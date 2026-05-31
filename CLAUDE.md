@@ -89,7 +89,7 @@ conflate them.
   resolution on `(ticker, observed_date)` and by `MANUAL_OVERRIDES` in
   `scripts/classify_universe.py` (~35 ambiguous short tickers). When web
   verification proves a wrong CIK, extend that dict — don't patch the resolver.
-- **Payout extraction is cash-only; the DLRET table supports full consideration.** Auto-extraction from EDGAR remains cash-only. The DLRET table abstains (neutral mark) only when no consideration terms are supplied; when stock-leg terms (`stock_ratio`, `acquirer_price`) are provided via `--merger-terms`, it computes the full cash+stock consideration (e.g. AET→CVS: $145 cash + 0.8378 CVS @ $80 = $212.02, DLRET = +11.6%).
+- **Payout extraction is cash-only; the DLRET table supports full consideration.** Auto-extraction from EDGAR remains cash-only. The DLRET table abstains (neutral mark) only when no consideration terms are supplied; when stock-leg terms (`stock_ratio`, `acquirer_price`) are provided via `--merger-terms`, it computes the full cash+stock consideration (e.g. AET→CVS: $145 cash + 0.8378 CVS @ $80 = $212.02, DLRET = +11.6%). The `--last-trade-closes`, `--recoveries`, and `--merger-terms` CSVs accept an optional `observed_delist_date` column for per-event overrides (blank/absent = applies to all events of that ticker); exchange and payout maps are derived per delisting event automatically.
 - **Validation is the EDGAR-cross-check loop**, not eyeballing: re-run
   `classify_universe.py`, then `verify_against_web.py` (and curl the cited
   accession) to confirm output against an independent path. Drill mismatches to

@@ -151,9 +151,12 @@ def main() -> int:
 
     # Load and validate override CSVs BEFORE the network loop so a malformed
     # file raises in <1s instead of after the ~2-min classification pass.
-    # These maps are keyed by ticker only; a recycled ticker with multiple
-    # delisting events shares one set of inputs. build_dlret_table still emits
-    # one row per delisting event.
+    # Override CSVs accept an optional ``observed_delist_date`` column: when a
+    # row's date is non-blank it is keyed by (ticker, date) for per-event
+    # precision; a blank/absent date applies to all events of that ticker.
+    # Exchange and payout maps are derived per delisting event internally, so
+    # recycled tickers (e.g. ALTR = Altera 2015 + Altair 2025) are handled
+    # correctly without any special casing in the override files.
     last_trades = load_float_map_csv(args.last_trade_closes, "last_trade_close") if args.last_trade_closes else {}
     recoveries = load_float_map_csv(args.recoveries, "recovery_ratio") if args.recoveries else {}
     merger_terms = load_merger_terms_csv(args.merger_terms) if args.merger_terms else {}
@@ -163,7 +166,7 @@ def main() -> int:
     t0 = time.time()
     bucket_counts: dict[str, int] = {}
     extractor = None if args.no_extract_payouts else PayoutExtractor(edgar)
-    payout_by_ticker: dict[str, PayoutResult] = {}
+    payout_by_ticker: dict[tuple[str, str | None], PayoutResult] = {}
     all_records: list = []
 
     HEADER = [
@@ -203,12 +206,12 @@ def main() -> int:
                     # exercised by the downstream BMP path
                     # (scripts/compute_corrected_returns.py), which has
                     # last-trade closes.
-                    payout_by_ticker[rec.ticker] = extractor.extract(rec)
+                    payout_by_ticker[(rec.ticker, rec.observed_delist_date)] = extractor.extract(rec)
                 except Exception as e:  # extraction must never abort the run
                     if not args.quiet:
                         print(f"[{i:4d}/{len(rows)}] {ticker}: payout ERROR {e}",
                               file=sys.stderr)
-            pr = payout_by_ticker.get(rec.ticker)
+            pr = payout_by_ticker.get((rec.ticker, rec.observed_delist_date))
             writer.writerow([
                 rec.ticker,
                 rec.cik or "",
@@ -245,10 +248,11 @@ def main() -> int:
         payouts_path.parent.mkdir(parents=True, exist_ok=True)
         with payouts_path.open("w", newline="") as pf:
             pw = csv.writer(pf)
-            pw.writerow(["ticker", "payout_per_share", "confidence", "source", "accession"])
-            for tkr, pr in sorted(payout_by_ticker.items()):
+            pw.writerow(["ticker", "observed_delist_date", "payout_per_share", "confidence", "source", "accession"])
+            for (tkr, date), pr in sorted(payout_by_ticker.items()):
                 pw.writerow([
                     tkr,
+                    date or "",
                     "" if pr.value is None else f"{pr.value:.2f}",
                     pr.confidence, pr.source, pr.accession,
                 ])
@@ -257,19 +261,19 @@ def main() -> int:
 
     # --- PRIMARY OUTPUT: DLRET reconstruction table ---
     exchanges = {
-        r.ticker.upper(): (av.exchange(r.ticker, observed_date=r.observed_delist_date) or "")
+        (r.ticker.upper(), r.observed_delist_date): (av.exchange(r.ticker, observed_date=r.observed_delist_date) or "")
         for r in all_records
     }
-    payouts_map: dict[str, float] = {}
-    payout_src: dict[str, str] = {}
-    payout_conf: dict[str, str] = {}
-    for t, pr in payout_by_ticker.items():
+    payouts_map: dict = {}
+    payout_src: dict = {}
+    payout_conf: dict = {}
+    for (tkr, date), pr in payout_by_ticker.items():
         if pr.value is None:
             continue
-        key = t.upper()
-        payouts_map[key] = pr.value
-        payout_src[key] = pr.source
-        payout_conf[key] = pr.confidence
+        k = (tkr.upper(), date)
+        payouts_map[k] = pr.value
+        payout_src[k] = pr.source
+        payout_conf[k] = pr.confidence
 
     table = build_dlret_table(
         all_records,

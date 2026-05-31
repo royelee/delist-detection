@@ -144,6 +144,14 @@ This runs the full pipeline and writes `output/dlret.csv`.
 > zero. This makes it explicit that a price input is missing and the return
 > cannot be computed.
 
+> **Recycled tickers:** The `--last-trade-closes`, `--recoveries`, and
+> `--merger-terms` CSVs accept an optional `observed_delist_date` column. When a
+> row's date is non-blank it overrides only that specific delisting event
+> (e.g. `("ALTR", "2015-12-28")` for Altera vs `("ALTR", "2025-03-26")` for
+> Altair); a blank or absent date applies to all events of that ticker (existing
+> behavior). Exchange and payout maps are derived per delisting event
+> automatically — no special casing needed for most recycled tickers.
+
 ---
 
 ## Quickstart
