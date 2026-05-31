@@ -78,6 +78,74 @@ classification evidence, and concrete train/backtest mechanics:
 
 ---
 
+## Primary output: the DLRET reconstruction table
+
+The pipeline's primary deliverable is `output/dlret.csv` — a single CSV that
+contains, for every delisted ticker, the reconstructed delisting return (DLRET)
+and the full audit trail explaining how it was computed.
+
+### Column schema
+
+```
+ticker, bucket, observed_delist_date, crsp_code, dlret, reason,
+exchange, last_trade_close, payout_per_share, stock_ratio,
+acquirer_price, acquirer_ticker, recovery_ratio, terminal_value,
+dlret_method, dlret_confidence, payout_source
+```
+
+These columns come from `DLRET_TABLE_COLUMNS` in
+[`reconstruction.py`](src/delist_detection/reconstruction.py). Each row is an
+`EnrichedDelistRecord` produced by the `enrich` function, and the final table is
+written by `build_dlret_table` / `write_dlret_csv`.
+
+### Per-bucket DLRET policy
+
+| Bucket | `dlret_method` | DLRET formula | When used |
+|---|---|---|---|
+| `merger` | `cash_only` | `payout / last_close − 1` | Pure-cash deal, both values known |
+| `merger` | `cash_plus_stock` | `(cash + stock_ratio × acquirer_price) / last_close − 1` | Cash+stock deal, all terms supplied |
+| `merger` | `stock_only` | `stock_ratio × acquirer_price / last_close − 1` | All-stock deal, terms supplied |
+| `merger` | `abstain_no_consideration` | *(blank)* | No consideration terms available |
+| `merger` | `needs_last_trade` | *(blank)* | Consideration known but `last_trade_close` missing |
+| `exchange_transfer` | `exchange_transfer_zero` | `0` | Security continues at successor exchange |
+| `liquidation` | `recovery_ratio` | `recovery_ratio − 1` | Recovery ratio supplied |
+| `liquidation` | `shumway_nyse_amex` | `−0.30` | No recovery; NYSE/AMEX listing |
+| `liquidation` | `shumway_nasdaq` | `−0.55` | No recovery; Nasdaq listing |
+| `compliance_failure` | `worthless` | `−1.0` | Exchange kicked the ticker; equity is worthless |
+| `expiration` | `dropped_expiration` | *(NaN — drop)* | Non-equity instrument (warrant, ETN, etc.) |
+| *(any)* | `unknown` | *(blank)* | Unclassified ticker |
+
+### Worked example: AET → CVS (cash + stock)
+
+AET was acquired by CVS Health for **$145.00 cash + 0.8378 CVS shares** per AET
+share. With CVS trading at $80.00 at close:
+
+```
+terminal_value = 145 + 0.8378 × 80 = 212.024
+dlret           = 212.024 / 190 − 1 = +11.6%
+```
+
+where `190` is the last trade close of AET. The row would show
+`dlret_method=cash_plus_stock`.
+
+### CLI
+
+```bash
+python scripts/classify_universe.py \
+    --last-trade-closes <csv> \
+    --merger-terms <csv> \
+    --recoveries <csv>
+```
+
+This runs the full pipeline and writes `output/dlret.csv`.
+
+> **Note:** Merger rows without a supplied `last_trade_close` emit a **blank**
+> `dlret` with `dlret_method=needs_last_trade` — they are never silently set to
+> zero. This makes it explicit that a price input is missing and the return
+> cannot be computed.
+
+---
+
 ## Quickstart
 
 ```bash

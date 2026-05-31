@@ -28,6 +28,7 @@ python scripts/classify_universe.py      # full universe → output/*.csv (NETWO
 python scripts/classify_universe.py --limit 20 --no-extract-payouts   # fast dev subset
 python scripts/verify_against_web.py     # independent EDGAR cross-check → output/web_verification.csv
 python scripts/regen_payout_fixtures.py  # refetch golden 8-K fixtures from live SEC
+python scripts/classify_universe.py --last-trade-closes ... --merger-terms ...   # full run incl. output/dlret.csv
 ```
 
 There is **no lint/format tooling** configured — do not invent a lint command.
@@ -65,6 +66,8 @@ observed_delist_date, crsp_code, bucket, confidence, reason, evidence`.
 - `bmp_correction.py` + `exchanges.py` — firm-month BMP 2007 correction:
   `R_month = (1+R_partial)(1+DLRET)−1`, synthesizing `DLRET` per bucket with
   exchange-specific Shumway constants when no realized delist return is observed.
+- `dlret.py` — DLRET hub: `resolve_dlret`/`DlretResult`/`compute_dlret` (self-explaining delisting return). `bmp_correction.py` re-exports for backward compatibility.
+- `reconstruction.py` — `EnrichedDelistRecord`, `enrich`, `build_dlret_table`, `write_dlret_csv`. `output/dlret.csv` is the **primary output**.
 - `qlib_adapter.py` — DataFrame splicers over a `(datetime, instrument)` panel:
   `inject_terminal_labels`, `apply_backtest_exits`, `apply_bmp_corrections`.
 
@@ -86,13 +89,7 @@ conflate them.
   resolution on `(ticker, observed_date)` and by `MANUAL_OVERRIDES` in
   `scripts/classify_universe.py` (~35 ambiguous short tickers). When web
   verification proves a wrong CIK, extend that dict — don't patch the resolver.
-- **Payout extraction is cash-only by design.** Mixed cash+stock, cash+stock
-  election, and stock-leg deals **intentionally abstain** (a miss → neutral mark,
-  the correct survivorship treatment; emitting only the cash leg would understate
-  the return). ~232/346 merger tickers get a payout; the other ~114 are *correct*
-  misses, not a coverage bug. Contingent CVRs are not a stock leg (cash+CVR keeps
-  its cash floor). The operative cash signal is the phrase "in cash", not "per
-  share". Verify a ticker is genuinely pure-cash before treating its miss as a gap.
+- **Payout extraction is cash-only; the DLRET table supports full consideration.** Auto-extraction from EDGAR remains cash-only. The DLRET table abstains (neutral mark) only when no consideration terms are supplied; when stock-leg terms (`stock_ratio`, `acquirer_price`) are provided via `--merger-terms`, it computes the full cash+stock consideration (e.g. AET→CVS: $145 cash + 0.8378 CVS @ $80 = $212.02, DLRET = +11.6%).
 - **Validation is the EDGAR-cross-check loop**, not eyeballing: re-run
   `classify_universe.py`, then `verify_against_web.py` (and curl the cited
   accession) to confirm output against an independent path. Drill mismatches to
