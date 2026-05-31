@@ -50,6 +50,9 @@ class EnrichedDelistRecord:
     payout_confidence: str | None
 
 
+_VALID_CONF = {"high", "medium", "low"}
+
+
 def _dlret_confidence(value: float, method: DlretMethod, payout_confidence: str | None) -> str:
     if math.isnan(value):
         return "low"                     # never high when NaN
@@ -98,12 +101,11 @@ def enrich(
     )
 
 
-_VALID_CONF = {"high", "medium", "low"}
-
-# In the firm-month facade these methods carry value 0.0 (a neutral no-shock
-# mark); but the self-documenting table blanks the dlret cell so a reader never
-# mistakes an abstain/unknown for a realized 0% return (README "never silently
-# zero"). EXCHANGE_TRANSFER_ZERO keeps its explicit 0.
+# ABSTAIN_NO_CONSIDERATION carries value 0.0 in the firm-month facade (a neutral
+# no-shock mark) and UNKNOWN may carry 0.0 or NaN; either way the self-documenting
+# table blanks the dlret cell so a reader never mistakes an abstain/unknown for a
+# realized 0% return (README "never silently zero"). EXCHANGE_TRANSFER_ZERO is NOT
+# in this set — it keeps its explicit 0.
 _DLRET_BLANK_IN_TABLE = {DlretMethod.ABSTAIN_NO_CONSIDERATION, DlretMethod.UNKNOWN}
 
 DLRET_TABLE_COLUMNS = [
