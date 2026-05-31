@@ -458,9 +458,10 @@ def bucket_for_code(code: int | None) -> CrspBucket:
         return CrspBucket.EXCHANGE_TRANSFER
     if 400 <= code < 500:
         return CrspBucket.LIQUIDATION
-    # 501-519 are "Another Exchange" up-migrations (e.g. 501 -> NYSE,
-    # 502 -> AMEX/NYSE MKT): positive events, NOT performance delistings.
-    if 501 <= code <= 519:
+    # Per Shumway & Warther (1999), only 501/502 (migration to NYSE/AMEX) are
+    # positive up-migrations; 500 and 505-588 are performance-related distress
+    # delistings (-> COMPLIANCE_FAILURE below). See docs/research/dlret-generation.md.
+    if 501 <= code <= 502:
         return CrspBucket.EXCHANGE_TRANSFER
     if 500 <= code < 600:
         return CrspBucket.COMPLIANCE_FAILURE
@@ -480,7 +481,7 @@ In `src/delist_detection/crsp_codes.py`, change the docstring line:
 to:
 
 ```
-    COMPLIANCE_FAILURE  — 500s (excl. 501-519 up-migrations); apply the Shumway
+    COMPLIANCE_FAILURE  — 500s (excl. 501/502 up-migrations); apply the Shumway
                           constant (-30% NYSE/AMEX, -55% Nasdaq) per bmp_correction
 ```
 

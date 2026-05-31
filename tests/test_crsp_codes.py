@@ -23,12 +23,15 @@ def test_ranges_fall_through_to_correct_bucket():
 
 
 def test_up_migration_codes_are_exchange_transfer_not_compliance():
-    # 501 (->NYSE) / 502 (->AMEX/NYSE MKT) are positive up-migrations,
-    # NOT performance delistings. They must not land in COMPLIANCE_FAILURE
-    # (which would apply a -55% Shumway shock to a good event).
+    # Per Shumway & Warther (1999): only 501 (->NYSE) and 502 (->AMEX/NYSE MKT)
+    # are positive up-migrations, NOT performance delistings. They must not land
+    # in COMPLIANCE_FAILURE (which would apply a -55% Shumway shock to a good event).
     assert bucket_for_code(501) is CrspBucket.EXCHANGE_TRANSFER
     assert bucket_for_code(502) is CrspBucket.EXCHANGE_TRANSFER
-    assert bucket_for_code(510) is CrspBucket.EXCHANGE_TRANSFER  # 503-519 sub-range
+    # 503-519 are performance-related distress delistings per the source — NOT
+    # up-migrations — so they must land in COMPLIANCE_FAILURE.
+    assert bucket_for_code(505) is CrspBucket.COMPLIANCE_FAILURE
+    assert bucket_for_code(517) is CrspBucket.COMPLIANCE_FAILURE
 
 
 def test_genuine_5xx_still_compliance():

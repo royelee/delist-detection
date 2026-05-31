@@ -164,7 +164,7 @@ The correction logic keys off **code ranges**, verified verbatim against Shumway
 | Merger | **200–240** | Populated; positive/neutral. Cash vs stock vs mixed distinguished by sub-code (§6). |
 | Exchange | **300–390** | Populated; neutral (security continues). |
 | Liquidation | **400** | Often missing but pre-priced; use realized distributions. |
-| "Another Exchange" / migration | **501–519** (incl. **501, 502 = up to NYSE/AMEX**) | **Positive — EXCLUDE from negative correction.** |
+| "Another Exchange" / migration | **501/502** (up to NYSE/AMEX only; 503–519 are performance-related per Shumway & Warther 1999) | **Positive — EXCLUDE from negative correction.** |
 | **Performance (negative)** | **500, 520–584** (1997) / **500, 505–588** (1999) | The corrected-substitute bucket (−30% / −55%). Includes **574 = bankruptcy**, **584 = fails exchange financial guidelines**. |
 
 > Verbatim (Shumway & Warther 1999): *"We classify delisting codes 500 and 505 to
