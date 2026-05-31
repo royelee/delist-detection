@@ -249,7 +249,9 @@ def main() -> int:
         with payouts_path.open("w", newline="") as pf:
             pw = csv.writer(pf)
             pw.writerow(["ticker", "observed_delist_date", "payout_per_share", "confidence", "source", "accession"])
-            for (tkr, date), pr in sorted(payout_by_ticker.items()):
+            for (tkr, date), pr in sorted(
+                payout_by_ticker.items(), key=lambda kv: (kv[0][0], kv[0][1] or "")
+            ):
                 pw.writerow([
                     tkr,
                     date or "",

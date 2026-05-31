@@ -19,7 +19,7 @@ examples; `docs/data-flow.md` for the full classifier trigger table.
 ```bash
 conda activate rdagent4qlib              # project env — pytest, pandas/requests, and the editable install live here (base lacks them)
 pip install -e .                         # editable install (Python ≥3.10) — once per env
-pytest                                    # full suite (122 tests, offline, no network)
+pytest                                    # full suite (160 tests, offline, no network)
 pytest tests/test_payout_extractor.py -v  # one file
 pytest tests/test_payout_extractor.py::test_match_in_cash_family_altr -v   # one test
 
