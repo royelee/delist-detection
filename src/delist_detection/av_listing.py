@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import csv
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 
 
@@ -101,7 +102,6 @@ class AvListingLoader:
             return None
         if observed_date and row.delist_date:
             try:
-                from datetime import datetime
                 ad = datetime.strptime(row.delist_date, "%Y-%m-%d").date()
                 od = datetime.strptime(observed_date, "%Y-%m-%d").date()
                 if abs((ad - od).days) > max_days_off:
@@ -117,7 +117,6 @@ class AvListingLoader:
             return None
         if observed_date and row.delist_date:
             try:
-                from datetime import datetime
                 ad = datetime.strptime(row.delist_date, "%Y-%m-%d").date()
                 od = datetime.strptime(observed_date, "%Y-%m-%d").date()
                 if abs((ad - od).days) > max_days_off:
@@ -133,7 +132,6 @@ class AvListingLoader:
             return None
         if observed_date and row.delist_date:
             try:
-                from datetime import datetime
                 ad = datetime.strptime(row.delist_date, "%Y-%m-%d").date()
                 od = datetime.strptime(observed_date, "%Y-%m-%d").date()
                 if abs((ad - od).days) > max_days_off:

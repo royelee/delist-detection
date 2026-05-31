@@ -149,6 +149,15 @@ def main() -> int:
     if args.limit:
         rows = rows[: args.limit]
 
+    # Load and validate override CSVs BEFORE the network loop so a malformed
+    # file raises in <1s instead of after the ~2-min classification pass.
+    # These maps are keyed by ticker only; a recycled ticker with multiple
+    # delisting events shares one set of inputs. build_dlret_table still emits
+    # one row per delisting event.
+    last_trades = load_float_map_csv(args.last_trade_closes, "last_trade_close") if args.last_trade_closes else {}
+    recoveries = load_float_map_csv(args.recoveries, "recovery_ratio") if args.recoveries else {}
+    merger_terms = load_merger_terms_csv(args.merger_terms) if args.merger_terms else {}
+
     out_path = Path(args.output)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     t0 = time.time()
@@ -247,21 +256,20 @@ def main() -> int:
         print(f"Wrote {payouts_path}: {n_hit}/{len(payout_by_ticker)} merger payouts extracted")
 
     # --- PRIMARY OUTPUT: DLRET reconstruction table ---
-    # These override maps are keyed by ticker only, so a recycled ticker with
-    # multiple delisting events shares one set of inputs across its output rows.
-    # Acceptable for the small hand-curated override CSVs; build_dlret_table still
-    # emits one row per delisting event. Revisit if recycled tickers need per-event terms.
-    last_trades = load_float_map_csv(args.last_trade_closes, "last_trade_close") if args.last_trade_closes else {}
-    recoveries = load_float_map_csv(args.recoveries, "recovery_ratio") if args.recoveries else {}
-    merger_terms = load_merger_terms_csv(args.merger_terms) if args.merger_terms else {}
     exchanges = {
         r.ticker.upper(): (av.exchange(r.ticker, observed_date=r.observed_delist_date) or "")
         for r in all_records
     }
-    payouts_map = {t.upper(): pr.value for t, pr in payout_by_ticker.items() if pr.value is not None} \
-        if extractor is not None else {}
-    payout_src = {t.upper(): pr.source for t, pr in payout_by_ticker.items()} if extractor is not None else {}
-    payout_conf = {t.upper(): pr.confidence for t, pr in payout_by_ticker.items()} if extractor is not None else {}
+    payouts_map: dict[str, float] = {}
+    payout_src: dict[str, str] = {}
+    payout_conf: dict[str, str] = {}
+    for t, pr in payout_by_ticker.items():
+        if pr.value is None:
+            continue
+        key = t.upper()
+        payouts_map[key] = pr.value
+        payout_src[key] = pr.source
+        payout_conf[key] = pr.confidence
 
     table = build_dlret_table(
         all_records,
