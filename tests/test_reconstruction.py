@@ -111,13 +111,22 @@ def test_write_csv_roundtrip(tmp_path):
 def test_recycled_ticker_yields_one_row_per_delisting():
     # ALTR was Altera (2015 merger) then Altair (2025). Two DelistRecords with
     # the same ticker but different dates -> two output rows, one per event.
+    # Per-event tuple-keyed maps disambiguate the two events.
     records = [
         _rec(ticker="ALTR", code=233, date="2015-12-28"),
         _rec(ticker="ALTR", code=231, date="2025-03-26"),
     ]
-    table = build_dlret_table(records, last_trade_closes={"ALTR": 50.0}, payouts={"ALTR": 54.0})
+    table = build_dlret_table(
+        records,
+        last_trade_closes={("ALTR", "2015-12-28"): 50.0, ("ALTR", "2025-03-26"): 90.0},
+        payouts={("ALTR", "2015-12-28"): 54.0, ("ALTR", "2025-03-26"): 99.0},
+    )
     assert len(table) == 2
-    assert {e.observed_delist_date for e in table} == {"2015-12-28", "2025-03-26"}
+    by_date = {e.observed_delist_date: e for e in table}
+    assert by_date["2015-12-28"].last_trade_close == 50.0
+    assert by_date["2025-03-26"].last_trade_close == 90.0
+    assert by_date["2015-12-28"].payout_per_share == 54.0
+    assert by_date["2025-03-26"].payout_per_share == 99.0
 
 
 def test_load_merger_terms_csv(tmp_path):
@@ -187,3 +196,52 @@ def test_cash_only_invalid_payout_confidence_yields_medium():
         payout_per_share=113.0, payout_confidence="unknown_tier",
     )
     assert e_junk.dlret_confidence == "medium"
+
+
+from delist_detection.reconstruction import _lookup
+
+
+def test_recycled_ticker_bare_default_applies_to_all_events():
+    # A bare-ticker default in last_trade_closes applies to ALL events when
+    # no per-event tuple key is present (backward-compatible fallback).
+    records = [
+        _rec(ticker="ALTR", code=233, date="2015-12-28"),
+        _rec(ticker="ALTR", code=231, date="2025-03-26"),
+    ]
+    table = build_dlret_table(records, last_trade_closes={"ALTR": 50.0})
+    assert len(table) == 2
+    assert all(e.last_trade_close == 50.0 for e in table)
+
+
+def test_lookup_tuple_wins_over_bare_ticker():
+    # When a map has both a per-event tuple key and a bare-ticker fallback,
+    # the tuple wins; a different date falls back to the bare-ticker default.
+    m = {("ALTR", "2015-12-28"): 50.0, "ALTR": 99.0}
+    assert _lookup(m, "ALTR", "2015-12-28") == 50.0   # tuple wins
+    assert _lookup(m, "ALTR", "2099-01-01") == 99.0   # fallback to bare ticker
+
+
+def test_load_float_map_csv_with_date_column_produces_tuple_keys(tmp_path):
+    from delist_detection.reconstruction import load_float_map_csv
+    p = tmp_path / "lt.csv"
+    p.write_text(
+        "ticker,observed_delist_date,last_trade_close\n"
+        "ALTR,2015-12-28,50.0\n"
+        "ALTR,,90.0\n"   # blank date -> bare ticker key
+    )
+    result = load_float_map_csv(p, "last_trade_close")
+    assert result[("ALTR", "2015-12-28")] == 50.0
+    assert result["ALTR"] == 90.0
+
+
+def test_load_merger_terms_csv_with_date_column_produces_tuple_keys(tmp_path):
+    from delist_detection.reconstruction import load_merger_terms_csv
+    p = tmp_path / "terms.csv"
+    p.write_text(
+        "ticker,observed_delist_date,cash_per_share,stock_ratio,acquirer_price,acquirer_ticker\n"
+        "ALTR,2015-12-28,54.0,,,\n"   # per-event key
+        "ALTR,,99.0,,,\n"             # blank date -> bare ticker key
+    )
+    result = load_merger_terms_csv(p)
+    assert result[("ALTR", "2015-12-28")] == {"cash_per_share": 54.0}
+    assert result["ALTR"] == {"cash_per_share": 99.0}
