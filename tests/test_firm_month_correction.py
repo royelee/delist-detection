@@ -85,3 +85,23 @@ def test_firm_month_correction_zero_prior_close_drops():
     assert out.drop is True
     assert math.isnan(out.firm_month_return)
     assert math.isnan(out.r_partial)
+
+
+def test_firm_month_merger_includes_stock_leg():
+    # AET->CVS: prior 200, last 190 (R_partial=-0.05); DLRET from full
+    # consideration 212.024/190-1=+0.11592 -> R_month=(0.95)(1.11592)-1
+    from delist_detection.handling import build_firm_month_correction
+    from delist_detection.classifier import DelistRecord
+    from delist_detection.crsp_codes import CrspBucket
+    from delist_detection.exchanges import Exchange
+    rec = DelistRecord(
+        ticker="AET", cik=1, observed_delist_date="2018-11-28",
+        crsp_code=241, bucket=CrspBucket.MERGER, confidence="high", reason="", evidence={},
+    )
+    fm = build_firm_month_correction(
+        record=rec, prior_month_end_close=200.0, last_trade_close=190.0,
+        exchange=Exchange.NYSE, payout_per_share=145.0,
+        stock_ratio=0.8378, acquirer_price=80.0,
+    )
+    assert fm.dlret == pytest.approx(0.11592, abs=1e-4)
+    assert fm.firm_month_return == pytest.approx((0.95) * (1.11592) - 1.0, abs=1e-4)

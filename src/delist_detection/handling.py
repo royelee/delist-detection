@@ -258,6 +258,8 @@ def build_firm_month_correction(
     exchange: Exchange | None,
     payout_per_share: float | None = None,
     recovery_ratio: float | None = None,
+    stock_ratio: float | None = None,
+    acquirer_price: float | None = None,
 ) -> FirmMonthReturn:
     """Compute the BMP 2007 corrected firm-month return for one delisting.
 
@@ -291,6 +293,8 @@ def build_firm_month_correction(
         last_trade_close=last_trade_close,
         payout_per_share=payout_per_share,
         recovery_ratio=recovery_ratio,
+        stock_ratio=stock_ratio,
+        acquirer_price=acquirer_price,
     )
     r_month = bmp_firm_month_return(
         prior_month_end_close=prior_month_end_close,
@@ -298,6 +302,8 @@ def build_firm_month_correction(
         bucket=record.bucket, exchange=ex,
         payout_per_share=payout_per_share,
         recovery_ratio=recovery_ratio,
+        stock_ratio=stock_ratio,
+        acquirer_price=acquirer_price,
     )
     drop = math.isnan(r_month)
     assert drop == math.isnan(r_month), "drop must agree with NaN return"
