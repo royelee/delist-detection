@@ -64,6 +64,14 @@ def _resolve_merger(
     stock_ratio: float | None,
     acquirer_price: float | None,
 ) -> DlretResult:
+    # A dangling stock term would silently understate DLRET to the cash floor with
+    # falsely-high confidence; fail loud instead.
+    if (stock_ratio is None) != (acquirer_price is None):
+        raise ValueError(
+            "merger stock leg under-specified: stock_ratio and acquirer_price "
+            "must both be provided or both omitted"
+        )
+
     cash: float | None = None
     if payout_per_share is not None:
         if payout_per_share < 0:

@@ -54,7 +54,7 @@ def _dlret_confidence(value: float, method: DlretMethod, payout_confidence: str 
     if math.isnan(value):
         return "low"                     # never high when NaN
     if method is DlretMethod.CASH_ONLY:
-        return payout_confidence or "high"
+        return payout_confidence if payout_confidence in _VALID_CONF else "medium"
     if method is DlretMethod.EXCHANGE_TRANSFER_ZERO:
         return "high"
     if method in (
@@ -97,6 +97,14 @@ def enrich(
         payout_source=payout_source, payout_confidence=payout_confidence,
     )
 
+
+_VALID_CONF = {"high", "medium", "low"}
+
+# In the firm-month facade these methods carry value 0.0 (a neutral no-shock
+# mark); but the self-documenting table blanks the dlret cell so a reader never
+# mistakes an abstain/unknown for a realized 0% return (README "never silently
+# zero"). EXCHANGE_TRANSFER_ZERO keeps its explicit 0.
+_DLRET_BLANK_IN_TABLE = {DlretMethod.ABSTAIN_NO_CONSIDERATION, DlretMethod.UNKNOWN}
 
 DLRET_TABLE_COLUMNS = [
     "ticker", "bucket", "observed_delist_date", "crsp_code", "dlret", "reason",
@@ -167,7 +175,7 @@ def enriched_to_row(e: EnrichedDelistRecord) -> dict:
         "bucket": e.bucket.value,
         "observed_delist_date": _fmt(e.observed_delist_date),
         "crsp_code": _fmt(e.crsp_code),
-        "dlret": _fmt(e.dlret),
+        "dlret": "" if e.dlret_method in _DLRET_BLANK_IN_TABLE else _fmt(e.dlret),
         "reason": e.reason,
         "exchange": e.exchange.value,
         "last_trade_close": _fmt(e.last_trade_close),
@@ -213,6 +221,11 @@ def load_merger_terms_csv(path: str | Path) -> dict[str, dict]:
             acq = (row.get("acquirer_ticker") or "").strip()
             if acq:
                 terms["acquirer_ticker"] = acq
+            if ("stock_ratio" in terms) != ("acquirer_price" in terms):
+                raise ValueError(
+                    f"{path}: ticker {tkr} has an incomplete stock leg — "
+                    "stock_ratio and acquirer_price must both be present or both absent"
+                )
             out[tkr] = terms
     return out
 

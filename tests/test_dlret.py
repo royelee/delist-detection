@@ -105,6 +105,17 @@ def test_zero_payout_is_total_wipe():
     assert r.method is DlretMethod.CASH_ONLY
 
 
+def test_merger_partial_stock_terms_raises():
+    # A dangling stock term (stock_ratio without acquirer_price) must fail loud
+    # rather than silently understating DLRET to the cash floor.
+    with pytest.raises(ValueError, match="under-specified"):
+        resolve_dlret(
+            CrspBucket.MERGER, Exchange.NYSE, 190.0,
+            payout_per_share=145.0, stock_ratio=0.8378,
+            # acquirer_price intentionally omitted
+        )
+
+
 def test_merger_no_consideration_bad_price_stays_nan_drop():
     # Back-compat: MERGER with no consideration AND no valid price is a NaN
     # drop (the original compute_dlret price guard), never a 0.0 neutral mark.

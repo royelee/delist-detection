@@ -149,12 +149,41 @@ def test_load_float_map_csv_raises_on_missing_column(tmp_path):
         load_float_map_csv(p, "last_trade_close")
 
 
-def test_merger_no_consideration_valid_price_renders_neutral_mark():
-    # Pins the "neutral mark vs blank" distinction: a MERGER with no
-    # consideration but a valid last_trade_close yields dlret == "0.000000"
-    # in the table row, not an empty string.
+def test_merger_no_consideration_valid_price_blanks_table_dlret():
+    # Per the README "never silently zero" rule: a MERGER with no consideration
+    # but a valid last_trade_close keeps dlret == 0.0 on the EnrichedDelistRecord
+    # but blanks the rendered CSV cell so a reader cannot mistake an abstain for
+    # a realized 0% return.
     e = enrich(_rec(), exchange=Exchange.NYSE, last_trade_close=10.0)
     assert e.dlret_method is DlretMethod.ABSTAIN_NO_CONSIDERATION
-    assert e.dlret == 0.0
+    assert e.dlret == 0.0               # value intact on the record
     row = enriched_to_row(e)
-    assert row["dlret"] == "0.000000"   # _fmt(0.0) -> f"{0.0:.6f}"
+    assert row["dlret"] == ""           # but blanked in the table
+
+
+def test_load_merger_terms_csv_raises_on_partial_stock_leg(tmp_path):
+    from delist_detection.reconstruction import load_merger_terms_csv
+    p = tmp_path / "bad_terms.csv"
+    p.write_text(
+        "ticker,cash_per_share,stock_ratio,acquirer_price,acquirer_ticker\n"
+        "AET,145,0.8378,,CVS\n"  # stock_ratio present but acquirer_price blank
+    )
+    with pytest.raises(ValueError, match="incomplete stock leg"):
+        load_merger_terms_csv(p)
+
+
+def test_cash_only_invalid_payout_confidence_yields_medium():
+    # An empty or invalid payout_confidence on a CASH_ONLY result must yield
+    # "medium" (a valid tier), not propagate junk or silently default "high".
+    e_empty = enrich(
+        _rec(code=233), exchange=Exchange.NYSE, last_trade_close=100.0,
+        payout_per_share=113.0, payout_confidence="",
+    )
+    assert e_empty.dlret_method is DlretMethod.CASH_ONLY
+    assert e_empty.dlret_confidence == "medium"
+
+    e_junk = enrich(
+        _rec(code=233), exchange=Exchange.NYSE, last_trade_close=100.0,
+        payout_per_share=113.0, payout_confidence="unknown_tier",
+    )
+    assert e_junk.dlret_confidence == "medium"
