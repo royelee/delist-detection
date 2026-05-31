@@ -17,11 +17,15 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_INPUT = ROOT / "data" / "delisted_tickers.tsv"
 DEFAULT_OUTPUT = ROOT / "output" / "delist_classifications.csv"
+DEFAULT_DLRET_OUTPUT = ROOT / "output" / "dlret.csv"
 
 from delist_detection import EdgarClient, TickerResolver, DelistClassifier
 from delist_detection.crsp_codes import CrspBucket
 from delist_detection.av_listing import AvListingLoader
 from delist_detection.payout_extractor import PayoutExtractor, PayoutResult
+from delist_detection.reconstruction import (
+    build_dlret_table, write_dlret_csv, load_merger_terms_csv, load_float_map_csv,
+)
 
 
 # Alpha Vantage LISTING_STATUS CSVs from the companion qlib_practice pipeline.
@@ -109,6 +113,14 @@ def main() -> int:
                    help="Skip per-share payout extraction (faster dev re-run)")
     p.add_argument("--payouts-output",
                    default=str(ROOT / "output" / "payouts.csv"))
+    p.add_argument("--dlret-output", default=str(DEFAULT_DLRET_OUTPUT),
+                   help="primary DLRET reconstruction table")
+    p.add_argument("--last-trade-closes", default=None,
+                   help="CSV: ticker,last_trade_close (merger DLRET needs this)")
+    p.add_argument("--merger-terms", default=None,
+                   help="CSV: ticker,cash_per_share,stock_ratio,acquirer_price,acquirer_ticker")
+    p.add_argument("--recoveries", default=None,
+                   help="CSV: ticker,recovery_ratio")
     args = p.parse_args()
 
     edgar = EdgarClient(cache_dir=ROOT / "cache" / "edgar")
@@ -143,6 +155,7 @@ def main() -> int:
     bucket_counts: dict[str, int] = {}
     extractor = None if args.no_extract_payouts else PayoutExtractor(edgar)
     payout_by_ticker: dict[str, PayoutResult] = {}
+    all_records: list = []
 
     HEADER = [
         "ticker", "cik", "observed_delist_date", "crsp_code", "bucket",
@@ -166,6 +179,8 @@ def main() -> int:
                 err_prefix = [ticker, "", observed, "", "unknown", "none", err]
                 writer.writerow(err_prefix + [""] * (len(HEADER) - len(err_prefix)))
                 continue
+            if rec is not None:
+                all_records.append(rec)
             ev = rec.evidence or {}
             df = ev.get("delist_filing") or {}
             ak = ev.get("anchor_8k") or {}
@@ -230,6 +245,36 @@ def main() -> int:
                 ])
         n_hit = sum(1 for pr in payout_by_ticker.values() if pr.value is not None)
         print(f"Wrote {payouts_path}: {n_hit}/{len(payout_by_ticker)} merger payouts extracted")
+
+    # --- PRIMARY OUTPUT: DLRET reconstruction table ---
+    # These override maps are keyed by ticker only, so a recycled ticker with
+    # multiple delisting events shares one set of inputs across its output rows.
+    # Acceptable for the small hand-curated override CSVs; build_dlret_table still
+    # emits one row per delisting event. Revisit if recycled tickers need per-event terms.
+    last_trades = load_float_map_csv(args.last_trade_closes, "last_trade_close") if args.last_trade_closes else {}
+    recoveries = load_float_map_csv(args.recoveries, "recovery_ratio") if args.recoveries else {}
+    merger_terms = load_merger_terms_csv(args.merger_terms) if args.merger_terms else {}
+    exchanges = {
+        r.ticker.upper(): (av.exchange(r.ticker, observed_date=r.observed_delist_date) or "")
+        for r in all_records
+    }
+    payouts_map = {t.upper(): pr.value for t, pr in payout_by_ticker.items() if pr.value is not None} \
+        if extractor is not None else {}
+    payout_src = {t.upper(): pr.source for t, pr in payout_by_ticker.items()} if extractor is not None else {}
+    payout_conf = {t.upper(): pr.confidence for t, pr in payout_by_ticker.items()} if extractor is not None else {}
+
+    table = build_dlret_table(
+        all_records,
+        last_trade_closes=last_trades,
+        payouts=payouts_map,
+        exchanges=exchanges,
+        merger_terms=merger_terms,
+        recovery_ratios=recoveries,
+        payout_sources=payout_src,
+        payout_confidences=payout_conf,
+    )
+    write_dlret_csv(table, args.dlret_output)
+    print(f"Wrote {args.dlret_output}: {len(table)} DLRET rows (PRIMARY OUTPUT)")
     return 0
 
 

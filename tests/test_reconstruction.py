@@ -118,3 +118,32 @@ def test_recycled_ticker_yields_one_row_per_delisting():
     table = build_dlret_table(records, last_trade_closes={"ALTR": 50.0}, payouts={"ALTR": 54.0})
     assert len(table) == 2
     assert {e.observed_delist_date for e in table} == {"2015-12-28", "2025-03-26"}
+
+
+def test_load_merger_terms_csv(tmp_path):
+    from delist_detection.reconstruction import load_merger_terms_csv
+    p = tmp_path / "terms.csv"
+    p.write_text(
+        "ticker,cash_per_share,stock_ratio,acquirer_price,acquirer_ticker\n"
+        "AET,145,0.8378,80,CVS\n"
+        "ABMD,380,,,\n"
+    )
+    terms = load_merger_terms_csv(p)
+    assert terms["AET"] == {"cash_per_share": 145.0, "stock_ratio": 0.8378,
+                            "acquirer_price": 80.0, "acquirer_ticker": "CVS"}
+    assert terms["ABMD"] == {"cash_per_share": 380.0}  # blanks omitted
+
+
+def test_load_float_map_csv_reads_values(tmp_path):
+    from delist_detection.reconstruction import load_float_map_csv
+    p = tmp_path / "lt.csv"
+    p.write_text("ticker,last_trade_close\nAET,190\nFOO,\n")
+    assert load_float_map_csv(p, "last_trade_close") == {"AET": 190.0}  # blank-value row skipped
+
+
+def test_load_float_map_csv_raises_on_missing_column(tmp_path):
+    from delist_detection.reconstruction import load_float_map_csv
+    p = tmp_path / "bad.csv"
+    p.write_text("ticker,close\nAET,190\n")  # 'close' != 'last_trade_close'
+    with pytest.raises(ValueError):
+        load_float_map_csv(p, "last_trade_close")

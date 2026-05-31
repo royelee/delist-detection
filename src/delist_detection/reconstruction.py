@@ -191,3 +191,52 @@ def write_dlret_csv(records: Iterable[EnrichedDelistRecord], path: str | Path) -
         writer.writeheader()
         for e in records:
             writer.writerow(enriched_to_row(e))
+
+
+def load_merger_terms_csv(path: str | Path) -> dict[str, dict]:
+    """Load merger-consideration terms keyed by upper-cased ticker.
+
+    CSV columns: ticker, cash_per_share, stock_ratio, acquirer_price,
+    acquirer_ticker. Blank numeric cells are omitted from the per-ticker dict.
+    """
+    out: dict[str, dict] = {}
+    with Path(path).open(newline="") as fh:
+        for row in csv.DictReader(fh):
+            tkr = (row.get("ticker") or "").strip().upper()
+            if not tkr:
+                continue
+            terms: dict = {}
+            for k in ("cash_per_share", "stock_ratio", "acquirer_price"):
+                v = (row.get(k) or "").strip()
+                if v:
+                    terms[k] = float(v)
+            acq = (row.get("acquirer_ticker") or "").strip()
+            if acq:
+                terms["acquirer_ticker"] = acq
+            out[tkr] = terms
+    return out
+
+
+def load_float_map_csv(path: str | Path, value_col: str) -> dict[str, float]:
+    """Load a {ticker(upper): float} map from a CSV with columns ticker, <value_col>.
+
+    Raises ValueError if the CSV header lacks 'ticker' or value_col, so a mistyped
+    --last-trade-closes/--recoveries column fails loudly instead of silently
+    returning {} (which would make every merger fall back to the no-price branch).
+    Rows with a blank ticker or blank value are skipped.
+    """
+    out: dict[str, float] = {}
+    with Path(path).open(newline="") as fh:
+        reader = csv.DictReader(fh)
+        fields = reader.fieldnames or []
+        missing = [c for c in ("ticker", value_col) if c not in fields]
+        if missing:
+            raise ValueError(
+                f"{path}: CSV missing required column(s) {missing}; found {fields}"
+            )
+        for row in reader:
+            tkr = (row.get("ticker") or "").strip().upper()
+            val = (row.get(value_col) or "").strip()
+            if tkr and val:
+                out[tkr] = float(val)
+    return out
