@@ -9,13 +9,16 @@ sequence of these into `output/dlret.csv`.
 
 from __future__ import annotations
 
+import csv
 import math
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
+from pathlib import Path
 
 from .classifier import DelistRecord
 from .crsp_codes import CrspBucket
 from .dlret import DlretMethod, resolve_dlret
-from .exchanges import Exchange
+from .exchanges import Exchange, normalize_exchange
 
 
 @dataclass(frozen=True)
@@ -93,3 +96,98 @@ def enrich(
         dlret_confidence=_dlret_confidence(res.value, res.method, payout_confidence),
         payout_source=payout_source, payout_confidence=payout_confidence,
     )
+
+
+DLRET_TABLE_COLUMNS = [
+    "ticker", "bucket", "observed_delist_date", "crsp_code", "dlret", "reason",
+    "exchange", "last_trade_close", "payout_per_share", "stock_ratio",
+    "acquirer_price", "acquirer_ticker", "recovery_ratio", "terminal_value",
+    "dlret_method", "dlret_confidence", "payout_source",
+]
+
+
+def build_dlret_table(
+    records: Iterable[DelistRecord],
+    *,
+    last_trade_closes: Mapping[str, float] | None = None,
+    payouts: Mapping[str, float] | None = None,
+    exchanges: Mapping[str, str] | None = None,
+    merger_terms: Mapping[str, dict] | None = None,
+    recovery_ratios: Mapping[str, float] | None = None,
+    payout_sources: Mapping[str, str] | None = None,
+    payout_confidences: Mapping[str, str] | None = None,
+) -> list[EnrichedDelistRecord]:
+    """Enrich each classification record into the primary DLRET table.
+
+    Lookups are keyed on the upper-cased ticker. `merger_terms[ticker]` is a
+    dict with optional keys: cash_per_share (overrides `payouts`), stock_ratio,
+    acquirer_price, acquirer_ticker.
+    """
+    last_trade_closes = last_trade_closes or {}
+    payouts = payouts or {}
+    exchanges = exchanges or {}
+    merger_terms = merger_terms or {}
+    recovery_ratios = recovery_ratios or {}
+    payout_sources = payout_sources or {}
+    payout_confidences = payout_confidences or {}
+
+    out: list[EnrichedDelistRecord] = []
+    for rec in records:
+        key = rec.ticker.upper()
+        terms = merger_terms.get(key, {})
+        cash = terms.get("cash_per_share", payouts.get(key))
+        out.append(enrich(
+            rec,
+            exchange=normalize_exchange(exchanges.get(key)),
+            last_trade_close=last_trade_closes.get(key),
+            payout_per_share=cash,
+            stock_ratio=terms.get("stock_ratio"),
+            acquirer_price=terms.get("acquirer_price"),
+            acquirer_ticker=terms.get("acquirer_ticker"),
+            recovery_ratio=recovery_ratios.get(key),
+            payout_source=payout_sources.get(key),
+            payout_confidence=payout_confidences.get(key),
+        ))
+    return out
+
+
+def _fmt(x: object) -> str:
+    if x is None:
+        return ""
+    if isinstance(x, float):
+        if math.isnan(x):
+            return ""
+        return f"{x:.6f}"
+    return str(x)
+
+
+def enriched_to_row(e: EnrichedDelistRecord) -> dict:
+    return {
+        "ticker": e.ticker,
+        "bucket": e.bucket.value,
+        "observed_delist_date": _fmt(e.observed_delist_date),
+        "crsp_code": _fmt(e.crsp_code),
+        "dlret": _fmt(e.dlret),
+        "reason": e.reason,
+        "exchange": e.exchange.value,
+        "last_trade_close": _fmt(e.last_trade_close),
+        "payout_per_share": _fmt(e.payout_per_share),
+        "stock_ratio": _fmt(e.stock_ratio),
+        "acquirer_price": _fmt(e.acquirer_price),
+        "acquirer_ticker": _fmt(e.acquirer_ticker),
+        "recovery_ratio": _fmt(e.recovery_ratio),
+        "terminal_value": _fmt(e.terminal_value),
+        "dlret_method": e.dlret_method.value,
+        "dlret_confidence": e.dlret_confidence,
+        "payout_source": _fmt(e.payout_source),
+    }
+
+
+def write_dlret_csv(records: Iterable[EnrichedDelistRecord], path: str | Path) -> None:
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", newline="") as fh:
+        writer = csv.DictWriter(fh, fieldnames=DLRET_TABLE_COLUMNS)
+        writer.writeheader()
+        for e in records:
+            writer.writerow(enriched_to_row(e))

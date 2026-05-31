@@ -53,3 +53,68 @@ def test_enrich_carries_classification_fields():
     assert e.crsp_code == 231
     assert e.bucket is CrspBucket.MERGER
     assert e.reason == "M&A 2.01+3.01+5.01"
+
+from delist_detection.reconstruction import (
+    build_dlret_table, write_dlret_csv, enriched_to_row, DLRET_TABLE_COLUMNS,
+)
+
+
+def test_table_column_order_is_contractual():
+    assert DLRET_TABLE_COLUMNS == [
+        "ticker", "bucket", "observed_delist_date", "crsp_code", "dlret", "reason",
+        "exchange", "last_trade_close", "payout_per_share", "stock_ratio",
+        "acquirer_price", "acquirer_ticker", "recovery_ratio", "terminal_value",
+        "dlret_method", "dlret_confidence", "payout_source",
+    ]
+
+
+def test_build_table_keys_on_ticker_and_uses_inputs():
+    records = [
+        _rec(ticker="AET", code=241, date="2018-11-28"),
+        _rec(ticker="ABMD", code=231, date="2023-01-03", bucket=CrspBucket.MERGER),
+    ]
+    table = build_dlret_table(
+        records,
+        last_trade_closes={"AET": 190.0, "ABMD": 300.0},
+        payouts={"AET": 145.0, "ABMD": 380.0},
+        exchanges={"AET": "NYSE", "ABMD": "NASDAQ"},
+        merger_terms={"AET": {"stock_ratio": 0.8378, "acquirer_price": 80.0, "acquirer_ticker": "CVS"}},
+    )
+    by_ticker = {e.ticker: e for e in table}
+    assert by_ticker["AET"].dlret_method is DlretMethod.CASH_PLUS_STOCK
+    assert by_ticker["ABMD"].dlret_method is DlretMethod.CASH_ONLY
+    assert by_ticker["ABMD"].dlret == pytest.approx(380.0 / 300.0 - 1.0)
+
+
+def test_row_blanks_nan_and_none():
+    e = enrich(_rec(), exchange=Exchange.NYSE, last_trade_close=None, payout_per_share=113.0)
+    row = enriched_to_row(e)
+    assert row["dlret"] == ""          # NaN renders blank, never 0
+    assert row["terminal_value"] == ""
+    assert row["dlret_method"] == "needs_last_trade"
+
+
+def test_write_csv_roundtrip(tmp_path):
+    import csv
+    records = [_rec(ticker="ABMD", code=231)]
+    table = build_dlret_table(records, last_trade_closes={"ABMD": 300.0}, payouts={"ABMD": 380.0},
+                              exchanges={"ABMD": "NASDAQ"})
+    out = tmp_path / "dlret.csv"
+    write_dlret_csv(table, out)
+    with out.open() as fh:
+        rows = list(csv.DictReader(fh))
+    assert list(rows[0].keys()) == DLRET_TABLE_COLUMNS
+    assert rows[0]["ticker"] == "ABMD"
+    assert rows[0]["dlret_method"] == "cash_only"
+
+
+def test_recycled_ticker_yields_one_row_per_delisting():
+    # ALTR was Altera (2015 merger) then Altair (2025). Two DelistRecords with
+    # the same ticker but different dates -> two output rows, one per event.
+    records = [
+        _rec(ticker="ALTR", code=233, date="2015-12-28"),
+        _rec(ticker="ALTR", code=231, date="2025-03-26"),
+    ]
+    table = build_dlret_table(records, last_trade_closes={"ALTR": 50.0}, payouts={"ALTR": 54.0})
+    assert len(table) == 2
+    assert {e.observed_delist_date for e in table} == {"2015-12-28", "2025-03-26"}
