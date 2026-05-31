@@ -32,6 +32,7 @@ import pandas as pd
 
 from delist_detection.av_listing import AvListingLoader
 from delist_detection.qlib_adapter import apply_bmp_corrections
+from delist_detection.reconstruction import load_float_map_csv
 
 
 def _read_panel(path: Path) -> pd.DataFrame:
@@ -45,10 +46,19 @@ def _read_panel(path: Path) -> pd.DataFrame:
 
 
 def _read_map(path: Path | None, value_col: str) -> dict[str, float]:
+    """Ticker-keyed float map for the firm-month path.
+
+    Delegates CSV parsing/validation to the shared
+    ``reconstruction.load_float_map_csv`` (fail-loud on a missing/mistyped
+    column, blank rows skipped), then collapses any per-event ``(ticker, date)``
+    keys to bare ticker — ``apply_bmp_corrections`` is ticker-keyed, so a
+    recycled ticker's last event wins here (the per-event ``dlret.csv`` path
+    keeps them distinct).
+    """
     if not path:
         return {}
-    df = pd.read_csv(path)
-    return dict(zip(df["ticker"].astype(str).str.upper(), df[value_col].astype(float)))
+    raw = load_float_map_csv(path, value_col)
+    return {(k[0] if isinstance(k, tuple) else k): v for k, v in raw.items()}
 
 
 def main(argv: list[str] | None = None) -> int:
