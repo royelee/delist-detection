@@ -103,3 +103,17 @@ def test_zero_payout_is_total_wipe():
     r = resolve_dlret(CrspBucket.MERGER, Exchange.NYSE, 100.0, payout_per_share=0.0)
     assert r.value == pytest.approx(-1.0)
     assert r.method is DlretMethod.CASH_ONLY
+
+
+def test_merger_no_consideration_bad_price_stays_nan_drop():
+    # Back-compat: MERGER with no consideration AND no valid price is a NaN
+    # drop (the original compute_dlret price guard), never a 0.0 neutral mark.
+    for bad in (0.0, -5.0, None):
+        r = resolve_dlret(CrspBucket.MERGER, Exchange.NYSE,
+                          last_trade_close=bad)
+        assert math.isnan(r.value)
+        assert math.isnan(compute_dlret(CrspBucket.MERGER, Exchange.NYSE, bad))
+    # but with a valid price, no consideration is a neutral 0.0 abstain
+    ok = resolve_dlret(CrspBucket.MERGER, Exchange.NYSE, last_trade_close=10.0)
+    assert ok.value == 0.0
+    assert ok.method is DlretMethod.ABSTAIN_NO_CONSIDERATION

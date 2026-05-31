@@ -78,13 +78,20 @@ def _resolve_merger(
         stock = leg
 
     legs = [x for x in (cash, stock) if x is not None]
+
+    # A valid last trade price is required. This guard precedes the
+    # no-consideration abstain so a bad/absent price stays a NaN drop
+    # regardless of legs — exactly as the original compute_dlret did, keeping
+    # the firm-month path byte-for-byte unchanged.
+    if last_trade_close is None or last_trade_close <= 0:
+        method = (DlretMethod.ABSTAIN_NO_CONSIDERATION if not legs
+                  else DlretMethod.NEEDS_LAST_TRADE)
+        return DlretResult(float("nan"), method, None)
+
     if not legs:
         return DlretResult(0.0, DlretMethod.ABSTAIN_NO_CONSIDERATION, None)
 
     terminal = float(sum(legs))
-    if last_trade_close is None or last_trade_close <= 0:
-        return DlretResult(float("nan"), DlretMethod.NEEDS_LAST_TRADE, None)
-
     if cash is not None and stock is not None:
         method = DlretMethod.CASH_PLUS_STOCK
     elif cash is not None:

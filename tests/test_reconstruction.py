@@ -147,3 +147,14 @@ def test_load_float_map_csv_raises_on_missing_column(tmp_path):
     p.write_text("ticker,close\nAET,190\n")  # 'close' != 'last_trade_close'
     with pytest.raises(ValueError):
         load_float_map_csv(p, "last_trade_close")
+
+
+def test_merger_no_consideration_valid_price_renders_neutral_mark():
+    # Pins the "neutral mark vs blank" distinction: a MERGER with no
+    # consideration but a valid last_trade_close yields dlret == "0.000000"
+    # in the table row, not an empty string.
+    e = enrich(_rec(), exchange=Exchange.NYSE, last_trade_close=10.0)
+    assert e.dlret_method is DlretMethod.ABSTAIN_NO_CONSIDERATION
+    assert e.dlret == 0.0
+    row = enriched_to_row(e)
+    assert row["dlret"] == "0.000000"   # _fmt(0.0) -> f"{0.0:.6f}"
