@@ -29,6 +29,11 @@ python scripts/classify_universe.py --limit 20 --no-extract-payouts   # fast dev
 python scripts/verify_against_web.py     # independent EDGAR cross-check → output/web_verification.csv
 python scripts/regen_payout_fixtures.py  # refetch golden 8-K fixtures from live SEC
 python scripts/classify_universe.py --last-trade-closes ... --merger-terms ...   # full run incl. output/dlret.csv
+
+# Manual verify (OFFLINE — drives the real CLI on cached tickers, no network) → inspect output/dlret.csv:
+python scripts/classify_universe.py --limit 15 --last-trade-closes lt.csv --merger-terms terms.csv --recoveries rec.csv --dlret-output /tmp/dlret.csv
+python scripts/compute_corrected_returns.py --panel panel.csv --classifications output/delist_classifications.csv --av-csv "$AV_LISTING_CSV" --payouts output/payouts.csv --out /tmp/corrected.csv   # firm-month BMP path
+# override-CSV columns: lt.csv=`ticker,last_trade_close` · terms.csv=`ticker,cash_per_share,stock_ratio,acquirer_price,acquirer_ticker` · rec.csv=`ticker,recovery_ratio` — each also accepts an optional `observed_delist_date` column for per-event (recycled-ticker) overrides
 ```
 
 There is **no lint/format tooling** configured — do not invent a lint command.
