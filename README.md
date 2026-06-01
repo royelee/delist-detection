@@ -105,27 +105,40 @@ written by `build_dlret_table` / `write_dlret_csv`.
 | `merger` | `cash_only` | `payout / last_close − 1` | Pure-cash deal, both values known |
 | `merger` | `cash_plus_stock` | `(cash + stock_ratio × acquirer_price) / last_close − 1` | Cash+stock deal, all terms supplied |
 | `merger` | `stock_only` | `stock_ratio × acquirer_price / last_close − 1` | All-stock deal, terms supplied |
-| `merger` | `abstain_no_consideration` | *(blank)* | No consideration terms available |
-| `merger` | `needs_last_trade` | *(blank)* | Consideration known but `last_trade_close` missing |
+| `merger` / `expiration` | `assumed_par` | `0` (terminal = `last_trade_close`) | Completed deal / fund closure with a known last price but no priceable consideration — terminal ≈ last price, so DLRET ≈ 0; **`low` confidence** |
+| `merger` | `needs_last_trade` | *(blank)* | Consideration known but `last_trade_close` missing (no denominator) |
+| `merger` | `abstain_no_consideration` | *(blank)* | No consideration **and** no last price |
 | `exchange_transfer` | `exchange_transfer_zero` | `0` | Security continues at successor exchange |
 | `liquidation` | `recovery_ratio` | `recovery_ratio − 1` | Recovery ratio supplied |
 | `liquidation` | `shumway_nyse_amex` | `−0.30` | No recovery; NYSE/AMEX listing |
 | `liquidation` | `shumway_nasdaq` | `−0.55` | No recovery; Nasdaq listing |
 | `compliance_failure` | `worthless` | `−1.0` | Exchange kicked the ticker; equity is worthless |
-| `expiration` | `dropped_expiration` | *(NaN — drop)* | Non-equity instrument (warrant, ETN, etc.) |
+| `expiration` | `dropped_expiration` | *(blank)* | Non-equity instrument with no last price |
 | *(any)* | `unknown` | *(blank)* | Unclassified ticker |
+
+> **No empty, no silent zero.** Any merger or fund closure with a valid
+> `last_trade_close` but no priceable consideration is filled with `dlret = 0`
+> tagged `dlret_method = assumed_par` at **`low`** confidence — a completed deal's
+> last price already reflects its terminal value (≈0 incremental return), so 0 is
+> the maximum-likelihood estimate, not a missing value. Rows are blank only when
+> there is genuinely no denominator (no `last_trade_close`). Filter on
+> `dlret_confidence` to keep, down-weight, or drop the estimates.
 
 ### Worked example: AET → CVS (cash + stock)
 
 AET was acquired by CVS Health for **$145.00 cash + 0.8378 CVS shares** per AET
-share. With CVS trading at $80.00 at close:
+share. With CVS trading at $80.27 on AET's last trading day:
 
 ```
-terminal_value = 145 + 0.8378 × 80 = 212.024
-dlret           = 212.024 / 190 − 1 = +11.6%
+terminal_value = 145 + 0.8378 × 80.27 = 212.25
+dlret           = 212.25 / 212.70 − 1 = −0.21%
 ```
 
-where `190` is the last trade close of AET. The row would show
+where `212.70` is AET's **last trade close** — not its pre-deal price. For a
+*completed* merger the price has already converged to the deal value by the last
+trade, so `dlret ≈ 0`: the ~11% acquisition premium was earned over the months
+between announcement and close and lives in the ordinary `RET` of those months,
+**not** in DLRET (putting it in both would double-count it). The row shows
 `dlret_method=cash_plus_stock`.
 
 ### CLI
@@ -151,6 +164,80 @@ This runs the full pipeline and writes `output/dlret.csv`.
 > Altair); a blank or absent date applies to all events of that ticker (existing
 > behavior). Exchange and payout maps are derived per delisting event
 > automatically — no special casing needed for most recycled tickers.
+
+---
+
+## Using DLRET to build training labels and backtests
+
+`output/dlret.csv` gives you one number per delisting — `dlret`, the return from a
+security's **last trade** to its **terminal value** (cash received, stock received,
+liquidation recovery, or zero). Splicing that one number into the delisting period
+is what makes both supervised labels and backtest P&L survivorship-bias-aware.
+Key the table on `(ticker, observed_delist_date)`; `dlret_confidence` tells you how
+far to trust each value.
+
+### The two formulas
+
+Both uses reduce to the same primitive — **a held position earns `DLRET` over the
+delisting step**, on top of whatever partial return `RET` your pipeline already
+computes up to the last trade:
+
+| Use | Formula | Why it removes the bias |
+|---|---|---|
+| **Training label** (delisting period) | `label = (1 + RET) × (1 + DLRET) − 1` | An acquired name carries its merger premium and a compliance-failure name carries its −100% into the label, instead of the row being dropped — dropping silently biases labels toward survivors. |
+| **Backtest exit** (delist date) | `exit_price = last_trade_close × (1 + DLRET)` (= the `terminal_value` column) | The position exits at the real delisting cashflow, instead of marking to the last quote (overstates) or force-selling at 0 (understates). Remove the instrument from the universe after `observed_delist_date`. |
+
+### Recipe (pandas, straight off `dlret.csv`)
+
+```python
+import pandas as pd
+
+dl = pd.read_csv("output/dlret.csv", parse_dates=["observed_delist_date"])
+
+# --- Training labels: compound RET with DLRET at each ticker's delisting row ---
+# `panel` is your MultiIndex (date, instrument) frame with a forward return RET.
+# Align observed_delist_date to your panel's frequency first (month-end for a
+# monthly panel; the trade date itself for a daily panel).
+dlret = dl.set_index(["ticker", "observed_delist_date"])["dlret"]
+panel["DLRET"] = panel.index.to_frame().apply(
+    lambda r: dlret.get((r["instrument"], r["date"]), 0.0), axis=1   # 0 off delisting rows
+)
+panel["LABEL"] = (1 + panel["RET"].fillna(0)) * (1 + panel["DLRET"].fillna(0)) - 1
+
+# --- Backtest exits: sell at terminal_value on the delist date, then drop ---
+exits = dl.assign(
+    exit_price=dl["terminal_value"].fillna(dl["last_trade_close"])    # = last_close×(1+dlret)
+)[["ticker", "observed_delist_date", "exit_price", "dlret_method"]]
+# exchange_transfer rows: don't exit — re-link the position to the successor ticker.
+```
+
+### Trust the value with `dlret_confidence`
+
+| confidence | what it is | suggested use |
+|---|---|---|
+| `high` | exact cash payout from a closing 8-K (`cash_only`), or an exchange transfer (`exchange_transfer_zero`) | use as-is |
+| `medium` | reconstructed cash+stock / all-stock terminal, or a Shumway/recovery mark | use as-is; spot-check large \|dlret\| |
+| `low` | `assumed_par` neutral estimate (completed deal / fund closure, terminal assumed = last price → DLRET ≈ 0) | down-weight, or exclude from training and treat the row as a drop |
+
+Because the table is never blank and never *silently* zero, both `DLRET.fillna(0)`
+(use the par estimates) and "drop where `dlret_confidence == 'low'`" (ignore them)
+are one-liners — the choice is yours and stays explicit.
+
+### Per-bucket intuition (what a long position experiences)
+
+| Delisting | `dlret` | Effect on the label / exit |
+|---|---|---|
+| Cash merger at a premium | `payout/last_close − 1` > 0 | positive terminal return — kept, not dropped |
+| Completed stock / cash+stock merger | ≈ 0 | premium already earned pre-close; no extra shock |
+| Exchange transfer | 0 | continues at successor; re-link, don't exit |
+| Liquidation | `recovery − 1`, else Shumway −0.30 / −0.55 | partial loss |
+| Compliance failure / SEC revocation | −1.0 | total loss — the correction that matters most |
+
+> **Programmatic alternative.** If you prefer typed helpers over the CSV, the
+> same math is available per-event from `build_train_label_adjustment` /
+> `build_backtest_exit` (see *API → Handling*), and the CRSP-style firm-month
+> form from `apply_bmp_corrections` (see *BMP 2007 firm-month return correction*).
+> `dlret.csv` is the precomputed, audit-trailed output of those paths.
 
 ---
 
