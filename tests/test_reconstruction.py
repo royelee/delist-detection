@@ -158,16 +158,34 @@ def test_load_float_map_csv_raises_on_missing_column(tmp_path):
         load_float_map_csv(p, "last_trade_close")
 
 
-def test_merger_no_consideration_valid_price_blanks_table_dlret():
-    # Per the README "never silently zero" rule: a MERGER with no consideration
-    # but a valid last_trade_close keeps dlret == 0.0 on the EnrichedDelistRecord
-    # but blanks the rendered CSV cell so a reader cannot mistake an abstain for
-    # a realized 0% return.
+def test_merger_no_consideration_valid_price_assumes_par():
+    # "No empty DLRET" rule: a completed MERGER with a valid last_trade_close but
+    # no computable consideration assumes terminal = last price (arbitrage closed
+    # the gap to the deal value), so DLRET = 0 is emitted as ASSUMED_PAR at low
+    # confidence — filled, not blank, and self-documenting (not a silent computed 0).
     e = enrich(_rec(), exchange=Exchange.NYSE, last_trade_close=10.0)
-    assert e.dlret_method is DlretMethod.ABSTAIN_NO_CONSIDERATION
-    assert e.dlret == 0.0               # value intact on the record
+    assert e.dlret_method is DlretMethod.ASSUMED_PAR
+    assert e.dlret == 0.0
+    assert e.dlret_confidence == "low"
     row = enriched_to_row(e)
-    assert row["dlret"] == ""           # but blanked in the table
+    assert row["dlret"] == "0.000000"   # filled (was blank under the old abstain rule)
+
+
+def test_expiration_with_last_price_assumes_par():
+    # Non-equity/fund closures (CRSP 6xx) redeem at NAV ≈ last price → DLRET ≈ 0.
+    e = enrich(_rec(code=600, bucket=CrspBucket.EXPIRATION), exchange=Exchange.NYSE,
+               last_trade_close=25.0)
+    assert e.dlret_method is DlretMethod.ASSUMED_PAR
+    assert e.dlret == 0.0
+    assert enriched_to_row(e)["dlret"] == "0.000000"
+
+
+def test_no_consideration_no_price_stays_blank():
+    # Without a last price there is no denominator, so par cannot be assumed —
+    # the cell stays a NaN/blank rather than fabricate a return.
+    e = enrich(_rec(), exchange=Exchange.NYSE, last_trade_close=None)
+    assert math.isnan(e.dlret)
+    assert enriched_to_row(e)["dlret"] == ""
 
 
 def test_load_merger_terms_csv_raises_on_partial_stock_leg(tmp_path):

@@ -42,6 +42,7 @@ class DlretMethod(str, Enum):
     SHUMWAY_NASDAQ = "shumway_nasdaq"
     WORTHLESS = "worthless"            # reserved; not emitted in v1
     DROPPED_EXPIRATION = "dropped_expiration"
+    ASSUMED_PAR = "assumed_par"        # completed delisting, terminal assumed = last price (DLRET≈0)
     UNKNOWN = "unknown"
 
 

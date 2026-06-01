@@ -17,7 +17,7 @@ from pathlib import Path
 
 from .classifier import DelistRecord
 from .crsp_codes import CrspBucket
-from .dlret import DlretMethod, resolve_dlret
+from .dlret import DlretMethod, DlretResult, resolve_dlret
 from .exchanges import Exchange, normalize_exchange
 
 
@@ -86,6 +86,22 @@ def enrich(
         record.bucket, exchange, last_trade_close,
         payout_per_share, stock_ratio, acquirer_price, recovery_ratio,
     )
+    # No empty DLRET in the table: a completed merger or a fund/non-equity closure
+    # with a known last price but no computable consideration has terminal value
+    # ≈ that last price (merger arbitrage closes the gap to the deal value before
+    # the last trade; a fund/ETF redeems at NAV ≈ its last trade). So DLRET ≈ 0 is
+    # the maximum-likelihood estimate, NOT a missing value — emit it as ASSUMED_PAR
+    # at low confidence so a reader never mistakes it for a realized/computed
+    # return. Buckets whose price collapses AFTER delisting (compliance, liquidation)
+    # already carry Shumway/recovery marks and never reach an abstain here. A valid
+    # positive last price is required (no denominator otherwise). This is a
+    # table-only estimate; the firm-month facade (compute_dlret) is untouched.
+    if (
+        record.bucket in (CrspBucket.MERGER, CrspBucket.EXPIRATION)
+        and res.method in (DlretMethod.ABSTAIN_NO_CONSIDERATION, DlretMethod.DROPPED_EXPIRATION)
+        and last_trade_close is not None and last_trade_close > 0
+    ):
+        res = DlretResult(0.0, DlretMethod.ASSUMED_PAR, last_trade_close)
     return EnrichedDelistRecord(
         ticker=record.ticker, cik=record.cik,
         observed_delist_date=record.observed_delist_date,
@@ -101,11 +117,11 @@ def enrich(
     )
 
 
-# ABSTAIN_NO_CONSIDERATION carries value 0.0 in the firm-month facade (a neutral
-# no-shock mark) and UNKNOWN may carry 0.0 or NaN; either way the self-documenting
-# table blanks the dlret cell so a reader never mistakes an abstain/unknown for a
-# realized 0% return (README "never silently zero"). EXCHANGE_TRANSFER_ZERO is NOT
-# in this set — it keeps its explicit 0.
+# A merger/expiration abstain WITH a valid last price is upgraded to ASSUMED_PAR
+# (DLRET 0, see enrich) and rendered, so the only abstains that reach the table are
+# the no-price ones (NaN) — those, and UNKNOWN, are blanked so a reader never
+# mistakes a genuinely-uncomputable row for a realized 0%. EXCHANGE_TRANSFER_ZERO
+# and ASSUMED_PAR keep their explicit 0.
 _DLRET_BLANK_IN_TABLE = {DlretMethod.ABSTAIN_NO_CONSIDERATION, DlretMethod.UNKNOWN}
 
 DLRET_TABLE_COLUMNS = [
