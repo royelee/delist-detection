@@ -102,6 +102,23 @@ MANUAL_OVERRIDES: dict[str, int] = {
     "RICE":  1588238,   # Rice Energy — EQT 2017 (verified)
 }
 
+# Deal-era acquirer ticker -> the symbol the raw Tiingo panel files its price
+# history under. The panel is a 2026 snapshot keyed by each issuer's CURRENT
+# ticker, so an acquirer that was later renamed/merged won't resolve a price
+# file under its deal-era symbol though the history is present under the new one.
+# Each entry verified to return a deal-era nominal close (e.g. rtx.csv carries
+# UTC's 2018-11-26 close of $127.98). The sanity gate still backstops every use.
+ACQUIRER_RENAMES: dict[str, str] = {
+    "UTX":  "RTX",   # United Technologies -> Raytheon Technologies -> RTX
+    "ECA":  "OVV",   # Encana -> Ovintiv
+    "COG":  "CTRA",  # Cabot Oil & Gas -> Coterra
+    "HRS":  "LHX",   # Harris -> L3Harris
+    "Q":    "IQV",   # Quintiles -> IQVIA
+    "SXCI": "CTRX",  # SXC Health -> Catamaran
+    "SPF":  "CAA",   # Standard Pacific -> CalAtlantic
+    "ESV":  "VAL",   # Ensco -> Valaris
+}
+
 
 def main() -> int:
     p = argparse.ArgumentParser()
@@ -335,11 +352,25 @@ def main() -> int:
                     last_trades[(r.ticker.upper(), r.observed_delist_date)] = c
 
         emitted = 0
+        llm_cash_recovered = 0
         drop = {"csv_override": 0, "no_acq_ticker": 0, "no_acq_price": 0,
                 "no_last_close": 0, "fail_sanity": 0}
         for (tkr, date), terms in llm_terms_raw.items():
+            pk = (tkr.upper(), date)
             if terms.stock_ratio is None:
-                continue  # pure cash → the payout extractor owns it; LLM owns the stock leg
+                # Pure-cash deal: the regex payout extractor normally owns these.
+                # Step in only when it found nothing — use the (more reliable) LLM
+                # cash, sanity-gated against last_close so a bad value can't ship.
+                lc = _lookup(last_trades, tkr.upper(), date)
+                if (terms.cash_per_share is not None and pk not in payouts_map
+                        and _lookup(merger_terms, tkr.upper(), date) is None
+                        and lc and lc > 0
+                        and abs(terms.cash_per_share / lc - 1.0) <= tol):
+                    payouts_map[pk] = terms.cash_per_share
+                    payout_src[pk] = "llm"
+                    payout_conf[pk] = terms.confidence or "medium"
+                    llm_cash_recovered += 1
+                continue
             if _lookup(merger_terms, tkr.upper(), date) is not None:
                 drop["csv_override"] += 1
                 continue
@@ -347,7 +378,11 @@ def main() -> int:
             if not acq:
                 drop["no_acq_ticker"] += 1
                 continue
+            # Try the deal-era ticker, then its current-symbol rename (the panel
+            # files renamed acquirers' history under the new ticker).
             acq_price = prices.close_on(acq, date)
+            if acq_price is None and acq.upper() in ACQUIRER_RENAMES:
+                acq_price = prices.close_on(ACQUIRER_RENAMES[acq.upper()], date)
             if acq_price is None:
                 drop["no_acq_price"] += 1
                 continue
@@ -373,14 +408,14 @@ def main() -> int:
                 # Drop it: otherwise build_dlret_table's `terms.get("cash_per_share",
                 # payouts[...])` fallback would re-add that phantom cash and inflate
                 # a stock-only deal into a bogus cash_plus_stock (e.g. MRD 65x).
-                pk = (tkr.upper(), date)
                 payouts_map.pop(pk, None)
                 payout_src.pop(pk, None)
                 payout_conf.pop(pk, None)
-            merged_terms[(tkr.upper(), date)] = d
+            merged_terms[pk] = d
             emitted += 1
         print(f"\nLLM merger terms: {emitted} cash+stock/stock-only emitted "
-              f"({len(llm_terms_raw)} mergers extracted); dropped {drop}")
+              f"({len(llm_terms_raw)} mergers extracted); dropped {drop}; "
+              f"plus {llm_cash_recovered} pure-cash recovered from LLM")
 
     table = build_dlret_table(
         all_records,

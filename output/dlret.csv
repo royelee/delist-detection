@@ -20,7 +20,7 @@ ALEX,merger,2026-03-12,231,0.000480,M&A 2.01+3.01+5.01 (acquired by external acq
 ALR,merger,2017-10-19,231,0.000196,M&A 2.01+3.01+5.01 (acquired by external acquirer),nyse,50.990000,51.000000,,,,,51.000000,cash_only,high,8K_2.01
 ALTR,merger,2025-03-26,231,0.010282,M&A 2.01+3.01+5.01 (acquired by external acquirer),other,111.850000,113.000000,,,,,113.000000,cash_only,high,8K_2.01
 ALXN,merger,2021-07-28,231,,M&A 2.01+3.01+5.01 (acquired by external acquirer),nasdaq,182.500000,,,,,,,abstain_no_consideration,low,
-AMED,merger,2025-08-14,231,,M&A 2.01+3.01+5.01 (acquired by external acquirer),nasdaq,100.990000,,,,,,,abstain_no_consideration,low,
+AMED,merger,2025-08-14,231,0.000099,M&A 2.01+3.01+5.01 (acquired by external acquirer),nasdaq,100.990000,101.000000,,,,,101.000000,cash_only,high,llm
 AMSG,liquidation,2016-12-09,400,-0.550000,"Form 25 + Form 15, 8-K without M&A items: liquidation/voluntary dereg",nasdaq,67.750000,,,,,,,shumway_nasdaq,medium,
 ANAT,merger,2022-09-08,231,-0.000105,M&A 2.01+3.01+5.01 (acquired by external acquirer),nasdaq,190.020000,190.000000,,,,,190.000000,cash_only,high,8K_2.01
 ANN,merger,2015-08-31,231,,M&A 2.01+3.01+5.01 (acquired by external acquirer),nyse,44.890000,,,,,,,abstain_no_consideration,low,
@@ -81,7 +81,7 @@ CFN,merger,2015-03-17,231,0.001476,M&A 2.01+3.01+5.01 (acquired by external acqu
 CHAP,compliance_failure,2020-10-14,580,-0.300000,"Compliance failure (3.01 alone, no M&A indicators) + NT 10-K/Q in prior year (delinquent filer 580)",nyse,0.035000,,,,,,,shumway_nyse_amex,medium,
 CHNG,merger,2022-10-03,231,-0.063296,M&A 2.01+3.01+5.01 (acquired by external acquirer),nasdaq,27.490000,25.750000,,,,,25.750000,cash_only,medium,DEFM14A
 CHS,merger,2024-01-05,231,0.001318,M&A 2.01+3.01+5.01 (acquired by external acquirer),nyse,7.590000,7.600000,,,,,7.600000,cash_only,high,8K_2.01
-CHSI,merger,2012-07-19,231,,M&A 2.01+3.01+5.01 (acquired by external acquirer),nasdaq,92.000000,,,,,,,abstain_no_consideration,low,
+CHSI,merger,2012-07-19,231,-0.047115,M&A 2.01+3.01+5.01 (acquired by external acquirer),nasdaq,92.000000,28.000000,0.660600,90.320000,SXCI,,87.665392,cash_plus_stock,medium,
 CIE,liquidation,2017-12-14,470,-0.300000,Bankruptcy (8-K item 1.03),nyse,0.380000,,,,,,,shumway_nyse_amex,medium,
 CIT,merger,2022-01-03,231,-0.003643,M&A 2.01+3.01+5.01 (acquired by external acquirer),nyse,53.500000,,0.062000,859.760000,FCNCA,,53.305120,stock_only,medium,
 CIVI,merger,2026-01-29,231,-0.000676,M&A 2.01+3.01+5.01 (acquired by external acquirer),nyse,27.380000,,1.450000,18.870000,SM,,27.361500,stock_only,medium,
@@ -93,7 +93,7 @@ CMA,merger,2026-01-30,231,0.057016,M&A 2.01+3.01+5.01 (acquired by external acqu
 CMD,merger,2021-06-02,231,0.014358,M&A 2.01+3.01+5.01 (acquired by external acquirer),nyse,80.370000,16.930000,0.337870,191.180000,STE,,81.523987,cash_plus_stock,medium,
 CNQR,merger,2014-12-04,231,0.001708,M&A 2.01+3.01+5.01 (acquired by external acquirer),nasdaq,128.780000,129.000000,,,,,129.000000,cash_only,high,8K_2.01
 CNW,merger,2015-10-30,231,0.001052,M&A 2.01+3.01+5.01 (acquired by external acquirer),nyse,47.550000,47.600000,,,,,47.600000,cash_only,high,8K_2.01
-COL,merger,2018-11-26,231,,M&A 2.01+3.01+5.01 (acquired by external acquirer),nyse,141.040000,,,,,,,abstain_no_consideration,low,
+COL,merger,2018-11-26,231,0.002230,M&A 2.01+3.01+5.01 (acquired by external acquirer),nyse,141.040000,93.330000,0.375250,127.980000,UTX,,141.354495,cash_plus_stock,medium,
 CONE,merger,2022-03-25,231,0.001549,M&A 2.01+3.01+5.01 (acquired by external acquirer),nasdaq,90.360000,90.500000,,,,,90.500000,cash_only,high,8K_2.01
 COOP,merger,2025-10-01,231,0.022297,M&A 2.01+3.01+5.01 (acquired by external acquirer),nasdaq,210.790000,,11.000000,19.590000,RKT,,215.490000,stock_only,medium,
 COUP,merger,2023-02-28,231,0.000371,M&A 2.01+3.01+5.01 (acquired by external acquirer),other,80.970000,81.000000,,,,,81.000000,cash_only,high,8K_2.01
@@ -205,7 +205,7 @@ IFIN,exchange_transfer,2024-08-30,304,0.000000,Continued 10-K/Q filings >180d af
 IM,merger,2016-12-13,231,0.000257,M&A 2.01+3.01+5.01 (acquired by external acquirer),nyse,38.890000,38.900000,,,,,38.900000,cash_only,high,8K_2.01
 IMCL,compliance_failure,2018-10-05,573,-0.550000,SEC REVOKED registration filed 2019-04-10,nasdaq,0.159277,,,,,,,shumway_nasdaq,medium,
 IMMU,merger,2020-10-23,231,0.001593,M&A 2.01+3.01+5.01 (acquired by external acquirer),nasdaq,87.860000,88.000000,,,,,88.000000,cash_only,high,8K_2.01
-IMS,merger,2016-10-11,200,,M&A 2.01+3.01 (acquisition with delisting),nyse,31.340000,,,,,,,abstain_no_consideration,low,
+IMS,merger,2016-10-11,200,-0.053723,M&A 2.01+3.01 (acquisition with delisting),nyse,31.340000,,0.384000,77.230000,Q,,29.656320,stock_only,medium,
 IPG,merger,2025-11-26,231,0.001058,M&A 2.01+3.01+5.01 (acquired by external acquirer),nyse,24.570000,,0.344000,71.500000,OMC,,24.596000,stock_only,medium,
 IPHI,merger,2021-04-20,231,0.001256,M&A 2.01+3.01+5.01 (acquired by external acquirer),nyse,172.270000,66.000000,2.323000,45.840000,MRVL,,172.486320,cash_plus_stock,medium,
 IRF,compliance_failure,2015-01-13,570,-0.300000,"Compliance failure (3.01 alone, no M&A indicators)",nyse,39.980000,,,,,,,shumway_nyse_amex,medium,
@@ -247,7 +247,7 @@ LXK,merger,2016-11-29,231,0.000247,M&A 2.01+3.01+5.01 (acquired by external acqu
 LYLT,compliance_failure,2023-06-27,570,-0.550000,"Compliance failure (3.01 alone, no M&A indicators)",other,0.011000,,,,,,,shumway_nasdaq,medium,
 MCFE,merger,2022-09-16,231,0.000385,M&A 2.01+3.01+5.01 (acquired by external acquirer),nasdaq,25.990000,26.000000,,,,,26.000000,cash_only,medium,8K_1.01
 MCRS,merger,2014-09-08,231,0.000147,M&A 2.01+3.01+5.01 (acquired by external acquirer),nasdaq,67.990000,68.000000,,,,,68.000000,cash_only,high,8K_2.01
-MCW,merger,2026-05-19,200,,M&A 2.01+3.01 (acquisition with delisting),nasdaq,7.100000,,,,,,,abstain_no_consideration,low,
+MCW,merger,2026-05-19,200,-0.014085,M&A 2.01+3.01 (acquisition with delisting),nasdaq,7.100000,7.000000,,,,,7.000000,cash_only,high,llm
 MDC,exchange_transfer,2024-04-19,304,0.000000,Continued 10-K/Q filings >180d after delist (moved to OTC or spun off),nyse,62.980000,,,,,,,exchange_transfer_zero,high,
 MDLA,merger,2021-10-29,231,0.000294,M&A 2.01+3.01+5.01 (acquired by external acquirer),nyse,33.990000,34.000000,,,,,34.000000,cash_only,medium,DEFM14A
 MDR,compliance_failure,2020-01-22,570,-0.300000,"Compliance failure (3.01 alone, no M&A indicators)",nyse,0.700000,,,,,,,shumway_nyse_amex,medium,
@@ -269,19 +269,19 @@ MRD,merger,2016-09-26,231,-0.018427,M&A 2.01+3.01+5.01 (acquired by external acq
 MRO,merger,2024-11-22,231,-0.001883,M&A 2.01+3.01+5.01 (acquired by external acquirer),nyse,28.550000,,0.255000,111.750000,COP,,28.496250,stock_only,medium,
 MSCC,merger,2018-05-29,231,0.000582,M&A 2.01+3.01+5.01 (acquired by external acquirer),nasdaq,68.740000,68.780000,,,,,68.780000,cash_only,high,8K_2.01
 MSGN,merger,2021-07-09,231,,M&A 2.01+3.01+5.01 (acquired by external acquirer),nyse,14.170000,,,,,,,abstain_no_consideration,low,
-MSP,merger,2022-06-23,231,,M&A 2.01+3.01+5.01 (acquired by external acquirer),other,35.180000,,,,,,,abstain_no_consideration,low,
+MSP,merger,2022-06-23,231,0.009096,M&A 2.01+3.01+5.01 (acquired by external acquirer),other,35.180000,35.500000,,,,,35.500000,cash_only,high,llm
 MXIM,merger,2021-09-01,231,-0.015908,M&A 2.01+3.01+5.01 (acquired by external acquirer),nasdaq,103.140000,,0.630000,161.110000,ADI,,101.499300,stock_only,medium,
 NATI,merger,2023-10-11,231,0.000333,M&A 2.01+3.01+5.01 (acquired by external acquirer),nasdaq,59.980000,60.000000,,,,,60.000000,cash_only,high,8K_2.01
 NAV,merger,2021-06-30,231,0.000000,M&A 2.01+3.01+5.01 (acquired by external acquirer),nyse,44.500000,44.500000,,,,,44.500000,cash_only,high,8K_2.01
 NBL,merger,2020-10-06,231,0.017840,M&A 2.01+3.01+5.01 (acquired by external acquirer),nyse,8.460000,,0.119100,72.300000,CVX,,8.610930,stock_only,medium,
 NEWR,merger,2023-11-07,231,0.000115,M&A 2.01+3.01+5.01 (acquired by external acquirer),nyse,86.990000,87.000000,,,,,87.000000,cash_only,high,8K_2.01
 NFS,expiration,2010-01-08,600,,"Non-equity security (asset_type='etf', name='graniteshares 2x short nflx daily etf')",nyse,52.210000,,,,,,,dropped_expiration,low,
-NFX,merger,2019-02-14,231,,M&A 2.01+3.01+5.01 (acquired by external acquirer),nyse,17.070000,,,,,,,abstain_no_consideration,low,
+NFX,merger,2019-02-14,231,0.023680,M&A 2.01+3.01+5.01 (acquired by external acquirer),nyse,17.070000,,2.671900,6.540000,ECA,,17.474226,stock_only,medium,
 NIHD,merger,2020-08-03,200,,M&A 2.01+3.01 (acquisition with delisting),nasdaq,2.170000,,,,,,,abstain_no_consideration,low,
 NLC,merger,2012-12-10,231,0.000000,M&A 2.01+3.01+5.01 (acquired by external acquirer),nyse,38.800000,38.800000,,,,,38.800000,cash_only,medium,DEFM14A
 NLSN,merger,2022-10-11,231,0.000715,M&A 2.01+3.01+5.01 (acquired by external acquirer),nyse,27.980000,28.000000,,,,,28.000000,cash_only,high,8K_2.01
 NMX,merger,2009-08-28,231,,M&A 2.01+3.01+5.01 (acquired by external acquirer),nyse,81.150000,,,,,,,abstain_no_consideration,low,
-NRE,merger,2019-10-07,231,,M&A 2.01+3.01+5.01 (acquired by external acquirer),nyse,17.020000,,,,,,,abstain_no_consideration,low,
+NRE,merger,2019-10-07,231,-0.000717,M&A 2.01+3.01+5.01 (acquired by external acquirer),nyse,17.020000,17.007800,,,,,17.007800,cash_only,high,llm
 NRF,merger,2017-01-18,231,-0.364538,M&A 2.01+3.01+5.01 (acquired by external acquirer),nyse,16.130000,10.250000,,,,,10.250000,cash_only,medium,DEFM14A
 NSR,liquidation,2022-08-15,400,-0.300000,"Form 25 + Form 15, no merger 8-K: voluntary dereg / liquidation",nyse,7.760000,,,,,,,shumway_nyse_amex,medium,
 NTRI,merger,2019-03-08,231,,M&A 2.01+3.01+5.01 (acquired by external acquirer),nasdaq,42.890000,,,,,,,abstain_no_consideration,low,
@@ -409,7 +409,7 @@ TSP,compliance_failure,2024-02-08,580,-0.550000,"Compliance failure (3.01 alone,
 TSRO,merger,2019-01-18,231,0.000534,M&A 2.01+3.01+5.01 (acquired by external acquirer),nasdaq,74.960000,75.000000,,,,,75.000000,cash_only,high,8K_2.01
 TSS,expiration,2019-09-17,600,,"Non-equity security (asset_type='etf', name='graniteshares 1x short tsla daily etf')",nyse,133.270000,,,,,,,dropped_expiration,low,
 TWC,merger,2016-05-26,231,0.042559,M&A 2.01+3.01+5.01 (acquired by external acquirer),nyse,209.560000,100.000000,0.540900,219.040000,CHTR,,218.478736,cash_plus_stock,medium,8K_2.01
-TWKS,merger,2024-11-13,200,,M&A 2.01+3.01 (acquisition with delisting),nasdaq,4.470000,,,,,,,abstain_no_consideration,low,
+TWKS,merger,2024-11-13,200,-0.015660,M&A 2.01+3.01 (acquisition with delisting),nasdaq,4.470000,4.400000,,,,,4.400000,cash_only,high,llm
 TWTR,merger,2022-10-28,231,0.009311,M&A 2.01+3.01+5.01 (acquired by external acquirer),nyse,53.700000,54.200000,,,,,54.200000,cash_only,high,8K_2.01
 TWX,merger,2018-06-15,231,0.026491,M&A 2.01+3.01+5.01 (acquired by external acquirer),nyse,98.770000,53.750000,1.437000,33.150000,T,,101.386550,cash_plus_stock,medium,
 UAG,expiration,2020-12-09,600,,"Non-equity security (asset_type='etf', name='ubs ag jersey')",nyse,17.570000,,,,,,,dropped_expiration,low,
@@ -448,11 +448,11 @@ WWAV,merger,2017-07-17,231,0.000178,M&A 2.01+3.01+5.01 (acquired by external acq
 WYN,exchange_transfer,2018-05-31,304,0.000000,Continued 10-K/Q filings >180d after delist (moved to OTC or spun off),nyse,108.440000,,,,,,,exchange_transfer_zero,high,
 X,merger,2025-06-18,231,0.002918,M&A 2.01+3.01+5.01 (acquired by external acquirer),nyse,54.840000,55.000000,,,,,55.000000,cash_only,high,8K_2.01
 XCO,exchange_transfer,2017-12-26,304,0.000000,Continued 10-K/Q filings >180d after delist (moved to OTC or spun off),nyse,0.640000,,,,,,,exchange_transfer_zero,high,
-XEC,merger,2021-10-04,231,,M&A 2.01+3.01+5.01 (acquired by external acquirer),nyse,87.200000,,,,,,,abstain_no_consideration,low,
+XEC,merger,2021-10-04,231,0.048308,M&A 2.01+3.01+5.01 (acquired by external acquirer),nyse,87.200000,,4.014600,22.770000,COG,,91.412442,stock_only,medium,
 XL,merger,2018-09-13,231,0.000174,M&A 2.01+3.01+5.01 (acquired by external acquirer),nyse,57.590000,57.600000,,,,,57.600000,cash_only,high,8K_2.01
 XLNX,merger,2022-02-14,231,0.010327,M&A 2.01+3.01+5.01 (acquired by external acquirer),nasdaq,194.920000,,1.723400,114.270000,AMD,,196.932918,stock_only,medium,
 XLRN,merger,2021-11-22,231,0.006993,M&A 2.01+3.01+5.01 (acquired by external acquirer),nasdaq,178.750000,180.000000,,,,,180.000000,cash_only,high,8K_2.01
-XLS,merger,2015-05-29,231,,M&A 2.01+3.01+5.01 (acquired by external acquirer),nyse,24.660000,,,,,,,abstain_no_consideration,low,
+XLS,merger,2015-05-29,231,0.003449,M&A 2.01+3.01+5.01 (acquired by external acquirer),nyse,24.660000,16.625000,0.102500,79.220000,HRS,,24.745050,cash_plus_stock,medium,
 XOG,merger,2021-11-24,231,-0.062724,M&A 2.01+3.01+5.01 (acquired by external acquirer),nasdaq,68.540000,,1.188326,54.060000,CIVI,,64.240886,stock_only,medium,
 XTO,compliance_failure,2013-02-07,570,-0.550000,"Compliance failure (3.01 alone, no M&A indicators)",other,41.810000,,,,,,,shumway_nasdaq,medium,
 Y,merger,2022-10-28,231,0.000271,M&A 2.01+3.01+5.01 (acquired by external acquirer),nyse,847.790000,848.020000,,,,,848.020000,cash_only,high,8K_2.01
