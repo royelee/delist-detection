@@ -31,6 +31,7 @@ Thumbs.db
 # Project caches (large; re-derivable from EDGAR)
 cache/edgar/
 cache/ticker_resolution.json
+cache/llm/
 
 # Run logs
 *.log

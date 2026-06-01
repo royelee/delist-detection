@@ -6,7 +6,8 @@ Five operational buckets, each with deterministic train/backtest handling:
     MERGER              — 200s, neutral-to-positive return event, use cash payout
     EXCHANGE_TRANSFER   — 300s, ticker continues elsewhere; re-link, don't drop
     LIQUIDATION         — 400s, partial recovery; apply realized recovery
-    COMPLIANCE_FAILURE  — 500s (and the dangerous half of 400s); apply -100% terminal
+    COMPLIANCE_FAILURE  — 500s (excl. 501/502 up-migrations); apply the Shumway
+                          constant (-30% NYSE/AMEX, -55% Nasdaq) per bmp_correction
     EXPIRATION          — 600s, scheduled end (warrants/units/ADRs); drop from equity universe
     UNKNOWN             — could not classify with confidence
 """
@@ -56,6 +57,11 @@ def bucket_for_code(code: int | None) -> CrspBucket:
         return CrspBucket.EXCHANGE_TRANSFER
     if 400 <= code < 500:
         return CrspBucket.LIQUIDATION
+    # Per Shumway & Warther (1999), only 501/502 (migration to NYSE/AMEX) are
+    # positive up-migrations; 500 and 505-588 are performance-related distress
+    # delistings (-> COMPLIANCE_FAILURE below). See docs/research/dlret-generation.md.
+    if 501 <= code <= 502:
+        return CrspBucket.EXCHANGE_TRANSFER
     if 500 <= code < 600:
         return CrspBucket.COMPLIANCE_FAILURE
     if 600 <= code < 700:

@@ -10,13 +10,17 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta
 
 import requests
 
 from .classifier import DelistRecord
 from .crsp_codes import CrspBucket
-from .edgar import EdgarSubmission
+from .filing_selection import (
+    announcement_8k,
+    closing_8k,
+    form_filings,
+    parse_date,
+)
 
 
 @dataclass(frozen=True)
@@ -208,21 +212,6 @@ def _match_payout(
     return (val, quotes[val]) if val is not None else (None, "")
 
 
-# Deal-close 8-Ks (Item 2.01) can precede the recorded delist date by weeks
-# to months (the security lingers on OTC, or the universe records a later
-# last-trade date). Mirror the classifier's 120-day backscan on the "before"
-# side; keep "after" tight since a true closing 8-K rarely lags the delist.
-_CLOSING_WINDOW = (timedelta(days=120), timedelta(days=30))    # (before, after) delist
-_ANNOUNCE_WINDOW = (timedelta(days=365), timedelta(days=7))    # before delist
-
-
-def _parse(s: str) -> date | None:
-    try:
-        return datetime.strptime(s, "%Y-%m-%d").date()
-    except (ValueError, TypeError):
-        return None
-
-
 class PayoutExtractor:
     def __init__(self, edgar) -> None:
         self.edgar = edgar
@@ -243,16 +232,16 @@ class PayoutExtractor:
         filings = self.edgar.recent_filings(record.cik)
         if not filings:
             return _NONE
-        delist = _parse(record.observed_delist_date or "")
+        delist = parse_date(record.observed_delist_date or "")
 
         # allow_weak: bare per-share / purchase-price / merger-consideration
         # patterns are trustworthy in clean merger-event 8-Ks but noisy in
         # multi-page proxies, so they are disabled for the DEFM14A/PREM14A tiers.
         tiers = [
-            ("8K_2.01", "high", True, self._tier1_closing(filings, delist)),
-            ("8K_1.01", "medium", True, self._tier2_announcement(filings, delist)),
-            ("DEFM14A", "medium", False, self._tier_form(filings, "DEFM14A", delist)),
-            ("PRE14A", "low", False, self._tier_form(filings, "PREM14A", delist)),
+            ("8K_2.01", "high", True, closing_8k(filings, delist)),
+            ("8K_1.01", "medium", True, announcement_8k(filings, delist)),
+            ("DEFM14A", "medium", False, form_filings(filings, "DEFM14A", delist)),
+            ("PRE14A", "low", False, form_filings(filings, "PREM14A", delist)),
         ]
         for source, conf, allow_weak, candidates in tiers:
             for f in candidates:
@@ -270,40 +259,3 @@ class PayoutExtractor:
                 if val is not None:
                     return PayoutResult(val, conf, source, f.accession, quotes[val][:160])
         return _NONE
-
-    @staticmethod
-    def _in_window(f: EdgarSubmission, delist: date | None,
-                   before: timedelta, after: timedelta) -> bool:
-        if delist is None:
-            return True
-        fd = _parse(f.report_date) or _parse(f.filing_date)
-        if fd is None:
-            return False
-        return (delist - before) <= fd <= (delist + after)
-
-    def _tier1_closing(self, filings, delist):
-        before, after = _CLOSING_WINDOW
-        out = [f for f in filings
-               if f.form == "8-K" and "2.01" in f.item_set
-               and self._in_window(f, delist, before, after)]
-        anchor = delist or date.min
-        out.sort(key=lambda f: abs(((_parse(f.report_date) or _parse(f.filing_date) or anchor) - anchor).days))
-        return out
-
-    def _tier2_announcement(self, filings, delist):
-        before, after = _ANNOUNCE_WINDOW
-        out = [f for f in filings
-               if f.form == "8-K" and "1.01" in f.item_set
-               and self._in_window(f, delist, before, after)]
-        out.sort(key=lambda f: (_parse(f.report_date) or _parse(f.filing_date) or date.min), reverse=True)
-        return out
-
-    def _tier_form(self, filings, form, delist):
-        out = [f for f in filings if f.form == form]
-        if delist is not None:
-            # A merger proxy is filed within a couple of years of close; bound
-            # both sides so a recycled CIK's decades-old proxy cannot match.
-            lo, hi = delist - timedelta(days=730), delist + timedelta(days=30)
-            out = [f for f in out if (fd := _parse(f.filing_date)) and lo <= fd <= hi]
-        out.sort(key=lambda f: (_parse(f.filing_date) or date.min), reverse=True)
-        return out

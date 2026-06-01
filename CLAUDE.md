@@ -19,7 +19,7 @@ examples; `docs/data-flow.md` for the full classifier trigger table.
 ```bash
 conda activate rdagent4qlib              # project env — pytest, pandas/requests, and the editable install live here (base lacks them)
 pip install -e .                         # editable install (Python ≥3.10) — once per env
-pytest                                    # full suite (122 tests, offline, no network)
+pytest                                    # full suite (160 tests, offline, no network)
 pytest tests/test_payout_extractor.py -v  # one file
 pytest tests/test_payout_extractor.py::test_match_in_cash_family_altr -v   # one test
 
@@ -28,6 +28,14 @@ python scripts/classify_universe.py      # full universe → output/*.csv (NETWO
 python scripts/classify_universe.py --limit 20 --no-extract-payouts   # fast dev subset
 python scripts/verify_against_web.py     # independent EDGAR cross-check → output/web_verification.csv
 python scripts/regen_payout_fixtures.py  # refetch golden 8-K fixtures from live SEC
+# End-to-end pipeline (the canonical way to use the library) — classify a universe → output/dlret.csv, then firm-month-correct a returns panel:
+python scripts/classify_universe.py --last-trade-closes lt.csv --merger-terms terms.csv --recoveries rec.csv   # → output/dlret.csv (+ delist_classifications.csv, payouts.csv)
+python scripts/compute_corrected_returns.py --panel panel.csv --classifications output/delist_classifications.csv --av-csv "$AV_LISTING_CSV" --payouts output/payouts.csv --last-trade-closes lt.csv --recoveries rec.csv --out corrected.parquet   # firm-month BMP correction
+# override-CSV columns: lt.csv=`ticker,last_trade_close` · terms.csv=`ticker,cash_per_share,stock_ratio,acquirer_price,acquirer_ticker` · rec.csv=`ticker,recovery_ratio` — each also accepts an optional `observed_delist_date` column for per-event (recycled-ticker) overrides
+# (append --limit N to classify_universe for a fast cached/offline subset)
+# Auto-extract cash+stock merger terms with an LLM instead of hand-writing terms.csv (NETWORK: SEC + OpenAI; needs OPENAI_API_KEY + CHAT_MODEL in .env):
+python scripts/classify_universe.py --extract-merger-terms-llm   # → output/dlret.csv with cash_plus_stock/stock_only rows (98 deals on the full universe)
+# LLM reads cash leg + stock ratio + acquirer ticker from EDGAR; acquirer_price + last_trade_close are joined from --raw-tiingo-dir (default ../qlib_practice .../raw_tiingo_csv, nominal `close`); a sanity gate (--merger-terms-sanity-tol, default 0.15) drops any term whose terminal value doesn't reconcile with last_close. An explicit --merger-terms row always overrides the LLM. Calibrate the prompt with `python scripts/eval_merger_extractor.py` (10 labeled deals, live) before trusting a run.
 ```
 
 There is **no lint/format tooling** configured — do not invent a lint command.
@@ -56,7 +64,16 @@ observed_delist_date, crsp_code, bucket, confidence, reason, evidence`.
   `5xx→compliance_failure`, `6xx→expiration`). **The bucket — not the exact code
   — drives all downstream handling.**
 - `payout_extractor.py` — bridges the layers: extracts the per-share **cash**
-  merger consideration from EDGAR filing text (network) for the `merger` bucket.
+  merger consideration from EDGAR filing text (network, regex) for the `merger` bucket.
+- `llm_merger_extractor.py` — the **cash+stock** counterpart: an LLM reads a
+  filing and returns full structured terms (`cash_per_share`, `stock_ratio`,
+  `acquirer_ticker`) the regex extractor can't generalize over. Uses
+  `llm_client.py` (injectable OpenAI JSON client) and `filing_selection.py`
+  (filing-tier picker shared with `payout_extractor.py`); responses cached under
+  `cache/llm/`. Disabled by default — enabled by `--extract-merger-terms-llm`.
+- `raw_tiingo.py` — `RawTiingoPrices.close_on(ticker, date)` nominal-close lookup
+  from the raw Tiingo panel; supplies `acquirer_price` + `last_trade_close` for
+  the LLM path (the prices are NOT parsed from filings).
 
 **Handling (pure):**
 - `handling.py` — event-level: `build_train_label_adjustment` (forward-return
@@ -65,6 +82,8 @@ observed_delist_date, crsp_code, bucket, confidence, reason, evidence`.
 - `bmp_correction.py` + `exchanges.py` — firm-month BMP 2007 correction:
   `R_month = (1+R_partial)(1+DLRET)−1`, synthesizing `DLRET` per bucket with
   exchange-specific Shumway constants when no realized delist return is observed.
+- `dlret.py` — DLRET hub: `resolve_dlret`/`DlretResult`/`compute_dlret` (self-explaining delisting return). `bmp_correction.py` re-exports for backward compatibility.
+- `reconstruction.py` — `EnrichedDelistRecord`, `enrich`, `build_dlret_table`, `write_dlret_csv`. `output/dlret.csv` is the **primary output**.
 - `qlib_adapter.py` — DataFrame splicers over a `(datetime, instrument)` panel:
   `inject_terminal_labels`, `apply_backtest_exits`, `apply_bmp_corrections`.
 
@@ -86,13 +105,7 @@ conflate them.
   resolution on `(ticker, observed_date)` and by `MANUAL_OVERRIDES` in
   `scripts/classify_universe.py` (~35 ambiguous short tickers). When web
   verification proves a wrong CIK, extend that dict — don't patch the resolver.
-- **Payout extraction is cash-only by design.** Mixed cash+stock, cash+stock
-  election, and stock-leg deals **intentionally abstain** (a miss → neutral mark,
-  the correct survivorship treatment; emitting only the cash leg would understate
-  the return). ~232/346 merger tickers get a payout; the other ~114 are *correct*
-  misses, not a coverage bug. Contingent CVRs are not a stock leg (cash+CVR keeps
-  its cash floor). The operative cash signal is the phrase "in cash", not "per
-  share". Verify a ticker is genuinely pure-cash before treating its miss as a gap.
+- **Payout extraction is cash-only; the DLRET table supports full consideration.** Auto-extraction from EDGAR remains cash-only. The DLRET table abstains (neutral mark) only when no consideration terms are supplied; when stock-leg terms (`stock_ratio`, `acquirer_price`) are provided via `--merger-terms`, it computes the full cash+stock consideration (e.g. AET→CVS: $145 cash + 0.8378 CVS @ $80 = $212.02, DLRET = +11.6%). The `--last-trade-closes`, `--recoveries`, and `--merger-terms` CSVs accept an optional `observed_delist_date` column for per-event overrides (blank/absent = applies to all events of that ticker); exchange and payout maps are derived per delisting event automatically.
 - **Validation is the EDGAR-cross-check loop**, not eyeballing: re-run
   `classify_universe.py`, then `verify_against_web.py` (and curl the cited
   accession) to confirm output against an independent path. Drill mismatches to
