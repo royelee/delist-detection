@@ -33,6 +33,9 @@ python scripts/classify_universe.py --last-trade-closes lt.csv --merger-terms te
 python scripts/compute_corrected_returns.py --panel panel.csv --classifications output/delist_classifications.csv --av-csv "$AV_LISTING_CSV" --payouts output/payouts.csv --last-trade-closes lt.csv --recoveries rec.csv --out corrected.parquet   # firm-month BMP correction
 # override-CSV columns: lt.csv=`ticker,last_trade_close` · terms.csv=`ticker,cash_per_share,stock_ratio,acquirer_price,acquirer_ticker` · rec.csv=`ticker,recovery_ratio` — each also accepts an optional `observed_delist_date` column for per-event (recycled-ticker) overrides
 # (append --limit N to classify_universe for a fast cached/offline subset)
+# Auto-extract cash+stock merger terms with an LLM instead of hand-writing terms.csv (NETWORK: SEC + OpenAI; needs OPENAI_API_KEY + CHAT_MODEL in .env):
+python scripts/classify_universe.py --extract-merger-terms-llm   # → output/dlret.csv with cash_plus_stock/stock_only rows (98 deals on the full universe)
+# LLM reads cash leg + stock ratio + acquirer ticker from EDGAR; acquirer_price + last_trade_close are joined from --raw-tiingo-dir (default ../qlib_practice .../raw_tiingo_csv, nominal `close`); a sanity gate (--merger-terms-sanity-tol, default 0.15) drops any term whose terminal value doesn't reconcile with last_close. An explicit --merger-terms row always overrides the LLM. Calibrate the prompt with `python scripts/eval_merger_extractor.py` (10 labeled deals, live) before trusting a run.
 ```
 
 There is **no lint/format tooling** configured — do not invent a lint command.
@@ -61,7 +64,16 @@ observed_delist_date, crsp_code, bucket, confidence, reason, evidence`.
   `5xx→compliance_failure`, `6xx→expiration`). **The bucket — not the exact code
   — drives all downstream handling.**
 - `payout_extractor.py` — bridges the layers: extracts the per-share **cash**
-  merger consideration from EDGAR filing text (network) for the `merger` bucket.
+  merger consideration from EDGAR filing text (network, regex) for the `merger` bucket.
+- `llm_merger_extractor.py` — the **cash+stock** counterpart: an LLM reads a
+  filing and returns full structured terms (`cash_per_share`, `stock_ratio`,
+  `acquirer_ticker`) the regex extractor can't generalize over. Uses
+  `llm_client.py` (injectable OpenAI JSON client) and `filing_selection.py`
+  (filing-tier picker shared with `payout_extractor.py`); responses cached under
+  `cache/llm/`. Disabled by default — enabled by `--extract-merger-terms-llm`.
+- `raw_tiingo.py` — `RawTiingoPrices.close_on(ticker, date)` nominal-close lookup
+  from the raw Tiingo panel; supplies `acquirer_price` + `last_trade_close` for
+  the LLM path (the prices are NOT parsed from filings).
 
 **Handling (pure):**
 - `handling.py` — event-level: `build_train_label_adjustment` (forward-return
