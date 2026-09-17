@@ -38,3 +38,28 @@ def test_bankruptcy_8ks_window():
 def test_mentions_bankruptcy():
     assert mentions_bankruptcy("filed voluntary petitions under chapter 11 of title 11")
     assert not mentions_bankruptcy("completion of the merger with CSG")
+
+
+from delist_detection.evidence import item_text, renamed_near, says_listing_transfer, still_operating
+
+LC_SUB = {"name": "Happen, Inc.", "formerNames": [
+    {"name": "LendingClub Corp", "from": "2007-08-15T04:00:00.000Z", "to": "2026-06-18T04:00:00.000Z"}]}
+
+
+def test_renamed_near():
+    assert renamed_near(LC_SUB, date(2026, 6, 1)) == "LendingClub Corp"
+    assert renamed_near(LC_SUB, date(2025, 1, 1)) is None
+
+
+def test_still_operating_needs_results_and_no_form15():
+    fs = [_8k("2026-07-27", "2.02,9.01")]
+    assert still_operating(fs, date(2026, 6, 1))
+    fs.append(EdgarSubmission("F", "15-12G", "2026-07-13", "", "", "f.htm"))
+    assert not still_operating(fs, date(2026, 6, 1))
+
+
+def test_listing_transfer_text():
+    t = ("Item 3.01 Notice of Delisting ... notified the NYSE of its intention to voluntarily "
+         "withdraw the listing of its common stock from the NYSE and transfer the listing to Nasdaq")
+    assert says_listing_transfer(item_text(t, "3.01"))
+    assert not says_listing_transfer("Item 3.01 ... did not regain compliance with the minimum bid price")

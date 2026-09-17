@@ -136,3 +136,25 @@ import pytest
 def test_item_fingerprints(items, code):
     c = DelistClassifier(edgar=None, resolver=None)
     assert c._classify_items(items)[0] == code
+
+
+class _RenameEdgar(_TextEdgar):
+    def submissions(self, cik):
+        return LC_LIKE
+
+
+LC_LIKE = {"name": "Happen, Inc.", "sic": "6141", "formerNames": [
+    {"name": "Reorg Co", "from": "2007-08-15T04:00:00.000Z", "to": "2026-06-18T04:00:00.000Z"}]}
+
+
+def test_rename_while_still_operating_is_an_exchange_transfer():
+    fs = [
+        EdgarSubmission("E0", "10-K", "2026-02-20", "", "", "k.htm"),   # existed before the date
+        EdgarSubmission("E1", "8-K", "2026-06-02", "2026-06-02", "3.01,7.01,9.01", "a.htm"),
+        EdgarSubmission("E2", "25", "2026-06-18", "", "", "p.xml"),
+        EdgarSubmission("E3", "8-K", "2026-07-27", "2026-07-27", "2.02,9.01", "b.htm"),
+    ]
+    e = _RenameEdgar(fs, {"E1": "Item 3.01 ... transfer the listing to The Nasdaq Stock Market"})
+    from delist_detection.ticker_resolver import TickerResolver
+    rec = DelistClassifier(e, TickerResolver(e)).classify_ticker("REORG", "2026-06-01")
+    assert rec.bucket is CrspBucket.EXCHANGE_TRANSFER and rec.crsp_code == 304

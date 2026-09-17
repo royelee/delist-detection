@@ -14,9 +14,6 @@ GOLDEN_MANUAL = {"IMCL": 1520047}
 # case id -> the task after which test_golden_bucket_and_flags passes. Delete entries
 # as tasks land; if a case still fails only for a later task's rule, move it there.
 XFAIL_BUCKET = {
-    # renames / listing transfers
-    "LC_2026-06-01": 7,     # 570: the 3.01 notice announces the move to Nasdaq
-    "SKLZ_2026-06-18": 7,   # 570 anchored on the 2021-08-16 Form 25 (needs Task 5 too)
     # SPAC (each resolves to the SPAC and already carries member_name_mismatch)
     "FST_2022-08-25": 8,    # 400: Form 25 + Form 15, no merger 8-K
     "BWC_2023-08-11": 8,    # 580: 3.01 + NT 10-K

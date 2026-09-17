@@ -7,6 +7,7 @@ from datetime import date, datetime, timedelta
 from .edgar import EdgarSubmission
 
 _BANKRUPTCY_TEXT = re.compile(r"bankruptcy|chapter\s+(?:11|7)\b|receivership", re.I)
+_TRANSFER_TEXT = re.compile(r"transfer\s+(?:the|its|of\s+(?:the|its))\s+listing", re.I)
 
 
 def parse_day(s: str | None) -> date | None:
@@ -78,3 +79,40 @@ def filed_operating_between(filings: list[EdgarSubmission], lo: date, hi: date) 
         if d and lo < d < hi and (f.form in OPERATING_FORMS or (f.form == "8-K" and "2.02" in f.item_set)):
             return True
     return False
+
+
+def renamed_near(sub: dict, on: date, days: int = 60) -> str | None:
+    """The former name whose EDGAR-name-change end date falls within `days`
+    of `on` — a rename around the delisting date, not just any old name."""
+    for fn in sub.get("formerNames") or []:
+        hi = parse_day(fn.get("to"))
+        if hi and abs((hi - on).days) <= days:
+            return fn.get("name")
+    return None
+
+
+def still_operating(filings: list[EdgarSubmission], on: date, days: int = 15) -> bool:
+    """Reported results (10-K/10-Q or an 8-K item 2.02) after on+days and filed no Form 15 after on."""
+    cutoff = on + timedelta(days=days)
+    operating = deregistered = False
+    for f in filings:
+        d = parse_day(f.filing_date)
+        if d is None or d <= on:
+            continue
+        if f.form.startswith("15-"):
+            deregistered = True
+        if d > cutoff and (f.form in OPERATING_FORMS or (f.form == "8-K" and "2.02" in f.item_set)):
+            operating = True
+    return operating and not deregistered
+
+
+def item_text(text: str, item: str, width: int = 1500) -> str:
+    """The slice of `text` starting at the `Item {item}` heading, `width` chars wide."""
+    i = (text or "").find(f"Item {item}")
+    return text[i:i + width] if i >= 0 else ""
+
+
+def says_listing_transfer(text: str) -> bool:
+    """True if `text` describes transferring the listing to another exchange,
+    as opposed to a compliance-deficiency notice."""
+    return bool(_TRANSFER_TEXT.search(text or ""))

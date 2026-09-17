@@ -17,7 +17,15 @@ from typing import Iterable
 
 from .crsp_codes import CrspBucket, bucket_for_code
 from .edgar import EdgarClient, EdgarSubmission
-from .evidence import bankruptcy_8ks, filed_operating_between, mentions_bankruptcy
+from .evidence import (
+    bankruptcy_8ks,
+    filed_operating_between,
+    item_text,
+    mentions_bankruptcy,
+    renamed_near,
+    says_listing_transfer,
+    still_operating,
+)
 from .ticker_resolver import TickerResolver
 
 
@@ -232,6 +240,25 @@ class DelistClassifier:
                 return f
         return None
 
+    def _rename_or_transfer(self, cik, filings, observed):
+        """A rename around the delisting date, or a 3.01 notice that reads as a
+        listing transfer rather than a deficiency, while the company keeps
+        reporting results: an exchange transfer, not a compliance failure."""
+        sub = self.edgar.submissions(cik)
+        if not isinstance(sub, dict):
+            return None
+        old = renamed_near(sub, observed)
+        transfer = False
+        for f in filings:
+            d = _parse_date(f.filing_date)
+            if f.form.startswith("8-K") and "3.01" in f.item_set and d and abs((d - observed).days) <= 30:
+                text = self.edgar.fetch_filing_text(cik, f.accession, f.primary_doc)
+                transfer = transfer or says_listing_transfer(item_text(text, "3.01"))
+        if (old or transfer) and still_operating(filings, observed):
+            why = f"renamed from {old!r}" if old else "3.01 notice announces a listing transfer"
+            return f"Ticker change / listing transfer: {why}; company still reports results"
+        return None
+
     def _effective_items(self, cik, f, flags):
         """The 8-K's item set with an unconfirmed 1.03 tag stripped.
 
@@ -402,6 +429,20 @@ class DelistClassifier:
                     bucket=CrspBucket.LIQUIDATION, confidence="high",
                     reason=f"Bankruptcy (8-K item 1.03 filed {bk.filing_date})",
                     evidence={**evidence, "bankruptcy_8k": asdict(bk)},
+                )
+
+        # A rename or a 3.01 "transfer the listing" notice, with the company
+        # still reporting results afterward, is an exchange transfer — not a
+        # compliance failure. Checked before the Form-25-driven branches so a
+        # frozen Form 25 tail (e.g. an old SPAC-merger Form 25) can't hide it.
+        if observed:
+            why = self._rename_or_transfer(resolution.cik, filings, observed)
+            if why:
+                return DelistRecord(
+                    ticker=ticker.upper(), cik=resolution.cik,
+                    observed_delist_date=observed_delist_date, crsp_code=304,
+                    bucket=CrspBucket.EXCHANGE_TRANSFER, confidence="high",
+                    reason=why, evidence=evidence,
                 )
 
         # Exchange-transfer override is the strongest single signal —
