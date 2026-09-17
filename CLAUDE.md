@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A sidecar for the `qlib_practice` Tiingo pipeline that makes a US-equity quant
+A sidecar for a Tiingo-style price pipeline that makes a US-equity quant
 universe survivorship-bias-aware. It reads a Tiingo-style instruments file
 (`ticker, start, end`) and, for every delisted ticker, uses **only public SEC
 EDGAR data** to classify *why* it stopped trading into a CRSP-style `DLSTCD`
@@ -16,8 +16,10 @@ examples; `docs/data-flow.md` for the full classifier trigger table.
 
 ## Commands
 
+The project's Python environment provides pytest, pandas, requests, and the
+editable install.
+
 ```bash
-conda activate rdagent4qlib              # project env — pytest, pandas/requests, and the editable install live here (base lacks them)
 pip install -e .                         # editable install (Python ≥3.10) — once per env
 pytest                                    # full suite (160 tests, offline, no network)
 pytest tests/test_payout_extractor.py -v  # one file
@@ -35,7 +37,7 @@ python scripts/compute_corrected_returns.py --panel panel.csv --classifications 
 # (append --limit N to classify_universe for a fast cached/offline subset)
 # Auto-extract cash+stock merger terms with an LLM instead of hand-writing terms.csv (NETWORK: SEC + OpenAI; needs OPENAI_API_KEY + CHAT_MODEL in .env):
 python scripts/classify_universe.py --extract-merger-terms-llm   # → output/dlret.csv with cash_plus_stock/stock_only rows (98 deals on the full universe)
-# LLM reads cash leg + stock ratio + acquirer ticker from EDGAR; acquirer_price + last_trade_close are joined from --raw-tiingo-dir (default ../qlib_practice .../raw_tiingo_csv, nominal `close`); a sanity gate (--merger-terms-sanity-tol, default 0.15) drops any term whose terminal value doesn't reconcile with last_close. An explicit --merger-terms row always overrides the LLM. Calibrate the prompt with `python scripts/eval_merger_extractor.py` (10 labeled deals, live) before trusting a run.
+# LLM reads cash leg + stock ratio + acquirer ticker from EDGAR; acquirer_price + last_trade_close are joined from --raw-tiingo-dir (default `$RAW_TIINGO_DIR`); a sanity gate (--merger-terms-sanity-tol, default 0.15) drops any term whose terminal value doesn't reconcile with last_close. An explicit --merger-terms row always overrides the LLM. Calibrate the prompt with `python scripts/eval_merger_extractor.py` (10 labeled deals, live) before trusting a run.
 ```
 
 There is **no lint/format tooling** configured — do not invent a lint command.
@@ -113,10 +115,11 @@ conflate them.
   `classify_universe.py`, then `verify_against_web.py` (and curl the cited
   accession) to confirm output against an independent path. Drill mismatches to
   root cause and re-run.
-- **Hardcoded external paths.** `classify_universe.py` points `AV_LISTING_CSV` /
-  `AV_ACTIVE_CSV` at absolute paths inside `../qlib_practice`; it reads
-  `data/delisted_tickers.tsv` and writes `output/`. Output CSVs are committed
-  artifacts.
+- **Configurable input paths.** `classify_universe.py` reads the AV listing
+  CSVs (`AV_LISTING_CSV` / `AV_ACTIVE_CSV`) and the raw price directory
+  (`--raw-tiingo-dir` / `RAW_TIINGO_DIR`) from env vars or CLI flags, with
+  repo-local defaults; it also reads `data/delisted_tickers.tsv` and writes
+  `output/`. Output CSVs are committed artifacts.
 
 ## Design/plan docs
 

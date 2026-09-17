@@ -8,9 +8,9 @@ handling.
 
 | Source | Path | Role |
 |---|---|---|
-| Tiingo universe | `fetch_data_aplha/data/tiingo_2026_05_22/instruments/all.txt` | List of `(ticker, start_date, end_date)`. A row with `end_date < today` is a delisting candidate. |
-| Alpha Vantage delisted list | `fetch_data_aplha/data/alphavantage_listing_status/listing_status_delisted_2026-05-19.csv` | Provides `(ticker, name, exchange, assetType, ipoDate, delistingDate)` — used as a CIK-resolution hint and asset-type signal. |
-| Alpha Vantage active list | `…/listing_status_active_2026-05-19.csv` | Fallback when a Tiingo ticker is missing from the delisted CSV (recycled or rename cases). |
+| Tiingo universe | the consumer's instruments file (`ticker, start, end`) | List of `(ticker, start_date, end_date)`. A row with `end_date < today` is a delisting candidate. |
+| Alpha Vantage delisted list | an Alpha Vantage LISTING_STATUS delisted CSV | Provides `(ticker, name, exchange, assetType, ipoDate, delistingDate)` — used as a CIK-resolution hint and asset-type signal. |
+| Alpha Vantage active list | an Alpha Vantage LISTING_STATUS active CSV | Fallback when a Tiingo ticker is missing from the delisted CSV (recycled or rename cases). |
 | SEC EDGAR | `data.sec.gov/submissions/CIK########.json` and `efts.sec.gov/LATEST/search-index` | Ground truth for filings (Form 25, 8-K item codes, Form 15). All output classifications derive from these. |
 
 ## Pipeline

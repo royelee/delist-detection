@@ -42,7 +42,7 @@ corrections; the 501/502 bug this spec fixes).
 - **Auto-extracting stock-leg merger terms from EDGAR** (exchange ratio, acquirer
   price). These remain externally provided inputs. The existing cash-only payout
   extractor is unchanged.
-- **Sourcing prices from `qlib_practice`.** `last_trade_close`, `acquirer_price`,
+- **Sourcing prices from the consumer pipeline.** `last_trade_close`, `acquirer_price`,
   and `recovery_ratio` are provided as inputs to the new method, keeping it
   decoupled and offline-testable.
 - A separate `−100%` upper-bound column. The upper bound is a stress test, not a

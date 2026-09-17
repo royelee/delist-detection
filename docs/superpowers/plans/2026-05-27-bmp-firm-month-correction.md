@@ -4,11 +4,11 @@
 
 **Goal:** Add Beaver-McNichols-Price (2007) firm-month return correction to `delist_detection`, producing a corrected `R_delisting_month = (1 + R_partial) * (1 + DLRET) - 1` per delisted firm, with exchange-aware Shumway constants for unobservable DLRETs.
 
-**Architecture:** Two new pure modules (`exchanges.py`, `bmp_correction.py`) compute DLRET per bucket and compound it with the partial-month return. The existing event-level `handling.py` API is preserved; a parallel `build_firm_month_correction()` is added. `qlib_adapter.py` gains `apply_bmp_corrections()` that splices corrected monthly returns into a (date, ticker) panel. Downstream consumers (qlib_practice) call this once before normal training/backtest — no per-row special-cases needed afterward.
+**Architecture:** Two new pure modules (`exchanges.py`, `bmp_correction.py`) compute DLRET per bucket and compound it with the partial-month return. The existing event-level `handling.py` API is preserved; a parallel `build_firm_month_correction()` is added. `qlib_adapter.py` gains `apply_bmp_corrections()` that splices corrected monthly returns into a (date, ticker) panel. Downstream consumers (the consumer pipeline) call this once before normal training/backtest — no per-row special-cases needed afterward.
 
 **Tech Stack:** Python 3.11, pandas, pytest. No new runtime deps. References: Beaver, McNichols & Price (2007, JAE); Shumway (1997, JoF); Shumway & Warther (1999, JoF); Gu, Kelly & Xiu (2020, RFS).
 
-**Scope boundary:** This plan delivers the *corrected return matrix*. It does NOT change the existing event-level handling, and it does NOT touch `qlib_practice` training/backtest scripts — those consume the output and are a separate plan.
+**Scope boundary:** This plan delivers the *corrected return matrix*. It does NOT change the existing event-level handling, and it does NOT touch the consumer pipeline's training/backtest scripts — those consume the output and are a separate plan.
 
 **Key facts the engineer must trust without re-deriving:**
 - BMP formula: `R_delisting_month = (1 + R_partial) * (1 + DLRET) - 1`, where `R_partial` = return from prior-month-end close to last-trade-day close, `DLRET` = return from last-trade close to delisting cash-out value.
@@ -984,7 +984,7 @@ git commit -m "feat: apply_bmp_corrections splices corrected R_month into qlib p
 
 ## Task 5: End-to-end script — `compute_corrected_returns.py`
 
-A CLI that reads classifications + a monthly panel + per-ticker metadata CSVs and emits a corrected-returns panel, so qlib_practice can pick it up without library dependencies.
+A CLI that reads classifications + a monthly panel + per-ticker metadata CSVs and emits a corrected-returns panel, so the consumer pipeline can pick it up without library dependencies.
 
 **Files:**
 - Create: `scripts/compute_corrected_returns.py`
@@ -1333,7 +1333,7 @@ The user's write-up references training-side and backtest-side practices from Gu
 - **GKX-style training**: cross-sectional rank features to [-1,1], Huber loss, include all firm-months without filtering by price/share-code/sector.
 - **BMP-style backtest**: portfolio return = weighted average of corrected firm-month returns, IC/R² on the same corrected matrix.
 
-These belong in `qlib_practice`, not `delist_detection`. They consume `corrected_monthly_panel.parquet` from this plan. A separate plan (`2026-05-27-gkx-walk-forward-with-bmp.md`) should:
+These belong in the consumer pipeline, not `delist_detection`. They consume `corrected_monthly_panel.parquet` from this plan. A separate plan (`2026-05-27-gkx-walk-forward-with-bmp.md`) should:
 
 1. Wire `apply_bmp_corrections` into the qlib panel-build step.
 2. Replace LightGBM's default L2 objective with Huber (`objective='huber'`).

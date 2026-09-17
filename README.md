@@ -4,9 +4,9 @@ Classify why every delisted ticker in a US-equity quant universe stopped
 trading, using only public SEC EDGAR data, and emit drop-in handlers that
 make supervised training and backtesting survivorship-bias-aware.
 
-Built as a sidecar for the [`qlib_practice`](../qlib_practice) Tiingo
-pipeline, but the library is self-contained — point it at any
-`(ticker, start_date, end_date)` instruments file.
+Built as a sidecar for a Tiingo-style price pipeline, but the library is
+self-contained — point it at any `(ticker, start_date, end_date)` instruments
+file.
 
 ---
 
