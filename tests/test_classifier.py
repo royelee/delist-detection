@@ -469,3 +469,44 @@ def test_a_fresh_submissions_payload_is_not_flagged():
     rec = DelistClassifier(e, TickerResolver(e, manual_overrides={"REORG": 5})).classify_ticker(
         "REORG", "2020-11-20")
     assert "submissions_stale" not in rec.evidence["flags"]
+
+
+# --- R3: the standard Item 1.03 heading alone confirms nothing ---
+
+from delist_detection.classifier import _confirms_bankruptcy
+
+
+def test_the_item_1_03_heading_alone_does_not_confirm_a_bankruptcy():
+    # A mis-tagged takeover 8-K that prints the standard heading and nothing else.
+    t = ("Item 1.03 Bankruptcy or Receivership. Not applicable. "
+         "Item 2.01 Completion of Acquisition or Disposition of Assets. On November 27, 2024 "
+         "the merger was completed and each share was converted into the right to receive "
+         "$25.75 in cash and one share of the spun-off company, without interest.")
+    assert _confirms_bankruptcy(t) is False
+
+
+def test_a_real_item_1_03_body_confirms_a_bankruptcy():
+    t = ("Item 1.03 Bankruptcy or Receivership. Commencement of Bankruptcy Cases "
+         "On December 14, 2017, the Company and its affiliates filed voluntary petitions "
+         "for relief in the United States Bankruptcy Court for the Southern District of Texas. "
+         "Item 2.04 Triggering Events.")
+    assert _confirms_bankruptcy(t) is True
+
+
+def test_a_chapter_11_reference_in_the_section_confirms_without_the_heading_words():
+    t = ("Item 1.03 Bankruptcy or Receivership. On September 30, 2020 the Debtors filed the "
+         "chapter 11 cases and the Plan became effective. Item 5.02 Departure of Directors.")
+    assert _confirms_bankruptcy(t) is True
+
+
+def test_a_court_appointed_receiver_in_the_section_confirms():
+    # HLTH/Nobilis: a state-court receivership whose body says "Temporary Receiver"
+    # and never "receivership", "bankruptcy", "chapter 7/11" or "petition". The
+    # heading word alone must not carry it, so `receivers?` (which does not match
+    # "Receivership") is what confirms.
+    t = ("Item 1.03 Bankruptcy or Receivership. On September 24, 2019, the 44th Judicial "
+         "District Court of Dallas County, Texas entered an order appointing Howard Marc "
+         "Spector as Temporary Receiver for all of the assets of the Company and assuming "
+         "jurisdiction over all of the Loan Parties' assets. Item 9.01 Financial Statements.")
+    assert "receivership" not in t.split("Receivership.", 1)[1].lower()
+    assert _confirms_bankruptcy(t) is True

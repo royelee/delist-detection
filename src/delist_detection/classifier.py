@@ -11,6 +11,7 @@ Pipeline per ticker:
 
 from __future__ import annotations
 
+import re
 from dataclasses import asdict, dataclass, field
 from datetime import date, datetime, timedelta
 from typing import Iterable
@@ -80,10 +81,39 @@ def _add_flag(flags: list[str], flag: str) -> None:
         flags.append(flag)
 
 
+# The Item 1.03 heading itself reads "Bankruptcy or Receivership", so every 8-K
+# carrying the tag — including a mis-tagged takeover — matches _BANKRUPTCY_TEXT on
+# the heading alone. Drop the heading, then require the wording in the body.
+_ITEM_HEADING = re.compile(r"^item\s*\d\.\d{2}[\s.–—-]*", re.I)
+_SENTENCE_END = re.compile(r"[.;:]\s")
+_HEADING_MAX = 80
+# Wording no standard heading carries, so it confirms anywhere in the section.
+# `receivers?\b` does not match the heading's "Receivership", but it does match a
+# court order "appointing ... as Temporary Receiver" — item 1.03 is Bankruptcy *or
+# Receivership*, and HLTH/Nobilis reports its receiver that way and no other.
+_BANKRUPTCY_BODY = re.compile(
+    r"chapter\s+(?:7|11)\b|petition|bankruptcy\s+court|receivers?\b", re.I)
+
+
+def _drop_heading(section: str) -> str:
+    """The section without its heading line: up to the first newline, else the
+    first sentence end within _HEADING_MAX characters of the item number."""
+    body = _ITEM_HEADING.sub("", section, count=1)
+    nl = body.find("\n")
+    if nl >= 0:
+        return body[nl + 1:]
+    m = _SENTENCE_END.search(body[:_HEADING_MAX])
+    return body[m.end():] if m else body
+
+
 def _confirms_bankruptcy(text: str) -> bool:
-    """The filing's Item 1.03 section mentions a bankruptcy. Wording elsewhere
-    (credit-agreement boilerplate in a takeover 8-K) confirms nothing."""
-    return mentions_bankruptcy(item_text(text, "1.03"))
+    """The filing's Item 1.03 section reports a bankruptcy. Wording elsewhere
+    (credit-agreement boilerplate in a takeover 8-K) confirms nothing, and
+    neither does the standard heading on its own."""
+    section = item_text(text, "1.03")
+    if not section:
+        return False
+    return bool(_BANKRUPTCY_BODY.search(section)) or mentions_bankruptcy(_drop_heading(section))
 
 
 def _near(d1: date | None, d2: date | None, days: int) -> bool:

@@ -121,3 +121,37 @@ from delist_detection.evidence import cites_listing_deficiency
 ])
 def test_cites_listing_deficiency_standard_exchange_wording(text, cites):
     assert cites_listing_deficiency(text) is cites
+
+
+# --- R3: item_text returns the item's own section, not 1,500 chars from the cover index ---
+
+COVER = ("Item 1.01 Entry into a Material Definitive Agreement "
+         "Item 1.03 Bankruptcy or Receivership "
+         "Item 9.01 Financial Statements and Exhibits "
+         "Item 1.03 Bankruptcy or Receivership. Voluntary Petition for Bankruptcy "
+         "On August 5, 2024, the Company filed a voluntary petition for relief under "
+         "chapter 11 of title 11 of the United States Code in the United States Bankruptcy "
+         "Court for the District of Delaware, and expects the common stock to be cancelled "
+         "with no recovery for holders of the Company's equity. "
+         "Item 2.04 Triggering Events that Accelerate a Direct Financial Obligation")
+
+
+def test_item_text_skips_a_cover_page_index_entry():
+    section = item_text(COVER, "1.03")
+    assert section.startswith("Item 1.03 Bankruptcy or Receivership. Voluntary Petition")
+    assert "Item 9.01" not in section
+
+
+def test_item_text_stops_at_the_next_item_heading():
+    section = item_text(COVER, "1.03")
+    assert "Item 2.04" not in section
+    assert section.rstrip().endswith("equity.")
+
+
+def test_item_text_falls_back_to_the_first_match_when_every_section_is_short():
+    t = "Item 3.01 Notice of Delisting. The Company is not in compliance."
+    assert item_text(t, "3.01") == t
+
+
+def test_item_text_with_no_match_is_empty():
+    assert item_text("nothing here", "1.03") == ""

@@ -146,10 +146,33 @@ def still_operating(filings: list[EdgarSubmission], on: date, days: int = 15) ->
     return operating and not deregistered
 
 
+_ITEM_HEAD = re.compile(r"item\s*\d\.\d{2}", re.I)
+ITEM_MIN_SECTION = 200   # shorter than this is an index entry or a cross-reference, not a section
+
+
 def item_text(text: str, item: str, width: int = 1500) -> str:
-    """The slice of `text` starting at the `Item {item}` heading (any case), `width` chars wide."""
-    m = re.search(rf"item\s*{re.escape(item)}", text or "", re.I)
-    return text[m.start():m.start() + width] if m else ""
+    """The `Item {item}` section of `text` (any case).
+
+    The section runs from the heading to the next `Item N.NN` heading or `width`
+    characters, whichever comes first. An 8-K's cover page indexes every item it
+    carries, and the body cross-references items too, so the first match is
+    usually a one-line entry that says nothing: take the first match whose
+    section is at least ITEM_MIN_SECTION characters. If every match is shorter
+    (a short filing with one heading), fall back to the first match and `width`
+    characters.
+    """
+    text = text or ""
+    matches = list(re.finditer(rf"item\s*{re.escape(item)}", text, re.I))
+    if not matches:
+        return ""
+    for m in matches:
+        end = min(len(text), m.start() + width)
+        nxt = _ITEM_HEAD.search(text, m.end())
+        if nxt and nxt.start() < end:
+            end = nxt.start()
+        if end - m.start() >= ITEM_MIN_SECTION:
+            return text[m.start():end]
+    return text[matches[0].start():matches[0].start() + width]
 
 
 def says_listing_transfer(text: str) -> bool:
