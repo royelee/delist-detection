@@ -32,14 +32,12 @@ from delist_detection.reconstruction import (
 )
 
 
-# Alpha Vantage LISTING_STATUS CSVs from the companion qlib_practice pipeline.
-# Override with the AV_LISTING_CSV / AV_ACTIVE_CSV env vars; the defaults assume
-# qlib_practice is checked out as a sibling of this repo.
-_AV_DIR = ROOT.parent / "qlib_practice" / "fetch_data_aplha" / "data" / "alphavantage_listing_status"
+# Alpha Vantage LISTING_STATUS CSVs come from the consuming pipeline; the
+# AV_LISTING_CSV / AV_ACTIVE_CSV env vars select them.
 AV_LISTING_CSV = os.environ.get(
-    "AV_LISTING_CSV", str(_AV_DIR / "listing_status_delisted_2026-05-19.csv"))
+    "AV_LISTING_CSV", str(ROOT / "data" / "listing_status_delisted.csv"))
 AV_ACTIVE_CSV = os.environ.get(
-    "AV_ACTIVE_CSV", str(_AV_DIR / "listing_status_active_2026-05-19.csv"))
+    "AV_ACTIVE_CSV", str(ROOT / "data" / "listing_status_active.csv"))
 
 
 KNOWN_RENAMES = {
@@ -179,7 +177,7 @@ def main() -> int:
                         "(|terminal/last_close-1| <= tol) rejects mis-resolutions.")
     p.add_argument("--raw-tiingo-dir", default=None,
                    help="Directory of raw Tiingo per-ticker CSVs (nominal close). "
-                        "Defaults to $RAW_TIINGO_DIR or the qlib_practice path. "
+                        "Defaults to $RAW_TIINGO_DIR. "
                         "Used for acquirer_price and to fill missing last_trade_close.")
     p.add_argument("--merger-terms-sanity-tol", type=float, default=DEFAULT_TOL,
                    help="Max |payout/last_close - 1| for any merger payout (regex cash, "

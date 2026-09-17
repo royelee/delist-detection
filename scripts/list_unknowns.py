@@ -12,12 +12,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 CLS = ROOT / "output" / "delist_classifications.csv"
-# Override with AV_LISTING_CSV; default assumes qlib_practice is a sibling repo.
+# AV_LISTING_CSV comes from the consuming pipeline; override the default below.
 AV = Path(os.environ.get(
     "AV_LISTING_CSV",
-    str(ROOT.parent / "qlib_practice" / "fetch_data_aplha"
-        / "data" / "alphavantage_listing_status"
-        / "listing_status_delisted_2026-05-19.csv")))
+    str(ROOT / "data" / "listing_status_delisted.csv")))
 
 
 def main() -> int:

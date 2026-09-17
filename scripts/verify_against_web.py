@@ -200,9 +200,7 @@ def main() -> int:
                    help="Stratified random sample size (0 = all)")
     p.add_argument("--av-csv", default=os.environ.get(
         "AV_LISTING_CSV",
-        str(ROOT.parent / "qlib_practice" / "fetch_data_aplha"
-            / "data" / "alphavantage_listing_status"
-            / "listing_status_delisted_2026-05-19.csv")))
+        str(ROOT / "data" / "listing_status_delisted.csv")))
     args = p.parse_args()
 
     # Load AV names for cross-validation
