@@ -260,6 +260,23 @@ def test_match_cash_plus_cvr_takes_cash_floor_apls():
     assert val == 41.00
 
 
+def test_match_cash_plus_cvr_equal_count_tie_still_takes_cash():
+    # Same shape as APLS, but here $41.00 and $4.00 each appear exactly twice
+    # (an equal-count tie), unlike the APLS case above where $41.00 (2x) beats
+    # $4.00 (1x) via the higher-count path. The CVR ($4.00) is well under 25% of
+    # the cash ($41.00 * 0.25 = $10.25), so _select's tie rule must still return
+    # the cash floor rather than abstaining.
+    text = ("$41.00 per Share, net to the seller in cash, without interest, plus "
+            "one contingent value right representing up to an aggregate of $4.00 "
+            "in cash. $41.00 per Share in cash is payable at closing, plus a "
+            "contingent value right of up to $4.00 in cash upon a milestone.")
+    counts, mixed, _ = _collect(text, None, True)
+    assert counts[41.0] == counts[4.0] == 2      # equal-count tie, not the higher-count path
+    assert _select(counts, mixed) == (41.0, False)
+    val, _ = _match_payout(text)
+    assert val == 41.00
+
+
 def test_match_preferred_class_not_flagged_mixed_tco():
     # TCO: common gets all-cash $43.00; a separate Series B Preferred class is
     # described in the next clause ("; and (ii) each share of ... Preferred

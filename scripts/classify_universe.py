@@ -302,7 +302,7 @@ def main() -> int:
                 dr.get("form", ""),
                 ev.get("name", ""),
                 ev.get("resolution_source", ""),
-                "" if pr is None or pr.value is None else f"{pr.value:.6g}",
+                "" if pr is None or pr.value is None else f"{pr.value:.10g}",
                 "" if pr is None else pr.source,
                 "" if pr is None else pr.confidence,
             ])
@@ -331,7 +331,7 @@ def main() -> int:
                 pw.writerow([
                     tkr,
                     date or "",
-                    "" if pr.value is None else f"{pr.value:.6g}",
+                    "" if pr.value is None else f"{pr.value:.10g}",
                     pr.confidence, pr.source, pr.accession,
                 ])
         n_hit = sum(1 for pr in payout_by_ticker.values() if pr.value is not None)

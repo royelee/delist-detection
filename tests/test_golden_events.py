@@ -54,5 +54,6 @@ def test_golden_payout(case, monkeypatch, request):
         request.applymarker(pytest.mark.xfail(strict=True, reason=f"fixed by Task {XFAIL_PAYOUT[case.id]}"))
     rec = _classify(case, monkeypatch)
     pr = PayoutExtractor(GoldenEdgar(case)).extract(rec, last_close=case.last_trade_close)
-    implied = (pr.value / case.last_trade_close - 1) if pr.value is not None else 0.0
+    assert pr.value is not None, pr
+    implied = pr.value / case.last_trade_close - 1
     assert abs(implied - case.expected_dlret) <= case.dlret_tol, pr
