@@ -2,7 +2,7 @@ import pytest
 
 from delist_detection.classifier import DelistClassifier
 from delist_detection.payout_extractor import PayoutExtractor
-from delist_detection.payout_gate import reconcile
+from delist_detection.payout_gate import DEFAULT_TOL, reconcile
 from delist_detection.ticker_resolver import TickerResolver
 from tests.golden import GoldenEdgar, load_cases, patch_efts
 
@@ -45,7 +45,7 @@ PAYOUT_CASES = [c for c in CASES if c.expected_bucket == "merger" and c.expected
 def test_golden_payout(case, monkeypatch):
     rec = _classify(case, monkeypatch)
     pr = PayoutExtractor(GoldenEdgar(case)).extract(rec, last_close=case.last_trade_close)
-    r = reconcile(pr.value, case.last_trade_close, case.llm_terms, case.data.get("acquirer_price"), 0.15)
+    r = reconcile(pr.value, case.last_trade_close, case.llm_terms, case.data.get("acquirer_price"), DEFAULT_TOL)
     assert r.cash is not None or r.stock_ratio is not None, (pr, r)
     value = r.cash if r.cash is not None else r.stock_ratio * r.acquirer_price
     implied = value / case.last_trade_close - 1

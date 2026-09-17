@@ -25,7 +25,7 @@ from delist_detection.crsp_codes import CrspBucket
 from delist_detection.av_listing import AvListingLoader
 from delist_detection.names import MemberNames
 from delist_detection.payout_extractor import PayoutExtractor, PayoutResult
-from delist_detection.payout_gate import reconcile
+from delist_detection.payout_gate import DEFAULT_TOL, gate_payouts
 from delist_detection.reconstruction import (
     build_dlret_table, write_dlret_csv, load_merger_terms_csv, load_float_map_csv,
     _lookup,
@@ -168,10 +168,10 @@ def main() -> int:
                    help="Directory of raw Tiingo per-ticker CSVs (nominal close). "
                         "Defaults to $RAW_TIINGO_DIR or the qlib_practice path. "
                         "Used for acquirer_price and to fill missing last_trade_close.")
-    p.add_argument("--merger-terms-sanity-tol", type=float, default=0.15,
+    p.add_argument("--merger-terms-sanity-tol", type=float, default=DEFAULT_TOL,
                    help="Max |payout/last_close - 1| for any merger payout (regex cash, "
                         "LLM cash, election leg, or LLM cash+stock terminal value) to be "
-                        "emitted (default 0.15). Completed deals reconcile tightly.")
+                        "emitted (default %(default)s). Completed deals reconcile tightly.")
     p.add_argument("--llm-model", default=None,
                    help="Override the chat model (default $CHAT_MODEL from .env).")
     p.add_argument("--names", default=None,
@@ -327,45 +327,13 @@ def main() -> int:
         print(f"  {b:22s} {c:4d}")
     print(f"\nWrote {out_path}")
 
-    if extractor is not None:
-        payouts_path = Path(args.payouts_output)
-        payouts_path.parent.mkdir(parents=True, exist_ok=True)
-        with payouts_path.open("w", newline="") as pf:
-            pw = csv.writer(pf)
-            pw.writerow(["ticker", "observed_delist_date", "payout_per_share", "confidence", "source", "accession"])
-            for (tkr, date), pr in sorted(
-                payout_by_ticker.items(), key=lambda kv: (kv[0][0], kv[0][1] or "")
-            ):
-                pw.writerow([
-                    tkr,
-                    date or "",
-                    "" if pr.value is None else f"{pr.value:.10g}",
-                    pr.confidence, pr.source, pr.accession,
-                ])
-        n_hit = sum(1 for pr in payout_by_ticker.values() if pr.value is not None)
-        print(f"Wrote {payouts_path}: {n_hit}/{len(payout_by_ticker)} merger payouts extracted")
-
     # --- PRIMARY OUTPUT: DLRET reconstruction table ---
     exchanges = {
         (r.ticker.upper(), r.observed_delist_date): (av.exchange(r.ticker, observed_date=r.observed_delist_date) or "")
         for r in all_records
     }
-    payouts_map: dict = {}
-    payout_src: dict = {}
-    payout_conf: dict = {}
-    for (tkr, date), pr in payout_by_ticker.items():
-        if pr.value is None:
-            continue
-        k = (tkr.upper(), date)
-        payouts_map[k] = pr.value
-        payout_src[k] = pr.source
-        payout_conf[k] = pr.confidence
-
-    # --- Payout gate + LLM merger terms. last_trade_close and acquirer_price are
-    #     joined from the raw Tiingo panel (never parsed from filings); an explicit
-    #     --merger-terms CSV row always wins over the LLM. ---
-    merged_terms = dict(merger_terms)
-    tol = args.merger_terms_sanity_tol
+    # last_trade_close and acquirer_price are joined from the raw Tiingo panel,
+    # never parsed from filings.
     if prices is not None:
         # Fill last_trade_close from the raw panel for any record the CSV did not
         # already cover, so BOTH cash-only payouts and LLM cash+stock terms have
@@ -377,103 +345,64 @@ def main() -> int:
                     last_trades[(r.ticker.upper(), r.observed_delist_date)] = c
 
     # Every merger payout must reconcile with the last close before it becomes a
-    # return: a regex value that does not is dropped, and a cash deal or an
-    # election takes the LLM leg the last close agrees with (payout_gate.reconcile).
-    payout_flags: dict = {}   # key -> reconcile flags, for the review_flags column
-    llm_cash = gate_failed = 0
-    for rec in all_records:
-        if rec.bucket != CrspBucket.MERGER:
-            continue
-        tkr, date = rec.ticker.upper(), rec.observed_delist_date
-        pk = (tkr, date)
-        pr = payout_by_ticker.get((rec.ticker, date))
-        has_csv = _lookup(merger_terms, tkr, date) is not None
-        terms = None if has_csv else llm_terms_raw.get((rec.ticker, date))
-        r = reconcile(
-            None if pr is None else pr.value,
-            _lookup(last_trades, tkr, date),
-            terms,
-            _acquirer_price(prices, terms.acquirer_ticker, date) if terms else None,
-            tol,
-        )
-        if r.flags:
-            payout_flags[pk] = r.flags
-        if any(f.startswith("payout_gate_failed:") for f in r.flags):
-            gate_failed += 1
-        if r.cash is None:
-            for m in (payouts_map, payout_src, payout_conf):
-                m.pop(pk, None)
-        else:
-            payouts_map[pk] = r.cash
-            if r.source != "regex":   # "llm" | "llm_election_cash"
-                payout_src[pk] = r.source
-                payout_conf[pk] = terms.confidence or "medium"
-                llm_cash += 1
-        if r.stock_ratio is not None:   # an election's stock leg; terms is set, so no CSV row
-            merged_terms[pk] = {"stock_ratio": r.stock_ratio, "acquirer_price": r.acquirer_price,
-                                "acquirer_ticker": terms.acquirer_ticker}
-    print(f"\nPayout gate: {gate_failed} merger payouts failed the last-close check")
+    # return; an explicit --merger-terms CSV row always wins over the LLM.
+    # gated.flags (key -> flags) feeds the review_flags column.
+    regex = {(t.upper(), d): pr for (t, d), pr in payout_by_ticker.items() if pr.value is not None}
+    terms_by_key = {(t.upper(), d): terms for (t, d), terms in llm_terms_raw.items()}
+    gated = gate_payouts(
+        [(r.ticker.upper(), r.observed_delist_date) for r in all_records if r.bucket == CrspBucket.MERGER],
+        {k: pr.value for k, pr in regex.items()},
+        {k: pr.source for k, pr in regex.items()},
+        {k: pr.confidence for k, pr in regex.items()},
+        terms_by_key,
+        last_trades,
+        merger_terms,
+        lambda ticker, date: _acquirer_price(prices, ticker, date),
+        args.merger_terms_sanity_tol,
+    )
+    print(f"\nPayout gate: {gated.gate_failed} merger rows flagged payout_gate_failed "
+          f"(a payout that failed the last-close check and no full terms settled the row)")
+    if llm_ext is not None:
+        print(f"LLM merger terms: {gated.emitted} cash+stock/stock-only emitted "
+              f"({len(llm_terms_raw)} mergers extracted); dropped {gated.dropped}; "
+              f"plus {gated.llm_cash} cash payouts taken from LLM terms")
 
-    if prices is not None:
-        emitted = 0
-        drop = {"csv_override": 0, "no_acq_ticker": 0, "no_acq_price": 0,
-                "no_last_close": 0, "fail_sanity": 0}
-        for (tkr, date), terms in llm_terms_raw.items():
-            # Pure-cash deals and elections were settled by the payout gate above.
-            if terms.stock_ratio is None or terms.deal_type == "election":
-                continue
-            pk = (tkr.upper(), date)
-            if _lookup(merger_terms, tkr.upper(), date) is not None:
-                drop["csv_override"] += 1
-                continue
-            acq = (terms.acquirer_ticker or "").strip()
-            if not acq:
-                drop["no_acq_ticker"] += 1
-                continue
-            acq_price = _acquirer_price(prices, acq, date)
-            if acq_price is None:
-                drop["no_acq_price"] += 1
-                continue
-            last_close = _lookup(last_trades, tkr.upper(), date)
-            if last_close is None or last_close <= 0:
-                # <=0 guard mirrors _resolve_merger (dlret.py): a zero/blank close
-                # would both divide-by-zero here and yield a NaN DLRET downstream.
-                drop["no_last_close"] += 1
-                continue
-            cash = terms.cash_per_share
-            terminal = (cash or 0.0) + terms.stock_ratio * acq_price
-            if abs(terminal / last_close - 1.0) > tol:
-                drop["fail_sanity"] += 1
-                continue
-            d = {"stock_ratio": terms.stock_ratio, "acquirer_price": acq_price,
-                 "acquirer_ticker": acq}
-            if cash is not None:
-                d["cash_per_share"] = cash
-            else:
-                # The LLM read this as all-stock and the gate confirmed the stock
-                # leg alone reconciles with last_close — so any cash the regex
-                # payout extractor (mis)read from this all-stock filing is wrong.
-                # Drop it: otherwise build_dlret_table's `terms.get("cash_per_share",
-                # payouts[...])` fallback would re-add that phantom cash and inflate
-                # a stock-only deal into a bogus cash_plus_stock (e.g. MRD 65x).
-                payouts_map.pop(pk, None)
-                payout_src.pop(pk, None)
-                payout_conf.pop(pk, None)
-            merged_terms[pk] = d
-            emitted += 1
-        print(f"LLM merger terms: {emitted} cash+stock/stock-only emitted "
-              f"({len(llm_terms_raw)} mergers extracted); dropped {drop}; "
-              f"plus {llm_cash} cash payouts taken from LLM terms")
+    if extractor is not None:
+        # The gated values, so a consumer never reads a payout the gate dropped;
+        # delist_classifications.csv keeps the raw extraction.
+        payouts_path = Path(args.payouts_output)
+        payouts_path.parent.mkdir(parents=True, exist_ok=True)
+        with payouts_path.open("w", newline="") as pf:
+            pw = csv.writer(pf)
+            pw.writerow(["ticker", "observed_delist_date", "payout_per_share", "confidence", "source", "accession"])
+            for (tkr, date), pr in sorted(
+                payout_by_ticker.items(), key=lambda kv: (kv[0][0], kv[0][1] or "")
+            ):
+                k = (tkr.upper(), date)
+                value = gated.payouts.get(k)
+                source = gated.sources.get(k, "none")
+                if source.startswith("llm"):
+                    accession = terms_by_key[k].source.partition(":")[2]   # "{form}:{accession}"
+                else:
+                    accession = pr.accession if value is not None else ""
+                pw.writerow([
+                    tkr,
+                    date or "",
+                    "" if value is None else f"{value:.10g}",
+                    gated.confidences.get(k, "none"), source, accession,
+                ])
+        n_hit = sum(1 for (t, d) in payout_by_ticker if (t.upper(), d) in gated.payouts)
+        print(f"Wrote {payouts_path}: {n_hit}/{len(payout_by_ticker)} merger payouts after the last-close gate")
 
     table = build_dlret_table(
         all_records,
         last_trade_closes=last_trades,
-        payouts=payouts_map,
+        payouts=gated.payouts,
         exchanges=exchanges,
-        merger_terms=merged_terms,
+        merger_terms=gated.merged_terms,
         recovery_ratios=recoveries,
-        payout_sources=payout_src,
-        payout_confidences=payout_conf,
+        payout_sources=gated.sources,
+        payout_confidences=gated.confidences,
     )
     write_dlret_csv(table, args.dlret_output)
     print(f"Wrote {args.dlret_output}: {len(table)} DLRET rows (PRIMARY OUTPUT)")

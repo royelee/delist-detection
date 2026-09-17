@@ -1,5 +1,9 @@
 """Capture the golden cases from live EDGAR into tests/fixtures/golden/ (NETWORK).
 
+Run from the repo root as `PYTHONPATH=src:. python scripts/build_golden_fixtures.py`:
+the LLM capture imports `scripts.classify_universe`, which must resolve to this
+repo's scripts/ (a bare run can find another project's `scripts` package).
+
 For each row of data/golden_events.csv this stores everything the resolver,
 classifier and payout reader read for that case, so tests replay it offline:
 submissions (trimmed to -1650/+400 days) for the true CIK, the wrong CIK and
@@ -13,13 +17,14 @@ the resolver's answers at capture time, kept for reading only.
 Re-run after changing data/golden_events.csv. `--efts-only` re-captures just
 `efts_raw` into the existing fixtures and leaves every other key untouched.
 
-With OPENAI_API_KEY set (environment or the repo .env), each merger case also
-stores `llm_terms` (the LLM merger terms for the classified record, read through
-cache/llm), `acquirer_price` (the acquirer's raw close on observed_delist_date,
-from --raw-tiingo-dir) and that `raw_tiingo_dir`. Without a key, a full run keeps
-the terms an earlier run captured. `--llm-only` re-captures just those three keys
-into the existing fixtures. `--only ID` (repeatable, ID = TICKER_DATE) limits any
-run to the named cases.
+With OPENAI_API_KEY set (environment or the repo .env) and --raw-tiingo-dir given,
+each merger case also stores `llm_terms` (the LLM merger terms for the classified
+record, read through cache/llm), `acquirer_price` (the acquirer's raw close on
+observed_delist_date) and `raw_tiingo_dir` (the snapshot-relative part of the
+price directory, e.g. tiingo_2026_09_11/raw_tiingo_csv). Without either, a full
+run skips that capture and keeps the terms an earlier run captured. `--llm-only`
+re-captures just those three keys into the existing fixtures and needs both.
+`--only ID` (repeatable, ID = TICKER_DATE) limits any run to the named cases.
 
 Submissions are re-fetched, not read from cache/: a cached copy older than the
 event would hide its Form 25. company_tickers.json is read from cache/ on
@@ -48,7 +53,6 @@ from delist_detection.llm_client import default_llm_client
 from delist_detection.llm_merger_extractor import LLMMergerTermsExtractor
 from delist_detection.raw_tiingo import RawTiingoPrices
 from delist_detection.ticker_resolver import TickerResolver
-from scripts.classify_universe import _acquirer_price
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "tests" / "fixtures" / "golden"
@@ -130,6 +134,8 @@ def _openai_key_set() -> bool:
 
 def _capture_llm(edgar, llm, raw_dir: str, row) -> dict:
     """The LLM_KEYS for a merger case, read for the record the classifier returns."""
+    from scripts.classify_universe import _acquirer_price   # needs PYTHONPATH=src:. (see docstring)
+
     t, d = row["ticker"], row["observed_delist_date"]
     rec = DelistClassifier(edgar, _resolver(edgar, row)).classify_ticker(t, d)
     if rec.bucket.value != "merger" or rec.cik != int(row["cik"]):
@@ -141,7 +147,8 @@ def _capture_llm(edgar, llm, raw_dir: str, row) -> dict:
         f"{terms.deal_type} cash={terms.cash_per_share} ratio={terms.stock_ratio} "
         f"acquirer={terms.acquirer_ticker} ({terms.source})")
     print(f"{t} {d}: llm_terms {shown}; acquirer_price {price}")
-    return {"llm_terms": asdict(terms) if terms else None, "acquirer_price": price, "raw_tiingo_dir": raw_dir}
+    return {"llm_terms": asdict(terms) if terms else None, "acquirer_price": price,
+            "raw_tiingo_dir": "/".join(Path(raw_dir).resolve().parts[-2:])}
 
 
 def _trim(sub: dict, filings, on: date) -> dict:
@@ -176,7 +183,7 @@ def main() -> None:
                    help="capture only this case (TICKER_DATE, e.g. BLD_2026-07-01); repeatable")
     p.add_argument("--raw-tiingo-dir",
                    help="raw Tiingo per-ticker CSV directory for acquirer_price "
-                        "(required when OPENAI_API_KEY is set)")
+                        "(the LLM capture runs only with it)")
     args = p.parse_args()
     requests.get = _recording(_strict(requests.get))   # EFTS calls in ticker_resolver
     rows = list(csv.DictReader((ROOT / "data" / "golden_events.csv").open()))
@@ -189,13 +196,16 @@ def main() -> None:
         return
     edgar = EdgarClient(cache_dir=ROOT / "cache" / "edgar")
     edgar.session.get = _strict(edgar.session.get)
+    if args.raw_tiingo_dir and not Path(args.raw_tiingo_dir).is_dir():
+        p.error(f"--raw-tiingo-dir is not a directory: {args.raw_tiingo_dir}")
     llm = None
-    if _openai_key_set():
-        if not args.raw_tiingo_dir or not Path(args.raw_tiingo_dir).is_dir():
-            p.error("capturing LLM terms needs --raw-tiingo-dir naming a directory")
+    if _openai_key_set() and args.raw_tiingo_dir:
         llm = LLMMergerTermsExtractor(edgar, default_llm_client(), cache_dir=ROOT / "cache" / "llm")
     elif args.llm_only:
-        p.error("--llm-only needs OPENAI_API_KEY")
+        p.error("--llm-only needs OPENAI_API_KEY and --raw-tiingo-dir")
+    else:
+        print("notice: LLM terms not captured (needs OPENAI_API_KEY and --raw-tiingo-dir); "
+              "existing ones are kept")
     if args.llm_only:
         for row in rows:
             if row["expected_bucket"] != "merger":
