@@ -14,15 +14,6 @@ GOLDEN_MANUAL = {"IMCL": 1520047}
 # case id -> the task after which test_golden_bucket_and_flags passes. Delete entries
 # as tasks land; if a case still fails only for a later task's rule, move it there.
 XFAIL_BUCKET = {
-    # bankruptcy history
-    "HLTH_2019-09-10": 4,   # Nobilis (frequency rank, flagged); 580 via the 3.01 + NT 10-K; liquidation
-                            # from the receivership 8-K (1.03, 2019-09-24) inside Task 4's after=30 window
-    "OAS_2020-11-20": 4,    # 304 from filings continued after emergence; the 1.03 of 2020-09-30
-                            # decides in Task 4
-    "MDR_2020-01-22": 4,    # 570 via the 3.01 until Task 4 reads the 1.03
-    "WE_2024-06-11": 4,     # 580 via the 3.01 + NT 10-K until Task 4 reads its 1.03s
-    "LYLT_2023-06-27": 4,   # 570 from the 3.01+3.03 8-K; the 1.03 8-K of 2023-03-10 is ignored
-    "VSTO_2024-11-27": 4,   # 470 from a 1.03 tag with no Item 1.03 section or bankruptcy text
     # takeover without 2.01
     "BCR_2017-12-29": 6,    # 570: closing 8-K has 3.01+3.03+5.01 without 2.01
     "ONXX_2013-10-17": 6,   # 470: 3.01+2.04 (convertible-note make-whole) beats the 5.01

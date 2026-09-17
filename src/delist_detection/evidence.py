@@ -1,9 +1,12 @@
 """Pure evidence predicates over one company's EDGAR record. No network."""
 from __future__ import annotations
 
+import re
 from datetime import date, datetime, timedelta
 
 from .edgar import EdgarSubmission
+
+_BANKRUPTCY_TEXT = re.compile(r"bankruptcy|chapter\s+(?:11|7)\b|receivership", re.I)
 
 
 def parse_day(s: str | None) -> date | None:
@@ -45,3 +48,18 @@ def names_near(sub: dict, on: date, days: int = 30) -> list[str]:
 def first_filing(filings: list[EdgarSubmission]) -> date | None:
     days = [d for f in filings if (d := parse_day(f.filing_date))]
     return min(days) if days else None
+
+
+def bankruptcy_8ks(filings: list[EdgarSubmission], on: date, before: int = 540, after: int = 30) -> list[EdgarSubmission]:
+    """8-Ks tagged item 1.03 (Bankruptcy or Receivership) within [on-before, on+after]."""
+    lo, hi = on - timedelta(days=before), on + timedelta(days=after)
+    out = []
+    for f in filings:
+        d = parse_day(f.report_date) or parse_day(f.filing_date)
+        if f.form.startswith("8-K") and "1.03" in f.item_set and d and lo <= d <= hi:
+            out.append(f)
+    return sorted(out, key=lambda f: f.filing_date)
+
+
+def mentions_bankruptcy(text: str) -> bool:
+    return bool(_BANKRUPTCY_TEXT.search(text or ""))

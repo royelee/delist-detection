@@ -20,3 +20,21 @@ def test_names_near_includes_a_name_that_ended_just_before_the_date():
     assert names_near(AVANOS, date(2018, 6, 29)) == ["Halyard Health, Inc.", "AVANOS MEDICAL, INC."]
     assert names_near(SUB, date(2024, 8, 20)) == ["Complete Solaria, Inc."]
     assert names_near({"name": "Solo Co", "formerNames": []}, date(2020, 1, 1)) == ["Solo Co"]
+
+
+from delist_detection.edgar import EdgarSubmission
+from delist_detection.evidence import bankruptcy_8ks, mentions_bankruptcy
+
+
+def _8k(d, items, acc="A"):
+    return EdgarSubmission(accession=acc, form="8-K", filing_date=d, report_date=d, items=items, primary_doc="x.htm")
+
+
+def test_bankruptcy_8ks_window():
+    fs = [_8k("2020-09-30", "1.01,1.03"), _8k("2018-01-01", "1.03", "B"), _8k("2020-11-20", "3.03,5.01", "C")]
+    assert [f.accession for f in bankruptcy_8ks(fs, date(2020, 11, 20))] == ["A"]
+
+
+def test_mentions_bankruptcy():
+    assert mentions_bankruptcy("filed voluntary petitions under chapter 11 of title 11")
+    assert not mentions_bankruptcy("completion of the merger with CSG")

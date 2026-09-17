@@ -17,6 +17,7 @@ from typing import Iterable
 
 from .crsp_codes import CrspBucket, bucket_for_code
 from .edgar import EdgarClient, EdgarSubmission
+from .evidence import bankruptcy_8ks, mentions_bankruptcy
 from .ticker_resolver import TickerResolver
 
 
@@ -208,6 +209,31 @@ class DelistClassifier:
         scored.sort(key=lambda x: x[0])
         return scored[0][1]
 
+    def _confirmed_bankruptcy(self, cik, filings, on):
+        """First 1.03 8-K in the window whose text mentions a bankruptcy. An empty
+        text (fetch miss) counts as confirmed: the tag is SEC's own metadata."""
+        for f in bankruptcy_8ks(filings, on):
+            text = self.edgar.fetch_filing_text(cik, f.accession, f.primary_doc)
+            if not text or mentions_bankruptcy(text):
+                return f
+        return None
+
+    def _effective_items(self, cik, f, flags):
+        """The 8-K's item set with an unconfirmed 1.03 tag stripped.
+
+        A 1.03 (Bankruptcy or Receivership) tag whose filing text doesn't
+        mention a bankruptcy is a mis-tag (e.g. a merger 8-K); don't let it
+        force a LIQUIDATION classification via `_classify_items`.
+        """
+        items = set(f.item_set)
+        if "1.03" in items:
+            text = self.edgar.fetch_filing_text(cik, f.accession, f.primary_doc)
+            if text and not mentions_bankruptcy(text):
+                items.discard("1.03")
+                if "bankruptcy_tag_unconfirmed" not in flags:
+                    flags.append("bankruptcy_tag_unconfirmed")
+        return items
+
     def _classify_items(self, items: set[str]) -> tuple[int | None, str]:
         """Map an 8-K item set to a CRSP DLSTCD-style code.
 
@@ -343,6 +369,20 @@ class DelistClassifier:
                     evidence={**evidence, "revoked_filing": asdict(f)},
                 )
 
+        # A confirmed bankruptcy on record beats everything below, including a
+        # company that kept filing after emerging from Chapter 11 with the same
+        # CIK (Oasis Petroleum): the old equity was still cancelled at emergence.
+        if observed:
+            bk = self._confirmed_bankruptcy(resolution.cik, filings, observed)
+            if bk is not None:
+                return DelistRecord(
+                    ticker=ticker.upper(), cik=resolution.cik,
+                    observed_delist_date=observed_delist_date, crsp_code=470,
+                    bucket=CrspBucket.LIQUIDATION, confidence="high",
+                    reason=f"Bankruptcy (8-K item 1.03 filed {bk.filing_date})",
+                    evidence={**evidence, "bankruptcy_8k": asdict(bk)},
+                )
+
         # Exchange-transfer override is the strongest single signal —
         # check it BEFORE the Form-25-or-not branches.
         if observed and self._detect_continued_filings(filings, observed):
@@ -383,7 +423,7 @@ class DelistClassifier:
                     reason="No Form 25 and no 8-K near observed delist date",
                     evidence=evidence,
                 )
-            code, reason = self._classify_items(eightk.item_set)
+            code, reason = self._classify_items(self._effective_items(resolution.cik, eightk, flags))
             if code is None:
                 # Form 15 present but no 8-K signal — went voluntarily deregistered.
                 if dereg is not None:
@@ -420,7 +460,7 @@ class DelistClassifier:
 
         anchor = _parse_date(delist_filing.filing_date) or observed
         eightk = self._pick_8k_near(filings, anchor) if anchor else None
-        if eightk is None or self._classify_items(eightk.item_set)[0] is None:
+        if eightk is None or self._classify_items(self._effective_items(resolution.cik, eightk, flags))[0] is None:
             back = self._backscan_for_fingerprint_8k(filings, anchor) if anchor else None
             if back is not None:
                 eightk = back
@@ -452,7 +492,7 @@ class DelistClassifier:
                 evidence=evidence,
             )
 
-        code, reason = self._classify_items(eightk.item_set)
+        code, reason = self._classify_items(self._effective_items(resolution.cik, eightk, flags))
 
         if code is None:
             if dereg is not None:
