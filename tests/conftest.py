@@ -24,6 +24,14 @@ class _FakeEdgar:
         return list(self.submissions_by_cik.get(int(cik), []))
 
 
+@pytest.fixture(autouse=True)
+def _no_efts_network(monkeypatch):
+    from delist_detection.ticker_resolver import TickerResolver
+    monkeypatch.setattr(TickerResolver, "_efts_lookup", lambda self, t, d=None, **kw: (None, None))
+    monkeypatch.setattr(TickerResolver, "_efts_pre_delist_frequency_ranked",
+                        lambda self, t, d, top_n=5: [])
+
+
 @pytest.fixture
 def fake_edgar() -> _FakeEdgar:
     """Three companies covering merger, compliance-failure, and liquidation."""

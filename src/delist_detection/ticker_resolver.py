@@ -16,7 +16,7 @@ from typing import Iterable
 
 import requests
 
-from .edgar import EdgarClient, DEFAULT_UA, _throttle
+from .edgar import EdgarClient, DEFAULT_UA, _throttle, check_response, EdgarBlocked
 
 
 @dataclass
@@ -49,6 +49,8 @@ class TickerResolver:
             try:
                 raw = json.loads(self.cache_path.read_text())
                 for t, d in raw.items():
+                    if d.get("cik") is None:  # a persisted miss is retried, never trusted
+                        continue
                     self._memo[t] = TickerResolution(**d)
             except (json.JSONDecodeError, TypeError):
                 pass
@@ -110,6 +112,7 @@ class TickerResolver:
                 headers={"User-Agent": DEFAULT_UA, "Accept": "application/json"},
                 timeout=30,
             )
+            check_response(resp)
             if resp.status_code != 200:
                 return []
             data = resp.json()
@@ -217,6 +220,8 @@ class TickerResolver:
             for form in ("25-NSE", "25", "15-12G", ""):
                 try:
                     hits = self.edgar.company_search_atom(variant, form_type=form)
+                except EdgarBlocked:
+                    raise
                 except Exception:
                     hits = []
                 for h in hits:
@@ -275,6 +280,8 @@ class TickerResolver:
         """
         try:
             sub = self.edgar.submissions(cik)
+        except EdgarBlocked:
+            raise
         except Exception:
             return 0
         if not isinstance(sub, dict):
@@ -313,6 +320,8 @@ class TickerResolver:
             return True
         try:
             subs = self.edgar.recent_filings(cik)
+        except EdgarBlocked:
+            raise
         except Exception:
             return False
 
@@ -366,6 +375,7 @@ class TickerResolver:
                 headers={"User-Agent": DEFAULT_UA, "Accept": "application/json"},
                 timeout=30,
             )
+            check_response(resp)
             if resp.status_code != 200:
                 return None, None
             data = resp.json()
@@ -473,7 +483,8 @@ class TickerResolver:
 
         res = TickerResolution(ticker=t, cik=cik, name=name, source=source)
         self._memo[cache_key] = res
-        self._persist()
+        if cik is not None:          # a miss is retried next run, never persisted
+            self._persist()
         return res
 
     def resolve_many(

@@ -26,6 +26,19 @@ FALLBACK_UA = "delist_detection/0.1 (r@users.noreply.github.com)"
 _REPO_ENV = Path(__file__).resolve().parents[2] / ".env"
 
 
+class EdgarBlocked(RuntimeError):
+    """SEC refused the request (403/429). Callers must never read this as 'no match':
+    from 2026-05-28 to 2026-09-16 every refusal was cached as 'No CIK found'."""
+
+
+def check_response(resp) -> None:
+    if resp.status_code in (403, 429):
+        raise EdgarBlocked(
+            f"SEC returned {resp.status_code} for {getattr(resp, 'url', '?')}. "
+            "Set EDGAR_USER_AGENT to a real contact address (see resolve_user_agent) or slow down."
+        )
+
+
 def resolve_user_agent(env_file: str | Path = _REPO_ENV) -> str:
     """EDGAR_USER_AGENT from the environment, else from ``env_file``, else the fallback.
 
@@ -117,6 +130,7 @@ class EdgarClient:
         host = "data.sec.gov" if url.startswith(SEC_HOST) else "www.sec.gov"
         headers = {**self.session.headers, "Host": host}
         resp = self.session.get(url, headers=headers, timeout=30)
+        check_response(resp)
         if resp.status_code == 404:
             cp.write_text(json.dumps({"__not_found__": True, "url": url}))
             return {"__not_found__": True, "url": url}
@@ -165,6 +179,7 @@ class EdgarClient:
                 headers={**self.session.headers, "Host": "www.sec.gov", "Accept": "application/atom+xml,text/xml"},
                 timeout=30,
             )
+            check_response(resp)
             if resp.status_code != 200:
                 return []
         except requests.RequestException:
@@ -231,6 +246,7 @@ class EdgarClient:
             )
         except requests.RequestException:
             return ""
+        check_response(resp)
         if resp.status_code != 200:
             # Only a 404 is a stable "not found" worth caching as a sticky miss.
             # Cache other non-200s (429/503/etc.) would turn a transient outage

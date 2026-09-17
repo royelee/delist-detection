@@ -20,6 +20,7 @@ DEFAULT_OUTPUT = ROOT / "output" / "delist_classifications.csv"
 DEFAULT_DLRET_OUTPUT = ROOT / "output" / "dlret.csv"
 
 from delist_detection import EdgarClient, TickerResolver, DelistClassifier
+from delist_detection.edgar import EdgarBlocked
 from delist_detection.crsp_codes import CrspBucket
 from delist_detection.av_listing import AvListingLoader
 from delist_detection.payout_extractor import PayoutExtractor, PayoutResult
@@ -236,6 +237,8 @@ def main() -> int:
         for i, (ticker, observed) in enumerate(rows, start=1):
             try:
                 rec = classifier.classify_ticker(ticker, observed)
+            except EdgarBlocked:
+                raise
             except Exception as e:  # network or parse failures should not abort
                 rec = None
                 err = f"{type(e).__name__}: {e}"
@@ -438,4 +441,8 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except EdgarBlocked as e:
+        print(f"ABORTED: {e}", file=sys.stderr)
+        sys.exit(2)
