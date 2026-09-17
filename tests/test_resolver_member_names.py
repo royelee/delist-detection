@@ -193,9 +193,12 @@ def test_the_efts_fallback_skips_the_exchange_that_filed_the_form25(monkeypatch)
     assert r._efts_lookup("PEAK", "2023-02-13", expected_name="HEALTHPEAK PROPERTIES") == (1829426, far_peak, True)
 
 
-def test_a_manual_override_is_not_name_checked(monkeypatch):
-    # R6: a hand-verified pin is the truth; checking it against the member name
-    # only fills review.csv with ~40 rows nobody needs to look at.
+def test_a_pinned_ticker_whose_names_differ_carries_both_flags(monkeypatch):
+    """member_name_mismatch states a fact about the security — the vendor series
+    is not the named member — so a pin does not silence it; that flag is how qlib
+    catches an impostor series (IMCL is ImmunoClin under ImClone's old symbol).
+    resolved_by_manual_override sits beside it so review triage can tell "the name
+    differs" apart from "the CIK needs checking"."""
     _real_efts(monkeypatch, [_hit(("1815737", "FAST Acquisition Corp.  (FST)  (CIK 0001815737)"))])
     e = _Edgar(dict([FAST, CITY]), {"FOREST": 38067})
     r = TickerResolver(e, manual_overrides={"FST": 1815737},
@@ -203,4 +206,14 @@ def test_a_manual_override_is_not_name_checked(monkeypatch):
     rec = DelistClassifier(e, r).classify_ticker("FST", "2022-08-25")
     assert rec.cik == 1815737
     assert rec.evidence["resolution_source"] == "manual"
-    assert "member_name_mismatch" not in rec.evidence["flags"]
+    flags = rec.evidence["flags"]
+    assert "member_name_mismatch" in flags and "resolved_by_manual_override" in flags
+
+
+def test_an_automatic_resolution_is_not_flagged_as_a_manual_override(monkeypatch):
+    _real_efts(monkeypatch, [_hit(("1815737", "FAST Acquisition Corp.  (FST)  (CIK 0001815737)"))])
+    e = _Edgar(dict([FAST, CITY]), {"FOREST": 38067})
+    r = TickerResolver(e, member_names=lambda t, d=None: "FOREST OIL CORP")
+    rec = DelistClassifier(e, r).classify_ticker("FST", "2022-08-25")
+    assert rec.evidence["resolution_source"] == "efts_name_mismatch"
+    assert "resolved_by_manual_override" not in rec.evidence["flags"]

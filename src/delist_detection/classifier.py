@@ -538,10 +538,14 @@ class DelistClassifier:
 
         if resolution.source == "company_tickers":
             flags.append("resolved_by_current_ticker_map")
-        # A manual override is hand-verified truth, so it is not name-checked:
-        # the ~40 pinned tickers would otherwise fill review.csv.
+        if resolution.source == "manual":
+            flags.append("resolved_by_manual_override")
+        # A pin does not silence the name check: `member_name_mismatch` states a
+        # fact about the security — the vendor series is not the named member —
+        # and it is how the consumer catches an impostor series. The two flags
+        # together tell review triage "the name differs, and the CIK is pinned".
         expected = self.resolver._expected_name(ticker.upper(), observed_delist_date)
-        if expected and observed and resolution.source != "manual":
+        if expected and observed:
             _, agrees = self.resolver._fits_date(resolution.cik, observed_delist_date, expected)
             if not agrees:
                 flags.append("member_name_mismatch")
