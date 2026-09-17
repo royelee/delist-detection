@@ -5367,5 +5367,169 @@
    827187,
    "Sleep Number Corp  (SNBR)  (CIK 0000827187)"
   ]
- ]
+ ],
+ "efts_raw": {
+  "https://efts.sec.gov/LATEST/search-index?q=%22VRTV%22&forms=25-NSE,25,15-12G,15-12B,15-15D&dateRange=custom&startdt=2023-09-01&enddt=2024-02-28": {
+   "hits": {
+    "total": {
+     "value": 0,
+     "relation": "eq"
+    },
+    "hits": []
+   }
+  },
+  "https://efts.sec.gov/LATEST/search-index?q=%22VRTV%22&forms=8-K&dateRange=custom&startdt=2023-08-02&enddt=2023-11-29": {
+   "hits": {
+    "total": {
+     "value": 11,
+     "relation": "eq"
+    },
+    "hits": [
+     {
+      "_source": {
+       "ciks": [
+        "0001599489"
+       ],
+       "display_names": [
+        "Veritiv Corp  (CIK 0001599489)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-10-17",
+       "adsh": "0001104659-23-109566"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001599489"
+       ],
+       "display_names": [
+        "Veritiv Corp  (CIK 0001599489)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-08-07",
+       "adsh": "0001104659-23-088101"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001599489"
+       ],
+       "display_names": [
+        "Veritiv Corp  (CIK 0001599489)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-08-08",
+       "adsh": "0001104659-23-088623"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001599489"
+       ],
+       "display_names": [
+        "Veritiv Corp  (CIK 0001599489)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-08-08",
+       "adsh": "0001104659-23-088623"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001599489"
+       ],
+       "display_names": [
+        "Veritiv Corp  (CIK 0001599489)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-10-18",
+       "adsh": "0001104659-23-109885"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000827187"
+       ],
+       "display_names": [
+        "Sleep Number Corp  (SNBR)  (CIK 0000827187)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-11-07",
+       "adsh": "0001213900-23-084374"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001599489"
+       ],
+       "display_names": [
+        "Veritiv Corp  (CIK 0001599489)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-10-17",
+       "adsh": "0001104659-23-109566"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000827187"
+       ],
+       "display_names": [
+        "Sleep Number Corp  (SNBR)  (CIK 0000827187)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-11-07",
+       "adsh": "0001213900-23-084374"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001599489"
+       ],
+       "display_names": [
+        "Veritiv Corp  (CIK 0001599489)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-08-07",
+       "adsh": "0001104659-23-088101"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001599489"
+       ],
+       "display_names": [
+        "Veritiv Corp  (CIK 0001599489)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-10-10",
+       "adsh": "0001104659-23-108254"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000827187"
+       ],
+       "display_names": [
+        "Sleep Number Corp  (SNBR)  (CIK 0000827187)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-11-07",
+       "adsh": "0001213900-23-084374"
+      }
+     }
+    ]
+   }
+  }
+ }
 }

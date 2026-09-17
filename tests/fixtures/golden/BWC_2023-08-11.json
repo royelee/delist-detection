@@ -6879,5 +6879,107 @@
    1893262,
    "J.P. Morgan Real Estate Income Trust, Inc.  (CIK 0001893262)"
   ]
- ]
+ ],
+ "efts_raw": {
+  "https://efts.sec.gov/LATEST/search-index?q=%22BWC%22&forms=25-NSE,25,15-12G,15-12B,15-15D&dateRange=custom&startdt=2023-05-13&enddt=2023-11-09": {
+   "hits": {
+    "total": {
+     "value": 1,
+     "relation": "eq"
+    },
+    "hits": [
+     {
+      "_source": {
+       "ciks": [
+        "0001854863",
+        "0001354457"
+       ],
+       "display_names": [
+        "Blue Whale Acquisition Corp I  (CIK 0001854863)",
+        "Nasdaq Stock Market LLC  (CIK 0001354457)"
+       ],
+       "form": "25-NSE",
+       "file_date": "2023-08-04",
+       "adsh": "0001354457-23-000566"
+      }
+     }
+    ]
+   }
+  },
+  "https://efts.sec.gov/LATEST/search-index?q=%22BWC%22&forms=8-K&dateRange=custom&startdt=2023-04-13&enddt=2023-08-10": {
+   "hits": {
+    "total": {
+     "value": 5,
+     "relation": "eq"
+    },
+    "hits": [
+     {
+      "_source": {
+       "ciks": [
+        "0000890447"
+       ],
+       "display_names": [
+        "Vertex Energy Inc.  (VTNR)  (CIK 0000890447)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-05-31",
+       "adsh": "0001387131-23-007087"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001854863"
+       ],
+       "display_names": [
+        "Blue Whale Acquisition Corp I  (CIK 0001854863)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-04-25",
+       "adsh": "0001829126-23-002914"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001854863"
+       ],
+       "display_names": [
+        "Blue Whale Acquisition Corp I  (CIK 0001854863)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-07-28",
+       "adsh": "0001193125-23-197713"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001069183"
+       ],
+       "display_names": [
+        "AXON ENTERPRISE, INC.  (AXON)  (CIK 0001069183)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-05-09",
+       "adsh": "0001069183-23-000027"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001893262"
+       ],
+       "display_names": [
+        "J.P. Morgan Real Estate Income Trust, Inc.  (CIK 0001893262)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-05-30",
+       "adsh": "0001193125-23-156145"
+      }
+     }
+    ]
+   }
+  }
+ }
 }

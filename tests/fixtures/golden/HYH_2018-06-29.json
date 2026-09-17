@@ -2455,5 +2455,78 @@
    1606498,
    "Halyard Health, Inc.  (AVNS)  (CIK 0001606498)"
   ]
- ]
+ ],
+ "efts_raw": {
+  "https://efts.sec.gov/LATEST/search-index?q=%22HYH%22&forms=25-NSE,25,15-12G,15-12B,15-15D&dateRange=custom&startdt=2018-03-31&enddt=2018-09-27": {
+   "hits": {
+    "total": {
+     "value": 0,
+     "relation": "eq"
+    },
+    "hits": []
+   }
+  },
+  "https://efts.sec.gov/LATEST/search-index?q=%22HYH%22&forms=8-K&dateRange=custom&startdt=2018-03-01&enddt=2018-06-28": {
+   "hits": {
+    "total": {
+     "value": 4,
+     "relation": "eq"
+    },
+    "hits": [
+     {
+      "_source": {
+       "ciks": [
+        "0001606498"
+       ],
+       "display_names": [
+        "Halyard Health, Inc.  (AVNS)  (CIK 0001606498)"
+       ],
+       "form": "8-K",
+       "file_date": "2018-06-01",
+       "adsh": "0001606498-18-000053"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001606498"
+       ],
+       "display_names": [
+        "Halyard Health, Inc.  (AVNS)  (CIK 0001606498)"
+       ],
+       "form": "8-K",
+       "file_date": "2018-05-01",
+       "adsh": "0001606498-18-000026"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001606498"
+       ],
+       "display_names": [
+        "Halyard Health, Inc.  (AVNS)  (CIK 0001606498)"
+       ],
+       "form": "8-K",
+       "file_date": "2018-05-02",
+       "adsh": "0001606498-18-000029"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001606498"
+       ],
+       "display_names": [
+        "Halyard Health, Inc.  (AVNS)  (CIK 0001606498)"
+       ],
+       "form": "8-K",
+       "file_date": "2018-06-21",
+       "adsh": "0001606498-18-000059"
+      }
+     }
+    ]
+   }
+  }
+ }
 }

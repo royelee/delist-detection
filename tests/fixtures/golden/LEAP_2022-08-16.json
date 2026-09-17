@@ -6799,5 +6799,1432 @@
    1842022,
    "DT Midstream, Inc.  (DTM)  (CIK 0001842022)"
   ]
- ]
+ ],
+ "efts_raw": {
+  "https://efts.sec.gov/LATEST/search-index?q=%22LEAP%22&forms=25-NSE,25,15-12G,15-12B,15-15D&dateRange=custom&startdt=2022-05-18&enddt=2022-11-14": {
+   "hits": {
+    "total": {
+     "value": 5,
+     "relation": "eq"
+    },
+    "hits": [
+     {
+      "_source": {
+       "ciks": [
+        "0001818346"
+       ],
+       "display_names": [
+        "Ribbit LEAP, Ltd.  (CIK 0001818346)"
+       ],
+       "form": "15-12G",
+       "file_date": "2022-08-25",
+       "adsh": "0001104659-22-094418"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001818346",
+        "0000876661"
+       ],
+       "display_names": [
+        "Ribbit LEAP, Ltd.  (CIK 0001818346)",
+        "NEW YORK STOCK EXCHANGE LLC  (CIK 0000876661)"
+       ],
+       "form": "25-NSE",
+       "file_date": "2022-08-19",
+       "adsh": "0000876661-22-000693"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001818346",
+        "0000876661"
+       ],
+       "display_names": [
+        "Ribbit LEAP, Ltd.  (CIK 0001818346)",
+        "NEW YORK STOCK EXCHANGE LLC  (CIK 0000876661)"
+       ],
+       "form": "25-NSE",
+       "file_date": "2022-08-15",
+       "adsh": "0000876661-22-000624"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001818346",
+        "0000876661"
+       ],
+       "display_names": [
+        "Ribbit LEAP, Ltd.  (CIK 0001818346)",
+        "NEW YORK STOCK EXCHANGE LLC  (CIK 0000876661)"
+       ],
+       "form": "25-NSE",
+       "file_date": "2022-08-15",
+       "adsh": "0000876661-22-000624"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001818346",
+        "0000876661"
+       ],
+       "display_names": [
+        "Ribbit LEAP, Ltd.  (CIK 0001818346)",
+        "NEW YORK STOCK EXCHANGE LLC  (CIK 0000876661)"
+       ],
+       "form": "25-NSE",
+       "file_date": "2022-08-19",
+       "adsh": "0000876661-22-000693"
+      }
+     }
+    ]
+   }
+  },
+  "https://efts.sec.gov/LATEST/search-index?q=%22LEAP%22&forms=8-K&dateRange=custom&startdt=2022-04-18&enddt=2022-08-15": {
+   "hits": {
+    "total": {
+     "value": 304,
+     "relation": "eq"
+    },
+    "hits": [
+     {
+      "_source": {
+       "ciks": [
+        "0001509745"
+       ],
+       "display_names": [
+        "LEAP THERAPEUTICS, INC.  (LPTX)  (CIK 0001509745)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-07-12",
+       "adsh": "0001104659-22-078992"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001509745"
+       ],
+       "display_names": [
+        "LEAP THERAPEUTICS, INC.  (LPTX)  (CIK 0001509745)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-08-12",
+       "adsh": "0001104659-22-089676"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001509745"
+       ],
+       "display_names": [
+        "LEAP THERAPEUTICS, INC.  (LPTX)  (CIK 0001509745)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-08-12",
+       "adsh": "0001104659-22-089676"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001509745"
+       ],
+       "display_names": [
+        "LEAP THERAPEUTICS, INC.  (LPTX)  (CIK 0001509745)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-05-13",
+       "adsh": "0001104659-22-059846"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001818346"
+       ],
+       "display_names": [
+        "Ribbit LEAP, Ltd.  (CIK 0001818346)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-08-03",
+       "adsh": "0001104659-22-085390"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001509745"
+       ],
+       "display_names": [
+        "LEAP THERAPEUTICS, INC.  (LPTX)  (CIK 0001509745)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-07-12",
+       "adsh": "0001104659-22-078992"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001842022"
+       ],
+       "display_names": [
+        "DT Midstream, Inc.  (DTM)  (CIK 0001842022)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-08-03",
+       "adsh": "0000947871-22-000822"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000819793"
+       ],
+       "display_names": [
+        "ALBANY INTERNATIONAL CORP /DE/  (AIN)  (CIK 0000819793)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-05-25",
+       "adsh": "0000819793-22-000034"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001509745"
+       ],
+       "display_names": [
+        "LEAP THERAPEUTICS, INC.  (LPTX)  (CIK 0001509745)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-06-16",
+       "adsh": "0001104659-22-071934"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001818346"
+       ],
+       "display_names": [
+        "Ribbit LEAP, Ltd.  (CIK 0001818346)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-08-03",
+       "adsh": "0001104659-22-085390"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001509745"
+       ],
+       "display_names": [
+        "LEAP THERAPEUTICS, INC.  (LPTX)  (CIK 0001509745)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-05-13",
+       "adsh": "0001104659-22-059846"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001842022"
+       ],
+       "display_names": [
+        "DT Midstream, Inc.  (DTM)  (CIK 0001842022)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-05-05",
+       "adsh": "0000947871-22-000495"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001509745"
+       ],
+       "display_names": [
+        "LEAP THERAPEUTICS, INC.  (LPTX)  (CIK 0001509745)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-08-12",
+       "adsh": "0001104659-22-089676"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001818346"
+       ],
+       "display_names": [
+        "Ribbit LEAP, Ltd.  (CIK 0001818346)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-08-03",
+       "adsh": "0001104659-22-085390"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001057379"
+       ],
+       "display_names": [
+        "HACKETT GROUP, INC.  (HCKT)  (CIK 0001057379)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-08-09",
+       "adsh": "0000950170-22-016112"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001057379"
+       ],
+       "display_names": [
+        "HACKETT GROUP, INC.  (HCKT)  (CIK 0001057379)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-05-10",
+       "adsh": "0001564590-22-019300"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000315189"
+       ],
+       "display_names": [
+        "DEERE & CO  (DE)  (CIK 0000315189)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-05-31",
+       "adsh": "0001558370-22-009519"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000315189"
+       ],
+       "display_names": [
+        "DEERE & CO  (DE)  (CIK 0000315189)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-05-17",
+       "adsh": "0001558370-22-009076"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001818787"
+       ],
+       "display_names": [
+        "Primavera Capital Acquisition Corp.  (CIK 0001818787)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-05-05",
+       "adsh": "0001193125-22-142329"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000040545"
+       ],
+       "display_names": [
+        "GENERAL ELECTRIC CO  (GE)  (CIK 0000040545)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-04-29",
+       "adsh": "0000040545-22-000030"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001643269"
+       ],
+       "display_names": [
+        "Sumo Logic, Inc.  (CIK 0001643269)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-05-05",
+       "adsh": "0001643269-22-000016"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000027904"
+       ],
+       "display_names": [
+        "DELTA AIR LINES, INC.  (DAL)  (CIK 0000027904)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-07-18",
+       "adsh": "0001683168-22-005002"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001758009"
+       ],
+       "display_names": [
+        "Quantum Computing Inc.  (QUBT)  (CIK 0001758009)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-06-21",
+       "adsh": "0001213900-22-034003"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001509745"
+       ],
+       "display_names": [
+        "LEAP THERAPEUTICS, INC.  (LPTX)  (CIK 0001509745)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-07-12",
+       "adsh": "0001104659-22-078992"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001088413"
+       ],
+       "display_names": [
+        "GREYSTONE LOGISTICS, INC.  (GLGI)  (CIK 0001088413)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-08-04",
+       "adsh": "0001493152-22-021275"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001088413"
+       ],
+       "display_names": [
+        "GREYSTONE LOGISTICS, INC.  (GLGI)  (CIK 0001088413)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-08-04",
+       "adsh": "0001493152-22-021275"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001467154"
+       ],
+       "display_names": [
+        "Novan, Inc.  (CIK 0001467154)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-05-16",
+       "adsh": "0001467154-22-000075"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001285819"
+       ],
+       "display_names": [
+        "OMEROS CORP  (OMER)  (CIK 0001285819)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-05-10",
+       "adsh": "0001558370-22-008110"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001824920"
+       ],
+       "display_names": [
+        "IonQ, Inc.  (IONQ, IONQ-WT)  (CIK 0001824920)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-05-16",
+       "adsh": "0001193125-22-151772"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001088413"
+       ],
+       "display_names": [
+        "GREYSTONE LOGISTICS, INC.  (GLGI)  (CIK 0001088413)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-08-04",
+       "adsh": "0001493152-22-021275"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001285819"
+       ],
+       "display_names": [
+        "OMEROS CORP  (OMER)  (CIK 0001285819)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-08-09",
+       "adsh": "0001558370-22-012871"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001842022"
+       ],
+       "display_names": [
+        "DT Midstream, Inc.  (DTM)  (CIK 0001842022)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-08-03",
+       "adsh": "0000947871-22-000822"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000729986"
+       ],
+       "display_names": [
+        "UNITED BANKSHARES INC/WV  (UBSI)  (CIK 0000729986)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-07-28",
+       "adsh": "0001193125-22-204190"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000729986"
+       ],
+       "display_names": [
+        "UNITED BANKSHARES INC/WV  (UBSI)  (CIK 0000729986)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-04-26",
+       "adsh": "0001193125-22-118934"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001045810"
+       ],
+       "display_names": [
+        "NVIDIA CORP  (NVDA)  (CIK 0001045810)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-05-25",
+       "adsh": "0001045810-22-000073"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000918965"
+       ],
+       "display_names": [
+        "SCANSOURCE, INC.  (SCSC)  (CIK 0000918965)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-05-10",
+       "adsh": "0000918965-22-000010"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001800667"
+       ],
+       "display_names": [
+        "JFrog Ltd  (FROG)  (CIK 0001800667)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-05-09",
+       "adsh": "0000950170-22-008493"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001814329"
+       ],
+       "display_names": [
+        "Astra Space, Inc.  (CIK 0001814329)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-04-28",
+       "adsh": "0000950170-22-006710"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001828105"
+       ],
+       "display_names": [
+        "Hippo Holdings Inc.  (HIPO, HIPO-WT)  (CIK 0001828105)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-08-11",
+       "adsh": "0001828105-22-000033"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001921064"
+       ],
+       "display_names": [
+        "BENCHMARK 2022-B35 MORTGAGE TRUST  (CIK 0001921064)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-05-12",
+       "adsh": "0001539497-22-000966"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001932997"
+       ],
+       "display_names": [
+        "BMO 2022-C2 Mortgage Trust  (CIK 0001932997)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-07-12",
+       "adsh": "0001539497-22-001263"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001800667"
+       ],
+       "display_names": [
+        "JFrog Ltd  (FROG)  (CIK 0001800667)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-08-03",
+       "adsh": "0000950170-22-014250"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000819793"
+       ],
+       "display_names": [
+        "ALBANY INTERNATIONAL CORP /DE/  (AIN)  (CIK 0000819793)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-04-25",
+       "adsh": "0000819793-22-000023"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001289419"
+       ],
+       "display_names": [
+        "Morningstar, Inc.  (MORN)  (CIK 0001289419)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-04-22",
+       "adsh": "0001104659-22-049042"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000819793"
+       ],
+       "display_names": [
+        "ALBANY INTERNATIONAL CORP /DE/  (AIN)  (CIK 0000819793)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-07-25",
+       "adsh": "0000819793-22-000041"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001013462"
+       ],
+       "display_names": [
+        "ANSYS INC  (ANSS)  (CIK 0001013462)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-08-03",
+       "adsh": "0001013462-22-000025"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000040545"
+       ],
+       "display_names": [
+        "GENERAL ELECTRIC CO  (GE)  (CIK 0000040545)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-04-26",
+       "adsh": "0000040545-22-000026"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000040545"
+       ],
+       "display_names": [
+        "GENERAL ELECTRIC CO  (GE)  (CIK 0000040545)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-07-26",
+       "adsh": "0000040545-22-000048"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001093691"
+       ],
+       "display_names": [
+        "PLUG POWER INC  (PLUG)  (CIK 0001093691)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-05-09",
+       "adsh": "0001104659-22-057476"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001377936"
+       ],
+       "display_names": [
+        "SARATOGA INVESTMENT CORP.  (SAJ, SAR, SAT, SAY, SAZ)  (CIK 0001377936)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-04-27",
+       "adsh": "0001213900-22-021904"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000315189"
+       ],
+       "display_names": [
+        "DEERE & CO  (DE)  (CIK 0000315189)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-05-20",
+       "adsh": "0001558370-22-009205"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000010254"
+       ],
+       "display_names": [
+        "EARTHSTONE ENERGY INC  (CIK 0000010254)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-06-02",
+       "adsh": "0000010254-22-000117"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000075488",
+        "0001918072",
+        "0001004980"
+       ],
+       "display_names": [
+        "PACIFIC GAS & ELECTRIC Co  (CIK 0000075488)",
+        "PG&E Wildfire Recovery Funding LLC  (CIK 0001918072)",
+        "PG&E Corp  (PCG, PCG-PA, PCG-PB, PCG-PC, PCG-PD, PCG-PE, PCG-PG, PCG-PH, PCG-PI)  (CIK 0001004980)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-07-21",
+       "adsh": "0001193125-22-199190"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000075488",
+        "0001918072"
+       ],
+       "display_names": [
+        "PACIFIC GAS & ELECTRIC Co  (CIK 0000075488)",
+        "PG&E Wildfire Recovery Funding LLC  (CIK 0001918072)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-07-15",
+       "adsh": "0001193125-22-194996"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001918072",
+        "0000075488"
+       ],
+       "display_names": [
+        "PG&E Wildfire Recovery Funding LLC  (CIK 0001918072)",
+        "PACIFIC GAS & ELECTRIC Co  (CIK 0000075488)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-05-05",
+       "adsh": "0001193125-22-142328"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001918072",
+        "0000075488",
+        "0001004980"
+       ],
+       "display_names": [
+        "PG&E Wildfire Recovery Funding LLC  (CIK 0001918072)",
+        "PACIFIC GAS & ELECTRIC Co  (CIK 0000075488)",
+        "PG&E Corp  (PCG, PCG-PA, PCG-PB, PCG-PC, PCG-PD, PCG-PE, PCG-PG, PCG-PH, PCG-PI)  (CIK 0001004980)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-05-11",
+       "adsh": "0001193125-22-146523"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001790982"
+       ],
+       "display_names": [
+        "Arconic Corp  (CIK 0001790982)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-05-20",
+       "adsh": "0001193125-22-156209"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000796505"
+       ],
+       "display_names": [
+        "Clearfield, Inc.  (CLFD)  (CIK 0000796505)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-04-28",
+       "adsh": "0001171843-22-002965"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001576914"
+       ],
+       "display_names": [
+        "MiX Telematics Ltd  (CIK 0001576914)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-07-06",
+       "adsh": "0001628280-22-018593"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001108348",
+        "0001522616",
+        "0000921864"
+       ],
+       "display_names": [
+        "CITIBANK CREDIT CARD ISSUANCE TRUST  (CIK 0001108348)",
+        "Citibank, N.A., as depositor of Citibank Credit Card Issuance Trust  (CIK 0001522616)",
+        "CITIBANK CREDIT CARD MASTER TRUST I  (CIK 0000921864)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-05-18",
+       "adsh": "0001193125-22-153913"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001108348",
+        "0001522616",
+        "0000921864"
+       ],
+       "display_names": [
+        "CITIBANK CREDIT CARD ISSUANCE TRUST  (CIK 0001108348)",
+        "Citibank, N.A., as depositor of Citibank Credit Card Issuance Trust  (CIK 0001522616)",
+        "CITIBANK CREDIT CARD MASTER TRUST I  (CIK 0000921864)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-08-12",
+       "adsh": "0001193125-22-219769"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000944130"
+       ],
+       "display_names": [
+        "MINISTRY PARTNERS INVESTMENT COMPANY, LLC  (CIK 0000944130)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-06-09",
+       "adsh": "0000944130-22-000027"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000944130"
+       ],
+       "display_names": [
+        "MINISTRY PARTNERS INVESTMENT COMPANY, LLC  (CIK 0000944130)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-06-09",
+       "adsh": "0000944130-22-000027"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001539838"
+       ],
+       "display_names": [
+        "Diamondback Energy, Inc.  (FANG)  (CIK 0001539838)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-06-07",
+       "adsh": "0001539838-22-000073"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000351817"
+       ],
+       "display_names": [
+        "SILVERBOW RESOURCES, INC.  (CIK 0000351817)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-06-24",
+       "adsh": "0001193125-22-180371"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001705873"
+       ],
+       "display_names": [
+        "Berry Corp (bry)  (BRY)  (CIK 0001705873)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-06-01",
+       "adsh": "0001705873-22-000043"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001486159"
+       ],
+       "display_names": [
+        "Chord Energy Corp  (CHRD, OASPW, WLLAW, WLLBW)  (CIK 0001486159)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-07-07",
+       "adsh": "0001193125-22-189506"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001658566"
+       ],
+       "display_names": [
+        "Centennial Resource Development, Inc.  (PR)  (CIK 0001658566)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-07-21",
+       "adsh": "0001193125-22-199148"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001104485"
+       ],
+       "display_names": [
+        "NORTHERN OIL & GAS, INC.  (NOG)  (CIK 0001104485)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-06-08",
+       "adsh": "0001104485-22-000123"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001703785"
+       ],
+       "display_names": [
+        "Sitio Royalties Corp.  (CIK 0001703785)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-06-10",
+       "adsh": "0001193125-22-171941"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000010254"
+       ],
+       "display_names": [
+        "EARTHSTONE ENERGY INC  (CIK 0000010254)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-08-11",
+       "adsh": "0000010254-22-000183"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001841666"
+       ],
+       "display_names": [
+        "APA Corp  (APA)  (CIK 0001841666)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-05-02",
+       "adsh": "0001193125-22-135246"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000006769"
+       ],
+       "display_names": [
+        "APACHE CORP  (CIK 0000006769)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-05-02",
+       "adsh": "0001193125-22-135233"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000006769"
+       ],
+       "display_names": [
+        "APACHE CORP  (CIK 0000006769)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-05-02",
+       "adsh": "0001193125-22-135233"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001841666"
+       ],
+       "display_names": [
+        "APA Corp  (APA)  (CIK 0001841666)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-05-02",
+       "adsh": "0001193125-22-135246"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001692787"
+       ],
+       "display_names": [
+        "Kinetik Holdings Inc.  (KNTK)  (CIK 0001692787)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-06-14",
+       "adsh": "0001193125-22-173139"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001805077"
+       ],
+       "display_names": [
+        "Eos Energy Enterprises, Inc.  (EOSE, EOSEW)  (CIK 0001805077)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-08-01",
+       "adsh": "0001628280-22-019887"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001811972"
+       ],
+       "display_names": [
+        "Barings Capital Investment Corp  (CIK 0001811972)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-04-29",
+       "adsh": "0001140361-22-016912"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001531152"
+       ],
+       "display_names": [
+        "BJ's Wholesale Club Holdings, Inc.  (BJ)  (CIK 0001531152)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-08-02",
+       "adsh": "0001104659-22-085169"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001099800"
+       ],
+       "display_names": [
+        "Edwards Lifesciences Corp  (EW)  (CIK 0001099800)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-07-21",
+       "adsh": "0001193125-22-199173"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001703785"
+       ],
+       "display_names": [
+        "Sitio Royalties Corp.  (CIK 0001703785)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-06-27",
+       "adsh": "0001193125-22-182967"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001534504",
+        "0001645026",
+        "0001566011"
+       ],
+       "display_names": [
+        "PBF Energy Inc.  (PBF)  (CIK 0001534504)",
+        "PBF Energy Co LLC  (CIK 0001645026)",
+        "PBF Holding Co LLC  (CIK 0001566011)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-05-27",
+       "adsh": "0001534504-22-000023"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001613103"
+       ],
+       "display_names": [
+        "Medtronic plc  (MDT)  (CIK 0001613103)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-05-02",
+       "adsh": "0001193125-22-135320"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001103982"
+       ],
+       "display_names": [
+        "Mondelez International, Inc.  (MDLZ)  (CIK 0001103982)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-07-12",
+       "adsh": "0001193125-22-191997"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001921064"
+       ],
+       "display_names": [
+        "BENCHMARK 2022-B35 MORTGAGE TRUST  (CIK 0001921064)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-05-12",
+       "adsh": "0001539497-22-000966"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001920442"
+       ],
+       "display_names": [
+        "BANK 2022-BNK41  (CIK 0001920442)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-05-05",
+       "adsh": "0001539497-22-000936"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001544206"
+       ],
+       "display_names": [
+        "Carlyle Secured Lending, Inc.  (CGBD, CGBDL)  (CIK 0001544206)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-06-01",
+       "adsh": "0001544206-22-000041"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000922224",
+        "0000055387",
+        "0000060549"
+       ],
+       "display_names": [
+        "PPL Corp  (PPL)  (CIK 0000922224)",
+        "KENTUCKY UTILITIES CO  (CIK 0000055387)",
+        "LOUISVILLE GAS & ELECTRIC CO /KY/  (CIK 0000060549)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-08-01",
+       "adsh": "0000922224-22-000036"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000922224",
+        "0000055387",
+        "0000060549"
+       ],
+       "display_names": [
+        "PPL Corp  (PPL)  (CIK 0000922224)",
+        "KENTUCKY UTILITIES CO  (CIK 0000055387)",
+        "LOUISVILLE GAS & ELECTRIC CO /KY/  (CIK 0000060549)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-08-01",
+       "adsh": "0000922224-22-000036"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000775368"
+       ],
+       "display_names": [
+        "ALLEGHANY CORP /DE  (CIK 0000775368)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-06-27",
+       "adsh": "0001193125-22-182850"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001920442"
+       ],
+       "display_names": [
+        "BANK 2022-BNK41  (CIK 0001920442)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-05-05",
+       "adsh": "0001539497-22-000936"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001047862"
+       ],
+       "display_names": [
+        "CONSOLIDATED EDISON INC  (ED)  (CIK 0001047862)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-06-30",
+       "adsh": "0001193125-22-186193"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001378950"
+       ],
+       "display_names": [
+        "CarParts.com, Inc.  (PRTS)  (CIK 0001378950)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-06-21",
+       "adsh": "0001140361-22-023561"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001637459"
+       ],
+       "display_names": [
+        "Kraft Heinz Co  (KHC)  (CIK 0001637459)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-07-08",
+       "adsh": "0001193125-22-190553"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001924780"
+       ],
+       "display_names": [
+        "BBCMS Mortgage Trust 2022-C16  (CIK 0001924780)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-06-28",
+       "adsh": "0001539497-22-001228"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000008670"
+       ],
+       "display_names": [
+        "AUTOMATIC DATA PROCESSING INC  (ADP)  (CIK 0000008670)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-07-01",
+       "adsh": "0000950103-22-011894"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001024478"
+       ],
+       "display_names": [
+        "ROCKWELL AUTOMATION, INC  (ROK)  (CIK 0001024478)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-07-01",
+       "adsh": "0001193125-22-187275"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000016918"
+       ],
+       "display_names": [
+        "CONSTELLATION BRANDS, INC.  (STZ)  (CIK 0000016918)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-08-09",
+       "adsh": "0001193125-22-216194"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000025445"
+       ],
+       "display_names": [
+        "Crane Holdings, Co.  (CXT)  (CIK 0000025445)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-08-15",
+       "adsh": "0001193125-22-221338"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001090872"
+       ],
+       "display_names": [
+        "AGILENT TECHNOLOGIES, INC.  (A)  (CIK 0001090872)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-04-19",
+       "adsh": "0001193125-22-108213"
+      }
+     }
+    ]
+   }
+  }
+ }
 }

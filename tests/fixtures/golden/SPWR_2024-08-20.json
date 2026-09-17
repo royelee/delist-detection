@@ -4805,5 +4805,221 @@
    867773,
    "SUNPOWER CORP  (SPWRQ)  (CIK 0000867773)"
   ]
- ]
+ ],
+ "efts_raw": {
+  "https://efts.sec.gov/LATEST/search-index?q=%22SPWR%22&forms=25-NSE,25,15-12G,15-12B,15-15D&dateRange=custom&startdt=2024-05-22&enddt=2024-11-18": {
+   "hits": {
+    "total": {
+     "value": 0,
+     "relation": "eq"
+    },
+    "hits": []
+   }
+  },
+  "https://efts.sec.gov/LATEST/search-index?q=%22SPWR%22&forms=8-K&dateRange=custom&startdt=2024-04-22&enddt=2024-08-19": {
+   "hits": {
+    "total": {
+     "value": 15,
+     "relation": "eq"
+    },
+    "hits": [
+     {
+      "_source": {
+       "ciks": [
+        "0000867773"
+       ],
+       "display_names": [
+        "SUNPOWER CORP  (SPWRQ)  (CIK 0000867773)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-05-24",
+       "adsh": "0000867773-24-000062"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000867773"
+       ],
+       "display_names": [
+        "SUNPOWER CORP  (SPWRQ)  (CIK 0000867773)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-07-29",
+       "adsh": "0000867773-24-000084"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000867773"
+       ],
+       "display_names": [
+        "SUNPOWER CORP  (SPWRQ)  (CIK 0000867773)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-04-24",
+       "adsh": "0000867773-24-000051"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000867773"
+       ],
+       "display_names": [
+        "SUNPOWER CORP  (SPWRQ)  (CIK 0000867773)"
+       ],
+       "form": "8-K/A",
+       "file_date": "2024-07-12",
+       "adsh": "0000867773-24-000079"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000867773"
+       ],
+       "display_names": [
+        "SUNPOWER CORP  (SPWRQ)  (CIK 0000867773)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-07-23",
+       "adsh": "0000867773-24-000081"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000867773"
+       ],
+       "display_names": [
+        "SUNPOWER CORP  (SPWRQ)  (CIK 0000867773)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-04-23",
+       "adsh": "0000867773-24-000047"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000867773"
+       ],
+       "display_names": [
+        "SUNPOWER CORP  (SPWRQ)  (CIK 0000867773)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-05-20",
+       "adsh": "0000867773-24-000058"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000867773"
+       ],
+       "display_names": [
+        "SUNPOWER CORP  (SPWRQ)  (CIK 0000867773)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-06-03",
+       "adsh": "0000867773-24-000069"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000867773"
+       ],
+       "display_names": [
+        "SUNPOWER CORP  (SPWRQ)  (CIK 0000867773)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-07-03",
+       "adsh": "0000867773-24-000074"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000867773"
+       ],
+       "display_names": [
+        "SUNPOWER CORP  (SPWRQ)  (CIK 0000867773)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-05-20",
+       "adsh": "0000867773-24-000058"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000867773"
+       ],
+       "display_names": [
+        "SUNPOWER CORP  (SPWRQ)  (CIK 0000867773)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-08-12",
+       "adsh": "0000867773-24-000093"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000867773"
+       ],
+       "display_names": [
+        "SUNPOWER CORP  (SPWRQ)  (CIK 0000867773)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-08-06",
+       "adsh": "0000867773-24-000086"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000867773"
+       ],
+       "display_names": [
+        "SUNPOWER CORP  (SPWRQ)  (CIK 0000867773)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-08-06",
+       "adsh": "0000867773-24-000086"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000867773"
+       ],
+       "display_names": [
+        "SUNPOWER CORP  (SPWRQ)  (CIK 0000867773)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-06-03",
+       "adsh": "0000867773-24-000069"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000867773"
+       ],
+       "display_names": [
+        "SUNPOWER CORP  (SPWRQ)  (CIK 0000867773)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-08-12",
+       "adsh": "0000867773-24-000093"
+      }
+     }
+    ]
+   }
+  }
+ }
 }

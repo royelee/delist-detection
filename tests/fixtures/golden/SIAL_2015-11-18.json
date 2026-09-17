@@ -3152,5 +3152,120 @@
    90185,
    "SIGMA ALDRICH CORP  (CIK 0000090185)"
   ]
- ]
+ ],
+ "efts_raw": {
+  "https://efts.sec.gov/LATEST/search-index?q=%22SIAL%22&forms=25-NSE,25,15-12G,15-12B,15-15D&dateRange=custom&startdt=2015-08-20&enddt=2016-02-16": {
+   "hits": {
+    "total": {
+     "value": 1,
+     "relation": "eq"
+    },
+    "hits": [
+     {
+      "_source": {
+       "ciks": [
+        "0000090185",
+        "0001354457"
+       ],
+       "display_names": [
+        "SIGMA ALDRICH CORP  (CIK 0000090185)",
+        "NASDAQ Stock Market LLC  (CIK 0001354457)"
+       ],
+       "form": "25-NSE",
+       "file_date": "2015-11-18",
+       "adsh": "0001354457-15-000214"
+      }
+     }
+    ]
+   }
+  },
+  "https://efts.sec.gov/LATEST/search-index?q=%22SIAL%22&forms=8-K&dateRange=custom&startdt=2015-07-21&enddt=2015-11-17": {
+   "hits": {
+    "total": {
+     "value": 6,
+     "relation": "eq"
+    },
+    "hits": [
+     {
+      "_source": {
+       "ciks": [
+        "0000090185"
+       ],
+       "display_names": [
+        "SIGMA ALDRICH CORP  (CIK 0000090185)"
+       ],
+       "form": "8-K",
+       "file_date": "2015-07-30",
+       "adsh": "0000090185-15-000091"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000090185"
+       ],
+       "display_names": [
+        "SIGMA ALDRICH CORP  (CIK 0000090185)"
+       ],
+       "form": "8-K",
+       "file_date": "2015-07-30",
+       "adsh": "0000090185-15-000091"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000090185"
+       ],
+       "display_names": [
+        "SIGMA ALDRICH CORP  (CIK 0000090185)"
+       ],
+       "form": "8-K",
+       "file_date": "2015-11-03",
+       "adsh": "0000090185-15-000123"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000090185"
+       ],
+       "display_names": [
+        "SIGMA ALDRICH CORP  (CIK 0000090185)"
+       ],
+       "form": "8-K",
+       "file_date": "2015-11-10",
+       "adsh": "0001193125-15-373327"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000090185"
+       ],
+       "display_names": [
+        "SIGMA ALDRICH CORP  (CIK 0000090185)"
+       ],
+       "form": "8-K",
+       "file_date": "2015-11-03",
+       "adsh": "0000090185-15-000123"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000090185"
+       ],
+       "display_names": [
+        "SIGMA ALDRICH CORP  (CIK 0000090185)"
+       ],
+       "form": "8-K",
+       "file_date": "2015-10-20",
+       "adsh": "0001193125-15-348269"
+      }
+     }
+    ]
+   }
+  }
+ }
 }

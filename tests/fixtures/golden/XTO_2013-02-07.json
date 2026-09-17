@@ -17721,5 +17721,351 @@
    1166036,
    "MARKWEST ENERGY PARTNERS L P  (CIK 0001166036)"
   ]
- ]
+ ],
+ "efts_raw": {
+  "https://efts.sec.gov/LATEST/search-index?q=%22XTO%22&forms=25-NSE,25,15-12G,15-12B,15-15D&dateRange=custom&startdt=2012-11-09&enddt=2013-05-08": {
+   "hits": {
+    "total": {
+     "value": 0,
+     "relation": "eq"
+    },
+    "hits": []
+   }
+  },
+  "https://efts.sec.gov/LATEST/search-index?q=%22XTO%22&forms=8-K&dateRange=custom&startdt=2012-10-10&enddt=2013-02-06": {
+   "hits": {
+    "total": {
+     "value": 25,
+     "relation": "eq"
+    },
+    "hits": [
+     {
+      "_source": {
+       "ciks": [
+        "0000945764"
+       ],
+       "display_names": [
+        "DENBURY RESOURCES INC  (CIK 0000945764)"
+       ],
+       "form": "8-K",
+       "file_date": "2012-12-06",
+       "adsh": "0000945764-12-000087"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000862022"
+       ],
+       "display_names": [
+        "HUGOTON ROYALTY TRUST  (HGTXU)  (CIK 0000862022)"
+       ],
+       "form": "8-K",
+       "file_date": "2012-12-20",
+       "adsh": "0001193125-12-509633"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000862022"
+       ],
+       "display_names": [
+        "HUGOTON ROYALTY TRUST  (HGTXU)  (CIK 0000862022)"
+       ],
+       "form": "8-K",
+       "file_date": "2012-11-19",
+       "adsh": "0001193125-12-475286"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000862022"
+       ],
+       "display_names": [
+        "HUGOTON ROYALTY TRUST  (HGTXU)  (CIK 0000862022)"
+       ],
+       "form": "8-K",
+       "file_date": "2013-01-18",
+       "adsh": "0001193125-13-017127"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000862022"
+       ],
+       "display_names": [
+        "HUGOTON ROYALTY TRUST  (HGTXU)  (CIK 0000862022)"
+       ],
+       "form": "8-K",
+       "file_date": "2012-10-19",
+       "adsh": "0001193125-12-428316"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000945764"
+       ],
+       "display_names": [
+        "DENBURY RESOURCES INC  (CIK 0000945764)"
+       ],
+       "form": "8-K/A",
+       "file_date": "2012-12-26",
+       "adsh": "0000945764-12-000091"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001349436"
+       ],
+       "display_names": [
+        "SANDRIDGE ENERGY INC  (SD)  (CIK 0001349436)"
+       ],
+       "form": "8-K/A",
+       "file_date": "2012-11-15",
+       "adsh": "0001193125-12-472564"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001349436"
+       ],
+       "display_names": [
+        "SANDRIDGE ENERGY INC  (SD)  (CIK 0001349436)"
+       ],
+       "form": "8-K/A",
+       "file_date": "2013-01-18",
+       "adsh": "0001193125-13-017402"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000945764"
+       ],
+       "display_names": [
+        "DENBURY RESOURCES INC  (CIK 0000945764)"
+       ],
+       "form": "8-K",
+       "file_date": "2012-12-06",
+       "adsh": "0000945764-12-000087"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000945764"
+       ],
+       "display_names": [
+        "DENBURY RESOURCES INC  (CIK 0000945764)"
+       ],
+       "form": "8-K/A",
+       "file_date": "2012-12-26",
+       "adsh": "0000945764-12-000091"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001166036"
+       ],
+       "display_names": [
+        "MARKWEST ENERGY PARTNERS L P  (CIK 0001166036)"
+       ],
+       "form": "8-K",
+       "file_date": "2012-11-07",
+       "adsh": "0001104659-12-075412"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000881787"
+       ],
+       "display_names": [
+        "CROSS TIMBERS ROYALTY TRUST  (CRT)  (CIK 0000881787)"
+       ],
+       "form": "8-K",
+       "file_date": "2013-01-18",
+       "adsh": "0001193125-13-017135"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000881787"
+       ],
+       "display_names": [
+        "CROSS TIMBERS ROYALTY TRUST  (CRT)  (CIK 0000881787)"
+       ],
+       "form": "8-K",
+       "file_date": "2012-10-19",
+       "adsh": "0001193125-12-428323"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001410636"
+       ],
+       "display_names": [
+        "American Water Works Company, Inc.  (AWK)  (CIK 0001410636)"
+       ],
+       "form": "8-K",
+       "file_date": "2012-11-07",
+       "adsh": "0001193125-12-457550"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001540698"
+       ],
+       "display_names": [
+        "Greenpro Resources Corp  (CIK 0001540698)"
+       ],
+       "form": "8-K",
+       "file_date": "2012-10-16",
+       "adsh": "0001021432-12-000218"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000945764"
+       ],
+       "display_names": [
+        "DENBURY RESOURCES INC  (CIK 0000945764)"
+       ],
+       "form": "8-K/A",
+       "file_date": "2012-12-26",
+       "adsh": "0000945764-12-000091"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000049938"
+       ],
+       "display_names": [
+        "IMPERIAL OIL LTD  (IMO)  (CIK 0000049938)"
+       ],
+       "form": "8-K",
+       "file_date": "2012-10-17",
+       "adsh": "0001193125-12-425805"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000945764"
+       ],
+       "display_names": [
+        "DENBURY RESOURCES INC  (CIK 0000945764)"
+       ],
+       "form": "8-K/A",
+       "file_date": "2013-01-18",
+       "adsh": "0000945764-13-000006"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000945764"
+       ],
+       "display_names": [
+        "DENBURY RESOURCES INC  (CIK 0000945764)"
+       ],
+       "form": "8-K",
+       "file_date": "2013-01-15",
+       "adsh": "0000945764-13-000003"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000945764"
+       ],
+       "display_names": [
+        "DENBURY RESOURCES INC  (CIK 0000945764)"
+       ],
+       "form": "8-K/A",
+       "file_date": "2013-01-18",
+       "adsh": "0000945764-13-000006"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000034088"
+       ],
+       "display_names": [
+        "EXXON MOBIL CORP  (XOM)  (CIK 0000034088)"
+       ],
+       "form": "8-K",
+       "file_date": "2012-11-01",
+       "adsh": "0000034088-12-000044"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000945764"
+       ],
+       "display_names": [
+        "DENBURY RESOURCES INC  (CIK 0000945764)"
+       ],
+       "form": "8-K",
+       "file_date": "2012-12-06",
+       "adsh": "0000945764-12-000087"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001092914"
+       ],
+       "display_names": [
+        "ATLAS PIPELINE PARTNERS LP  (CIK 0001092914)"
+       ],
+       "form": "8-K",
+       "file_date": "2012-10-31",
+       "adsh": "0001193125-12-442642"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000945764"
+       ],
+       "display_names": [
+        "DENBURY RESOURCES INC  (CIK 0000945764)"
+       ],
+       "form": "8-K",
+       "file_date": "2012-11-06",
+       "adsh": "0000945764-12-000076"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001547638"
+       ],
+       "display_names": [
+        "Southcross Energy Partners, L.P.  (CIK 0001547638)"
+       ],
+       "form": "8-K",
+       "file_date": "2012-11-13",
+       "adsh": "0001104659-12-077208"
+      }
+     }
+    ]
+   }
+  }
+ }
 }

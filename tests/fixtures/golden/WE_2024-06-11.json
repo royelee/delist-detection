@@ -17955,5 +17955,1353 @@
    1515816,
    "Plymouth Industrial REIT, Inc.  (PLYM)  (CIK 0001515816)"
   ]
- ]
+ ],
+ "efts_raw": {
+  "https://efts.sec.gov/LATEST/search-index?q=%22WE%22&forms=25-NSE,25,15-12G,15-12B,15-15D&dateRange=custom&startdt=2024-03-13&enddt=2024-09-09": {
+   "hits": {
+    "total": {
+     "value": 2,
+     "relation": "eq"
+    },
+    "hits": [
+     {
+      "_source": {
+       "ciks": [
+        "0001891512"
+       ],
+       "display_names": [
+        "Adastra Holdings Ltd.  (XTXXF)  (CIK 0001891512)"
+       ],
+       "form": "15-12G",
+       "file_date": "2024-05-01",
+       "adsh": "0001062993-24-009177"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001843714"
+       ],
+       "display_names": [
+        "Zapata Computing Holdings Inc.  (ZPTA, ZPTAW)  (CIK 0001843714)"
+       ],
+       "form": "25",
+       "file_date": "2024-03-28",
+       "adsh": "0000950142-24-000824"
+      }
+     }
+    ]
+   }
+  },
+  "https://efts.sec.gov/LATEST/search-index?q=%22WE%22&forms=8-K&dateRange=custom&startdt=2024-02-12&enddt=2024-06-10": {
+   "hits": {
+    "total": {
+     "value": 10000,
+     "relation": "gte"
+    },
+    "hits": [
+     {
+      "_source": {
+       "ciks": [
+        "0001096343"
+       ],
+       "display_names": [
+        "MARKEL GROUP INC.  (MKL)  (CIK 0001096343)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-02-23",
+       "adsh": "0001096343-24-000022"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000076605"
+       ],
+       "display_names": [
+        "PATRICK INDUSTRIES INC  (PATK)  (CIK 0000076605)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-02-14",
+       "adsh": "0000076605-24-000051"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000767405"
+       ],
+       "display_names": [
+        "SB FINANCIAL GROUP, INC.  (SBFG)  (CIK 0000767405)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-04-29",
+       "adsh": "0001213900-24-037200"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001484778"
+       ],
+       "display_names": [
+        "ThredUp Inc.  (TDUP)  (CIK 0001484778)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-03-07",
+       "adsh": "0001628280-24-009647"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000084246"
+       ],
+       "display_names": [
+        "RLI CORP  (RLI)  (CIK 0000084246)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-04-24",
+       "adsh": "0000084246-24-000007"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001258602"
+       ],
+       "display_names": [
+        "NELNET INC  (NNI)  (CIK 0001258602)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-02-27",
+       "adsh": "0001258602-24-000023"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000072333"
+       ],
+       "display_names": [
+        "NORDSTROM INC  (JWN)  (CIK 0000072333)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-03-05",
+       "adsh": "0000072333-24-000004"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001847577"
+       ],
+       "display_names": [
+        "Learn CW Investment Corp  (LCW)  (CIK 0001847577)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-05-07",
+       "adsh": "0001140361-24-024634"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001577916"
+       ],
+       "display_names": [
+        "Premier, Inc.  (PINC)  (CIK 0001577916)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-05-08",
+       "adsh": "0001193125-24-134184"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000887936"
+       ],
+       "display_names": [
+        "FTI CONSULTING, INC  (FCN)  (CIK 0000887936)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-02-26",
+       "adsh": "0001193125-24-046274"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001289419"
+       ],
+       "display_names": [
+        "Morningstar, Inc.  (MORN)  (CIK 0001289419)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-05-09",
+       "adsh": "0001289419-24-000033"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001757715"
+       ],
+       "display_names": [
+        "Aterian, Inc.  (ATER)  (CIK 0001757715)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-04-22",
+       "adsh": "0001437749-24-012636"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001069878"
+       ],
+       "display_names": [
+        "TREX CO INC  (TREX)  (CIK 0001069878)"
+       ],
+       "form": "8-K/A",
+       "file_date": "2024-03-05",
+       "adsh": "0001193125-24-058852"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001018840"
+       ],
+       "display_names": [
+        "ABERCROMBIE & FITCH CO /DE/  (ANF)  (CIK 0001018840)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-05-30",
+       "adsh": "0001018840-24-000035"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001866175"
+       ],
+       "display_names": [
+        "Crescent Energy Co  (CRGY)  (CIK 0001866175)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-05-16",
+       "adsh": "0001193125-24-140742"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001448431"
+       ],
+       "display_names": [
+        "OptimizeRx Corp  (OPRX)  (CIK 0001448431)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-04-02",
+       "adsh": "0001213900-24-029318"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000050471"
+       ],
+       "display_names": [
+        "ReposiTrak, Inc.  (TRAK)  (CIK 0000050471)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-05-17",
+       "adsh": "0001437749-24-017416"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000903651"
+       ],
+       "display_names": [
+        "INNODATA INC  (INOD)  (CIK 0000903651)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-02-22",
+       "adsh": "0001104659-24-026596"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000067215"
+       ],
+       "display_names": [
+        "DYCOM INDUSTRIES INC  (DY)  (CIK 0000067215)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-02-28",
+       "adsh": "0000067215-24-000010"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001515816"
+       ],
+       "display_names": [
+        "Plymouth Industrial REIT, Inc.  (PLYM)  (CIK 0001515816)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-02-27",
+       "adsh": "0001171520-24-000142"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001018724"
+       ],
+       "display_names": [
+        "AMAZON COM INC  (AMZN)  (CIK 0001018724)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-04-11",
+       "adsh": "0001104659-24-045915"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000049071"
+       ],
+       "display_names": [
+        "HUMANA INC  (HUM)  (CIK 0000049071)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-04-24",
+       "adsh": "0000049071-24-000021"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001659617"
+       ],
+       "display_names": [
+        "Moleculin Biotech, Inc.  (MBRX)  (CIK 0001659617)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-02-29",
+       "adsh": "0001437749-24-005992"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000923796"
+       ],
+       "display_names": [
+        "GEO GROUP INC  (GEO)  (CIK 0000923796)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-02-22",
+       "adsh": "0001193125-24-042879"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000043920"
+       ],
+       "display_names": [
+        "GREIF, INC  (GEF, GEF-B)  (CIK 0000043920)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-06-07",
+       "adsh": "0000043920-24-000032"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000768835"
+       ],
+       "display_names": [
+        "BIG LOTS INC  (BIG)  (CIK 0000768835)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-03-12",
+       "adsh": "0000768835-24-000011"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001730463"
+       ],
+       "display_names": [
+        "Autolus Therapeutics plc  (AUTL)  (CIK 0001730463)"
+       ],
+       "form": "8-K/A",
+       "file_date": "2024-03-15",
+       "adsh": "0001730463-24-000029"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000763744"
+       ],
+       "display_names": [
+        "LCI INDUSTRIES  (LCII)  (CIK 0000763744)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-05-09",
+       "adsh": "0000763744-24-000062"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001820566"
+       ],
+       "display_names": [
+        "Inspirato Inc  (ISPO, ISPOW)  (CIK 0001820566)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-05-09",
+       "adsh": "0001558370-24-007620"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000912595"
+       ],
+       "display_names": [
+        "MID AMERICA APARTMENT COMMUNITIES INC.  (MAA, MAA-PI)  (CIK 0000912595)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-02-12",
+       "adsh": "0000950170-24-013832"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000885550"
+       ],
+       "display_names": [
+        "CREDIT ACCEPTANCE CORP  (CACC)  (CIK 0000885550)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-04-03",
+       "adsh": "0000885550-24-000050"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001682220"
+       ],
+       "display_names": [
+        "Sachem Capital Corp.  (SACC, SACH, SCCC, SCCD, SCCE, SCCF, SCCG, SACH-PA)  (CIK 0001682220)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-05-10",
+       "adsh": "0001104659-24-059956"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000885978"
+       ],
+       "display_names": [
+        "U S PHYSICAL THERAPY INC /NV  (USPH)  (CIK 0000885978)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-03-01",
+       "adsh": "0000885978-24-000007"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001680247"
+       ],
+       "display_names": [
+        "ProPetro Holding Corp.  (PUMP)  (CIK 0001680247)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-02-21",
+       "adsh": "0001680247-24-000034"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000051143"
+       ],
+       "display_names": [
+        "INTERNATIONAL BUSINESS MACHINES CORP  (IBM)  (CIK 0000051143)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-04-25",
+       "adsh": "0000051143-24-000021"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001821534"
+       ],
+       "display_names": [
+        "Exodus Movement, Inc.  (EXOD)  (CIK 0001821534)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-05-07",
+       "adsh": "0000950170-24-053874"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001438231"
+       ],
+       "display_names": [
+        "Digimarc CORP  (DMRC)  (CIK 0001438231)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-05-02",
+       "adsh": "0001437749-24-014360"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000101538"
+       ],
+       "display_names": [
+        "UNITED STATES ANTIMONY CORP  (UAMY)  (CIK 0000101538)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-04-19",
+       "adsh": "0001654954-24-004778"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000887936"
+       ],
+       "display_names": [
+        "FTI CONSULTING, INC  (FCN)  (CIK 0000887936)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-04-29",
+       "adsh": "0001193125-24-122638"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000727207"
+       ],
+       "display_names": [
+        "Accelerate Diagnostics, Inc  (AXDX)  (CIK 0000727207)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-03-29",
+       "adsh": "0001104659-24-041230"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001492674"
+       ],
+       "display_names": [
+        "T2 Biosystems, Inc.  (TTOO)  (CIK 0001492674)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-02-16",
+       "adsh": "0001193125-24-038553"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001843988"
+       ],
+       "display_names": [
+        "two  (CIK 0001843988)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-03-19",
+       "adsh": "0001493152-24-010434"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001451505"
+       ],
+       "display_names": [
+        "Transocean Ltd.  (RIG)  (CIK 0001451505)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-02-21",
+       "adsh": "0001451505-24-000017"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001844862"
+       ],
+       "display_names": [
+        "Solid Power, Inc.  (SLDP, SLDPW)  (CIK 0001844862)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-02-29",
+       "adsh": "0001104659-24-029369"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001679788"
+       ],
+       "display_names": [
+        "Coinbase Global, Inc.  (COIN)  (CIK 0001679788)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-02-15",
+       "adsh": "0001679788-24-000019"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001770236"
+       ],
+       "display_names": [
+        "MOVING iMAGE TECHNOLOGIES INC.  (MITQ)  (CIK 0001770236)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-02-14",
+       "adsh": "0001558370-24-001158"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001069878"
+       ],
+       "display_names": [
+        "TREX CO INC  (TREX)  (CIK 0001069878)"
+       ],
+       "form": "8-K/A",
+       "file_date": "2024-05-24",
+       "adsh": "0001193125-24-146545"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001682220"
+       ],
+       "display_names": [
+        "Sachem Capital Corp.  (SACC, SACH, SCCC, SCCD, SCCE, SCCF, SCCG, SACH-PA)  (CIK 0001682220)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-04-02",
+       "adsh": "0001104659-24-042619"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001627223"
+       ],
+       "display_names": [
+        "Chemours Co  (CC)  (CIK 0001627223)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-03-29",
+       "adsh": "0001193125-24-081149"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001768267"
+       ],
+       "display_names": [
+        "Cerence Inc.  (CRNC)  (CIK 0001768267)"
+       ],
+       "form": "8-K/A",
+       "file_date": "2024-05-09",
+       "adsh": "0001193125-24-135028"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001022321"
+       ],
+       "display_names": [
+        "GENESIS ENERGY LP  (GEL, GELPP)  (CIK 0001022321)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-05-02",
+       "adsh": "0001022321-24-000049"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000001750"
+       ],
+       "display_names": [
+        "AAR CORP  (AIR)  (CIK 0000001750)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-02-14",
+       "adsh": "0001104659-24-023011"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000763744"
+       ],
+       "display_names": [
+        "LCI INDUSTRIES  (LCII)  (CIK 0000763744)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-02-14",
+       "adsh": "0000763744-24-000016"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001820566"
+       ],
+       "display_names": [
+        "Inspirato Inc  (ISPO, ISPOW)  (CIK 0001820566)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-03-07",
+       "adsh": "0001558370-24-002735"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001232582"
+       ],
+       "display_names": [
+        "ASHFORD HOSPITALITY TRUST INC  (AHT, AHT-PD, AHT-PF, AHT-PG, AHT-PH, AHT-PI)  (CIK 0001232582)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-05-08",
+       "adsh": "0001232582-24-000062"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001539638"
+       ],
+       "display_names": [
+        "Triumph Financial, Inc.  (TFIN, TFINP)  (CIK 0001539638)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-04-17",
+       "adsh": "0001628280-24-016580"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001028918"
+       ],
+       "display_names": [
+        "PACIFIC PREMIER BANCORP INC  (PPBI)  (CIK 0001028918)"
+       ],
+       "form": "8-K/A",
+       "file_date": "2024-04-29",
+       "adsh": "0001028918-24-000086"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001559720"
+       ],
+       "display_names": [
+        "Airbnb, Inc.  (ABNB)  (CIK 0001559720)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-02-13",
+       "adsh": "0001193125-24-033706"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001028918"
+       ],
+       "display_names": [
+        "PACIFIC PREMIER BANCORP INC  (PPBI)  (CIK 0001028918)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-04-29",
+       "adsh": "0001028918-24-000084"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000101538"
+       ],
+       "display_names": [
+        "UNITED STATES ANTIMONY CORP  (UAMY)  (CIK 0000101538)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-05-20",
+       "adsh": "0001654954-24-006674"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000775158"
+       ],
+       "display_names": [
+        "OSHKOSH CORP  (OSK)  (CIK 0000775158)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-04-25",
+       "adsh": "0000950170-24-047929"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000790526"
+       ],
+       "display_names": [
+        "RadNet, Inc.  (RDNT)  (CIK 0000790526)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-05-13",
+       "adsh": "0001683168-24-003246"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001805651"
+       ],
+       "display_names": [
+        "MARKETWISE, INC.  (MKTW)  (CIK 0001805651)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-05-17",
+       "adsh": "0001628280-24-024150"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001810806"
+       ],
+       "display_names": [
+        "Unity Software Inc.  (U)  (CIK 0001810806)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-02-26",
+       "adsh": "0001810806-24-000021"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001849056"
+       ],
+       "display_names": [
+        "Oklo Inc.  (OKLO)  (CIK 0001849056)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-05-13",
+       "adsh": "0001104659-24-060634"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000807707"
+       ],
+       "display_names": [
+        "VOXX International Corp  (VOXX)  (CIK 0000807707)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-05-17",
+       "adsh": "0000950170-24-061518"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000067215"
+       ],
+       "display_names": [
+        "DYCOM INDUSTRIES INC  (DY)  (CIK 0000067215)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-05-23",
+       "adsh": "0000067215-24-000025"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001093691"
+       ],
+       "display_names": [
+        "PLUG POWER INC  (PLUG)  (CIK 0001093691)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-03-04",
+       "adsh": "0001104659-24-030248"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001360214"
+       ],
+       "display_names": [
+        "HARROW, INC.  (HROW, HROWL, HROWM)  (CIK 0001360214)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-03-19",
+       "adsh": "0001493152-24-010520"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001682149"
+       ],
+       "display_names": [
+        "WISA TECHNOLOGIES, INC.  (WISA)  (CIK 0001682149)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-05-22",
+       "adsh": "0001104659-24-064248"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000051644"
+       ],
+       "display_names": [
+        "INTERPUBLIC GROUP OF COMPANIES, INC.  (IPG)  (CIK 0000051644)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-04-29",
+       "adsh": "0000051644-24-000023"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000095029"
+       ],
+       "display_names": [
+        "STURM RUGER & CO INC  (RGR)  (CIK 0000095029)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-02-23",
+       "adsh": "0001174947-24-000254"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000318300"
+       ],
+       "display_names": [
+        "PEOPLES BANCORP INC  (PEBO)  (CIK 0000318300)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-04-29",
+       "adsh": "0000318300-24-000178"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001472012"
+       ],
+       "display_names": [
+        "Immunome Inc.  (IMNM)  (CIK 0001472012)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-02-13",
+       "adsh": "0001104659-24-019883"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000886744"
+       ],
+       "display_names": [
+        "GERON CORP  (GERN, GERNW)  (CIK 0000886744)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-03-19",
+       "adsh": "0000950170-24-033142"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001222333"
+       ],
+       "display_names": [
+        "SPDR GOLD TRUST  (GLD)  (CIK 0001222333)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-05-29",
+       "adsh": "0001437749-24-018579"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001691421"
+       ],
+       "display_names": [
+        "Lemonade, Inc.  (LMND, LMND-WT)  (CIK 0001691421)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-02-27",
+       "adsh": "0001691421-24-000019"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000897078"
+       ],
+       "display_names": [
+        "Resonate Blends, Inc.  (KOAN)  (CIK 0000897078)"
+       ],
+       "form": "8-K/A",
+       "file_date": "2024-04-16",
+       "adsh": "0001493152-24-014759"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001438231"
+       ],
+       "display_names": [
+        "Digimarc CORP  (DMRC)  (CIK 0001438231)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-02-28",
+       "adsh": "0001437749-24-005896"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001720116"
+       ],
+       "display_names": [
+        "Red Violet, Inc.  (RDVT)  (CIK 0001720116)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-05-10",
+       "adsh": "0000950170-24-057464"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001020569"
+       ],
+       "display_names": [
+        "IRON MOUNTAIN INC  (IRM)  (CIK 0001020569)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-02-22",
+       "adsh": "0001104659-24-026573"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001434524"
+       ],
+       "display_names": [
+        "ClearSign Technologies Corp  (CLIR)  (CIK 0001434524)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-04-25",
+       "adsh": "0001104659-24-052066"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000043920"
+       ],
+       "display_names": [
+        "GREIF, INC  (GEF, GEF-B)  (CIK 0000043920)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-03-01",
+       "adsh": "0000043920-24-000012"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001792789"
+       ],
+       "display_names": [
+        "DoorDash, Inc.  (DASH)  (CIK 0001792789)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-02-15",
+       "adsh": "0001628280-24-005043"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001515816"
+       ],
+       "display_names": [
+        "Plymouth Industrial REIT, Inc.  (PLYM)  (CIK 0001515816)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-02-21",
+       "adsh": "0001171520-24-000134"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001222333"
+       ],
+       "display_names": [
+        "SPDR GOLD TRUST  (GLD)  (CIK 0001222333)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-05-29",
+       "adsh": "0001437749-24-018579"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001573221"
+       ],
+       "display_names": [
+        "TheRealReal, Inc.  (REAL)  (CIK 0001573221)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-05-07",
+       "adsh": "0001573221-24-000068"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000923796"
+       ],
+       "display_names": [
+        "GEO GROUP INC  (GEO)  (CIK 0000923796)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-05-13",
+       "adsh": "0001193125-24-137288"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001661998"
+       ],
+       "display_names": [
+        "Q32 Bio Inc.  (QTTB)  (CIK 0001661998)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-03-27",
+       "adsh": "0001193125-24-077930"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001564408"
+       ],
+       "display_names": [
+        "Snap Inc  (SNAP)  (CIK 0001564408)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-04-25",
+       "adsh": "0001564408-24-000030"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001289419"
+       ],
+       "display_names": [
+        "Morningstar, Inc.  (MORN)  (CIK 0001289419)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-03-22",
+       "adsh": "0001289419-24-000017"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001617640"
+       ],
+       "display_names": [
+        "ZILLOW GROUP, INC.  (Z, ZG)  (CIK 0001617640)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-05-01",
+       "adsh": "0001617640-24-000069"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001494582"
+       ],
+       "display_names": [
+        "BOSTON OMAHA Corp  (BOC)  (CIK 0001494582)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-05-20",
+       "adsh": "0001437749-24-017695"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001851612"
+       ],
+       "display_names": [
+        "Focus Impact BH3 Acquisition Co  (BHAC, BHACU, BHACW)  (CIK 0001851612)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-03-12",
+       "adsh": "0001140361-24-012867"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001874097"
+       ],
+       "display_names": [
+        "Cyngn Inc.  (CYN)  (CIK 0001874097)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-04-18",
+       "adsh": "0001213900-24-033941"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000051644"
+       ],
+       "display_names": [
+        "INTERPUBLIC GROUP OF COMPANIES, INC.  (IPG)  (CIK 0000051644)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-02-12",
+       "adsh": "0000051644-24-000007"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001375195"
+       ],
+       "display_names": [
+        "CORETEC GROUP INC.  (CRTG)  (CIK 0001375195)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-03-20",
+       "adsh": "0001437749-24-008672"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001022321"
+       ],
+       "display_names": [
+        "GENESIS ENERGY LP  (GEL, GELPP)  (CIK 0001022321)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-02-15",
+       "adsh": "0001022321-24-000015"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001595097"
+       ],
+       "display_names": [
+        "Corbus Pharmaceuticals Holdings, Inc.  (CRBP)  (CIK 0001595097)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-05-09",
+       "adsh": "0000950170-24-056291"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001173489"
+       ],
+       "display_names": [
+        "CEVA INC  (CEVA)  (CIK 0001173489)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-05-09",
+       "adsh": "0001437749-24-015490"
+      }
+     }
+    ]
+   }
+  }
+ }
 }

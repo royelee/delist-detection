@@ -68,7 +68,7 @@ def test_resolver_retries_a_cached_miss(tmp_path, fake_edgar, monkeypatch):
         "NOPE|2024-01-01": {"ticker": "NOPE", "cik": None, "name": None, "source": "none"},
     }))
     monkeypatch.setattr(TickerResolver, "_efts_lookup",
-                         lambda self, t, d=None, **kw: (999001, "Bad Co. (NOPE)"))
+                         lambda self, t, d=None, **kw: (999001, "Bad Co. (NOPE)", False))
     monkeypatch.setattr(TickerResolver, "_validate_cik", lambda self, *a, **kw: True)
     r = TickerResolver(fake_edgar, cache_path=cache)
     assert r.resolve("NOPE", "2024-01-01").cik == 999001

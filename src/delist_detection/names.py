@@ -41,7 +41,7 @@ class MemberNames:
         rows: dict[str, list[tuple[str, str]]] = {}
         with Path(path).open(newline="") as fh:
             for r in csv.DictReader(fh):
-                rows.setdefault(r["ticker"].strip().upper(), []).append((r["as_of"], r["name"]))
+                rows.setdefault(r["ticker"].strip().upper(), []).append((r["as_of"].strip(), r["name"]))
         return cls(rows)
 
     def __call__(self, ticker: str, observed_date: str | None = None) -> str | None:

@@ -3183,5 +3183,68 @@
    1012140,
    "ONYX PHARMACEUTICALS INC  (CIK 0001012140)"
   ]
- ]
+ ],
+ "efts_raw": {
+  "https://efts.sec.gov/LATEST/search-index?q=%22ONXX%22&forms=25-NSE,25,15-12G,15-12B,15-15D&dateRange=custom&startdt=2013-07-19&enddt=2014-01-15": {
+   "hits": {
+    "total": {
+     "value": 1,
+     "relation": "eq"
+    },
+    "hits": [
+     {
+      "_source": {
+       "ciks": [
+        "0001012140",
+        "0001354457"
+       ],
+       "display_names": [
+        "ONYX PHARMACEUTICALS INC  (CIK 0001012140)",
+        "NASDAQ Stock Market LLC  (CIK 0001354457)"
+       ],
+       "form": "25-NSE",
+       "file_date": "2013-10-01",
+       "adsh": "0001354457-13-000191"
+      }
+     }
+    ]
+   }
+  },
+  "https://efts.sec.gov/LATEST/search-index?q=%22ONXX%22&forms=8-K&dateRange=custom&startdt=2013-06-19&enddt=2013-10-16": {
+   "hits": {
+    "total": {
+     "value": 2,
+     "relation": "eq"
+    },
+    "hits": [
+     {
+      "_source": {
+       "ciks": [
+        "0001012140"
+       ],
+       "display_names": [
+        "ONYX PHARMACEUTICALS INC  (CIK 0001012140)"
+       ],
+       "form": "8-K",
+       "file_date": "2013-07-01",
+       "adsh": "0001104659-13-052419"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001012140"
+       ],
+       "display_names": [
+        "ONYX PHARMACEUTICALS INC  (CIK 0001012140)"
+       ],
+       "form": "8-K",
+       "file_date": "2013-08-08",
+       "adsh": "0001104659-13-061763"
+      }
+     }
+    ]
+   }
+  }
+ }
 }

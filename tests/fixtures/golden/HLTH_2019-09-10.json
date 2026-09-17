@@ -1879,5 +1879,91 @@
    1409916,
    "Nobilis Health Corp.  (CIK 0001409916)"
   ]
- ]
+ ],
+ "efts_raw": {
+  "https://efts.sec.gov/LATEST/search-index?q=%22HLTH%22&forms=25-NSE,25,15-12G,15-12B,15-15D&dateRange=custom&startdt=2019-06-12&enddt=2019-12-09": {
+   "hits": {
+    "total": {
+     "value": 0,
+     "relation": "eq"
+    },
+    "hits": []
+   }
+  },
+  "https://efts.sec.gov/LATEST/search-index?q=%22HLTH%22&forms=8-K&dateRange=custom&startdt=2019-05-13&enddt=2019-09-09": {
+   "hits": {
+    "total": {
+     "value": 5,
+     "relation": "eq"
+    },
+    "hits": [
+     {
+      "_source": {
+       "ciks": [
+        "0001409916"
+       ],
+       "display_names": [
+        "Nobilis Health Corp.  (CIK 0001409916)"
+       ],
+       "form": "8-K",
+       "file_date": "2019-05-17",
+       "adsh": "0001409916-19-000031"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001409916"
+       ],
+       "display_names": [
+        "Nobilis Health Corp.  (CIK 0001409916)"
+       ],
+       "form": "8-K",
+       "file_date": "2019-06-05",
+       "adsh": "0001409916-19-000036"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001409916"
+       ],
+       "display_names": [
+        "Nobilis Health Corp.  (CIK 0001409916)"
+       ],
+       "form": "8-K",
+       "file_date": "2019-09-09",
+       "adsh": "0001409916-19-000042"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001409916"
+       ],
+       "display_names": [
+        "Nobilis Health Corp.  (CIK 0001409916)"
+       ],
+       "form": "8-K",
+       "file_date": "2019-06-05",
+       "adsh": "0001409916-19-000036"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001409916"
+       ],
+       "display_names": [
+        "Nobilis Health Corp.  (CIK 0001409916)"
+       ],
+       "form": "8-K",
+       "file_date": "2019-05-29",
+       "adsh": "0001409916-19-000034"
+      }
+     }
+    ]
+   }
+  }
+ }
 }

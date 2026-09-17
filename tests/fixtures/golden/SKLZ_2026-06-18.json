@@ -1989,5 +1989,143 @@
    1801661,
    "Skillz Inc.  (SKLZ)  (CIK 0001801661)"
   ]
- ]
+ ],
+ "efts_raw": {
+  "https://efts.sec.gov/LATEST/search-index?q=%22SKLZ%22&forms=25-NSE,25,15-12G,15-12B,15-15D&dateRange=custom&startdt=2026-03-20&enddt=2026-09-16": {
+   "hits": {
+    "total": {
+     "value": 0,
+     "relation": "eq"
+    },
+    "hits": []
+   }
+  },
+  "https://efts.sec.gov/LATEST/search-index?q=%22SKLZ%22&forms=8-K&dateRange=custom&startdt=2026-02-18&enddt=2026-06-17": {
+   "hits": {
+    "total": {
+     "value": 9,
+     "relation": "eq"
+    },
+    "hits": [
+     {
+      "_source": {
+       "ciks": [
+        "0001801661"
+       ],
+       "display_names": [
+        "Skillz Inc.  (SKLZ)  (CIK 0001801661)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-05-01",
+       "adsh": "0001801661-26-000024"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001801661"
+       ],
+       "display_names": [
+        "Skillz Inc.  (SKLZ)  (CIK 0001801661)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-04-14",
+       "adsh": "0001801661-26-000022"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001801661"
+       ],
+       "display_names": [
+        "Skillz Inc.  (SKLZ)  (CIK 0001801661)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-06-08",
+       "adsh": "0001801661-26-000056"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001801661"
+       ],
+       "display_names": [
+        "Skillz Inc.  (SKLZ)  (CIK 0001801661)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-03-31",
+       "adsh": "0001801661-26-000019"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001801661"
+       ],
+       "display_names": [
+        "Skillz Inc.  (SKLZ)  (CIK 0001801661)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-05-15",
+       "adsh": "0001801661-26-000029"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001801661"
+       ],
+       "display_names": [
+        "Skillz Inc.  (SKLZ)  (CIK 0001801661)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-05-20",
+       "adsh": "0001801661-26-000035"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001801661"
+       ],
+       "display_names": [
+        "Skillz Inc.  (SKLZ)  (CIK 0001801661)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-03-23",
+       "adsh": "0001801661-26-000016"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001801661"
+       ],
+       "display_names": [
+        "Skillz Inc.  (SKLZ)  (CIK 0001801661)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-05-15",
+       "adsh": "0001801661-26-000029"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001801661"
+       ],
+       "display_names": [
+        "Skillz Inc.  (SKLZ)  (CIK 0001801661)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-03-31",
+       "adsh": "0001801661-26-000019"
+      }
+     }
+    ]
+   }
+  }
+ }
 }

@@ -8150,5 +8150,1464 @@
    765880,
    "HEALTHPEAK PROPERTIES, INC.  (DOC)  (CIK 0000765880)"
   ]
- ]
+ ],
+ "efts_raw": {
+  "https://efts.sec.gov/LATEST/search-index?q=%22PEAK%22&forms=25-NSE,25,15-12G,15-12B,15-15D&dateRange=custom&startdt=2022-11-15&enddt=2023-05-14": {
+   "hits": {
+    "total": {
+     "value": 9,
+     "relation": "eq"
+    },
+    "hits": [
+     {
+      "_source": {
+       "ciks": [
+        "0001829426"
+       ],
+       "display_names": [
+        "Far Peak Acquisition Corp  (CIK 0001829426)"
+       ],
+       "form": "15-12G",
+       "file_date": "2023-03-23",
+       "adsh": "0000929638-23-000897"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001452804"
+       ],
+       "display_names": [
+        "PEAK PHARMACEUTICALS, INC.  (RMHI)  (CIK 0001452804)"
+       ],
+       "form": "15-12G",
+       "file_date": "2023-03-21",
+       "adsh": "0001199835-23-000159"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001834645",
+        "0001354457"
+       ],
+       "display_names": [
+        "Peak Bio, Inc.  (PKBO, PKBOW)  (CIK 0001834645)",
+        "Nasdaq Stock Market LLC  (CIK 0001354457)"
+       ],
+       "form": "25-NSE",
+       "file_date": "2023-03-03",
+       "adsh": "0001354457-23-000150"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001829426",
+        "0000876661"
+       ],
+       "display_names": [
+        "Far Peak Acquisition Corp  (CIK 0001829426)",
+        "NEW YORK STOCK EXCHANGE LLC  (CIK 0000876661)"
+       ],
+       "form": "25-NSE",
+       "file_date": "2023-01-10",
+       "adsh": "0000876661-23-000032"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001829426",
+        "0000876661"
+       ],
+       "display_names": [
+        "Far Peak Acquisition Corp  (CIK 0001829426)",
+        "NEW YORK STOCK EXCHANGE LLC  (CIK 0000876661)"
+       ],
+       "form": "25-NSE",
+       "file_date": "2023-03-13",
+       "adsh": "0000876661-23-000211"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001834645",
+        "0001354457"
+       ],
+       "display_names": [
+        "Peak Bio, Inc.  (PKBO, PKBOW)  (CIK 0001834645)",
+        "Nasdaq Stock Market LLC  (CIK 0001354457)"
+       ],
+       "form": "25-NSE",
+       "file_date": "2023-03-03",
+       "adsh": "0001354457-23-000150"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001829426",
+        "0000876661"
+       ],
+       "display_names": [
+        "Far Peak Acquisition Corp  (CIK 0001829426)",
+        "NEW YORK STOCK EXCHANGE LLC  (CIK 0000876661)"
+       ],
+       "form": "25-NSE",
+       "file_date": "2023-03-13",
+       "adsh": "0000876661-23-000211"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001829426",
+        "0000876661"
+       ],
+       "display_names": [
+        "Far Peak Acquisition Corp  (CIK 0001829426)",
+        "NEW YORK STOCK EXCHANGE LLC  (CIK 0000876661)"
+       ],
+       "form": "25-NSE",
+       "file_date": "2023-01-10",
+       "adsh": "0000876661-23-000032"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001387998"
+       ],
+       "display_names": [
+        "Snoogoo Corp.  (CIK 0001387998)"
+       ],
+       "form": "15-15D",
+       "file_date": "2023-04-14",
+       "adsh": "0001096906-23-000810"
+      }
+     }
+    ]
+   }
+  },
+  "https://efts.sec.gov/LATEST/search-index?q=%22PEAK%22&forms=8-K&dateRange=custom&startdt=2022-10-16&enddt=2023-02-12": {
+   "hits": {
+    "total": {
+     "value": 585,
+     "relation": "eq"
+    },
+    "hits": [
+     {
+      "_source": {
+       "ciks": [
+        "0001834645"
+       ],
+       "display_names": [
+        "Peak Bio, Inc.  (PKBO, PKBOW)  (CIK 0001834645)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-11-07",
+       "adsh": "0001193125-22-279204"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001834645"
+       ],
+       "display_names": [
+        "Peak Bio, Inc.  (PKBO, PKBOW)  (CIK 0001834645)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-01-04",
+       "adsh": "0001193125-23-001577"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001834645"
+       ],
+       "display_names": [
+        "Peak Bio, Inc.  (PKBO, PKBOW)  (CIK 0001834645)"
+       ],
+       "form": "8-K/A",
+       "file_date": "2022-11-21",
+       "adsh": "0001193125-22-290076"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001834645"
+       ],
+       "display_names": [
+        "Peak Bio, Inc.  (PKBO, PKBOW)  (CIK 0001834645)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-01-04",
+       "adsh": "0001193125-23-001577"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001834645"
+       ],
+       "display_names": [
+        "Ignyte Acquisition Corp.  (PKBO, PKBOW)  (CIK 0001834645)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-11-02",
+       "adsh": "0001193125-22-275470"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001834645"
+       ],
+       "display_names": [
+        "Ignyte Acquisition Corp.  (PKBO, PKBOW)  (CIK 0001834645)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-10-27",
+       "adsh": "0001193125-22-270443"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001326732"
+       ],
+       "display_names": [
+        "Xencor Inc  (XNCR)  (CIK 0001326732)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-11-07",
+       "adsh": "0001558370-22-016645"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001834645"
+       ],
+       "display_names": [
+        "Peak Bio, Inc.  (PKBO, PKBOW)  (CIK 0001834645)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-11-07",
+       "adsh": "0001193125-22-279204"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001829426"
+       ],
+       "display_names": [
+        "Far Peak Acquisition Corp  (CIK 0001829426)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-12-22",
+       "adsh": "0000929638-22-001908"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001834645"
+       ],
+       "display_names": [
+        "Ignyte Acquisition Corp.  (PKBO, PKBOW)  (CIK 0001834645)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-10-18",
+       "adsh": "0001193125-22-264295"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001834645"
+       ],
+       "display_names": [
+        "Ignyte Acquisition Corp.  (PKBO, PKBOW)  (CIK 0001834645)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-10-27",
+       "adsh": "0001193125-22-270443"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001023994"
+       ],
+       "display_names": [
+        "SAFE & GREEN HOLDINGS CORP.  (SGBX)  (CIK 0001023994)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-02-07",
+       "adsh": "0001213900-23-009019"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001834645"
+       ],
+       "display_names": [
+        "Peak Bio, Inc.  (PKBO, PKBOW)  (CIK 0001834645)"
+       ],
+       "form": "8-K/A",
+       "file_date": "2022-11-21",
+       "adsh": "0001193125-22-290076"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001829426"
+       ],
+       "display_names": [
+        "Far Peak Acquisition Corp  (CIK 0001829426)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-10-31",
+       "adsh": "0001193125-22-273896"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001834645"
+       ],
+       "display_names": [
+        "Peak Bio, Inc.  (PKBO, PKBOW)  (CIK 0001834645)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-11-07",
+       "adsh": "0001193125-22-279204"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001829426"
+       ],
+       "display_names": [
+        "Far Peak Acquisition Corp  (CIK 0001829426)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-10-31",
+       "adsh": "0001193125-22-273896"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001834645"
+       ],
+       "display_names": [
+        "Peak Bio, Inc.  (PKBO, PKBOW)  (CIK 0001834645)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-11-07",
+       "adsh": "0001193125-22-279204"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001502377"
+       ],
+       "display_names": [
+        "Contango ORE, Inc.  (CTGO)  (CIK 0001502377)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-11-16",
+       "adsh": "0001157523-22-001642"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001834645"
+       ],
+       "display_names": [
+        "Ignyte Acquisition Corp.  (PKBO, PKBOW)  (CIK 0001834645)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-11-02",
+       "adsh": "0001193125-22-275470"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001834645"
+       ],
+       "display_names": [
+        "Peak Bio, Inc.  (PKBO, PKBOW)  (CIK 0001834645)"
+       ],
+       "form": "8-K/A",
+       "file_date": "2022-11-21",
+       "adsh": "0001193125-22-290076"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001834645"
+       ],
+       "display_names": [
+        "Peak Bio, Inc.  (PKBO, PKBOW)  (CIK 0001834645)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-01-04",
+       "adsh": "0001193125-23-001577"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001834645"
+       ],
+       "display_names": [
+        "Peak Bio, Inc.  (PKBO, PKBOW)  (CIK 0001834645)"
+       ],
+       "form": "8-K/A",
+       "file_date": "2022-11-21",
+       "adsh": "0001193125-22-290076"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001622229"
+       ],
+       "display_names": [
+        "Cogent Biosciences, Inc.  (COGT)  (CIK 0001622229)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-11-14",
+       "adsh": "0000950170-22-024675"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001502377"
+       ],
+       "display_names": [
+        "Contango ORE, Inc.  (CTGO)  (CIK 0001502377)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-02-03",
+       "adsh": "0001157523-23-000158"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001502377"
+       ],
+       "display_names": [
+        "Contango ORE, Inc.  (CTGO)  (CIK 0001502377)"
+       ],
+       "form": "8-K/A",
+       "file_date": "2023-02-06",
+       "adsh": "0001157523-23-000168"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001502377"
+       ],
+       "display_names": [
+        "Contango ORE, Inc.  (CTGO)  (CIK 0001502377)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-11-02",
+       "adsh": "0001157523-22-001486"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001815442"
+       ],
+       "display_names": [
+        "Kymera Therapeutics, Inc.  (KYMR)  (CIK 0001815442)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-12-14",
+       "adsh": "0001193125-22-304456"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000765880"
+       ],
+       "display_names": [
+        "HEALTHPEAK PROPERTIES, INC.  (DOC)  (CIK 0000765880)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-11-14",
+       "adsh": "0001628280-22-029856"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001130464"
+       ],
+       "display_names": [
+        "BLACK HILLS CORP /SD/  (BKH)  (CIK 0001130464)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-02-07",
+       "adsh": "0000950170-23-002000"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000765880"
+       ],
+       "display_names": [
+        "HEALTHPEAK PROPERTIES, INC.  (DOC)  (CIK 0000765880)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-11-14",
+       "adsh": "0001628280-22-029856"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001834645"
+       ],
+       "display_names": [
+        "Ignyte Acquisition Corp.  (PKBO, PKBOW)  (CIK 0001834645)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-10-27",
+       "adsh": "0001193125-22-270443"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001130464"
+       ],
+       "display_names": [
+        "BLACK HILLS CORP /SD/  (BKH)  (CIK 0001130464)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-11-02",
+       "adsh": "0001130464-22-000027"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001534120"
+       ],
+       "display_names": [
+        "Avalo Therapeutics, Inc.  (AVTX)  (CIK 0001534120)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-01-17",
+       "adsh": "0001628280-23-001103"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001834645"
+       ],
+       "display_names": [
+        "Peak Bio, Inc.  (PKBO, PKBOW)  (CIK 0001834645)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-01-04",
+       "adsh": "0001193125-23-001577"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001551152"
+       ],
+       "display_names": [
+        "AbbVie Inc.  (ABBV)  (CIK 0001551152)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-01-10",
+       "adsh": "0001104659-23-002452"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001492426"
+       ],
+       "display_names": [
+        "Horizon Therapeutics Public Ltd Co  (CIK 0001492426)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-11-02",
+       "adsh": "0001193125-22-275395"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001452804"
+       ],
+       "display_names": [
+        "PEAK PHARMACEUTICALS, INC.  (RMHI)  (CIK 0001452804)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-01-20",
+       "adsh": "0001199835-23-000025"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000732834"
+       ],
+       "display_names": [
+        "CONTINENTAL RESOURCES, INC  (CIK 0000732834)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-11-10",
+       "adsh": "0001193125-22-282684"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001534120"
+       ],
+       "display_names": [
+        "Avalo Therapeutics, Inc.  (AVTX)  (CIK 0001534120)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-11-07",
+       "adsh": "0001628280-22-028535"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000882796"
+       ],
+       "display_names": [
+        "BIOCRYST PHARMACEUTICALS INC  (BCRX)  (CIK 0000882796)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-01-09",
+       "adsh": "0001171843-23-000154"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001617406"
+       ],
+       "display_names": [
+        "Park Hotels & Resorts Inc.  (PK)  (CIK 0001617406)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-11-02",
+       "adsh": "0000950170-22-021268"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001502377"
+       ],
+       "display_names": [
+        "Contango ORE, Inc.  (CTGO)  (CIK 0001502377)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-11-15",
+       "adsh": "0001157523-22-001621"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001126234"
+       ],
+       "display_names": [
+        "LUMOS PHARMA, INC.  (LUMO)  (CIK 0001126234)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-12-12",
+       "adsh": "0001126234-22-000122"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001597264"
+       ],
+       "display_names": [
+        "Blueprint Medicines Corp  (BPMC)  (CIK 0001597264)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-01-09",
+       "adsh": "0001104659-23-002083"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001815442"
+       ],
+       "display_names": [
+        "Kymera Therapeutics, Inc.  (KYMR)  (CIK 0001815442)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-12-14",
+       "adsh": "0001193125-22-304330"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001517302"
+       ],
+       "display_names": [
+        "Artisan Partners Asset Management Inc.  (APAM)  (CIK 0001517302)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-11-09",
+       "adsh": "0001517302-22-000080"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001739614"
+       ],
+       "display_names": [
+        "Inhibrx, Inc.  (CIK 0001739614)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-11-16",
+       "adsh": "0001739614-22-000122"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001815442"
+       ],
+       "display_names": [
+        "Kymera Therapeutics, Inc.  (KYMR)  (CIK 0001815442)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-12-14",
+       "adsh": "0001193125-22-304330"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001834645"
+       ],
+       "display_names": [
+        "Peak Bio, Inc.  (PKBO, PKBOW)  (CIK 0001834645)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-11-07",
+       "adsh": "0001193125-22-279204"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001517302"
+       ],
+       "display_names": [
+        "Artisan Partners Asset Management Inc.  (APAM)  (CIK 0001517302)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-01-11",
+       "adsh": "0001517302-23-000003"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000767405"
+       ],
+       "display_names": [
+        "SB FINANCIAL GROUP, INC.  (SBFG)  (CIK 0000767405)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-12-23",
+       "adsh": "0001213900-22-082430"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001650648"
+       ],
+       "display_names": [
+        "4D Molecular Therapeutics, Inc.  (FDMT)  (CIK 0001650648)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-01-26",
+       "adsh": "0001193125-23-016298"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001517302"
+       ],
+       "display_names": [
+        "Artisan Partners Asset Management Inc.  (APAM)  (CIK 0001517302)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-02-09",
+       "adsh": "0001517302-23-000009"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000788816"
+       ],
+       "display_names": [
+        "OGLETHORPE POWER CORP  (CIK 0000788816)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-11-30",
+       "adsh": "0001628280-22-031044"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001517302"
+       ],
+       "display_names": [
+        "Artisan Partners Asset Management Inc.  (APAM)  (CIK 0001517302)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-12-09",
+       "adsh": "0001517302-22-000083"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000765880"
+       ],
+       "display_names": [
+        "HEALTHPEAK PROPERTIES, INC.  (DOC)  (CIK 0000765880)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-11-14",
+       "adsh": "0001628280-22-029856"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001101215"
+       ],
+       "display_names": [
+        "BREAD FINANCIAL HOLDINGS, INC.  (BFH)  (CIK 0001101215)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-01-26",
+       "adsh": "0001101215-23-000008"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000767405"
+       ],
+       "display_names": [
+        "SB FINANCIAL GROUP, INC.  (SBFG)  (CIK 0000767405)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-01-24",
+       "adsh": "0001213900-23-004668"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001787400"
+       ],
+       "display_names": [
+        "Nkarta, Inc.  (NKTX)  (CIK 0001787400)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-12-05",
+       "adsh": "0000950170-22-026020"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000767405"
+       ],
+       "display_names": [
+        "SB FINANCIAL GROUP, INC.  (SBFG)  (CIK 0000767405)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-10-21",
+       "adsh": "0001213900-22-065391"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001834645"
+       ],
+       "display_names": [
+        "Peak Bio, Inc.  (PKBO, PKBOW)  (CIK 0001834645)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-01-09",
+       "adsh": "0001193125-23-004066"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001829426"
+       ],
+       "display_names": [
+        "Far Peak Acquisition Corp  (CIK 0001829426)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-12-22",
+       "adsh": "0000929638-22-001908"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001534120"
+       ],
+       "display_names": [
+        "Avalo Therapeutics, Inc.  (AVTX)  (CIK 0001534120)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-01-17",
+       "adsh": "0001628280-23-001103"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001057877",
+        "0000049648"
+       ],
+       "display_names": [
+        "IDACORP INC  (IDA)  (CIK 0001057877)",
+        "IDAHO POWER CO  (CIK 0000049648)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-11-03",
+       "adsh": "0001057877-22-000074"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001417926"
+       ],
+       "display_names": [
+        "INVO Bioscience, Inc.  (INVO)  (CIK 0001417926)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-02-09",
+       "adsh": "0001493152-23-004074"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000765880"
+       ],
+       "display_names": [
+        "HEALTHPEAK PROPERTIES, INC.  (DOC)  (CIK 0000765880)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-02-07",
+       "adsh": "0001628280-23-002583"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000767405"
+       ],
+       "display_names": [
+        "SB FINANCIAL GROUP, INC.  (SBFG)  (CIK 0000767405)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-12-23",
+       "adsh": "0001213900-22-082430"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001677576"
+       ],
+       "display_names": [
+        "INNOVATIVE INDUSTRIAL PROPERTIES INC  (IIPR, IIPR-PA)  (CIK 0001677576)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-11-03",
+       "adsh": "0001104659-22-114200"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000765880"
+       ],
+       "display_names": [
+        "HEALTHPEAK PROPERTIES, INC.  (DOC)  (CIK 0000765880)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-11-01",
+       "adsh": "0001628280-22-027566"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001315098"
+       ],
+       "display_names": [
+        "Roblox Corp  (RBLX)  (CIK 0001315098)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-11-09",
+       "adsh": "0001315098-22-000155"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000751365"
+       ],
+       "display_names": [
+        "VIRCO MFG CORPORATION  (VIRC)  (CIK 0000751365)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-12-12",
+       "adsh": "0001628280-22-031713"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001517302"
+       ],
+       "display_names": [
+        "Artisan Partners Asset Management Inc.  (APAM)  (CIK 0001517302)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-01-31",
+       "adsh": "0001517302-23-000007"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001517302"
+       ],
+       "display_names": [
+        "Artisan Partners Asset Management Inc.  (APAM)  (CIK 0001517302)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-11-01",
+       "adsh": "0001517302-22-000073"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001095315"
+       ],
+       "display_names": [
+        "PFSWEB INC  (CIK 0001095315)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-11-14",
+       "adsh": "0001095315-22-000096"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001826457"
+       ],
+       "display_names": [
+        "Monte Rosa Therapeutics, Inc.  (GLUE)  (CIK 0001826457)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-10-24",
+       "adsh": "0001193125-22-267232"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001834645"
+       ],
+       "display_names": [
+        "Peak Bio, Inc.  (PKBO, PKBOW)  (CIK 0001834645)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-11-07",
+       "adsh": "0001193125-22-279204"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001452804"
+       ],
+       "display_names": [
+        "PEAK PHARMACEUTICALS, INC.  (RMHI)  (CIK 0001452804)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-01-20",
+       "adsh": "0001199835-23-000025"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001538495"
+       ],
+       "display_names": [
+        "Earth Science Tech, Inc.  (ETST, UNOV)  (CIK 0001538495)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-12-30",
+       "adsh": "0001493152-22-036860"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001106838"
+       ],
+       "display_names": [
+        "Sonnet BioTherapeutics Holdings, Inc.  (SONN)  (CIK 0001106838)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-01-19",
+       "adsh": "0001493152-23-001820"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001622229"
+       ],
+       "display_names": [
+        "Cogent Biosciences, Inc.  (COGT)  (CIK 0001622229)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-12-12",
+       "adsh": "0001193125-22-302302"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000764622",
+        "0000007286"
+       ],
+       "display_names": [
+        "PINNACLE WEST CAPITAL CORP  (PNW)  (CIK 0000764622)",
+        "ARIZONA PUBLIC SERVICE CO  (CIK 0000007286)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-12-02",
+       "adsh": "0000764622-22-000105"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000764622",
+        "0000007286"
+       ],
+       "display_names": [
+        "PINNACLE WEST CAPITAL CORP  (PNW)  (CIK 0000764622)",
+        "ARIZONA PUBLIC SERVICE CO  (CIK 0000007286)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-01-11",
+       "adsh": "0000764622-23-000004"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001538495"
+       ],
+       "display_names": [
+        "Earth Science Tech, Inc.  (ETST, UNOV)  (CIK 0001538495)"
+       ],
+       "form": "8-K/A",
+       "file_date": "2023-02-03",
+       "adsh": "0001493152-23-003521"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001657312"
+       ],
+       "display_names": [
+        "Verona Pharma plc  (VRNA)  (CIK 0001657312)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-12-20",
+       "adsh": "0001104659-22-128407"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001417926"
+       ],
+       "display_names": [
+        "INVO Bioscience, Inc.  (INVO)  (CIK 0001417926)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-02-09",
+       "adsh": "0001493152-23-004074"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001417926"
+       ],
+       "display_names": [
+        "INVO Bioscience, Inc.  (INVO)  (CIK 0001417926)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-02-09",
+       "adsh": "0001493152-23-004074"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001408443"
+       ],
+       "display_names": [
+        "Milestone Pharmaceuticals Inc.  (MIST)  (CIK 0001408443)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-12-06",
+       "adsh": "0001104659-22-124907"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000764622",
+        "0000007286"
+       ],
+       "display_names": [
+        "PINNACLE WEST CAPITAL CORP  (PNW)  (CIK 0000764622)",
+        "ARIZONA PUBLIC SERVICE CO  (CIK 0000007286)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-11-10",
+       "adsh": "0000764622-22-000100"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001023994"
+       ],
+       "display_names": [
+        "SAFE & GREEN HOLDINGS CORP.  (SGBX)  (CIK 0001023994)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-02-07",
+       "adsh": "0001213900-23-009019"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001023994"
+       ],
+       "display_names": [
+        "SAFE & GREEN HOLDINGS CORP.  (SGBX)  (CIK 0001023994)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-02-07",
+       "adsh": "0001213900-23-009019"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001907685"
+       ],
+       "display_names": [
+        "Comera Life Sciences Holdings, Inc.  (CMRA)  (CIK 0001907685)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-01-06",
+       "adsh": "0001193125-23-003452"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001637715"
+       ],
+       "display_names": [
+        "Reneo Pharmaceuticals, Inc.  (RPHM)  (CIK 0001637715)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-01-09",
+       "adsh": "0001193125-23-004092"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001834645"
+       ],
+       "display_names": [
+        "Peak Bio, Inc.  (PKBO, PKBOW)  (CIK 0001834645)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-01-04",
+       "adsh": "0001193125-23-001577"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001829426"
+       ],
+       "display_names": [
+        "Far Peak Acquisition Corp  (CIK 0001829426)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-12-29",
+       "adsh": "0000929638-22-001965"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001509589"
+       ],
+       "display_names": [
+        "CIVITAS RESOURCES, INC.  (CIVI, CIVII, CIVIW)  (CIK 0001509589)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-01-24",
+       "adsh": "0001104659-23-006000"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001583107"
+       ],
+       "display_names": [
+        "Theravance Biopharma, Inc.  (TBPH)  (CIK 0001583107)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-01-09",
+       "adsh": "0001104659-23-001980"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001348362"
+       ],
+       "display_names": [
+        "Lexaria Bioscience Corp.  (LEXX, LEXXW)  (CIK 0001348362)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-11-30",
+       "adsh": "0001640334-22-002533"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000861838"
+       ],
+       "display_names": [
+        "Aceragen, Inc.  (CIK 0000861838)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-01-18",
+       "adsh": "0001104659-23-004669"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000819926"
+       ],
+       "display_names": [
+        "SHARING ECONOMY INTERNATIONAL INC.  (CIK 0000819926)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-11-14",
+       "adsh": "0001213900-22-071690"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001739104"
+       ],
+       "display_names": [
+        "Elanco Animal Health Inc  (ELAN)  (CIK 0001739104)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-01-09",
+       "adsh": "0001104659-23-002071"
+      }
+     }
+    ]
+   }
+  }
+ }
 }

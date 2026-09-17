@@ -12083,5 +12083,91 @@
    879169,
    "INCYTE CORP  (INCY)  (CIK 0000879169)"
   ]
- ]
+ ],
+ "efts_raw": {
+  "https://efts.sec.gov/LATEST/search-index?q=%22BCR%22&forms=25-NSE,25,15-12G,15-12B,15-15D&dateRange=custom&startdt=2017-09-30&enddt=2018-03-29": {
+   "hits": {
+    "total": {
+     "value": 0,
+     "relation": "eq"
+    },
+    "hits": []
+   }
+  },
+  "https://efts.sec.gov/LATEST/search-index?q=%22BCR%22&forms=8-K&dateRange=custom&startdt=2017-08-31&enddt=2017-12-28": {
+   "hits": {
+    "total": {
+     "value": 5,
+     "relation": "eq"
+    },
+    "hits": [
+     {
+      "_source": {
+       "ciks": [
+        "0001422143"
+       ],
+       "display_names": [
+        "Kura Oncology, Inc.  (KURA)  (CIK 0001422143)"
+       ],
+       "form": "8-K",
+       "file_date": "2017-09-07",
+       "adsh": "0001564590-17-018418"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001572386"
+       ],
+       "display_names": [
+        "GREENWAY TECHNOLOGIES INC  (GWTI)  (CIK 0001572386)"
+       ],
+       "form": "8-K",
+       "file_date": "2017-11-02",
+       "adsh": "0001010549-17-000401"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001498382"
+       ],
+       "display_names": [
+        "DelMar Pharmaceuticals, Inc.  (KTRA)  (CIK 0001498382)"
+       ],
+       "form": "8-K",
+       "file_date": "2017-10-05",
+       "adsh": "0001213900-17-010307"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000009892"
+       ],
+       "display_names": [
+        "BARD C R INC /NJ/  (CIK 0000009892)"
+       ],
+       "form": "8-K",
+       "file_date": "2017-10-25",
+       "adsh": "0001193125-17-319310"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000879169"
+       ],
+       "display_names": [
+        "INCYTE CORP  (INCY)  (CIK 0000879169)"
+       ],
+       "form": "8-K",
+       "file_date": "2017-10-31",
+       "adsh": "0001104659-17-064808"
+      }
+     }
+    ]
+   }
+  }
+ }
 }

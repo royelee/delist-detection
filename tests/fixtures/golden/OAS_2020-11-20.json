@@ -12208,5 +12208,364 @@
    1528129,
    "Laredo Petroleum, Inc.  (VTLE)  (CIK 0001528129)"
   ]
- ]
+ ],
+ "efts_raw": {
+  "https://efts.sec.gov/LATEST/search-index?q=%22OAS%22&forms=25-NSE,25,15-12G,15-12B,15-15D&dateRange=custom&startdt=2020-08-22&enddt=2021-02-18": {
+   "hits": {
+    "total": {
+     "value": 0,
+     "relation": "eq"
+    },
+    "hits": []
+   }
+  },
+  "https://efts.sec.gov/LATEST/search-index?q=%22OAS%22&forms=8-K&dateRange=custom&startdt=2020-07-23&enddt=2020-11-19": {
+   "hits": {
+    "total": {
+     "value": 26,
+     "relation": "eq"
+    },
+    "hits": [
+     {
+      "_source": {
+       "ciks": [
+        "0001486159"
+       ],
+       "display_names": [
+        "Oasis Petroleum Inc.  (CHRD, OASPW, WLLAW, WLLBW)  (CIK 0001486159)"
+       ],
+       "form": "8-K",
+       "file_date": "2020-09-30",
+       "adsh": "0001486159-20-000075"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001180145"
+       ],
+       "display_names": [
+        "Cardiovascular Systems Inc  (CIK 0001180145)"
+       ],
+       "form": "8-K",
+       "file_date": "2020-11-04",
+       "adsh": "0001180145-20-000050"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001180145"
+       ],
+       "display_names": [
+        "Cardiovascular Systems Inc  (CIK 0001180145)"
+       ],
+       "form": "8-K",
+       "file_date": "2020-11-04",
+       "adsh": "0001180145-20-000050"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001486159"
+       ],
+       "display_names": [
+        "Oasis Petroleum Inc.  (CHRD, OASPW, WLLAW, WLLBW)  (CIK 0001486159)"
+       ],
+       "form": "8-K",
+       "file_date": "2020-10-02",
+       "adsh": "0001486159-20-000080"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001486159"
+       ],
+       "display_names": [
+        "Oasis Petroleum Inc.  (CHRD, OASPW, WLLAW, WLLBW)  (CIK 0001486159)"
+       ],
+       "form": "8-K",
+       "file_date": "2020-08-10",
+       "adsh": "0001486159-20-000066"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001180145"
+       ],
+       "display_names": [
+        "Cardiovascular Systems Inc  (CIK 0001180145)"
+       ],
+       "form": "8-K",
+       "file_date": "2020-08-04",
+       "adsh": "0001180145-20-000038"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001180145"
+       ],
+       "display_names": [
+        "Cardiovascular Systems Inc  (CIK 0001180145)"
+       ],
+       "form": "8-K",
+       "file_date": "2020-08-04",
+       "adsh": "0001180145-20-000038"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001486159"
+       ],
+       "display_names": [
+        "Oasis Petroleum Inc.  (CHRD, OASPW, WLLAW, WLLBW)  (CIK 0001486159)"
+       ],
+       "form": "8-K",
+       "file_date": "2020-08-05",
+       "adsh": "0001486159-20-000061"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001486159"
+       ],
+       "display_names": [
+        "Oasis Petroleum Inc.  (CHRD, OASPW, WLLAW, WLLBW)  (CIK 0001486159)"
+       ],
+       "form": "8-K",
+       "file_date": "2020-10-08",
+       "adsh": "0001486159-20-000082"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001486159"
+       ],
+       "display_names": [
+        "Oasis Petroleum Inc.  (CHRD, OASPW, WLLAW, WLLBW)  (CIK 0001486159)"
+       ],
+       "form": "8-K",
+       "file_date": "2020-09-30",
+       "adsh": "0001486159-20-000077"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001486159"
+       ],
+       "display_names": [
+        "Oasis Petroleum Inc.  (CHRD, OASPW, WLLAW, WLLBW)  (CIK 0001486159)"
+       ],
+       "form": "8-K",
+       "file_date": "2020-09-21",
+       "adsh": "0001486159-20-000069"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001486159"
+       ],
+       "display_names": [
+        "Oasis Petroleum Inc.  (CHRD, OASPW, WLLAW, WLLBW)  (CIK 0001486159)"
+       ],
+       "form": "8-K",
+       "file_date": "2020-09-30",
+       "adsh": "0001486159-20-000075"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001486159"
+       ],
+       "display_names": [
+        "Oasis Petroleum Inc.  (CHRD, OASPW, WLLAW, WLLBW)  (CIK 0001486159)"
+       ],
+       "form": "8-K",
+       "file_date": "2020-11-13",
+       "adsh": "0001486159-20-000094"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001652133"
+       ],
+       "display_names": [
+        "Oasis Midstream Partners LP  (CIK 0001652133)"
+       ],
+       "form": "8-K/A",
+       "file_date": "2020-08-10",
+       "adsh": "0001652133-20-000042"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001725526"
+       ],
+       "display_names": [
+        "HighPoint Resources Corp  (CIK 0001725526)"
+       ],
+       "form": "8-K",
+       "file_date": "2020-11-09",
+       "adsh": "0001193125-20-288553"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001652133"
+       ],
+       "display_names": [
+        "Oasis Midstream Partners LP  (CIK 0001652133)"
+       ],
+       "form": "8-K",
+       "file_date": "2020-08-05",
+       "adsh": "0001652133-20-000033"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001509589"
+       ],
+       "display_names": [
+        "Bonanza Creek Energy, Inc.  (CIVI, CIVII, CIVIW)  (CIK 0001509589)"
+       ],
+       "form": "8-K",
+       "file_date": "2020-11-09",
+       "adsh": "0001104659-20-122777"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001486159"
+       ],
+       "display_names": [
+        "Oasis Petroleum Inc.  (CHRD, OASPW, WLLAW, WLLBW)  (CIK 0001486159)"
+       ],
+       "form": "8-K",
+       "file_date": "2020-09-30",
+       "adsh": "0001486159-20-000075"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001486159"
+       ],
+       "display_names": [
+        "Oasis Petroleum Inc.  (CHRD, OASPW, WLLAW, WLLBW)  (CIK 0001486159)"
+       ],
+       "form": "8-K",
+       "file_date": "2020-08-05",
+       "adsh": "0001486159-20-000061"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000945764"
+       ],
+       "display_names": [
+        "DENBURY INC  (CIK 0000945764)"
+       ],
+       "form": "8-K",
+       "file_date": "2020-09-23",
+       "adsh": "0000945764-20-000156"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001528129"
+       ],
+       "display_names": [
+        "Laredo Petroleum, Inc.  (VTLE)  (CIK 0001528129)"
+       ],
+       "form": "8-K",
+       "file_date": "2020-11-04",
+       "adsh": "0001528129-20-000169"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000945764"
+       ],
+       "display_names": [
+        "DENBURY INC  (CIK 0000945764)"
+       ],
+       "form": "8-K",
+       "file_date": "2020-09-23",
+       "adsh": "0000945764-20-000156"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001528129"
+       ],
+       "display_names": [
+        "Laredo Petroleum, Inc.  (VTLE)  (CIK 0001528129)"
+       ],
+       "form": "8-K",
+       "file_date": "2020-09-02",
+       "adsh": "0001528129-20-000162"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001043219"
+       ],
+       "display_names": [
+        "ANNALY CAPITAL MANAGEMENT INC  (NLY, NLY-PF, NLY-PG, NLY-PI)  (CIK 0001043219)"
+       ],
+       "form": "8-K",
+       "file_date": "2020-07-29",
+       "adsh": "0001628280-20-010821"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001057706"
+       ],
+       "display_names": [
+        "FIRST BANCORP /PR/  (FBP)  (CIK 0001057706)"
+       ],
+       "form": "8-K/A",
+       "file_date": "2020-11-18",
+       "adsh": "0001140361-20-025982"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001057706"
+       ],
+       "display_names": [
+        "FIRST BANCORP /PR/  (FBP)  (CIK 0001057706)"
+       ],
+       "form": "8-K/A",
+       "file_date": "2020-11-18",
+       "adsh": "0001140361-20-025982"
+      }
+     }
+    ]
+   }
+  }
+ }
 }

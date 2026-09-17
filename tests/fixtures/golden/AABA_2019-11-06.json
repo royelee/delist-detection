@@ -3581,5 +3581,94 @@
    1011006,
    "ALTABA INC.  (CIK 0001011006)"
   ]
- ]
+ ],
+ "efts_raw": {
+  "https://efts.sec.gov/LATEST/search-index?q=%22AABA%22&forms=25-NSE,25,15-12G,15-12B,15-15D&dateRange=custom&startdt=2019-08-08&enddt=2020-02-04": {
+   "hits": {
+    "total": {
+     "value": 1,
+     "relation": "eq"
+    },
+    "hits": [
+     {
+      "_source": {
+       "ciks": [
+        "0001011006",
+        "0001354457"
+       ],
+       "display_names": [
+        "ALTABA INC.  (CIK 0001011006)",
+        "The Nasdaq Stock Market LLC  (CIK 0001354457)"
+       ],
+       "form": "25-NSE",
+       "file_date": "2019-10-07",
+       "adsh": "0001354457-19-000499"
+      }
+     }
+    ]
+   }
+  },
+  "https://efts.sec.gov/LATEST/search-index?q=%22AABA%22&forms=8-K&dateRange=custom&startdt=2019-07-09&enddt=2019-11-05": {
+   "hits": {
+    "total": {
+     "value": 4,
+     "relation": "eq"
+    },
+    "hits": [
+     {
+      "_source": {
+       "ciks": [
+        "0001011006"
+       ],
+       "display_names": [
+        "ALTABA INC.  (CIK 0001011006)"
+       ],
+       "form": "8-K",
+       "file_date": "2019-10-04",
+       "adsh": "0001193125-19-262790"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001011006"
+       ],
+       "display_names": [
+        "ALTABA INC.  (CIK 0001011006)"
+       ],
+       "form": "8-K",
+       "file_date": "2019-09-23",
+       "adsh": "0001193125-19-252251"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001011006"
+       ],
+       "display_names": [
+        "ALTABA INC.  (CIK 0001011006)"
+       ],
+       "form": "8-K",
+       "file_date": "2019-10-04",
+       "adsh": "0001193125-19-262790"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001011006"
+       ],
+       "display_names": [
+        "ALTABA INC.  (CIK 0001011006)"
+       ],
+       "form": "8-K",
+       "file_date": "2019-09-23",
+       "adsh": "0001193125-19-252251"
+      }
+     }
+    ]
+   }
+  }
+ }
 }

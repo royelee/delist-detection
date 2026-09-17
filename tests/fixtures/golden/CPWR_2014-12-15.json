@@ -4918,5 +4918,146 @@
    1563699,
    "Covisint Corp  (CIK 0001563699)"
   ]
- ]
+ ],
+ "efts_raw": {
+  "https://efts.sec.gov/LATEST/search-index?q=%22CPWR%22&forms=25-NSE,25,15-12G,15-12B,15-15D&dateRange=custom&startdt=2014-09-16&enddt=2015-03-15": {
+   "hits": {
+    "total": {
+     "value": 1,
+     "relation": "eq"
+    },
+    "hits": [
+     {
+      "_source": {
+       "ciks": [
+        "0000859014",
+        "0001354457"
+       ],
+       "display_names": [
+        "COMPUWARE CORP  (CIK 0000859014)",
+        "NASDAQ Stock Market LLC  (CIK 0001354457)"
+       ],
+       "form": "25-NSE",
+       "file_date": "2014-12-15",
+       "adsh": "0001354457-14-000214"
+      }
+     }
+    ]
+   }
+  },
+  "https://efts.sec.gov/LATEST/search-index?q=%22CPWR%22&forms=8-K&dateRange=custom&startdt=2014-08-17&enddt=2014-12-14": {
+   "hits": {
+    "total": {
+     "value": 8,
+     "relation": "eq"
+    },
+    "hits": [
+     {
+      "_source": {
+       "ciks": [
+        "0001563699"
+       ],
+       "display_names": [
+        "Covisint Corp  (CIK 0001563699)"
+       ],
+       "form": "8-K",
+       "file_date": "2014-10-10",
+       "adsh": "0001563699-14-000081"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000859014"
+       ],
+       "display_names": [
+        "COMPUWARE CORP  (CIK 0000859014)"
+       ],
+       "form": "8-K",
+       "file_date": "2014-10-10",
+       "adsh": "0001140361-14-037924"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000859014"
+       ],
+       "display_names": [
+        "COMPUWARE CORP  (CIK 0000859014)"
+       ],
+       "form": "8-K",
+       "file_date": "2014-11-05",
+       "adsh": "0001140361-14-040165"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000859014"
+       ],
+       "display_names": [
+        "COMPUWARE CORP  (CIK 0000859014)"
+       ],
+       "form": "8-K",
+       "file_date": "2014-10-21",
+       "adsh": "0001140361-14-038590"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001563699"
+       ],
+       "display_names": [
+        "Covisint Corp  (CIK 0001563699)"
+       ],
+       "form": "8-K",
+       "file_date": "2014-11-05",
+       "adsh": "0001563699-14-000091"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000859014"
+       ],
+       "display_names": [
+        "COMPUWARE CORP  (CIK 0000859014)"
+       ],
+       "form": "8-K",
+       "file_date": "2014-12-08",
+       "adsh": "0001140361-14-044467"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000859014"
+       ],
+       "display_names": [
+        "COMPUWARE CORP  (CIK 0000859014)"
+       ],
+       "form": "8-K",
+       "file_date": "2014-10-28",
+       "adsh": "0001140361-14-039208"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000859014"
+       ],
+       "display_names": [
+        "COMPUWARE CORP  (CIK 0000859014)"
+       ],
+       "form": "8-K",
+       "file_date": "2014-10-21",
+       "adsh": "0001140361-14-038590"
+      }
+     }
+    ]
+   }
+  }
+ }
 }

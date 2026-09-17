@@ -9912,5 +9912,689 @@
    1822492,
    "Hillman Solutions Corp.  (HLMN)  (CIK 0001822492)"
   ]
- ]
+ ],
+ "efts_raw": {
+  "https://efts.sec.gov/LATEST/search-index?q=%22BLD%22&forms=25-NSE,25,15-12G,15-12B,15-15D&dateRange=custom&startdt=2026-04-02&enddt=2026-09-29": {
+   "hits": {
+    "total": {
+     "value": 0,
+     "relation": "eq"
+    },
+    "hits": []
+   }
+  },
+  "https://efts.sec.gov/LATEST/search-index?q=%22BLD%22&forms=8-K&dateRange=custom&startdt=2026-03-03&enddt=2026-06-30": {
+   "hits": {
+    "total": {
+     "value": 51,
+     "relation": "eq"
+    },
+    "hits": [
+     {
+      "_source": {
+       "ciks": [
+        "0001633931"
+       ],
+       "display_names": [
+        "TopBuild Corp  (BLD)  (CIK 0001633931)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-04-28",
+       "adsh": "0001104659-26-050315"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001633931"
+       ],
+       "display_names": [
+        "TopBuild Corp  (BLD)  (CIK 0001633931)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-04-17",
+       "adsh": "0001104659-26-044899"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001633931"
+       ],
+       "display_names": [
+        "TopBuild Corp  (BLD)  (CIK 0001633931)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-06-16",
+       "adsh": "0001104659-26-074350"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001633931"
+       ],
+       "display_names": [
+        "TopBuild Corp  (BLD)  (CIK 0001633931)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-04-02",
+       "adsh": "0001104659-26-038926"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001633931"
+       ],
+       "display_names": [
+        "TopBuild Corp  (BLD)  (CIK 0001633931)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-05-05",
+       "adsh": "0001104659-26-055225"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001633931"
+       ],
+       "display_names": [
+        "TopBuild Corp  (BLD)  (CIK 0001633931)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-04-27",
+       "adsh": "0001104659-26-049431"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001633931"
+       ],
+       "display_names": [
+        "TopBuild Corp  (BLD)  (CIK 0001633931)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-06-29",
+       "adsh": "0001104659-26-078885"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001633931"
+       ],
+       "display_names": [
+        "TopBuild Corp  (BLD)  (CIK 0001633931)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-05-29",
+       "adsh": "0001104659-26-068292"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001633931"
+       ],
+       "display_names": [
+        "TopBuild Corp  (BLD)  (CIK 0001633931)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-06-29",
+       "adsh": "0001104659-26-078885"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001633931"
+       ],
+       "display_names": [
+        "TopBuild Corp  (BLD)  (CIK 0001633931)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-06-04",
+       "adsh": "0001104659-26-070561"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001633931"
+       ],
+       "display_names": [
+        "TopBuild Corp  (BLD)  (CIK 0001633931)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-06-12",
+       "adsh": "0001104659-26-073501"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001633931"
+       ],
+       "display_names": [
+        "TopBuild Corp  (BLD)  (CIK 0001633931)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-06-04",
+       "adsh": "0001104659-26-070561"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001633931"
+       ],
+       "display_names": [
+        "TopBuild Corp  (BLD)  (CIK 0001633931)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-06-22",
+       "adsh": "0001104659-26-076063"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001633931"
+       ],
+       "display_names": [
+        "TopBuild Corp  (BLD)  (CIK 0001633931)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-04-20",
+       "adsh": "0001104659-26-045245"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000883975"
+       ],
+       "display_names": [
+        "Microbot Medical Inc.  (MBOT)  (CIK 0000883975)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-03-26",
+       "adsh": "0001493152-26-012812"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000883975"
+       ],
+       "display_names": [
+        "Microbot Medical Inc.  (MBOT)  (CIK 0000883975)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-03-24",
+       "adsh": "0001493152-26-012281"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000883975"
+       ],
+       "display_names": [
+        "Microbot Medical Inc.  (MBOT)  (CIK 0000883975)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-05-05",
+       "adsh": "0001493152-26-021231"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000883975"
+       ],
+       "display_names": [
+        "Microbot Medical Inc.  (MBOT)  (CIK 0000883975)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-06-16",
+       "adsh": "0001493152-26-028824"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001435064"
+       ],
+       "display_names": [
+        "CEMTREX INC  (CETX, CETXP)  (CIK 0001435064)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-05-15",
+       "adsh": "0001493152-26-023702"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000883975"
+       ],
+       "display_names": [
+        "Microbot Medical Inc.  (MBOT)  (CIK 0000883975)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-04-14",
+       "adsh": "0001493152-26-016484"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000883975"
+       ],
+       "display_names": [
+        "Microbot Medical Inc.  (MBOT)  (CIK 0000883975)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-03-10",
+       "adsh": "0001493152-26-009454"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000883975"
+       ],
+       "display_names": [
+        "Microbot Medical Inc.  (MBOT)  (CIK 0000883975)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-06-25",
+       "adsh": "0001493152-26-030038"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000883975"
+       ],
+       "display_names": [
+        "Microbot Medical Inc.  (MBOT)  (CIK 0000883975)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-03-03",
+       "adsh": "0001493152-26-008658"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000883975"
+       ],
+       "display_names": [
+        "Microbot Medical Inc.  (MBOT)  (CIK 0000883975)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-05-15",
+       "adsh": "0001493152-26-023493"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000883975"
+       ],
+       "display_names": [
+        "Microbot Medical Inc.  (MBOT)  (CIK 0000883975)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-03-04",
+       "adsh": "0001493152-26-008782"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000883975"
+       ],
+       "display_names": [
+        "Microbot Medical Inc.  (MBOT)  (CIK 0000883975)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-04-30",
+       "adsh": "0001493152-26-019775"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000883975"
+       ],
+       "display_names": [
+        "Microbot Medical Inc.  (MBOT)  (CIK 0000883975)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-04-10",
+       "adsh": "0001493152-26-016198"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000883975"
+       ],
+       "display_names": [
+        "Microbot Medical Inc.  (MBOT)  (CIK 0000883975)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-04-22",
+       "adsh": "0001493152-26-018453"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000883975"
+       ],
+       "display_names": [
+        "Microbot Medical Inc.  (MBOT)  (CIK 0000883975)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-03-17",
+       "adsh": "0001493152-26-010446"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000883975"
+       ],
+       "display_names": [
+        "Microbot Medical Inc.  (MBOT)  (CIK 0000883975)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-06-23",
+       "adsh": "0001493152-26-029709"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000883975"
+       ],
+       "display_names": [
+        "Microbot Medical Inc.  (MBOT)  (CIK 0000883975)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-06-09",
+       "adsh": "0001493152-26-027861"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001633931"
+       ],
+       "display_names": [
+        "TopBuild Corp  (BLD)  (CIK 0001633931)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-04-20",
+       "adsh": "0001104659-26-045245"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000883975"
+       ],
+       "display_names": [
+        "Microbot Medical Inc.  (MBOT)  (CIK 0000883975)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-06-02",
+       "adsh": "0001493152-26-026769"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001633931"
+       ],
+       "display_names": [
+        "TopBuild Corp  (BLD)  (CIK 0001633931)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-04-02",
+       "adsh": "0001104659-26-038926"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000883975"
+       ],
+       "display_names": [
+        "Microbot Medical Inc.  (MBOT)  (CIK 0000883975)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-05-26",
+       "adsh": "0001493152-26-025171"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000883975"
+       ],
+       "display_names": [
+        "Microbot Medical Inc.  (MBOT)  (CIK 0000883975)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-05-14",
+       "adsh": "0001493152-26-022886"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000883975"
+       ],
+       "display_names": [
+        "Microbot Medical Inc.  (MBOT)  (CIK 0000883975)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-04-13",
+       "adsh": "0001493152-26-016293"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001633931"
+       ],
+       "display_names": [
+        "TopBuild Corp  (BLD)  (CIK 0001633931)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-06-16",
+       "adsh": "0001104659-26-074350"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000883975"
+       ],
+       "display_names": [
+        "Microbot Medical Inc.  (MBOT)  (CIK 0000883975)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-04-10",
+       "adsh": "0001493152-26-016198"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000883975"
+       ],
+       "display_names": [
+        "Microbot Medical Inc.  (MBOT)  (CIK 0000883975)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-06-30",
+       "adsh": "0001493152-26-031205"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001236275"
+       ],
+       "display_names": [
+        "QXO, Inc.  (QXO, QXO-PB)  (CIK 0001236275)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-06-29",
+       "adsh": "0001104659-26-078886"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001236275"
+       ],
+       "display_names": [
+        "QXO, Inc.  (QXO, QXO-PB)  (CIK 0001236275)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-06-30",
+       "adsh": "0001104659-26-079101"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001236275"
+       ],
+       "display_names": [
+        "QXO, Inc.  (QXO, QXO-PB)  (CIK 0001236275)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-06-04",
+       "adsh": "0001104659-26-070538"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001633931"
+       ],
+       "display_names": [
+        "TopBuild Corp  (BLD)  (CIK 0001633931)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-06-12",
+       "adsh": "0001104659-26-073501"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001633931"
+       ],
+       "display_names": [
+        "TopBuild Corp  (BLD)  (CIK 0001633931)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-06-12",
+       "adsh": "0001104659-26-073501"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001633931"
+       ],
+       "display_names": [
+        "TopBuild Corp  (BLD)  (CIK 0001633931)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-05-05",
+       "adsh": "0001104659-26-055225"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001236275"
+       ],
+       "display_names": [
+        "QXO, Inc.  (QXO, QXO-PB)  (CIK 0001236275)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-04-20",
+       "adsh": "0001104659-26-045111"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001633931"
+       ],
+       "display_names": [
+        "TopBuild Corp  (BLD)  (CIK 0001633931)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-04-20",
+       "adsh": "0001104659-26-045245"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001822492"
+       ],
+       "display_names": [
+        "Hillman Solutions Corp.  (HLMN)  (CIK 0001822492)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-03-24",
+       "adsh": "0001822492-26-000045"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001633931"
+       ],
+       "display_names": [
+        "TopBuild Corp  (BLD)  (CIK 0001633931)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-04-20",
+       "adsh": "0001104659-26-045245"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001585364"
+       ],
+       "display_names": [
+        "PERRIGO Co plc  (PRGO)  (CIK 0001585364)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-04-30",
+       "adsh": "0001585364-26-000040"
+      }
+     }
+    ]
+   }
+  }
+ }
 }

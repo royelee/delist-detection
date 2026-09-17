@@ -1859,5 +1859,94 @@
    1124827,
    "UTi WORLDWIDE INC  (CIK 0001124827)"
   ]
- ]
+ ],
+ "efts_raw": {
+  "https://efts.sec.gov/LATEST/search-index?q=%22UTIW%22&forms=25-NSE,25,15-12G,15-12B,15-15D&dateRange=custom&startdt=2015-11-03&enddt=2016-05-01": {
+   "hits": {
+    "total": {
+     "value": 1,
+     "relation": "eq"
+    },
+    "hits": [
+     {
+      "_source": {
+       "ciks": [
+        "0001124827",
+        "0001354457"
+       ],
+       "display_names": [
+        "UTi WORLDWIDE INC  (CIK 0001124827)",
+        "NASDAQ Stock Market LLC  (CIK 0001354457)"
+       ],
+       "form": "25-NSE",
+       "file_date": "2016-01-22",
+       "adsh": "0001354457-16-000270"
+      }
+     }
+    ]
+   }
+  },
+  "https://efts.sec.gov/LATEST/search-index?q=%22UTIW%22&forms=8-K&dateRange=custom&startdt=2015-10-04&enddt=2016-01-31": {
+   "hits": {
+    "total": {
+     "value": 4,
+     "relation": "eq"
+    },
+    "hits": [
+     {
+      "_source": {
+       "ciks": [
+        "0001124827"
+       ],
+       "display_names": [
+        "UTi WORLDWIDE INC  (CIK 0001124827)"
+       ],
+       "form": "8-K",
+       "file_date": "2016-01-20",
+       "adsh": "0000950157-16-001478"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001124827"
+       ],
+       "display_names": [
+        "UTi WORLDWIDE INC  (CIK 0001124827)"
+       ],
+       "form": "8-K",
+       "file_date": "2016-01-14",
+       "adsh": "0000950157-16-001464"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001124827"
+       ],
+       "display_names": [
+        "UTi WORLDWIDE INC  (CIK 0001124827)"
+       ],
+       "form": "8-K",
+       "file_date": "2015-11-09",
+       "adsh": "0000950157-15-001290"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001124827"
+       ],
+       "display_names": [
+        "UTi WORLDWIDE INC  (CIK 0001124827)"
+       ],
+       "form": "8-K",
+       "file_date": "2015-11-23",
+       "adsh": "0000950157-15-001340"
+      }
+     }
+    ]
+   }
+  }
+ }
 }

@@ -4932,5 +4932,78 @@
    1815737,
    "FAST Acquisition Corp.  (CIK 0001815737)"
   ]
- ]
+ ],
+ "efts_raw": {
+  "https://efts.sec.gov/LATEST/search-index?q=%22FST%22&forms=25-NSE,25,15-12G,15-12B,15-15D&dateRange=custom&startdt=2022-05-27&enddt=2022-11-23": {
+   "hits": {
+    "total": {
+     "value": 0,
+     "relation": "eq"
+    },
+    "hits": []
+   }
+  },
+  "https://efts.sec.gov/LATEST/search-index?q=%22FST%22&forms=8-K&dateRange=custom&startdt=2022-04-27&enddt=2022-08-24": {
+   "hits": {
+    "total": {
+     "value": 4,
+     "relation": "eq"
+    },
+    "hits": [
+     {
+      "_source": {
+       "ciks": [
+        "0001017303"
+       ],
+       "display_names": [
+        "TRANSACT TECHNOLOGIES INC  (TACT)  (CIK 0001017303)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-05-10",
+       "adsh": "0001017303-22-000026"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001017303"
+       ],
+       "display_names": [
+        "TRANSACT TECHNOLOGIES INC  (TACT)  (CIK 0001017303)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-08-17",
+       "adsh": "0001214659-22-010353"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001815737"
+       ],
+       "display_names": [
+        "FAST Acquisition Corp.  (CIK 0001815737)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-08-11",
+       "adsh": "0001213900-22-046514"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001815737"
+       ],
+       "display_names": [
+        "FAST Acquisition Corp.  (CIK 0001815737)"
+       ],
+       "form": "8-K",
+       "file_date": "2022-08-11",
+       "adsh": "0001213900-22-046514"
+      }
+     }
+    ]
+   }
+  }
+ }
 }

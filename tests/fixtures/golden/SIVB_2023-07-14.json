@@ -20165,5 +20165,195 @@
    35527,
    "FIFTH THIRD BANCORP  (FITB, FITBI, FITBO, FITBP)  (CIK 0000035527)"
   ]
- ]
+ ],
+ "efts_raw": {
+  "https://efts.sec.gov/LATEST/search-index?q=%22SIVB%22&forms=25-NSE,25,15-12G,15-12B,15-15D&dateRange=custom&startdt=2023-04-15&enddt=2023-10-12": {
+   "hits": {
+    "total": {
+     "value": 0,
+     "relation": "eq"
+    },
+    "hits": []
+   }
+  },
+  "https://efts.sec.gov/LATEST/search-index?q=%22SIVB%22&forms=8-K&dateRange=custom&startdt=2023-03-16&enddt=2023-07-13": {
+   "hits": {
+    "total": {
+     "value": 13,
+     "relation": "eq"
+    },
+    "hits": [
+     {
+      "_source": {
+       "ciks": [
+        "0000719739"
+       ],
+       "display_names": [
+        "SVB FINANCIAL GROUP  (SIVBQ)  (CIK 0000719739)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-03-22",
+       "adsh": "0001193125-23-076760"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000719739"
+       ],
+       "display_names": [
+        "SVB FINANCIAL GROUP  (SIVBQ)  (CIK 0000719739)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-03-17",
+       "adsh": "0001193125-23-073665"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001823608"
+       ],
+       "display_names": [
+        "Amalgamated Financial Corp.  (AMAL)  (CIK 0001823608)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-04-27",
+       "adsh": "0001823608-23-000066"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000719739"
+       ],
+       "display_names": [
+        "SVB FINANCIAL GROUP  (SIVBQ)  (CIK 0000719739)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-03-17",
+       "adsh": "0001193125-23-073665"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000719739"
+       ],
+       "display_names": [
+        "SVB FINANCIAL GROUP  (SIVBQ)  (CIK 0000719739)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-04-21",
+       "adsh": "0001193125-23-110576"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001212545"
+       ],
+       "display_names": [
+        "WESTERN ALLIANCE BANCORPORATION  (WAL, WAL-PA)  (CIK 0001212545)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-04-18",
+       "adsh": "0001212545-23-000119"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000719739"
+       ],
+       "display_names": [
+        "SVB FINANCIAL GROUP  (SIVBQ)  (CIK 0000719739)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-06-21",
+       "adsh": "0001193125-23-171310"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000719739"
+       ],
+       "display_names": [
+        "SVB FINANCIAL GROUP  (SIVBQ)  (CIK 0000719739)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-06-30",
+       "adsh": "0001193125-23-180388"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000719739"
+       ],
+       "display_names": [
+        "SVB FINANCIAL GROUP  (SIVBQ)  (CIK 0000719739)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-03-22",
+       "adsh": "0001193125-23-076760"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000049196"
+       ],
+       "display_names": [
+        "HUNTINGTON BANCSHARES INC /MD/  (HBAN, HBANL, HBANM, HBANP)  (CIK 0000049196)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-05-08",
+       "adsh": "0000049196-23-000049"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000049196"
+       ],
+       "display_names": [
+        "HUNTINGTON BANCSHARES INC /MD/  (HBAN, HBANL, HBANM, HBANP)  (CIK 0000049196)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-04-19",
+       "adsh": "0000049196-23-000030"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000035527"
+       ],
+       "display_names": [
+        "FIFTH THIRD BANCORP  (FITB, FITBI, FITBO, FITBP)  (CIK 0000035527)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-04-20",
+       "adsh": "0000035527-23-000153"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000109380"
+       ],
+       "display_names": [
+        "ZIONS BANCORPORATION, NATIONAL ASSOCIATION /UT/  (ZION, ZIONL, ZIONO, ZIONP)  (CIK 0000109380)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-04-19",
+       "adsh": "0000109380-23-000107"
+      }
+     }
+    ]
+   }
+  }
+ }
 }

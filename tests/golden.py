@@ -3,14 +3,21 @@ from __future__ import annotations
 
 import csv
 import json
-import re
 from dataclasses import dataclass
 from pathlib import Path
+from types import SimpleNamespace
 
+import requests
+
+from delist_detection import ticker_resolver
 from delist_detection.edgar import EdgarSubmission
+from delist_detection.ticker_resolver import TickerResolver
 
 ROOT = Path(__file__).resolve().parents[1]
 FIX = ROOT / "tests" / "fixtures" / "golden"
+# Read at import, before the autouse fixture in conftest.py replaces them for each test.
+_REAL_EFTS = {name: getattr(TickerResolver, name)
+              for name in ("_efts_lookup", "_efts_pre_delist_frequency_ranked")}
 
 
 @dataclass(frozen=True)
@@ -77,23 +84,23 @@ class GoldenEdgar:
         return self.data["atom"].get(f"{company}|{form_type}", [])
 
 
+class _EftsAnswer:
+    status_code = 200
+
+    def __init__(self, url: str, payload: dict) -> None:
+        self.url, self._payload = url, payload
+
+    def json(self) -> dict:
+        return self._payload
+
+
 def patch_efts(monkeypatch, case: GoldenCase) -> None:
-    from delist_detection.names import names_agree
-    from delist_detection.ticker_resolver import TickerResolver
-    hit = tuple(case.data["efts_lookup"])
-    freq = [tuple(x) for x in case.data["efts_frequency"]]
-    first_pass = re.compile(rf"\(\s*{re.escape(case.ticker.upper())}\s*\)")
-
-    def efts_lookup(self, t, d=None, expected_name=None, **kw):
-        # The fixture holds the answer of the old _efts_lookup. A hit without
-        # "(TICKER)" came from its second pass (first non-exchange CIK), which now
-        # returns a CIK only when the name agrees with expected_name. Later hits
-        # were not captured, so a disagreeing one replays as no hit.
-        cik, nm = hit
-        if cik is None or first_pass.search((nm or "").upper()) or names_agree(nm, expected_name):
-            return hit
-        return None, None
-
-    monkeypatch.setattr(TickerResolver, "_efts_lookup", efts_lookup)
-    monkeypatch.setattr(TickerResolver, "_efts_pre_delist_frequency_ranked",
-                        lambda self, t, d, top_n=5: freq)
+    """Run the real EFTS methods over the captured EFTS answers (efts_raw, keyed by
+    URL); a URL that was not captured answers with no hits."""
+    raw = case.data["efts_raw"]
+    for name, method in _REAL_EFTS.items():
+        monkeypatch.setattr(TickerResolver, name, method)
+    monkeypatch.setattr(ticker_resolver, "requests", SimpleNamespace(
+        get=lambda url, *a, **kw: _EftsAnswer(url, raw.get(url, {"hits": {"hits": []}})),
+        RequestException=requests.RequestException))
+    monkeypatch.setattr(ticker_resolver, "_throttle", lambda: None)

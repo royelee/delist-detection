@@ -8748,5 +8748,1559 @@
    1630212,
    "Change Agents Corporation.  (CHGA)  (CIK 0001630212)"
   ]
- ]
+ ],
+ "efts_raw": {
+  "https://efts.sec.gov/LATEST/search-index?q=%22TWO%22&forms=25-NSE,25,15-12G,15-12B,15-15D&dateRange=custom&startdt=2026-05-27&enddt=2026-11-23": {
+   "hits": {
+    "total": {
+     "value": 16,
+     "relation": "eq"
+    },
+    "hits": [
+     {
+      "_source": {
+       "ciks": [
+        "0001465740",
+        "0000876661"
+       ],
+       "display_names": [
+        "TWO HARBORS INVESTMENT CORP.  (TWO, TWOD, TWO-PA, TWO-PB, TWO-PC)  (CIK 0001465740)",
+        "NEW YORK STOCK EXCHANGE LLC  (CIK 0000876661)"
+       ],
+       "form": "25-NSE",
+       "file_date": "2026-08-25",
+       "adsh": "0000876661-26-000705"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001432364"
+       ],
+       "display_names": [
+        "AZUL SA  (AZUL, AZUXY)  (CIK 0001432364)"
+       ],
+       "form": "25",
+       "file_date": "2026-07-16",
+       "adsh": "0001292814-26-003772"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000931182",
+        "0000876661"
+       ],
+       "display_names": [
+        "ERP OPERATING LTD PARTNERSHIP  (CIK 0000931182)",
+        "NEW YORK STOCK EXCHANGE LLC  (CIK 0000876661)"
+       ],
+       "form": "25-NSE",
+       "file_date": "2026-08-17",
+       "adsh": "0000876661-26-000687"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001805077",
+        "0001354457"
+       ],
+       "display_names": [
+        "Eos Energy Enterprises, Inc.  (EOSE, EOSER)  (CIK 0001805077)",
+        "Nasdaq Stock Market LLC  (CIK 0001354457)"
+       ],
+       "form": "25-NSE",
+       "file_date": "2026-07-20",
+       "adsh": "0001354457-26-000704"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001552947",
+        "0001417835"
+       ],
+       "display_names": [
+        "Two Roads Shared Trust  (CIK 0001552947)",
+        "Cboe BZX Exchange, Inc.  (CIK 0001417835)"
+       ],
+       "form": "25-NSE",
+       "file_date": "2026-08-04",
+       "adsh": "0001417835-26-000249"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001465740",
+        "0000876661"
+       ],
+       "display_names": [
+        "TWO HARBORS INVESTMENT CORP.  (TWO, TWOD, TWO-PA, TWO-PB, TWO-PC)  (CIK 0001465740)",
+        "NEW YORK STOCK EXCHANGE LLC  (CIK 0000876661)"
+       ],
+       "form": "25-NSE",
+       "file_date": "2026-08-25",
+       "adsh": "0000876661-26-000705"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001552947",
+        "0001417835"
+       ],
+       "display_names": [
+        "Two Roads Shared Trust  (CIK 0001552947)",
+        "Cboe BZX Exchange, Inc.  (CIK 0001417835)"
+       ],
+       "form": "25-NSE",
+       "file_date": "2026-08-04",
+       "adsh": "0001417835-26-000251"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001552947",
+        "0001417835"
+       ],
+       "display_names": [
+        "Two Roads Shared Trust  (CIK 0001552947)",
+        "Cboe BZX Exchange, Inc.  (CIK 0001417835)"
+       ],
+       "form": "25-NSE",
+       "file_date": "2026-08-04",
+       "adsh": "0001417835-26-000244"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000045876",
+        "0000876661"
+       ],
+       "display_names": [
+        "ENVIRI Corp  (NVRI)  (CIK 0000045876)",
+        "NEW YORK STOCK EXCHANGE LLC  (CIK 0000876661)"
+       ],
+       "form": "25-NSE",
+       "file_date": "2026-06-01",
+       "adsh": "0000876661-26-000489"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001552947",
+        "0001417835"
+       ],
+       "display_names": [
+        "Two Roads Shared Trust  (CIK 0001552947)",
+        "Cboe BZX Exchange, Inc.  (CIK 0001417835)"
+       ],
+       "form": "25-NSE",
+       "file_date": "2026-07-08",
+       "adsh": "0001417835-26-000205"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001552947",
+        "0001417835"
+       ],
+       "display_names": [
+        "Two Roads Shared Trust  (CIK 0001552947)",
+        "Cboe BZX Exchange, Inc.  (CIK 0001417835)"
+       ],
+       "form": "25-NSE",
+       "file_date": "2026-08-04",
+       "adsh": "0001417835-26-000251"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001552947",
+        "0001417835"
+       ],
+       "display_names": [
+        "Two Roads Shared Trust  (CIK 0001552947)",
+        "Cboe BZX Exchange, Inc.  (CIK 0001417835)"
+       ],
+       "form": "25-NSE",
+       "file_date": "2026-08-04",
+       "adsh": "0001417835-26-000249"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001552947",
+        "0001417835"
+       ],
+       "display_names": [
+        "Two Roads Shared Trust  (CIK 0001552947)",
+        "Cboe BZX Exchange, Inc.  (CIK 0001417835)"
+       ],
+       "form": "25-NSE",
+       "file_date": "2026-08-04",
+       "adsh": "0001417835-26-000244"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000915912"
+       ],
+       "display_names": [
+        "AVALONBAY COMMUNITIES INC  (AVB)  (CIK 0000915912)"
+       ],
+       "form": "15-12G",
+       "file_date": "2026-08-27",
+       "adsh": "0001104659-26-102433"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000045876"
+       ],
+       "display_names": [
+        "ENVIRI LLC  (CIK 0000045876)"
+       ],
+       "form": "15-12G",
+       "file_date": "2026-06-12",
+       "adsh": "0000045876-26-000291"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000915912"
+       ],
+       "display_names": [
+        "AVALONBAY COMMUNITIES INC  (CIK 0000915912)"
+       ],
+       "form": "15-15D",
+       "file_date": "2026-09-16",
+       "adsh": "0001104659-26-108273"
+      }
+     }
+    ]
+   }
+  },
+  "https://efts.sec.gov/LATEST/search-index?q=%22TWO%22&forms=8-K&dateRange=custom&startdt=2026-04-27&enddt=2026-08-24": {
+   "hits": {
+    "total": {
+     "value": 10000,
+     "relation": "gte"
+    },
+    "hits": [
+     {
+      "_source": {
+       "ciks": [
+        "0001465740"
+       ],
+       "display_names": [
+        "TWO HARBORS INVESTMENT CORP.  (TWO, TWOD, TWO-PA, TWO-PB, TWO-PC)  (CIK 0001465740)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-05-19",
+       "adsh": "0001104659-26-063828"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001465740"
+       ],
+       "display_names": [
+        "TWO HARBORS INVESTMENT CORP.  (TWO, TWOD, TWO-PA, TWO-PB, TWO-PC)  (CIK 0001465740)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-05-28",
+       "adsh": "0001104659-26-067490"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001465740"
+       ],
+       "display_names": [
+        "TWO HARBORS INVESTMENT CORP.  (TWO, TWOD, TWO-PA, TWO-PB, TWO-PC)  (CIK 0001465740)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-05-15",
+       "adsh": "0001104659-26-061733"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001465740"
+       ],
+       "display_names": [
+        "TWO HARBORS INVESTMENT CORP.  (TWO, TWOD, TWO-PA, TWO-PB, TWO-PC)  (CIK 0001465740)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-05-14",
+       "adsh": "0001104659-26-060760"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001465740"
+       ],
+       "display_names": [
+        "TWO HARBORS INVESTMENT CORP.  (TWO, TWOD, TWO-PA, TWO-PB, TWO-PC)  (CIK 0001465740)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-06-23",
+       "adsh": "0001104659-26-076817"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001783398"
+       ],
+       "display_names": [
+        "UWM Holdings Corp  (UWMC)  (CIK 0001783398)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-05-11",
+       "adsh": "0001783398-26-000053"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001465740"
+       ],
+       "display_names": [
+        "TWO HARBORS INVESTMENT CORP.  (TWO, TWOD, TWO-PA, TWO-PB, TWO-PC)  (CIK 0001465740)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-04-29",
+       "adsh": "0001104659-26-050822"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001465740"
+       ],
+       "display_names": [
+        "TWO HARBORS INVESTMENT CORP.  (TWO, TWOD, TWO-PA, TWO-PB, TWO-PC)  (CIK 0001465740)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-04-28",
+       "adsh": "0001465740-26-000024"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001783398"
+       ],
+       "display_names": [
+        "UWM Holdings Corp  (UWMC)  (CIK 0001783398)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-05-01",
+       "adsh": "0001783398-26-000034"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001465740"
+       ],
+       "display_names": [
+        "TWO HARBORS INVESTMENT CORP.  (TWO, TWOD, TWO-PA, TWO-PB, TWO-PC)  (CIK 0001465740)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-04-29",
+       "adsh": "0001104659-26-050822"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001465740"
+       ],
+       "display_names": [
+        "TWO HARBORS INVESTMENT CORP.  (TWO, TWOD, TWO-PA, TWO-PB, TWO-PC)  (CIK 0001465740)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-05-19",
+       "adsh": "0001104659-26-063828"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001465740"
+       ],
+       "display_names": [
+        "TWO HARBORS INVESTMENT CORP.  (TWO, TWOD, TWO-PA, TWO-PB, TWO-PC)  (CIK 0001465740)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-05-08",
+       "adsh": "0001104659-26-057533"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001465740"
+       ],
+       "display_names": [
+        "TWO HARBORS INVESTMENT CORP.  (TWO, TWOD, TWO-PA, TWO-PB, TWO-PC)  (CIK 0001465740)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-06-23",
+       "adsh": "0001104659-26-076817"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001465740"
+       ],
+       "display_names": [
+        "TWO HARBORS INVESTMENT CORP.  (TWO, TWOD, TWO-PA, TWO-PB, TWO-PC)  (CIK 0001465740)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-07-06",
+       "adsh": "0001104659-26-080748"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001465740"
+       ],
+       "display_names": [
+        "TWO HARBORS INVESTMENT CORP.  (TWO, TWOD, TWO-PA, TWO-PB, TWO-PC)  (CIK 0001465740)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-05-08",
+       "adsh": "0001104659-26-057533"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001783398"
+       ],
+       "display_names": [
+        "UWM Holdings Corp  (UWMC)  (CIK 0001783398)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-05-01",
+       "adsh": "0001783398-26-000034"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001465740"
+       ],
+       "display_names": [
+        "TWO HARBORS INVESTMENT CORP.  (TWO, TWOD, TWO-PA, TWO-PB, TWO-PC)  (CIK 0001465740)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-05-15",
+       "adsh": "0001104659-26-061733"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001465740"
+       ],
+       "display_names": [
+        "TWO HARBORS INVESTMENT CORP.  (TWO, TWOD, TWO-PA, TWO-PB, TWO-PC)  (CIK 0001465740)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-05-28",
+       "adsh": "0001104659-26-067490"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001783398"
+       ],
+       "display_names": [
+        "UWM Holdings Corp  (UWMC)  (CIK 0001783398)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-05-13",
+       "adsh": "0001783398-26-000071"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001465740"
+       ],
+       "display_names": [
+        "TWO HARBORS INVESTMENT CORP.  (TWO, TWOD, TWO-PA, TWO-PB, TWO-PC)  (CIK 0001465740)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-07-06",
+       "adsh": "0001104659-26-080748"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001783398"
+       ],
+       "display_names": [
+        "UWM Holdings Corp  (UWMC)  (CIK 0001783398)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-05-01",
+       "adsh": "0001783398-26-000034"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001465740"
+       ],
+       "display_names": [
+        "TWO HARBORS INVESTMENT CORP.  (TWO, TWOD, TWO-PA, TWO-PB, TWO-PC)  (CIK 0001465740)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-04-28",
+       "adsh": "0001465740-26-000024"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001783398"
+       ],
+       "display_names": [
+        "UWM Holdings Corp  (UWMC)  (CIK 0001783398)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-05-12",
+       "adsh": "0001783398-26-000063"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001758699"
+       ],
+       "display_names": [
+        "TRANSUITE.ORG INC.  (TRSO)  (CIK 0001758699)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-06-30",
+       "adsh": "0001640334-26-001133"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001465740"
+       ],
+       "display_names": [
+        "TWO HARBORS INVESTMENT CORP.  (TWO, TWOD, TWO-PA, TWO-PB, TWO-PC)  (CIK 0001465740)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-08-03",
+       "adsh": "0001104659-26-089438"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0002023676"
+       ],
+       "display_names": [
+        "Launch Two Acquisition Corp.  (LPBB, LPBBU, LPBBW)  (CIK 0002023676)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-06-25",
+       "adsh": "0001213900-26-071780"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001783398"
+       ],
+       "display_names": [
+        "UWM Holdings Corp  (UWMC)  (CIK 0001783398)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-05-04",
+       "adsh": "0001783398-26-000041"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001278027"
+       ],
+       "display_names": [
+        "B&G Foods, Inc.  (BGS)  (CIK 0001278027)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-08-11",
+       "adsh": "0001104659-26-094042"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0002023676"
+       ],
+       "display_names": [
+        "Launch Two Acquisition Corp.  (LPBB, LPBBU, LPBBW)  (CIK 0002023676)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-06-25",
+       "adsh": "0001213900-26-071780"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001465740"
+       ],
+       "display_names": [
+        "TWO HARBORS INVESTMENT CORP.  (TWO, TWOD, TWO-PA, TWO-PB, TWO-PC)  (CIK 0001465740)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-07-28",
+       "adsh": "0001465740-26-000029"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000700565"
+       ],
+       "display_names": [
+        "FIRST MID BANCSHARES, INC.  (FMBH)  (CIK 0000700565)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-04-29",
+       "adsh": "0001171843-26-002829"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001783398"
+       ],
+       "display_names": [
+        "UWM Holdings Corp  (UWMC)  (CIK 0001783398)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-05-01",
+       "adsh": "0001783398-26-000034"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001465740"
+       ],
+       "display_names": [
+        "TWO HARBORS INVESTMENT CORP.  (TWO, TWOD, TWO-PA, TWO-PB, TWO-PC)  (CIK 0001465740)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-07-28",
+       "adsh": "0001465740-26-000029"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0002023676"
+       ],
+       "display_names": [
+        "Launch Two Acquisition Corp.  (LPBB, LPBBU, LPBBW)  (CIK 0002023676)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-06-30",
+       "adsh": "0001213900-26-073592"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000946581"
+       ],
+       "display_names": [
+        "TAKE TWO INTERACTIVE SOFTWARE INC  (TTWO)  (CIK 0000946581)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-08-07",
+       "adsh": "0001628280-26-054580"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001465740"
+       ],
+       "display_names": [
+        "TWO HARBORS INVESTMENT CORP.  (TWO, TWOD, TWO-PA, TWO-PB, TWO-PC)  (CIK 0001465740)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-06-08",
+       "adsh": "0001104659-26-071172"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000946581"
+       ],
+       "display_names": [
+        "TAKE TWO INTERACTIVE SOFTWARE INC  (TTWO)  (CIK 0000946581)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-05-21",
+       "adsh": "0001628280-26-037260"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001758699"
+       ],
+       "display_names": [
+        "TRANSUITE.ORG INC.  (TRSO)  (CIK 0001758699)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-06-30",
+       "adsh": "0001640334-26-001133"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001494413"
+       ],
+       "display_names": [
+        "Two Hands Corp  (TWOH)  (CIK 0001494413)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-07-08",
+       "adsh": "0001494413-26-000030"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001438231"
+       ],
+       "display_names": [
+        "Digimarc CORP  (DMRC)  (CIK 0001438231)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-05-12",
+       "adsh": "0001437749-26-016421"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000700565"
+       ],
+       "display_names": [
+        "FIRST MID BANCSHARES, INC.  (FMBH)  (CIK 0000700565)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-07-23",
+       "adsh": "0001171843-26-004848"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001140859"
+       ],
+       "display_names": [
+        "Cencora, Inc.  (COR)  (CIK 0001140859)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-08-05",
+       "adsh": "0001104659-26-090691"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000882796"
+       ],
+       "display_names": [
+        "BIOCRYST PHARMACEUTICALS INC  (BCRX)  (CIK 0000882796)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-06-12",
+       "adsh": "0001171843-26-004096"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000078239"
+       ],
+       "display_names": [
+        "PVH CORP. /DE/  (PVH)  (CIK 0000078239)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-07-14",
+       "adsh": "0001213900-26-077971"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0002023676"
+       ],
+       "display_names": [
+        "Launch Two Acquisition Corp.  (LPBB, LPBBU, LPBBW)  (CIK 0002023676)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-06-25",
+       "adsh": "0001213900-26-071780"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000105418"
+       ],
+       "display_names": [
+        "WEIS MARKETS INC  (WMK)  (CIK 0000105418)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-08-04",
+       "adsh": "0000105418-26-000048"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001498148"
+       ],
+       "display_names": [
+        "Artificial Intelligence Technology Solutions Inc.  (AITX)  (CIK 0001498148)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-07-15",
+       "adsh": "0001062993-26-003663"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001823878"
+       ],
+       "display_names": [
+        "PLAYSTUDIOS, Inc.  (MYPS, MYPSW)  (CIK 0001823878)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-05-11",
+       "adsh": "0001823878-26-000040"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001465740"
+       ],
+       "display_names": [
+        "TWO HARBORS INVESTMENT CORP.  (TWO, TWOD, TWO-PA, TWO-PB, TWO-PC)  (CIK 0001465740)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-04-28",
+       "adsh": "0001465740-26-000024"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001430306"
+       ],
+       "display_names": [
+        "Tonix Pharmaceuticals Holding Corp.  (TNXP)  (CIK 0001430306)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-04-29",
+       "adsh": "0001999371-26-009289"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001616862"
+       ],
+       "display_names": [
+        "Axalta Coating Systems Ltd.  (AXTA)  (CIK 0001616862)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-07-23",
+       "adsh": "0001193125-26-313418"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001823878"
+       ],
+       "display_names": [
+        "PLAYSTUDIOS, Inc.  (MYPS)  (CIK 0001823878)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-08-11",
+       "adsh": "0001823878-26-000055"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001006045"
+       ],
+       "display_names": [
+        "IRIDEX CORP  (IRIX)  (CIK 0001006045)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-07-16",
+       "adsh": "0001193125-26-305344"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001903508"
+       ],
+       "display_names": [
+        "Public Policy Holding Company, Inc.  (PPHC)  (CIK 0001903508)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-08-03",
+       "adsh": "0001628280-26-051520"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000314808"
+       ],
+       "display_names": [
+        "Valaris Ltd  (VAL, VAL-WT)  (CIK 0000314808)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-08-05",
+       "adsh": "0000314808-26-000139"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001726445"
+       ],
+       "display_names": [
+        "Seer, Inc.  (SEER)  (CIK 0001726445)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-07-31",
+       "adsh": "0001193125-26-328733"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001630212"
+       ],
+       "display_names": [
+        "Change Agents Corporation.  (CHGA)  (CIK 0001630212)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-08-24",
+       "adsh": "0001213900-26-093113"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001846084"
+       ],
+       "display_names": [
+        "Global Crossing Airlines Group Inc.  (JETBF, JETMF)  (CIK 0001846084)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-05-12",
+       "adsh": "0001193125-26-219032"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001828016"
+       ],
+       "display_names": [
+        "Playtika Holding Corp.  (PLTK)  (CIK 0001828016)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-08-06",
+       "adsh": "0001828016-26-000046"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001837607"
+       ],
+       "display_names": [
+        "AEON Biopharma, Inc.  (AEON)  (CIK 0001837607)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-07-15",
+       "adsh": "0001837607-26-000052"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001828016"
+       ],
+       "display_names": [
+        "Playtika Holding Corp.  (PLTK)  (CIK 0001828016)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-05-08",
+       "adsh": "0001828016-26-000036"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001726445"
+       ],
+       "display_names": [
+        "Seer, Inc.  (SEER)  (CIK 0001726445)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-07-02",
+       "adsh": "0001193125-26-294994"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000314808"
+       ],
+       "display_names": [
+        "Valaris Ltd  (VAL, VAL-WT)  (CIK 0000314808)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-05-04",
+       "adsh": "0000314808-26-000098"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000354647"
+       ],
+       "display_names": [
+        "CVB FINANCIAL CORP  (CVBF)  (CIK 0000354647)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-06-01",
+       "adsh": "0001193125-26-251450"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000799288"
+       ],
+       "display_names": [
+        "LANDS' END, INC.  (LE)  (CIK 0000799288)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-06-30",
+       "adsh": "0001104659-26-079340"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001630212"
+       ],
+       "display_names": [
+        "Change Agents Corporation.  (CHGA)  (CIK 0001630212)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-08-24",
+       "adsh": "0001213900-26-093113"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001286681"
+       ],
+       "display_names": [
+        "DOMINOS PIZZA INC  (DPZ)  (CIK 0001286681)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-07-20",
+       "adsh": "0001286681-26-000034"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001759138"
+       ],
+       "display_names": [
+        "Cabaletta Bio, Inc.  (CABA)  (CIK 0001759138)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-05-14",
+       "adsh": "0001759138-26-000024"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001593275"
+       ],
+       "display_names": [
+        "Hamilton Insurance Group, Ltd.  (HG)  (CIK 0001593275)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-04-30",
+       "adsh": "0001593275-26-000055"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001593275"
+       ],
+       "display_names": [
+        "Hamilton Insurance Group, Ltd.  (HG)  (CIK 0001593275)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-08-06",
+       "adsh": "0001593275-26-000094"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001415311"
+       ],
+       "display_names": [
+        "ProShares Trust II  (AGQ, EUO, GLL, SCO, UCO, UGL, ULE, YCL, YCS, ZSL, BOIL, KOLD, SVXY, UVXY, VIXM, VIXY)  (CIK 0001415311)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-05-12",
+       "adsh": "0001193125-26-219236"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001819516"
+       ],
+       "display_names": [
+        "Wheels Up Experience Inc.  (UP, WSUPW)  (CIK 0001819516)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-06-10",
+       "adsh": "0001628280-26-042215"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001610250"
+       ],
+       "display_names": [
+        "Boot Barn Holdings, Inc.  (BOOT)  (CIK 0001610250)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-05-14",
+       "adsh": "0001104659-26-061169"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001846084"
+       ],
+       "display_names": [
+        "Global Crossing Airlines Group Inc.  (JETBF, JETMF)  (CIK 0001846084)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-08-14",
+       "adsh": "0001193125-26-351131"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000059478"
+       ],
+       "display_names": [
+        "ELI LILLY & Co  (LLY)  (CIK 0000059478)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-05-20",
+       "adsh": "0001193125-26-232707"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000310158"
+       ],
+       "display_names": [
+        "Merck & Co., Inc.  (MRK)  (CIK 0000310158)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-05-22",
+       "adsh": "0001628280-26-037738"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000105418"
+       ],
+       "display_names": [
+        "WEIS MARKETS INC  (WMK)  (CIK 0000105418)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-05-06",
+       "adsh": "0000105418-26-000037"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000048287"
+       ],
+       "display_names": [
+        "HNI CORP  (HNI)  (CIK 0000048287)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-05-21",
+       "adsh": "0001140361-26-022463"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001603454"
+       ],
+       "display_names": [
+        "Celcuity Inc.  (CELC)  (CIK 0001603454)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-06-02",
+       "adsh": "0001493152-26-026761"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001045810"
+       ],
+       "display_names": [
+        "NVIDIA CORP  (NVDA)  (CIK 0001045810)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-06-18",
+       "adsh": "0001193125-26-275783"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001020859"
+       ],
+       "display_names": [
+        "UNITED NATURAL FOODS INC  (UNFI)  (CIK 0001020859)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-07-09",
+       "adsh": "0001020859-26-000020"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001895249"
+       ],
+       "display_names": [
+        "ConnectM Technology Solutions, Inc.  (CNTM)  (CIK 0001895249)"
+       ],
+       "form": "8-K/A",
+       "file_date": "2026-07-31",
+       "adsh": "0001104659-26-088892"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001726445"
+       ],
+       "display_names": [
+        "Seer, Inc.  (SEER)  (CIK 0001726445)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-07-31",
+       "adsh": "0001193125-26-326858"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001895249"
+       ],
+       "display_names": [
+        "ConnectM Technology Solutions, Inc.  (CNTM)  (CIK 0001895249)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-07-27",
+       "adsh": "0001104659-26-086996"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001874252"
+       ],
+       "display_names": [
+        "Quantum Cyber N.V.  (QUCY)  (CIK 0001874252)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-04-28",
+       "adsh": "0001213900-26-048635"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001434524"
+       ],
+       "display_names": [
+        "ClearSign Technologies Corp  (CLIR)  (CIK 0001434524)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-08-20",
+       "adsh": "0001104659-26-099235"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000718937"
+       ],
+       "display_names": [
+        "STAAR SURGICAL CO  (STAA)  (CIK 0000718937)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-08-06",
+       "adsh": "0001193125-26-337197"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001122976"
+       ],
+       "display_names": [
+        "AVIENT CORP  (AVNT)  (CIK 0001122976)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-04-27",
+       "adsh": "0001193125-26-178887"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001857154"
+       ],
+       "display_names": [
+        "Krispy Kreme, Inc.  (DNUT)  (CIK 0001857154)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-08-06",
+       "adsh": "0001857154-26-000044"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001498148"
+       ],
+       "display_names": [
+        "Artificial Intelligence Technology Solutions Inc.  (AITX)  (CIK 0001498148)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-08-18",
+       "adsh": "0001062993-26-004471"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000310158"
+       ],
+       "display_names": [
+        "Merck & Co., Inc.  (MRK)  (CIK 0000310158)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-05-22",
+       "adsh": "0001628280-26-037738"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001630212"
+       ],
+       "display_names": [
+        "Change Agents Corporation.  (ALBT)  (CIK 0001630212)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-07-23",
+       "adsh": "0001213900-26-081023"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001191070"
+       ],
+       "display_names": [
+        "Neuphoria Therapeutics Inc.  (NEUP)  (CIK 0001191070)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-05-26",
+       "adsh": "0001213900-26-061028"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0002119322"
+       ],
+       "display_names": [
+        "Digimarc Corp  (DMRC)  (CIK 0002119322)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-07-06",
+       "adsh": "0001437749-26-022813"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001570585"
+       ],
+       "display_names": [
+        "Liberty Global Ltd.  (LBTYA, LBTYB, LBTYK)  (CIK 0001570585)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-08-06",
+       "adsh": "0001570585-26-000125"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001662579"
+       ],
+       "display_names": [
+        "C4 Therapeutics, Inc.  (CCCC)  (CIK 0001662579)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-06-11",
+       "adsh": "0001628280-26-042365"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000030371"
+       ],
+       "display_names": [
+        "Duke Energy Carolinas, LLC  (CIK 0000030371)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-06-05",
+       "adsh": "0001104659-26-070990"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001020859"
+       ],
+       "display_names": [
+        "UNITED NATURAL FOODS INC  (UNFI)  (CIK 0001020859)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-07-09",
+       "adsh": "0001020859-26-000020"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001805521"
+       ],
+       "display_names": [
+        "FARADAY FUTURE INTELLIGENT ELECTRIC INC.  (FFAI)  (CIK 0001805521)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-08-10",
+       "adsh": "0001213900-26-087005"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000078890"
+       ],
+       "display_names": [
+        "BRINKS CO  (BCO)  (CIK 0000078890)"
+       ],
+       "form": "8-K",
+       "file_date": "2026-06-02",
+       "adsh": "0000078890-26-000045"
+      }
+     }
+    ]
+   }
+  }
+ }
 }

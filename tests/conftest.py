@@ -39,7 +39,7 @@ class _FakeEdgar:
 @pytest.fixture(autouse=True)
 def _no_efts_network(monkeypatch):
     from delist_detection.ticker_resolver import TickerResolver
-    monkeypatch.setattr(TickerResolver, "_efts_lookup", lambda self, t, d=None, **kw: (None, None))
+    monkeypatch.setattr(TickerResolver, "_efts_lookup", lambda self, t, d=None, **kw: (None, None, False))
     monkeypatch.setattr(TickerResolver, "_efts_pre_delist_frequency_ranked",
                         lambda self, t, d, top_n=5: [])
 

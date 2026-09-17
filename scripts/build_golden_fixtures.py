@@ -4,10 +4,14 @@ For each row of data/golden_events.csv this stores everything the resolver,
 classifier and payout reader read for that case, so tests replay it offline:
 submissions (trimmed to -1650/+400 days) for the true CIK, the wrong CIK and
 every candidate CIK a resolver tier can return, the company_tickers row,
-company_search_atom hits for every name variant the resolver issues, the two
-EFTS answers, and the text of every 8-K carrying items 1.03/2.01/3.01/5.01
-plus the closing/announcement filings the payout reader would open.
-Re-run after changing data/golden_events.csv.
+company_search_atom hits for every name variant the resolver issues, the raw
+answers to the two EFTS queries the resolver issues (`efts_raw`, keyed by URL,
+which tests/golden.py serves back to the real EFTS methods), and the text of
+every 8-K carrying items 1.03/2.01/3.01/5.01 plus the closing/announcement
+filings the payout reader would open. `efts_lookup` and `efts_frequency` are
+the resolver's answers at capture time, kept for reading only.
+Re-run after changing data/golden_events.csv. `--efts-only` re-captures just
+`efts_raw` into the existing fixtures and leaves every other key untouched.
 
 Submissions are re-fetched, not read from cache/: a cached copy older than the
 event would hide its Form 25. company_tickers.json is read from cache/ on
@@ -17,6 +21,7 @@ A refusal or a failed request aborts the run instead of becoming "no match".
 """
 from __future__ import annotations
 
+import argparse
 import csv
 import json
 import time
@@ -36,6 +41,10 @@ TEXT_ITEMS = {"1.03", "2.01", "3.01", "5.01"}
 # classifier backscans 120 days before that Form 25 for the anchor 8-K.
 BEFORE_DAYS, AFTER_DAYS = 1650, 400
 ANY_DISTANCE_FORMS = {"25", "25-NSE", "15-12G", "15-12B", "15-15D", "REVOKED"}
+EFTS_PREFIX = "https://efts.sec.gov/"
+# The resolver reads ciks and display_names; form, file_date and adsh make a fixture readable.
+EFTS_SOURCE_KEYS = ("ciks", "display_names", "form", "file_date", "adsh")
+_efts_raw: dict[str, dict] = {}
 
 
 def _strict(get):
@@ -61,6 +70,43 @@ def _strict(get):
     return wrapped
 
 
+def _recording(get):
+    """Keep every EFTS answer, keyed by URL and trimmed to EFTS_SOURCE_KEYS."""
+    def wrapped(*args, **kwargs):
+        resp = get(*args, **kwargs)
+        url = args[0] if args else kwargs.get("url")
+        if url.startswith(EFTS_PREFIX) and resp.status_code == 200:
+            hits = resp.json().get("hits", {})
+            _efts_raw[url] = {"hits": {"total": hits.get("total"), "hits": [
+                {"_source": {k: h["_source"][k] for k in EFTS_SOURCE_KEYS if k in h.get("_source", {})}}
+                for h in hits.get("hits", [])]}}
+        return resp
+    return wrapped
+
+
+def _resolver(edgar, row) -> TickerResolver:
+    return TickerResolver(edgar, member_names=lambda *_a, _n=row["member_name"], **_k: _n)
+
+
+def _capture_efts(resolver: TickerResolver, t: str, d: str) -> tuple[dict, list, list]:
+    """Issue both EFTS queries for (t, d): (efts_raw, efts_lookup, efts_frequency)."""
+    _efts_raw.clear()
+    lookup = list(resolver._efts_lookup(t, d, expected_name=resolver._expected_name(t, d)))
+    frequency = [list(x) for x in resolver._efts_pre_delist_frequency_ranked(t, d)]
+    return dict(_efts_raw), lookup, frequency
+
+
+def _refresh_efts(rows) -> None:
+    """Add efts_raw to the existing fixtures; nothing else is fetched or changed."""
+    for row in rows:
+        t, d = row["ticker"], row["observed_delist_date"]
+        path = OUT / f"{t}_{d}.json"
+        case = json.loads(path.read_text())
+        case["efts_raw"], _, _ = _capture_efts(_resolver(None, row), t, d)
+        path.write_text(json.dumps(case, indent=1))
+        print(f"{t} {d}: {len(case['efts_raw'])} EFTS answers")
+
+
 def _trim(sub: dict, filings, on: date) -> dict:
     """Name history + the filings near the event. `filings` must come from
     edgar.recent_filings(), which also walks the older paginated chunks — an
@@ -84,29 +130,35 @@ def _trim(sub: dict, filings, on: date) -> dict:
 
 
 def main() -> None:
+    p = argparse.ArgumentParser(description="Capture the golden cases from live EDGAR (NETWORK).")
+    p.add_argument("--efts-only", action="store_true",
+                   help="only re-capture efts_raw into the existing fixtures")
+    args = p.parse_args()
+    requests.get = _recording(_strict(requests.get))   # EFTS calls in ticker_resolver
+    rows = list(csv.DictReader((ROOT / "data" / "golden_events.csv").open()))
+    if args.efts_only:
+        _refresh_efts(rows)
+        return
     edgar = EdgarClient(cache_dir=ROOT / "cache" / "edgar")
-    requests.get = _strict(requests.get)          # EFTS calls in ticker_resolver
     edgar.session.get = _strict(edgar.session.get)
     companies = edgar.company_tickers()
     (OUT / "text").mkdir(parents=True, exist_ok=True)
-    rows = list(csv.DictReader((ROOT / "data" / "golden_events.csv").open()))
     refreshed: set[int] = set()
     for row in rows:
         t, d = row["ticker"], row["observed_delist_date"]
         on = date.fromisoformat(d)
-        resolver = TickerResolver(edgar, name_lookup=lambda *_a, _n=row["member_name"], **_k: _n)
+        resolver = _resolver(edgar, row)
         atom = {}
         for v in TickerResolver._name_variants(row["member_name"]):
             for form in ("25-NSE", "25", "15-12G", ""):
                 atom[f"{v}|{form}"] = edgar.company_search_atom(v, form_type=form)
-        efts_lookup = list(resolver._efts_lookup(t, d))
-        efts_frequency = [list(x) for x in resolver._efts_pre_delist_frequency_ranked(t, d)]
+        efts_raw, efts_lookup, efts_frequency = _capture_efts(resolver, t, d)
 
         text_ciks = {int(row["cik"])} | ({int(row["wrong_cik"])} if row.get("wrong_cik") else set())
         # every CIK a resolver tier can return is validated against its filings
         candidates = {int(h["cik"]) for hits in atom.values() for h in hits}
         candidates |= {int(c) for c, _ in efts_frequency}
-        candidates |= {int(efts_lookup[0])} if efts_lookup[0] is not None else set()
+        candidates |= {int(efts_lookup[0])} if efts_lookup[0] is not None else set()   # hit or fallback
         candidates |= {int(companies[t]["cik_str"])} if t in companies else set()
         candidates -= TickerResolver.EXCHANGE_CIKS
 
@@ -138,6 +190,7 @@ def main() -> None:
             "atom": atom,
             "efts_lookup": efts_lookup,
             "efts_frequency": efts_frequency,
+            "efts_raw": efts_raw,
         }
         (OUT / f"{t}_{d}.json").write_text(json.dumps(case, indent=1))
         print(f"{t} {d}: {len(subs)} companies, {len(texts)} texts")

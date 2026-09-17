@@ -5271,5 +5271,39 @@
    1137861,
    "WRIGHT MEDICAL GROUP INC  (CIK 0001137861)"
   ]
- ]
+ ],
+ "efts_raw": {
+  "https://efts.sec.gov/LATEST/search-index?q=%22KCI%22&forms=25-NSE,25,15-12G,15-12B,15-15D&dateRange=custom&startdt=2012-08-14&enddt=2013-02-10": {
+   "hits": {
+    "total": {
+     "value": 0,
+     "relation": "eq"
+    },
+    "hits": []
+   }
+  },
+  "https://efts.sec.gov/LATEST/search-index?q=%22KCI%22&forms=8-K&dateRange=custom&startdt=2012-07-15&enddt=2012-11-11": {
+   "hits": {
+    "total": {
+     "value": 1,
+     "relation": "eq"
+    },
+    "hits": [
+     {
+      "_source": {
+       "ciks": [
+        "0001137861"
+       ],
+       "display_names": [
+        "WRIGHT MEDICAL GROUP INC  (CIK 0001137861)"
+       ],
+       "form": "8-K",
+       "file_date": "2012-08-01",
+       "adsh": "0001137861-12-000043"
+      }
+     }
+    ]
+   }
+  }
+ }
 }

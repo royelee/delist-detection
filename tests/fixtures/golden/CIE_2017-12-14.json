@@ -11672,5 +11672,195 @@
    1610979,
    "Caesars Entertainment Resort Properties, LLC  (CIK 0001610979)"
   ]
- ]
+ ],
+ "efts_raw": {
+  "https://efts.sec.gov/LATEST/search-index?q=%22CIE%22&forms=25-NSE,25,15-12G,15-12B,15-15D&dateRange=custom&startdt=2017-09-15&enddt=2018-03-14": {
+   "hits": {
+    "total": {
+     "value": 0,
+     "relation": "eq"
+    },
+    "hits": []
+   }
+  },
+  "https://efts.sec.gov/LATEST/search-index?q=%22CIE%22&forms=8-K&dateRange=custom&startdt=2017-08-16&enddt=2017-12-13": {
+   "hits": {
+    "total": {
+     "value": 13,
+     "relation": "eq"
+    },
+    "hits": [
+     {
+      "_source": {
+       "ciks": [
+        "0001575879"
+       ],
+       "display_names": [
+        "Caesars Acquisition Co  (CIK 0001575879)"
+       ],
+       "form": "8-K",
+       "file_date": "2017-10-06",
+       "adsh": "0001193125-17-305845"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001610979"
+       ],
+       "display_names": [
+        "Caesars Entertainment Resort Properties, LLC  (CIK 0001610979)"
+       ],
+       "form": "8-K",
+       "file_date": "2017-11-02",
+       "adsh": "0001610979-17-000025"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000858339"
+       ],
+       "display_names": [
+        "CAESARS ENTERTAINMENT Corp  (CIK 0000858339)"
+       ],
+       "form": "8-K",
+       "file_date": "2017-09-14",
+       "adsh": "0001193125-17-284565"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000858339"
+       ],
+       "display_names": [
+        "CAESARS ENTERTAINMENT Corp  (CIK 0000858339)"
+       ],
+       "form": "8-K",
+       "file_date": "2017-11-01",
+       "adsh": "0000858339-17-000243"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000858339"
+       ],
+       "display_names": [
+        "CAESARS ENTERTAINMENT Corp  (CIK 0000858339)"
+       ],
+       "form": "8-K",
+       "file_date": "2017-10-24",
+       "adsh": "0001193125-17-317376"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001471261"
+       ],
+       "display_names": [
+        "Cobalt International Energy, Inc.  (CIK 0001471261)"
+       ],
+       "form": "8-K",
+       "file_date": "2017-11-02",
+       "adsh": "0001193125-17-330215"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000858339"
+       ],
+       "display_names": [
+        "CAESARS ENTERTAINMENT Corp  (CIK 0000858339)"
+       ],
+       "form": "8-K",
+       "file_date": "2017-10-13",
+       "adsh": "0001193125-17-309911"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001471261"
+       ],
+       "display_names": [
+        "Cobalt International Energy, Inc.  (CIK 0001471261)"
+       ],
+       "form": "8-K",
+       "file_date": "2017-11-15",
+       "adsh": "0001193125-17-344251"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001471261"
+       ],
+       "display_names": [
+        "Cobalt International Energy, Inc.  (CIK 0001471261)"
+       ],
+       "form": "8-K",
+       "file_date": "2017-11-15",
+       "adsh": "0001193125-17-344251"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001633917"
+       ],
+       "display_names": [
+        "PayPal Holdings, Inc.  (PYPL)  (CIK 0001633917)"
+       ],
+       "form": "8-K",
+       "file_date": "2017-11-16",
+       "adsh": "0001193125-17-345552"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001633917"
+       ],
+       "display_names": [
+        "PayPal Holdings, Inc.  (PYPL)  (CIK 0001633917)"
+       ],
+       "form": "8-K",
+       "file_date": "2017-11-16",
+       "adsh": "0001193125-17-345552"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000858339"
+       ],
+       "display_names": [
+        "CAESARS ENTERTAINMENT Corp  (CIK 0000858339)"
+       ],
+       "form": "8-K",
+       "file_date": "2017-12-01",
+       "adsh": "0001193125-17-357985"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001633917"
+       ],
+       "display_names": [
+        "PayPal Holdings, Inc.  (PYPL)  (CIK 0001633917)"
+       ],
+       "form": "8-K",
+       "file_date": "2017-11-16",
+       "adsh": "0001193125-17-345552"
+      }
+     }
+    ]
+   }
+  }
+ }
 }

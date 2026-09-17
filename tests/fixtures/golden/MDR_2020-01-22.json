@@ -9899,5 +9899,689 @@
    1654595,
    "Medalist Diversified REIT, Inc.  (MDRR, MDRRP)  (CIK 0001654595)"
   ]
- ]
+ ],
+ "efts_raw": {
+  "https://efts.sec.gov/LATEST/search-index?q=%22MDR%22&forms=25-NSE,25,15-12G,15-12B,15-15D&dateRange=custom&startdt=2019-10-24&enddt=2020-04-21": {
+   "hits": {
+    "total": {
+     "value": 0,
+     "relation": "eq"
+    },
+    "hits": []
+   }
+  },
+  "https://efts.sec.gov/LATEST/search-index?q=%22MDR%22&forms=8-K&dateRange=custom&startdt=2019-09-24&enddt=2020-01-21": {
+   "hits": {
+    "total": {
+     "value": 51,
+     "relation": "eq"
+    },
+    "hits": [
+     {
+      "_source": {
+       "ciks": [
+        "0000708819"
+       ],
+       "display_names": [
+        "MCDERMOTT INTERNATIONAL INC  (CIK 0000708819)"
+       ],
+       "form": "8-K",
+       "file_date": "2020-01-21",
+       "adsh": "0001193125-20-010618"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000708819"
+       ],
+       "display_names": [
+        "MCDERMOTT INTERNATIONAL INC  (CIK 0000708819)"
+       ],
+       "form": "8-K",
+       "file_date": "2020-01-21",
+       "adsh": "0001193125-20-010618"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001751299"
+       ],
+       "display_names": [
+        "Kaleido Biosciences, Inc.  (KLDO)  (CIK 0001751299)"
+       ],
+       "form": "8-K",
+       "file_date": "2019-12-12",
+       "adsh": "0001193125-19-312200"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000708819"
+       ],
+       "display_names": [
+        "MCDERMOTT INTERNATIONAL INC  (CIK 0000708819)"
+       ],
+       "form": "8-K",
+       "file_date": "2019-10-21",
+       "adsh": "0001193125-19-270495"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001701108"
+       ],
+       "display_names": [
+        "Spero Therapeutics, Inc.  (SPRO)  (CIK 0001701108)"
+       ],
+       "form": "8-K",
+       "file_date": "2019-11-04",
+       "adsh": "0001193125-19-283355"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000096943"
+       ],
+       "display_names": [
+        "TELEFLEX INC  (TFX)  (CIK 0000096943)"
+       ],
+       "form": "8-K",
+       "file_date": "2019-10-31",
+       "adsh": "0000096943-19-000171"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001641640"
+       ],
+       "display_names": [
+        "Nabriva Therapeutics plc  (CIK 0001641640)"
+       ],
+       "form": "8-K",
+       "file_date": "2019-12-20",
+       "adsh": "0001104659-19-074617"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001701108"
+       ],
+       "display_names": [
+        "Spero Therapeutics, Inc.  (SPRO)  (CIK 0001701108)"
+       ],
+       "form": "8-K",
+       "file_date": "2019-10-03",
+       "adsh": "0001193125-19-261358"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000096943"
+       ],
+       "display_names": [
+        "TELEFLEX INC  (TFX)  (CIK 0000096943)"
+       ],
+       "form": "8-K",
+       "file_date": "2019-10-31",
+       "adsh": "0000096943-19-000171"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001751299"
+       ],
+       "display_names": [
+        "Kaleido Biosciences, Inc.  (KLDO)  (CIK 0001751299)"
+       ],
+       "form": "8-K",
+       "file_date": "2019-10-30",
+       "adsh": "0001628280-19-012820"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000885725"
+       ],
+       "display_names": [
+        "BOSTON SCIENTIFIC CORP  (BSX)  (CIK 0000885725)"
+       ],
+       "form": "8-K",
+       "file_date": "2020-01-14",
+       "adsh": "0000885725-20-000003"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001478069"
+       ],
+       "display_names": [
+        "CONTRAFECT Corp  (CFRXQ)  (CIK 0001478069)"
+       ],
+       "form": "8-K",
+       "file_date": "2019-10-02",
+       "adsh": "0001193125-19-260859"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000708819"
+       ],
+       "display_names": [
+        "MCDERMOTT INTERNATIONAL INC  (CIK 0000708819)"
+       ],
+       "form": "8-K",
+       "file_date": "2019-12-13",
+       "adsh": "0001193125-19-313927"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000885725"
+       ],
+       "display_names": [
+        "BOSTON SCIENTIFIC CORP  (BSX)  (CIK 0000885725)"
+       ],
+       "form": "8-K",
+       "file_date": "2019-10-23",
+       "adsh": "0000885725-19-000043"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001373707"
+       ],
+       "display_names": [
+        "TETRAPHASE PHARMACEUTICALS INC  (CIK 0001373707)"
+       ],
+       "form": "8-K",
+       "file_date": "2019-10-30",
+       "adsh": "0001193125-19-278417"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001641640"
+       ],
+       "display_names": [
+        "Nabriva Therapeutics plc  (CIK 0001641640)"
+       ],
+       "form": "8-K",
+       "file_date": "2020-01-08",
+       "adsh": "0001104659-20-002277"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001701108"
+       ],
+       "display_names": [
+        "Spero Therapeutics, Inc.  (SPRO)  (CIK 0001701108)"
+       ],
+       "form": "8-K",
+       "file_date": "2019-12-05",
+       "adsh": "0001193125-19-306821"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000711404"
+       ],
+       "display_names": [
+        "COOPER COMPANIES, INC.  (COO)  (CIK 0000711404)"
+       ],
+       "form": "8-K",
+       "file_date": "2019-12-05",
+       "adsh": "0000711404-19-000045"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000708819"
+       ],
+       "display_names": [
+        "MCDERMOTT INTERNATIONAL INC  (CIK 0000708819)"
+       ],
+       "form": "8-K",
+       "file_date": "2019-11-04",
+       "adsh": "0001193125-19-283363"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001584423"
+       ],
+       "display_names": [
+        "APX Group Holdings, Inc.  (CIK 0001584423)"
+       ],
+       "form": "8-K",
+       "file_date": "2019-10-29",
+       "adsh": "0001193125-19-276807"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000708819"
+       ],
+       "display_names": [
+        "MCDERMOTT INTERNATIONAL INC  (CIK 0000708819)"
+       ],
+       "form": "8-K",
+       "file_date": "2019-11-05",
+       "adsh": "0001193125-19-283995"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000708819"
+       ],
+       "display_names": [
+        "MCDERMOTT INTERNATIONAL INC  (CIK 0000708819)"
+       ],
+       "form": "8-K",
+       "file_date": "2019-11-13",
+       "adsh": "0001193125-19-291016"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000708819"
+       ],
+       "display_names": [
+        "MCDERMOTT INTERNATIONAL INC  (CIK 0000708819)"
+       ],
+       "form": "8-K",
+       "file_date": "2019-11-05",
+       "adsh": "0001193125-19-283995"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000708819"
+       ],
+       "display_names": [
+        "MCDERMOTT INTERNATIONAL INC  (CIK 0000708819)"
+       ],
+       "form": "8-K",
+       "file_date": "2019-11-22",
+       "adsh": "0001193125-19-298554"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000708819"
+       ],
+       "display_names": [
+        "MCDERMOTT INTERNATIONAL INC  (CIK 0000708819)"
+       ],
+       "form": "8-K",
+       "file_date": "2019-10-21",
+       "adsh": "0001193125-19-270495"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000708819"
+       ],
+       "display_names": [
+        "MCDERMOTT INTERNATIONAL INC  (CIK 0000708819)"
+       ],
+       "form": "8-K",
+       "file_date": "2020-01-15",
+       "adsh": "0001193125-20-007542"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000708819"
+       ],
+       "display_names": [
+        "MCDERMOTT INTERNATIONAL INC  (CIK 0000708819)"
+       ],
+       "form": "8-K",
+       "file_date": "2019-10-29",
+       "adsh": "0001193125-19-276808"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001196501"
+       ],
+       "display_names": [
+        "HMS HOLDINGS CORP  (CIK 0001196501)"
+       ],
+       "form": "8-K",
+       "file_date": "2019-10-07",
+       "adsh": "0001196501-19-000022"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001751299"
+       ],
+       "display_names": [
+        "Kaleido Biosciences, Inc.  (KLDO)  (CIK 0001751299)"
+       ],
+       "form": "8-K",
+       "file_date": "2019-12-12",
+       "adsh": "0001193125-19-312200"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001175680"
+       ],
+       "display_names": [
+        "CytoDyn Inc.  (CYDY)  (CIK 0001175680)"
+       ],
+       "form": "8-K",
+       "file_date": "2019-12-18",
+       "adsh": "0001193125-19-316857"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000708819"
+       ],
+       "display_names": [
+        "MCDERMOTT INTERNATIONAL INC  (CIK 0000708819)"
+       ],
+       "form": "8-K",
+       "file_date": "2019-12-06",
+       "adsh": "0001193125-19-308312"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000921114"
+       ],
+       "display_names": [
+        "Armata Pharmaceuticals, Inc.  (ARMP)  (CIK 0000921114)"
+       ],
+       "form": "8-K",
+       "file_date": "2019-09-24",
+       "adsh": "0001144204-19-045764"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000708819"
+       ],
+       "display_names": [
+        "MCDERMOTT INTERNATIONAL INC  (CIK 0000708819)"
+       ],
+       "form": "8-K",
+       "file_date": "2020-01-21",
+       "adsh": "0001193125-20-010618"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001654595"
+       ],
+       "display_names": [
+        "Medalist Diversified REIT, Inc.  (MDRR, MDRRP)  (CIK 0001654595)"
+       ],
+       "form": "8-K/A",
+       "file_date": "2019-10-15",
+       "adsh": "0001104659-19-054153"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001654595"
+       ],
+       "display_names": [
+        "Medalist Diversified REIT, Inc.  (MDRR, MDRRP)  (CIK 0001654595)"
+       ],
+       "form": "8-K/A",
+       "file_date": "2019-09-24",
+       "adsh": "0001144204-19-045771"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001175151"
+       ],
+       "display_names": [
+        "Cytosorbents Corp  (CTSO)  (CIK 0001175151)"
+       ],
+       "form": "8-K",
+       "file_date": "2020-01-14",
+       "adsh": "0001104659-20-003914"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000708819"
+       ],
+       "display_names": [
+        "MCDERMOTT INTERNATIONAL INC  (CIK 0000708819)"
+       ],
+       "form": "8-K",
+       "file_date": "2019-12-02",
+       "adsh": "0001193125-19-303815"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001654595"
+       ],
+       "display_names": [
+        "Medalist Diversified REIT, Inc.  (MDRR, MDRRP)  (CIK 0001654595)"
+       ],
+       "form": "8-K/A",
+       "file_date": "2019-10-22",
+       "adsh": "0001104659-19-055551"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001641640"
+       ],
+       "display_names": [
+        "Nabriva Therapeutics plc  (CIK 0001641640)"
+       ],
+       "form": "8-K",
+       "file_date": "2019-11-12",
+       "adsh": "0001104659-19-062629"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001468666"
+       ],
+       "display_names": [
+        "SecureWorks Corp  (SCWX)  (CIK 0001468666)"
+       ],
+       "form": "8-K",
+       "file_date": "2019-12-05",
+       "adsh": "0001468666-19-000071"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000708819"
+       ],
+       "display_names": [
+        "MCDERMOTT INTERNATIONAL INC  (CIK 0000708819)"
+       ],
+       "form": "8-K",
+       "file_date": "2020-01-21",
+       "adsh": "0001193125-20-010618"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000856982"
+       ],
+       "display_names": [
+        "MERIT MEDICAL SYSTEMS INC  (MMSI)  (CIK 0000856982)"
+       ],
+       "form": "8-K",
+       "file_date": "2019-10-30",
+       "adsh": "0001558370-19-009454"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000708819"
+       ],
+       "display_names": [
+        "MCDERMOTT INTERNATIONAL INC  (CIK 0000708819)"
+       ],
+       "form": "8-K",
+       "file_date": "2019-10-21",
+       "adsh": "0001193125-19-270495"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001688476"
+       ],
+       "display_names": [
+        "NEXTIER OILFIELD SOLUTIONS INC.  (CIK 0001688476)"
+       ],
+       "form": "8-K",
+       "file_date": "2020-01-06",
+       "adsh": "0001688476-20-000002"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000856982"
+       ],
+       "display_names": [
+        "MERIT MEDICAL SYSTEMS INC  (MMSI)  (CIK 0000856982)"
+       ],
+       "form": "8-K",
+       "file_date": "2019-10-30",
+       "adsh": "0001558370-19-009454"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000708819"
+       ],
+       "display_names": [
+        "MCDERMOTT INTERNATIONAL INC  (CIK 0000708819)"
+       ],
+       "form": "8-K",
+       "file_date": "2019-11-04",
+       "adsh": "0001193125-19-283363"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000856984"
+       ],
+       "display_names": [
+        "USA EQUITIES CORP.  (USAQ)  (CIK 0000856984)"
+       ],
+       "form": "8-K",
+       "file_date": "2019-12-23",
+       "adsh": "0001493152-19-019583"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000811212"
+       ],
+       "display_names": [
+        "ThermoGenesis Holdings, Inc.  (THMO)  (CIK 0000811212)"
+       ],
+       "form": "8-K",
+       "file_date": "2019-11-27",
+       "adsh": "0001437749-19-023625"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000708819"
+       ],
+       "display_names": [
+        "MCDERMOTT INTERNATIONAL INC  (CIK 0000708819)"
+       ],
+       "form": "8-K",
+       "file_date": "2020-01-21",
+       "adsh": "0001193125-20-010618"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000708819"
+       ],
+       "display_names": [
+        "MCDERMOTT INTERNATIONAL INC  (CIK 0000708819)"
+       ],
+       "form": "8-K",
+       "file_date": "2019-12-06",
+       "adsh": "0001193125-19-308312"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000708819"
+       ],
+       "display_names": [
+        "MCDERMOTT INTERNATIONAL INC  (CIK 0000708819)"
+       ],
+       "form": "8-K",
+       "file_date": "2019-10-29",
+       "adsh": "0001193125-19-276808"
+      }
+     }
+    ]
+   }
+  }
+ }
 }

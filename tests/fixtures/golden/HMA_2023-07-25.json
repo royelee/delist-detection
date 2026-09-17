@@ -10694,5 +10694,169 @@
    1108205,
    "CURIS INC  (CRIS)  (CIK 0001108205)"
   ]
- ]
+ ],
+ "efts_raw": {
+  "https://efts.sec.gov/LATEST/search-index?q=%22HMA%22&forms=25-NSE,25,15-12G,15-12B,15-15D&dateRange=custom&startdt=2023-04-26&enddt=2023-10-23": {
+   "hits": {
+    "total": {
+     "value": 0,
+     "relation": "eq"
+    },
+    "hits": []
+   }
+  },
+  "https://efts.sec.gov/LATEST/search-index?q=%22HMA%22&forms=8-K&dateRange=custom&startdt=2023-03-27&enddt=2023-07-24": {
+   "hits": {
+    "total": {
+     "value": 11,
+     "relation": "eq"
+    },
+    "hits": [
+     {
+      "_source": {
+       "ciks": [
+        "0001094038"
+       ],
+       "display_names": [
+        "Marker Therapeutics, Inc.  (MRKR)  (CIK 0001094038)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-06-26",
+       "adsh": "0001104659-23-074513"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001390478"
+       ],
+       "display_names": [
+        "SELLAS Life Sciences Group, Inc.  (SLS)  (CIK 0001390478)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-06-01",
+       "adsh": "0001104659-23-067033"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001108205"
+       ],
+       "display_names": [
+        "CURIS INC  (CRIS)  (CIK 0001108205)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-07-06",
+       "adsh": "0001108205-23-000054"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001850529"
+       ],
+       "display_names": [
+        "Heartland Media Acquisition Corp.  (CIK 0001850529)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-03-30",
+       "adsh": "0001140361-23-014824"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001850529"
+       ],
+       "display_names": [
+        "Heartland Media Acquisition Corp.  (CIK 0001850529)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-04-19",
+       "adsh": "0001140361-23-019143"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000882361"
+       ],
+       "display_names": [
+        "Aptose Biosciences Inc.  (APTO)  (CIK 0000882361)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-06-12",
+       "adsh": "0001171843-23-003856"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001718227"
+       ],
+       "display_names": [
+        "Construction Partners, Inc.  (ROAD)  (CIK 0001718227)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-05-05",
+       "adsh": "0001718227-23-000035"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001556263"
+       ],
+       "display_names": [
+        "Syros Pharmaceuticals, Inc.  (SYRS)  (CIK 0001556263)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-05-25",
+       "adsh": "0001193125-23-154354"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0000886744"
+       ],
+       "display_names": [
+        "GERON CORP  (GERN, GERNW)  (CIK 0000886744)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-05-11",
+       "adsh": "0000950170-23-020860"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001822462"
+       ],
+       "display_names": [
+        "Foghorn Therapeutics Inc.  (FHTX)  (CIK 0001822462)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-06-28",
+       "adsh": "0001628280-23-023671"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001822462"
+       ],
+       "display_names": [
+        "Foghorn Therapeutics Inc.  (FHTX)  (CIK 0001822462)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-06-05",
+       "adsh": "0001628280-23-020737"
+      }
+     }
+    ]
+   }
+  }
+ }
 }

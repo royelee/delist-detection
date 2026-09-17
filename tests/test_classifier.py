@@ -43,3 +43,10 @@ def test_unknown_ticker_returns_unknown(fake_edgar):
     rec = classifier.classify_ticker("NOPE", "2024-01-01")
     assert rec.bucket is CrspBucket.UNKNOWN
     assert rec.cik is None
+
+
+def test_a_current_ticker_map_hit_is_flagged(fake_edgar):
+    resolver = TickerResolver(fake_edgar)
+    rec = DelistClassifier(fake_edgar, resolver).classify_ticker("ALTR", "2025-03-26")
+    assert rec.evidence["resolution_source"] == "company_tickers"
+    assert rec.evidence["flags"] == ["resolved_by_current_ticker_map"]

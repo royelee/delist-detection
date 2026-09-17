@@ -1022,5 +1022,247 @@
    1870997,
    "Loyalty Ventures Inc.  (CIK 0001870997)"
   ]
- ]
+ ],
+ "efts_raw": {
+  "https://efts.sec.gov/LATEST/search-index?q=%22LYLT%22&forms=25-NSE,25,15-12G,15-12B,15-15D&dateRange=custom&startdt=2023-03-29&enddt=2023-09-25": {
+   "hits": {
+    "total": {
+     "value": 0,
+     "relation": "eq"
+    },
+    "hits": []
+   }
+  },
+  "https://efts.sec.gov/LATEST/search-index?q=%22LYLT%22&forms=8-K&dateRange=custom&startdt=2023-02-27&enddt=2023-06-26": {
+   "hits": {
+    "total": {
+     "value": 17,
+     "relation": "eq"
+    },
+    "hits": [
+     {
+      "_source": {
+       "ciks": [
+        "0001870997"
+       ],
+       "display_names": [
+        "Loyalty Ventures Inc.  (CIK 0001870997)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-03-10",
+       "adsh": "0001870997-23-000010"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001870997"
+       ],
+       "display_names": [
+        "Loyalty Ventures Inc.  (CIK 0001870997)"
+       ],
+       "form": "8-K/A",
+       "file_date": "2023-03-10",
+       "adsh": "0001870997-23-000013"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001870997"
+       ],
+       "display_names": [
+        "Loyalty Ventures Inc.  (CIK 0001870997)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-03-10",
+       "adsh": "0001870997-23-000010"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001870997"
+       ],
+       "display_names": [
+        "Loyalty Ventures Inc.  (CIK 0001870997)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-03-15",
+       "adsh": "0001870997-23-000016"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001870997"
+       ],
+       "display_names": [
+        "Loyalty Ventures Inc.  (CIK 0001870997)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-03-09",
+       "adsh": "0001870997-23-000007"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001870997"
+       ],
+       "display_names": [
+        "Loyalty Ventures Inc.  (CIK 0001870997)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-03-02",
+       "adsh": "0001870997-23-000004"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001870997"
+       ],
+       "display_names": [
+        "Loyalty Ventures Inc.  (CIK 0001870997)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-03-23",
+       "adsh": "0001870997-23-000022"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001870997"
+       ],
+       "display_names": [
+        "Loyalty Ventures Inc.  (CIK 0001870997)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-03-09",
+       "adsh": "0001870997-23-000007"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001870997"
+       ],
+       "display_names": [
+        "Loyalty Ventures Inc.  (CIK 0001870997)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-03-10",
+       "adsh": "0001870997-23-000010"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001870997"
+       ],
+       "display_names": [
+        "Loyalty Ventures Inc.  (CIK 0001870997)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-03-10",
+       "adsh": "0001870997-23-000010"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001870997"
+       ],
+       "display_names": [
+        "Loyalty Ventures Inc.  (CIK 0001870997)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-03-02",
+       "adsh": "0001870997-23-000004"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001870997"
+       ],
+       "display_names": [
+        "Loyalty Ventures Inc.  (CIK 0001870997)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-03-02",
+       "adsh": "0001870997-23-000004"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001870997"
+       ],
+       "display_names": [
+        "Loyalty Ventures Inc.  (CIK 0001870997)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-03-15",
+       "adsh": "0001870997-23-000016"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001870997"
+       ],
+       "display_names": [
+        "Loyalty Ventures Inc.  (CIK 0001870997)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-03-02",
+       "adsh": "0001870997-23-000004"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001870997"
+       ],
+       "display_names": [
+        "Loyalty Ventures Inc.  (CIK 0001870997)"
+       ],
+       "form": "8-K",
+       "file_date": "2023-03-23",
+       "adsh": "0001870997-23-000022"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001870997"
+       ],
+       "display_names": [
+        "Loyalty Ventures Inc.  (CIK 0001870997)"
+       ],
+       "form": "8-K/A",
+       "file_date": "2023-03-10",
+       "adsh": "0001870997-23-000013"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001870997"
+       ],
+       "display_names": [
+        "Loyalty Ventures Inc.  (CIK 0001870997)"
+       ],
+       "form": "8-K/A",
+       "file_date": "2023-03-10",
+       "adsh": "0001870997-23-000013"
+      }
+     }
+    ]
+   }
+  }
+ }
 }

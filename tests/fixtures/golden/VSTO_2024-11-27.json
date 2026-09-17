@@ -4129,5 +4129,221 @@
    1943705,
    "Revelyst, Inc.  (CIK 0001943705)"
   ]
- ]
+ ],
+ "efts_raw": {
+  "https://efts.sec.gov/LATEST/search-index?q=%22VSTO%22&forms=25-NSE,25,15-12G,15-12B,15-15D&dateRange=custom&startdt=2024-08-29&enddt=2025-02-25": {
+   "hits": {
+    "total": {
+     "value": 0,
+     "relation": "eq"
+    },
+    "hits": []
+   }
+  },
+  "https://efts.sec.gov/LATEST/search-index?q=%22VSTO%22&forms=8-K&dateRange=custom&startdt=2024-07-30&enddt=2024-11-26": {
+   "hits": {
+    "total": {
+     "value": 15,
+     "relation": "eq"
+    },
+    "hits": [
+     {
+      "_source": {
+       "ciks": [
+        "0001616318"
+       ],
+       "display_names": [
+        "Vista Outdoor Inc.  (VSTO)  (CIK 0001616318)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-08-23",
+       "adsh": "0001616318-24-000083"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001616318"
+       ],
+       "display_names": [
+        "Vista Outdoor Inc.  (VSTO)  (CIK 0001616318)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-08-05",
+       "adsh": "0001616318-24-000074"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001616318"
+       ],
+       "display_names": [
+        "Vista Outdoor Inc.  (VSTO)  (CIK 0001616318)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-11-25",
+       "adsh": "0001616318-24-000116"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001616318"
+       ],
+       "display_names": [
+        "Vista Outdoor Inc.  (VSTO)  (CIK 0001616318)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-11-06",
+       "adsh": "0001616318-24-000103"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001616318"
+       ],
+       "display_names": [
+        "Vista Outdoor Inc.  (VSTO)  (CIK 0001616318)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-11-25",
+       "adsh": "0001616318-24-000116"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001616318"
+       ],
+       "display_names": [
+        "Vista Outdoor Inc.  (VSTO)  (CIK 0001616318)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-09-13",
+       "adsh": "0000950157-24-001229"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001616318"
+       ],
+       "display_names": [
+        "Vista Outdoor Inc.  (VSTO)  (CIK 0001616318)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-10-07",
+       "adsh": "0001628280-24-042373"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001943705"
+       ],
+       "display_names": [
+        "Revelyst, Inc.  (CIK 0001943705)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-10-07",
+       "adsh": "0001628280-24-042378"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001616318"
+       ],
+       "display_names": [
+        "Vista Outdoor Inc.  (VSTO)  (CIK 0001616318)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-10-07",
+       "adsh": "0001628280-24-042373"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001616318"
+       ],
+       "display_names": [
+        "Vista Outdoor Inc.  (VSTO)  (CIK 0001616318)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-10-07",
+       "adsh": "0001628280-24-042373"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001616318"
+       ],
+       "display_names": [
+        "Vista Outdoor Inc.  (VSTO)  (CIK 0001616318)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-09-11",
+       "adsh": "0000950157-24-001219"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001616318"
+       ],
+       "display_names": [
+        "Vista Outdoor Inc.  (VSTO)  (CIK 0001616318)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-08-09",
+       "adsh": "0000950157-24-001080"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001616318"
+       ],
+       "display_names": [
+        "Vista Outdoor Inc.  (VSTO)  (CIK 0001616318)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-09-13",
+       "adsh": "0000950157-24-001229"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001616318"
+       ],
+       "display_names": [
+        "Vista Outdoor Inc.  (VSTO)  (CIK 0001616318)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-11-06",
+       "adsh": "0001616318-24-000103"
+      }
+     },
+     {
+      "_source": {
+       "ciks": [
+        "0001616318"
+       ],
+       "display_names": [
+        "Vista Outdoor Inc.  (VSTO)  (CIK 0001616318)"
+       ],
+       "form": "8-K",
+       "file_date": "2024-08-05",
+       "adsh": "0001616318-24-000074"
+      }
+     }
+    ]
+   }
+  }
+ }
 }
