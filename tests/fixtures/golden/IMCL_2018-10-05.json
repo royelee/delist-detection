@@ -1,0 +1,603 @@
+{
+ "row": {
+  "ticker": "IMCL",
+  "observed_delist_date": "2018-10-05",
+  "cik": "1520047",
+  "wrong_cik": "",
+  "member_name": "IMCLONE SYSTEMS INC",
+  "last_trade_close": "0.159277",
+  "expected_bucket": "compliance_failure",
+  "expected_dlret": "",
+  "dlret_tol": "",
+  "expected_flags": "member_name_mismatch",
+  "verified": "edgar:1520047 REVOKED",
+  "note": "control: SEC revocation; vendor series is ImmunoClin not ImClone"
+ },
+ "company_tickers": {},
+ "submissions": {
+  "765258": {
+   "name": "IMCLONE SYSTEMS INC",
+   "sic": "2836",
+   "tickers": [],
+   "formerNames": [
+    {
+     "name": "IMCLONE SYSTEMS INC/DE",
+     "from": "1995-02-07T00:00:00.000Z",
+     "to": "2006-02-01T00:00:00.000Z"
+    },
+    {
+     "name": "IMCLONE SYSTEMS, INC.",
+     "from": "1994-02-11T00:00:00.000Z",
+     "to": "1994-02-11T00:00:00.000Z"
+    }
+   ],
+   "filings": {
+    "recent": {
+     "accessionNumber": [
+      "0000950137-08-014262",
+      "0001354457-08-000337",
+      "0000950109-94-000188"
+     ],
+     "form": [
+      "15-12G",
+      "25-NSE",
+      "SC 13G"
+     ],
+     "filingDate": [
+      "2008-12-05",
+      "2008-11-24",
+      "1994-02-11"
+     ],
+     "reportDate": [
+      "",
+      "",
+      ""
+     ],
+     "items": [
+      "",
+      "",
+      ""
+     ],
+     "primaryDocument": [
+      "c48075e15v12g.htm",
+      "xslF25X02/primary_doc.xml",
+      ""
+     ]
+    }
+   }
+  },
+  "1520047": {
+   "name": "Immunoclin Corp",
+   "sic": "7374",
+   "tickers": [],
+   "formerNames": [
+    {
+     "name": "PHARMA INVESTING NEWS, INC.",
+     "from": "2011-05-17T00:00:00.000Z",
+     "to": "2014-01-21T00:00:00.000Z"
+    }
+   ],
+   "filings": {
+    "recent": {
+     "accessionNumber": [
+      "9999999997-19-002653",
+      "0001571049-16-014044",
+      "0001571049-16-013912",
+      "0001144204-16-093633",
+      "0001144204-16-092599",
+      "0001468429-16-000023",
+      "0001468429-16-000022",
+      "0001144204-16-090915",
+      "0001144204-16-090886",
+      "0001144204-16-090857",
+      "0001144204-16-090848",
+      "0001144204-16-087590",
+      "0001621170-15-000010",
+      "0001621170-15-000009",
+      "0001621170-15-000008",
+      "0001621608-15-000001",
+      "0001621170-15-000003",
+      "0001468429-15-000005",
+      "0001517126-15-000111",
+      "0001630848-15-000002",
+      "0001600255-15-000002",
+      "0001517126-14-000393",
+      "0001517126-14-000386",
+      "0001517126-14-000374",
+      "0001621170-14-000006",
+      "0001600255-14-000009",
+      "0001621170-14-000001",
+      "0001621608-14-000001",
+      "0001600255-14-000006",
+      "0001266581-14-000003",
+      "0001517126-14-000304",
+      "0001517126-14-000284",
+      "0001517126-14-000239",
+      "0001517126-14-000229",
+      "0001517126-14-000203",
+      "0001517126-14-000201",
+      "0001517126-14-000195",
+      "0001517126-14-000180",
+      "0001517126-14-000147",
+      "0001078782-11-001424"
+     ],
+     "form": [
+      "REVOKED",
+      "SC 13D",
+      "SC 13D",
+      "8-K",
+      "8-K",
+      "4",
+      "3",
+      "SC 13D",
+      "SC 13D",
+      "SC 13D",
+      "SC 13D",
+      "8-K",
+      "4/A",
+      "4/A",
+      "3/A",
+      "4",
+      "4",
+      "4",
+      "NT 10-K",
+      "3",
+      "4",
+      "10-Q",
+      "NT 10-Q",
+      "S-8",
+      "4",
+      "4",
+      "3",
+      "3",
+      "3",
+      "3",
+      "10-Q",
+      "NT 10-Q",
+      "8-K",
+      "10-Q",
+      "8-K",
+      "10-K/A",
+      "10-K",
+      "NT 10-Q",
+      "NT 10-K",
+      "S-1"
+     ],
+     "filingDate": [
+      "2019-04-10",
+      "2016-04-20",
+      "2016-04-14",
+      "2016-04-11",
+      "2016-04-04",
+      "2016-04-01",
+      "2016-04-01",
+      "2016-03-29",
+      "2016-03-29",
+      "2016-03-29",
+      "2016-03-29",
+      "2016-03-11",
+      "2015-06-18",
+      "2015-06-18",
+      "2015-06-18",
+      "2015-06-12",
+      "2015-06-09",
+      "2015-06-09",
+      "2015-05-04",
+      "2015-02-06",
+      "2015-01-15",
+      "2014-12-22",
+      "2014-12-15",
+      "2014-12-03",
+      "2014-11-06",
+      "2014-11-05",
+      "2014-10-16",
+      "2014-10-14",
+      "2014-10-09",
+      "2014-09-30",
+      "2014-09-29",
+      "2014-09-15",
+      "2014-08-01",
+      "2014-07-24",
+      "2014-07-08",
+      "2014-07-07",
+      "2014-07-02",
+      "2014-06-16",
+      "2014-05-01",
+      "2011-05-17"
+     ],
+     "reportDate": [
+      "",
+      "",
+      "",
+      "2016-04-04",
+      "2016-04-01",
+      "2015-01-30",
+      "2013-07-11",
+      "",
+      "",
+      "",
+      "",
+      "2016-03-10",
+      "2015-06-05",
+      "2014-11-01",
+      "2014-02-13",
+      "2015-06-10",
+      "2015-06-05",
+      "2015-06-05",
+      "2015-01-31",
+      "2015-01-30",
+      "2015-01-01",
+      "2014-10-31",
+      "2014-10-31",
+      "",
+      "2014-11-01",
+      "2014-11-01",
+      "2014-02-13",
+      "2014-02-13",
+      "2014-02-13",
+      "2013-12-13",
+      "2014-07-31",
+      "2014-07-31",
+      "2014-08-01",
+      "2014-04-30",
+      "2014-07-02",
+      "2014-01-31",
+      "2014-01-31",
+      "2014-04-30",
+      "2014-01-31",
+      ""
+     ],
+     "items": [
+      "",
+      "",
+      "",
+      "1.02",
+      "4.01,9.01",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "5.03,8.01",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "8.01",
+      "",
+      "4.01,9.01",
+      "",
+      "",
+      "",
+      "",
+      ""
+     ],
+     "primaryDocument": [
+      "filename1.pdf",
+      "t1600223_sc13d.htm",
+      "t1600216_sc13d.htm",
+      "v436684_8k.htm",
+      "v436106_8k.htm",
+      "xslF345X03/primary_doc.xml",
+      "xslF345X02/primary_doc.xml",
+      "v435131_sc13d.htm",
+      "v435130_sc13d.htm",
+      "v435138_sc13d.htm",
+      "v435132_sc13d.htm",
+      "v433921_8k.htm",
+      "xslF345X03/primary_doc.xml",
+      "xslF345X03/primary_doc.xml",
+      "xslF345X02/primary_doc.xml",
+      "xslF345X03/primary_doc.xml",
+      "xslF345X03/primary_doc.xml",
+      "xslF345X03/primary_doc.xml",
+      "formnt10k.htm",
+      "xslF345X02/primary_doc.xml",
+      "xslF345X03/primary_doc.xml",
+      "form10q.htm",
+      "formnt10q.htm",
+      "forms8.htm",
+      "xslF345X03/primary_doc.xml",
+      "xslF345X03/primary_doc.xml",
+      "xslF345X02/primary_doc.xml",
+      "xslF345X02/primary_doc.xml",
+      "xslF345X02/primary_doc.xml",
+      "xslF345X02/primary_doc.xml",
+      "form10q.htm",
+      "formnt10q.htm",
+      "form8k.htm",
+      "form10q.htm",
+      "form8k.htm",
+      "form10ka.htm",
+      "form10k.htm",
+      "formnt10q.htm",
+      "formnt10k.htm",
+      "pharmas1.htm"
+     ]
+    }
+   }
+  }
+ },
+ "atom": {
+  "IMCLONE SYSTEMS INC|25-NSE": [
+   {
+    "cik": 765258,
+    "name": "IMCLONE SYSTEMS INC",
+    "form": "25-NSE",
+    "filing_date": "2008-11-24"
+   }
+  ],
+  "IMCLONE SYSTEMS INC|25": [
+   {
+    "cik": 765258,
+    "name": "IMCLONE SYSTEMS INC",
+    "form": "25-NSE",
+    "filing_date": "2008-11-24"
+   }
+  ],
+  "IMCLONE SYSTEMS INC|15-12G": [
+   {
+    "cik": 765258,
+    "name": "IMCLONE SYSTEMS INC",
+    "form": "15-12G",
+    "filing_date": "2008-12-05"
+   }
+  ],
+  "IMCLONE SYSTEMS INC|": [
+   {
+    "cik": 765258,
+    "name": "IMCLONE SYSTEMS INC",
+    "form": "SC 13G/A",
+    "filing_date": "2008-12-10"
+   },
+   {
+    "cik": 765258,
+    "name": "IMCLONE SYSTEMS INC",
+    "form": "15-12G",
+    "filing_date": "2008-12-05"
+   },
+   {
+    "cik": 765258,
+    "name": "IMCLONE SYSTEMS INC",
+    "form": "8-K",
+    "filing_date": "2008-11-26"
+   },
+   {
+    "cik": 765258,
+    "name": "IMCLONE SYSTEMS INC",
+    "form": "4",
+    "filing_date": "2008-11-26"
+   },
+   {
+    "cik": 765258,
+    "name": "IMCLONE SYSTEMS INC",
+    "form": "4",
+    "filing_date": "2008-11-26"
+   },
+   {
+    "cik": 765258,
+    "name": "IMCLONE SYSTEMS INC",
+    "form": "4",
+    "filing_date": "2008-11-26"
+   },
+   {
+    "cik": 765258,
+    "name": "IMCLONE SYSTEMS INC",
+    "form": "4",
+    "filing_date": "2008-11-26"
+   },
+   {
+    "cik": 765258,
+    "name": "IMCLONE SYSTEMS INC",
+    "form": "4",
+    "filing_date": "2008-11-26"
+   },
+   {
+    "cik": 765258,
+    "name": "IMCLONE SYSTEMS INC",
+    "form": "4",
+    "filing_date": "2008-11-26"
+   },
+   {
+    "cik": 765258,
+    "name": "IMCLONE SYSTEMS INC",
+    "form": "4",
+    "filing_date": "2008-11-26"
+   }
+  ],
+  "IMCLONE SYSTEMS|25-NSE": [
+   {
+    "cik": 765258,
+    "name": "IMCLONE SYSTEMS INC",
+    "form": "25-NSE",
+    "filing_date": "2008-11-24"
+   }
+  ],
+  "IMCLONE SYSTEMS|25": [
+   {
+    "cik": 765258,
+    "name": "IMCLONE SYSTEMS INC",
+    "form": "25-NSE",
+    "filing_date": "2008-11-24"
+   }
+  ],
+  "IMCLONE SYSTEMS|15-12G": [
+   {
+    "cik": 765258,
+    "name": "IMCLONE SYSTEMS INC",
+    "form": "15-12G",
+    "filing_date": "2008-12-05"
+   }
+  ],
+  "IMCLONE SYSTEMS|": [
+   {
+    "cik": 765258,
+    "name": "IMCLONE SYSTEMS INC",
+    "form": "SC 13G/A",
+    "filing_date": "2008-12-10"
+   },
+   {
+    "cik": 765258,
+    "name": "IMCLONE SYSTEMS INC",
+    "form": "15-12G",
+    "filing_date": "2008-12-05"
+   },
+   {
+    "cik": 765258,
+    "name": "IMCLONE SYSTEMS INC",
+    "form": "8-K",
+    "filing_date": "2008-11-26"
+   },
+   {
+    "cik": 765258,
+    "name": "IMCLONE SYSTEMS INC",
+    "form": "4",
+    "filing_date": "2008-11-26"
+   },
+   {
+    "cik": 765258,
+    "name": "IMCLONE SYSTEMS INC",
+    "form": "4",
+    "filing_date": "2008-11-26"
+   },
+   {
+    "cik": 765258,
+    "name": "IMCLONE SYSTEMS INC",
+    "form": "4",
+    "filing_date": "2008-11-26"
+   },
+   {
+    "cik": 765258,
+    "name": "IMCLONE SYSTEMS INC",
+    "form": "4",
+    "filing_date": "2008-11-26"
+   },
+   {
+    "cik": 765258,
+    "name": "IMCLONE SYSTEMS INC",
+    "form": "4",
+    "filing_date": "2008-11-26"
+   },
+   {
+    "cik": 765258,
+    "name": "IMCLONE SYSTEMS INC",
+    "form": "4",
+    "filing_date": "2008-11-26"
+   },
+   {
+    "cik": 765258,
+    "name": "IMCLONE SYSTEMS INC",
+    "form": "4",
+    "filing_date": "2008-11-26"
+   }
+  ],
+  "IMCLONE|25-NSE": [
+   {
+    "cik": 765258,
+    "name": "IMCLONE SYSTEMS INC",
+    "form": "25-NSE",
+    "filing_date": "2008-11-24"
+   }
+  ],
+  "IMCLONE|25": [
+   {
+    "cik": 765258,
+    "name": "IMCLONE SYSTEMS INC",
+    "form": "25-NSE",
+    "filing_date": "2008-11-24"
+   }
+  ],
+  "IMCLONE|15-12G": [
+   {
+    "cik": 765258,
+    "name": "IMCLONE SYSTEMS INC",
+    "form": "15-12G",
+    "filing_date": "2008-12-05"
+   }
+  ],
+  "IMCLONE|": [
+   {
+    "cik": 765258,
+    "name": "IMCLONE SYSTEMS INC",
+    "form": "SC 13G/A",
+    "filing_date": "2008-12-10"
+   },
+   {
+    "cik": 765258,
+    "name": "IMCLONE SYSTEMS INC",
+    "form": "15-12G",
+    "filing_date": "2008-12-05"
+   },
+   {
+    "cik": 765258,
+    "name": "IMCLONE SYSTEMS INC",
+    "form": "8-K",
+    "filing_date": "2008-11-26"
+   },
+   {
+    "cik": 765258,
+    "name": "IMCLONE SYSTEMS INC",
+    "form": "4",
+    "filing_date": "2008-11-26"
+   },
+   {
+    "cik": 765258,
+    "name": "IMCLONE SYSTEMS INC",
+    "form": "4",
+    "filing_date": "2008-11-26"
+   },
+   {
+    "cik": 765258,
+    "name": "IMCLONE SYSTEMS INC",
+    "form": "4",
+    "filing_date": "2008-11-26"
+   },
+   {
+    "cik": 765258,
+    "name": "IMCLONE SYSTEMS INC",
+    "form": "4",
+    "filing_date": "2008-11-26"
+   },
+   {
+    "cik": 765258,
+    "name": "IMCLONE SYSTEMS INC",
+    "form": "4",
+    "filing_date": "2008-11-26"
+   },
+   {
+    "cik": 765258,
+    "name": "IMCLONE SYSTEMS INC",
+    "form": "4",
+    "filing_date": "2008-11-26"
+   },
+   {
+    "cik": 765258,
+    "name": "IMCLONE SYSTEMS INC",
+    "form": "4",
+    "filing_date": "2008-11-26"
+   }
+  ]
+ },
+ "efts_lookup": [
+  null,
+  null
+ ],
+ "efts_frequency": []
+}

@@ -1,0 +1,32 @@
+ticker,observed_delist_date,cik,wrong_cik,member_name,last_trade_close,expected_bucket,expected_dlret,dlret_tol,expected_flags,verified,note
+HYH,2018-06-29,1606498,829281,HALYARD HEALTH INC,57.25,exchange_transfer,0.0,0.0001,,edgar:1606498 formerNames Halyard Health,rename to Avanos (AVNS)
+PEAK,2023-02-13,765880,1829426,HEALTHPEAK PROPERTIES INC,26.49,exchange_transfer,0.0,0.0001,,edgar:765880,2-session vendor stub of Healthpeak
+LC,2026-06-01,1409970,,LENDINGCLUB CORP,18.39,exchange_transfer,0.0,0.0001,,edgar:1409970 8-K 2026-06-02 and 2026-06-22,NYSE -> Nasdaq + rename to Happen
+SKLZ,2026-06-18,1801661,,SKILLZ INC CLASS A,8.84,exchange_transfer,0.0,0.0001,,edgar:1801661 8-K 2026-06-22,rename to Firy (FIRY)
+SPWR,2024-08-20,867773,1838987,SUNPOWER CORP.,1.78,liquidation,,,,edgar:867773 8-K 2024-08-06 item 1.03,Chapter 11
+OAS,2020-11-20,1486159,,OASIS PETROLEUM INC.,0.1214,liquidation,,,,edgar:1486159 8-K 2020-09-30 item 1.03; 8-K 2020-11-20,old equity cancelled at emergence
+VRTV,2023-11-30,1599489,,VERITIV CORP,169.99,merger,0.0000588,0.0005,,edgar:1599489 8-K 2023-11-30,$170 cash
+TWO,2026-08-25,1465740,,TWO HARBORS INVESTMENT REIT CORP,12.18,merger,-0.0147783,0.0005,,edgar:1465740 8-K 2026-08-25,$12.00 cash; $25.00 is the preferred redemption
+BLD,2026-07-01,1633931,,TOPBUILD CORP,354.53,merger,-0.057603,0.002,,edgar:1633931 8-K 2026-07-01,election prorated; post-deadline shares took 20.2 QXO @ 16.54
+CPWR,2014-12-15,859014,827099,COMPUWARE CORP.,10.35,merger,0.0037863,0.0005,,edgar:859014 8-K 2014-12-17,$10.389188 cash
+SIVB,2023-07-14,719739,,SVB FINANCIAL GROUP,0.56,liquidation,,,,edgar:719739 item 1.03,control: bankruptcy
+CIE,2017-12-14,1471261,,COBALT INTERNATIONAL ENERGY INC,0.38,liquidation,,,,edgar:1471261 item 1.03,control: bankruptcy
+MDR,2020-01-22,708819,,MCDERMOTT INTERNATIONAL INC,0.70,liquidation,,,,edgar:708819,control: Chapter 11 Jan 2020 (today 570 via 3.01)
+WE,2024-06-11,1813756,,WEWORK INC CLASS A,0.06,liquidation,,,,edgar:1813756,control: Chapter 11 Nov 2023 (today 580)
+LYLT,2023-06-27,1870997,,LOYALTY VENTURES INC,0.011,liquidation,,,,edgar:1870997,control: Chapter 11 Mar 2023 (today 570)
+IMCL,2018-10-05,1520047,,IMCLONE SYSTEMS INC,0.159277,compliance_failure,,,member_name_mismatch,edgar:1520047 REVOKED,control: SEC revocation; vendor series is ImmunoClin not ImClone
+BCR,2017-12-29,9892,,C R BARD INC,331.24,merger,,,,edgar:9892 8-K 0001193125-17-383532,BD closed 2017-12-28: $222.93 cash + 0.5077 BDX per share; closing 8-K has 3.01/3.03/5.01 but no 2.01
+ONXX,2013-10-17,1012140,,ONYX PHARMACEUTICALS INC.,124.92,merger,0.00064041,0.001,,edgar:1012140 8-K 0001193125-13-387156,Amgen tender and merger at $125.00 cash (closed 2013-10-01); item 2.04 is the convertible-note make-whole
+SIAL,2015-11-18,90185,,SIGMA ALDRICH CORP,139.76,merger,0.00171723,0.001,,edgar:90185 8-K 0001193125-15-380282 (2.01); 8-K 0001193125-14-347713 (terms),Merck KGaA $140.00 cash; closing 8-K carries 2.01 alone
+UTIW,2016-02-01,1124827,,UTI WORLDWIDE INC,7.09,merger,0.00141044,0.001,,edgar:1124827 8-K 0001341004-16-001043; DEFM14A 0001193125-15-395426,DSV $7.10 cash per ordinary share (closed 2016-01-22)
+KCI,2012-11-12,831967,,KINETIC CONCEPTS INC,68.47,merger,0.000438148,0.001,frozen_tail,edgar:831967 8-K 0001193125-11-306860; 25-NSE 2011-11-08,Apax $68.50 cash closed 2011-11-04; vendor tail to 2012-11-12
+XTO,2013-02-07,868809,,XTO ENERGY INC,41.81,merger,,,frozen_tail,edgar:868809 8-K 0000950103-10-001867; 25-NSE 2010-06-28,ExxonMobil all-stock (0.7098 XOM) closed 2010-06-25; vendor tail to 2013; this CIK files nothing 2010-07-08 to 2020
+VSTO,2024-11-27,1616318,,VISTA OUTDOOR INC,44.63,merger,,,,edgar:1616318 8-K 0001616318-24-000122,CSG closing: $25.75 cash + 1 Revelyst share; the 1.03 tag has no Item 1.03 section and no bankruptcy text
+LBRDA,2026-08-21,1611983,,LIBERTY BROADBAND CORP SERIES A,35.99,merger,,,,edgar:1611983 8-K 0001140361-26-033932; 25-NSE 2026-08-20,Charter merger closed 2026-08-19: 0.236 CHTR Class A per share (all stock)
+LBRDK,2026-08-21,1611983,,LIBERTY BROADBAND CORP SERIES C,36.02,merger,,,,edgar:1611983 8-K 0001140361-26-033932; 25-NSE 2026-08-20,same event as LBRDA (Series C also 0.236 CHTR)
+AABA,2019-11-06,1011006,,ALTABA INC,19.63,unknown,0.0,0.0001,no_evidence_default,edgar:1011006 8-K 0001193125-19-262790; 25-NSE 2019-10-07,solvent fund: plan of complete liquidation and dissolution (2019-10-04); no bankruptcy or deficiency
+FST,2022-08-25,1815737,,FOREST OIL CORP,10.18,expiration,0.0,0.0001,spac;member_name_mismatch,edgar:1815737 8-K 0001213900-22-046514,FAST Acquisition Corp redeems all Class A shares 2022-08-26 (no business combination)
+BWC,2023-08-11,1854863,,BABCOCK AND WILCOX,10.15,expiration,0.0,0.0001,spac;member_name_mismatch,edgar:1854863 8-K 0001193125-23-197713,Blue Whale Acquisition Corp I redeems all public shares (no business combination by 2023-08-06)
+HMA,2023-07-25,1850529,,HEALTH MANAGEMENT ASSOCIATES INC C,10.54,expiration,0.0,0.0001,spac;member_name_mismatch,edgar:1850529 8-K 0001140361-23-035928,Heartland Media Acquisition Corp redeems all Class A shares 2023-08-08
+LEAP,2022-08-16,1818346,,LEAP WIRELESS INTL INC,10.02,expiration,0.0,0.0001,spac;member_name_mismatch,edgar:1818346 8-K 0001104659-22-085390,Ribbit LEAP redeems all Class A shares 2022-08-15
+HLTH,2019-09-10,1409916,,HLTH CORP,0.12,compliance_failure,,,member_name_mismatch,edgar:1409916 8-K 0001409916-19-000042 (3.01); 8-K 0001409916-19-000051 (1.03),Nobilis Health: NYSE American delisting for failure to file (3.01 2019-09-09); state-court receiver appointed 2019-09-24; not HLTH Corp

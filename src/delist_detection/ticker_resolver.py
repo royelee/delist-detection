@@ -35,12 +35,15 @@ class TickerResolver:
         manual_overrides: dict[str, int] | None = None,
         cache_path: Path | str | None = None,
         name_lookup: "callable[..., str | None] | None" = None,
+        *,
+        member_names: "callable[..., str | None] | None" = None,
     ) -> None:
         self.edgar = edgar
         self.rename_map = {k.upper(): v.upper() for k, v in (rename_map or {}).items()}
         self.manual_overrides = {k.upper(): int(v) for k, v in (manual_overrides or {}).items()}
         self.cache_path = Path(cache_path) if cache_path else None
         self.name_lookup = name_lookup or (lambda *a, **kw: None)
+        self.member_names = member_names or (lambda *a, **kw: None)  # (ticker, date) -> index-member name; not read yet
         self._memo: dict[str, TickerResolution] = {}
         if self.cache_path and self.cache_path.exists():
             try:
