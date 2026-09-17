@@ -617,3 +617,33 @@ def test_a_stale_bankruptcy_without_a_change_in_control_keeps_the_override():
     rec = DelistClassifier(e, TickerResolver(e)).classify_ticker("REORG", "2023-06-01")
     assert rec.bucket is CrspBucket.LIQUIDATION and rec.crsp_code == 470
     assert "bankruptcy_before_merger" not in rec.evidence["flags"]
+
+
+# --- R8: the anchor 8-K's effective items are computed once ---
+
+
+class _CountingEdgar(_TextEdgar):
+    def __init__(self, filings, texts):
+        super().__init__(filings, texts)
+        self.fetches = []
+
+    def fetch_filing_text(self, cik, acc, doc):
+        self.fetches.append(acc)
+        return super().fetch_filing_text(cik, acc, doc)
+
+
+def test_the_anchor_8k_text_is_read_once_per_decision():
+    """_effective_items refetches the text and re-runs the 1.03 confirmation, so
+    calling it twice on the same 8-K doubles the work and makes the flag side
+    effects order-dependent."""
+    fs = [
+        EdgarSubmission("X1", "8-K", "2024-11-27", "2024-11-27", "1.03,2.01,3.01,5.01", "x.htm"),
+        EdgarSubmission("X2", "25-NSE", "2024-11-27", "", "", "p.xml"),
+        EdgarSubmission("X3", "15-12G", "2024-12-09", "", "", "f.htm"),
+    ]
+    e = _CountingEdgar(fs, {"X1": "completion of the merger; each share converted into the right to receive"})
+    rec = DelistClassifier(e, TickerResolver(e)).classify_ticker("REORG", "2024-11-27")
+    assert rec.bucket is CrspBucket.MERGER and rec.crsp_code == 231
+    assert "bankruptcy_tag_unconfirmed" in rec.evidence["flags"]
+    # once for the bankruptcy override, once for the anchor's effective items
+    assert e.fetches.count("X1") == 2

@@ -190,6 +190,10 @@ class TickerResolver:
     # so they appear in every delisting filing's CIK array. Always skip them.
     # Each entry was checked against EDGAR on 2026-09-17 (names as EDGAR gives
     # them); an unchecked CIK here hides a real company (1283699 is T-Mobile US).
+    # The set was also checked against the Form 25-NSE filer list: sampling 2018,
+    # 2021 and 2024 turns up only Nasdaq, NYSE, NYSE American, NYSE Arca and Cboe
+    # BZX, and EDGAR company search finds no 25 filer for IEX, Cboe EDGA, MEMX,
+    # MIAX Pearl or LTSE — so none of those is missing here.
     EXCHANGE_CIKS: set[int] = {
         1354457,   # Nasdaq Stock Market LLC
         876661,    # New York Stock Exchange LLC

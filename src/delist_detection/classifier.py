@@ -704,15 +704,19 @@ class DelistClassifier:
 
         anchor = _parse_date(delist_filing.filing_date) or observed
         eightk = self._pick_8k_near(filings, anchor) if anchor else None
-        if eightk is None or self._classify_items(self._effective_items(resolution.cik, eightk, flags))[0] is None:
+        # _effective_items refetches the text and re-runs the 1.03 confirmation,
+        # so it is computed once per 8-K and carried alongside it.
+        items = self._effective_items(resolution.cik, eightk, flags) if eightk is not None else None
+        if items is None or self._classify_items(items)[0] is None:
             back = self._backscan_for_fingerprint_8k(filings, anchor) if anchor else None
             if back is not None:
                 eightk = back
+                items = self._effective_items(resolution.cik, back, flags)
         evidence["anchor_8k"] = asdict(eightk) if eightk else None
 
         code = None
         if eightk is not None:
-            code, reason = self._classify_items(self._effective_items(resolution.cik, eightk, flags))
+            code, reason = self._classify_items(items)
         # No conclusive fingerprint, or a 3.01 alone: a distress bucket needs evidence.
         if code is None or code == 570:
             return self._default_without_fingerprint(
