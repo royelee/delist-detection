@@ -19,6 +19,7 @@ from typing import Iterable
 from .crsp_codes import CrspBucket, bucket_for_code
 from .edgar import STALE_KEY, EdgarClient, EdgarSubmission, submissions_fresh_after
 from .evidence import (
+    MERGER_EVIDENCE_DAYS,
     bankruptcy_8ks,
     cites_listing_deficiency,
     filed_operating_between,
@@ -420,7 +421,8 @@ class DelistClassifier:
         # An unreadable notice means the evidence here is at its weakest, and the
         # merger branch is the least conservative option — so require a proxy or
         # tender filing close to the anchor instead of one up to 400 days old.
-        before = NOTICE_MISSING_MERGER_DAYS if "notice_text_missing" in flags else 400
+        before = (NOTICE_MISSING_MERGER_DAYS if "notice_text_missing" in flags
+                  else MERGER_EVIDENCE_DAYS)
         proxy = merger_evidence(filings, anchor, before=before) if anchor else None
         if proxy is not None:
             return rec(231, CrspBucket.MERGER, "medium",

@@ -181,7 +181,11 @@ def says_listing_transfer(text: str) -> bool:
     return bool(_TRANSFER_TEXT.search(text or ""))
 
 
-def merger_evidence(filings: list[EdgarSubmission], on: date, before: int = 400, after: int = 30):
+MERGER_EVIDENCE_DAYS = 400   # how far before `on` a merger proxy / tender filing still counts
+
+
+def merger_evidence(filings: list[EdgarSubmission], on: date,
+                    before: int = MERGER_EVIDENCE_DAYS, after: int = 30):
     """The latest merger proxy or tender-offer filing within [on-before, on+after], else None."""
     lo, hi = on - timedelta(days=before), on + timedelta(days=after)
     hits = [f for f in filings if f.form in MERGER_EVIDENCE_FORMS
