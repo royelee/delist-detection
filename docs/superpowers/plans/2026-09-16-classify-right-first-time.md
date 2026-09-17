@@ -568,10 +568,17 @@ if __name__ == "__main__":
 
 ### Task 3: Member names and a date-aware company match
 
+**Revised after the Task 1 review.** The first version put the member-name search ahead of EFTS, ignored the ticker in name matching, and skipped zero-score frequency candidates. Checked against the golden fixtures, that design:
+- matched FST to Forest City ("FOREST" is shared);
+- rejected HYH, whose EDGAR name "Halyard Health" ends 2018-06-28, one day before the vendor's last date;
+- left the impostor cases HMA and HLTH unresolved.
+
+This version fixes all three. The DLRET row must describe the security that delisted on the date (Global Constraints), so the date-anchored EFTS search stays ahead of the member-name search. The member name decides only when nothing date-anchored found the company, and it always sets the mismatch flag.
+
 **Files:**
 - Create: `src/delist_detection/names.py`, `src/delist_detection/evidence.py` (first part)
-- Modify: `src/delist_detection/ticker_resolver.py`, `scripts/classify_universe.py`
-- Test: `tests/test_names.py`, `tests/test_evidence.py`, `tests/test_golden_events.py`
+- Modify: `src/delist_detection/ticker_resolver.py`, `src/delist_detection/classifier.py`, `scripts/classify_universe.py`, `tests/conftest.py`
+- Test: `tests/test_names.py`, `tests/test_evidence.py`, `tests/test_resolver_member_names.py`, `tests/test_golden_events.py`
 
 **Interfaces:**
 - Produces:
@@ -580,9 +587,12 @@ if __name__ == "__main__":
   - `names.MemberNames.from_csv(path) -> MemberNames`, with `__call__(ticker, observed_date=None) -> str | None`
   - `evidence.parse_day(s) -> date | None`
   - `evidence.name_at(sub: dict, on: date) -> str`
+  - `evidence.names_near(sub: dict, on: date, days: int = 30) -> list[str]`
   - `evidence.first_filing(filings) -> date | None`
   - `TickerResolver(..., member_names=callable)`
-  - `TickerResolver._fits_date(cik, observed_date, expected_name) -> tuple[bool, bool]`, returning (existed on the date, name agrees)
+  - `TickerResolver._expected_name(ticker, observed_date) -> str | None`
+  - `TickerResolver._fits_date(cik, observed_date, expected_name) -> tuple[bool, bool]`, returning (existed on the date, a name held within ±30 days agrees)
+  - `TickerResolver._accept_member_candidate(cik, observed_date, expected_name) -> bool`
   - The classifier adds `"member_name_mismatch"` and `"resolved_by_current_ticker_map"` to `evidence["flags"]`.
 
 - [ ] **Step 1: Write the failing unit tests.**
@@ -592,23 +602,24 @@ if __name__ == "__main__":
 from delist_detection.names import MemberNames, name_tokens, names_agree
 
 
-def test_tokens_drop_legal_suffixes_and_short_words():
+def test_tokens_keep_three_letter_words_and_drop_legal_suffixes():
     assert name_tokens("SUNPOWER CORP.") == {"SUNPOWER"}
-    assert name_tokens("Far Peak Acquisition Corp") == {"PEAK", "ACQUISITION"}
+    assert name_tokens("Far Peak Acquisition Corp") == {"FAR", "PEAK", "ACQUISITION"}
+    assert name_tokens("FOREST OIL CORP") == {"FOREST", "OIL"}
+    assert name_tokens("BABCOCK AND WILCOX") == {"BABCOCK", "WILCOX"}
+    assert name_tokens("LEAP WIRELESS INTL INC") == {"LEAP", "WIRELESS"}
 
 
-def test_agree_needs_a_shared_significant_token():
+def test_agreement_needs_two_shared_words_unless_a_name_has_one():
     assert names_agree("HALYARD HEALTH INC", "Halyard Health, Inc.")
+    assert names_agree("SUNPOWER CORP.", "SunPower Inc.")               # one-word names: one shared word
+    assert names_agree("XTO ENERGY INC", "XTO ENERGY INC")
     assert not names_agree("HEALTHPEAK PROPERTIES INC", "Far Peak Acquisition Corp")
     assert not names_agree("SUNPOWER CORP.", "Complete Solaria, Inc.")
+    assert not names_agree("FOREST OIL CORP", "Forest City Enterprises Inc")   # FST
+    assert not names_agree("LEAP WIRELESS INTL INC", "Ribbit LEAP, Ltd.")      # LEAP
+    assert not names_agree("XTO ENERGY INC", "ABC Energy Inc")
     assert not names_agree("", "Anything")
-
-
-def test_the_ticker_itself_does_not_make_two_names_agree():
-    # Ruling (Task 1 review): recycled companies often carry the symbol in their name.
-    assert not names_agree("LEAP WIRELESS INTL INC", "Ribbit LEAP, Ltd.", ignore=("LEAP",))
-    # ...but a name that is only the symbol still agrees with itself.
-    assert names_agree("SNAP INC", "Snap Inc.", ignore=("SNAP",))
 
 
 def test_member_names_picks_the_latest_row_on_or_before_the_date(tmp_path):
@@ -625,17 +636,26 @@ def test_member_names_picks_the_latest_row_on_or_before_the_date(tmp_path):
 # tests/test_evidence.py
 from datetime import date
 
-from delist_detection.evidence import name_at
+from delist_detection.evidence import name_at, names_near
 
 SUB = {"name": "SunPower Inc.", "formerNames": [
     {"name": "Complete Solaria, Inc.", "from": "2023-03-10T05:00:00.000Z", "to": "2025-09-26T04:00:00.000Z"},
     {"name": "Freedom Acquisition I Corp.", "from": "2021-01-08T05:00:00.000Z", "to": "2023-07-20T04:00:00.000Z"},
 ]}
+AVANOS = {"name": "AVANOS MEDICAL, INC.", "formerNames": [
+    {"name": "Halyard Health, Inc.", "from": "2014-06-02T04:00:00.000Z", "to": "2018-06-28T04:00:00.000Z"}]}
 
 
 def test_name_at_uses_the_former_name_covering_the_date():
     assert name_at(SUB, date(2024, 8, 20)) == "Complete Solaria, Inc."
     assert name_at(SUB, date(2026, 1, 1)) == "SunPower Inc."
+
+
+def test_names_near_includes_a_name_that_ended_just_before_the_date():
+    # EDGAR ends "Halyard Health" on 2018-06-28; the vendor's last HYH row is 2018-06-29.
+    assert names_near(AVANOS, date(2018, 6, 29)) == ["Halyard Health, Inc.", "AVANOS MEDICAL, INC."]
+    assert names_near(SUB, date(2024, 8, 20)) == ["Complete Solaria, Inc."]
+    assert names_near({"name": "Solo Co", "formerNames": []}, date(2020, 1, 1)) == ["Solo Co"]
 ```
 
 ```python
@@ -644,57 +664,89 @@ from delist_detection.edgar import EdgarSubmission
 from delist_detection.ticker_resolver import TickerResolver
 
 
-class _NameEdgar:
-    """One company reachable only by name search; no Form 25 near the date."""
-    def __init__(self, cik, name, former, filings, atom_name):
-        self.cik, self.name, self.former, self.filings, self.atom_name = cik, name, former, filings, atom_name
+class _Edgar:
+    """Companies by CIK; name search answers by name prefix."""
+    def __init__(self, companies, atom):
+        self.companies = companies      # cik -> (name, formerNames, filings)
+        self.atom = atom                # name prefix -> cik
     def company_tickers(self):
         return {}
     def submissions(self, cik):
-        return {"name": self.name, "formerNames": self.former, "sic": ""} if int(cik) == self.cik else {"__not_found__": True}
+        c = self.companies.get(int(cik))
+        return {"name": c[0], "formerNames": c[1], "sic": ""} if c else {"__not_found__": True}
     def recent_filings(self, cik):
-        return list(self.filings) if int(cik) == self.cik else []
+        c = self.companies.get(int(cik))
+        return list(c[2]) if c else []
     def company_search_atom(self, company, form_type="25-NSE"):
-        return [{"cik": self.cik, "name": None, "form": "", "filing_date": ""}] if company.upper().startswith(self.atom_name) else []
+        for prefix, cik in self.atom.items():
+            if company.upper().startswith(prefix):
+                return [{"cik": cik, "name": None, "form": "", "filing_date": ""}]
+        return []
     def fetch_filing_text(self, *a):
         return ""
 
 
-AVANOS = _NameEdgar(
-    1606498, "AVANOS MEDICAL, INC.",
-    [{"name": "Halyard Health, Inc.", "from": "2014-06-02T04:00:00.000Z", "to": "2018-06-30T04:00:00.000Z"}],
-    [EdgarSubmission("K1", "10-K", "2018-02-23", "", "", "k.htm"),
-     EdgarSubmission("E1", "8-K", "2018-07-02", "2018-06-29", "5.03,9.01", "e.htm")],
-    "HALYARD")
+def _f(acc, form, d):
+    return EdgarSubmission(acc, form, d, "", "", "x.htm")
+
+
+AVANOS = (1606498, ("AVANOS MEDICAL, INC.",
+                    [{"name": "Halyard Health, Inc.", "from": "2014-06-02T04:00:00.000Z",
+                      "to": "2018-06-28T04:00:00.000Z"}],
+                    [_f("K1", "10-K", "2018-02-23"), _f("E1", "8-K", "2018-07-02")]))
 
 
 def test_a_member_name_finds_a_renamed_company_that_filed_no_form25():
-    r = TickerResolver(AVANOS, member_names=lambda t, d=None: "HALYARD HEALTH INC")
+    e = _Edgar(dict([AVANOS]), {"HALYARD": 1606498})
+    r = TickerResolver(e, member_names=lambda t, d=None: "HALYARD HEALTH INC")
     assert r.resolve("HYH", "2018-06-29").cik == 1606498
 
 
 def test_without_a_member_name_the_loose_form25_check_still_applies():
-    r = TickerResolver(AVANOS, name_lookup=lambda t, d=None: "HALYARD HEALTH INC")
+    e = _Edgar(dict([AVANOS]), {"HALYARD": 1606498})
+    r = TickerResolver(e, name_lookup=lambda t, d=None: "HALYARD HEALTH INC")
     assert r.resolve("HYH", "2018-06-29").cik is None
 
 
+def test_a_frozen_tail_member_is_accepted_through_its_old_form25():
+    xto = (868809, ("XTO ENERGY INC", [], [_f("X1", "8-K", "2010-06-25"), _f("X2", "25-NSE", "2010-06-28"),
+                                          _f("X3", "15-12B", "2010-07-08")]))
+    r = TickerResolver(_Edgar(dict([xto]), {"XTO": 868809}), member_names=lambda t, d=None: "XTO ENERGY INC")
+    assert r.resolve("XTO", "2013-02-07").cik == 868809
+
+
 def test_a_long_dead_member_is_not_accepted_for_a_later_event():
-    dead = _NameEdgar(765258, "IMCLONE SYSTEMS INC", [],
-                      [EdgarSubmission("I1", "10-K", "2008-03-01", "", "", "k.htm")], "IMCLONE")
-    r = TickerResolver(dead, member_names=lambda t, d=None: "IMCLONE SYSTEMS INC")
+    dead = (765258, ("IMCLONE SYSTEMS INC", [], [_f("I1", "10-K", "2008-03-01")]))
+    r = TickerResolver(_Edgar(dict([dead]), {"IMCLONE": 765258}),
+                       member_names=lambda t, d=None: "IMCLONE SYSTEMS INC")
     assert r.resolve("IMCL", "2018-10-05").cik is None
 
 
-def test_the_frequency_tier_skips_a_candidate_whose_name_shares_nothing(monkeypatch):
-    comstock = _NameEdgar(1299969, "COMSTOCK INC", [], [], "NOMATCH")
+def test_the_date_anchored_efts_hit_beats_the_member_name(monkeypatch):
+    # FST: the vendor series is FAST Acquisition Corp; the member was Forest Oil.
+    fast = (1815737, ("FAST Acquisition Corp.", [], [_f("S1", "S-1", "2020-08-01"), _f("F1", "25-NSE", "2022-08-26")]))
+    city = (38067, ("FOREST CITY REALTY TRUST", [], [_f("C1", "10-K", "2018-02-27"), _f("C2", "25-NSE", "2018-12-10")]))
+    monkeypatch.setattr(TickerResolver, "_efts_lookup",
+                        lambda self, t, d=None, **kw: (1815737, "FAST Acquisition Corp. (FST)"))
+    r = TickerResolver(_Edgar(dict([fast, city]), {"FOREST": 38067}),
+                       member_names=lambda t, d=None: "FOREST OIL CORP")
+    assert r.resolve("FST", "2022-08-25").cik == 1815737
+
+
+def test_the_member_name_tier_runs_before_the_frequency_rank(monkeypatch):
+    # LC with SEC's current ticker map: EFTS finds nothing; frequency rank would pick Comstock.
+    lc = (1409970, ("Happen, Inc.", [{"name": "LendingClub Corp", "from": "2007-08-15T04:00:00.000Z",
+                                      "to": "2026-06-18T04:00:00.000Z"}],
+                    [_f("L1", "10-Q", "2026-05-05"), _f("L2", "25", "2026-06-18")]))
+    comstock = (1299969, ("COMSTOCK INC", [], [_f("M1", "10-K", "2026-03-01")]))
     monkeypatch.setattr(TickerResolver, "_efts_pre_delist_frequency_ranked",
-                        lambda self, t, d, top_n=5: [(1299969, "Comstock Inc")])
-    monkeypatch.setattr(TickerResolver, "_validate_cik", lambda self, c, d, strict=True: True)
-    r = TickerResolver(comstock, member_names=lambda t, d=None: "LENDINGCLUB CORP")
-    assert r.resolve("LC", "2026-06-01").cik is None
+                        lambda self, t, d, top_n=5: [(1299969, "Comstock Inc"), (1409970, "LendingClub")])
+    r = TickerResolver(_Edgar(dict([lc, comstock]), {"LENDINGCLUB": 1409970}),
+                       member_names=lambda t, d=None: "LENDINGCLUB CORP")
+    assert r.resolve("LC", "2026-06-01").cik == 1409970
 ```
 
-In `tests/test_golden_events.py`, delete the Task 3 entries from `XFAIL_BUCKET` (the ruling-split name of `XFAIL`).
+In `tests/test_golden_events.py`, delete the Task 3 entries from `XFAIL_BUCKET` (CPWR, PEAK, IMCL). Apply the general rule for any that still fail.
 
 - [ ] **Step 2: Run them.** `PYTHONPATH=src:. conda run -n rdagent4qlib --no-capture-output python -m pytest tests/test_names.py tests/test_evidence.py tests/test_resolver_member_names.py tests/test_golden_events.py -v`. Expected: the new files FAIL (ImportError or wrong CIK), and the Task 3 golden ids FAIL.
 
@@ -709,24 +761,25 @@ import re
 from bisect import bisect_right
 from pathlib import Path
 
-_STOP = {"CORP", "CORPORATION", "INC", "COMPANY", "HOLDINGS", "HOLDING", "LTD", "LIMITED",
-         "GROUP", "INTERNATIONAL", "TRUST", "PARTNERS", "FUND", "BANK", "BANCORP",
-         "BANCSHARES", "CLASS", "SERIES", "COMMON", "STOCK", "SHARES"}
+_STOP = {"CORP", "CORPORATION", "INC", "INCORPORATED", "COMPANY", "COS", "HOLDINGS", "HOLDING",
+         "LTD", "LIMITED", "LLC", "PLC", "GROUP", "INTERNATIONAL", "INTL", "TRUST", "PARTNERS",
+         "FUND", "BANK", "BANCORP", "BANCSHARES", "CLASS", "SERIES", "COMMON", "STOCK", "SHARES",
+         "THE", "AND", "NEW"}
 
 
 def name_tokens(name: str) -> set[str]:
-    return {t for t in re.findall(r"[A-Z]{4,}", (name or "").upper()) if t not in _STOP}
+    """Words of three or more letters, minus legal suffixes and fillers. Three-letter
+    words stay because they are often the distinctive part (XTO, OIL, SVB, UTI)."""
+    return {t for t in re.findall(r"[A-Z]{3,}", (name or "").upper()) if t not in _STOP}
 
 
-def names_agree(a: str, b: str, ignore: tuple[str, ...] = ()) -> bool:
-    """True if the names share a significant token. Tokens equal to an ignored
-    word (the ticker) are dropped first: recycled companies often carry the
-    symbol (Ribbit LEAP vs Leap Wireless). If that empties either side, the full
-    token sets are compared (SNAP INC vs Snap Inc.)."""
+def names_agree(a: str, b: str) -> bool:
+    """Two names agree when they share min(2, |A|, |B|) words, and at least one.
+    One shared word is not enough when both names have two or more: Forest Oil is
+    not Forest City (FST), Leap Wireless is not Ribbit LEAP (LEAP)."""
     ta, tb = name_tokens(a), name_tokens(b)
-    drop = {w.upper() for w in ignore}
-    ra, rb = ta - drop, tb - drop
-    return bool(ra & rb) if ra and rb else bool(ta & tb)
+    need = min(2, len(ta), len(tb))
+    return need >= 1 and len(ta & tb) >= need
 
 
 class MemberNames:
@@ -762,7 +815,7 @@ class MemberNames:
 """Pure evidence predicates over one company's EDGAR record. No network."""
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 from .edgar import EdgarSubmission
 
@@ -783,6 +836,26 @@ def name_at(sub: dict, on: date) -> str:
     return sub.get("name") or ""
 
 
+def names_near(sub: dict, on: date, days: int = 30) -> list[str]:
+    """Every name the company carried within ±days of `on`, former names first.
+
+    A delisting date and a rename date are often a day apart (EDGAR ends
+    "Halyard Health" on 2018-06-28; HYH's last vendor row is 2018-06-29), so a
+    single-day lookup misses the name the index used."""
+    lo, hi = on - timedelta(days=days), on + timedelta(days=days)
+    out: list[str] = []
+    last_end: date | None = None
+    for fn in sub.get("formerNames") or []:
+        f_lo, f_hi = parse_day(fn.get("from")), parse_day(fn.get("to"))
+        if f_hi and (last_end is None or f_hi > last_end):
+            last_end = f_hi
+        if f_lo and f_hi and f_lo <= hi and f_hi >= lo and fn.get("name"):
+            out.append(fn["name"])
+    if (last_end is None or last_end <= hi) and sub.get("name"):
+        out.append(sub["name"])      # the current name runs from the last rename on
+    return out
+
+
 def first_filing(filings: list[EdgarSubmission]) -> date | None:
     days = [d for f in filings if (d := parse_day(f.filing_date))]
     return min(days) if days else None
@@ -790,15 +863,17 @@ def first_filing(filings: list[EdgarSubmission]) -> date | None:
 
 - [ ] **Step 5: Wire the resolver.**
 
-In `TickerResolver.__init__`, store `member_names`. Add:
+In `TickerResolver.__init__`, store `member_names` (the Task 1 shim already accepts it). Add:
 
 ```python
+    MEMBER_ALIVE_DAYS = 400          # filed within ±this of the date: the company was operating
+    MEMBER_TAIL_DAYS = 1500          # a Form 25/15 up to this old: a frozen vendor tail (XTO)
+
     def _expected_name(self, t: str, observed_date: str | None) -> str | None:
         return self.member_names(t, observed_date) or self.name_lookup(t, observed_date)
 
-    def _fits_date(self, cik: int, observed_date: str | None, expected: str | None,
-                   ticker: str = "") -> tuple[bool, bool]:
-        """(existed on the date, its name then agrees with `expected`).
+    def _fits_date(self, cik: int, observed_date: str | None, expected: str | None) -> tuple[bool, bool]:
+        """(existed on the date, a name it carried within ±30 days agrees with `expected`).
 
         A CIK first seen after the delist date is today's holder of a recycled
         ticker (CPWR -> Ocean Thermal, SPWR -> Complete Solaria/SunPower Inc.)."""
@@ -814,40 +889,52 @@ In `TickerResolver.__init__`, store `member_names`. Add:
             return False, False
         first = first_filing(filings)
         existed = first is not None and first <= on
-        agrees = expected is None or names_agree(name_at(sub, on), expected, ignore=(ticker,))
+        agrees = expected is None or (isinstance(sub, dict) and
+                                      any(names_agree(n, expected) for n in names_near(sub, on)))
         return existed, agrees
 
-    def _alive_near(self, cik: int, observed_date: str) -> bool:
-        """Filed anything within [date − 1500 d, date + 400 d]."""
-        on = parse_day(observed_date)
-        if on is None:
-            return True
-        lo, hi = on - timedelta(days=1500), on + timedelta(days=400)
-        return any((d := parse_day(f.filing_date)) is not None and lo <= d <= hi
-                   for f in self.edgar.recent_filings(cik))
+    def _accept_member_candidate(self, cik: int, observed_date: str | None, expected: str) -> bool:
+        """Accept a name-search hit found through a member name.
 
-    def _accept_member_candidate(self, cik: int, t: str, observed_date: str | None, expected: str) -> bool:
-        """A name-search hit found through a member name. A rename files no
-        Form 25 (HYH -> Avanos, SKLZ -> Firy) and a frozen vendor tail can
-        outlast the 540-day window (XTO), so the loose Form-25 check alone
-        rejects true matches. Also accept the CIK when it existed on the date,
-        carried an agreeing name then, and was filing around the event (which
-        keeps out a long-dead member such as ImClone for a 2018 date)."""
+        A rename files no Form 25 (HYH -> Avanos), and a frozen vendor tail can
+        outlast the 540-day window (XTO), so the loose check alone rejects true
+        matches. Without that check, the company must have existed on the date,
+        carried an agreeing name then, and either been filing within ±400 days
+        or filed a Form 25/15 in the 1,500 days before the date. The last two
+        conditions keep out a long-dead member (ImClone for a 2018 date)."""
         if not observed_date or self._validate_cik(cik, observed_date, strict=False):
             return True
-        existed, agrees = self._fits_date(cik, observed_date, expected, t)
-        return existed and agrees and self._alive_near(cik, observed_date)
+        existed, agrees = self._fits_date(cik, observed_date, expected)
+        if not (existed and agrees):
+            return False
+        on = parse_day(observed_date)
+        for f in self.edgar.recent_filings(cik):
+            d = parse_day(f.filing_date)
+            if d is None:
+                continue
+            if abs((d - on).days) <= self.MEMBER_ALIVE_DAYS:
+                return True
+            if f.form in {"25", "25-NSE", "15-12G", "15-12B", "15-15D"} and \
+                    on - timedelta(days=self.MEMBER_TAIL_DAYS) <= d <= on + timedelta(days=45):
+                return True
+        return False
 ```
 
-Ruling (Task 1 review): `_accept_member_candidate` is used for the name tier whenever the expected name comes from `member_names` (not from AV).
+Import `parse_day`, `names_near` and `first_filing` from `.evidence`, `names_agree` and `name_tokens` from `.names`, and `EdgarBlocked` from `.edgar`.
 
-In `resolve()`:
-- `company_tickers` tier: accept the hit only if `_fits_date(cik, observed_date, expected, t) == (True, True)`, with source `"company_tickers"`. Otherwise fall through to the tiers below.
-- Tier 1 (EFTS): after `_validate_cik`, also require `existed`. If `agrees` is False, keep the CIK but set `source = "efts_name_mismatch"`.
-- `_efts_lookup` second pass ("first non-exchange CIK"): return a candidate only if `names_agree(nm, expected)` for the caller's expected name. Pass `expected` in as a new keyword argument `expected_name`. With no expected name, skip the second pass.
-- `_name_search`: replace `nm = self.name_lookup(ticker, observed_date)` with `nm = self._expected_name(ticker, observed_date)`. In `resolve()`, validate its hit with `_accept_member_candidate` when `self.member_names(t, observed_date)` is not None, and with `_validate_cik(..., strict=False)` otherwise (today's rule).
-- Tier 3: `score = self._name_match_score(cand_cik, av_name)`, where `av_name = self._expected_name(t, observed_date)`. Ruling (Task 1 review): when `av_name` is set, skip candidates whose score is 0. With SEC's current ticker map, LC reaches this tier and would otherwise take Comstock on rank alone.
-- Order change: when `self.member_names(t, observed_date)` is not None, try Tier 2 (name search) before Tier 1. A member name is more precise than a text search for the ticker (HYH, PEAK, CPWR, SPWR).
+In `resolve()`, the tier order stays as today. Only the checks change:
+1. Manual overrides.
+2. Cache.
+3. Rename map.
+4. `company_tickers`: accept the hit only if `_fits_date(cik, observed_date, expected) == (True, True)`, where `expected = self._expected_name(t, observed_date)`, with source `"company_tickers"`. Otherwise fall through.
+5. Tier 1 (EFTS): after `_validate_cik(strict=False)`, also require `existed` from `_fits_date`. If the name does not agree, keep the CIK and set `source = "efts_name_mismatch"`. The row describes the company that delisted on the date, and the classifier flags the mismatch.
+   - `_efts_lookup` gains a keyword argument `expected_name=None`.
+   - Its second pass ("first non-exchange CIK in any hit") returns a candidate only if `names_agree(nm, expected_name)`. With no expected name it skips the second pass.
+6. Tier 2 (name search): `_name_search` uses `self._expected_name(ticker, observed_date)` instead of `self.name_lookup(...)`.
+   - When `self.member_names(t, observed_date)` is not None, validate the hit with `_accept_member_candidate`. Otherwise keep today's `_validate_cik(..., strict=False)`.
+7. Tier 3 (frequency rank): unchanged selection, except that `_name_match_score` compares `name_tokens` sets (the shared tokenizer) against `self._expected_name(...)`.
+   - A score of 0 is allowed; the impostor series HMA and HLTH resolve only here.
+   - When the winner's score is 0 and an expected name exists, set `source = "efts_frequency_name_mismatch"`.
 
 In `DelistClassifier.classify_ticker`, right after `resolution` is known and a CIK exists:
 
@@ -857,7 +944,7 @@ In `DelistClassifier.classify_ticker`, right after `resolution` is known and a C
             flags.append("resolved_by_current_ticker_map")
         expected = self.resolver._expected_name(ticker.upper(), observed_delist_date)
         if expected and observed:
-            _, agrees = self.resolver._fits_date(resolution.cik, observed_delist_date, expected, ticker.upper())
+            _, agrees = self.resolver._fits_date(resolution.cik, observed_delist_date, expected)
             if not agrees:
                 flags.append("member_name_mismatch")
 ```
@@ -865,7 +952,7 @@ In `DelistClassifier.classify_ticker`, right after `resolution` is known and a C
 Put `flags` into every `evidence` dict created after this point (`evidence["flags"] = flags`). Build the base `evidence` before the REVOKED check so every return path carries it.
 
 The company-tickers tier now reads `submissions()` for every hit. So in `tests/conftest.py`, give `_FakeEdgar` the three methods the new code calls:
-- `submissions(cik)`, which returns `{"name": self.company_map_name(cik), "formerNames": [], "sic": ""}`, where the name is the `title` of the company-map row with that `cik_str`;
+- `submissions(cik)`, which returns `{"name": <title of the company-map row with that cik_str>, "formerNames": [], "sic": ""}`;
 - `fetch_filing_text(cik, accession, primary_doc)`, which returns `self.texts.get(accession, "")` from a new `texts: dict` field (default empty);
 - `company_search_atom(name, form_type="25-NSE")`, which returns `[]`.
 
@@ -873,7 +960,11 @@ Give the `BAD` fixture `texts={"A002": "Item 3.01 Notice of Delisting ... has no
 
 In `scripts/classify_universe.py`, add `p.add_argument("--names", default=None, help="CSV ticker,as_of,name: index-member names (qlib_practice exports them from iShares/Wikipedia holdings)")`. Pass `member_names=MemberNames.from_csv(args.names) if args.names else None` to `TickerResolver`.
 
-- [ ] **Step 6: Run the tests.** `conda run -n rdagent4qlib pytest -q`. Expected: PASS. The HYH, PEAK, CPWR and SPWR golden ids now pass on bucket or CIK; any bucket part they still need belongs to a later task. If one still fails only on bucket, move its `XFAIL` entry to that task (SPWR → 4, HYH → 7, PEAK → 9) instead of deleting it.
+- [ ] **Step 6: Run the tests.** `PYTHONPATH=src:. conda run -n rdagent4qlib --no-capture-output python -m pytest -q`. Expected: PASS.
+  - Golden cases: the resolution parts of HYH, SPWR, OAS, MDR, WE, XTO and KCI are now right, while their buckets wait for later tasks (their `XFAIL_BUCKET` entries stay).
+  - CPWR, PEAK and IMCL pass.
+  - HLTH, FST, BWC, HMA and LEAP carry `member_name_mismatch` and wait for their bucket task.
+  - Apply the general rule to anything else.
 
 - [ ] **Step 7: Commit.** `git commit -am "feat(resolver): member names and a date-aware company match; flag a member/company mismatch"`
 
