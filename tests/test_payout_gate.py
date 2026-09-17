@@ -62,8 +62,20 @@ def test_an_election_regex_matching_neither_leg_keeps_the_flag():
 
 def test_an_election_where_neither_leg_fits_keeps_the_flags():
     r = reconcile(25.0, 12.18, _terms("election", 50.0, 1.0, "X"), 44.0, DEFAULT_TOL)
-    assert r == reconcile(25.0, 12.18, None, None, DEFAULT_TOL)
-    assert (r.cash, r.stock_ratio, r.source, r.flags) == (None, None, "none", ("payout_gate_failed:25",))
+    assert (r.cash, r.stock_ratio, r.source) == (None, None, "none")
+    assert r.flags == ("payout_gate_failed:25", "llm_gate_failed")
+
+
+def test_llm_terms_that_fail_the_gate_are_flagged():
+    # with no regex value the row would otherwise land at par with no flag
+    r = reconcile(None, 12.18, _terms("cash", 50.0), None, DEFAULT_TOL)
+    assert (r.cash, r.source, r.flags) == (None, "none", ("llm_gate_failed",))
+    r = reconcile(25.0, 12.18, _terms("other", None), None, DEFAULT_TOL)
+    assert r.flags == ("payout_gate_failed:25", "llm_gate_failed")
+
+
+def test_llm_terms_left_to_the_cash_and_stock_gate_are_not_flagged_by_reconcile():
+    assert reconcile(None, 10.0, _terms("stock", None, 0.5, "X"), 30.0, DEFAULT_TOL).flags == ()
 
 
 def test_terms_with_a_stock_ratio_are_left_to_the_cash_and_stock_gate():
@@ -199,3 +211,26 @@ def test_terms_gate_csv_override_records_no_flag():
     g = _gate(terms=_terms("stock", None, 0.5, "XYZ"), csv=csv, price=20.0)
     assert g.dropped["csv_override"] == 1
     assert K not in g.flags
+
+
+def test_failed_llm_terms_flag_the_row_in_gate_payouts():
+    g = _gate(terms=_terms("cash", 50.0), close=12.18)
+    assert (g.payouts, g.flags[K]) == ({}, ("llm_gate_failed",))
+
+
+# --- F13: gate_failed counts only rows nothing settled ---
+
+def test_gate_failed_skips_a_row_the_llm_cash_settled():
+    # TWO: the regex $25 failed the close, the LLM's $12 settled the row
+    g = _gate(payout=25.0, terms=_terms("cash", 12.0), close=12.18)
+    assert (g.payouts[K], g.flags[K], g.gate_failed) == (12.0, ("payout_gate_failed:25",), 0)
+
+
+def test_gate_failed_skips_a_row_merger_terms_settled():
+    g = _gate(payout=25.0, close=12.18, csv={"ABC": {"cash_per_share": 12.0}})
+    assert (K in g.payouts, g.flags[K], g.gate_failed) == (False, ("payout_gate_failed:25",), 0)
+
+
+def test_gate_failed_counts_a_row_nothing_settled():
+    g = _gate(payout=25.0, close=12.18)
+    assert (K in g.payouts, g.flags[K], g.gate_failed) == (False, ("payout_gate_failed:25",), 1)

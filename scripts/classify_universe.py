@@ -360,8 +360,9 @@ def main() -> int:
         lambda ticker, date: _acquirer_price(prices, ticker, date),
         args.merger_terms_sanity_tol,
     )
-    print(f"\nPayout gate: {gated.gate_failed} merger rows flagged payout_gate_failed "
-          f"(a payout that failed the last-close check and no full terms settled the row)")
+    print(f"\nPayout gate: {gated.gate_failed} merger rows unsettled: flagged payout_gate_failed, "
+          f"with no gated payout and no merged terms (rows the LLM cash or full terms settled "
+          f"are not counted)")
     if llm_ext is not None:
         print(f"LLM merger terms: {gated.emitted} cash+stock/stock-only emitted "
               f"({len(llm_terms_raw)} mergers extracted); dropped {gated.dropped}; "

@@ -12,6 +12,7 @@ from .reconstruction import _lookup
 
 DEFAULT_TOL = 0.15
 GATE_FAILED = "payout_gate_failed:"
+LLM_GATE_FAILED = "llm_gate_failed"
 DROP_REASONS = ("csv_override", "no_acq_ticker", "no_acq_price", "no_last_close", "fail_sanity")
 
 
@@ -63,6 +64,10 @@ def reconcile(regex_value, last_close, llm_terms, acquirer_price, tol) -> Reconc
         elif ratio is None and _fits(cash, last_close, tol):
             # A cash deal, including the cash + CVR deals the LLM labels "other".
             return Reconciled(cash, None, None, "llm", tuple(flags))
+        if llm_terms.deal_type == "election" or ratio is None:
+            # Terms this function settles that did not reconcile: the row lands at
+            # par, so flag it. Other stock-ratio terms go to the cash+stock gate.
+            flags.append(LLM_GATE_FAILED)
     return Reconciled(None, None, None, "none", tuple(flags))
 
 
@@ -79,8 +84,14 @@ class GatedPayouts:
 
     @property
     def gate_failed(self) -> int:
-        """Rows still flagged payout_gate_failed (full terms clear the flag)."""
-        return sum(any(f.startswith(GATE_FAILED) for f in fl) for fl in self.flags.values())
+        """Rows flagged payout_gate_failed that nothing settled: no gated payout
+        and no merged terms (a row the LLM cash or full terms settled keeps its
+        flag for review but is not counted)."""
+        return sum(
+            any(f.startswith(GATE_FAILED) for f in fl)
+            and key not in self.payouts and not _lookup(self.merged_terms, *key)
+            for key, fl in self.flags.items()
+        )
 
 
 def gate_payouts(
