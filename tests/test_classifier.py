@@ -510,3 +510,59 @@ def test_a_court_appointed_receiver_in_the_section_confirms():
          "jurisdiction over all of the Loan Parties' assets. Item 9.01 Financial Statements.")
     assert "receivership" not in t.split("Receivership.", 1)[1].lower()
     assert _confirms_bankruptcy(t) is True
+
+
+# --- R4: an unreadable 3.01 notice narrows the merger-evidence window ---
+
+
+def test_an_unreadable_notice_narrows_the_merger_window_to_120_days():
+    """The 3.01 notice could not be fetched, so the merger branch is the weakest
+    evidence path: a proxy 200 days before the Form 25 no longer carries it."""
+    fs = [
+        EdgarSubmission("R1", "DEFM14A", "2022-10-22", "", "", "d.htm"),   # 200 days before the Form 25
+        EdgarSubmission("R2", "8-K", "2023-05-08", "2023-05-08", "3.01,8.01", "a.htm"),
+        EdgarSubmission("R3", "25-NSE", "2023-05-10", "", "", "p.xml"),
+        EdgarSubmission("R4", "NT 10-K", "2023-03-01", "", "", "n.htm"),
+    ]
+    e = _TextEdgar(fs, {})                                  # the notice fetch missed
+    rec = DelistClassifier(e, TickerResolver(e)).classify_ticker("REORG", "2023-05-10")
+    assert "notice_text_missing" in rec.evidence["flags"]
+    assert rec.bucket is CrspBucket.COMPLIANCE_FAILURE and rec.crsp_code == 580
+
+
+def test_an_unreadable_notice_with_no_other_evidence_is_unknown():
+    fs = [
+        EdgarSubmission("S1", "DEFM14A", "2022-10-22", "", "", "d.htm"),   # 200 days before the Form 25
+        EdgarSubmission("S2", "8-K", "2023-05-08", "2023-05-08", "3.01,8.01", "a.htm"),
+        EdgarSubmission("S3", "25-NSE", "2023-05-10", "", "", "p.xml"),
+    ]
+    e = _TextEdgar(fs, {})
+    rec = DelistClassifier(e, TickerResolver(e)).classify_ticker("REORG", "2023-05-10")
+    assert "notice_text_missing" in rec.evidence["flags"]
+    assert rec.bucket is CrspBucket.UNKNOWN
+    assert "no_evidence_default" in rec.evidence["flags"]
+
+
+def test_an_unreadable_notice_still_takes_a_proxy_inside_120_days():
+    fs = [
+        EdgarSubmission("T1", "DEFM14A", "2023-02-20", "", "", "d.htm"),   # 79 days before the Form 25
+        EdgarSubmission("T2", "8-K", "2023-05-08", "2023-05-08", "3.01,8.01", "a.htm"),
+        EdgarSubmission("T3", "25-NSE", "2023-05-10", "", "", "p.xml"),
+    ]
+    e = _TextEdgar(fs, {})
+    rec = DelistClassifier(e, TickerResolver(e)).classify_ticker("REORG", "2023-05-10")
+    assert "notice_text_missing" in rec.evidence["flags"]
+    assert rec.bucket is CrspBucket.MERGER and rec.crsp_code == 231
+
+
+def test_a_readable_notice_keeps_the_full_merger_window():
+    fs = [
+        EdgarSubmission("U1", "DEFM14A", "2022-10-22", "", "", "d.htm"),   # 200 days before the Form 25
+        EdgarSubmission("U2", "8-K", "2023-05-08", "2023-05-08", "3.01,8.01", "a.htm"),
+        EdgarSubmission("U3", "25-NSE", "2023-05-10", "", "", "p.xml"),
+    ]
+    e = _TextEdgar(fs, {"U2": "Item 3.01 Notice of Delisting. Nasdaq was notified that the merger closed "
+                              "and trading in the common stock will be suspended."})
+    rec = DelistClassifier(e, TickerResolver(e)).classify_ticker("REORG", "2023-05-10")
+    assert "notice_text_missing" not in rec.evidence["flags"]
+    assert rec.bucket is CrspBucket.MERGER and rec.crsp_code == 231

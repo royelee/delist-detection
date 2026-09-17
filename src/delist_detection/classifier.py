@@ -48,6 +48,7 @@ FORM25_AFTER_DAYS = 45       # a Form 25 filed after the vendor's last trade
 FORM25_TAIL_DAYS = 45        # beyond this, an earlier Form 25 means a frozen vendor tail
 FORM25_MAX_BEFORE_DAYS = 1500
 M_A_ITEMS = {"2.01", "5.01", "3.03"}
+NOTICE_MISSING_MERGER_DAYS = 120   # merger-evidence window when the 3.01 notice is unreadable
 
 
 @dataclass
@@ -382,7 +383,11 @@ class DelistClassifier:
             return rec(580 if delinquent else 570, CrspBucket.COMPLIANCE_FAILURE, "medium",
                        "Listing deficiency cited in the 3.01 notice"
                        + (" + NT 10-K/Q in the prior year (delinquent filer 580)" if delinquent else ""))
-        proxy = merger_evidence(filings, anchor) if anchor else None
+        # An unreadable notice means the evidence here is at its weakest, and the
+        # merger branch is the least conservative option — so require a proxy or
+        # tender filing close to the anchor instead of one up to 400 days old.
+        before = NOTICE_MISSING_MERGER_DAYS if "notice_text_missing" in flags else 400
+        proxy = merger_evidence(filings, anchor, before=before) if anchor else None
         if proxy is not None:
             return rec(231, CrspBucket.MERGER, "medium",
                        f"Merger filing {proxy.form} {proxy.filing_date} before the delisting")
