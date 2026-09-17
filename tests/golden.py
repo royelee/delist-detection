@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import csv
 import json
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -77,9 +78,22 @@ class GoldenEdgar:
 
 
 def patch_efts(monkeypatch, case: GoldenCase) -> None:
+    from delist_detection.names import names_agree
     from delist_detection.ticker_resolver import TickerResolver
-    hit = case.data["efts_lookup"]
+    hit = tuple(case.data["efts_lookup"])
     freq = [tuple(x) for x in case.data["efts_frequency"]]
-    monkeypatch.setattr(TickerResolver, "_efts_lookup", lambda self, t, d=None, **kw: tuple(hit))
+    first_pass = re.compile(rf"\(\s*{re.escape(case.ticker.upper())}\s*\)")
+
+    def efts_lookup(self, t, d=None, expected_name=None, **kw):
+        # The fixture holds the answer of the old _efts_lookup. A hit without
+        # "(TICKER)" came from its second pass (first non-exchange CIK), which now
+        # returns a CIK only when the name agrees with expected_name. Later hits
+        # were not captured, so a disagreeing one replays as no hit.
+        cik, nm = hit
+        if cik is None or first_pass.search((nm or "").upper()) or names_agree(nm, expected_name):
+            return hit
+        return None, None
+
+    monkeypatch.setattr(TickerResolver, "_efts_lookup", efts_lookup)
     monkeypatch.setattr(TickerResolver, "_efts_pre_delist_frequency_ranked",
                         lambda self, t, d, top_n=5: freq)

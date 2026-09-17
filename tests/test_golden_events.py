@@ -14,16 +14,9 @@ GOLDEN_MANUAL = {"IMCL": 1520047}
 # case id -> the task after which test_golden_bucket_and_flags passes. Delete entries
 # as tasks land; if a case still fails only for a later task's rule, move it there.
 XFAIL_BUCKET = {
-    # member names / date-aware company match
-    "PEAK_2023-02-13": 3,   # EFTS second pass takes Far Peak (1829426) -> 570; the member-name
-                            # search finds 765880, whose continued filings give 304
-    "CPWR_2014-12-15": 3,   # company_tickers gives today's CPWR, Ocean Thermal (827099) -> 304
-    "IMCL_2018-10-05": 3,   # pinned: bucket already right (573 via REVOKED); member_name_mismatch missing
     # bankruptcy history
     "HLTH_2019-09-10": 4,   # 580 via the 3.01; flag from Task 3, liquidation from the receivership
                             # 8-K (1.03, 2019-09-24) inside Task 4's after=30 window
-    "SPWR_2024-08-20": 4,   # company_tickers gives 1838987 (Complete Solaria on the date) -> 304;
-                            # Task 3 resolves 867773, Task 4 reads its 1.03 of 2024-08-06
     "OAS_2020-11-20": 4,    # unresolved (every EFTS candidate fails strict validation); the member
                             # name resolves it in Task 3, the 1.03 of 2020-09-30 decides in Task 4
     "MDR_2020-01-22": 4,    # unresolved (708819 fails strict validation: 10-Q 107 days later); Task 3
@@ -39,8 +32,6 @@ XFAIL_BUCKET = {
                             # member-name hit (existed, agreeing name, filing near the date), Task 5
                             # anchors on the 2010 Form 25 (frozen_tail), Task 6 reads 3.01+3.03+5.01
     # renames / listing transfers
-    "HYH_2018-06-29": 7,    # unresolved (a rename files no Form 25); Task 3's member-name acceptance
-                            # resolves 1606498, Task 7 gives 304
     "LC_2026-06-01": 7,     # 570: the 3.01 notice announces the move to Nasdaq
     "SKLZ_2026-06-18": 7,   # 570 anchored on the 2021-08-16 Form 25 (needs Task 5 too)
     # SPAC (each also needs Task 3's member_name_mismatch flag)

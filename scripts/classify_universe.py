@@ -23,6 +23,7 @@ from delist_detection import EdgarClient, TickerResolver, DelistClassifier
 from delist_detection.edgar import EdgarBlocked
 from delist_detection.crsp_codes import CrspBucket
 from delist_detection.av_listing import AvListingLoader
+from delist_detection.names import MemberNames
 from delist_detection.payout_extractor import PayoutExtractor, PayoutResult
 from delist_detection.reconstruction import (
     build_dlret_table, write_dlret_csv, load_merger_terms_csv, load_float_map_csv,
@@ -159,6 +160,9 @@ def main() -> int:
                         "be emitted (default 0.15). Completed deals reconcile tightly.")
     p.add_argument("--llm-model", default=None,
                    help="Override the chat model (default $CHAT_MODEL from .env).")
+    p.add_argument("--names", default=None,
+                   help="CSV ticker,as_of,name: index-member names (qlib_practice exports them "
+                        "from iShares/Wikipedia holdings)")
     args = p.parse_args()
 
     edgar = EdgarClient(cache_dir=ROOT / "cache" / "edgar")
@@ -169,6 +173,7 @@ def main() -> int:
         manual_overrides={k: v for k, v in MANUAL_OVERRIDES.items() if v > 0},
         cache_path=ROOT / "cache" / "ticker_resolution.json",
         name_lookup=av.name,
+        member_names=MemberNames.from_csv(args.names) if args.names else None,
     )
     classifier = DelistClassifier(
         edgar, resolver,

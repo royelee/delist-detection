@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 import pytest
@@ -16,12 +16,24 @@ class _FakeEdgar:
 
     submissions_by_cik: dict[int, list[EdgarSubmission]]
     company_map: dict[str, dict[str, Any]]
+    texts: dict[str, str] = field(default_factory=dict)   # accession -> filing text
 
     def company_tickers(self) -> dict[str, dict[str, Any]]:
         return self.company_map
 
     def recent_filings(self, cik: int | str) -> list[EdgarSubmission]:
         return list(self.submissions_by_cik.get(int(cik), []))
+
+    def submissions(self, cik: int | str) -> dict[str, Any]:
+        title = next((r["title"] for r in self.company_map.values()
+                      if int(r["cik_str"]) == int(cik)), "")
+        return {"name": title, "formerNames": [], "sic": ""}
+
+    def fetch_filing_text(self, cik: int | str, accession: str, primary_doc: str) -> str:
+        return self.texts.get(accession, "")
+
+    def company_search_atom(self, name: str, form_type: str = "25-NSE") -> list[dict]:
+        return []
 
 
 @pytest.fixture(autouse=True)
@@ -95,4 +107,6 @@ def fake_edgar() -> _FakeEdgar:
             "BAD":  {"cik_str": 999001, "ticker": "BAD",  "title": "Bad Co."},
             "LIQ":  {"cik_str": 999002, "ticker": "LIQ",  "title": "Liquidating Trust"},
         },
+        texts={"A002": "Item 3.01 Notice of Delisting ... has not regained compliance "
+                       "with the minimum bid price requirement"},
     )

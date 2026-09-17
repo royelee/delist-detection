@@ -295,6 +295,15 @@ class DelistClassifier:
                 evidence={"resolution_source": resolution.source},
             )
 
+        flags: list[str] = []
+        if resolution.source == "company_tickers":
+            flags.append("resolved_by_current_ticker_map")
+        expected = self.resolver._expected_name(ticker.upper(), observed_delist_date)
+        if expected and observed:
+            _, agrees = self.resolver._fits_date(resolution.cik, observed_delist_date, expected)
+            if not agrees:
+                flags.append("member_name_mismatch")
+
         filings = self.edgar.recent_filings(resolution.cik)
         if not filings:
             return DelistRecord(
@@ -305,6 +314,8 @@ class DelistClassifier:
                 bucket=CrspBucket.UNKNOWN,
                 confidence="none",
                 reason="EDGAR returned no submissions for CIK",
+                evidence={"resolution_source": resolution.source, "name": resolution.name,
+                          "flags": flags},
             )
 
         delist_filing = self._pick_delist_filing(filings, observed)
@@ -314,6 +325,7 @@ class DelistClassifier:
             "name": resolution.name,
             "delist_filing": asdict(delist_filing) if delist_filing else None,
             "dereg_filing": asdict(dereg) if dereg else None,
+            "flags": flags,
         }
 
         # SEC-revoked: explicit Order of Suspension/Revocation by the SEC.
