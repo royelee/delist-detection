@@ -392,12 +392,14 @@ def test_a_classification_asks_once_for_submissions_fresh_past_the_event():
         EdgarSubmission("F1", "8-K", "2020-09-30", "2020-09-29", "7.01", "a.htm"),
         EdgarSubmission("F2", "25-NSE", "2020-10-27", "", "", "p.xml"),
     ]
+    # a manual override makes the resolver read nothing, so only the classifier's call is counted
+    manual = {"REORG": 5}
     e = _FreshnessEdgar(fs, {})
-    DelistClassifier(e, TickerResolver(e)).classify_ticker("REORG", "2020-11-20")
+    DelistClassifier(e, TickerResolver(e, manual_overrides=manual)).classify_ticker("REORG", "2020-11-20")
     assert e.fresh_after == [date(2021, 1, 4)]          # observed + 45 days
     recent = date.today() - timedelta(days=10)
     e = _FreshnessEdgar(fs, {})
-    DelistClassifier(e, TickerResolver(e)).classify_ticker("REORG", recent.isoformat())
+    DelistClassifier(e, TickerResolver(e, manual_overrides=manual)).classify_ticker("REORG", recent.isoformat())
     assert e.fresh_after == [date.today()]              # capped at today
 
 

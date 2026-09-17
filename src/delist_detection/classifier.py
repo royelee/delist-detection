@@ -16,7 +16,7 @@ from datetime import date, datetime, timedelta
 from typing import Iterable
 
 from .crsp_codes import CrspBucket, bucket_for_code
-from .edgar import EdgarClient, EdgarSubmission
+from .edgar import EdgarClient, EdgarSubmission, submissions_fresh_after
 from .evidence import (
     bankruptcy_8ks,
     cites_listing_deficiency,
@@ -46,7 +46,6 @@ EIGHT_K_BACKSCAN_DAYS = 120  # how far back to scan for an announcement 8-K
 FORM25_AFTER_DAYS = 45       # a Form 25 filed after the vendor's last trade
 FORM25_TAIL_DAYS = 45        # beyond this, an earlier Form 25 means a frozen vendor tail
 FORM25_MAX_BEFORE_DAYS = 1500
-SUBMISSIONS_FRESH_DAYS = 45  # filings this long after the last trade must be in the submissions read
 M_A_ITEMS = {"2.01", "5.01", "3.03"}
 
 
@@ -459,8 +458,7 @@ class DelistClassifier:
         if observed:
             # Once, up front: a cached copy fetched before the event window is
             # fetched again, and every later read below hits the fresh copy.
-            self.edgar.submissions(resolution.cik, fresh_after=min(
-                observed + timedelta(days=SUBMISSIONS_FRESH_DAYS), date.today()))
+            self.edgar.submissions(resolution.cik, fresh_after=submissions_fresh_after(observed))
 
         flags: list[str] = []
         if resolution.source == "company_tickers":

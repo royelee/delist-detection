@@ -12,7 +12,7 @@ import os
 import threading
 import time
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -59,6 +59,14 @@ DEFAULT_UA = resolve_user_agent()
 
 # The day a cached JSON payload was fetched; a payload without it is dated by its file time.
 FETCHED_KEY = "__fetched__"
+SUBMISSIONS_FRESH_DAYS = 45  # filings this long after the last trade must be in the submissions read
+
+
+def submissions_fresh_after(on: date) -> date:
+    """The `fresh_after` for reading a company's submissions about an event on `on`:
+    `min(on + 45 days, today)`. The classifier and the resolver both use it."""
+    return min(on + timedelta(days=SUBMISSIONS_FRESH_DAYS), date.today())
+
 
 _RATE_LOCK = threading.Lock()
 _LAST_CALL: list[float] = [0.0]

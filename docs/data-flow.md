@@ -81,9 +81,10 @@ Every EDGAR JSON response is SHA1-keyed and cached in `cache/edgar/*.json`.
 A second run of `classify_universe.py` over the same set is near-instant
 (~3 s for 461 tickers) because no network calls happen. To force a refresh,
 delete the relevant cache files. Each payload records the day it was fetched
-(`__fetched__`; an older file is dated by its mtime). A classification asks
-once for the company's submissions fresh as of `min(observed + 45 days,
-today)`, so a copy cached before a later Form 25 is fetched again.
+(`__fetched__`; an older file is dated by its mtime). The resolver's checks
+and the classifier read a company's submissions fresh as of `min(observed +
+45 days, today)` (`edgar.submissions_fresh_after`), so a copy cached before a
+later Form 25 is fetched again.
 
 The ticker→CIK memo lives at `cache/ticker_resolution.json` and is keyed by
 `(ticker, observed_date)` so a recycled ticker resolves to the right

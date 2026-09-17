@@ -17,7 +17,7 @@ from typing import Iterable
 
 import requests
 
-from .edgar import EdgarClient, DEFAULT_UA, _throttle, check_response, EdgarBlocked
+from .edgar import EdgarClient, DEFAULT_UA, _throttle, check_response, EdgarBlocked, submissions_fresh_after
 from .evidence import first_filing, names_near, parse_day
 from .names import name_tokens, names_agree
 
@@ -95,6 +95,19 @@ class TickerResolver:
                 return n
         return None
 
+    def _submissions(self, cik: int, observed_date: str | None) -> dict:
+        """The company's submissions, fetched again when the cached copy predates
+        the event window (the same freshness the classifier asks for)."""
+        on = parse_day(observed_date)
+        if on is None:
+            return self.edgar.submissions(cik)
+        return self.edgar.submissions(cik, fresh_after=submissions_fresh_after(on))
+
+    def _filings(self, cik: int, observed_date: str | None) -> list:
+        """recent_filings, read after a fresh submissions read so both see one copy."""
+        self._submissions(cik, observed_date)
+        return self.edgar.recent_filings(cik)
+
     def _fits_date(self, cik: int, observed_date: str | None, expected: str | None) -> tuple[bool, bool]:
         """(existed on the date, a name it carried within ±30 days agrees with `expected`).
 
@@ -104,7 +117,7 @@ class TickerResolver:
         if on is None:
             return True, True
         try:
-            sub = self.edgar.submissions(cik)
+            sub = self._submissions(cik, observed_date)
             filings = self.edgar.recent_filings(cik)
         except EdgarBlocked:
             raise
@@ -132,7 +145,7 @@ class TickerResolver:
         if not (existed and agrees):
             return False
         on = parse_day(observed_date)
-        for f in self.edgar.recent_filings(cik):
+        for f in self._filings(cik, observed_date):
             d = parse_day(f.filing_date)
             if d is None:
                 continue
@@ -375,7 +388,7 @@ class TickerResolver:
             return None, None
         return best[2], best[3] or nm
 
-    def _name_match_score(self, cik: int, ticker_name: str) -> int:
+    def _name_match_score(self, cik: int, ticker_name: str, observed_date: str | None = None) -> int:
         """Token-overlap score between the expected name and the CIK's EDGAR names.
 
         Score is the number of `names.name_tokens` words shared by the
@@ -384,7 +397,7 @@ class TickerResolver:
         marked as a name mismatch by the caller (impostor vendor series).
         """
         try:
-            sub = self.edgar.submissions(cik)
+            sub = self._submissions(cik, observed_date)
         except EdgarBlocked:
             raise
         except Exception as e:
@@ -416,7 +429,7 @@ class TickerResolver:
         except ValueError:
             return True
         try:
-            subs = self.edgar.recent_filings(cik)
+            subs = self._filings(cik, observed_date)
         except EdgarBlocked:
             raise
         except Exception as e:
@@ -618,7 +631,7 @@ class TickerResolver:
             for rank, (cand_cik, cand_name) in enumerate(ranked):
                 if not self._validate_cik(cand_cik, observed_date, strict=True):
                     continue
-                score = self._name_match_score(cand_cik, expected) if expected else 0
+                score = self._name_match_score(cand_cik, expected, observed_date) if expected else 0
                 inv_rank = -rank
                 cur = (score, inv_rank, cand_cik, cand_name)
                 if best is None or cur > best:
