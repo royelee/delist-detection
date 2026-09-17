@@ -12,6 +12,7 @@ import os
 import threading
 import time
 from dataclasses import dataclass
+from datetime import date
 from pathlib import Path
 from typing import Any
 
@@ -56,6 +57,9 @@ def resolve_user_agent(env_file: str | Path = _REPO_ENV) -> str:
 
 DEFAULT_UA = resolve_user_agent()
 
+# The day a cached JSON payload was fetched; a payload without it is dated by its file time.
+FETCHED_KEY = "__fetched__"
+
 _RATE_LOCK = threading.Lock()
 _LAST_CALL: list[float] = [0.0]
 _MIN_INTERVAL = 1.0 / 8.0
@@ -71,6 +75,15 @@ def _strip_html(raw: str) -> str:
     t = _html.unescape(t)
     t = _re.sub(r"\s+", " ", t)
     return t.strip()
+
+
+def _fetched_on(cp: Path, data: Any) -> date:
+    if isinstance(data, dict):
+        try:
+            return date.fromisoformat(data.get(FETCHED_KEY))
+        except (TypeError, ValueError):
+            pass
+    return date.fromtimestamp(cp.stat().st_mtime)
 
 
 def _throttle() -> None:
@@ -118,27 +131,35 @@ class EdgarClient:
         h = hashlib.sha1(url.encode("utf-8")).hexdigest()
         return self.cache_dir / f"{h}.json"
 
-    def _get_json(self, url: str, *, refresh: bool = False) -> Any:
+    def _get_json(self, url: str, *, refresh: bool = False, fresh_after: date | None = None) -> Any:
+        """The cached payload, unless `refresh` or it was fetched before `fresh_after`."""
         cp = self._cache_path(url)
         if cp.exists() and not refresh:
             try:
-                return json.loads(cp.read_text())
+                data = json.loads(cp.read_text())
             except json.JSONDecodeError:
                 cp.unlink(missing_ok=True)
+            else:
+                if fresh_after is None or _fetched_on(cp, data) >= fresh_after:
+                    return data
 
         _throttle()
         host = "data.sec.gov" if url.startswith(SEC_HOST) else "www.sec.gov"
         headers = {**self.session.headers, "Host": host}
         resp = self.session.get(url, headers=headers, timeout=30)
         check_response(resp)
+        today = date.today().isoformat()
         if resp.status_code == 404:
-            cp.write_text(json.dumps({"__not_found__": True, "url": url}))
-            return {"__not_found__": True, "url": url}
+            data = {"__not_found__": True, "url": url, FETCHED_KEY: today}
+            cp.write_text(json.dumps(data))
+            return data
         resp.raise_for_status()
         try:
             data = resp.json()
         except json.JSONDecodeError:
             data = {"__raw__": resp.text, "url": url}
+        if isinstance(data, dict):
+            data[FETCHED_KEY] = today
         cp.write_text(json.dumps(data))
         return data
 
@@ -210,10 +231,13 @@ class EdgarClient:
             out.append({"cik": company_cik, "name": company_name, "form": "", "filing_date": ""})
         return out
 
-    def submissions(self, cik: int | str) -> dict[str, Any]:
+    def submissions(self, cik: int | str, fresh_after: date | None = None) -> dict[str, Any]:
+        """The company's submissions JSON. A cached copy fetched before
+        `fresh_after` is fetched again (and the cache rewritten), so filings
+        made after the cache date are seen."""
         cik_str = str(int(cik)).zfill(10)
         url = f"{SEC_HOST}/submissions/CIK{cik_str}.json"
-        return self._get_json(url)
+        return self._get_json(url, fresh_after=fresh_after)
 
     def fetch_filing_text(self, cik: int | str, accession: str, primary_doc: str) -> str:
         """Fetch a filing's primary document, return stripped plain text.

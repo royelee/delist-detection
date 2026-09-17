@@ -15,7 +15,7 @@ class _Edgar:
         self.tickers = tickers or {}    # SEC's current ticker map
     def company_tickers(self):
         return self.tickers
-    def submissions(self, cik):
+    def submissions(self, cik, fresh_after=None):
         c = self.companies.get(int(cik))
         return {"name": c[0], "formerNames": c[1], "sic": ""} if c else {"__not_found__": True}
     def recent_filings(self, cik):

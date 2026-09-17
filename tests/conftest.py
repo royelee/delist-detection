@@ -24,7 +24,7 @@ class _FakeEdgar:
     def recent_filings(self, cik: int | str) -> list[EdgarSubmission]:
         return list(self.submissions_by_cik.get(int(cik), []))
 
-    def submissions(self, cik: int | str) -> dict[str, Any]:
+    def submissions(self, cik: int | str, fresh_after=None) -> dict[str, Any]:
         title = next((r["title"] for r in self.company_map.values()
                       if int(r["cik_str"]) == int(cik)), "")
         return {"name": title, "formerNames": [], "sic": ""}

@@ -63,7 +63,7 @@ class _TextEdgar:
         return {"REORG": {"cik_str": 5, "ticker": "REORG", "title": "Reorg Co"}}
     def recent_filings(self, cik):
         return list(self.filings)
-    def submissions(self, cik):
+    def submissions(self, cik, fresh_after=None):
         return {"name": "Reorg Co", "formerNames": [], "sic": "1311"}
     def fetch_filing_text(self, cik, acc, doc):
         return self.texts.get(acc, "")
@@ -169,7 +169,7 @@ def test_item_fingerprints(items, code):
 
 
 class _RenameEdgar(_TextEdgar):
-    def submissions(self, cik):
+    def submissions(self, cik, fresh_after=None):
         return LC_LIKE
 
 
@@ -191,7 +191,7 @@ def test_rename_while_still_operating_is_an_exchange_transfer():
 
 
 class _MergerRenameEdgar(_TextEdgar):
-    def submissions(self, cik):
+    def submissions(self, cik, fresh_after=None):
         return TARGETCO_LIKE
 
 
@@ -216,7 +216,7 @@ def test_merger_fingerprint_blocks_the_rename_rule():
 
 
 class _BareDispositionRenameEdgar(_TextEdgar):
-    def submissions(self, cik):
+    def submissions(self, cik, fresh_after=None):
         return RENAMED_LIKE
 
 
@@ -239,7 +239,7 @@ def test_a_bare_201_does_not_block_a_rename():
 
 
 class _SpacEdgar(_TextEdgar):
-    def submissions(self, cik):
+    def submissions(self, cik, fresh_after=None):
         return {"name": "Blue Whale Acquisition Corp I", "sic": "6770", "formerNames": []}
 
 
@@ -373,3 +373,29 @@ def test_a_late_filing_alone_is_580_measured_from_the_form25():
     rec = DelistClassifier(e, TickerResolver(e)).classify_ticker("REORG", "2023-06-19")
     assert rec.evidence["anchor_gap_days"] == 40
     assert rec.bucket is CrspBucket.COMPLIANCE_FAILURE and rec.crsp_code == 580
+
+
+class _FreshnessEdgar(_TextEdgar):
+    def __init__(self, filings, texts):
+        super().__init__(filings, texts)
+        self.fresh_after = []
+
+    def submissions(self, cik, fresh_after=None):
+        if fresh_after is not None:
+            self.fresh_after.append(fresh_after)
+        return super().submissions(cik)
+
+
+def test_a_classification_asks_once_for_submissions_fresh_past_the_event():
+    from datetime import date, timedelta
+    fs = [
+        EdgarSubmission("F1", "8-K", "2020-09-30", "2020-09-29", "7.01", "a.htm"),
+        EdgarSubmission("F2", "25-NSE", "2020-10-27", "", "", "p.xml"),
+    ]
+    e = _FreshnessEdgar(fs, {})
+    DelistClassifier(e, TickerResolver(e)).classify_ticker("REORG", "2020-11-20")
+    assert e.fresh_after == [date(2021, 1, 4)]          # observed + 45 days
+    recent = date.today() - timedelta(days=10)
+    e = _FreshnessEdgar(fs, {})
+    DelistClassifier(e, TickerResolver(e)).classify_ticker("REORG", recent.isoformat())
+    assert e.fresh_after == [date.today()]              # capped at today

@@ -46,6 +46,7 @@ EIGHT_K_BACKSCAN_DAYS = 120  # how far back to scan for an announcement 8-K
 FORM25_AFTER_DAYS = 45       # a Form 25 filed after the vendor's last trade
 FORM25_TAIL_DAYS = 45        # beyond this, an earlier Form 25 means a frozen vendor tail
 FORM25_MAX_BEFORE_DAYS = 1500
+SUBMISSIONS_FRESH_DAYS = 45  # filings this long after the last trade must be in the submissions read
 M_A_ITEMS = {"2.01", "5.01", "3.03"}
 
 
@@ -441,6 +442,12 @@ class DelistClassifier:
                 reason="No CIK found for ticker (likely never SEC-registered or pre-EDGAR)",
                 evidence={"resolution_source": resolution.source},
             )
+
+        if observed:
+            # Once, up front: a cached copy fetched before the event window is
+            # fetched again, and every later read below hits the fresh copy.
+            self.edgar.submissions(resolution.cik, fresh_after=min(
+                observed + timedelta(days=SUBMISSIONS_FRESH_DAYS), date.today()))
 
         flags: list[str] = []
         if resolution.source == "company_tickers":

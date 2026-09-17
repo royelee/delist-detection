@@ -70,7 +70,7 @@ class GoldenEdgar:
     def company_tickers(self):
         return self.data["company_tickers"]
 
-    def submissions(self, cik):
+    def submissions(self, cik, fresh_after=None):
         return self.data["submissions"].get(str(int(cik)), {"__not_found__": True})
 
     def recent_filings(self, cik):
