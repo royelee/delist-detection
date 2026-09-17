@@ -2,7 +2,11 @@ import json
 
 import pytest
 
-from delist_detection.edgar import EdgarBlocked, EdgarClient
+from delist_detection.classifier import DelistRecord
+from delist_detection.crsp_codes import CrspBucket
+from delist_detection.edgar import EdgarBlocked, EdgarClient, EdgarSubmission
+from delist_detection.llm_merger_extractor import LLMMergerTermsExtractor
+from delist_detection.payout_extractor import PayoutExtractor
 from delist_detection.ticker_resolver import TickerResolver
 
 
@@ -68,3 +72,50 @@ def test_resolver_retries_a_cached_miss(tmp_path, fake_edgar, monkeypatch):
     monkeypatch.setattr(TickerResolver, "_validate_cik", lambda self, *a, **kw: True)
     r = TickerResolver(fake_edgar, cache_path=cache)
     assert r.resolve("NOPE", "2024-01-01").cik == 999001
+
+
+class _FakeEdgarMergerBlocked:
+    """A merger closing 8-K exists (so extraction reaches the text fetch),
+    but fetching its text hits a live SEC refusal."""
+
+    def __init__(self, filing):
+        self._filing = filing
+
+    def recent_filings(self, cik):
+        return [self._filing]
+
+    def fetch_filing_text(self, cik, accession, primary_doc):
+        raise EdgarBlocked("403")
+
+
+def _merger_closing_8k(accession="C1"):
+    return EdgarSubmission(
+        accession=accession, form="8-K", filing_date="2018-11-30",
+        report_date="2018-11-28", items="2.01,3.01,5.01", primary_doc="d.htm",
+    )
+
+
+def _merger_record(cik=1122304):
+    return DelistRecord(
+        ticker="AET", cik=cik, observed_delist_date="2018-11-28",
+        crsp_code=241, bucket=CrspBucket.MERGER, confidence="high",
+        reason="M&A 2.01+3.01+5.01", evidence={},
+    )
+
+
+def test_payout_extractor_propagates_refusal():
+    edgar = _FakeEdgarMergerBlocked(_merger_closing_8k())
+    ext = PayoutExtractor(edgar)
+    with pytest.raises(EdgarBlocked):
+        ext.extract(_merger_record())
+
+
+def test_llm_merger_extractor_propagates_refusal(tmp_path):
+    class _BoomLlm:
+        def extract(self, system, user, schema):
+            raise AssertionError("LLM must not be called when EDGAR is blocked")
+
+    edgar = _FakeEdgarMergerBlocked(_merger_closing_8k())
+    ext = LLMMergerTermsExtractor(edgar, _BoomLlm(), cache_dir=tmp_path)
+    with pytest.raises(EdgarBlocked):
+        ext.extract(_merger_record())

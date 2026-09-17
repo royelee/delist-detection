@@ -265,6 +265,8 @@ def main() -> int:
                     # (scripts/compute_corrected_returns.py), which has
                     # last-trade closes.
                     payout_by_ticker[(rec.ticker, rec.observed_delist_date)] = extractor.extract(rec)
+                except EdgarBlocked:
+                    raise
                 except Exception as e:  # extraction must never abort the run
                     if not args.quiet:
                         print(f"[{i:4d}/{len(rows)}] {ticker}: payout ERROR {e}",
@@ -274,6 +276,8 @@ def main() -> int:
                     terms = llm_ext.extract(rec)
                     if terms is not None:
                         llm_terms_raw[(rec.ticker, rec.observed_delist_date)] = terms
+                except EdgarBlocked:
+                    raise
                 except Exception as e:  # LLM extraction must never abort the run
                     if not args.quiet:
                         print(f"[{i:4d}/{len(rows)}] {ticker}: llm-terms ERROR {e}",
