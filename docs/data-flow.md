@@ -84,7 +84,12 @@ delete the relevant cache files.
 
 The ticker→CIK memo lives at `cache/ticker_resolution.json` and is keyed by
 `(ticker, observed_date)` so a recycled ticker resolves to the right
-issuer per date.
+issuer per date. The file is versioned (`{"__version__": 2, "entries": …}`);
+a file without version 2 predates the date and name checks, so it is
+ignored and replaced on the next save. Each entry records the member name
+it was checked with, and a lookup with a different member name resolves
+again. Misses, and answers reached while an EDGAR request failed
+transiently, are used for the run but never saved.
 
 ## Resolver strategy in detail
 

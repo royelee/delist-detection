@@ -8,6 +8,7 @@ full-text search (efts.sec.gov), which indexes historical filings.
 from __future__ import annotations
 
 import json
+import logging
 import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -19,6 +20,11 @@ import requests
 from .edgar import EdgarClient, DEFAULT_UA, _throttle, check_response, EdgarBlocked
 from .evidence import first_filing, names_near, parse_day
 from .names import name_tokens, names_agree
+
+log = logging.getLogger(__name__)
+# Version 2: {"__version__": 2, "entries": {key: {...TickerResolution, "member_name"}}}.
+# Anything else was written before the date and name checks and is not trusted.
+CACHE_VERSION = 2
 
 
 @dataclass
@@ -49,16 +55,31 @@ class TickerResolver:
         self.name_lookup = name_lookup or (lambda *a, **kw: None)
         self.member_names = member_names or (lambda *a, **kw: None)  # (ticker, date) -> index-member name
         self._memo: dict[str, TickerResolution] = {}
+        self._memo_member: dict[str, str | None] = {}   # key -> member name the answer was checked with
+        self._volatile: set[str] = set()   # misses and transient-error answers: this run only
+        self._transient = False            # a check in the current resolve() hit a transient error
         if self.cache_path and self.cache_path.exists():
-            try:
-                raw = json.loads(self.cache_path.read_text())
-                for t, d in raw.items():
-                    if d.get("cik") is None:  # a persisted miss is retried, never trusted
-                        continue
-                    self._memo[t] = TickerResolution(**d)
-            except (json.JSONDecodeError, TypeError):
-                pass
+            self._load_cache()
         self._companies: dict[str, dict] | None = None
+
+    def _load_cache(self) -> None:
+        try:
+            raw = json.loads(self.cache_path.read_text())
+        except json.JSONDecodeError:
+            raw = None
+        if not (isinstance(raw, dict) and raw.get("__version__") == CACHE_VERSION):
+            log.warning("%s is not a version-%d resolver cache; ignoring it (the next save replaces it)",
+                        self.cache_path, CACHE_VERSION)
+            return
+        for key, d in (raw.get("entries") or {}).items():
+            try:
+                res = TickerResolution(d["ticker"], d["cik"], d["name"], d["source"])
+            except (KeyError, TypeError):
+                continue
+            if res.cik is None:  # a persisted miss is retried, never trusted
+                continue
+            self._memo[key] = res
+            self._memo_member[key] = d.get("member_name")
 
     MEMBER_ALIVE_DAYS = 400          # filed within ±this of the date: the company was operating
     MEMBER_TAIL_DAYS = 1500          # a Form 25/15 up to this old: a frozen vendor tail (XTO)
@@ -87,7 +108,8 @@ class TickerResolver:
             filings = self.edgar.recent_filings(cik)
         except EdgarBlocked:
             raise
-        except Exception:
+        except Exception as e:
+            self._note_transient(e)
             return False, False
         first = first_filing(filings)
         existed = first is not None and first <= on
@@ -126,12 +148,29 @@ class TickerResolver:
             self._companies = self.edgar.company_tickers()
         return self._companies
 
+    def _note_transient(self, exc: Exception) -> None:
+        """A failed request is not evidence against a candidate: the answer this
+        resolve() reaches is used for the run but not saved."""
+        if isinstance(exc, requests.RequestException):
+            self._transient = True
+
+    def _remember(self, key: str, res: TickerResolution, member: str | None) -> None:
+        self._memo[key] = res
+        self._memo_member[key] = member
+        if res.cik is None or self._transient:   # retried next run, never persisted
+            self._volatile.add(key)
+            return
+        self._volatile.discard(key)
+        self._persist()
+
     def _persist(self) -> None:
         if not self.cache_path:
             return
         self.cache_path.parent.mkdir(parents=True, exist_ok=True)
+        entries = {k: {**r.__dict__, "member_name": self._memo_member.get(k)}
+                   for k, r in self._memo.items() if k not in self._volatile}
         self.cache_path.write_text(
-            json.dumps({t: r.__dict__ for t, r in self._memo.items()}, indent=2)
+            json.dumps({"__version__": CACHE_VERSION, "entries": entries}, indent=2)
         )
 
     # CIKs of US exchanges — these file Form 25-NSEs *on behalf of* the issuer,
@@ -179,9 +218,11 @@ class TickerResolver:
             )
             check_response(resp)
             if resp.status_code != 200:
+                self._transient = self._transient or resp.status_code >= 500
                 return []
             data = resp.json()
-        except (requests.RequestException, json.JSONDecodeError):
+        except (requests.RequestException, json.JSONDecodeError) as e:
+            self._note_transient(e)
             return []
         hits = data.get("hits", {}).get("hits", [])
         counts: dict[int, tuple[int, str]] = {}
@@ -287,7 +328,8 @@ class TickerResolver:
                     hits = self.edgar.company_search_atom(variant, form_type=form)
                 except EdgarBlocked:
                     raise
-                except Exception:
+                except Exception as e:
+                    self._note_transient(e)
                     hits = []
                 for h in hits:
                     cik = int(h["cik"])
@@ -341,7 +383,8 @@ class TickerResolver:
             sub = self.edgar.submissions(cik)
         except EdgarBlocked:
             raise
-        except Exception:
+        except Exception as e:
+            self._note_transient(e)
             return 0
         if not isinstance(sub, dict):
             return 0
@@ -372,7 +415,8 @@ class TickerResolver:
             subs = self.edgar.recent_filings(cik)
         except EdgarBlocked:
             raise
-        except Exception:
+        except Exception as e:
+            self._note_transient(e)
             return False
 
         has_delist_form = False
@@ -433,9 +477,11 @@ class TickerResolver:
             )
             check_response(resp)
             if resp.status_code != 200:
+                self._transient = self._transient or resp.status_code >= 500
                 return None, None, False
             data = resp.json()
-        except (requests.RequestException, json.JSONDecodeError):
+        except (requests.RequestException, json.JSONDecodeError) as e:
+            self._note_transient(e)
             return None, None, False
         hits = data.get("hits", {}).get("hits", [])
         token_re = re.compile(rf"\(\s*{re.escape(ticker_u)}\s*\)")
@@ -477,23 +523,24 @@ class TickerResolver:
     def resolve(self, ticker: str, observed_date: str | None = None) -> TickerResolution:
         t = ticker.upper().strip()
         cache_key = f"{t}|{observed_date or ''}"
+        # The answer holds only for the member name its checks used.
+        member = self.member_names(t, observed_date) or None
+        self._transient = False
 
         # Manual overrides always beat the cache — they're the truth.
         if t in self.manual_overrides:
             res = TickerResolution(ticker=t, cik=self.manual_overrides[t], name=None, source="manual")
-            self._memo[cache_key] = res
-            self._persist()
+            self._remember(cache_key, res, member)
             return res
 
-        if cache_key in self._memo:
+        if cache_key in self._memo and self._memo_member.get(cache_key) == member:
             return self._memo[cache_key]
 
         renamed = self.rename_map.get(t)
         if renamed and renamed != t:
-            inner = self.resolve(renamed, observed_date)
+            inner = self.resolve(renamed, observed_date)   # leaves self._transient set for this answer
             res = TickerResolution(ticker=t, cik=inner.cik, name=inner.name, source="rename")
-            self._memo[cache_key] = res
-            self._persist()
+            self._remember(cache_key, res, member)
             return res
 
         expected = self._expected_name(t, observed_date)
@@ -510,8 +557,7 @@ class TickerResolver:
                     name=row.get("title"),
                     source="company_tickers",
                 )
-                self._memo[cache_key] = res
-                self._persist()
+                self._remember(cache_key, res, member)
                 return res
 
         cik: int | None = None
@@ -553,7 +599,6 @@ class TickerResolver:
                 # Loose validation (a real Form 25 in the window), or the
                 # member-name acceptance when the caller supplied a usable
                 # index-member name.
-                member = self.member_names(t, observed_date)
                 if member and name_tokens(member):
                     ok = self._accept_member_candidate(c1, observed_date, member)
                 else:
@@ -582,9 +627,7 @@ class TickerResolver:
                 source = "rejected_validation"
 
         res = TickerResolution(ticker=t, cik=cik, name=name, source=source)
-        self._memo[cache_key] = res
-        if cik is not None:          # a miss is retried next run, never persisted
-            self._persist()
+        self._remember(cache_key, res, member)
         return res
 
     def resolve_many(
