@@ -191,3 +191,16 @@ def test_the_efts_fallback_skips_the_exchange_that_filed_the_form25(monkeypatch)
                                   ("0001829426", far_peak))])
     r = TickerResolver(_Edgar({}, {}))
     assert r._efts_lookup("PEAK", "2023-02-13", expected_name="HEALTHPEAK PROPERTIES") == (1829426, far_peak, True)
+
+
+def test_a_manual_override_is_not_name_checked(monkeypatch):
+    # R6: a hand-verified pin is the truth; checking it against the member name
+    # only fills review.csv with ~40 rows nobody needs to look at.
+    _real_efts(monkeypatch, [_hit(("1815737", "FAST Acquisition Corp.  (FST)  (CIK 0001815737)"))])
+    e = _Edgar(dict([FAST, CITY]), {"FOREST": 38067})
+    r = TickerResolver(e, manual_overrides={"FST": 1815737},
+                       member_names=lambda t, d=None: "FOREST OIL CORP")
+    rec = DelistClassifier(e, r).classify_ticker("FST", "2022-08-25")
+    assert rec.cik == 1815737
+    assert rec.evidence["resolution_source"] == "manual"
+    assert "member_name_mismatch" not in rec.evidence["flags"]

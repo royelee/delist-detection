@@ -536,8 +536,10 @@ class DelistClassifier:
 
         if resolution.source == "company_tickers":
             flags.append("resolved_by_current_ticker_map")
+        # A manual override is hand-verified truth, so it is not name-checked:
+        # the ~40 pinned tickers would otherwise fill review.csv.
         expected = self.resolver._expected_name(ticker.upper(), observed_delist_date)
-        if expected and observed:
+        if expected and observed and resolution.source != "manual":
             _, agrees = self.resolver._fits_date(resolution.cik, observed_delist_date, expected)
             if not agrees:
                 flags.append("member_name_mismatch")
