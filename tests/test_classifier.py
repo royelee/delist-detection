@@ -437,3 +437,35 @@ def test_a_spac_without_a_form25_or_form15_is_an_expiration_not_a_deficiency():
     assert rec.evidence.get("delist_filing") is None and rec.evidence.get("dereg_filing") is None
     assert rec.bucket is CrspBucket.EXPIRATION and rec.crsp_code == 600
     assert "spac" in rec.evidence["flags"]
+
+
+# --- R2: a submissions payload served from a failed refresh is flagged ---
+
+
+class _StaleSubmissionsEdgar(_TextEdgar):
+    """submissions() answers with the __stale__ mark _get_json adds on a failed refresh."""
+
+    def submissions(self, cik, fresh_after=None):
+        return {**super().submissions(cik), "__stale__": True}
+
+
+def test_a_stale_submissions_payload_is_flagged():
+    fs = [
+        EdgarSubmission("F1", "8-K", "2020-11-18", "2020-11-18", "2.01,5.01", "a.htm"),
+        EdgarSubmission("F2", "25-NSE", "2020-11-20", "", "", "p.xml"),
+    ]
+    e = _StaleSubmissionsEdgar(fs, {})
+    rec = DelistClassifier(e, TickerResolver(e, manual_overrides={"REORG": 5})).classify_ticker(
+        "REORG", "2020-11-20")
+    assert "submissions_stale" in rec.evidence["flags"]
+
+
+def test_a_fresh_submissions_payload_is_not_flagged():
+    fs = [
+        EdgarSubmission("F1", "8-K", "2020-11-18", "2020-11-18", "2.01,5.01", "a.htm"),
+        EdgarSubmission("F2", "25-NSE", "2020-11-20", "", "", "p.xml"),
+    ]
+    e = _TextEdgar(fs, {})
+    rec = DelistClassifier(e, TickerResolver(e, manual_overrides={"REORG": 5})).classify_ticker(
+        "REORG", "2020-11-20")
+    assert "submissions_stale" not in rec.evidence["flags"]

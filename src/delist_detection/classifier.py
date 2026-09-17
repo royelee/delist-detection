@@ -16,7 +16,7 @@ from datetime import date, datetime, timedelta
 from typing import Iterable
 
 from .crsp_codes import CrspBucket, bucket_for_code
-from .edgar import EdgarClient, EdgarSubmission, submissions_fresh_after
+from .edgar import STALE_KEY, EdgarClient, EdgarSubmission, submissions_fresh_after
 from .evidence import (
     bankruptcy_8ks,
     cites_listing_deficiency,
@@ -455,12 +455,16 @@ class DelistClassifier:
                 evidence={"resolution_source": resolution.source},
             )
 
+        flags: list[str] = []
         if observed:
             # Once, up front: a cached copy fetched before the event window is
-            # fetched again, and every later read below hits the fresh copy.
-            self.edgar.submissions(resolution.cik, fresh_after=submissions_fresh_after(observed))
+            # fetched again, and every later read below hits the fresh copy. A
+            # failed refetch serves the cached copy marked STALE_KEY, so the row
+            # is reviewable rather than an error.
+            sub = self.edgar.submissions(resolution.cik, fresh_after=submissions_fresh_after(observed))
+            if isinstance(sub, dict) and sub.get(STALE_KEY):
+                flags.append("submissions_stale")
 
-        flags: list[str] = []
         if resolution.source == "company_tickers":
             flags.append("resolved_by_current_ticker_map")
         expected = self.resolver._expected_name(ticker.upper(), observed_delist_date)

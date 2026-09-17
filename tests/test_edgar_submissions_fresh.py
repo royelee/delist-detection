@@ -5,6 +5,7 @@ import os
 from datetime import date, datetime
 
 import pytest
+import requests
 
 from delist_detection.edgar import EdgarBlocked, EdgarClient
 
@@ -88,3 +89,38 @@ def test_a_refusal_during_a_refresh_leaves_the_cached_copy(tmp_path, status):
     with pytest.raises(EdgarBlocked):
         client.submissions(42, fresh_after=EVENT)
     assert json.loads(cp.read_text()) == stale
+
+
+class _FailingSession(_Session):
+    """Answers every request with a transport failure."""
+
+    def get(self, url, headers=None, timeout=None):
+        self.calls.append(url)
+        raise requests.ConnectionError("no route to host")
+
+
+def test_a_transport_failure_during_a_refresh_serves_the_cached_copy(tmp_path):
+    # R2: a ticker with a usable cached copy must not become an error row.
+    stale = {"name": "Stale Co", "__fetched__": "2026-05-26"}
+    session = _FailingSession()
+    client = EdgarClient(cache_dir=tmp_path, session=session)
+    cp = client._cache_path(URL)
+    cp.write_text(json.dumps(stale))
+    got = client.submissions(42, fresh_after=EVENT)
+    assert got == {**stale, "__stale__": True}
+    assert session.calls == [URL]
+    assert json.loads(cp.read_text()) == stale          # the mark is never written to disk
+
+
+def test_a_transport_failure_without_a_cached_copy_still_raises(tmp_path):
+    session = _FailingSession()
+    client = EdgarClient(cache_dir=tmp_path, session=session)
+    with pytest.raises(requests.RequestException):
+        client.submissions(42, fresh_after=EVENT)
+
+
+def test_a_refusal_during_a_refresh_still_raises_even_with_a_cached_copy(tmp_path):
+    stale = {"name": "Stale Co", "__fetched__": "2026-05-26"}
+    client, _, _ = _client(tmp_path, stale, status=403)
+    with pytest.raises(EdgarBlocked):
+        client.submissions(42, fresh_after=EVENT)

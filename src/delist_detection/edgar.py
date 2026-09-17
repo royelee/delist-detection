@@ -59,6 +59,9 @@ DEFAULT_UA = resolve_user_agent()
 
 # The day a cached JSON payload was fetched; a payload without it is dated by its file time.
 FETCHED_KEY = "__fetched__"
+# Marks a payload served from cache because the refetch failed. Added to the
+# returned dict only, never written to disk.
+STALE_KEY = "__stale__"
 SUBMISSIONS_FRESH_DAYS = 45  # filings this long after the last trade must be in the submissions read
 
 
@@ -142,26 +145,37 @@ class EdgarClient:
     def _get_json(self, url: str, *, refresh: bool = False, fresh_after: date | None = None) -> Any:
         """The cached payload, unless `refresh` or it was fetched before `fresh_after`."""
         cp = self._cache_path(url)
+        cached: Any = None
         if cp.exists() and not refresh:
             try:
-                data = json.loads(cp.read_text())
+                cached = json.loads(cp.read_text())
             except json.JSONDecodeError:
                 cp.unlink(missing_ok=True)
             else:
-                if fresh_after is None or _fetched_on(cp, data) >= fresh_after:
-                    return data
+                if fresh_after is None or _fetched_on(cp, cached) >= fresh_after:
+                    return cached
 
         _throttle()
         host = "data.sec.gov" if url.startswith(SEC_HOST) else "www.sec.gov"
         headers = {**self.session.headers, "Host": host}
-        resp = self.session.get(url, headers=headers, timeout=30)
-        check_response(resp)
+        try:
+            resp = self.session.get(url, headers=headers, timeout=30)
+            check_response(resp)          # EdgarBlocked is not a RequestException: it propagates
+            if resp.status_code != 404:
+                resp.raise_for_status()
+        except requests.RequestException:
+            # A failed refresh must not turn a company with a usable cached copy
+            # into an error row — every event newer than SUBMISSIONS_FRESH_DAYS
+            # refetches on every run. Serve the cache, marked stale in the
+            # returned dict only, so callers can flag the row.
+            if not isinstance(cached, dict):
+                raise
+            return {**cached, STALE_KEY: True}
         today = date.today().isoformat()
         if resp.status_code == 404:
             data = {"__not_found__": True, "url": url, FETCHED_KEY: today}
             cp.write_text(json.dumps(data))
             return data
-        resp.raise_for_status()
         try:
             data = resp.json()
         except json.JSONDecodeError:
