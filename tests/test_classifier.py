@@ -647,3 +647,53 @@ def test_the_anchor_8k_text_is_read_once_per_decision():
     assert "bankruptcy_tag_unconfirmed" in rec.evidence["flags"]
     # once for the bankruptcy override, once for the anchor's effective items
     assert e.fetches.count("X1") == 2
+
+
+# --- re-review of R3: the body test must not fire on "competition", and the
+#     standard caption must come off even when it carries no punctuation ---
+
+from delist_detection.classifier import _drop_heading
+from delist_detection.evidence import item_text
+
+
+def test_competition_clearance_in_a_mis_tagged_takeover_is_not_a_petition():
+    """Takeover 8-Ks routinely discuss antitrust and competition clearance. An
+    unanchored `petition` matches inside "competition", which would confirm the
+    mis-tag and mark the row liquidation at -0.90."""
+    t = ("Item 1.03 Bankruptcy or Receivership. Not applicable. "
+         "Item 2.01 Completion of Acquisition or Disposition of Assets. On November 27, 2024 "
+         "the Company received all required antitrust and competition clearances and the "
+         "merger was completed.")
+    assert _confirms_bankruptcy(t) is False
+
+
+def test_an_unpunctuated_standard_caption_still_comes_off():
+    """edgar._strip_html collapses every newline to a space, so a heading that
+    ends without punctuation has nothing for the sentence rule to find and the
+    caption's own words used to confirm the filing."""
+    t = ("Item 1.03 Bankruptcy or Receivership On November 27, 2024 the merger was completed "
+         "and each share was converted into the right to receive $25.75 in cash. "
+         "Item 2.01 Completion of Acquisition or Disposition of Assets.")
+    assert "Bankruptcy" not in _drop_heading(item_text(t, "1.03"))
+    assert _confirms_bankruptcy(t) is False
+
+
+def test_a_punctuated_standard_caption_still_comes_off():
+    t = ("Item 1.03 Bankruptcy or Receivership. On November 27, 2024 the merger was completed "
+         "and each share was converted into the right to receive $25.75 in cash. "
+         "Item 2.01 Completion of Acquisition or Disposition of Assets.")
+    assert "Bankruptcy" not in _drop_heading(item_text(t, "1.03"))
+    assert _confirms_bankruptcy(t) is False
+
+
+def test_svbs_real_unpunctuated_heading_still_confirms_through_the_body():
+    """SVB (0001193125-23-067777): "Item 1.03. Bankruptcy or Receivership On March 10,
+    2023, ..." — no punctuation after the caption. The caption must come off, and
+    the filing must still confirm on the body's own "appointed as receiver"."""
+    from pathlib import Path
+    t = (Path(__file__).resolve().parents[1] / "tests" / "fixtures" / "golden" / "text"
+         / "719739_0001193125-23-067777.txt").read_text(encoding="utf-8")
+    section = item_text(t, "1.03")
+    assert section.count("\n") == 0                     # the stripped text has no newlines
+    assert not _drop_heading(section).lower().startswith("bankruptcy or receivership")
+    assert _confirms_bankruptcy(t) is True

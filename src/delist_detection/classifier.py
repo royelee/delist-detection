@@ -97,20 +97,37 @@ def _add_flag(flags: list[str], flag: str) -> None:
 # carrying the tag — including a mis-tagged takeover — matches _BANKRUPTCY_TEXT on
 # the heading alone. Drop the heading, then require the wording in the body.
 _ITEM_HEADING = re.compile(r"^item\s*\d\.\d{2}[\s.–—-]*", re.I)
+# SEC's own caption for item 1.03, and the whole reason the heading confirms
+# itself. Punctuation after it is optional in real filings — SVB prints
+# "Item 1.03. Bankruptcy or Receivership On March 10, 2023, …" — and
+# `edgar._strip_html` collapses every newline to a space, so neither the
+# sentence rule nor the newline rule has anything to find there. Matching the
+# caption itself is what actually takes it off.
+_ITEM_CAPTION = re.compile(r"^bankruptcy\s+or\s+receivership[\s.,;:–—-]*", re.I)
 _SENTENCE_END = re.compile(r"[.;:]\s")
 _HEADING_MAX = 80
 # Wording no standard heading carries, so it confirms anywhere in the section.
 # `receivers?\b` does not match the heading's "Receivership", but it does match a
 # court order "appointing ... as Temporary Receiver" — item 1.03 is Bankruptcy *or
 # Receivership*, and HLTH/Nobilis reports its receiver that way and no other.
+# `petitions?` must stay anchored: a bare `petition` matches inside "competition",
+# and takeover 8-Ks routinely report antitrust and competition clearance.
 _BANKRUPTCY_BODY = re.compile(
-    r"chapter\s+(?:7|11)\b|petition|bankruptcy\s+court|receivers?\b", re.I)
+    r"chapter\s+(?:7|11)\b|\bpetitions?\b|bankruptcy\s+court|receivers?\b", re.I)
 
 
 def _drop_heading(section: str) -> str:
-    """The section without its heading line: up to the first newline, else the
-    first sentence end within _HEADING_MAX characters of the item number."""
+    """The section without its heading.
+
+    The `Item N.NN` label always comes off. When SEC's standard caption follows,
+    that comes off too and the rest is the body. Any other heading shape falls
+    back to the first newline, else the first sentence end within _HEADING_MAX
+    characters of the label.
+    """
     body = _ITEM_HEADING.sub("", section, count=1)
+    without_caption = _ITEM_CAPTION.sub("", body, count=1)
+    if without_caption != body:
+        return without_caption
     nl = body.find("\n")
     if nl >= 0:
         return body[nl + 1:]

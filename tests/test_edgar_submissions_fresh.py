@@ -124,3 +124,35 @@ def test_a_refusal_during_a_refresh_still_raises_even_with_a_cached_copy(tmp_pat
     client, _, _ = _client(tmp_path, stale, status=403)
     with pytest.raises(EdgarBlocked):
         client.submissions(42, fresh_after=EVENT)
+
+
+class _ServerErrorResp(_Resp):
+    def raise_for_status(self):
+        raise requests.HTTPError(f"{self.status_code} Server Error", response=self)
+
+
+class _ServerErrorSession(_Session):
+    """Answers every request with a 5xx that raise_for_status turns into HTTPError."""
+
+    def get(self, url, headers=None, timeout=None):
+        self.calls.append(url)
+        return _ServerErrorResp(503, dict(self.data))
+
+
+def test_a_5xx_during_a_refresh_serves_the_cached_copy(tmp_path):
+    """Deliberate: requests.HTTPError is a RequestException, so SEC returning a
+    5xx during a freshness refetch is treated like any other failed refresh —
+    the cached copy is served, marked stale, rather than the row erroring out."""
+    stale = {"name": "Stale Co", "__fetched__": "2026-05-26"}
+    session = _ServerErrorSession()
+    client = EdgarClient(cache_dir=tmp_path, session=session)
+    cp = client._cache_path(URL)
+    cp.write_text(json.dumps(stale))
+    assert client.submissions(42, fresh_after=EVENT) == {**stale, "__stale__": True}
+    assert json.loads(cp.read_text()) == stale          # the 5xx never touches the cache
+
+
+def test_a_5xx_without_a_cached_copy_still_raises(tmp_path):
+    client = EdgarClient(cache_dir=tmp_path, session=_ServerErrorSession())
+    with pytest.raises(requests.HTTPError):
+        client.submissions(42, fresh_after=EVENT)

@@ -143,7 +143,16 @@ class EdgarClient:
         return self.cache_dir / f"{h}.json"
 
     def _get_json(self, url: str, *, refresh: bool = False, fresh_after: date | None = None) -> Any:
-        """The cached payload, unless `refresh` or it was fetched before `fresh_after`."""
+        """The cached payload, unless `refresh` or it was fetched before `fresh_after`.
+
+        When a refetch fails and a cached dict exists, that copy is returned with
+        STALE_KEY added to the returned dict only. "Fails" deliberately covers a
+        5xx as well as a transport error: `raise_for_status` raises
+        `requests.HTTPError`, which is a `requests.RequestException`, so an SEC
+        outage serves the cache instead of erroring the row out. `EdgarBlocked`
+        (403/429) is a `RuntimeError` and still propagates, as does any failure
+        with no cached copy to fall back on.
+        """
         cp = self._cache_path(url)
         cached: Any = None
         if cp.exists() and not refresh:
