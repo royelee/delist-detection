@@ -64,7 +64,7 @@ def test_table_column_order_is_contractual():
         "ticker", "bucket", "observed_delist_date", "crsp_code", "dlret", "reason",
         "exchange", "last_trade_close", "payout_per_share", "stock_ratio",
         "acquirer_price", "acquirer_ticker", "recovery_ratio", "terminal_value",
-        "dlret_method", "dlret_confidence", "payout_source",
+        "dlret_method", "dlret_confidence", "payout_source", "review_flags",
     ]
 
 
@@ -276,3 +276,17 @@ def test_unknown_without_deregistration_stays_blank():
     rec = DelistRecord("SKYF", None, "2021-08-24", None, CrspBucket.UNKNOWN, "none", "No CIK", {})
     e = enrich(rec, last_trade_close=0.001)
     assert e.dlret_method is DlretMethod.UNKNOWN
+
+
+def test_review_flags_is_the_last_column_and_joins_flags():
+    assert DLRET_TABLE_COLUMNS[-1] == "review_flags"
+    rec = DelistRecord("X", 1, "2020-01-02", 570, CrspBucket.COMPLIANCE_FAILURE, "medium", "r",
+                       {"flags": ["frozen_tail:120"]})
+    e = enrich(rec, last_trade_close=58.97, extra_flags=("payout_gate_failed:25",))
+    row = enriched_to_row(e)
+    assert row["review_flags"] == "frozen_tail:120;payout_gate_failed:25;distress_at_normal_price"
+
+
+def test_no_flags_is_an_empty_cell():
+    rec = DelistRecord("Y", 1, "2020-01-02", 231, CrspBucket.MERGER, "high", "r", {})
+    assert enriched_to_row(enrich(rec, last_trade_close=10.0, payout_per_share=10.0))["review_flags"] == ""
