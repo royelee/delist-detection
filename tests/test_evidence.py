@@ -64,3 +64,14 @@ def test_listing_transfer_text():
     assert says_listing_transfer(item_text(t, "3.01"))
     assert not says_listing_transfer("Item 3.01 ... did not regain compliance with the minimum bid price")
     assert says_listing_transfer("the Company transferred its listing to NYSE American")
+
+
+from delist_detection.evidence import is_spac
+
+
+def test_is_spac_by_sic_or_name_at_the_date():
+    assert is_spac({"sic": "6770", "name": "Blue Whale Acquisition Corp I"}, date(2023, 8, 11))
+    assert is_spac({"sic": "6199", "name": "Far Peak Acquisition Corp"}, date(2023, 2, 1))
+    desp = {"sic": "3711", "name": "Lucid Group", "formerNames": [
+        {"name": "Churchill Capital Corp IV", "from": "2020-04-30T00:00:00.000Z", "to": "2021-07-23T00:00:00.000Z"}]}
+    assert not is_spac(desp, date(2024, 1, 1))

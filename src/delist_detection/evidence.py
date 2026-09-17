@@ -9,6 +9,9 @@ from .edgar import EdgarSubmission
 _BANKRUPTCY_TEXT = re.compile(r"bankruptcy|chapter\s+(?:11|7)\b|receivership", re.I)
 _TRANSFER_TEXT = re.compile(r"transfer(?:red)?\s+(?:the|its|of\s+(?:the|its))\s+listing", re.I)
 
+SPAC_SIC = "6770"
+_SPAC_NAME = re.compile(r"\bacquisition\s+corp", re.I)
+
 
 def parse_day(s: str | None) -> date | None:
     try:
@@ -24,6 +27,17 @@ def name_at(sub: dict, on: date) -> str:
         if lo and hi and lo <= on <= hi:
             return fn.get("name") or ""
     return sub.get("name") or ""
+
+
+def is_spac(sub: dict, on: date) -> bool:
+    """True if the company is a blank-check acquisition company as of `on`.
+
+    The SIC check applies only while the name at the date also isn't an
+    operating name: a de-SPACed company keeps its new SIC (e.g. 3711), so
+    the SIC test alone is safe. For the name test, `name_at` returns the
+    post-merger name after the rename date.
+    """
+    return str(sub.get("sic") or "") == SPAC_SIC or bool(_SPAC_NAME.search(name_at(sub, on)))
 
 
 def names_near(sub: dict, on: date, days: int = 30) -> list[str]:

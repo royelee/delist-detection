@@ -20,6 +20,7 @@ from .edgar import EdgarClient, EdgarSubmission
 from .evidence import (
     bankruptcy_8ks,
     filed_operating_between,
+    is_spac,
     item_text,
     mentions_bankruptcy,
     renamed_near,
@@ -456,6 +457,23 @@ class DelistClassifier:
                     observed_delist_date=observed_delist_date, crsp_code=304,
                     bucket=CrspBucket.EXCHANGE_TRANSFER, confidence="high",
                     reason=why, evidence=evidence,
+                )
+
+        # A blank-check (SPAC) company that liquidates its trust redeems
+        # shares at trust value (~$10, true return ~0): a scheduled end, not
+        # distress. Checked before the Form-25-or-not branches so a late
+        # compliance/delinquent-filer signal (NT 10-K, a 3.01 notice) can't
+        # override the trust liquidation.
+        if observed:
+            sub = self.edgar.submissions(resolution.cik)
+            if isinstance(sub, dict) and is_spac(sub, observed) and (delist_filing or dereg):
+                flags.append("spac")
+                return DelistRecord(
+                    ticker=ticker.upper(), cik=resolution.cik,
+                    observed_delist_date=observed_delist_date, crsp_code=600,
+                    bucket=CrspBucket.EXPIRATION, confidence="high",
+                    reason="SPAC trust liquidation (blank-check company, redeemed at trust value)",
+                    evidence=evidence,
                 )
 
         # Exchange-transfer override is the strongest single signal —

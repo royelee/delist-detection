@@ -206,3 +206,22 @@ def test_a_bare_201_does_not_block_a_rename():
     from delist_detection.ticker_resolver import TickerResolver
     rec = DelistClassifier(e, TickerResolver(e)).classify_ticker("REORG", "2026-06-01")
     assert rec.bucket is CrspBucket.EXCHANGE_TRANSFER and rec.crsp_code == 304
+
+
+class _SpacEdgar(_TextEdgar):
+    def submissions(self, cik):
+        return {"name": "Blue Whale Acquisition Corp I", "sic": "6770", "formerNames": []}
+
+
+def test_spac_liquidation_is_expiration_even_with_a_late_filing_notice():
+    fs = [
+        EdgarSubmission("S1", "8-K", "2023-04-25", "2023-04-25", "3.01,9.01", "a.htm"),
+        EdgarSubmission("S2", "NT 10-K", "2023-03-31", "", "", "n.htm"),
+        EdgarSubmission("S3", "25-NSE", "2023-08-04", "", "", "p.xml"),
+        EdgarSubmission("S4", "15-12G", "2023-08-14", "", "", "f.htm"),
+    ]
+    e = _SpacEdgar(fs, {})
+    from delist_detection.ticker_resolver import TickerResolver
+    rec = DelistClassifier(e, TickerResolver(e)).classify_ticker("REORG", "2023-08-11")
+    assert rec.bucket is CrspBucket.EXPIRATION and rec.crsp_code == 600
+    assert "spac" in rec.evidence["flags"]

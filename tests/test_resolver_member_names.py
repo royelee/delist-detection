@@ -102,7 +102,7 @@ def test_the_classifier_flags_a_kept_first_pass_hit_under_another_name(monkeypat
     rec = DelistClassifier(e, r).classify_ticker("FST", "2022-08-25")
     assert rec.cik == 1815737
     assert rec.evidence["resolution_source"] == "efts_name_mismatch"
-    assert rec.evidence["flags"] == ["member_name_mismatch"]
+    assert rec.evidence["flags"] == ["member_name_mismatch", "spac"]
 
 
 def test_the_member_name_tier_runs_before_the_frequency_rank(monkeypatch):
