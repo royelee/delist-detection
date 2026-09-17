@@ -75,3 +75,27 @@ def test_is_spac_by_sic_or_name_at_the_date():
     desp = {"sic": "3711", "name": "Lucid Group", "formerNames": [
         {"name": "Churchill Capital Corp IV", "from": "2020-04-30T00:00:00.000Z", "to": "2021-07-23T00:00:00.000Z"}]}
     assert not is_spac(desp, date(2024, 1, 1))
+
+
+def test_is_spac_a_stale_sic_after_a_completed_rename_is_not_a_spac():
+    """A de-SPAC whose EDGAR SIC was never updated from 6770 must not read as
+    a SPAC once its rename has completed: the SIC test alone would pre-empt
+    a later real merger or compliance failure under the same CIK."""
+    desp = {"sic": "6770", "name": "Lucid Group", "formerNames": [
+        {"name": "Churchill Capital Corp IV", "from": "2020-04-30T00:00:00.000Z", "to": "2021-07-23T00:00:00.000Z"}]}
+    assert not is_spac(desp, date(2024, 1, 1))
+
+
+def test_is_spac_sic_6770_with_no_name_history_is_a_spac():
+    """No 'Acquisition Corp' in the name, but SIC 6770 and no formerNames at
+    all (never renamed): still a SPAC. FST/BWC/HMA/LEAP's underlying
+    companies all look exactly like this."""
+    assert is_spac({"sic": "6770", "name": "Ribbit LEAP, Ltd.", "formerNames": []}, date(2022, 8, 16))
+
+
+def test_is_spac_sic_6770_when_the_only_rename_has_not_completed_by_the_date():
+    """A formerNames entry whose `to` is after `on` hasn't completed by `on`
+    — the SIC test still applies."""
+    sub = {"sic": "6770", "name": "Some Trust Corp", "formerNames": [
+        {"name": "Old Blank Check Co", "from": "2020-01-01T00:00:00.000Z", "to": "2026-12-31T00:00:00.000Z"}]}
+    assert is_spac(sub, date(2023, 1, 1))

@@ -32,12 +32,27 @@ def name_at(sub: dict, on: date) -> str:
 def is_spac(sub: dict, on: date) -> bool:
     """True if the company is a blank-check acquisition company as of `on`.
 
-    The SIC check applies only while the name at the date also isn't an
-    operating name: a de-SPACed company keeps its new SIC (e.g. 3711), so
-    the SIC test alone is safe. For the name test, `name_at` returns the
-    post-merger name after the rename date.
+    True when either:
+      - the name at `on` (via `name_at`) matches "... Acquisition Corp"; or
+      - the SIC is 6770 AND no `formerNames` entry has a `to` date on or
+        before `on` (i.e. the company has not completed a rename by `on`).
+
+    The bare SIC test is not enough: EDGAR doesn't always update a SIC after
+    a de-SPAC merger, so a stale 6770 would pre-empt a real merger or
+    compliance failure that happens later under the same CIK into a false
+    EXPIRATION/600. Requiring no completed rename by `on` closes that gap
+    while still catching genuine SPAC liquidations, which (like FST, BWC,
+    HMA, LEAP) carry SIC 6770 and an empty `formerNames`.
     """
-    return str(sub.get("sic") or "") == SPAC_SIC or bool(_SPAC_NAME.search(name_at(sub, on)))
+    if _SPAC_NAME.search(name_at(sub, on)):
+        return True
+    if str(sub.get("sic") or "") != SPAC_SIC:
+        return False
+    for fn in sub.get("formerNames") or []:
+        hi = parse_day(fn.get("to"))
+        if hi and hi <= on:
+            return False
+    return True
 
 
 def names_near(sub: dict, on: date, days: int = 30) -> list[str]:
