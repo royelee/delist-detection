@@ -604,6 +604,13 @@ def test_agree_needs_a_shared_significant_token():
     assert not names_agree("", "Anything")
 
 
+def test_the_ticker_itself_does_not_make_two_names_agree():
+    # Ruling (Task 1 review): recycled companies often carry the symbol in their name.
+    assert not names_agree("LEAP WIRELESS INTL INC", "Ribbit LEAP, Ltd.", ignore=("LEAP",))
+    # ...but a name that is only the symbol still agrees with itself.
+    assert names_agree("SNAP INC", "Snap Inc.", ignore=("SNAP",))
+
+
 def test_member_names_picks_the_latest_row_on_or_before_the_date(tmp_path):
     p = tmp_path / "names.csv"
     p.write_text("ticker,as_of,name\nFST,2008-01-16,FOREST OIL CORP\nX,2020-01-01,OLD X\nX,2024-01-01,NEW X\n")
@@ -631,9 +638,65 @@ def test_name_at_uses_the_former_name_covering_the_date():
     assert name_at(SUB, date(2026, 1, 1)) == "SunPower Inc."
 ```
 
-In `tests/test_golden_events.py`, delete the Task 3 entries from `XFAIL`.
+```python
+# tests/test_resolver_member_names.py
+from delist_detection.edgar import EdgarSubmission
+from delist_detection.ticker_resolver import TickerResolver
 
-- [ ] **Step 2: Run them.** `conda run -n rdagent4qlib pytest tests/test_names.py tests/test_evidence.py tests/test_golden_events.py -v`. Expected: the two new files FAIL (ImportError), and the Task 3 golden ids FAIL.
+
+class _NameEdgar:
+    """One company reachable only by name search; no Form 25 near the date."""
+    def __init__(self, cik, name, former, filings, atom_name):
+        self.cik, self.name, self.former, self.filings, self.atom_name = cik, name, former, filings, atom_name
+    def company_tickers(self):
+        return {}
+    def submissions(self, cik):
+        return {"name": self.name, "formerNames": self.former, "sic": ""} if int(cik) == self.cik else {"__not_found__": True}
+    def recent_filings(self, cik):
+        return list(self.filings) if int(cik) == self.cik else []
+    def company_search_atom(self, company, form_type="25-NSE"):
+        return [{"cik": self.cik, "name": None, "form": "", "filing_date": ""}] if company.upper().startswith(self.atom_name) else []
+    def fetch_filing_text(self, *a):
+        return ""
+
+
+AVANOS = _NameEdgar(
+    1606498, "AVANOS MEDICAL, INC.",
+    [{"name": "Halyard Health, Inc.", "from": "2014-06-02T04:00:00.000Z", "to": "2018-06-30T04:00:00.000Z"}],
+    [EdgarSubmission("K1", "10-K", "2018-02-23", "", "", "k.htm"),
+     EdgarSubmission("E1", "8-K", "2018-07-02", "2018-06-29", "5.03,9.01", "e.htm")],
+    "HALYARD")
+
+
+def test_a_member_name_finds_a_renamed_company_that_filed_no_form25():
+    r = TickerResolver(AVANOS, member_names=lambda t, d=None: "HALYARD HEALTH INC")
+    assert r.resolve("HYH", "2018-06-29").cik == 1606498
+
+
+def test_without_a_member_name_the_loose_form25_check_still_applies():
+    r = TickerResolver(AVANOS, name_lookup=lambda t, d=None: "HALYARD HEALTH INC")
+    assert r.resolve("HYH", "2018-06-29").cik is None
+
+
+def test_a_long_dead_member_is_not_accepted_for_a_later_event():
+    dead = _NameEdgar(765258, "IMCLONE SYSTEMS INC", [],
+                      [EdgarSubmission("I1", "10-K", "2008-03-01", "", "", "k.htm")], "IMCLONE")
+    r = TickerResolver(dead, member_names=lambda t, d=None: "IMCLONE SYSTEMS INC")
+    assert r.resolve("IMCL", "2018-10-05").cik is None
+
+
+def test_the_frequency_tier_skips_a_candidate_whose_name_shares_nothing(monkeypatch):
+    comstock = _NameEdgar(1299969, "COMSTOCK INC", [], [], "NOMATCH")
+    monkeypatch.setattr(TickerResolver, "_efts_pre_delist_frequency_ranked",
+                        lambda self, t, d, top_n=5: [(1299969, "Comstock Inc")])
+    monkeypatch.setattr(TickerResolver, "_validate_cik", lambda self, c, d, strict=True: True)
+    r = TickerResolver(comstock, member_names=lambda t, d=None: "LENDINGCLUB CORP")
+    assert r.resolve("LC", "2026-06-01").cik is None
+```
+
+In `tests/test_golden_events.py`, delete the Task 3 entries from `XFAIL_BUCKET` (the ruling-split name of `XFAIL`).
+
+- [ ] **Step 2: Run them.** `PYTHONPATH=src:. conda run -n rdagent4qlib --no-capture-output python -m pytest tests/test_names.py tests/test_evidence.py tests/test_resolver_member_names.py tests/test_golden_events.py -v`. Expected: the new files FAIL (ImportError or wrong CIK), and the Task 3 golden ids FAIL.
 
 - [ ] **Step 3: Implement `names.py`.**
 
@@ -655,8 +718,15 @@ def name_tokens(name: str) -> set[str]:
     return {t for t in re.findall(r"[A-Z]{4,}", (name or "").upper()) if t not in _STOP}
 
 
-def names_agree(a: str, b: str) -> bool:
-    return bool(name_tokens(a) & name_tokens(b))
+def names_agree(a: str, b: str, ignore: tuple[str, ...] = ()) -> bool:
+    """True if the names share a significant token. Tokens equal to an ignored
+    word (the ticker) are dropped first: recycled companies often carry the
+    symbol (Ribbit LEAP vs Leap Wireless). If that empties either side, the full
+    token sets are compared (SNAP INC vs Snap Inc.)."""
+    ta, tb = name_tokens(a), name_tokens(b)
+    drop = {w.upper() for w in ignore}
+    ra, rb = ta - drop, tb - drop
+    return bool(ra & rb) if ra and rb else bool(ta & tb)
 
 
 class MemberNames:
@@ -726,7 +796,8 @@ In `TickerResolver.__init__`, store `member_names`. Add:
     def _expected_name(self, t: str, observed_date: str | None) -> str | None:
         return self.member_names(t, observed_date) or self.name_lookup(t, observed_date)
 
-    def _fits_date(self, cik: int, observed_date: str | None, expected: str | None) -> tuple[bool, bool]:
+    def _fits_date(self, cik: int, observed_date: str | None, expected: str | None,
+                   ticker: str = "") -> tuple[bool, bool]:
         """(existed on the date, its name then agrees with `expected`).
 
         A CIK first seen after the delist date is today's holder of a recycled
@@ -743,16 +814,39 @@ In `TickerResolver.__init__`, store `member_names`. Add:
             return False, False
         first = first_filing(filings)
         existed = first is not None and first <= on
-        agrees = expected is None or names_agree(name_at(sub, on), expected)
+        agrees = expected is None or names_agree(name_at(sub, on), expected, ignore=(ticker,))
         return existed, agrees
+
+    def _alive_near(self, cik: int, observed_date: str) -> bool:
+        """Filed anything within [date − 1500 d, date + 400 d]."""
+        on = parse_day(observed_date)
+        if on is None:
+            return True
+        lo, hi = on - timedelta(days=1500), on + timedelta(days=400)
+        return any((d := parse_day(f.filing_date)) is not None and lo <= d <= hi
+                   for f in self.edgar.recent_filings(cik))
+
+    def _accept_member_candidate(self, cik: int, t: str, observed_date: str | None, expected: str) -> bool:
+        """A name-search hit found through a member name. A rename files no
+        Form 25 (HYH -> Avanos, SKLZ -> Firy) and a frozen vendor tail can
+        outlast the 540-day window (XTO), so the loose Form-25 check alone
+        rejects true matches. Also accept the CIK when it existed on the date,
+        carried an agreeing name then, and was filing around the event (which
+        keeps out a long-dead member such as ImClone for a 2018 date)."""
+        if not observed_date or self._validate_cik(cik, observed_date, strict=False):
+            return True
+        existed, agrees = self._fits_date(cik, observed_date, expected, t)
+        return existed and agrees and self._alive_near(cik, observed_date)
 ```
 
+Ruling (Task 1 review): `_accept_member_candidate` is used for the name tier whenever the expected name comes from `member_names` (not from AV).
+
 In `resolve()`:
-- `company_tickers` tier: accept the hit only if `_fits_date(...) == (True, True)`, with source `"company_tickers"`. Otherwise fall through to the tiers below.
+- `company_tickers` tier: accept the hit only if `_fits_date(cik, observed_date, expected, t) == (True, True)`, with source `"company_tickers"`. Otherwise fall through to the tiers below.
 - Tier 1 (EFTS): after `_validate_cik`, also require `existed`. If `agrees` is False, keep the CIK but set `source = "efts_name_mismatch"`.
 - `_efts_lookup` second pass ("first non-exchange CIK"): return a candidate only if `names_agree(nm, expected)` for the caller's expected name. Pass `expected` in as a new keyword argument `expected_name`. With no expected name, skip the second pass.
-- `_name_search`: replace `nm = self.name_lookup(ticker, observed_date)` with `nm = self._expected_name(ticker, observed_date)`.
-- Tier 3: `score = self._name_match_score(cand_cik, av_name)`, where `av_name = self._expected_name(t, observed_date)`.
+- `_name_search`: replace `nm = self.name_lookup(ticker, observed_date)` with `nm = self._expected_name(ticker, observed_date)`. In `resolve()`, validate its hit with `_accept_member_candidate` when `self.member_names(t, observed_date)` is not None, and with `_validate_cik(..., strict=False)` otherwise (today's rule).
+- Tier 3: `score = self._name_match_score(cand_cik, av_name)`, where `av_name = self._expected_name(t, observed_date)`. Ruling (Task 1 review): when `av_name` is set, skip candidates whose score is 0. With SEC's current ticker map, LC reaches this tier and would otherwise take Comstock on rank alone.
 - Order change: when `self.member_names(t, observed_date)` is not None, try Tier 2 (name search) before Tier 1. A member name is more precise than a text search for the ticker (HYH, PEAK, CPWR, SPWR).
 
 In `DelistClassifier.classify_ticker`, right after `resolution` is known and a CIK exists:
@@ -763,7 +857,7 @@ In `DelistClassifier.classify_ticker`, right after `resolution` is known and a C
             flags.append("resolved_by_current_ticker_map")
         expected = self.resolver._expected_name(ticker.upper(), observed_delist_date)
         if expected and observed:
-            _, agrees = self.resolver._fits_date(resolution.cik, observed_delist_date, expected)
+            _, agrees = self.resolver._fits_date(resolution.cik, observed_delist_date, expected, ticker.upper())
             if not agrees:
                 flags.append("member_name_mismatch")
 ```
@@ -1466,7 +1560,10 @@ In `classifier.py`, add one helper and route every "no conclusive fingerprint" r
             return DelistRecord(ticker=ticker.upper(), cik=cik, observed_delist_date=observed_delist_date,
                                 crsp_code=code, bucket=bucket, confidence=conf, reason=reason,
                                 evidence={**evidence, **extra})
-        anchor = observed or (_parse_date(delist_filing.filing_date) if delist_filing else None)
+        # Ruling (Task 1 review): measure from the Form 25 when there is one. A frozen
+        # vendor tail pushes `observed` past the deal (KCI: proxy 43 days before its
+        # Form 25, 413 days before the vendor's last row).
+        anchor = (_parse_date(delist_filing.filing_date) if delist_filing else None) or observed
         if eightk is not None and "2.01" in eightk.item_set and dereg is not None:
             return rec(233, CrspBucket.MERGER, "medium", "2.01 with Form 25 + Form 15 (acquisition completed)")
         proxy = merger_evidence(filings, anchor) if anchor else None
