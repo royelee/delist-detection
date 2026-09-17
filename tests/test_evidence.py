@@ -99,3 +99,25 @@ def test_is_spac_sic_6770_when_the_only_rename_has_not_completed_by_the_date():
     sub = {"sic": "6770", "name": "Some Trust Corp", "formerNames": [
         {"name": "Old Blank Check Co", "from": "2020-01-01T00:00:00.000Z", "to": "2026-12-31T00:00:00.000Z"}]}
     assert is_spac(sub, date(2023, 1, 1))
+
+
+import pytest
+
+from delist_detection.evidence import cites_listing_deficiency
+
+
+@pytest.mark.parametrize("text, cites", [
+    ("the Company's failure to comply with the continued listing standard set forth in Section 802.01B", True),  # CIE
+    ("advising the Company of its failure to satisfy one or more continued listing rules or standards", True),    # SIVB
+    ("the NYSE determined that the trading price of the Class A shares was abnormally low", True),               # FPAC
+    ("an average global market capitalization over a consecutive 30-day trading period", True),                 # CIE
+    ("the average global market capitalisation fell below $15 million", True),
+    ("NYSE determined that the Company's common stock is no longer suitable for listing", True),                 # WeWork
+    ("the securities are no longer suitable for continued listing", True),
+    ("the NYSE had determined to commence proceedings to delist the Company's common stock", True),              # CIE
+    ("NYSE Regulation commenced proceedings to delist the common stock", True),
+    ("Item 3.01 Notice of Delisting or Failure to Satisfy a Continued Listing Rule or Standard; "
+     "Transfer of Listing.", False),                                                                            # the heading alone
+])
+def test_cites_listing_deficiency_standard_exchange_wording(text, cites):
+    assert cites_listing_deficiency(text) is cites

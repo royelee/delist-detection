@@ -238,7 +238,7 @@ def test_form25_form15_with_a_merger_proxy_is_a_merger():
     e = _TextEdgar(fs, {})
     from delist_detection.ticker_resolver import TickerResolver
     rec = DelistClassifier(e, TickerResolver(e)).classify_ticker("REORG", "2015-11-18")
-    assert rec.bucket is CrspBucket.MERGER
+    assert rec.bucket is CrspBucket.MERGER and rec.crsp_code == 231
 
 
 def test_form25_form15_with_2_01_alone_is_a_merger():
@@ -250,7 +250,7 @@ def test_form25_form15_with_2_01_alone_is_a_merger():
     e = _TextEdgar(fs, {})
     from delist_detection.ticker_resolver import TickerResolver
     rec = DelistClassifier(e, TickerResolver(e)).classify_ticker("REORG", "2016-02-01")
-    assert rec.bucket is CrspBucket.MERGER
+    assert rec.bucket is CrspBucket.MERGER and rec.crsp_code == 233
 
 
 def test_a_3_01_notice_citing_a_deficiency_stays_compliance():
@@ -290,3 +290,57 @@ def test_a_bare_3_01_without_a_form25_is_unknown():
     assert rec.evidence.get("delist_filing") is None
     assert rec.bucket is CrspBucket.UNKNOWN
     assert "no_evidence_default" in rec.evidence["flags"]
+    assert rec.evidence["deregistered"] is False
+
+
+def test_an_uppercase_item_heading_still_reads_the_deficiency_notice():
+    fs = [
+        EdgarSubmission("V1", "8-K", "2019-06-05", "2019-06-05", "3.01,9.01", "a.htm"),
+        EdgarSubmission("V2", "25-NSE", "2019-06-07", "", "", "p.xml"),
+    ]
+    e = _TextEdgar(fs, {"V1": "ITEM 3.01 Notice of Delisting or Failure to Satisfy a Continued Listing Rule or "
+                              "Standard. The Company is not in compliance with the continued listing standards "
+                              "regarding low selling price issues"})           # Nobilis 0001409916-19-000036
+    from delist_detection.ticker_resolver import TickerResolver
+    rec = DelistClassifier(e, TickerResolver(e)).classify_ticker("REORG", "2019-06-07")
+    assert rec.bucket is CrspBucket.COMPLIANCE_FAILURE and rec.crsp_code == 570
+
+
+def test_a_3_01_notice_whose_text_is_missing_is_flagged():
+    fs = [
+        EdgarSubmission("W1", "8-K", "2023-05-08", "2023-05-08", "3.01,8.01", "a.htm"),
+        EdgarSubmission("W2", "25-NSE", "2023-05-10", "", "", "p.xml"),
+    ]
+    e = _TextEdgar(fs, {})
+    from delist_detection.ticker_resolver import TickerResolver
+    rec = DelistClassifier(e, TickerResolver(e)).classify_ticker("REORG", "2023-05-10")
+    assert rec.bucket is CrspBucket.UNKNOWN
+    assert "notice_text_missing" in rec.evidence["flags"]
+
+
+def test_a_deficiency_notice_with_a_late_filing_is_580():
+    fs = [
+        EdgarSubmission("X0", "NT 10-K", "2023-03-31", "", "", "n.htm"),
+        EdgarSubmission("X1", "8-K", "2023-05-08", "2023-05-08", "3.01,8.01", "a.htm"),
+        EdgarSubmission("X2", "25-NSE", "2023-05-10", "", "", "p.xml"),
+    ]
+    e = _TextEdgar(fs, {"X1": "Item 3.01 ... has not regained compliance with the minimum bid price requirement"})
+    from delist_detection.ticker_resolver import TickerResolver
+    rec = DelistClassifier(e, TickerResolver(e)).classify_ticker("REORG", "2023-05-10")
+    assert rec.bucket is CrspBucket.COMPLIANCE_FAILURE and rec.crsp_code == 580
+
+
+def test_a_late_filing_alone_is_580_measured_from_the_form25():
+    """NT 10-K 360 days before the Form 25 but 400 days before the vendor's last
+    row: inside the window only when it is measured from the Form 25."""
+    fs = [
+        EdgarSubmission("Y0", "NT 10-K", "2022-05-15", "", "", "n.htm"),
+        EdgarSubmission("Y1", "8-K", "2023-05-08", "2023-05-08", "3.01,8.01", "a.htm"),
+        EdgarSubmission("Y2", "25-NSE", "2023-05-10", "", "", "p.xml"),
+    ]
+    e = _TextEdgar(fs, {"Y1": "Item 3.01 Notice of Delisting or Failure to Satisfy a Continued Listing Rule "
+                              "or Standard. The Company notified the exchange of its intent to delist."})
+    from delist_detection.ticker_resolver import TickerResolver
+    rec = DelistClassifier(e, TickerResolver(e)).classify_ticker("REORG", "2023-06-19")
+    assert rec.evidence["anchor_gap_days"] == 40
+    assert rec.bucket is CrspBucket.COMPLIANCE_FAILURE and rec.crsp_code == 580

@@ -314,7 +314,10 @@ class DelistClassifier:
         # days old (a deal that fell through can precede a real compliance delisting).
         notice = ""
         if eightk is not None and "3.01" in eightk.item_set:
-            notice = item_text(self.edgar.fetch_filing_text(cik, eightk.accession, eightk.primary_doc), "3.01")
+            text = self.edgar.fetch_filing_text(cik, eightk.accession, eightk.primary_doc)
+            if not text:
+                flags.append("notice_text_missing")    # reviewable: the notice could not be read
+            notice = item_text(text, "3.01")
         if cites_listing_deficiency(notice):
             return rec(580 if delinquent else 570, CrspBucket.COMPLIANCE_FAILURE, "medium",
                        "Listing deficiency cited in the 3.01 notice"

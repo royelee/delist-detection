@@ -12,7 +12,10 @@ _TRANSFER_TEXT = re.compile(r"transfer(?:red)?\s+(?:the|its|of\s+(?:the|its))\s+
 _DEFICIENCY_TEXT = re.compile(
     r"minimum\s+bid\s+price|stockholders[’']?\s+equity\s+requirement|"
     r"market\s+value\s+of\s+(?:listed|publicly\s+held)|regain(?:ed)?\s+compliance|"
-    r"not\s+in\s+compliance|failure\s+to\s+(?:timely\s+)?file|delinquen", re.I)
+    r"not\s+in\s+compliance|failure\s+to\s+(?:timely\s+)?file|delinquen|"
+    r"failure\s+to\s+(?:comply\s+with|satisfy)\s+(?:the|its|one\s+or\s+more)\s+continued\s+listing|"
+    r"abnormally\s+low|average\s+global\s+market\s+capitali[sz]ation|"
+    r"no\s+longer\s+suitable\s+for\s+(?:continued\s+)?listing|commence(?:d)?\s+proceedings\s+to\s+delist", re.I)
 
 SPAC_SIC = "6770"
 _SPAC_NAME = re.compile(r"\bacquisition\s+corp", re.I)
@@ -144,9 +147,9 @@ def still_operating(filings: list[EdgarSubmission], on: date, days: int = 15) ->
 
 
 def item_text(text: str, item: str, width: int = 1500) -> str:
-    """The slice of `text` starting at the `Item {item}` heading, `width` chars wide."""
-    i = (text or "").find(f"Item {item}")
-    return text[i:i + width] if i >= 0 else ""
+    """The slice of `text` starting at the `Item {item}` heading (any case), `width` chars wide."""
+    m = re.search(rf"item\s*{re.escape(item)}", text or "", re.I)
+    return text[m.start():m.start() + width] if m else ""
 
 
 def says_listing_transfer(text: str) -> bool:
