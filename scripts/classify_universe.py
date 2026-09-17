@@ -8,10 +8,10 @@ from __future__ import annotations
 
 import argparse
 import csv
-import json
 import os
 import sys
 import time
+from contextlib import contextmanager
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -67,7 +67,6 @@ MANUAL_OVERRIDES: dict[str, int] = {
     "ALEX":  1545654,   # Alexander & Baldwin REIT — 2026
     "WYN":   1361658,   # Wyndham Worldwide → spun 2018 (continuing entity)
     "OCR":   353230,    # Omnicare — CVS 2015
-    "VNTV":  1467373,   # Vantiv — Worldpay 2018
     "CONE":  1553023,   # CyrusOne — KKR 2022
     "DATA":  1303652,   # Tableau Software — Salesforce 2019
     "MNI":   1056087,   # McClatchy — Ch.11 2020
@@ -76,7 +75,6 @@ MANUAL_OVERRIDES: dict[str, int] = {
     "SPW":   88205,     # SPX Corp — refiled/restructured 2015
     "BFA":   14693,     # Brown-Forman Class A (share class delist; co continues)
     "CWENA": 1567683,   # Clearway Energy Class A (share class change)
-    "RICE":  1604665,   # Rice Energy — EQT 2017
     "IMCL":  1520047,   # ImmunoClin Corp (recycled ticker; SEC revoked 2019)
     # Tickers missing from AV — explicit knowledge of the rename
     "XTO":   868809,    # XTO Energy — ExxonMobil 2010; subsidiary dereg 2013
@@ -126,6 +124,21 @@ ACQUIRER_RENAMES: dict[str, str] = {
     "SPF":  "CAA",   # Standard Pacific -> CalAtlantic
     "ESV":  "VAL",   # Ensco -> Valaris
 }
+
+
+@contextmanager
+def _replace_on_success(path):
+    """Yield a temp path beside `path`; `path` is replaced only when the block
+    finishes. On an exception the temp file is removed and `path` is untouched,
+    so an abort never leaves a partial output over the last complete one."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(f".{path.name}.tmp")
+    try:
+        yield tmp
+        os.replace(tmp, path)
+    finally:
+        tmp.unlink(missing_ok=True)
 
 
 def _acquirer_price(prices, ticker: str | None, date: str | None) -> float | None:
@@ -250,7 +263,7 @@ def main() -> int:
         "anchor_8k_items", "dereg_form", "resolved_name", "resolution_source",
         "payout_per_share", "payout_source", "payout_confidence",
     ]
-    with out_path.open("w", newline="") as fh:
+    with _replace_on_success(out_path) as out_tmp, out_tmp.open("w", newline="") as fh:
         writer = csv.writer(fh)
         writer.writerow(HEADER)
         for i, (ticker, observed) in enumerate(rows, start=1):
@@ -373,7 +386,7 @@ def main() -> int:
         # delist_classifications.csv keeps the raw extraction.
         payouts_path = Path(args.payouts_output)
         payouts_path.parent.mkdir(parents=True, exist_ok=True)
-        with payouts_path.open("w", newline="") as pf:
+        with _replace_on_success(payouts_path) as payouts_tmp, payouts_tmp.open("w", newline="") as pf:
             pw = csv.writer(pf)
             pw.writerow(["ticker", "observed_delist_date", "payout_per_share", "confidence", "source", "accession"])
             for (tkr, date), pr in sorted(
@@ -406,7 +419,8 @@ def main() -> int:
         payout_confidences=gated.confidences,
         payout_flags=gated.flags,
     )
-    write_dlret_csv(table, args.dlret_output)
+    with _replace_on_success(args.dlret_output) as dlret_tmp:
+        write_dlret_csv(table, dlret_tmp)
     print(f"Wrote {args.dlret_output}: {len(table)} DLRET rows (PRIMARY OUTPUT)")
 
     # --- review.csv: every row the rules could not settle on their own ---
@@ -438,7 +452,7 @@ def main() -> int:
 
     review_path = Path(args.dlret_output).with_name("review.csv")
     review_path.parent.mkdir(parents=True, exist_ok=True)
-    with review_path.open("w", newline="") as rf:
+    with _replace_on_success(review_path) as review_tmp, review_tmp.open("w", newline="") as rf:
         rw = csv.DictWriter(rf, fieldnames=review_cols)
         rw.writeheader()
         rw.writerows(review_rows)
