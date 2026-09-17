@@ -195,8 +195,8 @@ def test_the_efts_fallback_skips_the_exchange_that_filed_the_form25(monkeypatch)
 
 def test_a_pinned_ticker_whose_names_differ_carries_both_flags(monkeypatch):
     """member_name_mismatch states a fact about the security — the vendor series
-    is not the named member — so a pin does not silence it; that flag is how qlib
-    catches an impostor series (IMCL is ImmunoClin under ImClone's old symbol).
+    is not the named member — so a pin does not silence it; that flag is how a
+    consumer catches an impostor series (IMCL is ImmunoClin under ImClone's old symbol).
     resolved_by_manual_override sits beside it so review triage can tell "the name
     differs" apart from "the CIK needs checking"."""
     _real_efts(monkeypatch, [_hit(("1815737", "FAST Acquisition Corp.  (FST)  (CIK 0001815737)"))])

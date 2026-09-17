@@ -11,13 +11,13 @@
 4. The payout reader handles whole-dollar amounts, preferred redemptions, award payouts and election deals, and every payout is checked against the last close.
 5. The table gains a `review_flags` column.
 
-**Tech Stack:** Python ≥ 3.10, pytest (offline), requests, pandas. Run everything under `conda run -n rdagent4qlib` from the repo root.
+**Tech Stack:** Python ≥ 3.10, pytest (offline), requests, pandas. Run everything from the repo root, in the project's Python environment.
 
 **Spec:** this plan's "Evidence" section. Source reports in the companion repo:
-- `qlib_practice/docs/validation/2026-09-16_panel_full_feature_panel.delist.parquet.md` (F7, F8, F9)
-- `qlib_practice/fetch_data_aplha/data/dlret_overrides.csv`, the 10 hand corrections this plan should make unnecessary
+- `the consumer pipeline's panel-validation report` (F7, F8, F9)
+- `the consumer pipeline's hand-written DLRET overrides`, the 10 hand corrections this plan should make unnecessary
 
-Companion plan in qlib_practice: `docs/superpowers/plans/2026-09-16-dlret-and-member-identity.md` (member-names export, build-dlret wiring, stage-1 identity check).
+Companion plan in the consumer repo: `2026-09-16-dlret-and-member-identity.md` (member-names export, build-dlret wiring, stage-1 identity check).
 
 ## Global Constraints
 
@@ -25,13 +25,13 @@ Companion plan in qlib_practice: `docs/superpowers/plans/2026-09-16-dlret-and-me
 - SEC fair access is unchanged: at most 8 requests/s, User-Agent from `EDGAR_USER_AGENT` (`edgar.resolve_user_agent()`).
 - `output/dlret.csv` keeps every existing column name and order. Exactly one column is appended: `review_flags` (semicolon-separated, empty when clean).
 - No new `CrspBucket` member and no change to `DLST_CODE_TO_BUCKET`.
-- The consumer (qlib_practice) writes −1.00 for every `compliance_failure` row and −0.90 for every `liquidation` row, whatever `dlret` says. A distress bucket is therefore a −100%/−90% training label and must rest on positive evidence: item 1.03 confirmed by text, item 2.04 without a change in control, NT 10-K/10-Q, SEC revocation, or a 3.01 notice citing a listing deficiency.
+- The consumer pipeline writes −1.00 for every `compliance_failure` row and −0.90 for every `liquidation` row, whatever `dlret` says. A distress bucket is therefore a −100%/−90% training label and must rest on positive evidence: item 1.03 confirmed by text, item 2.04 without a change in control, NT 10-K/10-Q, SEC revocation, or a 3.01 notice citing a listing deficiency.
 - The DLRET row describes the security whose prices the caller supplied: the vendor series ending on `observed_delist_date`. A member name is a check, never a substitute. If the company that delisted on that date is not the named member, emit that company's classification with the flag `member_name_mismatch`.
 - `MANUAL_OVERRIDES` stays authoritative, and so does the rule "extend it instead of patching the resolver when web verification proves a wrong CIK". This plan fixes classes of error, not single tickers.
 
 ---
 
-## Evidence (2026-09-16, qlib universe `tiingo_2026_09_11`, 495 delisted tickers, library `5e53294`)
+## Evidence (2026-09-16, the consumer's universe snapshot, 495 delisted tickers, library `5e53294`)
 
 **The 10 rows corrected by hand.** Each was checked against EDGAR.
 
@@ -258,7 +258,7 @@ if __name__ == "__main__":
 
 - [ ] **Step 4: Run it.**
 
-Run (network): `conda run -n rdagent4qlib python scripts/build_golden_fixtures.py`
+Run (network): `python scripts/build_golden_fixtures.py`
 Expected: one line per case and no traceback. `ls tests/fixtures/golden/*.json | wc -l` equals the number of CSV rows.
 
 - [ ] **Step 5: Write the offline fake.** Create `tests/golden.py`:
@@ -402,7 +402,7 @@ def test_golden_bucket_and_flags(case, monkeypatch, request):
 
 - [ ] **Step 7: Make the harness run against today's code.** Add a keyword-only `member_names=None` parameter to `TickerResolver.__init__`. It is stored as `self.member_names = member_names or (lambda *a, **kw: None)` and not used yet; Task 3 uses it.
 
-Run: `conda run -n rdagent4qlib pytest tests/test_golden_events.py -v`
+Run: `pytest tests/test_golden_events.py -v`
 Expected:
 - Every `XFAIL` id is reported XFAIL.
 - Every other id PASSES (SIVB, CIE, plus whatever Step 2 added and did not list).
@@ -501,7 +501,7 @@ def _no_efts_network(monkeypatch):
                         lambda self, t, d, top_n=5: [])
 ```
 
-- [ ] **Step 2: Run it.** `conda run -n rdagent4qlib pytest tests/test_edgar_blocked.py -v`. Expected: FAIL with `ImportError: cannot import name 'EdgarBlocked'`.
+- [ ] **Step 2: Run it.** `pytest tests/test_edgar_blocked.py -v`. Expected: FAIL with `ImportError: cannot import name 'EdgarBlocked'`.
 
 - [ ] **Step 3: Implement.** In `edgar.py`, after `FALLBACK_UA`:
 
@@ -560,7 +560,7 @@ if __name__ == "__main__":
         sys.exit(2)
 ```
 
-- [ ] **Step 4: Run the tests.** `conda run -n rdagent4qlib pytest -q`. Expected: PASS (the golden xfails are unchanged).
+- [ ] **Step 4: Run the tests.** `pytest -q`. Expected: PASS (the golden xfails are unchanged).
 
 - [ ] **Step 5: Commit.** `git commit -am "fix(edgar): a 403/429 is an error, not 'no match'; misses are not cached"`
 
@@ -748,7 +748,7 @@ def test_the_member_name_tier_runs_before_the_frequency_rank(monkeypatch):
 
 In `tests/test_golden_events.py`, delete the Task 3 entries from `XFAIL_BUCKET` (CPWR, PEAK, IMCL). Apply the general rule for any that still fail.
 
-- [ ] **Step 2: Run them.** `PYTHONPATH=src:. conda run -n rdagent4qlib --no-capture-output python -m pytest tests/test_names.py tests/test_evidence.py tests/test_resolver_member_names.py tests/test_golden_events.py -v`. Expected: the new files FAIL (ImportError or wrong CIK), and the Task 3 golden ids FAIL.
+- [ ] **Step 2: Run them.** `PYTHONPATH=src:. python -m pytest tests/test_names.py tests/test_evidence.py tests/test_resolver_member_names.py tests/test_golden_events.py -v`. Expected: the new files FAIL (ImportError or wrong CIK), and the Task 3 golden ids FAIL.
 
 - [ ] **Step 3: Implement `names.py`.**
 
@@ -958,9 +958,9 @@ The company-tickers tier now reads `submissions()` for every hit. So in `tests/c
 
 Give the `BAD` fixture `texts={"A002": "Item 3.01 Notice of Delisting ... has not regained compliance with the minimum bid price requirement"}`; Task 9 relies on it. Every fixture company's earliest filing must be on or before its test date, or the date check rejects it. That already holds for ALTR, BAD and LIQ.
 
-In `scripts/classify_universe.py`, add `p.add_argument("--names", default=None, help="CSV ticker,as_of,name: index-member names (qlib_practice exports them from iShares/Wikipedia holdings)")`. Pass `member_names=MemberNames.from_csv(args.names) if args.names else None` to `TickerResolver`.
+In `scripts/classify_universe.py`, add `p.add_argument("--names", default=None, help="CSV ticker,as_of,name: index-member names (the consuming pipeline exports them from iShares/Wikipedia holdings)")`. Pass `member_names=MemberNames.from_csv(args.names) if args.names else None` to `TickerResolver`.
 
-- [ ] **Step 6: Run the tests.** `PYTHONPATH=src:. conda run -n rdagent4qlib --no-capture-output python -m pytest -q`. Expected: PASS.
+- [ ] **Step 6: Run the tests.** `PYTHONPATH=src:. python -m pytest -q`. Expected: PASS.
   - Golden cases: the resolution parts of HYH, SPWR, OAS, MDR, WE, XTO and KCI are now right, while their buckets wait for later tasks (their `XFAIL_BUCKET` entries stay).
   - CPWR, PEAK and IMCL pass.
   - HLTH, FST, BWC, HMA and LEAP carry `member_name_mismatch` and wait for their bucket task.
@@ -1117,7 +1117,7 @@ In `_classify_items` callers, strip an unconfirmed 1.03 before classifying. Add:
 
 Then replace each `self._classify_items(eightk.item_set)` with `self._classify_items(self._effective_items(resolution.cik, eightk, flags))`. `_FakeEdgar` in `tests/conftest.py` already has `fetch_filing_text` and `submissions` (Task 3).
 
-- [ ] **Step 4: Run.** `conda run -n rdagent4qlib pytest -q`. Expected: PASS.
+- [ ] **Step 4: Run.** `pytest -q`. Expected: PASS.
 
 - [ ] **Step 5: Commit.** `git commit -am "fix(classifier): a confirmed 1.03 wins over continued filings; an unconfirmed 1.03 tag is ignored"`
 
@@ -1228,7 +1228,7 @@ In `classify_ticker`, change `delist_filing = self._pick_delist_filing(filings, 
 
 Keep `evidence["delist_filing"]` as today. When the anchor 8-K search runs on a frozen tail, it uses the Form 25 date (unchanged).
 
-- [ ] **Step 4: Run.** `conda run -n rdagent4qlib pytest -q`. Expected: PASS.
+- [ ] **Step 4: Run.** `pytest -q`. Expected: PASS.
 
 - [ ] **Step 5: Commit.** `git commit -am "fix(classifier): an old Form 25 from another event is not the anchor; flag frozen vendor tails"`
 
@@ -1293,7 +1293,7 @@ In `tests/test_golden_events.py`, delete the Task 6 `XFAIL` entries.
 
 Item 1.03 still comes first. Task 4 has already removed any unconfirmed 1.03 before this runs, which is how VSTO reaches the change-in-control rule.
 
-- [ ] **Step 4: Run.** `conda run -n rdagent4qlib pytest -q`. Expected: PASS. `test_compliance_failure_classifies_correctly` (3.01, 8.01) still returns 570.
+- [ ] **Step 4: Run.** `pytest -q`. Expected: PASS. `test_compliance_failure_classifies_correctly` (3.01, 8.01) still returns 570.
 
 - [ ] **Step 5: Commit.** `git commit -am "fix(classifier): a change in control is a takeover even without item 2.01, and beats 2.04"`
 
@@ -1441,7 +1441,7 @@ In `classifier.py`, add a method and call it after the bankruptcy check and befo
 
 `still_operating` is what keeps BLD, which was renamed "QXO Insulation, LLC" at its merger, out of this rule: it filed a Form 15 on 2026-07-13 and reported no results afterwards.
 
-- [ ] **Step 4: Run.** `conda run -n rdagent4qlib pytest -q`. Expected: PASS, including the golden cases LC, SKLZ and HYH.
+- [ ] **Step 4: Run.** `pytest -q`. Expected: PASS, including the golden cases LC, SKLZ and HYH.
 
 - [ ] **Step 5: Commit.** `git commit -am "feat(classifier): renames and listing transfers are exchange transfers, not compliance failures"`
 
@@ -1527,7 +1527,7 @@ In `classify_ticker`, after the rename check:
 
 Move `delist_filing`/`dereg` selection above this block if it isn't there already. `enrich` already turns EXPIRATION with a valid last close into `ASSUMED_PAR` (dlret 0).
 
-- [ ] **Step 4: Run.** `conda run -n rdagent4qlib pytest -q`. Expected: PASS.
+- [ ] **Step 4: Run.** `pytest -q`. Expected: PASS.
 
 - [ ] **Step 5: Commit.** `git commit -am "feat(classifier): SPAC trust liquidations are scheduled ends (600), not distress"`
 
@@ -1684,7 +1684,7 @@ In `reconstruction.enrich`, before the existing ASSUMED_PAR block:
         res = DlretResult(0.0, DlretMethod.ASSUMED_PAR, last_trade_close)
 ```
 
-- [ ] **Step 4: Run.** `conda run -n rdagent4qlib pytest -q`. Expected: PASS. `test_compliance_failure_classifies_correctly` needs its fixture to carry a deficiency: give `A002` a text in the conftest fake (`fetch_filing_text` returns "Item 3.01 ... minimum bid price" for `A002`).
+- [ ] **Step 4: Run.** `pytest -q`. Expected: PASS. `test_compliance_failure_classifies_correctly` needs its fixture to carry a deficiency: give `A002` a text in the conftest fake (`fetch_filing_text` returns "Item 3.01 ... minimum bid price" for `A002`).
 
 - [ ] **Step 5: Commit.** `git commit -am "fix(classifier): a distress bucket needs evidence; takeovers without a closing 8-K are found by their proxy/tender filings"`
 
@@ -1827,7 +1827,7 @@ Checked on 2026-09-16 against the real texts with these exact definitions:
 
 In the tier loop in `_extract`, a mixed deal still returns `_NONE` (unchanged). The value is written with `f"{pr.value:.2f}"` in `classify_universe.py`; change that to `f"{pr.value:.6g}"` so $10.389188 survives.
 
-- [ ] **Step 4: Run.** `conda run -n rdagent4qlib pytest -q`. Expected: PASS, including `tests/test_payout_golden.py` (the committed 8-K fixtures). If a golden fixture there changes value, read its text. Accept the change only if the new value is the per-common-share consideration.
+- [ ] **Step 4: Run.** `pytest -q`. Expected: PASS, including `tests/test_payout_golden.py` (the committed 8-K fixtures). If a golden fixture there changes value, read its text. Accept the change only if the new value is the per-common-share consideration.
 
 - [ ] **Step 5: Commit.** `git commit -am "fix(payout): whole-dollar amounts, preferred/award/redemption guards, elections are mixed, ties abstain"`
 
@@ -1940,7 +1940,7 @@ In `scripts/classify_universe.py`:
 
 In `tests/test_golden_events.py`, change `test_golden_payout` to run `reconcile` on the extractor's value, with the case's captured LLM terms when the fixture has them. Otherwise pass `None`. Assert on the reconciled cash or stock value. Delete the Task 11 `XFAIL` entry (BLD). BLD needs its LLM terms captured: extend `build_golden_fixtures.py` to store `LLMMergerTermsExtractor(...).extract(rec)` as `case["llm_terms"]` when `OPENAI_API_KEY` is set, and re-run it for BLD.
 
-- [ ] **Step 4: Run.** `conda run -n rdagent4qlib pytest -q`. Expected: PASS.
+- [ ] **Step 4: Run.** `pytest -q`. Expected: PASS.
 
 - [ ] **Step 5: Commit.** `git commit -am "feat(payout): gate every payout on the last close; resolve elections by the leg the price reconciles with"`
 
@@ -2005,28 +2005,28 @@ In `scripts/classify_universe.py`:
 - After writing the table, write `Path(args.dlret_output).with_name("review.csv")` with columns `ticker, observed_delist_date, bucket, dlret, review_flags, reason, cik, anchor_8k` for every row whose `review_flags` is non-empty.
 - Print one count line per flag.
 
-- [ ] **Step 4: Run.** `conda run -n rdagent4qlib pytest -q`. Expected: PASS.
+- [ ] **Step 4: Run.** `pytest -q`. Expected: PASS.
 
 - [ ] **Step 5: Commit.** `git commit -am "feat(table): review_flags column and output/review.csv list every row the rules could not settle"`
 
 ---
 
-### Task 13: Acceptance run on the qlib universe, then docs
+### Task 13: Acceptance run on the consumer's universe, then docs
 
 Needs the companion plan's Task Q1 (`member_names.csv`) and Task Q2 (`--dlret-overrides none`).
 
-- [ ] **Step 1: Rerun without hand corrections.** From qlib_practice, in the worktree of the companion plan:
+- [ ] **Step 1: Rerun without hand corrections.** From the consumer repo, in the worktree of the companion plan:
 
 ```bash
-PYTHONPATH=fetch_data_aplha/src conda run -n rdagent4qlib --no-capture-output \
-  python fetch_data_aplha/cli.py build-dlret --extract-merger-terms-llm --dlret-overrides none
+PYTHONPATH=<consumer-src> \
+  python <consumer-cli> build-dlret --extract-merger-terms-llm --dlret-overrides none
 ```
 
 Expected: exit 0 and no `ABORTED`.
 
 - [ ] **Step 2: Check the success criteria.** Record each result in the plan's Results section.
   1. Offline golden suite: 100% pass, and `XFAIL` is empty.
-  2. Each of the 10 rows in `fetch_data_aplha/data/dlret_overrides.csv` matches the new output: same bucket, and `|dlret − override| ≤ 0.002`. BLD may instead carry `payout_gate_failed` with dlret 0.
+  2. Each of the 10 rows in `<consumer-data>/dlret_overrides.csv` matches the new output: same bucket, and `|dlret − override| ≤ 0.002`. BLD may instead carry `payout_gate_failed` with dlret 0.
   3. Compliance/liquidation rows with last close ≥ $5: down from 41. Each one left has a reason naming its evidence (1.03 text, 2.04 without 5.01, deficiency text, NT filing, revocation).
   4. No row has `|dlret| > 10`.
   5. Every row that differs from the committed `data/delist/dlret.csv` is listed in the run report (old → new bucket, reason, flags) and read by a person. Expected size: 60–100 rows.
@@ -2047,7 +2047,7 @@ Expected: exit 0 and no `ABORTED`.
 
 ## Execution record (2026-09-17)
 
-Tasks 1–12 were executed with subagent-driven development on branch feat/classify-right-first-time, followed by a final whole-branch review and one fix wave (F1–F16). Task 13 is still open: it waits for Tasks 1–2 of the qlib companion plan (`qlib_practice/docs/superpowers/plans/2026-09-16-dlret-and-member-identity.md`).
+Tasks 1–12 were executed with subagent-driven development on branch feat/classify-right-first-time, followed by a final whole-branch review and one fix wave (F1–F16). Task 13 is still open: it waits for Tasks 1–2 of the consumer's companion plan (`the consumer pipeline/docs/superpowers/plans/2026-09-16-dlret-and-member-identity.md`).
 
 ### Rulings made during execution
 
@@ -2057,11 +2057,11 @@ Each ruling says what was decided, why, and what it costs if wrong. Later ruling
 - Ruling: the golden test compares flag names before any ":" (`{f.split(":")[0] for f in flags}`). — T5 emits `frozen_tail:<days>` by design. — If wrong: a flag regression with a changed suffix goes unnoticed (the suffix is informational).
 - Ruling: T1 adds `pythonpath = ["src", "."]` to `[tool.pytest.ini_options]`. — Without it the editable install (main checkout) is tested instead of this branch, and `tests.golden` is unimportable. — If wrong: nothing breaks; `PYTHONPATH=src:.` gives the same effect.
 - Ruling: the golden resolver runs without `MANUAL_OVERRIDES`. — It measures the automatic path the plan is about. — If wrong: cases that only the manual table resolves (IMCL, WE) stay xfail or get moved; the executor records why.
-- Ruling: execute Tasks 1–12 only, then the final review; Task 13 waits for the qlib companion plan. — Task 13 Step 1 calls a qlib CLI flag that does not exist yet. — If wrong: the acceptance numbers come one step later.
-- Ruling: every implementer runs tests as `PYTHONPATH=src:. conda run -n rdagent4qlib --no-capture-output python -m pytest …` from the clone, stays in the sandbox, and lists SEC/LLM hosts in `allowed_domains` for network steps; commits carry the session attribution trailers. — The environment requires it. — If wrong: a denied command, which is retried with the named host.
+- Ruling: execute Tasks 1–12 only, then the final review; Task 13 waits for the consumer's companion plan. — Task 13 Step 1 calls a consumer-side CLI flag that does not exist yet. — If wrong: the acceptance numbers come one step later.
+- Ruling: every implementer runs tests as `PYTHONPATH=src:. python -m pytest …` from the clone, stays in the sandbox, and lists SEC/LLM hosts in `allowed_domains` for network steps; commits carry the session attribution trailers. — The environment requires it. — If wrong: a denied command, which is retried with the named host.
 - Ruling (T1 concern 1+6): Task 3 widens acceptance when the expected name comes from member names: a name-tier candidate is accepted if `_validate_cik(loose)` passes OR (`_fits_date == (True, True)` AND the CIK filed anything within [observed − 1500 d, observed + 400 d]). — Renames file no Form 25 (HYH/Avanos, SKLZ), and frozen tails exceed 540 days (XTO). The "alive" window keeps a long-dead member (ImClone 765258 vs a 2018 date) out. — If wrong: a member CIK with no filings near the event is still rejected (stays xfail), or a live same-name company is accepted and later flagged by the classifier.
 - Ruling (T1 concern 2): Task 3's frequency tier rejects candidates with name score 0 whenever an expected name exists. — With SEC's current ticker map, LC falls to the frequency tier and picks Comstock on rank alone. — If wrong: a true target whose EDGAR name shares no token with the member name goes unresolved (visible as unknown).
-- Ruling (T1 concern 3): HLTH's expected bucket becomes `liquidation`. A state-court receivership (8-K 1.03, 2019-09-24) 14 days after the delisting decides the terminal value, and that is exactly the case Task 4's after=30 window exists for. — If wrong: HLTH's label is −0.90 instead of −1.00 (and HLTH is an impostor series, flagged member_name_mismatch, so qlib denylists it anyway).
+- Ruling (T1 concern 3): HLTH's expected bucket becomes `liquidation`. A state-court receivership (8-K 1.03, 2019-09-24) 14 days after the delisting decides the terminal value, and that is exactly the case Task 4's after=30 window exists for. — If wrong: HLTH's label is −0.90 instead of −1.00 (and HLTH is an impostor series, flagged member_name_mismatch, so the consumer pipeline denylists it anyway).
 - Ruling (T1 concern 4): Task 3's `names_agree(a, b, ignore=(ticker,))` drops tokens equal to the ticker before comparing, unless that leaves either side empty (then it compares full tokens). — Recycled companies often embed the symbol (Ribbit LEAP vs Leap Wireless). The fallback keeps SNAP-style names ("SNAP INC") agreeing. — If wrong: spurious member_name_mismatch flags (review noise, no label change).
 - Ruling (T1 concern 5): Task 9 measures the merger-evidence window from the Form 25 anchor date when a Form 25 exists, else from the observed date. — KCI's DEFM14A is 43 days before its Form 25 but 413 days before the frozen vendor end. — If wrong: a proxy from an unrelated earlier deal counts; the 400-day bound still applies.
 - Ruling (T1 concern 6): the golden test pins IMCL→1520047 through a one-entry `GOLDEN_MANUAL` dict passed as `manual_overrides`. — Production pins it in MANUAL_OVERRIDES, and no automatic path exists (no Form 25, recycled OTC shell); the CLAUDE.md invariant says to extend the manual table for such cases. — If wrong: nothing; the automatic path stays untested for IMCL only.
@@ -2071,7 +2071,7 @@ Each ruling says what was decided, why, and what it costs if wrong. Later ruling
 - Ruling (supersedes the "alive within [-1500, +400]" part): member-name candidates without a loose Form 25 need existed AND agrees AND (a filing within ±400 d OR a Form 25/15 within [-1500 d, +45 d]). — Keeps PEAK (a stub of a live company) and XTO (frozen tail) while rejecting long-dead members. — If wrong: a live same-name company is accepted and later flagged by the classifier.
 - Ruling (Task 2 dispatch): besides not persisting new misses, `TickerResolver.__init__` skips loading cache entries whose `cik` is None, so misses persisted by older runs are retried. The in-process memo still keeps misses within one run. — The 2026-05-28→09-16 SEC block left "source: none" entries that short-circuit forever; not persisting new ones alone does not clear them. — If wrong: a few extra EDGAR lookups per run for genuinely unresolvable tickers (a handful).
 - Ruling (T3 concern 2): `_expected_name` returns the first of (member name, AV name) that has at least one name token, else None, so names like "AT&T INC." / "3M CO" count as "no expected name" (no mismatch flag, no company_tickers rejection). — `names_agree` is False for token-less names by design, so without this they reject correct matches. — If wrong: such tickers lose the name check entirely (the date/existence checks still apply). Goes into the Task 3 fix round.
-- Ruling (T3 concern 4): the Task 13 acceptance run starts from an empty resolver cache (back up `cache/ticker_resolution.json` first); the qlib companion's first build-dlret after this branch lands does the same. — Old non-null entries (CPWR→Ocean Thermal) short-circuit the new checks. — If wrong: acceptance measures stale answers.
+- Ruling (T3 concern 4): the Task 13 acceptance run starts from an empty resolver cache (back up `cache/ticker_resolution.json` first); the consumer pipeline companion's first build-dlret after this branch lands does the same. — Old non-null entries (CPWR→Ocean Thermal) short-circuit the new checks. — If wrong: acceptance measures stale answers.
 - Ruling (T3 concern 3): Task 4's bankruptcy check runs before the item fingerprint (already the plan's order), so SPWR keeps passing after Task 6 narrows the 2.04 rule; the Task 6 dispatch will say to confirm SPWR.
 - Ruling (T3 Important 1, plan-mandated, sides with the global constraint): a second-pass EFTS hit whose name disagrees becomes a fallback instead of being dropped. The name search may replace it only when its own hit has a Form 25/15 within the same ±90-day window (PEAK→Healthpeak 25-NSE 2023-02-10, WE→WeWork 15-12G 2024-06-11). Otherwise resolve() returns the fallback with source `efts_name_mismatch`, and the classifier flags it. With no fallback, the name search behaves as now. — Otherwise a live same-name company silently replaces the company that filed the delisting form (reviewer probe: BWC→Babcock & Wilcox Enterprises, no flag). — If wrong: a junk second-pass hit (a random filer mentioning the ticker text) beats a correct rename match that filed no Form 25; that row is visible through member_name_mismatch.
 - Ruling (T3 Important 2): the builder captures the raw EFTS JSON for the two resolver queries per case (`efts_raw`, keyed by URL), and the golden replay stubs `requests.get` inside ticker_resolver with it, so the real `_efts_lookup` / `_efts_pre_delist_frequency_ranked` run offline and the replay approximation is removed. The existing fixtures get `efts_raw` added by an EFTS-only capture (62 requests), with no refetch of the other captured data. — If wrong: the fixture rebuild costs one more network step.
@@ -2081,16 +2081,16 @@ Each ruling says what was decided, why, and what it costs if wrong. Later ruling
 - Ruling (T9 Q2): the 8-K-only path (no Form 25) also routes a 570 through the helper. The code-None/no-Form-15 UNKNOWN return stays as is. — The global constraint says a distress bucket needs positive evidence, and a bare 3.01 without a Form 25 has none. — If wrong: a genuine exchange-initiated delisting whose notice lacks the deficiency wording becomes unknown (blank dlret, since not deregistered) instead of −100%.
 - Ruling (T9 Important 2, plan-mandated): `_DEFICIENCY_TEXT` adds `failure to (?:comply with|satisfy)\s+(?:the |its |one or more )continued listing`, `abnormally low`, `average global market capitali[sz]ation`, `no longer suitable for (?:continued )?listing`, and `commence(?:d)? proceedings to delist`. The standard heading "Failure to Satisfy a Continued Listing Rule or Standard" must still not match. — The reviewer found these in real notices (CIE, SIVB, FPAC, WeWork). Without them a non-bankrupt company with the same notice becomes unknown at par. — If wrong: a merger notice containing one of these phrases reads as distress (none seen in the 408 cached notices, per the reviewer's scan).
 - Ruling (T9 minor, in the fix round): a missing 3.01 notice text (fetch returned "") adds flag `notice_text_missing`; add tests for both 580 branches; assert codes 231/233 and `deregistered is False` in the weak tests.
-- Ruling (T11 pre-dispatch, gate scope): the reconcile pass runs for every merger record whether or not --extract-merger-terms-llm is on; it moves out of the `if prices is not None` block. The last close is the CSV value, else prices.close_on when prices exists (the existing fill stays inside the prices block and runs first). No close → the regex value is kept with flag `no_last_close` (the brief's code). — qlib always passes --last-trade-closes, so production always gates; the plan title says every payout. — If wrong: a standalone run without closes ships unchecked regex values exactly as before (flagged).
+- Ruling (T11 pre-dispatch, gate scope): the reconcile pass runs for every merger record whether or not --extract-merger-terms-llm is on; it moves out of the `if prices is not None` block. The last close is the CSV value, else prices.close_on when prices exists (the existing fill stays inside the prices block and runs first). No close → the regex value is kept with flag `no_last_close` (the brief's code). — the consumer always passes --last-trade-closes, so production always gates; the plan title says every payout. — If wrong: a standalone run without closes ships unchecked regex values exactly as before (flagged).
 - Ruling (T11 pre-dispatch, routing): reconcile runs first for every merger key, with llm_terms = the LLM terms for the key (reconcile ignores deal types other than cash/election), and llm_terms=None when a --merger-terms CSV row exists for the key. Afterwards the existing cash+stock gate runs only for terms with stock_ratio set and deal_type != "election", unchanged (it still pops the regex payout when the stock leg alone reconciles). Election stock legs from reconcile write merged_terms only when no CSV row exists. payout_src/payout_conf: kept for source "regex"; set to "llm"/"llm_election_cash" and terms.confidence for LLM cash; popped with the payout when r.cash is None. The acquirer price lookup (deal-era ticker, then ACQUIRER_RENAMES) becomes one helper used by both paths. — A cash+stock deal's regex cash leg never reconciles with the close, so dropping it before the gate is right; the gate then supplies the full terms. — If wrong: a cash+stock deal whose LLM gate fails now lands at par instead of the cash leg alone (a large false negative return before).
-- Ruling (T11 pre-dispatch, golden BLD): the fixture stores `llm_terms` (MergerTerms fields as a dict) and `acquirer_price` = raw close of the acquirer on observed_delist_date (with ACQUIRER_RENAMES fallback); the builder takes --raw-tiingo-dir (the library's default path doesn't resolve from this clone), run with ../qlib_practice/fetch_data_aplha/data/tiingo_2026_09_11/raw_tiingo_csv (QXO 2026-07-01 close 16.54, matching the golden note). test_golden_payout computes implied = (cash or ratio*acquirer_price)/last_close − 1, 0.0 when reconcile returns nothing. — The golden expected_dlret −0.057603 is 20.2×16.54/354.53−1. — If wrong: the BLD golden depends on the snapshot the fixture was built from (recorded in the fixture).
+- Ruling (T11 pre-dispatch, golden BLD): the fixture stores `llm_terms` (MergerTerms fields as a dict) and `acquirer_price` = raw close of the acquirer on observed_delist_date (with ACQUIRER_RENAMES fallback); the builder takes --raw-tiingo-dir (the library's default path doesn't resolve from this clone), run with ../the consumer pipeline/<consumer-data>/the raw price directory (QXO 2026-07-01 close 16.54, matching the golden note). test_golden_payout computes implied = (cash or ratio*acquirer_price)/last_close − 1, 0.0 when reconcile returns nothing. — The golden expected_dlret −0.057603 is 20.2×16.54/354.53−1. — If wrong: the BLD golden depends on the snapshot the fixture was built from (recorded in the fixture).
 - Ruling (T10 Important 1): keep the tie rule as the plan wrote it. Two figures with the same support where the smaller is ≥25% of the larger are ambiguous, and abstaining falls through to the next tier and, after Task 11, to the LLM cash the last close reconciles with. Fix round adds a regression test: equal counts, CVR < 25% of cash → the cash is returned. — The old max-pick is what produced TWO's $25. — If wrong: a cash deal whose filing repeats a CVR ≥25% of the cash as often as the cash abstains at this tier.
 - Ruling (T10 Important 2, plan-mandated): all 8 golden payout cases expect an extracted value (checked the CSV), so test_golden_payout asserts `pr.value is not None` before computing the implied return; drop the 0.0 fallback. — Makes near-par misses (VRTV, ONXX, KCI) visible. — If wrong: a future golden case that expects abstention needs its own marker.
 - Ruling (T10 Minor 3): payout format `.10g` instead of `.6g` so the full value survives as the brief intended. — Cost if wrong: none (payouts.csv is parsed with float()).
-- Ruling (T11 concern 2): payouts.csv is written after the gate from the gated values (same columns; blank payout when the gate drops it; source/confidence from payout_src/payout_conf; accession from the regex result when the source is regex, else from the LLM terms' source). delist_classifications.csv keeps the raw extraction (deferred doc note for Task 13). — qlib's audit_delist_exits.py and the library's compute_corrected_returns.py read payouts.csv, so an ungated misread still reaches them. — If wrong: a consumer that wanted the raw regex value loses it from payouts.csv (still in delist_classifications.csv).
+- Ruling (T11 concern 2): payouts.csv is written after the gate from the gated values (same columns; blank payout when the gate drops it; source/confidence from payout_src/payout_conf; accession from the regex result when the source is regex, else from the LLM terms' source). delist_classifications.csv keeps the raw extraction (deferred doc note for Task 13). — the consumer pipeline's audit_delist_exits.py and the library's compute_corrected_returns.py read payouts.csv, so an ungated misread still reaches them. — If wrong: a consumer that wanted the raw regex value loses it from payouts.csv (still in delist_classifications.csv).
 - Ruling (T11 concern 1): when the cash+stock gate emits terms for a key, remove that key's `payout_gate_failed:*` flags (a cash leg is not expected to reconcile alone); other flags stay. — Otherwise Task 12 lists correct rows for review. — If wrong: a misread cash leg on a deal the full terms resolve goes unlisted (the full terms override it anyway).
-- Ruling (T11 concern 3/4): accepted as is. The extractor's relative band uses only the CSV close (qlib always passes it); a --merger-terms row without cash no longer receives a regex cash that fails the gate (correct: a failing value must not ship). Deferred minor for the final review.
-- Ruling (T11 concern 5): the fixture records only the snapshot-relative part of raw_tiingo_dir (e.g. `tiingo_2026_09_11/raw_tiingo_csv`), not the absolute home path. — Committed fixtures shouldn't carry a user's home path. — Cost if wrong: none.
+- Ruling (T11 concern 3/4): accepted as is. The extractor's relative band uses only the CSV close (the consumer always passes it); a --merger-terms row without cash no longer receives a regex cash that fails the gate (correct: a failing value must not ship). Deferred minor for the final review.
+- Ruling (T11 concern 5): the fixture records only the snapshot-relative part of raw_tiingo_dir (e.g. the raw price directory), not the absolute home path. — Committed fixtures shouldn't carry a user's home path. — Cost if wrong: none.
 - Ruling (T11 Important 1): when both election legs fit, take the leg with the smaller |v/last_close − 1| (ties → stock, as now); add a test where both fit. — Election legs are equal at signing, so both usually fit; the stock-first rule biases DLRET down by up to the tolerance. — If wrong: an election whose post-deadline holders all got stock while the cash leg sits closer to the close takes the cash value (error bounded by the gap between the legs).
 - Ruling (T11 Important 2): reconcile accepts LLM cash for any non-election terms with stock_ratio None and cash set (as the deleted branch did), source "llm"; unit test with deal_type "other" (cash+CVR). — The LLM labels all 9 cached cash+CVR deals "other"; the T10 tie ruling relies on this fallback. — If wrong: an "other" deal whose cash field is a partial leg fills in only when it reconciles within 15%.
 - Ruling (T11 Minor 4): move the post-loop routing out of classify_universe into `payout_gate.gate_payouts(...)`, a pure function taking plain dicts plus an `acquirer_price(ticker, date)` callable and returning the payouts/src/conf/merged_terms/flags and the counters; classify_universe calls it. Tests cover: CSV key precedence, election stock leg (payout popped), stock-only gate pass (payout popped), no_last_close kept, LLM cash with stock_ratio set, the concern-1 flag removal, and the "other" cash recovery. — The block is new, branches on 5 inputs, and the fix round adds more branches; it had no automated test. — Cost if wrong: a moderate move of new code.
@@ -2102,20 +2102,20 @@ Each ruling says what was decided, why, and what it costs if wrong. Later ruling
 - Ruling (final review, cache): replace the manual cache wipe with a versioned cache in code (v2 file format; old files ignored) whose entries record the member name used; a different member name is a miss. Supersedes the T3 "start from an empty resolver cache" ruling. — The companion plan never wipes the cache and production's cache holds the wrong CIKs. — If wrong: the first run after merge re-resolves every ticker (network, slower).
 - Ruling (final review, scope of the one fix wave): F1–F13 in final-review-findings.md are fixed now, including the stale-submissions refresh (F4), transient-error non-persistence (F6), SPAC check in the default helper (F10), `llm_gate_failed` (F11), and atomic CSV writes (F12); the rest go to Task 13 or are left, as listed there. — F4 and F6 decide whether the first production run is right; F10 and F11 are cheap guards against −100% SPAC marks and silent par rows. — If wrong: a larger fix diff for one re-review.
 - Ruling (final review, Task 13 acceptance): the pinned-map and current-map acceptance runs use separate copies of the resolver cache (back up, run, restore), since the cache key does not include the company_tickers snapshot. — Cost if wrong: none.
-- Ruling (final fix wave, F14–F16): the same fix wave also replaces EXCHANGE_CIKS with the 12 verified registrants, sets KWK → 1060990, and passes fresh_after in the resolver's submissions reads; the wave's single re-review covers all of F1–F16. — These are pre-existing data errors of the kind this branch exists to fix, found during the wave; KWK's production row is wrong today. — If wrong: an exchange missing from the new list (IEX, Cboe BYX/EDGA, MEMX were not found by name) can be ranked as an issuer in the frequency tier; KWK's new classification is unverified until the qlib diff review.
+- Ruling (final fix wave, F14–F16): the same fix wave also replaces EXCHANGE_CIKS with the 12 verified registrants, sets KWK → 1060990, and passes fresh_after in the resolver's submissions reads; the wave's single re-review covers all of F1–F16. — These are pre-existing data errors of the kind this branch exists to fix, found during the wave; KWK's production row is wrong today. — If wrong: an exchange missing from the new list (IEX, Cboe BYX/EDGA, MEMX were not found by name) can be ranked as an issuer in the frequency tier; KWK's new classification is unverified until the consumer pipeline diff review.
 - Ruling (final fix wave, fixer concerns 4/5): company_search_atom turning a 5xx into an empty result is parked for Task 13 (a lower tier's answer can then be cached); the full re-resolve on the first run after merge is the intended cost of F1.
 - Final review: parked — a resolver-side transient refetch error rejects the candidate silently (lower tier or none, unflagged, not saved) — Ruling: park for Task 13; the answer is never persisted, and the classifier's up-front refetch still turns a failed refresh into an error row. Cost if wrong: an unflagged wrong-or-missing CIK for one run.
 - Final review: parked — the rename path can save an answer from a transient error when the renamed ticker was resolved earlier in the same run with the same date — Ruling: park; needs a same-run repeat, and the next run re-checks. Cost if wrong: one cached answer from a lower tier.
 
 ### Carry-over for Task 13
 
-- Scope of this run: Tasks 1–12. Task 13 needs the qlib companion plan's Tasks 1–2 first.
+- Scope of this run: Tasks 1–12. Task 13 needs the consumer's companion plan's Tasks 1–2 first.
 - Task 3: minor (deferred): CLAUDE.md/README don't document --names or the new flags yet (Task 13 docs step).
 - Task 9: minor (deferred, Task 13 docs): README.md:67 and docs/data-flow.md describe the old defaults.
-- Task 12: note for the qlib companion plan: apply_dlret_overrides keeps the classifier's review_flags on overridden rows, which may then describe a row the override replaced.
+- Task 12: note for the consumer's companion plan: apply_dlret_overrides keeps the classifier's review_flags on overridden rows, which may then describe a row the override replaced.
 - Final review: With fixes. 1 Critical (resolver cache bypasses Task 3), 4 Important (whole-text bankruptcy confirmation; $1,618.7928 → 1.0; stale submissions cache; golden CIK assertion skipped for mismatch cases), 14 Minor; deferred minors triaged (5 fix before merge, 10 Task 13, rest leave). Reviewer disagrees with the T3 "empty resolver cache" ruling.
 - Final review: note for Task 13 — the Item 1.03 section rule reduces in practice to "the body has an Item 1.03 heading" (the heading says Bankruptcy or Receivership; item_text takes 1,500 chars without stopping at the next Item).
-- Final review: clean (commits 518be29..f980db7). Library Tasks 1–12 complete; Task 13 waits for the qlib companion plan's Tasks 1–2.
+- Final review: clean (commits 518be29..f980db7). Library Tasks 1–12 complete; Task 13 waits for the consumer's companion plan's Tasks 1–2.
 
 From the final review (not fixed in the wave):
 
@@ -2123,8 +2123,8 @@ From the final review (not fixed in the wave):
 - Payout coverage change over 1,080 cached texts (−24, +10, 4 changed; ~13 from the widened mixed detector, ~8 from ties, 2–3 from `_CLASS_CONTEXT` after "other than shares of Series A Preferred Stock"): Task 13 reports the count.
 - Name-search replacement of an EFTS fallback checks only a Form 25/15 within 90 days (per the Task 3 ruling): left.
 - Stale `bankruptcy_tag_unconfirmed` after a backscan replaces the near 8-K: left (review noise).
-- Classifier calls resolver private methods; `member_name_mismatch` lost without an observed date: left (qlib always passes dates).
-- review.csv lands untracked in qlib's data/delist/: companion plan.
+- Classifier calls resolver private methods; `member_name_mismatch` lost without an observed date: left (the consumer always passes dates).
+- review.csv lands untracked in the consumer's data/delist/: companion plan.
 - REVOKED has no date bound (pre-existing): Task 13 checks REVOKED rows at ≥ $5.
 - No end-to-end golden check through gate_payouts → build_dlret_table; golden flags compared as a subset: Task 13.
 - Deferred minors triaged "Task 13": T1 company_tickers note, T3 docs, T3 efts_raw URL assertion, T9 Form 15 distance bound and reason text, T9 README/data-flow, T9 notice_section_missing, T11 LLM cash missing from payouts.csv, T12 review.csv join helper + test. Everything else triaged "leave".

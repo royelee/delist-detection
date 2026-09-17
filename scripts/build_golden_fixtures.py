@@ -19,11 +19,11 @@ Re-run after changing data/golden_events.csv. `--efts-only` re-captures just
 
 With OPENAI_API_KEY set (environment or the repo .env) and --raw-tiingo-dir given,
 each merger case also stores `llm_terms` (the LLM merger terms for the classified
-record, read through cache/llm), `acquirer_price` (the acquirer's raw close on
-observed_delist_date) and `raw_tiingo_dir` (the snapshot-relative part of the
-price directory, e.g. tiingo_2026_09_11/raw_tiingo_csv). Without either, a full
-run skips that capture and keeps the terms an earlier run captured. `--llm-only`
-re-captures just those three keys into the existing fixtures and needs both.
+record, read through cache/llm) and `acquirer_price` (the acquirer's raw close
+on observed_delist_date, read from the price directory given by
+--raw-tiingo-dir). Without either, a full run skips that capture and keeps the
+terms an earlier run captured. `--llm-only` re-captures just those two keys into
+the existing fixtures and needs both.
 `--only ID` (repeatable, ID = TICKER_DATE) limits any run to the named cases.
 
 Submissions are re-fetched, not read from cache/: a cached copy older than the
@@ -64,7 +64,7 @@ ANY_DISTANCE_FORMS = {"25", "25-NSE", "15-12G", "15-12B", "15-15D", "REVOKED"}
 EFTS_PREFIX = "https://efts.sec.gov/"
 # The resolver reads ciks and display_names; form, file_date and adsh make a fixture readable.
 EFTS_SOURCE_KEYS = ("ciks", "display_names", "form", "file_date", "adsh")
-LLM_KEYS = ("llm_terms", "acquirer_price", "raw_tiingo_dir")
+LLM_KEYS = ("llm_terms", "acquirer_price")
 _efts_raw: dict[str, dict] = {}
 
 
@@ -147,8 +147,7 @@ def _capture_llm(edgar, llm, raw_dir: str, row) -> dict:
         f"{terms.deal_type} cash={terms.cash_per_share} ratio={terms.stock_ratio} "
         f"acquirer={terms.acquirer_ticker} ({terms.source})")
     print(f"{t} {d}: llm_terms {shown}; acquirer_price {price}")
-    return {"llm_terms": asdict(terms) if terms else None, "acquirer_price": price,
-            "raw_tiingo_dir": "/".join(Path(raw_dir).resolve().parts[-2:])}
+    return {"llm_terms": asdict(terms) if terms else None, "acquirer_price": price}
 
 
 def _near_event(filings, on: date):

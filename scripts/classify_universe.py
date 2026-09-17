@@ -188,8 +188,8 @@ def main() -> int:
     p.add_argument("--llm-model", default=None,
                    help="Override the chat model (default $CHAT_MODEL from .env).")
     p.add_argument("--names", default=None,
-                   help="CSV ticker,as_of,name: index-member names (qlib_practice exports them "
-                        "from iShares/Wikipedia holdings)")
+                   help="CSV ticker,as_of,name: index-member names, as the consuming pipeline "
+                        "exports them from index-holdings data")
     args = p.parse_args()
 
     edgar = EdgarClient(cache_dir=ROOT / "cache" / "edgar")
