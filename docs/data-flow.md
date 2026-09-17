@@ -132,7 +132,7 @@ filing-trio fingerprint:
 | AV `assetType` ∈ {ETF, note, warrant, unit, right} OR name ∈ {"… Notes Due", "… ETF", "… Rights"} | 600 | EXPIRATION |
 | Form `REVOKED` present | 573 | COMPLIANCE_FAILURE |
 | 10-K / 10-Q / 20-F filed >180 days after delist | 304 | EXCHANGE_TRANSFER |
-| 8-K item 1.03 | 470 | LIQUIDATION |
+| 8-K item 1.03 whose Item 1.03 section mentions a bankruptcy (an unreadable text counts, flagged `bankruptcy_text_missing`) | 470 | LIQUIDATION |
 | 8-K items 2.01 + 3.01 + 5.01 | 231 | MERGER |
 | 8-K items 2.01 + 5.01 | 233 | MERGER |
 | 8-K items 2.01 + 3.01 | 200 | MERGER |

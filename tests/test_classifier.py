@@ -75,7 +75,8 @@ def test_bankruptcy_history_beats_continued_filings():
         EdgarSubmission("A2", "25-NSE", "2020-10-27", "", "", "p.xml"),
         EdgarSubmission("A3", "10-Q", "2021-08-05", "", "", "q.htm"),   # reorganized company keeps filing
     ]
-    e = _TextEdgar(fs, {"A1": "the Company filed voluntary petitions under chapter 11"})
+    e = _TextEdgar(fs, {"A1": "Item 1.03 Bankruptcy or Receivership. On September 29, 2020, "
+                              "the Company filed voluntary petitions under chapter 11"})
     from delist_detection.ticker_resolver import TickerResolver
     rec = DelistClassifier(e, TickerResolver(e)).classify_ticker("REORG", "2020-11-20")
     assert rec.bucket is CrspBucket.LIQUIDATION and rec.crsp_code == 470
@@ -92,6 +93,34 @@ def test_a_1_03_tag_without_bankruptcy_text_is_not_a_bankruptcy():
     rec = DelistClassifier(e, TickerResolver(e)).classify_ticker("REORG", "2024-11-27")
     assert rec.bucket is CrspBucket.MERGER
     assert "bankruptcy_tag_unconfirmed" in rec.evidence["flags"]
+
+
+def test_bankruptcy_wording_outside_a_1_03_section_does_not_confirm_the_tag():
+    # A takeover 8-K mis-tagged 1.03 (KCI, VRTV): the credit-agreement boilerplate
+    # says "bankruptcy", but the filing has no Item 1.03 section.
+    fs = [
+        EdgarSubmission("K1", "8-K", "2024-11-27", "2024-11-27", "1.02,1.03,2.01,3.01,5.01", "k.htm"),
+        EdgarSubmission("K2", "25-NSE", "2024-11-27", "", "", "p.xml"),
+        EdgarSubmission("K3", "15-12G", "2024-12-09", "", "", "f.htm"),
+    ]
+    text = ("Item 1.02 Termination of a Material Definitive Agreement. The credit agreement, whose "
+            "obligations accelerate upon the bankruptcy or insolvency of the borrower, was terminated. "
+            "Item 2.01 Completion of Acquisition or Disposition of Assets. Item 5.01 Changes in Control.")
+    e = _TextEdgar(fs, {"K1": text})
+    rec = DelistClassifier(e, TickerResolver(e)).classify_ticker("REORG", "2024-11-27")
+    assert rec.bucket is CrspBucket.MERGER and rec.crsp_code == 231
+    assert "bankruptcy_tag_unconfirmed" in rec.evidence["flags"]
+
+
+def test_a_1_03_tag_whose_text_is_missing_is_confirmed_and_flagged():
+    fs = [
+        EdgarSubmission("L1", "8-K", "2020-09-30", "2020-09-29", "1.03,7.01", "l.htm"),
+        EdgarSubmission("L2", "25-NSE", "2020-10-27", "", "", "p.xml"),
+    ]
+    e = _TextEdgar(fs, {})          # the text fetch missed
+    rec = DelistClassifier(e, TickerResolver(e)).classify_ticker("REORG", "2020-11-20")
+    assert rec.bucket is CrspBucket.LIQUIDATION and rec.crsp_code == 470
+    assert rec.evidence["flags"].count("bankruptcy_text_missing") == 1
 
 
 def test_an_old_form25_from_another_event_is_not_the_anchor():
