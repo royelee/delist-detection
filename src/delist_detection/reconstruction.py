@@ -111,6 +111,10 @@ def enrich(
     ):
         res = DlretResult(0.0, DlretMethod.ASSUMED_PAR, last_trade_close)
     flags = list((record.evidence or {}).get("flags", [])) + list(extra_flags)
+    # A merger whose consideration was never found lands at par silently, which
+    # reads as a realized 0% return. Flag it so review.csv lists the row.
+    if record.bucket is CrspBucket.MERGER and res.method is DlretMethod.ASSUMED_PAR:
+        flags.append("merger_at_par")
     if (record.bucket in (CrspBucket.COMPLIANCE_FAILURE, CrspBucket.LIQUIDATION)
             and last_trade_close is not None and last_trade_close >= 5.0):
         flags.append("distress_at_normal_price")

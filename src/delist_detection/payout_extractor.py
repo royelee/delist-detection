@@ -80,6 +80,14 @@ _CASH_ANCHOR = re.compile(r"in\s+cash", re.I)
 # A figure that belongs to another security or to an award is not the common-share payout.
 _CLASS_CONTEXT = re.compile(r"preferred\s+(?:stock|shares?)|depositary\s+shares|warrants?\b|redeem|redemption", re.I)
 _CLASS_WINDOW = 120
+# The subject the amount belongs to. A closing 8-K disposes of warrants, preferred
+# stock and redeemed notes in the clause *before* the common-share consideration
+# ("each Company Warrant was cancelled, and each Share converted into the right to
+# receive $113.00 in cash"), so a flat 120-character lookback throws the real payout
+# away. Scan _CLASS_CONTEXT only from the last subject marker inside that window, so
+# "each share of Series A Preferred Stock ... $25.00" is still discarded while a
+# preceding clause about another security is not read as this amount's subject.
+_CLASS_SUBJECT = re.compile(r"\beach\b|\bper\s+share\b|\bholders?\s+of\b", re.I)
 _AWARD_AFTER = re.compile(r"^\s*(?:\([^)]*\)\s*)?multiplied\s+by|^[^.]{0,40}\b(?:PSU|RSU|PBU|option)s?\b", re.I)
 _AWARD_WINDOW = 60
 
@@ -142,6 +150,18 @@ _MIXED_BEFORE = re.compile(
 _MIXED_WINDOW = 120
 
 
+def _subject_context(text: str, start: int) -> str:
+    """The text the class guard reads before an amount at `start`.
+
+    The last subject marker ("each", "per share", "holders of") inside the
+    _CLASS_WINDOW lookback to the amount, else the whole lookback. Never wider
+    than _CLASS_WINDOW: the marker only narrows the guard.
+    """
+    window = text[max(0, start - _CLASS_WINDOW):start]
+    markers = list(_CLASS_SUBJECT.finditer(window))
+    return window[markers[-1].start():] if markers else window
+
+
 def _passes_sanity(value: float, last_close: float | None) -> bool:
     if not (_ABS_MIN <= value <= _ABS_MAX):
         return False
@@ -175,7 +195,7 @@ def _collect(
                 continue
             # Skip a figure that belongs to another security class (preferred
             # redemption) or an award payout ("$1.00 multiplied by ... units").
-            if _CLASS_CONTEXT.search(text[max(0, m.start() - _CLASS_WINDOW):m.start()]):
+            if _CLASS_CONTEXT.search(_subject_context(text, m.start())):
                 continue
             if _AWARD_AFTER.search(text[m.end():m.end() + _AWARD_WINDOW]):
                 continue

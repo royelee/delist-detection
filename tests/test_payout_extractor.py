@@ -571,3 +571,34 @@ def test_an_amount_never_stops_inside_a_thousands_separator():
     assert _match_payout("holders receive $1,618.79 in cash")[0] == 1618.79
     # the long-decimal pattern needs its "." and reads the whole figure
     assert _match_payout("a net cash payment of $1,618.7928 per share")[0] == 1618.7928
+
+
+# --- R1: the class guard looks back only as far as the subject the amount belongs to ---
+
+
+def test_a_warrant_clause_before_the_subject_does_not_discard_the_share_payout():
+    # Closing 8-Ks routinely dispose of warrants in the clause before the common
+    # share's consideration. The guard must stop at "each Share", not run back
+    # over the warrant clause.
+    t = ("each Company Warrant was cancelled, and each Share converted into the "
+         "right to receive $113.00 in cash, without interest.")
+    assert _collect(t, None, True)[0] == {113.0: 2}
+
+
+def test_a_note_redemption_clause_before_the_subject_does_not_discard_the_share_payout():
+    t = ("the Notes were redeemed. Each Share was converted into the right to "
+         "receive $113.00 in cash.")
+    assert _collect(t, None, True)[0] == {113.0: 2}
+
+
+def test_the_subject_marker_still_discards_another_class_of_stock():
+    # The marker is "each share of Series A Preferred Stock": the class wording
+    # sits between it and the amount, so the figure is still discarded.
+    t = ("each share of Series A Preferred Stock was redeemed for $25.00 in cash, "
+         "without interest.")
+    assert _collect(t, None, True)[0] == {}
+
+
+def test_a_holders_of_marker_still_discards_a_warrant_payout():
+    t = "holders of Company Warrants received $3.00 in cash for each warrant."
+    assert _collect(t, None, True)[0] == {}
