@@ -11,6 +11,7 @@ import requests
 
 from delist_detection import ticker_resolver
 from delist_detection.edgar import EdgarSubmission
+from delist_detection.llm_merger_extractor import MergerTerms
 from delist_detection.ticker_resolver import TickerResolver
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -36,6 +37,12 @@ class GoldenCase:
     @property
     def id(self) -> str:
         return f"{self.ticker}_{self.observed_delist_date}"
+
+    @property
+    def llm_terms(self) -> MergerTerms | None:
+        """The LLM merger terms captured for this case, or None when none were captured."""
+        terms = self.data.get("llm_terms")
+        return MergerTerms(**terms) if terms else None
 
 
 def load_cases() -> list[GoldenCase]:

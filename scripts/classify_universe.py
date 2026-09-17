@@ -25,6 +25,7 @@ from delist_detection.crsp_codes import CrspBucket
 from delist_detection.av_listing import AvListingLoader
 from delist_detection.names import MemberNames
 from delist_detection.payout_extractor import PayoutExtractor, PayoutResult
+from delist_detection.payout_gate import reconcile
 from delist_detection.reconstruction import (
     build_dlret_table, write_dlret_csv, load_merger_terms_csv, load_float_map_csv,
     _lookup,
@@ -127,6 +128,18 @@ ACQUIRER_RENAMES: dict[str, str] = {
 }
 
 
+def _acquirer_price(prices, ticker: str | None, date: str | None) -> float | None:
+    """The acquirer's nominal close on `date`: the deal-era ticker first, then its
+    current-symbol rename. None without a price panel or an acquirer ticker."""
+    acq = (ticker or "").strip()
+    if prices is None or not acq:
+        return None
+    price = prices.close_on(acq, date)
+    if price is None and acq.upper() in ACQUIRER_RENAMES:
+        price = prices.close_on(ACQUIRER_RENAMES[acq.upper()], date)
+    return price
+
+
 def main() -> int:
     p = argparse.ArgumentParser()
     p.add_argument("--input", default=str(DEFAULT_INPUT))
@@ -156,8 +169,9 @@ def main() -> int:
                         "Defaults to $RAW_TIINGO_DIR or the qlib_practice path. "
                         "Used for acquirer_price and to fill missing last_trade_close.")
     p.add_argument("--merger-terms-sanity-tol", type=float, default=0.15,
-                   help="Max |terminal/last_close - 1| for an LLM cash+stock term to "
-                        "be emitted (default 0.15). Completed deals reconcile tightly.")
+                   help="Max |payout/last_close - 1| for any merger payout (regex cash, "
+                        "LLM cash, election leg, or LLM cash+stock terminal value) to be "
+                        "emitted (default 0.15). Completed deals reconcile tightly.")
     p.add_argument("--llm-model", default=None,
                    help="Override the chat model (default $CHAT_MODEL from .env).")
     p.add_argument("--names", default=None,
@@ -262,14 +276,8 @@ def main() -> int:
             dr = ev.get("dereg_filing") or {}
             if extractor is not None and rec.bucket == CrspBucket.MERGER:
                 try:
-                    # No last_close available in this classification pass, so
-                    # PayoutExtractor's relative sanity band (0.05x-20x of
-                    # last_close) is inert here and only the absolute band
-                    # [0.01, 10000] applies. The price-aware relative band is
-                    # exercised by the downstream BMP path
-                    # (scripts/compute_corrected_returns.py), which has
-                    # last-trade closes.
-                    payout_by_ticker[(rec.ticker, rec.observed_delist_date)] = extractor.extract(rec)
+                    payout_by_ticker[(rec.ticker, rec.observed_delist_date)] = extractor.extract(
+                        rec, last_close=_lookup(last_trades, rec.ticker.upper(), rec.observed_delist_date))
                 except EdgarBlocked:
                     raise
                 except Exception as e:  # extraction must never abort the run
@@ -353,12 +361,12 @@ def main() -> int:
         payout_src[k] = pr.source
         payout_conf[k] = pr.confidence
 
-    # --- LLM merger terms: join acquirer_price + last_trade_close from the raw
-    #     Tiingo panel, apply the sanity gate, then merge (an explicit
-    #     --merger-terms CSV row always wins over the LLM). ---
+    # --- Payout gate + LLM merger terms. last_trade_close and acquirer_price are
+    #     joined from the raw Tiingo panel (never parsed from filings); an explicit
+    #     --merger-terms CSV row always wins over the LLM. ---
     merged_terms = dict(merger_terms)
+    tol = args.merger_terms_sanity_tol
     if prices is not None:
-        tol = args.merger_terms_sanity_tol
         # Fill last_trade_close from the raw panel for any record the CSV did not
         # already cover, so BOTH cash-only payouts and LLM cash+stock terms have
         # the denominator DLRET needs. CSV-provided closes win (skipped here).
@@ -368,26 +376,53 @@ def main() -> int:
                 if c is not None:
                     last_trades[(r.ticker.upper(), r.observed_delist_date)] = c
 
+    # Every merger payout must reconcile with the last close before it becomes a
+    # return: a regex value that does not is dropped, and a cash deal or an
+    # election takes the LLM leg the last close agrees with (payout_gate.reconcile).
+    payout_flags: dict = {}   # key -> reconcile flags, for the review_flags column
+    llm_cash = gate_failed = 0
+    for rec in all_records:
+        if rec.bucket != CrspBucket.MERGER:
+            continue
+        tkr, date = rec.ticker.upper(), rec.observed_delist_date
+        pk = (tkr, date)
+        pr = payout_by_ticker.get((rec.ticker, date))
+        has_csv = _lookup(merger_terms, tkr, date) is not None
+        terms = None if has_csv else llm_terms_raw.get((rec.ticker, date))
+        r = reconcile(
+            None if pr is None else pr.value,
+            _lookup(last_trades, tkr, date),
+            terms,
+            _acquirer_price(prices, terms.acquirer_ticker, date) if terms else None,
+            tol,
+        )
+        if r.flags:
+            payout_flags[pk] = r.flags
+        if any(f.startswith("payout_gate_failed:") for f in r.flags):
+            gate_failed += 1
+        if r.cash is None:
+            for m in (payouts_map, payout_src, payout_conf):
+                m.pop(pk, None)
+        else:
+            payouts_map[pk] = r.cash
+            if r.source != "regex":   # "llm" | "llm_election_cash"
+                payout_src[pk] = r.source
+                payout_conf[pk] = terms.confidence or "medium"
+                llm_cash += 1
+        if r.stock_ratio is not None:   # an election's stock leg; terms is set, so no CSV row
+            merged_terms[pk] = {"stock_ratio": r.stock_ratio, "acquirer_price": r.acquirer_price,
+                                "acquirer_ticker": terms.acquirer_ticker}
+    print(f"\nPayout gate: {gate_failed} merger payouts failed the last-close check")
+
+    if prices is not None:
         emitted = 0
-        llm_cash_recovered = 0
         drop = {"csv_override": 0, "no_acq_ticker": 0, "no_acq_price": 0,
                 "no_last_close": 0, "fail_sanity": 0}
         for (tkr, date), terms in llm_terms_raw.items():
-            pk = (tkr.upper(), date)
-            if terms.stock_ratio is None:
-                # Pure-cash deal: the regex payout extractor normally owns these.
-                # Step in only when it found nothing — use the (more reliable) LLM
-                # cash, sanity-gated against last_close so a bad value can't ship.
-                lc = _lookup(last_trades, tkr.upper(), date)
-                if (terms.cash_per_share is not None and pk not in payouts_map
-                        and _lookup(merger_terms, tkr.upper(), date) is None
-                        and lc and lc > 0
-                        and abs(terms.cash_per_share / lc - 1.0) <= tol):
-                    payouts_map[pk] = terms.cash_per_share
-                    payout_src[pk] = "llm"
-                    payout_conf[pk] = terms.confidence or "medium"
-                    llm_cash_recovered += 1
+            # Pure-cash deals and elections were settled by the payout gate above.
+            if terms.stock_ratio is None or terms.deal_type == "election":
                 continue
+            pk = (tkr.upper(), date)
             if _lookup(merger_terms, tkr.upper(), date) is not None:
                 drop["csv_override"] += 1
                 continue
@@ -395,11 +430,7 @@ def main() -> int:
             if not acq:
                 drop["no_acq_ticker"] += 1
                 continue
-            # Try the deal-era ticker, then its current-symbol rename (the panel
-            # files renamed acquirers' history under the new ticker).
-            acq_price = prices.close_on(acq, date)
-            if acq_price is None and acq.upper() in ACQUIRER_RENAMES:
-                acq_price = prices.close_on(ACQUIRER_RENAMES[acq.upper()], date)
+            acq_price = _acquirer_price(prices, acq, date)
             if acq_price is None:
                 drop["no_acq_price"] += 1
                 continue
@@ -430,9 +461,9 @@ def main() -> int:
                 payout_conf.pop(pk, None)
             merged_terms[pk] = d
             emitted += 1
-        print(f"\nLLM merger terms: {emitted} cash+stock/stock-only emitted "
+        print(f"LLM merger terms: {emitted} cash+stock/stock-only emitted "
               f"({len(llm_terms_raw)} mergers extracted); dropped {drop}; "
-              f"plus {llm_cash_recovered} pure-cash recovered from LLM")
+              f"plus {llm_cash} cash payouts taken from LLM terms")
 
     table = build_dlret_table(
         all_records,

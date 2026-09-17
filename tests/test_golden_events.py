@@ -2,6 +2,7 @@ import pytest
 
 from delist_detection.classifier import DelistClassifier
 from delist_detection.payout_extractor import PayoutExtractor
+from delist_detection.payout_gate import reconcile
 from delist_detection.ticker_resolver import TickerResolver
 from tests.golden import GoldenEdgar, load_cases, patch_efts
 
@@ -15,14 +16,6 @@ GOLDEN_MANUAL = {"IMCL": 1520047}
 # case id -> the task after which test_golden_bucket_and_flags passes. Delete entries
 # as tasks land; if a case still fails only for a later task's rule, move it there.
 XFAIL_BUCKET: dict[str, int] = {}
-
-# case id -> the task after which test_golden_payout passes. Delete entries as tasks
-# land; if a case still fails only for a later task's rule, move it there.
-XFAIL_PAYOUT: dict[str, int] = {
-    # BLD is a cash-or-stock election: _select abstains (mixed=True) by design.
-    # Task 11 resolves the election via a price check.
-    "BLD_2026-07-01": 11,
-}
 
 
 def _classify(case, monkeypatch, names=None):
@@ -49,11 +42,11 @@ PAYOUT_CASES = [c for c in CASES if c.expected_bucket == "merger" and c.expected
 
 
 @pytest.mark.parametrize("case", PAYOUT_CASES, ids=[c.id for c in PAYOUT_CASES])
-def test_golden_payout(case, monkeypatch, request):
-    if case.id in XFAIL_PAYOUT:
-        request.applymarker(pytest.mark.xfail(strict=True, reason=f"fixed by Task {XFAIL_PAYOUT[case.id]}"))
+def test_golden_payout(case, monkeypatch):
     rec = _classify(case, monkeypatch)
     pr = PayoutExtractor(GoldenEdgar(case)).extract(rec, last_close=case.last_trade_close)
-    assert pr.value is not None, pr
-    implied = pr.value / case.last_trade_close - 1
-    assert abs(implied - case.expected_dlret) <= case.dlret_tol, pr
+    r = reconcile(pr.value, case.last_trade_close, case.llm_terms, case.data.get("acquirer_price"), 0.15)
+    assert r.cash is not None or r.stock_ratio is not None, (pr, r)
+    value = r.cash if r.cash is not None else r.stock_ratio * r.acquirer_price
+    implied = value / case.last_trade_close - 1
+    assert abs(implied - case.expected_dlret) <= case.dlret_tol, (pr, r)

@@ -10596,5 +10596,17 @@
     ]
    }
   }
- }
+ },
+ "llm_terms": {
+  "deal_type": "election",
+  "cash_per_share": 505.0,
+  "stock_ratio": 20.2,
+  "acquirer_name": "QXO, Inc.",
+  "acquirer_ticker": "QXO",
+  "confidence": "high",
+  "source": "8-K:0001104659-26-079876",
+  "quote": "each share ... was converted into the right to receive, at the election of the holder ... (i) ... $505.00 per TopBuild Share ... or (ii) 20.200 shares of QXO common stock"
+ },
+ "acquirer_price": 16.54,
+ "raw_tiingo_dir": "/Users/royeli/repo/github.com/qlib_practice/fetch_data_aplha/data/tiingo_2026_09_11/raw_tiingo_csv"
 }
