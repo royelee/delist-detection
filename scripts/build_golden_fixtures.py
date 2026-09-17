@@ -151,6 +151,22 @@ def _capture_llm(edgar, llm, raw_dir: str, row) -> dict:
             "raw_tiingo_dir": "/".join(Path(raw_dir).resolve().parts[-2:])}
 
 
+def _near_event(filings, on: date):
+    """The filings within [-BEFORE_DAYS, +AFTER_DAYS] of `on`.
+
+    A filing with an empty filingDate is skipped, as in `_trim`: EDGAR emits a
+    few, and `date.fromisoformat("")` used to abort a capture after all the
+    network work was already spent.
+    """
+    out = []
+    for f in filings:
+        if not f.filing_date:
+            continue
+        if -BEFORE_DAYS <= (date.fromisoformat(f.filing_date) - on).days <= AFTER_DAYS:
+            out.append(f)
+    return out
+
+
 def _trim(sub: dict, filings, on: date) -> dict:
     """Name history + the filings near the event. `filings` must come from
     edgar.recent_filings(), which also walks the older paginated chunks — an
@@ -246,8 +262,7 @@ def main() -> None:
             subs[str(cik)] = _trim(sub, all_filings, on)
             if cik not in text_ciks:
                 continue
-            filings = [f for f in all_filings
-                       if -BEFORE_DAYS <= (date.fromisoformat(f.filing_date) - on).days <= AFTER_DAYS]
+            filings = _near_event(all_filings, on)
             wanted = [f for f in filings if f.form.startswith("8-K") and f.item_set & TEXT_ITEMS]
             wanted += closing_8k(filings, on)[:2] + announcement_8k(filings, on)[:2]
             wanted += form_filings(filings, "DEFM14A", on)[:1]
