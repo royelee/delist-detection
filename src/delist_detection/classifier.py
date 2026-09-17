@@ -267,6 +267,8 @@ class DelistClassifier:
         has_301 = "3.01" in items
         has_501 = "5.01" in items
         has_503 = "5.03" in items
+        has_303 = "3.03" in items
+        control = has_501 and (has_201 or has_301 or has_303)
 
         if has_103:
             return 470, "Bankruptcy (8-K item 1.03)"
@@ -274,10 +276,12 @@ class DelistClassifier:
             return 231, "M&A 2.01+3.01+5.01 (acquired by external acquirer)"
         if has_201 and has_501:
             return 233, "M&A 2.01+5.01 (subsidiary buyback / parent acquisition)"
+        if control:
+            return 231, "M&A change in control (5.01) with delisting/rights change, closing 8-K without 2.01"
         if has_201 and has_301:
             return 200, "M&A 2.01+3.01 (acquisition with delisting)"
         if has_204 and has_301:
-            return 470, "3.01 + 2.04 (delisting with debt acceleration: distress/Ch.11 lead-in)"
+            return 470, "3.01 + 2.04 without a change in control (distress/Ch.11 lead-in)"
         if has_301:
             return 570, "Compliance failure (3.01 alone, no M&A indicators)"
         return None, "No conclusive 8-K items"

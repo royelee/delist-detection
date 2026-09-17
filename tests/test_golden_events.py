@@ -14,11 +14,6 @@ GOLDEN_MANUAL = {"IMCL": 1520047}
 # case id -> the task after which test_golden_bucket_and_flags passes. Delete entries
 # as tasks land; if a case still fails only for a later task's rule, move it there.
 XFAIL_BUCKET = {
-    # takeover without 2.01
-    "BCR_2017-12-29": 6,    # 570: closing 8-K has 3.01+3.03+5.01 without 2.01
-    "ONXX_2013-10-17": 6,   # 470: 3.01+2.04 (convertible-note make-whole) beats the 5.01
-    "XTO_2013-02-07": 6,    # 570 via the 3.01; resolved through its 2010 Form 25 (955 days before the
-                            # vendor end), which Task 5 anchors on (frozen_tail); Task 6 reads 3.01+3.03+5.01
     # renames / listing transfers
     "LC_2026-06-01": 7,     # 570: the 3.01 notice announces the move to Nasdaq
     "SKLZ_2026-06-18": 7,   # 570 anchored on the 2021-08-16 Form 25 (needs Task 5 too)

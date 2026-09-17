@@ -119,3 +119,20 @@ def test_an_earlier_merger_form25_marks_a_frozen_tail():
     rec = DelistClassifier(e, TickerResolver(e)).classify_ticker("REORG", "2013-02-07")
     assert rec.evidence["delist_filing"]["accession"] == "D2"
     assert any(f.startswith("frozen_tail:") for f in rec.evidence["flags"])
+
+
+import pytest
+
+
+@pytest.mark.parametrize("items, code", [
+    ({"3.01", "3.03", "5.01", "5.02", "5.03"}, 231),        # BCR, GXP, IRF: target 8-K without 2.01
+    ({"3.01", "5.01", "9.01"}, 231),                         # FWLT
+    ({"3.03", "5.01", "5.02"}, 231),
+    ({"1.01", "2.04", "3.01", "3.03", "5.01"}, 231),         # ONXX, SLXP: notes put on change in control
+    ({"2.04", "3.01"}, 470),                                 # distress lead-in stays distress
+    ({"3.01", "8.01"}, 570),
+    ({"1.03", "3.01"}, 470),
+])
+def test_item_fingerprints(items, code):
+    c = DelistClassifier(edgar=None, resolver=None)
+    assert c._classify_items(items)[0] == code
