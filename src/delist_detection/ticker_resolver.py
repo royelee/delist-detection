@@ -177,11 +177,13 @@ class TickerResolver:
     # so they appear in every delisting filing's CIK array. Always skip them.
     EXCHANGE_CIKS: set[int] = {
         1354457,   # Nasdaq Stock Market LLC
-        1067442,   # New York Stock Exchange LLC
+        876661,    # New York Stock Exchange LLC
+        1067442,   # unverified: no cached submissions or fixture names this CIK (it is not NYSE LLC)
         1102740,   # NYSE Arca (Pacific Exchange)
         1019028,   # NYSE American / NYSE MKT (formerly AMEX)
         1192304,   # NYSE Chicago
         1133219,   # BATS / CBOE BZX
+        1417835,   # Cboe BZX Exchange, Inc.
         1466168,   # CBOE Exchange Inc
         1605448,   # Investors Exchange (IEX)
         1283699,   # NYSE National

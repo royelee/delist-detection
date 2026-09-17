@@ -173,3 +173,17 @@ def test_a_member_name_without_usable_words_is_no_expected_name():
     assert (res.cik, res.source) == (732717, "company_tickers")
     rec = DelistClassifier(e, r).classify_ticker("T", "2024-01-02")
     assert rec.evidence["flags"] == ["resolved_by_current_ticker_map"]
+
+
+def test_exchange_ciks_include_nyse_llc_and_cboe_bzx():
+    assert {876661, 1417835} <= TickerResolver.EXCHANGE_CIKS
+
+
+def test_the_efts_fallback_skips_the_exchange_that_filed_the_form25(monkeypatch):
+    # NYSE LLC and Cboe BZX file Form 25s for their issuers; neither is the company that delisted
+    far_peak = "Far Peak Acquisition Corp  (CIK 0001829426)"
+    _real_efts(monkeypatch, [_hit(("0000876661", "NEW YORK STOCK EXCHANGE LLC  (CIK 0000876661)"),
+                                  ("0001417835", "Cboe BZX Exchange, Inc.  (CIK 0001417835)"),
+                                  ("0001829426", far_peak))])
+    r = TickerResolver(_Edgar({}, {}))
+    assert r._efts_lookup("PEAK", "2023-02-13", expected_name="HEALTHPEAK PROPERTIES") == (1829426, far_peak, True)

@@ -110,7 +110,7 @@ target rather than an acquirer.
 3. **EFTS Form-25/15 with date window.** Searches
    `efts.sec.gov/LATEST/search-index` restricted to Form 25, 25-NSE, 15-12G,
    15-12B, 15-15D within ±90 days of the observed delist date. Skips
-   known exchange CIKs (Nasdaq 1354457, NYSE 1067442, …) and prefers hits
+   known exchange CIKs (Nasdaq 1354457, NYSE LLC 876661, Cboe BZX 1417835, …) and prefers hits
    whose display_name contains the literal `(TICKER)`.
 
 4. **AV name + EDGAR cgi-bin company search.** Uses the company name from

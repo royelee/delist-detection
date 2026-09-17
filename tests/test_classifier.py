@@ -399,3 +399,39 @@ def test_a_classification_asks_once_for_submissions_fresh_past_the_event():
     e = _FreshnessEdgar(fs, {})
     DelistClassifier(e, TickerResolver(e)).classify_ticker("REORG", recent.isoformat())
     assert e.fresh_after == [date.today()]              # capped at today
+
+
+def _8k(acc, day, items):
+    return EdgarSubmission(acc, "8-K", day, day, items, "a.htm")
+
+
+def _backscan(filings):
+    from datetime import date
+    hit = DelistClassifier(edgar=None, resolver=None)._backscan_for_fingerprint_8k(filings, date(2020, 3, 10))
+    return hit.accession if hit else None
+
+
+def test_backscan_scores_2_04_with_3_01_above_a_bare_3_01():
+    assert _backscan([_8k("B1", "2020-01-01", "2.04,3.01"), _8k("B2", "2020-03-01", "3.01,8.01")]) == "B1"
+
+
+def test_backscan_scores_the_control_fingerprint_between_2_01_3_01_and_2_04_3_01():
+    # 5.01 with 3.01 or 3.03 and no 2.01: a change in control
+    assert _backscan([_8k("C1", "2020-01-01", "3.01,5.01"), _8k("C2", "2020-03-01", "2.04,3.01")]) == "C1"
+    assert _backscan([_8k("C1", "2020-01-01", "3.03,5.01"), _8k("C2", "2020-03-01", "3.01,8.01")]) == "C1"
+    assert _backscan([_8k("C1", "2020-01-01", "2.01,3.01"), _8k("C2", "2020-03-01", "3.01,5.01")]) == "C1"
+
+
+def test_a_spac_without_a_form25_or_form15_is_an_expiration_not_a_deficiency():
+    # NYSE's SPAC-liquidation notice reads "commence proceedings to delist"
+    fs = [
+        EdgarSubmission("T0", "10-K", "2022-03-01", "", "", "k.htm"),
+        EdgarSubmission("T1", "8-K", "2023-12-01", "2023-12-01", "3.01", "a.htm"),
+    ]
+    e = _SpacEdgar(fs, {"T1": "Item 3.01 Notice of Delisting. NYSE Regulation determined to commence "
+                              "proceedings to delist the Class A common stock, as the Company will not "
+                              "consummate an initial business combination"})
+    rec = DelistClassifier(e, TickerResolver(e)).classify_ticker("REORG", "2023-12-04")
+    assert rec.evidence.get("delist_filing") is None and rec.evidence.get("dereg_filing") is None
+    assert rec.bucket is CrspBucket.EXPIRATION and rec.crsp_code == 600
+    assert "spac" in rec.evidence["flags"]

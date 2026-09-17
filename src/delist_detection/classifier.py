@@ -215,10 +215,12 @@ class DelistClassifier:
                 score = 80
             elif {"2.01", "3.01"}.issubset(items):
                 score = 70
+            elif "5.01" in items and ("3.01" in items or "3.03" in items):
+                score = 65               # change in control without 2.01 (2.01+5.01 scored above)
+            elif {"2.04", "3.01"}.issubset(items):
+                score = 60
             elif "3.01" in items:
                 score = 40
-            elif "2.04" in items and "3.01" in items:
-                score = 60
             else:
                 continue
             if diagnostic is None or score > diagnostic[0] or (
@@ -313,9 +315,11 @@ class DelistClassifier:
                                      filings, eightk, dereg, delist_filing, evidence, flags):
         """The record for a delisting with no conclusive 8-K fingerprint (or a
         3.01 alone). A distress bucket needs positive evidence, so in order:
-        2.01 + Form 15 → merger; a 3.01 notice citing a listing deficiency →
-        compliance (580 with an NT 10-K/Q in the prior year); a merger proxy or
-        tender filing → merger; an NT 10-K/Q alone → 580; else unknown.
+        2.01 + Form 15 → merger; a SPAC → 600 expiration (NYSE's trust-liquidation
+        notice says "commence proceedings to delist"); a 3.01 notice citing a
+        listing deficiency → compliance (580 with an NT 10-K/Q in the prior
+        year); a merger proxy or tender filing → merger; an NT 10-K/Q alone →
+        580; else unknown.
         """
         def rec(code, bucket, conf, reason, **extra):
             return DelistRecord(ticker=ticker.upper(), cik=cik, observed_delist_date=observed_delist_date,
@@ -327,6 +331,15 @@ class DelistClassifier:
         anchor = (_parse_date(delist_filing.filing_date) if delist_filing else None) or observed
         if eightk is not None and "2.01" in eightk.item_set and dereg is not None:
             return rec(233, CrspBucket.MERGER, "medium", "2.01 with Form 25 + Form 15 (acquisition completed)")
+        # A SPAC with no Form 25 in the window and no Form 15 misses the SPAC rule
+        # in classify_ticker; its liquidation notice is not a deficiency.
+        if observed:
+            sub = self.edgar.submissions(cik)
+            if isinstance(sub, dict) and is_spac(sub, observed):
+                _add_flag(flags, "spac")
+                return rec(600, CrspBucket.EXPIRATION, "medium",
+                           "SPAC trust liquidation (blank-check company, no Form 25/15 in the window; "
+                           "redeemed at trust value)")
         delinquent = bool(anchor) and self._detect_delinquent_filer(filings, anchor)
         # Ruling (Task 9): an explicit deficiency notice outranks a proxy up to 400
         # days old (a deal that fell through can precede a real compliance delisting).
