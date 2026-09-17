@@ -506,3 +506,42 @@ def test_extract_swallows_fetch_error_returns_none():
     ext = PayoutExtractor(_RaisingFetchEdgar(filings))
     res = ext.extract(_merger_rec())
     assert res == PayoutResult.none()
+
+
+# --- Task 10: whole dollars, preferred redemptions, award payouts, elections, ties ---
+
+from delist_detection.payout_extractor import _collect, _select
+
+
+def test_whole_dollar_cash_is_read():
+    t = "each share was cancelled and converted into the right to receive $170 in cash, without interest"
+    assert _match_payout(t)[0] == 170.0
+
+
+def test_award_payout_multiplied_by_units_is_ignored():
+    t = ("Veritiv paid each holder an amount in cash equal to $1.00 multiplied by the target number "
+         "of performance-based units subject to such Company PBU Award")
+    assert _match_payout(t)[0] is None
+
+
+def test_preferred_redemption_is_ignored():
+    t = ("converted into the right to receive an amount in cash equal to $12.00 per share. "
+         "Following consummation, each outstanding share of TWO Preferred Stock will be redeemed "
+         "on the applicable redemption date for $25.00 in cash, plus accumulated dividends")
+    assert _match_payout(t)[0] == 12.0
+
+
+def test_cash_or_stock_election_is_mixed():
+    t = ("(i) an amount in cash equal to $505.00 per TopBuild Share (the Cash Consideration) or "
+         "(ii) 20.200 shares of QXO common stock per TopBuild Share (the Stock Consideration)")
+    counts, mixed, _ = _collect(t, None, True)
+    assert _select(counts, mixed) == (None, True)
+
+
+def test_a_tie_between_two_figures_abstains():
+    assert _select({12.0: 1, 25.0: 1}, {}) == (None, False)
+
+
+def test_six_decimal_cash_is_read_whole():
+    t = "shareholders received a net cash payment of $10.389188 per share of common stock"
+    assert _match_payout(t)[0] == 10.389188

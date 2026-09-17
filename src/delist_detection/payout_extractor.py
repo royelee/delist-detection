@@ -54,17 +54,32 @@ _ABS_MIN, _ABS_MAX = 0.01, 10000.00
 # dividends, DCF valuation ranges, and implied-value-of-stock figures — so they
 # only count when an "in cash" phrase follows within _CASH_WINDOW chars. Bare
 # "cash" is NOT enough (it matches "discounted cash flow").
+#
+# Whole dollars ("$170 in cash") or exactly two decimals. The lookahead still
+# refuses a truncated "$1,618.79" out of "$1,618.7928" (ALTR's per-unit figure,
+# which must not compete with the $113.00 consideration). Longer decimals are
+# read only after "cash payment of", where they are the consideration itself
+# (CPWR "net cash payment of $10.389188 per share").
+_AMT = r"\$\s*([\d,]+(?:\.\d{2})?)(?!\.?\d)"
+_AMT_LONG = r"\$\s*([\d,]+\.\d{2,6})(?!\d)"
 _PATTERNS = [
-    (re.compile(r"(?:right to receive|receive)\s+\$\s*([\d,]+\.\d{2})(?!\d)\s+in\s+cash", re.I), False),
-    (re.compile(r"in\s+cash\s+equal\s+to\s+\$\s*([\d,]+\.\d{2})(?!\d)", re.I), False),
-    (re.compile(r"\$\s*([\d,]+\.\d{2})(?!\d)\s+in\s+cash(?:,?\s+without\s+interest)?", re.I), False),
-    (re.compile(r"cash\s+consideration\s+of\s+\$\s*([\d,]+\.\d{2})(?!\d)", re.I), False),
-    (re.compile(r"merger\s+consideration\s+of\s+\$\s*([\d,]+\.\d{2})(?!\d)", re.I), True),
-    (re.compile(r"(?:purchase\s+price|price\s+per\s+share)\s+of\s+\$\s*([\d,]+\.\d{2})(?!\d)", re.I), True),
-    (re.compile(r"\$\s*([\d,]+\.\d{2})(?!\d)\s+(?:net\s+)?per\s+(?:[A-Za-z]+\s+){0,2}share", re.I), True),
+    (re.compile(r"(?:right to receive|receive)\s+" + _AMT + r"\s+in\s+cash", re.I), False),
+    (re.compile(r"in\s+cash\s+equal\s+to\s+" + _AMT, re.I), False),
+    (re.compile(_AMT + r"\s+in\s+cash(?:,?\s+without\s+interest)?", re.I), False),
+    (re.compile(r"cash\s+consideration\s+of\s+" + _AMT, re.I), False),
+    (re.compile(r"cash\s+payment\s+of\s+" + _AMT_LONG, re.I), False),
+    (re.compile(r"merger\s+consideration\s+of\s+" + _AMT, re.I), True),
+    (re.compile(r"(?:purchase\s+price|price\s+per\s+share)\s+of\s+" + _AMT, re.I), True),
+    (re.compile(_AMT + r"\s+(?:net\s+)?per\s+(?:[A-Za-z]+\s+){0,2}share", re.I), True),
 ]
 _CASH_WINDOW = 50
 _CASH_ANCHOR = re.compile(r"in\s+cash", re.I)
+
+# A figure that belongs to another security or to an award is not the common-share payout.
+_CLASS_CONTEXT = re.compile(r"preferred\s+(?:stock|shares?)|depositary\s+shares|warrants?\b|redeem|redemption", re.I)
+_CLASS_WINDOW = 120
+_AWARD_AFTER = re.compile(r"^\s*(?:\([^)]*\)\s*)?multiplied\s+by|^[^.]{0,40}\b(?:PSU|RSU|PBU|option)s?\b", re.I)
+_AWARD_WINDOW = 60
 
 
 # A dollar-per-share match is NOT a merger payout when the preceding context
@@ -107,9 +122,12 @@ _MIXED_EQUITY = (
     r"fraction\s+of\s+(?:a|one)\s+share)"
 )
 _MIXED_RATIO = r"(?:\d+(?:\.\d+)?|one|an?)"
-# co-consideration AFTER the cash: "...in cash and/plus <ratio> ... <equity>".
+# co-consideration AFTER the cash: "...in cash and/plus/or <ratio> ... <equity>".
+# The "or" join catches a cash-or-stock election (BLD); the optional lettered
+# list marker "(ii)" catches "(i) $X ... or (ii) 20.200 shares ...".
 _MIXED_AFTER = re.compile(
-    r"\b(?:and|plus)\b[^.;:]{0,30}?\b" + _MIXED_RATIO + r"\b"
+    r"\b(?:and|plus|or)\b[^.;:]{0,30}?\b(?:\((?:[a-z]|[ivx]+)\)\s*)?"
+    + _MIXED_RATIO + r"(?:\.\d+)?\b"
     r"(?:\s+[\w,'’\-]+){0,7}?\s+" + _MIXED_EQUITY + r"\b",
     re.I,
 )
@@ -119,7 +137,7 @@ _MIXED_AFTER = re.compile(
 # "(a) 0.2192 shares of HNI common stock ... and (b) $7.20 in cash".
 _MIXED_BEFORE = re.compile(
     _MIXED_EQUITY + r"\b[^.;:]{0,18}?\b(?:and|plus)\s*(?:\([a-z]\)\s*)?$", re.I)
-_MIXED_WINDOW = 80
+_MIXED_WINDOW = 120
 
 
 def _passes_sanity(value: float, last_close: float | None) -> bool:
@@ -153,6 +171,12 @@ def _collect(
             # Skip convertible-note redemption figures ("$X per $1,000 ...").
             if _NOTE_CONTEXT.search(text[max(0, m.start() - _NOTE_WINDOW):m.end() + _NOTE_WINDOW]):
                 continue
+            # Skip a figure that belongs to another security class (preferred
+            # redemption) or an award payout ("$1.00 multiplied by ... units").
+            if _CLASS_CONTEXT.search(text[max(0, m.start() - _CLASS_WINDOW):m.start()]):
+                continue
+            if _AWARD_AFTER.search(text[m.end():m.end() + _AWARD_WINDOW]):
+                continue
             # Weak patterns only count with an "in cash" phrase after the match.
             if weak and not _CASH_ANCHOR.search(text[m.end():m.end() + _CASH_WINDOW]):
                 continue
@@ -185,16 +209,16 @@ def _select(
     """
     if not counts:
         return None, False
-    # Modal value: real consideration is repeated many times, noise once or
-    # twice. On a count tie, prefer the larger value — the per-share consideration
-    # outranks small contingent legs (e.g. a CVR cap) that share "in cash" wording.
-    best = max(counts.items(), key=lambda kv: (kv[1], kv[0]))[0]
-    # Mixed (cash+stock) deal — OUT OF SCOPE — if the DOMINANT cash figure is
-    # itself a stock leg, or any cash figure is stated as a stock leg twice.
-    if (mixed.get(best, 0) and 2 * mixed[best] >= counts[best]) or \
+    top_n = max(counts.values())
+    tied = sorted((v for v, n in counts.items() if n == top_n), reverse=True)
+    # A mixed/election deal settles the ticker first: BLD's closing 8-K ties $505 with
+    # the prorated $249.67, and both sit next to a stock leg.
+    if any(mixed.get(v, 0) and 2 * mixed[v] >= counts[v] for v in tied) or \
        any(mc >= 2 for mc in mixed.values()):
         return None, True
-    return best, False
+    if len(tied) > 1 and tied[1] >= 0.25 * tied[0]:
+        return None, False           # two comparable figures equally supported (TWO $25 vs $12): abstain
+    return tied[0], False            # a lone winner, or the consideration beside a small contingent leg (CVR cap)
 
 
 def _match_payout(
