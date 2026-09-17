@@ -538,17 +538,20 @@ class DelistClassifier:
 
         if resolution.source == "company_tickers":
             flags.append("resolved_by_current_ticker_map")
-        if resolution.source == "manual":
-            flags.append("resolved_by_manual_override")
         # A pin does not silence the name check: `member_name_mismatch` states a
         # fact about the security — the vendor series is not the named member —
-        # and it is how the consumer catches an impostor series. The two flags
-        # together tell review triage "the name differs, and the CIK is pinned".
+        # and it is how the consumer catches an impostor series.
         expected = self.resolver._expected_name(ticker.upper(), observed_delist_date)
         if expected and observed:
             _, agrees = self.resolver._fits_date(resolution.cik, observed_delist_date, expected)
             if not agrees:
                 flags.append("member_name_mismatch")
+                # Only ever beside the mismatch, which it qualifies: the two flags
+                # together tell review triage "the name differs, and the CIK is
+                # already pinned". review.csv lists rows the rules could not
+                # settle, and a pin whose name agrees is settled, so it stays out.
+                if resolution.source == "manual":
+                    flags.append("resolved_by_manual_override")
 
         filings = self.edgar.recent_filings(resolution.cik)
         if not filings:

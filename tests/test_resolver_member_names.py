@@ -210,10 +210,15 @@ def test_a_pinned_ticker_whose_names_differ_carries_both_flags(monkeypatch):
     assert "member_name_mismatch" in flags and "resolved_by_manual_override" in flags
 
 
-def test_an_automatic_resolution_is_not_flagged_as_a_manual_override(monkeypatch):
+def test_a_pinned_ticker_whose_names_agree_gets_neither_flag(monkeypatch):
+    """review.csv lists rows the rules could not settle, and a pin whose name
+    agrees is settled: resolved_by_manual_override only qualifies a mismatch, so
+    a clean pin stays out of review entirely."""
     _real_efts(monkeypatch, [_hit(("1815737", "FAST Acquisition Corp.  (FST)  (CIK 0001815737)"))])
     e = _Edgar(dict([FAST, CITY]), {"FOREST": 38067})
-    r = TickerResolver(e, member_names=lambda t, d=None: "FOREST OIL CORP")
+    r = TickerResolver(e, manual_overrides={"FST": 1815737},
+                       member_names=lambda t, d=None: "FAST ACQUISITION CORP")
     rec = DelistClassifier(e, r).classify_ticker("FST", "2022-08-25")
-    assert rec.evidence["resolution_source"] == "efts_name_mismatch"
-    assert "resolved_by_manual_override" not in rec.evidence["flags"]
+    assert rec.evidence["resolution_source"] == "manual"
+    flags = rec.evidence["flags"]
+    assert "member_name_mismatch" not in flags and "resolved_by_manual_override" not in flags
