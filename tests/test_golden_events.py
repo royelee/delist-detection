@@ -34,8 +34,7 @@ def test_golden_bucket_and_flags(case, monkeypatch, request):
     assert rec.bucket.value == case.expected_bucket, rec.reason
     flags = rec.evidence.get("flags", [])
     assert set(case.expected_flags) <= {f.split(":")[0] for f in flags}, flags
-    if case.expected_bucket not in ("unknown",) and "member_name_mismatch" not in case.expected_flags:
-        assert rec.cik == case.cik
+    assert rec.cik == case.cik
 
 
 PAYOUT_CASES = [c for c in CASES if c.expected_bucket == "merger" and c.expected_dlret is not None]
