@@ -23,10 +23,10 @@ from pathlib import Path
 
 import requests
 
+from delist_detection.edgar import resolve_user_agent
+
 ROOT = Path(__file__).resolve().parents[1]
-USER_AGENT = os.environ.get(
-    "EDGAR_USER_AGENT", "delist_detection/0.1 (royelee@users.noreply.github.com)"
-)
+USER_AGENT = resolve_user_agent()
 
 
 def _get(url: str, timeout: int = 30) -> str | None:

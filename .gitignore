@@ -29,9 +29,7 @@ htmlcov/
 Thumbs.db
 
 # Project caches (large; re-derivable from EDGAR)
-cache/edgar/
-cache/ticker_resolution.json
-cache/llm/
+cache/
 
 # Run logs
 *.log

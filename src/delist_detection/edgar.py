@@ -20,11 +20,28 @@ import requests
 
 SEC_HOST = "https://data.sec.gov"
 WWW_SEC_HOST = "https://www.sec.gov"
-# SEC requires a descriptive User-Agent with a contact. Override via the
-# EDGAR_USER_AGENT env var; the default carries a non-personal noreply contact.
-DEFAULT_UA = os.environ.get(
-    "EDGAR_USER_AGENT", "delist_detection/0.1 (royelee@users.noreply.github.com)"
-)
+# SEC requires a descriptive User-Agent with a contact, and 403s ones it
+# doesn't accept (SEC has rejected this noreply fallback).
+FALLBACK_UA = "delist_detection/0.1 (r@users.noreply.github.com)"
+_REPO_ENV = Path(__file__).resolve().parents[2] / ".env"
+
+
+def resolve_user_agent(env_file: str | Path = _REPO_ENV) -> str:
+    """EDGAR_USER_AGENT from the environment, else from ``env_file``, else the fallback.
+
+    Reads only that one key from the file and leaves ``os.environ`` untouched;
+    ``llm_client.default_llm_client`` is the only place that calls ``load_dotenv``.
+    """
+    ua = os.environ.get("EDGAR_USER_AGENT", "").strip()
+    if ua:
+        return ua
+    from dotenv import dotenv_values  # noqa: PLC0415
+
+    ua = (dotenv_values(env_file).get("EDGAR_USER_AGENT") or "").strip()
+    return ua or FALLBACK_UA
+
+
+DEFAULT_UA = resolve_user_agent()
 
 _RATE_LOCK = threading.Lock()
 _LAST_CALL: list[float] = [0.0]
@@ -72,15 +89,17 @@ class EdgarClient:
     def __init__(
         self,
         cache_dir: str | Path,
-        user_agent: str = DEFAULT_UA,
+        user_agent: str | None = None,
         session: requests.Session | None = None,
     ) -> None:
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.session = session or requests.Session()
-        self.session.headers.update(
-            {"User-Agent": user_agent, "Accept": "application/json", "Host": "data.sec.gov"}
-        )
+        self.session.headers.update({
+            "User-Agent": user_agent or resolve_user_agent(),
+            "Accept": "application/json",
+            "Host": "data.sec.gov",
+        })
 
     def _cache_path(self, url: str) -> Path:
         h = hashlib.sha1(url.encode("utf-8")).hexdigest()

@@ -96,8 +96,11 @@ conflate them.
 - **SEC fair access.** `EdgarClient` throttles to 8 req/s and requires a
   descriptive `User-Agent`. Every response is cached under `cache/edgar/` (JSON)
   and `cache/edgar/text/` (stripped filing HTML), so re-runs cost nothing; these
-  caches are gitignored and re-derivable. `WebFetch` is **403'd by SEC** — for
-  ad-hoc EDGAR fetches use `curl -A "delist_detection/0.1 (royelee@users.noreply.github.com)"`.
+  caches are gitignored and re-derivable. The User-Agent comes from
+  `EDGAR_USER_AGENT` (environment first, then the repo `.env`, via
+  `edgar.resolve_user_agent()`); SEC 403s the noreply fallback, so set it.
+  `WebFetch` is **403'd by SEC** — for ad-hoc EDGAR fetches use
+  `curl -A "$(python -c 'from delist_detection.edgar import resolve_user_agent as r; print(r())')"`.
 - **Tests are fully offline.** They use a `FakeEdgar` fixture (`tests/conftest.py`)
   and committed text fixtures (`tests/fixtures/`); never add network to the test
   path. Golden fixtures are regenerated out-of-band by `scripts/regen_payout_fixtures.py`.
