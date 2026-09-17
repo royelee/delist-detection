@@ -562,3 +562,12 @@ def test_a_tie_between_two_figures_abstains():
 def test_six_decimal_cash_is_read_whole():
     t = "shareholders received a net cash payment of $10.389188 per share of common stock"
     assert _match_payout(t)[0] == 10.389188
+
+
+def test_an_amount_never_stops_inside_a_thousands_separator():
+    # read as 1.0 and 12.0 before the lookahead refused a following ",digit"
+    assert _match_payout("the cash consideration of $1,618.7928 per unit") == (None, "")
+    assert _match_payout("an amount in cash equal to $12,345.678 per unit") == (None, "")
+    assert _match_payout("holders receive $1,618.79 in cash")[0] == 1618.79
+    # the long-decimal pattern needs its "." and reads the whole figure
+    assert _match_payout("a net cash payment of $1,618.7928 per share")[0] == 1618.7928

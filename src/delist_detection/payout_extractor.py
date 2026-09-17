@@ -55,12 +55,14 @@ _ABS_MIN, _ABS_MAX = 0.01, 10000.00
 # only count when an "in cash" phrase follows within _CASH_WINDOW chars. Bare
 # "cash" is NOT enough (it matches "discounted cash flow").
 #
-# Whole dollars ("$170 in cash") or exactly two decimals. The lookahead still
-# refuses a truncated "$1,618.79" out of "$1,618.7928" (ALTR's per-unit figure,
-# which must not compete with the $113.00 consideration). Longer decimals are
-# read only after "cash payment of", where they are the consideration itself
-# (CPWR "net cash payment of $10.389188 per share").
-_AMT = r"\$\s*([\d,]+(?:\.\d{2})?)(?!\.?\d)"
+# Whole dollars ("$170 in cash") or exactly two decimals. The lookahead refuses
+# any stop before a digit, a ".digit" or a ",digit": no truncated "$1,618.79" and
+# no backtracked "$1" out of "$1,618.7928" (ALTR's per-unit figure, which must
+# not compete with the $113.00 consideration). Longer decimals are read only
+# after "cash payment of", where they are the consideration itself (CPWR "net
+# cash payment of $10.389188 per share"); that pattern needs its ".", so it
+# cannot stop inside a thousands separator.
+_AMT = r"\$\s*([\d,]+(?:\.\d{2})?)(?![.,]?\d)"
 _AMT_LONG = r"\$\s*([\d,]+\.\d{2,6})(?!\d)"
 _PATTERNS = [
     (re.compile(r"(?:right to receive|receive)\s+" + _AMT + r"\s+in\s+cash", re.I), False),
