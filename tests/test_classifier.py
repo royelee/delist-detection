@@ -566,3 +566,54 @@ def test_a_readable_notice_keeps_the_full_merger_window():
     rec = DelistClassifier(e, TickerResolver(e)).classify_ticker("REORG", "2023-05-10")
     assert "notice_text_missing" not in rec.evidence["flags"]
     assert rec.bucket is CrspBucket.MERGER and rec.crsp_code == 231
+
+
+# --- R5: a stale bankruptcy the company emerged from does not outrank the merger ---
+
+_BK_TEXT = ("Item 1.03 Bankruptcy or Receivership. Voluntary Petition for Reorganization "
+            "On April 20, 2022, the Company filed voluntary petitions for relief under "
+            "chapter 11 of title 11 in the United States Bankruptcy Court for the Southern "
+            "District of Texas. Item 2.04 Triggering Events.")
+
+
+def _emerged_then_acquired(bk_day, merger_items="2.01,3.01,5.01", extra=()):
+    return [
+        EdgarSubmission("BK", "8-K", bk_day, bk_day, "1.03,2.04", "bk.htm"),
+        EdgarSubmission("MG", "8-K", "2023-05-30", "2023-05-30", merger_items, "m.htm"),
+        EdgarSubmission("F25", "25-NSE", "2023-06-01", "", "", "p.xml"),
+        EdgarSubmission("F15", "15-12G", "2023-06-12", "", "", "f.htm"),
+        *extra,
+    ]
+
+
+def test_a_bankruptcy_emerged_from_before_the_merger_does_not_win():
+    e = _TextEdgar(_emerged_then_acquired("2022-04-20"), {"BK": _BK_TEXT})
+    rec = DelistClassifier(e, TickerResolver(e)).classify_ticker("REORG", "2023-06-01")
+    assert rec.bucket is CrspBucket.MERGER and rec.crsp_code == 231
+    assert "bankruptcy_before_merger" in rec.evidence["flags"]
+
+
+def test_a_recent_bankruptcy_still_outranks_a_merger_8k():
+    # 42 days before the delisting: inside the window, so the override stands.
+    e = _TextEdgar(_emerged_then_acquired("2023-04-20"), {"BK": _BK_TEXT})
+    rec = DelistClassifier(e, TickerResolver(e)).classify_ticker("REORG", "2023-06-01")
+    assert rec.bucket is CrspBucket.LIQUIDATION and rec.crsp_code == 470
+    assert "bankruptcy_before_merger" not in rec.evidence["flags"]
+
+
+def test_a_second_bankruptcy_near_the_delisting_keeps_the_override():
+    # An old Chapter 11 the company emerged from AND a fresh one at the delisting.
+    fresh = EdgarSubmission("BK2", "8-K", "2023-05-20", "2023-05-20", "1.03", "bk2.htm")
+    e = _TextEdgar(_emerged_then_acquired("2022-04-20", extra=(fresh,)),
+                   {"BK": _BK_TEXT, "BK2": _BK_TEXT})
+    rec = DelistClassifier(e, TickerResolver(e)).classify_ticker("REORG", "2023-06-01")
+    assert rec.bucket is CrspBucket.LIQUIDATION and rec.crsp_code == 470
+    assert "bankruptcy_before_merger" not in rec.evidence["flags"]
+
+
+def test_a_stale_bankruptcy_without_a_change_in_control_keeps_the_override():
+    # A bare 2.01 is a disposition, not a change in control: the override stands.
+    e = _TextEdgar(_emerged_then_acquired("2022-04-20", merger_items="2.01,9.01"), {"BK": _BK_TEXT})
+    rec = DelistClassifier(e, TickerResolver(e)).classify_ticker("REORG", "2023-06-01")
+    assert rec.bucket is CrspBucket.LIQUIDATION and rec.crsp_code == 470
+    assert "bankruptcy_before_merger" not in rec.evidence["flags"]

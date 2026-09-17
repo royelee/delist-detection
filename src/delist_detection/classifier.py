@@ -49,6 +49,16 @@ FORM25_TAIL_DAYS = 45        # beyond this, an earlier Form 25 means a frozen ve
 FORM25_MAX_BEFORE_DAYS = 1500
 M_A_ITEMS = {"2.01", "5.01", "3.03"}
 NOTICE_MISSING_MERGER_DAYS = 120   # merger-evidence window when the 3.01 notice is unreadable
+BANKRUPTCY_STALE_DAYS = 180        # older than this, a confirmed 1.03 can predate an acquisition
+MERGER_8K_WINDOW_DAYS = 30         # how near the delisting a change-in-control 8-K must sit
+
+
+def _is_change_in_control(items: set[str]) -> bool:
+    """The registrant was acquired: item 5.01, or 2.01 together with 3.01 or 3.03.
+
+    A bare 2.01 is a disposition of assets, not a change in control.
+    """
+    return "5.01" in items or ("2.01" in items and ("3.01" in items or "3.03" in items))
 
 
 @dataclass
@@ -278,11 +288,11 @@ class DelistClassifier:
         scored.sort(key=lambda x: x[0])
         return scored[0][1]
 
-    def _confirmed_bankruptcy(self, cik, filings, on, flags):
+    def _confirmed_bankruptcy(self, cik, filings, on, flags, before: int = 540):
         """First 1.03 8-K in the window whose Item 1.03 section mentions a
         bankruptcy. An empty text (fetch miss) counts as confirmed, since the tag
         is SEC's own metadata, and adds the flag `bankruptcy_text_missing`."""
-        for f in bankruptcy_8ks(filings, on):
+        for f in bankruptcy_8ks(filings, on, before=before):
             text = self.edgar.fetch_filing_text(cik, f.accession, f.primary_doc)
             if not text:
                 _add_flag(flags, "bankruptcy_text_missing")
@@ -290,6 +300,30 @@ class DelistClassifier:
             if _confirms_bankruptcy(text):
                 return f
         return None
+
+    def _emerged_before_merger(self, cik, filings, observed, flags) -> bool:
+        """The confirmed bankruptcy predates an acquisition the company was still
+        around for: every confirmed item 1.03 is more than BANKRUPTCY_STALE_DAYS
+        before the delisting, and an 8-K within ±MERGER_8K_WINDOW_DAYS of it
+        carries a change in control.
+
+        Without this, `bankruptcy_8ks(..., before=540)` plus the confirmed-
+        bankruptcy override outranks every merger signal, so a company that filed
+        Chapter 11, emerged, and was acquired within 18 months was marked
+        liquidation (−90% in training) instead of merger.
+        """
+        if self._confirmed_bankruptcy(cik, filings, observed, flags,
+                                      before=BANKRUPTCY_STALE_DAYS) is not None:
+            return False
+        for f in filings:
+            if not f.form.startswith("8-K"):
+                continue
+            d = _parse_date(f.report_date) or _parse_date(f.filing_date)
+            if d is None or abs((d - observed).days) > MERGER_8K_WINDOW_DAYS:
+                continue
+            if _is_change_in_control(f.item_set):
+                return True
+        return False
 
     def _rename_or_transfer(self, cik, filings, observed):
         """A rename around the delisting date, or a 3.01 notice that reads as a
@@ -313,7 +347,7 @@ class DelistClassifier:
             if d is None or abs((d - observed).days) > 30:
                 continue
             items = f.item_set
-            if "5.01" in items or ("2.01" in items and ("3.01" in items or "3.03" in items)):
+            if _is_change_in_control(items):
                 return None
             if "3.01" in items:
                 text = self.edgar.fetch_filing_text(cik, f.accession, f.primary_doc)
@@ -555,6 +589,10 @@ class DelistClassifier:
         # CIK (Oasis Petroleum): the old equity was still cancelled at emergence.
         if observed:
             bk = self._confirmed_bankruptcy(resolution.cik, filings, observed, flags)
+            if bk is not None and self._emerged_before_merger(
+                    resolution.cik, filings, observed, flags):
+                _add_flag(flags, "bankruptcy_before_merger")
+                bk = None                     # the merger path decides this one
             if bk is not None:
                 return DelistRecord(
                     ticker=ticker.upper(), cik=resolution.cik,
