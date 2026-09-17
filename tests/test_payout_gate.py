@@ -47,6 +47,19 @@ def test_an_election_takes_its_cash_leg_when_only_cash_fits():
     assert (r.cash, r.stock_ratio, r.acquirer_price, r.source) == (505.0, None, None, "llm_election_cash")
 
 
+def test_an_election_regex_matching_the_cash_leg_records_no_flag():
+    # BLD: the regex correctly read the 505.0 cash leg of the election, but the
+    # price ended up settling by the stock leg -- the "failed" flag is spurious.
+    r = reconcile(505.0, 354.53, _terms("election", 505.0, 20.2, "QXO"), 16.54, DEFAULT_TOL)
+    assert (r.cash, r.stock_ratio, r.source, r.flags) == (None, 20.2, "llm_election_stock", ())
+
+
+def test_an_election_regex_matching_neither_leg_keeps_the_flag():
+    r = reconcile(999.0, 354.53, _terms("election", 505.0, 20.2, "QXO"), 16.54, DEFAULT_TOL)
+    assert r.source == "llm_election_stock"
+    assert r.flags == ("payout_gate_failed:999",)
+
+
 def test_an_election_where_neither_leg_fits_keeps_the_flags():
     r = reconcile(25.0, 12.18, _terms("election", 50.0, 1.0, "X"), 44.0, DEFAULT_TOL)
     assert r == reconcile(25.0, 12.18, None, None, DEFAULT_TOL)
@@ -103,6 +116,8 @@ def test_a_merger_terms_csv_row_wins_over_the_llm():
 
 
 def test_an_election_stock_leg_drops_the_payout_and_writes_terms():
+    # the regex read the deal's real cash leg (505), even though the price
+    # ended up reconciling with the stock leg -- no flag should be recorded.
     payouts = {K: 505.0}
     g = gate_payouts([K], payouts, {K: "8K_2.01"}, {K: "high"},
                      {K: _terms("election", 505.0, 20.2, "QXO")}, {"ABC": 354.53}, {},
@@ -110,7 +125,7 @@ def test_an_election_stock_leg_drops_the_payout_and_writes_terms():
     assert K not in g.payouts and payouts == {K: 505.0}
     assert (g.sources[K], g.confidences[K]) == ("llm_election_stock", "high")
     assert g.merged_terms[K] == {"stock_ratio": 20.2, "acquirer_price": 16.54, "acquirer_ticker": "QXO"}
-    assert (g.flags[K], g.gate_failed, g.llm_cash) == (("payout_gate_failed:505",), 1, 0)
+    assert (g.flags, g.gate_failed, g.llm_cash) == ({}, 0, 0)
 
 
 def test_a_stock_only_gate_pass_drops_a_regex_value_that_fit():
@@ -140,11 +155,47 @@ def test_full_terms_clear_the_failed_flag_of_their_cash_leg():
     g = _gate(payout=145.0, terms=_terms("cash_and_stock", 145.0, 0.8378, "CVS"), close=212.70, price=80.27)
     assert g.merged_terms[K]["cash_per_share"] == 145.0 and K not in g.payouts
     assert (g.flags, g.gate_failed) == ({}, 0)
-    # when the full terms fail too, the flag stays
+    # when the full terms fail too, the regex flag stays and the terms-gate drop
+    # (fail_sanity) is appended so the row still surfaces in review.csv
     g = _gate(payout=145.0, terms=_terms("cash_and_stock", 145.0, 0.8378, "CVS"), close=300.0, price=80.27)
-    assert (g.flags[K], g.gate_failed, g.merged_terms) == (("payout_gate_failed:145",), 1, {})
+    assert (g.flags[K], g.gate_failed, g.merged_terms) == (
+        ("payout_gate_failed:145", "terms_gate_failed:fail_sanity"), 1, {})
 
 
 def test_a_cash_and_cvr_deal_labelled_other_fills_the_payout():
     g = _gate(terms=_terms("other", 380.0), close=381.02)
     assert (g.payouts[K], g.sources[K], g.confidences[K], g.llm_cash) == (380.0, "llm", "high", 1)
+
+
+# --- ruling 2: the cash+stock gate flags every drop reason but csv_override ---
+
+def test_terms_gate_no_acq_ticker_flag():
+    g = _gate(terms=_terms("stock", None, 0.5, None), close=12.0, price=4.0)
+    assert g.dropped["no_acq_ticker"] == 1
+    assert g.flags[K] == ("terms_gate_failed:no_acq_ticker",)
+
+
+def test_terms_gate_no_acq_price_flag():
+    g = _gate(terms=_terms("stock", None, 0.5, "XYZ"), close=12.0, price=None)
+    assert g.dropped["no_acq_price"] == 1
+    assert g.flags[K] == ("terms_gate_failed:no_acq_price",)
+
+
+def test_terms_gate_no_last_close_flag_appends_to_the_reconcile_flag():
+    # pass 1 (reconcile) already flagged no_last_close; pass 2 appends its own.
+    g = _gate(terms=_terms("stock", None, 0.5, "XYZ"), close=None, price=4.0)
+    assert g.dropped["no_last_close"] == 1
+    assert g.flags[K] == ("no_last_close", "terms_gate_failed:no_last_close")
+
+
+def test_terms_gate_fail_sanity_flag():
+    g = _gate(terms=_terms("cash", 12.0, 0.5, "XYZ"), close=12.0, price=4.0)
+    assert g.dropped["fail_sanity"] == 1
+    assert g.flags[K] == ("terms_gate_failed:fail_sanity",)
+
+
+def test_terms_gate_csv_override_records_no_flag():
+    csv = {"ABC": {"stock_ratio": 0.5, "acquirer_price": 20.0}}
+    g = _gate(terms=_terms("stock", None, 0.5, "XYZ"), csv=csv, price=20.0)
+    assert g.dropped["csv_override"] == 1
+    assert K not in g.flags

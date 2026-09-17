@@ -28,7 +28,7 @@ from delist_detection.payout_extractor import PayoutExtractor, PayoutResult
 from delist_detection.payout_gate import DEFAULT_TOL, gate_payouts
 from delist_detection.reconstruction import (
     build_dlret_table, write_dlret_csv, load_merger_terms_csv, load_float_map_csv,
-    _lookup,
+    _lookup, enriched_to_row,
 )
 
 
@@ -403,9 +403,47 @@ def main() -> int:
         recovery_ratios=recoveries,
         payout_sources=gated.sources,
         payout_confidences=gated.confidences,
+        payout_flags=gated.flags,
     )
     write_dlret_csv(table, args.dlret_output)
     print(f"Wrote {args.dlret_output}: {len(table)} DLRET rows (PRIMARY OUTPUT)")
+
+    # --- review.csv: every row the rules could not settle on their own ---
+    records_by_key = {(r.ticker.upper(), r.observed_delist_date): r for r in all_records}
+    review_cols = ["ticker", "observed_delist_date", "bucket", "dlret", "review_flags",
+                   "reason", "cik", "anchor_8k"]
+    review_rows = []
+    flag_counts: dict[str, int] = {}
+    for e in table:
+        if not e.review_flags:
+            continue
+        row = enriched_to_row(e)
+        rec = records_by_key.get((e.ticker.upper(), e.observed_delist_date))
+        anchor_8k = (((rec.evidence or {}).get("anchor_8k") or {}).get("items", "")
+                     if rec is not None else "")
+        review_rows.append({
+            "ticker": row["ticker"],
+            "observed_delist_date": row["observed_delist_date"],
+            "bucket": row["bucket"],
+            "dlret": row["dlret"],
+            "review_flags": row["review_flags"],
+            "reason": row["reason"],
+            "cik": "" if rec is None or rec.cik is None else rec.cik,
+            "anchor_8k": anchor_8k,
+        })
+        for f in e.review_flags:
+            name = f.split(":", 1)[0]
+            flag_counts[name] = flag_counts.get(name, 0) + 1
+
+    review_path = Path(args.dlret_output).with_name("review.csv")
+    review_path.parent.mkdir(parents=True, exist_ok=True)
+    with review_path.open("w", newline="") as rf:
+        rw = csv.DictWriter(rf, fieldnames=review_cols)
+        rw.writeheader()
+        rw.writerows(review_rows)
+    print(f"Wrote {review_path}: {len(review_rows)} rows need review")
+    for name, count in sorted(flag_counts.items(), key=lambda kv: (-kv[1], kv[0])):
+        print(f"  {name:28s} {count:4d}")
     return 0
 
 

@@ -46,12 +46,20 @@ def reconcile(regex_value, last_close, llm_terms, acquirer_price, tol) -> Reconc
         if llm_terms.deal_type == "election":
             stock = ratio * acquirer_price if ratio is not None and acquirer_price is not None else None
             stock_fits, cash_fits = _fits(stock, last_close, tol), _fits(cash, last_close, tol)
+            # A regex value within 1% of the deal's own cash leg read a real term
+            # of the deal, even when the election ultimately settles by the other
+            # leg -- the "failed the last close" flag would be spurious there.
+            regex_matches_cash_leg = (
+                regex_value is not None and cash is not None and cash != 0
+                and abs(regex_value / cash - 1.0) <= 0.01
+            )
+            settled_flags = () if regex_matches_cash_leg else tuple(flags)
             # The legs are equal at signing, so both usually fit: take the one nearer
             # the last close; a tie goes to stock.
             if stock_fits and (not cash_fits or _gap(stock, last_close) <= _gap(cash, last_close)):
-                return Reconciled(None, ratio, acquirer_price, "llm_election_stock", tuple(flags))
+                return Reconciled(None, ratio, acquirer_price, "llm_election_stock", settled_flags)
             if cash_fits:
-                return Reconciled(cash, None, None, "llm_election_cash", tuple(flags))
+                return Reconciled(cash, None, None, "llm_election_cash", settled_flags)
         elif ratio is None and _fits(cash, last_close, tol):
             # A cash deal, including the cash + CVR deals the LLM labels "other".
             return Reconciled(cash, None, None, "llm", tuple(flags))
@@ -129,6 +137,11 @@ def gate_payouts(
             out.merged_terms[key] = {"stock_ratio": r.stock_ratio, "acquirer_price": r.acquirer_price,
                                      "acquirer_ticker": terms.acquirer_ticker}
 
+    def flag_terms_gate_drop(key, reason: str) -> None:
+        # Every drop reason but csv_override gets a flag: a merger row the rules
+        # leave at par must still surface in review.csv.
+        out.flags[key] = out.flags.get(key, ()) + (f"terms_gate_failed:{reason}",)
+
     for key, terms in llm_terms.items():
         if terms.stock_ratio is None or terms.deal_type == "election":
             continue   # settled in pass 1
@@ -139,21 +152,25 @@ def gate_payouts(
         acq = (terms.acquirer_ticker or "").strip()
         if not acq:
             out.dropped["no_acq_ticker"] += 1
+            flag_terms_gate_drop(key, "no_acq_ticker")
             continue
         acq_price = acquirer_price(acq, date)
         if acq_price is None:
             out.dropped["no_acq_price"] += 1
+            flag_terms_gate_drop(key, "no_acq_price")
             continue
         last_close = _lookup(last_closes, tkr, date)
         if last_close is None or last_close <= 0:
             # <=0 guard mirrors _resolve_merger (dlret.py): a zero/blank close
             # would both divide-by-zero here and yield a NaN DLRET downstream.
             out.dropped["no_last_close"] += 1
+            flag_terms_gate_drop(key, "no_last_close")
             continue
         cash = terms.cash_per_share
         terminal = (cash or 0.0) + terms.stock_ratio * acq_price
         if _gap(terminal, last_close) > tol:
             out.dropped["fail_sanity"] += 1
+            flag_terms_gate_drop(key, "fail_sanity")
             continue
         d = {"stock_ratio": terms.stock_ratio, "acquirer_price": acq_price, "acquirer_ticker": acq}
         if cash is not None:
