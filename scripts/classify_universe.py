@@ -100,6 +100,11 @@ MANUAL_OVERRIDES: dict[str, int] = {
     # (duplicate IMCL line removed; see above)
     "VNTV":  1533932,   # Vantiv → Worldpay merger 2018 (verified)
     "RICE":  1588238,   # Rice Energy — EQT 2017 (verified)
+    "ONNN":  1097864,   # ON Semiconductor — ticker change ONNN → ON 2015, not a delisting
+    "UPL":   1022646,   # Ultra Petroleum — Nasdaq → OTC Aug 2019, kept filing until Form 15 in 2020
+    "ICPT":  1270073,   # Intercept — Alfasigma 2023 (Form 25 2023-11-08); vendor end date 2026-06-26 is a frozen tail
+    "HLX":   866829,    # Helix Energy — merged 2026, now Hornbeck Offshore (HOS); pinned so resolution survives HLX leaving company_tickers.json
+    "SBNY":  1288784,   # Signature Bank — failed Mar 2023; EDGAR holds only 13D/13G and Form D, no 10-K/8-K/Form 25, so it still classifies unknown
 }
 
 # Deal-era acquirer ticker -> the symbol the raw Tiingo panel files its price
