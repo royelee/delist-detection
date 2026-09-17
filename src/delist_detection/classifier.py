@@ -17,7 +17,7 @@ from typing import Iterable
 
 from .crsp_codes import CrspBucket, bucket_for_code
 from .edgar import EdgarClient, EdgarSubmission
-from .evidence import bankruptcy_8ks, mentions_bankruptcy
+from .evidence import bankruptcy_8ks, filed_operating_between, mentions_bankruptcy
 from .ticker_resolver import TickerResolver
 
 
@@ -31,6 +31,11 @@ LIQUIDATION_ITEMS = {"2.04"}
 DEFAULT_LOOKBACK_DAYS = 30
 EIGHT_K_WINDOW_DAYS = 14
 EIGHT_K_BACKSCAN_DAYS = 120  # how far back to scan for an announcement 8-K
+
+FORM25_AFTER_DAYS = 45       # a Form 25 filed after the vendor's last trade
+FORM25_TAIL_DAYS = 45        # beyond this, an earlier Form 25 means a frozen vendor tail
+FORM25_MAX_BEFORE_DAYS = 1500
+M_A_ITEMS = {"2.01", "5.01", "3.03"}
 
 
 @dataclass
@@ -114,23 +119,32 @@ class DelistClassifier:
         return False
 
     def _pick_delist_filing(
-        self, filings: list[EdgarSubmission], observed: date | None
-    ) -> EdgarSubmission | None:
-        candidates = [f for f in filings if f.form in DELIST_FORMS]
-        if not candidates:
-            return None
+        self,
+        filings: list[EdgarSubmission],
+        observed: date | None,
+        cik: int | None = None,
+    ) -> tuple[EdgarSubmission | None, int | None]:
+        cands = [f for f in filings if f.form in DELIST_FORMS]
+        if not cands:
+            return None, None
         if observed is None:
-            return max(candidates, key=lambda f: f.filing_date)
-        scored: list[tuple[int, EdgarSubmission]] = []
-        for c in candidates:
+            return max(cands, key=lambda f: f.filing_date), None
+        best = None
+        for c in cands:
             fd = _parse_date(c.filing_date)
             if fd is None:
                 continue
-            scored.append((abs((fd - observed).days), c))
-        if not scored:
-            return None
-        scored.sort(key=lambda x: x[0])
-        return scored[0][1]
+            gap = (observed - fd).days            # > 0: Form 25 before the last trade
+            if gap < -FORM25_AFTER_DAYS or gap > FORM25_MAX_BEFORE_DAYS:
+                continue
+            if gap > FORM25_TAIL_DAYS:
+                near = self._pick_8k_near(filings, fd) or self._backscan_for_fingerprint_8k(filings, fd)
+                merger_anchor = near is not None and bool(near.item_set & M_A_ITEMS)
+                if not merger_anchor and filed_operating_between(filings, fd, observed):
+                    continue                      # an older, different event (SKLZ 2021, LBRDA 2015)
+            if best is None or abs(gap) < abs(best[1]):
+                best = (c, gap)
+        return (best[0], best[1]) if best else (None, None)
 
     def _pick_8k_near(
         self, filings: list[EdgarSubmission], anchor: date
@@ -344,13 +358,16 @@ class DelistClassifier:
                           "flags": flags},
             )
 
-        delist_filing = self._pick_delist_filing(filings, observed)
+        delist_filing, gap = self._pick_delist_filing(filings, observed, resolution.cik)
+        if gap is not None and gap > FORM25_TAIL_DAYS:
+            flags.append(f"frozen_tail:{gap}")
         dereg = self._pick_dereg(filings, observed)
         evidence: dict = {
             "resolution_source": resolution.source,
             "name": resolution.name,
             "delist_filing": asdict(delist_filing) if delist_filing else None,
             "dereg_filing": asdict(dereg) if dereg else None,
+            "anchor_gap_days": gap,
             "flags": flags,
         }
 

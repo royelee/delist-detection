@@ -91,3 +91,31 @@ def test_a_1_03_tag_without_bankruptcy_text_is_not_a_bankruptcy():
     rec = DelistClassifier(e, TickerResolver(e)).classify_ticker("REORG", "2024-11-27")
     assert rec.bucket is CrspBucket.MERGER
     assert "bankruptcy_tag_unconfirmed" in rec.evidence["flags"]
+
+
+def test_an_old_form25_from_another_event_is_not_the_anchor():
+    # 1,037 days: inside the 1,500-day window, so the operating-filings rule is what rejects it
+    fs = [
+        EdgarSubmission("C1", "25-NSE", "2021-08-16", "", "", "p.xml"),          # warrant delisting
+        EdgarSubmission("C2", "8-K", "2021-08-16", "2021-08-16", "8.01,9.01", "c.htm"),
+        EdgarSubmission("C3", "10-Q", "2023-11-05", "", "", "q.htm"),
+        EdgarSubmission("C4", "8-K", "2024-06-18", "2024-06-18", "7.01,9.01", "d.htm"),
+    ]
+    e = _TextEdgar(fs, {})
+    from delist_detection.ticker_resolver import TickerResolver
+    rec = DelistClassifier(e, TickerResolver(e)).classify_ticker("REORG", "2024-06-18")
+    assert rec.evidence.get("delist_filing") is None
+    assert rec.bucket is not CrspBucket.COMPLIANCE_FAILURE
+
+
+def test_an_earlier_merger_form25_marks_a_frozen_tail():
+    fs = [
+        EdgarSubmission("D1", "8-K", "2010-06-25", "2010-06-25", "3.01,3.03,5.01", "a.htm"),
+        EdgarSubmission("D2", "25-NSE", "2010-06-28", "", "", "p.xml"),
+        EdgarSubmission("D3", "10-K", "2011-02-25", "", "", "k.htm"),              # registered debt
+    ]
+    e = _TextEdgar(fs, {})
+    from delist_detection.ticker_resolver import TickerResolver
+    rec = DelistClassifier(e, TickerResolver(e)).classify_ticker("REORG", "2013-02-07")
+    assert rec.evidence["delist_filing"]["accession"] == "D2"
+    assert any(f.startswith("frozen_tail:") for f in rec.evidence["flags"])

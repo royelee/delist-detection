@@ -63,3 +63,18 @@ def bankruptcy_8ks(filings: list[EdgarSubmission], on: date, before: int = 540, 
 
 def mentions_bankruptcy(text: str) -> bool:
     return bool(_BANKRUPTCY_TEXT.search(text or ""))
+
+
+OPERATING_FORMS = {"10-K", "10-Q", "20-F", "40-F"}
+
+
+def filed_operating_between(filings: list[EdgarSubmission], lo: date, hi: date) -> bool:
+    """True if the company filed a periodic operating report (or an 8-K with
+    earnings item 2.02) strictly between `lo` and `hi` — evidence that an
+    earlier Form 25 candidate is a different, still-operating event rather
+    than the anchor for the delisting at `hi`."""
+    for f in filings:
+        d = parse_day(f.filing_date)
+        if d and lo < d < hi and (f.form in OPERATING_FORMS or (f.form == "8-K" and "2.02" in f.item_set)):
+            return True
+    return False
