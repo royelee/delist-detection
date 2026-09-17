@@ -63,3 +63,4 @@ def test_listing_transfer_text():
          "withdraw the listing of its common stock from the NYSE and transfer the listing to Nasdaq")
     assert says_listing_transfer(item_text(t, "3.01"))
     assert not says_listing_transfer("Item 3.01 ... did not regain compliance with the minimum bid price")
+    assert says_listing_transfer("the Company transferred its listing to NYSE American")

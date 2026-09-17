@@ -243,15 +243,28 @@ class DelistClassifier:
     def _rename_or_transfer(self, cik, filings, observed):
         """A rename around the delisting date, or a 3.01 notice that reads as a
         listing transfer rather than a deficiency, while the company keeps
-        reporting results: an exchange transfer, not a compliance failure."""
+        reporting results: an exchange transfer, not a compliance failure.
+
+        Declines whenever a nearby 8-K carries a merger fingerprint (5.01, or
+        2.01 together with 3.01 or 3.03) — that's an acquisition, and the
+        rename is incidental to the deal closing, not a listing move. A bare
+        2.01 (a disposition, not a change in control) does not block it.
+        """
         sub = self.edgar.submissions(cik)
         if not isinstance(sub, dict):
             return None
         old = renamed_near(sub, observed)
         transfer = False
         for f in filings:
-            d = _parse_date(f.filing_date)
-            if f.form.startswith("8-K") and "3.01" in f.item_set and d and abs((d - observed).days) <= 30:
+            if not f.form.startswith("8-K"):
+                continue
+            d = _parse_date(f.report_date) or _parse_date(f.filing_date)
+            if d is None or abs((d - observed).days) > 30:
+                continue
+            items = f.item_set
+            if "5.01" in items or ("2.01" in items and ("3.01" in items or "3.03" in items)):
+                return None
+            if "3.01" in items:
                 text = self.edgar.fetch_filing_text(cik, f.accession, f.primary_doc)
                 transfer = transfer or says_listing_transfer(item_text(text, "3.01"))
         if (old or transfer) and still_operating(filings, observed):

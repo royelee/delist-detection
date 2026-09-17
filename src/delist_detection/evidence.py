@@ -7,7 +7,7 @@ from datetime import date, datetime, timedelta
 from .edgar import EdgarSubmission
 
 _BANKRUPTCY_TEXT = re.compile(r"bankruptcy|chapter\s+(?:11|7)\b|receivership", re.I)
-_TRANSFER_TEXT = re.compile(r"transfer\s+(?:the|its|of\s+(?:the|its))\s+listing", re.I)
+_TRANSFER_TEXT = re.compile(r"transfer(?:red)?\s+(?:the|its|of\s+(?:the|its))\s+listing", re.I)
 
 
 def parse_day(s: str | None) -> date | None:

@@ -158,3 +158,51 @@ def test_rename_while_still_operating_is_an_exchange_transfer():
     from delist_detection.ticker_resolver import TickerResolver
     rec = DelistClassifier(e, TickerResolver(e)).classify_ticker("REORG", "2026-06-01")
     assert rec.bucket is CrspBucket.EXCHANGE_TRANSFER and rec.crsp_code == 304
+
+
+class _MergerRenameEdgar(_TextEdgar):
+    def submissions(self, cik):
+        return TARGETCO_LIKE
+
+
+TARGETCO_LIKE = {"name": "Acquirer Co", "sic": "1311", "formerNames": [
+    {"name": "TargetCo, Inc.", "from": "2010-01-01T04:00:00.000Z", "to": "2026-06-01T04:00:00.000Z"}]}
+
+
+def test_merger_fingerprint_blocks_the_rename_rule():
+    """A merger 8-K (2.01+3.01+5.01) near a name change at closing, with the
+    surviving debt still reporting afterward and no Form 15, is a MERGER —
+    not an EXCHANGE_TRANSFER just because renamed_near fires."""
+    fs = [
+        EdgarSubmission("M0", "10-K", "2026-02-20", "", "", "k.htm"),          # well before the date
+        EdgarSubmission("M1", "8-K", "2026-06-01", "2026-06-01", "2.01,3.01,5.01", "a.htm"),
+        EdgarSubmission("M2", "25-NSE", "2026-06-01", "", "", "p.xml"),
+        EdgarSubmission("M3", "10-Q", "2026-09-29", "", "", "q.htm"),          # 120 days later
+    ]
+    e = _MergerRenameEdgar(fs, {})
+    from delist_detection.ticker_resolver import TickerResolver
+    rec = DelistClassifier(e, TickerResolver(e)).classify_ticker("REORG", "2026-06-01")
+    assert rec.bucket is CrspBucket.MERGER and rec.crsp_code == 231
+
+
+class _BareDispositionRenameEdgar(_TextEdgar):
+    def submissions(self, cik):
+        return RENAMED_LIKE
+
+
+RENAMED_LIKE = {"name": "Renamed Co", "sic": "6141", "formerNames": [
+    {"name": "OldCo, Inc.", "from": "2010-01-01T04:00:00.000Z", "to": "2026-06-01T04:00:00.000Z"}]}
+
+
+def test_a_bare_201_does_not_block_a_rename():
+    """2.01 alone (a disposition, not a change in control) is not a merger
+    fingerprint and must not block the rename rule."""
+    fs = [
+        EdgarSubmission("N0", "10-K", "2026-02-20", "", "", "k.htm"),
+        EdgarSubmission("N1", "8-K", "2026-06-02", "2026-06-02", "2.01,9.01", "a.htm"),
+        EdgarSubmission("N2", "8-K", "2026-07-27", "2026-07-27", "2.02,9.01", "b.htm"),
+    ]
+    e = _BareDispositionRenameEdgar(fs, {})
+    from delist_detection.ticker_resolver import TickerResolver
+    rec = DelistClassifier(e, TickerResolver(e)).classify_ticker("REORG", "2026-06-01")
+    assert rec.bucket is CrspBucket.EXCHANGE_TRANSFER and rec.crsp_code == 304
