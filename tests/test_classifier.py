@@ -25,16 +25,17 @@ def test_compliance_failure_classifies_correctly(fake_edgar):
     assert rec.evidence["delist_filing"]["form"] == "25-NSE"
 
 
-def test_liquidation_fingerprint(fake_edgar):
-    """Form 25 + Form 15 + non-merger 8-K should land in LIQUIDATION,
-    not COMPLIANCE_FAILURE — the latter would apply -100% in training."""
+def test_deregistration_without_any_evidence_is_unknown_not_liquidation(fake_edgar):
+    """Form 25 + Form 15 + non-merger 8-K, with no distress evidence, is UNKNOWN
+    (rendered at par), not LIQUIDATION or COMPLIANCE_FAILURE — those would
+    apply -90% / -100% in training."""
     resolver = TickerResolver(fake_edgar)
     classifier = DelistClassifier(fake_edgar, resolver)
     rec = classifier.classify_ticker("LIQ", "2019-11-06")
 
-    assert rec.bucket is CrspBucket.LIQUIDATION
-    assert rec.crsp_code == 400
-    assert rec.evidence["dereg_filing"]["form"] == "15-12G"
+    assert rec.bucket is CrspBucket.UNKNOWN
+    assert rec.evidence["deregistered"] is True
+    assert "no_evidence_default" in rec.evidence["flags"]
 
 
 def test_unknown_ticker_returns_unknown(fake_edgar):
@@ -225,3 +226,67 @@ def test_spac_liquidation_is_expiration_even_with_a_late_filing_notice():
     rec = DelistClassifier(e, TickerResolver(e)).classify_ticker("REORG", "2023-08-11")
     assert rec.bucket is CrspBucket.EXPIRATION and rec.crsp_code == 600
     assert "spac" in rec.evidence["flags"]
+
+
+def test_form25_form15_with_a_merger_proxy_is_a_merger():
+    fs = [
+        EdgarSubmission("M1", "DEFM14A", "2015-08-20", "", "", "d.htm"),
+        EdgarSubmission("M2", "25-NSE", "2015-11-18", "", "", "p.xml"),
+        EdgarSubmission("M3", "8-K", "2015-11-18", "2015-11-18", "8.01,9.01", "a.htm"),
+        EdgarSubmission("M4", "15-12G", "2015-11-30", "", "", "f.htm"),
+    ]
+    e = _TextEdgar(fs, {})
+    from delist_detection.ticker_resolver import TickerResolver
+    rec = DelistClassifier(e, TickerResolver(e)).classify_ticker("REORG", "2015-11-18")
+    assert rec.bucket is CrspBucket.MERGER
+
+
+def test_form25_form15_with_2_01_alone_is_a_merger():
+    fs = [
+        EdgarSubmission("U1", "8-K", "2016-01-22", "2016-01-22", "1.01,2.01,9.01", "a.htm"),
+        EdgarSubmission("U2", "25-NSE", "2016-01-22", "", "", "p.xml"),
+        EdgarSubmission("U3", "15-12G", "2016-02-01", "", "", "f.htm"),
+    ]
+    e = _TextEdgar(fs, {})
+    from delist_detection.ticker_resolver import TickerResolver
+    rec = DelistClassifier(e, TickerResolver(e)).classify_ticker("REORG", "2016-02-01")
+    assert rec.bucket is CrspBucket.MERGER
+
+
+def test_a_3_01_notice_citing_a_deficiency_stays_compliance():
+    fs = [
+        EdgarSubmission("N1", "8-K", "2023-05-08", "2023-05-08", "3.01,8.01", "a.htm"),
+        EdgarSubmission("N2", "25-NSE", "2023-05-10", "", "", "p.xml"),
+    ]
+    e = _TextEdgar(fs, {"N1": "Item 3.01 ... has not regained compliance with the minimum bid price requirement"})
+    from delist_detection.ticker_resolver import TickerResolver
+    rec = DelistClassifier(e, TickerResolver(e)).classify_ticker("REORG", "2023-05-10")
+    assert rec.bucket is CrspBucket.COMPLIANCE_FAILURE
+
+
+def test_a_deficiency_notice_beats_an_older_merger_proxy():
+    """A deal that fell through can precede a real compliance delisting: the
+    deficiency wording in the 3.01 notice outranks a proxy 200 days earlier."""
+    fs = [
+        EdgarSubmission("P1", "DEFM14A", "2022-10-22", "", "", "d.htm"),   # 200 days before the Form 25
+        EdgarSubmission("P2", "8-K", "2023-05-08", "2023-05-08", "3.01,8.01", "a.htm"),
+        EdgarSubmission("P3", "25-NSE", "2023-05-10", "", "", "p.xml"),
+    ]
+    e = _TextEdgar(fs, {"P2": "Item 3.01 ... has not regained compliance with the minimum bid price requirement"})
+    from delist_detection.ticker_resolver import TickerResolver
+    rec = DelistClassifier(e, TickerResolver(e)).classify_ticker("REORG", "2023-05-10")
+    assert rec.bucket is CrspBucket.COMPLIANCE_FAILURE and rec.crsp_code == 570
+
+
+def test_a_bare_3_01_without_a_form25_is_unknown():
+    fs = [
+        EdgarSubmission("Q1", "8-K", "2023-05-08", "2023-05-08", "3.01,8.01", "a.htm"),
+    ]
+    e = _TextEdgar(fs, {"Q1": "Item 3.01 Notice of Delisting or Failure to Satisfy a Continued Listing Rule "
+                              "or Standard; Transfer of Listing. The Company notified Nasdaq of its intent "
+                              "to delist its common stock."})
+    from delist_detection.ticker_resolver import TickerResolver
+    rec = DelistClassifier(e, TickerResolver(e)).classify_ticker("REORG", "2023-05-10")
+    assert rec.evidence.get("delist_filing") is None
+    assert rec.bucket is CrspBucket.UNKNOWN
+    assert "no_evidence_default" in rec.evidence["flags"]

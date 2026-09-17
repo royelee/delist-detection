@@ -19,10 +19,12 @@ from .crsp_codes import CrspBucket, bucket_for_code
 from .edgar import EdgarClient, EdgarSubmission
 from .evidence import (
     bankruptcy_8ks,
+    cites_listing_deficiency,
     filed_operating_between,
     is_spac,
     item_text,
     mentions_bankruptcy,
+    merger_evidence,
     renamed_near,
     says_listing_transfer,
     still_operating,
@@ -289,6 +291,46 @@ class DelistClassifier:
                     flags.append("bankruptcy_tag_unconfirmed")
         return items
 
+    def _default_without_fingerprint(self, ticker, cik, observed_delist_date, observed,
+                                     filings, eightk, dereg, delist_filing, evidence, flags):
+        """The record for a delisting with no conclusive 8-K fingerprint (or a
+        3.01 alone). A distress bucket needs positive evidence, so in order:
+        2.01 + Form 15 → merger; a 3.01 notice citing a listing deficiency →
+        compliance (580 with an NT 10-K/Q in the prior year); a merger proxy or
+        tender filing → merger; an NT 10-K/Q alone → 580; else unknown.
+        """
+        def rec(code, bucket, conf, reason, **extra):
+            return DelistRecord(ticker=ticker.upper(), cik=cik, observed_delist_date=observed_delist_date,
+                                crsp_code=code, bucket=bucket, confidence=conf, reason=reason,
+                                evidence={**evidence, **extra})
+        # Ruling (Task 1 review): measure from the Form 25 when there is one. A frozen
+        # vendor tail pushes `observed` past the deal (KCI: proxy 43 days before its
+        # Form 25, 413 days before the vendor's last row).
+        anchor = (_parse_date(delist_filing.filing_date) if delist_filing else None) or observed
+        if eightk is not None and "2.01" in eightk.item_set and dereg is not None:
+            return rec(233, CrspBucket.MERGER, "medium", "2.01 with Form 25 + Form 15 (acquisition completed)")
+        delinquent = bool(anchor) and self._detect_delinquent_filer(filings, anchor)
+        # Ruling (Task 9): an explicit deficiency notice outranks a proxy up to 400
+        # days old (a deal that fell through can precede a real compliance delisting).
+        notice = ""
+        if eightk is not None and "3.01" in eightk.item_set:
+            notice = item_text(self.edgar.fetch_filing_text(cik, eightk.accession, eightk.primary_doc), "3.01")
+        if cites_listing_deficiency(notice):
+            return rec(580 if delinquent else 570, CrspBucket.COMPLIANCE_FAILURE, "medium",
+                       "Listing deficiency cited in the 3.01 notice"
+                       + (" + NT 10-K/Q in the prior year (delinquent filer 580)" if delinquent else ""))
+        proxy = merger_evidence(filings, anchor) if anchor else None
+        if proxy is not None:
+            return rec(231, CrspBucket.MERGER, "medium",
+                       f"Merger filing {proxy.form} {proxy.filing_date} before the delisting")
+        if delinquent:
+            return rec(580, CrspBucket.COMPLIANCE_FAILURE, "medium",
+                       "Delinquent filer (NT 10-K/Q in the prior year), no merger evidence")
+        flags.append("no_evidence_default")
+        return rec(None, CrspBucket.UNKNOWN, "low",
+                   "Delisted/deregistered without merger or distress evidence",
+                   deregistered=bool(delist_filing or dereg))
+
     def _classify_items(self, items: set[str]) -> tuple[int | None, str]:
         """Map an 8-K item set to a CRSP DLSTCD-style code.
 
@@ -517,19 +559,11 @@ class DelistClassifier:
                     evidence=evidence,
                 )
             code, reason = self._classify_items(self._effective_items(resolution.cik, eightk, flags))
+            if code == 570 or (code is None and dereg is not None):
+                return self._default_without_fingerprint(
+                    ticker, resolution.cik, observed_delist_date, observed,
+                    filings, eightk, dereg, delist_filing, evidence, flags)
             if code is None:
-                # Form 15 present but no 8-K signal — went voluntarily deregistered.
-                if dereg is not None:
-                    return DelistRecord(
-                        ticker=ticker.upper(),
-                        cik=resolution.cik,
-                        observed_delist_date=observed_delist_date,
-                        crsp_code=573,
-                        bucket=CrspBucket.COMPLIANCE_FAILURE,
-                        confidence="medium",
-                        reason="Form 15 deregistration without merger 8-K (voluntary or SEC action)",
-                        evidence=evidence,
-                    )
                 return DelistRecord(
                     ticker=ticker.upper(),
                     cik=resolution.cik,
@@ -559,62 +593,14 @@ class DelistClassifier:
                 eightk = back
         evidence["anchor_8k"] = asdict(eightk) if eightk else None
 
-        if eightk is None:
-            # Form 25 present but no nearby 8-K. If a Form 15 was also filed,
-            # treat as voluntary deregistration / liquidation rather than
-            # compliance failure (which assigns -100% to forward returns).
-            if dereg is not None:
-                return DelistRecord(
-                    ticker=ticker.upper(),
-                    cik=resolution.cik,
-                    observed_delist_date=observed_delist_date,
-                    crsp_code=400,
-                    bucket=CrspBucket.LIQUIDATION,
-                    confidence="medium",
-                    reason="Form 25 + Form 15, no merger 8-K: voluntary dereg / liquidation",
-                    evidence=evidence,
-                )
-            return DelistRecord(
-                ticker=ticker.upper(),
-                cik=resolution.cik,
-                observed_delist_date=observed_delist_date,
-                crsp_code=570,
-                bucket=CrspBucket.COMPLIANCE_FAILURE,
-                confidence="medium",
-                reason="Form 25 present, no 8-K within window (defaulting to exchange action)",
-                evidence=evidence,
-            )
-
-        code, reason = self._classify_items(self._effective_items(resolution.cik, eightk, flags))
-
-        if code is None:
-            if dereg is not None:
-                return DelistRecord(
-                    ticker=ticker.upper(),
-                    cik=resolution.cik,
-                    observed_delist_date=observed_delist_date,
-                    crsp_code=400,
-                    bucket=CrspBucket.LIQUIDATION,
-                    confidence="medium",
-                    reason="Form 25 + Form 15, 8-K without M&A items: liquidation/voluntary dereg",
-                    evidence=evidence,
-                )
-            return DelistRecord(
-                ticker=ticker.upper(),
-                cik=resolution.cik,
-                observed_delist_date=observed_delist_date,
-                crsp_code=570,
-                bucket=CrspBucket.COMPLIANCE_FAILURE,
-                confidence="low",
-                reason="Form 25 present with 8-K having no conclusive items; default compliance",
-                evidence=evidence,
-            )
-
-        # Delinquent-filer upgrade: a 570 with NT 10-K/Q in the prior year
-        # is more specifically a 580 (delinquent in filings).
-        if code == 570 and observed and self._detect_delinquent_filer(filings, observed):
-            code = 580
-            reason = reason + " + NT 10-K/Q in prior year (delinquent filer 580)"
+        code = None
+        if eightk is not None:
+            code, reason = self._classify_items(self._effective_items(resolution.cik, eightk, flags))
+        # No conclusive fingerprint, or a 3.01 alone: a distress bucket needs evidence.
+        if code is None or code == 570:
+            return self._default_without_fingerprint(
+                ticker, resolution.cik, observed_delist_date, observed,
+                filings, eightk, dereg, delist_filing, evidence, flags)
 
         conf = "high" if dereg is not None else "medium"
         return DelistRecord(

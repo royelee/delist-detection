@@ -9,8 +9,16 @@ from .edgar import EdgarSubmission
 _BANKRUPTCY_TEXT = re.compile(r"bankruptcy|chapter\s+(?:11|7)\b|receivership", re.I)
 _TRANSFER_TEXT = re.compile(r"transfer(?:red)?\s+(?:the|its|of\s+(?:the|its))\s+listing", re.I)
 
+_DEFICIENCY_TEXT = re.compile(
+    r"minimum\s+bid\s+price|stockholders[’']?\s+equity\s+requirement|"
+    r"market\s+value\s+of\s+(?:listed|publicly\s+held)|regain(?:ed)?\s+compliance|"
+    r"not\s+in\s+compliance|failure\s+to\s+(?:timely\s+)?file|delinquen", re.I)
+
 SPAC_SIC = "6770"
 _SPAC_NAME = re.compile(r"\bacquisition\s+corp", re.I)
+
+# Proxy and tender-offer filings that announce a takeover of the registrant.
+MERGER_EVIDENCE_FORMS = {"DEFM14A", "DEFM14C", "PREM14A", "SC 14D9", "SC TO-T", "425"}
 
 
 def parse_day(s: str | None) -> date | None:
@@ -145,3 +153,16 @@ def says_listing_transfer(text: str) -> bool:
     """True if `text` describes transferring the listing to another exchange,
     as opposed to a compliance-deficiency notice."""
     return bool(_TRANSFER_TEXT.search(text or ""))
+
+
+def merger_evidence(filings: list[EdgarSubmission], on: date, before: int = 400, after: int = 30):
+    """The latest merger proxy or tender-offer filing within [on-before, on+after], else None."""
+    lo, hi = on - timedelta(days=before), on + timedelta(days=after)
+    hits = [f for f in filings if f.form in MERGER_EVIDENCE_FORMS
+            and (d := parse_day(f.filing_date)) and lo <= d <= hi]
+    return max(hits, key=lambda f: f.filing_date) if hits else None
+
+
+def cites_listing_deficiency(text: str) -> bool:
+    """True if `text` (a 3.01 notice) cites a continued-listing deficiency."""
+    return bool(_DEFICIENCY_TEXT.search(text or ""))

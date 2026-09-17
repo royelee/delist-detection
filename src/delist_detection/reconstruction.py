@@ -96,6 +96,11 @@ def enrich(
     # already carry Shumway/recovery marks and never reach an abstain here. A valid
     # positive last price is required (no denominator otherwise). This is a
     # table-only estimate; the firm-month facade (compute_dlret) is untouched.
+    # The same holds for a deregistration the classifier found no merger or
+    # distress evidence for (UNKNOWN + evidence["deregistered"]).
+    if (record.bucket is CrspBucket.UNKNOWN and (record.evidence or {}).get("deregistered")
+            and last_trade_close is not None and last_trade_close > 0):
+        res = DlretResult(0.0, DlretMethod.ASSUMED_PAR, last_trade_close)
     if (
         record.bucket in (CrspBucket.MERGER, CrspBucket.EXPIRATION)
         and res.method in (DlretMethod.ABSTAIN_NO_CONSIDERATION, DlretMethod.DROPPED_EXPIRATION)

@@ -13,14 +13,7 @@ GOLDEN_MANUAL = {"IMCL": 1520047}
 
 # case id -> the task after which test_golden_bucket_and_flags passes. Delete entries
 # as tasks land; if a case still fails only for a later task's rule, move it there.
-XFAIL_BUCKET = {
-    # no-evidence defaults
-    "SIAL_2015-11-18": 9,   # 400: anchor 8-K is 8.01; the proxy (DEFM14A 2014-11-03) is not read
-    "UTIW_2016-02-01": 9,   # 400: 2.01 alone is not a fingerprint
-    "AABA_2019-11-06": 9,   # 400: Form 25 + a 2011 Form 15, 7.01 8-K; solvent dissolution
-    "KCI_2012-11-12": 9,    # 570: the anchor 8-K is the 3.01-only notice (Task 5 flags the tail), and
-                            # Task 9 finds the DEFM14A (2011-09-26) 43 days before the Form 25
-}
+XFAIL_BUCKET: dict[str, int] = {}
 
 
 def _classify(case, monkeypatch, names=None):

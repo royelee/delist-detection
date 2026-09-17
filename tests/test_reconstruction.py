@@ -263,3 +263,16 @@ def test_load_merger_terms_csv_with_date_column_produces_tuple_keys(tmp_path):
     result = load_merger_terms_csv(p)
     assert result[("ALTR", "2015-12-28")] == {"cash_per_share": 54.0}
     assert result["ALTR"] == {"cash_per_share": 99.0}
+
+
+def test_unknown_deregistered_with_a_price_is_assumed_par():
+    rec = DelistRecord("LIQ", 1, "2019-11-06", None, CrspBucket.UNKNOWN, "low", "x",
+                       {"deregistered": True, "flags": ["no_evidence_default"]})
+    e = enrich(rec, last_trade_close=19.63)
+    assert e.dlret == 0.0 and e.dlret_method is DlretMethod.ASSUMED_PAR
+
+
+def test_unknown_without_deregistration_stays_blank():
+    rec = DelistRecord("SKYF", None, "2021-08-24", None, CrspBucket.UNKNOWN, "none", "No CIK", {})
+    e = enrich(rec, last_trade_close=0.001)
+    assert e.dlret_method is DlretMethod.UNKNOWN
