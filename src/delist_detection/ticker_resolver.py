@@ -175,19 +175,21 @@ class TickerResolver:
 
     # CIKs of US exchanges — these file Form 25-NSEs *on behalf of* the issuer,
     # so they appear in every delisting filing's CIK array. Always skip them.
+    # Each entry was checked against EDGAR on 2026-09-17 (names as EDGAR gives
+    # them); an unchecked CIK here hides a real company (1283699 is T-Mobile US).
     EXCHANGE_CIKS: set[int] = {
         1354457,   # Nasdaq Stock Market LLC
         876661,    # New York Stock Exchange LLC
-        1067442,   # unverified: no cached submissions or fixture names this CIK (it is not NYSE LLC)
-        1102740,   # NYSE Arca (Pacific Exchange)
-        1019028,   # NYSE American / NYSE MKT (formerly AMEX)
-        1192304,   # NYSE Chicago
-        1133219,   # BATS / CBOE BZX
+        1143362,   # NYSE Arca, Inc.
+        1143313,   # NYSE American LLC
+        876882,    # NYSE Texas, Inc. (formerly NYSE Chicago / Chicago Stock Exchange)
+        1131740,   # NYSE National, Inc.
         1417835,   # Cboe BZX Exchange, Inc.
-        1466168,   # CBOE Exchange Inc
-        1605448,   # Investors Exchange (IEX)
-        1283699,   # NYSE National
-        1106974,   # Boston Stock Exchange / NSX (legacy)
+        876663,    # Cboe Exchange, Inc.
+        1473845,   # Cboe EDGX Exchange, Inc.
+        876798,    # Nasdaq PHLX LLC
+        876796,    # Nasdaq Texas, LLC (formerly Nasdaq BX)
+        1296945,   # Boston Stock Exchange Inc.
     }
 
     def _efts_pre_delist_frequency_ranked(

@@ -175,8 +175,12 @@ def test_a_member_name_without_usable_words_is_no_expected_name():
     assert rec.evidence["flags"] == ["resolved_by_current_ticker_map"]
 
 
-def test_exchange_ciks_include_nyse_llc_and_cboe_bzx():
-    assert {876661, 1417835} <= TickerResolver.EXCHANGE_CIKS
+def test_exchange_ciks_are_the_verified_exchange_registrants():
+    # each checked against EDGAR on 2026-09-17; the old set held nine non-exchanges (T-Mobile among them)
+    assert TickerResolver.EXCHANGE_CIKS == {
+        1354457, 876661, 1143362, 1143313, 876882, 1131740,
+        1417835, 876663, 1473845, 876798, 876796, 1296945,
+    }
 
 
 def test_the_efts_fallback_skips_the_exchange_that_filed_the_form25(monkeypatch):

@@ -79,7 +79,7 @@ MANUAL_OVERRIDES: dict[str, int] = {
     # Tickers missing from AV — explicit knowledge of the rename
     "XTO":   868809,    # XTO Energy — ExxonMobil 2010; subsidiary dereg 2013
     "AH":    1472595,   # Accretive Health → R1 RCM (rename + ticker move)
-    "KWK":   1283699,   # Quicksilver Resources — Ch.11 2015
+    "KWK":   1060990,   # Quicksilver Resources Inc — Ch.11 2015 (1283699 is T-Mobile US)
     "PGN":   1094093,   # Progress Energy — Duke acquired 2012
     "WE":    1813756,   # WeWork (The We Company) — Ch.11 2023
     "SAVE":  1498710,   # Spirit Airlines — Ch.11 Nov 2024

@@ -104,3 +104,8 @@ def test_a_complete_run_replaces_every_output(outputs, monkeypatch):
     assert "BBB" in outputs["delist_classifications"].read_text()
     assert "BBB" in outputs["dlret"].read_text()
     assert _names(outputs) == sorted(p.name for p in outputs.values())
+
+
+def test_kwk_is_pinned_to_quicksilver_resources():
+    # 1283699 is T-Mobile US (formerly MetroPCS); Quicksilver Resources Inc is 1060990
+    assert cu.MANUAL_OVERRIDES["KWK"] == 1060990
