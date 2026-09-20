@@ -21,7 +21,7 @@ editable install.
 
 ```bash
 pip install -e .                         # editable install (Python ≥3.10) — once per env
-pytest                                    # full suite (160 tests, offline, no network)
+pytest                                    # full suite (416 tests, offline, no network)
 pytest tests/test_payout_extractor.py -v  # one file
 pytest tests/test_payout_extractor.py::test_match_in_cash_family_altr -v   # one test
 
@@ -30,10 +30,11 @@ python scripts/classify_universe.py      # full universe → output/*.csv (NETWO
 python scripts/classify_universe.py --limit 20 --no-extract-payouts   # fast dev subset
 python scripts/verify_against_web.py     # independent EDGAR cross-check → output/web_verification.csv
 python scripts/regen_payout_fixtures.py  # refetch golden 8-K fixtures from live SEC
-# End-to-end pipeline (the canonical way to use the library) — classify a universe → output/dlret.csv, then firm-month-correct a returns panel:
-python scripts/classify_universe.py --last-trade-closes lt.csv --merger-terms terms.csv --recoveries rec.csv   # → output/dlret.csv (+ delist_classifications.csv, payouts.csv)
+python scripts/build_golden_fixtures.py  # rebuild the 31-case golden regression set (NETWORK); --efts-only / --llm-only / --only ID / --raw-tiingo-dir
+# End-to-end pipeline (the canonical way to use the library) — classify a universe → output/dlret.csv (+ review.csv), then firm-month-correct a returns panel:
+python scripts/classify_universe.py --last-trade-closes lt.csv --merger-terms terms.csv --recoveries rec.csv --names names.csv   # → output/dlret.csv (+ delist_classifications.csv, payouts.csv, review.csv)
 python scripts/compute_corrected_returns.py --panel panel.csv --classifications output/delist_classifications.csv --av-csv "$AV_LISTING_CSV" --payouts output/payouts.csv --last-trade-closes lt.csv --recoveries rec.csv --out corrected.parquet   # firm-month BMP correction
-# override-CSV columns: lt.csv=`ticker,last_trade_close` · terms.csv=`ticker,cash_per_share,stock_ratio,acquirer_price,acquirer_ticker` · rec.csv=`ticker,recovery_ratio` — each also accepts an optional `observed_delist_date` column for per-event (recycled-ticker) overrides
+# override-CSV columns: lt.csv=`ticker,last_trade_close` · terms.csv=`ticker,cash_per_share,stock_ratio,acquirer_price,acquirer_ticker` · rec.csv=`ticker,recovery_ratio` — each also accepts an optional `observed_delist_date` column for per-event (recycled-ticker) overrides. names.csv=`ticker,as_of,name`: index-member names the resolver checks candidates against; without it the AV delisted-list name is the only fallback (see README's "Naming the right company")
 # (append --limit N to classify_universe for a fast cached/offline subset)
 # Auto-extract cash+stock merger terms with an LLM instead of hand-writing terms.csv (NETWORK: SEC + OpenAI; needs OPENAI_API_KEY + CHAT_MODEL in .env):
 python scripts/classify_universe.py --extract-merger-terms-llm   # → output/dlret.csv with cash_plus_stock/stock_only rows (98 deals on the full universe)
@@ -111,10 +112,25 @@ conflate them.
   `scripts/classify_universe.py` (~35 ambiguous short tickers). When web
   verification proves a wrong CIK, extend that dict — don't patch the resolver.
 - **Payout extraction is cash-only; the DLRET table supports full consideration.** Auto-extraction from EDGAR remains cash-only. The DLRET table abstains (neutral mark) only when no consideration terms are supplied; when stock-leg terms (`stock_ratio`, `acquirer_price`) are provided via `--merger-terms`, it computes the full cash+stock consideration (e.g. AET→CVS: $145 cash + 0.8378 CVS @ $80 = $212.02, DLRET = +11.6%). The `--last-trade-closes`, `--recoveries`, and `--merger-terms` CSVs accept an optional `observed_delist_date` column for per-event overrides (blank/absent = applies to all events of that ticker); exchange and payout maps are derived per delisting event automatically.
-- **Validation is the EDGAR-cross-check loop**, not eyeballing: re-run
-  `classify_universe.py`, then `verify_against_web.py` (and curl the cited
-  accession) to confirm output against an independent path. Drill mismatches to
-  root cause and re-run.
+- **EDGAR refusals abort; a miss is never cached as an answer.** A SEC
+  403/429 raises `EdgarBlocked` (`edgar.py`); `classify_universe.py`'s CLI
+  catches it and exits 2 instead of writing the refusal in as a result.
+- **The resolver cache is versioned.** `cache/ticker_resolution.json` carries
+  `{"__version__": 2, ...}`; a file at an older version is ignored, not
+  trusted, and gets replaced on the next save.
+- **`payouts.csv` is gated; `delist_classifications.csv` is raw.** Every
+  merger payout is checked against the last trade close (`payout_gate.reconcile`)
+  before it reaches `payouts.csv`; the classification CSV keeps the raw,
+  unchecked extraction alongside it.
+- **The golden set is the regression gate.** `tests/fixtures/golden/` (31
+  cases, from `data/golden_events.csv`) replays real EDGAR responses
+  offline; every case must stay green. `scripts/build_golden_fixtures.py`
+  rebuilds it after a live-data change.
+- **Validation is the EDGAR-cross-check loop**, not eyeballing: start from
+  `output/review.csv` (every row with a non-empty `review_flags`), then
+  re-run `classify_universe.py`, then `verify_against_web.py` (and curl the
+  cited accession) to confirm output against an independent path. Drill
+  mismatches to root cause and re-run.
 - **Configurable input paths.** `classify_universe.py` reads the AV listing
   CSVs (`AV_LISTING_CSV` / `AV_ACTIVE_CSV`) and the raw price directory
   (`--raw-tiingo-dir` / `RAW_TIINGO_DIR`) from env vars or CLI flags, with
