@@ -12,6 +12,7 @@ import os
 import threading
 import time
 from dataclasses import dataclass
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -24,6 +25,19 @@ WWW_SEC_HOST = "https://www.sec.gov"
 # doesn't accept (SEC has rejected this noreply fallback).
 FALLBACK_UA = "delist_detection/0.1 (r@users.noreply.github.com)"
 _REPO_ENV = Path(__file__).resolve().parents[2] / ".env"
+
+
+class EdgarBlocked(RuntimeError):
+    """SEC refused the request (403/429). Callers must never read this as 'no match':
+    from 2026-05-28 to 2026-09-16 every refusal was cached as 'No CIK found'."""
+
+
+def check_response(resp) -> None:
+    if resp.status_code in (403, 429):
+        raise EdgarBlocked(
+            f"SEC returned {resp.status_code} for {getattr(resp, 'url', '?')}. "
+            "Set EDGAR_USER_AGENT to a real contact address (see resolve_user_agent) or slow down."
+        )
 
 
 def resolve_user_agent(env_file: str | Path = _REPO_ENV) -> str:
@@ -43,6 +57,20 @@ def resolve_user_agent(env_file: str | Path = _REPO_ENV) -> str:
 
 DEFAULT_UA = resolve_user_agent()
 
+# The day a cached JSON payload was fetched; a payload without it is dated by its file time.
+FETCHED_KEY = "__fetched__"
+# Marks a payload served from cache because the refetch failed. Added to the
+# returned dict only, never written to disk.
+STALE_KEY = "__stale__"
+SUBMISSIONS_FRESH_DAYS = 45  # filings this long after the last trade must be in the submissions read
+
+
+def submissions_fresh_after(on: date) -> date:
+    """The `fresh_after` for reading a company's submissions about an event on `on`:
+    `min(on + 45 days, today)`. The classifier and the resolver both use it."""
+    return min(on + timedelta(days=SUBMISSIONS_FRESH_DAYS), date.today())
+
+
 _RATE_LOCK = threading.Lock()
 _LAST_CALL: list[float] = [0.0]
 _MIN_INTERVAL = 1.0 / 8.0
@@ -58,6 +86,15 @@ def _strip_html(raw: str) -> str:
     t = _html.unescape(t)
     t = _re.sub(r"\s+", " ", t)
     return t.strip()
+
+
+def _fetched_on(cp: Path, data: Any) -> date:
+    if isinstance(data, dict):
+        try:
+            return date.fromisoformat(data.get(FETCHED_KEY))
+        except (TypeError, ValueError):
+            pass
+    return date.fromtimestamp(cp.stat().st_mtime)
 
 
 def _throttle() -> None:
@@ -105,26 +142,55 @@ class EdgarClient:
         h = hashlib.sha1(url.encode("utf-8")).hexdigest()
         return self.cache_dir / f"{h}.json"
 
-    def _get_json(self, url: str, *, refresh: bool = False) -> Any:
+    def _get_json(self, url: str, *, refresh: bool = False, fresh_after: date | None = None) -> Any:
+        """The cached payload, unless `refresh` or it was fetched before `fresh_after`.
+
+        When a refetch fails and a cached dict exists, that copy is returned with
+        STALE_KEY added to the returned dict only. "Fails" deliberately covers a
+        5xx as well as a transport error: `raise_for_status` raises
+        `requests.HTTPError`, which is a `requests.RequestException`, so an SEC
+        outage serves the cache instead of erroring the row out. `EdgarBlocked`
+        (403/429) is a `RuntimeError` and still propagates, as does any failure
+        with no cached copy to fall back on.
+        """
         cp = self._cache_path(url)
+        cached: Any = None
         if cp.exists() and not refresh:
             try:
-                return json.loads(cp.read_text())
+                cached = json.loads(cp.read_text())
             except json.JSONDecodeError:
                 cp.unlink(missing_ok=True)
+            else:
+                if fresh_after is None or _fetched_on(cp, cached) >= fresh_after:
+                    return cached
 
         _throttle()
         host = "data.sec.gov" if url.startswith(SEC_HOST) else "www.sec.gov"
         headers = {**self.session.headers, "Host": host}
-        resp = self.session.get(url, headers=headers, timeout=30)
+        try:
+            resp = self.session.get(url, headers=headers, timeout=30)
+            check_response(resp)          # EdgarBlocked is not a RequestException: it propagates
+            if resp.status_code != 404:
+                resp.raise_for_status()
+        except requests.RequestException:
+            # A failed refresh must not turn a company with a usable cached copy
+            # into an error row — every event newer than SUBMISSIONS_FRESH_DAYS
+            # refetches on every run. Serve the cache, marked stale in the
+            # returned dict only, so callers can flag the row.
+            if not isinstance(cached, dict):
+                raise
+            return {**cached, STALE_KEY: True}
+        today = date.today().isoformat()
         if resp.status_code == 404:
-            cp.write_text(json.dumps({"__not_found__": True, "url": url}))
-            return {"__not_found__": True, "url": url}
-        resp.raise_for_status()
+            data = {"__not_found__": True, "url": url, FETCHED_KEY: today}
+            cp.write_text(json.dumps(data))
+            return data
         try:
             data = resp.json()
         except json.JSONDecodeError:
             data = {"__raw__": resp.text, "url": url}
+        if isinstance(data, dict):
+            data[FETCHED_KEY] = today
         cp.write_text(json.dumps(data))
         return data
 
@@ -165,6 +231,7 @@ class EdgarClient:
                 headers={**self.session.headers, "Host": "www.sec.gov", "Accept": "application/atom+xml,text/xml"},
                 timeout=30,
             )
+            check_response(resp)
             if resp.status_code != 200:
                 return []
         except requests.RequestException:
@@ -195,10 +262,13 @@ class EdgarClient:
             out.append({"cik": company_cik, "name": company_name, "form": "", "filing_date": ""})
         return out
 
-    def submissions(self, cik: int | str) -> dict[str, Any]:
+    def submissions(self, cik: int | str, fresh_after: date | None = None) -> dict[str, Any]:
+        """The company's submissions JSON. A cached copy fetched before
+        `fresh_after` is fetched again (and the cache rewritten), so filings
+        made after the cache date are seen."""
         cik_str = str(int(cik)).zfill(10)
         url = f"{SEC_HOST}/submissions/CIK{cik_str}.json"
-        return self._get_json(url)
+        return self._get_json(url, fresh_after=fresh_after)
 
     def fetch_filing_text(self, cik: int | str, accession: str, primary_doc: str) -> str:
         """Fetch a filing's primary document, return stripped plain text.
@@ -231,6 +301,7 @@ class EdgarClient:
             )
         except requests.RequestException:
             return ""
+        check_response(resp)
         if resp.status_code != 200:
             # Only a 404 is a stable "not found" worth caching as a sticky miss.
             # Cache other non-200s (429/503/etc.) would turn a transient outage

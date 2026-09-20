@@ -8,6 +8,7 @@ full-text search (efts.sec.gov), which indexes historical filings.
 from __future__ import annotations
 
 import json
+import logging
 import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -16,7 +17,14 @@ from typing import Iterable
 
 import requests
 
-from .edgar import EdgarClient, DEFAULT_UA, _throttle
+from .edgar import EdgarClient, DEFAULT_UA, _throttle, check_response, EdgarBlocked, submissions_fresh_after
+from .evidence import first_filing, names_near, parse_day
+from .names import name_tokens, names_agree
+
+log = logging.getLogger(__name__)
+# Version 2: {"__version__": 2, "entries": {key: {...TickerResolution, "member_name"}}}.
+# Anything else was written before the date and name checks and is not trusted.
+CACHE_VERSION = 2
 
 
 @dataclass
@@ -24,7 +32,9 @@ class TickerResolution:
     ticker: str
     cik: int | None
     name: str | None
-    source: str  # 'company_tickers' | 'efts' | 'manual' | 'rename' | None
+    # 'manual' | 'rename' | 'company_tickers' | 'efts' | 'efts_name_mismatch' | 'name_search'
+    # | 'efts_frequency' | 'efts_frequency_name_mismatch' | 'rejected_validation' | 'none'
+    source: str
 
 
 class TickerResolver:
@@ -35,48 +45,168 @@ class TickerResolver:
         manual_overrides: dict[str, int] | None = None,
         cache_path: Path | str | None = None,
         name_lookup: "callable[..., str | None] | None" = None,
+        *,
+        member_names: "callable[..., str | None] | None" = None,
     ) -> None:
         self.edgar = edgar
         self.rename_map = {k.upper(): v.upper() for k, v in (rename_map or {}).items()}
         self.manual_overrides = {k.upper(): int(v) for k, v in (manual_overrides or {}).items()}
         self.cache_path = Path(cache_path) if cache_path else None
         self.name_lookup = name_lookup or (lambda *a, **kw: None)
+        self.member_names = member_names or (lambda *a, **kw: None)  # (ticker, date) -> index-member name
         self._memo: dict[str, TickerResolution] = {}
+        self._memo_member: dict[str, str | None] = {}   # key -> member name the answer was checked with
+        self._volatile: set[str] = set()   # misses and transient-error answers: this run only
+        self._transient = False            # a check in the current resolve() hit a transient error
         if self.cache_path and self.cache_path.exists():
-            try:
-                raw = json.loads(self.cache_path.read_text())
-                for t, d in raw.items():
-                    self._memo[t] = TickerResolution(**d)
-            except (json.JSONDecodeError, TypeError):
-                pass
+            self._load_cache()
         self._companies: dict[str, dict] | None = None
+
+    def _load_cache(self) -> None:
+        try:
+            raw = json.loads(self.cache_path.read_text())
+        except json.JSONDecodeError:
+            raw = None
+        if not (isinstance(raw, dict) and raw.get("__version__") == CACHE_VERSION):
+            log.warning("%s is not a version-%d resolver cache; ignoring it (the next save replaces it)",
+                        self.cache_path, CACHE_VERSION)
+            return
+        for key, d in (raw.get("entries") or {}).items():
+            try:
+                res = TickerResolution(d["ticker"], d["cik"], d["name"], d["source"])
+            except (KeyError, TypeError):
+                continue
+            if res.cik is None:  # a persisted miss is retried, never trusted
+                continue
+            self._memo[key] = res
+            self._memo_member[key] = d.get("member_name")
+
+    MEMBER_ALIVE_DAYS = 400          # filed within ±this of the date: the company was operating
+    MEMBER_TAIL_DAYS = 1500          # a Form 25/15 up to this old: a frozen vendor tail (XTO)
+    REPLACE_WINDOW_DAYS = 90         # own Form 25/15 this close: a name-search hit replaces an EFTS fallback
+
+    def _expected_name(self, t: str, observed_date: str | None) -> str | None:
+        """The member name, else the AV name: the first with a usable word.
+
+        A name with no `name_tokens` word ("AT&T INC.", "3M CO", "HP INC")
+        cannot agree with anything, so it counts as no expected name."""
+        for n in (self.member_names(t, observed_date), self.name_lookup(t, observed_date)):
+            if n and name_tokens(n):
+                return n
+        return None
+
+    def _submissions(self, cik: int, observed_date: str | None) -> dict:
+        """The company's submissions, fetched again when the cached copy predates
+        the event window (the same freshness the classifier asks for)."""
+        on = parse_day(observed_date)
+        if on is None:
+            return self.edgar.submissions(cik)
+        return self.edgar.submissions(cik, fresh_after=submissions_fresh_after(on))
+
+    def _filings(self, cik: int, observed_date: str | None) -> list:
+        """recent_filings, read after a fresh submissions read so both see one copy."""
+        self._submissions(cik, observed_date)
+        return self.edgar.recent_filings(cik)
+
+    def _fits_date(self, cik: int, observed_date: str | None, expected: str | None) -> tuple[bool, bool]:
+        """(existed on the date, a name it carried within ±30 days agrees with `expected`).
+
+        A CIK first seen after the delist date is today's holder of a recycled
+        ticker (CPWR -> Ocean Thermal, SPWR -> Complete Solaria/SunPower Inc.)."""
+        on = parse_day(observed_date)
+        if on is None:
+            return True, True
+        try:
+            sub = self._submissions(cik, observed_date)
+            filings = self.edgar.recent_filings(cik)
+        except EdgarBlocked:
+            raise
+        except Exception as e:
+            self._note_transient(e)
+            return False, False
+        first = first_filing(filings)
+        existed = first is not None and first <= on
+        agrees = expected is None or (isinstance(sub, dict) and
+                                      any(names_agree(n, expected) for n in names_near(sub, on)))
+        return existed, agrees
+
+    def _accept_member_candidate(self, cik: int, observed_date: str | None, expected: str) -> bool:
+        """Accept a name-search hit found through a member name.
+
+        A rename files no Form 25 (HYH -> Avanos), and a frozen vendor tail can
+        outlast the 540-day window (XTO), so the loose check alone rejects true
+        matches. Without that check, the company must have existed on the date,
+        carried an agreeing name then, and either been filing within ±400 days
+        or filed a Form 25/15 in the 1,500 days before the date. The last two
+        conditions keep out a long-dead member (ImClone for a 2018 date)."""
+        if not observed_date or self._validate_cik(cik, observed_date, strict=False):
+            return True
+        existed, agrees = self._fits_date(cik, observed_date, expected)
+        if not (existed and agrees):
+            return False
+        on = parse_day(observed_date)
+        for f in self._filings(cik, observed_date):
+            d = parse_day(f.filing_date)
+            if d is None:
+                continue
+            if abs((d - on).days) <= self.MEMBER_ALIVE_DAYS:
+                return True
+            if f.form in {"25", "25-NSE", "15-12G", "15-12B", "15-15D"} and \
+                    on - timedelta(days=self.MEMBER_TAIL_DAYS) <= d <= on + timedelta(days=45):
+                return True
+        return False
 
     def _ensure_companies(self) -> dict[str, dict]:
         if self._companies is None:
             self._companies = self.edgar.company_tickers()
         return self._companies
 
+    def _note_transient(self, exc: Exception) -> None:
+        """A failed request is not evidence against a candidate: the answer this
+        resolve() reaches is used for the run but not saved."""
+        if isinstance(exc, requests.RequestException):
+            self._transient = True
+
+    def _remember(self, key: str, res: TickerResolution, member: str | None) -> None:
+        self._memo[key] = res
+        self._memo_member[key] = member
+        if res.cik is None or self._transient:   # retried next run, never persisted
+            self._volatile.add(key)
+            return
+        self._volatile.discard(key)
+        self._persist()
+
     def _persist(self) -> None:
         if not self.cache_path:
             return
         self.cache_path.parent.mkdir(parents=True, exist_ok=True)
+        entries = {k: {**r.__dict__, "member_name": self._memo_member.get(k)}
+                   for k, r in self._memo.items() if k not in self._volatile}
         self.cache_path.write_text(
-            json.dumps({t: r.__dict__ for t, r in self._memo.items()}, indent=2)
+            json.dumps({"__version__": CACHE_VERSION, "entries": entries}, indent=2)
         )
 
     # CIKs of US exchanges — these file Form 25-NSEs *on behalf of* the issuer,
     # so they appear in every delisting filing's CIK array. Always skip them.
+    # Each entry was checked against EDGAR on 2026-09-17 (names as EDGAR gives
+    # them); an unchecked CIK here hides a real company (1283699 is T-Mobile US).
+    # The set was also checked against the Form 25-NSE filer list: sampling 2018,
+    # 2021 and 2024 turns up only Nasdaq, NYSE, NYSE American, NYSE Arca and Cboe
+    # BZX, and EDGAR company search finds no 25 filer for IEX, Cboe EDGA, MEMX,
+    # MIAX Pearl or LTSE — so none of those is missing here.
     EXCHANGE_CIKS: set[int] = {
         1354457,   # Nasdaq Stock Market LLC
-        1067442,   # New York Stock Exchange LLC
-        1102740,   # NYSE Arca (Pacific Exchange)
-        1019028,   # NYSE American / NYSE MKT (formerly AMEX)
-        1192304,   # NYSE Chicago
-        1133219,   # BATS / CBOE BZX
-        1466168,   # CBOE Exchange Inc
-        1605448,   # Investors Exchange (IEX)
-        1283699,   # NYSE National
-        1106974,   # Boston Stock Exchange / NSX (legacy)
+        876661,    # New York Stock Exchange LLC
+        1143362,   # NYSE Arca, Inc.
+        1143313,   # NYSE American LLC
+        876882,    # NYSE Texas, Inc. (formerly NYSE Chicago / Chicago Stock Exchange)
+        1131740,   # NYSE National, Inc.
+        1417835,   # Cboe BZX Exchange, Inc.
+        876663,    # Cboe Exchange, Inc.
+        1473845,   # Cboe EDGX Exchange, Inc.
+        876798,    # Nasdaq PHLX LLC
+        876796,    # Nasdaq Texas, LLC (formerly Nasdaq BX)
+        1296945,   # Boston Stock Exchange Inc.
     }
 
     def _efts_pre_delist_frequency_ranked(
@@ -107,10 +237,13 @@ class TickerResolver:
                 headers={"User-Agent": DEFAULT_UA, "Accept": "application/json"},
                 timeout=30,
             )
+            check_response(resp)
             if resp.status_code != 200:
+                self._transient = self._transient or resp.status_code >= 500
                 return []
             data = resp.json()
-        except (requests.RequestException, json.JSONDecodeError):
+        except (requests.RequestException, json.JSONDecodeError) as e:
+            self._note_transient(e)
             return []
         hits = data.get("hits", {}).get("hits", [])
         counts: dict[int, tuple[int, str]] = {}
@@ -191,15 +324,15 @@ class TickerResolver:
     def _name_search(
         self, ticker: str, observed_date: str | None
     ) -> tuple[int | None, str | None]:
-        """Resolve via Alpha Vantage name → EDGAR company search.
+        """Resolve via the expected name (index member, else AV) → EDGAR company search.
 
         Collects ALL hits across name variants and forms, then picks the
         best (cik, name) by:
-          1. preferring CIKs whose name shares 4+ char tokens with AV name;
+          1. preferring CIKs whose name shares `name_tokens` words with the expected name;
           2. then preferring hits with `filing_date` closest to observed_date;
           3. else taking the first non-exchange CIK.
         """
-        nm = self.name_lookup(ticker, observed_date)
+        nm = self._expected_name(ticker, observed_date)
         if not nm:
             return None, None
         variants = self._name_variants(nm)
@@ -214,7 +347,10 @@ class TickerResolver:
             for form in ("25-NSE", "25", "15-12G", ""):
                 try:
                     hits = self.edgar.company_search_atom(variant, form_type=form)
-                except Exception:
+                except EdgarBlocked:
+                    raise
+                except Exception as e:
+                    self._note_transient(e)
                     hits = []
                 for h in hits:
                     cik = int(h["cik"])
@@ -235,19 +371,14 @@ class TickerResolver:
         if not candidates:
             return None, None
 
-        # Score each candidate: name-token overlap with AV name, then date proximity
-        target_tokens = {tok for tok in re.findall(r"[A-Z]{4,}", nm.upper())
-                         if tok not in {"CORP", "CORPORATION", "INC", "COMPANY",
-                                         "HOLDINGS", "LTD", "LIMITED", "GROUP",
-                                         "INTERNATIONAL", "TRUST", "PARTNERS",
-                                         "FUND", "BANK", "BANCORP", "BANCSHARES"}}
+        # Score each candidate: shared name_tokens with the expected name, then date proximity
+        target_tokens = name_tokens(nm)
         best: tuple[int, int, int, str | None] | None = None
         # higher score = better. score order: (name_score, -delta_penalty, -cik_index)
         for cand_cik, cand_name, delta in candidates:
             name_score = 0
             if cand_name:
-                cand_tokens = set(re.findall(r"[A-Z]{4,}", cand_name.upper()))
-                name_score = len(target_tokens & cand_tokens)
+                name_score = len(target_tokens & name_tokens(cand_name))
             # delta bonus: capped at 540 (else uninformative)
             if delta is None:
                 date_penalty = 1000
@@ -261,18 +392,20 @@ class TickerResolver:
             return None, None
         return best[2], best[3] or nm
 
-    def _name_match_score(self, cik: int, ticker_name: str) -> int:
-        """Token-overlap score between AV name and the CIK's EDGAR names.
+    def _name_match_score(self, cik: int, ticker_name: str, observed_date: str | None = None) -> int:
+        """Token-overlap score between the expected name and the CIK's EDGAR names.
 
-        Score is the number of shared 4+ char alphabetic tokens between the
-        AV-provided company name and the EDGAR conformed/former names.
-        Used as a soft validator — a candidate from frequency search whose
-        EDGAR name shares zero meaningful tokens with the AV name is almost
-        certainly the wrong company.
+        Score is the number of `names.name_tokens` words shared by the
+        expected (member or AV) name and the EDGAR conformed/former names.
+        Used to rank frequency candidates; a zero-score winner is kept but
+        marked as a name mismatch by the caller (impostor vendor series).
         """
         try:
-            sub = self.edgar.submissions(cik)
-        except Exception:
+            sub = self._submissions(cik, observed_date)
+        except EdgarBlocked:
+            raise
+        except Exception as e:
+            self._note_transient(e)
             return 0
         if not isinstance(sub, dict):
             return 0
@@ -281,23 +414,14 @@ class TickerResolver:
         ]
         candidate_tokens: set[str] = set()
         for n in names:
-            for tok in re.findall(r"[A-Z]{4,}", n.upper()):
-                if tok not in {"CORP", "CORPORATION", "INC", "COMPANY", "HOLDINGS",
-                                "LTD", "LIMITED", "GROUP", "INTERNATIONAL", "TRUST",
-                                "PARTNERS", "FUND", "BANK", "BANCORP", "BANCSHARES"}:
-                    candidate_tokens.add(tok)
-        target_tokens: set[str] = set()
-        for tok in re.findall(r"[A-Z]{4,}", ticker_name.upper()):
-            if tok not in {"CORP", "CORPORATION", "INC", "COMPANY", "HOLDINGS",
-                           "LTD", "LIMITED", "GROUP", "INTERNATIONAL", "TRUST",
-                           "PARTNERS", "FUND", "BANK", "BANCORP", "BANCSHARES"}:
-                target_tokens.add(tok)
-        return len(candidate_tokens & target_tokens)
+            candidate_tokens |= name_tokens(n)
+        return len(candidate_tokens & name_tokens(ticker_name))
 
-    def _validate_cik(self, cik: int, observed_date: str, strict: bool = True) -> bool:
+    def _validate_cik(self, cik: int, observed_date: str, strict: bool = True,
+                      window: int = 540) -> bool:
         """Confirm the candidate CIK matches a target-of-delisting profile.
 
-        Loose mode: just need a Form 25 or Form 15 within ±540 days of delist.
+        Loose mode: just need a Form 25 or Form 15 within ±window days of delist.
         Strict mode: additionally requires NO 10-K / 10-Q / 20-F filed in the
             window [observed+90, observed+5y]. The strict check rejects the
             *acquirer* (who keeps filing) when the candidate came from a
@@ -309,8 +433,11 @@ class TickerResolver:
         except ValueError:
             return True
         try:
-            subs = self.edgar.recent_filings(cik)
-        except Exception:
+            subs = self._filings(cik, observed_date)
+        except EdgarBlocked:
+            raise
+        except Exception as e:
+            self._note_transient(e)
             return False
 
         has_delist_form = False
@@ -322,7 +449,7 @@ class TickerResolver:
             except ValueError:
                 continue
             if f.form in {"25", "25-NSE", "15-12G", "15-12B", "15-15D"}:
-                if abs((fd - d).days) <= 540:
+                if abs((fd - d).days) <= window:
                     has_delist_form = True
             if strict and f.form in {"10-K", "10-Q", "20-F", "40-F"}:
                 if no_post_cutoff < fd < post_horizon:
@@ -330,8 +457,8 @@ class TickerResolver:
         return has_delist_form
 
     def _efts_lookup(
-        self, ticker: str, observed_date: str | None = None
-    ) -> tuple[int | None, str | None]:
+        self, ticker: str, observed_date: str | None = None, *, expected_name: str | None = None
+    ) -> tuple[int | None, str | None, bool]:
         """EDGAR full-text search fallback, anchored on the delisting filings.
 
         Strategy: search for the ticker only within Form 25 / 25-NSE / 15-*
@@ -343,6 +470,12 @@ class TickerResolver:
         When ``observed_date`` is None we still issue a delist-form-only
         query without a date range, which is far less ambiguous than the
         original 8-K-included query.
+
+        Returns ``(cik, name, fallback)``. ``fallback`` is True for a
+        second-pass candidate whose name disagrees with ``expected_name``:
+        a company that filed a delisting form in the window under another
+        name, which the caller keeps unless the member name finds a company
+        with its own delisting form near the date.
         """
         ticker_u = ticker.upper()
         forms = "25-NSE,25,15-12G,15-12B,15-15D"
@@ -363,11 +496,14 @@ class TickerResolver:
                 headers={"User-Agent": DEFAULT_UA, "Accept": "application/json"},
                 timeout=30,
             )
+            check_response(resp)
             if resp.status_code != 200:
-                return None, None
+                self._transient = self._transient or resp.status_code >= 500
+                return None, None, False
             data = resp.json()
-        except (requests.RequestException, json.JSONDecodeError):
-            return None, None
+        except (requests.RequestException, json.JSONDecodeError) as e:
+            self._note_transient(e)
+            return None, None, False
         hits = data.get("hits", {}).get("hits", [])
         token_re = re.compile(rf"\(\s*{re.escape(ticker_u)}\s*\)")
 
@@ -378,12 +514,17 @@ class TickerResolver:
             names = src.get("display_names") or []
             for nm, cik in zip(names, ciks):
                 if token_re.search(nm.upper()) and int(cik) not in self.EXCHANGE_CIKS:
-                    return int(cik), nm
+                    return int(cik), nm, False
 
         # Second pass: only safe when we narrowed by date AND restricted to
-        # delisting forms — then the issuer is the first non-exchange CIK
-        # in the most recent hit.
-        if observed_date:
+        # delisting forms — then take the first non-exchange CIK whose name
+        # agrees with the expected name. The first non-exchange CIK is often
+        # an unrelated filer in the window (PEAK -> Far Peak, WE -> Adastra),
+        # but it can also be the company that really delisted under another
+        # name (BWC -> Blue Whale), so it comes back as a fallback. With no
+        # expected name the pass is skipped.
+        if observed_date and expected_name:
+            fallback: tuple[int, str] | None = None
             for h in hits:
                 src = h.get("_source", {})
                 ciks = src.get("ciks") or []
@@ -392,63 +533,99 @@ class TickerResolver:
                     c = int(cik)
                     if c in self.EXCHANGE_CIKS:
                         continue
-                    return c, nm
-        return None, None
+                    if names_agree(nm, expected_name):
+                        return c, nm, False
+                    if fallback is None:
+                        fallback = (c, nm)
+            if fallback is not None:
+                return fallback[0], fallback[1], True
+        return None, None, False
 
     def resolve(self, ticker: str, observed_date: str | None = None) -> TickerResolution:
         t = ticker.upper().strip()
         cache_key = f"{t}|{observed_date or ''}"
+        # The answer holds only for the member name its checks used.
+        member = self.member_names(t, observed_date) or None
+        self._transient = False
 
         # Manual overrides always beat the cache — they're the truth.
         if t in self.manual_overrides:
             res = TickerResolution(ticker=t, cik=self.manual_overrides[t], name=None, source="manual")
-            self._memo[cache_key] = res
-            self._persist()
+            self._remember(cache_key, res, member)
             return res
 
-        if cache_key in self._memo:
+        if cache_key in self._memo and self._memo_member.get(cache_key) == member:
             return self._memo[cache_key]
 
         renamed = self.rename_map.get(t)
         if renamed and renamed != t:
-            inner = self.resolve(renamed, observed_date)
+            inner = self.resolve(renamed, observed_date)   # leaves self._transient set for this answer
             res = TickerResolution(ticker=t, cik=inner.cik, name=inner.name, source="rename")
-            self._memo[cache_key] = res
-            self._persist()
+            self._remember(cache_key, res, member)
             return res
 
+        expected = self._expected_name(t, observed_date)
         companies = self._ensure_companies()
         if t in companies:
+            # SEC's map lists today's holder of the ticker: accept it only if
+            # that company existed on the date under an agreeing name.
             row = companies[t]
-            res = TickerResolution(
-                ticker=t,
-                cik=int(row["cik_str"]),
-                name=row.get("title"),
-                source="company_tickers",
-            )
-            self._memo[cache_key] = res
-            self._persist()
-            return res
+            c = int(row["cik_str"])
+            if self._fits_date(c, observed_date, expected) == (True, True):
+                res = TickerResolution(
+                    ticker=t,
+                    cik=c,
+                    name=row.get("title"),
+                    source="company_tickers",
+                )
+                self._remember(cache_key, res, member)
+                return res
 
         cik: int | None = None
         name: str | None = None
         source = "none"
-        av_name = self.name_lookup(t, observed_date)
 
         # Tier 1: EFTS Form 25 + date — most precise when it returns a hit.
         # Use loose validation: a name in EFTS Form-25 results is already
-        # tightly date-anchored.
-        c0, n0 = self._efts_lookup(t, observed_date)
+        # tightly date-anchored. The company must have existed on the date;
+        # a name that disagrees with the expected one is kept (the row
+        # describes the company that delisted) and marked as a mismatch.
+        # A second-pass hit under another name is held back as a fallback.
+        c0, n0, weak = self._efts_lookup(t, observed_date, expected_name=expected)
+        fallback: tuple[int, str | None] | None = None
         if c0 is not None:
             if not observed_date or self._validate_cik(c0, observed_date, strict=False):
-                cik, name, source = c0, n0, "efts"
+                existed, agrees = self._fits_date(c0, observed_date, expected)
+                if existed and weak:
+                    fallback = (c0, n0)
+                elif existed:
+                    cik, name = c0, n0
+                    source = "efts" if agrees else "efts_name_mismatch"
 
-        # Tier 2: AV name → EDGAR company-name search. Loose validation:
-        # name-match plus a real Form 25 in the window is strong evidence.
+        # Tier 2: expected name → EDGAR company-name search.
         if cik is None:
             c1, n1 = self._name_search(t, observed_date)
-            if c1 is not None and (not observed_date or self._validate_cik(c1, observed_date, strict=False)):
-                cik, name, source = c1, n1, "name_search"
+            if fallback is not None:
+                # The member name is a check, never a substitute: it replaces
+                # the company EFTS found only with its own Form 25/15 near the
+                # date (PEAK -> Healthpeak, WE -> WeWork), not with a live
+                # company of that name (BWC keeps Blue Whale, flagged).
+                if c1 is not None and self._validate_cik(
+                        c1, observed_date, strict=False, window=self.REPLACE_WINDOW_DAYS):
+                    cik, name, source = c1, n1, "name_search"
+                else:
+                    cik, name = fallback
+                    source = "efts_name_mismatch"
+            elif c1 is not None:
+                # Loose validation (a real Form 25 in the window), or the
+                # member-name acceptance when the caller supplied a usable
+                # index-member name.
+                if member and name_tokens(member):
+                    ok = self._accept_member_candidate(c1, observed_date, member)
+                else:
+                    ok = not observed_date or self._validate_cik(c1, observed_date, strict=False)
+                if ok:
+                    cik, name, source = c1, n1, "name_search"
 
         # Tier 3: 8-K frequency rank — strict validation (must reject the
         # acquirer, who keeps filing 10-Qs).
@@ -458,19 +635,20 @@ class TickerResolver:
             for rank, (cand_cik, cand_name) in enumerate(ranked):
                 if not self._validate_cik(cand_cik, observed_date, strict=True):
                     continue
-                score = self._name_match_score(cand_cik, av_name) if av_name else 0
+                score = self._name_match_score(cand_cik, expected, observed_date) if expected else 0
                 inv_rank = -rank
                 cur = (score, inv_rank, cand_cik, cand_name)
                 if best is None or cur > best:
                     best = cur
             if best is not None:
-                cik, name, source = best[2], best[3], "efts_frequency"
+                cik, name = best[2], best[3]
+                # A zero-score winner is an impostor vendor series (HMA, HLTH).
+                source = "efts_frequency_name_mismatch" if expected and best[0] == 0 else "efts_frequency"
             elif ranked:
                 source = "rejected_validation"
 
         res = TickerResolution(ticker=t, cik=cik, name=name, source=source)
-        self._memo[cache_key] = res
-        self._persist()
+        self._remember(cache_key, res, member)
         return res
 
     def resolve_many(

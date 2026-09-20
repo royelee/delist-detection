@@ -4,9 +4,9 @@ Classify why every delisted ticker in a US-equity quant universe stopped
 trading, using only public SEC EDGAR data, and emit drop-in handlers that
 make supervised training and backtesting survivorship-bias-aware.
 
-Built as a sidecar for the [`qlib_practice`](../qlib_practice) Tiingo
-pipeline, but the library is self-contained — point it at any
-`(ticker, start_date, end_date)` instruments file.
+Built as a sidecar for a Tiingo-style price pipeline, but the library is
+self-contained — point it at any `(ticker, start_date, end_date)` instruments
+file.
 
 ---
 
@@ -57,17 +57,16 @@ penny-stock delist and 585 protection-of-investors → `compliance_failure`).
 |------|--------|---------|--------------------------|
 | 100 | `active` | Still trading; not delisted | Default for a live issue |
 | 200 | `merger` | Acquired/merged, terms unspecified | 8-K items 2.01 + 3.01 |
-| 231 | `merger` | Acquired by an **external** acquirer (cash/stock to holders) | 8-K items 2.01 + 3.01 + 5.01 |
-| 233 | `merger` | Acquired by a **parent / via subsidiary buyback** | 8-K items 2.01 + 5.01 (no 3.01) |
+| 231 | `merger` | Acquired by an **external** acquirer (cash/stock to holders) | 8-K items 2.01 + 3.01 + 5.01; item 5.01 without 2.01, alongside 3.01 or 3.03, as a change in control; or, with no fingerprint at all, a merger proxy/tender filing found within 400 days of the delisting |
+| 233 | `merger` | Acquired by a **parent / via subsidiary buyback** | 8-K items 2.01 + 5.01 (no 3.01); or, with no fingerprint, item 2.01 on the anchor 8-K plus a Form 15 deregistration |
 | 241, 251, 252, 261, 262 | `merger` | Other CRSP merger sub-types (payment-form variants) | Range fallthrough (2xx) |
 | 300–303 | `exchange_transfer` | Moved to a different exchange / market | Range fallthrough (3xx) |
-| 304 | `exchange_transfer` | Dropped by the exchange but the issuer keeps filing (OTC continuation / spin-off) | Periodic 10-K/Q/20-F filed >180 days after the delist date |
-| 400 | `liquidation` | Voluntary dissolution / deregistration | Form 25 + Form 15, no merger 8-K |
+| 304 | `exchange_transfer` | Dropped by the exchange but the issuer keeps filing (OTC continuation / spin-off), or a rename / listing transfer while the company keeps reporting | Periodic 10-K/Q/20-F filed >180 days after the delist date; or a rename near the delisting, or a 3.01 notice that reads as a listing transfer |
 | 470 | `liquidation` | **Bankruptcy / receivership** | 8-K item 1.03, or items 2.04 + 3.01 |
-| 570 | `compliance_failure` | Delisted by the exchange (price/standards), no M&A | 8-K item 3.01 alone, or Form 25 with no qualifying 8-K |
+| 570 | `compliance_failure` | Delisted by the exchange (price/standards), no M&A | A 3.01 notice that cites a listing deficiency (positive evidence required; a bare 3.01 no longer defaults to compliance failure) |
 | 573 | `compliance_failure` | **SEC revocation** of registration | EDGAR form `REVOKED` present |
-| 580 | `compliance_failure` | **Delinquent in filings** | A 570 case plus NT 10-K / NT 10-Q in the prior year |
-| 600 | `expiration` | Scheduled end of a non-equity security (warrant, unit, right, ETF/ETN, note) | Asset type or name indicates a non-equity instrument |
+| 580 | `compliance_failure` | **Delinquent in filings** | An NT 10-K / NT 10-Q filed in the prior year, alone or alongside a 570-qualifying deficiency notice |
+| 600 | `expiration` | Scheduled end of a non-equity security (warrant, unit, right, ETF/ETN, note); or a SPAC trust liquidation | Asset type or name indicates a non-equity instrument; or a blank-check company redeeming its trust (no Form 25/15 M&A evidence) |
 
 For the full trigger table see [`docs/data-flow.md`](docs/data-flow.md).
 
@@ -90,7 +89,7 @@ and the full audit trail explaining how it was computed.
 ticker, bucket, observed_delist_date, crsp_code, dlret, reason,
 exchange, last_trade_close, payout_per_share, stock_ratio,
 acquirer_price, acquirer_ticker, recovery_ratio, terminal_value,
-dlret_method, dlret_confidence, payout_source
+dlret_method, dlret_confidence, payout_source, review_flags
 ```
 
 These columns come from `DLRET_TABLE_COLUMNS` in
@@ -123,6 +122,58 @@ written by `build_dlret_table` / `write_dlret_csv`.
 > the maximum-likelihood estimate, not a missing value. Rows are blank only when
 > there is genuinely no denominator (no `last_trade_close`). Filter on
 > `dlret_confidence` to keep, down-weight, or drop the estimates.
+
+### Review surface
+
+Not every row is settled by clean evidence. `enrich()` collects every
+classifier and payout-gate flag into a `review_flags` column on `dlret.csv`
+(semicolon-joined), and `classify_universe.py` also writes
+`output/review.csv`, one row per non-empty `review_flags` value, with the
+ticker, bucket, `dlret`, reason, `cik`, and anchor 8-K item set, so a human
+can triage without re-deriving which rows the automatic rules could not
+settle on their own.
+
+The full flag vocabulary (from `classifier.py`, `ticker_resolver.py`,
+`payout_gate.py`, and `reconstruction.py`):
+
+| Flag | Meaning |
+|---|---|
+| `frozen_tail:<days>` | The Form 25 anchor predates the vendor's last trade by more than 45 days |
+| `member_name_mismatch` | The resolved CIK's EDGAR name disagrees with the expected index-member (or AV) name |
+| `resolved_by_current_ticker_map` | Resolved through `company_tickers.json` (today's holder of the ticker) |
+| `resolved_by_manual_override` | Resolved through `MANUAL_OVERRIDES`, and the name still disagrees |
+| `bankruptcy_tag_unconfirmed` | An 8-K carried the 1.03 tag, but its own Item 1.03 section did not confirm a bankruptcy |
+| `bankruptcy_text_missing` | The 1.03 filing's text could not be fetched, so the tag was kept unconfirmed |
+| `bankruptcy_before_merger` | A confirmed bankruptcy predates the delisting by more than 180 days and a change-in-control 8-K sits near the delisting; the merger path decided instead |
+| `spac` | Classified as a SPAC trust liquidation |
+| `no_evidence_default` | No merger or distress evidence found; classified unknown |
+| `notice_text_missing` | The 3.01 notice's text could not be fetched |
+| `payout_gate_failed:<value>` | The regex-extracted cash payout (`<value>`) did not reconcile with the last trade close |
+| `terms_gate_failed:<reason>` | The LLM cash+stock/stock-only terms did not reconcile (`no_acq_ticker`, `no_acq_price`, `no_last_close`, or `fail_sanity`) |
+| `llm_gate_failed` | The LLM cash or election terms did not reconcile either |
+| `no_last_close` | No last trade close was supplied, so the payout could not be checked |
+| `merger_at_par` | A merger whose consideration was never found; DLRET assumed 0 from the last close |
+| `submissions_stale` | A refetch of the company's EDGAR submissions failed; a cached copy was used instead |
+| `distress_at_normal_price` | A compliance-failure or liquidation row whose last trade close was still ≥ $5 |
+
+### Payout reconciliation (the last-close gate)
+
+Every merger payout, the regex cash figure or the LLM cash+stock terms, is
+checked against the target's last trade close before it reaches
+`payouts.csv` or `dlret.csv`. A completed deal trades at its consideration,
+so a payout far from the last close is a misread or a stale vendor price,
+never a return. `payout_gate.reconcile` does the check (default tolerance
+15%, `--merger-terms-sanity-tol`):
+
+- Mixed or ambiguous consideration abstains: the row lands at par instead
+  of shipping a partial or guessed value.
+- When the regex cash value doesn't fit but an LLM-extracted cash figure
+  does, the LLM value is taken instead.
+- A cash-or-stock election resolves to whichever leg, cash or
+  `stock_ratio x acquirer_price`, is closer to the last close.
+- A value that fits neither leg, or has no last close to check against, is
+  dropped and the row is flagged for review instead of shipped as a
+  misread return.
 
 ### Worked example: AET → CVS (cash + stock)
 
@@ -498,10 +549,13 @@ validates the candidate looks like a delist *target* (not an *acquirer*):
 2. **`company_tickers.json`.** Master active map.
 3. **EFTS Form-25/15 within ±90 days.** Most precise; skips known
    exchange CIKs (Nasdaq, NYSE, …) automatically.
-4. **AV name → EDGAR cgi-bin company search.** Generates name variants
-   (suffix-stripped, leading 1-3 tokens) and queries the ATOM endpoint.
-   Skips when AV's recorded delist date is >365 days from observed
-   (signals a recycled ticker — AV's name is for the prior issuer).
+4. **Index-member name (or AV name) → EDGAR cgi-bin company search.**
+   Generates name variants (suffix-stripped, leading 1-3 tokens) and
+   queries the ATOM endpoint. Uses the `--names` member name when one is
+   supplied for the ticker; otherwise falls back to Alpha Vantage's
+   delisted-list name, which skips a candidate when AV's recorded delist
+   date is >365 days from observed (signals a recycled ticker: AV's name
+   is for the prior issuer).
 5. **EFTS 8-K frequency rank.** Counts CIKs in 8-Ks mentioning the
    ticker in the 120 days pre-delist; strict-validates each candidate.
 
@@ -510,6 +564,22 @@ Form 15 within ±540 days of the observed delist date. In strict mode
 (used for frequency-rank candidates) it must additionally have no
 10-K/Q/20-F in the window `[delist + 90d, delist + 5y]` — the target
 stops periodic reporting; an acquirer does not.
+
+### Naming the right company: `--names`
+
+`classify_universe.py --names path.csv` (CSV columns `ticker,as_of,name`)
+supplies the name the company held as an index member, as of the date
+nearest and before the delisting. The resolver checks every candidate CIK
+against it, and uses it to reject a company that merely holds the ticker
+symbol today rather than the member that actually delisted (a recycled or
+impostor series).
+
+Without `--names`, the Alpha Vantage delisted-list name is the only
+fallback, for both resolution and the mismatch check, and it is wrong
+often enough to matter: when AV's own name is stale or names the wrong
+holder of a recycled ticker, checking a candidate against that same wrong
+name cannot catch the error. A `--names` file breaks that circularity with
+an independent source.
 
 ---
 

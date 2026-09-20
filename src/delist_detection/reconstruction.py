@@ -48,6 +48,8 @@ class EnrichedDelistRecord:
     # --- provenance carried through ---
     payout_source: str | None
     payout_confidence: str | None
+    # --- review ---
+    review_flags: tuple[str, ...] = ()
 
 
 _VALID_CONF = {"high", "medium", "low"}
@@ -81,6 +83,7 @@ def enrich(
     recovery_ratio: float | None = None,
     payout_source: str | None = None,
     payout_confidence: str | None = None,
+    extra_flags: Iterable[str] = (),
 ) -> EnrichedDelistRecord:
     res = resolve_dlret(
         record.bucket, exchange, last_trade_close,
@@ -96,12 +99,25 @@ def enrich(
     # already carry Shumway/recovery marks and never reach an abstain here. A valid
     # positive last price is required (no denominator otherwise). This is a
     # table-only estimate; the firm-month facade (compute_dlret) is untouched.
+    # The same holds for a deregistration the classifier found no merger or
+    # distress evidence for (UNKNOWN + evidence["deregistered"]).
+    if (record.bucket is CrspBucket.UNKNOWN and (record.evidence or {}).get("deregistered")
+            and last_trade_close is not None and last_trade_close > 0):
+        res = DlretResult(0.0, DlretMethod.ASSUMED_PAR, last_trade_close)
     if (
         record.bucket in (CrspBucket.MERGER, CrspBucket.EXPIRATION)
         and res.method in (DlretMethod.ABSTAIN_NO_CONSIDERATION, DlretMethod.DROPPED_EXPIRATION)
         and last_trade_close is not None and last_trade_close > 0
     ):
         res = DlretResult(0.0, DlretMethod.ASSUMED_PAR, last_trade_close)
+    flags = list((record.evidence or {}).get("flags", [])) + list(extra_flags)
+    # A merger whose consideration was never found lands at par silently, which
+    # reads as a realized 0% return. Flag it so review.csv lists the row.
+    if record.bucket is CrspBucket.MERGER and res.method is DlretMethod.ASSUMED_PAR:
+        flags.append("merger_at_par")
+    if (record.bucket in (CrspBucket.COMPLIANCE_FAILURE, CrspBucket.LIQUIDATION)
+            and last_trade_close is not None and last_trade_close >= 5.0):
+        flags.append("distress_at_normal_price")
     return EnrichedDelistRecord(
         ticker=record.ticker, cik=record.cik,
         observed_delist_date=record.observed_delist_date,
@@ -114,6 +130,7 @@ def enrich(
         dlret=res.value, dlret_method=res.method, terminal_value=res.terminal_value,
         dlret_confidence=_dlret_confidence(res.value, res.method, payout_confidence),
         payout_source=payout_source, payout_confidence=payout_confidence,
+        review_flags=tuple(dict.fromkeys(flags)),
     )
 
 
@@ -128,7 +145,7 @@ DLRET_TABLE_COLUMNS = [
     "ticker", "bucket", "observed_delist_date", "crsp_code", "dlret", "reason",
     "exchange", "last_trade_close", "payout_per_share", "stock_ratio",
     "acquirer_price", "acquirer_ticker", "recovery_ratio", "terminal_value",
-    "dlret_method", "dlret_confidence", "payout_source",
+    "dlret_method", "dlret_confidence", "payout_source", "review_flags",
 ]
 
 
@@ -154,6 +171,7 @@ def build_dlret_table(
     recovery_ratios: Mapping[str | tuple[str, str | None], float] | None = None,
     payout_sources: Mapping[str | tuple[str, str | None], str] | None = None,
     payout_confidences: Mapping[str | tuple[str, str | None], str] | None = None,
+    payout_flags: Mapping[str | tuple[str, str | None], Iterable[str]] | None = None,
 ) -> list[EnrichedDelistRecord]:
     """Enrich each classification record into the primary DLRET table.
 
@@ -178,6 +196,7 @@ def build_dlret_table(
     recovery_ratios = recovery_ratios or {}
     payout_sources = payout_sources or {}
     payout_confidences = payout_confidences or {}
+    payout_flags = payout_flags or {}
 
     out: list[EnrichedDelistRecord] = []
     for rec in records:
@@ -196,6 +215,7 @@ def build_dlret_table(
             recovery_ratio=_lookup(recovery_ratios, key, date),
             payout_source=_lookup(payout_sources, key, date),
             payout_confidence=_lookup(payout_confidences, key, date),
+            extra_flags=_lookup(payout_flags, key, date) or (),
         ))
     return out
 
@@ -229,6 +249,7 @@ def enriched_to_row(e: EnrichedDelistRecord) -> dict:
         "dlret_method": e.dlret_method.value,
         "dlret_confidence": e.dlret_confidence,
         "payout_source": _fmt(e.payout_source),
+        "review_flags": ";".join(e.review_flags),
     }
 
 

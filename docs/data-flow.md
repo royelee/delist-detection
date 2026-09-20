@@ -8,9 +8,9 @@ handling.
 
 | Source | Path | Role |
 |---|---|---|
-| Tiingo universe | `fetch_data_aplha/data/tiingo_2026_05_22/instruments/all.txt` | List of `(ticker, start_date, end_date)`. A row with `end_date < today` is a delisting candidate. |
-| Alpha Vantage delisted list | `fetch_data_aplha/data/alphavantage_listing_status/listing_status_delisted_2026-05-19.csv` | Provides `(ticker, name, exchange, assetType, ipoDate, delistingDate)` — used as a CIK-resolution hint and asset-type signal. |
-| Alpha Vantage active list | `…/listing_status_active_2026-05-19.csv` | Fallback when a Tiingo ticker is missing from the delisted CSV (recycled or rename cases). |
+| Tiingo universe | the consumer's instruments file (`ticker, start, end`) | List of `(ticker, start_date, end_date)`. A row with `end_date < today` is a delisting candidate. |
+| Alpha Vantage delisted list | an Alpha Vantage LISTING_STATUS delisted CSV | Provides `(ticker, name, exchange, assetType, ipoDate, delistingDate)` — used as a CIK-resolution hint and asset-type signal. |
+| Alpha Vantage active list | an Alpha Vantage LISTING_STATUS active CSV | Fallback when a Tiingo ticker is missing from the delisted CSV (recycled or rename cases). |
 | SEC EDGAR | `data.sec.gov/submissions/CIK########.json` and `efts.sec.gov/LATEST/search-index` | Ground truth for filings (Form 25, 8-K item codes, Form 15). All output classifications derive from these. |
 
 ## Pipeline
@@ -40,19 +40,17 @@ handling.
                     ▼
        ┌─────────────────────────────────────────────┐
        │            DelistClassifier                 │
-       │  short-circuits:                            │
+       │  short-circuits, in order:                  │
        │    asset_type ∈ {ETF, note, warrant, …}    │   → 600 EXPIRATION
        │    Form 'REVOKED' present                   │   → 573 COMPLIANCE
+       │    confirmed 1.03 bankruptcy                │   → 470 LIQUIDATION
+       │    rename / listing transfer                │   → 304 EXCHANGE
+       │    SPAC trust liquidation                   │   → 600 EXPIRATION
        │    10-K/Q filings >180d after delist        │   → 304 EXCHANGE
-       │  fingerprint:                               │
-       │    Form 25 + 8-K items + Form 15            │
-       │  rules:                                     │
-       │    2.01+3.01+5.01 → 231 MERGER              │
-       │    2.01+5.01      → 233 MERGER              │
-       │    1.03           → 470 BANKRUPTCY          │
-       │    3.01 alone     → 570 COMPLIANCE          │
-       │    + NT 10-K/Q    → 580 DELINQUENT          │
-       │    Form 25+15, no M&A items → 400 LIQUIDATION│
+       │  fingerprint + default cascade:              │
+       │    Form 25 + 8-K items + Form 15;            │
+       │    a distress bucket always needs positive   │
+       │    evidence (full trigger table below)       │
        └────────────┬────────────────────────────────┘
                     │ DelistRecord per ticker
                     ▼
@@ -80,11 +78,20 @@ handling.
 Every EDGAR JSON response is SHA1-keyed and cached in `cache/edgar/*.json`.
 A second run of `classify_universe.py` over the same set is near-instant
 (~3 s for 461 tickers) because no network calls happen. To force a refresh,
-delete the relevant cache files.
+delete the relevant cache files. Each payload records the day it was fetched
+(`__fetched__`; an older file is dated by its mtime). The resolver's checks
+and the classifier read a company's submissions fresh as of `min(observed +
+45 days, today)` (`edgar.submissions_fresh_after`), so a copy cached before a
+later Form 25 is fetched again.
 
 The ticker→CIK memo lives at `cache/ticker_resolution.json` and is keyed by
 `(ticker, observed_date)` so a recycled ticker resolves to the right
-issuer per date.
+issuer per date. The file is versioned (`{"__version__": 2, "entries": …}`);
+a file without version 2 predates the date and name checks, so it is
+ignored and replaced on the next save. Each entry records the member name
+it was checked with, and a lookup with a different member name resolves
+again. Misses, and answers reached while an EDGAR request failed
+transiently, are used for the run but never saved.
 
 ## Resolver strategy in detail
 
@@ -102,7 +109,7 @@ target rather than an acquirer.
 3. **EFTS Form-25/15 with date window.** Searches
    `efts.sec.gov/LATEST/search-index` restricted to Form 25, 25-NSE, 15-12G,
    15-12B, 15-15D within ±90 days of the observed delist date. Skips
-   known exchange CIKs (Nasdaq 1354457, NYSE 1067442, …) and prefers hits
+   known exchange CIKs (Nasdaq 1354457, NYSE LLC 876661, Cboe BZX 1417835, …) and prefers hits
    whose display_name contains the literal `(TICKER)`.
 
 4. **AV name + EDGAR cgi-bin company search.** Uses the company name from
@@ -119,30 +126,62 @@ target rather than an acquirer.
 
 ## Classifier rules
 
-A `DelistRecord` is produced by a series of early-exit checks plus the
-filing-trio fingerprint:
+`classify_ticker` runs a fixed sequence of checks and returns as soon as one
+applies, in this order:
 
 | Trigger | CRSP code | Bucket |
 |---|---|---|
 | AV `assetType` ∈ {ETF, note, warrant, unit, right} OR name ∈ {"… Notes Due", "… ETF", "… Rights"} | 600 | EXPIRATION |
 | Form `REVOKED` present | 573 | COMPLIANCE_FAILURE |
-| 10-K / 10-Q / 20-F filed >180 days after delist | 304 | EXCHANGE_TRANSFER |
-| 8-K item 1.03 | 470 | LIQUIDATION |
+| 8-K item 1.03 whose own Item 1.03 section reports a bankruptcy, searched 540 days before to 30 days after the delisting (an unreadable section still counts, flagged `bankruptcy_text_missing`). Exception: when that 1.03 is more than 180 days before the delisting and a change-in-control 8-K (5.01, or 2.01 with 3.01 or 3.03) falls within 30 days of the delisting, the merger path wins instead and the row is flagged `bankruptcy_before_merger` | 470 | LIQUIDATION |
+| A rename near the delisting, or a 3.01 notice that reads as a listing transfer rather than a deficiency, with the company still reporting results afterward. Yields to the merger path whenever a nearby 8-K shows an acquisition (5.01, or 2.01 with 3.01 or 3.03) | 304 | EXCHANGE_TRANSFER |
+| SPAC trust liquidation (blank-check company, redeemed at trust value) | 600 | EXPIRATION |
+| 10-K / 10-Q / 20-F filed more than 180 days after the delisting | 304 | EXCHANGE_TRANSFER |
+| None of the above: the 8-K item fingerprint decides, anchored on the Form 25 filing date when one exists (else the observed delist date). A Form 25 more than 45 days before the observed date is a frozen vendor tail, flagged `frozen_tail:<days>` | | |
 | 8-K items 2.01 + 3.01 + 5.01 | 231 | MERGER |
 | 8-K items 2.01 + 5.01 | 233 | MERGER |
-| 8-K items 2.01 + 3.01 | 200 | MERGER |
+| 8-K item 5.01 without 2.01, alongside 3.01 or 3.03 (a change in control with no completed-acquisition item) | 231 | MERGER |
+| 8-K items 2.01 + 3.01 (no 5.01) | 200 | MERGER |
 | 8-K items 2.04 + 3.01 | 470 | LIQUIDATION |
-| 8-K item 3.01 alone | 570 | COMPLIANCE_FAILURE |
-| 570 + NT 10-K/Q in prior year | 580 | COMPLIANCE_FAILURE |
-| Form 25 + Form 15, 8-K without M&A items | 400 | LIQUIDATION |
-| Form 25 with no nearby 8-K, no Form 15 | 570 | COMPLIANCE_FAILURE (default) |
+| No conclusive fingerprint, or 3.01 alone: the default cascade below decides, all of which needs positive evidence | | |
+| 2.01 present on the anchor 8-K and a Form 15 deregistration on file | 233 | MERGER |
+| SPAC with no Form 25/15 in the window | 600 | EXPIRATION |
+| A 3.01 notice citing a listing deficiency | 570, or 580 with an NT 10-K/Q in the prior year | COMPLIANCE_FAILURE |
+| A merger proxy or tender filing within 400 days of the anchor (120 days when the 3.01 notice text could not be fetched) | 231 | MERGER |
+| An NT 10-K/Q in the prior year, with no deficiency notice and no merger evidence | 580 | COMPLIANCE_FAILURE |
+| None of the above | unknown, flagged `no_evidence_default`, `deregistered` recorded | UNKNOWN |
+
+A distress bucket (`compliance_failure`, `liquidation`) is never the silent
+default: every row above that ends in 470, 570, or 580 read the evidence
+that put it there. A deregistration with no merger or distress evidence
+lands `unknown`, which `enrich()` (`reconstruction.py`) resolves to par
+(`dlret = 0`, `assumed_par`) when a valid last close exists, rather than
+compounding an unexplained gap into a fabricated return.
 
 ## Outputs
 
-`output/delist_classifications.csv` — primary deliverable. One row per
-ticker with the CRSP code, bucket, confidence (`high | medium | low | none`),
-human-readable reason, and the evidence chain (Form 25 date, 8-K items,
-Form 15 form name, resolved company name, which resolver tier won).
+`output/dlret.csv`: the primary deliverable. One row per delisting event
+with the reconstructed delisting return (`dlret`), the method that produced
+it, confidence, and the full audit trail (last trade close, payout terms,
+recovery ratio, `review_flags`). Columns are `DLRET_TABLE_COLUMNS` in
+`reconstruction.py`.
+
+`output/delist_classifications.csv`: one row per ticker with the CRSP
+code, bucket, confidence (`high | medium | low | none`), human-readable
+reason, the evidence chain (Form 25 date, 8-K items, Form 15 form name,
+resolved company name, which resolver tier won), and the raw extracted
+payout (`payout_per_share`, `payout_source`, `payout_confidence`) before
+the last-close gate runs.
+
+`output/payouts.csv`: per-merger cash payout after the last-close gate:
+only a payout (or cash+stock/stock-only terms) that reconciles with the
+target's last trade close is kept, so a row the gate drops is blank here
+even though `delist_classifications.csv` still carries the raw extracted
+value.
+
+`output/review.csv`: every row whose `review_flags` is non-empty, with its
+`cik` and anchor 8-K item set, for a human to triage. Written by
+`scripts/classify_universe.py` alongside `dlret.csv`.
 
 `output/web_verification.csv` — independent EDGAR cross-check produced by
 `scripts/verify_against_web.py`. Verdicts:

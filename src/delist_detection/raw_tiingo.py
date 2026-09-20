@@ -7,9 +7,7 @@ per ticker so repeated lookups within a process don't re-read the file.
 Root resolution order:
 1. Explicit ``root`` argument.
 2. ``RAW_TIINGO_DIR`` environment variable.
-3. Default path relative to the repo: ``../qlib_practice/fetch_data_aplha/
-   data/tiingo_2026_05_22/raw_tiingo_csv`` (resolved from the package file's
-   location up to the repository root).
+With neither set, ``RawTiingoPrices`` raises ``ValueError``.
 
 CSV format (per-ticker file ``{ticker.lower()}.csv``):
     date,close,high,low,open,volume,adjClose,adjHigh,adjLow,adjOpen,
@@ -25,21 +23,6 @@ from pathlib import Path
 
 import pandas as pd
 
-# Default path: resolve relative to this file's location.
-# Path(__file__) → src/delist_detection/raw_tiingo.py
-#   parents[0] → src/delist_detection/
-#   parents[1] → src/
-#   parents[2] → <repo root>  (delist_detection/)
-#   parents[2].parent → <repo root's parent>
-_DEFAULT_ROOT = (
-    Path(__file__).resolve().parents[2].parent
-    / "qlib_practice"
-    / "fetch_data_aplha"
-    / "data"
-    / "tiingo_2026_05_22"
-    / "raw_tiingo_csv"
-)
-
 
 class RawTiingoPrices:
     """Look up nominal close prices from raw Tiingo per-ticker CSV files.
@@ -49,7 +32,7 @@ class RawTiingoPrices:
     root:
         Directory containing the per-ticker CSV files (e.g. ``aet.csv``).
         When *None*, resolution falls back to the ``RAW_TIINGO_DIR``
-        environment variable, then to the hardcoded default qlib_practice path.
+        environment variable. With neither set, raises ``ValueError``.
     """
 
     def __init__(self, root: str | Path | None = None) -> None:
@@ -57,7 +40,9 @@ class RawTiingoPrices:
             self._root = Path(root)
         else:
             env = os.environ.get("RAW_TIINGO_DIR")
-            self._root = Path(env) if env else _DEFAULT_ROOT
+            if not env:
+                raise ValueError("no raw price directory: pass root= or set RAW_TIINGO_DIR")
+            self._root = Path(env)
         # Per-ticker cache: ticker_lower -> pd.Series(date_str -> close_float)
         # indexed by the date string, sorted ascending.
         self._cache: dict[str, pd.Series | None] = {}

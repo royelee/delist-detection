@@ -16,7 +16,7 @@
 - `qlib_adapter.py` is **not** rewritten to construct `EnrichedDelistRecord`s. It already derives from the hub *transitively*: `apply_bmp_corrections` → `build_firm_month_correction` → `compute_dlret`/`resolve_dlret`, and Task 6 gives it stock-leg support for free. A deeper `EnrichedDelistRecord`-based rewrite of `qlib_adapter` would add churn without changing behavior, so it is deferred. (The spec's "everything derives from the hub" is met computationally; the `EnrichedDelistRecord` is the table's transport type.)
 - Input maps (`last_trade_closes`, `payouts`, …) are keyed by ticker, matching the existing `compute_corrected_returns.py` convention. Recycled tickers still produce one output **row per delisting event** (keyed on the record), but share a per-ticker input value; supplying event-specific prices for a recycled ticker is a known limitation, consistent with the rest of the repo.
 
-**Run all tests with:** `conda activate rdagent4qlib && pytest -q` (the editable install + pytest live in that env).
+**Run all tests with:** `pytest -q` (the editable install + pytest live in the project's Python environment).
 
 ---
 
@@ -154,7 +154,7 @@ def test_zero_payout_is_total_wipe():
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `conda activate rdagent4qlib && pytest tests/test_dlret.py -q`
+Run: `pytest tests/test_dlret.py -q`
 Expected: FAIL — `ModuleNotFoundError: No module named 'delist_detection.dlret'`
 
 - [ ] **Step 3: Create `src/delist_detection/dlret.py`**
@@ -313,7 +313,7 @@ def compute_dlret(
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `conda activate rdagent4qlib && pytest tests/test_dlret.py -q`
+Run: `pytest tests/test_dlret.py -q`
 Expected: PASS (all tests in the file)
 
 - [ ] **Step 5: Commit**
@@ -399,7 +399,7 @@ def bmp_firm_month_return(
 
 - [ ] **Step 2: Run the existing + new suites to verify green**
 
-Run: `conda activate rdagent4qlib && pytest tests/test_bmp_correction.py tests/test_firm_month_correction.py tests/test_known_cases_bmp.py tests/test_qlib_adapter_bmp.py tests/test_dlret.py -q`
+Run: `pytest tests/test_bmp_correction.py tests/test_firm_month_correction.py tests/test_known_cases_bmp.py tests/test_qlib_adapter_bmp.py tests/test_dlret.py -q`
 Expected: PASS (no regressions; the moved `compute_dlret` behaves identically)
 
 - [ ] **Step 3: Commit**
@@ -439,7 +439,7 @@ def test_genuine_5xx_still_compliance():
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `conda activate rdagent4qlib && pytest tests/test_crsp_codes.py -q`
+Run: `pytest tests/test_crsp_codes.py -q`
 Expected: FAIL — `bucket_for_code(501)` returns `COMPLIANCE_FAILURE`
 
 - [ ] **Step 3: Fix `bucket_for_code`**
@@ -487,7 +487,7 @@ to:
 
 - [ ] **Step 5: Run to verify pass**
 
-Run: `conda activate rdagent4qlib && pytest tests/test_crsp_codes.py -q`
+Run: `pytest tests/test_crsp_codes.py -q`
 Expected: PASS
 
 - [ ] **Step 6: Commit**
@@ -569,7 +569,7 @@ def test_enrich_carries_classification_fields():
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `conda activate rdagent4qlib && pytest tests/test_reconstruction.py -q`
+Run: `pytest tests/test_reconstruction.py -q`
 Expected: FAIL — `ModuleNotFoundError: No module named 'delist_detection.reconstruction'`
 
 - [ ] **Step 3: Create `reconstruction.py` (record + enrich only; table builder added in Task 5)**
@@ -674,7 +674,7 @@ def enrich(
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `conda activate rdagent4qlib && pytest tests/test_reconstruction.py -q`
+Run: `pytest tests/test_reconstruction.py -q`
 Expected: PASS
 
 - [ ] **Step 5: Commit**
@@ -765,7 +765,7 @@ def test_recycled_ticker_yields_one_row_per_delisting():
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `conda activate rdagent4qlib && pytest tests/test_reconstruction.py -q`
+Run: `pytest tests/test_reconstruction.py -q`
 Expected: FAIL — `ImportError: cannot import name 'build_dlret_table'`
 
 - [ ] **Step 3: Append the table builder to `reconstruction.py`**
@@ -882,7 +882,7 @@ Note: `crsp_code` is an `int`; `_fmt` returns `str(int)` (e.g. `"241"`), not `"2
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `conda activate rdagent4qlib && pytest tests/test_reconstruction.py -q`
+Run: `pytest tests/test_reconstruction.py -q`
 Expected: PASS
 
 - [ ] **Step 5: Commit**
@@ -929,7 +929,7 @@ def test_firm_month_merger_includes_stock_leg():
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `conda activate rdagent4qlib && pytest tests/test_firm_month_correction.py::test_firm_month_merger_includes_stock_leg -q`
+Run: `pytest tests/test_firm_month_correction.py::test_firm_month_merger_includes_stock_leg -q`
 Expected: FAIL — `build_firm_month_correction() got an unexpected keyword argument 'stock_ratio'`
 
 - [ ] **Step 3: Update `build_firm_month_correction`**
@@ -978,7 +978,7 @@ Replace the `r_month = bmp_firm_month_return(...)` call (currently lines ~295-30
 
 - [ ] **Step 4: Run to verify pass (and no regressions)**
 
-Run: `conda activate rdagent4qlib && pytest tests/test_firm_month_correction.py tests/test_handling.py tests/test_qlib_adapter_bmp.py -q`
+Run: `pytest tests/test_firm_month_correction.py tests/test_handling.py tests/test_qlib_adapter_bmp.py -q`
 Expected: PASS
 
 - [ ] **Step 5: Commit**
@@ -1017,7 +1017,7 @@ def test_load_merger_terms_csv(tmp_path):
 
 - [ ] **Step 2: Run to verify failure**
 
-Run: `conda activate rdagent4qlib && pytest tests/test_reconstruction.py::test_load_merger_terms_csv -q`
+Run: `pytest tests/test_reconstruction.py::test_load_merger_terms_csv -q`
 Expected: FAIL — `ImportError: cannot import name 'load_merger_terms_csv'`
 
 - [ ] **Step 3: Add `load_merger_terms_csv` to `reconstruction.py`**
@@ -1051,7 +1051,7 @@ def load_merger_terms_csv(path: str | Path) -> dict[str, dict]:
 
 - [ ] **Step 4: Run to verify pass**
 
-Run: `conda activate rdagent4qlib && pytest tests/test_reconstruction.py::test_load_merger_terms_csv -q`
+Run: `pytest tests/test_reconstruction.py::test_load_merger_terms_csv -q`
 Expected: PASS
 
 - [ ] **Step 5: Wire the DLRET table into `classify_universe.py`**
@@ -1139,14 +1139,14 @@ Notes for the implementer (variable names confirmed against the current script):
 
 Run a tiny offline check that the script imports and the table builder is wired (does not hit EDGAR):
 
-Run: `conda activate rdagent4qlib && python -c "import scripts.classify_universe as m; import inspect; assert 'build_dlret_table' in inspect.getsource(m); print('wired OK')"`
+Run: `python -c "import scripts.classify_universe as m; import inspect; assert 'build_dlret_table' in inspect.getsource(m); print('wired OK')"`
 Expected: `wired OK`
 
 (Full universe run — `python scripts/classify_universe.py --limit 5 --last-trade-closes ...` — is a network/manual step; not part of the offline test gate.)
 
 - [ ] **Step 7: Run the whole suite**
 
-Run: `conda activate rdagent4qlib && pytest -q`
+Run: `pytest -q`
 Expected: PASS (all prior 122 tests + the new ones)
 
 - [ ] **Step 8: Commit**
@@ -1181,7 +1181,7 @@ Add a top-level section (near the start, after the intro) titled `## Primary out
 
 - [ ] **Step 3: Verify docs reference real symbols**
 
-Run: `conda activate rdagent4qlib && python -c "from delist_detection.reconstruction import DLRET_TABLE_COLUMNS; from delist_detection.dlret import DlretMethod; print(DLRET_TABLE_COLUMNS); print([m.value for m in DlretMethod])"`
+Run: `python -c "from delist_detection.reconstruction import DLRET_TABLE_COLUMNS; from delist_detection.dlret import DlretMethod; print(DLRET_TABLE_COLUMNS); print([m.value for m in DlretMethod])"`
 Expected: prints the column list and method values referenced in the docs (sanity-check that names match).
 
 - [ ] **Step 4: Commit**
@@ -1197,10 +1197,10 @@ git commit -m "docs: reframe README/CLAUDE around the DLRET table as primary out
 
 - [ ] **Run the full offline suite**
 
-Run: `conda activate rdagent4qlib && pytest -q`
+Run: `pytest -q`
 Expected: PASS — all previously-passing tests plus the new `test_dlret.py`, `test_reconstruction.py`, and the added cases in `test_crsp_codes.py` / `test_firm_month_correction.py`.
 
 - [ ] **Confirm the 501/502 fix end-to-end**
 
-Run: `conda activate rdagent4qlib && python -c "from delist_detection.crsp_codes import bucket_for_code, CrspBucket; assert bucket_for_code(501) is CrspBucket.EXCHANGE_TRANSFER; assert bucket_for_code(555) is CrspBucket.COMPLIANCE_FAILURE; print('501/502 fix OK')"`
+Run: `python -c "from delist_detection.crsp_codes import bucket_for_code, CrspBucket; assert bucket_for_code(501) is CrspBucket.EXCHANGE_TRANSFER; assert bucket_for_code(555) is CrspBucket.COMPLIANCE_FAILURE; print('501/502 fix OK')"`
 Expected: `501/502 fix OK`

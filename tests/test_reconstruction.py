@@ -64,7 +64,7 @@ def test_table_column_order_is_contractual():
         "ticker", "bucket", "observed_delist_date", "crsp_code", "dlret", "reason",
         "exchange", "last_trade_close", "payout_per_share", "stock_ratio",
         "acquirer_price", "acquirer_ticker", "recovery_ratio", "terminal_value",
-        "dlret_method", "dlret_confidence", "payout_source",
+        "dlret_method", "dlret_confidence", "payout_source", "review_flags",
     ]
 
 
@@ -263,3 +263,52 @@ def test_load_merger_terms_csv_with_date_column_produces_tuple_keys(tmp_path):
     result = load_merger_terms_csv(p)
     assert result[("ALTR", "2015-12-28")] == {"cash_per_share": 54.0}
     assert result["ALTR"] == {"cash_per_share": 99.0}
+
+
+def test_unknown_deregistered_with_a_price_is_assumed_par():
+    rec = DelistRecord("LIQ", 1, "2019-11-06", None, CrspBucket.UNKNOWN, "low", "x",
+                       {"deregistered": True, "flags": ["no_evidence_default"]})
+    e = enrich(rec, last_trade_close=19.63)
+    assert e.dlret == 0.0 and e.dlret_method is DlretMethod.ASSUMED_PAR
+
+
+def test_unknown_without_deregistration_stays_blank():
+    rec = DelistRecord("SKYF", None, "2021-08-24", None, CrspBucket.UNKNOWN, "none", "No CIK", {})
+    e = enrich(rec, last_trade_close=0.001)
+    assert e.dlret_method is DlretMethod.UNKNOWN
+
+
+def test_review_flags_is_the_last_column_and_joins_flags():
+    assert DLRET_TABLE_COLUMNS[-1] == "review_flags"
+    rec = DelistRecord("X", 1, "2020-01-02", 570, CrspBucket.COMPLIANCE_FAILURE, "medium", "r",
+                       {"flags": ["frozen_tail:120"]})
+    e = enrich(rec, last_trade_close=58.97, extra_flags=("payout_gate_failed:25",))
+    row = enriched_to_row(e)
+    assert row["review_flags"] == "frozen_tail:120;payout_gate_failed:25;distress_at_normal_price"
+
+
+def test_no_flags_is_an_empty_cell():
+    rec = DelistRecord("Y", 1, "2020-01-02", 231, CrspBucket.MERGER, "high", "r", {})
+    assert enriched_to_row(enrich(rec, last_trade_close=10.0, payout_per_share=10.0))["review_flags"] == ""
+
+
+def test_a_merger_left_at_par_is_flagged_for_review():
+    # R1: a payout that is never found lands at par unseen; review.csv must list it.
+    rec = DelistRecord("NOPAY", 1, "2020-01-02", 231, CrspBucket.MERGER, "medium", "r", {})
+    e = enrich(rec, last_trade_close=42.0)
+    assert e.dlret_method is DlretMethod.ASSUMED_PAR
+    assert "merger_at_par" in e.review_flags
+
+
+def test_a_merger_with_a_payout_is_not_flagged_at_par():
+    rec = DelistRecord("PAID", 1, "2020-01-02", 231, CrspBucket.MERGER, "high", "r", {})
+    e = enrich(rec, last_trade_close=42.0, payout_per_share=45.0)
+    assert e.dlret_method is not DlretMethod.ASSUMED_PAR
+    assert "merger_at_par" not in e.review_flags
+
+
+def test_a_non_merger_par_row_is_not_flagged_merger_at_par():
+    rec = DelistRecord("EXPIRE", 1, "2020-01-02", 600, CrspBucket.EXPIRATION, "high", "r", {})
+    e = enrich(rec, last_trade_close=10.0)
+    assert e.dlret_method is DlretMethod.ASSUMED_PAR
+    assert "merger_at_par" not in e.review_flags

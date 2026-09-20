@@ -260,6 +260,23 @@ def test_match_cash_plus_cvr_takes_cash_floor_apls():
     assert val == 41.00
 
 
+def test_match_cash_plus_cvr_equal_count_tie_still_takes_cash():
+    # Same shape as APLS, but here $41.00 and $4.00 each appear exactly twice
+    # (an equal-count tie), unlike the APLS case above where $41.00 (2x) beats
+    # $4.00 (1x) via the higher-count path. The CVR ($4.00) is well under 25% of
+    # the cash ($41.00 * 0.25 = $10.25), so _select's tie rule must still return
+    # the cash floor rather than abstaining.
+    text = ("$41.00 per Share, net to the seller in cash, without interest, plus "
+            "one contingent value right representing up to an aggregate of $4.00 "
+            "in cash. $41.00 per Share in cash is payable at closing, plus a "
+            "contingent value right of up to $4.00 in cash upon a milestone.")
+    counts, mixed, _ = _collect(text, None, True)
+    assert counts[41.0] == counts[4.0] == 2      # equal-count tie, not the higher-count path
+    assert _select(counts, mixed) == (41.0, False)
+    val, _ = _match_payout(text)
+    assert val == 41.00
+
+
 def test_match_preferred_class_not_flagged_mixed_tco():
     # TCO: common gets all-cash $43.00; a separate Series B Preferred class is
     # described in the next clause ("; and (ii) each share of ... Preferred
@@ -506,3 +523,82 @@ def test_extract_swallows_fetch_error_returns_none():
     ext = PayoutExtractor(_RaisingFetchEdgar(filings))
     res = ext.extract(_merger_rec())
     assert res == PayoutResult.none()
+
+
+# --- Task 10: whole dollars, preferred redemptions, award payouts, elections, ties ---
+
+from delist_detection.payout_extractor import _collect, _select
+
+
+def test_whole_dollar_cash_is_read():
+    t = "each share was cancelled and converted into the right to receive $170 in cash, without interest"
+    assert _match_payout(t)[0] == 170.0
+
+
+def test_award_payout_multiplied_by_units_is_ignored():
+    t = ("Veritiv paid each holder an amount in cash equal to $1.00 multiplied by the target number "
+         "of performance-based units subject to such Company PBU Award")
+    assert _match_payout(t)[0] is None
+
+
+def test_preferred_redemption_is_ignored():
+    t = ("converted into the right to receive an amount in cash equal to $12.00 per share. "
+         "Following consummation, each outstanding share of TWO Preferred Stock will be redeemed "
+         "on the applicable redemption date for $25.00 in cash, plus accumulated dividends")
+    assert _match_payout(t)[0] == 12.0
+
+
+def test_cash_or_stock_election_is_mixed():
+    t = ("(i) an amount in cash equal to $505.00 per TopBuild Share (the Cash Consideration) or "
+         "(ii) 20.200 shares of QXO common stock per TopBuild Share (the Stock Consideration)")
+    counts, mixed, _ = _collect(t, None, True)
+    assert _select(counts, mixed) == (None, True)
+
+
+def test_a_tie_between_two_figures_abstains():
+    assert _select({12.0: 1, 25.0: 1}, {}) == (None, False)
+
+
+def test_six_decimal_cash_is_read_whole():
+    t = "shareholders received a net cash payment of $10.389188 per share of common stock"
+    assert _match_payout(t)[0] == 10.389188
+
+
+def test_an_amount_never_stops_inside_a_thousands_separator():
+    # read as 1.0 and 12.0 before the lookahead refused a following ",digit"
+    assert _match_payout("the cash consideration of $1,618.7928 per unit") == (None, "")
+    assert _match_payout("an amount in cash equal to $12,345.678 per unit") == (None, "")
+    assert _match_payout("holders receive $1,618.79 in cash")[0] == 1618.79
+    # the long-decimal pattern needs its "." and reads the whole figure
+    assert _match_payout("a net cash payment of $1,618.7928 per share")[0] == 1618.7928
+
+
+# --- R1: the class guard looks back only as far as the subject the amount belongs to ---
+
+
+def test_a_warrant_clause_before_the_subject_does_not_discard_the_share_payout():
+    # Closing 8-Ks routinely dispose of warrants in the clause before the common
+    # share's consideration. The guard must stop at "each Share", not run back
+    # over the warrant clause.
+    t = ("each Company Warrant was cancelled, and each Share converted into the "
+         "right to receive $113.00 in cash, without interest.")
+    assert _collect(t, None, True)[0] == {113.0: 2}
+
+
+def test_a_note_redemption_clause_before_the_subject_does_not_discard_the_share_payout():
+    t = ("the Notes were redeemed. Each Share was converted into the right to "
+         "receive $113.00 in cash.")
+    assert _collect(t, None, True)[0] == {113.0: 2}
+
+
+def test_the_subject_marker_still_discards_another_class_of_stock():
+    # The marker is "each share of Series A Preferred Stock": the class wording
+    # sits between it and the amount, so the figure is still discarded.
+    t = ("each share of Series A Preferred Stock was redeemed for $25.00 in cash, "
+         "without interest.")
+    assert _collect(t, None, True)[0] == {}
+
+
+def test_a_holders_of_marker_still_discards_a_warrant_payout():
+    t = "holders of Company Warrants received $3.00 in cash for each warrant."
+    assert _collect(t, None, True)[0] == {}

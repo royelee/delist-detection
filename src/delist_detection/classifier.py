@@ -11,12 +11,26 @@ Pipeline per ticker:
 
 from __future__ import annotations
 
+import re
 from dataclasses import asdict, dataclass, field
 from datetime import date, datetime, timedelta
 from typing import Iterable
 
 from .crsp_codes import CrspBucket, bucket_for_code
-from .edgar import EdgarClient, EdgarSubmission
+from .edgar import STALE_KEY, EdgarClient, EdgarSubmission, submissions_fresh_after
+from .evidence import (
+    MERGER_EVIDENCE_DAYS,
+    bankruptcy_8ks,
+    cites_listing_deficiency,
+    filed_operating_between,
+    is_spac,
+    item_text,
+    mentions_bankruptcy,
+    merger_evidence,
+    renamed_near,
+    says_listing_transfer,
+    still_operating,
+)
 from .ticker_resolver import TickerResolver
 
 
@@ -30,6 +44,22 @@ LIQUIDATION_ITEMS = {"2.04"}
 DEFAULT_LOOKBACK_DAYS = 30
 EIGHT_K_WINDOW_DAYS = 14
 EIGHT_K_BACKSCAN_DAYS = 120  # how far back to scan for an announcement 8-K
+
+FORM25_AFTER_DAYS = 45       # a Form 25 filed after the vendor's last trade
+FORM25_TAIL_DAYS = 45        # beyond this, an earlier Form 25 means a frozen vendor tail
+FORM25_MAX_BEFORE_DAYS = 1500
+M_A_ITEMS = {"2.01", "5.01", "3.03"}
+NOTICE_MISSING_MERGER_DAYS = 120   # merger-evidence window when the 3.01 notice is unreadable
+BANKRUPTCY_STALE_DAYS = 180        # older than this, a confirmed 1.03 can predate an acquisition
+MERGER_8K_WINDOW_DAYS = 30         # how near the delisting a change-in-control 8-K must sit
+
+
+def _is_change_in_control(items: set[str]) -> bool:
+    """The registrant was acquired: item 5.01, or 2.01 together with 3.01 or 3.03.
+
+    A bare 2.01 is a disposition of assets, not a change in control.
+    """
+    return "5.01" in items or ("2.01" in items and ("3.01" in items or "3.03" in items))
 
 
 @dataclass
@@ -56,6 +86,63 @@ def _parse_date(s: str) -> date | None:
         return datetime.strptime(s, "%Y-%m-%d").date()
     except ValueError:
         return None
+
+
+def _add_flag(flags: list[str], flag: str) -> None:
+    if flag not in flags:
+        flags.append(flag)
+
+
+# The Item 1.03 heading itself reads "Bankruptcy or Receivership", so every 8-K
+# carrying the tag — including a mis-tagged takeover — matches _BANKRUPTCY_TEXT on
+# the heading alone. Drop the heading, then require the wording in the body.
+_ITEM_HEADING = re.compile(r"^item\s*\d\.\d{2}[\s.–—-]*", re.I)
+# SEC's own caption for item 1.03, and the whole reason the heading confirms
+# itself. Punctuation after it is optional in real filings — SVB prints
+# "Item 1.03. Bankruptcy or Receivership On March 10, 2023, …" — and
+# `edgar._strip_html` collapses every newline to a space, so neither the
+# sentence rule nor the newline rule has anything to find there. Matching the
+# caption itself is what actually takes it off.
+_ITEM_CAPTION = re.compile(r"^bankruptcy\s+or\s+receivership[\s.,;:–—-]*", re.I)
+_SENTENCE_END = re.compile(r"[.;:]\s")
+_HEADING_MAX = 80
+# Wording no standard heading carries, so it confirms anywhere in the section.
+# `receivers?\b` does not match the heading's "Receivership", but it does match a
+# court order "appointing ... as Temporary Receiver" — item 1.03 is Bankruptcy *or
+# Receivership*, and HLTH/Nobilis reports its receiver that way and no other.
+# `petitions?` must stay anchored: a bare `petition` matches inside "competition",
+# and takeover 8-Ks routinely report antitrust and competition clearance.
+_BANKRUPTCY_BODY = re.compile(
+    r"chapter\s+(?:7|11)\b|\bpetitions?\b|bankruptcy\s+court|receivers?\b", re.I)
+
+
+def _drop_heading(section: str) -> str:
+    """The section without its heading.
+
+    The `Item N.NN` label always comes off. When SEC's standard caption follows,
+    that comes off too and the rest is the body. Any other heading shape falls
+    back to the first newline, else the first sentence end within _HEADING_MAX
+    characters of the label.
+    """
+    body = _ITEM_HEADING.sub("", section, count=1)
+    without_caption = _ITEM_CAPTION.sub("", body, count=1)
+    if without_caption != body:
+        return without_caption
+    nl = body.find("\n")
+    if nl >= 0:
+        return body[nl + 1:]
+    m = _SENTENCE_END.search(body[:_HEADING_MAX])
+    return body[m.end():] if m else body
+
+
+def _confirms_bankruptcy(text: str) -> bool:
+    """The filing's Item 1.03 section reports a bankruptcy. Wording elsewhere
+    (credit-agreement boilerplate in a takeover 8-K) confirms nothing, and
+    neither does the standard heading on its own."""
+    section = item_text(text, "1.03")
+    if not section:
+        return False
+    return bool(_BANKRUPTCY_BODY.search(section)) or mentions_bankruptcy(_drop_heading(section))
 
 
 def _near(d1: date | None, d2: date | None, days: int) -> bool:
@@ -113,23 +200,32 @@ class DelistClassifier:
         return False
 
     def _pick_delist_filing(
-        self, filings: list[EdgarSubmission], observed: date | None
-    ) -> EdgarSubmission | None:
-        candidates = [f for f in filings if f.form in DELIST_FORMS]
-        if not candidates:
-            return None
+        self,
+        filings: list[EdgarSubmission],
+        observed: date | None,
+        cik: int | None = None,
+    ) -> tuple[EdgarSubmission | None, int | None]:
+        cands = [f for f in filings if f.form in DELIST_FORMS]
+        if not cands:
+            return None, None
         if observed is None:
-            return max(candidates, key=lambda f: f.filing_date)
-        scored: list[tuple[int, EdgarSubmission]] = []
-        for c in candidates:
+            return max(cands, key=lambda f: f.filing_date), None
+        best = None
+        for c in cands:
             fd = _parse_date(c.filing_date)
             if fd is None:
                 continue
-            scored.append((abs((fd - observed).days), c))
-        if not scored:
-            return None
-        scored.sort(key=lambda x: x[0])
-        return scored[0][1]
+            gap = (observed - fd).days            # > 0: Form 25 before the last trade
+            if gap < -FORM25_AFTER_DAYS or gap > FORM25_MAX_BEFORE_DAYS:
+                continue
+            if gap > FORM25_TAIL_DAYS:
+                near = self._pick_8k_near(filings, fd) or self._backscan_for_fingerprint_8k(filings, fd)
+                merger_anchor = near is not None and bool(near.item_set & M_A_ITEMS)
+                if not merger_anchor and filed_operating_between(filings, fd, observed):
+                    continue                      # an older, different event (SKLZ 2021, LBRDA 2015)
+            if best is None or abs(gap) < abs(best[1]):
+                best = (c, gap)
+        return (best[0], best[1]) if best else (None, None)
 
     def _pick_8k_near(
         self, filings: list[EdgarSubmission], anchor: date
@@ -177,10 +273,12 @@ class DelistClassifier:
                 score = 80
             elif {"2.01", "3.01"}.issubset(items):
                 score = 70
+            elif "5.01" in items and ("3.01" in items or "3.03" in items):
+                score = 65               # change in control without 2.01 (2.01+5.01 scored above)
+            elif {"2.04", "3.01"}.issubset(items):
+                score = 60
             elif "3.01" in items:
                 score = 40
-            elif "2.04" in items and "3.01" in items:
-                score = 60
             else:
                 continue
             if diagnostic is None or score > diagnostic[0] or (
@@ -208,6 +306,152 @@ class DelistClassifier:
         scored.sort(key=lambda x: x[0])
         return scored[0][1]
 
+    def _confirmed_bankruptcy(self, cik, filings, on, flags, before: int = 540):
+        """First 1.03 8-K in the window whose Item 1.03 section mentions a
+        bankruptcy. An empty text (fetch miss) counts as confirmed, since the tag
+        is SEC's own metadata, and adds the flag `bankruptcy_text_missing`."""
+        for f in bankruptcy_8ks(filings, on, before=before):
+            text = self.edgar.fetch_filing_text(cik, f.accession, f.primary_doc)
+            if not text:
+                _add_flag(flags, "bankruptcy_text_missing")
+                return f
+            if _confirms_bankruptcy(text):
+                return f
+        return None
+
+    def _emerged_before_merger(self, cik, filings, observed, flags) -> bool:
+        """The confirmed bankruptcy predates an acquisition the company was still
+        around for: every confirmed item 1.03 is more than BANKRUPTCY_STALE_DAYS
+        before the delisting, and an 8-K within ±MERGER_8K_WINDOW_DAYS of it
+        carries a change in control.
+
+        Without this, `bankruptcy_8ks(..., before=540)` plus the confirmed-
+        bankruptcy override outranks every merger signal, so a company that filed
+        Chapter 11, emerged, and was acquired within 18 months was marked
+        liquidation (−90% in training) instead of merger.
+        """
+        if self._confirmed_bankruptcy(cik, filings, observed, flags,
+                                      before=BANKRUPTCY_STALE_DAYS) is not None:
+            return False
+        for f in filings:
+            if not f.form.startswith("8-K"):
+                continue
+            d = _parse_date(f.report_date) or _parse_date(f.filing_date)
+            if d is None or abs((d - observed).days) > MERGER_8K_WINDOW_DAYS:
+                continue
+            if _is_change_in_control(f.item_set):
+                return True
+        return False
+
+    def _rename_or_transfer(self, cik, filings, observed):
+        """A rename around the delisting date, or a 3.01 notice that reads as a
+        listing transfer rather than a deficiency, while the company keeps
+        reporting results: an exchange transfer, not a compliance failure.
+
+        Declines whenever a nearby 8-K carries a merger fingerprint (5.01, or
+        2.01 together with 3.01 or 3.03) — that's an acquisition, and the
+        rename is incidental to the deal closing, not a listing move. A bare
+        2.01 (a disposition, not a change in control) does not block it.
+        """
+        sub = self.edgar.submissions(cik)
+        if not isinstance(sub, dict):
+            return None
+        old = renamed_near(sub, observed)
+        transfer = False
+        for f in filings:
+            if not f.form.startswith("8-K"):
+                continue
+            d = _parse_date(f.report_date) or _parse_date(f.filing_date)
+            if d is None or abs((d - observed).days) > 30:
+                continue
+            items = f.item_set
+            if _is_change_in_control(items):
+                return None
+            if "3.01" in items:
+                text = self.edgar.fetch_filing_text(cik, f.accession, f.primary_doc)
+                transfer = transfer or says_listing_transfer(item_text(text, "3.01"))
+        if (old or transfer) and still_operating(filings, observed):
+            why = f"renamed from {old!r}" if old else "3.01 notice announces a listing transfer"
+            return f"Ticker change / listing transfer: {why}; company still reports results"
+        return None
+
+    def _effective_items(self, cik, f, flags):
+        """The 8-K's item set with an unconfirmed 1.03 tag stripped.
+
+        A 1.03 (Bankruptcy or Receivership) tag whose filing has no Item 1.03
+        section mentioning a bankruptcy is a mis-tag (e.g. a merger 8-K); don't
+        let it force a LIQUIDATION classification via `_classify_items`. An
+        empty text keeps the tag and adds `bankruptcy_text_missing`.
+        """
+        items = set(f.item_set)
+        if "1.03" in items:
+            text = self.edgar.fetch_filing_text(cik, f.accession, f.primary_doc)
+            if not text:
+                _add_flag(flags, "bankruptcy_text_missing")
+            elif not _confirms_bankruptcy(text):
+                items.discard("1.03")
+                _add_flag(flags, "bankruptcy_tag_unconfirmed")
+        return items
+
+    def _default_without_fingerprint(self, ticker, cik, observed_delist_date, observed,
+                                     filings, eightk, dereg, delist_filing, evidence, flags):
+        """The record for a delisting with no conclusive 8-K fingerprint (or a
+        3.01 alone). A distress bucket needs positive evidence, so in order:
+        2.01 + Form 15 → merger; a SPAC → 600 expiration (NYSE's trust-liquidation
+        notice says "commence proceedings to delist"); a 3.01 notice citing a
+        listing deficiency → compliance (580 with an NT 10-K/Q in the prior
+        year); a merger proxy or tender filing → merger; an NT 10-K/Q alone →
+        580; else unknown.
+        """
+        def rec(code, bucket, conf, reason, **extra):
+            return DelistRecord(ticker=ticker.upper(), cik=cik, observed_delist_date=observed_delist_date,
+                                crsp_code=code, bucket=bucket, confidence=conf, reason=reason,
+                                evidence={**evidence, **extra})
+        # Ruling (Task 1 review): measure from the Form 25 when there is one. A frozen
+        # vendor tail pushes `observed` past the deal (KCI: proxy 43 days before its
+        # Form 25, 413 days before the vendor's last row).
+        anchor = (_parse_date(delist_filing.filing_date) if delist_filing else None) or observed
+        if eightk is not None and "2.01" in eightk.item_set and dereg is not None:
+            return rec(233, CrspBucket.MERGER, "medium", "2.01 with Form 25 + Form 15 (acquisition completed)")
+        # A SPAC with no Form 25 in the window and no Form 15 misses the SPAC rule
+        # in classify_ticker; its liquidation notice is not a deficiency.
+        if observed:
+            sub = self.edgar.submissions(cik)
+            if isinstance(sub, dict) and is_spac(sub, observed):
+                _add_flag(flags, "spac")
+                return rec(600, CrspBucket.EXPIRATION, "medium",
+                           "SPAC trust liquidation (blank-check company, no Form 25/15 in the window; "
+                           "redeemed at trust value)")
+        delinquent = bool(anchor) and self._detect_delinquent_filer(filings, anchor)
+        # Ruling (Task 9): an explicit deficiency notice outranks a proxy up to 400
+        # days old (a deal that fell through can precede a real compliance delisting).
+        notice = ""
+        if eightk is not None and "3.01" in eightk.item_set:
+            text = self.edgar.fetch_filing_text(cik, eightk.accession, eightk.primary_doc)
+            if not text:
+                flags.append("notice_text_missing")    # reviewable: the notice could not be read
+            notice = item_text(text, "3.01")
+        if cites_listing_deficiency(notice):
+            return rec(580 if delinquent else 570, CrspBucket.COMPLIANCE_FAILURE, "medium",
+                       "Listing deficiency cited in the 3.01 notice"
+                       + (" + NT 10-K/Q in the prior year (delinquent filer 580)" if delinquent else ""))
+        # An unreadable notice means the evidence here is at its weakest, and the
+        # merger branch is the least conservative option — so require a proxy or
+        # tender filing close to the anchor instead of one up to 400 days old.
+        before = (NOTICE_MISSING_MERGER_DAYS if "notice_text_missing" in flags
+                  else MERGER_EVIDENCE_DAYS)
+        proxy = merger_evidence(filings, anchor, before=before) if anchor else None
+        if proxy is not None:
+            return rec(231, CrspBucket.MERGER, "medium",
+                       f"Merger filing {proxy.form} {proxy.filing_date} before the delisting")
+        if delinquent:
+            return rec(580, CrspBucket.COMPLIANCE_FAILURE, "medium",
+                       "Delinquent filer (NT 10-K/Q in the prior year), no merger evidence")
+        flags.append("no_evidence_default")
+        return rec(None, CrspBucket.UNKNOWN, "low",
+                   "Delisted/deregistered without merger or distress evidence",
+                   deregistered=bool(delist_filing or dereg))
+
     def _classify_items(self, items: set[str]) -> tuple[int | None, str]:
         """Map an 8-K item set to a CRSP DLSTCD-style code.
 
@@ -227,6 +471,8 @@ class DelistClassifier:
         has_301 = "3.01" in items
         has_501 = "5.01" in items
         has_503 = "5.03" in items
+        has_303 = "3.03" in items
+        control = has_501 and (has_201 or has_301 or has_303)
 
         if has_103:
             return 470, "Bankruptcy (8-K item 1.03)"
@@ -234,10 +480,12 @@ class DelistClassifier:
             return 231, "M&A 2.01+3.01+5.01 (acquired by external acquirer)"
         if has_201 and has_501:
             return 233, "M&A 2.01+5.01 (subsidiary buyback / parent acquisition)"
+        if control:
+            return 231, "M&A change in control (5.01) with delisting/rights change, closing 8-K without 2.01"
         if has_201 and has_301:
             return 200, "M&A 2.01+3.01 (acquisition with delisting)"
         if has_204 and has_301:
-            return 470, "3.01 + 2.04 (delisting with debt acceleration: distress/Ch.11 lead-in)"
+            return 470, "3.01 + 2.04 without a change in control (distress/Ch.11 lead-in)"
         if has_301:
             return 570, "Compliance failure (3.01 alone, no M&A indicators)"
         return None, "No conclusive 8-K items"
@@ -295,6 +543,33 @@ class DelistClassifier:
                 evidence={"resolution_source": resolution.source},
             )
 
+        flags: list[str] = []
+        if observed:
+            # Once, up front: a cached copy fetched before the event window is
+            # fetched again, and every later read below hits the fresh copy. A
+            # failed refetch serves the cached copy marked STALE_KEY, so the row
+            # is reviewable rather than an error.
+            sub = self.edgar.submissions(resolution.cik, fresh_after=submissions_fresh_after(observed))
+            if isinstance(sub, dict) and sub.get(STALE_KEY):
+                flags.append("submissions_stale")
+
+        if resolution.source == "company_tickers":
+            flags.append("resolved_by_current_ticker_map")
+        # A pin does not silence the name check: `member_name_mismatch` states a
+        # fact about the security — the vendor series is not the named member —
+        # and it is how the consumer catches an impostor series.
+        expected = self.resolver._expected_name(ticker.upper(), observed_delist_date)
+        if expected and observed:
+            _, agrees = self.resolver._fits_date(resolution.cik, observed_delist_date, expected)
+            if not agrees:
+                flags.append("member_name_mismatch")
+                # Only ever beside the mismatch, which it qualifies: the two flags
+                # together tell review triage "the name differs, and the CIK is
+                # already pinned". review.csv lists rows the rules could not
+                # settle, and a pin whose name agrees is settled, so it stays out.
+                if resolution.source == "manual":
+                    flags.append("resolved_by_manual_override")
+
         filings = self.edgar.recent_filings(resolution.cik)
         if not filings:
             return DelistRecord(
@@ -305,15 +580,21 @@ class DelistClassifier:
                 bucket=CrspBucket.UNKNOWN,
                 confidence="none",
                 reason="EDGAR returned no submissions for CIK",
+                evidence={"resolution_source": resolution.source, "name": resolution.name,
+                          "flags": flags},
             )
 
-        delist_filing = self._pick_delist_filing(filings, observed)
+        delist_filing, gap = self._pick_delist_filing(filings, observed, resolution.cik)
+        if gap is not None and gap > FORM25_TAIL_DAYS:
+            flags.append(f"frozen_tail:{gap}")
         dereg = self._pick_dereg(filings, observed)
         evidence: dict = {
             "resolution_source": resolution.source,
             "name": resolution.name,
             "delist_filing": asdict(delist_filing) if delist_filing else None,
             "dereg_filing": asdict(dereg) if dereg else None,
+            "anchor_gap_days": gap,
+            "flags": flags,
         }
 
         # SEC-revoked: explicit Order of Suspension/Revocation by the SEC.
@@ -329,6 +610,55 @@ class DelistClassifier:
                     confidence="high",
                     reason=f"SEC REVOKED registration filed {f.filing_date}",
                     evidence={**evidence, "revoked_filing": asdict(f)},
+                )
+
+        # A confirmed bankruptcy on record beats everything below, including a
+        # company that kept filing after emerging from Chapter 11 with the same
+        # CIK (Oasis Petroleum): the old equity was still cancelled at emergence.
+        if observed:
+            bk = self._confirmed_bankruptcy(resolution.cik, filings, observed, flags)
+            if bk is not None and self._emerged_before_merger(
+                    resolution.cik, filings, observed, flags):
+                _add_flag(flags, "bankruptcy_before_merger")
+                bk = None                     # the merger path decides this one
+            if bk is not None:
+                return DelistRecord(
+                    ticker=ticker.upper(), cik=resolution.cik,
+                    observed_delist_date=observed_delist_date, crsp_code=470,
+                    bucket=CrspBucket.LIQUIDATION, confidence="high",
+                    reason=f"Bankruptcy (8-K item 1.03 filed {bk.filing_date})",
+                    evidence={**evidence, "bankruptcy_8k": asdict(bk)},
+                )
+
+        # A rename or a 3.01 "transfer the listing" notice, with the company
+        # still reporting results afterward, is an exchange transfer — not a
+        # compliance failure. Checked before the Form-25-driven branches so a
+        # frozen Form 25 tail (e.g. an old SPAC-merger Form 25) can't hide it.
+        if observed:
+            why = self._rename_or_transfer(resolution.cik, filings, observed)
+            if why:
+                return DelistRecord(
+                    ticker=ticker.upper(), cik=resolution.cik,
+                    observed_delist_date=observed_delist_date, crsp_code=304,
+                    bucket=CrspBucket.EXCHANGE_TRANSFER, confidence="high",
+                    reason=why, evidence=evidence,
+                )
+
+        # A blank-check (SPAC) company that liquidates its trust redeems
+        # shares at trust value (~$10, true return ~0): a scheduled end, not
+        # distress. Checked before the Form-25-or-not branches so a late
+        # compliance/delinquent-filer signal (NT 10-K, a 3.01 notice) can't
+        # override the trust liquidation.
+        if observed:
+            sub = self.edgar.submissions(resolution.cik)
+            if isinstance(sub, dict) and is_spac(sub, observed) and (delist_filing or dereg):
+                flags.append("spac")
+                return DelistRecord(
+                    ticker=ticker.upper(), cik=resolution.cik,
+                    observed_delist_date=observed_delist_date, crsp_code=600,
+                    bucket=CrspBucket.EXPIRATION, confidence="high",
+                    reason="SPAC trust liquidation (blank-check company, redeemed at trust value)",
+                    evidence=evidence,
                 )
 
         # Exchange-transfer override is the strongest single signal —
@@ -371,20 +701,12 @@ class DelistClassifier:
                     reason="No Form 25 and no 8-K near observed delist date",
                     evidence=evidence,
                 )
-            code, reason = self._classify_items(eightk.item_set)
+            code, reason = self._classify_items(self._effective_items(resolution.cik, eightk, flags))
+            if code == 570 or (code is None and dereg is not None):
+                return self._default_without_fingerprint(
+                    ticker, resolution.cik, observed_delist_date, observed,
+                    filings, eightk, dereg, delist_filing, evidence, flags)
             if code is None:
-                # Form 15 present but no 8-K signal — went voluntarily deregistered.
-                if dereg is not None:
-                    return DelistRecord(
-                        ticker=ticker.upper(),
-                        cik=resolution.cik,
-                        observed_delist_date=observed_delist_date,
-                        crsp_code=573,
-                        bucket=CrspBucket.COMPLIANCE_FAILURE,
-                        confidence="medium",
-                        reason="Form 15 deregistration without merger 8-K (voluntary or SEC action)",
-                        evidence=evidence,
-                    )
                 return DelistRecord(
                     ticker=ticker.upper(),
                     cik=resolution.cik,
@@ -408,68 +730,24 @@ class DelistClassifier:
 
         anchor = _parse_date(delist_filing.filing_date) or observed
         eightk = self._pick_8k_near(filings, anchor) if anchor else None
-        if eightk is None or self._classify_items(eightk.item_set)[0] is None:
+        # _effective_items refetches the text and re-runs the 1.03 confirmation,
+        # so it is computed once per 8-K and carried alongside it.
+        items = self._effective_items(resolution.cik, eightk, flags) if eightk is not None else None
+        if items is None or self._classify_items(items)[0] is None:
             back = self._backscan_for_fingerprint_8k(filings, anchor) if anchor else None
             if back is not None:
                 eightk = back
+                items = self._effective_items(resolution.cik, back, flags)
         evidence["anchor_8k"] = asdict(eightk) if eightk else None
 
-        if eightk is None:
-            # Form 25 present but no nearby 8-K. If a Form 15 was also filed,
-            # treat as voluntary deregistration / liquidation rather than
-            # compliance failure (which assigns -100% to forward returns).
-            if dereg is not None:
-                return DelistRecord(
-                    ticker=ticker.upper(),
-                    cik=resolution.cik,
-                    observed_delist_date=observed_delist_date,
-                    crsp_code=400,
-                    bucket=CrspBucket.LIQUIDATION,
-                    confidence="medium",
-                    reason="Form 25 + Form 15, no merger 8-K: voluntary dereg / liquidation",
-                    evidence=evidence,
-                )
-            return DelistRecord(
-                ticker=ticker.upper(),
-                cik=resolution.cik,
-                observed_delist_date=observed_delist_date,
-                crsp_code=570,
-                bucket=CrspBucket.COMPLIANCE_FAILURE,
-                confidence="medium",
-                reason="Form 25 present, no 8-K within window (defaulting to exchange action)",
-                evidence=evidence,
-            )
-
-        code, reason = self._classify_items(eightk.item_set)
-
-        if code is None:
-            if dereg is not None:
-                return DelistRecord(
-                    ticker=ticker.upper(),
-                    cik=resolution.cik,
-                    observed_delist_date=observed_delist_date,
-                    crsp_code=400,
-                    bucket=CrspBucket.LIQUIDATION,
-                    confidence="medium",
-                    reason="Form 25 + Form 15, 8-K without M&A items: liquidation/voluntary dereg",
-                    evidence=evidence,
-                )
-            return DelistRecord(
-                ticker=ticker.upper(),
-                cik=resolution.cik,
-                observed_delist_date=observed_delist_date,
-                crsp_code=570,
-                bucket=CrspBucket.COMPLIANCE_FAILURE,
-                confidence="low",
-                reason="Form 25 present with 8-K having no conclusive items; default compliance",
-                evidence=evidence,
-            )
-
-        # Delinquent-filer upgrade: a 570 with NT 10-K/Q in the prior year
-        # is more specifically a 580 (delinquent in filings).
-        if code == 570 and observed and self._detect_delinquent_filer(filings, observed):
-            code = 580
-            reason = reason + " + NT 10-K/Q in prior year (delinquent filer 580)"
+        code = None
+        if eightk is not None:
+            code, reason = self._classify_items(items)
+        # No conclusive fingerprint, or a 3.01 alone: a distress bucket needs evidence.
+        if code is None or code == 570:
+            return self._default_without_fingerprint(
+                ticker, resolution.cik, observed_delist_date, observed,
+                filings, eightk, dereg, delist_filing, evidence, flags)
 
         conf = "high" if dereg is not None else "medium"
         return DelistRecord(

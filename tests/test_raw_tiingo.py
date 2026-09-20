@@ -138,3 +138,39 @@ def test_date_after_last_row_returns_last_close(tmp_path):
     prices = RawTiingoPrices(root=tmp_path)
     # 2020-06-01 is after all rows — nearest prior is the last row.
     assert prices.close_on("ABC", "2020-06-01") == pytest.approx(105.0)
+
+
+# ---------------------------------------------------------------------------
+# Root resolution order
+# ---------------------------------------------------------------------------
+
+def test_root_argument_wins_over_env_var(tmp_path, monkeypatch):
+    """An explicit root= argument is used even when RAW_TIINGO_DIR is set."""
+    root_dir = tmp_path / "root"
+    env_dir = tmp_path / "env"
+    root_dir.mkdir()
+    env_dir.mkdir()
+    _write_csv(root_dir / "abc.csv", [("2020-01-02", 100.0)])
+    _write_csv(env_dir / "abc.csv", [("2020-01-02", 999.0)])
+    monkeypatch.setenv("RAW_TIINGO_DIR", str(env_dir))
+
+    prices = RawTiingoPrices(root=root_dir)
+    assert prices.close_on("ABC", "2020-01-02") == pytest.approx(100.0)
+
+
+def test_env_var_used_when_root_is_none(tmp_path, monkeypatch):
+    """RAW_TIINGO_DIR is used when root= is not passed."""
+    env_dir = tmp_path / "env"
+    env_dir.mkdir()
+    _write_csv(env_dir / "abc.csv", [("2020-01-02", 100.0)])
+    monkeypatch.setenv("RAW_TIINGO_DIR", str(env_dir))
+
+    prices = RawTiingoPrices()
+    assert prices.close_on("ABC", "2020-01-02") == pytest.approx(100.0)
+
+
+def test_no_root_no_env_raises_value_error(monkeypatch):
+    """Neither root= nor RAW_TIINGO_DIR set → ValueError, no silent default."""
+    monkeypatch.delenv("RAW_TIINGO_DIR", raising=False)
+    with pytest.raises(ValueError, match="no raw price directory"):
+        RawTiingoPrices()

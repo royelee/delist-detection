@@ -1,6 +1,6 @@
 """Alpha Vantage delisted listing-status loader.
 
-The qlib_practice pipeline already fetches AV's LISTING_STATUS, which gives
+The consuming pipeline already fetches AV's LISTING_STATUS, which gives
 us `(ticker, name, exchange, delistingDate)` for every delisted US-listed
 security. We use the **name** as both a resolver fallback (EDGAR company-
 name search) and as a validation signal (name-token match against the
