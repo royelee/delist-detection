@@ -151,6 +151,38 @@ def _acquirer_price(prices, ticker: str | None, date: str | None) -> float | Non
     return price
 
 
+def load_cik_map_csv(path):
+    """A (ticker, date) -> CIK lookup from the caller's universe identity table.
+
+    Columns: ticker, cik, and optionally era_start/era_end (blank = every event
+    of that ticker). A date outside every era of a ticker returns None rather
+    than the nearest era: the table does not claim what it does not cover.
+    """
+    rows = []
+    with open(path, newline="") as fh:
+        for r in csv.DictReader(fh):
+            cik = (r.get("cik") or "").strip()
+            if not cik:
+                continue
+            rows.append((r["ticker"].strip().upper(),
+                         (r.get("era_start") or "").strip(),
+                         (r.get("era_end") or "").strip(),
+                         int(cik)))
+
+    def lookup(ticker, observed_date=None):
+        t = (ticker or "").upper()
+        for tk, start, end, cik in rows:
+            if tk != t:
+                continue
+            if not start and not end:
+                return cik
+            if observed_date and (not start or start <= observed_date) and (not end or observed_date <= end):
+                return cik
+        return None
+
+    return lookup
+
+
 def main() -> int:
     p = argparse.ArgumentParser()
     p.add_argument("--input", default=str(DEFAULT_INPUT))
@@ -188,6 +220,9 @@ def main() -> int:
     p.add_argument("--names", default=None,
                    help="CSV ticker,as_of,name: index-member names, as the consuming pipeline "
                         "exports them from index-holdings data")
+    p.add_argument("--cik-map", default=None,
+                   help="CSV ticker,cik[,era_start,era_end]: the caller's resolved "
+                        "identity per ticker era. Beats every resolution tier.")
     args = p.parse_args()
 
     edgar = EdgarClient(cache_dir=ROOT / "cache" / "edgar")
@@ -199,6 +234,7 @@ def main() -> int:
         cache_path=ROOT / "cache" / "ticker_resolution.json",
         name_lookup=av.name,
         member_names=MemberNames.from_csv(args.names) if args.names else None,
+        cik_map=load_cik_map_csv(args.cik_map) if args.cik_map else None,
     )
     classifier = DelistClassifier(
         edgar, resolver,

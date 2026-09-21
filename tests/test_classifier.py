@@ -53,6 +53,32 @@ def test_a_current_ticker_map_hit_is_flagged(fake_edgar):
     assert rec.evidence["flags"] == ["resolved_by_current_ticker_map"]
 
 
+def test_a_cik_mapped_ticker_whose_names_differ_carries_both_flags(fake_edgar):
+    """Scoped exactly like resolved_by_manual_override: member_name_mismatch
+    states a fact about the security regardless of how the CIK was pinned, so
+    the mismatch flag still fires, and resolved_by_cik_map sits beside it to
+    tell review triage the CIK is already settled."""
+    resolver = TickerResolver(fake_edgar, cik_map=lambda t, d: 1701732 if t == "ALTR" else None,
+                              member_names=lambda t, d=None: "FOREST OIL CORP")
+    rec = DelistClassifier(fake_edgar, resolver).classify_ticker("ALTR", "2025-03-26")
+    assert rec.evidence["resolution_source"] == "cik_map"
+    flags = rec.evidence["flags"]
+    assert "member_name_mismatch" in flags and "resolved_by_cik_map" in flags
+
+
+def test_a_cik_mapped_ticker_whose_names_agree_gets_neither_flag(fake_edgar):
+    """Unconditional, resolved_by_cik_map would fire on nearly every row once a
+    universe-wide map exists and flood review.csv; resolution_source already
+    records "cik_map" in delist_classifications.csv, so provenance isn't lost
+    by leaving a settled pin out of flags/review.csv."""
+    resolver = TickerResolver(fake_edgar, cik_map=lambda t, d: 1701732 if t == "ALTR" else None,
+                              member_names=lambda t, d=None: "ALTAIR ENGINEERING INC")
+    rec = DelistClassifier(fake_edgar, resolver).classify_ticker("ALTR", "2025-03-26")
+    assert rec.evidence["resolution_source"] == "cik_map"
+    flags = rec.evidence["flags"]
+    assert "member_name_mismatch" not in flags and "resolved_by_cik_map" not in flags
+
+
 from delist_detection.edgar import EdgarSubmission
 
 

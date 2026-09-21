@@ -567,8 +567,14 @@ class DelistClassifier:
                 # together tell review triage "the name differs, and the CIK is
                 # already pinned". review.csv lists rows the rules could not
                 # settle, and a pin whose name agrees is settled, so it stays out.
+                # cik_map is scoped the same way, for the same reason: unconditional
+                # it would fire on nearly every row once a universe-wide map exists
+                # and flood review.csv, but resolution_source already records
+                # "cik_map" in delist_classifications.csv, so provenance isn't lost.
                 if resolution.source == "manual":
                     flags.append("resolved_by_manual_override")
+                if resolution.source == "cik_map":
+                    flags.append("resolved_by_cik_map")
 
         filings = self.edgar.recent_filings(resolution.cik)
         if not filings:

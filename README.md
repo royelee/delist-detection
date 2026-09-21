@@ -142,6 +142,7 @@ The full flag vocabulary (from `classifier.py`, `ticker_resolver.py`,
 | `member_name_mismatch` | The resolved CIK's EDGAR name disagrees with the expected index-member (or AV) name |
 | `resolved_by_current_ticker_map` | Resolved through `company_tickers.json` (today's holder of the ticker) |
 | `resolved_by_manual_override` | Resolved through `MANUAL_OVERRIDES`, and the name still disagrees |
+| `resolved_by_cik_map` | Resolved through `--cik-map`, and the name still disagrees |
 | `bankruptcy_tag_unconfirmed` | An 8-K carried the 1.03 tag, but its own Item 1.03 section did not confirm a bankruptcy |
 | `bankruptcy_text_missing` | The 1.03 filing's text could not be fetched, so the tag was kept unconfirmed |
 | `bankruptcy_before_merger` | A confirmed bankruptcy predates the delisting by more than 180 days and a change-in-control 8-K sits near the delisting; the merger path decided instead |
@@ -544,19 +545,25 @@ Tickers get recycled (e.g. ALTR was Altera 1988–2015, then Altair 2017–
 issuers. The resolver tries strategies in order of precision, then
 validates the candidate looks like a delist *target* (not an *acquirer*):
 
-1. **Manual override.** Hand-curated for ~35 short ambiguous tickers
-   (`AET`, `X`, `MER`, `KLG`, …). Always wins.
-2. **`company_tickers.json`.** Master active map.
-3. **EFTS Form-25/15 within ±90 days.** Most precise; skips known
+1. **`--cik-map`.** The caller's own per-(ticker, era) identity table — resolved
+   once against EDGAR and reviewed by a human. Beats every other tier,
+   including the manual override, and is never written to the on-disk
+   resolver cache (`cache/ticker_resolution.json`): the tier answers before
+   the cache is even consulted, so persisting it would let a stale pin
+   survive dropping `--cik-map`, or a ticker later corrected in the map.
+2. **Manual override.** Hand-curated for ~35 short ambiguous tickers
+   (`AET`, `X`, `MER`, `KLG`, …). Wins over everything below it.
+3. **`company_tickers.json`.** Master active map.
+4. **EFTS Form-25/15 within ±90 days.** Most precise; skips known
    exchange CIKs (Nasdaq, NYSE, …) automatically.
-4. **Index-member name (or AV name) → EDGAR cgi-bin company search.**
+5. **Index-member name (or AV name) → EDGAR cgi-bin company search.**
    Generates name variants (suffix-stripped, leading 1-3 tokens) and
    queries the ATOM endpoint. Uses the `--names` member name when one is
    supplied for the ticker; otherwise falls back to Alpha Vantage's
    delisted-list name, which skips a candidate when AV's recorded delist
    date is >365 days from observed (signals a recycled ticker: AV's name
    is for the prior issuer).
-5. **EFTS 8-K frequency rank.** Counts CIKs in 8-Ks mentioning the
+6. **EFTS 8-K frequency rank.** Counts CIKs in 8-Ks mentioning the
    ticker in the 120 days pre-delist; strict-validates each candidate.
 
 Validation: a candidate CIK is only accepted if it filed Form 25 or
@@ -580,6 +587,16 @@ often enough to matter: when AV's own name is stale or names the wrong
 holder of a recycled ticker, checking a candidate against that same wrong
 name cannot catch the error. A `--names` file breaks that circularity with
 an independent source.
+
+When the caller has already settled a ticker's identity — resolved once
+against EDGAR and reviewed by a human, e.g. a per-era identity table built
+elsewhere in the pipeline — hand it over with `--cik-map path.csv` (CSV
+columns `ticker,cik`, plus optional `era_start`/`era_end` for a ticker with
+more than one delisting event) instead of re-deriving it through `--names`.
+It beats every resolution tier, including the manual override, and still
+gets the same `member_name_mismatch` check against `--names` as any other
+source — a pin does not silence that check, since it states a fact about
+the security, not about how the CIK was found.
 
 ---
 
