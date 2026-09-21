@@ -63,6 +63,7 @@ FETCHED_KEY = "__fetched__"
 # returned dict only, never written to disk.
 STALE_KEY = "__stale__"
 SUBMISSIONS_FRESH_DAYS = 45  # filings this long after the last trade must be in the submissions read
+COMPANY_SEARCH_FRESH_DAYS = 7  # a company-search answer this old is refetched, never trusted forever
 
 
 def submissions_fresh_after(on: date) -> date:
@@ -218,12 +219,29 @@ class EdgarClient:
         Uses the cgi-bin/browse-edgar ATOM endpoint. The ATOM XML has a
         single <company-info> block (top match) and an <entry> per filing.
         We return the top company's CIK along with any matching filings.
+
+        Cached on disk like `_get_json` (same `FETCHED_KEY` / stored fetch
+        date), but never for an empty or error answer: an empty result would
+        otherwise silently and permanently hide a correct hit that only shows
+        up once EDGAR's index catches up. A cached hit older than
+        `COMPANY_SEARCH_FRESH_DAYS` is refetched.
         """
         url = (
             f"{WWW_SEC_HOST}/cgi-bin/browse-edgar?action=getcompany"
             f"&company={requests.utils.quote(company)}&type={form_type}"
             "&dateb=&owner=include&count=10&output=atom"
         )
+        cp = self._cache_path(url)
+        fresh_after = date.today() - timedelta(days=COMPANY_SEARCH_FRESH_DAYS)
+        if cp.exists():
+            try:
+                cached = json.loads(cp.read_text())
+            except json.JSONDecodeError:
+                cp.unlink(missing_ok=True)
+            else:
+                if isinstance(cached, dict) and _fetched_on(cp, cached) >= fresh_after:
+                    return cached.get("hits", [])
+
         _throttle()
         try:
             resp = self.session.get(
@@ -260,6 +278,8 @@ class EdgarClient:
             })
         if not entries:
             out.append({"cik": company_cik, "name": company_name, "form": "", "filing_date": ""})
+        if out:   # never cache an empty or error answer (see docstring)
+            cp.write_text(json.dumps({"hits": out, FETCHED_KEY: date.today().isoformat()}))
         return out
 
     def submissions(self, cik: int | str, fresh_after: date | None = None) -> dict[str, Any]:
