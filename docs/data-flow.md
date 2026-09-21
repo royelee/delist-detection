@@ -100,26 +100,34 @@ it cannot map deregistered tickers. We layer increasingly looser strategies
 until something hits, then validate that the candidate looks like a delist
 target rather than an acquirer.
 
-1. **Manual override.** Hand-curated `MANUAL_OVERRIDES` in
-   `scripts/classify_universe.py`. Always wins; used for short tickers
-   where EFTS picks the wrong issuer (e.g. `AET → 1122304 Aetna`).
+1. **`--cik-map`.** The caller's own per-(ticker, era) identity table,
+   resolved once against EDGAR and reviewed by a human (`cik_map` param on
+   `TickerResolver`). Beats every other tier, including the manual override.
+   Never written to `cache/ticker_resolution.json`: it answers before the
+   on-disk memo is even consulted, so persisting it would let a stale pin
+   outlive the caller correcting or dropping the map — the resolver must
+   forget it the moment `--cik-map` does.
 
-2. **company_tickers.json.** Master active-tickers map.
+2. **Manual override.** Hand-curated `MANUAL_OVERRIDES` in
+   `scripts/classify_universe.py`. Wins over everything below it; used for
+   short tickers where EFTS picks the wrong issuer (e.g. `AET → 1122304 Aetna`).
 
-3. **EFTS Form-25/15 with date window.** Searches
+3. **company_tickers.json.** Master active-tickers map.
+
+4. **EFTS Form-25/15 with date window.** Searches
    `efts.sec.gov/LATEST/search-index` restricted to Form 25, 25-NSE, 15-12G,
    15-12B, 15-15D within ±90 days of the observed delist date. Skips
    known exchange CIKs (Nasdaq 1354457, NYSE LLC 876661, Cboe BZX 1417835, …) and prefers hits
    whose display_name contains the literal `(TICKER)`.
 
-4. **AV name + EDGAR cgi-bin company search.** Uses the company name from
+5. **AV name + EDGAR cgi-bin company search.** Uses the company name from
    Alpha Vantage's delisted CSV, generates variants (full name, suffix-
    stripped, leading 1-3 tokens), and queries
    `www.sec.gov/cgi-bin/browse-edgar?company=…&type=…&output=atom`.
    Rejects when AV's delistingDate is >365 days from the observed date
    (signals a recycled ticker — the AV name is for the prior issuer).
 
-5. **EFTS 8-K frequency rank.** Counts CIKs appearing in 8-Ks that mention
+6. **EFTS 8-K frequency rank.** Counts CIKs appearing in 8-Ks that mention
    the ticker in the 120 days before delisting. Validates each candidate
    in strict mode (must have Form 25/15 in window AND no 10-K/Q in the
    five years after `delist + 90d` — the latter rejects the acquirer).

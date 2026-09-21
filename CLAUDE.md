@@ -21,7 +21,7 @@ editable install.
 
 ```bash
 pip install -e .                         # editable install (Python ≥3.10) — once per env
-pytest                                    # full suite (416 tests, offline, no network)
+pytest                                    # full suite (433 tests, offline, no network)
 pytest tests/test_payout_extractor.py -v  # one file
 pytest tests/test_payout_extractor.py::test_match_in_cash_family_altr -v   # one test
 
@@ -32,9 +32,9 @@ python scripts/verify_against_web.py     # independent EDGAR cross-check → out
 python scripts/regen_payout_fixtures.py  # refetch golden 8-K fixtures from live SEC
 python scripts/build_golden_fixtures.py  # rebuild the 31-case golden regression set (NETWORK); --efts-only / --llm-only / --only ID / --raw-tiingo-dir
 # End-to-end pipeline (the canonical way to use the library) — classify a universe → output/dlret.csv (+ review.csv), then firm-month-correct a returns panel:
-python scripts/classify_universe.py --last-trade-closes lt.csv --merger-terms terms.csv --recoveries rec.csv --names names.csv   # → output/dlret.csv (+ delist_classifications.csv, payouts.csv, review.csv)
+python scripts/classify_universe.py --last-trade-closes lt.csv --merger-terms terms.csv --recoveries rec.csv --names names.csv --cik-map cik_map.csv   # → output/dlret.csv (+ delist_classifications.csv, payouts.csv, review.csv)
 python scripts/compute_corrected_returns.py --panel panel.csv --classifications output/delist_classifications.csv --av-csv "$AV_LISTING_CSV" --payouts output/payouts.csv --last-trade-closes lt.csv --recoveries rec.csv --out corrected.parquet   # firm-month BMP correction
-# override-CSV columns: lt.csv=`ticker,last_trade_close` · terms.csv=`ticker,cash_per_share,stock_ratio,acquirer_price,acquirer_ticker` · rec.csv=`ticker,recovery_ratio` — each also accepts an optional `observed_delist_date` column for per-event (recycled-ticker) overrides. names.csv=`ticker,as_of,name`: index-member names the resolver checks candidates against; without it the AV delisted-list name is the only fallback (see README's "Naming the right company")
+# override-CSV columns: lt.csv=`ticker,last_trade_close` · terms.csv=`ticker,cash_per_share,stock_ratio,acquirer_price,acquirer_ticker` · rec.csv=`ticker,recovery_ratio` — each also accepts an optional `observed_delist_date` column for per-event (recycled-ticker) overrides. names.csv=`ticker,as_of,name`: index-member names the resolver checks candidates against; without it the AV delisted-list name is the only fallback (see README's "Naming the right company"). cik_map.csv=`ticker,cik[,era_start,era_end]`: the caller's own resolved-and-reviewed identity per ticker era — beats every resolution tier, including the manual override, and is checked against `--names` for the same mismatch flag (see README's "Naming the right company" and `docs/data-flow.md`)
 # (append --limit N to classify_universe for a fast cached/offline subset)
 # Auto-extract cash+stock merger terms with an LLM instead of hand-writing terms.csv (NETWORK: SEC + OpenAI; needs OPENAI_API_KEY + CHAT_MODEL in .env):
 python scripts/classify_universe.py --extract-merger-terms-llm   # → output/dlret.csv with cash_plus_stock/stock_only rows (98 deals on the full universe)
