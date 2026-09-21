@@ -555,6 +555,8 @@ class DelistClassifier:
 
         if resolution.source == "company_tickers":
             flags.append("resolved_by_current_ticker_map")
+        if resolution.source == "cik_map":
+            flags.append("resolved_by_cik_map")
         # A pin does not silence the name check: `member_name_mismatch` states a
         # fact about the security — the vendor series is not the named member —
         # and it is how the consumer catches an impostor series.

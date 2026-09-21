@@ -53,6 +53,13 @@ def test_a_current_ticker_map_hit_is_flagged(fake_edgar):
     assert rec.evidence["flags"] == ["resolved_by_current_ticker_map"]
 
 
+def test_a_cik_map_hit_is_flagged(fake_edgar):
+    resolver = TickerResolver(fake_edgar, cik_map=lambda t, d: 1701732 if t == "ALTR" else None)
+    rec = DelistClassifier(fake_edgar, resolver).classify_ticker("ALTR", "2025-03-26")
+    assert rec.evidence["resolution_source"] == "cik_map"
+    assert "resolved_by_cik_map" in rec.evidence["flags"]
+
+
 from delist_detection.edgar import EdgarSubmission
 
 

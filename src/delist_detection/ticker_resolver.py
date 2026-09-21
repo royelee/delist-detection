@@ -32,8 +32,9 @@ class TickerResolution:
     ticker: str
     cik: int | None
     name: str | None
-    # 'manual' | 'rename' | 'company_tickers' | 'efts' | 'efts_name_mismatch' | 'name_search'
-    # | 'efts_frequency' | 'efts_frequency_name_mismatch' | 'rejected_validation' | 'none'
+    # 'cik_map' | 'manual' | 'rename' | 'company_tickers' | 'efts' | 'efts_name_mismatch'
+    # | 'name_search' | 'efts_frequency' | 'efts_frequency_name_mismatch'
+    # | 'rejected_validation' | 'none'
     source: str
 
 
@@ -47,6 +48,7 @@ class TickerResolver:
         name_lookup: "callable[..., str | None] | None" = None,
         *,
         member_names: "callable[..., str | None] | None" = None,
+        cik_map: "callable[[str, str | None], int | None] | None" = None,
     ) -> None:
         self.edgar = edgar
         self.rename_map = {k.upper(): v.upper() for k, v in (rename_map or {}).items()}
@@ -54,6 +56,7 @@ class TickerResolver:
         self.cache_path = Path(cache_path) if cache_path else None
         self.name_lookup = name_lookup or (lambda *a, **kw: None)
         self.member_names = member_names or (lambda *a, **kw: None)  # (ticker, date) -> index-member name
+        self.cik_map = cik_map or (lambda *a, **kw: None)  # (ticker, date) -> CIK from the caller's universe
         self._memo: dict[str, TickerResolution] = {}
         self._memo_member: dict[str, str | None] = {}   # key -> member name the answer was checked with
         self._volatile: set[str] = set()   # misses and transient-error answers: this run only
@@ -547,6 +550,15 @@ class TickerResolver:
         # The answer holds only for the member name its checks used.
         member = self.member_names(t, observed_date) or None
         self._transient = False
+
+        pinned = self.cik_map(t, observed_date)
+        if pinned:
+            # The caller's universe states which company this row is: it was
+            # resolved once, against the member name, and reviewed. Nothing this
+            # resolver can derive from a symbol beats that.
+            res = TickerResolution(ticker=t, cik=int(pinned), name=None, source="cik_map")
+            self._remember(cache_key, res, member)
+            return res
 
         # Manual overrides always beat the cache — they're the truth.
         if t in self.manual_overrides:
