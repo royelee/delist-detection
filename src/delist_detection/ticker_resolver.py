@@ -555,10 +555,12 @@ class TickerResolver:
         if pinned:
             # The caller's universe states which company this row is: it was
             # resolved once, against the member name, and reviewed. Nothing this
-            # resolver can derive from a symbol beats that.
-            res = TickerResolution(ticker=t, cik=int(pinned), name=None, source="cik_map")
-            self._remember(cache_key, res, member)
-            return res
+            # resolver can derive from a symbol beats that. This tier answers
+            # before the memo read below, so persisting it buys nothing — and
+            # would let a stale pin survive an operator dropping --cik-map to
+            # see what the library resolves on its own, or a ticker later
+            # corrected in the map. Never written to the on-disk cache.
+            return TickerResolution(ticker=t, cik=int(pinned), name=None, source="cik_map")
 
         # Manual overrides always beat the cache — they're the truth.
         if t in self.manual_overrides:
