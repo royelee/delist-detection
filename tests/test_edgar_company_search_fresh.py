@@ -157,3 +157,46 @@ def test_an_empty_answer_does_not_overwrite_a_stale_cache_and_is_retried_next_ca
     hits2 = client.company_search_atom(COMPANY, form_type=FORM)
     assert hits2 == []
     assert session.calls == [_url(), _url()]
+
+
+def test_a_5xx_during_a_refetch_serves_the_stale_cached_hit(tmp_path):
+    """Mirrors _get_json: a failed refresh must not turn a company with a
+    usable cached copy into an empty result."""
+    client, session = _client(tmp_path, status=503)
+    cp = client._cache_path(_url())
+    stale = {"hits": HIT, FETCHED_KEY: (date.today() - timedelta(days=8)).isoformat()}
+    cp.write_text(json.dumps(stale))
+
+    hits = client.company_search_atom(COMPANY, form_type=FORM)
+
+    assert hits == HIT
+    assert session.calls == [_url()]
+    assert json.loads(cp.read_text()) == stale     # the 5xx never touches the cache
+
+
+def test_a_transport_failure_during_a_refetch_serves_the_stale_cached_hit(tmp_path):
+    class _FailingSession(_Session):
+        def get(self, url, headers=None, timeout=None):
+            self.calls.append(url)
+            raise requests.ConnectionError("no route to host")
+
+    session = _FailingSession()
+    client = EdgarClient(cache_dir=tmp_path, session=session)
+    cp = client._cache_path(_url())
+    stale = {"hits": HIT, FETCHED_KEY: (date.today() - timedelta(days=8)).isoformat()}
+    cp.write_text(json.dumps(stale))
+
+    hits = client.company_search_atom(COMPANY, form_type=FORM)
+
+    assert hits == HIT
+    assert json.loads(cp.read_text()) == stale
+
+
+def test_a_failed_refetch_without_any_cached_copy_still_returns_empty(tmp_path):
+    client, session = _client(tmp_path, status=503)
+    cp = client._cache_path(_url())
+
+    hits = client.company_search_atom(COMPANY, form_type=FORM)
+
+    assert hits == []
+    assert not cp.exists()

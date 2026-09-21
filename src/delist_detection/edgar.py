@@ -224,7 +224,10 @@ class EdgarClient:
         date), but never for an empty or error answer: an empty result would
         otherwise silently and permanently hide a correct hit that only shows
         up once EDGAR's index catches up. A cached hit older than
-        `COMPANY_SEARCH_FRESH_DAYS` is refetched.
+        `COMPANY_SEARCH_FRESH_DAYS` is refetched — and, like `_get_json`, a
+        failed refetch (transport error or non-200) serves the stale cached
+        hit rather than erroring the row out, so a transient SEC outage can't
+        turn a company with a usable cached answer into an empty result.
         """
         url = (
             f"{WWW_SEC_HOST}/cgi-bin/browse-edgar?action=getcompany"
@@ -233,11 +236,13 @@ class EdgarClient:
         )
         cp = self._cache_path(url)
         fresh_after = date.today() - timedelta(days=COMPANY_SEARCH_FRESH_DAYS)
+        cached: Any = None
         if cp.exists():
             try:
                 cached = json.loads(cp.read_text())
             except json.JSONDecodeError:
                 cp.unlink(missing_ok=True)
+                cached = None
             else:
                 if isinstance(cached, dict) and _fetched_on(cp, cached) >= fresh_after:
                     return cached.get("hits", [])
@@ -249,11 +254,11 @@ class EdgarClient:
                 headers={**self.session.headers, "Host": "www.sec.gov", "Accept": "application/atom+xml,text/xml"},
                 timeout=30,
             )
-            check_response(resp)
+            check_response(resp)          # EdgarBlocked is not a RequestException: it propagates
             if resp.status_code != 200:
-                return []
+                return cached.get("hits", []) if isinstance(cached, dict) else []
         except requests.RequestException:
-            return []
+            return cached.get("hits", []) if isinstance(cached, dict) else []
         text = resp.text
         # Quick-and-dirty XML extraction; the document is tiny and well-formed.
         import re as _re
