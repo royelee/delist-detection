@@ -53,9 +53,13 @@ observed_delist_date, crsp_code, bucket, confidence, reason, evidence`.
 **Classification (network):**
 - `edgar.py` — throttled, on-disk-cached SEC client. `submissions()`,
   `recent_filings()`, `fetch_filing_text()` (strips HTML, separate text cache).
-- `ticker_resolver.py` — `(ticker, as_of_date) → CIK`, 5 strategies in order of
-  precision (manual override → `company_tickers.json` → EFTS Form-25/15 →
-  AV-name company search → 8-K frequency rank), each strict-validated.
+- `ticker_resolver.py` — `(ticker, as_of_date) → CIK`, 6 strategies in order of
+  precision (caller-supplied `--cik-map` → manual override → `company_tickers.json`
+  → EFTS Form-25/15 → AV-name company search → 8-K frequency rank), each
+  strict-validated. `--cik-map` answers before every other tier (including the
+  manual override) and is never written to the on-disk resolver cache — it
+  answers before the memo read, so persisting it would let a stale pin survive
+  an operator dropping `--cik-map`, or a ticker later corrected in the map.
 - `av_listing.py` — Alpha Vantage `LISTING_STATUS` loader; provides issuer name
   + asset type as resolver fallback and validation signals.
 - `classifier.py` — the filing-trio fingerprint (**Form 25 + 8-K item codes +
