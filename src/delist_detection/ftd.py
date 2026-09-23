@@ -3,6 +3,10 @@
 Two uses: the close on a security's last trading day (a row dated D carries the
 close of the prior trading day), and the CUSIP a symbol carried on a date.
 Rows exist only on days with fails, so a quiet security has gaps.
+
+FTD writes class tickers without a separator ("BFB", "BRKB") where observations
+and the output tables write "BF-B". `FtdIndex` loads a requested ticker under
+both spellings and keys the rows by the requested (canonical) one.
 """
 from __future__ import annotations
 
@@ -13,7 +17,7 @@ import zipfile
 from bisect import bisect_left, bisect_right
 from collections import defaultdict
 from collections.abc import Iterable, Iterator
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -140,10 +144,37 @@ class FtdIndex:
         # between them (e.g. Jan and Mar) don't falsely cover Feb.
         self._symbol_windows: dict[str, list[tuple[date, date]]] = {}
         self._cusip_windows: dict[str, list[tuple[date, date]]] = {}
+        # Tickers requested by a load/extend symbol filter, and each one's FTD
+        # spelling without separators ("BFB" -> "BF-B"); None marks a bare
+        # spelling two requested tickers share, which is left unmapped.
+        self._requested: set[str] = set()
+        self._aliases: dict[str, str | None] = {}
         for r in rows:
             self.add(r)
 
+    def _learn(self, symbols: set[str]) -> set[str]:
+        """Remember `symbols` as canonical tickers; returns the file filter:
+        each one plus its separator-free spelling."""
+        out = set(symbols)
+        for s in symbols:
+            self._requested.add(s)
+            bare = s.replace("-", "")
+            if bare != s:
+                out.add(bare)
+                self._aliases[bare] = s if self._aliases.get(bare, s) == s else None
+        return out
+
+    def _canon(self, symbol: str) -> str:
+        """The requested ticker a row symbol stands for: itself when requested
+        as spelled, else the requested ticker it equals without separators."""
+        if symbol in self._requested:
+            return symbol
+        return self._aliases.get(symbol) or symbol
+
     def add(self, r: FtdRow) -> None:
+        canon = self._canon(r.symbol)
+        if canon != r.symbol:
+            r = replace(r, symbol=canon)
         if r in self._seen:
             return
         self._seen.add(r)
@@ -198,8 +229,9 @@ class FtdIndex:
     def _scan(self, client: FtdClient, lo: date, hi: date, symbols: set[str] | None,
               cusips: set[str] | None) -> None:
         lo_s, hi_s = lo.isoformat(), hi.isoformat()
+        wanted = None if symbols is None else self._learn(symbols)
         for url in client.urls_for(lo, hi):
-            for r in client.rows(url, symbols=symbols, cusips=cusips):
+            for r in client.rows(url, symbols=wanted, cusips=cusips):
                 if lo_s <= r.date <= hi_s:
                     self.add(r)
         for keys, windows in ((symbols, self._symbol_windows), (cusips, self._cusip_windows)):
@@ -222,7 +254,7 @@ class FtdIndex:
 
     def by_symbol(self, symbol: str, lo: str | None = None, hi: str | None = None) -> list[FtdRow]:
         self._sort()
-        return self._slice(self._by_symbol.get(normalize_ticker(symbol), []), lo, hi)
+        return self._slice(self._by_symbol.get(self._canon(normalize_ticker(symbol)), []), lo, hi)
 
     def by_cusip(self, cusip: str, lo: str | None = None, hi: str | None = None) -> list[FtdRow]:
         self._sort()

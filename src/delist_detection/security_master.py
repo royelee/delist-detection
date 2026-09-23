@@ -2,22 +2,26 @@
 into securities, with dated ticker and CUSIP ranges.
 
 A security is one share class traded in the US (CONTEXT.md). Eras of different
-tickers that resolve to the same FIGI (FB, later META) are one security.
+tickers that resolve to the same FIGI (FB, later META) are one security, and so
+are two eras of one ticker that `refine_eras` split apart but that resolve to
+the same FIGI (a reverse split's new CUSIP, a gap no FTD row bridged).
 """
 from __future__ import annotations
 
-from collections import Counter
+from collections import Counter, defaultdict
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date, timedelta
 
 from .figi_resolution import (
     FigiCandidate, accept, bloomberg_ticker, filter_query, placeholder_id, security_kind,
     share_class_from_name, us_candidates,
 )
-from .ftd import FtdIndex
+from .ftd import FtdIndex, FtdRow
 from .names import names_agree
-from .observations import TickerEra
+from .observations import ERA_GAP_DAYS, Observation, TickerEra
+
+ERA_MIN_RUN = 3          # an FTD CUSIP run shorter than this is noise, not a CUSIP switch
 
 
 @dataclass
@@ -47,7 +51,100 @@ class EraResolution:
     flags: tuple[str, ...]
 
 
+def _cusip_runs(rows: Sequence[FtdRow]) -> list[tuple[str, list[FtdRow]]]:
+    """Date-sorted `rows` grouped into consecutive runs of one CUSIP."""
+    runs: list[tuple[str, list[FtdRow]]] = []
+    for r in rows:
+        if runs and runs[-1][0] == r.cusip:
+            runs[-1][1].append(r)
+        else:
+            runs.append((r.cusip, [r]))
+    return runs
+
+
+def _cut(obs: Sequence[Observation], rows: Sequence[FtdRow],
+         cuts: Sequence[str]) -> list[tuple[list[Observation], list[FtdRow]]]:
+    """Observations and rows split at each cut date: a cut date starts the next part."""
+    bounds = [None, *sorted(set(cuts)), None]
+    return [([o for o in obs if (lo is None or o.as_of >= lo) and (hi is None or o.as_of < hi)],
+             [r for r in rows if (lo is None or r.date >= lo) and (hi is None or r.date < hi)])
+            for lo, hi in zip(bounds, bounds[1:])]
+
+
+def _gap_cuts(obs: Sequence[Observation], rows: Sequence[FtdRow]) -> list[str]:
+    kept = {c for c, run in _cusip_runs(rows) if len(run) >= ERA_MIN_RUN}
+    dates = sorted({o.as_of for o in obs} | {r.date for r in rows if r.cusip in kept})
+    return [b for a, b in zip(dates, dates[1:])
+            if (date.fromisoformat(b) - date.fromisoformat(a)).days > ERA_GAP_DAYS]
+
+
+def _switch_cuts(rows: Sequence[FtdRow]) -> list[str]:
+    kept = [(c, run) for c, run in _cusip_runs(rows) if len(run) >= ERA_MIN_RUN]
+    return [run[0].date for (a, _), (b, run) in zip(kept, kept[1:]) if a != b]
+
+
+def _split_era(era: TickerEra, rows: list[FtdRow]) -> list[TickerEra]:
+    out: list[TickerEra] = []
+    for g_obs, g_rows in _cut(era.observations, rows, _gap_cuts(era.observations, rows)):
+        for obs, part_rows in _cut(g_obs, g_rows, _switch_cuts(g_rows)):
+            if not obs:
+                continue                  # an FTD-only side (another holder of the ticker, a tail) is no era
+            counts = Counter(r.cusip for r in part_rows)
+            kept = tuple(c for c, n in counts.most_common() if n >= ERA_MIN_RUN)
+            out.append(replace(era, first=obs[0].as_of, last=obs[-1].as_of, observations=list(obs),
+                               ftd_cusips=kept))
+    return out
+
+
+def refine_eras(eras: Sequence[TickerEra], ftd: FtdIndex) -> list[TickerEra]:
+    """Stage 2 of era building (stage 1 is `observations.split_eras`): split each
+    observation era further on SEC fails-to-deliver evidence under its ticker.
+
+    Each observation era sees the ticker's FTD rows after the previous era's
+    last observation and before the next era's first observation (so rows
+    between two eras — one security's tail, the next one's head — are seen by
+    both, and each drops the side that is not its own). Within that window:
+
+    - Gap: the era's observation dates merged with the dates of its FTD rows of
+      the CUSIPs that have a run of at least `ERA_MIN_RUN` rows split where two
+      consecutive dates are more than `ERA_GAP_DAYS` apart. FTD rows bridge a
+      snapshot gap for a security that kept trading (2009-06-08 -> 2012-06-29);
+      nothing bridges DELL's 2013 -> 2018 gap.
+    - CUSIP switch: within each gap part, the FTD rows grouped into runs of one
+      CUSIP (runs shorter than `ERA_MIN_RUN` ignored as noise); where two kept
+      runs have different CUSIPs, split at the first date of the later run
+      (FOXA 90130A101 -> 35137L105, GOOG 38259P508 -> 38259P706).
+
+    The gap is applied first so that an observation of the new security dated
+    before its CUSIP's first FTD row (DELL Technologies seen 2018-12-31, first
+    fails row 2019-01-02) stays with the new security instead of being cut off
+    alone. Observations before a cut date stay in the earlier era; a part with
+    no observations is not an era, and its rows are dropped (a neighbouring era
+    of the same CUSIP already has that CUSIP). Each resulting era records the
+    CUSIPs of its own kept runs in `ftd_cusips`.
+
+    Over-splitting is cheap: `build_securities` merges eras that resolve to the
+    same FIGI.
+    """
+    spans: dict[str, list[tuple[str, str]]] = defaultdict(list)
+    for e in eras:
+        spans[e.ticker].append((e.first, e.last))
+    out: list[TickerEra] = []
+    for e in eras:
+        prev = max((last for first, last in spans[e.ticker] if first < e.first), default=None)
+        nxt = min((first for first, _ in spans[e.ticker] if first > e.first), default=None)
+        lo = (date.fromisoformat(prev) + timedelta(days=1)).isoformat() if prev else None
+        hi = (date.fromisoformat(nxt) - timedelta(days=1)).isoformat() if nxt else None
+        out += _split_era(e, ftd.by_symbol(e.ticker, lo, hi))
+    return out
+
+
 def era_cusips(era: TickerEra, ftd: FtdIndex) -> list[str]:
+    """Candidate CUSIPs for an era: the observed ones, then the FTD ones. A
+    refined era uses its own FTD CUSIPs; otherwise the FTD rows under the ticker
+    around the era whose description agrees with an era name, most rows first."""
+    if era.ftd_cusips:
+        return list(era.cusips) + [c for c in era.ftd_cusips if c not in era.cusips]
     lo = (date.fromisoformat(era.first) - timedelta(days=10)).isoformat()
     hi = (date.fromisoformat(era.last) + timedelta(days=10)).isoformat()
     counts: Counter[str] = Counter()
@@ -59,11 +156,18 @@ def era_cusips(era: TickerEra, ftd: FtdIndex) -> list[str]:
 
 
 def era_last_seen(era: TickerEra, ftd: FtdIndex, horizon_days: int = 400) -> str:
+    """The era's last sighting: its last observation, or a later FTD row under
+    its ticker within `horizon_days` — of the era's own FTD CUSIPs when it has
+    them (a name check is too weak: "FOX CORP" agrees with "TWENTY FIRST
+    CENTURY FOX"), else with a description that agrees with an era name."""
     lo = (date.fromisoformat(era.last) + timedelta(days=1)).isoformat()
     hi = (date.fromisoformat(era.last) + timedelta(days=horizon_days)).isoformat()
     best = era.last
     for r in ftd.by_symbol(era.ticker, lo, hi):
-        if era.names and not any(names_agree(r.description, n) for n in era.names):
+        if era.ftd_cusips:
+            if r.cusip not in era.ftd_cusips:
+                continue
+        elif era.names and not any(names_agree(r.description, n) for n in era.names):
             continue
         best = max(best, r.date)
     return best
@@ -165,17 +269,37 @@ class Range:
 
 def ranges_from_sightings(sightings: Iterable[tuple[str, str, str]], *, end: str | None,
                           open_ended: bool) -> list[Range]:
-    items = sorted(set(sightings))
+    """Dated `(day, value, source)` sightings -> consecutive ranges of one value.
+
+    Each range runs from its first sighting to the day before the next range's
+    first sighting; the last one ends at `end`, or stays open (`open_ended`),
+    or ends at its last sighting. A value seen only once, and only in FTD
+    rows, is noise and dropped. Sightings after `end` are ignored.
+
+    One day keeps one value: an observation beats an FTD row; then a value the
+    caller observed; then the value of the range already running (so a day
+    that sighted two tickers doesn't cut the running range); then the spelling
+    with a separator ("BF-B" over "BFB"); then the alphabetically first. So
+    every range has `valid_to >= valid_from`.
+    """
+    items = sorted({x for x in sightings if end is None or x[0] <= end})
     ftd_counts = Counter(v for _, v, s in items if s == "ftd")
     obs_values = {v for _, v, s in items if s == "observation"}
     items = [(d, v, s) for d, v, s in items if s == "observation" or ftd_counts[v] > 1 or v in obs_values]
-    runs: list[list] = []                        # [value, first, last, sources]
+    by_day: dict[str, list[tuple[str, str]]] = defaultdict(list)
     for d, v, s in items:
+        by_day[d].append((v, s))
+    runs: list[list] = []                        # [value, first, last, sources]
+    for d in sorted(by_day):
+        running = runs[-1][0] if runs else None
+        v, _ = min(by_day[d], key=lambda vs: (vs[1] != "observation", vs[0] not in obs_values, vs[0] != running,
+                                              "-" not in vs[0], vs[0]))
+        sources = {s for x, s in by_day[d] if x == v}
         if runs and runs[-1][0] == v:
             runs[-1][2] = d
-            runs[-1][3].add(s)
+            runs[-1][3] |= sources
         else:
-            runs.append([v, d, d, {s}])
+            runs.append([v, d, d, sources])
     out: list[Range] = []
     for i, (v, first, last, sources) in enumerate(runs):
         if i + 1 < len(runs):
@@ -186,5 +310,7 @@ def ranges_from_sightings(sightings: Iterable[tuple[str, str, str]], *, end: str
             to = None
         else:
             to = last
+        if to is not None and to < first:
+            continue                              # never an inverted range
         out.append(Range(v, first, to, "observation" if "observation" in sources else "ftd"))
     return out

@@ -170,6 +170,29 @@ def test_extend_disjoint_scans_do_not_falsely_cover_a_gap(tmp_path):
     assert [r.date for r in idx.by_cusip("00817Y108")] == ["2019-01-10", "2019-02-10", "2019-03-10"]
 
 
+def test_load_maps_separatorless_class_symbols_to_the_observed_ticker(tmp_path):
+    # FTD writes class tickers without a separator ("BFB", "BRKB"); observations
+    # and the tables use "BF-B". Rows load under both spellings and are keyed by
+    # the observed one; a symbol the caller did not spell with a separator stays.
+    (tmp_path / "index.html").write_text('<a href="/files/data/x/cnsfails201811b.zip">b</a>')
+    text = ("SETTLEMENT DATE|CUSIP|SYMBOL|QUANTITY (FAILS)|DESCRIPTION|PRICE\n"
+            "20181126|115637209|BFB|10|BROWN-FORMAN CORP CL-B|48.00\n"
+            "20181127|115637209|BF/B|10|BROWN-FORMAN CORP CL-B|48.50\n"
+            "20181126|115637100|BFA|10|BROWN-FORMAN CORP CL-A|47.00\n"
+            "20181126|084670702|BRKB|10|BERKSHIRE HATHWY INC(HLDG CO)B|200.00\n")
+    (tmp_path / "cnsfails201811b.zip").write_bytes(_zip_bytes({"a.txt": text}))
+    c = FtdClient(tmp_path)
+    idx = FtdIndex.load(c, date(2018, 11, 16), date(2018, 11, 30), symbols={"BF-B", "BFA"})
+    assert [(r.date, r.symbol) for r in idx.by_symbol("BF-B")] == [("2018-11-26", "BF-B"), ("2018-11-27", "BF-B")]
+    assert idx.by_symbol("BFB") == idx.by_symbol("BF-B")
+    assert [r.symbol for r in idx.by_symbol("BFA")] == ["BFA"]
+    assert [r.symbol for r in idx.by_cusip("115637209")] == ["BF-B", "BF-B"]
+    assert idx.close_after(date(2018, 11, 23), symbol="BF-B") == (48.0, "2018-11-26", False)
+    # a later extend (an acquirer ticker) maps its own spelling too
+    idx.extend(c, date(2018, 11, 16), date(2018, 11, 30), symbols={"BRK-B"})
+    assert [r.symbol for r in idx.by_symbol("BRK-B")] == ["BRK-B"]
+
+
 def test_extend_adjacent_scans_merge_and_skip_rescan(tmp_path):
     (tmp_path / "index.html").write_text(
         '<a href="/files/data/x/cnsfails201901a.zip">a</a>'

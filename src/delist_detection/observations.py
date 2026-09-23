@@ -2,10 +2,19 @@
 CUSIP and any identity pins the caller knows.
 
 Observations are the library's only view of the caller's universe. A ticker's
-observations are split into eras: runs that belong to one security. A new era
-starts after a long gap, when the name stops agreeing, or when a pin changes,
-because a recycled ticker (MON = Monsanto, later Monument Circle) must never be
-merged into one security.
+observations are split into eras: runs that belong to one security, because a
+recycled ticker (MON = Monsanto, later Monument Circle) must never be merged
+into one security. Eras are built in two stages:
+
+1. Here, from observations alone: a new era starts when a pin changes, when the
+   name stops agreeing, or when the share class letter in the name changes
+   ("GOOGLE INC CLASS A" -> "GOOGLE INC CLASS C"; a name with no class counts as
+   unknown and never splits). A gap alone does not split: index snapshots can
+   be years apart (2009-06-08 -> 2012-06-29) while the security kept trading.
+2. `security_master.refine_eras`, once SEC fails-to-deliver rows are loaded,
+   splits each era further on a CUSIP switch under the ticker and on a gap of
+   more than `ERA_GAP_DAYS` that no observation or FTD row of the era's CUSIP
+   bridges (DELL: Dell Inc. to 2013, Dell Technologies from 2018).
 """
 from __future__ import annotations
 
@@ -105,6 +114,10 @@ class TickerEra:
     first: str
     last: str
     observations: list[Observation] = field(default_factory=list)
+    # Set by security_master.refine_eras: the CUSIPs of the FTD rows (runs of
+    # at least 3) under this ticker inside this era's part of the timeline.
+    # Empty when not refined or when no such rows exist.
+    ftd_cusips: tuple[str, ...] = ()
 
     @property
     def names(self) -> list[str]:
@@ -136,27 +149,37 @@ def _gap_days(a: str, b: str) -> int:
     return (date.fromisoformat(b) - date.fromisoformat(a)).days
 
 
+def _class_letter(name: str | None) -> str | None:
+    """The class letter a name states ("…CLASS C" -> "C"; "…SERIES A" and
+    "…-A" -> "A"), or None when it states none: a name without a class
+    ("COMMON") is unknown, not a class of its own."""
+    from .figi_resolution import class_letter, share_class_from_name   # figi_resolution imports this module
+    return class_letter(share_class_from_name(name))
+
+
 def split_eras(obs: list[Observation]) -> list[TickerEra]:
+    """Stage 1 of era building (module docstring): split one ticker's
+    observations on a pin change, a name that stops agreeing, or a change of
+    the class letter stated in the name. A gap alone never splits here."""
     eras: list[TickerEra] = []
+    era_class: str | None = None                  # the current era's latest stated class letter
     for o in sorted(obs, key=lambda o: o.as_of):
         cur = eras[-1] if eras else None
+        cls = _class_letter(o.name)
         if cur is not None:
             last_name = cur.name
             pin_changed = ((o.cik is not None and cur.cik_pin is not None and o.cik != cur.cik_pin)
                            or (o.sec_id and cur.sec_id_pin and o.sec_id != cur.sec_id_pin))
             name_changed = bool(o.name and last_name and not names_agree(o.name, last_name)
                                 and o.name.upper() != last_name.upper())
-            # A long gap alone starts a new era only when neither side's name
-            # confirms continuity; a matching name outranks a bare gap (MONSANTO
-            # CO traded 2016-06-30 to 2017-12-29, an 18-month span, one era).
-            name_confirmed = bool(o.name and last_name and not name_changed)
-            gap_exceeded = _gap_days(cur.last, o.as_of) > ERA_GAP_DAYS
-            new_era = pin_changed or name_changed or (gap_exceeded and not name_confirmed)
-            if not new_era:
+            class_changed = cls is not None and era_class is not None and cls != era_class
+            if not (pin_changed or name_changed or class_changed):
                 cur.observations.append(o)
                 cur.last = o.as_of
+                era_class = cls or era_class
                 continue
         eras.append(TickerEra(o.ticker, o.as_of, o.as_of, [o]))
+        era_class = cls
     return eras
 
 

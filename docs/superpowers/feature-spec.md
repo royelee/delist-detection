@@ -481,10 +481,24 @@ line changes observable output.
   or per-merger exception (other than `EdgarBlocked`/`OpenFigiBlocked`,
   which still abort) is logged and the security is skipped with a review row
   flagged `error`, so one bad security doesn't fail an overnight full run.
-- **Era splitting (§5, "Observation").** A gap over `ERA_GAP_DAYS` (400 days)
-  splits a ticker's observations into a new era only when neither
-  observation's name confirms continuity; a name or pin change always
-  splits regardless of the gap.
+- **Era splitting (§5, "Observation"; §8.1).** A ticker's observations are
+  grouped into eras (runs taken to be one security) in two stages. First,
+  from observations alone: a new era starts on a pin change, on names that
+  stop agreeing, or on a change of the class letter in the name (`CLASS A`
+  → `CLASS C`; `CLASS A` and `SERIES A` are the same letter; a name with no
+  class is unknown and never splits). A gap alone does not split here.
+  Second, after the fails-to-deliver rows are loaded, each era is split
+  again on that evidence under its ticker: where the FTD rows switch from
+  one CUSIP to another (runs of 3+ rows; shorter runs are noise), and where
+  the era's observation dates plus its FTD rows of those CUSIPs leave a gap
+  over 400 days. FTD rows bridge the 2009 → 2012 snapshot gap for a
+  security that kept trading; DELL (Dell Inc. to 2013, Dell Technologies
+  from 2018), DOW, JEF and ADT split on the gap, FOX/FOXA, GOOG and UA on
+  the CUSIP switch. The gap split runs first, so an observation of the new
+  security dated before its CUSIP's first FTD row stays with it. A side
+  with no observations is not an era. Eras that still resolve to the same
+  FIGI (a reverse split's new CUSIP, a gap no row bridged) merge back into
+  one security.
 - **Fallback delisting date (§8.6, no-Form-25 path).** Dated by a confirmed
   bankruptcy 8-K first, then the anchor 8-K, then a revocation or Form 15
   filing but only when it falls within `[last_seen − 30d, last_seen + 120d]`;

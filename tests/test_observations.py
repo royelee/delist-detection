@@ -40,6 +40,9 @@ def test_load_reports_bad_rows(tmp_path):
 
 
 def test_recycled_ticker_splits_into_two_eras():
+    # The two Monsanto sightings 547 days apart stay together here: a bare gap
+    # no longer splits at the observation stage (FTD evidence decides that, in
+    # security_master.refine_eras; test_monsanto_gap_eras_still_form_one_security).
     obs = [
         Observation("MON", "2016-06-30", "MONSANTO CO"),
         Observation("MON", "2017-12-29", "MONSANTO CO"),
@@ -50,6 +53,37 @@ def test_recycled_ticker_splits_into_two_eras():
         ("2016-06-30", "2017-12-29", "MONSANTO CO"),
         ("2021-12-31", "2021-12-31", "MONUMENT CIRCLE ACQUISITION CORP"),
     ]
+
+
+def test_bare_gap_does_not_split_observations():
+    # Names that share their one distinctive word agree, and a gap alone no
+    # longer splits: DELL (Dell Inc. to 2013, Dell Technologies from 2018) is
+    # one observation era, split later by FTD evidence (refine_eras).
+    dell = split_eras([Observation("DELL", "2013-06-28", "DELL INC."),
+                       Observation("DELL", "2018-12-31", "DELL TECHNOLOGIES INC CLASS C")])
+    assert [(e.first, e.last) for e in dell] == [("2013-06-28", "2018-12-31")]
+    same = split_eras([Observation("X", "2009-06-08", "FOO INC"), Observation("X", "2012-06-29", "FOO INC")])
+    assert len(same) == 1
+    unnamed = split_eras([Observation("X", "2009-06-08"), Observation("X", "2012-06-29")])
+    assert len(unnamed) == 1
+
+
+def test_class_letter_change_splits_but_common_is_unknown():
+    a_to_c = split_eras([Observation("GOOG", "2013-12-31", "GOOGLE INC CLASS A"),
+                         Observation("GOOG", "2014-06-30", "GOOGLE INC CLASS C")])
+    assert [(e.first, e.last) for e in a_to_c] == [("2013-12-31", "2013-12-31"), ("2014-06-30", "2014-06-30")]
+    # COMMON (no class in the name) is unknown: it neither splits nor hides a later change
+    assert len(split_eras([Observation("GOOG", "2013-06-28", "GOOGLE INC"),
+                           Observation("GOOG", "2013-12-31", "GOOGLE INC CLASS A")])) == 1
+    assert len(split_eras([Observation("UA", "2016-06-30", "UNDER ARMOUR A INC"),
+                           Observation("UA", "2016-12-30", "UNDER ARMOUR INC CLASS C")])) == 1
+    a_blank_c = split_eras([Observation("Z", "2015-06-30", "ZILLOW GROUP INC CLASS A"),
+                            Observation("Z", "2015-09-30", "ZILLOW GROUP INC"),
+                            Observation("Z", "2015-12-31", "ZILLOW GROUP INC CLASS C")])
+    assert [(e.first, e.last) for e in a_blank_c] == [("2015-06-30", "2015-09-30"), ("2015-12-31", "2015-12-31")]
+    # the letter is what counts: "CLASS A" and "SERIES A" are the same class (LMCA, real names)
+    assert len(split_eras([Observation("LMCA", "2012-12-31", "LIBERTY MEDIA CORP CLASS A"),
+                           Observation("LMCA", "2013-06-28", "LIBERTY MEDIA CORP SERIES A")])) == 1
 
 
 def test_name_change_without_gap_splits_but_same_name_does_not():

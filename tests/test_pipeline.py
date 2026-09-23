@@ -838,3 +838,114 @@ def test_listed_today_error_for_one_security_does_not_abort_the_run(fake_edgar, 
     review = read_table("review", table_path(tmp_path, "review"))
     assert any(r["sec_id"] == "BBG000LIVE01" and r["review_flags"] == "error" and "figi boom" in r["reason"]
               for r in review)
+
+
+# ===================== final fix wave A =====================
+
+class _RowsFtdClient:
+    """An FTD client over in-memory rows, filtered like the real one."""
+
+    def __init__(self, rows):
+        self.ROWS = list(rows)
+
+    def urls_for(self, lo, hi):
+        return ["mem"]
+
+    def rows(self, url, *, symbols=None, cusips=None):
+        for r in self.ROWS:
+            if (symbols and r.symbol in symbols) or (cusips and r.cusip in cusips):
+                yield r
+
+
+class _MapFigi:
+    """OpenFIGI fake keyed by (idType, idValue)."""
+
+    def __init__(self, answers):
+        self.answers = answers
+
+    def map(self, jobs, use_cache=True):
+        return [self.answers.get((j["idType"], j["idValue"]), {"warning": "No identifier found."}) for j in jobs]
+
+    def filter(self, query, **fields):
+        return []
+
+
+def _index_clients(fake_edgar, obs, rows, figi_answers):
+    index = ObservationIndex(obs)
+    resolver = TickerResolver(fake_edgar, member_names=index.name_on, cik_map=index.cik_pin_on)
+    return index, Clients(edgar=fake_edgar, resolver=resolver, classifier=DelistClassifier(fake_edgar, resolver),
+                          figi=_MapFigi(figi_answers), ftd_client=_RowsFtdClient(rows))
+
+
+def _ftd(symbol, cusip, desc, dates, price=10.0):
+    return [FtdRow(d, cusip, symbol, desc, price) for d in dates]
+
+
+def test_run_splits_two_securities_that_shared_a_ticker(fake_edgar, tmp_path):
+    """DELL: Dell Inc. (taken private 2013) and Dell Technologies class C (listed
+    2018) agree on the one name word DELL; the observations form one era, and the
+    FTD gap and CUSIP switch must split it into two securities."""
+    fake_edgar.company_map["DELL"] = {"cik_str": 1571996, "ticker": "DELL", "title": "Dell Technologies Inc."}
+    fake_edgar.submissions_by_cik[1571996] = []
+    obs = [Observation("DELL", d, "DELL INC.") for d in ("2012-06-29", "2012-12-31", "2013-06-28")] + \
+          [Observation("DELL", d, "DELL TECHNOLOGIES INC CLASS C") for d in ("2018-12-31", "2019-06-30")]
+    rows = (_ftd("DELL", "24702R101", "DELL INC", ["2012-06-01", "2012-09-04", "2013-01-02", "2013-06-03",
+                                                  "2013-10-29"])
+            + _ftd("DELL", "24703L202", "DELL TECHNOLOGIES INC COM CL C",
+                   ["2019-01-02", "2019-03-01", "2019-06-03", "2019-09-03"]))
+    index, clients = _index_clients(fake_edgar, obs, rows, {
+        ("ID_CUSIP", "24702R101"): _figi_answer("BBGDELLINC1", "DELL", "DELL INC"),
+        ("ID_CUSIP", "24703L202"): _figi_answer("BBGDELLTEC1", "DELL", "DELL TECHNOLOGIES -C"),
+    })
+
+    run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
+
+    secs = {r["sec_id"] for r in read_table("securities", table_path(tmp_path, "securities"))}
+    assert secs == {"BBGDELLINC1", "BBGDELLTEC1"}
+    th = read_table("ticker_history", table_path(tmp_path, "ticker_history"))
+    assert [(r["sec_id"], r["valid_from"], r["valid_to"]) for r in th] == [
+        ("BBGDELLINC1", "2012-06-01", "2013-10-29"), ("BBGDELLTEC1", "2018-12-31", "2019-09-03")]
+
+
+def test_two_eras_of_one_security_give_one_security_and_one_ticker_range(fake_edgar, tmp_path):
+    """A reverse split changes the CUSIP (refine_eras splits the era there), and
+    the snapshot gap is bridged by FTD rows; both eras resolve to one FIGI and
+    must come back together as one security with one ticker range."""
+    fake_edgar.company_map["RS"] = {"cik_str": 4242, "ticker": "RS", "title": "REVERSE SPLIT CO"}
+    fake_edgar.submissions_by_cik[4242] = []
+    obs = [Observation("RS", d, "REVERSE SPLIT CO") for d in ("2009-06-08", "2012-06-29", "2012-12-31",
+                                                               "2013-06-28")]
+    rows = (_ftd("RS", "11111A101", "REVERSE SPLIT CO", ["2009-06-01", "2010-03-01", "2011-01-03", "2011-11-01",
+                                                          "2012-07-02", "2012-10-01"])
+            + _ftd("RS", "11111A200", "REVERSE SPLIT CO NEW", ["2012-10-02", "2013-01-02", "2013-04-01",
+                                                               "2013-07-01"]))
+    index, clients = _index_clients(fake_edgar, obs, rows, {
+        ("ID_CUSIP", "11111A101"): _figi_answer("BBGRSPLIT01", "RS", "REVERSE SPLIT CO"),
+        ("ID_CUSIP", "11111A200"): _figi_answer("BBGRSPLIT01", "RS", "REVERSE SPLIT CO"),
+    })
+
+    run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
+
+    assert [r["sec_id"] for r in read_table("securities", table_path(tmp_path, "securities"))] == ["BBGRSPLIT01"]
+    th = read_table("ticker_history", table_path(tmp_path, "ticker_history"))
+    assert [(r["ticker"], r["valid_from"], r["valid_to"]) for r in th] == [("RS", "2009-06-01", "2013-07-01")]
+
+
+def test_ftd_rows_spelled_without_a_separator_are_sightings_of_the_observed_ticker(fake_edgar, tmp_path):
+    """FTD writes Brown-Forman class B as "BFB"; the caller writes "BF-B". The
+    rows must find the CUSIP and appear in ticker_history as BF-B only."""
+    fake_edgar.company_map["BF-B"] = {"cik_str": 14693, "ticker": "BF-B", "title": "BROWN FORMAN CORP"}
+    fake_edgar.submissions_by_cik[14693] = []
+    obs = [Observation("BF-B", d, "BROWN FORMAN CORP CLASS B") for d in ("2015-06-30", "2015-12-31")]
+    rows = _ftd("BFB", "115637209", "BROWN-FORMAN CORP CL-B",
+                ["2015-06-01", "2015-08-03", "2015-10-01", "2016-01-04"])
+    index, clients = _index_clients(fake_edgar, obs, rows, {
+        ("ID_CUSIP", "115637209"): _figi_answer("BBG000BYNJ81", "BF/B", "BROWN-FORMAN CORP-CLASS B"),
+    })
+
+    run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
+
+    secs = read_table("securities", table_path(tmp_path, "securities"))
+    assert [(r["sec_id"], r["figi_source"]) for r in secs] == [("BBG000BYNJ81", "cusip")]
+    th = read_table("ticker_history", table_path(tmp_path, "ticker_history"))
+    assert [(r["ticker"], r["valid_from"], r["valid_to"]) for r in th] == [("BF-B", "2015-06-01", "2016-01-04")]

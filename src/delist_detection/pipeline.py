@@ -28,7 +28,7 @@ from .openfigi import OpenFigiBlocked
 from .payout_gate import DEFAULT_TOL, gate_payouts
 from .reconstruction import _lookup, build_delistings_table, delisting_row, unmatched_override_keys
 from .security_master import (
-    FigiResolver, Security, build_securities, era_cusips, era_last_seen, ranges_from_sightings,
+    FigiResolver, Security, build_securities, era_cusips, era_last_seen, ranges_from_sightings, refine_eras,
 )
 from .store import write_tables
 
@@ -248,17 +248,21 @@ def run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_
     eras = index.eras()
     if limit:
         eras = eras[:limit]
-    era_by_key = {e.key: e for e in eras}
     log(f"{len(eras)} ticker eras")
 
     if not eras:
         raise ValueError("no observations to process")
 
-    # 1. FTD rows for the eras' tickers (first: they date each era's real last sighting)
+    # 1. FTD rows for the eras' tickers (first: they date each era's real last sighting),
+    # then split the observation eras further on that evidence (a CUSIP switch, or a
+    # gap no FTD row bridges). Every later step works on the refined eras.
     lo = max(FTD_START, min(_d(e.first) for e in eras) - timedelta(days=30))
     hi = min(date.today(), max(_d(e.last) for e in eras) + timedelta(days=400))
     ftd = FtdIndex.load(clients.ftd_client, lo, hi, symbols={e.ticker for e in eras},
                         cusips={c for e in eras for c in e.cusips})
+    eras = refine_eras(eras, ftd)
+    era_by_key = {e.key: e for e in eras}
+    log(f"{len(eras)} eras after the FTD split")
 
     # 2. issuer CIK per era, resolved at the era's last sighting: index snapshots can
     # be months apart, and the resolver's Form 25 search is anchored on this date.
