@@ -7,6 +7,7 @@ Each quarterly ZIP (~15-25 MB) is summarized once into
 """
 from __future__ import annotations
 
+import calendar
 import csv
 import gzip
 import io
@@ -18,14 +19,29 @@ from collections.abc import Iterable
 from datetime import date
 from pathlib import Path
 
+import requests
+
 from .observations import normalize_ticker
 from .sec_http import download, get_text
+from .trading_calendar import add_trading_days
 
 MIDAS_INDEX_URL = ("https://www.sec.gov/opa/data/market-structure/"
                    "marketstructuredownloadshtml-by_security.html")
 MIDAS_START = date(2012, 1, 1)
+# A window that runs past MIDAS's coverage end (the latest published quarter)
+# always finds nothing in the unpublished part, so a found day sitting within
+# this many trading days of the coverage end is too close to the edge to
+# trust as the real last trade -- it would otherwise beat the notice/8-K
+# purely because the next quarter hasn't been published yet.
+MIDAS_COVERAGE_EDGE_TRADING_DAYS = 5
 _SEC = "https://www.sec.gov"
 _Q = re.compile(r"individual_security_(\d{4})_q(\d+)\.zip$", re.I)
+
+
+def _quarter_end(yq: tuple[int, int]) -> date:
+    y, q = yq
+    month = q * 3
+    return date(y, month, calendar.monthrange(y, month)[1])
 
 
 def quarter_of(url: str) -> tuple[int, int] | None:
@@ -90,6 +106,14 @@ class MidasClient:
             self._links = links
         return self._links
 
+    def coverage_end(self) -> date | None:
+        """The last day of the latest quarter MIDAS has published, or None if
+        the index lists no quarter at all."""
+        links = self.links()
+        if not links:
+            return None
+        return _quarter_end(max(links))
+
     def _summary(self, yq: tuple[int, int]) -> dict[str, list[str]] | None:
         if yq in self._summaries:
             return self._summaries[yq]
@@ -103,12 +127,19 @@ class MidasClient:
                 return None
             zpath = self.dir / url.rsplit("/", 1)[-1]
             try:
-                zpath = download(url, zpath, session=self.session, user_agent=self.user_agent)
-                z = zipfile.ZipFile(zpath)
-            except zipfile.BadZipFile:
-                zpath.unlink(missing_ok=True)  # corrupted: fetch it again once
-                zpath = download(url, zpath, session=self.session, user_agent=self.user_agent)
-                z = zipfile.ZipFile(zpath)
+                try:
+                    zpath = download(url, zpath, session=self.session, user_agent=self.user_agent)
+                    z = zipfile.ZipFile(zpath)
+                except zipfile.BadZipFile:
+                    zpath.unlink(missing_ok=True)  # corrupted: fetch it again once
+                    zpath = download(url, zpath, session=self.session, user_agent=self.user_agent)
+                    z = zipfile.ZipFile(zpath)
+            except requests.RequestException:
+                # Gave up after retries: remember this quarter as failed for
+                # the rest of the run, so the next security doesn't pay the
+                # same download+retry cost again.
+                self._summaries[yq] = None
+                return None
             with z:
                 try:
                     member = next(m for m in z.namelist() if m.lower().endswith(".csv"))
@@ -133,4 +164,12 @@ class MidasClient:
             for d in (s or {}).get(t, []):
                 if lo_s <= d <= hi_s and (best is None or d > best):
                     best = d
-        return date.fromisoformat(best) if best else None
+        if best is None:
+            return None
+        found = date.fromisoformat(best)
+        coverage_end = self.coverage_end()
+        if coverage_end is not None and hi > coverage_end:
+            edge = add_trading_days(coverage_end, -MIDAS_COVERAGE_EDGE_TRADING_DAYS)
+            if found >= edge:
+                return None       # too close to the unpublished edge to trust
+        return found
