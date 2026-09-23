@@ -73,6 +73,19 @@ def test_class_kind():
     assert class_kind("") == "other"
 
 
+def test_class_kind_misreads():
+    assert class_kind("Corporate Units") == "unit"
+    assert class_kind("Equity Units") == "unit"
+    assert class_kind("Tangible Equity Units") == "unit"
+    assert class_kind("Stock Purchase Contracts") == "unit"
+    assert class_kind("Redeemable warrants, each whole warrant exercisable for one share "
+                      "of Class A common stock") == "warrant"
+    assert class_kind("Capital Securities") == "preferred"
+    assert class_kind("Trust Preferred Securities") == "preferred"
+    assert class_kind("Trust Certificates") == "preferred"
+    assert class_kind("American Depositary Shares, each representing one ordinary share") == "common"
+
+
 def test_exchange_labels():
     assert exchange_label("NEW YORK STOCK EXCHANGE LLC") == "NYSE"
     assert exchange_label("NYSE American LLC") == "NYSE AMERICAN"

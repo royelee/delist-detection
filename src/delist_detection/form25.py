@@ -104,11 +104,15 @@ def class_kind(class_text: str) -> str:
         return "other"
     if re.match(r"^\W*(?:CLASS [A-Z] |SERIES [A-Z] )?(?:COMMON|ORDINARY)", s):
         return "common"
-    if re.search(r"PREFERRED|DEPOSITARY SHARES?,? EACH REPRESENTING", s):
+    if re.search(r"DEPOSITARY SHARES?,? EACH REPRESENTING", s):
+        # A depositary-share text is preferred only when it names a preferred
+        # security ("... each representing one ordinary share" is common).
+        return "preferred" if "PREFERRED" in s else "common"
+    if re.search(r"PREFERRED|CAPITAL SECURIT|TRUST PREFERRED|TRUST CERTIFICATE", s):
         return "preferred"
-    if re.search(r"^\W*UNITS?\b", s):
+    if re.search(r"\bUNITS?\b|PURCHASE CONTRACTS?\b", s):
         return "unit"
-    if re.search(r"^\W*WARRANTS?\b", s):
+    if re.search(r"\bWARRANTS?\b", s):
         return "warrant"
     if re.search(r"^\W*(?:[A-Z ]+ )?RIGHTS?\b", s) and "COMMON" not in s:
         return "right"
