@@ -39,6 +39,12 @@ EIGHTK_GROUP_AFTER_DAYS = 15                       # group 8-K window: latest fi
 DEREG_FALLBACK_BEFORE_DAYS = 30     # a fallback revocation or Form 15 must be within
 DEREG_FALLBACK_AFTER_DAYS = 120     # [last_seen - this, last_seen + this] to date the delisting
 
+# Buckets whose delisting ends the security's exchange life even when it is
+# sighted afterwards (OTC trading, a stale snapshot): all but a transfer and
+# an event the classifier could not place.
+ENDING_BUCKETS = frozenset({CrspBucket.MERGER, CrspBucket.LIQUIDATION, CrspBucket.COMPLIANCE_FAILURE,
+                            CrspBucket.EXPIRATION})
+
 # Preferred exchange for a multi-exchange delisting group: the filing on the
 # most-senior exchange supplies the event's `exchange` and `form25`/`form25_sub`.
 EXCHANGE_PREFERENCE = ("NYSE", "NASDAQ", "NYSE AMERICAN", "CBOE BZX", "NYSE ARCA")
@@ -341,7 +347,11 @@ class DelistingFinder:
                 (_d(eff) + timedelta(days=SEEN_AFTER_DAYS)).isoformat())
             ev = self._build_event(ctx, cik, filings, group, eff, continued)
             events.append(ev)
-            if not continued:
+            # Sightings after the effective date can be an OTC tail or a stale
+            # snapshot, not a listing: only an exchange transfer (or an event
+            # not classified) continues one. A merger, liquidation, compliance
+            # failure or expiration ends the security's exchange life.
+            if not continued or ev.record.bucket in ENDING_BUCKETS:
                 last_definitive = ev
 
         # spec 8.10: run the fallback / ended_without_delisting logic whenever

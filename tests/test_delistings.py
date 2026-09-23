@@ -611,6 +611,30 @@ def test_form25_before_first_sighting_is_ignored_while_listed(fake_edgar):
     assert events == [] and review == []
 
 
+def test_a_merger_ends_the_security_even_when_sightings_follow_it(fake_edgar):
+    """Dow Jones: acquired 2007-12-13 (Form 25 on 2007-12-18) while a stale
+    snapshot lists DJ until 2009. The sightings after it make the Form 25
+    `continued`, but only an exchange transfer continues a listing: a merger
+    ends it, so no fallback runs and no ended_without_delisting row is added
+    beside the delisting (72 such pairs in the first acceptance run; a
+    bankrupt security's OTC tail did the same)."""
+    fake_edgar.submissions_by_cik[29924] = [
+        EdgarSubmission("dj1", "8-K", "2007-12-13", "2007-12-13", "2.01,3.01,5.01,9.01", "k.htm"),
+        EdgarSubmission("dj2", "25-NSE", "2007-12-18", "", "", "p.xml"),
+        EdgarSubmission("dj3", "15-12B", "2007-12-24", "", "", "f.htm"),
+    ]
+    fake_edgar.raws["dj2"] = NYSE_COMMON_RAW
+    fake_edgar.texts["dj1"] = ("Item 3.01 Notice of Delisting. trading was suspended prior to the opening of "
+                               "trading on December 14, 2007 " + "x" * 300)
+    clf = DelistClassifier(fake_edgar, TickerResolver(fake_edgar))
+    sec = _sec("BBG000BH5K72", 29924, "DJ", "2007-12-01", "2009-06-08", "DOW JONES & CO INC")
+    events, review = DelistingFinder(fake_edgar, clf).find(
+        _ctx(sec, listed=False, seen_after=True, last_seen="2009-06-08"))
+    (ev,) = events
+    assert ev.record.bucket is CrspBucket.MERGER and ev.delist_date == "2007-12-28"
+    assert review == []
+
+
 class _TickerMidas:
     def __init__(self, days):
         self.days, self.calls = days, []

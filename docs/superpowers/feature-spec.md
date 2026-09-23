@@ -533,6 +533,14 @@ line changes observable output.
   `observed_after_delisting`. The close for a last trade before the
   fails-to-deliver window loaded for the eras is read from rows fetched
   for that day.
+- **Only a transfer continues a listing (§8.6, §8.10).** A Form 25 group is
+  "continued" when the security is listed today or sighted after its
+  effective date, but a sighting after it can be OTC trading (a bankrupt
+  security's tail) or a stale snapshot. A merger, liquidation, compliance
+  failure or expiration therefore ends the security whatever follows it; only
+  an exchange transfer (or an event the classifier could not place) that the
+  security was sighted after leaves it open for a later delisting, the
+  no-Form-25 fallback and the `ended_without_delisting` check.
 - **Form 25 grouping (§8.6, D16).** Matched Form 25s chain into one
   delisting when a filing's date is within `SAME_EVENT_DAYS` (30 days) of
   the *group's earliest* member's filing date, not its latest — so filings
