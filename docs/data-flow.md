@@ -292,8 +292,9 @@ the exact schema. `delistings.csv` is the primary deliverable.
 `figi_source`.
 
 `output/ticker_history.csv` / `output/cusip_history.csv`: point-in-time
-ticker and CUSIP ranges per security, keyed by `(sec_id, valid_from)`, built
-from observations plus SEC fails-to-deliver rows. `ticker_history.exchange`
+ticker and CUSIP ranges per security, keyed by `(sec_id, valid_from, ticker)`
+and `(sec_id, valid_from, cusip)` respectively, built from observations plus
+SEC fails-to-deliver rows. `ticker_history.exchange`
 is filled for the range that ends in a delisting (from the Form 25) and for
 the still-open range (from the issuer's current EDGAR submissions listing);
 otherwise empty. Building a range from an EDGAR ticker-change announcement

@@ -107,7 +107,7 @@ none is confirmed. `figi_source` is how it was found: `pin`, `ticker`,
 successor/acquirer security added only to price a delisting, never itself
 observed.
 
-### `ticker_history.csv` — key `(sec_id, valid_from)`
+### `ticker_history.csv` — key `(sec_id, valid_from, ticker)`
 
 Point-in-time ticker ranges.
 
@@ -123,7 +123,7 @@ notes). `source` is `observation` or `ftd` — building a range from an EDGAR
 ticker-change announcement (spec §8.5's `edgar_8k` source) is deferred, so
 that value doesn't currently appear here.
 
-### `cusip_history.csv` — key `(sec_id, valid_from)`
+### `cusip_history.csv` — key `(sec_id, valid_from, cusip)`
 
 Point-in-time CUSIP ranges, same shape as `ticker_history.csv`:
 

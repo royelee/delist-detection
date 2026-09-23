@@ -60,10 +60,13 @@ There is **no lint/format tooling** configured — do not invent a lint command.
 The codebase splits cleanly into a **classification layer** (network: EDGAR,
 OpenFIGI, SEC data files) and a **handling layer** (pure, no network). The
 `DelistRecord` dataclass (`classifier.py`) is the hand-off object between
-them: `sec_id, cik, delist_date, crsp_code, bucket, confidence, reason,
-evidence`. `pipeline.py`'s `run()` is the orchestration that turns a list of
-observations into the six output tables; see `CONTEXT.md` for the vocabulary
-its docstrings and variable names assume (security, era, sighting, pin, …).
+them: `ticker, cik, observed_delist_date, crsp_code, bucket, confidence,
+reason, evidence`, plus `sec_id`, `delist_date` and `successor_sec_id` —
+optional fields the new pipeline (`delistings.py`/`pipeline.py`) fills in
+alongside the original ones. `pipeline.py`'s `run()` is the orchestration
+that turns a list of observations into the six output tables; see
+`CONTEXT.md` for the vocabulary its docstrings and variable names assume
+(security, era, sighting, pin, …).
 
 **Classification (network):**
 - `observations.py` — `Observation`, `TickerEra`, `ObservationIndex`: splits
@@ -155,8 +158,11 @@ its docstrings and variable names assume (security, era, sighting, pin, …).
 **Handling (pure), keyed by `sec_id`:**
 - `handling.py` — event-level: `build_train_label_adjustment` (forward-return
   label) and `build_backtest_exit` (exit cashflow + universe-exit date), one
-  deterministic policy per bucket, reading its inputs off one `delistings.csv`
-  row (no more ticker-keyed dictionary arguments).
+  deterministic policy per bucket. Each still takes a `DelistRecord` plus
+  scalar `last_close`/`payout_per_share`/`recovery_ratio` (unchanged
+  signature); `adjustments_from_rows` is the new wrapper that calls both
+  straight from a `delistings.csv` row, via `qlib_adapter.record_from_row`/
+  `row_payout` — no more ticker-keyed dictionary arguments to assemble.
 - `bmp_correction.py` + `exchanges.py` — firm-month BMP 2007 correction:
   `R_month = (1+R_partial)(1+DLRET)−1`, synthesizing `DLRET` per bucket with
   exchange-specific Shumway constants when no realized delist return is observed.
