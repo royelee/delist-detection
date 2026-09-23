@@ -86,8 +86,17 @@ MANUAL_OVERRIDES: dict[str, int] = {
 }
 
 
+EXIT_CODES_EPILOG = """\
+Exit codes:
+  0  success, no review-row errors
+  2  aborted: SEC or OpenFIGI refused the request (EdgarBlocked/OpenFigiBlocked)
+  3  completed, but review.csv has one or more `error` rows (outputs are still
+     written; see the stderr banner for the count)
+"""
+
+
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser()
+    p = argparse.ArgumentParser(epilog=EXIT_CODES_EPILOG, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--observations", required=True, help="CSV ticker,as_of[,name,cusip,cik,sec_id]")
     p.add_argument("--output-dir", default=str(ROOT / "output"))
     p.add_argument("--cache-dir", default=str(ROOT / "cache"))
@@ -134,6 +143,11 @@ def main() -> int:
     print("Delistings by bucket:", summary.buckets)
     print("FIGI sources:", summary.figi_sources)
     print("Review flags:", summary.review_flags)
+    error_count = summary.review_flags.get("error", 0)
+    if error_count:
+        print(f"WARNING: {error_count} review row(s) flagged 'error' -- outputs were still written; "
+             "see review.csv for the affected (sec_id, delist_date) rows.", file=sys.stderr)
+        return 3
     return 0
 
 
