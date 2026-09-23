@@ -43,8 +43,12 @@ def _mdy(s: str | None) -> date | None:
         return None
 
 
-def parse_halts_rss(xml_text: str) -> list[Halt]:
-    root = ET.fromstring(xml_text.lstrip("﻿").strip())
+def parse_halts_rss(xml: str | bytes) -> list[Halt]:
+    """Halts in one day's feed. Give it the response's bytes: the feed starts
+    with a UTF-8 BOM and is served as `text/xml` with no charset, so a decoded
+    `requests` `.text` (ISO-8859-1) turns the BOM into three letters the XML
+    parser rejects; parsing the bytes lets it read the encoding itself."""
+    root = ET.fromstring(xml.strip() if isinstance(xml, bytes) else xml.lstrip("﻿").strip())
     out: list[Halt] = []
     for item in root.iter("item"):
         get = lambda tag: (item.findtext(f"ndaq:{tag}", default="", namespaces=_NS) or "").strip()
@@ -71,7 +75,7 @@ class NasdaqHaltClient:
     def halts_on(self, day: date) -> list[Halt]:
         cp = self.dir / f"{day:%Y%m%d}.xml"
         if cp.exists():
-            return parse_halts_rss(cp.read_text(encoding="utf-8"))
+            return parse_halts_rss(cp.read_bytes())
 
         for attempt in range(2):
             wait = self.min_interval - (time.monotonic() - self._last)
@@ -105,14 +109,14 @@ class NasdaqHaltClient:
                 return []
 
             try:
-                halts = parse_halts_rss(resp.text)
+                halts = parse_halts_rss(resp.content)
             except ET.ParseError as e:
                 _log.warning(f"halts_on({day:%Y-%m-%d}): parse error: {e}")
                 return []
 
             if day < date.today():                  # today's list can still grow
                 cp.parent.mkdir(parents=True, exist_ok=True)
-                cp.write_text(resp.text, encoding="utf-8")
+                cp.write_bytes(resp.content)
             return halts
 
         return []

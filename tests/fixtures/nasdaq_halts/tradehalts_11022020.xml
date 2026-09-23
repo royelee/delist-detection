@@ -1,0 +1,282 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:ndaq="http://www.nasdaqtrader.com/">
+  <channel>
+    <title>NASDAQTrader.com</title>
+    <link>http://www.nasdaqtrader.com</link>
+    <description>NASDAQ Trade Halts</description>
+    <copyright>Copyright 2026. All rights reserved.</copyright>
+    <pubDate>Wed, 23 Sep 2026 22:01:56 GMT</pubDate>
+    <ttl>1</ttl>
+    <ndaq:numItems>18</ndaq:numItems>
+    <item>
+      <title>CBL$E</title>
+      <pubDate>Mon, 02 Nov 2020 05:00:00 GMT</pubDate>
+      <ndaq:IssueSymbol>CBL$E</ndaq:IssueSymbol>
+      <ndaq:IssueName>CBL &amp; Associates Properties, Inc. Depositary Shs Repstg 1/10 6.625% Ser E Cum Redeemable (Pfd Stk)</ndaq:IssueName>
+      <ndaq:Mkt>N</ndaq:Mkt>
+      <ndaq:ReasonCode>T3</ndaq:ReasonCode>
+      <ndaq:PauseThresholdPrice />
+      <ndaq:HaltDate>11/02/2020</ndaq:HaltDate>
+      <ndaq:HaltTime>06:52:41</ndaq:HaltTime>
+      <ndaq:ResumptionDate>11/02/2020</ndaq:ResumptionDate>
+      <ndaq:ResumptionQuoteTime>12:15:40</ndaq:ResumptionQuoteTime>
+      <ndaq:ResumptionTradeTime>12:15:40</ndaq:ResumptionTradeTime>
+      <description><![CDATA[<table width="100%" cellpadding="5"><tr><th align="left">Issue Symbol</th><th align="left">Issue Name</th><th align="left">Mkt</th><th align="left">Reason Code</th><th align="left">Pause Threshold Price</th><th align="left">Halt Date</th><th align="left">Halt Time</th><th align="left">Resumption Date</th><th align="left">Resumption Quote Time</th><th align="left">Resumption Trade Time</th></tr><tr><td valign="top">CBL$E</td><td valign="top">CBL & Associates Properties, Inc. Depositary Shs Repstg 1/10 6.625% Ser E Cum Redeemable (Pfd Stk)</td><td valign="top">N</td><td valign="top">T3</td><td valign="top"></td><td valign="top">11/02/2020                    </td><td valign="top">06:52:41                      </td><td valign="top">11/02/2020                    </td><td valign="top">12:15:40                      </td><td valign="top">12:15:40                      </td></tr></table>]]></description>
+    </item>
+    <item>
+      <title>CBL$D</title>
+      <pubDate>Mon, 02 Nov 2020 05:00:00 GMT</pubDate>
+      <ndaq:IssueSymbol>CBL$D</ndaq:IssueSymbol>
+      <ndaq:IssueName>CBL &amp; Associates Properties, Inc. Dep Shares Repstg 1/10th Preferred Series D</ndaq:IssueName>
+      <ndaq:Mkt>N</ndaq:Mkt>
+      <ndaq:ReasonCode>T3</ndaq:ReasonCode>
+      <ndaq:PauseThresholdPrice />
+      <ndaq:HaltDate>11/02/2020</ndaq:HaltDate>
+      <ndaq:HaltTime>06:52:41</ndaq:HaltTime>
+      <ndaq:ResumptionDate>11/02/2020</ndaq:ResumptionDate>
+      <ndaq:ResumptionQuoteTime>12:15:35</ndaq:ResumptionQuoteTime>
+      <ndaq:ResumptionTradeTime>12:15:35</ndaq:ResumptionTradeTime>
+      <description><![CDATA[<table width="100%" cellpadding="5"><tr><th align="left">Issue Symbol</th><th align="left">Issue Name</th><th align="left">Mkt</th><th align="left">Reason Code</th><th align="left">Pause Threshold Price</th><th align="left">Halt Date</th><th align="left">Halt Time</th><th align="left">Resumption Date</th><th align="left">Resumption Quote Time</th><th align="left">Resumption Trade Time</th></tr><tr><td valign="top">CBL$D</td><td valign="top">CBL & Associates Properties, Inc. Dep Shares Repstg 1/10th Preferred Series D</td><td valign="top">N</td><td valign="top">T3</td><td valign="top"></td><td valign="top">11/02/2020                    </td><td valign="top">06:52:41                      </td><td valign="top">11/02/2020                    </td><td valign="top">12:15:35                      </td><td valign="top">12:15:35                      </td></tr></table>]]></description>
+    </item>
+    <item>
+      <title>CBL</title>
+      <pubDate>Mon, 02 Nov 2020 05:00:00 GMT</pubDate>
+      <ndaq:IssueSymbol>CBL</ndaq:IssueSymbol>
+      <ndaq:IssueName>CBL &amp; Associates Properties, Inc. Common Stock</ndaq:IssueName>
+      <ndaq:Mkt>N</ndaq:Mkt>
+      <ndaq:ReasonCode>T3</ndaq:ReasonCode>
+      <ndaq:PauseThresholdPrice />
+      <ndaq:HaltDate>11/02/2020</ndaq:HaltDate>
+      <ndaq:HaltTime>06:52:41</ndaq:HaltTime>
+      <ndaq:ResumptionDate>11/02/2020</ndaq:ResumptionDate>
+      <ndaq:ResumptionQuoteTime>12:14:28</ndaq:ResumptionQuoteTime>
+      <ndaq:ResumptionTradeTime>12:14:28</ndaq:ResumptionTradeTime>
+      <description><![CDATA[<table width="100%" cellpadding="5"><tr><th align="left">Issue Symbol</th><th align="left">Issue Name</th><th align="left">Mkt</th><th align="left">Reason Code</th><th align="left">Pause Threshold Price</th><th align="left">Halt Date</th><th align="left">Halt Time</th><th align="left">Resumption Date</th><th align="left">Resumption Quote Time</th><th align="left">Resumption Trade Time</th></tr><tr><td valign="top">CBL</td><td valign="top">CBL & Associates Properties, Inc. Common Stock</td><td valign="top">N</td><td valign="top">T3</td><td valign="top"></td><td valign="top">11/02/2020                    </td><td valign="top">06:52:41                      </td><td valign="top">11/02/2020                    </td><td valign="top">12:14:28                      </td><td valign="top">12:14:28                      </td></tr></table>]]></description>
+    </item>
+    <item>
+      <title>EIGI</title>
+      <pubDate>Mon, 02 Nov 2020 05:00:00 GMT</pubDate>
+      <ndaq:IssueSymbol>EIGI</ndaq:IssueSymbol>
+      <ndaq:IssueName>Endurance Int Grp Holdings Inc</ndaq:IssueName>
+      <ndaq:Mkt>Q</ndaq:Mkt>
+      <ndaq:ReasonCode>T3</ndaq:ReasonCode>
+      <ndaq:PauseThresholdPrice />
+      <ndaq:HaltDate>11/02/2020</ndaq:HaltDate>
+      <ndaq:HaltTime>07:26:33</ndaq:HaltTime>
+      <ndaq:ResumptionDate>11/02/2020</ndaq:ResumptionDate>
+      <ndaq:ResumptionQuoteTime>07:55:00</ndaq:ResumptionQuoteTime>
+      <ndaq:ResumptionTradeTime>08:00:00</ndaq:ResumptionTradeTime>
+      <description><![CDATA[<table width="100%" cellpadding="5"><tr><th align="left">Issue Symbol</th><th align="left">Issue Name</th><th align="left">Mkt</th><th align="left">Reason Code</th><th align="left">Pause Threshold Price</th><th align="left">Halt Date</th><th align="left">Halt Time</th><th align="left">Resumption Date</th><th align="left">Resumption Quote Time</th><th align="left">Resumption Trade Time</th></tr><tr><td valign="top">EIGI</td><td valign="top">Endurance Int Grp Holdings Inc</td><td valign="top">Q</td><td valign="top">T3</td><td valign="top"></td><td valign="top">11/02/2020                    </td><td valign="top">07:26:33                      </td><td valign="top">11/02/2020                    </td><td valign="top">07:55:00                      </td><td valign="top">08:00:00                      </td></tr></table>]]></description>
+    </item>
+    <item>
+      <title>VSL</title>
+      <pubDate>Mon, 02 Nov 2020 05:00:00 GMT</pubDate>
+      <ndaq:IssueSymbol>VSL</ndaq:IssueSymbol>
+      <ndaq:IssueName>Volshares Large Cap ETF</ndaq:IssueName>
+      <ndaq:Mkt>P</ndaq:Mkt>
+      <ndaq:ReasonCode>M</ndaq:ReasonCode>
+      <ndaq:PauseThresholdPrice />
+      <ndaq:HaltDate>11/02/2020</ndaq:HaltDate>
+      <ndaq:HaltTime>09:30:45</ndaq:HaltTime>
+      <ndaq:ResumptionDate>11/02/2020</ndaq:ResumptionDate>
+      <ndaq:ResumptionQuoteTime>09:35:45</ndaq:ResumptionQuoteTime>
+      <ndaq:ResumptionTradeTime>09:35:45</ndaq:ResumptionTradeTime>
+      <description><![CDATA[<table width="100%" cellpadding="5"><tr><th align="left">Issue Symbol</th><th align="left">Issue Name</th><th align="left">Mkt</th><th align="left">Reason Code</th><th align="left">Pause Threshold Price</th><th align="left">Halt Date</th><th align="left">Halt Time</th><th align="left">Resumption Date</th><th align="left">Resumption Quote Time</th><th align="left">Resumption Trade Time</th></tr><tr><td valign="top">VSL</td><td valign="top">Volshares Large Cap ETF</td><td valign="top">P</td><td valign="top">M</td><td valign="top"></td><td valign="top">11/02/2020                    </td><td valign="top">09:30:45                      </td><td valign="top">11/02/2020                    </td><td valign="top">09:35:45                      </td><td valign="top">09:35:45                      </td></tr></table>]]></description>
+    </item>
+    <item>
+      <title>NUZE</title>
+      <pubDate>Mon, 02 Nov 2020 05:00:00 GMT</pubDate>
+      <ndaq:IssueSymbol>NUZE</ndaq:IssueSymbol>
+      <ndaq:IssueName>NuZee, Inc. Common Stock</ndaq:IssueName>
+      <ndaq:Mkt>Q</ndaq:Mkt>
+      <ndaq:ReasonCode>LUDP</ndaq:ReasonCode>
+      <ndaq:PauseThresholdPrice />
+      <ndaq:HaltDate>11/02/2020</ndaq:HaltDate>
+      <ndaq:HaltTime>09:48:05</ndaq:HaltTime>
+      <ndaq:ResumptionDate>11/02/2020</ndaq:ResumptionDate>
+      <ndaq:ResumptionQuoteTime>09:48:05</ndaq:ResumptionQuoteTime>
+      <ndaq:ResumptionTradeTime>09:53:05</ndaq:ResumptionTradeTime>
+      <description><![CDATA[<table width="100%" cellpadding="5"><tr><th align="left">Issue Symbol</th><th align="left">Issue Name</th><th align="left">Mkt</th><th align="left">Reason Code</th><th align="left">Pause Threshold Price</th><th align="left">Halt Date</th><th align="left">Halt Time</th><th align="left">Resumption Date</th><th align="left">Resumption Quote Time</th><th align="left">Resumption Trade Time</th></tr><tr><td valign="top">NUZE</td><td valign="top">NuZee, Inc. Common Stock</td><td valign="top">Q</td><td valign="top">LUDP</td><td valign="top"></td><td valign="top">11/02/2020                    </td><td valign="top">09:48:05                      </td><td valign="top">11/02/2020                    </td><td valign="top">09:48:05                      </td><td valign="top">09:53:05                      </td></tr></table>]]></description>
+    </item>
+    <item>
+      <title>HVT.A</title>
+      <pubDate>Mon, 02 Nov 2020 05:00:00 GMT</pubDate>
+      <ndaq:IssueSymbol>HVT.A</ndaq:IssueSymbol>
+      <ndaq:IssueName>Haverty Furniture Companies, Inc. Common Stock</ndaq:IssueName>
+      <ndaq:Mkt>N</ndaq:Mkt>
+      <ndaq:ReasonCode>M</ndaq:ReasonCode>
+      <ndaq:PauseThresholdPrice />
+      <ndaq:HaltDate>11/02/2020</ndaq:HaltDate>
+      <ndaq:HaltTime>09:49:41</ndaq:HaltTime>
+      <ndaq:ResumptionDate>11/02/2020</ndaq:ResumptionDate>
+      <ndaq:ResumptionQuoteTime>10:02:56</ndaq:ResumptionQuoteTime>
+      <ndaq:ResumptionTradeTime>10:02:56</ndaq:ResumptionTradeTime>
+      <description><![CDATA[<table width="100%" cellpadding="5"><tr><th align="left">Issue Symbol</th><th align="left">Issue Name</th><th align="left">Mkt</th><th align="left">Reason Code</th><th align="left">Pause Threshold Price</th><th align="left">Halt Date</th><th align="left">Halt Time</th><th align="left">Resumption Date</th><th align="left">Resumption Quote Time</th><th align="left">Resumption Trade Time</th></tr><tr><td valign="top">HVT.A</td><td valign="top">Haverty Furniture Companies, Inc. Common Stock</td><td valign="top">N</td><td valign="top">M</td><td valign="top"></td><td valign="top">11/02/2020                    </td><td valign="top">09:49:41                      </td><td valign="top">11/02/2020                    </td><td valign="top">10:02:56                      </td><td valign="top">10:02:56                      </td></tr></table>]]></description>
+    </item>
+    <item>
+      <title>MARPS</title>
+      <pubDate>Mon, 02 Nov 2020 05:00:00 GMT</pubDate>
+      <ndaq:IssueSymbol>MARPS</ndaq:IssueSymbol>
+      <ndaq:IssueName>Marine Peteroleum Trust Units</ndaq:IssueName>
+      <ndaq:Mkt>Q</ndaq:Mkt>
+      <ndaq:ReasonCode>LUDP</ndaq:ReasonCode>
+      <ndaq:PauseThresholdPrice />
+      <ndaq:HaltDate>11/02/2020</ndaq:HaltDate>
+      <ndaq:HaltTime>09:50:55</ndaq:HaltTime>
+      <ndaq:ResumptionDate>11/02/2020</ndaq:ResumptionDate>
+      <ndaq:ResumptionQuoteTime>09:50:55</ndaq:ResumptionQuoteTime>
+      <ndaq:ResumptionTradeTime>09:55:55</ndaq:ResumptionTradeTime>
+      <description><![CDATA[<table width="100%" cellpadding="5"><tr><th align="left">Issue Symbol</th><th align="left">Issue Name</th><th align="left">Mkt</th><th align="left">Reason Code</th><th align="left">Pause Threshold Price</th><th align="left">Halt Date</th><th align="left">Halt Time</th><th align="left">Resumption Date</th><th align="left">Resumption Quote Time</th><th align="left">Resumption Trade Time</th></tr><tr><td valign="top">MARPS</td><td valign="top">Marine Peteroleum Trust Units</td><td valign="top">Q</td><td valign="top">LUDP</td><td valign="top"></td><td valign="top">11/02/2020                    </td><td valign="top">09:50:55                      </td><td valign="top">11/02/2020                    </td><td valign="top">09:50:55                      </td><td valign="top">09:55:55                      </td></tr></table>]]></description>
+    </item>
+    <item>
+      <title>SIXH</title>
+      <pubDate>Mon, 02 Nov 2020 05:00:00 GMT</pubDate>
+      <ndaq:IssueSymbol>SIXH</ndaq:IssueSymbol>
+      <ndaq:IssueName>6 Meridian Hedged Equity-Index Option Strategy ETF</ndaq:IssueName>
+      <ndaq:Mkt>P</ndaq:Mkt>
+      <ndaq:ReasonCode>M</ndaq:ReasonCode>
+      <ndaq:PauseThresholdPrice />
+      <ndaq:HaltDate>11/02/2020</ndaq:HaltDate>
+      <ndaq:HaltTime>09:50:12</ndaq:HaltTime>
+      <ndaq:ResumptionDate>11/02/2020</ndaq:ResumptionDate>
+      <ndaq:ResumptionQuoteTime>09:55:12</ndaq:ResumptionQuoteTime>
+      <ndaq:ResumptionTradeTime>09:55:12</ndaq:ResumptionTradeTime>
+      <description><![CDATA[<table width="100%" cellpadding="5"><tr><th align="left">Issue Symbol</th><th align="left">Issue Name</th><th align="left">Mkt</th><th align="left">Reason Code</th><th align="left">Pause Threshold Price</th><th align="left">Halt Date</th><th align="left">Halt Time</th><th align="left">Resumption Date</th><th align="left">Resumption Quote Time</th><th align="left">Resumption Trade Time</th></tr><tr><td valign="top">SIXH</td><td valign="top">6 Meridian Hedged Equity-Index Option Strategy ETF</td><td valign="top">P</td><td valign="top">M</td><td valign="top"></td><td valign="top">11/02/2020                    </td><td valign="top">09:50:12                      </td><td valign="top">11/02/2020                    </td><td valign="top">09:55:12                      </td><td valign="top">09:55:12                      </td></tr></table>]]></description>
+    </item>
+    <item>
+      <title>ERYP</title>
+      <pubDate>Mon, 02 Nov 2020 05:00:00 GMT</pubDate>
+      <ndaq:IssueSymbol>ERYP</ndaq:IssueSymbol>
+      <ndaq:IssueName>Erytech Pharma S.A. ADS</ndaq:IssueName>
+      <ndaq:Mkt>Q</ndaq:Mkt>
+      <ndaq:ReasonCode>LUDP</ndaq:ReasonCode>
+      <ndaq:PauseThresholdPrice />
+      <ndaq:HaltDate>11/02/2020</ndaq:HaltDate>
+      <ndaq:HaltTime>10:11:53</ndaq:HaltTime>
+      <ndaq:ResumptionDate>11/02/2020</ndaq:ResumptionDate>
+      <ndaq:ResumptionQuoteTime>10:11:53</ndaq:ResumptionQuoteTime>
+      <ndaq:ResumptionTradeTime>10:16:53</ndaq:ResumptionTradeTime>
+      <description><![CDATA[<table width="100%" cellpadding="5"><tr><th align="left">Issue Symbol</th><th align="left">Issue Name</th><th align="left">Mkt</th><th align="left">Reason Code</th><th align="left">Pause Threshold Price</th><th align="left">Halt Date</th><th align="left">Halt Time</th><th align="left">Resumption Date</th><th align="left">Resumption Quote Time</th><th align="left">Resumption Trade Time</th></tr><tr><td valign="top">ERYP</td><td valign="top">Erytech Pharma S.A. ADS</td><td valign="top">Q</td><td valign="top">LUDP</td><td valign="top"></td><td valign="top">11/02/2020                    </td><td valign="top">10:11:53                      </td><td valign="top">11/02/2020                    </td><td valign="top">10:11:53                      </td><td valign="top">10:16:53                      </td></tr></table>]]></description>
+    </item>
+    <item>
+      <title>DISCB</title>
+      <pubDate>Mon, 02 Nov 2020 05:00:00 GMT</pubDate>
+      <ndaq:IssueSymbol>DISCB</ndaq:IssueSymbol>
+      <ndaq:IssueName>Discovery, Inc. Ser B</ndaq:IssueName>
+      <ndaq:Mkt>Q</ndaq:Mkt>
+      <ndaq:ReasonCode>LUDP</ndaq:ReasonCode>
+      <ndaq:PauseThresholdPrice />
+      <ndaq:HaltDate>11/02/2020</ndaq:HaltDate>
+      <ndaq:HaltTime>10:23:31</ndaq:HaltTime>
+      <ndaq:ResumptionDate>11/02/2020</ndaq:ResumptionDate>
+      <ndaq:ResumptionQuoteTime>10:23:31</ndaq:ResumptionQuoteTime>
+      <ndaq:ResumptionTradeTime>10:35:30</ndaq:ResumptionTradeTime>
+      <description><![CDATA[<table width="100%" cellpadding="5"><tr><th align="left">Issue Symbol</th><th align="left">Issue Name</th><th align="left">Mkt</th><th align="left">Reason Code</th><th align="left">Pause Threshold Price</th><th align="left">Halt Date</th><th align="left">Halt Time</th><th align="left">Resumption Date</th><th align="left">Resumption Quote Time</th><th align="left">Resumption Trade Time</th></tr><tr><td valign="top">DISCB</td><td valign="top">Discovery, Inc. Ser B</td><td valign="top">Q</td><td valign="top">LUDP</td><td valign="top"></td><td valign="top">11/02/2020                    </td><td valign="top">10:23:31                      </td><td valign="top">11/02/2020                    </td><td valign="top">10:23:31                      </td><td valign="top">10:35:30                      </td></tr></table>]]></description>
+    </item>
+    <item>
+      <title>CETXP</title>
+      <pubDate>Mon, 02 Nov 2020 05:00:00 GMT</pubDate>
+      <ndaq:IssueSymbol>CETXP</ndaq:IssueSymbol>
+      <ndaq:IssueName>Cemtrex Inc. PFD</ndaq:IssueName>
+      <ndaq:Mkt>Q</ndaq:Mkt>
+      <ndaq:ReasonCode>LUDP</ndaq:ReasonCode>
+      <ndaq:PauseThresholdPrice />
+      <ndaq:HaltDate>11/02/2020</ndaq:HaltDate>
+      <ndaq:HaltTime>11:36:48</ndaq:HaltTime>
+      <ndaq:ResumptionDate>11/02/2020</ndaq:ResumptionDate>
+      <ndaq:ResumptionQuoteTime>11:36:48</ndaq:ResumptionQuoteTime>
+      <ndaq:ResumptionTradeTime>11:41:48</ndaq:ResumptionTradeTime>
+      <description><![CDATA[<table width="100%" cellpadding="5"><tr><th align="left">Issue Symbol</th><th align="left">Issue Name</th><th align="left">Mkt</th><th align="left">Reason Code</th><th align="left">Pause Threshold Price</th><th align="left">Halt Date</th><th align="left">Halt Time</th><th align="left">Resumption Date</th><th align="left">Resumption Quote Time</th><th align="left">Resumption Trade Time</th></tr><tr><td valign="top">CETXP</td><td valign="top">Cemtrex Inc. PFD</td><td valign="top">Q</td><td valign="top">LUDP</td><td valign="top"></td><td valign="top">11/02/2020                    </td><td valign="top">11:36:48                      </td><td valign="top">11/02/2020                    </td><td valign="top">11:36:48                      </td><td valign="top">11:41:48                      </td></tr></table>]]></description>
+    </item>
+    <item>
+      <title>AIHS</title>
+      <pubDate>Mon, 02 Nov 2020 05:00:00 GMT</pubDate>
+      <ndaq:IssueSymbol>AIHS</ndaq:IssueSymbol>
+      <ndaq:IssueName>Senmiao Technology Limited CM</ndaq:IssueName>
+      <ndaq:Mkt>Q</ndaq:Mkt>
+      <ndaq:ReasonCode>LUDP</ndaq:ReasonCode>
+      <ndaq:PauseThresholdPrice />
+      <ndaq:HaltDate>11/02/2020</ndaq:HaltDate>
+      <ndaq:HaltTime>14:30:36</ndaq:HaltTime>
+      <ndaq:ResumptionDate>11/02/2020</ndaq:ResumptionDate>
+      <ndaq:ResumptionQuoteTime>14:30:36</ndaq:ResumptionQuoteTime>
+      <ndaq:ResumptionTradeTime>14:35:36</ndaq:ResumptionTradeTime>
+      <description><![CDATA[<table width="100%" cellpadding="5"><tr><th align="left">Issue Symbol</th><th align="left">Issue Name</th><th align="left">Mkt</th><th align="left">Reason Code</th><th align="left">Pause Threshold Price</th><th align="left">Halt Date</th><th align="left">Halt Time</th><th align="left">Resumption Date</th><th align="left">Resumption Quote Time</th><th align="left">Resumption Trade Time</th></tr><tr><td valign="top">AIHS</td><td valign="top">Senmiao Technology Limited CM</td><td valign="top">Q</td><td valign="top">LUDP</td><td valign="top"></td><td valign="top">11/02/2020                    </td><td valign="top">14:30:36                      </td><td valign="top">11/02/2020                    </td><td valign="top">14:30:36                      </td><td valign="top">14:35:36                      </td></tr></table>]]></description>
+    </item>
+    <item>
+      <title>CFFAU</title>
+      <pubDate>Mon, 02 Nov 2020 05:00:00 GMT</pubDate>
+      <ndaq:IssueSymbol>CFFAU</ndaq:IssueSymbol>
+      <ndaq:IssueName>CF Finance Acquisition Unit</ndaq:IssueName>
+      <ndaq:Mkt>Q</ndaq:Mkt>
+      <ndaq:ReasonCode>LUDP</ndaq:ReasonCode>
+      <ndaq:PauseThresholdPrice />
+      <ndaq:HaltDate>11/02/2020</ndaq:HaltDate>
+      <ndaq:HaltTime>15:51:52</ndaq:HaltTime>
+      <ndaq:ResumptionDate>11/02/2020</ndaq:ResumptionDate>
+      <ndaq:ResumptionQuoteTime>15:51:52</ndaq:ResumptionQuoteTime>
+      <ndaq:ResumptionTradeTime>16:00:00</ndaq:ResumptionTradeTime>
+      <description><![CDATA[<table width="100%" cellpadding="5"><tr><th align="left">Issue Symbol</th><th align="left">Issue Name</th><th align="left">Mkt</th><th align="left">Reason Code</th><th align="left">Pause Threshold Price</th><th align="left">Halt Date</th><th align="left">Halt Time</th><th align="left">Resumption Date</th><th align="left">Resumption Quote Time</th><th align="left">Resumption Trade Time</th></tr><tr><td valign="top">CFFAU</td><td valign="top">CF Finance Acquisition Unit</td><td valign="top">Q</td><td valign="top">LUDP</td><td valign="top"></td><td valign="top">11/02/2020                    </td><td valign="top">15:51:52                      </td><td valign="top">11/02/2020                    </td><td valign="top">15:51:52                      </td><td valign="top">16:00:00                      </td></tr></table>]]></description>
+    </item>
+    <item>
+      <title>KPTI</title>
+      <pubDate>Mon, 02 Nov 2020 05:00:00 GMT</pubDate>
+      <ndaq:IssueSymbol>KPTI</ndaq:IssueSymbol>
+      <ndaq:IssueName>Karyopharm Therapeutics Inc.</ndaq:IssueName>
+      <ndaq:Mkt>Q</ndaq:Mkt>
+      <ndaq:ReasonCode>T3</ndaq:ReasonCode>
+      <ndaq:PauseThresholdPrice />
+      <ndaq:HaltDate>11/02/2020</ndaq:HaltDate>
+      <ndaq:HaltTime>16:00:16</ndaq:HaltTime>
+      <ndaq:ResumptionDate>11/02/2020</ndaq:ResumptionDate>
+      <ndaq:ResumptionQuoteTime>16:30:00</ndaq:ResumptionQuoteTime>
+      <ndaq:ResumptionTradeTime>16:35:00</ndaq:ResumptionTradeTime>
+      <description><![CDATA[<table width="100%" cellpadding="5"><tr><th align="left">Issue Symbol</th><th align="left">Issue Name</th><th align="left">Mkt</th><th align="left">Reason Code</th><th align="left">Pause Threshold Price</th><th align="left">Halt Date</th><th align="left">Halt Time</th><th align="left">Resumption Date</th><th align="left">Resumption Quote Time</th><th align="left">Resumption Trade Time</th></tr><tr><td valign="top">KPTI</td><td valign="top">Karyopharm Therapeutics Inc.</td><td valign="top">Q</td><td valign="top">T3</td><td valign="top"></td><td valign="top">11/02/2020                    </td><td valign="top">16:00:16                      </td><td valign="top">11/02/2020                    </td><td valign="top">16:30:00                      </td><td valign="top">16:35:00                      </td></tr></table>]]></description>
+    </item>
+    <item>
+      <title>CBL$E</title>
+      <pubDate>Mon, 02 Nov 2020 05:00:00 GMT</pubDate>
+      <ndaq:IssueSymbol>CBL$E</ndaq:IssueSymbol>
+      <ndaq:IssueName>CBL &amp; Associates Properties, Inc. Depositary Shs Repstg 1/10 6.625% Ser E Cum Redeemable (Pfd Stk)</ndaq:IssueName>
+      <ndaq:Mkt>N</ndaq:Mkt>
+      <ndaq:ReasonCode>D</ndaq:ReasonCode>
+      <ndaq:PauseThresholdPrice />
+      <ndaq:HaltDate>11/02/2020</ndaq:HaltDate>
+      <ndaq:HaltTime>16:11:11</ndaq:HaltTime>
+      <ndaq:ResumptionDate>11/02/2020</ndaq:ResumptionDate>
+      <ndaq:ResumptionQuoteTime>17:30:00</ndaq:ResumptionQuoteTime>
+      <ndaq:ResumptionTradeTime>17:30:00</ndaq:ResumptionTradeTime>
+      <description><![CDATA[<table width="100%" cellpadding="5"><tr><th align="left">Issue Symbol</th><th align="left">Issue Name</th><th align="left">Mkt</th><th align="left">Reason Code</th><th align="left">Pause Threshold Price</th><th align="left">Halt Date</th><th align="left">Halt Time</th><th align="left">Resumption Date</th><th align="left">Resumption Quote Time</th><th align="left">Resumption Trade Time</th></tr><tr><td valign="top">CBL$E</td><td valign="top">CBL & Associates Properties, Inc. Depositary Shs Repstg 1/10 6.625% Ser E Cum Redeemable (Pfd Stk)</td><td valign="top">N</td><td valign="top">D</td><td valign="top"></td><td valign="top">11/02/2020                    </td><td valign="top">16:11:11                      </td><td valign="top">11/02/2020                    </td><td valign="top">17:30:00                      </td><td valign="top">17:30:00                      </td></tr></table>]]></description>
+    </item>
+    <item>
+      <title>CBL</title>
+      <pubDate>Mon, 02 Nov 2020 05:00:00 GMT</pubDate>
+      <ndaq:IssueSymbol>CBL</ndaq:IssueSymbol>
+      <ndaq:IssueName>CBL &amp; Associates Properties, Inc. Common Stock</ndaq:IssueName>
+      <ndaq:Mkt>N</ndaq:Mkt>
+      <ndaq:ReasonCode>D</ndaq:ReasonCode>
+      <ndaq:PauseThresholdPrice />
+      <ndaq:HaltDate>11/02/2020</ndaq:HaltDate>
+      <ndaq:HaltTime>16:11:11</ndaq:HaltTime>
+      <ndaq:ResumptionDate>11/02/2020</ndaq:ResumptionDate>
+      <ndaq:ResumptionQuoteTime>17:30:00</ndaq:ResumptionQuoteTime>
+      <ndaq:ResumptionTradeTime>17:30:00</ndaq:ResumptionTradeTime>
+      <description><![CDATA[<table width="100%" cellpadding="5"><tr><th align="left">Issue Symbol</th><th align="left">Issue Name</th><th align="left">Mkt</th><th align="left">Reason Code</th><th align="left">Pause Threshold Price</th><th align="left">Halt Date</th><th align="left">Halt Time</th><th align="left">Resumption Date</th><th align="left">Resumption Quote Time</th><th align="left">Resumption Trade Time</th></tr><tr><td valign="top">CBL</td><td valign="top">CBL & Associates Properties, Inc. Common Stock</td><td valign="top">N</td><td valign="top">D</td><td valign="top"></td><td valign="top">11/02/2020                    </td><td valign="top">16:11:11                      </td><td valign="top">11/02/2020                    </td><td valign="top">17:30:00                      </td><td valign="top">17:30:00                      </td></tr></table>]]></description>
+    </item>
+    <item>
+      <title>CBL$D</title>
+      <pubDate>Mon, 02 Nov 2020 05:00:00 GMT</pubDate>
+      <ndaq:IssueSymbol>CBL$D</ndaq:IssueSymbol>
+      <ndaq:IssueName>CBL &amp; Associates Properties, Inc. Dep Shares Repstg 1/10th Preferred Series D</ndaq:IssueName>
+      <ndaq:Mkt>N</ndaq:Mkt>
+      <ndaq:ReasonCode>D</ndaq:ReasonCode>
+      <ndaq:PauseThresholdPrice />
+      <ndaq:HaltDate>11/02/2020</ndaq:HaltDate>
+      <ndaq:HaltTime>16:11:11</ndaq:HaltTime>
+      <ndaq:ResumptionDate>11/02/2020</ndaq:ResumptionDate>
+      <ndaq:ResumptionQuoteTime>17:30:00</ndaq:ResumptionQuoteTime>
+      <ndaq:ResumptionTradeTime>17:30:00</ndaq:ResumptionTradeTime>
+      <description><![CDATA[<table width="100%" cellpadding="5"><tr><th align="left">Issue Symbol</th><th align="left">Issue Name</th><th align="left">Mkt</th><th align="left">Reason Code</th><th align="left">Pause Threshold Price</th><th align="left">Halt Date</th><th align="left">Halt Time</th><th align="left">Resumption Date</th><th align="left">Resumption Quote Time</th><th align="left">Resumption Trade Time</th></tr><tr><td valign="top">CBL$D</td><td valign="top">CBL & Associates Properties, Inc. Dep Shares Repstg 1/10th Preferred Series D</td><td valign="top">N</td><td valign="top">D</td><td valign="top"></td><td valign="top">11/02/2020                    </td><td valign="top">16:11:11                      </td><td valign="top">11/02/2020                    </td><td valign="top">17:30:00                      </td><td valign="top">17:30:00                      </td></tr></table>]]></description>
+    </item>
+  </channel>
+</rss>

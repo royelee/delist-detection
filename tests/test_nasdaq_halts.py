@@ -1,4 +1,7 @@
 from datetime import date
+from pathlib import Path
+
+import requests
 
 from delist_detection.nasdaq_halts import Halt, NasdaqHaltClient, last_trade_from_halt, parse_halts_rss
 
@@ -50,6 +53,7 @@ class _Resp:
 
     def __init__(self, text):
         self.text = text
+        self.content = text.encode("utf-8")
 
 
 class _Session:
@@ -126,3 +130,30 @@ def test_client_403_logs_warning(tmp_path, caplog):
     assert "2025-03-25" in caplog.text
     # Verify cache file was not created
     assert not (tmp_path / "20250325.xml").exists()
+
+
+FEED_FIX = Path(__file__).parent / "fixtures" / "nasdaq_halts" / "tradehalts_11022020.xml"
+
+
+class _RealFeedSession:
+    """Serves the real 2020-11-02 feed as `requests` builds it: the body starts
+    with a UTF-8 BOM and the header says `text/xml` with no charset, so
+    `Response.text` decodes it as ISO-8859-1 (the BOM becomes three letters)."""
+
+    def get(self, url, headers=None, timeout=None):
+        r = requests.models.Response()
+        r.status_code = 200
+        r.headers["Content-Type"] = "text/xml"
+        r._content = FEED_FIX.read_bytes()
+        return r
+
+
+def test_real_feed_with_a_bom_and_no_charset_parses(tmp_path):
+    c = NasdaqHaltClient(tmp_path, session=_RealFeedSession(), min_interval=0)
+    h = c.deletion_halt("CBL", date(2020, 11, 2), date(2020, 11, 2))
+    assert h is not None and (h.symbol, h.reason, h.halt_time) == ("CBL", "D", "16:11:11")
+    assert last_trade_from_halt(h) == date(2020, 11, 2)
+    # the cached copy is the feed's own bytes and parses again
+    assert (tmp_path / "20201102.xml").read_bytes() == FEED_FIX.read_bytes()
+    assert [x.symbol for x in NasdaqHaltClient(tmp_path, session=None, min_interval=0).halts_on(date(2020, 11, 2))
+            if x.reason == "D"] == ["CBL$E", "CBL", "CBL$D"]
