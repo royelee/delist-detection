@@ -32,10 +32,17 @@ one observation per row per file).
                              │ ObservationIndex.eras()
                              ▼
               ┌────────────────────────────┐
-              │  TickerEra per (ticker,    │   splits on name mismatch / pin change /
-              │  contiguous sightings)     │   an unconfirmed gap > ERA_GAP_DAYS
+              │  stage 1: TickerEra per    │   splits on pin change / name mismatch /
+              │  (ticker, observations)    │   class-letter change; a gap alone never splits
               └─────────────┬──────────────┘
                              │ FtdIndex.load (era tickers' fails-to-deliver rows)
+                             ▼
+              ┌────────────────────────────┐
+              │  stage 2: refine_eras      │   splits again on the ticker's FTD rows: a
+              │                            │   CUSIP switch (runs of ≥ 3 rows), or a gap
+              │                            │   > ERA_GAP_DAYS in observation + FTD dates
+              └─────────────┬──────────────┘
+                             │
                              ▼
               ┌────────────────────────────┐
               │  era_last_seen, era_cusips │   FTD-confirmed true last sighting + CUSIPs
