@@ -69,7 +69,7 @@ def test_a_cik_mapped_ticker_whose_names_differ_carries_both_flags(fake_edgar):
 def test_a_cik_mapped_ticker_whose_names_agree_gets_neither_flag(fake_edgar):
     """Unconditional, resolved_by_cik_map would fire on nearly every row once a
     universe-wide map exists and flood review.csv; resolution_source already
-    records "cik_map" in delist_classifications.csv, so provenance isn't lost
+    records "cik_map" in delistings.csv, so provenance isn't lost
     by leaving a settled pin out of flags/review.csv."""
     resolver = TickerResolver(fake_edgar, cik_map=lambda t, d: 1701732 if t == "ALTR" else None,
                               member_names=lambda t, d=None: "ALTAIR ENGINEERING INC")

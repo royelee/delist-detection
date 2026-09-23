@@ -588,7 +588,7 @@ class DelistClassifier:
                 # cik_map is scoped the same way, for the same reason: unconditional
                 # it would fire on nearly every row once a universe-wide map exists
                 # and flood review.csv, but resolution_source already records
-                # "cik_map" in delist_classifications.csv, so provenance isn't lost.
+                # "cik_map" in delistings.csv, so provenance isn't lost.
                 if resolution.source == "manual":
                     flags.append("resolved_by_manual_override")
                 if resolution.source == "cik_map":

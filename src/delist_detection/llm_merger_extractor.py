@@ -16,7 +16,7 @@ PRICE is NOT resolved here: a later integration step joins it from a price
 panel and enforces the cash+stock sanity gate. ``to_merger_terms_dict()``
 therefore emits ``cash_per_share`` / ``stock_ratio`` / ``acquirer_ticker``
 (omitting any that are ``None``) — exactly the shape
-``reconstruction.build_dlret_table`` consumes via ``--merger-terms``;
+``reconstruction.build_delistings_table`` consumes via ``--merger-terms``;
 ``acquirer_price`` is added downstream.
 
 Miss → drop
@@ -78,7 +78,7 @@ class MergerTerms:
     quote: str
 
     def to_merger_terms_dict(self) -> dict:
-        """Project to the dict shape ``build_dlret_table`` consumes.
+        """Project to the dict shape ``build_delistings_table`` consumes.
 
         Emits ``cash_per_share`` / ``stock_ratio`` / ``acquirer_ticker``,
         OMITTING any that are ``None``. ``acquirer_price`` is intentionally

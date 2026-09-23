@@ -1,13 +1,15 @@
 """Cross-check classifications by reading independent web sources.
 
-For each ticker in `output/delist_classifications.csv`, hit a verification
-URL (the EDGAR entity landing page or Wikipedia) and ask: does the
-classification match what an independent source says?
+For each ticker in `output/delistings.csv`, hit a verification URL (the EDGAR
+entity landing page) and ask: does the classification match what an
+independent source says? The name checked against EDGAR is the row's own
+`resolved_name` — the name our own resolver settled on, not a name sourced
+from elsewhere.
 
 This script reads pre-built per-ticker probe lists from the user (or a
 default sampling stratified across buckets) and writes
 `output/web_verification.csv` with columns:
-    ticker, our_bucket, web_says, agree, evidence_url, note
+    sec_id, ticker, our_bucket, web_says, agree, evidence_url, note
 """
 
 from __future__ import annotations
@@ -15,7 +17,6 @@ from __future__ import annotations
 import argparse
 import csv
 import json
-import os
 import re
 import sys
 import time
@@ -73,19 +74,21 @@ def fetch_edgar_entity_landing(cik: int) -> dict:
     }
 
 
-def verify_one(row: dict, av_name: str | None = None) -> dict:
+def verify_one(row: dict) -> dict:
     """Return a verification dict for one classification row."""
     ticker = row["ticker"]
     bucket = row["bucket"]
     cik = row.get("cik")
+    resolved_name = row.get("resolved_name") or ""
     verdict = {
+        "sec_id": row.get("sec_id", ""),
         "ticker": ticker,
         "our_bucket": bucket,
         "our_code": row.get("crsp_code"),
         "our_reason": row.get("reason"),
         "edgar_name": "",
         "former_names": "",
-        "av_name": av_name or "",
+        "resolved_name": resolved_name,
         "name_match": "",
         "delist_form_present": "",
         "verdict": "",
@@ -121,9 +124,9 @@ def verify_one(row: dict, av_name: str | None = None) -> dict:
 
     name_pool_str = " ".join([edgar_name] + (info.get("formerNames", []) or []))
     pool_toks = _toks(name_pool_str)
-    av_tokens = list(_toks(av_name)) if av_name else []
-    matched_tokens = [t for t in av_tokens if t in pool_toks]
-    verdict["name_match"] = f"{len(matched_tokens)}/{len(av_tokens)}"
+    name_tokens = list(_toks(resolved_name)) if resolved_name else []
+    matched_tokens = [t for t in name_tokens if t in pool_toks]
+    verdict["name_match"] = f"{len(matched_tokens)}/{len(name_tokens)}"
 
     forms_in = {f["form"] for f in info.get("delist_filings", [])}
     has_25 = bool({"25", "25-NSE"} & forms_in)
@@ -134,8 +137,8 @@ def verify_one(row: dict, av_name: str | None = None) -> dict:
 
     # Date-proximity check: does the EDGAR entity have a delist filing within
     # ±30 days of the observed date? If so, the CIK is plausibly correct even
-    # when names don't match (i.e. ticker recycling — AV name is stale).
-    observed = row.get("observed_delist_date") or ""
+    # when names don't match (i.e. ticker recycling — resolved_name is stale).
+    observed = row.get("last_trade_date") or row.get("delist_date") or ""
     near_25 = False
     if observed and observed != "nan":
         from datetime import datetime as _dt
@@ -155,13 +158,13 @@ def verify_one(row: dict, av_name: str | None = None) -> dict:
             pass
 
     # Build a verdict.
-    if av_name and av_tokens and len(matched_tokens) == 0:
+    if resolved_name and name_tokens and len(matched_tokens) == 0:
         if near_25:
             verdict["verdict"] = "OK_recycled_ticker"
-            verdict["note"] = "AV name stale (ticker recycled); CIK has Form 25 within ±30d of observed"
+            verdict["note"] = "resolved_name stale (ticker recycled); CIK has Form 25 within ±30d of observed"
             return verdict
         verdict["verdict"] = "MISMATCH_name"
-        verdict["note"] = "AV name shares no tokens with EDGAR name"
+        verdict["note"] = "resolved_name shares no tokens with EDGAR name"
         return verdict
     if not has_25 and not has_15:
         verdict["verdict"] = "WEAK_no_delist_form"
@@ -194,22 +197,11 @@ def verify_one(row: dict, av_name: str | None = None) -> dict:
 
 def main() -> int:
     p = argparse.ArgumentParser()
-    p.add_argument("--input", default=str(ROOT / "output" / "delist_classifications.csv"))
+    p.add_argument("--input", default=str(ROOT / "output" / "delistings.csv"))
     p.add_argument("--output", default=str(ROOT / "output" / "web_verification.csv"))
     p.add_argument("--sample", type=int, default=0,
                    help="Stratified random sample size (0 = all)")
-    p.add_argument("--av-csv", default=os.environ.get(
-        "AV_LISTING_CSV",
-        str(ROOT / "data" / "listing_status_delisted.csv")))
     args = p.parse_args()
-
-    # Load AV names for cross-validation
-    av_names: dict[str, str] = {}
-    with open(args.av_csv) as fh:
-        for r in csv.DictReader(fh):
-            t = (r.get("symbol") or "").upper()
-            if t:
-                av_names[t] = r.get("name") or ""
 
     with open(args.input) as fh:
         rows = list(csv.DictReader(fh))
@@ -231,13 +223,13 @@ def main() -> int:
     counts: dict[str, int] = {}
     with out_path.open("w", newline="") as fh:
         w = csv.DictWriter(fh, fieldnames=[
-            "ticker", "our_bucket", "our_code", "our_reason",
-            "edgar_name", "former_names", "av_name", "name_match",
+            "sec_id", "ticker", "our_bucket", "our_code", "our_reason",
+            "edgar_name", "former_names", "resolved_name", "name_match",
             "delist_form_present", "verdict", "note",
         ])
         w.writeheader()
         for i, r in enumerate(rows, 1):
-            v = verify_one(r, av_name=av_names.get(r["ticker"].upper()))
+            v = verify_one(r)
             w.writerow(v)
             counts[v["verdict"]] = counts.get(v["verdict"], 0) + 1
             if i % 25 == 0:
