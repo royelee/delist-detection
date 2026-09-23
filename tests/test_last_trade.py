@@ -14,9 +14,18 @@ def test_eightk_phrases():
                                 "March 26, 2025")) == (date(2025, 3, 26), "8k_close")
     assert eightk_last_trade(_k("Trading was suspended immediately after the close on February 2, 2015")) \
         == (date(2015, 2, 2), "8k_close")
+    # Test with straight quotes (Closing Date)
     assert eightk_last_trade(_k("requested a halt prior to the open of trading on the Closing Date",
                                 extra='On October 13, 2023 (the "Closing Date"), the merger closed.')) \
         == (date(2023, 10, 12), "8k_open_closing")
+    # Test with typographic left double quote (Closing Date) — real EDGAR text
+    assert eightk_last_trade(_k("requested a halt prior to the open of trading on the Closing Date",
+                                extra='On October 13, 2023 (the “Closing Date”), the merger closed.')) \
+        == (date(2023, 10, 12), "8k_open_closing")
+    # Test 8k_close_closing pattern with typographic quotes
+    assert eightk_last_trade(_k("requested that trading at the close of trading on the Closing Date",
+                                extra='On February 28, 2024 (the “Closing Date”), the merger closed.')) \
+        == (date(2024, 2, 28), "8k_close_closing")
     assert eightk_last_trade(_k("trading in the Common Stock was suspended immediately on November 18, 2024")) \
         == (date(2024, 11, 18), "8k_suspended_unconfirmed")
     assert eightk_last_trade(_k("The last day of trading was January 5, 2017.")) == (date(2017, 1, 5), "8k_last_day")

@@ -26,7 +26,8 @@ def _day(s: str) -> date:
 
 
 def _closing_date(text: str) -> date | None:
-    m = re.search(rf'{_DATE}\s*\((?:the\s*)?["\']?Closing Date', text, re.I)
+    pattern = _DATE + r'\s*\((?:the\s*)?' + '["' + "'" + '“]?' + r'Closing Date'
+    m = re.search(pattern, text, re.I)
     return _day(m.group(1)) if m else None
 
 
