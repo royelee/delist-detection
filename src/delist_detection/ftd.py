@@ -1,0 +1,199 @@
+"""SEC fails-to-deliver data: dated (CUSIP, symbol, description, price) rows.
+
+Two uses: the close on a security's last trading day (a row dated D carries the
+close of the prior trading day), and the CUSIP a symbol carried on a date.
+Rows exist only on days with fails, so a quiet security has gaps.
+"""
+from __future__ import annotations
+
+import calendar
+import io
+import re
+import zipfile
+from bisect import bisect_left, bisect_right
+from collections import defaultdict
+from collections.abc import Iterable, Iterator
+from dataclasses import dataclass
+from datetime import date
+from pathlib import Path
+
+from .observations import normalize_ticker
+from .sec_http import download, get_text
+from .trading_calendar import add_trading_days, next_trading_day
+
+FTD_INDEX_URL = "https://www.sec.gov/data-research/sec-markets-data/fails-deliver-data"
+_SEC = "https://www.sec.gov"
+_HALF = re.compile(r"cnsfails(\d{4})(\d{2})([ab])(?:_\d+)?\.zip$", re.I)
+_QTR = re.compile(r"cnsp_sec_fails_(\d{4})q([1-4])\.zip$", re.I)
+
+
+@dataclass(frozen=True)
+class FtdRow:
+    date: str
+    cusip: str
+    symbol: str
+    description: str
+    price: float | None
+
+
+def period_of(url: str) -> tuple[date, date] | None:
+    name = url.rsplit("/", 1)[-1]
+    m = _HALF.search(name)
+    if m:
+        y, mo = int(m.group(1)), int(m.group(2))
+        if m.group(3).lower() == "a":
+            return date(y, mo, 1), date(y, mo, 15)
+        return date(y, mo, 16), date(y, mo, calendar.monthrange(y, mo)[1])
+    m = _QTR.search(name)
+    if m:
+        y, q = int(m.group(1)), int(m.group(2))
+        end_month = 3 * q
+        return date(y, end_month - 2, 1), date(y, end_month, calendar.monthrange(y, end_month)[1])
+    return None
+
+
+def parse_index_links(html: str) -> list[str]:
+    out: list[str] = []
+    seen: set[tuple[date, date]] = set()
+    for href in re.findall(r'href="([^"]+\.zip)"', html, re.I):
+        p = period_of(href)
+        if p is None or p in seen:
+            continue
+        seen.add(p)
+        out.append(href if href.startswith("http") else _SEC + href)
+    return out
+
+
+def parse_ftd_lines(lines: Iterable[str], *, symbols: set[str] | None = None,
+                    cusips: set[str] | None = None) -> Iterator[FtdRow]:
+    """Rows from FTD text lines; header, trailer and malformed lines are skipped.
+    With `symbols`/`cusips`, only rows matching either set are built (fast path)."""
+    want = symbols is not None or cusips is not None
+    symbols = symbols or set()
+    cusips = cusips or set()
+    for line in lines:
+        parts = line.rstrip("\r\n").split("|")
+        if len(parts) < 6:
+            continue
+        d = parts[0].strip()
+        if len(d) != 8 or not d.isdigit():
+            continue
+        cusip = parts[1].strip().upper()
+        symbol = normalize_ticker(parts[2])
+        if want and symbol not in symbols and cusip not in cusips:
+            continue
+        try:
+            price: float | None = float(parts[-1].strip())
+        except ValueError:
+            price = None
+        yield FtdRow(f"{d[:4]}-{d[4:6]}-{d[6:]}", cusip, symbol, "|".join(parts[4:-1]).strip(), price)
+
+
+class FtdClient:
+    def __init__(self, cache_dir: str | Path, *, session=None, user_agent: str | None = None) -> None:
+        self.dir = Path(cache_dir)
+        self.session, self.user_agent = session, user_agent
+        self._links: list[str] | None = None
+
+    def links(self) -> list[str]:
+        if self._links is None:
+            html = get_text(FTD_INDEX_URL, self.dir / "index.html", max_age_days=7,
+                            session=self.session, user_agent=self.user_agent)
+            self._links = parse_index_links(html)
+        return self._links
+
+    def urls_for(self, lo: date, hi: date) -> list[str]:
+        hits = [(period_of(u), u) for u in self.links()]
+        return [u for p, u in sorted(hits) if p and p[0] <= hi and p[1] >= lo]
+
+    def rows(self, url: str, *, symbols: set[str] | None = None,
+             cusips: set[str] | None = None) -> Iterator[FtdRow]:
+        dest = self.dir / url.rsplit("/", 1)[-1]
+        path = download(url, dest, session=self.session, user_agent=self.user_agent)
+        try:
+            z = zipfile.ZipFile(path)
+        except zipfile.BadZipFile:
+            path.unlink(missing_ok=True)          # a truncated download: fetch it again once
+            z = zipfile.ZipFile(download(url, dest, session=self.session, user_agent=self.user_agent))
+        with z:
+            for member in z.namelist():
+                if not member.lower().endswith(".txt"):
+                    continue
+                with z.open(member) as fh:
+                    yield from parse_ftd_lines(io.TextIOWrapper(fh, encoding="latin-1"),
+                                               symbols=symbols, cusips=cusips)
+
+
+class FtdIndex:
+    def __init__(self, rows: Iterable[FtdRow] = ()) -> None:
+        self._by_symbol: dict[str, list[FtdRow]] = defaultdict(list)
+        self._by_cusip: dict[str, list[FtdRow]] = defaultdict(list)
+        self._seen: set[FtdRow] = set()
+        self._dirty = False
+        for r in rows:
+            self.add(r)
+
+    def add(self, r: FtdRow) -> None:
+        if r in self._seen:
+            return
+        self._seen.add(r)
+        self._by_symbol[r.symbol].append(r)
+        self._by_cusip[r.cusip].append(r)
+        self._dirty = True
+
+    @classmethod
+    def load(cls, client: FtdClient, lo: date, hi: date, *, symbols: Iterable[str] | None = None,
+             cusips: Iterable[str] | None = None) -> "FtdIndex":
+        idx = cls()
+        idx._scan(client, lo, hi, {normalize_ticker(s) for s in symbols or ()},
+                  {c.upper() for c in cusips or ()})
+        return idx
+
+    def extend(self, client: FtdClient, lo: date, hi: date, *, cusips: Iterable[str]) -> None:
+        new = {c.upper() for c in cusips} - set(self._by_cusip)
+        if new:
+            self._scan(client, lo, hi, set(), new)
+
+    def _scan(self, client: FtdClient, lo: date, hi: date, symbols: set[str], cusips: set[str]) -> None:
+        lo_s, hi_s = lo.isoformat(), hi.isoformat()
+        for url in client.urls_for(lo, hi):
+            for r in client.rows(url, symbols=symbols, cusips=cusips):
+                if lo_s <= r.date <= hi_s:
+                    self.add(r)
+
+    def _sort(self) -> None:
+        if self._dirty:
+            for m in (self._by_symbol, self._by_cusip):
+                for v in m.values():
+                    v.sort(key=lambda r: (r.date, r.cusip, r.symbol))
+            self._dirty = False
+
+    @staticmethod
+    def _slice(rows: list[FtdRow], lo: str | None, hi: str | None) -> list[FtdRow]:
+        dates = [r.date for r in rows]
+        i = bisect_left(dates, lo) if lo else 0
+        j = bisect_right(dates, hi) if hi else len(rows)
+        return rows[i:j]
+
+    def by_symbol(self, symbol: str, lo: str | None = None, hi: str | None = None) -> list[FtdRow]:
+        self._sort()
+        return self._slice(self._by_symbol.get(normalize_ticker(symbol), []), lo, hi)
+
+    def by_cusip(self, cusip: str, lo: str | None = None, hi: str | None = None) -> list[FtdRow]:
+        self._sort()
+        return self._slice(self._by_cusip.get(cusip.upper(), []), lo, hi)
+
+    def close_after(self, day: date, *, cusip: str | None = None, symbol: str | None = None,
+                    max_lag: int = 3) -> tuple[float, str, bool] | None:
+        """The close of `day`: the first priced row dated on the next trading day,
+        or up to `max_lag` further trading days later (then `lagged` is True; rows
+        after the last trade repeat the last close, but after an OTC move they
+        carry OTC prices, so a lagged value is flagged for review)."""
+        first = next_trading_day(day)
+        last = add_trading_days(first, max_lag)
+        rows = (self.by_cusip(cusip, first.isoformat(), last.isoformat()) if cusip
+                else self.by_symbol(symbol or "", first.isoformat(), last.isoformat()))
+        for r in rows:
+            if r.price is not None and r.price > 0:
+                return r.price, r.date, r.date != first.isoformat()
+        return None
