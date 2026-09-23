@@ -75,8 +75,14 @@ def _cut(obs: Sequence[Observation], rows: Sequence[FtdRow],
             for lo, hi in zip(bounds, bounds[1:])]
 
 
-def _gap_cuts(obs: Sequence[Observation], rows: Sequence[FtdRow]) -> list[str]:
+def _kept_cusips(rows: Sequence[FtdRow]) -> tuple[str, ...]:
+    """CUSIPs with at least one run of `ERA_MIN_RUN` rows, most rows first."""
     kept = {c for c, run in _cusip_runs(rows) if len(run) >= ERA_MIN_RUN}
+    return tuple(c for c, _ in Counter(r.cusip for r in rows).most_common() if c in kept)
+
+
+def _gap_cuts(obs: Sequence[Observation], rows: Sequence[FtdRow]) -> list[str]:
+    kept = set(_kept_cusips(rows))
     dates = sorted({o.as_of for o in obs} | {r.date for r in rows if r.cusip in kept})
     return [b for a, b in zip(dates, dates[1:])
             if (date.fromisoformat(b) - date.fromisoformat(a)).days > ERA_GAP_DAYS]
@@ -93,10 +99,8 @@ def _split_era(era: TickerEra, rows: list[FtdRow]) -> list[TickerEra]:
         for obs, part_rows in _cut(g_obs, g_rows, _switch_cuts(g_rows)):
             if not obs:
                 continue                  # an FTD-only side (another holder of the ticker, a tail) is no era
-            counts = Counter(r.cusip for r in part_rows)
-            kept = tuple(c for c, n in counts.most_common() if n >= ERA_MIN_RUN)
             out.append(replace(era, first=obs[0].as_of, last=obs[-1].as_of, observations=list(obs),
-                               ftd_cusips=kept))
+                               ftd_cusips=_kept_cusips(part_rows)))
     return out
 
 

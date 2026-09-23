@@ -111,7 +111,7 @@ def _rows(symbol, cusip, dates, desc="X CO"):
 def test_refine_eras_ignores_short_cusip_runs_and_obs_less_sides():
     era = _era("X", ("2020-01-15", "X CO"), ("2020-06-30", "X CO"), ("2020-12-31", "X CO"))
     rows = (_rows("X", "AAA", ["2020-01-02", "2020-02-03", "2020-03-02", "2020-04-01"])
-            + _rows("X", "NOISE", ["2020-04-15", "2020-04-16"])            # a 2-row run: noise
+            + _rows("X", "NOISE", ["2020-04-15", "2020-04-16", "2020-05-15"])   # 3 rows, but no run of 3: noise
             + _rows("X", "AAA", ["2020-05-01", "2020-06-01", "2020-07-01"])
             + _rows("X", "BBB", ["2020-09-01", "2020-10-01", "2020-11-02", "2021-01-04"])
             + _rows("X", "CCC", ["2021-03-01", "2021-04-01", "2021-05-03"]))  # no observation after: not created
