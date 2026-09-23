@@ -256,6 +256,30 @@ def test_resolve_many_reports_every_cusip_of_the_era_that_maps_to_its_figi():
     assert len(figi.jobs) == 4                    # the 3 CUSIP jobs + the ticker job: no extra OpenFIGI call
 
 
+def test_a_ticker_resolved_era_keeps_its_ftd_cusip_unless_openfigi_maps_it_elsewhere():
+    """An era resolved by ticker keeps its own FTD CUSIP when OpenFIGI simply
+    has no record of it ("No identifier found": old CUSIPs often aren't in
+    OpenFIGI), and drops it only when OpenFIGI maps it to another composite."""
+    from dataclasses import replace
+    quiet = replace(_era("QQ", ("2016-06-30", "QUIET CO")), ftd_cusips=("12345A101",))
+    moved = replace(_era("MM", ("2016-06-30", "MOVED CO")), ftd_cusips=("67890B202",))
+    figi = _Figi({
+        ("TICKER", "QQ"): {"data": [_row("BBGQUIET001", "US", "QQ", "QUIET CO")]},
+        ("TICKER", "MM"): {"data": [_row("BBGMOVED001", "US", "MM", "MOVED CO")]},
+        # two other lines, neither carrying MM: not accepted, but it does map elsewhere
+        ("ID_CUSIP", "67890B202"): {"data": [_row("BBGELSEWHR1", "US", "XX", "ELSEWHERE INC"),
+                                             _row("BBGELSEWHR2", "US", "YY", "ELSEWHERE INC")]},
+    })
+    res = FigiResolver(figi).resolve_many([quiet, moved], ciks={quiet.key: 1, moved.key: 2},
+                                          cusips={quiet.key: ["12345A101"], moved.key: ["67890B202"]})
+    assert (res[quiet.key].source, res[quiet.key].cusips) == ("ticker", ("12345A101",))
+    assert (res[moved.key].source, res[moved.key].cusips) == ("ticker", ())
+    # a CUSIP the era did not get from its own FTD rows still needs OpenFIGI's confirmation
+    obs_only = split_eras([Observation("QQ", "2016-06-30", "QUIET CO", cusip="24680C303")])[0]
+    res2 = FigiResolver(figi).resolve_many([obs_only], ciks={obs_only.key: 1}, cusips={obs_only.key: ["24680C303"]})
+    assert res2[obs_only.key].cusips == ()
+
+
 def test_resolve_many_keeps_the_first_cusip_when_nothing_can_verify_it():
     pinned = split_eras([Observation("X", "2020-01-02", "X CORP", sec_id="BBG000PIN001")])[0]
     placeholder = _era("Y", ("2020-01-02", "Y CORP"))

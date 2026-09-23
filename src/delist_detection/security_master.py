@@ -50,8 +50,9 @@ class EraResolution:
     candidate: FigiCandidate | None
     flags: tuple[str, ...]
     # The era's CUSIPs that belong to sec_id: every tried CUSIP whose OpenFIGI
-    # answer is accepted as that composite; for a pin or a placeholder (nothing
-    # to check against) the era's first candidate CUSIP.
+    # answer is accepted as that composite, plus, for an era resolved by ticker
+    # or name, its own FTD CUSIP when OpenFIGI has no US line for it; for a pin
+    # or a placeholder (nothing to check against) the era's first candidate CUSIP.
     cusips: tuple[str, ...] = ()
 
 
@@ -237,12 +238,19 @@ class FigiResolver:
                 continue
             tried, idx, t_idx = plan[era.key]
             names = era.names
-            by_cusip = [accept(us_candidates(answers[i].get("data") or []), ticker=era.ticker, names=names,
-                               via_cusip=True) for i in idx]
+            found = [us_candidates(answers[i].get("data") or []) for i in idx]
+            by_cusip = [accept(f, ticker=era.ticker, names=names, via_cusip=True) for f in found]
 
             def resolved(sec_id: str, source: str, cand: FigiCandidate) -> EraResolution:
-                own = tuple(c for c, got in zip(tried, by_cusip) if got is not None and got.composite == sec_id)
-                return EraResolution(era.key, sec_id, source, cand, (), own)
+                def own(c: str, got: FigiCandidate | None, cands: list[FigiCandidate]) -> bool:
+                    if got is not None and got.composite == sec_id:
+                        return True
+                    # Resolved by ticker or name: the era's own FTD CUSIP stays unless
+                    # OpenFIGI maps it to another composite (it often has no record of
+                    # an old CUSIP at all).
+                    return source != "cusip" and c in era.ftd_cusips and not cands
+                return EraResolution(era.key, sec_id, source, cand, (),
+                                     tuple(c for c, got, f in zip(tried, by_cusip, found) if own(c, got, f)))
 
             c = next((got for got in by_cusip if got), None)
             if c:
