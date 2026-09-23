@@ -338,6 +338,38 @@ class EdgarClient:
         cp.write_text(text, encoding="utf-8")
         return text
 
+    def fetch_filing_raw(self, cik: int | str, accession: str) -> str:
+        """The complete submission text file: every document of the filing with
+        its <TYPE> header and raw markup (Form 25 XML plus its EX-99.25 notice).
+
+        Cached under cache/edgar/raw/{accession_no_dashes}.txt. Returns '' on a
+        404 (cached as a sticky miss) or a network error (not cached). A 403/429
+        raises EdgarBlocked.
+        """
+        acc_nodash = accession.replace("-", "")
+        raw_dir = self.cache_dir / "raw"
+        raw_dir.mkdir(parents=True, exist_ok=True)
+        cp = raw_dir / f"{acc_nodash}.txt"
+        if cp.exists():
+            return cp.read_text(encoding="utf-8", errors="replace")
+        url = f"{WWW_SEC_HOST}/Archives/edgar/data/{int(cik)}/{acc_nodash}/{accession}.txt"
+        _throttle()
+        try:
+            resp = self.session.get(
+                url,
+                headers={**self.session.headers, "Host": "www.sec.gov", "Accept": "text/plain,*/*"},
+                timeout=30,
+            )
+        except requests.RequestException:
+            return ""
+        check_response(resp)
+        if resp.status_code != 200:
+            if resp.status_code == 404:
+                cp.write_text("", encoding="utf-8")
+            return ""
+        cp.write_text(resp.text, encoding="utf-8")
+        return resp.text
+
     def recent_filings(self, cik: int | str) -> list[EdgarSubmission]:
         sub = self.submissions(cik)
         if not isinstance(sub, dict) or sub.get("__not_found__"):

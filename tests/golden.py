@@ -87,6 +87,10 @@ class GoldenEdgar:
         p = FIX / "text" / f"{int(cik)}_{accession}.txt"
         return p.read_text(encoding="utf-8") if p.exists() else ""
 
+    def fetch_filing_raw(self, cik, accession):
+        p = FIX / "raw" / f"{int(cik)}_{accession}.txt"
+        return p.read_text(encoding="utf-8") if p.exists() else ""
+
     def company_search_atom(self, company, form_type="25-NSE"):
         return self.data["atom"].get(f"{company}|{form_type}", [])
 

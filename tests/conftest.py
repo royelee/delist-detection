@@ -17,6 +17,7 @@ class _FakeEdgar:
     submissions_by_cik: dict[int, list[EdgarSubmission]]
     company_map: dict[str, dict[str, Any]]
     texts: dict[str, str] = field(default_factory=dict)   # accession -> filing text
+    raws: dict[str, str] = field(default_factory=dict)    # accession -> complete submission text
 
     def company_tickers(self) -> dict[str, dict[str, Any]]:
         return self.company_map
@@ -31,6 +32,9 @@ class _FakeEdgar:
 
     def fetch_filing_text(self, cik: int | str, accession: str, primary_doc: str) -> str:
         return self.texts.get(accession, "")
+
+    def fetch_filing_raw(self, cik: int | str, accession: str) -> str:
+        return self.raws.get(accession, "")
 
     def company_search_atom(self, name: str, form_type: str = "25-NSE") -> list[dict]:
         return []
