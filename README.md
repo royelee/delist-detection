@@ -179,8 +179,11 @@ sec_id, delist_date, ticker, payout_per_share, confidence, source, accession
 Every row that needs a human look: a delisting whose `review_flags` is
 non-empty, plus securities with no delisting at all (`ended_without_delisting`,
 `listing_status_unknown`, `form25_unmatched`, `form25_unclassified`,
-`form25_unreadable`, `observation_unresolved`, `error`), and ticker_history
-consistency checks (`ticker_range_overlap`, `ticker_shared`).
+`form25_unreadable`, `observation_unresolved`, `error`), ticker_history
+consistency checks (`ticker_range_overlap`, `ticker_shared`), and
+observation checks: `observation_conflict:<date>` (one row per ticker seen
+under two names on one date, `sec_id` empty) and `ticker_unconfirmed` (an
+era whose ticker no SEC fails-to-deliver row shows).
 
 ```
 sec_id, delist_date, ticker, cik, bucket, dlret, review_flags, reason, anchor_8k, last_seen
@@ -253,6 +256,7 @@ The full flag vocabulary (from `classifier.py`, `ticker_resolver.py`,
 | `last_trade_date_unconfirmed` | The last trade date comes from unconfirmed filing wording only, with no MIDAS/halt confirmation |
 | `no_last_trade_date` | No source (notice, 8-K, MIDAS, halt) yielded a last trade date at all |
 | `ftd_close_lagged` | The last-trade close is from a fails-to-deliver row more than one trading day after the last trade (no row on the next day) |
+| `acquirer_close_lagged` | The acquirer price used in the merger's cash+stock / stock-only terms is from a fails-to-deliver row more than one trading day after the target's last trade |
 | `ended_without_delisting` | Not listed today and no Form 25 or fallback delisting filing was found |
 | `listing_status_unknown` | Listing status could not be confirmed and no delisting was found |
 | `no_figi`, `observation_unresolved` | FIGI resolution fell back to a placeholder, or (with no CIK either) could not resolve at all |
@@ -260,6 +264,8 @@ The full flag vocabulary (from `classifier.py`, `ticker_resolver.py`,
 | `error` | An unexpected exception processing one security; logged and skipped rather than aborting the run |
 | `ticker_range_overlap` | Two of one security's own `ticker_history` ranges overlap |
 | `ticker_shared` | The same ticker maps to two different securities on the same day |
+| `observation_conflict:<date>` | The ticker was observed under two or more different names on `<date>` (a snapshot source that backfilled today's ticker: CB is both ACE LTD and CHUBB CORP in 2012-2014); both are kept, and the reason names each with the security it resolved to. `sec_id` is empty |
+| `ticker_unconfirmed` | An era from 2004 on with no fails-to-deliver row under its ticker within 30 days of its first and last observation: the SEC data never shows that ticker then (a snapshot carrying a later ticker, such as APTV in 2012-2013, or a security gone before the snapshot date) |
 
 ### Payout reconciliation (the last-close gate)
 
@@ -416,7 +422,7 @@ python scripts/observations_from_instruments.py --instruments data/delisted_tick
 # or: scripts/observations_from_snapshots.py --dir <folder of dated index-membership CSVs> --out obs.csv
 python scripts/classify_universe.py --observations obs.csv   # → output/{securities,ticker_history,cusip_history,delistings,payouts,review}.csv
 
-pytest -q                                # 699 unit tests, no network
+pytest -q                                # 705 unit tests, no network
 ```
 
 `classify_universe.py` prints a summary when it finishes: rows written per

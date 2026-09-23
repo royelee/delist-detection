@@ -359,7 +359,13 @@ plus every security with no delisting at all (`ended_without_delisting`,
 `form25_unreadable`, `observation_unresolved`, `error`), plus
 `ticker_history` consistency checks (`ticker_range_overlap`: two of one
 security's own ranges overlap; `ticker_shared`: the same ticker maps to two
-securities on the same day), for a human to triage. Written by
+securities on the same day), plus observation checks
+(`observation_conflict:<date>`: one row per ticker observed under two or
+more names on that date, both kept, `sec_id` empty; `ticker_unconfirmed`: an
+era from 2004 on with no fails-to-deliver row under its ticker within 30
+days of its span), for a human to triage. Delisting rows can also carry
+`acquirer_close_lagged` (the acquirer price in a merger's terms came from a
+fails-to-deliver row later than the next trading day). Written by
 `scripts/classify_universe.py` alongside the other five tables.
 
 `output/web_verification.csv` — independent EDGAR cross-check produced by
