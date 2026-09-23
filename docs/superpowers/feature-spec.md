@@ -452,3 +452,74 @@ The interview ended before these were answered; the recommended option applies.
 | Class-text matching of Form 25 fails for odd wording | `form25_unmatched` review rows; golden cases for dual-class issuers |
 | Large downloads (MIDAS ~11–23 MB per quarter) | Download only periods that contain a delisting; cache |
 | Consumer breakage | `qlib_practice` pins a SHA and migrates on its own schedule (section 14) |
+
+## 17. Implementation notes
+
+Where the build made a call the spec text left open, or differs from it. Each
+line changes observable output.
+
+- **FIGI resolution order (§8.3).** `FigiResolver` tries the era's known
+  CUSIPs first (a CUSIP hit needs no name check), then the era's ticker
+  (needs a matching per-venue ticker+name), then an issuer-name filter
+  search, in that order — not the order listed in §8.3.
+- **`ticker_history.source` values (§7.2).** Only `observation` and `ftd`
+  are produced; `edgar_8k` is not (see the next point).
+- **§8.5's EDGAR ticker-change search is deferred.** `ticker_history` ranges
+  are built only from observations and SEC fails-to-deliver rows; no search
+  for a ticker-change announcement runs. Fails-to-deliver rows already date
+  a ticker switch to within days, and parsing a change date out of 8-K text
+  is a separate feature.
+- **`ticker_history.exchange` (§7.2).** Filled from the matched Form 25 for
+  the range that ends in a delisting, and from the issuer's current EDGAR
+  submissions listing for the still-open range; every other range is empty.
+- **§8.5 consistency checks are review rows, not aborts.** An overlap
+  between two of one security's own `ticker_history` ranges, or the same
+  ticker mapping to two securities on the same day, is written to
+  `review.csv` as `ticker_range_overlap` / `ticker_shared` rather than
+  failing the run.
+- **Unexpected per-security failures don't abort the run.** A per-security
+  or per-merger exception (other than `EdgarBlocked`/`OpenFigiBlocked`,
+  which still abort) is logged and the security is skipped with a review row
+  flagged `error`, so one bad security doesn't fail an overnight full run.
+- **Era splitting (§5, "Observation").** A gap over `ERA_GAP_DAYS` (400 days)
+  splits a ticker's observations into a new era only when neither
+  observation's name confirms continuity; a name or pin change always
+  splits regardless of the gap.
+- **Fallback delisting date (§8.6, no-Form-25 path).** Dated by a confirmed
+  bankruptcy 8-K first, then the anchor 8-K, then a revocation or Form 15
+  filing but only when it falls within `[last_seen − 30d, last_seen + 120d]`;
+  otherwise the security's last sighting itself, flagged
+  `delist_date_approx`. A late SEC revocation of a delinquent filer can come
+  years after trading actually stopped, so an out-of-window revocation date
+  is rejected in favor of last-seen rather than trusted at face value.
+- **Form 25 grouping (§8.6, D16).** Matched Form 25s chain into one
+  delisting when a filing's date is within `SAME_EVENT_DAYS` (30 days) of
+  the *group's earliest* member's filing date, not its latest — so filings
+  55, 28 and 0 days apart form two delistings, not one long chain — and
+  filings on different exchanges can still join the same group.
+- **Siblings must be alive at the filing date (§8.6, D16 matching).** A
+  sibling security only competes for a Form 25 match while it was alive
+  around that filing's date (its own first/last sighting, widened by 30
+  days before and 400 days after); a sibling with no sightings at all is
+  always treated as alive, since its span is unknown.
+- **Class-text reading (§8.6, class matching).** The Form 25 class text is
+  read for units, equity units, purchase contracts, warrants (including
+  "Common Stock Purchase Warrants"), capital securities, ADSs and bare
+  "Preference Shares" — misreading any of these as common stock was fixed
+  during the build. `class_label` skips over a segment that names an
+  *attached* security (a rights-plan clause, or "PREFERRED"/"PREFERENCE"
+  when the text is actually common) rather than always cutting at the
+  first comma, so a class letter isn't picked up from the wrong clause.
+- **Nasdaq halt feed failures don't abort (§9).** A halt-feed request that
+  fails (network error, repeated 429/5xx) is logged and treated as "no
+  halt" rather than raised — it's a confirmation source, not one of the
+  required SEC sources, so a run should not fail over it.
+- **`-W` ticker suffix (§8.3, sideline filtering).** Read as the US warrant
+  suffix, not folded into the when-issued check — a warrant line is
+  filtered out by `security_kind`/class matching instead, so dropping it in
+  the when-issued check would have hidden a real security-type distinction.
+- **Acquirer pricing keyed by the merger event (§8.9).** The acquirer's
+  price is looked up keyed on the specific `(sec_id, delist_date)` merger —
+  the only way to price the acquirer as of that merger's own completion
+  date, since one acquirer ticker can price several targets on different
+  dates.
