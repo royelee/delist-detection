@@ -66,7 +66,7 @@ def summarize_midas_csv(lines: Iterable[str]) -> dict[str, list[str]]:
         except ValueError:
             continue
         d = row[i_date].strip()
-        if vol > 0 and len(d) == 8:
+        if vol > 0 and len(d) == 8 and d.isdigit():
             out[normalize_ticker(row[i_tk])].add(f"{d[:4]}-{d[4:6]}-{d[6:]}")
     return {t: sorted(v) for t, v in out.items()}
 
@@ -101,10 +101,19 @@ class MidasClient:
             if url is None:
                 self._summaries[yq] = None
                 return None
-            zpath = download(url, self.dir / url.rsplit("/", 1)[-1], session=self.session,
-                             user_agent=self.user_agent)
-            with zipfile.ZipFile(zpath) as z:
-                member = next(m for m in z.namelist() if m.lower().endswith(".csv"))
+            zpath = self.dir / url.rsplit("/", 1)[-1]
+            try:
+                zpath = download(url, zpath, session=self.session, user_agent=self.user_agent)
+                z = zipfile.ZipFile(zpath)
+            except zipfile.BadZipFile:
+                zpath.unlink(missing_ok=True)  # corrupted: fetch it again once
+                zpath = download(url, zpath, session=self.session, user_agent=self.user_agent)
+                z = zipfile.ZipFile(zpath)
+            with z:
+                try:
+                    member = next(m for m in z.namelist() if m.lower().endswith(".csv"))
+                except StopIteration:
+                    raise ValueError(f"No .csv file in {zpath}") from None
                 with z.open(member) as fh:
                     s = summarize_midas_csv(io.TextIOWrapper(fh, encoding="latin-1"))
             cache.parent.mkdir(parents=True, exist_ok=True)
