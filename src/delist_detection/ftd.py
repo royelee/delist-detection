@@ -12,10 +12,11 @@ from __future__ import annotations
 
 import calendar
 import io
+import logging
 import re
 import zipfile
 from bisect import bisect_left, bisect_right
-from collections import defaultdict
+from collections import Counter, defaultdict
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, replace
 from datetime import date, timedelta
@@ -24,6 +25,8 @@ from pathlib import Path
 from .observations import normalize_ticker
 from .sec_http import download, get_text
 from .trading_calendar import add_trading_days, next_trading_day
+
+_log = logging.getLogger(__name__)
 
 FTD_INDEX_URL = "https://www.sec.gov/data-research/sec-markets-data/fails-deliver-data"
 _SEC = "https://www.sec.gov"
@@ -69,11 +72,13 @@ def parse_index_links(html: str) -> list[str]:
 
 
 def parse_ftd_lines(lines: Iterable[str], *, symbols: set[str] | None = None,
-                    cusips: set[str] | None = None) -> Iterator[FtdRow]:
+                    cusips: set[str] | None = None, counts: Counter | None = None) -> Iterator[FtdRow]:
     """Rows from FTD text lines; header, trailer and malformed lines are skipped.
     `symbols`/`cusips` each filter independently when given (a row passes if it
     matches either one); both left `None` (the default) means no filtering at
-    all. Filtered on symbol/CUSIP before an `FtdRow` is built (fast path)."""
+    all. Filtered on symbol/CUSIP before an `FtdRow` is built (fast path).
+    `counts["rows"]`, when given, counts every well-formed data line, filtered
+    out or not."""
     for line in lines:
         parts = line.rstrip("\r\n").split("|")
         if len(parts) < 6:
@@ -81,6 +86,8 @@ def parse_ftd_lines(lines: Iterable[str], *, symbols: set[str] | None = None,
         d = parts[0].strip()
         if len(d) != 8 or not d.isdigit():
             continue
+        if counts is not None:
+            counts["rows"] += 1
         cusip = parts[1].strip().upper()
         symbol = normalize_ticker(parts[2])
         if symbols is not None or cusips is not None:
@@ -122,12 +129,17 @@ class FtdClient:
             path.unlink(missing_ok=True)          # a truncated download: fetch it again once
             z = zipfile.ZipFile(download(url, dest, session=self.session, user_agent=self.user_agent))
         with z:
-            for member in z.namelist():
-                if not member.lower().endswith(".txt"):
+            # Every file member is read, whatever its name: from 2022-05 on the SEC
+            # ships one member without an extension ("cnsfails202401a").
+            for info in z.infolist():
+                if info.is_dir():
                     continue
-                with z.open(member) as fh:
+                counts: Counter = Counter()
+                with z.open(info) as fh:
                     yield from parse_ftd_lines(io.TextIOWrapper(fh, encoding="latin-1"),
-                                               symbols=symbols, cusips=cusips)
+                                               symbols=symbols, cusips=cusips, counts=counts)
+                if not counts["rows"]:
+                    _log.warning(f"{dest.name}: member {info.filename!r} holds no fails-to-deliver rows; skipped")
 
 
 class FtdIndex:

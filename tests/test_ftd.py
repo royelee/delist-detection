@@ -107,6 +107,28 @@ def test_client_reads_quarterly_zip(tmp_path, monkeypatch):
     assert idx.close_after(date(2008, 12, 29), symbol="MER") == (11.07, "2008-12-30", False)
 
 
+def test_client_reads_a_member_without_an_extension(tmp_path, caplog):
+    """89 of the SEC's zips (2022-05 on, e.g. cnsfails202401a.zip) hold one
+    member named without ".txt" ("cnsfails202401a"): it is data all the same.
+    A member with no FTD rows at all is logged and skipped; directories too."""
+    (tmp_path / "index.html").write_text('<a href="/files/data/x/cnsfails202401a.zip">a</a>')
+    (tmp_path / "cnsfails202401a.zip").write_bytes(_zip_bytes({
+        "cnsfails202401a": "SETTLEMENT DATE|CUSIP|SYMBOL|QUANTITY (FAILS)|DESCRIPTION|PRICE\n"
+                           "20240102|00206R102|T|500|AT&T INC COM|16.78\n"
+                           "Trailer record count 1\n",
+        "notes/": "",
+        "readme": "no fails rows in here\n",
+    }))
+    c = FtdClient(tmp_path)
+    with caplog.at_level("WARNING", logger="delist_detection.ftd"):
+        rows = list(c.rows(c.urls_for(date(2024, 1, 1), date(2024, 1, 15))[0]))
+    assert rows == [FtdRow("2024-01-02", "00206R102", "T", "AT&T INC COM", 16.78)]
+    assert "readme" in caplog.text and "cnsfails202401a.zip" in caplog.text
+    assert "cnsfails202401a:" not in caplog.text          # the data member is not reported
+    idx = FtdIndex.load(c, date(2024, 1, 1), date(2024, 1, 15), symbols={"T"})
+    assert idx.close_after(date(2023, 12, 29), symbol="T") == (16.78, "2024-01-02", False)
+
+
 def test_load_with_no_filters_returns_every_row(tmp_path):
     (tmp_path / "index.html").write_text('<a href="/files/data/x/cnsfails201811b.zip">b</a>')
     (tmp_path / "cnsfails201811b.zip").write_bytes(_zip_bytes({"a.txt": SAMPLE}))
