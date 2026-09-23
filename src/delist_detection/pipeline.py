@@ -17,17 +17,20 @@ from typing import Any
 
 from .crsp_codes import CrspBucket
 from .delistings import DelistingEvent, DelistingFinder, ReviewItem, SecurityContext
-from .figi_resolution import accept, us_candidates
-from .form25 import SecurityRef
+from .edgar import EdgarBlocked
+from .figi_resolution import FigiCandidate, accept, share_class_from_name, us_candidates
+from .form25 import SecurityRef, exchange_label
 from .ftd import FtdIndex
 from .listing_status import listed_today
+from .names import names_agree
 from .observations import ObservationIndex, normalize_ticker
+from .openfigi import OpenFigiBlocked
 from .payout_gate import DEFAULT_TOL, gate_payouts
 from .reconstruction import _lookup, build_delistings_table, delisting_row, unmatched_override_keys
 from .security_master import (
     FigiResolver, Security, build_securities, era_cusips, era_last_seen, ranges_from_sightings,
 )
-from .store import table_path, write_table
+from .store import write_tables
 
 FTD_START = date(2004, 1, 1)
 
@@ -68,20 +71,143 @@ def _d(s: str) -> date:
     return date.fromisoformat(s)
 
 
-def successor_from_8k12b(search: Callable, figi, *, name: str, day: date,
-                         exclude_cik: int) -> tuple[int, str] | None:
-    """The successor issuer that filed an 8-K12B naming `name` around `day`."""
+def successor_from_8k12b(search: Callable, figi, *, name: str, day: date, exclude_cik: int,
+                         share_class: str = "COMMON") -> tuple[int, FigiCandidate, str] | None:
+    """The successor issuer that filed an 8-K12B naming `name` around `day`,
+    resolved to the US composite FIGI whose share class matches the
+    predecessor's `share_class`.
+
+    A display name looks like ``"Alphabet Inc.  (GOOGL, GOOG)  (CIK
+    0001652044)"``: the first parenthetical lists every ticker the hit
+    carries, not just one. Each of those tickers is resolved through
+    OpenFIGI; a resolved candidate is kept only when its name agrees
+    (`names.names_agree`) with the successor's own EDGAR name — the text
+    before that first parenthetical, exactly as EDGAR's full-text search
+    recorded it, so no extra network call is needed to confirm it. Among the
+    agreeing candidates, the one whose share class (`share_class_from_name`)
+    equals the predecessor's is picked; if the predecessor is plain common
+    and exactly one candidate agrees on name, that one is taken even without
+    an exact class match. Otherwise returns None (the caller leaves
+    `successor_unknown` set rather than guess).
+
+    Returns `(cik, candidate, filing_date)`.
+    """
     hits = search(f'"{name}"', "8-K12B,8-K12G3", day - timedelta(days=30), day + timedelta(days=60))
     for h in hits:
         src = h.get("_source", h)
+        filing_date = src.get("file_date") or src.get("filing_date") or ""
         for cik_s, disp in zip(src.get("ciks") or [], src.get("display_names") or []):
             cik = int(cik_s)
             if cik == exclude_cik:
                 continue
-            m = re.search(r"\(([A-Z0-9.\-]+)(?:,|\))", disp)
-            if m:
-                return cik, normalize_ticker(m.group(1))
+            m = re.search(r"\(([^)]*)\)", disp)
+            if not m:
+                continue
+            tickers = [normalize_ticker(t) for t in m.group(1).split(",") if t.strip()]
+            if not tickers or figi is None:
+                continue
+            edgar_name = disp[: m.start()].strip()
+            candidates: list[FigiCandidate] = []
+            for t in tickers:
+                ans = figi.map([{"idType": "TICKER", "idValue": t.replace("-", "/")}])[0]
+                candidates += us_candidates(ans.get("data") or [])
+            agreeing = [c for c in candidates if names_agree(c.name, edgar_name)]
+            if not agreeing:
+                continue
+            class_matches = [c for c in agreeing if share_class_from_name(c.name) == share_class]
+            if len(class_matches) == 1:
+                return cik, class_matches[0], filing_date
+            if share_class == "COMMON" and len(agreeing) == 1:
+                return cik, agreeing[0], filing_date
     return None
+
+
+def _issuer_exchange_for_ticker(edgar, cik: int | None, ticker: str) -> str | None:
+    """The exchange EDGAR's own submissions JSON records for `ticker` (the
+    parallel `tickers`/`exchanges` arrays), mapped to the table's exchange
+    names; None when the issuer, the ticker, or its exchange entry is
+    missing. Reads the submissions JSON the finder already cached — no new
+    source."""
+    if cik is None:
+        return None
+    sub = edgar.submissions(cik)
+    if not isinstance(sub, dict):
+        return None
+    tickers = sub.get("tickers") or []
+    exchanges = sub.get("exchanges") or []
+    want = normalize_ticker(ticker)
+    for t, x in zip(tickers, exchanges):
+        if normalize_ticker(t) == want and x:
+            return exchange_label(x) or None
+    return None
+
+
+def _overlaps(a: dict, b: dict) -> bool:
+    a_to = a["valid_to"] or "9999-12-31"
+    b_to = b["valid_to"] or "9999-12-31"
+    return a["valid_from"] <= b_to and b["valid_from"] <= a_to
+
+
+def _ticker_range_review(th_rows: list[dict]) -> list[ReviewItem]:
+    """Flag, without changing, two `ticker_history` problems (spec 8.5):
+    (a) one security's own ranges overlapping (`ticker_range_overlap`), and
+    (b) one ticker mapping to two different securities on the same day
+    (`ticker_shared`). Each violation names both ranges in its reason."""
+    out: list[ReviewItem] = []
+
+    by_sec: dict[str, list[dict]] = defaultdict(list)
+    by_ticker: dict[str, list[dict]] = defaultdict(list)
+    for r in th_rows:
+        by_sec[r["sec_id"]].append(r)
+        by_ticker[r["ticker"]].append(r)
+
+    def _name(r: dict) -> str:
+        return f"{r['ticker']} {r['valid_from']}..{r['valid_to'] or ''}"
+
+    for sid, rows in by_sec.items():
+        rs = sorted(rows, key=lambda r: r["valid_from"])
+        for i in range(len(rs)):
+            for j in range(i + 1, len(rs)):
+                if _overlaps(rs[i], rs[j]):
+                    out.append(ReviewItem(sid, rs[i]["ticker"], None, "ticker_range_overlap",
+                                          f"{_name(rs[i])} overlaps {_name(rs[j])}"))
+
+    for ticker, rows in by_ticker.items():
+        rs = sorted(rows, key=lambda r: r["valid_from"])
+        for i in range(len(rs)):
+            for j in range(i + 1, len(rs)):
+                if rs[i]["sec_id"] == rs[j]["sec_id"] or not _overlaps(rs[i], rs[j]):
+                    continue
+                out.append(ReviewItem(rs[i]["sec_id"], ticker, None, "ticker_shared",
+                                      f"{_name(rs[i])} ({rs[i]['sec_id']}) overlaps "
+                                      f"{_name(rs[j])} ({rs[j]['sec_id']})"))
+    return out
+
+
+def _merge_review_rows(rows: list[dict]) -> list[dict]:
+    """Collapse rows that share `(sec_id, delist_date, ticker, review_flags)`
+    into one, joining their distinct `reason`s with `"; "`. Every other field
+    keeps its first non-empty value."""
+    merged: dict[tuple, dict] = {}
+    order: list[tuple] = []
+    for r in rows:
+        key = (r.get("sec_id"), r.get("delist_date"), r.get("ticker"), r.get("review_flags"))
+        if key not in merged:
+            merged[key] = dict(r)
+            order.append(key)
+            continue
+        existing = merged[key]
+        reasons = [x for x in (existing.get("reason") or "").split("; ") if x]
+        new_reason = r.get("reason") or ""
+        if new_reason and new_reason not in reasons:
+            reasons.append(new_reason)
+        existing["reason"] = "; ".join(reasons)
+        for k, v in r.items():
+            if k == "reason":
+                continue
+            if not existing.get(k) and v:
+                existing[k] = v
+    return [merged[k] for k in order]
 
 
 def _sightings(sec: Security, ftd: FtdIndex, cusips: list[str]) -> list[tuple[str, str, str]]:
@@ -165,14 +291,19 @@ def run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_
         listed[s.sec_id] = listed_today(clients.figi, s.sec_id, edgar=clients.edgar, cik=s.issuer_cik)
         sig = sightings[s.sec_id]
         sibs = siblings.get(s.issuer_cik) or [SecurityRef(s.sec_id, s.share_class, s.kind)]
-        # sec_id -> (first sighting, last sighting) for every security sharing this
-        # issuer CIK, from the same sightings built above; a sibling with no
-        # sightings gets no entry (the finder treats it as alive at every filing).
+        # sec_id -> (first sighting, last own-ticker sighting) for every security
+        # sharing this issuer CIK, from the same sightings built above; a sibling
+        # with no sightings gets no entry (the finder treats it as alive at every
+        # filing). The end reuses _own_last_seen so a sibling's post-delisting OTC
+        # tail under another symbol can't extend its life past its real death.
         spans: dict[str, tuple[str, str]] = {}
         for ref in sibs:
             sib_sig = sightings.get(ref.sec_id)
-            if sib_sig:
-                spans[ref.sec_id] = (sib_sig[0][0], sib_sig[-1][0])
+            if not sib_sig:
+                continue
+            sib_sec = securities.get(ref.sec_id)
+            span_end = _own_last_seen(sib_sec, sib_sig) if sib_sec is not None else sib_sig[-1][0]
+            spans[ref.sec_id] = (sib_sig[0][0], span_end)
         ctx = SecurityContext(
             security=s,
             siblings=sibs,
@@ -183,7 +314,15 @@ def run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_
             expected_name=s.eras[-1].name if s.eras else None,
             sibling_spans=spans,
         )
-        evs, rv = finder.find(ctx)
+        try:
+            evs, rv = finder.find(ctx)
+        except (EdgarBlocked, OpenFigiBlocked):
+            raise
+        except Exception as exc:  # an overnight run must survive one bad security
+            log(f"[{i}/{len(securities)}] {s.sec_id}: ERROR {type(exc).__name__}: {exc}")
+            review.append(ReviewItem(s.sec_id, s.eras[-1].ticker if s.eras else "", s.issuer_cik, "error",
+                                     f"{type(exc).__name__}: {exc}", last_seen=ctx.last_seen))
+            continue
         events += evs
         review += rv
         if i % 50 == 0:
@@ -225,12 +364,19 @@ def run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_
     mergers = [e for e in events if e.record.bucket is CrspBucket.MERGER]
     for e in mergers:
         key = (e.sec_id, e.delist_date)
-        if clients.payout_extractor is not None:
-            payouts_raw[key] = clients.payout_extractor.extract(e.record, last_close=closes.get(key))
-        if clients.llm_extractor is not None:
-            t = clients.llm_extractor.extract(e.record)
-            if t is not None:
-                llm_terms[key] = t
+        try:
+            if clients.payout_extractor is not None:
+                payouts_raw[key] = clients.payout_extractor.extract(e.record, last_close=closes.get(key))
+            if clients.llm_extractor is not None:
+                t = clients.llm_extractor.extract(e.record)
+                if t is not None:
+                    llm_terms[key] = t
+        except (EdgarBlocked, OpenFigiBlocked):
+            raise
+        except Exception as exc:  # an overnight run must survive one bad extraction
+            log(f"{e.sec_id} {e.delist_date}: payout extraction ERROR {type(exc).__name__}: {exc}")
+            review.append(ReviewItem(e.sec_id, e.ticker, e.cik, "error", f"{type(exc).__name__}: {exc}",
+                                     delist_date=e.delist_date))
     trade_day = {(e.sec_id, e.delist_date): e.last_trade.day for e in events}
     acq_symbols = {normalize_ticker(t.acquirer_ticker) for t in llm_terms.values() if t.acquirer_ticker}
     acq_symbols |= {normalize_ticker(v["acquirer_ticker"]) for v in overrides.merger_terms.values()
@@ -240,10 +386,11 @@ def run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_
         if days:
             ftd.extend(clients.ftd_client, min(days) - timedelta(days=10), max(days) + timedelta(days=10),
                        symbols=acq_symbols)
-    by_delist_date = {dd: day for (_, dd), day in trade_day.items()}
 
-    def acquirer_price(ticker: str, delist_date: str | None) -> float | None:
-        day = by_delist_date.get(delist_date)
+    def acquirer_price(ticker: str, key: tuple[str, str | None]) -> float | None:
+        # Priced on THAT merger's own last-trade day: many mergers can share a
+        # delist_date, so a plain date->day map would misprice one with another's.
+        day = trade_day.get(key)
         got = ftd.close_after(day, symbol=ticker) if day and ticker else None
         return got[0] if got else None
 
@@ -255,8 +402,13 @@ def run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_
         acquirer_price, tol,
     )
     added: dict[str, Security] = {}
+    added_meta: dict[str, dict] = {}
     acquirer_ids: dict[tuple[str, str], str] = {}
-    for key, terms in gated.merged_terms.items():
+    for e in mergers:
+        key = (e.sec_id, e.delist_date)
+        terms = _lookup(gated.merged_terms, e.sec_id, e.delist_date)
+        if not terms:
+            continue
         acq = normalize_ticker(terms.get("acquirer_ticker") or "")
         day = trade_day.get(key)
         if not acq or day is None:
@@ -271,9 +423,10 @@ def run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_
             continue
         acquirer_ids[key] = cand.composite
         if cand.composite not in securities and cand.composite not in added:
-            added[cand.composite] = Security(cand.composite, None, "COMMON", cand.name, cand.security_type,
-                                             False, "cusip")
-            sightings[cand.composite] = sorted({(r.date, r.symbol, "ftd") for r in rows})
+            acq_cik = clients.resolver.resolve(acq, day.isoformat()).cik
+            added[cand.composite] = Security(cand.composite, acq_cik, share_class_from_name(cand.name), cand.name,
+                                             cand.security_type, False, "cusip")
+            added_meta[cand.composite] = {"kind": "acquirer", "ticker": acq, "rows": rows, "fallback_day": day}
 
     # 9. successors after a FIGI change
     # (search: EDGAR full-text search; wire the real one in default_clients via clients.edgar)
@@ -281,23 +434,20 @@ def run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_
     for e in events:
         if "successor_unknown" not in e.flags or successor_search is None:
             continue
-        name = securities[e.sec_id].name
+        predecessor = securities[e.sec_id]
         day = e.last_trade.day or _d(e.delist_date)
-        hit = successor_from_8k12b(successor_search, clients.figi, name=name, day=day, exclude_cik=e.cik)
+        hit = successor_from_8k12b(successor_search, clients.figi, name=predecessor.name, day=day,
+                                   exclude_cik=e.cik, share_class=predecessor.share_class)
         if hit is None:
             continue
-        s_cik, s_ticker = hit
-        ans = clients.figi.map([{"idType": "TICKER", "idValue": s_ticker.replace("-", "/")}])[0]
-        cands = us_candidates(ans.get("data") or [])
-        cand = cands[0] if len(cands) == 1 else None
-        if cand is None:
-            continue
+        s_cik, cand, filing_date = hit
         e.record.successor_sec_id = cand.composite
         e.record.evidence["flags"] = [f for f in e.record.evidence["flags"] if f != "successor_unknown"]
         if cand.composite not in securities and cand.composite not in added:
-            added[cand.composite] = Security(cand.composite, s_cik, "COMMON", cand.name, cand.security_type,
-                                             False, "ticker")
-            sightings[cand.composite] = [(day.isoformat(), s_ticker, "ftd")]
+            added[cand.composite] = Security(cand.composite, s_cik, share_class_from_name(cand.name), cand.name,
+                                             cand.security_type, False, "ticker")
+            added_meta[cand.composite] = {"kind": "successor", "ticker": cand.ticker,
+                                          "filing_date": filing_date or day.isoformat()}
 
     # 10. rows
     table = build_delistings_table(
@@ -334,16 +484,26 @@ def run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_
     final = {}
     for e in sorted(events, key=lambda e: e.delist_date):
         final[e.sec_id] = e
-    for sid, s in list(securities.items()) + list(added.items()):
+    for sid, s in securities.items():
         sig = sightings.get(sid, [])
         fe = final.get(sid)
         is_listed = bool(listed.get(sid))
         end = None
-        if fe is not None and not is_listed and fe.last_trade.day is not None:
-            end = fe.last_trade.day.isoformat()
+        if fe is not None and not is_listed:
+            # A last-trade day we couldn't confirm still clips the ranges at the
+            # delisting date -- an unclipped range would otherwise run past a
+            # security's real end.
+            end = fe.last_trade.day.isoformat() if fe.last_trade.day is not None else fe.delist_date
         clipped = [x for x in sig if end is None or x[0] <= end]
         for rg in ranges_from_sightings(clipped, end=end, open_ended=is_listed):
-            exch = fe.exchange if (fe is not None and end is not None and rg.valid_to == end) else None
+            if fe is not None and end is not None and rg.valid_to == end:
+                exch = fe.exchange
+            elif rg.valid_to is None:
+                # An open (listed-today) row: pull the exchange from the issuer's
+                # own EDGAR submissions JSON (already cached by the finder).
+                exch = _issuer_exchange_for_ticker(clients.edgar, s.issuer_cik, rg.value)
+            else:
+                exch = None
             th_rows.append({"sec_id": sid, "ticker": rg.value, "exchange": exch, "valid_from": rg.valid_from,
                             "valid_to": rg.valid_to, "source": rg.source})
         cus = [(r.date, r.cusip, "ftd") for c in sec_cusips.get(sid, []) for r in ftd.by_cusip(c)]
@@ -353,24 +513,62 @@ def run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_
             ch_rows.append({"sec_id": sid, "cusip": rg.value, "valid_from": rg.valid_from,
                             "valid_to": rg.valid_to, "source": rg.source})
 
+    # Added (acquirer/successor) securities get one row each, built directly:
+    # ranges_from_sightings' filter that drops single-value FTD sightings would
+    # otherwise silently drop a successor's lone 8-K12B-dated sighting.
+    for sid, s in added.items():
+        listed[sid] = listed_today(clients.figi, sid, edgar=clients.edgar, cik=s.issuer_cik)
+        is_listed = bool(listed[sid])
+        meta = added_meta[sid]
+        if meta["kind"] == "acquirer":
+            rows = meta["rows"]
+            dates = sorted(r.date for r in rows) if rows else []
+            valid_from = dates[0] if dates else meta["fallback_day"].isoformat()
+            valid_to = None if is_listed else (dates[-1] if dates else valid_from)
+            source = "ftd"
+        else:  # successor
+            fd = meta["filing_date"]
+            valid_from = fd
+            valid_to = None if is_listed else fd
+            source = "edgar_8k"
+        exch = _issuer_exchange_for_ticker(clients.edgar, s.issuer_cik, meta["ticker"]) if is_listed else None
+        th_rows.append({"sec_id": sid, "ticker": meta["ticker"], "exchange": exch, "valid_from": valid_from,
+                        "valid_to": valid_to, "source": source})
+
+    for item in _ticker_range_review(th_rows):
+        review_rows.append({"sec_id": item.sec_id, "delist_date": item.delist_date, "ticker": item.ticker,
+                            "cik": item.cik, "review_flags": item.flag, "reason": item.reason,
+                            "last_seen": item.last_seen})
+
     payout_rows = []
     for key, pr in payouts_raw.items():
         value = gated.payouts.get(key)
+        source = gated.sources.get(key, "none")
+        # Restore the old CLI's provenance rule: an LLM-sourced payout cites the
+        # LLM filing's accession (its regex accession, if any, is often blank or
+        # belongs to a different filing tier).
+        if source.startswith("llm"):
+            t = llm_terms.get(key)
+            accession = t.source.partition(":")[2] if t is not None else None
+        else:
+            accession = pr.accession if pr and value is not None else None
         payout_rows.append({"sec_id": key[0], "delist_date": key[1], "ticker": ev_by_key[key].ticker,
                             "payout_per_share": value, "confidence": gated.confidences.get(key, "none"),
-                            "source": gated.sources.get(key, "none"),
-                            "accession": (pr.accession if pr and value is not None else None)})
+                            "source": source, "accession": accession})
 
-    # 11. write
-    counts = {
-        "securities": write_table("securities", [s.row() for s in securities.values()] +
-                                  [s.row() for s in added.values()], table_path(out_dir, "securities")),
-        "ticker_history": write_table("ticker_history", th_rows, table_path(out_dir, "ticker_history")),
-        "cusip_history": write_table("cusip_history", ch_rows, table_path(out_dir, "cusip_history")),
-        "delistings": write_table("delistings", delisting_rows, table_path(out_dir, "delistings")),
-        "payouts": write_table("payouts", payout_rows, table_path(out_dir, "payouts")),
-        "review": write_table("review", review_rows, table_path(out_dir, "review")),
-    }
+    review_rows = _merge_review_rows(review_rows)
+
+    # 11. write -- all six tables formatted and written to temp files first,
+    # renamed into place together, so a later table's failure never leaves an
+    # earlier table's new file sitting over the previous complete one.
+    counts = write_tables(out_dir, {
+        "securities": [s.row() for s in securities.values()] + [s.row() for s in added.values()],
+        "ticker_history": th_rows,
+        "cusip_history": ch_rows,
+        "delistings": delisting_rows,
+        "payouts": payout_rows,
+        "review": review_rows,
+    })
     flags = Counter(f.split(":", 1)[0] for r in review_rows for f in (r.get("review_flags") or "").split(";") if f)
     return RunSummary(counts, dict(Counter(e.record.bucket.value for e in events)),
                       dict(Counter(s.figi_source for s in securities.values())), dict(flags))

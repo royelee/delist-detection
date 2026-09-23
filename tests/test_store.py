@@ -3,7 +3,7 @@ from datetime import date
 import pytest
 
 from delist_detection.store import (
-    DELISTINGS_COLUMNS, TABLES, format_cell, read_table, replace_on_success, table_path, write_table,
+    DELISTINGS_COLUMNS, TABLES, format_cell, read_table, replace_on_success, table_path, write_table, write_tables,
 )
 
 
@@ -68,6 +68,56 @@ def test_read_table_rejects_wrong_header(tmp_path):
     p.write_text("a,b\n1,2\n")
     with pytest.raises(ValueError, match="do not match"):
         read_table("securities", p)
+
+
+def test_write_tables_writes_every_table(tmp_path):
+    counts = write_tables(tmp_path, {
+        "securities": [{"sec_id": "BBG1", "issuer_cik": 1, "share_class": "COMMON", "name": "A",
+                        "security_type": "Common Stock", "observed": True, "figi_source": "cusip"}],
+        "review": [{"sec_id": "BBG1", "delist_date": "2020-01-01", "ticker": "A", "review_flags": "x"}],
+    })
+    assert counts == {"securities": 1, "review": 1}
+    assert read_table("securities", table_path(tmp_path, "securities"))[0]["sec_id"] == "BBG1"
+    assert read_table("review", table_path(tmp_path, "review"))[0]["review_flags"] == "x"
+
+
+def test_write_tables_failure_in_the_last_table_leaves_every_old_file_untouched(tmp_path):
+    write_tables(tmp_path, {
+        "securities": [{"sec_id": "BBG1"}],
+        "review": [{"sec_id": "BBG1", "delist_date": "2020-01-01", "ticker": "A", "review_flags": "x"}],
+    })
+    before_sec = table_path(tmp_path, "securities").read_text()
+    before_rev = table_path(tmp_path, "review").read_text()
+
+    with pytest.raises(ValueError, match="unknown column"):
+        write_tables(tmp_path, {
+            "securities": [{"sec_id": "BBG2"}],   # would format fine
+            "review": [{"sec_id": "BBG2", "bogus": 1}],   # fails formatting: aborts before any write
+        })
+
+    assert table_path(tmp_path, "securities").read_text() == before_sec
+    assert table_path(tmp_path, "review").read_text() == before_rev
+    assert not list(tmp_path.glob(".*.tmp"))
+
+
+def test_write_tables_a_failing_iterator_on_a_later_table_leaves_earlier_files_untouched(tmp_path):
+    write_tables(tmp_path, {
+        "securities": [{"sec_id": "BBG1"}],
+        "review": [{"sec_id": "BBG1", "delist_date": "2020-01-01", "ticker": "A", "review_flags": "x"}],
+    })
+    before_sec = table_path(tmp_path, "securities").read_text()
+    before_rev = table_path(tmp_path, "review").read_text()
+
+    def boom():
+        yield {"sec_id": "BBG9", "delist_date": "2020-02-02", "ticker": "B", "review_flags": "y"}
+        raise RuntimeError("mid-run failure")
+
+    with pytest.raises(RuntimeError):
+        write_tables(tmp_path, {"securities": [{"sec_id": "BBG2"}], "review": boom()})
+
+    assert table_path(tmp_path, "securities").read_text() == before_sec
+    assert table_path(tmp_path, "review").read_text() == before_rev
+    assert not list(tmp_path.glob(".*.tmp"))
 
 
 def test_replace_on_success_removes_temp_on_error(tmp_path):

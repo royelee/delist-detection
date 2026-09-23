@@ -108,6 +108,53 @@ def write_table(name: str, rows: Iterable[Mapping[str, object]], path: str | Pat
     return len(formatted)
 
 
+def write_tables(out_dir: str | Path, tables: Mapping[str, Iterable[Mapping[str, object]]]) -> dict[str, int]:
+    """Write every table in `tables` atomically as one group.
+
+    Every table's rows are formatted and validated first — an unknown column
+    or a failing iterator raises before any file is touched. Each table is
+    then written to its own temp file, and only once every temp file has
+    been written successfully are they all renamed into place. So a later
+    table's formatting or write failure never leaves an earlier table's new
+    file sitting over the previous complete one; on any failure every
+    previous file is left untouched and every temp file is cleaned up.
+
+    Returns `{name: row_count}`.
+    """
+    formatted: dict[str, tuple] = {}
+    for name, rows in tables.items():
+        spec = TABLES[name]
+        rows_fmt: list[dict[str, str]] = []
+        for r in rows:
+            extra = set(r) - set(spec.columns)
+            if extra:
+                raise ValueError(f"{name}: unknown column(s) {sorted(extra)}")
+            rows_fmt.append({c: format_cell(r.get(c)) for c in spec.columns})
+        rows_fmt.sort(key=lambda r: tuple(r[k] for k in spec.key) + tuple(r[c] for c in spec.columns))
+        formatted[name] = (spec, rows_fmt)
+
+    paths = {name: Path(table_path(out_dir, name)) for name in tables}
+    tmp_paths: dict[str, Path] = {}
+    counts: dict[str, int] = {}
+    try:
+        for name, (spec, rows_fmt) in formatted.items():
+            path = paths[name]
+            path.parent.mkdir(parents=True, exist_ok=True)
+            tmp = path.with_name(f".{path.name}.tmp")
+            with tmp.open("w", newline="") as fh:
+                w = csv.DictWriter(fh, fieldnames=list(spec.columns), lineterminator="\n")
+                w.writeheader()
+                w.writerows(rows_fmt)
+            tmp_paths[name] = tmp
+            counts[name] = len(rows_fmt)
+        for name, tmp in tmp_paths.items():
+            os.replace(tmp, paths[name])
+    finally:
+        for tmp in tmp_paths.values():
+            tmp.unlink(missing_ok=True)
+    return counts
+
+
 def read_table(name: str, path: str | Path) -> list[dict[str, str]]:
     spec = TABLES[name]
     with Path(path).open(newline="") as fh:

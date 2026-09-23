@@ -372,15 +372,30 @@ class EdgarClient:
 
     def full_text_search(self, q: str, forms: str, lo: date, hi: date) -> list[dict]:
         """EDGAR full-text search hits (`hits.hits`) for `q` within `forms`,
-        filed in `[lo, hi]`. Not cached (the index grows as filings are added),
-        so a network error or non-200 response simply returns `[]`; a 403/429
-        raises EdgarBlocked like every other EDGAR call.
+        filed in `[lo, hi]`.
+
+        Cached on disk under this client's cache directory, keyed by the
+        request URL, the same way `_get_json` caches — a second identical
+        call makes no request. A network error or non-200 response returns
+        `[]` and is never cached (the index grows as filings are added, so a
+        miss must be retried on the next run, and a 5xx must not freeze in
+        as an empty answer); a 403/429 raises `EdgarBlocked` like every
+        other EDGAR call.
         """
         url = (
             "https://efts.sec.gov/LATEST/search-index?"
             f"q={requests.utils.quote(q)}&forms={requests.utils.quote(forms)}"
             f"&dateRange=custom&startdt={lo.isoformat()}&enddt={hi.isoformat()}"
         )
+        cp = self._cache_path(url)
+        if cp.exists():
+            try:
+                cached = json.loads(cp.read_text())
+            except json.JSONDecodeError:
+                cp.unlink(missing_ok=True)
+            else:
+                if isinstance(cached, list):
+                    return cached
         _throttle()
         try:
             resp = self.session.get(
@@ -397,7 +412,9 @@ class EdgarClient:
             data = resp.json()
         except (ValueError, TypeError):
             return []
-        return data.get("hits", {}).get("hits", []) if isinstance(data, dict) else []
+        hits = data.get("hits", {}).get("hits", []) if isinstance(data, dict) else []
+        cp.write_text(json.dumps(hits))
+        return hits
 
     def recent_filings(self, cik: int | str) -> list[EdgarSubmission]:
         sub = self.submissions(cik)

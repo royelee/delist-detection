@@ -103,14 +103,34 @@ def test_full_text_search_parses_hits(tmp_path, monkeypatch):
     assert "startdt=2015-09-02" in s.calls[0] and "enddt=2015-12-01" in s.calls[0]
 
 
-def test_full_text_search_blocked(tmp_path, monkeypatch):
+def test_full_text_search_caches_a_successful_answer(tmp_path, monkeypatch):
     monkeypatch.setattr("delist_detection.edgar._throttle", lambda: None)
-    ec = EdgarClient(cache_dir=tmp_path, user_agent="ua", session=_Session(_Resp(403)))
+    hit = {"_source": {"ciks": ["1"], "display_names": ["X CO  (X)  (CIK 0000000001)"]}}
+    s = _Session(_Resp(text=json.dumps({"hits": {"hits": [hit]}})))
+    ec = EdgarClient(cache_dir=tmp_path, user_agent="ua", session=s)
+    first = ec.full_text_search('"X CO"', "8-K12B", date(2020, 1, 1), date(2020, 2, 1))
+    second = ec.full_text_search('"X CO"', "8-K12B", date(2020, 1, 1), date(2020, 2, 1))
+    assert first == second == [hit]
+    assert len(s.calls) == 1                       # the second call reads the cache, no request made
+
+
+@pytest.mark.parametrize("status", [403, 429])
+def test_full_text_search_blocked(tmp_path, monkeypatch, status):
+    monkeypatch.setattr("delist_detection.edgar._throttle", lambda: None)
+    ec = EdgarClient(cache_dir=tmp_path, user_agent="ua", session=_Session(_Resp(status)))
     with pytest.raises(EdgarBlocked):
         ec.full_text_search("X", "8-K12B", date(2020, 1, 1), date(2020, 2, 1))
+
+
+def test_full_text_search_500_returns_empty_and_is_not_cached(tmp_path, monkeypatch):
+    monkeypatch.setattr("delist_detection.edgar._throttle", lambda: None)
+    ec = EdgarClient(cache_dir=tmp_path, user_agent="ua", session=_Session(_Resp(500)))
+    assert ec.full_text_search("X", "8-K12B", date(2020, 1, 1), date(2020, 2, 1)) == []
+    assert not list(tmp_path.glob("*.json"))        # an error answer is never cached
 
 
 def test_full_text_search_network_error_returns_empty(tmp_path, monkeypatch):
     monkeypatch.setattr("delist_detection.edgar._throttle", lambda: None)
     ec = EdgarClient(cache_dir=tmp_path, user_agent="ua", session=_Session(requests.ConnectionError("down")))
     assert ec.full_text_search("X", "8-K12B", date(2020, 1, 1), date(2020, 2, 1)) == []
+    assert not list(tmp_path.glob("*.json"))

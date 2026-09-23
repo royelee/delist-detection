@@ -102,7 +102,7 @@ def gate_payouts(
     llm_terms: Mapping,
     last_closes: Mapping,
     csv_terms: Mapping,
-    acquirer_price: Callable[[str, str | None], float | None],
+    acquirer_price: Callable[[str, tuple[str, str | None]], float | None],
     tol: float,
 ) -> GatedPayouts:
     """Route every merger payout through the last-close check. Inputs are not mutated.
@@ -111,6 +111,9 @@ def gate_payouts(
     regex extraction, and llm_terms: MergerTerms, all by those keys. last_closes and
     csv_terms: the --last-trade-closes and --merger-terms maps (bare-ticker or
     (ticker, date) keys). A --merger-terms row always wins over the LLM.
+    acquirer_price(ticker, key): the acquirer's price on THAT merger's own last-trade
+    day — called with the merger's full key, not just its date, because many mergers
+    can share a delist date and each must be priced on its own last-trade day.
 
     Pass 1 reconciles each key's regex value (and its cash or election LLM terms).
     Pass 2 is the cash+stock gate for the other LLM terms that carry a stock ratio:
@@ -130,7 +133,7 @@ def gate_payouts(
             out.payouts.get(key),
             _lookup(last_closes, tkr, date),
             terms,
-            acquirer_price(terms.acquirer_ticker, date) if terms and terms.acquirer_ticker else None,
+            acquirer_price(terms.acquirer_ticker, key) if terms and terms.acquirer_ticker else None,
             tol,
         )
         if r.flags:
@@ -165,7 +168,7 @@ def gate_payouts(
             out.dropped["no_acq_ticker"] += 1
             flag_terms_gate_drop(key, "no_acq_ticker")
             continue
-        acq_price = acquirer_price(acq, date)
+        acq_price = acquirer_price(acq, key)
         if acq_price is None:
             out.dropped["no_acq_price"] += 1
             flag_terms_gate_drop(key, "no_acq_price")

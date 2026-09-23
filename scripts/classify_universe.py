@@ -86,22 +86,34 @@ MANUAL_OVERRIDES: dict[str, int] = {
 }
 
 
-def main() -> int:
+def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser()
     p.add_argument("--observations", required=True, help="CSV ticker,as_of[,name,cusip,cik,sec_id]")
     p.add_argument("--output-dir", default=str(ROOT / "output"))
     p.add_argument("--cache-dir", default=str(ROOT / "cache"))
     p.add_argument("--limit", type=int, default=None, help="process only the first N ticker eras")
     p.add_argument("--quiet", action="store_true")
-    p.add_argument("--no-extract-payouts", action="store_true")
+    p.add_argument("--no-extract-payouts", action="store_true",
+                   help="Skip per-share payout extraction (faster dev re-run)")
     p.add_argument("--no-midas", action="store_true", help="skip SEC MIDAS last-trade confirmation")
     p.add_argument("--no-halts", action="store_true", help="skip the Nasdaq halt feed")
     p.add_argument("--last-trade-closes", help="CSV sec_id,last_trade_close[,delist_date]")
     p.add_argument("--merger-terms", help="CSV sec_id,cash_per_share,stock_ratio,acquirer_price,acquirer_ticker[,delist_date]")
     p.add_argument("--recoveries", help="CSV sec_id,recovery_ratio[,delist_date]")
-    p.add_argument("--extract-merger-terms-llm", action="store_true")
-    p.add_argument("--llm-model", default=None)
-    p.add_argument("--merger-terms-sanity-tol", type=float, default=DEFAULT_TOL)
+    p.add_argument("--extract-merger-terms-llm", action="store_true",
+                   help="Use the LLM extractor to read cash+stock merger terms from EDGAR filings; "
+                        "acquirer_price is joined from the SEC fails-to-deliver panel and a sanity gate "
+                        "(|terminal/last_close-1| <= --merger-terms-sanity-tol) rejects mis-resolutions.")
+    p.add_argument("--llm-model", default=None, help="Override the chat model (default $CHAT_MODEL from .env).")
+    p.add_argument("--merger-terms-sanity-tol", type=float, default=DEFAULT_TOL,
+                   help="Max |payout/last_close - 1| for any merger payout (regex cash, LLM cash, election leg, "
+                        "or LLM cash+stock terminal value) to be emitted (default %(default)s). Completed deals "
+                        "reconcile tightly.")
+    return p
+
+
+def main() -> int:
+    p = build_parser()
     args = p.parse_args()
 
     overrides = Overrides(
