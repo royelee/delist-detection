@@ -462,8 +462,10 @@ line changes observable output.
   CUSIPs first (a CUSIP hit needs no name check), then the era's ticker
   (needs a matching per-venue ticker+name), then an issuer-name filter
   search, in that order — not the order listed in §8.3.
-- **`ticker_history.source` values (§7.2).** Only `observation` and `ftd`
-  are produced; `edgar_8k` is not (see the next point).
+- **`ticker_history.source` values (§7.2).** Observed securities get only
+  `observation` and `ftd` rows; `edgar_8k` appears only on a successor
+  security's row, dated by its 8-K12B (the ticker-change search that would
+  produce it for observed securities is deferred, see the next point).
 - **§8.5's EDGAR ticker-change search is deferred.** `ticker_history` ranges
   are built only from observations and SEC fails-to-deliver rows; no search
   for a ticker-change announcement runs. Fails-to-deliver rows already date
@@ -537,3 +539,19 @@ line changes observable output.
   the only way to price the acquirer as of that merger's own completion
   date, since one acquirer ticker can price several targets on different
   dates.
+- **A security's CUSIPs (§7.3, §8.8).** Every CUSIP of an era whose OpenFIGI
+  answer is accepted as the security's composite is kept (up to 3 tried per
+  era, no extra requests); for a `sec_id` pin or a placeholder, where there is
+  no composite to check against, the era's first candidate CUSIP is kept
+  unchecked.
+- **`securities.name` (§7.1).** The latest observation name of the
+  security, not the OpenFIGI name; the OpenFIGI name is used only when no
+  observation carries a name.
+- **`listed_today` is asked live (§8.10, §11).** The completeness check's
+  OpenFIGI lookup is not cached, so runs on different days over the same
+  caches can differ where a listing changed in between.
+- **`sec_id` pins are not name-checked (§5 "Pin", §8.3).** A `sec_id` pin is
+  taken as given; only a `cik` pin gets the `member_name_mismatch` check.
+- **No share-class rejection in FIGI acceptance (§8.3).** A candidate of a
+  different share class is not rejected; the class-letter era split and the
+  CUSIP-first order keep most classes apart.

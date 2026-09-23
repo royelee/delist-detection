@@ -975,6 +975,70 @@ def test_last_trade_close_uses_the_cusip_whose_range_holds_the_last_trade_day():
     assert pipeline._close_on(ftd, [], date(2021, 1, 4), "RSQ") == (7.0, "2021-01-05", False)
 
 
+def test_a_lagged_acquirer_close_flags_the_delisting(fake_edgar, tmp_path, monkeypatch):
+    """The acquirer's price is its FTD close on the merger's last trade day; when
+    no row sits on the next trading day and a later row is used, the delisting
+    carries acquirer_close_lagged (a merger priced on time does not)."""
+    fake_edgar.company_map["S1"] = {"cik_str": 7201, "ticker": "S1", "title": "TARGET ONE INC"}
+    fake_edgar.company_map["S2"] = {"cik_str": 7202, "ticker": "S2", "title": "TARGET TWO INC"}
+    fake_edgar.submissions_by_cik[7201] = []
+    fake_edgar.submissions_by_cik[7202] = []
+    obs = [Observation("S1", "2020-01-02", "TARGET ONE INC"), Observation("S1", "2020-05-29", "TARGET ONE INC"),
+           Observation("S2", "2020-01-02", "TARGET TWO INC"), Observation("S2", "2020-08-31", "TARGET TWO INC")]
+    rows = (_ftd("ACQ", "ACQCUSIP1", "ACQUIRER CO", ["2020-06-04"], price=100.0)        # 06-01 trade: 2 days late
+            + _ftd("ACQ", "ACQCUSIP1", "ACQUIRER CO", ["2020-09-02"], price=150.0))     # 09-01 trade: on time
+    index, clients = _index_clients(fake_edgar, obs, rows, {
+        ("TICKER", "S1"): _figi_answer("BBGSEC201", "S1", "TARGET ONE INC"),
+        ("TICKER", "S2"): _figi_answer("BBGSEC202", "S2", "TARGET TWO INC"),
+    })
+
+    def _merger(sec_id, ticker, cik, last_trade_day, delist_date):
+        rec = DelistRecord(ticker=ticker, cik=cik, observed_delist_date=delist_date, crsp_code=231,
+                           bucket=CrspBucket.MERGER, confidence="high", reason="x", evidence={"flags": []},
+                           sec_id=sec_id, delist_date=delist_date)
+        return DelistingEvent(sec_id=sec_id, cik=cik, ticker=ticker, delist_date=delist_date, record=rec,
+                              last_trade=LastTrade(last_trade_day, "notice_a", ()), form25=None, form25_sub=None,
+                              exchange="NYSE", flags=[])
+
+    events = {"BBGSEC201": _merger("BBGSEC201", "S1", 7201, date(2020, 6, 1), "2020-06-12"),
+              "BBGSEC202": _merger("BBGSEC202", "S2", 7202, date(2020, 9, 1), "2020-09-11")}
+
+    class _CannedFinder:
+        def __init__(self, edgar, classifier, *, midas=None, halts=None):
+            pass
+
+        def find(self, ctx):
+            ev = events.get(ctx.security.sec_id)
+            return ([ev] if ev else []), []
+
+    monkeypatch.setattr(pipeline, "DelistingFinder", _CannedFinder)
+
+    class _LLM:
+        def extract(self, record):
+            return MergerTerms("stock", None, 1.0, "ACQUIRER CO", "ACQ", "high", "8-K:X", "")
+
+    clients.llm_extractor = _LLM()
+    run(index, clients, Overrides(last_trade_closes={"BBGSEC201": 100.0, "BBGSEC202": 150.0}), out_dir=tmp_path,
+        log=lambda *_: None)
+
+    d = {r["sec_id"]: r for r in read_table("delistings", table_path(tmp_path, "delistings"))}
+    assert d["BBGSEC201"]["acquirer_price"] == "100.000000"
+    assert "acquirer_close_lagged" in d["BBGSEC201"]["review_flags"].split(";")
+    assert d["BBGSEC202"]["acquirer_price"] == "150.000000"
+    assert "acquirer_close_lagged" not in d["BBGSEC202"]["review_flags"].split(";")
+
+
+def test_run_is_deterministic(fake_edgar, tmp_path):
+    """Spec §11: the same inputs and caches give byte-identical CSVs."""
+    index, clients = _clients(fake_edgar)
+    run(index, clients, Overrides(), out_dir=tmp_path / "a", log=lambda *_: None)
+    run(index, clients, Overrides(), out_dir=tmp_path / "b", log=lambda *_: None)
+    names = ["securities", "ticker_history", "cusip_history", "delistings", "payouts", "review"]
+    for name in names:
+        assert table_path(tmp_path / "a", name).read_bytes() == table_path(tmp_path / "b", name).read_bytes(), name
+    assert sorted(p.name for p in (tmp_path / "a").glob("*.csv")) == sorted(f"{n}.csv" for n in names)
+
+
 def test_successor_search_quotes_the_predecessor_issuers_edgar_name(fake_edgar, tmp_path, monkeypatch):
     """The 8-K12B names the predecessor as EDGAR does ("Google Inc."), never as
     an index snapshot does ("GOOGLE INC CLASS A"): full-text search must quote

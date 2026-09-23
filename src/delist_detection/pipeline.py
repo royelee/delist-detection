@@ -436,12 +436,18 @@ def run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_
             ftd.extend(clients.ftd_client, min(days) - timedelta(days=10), max(days) + timedelta(days=10),
                        symbols=acq_symbols)
 
+    lagged_acquirer: set[tuple[str, str | None]] = set()
+
     def acquirer_price(ticker: str, key: tuple[str, str | None]) -> float | None:
         # Priced on THAT merger's own last-trade day: many mergers can share a
         # delist_date, so a plain date->day map would misprice one with another's.
         day = trade_day.get(key)
         got = ftd.close_after(day, symbol=ticker) if day and ticker else None
-        return got[0] if got else None
+        if got is None:
+            return None
+        if got[2]:
+            lagged_acquirer.add(key)
+        return got[0]
 
     regex = {k: pr for k, pr in payouts_raw.items() if pr is not None and pr.value is not None}
     gated = gate_payouts(
@@ -450,6 +456,12 @@ def run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_
         {k: pr.confidence for k, pr in regex.items()}, llm_terms, closes, overrides.merger_terms,
         acquirer_price, tol,
     )
+    for e in mergers:
+        # A lagged FTD close (no row on the next trading day) may carry an OTC or
+        # stale price: flag the delisting when that price made it into its terms.
+        terms = _lookup(gated.merged_terms, e.sec_id, e.delist_date)
+        if (e.sec_id, e.delist_date) in lagged_acquirer and terms and terms.get("acquirer_price") is not None:
+            e.record.evidence["flags"].append("acquirer_close_lagged")
     added: dict[str, Security] = {}
     added_meta: dict[str, dict] = {}
     acquirer_ids: dict[tuple[str, str], str] = {}
