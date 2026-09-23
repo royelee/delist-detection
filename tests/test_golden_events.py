@@ -49,3 +49,25 @@ def test_golden_payout(case, monkeypatch):
     value = r.cash if r.cash is not None else r.stock_ratio * r.acquirer_price
     implied = value / case.last_trade_close - 1
     assert abs(implied - case.expected_dlret) <= case.dlret_tol, (pr, r)
+
+
+from datetime import date
+
+
+@pytest.mark.parametrize("case", CASES, ids=[c.id for c in CASES])
+def test_golden_classify_event_matches_classify_ticker(case, monkeypatch):
+    """classify_event, given the CIK and the Form 25 classify_ticker anchors on, lands
+    in the same bucket with the same code: the new entry point reuses the rules."""
+    edgar = GoldenEdgar(case)
+    patch_efts(monkeypatch, case)
+    resolver = TickerResolver(edgar, manual_overrides=GOLDEN_MANUAL,
+                              member_names=lambda t, d=None: case.member_name)
+    clf = DelistClassifier(edgar, resolver)
+    old = clf.classify_ticker(case.ticker, case.observed_delist_date)
+    assert old.cik is not None
+    f25, _ = clf._pick_delist_filing(edgar.recent_filings(old.cik), date.fromisoformat(case.observed_delist_date),
+                                     old.cik)
+    new = clf.classify_event(ticker=case.ticker, cik=old.cik, anchor_date=case.observed_delist_date,
+                             name=old.evidence.get("name"), expected_name=case.member_name, form25=f25)
+    assert new.bucket is old.bucket, (old.reason, new.reason)
+    assert new.crsp_code == old.crsp_code

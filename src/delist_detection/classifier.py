@@ -31,10 +31,11 @@ from .evidence import (
     says_listing_transfer,
     still_operating,
 )
-from .ticker_resolver import TickerResolver
+from .ticker_resolver import TickerResolution, TickerResolver
 
 
 DELIST_FORMS = {"25", "25-NSE"}
+NON_EQUITY_KINDS = frozenset({"preferred", "debt", "warrant", "unit", "right", "fund"})
 DEREG_FORMS = {"15-12G", "15-12B", "15-15D"}
 
 # 8-K item code fingerprints (numeric strings as EDGAR emits them).
@@ -72,6 +73,9 @@ class DelistRecord:
     confidence: str            # 'high' | 'medium' | 'low' | 'none'
     reason: str
     evidence: dict = field(default_factory=dict)
+    sec_id: str | None = None                 # the security's US composite FIGI (or placeholder)
+    delist_date: str | None = None            # Form 25 effective date (filing + 10 days) or fallback filing date
+    successor_sec_id: str | None = None       # for exchange_transfer: the security a holder keeps
 
     def to_dict(self) -> dict:
         d = asdict(self)
@@ -495,8 +499,6 @@ class DelistClassifier:
         ticker: str,
         observed_delist_date: str | None = None,
     ) -> DelistRecord:
-        observed = _parse_date(observed_delist_date) if observed_delist_date else None
-
         # Asset-type short-circuit: ETFs, notes, warrants, units, rights all
         # land in CRSP 600 EXPIRATION (scheduled end / not an equity event).
         # We also pattern-match the AV company name for cases where the
@@ -543,6 +545,22 @@ class DelistClassifier:
                 evidence={"resolution_source": resolution.source},
             )
 
+        return self._classify_resolved(
+            ticker, resolution, observed_delist_date,
+            expected_name=self.resolver._expected_name(ticker.upper(), observed_delist_date),
+        )
+
+    def _classify_resolved(
+        self,
+        ticker: str,
+        resolution: TickerResolution,
+        observed_delist_date: str | None,
+        *,
+        expected_name: str | None,
+        delist_filing_override: EdgarSubmission | None = None,
+    ) -> DelistRecord:
+        observed = _parse_date(observed_delist_date) if observed_delist_date else None
+
         flags: list[str] = []
         if observed:
             # Once, up front: a cached copy fetched before the event window is
@@ -558,7 +576,7 @@ class DelistClassifier:
         # A pin does not silence the name check: `member_name_mismatch` states a
         # fact about the security — the vendor series is not the named member —
         # and it is how the consumer catches an impostor series.
-        expected = self.resolver._expected_name(ticker.upper(), observed_delist_date)
+        expected = expected_name
         if expected and observed:
             _, agrees = self.resolver._fits_date(resolution.cik, observed_delist_date, expected)
             if not agrees:
@@ -590,7 +608,12 @@ class DelistClassifier:
                           "flags": flags},
             )
 
-        delist_filing, gap = self._pick_delist_filing(filings, observed, resolution.cik)
+        if delist_filing_override is not None:
+            delist_filing = delist_filing_override
+            fd = _parse_date(delist_filing.filing_date)
+            gap = (observed - fd).days if (observed and fd) else None
+        else:
+            delist_filing, gap = self._pick_delist_filing(filings, observed, resolution.cik)
         if gap is not None and gap > FORM25_TAIL_DAYS:
             flags.append(f"frozen_tail:{gap}")
         dereg = self._pick_dereg(filings, observed)
@@ -766,6 +789,36 @@ class DelistClassifier:
             reason=reason,
             evidence=evidence,
         )
+
+    def classify_event(
+        self,
+        *,
+        ticker: str,
+        cik: int,
+        anchor_date: str,
+        name: str | None = None,
+        expected_name: str | None = None,
+        kind: str = "common",
+        form25: EdgarSubmission | None = None,
+    ) -> DelistRecord:
+        """Classify one delisting of a security whose issuer is already known.
+
+        `anchor_date` is the last trade date (or the Form 25 filing date when the
+        last trade is unknown); every rule window is measured from it. `form25` is
+        the filing the delisting finder matched to this security; without it the
+        Form 25 nearest the anchor is used, as classify_ticker does. `kind` comes
+        from the security master; a non-equity kind is a scheduled end (600).
+        """
+        if kind in NON_EQUITY_KINDS:
+            return DelistRecord(
+                ticker=ticker.upper(), cik=cik, observed_delist_date=anchor_date,
+                crsp_code=600, bucket=CrspBucket.EXPIRATION, confidence="high",
+                reason=f"Non-equity security ({kind})",
+                evidence={"asset_type": kind, "flags": []},
+            )
+        resolution = TickerResolution(ticker.upper(), int(cik), name, "security_master")
+        return self._classify_resolved(ticker, resolution, anchor_date, expected_name=expected_name,
+                                       delist_filing_override=form25)
 
     def classify_many(
         self, items: Iterable[tuple[str, str | None]]
