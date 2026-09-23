@@ -410,6 +410,136 @@ def test_cik_none_listed_today_is_quiet(fake_edgar):
     assert events == [] and review == []
 
 
+# -- fix round 3 (final review, wave B) ------------------------------------
+
+
+def test_ticker_is_on_last_trade_date_not_form25_filing_date(fake_edgar):
+    """The Form 25 filing date is 2018-11-29 but MIDAS confirms the last
+    trade was 2018-11-28: the delisting's ticker must come from the last
+    trade date, not the filing date."""
+    edgar = _aet_edgar(fake_edgar)
+    clf = DelistClassifier(edgar, TickerResolver(edgar))
+    sec = _sec("BBG000FJLFX8", 1122304, "AET", "2017-06-30", "2018-06-29", "AETNA INC")
+    midas = _Midas(date(2018, 11, 28))
+    ctx = _ctx(sec)
+    ctx.ticker_on = lambda d: "AETOLD" if d < "2018-11-29" else "AET"
+    events, review = DelistingFinder(edgar, clf, midas=midas).find(ctx)
+    assert review == []
+    (ev,) = events
+    assert ev.last_trade.day == date(2018, 11, 28)
+    assert ev.ticker == "AETOLD"
+    assert ev.record.ticker == "AETOLD"
+
+
+def test_ticker_falls_back_to_filing_date_when_last_trade_unknown(fake_edgar):
+    """No MIDAS/halts evidence and an unreadable ex99 notice: last trade day
+    stays unknown, so the ticker falls back to the Form 25 filing date."""
+    fake_edgar.submissions_by_cik[9601] = [EdgarSubmission("z1", "25", "2019-06-01", "", "", "p.xml")]
+    fake_edgar.raws["z1"] = NYSE_COMMON_RAW
+    clf = DelistClassifier(fake_edgar, TickerResolver(fake_edgar))
+    sec = _sec("BBG_Z", 9601, "ZZZ", "2015-01-01", "2019-05-31", "ZZZ CORP")
+    ctx = _ctx(sec, last_seen="2019-05-31")
+    ctx.ticker_on = lambda d: "ZOLD" if d < "2019-06-01" else "ZNEW"
+    events, _ = DelistingFinder(fake_edgar, clf).find(ctx)
+    (ev,) = events
+    assert ev.last_trade.day is None
+    assert ev.ticker == "ZNEW"       # ctx.ticker_on(filing_date="2019-06-01")
+
+
+def test_fallback_exchange_from_issuer_submissions(fake_edgar, monkeypatch):
+    fake_edgar.submissions_by_cik[11000] = [
+        EdgarSubmission("s1", "8-K", "2015-01-12", "2015-01-12", "1.03", "k.htm"),
+        EdgarSubmission("s2", "15-12G", "2016-03-01", "", "", "f.htm"),
+    ]
+    fake_edgar.texts["s1"] = "Item 1.03 Bankruptcy or Receivership. The Company filed a chapter 11 petition. " + "x" * 300
+    orig_submissions = fake_edgar.submissions
+
+    def submissions_with_exchange(cik, fresh_after=None):
+        d = orig_submissions(cik, fresh_after=fresh_after)
+        d["tickers"] = ["SSS"]
+        d["exchanges"] = ["Nasdaq"]
+        return d
+
+    monkeypatch.setattr(fake_edgar, "submissions", submissions_with_exchange)
+    clf = DelistClassifier(fake_edgar, TickerResolver(fake_edgar))
+    sec = _sec("BBG_S", 11000, "SSS", "2010-01-01", "2015-01-20", "SSS CORP")
+    events, review = DelistingFinder(fake_edgar, clf).find(_ctx(sec, last_seen="2015-01-20"))
+    (ev,) = events
+    assert ev.exchange == "NASDAQ"
+
+
+def test_fallback_exchange_is_empty_when_issuer_submissions_lack_it(fake_edgar):
+    fake_edgar.submissions_by_cik[11001] = [
+        EdgarSubmission("s1b", "8-K", "2015-01-12", "2015-01-12", "1.03", "k.htm"),
+    ]
+    fake_edgar.texts["s1b"] = "Item 1.03 Bankruptcy or Receivership. The Company filed a chapter 11 petition. " + "x" * 300
+    clf = DelistClassifier(fake_edgar, TickerResolver(fake_edgar))
+    sec = _sec("BBG_S2", 11001, "SS2", "2010-01-01", "2015-01-20", "SS2 CORP")
+    events, review = DelistingFinder(fake_edgar, clf).find(_ctx(sec, last_seen="2015-01-20"))
+    (ev,) = events
+    assert ev.exchange == ""
+
+
+def test_resolution_source_passes_through_from_context(fake_edgar):
+    edgar = _aet_edgar(fake_edgar)
+    clf = DelistClassifier(edgar, TickerResolver(edgar))
+    sec = _sec("BBG000FJLFX8", 1122304, "AET", "2017-06-30", "2018-06-29", "AETNA INC")
+    ctx = _ctx(sec)
+    ctx.resolution_source = "cik_map"
+    events, _ = DelistingFinder(edgar, clf, midas=_Midas(date(2018, 11, 28))).find(ctx)
+    (ev,) = events
+    assert ev.record.evidence["resolution_source"] == "cik_map"
+
+
+def test_resolution_source_defaults_to_security_master(fake_edgar):
+    edgar = _aet_edgar(fake_edgar)
+    clf = DelistClassifier(edgar, TickerResolver(edgar))
+    sec = _sec("BBG000FJLFX8", 1122304, "AET", "2017-06-30", "2018-06-29", "AETNA INC")
+    events, _ = DelistingFinder(edgar, clf, midas=_Midas(date(2018, 11, 28))).find(_ctx(sec))
+    (ev,) = events
+    assert ev.record.evidence["resolution_source"] == "security_master"
+
+
+def test_completeness_only_continued_event_still_gets_fallback_review(fake_edgar):
+    """A security not listed today whose only event is a `continued`
+    exchange transfer must still get review/fallback treatment -- not be
+    silently dropped because `events` is non-empty."""
+    fake_edgar.submissions_by_cik[9001] = [
+        EdgarSubmission("k1", "25", "2015-01-05", "", "", "p.xml"),
+        EdgarSubmission("k2", "10-K", "2015-09-01", "", "", "k.htm"),
+    ]
+    fake_edgar.raws["k1"] = NYSE_COMMON_RAW
+    clf = DelistClassifier(fake_edgar, TickerResolver(fake_edgar))
+    sec = _sec("BBG_K", 9001, "KKK", "2010-01-01", "2015-01-04", "KKK CORP")
+    ctx = _ctx(sec, listed=False, seen_after=True, last_seen="2015-06-01")
+    events, review = DelistingFinder(fake_edgar, clf).find(ctx)
+    assert len(events) == 1
+    assert events[0].record.bucket is CrspBucket.EXCHANGE_TRANSFER
+    assert events[0].record.successor_sec_id == "BBG_K"
+    assert [r.flag for r in review] == ["ended_without_delisting"]
+
+
+def test_completeness_continued_transfer_then_later_merger_yields_both(fake_edgar):
+    """A security transfers exchanges (continues trading), then later is
+    truly acquired with no fresh Form 25 near the merger: the finder must
+    report both the exchange-transfer event and the later merger."""
+    fake_edgar.submissions_by_cik[20000] = [
+        EdgarSubmission("e1", "25", "2015-01-05", "", "", "p.xml"),
+        EdgarSubmission("e2", "10-K", "2015-09-01", "", "", "k.htm"),
+        EdgarSubmission("e3", "8-K", "2018-03-10", "2018-03-10", "2.01,5.01", "k.htm"),
+    ]
+    fake_edgar.raws["e1"] = NYSE_COMMON_RAW
+    clf = DelistClassifier(fake_edgar, TickerResolver(fake_edgar))
+    sec = _sec("BBG_TWO", 20000, "TWOD", "2010-01-01", "2014-12-31", "TWOD CORP")
+    ctx = _ctx(sec, listed=False, seen_after=True, last_seen="2018-03-15")
+    events, review = DelistingFinder(fake_edgar, clf).find(ctx)
+    assert len(events) == 2
+    buckets = {ev.record.bucket for ev in events}
+    assert CrspBucket.EXCHANGE_TRANSFER in buckets and CrspBucket.MERGER in buckets
+    merger_ev = next(ev for ev in events if ev.record.bucket is CrspBucket.MERGER)
+    assert merger_ev.delist_date == "2018-03-10"
+
+
 def test_cik_none_listing_status_unknown(fake_edgar):
     sec = _sec("BBG_NOCIK3", None, "NOC3", "2018-01-01", "2020-01-01", "NOCIK CO")
     clf = DelistClassifier(fake_edgar, TickerResolver(fake_edgar))

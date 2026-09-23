@@ -16,13 +16,14 @@ from .crsp_codes import CrspBucket
 from .edgar import EdgarSubmission
 from .figi_resolution import class_letter
 from .form25 import (
-    REGIONAL_EXCHANGES, Form25, SecurityRef, class_kind, class_label, effective_date, list_form25, match_security,
-    notice_last_trade, parse_form25,
+    REGIONAL_EXCHANGES, Form25, SecurityRef, class_kind, class_label, effective_date, exchange_label, list_form25,
+    match_security, notice_last_trade, parse_form25,
 )
 from .last_trade import LastTrade, decide_last_trade, eightk_last_trade
 from .listing_status import exchanges_around, withdrawal_kind
 from .midas import MIDAS_START
 from .nasdaq_halts import last_trade_from_halt
+from .observations import normalize_ticker
 from .security_master import Security
 from .trading_calendar import previous_trading_day
 
@@ -80,6 +81,10 @@ class SecurityContext:
     # sec_id -> (first sighting, last sighting), ISO. A sibling absent here is
     # treated as alive at every filing date (the caller doesn't know its span).
     sibling_spans: dict[str, tuple[str, str]] = field(default_factory=dict)
+    # The resolver tier that found this security's CIK (e.g. "cik_map",
+    # "manual"); recorded on every DelistRecord this security's events
+    # produce, in place of the classify_event default "security_master".
+    resolution_source: str = "security_master"
 
 
 def _d(s: str) -> date:
@@ -192,6 +197,23 @@ class DelistingFinder:
                 groups.append([item])
         return groups
 
+    def _issuer_exchange(self, cik: int, ticker: str) -> str:
+        """The exchange EDGAR's own submissions JSON records for `ticker` (the
+        parallel `tickers`/`exchanges` arrays), mapped to the table's exchange
+        names; "" when the issuer, the ticker, or its exchange entry is
+        missing. Used by the no-Form-25 fallback, which otherwise has no
+        exchange evidence at all."""
+        sub = self.edgar.submissions(cik)
+        if not isinstance(sub, dict):
+            return ""
+        tickers = sub.get("tickers") or []
+        exchanges = sub.get("exchanges") or []
+        want = normalize_ticker(ticker)
+        for t, x in zip(tickers, exchanges):
+            if normalize_ticker(t) == want and x:
+                return exchange_label(x) or ""
+        return ""
+
     def _exchange_rank(self, item: tuple[EdgarSubmission, Form25]) -> tuple[int, str]:
         sub, f25 = item
         try:
@@ -297,7 +319,12 @@ class DelistingFinder:
             if not continued:
                 last_definitive = ev
 
-        if not events:
+        # spec 8.10: run the fallback / ended_without_delisting logic whenever
+        # no event found is a genuine end (every event is `continued`, e.g. an
+        # exchange transfer the security kept trading through) -- not only
+        # when `events` is empty. Otherwise a security whose only events are
+        # continued ones gets neither a real delisting nor a review row.
+        if last_definitive is None:
             if ctx.listed_today is False:
                 fb = self._fallback(ctx, cik, filings, ticker_last)
                 if fb is not None:
@@ -316,16 +343,21 @@ class DelistingFinder:
                      group: list[tuple[EdgarSubmission, Form25]], eff: str, continued: bool) -> DelistingEvent:
         sec = ctx.security
         winner_sub, winner_f25 = min(group, key=self._exchange_rank)
-        ticker = ctx.ticker_on(winner_sub.filing_date) or sec.eras[-1].ticker
-        lt = self._last_trade_group(cik, filings, group, ticker)
+        filing_ticker = ctx.ticker_on(winner_sub.filing_date) or sec.eras[-1].ticker
+        lt = self._last_trade_group(cik, filings, group, filing_ticker)
+        # spec 7.4: the delisting's ticker is the ticker on the last trade
+        # date, not on the Form 25 filing date -- only fall back to the
+        # filing-date ticker when the last trade date itself is unknown.
+        ticker = (lt.day and ctx.ticker_on(lt.day.isoformat())) or filing_ticker
         anchor = lt.day.isoformat() if lt.day else winner_sub.filing_date
         rec = self.classifier.classify_event(ticker=ticker, cik=cik, anchor_date=anchor, name=sec.name,
-                                             expected_name=ctx.expected_name, kind=sec.kind, form25=winner_sub)
+                                             expected_name=ctx.expected_name, kind=sec.kind, form25=winner_sub,
+                                             resolution_source=ctx.resolution_source)
         return self._event(sec, cik, ticker, eff, rec, lt, winner_f25, winner_sub, continued)
 
     def _event(self, sec: Security, cik: int, ticker: str, delist_date: str, rec: DelistRecord, lt: LastTrade,
                f25: Form25 | None, sub: EdgarSubmission | None, continued: bool,
-               extra_flags: tuple[str, ...] = ()) -> DelistingEvent:
+               extra_flags: tuple[str, ...] = (), exchange: str = "") -> DelistingEvent:
         rec.sec_id = sec.sec_id
         rec.delist_date = delist_date
         flags = list(lt.flags) + list(extra_flags)
@@ -339,7 +371,7 @@ class DelistingFinder:
             if f not in ev_flags:
                 ev_flags.append(f)
         return DelistingEvent(sec.sec_id, cik, ticker, delist_date, rec, lt, f25, sub,
-                              f25.exchange if f25 else "", flags)
+                              f25.exchange if f25 else exchange, flags)
 
     # -- no-Form-25 fallback ----------------------------------------------
     def _fallback_date(self, ctx: SecurityContext, ev: dict) -> tuple[str, tuple[str, ...]]:
@@ -371,7 +403,8 @@ class DelistingFinder:
                   ticker: str) -> DelistingEvent | None:
         sec = ctx.security
         rec = self.classifier.classify_event(ticker=ticker, cik=cik, anchor_date=ctx.last_seen, name=sec.name,
-                                             expected_name=ctx.expected_name, kind=sec.kind, form25=None)
+                                             expected_name=ctx.expected_name, kind=sec.kind, form25=None,
+                                             resolution_source=ctx.resolution_source)
         ev = rec.evidence or {}
         if ev.get("delist_filing"):
             # The classifier picked a Form 25 on its own, ignoring class: the
@@ -386,4 +419,10 @@ class DelistingFinder:
         lt = self._last_trade(cik, filings, None, ticker, _d(ended_by))
         if lt.day is None:
             lt = LastTrade(_d(ctx.last_seen), "", ("last_trade_date_unconfirmed",))
-        return self._event(sec, cik, ticker, ended_by, rec, lt, None, None, False, ("no_form25", *extra_flags))
+        # No Form 25 means no exchange evidence from a filing; fall back to
+        # whatever exchange EDGAR's own submissions JSON records for this
+        # ticker (spec D22) rather than leaving it blank -- which otherwise
+        # maps to Exchange.OTHER and applies the wrong Shumway constant.
+        exch = self._issuer_exchange(cik, ticker)
+        return self._event(sec, cik, ticker, ended_by, rec, lt, None, None, False, ("no_form25", *extra_flags),
+                           exchange=exch)

@@ -800,6 +800,7 @@ class DelistClassifier:
         expected_name: str | None = None,
         kind: str = "common",
         form25: EdgarSubmission | None = None,
+        resolution_source: str = "security_master",
     ) -> DelistRecord:
         """Classify one delisting of a security whose issuer is already known.
 
@@ -808,6 +809,10 @@ class DelistClassifier:
         the filing the delisting finder matched to this security; without it the
         Form 25 nearest the anchor is used, as classify_ticker does. `kind` comes
         from the security master; a non-equity kind is a scheduled end (600).
+        `resolution_source` is recorded in the returned record's evidence (and
+        drives the classifier's cik_map/manual-override qualifiers) exactly as
+        `classify_ticker` records the resolver tier that found the CIK; the
+        security master's own resolution defaults to "security_master".
         """
         if kind in NON_EQUITY_KINDS:
             return DelistRecord(
@@ -816,7 +821,7 @@ class DelistClassifier:
                 reason=f"Non-equity security ({kind})",
                 evidence={"asset_type": kind, "flags": []},
             )
-        resolution = TickerResolution(ticker.upper(), int(cik), name, "security_master")
+        resolution = TickerResolution(ticker.upper(), int(cik), name, resolution_source)
         return self._classify_resolved(ticker, resolution, anchor_date, expected_name=expected_name,
                                        delist_filing_override=form25)
 

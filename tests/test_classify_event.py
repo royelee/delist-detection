@@ -38,6 +38,17 @@ def test_event_name_mismatch_is_flagged(fake_edgar):
     assert "member_name_mismatch" in ev.evidence["flags"]
 
 
+def test_event_resolution_source_defaults_to_security_master(fake_edgar):
+    ev = _clf(fake_edgar).classify_event(ticker="ALTR", cik=1701732, anchor_date="2025-03-25")
+    assert ev.evidence["resolution_source"] == "security_master"
+
+
+def test_event_resolution_source_passes_through(fake_edgar):
+    ev = _clf(fake_edgar).classify_event(ticker="ALTR", cik=1701732, anchor_date="2025-03-25",
+                                         resolution_source="cik_map")
+    assert ev.evidence["resolution_source"] == "cik_map"
+
+
 def test_delist_record_new_fields_default_none():
     r = DelistRecord("X", 1, "2020-01-01", 231, CrspBucket.MERGER, "high", "r")
     assert r.sec_id is None and r.delist_date is None and r.successor_sec_id is None
