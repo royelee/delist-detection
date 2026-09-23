@@ -6,6 +6,7 @@ so this only confirms a date; it is not a complete register.
 """
 from __future__ import annotations
 
+import logging
 import time
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
@@ -20,6 +21,7 @@ from .trading_calendar import is_trading_day, previous_trading_day
 HALTS_URL = "https://www.nasdaqtrader.com/rss.aspx?feed=tradehalts&haltdate={mmddyyyy}"
 _NS = {"ndaq": "http://www.nasdaqtrader.com/"}
 _UA = "delist_detection research (halt history lookup)"
+_log = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -59,35 +61,61 @@ def last_trade_from_halt(h: Halt) -> date:
 
 
 class NasdaqHaltClient:
-    def __init__(self, cache_dir: str | Path, *, session=None, min_interval: float = 1.0) -> None:
+    def __init__(self, cache_dir: str | Path, *, session=None, min_interval: float = 1.0, sleep=None) -> None:
         self.dir = Path(cache_dir)
         self.session = session or requests.Session()
         self.min_interval = min_interval
+        self.sleep = sleep or time.sleep
         self._last = 0.0
 
     def halts_on(self, day: date) -> list[Halt]:
         cp = self.dir / f"{day:%Y%m%d}.xml"
         if cp.exists():
             return parse_halts_rss(cp.read_text(encoding="utf-8"))
-        wait = self.min_interval - (time.monotonic() - self._last)
-        if wait > 0:
-            time.sleep(wait)
-        self._last = time.monotonic()
-        try:
-            resp = self.session.get(HALTS_URL.format(mmddyyyy=f"{day:%m%d%Y}"),
-                                    headers={"User-Agent": _UA}, timeout=30)
-        except requests.RequestException:
-            return []
-        if resp.status_code != 200:
-            return []
-        try:
-            halts = parse_halts_rss(resp.text)
-        except ET.ParseError:
-            return []
-        if day < date.today():                  # today's list can still grow
-            cp.parent.mkdir(parents=True, exist_ok=True)
-            cp.write_text(resp.text, encoding="utf-8")
-        return halts
+
+        for attempt in range(2):
+            wait = self.min_interval - (time.monotonic() - self._last)
+            if wait > 0:
+                self.sleep(wait)
+            self._last = time.monotonic()
+            try:
+                resp = self.session.get(HALTS_URL.format(mmddyyyy=f"{day:%m%d%Y}"),
+                                        headers={"User-Agent": _UA}, timeout=30)
+            except requests.RequestException as e:
+                _log.warning(f"halts_on({day:%Y-%m-%d}): network error: {e}")
+                return []
+
+            # Check for 429 or 5xx; retry once
+            if resp.status_code in (429,) or (500 <= resp.status_code < 600):
+                if attempt == 0:
+                    sleep_duration = 2.0
+                    if "Retry-After" in resp.headers:
+                        try:
+                            sleep_duration = float(resp.headers["Retry-After"])
+                        except ValueError:
+                            pass
+                    self.sleep(sleep_duration)
+                    continue
+                else:
+                    _log.warning(f"halts_on({day:%Y-%m-%d}): {resp.status_code} after retry")
+                    return []
+
+            if resp.status_code != 200:
+                _log.warning(f"halts_on({day:%Y-%m-%d}): HTTP {resp.status_code}")
+                return []
+
+            try:
+                halts = parse_halts_rss(resp.text)
+            except ET.ParseError as e:
+                _log.warning(f"halts_on({day:%Y-%m-%d}): parse error: {e}")
+                return []
+
+            if day < date.today():                  # today's list can still grow
+                cp.parent.mkdir(parents=True, exist_ok=True)
+                cp.write_text(resp.text, encoding="utf-8")
+            return halts
+
+        return []
 
     def deletion_halt(self, symbol: str, lo: date, hi: date, max_days: int = 7) -> Halt | None:
         want = normalize_ticker(symbol)

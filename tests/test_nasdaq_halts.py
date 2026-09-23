@@ -39,8 +39,10 @@ def test_parse():
 def test_last_trade_from_halt():
     after_close = Halt("ALTR", "", "Q", "D", date(2025, 3, 25), "19:50:00", None)
     before_open = Halt("SAVE", "", "N", "D", date(2024, 11, 18), "04:30:00", None)
+    at_boundary = Halt("TEST", "", "Q", "D", date(2025, 3, 25), "09:30:00", None)
     assert last_trade_from_halt(after_close) == date(2025, 3, 25)
     assert last_trade_from_halt(before_open) == date(2024, 11, 15)
+    assert last_trade_from_halt(at_boundary) == date(2025, 3, 25)
 
 
 class _Resp:
@@ -59,6 +61,30 @@ class _Session:
         return _Resp(RSS if "03252025" in url else RSS.replace("<item>", "<x>").replace("</item>", "</x>"))
 
 
+class _Session429Then200:
+    """Returns 429 on first call, then 200 with RSS on retry."""
+    def __init__(self):
+        self.calls = 0
+        self.sleep_calls = []
+
+    def get(self, url, headers=None, timeout=None):
+        self.calls += 1
+        if self.calls == 1:
+            resp = _Resp("")
+            resp.status_code = 429
+            resp.headers = {"Retry-After": "0.1"}
+            return resp
+        return _Resp(RSS)
+
+
+class _Session403:
+    """Always returns 403."""
+    def get(self, url, headers=None, timeout=None):
+        resp = _Resp("")
+        resp.status_code = 403
+        return resp
+
+
 def test_client_caches_and_finds_deletion(tmp_path):
     s = _Session()
     c = NasdaqHaltClient(tmp_path, session=s, min_interval=0)
@@ -69,3 +95,34 @@ def test_client_caches_and_finds_deletion(tmp_path):
     c.halts_on(date(2025, 3, 25))
     assert len(s.urls) == n                                                          # cached
     assert "haltdate=03252025" in s.urls[1] or "haltdate=03252025" in s.urls[0]
+
+
+def test_client_retries_429(tmp_path):
+    """Test that 429 response triggers sleep and retry once."""
+    s = _Session429Then200()
+    sleep_calls = []
+    def mock_sleep(duration):
+        sleep_calls.append(duration)
+
+    c = NasdaqHaltClient(tmp_path, session=s, min_interval=0, sleep=mock_sleep)
+    halts = c.halts_on(date(2025, 3, 25))
+    assert len(halts) == 2  # Successfully got RSS after retry
+    assert len(sleep_calls) == 1  # Sleep was called once
+    assert sleep_calls[0] == 0.1  # Retry-After header was respected
+    assert s.calls == 2  # Called twice (429, then 200)
+
+
+def test_client_403_logs_warning(tmp_path, caplog):
+    """Test that 403 response logs a warning and returns empty list without caching."""
+    import logging
+    caplog.set_level(logging.WARNING)
+
+    s = _Session403()
+    c = NasdaqHaltClient(tmp_path, session=s, min_interval=0)
+    halts = c.halts_on(date(2025, 3, 25))
+
+    assert halts == []
+    assert "HTTP 403" in caplog.text
+    assert "2025-03-25" in caplog.text
+    # Verify cache file was not created
+    assert not (tmp_path / "20250325.xml").exists()
