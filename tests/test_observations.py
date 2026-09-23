@@ -1,8 +1,9 @@
 import pytest
 
 from delist_detection.observations import (
-    Observation, ObservationError, ObservationIndex, load_observations, normalize_ticker,
-    observations_from_instruments, observations_from_snapshots, split_eras, write_observations,
+    Observation, ObservationError, ObservationIndex, TickerEra, eras_by_key, load_observations, normalize_ticker,
+    number_eras, observation_conflicts, observations_from_instruments, observations_from_snapshots, split_eras,
+    write_observations,
 )
 
 
@@ -53,6 +54,39 @@ def test_recycled_ticker_splits_into_two_eras():
         ("2016-06-30", "2017-12-29", "MONSANTO CO"),
         ("2021-12-31", "2021-12-31", "MONUMENT CIRCLE ACQUISITION CORP"),
     ]
+
+
+def test_two_names_on_one_date_keep_both_eras_under_unique_keys():
+    # Real CB rows: one snapshot source backfilled today's ticker, so CB is both
+    # ACE LTD and CHUBB CORP on each date. Every era is kept; only a key that
+    # would collide gets a sequence suffix.
+    obs = [Observation("CB", "2009-06-08", "CHUBB CORP"),
+           Observation("CB", "2012-06-29", "ACE LTD"), Observation("CB", "2012-06-29", "CHUBB CORP"),
+           Observation("CB", "2012-12-31", "ACE LTD"), Observation("CB", "2012-12-31", "CHUBB CORP"),
+           Observation("CB", "2016-06-30", "CHUBB LTD")]
+    eras = split_eras(obs)
+    assert [e.key for e in eras] == ["CB@2009-06-08", "CB@2012-06-29", "CB@2012-06-29#1", "CB@2012-12-31",
+                                     "CB@2012-12-31#1"]
+    assert sorted((o.as_of, o.name) for e in eras for o in e.observations) == sorted((o.as_of, o.name) for o in obs)
+    assert list(eras_by_key(eras)) == [e.key for e in eras]
+
+
+def test_eras_by_key_refuses_a_duplicate_key():
+    a = TickerEra("CB", "2012-06-29", "2012-06-29", [Observation("CB", "2012-06-29", "ACE LTD")])
+    b = TickerEra("CB", "2012-06-29", "2012-06-29", [Observation("CB", "2012-06-29", "CHUBB CORP")])
+    with pytest.raises(ValueError, match="CB@2012-06-29"):
+        eras_by_key([a, b])
+    assert list(eras_by_key(number_eras([a, b]))) == ["CB@2012-06-29", "CB@2012-06-29#1"]
+
+
+def test_observation_conflicts_lists_each_ticker_date_with_two_names():
+    obs = [Observation("CB", "2012-06-29", "ACE LTD"), Observation("CB", "2012-06-29", "CHUBB CORP"),
+           Observation("AGN", "2014-06-30", "ALLERGAN INC"), Observation("AGN", "2014-06-30", "ALLERGAN PLC"),
+           Observation("RGA", "2014-12-31", "REINSURANCE GROUP OF AMERICA INC"),
+           Observation("RGA", "2014-12-31", "Reinsurance Group of America Inc."),     # same name, spelled apart
+           Observation("CB", "2016-06-30", "CHUBB LTD")]
+    assert observation_conflicts(obs) == [("AGN", "2014-06-30", ("ALLERGAN INC", "ALLERGAN PLC")),
+                                          ("CB", "2012-06-29", ("ACE LTD", "CHUBB CORP"))]
 
 
 def test_bare_gap_does_not_split_observations():

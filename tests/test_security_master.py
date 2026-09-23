@@ -80,6 +80,35 @@ def test_refine_eras_splits_securities_that_shared_a_ticker(real_eras, ticker, s
     assert [(e.first, e.last) for e in real_eras[ticker]] == spans
 
 
+def test_real_cb_and_agn_keep_every_observation_under_unique_keys(real_eras):
+    """CB is both ACE LTD and CHUBB CORP on five dates (2012-06-29 .. 2014-06-30),
+    AGN both ALLERGAN INC and ALLERGAN PLC on 2014-06-30: a snapshot source
+    backfilled today's ticker. No era, and so no observation, may be lost."""
+    obs = [o for o in load_observations(ERAS_FIX / "observations.csv") if o.ticker in ("CB", "AGN")]
+    eras = real_eras["CB"] + real_eras["AGN"]
+    assert sorted((o.ticker, o.as_of, o.name) for e in eras for o in e.observations) == \
+        sorted((o.ticker, o.as_of, o.name) for o in obs)
+    keys = [e.key for e in real_eras["CB"]]
+    assert len(set(keys)) == len(keys)
+    assert keys[:3] == ["CB@2008-01-16", "CB@2012-06-29", "CB@2012-06-29#1"]
+    assert keys[-1] == "CB@2016-06-30"                  # a suffix only where a key would collide
+    all_keys = [e.key for v in real_eras.values() for e in v]
+    assert len(set(all_keys)) == len(all_keys)
+
+
+def test_a_backfilled_name_does_not_take_the_tickers_fails_cusip(real_eras):
+    """CB's fails rows in 2012-2014 are Chubb Corp's (CHUBB CORPORATION,
+    171232101); ACE traded as ACE then. The ACE LTD eras sharing those dates
+    must not take that CUSIP, so they resolve on their own (by name) instead of
+    as Chubb Corp; the CHUBB CORP eras keep it."""
+    for e in real_eras["CB"]:
+        if e.name == "ACE LTD":
+            assert e.ftd_cusips == (), e.key
+        elif e.name == "CHUBB CORP" and e.ftd_cusips:
+            assert e.ftd_cusips == ("171232101",), e.key
+    assert real_eras["CB"][-1].ftd_cusips == ("H1467J104",)          # Chubb Ltd (formerly ACE) from 2016
+
+
 def test_refine_eras_splits_at_the_cusip_switch(real_eras):
     # FOXA: 21st Century Fox 90130A101 to 2019-01-23, Fox Corp 35137L105 from 2019-03-21
     # (Fox Corp began regular-way trading on 2019-03-19; its first fails row is 03-21)

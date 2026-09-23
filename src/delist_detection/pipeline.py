@@ -23,7 +23,7 @@ from .form25 import SecurityRef, exchange_label
 from .ftd import FtdIndex
 from .listing_status import listed_today
 from .names import names_agree
-from .observations import ObservationIndex, normalize_ticker
+from .observations import ObservationIndex, TickerEra, eras_by_key, normalize_ticker, observation_conflicts
 from .openfigi import OpenFigiBlocked
 from .payout_gate import DEFAULT_TOL, gate_payouts
 from .reconstruction import _lookup, build_delistings_table, delisting_row, unmatched_override_keys
@@ -204,6 +204,22 @@ def _ticker_range_review(th_rows: list[dict]) -> list[ReviewItem]:
     return out
 
 
+def _conflict_review(eras: list[TickerEra], resolutions: dict) -> list[ReviewItem]:
+    """One `observation_conflict:<date>` review row per ticker seen under two or
+    more names on one date (a snapshot source backfilled today's ticker: CB is
+    both ACE LTD and CHUBB CORP in 2012-2014). The reason names each name with
+    its era and the security that era resolved to. The date is in the flag so
+    each (ticker, date) keeps its own row under review.csv's key."""
+    out: list[ReviewItem] = []
+    for ticker, day, names in observation_conflicts(o for e in eras for o in e.observations):
+        seen = [f"{o.name} ({e.key} -> {resolutions[e.key].sec_id or 'unresolved'})"
+                for e in eras if e.ticker == ticker for o in e.observations if o.as_of == day and o.name]
+        out.append(ReviewItem("", ticker, None, f"observation_conflict:{day}",
+                              f"{ticker} seen on {day} under {len(names)} names: " + "; ".join(dict.fromkeys(seen)),
+                              last_seen=day))
+    return out
+
+
 def _merge_review_rows(rows: list[dict]) -> list[dict]:
     """Collapse rows that share `(sec_id, delist_date, ticker, review_flags)`
     into one, joining their distinct `reason`s with `"; "`. Every other field
@@ -305,7 +321,7 @@ def run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_
     ftd = FtdIndex.load(clients.ftd_client, lo, hi, symbols={e.ticker for e in eras},
                         cusips={c for e in eras for c in e.cusips})
     eras = refine_eras(eras, ftd)
-    era_by_key = {e.key: e for e in eras}
+    era_by_key = eras_by_key(eras)               # raises on a duplicate key: an era is never dropped
     log(f"{len(eras)} eras after the FTD split")
 
     # 2. issuer CIK per era, resolved at the era's last sighting: index snapshots can
@@ -322,6 +338,7 @@ def run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_
         for flag in res.flags:
             review.append(ReviewItem(res.sec_id or "", era.ticker, ciks.get(key), flag,
                                      f"{era.key} {era.name or ''}".strip(), last_seen=era.last))
+    review += _conflict_review(eras, resolutions)
     log(f"{len(securities)} securities; FIGI sources "
         f"{dict(Counter(s.figi_source for s in securities.values()))}")
 

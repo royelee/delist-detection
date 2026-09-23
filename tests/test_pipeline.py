@@ -1098,6 +1098,85 @@ def test_successor_search_name_falls_back_to_the_observation_name_without_class_
     assert successor_search_name(fake_edgar, None, "LIBERTY MEDIA CORP SERIES A") == "LIBERTY MEDIA CORP"
 
 
+ERAS_FIX = Path(__file__).parent / "fixtures" / "eras"
+
+
+def _eras_fixture(tickers):
+    import csv
+    from delist_detection.observations import load_observations
+    obs = [o for o in load_observations(ERAS_FIX / "observations.csv") if o.ticker in tickers]
+    with (ERAS_FIX / "ftd_rows.csv").open(newline="") as fh:
+        rows = [FtdRow(r["date"], r["cusip"], r["symbol"], r["description"],
+                       float(r["price"]) if r["price"] not in ("", "None") else None)
+                for r in csv.DictReader(fh) if r["symbol"] in tickers]
+    return obs, rows
+
+
+@pytest.mark.parametrize("name_hit", [True, False])
+def test_backfilled_names_lose_no_observation_and_are_reviewed(fake_edgar, tmp_path, monkeypatch, name_hit):
+    """Real CB and AGN rows: CB is both ACE LTD and CHUBB CORP on five dates and
+    AGN both ALLERGAN INC and ALLERGAN PLC on one. Every observation must reach a
+    security, each (ticker, date) gets one observation_conflict review row, the
+    CHUBB CORP eras join Chubb Corp by its CUSIP, and the ACE LTD eras never do:
+    they resolve on their own — to ACE's line (now Chubb Ltd, merging with CB's
+    2016+ era) when the name search finds it, else to an issuer placeholder."""
+    obs, rows = _eras_fixture({"CB", "AGN"})
+    fake_edgar.company_map["CB"] = {"cik_str": 896159, "ticker": "CB", "title": "Chubb Ltd"}
+    fake_edgar.company_map["AGN"] = {"cik_str": 1578845, "ticker": "AGN", "title": "Allergan plc"}
+    fake_edgar.submissions_by_cik[896159] = []
+    fake_edgar.submissions_by_cik[1578845] = []
+    chubb_ltd = [{"figi": "BBGCHUBBLTD", "compositeFIGI": "BBGCHUBBLTD", "exchCode": "US", "ticker": "CB",
+                  "name": "CHUBB LTD", "securityType": "Common Stock", "securityType2": "Common Stock"},
+                 {"figi": "BBGCHUBBLT2", "compositeFIGI": "BBGCHUBBLTD", "exchCode": "UN", "ticker": "CB",
+                  "name": "ACE LTD", "securityType": "Common Stock", "securityType2": "Common Stock"}]
+    index = ObservationIndex(obs)
+    resolver = TickerResolver(fake_edgar, manual_overrides={"CB": 896159, "AGN": 1578845},
+                              member_names=index.name_on, cik_map=index.cik_pin_on)
+    figi = _MapFigi({
+        ("ID_CUSIP", "171232101"): _figi_answer("BBGCHUBBCRP", "CB", "CHUBB CORP"),
+        ("ID_CINS", "H1467J104"): _figi_answer("BBGCHUBBLTD", "CB", "CHUBB LTD"),
+        ("TICKER", "CB"): _figi_answer("BBGCHUBBLTD", "CB", "CHUBB LTD"),
+        ("ID_CUSIP", "018490102"): _figi_answer("BBGALLERGAN", "AGN", "ALLERGAN INC"),
+        ("ID_CINS", "G0177J108"): _figi_answer("BBGALLERPLC", "AGN", "ALLERGAN PLC"),
+    })
+    figi.filter = lambda query, **fields: chubb_ltd if name_hit and query == "ACE" else []
+    clients = Clients(edgar=fake_edgar, resolver=resolver, classifier=DelistClassifier(fake_edgar, resolver),
+                      figi=figi, ftd_client=_RowsFtdClient(rows))
+    contexts = {}
+
+    class _Recorder:
+        def __init__(self, edgar, classifier, *, midas=None, halts=None):
+            pass
+
+        def find(self, ctx):
+            contexts[ctx.security.sec_id] = ctx
+            return [], []
+
+    monkeypatch.setattr(pipeline, "DelistingFinder", _Recorder)
+    run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
+
+    reached = sorted((o.ticker, o.as_of, o.name) for c in contexts.values() for e in c.security.eras
+                     for o in e.observations)
+    assert reached == sorted((o.ticker, o.as_of, o.name) for o in obs)          # no observation lost
+    review = read_table("review", table_path(tmp_path, "review"))
+    conflicts = sorted((r["ticker"], r["review_flags"]) for r in review
+                       if r["review_flags"].startswith("observation_conflict"))
+    assert conflicts == [("AGN", "observation_conflict:2014-06-30")] + [
+        ("CB", f"observation_conflict:{d}") for d in ("2012-06-29", "2012-12-31", "2013-06-28", "2013-12-31",
+                                                      "2014-06-30")]
+    for r in review:
+        if r["review_flags"].startswith("observation_conflict:") and r["ticker"] == "CB":
+            assert "ACE LTD" in r["reason"] and "CHUBB CORP" in r["reason"]
+    names_of = {sid: {o.name for e in c.security.eras for o in e.observations} for sid, c in contexts.items()}
+    assert names_of["BBGCHUBBCRP"] == {"CHUBB CORP"}                        # ACE LTD never lands on Chubb Corp
+    ace = "BBGCHUBBLTD" if name_hit else "CIK896159-COMMON"
+    assert "ACE LTD" in names_of[ace]
+    if name_hit:
+        assert names_of["BBGCHUBBLTD"] == {"ACE LTD", "CHUBB LTD", "CHUBB"}   # merged with CB's 2016+ era
+    else:
+        assert names_of["CIK896159-COMMON"] == {"ACE LTD"}
+
+
 def test_ftd_rows_spelled_without_a_separator_are_sightings_of_the_observed_ticker(fake_edgar, tmp_path):
     """FTD writes Brown-Forman class B as "BFB"; the caller writes "BF-B". The
     rows must find the CUSIP and appear in ticker_history as BF-B only."""

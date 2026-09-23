@@ -500,7 +500,20 @@ line changes observable output.
   security dated before its CUSIP's first FTD row stays with it. A side
   with no observations is not an era. Eras that still resolve to the same
   FIGI (a reverse split's new CUSIP, a gap no row bridged) merge back into
-  one security.
+  one security. No era is ever dropped: two eras of one ticker starting on
+  the same date keep unique keys (`CB@2012-06-29`, `CB@2012-06-29#1`).
+- **Two names for one ticker on one date (`observation_conflict`).** A
+  snapshot source that backfilled today's ticker gives one ticker two names
+  on a date (CB is both ACE LTD and CHUBB CORP from 2012-06-29 to
+  2014-06-30; AGN both ALLERGAN INC and ALLERGAN PLC on 2014-06-30). Both
+  observations are kept, and `review.csv` gets one row per such ticker and
+  date, flagged `observation_conflict:<date>` (the date is in the flag so
+  each keeps its own row under the table's key) and naming each name with
+  the security it resolved to. Where the two names form separate eras on the
+  same dates, the ticker's FTD CUSIP counts for an era only when its FTD
+  description agrees with the era's names, so the backfilled name does not
+  take the other security's CUSIP (ACE LTD never becomes Chubb Corp). It
+  then resolves by name search, or else to its issuer placeholder.
 - **Fallback delisting date (§8.6, no-Form-25 path).** Dated by a confirmed
   bankruptcy 8-K first, then the anchor 8-K, then a revocation or Form 15
   filing but only when it falls within `[last_seen − 30d, last_seen + 120d]`;

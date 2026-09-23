@@ -19,7 +19,7 @@ from .figi_resolution import (
 )
 from .ftd import FtdIndex, FtdRow
 from .names import names_agree
-from .observations import ERA_GAP_DAYS, Observation, TickerEra
+from .observations import ERA_GAP_DAYS, Observation, TickerEra, eras_by_key, number_eras
 
 ERA_MIN_RUN = 3          # an FTD CUSIP run shorter than this is noise, not a CUSIP switch
 
@@ -93,14 +93,26 @@ def _switch_cuts(rows: Sequence[FtdRow]) -> list[str]:
     return [run[0].date for (a, _), (b, run) in zip(kept, kept[1:]) if a != b]
 
 
-def _split_era(era: TickerEra, rows: list[FtdRow]) -> list[TickerEra]:
+def _described(cusip: str, rows: Sequence[FtdRow], names: Sequence[str]) -> bool:
+    """True when some FTD row of `cusip` has a description agreeing with a name."""
+    return any(names_agree(r.description, n) for r in rows if r.cusip == cusip for n in names)
+
+
+def _split_era(era: TickerEra, rows: list[FtdRow], *, contested: bool) -> list[TickerEra]:
     out: list[TickerEra] = []
     for g_obs, g_rows in _cut(era.observations, rows, _gap_cuts(era.observations, rows)):
         for obs, part_rows in _cut(g_obs, g_rows, _switch_cuts(g_rows)):
             if not obs:
                 continue                  # an FTD-only side (another holder of the ticker, a tail) is no era
+            kept = _kept_cusips(part_rows)
+            names = [o.name for o in obs if o.name]
+            if contested and names:
+                # Another era of this ticker has observations on the same dates
+                # (a backfilled name): the ticker's rows are only this era's when
+                # their description agrees with its names.
+                kept = tuple(c for c in kept if _described(c, part_rows, names))
             out.append(replace(era, first=obs[0].as_of, last=obs[-1].as_of, observations=list(obs),
-                               ftd_cusips=_kept_cusips(part_rows)))
+                               ftd_cusips=kept))
     return out
 
 
@@ -131,20 +143,30 @@ def refine_eras(eras: Sequence[TickerEra], ftd: FtdIndex) -> list[TickerEra]:
     of the same CUSIP already has that CUSIP). Each resulting era records the
     CUSIPs of its own kept runs in `ftd_cusips`.
 
+    Two eras of one ticker with observations on the same date (a snapshot
+    source backfilled today's ticker: CB is both "ACE LTD" and "CHUBB CORP" in
+    2012-2014) both see the same rows; for them a CUSIP counts only when its
+    FTD description agrees with the era's names, so the backfilled name does
+    not take the other security's CUSIP and resolves on its own.
+
+    Every era is kept, under a unique key (`observations.number_eras`).
     Over-splitting is cheap: `build_securities` merges eras that resolve to the
     same FIGI.
     """
     spans: dict[str, list[tuple[str, str]]] = defaultdict(list)
+    seen_on: Counter[tuple[str, str]] = Counter()
     for e in eras:
         spans[e.ticker].append((e.first, e.last))
+        seen_on.update({(e.ticker, o.as_of) for o in e.observations})
     out: list[TickerEra] = []
     for e in eras:
         prev = max((last for first, last in spans[e.ticker] if first < e.first), default=None)
         nxt = min((first for first, _ in spans[e.ticker] if first > e.first), default=None)
         lo = (date.fromisoformat(prev) + timedelta(days=1)).isoformat() if prev else None
         hi = (date.fromisoformat(nxt) - timedelta(days=1)).isoformat() if nxt else None
-        out += _split_era(e, ftd.by_symbol(e.ticker, lo, hi))
-    return out
+        contested = any(seen_on[(e.ticker, o.as_of)] > 1 for o in e.observations)
+        out += _split_era(e, ftd.by_symbol(e.ticker, lo, hi), contested=contested)
+    return number_eras(out)
 
 
 def era_cusips(era: TickerEra, ftd: FtdIndex) -> list[str]:
@@ -193,6 +215,7 @@ class FigiResolver:
 
     def resolve_many(self, eras: Sequence[TickerEra], *, ciks: Mapping[str, int | None],
                      cusips: Mapping[str, list[str]]) -> dict[str, EraResolution]:
+        eras_by_key(eras)                                # every era is keyed by era.key below: refuse duplicates
         out: dict[str, EraResolution] = {}
         jobs: list[dict] = []
         plan: dict[str, tuple[list[str], list[int], int]] = {}

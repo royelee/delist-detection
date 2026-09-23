@@ -21,7 +21,7 @@ from __future__ import annotations
 import csv
 import re
 from bisect import bisect_right
-from collections import defaultdict
+from collections import Counter, defaultdict
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import date
@@ -118,6 +118,10 @@ class TickerEra:
     # at least 3) under this ticker inside this era's part of the timeline.
     # Empty when not refined or when no such rows exist.
     ftd_cusips: tuple[str, ...] = ()
+    # 0 for the first era of a ticker starting on a date; 1, 2, ... for later
+    # eras starting the same day (one ticker seen under two names on one date),
+    # so `key` stays unique while every other key stays "TICKER@DATE".
+    seq: int = 0
 
     @property
     def names(self) -> list[str]:
@@ -142,7 +146,46 @@ class TickerEra:
 
     @property
     def key(self) -> str:
-        return f"{self.ticker}@{self.first}"
+        return f"{self.ticker}@{self.first}" + (f"#{self.seq}" if self.seq else "")
+
+
+def number_eras(eras: Iterable[TickerEra]) -> list[TickerEra]:
+    """Make every era key unique, in order: the first era of a ticker starting
+    on a date keeps "TICKER@DATE", each later one starting that day gets "#1",
+    "#2", ... Sets `seq` in place and returns the eras as a list."""
+    out = list(eras)
+    seen: Counter[tuple[str, str]] = Counter()
+    for e in out:
+        e.seq = seen[(e.ticker, e.first)]
+        seen[(e.ticker, e.first)] += 1
+    return out
+
+
+def eras_by_key(eras: Iterable[TickerEra]) -> dict[str, TickerEra]:
+    """`{era.key: era}`; raises ValueError when two eras share a key, so an era
+    can never be dropped silently by a dict keyed on it."""
+    out: dict[str, TickerEra] = {}
+    for e in eras:
+        if e.key in out:
+            raise ValueError(f"two ticker eras share the key {e.key!r}")
+        out[e.key] = e
+    return out
+
+
+def _name_key(name: str) -> str:
+    return re.sub(r"[^A-Z0-9]+", " ", name.upper()).strip()
+
+
+def observation_conflicts(observations: Iterable[Observation]) -> list[tuple[str, str, tuple[str, ...]]]:
+    """`(ticker, date, names)` for every ticker seen under two or more different
+    names on one date (case and punctuation aside). A snapshot source that
+    backfilled today's ticker does this: CB on 2012-06-29 is both "ACE LTD" and
+    "CHUBB CORP". Sorted by ticker and date."""
+    names: dict[tuple[str, str], dict[str, str]] = defaultdict(dict)
+    for o in observations:
+        if o.name:
+            names[(o.ticker, o.as_of)].setdefault(_name_key(o.name), o.name)
+    return [(t, d, tuple(sorted(v.values()))) for (t, d), v in sorted(names.items()) if len(v) > 1]
 
 
 def _gap_days(a: str, b: str) -> int:
@@ -180,7 +223,7 @@ def split_eras(obs: list[Observation]) -> list[TickerEra]:
                 continue
         eras.append(TickerEra(o.ticker, o.as_of, o.as_of, [o]))
         era_class = cls
-    return eras
+    return number_eras(eras)
 
 
 class ObservationIndex:
