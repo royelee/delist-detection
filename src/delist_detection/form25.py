@@ -142,6 +142,9 @@ def class_kind(class_text: str) -> str:
         return "warrant"
     if re.match(r"^\W*(?:CLASS [A-Z] |SERIES [A-Z] )?(?:COMMON|ORDINARY)", s):
         return "common"
+    if re.search(r"\bPURCHASE RIGHTS?$", before_comma) or re.match(r"^\W*RIGHTS? TO PURCHASE\b", s):
+        # a rights plan names the preferred its rights buy; the class is the rights
+        return "right"
     if re.search(r"DEPOSITARY SHARES?,? EACH REPRESENTING", s):
         # A depositary-share text is preferred only when it names a preferred
         # or preference security ("... each representing one ordinary share"

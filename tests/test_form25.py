@@ -169,3 +169,16 @@ def test_issuer_filed_text_form25_reads_the_class_above_its_caption():
     assert aapl.class_text.startswith("1.000% Notes due 2022") and class_kind(aapl.class_text) == "debt"
     gme = _load_text("gme_rights_25.txt", "0001445305-14-004535", "2014-10-29")
     assert gme.class_text == "Preferred Stock Purchase Rights"
+
+
+def test_class_kind_rights_plans_are_rights_not_preferred():
+    """A rights plan names the preferred stock its rights buy, but the class
+    withdrawn is the rights (GameStop's 2014 Form 25; Cheniere's)."""
+    gme = _load_text("gme_rights_25.txt", "0001445305-14-004535", "2014-10-29")
+    assert class_kind(gme.class_text) == "right"
+    assert class_kind("Rights to Purchase Series A Junior Participating Preferred Stock") == "right"
+    assert class_kind("Series A Junior Participating Preferred Stock Purchase Rights") == "right"
+    assert class_kind("Series B Convertible Perpetual Preferred Stock") == "preferred"
+    assert class_kind("Common Stock, par value $0.10 per share; Stock Purchase Rights") == "common"
+    assert class_kind("Common Stock, $0.01 par value, and associated Preferred Stock Purchase "
+                      "Rights") == "common"
