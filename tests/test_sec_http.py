@@ -1,7 +1,7 @@
 import json
 import os
 import time
-from datetime import date
+from datetime import date, timedelta
 
 import pytest
 import requests
@@ -133,4 +133,30 @@ def test_full_text_search_network_error_returns_empty(tmp_path, monkeypatch):
     monkeypatch.setattr("delist_detection.edgar._throttle", lambda: None)
     ec = EdgarClient(cache_dir=tmp_path, user_agent="ua", session=_Session(requests.ConnectionError("down")))
     assert ec.full_text_search("X", "8-K12B", date(2020, 1, 1), date(2020, 2, 1)) == []
+    assert not list(tmp_path.glob("*.json"))
+
+
+def test_full_text_search_does_not_cache_an_empty_answer(tmp_path, monkeypatch):
+    monkeypatch.setattr("delist_detection.edgar._throttle", lambda: None)
+    s = _Session(_Resp(text=json.dumps({"hits": {"hits": []}})))
+    ec = EdgarClient(cache_dir=tmp_path, user_agent="ua", session=s)
+    got = ec.full_text_search("X", "8-K12B", date(2020, 1, 1), date(2020, 2, 1))
+    assert got == []
+    assert not list(tmp_path.glob("*.json"))
+
+
+def test_full_text_search_does_not_cache_a_window_ending_on_or_after_today(tmp_path, monkeypatch):
+    monkeypatch.setattr("delist_detection.edgar._throttle", lambda: None)
+    hit = {"_source": {"ciks": ["1"], "display_names": ["X CO  (X)  (CIK 0000000001)"]}}
+    s = _Session(_Resp(text=json.dumps({"hits": {"hits": [hit]}})))
+    ec = EdgarClient(cache_dir=tmp_path, user_agent="ua", session=s)
+    got = ec.full_text_search('"X CO"', "8-K12B", date.today() - timedelta(days=30), date.today())
+    assert got == [hit]
+    assert not list(tmp_path.glob("*.json"))        # window not fully in the past: never cached
+
+    s2 = _Session(_Resp(text=json.dumps({"hits": {"hits": [hit]}})))
+    ec2 = EdgarClient(cache_dir=tmp_path, user_agent="ua", session=s2)
+    got2 = ec2.full_text_search('"X CO"', "8-K12B", date.today() - timedelta(days=30),
+                                date.today() + timedelta(days=5))
+    assert got2 == [hit]
     assert not list(tmp_path.glob("*.json"))

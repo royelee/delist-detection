@@ -1,7 +1,9 @@
+import csv
 from datetime import date
 
 import pytest
 
+import delist_detection.store as store
 from delist_detection.store import (
     DELISTINGS_COLUMNS, TABLES, format_cell, read_table, replace_on_success, table_path, write_table, write_tables,
 )
@@ -114,6 +116,45 @@ def test_write_tables_a_failing_iterator_on_a_later_table_leaves_earlier_files_u
 
     with pytest.raises(RuntimeError):
         write_tables(tmp_path, {"securities": [{"sec_id": "BBG2"}], "review": boom()})
+
+    assert table_path(tmp_path, "securities").read_text() == before_sec
+    assert table_path(tmp_path, "review").read_text() == before_rev
+    assert not list(tmp_path.glob(".*.tmp"))
+
+
+def test_write_tables_removes_the_temp_file_of_a_table_that_fails_mid_write(tmp_path, monkeypatch):
+    """A table's temp path must be registered for cleanup BEFORE it is opened,
+    not after a successful write -- otherwise a failure while writing that
+    table's own rows (disk full, etc.) leaves its temp file behind forever."""
+    write_tables(tmp_path, {
+        "securities": [{"sec_id": "BBG1"}],
+        "review": [{"sec_id": "BBG1", "delist_date": "2020-01-01", "ticker": "A", "review_flags": "x"}],
+    })
+    before_sec = table_path(tmp_path, "securities").read_text()
+    before_rev = table_path(tmp_path, "review").read_text()
+
+    real_dict_writer = csv.DictWriter
+
+    class _BoomWriter:
+        def __init__(self, fh, fieldnames, **kw):
+            self._real = real_dict_writer(fh, fieldnames, **kw)
+            self._boom = list(fieldnames) == list(TABLES["review"].columns)
+
+        def writeheader(self):
+            self._real.writeheader()
+
+        def writerows(self, rows):
+            if self._boom:
+                raise RuntimeError("disk full")
+            self._real.writerows(rows)
+
+    monkeypatch.setattr(store.csv, "DictWriter", _BoomWriter)
+
+    with pytest.raises(RuntimeError, match="disk full"):
+        write_tables(tmp_path, {
+            "securities": [{"sec_id": "BBG2"}],
+            "review": [{"sec_id": "BBG2", "delist_date": "2020-02-02", "ticker": "B", "review_flags": "y"}],
+        })
 
     assert table_path(tmp_path, "securities").read_text() == before_sec
     assert table_path(tmp_path, "review").read_text() == before_rev

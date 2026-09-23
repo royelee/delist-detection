@@ -376,11 +376,12 @@ class EdgarClient:
 
         Cached on disk under this client's cache directory, keyed by the
         request URL, the same way `_get_json` caches — a second identical
-        call makes no request. A network error or non-200 response returns
-        `[]` and is never cached (the index grows as filings are added, so a
-        miss must be retried on the next run, and a 5xx must not freeze in
-        as an empty answer); a 403/429 raises `EdgarBlocked` like every
-        other EDGAR call.
+        call makes no request. Never cached: a network error or non-200
+        response (so a miss is retried, and a 5xx never freezes in as an
+        empty answer); an empty hit list (EDGAR's index may simply not have
+        caught up yet); or an answer for a window that ends on or after
+        today (the filing it would find may not exist yet). A 403/429
+        raises `EdgarBlocked` like every other EDGAR call.
         """
         url = (
             "https://efts.sec.gov/LATEST/search-index?"
@@ -413,7 +414,8 @@ class EdgarClient:
         except (ValueError, TypeError):
             return []
         hits = data.get("hits", {}).get("hits", []) if isinstance(data, dict) else []
-        cp.write_text(json.dumps(hits))
+        if hits and hi < date.today():
+            cp.write_text(json.dumps(hits))
         return hits
 
     def recent_filings(self, cik: int | str) -> list[EdgarSubmission]:

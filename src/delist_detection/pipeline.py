@@ -78,17 +78,21 @@ def successor_from_8k12b(search: Callable, figi, *, name: str, day: date, exclud
     predecessor's `share_class`.
 
     A display name looks like ``"Alphabet Inc.  (GOOGL, GOOG)  (CIK
-    0001652044)"``: the first parenthetical lists every ticker the hit
-    carries, not just one. Each of those tickers is resolved through
-    OpenFIGI; a resolved candidate is kept only when its name agrees
+    0001652044)"``: the tickers are the parenthetical immediately before the
+    trailing ``(CIK ...)`` — never the first parenthetical in the string,
+    which can be part of the company's own legal name (``"Banco Santander
+    (Brasil) S.A.  (BSBR)  (CIK 0001471119)"`` carries the ticker ``BSBR``,
+    not ``Brasil``). Each of those tickers is resolved through OpenFIGI; a
+    resolved candidate is kept only when its name agrees
     (`names.names_agree`) with the successor's own EDGAR name — the text
-    before that first parenthetical, exactly as EDGAR's full-text search
+    before that ticker parenthetical, exactly as EDGAR's full-text search
     recorded it, so no extra network call is needed to confirm it. Among the
     agreeing candidates, the one whose share class (`share_class_from_name`)
     equals the predecessor's is picked; if the predecessor is plain common
     and exactly one candidate agrees on name, that one is taken even without
     an exact class match. Otherwise returns None (the caller leaves
-    `successor_unknown` set rather than guess).
+    `successor_unknown` set rather than guess). A display name with no
+    ticker parenthetical yields no candidates and makes no OpenFIGI request.
 
     Returns `(cik, candidate, filing_date)`.
     """
@@ -100,7 +104,7 @@ def successor_from_8k12b(search: Callable, figi, *, name: str, day: date, exclud
             cik = int(cik_s)
             if cik == exclude_cik:
                 continue
-            m = re.search(r"\(([^)]*)\)", disp)
+            m = re.search(r"\(([^()]*)\)\s*\(CIK\s+\d+\)\s*$", disp)
             if not m:
                 continue
             tickers = [normalize_ticker(t) for t in m.group(1).split(",") if t.strip()]
@@ -288,8 +292,8 @@ def run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_
     listed: dict[str, bool | None] = {}
     sightings = {sid: _sightings(s, ftd, sec_cusips[sid]) for sid, s in securities.items()}
     for i, s in enumerate(sorted(securities.values(), key=lambda s: s.sec_id), 1):
-        listed[s.sec_id] = listed_today(clients.figi, s.sec_id, edgar=clients.edgar, cik=s.issuer_cik)
         sig = sightings[s.sec_id]
+        own_last_seen = _own_last_seen(s, sig)
         sibs = siblings.get(s.issuer_cik) or [SecurityRef(s.sec_id, s.share_class, s.kind)]
         # sec_id -> (first sighting, last own-ticker sighting) for every security
         # sharing this issuer CIK, from the same sightings built above; a sibling
@@ -304,24 +308,28 @@ def run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_
             sib_sec = securities.get(ref.sec_id)
             span_end = _own_last_seen(sib_sec, sib_sig) if sib_sec is not None else sib_sig[-1][0]
             spans[ref.sec_id] = (sib_sig[0][0], span_end)
-        ctx = SecurityContext(
-            security=s,
-            siblings=sibs,
-            ticker_on=_ticker_on(sig),
-            last_seen=_own_last_seen(s, sig),
-            seen_after=lambda day, sig=sig: any(d > day for d, _, _ in sig),
-            listed_today=listed[s.sec_id],
-            expected_name=s.eras[-1].name if s.eras else None,
-            sibling_spans=spans,
-        )
         try:
+            # listed_today lives inside the try too: a FIGI/EDGAR error there
+            # must become a reviewable row for this one security, not abort
+            # the whole overnight run.
+            listed[s.sec_id] = listed_today(clients.figi, s.sec_id, edgar=clients.edgar, cik=s.issuer_cik)
+            ctx = SecurityContext(
+                security=s,
+                siblings=sibs,
+                ticker_on=_ticker_on(sig),
+                last_seen=own_last_seen,
+                seen_after=lambda day, sig=sig: any(d > day for d, _, _ in sig),
+                listed_today=listed[s.sec_id],
+                expected_name=s.eras[-1].name if s.eras else None,
+                sibling_spans=spans,
+            )
             evs, rv = finder.find(ctx)
         except (EdgarBlocked, OpenFigiBlocked):
             raise
         except Exception as exc:  # an overnight run must survive one bad security
             log(f"[{i}/{len(securities)}] {s.sec_id}: ERROR {type(exc).__name__}: {exc}")
             review.append(ReviewItem(s.sec_id, s.eras[-1].ticker if s.eras else "", s.issuer_cik, "error",
-                                     f"{type(exc).__name__}: {exc}", last_seen=ctx.last_seen))
+                                     f"{type(exc).__name__}: {exc}", last_seen=own_last_seen))
             continue
         events += evs
         review += rv
@@ -422,11 +430,16 @@ def run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_
         if cand is None:
             continue
         acquirer_ids[key] = cand.composite
-        if cand.composite not in securities and cand.composite not in added:
-            acq_cik = clients.resolver.resolve(acq, day.isoformat()).cik
-            added[cand.composite] = Security(cand.composite, acq_cik, share_class_from_name(cand.name), cand.name,
-                                             cand.security_type, False, "cusip")
-            added_meta[cand.composite] = {"kind": "acquirer", "ticker": acq, "rows": rows, "fallback_day": day}
+        if cand.composite not in securities:
+            if cand.composite not in added:
+                acq_cik = clients.resolver.resolve(acq, day.isoformat()).cik
+                added[cand.composite] = Security(cand.composite, acq_cik, share_class_from_name(cand.name),
+                                                 cand.name, cand.security_type, False, "cusip")
+                added_meta[cand.composite] = {"kind": "acquirer", "ticker": acq, "rows": [], "fallback_day": day}
+            # Union every merger's FTD window for this acquirer: several mergers
+            # can name the same acquirer, and its ticker_history row must span
+            # all of them, not just the first one processed.
+            added_meta[cand.composite]["rows"] = added_meta[cand.composite]["rows"] + list(rows)
 
     # 9. successors after a FIGI change
     # (search: EDGAR full-text search; wire the real one in default_clients via clients.edgar)
@@ -446,8 +459,15 @@ def run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_
         if cand.composite not in securities and cand.composite not in added:
             added[cand.composite] = Security(cand.composite, s_cik, share_class_from_name(cand.name), cand.name,
                                              cand.security_type, False, "ticker")
+            # A same-ticker successor (a holding-company reorg) must not overlap
+            # the predecessor's own ticker_history row, even when its 8-K12B was
+            # filed before the predecessor's actual last trade: clamp valid_from
+            # to no earlier than the day after that last trade (or delist_date
+            # when the last trade day is unknown).
+            not_before = ((e.last_trade.day or _d(e.delist_date)) + timedelta(days=1)).isoformat()
+            fd = filing_date or day.isoformat()
             added_meta[cand.composite] = {"kind": "successor", "ticker": cand.ticker,
-                                          "filing_date": filing_date or day.isoformat()}
+                                          "filing_date": max(fd, not_before)}
 
     # 10. rows
     table = build_delistings_table(

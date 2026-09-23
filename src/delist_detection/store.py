@@ -141,11 +141,14 @@ def write_tables(out_dir: str | Path, tables: Mapping[str, Iterable[Mapping[str,
             path = paths[name]
             path.parent.mkdir(parents=True, exist_ok=True)
             tmp = path.with_name(f".{path.name}.tmp")
+            # Registered before opening: a failure while writing THIS table's
+            # temp file must still get it cleaned up in `finally` below, not
+            # leak it.
+            tmp_paths[name] = tmp
             with tmp.open("w", newline="") as fh:
                 w = csv.DictWriter(fh, fieldnames=list(spec.columns), lineterminator="\n")
                 w.writeheader()
                 w.writerows(rows_fmt)
-            tmp_paths[name] = tmp
             counts[name] = len(rows_fmt)
         for name, tmp in tmp_paths.items():
             os.replace(tmp, paths[name])

@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
 import pytest
@@ -10,7 +10,9 @@ from delist_detection.delistings import DelistingEvent, DelistingFinder
 from delist_detection.edgar import EdgarBlocked, EdgarSubmission
 from delist_detection.ftd import FtdRow
 from delist_detection.last_trade import LastTrade
+from delist_detection.llm_merger_extractor import MergerTerms
 from delist_detection.observations import Observation, ObservationIndex
+from delist_detection.payout_extractor import PayoutResult
 from delist_detection.pipeline import (
     Clients, Overrides, _issuer_exchange_for_ticker, _merge_review_rows, _own_last_seen,
     _ticker_range_review, run, successor_from_8k12b,
@@ -224,6 +226,50 @@ def test_successor_from_8k12b_returns_none_without_a_figi_client():
     assert successor_from_8k12b(lambda *a: [], None, name="X", day=date(2015, 10, 2), exclude_cik=1) is None
 
 
+# --- fix round 2, item 4: the ticker(s) come from the parenthetical right before (CIK ...) ---
+
+class _RecordingFigi:
+    """Like _SuccessorFigi, but remembers every idValue it was asked to map."""
+
+    def __init__(self, answers):
+        self.answers = answers
+        self.calls = []
+
+    def map(self, jobs, use_cache=True):
+        self.calls += [j["idValue"] for j in jobs]
+        return [self.answers.get(j["idValue"], {"warning": "No identifier found."}) for j in jobs]
+
+
+def test_successor_ticker_skips_a_parenthetical_that_is_part_of_the_company_name():
+    # "(Brasil)" is part of the legal name, not a ticker; BSBR is the real one
+    hit = {"_source": {"ciks": ["1471119"],
+                       "display_names": ["Banco Santander (Brasil) S.A.  (BSBR)  (CIK 0001471119)"],
+                       "file_date": "2020-01-01"}}
+    figi = _RecordingFigi({"BSBR": _figi_answer("BBGBSBR0001", "BSBR", "Banco Santander (Brasil) S.A.")})
+    got = successor_from_8k12b(lambda *a: [hit], figi, name="X", day=date(2020, 1, 1), exclude_cik=1)
+    assert figi.calls == ["BSBR"]
+    assert got[0] == 1471119 and got[1].composite == "BBGBSBR0001" and got[2] == "2020-01-01"
+
+
+def test_successor_ticker_requests_every_ticker_before_cik():
+    hit = _alphabet_hit()
+    figi = _RecordingFigi({
+        "GOOGL": _figi_answer("BBGGOOGL01", "GOOGL", "Alphabet Inc"),
+        "GOOG": _figi_answer("BBGGOOG001", "GOOG", "Alphabet Inc"),
+    })
+    successor_from_8k12b(lambda *a: [hit], figi, name="X", day=date(2015, 10, 2), exclude_cik=1)
+    assert figi.calls == ["GOOGL", "GOOG"]
+
+
+def test_successor_with_no_ticker_parenthetical_makes_no_figi_request():
+    hit = {"_source": {"ciks": ["1"], "display_names": ["SOME COMPANY  (CIK 0000000001)"],
+                       "file_date": "2020-01-01"}}
+    figi = _RecordingFigi({})
+    got = successor_from_8k12b(lambda *a: [hit], figi, name="X", day=date(2020, 1, 1), exclude_cik=999)
+    assert got is None
+    assert figi.calls == []
+
+
 # --- item 2: added (acquirer/successor) securities get a real ticker_history row ---
 
 def test_run_writes_an_open_acquirer_ticker_history_row(fake_edgar, tmp_path):
@@ -350,7 +396,10 @@ def test_run_builds_last_seen_and_seen_after_from_the_right_sightings(fake_edgar
 
 def test_run_builds_sibling_spans_for_every_security_of_the_issuer(fake_edgar, tmp_path, monkeypatch):
     """Two share classes of one issuer must each see the other's sighting span
-    in SecurityContext.sibling_spans, keyed by sec_id."""
+    in SecurityContext.sibling_spans, keyed by sec_id. BBB's CUSIP also shows
+    an OTC tail under another symbol after its last own-ticker sighting: the
+    span's end must stay at that own-ticker sighting -- this fails under the
+    old `sib_sig[-1][0]`, which would pick up the later OTC-tail date."""
     fake_edgar.company_map["AAA"] = {"cik_str": 9001, "ticker": "AAA", "title": "DUAL CLASS CO"}
     fake_edgar.company_map["BBB"] = {"cik_str": 9001, "ticker": "BBB", "title": "DUAL CLASS CO"}
     fake_edgar.submissions_by_cik[9001] = []
@@ -364,21 +413,25 @@ def test_run_builds_sibling_spans_for_every_security_of_the_issuer(fake_edgar, t
                                   "ticker": "BBB", "name": "DUAL CLASS CO"}]},
     })
 
-    class _FtdEmpty:
+    class _FtdOtcTail:
+        ROWS = [FtdRow("2020-08-01", "BBBCUSIP1", "BBBQ", "DUAL CLASS CO OTC", 0.01)]
+
         def urls_for(self, lo, hi):
-            return []
+            return ["mem"]
 
         def rows(self, url, *, symbols=None, cusips=None):
-            return iter(())
+            for r in self.ROWS:
+                if (symbols and r.symbol in symbols) or (cusips and r.cusip in cusips):
+                    yield r
 
     obs = [Observation("AAA", "2020-01-01", "DUAL CLASS CO", cik=9001),
            Observation("AAA", "2020-06-01", "DUAL CLASS CO", cik=9001),
-           Observation("BBB", "2020-02-01", "DUAL CLASS CO", cik=9001),
-           Observation("BBB", "2020-07-01", "DUAL CLASS CO", cik=9001)]
+           Observation("BBB", "2020-02-01", "DUAL CLASS CO", cusip="BBBCUSIP1", cik=9001),
+           Observation("BBB", "2020-07-01", "DUAL CLASS CO", cusip="BBBCUSIP1", cik=9001)]
     index = ObservationIndex(obs)
     resolver = TickerResolver(fake_edgar, member_names=index.name_on, cik_map=index.cik_pin_on)
     clients = Clients(edgar=fake_edgar, resolver=resolver, classifier=DelistClassifier(fake_edgar, resolver),
-                      figi=figi, ftd_client=_FtdEmpty())
+                      figi=figi, ftd_client=_FtdOtcTail())
 
     contexts = {}
 
@@ -396,7 +449,7 @@ def test_run_builds_sibling_spans_for_every_security_of_the_issuer(fake_edgar, t
     aaa_ctx = contexts["BBGAAA00001"]
     assert set(aaa_ctx.sibling_spans) == {"BBGAAA00001", "BBGBBB00001"}
     assert aaa_ctx.sibling_spans["BBGAAA00001"] == ("2020-01-01", "2020-06-01")
-    assert aaa_ctx.sibling_spans["BBGBBB00001"] == ("2020-02-01", "2020-07-01")
+    assert aaa_ctx.sibling_spans["BBGBBB00001"] == ("2020-02-01", "2020-07-01")   # not the 2020-08-01 OTC tail
 
 
 # --- item 10: an open ticker_history row's exchange comes from EDGAR's own submissions ---
@@ -509,3 +562,279 @@ def test_issuer_exchange_for_ticker_reads_the_parallel_arrays(fake_edgar):
     assert _issuer_exchange_for_ticker(fake_edgar, 1, "X") == "NYSE"
     assert _issuer_exchange_for_ticker(fake_edgar, 1, "Y") is None
     assert _issuer_exchange_for_ticker(fake_edgar, None, "X") is None
+
+
+# ===================== fix round 2 =====================
+
+# --- item 1: payouts.csv cites the right accession, at the run() level ---
+
+class _FakePayoutExtractor:
+    def __init__(self, result):
+        self.result = result
+
+    def extract(self, record, last_close=None):
+        return self.result
+
+
+class _FakeLLMExtractor:
+    def __init__(self, terms):
+        self.terms = terms
+
+    def extract(self, record):
+        return self.terms
+
+
+def test_payouts_csv_cites_the_llm_accession_for_an_llm_sourced_payout(fake_edgar, tmp_path):
+    index, clients = _clients(fake_edgar)
+    clients.payout_extractor = _FakePayoutExtractor(PayoutResult.none())   # regex finds nothing
+    clients.llm_extractor = _FakeLLMExtractor(
+        MergerTerms("cash", 212.70, None, "ACQUIRER INC", "ACQ", "high", "8-K:0001-23-456789", "quote"))
+
+    run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
+
+    (row,) = read_table("payouts", table_path(tmp_path, "payouts"))
+    assert row["source"] == "llm"
+    assert row["accession"] == "0001-23-456789"   # not "8-K:0001-23-456789"
+
+
+def test_payouts_csv_cites_the_regex_accession_for_a_regex_sourced_payout(fake_edgar, tmp_path):
+    index, clients = _clients(fake_edgar)
+    clients.payout_extractor = _FakePayoutExtractor(
+        PayoutResult(212.70, "high", "8K_2.01", "0000123456-18-000001", "quote"))
+    clients.llm_extractor = _FakeLLMExtractor(None)   # present, but finds nothing -- regex must still win
+
+    run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
+
+    (row,) = read_table("payouts", table_path(tmp_path, "payouts"))
+    assert row["source"] == "8K_2.01"
+    assert row["accession"] == "0000123456-18-000001"
+
+
+# --- item 2: gate_payouts' acquirer_price is keyed by the merger, at the run() level ---
+
+def test_run_level_acquirer_price_uses_each_mergers_own_last_trade_day(fake_edgar, tmp_path, monkeypatch):
+    """Two merger events sharing a delist_date, both with LLM cash+stock terms
+    naming the same acquirer, must each get the acquirer's close on THEIR OWN
+    last trade day -- not whichever day a shared-by-date map happened to hold."""
+    fake_edgar.company_map["S1"] = {"cik_str": 7001, "ticker": "S1", "title": "TARGET ONE INC"}
+    fake_edgar.company_map["S2"] = {"cik_str": 7002, "ticker": "S2", "title": "TARGET TWO INC"}
+    fake_edgar.submissions_by_cik[7001] = []
+    fake_edgar.submissions_by_cik[7002] = []
+
+    figi = _RecordingFigi({
+        "S1": _figi_answer("BBGSEC001", "S1", "TARGET ONE INC"),
+        "S2": _figi_answer("BBGSEC002", "S2", "TARGET TWO INC"),
+    })
+
+    class _FtdWithAcquirer:
+        ROWS = [FtdRow("2020-06-02", "ACQCUSIP", "ACQ", "ACQUIRER CO", 100.0),
+                FtdRow("2020-06-08", "ACQCUSIP", "ACQ", "ACQUIRER CO", 150.0)]
+
+        def urls_for(self, lo, hi):
+            return ["mem"]
+
+        def rows(self, url, *, symbols=None, cusips=None):
+            for r in self.ROWS:
+                if (symbols and r.symbol in symbols) or (cusips and r.cusip in cusips):
+                    yield r
+
+    obs = [Observation("S1", "2020-01-01", "TARGET ONE INC", cik=7001),
+           Observation("S1", "2020-06-01", "TARGET ONE INC", cik=7001),
+           Observation("S2", "2020-01-01", "TARGET TWO INC", cik=7002),
+           Observation("S2", "2020-06-05", "TARGET TWO INC", cik=7002)]
+    index = ObservationIndex(obs)
+    resolver = TickerResolver(fake_edgar, member_names=index.name_on, cik_map=index.cik_pin_on)
+    clients = Clients(edgar=fake_edgar, resolver=resolver, classifier=DelistClassifier(fake_edgar, resolver),
+                      figi=figi, ftd_client=_FtdWithAcquirer())
+
+    def _merger_record(sec_id, ticker, cik, delist_date):
+        return DelistRecord(ticker=ticker, cik=cik, observed_delist_date=delist_date, crsp_code=231,
+                            bucket=CrspBucket.MERGER, confidence="high", reason="x", evidence={"flags": []},
+                            sec_id=sec_id, delist_date=delist_date)
+
+    ev1 = DelistingEvent(sec_id="BBGSEC001", cik=7001, ticker="S1", delist_date="2020-06-15",
+                         record=_merger_record("BBGSEC001", "S1", 7001, "2020-06-15"),
+                         last_trade=LastTrade(date(2020, 6, 1), "notice_a", ()), form25=None, form25_sub=None,
+                         exchange="NYSE", flags=[])
+    ev2 = DelistingEvent(sec_id="BBGSEC002", cik=7002, ticker="S2", delist_date="2020-06-15",
+                         record=_merger_record("BBGSEC002", "S2", 7002, "2020-06-15"),
+                         last_trade=LastTrade(date(2020, 6, 5), "notice_a", ()), form25=None, form25_sub=None,
+                         exchange="NYSE", flags=[])
+
+    class _CannedFinder:
+        def __init__(self, edgar, classifier, *, midas=None, halts=None):
+            pass
+
+        def find(self, ctx):
+            if ctx.security.sec_id == "BBGSEC001":
+                return [ev1], []
+            if ctx.security.sec_id == "BBGSEC002":
+                return [ev2], []
+            return [], []
+
+    monkeypatch.setattr(pipeline, "DelistingFinder", _CannedFinder)
+
+    terms1 = MergerTerms("stock", None, 1.0, "ACQUIRER CO", "ACQ", "high", "8-K:X1", "")
+    terms2 = MergerTerms("stock", None, 1.0, "ACQUIRER CO", "ACQ", "high", "8-K:X2", "")
+
+    class _LLMByKey:
+        def __init__(self, mapping):
+            self.mapping = mapping
+
+        def extract(self, record):
+            return self.mapping.get((record.sec_id, record.delist_date))
+
+    clients.llm_extractor = _LLMByKey({
+        ("BBGSEC001", "2020-06-15"): terms1,
+        ("BBGSEC002", "2020-06-15"): terms2,
+    })
+    overrides = Overrides(last_trade_closes={"BBGSEC001": 100.0, "BBGSEC002": 150.0})
+
+    run(index, clients, overrides, out_dir=tmp_path, log=lambda *_: None)
+
+    d = {r["sec_id"]: r for r in read_table("delistings", table_path(tmp_path, "delistings"))}
+    assert d["BBGSEC001"]["acquirer_price"] == "100.000000"
+    assert d["BBGSEC002"]["acquirer_price"] == "150.000000"
+
+
+# --- item 6: a same-ticker successor does not overlap its predecessor ---
+
+def test_same_ticker_successor_does_not_overlap_its_predecessor(fake_edgar, tmp_path, monkeypatch):
+    """A holding-company reorganization that keeps the ticker must not get a
+    ticker_shared flag: the successor's valid_from is clamped to the day
+    after the predecessor's last trade date, even when its 8-K12B was filed
+    earlier."""
+    index, clients = _clients(fake_edgar)
+
+    record = DelistRecord(ticker="AET", cik=1122304, observed_delist_date="2018-11-28", crsp_code=304,
+                          bucket=CrspBucket.EXCHANGE_TRANSFER, confidence="high", reason="holdco reorg",
+                          evidence={"flags": ["successor_unknown"]}, sec_id="BBG000FJLFX8",
+                          delist_date="2018-12-09")
+    ev = DelistingEvent(sec_id="BBG000FJLFX8", cik=1122304, ticker="AET", delist_date="2018-12-09", record=record,
+                        last_trade=LastTrade(date(2018, 11, 28), "notice_a", ()), form25=None, form25_sub=None,
+                        exchange="NYSE", flags=["successor_unknown"])
+
+    class _CannedFinder:
+        def __init__(self, edgar, classifier, *, midas=None, halts=None):
+            pass
+
+        def find(self, ctx):
+            return ([ev], []) if ctx.security.sec_id == "BBG000FJLFX8" else ([], [])
+
+    monkeypatch.setattr(pipeline, "DelistingFinder", _CannedFinder)
+
+    # the 8-K12B was filed BEFORE the predecessor's last trade -- without the
+    # clamp its ticker_history row would start before the predecessor's ends
+    hit = {"_source": {"ciks": ["8888"], "display_names": ["AET HOLDCO INC  (AET)  (CIK 0000008888)"],
+                       "file_date": "2018-11-01"}}
+    fake_edgar.full_text_search = lambda q, forms, lo, hi: [hit]
+    clients.figi.answers[("TICKER", "AET")] = _figi_answer("BBGAETNEW1", "AET", "AET HOLDCO INC")
+    clients.figi.answers[("COMPOSITE_ID_BB_GLOBAL", "BBGAETNEW1")] = {
+        "data": [{"figi": "BBGAETNEW1", "compositeFIGI": "BBGAETNEW1", "exchCode": "UN", "ticker": "AET",
+                  "name": "AET HOLDCO INC"}]}
+
+    run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
+
+    th = read_table("ticker_history", table_path(tmp_path, "ticker_history"))
+    new_rows = [r for r in th if r["sec_id"] == "BBGAETNEW1"]
+    assert len(new_rows) == 1
+    assert new_rows[0]["valid_from"] == "2018-11-29"     # day after 2018-11-28, not the earlier 8-K12B date
+    review = read_table("review", table_path(tmp_path, "review"))
+    assert not any(r["review_flags"] == "ticker_shared" for r in review)
+
+
+# --- item 7: one ticker_history range per acquirer, across all its mergers ---
+
+def test_run_writes_one_acquirer_range_spanning_all_its_mergers(fake_edgar, tmp_path, monkeypatch):
+    fake_edgar.company_map["S1"] = {"cik_str": 7101, "ticker": "S1", "title": "TARGET ONE INC"}
+    fake_edgar.company_map["S2"] = {"cik_str": 7102, "ticker": "S2", "title": "TARGET TWO INC"}
+    fake_edgar.company_map["ACQ"] = {"cik_str": 7777, "ticker": "ACQ", "title": "ACQUIRER CO"}
+    fake_edgar.submissions_by_cik[7101] = []
+    fake_edgar.submissions_by_cik[7102] = []
+    fake_edgar.submissions_by_cik[7777] = [EdgarSubmission("X1", "10-K", "2010-01-01", "", "", "x.htm")]
+
+    figi = _RecordingFigi({
+        "S1": _figi_answer("BBGSEC101", "S1", "TARGET ONE INC"),
+        "S2": _figi_answer("BBGSEC102", "S2", "TARGET TWO INC"),
+        "ACQCUSIP": _figi_answer("BBGACQ0001", "ACQ", "ACQUIRER CO"),
+    })
+
+    class _FtdTwoWindows:
+        ROWS = [FtdRow("2020-03-05", "ACQCUSIP", "ACQ", "ACQUIRER CO", 40.0),
+                FtdRow("2020-09-10", "ACQCUSIP", "ACQ", "ACQUIRER CO", 60.0)]
+
+        def urls_for(self, lo, hi):
+            return ["mem"]
+
+        def rows(self, url, *, symbols=None, cusips=None):
+            for r in self.ROWS:
+                if (symbols and r.symbol in symbols) or (cusips and r.cusip in cusips):
+                    yield r
+
+    obs = [Observation("S1", "2019-01-01", "TARGET ONE INC", cik=7101),
+           Observation("S1", "2020-02-20", "TARGET ONE INC", cik=7101),
+           Observation("S2", "2019-01-01", "TARGET TWO INC", cik=7102),
+           Observation("S2", "2020-08-25", "TARGET TWO INC", cik=7102)]
+    index = ObservationIndex(obs)
+    resolver = TickerResolver(fake_edgar, member_names=index.name_on, cik_map=index.cik_pin_on)
+    clients = Clients(edgar=fake_edgar, resolver=resolver, classifier=DelistClassifier(fake_edgar, resolver),
+                      figi=figi, ftd_client=_FtdTwoWindows())
+
+    def _merger_ev(sec_id, ticker, cik, last_trade_day, delist_date):
+        rec = DelistRecord(ticker=ticker, cik=cik, observed_delist_date=delist_date, crsp_code=231,
+                           bucket=CrspBucket.MERGER, confidence="high", reason="x", evidence={"flags": []},
+                           sec_id=sec_id, delist_date=delist_date)
+        return DelistingEvent(sec_id=sec_id, cik=cik, ticker=ticker, delist_date=delist_date, record=rec,
+                              last_trade=LastTrade(last_trade_day, "notice_a", ()), form25=None, form25_sub=None,
+                              exchange="NYSE", flags=[])
+
+    ev1 = _merger_ev("BBGSEC101", "S1", 7101, date(2020, 2, 28), "2020-03-15")
+    ev2 = _merger_ev("BBGSEC102", "S2", 7102, date(2020, 9, 2), "2020-09-20")
+
+    class _CannedFinder:
+        def __init__(self, edgar, classifier, *, midas=None, halts=None):
+            pass
+
+        def find(self, ctx):
+            if ctx.security.sec_id == "BBGSEC101":
+                return [ev1], []
+            if ctx.security.sec_id == "BBGSEC102":
+                return [ev2], []
+            return [], []
+
+    monkeypatch.setattr(pipeline, "DelistingFinder", _CannedFinder)
+
+    overrides = Overrides(merger_terms={
+        ("BBGSEC101", "2020-03-15"): {"stock_ratio": 1.0, "acquirer_price": 40.0, "acquirer_ticker": "ACQ"},
+        ("BBGSEC102", "2020-09-20"): {"stock_ratio": 1.0, "acquirer_price": 60.0, "acquirer_ticker": "ACQ"},
+    }, last_trade_closes={"BBGSEC101": 40.0, "BBGSEC102": 60.0})
+
+    run(index, clients, overrides, out_dir=tmp_path, log=lambda *_: None)
+
+    th = read_table("ticker_history", table_path(tmp_path, "ticker_history"))
+    acq_rows = [r for r in th if r["sec_id"] == "BBGACQ0001"]
+    assert len(acq_rows) == 1
+    assert acq_rows[0]["valid_from"] == "2020-03-05" and acq_rows[0]["valid_to"] == "2020-09-10"
+
+
+# --- item 8: a listed_today error for one observed security does not abort the run ---
+
+def test_listed_today_error_for_one_security_does_not_abort_the_run(fake_edgar, tmp_path):
+    index, clients = _clients(fake_edgar)
+    real_map = clients.figi.map
+
+    def _boom_map(jobs, use_cache=True):
+        for j in jobs:
+            if j.get("idValue") == "BBG000LIVE01":
+                raise RuntimeError("figi boom")
+        return real_map(jobs, use_cache=use_cache)
+
+    clients.figi.map = _boom_map
+
+    run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
+
+    (d,) = read_table("delistings", table_path(tmp_path, "delistings"))
+    assert d["sec_id"] == "BBG000FJLFX8"       # AET's row still made it through
+    review = read_table("review", table_path(tmp_path, "review"))
+    assert any(r["sec_id"] == "BBG000LIVE01" and r["review_flags"] == "error" and "figi boom" in r["reason"]
+              for r in review)
