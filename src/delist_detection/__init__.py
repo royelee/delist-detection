@@ -11,7 +11,7 @@ from .bmp_correction import (
 )
 from .handling import (
     TrainLabelAdjustment, BacktestExit, FirmMonthReturn,
-    build_train_label_adjustment, build_backtest_exit, apply_to_panel,
+    build_train_label_adjustment, build_backtest_exit, adjustments_from_rows,
     build_firm_month_correction,
 )
 from .payout_extractor import PayoutExtractor, PayoutResult
@@ -29,7 +29,7 @@ __all__ = [
     "BacktestExit",
     "build_train_label_adjustment",
     "build_backtest_exit",
-    "apply_to_panel",
+    "adjustments_from_rows",
     "Exchange",
     "normalize_exchange",
     "SHUMWAY_NYSE_AMEX",

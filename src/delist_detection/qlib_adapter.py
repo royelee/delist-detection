@@ -1,25 +1,32 @@
 """Glue to apply delisting-aware handling to a qlib-style price panel.
 
 A "qlib panel" here = a DataFrame indexed by (datetime, instrument) with at
-least a `close` column. The two public functions emit:
+least a `close` column, where `instrument` is a `sec_id` (see `store.py`).
+The three public functions emit:
 
-    inject_terminal_labels(panel, classifications_csv, horizon_days=21, label_col='LABEL')
-        Adds/overwrites the last `horizon_days` rows of each delisted ticker
-        so that the realized forward return matches the bucket's policy.
-        Eliminates the most common form of survivorship bias.
+    inject_terminal_labels(panel, delistings_csv, horizon_days=21, label_col='LABEL')
+        Adds/overwrites the last `horizon_days` rows of each delisted security
+        (dated on or before its last trade date) so that the realized forward
+        return matches the bucket's policy. Eliminates the most common form
+        of survivorship bias.
 
-    apply_backtest_exits(positions_df, classifications_csv)
+    apply_backtest_exits(positions_df, delistings_csv)
         Given a long-format positions/PnL dataframe with columns
-        ['date', 'ticker', 'price'], rewrites the exit-day price per ticker
+        ['date', 'sec_id', 'price'], rewrites the exit-day price per security
         to match the bucket-specific exit policy.
 
-Both functions are pure: they return new DataFrames; they do not mutate.
+    apply_bmp_corrections(panel, delistings_csv)
+        Splices the BMP 2007 corrected firm-month return into a monthly panel.
+
+All three read every DLRET input (exchange, last trade close, payout,
+recovery ratio, successor) straight off the `delistings.csv` row for that
+security. Every function is pure: they return new DataFrames; they do not
+mutate.
 """
 
 from __future__ import annotations
 
 import warnings
-from typing import Mapping
 
 import pandas as pd
 
@@ -29,216 +36,257 @@ from .exchanges import normalize_exchange
 from .handling import build_train_label_adjustment, build_backtest_exit, build_firm_month_correction
 
 
-def load_classifications(path: str) -> pd.DataFrame:
-    """Load the classifier output CSV. No type coercion beyond what's needed."""
-    df = pd.read_csv(path, dtype={"ticker": str})
-    df["observed_delist_date"] = pd.to_datetime(
-        df["observed_delist_date"], errors="coerce"
-    )
-    df["crsp_code"] = pd.to_numeric(df["crsp_code"], errors="coerce")
+_STR_COLS = {"sec_id": str, "ticker": str, "successor_sec_id": str, "acquirer_sec_id": str, "bucket": str}
+
+
+def load_delistings(path: str) -> pd.DataFrame:
+    """Load a `delistings.csv` (see `store.DELISTINGS_COLUMNS`). No type
+    coercion beyond what's needed to key/compute on the rows."""
+    df = pd.read_csv(path, dtype=_STR_COLS)
+    for c in ("delist_date", "last_trade_date"):
+        df[c] = pd.to_datetime(df[c], errors="coerce")
+    for c in ("crsp_code", "last_trade_close", "payout_per_share", "terminal_value", "recovery_ratio", "cik"):
+        df[c] = pd.to_numeric(df[c], errors="coerce")
     return df
 
 
-def _record_from_row(row: pd.Series) -> DelistRecord:
-    bucket = CrspBucket(row["bucket"]) if pd.notna(row["bucket"]) else CrspBucket.UNKNOWN
-    code = int(row["crsp_code"]) if pd.notna(row["crsp_code"]) else None
-    dd = row["observed_delist_date"]
+def _iso(v) -> str | None:
+    if v is None or (isinstance(v, float) and v != v) or v == "" or pd.isna(v):
+        return None
+    return pd.Timestamp(v).strftime("%Y-%m-%d")
+
+
+def _num(v) -> float | None:
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return None
+    return None if f != f else f
+
+
+def _str(v) -> str | None:
+    """A CSV cell as a string, or None for a blank/NaN cell (pandas represents
+    a blank cell in a non-string-dtype column as `float('nan')`)."""
+    if isinstance(v, str) and v:
+        return v
+    return None
+
+
+def record_from_row(row) -> DelistRecord:
+    bucket = CrspBucket(row["bucket"]) if isinstance(row["bucket"], str) and row["bucket"] else CrspBucket.UNKNOWN
+    code = _num(row.get("crsp_code"))
+    cik = _num(row.get("cik"))
+    succ = row.get("successor_sec_id")
     return DelistRecord(
-        ticker=row["ticker"],
-        cik=int(row["cik"]) if pd.notna(row["cik"]) else None,
-        observed_delist_date=dd.strftime("%Y-%m-%d") if pd.notna(dd) else None,
-        crsp_code=code,
-        bucket=bucket,
-        confidence=str(row.get("confidence", "")),
-        reason=str(row.get("reason", "")),
+        ticker=_str(row.get("ticker")) or "", cik=int(cik) if cik is not None else None,
+        observed_delist_date=_iso(row.get("last_trade_date")) or _iso(row.get("delist_date")),
+        crsp_code=int(code) if code is not None else None, bucket=bucket,
+        confidence=_str(row.get("confidence")) or "", reason=_str(row.get("reason")) or "",
+        sec_id=str(row["sec_id"]), delist_date=_iso(row.get("delist_date")),
+        successor_sec_id=succ if isinstance(succ, str) and succ else None,
     )
+
+
+def row_payout(row) -> float | None:
+    """The DLRET table's terminal_value when this is a merger (covers cash +
+    stock consideration); otherwise the raw cash payout, if any."""
+    if row.get("bucket") == "merger" and _num(row.get("terminal_value")) is not None:
+        return _num(row.get("terminal_value"))
+    return _num(row.get("payout_per_share"))
 
 
 def inject_terminal_labels(
     panel: pd.DataFrame,
-    classifications_csv: str,
+    delistings_csv: str,
     horizon_days: int = 21,
     label_col: str = "LABEL",
     close_col: str = "close",
-    payouts: Mapping[str, float] | None = None,
-    successor_map: Mapping[str, str] | None = None,
 ) -> pd.DataFrame:
-    """Inject the delist-aware forward-return label for each delisted ticker.
+    """Inject the delist-aware forward-return label for each delisted security.
 
     Expects `panel` to be MultiIndex (datetime, instrument) with a `close`
-    column. For each delisted ticker:
+    column, where `instrument` is a `sec_id`. For each delisting:
 
       * compute the bucket-policy forward return (e.g. −1.0 for compliance);
       * set `panel[label_col]` for the last `horizon_days` observations of
-        that ticker so that the supervised learner sees the realized outcome
-        rather than a censored value.
+        that security dated on or before its last trade date, so the
+        supervised learner sees the realized outcome rather than a censored
+        value (and never on a vendor filler row quoted after the security
+        stopped trading).
 
     Returns a new DataFrame; the original is untouched.
     """
     df = panel.copy()
     if label_col not in df.columns:
         df[label_col] = pd.NA
-    cls = load_classifications(classifications_csv)
+    delistings = load_delistings(delistings_csv)
 
-    for _, row in cls.iterrows():
-        rec = _record_from_row(row)
-        ticker = rec.ticker
-        if ticker not in df.index.get_level_values("instrument"):
+    for _, row in delistings.iterrows():
+        sec_id = row["sec_id"]
+        if sec_id not in df.index.get_level_values("instrument"):
             continue
-        slc = df.xs(ticker, level="instrument", drop_level=False)
+        slc = df.xs(sec_id, level="instrument", drop_level=False)
         if slc.empty:
             continue
-        last_close = float(slc[close_col].iloc[-1])
-        po = (payouts or {}).get(ticker)
-        adj = build_train_label_adjustment(rec, last_close, po, successor_map)
+        last_trade = row.get("last_trade_date")
+        if pd.notna(last_trade):
+            eligible = slc[slc.index.get_level_values("datetime") <= last_trade]
+        else:
+            eligible = slc
+        if eligible.empty:
+            continue
+
+        rec = record_from_row(row)
+        last_close = _num(row.get("last_trade_close"))
+        if last_close is None:
+            last_close = float(eligible[close_col].iloc[-1])
+        payout = row_payout(row)
+        recovery = _num(row.get("recovery_ratio"))
+        kw = {"recovery_ratio": recovery} if recovery is not None else {}
+        adj = build_train_label_adjustment(rec, last_close, payout, **kw)
         if not adj.keep_in_training:
             continue
-        idx_for_ticker = slc.index[-horizon_days:]
-        df.loc[idx_for_ticker, label_col] = adj.forward_return
+        idx_for_sec = eligible.index[-horizon_days:]
+        df.loc[idx_for_sec, label_col] = adj.forward_return
     return df
 
 
 def apply_backtest_exits(
     positions_df: pd.DataFrame,
-    classifications_csv: str,
-    payouts: Mapping[str, float] | None = None,
-    successor_map: Mapping[str, str] | None = None,
+    delistings_csv: str,
     date_col: str = "date",
-    ticker_col: str = "ticker",
+    id_col: str = "sec_id",
     price_col: str = "price",
 ) -> pd.DataFrame:
-    """Rewrite the exit-day price per delisted ticker to bucket policy.
+    """Rewrite the exit-day price per delisted security to bucket policy.
 
-    `positions_df` is long-format: (date, ticker, price).
-    The exit row is the one with `date == observed_delist_date` for that
-    ticker. If no such row exists (e.g. you stopped quoting earlier), no
-    change is made.
+    `positions_df` is long-format: (date, sec_id, price). The exit row is
+    the one whose date equals the last trade date (falling back to the
+    delist date if the last trade date is absent). If no such row exists
+    (e.g. you stopped quoting earlier), no change is made.
     """
     df = positions_df.copy()
-    cls = load_classifications(classifications_csv)
+    delistings = load_delistings(delistings_csv)
     df[date_col] = pd.to_datetime(df[date_col])
 
-    for _, row in cls.iterrows():
-        rec = _record_from_row(row)
-        ticker = rec.ticker
-        sub = df[df[ticker_col] == ticker]
+    for _, row in delistings.iterrows():
+        sec_id = row["sec_id"]
+        sub = df[df[id_col] == sec_id]
         if sub.empty:
             continue
-        if rec.observed_delist_date is None:
+        exit_date = row.get("last_trade_date")
+        if pd.isna(exit_date):
+            exit_date = row.get("delist_date")
+        if pd.isna(exit_date):
             continue
-        dd = pd.Timestamp(rec.observed_delist_date)
-        mask = (df[ticker_col] == ticker) & (df[date_col] == dd)
+        exit_date = pd.Timestamp(exit_date)
+        mask = (df[id_col] == sec_id) & (df[date_col] == exit_date)
         if not mask.any():
             continue
-        last_close = float(sub.iloc[-1][price_col])
-        po = (payouts or {}).get(ticker)
-        bx = build_backtest_exit(rec, last_close, po, successor_map)
+
+        rec = record_from_row(row)
+        last_close = _num(row.get("last_trade_close"))
+        if last_close is None:
+            last_close = float(sub.iloc[-1][price_col])
+        payout = row_payout(row)
+        recovery = _num(row.get("recovery_ratio"))
+        kw = {"recovery_ratio": recovery} if recovery is not None else {}
+        bx = build_backtest_exit(rec, last_close, payout, **kw)
         df.loc[mask, price_col] = bx.exit_price
     return df
 
 
 def apply_bmp_corrections(
     panel: pd.DataFrame,
-    classifications_csv: str,
-    payouts: Mapping[str, float] | None = None,
-    exchanges: Mapping[str, str] | None = None,
-    last_trade_closes: Mapping[str, float] | None = None,
-    recovery_ratios: Mapping[str, float] | None = None,
+    delistings_csv: str,
     return_col: str = "monthly_return",
     close_col: str = "close",
 ) -> pd.DataFrame:
     """Splice the BMP 2007 corrected R_delisting_month into a monthly panel.
 
-    For each delisted ticker, find the panel row whose date-level value is the
-    month-end containing `observed_delist_date`, then overwrite `return_col`
-    with `(1 + R_partial) * (1 + DLRET) - 1`. If the firm-month must be
-    dropped (EXPIRATION, no delist date, invalid prior close), remove the row.
+    For each delisting, find the panel row whose date-level value is the
+    month-end containing the security's observed delist date (last trade
+    date if present, else delist date), then overwrite `return_col` with
+    `(1 + R_partial) * (1 + DLRET) - 1`. If the firm-month must be dropped
+    (EXPIRATION, no delist date, invalid prior close), remove the row.
 
-    Args:
-        panel: MultiIndex (date, instrument) DataFrame with month-end dates.
-        payouts: ticker -> cash-equivalent payout per share (M&A).
-        exchanges: ticker -> raw exchange string (NYSE, NASDAQ, AMEX, ...).
-        last_trade_closes: ticker -> the close on the last trading day before
-            delist. Required for M&A and for non-month-end delists. Falls back
-            to the panel's close on the delist-month-end row if absent.
-        recovery_ratios: ticker -> observed liquidation recovery fraction.
+    `panel` is a MultiIndex (date, instrument) DataFrame with month-end
+    dates, where `instrument` is a `sec_id`. The last trade close, payout,
+    recovery ratio and exchange all come from the `delistings.csv` row; the
+    last trade close falls back to the panel's close on the delist-month-end
+    row if absent.
     """
-    payouts = payouts or {}
-    exchanges = exchanges or {}
-    last_trade_closes = last_trade_closes or {}
-    recovery_ratios = recovery_ratios or {}
-
     df = panel.copy()
-    cls = load_classifications(classifications_csv)
+    delistings = load_delistings(delistings_csv)
 
     rows_to_drop: list[tuple] = []
 
-    for _, row in cls.iterrows():
-        rec = _record_from_row(row)
-        ticker = rec.ticker
+    for _, row in delistings.iterrows():
+        sec_id = row["sec_id"]
+        rec = record_from_row(row)
         if rec.observed_delist_date is None:
             continue
-        if ticker not in df.index.get_level_values("instrument"):
+        if sec_id not in df.index.get_level_values("instrument"):
             continue
 
-        slc = df.xs(ticker, level="instrument", drop_level=False)
+        slc = df.xs(sec_id, level="instrument", drop_level=False)
         if slc.empty:
             continue
 
-        # Find the month-end on or after observed_delist_date that exists in
-        # the panel for this ticker.
+        # Find the month-end on or after the observed delist date that
+        # exists in the panel for this security.
         delist_ts = pd.Timestamp(rec.observed_delist_date)
-        ticker_dates = slc.index.get_level_values("date")
-        candidates = ticker_dates[ticker_dates >= delist_ts]
+        sec_dates = slc.index.get_level_values("date")
+        candidates = sec_dates[sec_dates >= delist_ts]
         if len(candidates) == 0:
             # Panel ends before delist; nothing to splice
             continue
         delist_month_end = candidates.min()
 
         # Prior month-end row (last row strictly before delist_month_end)
-        prior_dates = ticker_dates[ticker_dates < delist_month_end]
+        prior_dates = sec_dates[sec_dates < delist_month_end]
         if len(prior_dates) == 0:
             continue
         prior_month_end = prior_dates.max()
 
-        prior_close = float(df.loc[(prior_month_end, ticker), close_col])
-        provided_last_trade = last_trade_closes.get(ticker)
+        prior_close = float(df.loc[(prior_month_end, sec_id), close_col])
+        provided_last_trade = _num(row.get("last_trade_close"))
+        recov = _num(row.get("recovery_ratio"))
         if provided_last_trade is None:
-            last_trade_close = float(df.loc[(delist_month_end, ticker), close_col])
+            last_trade_close = float(df.loc[(delist_month_end, sec_id), close_col])
             bucket = rec.bucket
-            recov = recovery_ratios.get(ticker)
             if (
                 bucket is CrspBucket.COMPLIANCE_FAILURE
                 or (bucket is CrspBucket.LIQUIDATION and recov is None)
             ):
                 warnings.warn(
-                    f"apply_bmp_corrections: ticker={ticker} bucket={bucket.value} "
+                    f"apply_bmp_corrections: sec_id={sec_id} ticker={rec.ticker} bucket={bucket.value} "
                     f"has no observed last_trade_close; falling back to panel "
                     f"close_col={close_col!r} at {delist_month_end.date()}. "
                     f"The panel close for a performance-related delisting is often "
                     f"a stale mark and may understate the price collapse — the very "
-                    f"bias BMP 2007 is meant to remove. Provide last_trade_closes[{ticker}!r] "
-                    f"or recovery_ratios[{ticker}!r] explicitly to suppress this.",
+                    f"bias BMP 2007 is meant to remove. Provide last_trade_close for "
+                    f"{sec_id!r} in delistings.csv to suppress this.",
                     stacklevel=2,
                 )
         else:
-            last_trade_close = float(provided_last_trade)
+            last_trade_close = provided_last_trade
 
-        ex = normalize_exchange(exchanges.get(ticker))
+        ex = normalize_exchange(_str(row.get("exchange")))
 
         fm = build_firm_month_correction(
             record=rec,
             prior_month_end_close=prior_close,
             last_trade_close=last_trade_close,
             exchange=ex,
-            payout_per_share=payouts.get(ticker),
-            recovery_ratio=recovery_ratios.get(ticker),
+            payout_per_share=row_payout(row),
+            recovery_ratio=recov,
         )
 
         if fm.drop:
-            rows_to_drop.append((delist_month_end, ticker))
+            rows_to_drop.append((delist_month_end, sec_id))
         else:
-            df.loc[(delist_month_end, ticker), return_col] = fm.firm_month_return
+            df.loc[(delist_month_end, sec_id), return_col] = fm.firm_month_return
 
     if rows_to_drop:
         df = df.drop(index=rows_to_drop)
