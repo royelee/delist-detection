@@ -28,7 +28,7 @@ editable install.
 
 ```bash
 pip install -e .                         # editable install (Python ≥3.10) — once per env
-pytest                                    # full suite (585 tests, offline, no network)
+pytest                                    # full suite (675 tests, offline, no network)
 pytest tests/test_payout_extractor.py -v  # one file
 pytest tests/test_payout_extractor.py::test_match_in_cash_family_altr -v   # one test
 
@@ -85,7 +85,10 @@ that turns a list of observations into the six output tables; see
   acquirer-completion price; `by_cusip`/`by_symbol` supply CUSIP history.
 - `midas.py` — `MidasClient`: SEC MIDAS per-security exchange volume (2012+,
   ticker-keyed); `last_trade_day()` confirms the last day with lit+hidden
-  exchange volume.
+  exchange volume, suppressed to `None` when the window runs past MIDAS's
+  coverage end and the found day is within 5 trading days of that edge (an
+  unpublished quarter always yields nothing). A quarter that fails to
+  download is remembered in-memory for the rest of the run.
 - `nasdaq_halts.py` — `NasdaqHaltClient`: Nasdaq's keyless trade-halt feed;
   `deletion_halt()` finds a code-`D` ("security deletion") halt as a second
   last-trade-date confirmation when MIDAS has none.
@@ -173,7 +176,11 @@ that turns a list of observations into the six output tables; see
 - `qlib_adapter.py` — DataFrame splicers over a `(datetime, instrument)` panel,
   where `instrument` is a `sec_id`: `inject_terminal_labels`,
   `apply_backtest_exits`, `apply_bmp_corrections`, each reading every input
-  straight off the matching `delistings.csv` row.
+  straight off the matching `delistings.csv` row. All three, and
+  `handling.adjustments_from_rows`, skip a row whose `successor_sec_id`
+  equals its own `sec_id` (a continuing security, e.g. an exchange transfer
+  that kept the same FIGI) — it isn't an exit, so no label/exit/correction
+  is emitted for it.
 
 There are **two return-correction APIs** for different research conventions:
 event-level (`handling.py`) vs CRSP-style firm-month (`bmp_correction.py`). Don't
@@ -190,12 +197,18 @@ conflate them.
   `sec_http.py` (FTD, MIDAS) shares the same throttle, User-Agent and
   `EdgarBlocked`. `WebFetch` is **403'd by SEC** — for ad-hoc EDGAR fetches use
   `curl -A "$(python -c 'from delist_detection.edgar import resolve_user_agent as r; print(r())')"`.
+  A connection error, a timeout, or a 5xx on `_get_json`/`fetch_filing_raw`/
+  `full_text_search`/`sec_http` downloads retries up to 3 attempts (2s/4s
+  backoff, `edgar.retry_request`); a 403/429 still raises `EdgarBlocked` at
+  once, and a failure is never cached.
 - **OpenFIGI refusals abort too.** A 401/403 from OpenFIGI raises
   `OpenFigiBlocked` (`openfigi.py`); `classify_universe.py`'s CLI catches it
   alongside `EdgarBlocked` and exits 2. A 429 is waited out on the
   `ratelimit-*`/`retry-after` headers, never cached as an answer. The key
   comes from `OPEN_FIGI_API_KEY` (environment first, then the repo `.env`),
-  sent as header `X-OPENFIGI-APIKEY`.
+  sent as header `X-OPENFIGI-APIKEY`. Exit 3 is a completed run whose
+  `review.csv` has one or more `error` rows (outputs still written; a banner
+  goes to stderr with the count).
 - **Every output is written only after the whole run succeeds.**
   `pipeline.run()` computes every table in memory first and writes all six
   only at the end (`store.write_table`'s atomic replace), so a refusal or a

@@ -119,9 +119,10 @@ sec_id, ticker, exchange, valid_from, valid_to, source
 range that ends in a delisting (from the Form 25) and for the still-open
 range (from the issuer's current EDGAR submissions listing); a closed range
 that is neither has an empty `exchange` (see the spec's Implementation
-notes). `source` is `observation` or `ftd` — building a range from an EDGAR
-ticker-change announcement (spec §8.5's `edgar_8k` source) is deferred, so
-that value doesn't currently appear here.
+notes). `source` is `observation`, `ftd`, or `edgar_8k` — the last one for an
+added successor security's ticker range (exchange-transfer continuations),
+built directly from the 8-K that named it rather than from FTD sightings;
+an added acquirer security's range still comes from `ftd`.
 
 ### `cusip_history.csv` — key `(sec_id, valid_from, cusip)`
 
@@ -157,7 +158,13 @@ is the Form 25 filing date plus 10 days (Rule 12d2-2(d)(1)), or the date of
 the fallback filing that ended trading when no Form 25 exists.
 `raw_payout_*` is the extraction before the last-close gate (see *Payout
 reconciliation* below); `last_trade_date_source` is `ex99_notice`, `8k_301`,
-`midas`, `nasdaq_halt`, or empty.
+`midas`, `nasdaq_halt`, or empty. `resolution_source` is meant to record the
+resolver tier that found the security's CIK (`cik_map`, `manual`,
+`company_tickers`, `efts`, …); `SecurityContext.resolution_source` /
+`classify_event(resolution_source=...)` carry it through end to end, but the
+pipeline doesn't yet populate `SecurityContext` with the security master's
+own resolution tier, so every row currently reads the default
+`security_master`.
 
 ### `payouts.csv` — key `(sec_id, delist_date)`
 
@@ -409,7 +416,7 @@ python scripts/observations_from_instruments.py --instruments data/delisted_tick
 # or: scripts/observations_from_snapshots.py --dir <folder of dated index-membership CSVs> --out obs.csv
 python scripts/classify_universe.py --observations obs.csv   # → output/{securities,ticker_history,cusip_history,delistings,payouts,review}.csv
 
-pytest -q                                # 585 unit tests, no network
+pytest -q                                # 675 unit tests, no network
 ```
 
 `classify_universe.py` prints a summary when it finishes: rows written per
@@ -480,7 +487,12 @@ exit_ = build_backtest_exit(rec, last_close=111.85, payout_per_share=113.00)
 
 The panel-level adapters read every DLRET input straight off the matching
 `delistings.csv` row — no more ticker-keyed `payouts=`/`successor_map=`/
-`exchanges=` dictionaries to assemble by hand:
+`exchanges=` dictionaries to assemble by hand. All three splicers
+(`inject_terminal_labels`, `apply_backtest_exits`, `apply_bmp_corrections`) —
+and `handling.adjustments_from_rows` — skip a row whose `successor_sec_id`
+equals its own `sec_id`: that's a continuing security (it kept trading under
+the same FIGI, e.g. an exchange transfer that didn't relist under a new
+identity), not an exit, so no label/exit/correction is emitted for it.
 
 ```python
 from delist_detection.qlib_adapter import inject_terminal_labels, apply_backtest_exits
@@ -808,7 +820,12 @@ never a price vendor, never Alpha Vantage:
   2. The closing **8-K's Item 3.01** text (`last_trade.py`), read the same way.
   3. **SEC MIDAS** per-security exchange volume (`midas.py`, 2012+): the last
      day with nonzero lit+hidden exchange volume, when it falls in a plausible
-     window around the filing date.
+     window around the filing date. When the requested window runs past
+     MIDAS's coverage end (the last day of the latest quarter it could load)
+     and the found day sits within 5 trading days of that edge, MIDAS answers
+     `None` instead — an unpublished quarter always yields nothing, so a day
+     that close to the edge is indistinguishable from "the next quarter just
+     isn't out yet" and would otherwise beat the notice/8-K on stale grounds.
   4. **Nasdaq's trade-halt feed** (`nasdaq_halts.py`): a code-`D` ("security
      deletion") halt, used only when MIDAS has no answer.
   5. MIDAS beats a halt beats filing-text wording; a measured date that
@@ -841,5 +858,21 @@ never a price vendor, never Alpha Vantage:
 * SEC fair access: ≤10 req/s, descriptive `User-Agent` required. The
   client throttles to 8 req/s and is single-threaded; the FTD/MIDAS
   downloader shares the same throttle.
+* Transient failures retry: a connection error, a timeout, or a 5xx on a
+  submissions fetch, a filing-text/raw fetch, a full-text-search query, or a
+  MIDAS/FTD download is retried up to 3 attempts with 2s/4s backoff
+  (`edgar.retry_request`) before giving up. A 403/429 still raises
+  `EdgarBlocked` immediately, never retried; a failure is never cached as an
+  answer. A MIDAS quarter that keeps failing to download is remembered
+  in-memory for the rest of the run, so later securities don't pay the same
+  download-and-retry cost again.
 * No price vendor, no Alpha Vantage — every price and date above comes from
   a public SEC data set.
+
+## Exit codes (`classify_universe.py`)
+
+| Code | Meaning |
+|---|---|
+| `0` | Success, no `error` rows in `review.csv`. |
+| `2` | Aborted: SEC or OpenFIGI refused the request (`EdgarBlocked` / `OpenFigiBlocked`) — no output written. |
+| `3` | Completed, but `review.csv` has one or more `error` rows (one security or extraction raised and was logged instead of aborting the run) — outputs are still written; the run prints a banner to stderr with the count. |

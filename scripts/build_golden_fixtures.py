@@ -17,11 +17,12 @@ Re-run after changing data/golden_events.csv. `--efts-only` re-captures just
 
 With OPENAI_API_KEY set (environment or the repo .env), each merger case also
 stores `llm_terms` (the LLM merger terms for the classified record, read
-through cache/llm) and `acquirer_price` (the acquirer's close on the first
-trading day after observed_delist_date, read from SEC fails-to-deliver data
-via FtdIndex). Without it, a full run skips that capture and keeps the terms
-an earlier run captured. `--llm-only` re-captures just those two keys into
-the existing fixtures and needs OPENAI_API_KEY.
+through cache/llm) and `acquirer_price` (the acquirer's close on
+observed_delist_date itself, read from the fails-to-deliver row dated the
+next trading day via FtdIndex.close_after). Without it, a full run skips
+that capture and keeps the terms an earlier run captured. `--llm-only`
+re-captures just those two keys into the existing fixtures and needs
+OPENAI_API_KEY.
 `--only ID` (repeatable, ID = TICKER_DATE) limits any run to the named cases.
 
 Submissions are re-fetched, not read from cache/: a cached copy older than the
@@ -131,8 +132,9 @@ def _openai_key_set() -> bool:
 
 
 def _acquirer_price(acquirer: str | None, on: date) -> float | None:
-    """The acquirer's close on the first trading day after `on`, from SEC
-    fails-to-deliver data. None without an acquirer ticker or a priced row."""
+    """The acquirer's close on `on` itself -- read from the SEC fails-to-deliver
+    row dated the next trading day (FtdIndex.close_after). None without an
+    acquirer ticker or a priced row."""
     if not acquirer:
         return None
     ftd = FtdIndex.load(FtdClient(ROOT / "cache" / "sec_data" / "ftd"),

@@ -126,6 +126,22 @@ was checked with, and a lookup with a different name resolves again.
 Misses, and answers reached while an EDGAR request failed transiently, are
 used for the run but never saved.
 
+A connection error, a timeout, or a 5xx on a submissions fetch, a raw/text
+filing fetch, a full-text-search query, or a MIDAS/FTD ZIP download is
+retried up to 3 attempts with 2s/4s backoff (`edgar.retry_request`, reused by
+`sec_http.py`) before giving up; a 403/429 still raises `EdgarBlocked`
+immediately, never retried, and a failure is never cached as an answer. A
+MIDAS quarter that keeps failing to download is remembered in-memory
+(`MidasClient`) for the rest of the run so later securities don't repeat the
+same download-and-retry cost.
+
+`scripts/classify_universe.py` exits `0` on success, `2` when SEC or
+OpenFIGI refuses the request (`EdgarBlocked`/`OpenFigiBlocked` — no output
+written), and `3` when the run completed but `review.csv` has one or more
+`error` rows (one security or payout extraction raised and was logged
+instead of aborting; outputs are still written, and a banner naming the
+count goes to stderr).
+
 ## Resolver strategy in detail
 
 EDGAR's `company_tickers.json` only lists currently-registered issuers, so
@@ -215,12 +231,24 @@ goes to `review.csv` as `observation_unresolved`.
    exchange in the group supplies the event's `exchange`.
 6. **Date and classify** each group (`last_trade.decide_last_trade` +
    `DelistClassifier.classify_event`, anchored on the last trade date or the
-   winning Form 25's filing date).
-7. **No Form 25 found**: the classifier's existing fallback paths (8-K 2.01
-   completion, Form 15, `REVOKED`, SPAC trust liquidation) find and date the
-   delisting, flagged `no_form25`; when even those find nothing but the
-   security isn't listed today, it is dated by its last sighting, flagged
-   `delist_date_approx`.
+   winning Form 25's filing date). The event's `ticker` is the ticker on the
+   last trade date (`ctx.ticker_on(last_trade.day)`) when the last trade date
+   is known, else the ticker on the Form 25 filing date (spec §7.4).
+7. **Fallback / completeness**: this runs whenever none of the events found
+   for a security is a genuine end (every one is `continued` — e.g. an
+   exchange transfer the security kept trading through) — not only when no
+   events were found at all, so a security that transferred exchanges and
+   only later truly delisted still gets a second, later event instead of
+   silently having none. With no Form 25 to anchor on, the classifier's
+   existing fallback paths (8-K 2.01 completion, Form 15, `REVOKED`, SPAC
+   trust liquidation) find and date the delisting, flagged `no_form25`; a
+   fallback event has no Form 25 exchange evidence, so its `exchange` is
+   read from the issuer's own EDGAR submissions JSON (`tickers`/`exchanges`
+   at the ticker's index) instead, or left empty when that has nothing
+   either. When even the fallback paths find nothing but the security isn't
+   listed today, the security is dated by its last sighting instead, flagged
+   `delist_date_approx`, and reported to `review.csv` as
+   `ended_without_delisting` rather than fabricated as an event.
 
 A security can have more than one delisting (e.g. an exchange transfer,
 years later a merger).
@@ -268,7 +296,12 @@ README's *Where each date and price comes from* for the full detail):
 1. The Form 25's EX-99.25 exchange notice.
 2. The closing 8-K's Item 3.01 text.
 3. SEC MIDAS per-security exchange volume (2012+) — the last day with
-   nonzero exchange volume, when it falls in a plausible window.
+   nonzero exchange volume, when it falls in a plausible window. When the
+   requested window runs past MIDAS's coverage end (the last day of the
+   latest published quarter) and the found day is within 5 trading days of
+   that edge, MIDAS answers `None`: an unpublished quarter always yields
+   nothing, so a day that close to the edge can't be told apart from "the
+   next quarter just isn't out yet".
 4. Nasdaq's trade-halt feed (code `D`), used only when MIDAS has no answer.
 
 MIDAS beats a halt beats filing-text wording; a disagreement between a
@@ -297,8 +330,11 @@ and `(sec_id, valid_from, cusip)` respectively, built from observations plus
 SEC fails-to-deliver rows. `ticker_history.exchange`
 is filled for the range that ends in a delisting (from the Form 25) and for
 the still-open range (from the issuer's current EDGAR submissions listing);
-otherwise empty. Building a range from an EDGAR ticker-change announcement
-(spec §8.5's `edgar_8k` source) is deferred.
+otherwise empty. `ticker_history.source` is `observation`, `ftd`, or
+`edgar_8k`: an added successor security's range (an exchange-transfer
+continuation, spec §8.5) is built directly from the 8-K that named it rather
+than from FTD sightings; an added acquirer security's range still comes from
+`ftd`.
 
 `output/delistings.csv`: one row per delisting event with the CRSP code,
 bucket, confidence, evidence chain (Form 25 date, 8-K items, Form 15 form
@@ -306,7 +342,12 @@ name, resolved company name, which resolver tier won), the reconstructed
 delisting return (`dlret`), the method that produced it, and the raw
 extracted payout (`raw_payout_per_share`, `raw_payout_source`,
 `raw_payout_confidence`) before the last-close gate runs. Columns are
-`DELISTINGS_COLUMNS` in `store.py`.
+`DELISTINGS_COLUMNS` in `store.py`. `resolution_source` is meant to record
+the resolver tier that found the security's CIK; `SecurityContext
+.resolution_source` → `classify_event(resolution_source=...)` carry it
+through, but the pipeline doesn't yet populate it from the security
+master's own resolution, so every row currently reads the default
+`security_master`.
 
 `output/payouts.csv`: per-merger cash payout after the last-close gate:
 only a payout (or cash+stock/stock-only terms) that reconciles with the
@@ -353,3 +394,9 @@ securities on the same day), for a human to triage. Written by
 Every input these three read (exchange, last trade close, payout, recovery
 ratio, successor) comes straight off the matching `delistings.csv` row —
 there are no more ticker-keyed dictionary arguments to assemble by hand.
+
+All three splicers, and `handling.adjustments_from_rows`, skip a row whose
+`successor_sec_id` equals its own `sec_id`: that security kept trading under
+the same FIGI (e.g. an exchange transfer that didn't relist under a new
+identity), so it isn't an exit at all — no label, exit price, or firm-month
+correction is emitted for it.
