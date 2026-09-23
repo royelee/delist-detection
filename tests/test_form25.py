@@ -118,6 +118,13 @@ def test_class_label_only_from_the_securitys_own_segment():
                        "Participating Preferred Stock Purchase Rights") is None
     assert class_label("Series A Liberty SiriusXM Common Stock, par value $0.01") == "SERIES A"
     assert class_label("Class B Common Stock") == "CLASS B"
+    assert class_label("Preferred Stock, Series C") == "SERIES C"
+    assert class_label("5.750% Cumulative Preferred Stock, Series F") == "SERIES F"
+    assert class_label("Depositary Shares, each representing a 1/1,000th interest in a share of "
+                       "5.750% Series F Preference Share") == "SERIES F"
+    assert class_label("6.375% Series A Preferred Stock") == "SERIES A"
+    assert class_label("Class A Common Stock and associated Series B Preferred Stock Purchase "
+                       "Rights") == "CLASS A"
 
 
 def test_exchange_labels():

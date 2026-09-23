@@ -148,24 +148,42 @@ def class_kind(class_text: str) -> str:
     return "other"
 
 
-# A class letter is only real when it names the security's own class, not
-# something mentioned later in the text (a rights-plan clause naming its own
-# "Series A Junior Participating Preferred Stock"). Take it from the first
-# segment only: everything before the first comma, semicolon, "(", " AND " or
-# " WITH ". A Liberty-style tracking stock ("Series A Liberty SiriusXM Common
-# Stock") still carries its class as a series in that first segment.
+# A class letter is only real when it names the security's own class, not a
+# security attached to it (a rights-plan clause naming its own "Series A
+# Junior Participating Preferred Stock", or a warrant on a different class).
+# Split the whole text into segments at each comma, semicolon, "(", " AND " or
+# " WITH ", drop any segment that names an attached security (RIGHTS or
+# WARRANT), and — only when the class itself is common — also drop a segment
+# naming the preferred/preference security the rights are usually attached to
+# ("Class A Common Stock and associated Series B Preferred Stock Purchase
+# Rights" must not read as Series B). A preferred security keeps its own
+# "Series C"/"Series F" segment ("Preferred Stock, Series C"; "5.750% ...
+# Preference Share, Series F") since there's no other class it could belong
+# to. A Liberty-style tracking stock ("Series A Liberty SiriusXM Common
+# Stock") still carries its class as a series in its own (kept) segment.
 _SEGMENT_END = re.compile(r"[,;(]| AND | WITH ")
+_ATTACHED_SECURITY = re.compile(r"RIGHTS|WARRANT")
+_PREFERRED_WORD = re.compile(r"PREFERRED|PREFERENCE")
 
 
 def class_label(class_text: str) -> str | None:
     s = (class_text or "").upper()
-    seg = _SEGMENT_END.split(s, maxsplit=1)[0]
-    m = re.search(r"\bCLASS\s+([A-Z])\b", seg)
-    if m:
-        return f"CLASS {m.group(1)}"
-    m = re.search(r"\bSERIES\s+([A-Z])\b", seg)
-    if m:
-        return f"SERIES {m.group(1)}"
+    is_common = class_kind(class_text) == "common"
+    kept = []
+    for seg in _SEGMENT_END.split(s):
+        if not seg or _ATTACHED_SECURITY.search(seg):
+            continue
+        if is_common and _PREFERRED_WORD.search(seg):
+            continue
+        kept.append(seg)
+    for seg in kept:
+        m = re.search(r"\bCLASS\s+([A-Z])\b", seg)
+        if m:
+            return f"CLASS {m.group(1)}"
+    for seg in kept:
+        m = re.search(r"\bSERIES\s+([A-Z])\b", seg)
+        if m:
+            return f"SERIES {m.group(1)}"
     return None
 
 
