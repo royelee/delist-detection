@@ -342,12 +342,11 @@ name, resolved company name, which resolver tier won), the reconstructed
 delisting return (`dlret`), the method that produced it, and the raw
 extracted payout (`raw_payout_per_share`, `raw_payout_source`,
 `raw_payout_confidence`) before the last-close gate runs. Columns are
-`DELISTINGS_COLUMNS` in `store.py`. `resolution_source` is meant to record
-the resolver tier that found the security's CIK; `SecurityContext
-.resolution_source` → `classify_event(resolution_source=...)` carry it
-through, but the pipeline doesn't yet populate it from the security
-master's own resolution, so every row currently reads the default
-`security_master`.
+`DELISTINGS_COLUMNS` in `store.py`. `resolution_source` records the resolver
+tier that found the security's CIK, taken from the security's latest era
+that has a CIK (`security_master` when none has one); `SecurityContext
+.resolution_source` → `classify_event(resolution_source=...)` carry it to
+the row.
 
 `output/payouts.csv`: per-merger cash payout after the last-close gate:
 only a payout (or cash+stock/stock-only terms) that reconciles with the
