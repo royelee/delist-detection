@@ -91,3 +91,33 @@ def test_adjustments_from_rows_skips_rows_without_last_trade_close():
     assert train[0].ticker == "ALPHA"
     assert abs(train[0].forward_return - 0.13) < 1e-9
     assert exits[0].exit_price == 113.0
+
+
+def test_adjustments_from_rows_warns_on_skipped_rows(caplog):
+    import logging
+    rows = [
+        {"sec_id": "BBG2", "delist_date": "2024-06-30", "ticker": "BETA", "bucket": "compliance_failure",
+         "confidence": "high", "reason": "test", "last_trade_date": "2024-06-28"},  # no last_trade_close
+    ]
+    with caplog.at_level(logging.WARNING, logger="delist_detection.handling"):
+        train, exits = adjustments_from_rows(rows)
+    assert train == [] and exits == []
+    assert len(caplog.records) == 1
+    assert "BBG2" in caplog.records[0].message and "2024-06-30" in caplog.records[0].message
+
+
+def test_adjustments_from_rows_skips_continuing_security(caplog):
+    """An exchange_transfer row whose successor_sec_id equals its own
+    sec_id (the security kept trading under the same FIGI) is not a real
+    exit: adjustments_from_rows must not emit a label/exit for it, and must
+    not warn about it as a dropped row either."""
+    import logging
+    rows = [
+        {"sec_id": "BBG3", "delist_date": "2024-06-30", "ticker": "GAMMA", "bucket": "exchange_transfer",
+         "confidence": "high", "reason": "test", "last_trade_date": "2024-06-28", "last_trade_close": "50.0",
+         "successor_sec_id": "BBG3"},
+    ]
+    with caplog.at_level(logging.WARNING, logger="delist_detection.handling"):
+        train, exits = adjustments_from_rows(rows)
+    assert train == [] and exits == []
+    assert caplog.records == []

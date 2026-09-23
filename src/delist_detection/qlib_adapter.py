@@ -95,6 +95,14 @@ def row_payout(row) -> float | None:
     return _num(row.get("payout_per_share"))
 
 
+def _is_continuing(row) -> bool:
+    """True when `successor_sec_id` equals `sec_id`: the security kept
+    trading under the same FIGI (e.g. an exchange transfer), so this row is
+    not an exit at all. All three panel splicers below skip such rows."""
+    succ = _str(row.get("successor_sec_id"))
+    return succ is not None and succ == row["sec_id"]
+
+
 def inject_terminal_labels(
     panel: pd.DataFrame,
     delistings_csv: str,
@@ -123,6 +131,8 @@ def inject_terminal_labels(
 
     for _, row in delistings.iterrows():
         sec_id = row["sec_id"]
+        if _is_continuing(row):
+            continue
         if sec_id not in df.index.get_level_values("instrument"):
             continue
         slc = df.xs(sec_id, level="instrument", drop_level=False)
@@ -171,6 +181,8 @@ def apply_backtest_exits(
 
     for _, row in delistings.iterrows():
         sec_id = row["sec_id"]
+        if _is_continuing(row):
+            continue
         sub = df[df[id_col] == sec_id]
         if sub.empty:
             continue
@@ -223,6 +235,8 @@ def apply_bmp_corrections(
 
     for _, row in delistings.iterrows():
         sec_id = row["sec_id"]
+        if _is_continuing(row):
+            continue
         rec = record_from_row(row)
         if rec.observed_delist_date is None:
             continue

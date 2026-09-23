@@ -143,6 +143,23 @@ def test_apply_bmp_corrections_no_warn_when_last_trade_provided(monthly_panel, t
     )
 
 
+def test_apply_bmp_corrections_skips_continuing_security(monthly_panel, tmp_path):
+    """An exchange_transfer row whose successor_sec_id equals its own sec_id
+    is a continuing security: apply_bmp_corrections must not overwrite the
+    month's return with the partial return for it."""
+    # last_trade_close=108.0 would compute r_partial=0.08 (differs from the
+    # panel's raw 0.05) if the row were processed -- so the untouched 0.05
+    # can only mean the row was skipped, not a coincidental equal DLRET=0.
+    rows = [
+        _row("ALTR_ID", bucket="exchange_transfer", crsp_code=304, successor_sec_id="ALTR_ID",
+             last_trade_close=108.0),
+    ]
+    csv_path = _write(tmp_path, rows)
+    out = apply_bmp_corrections(monthly_panel, str(csv_path), return_col="monthly_return")
+    altr = out.xs("ALTR_ID", level="instrument")
+    assert altr.loc[pd.Timestamp("2025-03-31"), "monthly_return"] == pytest.approx(0.05)   # untouched
+
+
 def test_apply_bmp_corrections_no_warn_for_merger_fallback(monthly_panel, tmp_path):
     # M&A panel close usually tracks the deal — fallback is fine, no warning.
     import warnings

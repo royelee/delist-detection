@@ -47,6 +47,22 @@ def test_inject_terminal_labels_writes_bucket_returns(panel, tmp_delistings):
     assert all(abs(v - (-0.9)) < 1e-9 for v in gamma)
 
 
+def test_inject_terminal_labels_skips_continuing_security(panel, tmp_path):
+    """An exchange_transfer row whose successor_sec_id equals its own sec_id
+    is a continuing security (kept trading under the same FIGI) -- not an
+    exit -- so no label is injected for it."""
+    rows = [
+        {"sec_id": "ALPHA_ID", "delist_date": "2024-06-28", "ticker": "ALPHA", "cik": 1,
+         "bucket": "exchange_transfer", "crsp_code": 304, "confidence": "high", "reason": "test",
+         "last_trade_date": "2024-06-28", "successor_sec_id": "ALPHA_ID"},
+    ]
+    p = table_path(tmp_path, "delistings")
+    write_table("delistings", rows, p)
+    out = inject_terminal_labels(panel, str(p), horizon_days=3)
+    alpha = out.xs("ALPHA_ID", level="instrument")["LABEL"]
+    assert alpha.isna().all()
+
+
 def test_apply_backtest_exits_rewrites_exit_price(tmp_delistings):
     pos = pd.DataFrame([
         {"date": "2024-06-27", "sec_id": "ALPHA_ID", "price": 100.0},
@@ -64,3 +80,22 @@ def test_apply_backtest_exits_rewrites_exit_price(tmp_delistings):
     # Non-exit row of ALPHA unchanged
     pre = out[(out["sec_id"] == "ALPHA_ID") & (out["date"].dt.strftime("%Y-%m-%d") == "2024-06-27")]
     assert pre["price"].iloc[0] == 100.0
+
+
+def test_apply_backtest_exits_skips_continuing_security(tmp_path):
+    # last_trade_close=999.0 is explicit and differs from the position's own
+    # exit-day price (100.0), so an unskipped row would visibly overwrite it.
+    rows = [
+        {"sec_id": "DELTA_ID", "delist_date": "2024-06-28", "ticker": "DELTA", "cik": 4,
+         "bucket": "exchange_transfer", "crsp_code": 304, "confidence": "high", "reason": "test",
+         "last_trade_date": "2024-06-28", "last_trade_close": 999.0, "successor_sec_id": "DELTA_ID"},
+    ]
+    p = table_path(tmp_path, "delistings")
+    write_table("delistings", rows, p)
+    pos = pd.DataFrame([
+        {"date": "2024-06-27", "sec_id": "DELTA_ID", "price": 100.0},
+        {"date": "2024-06-28", "sec_id": "DELTA_ID", "price": 100.0},
+    ])
+    out = apply_backtest_exits(pos, str(p))
+    exit_row = out[(out["sec_id"] == "DELTA_ID") & (out["date"].dt.strftime("%Y-%m-%d") == "2024-06-28")]
+    assert exit_row["price"].iloc[0] == 100.0     # unchanged: not treated as an exit

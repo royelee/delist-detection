@@ -49,6 +49,7 @@ UNKNOWN                 : exit at 0.5 * last_close, flag for review.
 
 from __future__ import annotations
 
+import logging
 import math
 from dataclasses import dataclass
 from datetime import date, datetime
@@ -59,6 +60,8 @@ from .classifier import DelistRecord
 from .crsp_codes import CrspBucket
 from .exchanges import Exchange
 
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_RECOVERY_RATIO = 0.10
 DEFAULT_UNKNOWN_TRAIN_RETURN = -0.5
@@ -233,13 +236,28 @@ def build_backtest_exit(
 
 
 def adjustments_from_rows(rows: Iterable[Mapping[str, str]]) -> tuple[list[TrainLabelAdjustment], list[BacktestExit]]:
-    """Train-label adjustments and backtest exits straight from delistings.csv rows."""
+    """Train-label adjustments and backtest exits straight from delistings.csv rows.
+
+    A row whose `successor_sec_id` equals its own `sec_id` is a continuing
+    security (it kept trading under the same FIGI, e.g. an exchange transfer)
+    and is silently skipped -- it never reaches training or backtest handling
+    because it isn't an exit at all. A row missing `last_trade_close` is also
+    skipped (there's no price to compute a label/exit from), but that one is
+    never silent: spec 11 says nothing is dropped without a trace, so it's
+    logged at WARNING naming the `(sec_id, delist_date)` dropped.
+    """
     from .qlib_adapter import record_from_row, row_payout   # local import: qlib_adapter imports this module
 
     train, exits = [], []
     for row in rows:
+        sec_id = row.get("sec_id")
+        successor = row.get("successor_sec_id")
+        if successor and successor == sec_id:
+            continue
         close = _float(row.get("last_trade_close"))
         if close is None:
+            logger.warning("adjustments_from_rows: skipping (sec_id=%s, delist_date=%s): no last_trade_close",
+                           sec_id, row.get("delist_date"))
             continue
         rec = record_from_row(row)
         payout = row_payout(row)
