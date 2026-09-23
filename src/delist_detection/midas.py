@@ -12,6 +12,7 @@ import csv
 import gzip
 import io
 import json
+import logging
 import re
 import zipfile
 from collections import defaultdict
@@ -35,6 +36,7 @@ MIDAS_START = date(2012, 1, 1)
 # purely because the next quarter hasn't been published yet.
 MIDAS_COVERAGE_EDGE_TRADING_DAYS = 5
 _SEC = "https://www.sec.gov"
+_log = logging.getLogger(__name__)
 _Q = re.compile(r"individual_security_(\d{4})_q(\d+)\.zip$", re.I)
 
 
@@ -82,6 +84,8 @@ def summarize_midas_csv(lines: Iterable[str]) -> dict[str, list[str]]:
         except ValueError:
             continue
         d = row[i_date].strip()
+        if d.endswith(".0"):                  # the 2016 quarters write every number as a float
+            d = d[:-2]
         if vol > 0 and len(d) == 8 and d.isdigit():
             out[normalize_ticker(row[i_tk])].add(f"{d[:4]}-{d[4:6]}-{d[6:]}")
     return {t: sorted(v) for t, v in out.items()}
@@ -135,9 +139,9 @@ class MidasClient:
         if yq in self._summaries:
             return self._summaries[yq]
         cache = self.dir / f"{yq[0]}_q{yq[1]}.json.gz"
-        if cache.exists():
-            s = json.loads(gzip.decompress(cache.read_bytes()))
-        else:
+        s = json.loads(gzip.decompress(cache.read_bytes())) if cache.exists() else None
+        if not s:                           # none yet, or an empty one an older reader cached
+            cache.unlink(missing_ok=True)
             url = self.links().get(yq)
             if url is None:
                 self._summaries[yq] = None
@@ -159,6 +163,13 @@ class MidasClient:
                 return None
             with z:
                 s = _summarize_zip(z, zpath)
+            if not s:
+                # A quarter read to nothing is a layout this reader does not
+                # know, never an answer: keep the zip, cache nothing, and give
+                # no evidence from it for the rest of the run.
+                _log.warning(f"MIDAS {yq[0]} Q{yq[1]}: {zpath.name} yielded no rows with volume; not cached")
+                self._summaries[yq] = None
+                return None
             cache.parent.mkdir(parents=True, exist_ok=True)
             cache.write_bytes(gzip.compress(json.dumps(s).encode()))
             zpath.unlink(missing_ok=True)

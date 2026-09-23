@@ -179,3 +179,47 @@ def test_client_reads_a_csv_inside_a_nested_zip(tmp_path):
     c = MidasClient(tmp_path)
     assert c.last_trade_day("AET", date(2014, 4, 1), date(2014, 6, 10)) == date(2014, 5, 28)
     assert json.loads(gzip.decompress((tmp_path / "2014_q2.json.gz").read_bytes()))["BRK-B"] == ["2014-05-28"]
+
+
+CSV_2016 = """Date,Security,Ticker,McapRank,TurnRank,VolatilityRank,PriceRank,LitVol('000),OrderVol('000),Hidden,TradesForHidden,HiddenVol('000),TradeVolForHidden('000),Cancels,LitTrades,OddLots,TradesForOddLots,OddLotVol('000),TradeVolForOddLots('000)
+20160104.0,Stock,A,10.0,7.0,1.0,8.0,2146.9069999999997,105397.22100000002,1552.0,19804.0,260.172,2407.0789999999997,312569.0,14066.0,3774.0,15289.0,159.05800000000002,1639.151
+20160105.0,Stock,A,10.0,7.0,1.0,8.0,0.0,105397.22100000002,0.0,0.0,0.0,0.0,312569.0,0.0,0.0,0.0,0.0,0.0
+"""
+
+
+def test_summarize_reads_2016_float_formatted_dates():
+    """The 2016 quarters write every number as a float, the date too
+    ("20160104.0", real first rows of q1_2016_all.csv)."""
+    assert summarize_midas_csv(CSV_2016.splitlines()) == {"A": ["2016-01-04"]}
+
+
+def _zip_with(tmp_path, yq, csv_text):
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr(f"q{yq[1]}_{yq[0]}_all.csv", csv_text)
+    (tmp_path / f"individual_security_{yq[0]}_q{yq[1]}.zip").write_bytes(buf.getvalue())
+    (tmp_path / "index.html").write_text(
+        f'<a href="/files/opa/x/individual_security_{yq[0]}_q{yq[1]}.zip">z</a>')
+
+
+def test_a_quarter_that_yields_no_rows_is_not_cached(tmp_path, caplog):
+    """A quarter file read to an empty summary is a format the reader does not
+    know, never an answer: nothing is cached, a warning is logged, and the
+    quarter gives no evidence for the rest of the run."""
+    import logging
+    caplog.set_level(logging.WARNING)
+    _zip_with(tmp_path, (2016, 1), CSV_2016.replace("20160104.0", "01/04/2016"))
+    c = MidasClient(tmp_path)
+    assert c.last_trade_day("A", date(2016, 1, 1), date(2016, 3, 1)) is None
+    assert not (tmp_path / "2016_q1.json.gz").exists()
+    assert "2016 Q1" in caplog.text
+
+
+def test_an_empty_cached_summary_is_read_again(tmp_path):
+    """A summary cached empty by an older reader is not trusted: the quarter is
+    summarized again from its zip."""
+    _zip_with(tmp_path, (2016, 1), CSV_2016)
+    (tmp_path / "2016_q1.json.gz").write_bytes(gzip.compress(b"{}"))
+    c = MidasClient(tmp_path)
+    assert c.last_trade_day("A", date(2016, 1, 1), date(2016, 3, 1)) == date(2016, 1, 4)
+    assert json.loads(gzip.decompress((tmp_path / "2016_q1.json.gz").read_bytes())) == {"A": ["2016-01-04"]}
