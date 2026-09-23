@@ -3,8 +3,10 @@
 `enrich()` joins a classification `DelistRecord` with externally-provided DLRET
 inputs (last_trade_close, cash/stock merger terms, recovery) and the computed
 DLRET into a single `EnrichedDelistRecord` — the central type every downstream
-consumer can derive from. `build_dlret_table()` (added next) serializes a
-sequence of these into `output/dlret.csv`.
+consumer can derive from. `build_delistings_table()` enriches a whole sequence
+of records, keyed by `(sec_id, delist_date)`, and `delisting_row()` projects
+one `EnrichedDelistRecord` into an `output/delistings.csv` row; `store.py` owns
+writing the CSV.
 """
 
 from __future__ import annotations
@@ -50,6 +52,8 @@ class EnrichedDelistRecord:
     payout_confidence: str | None
     # --- review ---
     review_flags: tuple[str, ...] = ()
+    sec_id: str | None = None
+    delist_date: str | None = None
 
 
 _VALID_CONF = {"high", "medium", "low"}
@@ -131,6 +135,7 @@ def enrich(
         dlret_confidence=_dlret_confidence(res.value, res.method, payout_confidence),
         payout_source=payout_source, payout_confidence=payout_confidence,
         review_flags=tuple(dict.fromkeys(flags)),
+        sec_id=record.sec_id, delist_date=record.delist_date,
     )
 
 
@@ -140,13 +145,6 @@ def enrich(
 # mistakes a genuinely-uncomputable row for a realized 0%. EXCHANGE_TRANSFER_ZERO
 # and ASSUMED_PAR keep their explicit 0.
 _DLRET_BLANK_IN_TABLE = {DlretMethod.ABSTAIN_NO_CONSIDERATION, DlretMethod.UNKNOWN}
-
-DLRET_TABLE_COLUMNS = [
-    "ticker", "bucket", "observed_delist_date", "crsp_code", "dlret", "reason",
-    "exchange", "last_trade_close", "payout_per_share", "stock_ratio",
-    "acquirer_price", "acquirer_ticker", "recovery_ratio", "terminal_value",
-    "dlret_method", "dlret_confidence", "payout_source", "review_flags",
-]
 
 
 def _lookup(m: Mapping, ticker: str, observed_date: str | None):
@@ -161,33 +159,24 @@ def _lookup(m: Mapping, ticker: str, observed_date: str | None):
     return m.get(ticker)
 
 
-def build_dlret_table(
+def build_delistings_table(
     records: Iterable[DelistRecord],
     *,
-    last_trade_closes: Mapping[str | tuple[str, str | None], float] | None = None,
-    payouts: Mapping[str | tuple[str, str | None], float] | None = None,
-    exchanges: Mapping[str | tuple[str, str | None], str] | None = None,
-    merger_terms: Mapping[str | tuple[str, str | None], dict] | None = None,
-    recovery_ratios: Mapping[str | tuple[str, str | None], float] | None = None,
-    payout_sources: Mapping[str | tuple[str, str | None], str] | None = None,
-    payout_confidences: Mapping[str | tuple[str, str | None], str] | None = None,
-    payout_flags: Mapping[str | tuple[str, str | None], Iterable[str]] | None = None,
+    last_trade_closes: Mapping | None = None,
+    payouts: Mapping | None = None,
+    exchanges: Mapping | None = None,
+    merger_terms: Mapping | None = None,
+    recovery_ratios: Mapping | None = None,
+    payout_sources: Mapping | None = None,
+    payout_confidences: Mapping | None = None,
+    payout_flags: Mapping | None = None,
 ) -> list[EnrichedDelistRecord]:
-    """Enrich each classification record into the primary DLRET table.
+    """Enrich each delisting into a `delistings.csv` record.
 
-    Lookups support two key forms for each input map:
-
-    - Bare ticker (``"AET"``): applies to every delisting event for that ticker.
-      This is the existing behavior and all single-event tickers should use it.
-    - Per-event tuple (``("AET", "2018-11-28")``): applies only to the event
-      whose ``observed_delist_date`` matches. This wins over the bare-ticker
-      default, enabling recycled tickers (e.g. ALTR = Altera 2015 + Altair 2025)
-      to carry different ``last_trade_close``, ``payout_per_share``, or
-      ``exchange`` for each delisting.
-
-    ``merger_terms[key]`` is a dict with optional keys: ``cash_per_share``
-    (overrides ``payouts``), ``stock_ratio``, ``acquirer_price``,
-    ``acquirer_ticker``.
+    Every input map is keyed by `sec_id` (applies to all of the security's
+    delistings) or `(sec_id, delist_date)` (one delisting, which wins).
+    `merger_terms[key]` may hold `cash_per_share` (overrides `payouts`),
+    `stock_ratio`, `acquirer_price`, `acquirer_ticker`.
     """
     last_trade_closes = last_trade_closes or {}
     payouts = payouts or {}
@@ -200,8 +189,7 @@ def build_dlret_table(
 
     out: list[EnrichedDelistRecord] = []
     for rec in records:
-        key = rec.ticker.upper()
-        date = rec.observed_delist_date
+        key, date = rec.sec_id or rec.ticker.upper(), rec.delist_date
         terms = _lookup(merger_terms, key, date) or {}
         cash = terms.get("cash_per_share", _lookup(payouts, key, date))
         out.append(enrich(
@@ -220,65 +208,69 @@ def build_dlret_table(
     return out
 
 
-def _fmt(x: object) -> str:
-    if x is None:
-        return ""
-    if isinstance(x, float):
-        if math.isnan(x):
-            return ""
-        return f"{x:.6f}"
-    return str(x)
+_ROW_EXTRAS = ("exchange", "last_trade_date", "last_trade_date_source", "successor_sec_id", "acquirer_sec_id",
+               "raw_payout_per_share", "raw_payout_source", "raw_payout_confidence")
 
 
-def enriched_to_row(e: EnrichedDelistRecord) -> dict:
-    return {
-        "ticker": e.ticker,
-        "bucket": e.bucket.value,
-        "observed_delist_date": _fmt(e.observed_delist_date),
-        "crsp_code": _fmt(e.crsp_code),
-        "dlret": "" if e.dlret_method in _DLRET_BLANK_IN_TABLE else _fmt(e.dlret),
-        "reason": e.reason,
+def delisting_row(e: EnrichedDelistRecord, **extra) -> dict:
+    unknown = set(extra) - set(_ROW_EXTRAS)
+    if unknown:
+        raise TypeError(f"delisting_row: unexpected field(s) {sorted(unknown)}")
+    ev = e.evidence or {}
+    df = ev.get("delist_filing") or {}
+    ak = ev.get("anchor_8k") or {}
+    dr = ev.get("dereg_filing") or {}
+    row = {
+        "sec_id": e.sec_id, "delist_date": e.delist_date, "ticker": e.ticker, "cik": e.cik,
+        "bucket": e.bucket.value, "crsp_code": e.crsp_code, "confidence": e.confidence, "reason": e.reason,
         "exchange": e.exchange.value,
-        "last_trade_close": _fmt(e.last_trade_close),
-        "payout_per_share": _fmt(e.payout_per_share),
-        "stock_ratio": _fmt(e.stock_ratio),
-        "acquirer_price": _fmt(e.acquirer_price),
-        "acquirer_ticker": _fmt(e.acquirer_ticker),
-        "recovery_ratio": _fmt(e.recovery_ratio),
-        "terminal_value": _fmt(e.terminal_value),
-        "dlret_method": e.dlret_method.value,
-        "dlret_confidence": e.dlret_confidence,
-        "payout_source": _fmt(e.payout_source),
+        "last_trade_close": e.last_trade_close, "payout_per_share": e.payout_per_share,
+        "stock_ratio": e.stock_ratio, "acquirer_price": e.acquirer_price, "acquirer_ticker": e.acquirer_ticker,
+        "recovery_ratio": e.recovery_ratio, "terminal_value": e.terminal_value,
+        "dlret": None if e.dlret_method in _DLRET_BLANK_IN_TABLE else e.dlret,
+        "dlret_method": e.dlret_method.value, "dlret_confidence": e.dlret_confidence,
+        "payout_source": e.payout_source,
+        "delist_filing_form": df.get("form"), "delist_filing_date": df.get("filing_date"),
+        "delist_filing_accession": df.get("accession"), "anchor_8k_items": ak.get("items"),
+        "dereg_form": dr.get("form"), "resolved_name": ev.get("name"),
+        "resolution_source": ev.get("resolution_source"),
         "review_flags": ";".join(e.review_flags),
     }
+    row.update(extra)
+    return row
 
 
-def write_dlret_csv(records: Iterable[EnrichedDelistRecord], path: str | Path) -> None:
-    path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", newline="") as fh:
-        writer = csv.DictWriter(fh, fieldnames=DLRET_TABLE_COLUMNS)
-        writer.writeheader()
-        for e in records:
-            writer.writerow(enriched_to_row(e))
+def _key(row: Mapping[str, str], path) -> str | tuple[str, str] | None:
+    sid = (row.get("sec_id") or "").strip()
+    if not sid:
+        return None
+    date = (row.get("delist_date") or "").strip()
+    return (sid, date) if date else sid
 
 
-def load_merger_terms_csv(path: str | Path) -> dict[str | tuple[str, str], dict]:
-    """Load merger-consideration terms keyed by upper-cased ticker.
+def load_float_overrides(path: str | Path, value_col: str) -> dict[str | tuple[str, str], float]:
+    out: dict[str | tuple[str, str], float] = {}
+    with Path(path).open(newline="") as fh:
+        reader = csv.DictReader(fh)
+        missing = [c for c in ("sec_id", value_col) if c not in (reader.fieldnames or [])]
+        if missing:
+            raise ValueError(f"{path}: CSV missing required column(s) {missing}; found {reader.fieldnames}")
+        for row in reader:
+            key, val = _key(row, path), (row.get(value_col) or "").strip()
+            if key is not None and val:
+                out[key] = float(val)
+    return out
 
-    CSV columns: ticker, cash_per_share, stock_ratio, acquirer_price,
-    acquirer_ticker. Blank numeric cells are omitted from the per-ticker dict.
 
-    Optional column ``observed_delist_date``: when a row's date cell is
-    non-blank, the entry is keyed by ``(ticker_upper, date)`` for per-event
-    precision (recycled tickers). A blank/absent date cell falls back to a
-    bare ``ticker_upper`` key that applies to all events of that ticker.
-    """
+def load_merger_terms_overrides(path: str | Path) -> dict[str | tuple[str, str], dict]:
     out: dict[str | tuple[str, str], dict] = {}
     with Path(path).open(newline="") as fh:
-        for row in csv.DictReader(fh):
-            tkr = (row.get("ticker") or "").strip().upper()
-            if not tkr:
+        reader = csv.DictReader(fh)
+        if "sec_id" not in (reader.fieldnames or []):
+            raise ValueError(f"{path}: CSV missing required column 'sec_id'; found {reader.fieldnames}")
+        for row in reader:
+            key = _key(row, path)
+            if key is None:
                 continue
             terms: dict = {}
             for k in ("cash_per_share", "stock_ratio", "acquirer_price"):
@@ -289,43 +281,14 @@ def load_merger_terms_csv(path: str | Path) -> dict[str | tuple[str, str], dict]
             if acq:
                 terms["acquirer_ticker"] = acq
             if ("stock_ratio" in terms) != ("acquirer_price" in terms):
-                raise ValueError(
-                    f"{path}: ticker {tkr} has an incomplete stock leg — "
-                    "stock_ratio and acquirer_price must both be present or both absent"
-                )
-            date = (row.get("observed_delist_date") or "").strip()
-            out_key: str | tuple[str, str] = (tkr, date) if date else tkr
-            out[out_key] = terms
+                raise ValueError(f"{path}: {key} has an incomplete stock leg — stock_ratio and acquirer_price "
+                                 "must both be present or both absent")
+            out[key] = terms
     return out
 
 
-def load_float_map_csv(path: str | Path, value_col: str) -> dict[str | tuple[str, str], float]:
-    """Load a {ticker(upper): float} map from a CSV with columns ticker, <value_col>.
-
-    Raises ValueError if the CSV header lacks 'ticker' or value_col, so a mistyped
-    --last-trade-closes/--recoveries column fails loudly instead of silently
-    returning {} (which would make every merger fall back to the no-price branch).
-    Rows with a blank ticker or blank value are skipped.
-
-    Optional column ``observed_delist_date``: when a row's date cell is
-    non-blank, the entry is keyed by ``(ticker_upper, date)`` for per-event
-    precision (recycled tickers). A blank/absent date cell falls back to a
-    bare ``ticker_upper`` key that applies to all events of that ticker.
-    """
-    out: dict[str | tuple[str, str], float] = {}
-    with Path(path).open(newline="") as fh:
-        reader = csv.DictReader(fh)
-        fields = reader.fieldnames or []
-        missing = [c for c in ("ticker", value_col) if c not in fields]
-        if missing:
-            raise ValueError(
-                f"{path}: CSV missing required column(s) {missing}; found {fields}"
-            )
-        for row in reader:
-            tkr = (row.get("ticker") or "").strip().upper()
-            val = (row.get(value_col) or "").strip()
-            if tkr and val:
-                date = (row.get("observed_delist_date") or "").strip()
-                out_key: str | tuple[str, str] = (tkr, date) if date else tkr
-                out[out_key] = float(val)
-    return out
+def unmatched_override_keys(overrides: Mapping, events: Iterable[tuple[str, str]]) -> list:
+    events = list(events)
+    sids = {s for s, _ in events}
+    pairs = set(events)
+    return [k for k in overrides if (k not in pairs if isinstance(k, tuple) else k not in sids)]
