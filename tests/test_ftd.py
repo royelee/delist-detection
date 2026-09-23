@@ -193,6 +193,18 @@ def test_load_maps_separatorless_class_symbols_to_the_observed_ticker(tmp_path):
     assert [r.symbol for r in idx.by_symbol("BRK-B")] == ["BRK-B"]
 
 
+def test_rows_map_to_the_separator_spelling_even_when_the_bare_one_is_observed_too(tmp_path):
+    # Index snapshots spell one ticker both ways (Wikipedia "BF.B", iShares "BFB"):
+    # the rows are keyed by the canonical "BF-B" and found under either spelling.
+    (tmp_path / "index.html").write_text('<a href="/files/data/x/cnsfails201811b.zip">b</a>')
+    text = ("SETTLEMENT DATE|CUSIP|SYMBOL|QUANTITY (FAILS)|DESCRIPTION|PRICE\n"
+            "20181126|115637209|BFB|10|BROWN-FORMAN CORP CL-B|48.00\n")
+    (tmp_path / "cnsfails201811b.zip").write_bytes(_zip_bytes({"a.txt": text}))
+    idx = FtdIndex.load(FtdClient(tmp_path), date(2018, 11, 16), date(2018, 11, 30), symbols={"BF-B", "BFB"})
+    assert [r.symbol for r in idx.by_symbol("BF-B")] == ["BF-B"]
+    assert idx.by_symbol("BFB") == idx.by_symbol("BF-B")
+
+
 def test_extend_adjacent_scans_merge_and_skip_rescan(tmp_path):
     (tmp_path / "index.html").write_text(
         '<a href="/files/data/x/cnsfails201901a.zip">a</a>'

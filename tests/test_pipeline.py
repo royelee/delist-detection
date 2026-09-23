@@ -1116,3 +1116,32 @@ def test_ftd_rows_spelled_without_a_separator_are_sightings_of_the_observed_tick
     assert [(r["sec_id"], r["figi_source"]) for r in secs] == [("BBG000BYNJ81", "cusip")]
     th = read_table("ticker_history", table_path(tmp_path, "ticker_history"))
     assert [(r["ticker"], r["valid_from"], r["valid_to"]) for r in th] == [("BF-B", "2015-06-01", "2016-01-04")]
+
+
+def test_a_ticker_observed_in_both_spellings_keeps_each_securitys_own_spelling(fake_edgar, tmp_path):
+    """Hubbell, as the snapshots record it: class B seen as "HUB-B" (Wikipedia)
+    and "HUBB" (iShares) until the 2015 class merger, then the merged class under
+    its real ticker HUBB. FTD writes "HUBB" throughout. The class B eras must all
+    reach the old CUSIP (one security, labelled HUB-B); the merged class keeps
+    HUBB even though its FTD rows are keyed by the canonical HUB-B."""
+    for t in ("HUB-B", "HUBB"):
+        fake_edgar.company_map[t] = {"cik_str": 48898, "ticker": t, "title": "HUBBELL INC"}
+    fake_edgar.submissions_by_cik[48898] = []
+    obs = ([Observation("HUBB", d, "HUBBELL INC") for d in ("2013-06-28", "2013-12-31", "2016-06-30", "2016-12-30")]
+           + [Observation("HUB-B", d, "HUBBELL INC. CL B") for d in ("2014-12-31", "2015-06-30")])
+    rows = (_ftd("HUBB", "443510201", "HUBBELL INC CL B", ["2013-06-03", "2013-12-02", "2014-06-02", "2014-12-01",
+                                                          "2015-06-01", "2015-12-18"])
+            + _ftd("HUBB", "443510607", "HUBBELL INC", ["2015-12-21", "2016-06-01", "2016-12-01", "2017-01-03"]))
+    index, clients = _index_clients(fake_edgar, obs, rows, {
+        ("ID_CUSIP", "443510201"): _figi_answer("BBGHUBBOLD1", "HUB/B", "HUBBELL INC -CL B"),
+        ("ID_CUSIP", "443510607"): _figi_answer("BBGHUBBNEW1", "HUBB", "HUBBELL INC"),
+    })
+
+    run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
+
+    secs = {r["sec_id"] for r in read_table("securities", table_path(tmp_path, "securities"))}
+    assert secs == {"BBGHUBBOLD1", "BBGHUBBNEW1"}
+    th = read_table("ticker_history", table_path(tmp_path, "ticker_history"))
+    assert [(r["sec_id"], r["ticker"], r["valid_from"], r["valid_to"]) for r in th] == [
+        ("BBGHUBBNEW1", "HUBB", "2015-12-21", "2017-01-03"),
+        ("BBGHUBBOLD1", "HUB-B", "2013-06-03", "2015-12-18")]

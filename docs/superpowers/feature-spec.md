@@ -539,6 +539,13 @@ line changes observable output.
   the only way to price the acquirer as of that merger's own completion
   date, since one acquirer ticker can price several targets on different
   dates.
+- **Ticker spellings (§6.1, §7.2).** Fails-to-deliver rows written without
+  a separator ("BFB") are keyed by the observed separator spelling ("BF-B"),
+  also when the caller observed the bare spelling too (the index snapshots
+  write both). A security's `ticker_history` uses one spelling per ticker: a
+  spelling it was observed under, the separator form first — Hubbell's
+  merged class keeps "HUBB", its class B (seen as "HUB-B" and "HUBB") is
+  "HUB-B", and Viacom class B is "VIA-B" also for its Nasdaq years as VIAB.
 - **A security's CUSIPs (§7.3, §8.8).** Every CUSIP of an era whose OpenFIGI
   answer is accepted as the security's composite is kept (up to 3 tried per
   era, no extra requests); for a `sec_id` pin or a placeholder, where there is

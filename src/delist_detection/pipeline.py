@@ -231,10 +231,19 @@ def _merge_review_rows(rows: list[dict]) -> list[dict]:
 
 
 def _sightings(sec: Security, ftd: FtdIndex, cusips: list[str]) -> list[tuple[str, str, str]]:
+    """Dated `(day, ticker, source)` sightings of the security: its observations
+    and the FTD rows of its CUSIPs. A ticker spelled with or without separators
+    ("BF-B" / "BFB": snapshots write both, FTD keys rows by the separator form)
+    is written one way per security: a spelling it was observed under, the one
+    with a separator first. So Hubbell's merged class keeps "HUBB" while class
+    B, observed as "HUB-B" and "HUBB", is "HUB-B"."""
     out = [(o.as_of, o.ticker, "observation") for e in sec.eras for o in e.observations]
     for c in cusips:
         out += [(r.date, r.symbol, "ftd") for r in ftd.by_cusip(c)]
-    return sorted(set(out))
+    label: dict[str, str] = {}
+    for t in sorted({o.ticker for e in sec.eras for o in e.observations}, key=lambda t: ("-" not in t, t)):
+        label.setdefault(t.replace("-", ""), t)
+    return sorted({(d, label.get(t.replace("-", ""), t), s) for d, t, s in out})
 
 
 def _cusip_sightings(sec: Security, ftd: FtdIndex, cusips: list[str]) -> list[tuple[str, str, str]]:
