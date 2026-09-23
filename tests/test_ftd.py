@@ -215,6 +215,30 @@ def test_load_maps_separatorless_class_symbols_to_the_observed_ticker(tmp_path):
     assert [r.symbol for r in idx.by_symbol("BRK-B")] == ["BRK-B"]
 
 
+def test_a_bare_symbol_row_is_relabelled_only_when_its_description_fits_the_class_ticker():
+    """With the class ticker's observed names known, a "BFB" row becomes "BF-B"
+    only when its description agrees with them: another security trading under
+    the bare symbol stays "BFB". The bare spelling still finds all its rows.
+    With no names known (an acquirer ticker) there is nothing to check against,
+    and every bare row is relabelled."""
+    rows = [FtdRow("2018-11-26", "115637209", "BFB", "BROWN-FORMAN CORP CL-B", 48.0),
+            FtdRow("2018-11-27", "999999999", "BFB", "BIG FAKE BANCORP", 3.0)]
+
+    class _Client:
+        def urls_for(self, lo, hi):
+            return ["mem"]
+
+        def rows(self, url, *, symbols=None, cusips=None):
+            yield from (r for r in rows if symbols and r.symbol in symbols)
+
+    idx = FtdIndex.load(_Client(), date(2018, 11, 16), date(2018, 11, 30), symbols={"BF-B"},
+                        names={"BF-B": ["BROWN FORMAN CORP CLASS B"]})
+    assert [(r.cusip, r.symbol) for r in idx.by_symbol("BF-B")] == [("115637209", "BF-B")]
+    assert [(r.cusip, r.symbol) for r in idx.by_symbol("BFB")] == [("115637209", "BF-B"), ("999999999", "BFB")]
+    unnamed = FtdIndex.load(_Client(), date(2018, 11, 16), date(2018, 11, 30), symbols={"BF-B"})
+    assert [r.cusip for r in unnamed.by_symbol("BF-B")] == ["115637209", "999999999"]
+
+
 def test_rows_map_to_the_separator_spelling_even_when_the_bare_one_is_observed_too(tmp_path):
     # Index snapshots spell one ticker both ways (Wikipedia "BF.B", iShares "BFB"):
     # the rows are keyed by the canonical "BF-B" and found under either spelling.

@@ -330,8 +330,12 @@ def run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_
     # gap no FTD row bridges). Every later step works on the refined eras.
     lo = max(FTD_START, min(_d(e.first) for e in eras) - timedelta(days=30))
     hi = min(date.today(), max(_d(e.last) for e in eras) + timedelta(days=400))
+    class_names: dict[str, list[str]] = defaultdict(list)     # BF-B's names: checks FTD's "BFB" rows
+    for e in eras:
+        if "-" in e.ticker:
+            class_names[e.ticker] += e.names
     ftd = FtdIndex.load(clients.ftd_client, lo, hi, symbols={e.ticker for e in eras},
-                        cusips={c for e in eras for c in e.cusips})
+                        cusips={c for e in eras for c in e.cusips}, names=class_names)
     eras = refine_eras(eras, ftd)
     era_by_key = eras_by_key(eras)               # raises on a duplicate key: an era is never dropped
     log(f"{len(eras)} eras after the FTD split")

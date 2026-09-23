@@ -149,6 +149,23 @@ def test_refine_eras_ignores_short_cusip_runs_and_obs_less_sides():
     assert a.ftd_cusips == ("AAA",) and b.ftd_cusips == ("BBB",)
 
 
+def test_another_security_under_the_bare_symbol_does_not_split_a_class_tickers_era():
+    """Brown-Forman B is observed as BF-B; FTD writes it BFB. Rows of an unrelated
+    security trading as "BFB" in between must stay out of BF-B's rows, or they
+    read as a CUSIP switch and cut the era."""
+    obs = [Observation("BF-B", d, "BROWN FORMAN CORP CLASS B") for d in ("2015-06-30", "2016-06-30")]
+    rows = (_rows("BFB", "115637209", ["2015-06-01", "2015-09-01", "2015-12-01"], "BROWN-FORMAN CORP CL-B")
+            + _rows("BFB", "999999999", ["2016-01-04", "2016-02-01", "2016-03-01", "2016-04-01"], "BIG FAKE BANCORP")
+            + _rows("BFB", "115637209", ["2016-05-02", "2016-06-01", "2016-07-01"], "BROWN-FORMAN CORP CL-B"))
+    client = _RowsClient(rows)
+    guarded = FtdIndex.load(client, date(2015, 1, 1), date(2016, 12, 31), symbols={"BF-B"},
+                            names={"BF-B": ["BROWN FORMAN CORP CLASS B"]})
+    assert [(e.first, e.last, e.ftd_cusips) for e in refine_eras(split_eras(obs), guarded)] == [
+        ("2015-06-30", "2016-06-30", ("115637209",))]
+    unguarded = FtdIndex.load(client, date(2015, 1, 1), date(2016, 12, 31), symbols={"BF-B"})
+    assert len(refine_eras(split_eras(obs), unguarded)) == 2
+
+
 def test_refine_eras_splits_on_a_gap_that_no_ftd_row_bridges():
     era = _era("X", ("2009-06-08", "X CO"), ("2012-06-29", "X CO"), ("2012-12-31", "X CO"))
     bridged = _rows("X", "AAA", ["2009-06-01", "2010-03-01", "2011-01-03", "2011-11-01", "2012-07-02"])

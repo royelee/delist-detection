@@ -1225,6 +1225,28 @@ def test_ftd_rows_spelled_without_a_separator_are_sightings_of_the_observed_tick
     assert [(r["ticker"], r["valid_from"], r["valid_to"]) for r in th] == [("BF-B", "2015-06-01", "2016-01-04")]
 
 
+def test_another_security_under_the_bare_symbol_never_becomes_the_class_ticker(fake_edgar, tmp_path):
+    """BF-B is seen once, in the middle of a run of an unrelated security that
+    FTD lists as "BFB" too. Its rows must not be relabelled BF-B (their
+    description does not agree with BF-B's observed name), or BF-B would take
+    that security's CUSIP and resolve to it."""
+    fake_edgar.company_map["BF-B"] = {"cik_str": 14693, "ticker": "BF-B", "title": "BROWN FORMAN CORP"}
+    fake_edgar.submissions_by_cik[14693] = []
+    obs = [Observation("BF-B", "2016-02-15", "BROWN FORMAN CORP CLASS B")]
+    rows = (_ftd("BFB", "115637209", "BROWN-FORMAN CORP CL-B", ["2015-06-01", "2015-09-01", "2015-12-01"])
+            + _ftd("BFB", "999999999", "BIG FAKE BANCORP", ["2016-01-04", "2016-02-01", "2016-03-01", "2016-04-01"])
+            + _ftd("BFB", "115637209", "BROWN-FORMAN CORP CL-B", ["2016-05-02", "2016-06-01", "2016-07-01"]))
+    index, clients = _index_clients(fake_edgar, obs, rows, {
+        ("ID_CUSIP", "115637209"): _figi_answer("BBG000BYNJ81", "BF/B", "BROWN-FORMAN CORP-CLASS B"),
+        ("ID_CUSIP", "999999999"): _figi_answer("BBGBIGFAKE1", "BFB", "BIG FAKE BANCORP"),
+    })
+
+    run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
+
+    secs = read_table("securities", table_path(tmp_path, "securities"))
+    assert [(r["sec_id"], r["figi_source"]) for r in secs] == [("BBG000BYNJ81", "cusip")]
+
+
 def test_a_ticker_observed_in_both_spellings_keeps_each_securitys_own_spelling(fake_edgar, tmp_path):
     """Hubbell, as the snapshots record it: class B seen as "HUB-B" (Wikipedia)
     and "HUBB" (iShares) until the 2015 class merger, then the merged class under

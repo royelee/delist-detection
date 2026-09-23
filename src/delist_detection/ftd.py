@@ -17,11 +17,12 @@ import re
 import zipfile
 from bisect import bisect_left, bisect_right
 from collections import Counter, defaultdict
-from collections.abc import Iterable, Iterator
+from collections.abc import Iterable, Iterator, Mapping
 from dataclasses import dataclass, replace
 from datetime import date, timedelta
 from pathlib import Path
 
+from .names import names_agree
 from .observations import normalize_ticker
 from .sec_http import download, get_text
 from .trading_calendar import add_trading_days, next_trading_day
@@ -160,12 +161,19 @@ class FtdIndex:
         # separator ("BFB" -> "BF-B"); None marks a bare spelling two requested
         # tickers share, which is left unmapped.
         self._aliases: dict[str, str | None] = {}
+        # A class ticker's observed names: a bare-spelled row is relabelled to it
+        # only when its description agrees with one of them.
+        self._names: dict[str, list[str]] = {}
         for r in rows:
             self.add(r)
 
-    def _learn(self, symbols: set[str]) -> set[str]:
-        """Remember the separator spellings among `symbols`; returns the file
-        filter: each symbol plus its separator-free spelling."""
+    def _learn(self, symbols: set[str], names: Mapping[str, Iterable[str]] | None = None) -> set[str]:
+        """Remember the separator spellings among `symbols` (and the observed
+        names of any of them); returns the file filter: each symbol plus its
+        separator-free spelling."""
+        for t, ns in (names or {}).items():
+            t = normalize_ticker(t)
+            self._names[t] = list(dict.fromkeys([*self._names.get(t, []), *(n for n in ns if n)]))
         out = set(symbols)
         for s in symbols:
             bare = s.replace("-", "")
@@ -174,17 +182,23 @@ class FtdIndex:
                 self._aliases[bare] = s if self._aliases.get(bare, s) == s else None
         return out
 
-    def _canon(self, symbol: str) -> str:
-        """The canonical ticker a symbol stands for: the requested ticker it
-        equals without separators, else itself. This holds even when the bare
-        spelling was requested too (index snapshots write "BFB" and "BF.B"), so
-        both spellings share one list of rows."""
-        return self._aliases.get(symbol) or symbol
+    def _relabel(self, r: FtdRow) -> FtdRow:
+        """A row under a class ticker's bare spelling ("BFB"), keyed by the class
+        ticker ("BF-B") when its description agrees with the ticker's observed
+        names — or when none are known (an acquirer ticker), since there is
+        nothing to check against. Another security trading under the bare
+        symbol keeps it. This holds even when the bare spelling was requested
+        too (index snapshots write "BFB" and "BF.B")."""
+        canon = self._aliases.get(r.symbol)
+        if not canon:
+            return r
+        names = self._names.get(canon)
+        if names and not any(names_agree(r.description, n) for n in names):
+            return r
+        return replace(r, symbol=canon)
 
     def add(self, r: FtdRow) -> None:
-        canon = self._canon(r.symbol)
-        if canon != r.symbol:
-            r = replace(r, symbol=canon)
+        r = self._relabel(r)
         if r in self._seen:
             return
         self._seen.add(r)
@@ -194,8 +208,11 @@ class FtdIndex:
 
     @classmethod
     def load(cls, client: FtdClient, lo: date, hi: date, *, symbols: Iterable[str] | None = None,
-             cusips: Iterable[str] | None = None) -> "FtdIndex":
+             cusips: Iterable[str] | None = None,
+             names: Mapping[str, Iterable[str]] | None = None) -> "FtdIndex":
+        """`names`: observed names per class ticker, for the bare-spelling check."""
         idx = cls()
+        idx._learn(set(), names)
         idx._scan(client, lo, hi,
                   None if symbols is None else {normalize_ticker(s) for s in symbols},
                   None if cusips is None else {c.upper() for c in cusips})
@@ -263,8 +280,15 @@ class FtdIndex:
         return rows[i:j]
 
     def by_symbol(self, symbol: str, lo: str | None = None, hi: str | None = None) -> list[FtdRow]:
+        """Rows under `symbol`. A class ticker's bare spelling ("BFB") gives every
+        row FTD wrote under it: its own and those relabelled to the class ticker."""
         self._sort()
-        return self._slice(self._by_symbol.get(self._canon(normalize_ticker(symbol)), []), lo, hi)
+        s = normalize_ticker(symbol)
+        rows = self._by_symbol.get(s, [])
+        canon = self._aliases.get(s)
+        if canon:
+            rows = sorted(rows + self._by_symbol.get(canon, []), key=lambda r: (r.date, r.cusip, r.symbol))
+        return self._slice(rows, lo, hi)
 
     def by_cusip(self, cusip: str, lo: str | None = None, hi: str | None = None) -> list[FtdRow]:
         self._sort()
