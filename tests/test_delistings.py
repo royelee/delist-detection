@@ -82,15 +82,22 @@ def test_aet_merger_delisting(fake_edgar):
 
 
 def test_midas_volume_past_the_window_is_ignored(fake_edgar):
-    # The AET Form 25 (filed 2018-11-29) takes effect 2018-12-09; MIDAS is only
-    # ignored once its last volume day reaches effective + SEEN_AFTER_DAYS(5) =
-    # 2018-12-14 (issuer Form 25s take effect 10 days after filing and trading
-    # legitimately continues until then) -- so pick a MIDAS day well past that.
+    # The AET Form 25 group is a single filing (2018-11-29), so the finder's
+    # MIDAS window is [earliest filed - 75d, latest effective + 10d] =
+    # [2018-09-15, 2018-12-19], and effective = 2018-12-09. MIDAS is ignored
+    # only once its last volume day is on or after effective + SEEN_AFTER_DAYS
+    # (5) = 2018-12-14. Two boundary probes, both inside the requested window:
+    #   2018-12-14 (== effective + 5d): ignored, falls back to the ex99 notice
+    #   2018-12-13 (== effective + 4d): used as the last trade day
     edgar = _aet_edgar(fake_edgar)
     clf = DelistClassifier(edgar, TickerResolver(edgar))
     sec = _sec("BBG000FJLFX8", 1122304, "AET", "2017-06-30", "2018-06-29", "AETNA INC")
-    (ev,), _ = DelistingFinder(edgar, clf, midas=_Midas(date(2018, 12, 20))).find(_ctx(sec))
-    assert ev.last_trade.source == "ex99_notice" and ev.last_trade.day == date(2018, 11, 28)
+
+    (ev_ignored,), _ = DelistingFinder(edgar, clf, midas=_Midas(date(2018, 12, 14))).find(_ctx(sec))
+    assert ev_ignored.last_trade.source == "ex99_notice" and ev_ignored.last_trade.day == date(2018, 11, 28)
+
+    (ev_used,), _ = DelistingFinder(edgar, clf, midas=_Midas(date(2018, 12, 13))).find(_ctx(sec))
+    assert ev_used.last_trade.source == "midas" and ev_used.last_trade.day == date(2018, 12, 13)
 
 
 def test_secondary_regional_withdrawal_is_skipped(fake_edgar):
@@ -145,8 +152,9 @@ def test_unreadable_form25_goes_to_review(fake_edgar):
     sec = _sec("BBG_O", 9800, "OOO", "2015-01-01", "2019-01-09", "OOO CORP")
     events, review = DelistingFinder(fake_edgar, clf).find(_ctx(sec, last_seen="2019-01-09"))
     assert events == []
-    unreadable = [r for r in review if r.flag == "form25_unreadable"]
-    assert [(r.flag, r.delist_date) for r in unreadable] == [("form25_unreadable", "2019-01-20")]
+    # An unreadable filing sets had_unmatched too, so no ended_without_delisting
+    # piles on top of it (item 5, fix round 2).
+    assert [(r.flag, r.delist_date) for r in review] == [("form25_unreadable", "2019-01-20")]
 
 
 def test_unclassified_form25_class_goes_to_review(fake_edgar):
@@ -156,7 +164,9 @@ def test_unclassified_form25_class_goes_to_review(fake_edgar):
     sec = _sec("BBG_P", 9900, "PPP", "2015-01-01", "2019-01-31", "PPP CORP")
     events, review = DelistingFinder(fake_edgar, clf).find(_ctx(sec, last_seen="2019-01-31"))
     assert events == []
-    assert any(r.flag == "form25_unclassified" for r in review)
+    # An unclassified filing sets had_unmatched too, so no ended_without_delisting
+    # piles on top of it (item 5, fix round 2).
+    assert [r.flag for r in review] == ["form25_unclassified"]
 
 
 def test_single_sibling_letter_mismatch_is_skipped(fake_edgar):
@@ -238,6 +248,28 @@ def test_group_forms25_within_30_days_by_exchange_preference(fake_edgar):
     events, review = DelistingFinder(fake_edgar, clf).find(_ctx(sec, listed=True, seen_after=True))
     assert len(events) == 1
     assert events[0].exchange == "NYSE"
+    assert events[0].delist_date == "2018-12-07"    # effective date of the earliest filing (g1, 2018-11-27)
+    assert events[0].form25_sub.accession == "g2"   # the NYSE filing supplies form25/form25_sub
+
+
+def test_group_by_distance_from_earliest_filing(fake_edgar):
+    # Filings on day 0, day 28 and day 55: day 28 is within 30 days of day 0
+    # (joins), but day 55 is 55 days from day 0 -- outside SAME_EVENT_DAYS
+    # measured from the group's earliest filing -- so it's a second group.
+    fake_edgar.submissions_by_cik[12000] = [
+        EdgarSubmission("t1", "25", "2020-01-01", "", "", "p.xml"),
+        EdgarSubmission("t2", "25", "2020-01-29", "", "", "p.xml"),
+        EdgarSubmission("t3", "25", "2020-02-25", "", "", "p.xml"),
+    ]
+    fake_edgar.raws["t1"] = NYSE_COMMON_RAW
+    fake_edgar.raws["t2"] = NYSE_COMMON_RAW
+    fake_edgar.raws["t3"] = NYSE_COMMON_RAW
+    clf = DelistClassifier(fake_edgar, TickerResolver(fake_edgar))
+    sec = _sec("BBG_T", 12000, "TTT", "2015-01-01", "2019-12-31", "TTT CORP")
+    ctx = _ctx(sec, last_seen="2019-12-31")
+    ctx.seen_after = lambda d: d == "2020-02-25"   # lets the second group survive the item-3 ignore-gate
+    events, review = DelistingFinder(fake_edgar, clf).find(ctx)
+    assert len(events) == 2
 
 
 def test_group_last_trade_from_midas_across_issuer_and_exchange_form25(fake_edgar):
@@ -274,6 +306,46 @@ def test_fallback_dates_by_bankruptcy_8k_not_later_form15(fake_edgar):
     events, review = DelistingFinder(fake_edgar, clf).find(_ctx(sec, last_seen="2015-01-20"))
     (ev,) = events
     assert ev.record.delist_date == "2015-01-12"
+
+
+def test_fallback_revocation_years_later_uses_last_seen_approx(fake_edgar):
+    # SEC revocations of delinquent filers often come years after trading
+    # stopped; a revocation this distant must not date the delisting.
+    fake_edgar.submissions_by_cik[13000] = [
+        EdgarSubmission("v1", "REVOKED", "2018-01-15", "", "", ""),   # ~3 years after last_seen
+    ]
+    clf = DelistClassifier(fake_edgar, TickerResolver(fake_edgar))
+    sec = _sec("BBG_V", 13000, "VVV", "2010-01-01", "2015-01-10", "VVV CORP")
+    events, review = DelistingFinder(fake_edgar, clf).find(_ctx(sec, last_seen="2015-01-10"))
+    (ev,) = events
+    assert ev.record.delist_date == "2015-01-10"
+    assert "delist_date_approx" in ev.flags
+
+
+def test_fallback_revocation_within_window_is_used(fake_edgar):
+    fake_edgar.submissions_by_cik[13100] = [
+        EdgarSubmission("v2", "REVOKED", "2015-01-30", "", "", ""),   # last_seen + 20 days
+    ]
+    clf = DelistClassifier(fake_edgar, TickerResolver(fake_edgar))
+    sec = _sec("BBG_V2", 13100, "VVW", "2010-01-01", "2015-01-10", "VVW CORP")
+    events, review = DelistingFinder(fake_edgar, clf).find(_ctx(sec, last_seen="2015-01-10"))
+    (ev,) = events
+    assert ev.record.delist_date == "2015-01-30"
+
+
+def test_fallback_date_form15_window_bounds():
+    # _fallback_date is a pure function of ctx.last_seen and the classifier's
+    # evidence dict; test its Form-15/revocation window boundary directly
+    # rather than contriving a classifier scenario for each of the three cases.
+    finder = DelistingFinder(None, None)
+    ctx = SecurityContext(security=None, siblings=[], ticker_on=lambda d: None, last_seen="2015-01-10",
+                          seen_after=lambda d: False, listed_today=False, expected_name=None)
+    outside_before = {"dereg_filing": {"filing_date": "2014-12-10"}}   # last_seen - 31d: outside
+    assert finder._fallback_date(ctx, outside_before) == ("2015-01-10", ("delist_date_approx",))
+    inside_after = {"dereg_filing": {"filing_date": "2015-05-10"}}     # last_seen + 120d: inside
+    assert finder._fallback_date(ctx, inside_after) == ("2015-05-10", ())
+    outside_after = {"dereg_filing": {"filing_date": "2015-05-11"}}    # last_seen + 121d: outside
+    assert finder._fallback_date(ctx, outside_after) == ("2015-01-10", ("delist_date_approx",))
 
 
 def test_successor_is_itself_when_continued(fake_edgar):
@@ -336,3 +408,11 @@ def test_cik_none_listed_today_is_quiet(fake_edgar):
     clf = DelistClassifier(fake_edgar, TickerResolver(fake_edgar))
     events, review = DelistingFinder(fake_edgar, clf).find(_ctx(sec, listed=True))
     assert events == [] and review == []
+
+
+def test_cik_none_listing_status_unknown(fake_edgar):
+    sec = _sec("BBG_NOCIK3", None, "NOC3", "2018-01-01", "2020-01-01", "NOCIK CO")
+    clf = DelistClassifier(fake_edgar, TickerResolver(fake_edgar))
+    events, review = DelistingFinder(fake_edgar, clf).find(_ctx(sec, listed=None, last_seen="2020-01-01"))
+    assert events == []
+    assert [(r.flag, r.cik, r.last_seen) for r in review] == [("listing_status_unknown", None, "2020-01-01")]

@@ -98,18 +98,40 @@ def list_form25(filings: Iterable[EdgarSubmission]) -> list[EdgarSubmission]:
     return sorted((f for f in filings if f.form in FORM25_FORMS), key=lambda f: (f.filing_date, f.accession))
 
 
+# "Common Stock Purchase Warrants" / "Redeemable warrants included as part of the
+# units, each exercisable for..." are warrants even though the text also carries
+# COMMON or UNITS: checked first, against just the segment before the first comma
+# (or the whole text, for the two named lead-ins), so a warrant named after the
+# common isn't misread as the common itself.
+_WARRANT_TAIL = re.compile(r"WARRANTS?$")
+_WARRANT_LEAD = re.compile(r"^(?:COMMON STOCK PURCHASE WARRANTS?|REDEEMABLE WARRANTS?)")
+
+# Units that are themselves the equity of an MLP, LLC or royalty trust (not a
+# SPAC-style unit bundling a share + a warrant) are common. Checked before the
+# generic unit rule.
+_OWNERSHIP_UNIT_START = re.compile(r"^(?:CLASS [A-Z] )?(?:COMMON UNITS|DEPOSITARY UNITS|TRUST UNITS"
+                                   r"|UNITS REPRESENTING)")
+_OWNERSHIP_UNIT_INTEREST = re.compile(r"UNITS?\s+REPRESENTING.{0,80}?(?:PARTNER|LIMITED LIABILITY COMPANY|LLC)")
+
+
 def class_kind(class_text: str) -> str:
     s = (class_text or "").upper().strip()
     if not s:
         return "other"
+    before_comma = s.split(",", 1)[0].rstrip()
+    if _WARRANT_TAIL.search(before_comma) or _WARRANT_LEAD.match(s):
+        return "warrant"
     if re.match(r"^\W*(?:CLASS [A-Z] |SERIES [A-Z] )?(?:COMMON|ORDINARY)", s):
         return "common"
     if re.search(r"DEPOSITARY SHARES?,? EACH REPRESENTING", s):
         # A depositary-share text is preferred only when it names a preferred
-        # security ("... each representing one ordinary share" is common).
-        return "preferred" if "PREFERRED" in s else "common"
-    if re.search(r"PREFERRED|CAPITAL SECURIT|TRUST PREFERRED|TRUST CERTIFICATE", s):
+        # or preference security ("... each representing one ordinary share"
+        # is common).
+        return "preferred" if re.search(r"PREFERRED|PREFERENCE", s) else "common"
+    if re.search(r"PREFERRED|PREFERENCE|CAPITAL SECURIT|TRUST PREFERRED|TRUST CERTIFICATE", s):
         return "preferred"
+    if _OWNERSHIP_UNIT_START.match(s) or _OWNERSHIP_UNIT_INTEREST.search(s):
+        return "common"
     if re.search(r"\bUNITS?\b|PURCHASE CONTRACTS?\b", s):
         return "unit"
     if re.search(r"\bWARRANTS?\b", s):
@@ -126,12 +148,22 @@ def class_kind(class_text: str) -> str:
     return "other"
 
 
+# A class letter is only real when it names the security's own class, not
+# something mentioned later in the text (a rights-plan clause naming its own
+# "Series A Junior Participating Preferred Stock"). Take it from the first
+# segment only: everything before the first comma, semicolon, "(", " AND " or
+# " WITH ". A Liberty-style tracking stock ("Series A Liberty SiriusXM Common
+# Stock") still carries its class as a series in that first segment.
+_SEGMENT_END = re.compile(r"[,;(]| AND | WITH ")
+
+
 def class_label(class_text: str) -> str | None:
     s = (class_text or "").upper()
-    m = re.search(r"\bCLASS\s+([A-Z])\b", s)
+    seg = _SEGMENT_END.split(s, maxsplit=1)[0]
+    m = re.search(r"\bCLASS\s+([A-Z])\b", seg)
     if m:
         return f"CLASS {m.group(1)}"
-    m = re.search(r"\bSERIES\s+([A-Z])\b", s)
+    m = re.search(r"\bSERIES\s+([A-Z])\b", seg)
     if m:
         return f"SERIES {m.group(1)}"
     return None

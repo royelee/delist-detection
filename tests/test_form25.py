@@ -86,6 +86,40 @@ def test_class_kind_misreads():
     assert class_kind("American Depositary Shares, each representing one ordinary share") == "common"
 
 
+def test_class_kind_depositary_preference_shares():
+    assert class_kind("Depositary Shares, each representing a 1/1,000th interest in a 5.750% "
+                      "Series F Preference Share") == "preferred"
+    assert class_kind("Depositary Shares, each representing a 1/1,000th interest in a share of "
+                      "5.625% Perpetual Non-Cumulative Preference Shares") == "preferred"
+    assert class_kind("Series A Preference Shares") == "preferred"
+    assert class_kind("American Depositary Shares, each representing one ordinary share") == "common"
+
+
+def test_class_kind_ownership_units_are_common():
+    assert class_kind("Class A Units representing limited liability company interests") == "common"
+    assert class_kind("Common Units Representing Limited Partner Interests") == "common"
+    assert class_kind("Depositary Units Representing Limited Partner Interests") == "common"
+    assert class_kind("Trust Units") == "common"
+    assert class_kind("Units, each consisting of one share of Class A common stock and one-half "
+                      "of one redeemable warrant") == "unit"
+    assert class_kind("Corporate Units") == "unit"
+
+
+def test_class_kind_warrants_named_after_common():
+    assert class_kind("Common Stock Purchase Warrants") == "warrant"
+    assert class_kind("Redeemable warrants included as part of the units, each exercisable for "
+                      "one share of Class A common stock") == "warrant"
+    assert class_kind("Common Stock, $0.01 par value, and associated Preferred Stock Purchase "
+                      "Rights") == "common"
+
+
+def test_class_label_only_from_the_securitys_own_segment():
+    assert class_label("Common Stock, par value $0.01 per share, and associated Series A Junior "
+                       "Participating Preferred Stock Purchase Rights") is None
+    assert class_label("Series A Liberty SiriusXM Common Stock, par value $0.01") == "SERIES A"
+    assert class_label("Class B Common Stock") == "CLASS B"
+
+
 def test_exchange_labels():
     assert exchange_label("NEW YORK STOCK EXCHANGE LLC") == "NYSE"
     assert exchange_label("NYSE American LLC") == "NYSE AMERICAN"

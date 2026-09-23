@@ -35,8 +35,8 @@ SIBLING_ALIVE_AFTER_DAYS = 400      # a sibling's own last sighting, plus this: 
 MIDAS_BEFORE_DAYS, MIDAS_AFTER_DAYS, MIDAS_STILL_TRADING_DAYS = 75, 10, 5
 EIGHTK_BEFORE_DAYS, EIGHTK_AFTER_DAYS = 60, 5      # single-filing 8-K window (fallback path)
 EIGHTK_GROUP_AFTER_DAYS = 15                       # group 8-K window: latest filed + this many days
-DEREG_FALLBACK_BEFORE_DAYS = 30     # a fallback Form 15 must be within [last_seen - this, ...
-DEREG_FALLBACK_AFTER_DAYS = 120     # ... last_seen + this] to date the delisting
+DEREG_FALLBACK_BEFORE_DAYS = 30     # a fallback revocation or Form 15 must be within
+DEREG_FALLBACK_AFTER_DAYS = 120     # [last_seen - this, last_seen + this] to date the delisting
 
 # Preferred exchange for a multi-exchange delisting group: the filing on the
 # most-senior exchange supplies the event's `exchange` and `form25`/`form25_sub`.
@@ -181,11 +181,12 @@ class DelistingFinder:
     def _group(self, candidates: list[tuple[EdgarSubmission, Form25]]
               ) -> list[list[tuple[EdgarSubmission, Form25]]]:
         """Chain matched Form 25s into one group per delisting: each filing joins
-        the open group when it's within SAME_EVENT_DAYS of the group's latest
-        filing so far, across exchanges."""
+        the open group when it's within SAME_EVENT_DAYS of the group's EARLIEST
+        filing (not its latest member), across exchanges — so filings on days
+        0, 28 and 55 make two events (day 55 is 55 days from day 0), not one."""
         groups: list[list[tuple[EdgarSubmission, Form25]]] = []
         for item in sorted(candidates, key=lambda i: i[0].filing_date):
-            if groups and (_d(item[0].filing_date) - _d(groups[-1][-1][0].filing_date)).days <= SAME_EVENT_DAYS:
+            if groups and (_d(item[0].filing_date) - _d(groups[-1][0][0].filing_date)).days <= SAME_EVENT_DAYS:
                 groups[-1].append(item)
             else:
                 groups.append([item])
@@ -219,6 +220,9 @@ class DelistingFinder:
             if ctx.listed_today is False:
                 return [], [ReviewItem(sec.sec_id, ticker_last, None, "ended_without_delisting",
                                        "no issuer CIK to search for a Form 25", last_seen=ctx.last_seen)]
+            if ctx.listed_today is None:
+                return [], [ReviewItem(sec.sec_id, ticker_last, None, "listing_status_unknown",
+                                       "no issuer CIK and listing status unknown", last_seen=ctx.last_seen)]
             return [], []
 
         filings = self.edgar.recent_filings(cik)
@@ -233,17 +237,27 @@ class DelistingFinder:
         for sub in list_form25(filings):
             if sub.filing_date < floor:
                 continue
+            # Filings that plainly aren't about any security of this issuer
+            # (none of the observed securities were even alive on this date)
+            # get no review item at all, so these checks come before the
+            # readability/classification ones below.
+            alive = [r for r in ctx.siblings if self._alive_at(ctx, r.sec_id, sub.filing_date)]
+            if not alive:
+                continue
             raw = self.edgar.fetch_filing_raw(cik, sub.accession)
             if not raw:
+                had_unmatched = True
                 self._review(review, seen_review, sec, ticker_last, cik, "form25_unreadable",
                              f"no filing text for {sub.form} {sub.accession}", sub)
                 continue
             f25 = parse_form25(raw, accession=sub.accession, form=sub.form, filing_date=sub.filing_date)
+            if f25.exchange in REGIONAL_EXCHANGES:
+                continue
             if class_kind(f25.class_text) == "other":
+                had_unmatched = True
                 self._review(review, seen_review, sec, ticker_last, cik, "form25_unclassified",
                              f"{sub.form} {sub.accession} ({f25.class_text!r}) has no recognized class", sub)
                 continue
-            alive = [r for r in ctx.siblings if self._alive_at(ctx, r.sec_id, sub.filing_date)]
             matched, why = match_security(f25, alive)
             if matched is None:
                 if why == "ambiguous class":
@@ -255,8 +269,6 @@ class DelistingFinder:
                 continue
             ref = next((r for r in alive if r.sec_id == matched), None)
             if ref is not None and self._class_conflict(f25, ref):
-                continue
-            if f25.exchange in REGIONAL_EXCHANGES:
                 continue
             eff = effective_date(sub.filing_date)
             continued = bool(ctx.listed_today) or ctx.seen_after(
@@ -331,20 +343,27 @@ class DelistingFinder:
 
     # -- no-Form-25 fallback ----------------------------------------------
     def _fallback_date(self, ctx: SecurityContext, ev: dict) -> tuple[str, tuple[str, ...]]:
-        """Date a fallback delisting: the revocation filing, the confirmed
-        bankruptcy 8-K, the anchor 8-K, then a Form 15 only if it falls within
-        [last_seen - 30d, last_seen + 120d]; otherwise last_seen itself, flagged
-        `delist_date_approx`."""
-        for key in ("revoked_filing", "bankruptcy_8k", "anchor_8k"):
+        """Date a fallback delisting: the confirmed bankruptcy 8-K, then the
+        anchor 8-K, then the revocation filing or a Form 15 but only if either
+        falls within [last_seen - 30d, last_seen + 120d]; otherwise last_seen
+        itself, flagged `delist_date_approx`.
+
+        A revocation is not trusted outright: SEC revokes a delinquent filer's
+        registration years after trading actually stopped, and this date feeds
+        the return calculation, so a distant revocation is no better than
+        having no filing at all — last_seen plus the approx flag is closer to
+        the truth than a multi-year-late revocation date.
+        """
+        for key in ("bankruptcy_8k", "anchor_8k"):
             f = ev.get(key)
             if f and f.get("filing_date"):
                 return f["filing_date"], ()
-        dereg = ev.get("dereg_filing")
-        if dereg and dereg.get("filing_date"):
-            fd = dereg["filing_date"]
-            lo = (_d(ctx.last_seen) - timedelta(days=DEREG_FALLBACK_BEFORE_DAYS)).isoformat()
-            hi = (_d(ctx.last_seen) + timedelta(days=DEREG_FALLBACK_AFTER_DAYS)).isoformat()
-            if lo <= fd <= hi:
+        lo = (_d(ctx.last_seen) - timedelta(days=DEREG_FALLBACK_BEFORE_DAYS)).isoformat()
+        hi = (_d(ctx.last_seen) + timedelta(days=DEREG_FALLBACK_AFTER_DAYS)).isoformat()
+        for key in ("revoked_filing", "dereg_filing"):
+            f = ev.get(key)
+            fd = f.get("filing_date") if f else None
+            if fd and lo <= fd <= hi:
                 return fd, ()
         return ctx.last_seen, ("delist_date_approx",)
 
