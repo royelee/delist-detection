@@ -24,7 +24,7 @@ from pathlib import Path
 
 import requests
 
-from delist_detection.edgar import resolve_user_agent
+from delist_detection.edgar import EdgarBlocked, _throttle, check_response, resolve_user_agent
 
 ROOT = Path(__file__).resolve().parents[1]
 USER_AGENT = resolve_user_agent()
@@ -32,7 +32,9 @@ USER_AGENT = resolve_user_agent()
 
 def _get(url: str, timeout: int = 30) -> str | None:
     try:
+        _throttle()      # the library's shared SEC pacing (8 requests/s)
         r = requests.get(url, headers={"User-Agent": USER_AGENT}, timeout=timeout)
+        check_response(r)       # a 403/429 aborts the run (EdgarBlocked), never a verdict
         if r.status_code != 200:
             return None
         return r.text
@@ -49,8 +51,10 @@ def fetch_edgar_entity_landing(cik: int) -> dict:
     cs = str(cik).zfill(10)
     url = f"https://data.sec.gov/submissions/CIK{cs}.json"
     try:
+        _throttle()
         r = requests.get(url, headers={"User-Agent": USER_AGENT, "Host": "data.sec.gov"},
                          timeout=30)
+        check_response(r)
         if r.status_code != 200:
             return {}
         d = r.json()
@@ -243,4 +247,8 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except EdgarBlocked as e:
+        print(f"ABORTED: {e}", file=sys.stderr)
+        sys.exit(2)
