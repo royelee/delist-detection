@@ -251,6 +251,7 @@ The full flag vocabulary (from `classifier.py`, `ticker_resolver.py`,
 | `distress_at_normal_price` | A compliance-failure or liquidation row whose last trade close was still ≥ $5 |
 | `no_form25` | No Form 25 was found; the classifier's fallback path (8-K completion, Form 15, `REVOKED`, SPAC trust liquidation) found and dated the delisting |
 | `delist_date_approx` | The fallback delisting date is the security's last sighting, not a filing date (see *Where each date and price comes from* below) |
+| `observed_after_delisting` | The delisting's Form 25 was filed before the security's first observation, and no fails-to-deliver row under its own tickers shows it trading after that: the observations that follow are stale (a snapshot kept listing A.G. Edwards, acquired 2007-10-01, through 2009) |
 | `successor_unknown` | An exchange-transfer delisting whose successor security could not be found |
 | `last_trade_date_conflict` | The Form 25 notice / 8-K text and the MIDAS/Nasdaq-halt confirmation disagree on the last trade date |
 | `last_trade_date_unconfirmed` | The last trade date comes from unconfirmed filing wording only, with no MIDAS/halt confirmation |

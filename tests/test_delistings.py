@@ -540,6 +540,77 @@ def test_completeness_continued_transfer_then_later_merger_yields_both(fake_edga
     assert merger_ev.delist_date == "2018-03-10"
 
 
+def _stale_snapshot_edgar(fake_edgar):
+    # A.G. Edwards-like: acquired 2007-10-01 (Form 25, 8-K 2.01, Form 15), but a
+    # stale index snapshot still lists the ticker from 2008-01-16 to 2009-06-08.
+    fake_edgar.submissions_by_cik[21000] = [
+        EdgarSubmission("w1", "8-K", "2007-10-01", "2007-10-01", "2.01,3.01,5.01,9.01", "k.htm"),
+        EdgarSubmission("w2", "25-NSE", "2007-10-02", "", "", "p.xml"),
+        EdgarSubmission("w3", "15-12B", "2007-10-12", "", "", "f.htm"),
+    ]
+    fake_edgar.raws["w2"] = NYSE_COMMON_RAW
+    fake_edgar.texts["w1"] = ("Item 3.01 Notice of Delisting. trading was suspended prior to the opening of "
+                              "trading on October 1, 2007 " + "x" * 300)
+    return fake_edgar
+
+
+def test_form25_before_a_stale_first_sighting_is_the_delisting(fake_edgar):
+    """A snapshot that kept listing a security after it was acquired must not
+    hide the real delisting: with no delisting found from the first sighting
+    on and the security gone today, the Form 25 the classifier picks from
+    before that sighting (the floor the main scan applies) is still matched
+    and becomes the delisting, instead of an `ended_without_delisting` row."""
+    edgar = _stale_snapshot_edgar(fake_edgar)
+    clf = DelistClassifier(edgar, TickerResolver(edgar))
+    sec = _sec("BBG_AGE", 21000, "AGE", "2008-01-16", "2009-06-08", "EDWARDS AG INC")
+    ctx = _ctx(sec, listed=False, last_seen="2009-06-08")
+    ctx.seen_after = lambda d: d < "2009-06-08"      # the stale observations run to 2009-06-08
+    events, review = DelistingFinder(edgar, clf).find(ctx)
+    (ev,) = events
+    assert ev.delist_date == "2007-10-12" and ev.form25_sub.accession == "w2"
+    assert ev.record.bucket is CrspBucket.MERGER
+    assert ev.last_trade.day == date(2007, 9, 28)
+    assert "observed_after_delisting" in ev.flags
+    assert not any(r.flag == "ended_without_delisting" for r in review)
+
+
+def test_form25_before_first_sighting_is_not_taken_for_another_class(fake_edgar):
+    # The early Form 25 is still matched by class: one for a class the issuer's
+    # observed security is not (here preferred stock) is never its delisting.
+    edgar = _stale_snapshot_edgar(fake_edgar)
+    edgar.raws["w2"] = _f25_raw("New York Stock Exchange LLC", class_text="6.25% Preferred Stock, Series A")
+    clf = DelistClassifier(edgar, TickerResolver(edgar))
+    sec = _sec("BBG_AGE", 21000, "AGE", "2008-01-16", "2009-06-08", "EDWARDS AG INC")
+    events, review = DelistingFinder(edgar, clf).find(_ctx(sec, listed=False, last_seen="2009-06-08"))
+    assert events == []
+    assert [r.flag for r in review] == ["ended_without_delisting"]
+
+
+def test_form25_before_first_sighting_is_not_taken_when_ftd_shows_trading_after_it(fake_edgar):
+    # Fails-to-deliver rows under the security's own ticker after the early
+    # Form 25 show it kept trading: that filing ended something else (an old
+    # exchange move), so it is not revived.
+    edgar = _stale_snapshot_edgar(fake_edgar)
+    clf = DelistClassifier(edgar, TickerResolver(edgar))
+    sec = _sec("BBG_AGE", 21000, "AGE", "2008-01-16", "2009-06-08", "EDWARDS AG INC")
+    ctx = _ctx(sec, listed=False, last_seen="2009-06-08")
+    ctx.ftd_seen_after = lambda d: d < "2009-06-01"
+    events, review = DelistingFinder(edgar, clf).find(ctx)
+    assert events == []
+    assert [r.flag for r in review] == ["ended_without_delisting"]
+
+
+def test_form25_before_first_sighting_is_ignored_while_listed(fake_edgar):
+    # A security listed today never takes a Form 25 from before its first
+    # sighting (an earlier life of the issuer, an old exchange move).
+    edgar = _stale_snapshot_edgar(fake_edgar)
+    clf = DelistClassifier(edgar, TickerResolver(edgar))
+    sec = _sec("BBG_AGE", 21000, "AGE", "2008-01-16", "2009-06-08", "EDWARDS AG INC")
+    events, review = DelistingFinder(edgar, clf).find(_ctx(sec, listed=True, seen_after=True,
+                                                           last_seen="2009-06-08"))
+    assert events == [] and review == []
+
+
 def test_cik_none_listing_status_unknown(fake_edgar):
     sec = _sec("BBG_NOCIK3", None, "NOC3", "2018-01-01", "2020-01-01", "NOCIK CO")
     clf = DelistClassifier(fake_edgar, TickerResolver(fake_edgar))

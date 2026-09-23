@@ -392,6 +392,11 @@ def test_run_builds_last_seen_and_seen_after_from_the_right_sightings(fake_edgar
     assert ctx.last_seen == "2018-11-29"           # last AET-labeled sighting, not the later OTC row
     assert ctx.seen_after("2019-01-01") is True    # the OTC row is still visible to seen_after
     assert ctx.seen_after("2019-12-31") is False
+    # ftd_seen_after: fails rows under the security's own tickers only (not the
+    # OTC tail, not observations)
+    assert ctx.ftd_seen_after("2018-11-28") is True
+    assert ctx.ftd_seen_after("2018-11-29") is False
+    assert ctx.ftd_seen_after("2017-01-01") is True
 
 
 def test_run_builds_sibling_spans_for_every_security_of_the_issuer(fake_edgar, tmp_path, monkeypatch):
@@ -1303,3 +1308,36 @@ def test_a_ticker_observed_in_both_spellings_keeps_each_securitys_own_spelling(f
     assert [(r["sec_id"], r["ticker"], r["valid_from"], r["valid_to"]) for r in th] == [
         ("BBGHUBBNEW1", "HUBB", "2015-12-21", "2017-01-03"),
         ("BBGHUBBOLD1", "HUB-B", "2013-06-03", "2015-12-18")]
+
+
+STALE_F25_RAW = ("<TYPE>25-NSE\n<notificationOfRemoval><exchange><entityName>New York Stock Exchange LLC"
+                 "</entityName></exchange>\n<descriptionClassSecurity>Common Stock</descriptionClassSecurity>\n"
+                 "<ruleProvision>17 CFR 240.12d2-2(a)(3)</ruleProvision></notificationOfRemoval>")
+
+
+def test_a_delisting_before_the_ftd_window_still_gets_its_close(fake_edgar, tmp_path):
+    """A.G. Edwards as a stale snapshot records it: acquired 2007-10-01, still
+    listed under AGE from 2008-01-16 to 2009-06-08. The FTD rows are first
+    loaded from the eras' first sighting on (2007-12-17), so the rows that
+    carry the 2007-09-28 close are outside that window; the close lookup must
+    reach them all the same."""
+    fake_edgar.submissions_by_cik[21000] = [
+        EdgarSubmission("w1", "8-K", "2007-10-01", "2007-10-01", "2.01,3.01,5.01,9.01", "k.htm"),
+        EdgarSubmission("w2", "25-NSE", "2007-10-02", "", "", "p.xml"),
+        EdgarSubmission("w3", "15-12B", "2007-10-12", "", "", "f.htm"),
+    ]
+    fake_edgar.raws["w2"] = STALE_F25_RAW
+    fake_edgar.texts["w1"] = ("Item 3.01 Notice of Delisting. trading was suspended prior to the opening of "
+                              "trading on October 1, 2007 " + "x" * 300)
+    obs = [Observation("AGE", d, "EDWARDS AG INC", cik=21000, sec_id="BBGAGE00001")
+           for d in ("2008-01-16", "2008-07-25", "2009-06-08")]
+    rows = _ftd("AGE", "281760108", "EDWARDS A G INC", ["2007-09-04", "2007-09-28"], price=63.5) + \
+        _ftd("AGE", "281760108", "EDWARDS A G INC", ["2007-10-01"], price=64.0)
+    index, clients = _index_clients(fake_edgar, obs, rows, {})
+
+    run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
+
+    (d,) = read_table("delistings", table_path(tmp_path, "delistings"))
+    assert (d["sec_id"], d["delist_date"], d["bucket"]) == ("BBGAGE00001", "2007-10-12", "merger")
+    assert d["last_trade_date"] == "2007-09-28" and d["last_trade_close"] == "64.000000"
+    assert "observed_after_delisting" in d["review_flags"] and "no_last_close" not in d["review_flags"]

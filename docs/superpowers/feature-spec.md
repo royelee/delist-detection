@@ -521,6 +521,18 @@ line changes observable output.
   `delist_date_approx`. A late SEC revocation of a delinquent filer can come
   years after trading actually stopped, so an out-of-window revocation date
   is rejected in favor of last-seen rather than trusted at face value.
+- **A Form 25 before the first sighting (§8.6, stale observations).** The
+  Form 25 scan starts 30 days before the security's first sighting, so a
+  snapshot that kept listing a security after it was acquired (A.G.
+  Edwards, gone 2007-10-01, listed through 2009) would hide its delisting.
+  When nothing from the first sighting on is a delisting and the security
+  is not listed today, the classifier's fallback may still pick such an
+  earlier Form 25 (its frozen-tail rule); it becomes the delisting when it
+  matches the security by class and no fails-to-deliver row under the
+  security's own tickers is dated after it, flagged
+  `observed_after_delisting`. The close for a last trade before the
+  fails-to-deliver window loaded for the eras is read from rows fetched
+  for that day.
 - **Form 25 grouping (§8.6, D16).** Matched Form 25s chain into one
   delisting when a filing's date is within `SAME_EVENT_DAYS` (30 days) of
   the *group's earliest* member's filing date, not its latest — so filings

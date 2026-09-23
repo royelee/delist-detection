@@ -85,6 +85,11 @@ class SecurityContext:
     # "manual"); recorded on every DelistRecord this security's events
     # produce, in place of the classify_event default "security_master".
     resolution_source: str = "security_master"
+    # True when an SEC fails-to-deliver row under one of the security's own
+    # tickers is dated after the given ISO day: evidence of trading that an
+    # observation alone does not give (a stale snapshot can list a security
+    # long after it was acquired). Unknown (the default) counts as none.
+    ftd_seen_after: Callable[[str], bool] = lambda day: False
 
 
 def _d(s: str) -> date:
@@ -255,9 +260,11 @@ class DelistingFinder:
         seen_review: set[tuple[str, str]] = set()
         had_unmatched = False
         candidates: list[tuple[EdgarSubmission, Form25]] = []
+        early: list[EdgarSubmission] = []       # before the floor: only the fallback may take one
 
         for sub in list_form25(filings):
             if sub.filing_date < floor:
+                early.append(sub)
                 continue
             # Filings that plainly aren't about any security of this issuer
             # (none of the observed securities were even alive on this date)
@@ -326,7 +333,7 @@ class DelistingFinder:
         # continued ones gets neither a real delisting nor a review row.
         if last_definitive is None:
             if ctx.listed_today is False:
-                fb = self._fallback(ctx, cik, filings, ticker_last)
+                fb = self._fallback(ctx, cik, filings, ticker_last, early)
                 if fb is not None:
                     events.append(fb)
                 elif not had_unmatched:
@@ -340,7 +347,8 @@ class DelistingFinder:
         return events, review
 
     def _build_event(self, ctx: SecurityContext, cik: int, filings: list[EdgarSubmission],
-                     group: list[tuple[EdgarSubmission, Form25]], eff: str, continued: bool) -> DelistingEvent:
+                     group: list[tuple[EdgarSubmission, Form25]], eff: str, continued: bool,
+                     extra_flags: tuple[str, ...] = ()) -> DelistingEvent:
         sec = ctx.security
         winner_sub, winner_f25 = min(group, key=self._exchange_rank)
         filing_ticker = ctx.ticker_on(winner_sub.filing_date) or sec.eras[-1].ticker
@@ -353,7 +361,7 @@ class DelistingFinder:
         rec = self.classifier.classify_event(ticker=ticker, cik=cik, anchor_date=anchor, name=sec.name,
                                              expected_name=ctx.expected_name, kind=sec.kind, form25=winner_sub,
                                              resolution_source=ctx.resolution_source)
-        return self._event(sec, cik, ticker, eff, rec, lt, winner_f25, winner_sub, continued)
+        return self._event(sec, cik, ticker, eff, rec, lt, winner_f25, winner_sub, continued, extra_flags)
 
     def _event(self, sec: Security, cik: int, ticker: str, delist_date: str, rec: DelistRecord, lt: LastTrade,
                f25: Form25 | None, sub: EdgarSubmission | None, continued: bool,
@@ -399,20 +407,65 @@ class DelistingFinder:
                 return fd, ()
         return ctx.last_seen, ("delist_date_approx",)
 
+    def _early_group(self, ctx: SecurityContext, cik: int, picked: str,
+                     early: list[EdgarSubmission]) -> list[tuple[EdgarSubmission, Form25]]:
+        """The Form 25 `picked` (an accession) from `early`, the filings dated
+        before the main scan's floor, with its early neighbours within
+        SAME_EVENT_DAYS — each kept only when it matches this security by the
+        main scan's own rules (readable, not regional, a recognized class, and
+        `match_security` against this security and the siblings alive then).
+        The security itself counts as alive: its first sighting is what put
+        the filing before the floor. Empty when `picked` is not early."""
+        sec = ctx.security
+        anchor = next((s for s in early if s.accession == picked), None)
+        if anchor is None:
+            return []
+        own = next((r for r in ctx.siblings if r.sec_id == sec.sec_id), SecurityRef(sec.sec_id, sec.share_class,
+                                                                                     sec.kind))
+        group: list[tuple[EdgarSubmission, Form25]] = []
+        for sub in early:
+            if abs((_d(sub.filing_date) - _d(anchor.filing_date)).days) > SAME_EVENT_DAYS:
+                continue
+            raw = self.edgar.fetch_filing_raw(cik, sub.accession)
+            if not raw:
+                continue
+            f25 = parse_form25(raw, accession=sub.accession, form=sub.form, filing_date=sub.filing_date)
+            if f25.exchange in REGIONAL_EXCHANGES or class_kind(f25.class_text) == "other":
+                continue
+            alive = [own] + [r for r in ctx.siblings
+                             if r.sec_id != sec.sec_id and self._alive_at(ctx, r.sec_id, sub.filing_date)]
+            matched, _ = match_security(f25, alive)
+            if matched == sec.sec_id and not self._class_conflict(f25, own):
+                group.append((sub, f25))
+        return group
+
     def _fallback(self, ctx: SecurityContext, cik: int, filings: list[EdgarSubmission],
-                  ticker: str) -> DelistingEvent | None:
+                  ticker: str, early: list[EdgarSubmission] | None = None) -> DelistingEvent | None:
         sec = ctx.security
         rec = self.classifier.classify_event(ticker=ticker, cik=cik, anchor_date=ctx.last_seen, name=sec.name,
                                              expected_name=ctx.expected_name, kind=sec.kind, form25=None,
                                              resolution_source=ctx.resolution_source)
         ev = rec.evidence or {}
         if ev.get("delist_filing"):
-            # The classifier picked a Form 25 on its own, ignoring class: the
-            # main loop already decided about every Form 25 it could see, so a
-            # filing that comes back here was rejected (ambiguous, another
-            # sibling's, regional/secondary, another class, or before the
-            # floor) — never revive it as this security's delisting.
-            return None
+            # The classifier picked a Form 25 on its own, ignoring class. The
+            # main loop already decided about every Form 25 from the floor on,
+            # so such a filing was rejected (ambiguous, another sibling's,
+            # regional/secondary, another class) — never revive it. A filing
+            # from before the floor was never judged: the security's first
+            # sighting came after it, as when a stale index snapshot kept
+            # listing a security acquired months earlier. The classifier's own
+            # frozen-tail rule chose it for a security gone today, so it is
+            # the delisting when it matches this security by class and no
+            # fails-to-deliver row under the security's own tickers shows it
+            # trading after it; the observations after it are flagged
+            # `observed_after_delisting`.
+            group = self._early_group(ctx, cik, ev["delist_filing"].get("accession") or "", early or [])
+            if not group:
+                return None
+            eff = effective_date(min(s.filing_date for s, _ in group))
+            if ctx.ftd_seen_after((_d(eff) + timedelta(days=SEEN_AFTER_DAYS)).isoformat()):
+                return None
+            return self._build_event(ctx, cik, filings, group, eff, False, ("observed_after_delisting",))
         if rec.bucket is CrspBucket.UNKNOWN and not ev.get("deregistered"):
             return None
         ended_by, extra_flags = self._fallback_date(ctx, ev)

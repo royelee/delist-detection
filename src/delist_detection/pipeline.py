@@ -433,6 +433,8 @@ def run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_
                 expected_name=s.eras[-1].name if s.eras else None,
                 sibling_spans=spans,
                 resolution_source=_resolution_source(s, cik_res),
+                ftd_seen_after=lambda day, sig=sig, own={e.ticker for e in s.eras}: any(
+                    d > day for d, t, src in sig if src == "ftd" and t in own),
             )
             evs, rv = finder.find(ctx)
         except (EdgarBlocked, OpenFigiBlocked):
@@ -456,7 +458,15 @@ def run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_
     if bad:
         raise ValueError("override rows that match no delisting: " + "; ".join(map(str, bad)))
 
-    # 7. last-trade closes
+    # 7. last-trade closes. The FTD rows were loaded from the eras' first sighting
+    # on; a delisting whose last trade came earlier (a stale snapshot listed the
+    # security after it was gone) needs the rows around that day first.
+    early = [e for e in events if e.last_trade.day is not None and FTD_START <= e.last_trade.day < lo]
+    if early:
+        days = [e.last_trade.day for e in early]
+        ftd.extend(clients.ftd_client, min(days), max(days) + timedelta(days=10),
+                   symbols={e.ticker for e in early},
+                   cusips={c for e in early for c in sec_cusips.get(e.sec_id, [])})
     closes: dict[tuple[str, str], float] = {}
     for e in events:
         key = (e.sec_id, e.delist_date)
