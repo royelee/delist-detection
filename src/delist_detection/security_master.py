@@ -49,6 +49,10 @@ class EraResolution:
     source: str
     candidate: FigiCandidate | None
     flags: tuple[str, ...]
+    # The era's CUSIPs that belong to sec_id: every tried CUSIP whose OpenFIGI
+    # answer is accepted as that composite; for a pin or a placeholder (nothing
+    # to check against) the era's first candidate CUSIP.
+    cusips: tuple[str, ...] = ()
 
 
 def _cusip_runs(rows: Sequence[FtdRow]) -> list[tuple[str, list[FtdRow]]]:
@@ -187,48 +191,52 @@ class FigiResolver:
                      cusips: Mapping[str, list[str]]) -> dict[str, EraResolution]:
         out: dict[str, EraResolution] = {}
         jobs: list[dict] = []
-        plan: dict[str, tuple[list[int], int]] = {}
+        plan: dict[str, tuple[list[str], list[int], int]] = {}
         for era in eras:
+            tried = cusips.get(era.key, [])[: self.MAX_CUSIPS]
             if era.sec_id_pin:
-                out[era.key] = EraResolution(era.key, era.sec_id_pin, "pin", None, ())
+                out[era.key] = EraResolution(era.key, era.sec_id_pin, "pin", None, (), tuple(tried[:1]))
                 continue
             idx = []
-            for c in cusips.get(era.key, [])[: self.MAX_CUSIPS]:
+            for c in tried:
                 idx.append(len(jobs))
                 jobs.append(_cusip_job(c))
             t_idx = len(jobs)
             jobs.append({"idType": "TICKER", "idValue": bloomberg_ticker(era.ticker), "includeUnlistedEquities": True})
-            plan[era.key] = (idx, t_idx)
+            plan[era.key] = (tried, idx, t_idx)
         answers = self.figi.map(jobs) if jobs else []
         for era in eras:
             if era.key in out:
                 continue
-            idx, t_idx = plan[era.key]
+            tried, idx, t_idx = plan[era.key]
             names = era.names
-            for i in idx:
-                c = accept(us_candidates(answers[i].get("data") or []), ticker=era.ticker, names=names,
-                           via_cusip=True)
-                if c:
-                    out[era.key] = EraResolution(era.key, c.composite, "cusip", c, ())
-                    break
-            if era.key in out:
+            by_cusip = [accept(us_candidates(answers[i].get("data") or []), ticker=era.ticker, names=names,
+                               via_cusip=True) for i in idx]
+
+            def resolved(sec_id: str, source: str, cand: FigiCandidate) -> EraResolution:
+                own = tuple(c for c, got in zip(tried, by_cusip) if got is not None and got.composite == sec_id)
+                return EraResolution(era.key, sec_id, source, cand, (), own)
+
+            c = next((got for got in by_cusip if got), None)
+            if c:
+                out[era.key] = resolved(c.composite, "cusip", c)
                 continue
             c = accept(us_candidates(answers[t_idx].get("data") or []), ticker=era.ticker, names=names,
                        via_cusip=False)
             if c:
-                out[era.key] = EraResolution(era.key, c.composite, "ticker", c, ())
+                out[era.key] = resolved(c.composite, "ticker", c)
                 continue
             q = filter_query(era.name or "")
             if q:
                 rows = self.figi.filter(q, exchCode="US", includeUnlistedEquities=True)
                 c = accept(us_candidates(rows), ticker=era.ticker, names=names, via_cusip=False)
                 if c:
-                    out[era.key] = EraResolution(era.key, c.composite, "name", c, ())
+                    out[era.key] = resolved(c.composite, "name", c)
                     continue
             cik = ciks.get(era.key)
             if cik is not None:
                 out[era.key] = EraResolution(era.key, placeholder_id(cik, share_class_from_name(era.name)),
-                                             "placeholder", None, ("no_figi",))
+                                             "placeholder", None, ("no_figi",), tuple(tried[:1]))
             else:
                 out[era.key] = EraResolution(era.key, None, "unresolved", None, ("observation_unresolved",))
         return out

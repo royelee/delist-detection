@@ -28,7 +28,7 @@ from .openfigi import OpenFigiBlocked
 from .payout_gate import DEFAULT_TOL, gate_payouts
 from .reconstruction import _lookup, build_delistings_table, delisting_row, unmatched_override_keys
 from .security_master import (
-    FigiResolver, Security, build_securities, era_cusips, era_last_seen, ranges_from_sightings, refine_eras,
+    FigiResolver, Range, Security, build_securities, era_cusips, era_last_seen, ranges_from_sightings, refine_eras,
 )
 from .store import write_tables
 
@@ -237,6 +237,25 @@ def _sightings(sec: Security, ftd: FtdIndex, cusips: list[str]) -> list[tuple[st
     return sorted(set(out))
 
 
+def _cusip_sightings(sec: Security, ftd: FtdIndex, cusips: list[str]) -> list[tuple[str, str, str]]:
+    """Dated `(day, cusip, source)` sightings of the security's CUSIPs: the FTD
+    rows of each CUSIP that resolved to it, and the CUSIPs its observations carry."""
+    out = [(r.date, r.cusip, "ftd") for c in cusips for r in ftd.by_cusip(c)]
+    out += [(o.as_of, o.cusip, "observation") for e in sec.eras for o in e.observations if o.cusip]
+    return sorted(set(out))
+
+
+def _close_on(ftd: FtdIndex, cusip_ranges: list[Range], day: date,
+              symbol: str) -> tuple[float, str, bool] | None:
+    """The close of `day` (FTD rows of the next trading days, see
+    `FtdIndex.close_after`), looked up by the CUSIP whose range holds `day`,
+    then by `symbol`."""
+    d = day.isoformat()
+    cusip = next((r.value for r in cusip_ranges if r.valid_from <= d and (r.valid_to is None or d <= r.valid_to)),
+                 None)
+    return (ftd.close_after(day, cusip=cusip) if cusip else None) or ftd.close_after(day, symbol=symbol)
+
+
 def _ticker_on(sig: list[tuple[str, str, str]]) -> Callable[[str], str | None]:
     def f(day: str) -> str | None:
         before = [t for d, t, _ in sig if d <= day]
@@ -297,8 +316,9 @@ def run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_
     log(f"{len(securities)} securities; FIGI sources "
         f"{dict(Counter(s.figi_source for s in securities.values()))}")
 
-    # 4. each security's CUSIPs over its whole life
-    sec_cusips = {sid: list(dict.fromkeys(cusips[e.key][0] for e in s.eras if cusips[e.key]))
+    # 4. each security's CUSIPs over its whole life: every CUSIP of each of its eras
+    # that resolved to its FIGI (a reverse split's old and new CUSIP both)
+    sec_cusips = {sid: list(dict.fromkeys(c for e in s.eras for c in resolutions[e.key].cusips))
                   for sid, s in securities.items()}
     ftd.extend(clients.ftd_client, lo, date.today(), cusips={c for v in sec_cusips.values() for c in v})
 
@@ -376,9 +396,10 @@ def run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_
         if e.last_trade.day is None:
             e.record.evidence["flags"].append("no_last_close")
             continue
-        cusip = next((c for c in sec_cusips.get(e.sec_id, [])), None)
-        got = (ftd.close_after(e.last_trade.day, cusip=cusip) if cusip else None) \
-            or ftd.close_after(e.last_trade.day, symbol=e.ticker)
+        sec = securities[e.sec_id]
+        cusip_ranges = ranges_from_sightings(_cusip_sightings(sec, ftd, sec_cusips.get(e.sec_id, [])),
+                                             end=None, open_ended=True)
+        got = _close_on(ftd, cusip_ranges, e.last_trade.day, e.ticker)
         if got is None:
             e.record.evidence["flags"].append("no_last_close")
             continue
@@ -547,9 +568,7 @@ def run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_
                 exch = None
             th_rows.append({"sec_id": sid, "ticker": rg.value, "exchange": exch, "valid_from": rg.valid_from,
                             "valid_to": rg.valid_to, "source": rg.source})
-        cus = [(r.date, r.cusip, "ftd") for c in sec_cusips.get(sid, []) for r in ftd.by_cusip(c)]
-        cus += [(o.as_of, o.cusip, "observation") for e in s.eras for o in e.observations if o.cusip]
-        cus = [x for x in cus if end is None or x[0] <= end]
+        cus = [x for x in _cusip_sightings(s, ftd, sec_cusips.get(sid, [])) if end is None or x[0] <= end]
         for rg in ranges_from_sightings(cus, end=end, open_ended=is_listed):
             ch_rows.append({"sec_id": sid, "cusip": rg.value, "valid_from": rg.valid_from,
                             "valid_to": rg.valid_to, "source": rg.source})

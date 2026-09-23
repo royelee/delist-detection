@@ -204,11 +204,37 @@ def test_resolve_many_orders_routes():
         ciks={aet.key: 1122304, qcor.key: 1034842, goog.key: 1652044, fb.key: 1326801},
         cusips={aet.key: ["00817Y108"], qcor.key: ["74835Y101"], goog.key: [], fb.key: []},
     )
-    assert res[aet.key] == EraResolution(aet.key, "BBG000FJLFX8", "cusip", res[aet.key].candidate, ())
+    assert res[aet.key] == EraResolution(aet.key, "BBG000FJLFX8", "cusip", res[aet.key].candidate, (),
+                                         ("00817Y108",))
     assert res[qcor.key].sec_id == "BBG000BPVCR1" and res[qcor.key].source == "cusip"
     assert res[goog.key].sec_id == "BBG009S3NB30" and res[goog.key].source == "ticker"
     assert res[fb.key].sec_id == "CIK1326801-CLASS-A" and res[fb.key].flags == ("no_figi",)
     assert figi.filter_calls == ["FACEBOOK CLASS A"]          # only the unresolved era searched by name
+
+
+def test_resolve_many_reports_every_cusip_of_the_era_that_maps_to_its_figi():
+    # A reverse split: the observation carries the new CUSIP, FTD rows the old one;
+    # both map to the same composite, a third maps to another security.
+    era = split_eras([Observation("RS", "2020-06-30", "REVERSE SPLIT CO", cusip="11111A200")])[0]
+    figi = _Figi({
+        ("ID_CUSIP", "11111A200"): {"data": [_row("BBGRSPLIT01", "US", "RS", "REVERSE SPLIT CO")]},
+        ("ID_CUSIP", "11111A101"): {"data": [_row("BBGRSPLIT01", "US", "RS", "REVERSE SPLIT CO")]},
+        ("ID_CUSIP", "99999Z999"): {"data": [_row("BBGOTHER001", "US", "OTH", "OTHER CO")]},
+    })
+    res = FigiResolver(figi).resolve_many([era], ciks={era.key: 1},
+                                          cusips={era.key: ["11111A200", "11111A101", "99999Z999"]})
+    assert res[era.key].sec_id == "BBGRSPLIT01" and res[era.key].cusips == ("11111A200", "11111A101")
+    assert len(figi.jobs) == 4                    # the 3 CUSIP jobs + the ticker job: no extra OpenFIGI call
+
+
+def test_resolve_many_keeps_the_first_cusip_when_nothing_can_verify_it():
+    pinned = split_eras([Observation("X", "2020-01-02", "X CORP", sec_id="BBG000PIN001")])[0]
+    placeholder = _era("Y", ("2020-01-02", "Y CORP"))
+    res = FigiResolver(_Figi({})).resolve_many(
+        [pinned, placeholder], ciks={pinned.key: None, placeholder.key: 5},
+        cusips={pinned.key: ["PINCUSIP1", "PINCUSIP2"], placeholder.key: ["YCUSIP001"]})
+    assert res[pinned.key].cusips == ("PINCUSIP1",)
+    assert res[placeholder.key].sec_id == "CIK5-COMMON" and res[placeholder.key].cusips == ("YCUSIP001",)
 
 
 def test_pin_and_unresolved():
