@@ -67,10 +67,9 @@ def parse_index_links(html: str) -> list[str]:
 def parse_ftd_lines(lines: Iterable[str], *, symbols: set[str] | None = None,
                     cusips: set[str] | None = None) -> Iterator[FtdRow]:
     """Rows from FTD text lines; header, trailer and malformed lines are skipped.
-    With `symbols`/`cusips`, only rows matching either set are built (fast path)."""
-    want = symbols is not None or cusips is not None
-    symbols = symbols or set()
-    cusips = cusips or set()
+    `symbols`/`cusips` each filter independently when given (a row passes if it
+    matches either one); both left `None` (the default) means no filtering at
+    all. Filtered on symbol/CUSIP before an `FtdRow` is built (fast path)."""
     for line in lines:
         parts = line.rstrip("\r\n").split("|")
         if len(parts) < 6:
@@ -80,8 +79,11 @@ def parse_ftd_lines(lines: Iterable[str], *, symbols: set[str] | None = None,
             continue
         cusip = parts[1].strip().upper()
         symbol = normalize_ticker(parts[2])
-        if want and symbol not in symbols and cusip not in cusips:
-            continue
+        if symbols is not None or cusips is not None:
+            sym_hit = symbols is not None and symbol in symbols
+            cus_hit = cusips is not None and cusip in cusips
+            if not (sym_hit or cus_hit):
+                continue
         try:
             price: float | None = float(parts[-1].strip())
         except ValueError:
@@ -130,6 +132,11 @@ class FtdIndex:
         self._by_cusip: dict[str, list[FtdRow]] = defaultdict(list)
         self._seen: set[FtdRow] = set()
         self._dirty = False
+        # The [lo, hi] union already scanned *as that exact filter key* (not
+        # merely a key that happened to show up under the other dimension's
+        # filter) — see `extend`.
+        self._symbol_windows: dict[str, tuple[date, date]] = {}
+        self._cusip_windows: dict[str, tuple[date, date]] = {}
         for r in rows:
             self.add(r)
 
@@ -145,21 +152,42 @@ class FtdIndex:
     def load(cls, client: FtdClient, lo: date, hi: date, *, symbols: Iterable[str] | None = None,
              cusips: Iterable[str] | None = None) -> "FtdIndex":
         idx = cls()
-        idx._scan(client, lo, hi, {normalize_ticker(s) for s in symbols or ()},
-                  {c.upper() for c in cusips or ()})
+        idx._scan(client, lo, hi,
+                  None if symbols is None else {normalize_ticker(s) for s in symbols},
+                  None if cusips is None else {c.upper() for c in cusips})
         return idx
 
-    def extend(self, client: FtdClient, lo: date, hi: date, *, cusips: Iterable[str]) -> None:
-        new = {c.upper() for c in cusips} - set(self._by_cusip)
-        if new:
-            self._scan(client, lo, hi, set(), new)
+    def extend(self, client: FtdClient, lo: date, hi: date, *, cusips: Iterable[str] = (),
+               symbols: Iterable[str] = ()) -> None:
+        """Scan `[lo, hi]` for any of `cusips`/`symbols` not already covered by
+        an earlier `load`/`extend` scan filtered on that exact key over at
+        least that range. A CUSIP picked up only incidentally through a symbol
+        filter (never itself used as a CUSIP filter) has no recorded CUSIP
+        window, so it is rescanned here as a CUSIP filter — which is not
+        symbol-restricted, so it catches that CUSIP's rows under any symbol
+        (e.g. a ticker change). Rows already indexed are deduped via `_seen`."""
+        cusips = {c.upper() for c in cusips}
+        symbols = {normalize_ticker(s) for s in symbols}
+        new_cusips = {c for c in cusips if not self._covered(self._cusip_windows.get(c), lo, hi)}
+        new_symbols = {s for s in symbols if not self._covered(self._symbol_windows.get(s), lo, hi)}
+        if new_cusips or new_symbols:
+            self._scan(client, lo, hi, new_symbols or None, new_cusips or None)
 
-    def _scan(self, client: FtdClient, lo: date, hi: date, symbols: set[str], cusips: set[str]) -> None:
+    @staticmethod
+    def _covered(window: tuple[date, date] | None, lo: date, hi: date) -> bool:
+        return window is not None and window[0] <= lo and window[1] >= hi
+
+    def _scan(self, client: FtdClient, lo: date, hi: date, symbols: set[str] | None,
+              cusips: set[str] | None) -> None:
         lo_s, hi_s = lo.isoformat(), hi.isoformat()
         for url in client.urls_for(lo, hi):
             for r in client.rows(url, symbols=symbols, cusips=cusips):
                 if lo_s <= r.date <= hi_s:
                     self.add(r)
+        for keys, windows in ((symbols, self._symbol_windows), (cusips, self._cusip_windows)):
+            for k in keys or ():
+                cur = windows.get(k)
+                windows[k] = (min(cur[0], lo), max(cur[1], hi)) if cur else (lo, hi)
 
     def _sort(self) -> None:
         if self._dirty:

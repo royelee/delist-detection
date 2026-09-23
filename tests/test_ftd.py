@@ -90,3 +90,42 @@ def test_client_reads_quarterly_zip(tmp_path, monkeypatch):
     assert rows == [FtdRow("2008-12-30", "590188108", "MER", "MERRILL LYNCH & CO INC", 11.07)]
     idx = FtdIndex.load(c, date(2008, 12, 1), date(2008, 12, 31), symbols={"MER"})
     assert idx.close_after(date(2008, 12, 29), symbol="MER") == (11.07, "2008-12-30", False)
+
+
+def test_load_with_no_filters_returns_every_row(tmp_path):
+    (tmp_path / "index.html").write_text('<a href="/files/data/x/cnsfails201811b.zip">b</a>')
+    (tmp_path / "cnsfails201811b.zip").write_bytes(_zip_bytes({"a.txt": SAMPLE}))
+    c = FtdClient(tmp_path)
+    idx = FtdIndex.load(c, date(2018, 11, 16), date(2018, 11, 30))
+    assert len(idx.by_symbol("AET")) == 4
+    assert idx.by_symbol("CVS")[0].price == 80.27
+    assert idx.by_symbol("BRK-B")[0].price == 210.0
+    # 2004-03-22 (ABB) is outside the requested range, so it's excluded.
+    assert idx.by_symbol("ABB") == []
+
+
+def test_extend_with_symbols(tmp_path):
+    (tmp_path / "index.html").write_text('<a href="/files/data/x/cnsfails201811b.zip">b</a>')
+    (tmp_path / "cnsfails201811b.zip").write_bytes(_zip_bytes({"a.txt": SAMPLE}))
+    c = FtdClient(tmp_path)
+    idx = FtdIndex.load(c, date(2018, 11, 16), date(2018, 11, 30), symbols={"AET"})
+    assert idx.by_symbol("CVS") == []
+    idx.extend(c, date(2018, 11, 16), date(2018, 11, 30), symbols={"CVS"})
+    assert idx.close_after(date(2018, 11, 28), symbol="CVS") == (80.27, "2018-11-29", False)
+
+
+def test_extend_with_cusip_picks_up_rows_under_a_different_symbol(tmp_path):
+    # Simulates a ticker rename (e.g. FB -> META): same CUSIP, different symbol.
+    (tmp_path / "index.html").write_text('<a href="/files/data/x/cnsfails201811b.zip">b</a>')
+    text = ("SETTLEMENT DATE|CUSIP|SYMBOL|QUANTITY (FAILS)|DESCRIPTION|PRICE\n"
+            "20181126|30303M102|FB|10|FACEBOOK INC|140.00\n"
+            "20181128|30303M102|META|20|META PLATFORMS INC|141.00\n")
+    (tmp_path / "cnsfails201811b.zip").write_bytes(_zip_bytes({"a.txt": text}))
+    c = FtdClient(tmp_path)
+    idx = FtdIndex.load(c, date(2018, 11, 16), date(2018, 11, 30), symbols={"FB"})
+    assert [r.symbol for r in idx.by_cusip("30303M102")] == ["FB"]
+    # Already having rows for this CUSIP (via the symbol filter) must not stop
+    # a subsequent CUSIP-filtered extend from scanning it: that CUSIP has never
+    # itself been used as a scan filter, so its window is unrecorded.
+    idx.extend(c, date(2018, 11, 16), date(2018, 11, 30), cusips={"30303M102"})
+    assert [r.symbol for r in idx.by_cusip("30303M102")] == ["FB", "META"]
