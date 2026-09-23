@@ -72,3 +72,38 @@ def test_small_helpers():
     assert security_kind("Preferred") == "preferred"
     assert security_kind("", "GOLDMAN SACHS 6.125% NOTES DUE 2060") == "debt"
     assert security_kind(None) == "common"
+
+
+def test_us_candidates_warrants_not_dropped():
+    """Warrant lines (ticker ending in -W) should not be dropped as when-issued."""
+    rows = [
+        _row("BBG000ABC123", "US", "ABC-W", "ABC CORP-CW27", st="Warrant"),
+        _row("BBG000DEF456", "US", "ABC WI", "ABC CORP WHEN ISSUED"),  # this should be dropped
+    ]
+    cands = us_candidates(rows)
+    assert len(cands) == 1
+    assert cands[0].composite == "BBG000ABC123"
+    assert cands[0].ticker == "ABC-W"
+    assert cands[0].name == "ABC CORP-CW27"
+
+
+def test_us_candidates_security_type2_when_issued():
+    """securityType2 == 'When Issued' should drop the line when it's the representative."""
+    rows = [
+        _row("BBG000ABC123", "US", "ABC", "ABC CORP", st2="When Issued"),
+    ]
+    cands = us_candidates(rows)
+    assert len(cands) == 0  # dropped because rep has securityType2="When Issued"
+
+
+def test_us_candidates_prefers_us_exch_over_rs_zero():
+    """When no US row exists, use the first US_EXCH row, not rs[0]."""
+    rows = [
+        _row("BBG000ABC123", "GR", "ABC", "ABC GMBH"),  # foreign row first
+        _row("BBG000ABC123", "UN", "ABC", "ABC CORP"),  # US-traded row second
+    ]
+    cands = us_candidates(rows)
+    assert len(cands) == 1
+    assert cands[0].name == "ABC CORP"  # from UN row, not GR row
+    assert cands[0].ticker == "ABC"
+    assert len(cands[0].rows) == 2  # both rows in the candidate

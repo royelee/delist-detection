@@ -35,7 +35,7 @@ def _is_sideline(r: dict) -> bool:
     return (bool(_SIDELINE.search(r.get("name") or ""))
             or (r.get("securityType") or "").lower() in _FUND_TYPES
             or (r.get("securityType2") or "").lower() in {"mutual fund", "when issued"}
-            or ticker.endswith((" WI", "-W", "/WI", " W/I")))
+            or ticker.endswith((" WI", "/WI", " W/I")))
 
 
 def us_candidates(rows: Iterable[dict]) -> list[FigiCandidate]:
@@ -49,7 +49,7 @@ def us_candidates(rows: Iterable[dict]) -> list[FigiCandidate]:
         us = next((r for r in rs if r.get("exchCode") == "US"), None)
         if us is None and not any(r.get("exchCode") in US_EXCH for r in rs):
             continue
-        rep = us or rs[0]
+        rep = us or next((r for r in rs if r.get("exchCode") in US_EXCH), None)
         if _is_sideline(rep):
             continue
         out.append(FigiCandidate(comp, rep.get("name") or "", normalize_ticker(rep.get("ticker") or ""),
