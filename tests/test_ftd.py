@@ -75,6 +75,21 @@ def _zip_bytes(members: dict[str, str]) -> bytes:
     return buf.getvalue()
 
 
+class _CountingClient:
+    """Wraps a real `FtdClient`, counting `.rows()` calls, so a test can
+    assert `extend()` skipped rescanning an already-covered range."""
+    def __init__(self, real: FtdClient) -> None:
+        self._real = real
+        self.rows_calls = 0
+
+    def urls_for(self, lo, hi):
+        return self._real.urls_for(lo, hi)
+
+    def rows(self, url, *, symbols=None, cusips=None):
+        self.rows_calls += 1
+        yield from self._real.rows(url, symbols=symbols, cusips=cusips)
+
+
 def test_client_reads_quarterly_zip(tmp_path, monkeypatch):
     (tmp_path / "index.html").write_text(
         '<a href="/files/data/x/cnsp_sec_fails_2008q4.zip">q</a><a href="/files/data/x/cnsfails201811b.zip">b</a>')
@@ -129,3 +144,48 @@ def test_extend_with_cusip_picks_up_rows_under_a_different_symbol(tmp_path):
     # itself been used as a scan filter, so its window is unrecorded.
     idx.extend(c, date(2018, 11, 16), date(2018, 11, 30), cusips={"30303M102"})
     assert [r.symbol for r in idx.by_cusip("30303M102")] == ["FB", "META"]
+
+
+def test_extend_disjoint_scans_do_not_falsely_cover_a_gap(tmp_path):
+    (tmp_path / "index.html").write_text(
+        '<a href="/files/data/x/cnsfails201901a.zip">jan</a>'
+        '<a href="/files/data/x/cnsfails201902a.zip">feb</a>'
+        '<a href="/files/data/x/cnsfails201903a.zip">mar</a>')
+    header = "SETTLEMENT DATE|CUSIP|SYMBOL|QUANTITY (FAILS)|DESCRIPTION|PRICE\n"
+    (tmp_path / "cnsfails201901a.zip").write_bytes(
+        _zip_bytes({"a.txt": header + "20190110|00817Y108|AET|10|AETNA INC|100.00\n"}))
+    (tmp_path / "cnsfails201902a.zip").write_bytes(
+        _zip_bytes({"a.txt": header + "20190210|00817Y108|AET|10|AETNA INC|101.00\n"}))
+    (tmp_path / "cnsfails201903a.zip").write_bytes(
+        _zip_bytes({"a.txt": header + "20190310|00817Y108|AET|10|AETNA INC|102.00\n"}))
+    c = FtdClient(tmp_path)
+    idx = FtdIndex()
+    idx.extend(c, date(2019, 1, 1), date(2019, 1, 15), cusips={"00817Y108"})
+    idx.extend(c, date(2019, 3, 1), date(2019, 3, 15), cusips={"00817Y108"})
+    assert [r.date for r in idx.by_cusip("00817Y108")] == ["2019-01-10", "2019-03-10"]
+    # A naive min/max envelope over Jan..Mar would wrongly treat Feb as
+    # already covered; with merged disjoint intervals it is not, so this
+    # extend must still find the Feb row.
+    idx.extend(c, date(2019, 2, 1), date(2019, 2, 15), cusips={"00817Y108"})
+    assert [r.date for r in idx.by_cusip("00817Y108")] == ["2019-01-10", "2019-02-10", "2019-03-10"]
+
+
+def test_extend_adjacent_scans_merge_and_skip_rescan(tmp_path):
+    (tmp_path / "index.html").write_text(
+        '<a href="/files/data/x/cnsfails201901a.zip">a</a>'
+        '<a href="/files/data/x/cnsfails201901b.zip">b</a>')
+    header = "SETTLEMENT DATE|CUSIP|SYMBOL|QUANTITY (FAILS)|DESCRIPTION|PRICE\n"
+    (tmp_path / "cnsfails201901a.zip").write_bytes(
+        _zip_bytes({"a.txt": header + "20190105|00817Y108|AET|10|AETNA INC|100.00\n"}))
+    (tmp_path / "cnsfails201901b.zip").write_bytes(
+        _zip_bytes({"b.txt": header + "20190120|00817Y108|AET|10|AETNA INC|101.00\n"}))
+    c = _CountingClient(FtdClient(tmp_path))
+    idx = FtdIndex()
+    idx.extend(c, date(2019, 1, 1), date(2019, 1, 15), cusips={"00817Y108"})
+    idx.extend(c, date(2019, 1, 16), date(2019, 1, 31), cusips={"00817Y108"})
+    calls_before = c.rows_calls
+    # Jan 10-20 falls entirely inside the union of the two adjacent scans
+    # (Jan 1-15 and Jan 16-31): this must not rescan at all.
+    idx.extend(c, date(2019, 1, 10), date(2019, 1, 20), cusips={"00817Y108"})
+    assert c.rows_calls == calls_before
+    assert len(idx.by_cusip("00817Y108")) == 2

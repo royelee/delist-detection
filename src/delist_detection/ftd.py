@@ -14,7 +14,7 @@ from bisect import bisect_left, bisect_right
 from collections import defaultdict
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
 from .observations import normalize_ticker
@@ -132,11 +132,14 @@ class FtdIndex:
         self._by_cusip: dict[str, list[FtdRow]] = defaultdict(list)
         self._seen: set[FtdRow] = set()
         self._dirty = False
-        # The [lo, hi] union already scanned *as that exact filter key* (not
-        # merely a key that happened to show up under the other dimension's
-        # filter) — see `extend`.
-        self._symbol_windows: dict[str, tuple[date, date]] = {}
-        self._cusip_windows: dict[str, tuple[date, date]] = {}
+        # The disjoint [lo, hi] ranges already scanned *as that exact filter
+        # key* (not merely a key that happened to show up under the other
+        # dimension's filter) — see `extend`. Sorted, non-overlapping,
+        # non-adjacent; a key is covered for [lo, hi] only if one of its
+        # merged intervals spans the whole range, so two scans with a gap
+        # between them (e.g. Jan and Mar) don't falsely cover Feb.
+        self._symbol_windows: dict[str, list[tuple[date, date]]] = {}
+        self._cusip_windows: dict[str, list[tuple[date, date]]] = {}
         for r in rows:
             self.add(r)
 
@@ -168,14 +171,29 @@ class FtdIndex:
         (e.g. a ticker change). Rows already indexed are deduped via `_seen`."""
         cusips = {c.upper() for c in cusips}
         symbols = {normalize_ticker(s) for s in symbols}
-        new_cusips = {c for c in cusips if not self._covered(self._cusip_windows.get(c), lo, hi)}
-        new_symbols = {s for s in symbols if not self._covered(self._symbol_windows.get(s), lo, hi)}
+        new_cusips = {c for c in cusips if not self._covered(self._cusip_windows.get(c, []), lo, hi)}
+        new_symbols = {s for s in symbols if not self._covered(self._symbol_windows.get(s, []), lo, hi)}
         if new_cusips or new_symbols:
             self._scan(client, lo, hi, new_symbols or None, new_cusips or None)
 
     @staticmethod
-    def _covered(window: tuple[date, date] | None, lo: date, hi: date) -> bool:
-        return window is not None and window[0] <= lo and window[1] >= hi
+    def _covered(intervals: list[tuple[date, date]], lo: date, hi: date) -> bool:
+        """True only when a single already-scanned interval spans all of
+        [lo, hi] — two intervals that merely straddle it (e.g. Jan and Mar
+        around a Feb gap) must not count as covering it."""
+        return any(a <= lo and b >= hi for a, b in intervals)
+
+    @staticmethod
+    def _merge(intervals: list[tuple[date, date]], lo: date, hi: date) -> list[tuple[date, date]]:
+        """`intervals` (already sorted, merged) with `[lo, hi]` folded in,
+        merging any overlapping or adjacent (gap of a single day) intervals."""
+        merged: list[tuple[date, date]] = []
+        for a, b in sorted(intervals + [(lo, hi)]):
+            if merged and a <= merged[-1][1] + timedelta(days=1):
+                merged[-1] = (merged[-1][0], max(merged[-1][1], b))
+            else:
+                merged.append((a, b))
+        return merged
 
     def _scan(self, client: FtdClient, lo: date, hi: date, symbols: set[str] | None,
               cusips: set[str] | None) -> None:
@@ -186,8 +204,7 @@ class FtdIndex:
                     self.add(r)
         for keys, windows in ((symbols, self._symbol_windows), (cusips, self._cusip_windows)):
             for k in keys or ():
-                cur = windows.get(k)
-                windows[k] = (min(cur[0], lo), max(cur[1], hi)) if cur else (lo, hi)
+                windows[k] = self._merge(windows.get(k, []), lo, hi)
 
     def _sort(self) -> None:
         if self._dirty:
