@@ -115,6 +115,21 @@ def test_missing_close_leaves_blank_dlret_and_review(fake_edgar, tmp_path):
     assert any(r["sec_id"] == "BBG000FJLFX8" and "no_last_close" in r["review_flags"] for r in review)
 
 
+def test_close_looks_back_when_no_row_follows_the_last_trade(fake_edgar, tmp_path):
+    """The fails rows end on the last trade day itself (2018-11-28, carrying the
+    close of 11-27): the close comes from that row and is flagged
+    ftd_close_prior_day, instead of no close at all."""
+    rows = [FtdRow("2018-06-29", "00817Y108", "AET", "AETNA INC.(NEW)", 180.0),
+            FtdRow("2018-07-02", "00817Y108", "AET", "AETNA INC.(NEW)", 181.0),
+            FtdRow("2018-11-26", "00817Y108", "AET", "AETNA INC.(NEW)", 205.36),
+            FtdRow("2018-11-28", "00817Y108", "AET", "AETNA INC.(NEW)", 210.10)]
+    index, clients = _clients(fake_edgar, ftd_rows=rows)
+    run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
+    (d,) = read_table("delistings", table_path(tmp_path, "delistings"))
+    assert d["last_trade_date"] == "2018-11-28" and d["last_trade_close"] == "210.100000"
+    assert "ftd_close_prior_day" in d["review_flags"] and "no_last_close" not in d["review_flags"]
+
+
 def test_unmatched_override_stops_before_writing(fake_edgar, tmp_path):
     index, clients = _clients(fake_edgar)
     with pytest.raises(ValueError, match="BBG999"):

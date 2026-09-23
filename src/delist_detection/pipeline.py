@@ -305,6 +305,16 @@ def _close_on(ftd: FtdIndex, cusip_ranges: list[Range], day: date,
     return (ftd.close_after(day, cusip=cusip) if cusip else None) or ftd.close_after(day, symbol=symbol)
 
 
+def _close_through(ftd: FtdIndex, cusip_ranges: list[Range], day: date, symbol: str) -> tuple[float, str] | None:
+    """When no row follows `day`: the latest close known on it (`FtdIndex.close_through`,
+    a row dated on or a few trading days before `day`), by the CUSIP whose range
+    holds `day`, then by `symbol`."""
+    d = day.isoformat()
+    cusip = next((r.value for r in cusip_ranges if r.valid_from <= d and (r.valid_to is None or d <= r.valid_to)),
+                 None)
+    return (ftd.close_through(day, cusip=cusip) if cusip else None) or ftd.close_through(day, symbol=symbol)
+
+
 def _ticker_on(sig: list[tuple[str, str, str]]) -> Callable[[str], str | None]:
     def f(day: str) -> str | None:
         before = [t for d, t, _ in sig if d <= day]
@@ -465,7 +475,7 @@ def run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_
     early = [e for e in events if e.last_trade.day is not None and FTD_START <= e.last_trade.day < lo]
     if early:
         days = [e.last_trade.day for e in early]
-        ftd.extend(clients.ftd_client, min(days), max(days) + timedelta(days=10),
+        ftd.extend(clients.ftd_client, min(days) - timedelta(days=10), max(days) + timedelta(days=10),
                    symbols={e.ticker for e in early},
                    cusips={c for e in early for c in sec_cusips.get(e.sec_id, [])})
     closes: dict[tuple[str, str], float] = {}
@@ -483,7 +493,14 @@ def run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_
                                              end=None, open_ended=True)
         got = _close_on(ftd, cusip_ranges, e.last_trade.day, e.ticker)
         if got is None:
-            e.record.evidence["flags"].append("no_last_close")
+            # Fails stop once trading stops, so no row may follow the last trade
+            # day: look back a few rows (spec §16), flagged as an earlier close.
+            back = _close_through(ftd, cusip_ranges, e.last_trade.day, e.ticker)
+            if back is None:
+                e.record.evidence["flags"].append("no_last_close")
+            else:
+                closes[key] = back[0]
+                e.record.evidence["flags"].append("ftd_close_prior_day")
             continue
         price, _, lagged = got
         closes[key] = price
