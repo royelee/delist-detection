@@ -23,16 +23,16 @@ def test_an_old_flat_cache_is_ignored_and_replaced(tmp_path, fake_edgar, caplog)
     assert sum("ignor" in m for m in caplog.messages) == 1
     assert r.resolve("ALTR", "2025-03-26").cik == 1701732      # company_tickers, not the stale 999999
     saved = json.loads(cache.read_text())
-    assert saved["__version__"] == 2
+    assert saved["__version__"] == 3
     assert saved["entries"][KEY]["cik"] == 1701732
 
 
-def test_a_v2_cache_round_trips(tmp_path, fake_edgar):
+def test_a_v3_cache_round_trips(tmp_path, fake_edgar):
     cache = tmp_path / "res.json"
     r = TickerResolver(fake_edgar, cache_path=cache, member_names=_member("Altair Engineering Inc"))
     assert r.resolve("ALTR", "2025-03-26").cik == 1701732
     saved = json.loads(cache.read_text())
-    assert saved == {"__version__": 2, "entries": {KEY: {
+    assert saved == {"__version__": 3, "entries": {KEY: {
         "ticker": "ALTR", "cik": 1701732, "name": "Altair Engineering Inc.",
         "source": "company_tickers", "member_name": "Altair Engineering Inc"}}}
     # a fresh resolver answers from the file, with no EDGAR reads
@@ -42,13 +42,13 @@ def test_a_v2_cache_round_trips(tmp_path, fake_edgar):
 
 def test_a_different_member_name_misses_the_cache(tmp_path, fake_edgar):
     cache = tmp_path / "res.json"
-    cache.write_text(json.dumps({"__version__": 2, "entries": {KEY: {**STALE, "member_name": "Altera Corp"}}}))
+    cache.write_text(json.dumps({"__version__": 3, "entries": {KEY: {**STALE, "member_name": "Altera Corp"}}}))
     same = TickerResolver(fake_edgar, cache_path=cache, member_names=_member("Altera Corp"))
     assert same.resolve("ALTR", "2025-03-26").cik == 999999
     other = TickerResolver(fake_edgar, cache_path=cache, member_names=_member("Altair Engineering Inc"))
     assert other.resolve("ALTR", "2025-03-26").cik == 1701732
     # an entry saved without a member name misses a lookup that has one
-    cache.write_text(json.dumps({"__version__": 2, "entries": {KEY: {**STALE, "member_name": None}}}))
+    cache.write_text(json.dumps({"__version__": 3, "entries": {KEY: {**STALE, "member_name": None}}}))
     named = TickerResolver(fake_edgar, cache_path=cache, member_names=_member("Altair Engineering Inc"))
     assert named.resolve("ALTR", "2025-03-26").cik == 1701732
 
@@ -165,3 +165,20 @@ def test_a_stale_cached_copy_is_refetched_before_the_resolver_checks_it(tmp_path
     assert (res.cik, res.source) == (1611983, "efts")
     assert _Session.calls == [_Resp.url]          # fetched once; every later read hit the fresh copy
     assert json.loads(client._cache_path(_Resp.url).read_text())["filings"]["recent"]["filingDate"][-1] == "2026-08-20"
+
+
+def test_a_v2_cache_loses_only_the_answers_v3_decides_differently(tmp_path, fake_edgar):
+    """Version 3 prefers the ticker map's holder over a name-mismatched EFTS or
+    frequency candidate, so a version-2 cache keeps every answer except those
+    two kinds, which are resolved again."""
+    cache = tmp_path / "res.json"
+    kept = {**STALE, "member_name": "Altera Corp"}
+    cache.write_text(json.dumps({"__version__": 2, "entries": {
+        KEY: kept,
+        "M|2026-06-30": {"ticker": "M", "cik": 1771146, "name": "ETF Opportunities Trust",
+                         "source": "efts_name_mismatch", "member_name": "MACYS INC"},
+        "SIRI|2026-08-31": {"ticker": "SIRI", "cik": 320193, "name": "Apple Inc.",
+                            "source": "efts_frequency_name_mismatch", "member_name": "SIRIUSXM HOLDINGS INC"}}}))
+    r = TickerResolver(fake_edgar, cache_path=cache, member_names=_member("Altera Corp"))
+    assert set(r._memo) == {KEY}
+    assert r.resolve("ALTR", "2025-03-26").cik == 999999

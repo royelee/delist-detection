@@ -222,3 +222,50 @@ def test_a_pinned_ticker_whose_names_agree_gets_neither_flag(monkeypatch):
     assert rec.evidence["resolution_source"] == "manual"
     flags = rec.evidence["flags"]
     assert "member_name_mismatch" not in flags and "resolved_by_manual_override" not in flags
+
+
+def test_the_sec_ticker_map_holder_beats_an_unrelated_efts_fallback(monkeypatch):
+    """Macy's as the snapshots write it ("MACYS INC"; EDGAR says "Macy's, Inc.",
+    so the names do not agree): the ticker map's holder existed on the date,
+    and the only other candidate is the EFTS fallback, an ETF trust whose
+    Form 25 text mentions "M" and whose name disagrees too. The SEC's own
+    ticker map wins; the name mismatch stays for review."""
+    macys = (794367, ("Macy's, Inc.", [{"name": "FEDERATED DEPARTMENT STORES INC /DE/",
+                                        "from": "1994-01-01T00:00:00.000Z", "to": "2007-06-01T00:00:00.000Z"}],
+                      [_f("M0", "10-K", "2026-03-20"), _f("M1", "10-Q", "2026-06-05")]))
+    etf = (1771146, ("ETF Opportunities Trust", [], [_f("T0", "N-1A", "2019-05-01"), _f("T1", "25-NSE", "2026-07-15")]))
+    _real_efts(monkeypatch, [_hit(("1771146", "ETF Opportunities Trust  (CIK 0001771146)"))])
+    e = _Edgar(dict([macys, etf]), {}, tickers={"M": {"cik_str": 794367, "ticker": "M", "title": "Macy's, Inc."}})
+    r = TickerResolver(e, member_names=lambda t, d=None: "MACYS INC")
+    res = r.resolve("M", "2026-06-30")
+    assert (res.cik, res.source) == (794367, "company_tickers_name_mismatch")
+    rec = DelistClassifier(e, r).classify_ticker("M", "2026-06-30")
+    assert "member_name_mismatch" in rec.evidence["flags"]
+
+
+def test_a_ticker_map_holder_that_did_not_exist_yet_does_not_beat_the_fallback(monkeypatch):
+    # BWC's EFTS fallback stays when today's holder of the ticker was founded later.
+    blue = (1854863, ("Blue Whale Acquisition Corp I", [],
+                      [_f("B0", "S-1", "2021-05-13"), _f("B1", "25-NSE", "2023-08-10")]))
+    later = (2000001, ("Later Holder Inc", [], [_f("L0", "S-1", "2024-05-01")]))
+    _real_efts(monkeypatch, [_hit(("1854863", "Blue Whale Acquisition Corp I  (CIK 0001854863)"))])
+    e = _Edgar(dict([blue, later]), {}, tickers={"BWC": {"cik_str": 2000001, "ticker": "BWC",
+                                                        "title": "Later Holder Inc"}})
+    r = TickerResolver(e, member_names=lambda t, d=None: "BABCOCK AND WILCOX")
+    res = r.resolve("BWC", "2023-08-11")
+    assert (res.cik, res.source) == (1854863, "efts_name_mismatch")
+
+
+def test_the_ticker_map_holder_beats_a_zero_score_frequency_winner(monkeypatch):
+    """SiriusXM: "SIRIUSXM HOLDINGS INC" against EDGAR's "SIRIUS XM HOLDINGS INC."
+    shares no word, and the 8-K frequency rank's winner is Apple (8-Ks that
+    mention Siri), which shares none either: the ticker map's holder wins."""
+    siri = (908937, ("SIRIUS XM HOLDINGS INC.", [], [_f("S0", "10-K", "2026-01-30"), _f("S1", "10-Q", "2026-07-30")]))
+    apple = (320193, ("Apple Inc.", [], [_f("A0", "8-K", "2026-07-30")]))
+    e = _Edgar(dict([siri, apple]), {}, tickers={"SIRI": {"cik_str": 908937, "ticker": "SIRI",
+                                                         "title": "SIRIUS XM HOLDINGS INC."}})
+    r = TickerResolver(e, member_names=lambda t, d=None: "SIRIUSXM HOLDINGS INC")
+    monkeypatch.setattr(r, "_efts_pre_delist_frequency_ranked", lambda t, d, top_n=5: [(320193, "Apple Inc.")])
+    monkeypatch.setattr(r, "_validate_cik", lambda *a, **k: True)
+    res = r.resolve("SIRI", "2026-08-31")
+    assert (res.cik, res.source) == (908937, "company_tickers_name_mismatch")
