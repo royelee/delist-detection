@@ -1098,6 +1098,34 @@ def test_successor_search_name_falls_back_to_the_observation_name_without_class_
     assert successor_search_name(fake_edgar, None, "LIBERTY MEDIA CORP SERIES A") == "LIBERTY MEDIA CORP"
 
 
+@pytest.mark.parametrize("pinned, source", [(False, "manual"), (True, "cik_map")])
+def test_the_resolver_tier_reaches_the_delisting_row(fake_edgar, tmp_path, pinned, source):
+    """The CIK's resolver tier (a MANUAL_OVERRIDES entry, or the caller's cik
+    pin) is recorded as the delisting's resolution_source, from the security's
+    latest era, instead of the generic "security_master"."""
+    index, clients = _clients(fake_edgar)
+    if not pinned:
+        obs = [Observation("AET", "2017-06-30", "AETNA INC"), Observation("AET", "2018-06-29", "AETNA INC")]
+        index = ObservationIndex(obs)
+        clients.resolver = TickerResolver(fake_edgar, manual_overrides={"AET": 1122304},
+                                          member_names=index.name_on, cik_map=index.cik_pin_on)
+    run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
+    (d,) = read_table("delistings", table_path(tmp_path, "delistings"))
+    assert d["sec_id"] == "BBG000FJLFX8" and d["resolution_source"] == source
+
+
+def test_resolution_source_comes_from_the_latest_era_that_has_a_cik():
+    from delist_detection.observations import TickerEra
+    from delist_detection.ticker_resolver import TickerResolution
+    old, new = TickerEra("X", "2010-01-04", "2012-06-29", []), TickerEra("X", "2014-06-30", "2016-06-30", [])
+    sec = Security("BBGX", 5, "COMMON", "X CO", "Common Stock", True, "cusip", eras=[old, new])
+    res = {old.key: TickerResolution("X", 5, None, "manual"), new.key: TickerResolution("X", None, None, "none")}
+    assert pipeline._resolution_source(sec, res) == "manual"          # the era issuer_cik came from
+    res[new.key] = TickerResolution("X", 5, None, "company_tickers")
+    assert pipeline._resolution_source(sec, res) == "company_tickers"
+    assert pipeline._resolution_source(sec, {}) == "security_master"
+
+
 ERAS_FIX = Path(__file__).parent / "fixtures" / "eras"
 
 

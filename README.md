@@ -158,13 +158,13 @@ is the Form 25 filing date plus 10 days (Rule 12d2-2(d)(1)), or the date of
 the fallback filing that ended trading when no Form 25 exists.
 `raw_payout_*` is the extraction before the last-close gate (see *Payout
 reconciliation* below); `last_trade_date_source` is `ex99_notice`, `8k_301`,
-`midas`, `nasdaq_halt`, or empty. `resolution_source` is meant to record the
-resolver tier that found the security's CIK (`cik_map`, `manual`,
-`company_tickers`, `efts`, …); `SecurityContext.resolution_source` /
-`classify_event(resolution_source=...)` carry it through end to end, but the
-pipeline doesn't yet populate `SecurityContext` with the security master's
-own resolution tier, so every row currently reads the default
-`security_master`.
+`midas`, `nasdaq_halt`, or empty. `resolution_source` records the resolver
+tier that found the security's CIK (`cik_map` for an observation's `cik` pin,
+`manual`, `company_tickers`, `efts`, `name_search`, …), taken from the
+security's latest era that has a CIK (`security_master` when none has one);
+`SecurityContext.resolution_source` → `classify_event(resolution_source=...)`
+carry it to the row. A `company_tickers` resolution also sets the
+`resolved_by_current_ticker_map` flag (see the flags table below).
 
 ### `payouts.csv` — key `(sec_id, delist_date)`
 

@@ -290,6 +290,18 @@ def _ticker_on(sig: list[tuple[str, str, str]]) -> Callable[[str], str | None]:
     return f
 
 
+def _resolution_source(sec: Security, cik_res: dict) -> str:
+    """The resolver tier ("cik_map", "manual", "company_tickers", ...) that
+    found the security's issuer CIK: that of its latest era with a CIK, the
+    same era `build_securities` takes `issuer_cik` from; "security_master"
+    when none has one."""
+    for e in reversed(sec.eras):
+        r = cik_res.get(e.key)
+        if r is not None and r.cik is not None:
+            return r.source or "security_master"
+    return "security_master"
+
+
 def _own_last_seen(sec: Security, sig: list[tuple[str, str, str]]) -> str:
     """The latest sighting under one of the security's own era tickers, else
     the latest era end date.
@@ -326,7 +338,10 @@ def run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_
 
     # 2. issuer CIK per era, resolved at the era's last sighting: index snapshots can
     # be months apart, and the resolver's Form 25 search is anchored on this date.
-    ciks = {e.key: clients.resolver.resolve(e.ticker, era_last_seen(e, ftd)).cik for e in eras}
+    # The resolver tier that found it (cik_map, manual, company_tickers, ...) is kept
+    # for the delisting rows' resolution_source.
+    cik_res = {e.key: clients.resolver.resolve(e.ticker, era_last_seen(e, ftd)) for e in eras}
+    ciks = {k: r.cik for k, r in cik_res.items()}
 
     # 3. FIGI per era -> securities
     cusips = {e.key: era_cusips(e, ftd) for e in eras}
@@ -388,6 +403,7 @@ def run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_
                 listed_today=listed[s.sec_id],
                 expected_name=s.eras[-1].name if s.eras else None,
                 sibling_spans=spans,
+                resolution_source=_resolution_source(s, cik_res),
             )
             evs, rv = finder.find(ctx)
         except (EdgarBlocked, OpenFigiBlocked):
