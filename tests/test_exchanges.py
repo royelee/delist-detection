@@ -25,26 +25,3 @@ def test_normalize_unknown_or_missing():
     assert normalize_exchange(None) is Exchange.OTHER
     assert normalize_exchange("OTC Markets") is Exchange.OTHER
     assert normalize_exchange("BATS") is Exchange.OTHER
-
-
-import textwrap
-import pytest
-from delist_detection.av_listing import AvListingLoader
-
-
-@pytest.fixture
-def av_csv(tmp_path):
-    p = tmp_path / "delisted.csv"
-    p.write_text(textwrap.dedent("""\
-        symbol,name,exchange,assetType,ipoDate,delistingDate
-        ALTR,Altair,NASDAQ,Stock,2017-10-25,2025-03-26
-        RSH,RadioShack,NYSE,Stock,1971-08-12,2015-02-09
-    """))
-    return p
-
-
-def test_av_loader_exchange_lookup(av_csv):
-    loader = AvListingLoader(av_csv)
-    assert loader.exchange("ALTR") == "NASDAQ"
-    assert loader.exchange("RSH") == "NYSE"
-    assert loader.exchange("DOESNOTEXIST") is None

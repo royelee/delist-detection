@@ -1,5 +1,7 @@
+import json
 import os
 import time
+from datetime import date
 
 import pytest
 import requests
@@ -15,6 +17,9 @@ class _Resp:
     def raise_for_status(self):
         if self.status_code >= 400:
             raise requests.HTTPError(str(self.status_code))
+
+    def json(self):
+        return json.loads(self.text)
 
 
 class _Session:
@@ -85,3 +90,27 @@ def test_fetch_filing_raw_blocked(tmp_path, monkeypatch):
     ec = EdgarClient(cache_dir=tmp_path, user_agent="ua", session=_Session(_Resp(403)))
     with pytest.raises(EdgarBlocked):
         ec.fetch_filing_raw(1, "0000000000-00-000002")
+
+
+def test_full_text_search_parses_hits(tmp_path, monkeypatch):
+    monkeypatch.setattr("delist_detection.edgar._throttle", lambda: None)
+    hit = {"_source": {"ciks": ["0001652044"], "display_names": ["Alphabet Inc.  (GOOGL, GOOG)  (CIK 0001652044)"]}}
+    s = _Session(_Resp(text=json.dumps({"hits": {"hits": [hit]}})))
+    ec = EdgarClient(cache_dir=tmp_path, user_agent="ua", session=s)
+    got = ec.full_text_search('"GOOGLE INC"', "8-K12B,8-K12G3", date(2015, 9, 2), date(2015, 12, 1))
+    assert got == [hit]
+    assert "efts.sec.gov" in s.calls[0]
+    assert "startdt=2015-09-02" in s.calls[0] and "enddt=2015-12-01" in s.calls[0]
+
+
+def test_full_text_search_blocked(tmp_path, monkeypatch):
+    monkeypatch.setattr("delist_detection.edgar._throttle", lambda: None)
+    ec = EdgarClient(cache_dir=tmp_path, user_agent="ua", session=_Session(_Resp(403)))
+    with pytest.raises(EdgarBlocked):
+        ec.full_text_search("X", "8-K12B", date(2020, 1, 1), date(2020, 2, 1))
+
+
+def test_full_text_search_network_error_returns_empty(tmp_path, monkeypatch):
+    monkeypatch.setattr("delist_detection.edgar._throttle", lambda: None)
+    ec = EdgarClient(cache_dir=tmp_path, user_agent="ua", session=_Session(requests.ConnectionError("down")))
+    assert ec.full_text_search("X", "8-K12B", date(2020, 1, 1), date(2020, 2, 1)) == []

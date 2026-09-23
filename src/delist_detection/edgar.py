@@ -370,6 +370,35 @@ class EdgarClient:
         cp.write_text(resp.text, encoding="utf-8")
         return resp.text
 
+    def full_text_search(self, q: str, forms: str, lo: date, hi: date) -> list[dict]:
+        """EDGAR full-text search hits (`hits.hits`) for `q` within `forms`,
+        filed in `[lo, hi]`. Not cached (the index grows as filings are added),
+        so a network error or non-200 response simply returns `[]`; a 403/429
+        raises EdgarBlocked like every other EDGAR call.
+        """
+        url = (
+            "https://efts.sec.gov/LATEST/search-index?"
+            f"q={requests.utils.quote(q)}&forms={requests.utils.quote(forms)}"
+            f"&dateRange=custom&startdt={lo.isoformat()}&enddt={hi.isoformat()}"
+        )
+        _throttle()
+        try:
+            resp = self.session.get(
+                url,
+                headers={**self.session.headers, "Host": "efts.sec.gov", "Accept": "application/json"},
+                timeout=30,
+            )
+        except requests.RequestException:
+            return []
+        check_response(resp)          # EdgarBlocked is not a RequestException: it propagates
+        if resp.status_code != 200:
+            return []
+        try:
+            data = resp.json()
+        except (ValueError, TypeError):
+            return []
+        return data.get("hits", {}).get("hits", []) if isinstance(data, dict) else []
+
     def recent_filings(self, cik: int | str) -> list[EdgarSubmission]:
         sub = self.submissions(cik)
         if not isinstance(sub, dict) or sub.get("__not_found__"):

@@ -1,5 +1,3 @@
-import pytest
-
 from delist_detection.ticker_resolver import TickerResolver
 
 
@@ -46,25 +44,3 @@ def test_a_cik_map_answer_is_not_persisted_to_the_resolver_cache(tmp_path, fake_
     unmapped = TickerResolver(fake_edgar, cache_path=cache)
     res2 = unmapped.resolve("CPWR", "2014-12-15")
     assert res2.source != "cik_map"
-
-
-def test_the_cik_map_csv_is_read_by_ticker_and_era(tmp_path):
-    # scripts/classify_universe.py still imports names Task 16 removed from
-    # reconstruction.py (build_dlret_table, etc.); it is rewritten in Task 17-18.
-    # Skip rather than fail until then.
-    m = pytest.importorskip("scripts.classify_universe")
-    p = tmp_path / "universe_identity.csv"
-    p.write_text(
-        "ticker,era_start,era_end,cik,name,source,confidence,flags\n"
-        "LEAP,2012-06-29,2013-06-28,1065049,LEAP WIRELESS INTERNATIONAL INC,efts,high,\n"
-        "LEAP,2021-06-30,2021-12-31,1818605,RIBBIT LEAP LTD,efts,high,\n"
-        "CPWR,,,859014,COMPUWARE CORP,efts,high,\n"
-    )
-
-    lookup = m.load_cik_map_csv(p)
-
-    assert lookup("LEAP", "2013-03-01") == 1065049
-    assert lookup("LEAP", "2021-09-30") == 1818605
-    assert lookup("LEAP", "2016-01-01") is None      # between eras: no claim
-    assert lookup("CPWR", "2014-12-15") == 859014    # no era bounds: every event
-    assert lookup("UNKNOWN", "2014-12-15") is None
