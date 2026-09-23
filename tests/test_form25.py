@@ -149,3 +149,23 @@ def test_list_form25_and_effective_date():
             EdgarSubmission("x3", "8-K", "2019-01-02", "", "3.01", "p")]
     assert [s.accession for s in list_form25(subs)] == ["x1", "x2"]
     assert effective_date("2018-11-29") == "2018-12-09"
+
+
+def _load_text(name, accession, filing_date):
+    return parse_form25((FIX / name).read_text(encoding="utf-8", errors="replace"),
+                        accession=accession, form="25", filing_date=filing_date)
+
+
+def test_issuer_filed_text_form25_reads_the_class_above_its_caption():
+    """An issuer-filed Form 25 is an HTML cover with no XML: the class is the
+    text right above "(Description of class of securities)", not what follows
+    "...to strike the class of securities from listing and registration:" (the
+    rule checkboxes, which the old reading returned as '☐ 17 CFR 240')."""
+    aep = _load_text("aep_units_common_25.txt", "0000004904-20-000077", "2020-09-30")
+    assert aep.exchange == "NYSE"
+    assert aep.class_text.startswith("Common Stock, $6.50 par value")
+    assert class_kind(aep.class_text) == "common"                 # AEP moved to Nasdaq in 2020
+    aapl = _load_text("aapl_notes_25.txt", "0001193125-19-074874", "2019-03-14")
+    assert aapl.class_text.startswith("1.000% Notes due 2022") and class_kind(aapl.class_text) == "debt"
+    gme = _load_text("gme_rights_25.txt", "0001445305-14-004535", "2014-10-29")
+    assert gme.class_text == "Preferred Stock Purchase Rights"

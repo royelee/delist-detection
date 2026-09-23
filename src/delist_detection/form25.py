@@ -78,6 +78,27 @@ def _notice(raw: str) -> str:
     return _strip_html(m.group(1)) if m else ""
 
 
+_CLASS_CAPTION = r"\(\s*Description of (?:the )?class(?:es)? of securit(?:y|ies)\s*\)"
+
+
+def _text_class(text: str) -> str:
+    """The class of a text (issuer-filed, HTML) Form 25: the words right above
+    its "(Description of class of securities)" caption, after the "(Address
+    ... executive offices)" caption before them. An older layout states it
+    after a "Title of class of securities:" label. Never the rule checkboxes
+    ("☐ 17 CFR 240.12d2-2(a)(1)") that follow "...strike the class of
+    securities from listing and registration:"."""
+    for pat in (rf"offices\s*\)\s*(.{{3,400}}?)\s*{_CLASS_CAPTION}",
+                rf"\)\s*([^()]{{3,400}}?)\s*{_CLASS_CAPTION}"):
+        m = re.search(pat, text, re.I | re.S)
+        if m:
+            return m.group(1).strip()
+    m = re.search(r"(?:class|title) of (?:the )?securit(?:y|ies)[^:]{0,40}:\s*(.{3,120}?)(?:\s{2,}|\.|$)", text, re.I)
+    if m and not re.search(r"17\s*CFR", m.group(1), re.I):
+        return m.group(1).strip()
+    return ""
+
+
 def parse_form25(raw: str, *, accession: str, form: str, filing_date: str) -> Form25:
     exch_block = re.search(r"<exchange>(.*?)</exchange>", raw, re.S | re.I)
     exch_name = _tag(exch_block.group(1), "entityName") if exch_block else ""
@@ -87,9 +108,7 @@ def parse_form25(raw: str, *, accession: str, form: str, filing_date: str) -> Fo
         text = _strip_html(raw)
         exch_name = exchange_label(text[:4000])
         if not class_text:
-            m = re.search(r"(?:class|title) of (?:the )?securit(?:y|ies)[^:]{0,40}:\s*(.{3,120}?)(?:\s{2,}|\.|$)",
-                          text, re.I)
-            class_text = m.group(1).strip() if m else ""
+            class_text = _text_class(text)
     return Form25(accession, form, filing_date, exchange_label(exch_name) or exch_name.upper(),
                   class_text, rule, _notice(raw))
 
