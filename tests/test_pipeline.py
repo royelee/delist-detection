@@ -397,6 +397,9 @@ def test_run_builds_last_seen_and_seen_after_from_the_right_sightings(fake_edgar
     assert ctx.ftd_seen_after("2018-11-28") is True
     assert ctx.ftd_seen_after("2018-11-29") is False
     assert ctx.ftd_seen_after("2017-01-01") is True
+    # tickers_between: every ticker sighted in the window, the OTC tail's included
+    assert ctx.tickers_between("2018-06-01", "2019-12-31") == ["AET", "AETQ"]
+    assert ctx.tickers_between("2019-01-01", "2019-12-31") == ["AETQ"]
 
 
 def test_run_builds_sibling_spans_for_every_security_of_the_issuer(fake_edgar, tmp_path, monkeypatch):

@@ -611,6 +611,43 @@ def test_form25_before_first_sighting_is_ignored_while_listed(fake_edgar):
     assert events == [] and review == []
 
 
+class _TickerMidas:
+    def __init__(self, days):
+        self.days, self.calls = days, []
+
+    def last_trade_day(self, ticker, lo, hi):
+        self.calls.append(ticker)
+        return self.days.get(ticker)
+
+
+def test_last_trade_confirmation_asks_for_every_ticker_of_the_window(fake_edgar):
+    """Spirit Airlines: NYSE suspended SAVE before the open on 2024-11-18 and
+    filed its Form 25 on 2024-12-05, by when the shares traded OTC as SAVEQ
+    (fails rows under SAVEQ). MIDAS, exchange trades only, knows SAVE, not
+    SAVEQ: the confirmation must ask for every ticker the security carried in
+    the window, not only the one on the Form 25's date."""
+    notice = ("<TYPE>25-NSE\n<notificationOfRemoval><exchange><entityName>New York Stock Exchange LLC"
+              "</entityName></exchange>\n<descriptionClassSecurity>Common Stock</descriptionClassSecurity>\n"
+              "<ruleProvision>17 CFR 240.12d2-2(b)</ruleProvision></notificationOfRemoval>\n"
+              "<TYPE>EX-99.25\n<TEXT>\nOn November 18, 2024, the Exchange determined that the common stock "
+              "of Spirit Airlines, Inc. should be suspended immediately.\n</TEXT>")
+    fake_edgar.submissions_by_cik[1498710] = [
+        EdgarSubmission("sv1", "8-K", "2024-11-18", "2024-11-18", "1.03,7.01,9.01", "k.htm"),
+        EdgarSubmission("sv2", "25-NSE", "2024-12-05", "", "", "p.xml"),
+    ]
+    fake_edgar.raws["sv2"] = notice
+    fake_edgar.texts["sv1"] = "Item 1.03 Bankruptcy or Receivership. filed voluntary petitions under chapter 11. " + "x" * 300
+    clf = DelistClassifier(fake_edgar, TickerResolver(fake_edgar))
+    sec = _sec("BBG000BF6RQ9", 1498710, "SAVE", "2023-06-30", "2024-06-28", "SPIRIT AIRLINES INC")
+    ctx = _ctx(sec, last_seen="2024-11-18")
+    ctx.ticker_on = lambda d: "SAVE" if d < "2024-11-19" else "SAVEQ"
+    ctx.tickers_between = lambda lo, hi: ["SAVE", "SAVEQ"]
+    midas = _TickerMidas({"SAVE": date(2024, 11, 15)})
+    (ev,), _ = DelistingFinder(fake_edgar, clf, midas=midas).find(ctx)
+    assert ev.last_trade.day == date(2024, 11, 15) and ev.last_trade.source == "midas"
+    assert set(midas.calls) == {"SAVE", "SAVEQ"}
+
+
 def test_cik_none_listing_status_unknown(fake_edgar):
     sec = _sec("BBG_NOCIK3", None, "NOC3", "2018-01-01", "2020-01-01", "NOCIK CO")
     clf = DelistClassifier(fake_edgar, TickerResolver(fake_edgar))

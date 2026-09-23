@@ -90,6 +90,11 @@ class SecurityContext:
     # observation alone does not give (a stale snapshot can list a security
     # long after it was acquired). Unknown (the default) counts as none.
     ftd_seen_after: Callable[[str], bool] = lambda day: False
+    # Every ticker the security was sighted under between two ISO days (its own
+    # and, from fails rows, an OTC symbol it moved to), for the exchange-trade
+    # confirmations (MIDAS, Nasdaq halts): the ticker on a Form 25's date can be
+    # the OTC symbol already (SAVE -> SAVEQ), which no exchange source knows.
+    tickers_between: Callable[[str, str], list[str]] = lambda lo, hi: []
 
 
 def _d(s: str) -> date:
@@ -134,27 +139,48 @@ class DelistingFinder:
         return self._eightk_window(cik, filings, filed - timedelta(days=EIGHTK_BEFORE_DAYS),
                                    filed + timedelta(days=EIGHTK_AFTER_DAYS), filed)
 
-    def _last_trade(self, cik: int, filings: list[EdgarSubmission], f25: Form25 | None, ticker: str,
-                    filed: date) -> LastTrade:
-        notice = notice_last_trade(f25) if f25 else (None, "")
-        eightk = self._eightk(cik, filings, filed)
+    def _confirmations(self, tickers: list[str], filed: date, lo: date, hi: date, still_trading: date,
+                       guesses: list[date]) -> tuple[date | None, date | None]:
+        """(MIDAS last day with exchange volume, Nasdaq code-D halt day) over
+        every ticker in `tickers`: MIDAS (asked when `filed` is in its
+        coverage) takes the latest day in `[lo, hi]` before `still_trading`
+        under any of them; the halt feed is asked only when MIDAS has nothing,
+        around the text sources' `guesses`."""
         midas = None
         if self.midas is not None and filed >= MIDAS_START:
-            m = self.midas.last_trade_day(ticker, filed - timedelta(days=MIDAS_BEFORE_DAYS),
-                                          filed + timedelta(days=MIDAS_AFTER_DAYS))
-            if m is not None and m < filed + timedelta(days=MIDAS_STILL_TRADING_DAYS):
-                midas = m
+            days = [m for t in tickers if (m := self.midas.last_trade_day(t, lo, hi)) is not None
+                    and m < still_trading]
+            midas = max(days) if days else None
         halt = None
         if midas is None and self.halts is not None:
-            guesses = [d for d, _ in (notice, eightk) if d] or [previous_trading_day(filed)]
-            h = self.halts.deletion_halt(ticker, min(guesses) - timedelta(days=2),
-                                         max(guesses) + timedelta(days=2), max_days=5)
-            halt = last_trade_from_halt(h) if h else None
+            for t in tickers:
+                h = self.halts.deletion_halt(t, min(guesses) - timedelta(days=2),
+                                             max(guesses) + timedelta(days=2), max_days=5)
+                if h:
+                    halt = last_trade_from_halt(h)
+                    break
+        return midas, halt
+
+    @staticmethod
+    def _tickers(ctx: SecurityContext | None, ticker: str, lo: date, hi: date) -> list[str]:
+        """`ticker` first, then every other ticker the security carried in `[lo, hi]`."""
+        others = ctx.tickers_between(lo.isoformat(), hi.isoformat()) if ctx is not None else []
+        return list(dict.fromkeys([ticker, *others]))
+
+    def _last_trade(self, cik: int, filings: list[EdgarSubmission], f25: Form25 | None, ticker: str,
+                    filed: date, ctx: SecurityContext | None = None) -> LastTrade:
+        notice = notice_last_trade(f25) if f25 else (None, "")
+        eightk = self._eightk(cik, filings, filed)
+        lo, hi = filed - timedelta(days=MIDAS_BEFORE_DAYS), filed + timedelta(days=MIDAS_AFTER_DAYS)
+        midas, halt = self._confirmations(
+            self._tickers(ctx, ticker, lo, hi), filed, lo, hi, filed + timedelta(days=MIDAS_STILL_TRADING_DAYS),
+            [d for d, _ in (notice, eightk) if d] or [previous_trading_day(filed)])
         return decide_last_trade(notice=notice, eightk=eightk, midas=midas, halt=halt)
 
     # -- last trade for a group of Form 25s of one delisting --------------
     def _last_trade_group(self, cik: int, filings: list[EdgarSubmission],
-                          group: list[tuple[EdgarSubmission, Form25]], ticker: str) -> LastTrade:
+                          group: list[tuple[EdgarSubmission, Form25]], ticker: str,
+                          ctx: SecurityContext | None = None) -> LastTrade:
         subs = [s for s, _ in group]
         earliest_filed = _d(min(s.filing_date for s in subs))
         latest_filed = _d(max(s.filing_date for s in subs))
@@ -171,20 +197,12 @@ class DelistingFinder:
         eightk = self._eightk_window(cik, filings, earliest_filed - timedelta(days=EIGHTK_BEFORE_DAYS),
                                      latest_filed + timedelta(days=EIGHTK_GROUP_AFTER_DAYS), earliest_filed)
 
-        midas = None
-        if self.midas is not None and earliest_filed >= MIDAS_START:
-            m = self.midas.last_trade_day(ticker, earliest_filed - timedelta(days=MIDAS_BEFORE_DAYS),
-                                          latest_eff + timedelta(days=MIDAS_AFTER_DAYS))
-            if m is not None and m < latest_eff + timedelta(days=MIDAS_STILL_TRADING_DAYS):
-                midas = m
-
-        halt = None
-        if midas is None and self.halts is not None:
-            guesses = [d for d, _ in (notice, eightk) if d] or [previous_trading_day(latest_filed)]
-            h = self.halts.deletion_halt(ticker, min(guesses) - timedelta(days=2),
-                                         max(guesses) + timedelta(days=2), max_days=5)
-            halt = last_trade_from_halt(h) if h else None
-
+        lo = earliest_filed - timedelta(days=MIDAS_BEFORE_DAYS)
+        hi = latest_eff + timedelta(days=MIDAS_AFTER_DAYS)
+        midas, halt = self._confirmations(
+            self._tickers(ctx, ticker, lo, hi), earliest_filed, lo, hi,
+            latest_eff + timedelta(days=MIDAS_STILL_TRADING_DAYS),
+            [d for d, _ in (notice, eightk) if d] or [previous_trading_day(latest_filed)])
         return decide_last_trade(notice=notice, eightk=eightk, midas=midas, halt=halt)
 
     # -- grouping -----------------------------------------------------------
@@ -352,7 +370,7 @@ class DelistingFinder:
         sec = ctx.security
         winner_sub, winner_f25 = min(group, key=self._exchange_rank)
         filing_ticker = ctx.ticker_on(winner_sub.filing_date) or sec.eras[-1].ticker
-        lt = self._last_trade_group(cik, filings, group, filing_ticker)
+        lt = self._last_trade_group(cik, filings, group, filing_ticker, ctx)
         # spec 7.4: the delisting's ticker is the ticker on the last trade
         # date, not on the Form 25 filing date -- only fall back to the
         # filing-date ticker when the last trade date itself is unknown.
@@ -469,7 +487,7 @@ class DelistingFinder:
         if rec.bucket is CrspBucket.UNKNOWN and not ev.get("deregistered"):
             return None
         ended_by, extra_flags = self._fallback_date(ctx, ev)
-        lt = self._last_trade(cik, filings, None, ticker, _d(ended_by))
+        lt = self._last_trade(cik, filings, None, ticker, _d(ended_by), ctx)
         if lt.day is None:
             lt = LastTrade(_d(ctx.last_seen), "", ("last_trade_date_unconfirmed",))
         # No Form 25 means no exchange evidence from a filing; fall back to

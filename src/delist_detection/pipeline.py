@@ -435,6 +435,7 @@ def run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_
                 resolution_source=_resolution_source(s, cik_res),
                 ftd_seen_after=lambda day, sig=sig, own={e.ticker for e in s.eras}: any(
                     d > day for d, t, src in sig if src == "ftd" and t in own),
+                tickers_between=lambda lo, hi, sig=sig: list(dict.fromkeys(t for d, t, _ in sig if lo <= d <= hi)),
             )
             evs, rv = finder.find(ctx)
         except (EdgarBlocked, OpenFigiBlocked):
