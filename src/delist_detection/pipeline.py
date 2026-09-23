@@ -204,6 +204,30 @@ def _ticker_range_review(th_rows: list[dict]) -> list[ReviewItem]:
     return out
 
 
+TICKER_CONFIRM_DAYS = 30        # an era's ticker counts as confirmed by an FTD row this close to its span
+
+
+def _unconfirmed_review(eras: list[TickerEra], ftd: FtdIndex, resolutions: dict,
+                        ciks: dict) -> list[ReviewItem]:
+    """A `ticker_unconfirmed` review row for each era from 2004 on (the start of
+    SEC fails-to-deliver data) with no FTD row under its ticker within
+    `TICKER_CONFIRM_DAYS` of its first and last observation: the SEC data never
+    shows that ticker then, as when a snapshot carries a ticker adopted later
+    (APTV in 2012-2013, when Delphi traded as DLPH)."""
+    out: list[ReviewItem] = []
+    for e in eras:
+        if _d(e.last) < FTD_START:
+            continue
+        lo = max(FTD_START, _d(e.first) - timedelta(days=TICKER_CONFIRM_DAYS)).isoformat()
+        hi = (_d(e.last) + timedelta(days=TICKER_CONFIRM_DAYS)).isoformat()
+        if ftd.by_symbol(e.ticker, lo, hi):
+            continue
+        out.append(ReviewItem(resolutions[e.key].sec_id or "", e.ticker, ciks.get(e.key), "ticker_unconfirmed",
+                              f"{e.key} {e.name or ''}: no fails-to-deliver row under {e.ticker} "
+                              f"from {lo} to {hi}", last_seen=e.last))
+    return out
+
+
 def _conflict_review(eras: list[TickerEra], resolutions: dict) -> list[ReviewItem]:
     """One `observation_conflict:<date>` review row per ticker seen under two or
     more names on one date (a snapshot source backfilled today's ticker: CB is
@@ -358,6 +382,7 @@ def run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_
             review.append(ReviewItem(res.sec_id or "", era.ticker, ciks.get(key), flag,
                                      f"{era.key} {era.name or ''}".strip(), last_seen=era.last))
     review += _conflict_review(eras, resolutions)
+    review += _unconfirmed_review(eras, ftd, resolutions, ciks)
     log(f"{len(securities)} securities; FIGI sources "
         f"{dict(Counter(s.figi_source for s in securities.values()))}")
 

@@ -1126,6 +1126,35 @@ def test_resolution_source_comes_from_the_latest_era_that_has_a_cik():
     assert pipeline._resolution_source(sec, {}) == "security_master"
 
 
+def test_an_era_whose_ticker_the_sec_data_never_shows_is_reviewed(fake_edgar, tmp_path):
+    """APTV as the snapshots record it: "APTIV PLC" under APTV in 2012-2013 (a
+    backfilled ticker: Delphi traded as DLPH then) and again from 2017-12-31.
+    The 2012-2013 era has no fails row under APTV within 30 days of its span, so
+    it gets a ticker_unconfirmed review row; the later era, confirmed by FTD
+    rows, and an era before 2004 (no FTD data then) do not."""
+    fake_edgar.company_map["APTV"] = {"cik_str": 1521332, "ticker": "APTV", "title": "Aptiv PLC"}
+    fake_edgar.company_map["OLD"] = {"cik_str": 4444, "ticker": "OLD", "title": "OLD CO"}
+    fake_edgar.submissions_by_cik[1521332] = []
+    fake_edgar.submissions_by_cik[4444] = []
+    obs = ([Observation("APTV", d, "APTIV PLC") for d in ("2012-06-29", "2012-12-31", "2013-06-28", "2013-12-31",
+                                                         "2017-12-31", "2018-06-30")]
+           + [Observation("OLD", d, "OLD CO") for d in ("2002-06-28", "2003-06-30")])
+    rows = _ftd("APTV", "G6095L109", "APTIV PLC", ["2017-12-05", "2018-01-02", "2018-03-01", "2018-06-01", "2018-07-02"])
+    index, clients = _index_clients(fake_edgar, obs, rows, {
+        ("ID_CINS", "G6095L109"): _figi_answer("BBGAPTIV001", "APTV", "APTIV PLC"),
+        ("TICKER", "APTV"): _figi_answer("BBGAPTIV001", "APTV", "APTIV PLC"),
+        ("TICKER", "OLD"): _figi_answer("BBGOLDCO001", "OLD", "OLD CO"),
+    })
+
+    run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
+
+    review = read_table("review", table_path(tmp_path, "review"))
+    flagged = [(r["sec_id"], r["ticker"], r["last_seen"]) for r in review if r["review_flags"] == "ticker_unconfirmed"]
+    assert flagged == [("BBGAPTIV001", "APTV", "2013-12-31")]
+    (row,) = [r for r in review if r["review_flags"] == "ticker_unconfirmed"]
+    assert "APTV@2012-06-29" in row["reason"] and "2012-05-30" in row["reason"] and "2014-01-30" in row["reason"]
+
+
 ERAS_FIX = Path(__file__).parent / "fixtures" / "eras"
 
 
