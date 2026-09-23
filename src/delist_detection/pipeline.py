@@ -126,6 +126,22 @@ def successor_from_8k12b(search: Callable, figi, *, name: str, day: date, exclud
     return None
 
 
+_CLASS_WORDS = re.compile(r"\b(?:CL(?:ASS)?|SER(?:IES)?)\s*-?\s*[A-Z0-9]\b|-[A-Z]$", re.I)
+_STATE_TAG = re.compile(r"\s*/[A-Z]+/?\s*$")        # EDGAR's "AETNA INC /PA/", "ALLEGHANY CORP /DE"
+
+
+def successor_search_name(edgar, cik: int | None, observed_name: str | None) -> str:
+    """The predecessor's name as an 8-K12B would print it: the issuer's EDGAR
+    name from its submissions JSON without EDGAR's state tag ("Google Inc."),
+    else the observation name without its class words ("GOOGLE INC CLASS A"
+    -> "GOOGLE INC")."""
+    sub = edgar.submissions(cik) if cik is not None else None
+    name = (sub.get("name") or "").strip() if isinstance(sub, dict) else ""
+    if name:
+        return _STATE_TAG.sub("", name).strip()
+    return re.sub(r"\s+", " ", _CLASS_WORDS.sub(" ", observed_name or "")).strip(" -")
+
+
 def _issuer_exchange_for_ticker(edgar, cik: int | None, ticker: str) -> str | None:
     """The exchange EDGAR's own submissions JSON records for `ticker` (the
     parallel `tickers`/`exchanges` arrays), mapped to the table's exchange
@@ -453,7 +469,8 @@ def run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_
             continue
         predecessor = securities[e.sec_id]
         day = e.last_trade.day or _d(e.delist_date)
-        hit = successor_from_8k12b(successor_search, clients.figi, name=predecessor.name, day=day,
+        name = successor_search_name(clients.edgar, e.cik, predecessor.name)
+        hit = successor_from_8k12b(successor_search, clients.figi, name=name, day=day,
                                    exclude_cik=e.cik, share_class=predecessor.share_class)
         if hit is None:
             continue

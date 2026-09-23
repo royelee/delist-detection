@@ -15,7 +15,7 @@ from delist_detection.observations import Observation, ObservationIndex
 from delist_detection.payout_extractor import PayoutResult
 from delist_detection.pipeline import (
     Clients, Overrides, _issuer_exchange_for_ticker, _merge_review_rows, _own_last_seen,
-    _ticker_range_review, run, successor_from_8k12b,
+    _ticker_range_review, run, successor_from_8k12b, successor_search_name,
 )
 from delist_detection.security_master import Security
 from delist_detection.store import read_table, table_path
@@ -929,6 +929,65 @@ def test_two_eras_of_one_security_give_one_security_and_one_ticker_range(fake_ed
     assert [r["sec_id"] for r in read_table("securities", table_path(tmp_path, "securities"))] == ["BBGRSPLIT01"]
     th = read_table("ticker_history", table_path(tmp_path, "ticker_history"))
     assert [(r["ticker"], r["valid_from"], r["valid_to"]) for r in th] == [("RS", "2009-06-01", "2013-07-01")]
+
+
+def test_successor_search_quotes_the_predecessor_issuers_edgar_name(fake_edgar, tmp_path, monkeypatch):
+    """The 8-K12B names the predecessor as EDGAR does ("Google Inc."), never as
+    an index snapshot does ("GOOGLE INC CLASS A"): full-text search must quote
+    the issuer's EDGAR name from its submissions JSON."""
+    fake_edgar.company_map["GOOGL"] = {"cik_str": 1288776, "ticker": "GOOGL", "title": "Google Inc."}
+    fake_edgar.submissions_by_cik[1288776] = []
+    obs = [Observation("GOOGL", d, "GOOGLE INC CLASS A") for d in ("2014-06-30", "2015-06-30")]
+    rows = _ftd("GOOGL", "38259P508", "GOOGLE INC;COM USD0.001 CL'A'",
+                ["2014-06-02", "2014-12-01", "2015-06-01", "2015-10-02"])
+    index, clients = _index_clients(fake_edgar, obs, rows, {
+        ("ID_CUSIP", "38259P508"): _figi_answer("BBGGOOGLEA1", "GOOGL", "GOOGLE INC-CL A"),
+        ("TICKER", "GOOGL"): _figi_answer("BBG009S39JX6", "GOOGL", "ALPHABET INC-CL A"),
+        ("TICKER", "GOOG"): _figi_answer("BBG009S3NB30", "GOOG", "ALPHABET INC-CL C"),
+    })
+    record = DelistRecord(ticker="GOOGL", cik=1288776, observed_delist_date="2015-10-02", crsp_code=300,
+                          bucket=CrspBucket.EXCHANGE_TRANSFER, confidence="high", reason="holdco reorg",
+                          evidence={"flags": ["successor_unknown"]}, sec_id="BBGGOOGLEA1", delist_date="2015-10-12")
+    ev = DelistingEvent(sec_id="BBGGOOGLEA1", cik=1288776, ticker="GOOGL", delist_date="2015-10-12", record=record,
+                        last_trade=LastTrade(date(2015, 10, 2), "notice_a", ()), form25=None, form25_sub=None,
+                        exchange="NASDAQ", flags=["successor_unknown"])
+
+    class _CannedFinder:
+        def __init__(self, edgar, classifier, *, midas=None, halts=None):
+            pass
+
+        def find(self, ctx):
+            return [ev], []
+
+    monkeypatch.setattr(pipeline, "DelistingFinder", _CannedFinder)
+    filing_text = ("Alphabet Inc. became the successor issuer to Google Inc. pursuant to Rule 12g-3(a); "
+                   "each share of Google Class A Capital Stock converted into Alphabet Class A Common Stock.")
+    queries = []
+
+    def _search(q, forms, lo, hi):              # EDGAR full-text search: the quoted phrase must appear
+        queries.append(q)
+        if q.strip('"') not in filing_text:
+            return []
+        return [{"_source": {"ciks": ["1652044"], "display_names": ["Alphabet Inc.  (GOOGL, GOOG)  (CIK 0001652044)"],
+                             "file_date": "2015-10-02"}}]
+
+    fake_edgar.full_text_search = _search
+
+    run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
+
+    assert queries == ['"Google Inc."']
+    (d,) = read_table("delistings", table_path(tmp_path, "delistings"))
+    assert d["successor_sec_id"] == "BBG009S39JX6"                     # Alphabet class A, the matching class
+    assert "successor_unknown" not in d["review_flags"]
+
+
+def test_successor_search_name_falls_back_to_the_observation_name_without_class_words(fake_edgar):
+    fake_edgar.company_map["AET"] = {"cik_str": 1122304, "ticker": "AET", "title": "AETNA INC /PA/"}
+    assert successor_search_name(fake_edgar, 1122304, "AETNA INC") == "AETNA INC"       # EDGAR's state tag dropped
+    fake_edgar.submissions = lambda cik, fresh_after=None: {"name": "", "formerNames": []}
+    assert successor_search_name(fake_edgar, 1288776, "GOOGLE INC CLASS A") == "GOOGLE INC"
+    assert successor_search_name(fake_edgar, 1288776, "ALPHABET INC-CL C") == "ALPHABET INC"
+    assert successor_search_name(fake_edgar, None, "LIBERTY MEDIA CORP SERIES A") == "LIBERTY MEDIA CORP"
 
 
 def test_ftd_rows_spelled_without_a_separator_are_sightings_of_the_observed_ticker(fake_edgar, tmp_path):
