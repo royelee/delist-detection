@@ -107,6 +107,45 @@ def _throttle() -> None:
         _LAST_CALL[0] = time.monotonic()
 
 
+# Backoff between retry attempts, in seconds: 2s after the 1st failure, 4s
+# after the 2nd (3 attempts total, like OpenFigiClient._post).
+RETRY_BACKOFF = (2, 4)
+RETRY_MAX_ATTEMPTS = 3
+
+
+def retry_request(make_request, *, sleep=time.sleep, max_attempts: int = RETRY_MAX_ATTEMPTS,
+                  backoff: tuple[float, ...] = RETRY_BACKOFF):
+    """Call `make_request()` (a callable returning a `requests.Response`) up
+    to `max_attempts` times, retrying a connection error, a timeout, or a 5xx
+    response with `backoff` seconds between attempts (`sleep` is injectable
+    for tests). `check_response` runs on every response that comes back, so a
+    403/429 raises `EdgarBlocked` immediately -- it is never retried. A 404 or
+    any other non-5xx response is returned on the first attempt, unchanged.
+
+    On final failure: if every attempt raised, the last exception is
+    re-raised; if the last attempt returned a persistent 5xx response, that
+    response is returned (the caller's own `raise_for_status()`/status check
+    decides what happens next -- unchanged from before this helper existed).
+    """
+    last_exc: requests.RequestException | None = None
+    resp = None
+    for attempt in range(max_attempts):
+        try:
+            resp = make_request()
+        except requests.RequestException as exc:
+            last_exc, resp = exc, None
+        else:
+            check_response(resp)              # 403/429 -> EdgarBlocked, raised at once, never retried
+            if resp.status_code < 500:
+                return resp
+            last_exc = None                   # a 5xx is retryable, not a transport exception
+        if attempt < max_attempts - 1:
+            sleep(backoff[attempt])
+    if resp is not None:
+        return resp
+    raise last_exc
+
+
 @dataclass
 class EdgarSubmission:
     """One row from the recent-filings table on submissions.json."""
@@ -129,6 +168,7 @@ class EdgarClient:
         cache_dir: str | Path,
         user_agent: str | None = None,
         session: requests.Session | None = None,
+        sleep=time.sleep,
     ) -> None:
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
@@ -138,6 +178,7 @@ class EdgarClient:
             "Accept": "application/json",
             "Host": "data.sec.gov",
         })
+        self.sleep = sleep
 
     def _cache_path(self, url: str) -> Path:
         h = hashlib.sha1(url.encode("utf-8")).hexdigest()
@@ -165,12 +206,15 @@ class EdgarClient:
                 if fresh_after is None or _fetched_on(cp, cached) >= fresh_after:
                     return cached
 
-        _throttle()
         host = "data.sec.gov" if url.startswith(SEC_HOST) else "www.sec.gov"
         headers = {**self.session.headers, "Host": host}
+
+        def make():
+            _throttle()
+            return self.session.get(url, headers=headers, timeout=30)
+
         try:
-            resp = self.session.get(url, headers=headers, timeout=30)
-            check_response(resp)          # EdgarBlocked is not a RequestException: it propagates
+            resp = retry_request(make, sleep=self.sleep)   # EdgarBlocked propagates, not retried
             if resp.status_code != 404:
                 resp.raise_for_status()
         except requests.RequestException:
@@ -353,16 +397,19 @@ class EdgarClient:
         if cp.exists():
             return cp.read_text(encoding="utf-8", errors="replace")
         url = f"{WWW_SEC_HOST}/Archives/edgar/data/{int(cik)}/{acc_nodash}/{accession}.txt"
-        _throttle()
-        try:
-            resp = self.session.get(
+
+        def make():
+            _throttle()
+            return self.session.get(
                 url,
                 headers={**self.session.headers, "Host": "www.sec.gov", "Accept": "text/plain,*/*"},
                 timeout=30,
             )
+
+        try:
+            resp = retry_request(make, sleep=self.sleep)   # EdgarBlocked propagates, not retried
         except requests.RequestException:
             return ""
-        check_response(resp)
         if resp.status_code != 200:
             if resp.status_code == 404:
                 cp.write_text("", encoding="utf-8")
@@ -397,16 +444,19 @@ class EdgarClient:
             else:
                 if isinstance(cached, list):
                     return cached
-        _throttle()
-        try:
-            resp = self.session.get(
+
+        def make():
+            _throttle()
+            return self.session.get(
                 url,
                 headers={**self.session.headers, "Host": "efts.sec.gov", "Accept": "application/json"},
                 timeout=30,
             )
+
+        try:
+            resp = retry_request(make, sleep=self.sleep)   # EdgarBlocked propagates, not retried
         except requests.RequestException:
             return []
-        check_response(resp)          # EdgarBlocked is not a RequestException: it propagates
         if resp.status_code != 200:
             return []
         try:

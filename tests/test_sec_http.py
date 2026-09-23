@@ -64,11 +64,58 @@ def test_get_text_refreshes_and_falls_back(tmp_path):
     assert len(s.calls) == 1
     old = time.time() - 10 * 86400
     os.utime(cf, (old, old))
-    s2 = _Session(requests.ConnectionError("down"))
-    assert sec_http.get_text("u", cf, session=s2, user_agent="ua") == "v1"     # stale cache served
+    # A persistent connection error is retried 3 times before falling back.
+    s2 = _Session(requests.ConnectionError("down"), requests.ConnectionError("down"),
+                  requests.ConnectionError("down"))
+    assert sec_http.get_text("u", cf, session=s2, user_agent="ua", sleep=lambda _: None) == "v1"  # stale served
+    assert len(s2.calls) == 3
+    s3 = _Session(requests.ConnectionError("x"), requests.ConnectionError("x"), requests.ConnectionError("x"))
     with pytest.raises(requests.ConnectionError):
-        sec_http.get_text("u", tmp_path / "none.html", session=_Session(requests.ConnectionError("x")),
-                          user_agent="ua")
+        sec_http.get_text("u", tmp_path / "none.html", session=s3, user_agent="ua", sleep=lambda _: None)
+
+
+def test_get_text_retries_5xx_then_succeeds(tmp_path):
+    cf = tmp_path / "index2.html"
+    slept = []
+    s = _Session(_Resp(503), _Resp(text="v2"))
+    assert sec_http.get_text("u", cf, session=s, user_agent="ua", sleep=slept.append) == "v2"
+    assert len(s.calls) == 2
+    assert slept == [2]
+
+
+def test_get_text_429_raises_at_once(tmp_path):
+    cf = tmp_path / "index3.html"
+    s = _Session(_Resp(429))
+    with pytest.raises(EdgarBlocked):
+        sec_http.get_text("u", cf, session=s, user_agent="ua", sleep=lambda _: None)
+    assert len(s.calls) == 1
+    assert not cf.exists()
+
+
+def test_download_retries_503_then_succeeds(tmp_path):
+    slept = []
+    s = _Session(_Resp(503), _Resp(content=b"zipbytes"))
+    p = sec_http.download("https://www.sec.gov/g.zip", tmp_path / "g.zip", session=s, user_agent="ua",
+                          sleep=slept.append)
+    assert p.read_bytes() == b"zipbytes"
+    assert len(s.calls) == 2
+    assert slept == [2]
+
+
+def test_download_three_503s_fails_without_caching(tmp_path):
+    s = _Session(_Resp(503), _Resp(503), _Resp(503))
+    dest = tmp_path / "h.zip"
+    with pytest.raises(requests.HTTPError):
+        sec_http.download("https://www.sec.gov/h.zip", dest, session=s, user_agent="ua", sleep=lambda _: None)
+    assert len(s.calls) == 3
+    assert not dest.exists()
+
+
+def test_download_429_raises_at_once_no_retry(tmp_path):
+    s = _Session(_Resp(429))
+    with pytest.raises(EdgarBlocked):
+        sec_http.download("u", tmp_path / "i.zip", session=s, user_agent="ua", sleep=lambda _: None)
+    assert len(s.calls) == 1
 
 
 def test_fetch_filing_raw(tmp_path, monkeypatch):
@@ -90,6 +137,25 @@ def test_fetch_filing_raw_blocked(tmp_path, monkeypatch):
     ec = EdgarClient(cache_dir=tmp_path, user_agent="ua", session=_Session(_Resp(403)))
     with pytest.raises(EdgarBlocked):
         ec.fetch_filing_raw(1, "0000000000-00-000002")
+
+
+def test_fetch_filing_raw_retries_503_then_succeeds(tmp_path, monkeypatch):
+    monkeypatch.setattr("delist_detection.edgar._throttle", lambda: None)
+    slept = []
+    s = _Session(_Resp(503), _Resp(text="hello"))
+    ec = EdgarClient(cache_dir=tmp_path, user_agent="ua", session=s, sleep=slept.append)
+    assert ec.fetch_filing_raw(1, "0000000000-00-000003") == "hello"
+    assert len(s.calls) == 2
+    assert slept == [2]
+
+
+def test_fetch_filing_raw_three_503s_returns_empty_without_caching(tmp_path, monkeypatch):
+    monkeypatch.setattr("delist_detection.edgar._throttle", lambda: None)
+    s = _Session(_Resp(503), _Resp(503), _Resp(503))
+    ec = EdgarClient(cache_dir=tmp_path, user_agent="ua", session=s, sleep=lambda _: None)
+    assert ec.fetch_filing_raw(1, "0000000000-00-000004") == ""
+    assert len(s.calls) == 3
+    assert not list((tmp_path / "raw").glob("*.txt"))
 
 
 def test_full_text_search_parses_hits(tmp_path, monkeypatch):
@@ -123,17 +189,45 @@ def test_full_text_search_blocked(tmp_path, monkeypatch, status):
 
 
 def test_full_text_search_500_returns_empty_and_is_not_cached(tmp_path, monkeypatch):
+    # A 5xx is retried up to 3 attempts; all three fail here, so the result is
+    # still empty and never cached, but the session must have been asked 3 times.
     monkeypatch.setattr("delist_detection.edgar._throttle", lambda: None)
-    ec = EdgarClient(cache_dir=tmp_path, user_agent="ua", session=_Session(_Resp(500)))
+    s = _Session(_Resp(500), _Resp(500), _Resp(500))
+    ec = EdgarClient(cache_dir=tmp_path, user_agent="ua", session=s, sleep=lambda _: None)
     assert ec.full_text_search("X", "8-K12B", date(2020, 1, 1), date(2020, 2, 1)) == []
     assert not list(tmp_path.glob("*.json"))        # an error answer is never cached
+    assert len(s.calls) == 3
 
 
 def test_full_text_search_network_error_returns_empty(tmp_path, monkeypatch):
     monkeypatch.setattr("delist_detection.edgar._throttle", lambda: None)
-    ec = EdgarClient(cache_dir=tmp_path, user_agent="ua", session=_Session(requests.ConnectionError("down")))
+    s = _Session(requests.ConnectionError("down"), requests.ConnectionError("down"),
+                 requests.ConnectionError("down"))
+    ec = EdgarClient(cache_dir=tmp_path, user_agent="ua", session=s, sleep=lambda _: None)
     assert ec.full_text_search("X", "8-K12B", date(2020, 1, 1), date(2020, 2, 1)) == []
     assert not list(tmp_path.glob("*.json"))
+    assert len(s.calls) == 3
+
+
+def test_full_text_search_retries_503_then_succeeds(tmp_path, monkeypatch):
+    monkeypatch.setattr("delist_detection.edgar._throttle", lambda: None)
+    hit = {"_source": {"ciks": ["1"], "display_names": ["X CO  (X)  (CIK 0000000001)"]}}
+    slept = []
+    s = _Session(_Resp(503), _Resp(text=json.dumps({"hits": {"hits": [hit]}})))
+    ec = EdgarClient(cache_dir=tmp_path, user_agent="ua", session=s, sleep=slept.append)
+    got = ec.full_text_search('"X CO"', "8-K12B", date(2020, 1, 1), date(2020, 2, 1))
+    assert got == [hit]
+    assert len(s.calls) == 2
+    assert slept == [2]                             # one backoff between the two attempts
+
+
+def test_full_text_search_429_raises_at_once_no_retry(tmp_path, monkeypatch):
+    monkeypatch.setattr("delist_detection.edgar._throttle", lambda: None)
+    s = _Session(_Resp(429))
+    ec = EdgarClient(cache_dir=tmp_path, user_agent="ua", session=s, sleep=lambda _: None)
+    with pytest.raises(EdgarBlocked):
+        ec.full_text_search("X", "8-K12B", date(2020, 1, 1), date(2020, 2, 1))
+    assert len(s.calls) == 1                        # not retried
 
 
 def test_full_text_search_does_not_cache_an_empty_answer(tmp_path, monkeypatch):

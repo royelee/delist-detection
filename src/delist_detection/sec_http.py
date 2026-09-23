@@ -1,6 +1,10 @@
 """Throttled, cached downloads of SEC data files (fails-to-deliver ZIPs, MIDAS
 ZIPs, their index pages). Same fair-access rules as EdgarClient: one shared
-8 req/s throttle, a descriptive User-Agent, and EdgarBlocked on 403/429."""
+8 req/s throttle, a descriptive User-Agent, and EdgarBlocked on 403/429.
+
+Every download here retries a connection error, a timeout, or a 5xx up to 3
+attempts with backoff (`retry_request`, same as `EdgarClient`'s); a 403/429
+still raises `EdgarBlocked` at once, and a failure is never cached."""
 from __future__ import annotations
 
 import os
@@ -9,23 +13,26 @@ from pathlib import Path
 
 import requests
 
-from .edgar import _throttle, check_response, resolve_user_agent
+from .edgar import _throttle, resolve_user_agent, retry_request
 
 
-def _get(url: str, session, user_agent: str | None, timeout: int):
+def _get(url: str, session, user_agent: str | None, timeout: int, *, sleep=time.sleep):
     s = session or requests.Session()
     headers = {"User-Agent": user_agent or resolve_user_agent(), "Accept": "*/*", "Host": "www.sec.gov"}
-    _throttle()
-    resp = s.get(url, headers=headers, timeout=timeout)
-    check_response(resp)
-    return resp
+
+    def make():
+        _throttle()
+        return s.get(url, headers=headers, timeout=timeout)
+
+    return retry_request(make, sleep=sleep)   # EdgarBlocked propagates, not retried
 
 
-def download(url: str, dest: str | Path, *, session=None, user_agent: str | None = None) -> Path:
+def download(url: str, dest: str | Path, *, session=None, user_agent: str | None = None,
+            sleep=time.sleep) -> Path:
     dest = Path(dest)
     if dest.exists() and dest.stat().st_size > 0:
         return dest
-    resp = _get(url, session, user_agent, timeout=180)
+    resp = _get(url, session, user_agent, timeout=180, sleep=sleep)
     if resp.status_code == 404:
         raise FileNotFoundError(url)
     resp.raise_for_status()
@@ -37,12 +44,12 @@ def download(url: str, dest: str | Path, *, session=None, user_agent: str | None
 
 
 def get_text(url: str, cache_file: str | Path, *, max_age_days: float = 7, session=None,
-             user_agent: str | None = None) -> str:
+             user_agent: str | None = None, sleep=time.sleep) -> str:
     cf = Path(cache_file)
     if cf.exists() and time.time() - cf.stat().st_mtime < max_age_days * 86400:
         return cf.read_text(encoding="utf-8", errors="replace")
     try:
-        resp = _get(url, session, user_agent, timeout=60)
+        resp = _get(url, session, user_agent, timeout=60, sleep=sleep)
         resp.raise_for_status()
     except requests.RequestException:
         if cf.exists():
