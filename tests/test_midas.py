@@ -161,3 +161,21 @@ def test_failed_quarter_download_is_remembered_for_the_rest_of_the_run(tmp_path)
         assert c.last_trade_day("ZZZ", date(2018, 10, 1), date(2018, 12, 10)) is None
     assert calls[0] == 1
     assert not (tmp_path / "2018_q4.json.gz").exists()
+
+
+def test_client_reads_a_csv_inside_a_nested_zip(tmp_path):
+    """SEC ships some quarters (2014 Q2) as a zip holding a folder with another
+    zip, which holds the README and the CSV: the CSV is read from the inner zip."""
+    (tmp_path / "index.html").write_text('<a href="/files/opa/x/individual_security_2014_q2.zip">z</a>')
+    inner = io.BytesIO()
+    with zipfile.ZipFile(inner, "w") as z:
+        z.writestr("README2_q.txt", "readme")
+        z.writestr("q2_2014_all.csv", CSV.replace("201811", "201405"))
+    outer = io.BytesIO()
+    with zipfile.ZipFile(outer, "w") as z:
+        z.writestr("Market Activity by Individual Security 2014 Q2/individual_security_2014_q2.zip",
+                   inner.getvalue())
+    (tmp_path / "individual_security_2014_q2.zip").write_bytes(outer.getvalue())
+    c = MidasClient(tmp_path)
+    assert c.last_trade_day("AET", date(2014, 4, 1), date(2014, 6, 10)) == date(2014, 5, 28)
+    assert json.loads(gzip.decompress((tmp_path / "2014_q2.json.gz").read_bytes()))["BRK-B"] == ["2014-05-28"]

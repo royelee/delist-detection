@@ -87,6 +87,23 @@ def summarize_midas_csv(lines: Iterable[str]) -> dict[str, list[str]]:
     return {t: sorted(v) for t, v in out.items()}
 
 
+def _summarize_zip(z: zipfile.ZipFile, zpath: Path) -> dict[str, list[str]]:
+    """The summary of the quarter's CSV in `z`. Some quarters (2014 Q2) ship the
+    CSV one level down, inside a zip in the zip; that inner zip is read too."""
+    member = next((m for m in z.namelist() if m.lower().endswith(".csv")), None)
+    if member is not None:
+        with z.open(member) as fh:
+            return summarize_midas_csv(io.TextIOWrapper(fh, encoding="latin-1"))
+    for m in z.namelist():
+        if m.lower().endswith(".zip"):
+            with zipfile.ZipFile(io.BytesIO(z.read(m))) as inner:
+                member = next((n for n in inner.namelist() if n.lower().endswith(".csv")), None)
+                if member is not None:
+                    with inner.open(member) as fh:
+                        return summarize_midas_csv(io.TextIOWrapper(fh, encoding="latin-1"))
+    raise ValueError(f"No .csv file in {zpath}")
+
+
 class MidasClient:
     def __init__(self, cache_dir: str | Path, *, session=None, user_agent: str | None = None) -> None:
         self.dir = Path(cache_dir)
@@ -141,12 +158,7 @@ class MidasClient:
                 self._summaries[yq] = None
                 return None
             with z:
-                try:
-                    member = next(m for m in z.namelist() if m.lower().endswith(".csv"))
-                except StopIteration:
-                    raise ValueError(f"No .csv file in {zpath}") from None
-                with z.open(member) as fh:
-                    s = summarize_midas_csv(io.TextIOWrapper(fh, encoding="latin-1"))
+                s = _summarize_zip(z, zpath)
             cache.parent.mkdir(parents=True, exist_ok=True)
             cache.write_bytes(gzip.compress(json.dumps(s).encode()))
             zpath.unlink(missing_ok=True)
