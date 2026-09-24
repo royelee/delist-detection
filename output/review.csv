@@ -79,7 +79,6 @@ BBG000BC9WH2,2015-10-18,HME,923118,merger,0.000399,ftd_close_prior:3,M&A 2.01+3.
 BBG000BCFQC3,2015-01-01,ASBC,7789,exchange_transfer,0.000000,resolved_by_current_ticker_map;ftd_close_lagged,Ticker change / listing transfer: 3.01 notice announces a listing transfer; company still reports results,,
 BBG000BCG930,,ANTM,1156039,,,ticker_unconfirmed,ANTM@2012-06-29 WELLPOINT INC: no fails-to-deliver row under ANTM from 2012-05-30 to 2014-07-30,,2014-06-30
 BBG000BCGY17,2015-07-05,LO,1424847,,,form25_unclassified,25 0001193125-15-234974 ('') has no recognized class,,
-BBG000BCHG15,,ASH,7694,,,ended_without_delisting,not listed today and no Form 25 or delisting filing found,,2016-09-20
 BBG000BCKC47,2016-07-11,GAS,1004155,exchange_transfer,0.000000,successor_unknown,Continued 10-K/Q filings >180d after delist (moved to OTC or spun off),,
 BBG000BCNYT9,2020-01-16,AVP,8868,exchange_transfer,0.000000,successor_unknown,Continued 10-K/Q filings >180d after delist (moved to OTC or spun off),,
 BBG000BCPB71,2018-05-17,AVT,8858,,,form25_unclassified,25 0001558370-18-004169 ('') has no recognized class,,
@@ -158,8 +157,7 @@ BBG000BFMBQ6,,CI,,,,ticker_shared,CI 2007-12-18..2018-12-31 (BBG000BFMBQ6) overl
 BBG000BFMBQ6,2018-12-31,CI,701221,merger,,no_last_trade_date;no_last_close;terms_gate_failed:no_acq_price,M&A 2.01+3.01+5.01 (acquired by external acquirer),"2.01,2.03,3.01,3.03,5.01,5.02,5.03,8.01,9.01",
 BBG000BFRF55,,CLF,,,,ticker_shared,CLF 2008-10-16.. (BBG000BFRF55) overlaps CLF 2008-10-16.. (CIK764065-COMMON),,
 BBG000BFRF55,2010-06-12,CLF,764065,,,form25_unmatched,25-NSE 0000876661-10-000189 ('Common Share Purchase Rights'): ambiguous class,,
-BBG000BFT2L4,2015-12-21,CMCSA,1166691,,,form25_unmatched,25-NSE 0001354457-15-000245 ('Class A Special Common Stock'): ambiguous class,,
-BBG000BFTJ91,2015-12-21,CMCSK,1166691,,,form25_unmatched,25-NSE 0001354457-15-000245 ('Class A Special Common Stock'): ambiguous class,,
+BBG000BFTJ91,2015-12-21,CMCSK,1166691,exchange_transfer,0.000000,successor_unknown,Continued 10-K/Q filings >180d after delist (moved to OTC or spun off),,
 BBG000BFVKZ6,2019-02-25,AHL,1267395,exchange_transfer,0.000000,successor_unknown,Continued 10-K/Q filings >180d after delist (moved to OTC or spun off),,
 BBG000BFZ1K0,2015-11-09,CNW,23675,merger,,no_last_close,M&A 2.01+3.01+5.01 (acquired by external acquirer),"1.02,2.01,3.01,3.03,5.01,5.02,5.03,8.01,9.01",
 BBG000BG09F5,2021-02-12,GPOR,874499,liquidation,-0.550000,resolved_by_current_ticker_map,Bankruptcy (8-K item 1.03 filed 2020-11-16),,
@@ -195,10 +193,9 @@ BBG000BHK836,2021-05-24,FLIR,354908,merger,0.000970,ftd_close_lagged,M&A 2.01+3.
 BBG000BHLYP4,2008-07-21,CME,1156375,,,form25_unclassified,"25 0001193125-08-149919 (': 20 South Wacker Drive Chicago, IL 60606') has no recognized class",,
 BBG000BHNPN3,2012-07-12,CHSI,1090403,merger,0.000000,terms_gate_failed:fail_sanity;merger_at_par,M&A 2.01+3.01+5.01 (acquired by external acquirer),"1.02,2.01,3.01,3.03,5.01,5.02,5.03,5.07,9.01",
 BBG000BHRRV6,,EK,31235,,,ended_without_delisting,not listed today and no Form 25 or delisting filing found,,2012-01-19
-BBG000BHSKN9,,GOOG,,,,ticker_shared,GOOG 2007-12-27..2014-04-06 (BBG000BHSKN9) overlaps GOOG 2014-04-04..2015-10-05 (BBG002W96FT9),,
+BBG000BHSKN9,,GOOG,,,,ticker_shared,GOOG 2007-12-27..2014-04-06 (BBG000BHSKN9) overlaps GOOG 2014-04-04..2015-10-12 (BBG002W96FT9),,
 BBG000BHSKN9,,GOOGL,,,,ticker_shared,GOOGL 2014-04-07..2015-10-12 (BBG000BHSKN9) overlaps GOOGL 2015-10-06.. (BBG009S39JX6),,
 BBG000BHSKN9,2015-10-12,GOOGL,1288776,unknown,,no_evidence_default;no_last_trade_date;no_last_close,Delisted/deregistered without merger or distress evidence,"1.01,3.01,3.03,5.02,5.03,9.01",
-BBG000BHW628,,WCN,,,,ticker_shared,WCN 2008-01-08..2016-06-01 (BBG000BHW628) overlaps WCN 2016-05-23..2016-06-10 (BBG000FLHZZ2),,
 BBG000BHW628,2016-06-11,WCN,1057058,merger,0.000000,last_trade_date_conflict,M&A 2.01+3.01+5.01 (acquired by external acquirer),"1.01,1.02,2.01,3.01,3.03,5.01,5.02,5.03,9.01",
 BBG000BHWTB8,2016-12-11,PPS,903127,merger,-0.029237,ftd_close_lagged;acquirer_close_lagged,M&A 2.01+3.01+5.01 (acquired by external acquirer),"1.02,2.01,3.01,3.03,5.01,5.02,5.03,7.01,9.01",
 BBG000BJ27C4,2012-07-15,PGN,1094093,exchange_transfer,0.000000,successor_unknown;ftd_close_prior:1,Continued 10-K/Q filings >180d after delist (moved to OTC or spun off),,
@@ -381,7 +378,7 @@ BBG000BVK2W6,,TRB,726513,,,ended_without_delisting,not listed today and no Form 
 BBG000BVPPM1,2018-10-11,ANDV,50104,merger,-0.008013,ftd_close_lagged,M&A 2.01+3.01+5.01 (acquired by external acquirer),"1.02,2.01,3.01,3.03,5.01,5.02,5.03,7.01,9.01",
 BBG000BVV7G1,2012-01-09,TXN,97476,exchange_transfer,0.000000,resolved_by_current_ticker_map;member_name_mismatch;no_last_trade_date;no_last_close,Ticker change / listing transfer: 3.01 notice announces a listing transfer; company still reports results,,
 BBG000BW9W88,2017-06-11,VAL,102741,merger,0.000089,ftd_close_lagged,M&A 2.01+3.01+5.01 (acquired by external acquirer),"1.02,2.01,3.01,3.03,5.01,5.02,5.03,9.01",
-BBG000BWDFD4,2019-12-14,PARAA,813828,,,form25_unmatched,"25 0001193125-19-306213 ('Class A Common Stock, par value $0.001 per share Class B Common Stock, par value $0.001 per share'): ambiguous class",,
+BBG000BWDFD4,2019-12-14,VIACA,813828,exchange_transfer,0.000000,member_name_mismatch;no_last_trade_date;no_last_close,Continued 10-K/Q filings >180d after delist (moved to OTC or spun off),,
 BBG000BWDFD4,2025-08-17,PARAA,813828,merger,,no_last_close,M&A 2.01+3.01+5.01 (acquired by external acquirer),"1.01,1.02,2.01,3.01,3.03,5.01,5.02,5.03,9.01",
 BBG000BWMX63,2026-08-30,WBS,801337,merger,0.003823,resolved_by_current_ticker_map,M&A 2.01+3.01+5.01 (acquired by external acquirer),"2.01,3.01,3.03,5.01,5.02,5.03,9.01",
 BBG000BWNFZ9,2012-06-10,WDC,106040,exchange_transfer,0.000000,resolved_by_current_ticker_map;no_last_trade_date;no_last_close,Continued 10-K/Q filings >180d after delist (moved to OTC or spun off),,
@@ -432,6 +429,7 @@ BBG000C3W281,2026-06-20,MASI,937556,merger,0.000278,resolved_by_current_ticker_m
 BBG000C44LH8,2015-11-12,CYN,201461,merger,-0.000718,ftd_close_lagged;payout_gate_failed:47.25,M&A 2.01+3.01+5.01 (acquired by external acquirer),"2.01,3.01,3.03,5.01,5.02,5.03,9.01",
 BBG000C45984,2008-06-20,L,60086,,,form25_unmatched,"25 0001193125-08-131145 ('Carolina Group Stock, par value $0.01 per share'): ambiguous class",,
 BBG000C496P7,2019-12-14,PARA,813828,,,form25_unmatched,"25 0001193125-19-306213 ('Class A Common Stock, par value $0.001 per share Class B Common Stock, par value $0.001 per share'): ambiguous class",,
+BBG000C496P7,2025-08-17,PARA,813828,merger,0.000000,payout_gate_failed:15;llm_gate_failed;merger_at_par,M&A 2.01+3.01+5.01 (acquired by external acquirer),"1.01,1.02,2.01,3.01,3.03,5.01,5.02,5.03,9.01",
 BBG000C4DPX1,2016-02-08,AVGO,1441634,merger,0.000000,payout_gate_failed:54.5;terms_gate_failed:no_acq_ticker;merger_at_par,M&A 2.01+3.01+5.01 (acquired by external acquirer),"1.01,1.02,2.01,2.03,3.01,3.03,5.01,5.02,9.01",
 BBG000C4FB79,2012-03-16,TRH,862510,merger,,no_last_close,M&A 2.01+3.01+5.01 (acquired by external acquirer),"2.01,3.01,3.03,5.01,5.02,9.01",
 BBG000C4H302,2010-05-09,BJS,864328,merger,0.004141,acquirer_close_lagged,M&A 2.01+3.01+5.01 (acquired by external acquirer),"1.01,1.02,2.01,3.01,3.03,5.01,5.02,5.03,9.01",
@@ -461,7 +459,6 @@ BBG000CGT2S4,2016-05-29,UPL,1022646,liquidation,-0.300000,last_trade_date_confli
 BBG000CH11X8,2011-06-16,WTNY,106926,merger,,no_last_trade_date;no_last_close;terms_gate_failed:no_acq_price,"M&A change in control (5.01) with delisting/rights change, closing 8-K without 2.01","3.01,3.03,5.01,9.01",
 BBG000CHWP52,2022-04-18,DISCA,1437107,,,form25_unmatched,25-NSE 0001354457-22-000229 ('Series A Common Stock'): ambiguous class; 25-NSE 0001354457-22-000230 ('Series B Common Stock'): ambiguous class,,
 BBG000CL1HL7,2021-12-10,CLI,924901,exchange_transfer,0.000000,last_trade_date_unconfirmed;no_form25;delist_date_approx;successor_unknown;ftd_close_lagged,Continued 10-K/Q filings >180d after delist (moved to OTC or spun off),,
-BBG000CLNSF6,,STL,93451,,,ended_without_delisting,not listed today and no Form 25 or delisting filing found,,2022-02-02
 BBG000CNNMD7,,SKYF,855876,,,ended_without_delisting,not listed today and no Form 25 or delisting filing found,,2009-06-08
 BBG000CNWNL6,2020-01-06,OI,812074,,,form25_unmatched,"25-NSE 0000876661-19-001306 ('Owens-Illinois, Inc. Common Stock'): ambiguous class",,
 BBG000CNZC55,2014-10-06,ODP,800240,exchange_transfer,0.000000,no_last_trade_date;no_last_close,Continued 10-K/Q filings >180d after delist (moved to OTC or spun off),,
@@ -482,7 +479,6 @@ BBG000D3MB18,2013-06-17,VMED,1270400,merger,0.017136,ftd_close_prior:1;acquirer_
 BBG000D4YTR6,2018-10-19,VLY,714310,exchange_transfer,0.000000,resolved_by_current_ticker_map;no_last_trade_date;no_last_close,Ticker change / listing transfer: 3.01 notice announces a listing transfer; company still reports results,,
 BBG000D52545,2012-01-02,WEN,30697,exchange_transfer,0.000000,no_last_trade_date;no_last_close,Ticker change / listing transfer: 3.01 notice announces a listing transfer; company still reports results,,
 BBG000D9DMK0,2024-05-30,LH,920148,,,form25_unmatched,25-NSE 0000876661-24-000366 ('Common Stock (CUSIP # 50540R409)'): ambiguous class,,
-BBG000D9V7T4,,AAN,,,,ticker_shared,AAN 2010-12-14..2020-10-16 (BBG000D9V7T4) overlaps AAN 2020-10-08..2020-10-26 (BBG00VSH86G4),,
 BBG000DBTPX7,2015-12-25,AWAY,1366684,merger,0.001341,last_trade_date_conflict,M&A 2.01+3.01+5.01 (acquired by external acquirer),"1.01,2.01,2.03,3.01,3.03,5.01,5.02,5.03,9.01",
 BBG000DBVBY4,2021-03-11,EV,350797,merger,0.010940,ftd_close_prior:5,M&A 2.01+3.01+5.01 (acquired by external acquirer),"1.02,2.01,3.01,3.03,5.01,5.02,5.03,8.01,9.01",
 BBG000DD3510,,AIV,,,,ticker_shared,AIV 2007-12-21..2020-12-07 (BBG000DD3510) overlaps AIV 2007-12-21.. (CIK922864-COMMON),,
@@ -493,8 +489,8 @@ BBG000DGM399,2008-04-10,CBH,715096,merger,0.026033,acquirer_close_lagged,"M&A ch
 BBG000DGPR66,2023-11-11,BG,1144519,merger,0.000000,member_name_mismatch;resolved_by_cik_map,M&A 2.01+3.01+5.01 (acquired by external acquirer),"1.01,2.01,3.01,3.03,5.01,5.02,5.03,9.01",
 BBG000DGZ1B6,2008-11-20,MNST,1020416,exchange_transfer,0.000000,no_last_trade_date;no_last_close,Continued 10-K/Q filings >180d after delist (moved to OTC or spun off),,
 BBG000DGZ1B6,2009-06-08,MNST,1020416,exchange_transfer,0.000000,last_trade_date_unconfirmed;no_form25;delist_date_approx;successor_unknown,Continued 10-K/Q filings >180d after delist (moved to OTC or spun off),,
-BBG000DHM3H8,2019-12-14,VIA,813828,,,form25_unmatched,"25 0001193125-19-306213 ('Class A Common Stock, par value $0.001 per share Class B Common Stock, par value $0.001 per share'): ambiguous class",,
-BBG000DHSPT0,2019-12-14,VIAB,813828,,,form25_unmatched,"25 0001193125-19-306213 ('Class A Common Stock, par value $0.001 per share Class B Common Stock, par value $0.001 per share'): ambiguous class",,
+BBG000DHM3H8,2019-12-14,VIA,1339947,merger,-0.060336,ftd_close_prior:1,M&A 2.01+3.01+5.01 (acquired by external acquirer),"2.01,3.01,3.03,5.01,5.02,5.03,8.01,9.01",
+BBG000DHSPT0,2011-12-10,VIA-B,1339947,exchange_transfer,0.000000,no_last_trade_date;no_last_close,Continued 10-K/Q filings >180d after delist (moved to OTC or spun off),,
 BBG000DMBXR2,2010-01-30,JPM,19617,,,form25_unclassified,"25-NSE 0001143313-10-000012 ('Consumer Priced Indexed Securities(SM) (CPIS(SM)), Securities indexed to the non-seasonally adjusted U.S. Consumer Price Index, or CPI, on a three-month lagged basis') has no recognized class",,
 BBG000DMBXR2,2012-12-14,JPM,19617,,,form25_unclassified,25-NSE 0001143362-12-000114 ('See Attached') has no recognized class,,
 BBG000DMBXR2,2014-05-30,JPM,19617,,,form25_unclassified,25-NSE 0001143362-14-000071 ('See Attached.') has no recognized class,,
@@ -573,7 +569,7 @@ BBG000H89QJ6,2016-05-28,TWC,1377013,merger,-0.028330,ftd_close_prior:5,M&A 2.01+
 BBG000HZFZX3,2011-10-30,LVLT,794323,,,form25_unclassified,25 0001104659-11-056821 ('') has no recognized class,,
 BBG000HZFZX3,2017-11-11,LVLT,794323,exchange_transfer,0.000000,successor_unknown,Continued 10-K/Q filings >180d after delist (moved to OTC or spun off),,
 BBG000J0D904,2024-09-20,BIG,768835,liquidation,-0.300000,last_trade_date_conflict,Bankruptcy (8-K item 1.03 filed 2024-09-10),,
-BBG000J453J8,2019-05-12,CCO,1334978,exchange_transfer,0.000000,resolved_by_current_ticker_map;bankruptcy_before_merger;ftd_close_lagged,Continued 10-K/Q filings >180d after delist (moved to OTC or spun off),,
+BBG000J453J8,2019-05-12,CCO,1334978,exchange_transfer,0.000000,resolved_by_current_ticker_map;bankruptcy_before_merger;successor_unknown;ftd_close_lagged,Continued 10-K/Q filings >180d after delist (moved to OTC or spun off),,
 BBG000J8CD72,2010-02-18,ACS,2135,merger,0.000000,terms_gate_failed:fail_sanity;merger_at_par,Merger filing 425 2010-02-05 before the delisting,5.02,
 BBG000JBN3X6,,LCC,,,,ended_without_delisting,no issuer CIK to search for a Form 25,,2013-12-06
 BBG000JBSJZ4,2014-07-01,FNF,1331875,exchange_transfer,0.000000,resolved_by_current_ticker_map;last_trade_date_unconfirmed;no_form25;delist_date_approx,Continued 10-K/Q filings >180d after delist (moved to OTC or spun off); successor by same issuer,,
@@ -616,7 +612,7 @@ BBG000N8Y8W6,2017-07-27,AWH,1163348,merger,,no_last_trade_date;no_last_close;ter
 BBG000NC8DB8,2009-07-11,EQ,1350031,merger,-0.033571,ftd_close_prior:1,M&A 2.01+3.01+5.01 (acquired by external acquirer),"2.01,3.01,3.03,5.01,5.02,5.03,9.01",
 BBG000NDV1D4,2013-07-26,TMUS,1283699,,,form25_unmatched,25-NSE 0000876661-13-000530 ('Common Stock'): ambiguous class; 25-NSE/A 0000876661-13-000532 ('Common Stock'): ambiguous class; 25-NSE/A 0000876661-13-000538 ('Common Stock'): ambiguous class,,
 BBG000NDV1D4,2015-11-05,TMUS,1283699,exchange_transfer,0.000000,resolved_by_current_ticker_map;no_last_trade_date;no_last_close,Continued 10-K/Q filings >180d after delist (moved to OTC or spun off),,
-BBG000NS03H7,2021-07-19,MSGN,1469372,,,form25_unmatched,25-NSE 0000876661-21-001023 ('Class A Common Stock'): ambiguous class,,
+BBG000NS03H7,2021-07-19,MSGN,1469372,merger,,no_last_close;terms_gate_failed:no_last_close,M&A 2.01+3.01+5.01 (acquired by external acquirer),"2.01,3.01,3.03,5.01,5.02,5.03,5.07,9.01",
 BBG000NSCNT7,2017-12-21,PFG,1126328,exchange_transfer,0.000000,resolved_by_current_ticker_map;ftd_close_lagged,Ticker change / listing transfer: 3.01 notice announces a listing transfer; company still reports results,,
 BBG000P1F8Q7,2015-09-13,HSP,1274057,merger,,no_last_close,M&A 2.01+3.01+5.01 (acquired by external acquirer),"1.02,2.01,3.01,3.03,5.01,5.02,5.03,9.01",
 BBG000P1K2X6,2026-07-26,GTLS,892553,merger,0.000476,resolved_by_current_ticker_map,M&A 2.01+3.01+5.01 (acquired by external acquirer),"2.01,3.01,3.03,5.01,5.02,5.03,9.01",
@@ -642,7 +638,6 @@ BBG000QF18M4,2012-07-15,SOA,1043382,merger,-0.002980,ftd_close_prior:1,M&A 2.01+
 BBG000QFJ7H3,2020-01-02,OAS,1486159,exchange_transfer,0.000000,no_last_trade_date;no_last_close,Ticker change / listing transfer: 3.01 notice announces a listing transfer; company still reports results,,
 BBG000QFJ7H3,2020-11-06,OAS,1486159,,,form25_unmatched,25-NSE 0001354457-20-000638 ('Common Stock'): ambiguous class,,
 BBG000QGWY50,2025-06-12,BLUEXXXX,1293971,merger,,no_last_close,M&A 2.01+3.01+5.01 (acquired by external acquirer),"1.01,2.01,3.01,3.03,5.01,5.02,5.03,9.01",
-BBG000QH56C1,,CBOE,1374310,,,ended_without_delisting,not listed today and no Form 25 or delisting filing found,,2026-08-27
 BBG000QN4GY3,2022-06-09,RLGY,1355001,exchange_transfer,0.000000,member_name_mismatch;no_form25;delist_date_approx;successor_unknown,Ticker change / listing transfer: renamed from 'REALOGY GROUP LLC'; company still reports results,,
 BBG000QW8XR0,2017-09-25,WBMD,1326583,merger,0.000451,ftd_close_prior:8,M&A 2.01+3.01+5.01 (acquired by external acquirer),"1.01,2.01,2.04,3.01,3.03,5.01,5.02,5.03,9.01",
 BBG000R06BX2,2015-09-10,NLSN,1492633,,,form25_unmatched,25-NSE 0000876661-15-000391 ('Nielsen N.V. Common Stock'): ambiguous class,,
@@ -687,7 +682,8 @@ BBG0029ZX840,2022-12-29,TWLO,1447669,exchange_transfer,0.000000,resolved_by_curr
 BBG002B67HB2,2025-08-01,UNIT,1620280,merger,-0.006627,last_trade_date_unconfirmed;no_form25,"M&A 2.01+3.01+5.01 (acquired by external acquirer) (no Form 25 anchor, 8-K-only)","2.01,3.01,3.03,5.01,5.02,5.03,8.01,9.01",
 BBG002BHBHM1,2020-10-23,MNK,1567892,liquidation,-0.300000,last_trade_date_unconfirmed,Bankruptcy (8-K item 1.03 filed 2020-10-13),,
 BBG002V098F7,2025-10-11,COOP,933136,merger,0.011338,ftd_close_lagged,M&A 2.01+3.01+5.01 (acquired by external acquirer),"1.01,2.01,2.03,3.01,3.03,5.01,5.02,5.03,7.01,9.01",
-BBG002W96FT9,,GOOG,1288776,,,ended_without_delisting,not listed today and no Form 25 or delisting filing found,,2015-10-05
+BBG002W96FT9,,GOOG,,,,ticker_shared,GOOG 2014-04-04..2015-10-12 (BBG002W96FT9) overlaps GOOG 2015-10-06.. (BBG009S3NB30),,
+BBG002W96FT9,2015-10-12,GOOG,1288776,unknown,,no_evidence_default;no_last_trade_date;no_last_close,Delisted/deregistered without merger or distress evidence,"1.01,3.01,3.03,5.02,5.03,9.01",
 BBG0033377Y3,2021-01-07,HDS,1573097,merger,0.000179,last_trade_date_conflict,M&A 2.01+3.01+5.01 (acquired by external acquirer),"1.02,2.01,3.01,3.03,5.01,5.02,5.03,9.01",
 BBG00341H6M0,2022-10-15,GBT,1629137,merger,0.000146,ftd_close_lagged,M&A 2.01+3.01+5.01 (acquired by external acquirer),"1.01,1.02,2.01,2.04,3.01,3.03,5.01,5.02,5.03,9.01",
 BBG003444577,2014-12-25,BKW,1547282,merger,0.038007,ftd_close_prior:4;acquirer_close_lagged,M&A 2.01+3.01+5.01 (acquired by external acquirer),"1.01,2.01,2.03,3.01,3.03,5.01,5.02,5.03,9.01",
@@ -697,9 +693,6 @@ BBG003BW05K6,2024-03-14,SAIC,1571123,exchange_transfer,0.000000,resolved_by_curr
 BBG003FHPBQ9,2016-12-12,EVHC,1578318,merger,0.000000,terms_gate_failed:no_acq_ticker;merger_at_par,M&A 2.01+3.01 (acquisition with delisting),"1.01,2.01,2.03,3.01,3.03,5.02,5.03,9.01",
 BBG003P9ZSL3,2016-04-28,LMCA,1560385,,,form25_unmatched,25-NSE 0001354457-16-000357 ('OLD Liberty Media Corporation Series A Common Stock (531229102); OLD Liberty Media Corporation Series B Common Stock (531229201); OLD Liberty Media Corporation Series C Common Stock (531229300)'): ambiguous class,,
 BBG003P9ZSL3,2023-07-28,LMCA,1560385,,,form25_unmatched,25-NSE 0001354457-23-000512 ('Series A Liberty Braves Common Stock & Series C Liberty Braves Common Stock'): ambiguous class,,
-BBG003P9ZSL3,2023-08-13,LMCA,1560385,,,form25_unmatched,"25-NSE 0001354457-23-000564 ('Series A Liberty Formula One Common Stock, Series C Liberty Formula One Common Stock, Series A Liberty SiriusXM Common Stock, Series B Liberty SiriusXM Common Stock, Series K Liberty SiriusXM Common Stock'): ambiguous class",,
-BBG003P9ZSL3,2024-09-19,LMCA,1560385,,,form25_unmatched,"25-NSE 0001354457-24-000664 ('Series A Liberty SiriusXM Common Stock (LSXMA), Series B Liberty SiriusXM Common Stock (LSXMB), and Series C Liberty SiriusXM Common Stock (LSXMK)'): ambiguous class",,
-BBG003P9ZSL3,2025-12-25,LMCA,1560385,,,form25_unmatched,25-NSE 0001354457-25-001270 ('Liberty Media Corporation Series A Liberty Live Common Stock & \tLiberty Media Corporation Series C Liberty Live Common Stock'): ambiguous class,,
 BBG003PGJHP5,2026-08-03,TMHC,1562476,merger,0.000690,resolved_by_current_ticker_map;ftd_close_lagged,M&A 2.01+3.01+5.01 (acquired by external acquirer),"1.01,2.01,3.01,3.03,5.01,5.02,5.03,8.01,9.01",
 BBG004DF9V32,2014-11-24,ATHL,1574648,merger,0.005500,ftd_close_prior:5,"M&A change in control (5.01) with delisting/rights change, closing 8-K without 2.01","3.01,3.03,5.01,5.02,5.03,8.01,9.01",
 BBG004M25Z09,2016-06-18,SSE,1532930,liquidation,-0.300000,last_trade_date_conflict;ftd_close_lagged,Bankruptcy (8-K item 1.03 filed 2016-06-07),,
@@ -718,9 +711,6 @@ BBG005PCN2G7,2017-01-21,NSAM,1597503,merger,-0.088384,acquirer_close_lagged,M&A 
 BBG005PWSVQ3,2015-01-16,WPG,1594686,exchange_transfer,0.000000,member_name_mismatch;resolved_by_cik_map;last_trade_date_unconfirmed;no_form25;delist_date_approx,Continued 10-K/Q filings >180d after delist (moved to OTC or spun off); successor by same issuer,,
 BBG005SW6TK5,2016-04-28,LMCK,1560385,,,form25_unmatched,25-NSE 0001354457-16-000357 ('OLD Liberty Media Corporation Series A Common Stock (531229102); OLD Liberty Media Corporation Series B Common Stock (531229201); OLD Liberty Media Corporation Series C Common Stock (531229300)'): ambiguous class,,
 BBG005SW6TK5,2023-07-28,LMCK,1560385,,,form25_unmatched,25-NSE 0001354457-23-000512 ('Series A Liberty Braves Common Stock & Series C Liberty Braves Common Stock'): ambiguous class,,
-BBG005SW6TK5,2023-08-13,LMCK,1560385,,,form25_unmatched,"25-NSE 0001354457-23-000564 ('Series A Liberty Formula One Common Stock, Series C Liberty Formula One Common Stock, Series A Liberty SiriusXM Common Stock, Series B Liberty SiriusXM Common Stock, Series K Liberty SiriusXM Common Stock'): ambiguous class",,
-BBG005SW6TK5,2024-09-19,LMCK,1560385,,,form25_unmatched,"25-NSE 0001354457-24-000664 ('Series A Liberty SiriusXM Common Stock (LSXMA), Series B Liberty SiriusXM Common Stock (LSXMB), and Series C Liberty SiriusXM Common Stock (LSXMK)'): ambiguous class",,
-BBG005SW6TK5,2025-12-25,LMCK,1560385,,,form25_unmatched,25-NSE 0001354457-25-001270 ('Liberty Media Corporation Series A Liberty Live Common Stock & \tLiberty Media Corporation Series C Liberty Live Common Stock'): ambiguous class,,
 BBG005XVXML5,2024-06-10,SWAV,1642545,merger,0.000747,ftd_close_lagged,M&A 2.01+3.01+5.01 (acquired by external acquirer),"1.01,1.02,2.01,2.04,3.01,3.03,5.01,5.02,5.03,7.01,9.01",
 BBG0060HN0R3,2016-03-04,KING,1580732,unknown,0.000000,no_evidence_default,Delisted/deregistered without merger or distress evidence,,
 BBG0064N2T78,2025-06-26,VIRT,1592386,exchange_transfer,0.000000,resolved_by_current_ticker_map;ftd_close_lagged,Ticker change / listing transfer: 3.01 notice announces a listing transfer; company still reports results,,
@@ -732,6 +722,7 @@ BBG006G57XG0,2025-08-19,VNOM,1602065,merger,0.000000,last_trade_date_unconfirmed
 BBG006GNRZ83,2015-01-19,LBRDA,1611983,,,form25_unmatched,25-NSE 0001354457-15-000004 ('Subscription Rights to Purchase Shares of Series C Common Stock'): ambiguous class,,
 BBG006GNRZ83,2026-08-30,LBRDA,1611983,merger,-0.000197,resolved_by_current_ticker_map,M&A 2.01+3.01+5.01 (acquired by external acquirer),"1.02,2.01,3.01,3.03,5.01,5.02,5.03,9.01",
 BBG006GNSZW5,2015-01-19,LBRDK,1611983,,,form25_unmatched,25-NSE 0001354457-15-000004 ('Subscription Rights to Purchase Shares of Series C Common Stock'): ambiguous class,,
+BBG006GNSZW5,2026-08-30,LBRDK,1611983,merger,-0.001029,resolved_by_current_ticker_map,M&A 2.01+3.01+5.01 (acquired by external acquirer),"1.02,2.01,3.01,3.03,5.01,5.02,5.03,9.01",
 BBG006KY8KV2,2017-10-17,TERP,1599947,exchange_transfer,0.000000,last_trade_date_unconfirmed;no_form25;delist_date_approx;successor_unknown,Continued 10-K/Q filings >180d after delist (moved to OTC or spun off),,
 BBG006LYGNL7,2021-10-16,ARD,1689662,merger,,no_last_trade_date;no_last_close,Merger filing 425 2021-10-12 before the delisting,,
 BBG006N7RYV7,,FNFV,,,,ended_without_delisting,no issuer CIK to search for a Form 25,,2017-11-21
@@ -763,20 +754,12 @@ BBG00B6WH9G3,2020-07-10,MTCH,891103,,,form25_unmatched,25-NSE 0001354457-20-0002
 BBG00BDQ1H13,2022-10-10,TEAM,1650372,,,form25_unmatched,"25-NSE 0001354457-22-000555 ('Class A Ordinary Shares, nominal value $0.10 per share'): ambiguous class",,
 BBG00BFHD827,2023-07-28,LSXMA,1560385,,,form25_unmatched,25-NSE 0001354457-23-000512 ('Series A Liberty Braves Common Stock & Series C Liberty Braves Common Stock'): ambiguous class,,
 BBG00BFHD827,2023-08-13,LSXMA,1560385,,,form25_unmatched,"25-NSE 0001354457-23-000564 ('Series A Liberty Formula One Common Stock, Series C Liberty Formula One Common Stock, Series A Liberty SiriusXM Common Stock, Series B Liberty SiriusXM Common Stock, Series K Liberty SiriusXM Common Stock'): ambiguous class",,
-BBG00BFHD827,2024-09-19,LSXMA,1560385,,,form25_unmatched,"25-NSE 0001354457-24-000664 ('Series A Liberty SiriusXM Common Stock (LSXMA), Series B Liberty SiriusXM Common Stock (LSXMB), and Series C Liberty SiriusXM Common Stock (LSXMK)'): ambiguous class",,
-BBG00BFHD827,2025-12-25,LSXMA,1560385,,,form25_unmatched,25-NSE 0001354457-25-001270 ('Liberty Media Corporation Series A Liberty Live Common Stock & \tLiberty Media Corporation Series C Liberty Live Common Stock'): ambiguous class,,
 BBG00BFHD9S7,2023-07-28,LSXMK,1560385,,,form25_unmatched,25-NSE 0001354457-23-000512 ('Series A Liberty Braves Common Stock & Series C Liberty Braves Common Stock'): ambiguous class,,
 BBG00BFHD9S7,2023-08-13,LSXMK,1560385,,,form25_unmatched,"25-NSE 0001354457-23-000564 ('Series A Liberty Formula One Common Stock, Series C Liberty Formula One Common Stock, Series A Liberty SiriusXM Common Stock, Series B Liberty SiriusXM Common Stock, Series K Liberty SiriusXM Common Stock'): ambiguous class",,
-BBG00BFHD9S7,2024-09-19,LSXMK,1560385,,,form25_unmatched,"25-NSE 0001354457-24-000664 ('Series A Liberty SiriusXM Common Stock (LSXMA), Series B Liberty SiriusXM Common Stock (LSXMB), and Series C Liberty SiriusXM Common Stock (LSXMK)'): ambiguous class",,
-BBG00BFHD9S7,2025-12-25,LSXMK,1560385,,,form25_unmatched,25-NSE 0001354457-25-001270 ('Liberty Media Corporation Series A Liberty Live Common Stock & \tLiberty Media Corporation Series C Liberty Live Common Stock'): ambiguous class,,
 BBG00BFHDCV6,2023-07-28,FWONA,1560385,,,form25_unmatched,25-NSE 0001354457-23-000512 ('Series A Liberty Braves Common Stock & Series C Liberty Braves Common Stock'): ambiguous class,,
 BBG00BFHDCV6,2023-08-13,FWONA,1560385,,,form25_unmatched,"25-NSE 0001354457-23-000564 ('Series A Liberty Formula One Common Stock, Series C Liberty Formula One Common Stock, Series A Liberty SiriusXM Common Stock, Series B Liberty SiriusXM Common Stock, Series K Liberty SiriusXM Common Stock'): ambiguous class",,
-BBG00BFHDCV6,2024-09-19,FWONA,1560385,,,form25_unmatched,"25-NSE 0001354457-24-000664 ('Series A Liberty SiriusXM Common Stock (LSXMA), Series B Liberty SiriusXM Common Stock (LSXMB), and Series C Liberty SiriusXM Common Stock (LSXMK)'): ambiguous class",,
-BBG00BFHDCV6,2025-12-25,FWONA,1560385,,,form25_unmatched,25-NSE 0001354457-25-001270 ('Liberty Media Corporation Series A Liberty Live Common Stock & \tLiberty Media Corporation Series C Liberty Live Common Stock'): ambiguous class,,
 BBG00BFHDFR4,2023-07-28,FWONK,1560385,,,form25_unmatched,25-NSE 0001354457-23-000512 ('Series A Liberty Braves Common Stock & Series C Liberty Braves Common Stock'): ambiguous class,,
 BBG00BFHDFR4,2023-08-13,FWONK,1560385,,,form25_unmatched,"25-NSE 0001354457-23-000564 ('Series A Liberty Formula One Common Stock, Series C Liberty Formula One Common Stock, Series A Liberty SiriusXM Common Stock, Series B Liberty SiriusXM Common Stock, Series K Liberty SiriusXM Common Stock'): ambiguous class",,
-BBG00BFHDFR4,2024-09-19,FWONK,1560385,,,form25_unmatched,"25-NSE 0001354457-24-000664 ('Series A Liberty SiriusXM Common Stock (LSXMA), Series B Liberty SiriusXM Common Stock (LSXMB), and Series C Liberty SiriusXM Common Stock (LSXMK)'): ambiguous class",,
-BBG00BFHDFR4,2025-12-25,FWONK,1560385,,,form25_unmatched,25-NSE 0001354457-25-001270 ('Liberty Media Corporation Series A Liberty Live Common Stock & \tLiberty Media Corporation Series C Liberty Live Common Stock'): ambiguous class,,
 BBG00BFHKT14,2018-05-31,CHUBA,1665658,merger,0.000880,ftd_close_lagged,M&A 2.01+3.01+5.01 (acquired by external acquirer),"1.02,2.01,3.01,3.03,5.01,5.02,5.03,7.01,9.01",
 BBG00C1BZMT9,2019-12-30,CNDT,1677703,exchange_transfer,0.000000,resolved_by_current_ticker_map;no_last_trade_date;no_last_close,Continued 10-K/Q filings >180d after delist (moved to OTC or spun off),,
 BBG00CNYBQ76,2022-09-22,CDEV,1658566,exchange_transfer,0.000000,resolved_by_current_ticker_map,Continued 10-K/Q filings >180d after delist (moved to OTC or spun off),,
@@ -784,14 +767,13 @@ BBG00CNYBQ76,2026-01-17,PR,1658566,exchange_transfer,0.000000,resolved_by_curren
 BBG00CTY3QD2,2018-03-18,BIVV,1681689,merger,0.000191,last_trade_date_conflict,M&A 2.01+3.01+5.01 (acquired by external acquirer),"1.02,2.01,3.01,3.03,5.01,5.02,5.03,9.01",
 BBG00CW2JCN1,2022-01-13,ATH,1527469,exchange_transfer,0.000000,successor_unknown;ftd_close_prior:2,Continued 10-K/Q filings >180d after delist (moved to OTC or spun off),,
 BBG00D1WHZD9,2020-11-09,HTZ,1657853,,,form25_unmatched,25-NSE 0000876661-20-001005 ('Common Stock'): ambiguous class,,
-BBG00D30HGP6,,CLNY,1467076,,,ended_without_delisting,not listed today and no Form 25 or delisting filing found,,2021-06-23
 BBG00D3CHRC0,2018-10-11,EVHC,1678531,merger,0.000217,no_form25,"M&A 2.01+3.01+5.01 (acquired by external acquirer) (no Form 25 anchor, 8-K-only)","1.01,1.02,2.01,3.01,3.03,5.01,5.02,5.03,9.01",
 BBG00D7BRGD0,2018-05-31,CHUBK,1665658,merger,0.004415,ftd_close_lagged,M&A 2.01+3.01+5.01 (acquired by external acquirer),"1.02,2.01,3.01,3.03,5.01,5.02,5.03,7.01,9.01",
 BBG00DBBG1M0,2018-09-22,XL,875159,merger,0.000174,member_name_mismatch;resolved_by_cik_map,M&A 2.01+3.01+5.01 (acquired by external acquirer),"2.01,3.01,3.03,5.01,5.02,5.03,8.01,9.01",
 BBG00DBBG1M0,2018-10-04,XL,875159,,,form25_unclassified,25 0000950157-18-000997 ('') has no recognized class,,
 BBG00DJ2LJF5,2019-01-07,DVMT,1571996,exchange_transfer,0.000000,ftd_close_lagged,Continued 10-K/Q filings >180d after delist (moved to OTC or spun off); successor by same issuer,,
 BBG00FFJY867,2016-12-19,LGFB,929351,,,form25_unmatched,25-NSE 0000876661-16-001474 ('Common Shares'): ambiguous class,,
-BBG00FFJY867,2025-05-17,LGFB,929351,,,form25_unmatched,25-NSE 0000876661-25-000296 ('Class A Voting Common Shares; Class B Non-Voting Common Shares'): ambiguous class,,
+BBG00FFJY867,2025-05-17,LGFB,929351,exchange_transfer,0.000000,successor_unknown,Continued 10-K/Q filings >180d after delist (moved to OTC or spun off),,
 BBG00GBV88T6,2016-05-14,BTUXXXX,1064728,liquidation,,resolved_by_current_ticker_map;last_trade_date_unconfirmed;no_last_close,Bankruptcy (8-K item 1.03 filed 2016-04-13),,
 BBG00GBVBK51,2021-12-16,BKR,1701605,exchange_transfer,0.000000,resolved_by_current_ticker_map;no_last_trade_date;no_last_close,Continued 10-K/Q filings >180d after delist (moved to OTC or spun off),,
 BBG00GQK3WB5,2025-02-01,SMAR,1366561,merger,0.000531,ftd_close_lagged,M&A 2.01+3.01+5.01 (acquired by external acquirer),"1.01,2.01,3.01,3.03,5.01,5.02,5.03,8.01,9.01",
@@ -808,7 +790,6 @@ BBG00JR5MM31,,LNW,,,,ended_without_delisting,no issuer CIK to search for a Form 
 BBG00KR691K8,2022-10-23,CVET,1752836,merger,0.000476,ftd_close_lagged,M&A 2.01+3.01+5.01 (acquired by external acquirer),"1.01,1.02,2.01,2.03,3.01,3.03,5.01,5.02,5.03,8.01,9.01",
 BBG00L31HTW0,,RVI,1735184,,,ended_without_delisting,not listed today and no Form 25 or delisting filing found,,2022-04-08
 BBG00L31HTW0,2022-04-07,RVI,1735184,exchange_transfer,0.000000,no_last_trade_date;no_last_close,Continued 10-K/Q filings >180d after delist (moved to OTC or spun off),,
-BBG00L9HLWV8,2021-07-19,MSGE,1469372,,,form25_unmatched,25-NSE 0000876661-21-001023 ('Class A Common Stock'): ambiguous class,,
 BBG00LT2PDY4,,BPYU,1496048,,,ticker_unconfirmed,BPYU@2020-06-30 BROOKFIELD PROPERTY REIT INC CLASS: no fails-to-deliver row under BPYU from 2020-05-31 to 2021-07-30,,2021-06-30
 BBG00LT2PDY4,2021-08-05,BPYU,1496048,unknown,,no_evidence_default;no_last_close,Delisted/deregistered without merger or distress evidence,"1.01,3.01,3.02,5.02",
 BBG00M1CKSK7,2025-04-26,SWI,1739942,merger,0.000541,ftd_close_lagged,M&A 2.01+3.01+5.01 (acquired by external acquirer),"1.01,1.02,2.01,2.03,3.01,3.03,5.01,5.02,5.03,8.01,9.01",
@@ -842,19 +823,13 @@ BBG014QJ5BV6,2026-05-25,EHAB,1803737,merger,0.000000,resolved_by_current_ticker_
 BBG01B6SGB59,,UHAL-B,4457,,,ticker_unconfirmed,UHAL-B@2022-12-31 U HAUL NON VOTING SERIES N: no fails-to-deliver row under UHAL-B from 2022-12-01 to 2023-01-30,,2022-12-31
 BBG01B6SGB59,2022-12-26,UHAL-B,4457,exchange_transfer,0.000000,resolved_by_current_ticker_map;no_last_trade_date;no_last_close,Ticker change / listing transfer: renamed from 'AMERCO /NV/'; company still reports results,,
 BBG01FND0CC1,2023-11-16,LIN,1707925,,,form25_unmatched,25 0001654954-23-013831 ('Ordinary Shares (€0.001 nominal value per share)'): ambiguous class,,
-BBG01HLM8W28,2024-09-19,LSXMA,1560385,,,form25_unmatched,"25-NSE 0001354457-24-000664 ('Series A Liberty SiriusXM Common Stock (LSXMA), Series B Liberty SiriusXM Common Stock (LSXMB), and Series C Liberty SiriusXM Common Stock (LSXMK)'): ambiguous class",,
-BBG01HLM8W28,2025-12-25,LSXMA,1560385,,,form25_unmatched,25-NSE 0001354457-25-001270 ('Liberty Media Corporation Series A Liberty Live Common Stock & \tLiberty Media Corporation Series C Liberty Live Common Stock'): ambiguous class,,
+BBG01HLM8W28,2024-09-19,LSXMA,1560385,exchange_transfer,0.000000,successor_unknown,Continued 10-K/Q filings >180d after delist (moved to OTC or spun off),,
 BBG01HLMB6H5,2024-09-19,LSXMK,1560385,,,form25_unmatched,"25-NSE 0001354457-24-000664 ('Series A Liberty SiriusXM Common Stock (LSXMA), Series B Liberty SiriusXM Common Stock (LSXMB), and Series C Liberty SiriusXM Common Stock (LSXMK)'): ambiguous class",,
-BBG01HLMB6H5,2025-12-25,LSXMK,1560385,,,form25_unmatched,25-NSE 0001354457-25-001270 ('Liberty Media Corporation Series A Liberty Live Common Stock & \tLiberty Media Corporation Series C Liberty Live Common Stock'): ambiguous class,,
-BBG01HLMB809,2024-09-19,FWONA,1560385,,,form25_unmatched,"25-NSE 0001354457-24-000664 ('Series A Liberty SiriusXM Common Stock (LSXMA), Series B Liberty SiriusXM Common Stock (LSXMB), and Series C Liberty SiriusXM Common Stock (LSXMK)'): ambiguous class",,
-BBG01HLMB809,2025-12-25,FWONA,1560385,,,form25_unmatched,25-NSE 0001354457-25-001270 ('Liberty Media Corporation Series A Liberty Live Common Stock & \tLiberty Media Corporation Series C Liberty Live Common Stock'): ambiguous class,,
-BBG01HLMBCG3,2024-09-19,FWONK,1560385,,,form25_unmatched,"25-NSE 0001354457-24-000664 ('Series A Liberty SiriusXM Common Stock (LSXMA), Series B Liberty SiriusXM Common Stock (LSXMB), and Series C Liberty SiriusXM Common Stock (LSXMK)'): ambiguous class",,
-BBG01HLMBCG3,2025-12-25,FWONK,1560385,,,form25_unmatched,25-NSE 0001354457-25-001270 ('Liberty Media Corporation Series A Liberty Live Common Stock & \tLiberty Media Corporation Series C Liberty Live Common Stock'): ambiguous class,,
-BBG01HMFL081,2024-09-19,LLYVA,1560385,,,form25_unmatched,"25-NSE 0001354457-24-000664 ('Series A Liberty SiriusXM Common Stock (LSXMA), Series B Liberty SiriusXM Common Stock (LSXMB), and Series C Liberty SiriusXM Common Stock (LSXMK)'): ambiguous class",,
-BBG01HMFL081,2025-12-25,LLYVA,1560385,,,form25_unmatched,25-NSE 0001354457-25-001270 ('Liberty Media Corporation Series A Liberty Live Common Stock & \tLiberty Media Corporation Series C Liberty Live Common Stock'): ambiguous class,,
-BBG01HMFLTN1,,LLYVK,,,,ticker_shared,LLYVK 2023-08-04..2025-12-29 (BBG01HMFLTN1) overlaps LLYVK 2025-12-17.. (BBG01YYX1Z14),,
-BBG01HMFLTN1,2024-09-19,LLYVK,1560385,,,form25_unmatched,"25-NSE 0001354457-24-000664 ('Series A Liberty SiriusXM Common Stock (LSXMA), Series B Liberty SiriusXM Common Stock (LSXMB), and Series C Liberty SiriusXM Common Stock (LSXMK)'): ambiguous class",,
-BBG01HMFLTN1,2025-12-25,LLYVK,1560385,,,form25_unmatched,25-NSE 0001354457-25-001270 ('Liberty Media Corporation Series A Liberty Live Common Stock & \tLiberty Media Corporation Series C Liberty Live Common Stock'): ambiguous class,,
+BBG01HMFL081,,LLYVA,,,,ticker_shared,LLYVA 2023-08-04..2025-12-25 (BBG01HMFL081) overlaps LLYVA 2025-12-17.. (BBG01YY256K1),,
+BBG01HMFL081,2025-12-25,LLYVA,1560385,exchange_transfer,0.000000,no_last_trade_date;no_last_close,Continued 10-K/Q filings >180d after delist (moved to OTC or spun off); successor by same ticker,,
+BBG01HMFLTN1,,LLYVK,1560385,,,ended_without_delisting,not listed today and no Form 25 or delisting filing found,,2025-12-16
+BBG01HMFLTN1,,LLYVK,,,,ticker_shared,LLYVK 2023-08-04..2025-12-25 (BBG01HMFLTN1) overlaps LLYVK 2025-12-17.. (BBG01YYX1Z14),,
+BBG01HMFLTN1,2025-12-25,LLYVK,1560385,exchange_transfer,0.000000,no_last_trade_date;no_last_close,Continued 10-K/Q filings >180d after delist (moved to OTC or spun off),,
 BBG01JNDL2R6,2025-07-18,SEG,2009684,exchange_transfer,0.000000,resolved_by_current_ticker_map;no_last_trade_date;no_last_close,Ticker change / listing transfer: 3.01 notice announces a listing transfer; company still reports results,,
 BBG01K9HZH92,2018-01-08,LBTYA,1570585,exchange_transfer,0.000000,resolved_by_current_ticker_map;no_last_trade_date;no_last_close,Continued 10-K/Q filings >180d after delist (moved to OTC or spun off),,
 BBG01K9HZH92,2023-12-04,LBTYAZZZZ,1570585,exchange_transfer,0.000000,resolved_by_current_ticker_map;no_last_trade_date;no_last_close,Ticker change / listing transfer: renamed from 'Liberty Global plc'; company still reports results,,
@@ -996,7 +971,6 @@ CIK1465112-COMMON,2015-11-09,DTV,1465112,,,form25_unclassified,"25 0001465112-15
 CIK1469372-CLASS-A,,MSG,1469372,,,no_figi,MSG@2012-06-29 MADISON SQUARE GARDEN ORD CLASS A,,2015-06-30
 CIK1469372-CLASS-A,2015-08-03,MSG,1469372,exchange_transfer,0.000000,no_last_trade_date;no_last_close,Continued 10-K/Q filings >180d after delist (moved to OTC or spun off),,
 CIK1469372-CLASS-A,2015-10-02,MSG,1469372,exchange_transfer,0.000000,last_trade_date_unconfirmed;no_form25;delist_date_approx;successor_unknown,Continued 10-K/Q filings >180d after delist (moved to OTC or spun off),,
-CIK1469372-CLASS-A,2021-07-19,MSG,1469372,,,form25_unmatched,25-NSE 0000876661-21-001023 ('Class A Common Stock'): ambiguous class,,
 CIK1471261-COMMON,,CIE,1471261,,,no_figi,CIE@2012-06-29 COBALT INTERNATIONAL ENERGY INC,,2015-12-31
 CIK1471261-COMMON,2018-01-12,CIEXXXX,1471261,liquidation,,no_last_close,Bankruptcy (8-K item 1.03 filed 2017-12-14),,
 CIK1478242-COMMON,,Q,1478242,,,no_figi,Q@2013-12-31 IQVIA HOLDINGS INC; Q@2014-12-31 QUINTILES TRANSNATIONAL HOLDINGS I; Q@2016-12-30 QUINTILES IMS INC,,2014-06-30
@@ -1016,7 +990,7 @@ CIK1561032-COMMON,2022-07-26,HTA,1561032,exchange_transfer,0.000000,last_trade_d
 CIK1571949-COMMON,,ICE,1571949,,,no_figi,ICE@2008-01-16 INTERCONTINENTALEXCHANGE INC.,,2013-06-28
 CIK1571949-COMMON,,ICE,,,,ticker_shared,ICE 2008-01-16.. (CIK1571949-COMMON) overlaps ICE 2013-11-14.. (BBG000C1FB75),,
 CIK1575828-COMMON,,FI,1575828,,,no_figi,FI@2013-12-31 FRANK S INTERNATIONAL NV,,2016-12-30
-CIK1575828-COMMON,2021-10-01,FI,1575828,exchange_transfer,0.000000,member_name_mismatch;resolved_by_cik_map;last_trade_date_unconfirmed;no_form25;delist_date_approx;successor_unknown;ftd_close_prior:1,Continued 10-K/Q filings >180d after delist (moved to OTC or spun off),,
+CIK1575828-COMMON,2021-10-01,FI,1575828,exchange_transfer,0.000000,last_trade_date_unconfirmed;no_form25;delist_date_approx;successor_unknown;ftd_close_prior:1,Continued 10-K/Q filings >180d after delist (moved to OTC or spun off),,
 CIK1578845-COMMON,,ACT,1578845,,,no_figi,ACT@2014-12-31 ACTAVIS PLC,,2014-12-31
 CIK1578845-COMMON,2015-06-15,ACT,1578845,exchange_transfer,0.000000,last_trade_date_unconfirmed;no_form25;delist_date_approx,Continued 10-K/Q filings >180d after delist (moved to OTC or spun off); successor by same issuer,,
 CIK1584207-COMMON,,LEAF,1584207,,,no_figi,LEAF@2015-06-30 SPRINGLEAF HOLDINGS INC,,2015-06-30
@@ -1210,7 +1184,6 @@ CIK895648-COMMON,,GGP,895648,,,no_figi,GGP@2008-01-16 GENERAL GROWTH PPTYS INC,,
 CIK895648-COMMON,2009-05-21,GGP,895648,liquidation,-0.300000,last_trade_date_conflict,Bankruptcy (8-K item 1.03 filed 2009-04-16),,
 CIK896159-COMMON,,ACE,896159,,,no_figi,ACE@2008-01-16 ACE LTD; ACE@2008-07-25 ACE LTD,,2008-05-31
 CIK896159-COMMON,,CB,896159,,,no_figi,CB@2012-06-29 ACE LTD; CB@2012-12-31 ACE LTD; CB@2013-06-28 ACE LTD; CB@2013-12-31 ACE LTD; CB@2014-06-30 ACE LTD,,2012-06-29
-CIK898173-COMMON,,ORLY,898173,,,no_figi,ORLY@2008-01-16 O REILLY AUTOMOTIVE INC,,2009-06-08
 CIK898174-COMMON,,RGA,898174,,,no_figi,RGA@2008-01-16 REINSURANCE GRP OF AMER,,2008-11-18
 CIK898174-COMMON,,RGA,,,,ticker_shared,RGA 2008-01-14.. (CIK898174-COMMON) overlaps RGA 2008-12-02.. (BBG000BDLCQ0),,
 CIK898174-COMMON,2008-12-12,RGA,898174,,,form25_unmatched,"25-NSE 0000876661-08-000514 ('Class A Common Stock'): ambiguous class; 25-NSE 0000876661-08-000516 ('Class B Common Stock, Series B-1 Preferred Share Purchase Rights'): ambiguous class",,
@@ -1225,7 +1198,6 @@ CIK922864-COMMON,,AIV,922864,,,no_figi,AIV@2012-06-29 APARTMENT INVESTMENT AND M
 CIK922864-COMMON,,AIV,,,,ticker_shared,AIV 2007-12-21.. (CIK922864-COMMON) overlaps AIV 2020-12-09.. (BBG000DD3510),,
 CIK929351-COMMON,,LGF,929351,,,no_figi,LGF@2013-12-31 LIONS GATE ENTERTAINMENT CORP,,2016-06-30
 CIK929351-COMMON,2016-12-19,LGF,929351,,,form25_unmatched,25-NSE 0000876661-16-001474 ('Common Shares'): ambiguous class,,
-CIK929351-COMMON,2025-05-17,LGF,929351,,,form25_unmatched,25-NSE 0000876661-25-000296 ('Class A Voting Common Shares; Class B Non-Voting Common Shares'): ambiguous class,,
 CIK931336-COMMON,,DF,931336,,,no_figi,DF@2008-01-16 DEAN FOODS CO.,,2013-06-28
 CIK931336-COMMON,2013-08-26,DF,931336,exchange_transfer,0.000000,last_trade_date_unconfirmed;no_form25;delist_date_approx;successor_unknown;ftd_close_lagged,Continued 10-K/Q filings >180d after delist (moved to OTC or spun off),,
 CIK93556-COMMON,,SWK,93556,,,no_figi,SWK@2008-01-16 STANLEY WORKS,,2009-06-08

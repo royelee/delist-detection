@@ -1,0 +1,39 @@
+{
+  "as_of": "2026-09-24",
+  "cache_answers": {
+    "archives": 12824,
+    "company_search": 1944,
+    "company_tickers": 10,
+    "full_text_search": 712,
+    "submissions": 26606,
+    "submissions_page": 9823
+  },
+  "code_version": "0620016-dirty",
+  "degraded_answers": {},
+  "latency_ms": {},
+  "not_covered": {},
+  "rejected_queries": {},
+  "resolution_degraded": 0,
+  "sec_requests": {},
+  "sec_workers": 4,
+  "stages": {
+    "delisting search": {
+      "edgar_requests": 0,
+      "sec_data_downloads": 0
+    },
+    "issuer resolution": {
+      "edgar_requests": 0,
+      "sec_data_downloads": 0
+    },
+    "payouts": {
+      "edgar_requests": 0,
+      "sec_data_downloads": 0
+    },
+    "successor search": {
+      "edgar_requests": 0,
+      "sec_data_downloads": 0
+    }
+  },
+  "warm_degraded": {},
+  "warm_failed": {}
+}
