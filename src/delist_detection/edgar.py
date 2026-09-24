@@ -711,9 +711,12 @@ class EdgarClient:
         STALE_KEY added to the returned dict only. "Fails" deliberately covers a
         5xx as well as a transport error: `raise_for_status` raises
         `requests.HTTPError`, which is a `requests.RequestException`, so an SEC
-        outage serves the cache instead of erroring the row out. `EdgarBlocked`
-        (403/429) is a `RuntimeError` and still propagates, as does any failure
-        with no cached copy to fall back on.
+        outage serves the cache instead of erroring the row out. A 200 whose
+        body is not JSON (an HTML error/maintenance page) fails the same way --
+        it is never written as an answer (no `{"__raw__": ...}` fallback), since
+        that could silently overwrite a good submissions copy and hide a Form
+        25. `EdgarBlocked` (403/429) is a `RuntimeError` and still propagates,
+        as does any failure with no cached copy to fall back on.
 
         One thread at a time per cache file (`_lock_for`): a second caller for
         the same URL waits, then reads what the first wrote. On a prefetch thread
@@ -737,6 +740,15 @@ class EdgarClient:
                 resp = self._get(url, host=host, accept="application/json")   # EdgarBlocked propagates
                 if resp.status_code != 404:
                     resp.raise_for_status()
+                    try:
+                        data = resp.json()
+                    except json.JSONDecodeError as exc:
+                        # A 200 that is not JSON (an HTML error/maintenance page) is not
+                        # an answer. Writing it as {"__raw__": ...} could overwrite a good
+                        # submissions copy and silently hide a Form 25, so it is never
+                        # written: fall into the same failed-refresh handling as a 5xx or
+                        # a transport error, below.
+                        raise requests.RequestException(f"EDGAR sent a non-JSON 200 for {url}") from exc
             except requests.RequestException:
                 # A failed refresh must not turn a company with a usable cached copy
                 # into an error row -- every event newer than SUBMISSIONS_FRESH_DAYS
@@ -752,10 +764,6 @@ class EdgarClient:
                 data = {"__not_found__": True, "url": url, FETCHED_KEY: today}
                 _write_atomic(cp, json.dumps(data))
                 return data
-            try:
-                data = resp.json()
-            except json.JSONDecodeError:
-                data = {"__raw__": resp.text, "url": url}
             if isinstance(data, dict):
                 data[FETCHED_KEY] = today
             _write_atomic(cp, json.dumps(data))
