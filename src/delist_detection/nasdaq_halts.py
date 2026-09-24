@@ -15,6 +15,7 @@ from pathlib import Path
 
 import requests
 
+from .edgar import SEC_STATS
 from .observations import normalize_ticker
 from .trading_calendar import is_trading_day, previous_trading_day
 
@@ -113,6 +114,10 @@ class NasdaqHaltClient:
             try:
                 halts = parse_halts_rss(resp.content)
             except ET.ParseError as e:
+                # A malformed body is not "no halts" -- that would silently hide a
+                # real deletion halt. Flag it like every other degraded EDGAR/SEC
+                # read; never cache the day (final-fix item 8).
+                SEC_STATS.degraded("failed_request")
                 _log.warning(f"halts_on({day:%Y-%m-%d}): parse error: {e}")
                 return []
 

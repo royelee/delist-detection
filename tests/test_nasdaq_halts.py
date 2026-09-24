@@ -1,8 +1,10 @@
+import logging
 from datetime import date
 from pathlib import Path
 
 import requests
 
+from delist_detection.edgar import SEC_STATS
 from delist_detection.nasdaq_halts import Halt, NasdaqHaltClient, last_trade_from_halt, parse_halts_rss
 
 RSS = """﻿<?xml version="1.0" encoding="utf-8"?>
@@ -114,6 +116,29 @@ def test_client_retries_429(tmp_path):
     assert len(sleep_calls) == 1  # Sleep was called once
     assert sleep_calls[0] == 0.1  # Retry-After header was respected
     assert s.calls == 2  # Called twice (429, then 200)
+
+
+class _SessionMalformed:
+    """Always returns a 200 with an unparseable body (a mismatched tag)."""
+    def get(self, url, headers=None, timeout=None):
+        return _Resp("<rss><channel><item></channel></rss>")
+
+
+def test_a_malformed_body_counts_as_degraded_and_is_not_cached(tmp_path, caplog):
+    """item 8: a malformed halt-feed answer (SEC sent this twice for
+    2025-05-05, per task-16's live measurement) was treated as "no halts" with
+    no flag anywhere. It must count SEC_STATS.degraded("failed_request"),
+    never cache the day, and log once (already true before this fix)."""
+    caplog.set_level(logging.WARNING)
+    s = _SessionMalformed()
+    c = NasdaqHaltClient(tmp_path, session=s, min_interval=0)
+    mark = SEC_STATS.snapshot()
+    halts = c.halts_on(date(2025, 5, 5))
+    assert halts == []
+    assert not (tmp_path / "20250505.xml").exists()
+    counts, _ = SEC_STATS.since(mark)
+    assert counts.get("degraded:failed_request") == 1
+    assert "parse error" in caplog.text and "2025-05-05" in caplog.text
 
 
 def test_client_403_logs_warning(tmp_path, caplog):
