@@ -874,7 +874,10 @@ class EdgarClient:
         Cached as utf-8 under cache/edgar/text/{accession_no_dashes}.txt.
         Returns '' on empty primary_doc, 404, or network error so callers can
         fall through to the next tier. A 404 is cached as a sticky miss;
-        transient non-200s are not cached so a later run retries.
+        transient non-200s are not cached so a later run retries. A connection
+        error, a timeout or a 5xx is retried like `fetch_filing_raw` (up to 3
+        attempts, `edgar.retry_request`): one transport blip must not turn a
+        readable filing into a degraded row.
         """
         # An empty primary_doc would resolve to the directory-listing URL, which
         # returns 200 and a useless file index — never fetch it (FIX 7).
@@ -890,7 +893,7 @@ class EdgarClient:
                 return cp.read_text(encoding="utf-8")
             url = f"{WWW_SEC_HOST}/Archives/edgar/data/{int(cik)}/{acc_nodash}/{primary_doc}"
             try:
-                resp = self._get(url, host="www.sec.gov", accept="text/html,*/*", retry=False)
+                resp = self._get(url, host="www.sec.gov", accept="text/html,*/*")   # EdgarBlocked propagates
             except requests.RequestException:
                 SEC_STATS.degraded("failed_request")
                 return ""

@@ -195,6 +195,9 @@ def test_every_request_names_its_own_host_and_the_user_agent(tmp_path):
 
 
 def test_a_failed_filing_text_request_pauses_every_thread(tmp_path, monkeypatch):
+    # Item 2: fetch_filing_text is retried like fetch_filing_raw (edgar.retry_request,
+    # up to 3 attempts), so a persistent 5xx pauses the shared limiter after each
+    # attempt -- the last attempt's backoff (4s) is reused past the table's end.
     pauses = []
 
     class _Probe:
@@ -207,7 +210,7 @@ def test_a_failed_filing_text_request_pauses_every_thread(tmp_path, monkeypatch)
     monkeypatch.setattr(edgar, "SEC_LIMITER", _Probe())
     client = _client(tmp_path, _Session(status=503))
     assert client.fetch_filing_text(42, "0000000042-24-000001", "a.htm") == ""
-    assert pauses == [edgar.RETRY_BACKOFF[0]]
+    assert pauses == [edgar.RETRY_BACKOFF[0], edgar.RETRY_BACKOFF[1], edgar.RETRY_BACKOFF[1]]
 
 
 @pytest.mark.parametrize("status", [403, 429])
