@@ -2,6 +2,7 @@ import gzip
 import io
 import json
 import os
+import threading
 import time
 import zipfile
 from datetime import date
@@ -12,6 +13,7 @@ import requests
 
 from delist_detection.edgar import fill_only
 from delist_detection.midas import MIDAS_INDEX_URL, MidasClient, quarter_of, summarize_midas_csv
+from delist_detection.sec_http import get_text
 
 CSV = """Date,Security,Ticker,McapRank,TurnRank,VolatilityRank,PriceRank,LitVol('000),OrderVol('000),Hidden,TradesForHidden,HiddenVol('000),TradeVolForHidden('000),Cancels,LitTrades,OddLots,TradesForOddLots,OddLotVol('000),TradeVolForOddLots('000)
 20181127,Stock,AET,10,4,1,10,400.1,500,1,1,20.0,1,1,1,1,1,1,1
@@ -229,44 +231,132 @@ def test_an_empty_cached_summary_is_read_again(tmp_path):
     assert json.loads(gzip.decompress((tmp_path / "2016_q1.json.gz").read_bytes())) == {"A": ["2016-01-04"]}
 
 
-def test_what_a_warm_thread_reads_from_a_stale_index_is_not_kept_for_the_sequential_pass(tmp_path):
-    """The warm finders share the run's own client. A warm thread (edgar.fill_only)
-    reads the cached index whatever its age and never refreshes it, so neither
-    that read nor a miss drawn from it may outlive the warm pass: the sequential
-    pass reads the index itself, refreshes the stale copy and finds the new
-    quarter, exactly as a one-thread run does."""
-    q4, q1 = ('<a href="/files/opa/x/individual_security_2018_q4.zip">z</a>',
-              '<a href="/files/opa/x/individual_security_2019_q1.zip">z</a>')
-    index = tmp_path / "index.html"
-    index.write_text(q4)
-    stale = time.time() - 40 * 86400
-    os.utime(index, (stale, stale))
+# The warm finders share the run's own client. A warm thread (edgar.fill_only)
+# reads the cached index whatever its age and never refreshes it; nothing it reads
+# or misses may change what the sequential pass reads, which is what a one-thread
+# run reads.
+Q4_LINK = '<a href="/files/opa/x/individual_security_2018_q4.zip">z</a>'
+Q1_LINK = '<a href="/files/opa/x/individual_security_2019_q1.zip">z</a>'
+Q4_URL = "https://www.sec.gov/files/opa/x/individual_security_2018_q4.zip"
+Q1_URL = "https://www.sec.gov/files/opa/x/individual_security_2019_q1.zip"
+Q4 = (date(2018, 10, 1), date(2018, 12, 10))
+Q1 = (date(2019, 1, 2), date(2019, 3, 29))
+
+
+def _zip_bytes(name: str, csv_text: str) -> bytes:
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w") as z:
-        z.writestr("q1_2019_all.csv", CSV.replace("20181128", "20190215"))
-    q1_url = "https://www.sec.gov/files/opa/x/individual_security_2019_q1.zip"
-    served = {MIDAS_INDEX_URL: (q4 + q1).encode(), q1_url: buf.getvalue()}
-    asked = []
+        z.writestr(name, csv_text)
+    return buf.getvalue()
 
-    class _Session:
-        def get(self, url, headers=None, timeout=None):
-            asked.append(url)
-            body = served[url]
-            return SimpleNamespace(status_code=200, url=url, content=body, text=body.decode("latin-1"),
-                                   raise_for_status=lambda: None)
 
-    c = MidasClient(tmp_path, session=_Session())
+class _Sec:
+    """SEC's servers: canned bodies by URL, any other URL a 404. Records every URL asked."""
+
+    def __init__(self, served: dict[str, bytes]):
+        self.served, self.asked = served, []
+
+    def get(self, url, headers=None, timeout=None):
+        self.asked.append(url)
+        body = self.served.get(url)
+        return SimpleNamespace(status_code=200 if body is not None else 404, url=url, content=body or b"",
+                               text=(body or b"").decode("latin-1"), raise_for_status=lambda: None)
+
+
+def _index(tmp_path, html: str, *, age_days: float = 0):
+    page = tmp_path / "index.html"
+    page.write_text(html)
+    then = time.time() - age_days * 86400
+    os.utime(page, (then, then))
+
+
+def test_what_a_warm_thread_reads_from_a_stale_index_is_not_kept_for_the_sequential_pass(tmp_path):
+    """Neither the stale copy a warm thread read nor a miss drawn from it outlives
+    the warm pass: the sequential pass reads the index itself, refreshes the stale
+    copy and finds the new quarter."""
+    _index(tmp_path, Q4_LINK, age_days=40)
+    sec = _Sec({MIDAS_INDEX_URL: (Q4_LINK + Q1_LINK).encode(),
+                Q1_URL: _zip_bytes("q1_2019_all.csv", CSV.replace("20181128", "20190215"))})
+    c = MidasClient(tmp_path, session=sec)
     with fill_only():
-        assert c.last_trade_day("AET", date(2019, 1, 2), date(2019, 3, 29)) is None     # not in the stale copy
+        assert c.last_trade_day("AET", *Q1) is None                   # not in the stale copy
         assert c.coverage_end() == date(2018, 12, 31)
-    assert asked == []
-    assert c.last_trade_day("AET", date(2019, 1, 2), date(2019, 3, 29)) == date(2019, 2, 15)
-    assert asked == [MIDAS_INDEX_URL, q1_url]
+    assert sec.asked == []
+    assert c.last_trade_day("AET", *Q1) == date(2019, 2, 15)
+    assert sec.asked == [MIDAS_INDEX_URL, Q1_URL]
     assert c.coverage_end() == date(2019, 3, 31)
 
 
+def test_a_warm_thread_downloads_nothing_through_a_stale_index(tmp_path):
+    """A one-thread run refreshes a stale index before its first download, and the
+    fresh copy may list the quarter under another URL or not at all: a warm thread
+    leaves every quarter not yet summarised to the sequential pass."""
+    _index(tmp_path, Q4_LINK, age_days=40)
+    sec = _Sec({MIDAS_INDEX_URL: Q4_LINK.encode(), Q4_URL: _zip_bytes("q4_2018_all.csv", CSV)})
+    c = MidasClient(tmp_path, session=sec)
+    with fill_only():
+        assert c.last_trade_day("AET", *Q4) is None
+        assert c.last_trade_day("ZZZ", *Q4) is None
+    assert sec.asked == []
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["index.html"]
+    assert c.last_trade_day("AET", *Q4) == date(2018, 11, 28)
+    assert sec.asked == [MIDAS_INDEX_URL, Q4_URL]
+
+
+def test_a_warm_thread_downloads_a_missing_quarter_through_a_fresh_index(tmp_path):
+    _index(tmp_path, Q4_LINK)
+    sec = _Sec({Q4_URL: _zip_bytes("q4_2018_all.csv", CSV)})
+    c = MidasClient(tmp_path, session=sec)
+    with fill_only():
+        assert c.last_trade_day("AET", *Q4) == date(2018, 11, 28)
+    assert sec.asked == [Q4_URL]
+    assert (tmp_path / "2018_q4.json.gz").exists()
+    assert c.last_trade_day("AET", *Q4) == date(2018, 11, 28)
+    assert sec.asked == [Q4_URL]                                      # the index was fresh, the quarter summarised
+
+
+def test_the_warm_threads_read_and_parse_the_index_once(tmp_path):
+    _index(tmp_path, Q4_LINK + Q1_LINK)
+    for name, q in (("2018_q4", "20181128"), ("2019_q1", "20190215")):
+        csv_text = CSV.replace("20181128", q)
+        (tmp_path / f"{name}.json.gz").write_bytes(gzip.compress(json.dumps(
+            summarize_midas_csv(csv_text.splitlines())).encode()))
+    reads = []
+
+    def counting(*a, **k):
+        reads.append(threading.current_thread().name)
+        return get_text(*a, **k)
+
+    with patch("delist_detection.midas.get_text", side_effect=counting):
+        c = MidasClient(tmp_path, session=_Sec({}))
+        with fill_only():
+            assert c.last_trade_day("AET", *Q4) == date(2018, 11, 28)
+            assert c.last_trade_day("AET", *Q1) == date(2019, 2, 15)
+            assert c.last_trade_day("BRK-B", *Q4) == date(2018, 11, 28)
+            assert c.coverage_end() == date(2019, 3, 31)
+        assert len(reads) == 1
+        assert c.coverage_end() == date(2019, 3, 31)
+        assert len(reads) == 2                                        # the sequential pass reads the page itself
+
+
+def test_a_quarter_zip_sec_no_longer_serves_is_a_miss(tmp_path):
+    """A 404 on the quarter's ZIP gives no evidence, as a failed download does: once
+    for the warm threads, once more for the sequential pass, and nothing written."""
+    _index(tmp_path, Q4_LINK)
+    sec = _Sec({})
+    c = MidasClient(tmp_path, session=sec)
+    with fill_only():
+        assert c.last_trade_day("AET", *Q4) is None
+        assert c.last_trade_day("ZZZ", *Q4) is None
+    assert sec.asked == [Q4_URL]
+    assert c.last_trade_day("AET", *Q4) is None
+    assert c.last_trade_day("ZZZ", *Q4) is None
+    assert sec.asked == [Q4_URL, Q4_URL]
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["index.html"]
+
+
 def test_a_download_the_warm_threads_gave_up_on_is_tried_again_by_the_sequential_pass(tmp_path):
-    (tmp_path / "index.html").write_text('<a href="/files/opa/x/individual_security_2018_q4.zip">z</a>')
+    _index(tmp_path, Q4_LINK)
     calls = [0]
 
     def fail_download(url, dest, **kwargs):
@@ -276,9 +366,10 @@ def test_a_download_the_warm_threads_gave_up_on_is_tried_again_by_the_sequential
     with patch("delist_detection.midas.download", side_effect=fail_download):
         c = MidasClient(tmp_path)
         with fill_only():
-            assert c.last_trade_day("AET", date(2018, 10, 1), date(2018, 12, 10)) is None
-            assert c.last_trade_day("ZZZ", date(2018, 10, 1), date(2018, 12, 10)) is None
+            assert c.last_trade_day("AET", *Q4) is None
+            assert c.last_trade_day("ZZZ", *Q4) is None
         assert calls[0] == 1                               # once for every warm thread
-        assert c.last_trade_day("AET", date(2018, 10, 1), date(2018, 12, 10)) is None
-        assert c.last_trade_day("ZZZ", date(2018, 10, 1), date(2018, 12, 10)) is None
+        assert c.last_trade_day("AET", *Q4) is None
+        assert c.last_trade_day("ZZZ", *Q4) is None
     assert calls[0] == 2                                   # and once more by the sequential pass itself
+

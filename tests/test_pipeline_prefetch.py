@@ -166,8 +166,10 @@ def test_the_warm_finders_are_the_sequential_finders_twins(fake_edgar, tmp_path,
     for midas, halts, classifier in warm_built:
         assert isinstance(midas, Serialized) and midas._obj is clients.midas
         assert isinstance(halts, Serialized) and halts._obj is clients.halts
+        assert classifier is not clients.classifier                     # a copy of the run's classifier
         assert classifier.resolver is not clients.resolver and isinstance(classifier.resolver, TickerResolver)
     assert len({id(m) for m, _, _ in warm_built}) == 1                 # one lock shared by every warm finder
+    assert clients.classifier.resolver is clients.resolver             # the run's own classifier is untouched
 
 
 def test_prefetch_reads_edgar_on_worker_threads_before_the_sequential_pass(fake_edgar, tmp_path):
@@ -204,10 +206,11 @@ def test_a_refusal_on_a_worker_thread_aborts_the_run_and_writes_nothing(fake_edg
     assert {p.name: p.read_text() for p in tmp_path.glob("*.csv")} == before
 
 
-def test_the_runs_own_resolver_only_ever_runs_on_the_main_thread(fake_edgar, tmp_path):
+def test_the_runs_own_resolver_only_ever_runs_on_the_main_thread(fake_edgar, tmp_path, monkeypatch):
     index, clients = _clients(fake_edgar)
-    r, seen = clients.resolver, []
+    r, seen, other = clients.resolver, [], []
     real_resolve, real_fits = r.resolve, r._fits_date
+    class_resolve, class_fits = TickerResolver.resolve, TickerResolver._fits_date
 
     def resolve(*a, **k):
         seen.append(threading.current_thread().name)
@@ -217,9 +220,20 @@ def test_the_runs_own_resolver_only_ever_runs_on_the_main_thread(fake_edgar, tmp
         seen.append(threading.current_thread().name)
         return real_fits(*a, **k)
 
+    def any_resolve(self, *a, **k):                 # every other resolver: the warm passes' shadows
+        other.append(threading.current_thread().name)
+        return class_resolve(self, *a, **k)
+
+    def any_fits(self, *a, **k):
+        other.append(threading.current_thread().name)
+        return class_fits(self, *a, **k)
+
     r.resolve, r._fits_date = resolve, fits        # its `_transient` flag must never be shared across threads
+    monkeypatch.setattr(TickerResolver, "resolve", any_resolve)
+    monkeypatch.setattr(TickerResolver, "_fits_date", any_fits)
     run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None, sec_workers=4)
     assert seen and set(seen) == {threading.main_thread().name}
+    assert any(name.startswith("sec-warm") for name in other)        # the warm passes did reach a resolver
 
 
 def test_a_failure_only_a_warm_worker_meets_is_counted_under_its_stage(fake_edgar, tmp_path, monkeypatch):
