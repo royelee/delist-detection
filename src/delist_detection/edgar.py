@@ -565,21 +565,28 @@ class EdgarSubmission:
         return {x.strip() for x in self.items.split(",") if x.strip()}
 
 
+# A genuine EDGAR company-search answer, matched or not, is always a complete
+# ATOM feed (see tests/fixtures/company_search/: nomatch.atom is a <feed> with
+# no <cik>, just like onematch.atom and multimatch.atom are <feed>s with one).
+# Anything else at 200 -- an HTML error or maintenance page, a truncated body --
+# is not an answer and must never be read as "no match".
+_ATOM_FEED = re.compile(r"\A\s*(?:<\?xml[^>]*\?>\s*)?<feed[\s>].*</feed>\s*\Z", re.DOTALL)
+
+
 def _parse_company_atom(text: str) -> list[dict[str, Any]]:
     """The hits of a cgi-bin/browse-edgar ATOM answer: the top company with each of
     its filings, or the company alone when it lists none; [] when no company matched."""
-    import re as _re
-    ci_cik = _re.search(r"<cik>\s*(\d+)\s*</cik>", text)
+    ci_cik = re.search(r"<cik>\s*(\d+)\s*</cik>", text)
     if not ci_cik:
         return []
-    ci_name = _re.search(r"<conformed-name>(.*?)</conformed-name>", text)
+    ci_name = re.search(r"<conformed-name>(.*?)</conformed-name>", text)
     company_cik = int(ci_cik.group(1))
     company_name = ci_name.group(1) if ci_name else None
-    entries = _re.findall(r"<entry>(.*?)</entry>", text, flags=_re.DOTALL)
+    entries = re.findall(r"<entry>(.*?)</entry>", text, flags=re.DOTALL)
     out: list[dict[str, Any]] = []
     for e in entries:
-        fd = _re.search(r"<filing-date>(\d{4}-\d{2}-\d{2})</filing-date>", e)
-        ft = _re.search(r"<filing-type>([^<]+)</filing-type>", e)
+        fd = re.search(r"<filing-date>(\d{4}-\d{2}-\d{2})</filing-date>", e)
+        ft = re.search(r"<filing-type>([^<]+)</filing-type>", e)
         out.append({"cik": company_cik, "name": company_name,
                     "form": ft.group(1) if ft else "", "filing_date": fd.group(1) if fd else ""})
     if not entries:
@@ -782,13 +789,20 @@ class EdgarClient:
         Every answer, hits or empty, is cached with the day it was fetched and
         trusted for COMPANY_SEARCH_FRESH_DAYS (7): EDGAR's index can catch up, so
         no answer is kept longer, and the resolver re-derives any miss from these
-        answers on every run. The request is retried like every other SEC call.
-        If it still fails, a cached hit list, however old, is served with
-        STALE_KEY on each hit (the caller must not save what it builds on it);
-        with no hits to fall back on it raises `requests.RequestException` -- an
-        unanswered search is not an empty one. A 403/429 raises `EdgarBlocked`.
-        With `search_cache` off, the disk cache is neither read nor written. On a
-        prefetch thread (`fill_only`) a cached answer is returned whatever its age.
+        answers on every run. The request is retried like every other SEC call. A
+        400 or 404 is a rejected query: logged, counted as `rejected:company_search`,
+        returned as [], never cached, and not transient. A 200 body that is not a
+        complete ATOM feed (an HTML error or maintenance page, a truncated body --
+        see `_ATOM_FEED`) is not an answer either, and is handled like a 5xx: if
+        it still fails, a cached hit list, however old, is served with STALE_KEY
+        on each hit (the caller must not save what it builds on it); with no hits
+        to fall back on it raises `requests.RequestException` -- an unanswered
+        search is not an empty one. A 403/429 raises `EdgarBlocked`. With
+        `search_cache` off, the disk cache is neither read nor written. On a
+        prefetch thread (`fill_only`) a cached answer is returned whatever its
+        age; an existing file this client cannot read as a current answer
+        (unreadable, or with no `hits` list) is answered as [] instead, with no
+        request and the file untouched.
         """
         url = (
             f"{WWW_SEC_HOST}/cgi-bin/browse-edgar?action=getcompany"
@@ -802,18 +816,30 @@ class EdgarClient:
                 try:
                     cached = json.loads(cp.read_text())
                 except json.JSONDecodeError:
+                    if filling_only():
+                        return []
                     cp.unlink(missing_ok=True)
                     cached = None
                 else:
-                    fresh_after = self.today - timedelta(days=COMPANY_SEARCH_FRESH_DAYS)
-                    if (isinstance(cached, dict) and isinstance(cached.get("hits"), list)
-                            and (filling_only() or _fetched_on(cp, cached) >= fresh_after)):
-                        SEC_STATS.add("cache:company_search")
-                        return list(cached["hits"])
+                    if not (isinstance(cached, dict) and isinstance(cached.get("hits"), list)):
+                        if filling_only():
+                            return []
+                    else:
+                        fresh_after = self.today - timedelta(days=COMPANY_SEARCH_FRESH_DAYS)
+                        if filling_only() or _fetched_on(cp, cached) >= fresh_after:
+                            SEC_STATS.add("cache:company_search")
+                            return list(cached["hits"])
             try:
                 resp = self._get(url, host="www.sec.gov", accept="application/atom+xml,text/xml")
+                if resp.status_code in (400, 404):
+                    log.warning("EDGAR company search rejected %s (HTTP %d): no answer, not cached",
+                                url, resp.status_code)
+                    SEC_STATS.add("rejected:company_search")
+                    return []
                 if resp.status_code != 200:
                     raise requests.HTTPError(f"EDGAR company search answered {resp.status_code} for {url}")
+                if not _ATOM_FEED.match(resp.text):
+                    raise requests.RequestException(f"EDGAR company search sent a non-ATOM body for {url}")
             except requests.RequestException:
                 hits = cached.get("hits") if isinstance(cached, dict) else None
                 if isinstance(hits, list) and hits:

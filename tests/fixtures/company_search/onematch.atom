@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="ISO-8859-1" ?>
+  <feed xmlns="http://www.w3.org/2005/Atom">
+    <author>
+      <email>webmaster@sec.gov</email>
+      <name>Webmaster</name>
+    </author>
+    <company-info>
+      <addresses>
+        <address type="mailing">
+          <city>SAN JOSE</city>
+          <state>CA</state>
+          <street1>101 INNOVATION DR</street1>
+          <zip>95134</zip>
+        </address>
+        <address type="business">
+          <city>SAN JOSE</city>
+          <phone>408.544.8790</phone>
+          <state>CA</state>
+          <street1>101 INNOVATION DR</street1>
+          <zip>95134</zip>
+        </address>
+      </addresses>
+      <assigned-sic>3674</assigned-sic>
+      <assigned-sic-desc>SEMICONDUCTORS &amp;amp; RELATED DEVICES</assigned-sic-desc>
+      <assigned-sic-href>https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&amp;SIC=3674&amp;owner=include&amp;count=10</assigned-sic-href>
+      <cik>0000768251</cik>
+      <cik-href>https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&amp;CIK=0000768251&amp;owner=include&amp;count=10</cik-href>
+      <conformed-name>ALTERA CORP</conformed-name>
+      <fiscal-year-end>1231</fiscal-year-end>
+      <state-location>CA</state-location>
+      <state-location-href>https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&amp;State=CA&amp;owner=include&amp;count=10</state-location-href>
+      <state-of-incorporation>DE</state-of-incorporation>
+    </company-info>
+    <entry>
+      <category label="form type" scheme="https://www.sec.gov/" term="25-NSE" />
+      <content type="text/xml">
+        <accession-number>0001354457-15-000253</accession-number>
+        <act>34</act>
+        <file-number>000-16617</file-number>
+        <file-number-href>https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&amp;filenum=000-16617&amp;owner=include&amp;count=10</file-number-href>
+        <filing-date>2015-12-28</filing-date>
+        <filing-href>https://www.sec.gov/Archives/edgar/data/768251/000135445715000253/0001354457-15-000253-index.htm</filing-href>
+        <filing-type>25-NSE</filing-type>
+        <film-number>151308059</film-number>
+        <form-name>Notification filed by national security exchange to report the removal from listing and registration of matured, redeemed or retired securities</form-name>
+        <size>2 KB</size>
+      </content>
+      <id>urn:tag:sec.gov,2008:accession-number=0001354457-15-000253</id>
+      <link href="https://www.sec.gov/Archives/edgar/data/768251/000135445715000253/0001354457-15-000253-index.htm" rel="alternate" type="text/html" />
+      <summary type="html"> &lt;b&gt;Filed:&lt;/b&gt; 2015-12-28 &lt;b&gt;AccNo:&lt;/b&gt; 0001354457-15-000253 &lt;b&gt;Size:&lt;/b&gt; 2 KB</summary>
+      <title>25-NSE  - Notification filed by national security exchange to report the removal from listing and registration of matured, redeemed or retired securities</title>
+      <updated>2015-12-28T09:08:39-05:00</updated>
+    </entry>
+    <id>https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&amp;CIK=0000768251</id>
+    <link href="https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&amp;company=ALTERA CORP&amp;type=25&amp;owner=include&amp;start=0&amp;count=10" rel="alternate" type="text/html" />
+    <link href="https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&amp;company=ALTERA CORP&amp;type=25&amp;owner=include&amp;start=0&amp;count=10&amp;output=atom" rel="self" type="application/atom+xml" />
+    <title>ALTERA CORP  (0000768251)</title>
+    <updated>2026-09-24T04:18:53-04:00</updated>
+  </feed>

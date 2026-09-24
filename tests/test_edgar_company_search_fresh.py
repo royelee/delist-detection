@@ -5,6 +5,7 @@ an unanswered search is not an empty one."""
 import json
 import os
 from datetime import date, datetime, timedelta
+from pathlib import Path
 
 import pytest
 import requests
@@ -23,6 +24,16 @@ ATOM_HIT = (
 ATOM_EMPTY = "<feed></feed>"
 
 HIT = [{"cik": 867773, "name": "SUNPOWER CORP", "form": "25-NSE", "filing_date": "2024-08-15"}]
+
+# Real EDGAR answers (captured 2026-09-24), so the "is this an ATOM feed" gate is
+# exercised against SEC's actual response shapes, not a hand-written stand-in.
+FIXTURES = Path(__file__).parent / "fixtures" / "company_search"
+NOMATCH = (FIXTURES / "nomatch.atom").read_text()
+ONEMATCH = (FIXTURES / "onematch.atom").read_text()
+MULTIMATCH = (FIXTURES / "multimatch.atom").read_text()
+
+HTML_BODY = "<html><body>Service Unavailable</body></html>"
+TRUNCATED_FEED = "<feed><company-info><cik>867773</cik>"   # cut off mid-response, no </feed>
 
 
 def _url(company=COMPANY, form_type=FORM):
@@ -208,3 +219,85 @@ def test_a_search_holds_its_cache_file_lock(tmp_path):
     client = EdgarClient(cache_dir=tmp_path, session=_Probe())
     client.company_search_atom(COMPANY, form_type=FORM)
     assert held == [True]
+
+
+# --- Fix round 1: a 200 that is not a real ATOM feed is a failure, not a match ---
+
+def test_a_real_no_match_feed_parses_to_empty_and_is_cached_for_7_days(tmp_path):
+    client, session = _client(tmp_path, text=NOMATCH)
+    cp = client._cache_path(_url())
+    assert client.company_search_atom(COMPANY, form_type=FORM) == []
+    assert json.loads(cp.read_text()) == {"hits": [], FETCHED_KEY: date.today().isoformat()}
+
+
+def test_a_real_one_match_feed_parses_to_one_hit(tmp_path):
+    client, session = _client(tmp_path, text=ONEMATCH)
+    assert client.company_search_atom(COMPANY, form_type=FORM) == [
+        {"cik": 768251, "name": "ALTERA CORP", "form": "25-NSE", "filing_date": "2015-12-28"}]
+
+
+def test_a_real_multi_match_feed_parses_as_it_does_today(tmp_path):
+    """The multi-company feed shape (several top-level <entry title=...> blocks,
+    each with its own <company-info>) is not one this parser targets -- it only
+    ever reads the first <cik> anywhere in the body. This pins the current
+    output; fixing multi-match parsing is not in scope for this fix round."""
+    client, session = _client(tmp_path, text=MULTIMATCH)
+    assert client.company_search_atom(COMPANY, form_type=FORM) == [
+        {"cik": 20171, "name": None, "form": "", "filing_date": ""}]
+
+
+def test_an_html_200_is_not_an_answer_and_raises_without_caching(tmp_path):
+    client, session = _client(tmp_path, text=HTML_BODY)
+    cp = client._cache_path(_url())
+    with pytest.raises(requests.RequestException):
+        client.company_search_atom(COMPANY, form_type=FORM)
+    assert not cp.exists()
+
+
+def test_an_html_200_over_an_expired_hit_list_serves_it_marked_stale(tmp_path):
+    client, session = _client(tmp_path, text=HTML_BODY)
+    cp = client._cache_path(_url())
+    stale = {"hits": HIT, FETCHED_KEY: (date.today() - timedelta(days=8)).isoformat()}
+    cp.write_text(json.dumps(stale))
+    assert client.company_search_atom(COMPANY, form_type=FORM) == [{**HIT[0], STALE_KEY: True}]
+    assert json.loads(cp.read_text()) == stale        # the bad body never touches the cache
+
+
+def test_a_truncated_feed_is_not_an_answer_and_raises(tmp_path):
+    client, session = _client(tmp_path, text=TRUNCATED_FEED)
+    cp = client._cache_path(_url())
+    with pytest.raises(requests.RequestException):
+        client.company_search_atom(COMPANY, form_type=FORM)
+    assert not cp.exists()
+
+
+# --- Fix round 1: fill_only never touches an existing file it cannot use ---
+
+def test_a_prefetch_thread_never_touches_an_unreadable_existing_file(tmp_path):
+    client, session = _client(tmp_path)
+    cp = client._cache_path(_url())
+    cp.write_text("not json")
+    with fill_only():
+        assert client.company_search_atom(COMPANY, form_type=FORM) == []
+    assert session.calls == [] and cp.read_text() == "not json"
+
+
+def test_a_prefetch_thread_never_touches_a_file_with_no_hits_list(tmp_path):
+    client, session = _client(tmp_path)
+    cp = client._cache_path(_url())
+    odd = {"no_hits_key": True, FETCHED_KEY: date.today().isoformat()}
+    cp.write_text(json.dumps(odd))
+    with fill_only():
+        assert client.company_search_atom(COMPANY, form_type=FORM) == []
+    assert session.calls == [] and json.loads(cp.read_text()) == odd
+
+
+# --- Fix round 1: a 400/404 is a rejected query, not a failure (parity with EFTS) ---
+
+@pytest.mark.parametrize("status", [400, 404])
+def test_a_400_or_404_is_a_rejected_query_not_cached_not_transient(tmp_path, status):
+    client, session = _client(tmp_path, status=status)
+    cp = client._cache_path(_url())
+    assert client.company_search_atom(COMPANY, form_type=FORM) == []
+    assert session.calls == [_url()]          # a 4xx is not retried
+    assert not cp.exists()
