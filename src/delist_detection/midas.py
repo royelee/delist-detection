@@ -22,6 +22,7 @@ from pathlib import Path
 
 import requests
 
+from .edgar import filling_only
 from .observations import normalize_ticker
 from .sec_http import download, get_text
 from .trading_calendar import add_trading_days
@@ -114,18 +115,26 @@ class MidasClient:
         self.session, self.user_agent = session, user_agent
         self._links: dict[tuple[int, int], str] | None = None
         self._summaries: dict[tuple[int, int], dict[str, list[str]] | None] = {}
+        self._fill_misses: set[tuple[int, int]] = set()     # quarters a prefetch thread found nothing for
 
     def links(self) -> dict[tuple[int, int], str]:
-        if self._links is None:
-            html = get_text(MIDAS_INDEX_URL, self.dir / "index.html", max_age_days=30,
-                            session=self.session, user_agent=self.user_agent)
-            links: dict[tuple[int, int], str] = {}
-            for href in re.findall(r'href="([^"]+\.zip)"', html, re.I):
-                q = quarter_of(href)
-                if q and q not in links:
-                    links[q] = href if href.startswith("http") else _SEC + href
+        """Each published quarter's ZIP link, from the index page (fetched again
+        once 30 days old), kept for the run. A prefetch thread (`edgar.fill_only()`)
+        reads the cached page whatever its age and keeps nothing: the sequential
+        pass reads the page itself, and refreshes a stale copy, as a one-thread
+        run does."""
+        if self._links is not None:
+            return self._links
+        html = get_text(MIDAS_INDEX_URL, self.dir / "index.html", max_age_days=30,
+                        session=self.session, user_agent=self.user_agent)
+        links: dict[tuple[int, int], str] = {}
+        for href in re.findall(r'href="([^"]+\.zip)"', html, re.I):
+            q = quarter_of(href)
+            if q and q not in links:
+                links[q] = href if href.startswith("http") else _SEC + href
+        if not filling_only():
             self._links = links
-        return self._links
+        return links
 
     def coverage_end(self) -> date | None:
         """The last day of the latest quarter MIDAS has published, or None if
@@ -135,16 +144,27 @@ class MidasClient:
             return None
         return _quarter_end(max(links))
 
+    def _miss(self, yq: tuple[int, int]) -> None:
+        """No evidence from quarter `yq` for the rest of the run. A prefetch thread
+        keeps the miss to the prefetch threads: it may rest on a stale index
+        copy, or on a failed download the sequential pass must try itself."""
+        if filling_only():
+            self._fill_misses.add(yq)
+        else:
+            self._summaries[yq] = None
+
     def _summary(self, yq: tuple[int, int]) -> dict[str, list[str]] | None:
         if yq in self._summaries:
             return self._summaries[yq]
+        if filling_only() and yq in self._fill_misses:
+            return None
         cache = self.dir / f"{yq[0]}_q{yq[1]}.json.gz"
         s = json.loads(gzip.decompress(cache.read_bytes())) if cache.exists() else None
         if not s:                           # none yet, or an empty one an older reader cached
             cache.unlink(missing_ok=True)
             url = self.links().get(yq)
             if url is None:
-                self._summaries[yq] = None
+                self._miss(yq)
                 return None
             zpath = self.dir / url.rsplit("/", 1)[-1]
             try:
@@ -159,7 +179,7 @@ class MidasClient:
                 # Gave up after retries: remember this quarter as failed for
                 # the rest of the run, so the next security doesn't pay the
                 # same download+retry cost again.
-                self._summaries[yq] = None
+                self._miss(yq)
                 return None
             with z:
                 s = _summarize_zip(z, zpath)
