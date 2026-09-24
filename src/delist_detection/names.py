@@ -11,8 +11,11 @@ _STOP = {"CORP", "CORPORATION", "INC", "INCORPORATED", "COMPANY", "COS", "HOLDIN
 
 def name_tokens(name: str) -> set[str]:
     """Words of three or more letters, minus legal suffixes and fillers. Three-letter
-    words stay because they are often the distinctive part (XTO, OIL, SVB, UTI)."""
-    return {t for t in re.findall(r"[A-Z]{3,}", (name or "").upper()) if t not in _STOP}
+    words stay because they are often the distinctive part (XTO, OIL, SVB, UTI).
+    An apostrophe inside a word is dropped, not a break: EDGAR's "Macy's" is the
+    snapshots' MACYS."""
+    text = re.sub(r"['’]", "", (name or "").upper())
+    return {t for t in re.findall(r"[A-Z]{3,}", text) if t not in _STOP}
 
 
 def names_agree(a: str, b: str) -> bool:

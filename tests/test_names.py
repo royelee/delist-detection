@@ -19,3 +19,14 @@ def test_agreement_needs_two_shared_words_unless_a_name_has_one():
     assert not names_agree("LEAP WIRELESS INTL INC", "Ribbit LEAP, Ltd.")      # LEAP
     assert not names_agree("XTO ENERGY INC", "ABC Energy Inc")
     assert not names_agree("", "Anything")
+
+
+def test_a_possessive_apostrophe_does_not_split_a_word():
+    """EDGAR writes "Macy's, Inc." and "DILLARD'S, INC.", the snapshots MACYS and
+    DILLARDS: the apostrophe (straight or curly) is dropped, not a word break."""
+    assert name_tokens("Macy's, Inc.") == {"MACYS"}
+    assert name_tokens("DILLARD’S, INC.") == {"DILLARDS"}
+    assert names_agree("MACYS INC", "Macy's, Inc.")
+    assert names_agree("DILLARDS INC CLASS A", "DILLARD'S, INC.")
+    assert names_agree("O'REILLY AUTOMOTIVE INC", "OREILLY AUTOMOTIVE INC")
+    assert names_agree("LOWE'S COMPANIES INC", "LOWES COMPANIES INC")
