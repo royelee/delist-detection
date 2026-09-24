@@ -96,6 +96,88 @@ def _fetched_on(cp: Path, data: Any) -> date:
     return date.fromtimestamp(cp.stat().st_mtime)
 
 
+def _fsync_dir(directory: Path) -> None:
+    """Make a rename in `directory` durable. Best effort: some filesystems refuse
+    to fsync a directory."""
+    try:
+        fd = os.open(directory, os.O_RDONLY)
+    except OSError:
+        return
+    try:
+        os.fsync(fd)
+    except OSError:
+        pass
+    finally:
+        os.close(fd)
+
+
+def _write_atomic(path: Path, text: str) -> None:
+    """Replace `path` with `text` in one step: a reader -- in this process or
+    another -- sees the old file or the complete new one, never a part. The temp
+    file sits in the same directory (os.replace is atomic only within one
+    filesystem) and carries the process and thread id, so two writers never
+    share one and `clean_orphan_temps` can tell a dead writer's leftover from a
+    live one's. The data is fsynced before the rename and the directory after
+    it, so the new file also survives a power loss."""
+    tmp = path.with_name(f".{path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
+    try:
+        with open(tmp, "w", encoding="utf-8") as fh:
+            fh.write(text)
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(tmp, path)
+    finally:
+        tmp.unlink(missing_ok=True)
+    _fsync_dir(path.parent)
+
+
+def _pid_alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except OSError:              # EPERM: the process exists but belongs to another user
+        return True
+    return True
+
+
+def clean_orphan_temps(directory: Path) -> None:
+    """Delete the `_write_atomic` temp files (`.<name>.<pid>.<thread>.tmp`) in
+    `directory` whose writing process has exited: it was killed mid-write. A
+    live process's temp file is left alone, since it may still be writing it."""
+    if not directory.is_dir():
+        return
+    for p in directory.glob(".*.tmp"):
+        parts = p.name[1:-len(".tmp")].rsplit(".", 2)
+        if len(parts) == 3 and parts[1].isdigit() and parts[2].isdigit() and not _pid_alive(int(parts[1])):
+            p.unlink(missing_ok=True)
+
+
+_FILL_ONLY = threading.local()
+
+
+@contextmanager
+def fill_only():
+    """On the calling thread, EDGAR reads fill missing cache entries but never
+    replace an existing one: a copy older than the caller's `fresh_after`, or an
+    expired search answer, is returned as it is, with no request.
+    `prefetch.warm` runs every task inside this. A warm pass therefore only adds
+    answers the sequential pass would fetch the same way itself, and every
+    refresh happens in the sequential pass, in its own order, exactly as in a
+    one-thread run (spec §11: same inputs and caches -> byte-identical CSVs)."""
+    prev = getattr(_FILL_ONLY, "on", False)
+    _FILL_ONLY.on = True
+    try:
+        yield
+    finally:
+        _FILL_ONLY.on = prev
+
+
+def filling_only() -> bool:
+    """True inside `fill_only()` on this thread."""
+    return getattr(_FILL_ONLY, "on", False)
+
+
 class PrefetchCancelled(BaseException):
     """Raised at a prefetch worker's next SEC request once its pool is stopping (a
     refusal on another thread, or Ctrl-C). A BaseException, like KeyboardInterrupt,
@@ -331,15 +413,70 @@ class EdgarClient:
         session: requests.Session | None = None,
         sleep=time.sleep,
     ) -> None:
+        """`session`: one HTTP session for every thread (tests inject a fake);
+        without it each thread gets its own `requests.Session`."""
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
-        self.session = session or requests.Session()
-        self.session.headers.update({
-            "User-Agent": user_agent or resolve_user_agent(),
-            "Accept": "application/json",
-            "Host": "data.sec.gov",
-        })
+        self.user_agent = user_agent or resolve_user_agent()
+        self._session = session
+        self._local = threading.local()
         self.sleep = sleep
+        self._locks: dict[str, threading.Lock] = {}
+        self._locks_guard = threading.Lock()
+        for d in (self.cache_dir, self.cache_dir / "text", self.cache_dir / "raw"):
+            clean_orphan_temps(d)
+
+    @property
+    def session(self) -> requests.Session:
+        """The calling thread's HTTP session (requests.Session is not thread-safe:
+        its cookie jar changes with every answer), or the session injected at
+        construction, which every thread shares."""
+        if self._session is not None:
+            return self._session
+        s = getattr(self._local, "session", None)
+        if s is None:
+            s = self._local.session = requests.Session()
+        return s
+
+    def _headers(self, host: str, accept: str) -> dict[str, str]:
+        """Every request's headers, built per call: no session-wide default can
+        send a wrong Host."""
+        return {"User-Agent": self.user_agent, "Accept": accept, "Host": host}
+
+    def _get(self, url: str, *, host: str, accept: str, retry: bool = True):
+        """GET `url` on this thread's session, through the shared limiter, with this
+        request's own headers. With `retry`, through `retry_request`: a transport
+        error or a 5xx is retried with backoff, every thread pausing with it, and
+        a 403/429 raises EdgarBlocked at once. Without it, one attempt, and a 5xx
+        or a transport error still pauses every thread for the first backoff."""
+        headers = self._headers(host, accept)
+        session = self.session
+
+        def make():
+            _throttle()
+            return session.get(url, headers=headers, timeout=30)
+
+        if retry:
+            return retry_request(make, sleep=self.sleep)
+        try:
+            resp = make()
+        except requests.RequestException:
+            SEC_LIMITER.pause(RETRY_BACKOFF[0])
+            raise
+        if resp.status_code >= 500:
+            SEC_LIMITER.pause(RETRY_BACKOFF[0])
+        return resp
+
+    def _lock_for(self, key: str) -> threading.Lock:
+        """The lock of one cache file (`key` = its path). Whoever holds it is the
+        only thread checking, fetching or writing that file, so two threads
+        needing the same answer make one request: the second waits, then reads
+        what the first wrote. No method holds two of these at once."""
+        with self._locks_guard:
+            lock = self._locks.get(key)
+            if lock is None:
+                lock = self._locks[key] = threading.Lock()
+            return lock
 
     def _cache_path(self, url: str) -> Path:
         h = hashlib.sha1(url.encode("utf-8")).hexdigest()
@@ -355,50 +492,48 @@ class EdgarClient:
         outage serves the cache instead of erroring the row out. `EdgarBlocked`
         (403/429) is a `RuntimeError` and still propagates, as does any failure
         with no cached copy to fall back on.
+
+        One thread at a time per cache file (`_lock_for`): a second caller for
+        the same URL waits, then reads what the first wrote. On a prefetch thread
+        (`fill_only`) a cached copy is returned whatever its age.
         """
         cp = self._cache_path(url)
-        cached: Any = None
-        if cp.exists() and not refresh:
+        with self._lock_for(str(cp)):
+            cached: Any = None
+            if cp.exists() and not refresh:
+                try:
+                    cached = json.loads(cp.read_text())
+                except json.JSONDecodeError:
+                    cp.unlink(missing_ok=True)
+                else:
+                    if fresh_after is None or filling_only() or _fetched_on(cp, cached) >= fresh_after:
+                        return cached
+            host = "data.sec.gov" if url.startswith(SEC_HOST) else "www.sec.gov"
             try:
-                cached = json.loads(cp.read_text())
+                resp = self._get(url, host=host, accept="application/json")   # EdgarBlocked propagates
+                if resp.status_code != 404:
+                    resp.raise_for_status()
+            except requests.RequestException:
+                # A failed refresh must not turn a company with a usable cached copy
+                # into an error row -- every event newer than SUBMISSIONS_FRESH_DAYS
+                # refetches on every run. Serve the cache, marked stale in the
+                # returned dict only, so callers can flag the row.
+                if not isinstance(cached, dict):
+                    raise
+                return {**cached, STALE_KEY: True}
+            today = date.today().isoformat()
+            if resp.status_code == 404:
+                data = {"__not_found__": True, "url": url, FETCHED_KEY: today}
+                _write_atomic(cp, json.dumps(data))
+                return data
+            try:
+                data = resp.json()
             except json.JSONDecodeError:
-                cp.unlink(missing_ok=True)
-            else:
-                if fresh_after is None or _fetched_on(cp, cached) >= fresh_after:
-                    return cached
-
-        host = "data.sec.gov" if url.startswith(SEC_HOST) else "www.sec.gov"
-        headers = {**self.session.headers, "Host": host}
-
-        def make():
-            _throttle()
-            return self.session.get(url, headers=headers, timeout=30)
-
-        try:
-            resp = retry_request(make, sleep=self.sleep)   # EdgarBlocked propagates, not retried
-            if resp.status_code != 404:
-                resp.raise_for_status()
-        except requests.RequestException:
-            # A failed refresh must not turn a company with a usable cached copy
-            # into an error row — every event newer than SUBMISSIONS_FRESH_DAYS
-            # refetches on every run. Serve the cache, marked stale in the
-            # returned dict only, so callers can flag the row.
-            if not isinstance(cached, dict):
-                raise
-            return {**cached, STALE_KEY: True}
-        today = date.today().isoformat()
-        if resp.status_code == 404:
-            data = {"__not_found__": True, "url": url, FETCHED_KEY: today}
-            cp.write_text(json.dumps(data))
+                data = {"__raw__": resp.text, "url": url}
+            if isinstance(data, dict):
+                data[FETCHED_KEY] = today
+            _write_atomic(cp, json.dumps(data))
             return data
-        try:
-            data = resp.json()
-        except json.JSONDecodeError:
-            data = {"__raw__": resp.text, "url": url}
-        if isinstance(data, dict):
-            data[FETCHED_KEY] = today
-        cp.write_text(json.dumps(data))
-        return data
 
     def company_tickers(self) -> dict[str, dict[str, Any]]:
         """Master ticker→CIK map. ~10k entries; refresh weekly is enough.
@@ -452,13 +587,8 @@ class EdgarClient:
                 if isinstance(cached, dict) and _fetched_on(cp, cached) >= fresh_after:
                     return cached.get("hits", [])
 
-        _throttle()
         try:
-            resp = self.session.get(
-                url,
-                headers={**self.session.headers, "Host": "www.sec.gov", "Accept": "application/atom+xml,text/xml"},
-                timeout=30,
-            )
+            resp = self._get(url, host="www.sec.gov", accept="application/atom+xml,text/xml", retry=False)
             check_response(resp)          # EdgarBlocked is not a RequestException: it propagates
             if resp.status_code != 200:
                 return cached.get("hits", []) if isinstance(cached, dict) else []
@@ -489,7 +619,7 @@ class EdgarClient:
         if not entries:
             out.append({"cik": company_cik, "name": company_name, "form": "", "filing_date": ""})
         if out:   # never cache an empty or error answer (see docstring)
-            cp.write_text(json.dumps({"hits": out, FETCHED_KEY: date.today().isoformat()}))
+            _write_atomic(cp, json.dumps({"hits": out, FETCHED_KEY: date.today().isoformat()}))
         return out
 
     def submissions(self, cik: int | str, fresh_after: date | None = None) -> dict[str, Any]:
@@ -516,32 +646,25 @@ class EdgarClient:
         text_dir = self.cache_dir / "text"
         text_dir.mkdir(parents=True, exist_ok=True)
         cp = text_dir / f"{acc_nodash}.txt"
-        if cp.exists():
-            return cp.read_text(encoding="utf-8")
-        url = (
-            f"{WWW_SEC_HOST}/Archives/edgar/data/{int(cik)}/"
-            f"{acc_nodash}/{primary_doc}"
-        )
-        _throttle()
-        try:
-            resp = self.session.get(
-                url,
-                headers={**self.session.headers, "Host": "www.sec.gov", "Accept": "text/html,*/*"},
-                timeout=30,
-            )
-        except requests.RequestException:
-            return ""
-        check_response(resp)
-        if resp.status_code != 200:
-            # Only a 404 is a stable "not found" worth caching as a sticky miss.
-            # Cache other non-200s (429/503/etc.) would turn a transient outage
-            # into a permanent empty result, so leave the cache untouched (FIX 6).
-            if resp.status_code == 404:
-                cp.write_text("", encoding="utf-8")
-            return ""
-        text = _strip_html(resp.text)
-        cp.write_text(text, encoding="utf-8")
-        return text
+        with self._lock_for(str(cp)):
+            if cp.exists():
+                return cp.read_text(encoding="utf-8")
+            url = f"{WWW_SEC_HOST}/Archives/edgar/data/{int(cik)}/{acc_nodash}/{primary_doc}"
+            try:
+                resp = self._get(url, host="www.sec.gov", accept="text/html,*/*", retry=False)
+            except requests.RequestException:
+                return ""
+            check_response(resp)
+            if resp.status_code != 200:
+                # Only a 404 is a stable "not found" worth caching as a sticky miss.
+                # Caching other non-200s (429/503/etc.) would turn a transient outage
+                # into a permanent empty result, so leave the cache untouched (FIX 6).
+                if resp.status_code == 404:
+                    _write_atomic(cp, "")
+                return ""
+            text = _strip_html(resp.text)
+            _write_atomic(cp, text)
+            return text
 
     def fetch_filing_raw(self, cik: int | str, accession: str) -> str:
         """The complete submission text file: every document of the filing with
@@ -555,28 +678,20 @@ class EdgarClient:
         raw_dir = self.cache_dir / "raw"
         raw_dir.mkdir(parents=True, exist_ok=True)
         cp = raw_dir / f"{acc_nodash}.txt"
-        if cp.exists():
-            return cp.read_text(encoding="utf-8", errors="replace")
-        url = f"{WWW_SEC_HOST}/Archives/edgar/data/{int(cik)}/{acc_nodash}/{accession}.txt"
-
-        def make():
-            _throttle()
-            return self.session.get(
-                url,
-                headers={**self.session.headers, "Host": "www.sec.gov", "Accept": "text/plain,*/*"},
-                timeout=30,
-            )
-
-        try:
-            resp = retry_request(make, sleep=self.sleep)   # EdgarBlocked propagates, not retried
-        except requests.RequestException:
-            return ""
-        if resp.status_code != 200:
-            if resp.status_code == 404:
-                cp.write_text("", encoding="utf-8")
-            return ""
-        cp.write_text(resp.text, encoding="utf-8")
-        return resp.text
+        with self._lock_for(str(cp)):
+            if cp.exists():
+                return cp.read_text(encoding="utf-8", errors="replace")
+            url = f"{WWW_SEC_HOST}/Archives/edgar/data/{int(cik)}/{acc_nodash}/{accession}.txt"
+            try:
+                resp = self._get(url, host="www.sec.gov", accept="text/plain,*/*")   # EdgarBlocked propagates
+            except requests.RequestException:
+                return ""
+            if resp.status_code != 200:
+                if resp.status_code == 404:
+                    _write_atomic(cp, "")
+                return ""
+            _write_atomic(cp, resp.text)
+            return resp.text
 
     def full_text_search(self, q: str, forms: str, lo: date, hi: date) -> list[dict]:
         """EDGAR full-text search hits (`hits.hits`) for `q` within `forms`,
@@ -606,16 +721,8 @@ class EdgarClient:
                 if isinstance(cached, list):
                     return cached
 
-        def make():
-            _throttle()
-            return self.session.get(
-                url,
-                headers={**self.session.headers, "Host": "efts.sec.gov", "Accept": "application/json"},
-                timeout=30,
-            )
-
         try:
-            resp = retry_request(make, sleep=self.sleep)   # EdgarBlocked propagates, not retried
+            resp = self._get(url, host="efts.sec.gov", accept="application/json")   # EdgarBlocked propagates
         except requests.RequestException:
             return []
         if resp.status_code != 200:
@@ -626,7 +733,7 @@ class EdgarClient:
             return []
         hits = data.get("hits", {}).get("hits", []) if isinstance(data, dict) else []
         if hits and hi < date.today():
-            cp.write_text(json.dumps(hits))
+            _write_atomic(cp, json.dumps(hits))
         return hits
 
     def recent_filings(self, cik: int | str) -> list[EdgarSubmission]:
