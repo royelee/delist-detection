@@ -9,6 +9,7 @@ from __future__ import annotations
 import fcntl
 import hashlib
 import json
+import logging
 import os
 import re
 import threading
@@ -22,6 +23,8 @@ from pathlib import Path
 from typing import Any
 
 import requests
+
+log = logging.getLogger(__name__)
 
 
 SEC_HOST = "https://data.sec.gov"
@@ -69,6 +72,44 @@ FETCHED_KEY = "__fetched__"
 STALE_KEY = "__stale__"
 SUBMISSIONS_FRESH_DAYS = 45  # filings this long after the last trade must be in the submissions read
 COMPANY_SEARCH_FRESH_DAYS = 7  # a company-search answer this old is refetched, never trusted forever
+
+# EDGAR full-text search (efts.sec.gov). Every answer, hits or empty, is cached
+# under the URL's SHA1 with the day it was fetched, and holds for
+# efts_ttl_days(window_end, fetched): the time from the end of its date window to
+# the fetch, kept within [EFTS_MIN_TTL_DAYS, EFTS_MAX_TTL_DAYS]. An answer fetched
+# soon after its window closed (or while it is open) can still change as EDGAR
+# indexes late filings, so it is asked again within a week; one fetched long after
+# has settled, but SEC re-indexes, so even it is asked again yearly. EDGAR's
+# full-text index starts in 2001: a window ending before EFTS_COVERAGE_START is not
+# covered and is never sent.
+EFTS_SCHEMA = 1
+EFTS_KEY = "efts_hits"
+EFTS_MIN_TTL_DAYS, EFTS_MAX_TTL_DAYS = 7, 365
+EFTS_COVERAGE_START = date(2001, 1, 1)
+# The only `_source` fields a caller reads (resolver: ciks, display_names; successor
+# search: file_date too); form and adsh keep a cached answer readable, `_id` names
+# the document the review loop curls.
+EFTS_SOURCE_KEYS = ("ciks", "display_names", "form", "file_date", "adsh")
+
+
+def efts_ttl_days(window_end: date, fetched: date) -> int:
+    """Days a full-text-search answer fetched on `fetched` holds (see above)."""
+    return max(EFTS_MIN_TTL_DAYS, min(EFTS_MAX_TTL_DAYS, (fetched - window_end).days))
+
+
+def _trim_hits(hits: Any) -> list[dict]:
+    """EFTS hits with each `_source` cut to EFTS_SOURCE_KEYS and `_id` kept: the
+    same dicts whether an answer comes from the network or the cache."""
+    out: list[dict] = []
+    for h in hits if isinstance(hits, list) else []:
+        if not isinstance(h, dict):
+            continue
+        src = h.get("_source") if isinstance(h.get("_source"), dict) else {}
+        hit: dict = {"_source": {k: src[k] for k in EFTS_SOURCE_KEYS if k in src}}
+        if "_id" in h:
+            hit = {"_id": h["_id"], **hit}
+        out.append(hit)
+    return out
 
 
 def submissions_fresh_after(on: date, today: date | None = None) -> date:
@@ -534,11 +575,14 @@ class EdgarClient:
         sleep=time.sleep,
         *,
         today: date | None = None,
+        search_cache: bool = True,
     ) -> None:
         """`session`: one HTTP session for every thread (tests inject a fake);
         without it each thread gets its own `requests.Session`. `today`: the run
-        date every freshness rule and fetch stamp uses (default: the clock, read at
-        each use)."""
+        date every freshness rule and fetch stamp uses (default: the clock, read
+        at each use). `search_cache=False` neither reads nor writes the
+        full-text-search and company-search caches: the golden-fixture builder
+        must record live answers."""
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.user_agent = user_agent or resolve_user_agent()
@@ -546,8 +590,13 @@ class EdgarClient:
         self._local = threading.local()
         self.sleep = sleep
         self._today = today
+        self.search_cache = search_cache
         self._locks: dict[str, threading.Lock] = {}
         self._locks_guard = threading.Lock()
+        # Answers not written to disk (undated full-text searches, rejected
+        # queries), kept for the life of this client -- one run -- so a warm
+        # worker and the sequential pass send each one once.
+        self._run_memo: dict[str, list] = {}
         for d in (self.cache_dir, self.cache_dir / "text", self.cache_dir / "raw"):
             clean_orphan_temps(d)
 
@@ -843,48 +892,104 @@ class EdgarClient:
             _write_atomic(cp, resp.text)
             return resp.text
 
-    def full_text_search(self, q: str, forms: str, lo: date, hi: date) -> list[dict]:
-        """EDGAR full-text search hits (`hits.hits`) for `q` within `forms`,
-        filed in `[lo, hi]`.
+    def _efts_cached(self, cp: Path, window_end: date, *, any_age: bool = False) -> list[dict] | None:
+        """The answer cached at `cp` while it holds (efts_ttl_days), or at any age
+        with `any_age` (a prefetch thread, `fill_only`). None when there is no
+        file, or a file of another schema; the old full_text_search's bare lists
+        count as another schema, except to a prefetch thread, which never
+        replaces a file. The caller holds the file's lock."""
+        if not cp.exists():
+            return None
+        try:
+            data = json.loads(cp.read_text())
+        except json.JSONDecodeError:
+            cp.unlink(missing_ok=True)
+            return None
+        if isinstance(data, list):
+            return _trim_hits(data) if any_age else None
+        if not isinstance(data, dict) or data.get("schema") != EFTS_SCHEMA or not isinstance(data.get(EFTS_KEY), list):
+            return None
+        fetched = _fetched_on(cp, data)
+        if any_age or self.today < fetched + timedelta(days=efts_ttl_days(window_end, fetched)):
+            return data[EFTS_KEY]
+        return None
 
-        Cached on disk under this client's cache directory, keyed by the
-        request URL, the same way `_get_json` caches — a second identical
-        call makes no request. Never cached: a network error or non-200
-        response (so a miss is retried, and a 5xx never freezes in as an
-        empty answer); an empty hit list (EDGAR's index may simply not have
-        caught up yet); or an answer for a window that ends on or after
-        today (the filing it would find may not exist yet). A 403/429
-        raises `EdgarBlocked` like every other EDGAR call.
+    def efts_search(self, url: str, *, window_end: date | None) -> list[dict]:
+        """`hits.hits` of an EDGAR full-text-search URL, each hit's `_source` cut to
+        EFTS_SOURCE_KEYS and its `_id` kept. `window_end` is the last filing date
+        the query covers (None: the query has no date window).
+
+        Every answer, hits or empty, is written under the URL's SHA1 with its
+        schema, window end and fetch date, and holds for efts_ttl_days. A window
+        ending before EFTS_COVERAGE_START returns [] with no request (EDGAR's
+        index does not cover it). An undated answer is kept in memory for this
+        client's run only. A 400 or 404 is a rejected query: logged, counted,
+        returned as [], never written, and kept in memory so one run sends it
+        once; it is not a failure. A transport error or 5xx after the retries, or
+        a body that is not JSON, raises `requests.RequestException`, and nothing
+        is cached. A 403/429 raises `EdgarBlocked`, never retried. On a prefetch
+        thread (`fill_only`) a cached answer is returned whatever its age.
+        """
+        if window_end is not None and window_end < EFTS_COVERAGE_START:
+            SEC_STATS.add("not_covered:full_text_search")
+            return []
+        cp = self._cache_path(url)
+        with self._lock_for(str(cp)):
+            if self.search_cache:
+                memo = self._run_memo.get(url)
+                if memo is not None:
+                    SEC_STATS.add("cache:full_text_search")
+                    return list(memo)
+                if window_end is not None:
+                    cached = self._efts_cached(cp, window_end, any_age=filling_only())
+                    if cached is not None:
+                        SEC_STATS.add("cache:full_text_search")
+                        return list(cached)
+            try:
+                resp = self._get(url, host="efts.sec.gov", accept="application/json")   # EdgarBlocked propagates
+            except requests.RequestException:
+                SEC_STATS.degraded("failed_request")
+                raise
+            if resp.status_code in (400, 404):
+                log.warning("EDGAR full-text search rejected %s (HTTP %d): no answer, not cached",
+                            url, resp.status_code)
+                SEC_STATS.add("rejected:full_text_search")
+                if self.search_cache:
+                    self._run_memo[url] = []
+                return []
+            if resp.status_code != 200:
+                SEC_STATS.degraded("failed_request")
+                raise requests.HTTPError(f"EDGAR full-text search answered {resp.status_code} for {url}")
+            try:
+                data = resp.json()
+            except ValueError as exc:                      # requests' JSONDecodeError is a ValueError
+                SEC_STATS.degraded("failed_request")
+                raise requests.RequestException(f"EDGAR full-text search sent no JSON for {url}") from exc
+            outer = data.get("hits") if isinstance(data, dict) else None
+            hits = _trim_hits(outer.get("hits") if isinstance(outer, dict) else [])
+            if self.search_cache:
+                if window_end is None:
+                    self._run_memo[url] = hits
+                else:
+                    _write_atomic(cp, json.dumps({"schema": EFTS_SCHEMA, "window_end": window_end.isoformat(),
+                                                  FETCHED_KEY: self.today.isoformat(), EFTS_KEY: hits}))
+            return list(hits)
+
+    def full_text_search(self, q: str, forms: str, lo: date, hi: date) -> list[dict]:
+        """EDGAR full-text search hits (`hits.hits`, trimmed as `efts_search` trims
+        them) for `q` within `forms`, filed in `[lo, hi]`, cached as `efts_search`
+        caches them. [] when EDGAR could not answer: the successor search then
+        leaves `successor_unknown` set. A 403/429 raises `EdgarBlocked`.
         """
         url = (
             "https://efts.sec.gov/LATEST/search-index?"
             f"q={requests.utils.quote(q)}&forms={requests.utils.quote(forms)}"
             f"&dateRange=custom&startdt={lo.isoformat()}&enddt={hi.isoformat()}"
         )
-        cp = self._cache_path(url)
-        if cp.exists():
-            try:
-                cached = json.loads(cp.read_text())
-            except json.JSONDecodeError:
-                cp.unlink(missing_ok=True)
-            else:
-                if isinstance(cached, list):
-                    return cached
-
         try:
-            resp = self._get(url, host="efts.sec.gov", accept="application/json")   # EdgarBlocked propagates
+            return self.efts_search(url, window_end=hi)
         except requests.RequestException:
             return []
-        if resp.status_code != 200:
-            return []
-        try:
-            data = resp.json()
-        except (ValueError, TypeError):
-            return []
-        hits = data.get("hits", {}).get("hits", []) if isinstance(data, dict) else []
-        if hits and hi < self.today:
-            _write_atomic(cp, json.dumps(hits))
-        return hits
 
     def recent_filings(self, cik: int | str) -> list[EdgarSubmission]:
         sub = self.submissions(cik)

@@ -230,27 +230,33 @@ def test_full_text_search_429_raises_at_once_no_retry(tmp_path, monkeypatch):
     assert len(s.calls) == 1                        # not retried
 
 
-def test_full_text_search_does_not_cache_an_empty_answer(tmp_path, monkeypatch):
+def test_full_text_search_caches_an_empty_answer(tmp_path, monkeypatch):
+    # An empty answer is written like a hit, with its fetch date; it holds for its TTL.
     monkeypatch.setattr("delist_detection.edgar._throttle", lambda: None)
     s = _Session(_Resp(text=json.dumps({"hits": {"hits": []}})))
     ec = EdgarClient(cache_dir=tmp_path, user_agent="ua", session=s)
-    got = ec.full_text_search("X", "8-K12B", date(2020, 1, 1), date(2020, 2, 1))
-    assert got == []
-    assert not list(tmp_path.glob("*.json"))
+    assert ec.full_text_search("X", "8-K12B", date(2020, 1, 1), date(2020, 2, 1)) == []
+    (saved,) = tmp_path.glob("*.json")
+    assert json.loads(saved.read_text())["efts_hits"] == []
+    s2 = _Session()
+    later = EdgarClient(cache_dir=tmp_path, user_agent="ua", session=s2)
+    assert later.full_text_search("X", "8-K12B", date(2020, 1, 1), date(2020, 2, 1)) == []
+    assert s2.calls == []
 
 
-def test_full_text_search_does_not_cache_a_window_ending_on_or_after_today(tmp_path, monkeypatch):
+def test_full_text_search_holds_an_open_windows_answer_for_seven_days_only(tmp_path, monkeypatch):
     monkeypatch.setattr("delist_detection.edgar._throttle", lambda: None)
     hit = {"_source": {"ciks": ["1"], "display_names": ["X CO  (X)  (CIK 0000000001)"]}}
+    today = date.today()
+    lo = today - timedelta(days=30)
     s = _Session(_Resp(text=json.dumps({"hits": {"hits": [hit]}})))
-    ec = EdgarClient(cache_dir=tmp_path, user_agent="ua", session=s)
-    got = ec.full_text_search('"X CO"', "8-K12B", date.today() - timedelta(days=30), date.today())
-    assert got == [hit]
-    assert not list(tmp_path.glob("*.json"))        # window not fully in the past: never cached
-
-    s2 = _Session(_Resp(text=json.dumps({"hits": {"hits": [hit]}})))
-    ec2 = EdgarClient(cache_dir=tmp_path, user_agent="ua", session=s2)
-    got2 = ec2.full_text_search('"X CO"', "8-K12B", date.today() - timedelta(days=30),
-                                date.today() + timedelta(days=5))
-    assert got2 == [hit]
-    assert not list(tmp_path.glob("*.json"))
+    assert EdgarClient(cache_dir=tmp_path, user_agent="ua", session=s, today=today).full_text_search(
+        '"X CO"', "8-K12B", lo, today) == [hit]
+    s2 = _Session()
+    assert EdgarClient(cache_dir=tmp_path, user_agent="ua", session=s2,
+                       today=today + timedelta(days=6)).full_text_search('"X CO"', "8-K12B", lo, today) == [hit]
+    assert s2.calls == []
+    s3 = _Session(_Resp(text=json.dumps({"hits": {"hits": []}})))
+    assert EdgarClient(cache_dir=tmp_path, user_agent="ua", session=s3,
+                       today=today + timedelta(days=7)).full_text_search('"X CO"', "8-K12B", lo, today) == []
+    assert len(s3.calls) == 1
