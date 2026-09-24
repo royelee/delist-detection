@@ -1503,3 +1503,19 @@ def test_two_candidates_leave_the_successor_unknown(fake_edgar, tmp_path, monkey
     extra = {("ID_CUSIP", "09247X999"): _figi_answer("BBGBLKX0001", "BLKX", "BLACKROCK INC SERIES X")}
     d = _reorg_run(fake_edgar, tmp_path, monkeypatch, extra_obs=extra_obs, extra_rows=extra_rows, extra_figi=extra)
     assert d["BBGBLKOLD01"]["successor_sec_id"] == "" and "successor_unknown" in d["BBGBLKOLD01"]["review_flags"]
+
+
+def test_with_no_last_trade_date_the_window_is_anchored_on_the_form25_filing():
+    """APA Corp's 2021 holdco reorganization: Apache's Form 25 was filed 2021-03-04
+    (effective 2021-03-14) and no source dated the last trade; the new line is
+    first seen 2021-03-01. Anchored on the effective date the window
+    [03-09, 03-29] misses it; the Form 25 filing date is the better proxy."""
+    record = DelistRecord(ticker="APA", cik=6769, observed_delist_date="2021-03-04", crsp_code=304,
+                          bucket=CrspBucket.EXCHANGE_TRANSFER, confidence="medium", reason="Continued filings",
+                          evidence={"flags": ["successor_unknown"]}, sec_id="BBGAPAOLD01", delist_date="2021-03-14")
+    sub = EdgarSubmission("0001354457-21-000304", "25-NSE", "2021-03-04", "", "", "p.xml")
+    ev = DelistingEvent(sec_id="BBGAPAOLD01", cik=6769, ticker="APA", delist_date="2021-03-14", record=record,
+                        last_trade=LastTrade(None, "", ("no_last_trade_date",)), form25=None, form25_sub=sub,
+                        exchange="NASDAQ", flags=["successor_unknown"])
+    starts = {"BBGAPAOLD01": ("2007-12-17", 6769, {"APA"}), "BBGAPANEW01": ("2021-03-01", 1841666, {"APA"})}
+    assert pipeline._successor_in_run(ev, starts) == ("BBGAPANEW01", "same_ticker")

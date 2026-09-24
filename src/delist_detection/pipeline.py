@@ -304,9 +304,11 @@ def _successor_in_run(e: DelistingEvent, starts: dict[str, tuple[str, int | None
     (first sighting, issuer CIK, tickers)) whose first sighting falls within
     [last trade - SUCCESSOR_BEFORE_DAYS, last trade + SUCCESSOR_AFTER_DAYS] and
     that shares the delisted security's issuer CIK or its ticker: the new line
-    of a holding-company reorganization or a rename. Returns (sec_id,
-    "same_issuer" | "same_ticker"); None for zero or several candidates."""
-    day = e.last_trade.day or _d(e.delist_date)
+    of a holding-company reorganization or a rename. With no last trade date
+    the Form 25's filing date stands in for it (the delisting date is ten days
+    later), else the delisting date. Returns (sec_id, "same_issuer" |
+    "same_ticker"); None for zero or several candidates."""
+    day = e.last_trade.day or (_d(e.form25_sub.filing_date) if e.form25_sub is not None else _d(e.delist_date))
     lo = (day - timedelta(days=SUCCESSOR_BEFORE_DAYS)).isoformat()
     hi = (day + timedelta(days=SUCCESSOR_AFTER_DAYS)).isoformat()
     found: dict[str, str] = {}
