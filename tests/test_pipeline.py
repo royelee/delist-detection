@@ -1359,3 +1359,27 @@ def test_a_delisting_before_the_ftd_window_still_gets_its_close(fake_edgar, tmp_
     assert (d["sec_id"], d["delist_date"], d["bucket"]) == ("BBGAGE00001", "2007-10-12", "merger")
     assert d["last_trade_date"] == "2007-09-28" and d["last_trade_close"] == "64.000000"
     assert "observed_after_delisting" in d["review_flags"] and "no_last_close" not in d["review_flags"]
+
+
+def test_the_early_ftd_extension_covers_the_whole_look_back(fake_edgar, tmp_path):
+    """The only fails row before A.G. Edwards' 2007-09-28 last trade is ten
+    trading days earlier (2007-09-14): the rows loaded for a delisting before
+    the eras' FTD window must reach that far back for the look-back close."""
+    fake_edgar.submissions_by_cik[21000] = [
+        EdgarSubmission("w1", "8-K", "2007-10-01", "2007-10-01", "2.01,3.01,5.01,9.01", "k.htm"),
+        EdgarSubmission("w2", "25-NSE", "2007-10-02", "", "", "p.xml"),
+        EdgarSubmission("w3", "15-12B", "2007-10-12", "", "", "f.htm"),
+    ]
+    fake_edgar.raws["w2"] = STALE_F25_RAW
+    fake_edgar.texts["w1"] = ("Item 3.01 Notice of Delisting. trading was suspended prior to the opening of "
+                              "trading on October 1, 2007 " + "x" * 300)
+    obs = [Observation("AGE", d, "EDWARDS AG INC", cik=21000, sec_id="BBGAGE00001")
+           for d in ("2008-01-16", "2008-07-25", "2009-06-08")]
+    rows = _ftd("AGE", "281760108", "EDWARDS A G INC", ["2007-09-14"], price=62.0)
+    index, clients = _index_clients(fake_edgar, obs, rows, {})
+
+    run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
+
+    (d,) = read_table("delistings", table_path(tmp_path, "delistings"))
+    assert d["last_trade_date"] == "2007-09-28" and d["last_trade_close"] == "62.000000"
+    assert "ftd_close_prior_day" in d["review_flags"]

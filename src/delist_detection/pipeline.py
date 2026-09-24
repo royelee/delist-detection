@@ -475,7 +475,7 @@ def run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_
     early = [e for e in events if e.last_trade.day is not None and FTD_START <= e.last_trade.day < lo]
     if early:
         days = [e.last_trade.day for e in early]
-        ftd.extend(clients.ftd_client, min(days) - timedelta(days=10), max(days) + timedelta(days=10),
+        ftd.extend(clients.ftd_client, min(days) - timedelta(days=20), max(days) + timedelta(days=10),
                    symbols={e.ticker for e in early},
                    cusips={c for e in early for c in sec_cusips.get(e.sec_id, [])})
     closes: dict[tuple[str, str], float] = {}
