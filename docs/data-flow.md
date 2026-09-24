@@ -151,9 +151,12 @@ page served as JSON) raises and is never cached: a bad 200 must not be mistaken
 for a real empty answer, which could hide a filing for up to a year. Each hit
 keeps `_id` and only the `_source` fields the library reads
 (`EFTS_SOURCE_KEYS`). The EDGAR company-name search caches every answer, empties
-included, for 7 days, and is retried like every other SEC request. When it
-still fails, a cached hit list is served marked stale; with nothing to fall
-back on, it raises instead of answering "no match".
+included, for 7 days, and is retried like every other SEC request. EDGAR's
+answer, a no-match included, is always a complete ATOM `<feed>` document, so a
+200 whose body is not one (an HTML error page, a truncated feed) is treated
+like a 5xx and never cached; a 400/404 is a rejected query, not cached and not
+a failure. When the search still fails, a cached hit list is served marked
+stale; with nothing to fall back on, it raises instead of answering "no match".
 
 The ticker→CIK memo lives at `cache/ticker_resolution.json` and is keyed by
 `(ticker, observed_date)` so a recycled ticker resolves to the right issuer per
@@ -215,8 +218,8 @@ exchange transfer). It runs each stage's own code on N threads
   lock (the same open file description). An unwritable lock path fails at
   start-up (`use_machine_wide_limit` raises `OSError`), not mid-run.
 - **Timeouts.** An EDGAR request (submissions, filing text, full-text and
-  company-name search) times out at 30 s; a SEC data-file download (a MIDAS or
-  FTD ZIP) times out at 180 s.
+  company-name search) times out at 30 s; a MIDAS or FTD index page at 60 s; a
+  SEC data-file download (a MIDAS or FTD ZIP) at 180 s.
 - **Refusals and Ctrl-C.** A refusal (`EdgarBlocked`/`OpenFigiBlocked`) on any
   thread stops the pool: no item starts after it, and every running worker's
   next SEC request raises `PrefetchCancelled` instead of going out; the refusal
@@ -235,7 +238,7 @@ Each run writes `run_manifest.json` next to the tables:
 - the run date (`as_of`), the code version and the worker count;
 - per-endpoint SEC request counts, cache answers and latency (p50, p95, max);
 - degraded answers (failed requests, stale copies), rejected and not-covered
-  full-text searches;
+  full-text searches, and the count of `resolution_degraded` review rows;
 - per-warm-pass task failures (`warm_failed:<stage>` — logged at DEBUG and
   counted; the sequential pass meets and records the same failure itself, so a
   nonzero count here only flags a concurrency-only failure worth a second look);
