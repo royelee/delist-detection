@@ -684,6 +684,10 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
             review.append(ReviewItem(s.sec_id, s.eras[-1].ticker if s.eras else "", s.issuer_cik, DEGRADED_FLAG,
                                      "the delisting search rested on a failed EDGAR request or a stale copy; "
                                      "run again once SEC answers", last_seen=own_last_seen))
+            # item 3: the flag must reach the delisting's own row (delistings.csv),
+            # not only review.csv.
+            for ev in evs:
+                ev.record.evidence["flags"].append(DEGRADED_FLAG)
         if i % 50 == 0:
             log(f"[{i}/{len(securities)}] securities searched; {len(events)} delistings so far")
     meter.done("delisting search", mark)
@@ -767,6 +771,8 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
             review.append(ReviewItem(e.sec_id, e.ticker, e.cik, DEGRADED_FLAG,
                                      "payout extraction rested on a failed EDGAR request or a stale copy",
                                      delist_date=e.delist_date))
+            # item 3: the flag must reach the delisting's own row too.
+            e.record.evidence["flags"].append(DEGRADED_FLAG)
     trade_day = {(e.sec_id, e.delist_date): e.last_trade.day for e in events}
     acq_symbols = {normalize_ticker(t.acquirer_ticker) for t in llm_terms.values() if t.acquirer_ticker}
     acq_symbols |= {normalize_ticker(v["acquirer_ticker"]) for v in overrides.merger_terms.values()
@@ -882,6 +888,8 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
                 review.append(ReviewItem(e.sec_id, e.ticker, e.cik, DEGRADED_FLAG,
                                          "the successor search rested on a failed EDGAR request or a stale copy",
                                          delist_date=e.delist_date))
+                # item 3: the flag must reach the delisting's own row too.
+                e.record.evidence["flags"].append(DEGRADED_FLAG)
             if hit is None:
                 continue
             s_cik, cand, filing_date = hit
