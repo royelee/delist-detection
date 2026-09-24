@@ -1,4 +1,8 @@
+import json
 from datetime import date
+from pathlib import Path
+
+import pytest
 
 from delist_detection.edgar import EdgarSubmission
 from delist_detection.listing_status import (
@@ -61,7 +65,8 @@ class _Sub:
         self.exchanges = exchanges
 
     def submissions(self, cik, fresh_after=None):
-        return {"exchanges": self.exchanges}
+        # EDGAR's parallel arrays: a ticker per exchange entry
+        return {"tickers": [f"T{i}" for i in range(len(self.exchanges))], "exchanges": self.exchanges}
 
 
 def test_listed_today():
@@ -74,3 +79,47 @@ def test_listed_today():
     assert listed_today(_Figi({}), "CIK1-COMMON", edgar=_Sub(["NYSE"]), cik=1) is True
     assert listed_today(_Figi({}), "CIK1-COMMON", edgar=_Sub(["OTC"]), cik=1) is False
     assert listed_today(_Figi({}), "CIK1-COMMON") is None
+
+
+LISTING_FIX = Path(__file__).parent / "fixtures" / "listing_status"
+
+
+class _FixEdgar:
+    def __init__(self, sub):
+        self.sub = sub
+
+    def submissions(self, cik, fresh_after=None):
+        return self.sub
+
+
+def _fix(name):
+    return json.loads((LISTING_FIX / f"{name}.json").read_text())
+
+
+@pytest.mark.parametrize("name,listed", [
+    ("celgene", False), ("tss", False), ("slack", False), ("mylan", False), ("alexion", False),
+    ("apache_old", False), ("apple", True), ("berkshire_b", True), ("alphabet_a", True),
+])
+def test_a_dead_figi_with_a_venue_row_is_not_listed(name, listed):
+    """OpenFIGI's map by composite FIGI still returns an exchange venue row for a
+    delisted security (Celgene: UW; TSS: UN; old Apache: UW — live answers of
+    2026-09-23). With the issuer's CIK known, the security is listed today only
+    when the issuer's EDGAR submissions also list one of its tickers on a major
+    exchange; the fixtures hold the live OpenFIGI answer and the issuer's
+    cached submissions tickers/exchanges."""
+    f = _fix(name)
+    got = listed_today(_Figi(f["openfigi"]), f["sec_id"], edgar=_FixEdgar(f["submissions"]), cik=f["cik"],
+                       tickers=f["observed_tickers"])
+    assert got is listed
+
+
+def test_the_openfigi_ticker_also_counts_and_no_cik_keeps_the_openfigi_rule():
+    figi = _Figi({"data": [{"exchCode": "UN", "ticker": "NEWT"}]})
+    sub = _FixEdgar({"tickers": ["NEWT"], "exchanges": ["NYSE"]})
+    assert listed_today(figi, "BBG1", edgar=sub, cik=5, tickers=["OLDT"]) is True     # renamed since observed
+    assert listed_today(figi, "BBG1", edgar=_FixEdgar({"tickers": ["NEWT"], "exchanges": ["OTC"]}), cik=5,
+                        tickers=["OLDT"]) is False
+    assert listed_today(figi, "BBG1", tickers=["OLDT"]) is True                        # no CIK: OpenFIGI alone
+    # a placeholder: one of its own tickers must be on a major exchange
+    assert listed_today(_Figi({}), "CIK5-COMMON", edgar=sub, cik=5, tickers=["OTHER"]) is False
+    assert listed_today(_Figi({}), "CIK5-COMMON", edgar=sub, cik=5, tickers=["NEWT"]) is True

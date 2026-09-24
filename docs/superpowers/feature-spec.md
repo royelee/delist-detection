@@ -590,6 +590,14 @@ line changes observable output.
 - **`listed_today` is asked live (§8.10, §11).** The completeness check's
   OpenFIGI lookup is not cached, so runs on different days over the same
   caches can differ where a listing changed in between.
+- **`listed_today` needs EDGAR too when the CIK is known (§8.10).** OpenFIGI
+  keeps exchange-venue rows for a dead composite FIGI (Celgene, TSS, old
+  Apache still show UW/UN), so with the issuer's CIK known a security is
+  listed today only when OpenFIGI shows a venue and the issuer's EDGAR
+  submissions JSON lists one of the security's observed tickers, or the
+  ticker OpenFIGI returns, on a major exchange. With no CIK, OpenFIGI alone
+  decides; a placeholder is listed when EDGAR lists one of its own tickers
+  on a major exchange.
 - **`sec_id` pins are not name-checked (§5 "Pin", §8.3).** A `sec_id` pin is
   taken as given; only a `cik` pin gets the `member_name_mismatch` check.
 - **No share-class rejection in FIGI acceptance (§8.3).** A candidate of a

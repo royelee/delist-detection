@@ -15,6 +15,7 @@ from .edgar import EdgarSubmission
 from .evidence import parse_day
 from .figi_resolution import is_placeholder
 from .form25 import MAJOR_EXCHANGES, REGIONAL_EXCHANGES, exchange_label, exchanges_named
+from .observations import normalize_ticker
 
 ANNUAL_FORMS = frozenset({"10-K", "10-K405", "10-KSB", "10-KT", "20-F", "40-F"})
 EXCHANGE_VENUES = frozenset({"UN", "UW", "UQ", "UR", "UA", "UP", "UF"})
@@ -59,14 +60,40 @@ def withdrawal_kind(exchange: str, before: set[str] | None, after: set[str] | No
     return "delisting"
 
 
-def listed_today(figi, sec_id: str, *, edgar=None, cik: int | None = None) -> bool | None:
+def _edgar_lists(edgar, cik: int, tickers: Iterable[str] | None) -> bool:
+    """True when the issuer's EDGAR submissions JSON lists one of `tickers` on a
+    major exchange (any of its tickers when `tickers` is None)."""
+    sub = edgar.submissions(cik)
+    if not isinstance(sub, dict):
+        return False
+    want = None if tickers is None else {normalize_ticker(t) for t in tickers if t}
+    for t, x in zip(sub.get("tickers") or [], sub.get("exchanges") or []):
+        if (want is None or normalize_ticker(t) in want) and exchange_label(x or "") in MAJOR_EXCHANGES:
+            return True
+    return False
+
+
+def listed_today(figi, sec_id: str, *, edgar=None, cik: int | None = None,
+                 tickers: Iterable[str] | None = None) -> bool | None:
+    """Whether the security trades on a US exchange today.
+
+    A composite FIGI needs an exchange venue in OpenFIGI's answer. OpenFIGI keeps
+    venue rows for a dead line (Celgene, TSS, old Apache still show UW/UN), so
+    when the issuer's CIK is known the issuer's EDGAR submissions JSON must also
+    list one of the security's `tickers`, or a ticker OpenFIGI returns, on a
+    major exchange. With no CIK, OpenFIGI alone decides. A placeholder has no
+    FIGI: EDGAR alone decides, on the security's own tickers."""
     if not is_placeholder(sec_id):
         ans = figi.map([{"idType": "COMPOSITE_ID_BB_GLOBAL", "idValue": sec_id}], use_cache=False)[0]
         if "error" in ans:
             return None
-        return any(r.get("exchCode") in EXCHANGE_VENUES for r in ans.get("data") or [])
+        rows = [r for r in ans.get("data") or [] if r.get("exchCode") in EXCHANGE_VENUES]
+        if not rows:
+            return False
+        if edgar is None or cik is None:
+            return True
+        names = None if tickers is None else [*tickers, *(str(r.get("ticker") or "").replace("/", "-") for r in rows)]
+        return _edgar_lists(edgar, cik, names)
     if edgar is None or cik is None:
         return None
-    sub = edgar.submissions(cik)
-    labels = {exchange_label(x) for x in (sub.get("exchanges") or []) if x} if isinstance(sub, dict) else set()
-    return bool(labels & MAJOR_EXCHANGES)
+    return _edgar_lists(edgar, cik, tickers)

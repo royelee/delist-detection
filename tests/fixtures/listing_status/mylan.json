@@ -1,0 +1,25 @@
+{
+ "sec_id": "BBG000BPQD31",
+ "cik": 1623613,
+ "observed_tickers": [
+  "MYL"
+ ],
+ "openfigi": {
+  "data": [
+   {
+    "figi": "BBG000BPQMX8",
+    "compositeFIGI": "BBG000BPQD31",
+    "exchCode": "UW",
+    "ticker": "MYL",
+    "name": "MYLAN NV",
+    "securityType": "Common Stock"
+   }
+  ]
+ },
+ "submissions": {
+  "name": "Mylan II B.V.",
+  "tickers": [],
+  "exchanges": [],
+  "__fetched__": null
+ }
+}

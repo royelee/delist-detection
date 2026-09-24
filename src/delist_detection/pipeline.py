@@ -448,7 +448,8 @@ def run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_
             # listed_today lives inside the try too: a FIGI/EDGAR error there
             # must become a reviewable row for this one security, not abort
             # the whole overnight run.
-            listed[s.sec_id] = listed_today(clients.figi, s.sec_id, edgar=clients.edgar, cik=s.issuer_cik)
+            listed[s.sec_id] = listed_today(clients.figi, s.sec_id, edgar=clients.edgar, cik=s.issuer_cik,
+                                            tickers=sorted({e.ticker for e in s.eras}))
             ctx = SecurityContext(
                 security=s,
                 siblings=sibs,
@@ -706,7 +707,8 @@ def run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_
     # ranges_from_sightings' filter that drops single-value FTD sightings would
     # otherwise silently drop a successor's lone 8-K12B-dated sighting.
     for sid, s in added.items():
-        listed[sid] = listed_today(clients.figi, sid, edgar=clients.edgar, cik=s.issuer_cik)
+        listed[sid] = listed_today(clients.figi, sid, edgar=clients.edgar, cik=s.issuer_cik,
+                                   tickers=[added_meta[sid]["ticker"]])
         is_listed = bool(listed[sid])
         meta = added_meta[sid]
         if meta["kind"] == "acquirer":

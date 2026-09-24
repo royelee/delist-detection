@@ -67,6 +67,7 @@ def _clients(fake_edgar, ftd_rows=None):
     fake_edgar.submissions_by_cik[777] = []
     fake_edgar.company_map["AET"] = {"cik_str": 1122304, "ticker": "AET", "title": "AETNA INC /PA/"}
     fake_edgar.company_map["LIVE"] = {"cik_str": 777, "ticker": "LIVE", "title": "LIVE CO"}
+    fake_edgar.listings[777] = [("LIVE", "NYSE")]
     fake_edgar.raws["0000876661-18-001269"] = AET_RAW
     fake_edgar.texts["0001122304-18-000178"] = ("Item 3.01 Notice. trading suspended prior to the opening of trading "
                                                 "on November 29, 2018 " + "x" * 300)
@@ -295,6 +296,7 @@ def test_run_writes_an_open_acquirer_ticker_history_row(fake_edgar, tmp_path):
     index, clients = _clients(fake_edgar)
     fake_edgar.company_map["ACQ"] = {"cik_str": 9999, "ticker": "ACQ", "title": "ACQUIRER INC"}
     fake_edgar.submissions_by_cik[9999] = [EdgarSubmission("X1", "10-K", "2010-01-01", "", "", "x.htm")]
+    fake_edgar.listings[9999] = [("ACQ", "NYSE")]
     clients.figi.answers[("ID_CUSIP", "ACQCUSIP1")] = _figi_answer("BBGACQ00001", "ACQ", "ACQUIRER INC")
     clients.figi.answers[("COMPOSITE_ID_BB_GLOBAL", "BBGACQ00001")] = {
         "data": [{"figi": "BBGACQ00001", "compositeFIGI": "BBGACQ00001", "exchCode": "UN", "ticker": "ACQ",
@@ -343,6 +345,7 @@ def test_run_writes_an_open_successor_ticker_history_row(fake_edgar, tmp_path, m
     hit = {"_source": {"ciks": ["8888"], "display_names": ["SUCCESSOR CO  (SUX)  (CIK 0000008888)"],
                        "file_date": "2018-12-15"}}
     fake_edgar.full_text_search = lambda q, forms, lo, hi: [hit]
+    fake_edgar.listings[8888] = [("SUX", "NYSE")]
     clients.figi.answers[("TICKER", "SUX")] = _figi_answer("BBGSUX00001", "SUX", "SUCCESSOR CO")
     clients.figi.answers[("COMPOSITE_ID_BB_GLOBAL", "BBGSUX00001")] = {
         "data": [{"figi": "BBGSUX00001", "compositeFIGI": "BBGSUX00001", "exchCode": "UN", "ticker": "SUX",
@@ -1427,3 +1430,16 @@ def test_a_look_back_close_keeps_its_row_date_in_the_evidence(fake_edgar, tmp_pa
     assert seen["BBG000FJLFX8"]["ftd_close_row_date"] == "2018-11-21"
     (d,) = read_table("delistings", table_path(tmp_path, "delistings"))
     assert "ftd_close_prior:5" in d["review_flags"].split(";")      # close of 11-20 -> 11-28 (22nd a holiday): 5
+
+
+def test_listed_today_is_asked_with_each_securitys_own_tickers(fake_edgar, tmp_path, monkeypatch):
+    seen = {}
+
+    def spy(figi, sec_id, *, edgar=None, cik=None, tickers=None):
+        seen[sec_id] = sorted(tickers or [])
+        return sec_id == "BBG000LIVE01"
+
+    monkeypatch.setattr(pipeline, "listed_today", spy)
+    index, clients = _clients(fake_edgar)
+    run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
+    assert seen == {"BBG000FJLFX8": ["AET"], "BBG000LIVE01": ["LIVE"]}
