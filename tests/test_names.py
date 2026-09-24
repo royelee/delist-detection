@@ -43,3 +43,18 @@ def test_an_apostrophe_word_matches_both_the_joined_and_the_split_spelling():
     assert names_agree("Frank's International N.V.", "FRANK S INTERNATIONAL NV")
     assert names_agree("Frank's International N.V.", "FRANKS INTERNATIONAL NV")
     assert name_tokens("O'Reilly Automotive") == {"OREILLY", "REILLY", "AUTOMOTIVE"}
+
+
+def test_a_possessive_word_counts_once_toward_the_words_needed():
+    """"Wendy's Co" is one word (WENDYS or WENDY), not two: it needs one shared
+    word, as a one-word name does. Before, its two spellings raised the need to
+    two and it no longer agreed with "WENDYS ARBYS GROUP INC"."""
+    assert names_agree("WENDYS ARBYS GROUP INC", "Wendy's Co")
+    assert names_agree("MACYS RETAIL HOLDINGS INC", "Macy's, Inc.")
+    assert names_agree("O'REILLY AUTOMOTIVE INC", "O REILLY AUTOMOTIVE INC")
+    assert names_agree("O'REILLY AUTOMOTIVE INC", "OREILLY AUTOMOTIVE INC")
+    assert names_agree("Frank's International N.V.", "FRANK S INTERNATIONAL NV")
+    assert names_agree("Frank's International N.V.", "FRANKS INTERNATIONAL NV")
+    # two words on each side still need two shared words, a possessive counted once
+    assert not names_agree("Macy's Foods Inc", "MACYS RETAIL HOLDINGS INC")
+    assert not names_agree("MACY MACYS FOODS", "Macy's Retail Holdings")
