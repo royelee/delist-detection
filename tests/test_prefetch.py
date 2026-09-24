@@ -6,17 +6,32 @@ prefetch.Serialized: one call at a time into a client that is not thread-safe.
 The `warm` tests order their threads with barriers and events, never with sleeps,
 so a correct `warm` passes whatever the scheduling. Every wait carries HANG as a
 timeout only so that a wrong `warm` fails instead of hanging the suite."""
+import copy
+import json
+import logging
 import threading
 import time
+from datetime import date
 
 import pytest
 
 from delist_detection import edgar, prefetch
-from delist_detection.edgar import EdgarBlocked, PrefetchCancelled, RateLimiter, filling_only
+from delist_detection.edgar import SEC_STATS, EdgarBlocked, EdgarClient, PrefetchCancelled, RateLimiter, filling_only
 from delist_detection.openfigi import OpenFigiBlocked
 from delist_detection.prefetch import Serialized, warm
 
 HANG = 5.0      # seconds; reached only when the code under test is wrong
+SUB_URL = "https://data.sec.gov/submissions/CIK0000000042.json"
+
+
+def _warm_failures(mark):
+    """The warm_failed:<name> counts added to SEC_STATS since `mark`."""
+    return {k: v for k, v in SEC_STATS.since(mark)[0].items() if k.startswith("warm_failed:")}
+
+
+def _warnings(caplog):
+    return [r.getMessage() for r in caplog.records
+            if r.name == "delist_detection.prefetch" and r.levelno >= logging.WARNING]
 
 
 class _Clock:
@@ -68,7 +83,7 @@ def test_one_worker_warms_nothing():
     assert calls == []
 
 
-def test_every_item_is_warmed_once_and_ordinary_failures_are_ignored():
+def test_every_item_is_warmed_once_and_an_ordinary_failure_does_not_stop_the_pass():
     seen, guard, after_ran = [], threading.Lock(), threading.Event()
 
     def task(item):
@@ -81,8 +96,31 @@ def test_every_item_is_warmed_once_and_ordinary_failures_are_ignored():
         else:
             after_ran.set()
 
+    mark = SEC_STATS.snapshot()
     assert warm(["waits", "fails", "after"], task, workers=2, limiter=_Limiter()) == 3
     assert sorted(seen) == ["after", "fails", "waits"]
+    assert _warm_failures(mark) == {"warm_failed:warm": 1}      # the default pass name
+
+
+def test_a_pass_whose_every_task_raises_returns_and_reports_each_failure(caplog):
+    def task(item):
+        raise ValueError(f"item {item} could not be parsed")
+
+    mark = SEC_STATS.snapshot()
+    with caplog.at_level(logging.DEBUG, logger="delist_detection.prefetch"):
+        assert warm([1, 2, 3, 4], task, workers=2, limiter=_Limiter(), name="payouts") == 4
+    assert _warm_failures(mark) == {"warm_failed:payouts": 4}
+    assert _warnings(caplog) == ["warm pass payouts: 4 of 4 items raised; the sequential pass re-runs them"]
+    debug = [r for r in caplog.records if r.name == "delist_detection.prefetch" and r.levelno == logging.DEBUG]
+    assert sorted(r.getMessage() for r in debug) == ["warm 1 failed", "warm 2 failed", "warm 3 failed", "warm 4 failed"]
+    assert all(r.exc_info and r.exc_info[0] is ValueError for r in debug)   # each with its traceback
+
+
+def test_a_pass_with_no_failure_warns_nothing(caplog):
+    mark = SEC_STATS.snapshot()
+    with caplog.at_level(logging.DEBUG, logger="delist_detection.prefetch"):
+        warm([1, 2, 3], lambda item: None, workers=2, limiter=_Limiter(), name="payouts")
+    assert _warm_failures(mark) == {} and _warnings(caplog) == []
 
 
 def test_every_task_runs_fill_only():
@@ -123,9 +161,33 @@ def test_each_worker_gets_its_own_state_object_built_on_the_calling_thread():
     assert len(set(at_once.values())) == 3 and set(used) == set(at_once.values())
 
 
+def test_the_state_factory_reads_fill_only_and_never_refreshes_a_cached_copy(tmp_path):
+    calls = []
+
+    class _Session:
+        def get(self, url, headers=None, timeout=None):
+            calls.append(url)
+            raise AssertionError("a state factory refreshed a cached copy")
+
+    client = EdgarClient(cache_dir=tmp_path, user_agent="Test Co test@example.com", session=_Session(),
+                         sleep=lambda _: None)
+    cp = client._cache_path(SUB_URL)
+    old = {"name": "Old Co", "__fetched__": "2020-01-01"}
+    cp.write_text(json.dumps(old))
+    read = []
+
+    def shadow():                              # a factory that reads EDGAR as it builds, as a resolver may
+        read.append(client.submissions(42, fresh_after=date(2026, 9, 1)))   # older than asked for
+        return object()
+
+    warm([1, 2], lambda state, item: None, workers=2, state=shadow, limiter=_Limiter())
+    assert read == [old, old] and calls == []
+    assert json.loads(cp.read_text()) == old
+
+
 @pytest.mark.parametrize("refusal", [EdgarBlocked("SEC returned 403"), OpenFigiBlocked("OpenFIGI returned 401")])
-def test_a_refusal_stops_the_pool_and_is_raised(refusal):
-    lim = _Limiter()
+def test_a_refusal_stops_the_pool_and_is_raised(refusal, caplog):
+    lim, mark = _Limiter(), SEC_STATS.snapshot()
     in_flight = threading.Barrier(3, timeout=HANG)   # two workers mid-chain, and the one about to be refused
     outcome, refused_on, later = [], [], []
 
@@ -146,6 +208,7 @@ def test_a_refusal_stops_the_pool_and_is_raised(refusal):
     assert outcome == ["cancelled", "cancelled"]   # every other worker's next request never went out
     assert lim.count == 2                      # only the two requests already out before the refusal
     assert later == []                         # no item started after the refusal
+    assert _warm_failures(mark) == {} and _warnings(caplog) == []   # neither the refusal nor a cancel is a failure
 
 
 def test_the_process_wide_limiter_is_the_default(monkeypatch):
@@ -190,8 +253,8 @@ def test_the_refused_worker_stops_the_pool_before_it_takes_another_item(monkeypa
     assert outcome == ["cancelled"] and lim.count == 1
 
 
-def test_an_interrupt_stops_the_workers_and_is_raised(monkeypatch):
-    lim = _Limiter()
+def test_an_interrupt_stops_the_workers_and_is_raised(monkeypatch, caplog):
+    lim, mark = _Limiter(), SEC_STATS.snapshot()
     in_flight, outcome, later = threading.Barrier(3, timeout=HANG), [], []
 
     def task(item):
@@ -209,6 +272,7 @@ def test_an_interrupt_stops_the_workers_and_is_raised(monkeypatch):
         warm(["a", "b", "later"], task, workers=2, limiter=lim)
     assert outcome == ["cancelled", "cancelled"] and lim.count == 2
     assert later == []
+    assert _warm_failures(mark) == {} and _warnings(caplog) == []
 
 
 def test_a_serialized_client_runs_one_call_at_a_time():
@@ -246,3 +310,13 @@ def test_a_serialized_call_that_is_cancelled_releases_the_lock():
     with pytest.raises(PrefetchCancelled):
         s.fetch(True)
     assert s.fetch(False) == "ok"
+
+
+def test_a_serialized_client_can_be_copied():
+    class _Client:
+        def fetch(self):
+            return "ok"
+
+    s = Serialized(_Client())
+    c = copy.copy(s)                           # a copy is built with no _obj yet: it must not recurse
+    assert c._obj is s._obj and c.fetch() == "ok"

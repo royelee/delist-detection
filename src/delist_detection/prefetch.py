@@ -12,6 +12,7 @@ same inputs and caches -> byte-identical CSVs).
 """
 from __future__ import annotations
 
+import logging
 import queue
 import threading
 from collections.abc import Callable, Iterable
@@ -19,8 +20,10 @@ from concurrent.futures import FIRST_EXCEPTION, ThreadPoolExecutor, wait
 from typing import Any
 
 from . import edgar as _edgar
-from .edgar import EdgarBlocked, PrefetchCancelled, RateLimiter, fill_only
+from .edgar import SEC_STATS, EdgarBlocked, PrefetchCancelled, RateLimiter, fill_only
 from .openfigi import OpenFigiBlocked
+
+log = logging.getLogger(__name__)
 
 FATAL = (EdgarBlocked, OpenFigiBlocked)
 
@@ -40,6 +43,10 @@ class Serialized:
         self._lock = threading.Lock()
 
     def __getattr__(self, name: str) -> Any:
+        # Never forward a protocol method, nor look up our own fields before they
+        # exist: `copy.copy` builds the copy without __init__, then probes it.
+        if name.startswith("__") or name in ("_obj", "_lock"):
+            raise AttributeError(name)
         attr = getattr(self._obj, name)
         if not callable(attr):
             return attr
@@ -51,30 +58,46 @@ class Serialized:
 
 
 def warm(items: Iterable[Any], task: Callable[..., object], *, workers: int,
-         state: Callable[[], Any] | None = None, limiter: RateLimiter | None = None) -> int:
+         state: Callable[[], Any] | None = None, limiter: RateLimiter | None = None,
+         name: str = "warm") -> int:
     """Run `task(item)` -- or `task(state_obj, item)` when `state` is given -- for
     every item on up to `workers` threads, and return the number of items handed
-    to the pool. `limiter` defaults to `edgar.SEC_LIMITER` at call time.
+    to the pool. `name` labels the pass in the log and in SEC_STATS.
 
-    `state` is called on this thread once per worker; a worker takes one of those
-    objects for each item, so an object is never used by two threads at once (a
-    shadow resolver, a finder). Every task runs under `edgar.fill_only()`. A task
-    that raises an ordinary exception is ignored: the sequential pass meets the
-    same failure and records it as it always has. `workers <= 1` warms nothing:
-    the sequential pass fetches everything itself, one request at a time.
+    `limiter` is a test seam; it defaults to `edgar.SEC_LIMITER`, read at call
+    time. A production pass must leave it at that default: real requests reach
+    the limiter through `edgar._throttle`, which reads that global, so a stop
+    bound to any other limiter never cancels them.
+
+    `state` is called on this thread once per worker, under `edgar.fill_only()`
+    like the tasks; a worker takes one of those objects for each item, so an
+    object is never used by two threads at once (a shadow resolver, a finder).
+    Every task runs under `edgar.fill_only()`. A task that raises an ordinary
+    exception does not stop the pass: the sequential pass meets the same failure
+    and records it as it always has. Each such failure is logged at DEBUG with
+    its traceback and counted in SEC_STATS as `warm_failed:<name>`, and a pass
+    with any ends with one WARNING giving the count, since a failure only a
+    worker thread meets (a concurrency bug) would otherwise go unseen.
+    `workers <= 1` warms nothing: the sequential pass fetches everything itself,
+    one request at a time.
 
     A refusal (EdgarBlocked, OpenFigiBlocked) or an interrupt stops the pool: no
     item starts after it, every running worker's next SEC request raises
     PrefetchCancelled instead of going out, and the refusal or interrupt is
-    raised here once the workers have stopped. On a first Ctrl-C this function
-    waits for the workers; each finishes the one request it has in flight (an
-    EDGAR request times out after 30 s without an answer, a SEC data-file
-    download such as a MIDAS ZIP after 180 s). A second Ctrl-C during that wait
-    interrupts the wait itself and propagates at once, but the workers are not
-    daemon threads, so the interpreter still waits for each one's in-flight
-    request before the process exits; no queued item starts meanwhile, since the
-    stop is set before the wait. Nothing is torn either way: every cache file is
-    written atomically, and the tables are written only at the end of a run.
+    raised here once the workers have stopped. Neither is counted as a failure.
+    A stopped worker may first sleep out a retry backoff or a shared pause (at
+    most 4 s) before that next request raises, and a request to another service
+    (OpenFIGI, the Nasdaq halt feed) goes through no SEC limiter, so it is not
+    cancelled: the worker stops at its next SEC request after it. On a first
+    Ctrl-C this function waits for the workers; each finishes the one request it
+    has in flight (an EDGAR request times out after 30 s without an answer, a
+    SEC data-file download such as a MIDAS ZIP after 180 s). A second Ctrl-C
+    during that wait interrupts the wait itself and propagates at once, but the
+    workers are not daemon threads, so the interpreter still waits for each
+    one's in-flight request before the process exits; no queued item starts
+    meanwhile, since the stop is set before the wait. Nothing is torn either
+    way: every cache file is written atomically, and the tables are written only
+    at the end of a run.
     """
     items = list(items)
     if workers <= 1 or not items:
@@ -82,9 +105,11 @@ def warm(items: Iterable[Any], task: Callable[..., object], *, workers: int,
     lim = limiter if limiter is not None else _edgar.SEC_LIMITER
     n = min(workers, len(items))
     states: queue.SimpleQueue = queue.SimpleQueue()
-    for _ in range(n):
-        states.put(state() if state is not None else None)
+    with fill_only():                      # a factory that reads EDGAR never refreshes a cached copy either
+        for _ in range(n):
+            states.put(state() if state is not None else None)
     stop = threading.Event()
+    failed: list[Any] = []                 # list.append is atomic: workers add to it without a lock
 
     def run(item: Any) -> None:
         if stop.is_set():
@@ -101,8 +126,10 @@ def warm(items: Iterable[Any], task: Callable[..., object], *, workers: int,
         except FATAL:
             stop.set()                     # before this thread can pick up another item
             raise
-        except Exception:                  # noqa: BLE001 -- best effort; the sequential pass reports it
-            pass
+        except Exception:                  # noqa: BLE001 -- the sequential pass meets it again and reports it
+            log.debug("warm %r failed", item, exc_info=True)
+            SEC_STATS.add(f"warm_failed:{name}")
+            failed.append(item)
         finally:
             states.put(obj)
 
@@ -118,4 +145,7 @@ def warm(items: Iterable[Any], task: Callable[..., object], *, workers: int,
         pool.shutdown(wait=True, cancel_futures=True)
         raise
     pool.shutdown(wait=True)
+    if failed:
+        log.warning("warm pass %s: %d of %d items raised; the sequential pass re-runs them",
+                    name, len(failed), len(items))
     return len(items)

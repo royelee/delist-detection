@@ -13,7 +13,7 @@ from pathlib import Path
 
 import requests
 
-from .edgar import SEC_STATS, _throttle, resolve_user_agent, retry_request
+from .edgar import SEC_STATS, _throttle, filling_only, resolve_user_agent, retry_request
 
 
 def _get(url: str, session, user_agent: str | None, timeout: int, *, sleep=time.sleep):
@@ -50,8 +50,12 @@ def download(url: str, dest: str | Path, *, session=None, user_agent: str | None
 
 def get_text(url: str, cache_file: str | Path, *, max_age_days: float = 7, session=None,
              user_agent: str | None = None, sleep=time.sleep) -> str:
+    """`url`'s text, cached in `cache_file` and fetched again once the copy is
+    `max_age_days` old; a failed refetch serves the old copy. On a prefetch
+    thread (`edgar.fill_only()`) an existing copy of any age is returned with no
+    request, so only the sequential pass refreshes it, in its own order."""
     cf = Path(cache_file)
-    if cf.exists() and time.time() - cf.stat().st_mtime < max_age_days * 86400:
+    if cf.exists() and (filling_only() or time.time() - cf.stat().st_mtime < max_age_days * 86400):
         return cf.read_text(encoding="utf-8", errors="replace")
     try:
         resp = _get(url, session, user_agent, timeout=60, sleep=sleep)

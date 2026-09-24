@@ -7,7 +7,7 @@ import pytest
 import requests
 
 from delist_detection import sec_http
-from delist_detection.edgar import EdgarBlocked, EdgarClient
+from delist_detection.edgar import EdgarBlocked, EdgarClient, fill_only
 
 
 class _Resp:
@@ -260,3 +260,18 @@ def test_full_text_search_holds_an_open_windows_answer_for_seven_days_only(tmp_p
     assert EdgarClient(cache_dir=tmp_path, user_agent="ua", session=s3,
                        today=today + timedelta(days=7)).full_text_search('"X CO"', "8-K12B", lo, today) == []
     assert len(s3.calls) == 1
+
+
+def test_get_text_on_a_prefetch_thread_keeps_an_old_copy_and_fills_a_missing_one(tmp_path):
+    cf = tmp_path / "index.html"
+    cf.write_text("old")
+    long_ago = time.time() - 400 * 86400
+    os.utime(cf, (long_ago, long_ago))
+    s = _Session(_Resp(text="missing"), _Resp(text="new"))
+    with fill_only():
+        assert sec_http.get_text("u", cf, max_age_days=30, session=s, user_agent="ua") == "old"   # no refresh
+        assert sec_http.get_text("m", tmp_path / "missing.html", max_age_days=30, session=s,
+                                 user_agent="ua") == "missing"                                  # filled
+    assert s.calls == ["m"] and cf.read_text() == "old"
+    assert sec_http.get_text("u", cf, max_age_days=30, session=s, user_agent="ua") == "new"      # outside: refreshed
+    assert s.calls == ["m", "u"]
