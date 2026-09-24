@@ -16,8 +16,8 @@ from .crsp_codes import CrspBucket
 from .edgar import EdgarSubmission
 from .figi_resolution import class_letter
 from .form25 import (
-    REGIONAL_EXCHANGES, Form25, SecurityRef, class_kind, class_label, effective_date, exchange_label, list_form25,
-    match_security, notice_last_trade, parse_form25,
+    REGIONAL_EXCHANGES, Form25, SecurityRef, class_kind, class_letters, effective_date, exchange_label, list_form25,
+    match_securities, notice_last_trade, parse_form25,
 )
 from .last_trade import LastTrade, decide_last_trade, eightk_last_trade
 from .listing_status import exchanges_around, withdrawal_kind
@@ -122,13 +122,13 @@ class DelistingFinder:
         return lo <= filing_date <= hi
 
     def _class_conflict(self, f25: Form25, ref: SecurityRef) -> bool:
-        """True when the Form 25's class letter and the matched sibling's class
-        letter both exist and disagree: `match_security`'s single-sibling branch
+        """True when the Form 25 names class letters and the matched sibling's
+        class letter is not one of them: `match_securities`' single-sibling branch
         (`len(same) == 1`) accepts by elimination without checking letters, so
         this is the backstop for a class the universe doesn't actually hold."""
-        f_letter = class_letter(class_label(f25.class_text))
+        f_letters = class_letters(f25.class_text)
         r_letter = class_letter(ref.share_class)
-        return bool(f_letter and r_letter and f_letter != r_letter)
+        return bool(f_letters and r_letter and r_letter not in f_letters)
 
     # -- last trade (single filing; used by the no-Form-25 fallback) -----
     def _eightk_window(self, cik: int, filings: list[EdgarSubmission], lo: date, hi: date,
@@ -311,16 +311,16 @@ class DelistingFinder:
                 self._review(review, seen_review, sec, ticker_last, cik, "form25_unclassified",
                              f"{sub.form} {sub.accession} ({f25.class_text!r}) has no recognized class", sub)
                 continue
-            matched, why = match_security(f25, alive)
-            if matched is None:
+            matched, why = match_securities(f25, alive)
+            if not matched:
                 if why == "ambiguous class":
                     had_unmatched = True
                     self._review(review, seen_review, sec, ticker_last, cik, "form25_unmatched",
                                  f"{sub.form} {sub.accession} ({f25.class_text!r}): {why}", sub)
                 continue
-            if matched != sec.sec_id:
+            if sec.sec_id not in matched:
                 continue
-            ref = next((r for r in alive if r.sec_id == matched), None)
+            ref = next((r for r in alive if r.sec_id == sec.sec_id), None)
             if ref is not None and self._class_conflict(f25, ref):
                 continue
             eff = effective_date(sub.filing_date)
@@ -441,7 +441,7 @@ class DelistingFinder:
         before the main scan's floor, with its early neighbours within
         SAME_EVENT_DAYS — each kept only when it matches this security by the
         main scan's own rules (readable, not regional, a recognized class, and
-        `match_security` against this security and the siblings alive then).
+        `match_securities` against this security and the siblings alive then).
         The security itself counts as alive: its first sighting is what put
         the filing before the floor. Empty when `picked` is not early."""
         sec = ctx.security
@@ -449,7 +449,7 @@ class DelistingFinder:
         if anchor is None:
             return []
         own = next((r for r in ctx.siblings if r.sec_id == sec.sec_id), SecurityRef(sec.sec_id, sec.share_class,
-                                                                                     sec.kind))
+                                                                                     sec.kind, sec.name))
         group: list[tuple[EdgarSubmission, Form25]] = []
         for sub in early:
             if abs((_d(sub.filing_date) - _d(anchor.filing_date)).days) > SAME_EVENT_DAYS:
@@ -462,8 +462,8 @@ class DelistingFinder:
                 continue
             alive = [own] + [r for r in ctx.siblings
                              if r.sec_id != sec.sec_id and self._alive_at(ctx, r.sec_id, sub.filing_date)]
-            matched, _ = match_security(f25, alive)
-            if matched == sec.sec_id and not self._class_conflict(f25, own):
+            matched, _ = match_securities(f25, alive)
+            if sec.sec_id in matched and not self._class_conflict(f25, own):
                 group.append((sub, f25))
         return group
 

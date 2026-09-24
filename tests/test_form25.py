@@ -4,7 +4,7 @@ from pathlib import Path
 from delist_detection.edgar import EdgarSubmission
 from delist_detection.form25 import (
     Form25, SecurityRef, class_kind, class_label, effective_date, exchange_label, exchanges_named,
-    list_form25, match_security, notice_last_trade, parse_form25,
+    list_form25, match_securities, match_security, notice_last_trade, parse_form25,
 )
 
 FIX = Path(__file__).parent / "fixtures" / "form25"
@@ -213,3 +213,38 @@ def test_edgars_bare_cboe_exchange_string_is_cboe_bzx():
     assert exchange_label("Cboe") == "CBOE BZX"
     assert exchange_label("CBOE BZX") == "CBOE BZX" and exchange_label("BATS") == "CBOE BZX"
     assert exchange_label("Cboe Exchange, Inc.") == ""
+
+
+LIBERTY_LIVE_CLASSES = ("Liberty Media Corporation Series A Liberty Live Common Stock & \t"
+                        "Liberty Media Corporation Series C Liberty Live Common Stock")
+
+
+def _liberty_refs():
+    return [SecurityRef("LLYVA", "CLASS A", "common", "LIBERTY MEDIA LIBERTY LIVE CORP SE"),
+            SecurityRef("LLYVK", "CLASS C", "common", "LIBERTY MEDIA LIBERTY LIVE CORP SE"),
+            SecurityRef("FWONA", "CLASS A", "common", "LIBERTY MEDIA FORMULA ONE SERIES A"),
+            SecurityRef("FWONK", "CLASS C", "common", "LIBERTY MEDIA FORMULA ONE SERIES C")]
+
+
+def test_a_tracking_stock_form25_matches_each_named_class_by_its_group_name():
+    """Liberty Media's 2025 Liberty Live split-off: one Form 25 names Series A
+    and Series C Liberty Live Common Stock while the Formula One group's Series
+    A and C (same issuer, same letters) keep trading. Each named class matches
+    the sibling of its letter whose name carries that class's own words."""
+    f = Form25("a", "25-NSE", "2025-12-15", "NASDAQ", LIBERTY_LIVE_CLASSES, "", "")
+    assert match_securities(f, _liberty_refs()) == (["LLYVA", "LLYVK"], "class A, C by name")
+
+
+def test_same_letter_siblings_with_no_distinguishing_name_stay_ambiguous():
+    f = Form25("a", "25-NSE", "2025-12-15", "NASDAQ", "Series A Common Stock", "", "")
+    refs = [SecurityRef("X1", "CLASS A", "common", "LIBERTY MEDIA CORP"),
+            SecurityRef("X2", "CLASS A", "common", "LIBERTY MEDIA CORP")]
+    assert match_securities(f, refs) == ([], "ambiguous class")
+    assert match_security(f, refs) == (None, "ambiguous class")
+
+
+def test_a_form25_naming_several_classes_matches_each_of_them():
+    f = Form25("a", "25-NSE", "2020-01-02", "NYSE", "Class A Common Stock; Class B Common Stock", "", "")
+    refs = [SecurityRef("A", "CLASS A", "common"), SecurityRef("B", "CLASS B", "common"),
+            SecurityRef("C", "CLASS C", "common")]
+    assert match_securities(f, refs) == (["A", "B"], "class A, B")

@@ -14,6 +14,7 @@ from datetime import date, datetime, timedelta
 
 from .edgar import EdgarSubmission, _strip_html
 from .figi_resolution import class_letter
+from .names import name_tokens
 from .trading_calendar import previous_trading_day
 
 FORM25_FORMS = frozenset({"25", "25-NSE", "25/A", "25-NSE/A"})
@@ -175,22 +176,24 @@ def class_kind(class_text: str) -> str:
 # A class letter is only real when it names the security's own class, not a
 # security attached to it (a rights-plan clause naming its own "Series A
 # Junior Participating Preferred Stock", or a warrant on a different class).
-# Split the whole text into segments at each comma, semicolon, "(", " AND " or
-# " WITH ", drop any segment that names an attached security (RIGHTS or
-# WARRANT), and — only when the class itself is common — also drop a segment
-# naming the preferred/preference security the rights are usually attached to
-# ("Class A Common Stock and associated Series B Preferred Stock Purchase
-# Rights" must not read as Series B). A preferred security keeps its own
-# "Series C"/"Series F" segment ("Preferred Stock, Series C"; "5.750% ...
+# Split the whole text into segments at each comma, semicolon, "(", "&",
+# " AND " or " WITH ", drop any segment that names an attached security
+# (RIGHTS or WARRANT), and — only when the class itself is common — also drop
+# a segment naming the preferred/preference security the rights are usually
+# attached to ("Class A Common Stock and associated Series B Preferred Stock
+# Purchase Rights" must not read as Series B). A preferred security keeps its
+# own "Series C"/"Series F" segment ("Preferred Stock, Series C"; "5.750% ...
 # Preference Share, Series F") since there's no other class it could belong
 # to. A Liberty-style tracking stock ("Series A Liberty SiriusXM Common
 # Stock") still carries its class as a series in its own (kept) segment.
-_SEGMENT_END = re.compile(r"[,;(]| AND | WITH ")
+_SEGMENT_END = re.compile(r"[,;(&]| AND | WITH ")
 _ATTACHED_SECURITY = re.compile(r"RIGHTS|WARRANT")
 _PREFERRED_WORD = re.compile(r"PREFERRED|PREFERENCE")
+_CLASS_WORD = re.compile(r"\bCLASS\s+([A-Z])\b")
+_SERIES_WORD = re.compile(r"\bSERIES\s+([A-Z])\b")
 
 
-def class_label(class_text: str) -> str | None:
+def _kept_segments(class_text: str) -> list[str]:
     s = (class_text or "").upper()
     is_common = class_kind(class_text) == "common"
     kept = []
@@ -200,15 +203,27 @@ def class_label(class_text: str) -> str | None:
         if is_common and _PREFERRED_WORD.search(seg):
             continue
         kept.append(seg)
+    return kept
+
+
+def _lettered_segments(class_text: str) -> list[tuple[str, str]]:
+    """(label, segment) for each kept segment naming a class: its CLASS letter,
+    or its SERIES letter when no segment names a CLASS."""
+    kept = _kept_segments(class_text)
+    pat, word = ((_CLASS_WORD, "CLASS") if any(_CLASS_WORD.search(seg) for seg in kept)
+                 else (_SERIES_WORD, "SERIES"))
+    out = []
     for seg in kept:
-        m = re.search(r"\bCLASS\s+([A-Z])\b", seg)
+        m = pat.search(seg)
         if m:
-            return f"CLASS {m.group(1)}"
-    for seg in kept:
-        m = re.search(r"\bSERIES\s+([A-Z])\b", seg)
-        if m:
-            return f"SERIES {m.group(1)}"
-    return None
+            out.append((f"{word} {m.group(1)}", seg))
+    return out
+
+
+def class_label(class_text: str) -> str | None:
+    """The first class the text names ("CLASS A", "SERIES C"), or None."""
+    got = _lettered_segments(class_text)
+    return got[0][0] if got else None
 
 
 @dataclass(frozen=True)
@@ -216,21 +231,60 @@ class SecurityRef:
     sec_id: str
     share_class: str
     kind: str
+    name: str = ""
 
 
-def match_security(f25: Form25, refs: Sequence[SecurityRef]) -> tuple[str | None, str]:
+def _named_by(segment: str, hits: Sequence[SecurityRef]) -> list[SecurityRef]:
+    """The hits whose own name words (those not shared by every hit) appear in
+    the Form 25's segment: Liberty Media's Series A Liberty Live and Series A
+    Formula One share the issuer and the letter, and only the group name tells
+    them apart."""
+    toks = [name_tokens(r.name) for r in hits]
+    common = set.intersection(*toks) if toks else set()
+    words = name_tokens(segment)
+    return [r for r, t in zip(hits, toks) if (t - common) & words]
+
+
+def match_securities(f25: Form25, refs: Sequence[SecurityRef]) -> tuple[list[str], str]:
+    """Every security of `refs` the Form 25 removes: the only one of its kind,
+    or, per class the text names, the one sibling of that letter (among several
+    of one letter, the one whose name the class's own words pick out)."""
     kind = class_kind(f25.class_text)
     same = [r for r in refs if r.kind == kind or (kind == "other" and r.kind == "common")]
     if not same:
-        return None, f"no observed {kind} security"
+        return [], f"no observed {kind} security"
     if len(same) == 1:
-        return same[0].sec_id, "only security of its kind"
-    letter = class_letter(class_label(f25.class_text))
-    if letter:
+        return [same[0].sec_id], "only security of its kind"
+    matched: list[str] = []
+    letters: list[str] = []
+    by_name = False
+    for label, seg in _lettered_segments(f25.class_text):
+        letter = class_letter(label)
         hits = [r for r in same if class_letter(r.share_class) == letter]
-        if len(hits) == 1:
-            return hits[0].sec_id, f"class {letter}"
-    return None, "ambiguous class"
+        named = len(hits) > 1
+        if named:
+            hits = _named_by(seg, hits)
+        if len(hits) == 1 and hits[0].sec_id not in matched:
+            matched.append(hits[0].sec_id)
+            letters.append(letter)
+            by_name = by_name or named
+    if not matched:
+        return [], "ambiguous class"
+    return matched, f"class {', '.join(dict.fromkeys(letters))}" + (" by name" if by_name else "")
+
+
+def match_security(f25: Form25, refs: Sequence[SecurityRef]) -> tuple[str | None, str]:
+    """The one security the Form 25 removes (see match_securities); None when
+    it names none of `refs` or several."""
+    matched, why = match_securities(f25, refs)
+    if len(matched) == 1:
+        return matched[0], why
+    return None, why if not matched else "several classes"
+
+
+def class_letters(class_text: str) -> set[str]:
+    """Every class letter the Form 25's text names."""
+    return {class_letter(label) for label, _ in _lettered_segments(class_text)} - {None}
 
 
 def _day(s: str) -> date:

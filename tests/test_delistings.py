@@ -678,3 +678,27 @@ def test_cik_none_listing_status_unknown(fake_edgar):
     events, review = DelistingFinder(fake_edgar, clf).find(_ctx(sec, listed=None, last_seen="2020-01-01"))
     assert events == []
     assert [(r.flag, r.cik, r.last_seen) for r in review] == [("listing_status_unknown", None, "2020-01-01")]
+
+
+def test_the_second_class_a_form25_names_gets_its_delisting(fake_edgar):
+    """The Liberty Live Form 25 names Series A and then Series C: the Series C
+    line (LLYVK) is delisted by it as much as the Series A line, while the
+    Formula One group's Series C sibling is not."""
+    fake_edgar.submissions_by_cik[1560385] = [
+        EdgarSubmission("l1", "8-K", "2025-12-15", "2025-12-15", "1.01,2.01,3.01,7.01,8.01,9.01", "k.htm"),
+        EdgarSubmission("l2", "25-NSE", "2025-12-15", "", "", "p.xml")]
+    fake_edgar.raws["l2"] = _f25_raw("The Nasdaq Stock Market LLC", class_text=(
+        "Liberty Media Corporation Series A Liberty Live Common Stock &amp; "
+        "Liberty Media Corporation Series C Liberty Live Common Stock"))
+    clf = DelistClassifier(fake_edgar, TickerResolver(fake_edgar))
+    sec = _sec("LLYVK", 1560385, "LLYVK", "2023-08-04", "2025-12-12", "LIBERTY MEDIA LIBERTY LIVE CORP SE")
+    sec.share_class = "CLASS C"
+    ctx = _ctx(sec, last_seen="2025-12-12")
+    ctx.siblings = [SecurityRef("LLYVA", "CLASS A", "common", "LIBERTY MEDIA LIBERTY LIVE CORP SE"),
+                    SecurityRef("LLYVK", "CLASS C", "common", "LIBERTY MEDIA LIBERTY LIVE CORP SE"),
+                    SecurityRef("FWONA", "CLASS A", "common", "LIBERTY MEDIA FORMULA ONE SERIES A"),
+                    SecurityRef("FWONK", "CLASS C", "common", "LIBERTY MEDIA FORMULA ONE SERIES C")]
+    events, review = DelistingFinder(fake_edgar, clf).find(ctx)
+    assert [r.flag for r in review if r.flag == "form25_unmatched"] == []
+    (ev,) = events
+    assert (ev.sec_id, ev.delist_date) == ("LLYVK", "2025-12-25")

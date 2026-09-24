@@ -474,7 +474,7 @@ def run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_
     siblings: dict[int, list[SecurityRef]] = defaultdict(list)
     for s in securities.values():
         if s.issuer_cik is not None:
-            siblings[s.issuer_cik].append(SecurityRef(s.sec_id, s.share_class, s.kind))
+            siblings[s.issuer_cik].append(SecurityRef(s.sec_id, s.share_class, s.kind, s.name))
     finder = DelistingFinder(clients.edgar, clients.classifier, midas=clients.midas, halts=clients.halts)
     events: list[DelistingEvent] = []
     listed: dict[str, bool | None] = {}
@@ -482,7 +482,7 @@ def run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_
     for i, s in enumerate(sorted(securities.values(), key=lambda s: s.sec_id), 1):
         sig = sightings[s.sec_id]
         own_last_seen = _own_last_seen(s, sig)
-        sibs = siblings.get(s.issuer_cik) or [SecurityRef(s.sec_id, s.share_class, s.kind)]
+        sibs = siblings.get(s.issuer_cik) or [SecurityRef(s.sec_id, s.share_class, s.kind, s.name)]
         # sec_id -> (first sighting, last own-ticker sighting) for every security
         # sharing this issuer CIK, from the same sightings built above; a sibling
         # with no sightings gets no entry (the finder treats it as alive at every
