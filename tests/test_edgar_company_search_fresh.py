@@ -1,18 +1,15 @@
-"""EdgarClient.company_search_atom caching: bounded freshness, never negative.
-
-company_search_atom never cached anything before this fix — every call hit
-the network directly, unlike submissions() which already goes through
-_get_json's freshness-bounded cache. This gives it the same disk cache
-(FETCHED_KEY + the stored fetch date), but never persists an empty or error
-answer (that would silently and permanently stand in for a real hit once
-written), and treats anything older than 7 days as stale."""
+"""EdgarClient.company_search_atom caching: every answer, hits or empty, is cached
+with its fetch date and trusted for 7 days; a failed request is retried, then
+serves a cached hit list marked stale, and with nothing to fall back on raises --
+an unanswered search is not an empty one."""
 import json
 import os
 from datetime import date, datetime, timedelta
 
+import pytest
 import requests
 
-from delist_detection.edgar import EdgarClient, FETCHED_KEY, WWW_SEC_HOST
+from delist_detection.edgar import EdgarClient, FETCHED_KEY, STALE_KEY, WWW_SEC_HOST, fill_only
 
 COMPANY = "SUNPOWER CORP"
 FORM = "25-NSE"
@@ -53,7 +50,7 @@ class _Session:
 
 def _client(tmp_path, **session_kw):
     session = _Session(**session_kw)
-    client = EdgarClient(cache_dir=tmp_path, session=session)
+    client = EdgarClient(cache_dir=tmp_path, session=session, sleep=lambda _: None)
     return client, session
 
 
@@ -101,102 +98,113 @@ def test_an_unstamped_stale_cache_is_dated_by_its_file_time(tmp_path):
     assert hits == HIT
 
 
-def test_an_empty_answer_is_not_written_to_the_cache(tmp_path):
+class _FailingSession(_Session):
+    def get(self, url, headers=None, timeout=None):
+        self.calls.append(url)
+        raise requests.ConnectionError("no route to host")
+
+
+def test_an_empty_answer_is_cached_for_7_days_like_a_hit(tmp_path):
     client, session = _client(tmp_path, text=ATOM_EMPTY)
     cp = client._cache_path(_url())
+    assert client.company_search_atom(COMPANY, form_type=FORM) == []
+    assert json.loads(cp.read_text()) == {"hits": [], FETCHED_KEY: date.today().isoformat()}
+    later, later_session = _client(tmp_path, text=ATOM_HIT)
+    assert later.company_search_atom(COMPANY, form_type=FORM) == []          # within 7 days: no request
+    assert later_session.calls == []
+    cp.write_text(json.dumps({"hits": [], FETCHED_KEY: (date.today() - timedelta(days=8)).isoformat()}))
+    again, again_session = _client(tmp_path, text=ATOM_HIT)
+    assert again.company_search_atom(COMPANY, form_type=FORM) == HIT        # expired: asked again
+    assert again_session.calls == [_url()]
 
-    hits = client.company_search_atom(COMPANY, form_type=FORM)
 
-    assert hits == []
-    assert session.calls == [_url()]
-    assert not cp.exists()
-
-
-def test_an_error_answer_is_not_written_to_the_cache(tmp_path):
+def test_an_error_answer_is_retried_then_raises_and_is_not_cached(tmp_path):
     client, session = _client(tmp_path, status=500)
-    cp = client._cache_path(_url())
-
-    hits = client.company_search_atom(COMPANY, form_type=FORM)
-
-    assert hits == []
-    assert session.calls == [_url()]
-    assert not cp.exists()
+    with pytest.raises(requests.HTTPError):
+        client.company_search_atom(COMPANY, form_type=FORM)
+    assert session.calls == [_url()] * 3
+    assert not client._cache_path(_url()).exists()
 
 
-def test_a_transport_failure_is_not_written_to_the_cache(tmp_path):
-    class _FailingSession(_Session):
-        def get(self, url, headers=None, timeout=None):
-            self.calls.append(url)
-            raise requests.ConnectionError("no route to host")
-
+def test_a_transport_failure_is_retried_then_raises(tmp_path):
     session = _FailingSession()
-    client = EdgarClient(cache_dir=tmp_path, session=session)
-    cp = client._cache_path(_url())
-
-    hits = client.company_search_atom(COMPANY, form_type=FORM)
-
-    assert hits == []
-    assert not cp.exists()
+    client = EdgarClient(cache_dir=tmp_path, session=session, sleep=lambda _: None)
+    with pytest.raises(requests.ConnectionError):
+        client.company_search_atom(COMPANY, form_type=FORM)
+    assert session.calls == [_url()] * 3
+    assert not client._cache_path(_url()).exists()
 
 
-def test_an_empty_answer_does_not_overwrite_a_stale_cache_and_is_retried_next_call(tmp_path):
-    """An empty refetch must not persist over a stale cached hit: the next
-    call retries rather than trusting the empty answer forever."""
+def test_an_empty_refetch_replaces_a_stale_hit_and_holds_for_7_days(tmp_path):
     client, session = _client(tmp_path, text=ATOM_EMPTY)
     cp = client._cache_path(_url())
-    stale = {"hits": HIT, FETCHED_KEY: (date.today() - timedelta(days=8)).isoformat()}
-    cp.write_text(json.dumps(stale))
-
-    hits = client.company_search_atom(COMPANY, form_type=FORM)
-
-    assert hits == []
-    assert json.loads(cp.read_text()) == stale     # untouched, not clobbered with an empty answer
+    cp.write_text(json.dumps({"hits": HIT, FETCHED_KEY: (date.today() - timedelta(days=8)).isoformat()}))
+    assert client.company_search_atom(COMPANY, form_type=FORM) == []
+    assert json.loads(cp.read_text())["hits"] == []
     assert session.calls == [_url()]
 
-    # the next call still sees a stale cache and retries, rather than being stuck
-    hits2 = client.company_search_atom(COMPANY, form_type=FORM)
-    assert hits2 == []
-    assert session.calls == [_url(), _url()]
 
-
-def test_a_5xx_during_a_refetch_serves_the_stale_cached_hit(tmp_path):
-    """Mirrors _get_json: a failed refresh must not turn a company with a
-    usable cached copy into an empty result."""
+def test_a_5xx_during_a_refetch_serves_the_stale_hit_marked_stale(tmp_path):
     client, session = _client(tmp_path, status=503)
     cp = client._cache_path(_url())
     stale = {"hits": HIT, FETCHED_KEY: (date.today() - timedelta(days=8)).isoformat()}
     cp.write_text(json.dumps(stale))
-
-    hits = client.company_search_atom(COMPANY, form_type=FORM)
-
-    assert hits == HIT
-    assert session.calls == [_url()]
-    assert json.loads(cp.read_text()) == stale     # the 5xx never touches the cache
+    assert client.company_search_atom(COMPANY, form_type=FORM) == [{**HIT[0], STALE_KEY: True}]
+    assert session.calls == [_url()] * 3
+    assert json.loads(cp.read_text()) == stale        # the failure never touches the cache
 
 
-def test_a_transport_failure_during_a_refetch_serves_the_stale_cached_hit(tmp_path):
-    class _FailingSession(_Session):
-        def get(self, url, headers=None, timeout=None):
-            self.calls.append(url)
-            raise requests.ConnectionError("no route to host")
-
+def test_a_transport_failure_during_a_refetch_serves_the_stale_hit_marked_stale(tmp_path):
     session = _FailingSession()
-    client = EdgarClient(cache_dir=tmp_path, session=session)
+    client = EdgarClient(cache_dir=tmp_path, session=session, sleep=lambda _: None)
     cp = client._cache_path(_url())
     stale = {"hits": HIT, FETCHED_KEY: (date.today() - timedelta(days=8)).isoformat()}
     cp.write_text(json.dumps(stale))
-
-    hits = client.company_search_atom(COMPANY, form_type=FORM)
-
-    assert hits == HIT
+    assert client.company_search_atom(COMPANY, form_type=FORM) == [{**HIT[0], STALE_KEY: True}]
     assert json.loads(cp.read_text()) == stale
 
 
-def test_a_failed_refetch_without_any_cached_copy_still_returns_empty(tmp_path):
-    client, session = _client(tmp_path, status=503)
+def test_a_failed_refetch_of_an_expired_empty_answer_raises(tmp_path):
+    client, _ = _client(tmp_path, status=503)
+    client._cache_path(_url()).write_text(json.dumps(
+        {"hits": [], FETCHED_KEY: (date.today() - timedelta(days=8)).isoformat()}))
+    with pytest.raises(requests.HTTPError):
+        client.company_search_atom(COMPANY, form_type=FORM)
+
+
+def test_a_failed_search_without_any_cached_copy_raises(tmp_path):
+    client, _ = _client(tmp_path, status=503)
+    with pytest.raises(requests.HTTPError):
+        client.company_search_atom(COMPANY, form_type=FORM)
+    assert not client._cache_path(_url()).exists()
+
+
+def test_a_prefetch_thread_reads_an_expired_answer_without_asking_again(tmp_path):
+    client, session = _client(tmp_path)
+    old = {"hits": HIT, FETCHED_KEY: (date.today() - timedelta(days=30)).isoformat()}
+    client._cache_path(_url()).write_text(json.dumps(old))
+    with fill_only():
+        assert client.company_search_atom(COMPANY, form_type=FORM) == HIT
+    assert session.calls == [] and json.loads(client._cache_path(_url()).read_text()) == old
+
+
+def test_without_the_search_cache_nothing_is_read_or_written(tmp_path):
+    session = _Session()
+    client = EdgarClient(cache_dir=tmp_path, session=session, search_cache=False)
     cp = client._cache_path(_url())
+    cp.write_text(json.dumps({"hits": [], FETCHED_KEY: date.today().isoformat()}))
+    assert client.company_search_atom(COMPANY, form_type=FORM) == HIT
+    assert session.calls == [_url()] and json.loads(cp.read_text())["hits"] == []
 
-    hits = client.company_search_atom(COMPANY, form_type=FORM)
 
-    assert hits == []
-    assert not cp.exists()
+def test_a_search_holds_its_cache_file_lock(tmp_path):
+    held = []
+
+    class _Probe(_Session):
+        def get(self, url, headers=None, timeout=None):
+            held.append(client._lock_for(str(client._cache_path(url))).locked())
+            return super().get(url, headers, timeout)
+
+    client = EdgarClient(cache_dir=tmp_path, session=_Probe())
+    client.company_search_atom(COMPANY, form_type=FORM)
+    assert held == [True]

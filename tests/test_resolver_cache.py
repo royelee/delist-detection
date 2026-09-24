@@ -5,6 +5,7 @@ import logging
 
 import requests
 
+from delist_detection.edgar import STALE_KEY
 from delist_detection.ticker_resolver import TickerResolver
 
 KEY = "ALTR|2025-03-26"
@@ -183,3 +184,68 @@ def test_a_cache_drops_only_the_answers_of_a_retired_rule(tmp_path, fake_edgar):
                                "source": "company_tickers_name_mismatch", "member_name": "DILLARDS INC CLASS A"}}}))
         r = TickerResolver(fake_edgar, cache_path=cache, member_names=_member("Altera Corp"))
         assert set(r._memo) == {KEY, "M|2026-06-30"}
+
+
+class _StaleEdgar:
+    """Wraps FakeEdgar; every submissions read is an older copy served because the refetch failed."""
+
+    def __init__(self, inner):
+        self.inner = inner
+
+    def __getattr__(self, name):
+        return getattr(self.inner, name)
+
+    def submissions(self, cik, fresh_after=None):
+        return {**self.inner.submissions(cik), STALE_KEY: True}
+
+
+def test_an_answer_read_from_a_stale_copy_is_not_persisted(tmp_path, fake_edgar):
+    cache = tmp_path / "res.json"
+    r = TickerResolver(_StaleEdgar(fake_edgar), cache_path=cache)
+    assert r.resolve("ALTR", "2025-03-26").cik == 1701732        # used for this run
+    assert r._transient is True
+    assert not cache.exists() or KEY not in cache.read_text()   # but not saved
+
+
+class _StaleSearch:
+    """Wraps FakeEdgar; the company search answers with a cached hit served after a failed refetch."""
+
+    def __init__(self, inner):
+        self.inner = inner
+
+    def __getattr__(self, name):
+        return getattr(self.inner, name)
+
+    def company_search_atom(self, company, form_type="25-NSE"):
+        return [{"cik": 999002, "name": "Liquidating Trust", "form": "25-NSE", "filing_date": "2019-11-06",
+                 STALE_KEY: True}]
+
+
+def test_a_name_search_answered_from_a_stale_hit_is_not_persisted(tmp_path, fake_edgar):
+    cache = tmp_path / "res.json"
+    r = TickerResolver(_StaleSearch(fake_edgar), cache_path=cache, member_names=_member("Liquidating Trust"))
+    res = r.resolve("NOPE", "2019-11-06")
+    assert (res.cik, res.source) == (999002, "name_search")
+    assert r._transient is True
+    assert not cache.exists() or "NOPE|2019-11-06" not in cache.read_text()
+
+
+class _SearchDown:
+    """Wraps FakeEdgar; EDGAR's company search cannot be reached."""
+
+    def __init__(self, inner):
+        self.inner, self.searches = inner, 0
+
+    def __getattr__(self, name):
+        return getattr(self.inner, name)
+
+    def company_search_atom(self, company, form_type="25-NSE"):
+        self.searches += 1
+        raise requests.ConnectionError("no route to host")
+
+
+def test_a_company_search_that_could_not_be_sent_marks_the_resolve_transient(fake_edgar):
+    e = _SearchDown(fake_edgar)
+    r = TickerResolver(e, member_names=_member("Nope Holdings Inc"))
+    assert r.resolve("NOPE", "2024-01-01").cik is None
+    assert e.searches > 0 and r._transient is True

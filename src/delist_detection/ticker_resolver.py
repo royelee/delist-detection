@@ -17,7 +17,7 @@ from typing import Iterable
 
 import requests
 
-from .edgar import EdgarBlocked, EdgarClient, submissions_fresh_after
+from .edgar import STALE_KEY, EdgarBlocked, EdgarClient, submissions_fresh_after
 from .evidence import first_filing, names_near, parse_day
 from .names import name_tokens, names_agree
 
@@ -112,11 +112,17 @@ class TickerResolver:
 
     def _submissions(self, cik: int, observed_date: str | None) -> dict:
         """The company's submissions, fetched again when the cached copy predates
-        the event window (the same freshness the classifier asks for)."""
+        the event window (the same freshness the classifier asks for). An older
+        copy served because that refetch failed is used, but marks this resolve
+        transient: what it leads to is not saved."""
         on = parse_day(observed_date)
         if on is None:
-            return self.edgar.submissions(cik)
-        return self.edgar.submissions(cik, fresh_after=submissions_fresh_after(on, self.today))
+            sub = self.edgar.submissions(cik)
+        else:
+            sub = self.edgar.submissions(cik, fresh_after=submissions_fresh_after(on, self.today))
+        if isinstance(sub, dict) and sub.get(STALE_KEY):
+            self._transient = True
+        return sub
 
     def _filings(self, cik: int, observed_date: str | None) -> list:
         """recent_filings, read after a fresh submissions read so both see one copy."""
@@ -363,6 +369,8 @@ class TickerResolver:
                 except Exception as e:
                     self._note_transient(e)
                     hits = []
+                if any(isinstance(h, dict) and h.get(STALE_KEY) for h in hits):
+                    self._transient = True       # a hit served after a failed refetch: never saved
                 for h in hits:
                     cik = int(h["cik"])
                     if cik in self.EXCHANGE_CIKS:

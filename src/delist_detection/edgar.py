@@ -565,6 +565,28 @@ class EdgarSubmission:
         return {x.strip() for x in self.items.split(",") if x.strip()}
 
 
+def _parse_company_atom(text: str) -> list[dict[str, Any]]:
+    """The hits of a cgi-bin/browse-edgar ATOM answer: the top company with each of
+    its filings, or the company alone when it lists none; [] when no company matched."""
+    import re as _re
+    ci_cik = _re.search(r"<cik>\s*(\d+)\s*</cik>", text)
+    if not ci_cik:
+        return []
+    ci_name = _re.search(r"<conformed-name>(.*?)</conformed-name>", text)
+    company_cik = int(ci_cik.group(1))
+    company_name = ci_name.group(1) if ci_name else None
+    entries = _re.findall(r"<entry>(.*?)</entry>", text, flags=_re.DOTALL)
+    out: list[dict[str, Any]] = []
+    for e in entries:
+        fd = _re.search(r"<filing-date>(\d{4}-\d{2}-\d{2})</filing-date>", e)
+        ft = _re.search(r"<filing-type>([^<]+)</filing-type>", e)
+        out.append({"cik": company_cik, "name": company_name,
+                    "form": ft.group(1) if ft else "", "filing_date": fd.group(1) if fd else ""})
+    if not entries:
+        out.append({"cik": company_cik, "name": company_name, "form": "", "filing_date": ""})
+    return out
+
+
 class EdgarClient:
     """The EDGAR client, one instance shared by every thread of a run: each thread
     sends on its own HTTP session, and each cache file has its own lock
@@ -751,20 +773,22 @@ class EdgarClient:
         return out
 
     def company_search_atom(self, company: str, form_type: str = "25-NSE") -> list[dict[str, Any]]:
-        """Search EDGAR by company name; return [{cik, name, form, date}, ...].
+        """Search EDGAR by company name; return [{cik, name, form, filing_date}, ...].
 
-        Uses the cgi-bin/browse-edgar ATOM endpoint. The ATOM XML has a
-        single <company-info> block (top match) and an <entry> per filing.
-        We return the top company's CIK along with any matching filings.
+        Uses the cgi-bin/browse-edgar ATOM endpoint. The ATOM XML has a single
+        <company-info> block (top match) and an <entry> per filing; we return the
+        top company's CIK with each matching filing.
 
-        Cached on disk like `_get_json` (same `FETCHED_KEY` / stored fetch
-        date), but never for an empty or error answer: an empty result would
-        otherwise silently and permanently hide a correct hit that only shows
-        up once EDGAR's index catches up. A cached hit older than
-        `COMPANY_SEARCH_FRESH_DAYS` is refetched — and, like `_get_json`, a
-        failed refetch (transport error or non-200) serves the stale cached
-        hit rather than erroring the row out, so a transient SEC outage can't
-        turn a company with a usable cached answer into an empty result.
+        Every answer, hits or empty, is cached with the day it was fetched and
+        trusted for COMPANY_SEARCH_FRESH_DAYS (7): EDGAR's index can catch up, so
+        no answer is kept longer, and the resolver re-derives any miss from these
+        answers on every run. The request is retried like every other SEC call.
+        If it still fails, a cached hit list, however old, is served with
+        STALE_KEY on each hit (the caller must not save what it builds on it);
+        with no hits to fall back on it raises `requests.RequestException` -- an
+        unanswered search is not an empty one. A 403/429 raises `EdgarBlocked`.
+        With `search_cache` off, the disk cache is neither read nor written. On a
+        prefetch thread (`fill_only`) a cached answer is returned whatever its age.
         """
         url = (
             f"{WWW_SEC_HOST}/cgi-bin/browse-edgar?action=getcompany"
@@ -772,52 +796,35 @@ class EdgarClient:
             "&dateb=&owner=include&count=10&output=atom"
         )
         cp = self._cache_path(url)
-        fresh_after = self.today - timedelta(days=COMPANY_SEARCH_FRESH_DAYS)
-        cached: Any = None
-        if cp.exists():
+        with self._lock_for(str(cp)):
+            cached: Any = None
+            if self.search_cache and cp.exists():
+                try:
+                    cached = json.loads(cp.read_text())
+                except json.JSONDecodeError:
+                    cp.unlink(missing_ok=True)
+                    cached = None
+                else:
+                    fresh_after = self.today - timedelta(days=COMPANY_SEARCH_FRESH_DAYS)
+                    if (isinstance(cached, dict) and isinstance(cached.get("hits"), list)
+                            and (filling_only() or _fetched_on(cp, cached) >= fresh_after)):
+                        SEC_STATS.add("cache:company_search")
+                        return list(cached["hits"])
             try:
-                cached = json.loads(cp.read_text())
-            except json.JSONDecodeError:
-                cp.unlink(missing_ok=True)
-                cached = None
-            else:
-                if isinstance(cached, dict) and _fetched_on(cp, cached) >= fresh_after:
-                    return cached.get("hits", [])
-
-        try:
-            resp = self._get(url, host="www.sec.gov", accept="application/atom+xml,text/xml", retry=False)
-            check_response(resp)          # EdgarBlocked is not a RequestException: it propagates
-            if resp.status_code != 200:
-                return cached.get("hits", []) if isinstance(cached, dict) else []
-        except requests.RequestException:
-            return cached.get("hits", []) if isinstance(cached, dict) else []
-        text = resp.text
-        # Quick-and-dirty XML extraction; the document is tiny and well-formed.
-        import re as _re
-        out: list[dict[str, Any]] = []
-        ci_cik = _re.search(r"<cik>\s*(\d+)\s*</cik>", text)
-        ci_name = _re.search(r"<conformed-name>(.*?)</conformed-name>", text)
-        company_cik = int(ci_cik.group(1)) if ci_cik else None
-        company_name = ci_name.group(1) if ci_name else None
-        if company_cik is None:
-            return []
-        entries = _re.findall(
-            r"<entry>(.*?)</entry>", text, flags=_re.DOTALL
-        )
-        for e in entries:
-            fd = _re.search(r"<filing-date>(\d{4}-\d{2}-\d{2})</filing-date>", e)
-            ft = _re.search(r"<filing-type>([^<]+)</filing-type>", e)
-            out.append({
-                "cik": company_cik,
-                "name": company_name,
-                "form": ft.group(1) if ft else "",
-                "filing_date": fd.group(1) if fd else "",
-            })
-        if not entries:
-            out.append({"cik": company_cik, "name": company_name, "form": "", "filing_date": ""})
-        if out:   # never cache an empty or error answer (see docstring)
-            _write_atomic(cp, json.dumps({"hits": out, FETCHED_KEY: self.today.isoformat()}))
-        return out
+                resp = self._get(url, host="www.sec.gov", accept="application/atom+xml,text/xml")
+                if resp.status_code != 200:
+                    raise requests.HTTPError(f"EDGAR company search answered {resp.status_code} for {url}")
+            except requests.RequestException:
+                hits = cached.get("hits") if isinstance(cached, dict) else None
+                if isinstance(hits, list) and hits:
+                    SEC_STATS.degraded("stale_copy")
+                    return [{**h, STALE_KEY: True} for h in hits]
+                SEC_STATS.degraded("failed_request")
+                raise
+            out = _parse_company_atom(resp.text)
+            if self.search_cache:
+                _write_atomic(cp, json.dumps({"hits": out, FETCHED_KEY: self.today.isoformat()}))
+            return out
 
     def submissions(self, cik: int | str, fresh_after: date | None = None) -> dict[str, Any]:
         """The company's submissions JSON. A cached copy fetched before
