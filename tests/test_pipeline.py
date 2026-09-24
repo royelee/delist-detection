@@ -14,12 +14,12 @@ from delist_detection.llm_merger_extractor import MergerTerms
 from delist_detection.observations import Observation, ObservationIndex
 from delist_detection.payout_extractor import PayoutResult
 from delist_detection.pipeline import (
-    Clients, Overrides, _issuer_exchange_for_ticker, _merge_review_rows, _own_last_seen,
+    Clients, Overrides, _acquirer_cik, _issuer_exchange_for_ticker, _merge_review_rows, _own_last_seen,
     _ticker_range_review, run, successor_from_8k12b, successor_search_name,
 )
 from delist_detection.security_master import Security
 from delist_detection.store import read_table, table_path
-from delist_detection.ticker_resolver import TickerResolver
+from delist_detection.ticker_resolver import TickerResolution, TickerResolver
 
 FIX = Path(__file__).parent / "fixtures" / "form25"
 AET_RAW = (FIX / "aet_25nse.txt").read_text(encoding="utf-8", errors="replace")
@@ -1712,3 +1712,44 @@ def test_a_placeholder_whose_late_rows_are_a_deleted_symbol_is_not_listed_today(
     ch = [r for r in read_table("cusip_history", table_path(tmp_path, "cusip_history"))
           if r["sec_id"] == "CIK47217-COMMON"]
     assert ch and all(r["valid_to"] for r in ch)
+
+
+# --- fix round 3, item 4: an acquirer on another ticker that resolves to the target's CIK ---
+
+class _OneAnswerResolver:
+    def __init__(self, cik):
+        self.cik = cik
+
+    def resolve(self, ticker, observed_date=None, **kw):
+        return TickerResolution(ticker=ticker, cik=self.cik, name=None, source="efts")
+
+
+def _nutrisystem_event():
+    record = DelistRecord(ticker="NTRI", cik=1096376, observed_delist_date="2019-03-07", crsp_code=231,
+                          bucket=CrspBucket.MERGER, confidence="high", reason="x", evidence={"flags": []},
+                          sec_id="BBGNTRI0001", delist_date="2019-03-17")
+    return DelistingEvent(sec_id="BBGNTRI0001", cik=1096376, ticker="NTRI", delist_date="2019-03-17",
+                          record=record, last_trade=LastTrade(date(2019, 3, 7), "midas", ()), form25=None,
+                          form25_sub=None, exchange="NASDAQ", flags=[])
+
+
+def test_an_acquirer_on_another_ticker_resolved_to_the_targets_cik_does_not_take_it(fake_edgar):
+    """Tivity bought Nutrisystem in 2019, and the resolver answered TVTY with
+    Nutrisystem's own CIK. The acquirer must not carry the target's CIK: the SEC
+    ticker map's holder of TVTY stands in when EDGAR lists it today, else the
+    CIK is left empty."""
+    ev = _nutrisystem_event()
+    clients = Clients(edgar=fake_edgar, resolver=_OneAnswerResolver(1096376), classifier=None, figi=None,
+                      ftd_client=None)
+    assert _acquirer_cik(clients, "TVTY", date(2019, 3, 7), ev) is None
+
+    fake_edgar.company_map["TVTY"] = {"cik_str": 704415, "ticker": "TVTY", "title": "Tivity Health, Inc."}
+    fake_edgar.submissions_by_cik[704415] = []
+    fake_edgar.listings[704415] = [("TVTY", "Nasdaq")]
+    assert _acquirer_cik(clients, "TVTY", date(2019, 3, 7), ev) == 704415
+
+
+def test_an_acquirer_on_another_ticker_keeps_the_cik_the_resolver_gives(fake_edgar):
+    clients = Clients(edgar=fake_edgar, resolver=_OneAnswerResolver(704415), classifier=None, figi=None,
+                      ftd_client=None)
+    assert _acquirer_cik(clients, "TVTY", date(2019, 3, 7), _nutrisystem_event()) == 704415
