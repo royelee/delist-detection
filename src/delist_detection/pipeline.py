@@ -75,6 +75,15 @@ def _d(s: str) -> date:
     return date.fromisoformat(s)
 
 
+SUCCESSOR_FORMS = "8-K12B,8-K12G3"
+
+
+def successor_query(name: str, day: date) -> tuple[str, str, date, date]:
+    """The full-text search successor_from_8k12b sends for `name` around `day`.
+    The prefetch sends the same one, so the sequential pass reads it from cache."""
+    return f'"{name}"', SUCCESSOR_FORMS, day - timedelta(days=30), day + timedelta(days=60)
+
+
 def successor_from_8k12b(search: Callable, figi, *, name: str, day: date, exclude_cik: int,
                          share_class: str = "COMMON") -> tuple[int, FigiCandidate, str] | None:
     """The successor issuer that filed an 8-K12B naming `name` around `day`,
@@ -100,7 +109,7 @@ def successor_from_8k12b(search: Callable, figi, *, name: str, day: date, exclud
 
     Returns `(cik, candidate, filing_date)`.
     """
-    hits = search(f'"{name}"', "8-K12B,8-K12G3", day - timedelta(days=30), day + timedelta(days=60))
+    hits = search(*successor_query(name, day))
     for h in hits:
         src = h.get("_source", h)
         filing_date = src.get("file_date") or src.get("filing_date") or ""
@@ -695,6 +704,12 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
     payouts_raw, llm_terms = {}, {}
     mergers = [e for e in events if e.record.bucket is CrspBucket.MERGER]
     mark = meter.start()
+    if sec_workers > 1 and clients.payout_extractor is not None:
+        # The regex payout reader's EDGAR reads, warmed. The LLM extractor is not
+        # warmed: its calls are paid, and it has its own cache.
+        extractor = clients.payout_extractor
+        warm(mergers, lambda e: extractor.extract(e.record, last_close=closes.get((e.sec_id, e.delist_date))),
+             workers=sec_workers, name="payouts")
     for e in mergers:
         key = (e.sec_id, e.delist_date)
         try:
@@ -796,6 +811,12 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
         else:
             first = meta["filing_date"]
         starts[sid] = (first, s.issuer_cik, {meta["ticker"]})
+    if sec_workers > 1 and successor_search is not None:
+        # The events the loop below searches for: unknown successor, none in the run.
+        pending = [e for e in events if "successor_unknown" in e.flags and _successor_in_run(e, starts) is None]
+        warm(pending, lambda e: successor_search(*successor_query(
+            successor_search_name(clients.edgar, e.cik, securities[e.sec_id].name),
+            e.last_trade.day or _d(e.delist_date))), workers=sec_workers, name="successor search")
     for e in events:
         if "successor_unknown" not in e.flags:
             continue
