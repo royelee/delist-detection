@@ -329,7 +329,7 @@ Closes come from SEC fails-to-deliver rows (2004+, `ftd.close_after`): the
 row dated `last_trade_date + 1 trading day` carries `last_trade_date`'s
 close, looked up by CUSIP first, then by ticker. The same lookup prices the
 acquirer on a merger's completion date. When no row follows the last trade
-day (fails stop once trading stops), the latest row dated on it or up to 4
+day (fails stop once trading stops), the latest row dated on it or up to 10
 trading days before gives the close of the day before that row, flagged
 `ftd_close_prior_day` (`ftd.close_through`). Missing → `--last-trade-closes`
 override; otherwise `dlret` stays blank (`needs_last_trade`) and the row

@@ -310,13 +310,15 @@ class FtdIndex:
         return None
 
     def close_through(self, day: date, *, cusip: str | None = None, symbol: str | None = None,
-                      max_back: int = 4) -> tuple[float, str] | None:
+                      max_back: int = 10) -> tuple[float, str] | None:
         """The latest close known on `day` when no row follows it: the priced row
         dated on `day` or up to `max_back` trading days earlier, whose price is
         the close of the trading day before its date. Fails stop once a security
         stops trading, so a merger's last trade day often has no row after it
         (Dell Inc.'s rows end on 2013-10-29, its last trade); the spec's
-        fallback is to look back a few rows. Returns `(price, row_date)`."""
+        fallback is to look back a few rows. Ten trading days (two weeks) keeps
+        the price recent: a pending merger's target trades at a stable spread to
+        its deal price. Returns `(price, row_date)`."""
         lo = add_trading_days(day, -max_back).isoformat()
         rows = (self.by_cusip(cusip, lo, day.isoformat()) if cusip
                 else self.by_symbol(symbol or "", lo, day.isoformat()))

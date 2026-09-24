@@ -292,7 +292,7 @@ def test_close_through_reads_the_latest_row_on_or_before_the_day():
     assert idx.close_after(date(2013, 10, 29), cusip="24702R101") is None
     assert idx.close_through(date(2013, 10, 29), cusip="24702R101") == (13.82, "2013-10-29")
     assert idx.close_through(date(2013, 10, 29), symbol="DELL") == (13.82, "2013-10-29")
-    # the rows end 2013-10-29: a day four trading days later still reaches it (max_back=4)...
-    assert idx.close_through(date(2013, 11, 4), cusip="24702R101") == (13.82, "2013-10-29")
-    # ...a day five trading days later does not
-    assert idx.close_through(date(2013, 11, 5), cusip="24702R101") is None
+    # the rows end 2013-10-29: a day ten trading days later still reaches it (two weeks)...
+    assert idx.close_through(date(2013, 11, 12), cusip="24702R101") == (13.82, "2013-10-29")
+    # ...a day eleven trading days later does not
+    assert idx.close_through(date(2013, 11, 13), cusip="24702R101") is None
