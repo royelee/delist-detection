@@ -28,13 +28,14 @@ editable install.
 
 ```bash
 pip install -e .                         # editable install (Python ≥3.10) — once per env
-pytest                                    # full suite (705 tests, offline, no network)
+pytest                                    # full suite (968 tests, offline, no network)
 pytest tests/test_payout_extractor.py -v  # one file
 pytest tests/test_payout_extractor.py::test_match_in_cash_family_altr -v   # one test
 
 python scripts/verify_altair.py          # smoke: ALTR → CRSP 231, high
 python scripts/classify_universe.py --observations obs.csv   # → output/{securities,ticker_history,cusip_history,delistings,payouts,review}.csv (NETWORK; free when cached)
 python scripts/classify_universe.py --observations obs.csv --limit 20 --no-extract-payouts --no-midas --no-halts   # fast dev subset
+python scripts/classify_universe.py --observations obs.csv --sec-workers 1   # one SEC request at a time (default: 4 prefetch threads, max 8, one machine-wide 8 req/s limit)
 python scripts/observations_from_snapshots.py --dir <folder of dated snapshot CSVs> --out obs.csv   # ticker/name columns, one date per file name
 python scripts/observations_from_instruments.py --instruments all.txt --out obs.csv   # legacy (ticker,start,end) file → two observations per row
 python scripts/verify_against_web.py     # independent EDGAR cross-check on output/delistings.csv → output/web_verification.csv
@@ -201,14 +202,28 @@ conflate them.
   `full_text_search`/`sec_http` downloads retries up to 3 attempts (2s/4s
   backoff, `edgar.retry_request`); a 403/429 still raises `EdgarBlocked` at
   once, and a failure is never cached.
+  The limiter (`edgar.SEC_LIMITER`) is shared by every thread of the process
+  and, through `~/.cache/delist_detection/sec_rate.lock`
+  (`$DELIST_DETECTION_SEC_RATE_LOCK`), by every SEC client on the machine
+  (`edgar.use_machine_wide_limit()`, installed by the CLI, `default_clients`,
+  `verify_against_web.py` and `build_golden_fixtures.py`). `--sec-workers N`
+  threads prefetch through it (`prefetch.warm`); they only fill missing cache
+  entries, so output is byte-identical for any N given the same caches and run
+  date. A 5xx pauses every thread. The CLI refuses to start without
+  `EDGAR_USER_AGENT`. Full-text-search and company-search answers, empties
+  included, are cached with a TTL (see `docs/data-flow.md`); a resolver miss is
+  never cached. An agent sandbox must set `DELIST_DETECTION_SEC_RATE_LOCK` to a
+  writable shared path (the default `~/.cache/...` path may not be writable or
+  shared there).
 - **OpenFIGI refusals abort too.** A 401/403 from OpenFIGI raises
   `OpenFigiBlocked` (`openfigi.py`); `classify_universe.py`'s CLI catches it
   alongside `EdgarBlocked` and exits 2. A 429 is waited out on the
   `ratelimit-*`/`retry-after` headers, never cached as an answer. The key
   comes from `OPEN_FIGI_API_KEY` (environment first, then the repo `.env`),
   sent as header `X-OPENFIGI-APIKEY`. Exit 3 is a completed run whose
-  `review.csv` has one or more `error` rows (outputs still written; a banner
-  goes to stderr with the count).
+  `review.csv` has one or more `error` or `resolution_degraded` rows (an answer
+  rested on a failed SEC request or a stale copy); outputs are still written,
+  and a banner goes to stderr with the counts.
 - **Every output is written only after the whole run succeeds.**
   `pipeline.run()` computes every table in memory first and writes all six
   only at the end (`store.write_table`'s atomic replace), so a refusal or a
@@ -238,8 +253,10 @@ conflate them.
   verification proves a wrong CIK, extend that dict — don't patch the resolver.
 - **Payout extraction is cash-only; the DLRET table supports full consideration.** Auto-extraction from EDGAR remains cash-only. The DLRET table abstains (neutral mark) only when no consideration terms are supplied; when stock-leg terms (`stock_ratio`, `acquirer_price`) are provided via `--merger-terms`, it computes the full cash+stock consideration (e.g. AET→CVS: $145 cash + 0.8378 CVS @ $80 = $212.02, DLRET = +11.6%). The `--last-trade-closes`, `--recoveries`, and `--merger-terms` CSVs are keyed by `sec_id` and accept an optional `delist_date` column for per-event overrides (blank/absent = applies to all delistings of that security); a row matching no delisting stops the run.
 - **The resolver cache is versioned.** `cache/ticker_resolution.json` carries
-  `{"__version__": 2, ...}`; a file at an older version is ignored, not
-  trusted, and gets replaced on the next save.
+  `{"__version__": 3, ...}` (versions 2 and 3 load; an older file is ignored, not
+  trusted, and replaced on the next save) and never holds a miss or an answer
+  that rested on a failed request or a stale copy. The pipeline writes it after
+  each resolving stage and on the way out of a run.
 - **`payouts.csv` is gated; `delistings.csv` carries the raw extraction
   alongside it.** Every merger payout is checked against the last trade close
   (`payout_gate.reconcile`) before it reaches `payouts.csv`; `delistings.csv`

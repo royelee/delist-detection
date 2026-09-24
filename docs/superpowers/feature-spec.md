@@ -339,7 +339,7 @@ receives rows with no delisting: `ended_without_delisting`, `no_figi`,
 |---|---|---|---|
 | EDGAR submissions | `data.sec.gov/submissions/CIK##########.json` (+ paginated files) | Form 25/8-K/15/8-K12B lists, names | ≤ 8 req/s, User-Agent; `cache/edgar/` |
 | EDGAR filing documents | `www.sec.gov/Archives/edgar/data/...` | Form 25 XML, EX-99.25, 8-K text, 10-K covers | same; `cache/edgar/text/` |
-| EDGAR full-text search | `efts.sec.gov/LATEST/search-index` | ticker-change announcements, resolver tiers | same |
+| EDGAR full-text search | `efts.sec.gov/LATEST/search-index` | ticker-change announcements, resolver tiers | same; `cache/edgar/`, each answer held 7–365 days by how long after its window it was fetched (§17) |
 | OpenFIGI | `api.openfigi.com/v3/mapping`, `/v3/filter` | composite FIGI, security type | `ratelimit-*` headers; `cache/openfigi/` |
 | SEC fails-to-deliver | `www.sec.gov/data-research/sec-markets-data/fails-deliver-data` (half-month ZIPs, 2004+) | closes, CUSIP history | same SEC rules; `cache/sec_data/ftd/`; download only the periods needed |
 | SEC MIDAS by security | `www.sec.gov/opa/data/market-structure/marketstructuredownloadshtml-by_security.html` (quarterly ZIPs, 2012+) | last day with exchange volume | `cache/sec_data/midas/`; download only needed quarters |
@@ -349,7 +349,10 @@ Rules:
 - Every response is cached on disk; re-runs are free. Caches are gitignored.
 - A SEC 403/429 raises `EdgarBlocked` and the CLI exits 2 (existing). The same
   applies to the other SEC data sets. OpenFIGI 429 is waited out; 401/403 exits 2.
-- A miss is never cached as an answer.
+- Search evidence may be cached with a TTL; a resolver decision is never cached
+  as a miss. EDGAR full-text-search and company-name-search answers, empties
+  included, are cached with their fetch date and asked again when their TTL runs
+  out (§17); every run re-derives a miss from that evidence with the current code.
 
 ## 10. CLI
 
@@ -610,3 +613,24 @@ line changes observable output.
 - **No share-class rejection in FIGI acceptance (§8.3).** A candidate of a
   different share class is not rejected; the class-letter era split and the
   CUSIP-first order keep most classes apart.
+- **SEC fair access across processes (§9, §11).** The 8 requests/s cap holds for
+  the machine, not just the process: every SEC request takes an `flock`-guarded
+  lock file outside the repo (`~/.cache/delist_detection/sec_rate.lock`, or
+  `$DELIST_DETECTION_SEC_RATE_LOCK`) that holds the last start time, and waits
+  1/8 s past it. `classify_universe.py --sec-workers N` (default 4, at most 8)
+  prefetches on N threads under that one limit, and a 5xx pauses them all.
+- **Determinism includes the run date (§11).** Every freshness rule reads one
+  run date (`as_of`), so "same inputs and caches" means the same caches and the
+  same `as_of`. For those, the tables are byte-identical for any `--sec-workers`:
+  prefetch threads only fill missing cache entries and never refresh one.
+  `run_manifest.json` records `as_of`, the code version, the worker count and
+  the SEC traffic.
+- **Search answers held by age (§9).** A full-text-search answer holds
+  `max(7, min(365, fetch date − window end))` days, and a window ending before
+  2001 is never sent (EDGAR's index starts in 2001). A company-name-search
+  answer holds 7 days. A 400/404 from full-text search is a rejected query, not
+  an empty answer.
+- **Degraded answers are reviewable (§11 "no silent drop").** An era, security,
+  payout or successor search whose answer rested on a failed SEC request or a
+  stale copy gets a `resolution_degraded` review row; its answer is used for
+  the run but never saved, and the CLI exits 3.

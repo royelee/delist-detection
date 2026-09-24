@@ -112,29 +112,63 @@ one observation per row per file).
 ## Caching
 
 Every EDGAR JSON response is SHA1-keyed and cached in `cache/edgar/*.json`;
-filing text in `cache/edgar/text/`. OpenFIGI responses are cached under
-`cache/openfigi/`, paced on the `ratelimit-*` headers. SEC fails-to-deliver
-and MIDAS downloads live under `cache/sec_data/ftd/` and `cache/sec_data/midas/`
-(MIDAS summarizes each quarterly ZIP once into a small JSON and deletes the
-ZIP). The Nasdaq halt feed caches one file per day under `cache/nasdaq_halts/`.
-A re-run over the same observations is near-instant because no network calls
-happen. Each EDGAR payload records the day it was fetched (`__fetched__`; an
-older file is dated by its mtime). The resolver's checks and the classifier
-read a company's submissions fresh as of `min(observed + 45 days, today)`
-(`edgar.submissions_fresh_after`), so a copy cached before a later Form 25 is
-fetched again.
+filing text in `cache/edgar/text/`, complete submissions in `cache/edgar/raw/`.
+OpenFIGI responses are cached under `cache/openfigi/`, paced on the
+`ratelimit-*` headers. SEC fails-to-deliver and MIDAS downloads live under
+`cache/sec_data/ftd/` and `cache/sec_data/midas/` (MIDAS summarizes each
+quarterly ZIP once into a small JSON and deletes the ZIP). The Nasdaq halt feed
+caches one file per day under `cache/nasdaq_halts/`. Each EDGAR payload records
+the day it was fetched (`__fetched__`; an older file is dated by its mtime). The
+resolver's checks and the classifier read a company's submissions fresh as of
+`min(observed + 45 days, as_of)` (`edgar.submissions_fresh_after`), where
+`as_of` is the run date, read once per run and passed to every client. A copy
+cached before a later Form 25 is therefore fetched again — except the delisting
+finder's own Form 25 scan (`DelistingFinder.find`, via `EdgarClient.recent_filings`),
+which reads a cached submissions copy with no freshness bound at all, warm-filled
+or not; a submissions copy a warm thread fills carries no TTL of its own either.
+That is a known gap in the finder, out of scope for this plan. `pipeline.default_clients`
+is what gives every client the one shared `as_of`; a caller who builds `Clients` by
+hand and leaves it unset gets clients that each default `as_of` to today's
+wall-clock date independently, at whatever moment they run. The MIDAS and FTD
+index pages (the list of published ZIPs) age by wall clock instead, not by
+`as_of` (`sec_http.get_text`'s day-old check), since SEC republishes them on its
+own schedule, unrelated to the run date. Every cache file is
+written atomically and durably (a temp file, fsync, `os.replace`, fsync of the
+directory), so a crash, Ctrl-C or power loss never leaves a torn file; a killed
+writer's temp files are removed when the next client starts.
+
+Search answers are evidence, cached with a TTL; a resolver decision is never
+cached as a miss. EDGAR full-text search (`efts.sec.gov`: the resolver's Form 25
+and 8-K frequency tiers, and the successor search) goes through
+`EdgarClient.efts_search`. Every answer, hits or empty, is written with its
+schema version, window end and fetch date, and holds for
+`max(7, min(365, fetch date − window end))` days (`edgar.efts_ttl_days`). A
+window ending before 2001 is not covered by EDGAR's index and is never sent. A
+400 or 404 is a rejected query: logged, counted, never written, not a failure. A
+5xx after retries, a transport error, a non-JSON body, or a 200 body that is not
+a recognized search answer (no `hits.hits` — an EDGAR error page or maintenance
+page served as JSON) raises and is never cached: a bad 200 must not be mistaken
+for a real empty answer, which could hide a filing for up to a year. Each hit
+keeps `_id` and only the `_source` fields the library reads
+(`EFTS_SOURCE_KEYS`). The EDGAR company-name search caches every answer, empties
+included, for 7 days, and is retried like every other SEC request. When it
+still fails, a cached hit list is served marked stale; with nothing to fall
+back on, it raises instead of answering "no match".
 
 The ticker→CIK memo lives at `cache/ticker_resolution.json` and is keyed by
-`(ticker, observed_date)` so a recycled ticker resolves to the right
-issuer per date. The file is versioned (`{"__version__": 3, "entries": …}`);
-versions 2 and 3 load, and a file before version 2 predates the date and
-name checks, so it is ignored and replaced on the next save. Answers of a
-withdrawn rule (`company_tickers_name_mismatch`, which let today's
-ticker-map holder beat a name-mismatched EFTS candidate) are dropped on load
-and resolved again. Each entry records the era name it
-was checked with, and a lookup with a different name resolves again.
-Misses, and answers reached while an EDGAR request failed transiently, are
-used for the run but never saved.
+`(ticker, observed_date)` so a recycled ticker resolves to the right issuer per
+date. The file is versioned (`{"__version__": 3, "entries": …}`); versions 2 and
+3 load, and a file before version 2 predates the date and name checks, so it is
+ignored and replaced on the next save. Answers of a withdrawn rule
+(`company_tickers_name_mismatch`, which let today's ticker-map holder beat a
+name-mismatched EFTS candidate) are dropped on load and resolved again. Each
+entry records the era name it was checked with, and a lookup with a different
+name resolves again. Misses are never saved: each run re-derives them, with the
+current code, from the cached search evidence. An answer reached while an EDGAR
+request failed, or through a stale copy (a submissions JSON or a company-search
+hit served after a failed refetch), is used for the run but never saved, and
+`review.csv` flags it `resolution_degraded`. The pipeline writes the memo after
+each resolving stage and on the way out of a run.
 
 A connection error, a timeout, or a 5xx on a submissions fetch, a raw/text
 filing fetch, a full-text-search query, or a MIDAS/FTD ZIP download is
@@ -145,12 +179,83 @@ MIDAS quarter that keeps failing to download is remembered in-memory
 (`MidasClient`) for the rest of the run so later securities don't repeat the
 same download-and-retry cost.
 
-`scripts/classify_universe.py` exits `0` on success, `2` when SEC or
-OpenFIGI refuses the request (`EdgarBlocked`/`OpenFigiBlocked` — no output
-written), and `3` when the run completed but `review.csv` has one or more
-`error` rows (one security or payout extraction raised and was logged
-instead of aborting; outputs are still written, and a banner naming the
-count goes to stderr).
+`classify_universe.py --sec-workers N` (default 4, at most 8; the library's
+`run()` defaults to 1) fills the SEC caches ahead of four sequential stages:
+issuer resolution (one task per era), the Form 25 search (one per security),
+payout extraction (one per merger) and the successor search (one per unresolved
+exchange transfer). It runs each stage's own code on N threads
+(`prefetch.warm`) and throws the answers away.
+- **Fill-only threads.** Warm threads only fill missing cache entries; they
+  never refresh an existing one (`edgar.fill_only`). The stage then runs one
+  item at a time on the main thread, in the usual order, reading exactly what a
+  one-thread run reads and refreshing stale copies itself. The same caches and
+  run date therefore give byte-identical tables for any N — the *cache tree* can
+  still end up larger than a single-worker run's, since a warm thread may fetch
+  and keep (at its own normal TTL) a real SEC answer the sequential pass never
+  asks for; that never changes a row the tables emit.
+- **Warm finders.** They use the run's own MIDAS and Nasdaq-halt clients, each
+  behind one lock (`prefetch.Serialized`), so they take the same last-trade
+  anchors as the sequential pass.
+- **What stays on the main thread.** The fails-to-deliver downloads, OpenFIGI
+  and the LLM extractor. OpenFIGI's per-security listing check is sent as
+  batched mapping requests.
+- **The rate limit.** Every thread shares one limiter (`edgar.SEC_LIMITER`:
+  request starts at least 1/8 s apart). A 5xx or dropped connection pauses
+  every thread together. The limit is machine-wide: each start also takes an
+  `flock` on `~/.cache/delist_detection/sec_rate.lock`
+  (`$DELIST_DETECTION_SEC_RATE_LOCK` overrides it). That file holds the last
+  start time, so every SEC client on the machine that uses the same file (runs
+  in any worktree, `verify_against_web.py`, `build_golden_fixtures.py`) stays
+  under 8 requests/s together. A library caller that builds its own clients
+  instead of using `default_clients` must call `edgar.use_machine_wide_limit()`
+  itself. A process never sleeps while holding the lock file's `flock` — it
+  reads the last start time, releases the lock, then sleeps — so a suspended
+  process (Ctrl-Z, a debugger) cannot stall every other SEC client on the
+  machine; a process forked after the gate is installed shares the parent's
+  lock (the same open file description). An unwritable lock path fails at
+  start-up (`use_machine_wide_limit` raises `OSError`), not mid-run.
+- **Timeouts.** An EDGAR request (submissions, filing text, full-text and
+  company-name search) times out at 30 s; a SEC data-file download (a MIDAS or
+  FTD ZIP) times out at 180 s.
+- **Refusals and Ctrl-C.** A refusal (`EdgarBlocked`/`OpenFigiBlocked`) on any
+  thread stops the pool: no item starts after it, and every running worker's
+  next SEC request raises `PrefetchCancelled` instead of going out; the refusal
+  is raised once the workers have stopped. A stopped worker may first sleep out
+  a retry backoff or a shared rate-limiter pause (at most 4 s) before that next
+  request raises; a request to another service (OpenFIGI, the Nasdaq halt feed)
+  goes through no SEC limiter, so it is not cancelled — the worker stops at its
+  next SEC request after it. A first Ctrl-C does the same, then waits for each
+  worker's one in-flight request (an EDGAR request times out at 30 s, a
+  MIDAS/FTD ZIP download at 180 s). A second Ctrl-C during that wait interrupts
+  the wait itself and propagates at once, but the workers are not daemon
+  threads, so the interpreter still waits for each one's in-flight request
+  before the process exits.
+
+Each run writes `run_manifest.json` next to the tables:
+- the run date (`as_of`), the code version and the worker count;
+- per-endpoint SEC request counts, cache answers and latency (p50, p95, max);
+- degraded answers (failed requests, stale copies), rejected and not-covered
+  full-text searches;
+- per-warm-pass task failures (`warm_failed:<stage>` — logged at DEBUG and
+  counted; the sequential pass meets and records the same failure itself, so a
+  nonzero count here only flags a concurrency-only failure worth a second look);
+- per-stage EDGAR requests and SEC data-file downloads.
+
+The manifest is not part of the byte-identical-output guarantee: `as_of`, the
+code version and the worker count make it expected to differ between two runs
+even when their six tables come out identical. A run that aborts leaves the
+previous manifest in place.
+
+`scripts/classify_universe.py` exits:
+- `0` on success;
+- `2` when SEC or OpenFIGI refuses a request (`EdgarBlocked`/`OpenFigiBlocked`;
+  no output written), or when a start-up check fails (no `EDGAR_USER_AGENT`, an
+  unusable rate-lock file, or `--sec-workers` outside `[1, 8]`);
+- `3` when the run completed but `review.csv` has one or more `error` rows (one
+  security or payout extraction raised and was logged instead of aborting) or
+  `resolution_degraded` rows (an answer rested on a failed SEC request or a
+  stale copy). Outputs are still written, and a banner naming the counts goes to
+  stderr.
 
 ## Resolver strategy in detail
 

@@ -628,6 +628,8 @@ src/delist_detection/
     trading_calendar.py   NYSE trading-day calendar
     sec_http.py           Throttled, cached downloads shared by ftd.py / midas.py
     edgar.py              Throttled SEC EDGAR client with on-disk JSON cache
+    prefetch.py           warm(): fills the SEC caches on fill-only threads ahead of each sequential stage
+    manifest.py           run_manifest.json: run date, code version, workers, SEC traffic, degraded answers
     ftd.py                SEC fails-to-deliver rows: last-trade closes, CUSIP history
     midas.py               SEC MIDAS per-security exchange volume: last-trade confirmation
     nasdaq_halts.py        Nasdaq code-D halt feed: last-trade confirmation
@@ -668,10 +670,11 @@ output/
     delistings.csv        One row per delisting, with DLRET and its audit trail (primary output)
     payouts.csv           Per-merger extracted payout with source + accession (gated)
     review.csv            Every row (delisting or not) that needs a human look
+    run_manifest.json     What the run rested on: as_of, code version, SEC requests/cache/latency per endpoint
     web_verification.csv  Per-row independent cross-check verdict
 
 cache/
-    edgar/*.json                 SEC JSON cache (re-runs are free)
+    edgar/*.json                 SEC JSON cache (re-runs are free); search answers held by a TTL
     edgar/text/*                 Stripped filing text cache
     openfigi/*                   OpenFIGI mapping/filter response cache
     sec_data/ftd/*, sec_data/midas/*   Downloaded/summarized SEC data files
@@ -886,6 +889,6 @@ never a price vendor, never Alpha Vantage:
 
 | Code | Meaning |
 |---|---|
-| `0` | Success, no `error` rows in `review.csv`. |
-| `2` | Aborted: SEC or OpenFIGI refused the request (`EdgarBlocked` / `OpenFigiBlocked`) — no output written. |
-| `3` | Completed, but `review.csv` has one or more `error` rows (one security or extraction raised and was logged instead of aborting the run) — outputs are still written; the run prints a banner to stderr with the count. |
+| `0` | Success, no `error` or `resolution_degraded` rows in `review.csv`. |
+| `2` | Aborted: SEC or OpenFIGI refused the request (`EdgarBlocked` / `OpenFigiBlocked`), or a start-up check failed (no `EDGAR_USER_AGENT`, an unusable SEC rate-lock file, or `--sec-workers` outside `[1, 8]`) — no output written. |
+| `3` | Completed, but `review.csv` has one or more `error` rows (one security or extraction raised and was logged instead of aborting the run) or `resolution_degraded` rows (an answer rested on a failed SEC request or a stale copy) — outputs are still written; the run prints a banner to stderr with the counts. |

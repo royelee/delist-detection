@@ -6,14 +6,14 @@ For each row of data/golden_events.csv this stores everything the resolver,
 classifier and payout reader read for that case, so tests replay it offline:
 submissions (trimmed to -1650/+400 days) for the true CIK, the wrong CIK and
 every candidate CIK a resolver tier can return, the company_tickers row,
-company_search_atom hits for every name variant the resolver issues, the raw
-answers to the two EFTS queries the resolver issues (`efts_raw`, keyed by URL,
-which tests/golden.py serves back to the real EFTS methods), recorded from the
-live answer: the client's search caches are bypassed, so a cached answer can
-never be frozen into a fixture, and the text of every 8-K carrying items
-1.03/2.01/3.01/5.01 plus the closing/announcement filings the payout reader
-would open. `efts_lookup` and `efts_frequency` are the resolver's answers at
-capture time, kept for reading only.
+company_search_atom hits for every name variant the resolver issues, and the
+raw answers to the two EFTS queries the resolver issues (`efts_raw`, keyed by
+URL, which tests/golden.py serves back to the real EFTS methods), plus the
+text of every 8-K carrying items 1.03/2.01/3.01/5.01 and the closing/announcement
+filings the payout reader would open. `efts_raw` is recorded from the live
+answer: the client's search caches are bypassed, so a cached answer can never
+be frozen into a fixture. `efts_lookup` and `efts_frequency` are the resolver's
+answers at capture time, kept for reading only.
 Re-run after changing data/golden_events.csv. `--efts-only` re-captures just
 `efts_raw` into the existing fixtures and leaves every other key untouched.
 
