@@ -162,9 +162,9 @@ def test_the_manifest_reports_warm_failed_and_rejected_by_stage_or_endpoint():
     # SEC_STATS also counts warm_failed:<stage> (Task 9) and rejected:<endpoint>
     # (Task 5/7); the manifest must not silently drop either group.
     got = manifest.build(as_of=date(2026, 9, 23), sec_workers=4,
-                         counts={"warm_failed:form25 scan": 2, "rejected:company_search": 1,
+                         counts={"warm_failed:delisting search": 2, "rejected:company_search": 1,
                                 "rejected:full_text_search": 3, "not_covered:full_text_search": 1},
                          timings={}, stages={}, review_flags={})
-    assert got["warm_failed"] == {"form25 scan": 2}
+    assert got["warm_failed"] == {"delisting search": 2}
     assert got["rejected_queries"] == {"company_search": 1, "full_text_search": 3}
     assert got["not_covered"] == {"full_text_search": 1}
