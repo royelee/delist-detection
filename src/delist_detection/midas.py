@@ -23,7 +23,7 @@ from pathlib import Path
 
 import requests
 
-from .edgar import filling_only
+from .edgar import SEC_STATS, filling_only
 from .observations import normalize_ticker
 from .sec_http import download, get_text
 from .trading_calendar import add_trading_days
@@ -123,6 +123,20 @@ class MidasClient:
         self._fill_links: dict[tuple[int, int], str] | None = None
         self._fill_index_stale = False
         self._fill_misses: set[tuple[int, int]] = set()
+        # Quarters already warned+counted as a miss this run (warm and sequential
+        # share this: `prefetch.Serialized` runs every MidasClient call, warm or
+        # sequential, one at a time -- see final-fix item 6).
+        self._warned_misses: set[tuple[int, int]] = set()
+
+    def _warn_miss(self, yq: tuple[int, int], why: str) -> None:
+        """Log once and count `midas_miss:<yq>` once per quarter per run: a quarter
+        that never yields evidence is otherwise a silent fallback to "no last
+        trade day" evidence."""
+        if yq in self._warned_misses:
+            return
+        self._warned_misses.add(yq)
+        _log.warning(f"MIDAS {yq[0]} Q{yq[1]}: {why}; no evidence from this quarter for the rest of the run")
+        SEC_STATS.add(f"midas_miss:{yq[0]}q{yq[1]}")
 
     def _read_index(self) -> dict[tuple[int, int], str]:
         html = get_text(MIDAS_INDEX_URL, self.dir / "index.html", max_age_days=INDEX_MAX_AGE_DAYS,
@@ -198,12 +212,15 @@ class MidasClient:
                     zpath.unlink(missing_ok=True)  # corrupted: fetch it again once
                     zpath = download(url, zpath, session=self.session, user_agent=self.user_agent)
                     z = zipfile.ZipFile(zpath)
-            except (requests.RequestException, FileNotFoundError):
+            except (requests.RequestException, FileNotFoundError) as exc:
                 # Gave up after retries, or a 404 (the index lists a ZIP SEC no
                 # longer serves; nothing is written): remember this quarter as
                 # failed for the rest of the run, so the next security doesn't
                 # pay the same download+retry cost again.
                 self._miss(yq)
+                why = "SEC no longer serves this quarter's ZIP" if isinstance(exc, FileNotFoundError) \
+                    else f"the download kept failing ({exc})"
+                self._warn_miss(yq, why)
                 return None
             with z:
                 s = _summarize_zip(z, zpath)

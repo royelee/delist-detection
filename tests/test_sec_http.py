@@ -7,7 +7,7 @@ import pytest
 import requests
 
 from delist_detection import sec_http
-from delist_detection.edgar import EdgarBlocked, EdgarClient, fill_only
+from delist_detection.edgar import SEC_STATS, EdgarBlocked, EdgarClient, fill_only
 
 
 class _Resp:
@@ -72,6 +72,22 @@ def test_get_text_refreshes_and_falls_back(tmp_path):
     s3 = _Session(requests.ConnectionError("x"), requests.ConnectionError("x"), requests.ConnectionError("x"))
     with pytest.raises(requests.ConnectionError):
         sec_http.get_text("u", tmp_path / "none.html", session=s3, user_agent="ua", sleep=lambda _: None)
+
+
+def test_get_text_serving_a_stale_index_after_a_failed_refresh_counts_as_degraded(tmp_path):
+    """item 6: a stale index page (the MIDAS/FTD ZIP listing) served after a
+    failed refresh is otherwise a silent fallback -- the caller can't tell it
+    read a possibly-outdated page. It must count SEC_STATS.degraded("stale_copy")."""
+    cf = tmp_path / "index.html"
+    cf.write_text("old")
+    old = time.time() - 10 * 86400
+    os.utime(cf, (old, old))
+    s = _Session(requests.ConnectionError("down"), requests.ConnectionError("down"),
+                requests.ConnectionError("down"))
+    mark = SEC_STATS.snapshot()
+    assert sec_http.get_text("u", cf, session=s, user_agent="ua", sleep=lambda _: None) == "old"
+    counts, _ = SEC_STATS.since(mark)
+    assert counts.get("degraded:stale_copy") == 1
 
 
 def test_get_text_retries_5xx_then_succeeds(tmp_path):

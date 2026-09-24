@@ -51,9 +51,11 @@ def download(url: str, dest: str | Path, *, session=None, user_agent: str | None
 def get_text(url: str, cache_file: str | Path, *, max_age_days: float = 7, session=None,
              user_agent: str | None = None, sleep=time.sleep) -> str:
     """`url`'s text, cached in `cache_file` and fetched again once the copy is
-    `max_age_days` old; a failed refetch serves the old copy. On a prefetch
-    thread (`edgar.fill_only()`) an existing copy of any age is returned with no
-    request, so only the sequential pass refreshes it, in its own order."""
+    `max_age_days` old; a failed refetch serves the old copy, counted as
+    `SEC_STATS.degraded("stale_copy")` since a possibly-outdated index page is
+    otherwise a silent fallback. On a prefetch thread (`edgar.fill_only()`) an
+    existing copy of any age is returned with no request, so only the
+    sequential pass refreshes it, in its own order."""
     cf = Path(cache_file)
     if cf.exists() and (filling_only() or time.time() - cf.stat().st_mtime < max_age_days * 86400):
         return cf.read_text(encoding="utf-8", errors="replace")
@@ -62,6 +64,7 @@ def get_text(url: str, cache_file: str | Path, *, max_age_days: float = 7, sessi
         resp.raise_for_status()
     except requests.RequestException:
         if cf.exists():
+            SEC_STATS.degraded("stale_copy")
             return cf.read_text(encoding="utf-8", errors="replace")
         raise
     cf.parent.mkdir(parents=True, exist_ok=True)

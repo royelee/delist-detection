@@ -1,6 +1,7 @@
 import gzip
 import io
 import json
+import logging
 import os
 import threading
 import time
@@ -11,7 +12,7 @@ from unittest.mock import patch
 
 import requests
 
-from delist_detection.edgar import fill_only
+from delist_detection.edgar import SEC_STATS, fill_only
 from delist_detection.midas import MIDAS_INDEX_URL, MidasClient, quarter_of, summarize_midas_csv
 from delist_detection.sec_http import get_text
 
@@ -353,6 +354,25 @@ def test_a_quarter_zip_sec_no_longer_serves_is_a_miss(tmp_path):
     assert c.last_trade_day("ZZZ", *Q4) is None
     assert sec.asked == [Q4_URL, Q4_URL]
     assert sorted(p.name for p in tmp_path.iterdir()) == ["index.html"]
+
+
+def test_a_midas_miss_after_a_404_logs_one_warning_and_counts_once_per_run(tmp_path, caplog):
+    """item 6: a MIDAS quarter that never yields evidence (a 404 on its ZIP, or a
+    download that keeps failing) otherwise falls back to "no evidence" silently.
+    It must log one WARNING and count midas_miss:<yq> in SEC_STATS -- once per
+    quarter per run, even though the warm pass and the sequential pass each try
+    the download themselves for the same quarter."""
+    caplog.set_level(logging.WARNING)
+    _index(tmp_path, Q4_LINK)
+    sec = _Sec({})
+    c = MidasClient(tmp_path, session=sec)
+    mark = SEC_STATS.snapshot()
+    with fill_only():
+        assert c.last_trade_day("AET", *Q4) is None
+    assert c.last_trade_day("ZZZ", *Q4) is None
+    counts, _ = SEC_STATS.since(mark)
+    assert counts.get("midas_miss:2018q4") == 1
+    assert caplog.text.count("2018 Q4") == 1
 
 
 def test_a_download_the_warm_threads_gave_up_on_is_tried_again_by_the_sequential_pass(tmp_path):
