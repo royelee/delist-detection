@@ -132,7 +132,9 @@ hand and leaves it unset gets clients that each default `as_of` to today's
 wall-clock date independently, at whatever moment they run. The MIDAS and FTD
 index pages (the list of published ZIPs) age by wall clock instead, not by
 `as_of` (`sec_http.get_text`'s day-old check), since SEC republishes them on its
-own schedule, unrelated to the run date. Every cache file is
+own schedule, unrelated to the run date. A stale index page served after a
+failed refresh counts `SEC_STATS.degraded("stale_copy")`, like every other
+stale-copy fallback. Every cache file is
 written atomically and durably (a temp file, fsync, `os.replace`, fsync of the
 directory), so a crash, Ctrl-C or power loss never leaves a torn file; a killed
 writer's temp files are removed when the next client starts.
@@ -173,14 +175,18 @@ hit served after a failed refetch), is used for the run but never saved, and
 `review.csv` flags it `resolution_degraded`. The pipeline writes the memo after
 each resolving stage and on the way out of a run.
 
-A connection error, a timeout, or a 5xx on a submissions fetch, a raw/text
-filing fetch, a full-text-search query, or a MIDAS/FTD ZIP download is
-retried up to 3 attempts with 2s/4s backoff (`edgar.retry_request`, reused by
+A connection error, a timeout, or a 5xx on a submissions fetch, a filing text
+or raw fetch (`fetch_filing_text` and `fetch_filing_raw` are both retried the
+same way), a full-text-search query, or a MIDAS/FTD ZIP download is retried up
+to 3 attempts with 2s/4s backoff (`edgar.retry_request`, reused by
 `sec_http.py`) before giving up; a 403/429 still raises `EdgarBlocked`
 immediately, never retried, and a failure is never cached as an answer. A
-MIDAS quarter that keeps failing to download is remembered in-memory
-(`MidasClient`) for the rest of the run so later securities don't repeat the
-same download-and-retry cost.
+MIDAS quarter that keeps failing to download, or whose ZIP SEC no longer
+serves (a 404), is remembered in-memory (`MidasClient`) for the rest of the
+run so later securities don't repeat the same download-and-retry cost, and
+logs one WARNING and counts `midas_miss:<yq>` in `SEC_STATS` — once per
+quarter per run, even though a warm pass and the sequential pass each try the
+download themselves.
 
 `classify_universe.py --sec-workers N` (default 4, at most 8; the library's
 `run()` defaults to 1) fills the SEC caches ahead of four sequential stages:
@@ -202,6 +208,28 @@ exchange transfer). It runs each stage's own code on N threads
 - **What stays on the main thread.** The fails-to-deliver downloads, OpenFIGI
   and the LLM extractor. OpenFIGI's per-security listing check is sent as
   batched mapping requests.
+- **Measured speed** (task 16's live measurement, 2026-09-24). Cold runs on
+  150 eras: 1 worker 18m, 4 workers 11m, 8 workers 5m (4.6×). A fully warm
+  full-universe rerun takes 3–4 min with 0 SEC requests. Guidance: use
+  `--sec-workers 8` for a cold or large refetch; use `--sec-workers 1` for a
+  rerun whose caches are already warm — a warm pass redoes each stage's CPU
+  work but sends no request, so a fully warm rerun at the default 4 workers is
+  about 50% slower (+CPU only, no extra SEC traffic) than at 1; the default
+  stays 4 (cold savings are hours, the warm-rerun cost is ~1.5 min, and 4
+  keeps company-search pressure moderate). SEC's company-name search
+  (`cgi-bin/browse-edgar`) is 89% of cold issuer-resolution time and can slow
+  to ~10 s/request after about 1,500 searches in under an hour, recovering
+  after ~20 idle minutes; every such answer is a normal 200 with a valid ATOM
+  body, so nothing in the code notices the slowdown — it only costs time.
+  Peak memory is 1.8–4.2 GB, mostly the fails-to-deliver panel; threads add
+  well under 40 MB. SEC does not keep full-text-search hit order stable
+  between two fetches of the same query: the same cache always gives the same
+  output, but a refetch can reorder tied hits (three EDGAR-side places take
+  the first match in hit order — the resolver's first pass, the frequency
+  ranking's stable sort of ties, and `successor_from_8k12b`'s first agreeing
+  candidate — so two fetches of one query can resolve differently when two
+  CIKs tie; sorting hits canonically before use would remove this, left as a
+  main-branch follow-up).
 - **The rate limit.** Every thread shares one limiter (`edgar.SEC_LIMITER`:
   request starts at least 1/8 s apart). A 5xx or dropped connection pauses
   every thread together. The limit is machine-wide: each start also takes an
@@ -216,7 +244,15 @@ exchange transfer). It runs each stage's own code on N threads
   process (Ctrl-Z, a debugger) cannot stall every other SEC client on the
   machine; a process forked after the gate is installed shares the parent's
   lock (the same open file description). An unwritable lock path fails at
-  start-up (`use_machine_wide_limit` raises `OSError`), not mid-run.
+  start-up (`use_machine_wide_limit` raises `OSError`), not mid-run. An agent
+  sandbox cannot write `~/.cache/...`, so this repo's agent runs set
+  `DELIST_DETECTION_SEC_RATE_LOCK` to one path,
+  `/tmp/claude/delist_detection/sec_rate.lock`. That is a *different* file
+  from the terminal default, so an agent-sandbox run and a terminal run never
+  share a gate with each other — only with other runs of their own kind. Only
+  one SEC client may run at a time across the two; nothing in the code
+  enforces that, so it is a manual rule (the controller confirms no other SEC
+  client is running before a live run).
 - **Timeouts.** An EDGAR request (submissions, filing text, full-text and
   company-name search) times out at 30 s; a MIDAS or FTD index page at 60 s; a
   SEC data-file download (a MIDAS or FTD ZIP) at 180 s.
@@ -238,7 +274,13 @@ Each run writes `run_manifest.json` next to the tables:
 - the run date (`as_of`), the code version and the worker count;
 - per-endpoint SEC request counts, cache answers and latency (p50, p95, max);
 - degraded answers (failed requests, stale copies), rejected and not-covered
-  full-text searches, and the count of `resolution_degraded` review rows;
+  full-text searches, and the count of `resolution_degraded` review rows.
+  `degraded_answers` counts only what the *sequential* pass rested on; a
+  warm/fill-only thread's own degraded reads (`edgar.filling_only()`) are
+  counted apart, under `warm_degraded:<what>`, so `degraded_answers` is never
+  inflated by a warm thread's own failed attempt at an answer the sequential
+  pass never needed (only the sequential pass's own degraded reads can ever
+  become a `resolution_degraded` review row and feed exit 3);
 - per-warm-pass task failures (`warm_failed:<stage>` — logged at DEBUG and
   counted; the sequential pass meets and records the same failure itself, so a
   nonzero count here only flags a concurrency-only failure worth a second look);

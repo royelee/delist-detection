@@ -28,7 +28,7 @@ editable install.
 
 ```bash
 pip install -e .                         # editable install (Python ≥3.10) — once per env
-pytest                                    # full suite (968 tests, offline, no network)
+pytest                                    # full suite (980 tests, offline, no network)
 pytest tests/test_payout_extractor.py -v  # one file
 pytest tests/test_payout_extractor.py::test_match_in_cash_family_altr -v   # one test
 
@@ -199,9 +199,9 @@ conflate them.
   `EdgarBlocked`. `WebFetch` is **403'd by SEC** — for ad-hoc EDGAR fetches use
   `curl -A "$(python -c 'from delist_detection.edgar import resolve_user_agent as r; print(r())')"`.
   A connection error, a timeout, or a 5xx on `_get_json`/`fetch_filing_raw`/
-  `full_text_search`/`sec_http` downloads retries up to 3 attempts (2s/4s
-  backoff, `edgar.retry_request`); a 403/429 still raises `EdgarBlocked` at
-  once, and a failure is never cached.
+  `fetch_filing_text`/`full_text_search`/`sec_http` downloads retries up to 3
+  attempts (2s/4s backoff, `edgar.retry_request`); a 403/429 still raises
+  `EdgarBlocked` at once, and a failure is never cached.
   The limiter (`edgar.SEC_LIMITER`) is shared by every thread of the process
   and, through `~/.cache/delist_detection/sec_rate.lock`
   (`$DELIST_DETECTION_SEC_RATE_LOCK`), by every SEC client on the machine
@@ -214,7 +214,26 @@ conflate them.
   included, are cached with a TTL (see `docs/data-flow.md`); a resolver miss is
   never cached. An agent sandbox must set `DELIST_DETECTION_SEC_RATE_LOCK` to a
   writable shared path (the default `~/.cache/...` path may not be writable or
-  shared there).
+  shared there); this repo's agent runs use the one path
+  `/tmp/claude/delist_detection/sec_rate.lock`. An agent-sandbox run and a
+  terminal run therefore use *different* lock files and never share a gate —
+  only one SEC client may run at a time across the two, coordinated by hand
+  (the controller confirms no other client is running before a live run).
+- **Measured SEC request speed** (task 16's live measurement, 2026-09-24). Cold
+  runs on 150 eras: 1 worker 18m, 4 workers 11m, 8 workers 5m (4.6×). A fully
+  warm full-universe rerun takes 3–4 min with 0 SEC requests. Use
+  `--sec-workers 8` for a cold or large refetch; use `--sec-workers 1` for a
+  rerun whose caches are already warm (a warm pass redoes each stage's CPU
+  work but sends no request, so 4 workers is about 50% slower than 1 on a
+  fully warm rerun); the CLI default stays 4. SEC's company-name search
+  (`cgi-bin/browse-edgar`, the resolver's fallback tier) is 89% of cold
+  issuer-resolution time and can slow to ~10 s/request after about 1,500
+  searches in under an hour, recovering after ~20 idle minutes — every such
+  answer is a normal 200, so nothing in the code notices the slowdown; it only
+  costs time. Peak memory is 1.8–4.2 GB (mostly the fails-to-deliver panel);
+  threads add well under 40 MB. SEC does not keep full-text-search hit order
+  stable between two fetches of the same query: the same cache always gives
+  the same output, but a refetch can reorder tied hits (see `docs/data-flow.md`).
 - **OpenFIGI refusals abort too.** A 401/403 from OpenFIGI raises
   `OpenFigiBlocked` (`openfigi.py`); `classify_universe.py`'s CLI catches it
   alongside `EdgarBlocked` and exits 2. A 429 is waited out on the
