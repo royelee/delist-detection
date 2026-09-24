@@ -6,6 +6,7 @@ file never leaves a half-written output over the previous complete one.
 """
 from __future__ import annotations
 
+import copy
 import re
 import sys
 from collections import Counter, defaultdict
@@ -18,7 +19,7 @@ from typing import Any
 from .crsp_codes import CrspBucket
 from .delistings import DelistingEvent, DelistingFinder, ReviewItem, SecurityContext
 from .edgar import SEC_STATS, EdgarBlocked
-from .figi_resolution import FigiCandidate, accept, share_class_from_name, us_candidates
+from .figi_resolution import FigiCandidate, accept, is_placeholder, share_class_from_name, us_candidates
 from .form25 import SecurityRef, exchange_label
 from .ftd import FtdIndex
 from .listing_status import edgar_lists, listed_today, listing_answers
@@ -26,7 +27,7 @@ from .names import names_agree
 from .observations import ObservationIndex, TickerEra, eras_by_key, normalize_ticker, observation_conflicts
 from .openfigi import OpenFigiBlocked
 from .payout_gate import DEFAULT_TOL, gate_payouts
-from .prefetch import warm
+from .prefetch import Serialized, warm
 from .reconstruction import _lookup, build_delistings_table, delisting_row, unmatched_override_keys
 from .security_master import (
     FigiResolver, Range, Security, build_securities, era_cusips, era_last_seen, ranges_from_sightings, refine_eras,
@@ -445,6 +446,36 @@ def _flush_memo(clients: Clients) -> None:
         flush()
 
 
+def _warm_delisting_search(clients: Clients, ordered: list[Security], listing: dict[str, dict],
+                           context: Callable[[Security, bool | None], SecurityContext], workers: int) -> None:
+    """Fill the SEC caches for the Form 25 search: each security's own finder work
+    on `workers` threads, fill-only, its answers thrown away. A warm finder is the
+    sequential finder's twin: a copy of the run's classifier holding a shadow
+    resolver, and the run's own MIDAS and Nasdaq-halt clients, each behind one lock
+    shared by every warm finder. It therefore takes the same last-trade anchors
+    and asks for what the sequential pass will. A security whose batched OpenFIGI
+    answer is missing is skipped: the sequential pass asks OpenFIGI for it alone,
+    and its listing status decides what the finder reads."""
+    midas = Serialized(clients.midas) if clients.midas is not None else None
+    halts = Serialized(clients.halts) if clients.halts is not None else None
+
+    def make_finder() -> DelistingFinder:
+        classifier = copy.copy(clients.classifier)
+        if getattr(classifier, "resolver", None) is not None:
+            classifier.resolver = clients.resolver.shadow()
+        return DelistingFinder(clients.edgar, classifier, midas=midas, halts=halts)
+
+    def task(finder: DelistingFinder, s: Security) -> None:
+        answer = listing.get(s.sec_id)
+        if answer is None and not is_placeholder(s.sec_id):
+            return
+        now = listed_today(None, s.sec_id, edgar=clients.edgar, cik=s.issuer_cik,
+                           tickers=sorted({e.ticker for e in s.eras}), answer=answer)
+        finder.find(context(s, now))
+
+    warm(ordered, task, workers=workers, state=make_finder, name="form25 scan")
+
+
 def run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_dir: Path,
         tol: float = DEFAULT_TOL, limit: int | None = None, log: Callable = _stderr,
         sec_workers: int = 1) -> RunSummary:
@@ -505,7 +536,7 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
         # away. The resolve below then runs one era at a time, in order, on this
         # thread, and finds its requests answered.
         warm(eras, lambda shadow, e: shadow.resolve(e.ticker, last_seen[e.key], pin=e.cik_pin),
-             workers=sec_workers, state=clients.resolver.shadow)
+             workers=sec_workers, state=clients.resolver.shadow, name="issuer resolution")
     cik_res = {e.key: clients.resolver.resolve(e.ticker, last_seen[e.key], pin=e.cik_pin) for e in eras}
     _flush_memo(clients)
     meter.done("issuer resolution", mark)
@@ -541,14 +572,9 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
     events: list[DelistingEvent] = []
     listed: dict[str, bool | None] = {}
     sightings = {sid: _sightings(s, ftd, sec_cusips[sid]) for sid, s in securities.items()}
-    ordered = sorted(securities.values(), key=lambda s: s.sec_id)
-    # One batched OpenFIGI ask for every security's listing; a failed batch leaves
-    # each security to ask alone inside its own try below.
-    listing = listing_answers(clients.figi, [s.sec_id for s in ordered])
-    mark = meter.start()
-    for i, s in enumerate(ordered, 1):
+
+    def security_context(s: Security, listed_now: bool | None) -> SecurityContext:
         sig = sightings[s.sec_id]
-        own_last_seen = _own_last_seen(s, sig)
         sibs = siblings.get(s.issuer_cik) or [SecurityRef(s.sec_id, s.share_class, s.kind, s.name)]
         # sec_id -> (first sighting, last own-ticker sighting) for every security
         # sharing this issuer CIK, from the same sightings built above; a sibling
@@ -563,28 +589,38 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
             sib_sec = securities.get(ref.sec_id)
             span_end = _own_last_seen(sib_sec, sib_sig) if sib_sec is not None else sib_sig[-1][0]
             spans[ref.sec_id] = (sib_sig[0][0], span_end)
+        return SecurityContext(
+            security=s,
+            siblings=sibs,
+            ticker_on=_ticker_on(sig),
+            last_seen=_own_last_seen(s, sig),
+            seen_after=lambda day, sig=sig: any(d > day for d, _, _ in sig),
+            listed_today=listed_now,
+            expected_name=s.eras[-1].name if s.eras else None,
+            sibling_spans=spans,
+            resolution_source=_resolution_source(s, cik_res),
+            ftd_seen_after=lambda day, sig=sig, own={e.ticker for e in s.eras}: any(
+                d > day for d, t, src in sig if src == "ftd" and t in own),
+            tickers_between=lambda lo, hi, sig=sig: list(dict.fromkeys(t for d, t, _ in sig if lo <= d <= hi)),
+        )
+
+    ordered = sorted(securities.values(), key=lambda s: s.sec_id)
+    # One batched OpenFIGI ask for every security's listing; a failed batch leaves
+    # each security to ask alone inside its own try below.
+    listing = listing_answers(clients.figi, [s.sec_id for s in ordered])
+    mark = meter.start()
+    if sec_workers > 1:
+        _warm_delisting_search(clients, ordered, listing, security_context, sec_workers)
+    for i, s in enumerate(ordered, 1):
+        own_last_seen = _own_last_seen(s, sightings[s.sec_id])
         try:
-            # listed_today lives inside the try too: a FIGI/EDGAR error there
-            # must become a reviewable row for this one security, not abort
-            # the whole overnight run.
+            # listed_today and the context live inside the try too: a FIGI/EDGAR
+            # error there must become a reviewable row for this one security,
+            # not abort the whole overnight run.
             listed[s.sec_id] = listed_today(clients.figi, s.sec_id, edgar=clients.edgar, cik=s.issuer_cik,
                                             tickers=sorted({e.ticker for e in s.eras}),
                                             answer=listing.get(s.sec_id))
-            ctx = SecurityContext(
-                security=s,
-                siblings=sibs,
-                ticker_on=_ticker_on(sig),
-                last_seen=own_last_seen,
-                seen_after=lambda day, sig=sig: any(d > day for d, _, _ in sig),
-                listed_today=listed[s.sec_id],
-                expected_name=s.eras[-1].name if s.eras else None,
-                sibling_spans=spans,
-                resolution_source=_resolution_source(s, cik_res),
-                ftd_seen_after=lambda day, sig=sig, own={e.ticker for e in s.eras}: any(
-                    d > day for d, t, src in sig if src == "ftd" and t in own),
-                tickers_between=lambda lo, hi, sig=sig: list(dict.fromkeys(t for d, t, _ in sig if lo <= d <= hi)),
-            )
-            evs, rv = finder.find(ctx)
+            evs, rv = finder.find(security_context(s, listed[s.sec_id]))
         except (EdgarBlocked, OpenFigiBlocked):
             raise
         except Exception as exc:  # an overnight run must survive one bad security

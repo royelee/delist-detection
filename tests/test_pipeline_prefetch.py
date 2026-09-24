@@ -6,15 +6,18 @@ stage is refused."""
 import json
 import threading
 from datetime import date
+from types import SimpleNamespace
 
 import pytest
 
 import delist_detection.pipeline as pipeline
 from delist_detection import edgar
 from delist_detection.edgar import EdgarBlocked
+from delist_detection.midas import MidasClient
 from delist_detection.observations import Observation, ObservationIndex
 from delist_detection.openfigi import OpenFigiBlocked
 from delist_detection.pipeline import Overrides, run
+from delist_detection.prefetch import Serialized
 from delist_detection.ticker_resolver import TickerResolver
 from tests.test_pipeline import _clients, _FtdClient, _index_clients
 
@@ -122,3 +125,135 @@ def test_default_clients_share_one_run_date_and_a_machine_wide_limit(tmp_path, m
     assert c.as_of == c.edgar.today == c.resolver.today == c.classifier.today == c.halts.today == date(2026, 9, 23)
     assert c.resolver.batch_writes is True
     assert edgar.SEC_LIMITER.gate is not None and edgar.SEC_LIMITER.gate.path == tmp_path / "sec_rate.lock"
+
+
+class _Midas:
+    def last_trade_day(self, ticker, lo, hi):
+        return None
+
+
+class _Halts:
+    def deletion_halt(self, symbol, lo, hi, max_days=7):
+        return None
+
+
+def test_the_warm_finders_are_the_sequential_finders_twins(fake_edgar, tmp_path, monkeypatch):
+    index, clients = _clients(fake_edgar)
+    clients.midas, clients.halts = _Midas(), _Halts()
+    built = []
+    real = pipeline.DelistingFinder
+
+    class _Spy(real):
+        def __init__(self, edgar, classifier, *, midas=None, halts=None):
+            built.append((midas, halts, classifier))
+            super().__init__(edgar, classifier, midas=midas, halts=halts)
+
+    monkeypatch.setattr(pipeline, "DelistingFinder", _Spy)
+    run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None, sec_workers=4)
+    (seq_midas, seq_halts, seq_classifier), *warm_built = built      # the sequential finder is built first
+    assert seq_midas is clients.midas and seq_halts is clients.halts and seq_classifier is clients.classifier
+    assert warm_built
+    for midas, halts, classifier in warm_built:
+        assert isinstance(midas, Serialized) and midas._obj is clients.midas
+        assert isinstance(halts, Serialized) and halts._obj is clients.halts
+        assert classifier.resolver is not clients.resolver and isinstance(classifier.resolver, TickerResolver)
+    assert len({id(m) for m, _, _ in warm_built}) == 1                 # one lock shared by every warm finder
+
+
+def test_prefetch_reads_edgar_on_worker_threads_before_the_sequential_pass(fake_edgar, tmp_path):
+    index, clients = _clients(fake_edgar)
+    seen, real = [], fake_edgar.recent_filings
+
+    def recording(cik):
+        seen.append((int(cik), threading.current_thread().name))
+        return real(cik)
+
+    fake_edgar.recent_filings = recording
+    run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None, sec_workers=4)
+    names = [name for cik, name in seen if cik == 1122304]
+    assert any(n.startswith("sec-warm") for n in names)                # the prefetch read it
+    assert names[-1] == threading.main_thread().name                   # and the sequential pass read it after
+
+
+def test_a_refusal_on_a_worker_thread_aborts_the_run_and_writes_nothing(fake_edgar, tmp_path):
+    index, clients = _clients(fake_edgar)
+    run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
+    before = {p.name: p.read_text() for p in tmp_path.glob("*.csv")}
+    main_calls, real = [], fake_edgar.fetch_filing_raw
+
+    def refused_on_workers(cik, accession):
+        if threading.current_thread() is not threading.main_thread():
+            raise EdgarBlocked("SEC returned 403")
+        main_calls.append(accession)
+        return real(cik, accession)
+
+    fake_edgar.fetch_filing_raw = refused_on_workers
+    with pytest.raises(EdgarBlocked):
+        run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None, sec_workers=4)
+    assert main_calls == []                                            # the sequential pass never began
+    assert {p.name: p.read_text() for p in tmp_path.glob("*.csv")} == before
+
+
+def test_the_runs_own_resolver_only_ever_runs_on_the_main_thread(fake_edgar, tmp_path):
+    index, clients = _clients(fake_edgar)
+    r, seen = clients.resolver, []
+    real_resolve, real_fits = r.resolve, r._fits_date
+
+    def resolve(*a, **k):
+        seen.append(threading.current_thread().name)
+        return real_resolve(*a, **k)
+
+    def fits(*a, **k):
+        seen.append(threading.current_thread().name)
+        return real_fits(*a, **k)
+
+    r.resolve, r._fits_date = resolve, fits        # its `_transient` flag must never be shared across threads
+    run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None, sec_workers=4)
+    assert seen and set(seen) == {threading.main_thread().name}
+
+
+def test_a_failure_only_a_warm_worker_meets_is_counted_under_its_stage(fake_edgar, tmp_path, monkeypatch):
+    index, clients = _clients(fake_edgar)
+    raised = {"issuer resolution": 0, "form25 scan": 0}
+    real_resolve, real_raw = TickerResolver.resolve, fake_edgar.fetch_filing_raw
+
+    def resolve(self, *a, **k):
+        if threading.current_thread() is not threading.main_thread():
+            raised["issuer resolution"] += 1
+            raise RuntimeError("boom")
+        return real_resolve(self, *a, **k)
+
+    def raw(cik, accession):
+        if threading.current_thread() is not threading.main_thread():
+            raised["form25 scan"] += 1
+            raise RuntimeError("boom")
+        return real_raw(cik, accession)
+
+    monkeypatch.setattr(TickerResolver, "resolve", resolve)
+    fake_edgar.fetch_filing_raw = raw
+    mark = edgar.SEC_STATS.snapshot()
+    run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None, sec_workers=4)
+    counts, _ = edgar.SEC_STATS.since(mark)
+    assert all(raised.values())
+    assert {stage: counts.get(f"warm_failed:{stage}", 0) for stage in raised} == raised
+
+
+def test_a_refusal_of_the_runs_midas_download_on_a_worker_aborts_the_run(fake_edgar, tmp_path):
+    """The run's real MidasClient, behind Serialized: none of its handlers (a
+    failed download, a bad ZIP), nor the finder's, swallows a 403, so the pool
+    stops and the refusal reaches the caller before the sequential pass asks."""
+    index, clients = _clients(fake_edgar)
+    (tmp_path / "midas").mkdir()
+    (tmp_path / "midas" / "index.html").write_text('<a href="/files/opa/x/individual_security_2018_q4.zip">z</a>')
+    asked = []
+
+    class _Refusing:
+        def get(self, url, headers=None, timeout=None):
+            asked.append(threading.current_thread().name)
+            return SimpleNamespace(status_code=403, url=url)
+
+    clients.midas = MidasClient(tmp_path / "midas", session=_Refusing())
+    with pytest.raises(EdgarBlocked):
+        run(index, clients, Overrides(), out_dir=tmp_path / "out", log=lambda *_: None, sec_workers=4)
+    assert asked and all(name.startswith("sec-warm") for name in asked)
+    assert not (tmp_path / "out").exists()
