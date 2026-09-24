@@ -39,3 +39,71 @@ def test_every_edgar_request_is_paced(monkeypatch):
     verify.fetch_edgar_entity_landing(320193)
     verify._get("https://www.sec.gov/cgi-bin/browse-edgar")
     assert events == ["throttle", "get", "throttle", "get"]
+
+
+def _sub(name, rows, former=(), files=()):
+    keys = ("form", "filingDate", "items")
+    return {"name": name, "formerNames": [{"name": n} for n in former], "tickers": [],
+            "filings": {"recent": {k: [r[i] for r in rows] for i, k in enumerate(keys)},
+                        "files": list(files)}}
+
+
+class _JsonResp:
+    status_code = 200
+
+    def __init__(self, d):
+        self.d = d
+
+    def json(self):
+        return self.d
+
+
+def _serve(monkeypatch, by_url):
+    monkeypatch.setattr(verify, "_throttle", lambda: None)
+    monkeypatch.setattr(verify.requests, "get", lambda url, **kw: _JsonResp(by_url[url]))
+
+
+def _row(ticker, bucket, cik, name, day):
+    return {"sec_id": "BBG", "ticker": ticker, "bucket": bucket, "cik": str(cik), "resolved_name": name,
+            "crsp_code": "", "reason": "", "last_trade_date": day, "delist_date": day}
+
+
+def test_camel_case_edgar_names_match_run_together_names(monkeypatch):
+    """EDGAR writes "BlackRock, Inc.", the snapshots "BLACKROCK INC": the camelCase
+    split alone made them share no word (MISMATCH_name)."""
+    url = "https://data.sec.gov/submissions/CIK0002012383.json"
+    _serve(monkeypatch, {url: _sub("BlackRock, Inc.", [("8-K12B", "2024-10-01", "")])})
+    v = verify.verify_one(_row("BLK", "exchange_transfer", 2012383, "BLACKROCK INC", "2024-10-02"))
+    assert v["verdict"] != "MISMATCH_name" and v["name_match"] == "1/1"
+
+
+def test_a_merger_is_confirmed_by_merger_documents_in_older_filings(monkeypatch):
+    """Genentech (Roche, 2009) filed no 8-K 2.01/5.01; its SC 14D9 and Form 25 sit in
+    an older submissions file, past the `recent` block the verifier read."""
+    base = "https://data.sec.gov/submissions/"
+    _serve(monkeypatch, {
+        base + "CIK0000318771.json": _sub("GENENTECH INC", [("10-K", "2010-02-01", "")],
+                                          files=[{"name": "CIK0000318771-submissions-001.json",
+                                                  "filingFrom": "2004-01-01", "filingTo": "2009-12-31"}]),
+        base + "CIK0000318771-submissions-001.json": {
+            "form": ["25-NSE", "15-12B", "SC 14D9", "8-K"], "filingDate": ["2009-03-26", "2009-04-06",
+                                                                         "2009-02-23", "2006-05-01"],
+            "items": ["", "", "", "2.01"]},
+    })
+    v = verify.verify_one(_row("DNA", "merger", 318771, "GENENTECH INC", "2009-03-25"))
+    assert v["verdict"] == "OK" and v["delist_form_present"] == "25=Y,15=Y"
+
+
+def test_a_bankruptcy_8k_confirms_a_liquidation_without_form15(monkeypatch):
+    url = "https://data.sec.gov/submissions/CIK0000768835.json"
+    _serve(monkeypatch, {url: _sub("BIG LOTS INC", [("25-NSE", "2024-09-10", ""), ("8-K", "2024-09-10", "1.03,7.01")])})
+    v = verify.verify_one(_row("BIG", "liquidation", 768835, "BIG LOTS INC", "2024-09-10"))
+    assert v["verdict"] == "OK"
+
+
+def test_an_old_unrelated_8k_does_not_confirm_a_merger(monkeypatch):
+    # a 2.01 years before the delisting is some other deal, not this one
+    url = "https://data.sec.gov/submissions/CIK0000000001.json"
+    _serve(monkeypatch, {url: _sub("ACME CORP", [("25-NSE", "2020-06-01", ""), ("8-K", "2012-01-05", "2.01")])})
+    v = verify.verify_one(_row("ACME", "merger", 1, "ACME CORP", "2020-05-29"))
+    assert v["verdict"] == "WEAK_no_ma_items"

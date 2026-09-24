@@ -402,6 +402,19 @@ trading afterwards: the observations after it are a stale snapshot's). Written b
 | `WEAK_no_delist_form`, `WEAK_no_ma_items`, `WEAK_no_3_01`, `WEAK_no_form15` | Names agree, but the bucket-specific evidence expected on EDGAR wasn't found |
 | `no_cik`, `bad_cik`, `no_entity_data` | No CIK, an invalid one, or nothing to check on the EDGAR entity page |
 
+The verifier reads the company's whole filing list (the submissions JSON's
+`recent` block plus each older submissions file overlapping the window) and
+counts evidence only within [delisting − 400 days, delisting + 120 days]: a
+Form 25/15 for `WEAK_no_delist_form`; for a merger an 8-K item 2.01 or 5.01
+or a merger document (SC 14D9, SC TO-T, DEFM14A/C, PREM14A/C, 425, SC 13E3);
+for a liquidation a Form 15 or the bankruptcy 8-K (item 1.03); for a
+compliance failure an 8-K item 3.01. Names are compared on words of four or
+more letters, legal and share-class words dropped, both as written and split
+on camelCase ("BlackRock" matches "BLACKROCK"). Agreement on the delisting
+rows counts `MISMATCH_*`, `WEAK_no_ma_items`, `WEAK_no_3_01` and
+`WEAK_no_form15` as disagreements; `WEAK_no_delist_form` and `no_*` are no
+evidence either way.
+
 ## Downstream integration
 
 `delistings.csv` is consumed by `delist_detection.qlib_adapter`, joined on
