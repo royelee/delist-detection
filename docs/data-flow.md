@@ -127,12 +127,11 @@ fetched again.
 The ticker→CIK memo lives at `cache/ticker_resolution.json` and is keyed by
 `(ticker, observed_date)` so a recycled ticker resolves to the right
 issuer per date. The file is versioned (`{"__version__": 3, "entries": …}`);
-a file before version 2 predates the date and name checks, so it is
-ignored and replaced on the next save; a version-2 file loads without its
-`efts_name_mismatch` and `efts_frequency_name_mismatch` answers, which
-version 3 decides differently (the SEC ticker map's holder, when it existed
-on the date, beats a candidate whose name disagrees as much:
-`company_tickers_name_mismatch`). Each entry records the era name it
+versions 2 and 3 load, and a file before version 2 predates the date and
+name checks, so it is ignored and replaced on the next save. Answers of a
+withdrawn rule (`company_tickers_name_mismatch`, which let today's
+ticker-map holder beat a name-mismatched EFTS candidate) are dropped on load
+and resolved again. Each entry records the era name it
 was checked with, and a lookup with a different name resolves again.
 Misses, and answers reached while an EDGAR request failed transiently, are
 used for the run but never saved.
@@ -173,13 +172,11 @@ target rather than an acquirer.
    `scripts/classify_universe.py`. Wins over everything below it; used for
    short tickers where EFTS picks the wrong issuer (e.g. `AET → 1122304 Aetna`).
 
-3. **company_tickers.json.** Master active-tickers map. Taken outright when
-   today's holder of the ticker existed on the date under an agreeing name.
-   When it existed but its name disagrees ("Macy's, Inc." for an observed
-   "MACYS INC"), it is held back: a later tier's candidate whose name agrees
-   still wins, but it beats the EFTS second-pass fallback (tier 4) and a
-   zero-name-score frequency winner (tier 6), whose names disagree as much
-   (source `company_tickers_name_mismatch`, flagged `member_name_mismatch`).
+3. **company_tickers.json.** Master active-tickers map. Taken only when
+   today's holder of the ticker existed on the date under an agreeing name;
+   a holder whose name disagrees is not used (a recycled ticker's historical
+   era would otherwise go to today's holder). A wrong answer from a later
+   tier is corrected with a `cik` pin or `MANUAL_OVERRIDES`, not here.
 
 4. **EFTS Form-25/15 with date window.** Searches
    `efts.sec.gov/LATEST/search-index` restricted to Form 25, 25-NSE, 15-12G,

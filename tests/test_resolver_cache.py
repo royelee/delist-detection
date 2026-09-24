@@ -167,18 +167,19 @@ def test_a_stale_cached_copy_is_refetched_before_the_resolver_checks_it(tmp_path
     assert json.loads(client._cache_path(_Resp.url).read_text())["filings"]["recent"]["filingDate"][-1] == "2026-08-20"
 
 
-def test_a_v2_cache_loses_only_the_answers_v3_decides_differently(tmp_path, fake_edgar):
-    """Version 3 prefers the ticker map's holder over a name-mismatched EFTS or
-    frequency candidate, so a version-2 cache keeps every answer except those
-    two kinds, which are resolved again."""
+def test_a_cache_drops_only_the_answers_of_a_retired_rule(tmp_path, fake_edgar):
+    """Version 3 was written while the resolver let the ticker map's holder beat
+    a name-mismatched EFTS candidate (company_tickers_name_mismatch); that rule
+    is withdrawn, so those answers are dropped and resolved again. Every other
+    answer of a version-2 or version-3 file loads."""
     cache = tmp_path / "res.json"
     kept = {**STALE, "member_name": "Altera Corp"}
-    cache.write_text(json.dumps({"__version__": 2, "entries": {
-        KEY: kept,
-        "M|2026-06-30": {"ticker": "M", "cik": 1771146, "name": "ETF Opportunities Trust",
-                         "source": "efts_name_mismatch", "member_name": "MACYS INC"},
-        "SIRI|2026-08-31": {"ticker": "SIRI", "cik": 320193, "name": "Apple Inc.",
-                            "source": "efts_frequency_name_mismatch", "member_name": "SIRIUSXM HOLDINGS INC"}}}))
-    r = TickerResolver(fake_edgar, cache_path=cache, member_names=_member("Altera Corp"))
-    assert set(r._memo) == {KEY}
-    assert r.resolve("ALTR", "2025-03-26").cik == 999999
+    for version in (2, 3):
+        cache.write_text(json.dumps({"__version__": version, "entries": {
+            KEY: kept,
+            "M|2026-06-30": {"ticker": "M", "cik": 1771146, "name": "ETF Opportunities Trust",
+                             "source": "efts_name_mismatch", "member_name": "MACYS INC"},
+            "DDS|2026-08-24": {"ticker": "DDS", "cik": 28917, "name": "DILLARD'S, INC.",
+                               "source": "company_tickers_name_mismatch", "member_name": "DILLARDS INC CLASS A"}}}))
+        r = TickerResolver(fake_edgar, cache_path=cache, member_names=_member("Altera Corp"))
+        assert set(r._memo) == {KEY, "M|2026-06-30"}

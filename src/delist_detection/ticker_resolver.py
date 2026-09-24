@@ -22,16 +22,16 @@ from .evidence import first_filing, names_near, parse_day
 from .names import name_tokens, names_agree
 
 log = logging.getLogger(__name__)
-# Version 2: {"__version__": 2, "entries": {key: {...TickerResolution, "member_name"}}}.
-# Anything else was written before the date and name checks and is not trusted.
 _LOOK_UP_PIN = object()     # resolve(pin=...) default: look the pin up with cik_map
+# The cache file is {"__version__": N, "entries": {key: {...TickerResolution,
+# "member_name"}}}. Versions 2 and 3 load; anything older was written before the
+# date and name checks and is not trusted. Version 3 was written while a
+# since-withdrawn rule let today's ticker-map holder beat a name-mismatched EFTS
+# candidate; its answers (source company_tickers_name_mismatch) are dropped on
+# load and resolved again.
 CACHE_VERSION = 3
-# An older cache version still loads, minus the answers of these sources, which
-# the current rules decide differently. Version 3 prefers the SEC ticker map's
-# holder over a name-mismatched EFTS fallback or frequency winner.
-_DECIDED_DIFFERENTLY_SINCE: dict[int, frozenset[str]] = {
-    2: frozenset({"efts_name_mismatch", "efts_frequency_name_mismatch"}),
-}
+_LOADABLE_VERSIONS = frozenset({2, 3})
+_RETIRED_SOURCES = frozenset({"company_tickers_name_mismatch"})
 
 
 @dataclass
@@ -78,11 +78,10 @@ class TickerResolver:
         except json.JSONDecodeError:
             raw = None
         version = raw.get("__version__") if isinstance(raw, dict) else None
-        if version != CACHE_VERSION and version not in _DECIDED_DIFFERENTLY_SINCE:
+        if version not in _LOADABLE_VERSIONS:
             log.warning("%s is not a version-%d resolver cache; ignoring it (the next save replaces it)",
                         self.cache_path, CACHE_VERSION)
             return
-        stale_sources = _DECIDED_DIFFERENTLY_SINCE.get(version, frozenset())
         for key, d in (raw.get("entries") or {}).items():
             try:
                 res = TickerResolution(d["ticker"], d["cik"], d["name"], d["source"])
@@ -90,7 +89,7 @@ class TickerResolver:
                 continue
             if res.cik is None:  # a persisted miss is retried, never trusted
                 continue
-            if res.source in stale_sources:   # an older rule's answer this version may not give
+            if res.source in _RETIRED_SOURCES:   # a withdrawn rule's answer
                 continue
             self._memo[key] = res
             self._memo_member[key] = d.get("member_name")
@@ -597,17 +596,12 @@ class TickerResolver:
 
         expected = self._expected_name(t, observed_date)
         companies = self._ensure_companies()
-        # Today's holder of the ticker when it existed on the date but under a
-        # name that does not agree ("Macy's, Inc." for "MACYS INC"): not taken
-        # outright, but it beats a candidate below whose name disagrees too.
-        held: tuple[int, str | None] | None = None
         if t in companies:
             # SEC's map lists today's holder of the ticker: accept it only if
             # that company existed on the date under an agreeing name.
             row = companies[t]
             c = int(row["cik_str"])
-            existed, agrees = self._fits_date(c, observed_date, expected)
-            if existed and agrees:
+            if self._fits_date(c, observed_date, expected) == (True, True):
                 res = TickerResolution(
                     ticker=t,
                     cik=c,
@@ -616,8 +610,6 @@ class TickerResolver:
                 )
                 self._remember(cache_key, res, member)
                 return res
-            if existed:
-                held = (c, row.get("title"))
 
         cik: int | None = None
         name: str | None = None
@@ -651,10 +643,6 @@ class TickerResolver:
                 if c1 is not None and self._validate_cik(
                         c1, observed_date, strict=False, window=self.REPLACE_WINDOW_DAYS):
                     cik, name, source = c1, n1, "name_search"
-                elif held is not None:
-                    # Neither name agrees; the SEC's own ticker map beats a
-                    # delisting filer that merely mentions the ticker.
-                    (cik, name), source = held, "company_tickers_name_mismatch"
                 else:
                     cik, name = fallback
                     source = "efts_name_mismatch"
@@ -682,10 +670,7 @@ class TickerResolver:
                 cur = (score, inv_rank, cand_cik, cand_name)
                 if best is None or cur > best:
                     best = cur
-            if best is not None and expected and best[0] == 0 and held is not None:
-                # a zero-score winner disagrees on name as much as the ticker map's holder does
-                (cik, name), source = held, "company_tickers_name_mismatch"
-            elif best is not None:
+            if best is not None:
                 cik, name = best[2], best[3]
                 # A zero-score winner is an impostor vendor series (HMA, HLTH).
                 source = "efts_frequency_name_mismatch" if expected and best[0] == 0 else "efts_frequency"
