@@ -10,6 +10,7 @@ import fcntl
 import hashlib
 import json
 import os
+import re
 import threading
 import time
 import weakref
@@ -118,7 +119,10 @@ def _write_atomic(path: Path, text: str) -> None:
     filesystem) and carries the process and thread id, so two writers never
     share one and `clean_orphan_temps` can tell a dead writer's leftover from a
     live one's. The data is fsynced before the rename and the directory after
-    it, so the new file also survives a power loss."""
+    it, so the new file also survives a power loss. Durability is fsync-level
+    only: on macOS `os.fsync` does not flush the drive's own write cache (that
+    takes `fcntl.F_FULLFSYNC`), so a power loss there may still lose a write the
+    OS had accepted."""
     tmp = path.with_name(f".{path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
     try:
         with open(tmp, "w", encoding="utf-8") as fh:
@@ -132,24 +136,36 @@ def _write_atomic(path: Path, text: str) -> None:
 
 
 def _pid_alive(pid: int) -> bool:
+    """False only when no process has `pid`. True when one may: it is running,
+    it belongs to another user (EPERM), or `pid` is no number this OS can hold
+    as a pid (a stray file's name, not ours to judge)."""
     try:
         os.kill(pid, 0)
     except ProcessLookupError:
         return False
     except OSError:              # EPERM: the process exists but belongs to another user
         return True
+    except (OverflowError, ValueError):
+        return True
     return True
+
+
+_TEMP_NAME = re.compile(r"\.(.+)\.(\d+)\.(\d+)\.tmp", re.ASCII)
 
 
 def clean_orphan_temps(directory: Path) -> None:
     """Delete the `_write_atomic` temp files (`.<name>.<pid>.<thread>.tmp`) in
     `directory` whose writing process has exited: it was killed mid-write. A
-    live process's temp file is left alone, since it may still be writing it."""
+    live process's temp file is left alone, since it may still be writing it,
+    and so is any file whose name does not parse as one. The pid is checked on
+    this host only: this assumes every writer to the cache runs on this machine
+    in one PID namespace (a cache shared with another host or a container could
+    see that writer's live temp file as a dead one's)."""
     if not directory.is_dir():
         return
     for p in directory.glob(".*.tmp"):
-        parts = p.name[1:-len(".tmp")].rsplit(".", 2)
-        if len(parts) == 3 and parts[1].isdigit() and parts[2].isdigit() and not _pid_alive(int(parts[1])):
+        m = _TEMP_NAME.fullmatch(p.name)
+        if m and not _pid_alive(int(m.group(2))):
             p.unlink(missing_ok=True)
 
 
@@ -430,6 +446,12 @@ class EdgarSubmission:
 
 
 class EdgarClient:
+    """The EDGAR client, one instance shared by every thread of a run: each thread
+    sends on its own HTTP session, and each cache file has its own lock
+    (`_lock_for`). The lock table grows by one entry per cache file the client
+    touches and is never pruned, for the client's lifetime: one small lock per
+    file, fine for a CLI run."""
+
     def __init__(
         self,
         cache_dir: str | Path,
@@ -471,8 +493,9 @@ class EdgarClient:
         """GET `url` on this thread's session, through the shared limiter, with this
         request's own headers. With `retry`, through `retry_request`: a transport
         error or a 5xx is retried with backoff, every thread pausing with it, and
-        a 403/429 raises EdgarBlocked at once. Without it, one attempt, and a 5xx
-        or a transport error still pauses every thread for the first backoff."""
+        a 403/429 raises EdgarBlocked at once. Without it, one attempt: a 403/429
+        still raises EdgarBlocked, and a 5xx or a transport error still pauses
+        every thread for the first backoff."""
         headers = self._headers(host, accept)
         session = self.session
 
@@ -487,6 +510,7 @@ class EdgarClient:
         except requests.RequestException:
             SEC_LIMITER.pause(RETRY_BACKOFF[0])
             raise
+        check_response(resp)              # 403/429 -> EdgarBlocked, as on the retried path
         if resp.status_code >= 500:
             SEC_LIMITER.pause(RETRY_BACKOFF[0])
         return resp
@@ -519,12 +543,13 @@ class EdgarClient:
 
         One thread at a time per cache file (`_lock_for`): a second caller for
         the same URL waits, then reads what the first wrote. On a prefetch thread
-        (`fill_only`) a cached copy is returned whatever its age.
+        (`fill_only`) a cached copy is returned whatever its age, even with
+        `refresh`: a warm pass never replaces a copy.
         """
         cp = self._cache_path(url)
         with self._lock_for(str(cp)):
             cached: Any = None
-            if cp.exists() and not refresh:
+            if cp.exists() and (not refresh or filling_only()):
                 try:
                     cached = json.loads(cp.read_text())
                 except json.JSONDecodeError:

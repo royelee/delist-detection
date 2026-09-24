@@ -80,13 +80,17 @@ def test_a_second_caller_waits_for_the_first_and_reads_its_answer(tmp_path):
     lock = client._lock_for(str(cp))
     lock.acquire()                                    # a first thread is mid-fetch of this URL
     out = []
-    t = threading.Thread(target=lambda: out.append(client.submissions(42)))
-    t.start()
-    t.join(0.2)
-    assert t.is_alive()                               # the second caller waits on the file's lock...
-    assert session.calls == []                        # ...without sending a request of its own
-    cp.write_text(json.dumps({"name": "First Co", "__fetched__": "2026-09-23"}))   # the first finishes
-    lock.release()
+    # daemon, and the lock released in `finally`: a failed assertion ends the
+    # test instead of leaving a worker blocked on the lock and the suite hanging
+    t = threading.Thread(target=lambda: out.append(client.submissions(42)), daemon=True)
+    try:
+        t.start()
+        t.join(0.2)
+        assert t.is_alive()                           # the second caller waits on the file's lock...
+        assert session.calls == []                    # ...without sending a request of its own
+        cp.write_text(json.dumps({"name": "First Co", "__fetched__": "2026-09-23"}))   # the first finishes
+    finally:
+        lock.release()
     t.join(5)
     assert out == [{"name": "First Co", "__fetched__": "2026-09-23"}]
     assert session.calls == []
@@ -128,7 +132,7 @@ def test_a_write_reaches_the_disk_before_it_replaces_the_file(tmp_path, monkeypa
     monkeypatch.setattr(edgar.os, "fsync", fsync)
     monkeypatch.setattr(edgar.os, "replace", replace)
     edgar._write_atomic(tmp_path / "x.json", "{}")
-    assert events[:2] == ["fsync", "replace"]
+    assert events == ["fsync", "replace", "fsync"]    # the data, the rename, then the directory
 
 
 def test_temp_files_left_by_a_killed_process_are_removed_at_start(tmp_path):
@@ -140,6 +144,15 @@ def test_temp_files_left_by_a_killed_process_are_removed_at_start(tmp_path):
         p.write_text("x")
     EdgarClient(cache_dir=tmp_path, user_agent=UA)
     assert not dead.exists() and live.exists() and other.exists()
+
+
+def test_a_stray_temp_file_name_neither_breaks_the_client_nor_is_removed(tmp_path):
+    superscript = tmp_path / ".x.²2.1.tmp"                  # "²2": str.isdigit() says yes, int() says no
+    huge_pid = tmp_path / f".y.json.{'9' * 20}.1.tmp"             # no OS has such a pid: os.kill overflows
+    for p in (superscript, huge_pid):
+        p.write_text("x")
+    EdgarClient(cache_dir=tmp_path, user_agent=UA)
+    assert superscript.exists() and huge_pid.exists()
 
 
 def test_each_thread_gets_its_own_session(tmp_path):
@@ -193,6 +206,16 @@ def test_a_failed_filing_text_request_pauses_every_thread(tmp_path, monkeypatch)
     assert pauses == [edgar.RETRY_BACKOFF[0]]
 
 
+@pytest.mark.parametrize("status", [403, 429])
+@pytest.mark.parametrize("retry", [False, True])
+def test_a_refusal_raises_at_once_with_or_without_retries(tmp_path, status, retry):
+    session = _Session(status=status)
+    client = _client(tmp_path, session)
+    with pytest.raises(edgar.EdgarBlocked):
+        client._get("https://www.sec.gov/x", host="www.sec.gov", accept="*/*", retry=retry)
+    assert session.calls == ["https://www.sec.gov/x"]                 # one request, never retried
+
+
 def test_a_prefetch_thread_fills_a_missing_copy_but_never_replaces_one(tmp_path):
     session = _Session()
     client = _client(tmp_path, session)
@@ -205,6 +228,18 @@ def test_a_prefetch_thread_fills_a_missing_copy_but_never_replaces_one(tmp_path)
     assert json.loads(cp.read_text()) == old
     assert session.calls == ["https://data.sec.gov/submissions/CIK0000000043.json"]
     assert client.submissions(42, fresh_after=date(2026, 9, 1))["name"] == "Co"   # outside: refreshed
+
+
+def test_a_prefetch_thread_keeps_an_existing_copy_even_when_asked_to_refresh(tmp_path):
+    session = _Session()
+    client = _client(tmp_path, session)
+    cp = client._cache_path(SUB_URL)
+    old = {"name": "Old Co", "__fetched__": "2020-01-01"}
+    cp.write_text(json.dumps(old))
+    with fill_only():
+        assert client._get_json(SUB_URL, refresh=True) == old          # fill-only wins over refresh
+    assert session.calls == [] and json.loads(cp.read_text()) == old
+    assert client._get_json(SUB_URL, refresh=True)["name"] == "Co"      # outside: refreshed
 
 
 def test_fill_only_applies_to_the_calling_thread_alone():
