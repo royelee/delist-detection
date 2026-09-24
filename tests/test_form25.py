@@ -203,3 +203,13 @@ def test_notice_market_open_and_close_variants_synthetic():
         == (date(2016, 5, 19), "notice_close")
     assert notice_last_trade(mk("suspended from trading before the opening on May 19, 2016")) \
         == (date(2016, 5, 18), "notice_open")
+
+
+def test_edgars_bare_cboe_exchange_string_is_cboe_bzx():
+    """EDGAR's submissions list Cboe Global Markets (CIK 1374310) on exchange
+    "CBOE": its own shares trade on Cboe BZX. Only the bare string maps; a
+    Cboe options-exchange entity name does not."""
+    assert exchange_label("CBOE") == "CBOE BZX"
+    assert exchange_label("Cboe") == "CBOE BZX"
+    assert exchange_label("CBOE BZX") == "CBOE BZX" and exchange_label("BATS") == "CBOE BZX"
+    assert exchange_label("Cboe Exchange, Inc.") == ""

@@ -29,7 +29,9 @@ _EXCHANGES: list[tuple[str, str]] = [
     ("PACIFIC", r"PACIFIC (?:STOCK )?EXCHANGE"),
     ("BOSTON", r"BOSTON STOCK EXCHANGE|NASDAQ\s*(?:OMX\s*)?BX"),
     ("PHLX", r"PHILADELPHIA STOCK EXCHANGE|NASDAQ\s*(?:OMX\s*)?PHLX|\bPHLX\b"),
-    ("CBOE BZX", r"CBOE\s*BZX|\bBATS\b"),
+    # EDGAR's submissions write a bare "CBOE" for Cboe Global Markets, whose
+    # shares list on Cboe BZX; an entity name such as "Cboe Exchange, Inc." is not it.
+    ("CBOE BZX", r"CBOE\s*BZX|\bBATS\b|^\s*CBOE\s*$"),
     ("NASDAQ", r"NASDAQ"),
     ("NYSE", r"NEW YORK STOCK EXCHANGE|\bNYSE\b"),
 ]

@@ -123,3 +123,9 @@ def test_the_openfigi_ticker_also_counts_and_no_cik_keeps_the_openfigi_rule():
     # a placeholder: one of its own tickers must be on a major exchange
     assert listed_today(_Figi({}), "CIK5-COMMON", edgar=sub, cik=5, tickers=["OTHER"]) is False
     assert listed_today(_Figi({}), "CIK5-COMMON", edgar=sub, cik=5, tickers=["NEWT"]) is True
+
+
+def test_a_security_edgar_lists_on_cboe_is_listed_today():
+    figi = _Figi({"data": [{"exchCode": "UF", "ticker": "CBOE"}]})
+    sub = _FixEdgar({"tickers": ["CBOE"], "exchanges": ["CBOE"]})
+    assert listed_today(figi, "BBG000QH56C1", edgar=sub, cik=1374310, tickers=["CBOE"]) is True
