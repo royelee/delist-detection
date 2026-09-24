@@ -5,11 +5,7 @@ import csv
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from types import SimpleNamespace
 
-import requests
-
-from delist_detection import ticker_resolver
 from delist_detection.edgar import EdgarSubmission
 from delist_detection.llm_merger_extractor import MergerTerms
 from delist_detection.ticker_resolver import TickerResolver
@@ -95,23 +91,11 @@ class GoldenEdgar:
         return self.data["atom"].get(f"{company}|{form_type}", [])
 
 
-class _EftsAnswer:
-    status_code = 200
-
-    def __init__(self, url: str, payload: dict) -> None:
-        self.url, self._payload = url, payload
-
-    def json(self) -> dict:
-        return self._payload
-
-
 def patch_efts(monkeypatch, case: GoldenCase) -> None:
     """Run the real EFTS methods over the captured EFTS answers (efts_raw, keyed by
     URL); a URL that was not captured answers with no hits."""
     raw = case.data["efts_raw"]
     for name, method in _REAL_EFTS.items():
         monkeypatch.setattr(TickerResolver, name, method)
-    monkeypatch.setattr(ticker_resolver, "requests", SimpleNamespace(
-        get=lambda url, *a, **kw: _EftsAnswer(url, raw.get(url, {"hits": {"hits": []}})),
-        RequestException=requests.RequestException))
-    monkeypatch.setattr(ticker_resolver, "_throttle", lambda: None)
+    monkeypatch.setattr(TickerResolver, "_efts_hits",
+                        lambda self, url, window_end=None: raw.get(url, {"hits": {"hits": []}})["hits"]["hits"])

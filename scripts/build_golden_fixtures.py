@@ -8,10 +8,12 @@ submissions (trimmed to -1650/+400 days) for the true CIK, the wrong CIK and
 every candidate CIK a resolver tier can return, the company_tickers row,
 company_search_atom hits for every name variant the resolver issues, the raw
 answers to the two EFTS queries the resolver issues (`efts_raw`, keyed by URL,
-which tests/golden.py serves back to the real EFTS methods), and the text of
-every 8-K carrying items 1.03/2.01/3.01/5.01 plus the closing/announcement
-filings the payout reader would open. `efts_lookup` and `efts_frequency` are
-the resolver's answers at capture time, kept for reading only.
+which tests/golden.py serves back to the real EFTS methods), recorded from the
+live answer: the client's search caches are bypassed, so a cached answer can
+never be frozen into a fixture, and the text of every 8-K carrying items
+1.03/2.01/3.01/5.01 plus the closing/announcement filings the payout reader
+would open. `efts_lookup` and `efts_frequency` are the resolver's answers at
+capture time, kept for reading only.
 Re-run after changing data/golden_events.csv. `--efts-only` re-captures just
 `efts_raw` into the existing fixtures and leaves every other key untouched.
 
@@ -46,7 +48,7 @@ import requests
 from dotenv import dotenv_values
 
 from delist_detection.classifier import DelistClassifier
-from delist_detection.edgar import SEC_HOST, EdgarClient
+from delist_detection.edgar import EFTS_SOURCE_KEYS, SEC_HOST, EdgarClient, use_machine_wide_limit
 from delist_detection.filing_selection import announcement_8k, closing_8k, form_filings
 from delist_detection.ftd import FtdClient, FtdIndex
 from delist_detection.llm_client import default_llm_client
@@ -61,8 +63,6 @@ TEXT_ITEMS = {"1.03", "2.01", "3.01", "5.01"}
 BEFORE_DAYS, AFTER_DAYS = 1650, 400
 ANY_DISTANCE_FORMS = {"25", "25-NSE", "15-12G", "15-12B", "15-15D", "REVOKED"}
 EFTS_PREFIX = "https://efts.sec.gov/"
-# The resolver reads ciks and display_names; form, file_date and adsh make a fixture readable.
-EFTS_SOURCE_KEYS = ("ciks", "display_names", "form", "file_date", "adsh")
 LLM_KEYS = ("llm_terms", "acquirer_price")
 _efts_raw: dict[str, dict] = {}
 
@@ -91,7 +91,9 @@ def _strict(get):
 
 
 def _recording(get):
-    """Keep every EFTS answer, keyed by URL and trimmed to EFTS_SOURCE_KEYS."""
+    """Keep every EFTS answer the client's session receives, keyed by URL, with
+    `hits.total` and each `_source` cut to EFTS_SOURCE_KEYS: the shape
+    tests/golden.py serves back."""
     def wrapped(*args, **kwargs):
         resp = get(*args, **kwargs)
         url = args[0] if args else kwargs.get("url")
@@ -102,6 +104,16 @@ def _recording(get):
                 for h in hits.get("hits", [])]}}
         return resp
     return wrapped
+
+
+def _client(cache_dir: Path) -> EdgarClient:
+    """The live EDGAR client of a capture. The search caches are bypassed, so a
+    cached answer is never frozen into a fixture; every request is strict; and
+    every EFTS answer is recorded as it arrived. Single-threaded: `session` is
+    this thread's session."""
+    edgar = EdgarClient(cache_dir=cache_dir, search_cache=False)
+    edgar.session.get = _recording(_strict(edgar.session.get))
+    return edgar
 
 
 def _resolver(edgar, row) -> TickerResolver:
@@ -116,13 +128,13 @@ def _capture_efts(resolver: TickerResolver, t: str, d: str) -> tuple[dict, list,
     return dict(_efts_raw), lookup, frequency
 
 
-def _refresh_efts(rows) -> None:
+def _refresh_efts(rows, edgar) -> None:
     """Add efts_raw to the existing fixtures; nothing else is fetched or changed."""
     for row in rows:
         t, d = row["ticker"], row["observed_delist_date"]
         path = OUT / f"{t}_{d}.json"
         case = json.loads(path.read_text())
-        case["efts_raw"], _, _ = _capture_efts(_resolver(None, row), t, d)
+        case["efts_raw"], _, _ = _capture_efts(_resolver(edgar, row), t, d)
         path.write_text(json.dumps(case, indent=1))
         print(f"{t} {d}: {len(case['efts_raw'])} EFTS answers")
 
@@ -207,17 +219,16 @@ def main() -> None:
     p.add_argument("--only", action="append", metavar="ID",
                    help="capture only this case (TICKER_DATE, e.g. BLD_2026-07-01); repeatable")
     args = p.parse_args()
-    requests.get = _recording(_strict(requests.get))   # EFTS calls in ticker_resolver
+    use_machine_wide_limit()    # share the 8 requests/s with every other SEC client on this machine
     rows = list(csv.DictReader((ROOT / "data" / "golden_events.csv").open()))
     if args.only:
         rows = [r for r in rows if f"{r['ticker']}_{r['observed_delist_date']}" in args.only]
         if len(rows) != len(set(args.only)):
             p.error(f"--only names a case that is not in data/golden_events.csv: {args.only}")
+    edgar = _client(ROOT / "cache" / "edgar")
     if args.efts_only:
-        _refresh_efts(rows)
+        _refresh_efts(rows, edgar)
         return
-    edgar = EdgarClient(cache_dir=ROOT / "cache" / "edgar")
-    edgar.session.get = _strict(edgar.session.get)
     llm = None
     if _openai_key_set():
         llm = LLMMergerTermsExtractor(edgar, default_llm_client(), cache_dir=ROOT / "cache" / "llm")

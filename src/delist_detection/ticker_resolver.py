@@ -17,7 +17,7 @@ from typing import Iterable
 
 import requests
 
-from .edgar import EdgarClient, DEFAULT_UA, _throttle, check_response, EdgarBlocked, submissions_fresh_after
+from .edgar import EdgarBlocked, EdgarClient, submissions_fresh_after
 from .evidence import first_filing, names_near, parse_day
 from .names import name_tokens, names_agree
 
@@ -224,6 +224,13 @@ class TickerResolver:
         1296945,   # Boston Stock Exchange Inc.
     }
 
+    def _efts_hits(self, url: str, window_end: date | None) -> list[dict]:
+        """EFTS `hits.hits` for one of this resolver's queries, sent through the
+        EDGAR client: the shared rate limit, the User-Agent, and the cache
+        (`EdgarClient.efts_search`). Raises requests.RequestException when EDGAR
+        could not answer; the callers then mark this resolve transient."""
+        return self.edgar.efts_search(url, window_end=window_end)
+
     def _efts_pre_delist_frequency_ranked(
         self, ticker: str, observed_date: str, top_n: int = 5
     ) -> list[tuple[int, str]]:
@@ -246,21 +253,10 @@ class TickerResolver:
             f"&dateRange=custom&startdt={lo}&enddt={hi}"
         )
         try:
-            _throttle()
-            resp = requests.get(
-                url,
-                headers={"User-Agent": DEFAULT_UA, "Accept": "application/json"},
-                timeout=30,
-            )
-            check_response(resp)
-            if resp.status_code != 200:
-                self._transient = self._transient or resp.status_code >= 500
-                return []
-            data = resp.json()
-        except (requests.RequestException, json.JSONDecodeError) as e:
+            hits = self._efts_hits(url, d - timedelta(days=1))
+        except requests.RequestException as e:
             self._note_transient(e)
             return []
-        hits = data.get("hits", {}).get("hits", [])
         counts: dict[int, tuple[int, str]] = {}
         token_re = re.compile(rf"\(\s*{re.escape(ticker.upper())}\s*\)")
         for h in hits:
@@ -495,31 +491,22 @@ class TickerResolver:
         ticker_u = ticker.upper()
         forms = "25-NSE,25,15-12G,15-12B,15-15D"
         params = [f"q=%22{ticker_u}%22", f"forms={forms}"]
+        window_end: date | None = None
         if observed_date:
             try:
                 d = datetime.strptime(observed_date, "%Y-%m-%d").date()
                 lo = (d - timedelta(days=90)).isoformat()
                 hi = (d + timedelta(days=90)).isoformat()
                 params += [f"dateRange=custom", f"startdt={lo}", f"enddt={hi}"]
+                window_end = d + timedelta(days=90)
             except ValueError:
                 pass
         url = "https://efts.sec.gov/LATEST/search-index?" + "&".join(params)
         try:
-            _throttle()
-            resp = requests.get(
-                url,
-                headers={"User-Agent": DEFAULT_UA, "Accept": "application/json"},
-                timeout=30,
-            )
-            check_response(resp)
-            if resp.status_code != 200:
-                self._transient = self._transient or resp.status_code >= 500
-                return None, None, False
-            data = resp.json()
-        except (requests.RequestException, json.JSONDecodeError) as e:
-            self._note_transient(e)
+            hits = self._efts_hits(url, window_end)
+        except requests.RequestException as e:
+            self._note_transient(e)          # EDGAR did not answer: never save what this resolve reaches
             return None, None, False
-        hits = data.get("hits", {}).get("hits", [])
         token_re = re.compile(rf"\(\s*{re.escape(ticker_u)}\s*\)")
 
         # First pass: exact (TICKER) match anywhere in display_names.

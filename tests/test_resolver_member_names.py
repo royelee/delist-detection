@@ -1,4 +1,3 @@
-import delist_detection.ticker_resolver as tr
 from delist_detection.classifier import DelistClassifier
 from delist_detection.edgar import EdgarSubmission
 from delist_detection.ticker_resolver import TickerResolver
@@ -36,15 +35,8 @@ def _f(acc, form, d):
 
 def _real_efts(monkeypatch, hits):
     """Run the real _efts_lookup over these EFTS hits (no network)."""
-    class _Resp:
-        status_code = 200
-
-        def json(self):
-            return {"hits": {"hits": hits}}
-
     monkeypatch.setattr(TickerResolver, "_efts_lookup", _REAL_EFTS_LOOKUP)
-    monkeypatch.setattr(tr.requests, "get", lambda *a, **kw: _Resp())
-    monkeypatch.setattr(tr, "_throttle", lambda: None)
+    monkeypatch.setattr(TickerResolver, "_efts_hits", lambda self, url, window_end=None: hits)
 
 
 def _hit(*pairs):
