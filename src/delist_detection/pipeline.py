@@ -21,7 +21,7 @@ from .edgar import EdgarBlocked
 from .figi_resolution import FigiCandidate, accept, share_class_from_name, us_candidates
 from .form25 import SecurityRef, exchange_label
 from .ftd import FtdIndex
-from .listing_status import listed_today
+from .listing_status import edgar_lists, listed_today
 from .names import names_agree
 from .observations import ObservationIndex, TickerEra, eras_by_key, normalize_ticker, observation_conflicts
 from .openfigi import OpenFigiBlocked
@@ -323,6 +323,28 @@ def _successor_in_run(e: DelistingEvent, starts: dict[str, tuple[str, int | None
         elif own & tickers:
             found[sid] = "same_ticker"
     return next(iter(found.items())) if len(found) == 1 else None
+
+
+def _acquirer_cik(clients: Clients, acq: str, day: date, target: DelistingEvent) -> int | None:
+    """The acquirer's issuer CIK. The resolver answers for (ticker, day), so an
+    acquirer that took the target's own ticker (Progressive Waste becoming
+    Waste Connections under WCN) resolves to the target's CIK, often through the
+    target era's pin. Then the SEC ticker map's holder (company_tickers.json)
+    stands in when it is a different company whose EDGAR record lists the
+    ticker on a major exchange today; otherwise the CIK is left unknown rather
+    than copied from the target."""
+    cik = clients.resolver.resolve(acq, day.isoformat()).cik
+    if normalize_ticker(acq) != normalize_ticker(target.ticker) and (cik is None or cik != target.cik):
+        return cik
+    companies = clients.edgar.company_tickers() or {}
+    row = companies.get(acq.upper()) or companies.get(acq.upper().replace(".", "-")) or {}
+    try:
+        holder = int(row.get("cik_str"))
+    except (TypeError, ValueError):
+        return None
+    if holder == target.cik or not edgar_lists(clients.edgar, holder, [acq]):
+        return None
+    return holder
 
 
 def _cusip_on(cusip_ranges: list[Range], day: date) -> str | None:
@@ -633,7 +655,7 @@ def run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_
         acquirer_ids[key] = cand.composite
         if cand.composite not in securities:
             if cand.composite not in added:
-                acq_cik = clients.resolver.resolve(acq, day.isoformat()).cik
+                acq_cik = _acquirer_cik(clients, acq, day, e)
                 added[cand.composite] = Security(cand.composite, acq_cik, share_class_from_name(cand.name),
                                                  cand.name, cand.security_type, False, "cusip")
                 added_meta[cand.composite] = {"kind": "acquirer", "ticker": acq, "rows": [], "fallback_day": day}

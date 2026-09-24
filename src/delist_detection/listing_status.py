@@ -60,7 +60,7 @@ def withdrawal_kind(exchange: str, before: set[str] | None, after: set[str] | No
     return "delisting"
 
 
-def _edgar_lists(edgar, cik: int, tickers: Iterable[str] | None) -> bool:
+def edgar_lists(edgar, cik: int, tickers: Iterable[str] | None) -> bool:
     """True when the issuer's EDGAR submissions JSON lists one of `tickers` on a
     major exchange (any of its tickers when `tickers` is None)."""
     sub = edgar.submissions(cik)
@@ -93,7 +93,7 @@ def listed_today(figi, sec_id: str, *, edgar=None, cik: int | None = None,
         if edgar is None or cik is None:
             return True
         names = None if tickers is None else [*tickers, *(str(r.get("ticker") or "").replace("/", "-") for r in rows)]
-        return _edgar_lists(edgar, cik, names)
+        return edgar_lists(edgar, cik, names)
     if edgar is None or cik is None:
         return None
-    return _edgar_lists(edgar, cik, tickers)
+    return edgar_lists(edgar, cik, tickers)

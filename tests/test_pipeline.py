@@ -1520,3 +1520,44 @@ def test_with_no_last_trade_date_the_window_is_anchored_on_the_form25_filing():
                         exchange="NASDAQ", flags=["successor_unknown"])
     starts = {"BBGAPAOLD01": ("2007-12-17", 6769, {"APA"}), "BBGAPANEW01": ("2021-03-01", 1841666, {"APA"})}
     assert pipeline._successor_in_run(ev, starts) == ("BBGAPANEW01", "same_ticker")
+
+
+def _same_ticker_acquirer_run(fake_edgar, tmp_path, holder=None):
+    """Waste Connections 2016 as the run sees it: the target (old WCN, pinned to
+    its own issuer) is acquired by a company that takes the same ticker WCN; the
+    fails rows under WCN around the last trade are mostly the acquirer's CUSIP.
+    The resolver's pin lookup for WCN on that day answers with the target's CIK."""
+    fake_edgar.submissions_by_cik[1057058] = [
+        EdgarSubmission("w1", "8-K", "2016-06-01", "2016-06-01", "2.01,3.01,5.01", "k.htm"),
+        EdgarSubmission("w2", "25-NSE", "2016-06-01", "", "", "p.xml")]
+    fake_edgar.raws["w2"] = STALE_F25_RAW
+    fake_edgar.texts["w1"] = ("Item 3.01 Notice. trading suspended prior to the opening of trading on June 1, 2016 "
+                              + "x" * 300)
+    if holder:
+        fake_edgar.company_map["WCN"] = {"cik_str": holder, "ticker": "WCN", "title": "Waste Connections, Inc."}
+        fake_edgar.submissions_by_cik[holder] = []
+        fake_edgar.listings[holder] = [("WCN", "NYSE")]
+    obs = [Observation("WCN", d, "WASTE CONNECTIONS INC.", cik=1057058) for d in ("2015-06-30", "2015-12-31")]
+    rows = (_ftd("WCN", "941053100", "WASTE CONNECTIONS INC",
+                 ["2015-06-30", "2015-08-31", "2015-10-30", "2015-12-31", "2016-02-29", "2016-04-29", "2016-05-27",
+                  "2016-05-31"])
+            + _ftd("WCN", "94106B101", "WASTE CONNECTIONS INC",
+                   ["2016-06-02", "2016-06-03", "2016-06-06", "2016-06-08", "2016-06-09"]))
+    index, clients = _index_clients(fake_edgar, obs, rows, {
+        ("ID_CUSIP", "941053100"): _figi_answer("BBGWCNOLD01", "WCN", "WASTE CONNECTIONS INC"),
+        ("ID_CUSIP", "94106B101"): _figi_answer("BBGWCNNEW01", "WCN", "WASTE CONNECTIONS INC")})
+    overrides = Overrides(merger_terms={("BBGWCNOLD01", "2016-06-11"):
+                                        {"stock_ratio": 2.076, "acquirer_price": 30.0, "acquirer_ticker": "WCN"}})
+    run(index, clients, overrides, out_dir=tmp_path, log=lambda *_: None)
+    return {r["sec_id"]: r for r in read_table("securities", table_path(tmp_path, "securities"))}
+
+
+def test_a_same_ticker_acquirer_takes_the_sec_ticker_maps_holder_not_the_targets_cik(fake_edgar, tmp_path):
+    secs = _same_ticker_acquirer_run(fake_edgar, tmp_path, holder=1318220)
+    assert secs["BBGWCNNEW01"]["observed"] == "false"
+    assert secs["BBGWCNNEW01"]["issuer_cik"] == "1318220"
+
+
+def test_a_same_ticker_acquirer_without_a_ticker_map_holder_has_no_cik(fake_edgar, tmp_path):
+    secs = _same_ticker_acquirer_run(fake_edgar, tmp_path)
+    assert secs["BBGWCNNEW01"]["issuer_cik"] == ""
