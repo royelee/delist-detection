@@ -209,8 +209,8 @@ exchange transfer). It runs each stage's own code on N threads
   and the LLM extractor. OpenFIGI's per-security listing check is sent as
   batched mapping requests.
 - **Measured speed** (task 16's live measurement, 2026-09-24). Cold runs on
-  150 eras: 1 worker 18m, 4 workers 11m, 8 workers 5m (4.6×). A fully warm
-  full-universe rerun takes 3–4 min with 0 SEC requests. Guidance: use
+  150 eras: 1 worker 18m, 4 workers 11m, 8 workers 5m (3.6× wall time; issuer resolution 4.6×). A fully warm
+  full-universe rerun takes about 3–4 min (2m47s at 1 worker, 4m13s at 4) with 0 SEC requests. Guidance: use
   `--sec-workers 8` for a cold or large refetch; use `--sec-workers 1` for a
   rerun whose caches are already warm — a warm pass redoes each stage's CPU
   work but sends no request, so a fully warm rerun at the default 4 workers is
@@ -221,8 +221,8 @@ exchange transfer). It runs each stage's own code on N threads
   to ~10 s/request after about 1,500 searches in under an hour, recovering
   after ~20 idle minutes; every such answer is a normal 200 with a valid ATOM
   body, so nothing in the code notices the slowdown — it only costs time.
-  Peak memory is 1.8–4.2 GB, mostly the fails-to-deliver panel; threads add
-  well under 40 MB. SEC does not keep full-text-search hit order stable
+  Peak memory is 1.8–4.2 GB, mostly data (likely the fails-to-deliver panel; not profiled); threads add
+  at most about 37 MB (measured). SEC does not keep full-text-search hit order stable
   between two fetches of the same query: the same cache always gives the same
   output, but a refetch can reorder tied hits (three EDGAR-side places take
   the first match in hit order — the resolver's first pass, the frequency

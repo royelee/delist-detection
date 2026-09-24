@@ -220,8 +220,8 @@ conflate them.
   only one SEC client may run at a time across the two, coordinated by hand
   (the controller confirms no other client is running before a live run).
 - **Measured SEC request speed** (task 16's live measurement, 2026-09-24). Cold
-  runs on 150 eras: 1 worker 18m, 4 workers 11m, 8 workers 5m (4.6×). A fully
-  warm full-universe rerun takes 3–4 min with 0 SEC requests. Use
+  runs on 150 eras: 1 worker 18m, 4 workers 11m, 8 workers 5m (3.6× wall time; issuer resolution 4.6×). A fully
+  warm full-universe rerun takes about 3–4 min (2m47s at 1 worker, 4m13s at 4) with 0 SEC requests. Use
   `--sec-workers 8` for a cold or large refetch; use `--sec-workers 1` for a
   rerun whose caches are already warm (a warm pass redoes each stage's CPU
   work but sends no request, so 4 workers is about 50% slower than 1 on a
@@ -230,8 +230,8 @@ conflate them.
   issuer-resolution time and can slow to ~10 s/request after about 1,500
   searches in under an hour, recovering after ~20 idle minutes — every such
   answer is a normal 200, so nothing in the code notices the slowdown; it only
-  costs time. Peak memory is 1.8–4.2 GB (mostly the fails-to-deliver panel);
-  threads add well under 40 MB. SEC does not keep full-text-search hit order
+  costs time. Peak memory is 1.8–4.2 GB (mostly data, likely the fails-to-deliver panel; not profiled);
+  threads add at most about 37 MB (measured). SEC does not keep full-text-search hit order
   stable between two fetches of the same query: the same cache always gives
   the same output, but a refetch can reorder tied hits (see `docs/data-flow.md`).
 - **OpenFIGI refusals abort too.** A 401/403 from OpenFIGI raises
