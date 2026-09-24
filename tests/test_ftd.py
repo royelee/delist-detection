@@ -3,7 +3,7 @@ import zipfile
 from datetime import date
 
 from delist_detection.ftd import (
-    FtdClient, FtdIndex, FtdRow, parse_ftd_lines, parse_index_links, period_of,
+    FtdClient, FtdIndex, FtdRow, is_deleted_symbol, parse_ftd_lines, parse_index_links, period_of,
 )
 
 SAMPLE = """SETTLEMENT DATE|CUSIP|SYMBOL|QUANTITY (FAILS)|DESCRIPTION|PRICE
@@ -296,3 +296,13 @@ def test_close_through_reads_the_latest_row_on_or_before_the_day():
     assert idx.close_through(date(2013, 11, 12), cusip="24702R101") == (13.82, "2013-10-29")
     # ...a day eleven trading days later does not
     assert idx.close_through(date(2013, 11, 13), cusip="24702R101") is None
+
+
+def test_a_deleted_symbol_is_the_old_symbol_plus_xxxx():
+    """SEC's fails files keep reporting a delisted security under its deleted
+    symbol: the old symbol with XXXX appended (ORLYXXXX, LLYVKXXXX, AGRX ->
+    AGRXXXXX). A real ticker may end in X or XX (AVXX)."""
+    for s in ("ORLYXXXX", "LLYVKXXXX", "AGRXXXXX", "BXXXXX", "BRK-BXXXX"):
+        assert is_deleted_symbol(s), s
+    for s in ("ORLY", "AVXX", "XXX", "XXXX", "", "BXXX"):
+        assert not is_deleted_symbol(s), s

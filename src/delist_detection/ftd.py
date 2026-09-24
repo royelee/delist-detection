@@ -44,6 +44,14 @@ class FtdRow:
     price: float | None
 
 
+def is_deleted_symbol(symbol: str) -> bool:
+    """SEC's fails files keep reporting a delisted security under a deleted
+    symbol: its old symbol with "XXXX" appended (ORLYXXXX, LLYVKXXXX; AGRX
+    becomes AGRXXXXX). Such a row records a fail still settling, not trading
+    under a live symbol. A real ticker may end in X or XX (AVXX), never XXXX."""
+    return len(symbol or "") > 4 and symbol.endswith("XXXX")
+
+
 def period_of(url: str) -> tuple[date, date] | None:
     name = url.rsplit("/", 1)[-1]
     m = _HALF.search(name)

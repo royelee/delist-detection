@@ -21,7 +21,7 @@ from .delistings import DelistingEvent, DelistingFinder, ReviewItem, SecurityCon
 from .edgar import SEC_STATS, EdgarBlocked
 from .figi_resolution import FigiCandidate, accept, is_placeholder, share_class_from_name, us_candidates
 from .form25 import SecurityRef, exchange_label
-from .ftd import FtdIndex
+from .ftd import FtdIndex, is_deleted_symbol
 from .listing_status import edgar_lists, listed_today, listing_answers
 from . import manifest as run_manifest
 from .names import names_agree
@@ -305,10 +305,13 @@ def _sightings(sec: Security, ftd: FtdIndex, cusips: list[str]) -> list[tuple[st
     ("BF-B" / "BFB": snapshots write both, FTD keys rows by the separator form)
     is written one way per security: a spelling it was observed under, the one
     with a separator first. So Hubbell's merged class keeps "HUBB" while class
-    B, observed as "HUB-B" and "HUBB", is "HUB-B"."""
+    B, observed as "HUB-B" and "HUBB", is "HUB-B". A row under a deleted
+    symbol ("ORLYXXXX") is a fail still settling after the delisting, not a
+    sighting of trading: it opens and extends no range, and counts in no
+    `seen_after`, `last_seen` or sibling span."""
     out = [(o.as_of, o.ticker, "observation") for e in sec.eras for o in e.observations]
     for c in cusips:
-        out += [(r.date, r.symbol, "ftd") for r in ftd.by_cusip(c)]
+        out += [(r.date, r.symbol, "ftd") for r in ftd.by_cusip(c) if not is_deleted_symbol(r.symbol)]
     label: dict[str, str] = {}
     for t in sorted({o.ticker for e in sec.eras for o in e.observations}, key=lambda t: ("-" not in t, t)):
         label.setdefault(t.replace("-", ""), t)
@@ -317,10 +320,21 @@ def _sightings(sec: Security, ftd: FtdIndex, cusips: list[str]) -> list[tuple[st
 
 def _cusip_sightings(sec: Security, ftd: FtdIndex, cusips: list[str]) -> list[tuple[str, str, str]]:
     """Dated `(day, cusip, source)` sightings of the security's CUSIPs: the FTD
-    rows of each CUSIP that resolved to it, and the CUSIPs its observations carry."""
-    out = [(r.date, r.cusip, "ftd") for c in cusips for r in ftd.by_cusip(c)]
+    rows of each CUSIP that resolved to it (not those under a deleted symbol),
+    and the CUSIPs its observations carry."""
+    out = [(r.date, r.cusip, "ftd") for c in cusips for r in ftd.by_cusip(c) if not is_deleted_symbol(r.symbol)]
     out += [(o.as_of, o.cusip, "observation") for e in sec.eras for o in e.observations if o.cusip]
     return sorted(set(out))
+
+
+def _symbol_deleted(ftd: FtdIndex, cusips: list[str]) -> bool:
+    """The security's own CUSIPs last failed under a deleted symbol only: after
+    the first "…XXXX" row, no row under a live symbol. Its symbol was deleted,
+    so the security no longer trades under it (HP's pre-2015 CUSIP fails as
+    HPQXXXX after the separation, while EDGAR lists HPQ for today's line)."""
+    rows = sorted((r for c in cusips for r in ftd.by_cusip(c)), key=lambda r: r.date)
+    first = next((r.date for r in rows if is_deleted_symbol(r.symbol)), None)
+    return first is not None and not any(r.date > first and not is_deleted_symbol(r.symbol) for r in rows)
 
 
 SUCCESSOR_BEFORE_DAYS, SUCCESSOR_AFTER_DAYS = 5, 15    # a successor's first sighting around the last trade
@@ -495,7 +509,8 @@ def _degraded_since(mark: int) -> bool:
 
 
 def _warm_delisting_search(clients: Clients, ordered: list[Security], listing: dict[str, dict],
-                           context: Callable[[Security, bool | None], SecurityContext], workers: int) -> None:
+                           context: Callable[[Security, bool | None], SecurityContext], workers: int,
+                           retired: frozenset[str] = frozenset()) -> None:
     """Fill the SEC caches for the Form 25 search: each security's own finder work
     on `workers` threads, fill-only, its answers thrown away. A warm finder is the
     sequential finder's twin: a copy of the run's classifier holding a shadow
@@ -517,8 +532,9 @@ def _warm_delisting_search(clients: Clients, ordered: list[Security], listing: d
         answer = listing.get(s.sec_id)
         if answer is None and not is_placeholder(s.sec_id):
             return
-        now = listed_today(None, s.sec_id, edgar=clients.edgar, cik=s.issuer_cik,
-                           tickers=sorted({e.ticker for e in s.eras}), answer=answer)
+        now = False if s.sec_id in retired else listed_today(
+            None, s.sec_id, edgar=clients.edgar, cik=s.issuer_cik,
+            tickers=sorted({e.ticker for e in s.eras}), answer=answer)
         finder.find(context(s, now))
 
     warm(ordered, task, workers=workers, state=make_finder, name="delisting search")
@@ -673,8 +689,13 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
     # each security to ask alone inside its own try below.
     listing = listing_answers(clients.figi, [s.sec_id for s in ordered])
     mark = meter.start()
+    # A placeholder has no FIGI to ask; EDGAR answers for its ticker, which a
+    # later line of the issuer may hold today. Its own CUSIP failing only under
+    # a deleted symbol at the end says it is not the line listed today.
+    retired = frozenset(s.sec_id for s in ordered
+                        if is_placeholder(s.sec_id) and _symbol_deleted(ftd, sec_cusips[s.sec_id]))
     if sec_workers > 1:
-        _warm_delisting_search(clients, ordered, listing, security_context, sec_workers)
+        _warm_delisting_search(clients, ordered, listing, security_context, sec_workers, retired)
     for i, s in enumerate(ordered, 1):
         own_last_seen = _own_last_seen(s, sightings[s.sec_id])
         degraded_mark = SEC_STATS.thread_degraded()
@@ -682,9 +703,9 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
             # listed_today and the context live inside the try too: a FIGI/EDGAR
             # error there must become a reviewable row for this one security,
             # not abort the whole overnight run.
-            listed[s.sec_id] = listed_today(clients.figi, s.sec_id, edgar=clients.edgar, cik=s.issuer_cik,
-                                            tickers=sorted({e.ticker for e in s.eras}),
-                                            answer=listing.get(s.sec_id))
+            listed[s.sec_id] = False if s.sec_id in retired else listed_today(
+                clients.figi, s.sec_id, edgar=clients.edgar, cik=s.issuer_cik,
+                tickers=sorted({e.ticker for e in s.eras}), answer=listing.get(s.sec_id))
             evs, rv = finder.find(security_context(s, listed[s.sec_id]))
         except (EdgarBlocked, OpenFigiBlocked):
             raise

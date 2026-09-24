@@ -1644,3 +1644,71 @@ def test_a_same_ticker_acquirer_is_never_the_target_itself(fake_edgar, tmp_path)
     assert d["sec_id"] == "BBGWCNOLD01"
     assert d["acquirer_sec_id"] == "BBGWCNNEW01"
     assert secs["BBGWCNNEW01"]["issuer_cik"] == "1318220"
+
+
+
+# --- fix round 3, item 1: a deleted symbol's fails rows are not trading ---
+
+_NASDAQ_F25 = ("<TYPE>25-NSE\n<notificationOfRemoval><exchange><entityName>The Nasdaq Stock Market LLC"
+               "</entityName></exchange>\n<descriptionClassSecurity>Common Stock</descriptionClassSecurity>\n"
+               "<ruleProvision>17 CFR 240.12d2-2(a)(3)</ruleProvision></notificationOfRemoval>")
+
+
+def _retired_cusip_run(fake_edgar, tmp_path, tail_symbol):
+    """Liberty Live's 2025 split-off as the fails files show it: the old line's
+    CUSIP keeps failing after its Form 25 (2025-12-15, effective 12-25) under
+    the deleted symbol LLYKXXXX, while the new line trades LLYK under a new
+    CUSIP from 2025-12-17. The old issuer keeps filing 10-Qs, so the
+    classifier reads an exchange transfer."""
+    fake_edgar.submissions_by_cik[5555] = [
+        EdgarSubmission("f1", "25-NSE", "2025-12-15", "", "", "p.xml"),
+        EdgarSubmission("q1", "10-Q", "2026-08-05", "2026-06-30", "", "q.htm")]
+    fake_edgar.submissions_by_cik[6666] = []
+    fake_edgar.raws["f1"] = _NASDAQ_F25
+    obs = ([Observation("LLYK", d, "LIBERTY LIVE CORP", cik=5555) for d in ("2024-06-28", "2024-12-31", "2025-06-30")]
+           + [Observation("LLYK", "2026-06-30", "LIBERTY LIVE HOLDINGS INC", cik=6666)])
+    rows = (_ftd("LLYK", "53229D101", "LIBERTY LIVE CORP",
+                 ["2024-06-28", "2024-12-31", "2025-06-30", "2025-10-01", "2025-12-12"])
+            + _ftd(tail_symbol, "53229D101", "LIBERTY LIVE CORP", ["2025-12-31", "2026-01-15", "2026-02-02"])
+            + _ftd("LLYK", "53230X101", "LIBERTY LIVE HOLDINGS INC", ["2025-12-17", "2026-01-15", "2026-06-30"]))
+    index, clients = _index_clients(fake_edgar, obs, rows, {
+        ("ID_CUSIP", "53229D101"): _figi_answer("BBGLLYKOLD1", "LLYK", "LIBERTY LIVE CORP"),
+        ("ID_CUSIP", "53230X101"): _figi_answer("BBGLLYKNEW1", "LLYK", "LIBERTY LIVE HOLDINGS INC")})
+    fake_edgar.full_text_search = lambda q, forms, lo, hi: []
+    run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
+    d = {r["sec_id"]: r for r in read_table("delistings", table_path(tmp_path, "delistings"))}
+    return d, read_table("ticker_history", table_path(tmp_path, "ticker_history"))
+
+
+def test_deleted_symbol_fails_after_the_delisting_are_not_continued_trading(fake_edgar, tmp_path):
+    d, th = _retired_cusip_run(fake_edgar, tmp_path, "LLYKXXXX")
+    old = d["BBGLLYKOLD1"]
+    assert old["bucket"] == "exchange_transfer"
+    assert old["successor_sec_id"] == "BBGLLYKNEW1"
+    assert not [r for r in th if r["ticker"].endswith("XXXX")]
+
+
+def test_live_symbol_fails_after_the_delisting_still_read_as_continued(fake_edgar, tmp_path):
+    d, _ = _retired_cusip_run(fake_edgar, tmp_path, "LLYK")
+    assert d["BBGLLYKOLD1"]["successor_sec_id"] == "BBGLLYKOLD1"
+
+
+def test_a_placeholder_whose_late_rows_are_a_deleted_symbol_is_not_listed_today(fake_edgar, tmp_path):
+    """HP's pre-2015 line has no FIGI (a placeholder). Its CUSIP fails under HPQ
+    until the November 2015 separation, then only under HPQXXXX. EDGAR still
+    lists HPQ for the issuer (today's HP Inc. line), so the placeholder read as
+    listed today, with an open HPQXXXX range."""
+    fake_edgar.submissions_by_cik[47217] = []
+    fake_edgar.listings[47217] = [("HPQ", "NYSE")]
+    obs = [Observation("HPQ", d, "HEWLETT PACKARD", cik=47217) for d in ("2014-06-30", "2014-12-31", "2015-06-30")]
+    rows = (_ftd("HPQ", "428236103", "HEWLETT PACKARD CO", ["2014-06-30", "2015-01-02", "2015-06-30", "2015-11-02"])
+            + _ftd("HPQXXXX", "428236103", "HEWLETT PACKARD CO", ["2015-11-03", "2015-11-20", "2016-01-04"]))
+    index, clients = _index_clients(fake_edgar, obs, rows, {})
+    run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
+    th = [r for r in read_table("ticker_history", table_path(tmp_path, "ticker_history"))
+          if r["sec_id"] == "CIK47217-COMMON"]
+    assert th and all(r["valid_to"] for r in th)
+    assert not [r for r in th if r["ticker"].endswith("XXXX")]
+    ch = [r for r in read_table("cusip_history", table_path(tmp_path, "cusip_history"))
+          if r["sec_id"] == "CIK47217-COMMON"]
+    assert ch and all(r["valid_to"] for r in ch)
