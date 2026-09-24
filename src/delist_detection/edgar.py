@@ -899,22 +899,29 @@ class EdgarClient:
             return resp.text
 
     def _efts_cached(self, cp: Path, window_end: date, *, any_age: bool = False) -> list[dict] | None:
-        """The answer cached at `cp` while it holds (efts_ttl_days), or at any age
-        with `any_age` (a prefetch thread, `fill_only`). None when there is no
-        file, or a file of another schema; the old full_text_search's bare lists
-        count as another schema, except to a prefetch thread, which never
-        replaces a file. The caller holds the file's lock."""
+        """The answer cached at `cp` while it holds (efts_ttl_days), or, with
+        `any_age` (a prefetch thread, `fill_only`), the file's hits whatever
+        their age. None means "no usable answer, go fetch" -- reachable only
+        outside `fill_only`: there, an unreadable file, a bare list (the old
+        full_text_search's format) or a file of another schema is asked again
+        and replaced. A prefetch thread never replaces a file: the same three
+        cases instead answer `[]`, with no request and no write, and the file
+        is left exactly as it is; the warm pass discards the `[]`, and the
+        sequential pass handles the file as it does today. The caller holds
+        the file's lock."""
         if not cp.exists():
             return None
         try:
             data = json.loads(cp.read_text())
         except json.JSONDecodeError:
+            if any_age:
+                return []
             cp.unlink(missing_ok=True)
             return None
         if isinstance(data, list):
-            return _trim_hits(data) if any_age else None
+            return [] if any_age else None
         if not isinstance(data, dict) or data.get("schema") != EFTS_SCHEMA or not isinstance(data.get(EFTS_KEY), list):
-            return None
+            return [] if any_age else None
         fetched = _fetched_on(cp, data)
         if any_age or self.today < fetched + timedelta(days=efts_ttl_days(window_end, fetched)):
             return data[EFTS_KEY]
@@ -929,12 +936,17 @@ class EdgarClient:
         schema, window end and fetch date, and holds for efts_ttl_days. A window
         ending before EFTS_COVERAGE_START returns [] with no request (EDGAR's
         index does not cover it). An undated answer is kept in memory for this
-        client's run only. A 400 or 404 is a rejected query: logged, counted,
-        returned as [], never written, and kept in memory so one run sends it
-        once; it is not a failure. A transport error or 5xx after the retries, or
-        a body that is not JSON, raises `requests.RequestException`, and nothing
-        is cached. A 403/429 raises `EdgarBlocked`, never retried. On a prefetch
-        thread (`fill_only`) a cached answer is returned whatever its age.
+        client's run only, as copies: mutating a returned hit never reaches a
+        later call. A 400 or 404 is a rejected query: logged, counted, returned
+        as [], never written, and kept in memory so one run sends it once; it is
+        not a failure. A transport error or 5xx after the retries, a body that
+        is not JSON, or a 200 body that is not a search answer (no `hits.hits`
+        list -- an EDGAR error body, say) raises `requests.RequestException`,
+        and nothing is cached: a malformed answer must never freeze in as an
+        empty one. A 403/429 raises `EdgarBlocked`, never retried. On a prefetch
+        thread (`fill_only`) a cached answer of any age is returned; an existing
+        file this client cannot read as a current answer is answered as `[]`
+        instead, with no request and the file untouched (`_efts_cached`).
         """
         if window_end is not None and window_end < EFTS_COVERAGE_START:
             SEC_STATS.add("not_covered:full_text_search")
@@ -945,7 +957,7 @@ class EdgarClient:
                 memo = self._run_memo.get(url)
                 if memo is not None:
                     SEC_STATS.add("cache:full_text_search")
-                    return list(memo)
+                    return [dict(h) for h in memo]
                 if window_end is not None:
                     cached = self._efts_cached(cp, window_end, any_age=filling_only())
                     if cached is not None:
@@ -972,10 +984,17 @@ class EdgarClient:
                 SEC_STATS.degraded("failed_request")
                 raise requests.RequestException(f"EDGAR full-text search sent no JSON for {url}") from exc
             outer = data.get("hits") if isinstance(data, dict) else None
-            hits = _trim_hits(outer.get("hits") if isinstance(outer, dict) else [])
+            raw_hits = outer.get("hits") if isinstance(outer, dict) else None
+            if not isinstance(data, dict) or not isinstance(outer, dict) or not isinstance(raw_hits, list):
+                # A 200 body that is not a search answer (an EDGAR error body, a
+                # maintenance page as JSON, ...) must never be cached as an empty
+                # answer: that could hide a real filing for up to a year.
+                SEC_STATS.degraded("failed_request")
+                raise requests.RequestException(f"EDGAR full-text search sent an unrecognized body for {url}")
+            hits = _trim_hits(raw_hits)
             if self.search_cache:
                 if window_end is None:
-                    self._run_memo[url] = hits
+                    self._run_memo[url] = [dict(h) for h in hits]
                 else:
                     _write_atomic(cp, json.dumps({"schema": EFTS_SCHEMA, "window_end": window_end.isoformat(),
                                                   FETCHED_KEY: self.today.isoformat(), EFTS_KEY: hits}))

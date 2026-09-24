@@ -211,3 +211,44 @@ def test_a_search_holds_its_cache_file_lock(tmp_path):
     c = EdgarClient(cache_dir=tmp_path, user_agent=UA, session=_Probe(_answer(HIT)), today=AS_OF)
     c.efts_search(URL, window_end=END)
     assert held == [True]
+
+
+def test_a_200_body_with_no_hits_object_raises_and_writes_nothing(tmp_path):
+    # An EDGAR error body ("hits" missing entirely) must never be cached as an
+    # empty answer: that could hide a real filing for up to a year.
+    c, s = _client(tmp_path, _Resp(text=json.dumps({"error": "search backend timeout"})))
+    with pytest.raises(requests.RequestException):
+        c.efts_search(URL, window_end=END)
+    assert len(s.calls) == 1 and not c._cache_path(URL).exists()
+
+
+def test_a_body_whose_hits_is_a_list_not_an_object_raises(tmp_path):
+    c, s = _client(tmp_path, _Resp(text=json.dumps({"hits": []})))
+    with pytest.raises(requests.RequestException):
+        c.efts_search(URL, window_end=END)
+    assert len(s.calls) == 1 and not c._cache_path(URL).exists()
+
+
+def test_a_genuine_empty_hits_list_is_still_a_real_answer_and_is_cached(tmp_path):
+    # hits.hits == [] is a real (if empty) answer, distinct from a malformed body.
+    c, _ = _client(tmp_path, _answer())
+    assert c.efts_search(URL, window_end=END) == []
+    assert _saved(c)[EFTS_KEY] == []
+
+
+def test_a_prefetch_thread_never_replaces_a_file_of_another_schema(tmp_path):
+    c, s = _client(tmp_path)
+    other_schema = json.dumps({"schema": 2, "window_end": "2020-02-01", FETCHED_KEY: "2020-01-01",
+                               EFTS_KEY: [HIT]})
+    c._cache_path(URL).write_text(other_schema)
+    with fill_only():
+        assert c.efts_search(URL, window_end=END) == []
+    assert s.calls == [] and c._cache_path(URL).read_text() == other_schema
+
+
+def test_the_run_memo_returns_copies_not_shared_dicts(tmp_path):
+    c, _ = _client(tmp_path, _answer(HIT))
+    first = c.efts_search(URL, window_end=None)
+    first[0]["_id"] = "mutated"                    # a caller changing its own copy
+    second = c.efts_search(URL, window_end=None)    # must not see that change
+    assert second == [HIT]
