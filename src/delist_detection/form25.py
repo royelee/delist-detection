@@ -250,26 +250,33 @@ def _class_matches(f25: Form25, same: Sequence[SecurityRef]
     """Per class the text names: its one sibling of that letter (a tie of one
     letter broken by the class's own words). Returns the matched sec_ids, their
     letters, whether a name broke a tie, and the unmatched siblings the text may
-    be about: those of a class left tied, and those whose class has no letter."""
+    be about. A class that picks out no single sibling of its letter leaves
+    tied: the siblings whose class has no letter and whose own name words it
+    names (Liberty SiriusXM's letter-less Series C line), else the siblings of
+    its letter it could not tell apart (a generic "Class B Common Stock" with a
+    FIGI line and a placeholder of the same stock)."""
     matched: list[str] = []
     letters: list[str] = []
     by_name = False
-    segments = _lettered_segments(f25.class_text)
-    # a sibling whose class carries no letter can be any class the text names
-    tied: set[str] = {r.sec_id for r in same if class_letter(r.share_class) is None} if segments else set()
-    for label, seg in segments:
+    tied: set[str] = set()
+    for label, seg in _lettered_segments(f25.class_text):
         letter = class_letter(label)
         hits = [r for r in same if class_letter(r.share_class) == letter]
         named = len(hits) > 1
-        if named:
-            named_hits = _named_by(seg, hits)
-            if len(named_hits) != 1:
-                tied |= {r.sec_id for r in (named_hits or hits)}
-            hits = named_hits
-        if len(hits) == 1 and hits[0].sec_id not in matched:
-            matched.append(hits[0].sec_id)
-            letters.append(letter)
-            by_name = by_name or named
+        picked = _named_by(seg, hits) if named else hits
+        if len(picked) == 1:
+            if picked[0].sec_id not in matched:
+                matched.append(picked[0].sec_id)
+                letters.append(letter)
+                by_name = by_name or named
+            continue
+        letterless = [r for r in _named_by(seg, same) if class_letter(r.share_class) is None]
+        if letterless:
+            tied |= {r.sec_id for r in letterless}
+        elif len(picked) > 1:
+            tied |= {r.sec_id for r in picked}
+        elif named and not _named_by(seg, same):
+            tied |= {r.sec_id for r in hits}      # the class's words name no sibling at all
     return matched, letters, by_name, tied - set(matched)
 
 

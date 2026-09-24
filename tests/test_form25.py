@@ -263,3 +263,29 @@ def test_a_sibling_with_no_class_letter_is_left_tied_when_the_form25_names_lette
             SecurityRef("FWONA", "CLASS A", "common", "LIBERTY MEDIA FORMULA ONE SERIES A")]
     assert match_securities(f, refs) == (["LSXMA"], "class A by name")
     assert tied_securities(f, refs) == {"LSXMK"}
+
+
+def test_a_class_named_for_another_group_leaves_that_letters_siblings_untied():
+    """The Series C of Liberty SiriusXM's Form 25 is not Formula One's or Liberty
+    Live's Series C: neither is named by the class's words, so neither is tied;
+    the letter-less SiriusXM line the words do name is."""
+    f = Form25("a", "25-NSE", "2024-09-09", "NASDAQ",
+               "Series A Liberty SiriusXM Common Stock (LSXMA), and Series C Liberty SiriusXM Common Stock (LSXMK)",
+               "", "")
+    refs = [SecurityRef("LSXMA", "CLASS A", "common", "LIBERTY MEDIA LIBERTY SIRIUSXM COR"),
+            SecurityRef("LSXMK", "COMMON", "common", "LIBERTY MEDIA LIBERTY SIRIUSXM COR"),
+            SecurityRef("FWONK", "CLASS C", "common", "LIBERTY MEDIA FORMULA ONE SERIES C"),
+            SecurityRef("LLYVK", "CLASS C", "common", "LIBERTY MEDIA LIBERTY LIVE CORP SE")]
+    assert match_securities(f, refs)[0] == ["LSXMA"]
+    assert tied_securities(f, refs) == {"LSXMK"}
+
+
+def test_a_letterless_sibling_no_class_names_is_not_tied():
+    """U-Haul's 2022 Form 25 names its Series N non-voting stock, which matches;
+    the voting common line has no letter, and no class's words name it."""
+    f = Form25("a", "25", "2022-12-16", "NYSE",
+               "Common Stock, par value $0.25 and Series N Non-Voting Common Stock, par value $0.001", "", "")
+    refs = [SecurityRef("UHAL", "COMMON", "common", "U HAUL HOLDING"),
+            SecurityRef("UHALB", "SERIES N", "common", "U HAUL NON VOTING SERIES N")]
+    assert match_securities(f, refs)[0] == ["UHALB"]
+    assert tied_securities(f, refs) == set()
