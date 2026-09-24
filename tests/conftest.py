@@ -119,10 +119,28 @@ def fake_edgar() -> _FakeEdgar:
     )
 
 
+class _VirtualClock:
+    """Time that passes only when the limiter sleeps on it. The limiter re-checks
+    its pause after every sleep, so with the real clock and a no-op sleep it
+    would busy-wait out every pause in real time."""
+
+    def __init__(self) -> None:
+        self.t = 1000.0
+
+    def now(self) -> float:
+        return self.t
+
+    def sleep(self, s: float) -> None:
+        self.t += s
+
+
 @pytest.fixture(autouse=True)
 def _fresh_sec_limiter(monkeypatch):
     """Every test gets its own process-wide SEC limiter: in-process only (never a
-    machine-wide lock file under the home directory), never sleeping, and with no
-    pause or request count left over from another test."""
+    machine-wide lock file under the home directory), on a virtual clock that its
+    own sleep advances (so it never waits in real time, and never busy-waits),
+    and with no pause or request count left over from another test."""
     from delist_detection import edgar
-    monkeypatch.setattr(edgar, "SEC_LIMITER", edgar.RateLimiter(edgar.SEC_MAX_RATE, sleep=lambda s: None))
+    clock = _VirtualClock()
+    monkeypatch.setattr(edgar, "SEC_LIMITER",
+                        edgar.RateLimiter(edgar.SEC_MAX_RATE, clock=clock.now, sleep=clock.sleep))

@@ -189,7 +189,8 @@ class RateLimiter:
     """At most `rate` request starts per second across every thread that shares it.
 
     `acquire()` blocks until the caller may start one request: `interval` after
-    the previous start, and not before a pause set by `pause()` has run out. The
+    the previous start, and not before a pause set by `pause()` has run out --
+    including a pause set or extended while the caller is already waiting. The
     lock is held while sleeping, so callers queue behind it and no burst credit
     builds up. `gate` (a MachineGate) extends the spacing to every process on
     the machine that shares its lock file; it is taken after the in-process
@@ -225,15 +226,17 @@ class RateLimiter:
     def acquire(self) -> None:
         self._raise_if_cancelled()
         with self._lock:
-            self._raise_if_cancelled()           # stopped while queued behind the lock
-            with self._pause_lock:
-                ready = self._resume_at
-            if self._last is not None:
-                ready = max(ready, self._last + self.interval)
-            wait = ready - self._clock()
-            if wait > 0:
-                self._sleep(wait)
-            self._raise_if_cancelled()           # stopped while sleeping: the slot goes unused
+            while True:
+                # stopped while queued behind the lock, or while sleeping: the slot goes unused
+                self._raise_if_cancelled()
+                with self._pause_lock:
+                    ready = self._resume_at
+                if self._last is not None:
+                    ready = max(ready, self._last + self.interval)
+                wait = ready - self._clock()
+                if wait <= 0:
+                    break
+                self._sleep(wait)                # then look again: a pause may have been set meanwhile
             if self.gate is not None:
                 self.gate.wait_turn()            # every other process sharing the lock file
                 self._raise_if_cancelled()       # stopped while waiting for the machine's turn
@@ -243,12 +246,14 @@ class RateLimiter:
     @contextmanager
     def cancelled_by(self, stop: threading.Event):
         """Inside this block, the calling thread's acquire() raises PrefetchCancelled
-        once `stop` is set. Other threads are not affected."""
+        once `stop` is set. Other threads are not affected. On exit the event of an
+        enclosing block, if any, applies again."""
+        outer = getattr(self._local, "stop", None)
         self._local.stop = stop
         try:
             yield
         finally:
-            self._local.stop = None
+            self._local.stop = outer
 
 
 SEC_MAX_RATE = 8.0      # SEC allows 10 requests/s per client; we stay under it (spec §9, §11)
@@ -361,7 +366,9 @@ def retry_request(make_request, *, sleep=time.sleep, max_attempts: int = RETRY_M
     After every failed attempt the shared SEC_LIMITER is paused for that
     attempt's backoff (the last attempt for the last backoff), so every other
     thread's next SEC request waits too: while SEC is failing, the pool backs
-    off together instead of sending ~8 mostly failing requests a second.
+    off together instead of sending ~8 mostly failing requests a second. An
+    attempt beyond the end of `backoff` reuses its last value; an empty
+    `backoff` retries at once, with no pause and no sleep.
 
     On final failure: if every attempt raised, the last exception is
     re-raised; if the last attempt returned a persistent 5xx response, that
@@ -380,6 +387,8 @@ def retry_request(make_request, *, sleep=time.sleep, max_attempts: int = RETRY_M
             if resp.status_code < 500:
                 return resp
             last_exc = None                   # a 5xx is retryable, not a transport exception
+        if not backoff:
+            continue
         wait = backoff[min(attempt, len(backoff) - 1)]
         SEC_LIMITER.pause(wait)               # every thread's next SEC request waits too
         if attempt < max_attempts - 1:

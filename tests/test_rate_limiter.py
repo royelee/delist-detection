@@ -12,6 +12,10 @@ import requests
 from delist_detection import edgar
 from delist_detection.edgar import SEC_RATE_LOCK_ENV, MachineGate, PrefetchCancelled, RateLimiter, default_rate_lock_path
 
+# The module's own limiter, read at collection time, before conftest's autouse
+# fixture swaps in a per-test one.
+_MODULE_SEC_LIMITER = edgar.SEC_LIMITER
+
 
 class _Clock:
     """A clock that only moves when someone sleeps on it."""
@@ -25,6 +29,22 @@ class _Clock:
     def sleep(self, s):
         self.slept.append(round(s, 9))
         self.t += s
+
+
+class _InterruptedClock(_Clock):
+    """A _Clock whose sleeps run `hooks` (one per sleep, in order) halfway through:
+    another thread acting while this one waits."""
+
+    def __init__(self, *hooks):
+        super().__init__()
+        self.hooks = list(hooks)
+
+    def sleep(self, s):
+        self.slept.append(round(s, 9))
+        self.t += s / 2
+        if self.hooks:
+            self.hooks.pop(0)()
+        self.t += s / 2
 
 
 class _Resp:
@@ -55,6 +75,18 @@ def test_a_caller_after_a_quiet_spell_does_not_wait():
     c.t += 1.0
     lim.acquire()
     assert c.slept == []
+
+
+def test_the_second_start_after_a_quiet_spell_still_waits_a_full_interval():
+    # No burst credit builds up while idle: only the first start after the spell is free.
+    c = _Clock()
+    lim = _limiter(c)
+    lim.acquire()
+    c.t += 1.0
+    lim.acquire()
+    lim.acquire()
+    assert c.slept == [0.125]
+    assert c.t == pytest.approx(101.125)
 
 
 def test_threads_sharing_a_limiter_never_start_closer_than_the_interval():
@@ -101,13 +133,39 @@ def test_a_pause_set_on_one_thread_holds_every_other_thread():
     assert c.slept == [2.0]
 
 
+def test_a_pause_set_while_a_caller_waits_holds_that_caller():
+    # The caller waits 0.125 s for its slot; halfway through, SEC fails on another
+    # thread and pauses the pool. The caller must not start before the pause ends.
+    c = _InterruptedClock(lambda: lim.pause(2.0))
+    lim = _limiter(c)
+    lim.acquire()                              # 100.0
+    lim.acquire()                              # the pause lands at 100.0625, until 102.0625
+    assert lim._resume_at == pytest.approx(102.0625)
+    assert lim._last >= lim._resume_at
+    assert c.t == pytest.approx(102.0625)
+    assert c.slept == [0.125, 1.9375]
+
+
+def test_a_pause_extended_while_a_caller_waits_holds_it_to_the_new_end():
+    # A 2 s pause from 100.0; one second in, a second failure extends it to the 4 s mark.
+    c = _InterruptedClock(lambda: lim.pause(3.0))
+    lim = _limiter(c)
+    lim.pause(2.0)
+    lim.acquire()
+    assert lim._resume_at == pytest.approx(104.0)
+    assert c.t == pytest.approx(104.0)
+    assert c.slept == [2.0, 2.0]
+
+
 def test_retry_request_pauses_every_thread_on_each_failure(monkeypatch):
     c = _Clock()
     lim = _limiter(c)
     monkeypatch.setattr(edgar, "SEC_LIMITER", lim)
     answers = iter([_Resp(503), requests.ConnectionError("reset"), _Resp(200)])
+    seen = []                                  # the pool's pause as each attempt starts
 
     def make():
+        seen.append(lim._resume_at)
         r = next(answers)
         if isinstance(r, Exception):
             raise r
@@ -115,6 +173,7 @@ def test_retry_request_pauses_every_thread_on_each_failure(monkeypatch):
 
     slept = []
     assert edgar.retry_request(make, sleep=slept.append).status_code == 200
+    assert seen == [float("-inf"), 102.0, 104.0]   # the 5xx paused the pool 2 s, the dropped connection 4 s
     assert slept == [2, 4]                     # this thread backs off as before...
     other = threading.Thread(target=lim.acquire)
     other.start()
@@ -126,9 +185,46 @@ def test_a_request_that_keeps_failing_leaves_the_pool_paused(monkeypatch):
     c = _Clock()
     lim = _limiter(c)
     monkeypatch.setattr(edgar, "SEC_LIMITER", lim)
-    assert edgar.retry_request(lambda: _Resp(503), sleep=lambda s: None).status_code == 503
+    seen = []
+
+    def make():
+        seen.append(lim._resume_at)
+        return _Resp(503)
+
+    def backoff(s):                            # this thread's own backoff: time passes outside the limiter
+        c.t += s
+
+    assert edgar.retry_request(make, sleep=backoff).status_code == 503
+    assert seen == [float("-inf"), 102.0, 106.0]   # each failure paused the pool for its backoff...
     lim.acquire()
-    assert c.slept == [4.0]                    # the last backoff also holds everyone's next start
+    assert c.slept == [4.0]                    # ...and the last one too: everyone's next start waits
+    assert c.t == pytest.approx(110.0)
+
+
+def test_retry_request_with_no_backoff_neither_pauses_nor_sleeps(monkeypatch):
+    c = _Clock()
+    lim = _limiter(c)
+    monkeypatch.setattr(edgar, "SEC_LIMITER", lim)
+    slept = []
+    assert edgar.retry_request(lambda: _Resp(503), sleep=slept.append, backoff=()).status_code == 503
+    assert slept == []
+    assert lim._resume_at == float("-inf")
+
+
+def test_retry_request_with_a_short_backoff_reuses_its_last_value(monkeypatch):
+    c = _Clock()
+    lim = _limiter(c)
+    monkeypatch.setattr(edgar, "SEC_LIMITER", lim)
+    seen, slept = [], []
+
+    def make():
+        seen.append(lim._resume_at)
+        return _Resp(503)
+
+    assert edgar.retry_request(make, sleep=slept.append, max_attempts=3, backoff=(1,)).status_code == 503
+    assert slept == [1, 1]
+    assert seen == [float("-inf"), 101.0, 101.0]
+    assert lim._resume_at == 101.0
 
 
 def test_a_stopped_worker_starts_no_further_request():
@@ -156,12 +252,36 @@ def test_the_stop_event_applies_only_to_the_thread_that_entered_the_block():
     assert lim.count == 1
 
 
+def test_a_nested_stop_block_restores_the_outer_event_on_exit():
+    c = _Clock()
+    lim = _limiter(c)
+    outer, inner = threading.Event(), threading.Event()
+    with lim.cancelled_by(outer):
+        with lim.cancelled_by(inner):
+            lim.acquire()
+        outer.set()
+        with pytest.raises(PrefetchCancelled):
+            lim.acquire()                      # back in the outer block: the outer event applies again
+    lim.acquire()
+    assert lim.count == 2
+
+
 def test_prefetch_cancelled_passes_through_except_exception():
     with pytest.raises(PrefetchCancelled):
         try:
             raise PrefetchCancelled()
         except Exception:                      # the library's broad handlers must not swallow it
             pytest.fail("PrefetchCancelled was caught by `except Exception`")
+
+
+def test_the_per_test_limiter_costs_no_real_time_after_a_pause():
+    # conftest's limiter runs on a virtual clock that its own sleep advances: a pause
+    # left by a failing request neither blocks a test nor spins it in a busy-wait.
+    edgar.SEC_LIMITER.pause(60.0)
+    t = threading.Thread(target=edgar._throttle, daemon=True)
+    t.start()
+    t.join(5)
+    assert not t.is_alive()
 
 
 def test_every_sec_request_goes_through_the_shared_limiter(monkeypatch):
@@ -177,7 +297,9 @@ def test_every_sec_request_goes_through_the_shared_limiter(monkeypatch):
 
 
 def test_the_shared_limiter_allows_8_requests_per_second():
-    assert edgar.SEC_LIMITER.interval == pytest.approx(0.125)
+    assert _MODULE_SEC_LIMITER is not edgar.SEC_LIMITER   # the module's own, not conftest's per-test one
+    assert edgar.SEC_MAX_RATE == 8.0
+    assert _MODULE_SEC_LIMITER.interval == pytest.approx(0.125)
 
 
 def _gate(path, c):
