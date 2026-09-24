@@ -10,6 +10,7 @@ import fcntl
 import hashlib
 import json
 import logging
+import math
 import os
 import re
 import threading
@@ -368,10 +369,14 @@ class MachineGate:
             waited_out = raw                     # another process may have started meanwhile
 
     def _wait_after(self, raw: bytes) -> float:
-        """How long to wait after the start stamped `raw`, clamped to [0, interval]."""
+        """How long to wait after the start stamped `raw`, clamped to [0, interval]. A
+        stamp that is unreadable or not finite (nan, inf, -inf -- `time.sleep` raises
+        ValueError on nan) counts as no stamp."""
         try:
             last = float(raw.decode("ascii").strip() or "0")
         except (UnicodeDecodeError, ValueError):
+            last = 0.0
+        if not math.isfinite(last):
             last = 0.0
         return min(max(last + self.interval - self._wall(), 0.0), self.interval)
 
@@ -627,8 +632,9 @@ class EdgarClient:
         request's own headers, counted and timed under its endpoint (SEC_STATS).
         With `retry`, through `retry_request`: a transport error or a 5xx is
         retried with backoff, every thread pausing with it, and a 403/429 raises
-        EdgarBlocked at once. Without it, one attempt, and a 5xx or a transport
-        error still pauses every thread for the first backoff."""
+        EdgarBlocked at once. Without it, one attempt, a 403/429 still raises
+        EdgarBlocked at once, and a 5xx or a transport error still pauses every
+        thread for the first backoff."""
         headers = self._headers(host, accept)
         session = self.session
         endpoint = _endpoint(url)

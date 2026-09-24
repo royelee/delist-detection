@@ -337,7 +337,7 @@ def test_a_wall_clock_step_back_waits_at_most_one_interval(tmp_path):
     assert float(path.read_text()) == pytest.approx(100.125)   # the stale stamp is replaced by this start
 
 
-@pytest.mark.parametrize("content", ["", "garbage", "1.0"])
+@pytest.mark.parametrize("content", ["", "garbage", "1.0", "nan"])
 def test_an_old_or_unreadable_stamp_does_not_wait(tmp_path, content):
     c = _Clock()
     path = tmp_path / "sec_rate.lock"
