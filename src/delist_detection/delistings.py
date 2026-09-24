@@ -17,7 +17,7 @@ from .edgar import EdgarSubmission
 from .figi_resolution import class_letter
 from .form25 import (
     REGIONAL_EXCHANGES, Form25, SecurityRef, class_kind, class_letters, effective_date, exchange_label, list_form25,
-    match_securities, notice_last_trade, parse_form25,
+    match_securities, notice_last_trade, parse_form25, tied_securities,
 )
 from .last_trade import LastTrade, decide_last_trade, eightk_last_trade
 from .listing_status import exchanges_around, withdrawal_kind
@@ -319,6 +319,12 @@ class DelistingFinder:
                                  f"{sub.form} {sub.accession} ({f25.class_text!r}): {why}", sub)
                 continue
             if sec.sec_id not in matched:
+                if sec.sec_id in tied_securities(f25, alive):
+                    # another class of this Form 25 matched; this one shares its
+                    # letter with a sibling no name word tells apart, or has none
+                    had_unmatched = True
+                    self._review(review, seen_review, sec, ticker_last, cik, "form25_unmatched",
+                                 f"{sub.form} {sub.accession} ({f25.class_text!r}): ambiguous class", sub)
                 continue
             ref = next((r for r in alive if r.sec_id == sec.sec_id), None)
             if ref is not None and self._class_conflict(f25, ref):

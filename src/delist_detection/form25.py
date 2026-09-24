@@ -245,6 +245,34 @@ def _named_by(segment: str, hits: Sequence[SecurityRef]) -> list[SecurityRef]:
     return [r for r, t in zip(hits, toks) if (t - common) & words]
 
 
+def _class_matches(f25: Form25, same: Sequence[SecurityRef]
+                   ) -> tuple[list[str], list[str], bool, set[str]]:
+    """Per class the text names: its one sibling of that letter (a tie of one
+    letter broken by the class's own words). Returns the matched sec_ids, their
+    letters, whether a name broke a tie, and the unmatched siblings the text may
+    be about: those of a class left tied, and those whose class has no letter."""
+    matched: list[str] = []
+    letters: list[str] = []
+    by_name = False
+    segments = _lettered_segments(f25.class_text)
+    # a sibling whose class carries no letter can be any class the text names
+    tied: set[str] = {r.sec_id for r in same if class_letter(r.share_class) is None} if segments else set()
+    for label, seg in segments:
+        letter = class_letter(label)
+        hits = [r for r in same if class_letter(r.share_class) == letter]
+        named = len(hits) > 1
+        if named:
+            named_hits = _named_by(seg, hits)
+            if len(named_hits) != 1:
+                tied |= {r.sec_id for r in (named_hits or hits)}
+            hits = named_hits
+        if len(hits) == 1 and hits[0].sec_id not in matched:
+            matched.append(hits[0].sec_id)
+            letters.append(letter)
+            by_name = by_name or named
+    return matched, letters, by_name, tied - set(matched)
+
+
 def match_securities(f25: Form25, refs: Sequence[SecurityRef]) -> tuple[list[str], str]:
     """Every security of `refs` the Form 25 removes: the only one of its kind,
     or, per class the text names, the one sibling of that letter (among several
@@ -255,22 +283,22 @@ def match_securities(f25: Form25, refs: Sequence[SecurityRef]) -> tuple[list[str
         return [], f"no observed {kind} security"
     if len(same) == 1:
         return [same[0].sec_id], "only security of its kind"
-    matched: list[str] = []
-    letters: list[str] = []
-    by_name = False
-    for label, seg in _lettered_segments(f25.class_text):
-        letter = class_letter(label)
-        hits = [r for r in same if class_letter(r.share_class) == letter]
-        named = len(hits) > 1
-        if named:
-            hits = _named_by(seg, hits)
-        if len(hits) == 1 and hits[0].sec_id not in matched:
-            matched.append(hits[0].sec_id)
-            letters.append(letter)
-            by_name = by_name or named
+    matched, letters, by_name, _ = _class_matches(f25, same)
     if not matched:
         return [], "ambiguous class"
     return matched, f"class {', '.join(dict.fromkeys(letters))}" + (" by name" if by_name else "")
+
+
+def tied_securities(f25: Form25, refs: Sequence[SecurityRef]) -> set[str]:
+    """The unmatched siblings a Form 25 that names class letters may still be
+    about: two lines of one letter that no name word tells apart (often a FIGI
+    line and a placeholder for the same stock), and a line whose class carries
+    no letter (Liberty SiriusXM's Series C FIGI, named "... SIRIUSXM COR")."""
+    kind = class_kind(f25.class_text)
+    same = [r for r in refs if r.kind == kind or (kind == "other" and r.kind == "common")]
+    if len(same) < 2:
+        return set()
+    return _class_matches(f25, same)[3]
 
 
 def match_security(f25: Form25, refs: Sequence[SecurityRef]) -> tuple[str | None, str]:

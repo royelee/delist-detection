@@ -702,3 +702,24 @@ def test_the_second_class_a_form25_names_gets_its_delisting(fake_edgar):
     assert [r.flag for r in review if r.flag == "form25_unmatched"] == []
     (ev,) = events
     assert (ev.sec_id, ev.delist_date) == ("LLYVK", "2025-12-25")
+
+
+def test_a_class_left_ambiguous_still_goes_to_review_when_another_class_matched(fake_edgar):
+    """CBS's 2019 Form 25 names Class A and Class B. Class A matches its one
+    sibling; Class B has two (the Class B FIGI line and a placeholder for the
+    same stock) that no name word tells apart. The placeholder is not matched,
+    and its review row says the class was ambiguous, not that it ended with no
+    delisting filing."""
+    fake_edgar.submissions_by_cik[813828] = [EdgarSubmission("c1", "25", "2019-12-04", "", "", "p.xml")]
+    fake_edgar.raws["c1"] = _f25_raw("New York Stock Exchange LLC", class_text=(
+        "Class A Common Stock, par value $0.001 per share Class B Common Stock, par value $0.001 per share"))
+    clf = DelistClassifier(fake_edgar, TickerResolver(fake_edgar))
+    sec = _sec("CIK813828-CLASS-B", 813828, "CBS", "2008-01-16", "2019-06-30", "CBS CORP CLASS B")
+    sec.share_class = "CLASS B"
+    ctx = _ctx(sec, last_seen="2019-12-06")
+    ctx.siblings = [SecurityRef("BBG000BWDFD4", "CLASS A", "common", "PARAMOUNT GLOBAL CLASS A"),
+                    SecurityRef("BBG000C496P7", "CLASS B", "common", "PARAMOUNT GLOBAL CLASS B"),
+                    SecurityRef("CIK813828-CLASS-B", "CLASS B", "common", "CBS CORP CLASS B")]
+    events, review = DelistingFinder(fake_edgar, clf).find(ctx)
+    assert events == []
+    assert [r.flag for r in review] == ["form25_unmatched"]

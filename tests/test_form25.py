@@ -4,7 +4,7 @@ from pathlib import Path
 from delist_detection.edgar import EdgarSubmission
 from delist_detection.form25 import (
     Form25, SecurityRef, class_kind, class_label, effective_date, exchange_label, exchanges_named,
-    list_form25, match_securities, match_security, notice_last_trade, parse_form25,
+    list_form25, match_securities, match_security, notice_last_trade, parse_form25, tied_securities,
 )
 
 FIX = Path(__file__).parent / "fixtures" / "form25"
@@ -248,3 +248,18 @@ def test_a_form25_naming_several_classes_matches_each_of_them():
     refs = [SecurityRef("A", "CLASS A", "common"), SecurityRef("B", "CLASS B", "common"),
             SecurityRef("C", "CLASS C", "common")]
     assert match_securities(f, refs) == (["A", "B"], "class A, B")
+
+
+def test_a_sibling_with_no_class_letter_is_left_tied_when_the_form25_names_letters():
+    """Liberty SiriusXM's 2024 Form 25 names Series A, B and C. Series A matches
+    its line by name; the Series C line's FIGI name carries no letter, so it
+    cannot be matched, and it is reported as tied (to review) rather than as a
+    security the Form 25 is not about."""
+    f = Form25("a", "25-NSE", "2024-09-09", "NASDAQ",
+               "Series A Liberty SiriusXM Common Stock (LSXMA), Series B Liberty SiriusXM Common Stock (LSXMB), "
+               "and Series C Liberty SiriusXM Common Stock (LSXMK)", "", "")
+    refs = [SecurityRef("LSXMA", "CLASS A", "common", "LIBERTY MEDIA LIBERTY SIRIUSXM COR"),
+            SecurityRef("LSXMK", "COMMON", "common", "LIBERTY MEDIA LIBERTY SIRIUSXM COR"),
+            SecurityRef("FWONA", "CLASS A", "common", "LIBERTY MEDIA FORMULA ONE SERIES A")]
+    assert match_securities(f, refs) == (["LSXMA"], "class A by name")
+    assert tied_securities(f, refs) == {"LSXMK"}
