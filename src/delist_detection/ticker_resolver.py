@@ -24,6 +24,7 @@ from .names import name_tokens, names_agree
 log = logging.getLogger(__name__)
 # Version 2: {"__version__": 2, "entries": {key: {...TickerResolution, "member_name"}}}.
 # Anything else was written before the date and name checks and is not trusted.
+_LOOK_UP_PIN = object()     # resolve(pin=...) default: look the pin up with cik_map
 CACHE_VERSION = 3
 # An older cache version still loads, minus the answers of these sources, which
 # the current rules decide differently. Version 3 prefers the SEC ticker map's
@@ -554,14 +555,19 @@ class TickerResolver:
                 return fallback[0], fallback[1], True
         return None, None, False
 
-    def resolve(self, ticker: str, observed_date: str | None = None) -> TickerResolution:
+    def resolve(self, ticker: str, observed_date: str | None = None, *,
+                pin: int | None | object = _LOOK_UP_PIN) -> TickerResolution:
+        """`pin`: the caller's own CIK pin for this lookup (None: none), in place of
+        `cik_map(ticker, observed_date)`. A caller resolving a known era passes
+        its pin: a date lookup can land nearer another era of the ticker than
+        the era's own observations and return that era's pin."""
         t = ticker.upper().strip()
         cache_key = f"{t}|{observed_date or ''}"
         # The answer holds only for the member name its checks used.
         member = self.member_names(t, observed_date) or None
         self._transient = False
 
-        pinned = self.cik_map(t, observed_date)
+        pinned = self.cik_map(t, observed_date) if pin is _LOOK_UP_PIN else pin
         if pinned:
             # The caller's universe states which company this row is: it was
             # resolved once, against the member name, and reviewed. Nothing this

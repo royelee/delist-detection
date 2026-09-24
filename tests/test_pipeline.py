@@ -1383,3 +1383,27 @@ def test_the_early_ftd_extension_covers_the_whole_look_back(fake_edgar, tmp_path
     (d,) = read_table("delistings", table_path(tmp_path, "delistings"))
     assert d["last_trade_date"] == "2007-09-28" and d["last_trade_close"] == "62.000000"
     assert "ftd_close_prior_day" in d["review_flags"]
+
+
+def test_each_era_is_resolved_with_its_own_pin(fake_edgar, tmp_path):
+    """BlackRock's 2024 holding-company reorganization: the old line is pinned to
+    the old issuer, the new line (observed from 2024-12-31) to the new holdco.
+    The old era is resolved at its FTD-extended last sighting (2024-10-01), which
+    is nearer the new era's first observation than its own last one; the pin
+    must still be the old era's own, not the nearest era's."""
+    fake_edgar.submissions_by_cik[1364742] = []
+    fake_edgar.submissions_by_cik[2012383] = []
+    obs = ([Observation("BLK", d, "BLACKROCK INC", cik=1364742) for d in ("2024-01-02", "2024-06-28")]
+           + [Observation("BLK", d, "BLACKROCK INC", cik=2012383) for d in ("2024-12-31", "2025-06-30")])
+    rows = (_ftd("BLK", "09247X101", "BLACKROCK INC", ["2024-01-02", "2024-04-01", "2024-06-28", "2024-08-01",
+                                                      "2024-10-01"])
+            + _ftd("BLK", "09290D101", "BLACKROCK INC", ["2024-10-02", "2024-12-02", "2024-12-31", "2025-06-30"]))
+    index, clients = _index_clients(fake_edgar, obs, rows, {
+        ("ID_CUSIP", "09247X101"): _figi_answer("BBGBLKOLD01", "BLK", "BLACKROCK INC"),
+        ("ID_CUSIP", "09290D101"): _figi_answer("BBGBLKNEW01", "BLK", "BLACKROCK INC"),
+    })
+
+    run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
+
+    secs = {r["sec_id"]: r["issuer_cik"] for r in read_table("securities", table_path(tmp_path, "securities"))}
+    assert secs == {"BBGBLKOLD01": "1364742", "BBGBLKNEW01": "2012383"}

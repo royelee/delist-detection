@@ -378,7 +378,9 @@ def run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_
     # be months apart, and the resolver's Form 25 search is anchored on this date.
     # The resolver tier that found it (cik_map, manual, company_tickers, ...) is kept
     # for the delisting rows' resolution_source.
-    cik_res = {e.key: clients.resolver.resolve(e.ticker, era_last_seen(e, ftd)) for e in eras}
+    # Each era's own pin: a pin looked up by (ticker, date) can belong to a
+    # neighbouring era when the last sighting falls between the two.
+    cik_res = {e.key: clients.resolver.resolve(e.ticker, era_last_seen(e, ftd), pin=e.cik_pin) for e in eras}
     ciks = {k: r.cik for k, r in cik_res.items()}
 
     # 3. FIGI per era -> securities

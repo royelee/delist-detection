@@ -160,8 +160,10 @@ it cannot map deregistered tickers. We layer increasingly looser strategies
 until something hits, then validate that the candidate looks like a delist
 target rather than an acquirer.
 
-1. **The era's `cik` pin**, from the observations CSV (`ObservationIndex.cik_pin_on`,
-   wired in by `pipeline.py`). Beats every other tier, including the manual
+1. **The era's `cik` pin**, from the observations CSV: `pipeline.py` passes each
+   era's own pin (`resolve(..., pin=era.cik_pin)`), since a date lookup
+   (`ObservationIndex.cik_pin_on`, the resolver's `cik_map` for other callers)
+   can land nearer another era of the ticker. Beats every other tier, including the manual
    override. Never written to `cache/ticker_resolution.json`: it answers
    before the on-disk memo is even consulted, so persisting it would let a
    stale pin outlive a later correction in the observations file — the
