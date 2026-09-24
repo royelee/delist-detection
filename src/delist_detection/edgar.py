@@ -6,11 +6,13 @@ at 8 req/sec and cache every JSON payload, so repeated runs cost nothing.
 
 from __future__ import annotations
 
+import fcntl
 import hashlib
 import json
 import os
 import threading
 import time
+import weakref
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import date, timedelta
@@ -107,10 +109,14 @@ class RateLimiter:
     `acquire()` blocks until the caller may start one request: `interval` after
     the previous start, and not before a pause set by `pause()` has run out. The
     lock is held while sleeping, so callers queue behind it and no burst credit
-    builds up. `clock` and `sleep` are injectable so tests never wait.
+    builds up. `gate` (a MachineGate) extends the spacing to every process on
+    the machine that shares its lock file; it is taken after the in-process
+    lock, so this process's own threads queue cheaply first. `clock` and `sleep`
+    are injectable so tests never wait.
     """
 
-    def __init__(self, rate: float, *, clock=time.monotonic, sleep=time.sleep) -> None:
+    def __init__(self, rate: float, *, clock=time.monotonic, sleep=time.sleep,
+                 gate: "MachineGate | None" = None) -> None:
         self.interval = 1.0 / rate
         self._clock, self._sleep = clock, sleep
         self._lock = threading.Lock()            # held from the wait through the start
@@ -119,6 +125,7 @@ class RateLimiter:
         self._resume_at = float("-inf")
         self._local = threading.local()
         self.count = 0                           # requests started through this limiter
+        self.gate = gate                         # machine-wide spacing (MachineGate), taken after _lock
 
     def _raise_if_cancelled(self) -> None:
         stop = getattr(self._local, "stop", None)
@@ -145,6 +152,9 @@ class RateLimiter:
             if wait > 0:
                 self._sleep(wait)
             self._raise_if_cancelled()           # stopped while sleeping: the slot goes unused
+            if self.gate is not None:
+                self.gate.wait_turn()            # every other process sharing the lock file
+                self._raise_if_cancelled()       # stopped while waiting for the machine's turn
             self._last = self._clock()
             self.count += 1
 
@@ -161,6 +171,86 @@ class RateLimiter:
 
 SEC_MAX_RATE = 8.0      # SEC allows 10 requests/s per client; we stay under it (spec §9, §11)
 SEC_LIMITER = RateLimiter(SEC_MAX_RATE)
+
+SEC_RATE_LOCK_ENV = "DELIST_DETECTION_SEC_RATE_LOCK"
+
+
+def default_rate_lock_path() -> Path:
+    """The machine-wide SEC rate lock file: $DELIST_DETECTION_SEC_RATE_LOCK, else
+    ~/.cache/delist_detection/sec_rate.lock. Outside the repo on purpose: every
+    checkout and worktree on the machine must share it."""
+    env = os.environ.get(SEC_RATE_LOCK_ENV, "").strip()
+    return Path(env).expanduser() if env else Path.home() / ".cache" / "delist_detection" / "sec_rate.lock"
+
+
+class MachineGate:
+    """Spaces SEC request starts across every process on the machine that uses one
+    lock file. The file holds the wall-clock time of the last start. `wait_turn`
+    takes the file's exclusive `flock`, waits until `interval` after that time,
+    writes its own start and releases the lock. The wait is clamped to
+    [0, interval], so a wall-clock step can neither stall the pool (a stamp "in
+    the future") nor let a burst through; an unreadable stamp counts as none.
+    The file is opened here, so an unwritable path fails at start-up, not in the
+    middle of a run."""
+
+    def __init__(self, path: str | Path, interval: float, *, wall=time.time, sleep=time.sleep) -> None:
+        self.path, self.interval = Path(path), interval
+        self._wall, self._sleep = wall, sleep
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self._fd = os.open(self.path, os.O_RDWR | os.O_CREAT, 0o644)
+        weakref.finalize(self, os.close, self._fd)
+
+    def wait_turn(self) -> None:
+        fcntl.flock(self._fd, fcntl.LOCK_EX)
+        try:
+            try:
+                last = float(os.pread(self._fd, 64, 0).decode("ascii").strip() or "0")
+            except (UnicodeDecodeError, ValueError):
+                last = 0.0
+            wait = min(max(last + self.interval - self._wall(), 0.0), self.interval)
+            if wait > 0:
+                self._sleep(wait)
+            stamp = f"{self._wall():.6f}".encode("ascii")
+            os.ftruncate(self._fd, 0)
+            os.pwrite(self._fd, stamp, 0)
+        finally:
+            fcntl.flock(self._fd, fcntl.LOCK_UN)
+
+
+def use_machine_wide_limit(path: str | Path | None = None) -> MachineGate:
+    """Extend SEC_LIMITER's spacing to every process on this machine that uses the
+    same lock file (`path`, default `default_rate_lock_path()`). Call it once at
+    start-up, before any SEC request: the CLI, `pipeline.default_clients`,
+    `verify_against_web.py` and `build_golden_fixtures.py` do. Idempotent for one
+    path. Raises OSError, naming the path and SEC_RATE_LOCK_ENV, when the lock
+    file cannot be opened for writing."""
+    p = Path(path).expanduser() if path is not None else default_rate_lock_path()
+    gate = SEC_LIMITER.gate
+    if gate is not None and gate.path == p:
+        return gate
+    try:
+        gate = MachineGate(p, SEC_LIMITER.interval)
+    except OSError as exc:
+        raise OSError(f"cannot open the machine-wide SEC rate lock {p} ({exc}); set {SEC_RATE_LOCK_ENV} "
+                      "to a writable file that every SEC client on this machine uses") from exc
+    SEC_LIMITER.gate = gate
+    return gate
+
+
+class EdgarSetupError(RuntimeError):
+    """The client is not set up to talk to SEC: no User-Agent SEC accepts."""
+
+
+def require_user_agent() -> str:
+    """The configured User-Agent. Raises EdgarSetupError when only the fallback
+    is left, which SEC answers with 403, so a run stops before its first request
+    instead of after a pool of threads has been refused."""
+    ua = resolve_user_agent()
+    if ua == FALLBACK_UA:
+        raise EdgarSetupError(
+            "EDGAR_USER_AGENT is not set (environment or the repo .env); SEC refuses the fallback "
+            f"User-Agent {FALLBACK_UA!r}. Set it to a name and a contact address, e.g. 'Jane Doe jane@example.com'.")
+    return ua
 
 
 def _throttle() -> None:

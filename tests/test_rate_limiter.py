@@ -1,13 +1,16 @@
 """The process-wide SEC rate limiter: request starts spaced 1/rate apart across
 threads, a pause every thread honours while SEC fails, and a stopped prefetch
 worker that starts no further request."""
+import fcntl
+import os
 import threading
+from pathlib import Path
 
 import pytest
 import requests
 
 from delist_detection import edgar
-from delist_detection.edgar import PrefetchCancelled, RateLimiter
+from delist_detection.edgar import SEC_RATE_LOCK_ENV, MachineGate, PrefetchCancelled, RateLimiter, default_rate_lock_path
 
 
 class _Clock:
@@ -175,3 +178,103 @@ def test_every_sec_request_goes_through_the_shared_limiter(monkeypatch):
 
 def test_the_shared_limiter_allows_8_requests_per_second():
     assert edgar.SEC_LIMITER.interval == pytest.approx(0.125)
+
+
+def _gate(path, c):
+    return MachineGate(path, 0.125, wall=c.now, sleep=c.sleep)
+
+
+def test_two_limiters_sharing_one_lock_file_space_their_starts(tmp_path):
+    # Two processes on one machine: each has its own in-process limiter, and both
+    # use the same lock file. Their starts interleave but never come closer than
+    # 1/8 s.
+    c = _Clock()
+    path = tmp_path / "sec_rate.lock"
+    a = RateLimiter(8, clock=c.now, sleep=c.sleep, gate=_gate(path, c))
+    b = RateLimiter(8, clock=c.now, sleep=c.sleep, gate=_gate(path, c))
+    starts = []
+    for lim in (a, b, a, b):
+        lim.acquire()
+        starts.append(c.t)
+    assert starts == pytest.approx([100.0, 100.125, 100.25, 100.375])
+    assert float(path.read_text()) == pytest.approx(100.375)
+
+
+def test_a_wall_clock_step_back_waits_at_most_one_interval(tmp_path):
+    c = _Clock()
+    path = tmp_path / "sec_rate.lock"
+    path.write_text("999999.0")                 # a start stamped "in the future": the clock stepped back
+    _gate(path, c).wait_turn()
+    assert c.slept == [0.125]
+
+
+@pytest.mark.parametrize("content", ["", "garbage", "1.0"])
+def test_an_old_or_unreadable_stamp_does_not_wait(tmp_path, content):
+    c = _Clock()
+    path = tmp_path / "sec_rate.lock"
+    path.write_text(content)
+    _gate(path, c).wait_turn()
+    assert c.slept == []
+    assert float(path.read_text()) == pytest.approx(100.0)
+
+
+def test_the_lock_file_is_held_while_a_start_is_taken(tmp_path):
+    path = tmp_path / "sec_rate.lock"
+    gate = MachineGate(path, 0.125)             # real clock; a new file never waits
+    holder = os.open(path, os.O_RDWR)
+    fcntl.flock(holder, fcntl.LOCK_EX)          # another process is taking its start
+    t = threading.Thread(target=gate.wait_turn)
+    t.start()
+    t.join(0.2)
+    assert t.is_alive()                         # this one waits for the lock
+    fcntl.flock(holder, fcntl.LOCK_UN)
+    os.close(holder)
+    t.join(5)
+    assert not t.is_alive()
+
+
+def test_the_lock_path_comes_from_the_environment(monkeypatch, tmp_path):
+    monkeypatch.setenv(SEC_RATE_LOCK_ENV, str(tmp_path / "x.lock"))
+    assert default_rate_lock_path() == tmp_path / "x.lock"
+    monkeypatch.delenv(SEC_RATE_LOCK_ENV)
+    assert default_rate_lock_path() == Path.home() / ".cache" / "delist_detection" / "sec_rate.lock"
+
+
+def test_use_machine_wide_limit_gates_the_shared_limiter(monkeypatch, tmp_path):
+    monkeypatch.setenv(SEC_RATE_LOCK_ENV, str(tmp_path / "sec_rate.lock"))
+    gate = edgar.use_machine_wide_limit()
+    assert edgar.SEC_LIMITER.gate is gate and gate.path == tmp_path / "sec_rate.lock"
+    assert edgar.use_machine_wide_limit() is gate          # idempotent
+    edgar._throttle()
+    assert float((tmp_path / "sec_rate.lock").read_text()) > 0
+
+
+def test_an_unwritable_lock_path_fails_at_setup_naming_the_variable(tmp_path):
+    blocker = tmp_path / "file"
+    blocker.write_text("")
+    with pytest.raises(OSError, match=SEC_RATE_LOCK_ENV):
+        edgar.use_machine_wide_limit(blocker / "sub" / "sec_rate.lock")   # a file where a directory must be
+    assert edgar.SEC_LIMITER.gate is None
+
+
+def test_require_user_agent_refuses_the_fallback(monkeypatch):
+    monkeypatch.setattr(edgar, "resolve_user_agent", lambda: edgar.FALLBACK_UA)
+    with pytest.raises(edgar.EdgarSetupError, match="EDGAR_USER_AGENT"):
+        edgar.require_user_agent()
+    monkeypatch.setattr(edgar, "resolve_user_agent", lambda: "Test Co test@example.com")
+    assert edgar.require_user_agent() == "Test Co test@example.com"
+
+
+def test_a_worker_stopped_while_it_waits_for_the_machine_turn_starts_no_request():
+    c = _Clock()
+    stop = threading.Event()
+
+    class _Gate:
+        def wait_turn(self):
+            stop.set()                          # the pool stops while this thread waits on the lock file
+
+    lim = RateLimiter(8, clock=c.now, sleep=c.sleep, gate=_Gate())
+    with lim.cancelled_by(stop):
+        with pytest.raises(PrefetchCancelled):
+            lim.acquire()
+    assert lim.count == 0

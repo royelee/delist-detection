@@ -25,7 +25,7 @@ from pathlib import Path
 
 import requests
 
-from delist_detection.edgar import EdgarBlocked, _throttle, check_response, resolve_user_agent
+from delist_detection.edgar import EdgarBlocked, _throttle, check_response, resolve_user_agent, use_machine_wide_limit
 
 ROOT = Path(__file__).resolve().parents[1]
 USER_AGENT = resolve_user_agent()
@@ -230,6 +230,7 @@ def main() -> int:
     p.add_argument("--sample", type=int, default=0,
                    help="Stratified random sample size (0 = all)")
     args = p.parse_args()
+    use_machine_wide_limit()     # share the 8 requests/s with every other SEC client on this machine
 
     with open(args.input) as fh:
         rows = list(csv.DictReader(fh))
