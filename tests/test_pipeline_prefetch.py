@@ -257,3 +257,48 @@ def test_a_refusal_of_the_runs_midas_download_on_a_worker_aborts_the_run(fake_ed
         run(index, clients, Overrides(), out_dir=tmp_path / "out", log=lambda *_: None, sec_workers=4)
     assert asked and all(name.startswith("sec-warm") for name in asked)
     assert not (tmp_path / "out").exists()
+
+
+class _UnsavableResolver:
+    """A resolver whose memo cannot be written (the disk is full)."""
+
+    def flush(self):
+        raise OSError("No space left on device")
+
+
+def _unsavable_clients():
+    return pipeline.Clients(edgar=None, resolver=_UnsavableResolver(), classifier=None, figi=None, ftd_client=None)
+
+
+@pytest.mark.parametrize("exc", [EdgarBlocked("SEC returned 403"), OpenFigiBlocked("OpenFIGI returned 401"),
+                                 KeyboardInterrupt()], ids=["edgar_refusal", "openfigi_refusal", "ctrl_c"])
+def test_a_refusal_or_ctrl_c_wins_over_a_memo_that_cannot_be_saved(tmp_path, monkeypatch, exc):
+    """The CLI must still exit 2 on a refusal: the failed flush on the way out is
+    logged, and the refusal, not the OSError, reaches the caller."""
+    def aborted(*a, **k):
+        raise exc
+
+    monkeypatch.setattr(pipeline, "_run", aborted)
+    lines = []
+    with pytest.raises(type(exc)) as raised:
+        run(None, _unsavable_clients(), Overrides(), out_dir=tmp_path, log=lines.append)
+    assert raised.value is exc
+    assert lines == ["could not save the resolver memo while aborting: No space left on device"]
+
+
+def test_a_memo_that_cannot_be_saved_after_a_complete_run_is_an_error(tmp_path, monkeypatch):
+    monkeypatch.setattr(pipeline, "_run", lambda *a, **k: "summary")
+    with pytest.raises(OSError, match="No space left on device"):
+        run(None, _unsavable_clients(), Overrides(), out_dir=tmp_path, log=lambda *_: None)
+
+
+def test_the_stage_meter_counts_edgar_requests_apart_from_data_file_downloads():
+    lines = []
+    meter = pipeline._StageMeter(lines.append)
+    mark = meter.start()
+    edgar.SEC_STATS.add("request:submissions")
+    edgar.SEC_STATS.add("request:sec_data")
+    edgar.SEC_STATS.add("cache:submissions")          # a cache answer is not a request
+    meter.done("issuer resolution", mark)
+    assert meter.stages == {"issuer resolution": {"edgar_requests": 1, "sec_data_downloads": 1}}
+    assert lines == ["issuer resolution: 1 EDGAR requests, 1 SEC data-file downloads (all threads)"]

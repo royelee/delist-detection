@@ -4,6 +4,7 @@ import json
 import logging
 from datetime import date
 
+import pytest
 import requests
 
 from delist_detection.edgar import STALE_KEY
@@ -328,3 +329,60 @@ def test_a_shadow_starts_from_its_resolver_memo_and_saves_nothing(tmp_path, fake
     assert s.resolve("ALTR", "2025-03-26").cik == 1701732       # a new answer...
     assert cache.read_text() == saved                            # ...is not saved
     assert "ALTR|2025-03-26" not in r._memo                      # ...nor seen by its resolver
+
+
+class _CountingTickers:
+    """Wraps FakeEdgar; counts company_tickers() reads."""
+
+    def __init__(self, inner):
+        self.inner, self.ticker_reads = inner, 0
+
+    def __getattr__(self, name):
+        return getattr(self.inner, name)
+
+    def company_tickers(self):
+        self.ticker_reads += 1
+        return self.inner.company_tickers()
+
+
+def test_a_shadow_reads_the_ticker_map_only_when_an_era_needs_it(fake_edgar):
+    """A one-worker run reads company_tickers.json only when an era gets past its
+    pin, manual override and memo; a shadow built before that must not read it
+    sooner, and once its resolver has the map it shares it."""
+    e = _CountingTickers(fake_edgar)
+    r = TickerResolver(e, cik_map=lambda t, d=None: 999001 if t == "BAD" else None)
+    s = r.shadow()
+    assert e.ticker_reads == 0
+    assert s.resolve("BAD", "2023-05-10").cik == 999001          # pinned: no map needed
+    assert e.ticker_reads == 0
+    assert s.resolve("ALTR", "2025-03-26").cik == 1701732        # the first era that needs it
+    assert e.ticker_reads == 1
+    assert r.resolve("LIQ", "2019-11-06").cik == 999002
+    assert r.shadow()._companies is r._companies and e.ticker_reads == 2
+
+
+class _InterruptAfterWrite(dict):
+    """A memo whose next write lands and then is interrupted (Ctrl-C) before the
+    rest of `_remember` runs."""
+
+    def __setitem__(self, key, value):
+        super().__setitem__(key, value)
+        raise KeyboardInterrupt
+
+
+def test_an_interrupt_right_after_a_transient_answer_enters_the_memo_saves_nothing(tmp_path, fake_edgar,
+                                                                                   monkeypatch):
+    monkeypatch.setattr(TickerResolver, "_efts_lookup",
+                        lambda self, t, d=None, **kw: (999002, "Liquidating Trust (ALTR)", False))
+    monkeypatch.setattr(TickerResolver, "_validate_cik", lambda self, *a, **kw: True)
+    cache = tmp_path / "res.json"
+    e = _FlakyEdgar(fake_edgar)
+    e.failed = True                                               # no failure yet
+    r = TickerResolver(e, cache_path=cache, batch_writes=True)
+    assert r.resolve("BAD", "2023-05-10").cik == 999001          # a saveable answer, not yet flushed
+    e.failed = False                                              # ALTR's date check now fails: transient
+    r._memo = _InterruptAfterWrite(r._memo)
+    with pytest.raises(KeyboardInterrupt):
+        r.resolve("ALTR", "2025-03-26")
+    r.flush()                                                     # run()'s way out
+    assert set(json.loads(cache.read_text())["entries"]) == {"BAD|2023-05-10"}

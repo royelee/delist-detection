@@ -487,12 +487,20 @@ def run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_
     thread, so the same caches and run date (`clients.as_of`) give byte-identical
     tables for any worker count. A refusal on any thread aborts the run before
     anything is written. The resolver's memo is written after issuer resolution,
-    after the acquirer lookups, and on the way out, error or not."""
+    after the acquirer lookups, and on the way out, error or not. On the way out
+    of an aborted run, a memo that cannot be written is logged and the abort (a
+    refusal, Ctrl-C) is what reaches the caller, so the CLI still exits 2."""
     try:
-        return _run(index, clients, overrides, out_dir=out_dir, tol=tol, limit=limit, log=log,
-                    sec_workers=sec_workers)
-    finally:
-        _flush_memo(clients)
+        summary = _run(index, clients, overrides, out_dir=out_dir, tol=tol, limit=limit, log=log,
+                       sec_workers=sec_workers)
+    except BaseException:
+        try:
+            _flush_memo(clients)
+        except OSError as exc:
+            log(f"could not save the resolver memo while aborting: {exc}")
+        raise
+    _flush_memo(clients)
+    return summary
 
 
 def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_dir: Path, tol: float,

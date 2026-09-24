@@ -199,14 +199,20 @@ class TickerResolver:
             self._transient = True
 
     def _remember(self, key: str, res: TickerResolution, member: str | None) -> None:
-        self._memo[key] = res
-        self._memo_member[key] = member
+        # A miss or a transient answer is marked volatile (never persisted) before
+        # it enters the memo, and a mark is cleared only after a saveable answer
+        # has replaced the entry: an interrupt between these lines leaves nothing
+        # that the flush on the way out of the run would save wrongly.
+        volatile = res.cik is None or self._transient   # retried next run, never persisted
         if self._transient:
             self._degraded.add(key)
-        else:
-            self._degraded.discard(key)
-        if res.cik is None or self._transient:   # retried next run, never persisted
+        if volatile:
             self._volatile.add(key)
+        self._memo[key] = res
+        self._memo_member[key] = member
+        if not self._transient:
+            self._degraded.discard(key)
+        if volatile:
             return
         self._volatile.discard(key)
         self._dirty = True
@@ -713,11 +719,14 @@ class TickerResolver:
         client, overrides, name callables and run date, and a snapshot of the
         memo (so it skips every era this resolver already answers). It persists
         nothing and its answers are thrown away. Call it on the thread that owns
-        this resolver, while that resolver is idle (prefetch.warm does)."""
+        this resolver, while that resolver is idle (prefetch.warm does). The
+        ticker map is shared once this resolver has loaded it; until then the
+        shadow loads it itself, only when an era needs it, as a one-worker run
+        would."""
         s = TickerResolver(self.edgar, rename_map=self.rename_map, manual_overrides=self.manual_overrides,
                            name_lookup=self.name_lookup, member_names=self.member_names, cik_map=self.cik_map,
                            today=self.today)
         s._memo, s._memo_member = dict(self._memo), dict(self._memo_member)
         s._volatile, s._degraded = set(self._volatile), set(self._degraded)
-        s._companies = self._ensure_companies()
+        s._companies = self._companies
         return s
