@@ -10,7 +10,7 @@ import pytest
 import requests
 
 from delist_detection import sec_http
-from delist_detection.edgar import SEC_STATS, STALE_KEY, EdgarClient, FETCHED_KEY, _endpoint
+from delist_detection.edgar import SEC_STATS, STALE_KEY, EdgarClient, FETCHED_KEY, _endpoint, fill_only
 
 UA = "Test Co test@example.com"
 SUB_URL = "https://data.sec.gov/submissions/CIK0000000042.json"
@@ -86,6 +86,28 @@ def test_a_failed_filing_text_request_counts_as_degraded(tmp_path):
     mark = SEC_STATS.snapshot()
     assert client.fetch_filing_text(42, "0000000042-24-000001", "a.htm") == ""
     assert SEC_STATS.since(mark)[0]["degraded:failed_request"] == 1
+
+
+def test_a_degraded_read_on_a_fill_only_thread_counts_as_warm_degraded(tmp_path):
+    # item 5: a warm thread's degraded read must not be counted with the
+    # sequential pass's own -- run_manifest.json's degraded_answers should
+    # reflect only what the sequential pass relied on.
+    client = _client(tmp_path, status=503)
+    mark = SEC_STATS.snapshot()
+    with fill_only():
+        assert client.fetch_filing_text(42, "0000000042-24-000001", "a.htm") == ""
+    counts, _ = SEC_STATS.since(mark)
+    assert counts.get("warm_degraded:failed_request") == 1
+    assert "degraded:failed_request" not in counts
+
+
+def test_a_degraded_read_off_a_fill_only_thread_still_counts_as_degraded(tmp_path):
+    client = _client(tmp_path, status=503)
+    mark = SEC_STATS.snapshot()
+    assert client.fetch_filing_text(42, "0000000042-24-000001", "a.htm") == ""
+    counts, _ = SEC_STATS.since(mark)
+    assert counts.get("degraded:failed_request") == 1
+    assert "warm_degraded:failed_request" not in counts
 
 
 def test_a_sec_data_download_is_counted(tmp_path):

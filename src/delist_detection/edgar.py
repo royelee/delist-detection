@@ -456,10 +456,12 @@ class RequestStats:
     """The counters behind run_manifest.json, shared by every thread of the
     process: requests sent and answers read from cache, per endpoint
     ("request:<endpoint>", "cache:<endpoint>"); answers that rest on a failed
-    request or a stale copy ("degraded:<what>"); and each request's latency. A
-    run reports the change since a `snapshot()`. `degraded()` also counts on the
-    calling thread alone (`thread_degraded()`), so the pipeline can tell which
-    era or security a degraded answer served."""
+    request or a stale copy ("degraded:<what>", or "warm_degraded:<what>" on a
+    fill-only/warm thread -- see `filling_only()` -- so `degraded_answers`
+    reflects only what the sequential pass relied on); and each request's
+    latency. A run reports the change since a `snapshot()`. `degraded()` also
+    counts on the calling thread alone (`thread_degraded()`), so the pipeline
+    can tell which era or security a degraded answer served."""
 
     def __init__(self) -> None:
         self._lock = threading.Lock()
@@ -476,7 +478,8 @@ class RequestStats:
             self._timings[endpoint].append(seconds)
 
     def degraded(self, what: str) -> None:
-        self.add(f"degraded:{what}")
+        prefix = "warm_degraded" if filling_only() else "degraded"
+        self.add(f"{prefix}:{what}")
         self._local.degraded = self.thread_degraded() + 1
 
     def thread_degraded(self) -> int:

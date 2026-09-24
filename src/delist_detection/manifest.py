@@ -60,7 +60,10 @@ def build(*, as_of: date, sec_workers: int, counts: dict[str, int], timings: dic
     of the run's start; `stages` is the pipeline's per-stage meter. `warm_failed`
     reports, per warm pass, how many items a worker thread failed on (the
     sequential pass meets and records the same failures itself; a nonzero count
-    here only flags a concurrency-only failure worth a second look)."""
+    here only flags a concurrency-only failure worth a second look). `degraded_answers`
+    counts only the sequential pass's own degraded reads; a warm/fill-only
+    thread's degraded reads are counted separately, under `warm_degraded`
+    (`edgar.RequestStats.degraded`, `edgar.filling_only`)."""
     return {
         "as_of": as_of.isoformat(),
         "code_version": code_version(),
@@ -68,6 +71,7 @@ def build(*, as_of: date, sec_workers: int, counts: dict[str, int], timings: dic
         "sec_requests": _by_prefix(counts, "request:"),
         "cache_answers": _by_prefix(counts, "cache:"),
         "degraded_answers": _by_prefix(counts, "degraded:"),
+        "warm_degraded": _by_prefix(counts, "warm_degraded:"),
         "rejected_queries": _by_prefix(counts, "rejected:"),
         "not_covered": _by_prefix(counts, "not_covered:"),
         "warm_failed": _by_prefix(counts, "warm_failed:"),
