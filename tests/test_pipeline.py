@@ -1514,7 +1514,8 @@ def test_with_no_last_trade_date_the_window_is_anchored_on_the_form25_filing():
                           bucket=CrspBucket.EXCHANGE_TRANSFER, confidence="medium", reason="Continued filings",
                           evidence={"flags": ["successor_unknown"]}, sec_id="BBGAPAOLD01", delist_date="2021-03-14")
     sub = EdgarSubmission("0001354457-21-000304", "25-NSE", "2021-03-04", "", "", "p.xml")
-    ev = DelistingEvent(sec_id="BBGAPAOLD01", cik=6769, ticker="APA", delist_date="2021-03-14", record=record,
+    # the delisting's ticker is the fails rows' deleted-symbol spelling; the old line's own ticker is APA
+    ev = DelistingEvent(sec_id="BBGAPAOLD01", cik=6769, ticker="APAXXXX", delist_date="2021-03-14", record=record,
                         last_trade=LastTrade(None, "", ("no_last_trade_date",)), form25=None, form25_sub=sub,
                         exchange="NASDAQ", flags=["successor_unknown"])
     starts = {"BBGAPAOLD01": ("2007-12-17", 6769, {"APA"}), "BBGAPANEW01": ("2021-03-01", 1841666, {"APA"})}

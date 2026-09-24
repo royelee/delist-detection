@@ -311,13 +311,16 @@ def _successor_in_run(e: DelistingEvent, starts: dict[str, tuple[str, int | None
     day = e.last_trade.day or (_d(e.form25_sub.filing_date) if e.form25_sub is not None else _d(e.delist_date))
     lo = (day - timedelta(days=SUCCESSOR_BEFORE_DAYS)).isoformat()
     hi = (day + timedelta(days=SUCCESSOR_AFTER_DAYS)).isoformat()
+    # the delisting's ticker can be a deleted-symbol spelling ("APAXXXX"): match
+    # on every ticker the delisted security carried
+    own = starts.get(e.sec_id, ("", None, set()))[2] | {e.ticker}
     found: dict[str, str] = {}
     for sid, (first, cik, tickers) in starts.items():
         if sid == e.sec_id or not lo <= first <= hi:
             continue
         if cik is not None and cik == e.cik:
             found[sid] = "same_issuer"
-        elif e.ticker in tickers:
+        elif own & tickers:
             found[sid] = "same_ticker"
     return next(iter(found.items())) if len(found) == 1 else None
 
