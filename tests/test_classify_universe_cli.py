@@ -96,6 +96,13 @@ def test_the_fallback_user_agent_stops_the_run_before_any_request(monkeypatch):
     assert exc.value.code == 2
 
 
+def test_main_returns_3_when_an_answer_rested_on_a_failed_request(monkeypatch, capsys):
+    rc = _run_main(monkeypatch, {"resolution_degraded": 2})
+    assert rc == 3
+    err = capsys.readouterr().err
+    assert "2" in err and "resolution_degraded" in err
+
+
 def test_an_unusable_rate_lock_stops_the_run_before_any_request(monkeypatch):
     monkeypatch.setenv("EDGAR_USER_AGENT", "Test Co test@example.com")
 

@@ -23,6 +23,7 @@ from .figi_resolution import FigiCandidate, accept, is_placeholder, share_class_
 from .form25 import SecurityRef, exchange_label
 from .ftd import FtdIndex
 from .listing_status import edgar_lists, listed_today, listing_answers
+from . import manifest as run_manifest
 from .names import names_agree
 from .observations import ObservationIndex, TickerEra, eras_by_key, normalize_ticker, observation_conflicts
 from .openfigi import OpenFigiBlocked
@@ -455,6 +456,15 @@ def _flush_memo(clients: Clients) -> None:
         flush()
 
 
+DEGRADED_FLAG = "resolution_degraded"
+
+
+def _degraded_since(mark: int) -> bool:
+    """Whether an EDGAR answer on this thread rested on a failed request or a stale
+    copy since `mark` (edgar.SEC_STATS.thread_degraded())."""
+    return SEC_STATS.thread_degraded() > mark
+
+
 def _warm_delisting_search(clients: Clients, ordered: list[Security], listing: dict[str, dict],
                            context: Callable[[Security, bool | None], SecurityContext], workers: int) -> None:
     """Fill the SEC caches for the Form 25 search: each security's own finder work
@@ -516,6 +526,7 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
          limit: int | None, log: Callable, sec_workers: int) -> RunSummary:
     as_of = clients.as_of or date.today()     # the one run date: every window below ends on it
     meter = _StageMeter(log)
+    run_mark = SEC_STATS.snapshot()           # the manifest reports the traffic since here
     eras = index.eras()
     if limit:
         eras = eras[:limit]
@@ -569,6 +580,13 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
         for flag in res.flags:
             review.append(ReviewItem(res.sec_id or "", era.ticker, ciks.get(key), flag,
                                      f"{era.key} {era.name or ''}".strip(), last_seen=era.last))
+    for e in eras:
+        if clients.resolver.is_degraded(e.ticker, last_seen[e.key]):
+            res = resolutions[e.key]
+            review.append(ReviewItem(res.sec_id or "", e.ticker, ciks.get(e.key), DEGRADED_FLAG,
+                                     f"{e.key} {e.name or ''}: issuer resolution rested on a failed EDGAR request "
+                                     "or a stale copy; its answer was used for this run but not saved",
+                                     last_seen=e.last))
     review += _conflict_review(eras, resolutions)
     review += _unconfirmed_review(eras, ftd, resolutions, ciks)
     log(f"{len(securities)} securities; FIGI sources "
@@ -630,6 +648,7 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
         _warm_delisting_search(clients, ordered, listing, security_context, sec_workers)
     for i, s in enumerate(ordered, 1):
         own_last_seen = _own_last_seen(s, sightings[s.sec_id])
+        degraded_mark = SEC_STATS.thread_degraded()
         try:
             # listed_today and the context live inside the try too: a FIGI/EDGAR
             # error there must become a reviewable row for this one security,
@@ -647,6 +666,10 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
             continue
         events += evs
         review += rv
+        if _degraded_since(degraded_mark):
+            review.append(ReviewItem(s.sec_id, s.eras[-1].ticker if s.eras else "", s.issuer_cik, DEGRADED_FLAG,
+                                     "the delisting search rested on a failed EDGAR request or a stale copy; "
+                                     "run again once SEC answers", last_seen=own_last_seen))
         if i % 50 == 0:
             log(f"[{i}/{len(securities)}] securities searched; {len(events)} delistings so far")
     meter.done("delisting search", mark)
@@ -712,6 +735,7 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
              workers=sec_workers, name="payouts")
     for e in mergers:
         key = (e.sec_id, e.delist_date)
+        degraded_mark = SEC_STATS.thread_degraded()
         try:
             if clients.payout_extractor is not None:
                 payouts_raw[key] = clients.payout_extractor.extract(e.record, last_close=closes.get(key))
@@ -724,6 +748,10 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
         except Exception as exc:  # an overnight run must survive one bad extraction
             log(f"{e.sec_id} {e.delist_date}: payout extraction ERROR {type(exc).__name__}: {exc}")
             review.append(ReviewItem(e.sec_id, e.ticker, e.cik, "error", f"{type(exc).__name__}: {exc}",
+                                     delist_date=e.delist_date))
+        if _degraded_since(degraded_mark):
+            review.append(ReviewItem(e.sec_id, e.ticker, e.cik, DEGRADED_FLAG,
+                                     "payout extraction rested on a failed EDGAR request or a stale copy",
                                      delist_date=e.delist_date))
     trade_day = {(e.sec_id, e.delist_date): e.last_trade.day for e in events}
     acq_symbols = {normalize_ticker(t.acquirer_ticker) for t in llm_terms.values() if t.acquirer_ticker}
@@ -832,9 +860,14 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
             continue
         predecessor = securities[e.sec_id]
         day = e.last_trade.day or _d(e.delist_date)
+        degraded_mark = SEC_STATS.thread_degraded()
         name = successor_search_name(clients.edgar, e.cik, predecessor.name)
         hit = successor_from_8k12b(successor_search, clients.figi, name=name, day=day,
                                    exclude_cik=e.cik, share_class=predecessor.share_class)
+        if _degraded_since(degraded_mark):
+            review.append(ReviewItem(e.sec_id, e.ticker, e.cik, DEGRADED_FLAG,
+                                     "the successor search rested on a failed EDGAR request or a stale copy",
+                                     delist_date=e.delist_date))
         if hit is None:
             continue
         s_cik, cand, filing_date = hit
@@ -974,6 +1007,10 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
         "review": review_rows,
     })
     flags = Counter(f.split(":", 1)[0] for r in review_rows for f in (r.get("review_flags") or "").split(";") if f)
+    stat_counts, stat_timings = SEC_STATS.since(run_mark)
+    run_manifest.write(out_dir, run_manifest.build(as_of=as_of, sec_workers=sec_workers, counts=stat_counts,
+                                                   timings=stat_timings, stages=meter.stages,
+                                                   review_flags=dict(flags)))
     return RunSummary(counts, dict(Counter(e.record.bucket.value for e in events)),
                       dict(Counter(s.figi_source for s in securities.values())), dict(flags))
 

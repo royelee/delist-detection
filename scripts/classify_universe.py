@@ -92,11 +92,11 @@ MAX_SEC_WORKERS = 8         # one process's ceiling: all threads share one 8 req
 EXIT_CODES_EPILOG = """\
 Exit codes:
   0  success, no review-row errors
-  2  aborted: SEC or OpenFIGI refused the request (EdgarBlocked/OpenFigiBlocked),
-     or a start-up check failed before any request (EDGAR_USER_AGENT unset, the
-     SEC rate-lock file unusable, --sec-workers outside 1..8)
-  3  completed, but review.csv has one or more `error` rows (outputs are still
-     written; see the stderr banner for the count)
+  2  aborted: SEC or OpenFIGI refused the request (EdgarBlocked/OpenFigiBlocked), or the
+     start-up checks failed (no EDGAR_USER_AGENT, an unusable SEC rate-lock file)
+  3  completed, but review.csv has one or more `error` rows, or `resolution_degraded`
+     rows (an answer rested on a failed SEC request or a stale copy; run again once SEC
+     answers). Outputs are still written; see the stderr banner for the counts
 """
 
 
@@ -162,11 +162,15 @@ def main() -> int:
     print("FIGI sources:", summary.figi_sources)
     print("Review flags:", summary.review_flags)
     error_count = summary.review_flags.get("error", 0)
+    degraded_count = summary.review_flags.get("resolution_degraded", 0)
     if error_count:
         print(f"WARNING: {error_count} review row(s) flagged 'error' -- outputs were still written; "
-             "see review.csv for the affected (sec_id, delist_date) rows.", file=sys.stderr)
-        return 3
-    return 0
+              "see review.csv for the affected (sec_id, delist_date) rows.", file=sys.stderr)
+    if degraded_count:
+        print(f"WARNING: {degraded_count} review row(s) flagged 'resolution_degraded' -- an answer rested on "
+              "a failed SEC request or a stale copy; outputs were still written, run again once SEC answers.",
+              file=sys.stderr)
+    return 3 if error_count or degraded_count else 0
 
 
 if __name__ == "__main__":
