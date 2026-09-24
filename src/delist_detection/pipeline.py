@@ -86,7 +86,9 @@ def successor_query(name: str, day: date) -> tuple[str, str, date, date]:
 
 
 def successor_from_8k12b(search: Callable, figi, *, name: str, day: date, exclude_cik: int,
-                         share_class: str = "COMMON") -> tuple[int, FigiCandidate, str] | None:
+                         share_class: str = "COMMON", edgar=None,
+                         own_tickers: set[str] | frozenset[str] = frozenset()
+                         ) -> tuple[int, FigiCandidate, str] | None:
     """The successor issuer that filed an 8-K12B naming `name` around `day`,
     resolved to the US composite FIGI whose share class matches the
     predecessor's `share_class`.
@@ -108,8 +110,18 @@ def successor_from_8k12b(search: Callable, figi, *, name: str, day: date, exclud
     `successor_unknown` set rather than guess). A display name with no
     ticker parenthetical yields no candidates and makes no OpenFIGI request.
 
+    A filer is skipped when it is another company's own, still-listed stock:
+    its EDGAR name does not agree with the predecessor's `name`, none of its
+    tickers is one of the predecessor's `own_tickers`, and (with `edgar`) its
+    EDGAR record lists one of them on a major exchange today. Clear Channel
+    Outdoor's 2019 successor filed its 8-K12B under the predecessor's own CIK
+    (excluded), which left iHeartMedia's 8-K12G3 for its own emergence, naming
+    its subsidiary: IHRT is not Clear Channel Outdoor's successor. Alphabet
+    (a new name on Google's own tickers) is.
+
     Returns `(cik, candidate, filing_date)`.
     """
+    own = {normalize_ticker(t) for t in own_tickers if t}
     hits = search(*successor_query(name, day))
     for h in hits:
         src = h.get("_source", h)
@@ -125,6 +137,9 @@ def successor_from_8k12b(search: Callable, figi, *, name: str, day: date, exclud
             if not tickers or figi is None:
                 continue
             edgar_name = disp[: m.start()].strip()
+            if (edgar is not None and not names_agree(name, edgar_name) and not own & set(tickers)
+                    and edgar_lists(edgar, cik, tickers)):
+                continue
             candidates: list[FigiCandidate] = []
             for t in tickers:
                 ans = figi.map([{"idType": "TICKER", "idValue": t.replace("-", "/")}])[0]
@@ -888,7 +903,9 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
             name, day = args
             predecessor = securities[e.sec_id]
             hit = successor_from_8k12b(successor_search, clients.figi, name=name, day=day,
-                                       exclude_cik=e.cik, share_class=predecessor.share_class)
+                                       exclude_cik=e.cik, share_class=predecessor.share_class,
+                                       edgar=clients.edgar,
+                                       own_tickers={x.ticker for x in predecessor.eras} | {e.ticker})
             if _degraded_since(degraded_mark):
                 review.append(ReviewItem(e.sec_id, e.ticker, e.cik, DEGRADED_FLAG,
                                          "the successor search rested on a failed EDGAR request or a stale copy",

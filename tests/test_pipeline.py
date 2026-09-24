@@ -342,14 +342,14 @@ def test_run_writes_an_open_successor_ticker_history_row(fake_edgar, tmp_path, m
 
     monkeypatch.setattr(pipeline, "DelistingFinder", _CannedFinder)
 
-    hit = {"_source": {"ciks": ["8888"], "display_names": ["SUCCESSOR CO  (SUX)  (CIK 0000008888)"],
+    hit = {"_source": {"ciks": ["8888"], "display_names": ["AETNA HOLDINGS INC  (SUX)  (CIK 0000008888)"],
                        "file_date": "2018-12-15"}}
     fake_edgar.full_text_search = lambda q, forms, lo, hi: [hit]
     fake_edgar.listings[8888] = [("SUX", "NYSE")]
-    clients.figi.answers[("TICKER", "SUX")] = _figi_answer("BBGSUX00001", "SUX", "SUCCESSOR CO")
+    clients.figi.answers[("TICKER", "SUX")] = _figi_answer("BBGSUX00001", "SUX", "AETNA HOLDINGS INC")
     clients.figi.answers[("COMPOSITE_ID_BB_GLOBAL", "BBGSUX00001")] = {
         "data": [{"figi": "BBGSUX00001", "compositeFIGI": "BBGSUX00001", "exchCode": "UN", "ticker": "SUX",
-                  "name": "SUCCESSOR CO"}]}
+                  "name": "AETNA HOLDINGS INC"}]}
 
     run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
 
@@ -1577,3 +1577,57 @@ def test_the_listing_check_asks_openfigi_once_for_all_securities(fake_edgar, tmp
     listing_calls = [c for c in calls if c and c[0][0] == "COMPOSITE_ID_BB_GLOBAL"]
     assert listing_calls == [[("COMPOSITE_ID_BB_GLOBAL", "BBG000FJLFX8"),
                               ("COMPOSITE_ID_BB_GLOBAL", "BBG000LIVE01")]]
+
+
+# --- fix round 2, item 5: another listed company's own stock is not a successor ---
+
+def _cco_hits():
+    """EDGAR full-text search for "Clear Channel Outdoor Holdings, Inc." around
+    its 2019-05-01 last trade: the new CCOH's 8-K12B is filed under the old
+    one's own CIK, and iHeartMedia's 8-K12G3 (its own emergence) names the
+    subsidiary."""
+    return [{"_source": {"ciks": ["0001334978"], "file_date": "2019-05-02",
+                         "display_names": ["Clear Channel Outdoor Holdings, Inc.  (CCO)  (CIK 0001334978)"]}},
+            {"_source": {"ciks": ["0001400891"], "file_date": "2019-05-02",
+                         "display_names": ["iHeartMedia, Inc.  (IHRT, IHETW, IHRTB)  (CIK 0001400891)"]}}]
+
+
+def test_successor_8k12b_refuses_another_listed_companys_own_stock(fake_edgar):
+    """IHRT is iHeartMedia's own stock, not one of Clear Channel Outdoor's
+    tickers; iHeartMedia is listed today and its name shares nothing with
+    the predecessor's: it is not the successor, and the delisting keeps
+    successor_unknown."""
+    fake_edgar.submissions_by_cik[1400891] = []
+    fake_edgar.listings[1400891] = [("IHRT", "Nasdaq")]
+    figi = _RecordingFigi({"IHRT": _figi_answer("BBG00P2FSNZ9", "IHRT", "IHEARTMEDIA INC - CLASS A")})
+    got = successor_from_8k12b(lambda *a: _cco_hits(), figi, name="Clear Channel Outdoor Holdings, Inc.",
+                               day=date(2019, 5, 1), exclude_cik=1334978, share_class="CLASS A",
+                               edgar=fake_edgar, own_tickers={"CCO"})
+    assert got is None
+    assert figi.calls == []
+
+
+def test_successor_8k12b_keeps_a_new_issuer_on_the_predecessors_ticker(fake_edgar):
+    """Alphabet shares no name word with Google and is listed today, but it
+    carries Google's own tickers: the predecessor's line under a new issuer."""
+    fake_edgar.submissions_by_cik[1652044] = []
+    fake_edgar.listings[1652044] = [("GOOGL", "Nasdaq"), ("GOOG", "Nasdaq")]
+    figi = _SuccessorFigi({"GOOGL": _figi_answer("BBGGOOGL01", "GOOGL", "Alphabet Inc Class A"),
+                           "GOOG": _figi_answer("BBGGOOG001", "GOOG", "Alphabet Inc Class C")})
+    got = successor_from_8k12b(lambda *a: [_alphabet_hit()], figi, name="Google Inc.", day=date(2015, 10, 2),
+                               exclude_cik=1288776, share_class="CLASS C", edgar=fake_edgar,
+                               own_tickers={"GOOG", "GOOGL"})
+    assert got[0] == 1652044 and got[1].composite == "BBGGOOG001"
+
+
+def test_successor_8k12b_keeps_a_renamed_issuer_whose_name_agrees(fake_edgar):
+    """A new ticker is fine when the successor's EDGAR name agrees with the
+    predecessor's (a holding company named after the old issuer)."""
+    fake_edgar.submissions_by_cik[7777] = []
+    fake_edgar.listings[7777] = [("ACMH", "NYSE")]
+    hit = {"_source": {"ciks": ["7777"], "file_date": "2020-01-02",
+                       "display_names": ["Acme Widget Holdings Inc.  (ACMH)  (CIK 0000007777)"]}}
+    figi = _SuccessorFigi({"ACMH": _figi_answer("BBGACMH0001", "ACMH", "ACME WIDGET HOLDINGS INC")})
+    got = successor_from_8k12b(lambda *a: [hit], figi, name="Acme Widget Corp", day=date(2020, 1, 1),
+                               exclude_cik=1, edgar=fake_edgar, own_tickers={"ACW"})
+    assert got[1].composite == "BBGACMH0001"
