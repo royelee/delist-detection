@@ -836,13 +836,18 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
         day = trade_day.get(key)
         if not acq or day is None:
             continue
-        rows = ftd.by_symbol(acq, (day - timedelta(days=10)).isoformat(), (day + timedelta(days=10)).isoformat())
+        # An acquirer that took the target's ticker (a holding company, Ashland
+        # 2016) shares the fails rows under it with the target, whose own CUSIP
+        # keeps failing after the last trade: count only other CUSIPs.
+        own_cusips = set(sec_cusips.get(e.sec_id, []))
+        rows = [r for r in ftd.by_symbol(acq, (day - timedelta(days=10)).isoformat(),
+                                         (day + timedelta(days=10)).isoformat()) if r.cusip not in own_cusips]
         cusip = Counter(r.cusip for r in rows).most_common(1)
         if not cusip:
             continue
         ans = clients.figi.map([{"idType": "ID_CUSIP", "idValue": cusip[0][0], "includeUnlistedEquities": True}])[0]
         cand = accept(us_candidates(ans.get("data") or []), ticker=acq, names=[], via_cusip=True)
-        if cand is None:
+        if cand is None or cand.composite == e.sec_id:
             continue
         acquirer_ids[key] = cand.composite
         if cand.composite not in securities:

@@ -1522,7 +1522,7 @@ def test_with_no_last_trade_date_the_window_is_anchored_on_the_form25_filing():
     assert pipeline._successor_in_run(ev, starts) == ("BBGAPANEW01", "same_ticker")
 
 
-def _same_ticker_acquirer_run(fake_edgar, tmp_path, holder=None):
+def _same_ticker_acquirer_run(fake_edgar, tmp_path, holder=None, old_tail=()):
     """Waste Connections 2016 as the run sees it: the target (old WCN, pinned to
     its own issuer) is acquired by a company that takes the same ticker WCN; the
     fails rows under WCN around the last trade are mostly the acquirer's CUSIP.
@@ -1540,7 +1540,7 @@ def _same_ticker_acquirer_run(fake_edgar, tmp_path, holder=None):
     obs = [Observation("WCN", d, "WASTE CONNECTIONS INC.", cik=1057058) for d in ("2015-06-30", "2015-12-31")]
     rows = (_ftd("WCN", "941053100", "WASTE CONNECTIONS INC",
                  ["2015-06-30", "2015-08-31", "2015-10-30", "2015-12-31", "2016-02-29", "2016-04-29", "2016-05-27",
-                  "2016-05-31"])
+                  "2016-05-31", *old_tail])
             + _ftd("WCN", "94106B101", "WASTE CONNECTIONS INC",
                    ["2016-06-02", "2016-06-03", "2016-06-06", "2016-06-08", "2016-06-09"]))
     index, clients = _index_clients(fake_edgar, obs, rows, {
@@ -1631,3 +1631,16 @@ def test_successor_8k12b_keeps_a_renamed_issuer_whose_name_agrees(fake_edgar):
     got = successor_from_8k12b(lambda *a: [hit], figi, name="Acme Widget Corp", day=date(2020, 1, 1),
                                exclude_cik=1, edgar=fake_edgar, own_tickers={"ACW"})
     assert got[1].composite == "BBGACMH0001"
+
+
+def test_a_same_ticker_acquirer_is_never_the_target_itself(fake_edgar, tmp_path):
+    """Ashland 2016: most fails rows under ASH around the reorganization carry
+    the old line's own CUSIP (fails keep settling after the last trade), so the
+    most common CUSIP under the acquirer's ticker was the delisted security
+    itself. The acquirer is the new line on that ticker."""
+    secs = _same_ticker_acquirer_run(fake_edgar, tmp_path, holder=1318220, old_tail=[
+        "2016-05-23", "2016-05-24", "2016-05-25", "2016-05-26", "2016-06-02", "2016-06-03", "2016-06-06"])
+    (d,) = read_table("delistings", table_path(tmp_path, "delistings"))
+    assert d["sec_id"] == "BBGWCNOLD01"
+    assert d["acquirer_sec_id"] == "BBGWCNNEW01"
+    assert secs["BBGWCNNEW01"]["issuer_cik"] == "1318220"
