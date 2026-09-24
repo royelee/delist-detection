@@ -6,7 +6,7 @@ import pytest
 
 from delist_detection.edgar import EdgarSubmission
 from delist_detection.listing_status import (
-    cover_exchanges, exchanges_around, listed_today, withdrawal_kind,
+    cover_exchanges, exchanges_around, listed_today, listing_answers, withdrawal_kind,
 )
 
 COVER_2019 = ("UNITED STATES SECURITIES AND EXCHANGE COMMISSION FORM 10-K ... Securities registered pursuant "
@@ -129,3 +129,45 @@ def test_a_security_edgar_lists_on_cboe_is_listed_today():
     figi = _Figi({"data": [{"exchCode": "UF", "ticker": "CBOE"}]})
     sub = _FixEdgar({"tickers": ["CBOE"], "exchanges": ["CBOE"]})
     assert listed_today(figi, "BBG000QH56C1", edgar=sub, cik=1374310, tickers=["CBOE"]) is True
+
+
+from delist_detection.openfigi import OpenFigiBlocked
+
+
+class _BatchFigi:
+    def __init__(self, answers, fail=None):
+        self.answers, self.fail, self.calls = answers, fail, []
+
+    def map(self, jobs, use_cache=True):
+        self.calls.append(([j["idValue"] for j in jobs], use_cache))
+        if self.fail is not None:
+            raise self.fail
+        return [self.answers.get(j["idValue"], {"warning": "No identifier found."}) for j in jobs]
+
+
+def test_listing_answers_asks_openfigi_once_for_every_figi():
+    figi = _BatchFigi({"BBG1": {"data": [{"exchCode": "UN"}]}})
+    got = listing_answers(figi, ["BBG1", "CIK7-COMMON", "BBG2", "BBG1"])
+    assert figi.calls == [(["BBG1", "BBG2"], False)]     # one call; no placeholder, no duplicate, no cache
+    assert got == {"BBG1": {"data": [{"exchCode": "UN"}]}, "BBG2": {"warning": "No identifier found."}}
+
+
+def test_a_prefetched_answer_needs_no_openfigi_call():
+    assert listed_today(None, "BBG1", answer={"data": [{"exchCode": "UN"}]}) is True
+    assert listed_today(None, "BBG1", answer={"error": "x"}) is None
+    assert listed_today(None, "BBG1", answer={"warning": "No identifier found."}) is False
+
+
+def test_a_failed_batch_leaves_each_security_to_ask_alone():
+    assert listing_answers(_BatchFigi({}, fail=RuntimeError("figi down")), ["BBG1"]) == {}
+
+
+def test_a_refused_batch_aborts():
+    with pytest.raises(OpenFigiBlocked):
+        listing_answers(_BatchFigi({}, fail=OpenFigiBlocked("401")), ["BBG1"])
+
+
+def test_no_figi_client_or_only_placeholders_asks_nothing():
+    figi = _BatchFigi({})
+    assert listing_answers(figi, ["CIK1-COMMON"]) == {} and figi.calls == []
+    assert listing_answers(None, ["BBG1"]) == {}

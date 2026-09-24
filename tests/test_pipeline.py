@@ -1435,7 +1435,7 @@ def test_a_look_back_close_keeps_its_row_date_in_the_evidence(fake_edgar, tmp_pa
 def test_listed_today_is_asked_with_each_securitys_own_tickers(fake_edgar, tmp_path, monkeypatch):
     seen = {}
 
-    def spy(figi, sec_id, *, edgar=None, cik=None, tickers=None):
+    def spy(figi, sec_id, *, edgar=None, cik=None, tickers=None, answer=None):
         seen[sec_id] = sorted(tickers or [])
         return sec_id == "BBG000LIVE01"
 
@@ -1561,3 +1561,19 @@ def test_a_same_ticker_acquirer_takes_the_sec_ticker_maps_holder_not_the_targets
 def test_a_same_ticker_acquirer_without_a_ticker_map_holder_has_no_cik(fake_edgar, tmp_path):
     secs = _same_ticker_acquirer_run(fake_edgar, tmp_path)
     assert secs["BBGWCNNEW01"]["issuer_cik"] == ""
+
+
+def test_the_listing_check_asks_openfigi_once_for_all_securities(fake_edgar, tmp_path):
+    index, clients = _clients(fake_edgar)
+    calls = []
+    real_map = clients.figi.map
+
+    def recording(jobs, use_cache=True):
+        calls.append([(j["idType"], j["idValue"]) for j in jobs])
+        return real_map(jobs, use_cache=use_cache)
+
+    clients.figi.map = recording
+    run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
+    listing_calls = [c for c in calls if c and c[0][0] == "COMPOSITE_ID_BB_GLOBAL"]
+    assert listing_calls == [[("COMPOSITE_ID_BB_GLOBAL", "BBG000FJLFX8"),
+                              ("COMPOSITE_ID_BB_GLOBAL", "BBG000LIVE01")]]

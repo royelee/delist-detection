@@ -21,7 +21,7 @@ from .edgar import EdgarBlocked
 from .figi_resolution import FigiCandidate, accept, share_class_from_name, us_candidates
 from .form25 import SecurityRef, exchange_label
 from .ftd import FtdIndex
-from .listing_status import edgar_lists, listed_today
+from .listing_status import edgar_lists, listed_today, listing_answers
 from .names import names_agree
 from .observations import ObservationIndex, TickerEra, eras_by_key, normalize_ticker, observation_conflicts
 from .openfigi import OpenFigiBlocked
@@ -479,7 +479,11 @@ def run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_
     events: list[DelistingEvent] = []
     listed: dict[str, bool | None] = {}
     sightings = {sid: _sightings(s, ftd, sec_cusips[sid]) for sid, s in securities.items()}
-    for i, s in enumerate(sorted(securities.values(), key=lambda s: s.sec_id), 1):
+    ordered = sorted(securities.values(), key=lambda s: s.sec_id)
+    # One batched OpenFIGI ask for every security's listing; a failed batch leaves
+    # each security to ask alone inside its own try below.
+    listing = listing_answers(clients.figi, [s.sec_id for s in ordered])
+    for i, s in enumerate(ordered, 1):
         sig = sightings[s.sec_id]
         own_last_seen = _own_last_seen(s, sig)
         sibs = siblings.get(s.issuer_cik) or [SecurityRef(s.sec_id, s.share_class, s.kind, s.name)]
@@ -501,7 +505,8 @@ def run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_
             # must become a reviewable row for this one security, not abort
             # the whole overnight run.
             listed[s.sec_id] = listed_today(clients.figi, s.sec_id, edgar=clients.edgar, cik=s.issuer_cik,
-                                            tickers=sorted({e.ticker for e in s.eras}))
+                                            tickers=sorted({e.ticker for e in s.eras}),
+                                            answer=listing.get(s.sec_id))
             ctx = SecurityContext(
                 security=s,
                 siblings=sibs,
