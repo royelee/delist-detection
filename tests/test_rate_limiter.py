@@ -326,8 +326,15 @@ def test_a_wall_clock_step_back_waits_at_most_one_interval(tmp_path):
     c = _Clock()
     path = tmp_path / "sec_rate.lock"
     path.write_text("999999.0")                 # a start stamped "in the future": the clock stepped back
-    _gate(path, c).wait_turn()
+
+    def sleep(s):
+        if len(c.slept) >= 3:                   # fail, not hang, if the same stale stamp is waited out forever
+            raise AssertionError("waited again for a stamp it had already waited out")
+        c.sleep(s)
+
+    MachineGate(path, 0.125, wall=c.now, sleep=sleep).wait_turn()
     assert c.slept == [0.125]
+    assert float(path.read_text()) == pytest.approx(100.125)   # the stale stamp is replaced by this start
 
 
 @pytest.mark.parametrize("content", ["", "garbage", "1.0"])
@@ -400,3 +407,55 @@ def test_a_worker_stopped_while_it_waits_for_the_machine_turn_starts_no_request(
         with pytest.raises(PrefetchCancelled):
             lim.acquire()
     assert lim.count == 0
+
+
+def test_no_process_sleeps_while_it_holds_the_lock_file(tmp_path):
+    # A process suspended mid-sleep (Ctrl-Z, a debugger) must not hold every other SEC
+    # client on the machine: the wait for a turn happens with the lock file released.
+    c = _Clock()
+    path = tmp_path / "sec_rate.lock"
+    path.write_text("100.0")                    # another process started just now: this one waits 1/8 s
+    probe = os.open(path, os.O_RDWR)
+    held_while_sleeping = []
+
+    def sleep(s):
+        try:
+            fcntl.flock(probe, fcntl.LOCK_EX | fcntl.LOCK_NB)   # could another process take the lock now?
+        except BlockingIOError:
+            held_while_sleeping.append(s)
+        else:
+            fcntl.flock(probe, fcntl.LOCK_UN)
+        c.sleep(s)
+
+    MachineGate(path, 0.125, wall=c.now, sleep=sleep).wait_turn()
+    os.close(probe)
+    assert c.slept == [0.125]
+    assert held_while_sleeping == []
+    assert float(path.read_text()) == pytest.approx(100.125)
+
+
+def test_a_start_another_process_takes_during_the_wait_is_waited_out_too(tmp_path):
+    c = _Clock()
+    path = tmp_path / "sec_rate.lock"
+    path.write_text("100.0")
+    other = os.open(path, os.O_RDWR)
+
+    def sleep(s):
+        c.sleep(s)
+        if len(c.slept) == 1:                   # while this one sleeps, another process takes its turn
+            fcntl.flock(other, fcntl.LOCK_EX | fcntl.LOCK_NB)   # never blocks: the sleeper holds no lock
+            os.ftruncate(other, 0)
+            os.pwrite(other, f"{c.t:.6f}".encode("ascii"), 0)
+            fcntl.flock(other, fcntl.LOCK_UN)
+
+    MachineGate(path, 0.125, wall=c.now, sleep=sleep).wait_turn()
+    os.close(other)
+    assert c.slept == [0.125, 0.125]            # it looked again, and waited 1/8 s after the other's start
+    assert float(path.read_text()) == pytest.approx(100.25)
+
+
+def test_tests_never_use_the_lock_file_in_the_home_directory():
+    # conftest points DELIST_DETECTION_SEC_RATE_LOCK at a per-test temporary file.
+    p = default_rate_lock_path()
+    assert p != Path.home() / ".cache" / "delist_detection" / "sec_rate.lock"
+    assert p.parent.is_dir()

@@ -107,3 +107,27 @@ def test_an_old_unrelated_8k_does_not_confirm_a_merger(monkeypatch):
     _serve(monkeypatch, {url: _sub("ACME CORP", [("25-NSE", "2020-06-01", ""), ("8-K", "2012-01-05", "2.01")])})
     v = verify.verify_one(_row("ACME", "merger", 1, "ACME CORP", "2020-05-29"))
     assert v["verdict"] == "WEAK_no_ma_items"
+
+
+def test_main_installs_the_machine_wide_limit_and_checks_the_user_agent_before_any_request(
+        monkeypatch, tmp_path):
+    import csv
+    import sys
+
+    events = []
+    monkeypatch.setattr(verify, "use_machine_wide_limit", lambda: events.append("machine-wide limit"))
+    monkeypatch.setattr(verify, "require_user_agent", lambda: events.append("user agent") or "Test Co t@example.com")
+    monkeypatch.setattr(verify, "_throttle", lambda: events.append("throttle"))
+    url = "https://data.sec.gov/submissions/CIK0000768835.json"
+    body = _sub("BIG LOTS INC", [("25-NSE", "2024-09-10", ""), ("8-K", "2024-09-10", "1.03,7.01")])
+    monkeypatch.setattr(verify.requests, "get", lambda u, **kw: events.append("get") or _JsonResp(body))
+    row = _row("BIG", "liquidation", 768835, "BIG LOTS INC", "2024-09-10")
+    src, out = tmp_path / "delistings.csv", tmp_path / "web_verification.csv"
+    with src.open("w", newline="") as fh:
+        w = csv.DictWriter(fh, fieldnames=list(row))
+        w.writeheader()
+        w.writerow(row)
+    monkeypatch.setattr(sys, "argv", ["verify_against_web.py", "--input", str(src), "--output", str(out)])
+    assert verify.main() == 0
+    assert events[:2] == ["user agent", "machine-wide limit"]
+    assert "get" in events[2:] and events.count("get") == events.count("throttle")

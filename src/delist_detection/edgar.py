@@ -273,11 +273,15 @@ def default_rate_lock_path() -> Path:
 class MachineGate:
     """Spaces SEC request starts across every process on the machine that uses one
     lock file. The file holds the wall-clock time of the last start. `wait_turn`
-    takes the file's exclusive `flock`, waits until `interval` after that time,
-    writes its own start and releases the lock. The wait is clamped to
-    [0, interval], so a wall-clock step can neither stall the pool (a stamp "in
-    the future") nor let a burst through; an unreadable stamp counts as none.
-    The file is opened here, so an unwritable path fails at start-up, not in the
+    takes the file's exclusive `flock` and reads that time. If its turn is due,
+    it writes its own start and releases the lock. Otherwise it releases the
+    lock, sleeps until `interval` after that time, and looks again. It never
+    sleeps while it holds the lock, so a process suspended mid-wait (Ctrl-Z, a
+    debugger) cannot stall every other SEC client on the machine. The wait is
+    clamped to [0, interval], and a stamp already waited out is not waited for
+    again, so a wall-clock step can neither stall the pool (a stamp "in the
+    future") nor let a burst through; an unreadable stamp counts as none. The
+    file is opened here, so an unwritable path fails at start-up, not in the
     middle of a run."""
 
     def __init__(self, path: str | Path, interval: float, *, wall=time.time, sleep=time.sleep) -> None:
@@ -288,20 +292,29 @@ class MachineGate:
         weakref.finalize(self, os.close, self._fd)
 
     def wait_turn(self) -> None:
-        fcntl.flock(self._fd, fcntl.LOCK_EX)
-        try:
+        waited_out = None                        # the stamp this call has already slept a turn for
+        while True:
+            fcntl.flock(self._fd, fcntl.LOCK_EX)
             try:
-                last = float(os.pread(self._fd, 64, 0).decode("ascii").strip() or "0")
-            except (UnicodeDecodeError, ValueError):
-                last = 0.0
-            wait = min(max(last + self.interval - self._wall(), 0.0), self.interval)
-            if wait > 0:
-                self._sleep(wait)
-            stamp = f"{self._wall():.6f}".encode("ascii")
-            os.ftruncate(self._fd, 0)
-            os.pwrite(self._fd, stamp, 0)
-        finally:
-            fcntl.flock(self._fd, fcntl.LOCK_UN)
+                raw = os.pread(self._fd, 64, 0)
+                wait = 0.0 if raw == waited_out else self._wait_after(raw)
+                if wait <= 0:
+                    stamp = f"{self._wall():.6f}".encode("ascii")
+                    os.ftruncate(self._fd, 0)
+                    os.pwrite(self._fd, stamp, 0)
+                    return
+            finally:
+                fcntl.flock(self._fd, fcntl.LOCK_UN)
+            self._sleep(wait)                    # with the lock released; then look again:
+            waited_out = raw                     # another process may have started meanwhile
+
+    def _wait_after(self, raw: bytes) -> float:
+        """How long to wait after the start stamped `raw`, clamped to [0, interval]."""
+        try:
+            last = float(raw.decode("ascii").strip() or "0")
+        except (UnicodeDecodeError, ValueError):
+            last = 0.0
+        return min(max(last + self.interval - self._wall(), 0.0), self.interval)
 
 
 def use_machine_wide_limit(path: str | Path | None = None) -> MachineGate:
@@ -341,10 +354,12 @@ def require_user_agent() -> str:
 
 
 def _throttle() -> None:
-    """Wait for this process's next SEC request slot. Every SEC request in the
-    library (EdgarClient, sec_http, verify_against_web) calls this, from any
-    thread. It reads the module's SEC_LIMITER at each call, so a test or the
-    CLI can swap or extend the limiter."""
+    """Wait for the next SEC request slot: this process's, and, once
+    `use_machine_wide_limit()` has installed a gate, the machine's across every
+    process sharing the lock file. Every SEC request in the library
+    (EdgarClient, sec_http, verify_against_web) calls this, from any thread. It
+    reads the module's SEC_LIMITER at each call, so a test or the CLI can swap
+    or extend the limiter."""
     SEC_LIMITER.acquire()
 
 

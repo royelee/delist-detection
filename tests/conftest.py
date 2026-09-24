@@ -135,12 +135,15 @@ class _VirtualClock:
 
 
 @pytest.fixture(autouse=True)
-def _fresh_sec_limiter(monkeypatch):
-    """Every test gets its own process-wide SEC limiter: in-process only (never a
-    machine-wide lock file under the home directory), on a virtual clock that its
-    own sleep advances (so it never waits in real time, and never busy-waits),
-    and with no pause or request count left over from another test."""
+def _fresh_sec_limiter(monkeypatch, tmp_path_factory):
+    """Every test gets its own process-wide SEC limiter: in-process only, on a
+    virtual clock that its own sleep advances (so it never waits in real time,
+    and never busy-waits), and with no pause or request count left over from
+    another test. DELIST_DETECTION_SEC_RATE_LOCK points at a per-test temporary
+    file, outside the test's own tmp_path, so code that installs the
+    machine-wide gate never touches the lock file under the home directory."""
     from delist_detection import edgar
+    monkeypatch.setenv(edgar.SEC_RATE_LOCK_ENV, str(tmp_path_factory.mktemp("sec_rate") / "sec_rate.lock"))
     clock = _VirtualClock()
     monkeypatch.setattr(edgar, "SEC_LIMITER",
                         edgar.RateLimiter(edgar.SEC_MAX_RATE, clock=clock.now, sleep=clock.sleep))
