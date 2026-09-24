@@ -11,7 +11,7 @@ import json
 import logging
 import re
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Iterable
 
@@ -56,6 +56,7 @@ class TickerResolver:
         *,
         member_names: "callable[..., str | None] | None" = None,
         cik_map: "callable[[str, str | None], int | None] | None" = None,
+        today: date | None = None,
     ) -> None:
         self.edgar = edgar
         self.rename_map = {k.upper(): v.upper() for k, v in (rename_map or {}).items()}
@@ -64,6 +65,7 @@ class TickerResolver:
         self.name_lookup = name_lookup or (lambda *a, **kw: None)
         self.member_names = member_names or (lambda *a, **kw: None)  # (ticker, date) -> index-member name
         self.cik_map = cik_map or (lambda *a, **kw: None)  # (ticker, date) -> CIK from the caller's universe
+        self.today = today    # the run date bounding submissions freshness (None: the clock, at each read)
         self._memo: dict[str, TickerResolution] = {}
         self._memo_member: dict[str, str | None] = {}   # key -> member name the answer was checked with
         self._volatile: set[str] = set()   # misses and transient-error answers: this run only
@@ -114,7 +116,7 @@ class TickerResolver:
         on = parse_day(observed_date)
         if on is None:
             return self.edgar.submissions(cik)
-        return self.edgar.submissions(cik, fresh_after=submissions_fresh_after(on))
+        return self.edgar.submissions(cik, fresh_after=submissions_fresh_after(on, self.today))
 
     def _filings(self, cik: int, observed_date: str | None) -> list:
         """recent_filings, read after a fresh submissions read so both see one copy."""

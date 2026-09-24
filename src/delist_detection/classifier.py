@@ -162,11 +162,14 @@ class DelistClassifier:
         resolver: TickerResolver,
         asset_type_lookup: "callable[..., str | None] | None" = None,
         name_hint_lookup: "callable[..., str | None] | None" = None,
+        *,
+        today: date | None = None,
     ) -> None:
         self.edgar = edgar
         self.resolver = resolver
         self.asset_type_lookup = asset_type_lookup or (lambda *a, **kw: None)
         self.name_hint_lookup = name_hint_lookup or (lambda *a, **kw: None)
+        self.today = today    # the run date bounding submissions freshness (None: the clock)
 
     def _detect_continued_filings(
         self, filings: list[EdgarSubmission], delist_date: date
@@ -567,7 +570,7 @@ class DelistClassifier:
             # fetched again, and every later read below hits the fresh copy. A
             # failed refetch serves the cached copy marked STALE_KEY, so the row
             # is reviewable rather than an error.
-            sub = self.edgar.submissions(resolution.cik, fresh_after=submissions_fresh_after(observed))
+            sub = self.edgar.submissions(resolution.cik, fresh_after=submissions_fresh_after(observed, self.today))
             if isinstance(sub, dict) and sub.get(STALE_KEY):
                 flags.append("submissions_stale")
 

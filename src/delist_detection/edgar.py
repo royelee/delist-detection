@@ -14,6 +14,7 @@ import re
 import threading
 import time
 import weakref
+from collections import Counter, defaultdict
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import date, timedelta
@@ -70,10 +71,11 @@ SUBMISSIONS_FRESH_DAYS = 45  # filings this long after the last trade must be in
 COMPANY_SEARCH_FRESH_DAYS = 7  # a company-search answer this old is refetched, never trusted forever
 
 
-def submissions_fresh_after(on: date) -> date:
+def submissions_fresh_after(on: date, today: date | None = None) -> date:
     """The `fresh_after` for reading a company's submissions about an event on `on`:
-    `min(on + 45 days, today)`. The classifier and the resolver both use it."""
-    return min(on + timedelta(days=SUBMISSIONS_FRESH_DAYS), date.today())
+    `min(on + 45 days, today)`, where `today` is the run date (default: the clock).
+    The classifier and the resolver both use it."""
+    return min(on + timedelta(days=SUBMISSIONS_FRESH_DAYS), today or date.today())
 
 
 def _strip_html(raw: str) -> str:
@@ -379,6 +381,78 @@ def _throttle() -> None:
     SEC_LIMITER.acquire()
 
 
+def _endpoint(url: str) -> str:
+    """The EDGAR endpoint a URL belongs to, as run_manifest.json counts requests.
+    Everything that is not an EDGAR endpoint (fails-to-deliver and MIDAS ZIPs and
+    their index pages) is `sec_data`."""
+    if "efts.sec.gov" in url:
+        return "full_text_search"
+    if "/cgi-bin/browse-edgar" in url:
+        return "company_search"
+    if "/submissions/CIK" in url and "-submissions-" not in url:
+        return "submissions"
+    if "/submissions/" in url:
+        return "submissions_page"
+    if "/Archives/edgar/" in url:
+        return "archives"
+    if url.endswith("/company_tickers.json"):
+        return "company_tickers"
+    return "sec_data"
+
+
+@dataclass(frozen=True)
+class StatsMark:
+    counts: dict
+    timing_lengths: dict
+
+
+class RequestStats:
+    """The counters behind run_manifest.json, shared by every thread of the
+    process: requests sent and answers read from cache, per endpoint
+    ("request:<endpoint>", "cache:<endpoint>"); answers that rest on a failed
+    request or a stale copy ("degraded:<what>"); and each request's latency. A
+    run reports the change since a `snapshot()`. `degraded()` also counts on the
+    calling thread alone (`thread_degraded()`), so the pipeline can tell which
+    era or security a degraded answer served."""
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._counts: Counter = Counter()
+        self._timings: dict[str, list[float]] = defaultdict(list)
+        self._local = threading.local()
+
+    def add(self, key: str) -> None:
+        with self._lock:
+            self._counts[key] += 1
+
+    def timing(self, endpoint: str, seconds: float) -> None:
+        with self._lock:
+            self._timings[endpoint].append(seconds)
+
+    def degraded(self, what: str) -> None:
+        self.add(f"degraded:{what}")
+        self._local.degraded = self.thread_degraded() + 1
+
+    def thread_degraded(self) -> int:
+        return getattr(self._local, "degraded", 0)
+
+    def snapshot(self) -> StatsMark:
+        with self._lock:
+            return StatsMark(dict(self._counts), {k: len(v) for k, v in self._timings.items()})
+
+    def since(self, mark: StatsMark) -> tuple[dict[str, int], dict[str, list[float]]]:
+        """(counts, latencies in seconds per endpoint) added since `mark`."""
+        with self._lock:
+            counts = {k: v - mark.counts.get(k, 0) for k, v in self._counts.items()
+                      if v != mark.counts.get(k, 0)}
+            timings = {k: list(v[mark.timing_lengths.get(k, 0):]) for k, v in self._timings.items()
+                       if len(v) > mark.timing_lengths.get(k, 0)}
+        return dict(sorted(counts.items())), dict(sorted(timings.items()))
+
+
+SEC_STATS = RequestStats()
+
+
 # Backoff between retry attempts, in seconds: 2s after the 1st failure, 4s
 # after the 2nd (3 attempts total, like OpenFigiClient._post).
 RETRY_BACKOFF = (2, 4)
@@ -458,19 +532,29 @@ class EdgarClient:
         user_agent: str | None = None,
         session: requests.Session | None = None,
         sleep=time.sleep,
+        *,
+        today: date | None = None,
     ) -> None:
         """`session`: one HTTP session for every thread (tests inject a fake);
-        without it each thread gets its own `requests.Session`."""
+        without it each thread gets its own `requests.Session`. `today`: the run
+        date every freshness rule and fetch stamp uses (default: the clock, read at
+        each use)."""
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.user_agent = user_agent or resolve_user_agent()
         self._session = session
         self._local = threading.local()
         self.sleep = sleep
+        self._today = today
         self._locks: dict[str, threading.Lock] = {}
         self._locks_guard = threading.Lock()
         for d in (self.cache_dir, self.cache_dir / "text", self.cache_dir / "raw"):
             clean_orphan_temps(d)
+
+    @property
+    def today(self) -> date:
+        """The run date: the one given at construction, else the clock's."""
+        return self._today or date.today()
 
     @property
     def session(self) -> requests.Session:
@@ -491,17 +575,23 @@ class EdgarClient:
 
     def _get(self, url: str, *, host: str, accept: str, retry: bool = True):
         """GET `url` on this thread's session, through the shared limiter, with this
-        request's own headers. With `retry`, through `retry_request`: a transport
-        error or a 5xx is retried with backoff, every thread pausing with it, and
-        a 403/429 raises EdgarBlocked at once. Without it, one attempt: a 403/429
-        still raises EdgarBlocked, and a 5xx or a transport error still pauses
-        every thread for the first backoff."""
+        request's own headers, counted and timed under its endpoint (SEC_STATS).
+        With `retry`, through `retry_request`: a transport error or a 5xx is
+        retried with backoff, every thread pausing with it, and a 403/429 raises
+        EdgarBlocked at once. Without it, one attempt, and a 5xx or a transport
+        error still pauses every thread for the first backoff."""
         headers = self._headers(host, accept)
         session = self.session
+        endpoint = _endpoint(url)
 
         def make():
             _throttle()
-            return session.get(url, headers=headers, timeout=30)
+            SEC_STATS.add(f"request:{endpoint}")
+            started = time.monotonic()
+            try:
+                return session.get(url, headers=headers, timeout=30)
+            finally:
+                SEC_STATS.timing(endpoint, time.monotonic() - started)
 
         if retry:
             return retry_request(make, sleep=self.sleep)
@@ -510,7 +600,7 @@ class EdgarClient:
         except requests.RequestException:
             SEC_LIMITER.pause(RETRY_BACKOFF[0])
             raise
-        check_response(resp)              # 403/429 -> EdgarBlocked, as on the retried path
+        check_response(resp)              # 403/429 -> EdgarBlocked, as on the retried path (3b5c3aa)
         if resp.status_code >= 500:
             SEC_LIMITER.pause(RETRY_BACKOFF[0])
         return resp
@@ -556,6 +646,7 @@ class EdgarClient:
                     cp.unlink(missing_ok=True)
                 else:
                     if fresh_after is None or filling_only() or _fetched_on(cp, cached) >= fresh_after:
+                        SEC_STATS.add(f"cache:{_endpoint(url)}")
                         return cached
             host = "data.sec.gov" if url.startswith(SEC_HOST) else "www.sec.gov"
             try:
@@ -568,9 +659,11 @@ class EdgarClient:
                 # refetches on every run. Serve the cache, marked stale in the
                 # returned dict only, so callers can flag the row.
                 if not isinstance(cached, dict):
+                    SEC_STATS.degraded("failed_request")
                     raise
+                SEC_STATS.degraded("stale_copy")
                 return {**cached, STALE_KEY: True}
-            today = date.today().isoformat()
+            today = self.today.isoformat()
             if resp.status_code == 404:
                 data = {"__not_found__": True, "url": url, FETCHED_KEY: today}
                 _write_atomic(cp, json.dumps(data))
@@ -624,7 +717,7 @@ class EdgarClient:
             "&dateb=&owner=include&count=10&output=atom"
         )
         cp = self._cache_path(url)
-        fresh_after = date.today() - timedelta(days=COMPANY_SEARCH_FRESH_DAYS)
+        fresh_after = self.today - timedelta(days=COMPANY_SEARCH_FRESH_DAYS)
         cached: Any = None
         if cp.exists():
             try:
@@ -668,7 +761,7 @@ class EdgarClient:
         if not entries:
             out.append({"cik": company_cik, "name": company_name, "form": "", "filing_date": ""})
         if out:   # never cache an empty or error answer (see docstring)
-            _write_atomic(cp, json.dumps({"hits": out, FETCHED_KEY: date.today().isoformat()}))
+            _write_atomic(cp, json.dumps({"hits": out, FETCHED_KEY: self.today.isoformat()}))
         return out
 
     def submissions(self, cik: int | str, fresh_after: date | None = None) -> dict[str, Any]:
@@ -697,11 +790,13 @@ class EdgarClient:
         cp = text_dir / f"{acc_nodash}.txt"
         with self._lock_for(str(cp)):
             if cp.exists():
+                SEC_STATS.add("cache:archives")
                 return cp.read_text(encoding="utf-8")
             url = f"{WWW_SEC_HOST}/Archives/edgar/data/{int(cik)}/{acc_nodash}/{primary_doc}"
             try:
                 resp = self._get(url, host="www.sec.gov", accept="text/html,*/*", retry=False)
             except requests.RequestException:
+                SEC_STATS.degraded("failed_request")
                 return ""
             check_response(resp)
             if resp.status_code != 200:
@@ -710,6 +805,8 @@ class EdgarClient:
                 # into a permanent empty result, so leave the cache untouched (FIX 6).
                 if resp.status_code == 404:
                     _write_atomic(cp, "")
+                else:
+                    SEC_STATS.degraded("failed_request")
                 return ""
             text = _strip_html(resp.text)
             _write_atomic(cp, text)
@@ -729,15 +826,19 @@ class EdgarClient:
         cp = raw_dir / f"{acc_nodash}.txt"
         with self._lock_for(str(cp)):
             if cp.exists():
+                SEC_STATS.add("cache:archives")
                 return cp.read_text(encoding="utf-8", errors="replace")
             url = f"{WWW_SEC_HOST}/Archives/edgar/data/{int(cik)}/{acc_nodash}/{accession}.txt"
             try:
                 resp = self._get(url, host="www.sec.gov", accept="text/plain,*/*")   # EdgarBlocked propagates
             except requests.RequestException:
+                SEC_STATS.degraded("failed_request")
                 return ""
             if resp.status_code != 200:
                 if resp.status_code == 404:
                     _write_atomic(cp, "")
+                else:
+                    SEC_STATS.degraded("failed_request")
                 return ""
             _write_atomic(cp, resp.text)
             return resp.text
@@ -781,7 +882,7 @@ class EdgarClient:
         except (ValueError, TypeError):
             return []
         hits = data.get("hits", {}).get("hits", []) if isinstance(data, dict) else []
-        if hits and hi < date.today():
+        if hits and hi < self.today:
             _write_atomic(cp, json.dumps(hits))
         return hits
 

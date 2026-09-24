@@ -65,11 +65,13 @@ def last_trade_from_halt(h: Halt) -> date:
 
 
 class NasdaqHaltClient:
-    def __init__(self, cache_dir: str | Path, *, session=None, min_interval: float = 1.0, sleep=None) -> None:
+    def __init__(self, cache_dir: str | Path, *, session=None, min_interval: float = 1.0, sleep=None,
+                 today: date | None = None) -> None:
         self.dir = Path(cache_dir)
         self.session = session or requests.Session()
         self.min_interval = min_interval
         self.sleep = sleep or time.sleep
+        self.today = today          # the run date: that day's list can still grow (None: the clock)
         self._last = 0.0
 
     def halts_on(self, day: date) -> list[Halt]:
@@ -114,7 +116,7 @@ class NasdaqHaltClient:
                 _log.warning(f"halts_on({day:%Y-%m-%d}): parse error: {e}")
                 return []
 
-            if day < date.today():                  # today's list can still grow
+            if day < (self.today or date.today()):  # today's list can still grow
                 cp.parent.mkdir(parents=True, exist_ok=True)
                 cp.write_bytes(resp.content)
             return halts

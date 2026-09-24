@@ -157,3 +157,12 @@ def test_real_feed_with_a_bom_and_no_charset_parses(tmp_path):
     assert (tmp_path / "20201102.xml").read_bytes() == FEED_FIX.read_bytes()
     assert [x.symbol for x in NasdaqHaltClient(tmp_path, session=None, min_interval=0).halts_on(date(2020, 11, 2))
             if x.reason == "D"] == ["CBL$E", "CBL", "CBL$D"]
+
+
+def test_the_halt_feed_caches_only_days_before_its_run_date(tmp_path):
+    c = NasdaqHaltClient(tmp_path, session=_RealFeedSession(), min_interval=0, today=date(2020, 11, 2))
+    c.halts_on(date(2020, 11, 2))
+    assert not (tmp_path / "20201102.xml").exists()        # the run's own day can still grow
+    later = NasdaqHaltClient(tmp_path, session=_RealFeedSession(), min_interval=0, today=date(2020, 11, 3))
+    later.halts_on(date(2020, 11, 2))
+    assert (tmp_path / "20201102.xml").exists()

@@ -13,7 +13,7 @@ from pathlib import Path
 
 import requests
 
-from .edgar import _throttle, resolve_user_agent, retry_request
+from .edgar import SEC_STATS, _throttle, resolve_user_agent, retry_request
 
 
 def _get(url: str, session, user_agent: str | None, timeout: int, *, sleep=time.sleep):
@@ -22,7 +22,12 @@ def _get(url: str, session, user_agent: str | None, timeout: int, *, sleep=time.
 
     def make():
         _throttle()
-        return s.get(url, headers=headers, timeout=timeout)
+        SEC_STATS.add("request:sec_data")
+        started = time.monotonic()
+        try:
+            return s.get(url, headers=headers, timeout=timeout)
+        finally:
+            SEC_STATS.timing("sec_data", time.monotonic() - started)
 
     return retry_request(make, sleep=sleep)   # EdgarBlocked propagates, not retried
 
