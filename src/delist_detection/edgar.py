@@ -11,6 +11,7 @@ import json
 import os
 import threading
 import time
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import date, timedelta
 from pathlib import Path
@@ -72,11 +73,6 @@ def submissions_fresh_after(on: date) -> date:
     return min(on + timedelta(days=SUBMISSIONS_FRESH_DAYS), date.today())
 
 
-_RATE_LOCK = threading.Lock()
-_LAST_CALL: list[float] = [0.0]
-_MIN_INTERVAL = 1.0 / 8.0
-
-
 def _strip_html(raw: str) -> str:
     """Strip <script>/<style>/tags, unescape entities, collapse whitespace."""
     import html as _html
@@ -98,13 +94,81 @@ def _fetched_on(cp: Path, data: Any) -> date:
     return date.fromtimestamp(cp.stat().st_mtime)
 
 
+class PrefetchCancelled(BaseException):
+    """Raised at a prefetch worker's next SEC request once its pool is stopping (a
+    refusal on another thread, or Ctrl-C). A BaseException, like KeyboardInterrupt,
+    so the library's `except Exception` handlers let it through and the worker ends
+    without sending another request."""
+
+
+class RateLimiter:
+    """At most `rate` request starts per second across every thread that shares it.
+
+    `acquire()` blocks until the caller may start one request: `interval` after
+    the previous start, and not before a pause set by `pause()` has run out. The
+    lock is held while sleeping, so callers queue behind it and no burst credit
+    builds up. `clock` and `sleep` are injectable so tests never wait.
+    """
+
+    def __init__(self, rate: float, *, clock=time.monotonic, sleep=time.sleep) -> None:
+        self.interval = 1.0 / rate
+        self._clock, self._sleep = clock, sleep
+        self._lock = threading.Lock()            # held from the wait through the start
+        self._pause_lock = threading.Lock()      # guards _resume_at only; taken after _lock, never before
+        self._last: float | None = None
+        self._resume_at = float("-inf")
+        self._local = threading.local()
+        self.count = 0                           # requests started through this limiter
+
+    def _raise_if_cancelled(self) -> None:
+        stop = getattr(self._local, "stop", None)
+        if stop is not None and stop.is_set():
+            raise PrefetchCancelled()
+
+    def pause(self, seconds: float) -> None:
+        """Hold every caller's next request start until `seconds` from now. SEC is
+        failing (a 5xx or a dropped connection), so the whole pool backs off
+        together instead of each thread on its own. A longer pause already set is
+        kept."""
+        with self._pause_lock:
+            self._resume_at = max(self._resume_at, self._clock() + seconds)
+
+    def acquire(self) -> None:
+        self._raise_if_cancelled()
+        with self._lock:
+            self._raise_if_cancelled()           # stopped while queued behind the lock
+            with self._pause_lock:
+                ready = self._resume_at
+            if self._last is not None:
+                ready = max(ready, self._last + self.interval)
+            wait = ready - self._clock()
+            if wait > 0:
+                self._sleep(wait)
+            self._raise_if_cancelled()           # stopped while sleeping: the slot goes unused
+            self._last = self._clock()
+            self.count += 1
+
+    @contextmanager
+    def cancelled_by(self, stop: threading.Event):
+        """Inside this block, the calling thread's acquire() raises PrefetchCancelled
+        once `stop` is set. Other threads are not affected."""
+        self._local.stop = stop
+        try:
+            yield
+        finally:
+            self._local.stop = None
+
+
+SEC_MAX_RATE = 8.0      # SEC allows 10 requests/s per client; we stay under it (spec §9, §11)
+SEC_LIMITER = RateLimiter(SEC_MAX_RATE)
+
+
 def _throttle() -> None:
-    with _RATE_LOCK:
-        now = time.monotonic()
-        wait = _MIN_INTERVAL - (now - _LAST_CALL[0])
-        if wait > 0:
-            time.sleep(wait)
-        _LAST_CALL[0] = time.monotonic()
+    """Wait for this process's next SEC request slot. Every SEC request in the
+    library (EdgarClient, sec_http, verify_against_web) calls this, from any
+    thread. It reads the module's SEC_LIMITER at each call, so a test or the
+    CLI can swap or extend the limiter."""
+    SEC_LIMITER.acquire()
 
 
 # Backoff between retry attempts, in seconds: 2s after the 1st failure, 4s
@@ -121,6 +185,11 @@ def retry_request(make_request, *, sleep=time.sleep, max_attempts: int = RETRY_M
     for tests). `check_response` runs on every response that comes back, so a
     403/429 raises `EdgarBlocked` immediately -- it is never retried. A 404 or
     any other non-5xx response is returned on the first attempt, unchanged.
+
+    After every failed attempt the shared SEC_LIMITER is paused for that
+    attempt's backoff (the last attempt for the last backoff), so every other
+    thread's next SEC request waits too: while SEC is failing, the pool backs
+    off together instead of sending ~8 mostly failing requests a second.
 
     On final failure: if every attempt raised, the last exception is
     re-raised; if the last attempt returned a persistent 5xx response, that
@@ -139,8 +208,10 @@ def retry_request(make_request, *, sleep=time.sleep, max_attempts: int = RETRY_M
             if resp.status_code < 500:
                 return resp
             last_exc = None                   # a 5xx is retryable, not a transport exception
+        wait = backoff[min(attempt, len(backoff) - 1)]
+        SEC_LIMITER.pause(wait)               # every thread's next SEC request waits too
         if attempt < max_attempts - 1:
-            sleep(backoff[attempt])
+            sleep(wait)
     if resp is not None:
         return resp
     raise last_exc

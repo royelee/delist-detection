@@ -117,3 +117,12 @@ def fake_edgar() -> _FakeEdgar:
         texts={"A002": "Item 3.01 Notice of Delisting ... has not regained compliance "
                        "with the minimum bid price requirement"},
     )
+
+
+@pytest.fixture(autouse=True)
+def _fresh_sec_limiter(monkeypatch):
+    """Every test gets its own process-wide SEC limiter: in-process only (never a
+    machine-wide lock file under the home directory), never sleeping, and with no
+    pause or request count left over from another test."""
+    from delist_detection import edgar
+    monkeypatch.setattr(edgar, "SEC_LIMITER", edgar.RateLimiter(edgar.SEC_MAX_RATE, sleep=lambda s: None))
