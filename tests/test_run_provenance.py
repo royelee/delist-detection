@@ -18,7 +18,7 @@ from delist_detection.observations import Observation
 from delist_detection.payout_extractor import PayoutResult
 from delist_detection.pipeline import Overrides, run
 from delist_detection.store import read_table, table_path
-from tests.test_pipeline import LIVE_FIGI, _clients, _index_clients
+from tests.test_pipeline import LIVE_FIGI, _clients, _index_clients, _same_ticker_acquirer_run
 
 
 @pytest.fixture(autouse=True)
@@ -128,6 +128,29 @@ def test_a_successor_search_whose_efts_refetch_failed_is_flagged_resolution_degr
     # item 3: the successor search rested on a failed request, so the delisting's
     # own row carries the flag too.
     assert "resolution_degraded" in d["review_flags"].split(";")
+
+
+def test_an_acquirer_cik_lookup_through_a_stale_copy_is_flagged_naming_the_acquirer(fake_edgar, tmp_path):
+    """item 4: _acquirer_cik falls through to the SEC ticker-map holder's own
+    submissions JSON (edgar_lists) when the acquirer took the target's own
+    ticker -- the Waste Connections 2016 scenario. A stale copy served there
+    must add a resolution_degraded row naming the acquirer ticker."""
+    real = fake_edgar.submissions
+
+    def stale_for_holder(cik, fresh_after=None):
+        if int(cik) == 1318220:
+            SEC_STATS.degraded("stale_copy")
+        return real(cik, fresh_after=fresh_after)
+
+    fake_edgar.submissions = stale_for_holder
+    _same_ticker_acquirer_run(fake_edgar, tmp_path, holder=1318220)
+    rows = [r for r in _review(tmp_path) if r["review_flags"] == "resolution_degraded"]
+    assert any("WCN" in r["reason"] for r in rows)
+
+
+def test_a_clean_acquirer_cik_lookup_is_not_flagged(fake_edgar, tmp_path):
+    _same_ticker_acquirer_run(fake_edgar, tmp_path, holder=1318220)
+    assert not any(r["review_flags"] == "resolution_degraded" for r in _review(tmp_path))
 
 
 def test_a_clean_run_has_no_resolution_degraded_row(fake_edgar, tmp_path):

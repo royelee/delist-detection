@@ -832,7 +832,12 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
         acquirer_ids[key] = cand.composite
         if cand.composite not in securities:
             if cand.composite not in added:
+                degraded_mark = SEC_STATS.thread_degraded()
                 acq_cik = _acquirer_cik(clients, acq, day, e)
+                if _degraded_since(degraded_mark):
+                    review.append(ReviewItem(e.sec_id, e.ticker, e.cik, DEGRADED_FLAG,
+                                             f"the acquirer {acq} CIK lookup rested on a failed EDGAR request "
+                                             "or a stale copy", delist_date=e.delist_date))
                 added[cand.composite] = Security(cand.composite, acq_cik, share_class_from_name(cand.name),
                                                  cand.name, cand.security_type, False, "cusip")
                 added_meta[cand.composite] = {"kind": "acquirer", "ticker": acq, "rows": [], "fallback_day": day}
