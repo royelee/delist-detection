@@ -5,6 +5,7 @@ date, per-stage request counts, the resolver memo flushed even when a later
 stage is refused, and the same bytes from one worker and from N."""
 import gzip
 import json
+import logging
 import os
 import shutil
 import threading
@@ -238,7 +239,7 @@ def test_the_runs_own_resolver_only_ever_runs_on_the_main_thread(fake_edgar, tmp
 
 def test_a_failure_only_a_warm_worker_meets_is_counted_under_its_stage(fake_edgar, tmp_path, monkeypatch):
     index, clients = _clients(fake_edgar)
-    raised = {"issuer resolution": 0, "form25 scan": 0}
+    raised = {"issuer resolution": 0, "delisting search": 0}
     real_resolve, real_raw = TickerResolver.resolve, fake_edgar.fetch_filing_raw
 
     def resolve(self, *a, **k):
@@ -249,7 +250,7 @@ def test_a_failure_only_a_warm_worker_meets_is_counted_under_its_stage(fake_edga
 
     def raw(cik, accession):
         if threading.current_thread() is not threading.main_thread():
-            raised["form25 scan"] += 1
+            raised["delisting search"] += 1
             raise RuntimeError("boom")
         return real_raw(cik, accession)
 
@@ -412,6 +413,10 @@ TICKERS_URL = "https://www.sec.gov/files/company_tickers.json"
 AET_SUB_URL = "https://data.sec.gov/submissions/CIK0001122304.json"
 OLD_SUB_URL = "https://data.sec.gov/submissions/CIK0000002222.json"
 XFR_SUB_URL = "https://data.sec.gov/submissions/CIK0000003333.json"
+# The company LIVE's expired search answers name when seeded with a stale hit (and
+# today's answers do not): LIVE CO, CIK 5555, filing since 2020 with a Form 25 on
+# 2025-07-01, so the hit validates for LIVE on 2025-06-30.
+STALE_HIT_SUB_URL = "https://data.sec.gov/submissions/CIK0000005555.json"
 # AET's merger proxy: only the payout reader (stage 8) reads it.
 AET_PROXY_URL = "https://www.sec.gov/Archives/edgar/data/1122304/000104746918000999/defm.htm"
 _KEYS = ("accessionNumber", "form", "filingDate", "reportDate", "items", "primaryDocument")
@@ -424,6 +429,15 @@ OLD_FILINGS = [("0000876661-19-000100", "25-NSE", "2019-02-01", "", "", "primary
 # exchange transfer to an unknown successor, which stage 9 searches for.
 XFR_FILINGS = [("0000003333-19-000010", "10-Q", "2019-08-09", "2019-06-30", "", "q.htm"),
                ("0000003333-20-000004", "10-K", "2020-03-02", "2019-12-31", "", "k.htm")]
+STALE_HIT_FILINGS = [("0000005555-20-000002", "10-K", "2020-03-02", "2019-12-31", "", "k.htm"),
+                     ("0001354457-25-000555", "25-NSE", "2025-07-01", "", "", "primary_doc.xml")]
+STALE_HITS = {
+    "full_text_search": {"_id": "0001354457-25-000555:primary_doc.xml", "_source": {
+        "ciks": ["0000005555", "0001354457"], "display_names": ["LIVE CO  (LIVE)  (CIK 0000005555)",
+                                                                "Nasdaq Stock Market LLC  (CIK 0001354457)"],
+        "form": "25-NSE", "file_date": "2025-07-01", "adsh": "0001354457-25-000555"}},
+    "name_search": {"cik": 5555, "name": "LIVE CO", "form": "25-NSE", "filing_date": "2025-07-01"},
+}
 MIDAS_QUARTERS = ((2018, 3), (2018, 4), (2019, 1))
 
 # The copies _seed leaves stale: each one's stage refreshes it in a one-worker run,
@@ -474,6 +488,7 @@ class _OfflineSec:
             AET_SUB_URL: json.dumps(_submissions(1122304, "AETNA INC /PA/", AET_FILINGS)),
             OLD_SUB_URL: json.dumps(_submissions(2222, "OLD CO INC", OLD_FILINGS)),
             XFR_SUB_URL: json.dumps(_submissions(3333, "XFR CORP", XFR_FILINGS)),
+            STALE_HIT_SUB_URL: json.dumps(_submissions(5555, "LIVE CO", STALE_HIT_FILINGS)),
             "https://www.sec.gov/Archives/edgar/data/1122304/000087666118001269/0000876661-18-001269.txt": AET_RAW,
             "https://www.sec.gov/Archives/edgar/data/1122304/000112230418000178/k.htm":
                 "<html>Item 3.01 Notice. trading suspended prior to the opening of trading on November 29, 2018 "
@@ -495,7 +510,7 @@ class _OfflineSec:
         return _SecResp(404, "", url)
 
 
-def _seed(root):
+def _seed(root, stale_hits=()):
     """The starting cache, with a stale copy on each refresh path the runs reach:
     - OLD's submissions, cached on 2019-01-01, before its Form 25 (2019-02-01): the
       Form 25 scan reads that copy, and the classifier then refreshes it. If a warm
@@ -503,9 +518,11 @@ def _seed(root):
       than a one-worker run does, and the tables would differ.
     - Expired full-text-search answers (LIVE's two resolver queries, XFR's successor
       search) and an expired company-name search (LIVE): each is asked again by
-      the stage that reads it. They hold today's (empty) answer. A stale answer
-      whose hits differ from today's leads a warm worker to fill entries that a
-      one-worker run never asks for: the CSVs still agree, the cache trees do not.
+      the stage that reads it. They hold today's (empty) answer, except that
+      LIVE's Form 25 search ("full_text_search") and name search ("name_search")
+      hold the hit STALE_HITS names when `stale_hits` lists them. A warm worker
+      follows such a hit and fills entries a one-worker run never asks for: the
+      CSVs still agree, and the cache tree gains those fills.
     - A 60-day-old MIDAS index that lists only 2018 Q3: read through it, AET's
       last MIDAS trade day would sit too close to the index's coverage end to use,
       so a warm read of it kept for the sequential pass would change AET's row.
@@ -515,12 +532,16 @@ def _seed(root):
     def put(url, payload):
         client._cache_path(url).write_text(json.dumps(payload))
 
+    def hits(kind):
+        return [STALE_HITS[kind]] if kind in stale_hits else []
+
     put(OLD_SUB_URL, {**_submissions(2222, "OLD CO INC", []), FETCHED_KEY: "2019-01-01"})
-    for url, window_end, fetched in ((LIVE_FORM25_SEARCH, "2025-09-28", "2025-10-01"),
-                                     (LIVE_8K_SEARCH, "2025-06-29", "2025-07-02"),
-                                     (XFR_SUCCESSOR_SEARCH, "2019-03-01", "2019-03-05")):
-        put(url, {"schema": EFTS_SCHEMA, "window_end": window_end, FETCHED_KEY: fetched, EFTS_KEY: []})
-    put(LIVE_NAME_SEARCH, {"hits": [], FETCHED_KEY: "2026-09-01"})
+    searches = ((LIVE_FORM25_SEARCH, "2025-09-28", "2025-10-01", hits("full_text_search")),
+                (LIVE_8K_SEARCH, "2025-06-29", "2025-07-02", []),
+                (XFR_SUCCESSOR_SEARCH, "2019-03-01", "2019-03-05", []))
+    for url, window_end, fetched, found in searches:
+        put(url, {"schema": EFTS_SCHEMA, "window_end": window_end, FETCHED_KEY: fetched, EFTS_KEY: found})
+    put(LIVE_NAME_SEARCH, {"hits": hits("name_search"), FETCHED_KEY: "2026-09-01"})
     midas = root / "midas"
     midas.mkdir()
     for y, q in MIDAS_QUARTERS:
@@ -557,35 +578,43 @@ def _tree(root):
     return {str(p.relative_to(root)): p.read_bytes() for p in sorted(root.rglob("*")) if p.is_file()}
 
 
-def _one_and_n(tmp_path, monkeypatch, workers, **universe):
+def _one_and_n(tmp_path, monkeypatch, caplog, workers, *, stale_hits=(), **universe):
     """One worker and `workers` workers, each run from its own clone of one seeded
-    cache: both write the same six CSVs, byte for byte, and leave the same cache
-    tree. Returns each run's request log."""
+    cache (`_seed(stale_hits=)`): both write the same six CSVs, byte for byte, and
+    no warm task of the N-worker run raises (else a check that something never
+    happens on a warm worker could pass because the worker died first). Returns
+    each run's request log and the cache tree it leaves behind."""
     for name, method in _REAL_EFTS.items():        # LIVE's resolver full-text searches go through the cache
         monkeypatch.setattr(TickerResolver, name, method)
     seed = tmp_path / "seed"
-    _seed(seed)
+    _seed(seed, stale_hits)
     shutil.copytree(seed, tmp_path / "one")
     shutil.copytree(seed, tmp_path / "n")
     sec1 = _offline_run(tmp_path / "one", tmp_path / "out1", 1, **universe)
+    caplog.set_level(logging.WARNING, logger="delist_detection.prefetch")
+    caplog.clear()
     secn = _offline_run(tmp_path / "n", tmp_path / "outn", workers, **universe)
+    assert [r.getMessage() for r in caplog.records if r.name == "delist_detection.prefetch"] == []
     csv1 = {p.name: p.read_bytes() for p in (tmp_path / "out1").glob("*.csv")}
     csvn = {p.name: p.read_bytes() for p in (tmp_path / "outn").glob("*.csv")}
     assert len(csv1) == 6 and csv1 == csvn
-    assert _tree(tmp_path / "one") == _tree(tmp_path / "n")                  # the caches each run leaves behind
-    return sec1, secn
+    return (sec1, _tree(tmp_path / "one")), (secn, _tree(tmp_path / "n"))
 
 
-@pytest.mark.parametrize("workers", [2, 4])
-def test_one_worker_and_n_give_the_same_bytes_from_the_same_starting_caches(tmp_path, monkeypatch, workers):
-    sec1, secn = _one_and_n(tmp_path, monkeypatch, workers)
+def _assert_stale_copies_refreshed_only_by_the_stage(sec1, secn):
     main = threading.main_thread().name
     for url in STALE_URLS:
         assert (url, main) in sec1.calls and (url, main) in secn.calls, url    # refreshed by the stage itself
         assert not any(u == url and t != main for u, t in secn.calls), url     # never by a warm worker
+
+
+@pytest.mark.parametrize("workers", [2, 4])
+def test_one_worker_and_n_give_the_same_bytes_from_the_same_starting_caches(tmp_path, monkeypatch, caplog, workers):
+    (sec1, tree1), (secn, treen) = _one_and_n(tmp_path, monkeypatch, caplog, workers)
+    assert tree1 == treen                                                    # the caches each run leaves behind
+    _assert_stale_copies_refreshed_only_by_the_stage(sec1, secn)
     proxy = [t for u, t in secn.calls if u == AET_PROXY_URL]
     assert len(proxy) == 1 and proxy[0].startswith("sec-warm")      # the payout warm pass fetched it, stage 8 read it
-    assert any(t.startswith("sec-warm") for _, t in secn.calls)                      # the warm pass did fetch
     rows = {d["sec_id"]: d for d in read_table("delistings", table_path(tmp_path / "out1", "delistings"))}
     assert set(rows) == {"BBG000FJLFX8", "CIK3333-COMMON"}
     assert (rows["BBG000FJLFX8"]["bucket"], rows["BBG000FJLFX8"]["last_trade_date_source"]) == ("merger", "midas")
@@ -594,9 +623,31 @@ def test_one_worker_and_n_give_the_same_bytes_from_the_same_starting_caches(tmp_
 
 
 @pytest.mark.parametrize("workers", [2, 4])
-def test_a_universe_of_pinned_eras_never_reads_the_ticker_map_with_any_worker_count(tmp_path, monkeypatch,
+def test_a_universe_of_pinned_eras_never_reads_the_ticker_map_with_any_worker_count(tmp_path, monkeypatch, caplog,
                                                                                     workers):
     """No era needs SEC's ticker map, so a one-worker run never fetches it: the warm
     shadow resolvers load it only when an era needs it, never on their own."""
-    sec1, secn = _one_and_n(tmp_path, monkeypatch, workers, live_cik=777)
+    (sec1, tree1), (secn, treen) = _one_and_n(tmp_path, monkeypatch, caplog, workers, live_cik=777)
+    assert tree1 == treen
     assert not any(u == TICKERS_URL for u, _ in sec1.calls + secn.calls)
+
+
+@pytest.mark.parametrize("stale_hits", [("full_text_search",), ("name_search",), ("full_text_search", "name_search")],
+                         ids=["full_text_search", "name_search", "both"])
+def test_a_stale_hit_a_warm_worker_follows_never_reaches_the_tables(tmp_path, monkeypatch, caplog, stale_hits):
+    """LIVE's expired search answers name LIVE CO (CIK 5555), whose Form 25 would
+    validate it; today's answers name nobody. A warm worker reads the expired copy
+    as it is, follows the hit and fills CIK 5555's submissions. The sequential pass
+    asks again, finds nothing and never reads them: the tables are the same bytes
+    as a one-worker run's, and the N-worker cache is the one-worker cache plus
+    exactly the warm worker's fills."""
+    (sec1, tree1), (secn, treen) = _one_and_n(tmp_path, monkeypatch, caplog, 4, stale_hits=stale_hits)
+    _assert_stale_copies_refreshed_only_by_the_stage(sec1, secn)
+    secs = {r["sec_id"]: r for r in read_table("securities", table_path(tmp_path / "outn", "securities"))}
+    assert secs["BBG000LIVE01"]["issuer_cik"] == ""                        # today's answer, not the stale CIK
+    assert tree1.items() <= treen.items()
+    main = threading.main_thread().name
+    warm_only = {u for u, t in secn.calls if t != main} - {u for u, _ in sec1.calls}
+    assert warm_only == {STALE_HIT_SUB_URL}                                # the warm worker did follow the hit
+    cache = EdgarClient(cache_dir=tmp_path / "n" / "edgar", user_agent=UA, session=_OfflineSec(), today=AS_OF)
+    assert set(treen) - set(tree1) == {str(cache._cache_path(u).relative_to(tmp_path / "n")) for u in warm_only}

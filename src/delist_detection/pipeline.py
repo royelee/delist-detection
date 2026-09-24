@@ -338,6 +338,20 @@ def _successor_in_run(e: DelistingEvent, starts: dict[str, tuple[str, int | None
     return next(iter(found.items())) if len(found) == 1 else None
 
 
+def _successor_search_args(edgar, e: DelistingEvent, starts: dict[str, tuple[str, int | None, set[str]]],
+                           securities: dict[str, Security]) -> tuple[str, date] | None:
+    """The (name, day) stage 9 sends EDGAR's full-text search for `e`
+    (`successor_query` builds the search), or None when it sends none: the
+    successor is known, or it is a security of this run (`_successor_in_run`).
+    The warm pass and the sequential loop both ask this, so they send the same
+    searches. Only an event it searches for reads EDGAR (the issuer's
+    submissions, for its name)."""
+    if "successor_unknown" not in e.flags or _successor_in_run(e, starts) is not None:
+        return None
+    return (successor_search_name(edgar, e.cik, securities[e.sec_id].name),
+            e.last_trade.day or _d(e.delist_date))
+
+
 def _acquirer_cik(clients: Clients, acq: str, day: date, target: DelistingEvent) -> int | None:
     """The acquirer's issuer CIK. The resolver answers for (ticker, day), so an
     acquirer that took the target's own ticker (Progressive Waste becoming
@@ -492,7 +506,7 @@ def _warm_delisting_search(clients: Clients, ordered: list[Security], listing: d
                            tickers=sorted({e.ticker for e in s.eras}), answer=answer)
         finder.find(context(s, now))
 
-    warm(ordered, task, workers=workers, state=make_finder, name="form25 scan")
+    warm(ordered, task, workers=workers, state=make_finder, name="delisting search")
 
 
 def run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_dir: Path,
@@ -839,52 +853,52 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
         else:
             first = meta["filing_date"]
         starts[sid] = (first, s.issuer_cik, {meta["ticker"]})
-    if sec_workers > 1 and successor_search is not None:
-        # The events the loop below searches for: unknown successor, none in the run.
-        pending = [e for e in events if "successor_unknown" in e.flags and _successor_in_run(e, starts) is None]
-        warm(pending, lambda e: successor_search(*successor_query(
-            successor_search_name(clients.edgar, e.cik, securities[e.sec_id].name),
-            e.last_trade.day or _d(e.delist_date))), workers=sec_workers, name="successor search")
-    for e in events:
-        if "successor_unknown" not in e.flags:
+    for e in events:                           # a security of this run
+        in_run = _successor_in_run(e, starts) if "successor_unknown" in e.flags else None
+        if in_run is None:
             continue
-        in_run = _successor_in_run(e, starts)
-        if in_run is not None:
-            sid, how = in_run
-            e.record.successor_sec_id = sid
-            e.record.evidence["flags"] = [f for f in e.record.evidence["flags"] if f != "successor_unknown"]
-            e.record.evidence["successor_by"] = how
-            e.record.reason = f"{e.record.reason}; successor by {how.replace('_', ' ')}"
-            continue
-        if successor_search is None:
-            continue
-        predecessor = securities[e.sec_id]
-        day = e.last_trade.day or _d(e.delist_date)
-        degraded_mark = SEC_STATS.thread_degraded()
-        name = successor_search_name(clients.edgar, e.cik, predecessor.name)
-        hit = successor_from_8k12b(successor_search, clients.figi, name=name, day=day,
-                                   exclude_cik=e.cik, share_class=predecessor.share_class)
-        if _degraded_since(degraded_mark):
-            review.append(ReviewItem(e.sec_id, e.ticker, e.cik, DEGRADED_FLAG,
-                                     "the successor search rested on a failed EDGAR request or a stale copy",
-                                     delist_date=e.delist_date))
-        if hit is None:
-            continue
-        s_cik, cand, filing_date = hit
-        e.record.successor_sec_id = cand.composite
+        sid, how = in_run
+        e.record.successor_sec_id = sid
         e.record.evidence["flags"] = [f for f in e.record.evidence["flags"] if f != "successor_unknown"]
-        if cand.composite not in securities and cand.composite not in added:
-            added[cand.composite] = Security(cand.composite, s_cik, share_class_from_name(cand.name), cand.name,
-                                             cand.security_type, False, "ticker")
-            # A same-ticker successor (a holding-company reorg) must not overlap
-            # the predecessor's own ticker_history row, even when its 8-K12B was
-            # filed before the predecessor's actual last trade: clamp valid_from
-            # to no earlier than the day after that last trade (or delist_date
-            # when the last trade day is unknown).
-            not_before = ((e.last_trade.day or _d(e.delist_date)) + timedelta(days=1)).isoformat()
-            fd = filing_date or day.isoformat()
-            added_meta[cand.composite] = {"kind": "successor", "ticker": cand.ticker,
-                                          "filing_date": max(fd, not_before)}
+        e.record.evidence["successor_by"] = how
+        e.record.reason = f"{e.record.reason}; successor by {how.replace('_', ' ')}"
+    if successor_search is not None:           # else the successor issuer's 8-K12B
+        if sec_workers > 1:
+            def warm_search(e: DelistingEvent) -> None:
+                args = _successor_search_args(clients.edgar, e, starts, securities)
+                if args is not None:
+                    successor_search(*successor_query(*args))
+            warm(events, warm_search, workers=sec_workers, name="successor search")
+        for e in events:
+            degraded_mark = SEC_STATS.thread_degraded()
+            args = _successor_search_args(clients.edgar, e, starts, securities)
+            if args is None:
+                continue
+            name, day = args
+            predecessor = securities[e.sec_id]
+            hit = successor_from_8k12b(successor_search, clients.figi, name=name, day=day,
+                                       exclude_cik=e.cik, share_class=predecessor.share_class)
+            if _degraded_since(degraded_mark):
+                review.append(ReviewItem(e.sec_id, e.ticker, e.cik, DEGRADED_FLAG,
+                                         "the successor search rested on a failed EDGAR request or a stale copy",
+                                         delist_date=e.delist_date))
+            if hit is None:
+                continue
+            s_cik, cand, filing_date = hit
+            e.record.successor_sec_id = cand.composite
+            e.record.evidence["flags"] = [f for f in e.record.evidence["flags"] if f != "successor_unknown"]
+            if cand.composite not in securities and cand.composite not in added:
+                added[cand.composite] = Security(cand.composite, s_cik, share_class_from_name(cand.name), cand.name,
+                                                 cand.security_type, False, "ticker")
+                # A same-ticker successor (a holding-company reorg) must not overlap
+                # the predecessor's own ticker_history row, even when its 8-K12B was
+                # filed before the predecessor's actual last trade: clamp valid_from
+                # to no earlier than the day after that last trade (or delist_date
+                # when the last trade day is unknown).
+                not_before = ((e.last_trade.day or _d(e.delist_date)) + timedelta(days=1)).isoformat()
+                fd = filing_date or day.isoformat()
+                added_meta[cand.composite] = {"kind": "successor", "ticker": cand.ticker,
+                                              "filing_date": max(fd, not_before)}
     meter.done("successor search", mark)
 
     # 10. rows
