@@ -24,9 +24,22 @@ def test_agreement_needs_two_shared_words_unless_a_name_has_one():
 def test_a_possessive_apostrophe_does_not_split_a_word():
     """EDGAR writes "Macy's, Inc." and "DILLARD'S, INC.", the snapshots MACYS and
     DILLARDS: the apostrophe (straight or curly) is dropped, not a word break."""
-    assert name_tokens("Macy's, Inc.") == {"MACYS"}
-    assert name_tokens("DILLARD’S, INC.") == {"DILLARDS"}
+    assert name_tokens("Macy's, Inc.") == {"MACYS", "MACY"}
+    assert name_tokens("DILLARD’S, INC.") == {"DILLARDS", "DILLARD"}
     assert names_agree("MACYS INC", "Macy's, Inc.")
     assert names_agree("DILLARDS INC CLASS A", "DILLARD'S, INC.")
     assert names_agree("O'REILLY AUTOMOTIVE INC", "OREILLY AUTOMOTIVE INC")
     assert names_agree("LOWE'S COMPANIES INC", "LOWES COMPANIES INC")
+
+
+def test_an_apostrophe_word_matches_both_the_joined_and_the_split_spelling():
+    """Snapshots write O'Reilly as OREILLY, O REILLY and O'REILLY, and Frank's
+    as FRANK S: a word with an apostrophe gives both the joined form (OREILLY,
+    MACYS, FRANKS) and the split one (REILLY; MACY; FRANK), so each spelling
+    matches either."""
+    assert names_agree("MACY'S, INC.", "MACYS INC")
+    assert names_agree("O'REILLY AUTOMOTIVE INC", "O REILLY AUTOMOTIVE INC")
+    assert names_agree("O'REILLY AUTOMOTIVE INC", "OREILLY AUTOMOTIVE INC")
+    assert names_agree("Frank's International N.V.", "FRANK S INTERNATIONAL NV")
+    assert names_agree("Frank's International N.V.", "FRANKS INTERNATIONAL NV")
+    assert name_tokens("O'Reilly Automotive") == {"OREILLY", "REILLY", "AUTOMOTIVE"}
