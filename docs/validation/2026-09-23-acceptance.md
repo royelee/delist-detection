@@ -548,7 +548,7 @@ Carried from the reviews, updated for fix round 3.
   (d17ddf1); the 8 cases are pins.
 - **Look-back closes without their age:** FIXED with `ftd_close_prior:<n>`.
   - 81 merger closes are look-backs; 43 are older than one trading day.
-  - Check 6 without them: 77.8%.
+  - Check 6 without them: 78.0% (487 of 624).
   - The look-back closes still feed DLRET.
 - **Dead FIGIs counted as listed today:** FIXED for 45 of 48 (fd0b8be).
   - 3 bankrupt and relisted securities (BTU, GTX, CHK) remain open, because their
@@ -568,9 +568,11 @@ Carried from the reviews, updated for fix round 3.
     - 8 stale or backfilled snapshot eras (TXU, XM, Sovereign, PEAK/WYND/IAC 2014,
       UAC-C, SunPower 2009);
     - 7 old lines that the deleted-symbol rule closed in round 3, of issuers whose
-      CUSIP changed with a rename, a reincorporation or a reverse split and whose
-      new line starts outside the window or is not in the run (CNO 2010, WEC 2015,
-      AGNC 2016, CXW 2016, CLF 2017, AIV 2019, WW 2019);
+      CUSIP changed with a rename, a reincorporation or a reverse split (CNO 2010,
+      WEC 2015, AGNC 2016, CXW 2016, CLF 2017, AIV 2019, WW 2019). For CNO and WW
+      the new line is not in the run; the other five duplicate a FIGI line in the
+      run that holds the same CUSIP over the same dates, so a same-CUSIP successor
+      link would fix them;
     - 4 mergers whose target was the legal survivor or kept filing
       (Schering-Plough → Merck, Foundation Coal, McDermott, Engility);
     - 1 bankruptcy (CBL 2020);
@@ -652,10 +654,12 @@ Carried from the reviews, updated for fix round 3.
     ACI, CIE, XCO, BLUE) now carry their own ticker, so MIDAS dates their last trade
     and the close is found: 6 liquidations gain a Shumway DLRET (-30%), BLUE 2025 a
     close.
-  - Three `ticker_shared` rows are new (QDEL 2022, HTZ, ITT): the `…XXXX` range used
-    to cut a range that now runs to its end, into the newer line's first days. QDEL
-    has no last trade date, so its range runs to the delisting date; HTZ and ITT are
-    old and new lines merged on one FIGI (as BTU, GTX, CHK). STILL OPEN.
+  - Three `ticker_shared` rows are new (QDEL 2022, HTZ, ITT); the `…XXXX` ranges
+    used to hide them. QDEL has no last trade date, so its range runs to the Form 25
+    date, 6 days into QuidelOrtho. HTZ and ITT are old and new lines merged on one
+    FIGI (as BTU, GTX, CHK), so their ranges span the intervening line for years
+    (HTZ 2016-07-05..2020-11-02, ITT 2011-11-02..2016-05-17). Hertz's 2020
+    bankruptcy has no delisting row (`form25_unmatched`). STILL OPEN.
 - **ACAS 2017 on AGNC's CIK:** FIXED (32e92e0). Pinned to 817473 (checked live on
   EDGAR: American Capital, Ltd, formerly American Capital Strategies; 25-NSE/A and
   8-K items 2.01/3.01 on 2017-01-04, Form 15-12G on 2017-01-17). The delisting is
@@ -710,5 +714,15 @@ Carried from the reviews, updated for fix round 3.
 - **Company search keeps only its first match:** STILL OPEN (known follow-up).
   `_parse_company_atom` returns only the first company of a multi-match answer, so
   the name-search tier can miss the right company.
-- **CLAUDE.md:** it says 988 tests (6f85017); the suite is now 995. Not edited
-  here.
+- **CLAUDE.md:** updated to 995 tests (bdfaf4e). FIXED.
+- **SEC's other deleted-symbol spelling `…ZZZZ`** is still read as trading: 8
+  `…ZZZZ` ranges (CLF, PNR, WEN ×2, HON, HLT ×3) and the delisting ticker
+  `LBTYAZZZZ`. STILL OPEN (same fix as `…XXXX`).
+- **17 listed securities keep a retired CUSIP as their open CUSIP range** (TRI,
+  CIM, SKLZ, BTU, SPCE, …). STILL OPEN.
+- **Shumway −30% vs the first post-suspension FTD price:** for 4 of the 6
+  liquidations newly dated in round 3 (BTU, CHK, ACI, XCO) the first
+  post-suspension FTD price implies −59% to −77%. The policy is unchanged; pass
+  `--recoveries` where the realized loss matters. STILL OPEN.
+- **`names_agree` counts a repeated word twice** ("BROWN & BROWN INC" vs "POE &
+  BROWN INC" now disagree); no row in this run changed. STILL OPEN.
