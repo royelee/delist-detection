@@ -12,7 +12,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
-from delist_detection.edgar import EdgarBlocked
+from delist_detection.edgar import EdgarBlocked, EdgarSetupError, require_user_agent, use_machine_wide_limit
 from delist_detection.observations import ObservationIndex, load_observations
 from delist_detection.openfigi import OpenFigiBlocked
 from delist_detection.payout_gate import DEFAULT_TOL
@@ -85,11 +85,16 @@ MANUAL_OVERRIDES: dict[str, int] = {
     "SBNY":  1288784,   # Signature Bank — failed Mar 2023; EDGAR holds only 13D/13G and Form D, no 10-K/8-K/Form 25, so it still classifies unknown
 }
 
+DEFAULT_SEC_WORKERS = 4     # threads prefetching SEC data; each stage itself stays sequential
+MAX_SEC_WORKERS = 8         # one process's ceiling: all threads share one 8 requests/s limit
+
 
 EXIT_CODES_EPILOG = """\
 Exit codes:
   0  success, no review-row errors
-  2  aborted: SEC or OpenFIGI refused the request (EdgarBlocked/OpenFigiBlocked)
+  2  aborted: SEC or OpenFIGI refused the request (EdgarBlocked/OpenFigiBlocked),
+     or a start-up check failed before any request (EDGAR_USER_AGENT unset, the
+     SEC rate-lock file unusable, --sec-workers outside 1..8)
   3  completed, but review.csv has one or more `error` rows (outputs are still
      written; see the stderr banner for the count)
 """
@@ -118,12 +123,25 @@ def build_parser() -> argparse.ArgumentParser:
                    help="Max |payout/last_close - 1| for any merger payout (regex cash, LLM cash, election leg, "
                         "or LLM cash+stock terminal value) to be emitted (default %(default)s). Completed deals "
                         "reconcile tightly.")
+    p.add_argument("--sec-workers", type=int, default=DEFAULT_SEC_WORKERS,
+                   help=f"Threads that fetch SEC data ahead of each stage (default %(default)s, at most "
+                        f"{MAX_SEC_WORKERS}; 1 = one request at a time). Every SEC request from this process, and "
+                        "from every other SEC client on this machine through the lock file "
+                        "$DELIST_DETECTION_SEC_RATE_LOCK (default ~/.cache/delist_detection/sec_rate.lock), "
+                        "shares one 8 requests/s limit, so more threads only fill that limit sooner.")
     return p
 
 
 def main() -> int:
     p = build_parser()
     args = p.parse_args()
+    if not 1 <= args.sec_workers <= MAX_SEC_WORKERS:
+        p.error(f"--sec-workers must be between 1 and {MAX_SEC_WORKERS}")
+    try:
+        require_user_agent()           # SEC 403s the fallback: stop before the first request
+        use_machine_wide_limit()       # every SEC client on this machine shares the 8 requests/s
+    except (EdgarSetupError, OSError) as exc:
+        p.error(str(exc))
 
     overrides = Overrides(
         last_trade_closes=load_float_overrides(args.last_trade_closes, "last_trade_close") if args.last_trade_closes else {},
@@ -138,7 +156,7 @@ def main() -> int:
     )
     log = (lambda *a: None) if args.quiet else None
     summary = run(index, clients, overrides, out_dir=Path(args.output_dir), tol=args.merger_terms_sanity_tol,
-                  limit=args.limit, **({"log": log} if log else {}))
+                  limit=args.limit, sec_workers=args.sec_workers, **({"log": log} if log else {}))
     print("Rows written:", summary.counts)
     print("Delistings by bucket:", summary.buckets)
     print("FIGI sources:", summary.figi_sources)

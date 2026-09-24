@@ -2,6 +2,7 @@
 holding an answer reached through a transient EDGAR error."""
 import json
 import logging
+from datetime import date
 
 import requests
 
@@ -312,3 +313,18 @@ def test_a_memo_temp_file_left_by_a_killed_process_is_removed(tmp_path, fake_edg
     orphan.write_text("{")
     TickerResolver(fake_edgar, cache_path=tmp_path / "res.json")
     assert not orphan.exists()
+
+
+def test_a_shadow_starts_from_its_resolver_memo_and_saves_nothing(tmp_path, fake_edgar):
+    cache = tmp_path / "res.json"
+    e = _RecordingEdgar(fake_edgar)
+    r = TickerResolver(e, cache_path=cache, today=date(2026, 9, 23))
+    assert r.resolve("BAD", "2023-05-10").cik == 999001
+    saved, reads = cache.read_text(), len(e.log)
+    s = r.shadow()
+    assert s.today == date(2026, 9, 23) and s.cache_path is None
+    assert s.resolve("BAD", "2023-05-10").cik == 999001         # from the copied memo...
+    assert len(e.log) == reads                                   # ...with no EDGAR read
+    assert s.resolve("ALTR", "2025-03-26").cik == 1701732       # a new answer...
+    assert cache.read_text() == saved                            # ...is not saved
+    assert "ALTR|2025-03-26" not in r._memo                      # ...nor seen by its resolver

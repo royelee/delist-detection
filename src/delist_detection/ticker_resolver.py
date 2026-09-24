@@ -707,3 +707,17 @@ class TickerResolver:
         self, items: Iterable[tuple[str, str | None]]
     ) -> dict[str, TickerResolution]:
         return {t: self.resolve(t, d) for t, d in items}
+
+    def shadow(self) -> "TickerResolver":
+        """A copy for warming the EDGAR caches on another thread: the same EDGAR
+        client, overrides, name callables and run date, and a snapshot of the
+        memo (so it skips every era this resolver already answers). It persists
+        nothing and its answers are thrown away. Call it on the thread that owns
+        this resolver, while that resolver is idle (prefetch.warm does)."""
+        s = TickerResolver(self.edgar, rename_map=self.rename_map, manual_overrides=self.manual_overrides,
+                           name_lookup=self.name_lookup, member_names=self.member_names, cik_map=self.cik_map,
+                           today=self.today)
+        s._memo, s._memo_member = dict(self._memo), dict(self._memo_member)
+        s._volatile, s._degraded = set(self._volatile), set(self._degraded)
+        s._companies = self._ensure_companies()
+        return s

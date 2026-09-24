@@ -17,7 +17,7 @@ from typing import Any
 
 from .crsp_codes import CrspBucket
 from .delistings import DelistingEvent, DelistingFinder, ReviewItem, SecurityContext
-from .edgar import EdgarBlocked
+from .edgar import SEC_STATS, EdgarBlocked
 from .figi_resolution import FigiCandidate, accept, share_class_from_name, us_candidates
 from .form25 import SecurityRef, exchange_label
 from .ftd import FtdIndex
@@ -26,6 +26,7 @@ from .names import names_agree
 from .observations import ObservationIndex, TickerEra, eras_by_key, normalize_ticker, observation_conflicts
 from .openfigi import OpenFigiBlocked
 from .payout_gate import DEFAULT_TOL, gate_payouts
+from .prefetch import warm
 from .reconstruction import _lookup, build_delistings_table, delisting_row, unmatched_override_keys
 from .security_master import (
     FigiResolver, Range, Security, build_securities, era_cusips, era_last_seen, ranges_from_sightings, refine_eras,
@@ -47,6 +48,7 @@ class Clients:
     halts: Any = None
     payout_extractor: Any = None
     llm_extractor: Any = None
+    as_of: date | None = None       # the run date every client uses (default_clients sets it)
 
 
 @dataclass
@@ -415,8 +417,57 @@ def _own_last_seen(sec: Security, sig: list[tuple[str, str, str]]) -> str:
     return dates[-1] if dates else max(e.last for e in sec.eras)
 
 
+class _StageMeter:
+    """SEC traffic per pipeline stage, from edgar.SEC_STATS: logged as each stage
+    ends and kept for run_manifest.json. Counts cover every thread (the warm pass's
+    and the stage's own). EDGAR endpoints are counted apart from SEC data-file
+    downloads (fails-to-deliver and MIDAS ZIPs and their index pages)."""
+
+    def __init__(self, log: Callable) -> None:
+        self.log = log
+        self.stages: dict[str, dict[str, int]] = {}
+
+    def start(self):
+        return SEC_STATS.snapshot()
+
+    def done(self, stage: str, mark) -> None:
+        counts, _ = SEC_STATS.since(mark)
+        edgar_n = sum(v for k, v in counts.items() if k.startswith("request:") and k != "request:sec_data")
+        data_n = counts.get("request:sec_data", 0)
+        self.stages[stage] = {"edgar_requests": edgar_n, "sec_data_downloads": data_n}
+        self.log(f"{stage}: {edgar_n} EDGAR requests, {data_n} SEC data-file downloads (all threads)")
+
+
+def _flush_memo(clients: Clients) -> None:
+    """Write the resolver's batched memo now (TickerResolver.flush)."""
+    flush = getattr(clients.resolver, "flush", None)
+    if flush is not None:
+        flush()
+
+
 def run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_dir: Path,
-        tol: float = DEFAULT_TOL, limit: int | None = None, log: Callable = _stderr) -> RunSummary:
+        tol: float = DEFAULT_TOL, limit: int | None = None, log: Callable = _stderr,
+        sec_workers: int = 1) -> RunSummary:
+    """Observations -> the six tables under `out_dir` (spec §8).
+
+    `sec_workers` > 1 fills the SEC caches ahead of each SEC-heavy stage on that
+    many threads (`prefetch.warm`: fill-only, every thread under the one limiter).
+    Each stage itself still runs one item at a time, in its usual order, on this
+    thread, so the same caches and run date (`clients.as_of`) give byte-identical
+    tables for any worker count. A refusal on any thread aborts the run before
+    anything is written. The resolver's memo is written after issuer resolution,
+    after the acquirer lookups, and on the way out, error or not."""
+    try:
+        return _run(index, clients, overrides, out_dir=out_dir, tol=tol, limit=limit, log=log,
+                    sec_workers=sec_workers)
+    finally:
+        _flush_memo(clients)
+
+
+def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_dir: Path, tol: float,
+         limit: int | None, log: Callable, sec_workers: int) -> RunSummary:
+    as_of = clients.as_of or date.today()     # the one run date: every window below ends on it
+    meter = _StageMeter(log)
     eras = index.eras()
     if limit:
         eras = eras[:limit]
@@ -429,7 +480,7 @@ def run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_
     # then split the observation eras further on that evidence (a CUSIP switch, or a
     # gap no FTD row bridges). Every later step works on the refined eras.
     lo = max(FTD_START, min(_d(e.first) for e in eras) - timedelta(days=30))
-    hi = min(date.today(), max(_d(e.last) for e in eras) + timedelta(days=400))
+    hi = min(as_of, max(_d(e.last) for e in eras) + timedelta(days=400))
     class_names: dict[str, list[str]] = defaultdict(list)     # BF-B's names: checks FTD's "BFB" rows
     for e in eras:
         if "-" in e.ticker:
@@ -446,7 +497,18 @@ def run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_
     # for the delisting rows' resolution_source.
     # Each era's own pin: a pin looked up by (ticker, date) can belong to a
     # neighbouring era when the last sighting falls between the two.
-    cik_res = {e.key: clients.resolver.resolve(e.ticker, era_last_seen(e, ftd), pin=e.cik_pin) for e in eras}
+    last_seen = {e.key: era_last_seen(e, ftd) for e in eras}
+    mark = meter.start()
+    if sec_workers > 1:
+        # Warm the EDGAR caches: each era resolved on a worker thread by a shadow
+        # resolver (a snapshot of this memo that saves nothing), its answer thrown
+        # away. The resolve below then runs one era at a time, in order, on this
+        # thread, and finds its requests answered.
+        warm(eras, lambda shadow, e: shadow.resolve(e.ticker, last_seen[e.key], pin=e.cik_pin),
+             workers=sec_workers, state=clients.resolver.shadow)
+    cik_res = {e.key: clients.resolver.resolve(e.ticker, last_seen[e.key], pin=e.cik_pin) for e in eras}
+    _flush_memo(clients)
+    meter.done("issuer resolution", mark)
     ciks = {k: r.cik for k, r in cik_res.items()}
 
     # 3. FIGI per era -> securities
@@ -468,7 +530,7 @@ def run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_
     # that resolved to its FIGI (a reverse split's old and new CUSIP both)
     sec_cusips = {sid: list(dict.fromkeys(c for e in s.eras for c in resolutions[e.key].cusips))
                   for sid, s in securities.items()}
-    ftd.extend(clients.ftd_client, lo, date.today(), cusips={c for v in sec_cusips.values() for c in v})
+    ftd.extend(clients.ftd_client, lo, as_of, cusips={c for v in sec_cusips.values() for c in v})
 
     # 5. delistings
     siblings: dict[int, list[SecurityRef]] = defaultdict(list)
@@ -483,6 +545,7 @@ def run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_
     # One batched OpenFIGI ask for every security's listing; a failed batch leaves
     # each security to ask alone inside its own try below.
     listing = listing_answers(clients.figi, [s.sec_id for s in ordered])
+    mark = meter.start()
     for i, s in enumerate(ordered, 1):
         sig = sightings[s.sec_id]
         own_last_seen = _own_last_seen(s, sig)
@@ -533,6 +596,7 @@ def run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_
         review += rv
         if i % 50 == 0:
             log(f"[{i}/{len(securities)}] securities searched; {len(events)} delistings so far")
+    meter.done("delisting search", mark)
 
     # 6. every override must name a delisting
     keys = [(e.sec_id, e.delist_date) for e in events]
@@ -586,6 +650,7 @@ def run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_
     # 8. merger payouts, LLM terms, acquirer prices and securities
     payouts_raw, llm_terms = {}, {}
     mergers = [e for e in events if e.record.bucket is CrspBucket.MERGER]
+    mark = meter.start()
     for e in mergers:
         key = (e.sec_id, e.delist_date)
         try:
@@ -668,12 +733,15 @@ def run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_
             # can name the same acquirer, and its ticker_history row must span
             # all of them, not just the first one processed.
             added_meta[cand.composite]["rows"] = added_meta[cand.composite]["rows"] + list(rows)
+    _flush_memo(clients)                       # the acquirer lookups resolved tickers
+    meter.done("payouts", mark)
 
     # 9. successors after a FIGI change: first a security of this run that starts
     # right after the last trade under the same issuer or ticker (a holdco
     # reorganization's new line, a rename's new FIGI), then the successor
     # issuer's 8-K12B (search: EDGAR full-text search, wired in default_clients).
     successor_search = getattr(clients.edgar, "full_text_search", None)
+    mark = meter.start()
     starts: dict[str, tuple[str, int | None, set[str]]] = {
         sid: (sig[0][0], securities[sid].issuer_cik, {t for _, t, _ in sig})
         for sid, sig in sightings.items() if sig}
@@ -719,6 +787,7 @@ def run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_
             fd = filing_date or day.isoformat()
             added_meta[cand.composite] = {"kind": "successor", "ticker": cand.ticker,
                                           "filing_date": max(fd, not_before)}
+    meter.done("successor search", mark)
 
     # 10. rows
     table = build_delistings_table(
@@ -847,9 +916,12 @@ def run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_
 def default_clients(index: ObservationIndex, *, cache_dir: Path, rename_map: dict | None = None,
                     manual_overrides: dict | None = None, extract_payouts: bool = True,
                     extract_llm: bool = False, llm_model: str | None = None, use_midas: bool = True,
-                    use_halts: bool = True) -> Clients:
+                    use_halts: bool = True, as_of: date | None = None) -> Clients:
+    """The production clients. Every client is dated `as_of` (default: today,
+    read once here), the resolver batches its memo writes, and the SEC limit is
+    made machine-wide (edgar.use_machine_wide_limit)."""
     from .classifier import DelistClassifier
-    from .edgar import EdgarClient
+    from .edgar import EdgarClient, use_machine_wide_limit
     from .ftd import FtdClient
     from .midas import MidasClient
     from .nasdaq_halts import NasdaqHaltClient
@@ -857,22 +929,25 @@ def default_clients(index: ObservationIndex, *, cache_dir: Path, rename_map: dic
     from .payout_extractor import PayoutExtractor
     from .ticker_resolver import TickerResolver
 
-    edgar = EdgarClient(cache_dir=cache_dir / "edgar")
+    as_of = as_of or date.today()
+    use_machine_wide_limit()
+    edgar = EdgarClient(cache_dir=cache_dir / "edgar", today=as_of)
     resolver = TickerResolver(edgar, rename_map=rename_map,
                               manual_overrides={k: v for k, v in (manual_overrides or {}).items() if v > 0},
                               cache_path=cache_dir / "ticker_resolution.json",
-                              member_names=index.name_on, cik_map=index.cik_pin_on)
+                              member_names=index.name_on, cik_map=index.cik_pin_on, today=as_of,
+                              batch_writes=True)
     llm = None
     if extract_llm:
         from .llm_client import default_llm_client
         from .llm_merger_extractor import LLMMergerTermsExtractor
         llm = LLMMergerTermsExtractor(edgar, default_llm_client(llm_model), cache_dir=cache_dir / "llm")
     return Clients(
-        edgar=edgar, resolver=resolver, classifier=DelistClassifier(edgar, resolver),
+        edgar=edgar, resolver=resolver, classifier=DelistClassifier(edgar, resolver, today=as_of),
         figi=OpenFigiClient(cache_dir / "openfigi", resolve_api_key()),
         ftd_client=FtdClient(cache_dir / "sec_data" / "ftd"),
         midas=MidasClient(cache_dir / "sec_data" / "midas") if use_midas else None,
-        halts=NasdaqHaltClient(cache_dir / "nasdaq_halts") if use_halts else None,
+        halts=NasdaqHaltClient(cache_dir / "nasdaq_halts", today=as_of) if use_halts else None,
         payout_extractor=PayoutExtractor(edgar) if extract_payouts else None,
-        llm_extractor=llm,
+        llm_extractor=llm, as_of=as_of,
     )
