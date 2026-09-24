@@ -295,6 +295,31 @@ def _cusip_sightings(sec: Security, ftd: FtdIndex, cusips: list[str]) -> list[tu
     return sorted(set(out))
 
 
+SUCCESSOR_BEFORE_DAYS, SUCCESSOR_AFTER_DAYS = 5, 15    # a successor's first sighting around the last trade
+
+
+def _successor_in_run(e: DelistingEvent, starts: dict[str, tuple[str, int | None, set[str]]]
+                      ) -> tuple[str, str] | None:
+    """The one security of the run (observed or added; `starts`: sec_id ->
+    (first sighting, issuer CIK, tickers)) whose first sighting falls within
+    [last trade - SUCCESSOR_BEFORE_DAYS, last trade + SUCCESSOR_AFTER_DAYS] and
+    that shares the delisted security's issuer CIK or its ticker: the new line
+    of a holding-company reorganization or a rename. Returns (sec_id,
+    "same_issuer" | "same_ticker"); None for zero or several candidates."""
+    day = e.last_trade.day or _d(e.delist_date)
+    lo = (day - timedelta(days=SUCCESSOR_BEFORE_DAYS)).isoformat()
+    hi = (day + timedelta(days=SUCCESSOR_AFTER_DAYS)).isoformat()
+    found: dict[str, str] = {}
+    for sid, (first, cik, tickers) in starts.items():
+        if sid == e.sec_id or not lo <= first <= hi:
+            continue
+        if cik is not None and cik == e.cik:
+            found[sid] = "same_issuer"
+        elif e.ticker in tickers:
+            found[sid] = "same_ticker"
+    return next(iter(found.items())) if len(found) == 1 else None
+
+
 def _cusip_on(cusip_ranges: list[Range], day: date) -> str | None:
     """The CUSIP whose range holds `day`, if any."""
     d = day.isoformat()
@@ -612,11 +637,33 @@ def run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_
             # all of them, not just the first one processed.
             added_meta[cand.composite]["rows"] = added_meta[cand.composite]["rows"] + list(rows)
 
-    # 9. successors after a FIGI change
-    # (search: EDGAR full-text search; wire the real one in default_clients via clients.edgar)
+    # 9. successors after a FIGI change: first a security of this run that starts
+    # right after the last trade under the same issuer or ticker (a holdco
+    # reorganization's new line, a rename's new FIGI), then the successor
+    # issuer's 8-K12B (search: EDGAR full-text search, wired in default_clients).
     successor_search = getattr(clients.edgar, "full_text_search", None)
+    starts: dict[str, tuple[str, int | None, set[str]]] = {
+        sid: (sig[0][0], securities[sid].issuer_cik, {t for _, t, _ in sig})
+        for sid, sig in sightings.items() if sig}
+    for sid, s in added.items():
+        meta = added_meta[sid]
+        if meta["kind"] == "acquirer":
+            first = min((r.date for r in meta["rows"]), default=meta["fallback_day"].isoformat())
+        else:
+            first = meta["filing_date"]
+        starts[sid] = (first, s.issuer_cik, {meta["ticker"]})
     for e in events:
-        if "successor_unknown" not in e.flags or successor_search is None:
+        if "successor_unknown" not in e.flags:
+            continue
+        in_run = _successor_in_run(e, starts)
+        if in_run is not None:
+            sid, how = in_run
+            e.record.successor_sec_id = sid
+            e.record.evidence["flags"] = [f for f in e.record.evidence["flags"] if f != "successor_unknown"]
+            e.record.evidence["successor_by"] = how
+            e.record.reason = f"{e.record.reason}; successor by {how.replace('_', ' ')}"
+            continue
+        if successor_search is None:
             continue
         predecessor = securities[e.sec_id]
         day = e.last_trade.day or _d(e.delist_date)

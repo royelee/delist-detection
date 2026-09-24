@@ -533,6 +533,13 @@ line changes observable output.
   `observed_after_delisting`. The close for a last trade before the
   fails-to-deliver window loaded for the eras is read from rows fetched
   for that day.
+- **A successor already in the run (§8.9).** For an `exchange_transfer`
+  delisting whose successor is unknown, the one security of the run
+  (observed or added) whose first sighting falls within [last trade − 5 d,
+  last trade + 15 d] and that shares the issuer CIK or the ticker becomes
+  `successor_sec_id` before the 8-K12B search runs (the reason says "successor
+  by same issuer" / "by same ticker"); zero or several candidates leave it to
+  the 8-K12B search.
 - **Only a transfer continues a listing (§8.6, §8.10).** A Form 25 group is
   "continued" when the security is listed today or sighted after its
   effective date, but a sighting after it can be OTC trading (a bankrupt

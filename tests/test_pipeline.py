@@ -1443,3 +1443,63 @@ def test_listed_today_is_asked_with_each_securitys_own_tickers(fake_edgar, tmp_p
     index, clients = _clients(fake_edgar)
     run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
     assert seen == {"BBG000FJLFX8": ["AET"], "BBG000LIVE01": ["LIVE"]}
+
+
+def _reorg_run(fake_edgar, tmp_path, monkeypatch, new_dates=("2024-10-02", "2024-12-02", "2024-12-31", "2025-06-30"),
+               extra_obs=(), extra_rows=(), extra_figi=None):
+    """BlackRock's 2024 holdco reorganization as the finder's fallback reports it:
+    the old line (pinned to the old issuer) ends 2024-10-01 with an
+    exchange_transfer flagged successor_unknown; the new line (the new holdco,
+    same ticker) is first seen in the fails rows on `new_dates[0]`."""
+    fake_edgar.submissions_by_cik[1364742] = []
+    fake_edgar.submissions_by_cik[2012383] = []
+    obs = ([Observation("BLK", d, "BLACKROCK INC", cik=1364742) for d in ("2024-01-02", "2024-06-28")]
+           + [Observation("BLK", d, "BLACKROCK INC", cik=2012383) for d in ("2024-12-31", "2025-06-30")]
+           + list(extra_obs))
+    rows = (_ftd("BLK", "09247X101", "BLACKROCK INC", ["2024-01-02", "2024-04-01", "2024-06-28", "2024-08-01",
+                                                      "2024-10-01"])
+            + _ftd("BLK", "09290D101", "BLACKROCK INC", list(new_dates)) + list(extra_rows))
+    answers = {("ID_CUSIP", "09247X101"): _figi_answer("BBGBLKOLD01", "BLK", "BLACKROCK INC"),
+               ("ID_CUSIP", "09290D101"): _figi_answer("BBGBLKNEW01", "BLK", "BLACKROCK INC")}
+    answers.update(extra_figi or {})
+    index, clients = _index_clients(fake_edgar, obs, rows, answers)
+    record = DelistRecord(ticker="BLK", cik=1364742, observed_delist_date="2024-10-01", crsp_code=304,
+                          bucket=CrspBucket.EXCHANGE_TRANSFER, confidence="medium", reason="Continued filings",
+                          evidence={"flags": ["no_form25", "successor_unknown"]}, sec_id="BBGBLKOLD01",
+                          delist_date="2024-10-01")
+    ev = DelistingEvent(sec_id="BBGBLKOLD01", cik=1364742, ticker="BLK", delist_date="2024-10-01", record=record,
+                        last_trade=LastTrade(date(2024, 10, 1), "", ()), form25=None, form25_sub=None,
+                        exchange="NYSE", flags=["no_form25", "successor_unknown"])
+
+    class _CannedFinder:
+        def __init__(self, edgar, classifier, *, midas=None, halts=None):
+            pass
+
+        def find(self, ctx):
+            return ([ev], []) if ctx.security.sec_id == "BBGBLKOLD01" else ([], [])
+
+    monkeypatch.setattr(pipeline, "DelistingFinder", _CannedFinder)
+    fake_edgar.full_text_search = lambda q, forms, lo, hi: []
+    run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
+    return {r["sec_id"]: r for r in read_table("delistings", table_path(tmp_path, "delistings"))}
+
+
+def test_a_transfer_successor_is_the_runs_new_line_under_the_same_ticker(fake_edgar, tmp_path, monkeypatch):
+    d = _reorg_run(fake_edgar, tmp_path, monkeypatch)["BBGBLKOLD01"]
+    assert d["successor_sec_id"] == "BBGBLKNEW01"
+    assert "successor_unknown" not in d["review_flags"] and d["reason"].endswith("; successor by same ticker")
+
+
+def test_no_successor_is_linked_when_nothing_starts_near_the_last_trade(fake_edgar, tmp_path, monkeypatch):
+    # the new line's fails rows start only on 2024-12-02: nothing starts within 15 days
+    d = _reorg_run(fake_edgar, tmp_path, monkeypatch, new_dates=("2024-12-02", "2024-12-31", "2025-06-30"))
+    assert d["BBGBLKOLD01"]["successor_sec_id"] == "" and "successor_unknown" in d["BBGBLKOLD01"]["review_flags"]
+
+
+def test_two_candidates_leave_the_successor_unknown(fake_edgar, tmp_path, monkeypatch):
+    # a second security of the old issuer also starts on 2024-10-03: ambiguous
+    extra_obs = [Observation("BLKX", "2024-12-31", "BLACKROCK INC SERIES X", cik=1364742)]
+    extra_rows = _ftd("BLKX", "09247X999", "BLACKROCK INC SERIES X", ["2024-10-03", "2024-11-01", "2024-12-31"])
+    extra = {("ID_CUSIP", "09247X999"): _figi_answer("BBGBLKX0001", "BLKX", "BLACKROCK INC SERIES X")}
+    d = _reorg_run(fake_edgar, tmp_path, monkeypatch, extra_obs=extra_obs, extra_rows=extra_rows, extra_figi=extra)
+    assert d["BBGBLKOLD01"]["successor_sec_id"] == "" and "successor_unknown" in d["BBGBLKOLD01"]["review_flags"]
