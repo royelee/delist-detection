@@ -182,3 +182,24 @@ def test_class_kind_rights_plans_are_rights_not_preferred():
     assert class_kind("Common Stock, par value $0.10 per share; Stock Purchase Rights") == "common"
     assert class_kind("Common Stock, $0.01 par value, and associated Preferred Stock Purchase "
                       "Rights") == "common"
+
+
+def test_notice_wordings_before_market_open_and_suspended_by_the_exchange():
+    """Real NYSE-family wordings the notice reader missed: "suspended from
+    trading before market open on August 27, 2026" (Leggett & Platt; 43 cached
+    notices say it this way) and "The security was suspended by the Exchange on
+    June 27, 2011" (Wesco, NYSE Amex; 97 cached notices)."""
+    leg = _load("leg_25nse_before_market_open.txt", "0000876661-26-000712", "2026-08-27")
+    assert notice_last_trade(leg) == (date(2026, 8, 26), "notice_open")
+    wsc = _load("wsc_25nse_suspended_by_exchange.txt", "0001143313-11-000058", "2011-06-27")
+    assert notice_last_trade(wsc) == (date(2011, 6, 24), "notice_a")
+
+
+def test_notice_market_open_and_close_variants_synthetic():
+    mk = lambda text: Form25("a", "25-NSE", "2016-05-20", "NYSE", "Common Stock", "17 CFR 240.12d2-2(a)(3)", text)
+    assert notice_last_trade(mk("this security was suspended from trading prior to market open on May 19, 2016")) \
+        == (date(2016, 5, 18), "notice_open")
+    assert notice_last_trade(mk("this security was suspended from trading after market close on May 19, 2016")) \
+        == (date(2016, 5, 19), "notice_close")
+    assert notice_last_trade(mk("suspended from trading before the opening on May 19, 2016")) \
+        == (date(2016, 5, 18), "notice_open")

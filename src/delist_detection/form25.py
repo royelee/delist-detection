@@ -243,12 +243,20 @@ def notice_last_trade(f25: Form25) -> tuple[date | None, str]:
     m = re.search(rf"suspended from trading on {_DATE}", t, re.I)
     if m and not involuntary:
         return previous_trading_day(_day(m.group(1))), "notice_a"
-    m = re.search(rf"(?:at|after) the close(?: of (?:the )?(?:trading|market)(?: session)?)? on {_DATE}", t, re.I)
+    # "at the close of the trading session on D", "after market close on D"
+    m = re.search(rf"(?:at|after) (?:the )?(?:market )?close(?: of (?:the )?(?:trading|market)(?: session)?)? on {_DATE}",
+                  t, re.I)
     if m:
         return _day(m.group(1)), "notice_close"
-    m = re.search(rf"(?:prior to|before) the (?:open|opening)(?: of (?:the )?trading)? on {_DATE}", t, re.I)
+    # "before the opening of trading on D", "before market open on D", "prior to market open on D"
+    m = re.search(rf"(?:prior to|before) (?:the )?(?:market )?(?:open|opening)(?: of (?:the )?(?:trading|market))? "
+                  rf"on {_DATE}", t, re.I)
     if m:
         return previous_trading_day(_day(m.group(1))), "notice_open"
+    # NYSE Amex: "The security was suspended by the Exchange on D" (no trading on D)
+    m = re.search(rf"suspended by the Exchange on {_DATE}", t, re.I)
+    if m and not involuntary:
+        return previous_trading_day(_day(m.group(1))), "notice_a"
     m = re.search(rf"would be suspended on {_DATE}", t, re.I)
     if m:
         return previous_trading_day(_day(m.group(1))), "notice_nasdaq"

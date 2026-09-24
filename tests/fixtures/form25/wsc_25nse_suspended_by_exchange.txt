@@ -1,0 +1,153 @@
+<SEC-DOCUMENT>0001143313-11-000058.txt : 20110627
+<SEC-HEADER>0001143313-11-000058.hdr.sgml : 20110627
+<ACCEPTANCE-DATETIME>20110627151929
+ACCESSION NUMBER:		0001143313-11-000058
+CONFORMED SUBMISSION TYPE:	25-NSE
+PUBLIC DOCUMENT COUNT:		2
+FILED AS OF DATE:		20110627
+DATE AS OF CHANGE:		20110627
+EFFECTIVENESS DATE:		20110627
+
+SUBJECT COMPANY:	
+
+	COMPANY DATA:	
+		COMPANY CONFORMED NAME:			WESCO FINANCIAL CORP
+		CENTRAL INDEX KEY:			0000105729
+		STANDARD INDUSTRIAL CLASSIFICATION:	SERVICES-EQUIPMENT RENTAL & LEASING, NEC [7359]
+		IRS NUMBER:				952109453
+		STATE OF INCORPORATION:			CA
+		FISCAL YEAR END:			1231
+
+	FILING VALUES:
+		FORM TYPE:		25-NSE
+		SEC ACT:		1934 Act
+		SEC FILE NUMBER:	001-04720
+		FILM NUMBER:		11932984
+
+	BUSINESS ADDRESS:	
+		STREET 1:		301 EAST COLORADO BLVD
+		STREET 2:		SUITE 300
+		CITY:			PASADENA
+		STATE:			CA
+		ZIP:			91101
+		BUSINESS PHONE:		626-585-6700
+
+	MAIL ADDRESS:	
+		STREET 1:		301 EAST COLORADO BLVD
+		STREET 2:		SUITE 300
+		CITY:			PASADENA
+		STATE:			CA
+		ZIP:			91101-1954
+
+FILED BY:		
+
+	COMPANY DATA:	
+		COMPANY CONFORMED NAME:			NYSE Amex
+		CENTRAL INDEX KEY:			0001143313
+		IRS NUMBER:				522127241
+
+	FILING VALUES:
+		FORM TYPE:		25-NSE
+
+	BUSINESS ADDRESS:	
+		STREET 1:		20 BROAD STREET, 17TH FLOOR
+		CITY:			NEW YORK
+		STATE:			NY
+		ZIP:			10005
+		BUSINESS PHONE:		212-656-5024
+
+	MAIL ADDRESS:	
+		STREET 1:		20 BROAD STREET, 17TH FLOOR
+		CITY:			NEW YORK
+		STATE:			NY
+		ZIP:			10005
+
+	FORMER COMPANY:	
+		FORMER CONFORMED NAME:	NYSE Alternext US LLC
+		DATE OF NAME CHANGE:	20081009
+
+	FORMER COMPANY:	
+		FORMER CONFORMED NAME:	AMERICAN STOCK EXCHANGE LLC
+		DATE OF NAME CHANGE:	20010620
+</SEC-HEADER>
+<DOCUMENT>
+<TYPE>25-NSE
+<SEQUENCE>1
+<FILENAME>primary_doc.xml
+<TEXT>
+<XML>
+<?xml version="1.0"?>
+<notificationOfRemoval>
+
+    <schemaVersion>X0203</schemaVersion>
+
+    <exchange>
+        <cik>0001143313</cik>
+        <entityName>NYSE Amex</entityName>
+    </exchange>
+
+    <issuer>
+        <cik>0000105729</cik>
+        <entityName>WESCO FINANCIAL CORP</entityName>
+        <fileNumber>001-04720</fileNumber>
+        <address>
+            <street1>301 EAST COLORADO BLVD</street1>
+            <street2>SUITE 300</street2>
+            <city>PASADENA</city>
+            <stateOrCountryCode>CA</stateOrCountryCode>
+            <stateOrCountry>CALIFORNIA</stateOrCountry>
+            <zipCode>91101</zipCode>
+        </address>
+        <telephoneNumber>626-585-6700</telephoneNumber>
+    </issuer>
+
+    <descriptionClassSecurity>Common Stock</descriptionClassSecurity>
+
+    <ruleProvision>17 CFR 240.12d2-2(a)(3)</ruleProvision>
+
+    <signatureData>
+        <signatureName>Silvio Conte</signatureName>
+        <signatureTitle>Director</signatureTitle>
+        <signatureDate>2011-06-27</signatureDate>
+    </signatureData>
+</notificationOfRemoval>
+</XML>
+</TEXT>
+</DOCUMENT>
+<DOCUMENT>
+<TYPE>EX-99.25
+<SEQUENCE>2
+<FILENAME>wsc.txt
+<TEXT>
+NOTIFICATION OF THE REMOVAL FROM LISTING AND
+REGISTRATION OF THE STATED SECURITIES
+
+NYSE Amex hereby notifies
+the SEC of its intention to remove
+the entire class of the stated securities
+from listing and registration on the
+Exchange at the opening of business on
+July 8, 2011, pursuant to the provisions
+of Rule 12d2-2 (a) 17CFR240.12d2-2(a)(3)
+
+The removal of Wesco Financial Corp,
+Common Stock is being effected
+because the Exchange knows or is
+reliably informed that on
+June 24, 2011 the instruments
+representing the securities comprising
+the entire class of this security came
+to evidence, by operation of law or
+otherwise, other securities in
+substitution therefore and
+represent no other right except,
+if such be the fact, the right
+to receive an immediate cash payment.
+
+
+The security was suspended by the
+Exchange on June 27, 2011.
+
+</TEXT>
+</DOCUMENT>
+</SEC-DOCUMENT>
