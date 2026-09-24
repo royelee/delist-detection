@@ -3,8 +3,8 @@
 Spec: `docs/superpowers/feature-spec.md` §13. Run on 2026-09-24 against live SEC
 EDGAR, SEC fails-to-deliver (FTD), SEC MIDAS, the Nasdaq halt feed, OpenFIGI and
 OpenAI (`--extract-merger-terms-llm`, model from `CHAT_MODEL`). This note describes
-the run after review fix round 2, on the SEC speed-up (merged at 7779196) plus the
-round-2 fixes listed below.
+the run after review fix round 3, on the SEC speed-up (merged at 7779196) plus the
+round-2 and round-3 fixes listed below.
 
 ```bash
 DELIST_DETECTION_SEC_RATE_LOCK=/tmp/claude/delist_detection/sec_rate.lock \
@@ -21,11 +21,14 @@ Final run: exit 0, no `error` and no `resolution_degraded` rows (the CLI exits 3
 when either appears, and still writes its outputs). Log: `output/run.log`.
 Provenance: `output/run_manifest.json`, written next to the tables. It records the
 run date, the code version, the worker count, SEC request counts by endpoint,
-latency, and degraded-answer counts. It differs between runs by design. Its code
-version reads `0620016-dirty` because the previous run's tables were uncommitted
-in the tree when the run started.
+latency, the degraded-answer counts (`resolution_degraded`, and `warm_degraded` for
+the warm threads' own reads), and `warm_failed`: the warm-pass stages that failed
+and were left to the sequential pass (manifest only; empty in this run). It differs
+between runs by design. Its code version reads `e5d340a-dirty` because the previous
+run's tables were uncommitted in the tree when the run started.
 
-**Speed.** This round made four full runs, all with 4 SEC workers:
+**Speed.** Fix round 2 made four full runs and fix round 3 one, all with 4 SEC
+workers:
 
 - **First run** (code `da61707`, about 28 minutes). The caches had been written by
   the pre-speed-up code, which never cached empty company searches and wrote EFTS
@@ -35,19 +38,15 @@ in the tree when the run started.
   p95 27.5 s, max 30 s; SEC's company search slows under sustained traffic. One
   warm-thread read failed (`warm_degraded: failed_request 1`, manifest only); no
   row rests on a degraded answer (`resolution_degraded` 0).
-- **Three reruns** after the last three fixes (8b0e96e, 8ec70ca, 0620016). Each sent
-  0 SEC requests and took about 5 minutes.
-- **Before the speed-up**, a warm rerun took 30 to 60 minutes.
+- **Three round-2 reruns** after the last three round-2 fixes (8b0e96e, 8ec70ca,
+  0620016). Each sent 0 SEC requests and took about 5 minutes.
+- **The round-3 run** (code `e5d340a`, about 5 minutes) sent 11 SEC requests: 10
+  full-text searches for the successors of the new transfer rows, and 1 filing
+  archive. One warm-thread read failed (`warm_degraded`, manifest only); no row
+  rests on a degraded answer.
+- **Before the speed-up**, a warm rerun took 40 to 70 minutes.
 
-The tables below are from the last rerun. The verifier ran once, on the first
-run's tables. The three reruns changed only these, none of which the verifier
-reads:
-
-- `acquirer_sec_id` on 5 merger rows;
-- the start of 2 acquirer ticker ranges;
-- review rows.
-
-The delisting rows' identity and classification columns are the same.
+The tables below and `output/web_verification.csv` are from the round-3 run.
 
 ## Input
 
@@ -60,7 +59,7 @@ Wikipedia snapshot CSVs (equities only).
 | Tickers | 2,219 |
 | Snapshot dates | 36 (2008-01-16 .. 2026-06-30) |
 | Rows with a `name` / `cusip` | 35,955 / 0 |
-| Rows with a `cik` pin | 1,654 (162 pin groups, table below) |
+| Rows with a `cik` pin | 1,665 (163 pin groups, table below) |
 | Rows with a `sec_id` pin | 0 |
 | Ticker eras (stage 1 / after the FTD split) | 2,469 / 2,660 |
 
@@ -97,58 +96,58 @@ Wikipedia snapshot CSVs (equities only).
 
 | Table | Rows |
 |---|---|
-| `securities.csv` | 2,287 (2,271 observed, 16 added acquirers) |
-| `ticker_history.csv` | 3,013 |
-| `cusip_history.csv` | 2,616 |
-| `delistings.csv` | 992 |
-| `payouts.csv` | 623 |
-| `review.csv` | 1,213 |
+| `securities.csv` | 2,288 (2,272 observed, 16 added acquirers) |
+| `ticker_history.csv` | 2,962 |
+| `cusip_history.csv` | 2,603 |
+| `delistings.csv` | 1,004 |
+| `payouts.csv` | 624 |
+| `review.csv` | 1,220 |
 
 The old `output/dlret.csv` and `output/delist_classifications.csv` are removed.
 
-**Delistings by bucket:** merger 623, exchange_transfer 302, liquidation 48,
+**Delistings by bucket:** merger 624, exchange_transfer 313, liquidation 48,
 unknown 12, compliance_failure 6, expiration 1.
 
-**Delistings by year:** 2006 1, 2007 24, 2008 38, 2009 39, 2010 32, 2011 41,
-2012 36, 2013 39, 2014 37, 2015 67, 2016 86, 2017 63, 2018 70, 2019 53, 2020 61,
+**Delistings by year:** 2006 1, 2007 24, 2008 40, 2009 39, 2010 34, 2011 41,
+2012 36, 2013 39, 2014 37, 2015 69, 2016 88, 2017 65, 2018 70, 2019 55, 2020 61,
 2021 62, 2022 61, 2023 46, 2024 40, 2025 54, 2026 42.
 
-**Last trade date source:** MIDAS 523, EX-99.25 notice 193, 8-K item 3.01 31,
-Nasdaq halt 27, none 218.
+**Last trade date source:** MIDAS 531, EX-99.25 notice 187, 8-K item 3.01 30,
+Nasdaq halt 27, none 229.
 
-**DLRET method:** cash_only 311, exchange_transfer_zero 302, stock_only 123,
-cash_plus_stock 82, assumed_par 58, needs_last_trade 34, shumway_nyse_amex 30,
-abstain_no_consideration 23, shumway_nasdaq 17, unknown 12.
+**DLRET method:** exchange_transfer_zero 313, cash_only 311, stock_only 123,
+cash_plus_stock 83, assumed_par 59, shumway_nyse_amex 36, needs_last_trade 34,
+abstain_no_consideration 22, shumway_nasdaq 17, unknown 6.
 
-**FIGI source (securities):** cusip 1,992, ticker 136, placeholder 159.
+**FIGI source (securities):** cusip 1,992, ticker 136, placeholder 160.
 
-**Resolution source (delistings):** name_search 540, efts 170, company_tickers 126,
-cik_map (pins) 104, manual 37, efts_frequency 12, efts_name_mismatch 1, rename 1,
+**Resolution source (delistings):** name_search 539, efts 170, company_tickers 136,
+cik_map (pins) 107, manual 37, efts_frequency 12, efts_name_mismatch 1, rename 1,
 none 1.
 
 **Review flags** (rows carrying each):
-- no_last_close 170, no_figi 169, ftd_close_lagged 131, no_last_trade_date 131,
-  no_form25 128
-- resolved_by_current_ticker_map 126, successor_unknown 123, ftd_close_prior 119,
-  form25_unclassified 118, delist_date_approx 113
-- last_trade_date_unconfirmed 92, form25_unmatched 78, ticker_unconfirmed 63,
-  ended_without_delisting 59, merger_at_par 50
-- terms_gate_failed 49, ticker_shared 43, last_trade_date_conflict 41,
-  observation_unresolved 32, member_name_mismatch 31
-- acquirer_close_lagged 29, observed_after_delisting 24, llm_gate_failed 15,
+- no_figi 170, no_last_close 163, no_form25 139, resolved_by_current_ticker_map 136,
+  ftd_close_lagged 133
+- no_last_trade_date 131, successor_unknown 129, delist_date_approx 123,
+  ftd_close_prior 120, form25_unclassified 118
+- last_trade_date_unconfirmed 99, form25_unmatched 78, ticker_unconfirmed 63,
+  ended_without_delisting 58, merger_at_par 51
+- terms_gate_failed 49, last_trade_date_conflict 45, ticker_shared 42,
+  observation_unresolved 31, member_name_mismatch 31
+- acquirer_close_lagged 29, observed_after_delisting 24, llm_gate_failed 16,
   payout_gate_failed 12, no_evidence_default 12, resolved_by_cik_map 12
-- observation_conflict 6, distress_at_normal_price 3, bankruptcy_before_merger 1,
+- observation_conflict 6, distress_at_normal_price 4, bankruptcy_before_merger 1,
   bankruptcy_tag_unconfirmed 1, resolved_by_manual_override 1
 - resolution_degraded 0, error 0
 
-`resolved_by_current_ticker_map` (126) is the restored pre-refactor flag on every
+`resolved_by_current_ticker_map` (136) is the restored pre-refactor flag on every
 delisting whose CIK came from `company_tickers.json`. It is noise by design here.
 
 ## Acceptance checks (spec §13)
 
 | # | Check | Result |
 |---|---|---|
-| 1 | `pytest` offline, golden set green | PASS: 988 passed |
+| 1 | `pytest` offline, golden set green | PASS: 995 passed |
 | 2 | Full run writes all six files, no crash, prints coverage | PASS: exit 0, no `error` or `resolution_degraded` rows |
 | 3a | AET: `sec_id` BBG000FJLFX8, one merger, last trade 2018-11-28, close 212.70 | PASS: MIDAS 2018-11-28, close 212.70 |
 | 3b | ALTR (Altair): last trade 2025-03-25 | NOT IN INPUT (see below); PASS on a supplementary run |
@@ -157,9 +156,9 @@ delisting whose CIK came from `company_tickers.json`. It is noise by design here
 | 3e | HOT, PE, TSS merger, not expiration | PASS: all three code 231 |
 | 3f | Apache: no delisting from the 2020 Chicago withdrawal | PASS: only the 2021-03 APA holdco transfer, linked to APA Corp's line |
 | 3g | GOOG / GOOGL two securities | PASS: BBG009S3NB30 / BBG009S39JX6 |
-| 4 | Every observed security listed today, delisted, or in review | PASS: 2,271 = 1,312 listed + 867 delisted + 92 review, 0 missing (see below) |
-| 5 | `verify_against_web.py` agreement ≥ 98.9% | PASS: 1 of 896 verifiable rows disagrees (99.9%). 96 rows cannot be checked (no Form 25/15 in the window). OK only: 892 / 992 = 89.9% |
-| 6 | `last_trade_close` on ≥ 90% of 2004+ merger delistings | PASS: 566 / 623 = 90.9% with look-back closes; 485 / 623 = 77.8% without them |
+| 4 | Every observed security listed today, delisted, or in review | PASS: 2,272 = 1,301 listed + 879 delisted + 92 review, 0 missing (see below) |
+| 5 | `verify_against_web.py` agreement ≥ 98.9% | PASS: 1 of 899 verifiable rows disagrees (99.9%). 105 rows cannot be checked (no Form 25/15 in the window). OK only: 895 / 1,004 = 89.1% |
+| 6 | `last_trade_close` on ≥ 90% of 2004+ merger delistings | PASS: 568 / 624 = 91.0% with look-back closes; 487 / 624 = 78.0% without them |
 
 **Check 4.** "Listed today" means an open `ticker_history` row, i.e. `listed_today`
 is true. It has three branches:
@@ -171,7 +170,10 @@ is true. It has three branches:
 - **A FIGI security with no CIK:** OpenFIGI alone decides.
 - **A placeholder** (`CIK<cik>-<CLASS>`, no FIGI, so no venue to ask): it is listed
   only when its issuer's EDGAR submissions list one of the placeholder's own
-  tickers on a major exchange.
+  tickers on a major exchange, and (since round 3) its own CUSIP did not last fail
+  only under a deleted symbol. SEC's fails files keep reporting a delisted
+  security under its old symbol with `XXXX` appended (`HPQXXXX`); such a
+  placeholder is an old line whose ticker a newer line of the issuer holds today.
 
 Before fd0b8be, both of these counted as listed:
 
@@ -189,7 +191,11 @@ The placeholder branch is where the increase in no-Form-25 `exchange_transfer`
   longer listed and have no Form 25, so the fallback classifier's continued-filings
   rule reads each of them as 304.
 - The 44th is WLL 2017.
-- This round leaves the 114 rows unchanged.
+- Round 2 left the 114 rows unchanged. Round 3 makes them 125: the deleted-symbol
+  rule closed 12 more placeholders (the old lines of NTAP 2008, ACAS 2008, CNO
+  2010, SM 2010, WEC 2015, HPQ 2015, AGNC 2016, CXW 2016, CLF 2017, CNX 2017, AIV
+  2019 and WW 2019), none with a Form 25. ACAS 2017 left the set: it is now a
+  merger (see the pins).
 
 Three securities still have both a definitive delisting and an open range:
 
@@ -200,9 +206,9 @@ Three securities still have both a definitive delisting and an open range:
 Each went bankrupt, and its eras before and after resolved to one FIGI, which is
 listed today. The delisting belongs to the pre-bankruptcy line.
 
-**Check 6.** 81 of the 566 merger closes are look-back closes
+**Check 6.** 81 of the 568 merger closes are look-back closes
 (`ftd_close_prior:<n>`, no fails row after the last trade); 43 of them are older than
-one trading day (up to 10). Across all delistings the ages are: 1 day 69, 2 days 9,
+one trading day (up to 10). Across all delistings the ages are: 1 day 70, 2 days 9,
 3 days 14, 4 days 6, 5 days 9, 6 days 1, 7 days 5, 8 days 4, 9 days 1, 10 days 1. DLRET
 uses the look-back close as the last close.
 
@@ -222,7 +228,7 @@ A supplementary run on four Altair observations (`ALTAIR ENGINEERING INC CLASS A
 **Agreement definition.** Disagreements are `MISMATCH_*`, `WEAK_no_ma_items`,
 `WEAK_no_3_01` and `WEAK_no_form15`; `WEAK_no_delist_form` and `no_*` are no evidence
 either way. This reproduces the 98.9% baseline exactly (456 / 461 on the pre-refactor
-file). Final verdicts: OK 892, OK_recycled_ticker 3, WEAK_no_delist_form 96,
+file). Final verdicts: OK 895, OK_recycled_ticker 3, WEAK_no_delist_form 105,
 MISMATCH_name 1.
 
 ## Independent verification: every mismatch and weak row
@@ -238,10 +244,11 @@ MISMATCH_name 1.
     splits at the apostrophe.
   - Dun & Bradstreet 2025: the snapshot's abbreviated "DUN BRADST HLDG INC".
   - Wendy's 2012: the snapshot's bare "WENDYS".
-- **96 WEAK_no_delist_form.** No evidence either way. They are `exchange_transfer`
+- **105 WEAK_no_delist_form.** No evidence either way. They are `exchange_transfer`
   rows from the no-Form-25 fallback whose issuer filed no Form 25/15 in the window
   (renames, reverse splits, holdco reorganizations; see the 304 residual below),
-  plus Tidewater's 2017 bankruptcy.
+  plus Tidewater's 2017 bankruptcy. Round 3 added 10 (the placeholders the
+  deleted-symbol rule closed) and removed ACAS 2017, now a verified merger.
 - **Earlier passes**, all explained and fixed:
   - 27 WEAK_no_ma_items: real mergers whose SC 14D9 / DEFM14A / 425 filings sat in
     older submissions files (d6021c6).
@@ -252,15 +259,15 @@ MISMATCH_name 1.
 
 ## Successor links
 
-`successor_sec_id` is filled on 179 of the 302 `exchange_transfer` rows:
+`successor_sec_id` is filled on 184 of the 313 `exchange_transfer` rows:
 
-- 126 point to the security itself (it kept trading after an exchange move).
-- 53 point to another security of the run, all found by the same-issuer /
+- 125 point to the security itself (it kept trading after an exchange move).
+- 59 point to another security of the run, all found by the same-issuer /
   same-ticker rule (024fddc, 700e6d5, 746f2ac). Examples: APA 2021 → APA Corp's
   line, Charter 2016, Apollo 2022, Dell's DVMT tracking stock, Discovery K,
-  Brookfield Renewable 2025, and Liberty Live's Series A 2025 → Liberty Live
-  Holdings' LLYVA.
-- 123 transfers keep `successor_unknown`.
+  Brookfield Renewable 2025, Liberty Live's Series A and C 2025 → Liberty Live
+  Holdings' LLYVA and LLYVK, and HP's pre-2015 line → HP Inc (BBG000KHWT55).
+- 129 transfers keep `successor_unknown`.
 
 No link comes from the 8-K12B search. The previous run's only one, Clear Channel
 Outdoor 2019 → iHeartMedia's IHRT, was wrong, and da61707 removed it:
@@ -317,10 +324,15 @@ An earlier note claimed the 8-K12B search linked Alphabet and APA; that was wron
 | da61707 | Another company's own, still-listed stock is not an 8-K12B successor (CCO 2019) |
 | 8b0e96e | An acquirer on the target's ticker is never the target itself |
 | 8ec70ca, 0620016 | A class a Form 25 leaves unresolved still goes to review (`form25_unmatched`) when another class matched |
+| **Fix round 3** | |
+| eb3b351 | A fails row under a deleted symbol (`…XXXX`) is not trading: it opens and extends no ticker or CUSIP range and counts in no `seen_after`, `last_seen` or sibling span (closes still read it by CUSIP); a placeholder whose own CUSIP last failed only under a deleted symbol is not listed today |
+| 32e92e0 | Pin: ACAS to American Capital, Ltd (817473), not AGNC (1423689) |
+| f4869b4 | A possessive word counts once toward the words two names must share ("Wendy's Co" = WENDYS ARBYS GROUP) |
+| 8771fab | Test: an acquirer on another ticker resolved to the target's CIK (Tivity/Nutrisystem) |
 
 Progress across runs: run 1 (before these fixes) had 16 `error` rows, 794
 delistings, 75.5% merger closes and failed SAVE. This run has 0 errors, 0 degraded
-rows, 992 delistings, and passes every check the input allows.
+rows, 1,004 delistings, and passes every check the input allows.
 
 ## Identity corrections (observation `cik` pins)
 
@@ -335,13 +347,14 @@ also gave the old line the new holdco's CIK.
 issuer first filed after the security's first sighting were listed. Each correct
 CIK was verified in its EDGAR submissions JSON (name, former names, filing span).
 
-**The pins: 162 groups on 1,654 rows** (one table row each):
+**The pins: 163 groups on 1,665 rows** (one table row each):
 - 116 from the first pass, including 3 stale-snapshot eras.
 - 7 for the cases the reverted resolver rule had fixed: AMP, DDS, GE, M, ORLY, PKG,
   SIRI.
 - 33 for 15 reorganized issuers (old and new line each) and the Liberty Live
   split-off.
 - 6 in fix round 2: MSGE, STL, CLNY, VIA-B, VIAB, VIA.
+- 1 in fix round 3: ACAS (all 11 rows) to 817473.
 
 Where a ticker-level `MANUAL_OVERRIDES` entry named a later holder of a recycled
 ticker (IMCL, AH), or was simply wrong (CBH → 1018272 is Arrowhead Financial), the
@@ -525,10 +538,11 @@ The other 7 groups the audit lists are expected:
 | VIA-B | all rows | 1339947 | 813828 CBS Corp | Viacom Inc (2006-2019) class B |
 | VIAB | all rows | 1339947 | 813828 CBS Corp | Viacom Inc (2006-2019) class B |
 | VIA | all rows | 1339947 | 813828 CBS Corp | Viacom Inc (2006-2019) class A |
+| ACAS | all rows | 817473 | 1423689 AGNC Investment (formerly American Capital Agency) | American Capital Ltd (formerly American Capital Strategies; acquired by Ares Capital Jan 2017) |
 
 ## Residuals for the user
 
-Carried from the review, updated for fix round 2.
+Carried from the reviews, updated for fix round 3.
 
 - **Resolver precedence for today's ticker-map holder:** FIXED by reverting it
   (d17ddf1); the 8 cases are pins.
@@ -539,12 +553,12 @@ Carried from the review, updated for fix round 2.
 - **Dead FIGIs counted as listed today:** FIXED for 45 of 48 (fd0b8be).
   - 3 bankrupt and relisted securities (BTU, GTX, CHK) remain open, because their
     old and new lines share one FIGI.
-- **No-Form-25 `exchange_transfer` (304) rows:** STILL OPEN. The same 114 rows as in
-  round 1.
-  - Round 1's increase from 86 came from the placeholder branch of `listed_today`
-    (see check 4).
-  - 46 of the 114 have a successor in the run; 68 do not.
-  - The 68, by reading the names:
+- **No-Form-25 `exchange_transfer` (304) rows:** STILL OPEN. 125 rows (114 in
+  rounds 1 and 2).
+  - Round 1's increase from 86 came from the placeholder branch of `listed_today`,
+    round 3's from the deleted-symbol rule (see check 4).
+  - 51 of the 125 have a successor in the run; 74 do not.
+  - The 74, by reading the names:
     - about 37 renames, holdco reorganizations or spin-offs whose new line starts
       outside the window or is not in the run (ITT, Yahoo → Altaba, WellPoint →
       Anthem, News Corp 2013, Delphi → Aptiv, Northeast Utilities → Eversource,
@@ -553,9 +567,12 @@ Carried from the review, updated for fix round 2.
       Supervalu 2017, Frontier 2017, Windstream 2015, McClatchy 2016, YRC 2010, …);
     - 8 stale or backfilled snapshot eras (TXU, XM, Sovereign, PEAK/WYND/IAC 2014,
       UAC-C, SunPower 2009);
-    - 5 mergers whose target was the legal survivor or kept filing
-      (Schering-Plough → Merck, American Capital, Foundation Coal, McDermott,
-      Engility);
+    - 7 old lines that the deleted-symbol rule closed in round 3, of issuers whose
+      CUSIP changed with a rename, a reincorporation or a reverse split and whose
+      new line starts outside the window or is not in the run (CNO 2010, WEC 2015,
+      AGNC 2016, CXW 2016, CLF 2017, AIV 2019, WW 2019);
+    - 4 mergers whose target was the legal survivor or kept filing
+      (Schering-Plough → Merck, Foundation Coal, McDermott, Engility);
     - 1 bankruptcy (CBL 2020);
     - 1 when-issued line (RXO-WI).
   - The classifier's continued-filings rule, which is frozen, is what yields 304
@@ -568,12 +585,17 @@ Carried from the review, updated for fix round 2.
   - DLRET is about 0 or at par. No successor is recorded for a merger row.
   - Since 8b0e96e, the acquirer is the new line (Ashland, nCino) or none (MIC, UNIT,
     WRK), never the delisted security itself.
-- **Identity errors that a single shared name word hides:** PARTLY FIXED.
-  - The pins cover every case found (JNPR, Oasis, and in round 2 SPHR/MSGN, STL,
-    CLNY, Viacom, ASH).
+- **Identity errors that shared name words hide:** PARTLY FIXED.
+  - The pins cover every case found (JNPR, Oasis; in round 2 SPHR/MSGN, STL, CLNY,
+    Viacom, ASH; in round 3 ACAS).
   - The table-wide check lists 36 remaining low scores, all abbreviations or renames
-    with the right CIK.
-  - Not every one-word match was reviewed by hand.
+    with the right CIK. That statement covers only the low scores. A wrong CIK whose
+    EDGAR name shares enough words with the snapshot name scores high and is not
+    listed: ACAS carried AGNC's CIK, whose former name "American Capital Agency"
+    shares AMERICAN and CAPITAL with "AMERICAN CAPITAL LTD." The round-2 note
+    counted American Capital among the mergers whose target kept filing; that was
+    this wrong CIK (AGNC keeps filing), and the re-review found it.
+  - Not every high-scoring match was reviewed by hand.
 - **Possessive apostrophes:** FIXED (40d6077, then c67e68a). There are 31
   `member_name_mismatch` rows.
   - The previous note blamed FI 2021 on the snapshot's name. It came from the
@@ -581,6 +603,9 @@ Carried from the review, updated for fix round 2.
     snapshot's "FRANK S". c67e68a keeps both spellings, and FI 2021 is cleared.
   - One is new: VIACA 2019, where the snapshot writes the post-merger name
     "VIACOMCBS INC CLASS A" against the right CIK 813828.
+  - Round 3: ACAS 2017 is cleared (now on its own CIK), and WW 2019 is new: a
+    placeholder the deleted-symbol rule closed, on the right CIK 105319 (Weight
+    Watchers, renamed WW International in 2018). Still 31 rows.
 - **O'Reilly's phantom placeholder:** FIXED (c67e68a). The pre-2011 era is
   BBG000BGYWY6 again, and CIK898173-COMMON is gone.
 - **CBOE counted as unlisted:** FIXED (b3ba217). Listed today on CBOE BZX.
@@ -611,15 +636,51 @@ Carried from the review, updated for fix round 2.
     (`unknown`), Comcast's CMCSK 2015, Liberty SiriusXM's Series A 2024, Liberty
     Broadband's LBRDK 2026, and Lions Gate's class B 2025.
   - `form25_unmatched` rows: 113 → 78.
-- **LLYVK's successor is itself:** STILL OPEN (new).
-  - Fails rows under the retired CUSIP run past the delisting's 5-day continued
-    window, so the transfer reads as continued trading.
-  - The new LLYVK line (BBG01YYX1Z14) is not linked.
+- **LLYVK's successor is itself:** FIXED (eb3b351). The fails rows past the
+  delisting were under the deleted symbol LLYVKXXXX; they no longer count as
+  trading, so the transfer is not continued, and the successor is the new LLYVK
+  line (BBG01YYX1Z14).
+- **Deleted-symbol (`…XXXX`) fails rows read as trading:** FIXED (eb3b351).
+  - 37 `…XXXX` ticker ranges are gone from ticker_history (ORLY's 3-day ORLYXXXX
+    row among them; ORLY is one open range from 2007).
+  - TRI, CIM and SKLZ keep open ranges under their own tickers, not TRIXXXX,
+    CIMXXXX, SKLZXXXX.
+  - The HPQ, AGNC, CNO and CNX placeholders (and SM, NTAP, WEC, CXW, CLF, AIV, WW
+    and ACAS 2008) are no longer listed today: each is a 304 row, HPQ, CNX, SM,
+    NTAP and ACAS 2008 linked to the issuer's newer line.
+  - Bankrupt lines whose delisting ticker was the deleted symbol (BTU, CHK, WE,
+    ACI, CIE, XCO, BLUE) now carry their own ticker, so MIDAS dates their last trade
+    and the close is found: 6 liquidations gain a Shumway DLRET (-30%), BLUE 2025 a
+    close.
+  - Three `ticker_shared` rows are new (QDEL 2022, HTZ, ITT): the `…XXXX` range used
+    to cut a range that now runs to its end, into the newer line's first days. QDEL
+    has no last trade date, so its range runs to the delisting date; HTZ and ITT are
+    old and new lines merged on one FIGI (as BTU, GTX, CHK). STILL OPEN.
+- **ACAS 2017 on AGNC's CIK:** FIXED (32e92e0). Pinned to 817473 (checked live on
+  EDGAR: American Capital, Ltd, formerly American Capital Strategies; 25-NSE/A and
+  8-K items 2.01/3.01 on 2017-01-04, Form 15-12G on 2017-01-17). The delisting is
+  now a merger (231) into Ares Capital, cash plus stock, DLRET +0.4%.
+- **Possessive words counted twice:** FIXED (f4869b4). "WENDYS ARBYS GROUP INC"
+  agrees with "Wendy's Co" and "MACYS RETAIL HOLDINGS INC" with "Macy's, Inc."
+  again.
+- **CLNY/DBRG open range with no exchange:** STILL OPEN. Colony Capital's FIGI is
+  today's DigitalBridge (DBRG), but its sightings stop with the CLNY observations,
+  so its open range reads CLNY, a ticker EDGAR no longer lists, with no exchange.
+  15 open ranges have no exchange (22 in round 2, 8 of them `…XXXX` ranges now gone;
+  SKLZ's own open range has none either): CLNY, a separator spelling (BRKB), a
+  bankrupt tail (SDOCQ), and tickers EDGAR lists under another spelling or venue.
+- **5 added acquirers with no issuer CIK:** STILL OPEN, by design of ec8ed6e. Tivity,
+  Shire ADR, Encana, Alpha Natural Resources and Aaron's Holdings resolved to their
+  target's CIK, and the SEC ticker map lists no holder today, so the CIK is left
+  empty rather than copied.
+- **Same-ticker acquirer priced by symbol:** STILL OPEN. The acquirer's price is
+  looked up under its ticker, not its CUSIP, so where the target and acquirer share
+  a ticker the price can be the target's; DLRETs were unchanged by 8b0e96e.
 - **CCO 2019 → IHRT:** FIXED (da61707). `successor_unknown`.
 - **Liberty SiriusXM's letter-less Series C lines and CBS's Class B placeholder:**
   STILL OPEN, in review as `form25_unmatched` (8ec70ca, 0620016). Their FIGI name
   carries no class letter, or a FIGI line and a placeholder hold the same stock.
-- **Mergers without a close:** STILL OPEN: 57 of 623.
+- **Mergers without a close:** STILL OPEN: 56 of 624.
   - 39 have no last trade date. Mostly these are Nasdaq deals whose Form 25-NSE
     carries an empty EX-99.25 before MIDAS, or has no MIDAS row, and has no dated
     3.01 8-K.
@@ -639,7 +700,8 @@ Carried from the review, updated for fix round 2.
 - **GGP relisting** (review minor): STILL OPEN.
 - **Resolver speed:** FIXED by the SEC speed-up.
   - EFTS answers are cached with a TTL, and empty company searches for 7 days.
-  - A warm rerun here sent 0 SEC requests and took about 5 minutes.
+  - A warm rerun here sent 0 to 11 SEC requests and took about 5 minutes (40 to 70
+    minutes before).
   - Resolver misses are still never cached, by design.
 - **Stale submissions can hide a new Form 25:** STILL OPEN (known follow-up). The
   delisting finder reads submissions without a freshness bound, so a copy cached
@@ -648,5 +710,5 @@ Carried from the review, updated for fix round 2.
 - **Company search keeps only its first match:** STILL OPEN (known follow-up).
   `_parse_company_atom` returns only the first company of a multi-match answer, so
   the name-search tier can miss the right company.
-- **CLAUDE.md:** the speed-up branch updated it (cache version 3, 980 tests). The
-  suite is now 988; the controller updates CLAUDE.md.
+- **CLAUDE.md:** it says 988 tests (6f85017); the suite is now 995. Not edited
+  here.

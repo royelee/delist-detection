@@ -1,24 +1,40 @@
 {
   "as_of": "2026-09-24",
   "cache_answers": {
-    "archives": 12824,
-    "company_search": 1944,
+    "archives": 12826,
+    "company_search": 1924,
     "company_tickers": 10,
-    "full_text_search": 712,
-    "submissions": 26606,
-    "submissions_page": 9823
+    "full_text_search": 709,
+    "submissions": 26642,
+    "submissions_page": 9868
   },
-  "code_version": "0620016-dirty",
+  "code_version": "e5d340a-dirty",
   "degraded_answers": {},
-  "latency_ms": {},
+  "latency_ms": {
+    "archives": {
+      "max": 198.0,
+      "n": 1,
+      "p50": 198.0,
+      "p95": 198.0
+    },
+    "full_text_search": {
+      "max": 541.5,
+      "n": 10,
+      "p50": 340.6,
+      "p95": 541.5
+    }
+  },
   "not_covered": {},
   "rejected_queries": {},
   "resolution_degraded": 0,
-  "sec_requests": {},
+  "sec_requests": {
+    "archives": 1,
+    "full_text_search": 10
+  },
   "sec_workers": 4,
   "stages": {
     "delisting search": {
-      "edgar_requests": 0,
+      "edgar_requests": 1,
       "sec_data_downloads": 0
     },
     "issuer resolution": {
@@ -30,10 +46,12 @@
       "sec_data_downloads": 0
     },
     "successor search": {
-      "edgar_requests": 0,
+      "edgar_requests": 10,
       "sec_data_downloads": 0
     }
   },
-  "warm_degraded": {},
+  "warm_degraded": {
+    "failed_request": 1
+  },
   "warm_failed": {}
 }

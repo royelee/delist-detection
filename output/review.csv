@@ -1,7 +1,6 @@
 sec_id,delist_date,ticker,cik,bucket,dlret,review_flags,reason,anchor_8k,last_seen
 ,,AABA,,,,observation_unresolved,AABA@2012-06-29 ALTABA INC,,2014-06-30
 ,,AABA,,,,ticker_unconfirmed,AABA@2012-06-29 ALTABA INC: no fails-to-deliver row under AABA from 2012-05-30 to 2014-07-30,,2014-06-30
-,,ACAS,,,,observation_unresolved,ACAS@2008-01-16 AMERICAN CAP STRATEGIES,,2008-05-31
 ,,AGN,,,,observation_conflict:2014-06-30,AGN seen on 2014-06-30 under 2 names: ALLERGAN INC (AGN@2008-01-16 -> BBG000BHQ1H0); ALLERGAN PLC (AGN@2014-06-30 -> BBG000BHQ1H0),,2014-06-30
 ,,BWC,,,,observation_unresolved,BWC@2012-06-29 BABCOCK AND WILCOX,,2015-06-30
 ,,CB,,,,observation_conflict:2012-06-29,CB seen on 2012-06-29 under 2 names: ACE LTD (CB@2012-06-29 -> CIK896159-COMMON); CHUBB CORP (CB@2012-06-29#1 -> BBG000BF1R66),,2012-06-29
@@ -74,7 +73,7 @@ BBG000BC15S7,,AON,,,,ticker_shared,AON 2012-04-03..2020-04-01 (BBG000BC15S7) ove
 BBG000BC15S7,2020-04-11,AON,315293,,,form25_unmatched,25-NSE 0000876661-20-000277 ('Class A Ordinary Shares'): ambiguous class,,
 BBG000BC26P7,2026-02-02,GES,912463,merger,-0.003569,ftd_close_lagged,M&A 2.01+3.01+5.01 (acquired by external acquirer),"1.01,1.02,2.01,2.03,3.01,3.03,5.01,5.02,5.03,7.01,9.01",
 BBG000BC2C10,,APA,,,,ticker_shared,APA 2007-12-17..2021-03-14 (BBG000BC2C10) overlaps APA 2021-03-02.. (BBG00YTS96G2),,
-BBG000BC2C10,2021-03-14,APAXXXX,6769,exchange_transfer,0.000000,no_last_trade_date;no_last_close,Continued 10-K/Q filings >180d after delist (moved to OTC or spun off); successor by same ticker,,
+BBG000BC2C10,2021-03-14,APA,6769,exchange_transfer,0.000000,no_last_trade_date;no_last_close,Continued 10-K/Q filings >180d after delist (moved to OTC or spun off); successor by same ticker,,
 BBG000BC9WH2,2015-10-18,HME,923118,merger,0.000399,ftd_close_prior:3,M&A 2.01+3.01+5.01 (acquired by external acquirer),"1.01,1.02,2.01,2.03,3.01,5.01,5.02,5.03,9.01",
 BBG000BCFQC3,2015-01-01,ASBC,7789,exchange_transfer,0.000000,resolved_by_current_ticker_map;ftd_close_lagged,Ticker change / listing transfer: 3.01 notice announces a listing transfer; company still reports results,,
 BBG000BCG930,,ANTM,1156039,,,ticker_unconfirmed,ANTM@2012-06-29 WELLPOINT INC: no fails-to-deliver row under ANTM from 2012-05-30 to 2014-07-30,,2014-06-30
@@ -155,7 +154,7 @@ BBG000BFK8Y6,,TCF,814184,,,ticker_unconfirmed,TCF@2012-06-29 TCF FINANCIAL CORP:
 BBG000BFK8Y6,2021-06-19,TCF,19612,merger,-0.003719,ftd_close_lagged;acquirer_close_lagged,M&A 2.01+5.01 (subsidiary buyback / parent acquisition),"2.01,3.03,5.01,5.02,5.03,8.01,9.01",
 BBG000BFMBQ6,,CI,,,,ticker_shared,CI 2007-12-18..2018-12-31 (BBG000BFMBQ6) overlaps CI 2018-12-24.. (BBG00KXRCDP0),,
 BBG000BFMBQ6,2018-12-31,CI,701221,merger,,no_last_trade_date;no_last_close;terms_gate_failed:no_acq_price,M&A 2.01+3.01+5.01 (acquired by external acquirer),"2.01,2.03,3.01,3.03,5.01,5.02,5.03,8.01,9.01",
-BBG000BFRF55,,CLF,,,,ticker_shared,CLF 2008-10-16.. (BBG000BFRF55) overlaps CLF 2008-10-16.. (CIK764065-COMMON),,
+BBG000BFRF55,,CLF,,,,ticker_shared,CLF 2008-10-16.. (BBG000BFRF55) overlaps CLF 2008-10-16..2017-08-25 (CIK764065-COMMON),,
 BBG000BFRF55,2010-06-12,CLF,764065,,,form25_unmatched,25-NSE 0000876661-10-000189 ('Common Share Purchase Rights'): ambiguous class,,
 BBG000BFTJ91,2015-12-21,CMCSK,1166691,exchange_transfer,0.000000,successor_unknown,Continued 10-K/Q filings >180d after delist (moved to OTC or spun off),,
 BBG000BFVKZ6,2019-02-25,AHL,1267395,exchange_transfer,0.000000,successor_unknown,Continued 10-K/Q filings >180d after delist (moved to OTC or spun off),,
@@ -395,7 +394,6 @@ BBG000BXNJ07,2009-11-09,CY,791915,exchange_transfer,0.000000,no_last_trade_date;
 BBG000BY33P5,2009-11-02,JNPR,1043604,exchange_transfer,0.000000,no_last_trade_date;no_last_close,Continued 10-K/Q filings >180d after delist (moved to OTC or spun off),,
 BBG000BYD720,2017-06-09,JNS,1065865,merger,0.000000,terms_gate_failed:no_acq_ticker;merger_at_par,M&A 2.01+3.01+5.01 (acquired by external acquirer),"1.01,1.02,2.01,3.01,3.03,5.01,5.02,5.03,9.01",
 BBG000BYKSX2,2017-10-13,ALR,1145460,merger,0.000196,ftd_close_lagged,M&A 2.01+3.01+5.01 (acquired by external acquirer),"1.02,2.01,3.01,3.03,5.01,9.01",
-BBG000BYR208,2017-01-06,ACAS,1423689,exchange_transfer,0.000000,member_name_mismatch;no_form25;delist_date_approx;successor_unknown,Continued 10-K/Q filings >180d after delist (moved to OTC or spun off),,
 BBG000BYWTX7,2021-04-20,MRVL,1058057,merger,0.035777,last_trade_date_unconfirmed;no_form25,"M&A 2.01+3.01+5.01 (acquired by external acquirer) (no Form 25 anchor, 8-K-only)","2.01,2.03,3.01,3.03,5.01,5.02,5.03,8.01,9.01",
 BBG000BYYLS8,,TFC,1072847,,,ticker_unconfirmed,TFC@2012-06-29 TRUIST FINANCIAL CORP: no fails-to-deliver row under TFC from 2012-05-30 to 2014-07-30,,2014-06-30
 BBG000C04224,,CBRE,1138118,,,ticker_unconfirmed,CBRE@2012-06-29 CBRE GROUP INC CLASS A: no fails-to-deliver row under CBRE from 2012-05-30 to 2014-07-30,,2014-06-30
@@ -442,6 +440,7 @@ BBG000C4Y9D6,2011-04-11,Q,1037949,exchange_transfer,0.000000,successor_unknown;f
 BBG000C4ZNF2,,ABK,874501,,,ended_without_delisting,not listed today and no Form 25 or delisting filing found,,2010-11-15
 BBG000C5Z1S3,2010-01-08,MU,723125,exchange_transfer,0.000000,resolved_by_current_ticker_map,Continued 10-K/Q filings >180d after delist (moved to OTC or spun off),,
 BBG000C6CFJ5,2007-12-27,GS,886982,,,form25_unclassified,25 0000891092-07-005430 ('') has no recognized class,,
+BBG000C6GN04,,QDEL,,,,ticker_shared,QDEL 2008-04-03..2022-06-06 (BBG000C6GN04) overlaps QDEL 2022-05-31.. (BBG017TGV7M2),,
 BBG000C6GN04,2022-06-06,QDEL,353569,merger,,no_last_trade_date;no_last_close;terms_gate_failed:no_acq_ticker,Merger filing 425 2022-05-06 before the delisting,5.07,
 BBG000C6W266,2014-12-14,CNQR,1066026,merger,0.001708,ftd_close_lagged,M&A 2.01+3.01+5.01 (acquired by external acquirer),"2.01,2.04,3.01,3.03,5.01,5.02,5.03,8.01,9.01",
 BBG000C78J55,2018-06-11,SSP,832428,exchange_transfer,0.000000,resolved_by_current_ticker_map,Ticker change / listing transfer: 3.01 notice announces a listing transfer; company still reports results,,
@@ -481,7 +480,7 @@ BBG000D52545,2012-01-02,WEN,30697,exchange_transfer,0.000000,no_last_trade_date;
 BBG000D9DMK0,2024-05-30,LH,920148,,,form25_unmatched,25-NSE 0000876661-24-000366 ('Common Stock (CUSIP # 50540R409)'): ambiguous class,,
 BBG000DBTPX7,2015-12-25,AWAY,1366684,merger,0.001341,last_trade_date_conflict,M&A 2.01+3.01+5.01 (acquired by external acquirer),"1.01,2.01,2.03,3.01,3.03,5.01,5.02,5.03,9.01",
 BBG000DBVBY4,2021-03-11,EV,350797,merger,0.010940,ftd_close_prior:5,M&A 2.01+3.01+5.01 (acquired by external acquirer),"1.02,2.01,3.01,3.03,5.01,5.02,5.03,8.01,9.01",
-BBG000DD3510,,AIV,,,,ticker_shared,AIV 2007-12-21..2020-12-07 (BBG000DD3510) overlaps AIV 2007-12-21.. (CIK922864-COMMON),,
+BBG000DD3510,,AIV,,,,ticker_shared,AIV 2007-12-21.. (BBG000DD3510) overlaps AIV 2007-12-21..2019-02-21 (CIK922864-COMMON),,
 BBG000DDXVZ3,2018-04-27,DST,714603,merger,0.003824,ftd_close_prior:4,M&A 2.01+3.01+5.01 (acquired by external acquirer),"2.01,3.01,3.03,5.01,5.02,5.03,8.01,9.01",
 BBG000DFMXT3,,AZPN,,,,ticker_shared,AZPN 2008-01-24..2022-05-26 (BBG000DFMXT3) overlaps AZPN 2022-05-18..2025-03-11 (BBG017J18W74),,
 BBG000DFMXT3,2022-05-26,AZPN,929940,merger,,no_last_trade_date;no_last_close;terms_gate_failed:no_acq_price,M&A 2.01+3.01+5.01 (acquired by external acquirer),"2.01,3.01,3.03,5.01,5.02,5.03,5.07,8.01,9.01",
@@ -637,7 +636,7 @@ BBG000QF05R6,2022-06-05,COLD,1455863,exchange_transfer,0.000000,resolved_by_curr
 BBG000QF18M4,2012-07-15,SOA,1043382,merger,-0.002980,ftd_close_prior:1,M&A 2.01+3.01+5.01 (acquired by external acquirer),"2.01,3.01,3.02,3.03,5.01,5.02,5.03,8.01,9.01",
 BBG000QFJ7H3,2020-01-02,OAS,1486159,exchange_transfer,0.000000,no_last_trade_date;no_last_close,Ticker change / listing transfer: 3.01 notice announces a listing transfer; company still reports results,,
 BBG000QFJ7H3,2020-11-06,OAS,1486159,,,form25_unmatched,25-NSE 0001354457-20-000638 ('Common Stock'): ambiguous class,,
-BBG000QGWY50,2025-06-12,BLUEXXXX,1293971,merger,,no_last_close,M&A 2.01+3.01+5.01 (acquired by external acquirer),"1.01,2.01,3.01,3.03,5.01,5.02,5.03,9.01",
+BBG000QGWY50,2025-06-12,BLUE,1293971,merger,0.000000,llm_gate_failed;merger_at_par,M&A 2.01+3.01+5.01 (acquired by external acquirer),"1.01,2.01,3.01,3.03,5.01,5.02,5.03,9.01",
 BBG000QN4GY3,2022-06-09,RLGY,1355001,exchange_transfer,0.000000,member_name_mismatch;no_form25;delist_date_approx;successor_unknown,Ticker change / listing transfer: renamed from 'REALOGY GROUP LLC'; company still reports results,,
 BBG000QW8XR0,2017-09-25,WBMD,1326583,merger,0.000451,ftd_close_prior:8,M&A 2.01+3.01+5.01 (acquired by external acquirer),"1.01,2.01,2.04,3.01,3.03,5.01,5.02,5.03,9.01",
 BBG000R06BX2,2015-09-10,NLSN,1492633,,,form25_unmatched,25-NSE 0000876661-15-000391 ('Nielsen N.V. Common Stock'): ambiguous class,,
@@ -659,7 +658,7 @@ BBG000W4G3B9,,ST,,,,ticker_shared,ST 2010-04-26..2018-03-28 (BBG000W4G3B9) overl
 BBG000W4G3B9,2018-04-07,ST,1477294,,,form25_unmatched,25-NSE 0000876661-18-000303 ('Ordinary Shares'): ambiguous class,,
 BBG0014GJCT9,2021-11-01,PANW,1327567,exchange_transfer,0.000000,resolved_by_current_ticker_map;no_last_trade_date;no_last_close,Ticker change / listing transfer: 3.01 notice announces a listing transfer; company still reports results,,
 BBG0016T3GQ0,2018-01-05,VC,1111335,exchange_transfer,0.000000,resolved_by_current_ticker_map,Ticker change / listing transfer: 3.01 notice announces a listing transfer; company still reports results,,
-BBG0017T9998,,CZR,,,,ticker_shared,CZR 2012-02-13..2020-07-22 (BBG0017T9998) overlaps CZR 2020-07-22.. (BBG0074Q3NK6),,
+BBG0017T9998,,CZR,,,,ticker_shared,CZR 2012-02-13..2020-07-30 (BBG0017T9998) overlaps CZR 2020-07-22.. (BBG0074Q3NK6),,
 BBG0017T9998,2020-07-30,CZR,858339,merger,,no_last_trade_date;no_last_close,M&A 2.01+3.01+5.01 (acquired by external acquirer),"1.01,1.02,2.01,3.01,3.03,5.01,5.02,5.03,9.01",
 BBG0018YXYX7,2017-01-09,PBYI,1401667,exchange_transfer,0.000000,resolved_by_current_ticker_map,Ticker change / listing transfer: 3.01 notice announces a listing transfer; company still reports results,,
 BBG0019LSQ49,,FRC,1132979,,,ended_without_delisting,not listed today and no Form 25 or delisting filing found,,2023-05-03
@@ -765,6 +764,7 @@ BBG00C1BZMT9,2019-12-30,CNDT,1677703,exchange_transfer,0.000000,resolved_by_curr
 BBG00CNYBQ76,2022-09-22,CDEV,1658566,exchange_transfer,0.000000,resolved_by_current_ticker_map,Continued 10-K/Q filings >180d after delist (moved to OTC or spun off),,
 BBG00CNYBQ76,2026-01-17,PR,1658566,exchange_transfer,0.000000,resolved_by_current_ticker_map;no_last_trade_date;no_last_close,Continued 10-K/Q filings >180d after delist (moved to OTC or spun off),,
 BBG00CTY3QD2,2018-03-18,BIVV,1681689,merger,0.000191,last_trade_date_conflict,M&A 2.01+3.01+5.01 (acquired by external acquirer),"1.02,2.01,3.01,3.03,5.01,5.02,5.03,9.01",
+BBG00CVQZQ96,,ITT,,,,ticker_shared,ITT 2008-01-16.. (BBG00CVQZQ96) overlaps ITT 2011-11-02..2016-05-17 (BBG000BMB7R1),,
 BBG00CW2JCN1,2022-01-13,ATH,1527469,exchange_transfer,0.000000,successor_unknown;ftd_close_prior:2,Continued 10-K/Q filings >180d after delist (moved to OTC or spun off),,
 BBG00D1WHZD9,2020-11-09,HTZ,1657853,,,form25_unmatched,25-NSE 0000876661-20-001005 ('Common Stock'): ambiguous class,,
 BBG00D3CHRC0,2018-10-11,EVHC,1678531,merger,0.000217,no_form25,"M&A 2.01+3.01+5.01 (acquired by external acquirer) (no Form 25 anchor, 8-K-only)","1.01,1.02,2.01,3.01,3.03,5.01,5.02,5.03,9.01",
@@ -774,7 +774,7 @@ BBG00DBBG1M0,2018-10-04,XL,875159,,,form25_unclassified,25 0000950157-18-000997 
 BBG00DJ2LJF5,2019-01-07,DVMT,1571996,exchange_transfer,0.000000,ftd_close_lagged,Continued 10-K/Q filings >180d after delist (moved to OTC or spun off); successor by same issuer,,
 BBG00FFJY867,2016-12-19,LGFB,929351,,,form25_unmatched,25-NSE 0000876661-16-001474 ('Common Shares'): ambiguous class,,
 BBG00FFJY867,2025-05-17,LGFB,929351,exchange_transfer,0.000000,successor_unknown,Continued 10-K/Q filings >180d after delist (moved to OTC or spun off),,
-BBG00GBV88T6,2016-05-14,BTUXXXX,1064728,liquidation,,resolved_by_current_ticker_map;last_trade_date_unconfirmed;no_last_close,Bankruptcy (8-K item 1.03 filed 2016-04-13),,
+BBG00GBV88T6,2016-05-14,BTU,1064728,liquidation,-0.300000,resolved_by_current_ticker_map;last_trade_date_conflict,Bankruptcy (8-K item 1.03 filed 2016-04-13),,
 BBG00GBVBK51,2021-12-16,BKR,1701605,exchange_transfer,0.000000,resolved_by_current_ticker_map;no_last_trade_date;no_last_close,Continued 10-K/Q filings >180d after delist (moved to OTC or spun off),,
 BBG00GQK3WB5,2025-02-01,SMAR,1366561,merger,0.000531,ftd_close_lagged,M&A 2.01+3.01+5.01 (acquired by external acquirer),"1.01,2.01,3.01,3.03,5.01,5.02,5.03,8.01,9.01",
 BBG00GSNPM07,2026-07-11,JHG,1274173,merger,0.000962,resolved_by_current_ticker_map;ftd_close_lagged,M&A 2.01+3.01+5.01 (acquired by external acquirer),"1.01,1.02,2.01,2.03,3.01,3.03,5.01,5.02,5.03,8.01,9.01",
@@ -804,18 +804,19 @@ BBG00VJ17DS2,2026-01-01,QS,1811414,exchange_transfer,0.000000,resolved_by_curren
 BBG00VNLZL95,,TMUSR,,,,ended_without_delisting,no issuer CIK to search for a Form 25,,2020-07-20
 BBG00W0L8GW3,2023-05-12,OSH,1564406,merger,0.002571,ftd_close_prior:7,M&A 2.01+3.01+5.01 (acquired by external acquirer),"1.01,1.02,2.01,3.01,3.03,5.01,5.02,5.03,8.01,9.01",
 BBG00W5FS571,2025-01-09,BEPC,1791863,exchange_transfer,0.000000,resolved_by_current_ticker_map,Continued 10-K/Q filings >180d after delist (moved to OTC or spun off); successor by same issuer,,
-BBG00W7FH7G7,2023-12-02,WEXXXX,1813756,liquidation,,last_trade_date_unconfirmed;no_last_close,Bankruptcy (8-K item 1.03 filed 2023-11-07),,
+BBG00W7FH7G7,2023-12-02,WE,1813756,liquidation,-0.300000,last_trade_date_conflict,Bankruptcy (8-K item 1.03 filed 2023-11-07),,
 BBG00W9LXXJ4,2026-01-16,CVAC,1809122,merger,0.000000,merger_at_par,Merger filing 425 2025-12-03 before the delisting,,
 BBG00WNSJM49,2022-12-26,CCCS,1818201,exchange_transfer,0.000000,resolved_by_current_ticker_map;no_last_trade_date;no_last_close,Ticker change / listing transfer: 3.01 notice announces a listing transfer; company still reports results,,
 BBG00WYYC600,2017-11-09,WLL,1255474,exchange_transfer,0.000000,last_trade_date_unconfirmed;no_form25;delist_date_approx,Continued 10-K/Q filings >180d after delist (moved to OTC or spun off); successor by same issuer,,
 BBG00XP8FYQ3,2022-07-03,MSP,1724570,merger,0.009096,ftd_close_lagged,M&A 2.01+3.01+5.01 (acquired by external acquirer),"1.01,1.02,2.01,2.03,3.01,3.03,5.01,5.02,5.03,9.01",
-BBG00Z6DX554,2020-07-30,CHKXXXX,895126,liquidation,,resolved_by_current_ticker_map;member_name_mismatch;last_trade_date_unconfirmed;no_last_close,Bankruptcy (8-K item 1.03 filed 2020-06-29),,
+BBG00Z6DX554,2020-07-30,CHK,895126,liquidation,-0.300000,resolved_by_current_ticker_map;member_name_mismatch;last_trade_date_conflict;distress_at_normal_price,Bankruptcy (8-K item 1.03 filed 2020-06-29),,
 BBG00ZHCT050,2023-07-15,DSEY,1831617,merger,,no_last_trade_date;no_last_close,M&A 2.01+3.01+5.01 (acquired by external acquirer),"1.01,1.02,2.01,3.01,3.03,5.01,5.02,5.03,8.01,9.01",
 BBG00ZNSSKP3,2025-12-04,VMEO,1837686,merger,0.000000,ftd_close_lagged,M&A 2.01+3.01+5.01 (acquired by external acquirer),"2.01,3.01,3.03,5.01,5.02,5.03,9.01",
 BBG010FNXMC3,2025-04-24,PYCR,1839439,merger,0.000445,ftd_close_lagged,M&A 2.01+3.01+5.01 (acquired by external acquirer),"1.02,2.01,3.01,3.03,5.01,5.03,8.01,9.01",
 BBG010MVVVW7,2026-01-30,FYBR,20520,merger,0.000260,ftd_close_lagged,M&A 2.01+3.01+5.01 (acquired by external acquirer),"1.02,2.01,3.01,3.03,5.01,5.02,5.03,9.01",
 BBG011FS2K38,2025-01-10,MCW,1853513,exchange_transfer,0.000000,resolved_by_current_ticker_map;no_last_trade_date;no_last_close,Continued 10-K/Q filings >180d after delist (moved to OTC or spun off),,
 BBG011FS2K38,2026-05-29,MCW,1853513,merger,-0.014085,resolved_by_current_ticker_map,M&A 2.01+3.01 (acquisition with delisting),"1.01,1.02,2.01,2.03,3.01,3.03,5.02,5.03,7.01,9.01",
+BBG011N57109,,HTZ,,,,ticker_shared,HTZ 2007-12-27..2021-07-05 (BBG011N57109) overlaps HTZ 2016-07-05..2020-11-02 (BBG00D1WHZD9),,
 BBG011N57109,2020-11-09,HTZ,1657853,,,form25_unmatched,25-NSE 0000876661-20-001005 ('Common Stock'): ambiguous class,,
 BBG012BV9SK0,2026-07-17,OLPX,1868726,merger,-0.004831,resolved_by_current_ticker_map,M&A 2.01+3.01+5.01 (acquired by external acquirer),"1.02,2.01,3.01,3.03,5.01,5.02,5.03,8.01,9.01",
 BBG012THM3Q6,2025-11-28,INFA,1868778,merger,0.008471,ftd_close_lagged,M&A 2.01+3.01+5.01 (acquired by external acquirer),"1.02,2.01,3.01,3.03,5.01,5.02,5.03,9.01",
@@ -827,9 +828,8 @@ BBG01HLM8W28,2024-09-19,LSXMA,1560385,exchange_transfer,0.000000,successor_unkno
 BBG01HLMB6H5,2024-09-19,LSXMK,1560385,,,form25_unmatched,"25-NSE 0001354457-24-000664 ('Series A Liberty SiriusXM Common Stock (LSXMA), Series B Liberty SiriusXM Common Stock (LSXMB), and Series C Liberty SiriusXM Common Stock (LSXMK)'): ambiguous class",,
 BBG01HMFL081,,LLYVA,,,,ticker_shared,LLYVA 2023-08-04..2025-12-25 (BBG01HMFL081) overlaps LLYVA 2025-12-17.. (BBG01YY256K1),,
 BBG01HMFL081,2025-12-25,LLYVA,1560385,exchange_transfer,0.000000,no_last_trade_date;no_last_close,Continued 10-K/Q filings >180d after delist (moved to OTC or spun off); successor by same ticker,,
-BBG01HMFLTN1,,LLYVK,1560385,,,ended_without_delisting,not listed today and no Form 25 or delisting filing found,,2025-12-16
 BBG01HMFLTN1,,LLYVK,,,,ticker_shared,LLYVK 2023-08-04..2025-12-25 (BBG01HMFLTN1) overlaps LLYVK 2025-12-17.. (BBG01YYX1Z14),,
-BBG01HMFLTN1,2025-12-25,LLYVK,1560385,exchange_transfer,0.000000,no_last_trade_date;no_last_close,Continued 10-K/Q filings >180d after delist (moved to OTC or spun off),,
+BBG01HMFLTN1,2025-12-25,LLYVK,1560385,exchange_transfer,0.000000,no_last_trade_date;no_last_close,Continued 10-K/Q filings >180d after delist (moved to OTC or spun off); successor by same ticker,,
 BBG01JNDL2R6,2025-07-18,SEG,2009684,exchange_transfer,0.000000,resolved_by_current_ticker_map;no_last_trade_date;no_last_close,Ticker change / listing transfer: 3.01 notice announces a listing transfer; company still reports results,,
 BBG01K9HZH92,2018-01-08,LBTYA,1570585,exchange_transfer,0.000000,resolved_by_current_ticker_map;no_last_trade_date;no_last_close,Continued 10-K/Q filings >180d after delist (moved to OTC or spun off),,
 BBG01K9HZH92,2023-12-04,LBTYAZZZZ,1570585,exchange_transfer,0.000000,resolved_by_current_ticker_map;no_last_trade_date;no_last_close,Ticker change / listing transfer: renamed from 'Liberty Global plc'; company still reports results,,
@@ -837,7 +837,7 @@ BBG01R914LT5,,APTV,,,,ticker_shared,APTV 2012-06-29.. (BBG01R914LT5) overlaps AP
 BBG01R914LT5,,APTV,,,,ticker_unconfirmed,APTV@2012-06-29 APTIV PLC: no fails-to-deliver row under APTV from 2012-05-30 to 2014-01-30,,2013-12-31
 BBG01R914LT5,2024-12-28,APTV,1521332,,,form25_unmatched,25-NSE 0000876661-24-001183 ('Ordinary Shares'): ambiguous class,,
 CIK1002047-COMMON,,NTAP,1002047,,,no_figi,NTAP@2008-01-16 NETWORK APPLIANCE INC,,2008-01-16
-CIK1002047-COMMON,,NTAP,,,,ticker_shared,NTAP 2008-01-11.. (CIK1002047-COMMON) overlaps NTAP 2008-03-28.. (BBG000FP1N32),,
+CIK1002047-COMMON,2008-03-19,NTAP,1002047,exchange_transfer,0.000000,resolved_by_current_ticker_map;last_trade_date_unconfirmed;no_form25;delist_date_approx;ftd_close_prior:1,Ticker change / listing transfer: renamed from 'NETWORK APPLIANCE INC'; company still reports results; successor by same issuer,,
 CIK100517-COMMON,,UAUA,100517,,,no_figi,UAUA@2008-01-16 UAL CORP,,2009-06-08
 CIK100517-COMMON,2010-10-10,UAUA,100517,,,form25_unmatched,25 0000950157-10-001887 ('Common Stock'): ambiguous class,,
 CIK1011006-COMMON,,YHOO,1011006,,,no_figi,YHOO@2008-01-16 YAHOO! INC,,2016-12-30
@@ -850,7 +850,7 @@ CIK1023291-COMMON,,TXU,1023291,,,no_figi,TXU@2008-01-16 TXU CORP,,2009-06-08
 CIK1023291-COMMON,,TXU,1023291,,,ticker_unconfirmed,TXU@2008-01-16 TXU CORP: no fails-to-deliver row under TXU from 2007-12-17 to 2009-07-08,,2009-06-08
 CIK1023291-COMMON,2009-06-08,TXU,1023291,exchange_transfer,0.000000,member_name_mismatch;resolved_by_cik_map;last_trade_date_unconfirmed;no_form25;delist_date_approx;successor_unknown;no_last_close,Continued 10-K/Q filings >180d after delist (moved to OTC or spun off),,
 CIK1037676-COMMON,,ACI,1037676,,,no_figi,ACI@2008-01-16 ARCH COAL INC,,2009-06-08
-CIK1037676-COMMON,2016-02-08,ACIXXXX,1037676,liquidation,,last_trade_date_unconfirmed;no_last_close,Bankruptcy (8-K item 1.03 filed 2016-01-11),,
+CIK1037676-COMMON,2016-02-08,ACI,1037676,liquidation,-0.300000,last_trade_date_conflict,Bankruptcy (8-K item 1.03 filed 2016-01-11),,
 CIK1038205-COMMON,,OZRK,1038205,,,no_figi,OZRK@2017-06-30 BANK OF OZARKS,,2018-06-30
 CIK1038205-COMMON,2017-07-06,OZRK,1038205,merger,,no_last_trade_date;no_last_close;terms_gate_failed:no_acq_price,M&A 2.01+3.01 (acquisition with delisting),"2.01,3.01,5.02,9.01",
 CIK1038914-COMMON,,GSF,1038914,,,no_figi,GSF@2008-01-16 GLOBALSANTAFE CORP,,2009-06-08
@@ -866,19 +866,21 @@ CIK105319-COMMON,,WTW,105319,,,no_figi,WTW@2008-01-16 WEIGHT WATCHERS INTL INC,,
 CIK105319-COMMON,,WW,105319,,,no_figi,WW@2012-06-29 WW INTERNATIONAL INC,,2013-12-31
 CIK105319-COMMON,,WW,105319,,,ticker_unconfirmed,WW@2012-06-29 WW INTERNATIONAL INC: no fails-to-deliver row under WW from 2012-05-30 to 2014-01-30,,2013-12-31
 CIK105319-COMMON,2018-10-22,WTW,105319,exchange_transfer,0.000000,resolved_by_current_ticker_map;member_name_mismatch;no_last_trade_date;no_last_close,Ticker change / listing transfer: 3.01 notice announces a listing transfer; company still reports results,,
+CIK105319-COMMON,2019-09-30,WW,105319,exchange_transfer,0.000000,resolved_by_current_ticker_map;member_name_mismatch;last_trade_date_unconfirmed;no_form25;delist_date_approx;successor_unknown,Ticker change / listing transfer: renamed from 'WEIGHT WATCHERS INTERNATIONAL INC'; company still reports results,,
 CIK1056087-COMMON,,MNI,1056087,,,no_figi,MNI@2008-01-16 MCCLATCHY CO,,2009-06-08
 CIK1056087-COMMON,2016-05-25,MNI,1056087,exchange_transfer,0.000000,last_trade_date_unconfirmed;no_form25;delist_date_approx;successor_unknown;ftd_close_prior:1,Continued 10-K/Q filings >180d after delist (moved to OTC or spun off),,
 CIK1066104-COMMON,,EXBD,1066104,,,no_figi,EXBD@2008-01-16 CORPORATE EXECUTIVE,,2009-06-08
 CIK1066104-COMMON,2010-08-29,EXBD,1066104,exchange_transfer,0.000000,no_last_trade_date;no_last_close,Continued 10-K/Q filings >180d after delist (moved to OTC or spun off),,
 CIK1066104-COMMON,2012-08-13,EXBD,1066104,exchange_transfer,0.000000,no_form25;delist_date_approx;successor_unknown,Continued 10-K/Q filings >180d after delist (moved to OTC or spun off),,
 CIK1070412-COMMON,,CNX,1070412,,,no_figi,CNX@2008-01-16 CONSOL ENERGY INC,,2017-06-30
+CIK1070412-COMMON,2017-11-29,CNX,1070412,exchange_transfer,0.000000,resolved_by_current_ticker_map;last_trade_date_unconfirmed;no_form25;delist_date_approx,Ticker change / listing transfer: renamed from 'CONSOL ENERGY INC'; company still reports results; successor by same issuer,,
 CIK1070985-COMMON,,CXW,1070985,,,no_figi,CXW@2008-01-16 CORRECTIONS CORP OF AMER; CXW@2014-12-31 CORRECTIONS CORPORATION OF AMERICA,,2009-06-08
-CIK1070985-COMMON,,CXW,,,,ticker_shared,CXW 2008-01-16.. (CIK1070985-COMMON) overlaps CXW 2008-02-06.. (BBG000BJSJT2),,
+CIK1070985-COMMON,,CXW,,,,ticker_shared,CXW 2008-01-16..2016-10-31 (CIK1070985-COMMON) overlaps CXW 2008-02-06.. (BBG000BJSJT2),,
+CIK1070985-COMMON,2016-11-10,CXW,1070985,exchange_transfer,0.000000,no_form25;delist_date_approx;successor_unknown,Ticker change / listing transfer: renamed from 'CORRECTIONS CORP OF AMERICA'; company still reports results,,
 CIK1074771-COMMON,,TOC,,,,ticker_shared,TOC 2007-12-17..2008-01-15 (CIK1074771-COMMON) overlaps TOC 2007-12-17..2008-04-17 (BBG000BBS9F6),,
 CIK1074771-COMMON,,TRI,1074771,,,ended_without_delisting,not listed today and no Form 25 or delisting filing found,,2018-11-27
 CIK1074771-COMMON,,TRI,1074771,,,no_figi,TRI@2008-01-16 TRIAD HOSPITALS INC,,2009-06-08
-CIK1074771-COMMON,,TRI,,,,ticker_shared,TRI 2008-04-18..2018-11-27 (CIK1074771-COMMON) overlaps TRI 2008-04-18..2018-11-27 (BBG000BBS9F6),,
-CIK1074771-COMMON,,TRIXXXX,,,,ticker_shared,TRIXXXX 2018-11-28..2018-11-30 (CIK1074771-COMMON) overlaps TRIXXXX 2018-11-28.. (BBG000BBS9F6),,
+CIK1074771-COMMON,,TRI,,,,ticker_shared,TRI 2008-04-18..2018-11-27 (CIK1074771-COMMON) overlaps TRI 2008-04-18.. (BBG000BBS9F6),,
 CIK1075415-COMMON,,SNH,1075415,,,no_figi,SNH@2014-12-31 SENIOR HOUSING PROPERTIES TRUST RE,,2018-12-31
 CIK1075415-COMMON,2020-01-07,SNH,1075415,exchange_transfer,0.000000,member_name_mismatch;resolved_by_cik_map;last_trade_date_unconfirmed;no_form25;delist_date_approx;successor_unknown;ftd_close_prior:1,Continued 10-K/Q filings >180d after delist (moved to OTC or spun off),,
 CIK1075531-COMMON,,PCLN,1075531,,,no_figi,PCLN@2012-06-29 BOOKING HOLDINGS INC; PCLN@2014-12-31 THE PRICELINE GROUP INC,,2014-06-30
@@ -922,6 +924,7 @@ CIK1170565-COMMON,,WFT,1170565,,,ended_without_delisting,not listed today and no
 CIK1170565-COMMON,,WFT,1170565,,,no_figi,WFT@2008-01-16 WEATHERFORD INTL; WFT@2009-03-20 WEATHERFORD INTL,,2009-01-23
 CIK1170565-COMMON,2009-03-08,WFT,1170565,unknown,0.000000,no_evidence_default;ftd_close_lagged,Delisted/deregistered without merger or distress evidence,"1.01,5.01,8.01,9.01",
 CIK1224608-COMMON,,CNO,1224608,,,no_figi,CNO@2008-01-16 CONSECO INC,,2009-06-08
+CIK1224608-COMMON,2010-05-11,CNO,1224608,exchange_transfer,0.000000,resolved_by_current_ticker_map;last_trade_date_unconfirmed;no_form25;delist_date_approx;successor_unknown;ftd_close_lagged,Ticker change / listing transfer: renamed from 'CONSECO INC'; company still reports results,,
 CIK1282266-COMMON,,WIN,1282266,,,no_figi,WIN@2008-01-16 WINDSTREAM CORP.; WIN@2013-12-31 WINDSTREAM HOLDINGS INC,,2013-06-28
 CIK1282266-COMMON,2009-12-18,WIN,1282266,exchange_transfer,0.000000,no_last_trade_date;no_last_close,Continued 10-K/Q filings >180d after delist (moved to OTC or spun off),,
 CIK1282266-COMMON,2015-04-27,WIN,1282266,exchange_transfer,0.000000,last_trade_date_unconfirmed;no_form25;delist_date_approx;successor_unknown,Continued 10-K/Q filings >180d after delist (moved to OTC or spun off),,
@@ -960,6 +963,7 @@ CIK1418135-COMMON,2018-07-13,DPS,1418135,exchange_transfer,0.000000,no_form25;de
 CIK1420800-COMMON,,CFX,1420800,,,no_figi,CFX@2012-06-29 COLFAX CORP,,2021-12-31
 CIK1420800-COMMON,2022-04-07,CFX,1420800,exchange_transfer,0.000000,no_form25;delist_date_approx,Continued 10-K/Q filings >180d after delist (moved to OTC or spun off); successor by same issuer,,
 CIK1423689-COMMON,,AGNC,1423689,,,no_figi,AGNC@2014-12-31 AMERICAN CAPITAL AGENCY REIT CORP,,2016-06-30
+CIK1423689-COMMON,2016-10-03,AGNC,1423689,exchange_transfer,0.000000,resolved_by_current_ticker_map;last_trade_date_unconfirmed;no_form25;delist_date_approx;successor_unknown,Ticker change / listing transfer: renamed from 'American Capital Agency Corp'; company still reports results,,
 CIK1428875-COMMON,,SERV,1428875,,,no_figi,SERV@2014-12-31 SERVICEMASTER GLOBAL HOLDINGS INC,,2020-06-30
 CIK1428875-COMMON,2020-10-06,SERV,1428875,exchange_transfer,0.000000,no_form25;delist_date_approx,Continued 10-K/Q filings >180d after delist (moved to OTC or spun off); successor by same issuer,,
 CIK1458891-COMMON,,NE,1458891,,,no_figi,NE@2009-06-08 NOBLE CORPORATION,,2009-06-08
@@ -972,7 +976,6 @@ CIK1469372-CLASS-A,,MSG,1469372,,,no_figi,MSG@2012-06-29 MADISON SQUARE GARDEN O
 CIK1469372-CLASS-A,2015-08-03,MSG,1469372,exchange_transfer,0.000000,no_last_trade_date;no_last_close,Continued 10-K/Q filings >180d after delist (moved to OTC or spun off),,
 CIK1469372-CLASS-A,2015-10-02,MSG,1469372,exchange_transfer,0.000000,last_trade_date_unconfirmed;no_form25;delist_date_approx;successor_unknown,Continued 10-K/Q filings >180d after delist (moved to OTC or spun off),,
 CIK1471261-COMMON,,CIE,1471261,,,no_figi,CIE@2012-06-29 COBALT INTERNATIONAL ENERGY INC,,2015-12-31
-CIK1471261-COMMON,2018-01-12,CIEXXXX,1471261,liquidation,,no_last_close,Bankruptcy (8-K item 1.03 filed 2017-12-14),,
 CIK1478242-COMMON,,Q,1478242,,,no_figi,Q@2013-12-31 IQVIA HOLDINGS INC; Q@2014-12-31 QUINTILES TRANSNATIONAL HOLDINGS I; Q@2016-12-30 QUINTILES IMS INC,,2014-06-30
 CIK1478242-COMMON,2017-11-17,Q,1478242,exchange_transfer,0.000000,no_form25;delist_date_approx,"Ticker change / listing transfer: renamed from 'Quintiles IMS Holdings, Inc.'; company still reports results; successor by same issuer",,
 CIK1498301-COMMON,,ASNA,1498301,,,no_figi,ASNA@2012-06-29 ASCENA RETAIL GROUP INC.,,2014-12-31
@@ -1042,7 +1045,6 @@ CIK315293-COMMON,,AOC,315293,,,no_figi,AOC@2008-01-16 AON CORP,,2009-06-08
 CIK315293-COMMON,2009-12-01,AOC,315293,exchange_transfer,0.000000,last_trade_date_unconfirmed;no_form25;delist_date_approx;successor_unknown,Continued 10-K/Q filings >180d after delist (moved to OTC or spun off),,
 CIK315293-COMMON,2020-04-11,AOC,315293,,,form25_unmatched,25-NSE 0000876661-20-000277 ('Class A Ordinary Shares'): ambiguous class,,
 CIK316300-COMMON,,XCO,316300,,,no_figi,XCO@2012-06-29 EXCO RESOURCES INC,,2013-06-28
-CIK316300-COMMON,2018-01-20,XCOXXXX,316300,liquidation,,no_last_close,Bankruptcy (8-K item 1.03 filed 2018-01-17),,
 CIK320335-COMMON,,TMK,320335,,,no_figi,TMK@2008-01-16 TORCHMARK CORP,,2019-06-30
 CIK320335-COMMON,2019-08-12,TMK,320335,exchange_transfer,0.000000,no_form25;delist_date_approx,Ticker change / listing transfer: renamed from 'TORCHMARK CORP'; company still reports results; successor by same issuer,,
 CIK33213-COMMON,,EQT,33213,,,no_figi,EQT@2008-01-16 EQUITABLE RESOURCES INC,,2009-01-23
@@ -1057,6 +1059,7 @@ CIK39899-COMMON,,TGNA,39899,,,no_figi,TGNA@2012-06-29 GANNETT CO INC,,2014-06-30
 CIK39899-COMMON,,TGNA,39899,,,ticker_unconfirmed,TGNA@2012-06-29 GANNETT CO INC: no fails-to-deliver row under TGNA from 2012-05-30 to 2014-07-30,,2014-06-30
 CIK39899-COMMON,2015-06-30,TGNA,39899,exchange_transfer,0.000000,last_trade_date_unconfirmed;no_form25;delist_date_approx;successor_unknown,Continued 10-K/Q filings >180d after delist (moved to OTC or spun off),,
 CIK47217-COMMON,,HPQ,47217,,,no_figi,HPQ@2008-01-16 HEWLETT PACKARD,,2015-06-30
+CIK47217-COMMON,2015-11-02,HPQ,47217,exchange_transfer,0.000000,resolved_by_current_ticker_map;last_trade_date_unconfirmed;no_form25;delist_date_approx,Ticker change / listing transfer: renamed from 'HEWLETT PACKARD CO'; company still reports results; successor by same issuer,,
 CIK47518-COMMON,,HB,47518,,,no_figi,HB@2008-01-16 HILLENBRAND INDUSTRIES,,2009-06-08
 CIK47518-COMMON,2009-06-08,HB,47518,exchange_transfer,0.000000,member_name_mismatch;resolved_by_cik_map;last_trade_date_unconfirmed;no_form25;delist_date_approx;successor_unknown;no_last_close,Continued 10-K/Q filings >180d after delist (moved to OTC or spun off),,
 CIK47580-COMMON,,HLT,47580,,,no_figi,HLT@2008-01-16 HILTON HOTELS CORP,,2009-06-08
@@ -1103,6 +1106,7 @@ CIK73887-COMMON,2019-05-13,ERA,73887,liquidation,-0.550000,last_trade_date_uncon
 CIK753308-COMMON,,FPL,753308,,,ended_without_delisting,not listed today and no Form 25 or delisting filing found,,2010-06-02
 CIK753308-COMMON,,FPL,753308,,,no_figi,FPL@2008-01-16 FPL GROUP INC,,2009-06-08
 CIK764065-COMMON,,CLF,764065,,,no_figi,CLF@2012-06-29 CLIFFS NATURAL RESOURCES INC.,,2014-12-31
+CIK764065-COMMON,2017-08-25,CLF,764065,exchange_transfer,0.000000,resolved_by_current_ticker_map;last_trade_date_unconfirmed;no_form25;delist_date_approx;successor_unknown,Ticker change / listing transfer: renamed from 'CLIFFS NATURAL RESOURCES INC.'; company still reports results,,
 CIK765880-COMMON,,PEAK,765880,,,no_figi,PEAK@2012-06-29 HEALTHPEAK PROPERTIES INC,,2014-06-30
 CIK765880-COMMON,,PEAK,765880,,,ticker_unconfirmed,PEAK@2012-06-29 HEALTHPEAK PROPERTIES INC: no fails-to-deliver row under PEAK from 2012-05-30 to 2014-07-30,,2014-06-30
 CIK765880-COMMON,2014-06-30,PEAK,765880,exchange_transfer,0.000000,member_name_mismatch;resolved_by_cik_map;last_trade_date_unconfirmed;no_form25;delist_date_approx;successor_unknown;no_last_close,Continued 10-K/Q filings >180d after delist (moved to OTC or spun off),,
@@ -1118,7 +1122,8 @@ CIK78128-COMMON,2020-02-04,WTR,78128,exchange_transfer,0.000000,no_form25;delist
 CIK78239-COMMON,,PVH,78239,,,no_figi,PVH@2008-01-16 PHILLIPS VAN HEUSEN,,2009-06-08
 CIK78239-COMMON,,PVH,,,,ticker_shared,PVH 2007-12-20.. (CIK78239-COMMON) overlaps PVH 2011-07-15.. (BBG000BRRG02),,
 CIK783325-COMMON,,WEC,783325,,,no_figi,WEC@2008-01-16 WISCONSIN ENERGY CORP; WEC@2014-12-31 WISCONSIN ENERGY CORP,,2009-06-08
-CIK783325-COMMON,,WEC,,,,ticker_shared,WEC 2007-12-20.. (CIK783325-COMMON) overlaps WEC 2007-12-20.. (BBG000BWP7D9),,
+CIK783325-COMMON,,WEC,,,,ticker_shared,WEC 2007-12-20..2015-06-30 (CIK783325-COMMON) overlaps WEC 2007-12-20.. (BBG000BWP7D9),,
+CIK783325-COMMON,2015-06-30,WEC,783325,exchange_transfer,0.000000,resolved_by_current_ticker_map;last_trade_date_unconfirmed;no_form25;delist_date_approx;successor_unknown,Ticker change / listing transfer: renamed from 'WISCONSIN ENERGY CORP'; company still reports results,,
 CIK789073-COMMON,,FO,789073,,,no_figi,FO@2008-01-16 FORTUNE BRANDS INC,,2009-06-08
 CIK789073-COMMON,2011-10-06,FO,789073,exchange_transfer,0.000000,last_trade_date_unconfirmed;no_form25;delist_date_approx;ftd_close_prior:1,Continued 10-K/Q filings >180d after delist (moved to OTC or spun off); successor by same issuer,,
 CIK803649-COMMON,,CWH,803649,,,ended_without_delisting,not listed today and no Form 25 or delisting filing found,,2014-08-01
@@ -1128,6 +1133,8 @@ CIK804055-COMMON,,CCE,804055,,,no_figi,CCE@2008-01-16 COCA COLA ENTERPRISE,,2009
 CIK804055-COMMON,2010-10-15,CCE,804055,merger,0.000000,ftd_close_lagged;terms_gate_failed:fail_sanity;merger_at_par,M&A 2.01+3.01+5.01 (acquired by external acquirer),"2.01,3.01,3.03,5.01,5.02,5.03,9.01",
 CIK813828-CLASS-B,,CBS,813828,,,no_figi,CBS@2008-01-16 CBS CORP CLASS B,,2019-06-30
 CIK813828-CLASS-B,2019-12-14,CBS,813828,,,form25_unmatched,"25 0001193125-19-306213 ('Class A Common Stock, par value $0.001 per share Class B Common Stock, par value $0.001 per share'): ambiguous class",,
+CIK817473-COMMON,,ACAS,817473,,,no_figi,ACAS@2008-01-16 AMERICAN CAP STRATEGIES,,2008-05-31
+CIK817473-COMMON,2008-07-08,ACAS,817473,exchange_transfer,0.000000,last_trade_date_unconfirmed;no_form25;delist_date_approx,Continued 10-K/Q filings >180d after delist (moved to OTC or spun off); successor by same issuer,,
 CIK833444-COMMON,,TYC,833444,,,no_figi,TYC@2014-12-31 TYCO INTERNATIONAL PLC,,2016-06-30
 CIK833444-COMMON,2016-09-07,TYC,833444,exchange_transfer,0.000000,last_trade_date_unconfirmed;no_form25;delist_date_approx;ftd_close_prior:1,Continued 10-K/Q filings >180d after delist (moved to OTC or spun off); successor by same issuer,,
 CIK835541-COMMON,,SLR,835541,,,no_figi,SLR@2008-01-16 SOLECTRON CORP,,2009-06-08
@@ -1173,7 +1180,7 @@ CIK892535-COMMON,,TMA,892535,,,no_figi,TMA@2008-01-16 THORNBURG MORTGAGE INC,,20
 CIK892535-COMMON,2008-09-29,TMA,892535,compliance_failure,-0.550000,last_trade_date_unconfirmed;no_form25;delist_date_approx;ftd_close_lagged,SEC REVOKED registration filed 2012-05-01,,
 CIK892535-COMMON,2009-01-25,TMA,892535,,,form25_unmatched,"25-NSE 0000876661-09-000070 ('Common Stock, par value $0.01'): ambiguous class",,
 CIK893538-COMMON,,SM,893538,,,no_figi,SM@2008-01-16 ST MARY LAND & EXPL CO,,2009-06-08
-CIK893538-COMMON,,SM,,,,ticker_shared,SM 2007-12-24..2010-06-08 (CIK893538-COMMON) overlaps SM 2010-06-03.. (BBG000BFV115),,
+CIK893538-COMMON,2010-05-28,SM,893538,exchange_transfer,0.000000,resolved_by_current_ticker_map;last_trade_date_unconfirmed;no_form25;delist_date_approx;ftd_close_lagged,Ticker change / listing transfer: renamed from 'ST MARY LAND & EXPLORATION CO'; company still reports results; successor by same issuer,,
 CIK893949-COMMON,,PDX,893949,,,ended_without_delisting,not listed today and no Form 25 or delisting filing found,,2009-06-08
 CIK893949-COMMON,,PDX,893949,,,no_figi,PDX@2008-01-16 PEDIATRIX MEDICAL GROUP,,2009-06-08
 CIK894315-COMMON,,DDR,894315,,,no_figi,DDR@2008-01-16 DEVELOPERS DIVERSIFIED,,2009-06-08
@@ -1195,7 +1202,7 @@ CIK910073-COMMON,,NYB,910073,,,no_figi,NYB@2008-01-16 NEW YORK CMNTY BANCORP,,20
 CIK910073-COMMON,,NYCB,910073,,,no_figi,NYCB@2012-06-29 NEW YORK COMMUNITY BANCORP INC,,2023-12-31
 CIK910073-COMMON,2024-07-12,NYCB,910073,exchange_transfer,0.000000,last_trade_date_unconfirmed;no_form25;delist_date_approx;successor_unknown,Continued 10-K/Q filings >180d after delist (moved to OTC or spun off),,
 CIK922864-COMMON,,AIV,922864,,,no_figi,AIV@2012-06-29 APARTMENT INVESTMENT AND MANAGEMEN,,2018-12-31
-CIK922864-COMMON,,AIV,,,,ticker_shared,AIV 2007-12-21.. (CIK922864-COMMON) overlaps AIV 2020-12-09.. (BBG000DD3510),,
+CIK922864-COMMON,2019-05-30,AIV,922864,exchange_transfer,0.000000,resolved_by_current_ticker_map;last_trade_date_unconfirmed;no_form25;successor_unknown,Continued 10-K/Q filings >180d after delist (moved to OTC or spun off),,
 CIK929351-COMMON,,LGF,929351,,,no_figi,LGF@2013-12-31 LIONS GATE ENTERTAINMENT CORP,,2016-06-30
 CIK929351-COMMON,2016-12-19,LGF,929351,,,form25_unmatched,25-NSE 0000876661-16-001474 ('Common Shares'): ambiguous class,,
 CIK931336-COMMON,,DF,931336,,,no_figi,DF@2008-01-16 DEAN FOODS CO.,,2013-06-28
