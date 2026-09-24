@@ -17,7 +17,7 @@ from typing import Iterable
 
 import requests
 
-from .edgar import STALE_KEY, EdgarBlocked, EdgarClient, submissions_fresh_after
+from .edgar import STALE_KEY, EdgarBlocked, EdgarClient, _write_atomic, clean_orphan_temps, submissions_fresh_after
 from .evidence import first_filing, names_near, parse_day
 from .names import name_tokens, names_agree
 
@@ -57,7 +57,12 @@ class TickerResolver:
         member_names: "callable[..., str | None] | None" = None,
         cik_map: "callable[[str, str | None], int | None] | None" = None,
         today: date | None = None,
+        batch_writes: bool = False,
     ) -> None:
+        """`today`: the run date bounding submissions freshness (None: the clock).
+        `batch_writes`: keep new answers in memory until `flush()` (the pipeline
+        flushes after each resolving stage and on the way out of a run) instead
+        of rewriting the whole memo file for each one."""
         self.edgar = edgar
         self.rename_map = {k.upper(): v.upper() for k, v in (rename_map or {}).items()}
         self.manual_overrides = {k.upper(): int(v) for k, v in (manual_overrides or {}).items()}
@@ -65,11 +70,16 @@ class TickerResolver:
         self.name_lookup = name_lookup or (lambda *a, **kw: None)
         self.member_names = member_names or (lambda *a, **kw: None)  # (ticker, date) -> index-member name
         self.cik_map = cik_map or (lambda *a, **kw: None)  # (ticker, date) -> CIK from the caller's universe
-        self.today = today    # the run date bounding submissions freshness (None: the clock, at each read)
+        self.today = today
+        self.batch_writes = batch_writes
         self._memo: dict[str, TickerResolution] = {}
         self._memo_member: dict[str, str | None] = {}   # key -> member name the answer was checked with
         self._volatile: set[str] = set()   # misses and transient-error answers: this run only
+        self._degraded: set[str] = set()   # keys whose answer rests on a failed request or a stale copy
+        self._dirty = False                # an answer was added since the memo file was last written
         self._transient = False            # a check in the current resolve() hit a transient error
+        if self.cache_path:
+            clean_orphan_temps(self.cache_path.parent)
         if self.cache_path and self.cache_path.exists():
             self._load_cache()
         self._companies: dict[str, dict] | None = None
@@ -191,21 +201,34 @@ class TickerResolver:
     def _remember(self, key: str, res: TickerResolution, member: str | None) -> None:
         self._memo[key] = res
         self._memo_member[key] = member
+        if self._transient:
+            self._degraded.add(key)
+        else:
+            self._degraded.discard(key)
         if res.cik is None or self._transient:   # retried next run, never persisted
             self._volatile.add(key)
             return
         self._volatile.discard(key)
-        self._persist()
+        self._dirty = True
+        if not self.batch_writes:
+            self.flush()
 
-    def _persist(self) -> None:
-        if not self.cache_path:
+    def flush(self) -> None:
+        """Write the memo file if an answer was added since it was last written
+        (atomically: a crash never leaves a torn memo)."""
+        if not self._dirty or not self.cache_path:
             return
         self.cache_path.parent.mkdir(parents=True, exist_ok=True)
         entries = {k: {**r.__dict__, "member_name": self._memo_member.get(k)}
                    for k, r in self._memo.items() if k not in self._volatile}
-        self.cache_path.write_text(
-            json.dumps({"__version__": CACHE_VERSION, "entries": entries}, indent=2)
-        )
+        _write_atomic(self.cache_path, json.dumps({"__version__": CACHE_VERSION, "entries": entries}, indent=2))
+        self._dirty = False
+
+    def is_degraded(self, ticker: str, observed_date: str | None = None) -> bool:
+        """Whether this run's answer for (ticker, date) rests on a failed EDGAR
+        request or a stale copy. Such an answer is used for the run and never
+        saved; the pipeline flags it `resolution_degraded`."""
+        return f"{ticker.upper().strip()}|{observed_date or ''}" in self._degraded
 
     # CIKs of US exchanges — these file Form 25-NSEs *on behalf of* the issuer,
     # so they appear in every delisting filing's CIK array. Always skip them.
@@ -582,6 +605,8 @@ class TickerResolver:
             return res
 
         if cache_key in self._memo and self._memo_member.get(cache_key) == member:
+            # A rename built on this answer inherits whether it rests on a failed request.
+            self._transient = cache_key in self._degraded
             return self._memo[cache_key]
 
         renamed = self.rename_map.get(t)

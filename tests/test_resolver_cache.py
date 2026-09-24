@@ -249,3 +249,66 @@ def test_a_company_search_that_could_not_be_sent_marks_the_resolve_transient(fak
     r = TickerResolver(e, member_names=_member("Nope Holdings Inc"))
     assert r.resolve("NOPE", "2024-01-01").cik is None
     assert e.searches > 0 and r._transient is True
+
+
+def test_a_degraded_answer_is_known_for_the_run(tmp_path, fake_edgar, monkeypatch):
+    monkeypatch.setattr(TickerResolver, "_efts_lookup",
+                        lambda self, t, d=None, **kw: (999002, "Liquidating Trust (ALTR)", False))
+    monkeypatch.setattr(TickerResolver, "_validate_cik", lambda self, *a, **kw: True)
+    r = TickerResolver(_FlakyEdgar(fake_edgar), cache_path=tmp_path / "res.json")
+    assert r.resolve("ALTR", "2025-03-26").cik == 999002
+    assert r.is_degraded("ALTR", "2025-03-26") is True
+    assert r.resolve("BAD", "2023-05-10").cik == 999001
+    assert r.is_degraded("BAD", "2023-05-10") is False
+    assert r.is_degraded("altr ", "2025-03-26") is True           # the resolver's own key normalisation
+
+
+def test_a_rename_built_on_a_degraded_answer_is_degraded_and_not_saved(tmp_path, fake_edgar, monkeypatch):
+    monkeypatch.setattr(TickerResolver, "_efts_lookup",
+                        lambda self, t, d=None, **kw: (999002, "Liquidating Trust (ALTR)", False))
+    monkeypatch.setattr(TickerResolver, "_validate_cik", lambda self, *a, **kw: True)
+    cache = tmp_path / "res.json"
+    r = TickerResolver(_FlakyEdgar(fake_edgar), cache_path=cache, rename_map={"OLDALTR": "ALTR"})
+    assert r.resolve("ALTR", "2025-03-26").cik == 999002          # transient: the flaky date check
+    assert r.resolve("OLDALTR", "2025-03-26").cik == 999002       # the rename reads that memo entry
+    assert r.is_degraded("OLDALTR", "2025-03-26") is True
+    assert not cache.exists() or "OLDALTR" not in cache.read_text()
+
+
+def test_batched_writes_reach_the_file_only_on_flush(tmp_path, fake_edgar, monkeypatch):
+    import delist_detection.ticker_resolver as tr
+    writes = []
+    real = tr._write_atomic
+
+    def recording(path, text):
+        writes.append(path)
+        real(path, text)
+
+    monkeypatch.setattr(tr, "_write_atomic", recording)
+    cache = tmp_path / "res.json"
+    r = TickerResolver(fake_edgar, cache_path=cache, batch_writes=True)
+    assert r.resolve("ALTR", "2025-03-26").cik == 1701732
+    assert r.resolve("BAD", "2023-05-10").cik == 999001
+    assert not cache.exists() and writes == []
+    r.flush()
+    assert set(json.loads(cache.read_text())["entries"]) == {"ALTR|2025-03-26", "BAD|2023-05-10"}
+    r.flush()                                                      # nothing new: no rewrite
+    assert writes == [cache]
+
+
+def test_without_batching_every_new_answer_is_written_at_once(tmp_path, fake_edgar):
+    cache = tmp_path / "res.json"
+    r = TickerResolver(fake_edgar, cache_path=cache)
+    r.resolve("ALTR", "2025-03-26")
+    assert "ALTR|2025-03-26" in json.loads(cache.read_text())["entries"]
+
+
+def test_a_memo_temp_file_left_by_a_killed_process_is_removed(tmp_path, fake_edgar):
+    import subprocess
+    import sys
+    p = subprocess.Popen([sys.executable, "-c", ""])
+    p.wait()
+    orphan = tmp_path / f".res.json.{p.pid}.1.tmp"
+    orphan.write_text("{")
+    TickerResolver(fake_edgar, cache_path=tmp_path / "res.json")
+    assert not orphan.exists()
