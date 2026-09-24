@@ -31,6 +31,7 @@ from .security_master import (
     FigiResolver, Range, Security, build_securities, era_cusips, era_last_seen, ranges_from_sightings, refine_eras,
 )
 from .store import write_tables
+from .trading_calendar import next_trading_day, previous_trading_day
 
 FTD_START = date(2004, 1, 1)
 
@@ -294,14 +295,19 @@ def _cusip_sightings(sec: Security, ftd: FtdIndex, cusips: list[str]) -> list[tu
     return sorted(set(out))
 
 
+def _cusip_on(cusip_ranges: list[Range], day: date) -> str | None:
+    """The CUSIP whose range holds `day`, if any."""
+    d = day.isoformat()
+    return next((r.value for r in cusip_ranges if r.valid_from <= d and (r.valid_to is None or d <= r.valid_to)),
+                None)
+
+
 def _close_on(ftd: FtdIndex, cusip_ranges: list[Range], day: date,
               symbol: str) -> tuple[float, str, bool] | None:
     """The close of `day` (FTD rows of the next trading days, see
     `FtdIndex.close_after`), looked up by the CUSIP whose range holds `day`,
     then by `symbol`."""
-    d = day.isoformat()
-    cusip = next((r.value for r in cusip_ranges if r.valid_from <= d and (r.valid_to is None or d <= r.valid_to)),
-                 None)
+    cusip = _cusip_on(cusip_ranges, day)
     return (ftd.close_after(day, cusip=cusip) if cusip else None) or ftd.close_after(day, symbol=symbol)
 
 
@@ -309,10 +315,18 @@ def _close_through(ftd: FtdIndex, cusip_ranges: list[Range], day: date, symbol: 
     """When no row follows `day`: the latest close known on it (`FtdIndex.close_through`,
     a row dated on or a few trading days before `day`), by the CUSIP whose range
     holds `day`, then by `symbol`."""
-    d = day.isoformat()
-    cusip = next((r.value for r in cusip_ranges if r.valid_from <= d and (r.valid_to is None or d <= r.valid_to)),
-                 None)
+    cusip = _cusip_on(cusip_ranges, day)
     return (ftd.close_through(day, cusip=cusip) if cusip else None) or ftd.close_through(day, symbol=symbol)
+
+
+def _close_age(row_date: str, last_trade: date) -> int:
+    """Trading days from the close a fails row dated `row_date` carries (that of
+    the trading day before it) to `last_trade`: 1 for a row dated the last
+    trade day itself."""
+    day, n = previous_trading_day(date.fromisoformat(row_date)), 0
+    while day < last_trade:
+        day, n = next_trading_day(day), n + 1
+    return n
 
 
 def _ticker_on(sig: list[tuple[str, str, str]]) -> Callable[[str], str | None]:
@@ -496,13 +510,15 @@ def run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_
         got = _close_on(ftd, cusip_ranges, e.last_trade.day, e.ticker)
         if got is None:
             # Fails stop once trading stops, so no row may follow the last trade
-            # day: look back a few rows (spec §16), flagged as an earlier close.
+            # day: look back a few rows (spec §16). The flag carries the close's
+            # age in trading days (ftd_close_prior:<n>); the evidence the row date.
             back = _close_through(ftd, cusip_ranges, e.last_trade.day, e.ticker)
             if back is None:
                 e.record.evidence["flags"].append("no_last_close")
             else:
                 closes[key] = back[0]
-                e.record.evidence["flags"].append("ftd_close_prior_day")
+                e.record.evidence["ftd_close_row_date"] = back[1]
+                e.record.evidence["flags"].append(f"ftd_close_prior:{_close_age(back[1], e.last_trade.day)}")
             continue
         price, _, lagged = got
         closes[key] = price

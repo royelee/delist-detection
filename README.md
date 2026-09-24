@@ -257,7 +257,7 @@ The full flag vocabulary (from `classifier.py`, `ticker_resolver.py`,
 | `last_trade_date_unconfirmed` | The last trade date comes from unconfirmed filing wording only, with no MIDAS/halt confirmation |
 | `no_last_trade_date` | No source (notice, 8-K, MIDAS, halt) yielded a last trade date at all |
 | `ftd_close_lagged` | The last-trade close is from a fails-to-deliver row more than one trading day after the last trade (no row on the next day) |
-| `ftd_close_prior_day` | No fails-to-deliver row follows the last trade day (fails stop once trading stops), so the close is the latest one known on it: the price on a row dated the last trade day or up to 10 trading days earlier, which is the close of the trading day before that row |
+| `ftd_close_prior:<n>` | No fails-to-deliver row follows the last trade day (fails stop once trading stops), so the close is the latest one known on it: the price on a row dated the last trade day or up to 10 trading days earlier, which is the close of the trading day before that row. `<n>` is that close's age in trading days before the last trade (1 = the day before); the row's date is kept in the evidence (`ftd_close_row_date`) |
 | `acquirer_close_lagged` | The acquirer price used in the merger's cash+stock / stock-only terms is from a fails-to-deliver row more than one trading day after the target's last trade |
 | `ended_without_delisting` | Not listed today and no Form 25 or fallback delisting filing was found |
 | `listing_status_unknown` | Listing status could not be confirmed and no delisting was found |
@@ -850,7 +850,8 @@ never a price vendor, never Alpha Vantage:
   trade at all (fails stop once trading stops), it looks back to the latest
   row dated on the last trade day or up to 10 trading days before it, whose
   price is the close of the day before that row (flagged
-  `ftd_close_prior_day`), before giving up (`no_last_close`) — override with
+  `ftd_close_prior:<n>`, `<n>` its age in trading days; DLRET uses it as the
+  last close), before giving up (`no_last_close`) — override with
   `--last-trade-closes`.
 
 ---

@@ -117,8 +117,9 @@ def test_missing_close_leaves_blank_dlret_and_review(fake_edgar, tmp_path):
 
 def test_close_looks_back_when_no_row_follows_the_last_trade(fake_edgar, tmp_path):
     """The fails rows end on the last trade day itself (2018-11-28, carrying the
-    close of 11-27): the close comes from that row and is flagged
-    ftd_close_prior_day, instead of no close at all."""
+    close of 11-27): the close comes from that row and is flagged with its age
+    in trading days, ftd_close_prior:1, instead of no close at all; the
+    evidence keeps the row's date."""
     rows = [FtdRow("2018-06-29", "00817Y108", "AET", "AETNA INC.(NEW)", 180.0),
             FtdRow("2018-07-02", "00817Y108", "AET", "AETNA INC.(NEW)", 181.0),
             FtdRow("2018-11-26", "00817Y108", "AET", "AETNA INC.(NEW)", 205.36),
@@ -127,7 +128,7 @@ def test_close_looks_back_when_no_row_follows_the_last_trade(fake_edgar, tmp_pat
     run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
     (d,) = read_table("delistings", table_path(tmp_path, "delistings"))
     assert d["last_trade_date"] == "2018-11-28" and d["last_trade_close"] == "210.100000"
-    assert "ftd_close_prior_day" in d["review_flags"] and "no_last_close" not in d["review_flags"]
+    assert "ftd_close_prior:1" in d["review_flags"].split(";") and "no_last_close" not in d["review_flags"]
 
 
 def test_unmatched_override_stops_before_writing(fake_edgar, tmp_path):
@@ -1382,7 +1383,8 @@ def test_the_early_ftd_extension_covers_the_whole_look_back(fake_edgar, tmp_path
 
     (d,) = read_table("delistings", table_path(tmp_path, "delistings"))
     assert d["last_trade_date"] == "2007-09-28" and d["last_trade_close"] == "62.000000"
-    assert "ftd_close_prior_day" in d["review_flags"]
+    # the 2007-09-14 row carries the close of 2007-09-13, eleven trading days before the last trade
+    assert "ftd_close_prior:11" in d["review_flags"].split(";")
 
 
 def test_each_era_is_resolved_with_its_own_pin(fake_edgar, tmp_path):
@@ -1407,3 +1409,21 @@ def test_each_era_is_resolved_with_its_own_pin(fake_edgar, tmp_path):
 
     secs = {r["sec_id"]: r["issuer_cik"] for r in read_table("securities", table_path(tmp_path, "securities"))}
     assert secs == {"BBGBLKOLD01": "1364742", "BBGBLKNEW01": "2012383"}
+
+
+def test_a_look_back_close_keeps_its_row_date_in_the_evidence(fake_edgar, tmp_path, monkeypatch):
+    rows = [FtdRow("2018-06-29", "00817Y108", "AET", "AETNA INC.(NEW)", 180.0),
+            FtdRow("2018-11-21", "00817Y108", "AET", "AETNA INC.(NEW)", 205.00)]
+    index, clients = _clients(fake_edgar, ftd_rows=rows)
+    seen = {}
+    real = pipeline.build_delistings_table
+
+    def spy(records, **kw):
+        seen.update({r.sec_id: r.evidence for r in records})
+        return real(records, **kw)
+
+    monkeypatch.setattr(pipeline, "build_delistings_table", spy)
+    run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
+    assert seen["BBG000FJLFX8"]["ftd_close_row_date"] == "2018-11-21"
+    (d,) = read_table("delistings", table_path(tmp_path, "delistings"))
+    assert "ftd_close_prior:5" in d["review_flags"].split(";")      # close of 11-20 -> 11-28 (22nd a holiday): 5
