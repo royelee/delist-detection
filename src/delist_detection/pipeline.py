@@ -30,7 +30,7 @@ from .openfigi import OpenFigiBlocked
 from .payout_gate import DEFAULT_TOL, gate_payouts
 from .prefetch import Serialized, warm
 from .reconstruction import _lookup, build_delistings_table, delisting_row, unmatched_override_keys
-from .review_triage import Decision, triage
+from .review_triage import Decision, is_blank, triage
 from .security_master import (
     FigiResolver, Range, Security, build_securities, era_cusips, era_last_seen, ranges_from_sightings, refine_eras,
 )
@@ -992,7 +992,13 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
             raw_payout_per_share=pr.value if pr else None, raw_payout_source=pr.source if pr else None,
             raw_payout_confidence=pr.confidence if pr else None,
         ))
-        if enr.review_flags:
+        # I2 (final review): a delisting with a blank DLRET must reach triage even
+        # with no flags at all -- resolve_dlret can return NaN with no flag added
+        # (e.g. a --last-trade-closes override of 0 or a negative --recoveries/
+        # --merger-terms value on a non-merger bucket: the override was "given", so
+        # no_last_close is never added). triage() itself drops a flagless row with a
+        # real DLRET without counting it, so adding one here is safe either way.
+        if enr.review_flags or is_blank(delisting_rows[-1]["dlret"]):
             ak = (enr.evidence or {}).get("anchor_8k") or {}
             review_rows.append({"sec_id": enr.sec_id, "delist_date": enr.delist_date, "ticker": enr.ticker,
                                 "cik": enr.cik, "bucket": enr.bucket.value,
@@ -1082,7 +1088,17 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
     # feeds RunSummary.review_flags and the manifest, so exit code 3 still sees
     # every `error` and `resolution_degraded`.
     flags = Counter(f.split(":", 1)[0] for r in review_rows for f in (r.get("review_flags") or "").split(";") if f)
-    tri = triage(review_rows, review_decisions)
+    # M3 (final review): a --limit dev subset (or a second universe sharing the
+    # repo-relative default data/review_decisions.csv) can only see a fraction of
+    # the rows a decisions file was written against, so every decision outside it
+    # would otherwise turn into review-noise, not a real signal. report_unmatched
+    # counts them regardless (tri.counts["unmatched_decisions"]); only the rows
+    # (and their review_summary.csv entry) are suppressed.
+    report_unmatched = limit is None
+    tri = triage(review_rows, review_decisions, report_unmatched=report_unmatched)
+    if not report_unmatched and tri.counts["unmatched_decisions"]:
+        log(f"{tri.counts['unmatched_decisions']} decision(s) in data/review_decisions.csv matched no row in "
+            f"this --limit {limit} subset; not reported as review_decision_unmatched rows")
 
     # 11. write -- every table formatted and written to temp files first,
     # renamed into place together, so a later table's failure never leaves an

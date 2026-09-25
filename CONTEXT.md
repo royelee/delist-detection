@@ -47,5 +47,5 @@ How much a `review.csv` row can move a return, one of `fix` (`no_dlret` — a de
 _Avoid_: priority, urgency
 
 **Review decision**:
-A line in `data/review_decisions.csv` recording that a person checked one exact flag on one exact row and it's fine (`sec_id, delist_date, ticker, flag, decision, note`). The pipeline reads it on every run, so an accepted flag stays off `review.csv`; a decision naming a flag no row carries becomes a `review_decision_unmatched` row rather than being silently dropped. A decision never changes `delistings.csv`.
+A line in `data/review_decisions.csv` recording that a person checked one exact flag on one exact row and it's fine (`sec_id, delist_date, ticker, flag, decision, note`). The pipeline reads it on every run, so an accepted flag stays off `review.csv`; a decision naming a flag no row carries becomes a `review_decision_unmatched:<flag>` row rather than being silently dropped (unless the run used `--limit`, which only counts it). A decision never changes `delistings.csv`.
 _Avoid_: override, exception, waiver

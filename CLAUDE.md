@@ -28,7 +28,7 @@ editable install.
 
 ```bash
 pip install -e .                         # editable install (Python ≥3.10) — once per env
-pytest                                    # full suite (1066 tests, offline, no network)
+pytest                                    # full suite (1092 tests, offline, no network)
 pytest tests/test_payout_extractor.py -v  # one file
 pytest tests/test_payout_extractor.py::test_match_in_cash_family_altr -v   # one test
 
@@ -41,7 +41,7 @@ python scripts/observations_from_instruments.py --instruments all.txt --out obs.
 python scripts/verify_against_web.py     # independent EDGAR cross-check on output/delistings.csv → output/web_verification.csv
 python scripts/regen_payout_fixtures.py  # refetch golden 8-K fixtures from live SEC
 python scripts/build_golden_fixtures.py  # rebuild the 31-case golden regression set (NETWORK); --efts-only / --llm-only / --only ID
-python scripts/accept_review.py --flag terms_gate_failed --note "sampled 5, all fine"   # bulk-accept every current review.csv row carrying that flag → appends to data/review_decisions.csv (offline); --bucket narrows, --dry-run previews
+python scripts/accept_review.py --flag terms_gate_failed --note "sampled 5, all fine"   # bulk-accept every current review.csv row carrying that flag → appends to data/review_decisions.csv (offline); --bucket narrows, --dry-run previews, --yes required for a fix-severity flag
 # End-to-end pipeline (the canonical way to use the library) — classify a universe → output/delistings.csv (+ 6 more tables), then firm-month-correct a returns panel:
 python scripts/classify_universe.py --observations obs.csv --last-trade-closes lt.csv --merger-terms terms.csv --recoveries rec.csv   # → output/{securities,ticker_history,cusip_history,delistings,payouts,review,review_summary}.csv
 python scripts/compute_corrected_returns.py --panel panel.csv --delistings output/delistings.csv --out corrected.parquet   # firm-month BMP correction, keyed on sec_id
@@ -259,20 +259,31 @@ conflate them.
   `acceptable=False`).
 - **`review.csv` is triaged, not raw; `review_summary.csv` groups it by
   cause.** `review_triage.triage()` gives every row a `severity` — `fix`
-  (`no_dlret`, `observation_unresolved`, or the run/decisions file itself is
-  broken: `error`, `resolution_degraded`, `review_decision_unmatched`),
-  `check` (a rule couldn't settle it), or `info` (a less precise source,
-  nothing suggests it's wrong). `no_dlret` is injected onto every delisting
-  row (non-blank `bucket`) whose DLRET is still blank, *before* decisions are
-  applied, so accepting a row's other flags never silently drops a delisting
-  that still has no return — only supplying the value or explicitly accepting
-  `no_dlret` itself does. Rows are ordered by what they can move: `fix`
-  before `check`; within that, a delisting with a blank DLRET first (this
-  grouping is unchanged — it reads `bucket`/`dlret` directly, not tokens),
-  then delisting rows by descending `|dlret|`, then everything else; ties
-  break on `(sec_id, delist_date, ticker, review_flags)` and, for full
-  determinism, a few more columns after that. A row whose remaining flags are
-  all `info` leaves `review.csv` — those flags stay on `delistings.csv`.
+  (`no_dlret`, `observation_unresolved`, `ended_without_delisting`, or the
+  run/decisions file itself is broken: `error`, `resolution_degraded`,
+  `review_decision_unmatched`), `check` (a rule couldn't settle it), or `info`
+  (a less precise source, nothing suggests it's wrong). `no_dlret` is
+  injected onto every delisting row (non-blank `bucket`) whose DLRET is still
+  blank, *before* decisions are applied, so accepting a row's other flags
+  never silently drops a delisting that still has no return — only supplying
+  the value or explicitly accepting `no_dlret` itself does; `pipeline.py`
+  adds a delisting to the triage input when it has flags **or** a blank
+  DLRET (`review_triage.is_blank`), since `resolve_dlret` can return NaN with
+  *no* flag at all (a `--last-trade-closes`/`--recoveries`/`--merger-terms`
+  override that resolves to no consideration on a non-merger bucket — the
+  override was "given", so `no_last_close` is never added). A flag's severity
+  can be bucket-conditional (`FlagInfo.severity_by_bucket`,
+  `FlagInfo.severity_for(bucket)`): `no_last_close`/`no_last_trade_date`
+  grade `info` on an `exchange_transfer` row (its DLRET is 0 whatever the
+  close) and stay `check` elsewhere; `review_summary.csv`'s `severity` column
+  always shows the catalog's *base* severity, while `in_review` reflects the
+  downgrade. Rows are ordered by what they can move: `fix` before `check`;
+  within that, a delisting with a blank DLRET first (this grouping is
+  unchanged — it reads `bucket`/`dlret` directly, not tokens), then delisting
+  rows by descending `|dlret|`, then everything else; ties break on
+  `(sec_id, delist_date, ticker, review_flags)` and, for full determinism, a
+  few more columns after that. A row whose remaining flags are all `info`
+  leaves `review.csv` — those flags stay on `delistings.csv`.
   `output/review_summary.csv` has one row per flag name: severity, how many
   rows carried it, how many are still in review, how many tokens were
   accepted, its catalog description/action, and up to 3 examples.
@@ -284,17 +295,41 @@ conflate them.
   `terms_gate_failed:no_acq_price`, never just the name before `:`);
   `error`/`resolution_degraded` can never be accepted
   (`CATALOG[...].acceptable is False` — the run itself failed, the fix is a
-  rerun, not a decision); a decision that matches no row becomes a
-  `review_decision_unmatched` row instead of being silently dropped.
-  Decisions never change `delistings.csv`. `classify_universe.py
-  --review-decisions PATH` reads this file (default
+  rerun, not a decision); a decision that matches no row becomes a `fix`
+  `review_decision_unmatched:<flag>` row (the flag it names, not the bare
+  name — so two stale decisions on one row get distinct review keys instead
+  of colliding) instead of being silently dropped, *unless* `triage(...,
+  report_unmatched=False)` — `pipeline.run()` passes `report_unmatched=(limit
+  is None)`, so a `--limit` dev subset (which can only see a fraction of the
+  rows a decisions file was written against) doesn't flood `review.csv` with
+  noise; `counts["unmatched_decisions"]` still counts them regardless, and
+  the run logs how many were skipped. Decisions never change `delistings.csv`.
+  `classify_universe.py --review-decisions PATH` reads this file (default
   `data/review_decisions.csv`; missing at the default path means no
   decisions; missing at an explicit path, or a `ReviewDecisionError`, is
   reported on stderr and exits 2 — unlike a bad `--last-trade-closes` /
   `--merger-terms` / `--recoveries` file, which is not yet guarded and
-  currently crashes with an uncaught traceback, exit 1). `scripts/accept_review.py
-  --flag NAME --note TEXT [--bucket B] [--dry-run]` bulk-accepts every row
-  currently carrying that flag in one append.
+  currently crashes with an uncaught traceback, exit 1).
+- **`scripts/accept_review.py` refuses mistakes rather than silently doing
+  nothing.** `--flag NAME --note TEXT [--bucket B] [--yes] [--dry-run]`
+  bulk-accepts every row currently carrying flag `NAME` in one
+  `data/review_decisions.csv` append. `NAME` must be a bare name in
+  `review_triage.CATALOG` — a full token copied from `review.csv` (with a
+  `:` in it, e.g. `payout_gate_failed:45.5`) or a typo (`no_last_clsoe`) used
+  to silently match nothing and print "added 0 decision(s)"; both now exit 2
+  (`review_triage.accept_by_flag` itself refuses them, so any direct caller
+  gets the same protection). Zero matches print a warning instead of nothing.
+  Bulk-accepting a **`fix`**-severity flag (`no_dlret`, `observation_unresolved`,
+  `ended_without_delisting`) needs `--yes` — one note would otherwise clear
+  every row of that cause at once, reopening the exact hole `no_dlret` closed
+  — and the refusal says how many rows it would clear. `append_decisions`
+  validates an existing decisions file through `load_decisions` first (both
+  now read `utf-8-sig`, so an Excel-written BOM doesn't blank the first
+  cell) and refuses (exit 2, nothing written) to touch a file that doesn't
+  load; a file that does load is rewritten with every existing row and every
+  existing column — including ones `load_decisions` itself ignores — in the
+  file's own header order, never reformatted or dropped. A real write prints
+  "rerun classify_universe.py to apply them"; `--dry-run` does not.
 - **Every output is written only after the whole run succeeds.**
   `pipeline.run()` computes every table in memory first and writes all seven
   only at the end (`store.write_table`'s atomic replace), so a refusal or a

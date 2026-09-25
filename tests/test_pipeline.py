@@ -1115,8 +1115,41 @@ def test_a_stale_review_decision_becomes_a_review_decision_unmatched_row(fake_ed
     decisions = [Decision("NOPE", "2020-01-01", "ZZZ", "no_figi", "typo")]
     summary = run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None, review_decisions=decisions)
     review = read_table("review", table_path(tmp_path, "review"))
-    assert any(r["review_flags"] == "review_decision_unmatched" and r["severity"] == "fix" for r in review)
+    assert any(r["review_flags"] == "review_decision_unmatched:no_figi" and r["severity"] == "fix"
+              for r in review)
     assert summary.review_counts["unmatched_decisions"] == 1
+
+
+def test_a_blank_dlret_with_no_flags_still_reaches_review_as_fix_no_dlret(fake_edgar, tmp_path, monkeypatch):
+    """I2 (final review): resolve_dlret can return NaN with an *empty* flags
+    list -- a --last-trade-closes override of 0 on a non-merger bucket, since
+    the override was "given" so no_last_close is never added (SEC
+    fails-to-deliver data never itself yields a close <= 0). Such a delisting
+    must still reach review.csv as `fix` with `no_dlret`, not be silently
+    skipped because enr.review_flags is empty."""
+    index, clients = _clients(fake_edgar)
+    record = DelistRecord(ticker="AET", cik=1122304, observed_delist_date="2018-11-28", crsp_code=470,
+                          bucket=CrspBucket.LIQUIDATION, confidence="high", reason="bankruptcy",
+                          evidence={"flags": []}, sec_id="BBG000FJLFX8", delist_date="2018-12-09")
+    ev = DelistingEvent(sec_id="BBG000FJLFX8", cik=1122304, ticker="AET", delist_date="2018-12-09", record=record,
+                        last_trade=LastTrade(date(2018, 11, 28), "notice_a", ()), form25=None, form25_sub=None,
+                        exchange="NYSE", flags=[])
+
+    class _CannedFinder:
+        def __init__(self, edgar, classifier, *, midas=None, halts=None):
+            pass
+
+        def find(self, ctx):
+            return ([ev], []) if ctx.security.sec_id == "BBG000FJLFX8" else ([], [])
+
+    monkeypatch.setattr(pipeline, "DelistingFinder", _CannedFinder)
+    overrides = Overrides(last_trade_closes={("BBG000FJLFX8", "2018-12-09"): 0.0})
+    run(index, clients, overrides, out_dir=tmp_path, log=lambda *_: None)
+    (d,) = [d for d in read_table("delistings", table_path(tmp_path, "delistings")) if d["sec_id"] == "BBG000FJLFX8"]
+    assert d["dlret"] == "" and d["review_flags"] == ""     # confirms the gap: no flag, blank DLRET
+    review = read_table("review", table_path(tmp_path, "review"))
+    (r,) = [r for r in review if r["sec_id"] == "BBG000FJLFX8"]
+    assert (r["severity"], r["review_flags"]) == ("fix", "no_dlret")
 
 
 def test_delistings_csv_is_byte_identical_with_and_without_review_decisions(fake_edgar, tmp_path):
@@ -1128,6 +1161,22 @@ def test_delistings_csv_is_byte_identical_with_and_without_review_decisions(fake
         review_decisions=decisions)
     assert (table_path(tmp_path / "no_decisions", "delistings").read_bytes()
             == table_path(tmp_path / "with_decisions", "delistings").read_bytes())
+
+
+def test_limit_suppresses_unmatched_decision_rows_but_still_counts_and_logs_them(fake_edgar, tmp_path):
+    """M3 (final review): a --limit dev subset can only see a fraction of the
+    rows a decisions file was written against; every decision outside it must
+    not flood review.csv with review_decision_unmatched rows, but must still
+    be counted and logged."""
+    index, clients = _clients(fake_edgar)
+    decisions = [Decision("BBG000LIVE01", "", "LIVE", "ticker_unconfirmed", "checked, fine")]
+    logged = []
+    summary = run(index, clients, Overrides(), out_dir=tmp_path, log=logged.append, limit=1,
+                  review_decisions=decisions)
+    review = read_table("review", table_path(tmp_path, "review"))
+    assert not any("review_decision_unmatched" in r["review_flags"] for r in review)
+    assert summary.review_counts["unmatched_decisions"] == 1
+    assert any("1 decision(s)" in line and "--limit 1" in line for line in logged)
 
 
 def test_review_csv_first_column_is_severity_and_holds_only_fix_or_check(fake_edgar, tmp_path):

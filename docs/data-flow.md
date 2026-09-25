@@ -544,6 +544,14 @@ fails-to-deliver row later than the next trading day) and
 first observation and no fails-to-deliver row under its own tickers shows it
 trading afterwards: the observations after it are a stale snapshot's).
 
+`pipeline.py` adds a delisting to the triage input when it has flags **or**
+a blank DLRET (`review_triage.is_blank`): `resolve_dlret` can return NaN
+with *no* flag at all when a `--last-trade-closes`/`--recoveries`/
+`--merger-terms` override resolves to no consideration on a non-merger
+bucket (the override was "given", so `no_last_close` is never added), and
+such a row must still reach review, not vanish because `review_flags` was
+empty.
+
 `review_triage.triage()` (`review_triage.py`) first appends the token
 `no_dlret` to every delisting row (non-blank `bucket`) whose `dlret` is still
 blank, *before* any decision is applied — so accepting the row's other flags
@@ -551,28 +559,49 @@ never silently drops a delisting that still has no return; only supplying the
 value or explicitly accepting `no_dlret` does. It then turns those candidate
 rows plus `data/review_decisions.csv` (`--review-decisions`) into the final
 `output/review.csv`: every row gets a leading `severity` — `fix` (`no_dlret`,
-`observation_unresolved`, or the run/decisions file itself is broken:
-`error`, `resolution_degraded`, `review_decision_unmatched`), `check` (a rule
-couldn't settle it), or `info` (a less precise source, nothing suggests it's
-wrong) — and rows are ordered by what they can move: `fix` before `check`; a
-delisting with a blank `dlret` first (this grouping still reads `bucket`/
-`dlret` directly, unaffected by tokens or decisions), then delisting rows by
-descending `|dlret|`, then everything else; ties break on `(sec_id,
-delist_date, ticker, review_flags)` and, for determinism, a few more columns.
-A row whose remaining flags are all `info` is dropped from `review.csv` (its
-flags stay on `delistings.csv`). A decision matches a row by the exact token
-and by `(sec_id, delist_date, ticker)` compared as stripped strings (blank
-matches blank); `error` and `resolution_degraded` can never be accepted; a
-decision matching no row becomes a `fix` `review_decision_unmatched` row
-instead of vanishing. `no_dlret` and `review_decision_unmatched` are the only
-two flags `triage()` itself creates — neither ever comes from the pipeline or
-reaches `delistings.csv`. Decisions never change `delistings.csv`.
-`output/review_summary.csv` (key `flag`) has one row per flag name —
-`severity, flag, rows, in_review, accepted, description, action, examples` —
-for triaging by cause; `scripts/accept_review.py --flag NAME --note TEXT
-[--bucket B]` bulk-appends `accept` decisions for every row currently
-carrying that flag. Written by `scripts/classify_universe.py` alongside the
-other five tables.
+`observation_unresolved`, `ended_without_delisting` — a security that
+stopped being observed with no delisting found has no DLRET either, and
+would otherwise drop out of a backtest with no terminal return — or the
+run/decisions file itself is broken: `error`, `resolution_degraded`,
+`review_decision_unmatched`), `check` (a rule couldn't settle it), or `info`
+(a less precise source, nothing suggests it's wrong) — and rows are ordered
+by what they can move: `fix` before `check`; a delisting with a blank
+`dlret` first (this grouping still reads `bucket`/`dlret` directly,
+unaffected by tokens or decisions), then delisting rows by descending
+`|dlret|`, then everything else; ties break on `(sec_id, delist_date,
+ticker, review_flags)` and, for determinism, a few more columns. A flag's
+severity can also depend on the row's `bucket`
+(`FlagInfo.severity_by_bucket`/`severity_for`): `no_last_close`/
+`no_last_trade_date` grade `info` on an `exchange_transfer` row (its DLRET
+is 0 whatever the close, so the close changes no output) and stay `check`
+elsewhere; `review_summary.csv`'s `severity` column always shows the
+catalog's base severity, `in_review` reflects the downgrade. A row whose
+remaining flags are all `info` is dropped from `review.csv` (its flags stay
+on `delistings.csv`). A decision matches a row by the exact token and by
+`(sec_id, delist_date, ticker)` compared as stripped strings (blank matches
+blank); `error` and `resolution_degraded` can never be accepted; a decision
+matching no row becomes a `fix` `review_decision_unmatched:<flag>` row (the
+flag it names, not the bare name — so two stale decisions on one row get
+distinct review keys instead of colliding) instead of vanishing, unless
+`report_unmatched=False` (`pipeline.run()` passes `report_unmatched=(limit
+is None)`: a `--limit` dev subset can only see a fraction of the rows a
+decisions file was written against, so unmatched rows outside it are only
+counted — `tri.counts["unmatched_decisions"]`, logged by the run — not
+turned into review rows). `no_dlret` and `review_decision_unmatched:<flag>`
+are the only tokens `triage()` itself creates — neither ever comes from the
+pipeline or reaches `delistings.csv`. Decisions never change
+`delistings.csv`. `output/review_summary.csv` (key `flag`) has one row per
+flag name — `severity, flag, rows, in_review, accepted, description, action,
+examples` — for triaging by cause; `scripts/accept_review.py --flag NAME
+--note TEXT [--bucket B] [--yes]` bulk-appends `accept` decisions for every
+row currently carrying that flag (`NAME` must be a bare `CATALOG` name, not
+a token with a `:`; bulk-accepting a `fix`-severity flag needs `--yes`).
+`append_decisions` validates an existing decisions file through
+`load_decisions` first (both read `utf-8-sig`, so an Excel BOM doesn't blank
+the first cell) and refuses to touch a file that doesn't load, rewriting a
+valid one with every existing row/column preserved in the file's own header
+order. Written by `scripts/classify_universe.py` alongside the other six
+tables.
 
 `output/web_verification.csv` — independent EDGAR cross-check produced by
 `scripts/verify_against_web.py`. Verdicts:

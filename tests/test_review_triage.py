@@ -8,7 +8,7 @@ import pytest
 
 from delist_detection.review_triage import (
     CATALOG, DECISION_COLUMNS, SEVERITIES, Decision, FlagInfo, ReviewDecisionError, flag_info, flag_name,
-    load_decisions, row_severity, triage,
+    is_blank, load_decisions, row_severity, triage,
 )
 
 OUTPUT = Path(__file__).resolve().parents[1] / "output"
@@ -69,13 +69,13 @@ def test_severities_follow_the_rulings():
     assert {n for n, i in CATALOG.items() if i.severity == "info"} == info
     assert {n for n, i in CATALOG.items() if not i.acceptable} == unacceptable
     assert {n for n, i in CATALOG.items() if i.severity == "fix"} == (
-        unacceptable | {"observation_unresolved", "no_dlret"})
+        unacceptable | {"observation_unresolved", "no_dlret", "ended_without_delisting"})
     for name in ("merger_at_par", "terms_gate_failed", "payout_gate_failed", "llm_gate_failed",
                  "distress_at_normal_price", "bankruptcy_before_merger", "bankruptcy_tag_unconfirmed",
                  "bankruptcy_text_missing", "no_evidence_default", "last_trade_date_conflict", "no_form25",
                  "delist_date_approx", "successor_unknown", "no_last_close", "no_last_trade_date",
                  "form25_unclassified", "form25_unmatched", "form25_unreadable", "listing_status_unknown",
-                 "ended_without_delisting", "observed_after_delisting", "member_name_mismatch",
+                 "observed_after_delisting", "member_name_mismatch",
                  "ticker_unconfirmed", "ticker_shared", "ticker_range_overlap", "observation_conflict"):
         assert CATALOG[name].severity == "check", name
 
@@ -171,6 +171,66 @@ def test_no_dlret_never_reaches_a_non_delisting_review_item():
     assert "no_dlret" not in r["review_flags"]
 
 
+# --- I3: no_last_close / no_last_trade_date are info on exchange_transfer ----
+
+def test_no_last_close_is_info_on_an_exchange_transfer_row_but_check_elsewhere():
+    et_row = _del("S1", "2020-01-02", "AAA", "no_last_close", dlret=0.0, bucket="exchange_transfer")
+    assert row_severity(et_row) == "info"
+    merger_row = _del("S2", "2020-02-02", "BBB", "no_last_close", dlret=0.05)
+    assert row_severity(merger_row) == "check"
+
+
+def test_no_last_close_alone_on_an_exchange_transfer_row_is_hidden_as_info():
+    tri = triage([_del("S1", "2020-01-02", "AAA", "no_last_close", dlret=0.0, bucket="exchange_transfer")], ())
+    assert tri.review_rows == [] and tri.counts["info_hidden"] == 1
+
+
+def test_no_last_trade_date_is_also_info_on_exchange_transfer():
+    et_row = _del("S1", "2020-01-02", "AAA", "no_last_trade_date", dlret=0.0, bucket="exchange_transfer")
+    assert row_severity(et_row) == "info"
+
+
+def test_the_summary_severity_stays_base_but_in_review_reflects_the_bucket_downgrade():
+    rows = [_del("S1", "2020-01-02", "AAA", "no_last_close", dlret=0.0, bucket="exchange_transfer"),
+           _del("S2", "2020-02-02", "BBB", "no_last_close", dlret=0.05)]
+    tri = triage(rows, ())
+    summ = {s["flag"]: s for s in tri.summary_rows}
+    assert summ["no_last_close"]["severity"] == "check"       # review_summary.csv shows the base severity
+    assert summ["no_last_close"]["rows"] == 2
+    assert summ["no_last_close"]["in_review"] == 1             # S1's row was hidden as info
+
+
+def test_a_downgraded_token_alongside_a_check_token_still_grades_check():
+    row = _del("S1", "2020-01-02", "AAA", "no_last_close;successor_unknown", dlret=0.0,
+              bucket="exchange_transfer")
+    assert row_severity(row) == "check"                        # successor_unknown is still check here
+
+
+# --- M1: an unmatched decision's token names the flag ------------------------
+
+def test_two_stale_decisions_on_one_row_give_two_distinct_review_keys():
+    tri = triage([], [_accept("S1", "2020-01-02", "AAA", "no_figi"),
+                      _accept("S1", "2020-01-02", "AAA", "merger_at_par")])
+    keys = {(r["sec_id"], r["delist_date"], r["ticker"], r["review_flags"]) for r in tri.review_rows}
+    assert keys == {("S1", "2020-01-02", "AAA", "review_decision_unmatched:no_figi"),
+                    ("S1", "2020-01-02", "AAA", "review_decision_unmatched:merger_at_par")}
+
+
+# --- M3: report_unmatched=False (a --limit subset) ----------------------------
+
+def test_report_unmatched_false_makes_no_unmatched_rows_but_still_counts_them():
+    tri = triage([], [_accept("S1", "2020-01-02", "AAA", "no_figi")], report_unmatched=False)
+    assert tri.review_rows == [] and tri.summary_rows == []
+    assert tri.counts["unmatched_decisions"] == 1
+
+
+def test_report_unmatched_false_does_not_suppress_a_real_match():
+    rows = [_del("S1", "2020-01-02", "AAA", "merger_at_par", dlret=0.0)]
+    tri = triage(rows, [_accept("S1", "2020-01-02", "AAA", "merger_at_par"),
+                        _accept("S2", "2020-02-02", "BBB", "no_figi")], report_unmatched=False)
+    assert tri.review_rows == [] and tri.counts["cleared"] == 1 and tri.counts["unmatched_decisions"] == 1
+
+
 def test_an_accepted_token_leaves_the_row_and_an_info_remainder_is_hidden():
     rows = [_del("S1", "2020-01-02", "AAA", "merger_at_par;no_figi", dlret=0.0)]
     tri = triage(rows, [_accept("S1", "2020-01-02", "AAA", "merger_at_par")])
@@ -197,7 +257,8 @@ def test_a_decision_matches_the_exact_token_and_an_unmatched_one_becomes_a_fix_r
     rows = [_del("S1", "2020-01-02", "AAA", "terms_gate_failed:fail_sanity", dlret=0.0)]
     tri = triage(rows, [_accept("S1", "2020-01-02", "AAA", "terms_gate_failed:no_acq_price", note="checked 8-K")])
     assert [(r["severity"], r["sec_id"], r["review_flags"]) for r in tri.review_rows] == [
-        ("fix", "S1", "review_decision_unmatched"), ("check", "S1", "terms_gate_failed:fail_sanity")]
+        ("fix", "S1", "review_decision_unmatched:terms_gate_failed:no_acq_price"),
+        ("check", "S1", "terms_gate_failed:fail_sanity")]
     un = tri.review_rows[0]
     assert (un["delist_date"], un["ticker"]) == ("2020-01-02", "AAA")
     assert un["reason"] == ("decision accepts 'terms_gate_failed:no_acq_price' but no review row carries it; "
@@ -214,7 +275,7 @@ def test_an_unmatched_decision_without_a_note_has_no_parenthetical():
     tri = triage([], [_accept("", "", "ZZZ", "ticker_shared")])
     (r,) = tri.review_rows
     assert r["reason"] == "decision accepts 'ticker_shared' but no review row carries it; remove it from the decisions file"
-    assert r["severity"] == "fix" and r["review_flags"] == "review_decision_unmatched"
+    assert r["severity"] == "fix" and r["review_flags"] == "review_decision_unmatched:ticker_shared"
 
 
 def test_the_summary_counts_every_unmatched_decision_row_and_sorts_it_by_that_count():
@@ -228,7 +289,8 @@ def test_the_summary_counts_every_unmatched_decision_row_and_sorts_it_by_that_co
 def test_a_decision_on_the_same_token_but_another_row_does_not_match():
     tri = triage([_del("S1", "2020-01-02", "AAA", "merger_at_par", dlret=0.0)],
                  [_accept("S1", "2020-01-03", "AAA", "merger_at_par")])
-    assert sorted(r["review_flags"] for r in tri.review_rows) == ["merger_at_par", "review_decision_unmatched"]
+    assert sorted(r["review_flags"] for r in tri.review_rows) == [
+        "merger_at_par", "review_decision_unmatched:merger_at_par"]
 
 
 def test_blank_key_cells_match_blank_decision_cells():
@@ -353,6 +415,19 @@ def _write(tmp_path, text: str) -> Path:
 
 def test_a_header_only_file_has_no_decisions(tmp_path):
     assert load_decisions(_write(tmp_path, HEADER + "\n")) == []
+
+
+def test_load_decisions_ignores_a_utf8_bom(tmp_path):
+    """C1 (final review): a UTF-8 BOM, which Excel writes on a "CSV UTF-8"
+    save, must not blank the first header cell (sec_id)."""
+    p = tmp_path / "review_decisions.csv"
+    p.write_bytes(("﻿" + HEADER + "\nS1,2020-01-02,AAA,merger_at_par,accept,ok\n").encode("utf-8"))
+    assert load_decisions(p) == [Decision("S1", "2020-01-02", "AAA", "merger_at_par", "ok")]
+
+
+def test_is_blank():
+    assert is_blank(None) and is_blank("") and is_blank("  ") and is_blank(float("nan"))
+    assert not is_blank(0.0) and not is_blank("x")
 
 
 def test_decisions_are_read_stripped_and_extra_columns_are_ignored(tmp_path):

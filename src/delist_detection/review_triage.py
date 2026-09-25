@@ -51,6 +51,17 @@ class FlagInfo:
     description: str
     action: str
     acceptable: bool = True
+    # Per-bucket severity overrides, e.g. (("exchange_transfer", "info"),): a flag
+    # whose urgency depends on the delisting bucket (I3, final review). The
+    # catalog's own `severity` (used by review_summary.csv) is always the base
+    # value; `severity_for` is what `row_severity` actually uses.
+    severity_by_bucket: tuple[tuple[str, str], ...] = ()
+
+    def severity_for(self, bucket: str) -> str:
+        for b, s in self.severity_by_bucket:
+            if b == bucket:
+                return s
+        return self.severity
 
 
 def _accept_if(when: str = "right") -> str:
@@ -84,6 +95,15 @@ CATALOG: dict[str, FlagInfo] = {
                "row whose dlret is still blank, so accepting its other flags never silently drops it.",
         "Supply the missing value via --last-trade-closes, --merger-terms or --recoveries and rerun, or "
         f"{_accept_if('no value exists to supply')}."),
+    # --- fix: the security stopped being observed but has no delisting row ---
+    "ended_without_delisting": FlagInfo(
+        "fix", "The security was observed and then stopped being observed, but no delisting was found: it has "
+               "no delisting row and no DLRET, so it drops out of a backtest with no terminal return -- a "
+               "missing delisting can hide a loss as large as -100%.",
+        "Find the Form 25/15, bankruptcy or merger filing that ended it (search the issuer's filings around "
+        "last_seen); if the identity is wrong, pin the right cik/sec_id on the observations. Accept only "
+        "after confirming the security really still trades (e.g. under another ticker) or is out of scope -- "
+        "there is no override to add a missing delisting."),
 
     # --- check: a rule could not settle the answer ---
     # merger terms and payouts
@@ -162,15 +182,26 @@ CATALOG: dict[str, FlagInfo] = {
         f"--last-trade-closes if the close is wrong, or {_ACCEPT}."),
     "no_last_trade_date": FlagInfo(
         "check", "No source (MIDAS, a Nasdaq halt, the Form 25 notice or the 8-K text) dates the last trade.",
-        "Find the last trading day in the delisting filings and supply that day's close in "
-        "--last-trade-closes."),
+        "Matters when the row also carries no_dlret, or for a liquidation or compliance_failure delisting "
+        "(their DLRET needs a close): find the last trading day in the delisting filings and supply that "
+        "day's close in --last-trade-closes. On an exchange transfer the DLRET is 0 whatever the close; "
+        "accept it in bulk with `accept_review.py --flag no_last_trade_date --bucket exchange_transfer`.",
+        severity_by_bucket=(("exchange_transfer", "info"),)),
     "no_last_close": FlagInfo(
         "check", "No last-trade close was found in SEC fails-to-deliver data (or there is no last trade date), "
                  "so the DLRET may be blank.",
-        "Supply the close in --last-trade-closes (sec_id,last_trade_close[,delist_date])."),
+        "Matters when the row also carries no_dlret, or for a liquidation or compliance_failure delisting "
+        "(their DLRET needs a close): supply the close in --last-trade-closes "
+        "(sec_id,last_trade_close[,delist_date]). On an exchange transfer the DLRET is 0 whatever the close; "
+        "accept it in bulk with `accept_review.py --flag no_last_close --bucket exchange_transfer`.",
+        severity_by_bucket=(("exchange_transfer", "info"),)),
     "successor_unknown": FlagInfo(
-        "check", "An exchange transfer whose new security (successor_sec_id) was not found.",
-        f"Find the security the holders kept and add an observation of it; {_accept_if('none exists')}."),
+        "check", "An exchange-transfer delisting (CRSP code 304: filings continued more than 180 days after "
+                 "the delisting) whose successor security (successor_sec_id) was not found.",
+        "Confirm the security really moved -- to OTC or another venue -- and was not acquired or dropped for "
+        "cause; if the bucket itself is wrong, no bucket override exists, so note it for a classifier rule "
+        f"instead of chasing the successor. Otherwise find the security the holders kept and add an "
+        f"observation of it; {_accept_if('none exists')}."),
     "observed_after_delisting": FlagInfo(
         "check", "The delisting is a Form 25 filed before the observations stopped: a stale snapshot kept "
                  "listing a security already gone.",
@@ -191,11 +222,6 @@ CATALOG: dict[str, FlagInfo] = {
     "listing_status_unknown": FlagInfo(
         "check", "Whether the security trades today could not be told, and no delisting was found for it.",
         f"Check whether it still trades; if it ended, find its Form 25 or delisting filing, else {_ACCEPT}."),
-    "ended_without_delisting": FlagInfo(
-        "check", "The security is not listed today, but no Form 25 or other delisting filing was found, so it "
-                 "has no delisting row.",
-        "Search the issuer's filings around last_seen for a Form 25, 8-K or Form 15; if the CIK is wrong, "
-        f"pin the right cik on the observations, else {_ACCEPT}."),
     # identity
     "member_name_mismatch": FlagInfo(
         "check", "EDGAR's issuer name on the delisting date does not agree with the observed name, so the CIK "
@@ -270,6 +296,14 @@ def _blank(v: object) -> bool:
     return v is None or (isinstance(v, float) and math.isnan(v)) or (isinstance(v, str) and not v.strip())
 
 
+def is_blank(v: object) -> bool:
+    """True for `None`, NaN, or an empty/whitespace-only string -- the same
+    "no value" test `_inject_no_dlret`/`row_severity` use for `dlret`, exposed
+    publicly so `pipeline.py` can decide whether a delisting needs `no_dlret`
+    without reaching into a private helper (I2, final review)."""
+    return _blank(v)
+
+
 def _text(v: object) -> str:
     return "" if v is None else str(v)
 
@@ -290,11 +324,16 @@ def _is_delisting(row: Mapping) -> bool:
 
 def row_severity(row: Mapping) -> str:
     """The most severe of the row's tokens' catalog severities (`fix` > `check`
-    > `info`); `info` for a row with none. A delisting row with a blank DLRET
-    is `fix` because `triage()` injects the `no_dlret` token (see
-    `_inject_no_dlret`) before this is ever called -- this function itself no
-    longer special-cases the bucket/dlret fields."""
-    return _most_severe(flag_info(t).severity for t in _tokens(row.get("review_flags")))
+    > `info`); `info` for a row with none. A token whose `FlagInfo` carries a
+    `severity_by_bucket` entry for this row's `bucket` (I3, final review: e.g.
+    `no_last_close` is `info` on an `exchange_transfer` row, whose DLRET is 0
+    whatever the close) uses that instead of its base severity -- the base
+    severity is what `review_summary.csv`'s own `severity` column shows.
+    A delisting row with a blank DLRET is `fix` because `triage()` injects the
+    `no_dlret` token (see `_inject_no_dlret`) before this is ever called --
+    this function itself no longer special-cases the bucket/dlret fields."""
+    bucket = _text(row.get("bucket")).strip()
+    return _most_severe(flag_info(t).severity_for(bucket) for t in _tokens(row.get("review_flags")))
 
 
 def _inject_no_dlret(row: Mapping) -> dict:
@@ -333,12 +372,13 @@ def _key(sec_id: object, delist_date: object, ticker: object) -> tuple[str, str,
 
 def load_decisions(path: str | Path) -> list[Decision]:
     """The decisions in the CSV at `path` (header: every DECISION_COLUMNS name;
-    other columns are ignored; cells are stripped). A missing file raises
-    FileNotFoundError; a bad file raises ReviewDecisionError naming the file and
-    line. Rows repeating a `(sec_id, delist_date, ticker, flag)` collapse into
-    the first."""
+    other columns are ignored; cells are stripped). Read as `utf-8-sig`, so a
+    UTF-8 BOM (as Excel writes on a "CSV UTF-8" save) does not blank the first
+    header/cell. A missing file raises FileNotFoundError; a bad file raises
+    ReviewDecisionError naming the file and line. Rows repeating a `(sec_id,
+    delist_date, ticker, flag)` collapse into the first."""
     path = Path(path)
-    with path.open(newline="") as fh:
+    with path.open(newline="", encoding="utf-8-sig") as fh:
         reader = csv.DictReader(fh)
         header = [h.strip() for h in reader.fieldnames or ()]
         missing = [c for c in DECISION_COLUMNS if c not in header]
@@ -367,13 +407,23 @@ def accept_by_flag(review_rows: Iterable[Mapping], flag: str, *, note: str,
     before its `:`), one per matching token, narrowed to rows whose `bucket`
     equals `bucket` when given. `note` is copied onto every decision and must
     be non-empty (the person records what they checked). Raises
-    `ReviewDecisionError` for a blank `note` or a `flag` whose catalog entry
-    is not acceptable (`error`, `resolution_degraded`,
-    `review_decision_unmatched`) -- these mean the run itself failed, not
-    that a rule couldn't settle the answer."""
+    `ReviewDecisionError` for a blank `note`; a `flag` containing `:` (a full
+    token such as `payout_gate_failed:45.5` copied from review.csv, rather
+    than a flag *name*, would otherwise silently match nothing); a `flag` not
+    in `CATALOG` at all (a typo such as `no_last_clsoe` would otherwise fall
+    back to the generic "not in the flag catalog" entry -- itself acceptable
+    -- and silently match nothing too); or a `flag` whose catalog entry is
+    not acceptable (`error`, `resolution_degraded`, `review_decision_unmatched`)
+    -- these mean the run itself failed, not that a rule couldn't settle the
+    answer."""
     if not note or not note.strip():
         raise ReviewDecisionError("note must be non-empty")
-    info = flag_info(flag)
+    if ":" in flag:
+        raise ReviewDecisionError(f"flag {flag!r} must be a flag name, not a token; drop everything from "
+                                  "the first ':' on")
+    if flag not in CATALOG:
+        raise ReviewDecisionError(f"flag {flag!r} is not in review_triage.CATALOG")
+    info = CATALOG[flag]
     if not info.acceptable:
         raise ReviewDecisionError(f"flag {flag!r} cannot be accepted; {info.action}")
     out: list[Decision] = []
@@ -393,30 +443,51 @@ def append_decisions(path: str | Path, decisions: Sequence[Decision], *, dry_run
     `(sec_id, delist_date, ticker, flag)`, stripped) is skipped, and so is a
     repeat within `decisions` itself. Written atomically
     (`store.replace_on_success`). Returns how many rows would be added
-    (`dry_run=True`) or were added."""
+    (`dry_run=True`) or were added.
+
+    C1 (final review): an existing file is validated with `load_decisions`
+    first -- a file that does not load (a missing column, a bad decision, an
+    unacceptable flag) raises `ReviewDecisionError` and nothing is written, so
+    a bad file is never silently rewritten into an empty or half-blanked one.
+    A valid file's rows are re-read with the same header normalization
+    `load_decisions` uses (stripped header cells, `utf-8-sig` so an Excel BOM
+    is ignored) and written back **exactly as read** -- every existing row,
+    every existing column including ones `load_decisions` itself ignores (a
+    `reviewer` column, say), in the file's own column order. A new row gets a
+    blank cell for every column beyond `DECISION_COLUMNS`."""
     path = Path(path)
     try:
-        with path.open(newline="") as fh:
-            existing_rows = list(csv.DictReader(fh))
+        load_decisions(path)      # validates; raises before anything is read further or written
     except FileNotFoundError:
-        existing_rows = []
-    seen = {_key(r.get("sec_id"), r.get("delist_date"), r.get("ticker")) + (_text(r.get("flag")).strip(),)
-            for r in existing_rows}
+        header = list(DECISION_COLUMNS)
+        existing_rows: list[dict[str, str]] = []
+        existing_keys: set[tuple[str, str, str, str]] = set()
+    else:
+        with path.open(newline="", encoding="utf-8-sig") as fh:
+            reader = csv.DictReader(fh)
+            raw_fieldnames = reader.fieldnames or []
+            header = [h.strip() for h in raw_fieldnames]
+            existing_rows = [{h: (raw_row.get(orig) or "") for h, orig in zip(header, raw_fieldnames)}
+                             for raw_row in reader]
+        existing_keys = {_key(r.get("sec_id"), r.get("delist_date"), r.get("ticker"))
+                         + (_text(r.get("flag")).strip(),) for r in existing_rows}
+    seen = set(existing_keys)
     new_rows: list[dict[str, str]] = []
     for d in decisions:
         k = _key(d.sec_id, d.delist_date, d.ticker) + (d.flag.strip(),)
         if k in seen:
             continue
         seen.add(k)
-        new_rows.append({"sec_id": d.sec_id, "delist_date": d.delist_date, "ticker": d.ticker, "flag": d.flag,
-                         "decision": "accept", "note": d.note})
+        values = {"sec_id": d.sec_id, "delist_date": d.delist_date, "ticker": d.ticker, "flag": d.flag,
+                 "decision": "accept", "note": d.note}
+        new_rows.append({c: values.get(c, "") for c in header})
     if dry_run or not new_rows:
         return len(new_rows)
     with replace_on_success(path) as tmp, tmp.open("w", newline="") as fh:
-        w = csv.DictWriter(fh, fieldnames=list(DECISION_COLUMNS), lineterminator="\n")
+        w = csv.DictWriter(fh, fieldnames=header, lineterminator="\n")
         w.writeheader()
         for r in existing_rows:
-            w.writerow({c: r.get(c, "") for c in DECISION_COLUMNS})
+            w.writerow(r)
         for r in new_rows:
             w.writerow(r)
     return len(new_rows)
@@ -458,7 +529,7 @@ def _names(row: Mapping) -> set[str]:
     return {flag_name(t) for t in _tokens(row.get("review_flags"))}
 
 
-def triage(rows: list[Mapping], decisions: Sequence[Decision]) -> Triage:
+def triage(rows: list[Mapping], decisions: Sequence[Decision], *, report_unmatched: bool = True) -> Triage:
     """The final review.csv rows, the review_summary.csv rows and the counts.
 
     Before anything else, every delisting row (non-blank `bucket`) whose DLRET
@@ -471,16 +542,23 @@ def triage(rows: list[Mapping], decisions: Sequence[Decision]) -> Triage:
 
     A token is accepted by a decision with the same `(sec_id, delist_date,
     ticker)` (stripped, None as "") and exactly that token; accepted tokens
-    leave their row. A decision that accepts nothing becomes a
-    `review_decision_unmatched` row. Rows left with no token, or with a
-    severity of `info`, leave review.csv. The rest are ordered by severity;
-    then delisting rows (those with a `bucket`) with a blank DLRET, delisting
-    rows by descending |DLRET|, every other row; then by
-    `(sec_id, delist_date, ticker, review_flags)` and, beyond what those four
-    decide, a few more columns (`reason, cik, bucket, dlret, anchor_8k,
-    last_seen`) so two rows that still tie never depend on the input order.
-    The caller's input rows are not mutated (each is copied before its tokens
-    change)."""
+    leave their row. A decision that accepts nothing becomes a `fix` row whose
+    token is `review_decision_unmatched:<flag>` (the flag it names, not the
+    bare name -- two stale decisions on one row therefore get distinct review
+    keys) -- unless `report_unmatched` is False (M3, final review: a `--limit`
+    dev subset, or a second universe sharing the repo-relative default
+    `data/review_decisions.csv`, can only see a fraction of the rows a
+    decisions file was written against, so every decision outside that subset
+    would otherwise become noise), in which case no such row is made, though
+    `counts["unmatched_decisions"]` still reports how many there were so the
+    caller can log it. Rows left with no token, or with a severity of `info`,
+    leave review.csv. The rest are ordered by severity; then delisting rows
+    (those with a `bucket`) with a blank DLRET, delisting rows by descending
+    |DLRET|, every other row; then by `(sec_id, delist_date, ticker,
+    review_flags)` and, beyond what those four decide, a few more columns
+    (`reason, cik, bucket, dlret, anchor_8k, last_seen`) so two rows that
+    still tie never depend on the input order. The caller's input rows are
+    not mutated (each is copied before its tokens change)."""
     rows = [_inject_no_dlret(r) for r in rows]
     by_key: dict[tuple[str, str, str, str], Decision] = {}
     for d in decisions:
@@ -511,18 +589,22 @@ def triage(rows: list[Mapping], decisions: Sequence[Decision]) -> Triage:
         kept_rows.append({**out, "severity": severity})
 
     unmatched = [d for k, d in by_key.items() if k not in used]
-    for d in unmatched:
-        note = f" ({d.note})" if d.note else ""
-        kept_rows.append({
-            "severity": "fix", "sec_id": d.sec_id, "delist_date": d.delist_date, "ticker": d.ticker,
-            "review_flags": UNMATCHED_FLAG,
-            "reason": f"decision accepts {d.flag!r} but no review row carries it; remove it from the decisions "
-                      f"file{note}",
-        })
+    if report_unmatched:
+        for d in unmatched:
+            note = f" ({d.note})" if d.note else ""
+            kept_rows.append({
+                "severity": "fix", "sec_id": d.sec_id, "delist_date": d.delist_date, "ticker": d.ticker,
+                # M1 (final review): the flag it names, not the bare UNMATCHED_FLAG, so two stale decisions
+                # on one row get distinct keys (sec_id, delist_date, ticker, review_flags) instead of
+                # colliding; the catalog still looks it up by the name before ':'.
+                "review_flags": f"{UNMATCHED_FLAG}:{d.flag}",
+                "reason": f"decision accepts {d.flag!r} but no review row carries it; remove it from the "
+                          f"decisions file{note}",
+            })
     review_rows = sorted(kept_rows, key=_order)
 
     input_rows = sorted(rows, key=lambda r: tuple(_text(r.get(c)) for c in _TIEBREAK))
-    names = {n for r in rows for n in _names(r)} | ({UNMATCHED_FLAG} if unmatched else set())
+    names = {n for r in rows for n in _names(r)} | ({UNMATCHED_FLAG} if (unmatched and report_unmatched) else set())
     summary_rows = []
     for name in names:
         examples: list[str] = []

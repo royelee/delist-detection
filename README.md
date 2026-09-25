@@ -261,9 +261,15 @@ classifier and payout-gate flag into a `review_flags` column on
 securities with no delisting at all — see *The seven output tables* above),
 with the ticker, bucket, `dlret`, reason, `cik`, and anchor 8-K item set, so a
 human can triage without re-deriving which rows the automatic rules could not
-settle on their own. `review_triage.py` (`triage()`) gives every row a
-`severity`, orders them by what they can move, and hides a row whose flags
-are all `info` — see *Severities and accepting a review row* below.
+settle on their own. `review.csv` also carries a delisting with a blank
+`dlret` and **no flags at all** — reachable through an override value that
+resolves to no consideration (a `--last-trade-closes` of 0, a negative
+`--recoveries`/`--merger-terms` leg) on a non-merger bucket, since the
+override was "given" so no flag is added for it — so a missing return is
+never silently absent from the review surface either. `review_triage.py`
+(`triage()`) gives every row a `severity`, orders them by what they can
+move, and hides a row whose flags are all `info` — see *Severities and
+accepting a review row* below.
 
 The full flag vocabulary (from `classifier.py`, `ticker_resolver.py`,
 `delistings.py`, `payout_gate.py`, and `reconstruction.py`):
@@ -310,9 +316,10 @@ The full flag vocabulary (from `classifier.py`, `ticker_resolver.py`,
 
 Plus two flags `review_triage.triage()` itself creates — neither ever comes
 from the pipeline, so neither ever reaches `delistings.csv`:
-`review_decision_unmatched` for a stale decision (see below), and `no_dlret`,
-added to every delisting row whose `dlret` is still blank before decisions
-are applied, so accepting the row's other flags never silently drops it.
+`review_decision_unmatched:<flag>` for a stale decision (the flag it names,
+not just the bare name — see below), and `no_dlret`, added to every delisting
+row whose `dlret` is still blank before decisions are applied, so accepting
+the row's other flags never silently drops it.
 
 ### Severities and accepting a review row
 
@@ -323,6 +330,23 @@ groups the current run by flag; work it top down, then `review.csv` itself.
 `no_dlret` is `fix` and acceptable like any other flag: accept it once you've
 confirmed no value exists to supply, or supply one via `--last-trade-closes`
 / `--merger-terms` / `--recoveries` and rerun.
+
+`ended_without_delisting` is `fix`: the security was observed and then
+stopped being observed, but no delisting was found, so it has no DLRET and
+would drop out of a backtest with no terminal return at all — a missing
+delisting can hide a loss as large as -100%, so it is treated like `no_dlret`
+rather than a routine `check`. Accept it only once you've confirmed the
+security really still trades (e.g. under another ticker) or is out of scope;
+there is no override to add a missing delisting.
+
+A flag's severity can also depend on the row's `bucket`: `no_last_close` and
+`no_last_trade_date` grade `info` (hidden, unless something else on the row
+still needs a look) on an `exchange_transfer` row, since its DLRET is 0
+whatever the close — chasing that close changes no output. They stay `check`
+everywhere else, and matter most alongside `no_dlret` or on a `liquidation`/
+`compliance_failure` row, whose DLRET does need a close.
+`review_summary.csv`'s `severity` column always shows the catalog's base
+severity (`check`); its `in_review` count reflects the per-bucket downgrade.
 
 Once you've checked a flag on a row and it's fine, record it in
 `data/review_decisions.csv` so it stays accepted on every later run:
@@ -341,14 +365,20 @@ itself failed, and `load_decisions` refuses the file with a
 `ReviewDecisionError` (`classify_universe.py` reports it and exits 2) rather
 than let a rerun silently hide the failure. A decision that matches no row —
 a typo, or a line written against an older run — becomes a `fix`
-`review_decision_unmatched` row instead of disappearing. Decisions only ever
-change `review.csv`/`review_summary.csv`; `delistings.csv` is never touched.
+`review_decision_unmatched:<flag>` row instead of disappearing (the token
+names the exact flag it tried to accept, so two stale decisions on one row
+never collide on the same review key). Decisions only ever change
+`review.csv`/`review_summary.csv`; `delistings.csv` is never touched.
 
 `classify_universe.py --review-decisions PATH` reads this file (default
 `data/review_decisions.csv`; a missing file at the default path just means no
 decisions yet, a missing file at an explicit path is an error). The CLI's
 `Review: N fix, M check (…)` line and the manifest's `"review"` object report
-`review_triage.triage()`'s own tally.
+`review_triage.triage()`'s own tally. With `--limit N` (a fast dev subset),
+a decision that matches no row in that subset is *not* turned into a
+`review_decision_unmatched` row — most of the decisions file's rows are
+outside the subset by construction, and reporting every one would be noise,
+not signal — but the run log still says how many were skipped.
 
 Sampling a handful of rows for one flag and accepting them all at once:
 
@@ -358,9 +388,15 @@ python scripts/accept_review.py --flag no_form25 --bucket merger --note "checked
 ```
 
 `--bucket` narrows to rows whose `bucket` matches; `--dry-run` reports the
-count without writing. It appends one `accept` decision per matching token,
-skips one already recorded, and refuses (exit 2) a flag that can't be
-accepted.
+count without writing; a run that matches no row prints a warning instead of
+silently doing nothing. It appends one `accept` decision per matching token,
+skips one already recorded, and prints "rerun classify_universe.py to apply
+them" once it writes. `--flag` must be a bare flag name in
+`review_triage.CATALOG` — a full token copied from `review.csv` (with a `:`
+in it) or a typo are refused (exit 2) rather than silently matching nothing.
+Bulk-accepting a **`fix`**-severity flag (`no_dlret`, `observation_unresolved`,
+`ended_without_delisting`) needs `--yes`, since one note would otherwise clear
+every row of that cause at once.
 
 ### Payout reconciliation (the last-close gate)
 
@@ -519,7 +555,7 @@ python scripts/observations_from_instruments.py --instruments data/delisted_tick
 # or: scripts/observations_from_snapshots.py --dir <folder of dated index-membership CSVs> --out obs.csv
 python scripts/classify_universe.py --observations obs.csv   # → output/{securities,ticker_history,cusip_history,delistings,payouts,review,review_summary}.csv
 
-pytest -q                                # 1066 unit tests, no network
+pytest -q                                # 1092 unit tests, no network
 ```
 
 `classify_universe.py` prints a summary when it finishes: rows written per
