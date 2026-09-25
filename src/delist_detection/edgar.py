@@ -156,7 +156,7 @@ def _fsync_dir(directory: Path) -> None:
         os.close(fd)
 
 
-def _write_atomic(path: Path, text: str) -> None:
+def write_atomic(path: Path, text: str) -> None:
     """Replace `path` with `text` in one step: a reader -- in this process or
     another -- sees the old file or the complete new one, never a part. The temp
     file sits in the same directory (os.replace is atomic only within one
@@ -198,7 +198,7 @@ _TEMP_NAME = re.compile(r"\.(.+)\.(\d+)\.(\d+)\.tmp", re.ASCII)
 
 
 def clean_orphan_temps(directory: Path) -> None:
-    """Delete the `_write_atomic` temp files (`.<name>.<pid>.<thread>.tmp`) in
+    """Delete the `write_atomic` temp files (`.<name>.<pid>.<thread>.tmp`) in
     `directory` whose writing process has exited: it was killed mid-write. A
     live process's temp file is left alone, since it may still be writing it,
     and so is any file whose name does not parse as one. The pid is checked on
@@ -765,11 +765,11 @@ class EdgarClient:
             today = self.today.isoformat()
             if resp.status_code == 404:
                 data = {"__not_found__": True, "url": url, FETCHED_KEY: today}
-                _write_atomic(cp, json.dumps(data))
+                write_atomic(cp, json.dumps(data))
                 return data
             if isinstance(data, dict):
                 data[FETCHED_KEY] = today
-            _write_atomic(cp, json.dumps(data))
+            write_atomic(cp, json.dumps(data))
             return data
 
     def company_tickers(self) -> dict[str, dict[str, Any]]:
@@ -860,7 +860,7 @@ class EdgarClient:
                 raise
             out = _parse_company_atom(resp.text)
             if self.search_cache:
-                _write_atomic(cp, json.dumps({"hits": out, FETCHED_KEY: self.today.isoformat()}))
+                write_atomic(cp, json.dumps({"hits": out, FETCHED_KEY: self.today.isoformat()}))
             return out
 
     def submissions(self, cik: int | str, fresh_after: date | None = None) -> dict[str, Any]:
@@ -906,12 +906,12 @@ class EdgarClient:
                 # Caching other non-200s (429/503/etc.) would turn a transient outage
                 # into a permanent empty result, so leave the cache untouched (FIX 6).
                 if resp.status_code == 404:
-                    _write_atomic(cp, "")
+                    write_atomic(cp, "")
                 else:
                     SEC_STATS.degraded("failed_request")
                 return ""
             text = _strip_html(resp.text)
-            _write_atomic(cp, text)
+            write_atomic(cp, text)
             return text
 
     def fetch_filing_raw(self, cik: int | str, accession: str) -> str:
@@ -938,11 +938,11 @@ class EdgarClient:
                 return ""
             if resp.status_code != 200:
                 if resp.status_code == 404:
-                    _write_atomic(cp, "")
+                    write_atomic(cp, "")
                 else:
                     SEC_STATS.degraded("failed_request")
                 return ""
-            _write_atomic(cp, resp.text)
+            write_atomic(cp, resp.text)
             return resp.text
 
     def _efts_cached(self, cp: Path, window_end: date, *, any_age: bool = False) -> list[dict] | None:
@@ -1043,7 +1043,7 @@ class EdgarClient:
                 if window_end is None:
                     self._run_memo[url] = [dict(h) for h in hits]
                 else:
-                    _write_atomic(cp, json.dumps({"schema": EFTS_SCHEMA, "window_end": window_end.isoformat(),
+                    write_atomic(cp, json.dumps({"schema": EFTS_SCHEMA, "window_end": window_end.isoformat(),
                                                   FETCHED_KEY: self.today.isoformat(), EFTS_KEY: hits}))
             return list(hits)
 

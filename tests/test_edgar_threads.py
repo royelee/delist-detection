@@ -109,14 +109,14 @@ def test_an_interrupted_write_leaves_the_old_file_whole(tmp_path, monkeypatch):
 
     monkeypatch.setattr(edgar.os, "replace", disk_full)
     with pytest.raises(OSError):
-        edgar._write_atomic(path, '{"new": 2}')
+        edgar.write_atomic(path, '{"new": 2}')
     assert path.read_text() == '{"old": 1}'
     assert [p.name for p in tmp_path.iterdir()] == ["x.json"]      # no temp file left behind
 
 
 def test_a_write_replaces_the_file_in_one_step(tmp_path):
     path = tmp_path / "x.json"
-    edgar._write_atomic(path, '{"new": 2}')
+    edgar.write_atomic(path, '{"new": 2}')
     assert path.read_text() == '{"new": 2}'
     assert [p.name for p in tmp_path.iterdir()] == ["x.json"]
 
@@ -135,7 +135,7 @@ def test_a_write_reaches_the_disk_before_it_replaces_the_file(tmp_path, monkeypa
 
     monkeypatch.setattr(edgar.os, "fsync", fsync)
     monkeypatch.setattr(edgar.os, "replace", replace)
-    edgar._write_atomic(tmp_path / "x.json", "{}")
+    edgar.write_atomic(tmp_path / "x.json", "{}")
     assert events == ["fsync", "replace", "fsync"]    # the data, the rename, then the directory
 
 
@@ -143,7 +143,7 @@ def test_temp_files_left_by_a_killed_process_are_removed_at_start(tmp_path):
     (tmp_path / "text").mkdir()
     dead = tmp_path / "text" / f".a.txt.{_dead_pid()}.1.tmp"
     live = tmp_path / f".b.json.{os.getpid()}.1.tmp"          # this process: it may still be writing it
-    other = tmp_path / ".c.json.tmp"                          # not a _write_atomic name
+    other = tmp_path / ".c.json.tmp"                          # not a write_atomic name
     for p in (dead, live, other):
         p.write_text("x")
     EdgarClient(cache_dir=tmp_path, user_agent=UA)

@@ -82,7 +82,8 @@ that turns a list of observations into the seven output tables; see
   `resolve_user_agent()` that `sec_http.py`, `ftd.py`, `midas.py` reuse.
 - `sec_http.py` — throttled, cached `download()`/`get_text()` for the other SEC
   data files (FTD and MIDAS ZIPs and their index pages), sharing `edgar.py`'s
-  throttle, User-Agent and `EdgarBlocked` on 403/429.
+  throttle, User-Agent and `EdgarBlocked` on 403/429. Index pages are cached
+  through `edgar.write_atomic`, ZIPs through a `.part` file and a rename.
 - `ftd.py` — `FtdClient`/`FtdIndex`: SEC fails-to-deliver rows (`(date, CUSIP,
   symbol, price)`, 2004+). `close_after()` supplies every last-trade close and
   acquirer-completion price; `by_cusip`/`by_symbol` supply CUSIP history.
@@ -96,7 +97,8 @@ that turns a list of observations into the seven output tables; see
   `deletion_halt()` finds a code-`D` ("security deletion") halt as a second
   last-trade-date confirmation when MIDAS has none.
 - `openfigi.py` — `OpenFigiClient`: OpenFIGI `/v3/mapping` and `/v3/filter`,
-  cached on disk, paced on the `ratelimit-*` headers. Owns `OpenFigiBlocked`
+  cached on disk (`edgar.write_atomic`: a run that dies mid-write leaves no
+  cut-off answer), paced on the `ratelimit-*` headers. Owns `OpenFigiBlocked`
   (401/403) and `OpenFigiUnavailable` (timeouts/5xx after its retries).
 - `figi_resolution.py` — pure rules turning an OpenFIGI answer into one US
   composite FIGI: `us_candidates()` groups rows by composite and keeps only US

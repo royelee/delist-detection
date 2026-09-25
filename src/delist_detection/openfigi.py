@@ -15,6 +15,8 @@ from pathlib import Path
 
 import requests
 
+from .edgar import write_atomic
+
 OPENFIGI_URL = "https://api.openfigi.com/v3"
 _REPO_ENV = Path(__file__).resolve().parents[2] / ".env"
 
@@ -104,7 +106,7 @@ class OpenFigiClient:
             for i, ans in zip(chunk, answers):
                 results[i] = ans
                 if use_cache and "error" not in ans:
-                    self._cache_file("mapping", jobs[i]).write_text(json.dumps(ans))
+                    write_atomic(self._cache_file("mapping", jobs[i]), json.dumps(ans))
         return [r if r is not None else {"error": "no answer"} for r in results]
 
     def filter(self, query: str, *, max_pages: int = 3, **fields) -> list[dict]:
@@ -123,5 +125,5 @@ class OpenFigiClient:
             start = ans.get("next")
             if not start:
                 break
-        cf.write_text(json.dumps(data))
+        write_atomic(cf, json.dumps(data))
         return data

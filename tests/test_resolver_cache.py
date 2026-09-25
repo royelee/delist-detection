@@ -280,13 +280,13 @@ def test_a_rename_built_on_a_degraded_answer_is_degraded_and_not_saved(tmp_path,
 def test_batched_writes_reach_the_file_only_on_flush(tmp_path, fake_edgar, monkeypatch):
     import delist_detection.ticker_resolver as tr
     writes = []
-    real = tr._write_atomic
+    real = tr.write_atomic
 
     def recording(path, text):
         writes.append(path)
         real(path, text)
 
-    monkeypatch.setattr(tr, "_write_atomic", recording)
+    monkeypatch.setattr(tr, "write_atomic", recording)
     cache = tmp_path / "res.json"
     r = TickerResolver(fake_edgar, cache_path=cache, batch_writes=True)
     assert r.resolve("ALTR", "2025-03-26").cik == 1701732

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import errno
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -41,6 +42,52 @@ class _FakeEdgar:
 
     def company_search_atom(self, name: str, form_type: str = "25-NSE") -> list[dict]:
         return []
+
+
+class _HalfWriter:
+    """A file whose write stops halfway with a full disk, as when the process
+    dies mid-write: the first half reaches the file, then OSError."""
+
+    def __init__(self, fh):
+        self.fh = fh
+
+    def write(self, data):
+        self.fh.write(data[: len(data) // 2])
+        self.fh.flush()
+        raise OSError(errno.ENOSPC, "No space left on device")
+
+    def __getattr__(self, name):
+        return getattr(self.fh, name)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self.fh.close()
+        return False
+
+
+@pytest.fixture
+def writes_fail_midway(monkeypatch):
+    """Arm a directory (call the returned function with it): every file opened
+    for writing under it stops halfway through its first write (`_HalfWriter`).
+    Patches the builtin `open` and `Path.open` (which `write_text` and
+    `write_bytes` use)."""
+    import builtins
+    import pathlib
+
+    real_open = builtins.open
+    armed: list[str] = []
+
+    def fake_open(file, mode="r", *args, **kwargs):
+        fh = real_open(file, mode, *args, **kwargs)
+        if any(ch in mode for ch in "wax") and any(str(file).startswith(d) for d in armed):
+            return _HalfWriter(fh)
+        return fh
+
+    monkeypatch.setattr(builtins, "open", fake_open)
+    monkeypatch.setattr(pathlib.Path, "open", lambda self, mode="r", *a, **k: fake_open(self, mode, *a, **k))
+    return lambda directory: armed.append(str(directory))
 
 
 @pytest.fixture(autouse=True)

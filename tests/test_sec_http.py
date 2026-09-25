@@ -56,6 +56,16 @@ def test_download_404_and_block(tmp_path):
     assert not (tmp_path / "a.zip").exists() and not (tmp_path / "b.zip").exists()
 
 
+def test_an_index_page_cut_off_mid_write_leaves_no_cache_file(tmp_path, writes_fail_midway):
+    """Code review 2026-09-25, item 6: get_text caches through edgar.write_atomic,
+    so a run that dies mid-write leaves no cut-off index page for the next run."""
+    writes_fail_midway(tmp_path)
+    with pytest.raises(OSError):
+        sec_http.get_text("u", tmp_path / "index.html", session=_Session(_Resp(text="<html>" + "x" * 100)),
+                          user_agent="ua")
+    assert list(tmp_path.iterdir()) == []
+
+
 def test_get_text_refreshes_and_falls_back(tmp_path):
     cf = tmp_path / "index.html"
     s = _Session(_Resp(text="v1"))

@@ -112,6 +112,24 @@ def test_filter_pages_and_caches(tmp_path):
     assert len(s.posts) == 2
 
 
+def test_a_mapping_answer_cut_off_mid_write_leaves_no_cache_file(tmp_path, writes_fail_midway):
+    """Code review 2026-09-25, item 6: a run that dies while caching an answer
+    must not leave a cut-off file the next run would trust (edgar.write_atomic)."""
+    c = OpenFigiClient(tmp_path, "k", session=_Session(_Resp(body=[AET]), _Resp(body=[AET])), sleep=lambda _: None)
+    writes_fail_midway(tmp_path)
+    with pytest.raises(OSError):
+        c.map([{"idType": "TICKER", "idValue": "AET"}])
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_a_filter_answer_cut_off_mid_write_leaves_no_cache_file(tmp_path, writes_fail_midway):
+    c = OpenFigiClient(tmp_path, "k", session=_Session(_Resp(body={"data": [{"figi": "A"}]})), sleep=lambda _: None)
+    writes_fail_midway(tmp_path)
+    with pytest.raises(OSError):
+        c.filter("QUESTCOR", exchCode="US")
+    assert list(tmp_path.iterdir()) == []
+
+
 def test_resolve_api_key(tmp_path, monkeypatch):
     env = tmp_path / ".env"
     env.write_text("OPEN_FIGI_API_KEY=fromfile\n")

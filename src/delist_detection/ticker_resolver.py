@@ -17,7 +17,7 @@ from typing import Iterable
 
 import requests
 
-from .edgar import STALE_KEY, EdgarBlocked, EdgarClient, _write_atomic, clean_orphan_temps, submissions_fresh_after
+from .edgar import STALE_KEY, EdgarBlocked, EdgarClient, clean_orphan_temps, submissions_fresh_after, write_atomic
 from .evidence import first_filing, names_near, parse_day
 from .names import name_tokens, names_agree
 
@@ -227,7 +227,7 @@ class TickerResolver:
         self.cache_path.parent.mkdir(parents=True, exist_ok=True)
         entries = {k: {**r.__dict__, "member_name": self._memo_member.get(k)}
                    for k, r in self._memo.items() if k not in self._volatile}
-        _write_atomic(self.cache_path, json.dumps({"__version__": CACHE_VERSION, "entries": entries}, indent=2))
+        write_atomic(self.cache_path, json.dumps({"__version__": CACHE_VERSION, "entries": entries}, indent=2))
         self._dirty = False
 
     def is_degraded(self, ticker: str, observed_date: str | None = None) -> bool:

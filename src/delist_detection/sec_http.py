@@ -13,7 +13,7 @@ from pathlib import Path
 
 import requests
 
-from .edgar import SEC_STATS, _throttle, filling_only, resolve_user_agent, retry_request
+from .edgar import SEC_STATS, _throttle, filling_only, resolve_user_agent, retry_request, write_atomic
 
 
 def _get(url: str, session, user_agent: str | None, timeout: int, *, sleep=time.sleep):
@@ -68,5 +68,5 @@ def get_text(url: str, cache_file: str | Path, *, max_age_days: float = 7, sessi
             return cf.read_text(encoding="utf-8", errors="replace")
         raise
     cf.parent.mkdir(parents=True, exist_ok=True)
-    cf.write_text(resp.text, encoding="utf-8")
+    write_atomic(cf, resp.text)
     return resp.text

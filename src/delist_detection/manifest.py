@@ -22,7 +22,7 @@ from datetime import date
 from functools import lru_cache
 from pathlib import Path
 
-from .edgar import _write_atomic
+from .edgar import write_atomic
 
 MANIFEST_NAME = "run_manifest.json"
 _ROOT = Path(__file__).resolve().parents[2]
@@ -88,5 +88,5 @@ def build(*, as_of: date, sec_workers: int, counts: dict[str, int], timings: dic
 
 def write(out_dir: str | Path, manifest: dict) -> Path:
     path = Path(out_dir) / MANIFEST_NAME
-    _write_atomic(path, json.dumps(manifest, indent=2, sort_keys=True) + "\n")
+    write_atomic(path, json.dumps(manifest, indent=2, sort_keys=True) + "\n")
     return path
