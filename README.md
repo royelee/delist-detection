@@ -199,8 +199,11 @@ source but nothing suggests it's wrong). `no_dlret` is injected onto every
 delisting row whose `dlret` is still blank *before* decisions are applied, so
 accepting the row's other flags never silently makes it disappear — only
 supplying the value or explicitly accepting `no_dlret` does. A row whose
-flags are *all* `info` never appears here — those flags stay on
-`delistings.csv`, just not surfaced for review. Rows are ordered by what they
+flags are *all* `info` never appears here — a delisting row's `info` flags
+stay on `delistings.csv`, just not surfaced for review; a security-level
+`info` flag such as `no_figi` belongs to no delisting row: it is counted in
+`review_summary.csv`, and every placeholder is listed in `securities.csv`
+(`figi_source=placeholder`). Rows are ordered by what they
 can do to a return: `fix` before `check`; within that, a delisting with a
 blank `dlret` first (this grouping reads `bucket`/`dlret` directly, not
 tokens, and is unaffected by decisions), then delisting rows by descending
@@ -903,7 +906,9 @@ otherwise it tries, in order, the era's known CUSIPs (a CUSIP hit needs no
 name check), then the era's ticker (needs a matching per-venue ticker+name),
 then an issuer-name filter search — see the spec's Implementation notes for
 why CUSIP is tried first. When nothing is accepted, the security gets the
-placeholder `sec_id` `CIK<cik>-<CLASS>` (flagged `no_figi`); with no CIK
+placeholder `sec_id` `CIK<cik>-<CLASS>` (flagged `no_figi`, an `info` flag:
+counted in `review_summary.csv`, not listed in `review.csv`; `securities.csv`
+marks the security `figi_source=placeholder`); with no CIK
 either, the observation goes to `review.csv` as `observation_unresolved`.
 
 ---

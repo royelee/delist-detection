@@ -377,8 +377,10 @@ composite FIGI via OpenFIGI, one era at a time:
 when-issued/144A/fund-NAV lines; `accept()` never trusts Bloomberg's current
 name alone, since Bloomberg renames a dead line to its acquirer. With no
 candidate accepted, the security gets the placeholder `sec_id`
-`CIK<cik>-<CLASS>` (flagged `no_figi`); with no CIK either, the observation
-goes to `review.csv` as `observation_unresolved`.
+`CIK<cik>-<CLASS>` (flagged `no_figi`, an `info` flag: counted in
+`review_summary.csv`, not listed in `review.csv`; `securities.csv` marks it
+`figi_source=placeholder`); with no CIK either, the observation goes to
+`review.csv` as `observation_unresolved`.
 
 ## Delisting discovery
 
@@ -591,8 +593,10 @@ severity can also depend on the row's `bucket`
 is 0 whatever the close, so the close changes no output) and stay `check`
 elsewhere; `review_summary.csv`'s `severity` column always shows the
 catalog's base severity, `in_review` reflects the downgrade. A row whose
-remaining flags are all `info` is dropped from `review.csv` (its flags stay
-on `delistings.csv`). A decision matches a row by the exact token and by
+remaining flags are all `info` is dropped from `review.csv` (a delisting
+row's flags stay on `delistings.csv`; a security-level `info` flag such as
+`no_figi` has no delisting row: it is counted in `review_summary.csv`, and
+`securities.csv` lists every placeholder with `figi_source=placeholder`). A decision matches a row by the exact token and by
 `(sec_id, delist_date, ticker)` compared as stripped strings (blank matches
 blank); `error` and `resolution_degraded` can never be accepted; a decision
 matching no row becomes a `fix` `review_decision_unmatched:<flag>` row (the

@@ -285,7 +285,10 @@ conflate them.
   rows by descending `|dlret|`, then everything else; ties break on
   `(sec_id, delist_date, ticker, review_flags)` and, for full determinism, a
   few more columns after that. A row whose remaining flags are all `info`
-  leaves `review.csv` — those flags stay on `delistings.csv`.
+  leaves `review.csv` — a delisting row's flags stay on `delistings.csv`; a
+  security-level `info` flag such as `no_figi` has no delisting row: it is
+  counted in `review_summary.csv`, and `securities.csv` lists every
+  placeholder (`figi_source=placeholder`).
   `output/review_summary.csv` has one row per flag name: severity, how many
   rows carried it, how many are still in review, how many tokens were
   accepted, its catalog description/action, and up to 3 examples.

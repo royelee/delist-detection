@@ -43,7 +43,7 @@ A CIK or `sec_id` the caller attaches to an observation because it has already s
 _Avoid_: cik-map, override
 
 **Severity**:
-How much a `review.csv` row can move a return, one of `fix` (`no_dlret` — a delisting whose return is still blank, injected before its other flags are ever accepted — a security that couldn't be identified, or the run or the decisions file itself is broken), `check` (a rule couldn't settle the answer; read the cited filing), or `info` (the answer came from a less precise source but nothing suggests it's wrong). A row whose flags are all `info` leaves `review.csv`; its flags stay on `delistings.csv`. Rows are ordered by severity, then by how much they can still move a return.
+How much a `review.csv` row can move a return, one of `fix` (`no_dlret` — a delisting whose return is still blank, injected before its other flags are ever accepted — a security that couldn't be identified, or the run or the decisions file itself is broken), `check` (a rule couldn't settle the answer; read the cited filing), or `info` (the answer came from a less precise source but nothing suggests it's wrong). A row whose flags are all `info` leaves `review.csv`; a delisting row's flags stay on `delistings.csv`, and a security-level one such as `no_figi` is counted in `review_summary.csv` (the placeholder itself is in `securities.csv`). Rows are ordered by severity, then by how much they can still move a return.
 _Avoid_: priority, urgency
 
 **Review decision**:

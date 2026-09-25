@@ -654,3 +654,12 @@ line changes observable output.
   payout or successor search whose answer rested on a failed SEC request or a
   stale copy gets a `resolution_degraded` review row; its answer is used for
   the run but never saved, and the CLI exits 3.
+- **`no_figi` is not in `review.csv` (D19, §7.5, §8.3).** The spec puts a
+  placeholder into `review.csv` flagged `no_figi`. Review triage (requested
+  later) grades `no_figi` `info`: the placeholder is a stable, joinable key and
+  nothing suggests it is wrong, so a row whose flags are all `info` leaves
+  `review.csv`. Placeholders are not lost: `securities.csv` lists every one
+  (`figi_source=placeholder`) and `review_summary.csv` counts the `no_figi`
+  rows. Unlike a delisting row's `info` flags, which stay on `delistings.csv`,
+  `no_figi` belongs to a security, not a delisting, so it appears on no other
+  table.

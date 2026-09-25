@@ -9,8 +9,10 @@ with a severity:
              decisions file is stale; always needs a person.
 - `check` -- a rule could not settle the answer; read the cited filing.
 - `info`  -- the answer came from a less precise source but nothing suggests it
-             is wrong. A row whose flags are all `info` leaves review.csv (the
-             flags stay on delistings.csv).
+             is wrong. A row whose flags are all `info` leaves review.csv (a
+             delisting row's flags stay on delistings.csv; a security-level
+             one such as `no_figi` is counted in review_summary.csv, and
+             securities.csv lists every placeholder).
 
 A delisting row (one with a `bucket`) with no DLRET always needs a person:
 `triage()` gives it the token `no_dlret` (`fix`, acceptable) before decisions
