@@ -25,8 +25,12 @@ def test_parse_aet():
 
 
 def test_notice_dates_for_involuntary_removals():
+    """Spec 8.8: an involuntary (b) notice's date is the decision day, to be
+    confirmed by MIDAS or a halt, whatever its wording: RadioShack's "announcement
+    ... at the close of the trading session on February 2, 2015 of the
+    suspension" too (code review 2026-09-25, item 4)."""
     rsh = _load("rsh_25nse.txt", "0000876661-15-000132", "2015-03-20")
-    assert notice_last_trade(rsh) == (date(2015, 2, 2), "notice_close")
+    assert notice_last_trade(rsh) == (date(2015, 2, 2), "notice_b_unconfirmed")
     save = _load("save_25nse.txt", "0000876661-24-001142", "2024-12-05")
     assert notice_last_trade(save) == (date(2024, 11, 18), "notice_b_unconfirmed")
 
@@ -34,10 +38,15 @@ def test_notice_dates_for_involuntary_removals():
 def test_notice_text_patterns_synthetic():
     mk = lambda text, rule="17 CFR 240.12d2-2(b)": Form25("a", "25-NSE", "2016-05-20", "NASDAQ", "Common Stock",
                                                         rule, text)
-    assert notice_last_trade(mk("trading in the Companys securities would be suspended on May 19, 2016")) \
-        == (date(2016, 5, 18), "notice_nasdaq")
-    assert notice_last_trade(mk("suspended prior to the opening of trading on January 2, 2009")) \
-        == (date(2008, 12, 31), "notice_open")
+    nasdaq = "trading in the Companys securities would be suspended on May 19, 2016"
+    opening = "suspended prior to the opening of trading on January 2, 2009"
+    assert notice_last_trade(mk(nasdaq, "17 CFR 240.12d2-2(a)(3)")) == (date(2016, 5, 18), "notice_nasdaq")
+    assert notice_last_trade(mk(opening, "17 CFR 240.12d2-2(a)(3)")) == (date(2008, 12, 31), "notice_open")
+    # the same wordings on an involuntary (b) notice: same day, not confirmed
+    assert notice_last_trade(mk(nasdaq)) == (date(2016, 5, 18), "notice_b_unconfirmed")
+    assert notice_last_trade(mk(opening)) == (date(2008, 12, 31), "notice_b_unconfirmed")
+    assert notice_last_trade(mk("the Common Stock was suspended from trading on May 19, 2016")) \
+        == (date(2016, 5, 18), "notice_b_unconfirmed")
     assert notice_last_trade(mk("")) == (None, "")
 
 

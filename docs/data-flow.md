@@ -471,7 +471,10 @@ compounding an unexplained gap into a fabricated return.
 `last_trade.decide_last_trade` picks among, in priority order (see the
 README's *Where each date and price comes from* for the full detail):
 
-1. The Form 25's EX-99.25 exchange notice.
+1. The Form 25's EX-99.25 exchange notice. On an involuntary notice
+   (rule 12d2-2(b)) the date is the Exchange's decision day, whatever the
+   wording (NYSE announces the suspension "at the close of the trading
+   session on D"), so it counts only once MIDAS or a halt confirms it.
 2. The closing 8-K's Item 3.01 text.
 3. SEC MIDAS per-security exchange volume (2012+) — the last day with
    nonzero exchange volume, when it falls in a plausible window. When the
@@ -483,8 +486,10 @@ README's *Where each date and price comes from* for the full detail):
 4. Nasdaq's trade-halt feed (code `D`), used only when MIDAS has no answer.
 
 MIDAS beats a halt beats filing-text wording; a disagreement between a
-measured source and filing text is flagged `last_trade_date_conflict`; text
-alone with no confirmation is flagged `last_trade_date_unconfirmed`.
+measured source and filing text is flagged `last_trade_date_conflict`; a
+date from unconfirmed wording (an involuntary notice's decision day, an
+8-K's bare "suspended on D") with no MIDAS or halt to confirm it is flagged
+`last_trade_date_unconfirmed`.
 
 Closes come from SEC fails-to-deliver rows (2004+, `ftd.close_after`): the
 row dated `last_trade_date + 1 trading day` carries `last_trade_date`'s

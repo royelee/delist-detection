@@ -145,6 +145,31 @@ def test_listed_today_without_form25_is_quiet(fake_edgar):
     assert DelistingFinder(fake_edgar, clf).find(_ctx(sec, listed=True)) == ([], [])
 
 
+RSH_RAW = (FIX / "rsh_25nse.txt").read_text(encoding="utf-8", errors="replace")
+
+
+def test_an_involuntary_notice_date_that_nothing_confirms_is_flagged_unconfirmed(fake_edgar):
+    """Spec 8.8: on an involuntary (rule 12d2-2(b)) notice the date is the
+    Exchange's decision day, to be confirmed by MIDAS or a Nasdaq halt. NYSE's
+    RadioShack notice announces the suspension "at the close of the trading
+    session on February 2, 2015"; with no MIDAS or halt to confirm it (MIDAS
+    starts in 2012, so every earlier (b) notice is in this case) the date is
+    kept but flagged last_trade_date_unconfirmed (code review 2026-09-25, item 4)."""
+    fake_edgar.submissions_by_cik[96289] = [
+        EdgarSubmission("0000876661-15-000132", "25-NSE", "2015-03-20", "", "", "primary_doc.xml")]
+    fake_edgar.raws["0000876661-15-000132"] = RSH_RAW
+    clf = DelistClassifier(fake_edgar, TickerResolver(fake_edgar))
+    sec = _sec("BBG000BRSH01", 96289, "RSH", "2014-06-30", "2014-12-31", "RADIOSHACK CORP")
+    (ev,), _ = DelistingFinder(fake_edgar, clf).find(_ctx(sec, last_seen="2015-02-02"))
+    assert (ev.last_trade.day, ev.last_trade.source) == (date(2015, 2, 2), "ex99_notice")
+    assert "last_trade_date_unconfirmed" in ev.last_trade.flags
+    assert "last_trade_date_unconfirmed" in ev.record.evidence["flags"]
+    # confirmed by MIDAS on the same day: no flag
+    (ev,), _ = DelistingFinder(fake_edgar, clf, midas=_Midas(date(2015, 2, 2))).find(
+        _ctx(sec, last_seen="2015-02-02"))
+    assert ev.last_trade.source == "midas" and ev.last_trade.flags == ()
+
+
 # -- fix round 1 ----------------------------------------------------------
 
 

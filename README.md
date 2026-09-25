@@ -299,7 +299,7 @@ The full flag vocabulary (from `classifier.py`, `ticker_resolver.py`,
 | `observed_after_delisting` | The delisting's Form 25 was filed before the security's first observation, and no fails-to-deliver row under its own tickers shows it trading after that: the observations that follow are stale (a snapshot kept listing A.G. Edwards, acquired 2007-10-01, through 2009) |
 | `successor_unknown` | An exchange-transfer delisting whose successor security could not be found. Before the successor issuer's 8-K12B is searched, a security of the run whose first sighting falls within [last trade − 5 d, last trade + 15 d] and that shares the issuer CIK or the ticker is taken when it is the only one (a holdco reorganization's new line, a rename's new FIGI); the reason then ends "successor by same issuer" / "successor by same ticker" |
 | `last_trade_date_conflict` | The Form 25 notice / 8-K text and the MIDAS/Nasdaq-halt confirmation disagree on the last trade date |
-| `last_trade_date_unconfirmed` | The last trade date comes from unconfirmed filing wording only, with no MIDAS/halt confirmation |
+| `last_trade_date_unconfirmed` | The last trade date comes from unconfirmed filing wording only, with no MIDAS/halt confirmation. An involuntary (rule 12d2-2(b)) Form 25 notice's date is always unconfirmed wording: it is the Exchange's decision day (spec 8.8) |
 | `no_last_trade_date` | No source (notice, 8-K, MIDAS, halt) yielded a last trade date at all |
 | `ftd_close_lagged` | The last-trade close is from a fails-to-deliver row more than one trading day after the last trade (no row on the next day) |
 | `ftd_close_prior:<n>` | No fails-to-deliver row follows the last trade day (fails stop once trading stops), so the close is the latest one known on it: the price on a row dated the last trade day or up to 10 trading days earlier, which is the close of the trading day before that row. `<n>` is that close's age in trading days before the last trade (1 = the day before); the row's date is kept in the evidence (`ftd_close_row_date`) |
@@ -966,6 +966,8 @@ never a price vendor, never Alpha Vantage:
   1. The exchange's **EX-99.25 notice** on the Form 25 (`form25.py`):
      "suspended from trading on D" → the trading day before D; "at/after the
      close on D" → D; "prior to the opening on D" → the trading day before D.
+     On an involuntary notice (rule 12d2-2(b)) the date is the Exchange's
+     decision day (spec 8.8), so it is unconfirmed wording whatever it says.
   2. The closing **8-K's Item 3.01** text (`last_trade.py`), read the same way.
   3. **SEC MIDAS** per-security exchange volume (`midas.py`, 2012+): the last
      day with nonzero lit+hidden exchange volume, when it falls in a plausible
@@ -979,7 +981,9 @@ never a price vendor, never Alpha Vantage:
      deletion") halt, used only when MIDAS has no answer.
   5. MIDAS beats a halt beats filing-text wording; a measured date that
      disagrees with the filing text is flagged `last_trade_date_conflict`;
-     text alone with no confirmation is flagged `last_trade_date_unconfirmed`.
+     a date from unconfirmed wording (an involuntary notice, an 8-K's bare
+     "suspended on D") with no MIDAS/halt confirmation is flagged
+     `last_trade_date_unconfirmed`.
 * **`last_trade_close` and `acquirer_price`** — **SEC fails-to-deliver**
   rows (`ftd.py`, 2004+): the row dated `last_trade_date + 1 trading day`
   carries `last_trade_date`'s close (fails-to-deliver rows are dated by

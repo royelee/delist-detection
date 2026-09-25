@@ -327,10 +327,25 @@ def _day(s: str) -> date:
 
 
 def notice_last_trade(f25: Form25) -> tuple[date | None, str]:
+    """The last trade day the exchange's notice states, and how it said it.
+
+    Spec 8.8: on an involuntary notice (rule 12d2-2(b)) the date is the
+    Exchange's decision day, whatever the wording ("an announcement was made on
+    the 'ticker' ... at the close of the trading session on February 2, 2015 of
+    the suspension"), so it comes back as `notice_b_unconfirmed`: MIDAS or a
+    Nasdaq halt must confirm it, else the delisting is flagged
+    `last_trade_date_unconfirmed` (`last_trade.decide_last_trade`)."""
     t = re.sub(r"\s+", " ", f25.notice_text or "")
     if not t:
         return None, ""
     involuntary = "(b)" in (f25.rule or "")
+    day, kind = _notice_day(t, involuntary)
+    if day is not None and involuntary:
+        return day, "notice_b_unconfirmed"
+    return day, kind
+
+
+def _notice_day(t: str, involuntary: bool) -> tuple[date | None, str]:
     m = re.search(rf"suspended from trading on {_DATE}", t, re.I)
     if m and not involuntary:
         return previous_trading_day(_day(m.group(1))), "notice_a"
