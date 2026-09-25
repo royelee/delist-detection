@@ -482,7 +482,12 @@ line changes observable output.
   same dates and end the placeholder in a rename row (ACE LTD, backfilled
   under CB in 2012-14, while its ACE era finds no FIGI; Gannett under TGNA
   beside GCI; Weight Watchers under WW beside WTW). Such an era keeps its
-  placeholder.
+  placeholder. These guards see only the eras in the same run: a universe
+  that lacks the later issuer's CUSIP-confirmed era cannot contradict the
+  match, so an old issuer can silently take the later issuer's line (drop new
+  GGP from the observations and General Growth 2008 takes its FIGI; drop JEC
+  and J 2012 takes Jacobs Solutions'). A review flag on every acceptance made
+  only through EDGAR names is a follow-up.
 - **§8.3's third acceptance route is not built.** Accepting a candidate
   because its name matches the acquirer or successor named in the security's
   delisting 8-K is not implemented: a security whose only OpenFIGI match
