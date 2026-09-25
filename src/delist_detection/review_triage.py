@@ -17,15 +17,23 @@ A delisting row (one with a `bucket`) with no DLRET is `fix` whatever its flags.
 `triage()` turns the pipeline's merged review rows plus a person's decisions
 (`load_decisions`: "I checked this flag on this row, it is fine") into the
 final review.csv rows, ordered by what they can do to a return, and a per-flag
-summary. It never touches delistings.csv. Pure: no I/O but `load_decisions`.
+summary. It never touches delistings.csv. Pure: no I/O but `load_decisions`
+and `append_decisions`.
+
+`accept_by_flag`/`append_decisions` are the reusable half of
+`scripts/accept_review.py`'s bulk accept: build one `Decision` per row
+currently carrying a given flag, then append them to the decisions file
+(skipping any already there).
 """
 from __future__ import annotations
 
 import csv
 import math
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+
+from .store import replace_on_success
 
 SEVERITIES = ("fix", "check", "info")        # this order is the sort order
 
@@ -111,8 +119,9 @@ CATALOG: dict[str, FlagInfo] = {
                  "weaker evidence.",
         f"Rerun once EDGAR answers, or read the 3.01 8-K on EDGAR to confirm the bucket; {_ACCEPT}."),
     "no_evidence_default": FlagInfo(
-        "check", "Delisted or deregistered with no merger or distress evidence, so the bucket is unknown (DLRET "
-                 "0 at par when a last close exists, else blank).",
+        "check", "Delisted with no merger or distress evidence, so the bucket is unknown; DLRET is set to 0 at "
+                 "par only when a Form 25 or Form 15 also confirms deregistration and a last close exists, else "
+                 "it is blank.",
         f"Read the filings around the delisting to learn why it ended; {_ACCEPT}, otherwise the classifier "
         "needs a rule."),
     "spac": FlagInfo(
@@ -329,6 +338,67 @@ def load_decisions(path: str | Path) -> list[Decision]:
     return list(out.values())
 
 
+def accept_by_flag(review_rows: Iterable[Mapping], flag: str, *, note: str,
+                    bucket: str | None = None) -> list[Decision]:
+    """One `Decision` for every token of `review_rows` named `flag` (the text
+    before its `:`), one per matching token, narrowed to rows whose `bucket`
+    equals `bucket` when given. `note` is copied onto every decision and must
+    be non-empty (the person records what they checked). Raises
+    `ReviewDecisionError` for a blank `note` or a `flag` whose catalog entry
+    is not acceptable (`error`, `resolution_degraded`,
+    `review_decision_unmatched`) -- these mean the run itself failed, not
+    that a rule couldn't settle the answer."""
+    if not note or not note.strip():
+        raise ReviewDecisionError("note must be non-empty")
+    info = flag_info(flag)
+    if not info.acceptable:
+        raise ReviewDecisionError(f"flag {flag!r} cannot be accepted; {info.action}")
+    out: list[Decision] = []
+    for row in review_rows:
+        if bucket is not None and _text(row.get("bucket")).strip() != bucket:
+            continue
+        for token in _tokens(row.get("review_flags")):
+            if flag_name(token) == flag:
+                out.append(Decision(_text(row.get("sec_id")), _text(row.get("delist_date")),
+                                    _text(row.get("ticker")), token, note))
+    return out
+
+
+def append_decisions(path: str | Path, decisions: Sequence[Decision], *, dry_run: bool = False) -> int:
+    """Append `decisions` to the decisions CSV at `path`, creating it with the
+    `DECISION_COLUMNS` header when missing. A decision already there (same
+    `(sec_id, delist_date, ticker, flag)`, stripped) is skipped, and so is a
+    repeat within `decisions` itself. Written atomically
+    (`store.replace_on_success`). Returns how many rows would be added
+    (`dry_run=True`) or were added."""
+    path = Path(path)
+    try:
+        with path.open(newline="") as fh:
+            existing_rows = list(csv.DictReader(fh))
+    except FileNotFoundError:
+        existing_rows = []
+    seen = {_key(r.get("sec_id"), r.get("delist_date"), r.get("ticker")) + (_text(r.get("flag")).strip(),)
+            for r in existing_rows}
+    new_rows: list[dict[str, str]] = []
+    for d in decisions:
+        k = _key(d.sec_id, d.delist_date, d.ticker) + (d.flag.strip(),)
+        if k in seen:
+            continue
+        seen.add(k)
+        new_rows.append({"sec_id": d.sec_id, "delist_date": d.delist_date, "ticker": d.ticker, "flag": d.flag,
+                         "decision": "accept", "note": d.note})
+    if dry_run or not new_rows:
+        return len(new_rows)
+    with replace_on_success(path) as tmp, tmp.open("w", newline="") as fh:
+        w = csv.DictWriter(fh, fieldnames=list(DECISION_COLUMNS), lineterminator="\n")
+        w.writeheader()
+        for r in existing_rows:
+            w.writerow({c: r.get(c, "") for c in DECISION_COLUMNS})
+        for r in new_rows:
+            w.writerow(r)
+    return len(new_rows)
+
+
 @dataclass(frozen=True)
 class Triage:
     review_rows: list[dict]
@@ -374,8 +444,11 @@ def triage(rows: list[Mapping], decisions: Sequence[Decision]) -> Triage:
     `review_decision_unmatched` row. Rows left with no token, or with a
     severity of `info`, leave review.csv. The rest are ordered by severity;
     then delisting rows (those with a `bucket`) with a blank DLRET, delisting
-    rows by descending |DLRET|, every other row; then by key. The input rows
-    are not changed."""
+    rows by descending |DLRET|, every other row; then by
+    `(sec_id, delist_date, ticker, review_flags)` and, beyond what those four
+    decide, a few more columns (`reason, cik, bucket, dlret, anchor_8k,
+    last_seen`) so two rows that still tie never depend on the input order.
+    The input rows are not changed."""
     by_key: dict[tuple[str, str, str, str], Decision] = {}
     for d in decisions:
         by_key.setdefault(_key(d.sec_id, d.delist_date, d.ticker) + (d.flag,), d)

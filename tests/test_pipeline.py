@@ -1,3 +1,5 @@
+import csv
+import json
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -17,6 +19,7 @@ from delist_detection.pipeline import (
     Clients, Overrides, _acquirer_cik, _issuer_exchange_for_ticker, _merge_review_rows, _own_last_seen,
     _ticker_range_review, run, successor_from_8k12b, successor_search_name,
 )
+from delist_detection.review_triage import Decision
 from delist_detection.security_master import Security
 from delist_detection.store import read_table, table_path
 from delist_detection.ticker_resolver import TickerResolution, TickerResolver
@@ -1088,6 +1091,53 @@ def test_run_is_deterministic(fake_edgar, tmp_path):
     for name in names:
         assert table_path(tmp_path / "a", name).read_bytes() == table_path(tmp_path / "b", name).read_bytes(), name
     assert sorted(p.name for p in (tmp_path / "a").glob("*.csv")) == sorted(f"{n}.csv" for n in names)
+
+
+def test_review_decisions_accept_a_flag_and_are_counted_in_the_manifest(fake_edgar, tmp_path):
+    """A decision matching the run's own `ticker_unconfirmed` row on LIVE (its
+    only token) clears it from review.csv and is counted `accepted` in both
+    RunSummary.review_counts and the manifest's new "review" field."""
+    index, clients = _clients(fake_edgar)
+    decisions = [Decision("BBG000LIVE01", "", "LIVE", "ticker_unconfirmed", "checked, fine")]
+    summary = run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None, review_decisions=decisions)
+    review = read_table("review", table_path(tmp_path, "review"))
+    assert not any(r["sec_id"] == "BBG000LIVE01" for r in review)
+    assert summary.review_counts["accepted"] == 1
+    manifest = json.loads((tmp_path / "run_manifest.json").read_text())
+    assert manifest["review"] == summary.review_counts
+
+
+def test_a_stale_review_decision_becomes_a_review_decision_unmatched_row(fake_edgar, tmp_path):
+    """A decision naming a flag no row carries (a typo, or a line written
+    against an older run) never disappears silently: it becomes a `fix`
+    `review_decision_unmatched` row."""
+    index, clients = _clients(fake_edgar)
+    decisions = [Decision("NOPE", "2020-01-01", "ZZZ", "no_figi", "typo")]
+    summary = run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None, review_decisions=decisions)
+    review = read_table("review", table_path(tmp_path, "review"))
+    assert any(r["review_flags"] == "review_decision_unmatched" and r["severity"] == "fix" for r in review)
+    assert summary.review_counts["unmatched_decisions"] == 1
+
+
+def test_delistings_csv_is_byte_identical_with_and_without_review_decisions(fake_edgar, tmp_path):
+    """Decisions only ever touch review.csv/review_summary.csv."""
+    index, clients = _clients(fake_edgar)
+    decisions = [Decision("BBG000LIVE01", "", "LIVE", "ticker_unconfirmed", "checked, fine")]
+    run(index, clients, Overrides(), out_dir=tmp_path / "no_decisions", log=lambda *_: None)
+    run(index, clients, Overrides(), out_dir=tmp_path / "with_decisions", log=lambda *_: None,
+        review_decisions=decisions)
+    assert (table_path(tmp_path / "no_decisions", "delistings").read_bytes()
+            == table_path(tmp_path / "with_decisions", "delistings").read_bytes())
+
+
+def test_review_csv_first_column_is_severity_and_holds_only_fix_or_check(fake_edgar, tmp_path):
+    index, clients = _clients(fake_edgar)
+    run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
+    with table_path(tmp_path, "review").open(newline="") as fh:
+        reader = csv.DictReader(fh)
+        assert reader.fieldnames[0] == "severity"
+        rows = list(reader)
+    assert rows and all(r["severity"] in ("fix", "check") for r in rows)
 
 
 def test_successor_search_quotes_the_predecessor_issuers_edgar_name(fake_edgar, tmp_path, monkeypatch):

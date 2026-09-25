@@ -10,7 +10,7 @@ import copy
 import re
 import sys
 from collections import Counter, defaultdict
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from pathlib import Path
@@ -30,7 +30,7 @@ from .openfigi import OpenFigiBlocked
 from .payout_gate import DEFAULT_TOL, gate_payouts
 from .prefetch import Serialized, warm
 from .reconstruction import _lookup, build_delistings_table, delisting_row, unmatched_override_keys
-from .review_triage import triage
+from .review_triage import Decision, triage
 from .security_master import (
     FigiResolver, Range, Security, build_securities, era_cusips, era_last_seen, ranges_from_sightings, refine_eras,
 )
@@ -67,6 +67,7 @@ class RunSummary:
     buckets: dict[str, int]
     figi_sources: dict[str, int]
     review_flags: dict[str, int]
+    review_counts: dict[str, int] = field(default_factory=dict)     # review_triage.triage()'s counts
 
 
 def _stderr(*parts) -> None:
@@ -543,9 +544,19 @@ def _warm_delisting_search(clients: Clients, ordered: list[Security], listing: d
 
 def run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_dir: Path,
         tol: float = DEFAULT_TOL, limit: int | None = None, log: Callable = _stderr,
-        sec_workers: int = 1) -> RunSummary:
-    """Observations -> the six tables under `out_dir` (spec §8), plus
-    review_summary.csv (`review_triage`: review.csv's rows by flag).
+        sec_workers: int = 1, review_decisions: Sequence[Decision] = ()) -> RunSummary:
+    """Observations -> the seven tables under `out_dir` (spec §8): `review_decisions`
+    (`review_triage.load_decisions`: "I checked this flag on this row, it is
+    fine") is passed straight to `review_triage.triage`, which writes
+    review.csv (severity-ordered, info-only rows hidden, accepted tokens
+    removed) and review_summary.csv (review.csv's rows by flag). A decision
+    that accepts nothing becomes a `review_decision_unmatched` row instead of
+    being silently dropped. `RunSummary.review_flags`/the manifest's own
+    `review_flags` still count every flag from *before* triage or decisions
+    (so exit code 3 always sees every `error`/`resolution_degraded`, decision
+    or not); the new `RunSummary.review_counts` (= `tri.counts`, also under
+    the manifest's `"review"` key) reports triage's own tally
+    (fix/check/info_hidden/accepted/cleared/unmatched_decisions).
 
     `sec_workers` > 1 fills the SEC caches ahead of each SEC-heavy stage on that
     many threads (`prefetch.warm`: fill-only, every thread under the one limiter).
@@ -558,7 +569,7 @@ def run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_
     refusal, Ctrl-C) is what reaches the caller, so the CLI still exits 2."""
     try:
         summary = _run(index, clients, overrides, out_dir=out_dir, tol=tol, limit=limit, log=log,
-                       sec_workers=sec_workers)
+                       sec_workers=sec_workers, review_decisions=review_decisions)
     except BaseException:
         try:
             _flush_memo(clients)
@@ -570,7 +581,8 @@ def run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_
 
 
 def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_dir: Path, tol: float,
-         limit: int | None, log: Callable, sec_workers: int) -> RunSummary:
+         limit: int | None, log: Callable, sec_workers: int,
+         review_decisions: Sequence[Decision] = ()) -> RunSummary:
     as_of = clients.as_of or date.today()     # the one run date: every window below ends on it
     meter = _StageMeter(log)
     run_mark = SEC_STATS.snapshot()           # the manifest reports the traffic since here
@@ -1070,7 +1082,7 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
     # feeds RunSummary.review_flags and the manifest, so exit code 3 still sees
     # every `error` and `resolution_degraded`.
     flags = Counter(f.split(":", 1)[0] for r in review_rows for f in (r.get("review_flags") or "").split(";") if f)
-    tri = triage(review_rows, ())
+    tri = triage(review_rows, review_decisions)
 
     # 11. write -- every table formatted and written to temp files first,
     # renamed into place together, so a later table's failure never leaves an
@@ -1087,9 +1099,9 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
     stat_counts, stat_timings = SEC_STATS.since(run_mark)
     run_manifest.write(out_dir, run_manifest.build(as_of=as_of, sec_workers=sec_workers, counts=stat_counts,
                                                    timings=stat_timings, stages=meter.stages,
-                                                   review_flags=dict(flags)))
+                                                   review_flags=dict(flags), review=tri.counts))
     return RunSummary(counts, dict(Counter(e.record.bucket.value for e in events)),
-                      dict(Counter(s.figi_source for s in securities.values())), dict(flags))
+                      dict(Counter(s.figi_source for s in securities.values())), dict(flags), dict(tri.counts))
 
 
 def default_clients(index: ObservationIndex, *, cache_dir: Path, rename_map: dict | None = None,

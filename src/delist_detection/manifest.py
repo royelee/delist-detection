@@ -1,7 +1,7 @@
 # src/delist_detection/manifest.py
 """run_manifest.json: what one run of the pipeline rested on.
 
-Written next to the six tables, and only after them: a run that aborts leaves the
+Written next to the seven tables, and only after them: a run that aborts leaves the
 previous manifest in place, like the previous tables. It records:
 - the run date every freshness rule used (`as_of`);
 - the code that ran and the worker count;
@@ -12,7 +12,7 @@ So two runs over the same observations can be told apart when their tables diffe
 
 The manifest is not part of the byte-identical-output guarantee: it carries the
 run date, the code version and the worker count, so it is expected to differ
-between two runs even when their six tables come out identical.
+between two runs even when their seven tables come out identical.
 """
 from __future__ import annotations
 
@@ -55,7 +55,7 @@ def _latency(timings: dict[str, list[float]]) -> dict[str, dict[str, float]]:
 
 
 def build(*, as_of: date, sec_workers: int, counts: dict[str, int], timings: dict[str, list[float]],
-          stages: dict[str, dict[str, int]], review_flags: dict[str, int]) -> dict:
+          stages: dict[str, dict[str, int]], review_flags: dict[str, int], review: dict[str, int]) -> dict:
     """The manifest of one run. `counts` and `timings` are edgar.SEC_STATS.since()
     of the run's start; `stages` is the pipeline's per-stage meter. `warm_failed`
     reports, per warm pass, how many items a worker thread failed on (the
@@ -63,7 +63,11 @@ def build(*, as_of: date, sec_workers: int, counts: dict[str, int], timings: dic
     here only flags a concurrency-only failure worth a second look). `degraded_answers`
     counts only the sequential pass's own degraded reads; a warm/fill-only
     thread's degraded reads are counted separately, under `warm_degraded`
-    (`edgar.RequestStats.degraded`, `edgar.filling_only`)."""
+    (`edgar.RequestStats.degraded`, `edgar.filling_only`). `review` is
+    `review_triage.triage()`'s own counts (fix/check/info_hidden/accepted/
+    cleared/unmatched_decisions); `review_flags` (used only for
+    `resolution_degraded` below) is the flag tally from *before* triage or
+    decisions, so exit code 3 always sees every `error`/`resolution_degraded`."""
     return {
         "as_of": as_of.isoformat(),
         "code_version": code_version(),
@@ -78,6 +82,7 @@ def build(*, as_of: date, sec_workers: int, counts: dict[str, int], timings: dic
         "latency_ms": _latency(timings),
         "stages": stages,
         "resolution_degraded": review_flags.get("resolution_degraded", 0),
+        "review": review,
     }
 
 

@@ -1,8 +1,10 @@
 """Build the security master and the delisting table from caller observations.
 
-Reads:  an observations CSV (ticker, as_of[, name, cusip, cik, sec_id])
+Reads:  an observations CSV (ticker, as_of[, name, cusip, cik, sec_id]), and
+        data/review_decisions.csv (accepted review flags; default path, so a
+        missing file there means no decisions)
 Writes: output/securities.csv, ticker_history.csv, cusip_history.csv,
-        delistings.csv, payouts.csv, review.csv
+        delistings.csv, payouts.csv, review.csv, review_summary.csv
 """
 from __future__ import annotations
 
@@ -18,6 +20,7 @@ from delist_detection.openfigi import OpenFigiBlocked
 from delist_detection.payout_gate import DEFAULT_TOL
 from delist_detection.pipeline import Overrides, default_clients, run
 from delist_detection.reconstruction import load_float_overrides, load_merger_terms_overrides
+from delist_detection.review_triage import ReviewDecisionError, load_decisions
 
 KNOWN_RENAMES = {
     # Tiingo ticker -> SEC-current ticker (only when SEC has a different one)
@@ -87,13 +90,15 @@ MANUAL_OVERRIDES: dict[str, int] = {
 
 DEFAULT_SEC_WORKERS = 4     # threads prefetching SEC data; each stage itself stays sequential
 MAX_SEC_WORKERS = 8         # one process's ceiling: all threads share one 8 requests/s limit
+DEFAULT_REVIEW_DECISIONS = str(ROOT / "data" / "review_decisions.csv")
 
 
 EXIT_CODES_EPILOG = """\
 Exit codes:
   0  success, no review-row errors
   2  aborted: SEC or OpenFIGI refused the request (EdgarBlocked/OpenFigiBlocked), or the
-     start-up checks failed (no EDGAR_USER_AGENT, an unusable SEC rate-lock file)
+     start-up checks failed (no EDGAR_USER_AGENT, an unusable SEC rate-lock file, a
+     --review-decisions file that is missing when given explicitly or that fails to load)
   3  completed, but review.csv has one or more `error` rows, or `resolution_degraded`
      rows (an answer rested on a failed SEC request or a stale copy; run again once SEC
      answers). Outputs are still written; see the stderr banner for the counts
@@ -114,6 +119,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--last-trade-closes", help="CSV sec_id,last_trade_close[,delist_date]")
     p.add_argument("--merger-terms", help="CSV sec_id,cash_per_share,stock_ratio,acquirer_price,acquirer_ticker[,delist_date]")
     p.add_argument("--recoveries", help="CSV sec_id,recovery_ratio[,delist_date]")
+    p.add_argument("--review-decisions", default=DEFAULT_REVIEW_DECISIONS,
+                   help="CSV of accepted review flags: sec_id,delist_date,ticker,flag,decision,note "
+                        "(default %(default)s; missing at the default path means no decisions, missing at an "
+                        "explicit path is an error)")
     p.add_argument("--extract-merger-terms-llm", action="store_true",
                    help="Use the LLM extractor to read cash+stock merger terms from EDGAR filings; "
                         "acquirer_price is joined from the SEC fails-to-deliver panel and a sanity gate "
@@ -148,6 +157,15 @@ def main() -> int:
         merger_terms=load_merger_terms_overrides(args.merger_terms) if args.merger_terms else {},
         recoveries=load_float_overrides(args.recoveries, "recovery_ratio") if args.recoveries else {},
     )
+    try:
+        review_decisions = load_decisions(args.review_decisions)
+    except FileNotFoundError:
+        if args.review_decisions == DEFAULT_REVIEW_DECISIONS:
+            review_decisions = []          # no decisions file at the default path: nothing accepted yet
+        else:
+            p.error(f"--review-decisions {args.review_decisions}: file not found")
+    except ReviewDecisionError as exc:
+        p.error(str(exc))
     index = ObservationIndex(load_observations(args.observations))
     clients = default_clients(
         index, cache_dir=Path(args.cache_dir), rename_map=KNOWN_RENAMES, manual_overrides=MANUAL_OVERRIDES,
@@ -156,11 +174,16 @@ def main() -> int:
     )
     log = (lambda *a: None) if args.quiet else None
     summary = run(index, clients, overrides, out_dir=Path(args.output_dir), tol=args.merger_terms_sanity_tol,
-                  limit=args.limit, sec_workers=args.sec_workers, **({"log": log} if log else {}))
+                  limit=args.limit, sec_workers=args.sec_workers, review_decisions=review_decisions,
+                  **({"log": log} if log else {}))
     print("Rows written:", summary.counts)
     print("Delistings by bucket:", summary.buckets)
     print("FIGI sources:", summary.figi_sources)
     print("Review flags:", summary.review_flags)
+    rc = summary.review_counts
+    print(f"Review: {rc.get('fix', 0)} fix, {rc.get('check', 0)} check "
+          f"({rc.get('info_hidden', 0)} info-only rows hidden, {rc.get('accepted', 0)} accepted, "
+          f"{rc.get('unmatched_decisions', 0)} unmatched decisions)")
     error_count = summary.review_flags.get("error", 0)
     degraded_count = summary.review_flags.get("resolution_degraded", 0)
     if error_count:

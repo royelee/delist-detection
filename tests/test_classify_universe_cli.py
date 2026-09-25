@@ -16,9 +16,11 @@ SPEC.loader.exec_module(cli)
 
 
 class _FakeSummary:
-    def __init__(self, review_flags):
+    def __init__(self, review_flags, review_counts=None):
         self.counts, self.buckets, self.figi_sources = {}, {}, {}
         self.review_flags = review_flags
+        self.review_counts = review_counts or {"fix": 0, "check": 0, "info_hidden": 0, "accepted": 0,
+                                               "cleared": 0, "unmatched_decisions": 0}
 
 
 def _run_main(monkeypatch, review_flags, *argv):
@@ -101,6 +103,37 @@ def test_main_returns_3_when_an_answer_rested_on_a_failed_request(monkeypatch, c
     assert rc == 3
     err = capsys.readouterr().err
     assert "2" in err and "resolution_degraded" in err
+
+
+def test_no_review_decisions_file_at_the_default_path_means_no_decisions(monkeypatch, tmp_path):
+    monkeypatch.setattr(cli, "DEFAULT_REVIEW_DECISIONS", str(tmp_path / "missing.csv"))
+    rc = _run_main(monkeypatch, {})
+    assert rc == 0
+    assert _run_main.seen["review_decisions"] == []
+
+
+def test_an_explicit_missing_review_decisions_path_exits_2(monkeypatch, tmp_path):
+    monkeypatch.setenv("EDGAR_USER_AGENT", "Test Co test@example.com")
+    monkeypatch.setattr(cli, "use_machine_wide_limit", lambda *a, **k: None)
+    monkeypatch.setattr(cli, "default_clients", lambda *a, **kw: pytest.fail("no client may be built"))
+    monkeypatch.setattr(sys, "argv", ["classify_universe.py", "--observations", "x.csv",
+                                      "--review-decisions", str(tmp_path / "nope.csv")])
+    with pytest.raises(SystemExit) as exc:
+        cli.main()
+    assert exc.value.code == 2
+
+
+def test_a_decisions_file_with_decision_reject_exits_2(monkeypatch, tmp_path):
+    path = tmp_path / "decisions.csv"
+    path.write_text("sec_id,delist_date,ticker,flag,decision,note\nS1,,X,no_figi,reject,bad\n")
+    monkeypatch.setenv("EDGAR_USER_AGENT", "Test Co test@example.com")
+    monkeypatch.setattr(cli, "use_machine_wide_limit", lambda *a, **k: None)
+    monkeypatch.setattr(cli, "default_clients", lambda *a, **kw: pytest.fail("no client may be built"))
+    monkeypatch.setattr(sys, "argv", ["classify_universe.py", "--observations", "x.csv",
+                                      "--review-decisions", str(path)])
+    with pytest.raises(SystemExit) as exc:
+        cli.main()
+    assert exc.value.code == 2
 
 
 def test_an_unusable_rate_lock_stops_the_run_before_any_request(monkeypatch):

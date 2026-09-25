@@ -28,12 +28,12 @@ editable install.
 
 ```bash
 pip install -e .                         # editable install (Python ≥3.10) — once per env
-pytest                                    # full suite (995 tests, offline, no network)
+pytest                                    # full suite (1058 tests, offline, no network)
 pytest tests/test_payout_extractor.py -v  # one file
 pytest tests/test_payout_extractor.py::test_match_in_cash_family_altr -v   # one test
 
 python scripts/verify_altair.py          # smoke: ALTR → CRSP 231, high
-python scripts/classify_universe.py --observations obs.csv   # → output/{securities,ticker_history,cusip_history,delistings,payouts,review}.csv (NETWORK; free when cached)
+python scripts/classify_universe.py --observations obs.csv   # → output/{securities,ticker_history,cusip_history,delistings,payouts,review,review_summary}.csv (NETWORK; free when cached)
 python scripts/classify_universe.py --observations obs.csv --limit 20 --no-extract-payouts --no-midas --no-halts   # fast dev subset
 python scripts/classify_universe.py --observations obs.csv --sec-workers 1   # one SEC request at a time (default: 4 prefetch threads, max 8, one machine-wide 8 req/s limit)
 python scripts/observations_from_snapshots.py --dir <folder of dated snapshot CSVs> --out obs.csv   # ticker/name columns, one date per file name
@@ -41,10 +41,12 @@ python scripts/observations_from_instruments.py --instruments all.txt --out obs.
 python scripts/verify_against_web.py     # independent EDGAR cross-check on output/delistings.csv → output/web_verification.csv
 python scripts/regen_payout_fixtures.py  # refetch golden 8-K fixtures from live SEC
 python scripts/build_golden_fixtures.py  # rebuild the 31-case golden regression set (NETWORK); --efts-only / --llm-only / --only ID
-# End-to-end pipeline (the canonical way to use the library) — classify a universe → output/delistings.csv (+ 5 more tables), then firm-month-correct a returns panel:
-python scripts/classify_universe.py --observations obs.csv --last-trade-closes lt.csv --merger-terms terms.csv --recoveries rec.csv   # → output/{securities,ticker_history,cusip_history,delistings,payouts,review}.csv
+python scripts/accept_review.py --flag terms_gate_failed --note "sampled 5, all fine"   # bulk-accept every current review.csv row carrying that flag → appends to data/review_decisions.csv (offline); --bucket narrows, --dry-run previews
+# End-to-end pipeline (the canonical way to use the library) — classify a universe → output/delistings.csv (+ 6 more tables), then firm-month-correct a returns panel:
+python scripts/classify_universe.py --observations obs.csv --last-trade-closes lt.csv --merger-terms terms.csv --recoveries rec.csv   # → output/{securities,ticker_history,cusip_history,delistings,payouts,review,review_summary}.csv
 python scripts/compute_corrected_returns.py --panel panel.csv --delistings output/delistings.csv --out corrected.parquet   # firm-month BMP correction, keyed on sec_id
 # override-CSV columns are keyed by sec_id[,delist_date] (a blank/absent delist_date applies to every delisting of that security): lt.csv=`sec_id,last_trade_close[,delist_date]` · terms.csv=`sec_id,cash_per_share,stock_ratio,acquirer_price,acquirer_ticker[,delist_date]` · rec.csv=`sec_id,recovery_ratio[,delist_date]`. A row that matches no delisting stops the run.
+# --review-decisions PATH (default data/review_decisions.csv) is read the same way: sec_id,delist_date,ticker,flag,decision,note. Missing at the default path means no decisions; missing at an explicit path, or a bad file, exits 2.
 # (append --limit N to classify_universe for a fast cached/offline subset)
 # Auto-extract cash+stock merger terms with an LLM instead of hand-writing terms.csv (NETWORK: SEC + OpenAI; needs OPENAI_API_KEY + CHAT_MODEL in .env):
 python scripts/classify_universe.py --observations obs.csv --extract-merger-terms-llm   # → output/delistings.csv with cash_plus_stock/stock_only rows
@@ -65,7 +67,7 @@ them: `ticker, cik, observed_delist_date, crsp_code, bucket, confidence,
 reason, evidence`, plus `sec_id`, `delist_date` and `successor_sec_id` —
 optional fields the new pipeline (`delistings.py`/`pipeline.py`) fills in
 alongside the original ones. `pipeline.py`'s `run()` is the orchestration
-that turns a list of observations into the six output tables; see
+that turns a list of observations into the seven output tables; see
 `CONTEXT.md` for the vocabulary its docstrings and variable names assume
 (security, era, sighting, pin, …).
 
@@ -155,6 +157,14 @@ that turns a list of observations into the six output tables; see
   (`TABLES`), `format_cell` (the one cell formatter every table shares),
   `write_table`/`read_table` (atomic write via `replace_on_success`). A later
   move to DuckDB changes only this module.
+- `review_triage.py` — pure (no network): `CATALOG` maps every review flag to
+  a severity (`fix`/`check`/`info`), a description and an action;
+  `row_severity`/`triage()` turn the pipeline's merged review rows plus a
+  decisions list into `review.csv` (severity-sorted, info-only rows hidden)
+  and `review_summary.csv` (one row per flag). `Decision`/`load_decisions`/
+  `ReviewDecisionError` read `data/review_decisions.csv`; `accept_by_flag`/
+  `append_decisions` back `scripts/accept_review.py`'s bulk accept. Called by
+  `pipeline.run()` just before the write; never touches `delistings.csv`.
 - `trading_calendar.py` — NYSE trading days (weekends, exchange holidays,
   unscheduled closures); turns "suspended before the open on D" into the
   actual last trading day and lines up FTD rows (dated D, priced at D−1's close).
@@ -242,9 +252,46 @@ conflate them.
   sent as header `X-OPENFIGI-APIKEY`. Exit 3 is a completed run whose
   `review.csv` has one or more `error` or `resolution_degraded` rows (an answer
   rested on a failed SEC request or a stale copy); outputs are still written,
-  and a banner goes to stderr with the counts.
+  and a banner goes to stderr with the counts. This tally is taken *before*
+  `review_triage.triage()` runs, so it is unaffected by decisions or hidden
+  info-only rows — an `error`/`resolution_degraded` row always trips exit 3,
+  whether or not a decision also exists for it (it can't: both flags are
+  `acceptable=False`).
+- **`review.csv` is triaged, not raw; `review_summary.csv` groups it by
+  cause.** `review_triage.triage()` gives every row a `severity` — `fix` (a
+  delisting with a blank DLRET, `observation_unresolved`, or the run/decisions
+  file itself is broken: `error`, `resolution_degraded`,
+  `review_decision_unmatched`), `check` (a rule couldn't settle it), or `info`
+  (a less precise source, nothing suggests it's wrong) — and orders rows by
+  what they can move: `fix` before `check`; within that, a delisting with a
+  blank DLRET first, then delisting rows by descending `|dlret|`, then
+  everything else; ties break on `(sec_id, delist_date, ticker,
+  review_flags)` and, for full determinism, a few more columns after that. A
+  row whose remaining flags are all `info` leaves `review.csv` — those flags
+  stay on `delistings.csv`. `output/review_summary.csv` has one row per flag
+  name: severity, how many rows carried it, how many are still in review, how
+  many tokens were accepted, its catalog description/action, and up to 3
+  examples. `data/review_decisions.csv`
+  (`sec_id,delist_date,ticker,flag,decision,note`, `decision` always
+  `accept`) is a person's "I checked this exact flag on this exact row, it's
+  fine": a decision matches only the identical `(sec_id, delist_date, ticker,
+  flag)` (blank cells match blank; the flag is the full token, e.g.
+  `terms_gate_failed:no_acq_price`, never just the name before `:`);
+  `error`/`resolution_degraded` can never be accepted
+  (`CATALOG[...].acceptable is False` — the run itself failed, the fix is a
+  rerun, not a decision); a decision that matches no row becomes a
+  `review_decision_unmatched` row instead of being silently dropped.
+  Decisions never change `delistings.csv`. `classify_universe.py
+  --review-decisions PATH` reads this file (default
+  `data/review_decisions.csv`; missing at the default path means no
+  decisions; missing at an explicit path, or a `ReviewDecisionError`, is
+  reported on stderr and exits 2 — unlike a bad `--last-trade-closes` /
+  `--merger-terms` / `--recoveries` file, which is not yet guarded and
+  currently crashes with an uncaught traceback, exit 1). `scripts/accept_review.py
+  --flag NAME --note TEXT [--bucket B] [--dry-run]` bulk-accepts every row
+  currently carrying that flag in one append.
 - **Every output is written only after the whole run succeeds.**
-  `pipeline.run()` computes every table in memory first and writes all six
+  `pipeline.run()` computes every table in memory first and writes all seven
   only at the end (`store.write_table`'s atomic replace), so a refusal or a
   bad override CSV midway through a run never leaves a half-written table
   over the previous complete one.
@@ -286,15 +333,16 @@ conflate them.
   offline; every case must stay green. `scripts/build_golden_fixtures.py`
   rebuilds it after a live-data change.
 - **Validation is the EDGAR-cross-check loop**, not eyeballing: start from
-  `output/review.csv` (every row with a non-empty `review_flags`), then
-  re-run `classify_universe.py`, then `verify_against_web.py` on
+  `output/review_summary.csv`, work `review.csv` top down, record each
+  accepted row in `data/review_decisions.csv`, then re-run
+  `classify_universe.py`, then `verify_against_web.py` on
   `output/delistings.csv` (and curl the cited accession) to confirm output
   against an independent path. Drill mismatches to root cause and re-run.
 - **Configurable input paths.** `classify_universe.py` requires
   `--observations` (a CSV of `ticker, as_of[, name, cusip, cik, sec_id]`,
   built by `observations_from_snapshots.py` / `observations_from_instruments.py`
   or hand-supplied) and reads `--output-dir`/`--cache-dir` with repo-local
-  defaults; it writes six tables to `output/`, all committed artifacts.
+  defaults; it writes seven tables to `output/`, all committed artifacts.
 
 ## Design/plan docs
 

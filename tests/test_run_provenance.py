@@ -172,9 +172,11 @@ def test_the_manifest_records_what_the_run_rested_on(fake_edgar, tmp_path):
     # _by_prefix helper would otherwise silently drop.
     assert set(m) == {"as_of", "code_version", "sec_workers", "sec_requests", "cache_answers",
                       "degraded_answers", "warm_degraded", "rejected_queries", "not_covered", "warm_failed",
-                      "latency_ms", "stages", "resolution_degraded"}
+                      "latency_ms", "stages", "resolution_degraded", "review"}
     assert set(m["stages"]) == {"issuer resolution", "delisting search", "payouts", "successor search"}
     assert m["resolution_degraded"] == 0
+    assert m["review"] == {"fix": 0, "check": 2, "info_hidden": 0, "accepted": 0, "cleared": 0,
+                           "unmatched_decisions": 0}     # review_triage.triage()'s own tally
 
 
 def test_a_refused_run_leaves_the_previous_manifest_in_place(fake_edgar, tmp_path):
@@ -193,7 +195,7 @@ def test_a_refused_run_leaves_the_previous_manifest_in_place(fake_edgar, tmp_pat
 
 def test_latency_percentiles_per_endpoint():
     got = manifest.build(as_of=date(2026, 9, 23), sec_workers=1, counts={"request:archives": 4},
-                         timings={"archives": [0.1, 0.2, 0.3, 1.0]}, stages={}, review_flags={})
+                         timings={"archives": [0.1, 0.2, 0.3, 1.0]}, stages={}, review_flags={}, review={})
     assert got["latency_ms"] == {"archives": {"n": 4, "p50": 200.0, "p95": 1000.0, "max": 1000.0}}
     assert got["sec_requests"] == {"archives": 4}
 
@@ -204,7 +206,7 @@ def test_the_manifest_reports_warm_failed_and_rejected_by_stage_or_endpoint():
     got = manifest.build(as_of=date(2026, 9, 23), sec_workers=4,
                          counts={"warm_failed:delisting search": 2, "rejected:company_search": 1,
                                 "rejected:full_text_search": 3, "not_covered:full_text_search": 1},
-                         timings={}, stages={}, review_flags={})
+                         timings={}, stages={}, review_flags={}, review={})
     assert got["warm_failed"] == {"delisting search": 2}
     assert got["rejected_queries"] == {"company_search": 1, "full_text_search": 3}
     assert got["not_covered"] == {"full_text_search": 1}
@@ -216,6 +218,6 @@ def test_the_manifest_separates_warm_degraded_from_the_sequential_passs_own(tmp_
     # then reflects only what the sequential pass relied on.
     got = manifest.build(as_of=date(2026, 9, 23), sec_workers=4,
                          counts={"degraded:stale_copy": 1, "warm_degraded:failed_request": 3},
-                         timings={}, stages={}, review_flags={})
+                         timings={}, stages={}, review_flags={}, review={})
     assert got["degraded_answers"] == {"stale_copy": 1}
     assert got["warm_degraded"] == {"failed_request": 3}

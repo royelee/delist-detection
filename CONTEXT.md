@@ -41,3 +41,11 @@ _Avoid_: member name, names row
 **Pin**:
 A CIK or `sec_id` the caller attaches to an observation because it has already settled that observation's identity. A pin beats the library's own resolution but is still checked against the observation's name.
 _Avoid_: cik-map, override
+
+**Severity**:
+How much a `review.csv` row can move a return, one of `fix` (a delisting with no DLRET, a security that couldn't be identified, or the run or the decisions file itself is broken), `check` (a rule couldn't settle the answer; read the cited filing), or `info` (the answer came from a less precise source but nothing suggests it's wrong). A row whose flags are all `info` leaves `review.csv`; its flags stay on `delistings.csv`. Rows are ordered by severity, then by how much they can still move a return.
+_Avoid_: priority, urgency
+
+**Review decision**:
+A line in `data/review_decisions.csv` recording that a person checked one exact flag on one exact row and it's fine (`sec_id, delist_date, ticker, flag, decision, note`). The pipeline reads it on every run, so an accepted flag stays off `review.csv`; a decision naming a flag no row carries becomes a `review_decision_unmatched` row rather than being silently dropped. A decision never changes `delistings.csv`.
+_Avoid_: override, exception, waiver

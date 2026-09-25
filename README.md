@@ -85,13 +85,14 @@ classification evidence, and concrete train/backtest mechanics:
 
 ---
 
-## The six output tables
+## The seven output tables
 
-`classify_universe.py` writes six CSVs to `output/`, all committed artifacts
-(one row layout each, fixed column order, ISO dates, `;`-joined lists, empty
-cell for NULL, rows sorted by key — see [`store.py`](src/delist_detection/store.py)
-for the schema every table shares). `delistings.csv` is the primary
-deliverable; the other five support it.
+`classify_universe.py` writes seven CSVs to `output/`, all committed
+artifacts (one row layout each, fixed column order, ISO dates, `;`-joined
+lists, empty cell for NULL, rows sorted by key unless noted — see
+[`store.py`](src/delist_detection/store.py) for the schema every table
+shares). `delistings.csv` is the primary deliverable; the other six support
+it.
 
 ### `securities.csv` — key `sec_id`
 
@@ -174,20 +175,52 @@ Per-merger cash payout after the last-close gate.
 sec_id, delist_date, ticker, payout_per_share, confidence, source, accession
 ```
 
-### `review.csv` — key `(sec_id, delist_date, ticker, review_flags)`
+### `review.csv` — key `(sec_id, delist_date, ticker, review_flags)`, pre-sorted (not key-sorted)
 
-Every row that needs a human look: a delisting whose `review_flags` is
-non-empty, plus securities with no delisting at all (`ended_without_delisting`,
-`listing_status_unknown`, `form25_unmatched`, `form25_unclassified`,
-`form25_unreadable`, `observation_unresolved`, `error`), ticker_history
-consistency checks (`ticker_range_overlap`, `ticker_shared`), and
-observation checks: `observation_conflict:<date>` (one row per ticker seen
-under two names on one date, `sec_id` empty) and `ticker_unconfirmed` (an
-era whose ticker no SEC fails-to-deliver row shows).
+Every row that still needs a human look, `review_triage.triage()`'s output:
+a delisting whose `review_flags` is non-empty, plus securities with no
+delisting at all (`ended_without_delisting`, `listing_status_unknown`,
+`form25_unmatched`, `form25_unclassified`, `form25_unreadable`,
+`observation_unresolved`, `error`), ticker_history consistency checks
+(`ticker_range_overlap`, `ticker_shared`), and observation checks:
+`observation_conflict:<date>` (one row per ticker seen under two names on
+one date, `sec_id` empty) and `ticker_unconfirmed` (an era whose ticker no
+SEC fails-to-deliver row shows).
 
 ```
-sec_id, delist_date, ticker, cik, bucket, dlret, review_flags, reason, anchor_8k, last_seen
+severity, sec_id, delist_date, ticker, cik, bucket, dlret, review_flags, reason, anchor_8k, last_seen
 ```
+
+Every row carries a **`severity`**, the first column: `fix` (a delisting with
+a blank `dlret`, `observation_unresolved`, or the run/decisions file itself
+is broken — `error`, `resolution_degraded`, `review_decision_unmatched`),
+`check` (a rule couldn't settle the answer), or `info` (the answer came from
+a less precise source but nothing suggests it's wrong). A row whose flags are
+*all* `info` never appears here — those flags stay on `delistings.csv`, just
+not surfaced for review. Rows are ordered by what they can do to a return:
+`fix` before `check`; within that, a delisting with a blank `dlret` first,
+then delisting rows by descending `|dlret|`, then everything else; ties break
+on `(sec_id, delist_date, ticker, review_flags)` and a few more columns after
+that, so the order never depends on run-to-run noise. See *Severities and
+accepting a review row* below for the full catalog, `review_summary.csv`,
+and `data/review_decisions.csv`.
+
+### `review_summary.csv` — key `flag`, pre-sorted (not key-sorted)
+
+One row per flag name that appears anywhere in the run, for triaging by
+cause instead of row-by-row:
+
+```
+severity, flag, rows, in_review, accepted, description, action, examples
+```
+
+`rows` is how many rows carried that flag before any decision; `in_review`
+is how many still carry it in the final `review.csv`; `accepted` is how many
+of its tokens a decision removed; `description`/`action` come from
+`review_triage.CATALOG`; `examples` is up to three `TICKER@delist_date` (or
+`TICKER`, or `sec_id` with no ticker) labels. Rows are ordered by severity,
+then by `rows` descending, then by flag name — so the biggest, most urgent
+causes sort first.
 
 ### Per-bucket DLRET policy
 
@@ -220,11 +253,13 @@ sec_id, delist_date, ticker, cik, bucket, dlret, review_flags, reason, anchor_8k
 Not every row is settled by clean evidence. `enrich()` collects every
 classifier and payout-gate flag into a `review_flags` column on
 `delistings.csv` (semicolon-joined), and `classify_universe.py` also writes
-`output/review.csv`, one row per non-empty `review_flags` value (plus rows
-for securities with no delisting at all — see *The six output tables*
-above), with the ticker, bucket, `dlret`, reason, `cik`, and anchor 8-K item
-set, so a human can triage without re-deriving which rows the automatic
-rules could not settle on their own.
+`output/review.csv` and `output/review_summary.csv` (plus rows for
+securities with no delisting at all — see *The seven output tables* above),
+with the ticker, bucket, `dlret`, reason, `cik`, and anchor 8-K item set, so a
+human can triage without re-deriving which rows the automatic rules could not
+settle on their own. `review_triage.py` (`triage()`) gives every row a
+`severity`, orders them by what they can move, and hides a row whose flags
+are all `info` — see *Severities and accepting a review row* below.
 
 The full flag vocabulary (from `classifier.py`, `ticker_resolver.py`,
 `delistings.py`, `payout_gate.py`, and `reconstruction.py`):
@@ -269,6 +304,54 @@ The full flag vocabulary (from `classifier.py`, `ticker_resolver.py`,
 | `observation_conflict:<date>` | The ticker was observed under two or more different names on `<date>` (a snapshot source that backfilled today's ticker: CB is both ACE LTD and CHUBB CORP in 2012-2014); both are kept, and the reason names each with the security it resolved to. `sec_id` is empty |
 | `ticker_unconfirmed` | An era from 2004 on with no fails-to-deliver row under its ticker within 30 days of its first and last observation: the SEC data never shows that ticker then (a snapshot carrying a later ticker, such as APTV in 2012-2013, or a security gone before the snapshot date) |
 
+Plus `review_decision_unmatched`, which `review_triage.triage()` itself
+creates for a stale decision (see below) — it never comes from the pipeline.
+
+### Severities and accepting a review row
+
+Every flag above has a catalog entry (`review_triage.CATALOG`) giving it a
+**severity** — `fix`, `check`, or `info` (see `review.csv`'s columns above)
+— plus a plain-language description and action. `output/review_summary.csv`
+groups the current run by flag; work it top down, then `review.csv` itself.
+
+Once you've checked a flag on a row and it's fine, record it in
+`data/review_decisions.csv` so it stays accepted on every later run:
+
+```
+sec_id, delist_date, ticker, flag, decision, note
+```
+
+`decision` is always `accept`. A decision matches a row by the *exact* token
+— `terms_gate_failed:no_acq_price`, never just `terms_gate_failed` — and by
+`(sec_id, delist_date, ticker)` compared as stripped strings (a blank cell
+matches a blank one, for observation-level rows like
+`observation_conflict:<date>` whose `sec_id` is empty). `error` and
+`resolution_degraded` can never be accepted this way — both mean the run
+itself failed, and `load_decisions` refuses the file with a
+`ReviewDecisionError` (`classify_universe.py` reports it and exits 2) rather
+than let a rerun silently hide the failure. A decision that matches no row —
+a typo, or a line written against an older run — becomes a `fix`
+`review_decision_unmatched` row instead of disappearing. Decisions only ever
+change `review.csv`/`review_summary.csv`; `delistings.csv` is never touched.
+
+`classify_universe.py --review-decisions PATH` reads this file (default
+`data/review_decisions.csv`; a missing file at the default path just means no
+decisions yet, a missing file at an explicit path is an error). The CLI's
+`Review: N fix, M check (…)` line and the manifest's `"review"` object report
+`review_triage.triage()`'s own tally.
+
+Sampling a handful of rows for one flag and accepting them all at once:
+
+```bash
+python scripts/accept_review.py --flag terms_gate_failed --note "sampled 5, all fine"
+python scripts/accept_review.py --flag no_form25 --bucket merger --note "checked EDGAR" --dry-run
+```
+
+`--bucket` narrows to rows whose `bucket` matches; `--dry-run` reports the
+count without writing. It appends one `accept` decision per matching token,
+skips one already recorded, and refuses (exit 2) a flag that can't be
+accepted.
+
 ### Payout reconciliation (the last-close gate)
 
 Every merger payout, the regex cash figure or the LLM cash+stock terms, is
@@ -312,13 +395,15 @@ python scripts/classify_universe.py \
     --observations obs.csv \
     --last-trade-closes <csv> \
     --merger-terms <csv> \
-    --recoveries <csv>
+    --recoveries <csv> \
+    --review-decisions <csv>
 ```
 
 This runs the full pipeline and writes `output/securities.csv`,
-`ticker_history.csv`, `cusip_history.csv`, `delistings.csv`, `payouts.csv`
-and `review.csv`. See *Observations and pins* below for the required
-`--observations` input.
+`ticker_history.csv`, `cusip_history.csv`, `delistings.csv`, `payouts.csv`,
+`review.csv` and `review_summary.csv`. See *Observations and pins* below for
+the required `--observations` input, and *Severities and accepting a review
+row* above for `--review-decisions` (default `data/review_decisions.csv`).
 
 > **Note:** Merger rows without a `last_trade_close` (SEC fails-to-deliver
 > found none, and none was supplied via `--last-trade-closes`) emit a
@@ -422,17 +507,18 @@ python scripts/verify_altair.py          # smoke test: ALTR → CRSP 231 high
 # Build an observations CSV, then run the pipeline:
 python scripts/observations_from_instruments.py --instruments data/delisted_tickers.tsv --out obs.csv
 # or: scripts/observations_from_snapshots.py --dir <folder of dated index-membership CSVs> --out obs.csv
-python scripts/classify_universe.py --observations obs.csv   # → output/{securities,ticker_history,cusip_history,delistings,payouts,review}.csv
+python scripts/classify_universe.py --observations obs.csv   # → output/{securities,ticker_history,cusip_history,delistings,payouts,review,review_summary}.csv
 
-pytest -q                                # 995 unit tests, no network
+pytest -q                                # 1058 unit tests, no network
 ```
 
 `classify_universe.py` prints a summary when it finishes: rows written per
 table, delistings by bucket, `securities.csv` FIGI sources (`pin` / `ticker` /
-`cusip` / `name` / `placeholder`), and `review.csv` flag counts — the first
-place to look for how well a run went. `output/review.csv` is the
-triage list; see *Verifying the output* below for the independent
-EDGAR cross-check.
+`cusip` / `name` / `placeholder`), `review.csv` flag counts, and a `Review: N
+fix, M check (…)` line — the first place to look for how well a run went.
+`output/review_summary.csv` groups the triage list by cause;
+see *Severities and accepting a review row* above and *Verifying the output*
+below for the independent EDGAR cross-check.
 
 The same run auto-extracts the per-share cash merger consideration for every
 `merger`-bucket delisting into `output/payouts.csv` (see *Payout extraction*
@@ -651,13 +737,15 @@ src/delist_detection/
     reconstruction.py           EnrichedDelistRecord, build_delistings_table — output/delistings.csv
     payout_extractor.py         Per-share cash merger consideration from EDGAR filings (regex)
     llm_merger_extractor.py     Cash+stock/stock-only merger terms via an LLM
+    review_triage.py            Flag catalog + severities → review.csv / review_summary.csv; decisions file
     qlib_adapter.py             DataFrame adapters: inject_terminal_labels, apply_backtest_exits
 
 scripts/
     verify_altair.py                 End-to-end sanity check on ALTR (Siemens deal)
     observations_from_instruments.py  Legacy (ticker,start,end) file → observations CSV
     observations_from_snapshots.py    Folder of dated snapshot CSVs → observations CSV
-    classify_universe.py              Reads --observations → writes the six output tables
+    classify_universe.py              Reads --observations → writes the seven output tables
+    accept_review.py                  Bulk-accept review.csv rows by flag → appends data/review_decisions.csv
     verify_against_web.py             Independent EDGAR cross-check → output/web_verification.csv
     compute_corrected_returns.py      CLI: read panel + delistings.csv → write BMP-corrected panel
     regen_payout_fixtures.py          Regenerate golden payout test fixtures from live SEC
@@ -669,9 +757,13 @@ output/
     cusip_history.csv     Point-in-time CUSIP ranges per security
     delistings.csv        One row per delisting, with DLRET and its audit trail (primary output)
     payouts.csv           Per-merger extracted payout with source + accession (gated)
-    review.csv            Every row (delisting or not) that needs a human look
+    review.csv            Every row (delisting or not) that still needs a human look, severity-ordered
+    review_summary.csv    review.csv's rows grouped by flag, for triaging by cause
     run_manifest.json     What the run rested on: as_of, code version, SEC requests/cache/latency per endpoint
     web_verification.csv  Per-row independent cross-check verdict
+
+data/
+    review_decisions.csv  Accepted review flags (sec_id,delist_date,ticker,flag,decision,note), read every run
 
 cache/
     edgar/*.json                 SEC JSON cache (re-runs are free); search answers held by a TTL
@@ -890,5 +982,5 @@ never a price vendor, never Alpha Vantage:
 | Code | Meaning |
 |---|---|
 | `0` | Success, no `error` or `resolution_degraded` rows in `review.csv`. |
-| `2` | Aborted: SEC or OpenFIGI refused the request (`EdgarBlocked` / `OpenFigiBlocked`), or a start-up check failed (no `EDGAR_USER_AGENT`, an unusable SEC rate-lock file, or `--sec-workers` outside `[1, 8]`) — no output written. |
+| `2` | Aborted: SEC or OpenFIGI refused the request (`EdgarBlocked` / `OpenFigiBlocked`), or a start-up check failed (no `EDGAR_USER_AGENT`, an unusable SEC rate-lock file, `--sec-workers` outside `[1, 8]`, or a `--review-decisions` file that's missing when given explicitly or fails to load) — no output written. |
 | `3` | Completed, but `review.csv` has one or more `error` rows (one security or extraction raised and was logged instead of aborting the run) or `resolution_degraded` rows (an answer rested on a failed SEC request or a stale copy) — outputs are still written; the run prints a banner to stderr with the counts. |
