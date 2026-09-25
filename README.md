@@ -304,7 +304,7 @@ The full flag vocabulary (from `classifier.py`, `ticker_resolver.py`,
 | `ftd_close_lagged` | The last-trade close is from a fails-to-deliver row more than one trading day after the last trade (no row on the next day) |
 | `ftd_close_prior:<n>` | No fails-to-deliver row follows the last trade day (fails stop once trading stops), so the close is the latest one known on it: the price on a row dated the last trade day or up to 10 trading days earlier, which is the close of the trading day before that row. `<n>` is that close's age in trading days before the last trade (1 = the day before); the row's date is kept in the evidence (`ftd_close_row_date`) |
 | `acquirer_close_lagged` | The acquirer price used in the merger's cash+stock / stock-only terms is from a fails-to-deliver row more than one trading day after the target's last trade |
-| `ended_without_delisting` | Not listed today and no Form 25 or fallback delisting filing was found |
+| `ended_without_delisting` | Not listed today and no Form 25 or fallback delisting filing was found, or none matched the security (it then sits next to that Form 25's `form25_*` row) |
 | `listing_status_unknown` | Listing status could not be confirmed and no delisting was found |
 | `no_figi`, `observation_unresolved` | FIGI resolution fell back to a placeholder, or (with no CIK either) could not resolve at all |
 | `form25_unmatched`, `form25_unclassified`, `form25_unreadable` | A Form 25 could not be matched to one security's class, its class text was unreadable, or its filing text could not be fetched |

@@ -119,10 +119,13 @@ def test_ambiguous_class_goes_to_review(fake_edgar):
     ctx.siblings = [SecurityRef("BBG_A", "CLASS A", "common"), SecurityRef("BBG_B", "CLASS B", "common")]
     events, review = DelistingFinder(edgar, clf).find(ctx)
     # The fallback must not revive the same Form 25 the loop just rejected as
-    # ambiguous (item 1); the ambiguity review item is the whole explanation,
-    # so no `ended_without_delisting` piles on top of it either.
+    # ambiguous (item 1). The security is still neither listed nor delisted,
+    # so spec 8.10's `ended_without_delisting` row is written next to the
+    # ambiguity row (code review 2026-09-25, item 2): accepting the Form 25
+    # row as "not about this security" must not drop the security from review.
     assert events == []
-    assert [r.flag for r in review] == ["form25_unmatched"]
+    assert [r.flag for r in review] == ["form25_unmatched", "ended_without_delisting"]
+    assert review[1].last_seen == "2018-11-28" and review[1].delist_date == ""
 
 
 def test_ended_without_delisting(fake_edgar):
@@ -152,9 +155,10 @@ def test_unreadable_form25_goes_to_review(fake_edgar):
     sec = _sec("BBG_O", 9800, "OOO", "2015-01-01", "2019-01-09", "OOO CORP")
     events, review = DelistingFinder(fake_edgar, clf).find(_ctx(sec, last_seen="2019-01-09"))
     assert events == []
-    # An unreadable filing sets had_unmatched too, so no ended_without_delisting
-    # piles on top of it (item 5, fix round 2).
-    assert [(r.flag, r.delist_date) for r in review] == [("form25_unreadable", "2019-01-20")]
+    # Not listed and not delisted: ended_without_delisting is written next to
+    # the form25_unreadable row (code review 2026-09-25, item 2).
+    assert [(r.flag, r.delist_date) for r in review] == [("form25_unreadable", "2019-01-20"),
+                                                         ("ended_without_delisting", "")]
 
 
 def test_unclassified_form25_class_goes_to_review(fake_edgar):
@@ -164,9 +168,9 @@ def test_unclassified_form25_class_goes_to_review(fake_edgar):
     sec = _sec("BBG_P", 9900, "PPP", "2015-01-01", "2019-01-31", "PPP CORP")
     events, review = DelistingFinder(fake_edgar, clf).find(_ctx(sec, last_seen="2019-01-31"))
     assert events == []
-    # An unclassified filing sets had_unmatched too, so no ended_without_delisting
-    # piles on top of it (item 5, fix round 2).
-    assert [r.flag for r in review] == ["form25_unclassified"]
+    # Not listed and not delisted: ended_without_delisting is written next to
+    # the form25_unclassified row (code review 2026-09-25, item 2).
+    assert [r.flag for r in review] == ["form25_unclassified", "ended_without_delisting"]
 
 
 def test_single_sibling_letter_mismatch_is_skipped(fake_edgar):
@@ -707,9 +711,10 @@ def test_the_second_class_a_form25_names_gets_its_delisting(fake_edgar):
 def test_a_class_left_ambiguous_still_goes_to_review_when_another_class_matched(fake_edgar):
     """CBS's 2019 Form 25 names Class A and Class B. Class A matches its one
     sibling; Class B has two (the Class B FIGI line and a placeholder for the
-    same stock) that no name word tells apart. The placeholder is not matched,
-    and its review row says the class was ambiguous, not that it ended with no
-    delisting filing."""
+    same stock) that no name word tells apart. The placeholder is not matched:
+    its review rows say the class was ambiguous and, as it is neither listed
+    nor delisted, that it ended without a delisting (code review 2026-09-25,
+    item 2: accepting the first row must not drop the security from review)."""
     fake_edgar.submissions_by_cik[813828] = [EdgarSubmission("c1", "25", "2019-12-04", "", "", "p.xml")]
     fake_edgar.raws["c1"] = _f25_raw("New York Stock Exchange LLC", class_text=(
         "Class A Common Stock, par value $0.001 per share Class B Common Stock, par value $0.001 per share"))
@@ -722,4 +727,5 @@ def test_a_class_left_ambiguous_still_goes_to_review_when_another_class_matched(
                     SecurityRef("CIK813828-CLASS-B", "CLASS B", "common", "CBS CORP CLASS B")]
     events, review = DelistingFinder(fake_edgar, clf).find(ctx)
     assert events == []
-    assert [r.flag for r in review] == ["form25_unmatched"]
+    assert [r.flag for r in review] == ["form25_unmatched", "ended_without_delisting"]
+    assert "no Form 25 matched it" in review[1].reason

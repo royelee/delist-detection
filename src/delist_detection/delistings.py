@@ -370,10 +370,14 @@ class DelistingFinder:
                 fb = self._fallback(ctx, cik, filings, ticker_last, early)
                 if fb is not None:
                     events.append(fb)
-                elif not had_unmatched:
+                else:
+                    # Also next to form25_* rows: those say a filing could not be
+                    # placed; accepting one as "not about this security" must not
+                    # drop the security itself from review (spec 8.10, G6).
+                    why = ("no Form 25 matched it (see its form25_* rows) and no other delisting filing found"
+                           if had_unmatched else "no Form 25 or delisting filing found")
                     review.append(ReviewItem(sec.sec_id, ticker_last, cik, "ended_without_delisting",
-                                             "not listed today and no Form 25 or delisting filing found",
-                                             last_seen=ctx.last_seen))
+                                             f"not listed today and {why}", last_seen=ctx.last_seen))
             elif ctx.listed_today is None:
                 review.append(ReviewItem(sec.sec_id, ticker_last, cik, "listing_status_unknown",
                                          "listing status unknown and no delisting found",

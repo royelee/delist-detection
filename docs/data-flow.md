@@ -423,7 +423,10 @@ goes to `review.csv` as `observation_unresolved`.
    either. When even the fallback paths find nothing but the security isn't
    listed today, the security is dated by its last sighting instead, flagged
    `delist_date_approx`, and reported to `review.csv` as
-   `ended_without_delisting` rather than fabricated as an event.
+   `ended_without_delisting` rather than fabricated as an event — also when
+   the issuer's Form 25s produced `form25_unmatched`/`form25_unclassified`/
+   `form25_unreadable` rows for it, which stay next to it: accepting one of
+   those as "not about this security" must not drop the security from review.
 
 A security can have more than one delisting (e.g. an exchange transfer,
 years later a merger).
