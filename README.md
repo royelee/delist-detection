@@ -903,9 +903,12 @@ company.
 
 `FigiResolver` queries OpenFIGI for each era: a `sec_id` pin wins outright;
 otherwise it tries, in order, the era's known CUSIPs (a CUSIP hit needs no
-name check), then the era's ticker (needs a matching per-venue ticker+name),
-then an issuer-name filter search — see the spec's Implementation notes for
-why CUSIP is tried first. When nothing is accepted, the security gets the
+name check), then the era's ticker (needs a matching per-venue ticker+name:
+the observation's name or, failing that, one of the issuer's EDGAR names,
+current or former — so Northeast Utilities, seen under ES before its rename,
+takes Bloomberg's EVERSOURCE ENERGY line), then an issuer-name filter search
+— see the spec's Implementation notes for why CUSIP is tried first and when
+an EDGAR-name match is dropped. When nothing is accepted, the security gets the
 placeholder `sec_id` `CIK<cik>-<CLASS>` (flagged `no_figi`, an `info` flag:
 counted in `review_summary.csv`, not listed in `review.csv`; `securities.csv`
 marks the security `figi_source=placeholder`); with no CIK

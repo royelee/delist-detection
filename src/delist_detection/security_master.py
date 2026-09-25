@@ -243,6 +243,32 @@ def era_last_seen(era: TickerEra, ftd: FtdIndex, horizon_days: int = 400) -> str
     return best
 
 
+def _contradicted(era: TickerEra, composite: str, eras: Sequence[TickerEra], ciks: Mapping[str, int | None],
+                  confirmed: Mapping[str, str]) -> bool:
+    """Whether another era's pin or CUSIP (`confirmed`: era key -> composite)
+    rules out `composite` for `era`, a candidate that only the issuer's EDGAR
+    names accept. An issuer's names can outlive its stock and match a later
+    line: the bankrupt General Growth Properties (CIK 895648) is now "GGP, Inc.",
+    the name of the new issuer's GGP line; Jacobs Engineering's names match
+    today's JACOBS SOLUTIONS line, a new composite since the 2022 reorganization.
+    So the candidate is ruled out when an era of another known issuer is
+    confirmed on it, or when an era of the same issuer and share class is
+    confirmed on another composite over overlapping dates."""
+    cik, cls = ciks.get(era.key), share_class_from_name(era.name)
+    for other in eras:
+        comp = confirmed.get(other.key)
+        if comp is None or other.key == era.key:
+            continue
+        other_cik = ciks.get(other.key)
+        if comp == composite:
+            if other_cik is not None and other_cik != cik:
+                return True
+        elif (other_cik == cik and share_class_from_name(other.name) == cls
+              and other.first <= era.last and era.first <= other.last):
+            return True
+    return False
+
+
 def _cusip_job(c: str) -> dict:
     return {"idType": "ID_CINS" if c[:1].isalpha() else "ID_CUSIP", "idValue": c, "includeUnlistedEquities": True}
 
@@ -254,8 +280,23 @@ class FigiResolver:
         self.figi = figi
 
     def resolve_many(self, eras: Sequence[TickerEra], *, ciks: Mapping[str, int | None],
-                     cusips: Mapping[str, list[str]]) -> dict[str, EraResolution]:
+                     cusips: Mapping[str, list[str]],
+                     issuer_names: Mapping[int, Sequence[str]] | None = None) -> dict[str, EraResolution]:
+        """Each era's FIGI (spec §8.3): a `sec_id` pin; else the first of its
+        CUSIPs (`cusips`, at most `MAX_CUSIPS`) that OpenFIGI maps to one US
+        composite; else its ticker, then a name search, where a candidate is
+        accepted only when its name agrees with the era's observed names or,
+        failing that, its issuer's EDGAR names, current and former
+        (`issuer_names`, by CIK: Northeast Utilities, seen under ES before its
+        rename, is accepted onto Bloomberg's EVERSOURCE ENERGY line because
+        EDGAR lists both names for CIK 72741). A dead line Bloomberg renamed to
+        its acquirer is still rejected: the acquirer's name is not one of the
+        target issuer's names. A candidate taken only through the EDGAR names
+        must also not contradict another era's pin or CUSIP
+        (`_contradicted`). Else the issuer's placeholder, or unresolved with no
+        issuer."""
         eras_by_key(eras)                                # every era is keyed by era.key below: refuse duplicates
+        issuer_names = issuer_names or {}
         out: dict[str, EraResolution] = {}
         jobs: list[dict] = []
         plan: dict[str, tuple[list[str], list[int], int]] = {}
@@ -272,13 +313,33 @@ class FigiResolver:
             jobs.append({"idType": "TICKER", "idValue": bloomberg_ticker(era.ticker), "includeUnlistedEquities": True})
             plan[era.key] = (tried, idx, t_idx)
         answers = self.figi.map(jobs) if jobs else []
+        found_of: dict[str, list[list[FigiCandidate]]] = {}
+        by_cusip_of: dict[str, list[FigiCandidate | None]] = {}
+        confirmed = {k: r.sec_id for k, r in out.items()}      # era -> composite of its pin or CUSIP
         for era in eras:
             if era.key in out:
                 continue
-            tried, idx, t_idx = plan[era.key]
-            names = era.names
-            found = [us_candidates(answers[i].get("data") or []) for i in idx]
-            by_cusip = [accept(f, ticker=era.ticker, names=names, via_cusip=True) for f in found]
+            _, idx, _ = plan[era.key]
+            found_of[era.key] = [us_candidates(answers[i].get("data") or []) for i in idx]
+            by_cusip_of[era.key] = [accept(f, ticker=era.ticker, names=era.names, via_cusip=True)
+                                    for f in found_of[era.key]]
+            c = next((got for got in by_cusip_of[era.key] if got), None)
+            if c:
+                confirmed[era.key] = c.composite
+
+        def named(era: TickerEra, cands: list[FigiCandidate]) -> FigiCandidate | None:
+            c = accept(cands, ticker=era.ticker, names=era.names, via_cusip=False)
+            edgar = issuer_names.get(ciks.get(era.key), ())
+            if c is not None or not edgar:
+                return c
+            c = accept(cands, ticker=era.ticker, names=[*era.names, *edgar], via_cusip=False)
+            return None if c is None or _contradicted(era, c.composite, eras, ciks, confirmed) else c
+
+        for era in eras:
+            if era.key in out:
+                continue
+            tried, _, t_idx = plan[era.key]
+            found, by_cusip = found_of[era.key], by_cusip_of[era.key]
 
             def resolved(sec_id: str, source: str, cand: FigiCandidate) -> EraResolution:
                 def own(c: str, got: FigiCandidate | None, cands: list[FigiCandidate]) -> bool:
@@ -295,15 +356,14 @@ class FigiResolver:
             if c:
                 out[era.key] = resolved(c.composite, "cusip", c)
                 continue
-            c = accept(us_candidates(answers[t_idx].get("data") or []), ticker=era.ticker, names=names,
-                       via_cusip=False)
+            c = named(era, us_candidates(answers[t_idx].get("data") or []))
             if c:
                 out[era.key] = resolved(c.composite, "ticker", c)
                 continue
             q = filter_query(era.name or "")
             if q:
                 rows = self.figi.filter(q, exchCode="US", includeUnlistedEquities=True)
-                c = accept(us_candidates(rows), ticker=era.ticker, names=names, via_cusip=False)
+                c = named(era, us_candidates(rows))
                 if c:
                     out[era.key] = resolved(c.composite, "name", c)
                     continue

@@ -1964,3 +1964,41 @@ def test_an_era_with_no_issuer_takes_a_cusip_another_era_shows_is_its_issuers(fa
     assert [r["sec_id"] for r in read_table("securities", table_path(tmp_path, "securities"))] == ["BBG000BHLYP4"]
     flags = {r["review_flags"] for r in read_table("review", table_path(tmp_path, "review"))}
     assert "observation_unresolved" not in flags
+
+
+# --- code review round 2, item 1: FIGI acceptance by ticker/name also takes the issuer's EDGAR names (spec §8.3) ---
+
+def test_an_era_under_its_issuers_old_name_is_accepted_on_the_ticker_by_the_edgar_names(fake_edgar, tmp_path):
+    """Real case: the snapshots list Northeast Utilities under ES from 2012 (a
+    backfilled ticker; it traded as NU until its 2015 rename to Eversource), so
+    SEC's fails rows under ES then are EnergySolutions' and the era has no FTD
+    CUSIP of its own. OpenFIGI's ES answer is Bloomberg's line under today's
+    name, EVERSOURCE ENERGY, which the observation name does not match; EDGAR
+    lists NORTHEAST UTILITIES among the issuer's former names, so the era is
+    accepted onto Eversource's FIGI: one security, no placeholder, and no
+    rename delisting."""
+    fake_edgar.company_map["ES"] = {"cik_str": 72741, "ticker": "ES", "title": "EVERSOURCE ENERGY"}
+    fake_edgar.former_names[72741] = [("NORTHEAST UTILITIES", "1994-07-28", "2015-04-29"),
+                                      ("NORTHEAST UTILITIES SYSTEM", "1996-11-27", "2004-11-30")]
+    fake_edgar.submissions_by_cik[72741] = [EdgarSubmission("0000072741-02-000001", "10-K", "2002-03-01", "",
+                                                            "", "k.htm")]
+    obs = ([Observation("ES", d, "NORTHEAST UTILITIES") for d in ("2012-06-29", "2012-12-31", "2013-06-28",
+                                                                   "2013-12-31", "2014-06-30")]
+           + [Observation("ES", d, "EVERSOURCE ENERGY") for d in ("2015-06-30", "2015-12-31", "2016-06-30")])
+    rows = (_ftd("ES", "292756202", "ENERGYSOLUTIONS INC. COM",
+                 ["2012-06-01", "2012-09-04", "2012-12-03", "2013-03-01", "2013-05-21"], 3.9)
+            + _ftd("ES", "30040W108", "EVERSOURCE ENERGY COM SHS",
+                   ["2015-02-19", "2015-06-01", "2015-09-01", "2015-12-31", "2016-06-01"], 50.0))
+    index, clients = _index_clients(fake_edgar, obs, rows, {
+        ("ID_CUSIP", "292756202"): _figi_answer("BBG000MTJYV2", "ES", "ENERGYSOLUTIONS INC"),
+        ("ID_CUSIP", "30040W108"): _figi_answer("BBG000BQ87N0", "ES", "EVERSOURCE ENERGY"),
+        ("TICKER", "ES"): _figi_answer("BBG000BQ87N0", "ES", "EVERSOURCE ENERGY"),
+    })
+
+    run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
+
+    secs = read_table("securities", table_path(tmp_path, "securities"))
+    assert [(r["sec_id"], r["issuer_cik"]) for r in secs] == [("BBG000BQ87N0", "72741")]
+    th = read_table("ticker_history", table_path(tmp_path, "ticker_history"))
+    assert [(r["sec_id"], r["ticker"], r["valid_from"]) for r in th] == [("BBG000BQ87N0", "ES", "2012-06-29")]
+    assert read_table("delistings", table_path(tmp_path, "delistings")) == []

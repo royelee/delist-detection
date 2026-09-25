@@ -465,6 +465,23 @@ line changes observable output.
   CUSIPs first (a CUSIP hit needs no name check), then the era's ticker
   (needs a matching per-venue ticker+name), then an issuer-name filter
   search, in that order — not the order listed in §8.3.
+- **EDGAR names in ticker and name acceptance (§8.3).** A ticker or name-search
+  hit is accepted on the era's observed names first; only when they fail are
+  its issuer's EDGAR names (current and former) added, so Northeast Utilities,
+  seen under ES before its 2015 rename, takes Bloomberg's EVERSOURCE ENERGY
+  line. A candidate only the EDGAR names accept is dropped when another era's
+  pin or CUSIP contradicts it: an era of another known issuer is confirmed on
+  it, or an era of the same issuer and share class is confirmed on another
+  composite over overlapping dates. An issuer's names can outlive its stock
+  and match a later line: the bankrupt General Growth Properties is now
+  "GGP, Inc.", the name of the new issuer's GGP line, and Jacobs Engineering
+  under a backfilled J in 2012 matches today's Jacobs Solutions line, a new
+  composite since 2022, while its JEC era is on the old one. Such an era keeps
+  its placeholder.
+- **§8.3's third acceptance route is not built.** Accepting a candidate
+  because its name matches the acquirer or successor named in the security's
+  delisting 8-K is not implemented: a security whose only OpenFIGI match
+  carries that name keeps its placeholder, or its ticker/CUSIP match.
 - **`ticker_history.source` values (§7.2).** Observed securities get only
   `observation` and `ftd` rows; `edgar_8k` appears only on a successor
   security's row, dated by its 8-K12B (the ticker-change search that would

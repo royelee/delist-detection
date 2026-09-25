@@ -373,9 +373,16 @@ composite FIGI via OpenFIGI, one era at a time:
    issuer CIK also takes a CUSIP that an era with a known issuer took.
 3. **The era's ticker**, queried via `TICKER`; accepted only when a per-venue
    row carries both the observation's ticker and a name that agrees with the
-   observation/EDGAR name.
+   era's observed names or, failing that, its issuer's EDGAR names (current
+   and former): Northeast Utilities, seen under ES before its rename, takes
+   Bloomberg's EVERSOURCE ENERGY line. A candidate only the EDGAR names accept
+   is dropped when another era's pin or CUSIP contradicts it: another issuer's
+   era is confirmed on it (old General Growth Properties is now "GGP, Inc.",
+   the name of the new issuer's GGP line), or an era of the same issuer and
+   class is confirmed on another composite over overlapping dates (Jacobs
+   under a backfilled J in 2012 is not today's Jacobs Solutions line).
 4. **An issuer-name filter search** (`/v3/filter`, legal suffixes stripped)
-   as the last resort.
+   as the last resort, accepted by the same name rule as the ticker.
 
 `figi_resolution.us_candidates` keeps only US-venue rows and drops
 when-issued/144A/fund-NAV lines; `accept()` never trusts Bloomberg's current

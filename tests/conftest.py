@@ -20,6 +20,7 @@ class _FakeEdgar:
     texts: dict[str, str] = field(default_factory=dict)   # accession -> filing text
     raws: dict[str, str] = field(default_factory=dict)    # accession -> complete submission text
     listings: dict[int, list[tuple[str, str]]] = field(default_factory=dict)   # cik -> [(ticker, exchange)]
+    former_names: dict[int, list[tuple[str, str, str]]] = field(default_factory=dict)  # cik -> [(name, from, to)]
 
     def company_tickers(self) -> dict[str, dict[str, Any]]:
         return self.company_map
@@ -31,7 +32,8 @@ class _FakeEdgar:
         title = next((r["title"] for r in self.company_map.values()
                       if int(r["cik_str"]) == int(cik)), "")
         listed = self.listings.get(int(cik), [])
-        return {"name": title, "formerNames": [], "sic": "",
+        former = [{"name": n, "from": lo, "to": hi} for n, lo, hi in self.former_names.get(int(cik), [])]
+        return {"name": title, "formerNames": former, "sic": "",
                 "tickers": [x for x, _ in listed], "exchanges": [y for _, y in listed]}
 
     def fetch_filing_text(self, cik: int | str, accession: str, primary_doc: str) -> str:

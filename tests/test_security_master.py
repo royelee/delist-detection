@@ -346,6 +346,101 @@ def test_pin_and_unresolved():
     assert res[orphan.key].sec_id is None and res[orphan.key].flags == ("observation_unresolved",)
 
 
+def test_the_ticker_route_accepts_on_the_issuers_edgar_names_but_never_on_an_acquirers_name():
+    """Spec §8.3: a ticker hit's name must agree with the observation or EDGAR
+    name. Northeast Utilities, seen under ES before its 2015 rename, is accepted
+    onto Bloomberg's EVERSOURCE ENERGY line because EDGAR lists both names for
+    CIK 72741. Questcor's dead QCOR line, which Bloomberg renamed to its
+    acquirer, stays rejected: the acquirer's name is not one of Questcor's."""
+    nu = _era("ES", ("2012-06-29", "NORTHEAST UTILITIES"), ("2014-06-30", "NORTHEAST UTILITIES"))
+    qcor = _era("QCOR", ("2014-06-30", "QUESTCOR PHARMACEUTICALS INC"))
+    figi = _Figi({
+        ("TICKER", "ES"): {"data": [_row("BBG000BQ87N0", "US", "ES", "EVERSOURCE ENERGY")]},
+        ("TICKER", "QCOR"): {"data": [_row("BBG000BPVCR1", "US", "QCOR", "MALLINCKRODT ARD LLC")]},
+    })
+    ciks, cusips = {nu.key: 72741, qcor.key: 1034842}, {nu.key: [], qcor.key: []}
+    names = {72741: ("EVERSOURCE ENERGY", "NORTHEAST UTILITIES", "NORTHEAST UTILITIES SYSTEM"),
+             1034842: ("QUESTCOR PHARMACEUTICALS INC",)}
+    assert FigiResolver(figi).resolve_many([nu], ciks=ciks, cusips=cusips)[nu.key].sec_id == "CIK72741-COMMON"
+    res = FigiResolver(figi).resolve_many([nu, qcor], ciks=ciks, cusips=cusips, issuer_names=names)
+    assert (res[nu.key].sec_id, res[nu.key].source) == ("BBG000BQ87N0", "ticker")
+    assert (res[qcor.key].sec_id, res[qcor.key].flags) == ("CIK1034842-COMMON", ("no_figi",))
+
+
+def test_edgar_names_do_not_hand_an_era_a_figi_another_issuers_cusip_confirms():
+    """Real case: General Growth Properties (CIK 895648) went bankrupt in 2009 and
+    a new issuer (CIK 1496048) took the business and the GGP ticker in 2010. The
+    old issuer's EDGAR name is now "GGP, Inc. (fka General Growth Properties ...)",
+    which agrees with Bloomberg's GGP INC line; but CUSIP 36174X101 confirms that
+    line as the new issuer's, so the old era keeps its placeholder."""
+    old = _era("GGP", ("2008-01-16", "GENERAL GROWTH PPTYS INC"), ("2009-06-08", "GENERAL GROWTH PPTYS INC"))
+    new = _era("GGP", ("2017-06-30", "GGP INC"), ("2018-06-30", "GGP INC"))
+    ggp = {"data": [_row("BBG000BG3HG3", "US", "GGP", "GGP INC", "REIT")]}
+    figi = _Figi({("ID_CUSIP", "36174X101"): ggp, ("TICKER", "GGP"): ggp})
+    names = {895648: ("GGP, Inc. (fka General Growth Properties Inc. & predecessor to General Growth "
+                      "Properties, Inc.)", "GENERAL GROWTH PROPERTIES INC"),
+             1496048: ("Brookfield Property REIT Inc.", "GGP Inc.", "General Growth Properties, Inc.",
+                       "New GGP, Inc.")}
+    res = FigiResolver(figi).resolve_many([old, new], ciks={old.key: 895648, new.key: 1496048},
+                                          cusips={old.key: ["370021107"], new.key: ["36174X101"]},
+                                          issuer_names=names)
+    assert (res[new.key].sec_id, res[new.key].source) == ("BBG000BG3HG3", "cusip")
+    assert res[old.key].sec_id == "CIK895648-COMMON"
+
+
+def test_edgar_names_do_not_move_an_era_off_the_line_its_issuers_cusip_confirms_for_those_dates():
+    """Real case: the snapshots list Jacobs Engineering under J in 2012-2014 as well
+    as under JEC, its ticker then. OpenFIGI's J answer is today's JACOBS SOLUTIONS
+    INC line (CUSIP 46982L108, since the 2022 holding-company reorganization),
+    which agrees with an EDGAR name of CIK 52988; but over those dates the JEC era
+    of the same issuer and class is confirmed on BBG000BMFFQ0 by CUSIP 469814107,
+    so the J era does not take the later line. Wyndham, also backfilled (WYND for
+    2012-2014), is taken: its ticker hit is the line WYN's CUSIP confirms."""
+    jec = _era("JEC", ("2008-01-16", "JACOBS ENGINEERING GROUP INC"), ("2019-06-30", "JACOBS ENGINEERING GROUP INC"))
+    j12 = _era("J", ("2012-06-29", "JACOBS ENGINEERING GROUP INC"), ("2014-06-30", "JACOBS ENGINEERING GROUP INC"))
+    j22 = _era("J", ("2022-12-31", "JACOBS SOLUTIONS INC"), ("2026-06-30", "JACOBS SOLUTIONS INC"))
+    wyn = _era("WYN", ("2008-01-16", "WYNDHAM WORLDWIDE CORP"), ("2017-12-31", "WYNDHAM WORLDWIDE CORP"))
+    wynd = _era("WYND", ("2012-06-29", "TRAVEL LEISURE INC"), ("2014-06-30", "TRAVEL LEISURE INC"))
+    solutions = {"data": [_row("BBG019C1BQR4", "US", "J", "JACOBS SOLUTIONS INC")]}
+    wyndham = {"data": [_row("BBG000PV2L86", "US", "WYND", "WYNDHAM DESTINATIONS INC")]}
+    figi = _Figi({
+        ("ID_CUSIP", "469814107"): {"data": [_row("BBG000BMFFQ0", "US", "9990213D", "JACOBS ENGINEERING GROUP INC")]},
+        ("ID_CUSIP", "46982L108"): solutions, ("TICKER", "J"): solutions,
+        ("ID_CUSIP", "98310W108"): wyndham, ("TICKER", "WYND"): wyndham,
+    })
+    eras = [jec, j12, j22, wyn, wynd]
+    ciks = {jec.key: 52988, j12.key: 52988, j22.key: 52988, wyn.key: 1361658, wynd.key: 1361658}
+    cusips = {jec.key: ["469814107"], j12.key: [], j22.key: ["46982L108"], wyn.key: ["98310W108"], wynd.key: []}
+    names = {52988: ("JACOBS SOLUTIONS INC.", "JACOBS ENGINEERING GROUP INC /DE/"),
+             1361658: ("Travel & Leisure Co.", "Wyndham Destinations, Inc.", "WYNDHAM WORLDWIDE CORP")}
+    res = FigiResolver(figi).resolve_many(eras, ciks=ciks, cusips=cusips, issuer_names=names)
+    assert {k: r.sec_id for k, r in res.items()} == {
+        jec.key: "BBG000BMFFQ0", j12.key: "CIK52988-COMMON", j22.key: "BBG019C1BQR4",
+        wyn.key: "BBG000PV2L86", wynd.key: "BBG000PV2L86"}
+
+
+def test_the_same_issuer_guard_weighs_only_the_same_class_over_overlapping_dates():
+    """The guard above is about one share class at one time: an issuer's class A
+    line confirmed over the same dates says nothing about its class C era, and a
+    line it had years before says nothing about a later era."""
+    a = _era("AAA", ("2012-06-29", "ALPHA CO CLASS A"), ("2014-06-30", "ALPHA CO CLASS A"))
+    c = _era("AAC", ("2012-06-29", "BETA HOLDINGS CLASS C"), ("2014-06-30", "BETA HOLDINGS CLASS C"))
+    old = _era("GMA", ("2008-01-16", "GAMMA CORP"), ("2010-06-30", "GAMMA CORP"))
+    new = _era("GMB", ("2014-06-30", "DELTA INC"), ("2016-06-30", "DELTA INC"))
+    figi = _Figi({
+        ("ID_CUSIP", "11111A101"): {"data": [_row("BBGCLASSA01", "US", "AAA", "ALPHA CO-CL A")]},
+        ("TICKER", "AAC"): {"data": [_row("BBGCLASSC01", "US", "AAC", "ALPHA CO-CL C")]},
+        ("ID_CUSIP", "22222B101"): {"data": [_row("BBGOLDLINE1", "US", "GMA", "GAMMA CORP")]},
+        ("TICKER", "GMB"): {"data": [_row("BBGNEWLINE1", "US", "GMB", "GAMMA CORP")]},
+    })
+    res = FigiResolver(figi).resolve_many(
+        [a, c, old, new], ciks={a.key: 1, c.key: 1, old.key: 2, new.key: 2},
+        cusips={a.key: ["11111A101"], c.key: [], old.key: ["22222B101"], new.key: []},
+        issuer_names={1: ("ALPHA CO", "BETA HOLDINGS"), 2: ("GAMMA CORP", "DELTA INC")})
+    assert {k: r.sec_id for k, r in res.items()} == {a.key: "BBGCLASSA01", c.key: "BBGCLASSC01",
+                                                    old.key: "BBGOLDLINE1", new.key: "BBGNEWLINE1"}
+
+
 def test_build_securities_merges_eras_of_one_figi():
     fb = _era("FB", ("2021-12-31", "FACEBOOK INC CLASS A"))
     meta = _era("META", ("2022-06-30", "META PLATFORMS INC CLASS A"))

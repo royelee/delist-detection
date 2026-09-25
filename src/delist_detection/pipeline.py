@@ -579,7 +579,8 @@ def run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_
     anything is written. The resolver's memo is written after issuer resolution,
     after the acquirer lookups, and on the way out, error or not. On the way out
     of an aborted run, a memo that cannot be written is logged and the abort (a
-    refusal, Ctrl-C) is what reaches the caller, so the CLI still exits 2."""
+    refusal, an OpenFIGI outage, Ctrl-C) is what reaches the caller, so the CLI
+    still exits with that abort's code (2 for a refusal, 1 for an outage)."""
     try:
         summary = _run(index, clients, overrides, out_dir=out_dir, tol=tol, limit=limit, log=log,
                        sec_workers=sec_workers, review_decisions=review_decisions)
@@ -643,10 +644,11 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
     ciks = {k: r.cik for k, r in cik_res.items()}
 
     # 3. FIGI per era -> securities. An era takes only the FTD CUSIPs whose rows
-    # describe its issuer, by its observed names or the issuer's EDGAR names (D21).
+    # describe its issuer, by its observed names or the issuer's EDGAR names (D21),
+    # and a ticker or name hit whose name agrees with those same names (§8.3).
     issuer_names = {cik: _issuer_names(clients.edgar, cik) for cik in dict.fromkeys(ciks.values()) if cik}
     cusips = candidate_cusips(eras, ftd, ciks, issuer_names)
-    resolutions = FigiResolver(clients.figi).resolve_many(eras, ciks=ciks, cusips=cusips)
+    resolutions = FigiResolver(clients.figi).resolve_many(eras, ciks=ciks, cusips=cusips, issuer_names=issuer_names)
     securities = build_securities(resolutions, era_by_key, ciks)
     review: list[ReviewItem] = []
     for key, res in resolutions.items():
