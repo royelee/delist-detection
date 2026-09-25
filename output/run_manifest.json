@@ -1,14 +1,14 @@
 {
   "as_of": "2026-09-25",
   "cache_answers": {
-    "archives": 6733,
+    "archives": 6728,
     "company_search": 962,
     "company_tickers": 6,
-    "full_text_search": 363,
-    "submissions": 16437,
-    "submissions_page": 5137
+    "full_text_search": 357,
+    "submissions": 16332,
+    "submissions_page": 5098
   },
-  "code_version": "85ebf37-dirty",
+  "code_version": "25dde28-dirty",
   "degraded_answers": {},
   "latency_ms": {},
   "not_covered": {},
@@ -16,10 +16,10 @@
   "resolution_degraded": 0,
   "review": {
     "accepted": 0,
-    "check": 618,
+    "check": 595,
     "cleared": 0,
     "fix": 187,
-    "info_hidden": 465,
+    "info_hidden": 446,
     "unmatched_decisions": 0
   },
   "sec_requests": {},
