@@ -12,7 +12,7 @@ with a severity:
              is wrong. A row whose flags are all `info` leaves review.csv (the
              flags stay on delistings.csv).
 
-A delisting with no DLRET is `fix` whatever its flags.
+A delisting row (one with a `bucket`) with no DLRET is `fix` whatever its flags.
 
 `triage()` turns the pipeline's merged review rows plus a person's decisions
 (`load_decisions`: "I checked this flag on this row, it is fine") into the
@@ -263,11 +263,17 @@ def _most_severe(severities) -> str:
     return min(severities, key=SEVERITIES.index, default="info")
 
 
+def _is_delisting(row: Mapping) -> bool:
+    """A delisting row has a bucket. A Form 25 review item (`form25_unmatched`,
+    ...) carries the Form 25's date in `delist_date` but no bucket: it is not one."""
+    return not _blank(row.get("bucket"))
+
+
 def row_severity(row: Mapping) -> str:
-    """`fix` for a delisting (a row with a `delist_date`) with a blank DLRET,
-    whatever its flags; otherwise the most severe of its flags' severities
-    (`info` for a row with none)."""
-    if not _blank(row.get("delist_date")) and _blank(row.get("dlret")):
+    """`fix` for a delisting row with a blank DLRET, whatever its flags;
+    otherwise the most severe of its flags' severities (`info` for a row with
+    none)."""
+    if _is_delisting(row) and _blank(row.get("dlret")):
         return "fix"
     return _most_severe(flag_info(t).severity for t in _tokens(row.get("review_flags")))
 
@@ -331,8 +337,9 @@ class Triage:
 
 
 def _group(row: Mapping) -> int:
-    """0: a delisting with a blank DLRET; 1: a delisting with a DLRET; 2: no delisting."""
-    if _blank(row.get("delist_date")):
+    """0: a delisting row with a blank DLRET; 1: a delisting row with a DLRET;
+    2: every other row."""
+    if not _is_delisting(row):
         return 2
     return 0 if _blank(row.get("dlret")) else 1
 
@@ -366,8 +373,9 @@ def triage(rows: list[Mapping], decisions: Sequence[Decision]) -> Triage:
     leave their row. A decision that accepts nothing becomes a
     `review_decision_unmatched` row. Rows left with no token, or with a
     severity of `info`, leave review.csv. The rest are ordered by severity;
-    then delistings with a blank DLRET, delistings by descending |DLRET|,
-    rows with no delisting; then by key. The input rows are not changed."""
+    then delisting rows (those with a `bucket`) with a blank DLRET, delisting
+    rows by descending |DLRET|, every other row; then by key. The input rows
+    are not changed."""
     by_key: dict[tuple[str, str, str, str], Decision] = {}
     for d in decisions:
         by_key.setdefault(_key(d.sec_id, d.delist_date, d.ticker) + (d.flag,), d)
@@ -421,7 +429,8 @@ def triage(rows: list[Mapping], decisions: Sequence[Decision]) -> Triage:
         info = CATALOG.get(name, _UNKNOWN)
         summary_rows.append({
             "severity": info.severity, "flag": name,
-            "rows": sum(name in _names(r) for r in rows),
+            # the unmatched-decision rows exist only after decisions: count them
+            "rows": sum(name in _names(r) for r in rows) + (len(unmatched) if name == UNMATCHED_FLAG else 0),
             "in_review": sum(name in _names(r) for r in review_rows),
             "accepted": accepted_by_name.get(name, 0),
             "description": info.description, "action": info.action, "examples": "; ".join(examples),
