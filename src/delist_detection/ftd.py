@@ -22,6 +22,7 @@ from dataclasses import dataclass, replace
 from datetime import date, timedelta
 from pathlib import Path
 
+from .edgar import clean_orphan_temps
 from .names import names_agree
 from .observations import normalize_ticker
 from .sec_http import download, get_text
@@ -116,6 +117,7 @@ class FtdClient:
         self.dir = Path(cache_dir)
         self.session, self.user_agent = session, user_agent
         self._links: list[str] | None = None
+        clean_orphan_temps(self.dir)          # a killed run's cut-off download or index page
 
     def links(self) -> list[str]:
         if self._links is None:

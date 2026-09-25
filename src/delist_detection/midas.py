@@ -23,7 +23,7 @@ from pathlib import Path
 
 import requests
 
-from .edgar import SEC_STATS, filling_only
+from .edgar import SEC_STATS, clean_orphan_temps, filling_only, write_atomic
 from .observations import normalize_ticker
 from .sec_http import download, get_text
 from .trading_calendar import add_trading_days
@@ -127,6 +127,7 @@ class MidasClient:
         # share this: `prefetch.Serialized` runs every MidasClient call, warm or
         # sequential, one at a time -- see final-fix item 6).
         self._warned_misses: set[tuple[int, int]] = set()
+        clean_orphan_temps(self.dir)          # a killed run's cut-off download, index page or summary
 
     def _warn_miss(self, yq: tuple[int, int], why: str) -> None:
         """Log once and count `midas_miss:<yq>` once per quarter per run: a quarter
@@ -232,7 +233,7 @@ class MidasClient:
                 self._summaries[yq] = None
                 return None
             cache.parent.mkdir(parents=True, exist_ok=True)
-            cache.write_bytes(gzip.compress(json.dumps(s).encode()))
+            write_atomic(cache, gzip.compress(json.dumps(s).encode()))
             zpath.unlink(missing_ok=True)
         self._summaries[yq] = s
         return s

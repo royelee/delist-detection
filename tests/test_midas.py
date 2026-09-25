@@ -10,6 +10,7 @@ from datetime import date
 from types import SimpleNamespace
 from unittest.mock import patch
 
+import pytest
 import requests
 
 from delist_detection.edgar import SEC_STATS, fill_only
@@ -220,6 +221,17 @@ def test_a_quarter_that_yields_no_rows_is_not_cached(tmp_path, caplog):
     assert c.last_trade_day("A", date(2016, 1, 1), date(2016, 3, 1)) is None
     assert not (tmp_path / "2016_q1.json.gz").exists()
     assert "2016 Q1" in caplog.text
+
+
+def test_a_quarter_summary_cut_off_mid_write_leaves_no_cache_file(tmp_path, writes_fail_midway):
+    """A run that dies while caching a quarter's summary leaves no cut-off
+    .json.gz, which the next run would fail to decompress: the summary is
+    written through edgar.write_atomic, and the zip stays for the next run."""
+    _zip_with(tmp_path, (2018, 4), CSV)
+    writes_fail_midway(tmp_path)
+    with pytest.raises(OSError):
+        MidasClient(tmp_path).last_trade_day("AET", date(2018, 10, 1), date(2018, 12, 10))
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["index.html", "individual_security_2018_q4.zip"]
 
 
 def test_an_empty_cached_summary_is_read_again(tmp_path):

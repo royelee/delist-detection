@@ -134,10 +134,13 @@ index pages (the list of published ZIPs) age by wall clock instead, not by
 `as_of` (`sec_http.get_text`'s day-old check), since SEC republishes them on its
 own schedule, unrelated to the run date. A stale index page served after a
 failed refresh counts `SEC_STATS.degraded("stale_copy")`, like every other
-stale-copy fallback. Every cache file is
-written atomically and durably (a temp file, fsync, `os.replace`, fsync of the
-directory), so a crash, Ctrl-C or power loss never leaves a torn file; a killed
-writer's temp files are removed when the next client starts.
+stale-copy fallback. Every cache file — EDGAR answers and filing text, the
+FTD and MIDAS ZIPs and index pages, MIDAS quarter summaries, Nasdaq halt days,
+OpenFIGI answers, LLM answers and the resolver memo — is written atomically and
+durably through `edgar.write_atomic` (a temp file, fsync, `os.replace`, fsync
+of the directory), so a crash, Ctrl-C or power loss never leaves a torn file;
+a killed writer's temp files (and a `.part` download left by the code before
+this) are removed when the next client starts (`edgar.clean_orphan_temps`).
 
 Search answers are evidence, cached with a TTL; a resolver decision is never
 cached as a miss. EDGAR full-text search (`efts.sec.gov`: the resolver's Form 25

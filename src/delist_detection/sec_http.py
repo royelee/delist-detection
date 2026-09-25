@@ -7,7 +7,6 @@ attempts with backoff (`retry_request`, same as `EdgarClient`'s); a 403/429
 still raises `EdgarBlocked` at once, and a failure is never cached."""
 from __future__ import annotations
 
-import os
 import time
 from pathlib import Path
 
@@ -42,9 +41,7 @@ def download(url: str, dest: str | Path, *, session=None, user_agent: str | None
         raise FileNotFoundError(url)
     resp.raise_for_status()
     dest.parent.mkdir(parents=True, exist_ok=True)
-    tmp = dest.with_name(dest.name + ".part")
-    tmp.write_bytes(resp.content)
-    os.replace(tmp, dest)
+    write_atomic(dest, resp.content)
     return dest
 
 

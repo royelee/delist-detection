@@ -82,8 +82,11 @@ that turns a list of observations into the seven output tables; see
   `resolve_user_agent()` that `sec_http.py`, `ftd.py`, `midas.py` reuse.
 - `sec_http.py` — throttled, cached `download()`/`get_text()` for the other SEC
   data files (FTD and MIDAS ZIPs and their index pages), sharing `edgar.py`'s
-  throttle, User-Agent and `EdgarBlocked` on 403/429. Index pages are cached
-  through `edgar.write_atomic`, ZIPs through a `.part` file and a rename.
+  throttle, User-Agent and `EdgarBlocked` on 403/429. Index pages and ZIPs are
+  both cached through `edgar.write_atomic` (text or bytes). Every cache file
+  (EDGAR, SEC data files, MIDAS summaries, halt days, OpenFIGI and LLM answers)
+  goes through it, and each client removes a killed run's temp files
+  (`edgar.clean_orphan_temps`, also old `.part` downloads) when it starts.
 - `ftd.py` — `FtdClient`/`FtdIndex`: SEC fails-to-deliver rows (`(date, CUSIP,
   symbol, price)`, 2004+). `close_after()` supplies every last-trade close and
   acquirer-completion price; `by_cusip`/`by_symbol` supply CUSIP history.

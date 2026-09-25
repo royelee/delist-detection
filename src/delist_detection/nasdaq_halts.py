@@ -15,7 +15,7 @@ from pathlib import Path
 
 import requests
 
-from .edgar import SEC_STATS
+from .edgar import SEC_STATS, clean_orphan_temps, write_atomic
 from .observations import normalize_ticker
 from .trading_calendar import is_trading_day, previous_trading_day
 
@@ -74,6 +74,7 @@ class NasdaqHaltClient:
         self.sleep = sleep or time.sleep
         self.today = today          # the run date: that day's list can still grow (None: the clock)
         self._last = 0.0
+        clean_orphan_temps(self.dir)          # a killed run's cut-off day
 
     def halts_on(self, day: date) -> list[Halt]:
         cp = self.dir / f"{day:%Y%m%d}.xml"
@@ -123,7 +124,7 @@ class NasdaqHaltClient:
 
             if day < (self.today or date.today()):  # today's list can still grow
                 cp.parent.mkdir(parents=True, exist_ok=True)
-                cp.write_bytes(resp.content)
+                write_atomic(cp, resp.content)
             return halts
 
         return []

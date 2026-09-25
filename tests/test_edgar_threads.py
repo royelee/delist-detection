@@ -150,6 +150,31 @@ def test_temp_files_left_by_a_killed_process_are_removed_at_start(tmp_path):
     assert not dead.exists() and live.exists() and other.exists()
 
 
+def _cache_writers():
+    from delist_detection.ftd import FtdClient
+    from delist_detection.llm_merger_extractor import LLMMergerTermsExtractor
+    from delist_detection.midas import MidasClient
+    from delist_detection.nasdaq_halts import NasdaqHaltClient
+    from delist_detection.openfigi import OpenFigiClient
+    return {"ftd": FtdClient, "midas": MidasClient, "halts": NasdaqHaltClient, "openfigi": OpenFigiClient,
+            "llm": lambda d: LLMMergerTermsExtractor(None, None, cache_dir=d)}
+
+
+@pytest.mark.parametrize("writer", ["ftd", "midas", "halts", "openfigi", "llm"])
+def test_every_cache_writer_removes_a_killed_runs_leftovers_at_start(tmp_path, writer):
+    """Every client that writes its cache through write_atomic cleans its own
+    directory at start, as EdgarClient does: a dead process's temp file goes,
+    and so does a `.part` file, which only the download code before write_atomic
+    wrote (a run killed mid-download). A live process's temp file stays."""
+    dead = tmp_path / f".f.zip.{_dead_pid()}.1.tmp"
+    live = tmp_path / f".g.zip.{os.getpid()}.1.tmp"
+    part = tmp_path / "individual_security_2018_q4.zip.part"
+    for p in (dead, live, part):
+        p.write_text("x")
+    _cache_writers()[writer](tmp_path)
+    assert (dead.exists(), part.exists(), live.exists()) == (False, False, True)
+
+
 def test_a_stray_temp_file_name_neither_breaks_the_client_nor_is_removed(tmp_path):
     superscript = tmp_path / ".x.²2.1.tmp"                  # "²2": str.isdigit() says yes, int() says no
     huge_pid = tmp_path / f".y.json.{'9' * 20}.1.tmp"             # no OS has such a pid: os.kill overflows

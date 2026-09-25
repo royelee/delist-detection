@@ -156,11 +156,12 @@ def _fsync_dir(directory: Path) -> None:
         os.close(fd)
 
 
-def write_atomic(path: Path, text: str) -> None:
-    """Replace `path` with `text` in one step: a reader -- in this process or
-    another -- sees the old file or the complete new one, never a part. The temp
-    file sits in the same directory (os.replace is atomic only within one
-    filesystem) and carries the process and thread id, so two writers never
+def write_atomic(path: Path, data: str | bytes) -> None:
+    """Replace `path` with `data` (text, written as UTF-8, or bytes) in one
+    step: a reader -- in this process or another -- sees the old file or the
+    complete new one, never a part. The temp file sits in the same directory
+    (os.replace is atomic only within one filesystem) and carries the process
+    and thread id, so two writers never
     share one and `clean_orphan_temps` can tell a dead writer's leftover from a
     live one's. The data is fsynced before the rename and the directory after
     it, so the new file also survives a power loss. Durability is fsync-level
@@ -169,8 +170,8 @@ def write_atomic(path: Path, text: str) -> None:
     OS had accepted."""
     tmp = path.with_name(f".{path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
     try:
-        with open(tmp, "w", encoding="utf-8") as fh:
-            fh.write(text)
+        with (open(tmp, "wb") if isinstance(data, bytes) else open(tmp, "w", encoding="utf-8")) as fh:
+            fh.write(data)
             fh.flush()
             os.fsync(fh.fileno())
         os.replace(tmp, path)
@@ -204,13 +205,18 @@ def clean_orphan_temps(directory: Path) -> None:
     and so is any file whose name does not parse as one. The pid is checked on
     this host only: this assumes every writer to the cache runs on this machine
     in one PID namespace (a cache shared with another host or a container could
-    see that writer's live temp file as a dead one's)."""
+    see that writer's live temp file as a dead one's). Also deletes every
+    `<name>.part` file: `sec_http.download` wrote its ZIPs through one before it
+    used `write_atomic`, and nothing writes one now, so a `.part` file is only
+    ever a leftover of a run killed mid-download."""
     if not directory.is_dir():
         return
     for p in directory.glob(".*.tmp"):
         m = _TEMP_NAME.fullmatch(p.name)
         if m and not _pid_alive(int(m.group(2))):
             p.unlink(missing_ok=True)
+    for p in directory.glob("*.part"):
+        p.unlink(missing_ok=True)
 
 
 _FILL_ONLY = threading.local()

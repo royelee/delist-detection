@@ -15,7 +15,7 @@ from pathlib import Path
 
 import requests
 
-from .edgar import write_atomic
+from .edgar import clean_orphan_temps, write_atomic
 
 OPENFIGI_URL = "https://api.openfigi.com/v3"
 _REPO_ENV = Path(__file__).resolve().parents[2] / ".env"
@@ -57,6 +57,7 @@ class OpenFigiClient:
                  sleep=time.sleep) -> None:
         self.dir = Path(cache_dir)
         self.dir.mkdir(parents=True, exist_ok=True)
+        clean_orphan_temps(self.dir)          # a killed run's cut-off answer
         self.api_key = api_key
         self.session = session or requests.Session()
         self.sleep = sleep

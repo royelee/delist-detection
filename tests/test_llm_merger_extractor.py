@@ -208,6 +208,18 @@ def test_cache_hit_second_call_served_from_disk(tmp_path):
     assert any(PROMPT_VERSION in p.name for p in cache_files)  # prompt version tags the cache key
 
 
+def test_an_answer_cut_off_mid_write_leaves_no_cache_file(tmp_path, writes_fail_midway):
+    """A run that dies while caching the LLM's answer leaves no cut-off JSON
+    file: the answer is written through edgar.write_atomic."""
+    resp = {"deal_type": "cash", "cash_per_share": 113.0, "stock_ratio": None, "acquirer_name": None,
+            "acquirer_ticker": None, "confidence": "high", "quote": "$113.00 in cash"}
+    ext = LLMMergerTermsExtractor(_FakeEdgarText([_closing_8k()], {"C1": _USABLE_TEXT}), _FakeLlm([resp]),
+                                  model="m1", cache_dir=tmp_path)
+    writes_fail_midway(tmp_path)
+    ext.extract(_merger_rec())
+    assert list(tmp_path.iterdir()) == []
+
+
 def test_tolerant_float_parse(tmp_path):
     resp = {
         "deal_type": "cash", "cash_per_share": "$145.00", "stock_ratio": None,

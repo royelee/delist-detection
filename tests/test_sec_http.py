@@ -56,6 +56,27 @@ def test_download_404_and_block(tmp_path):
     assert not (tmp_path / "a.zip").exists() and not (tmp_path / "b.zip").exists()
 
 
+def test_a_download_cut_off_mid_write_leaves_no_file(tmp_path, writes_fail_midway):
+    """A run that dies mid-download leaves neither a cut-off file nor a
+    leftover part file: the download is written through edgar.write_atomic."""
+    writes_fail_midway(tmp_path)
+    with pytest.raises(OSError):
+        sec_http.download("https://www.sec.gov/f.zip", tmp_path / "f.zip",
+                          session=_Session(_Resp(content=b"zipbytes" * 100)), user_agent="ua")
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_a_download_is_fsynced_before_it_is_renamed_into_place(tmp_path, monkeypatch):
+    events = []
+    real_fsync, real_replace = os.fsync, os.replace
+    monkeypatch.setattr(os, "fsync", lambda fd: (events.append("fsync"), real_fsync(fd))[1])
+    monkeypatch.setattr(os, "replace", lambda a, b: (events.append("replace"), real_replace(a, b))[1])
+    sec_http.download("https://www.sec.gov/f.zip", tmp_path / "f.zip", session=_Session(_Resp(content=b"z")),
+                      user_agent="ua")
+    assert events == ["fsync", "replace", "fsync"]          # the data, the rename, then the directory
+    assert (tmp_path / "f.zip").read_bytes() == b"z"
+
+
 def test_an_index_page_cut_off_mid_write_leaves_no_cache_file(tmp_path, writes_fail_midway):
     """Code review 2026-09-25, item 6: get_text caches through edgar.write_atomic,
     so a run that dies mid-write leaves no cut-off index page for the next run."""

@@ -46,6 +46,7 @@ import requests
 
 from .classifier import DelistRecord
 from .crsp_codes import CrspBucket
+from .edgar import clean_orphan_temps, write_atomic
 from .filing_selection import (
     EdgarSubmission,
     announcement_8k,
@@ -230,6 +231,7 @@ class LLMMergerTermsExtractor:
         self.model = model or os.environ.get("CHAT_MODEL", "model")
         self.cache_dir = Path(cache_dir)
         self.max_filings = max_filings
+        clean_orphan_temps(self.cache_dir)    # a killed run's cut-off answer
 
     # ------------------------------------------------------------------ #
     # Public API
@@ -379,7 +381,7 @@ class LLMMergerTermsExtractor:
             raw = self.llm.extract(SYSTEM_PROMPT, user_prompt, RESULT_SCHEMA)
             if isinstance(raw, dict):
                 self.cache_dir.mkdir(parents=True, exist_ok=True)
-                cache_path.write_text(json.dumps(raw))
+                write_atomic(cache_path, json.dumps(raw))
 
         return self._to_terms(raw, filing)
 
