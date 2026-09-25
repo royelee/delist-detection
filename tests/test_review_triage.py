@@ -1,0 +1,305 @@
+"""review.csv triage: the flag catalog, row severities, the decisions file and
+the ordering / hiding / summary rules (plan 2026-09-24-review-triage, Task 1)."""
+import csv
+import math
+from pathlib import Path
+
+import pytest
+
+from delist_detection.review_triage import (
+    CATALOG, DECISION_COLUMNS, SEVERITIES, Decision, FlagInfo, ReviewDecisionError, flag_info, flag_name,
+    load_decisions, row_severity, triage,
+)
+
+OUTPUT = Path(__file__).resolve().parents[1] / "output"
+
+
+def _row(sec_id, delist_date, ticker, flags, dlret=None, **extra):
+    return {"sec_id": sec_id, "delist_date": delist_date, "ticker": ticker, "review_flags": flags, "dlret": dlret,
+            **extra}
+
+
+def _accept(sec_id, delist_date, ticker, flag, note=""):
+    return Decision(sec_id, delist_date, ticker, flag, note)
+
+
+# --- catalog -------------------------------------------------------------
+
+def test_flag_name_is_the_text_before_the_first_colon():
+    assert flag_name("terms_gate_failed:no_acq_price") == "terms_gate_failed"
+    assert flag_name("observation_conflict:2014-06-30") == "observation_conflict"
+    assert flag_name("no_figi") == "no_figi"
+    assert flag_info("terms_gate_failed:no_acq_price") is CATALOG["terms_gate_failed"]
+
+
+def test_an_unknown_flag_is_check():
+    assert flag_info("brand_new_flag:x") == FlagInfo("check", "not in the flag catalog",
+                                                     "add it to review_triage.CATALOG")
+    assert row_severity(_row("S1", None, "AAA", "brand_new_flag")) == "check"
+
+
+def _committed_tokens(name: str) -> set[str]:
+    with (OUTPUT / name).open(newline="") as fh:
+        return {t for r in csv.DictReader(fh) for t in (r["review_flags"] or "").split(";") if t}
+
+
+@pytest.mark.parametrize("name", ["review.csv", "delistings.csv"])
+def test_every_flag_in_the_committed_output_is_in_the_catalog(name):
+    tokens = _committed_tokens(name)
+    assert tokens                                   # the file really carries flags
+    assert sorted({flag_name(t) for t in tokens} - set(CATALOG)) == []
+
+
+def test_every_catalog_entry_is_complete():
+    for name, info in CATALOG.items():
+        assert info.severity in SEVERITIES, name
+        assert info.description.strip() and info.action.strip(), name
+        assert ":" not in name and ";" not in name, name
+
+
+def test_severities_follow_the_rulings():
+    info = {"no_figi", "resolved_by_current_ticker_map", "resolved_by_cik_map", "resolved_by_manual_override",
+            "ftd_close_prior", "ftd_close_lagged", "acquirer_close_lagged", "last_trade_date_unconfirmed"}
+    unacceptable = {"error", "resolution_degraded", "review_decision_unmatched"}
+    assert {n for n, i in CATALOG.items() if i.severity == "info"} == info
+    assert {n for n, i in CATALOG.items() if not i.acceptable} == unacceptable
+    assert {n for n, i in CATALOG.items() if i.severity == "fix"} == unacceptable | {"observation_unresolved"}
+    for name in ("merger_at_par", "terms_gate_failed", "payout_gate_failed", "llm_gate_failed",
+                 "distress_at_normal_price", "bankruptcy_before_merger", "bankruptcy_tag_unconfirmed",
+                 "bankruptcy_text_missing", "no_evidence_default", "last_trade_date_conflict", "no_form25",
+                 "delist_date_approx", "successor_unknown", "no_last_close", "no_last_trade_date",
+                 "form25_unclassified", "form25_unmatched", "form25_unreadable", "listing_status_unknown",
+                 "ended_without_delisting", "observed_after_delisting", "member_name_mismatch",
+                 "ticker_unconfirmed", "ticker_shared", "ticker_range_overlap", "observation_conflict"):
+        assert CATALOG[name].severity == "check", name
+
+
+# --- row_severity -----------------------------------------------------------
+
+def test_row_severity():
+    # a delisting with no DLRET always needs a person, whatever its flags
+    assert row_severity(_row("S1", "2020-01-02", "AAA", "ftd_close_prior:3", dlret=None)) == "fix"
+    assert row_severity(_row("S1", "2020-01-02", "AAA", "ftd_close_prior:3", dlret=float("nan"))) == "fix"
+    assert row_severity(_row("S1", "2020-01-02", "AAA", "ftd_close_prior:3", dlret="")) == "fix"
+    assert row_severity(_row("S1", "2020-01-02", "AAA", "ftd_close_prior:3", dlret=0.1)) == "info"
+    assert row_severity(_row("S1", "2020-01-02", "AAA", "merger_at_par;no_figi", dlret=0.0)) == "check"
+    assert row_severity(_row("S1", "", "AAA", "error")) == "fix"
+    assert row_severity(_row("S1", None, "AAA", "")) == "info"
+
+
+# --- triage: hiding, decisions ------------------------------------------------
+
+def test_an_info_only_row_leaves_review_but_is_counted():
+    tri = triage([_row("S1", "2020-01-02", "AAA", "ftd_close_prior:2", dlret=0.05)], ())
+    assert tri.review_rows == []
+    (s,) = tri.summary_rows
+    assert (s["flag"], s["severity"], s["rows"], s["in_review"], s["accepted"]) == ("ftd_close_prior", "info", 1, 0, 0)
+    assert s["examples"] == "AAA@2020-01-02"
+    assert tri.counts == {"fix": 0, "check": 0, "info_hidden": 1, "accepted": 0, "cleared": 0,
+                          "unmatched_decisions": 0}
+
+
+def test_a_delisting_with_no_dlret_stays_as_fix_even_with_info_flags_only():
+    (r,) = triage([_row("S1", "2020-01-02", "AAA", "ftd_close_prior:2", dlret=None)], ()).review_rows
+    assert (r["severity"], r["review_flags"]) == ("fix", "ftd_close_prior:2")
+
+
+def test_an_accepted_token_leaves_the_row_and_an_info_remainder_is_hidden():
+    rows = [_row("S1", "2020-01-02", "AAA", "merger_at_par;no_figi", dlret=0.0)]
+    tri = triage(rows, [_accept("S1", "2020-01-02", "AAA", "merger_at_par")])
+    assert tri.review_rows == []
+    assert tri.counts["accepted"] == 1 and tri.counts["info_hidden"] == 1 and tri.counts["cleared"] == 0
+    assert rows[0]["review_flags"] == "merger_at_par;no_figi"          # the input row is not changed
+
+
+def test_a_row_whose_every_token_is_accepted_is_cleared():
+    tri = triage([_row("S1", "2020-01-02", "AAA", "merger_at_par", dlret=0.0)],
+                 [_accept("S1", "2020-01-02", "AAA", "merger_at_par")])
+    assert tri.review_rows == []
+    assert tri.counts["cleared"] == 1 and tri.counts["info_hidden"] == 0 and tri.counts["accepted"] == 1
+
+
+def test_remaining_tokens_keep_their_info_flags_and_are_graded_without_the_accepted_ones():
+    tri = triage([_row("S1", "2020-01-02", "AAA", "observation_unresolved;merger_at_par;no_figi", dlret=0.0)],
+                 [_accept("S1", "2020-01-02", "AAA", "observation_unresolved")])
+    (r,) = tri.review_rows
+    assert (r["severity"], r["review_flags"]) == ("check", "merger_at_par;no_figi")
+
+
+def test_a_decision_matches_the_exact_token_and_an_unmatched_one_becomes_a_fix_row():
+    rows = [_row("S1", "2020-01-02", "AAA", "terms_gate_failed:fail_sanity", dlret=0.0)]
+    tri = triage(rows, [_accept("S1", "2020-01-02", "AAA", "terms_gate_failed:no_acq_price", note="checked 8-K")])
+    assert [(r["severity"], r["sec_id"], r["review_flags"]) for r in tri.review_rows] == [
+        ("fix", "S1", "review_decision_unmatched"), ("check", "S1", "terms_gate_failed:fail_sanity")]
+    un = tri.review_rows[0]
+    assert (un["delist_date"], un["ticker"]) == ("2020-01-02", "AAA")
+    assert un["reason"] == ("decision accepts 'terms_gate_failed:no_acq_price' but no review row carries it; "
+                            "remove it from the decisions file (checked 8-K)")
+    assert tri.counts["unmatched_decisions"] == 1 and tri.counts["accepted"] == 0 and tri.counts["fix"] == 1
+    summary = {s["flag"]: s for s in tri.summary_rows}
+    assert summary["review_decision_unmatched"]["severity"] == "fix"
+    assert summary["review_decision_unmatched"]["in_review"] == 1
+    assert summary["review_decision_unmatched"]["examples"] == "AAA@2020-01-02"
+
+
+def test_an_unmatched_decision_without_a_note_has_no_parenthetical():
+    tri = triage([], [_accept("", "", "ZZZ", "ticker_shared")])
+    (r,) = tri.review_rows
+    assert r["reason"] == "decision accepts 'ticker_shared' but no review row carries it; remove it from the decisions file"
+    assert r["severity"] == "fix" and r["review_flags"] == "review_decision_unmatched"
+
+
+def test_a_decision_on_the_same_token_but_another_row_does_not_match():
+    tri = triage([_row("S1", "2020-01-02", "AAA", "merger_at_par", dlret=0.0)],
+                 [_accept("S1", "2020-01-03", "AAA", "merger_at_par")])
+    assert sorted(r["review_flags"] for r in tri.review_rows) == ["merger_at_par", "review_decision_unmatched"]
+
+
+def test_blank_key_cells_match_blank_decision_cells():
+    rows = [_row("", None, "CB", "observation_conflict:2014-06-30"),
+            _row("", None, "CB", "observation_conflict:2013-12-31")]
+    tri = triage(rows, [_accept("", "", "CB", "observation_conflict:2014-06-30")])
+    assert [r["review_flags"] for r in tri.review_rows] == ["observation_conflict:2013-12-31"]
+    assert tri.counts["accepted"] == 1 and tri.counts["cleared"] == 1 and tri.counts["unmatched_decisions"] == 0
+
+
+def test_duplicate_decisions_accept_once():
+    d = _accept("S1", "2020-01-02", "AAA", "merger_at_par")
+    tri = triage([_row("S1", "2020-01-02", "AAA", "merger_at_par", dlret=0.0)], [d, d])
+    assert tri.review_rows == [] and tri.counts["unmatched_decisions"] == 0 and tri.counts["accepted"] == 1
+
+
+# --- ordering -------------------------------------------------------------------
+
+def test_rows_are_ordered_by_severity_then_what_they_can_do_to_a_return():
+    rows = [
+        _row("S7", None, "GGG", "ticker_shared"),                                   # check, no date
+        _row("S6", "2020-06-01", "FFF", "merger_at_par", dlret=0.0),                 # check, dlret 0
+        _row("S5", "2020-05-01", "EEE", "payout_gate_failed:20", dlret=0.05),        # check, dlret 0.05
+        _row("S4", "2020-04-01", "DDD", "distress_at_normal_price", dlret=-0.3),     # check, dlret -0.3
+        _row("S3", None, "CCC", "observation_unresolved"),                           # fix, no date
+        _row("S2", "2020-02-01", "BBB", "error", dlret=0.1),                         # fix, with a dlret
+        _row("S1", "2020-01-01", "AAA", "ftd_close_prior:1", dlret=None),            # fix, blank dlret
+        _row("S0", None, "ZZZ", "ticker_shared"),                                    # check, no date
+    ]
+    tri = triage(rows, ())
+    assert [(r["severity"], r["sec_id"]) for r in tri.review_rows] == [
+        ("fix", "S1"), ("fix", "S2"), ("fix", "S3"),
+        ("check", "S4"), ("check", "S5"), ("check", "S6"), ("check", "S0"), ("check", "S7")]
+    assert tri.counts["fix"] == 3 and tri.counts["check"] == 5
+
+
+# --- summary ---------------------------------------------------------------------
+
+def _summary_fixture():
+    rows = [
+        _row("S1", "2020-01-02", "AAA", "merger_at_par;no_figi", dlret=0.0),
+        _row("S2", "2021-03-04", "BBB", "merger_at_par", dlret=0.0),
+        _row("S3", None, "CCC", "no_figi"),
+        _row("", None, "DDD", "observation_unresolved"),
+        _row("S5", None, "", "no_figi"),
+        _row("S6", None, "EEE", "ticker_shared"),
+        _row("S7", None, "FFF", "ticker_shared"),
+        _row("S8", None, "GGG", "member_name_mismatch"),
+        _row("S9", None, "HHH", "no_figi"),
+    ]
+    return rows, [_accept("S2", "2021-03-04", "BBB", "merger_at_par")]
+
+
+def test_summary_rows_group_by_flag_with_counts_and_examples():
+    rows, decisions = _summary_fixture()
+    tri = triage(rows, decisions)
+    got = [(s["severity"], s["flag"], s["rows"], s["in_review"], s["accepted"], s["examples"])
+           for s in tri.summary_rows]
+    assert got == [
+        ("fix", "observation_unresolved", 1, 1, 0, "DDD"),
+        ("check", "merger_at_par", 2, 1, 1, "AAA@2020-01-02; BBB@2021-03-04"),
+        ("check", "ticker_shared", 2, 2, 0, "EEE; FFF"),
+        ("check", "member_name_mismatch", 1, 1, 0, "GGG"),
+        ("info", "no_figi", 4, 1, 0, "AAA@2020-01-02; CCC; S5"),
+    ]
+    assert tri.summary_rows[0]["description"] == CATALOG["observation_unresolved"].description
+    assert tri.summary_rows[0]["action"] == CATALOG["observation_unresolved"].action
+    assert tri.counts == {"fix": 1, "check": 4, "info_hidden": 3, "accepted": 1, "cleared": 1,
+                          "unmatched_decisions": 0}
+
+
+def test_triage_is_deterministic_whatever_the_input_order():
+    rows, decisions = _summary_fixture()
+    rows += [_row("S4", "2020-04-01", "DDD", "distress_at_normal_price", dlret=-0.3),
+             _row("S1", "2020-01-01", "AAA", "ftd_close_prior:1", dlret=None)]
+    decisions += [_accept("", "", "QQQ", "no_figi")]
+    a = triage(rows, decisions)
+    b = triage(list(reversed(rows)), list(reversed(decisions)))
+    assert a.review_rows == b.review_rows and a.summary_rows == b.summary_rows and a.counts == b.counts
+
+
+def test_output_rows_carry_the_severity_and_every_input_column():
+    (r,) = triage([_row("S1", "2020-01-02", "AAA", "merger_at_par", dlret=0.0, cik=1, bucket="merger",
+                        reason="why", anchor_8k="2.01", last_seen=None)], ()).review_rows
+    assert r == {"severity": "check", "sec_id": "S1", "delist_date": "2020-01-02", "ticker": "AAA", "cik": 1,
+                 "bucket": "merger", "dlret": 0.0, "review_flags": "merger_at_par", "reason": "why",
+                 "anchor_8k": "2.01", "last_seen": None}
+
+
+def test_a_severity_already_on_an_input_row_is_recomputed():
+    (r,) = triage([_row("S1", None, "AAA", "observation_unresolved", severity="info")], ()).review_rows
+    assert r["severity"] == "fix"
+
+
+def test_a_nan_dlret_counts_as_blank():
+    (r,) = triage([_row("S1", "2020-01-02", "AAA", "merger_at_par", dlret=float("nan"))], ()).review_rows
+    assert r["severity"] == "fix" and math.isnan(r["dlret"])
+
+
+# --- load_decisions --------------------------------------------------------------
+
+HEADER = ",".join(DECISION_COLUMNS)
+
+
+def _write(tmp_path, text: str) -> Path:
+    p = tmp_path / "review_decisions.csv"
+    p.write_text(text)
+    return p
+
+
+def test_a_header_only_file_has_no_decisions(tmp_path):
+    assert load_decisions(_write(tmp_path, HEADER + "\n")) == []
+
+
+def test_decisions_are_read_stripped_and_extra_columns_are_ignored(tmp_path):
+    p = _write(tmp_path, HEADER + ",reviewer\n"
+               " S1 , 2020-01-02 ,AAA, merger_at_par ,accept, 8-K says par ,roy\n"
+               ",,CB,observation_conflict:2014-06-30,accept,,roy\n"
+               "S1,2020-01-02,AAA,merger_at_par,accept,again,roy\n")      # a duplicate collapses
+    assert load_decisions(p) == [Decision("S1", "2020-01-02", "AAA", "merger_at_par", "8-K says par"),
+                                 Decision("", "", "CB", "observation_conflict:2014-06-30", "")]
+
+
+def test_a_missing_file_raises_file_not_found(tmp_path):
+    with pytest.raises(FileNotFoundError):
+        load_decisions(tmp_path / "nope.csv")
+
+
+def test_a_missing_required_column_is_refused(tmp_path):
+    p = _write(tmp_path, "sec_id,delist_date,ticker,decision,note\nS1,2020-01-02,AAA,accept,\n")
+    with pytest.raises(ReviewDecisionError, match=r"review_decisions\.csv.*flag"):
+        load_decisions(p)
+
+
+@pytest.mark.parametrize("line, why", [
+    ("S1,2020-01-02,AAA,merger_at_par,reject,", "decision"),
+    ("S1,2020-01-02,AAA,merger_at_par,Accept,", "decision"),
+    ("S1,2020-01-02,AAA,,accept,", "flag"),
+    ("S1,2020-01-02,AAA,error,accept,", "error"),
+    ("S1,2020-01-02,AAA,resolution_degraded,accept,", "resolution_degraded"),
+    ("S1,2020-01-02,AAA,review_decision_unmatched,accept,", "review_decision_unmatched"),
+])
+def test_a_bad_decision_is_refused_naming_the_file_and_line(tmp_path, line, why):
+    p = _write(tmp_path, HEADER + "\nS0,2019-01-02,ZZZ,merger_at_par,accept,\n" + line + "\n")
+    with pytest.raises(ReviewDecisionError, match=rf"review_decisions\.csv:3\b.*{why}"):
+        load_decisions(p)
+
+
+def test_decision_error_is_a_value_error():
+    assert issubclass(ReviewDecisionError, ValueError)

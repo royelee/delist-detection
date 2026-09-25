@@ -30,6 +30,7 @@ from .openfigi import OpenFigiBlocked
 from .payout_gate import DEFAULT_TOL, gate_payouts
 from .prefetch import Serialized, warm
 from .reconstruction import _lookup, build_delistings_table, delisting_row, unmatched_override_keys
+from .review_triage import triage
 from .security_master import (
     FigiResolver, Range, Security, build_securities, era_cusips, era_last_seen, ranges_from_sightings, refine_eras,
 )
@@ -543,7 +544,8 @@ def _warm_delisting_search(clients: Clients, ordered: list[Security], listing: d
 def run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_dir: Path,
         tol: float = DEFAULT_TOL, limit: int | None = None, log: Callable = _stderr,
         sec_workers: int = 1) -> RunSummary:
-    """Observations -> the six tables under `out_dir` (spec §8).
+    """Observations -> the six tables under `out_dir` (spec §8), plus
+    review_summary.csv (`review_triage`: review.csv's rows by flag).
 
     `sec_workers` > 1 fills the SEC caches ahead of each SEC-heavy stage on that
     many threads (`prefetch.warm`: fill-only, every thread under the one limiter).
@@ -1064,8 +1066,13 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
                             "source": source, "accession": accession})
 
     review_rows = _merge_review_rows(review_rows)
+    # Every flag of the run, counted before triage hides or accepts any: this
+    # feeds RunSummary.review_flags and the manifest, so exit code 3 still sees
+    # every `error` and `resolution_degraded`.
+    flags = Counter(f.split(":", 1)[0] for r in review_rows for f in (r.get("review_flags") or "").split(";") if f)
+    tri = triage(review_rows, ())
 
-    # 11. write -- all six tables formatted and written to temp files first,
+    # 11. write -- every table formatted and written to temp files first,
     # renamed into place together, so a later table's failure never leaves an
     # earlier table's new file sitting over the previous complete one.
     counts = write_tables(out_dir, {
@@ -1074,9 +1081,9 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
         "cusip_history": ch_rows,
         "delistings": delisting_rows,
         "payouts": payout_rows,
-        "review": review_rows,
+        "review": tri.review_rows,
+        "review_summary": tri.summary_rows,
     })
-    flags = Counter(f.split(":", 1)[0] for r in review_rows for f in (r.get("review_flags") or "").split(";") if f)
     stat_counts, stat_timings = SEC_STATS.since(run_mark)
     run_manifest.write(out_dir, run_manifest.build(as_of=as_of, sec_workers=sec_workers, counts=stat_counts,
                                                    timings=stat_timings, stages=meter.stages,

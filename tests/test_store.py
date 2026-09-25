@@ -27,6 +27,37 @@ def test_all_tables_have_keys_inside_columns():
     assert TABLES["delistings"].key == ("sec_id", "delist_date")
 
 
+def test_review_tables_keep_their_given_order_and_every_other_table_sorts():
+    assert TABLES["review"].columns == ("severity", "sec_id", "delist_date", "ticker", "cik", "bucket", "dlret",
+                                        "review_flags", "reason", "anchor_8k", "last_seen")
+    assert TABLES["review"].key == ("sec_id", "delist_date", "ticker", "review_flags")
+    assert TABLES["review_summary"].columns == ("severity", "flag", "rows", "in_review", "accepted", "description",
+                                                "action", "examples")
+    assert TABLES["review_summary"].key == ("flag",)
+    assert {n for n, spec in TABLES.items() if not spec.sort} == {"review", "review_summary"}
+
+
+def _review(sec_id, flags):
+    return {"severity": "check", "sec_id": sec_id, "delist_date": "2020-01-01", "ticker": "A", "review_flags": flags}
+
+
+def test_an_unsorted_table_keeps_its_input_order(tmp_path):
+    rows = [_review("S3", "b"), _review("S1", "a"), _review("S2", "c")]
+    write_table("review", rows, table_path(tmp_path, "review"))
+    assert [r["sec_id"] for r in read_table("review", table_path(tmp_path, "review"))] == ["S3", "S1", "S2"]
+    write_tables(tmp_path / "t", {
+        "review": rows,
+        "review_summary": [{"severity": "info", "flag": "z", "rows": 3}, {"severity": "fix", "flag": "a", "rows": 1}],
+        "securities": [{"sec_id": "BBG2"}, {"sec_id": "BBG1"}],
+    })
+    assert [r["sec_id"] for r in read_table("review", table_path(tmp_path / "t", "review"))] == ["S3", "S1", "S2"]
+    assert [r["flag"] for r in read_table("review_summary", table_path(tmp_path / "t", "review_summary"))] == [
+        "z", "a"]
+    # a key-sorted table in the same call still sorts
+    assert [r["sec_id"] for r in read_table("securities", table_path(tmp_path / "t", "securities"))] == [
+        "BBG1", "BBG2"]
+
+
 def test_write_sorts_by_key_and_round_trips(tmp_path):
     p = table_path(tmp_path, "securities")
     rows = [

@@ -1,9 +1,11 @@
 """CSV storage for the output tables.
 
 Every table has one schema here: its column order and its key. All writes go
-through `write_table`, which formats cells the same way everywhere, sorts rows
-by key, and replaces the file only when the whole write succeeds. A later move
-to DuckDB changes only this module.
+through `write_table`/`write_tables`, which format cells the same way
+everywhere, sort rows by key (or keep the given order, for a table whose spec
+has `sort=False`: review.csv comes pre-ordered by `review_triage`), and replace
+the file only when the whole write succeeds. A later move to DuckDB changes
+only this module.
 """
 from __future__ import annotations
 
@@ -22,6 +24,7 @@ class TableSpec:
     name: str
     columns: tuple[str, ...]
     key: tuple[str, ...]
+    sort: bool = True          # False: rows are written in the order given
 
 
 DELISTINGS_COLUMNS: tuple[str, ...] = (
@@ -49,9 +52,12 @@ TABLES: dict[str, TableSpec] = {t.name: t for t in (
               ("sec_id", "delist_date", "ticker", "payout_per_share", "confidence", "source", "accession"),
               ("sec_id", "delist_date")),
     TableSpec("review",
-              ("sec_id", "delist_date", "ticker", "cik", "bucket", "dlret", "review_flags", "reason",
+              ("severity", "sec_id", "delist_date", "ticker", "cik", "bucket", "dlret", "review_flags", "reason",
                "anchor_8k", "last_seen"),
-              ("sec_id", "delist_date", "ticker", "review_flags")),
+              ("sec_id", "delist_date", "ticker", "review_flags"), sort=False),
+    TableSpec("review_summary",
+              ("severity", "flag", "rows", "in_review", "accepted", "description", "action", "examples"),
+              ("flag",), sort=False),
 )}
 
 
@@ -89,6 +95,13 @@ def table_path(out_dir: str | Path, name: str) -> Path:
     return Path(out_dir) / f"{name}.csv"
 
 
+def _sort(spec: TableSpec, rows: list[dict[str, str]]) -> None:
+    """Sort formatted `rows` in place by key, then every column -- unless the
+    table keeps the order it was given."""
+    if spec.sort:
+        rows.sort(key=lambda r: tuple(r[k] for k in spec.key) + tuple(r[c] for c in spec.columns))
+
+
 def write_table(name: str, rows: Iterable[Mapping[str, object]], path: str | Path) -> int:
     """Write `rows` as table `name`; returns the row count. Missing columns are blank;
     an unknown column raises ValueError before anything is written. Rows are
@@ -100,7 +113,7 @@ def write_table(name: str, rows: Iterable[Mapping[str, object]], path: str | Pat
         if extra:
             raise ValueError(f"{name}: unknown column(s) {sorted(extra)}")
         formatted.append({c: format_cell(r.get(c)) for c in spec.columns})
-    formatted.sort(key=lambda r: tuple(r[k] for k in spec.key) + tuple(r[c] for c in spec.columns))
+    _sort(spec, formatted)
     with replace_on_success(path) as tmp, tmp.open("w", newline="") as fh:
         w = csv.DictWriter(fh, fieldnames=list(spec.columns), lineterminator="\n")
         w.writeheader()
@@ -130,7 +143,7 @@ def write_tables(out_dir: str | Path, tables: Mapping[str, Iterable[Mapping[str,
             if extra:
                 raise ValueError(f"{name}: unknown column(s) {sorted(extra)}")
             rows_fmt.append({c: format_cell(r.get(c)) for c in spec.columns})
-        rows_fmt.sort(key=lambda r: tuple(r[k] for k in spec.key) + tuple(r[c] for c in spec.columns))
+        _sort(spec, rows_fmt)
         formatted[name] = (spec, rows_fmt)
 
     paths = {name: Path(table_path(out_dir, name)) for name in tables}

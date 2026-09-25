@@ -597,7 +597,7 @@ def _one_and_n(tmp_path, monkeypatch, caplog, workers, *, stale_hits=(), **unive
     assert [r.getMessage() for r in caplog.records if r.name == "delist_detection.prefetch"] == []
     csv1 = {p.name: p.read_bytes() for p in (tmp_path / "out1").glob("*.csv")}
     csvn = {p.name: p.read_bytes() for p in (tmp_path / "outn").glob("*.csv")}
-    assert len(csv1) == 6 and csv1 == csvn
+    assert len(csv1) == 7 and csv1 == csvn         # the six tables and review_summary.csv
     return (sec1, _tree(tmp_path / "one")), (secn, _tree(tmp_path / "n"))
 
 

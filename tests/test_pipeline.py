@@ -113,7 +113,31 @@ def test_missing_close_leaves_blank_dlret_and_review(fake_edgar, tmp_path):
     assert d["last_trade_close"] == "" and d["dlret"] == ""
     assert "no_last_close" in d["review_flags"]
     review = read_table("review", table_path(tmp_path, "review"))
-    assert any(r["sec_id"] == "BBG000FJLFX8" and "no_last_close" in r["review_flags"] for r in review)
+    assert any(r["sec_id"] == "BBG000FJLFX8" and "no_last_close" in r["review_flags"] and r["severity"] == "fix"
+               for r in review)
+
+
+def test_review_csv_hides_info_only_rows_that_the_run_summary_still_counts(fake_edgar, tmp_path):
+    """A delisting whose only flag is `ftd_close_prior:1` (info) and that has a
+    DLRET leaves review.csv; the flag stays on delistings.csv, review_summary.csv
+    counts it, and the run summary (which feeds the manifest and exit code 3)
+    still counts every flag."""
+    rows = [FtdRow("2018-06-29", "00817Y108", "AET", "AETNA INC.(NEW)", 180.0),
+            FtdRow("2018-07-02", "00817Y108", "AET", "AETNA INC.(NEW)", 181.0),
+            FtdRow("2018-11-28", "00817Y108", "AET", "AETNA INC.(NEW)", 210.10)]
+    index, clients = _clients(fake_edgar, ftd_rows=rows)
+    overrides = Overrides(merger_terms={("BBG000FJLFX8", "2018-12-09"): {"cash_per_share": 210.10}})
+    summary = run(index, clients, overrides, out_dir=tmp_path, log=lambda *_: None)
+    (d,) = read_table("delistings", table_path(tmp_path, "delistings"))
+    assert d["review_flags"] == "ftd_close_prior:1" and d["dlret"] == "0.000000"
+    review = read_table("review", table_path(tmp_path, "review"))
+    assert [(r["severity"], r["sec_id"], r["review_flags"]) for r in review] == [
+        ("check", "BBG000LIVE01", "ticker_unconfirmed")]
+    summ = {r["flag"]: r for r in read_table("review_summary", table_path(tmp_path, "review_summary"))}
+    assert [summ["ftd_close_prior"][c] for c in ("severity", "rows", "in_review", "accepted", "examples")] == [
+        "info", "1", "0", "0", "AET@2018-12-09"]
+    assert summary.review_flags == {"ftd_close_prior": 1, "ticker_unconfirmed": 1}
+    assert summary.counts["review"] == 1 and summary.counts["review_summary"] == 2
 
 
 def test_close_looks_back_when_no_row_follows_the_last_trade(fake_edgar, tmp_path):
@@ -1060,7 +1084,7 @@ def test_run_is_deterministic(fake_edgar, tmp_path):
     index, clients = _clients(fake_edgar)
     run(index, clients, Overrides(), out_dir=tmp_path / "a", log=lambda *_: None)
     run(index, clients, Overrides(), out_dir=tmp_path / "b", log=lambda *_: None)
-    names = ["securities", "ticker_history", "cusip_history", "delistings", "payouts", "review"]
+    names = ["securities", "ticker_history", "cusip_history", "delistings", "payouts", "review", "review_summary"]
     for name in names:
         assert table_path(tmp_path / "a", name).read_bytes() == table_path(tmp_path / "b", name).read_bytes(), name
     assert sorted(p.name for p in (tmp_path / "a").glob("*.csv")) == sorted(f"{n}.csv" for n in names)
