@@ -180,6 +180,33 @@ def test_refusal_mid_run_keeps_previous_outputs(fake_edgar, tmp_path):
     assert {p.name: p.read_text() for p in tmp_path.glob("*.csv")} == before
 
 
+@pytest.mark.parametrize("where", ["listing batch", "one security"])
+def test_an_openfigi_outage_stops_the_run_and_keeps_previous_outputs(fake_edgar, tmp_path, where):
+    """Code review 2026-09-25, item 5: OpenFIGI unavailable after its retries
+    stops the run like a refusal -- no error row, no placeholder in its place
+    (that would change sec_ids between runs), nothing written over the
+    previous complete outputs -- whether the batched listing ask or one
+    security's own ask meets it."""
+    from delist_detection.openfigi import OpenFigiUnavailable
+
+    index, clients = _clients(fake_edgar)
+    run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
+    before = {p.name: p.read_text() for p in tmp_path.glob("*.csv")}
+    real_map = clients.figi.map
+
+    def down(jobs, use_cache=True):
+        if not use_cache and where == "one security" and len(jobs) > 1:
+            raise RuntimeError("a glitch in the batch: each security asks alone")
+        if not use_cache:
+            raise OpenFigiUnavailable("OpenFIGI /mapping kept failing after 6 attempts")
+        return real_map(jobs, use_cache=use_cache)
+
+    clients.figi.map = down
+    with pytest.raises(OpenFigiUnavailable):
+        run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
+    assert {p.name: p.read_text() for p in tmp_path.glob("*.csv")} == before
+
+
 def test_own_last_seen_ignores_an_otc_tail_under_another_symbol():
     """A bankrupt XYZ's CUSIP keeps showing up in FTD data under the OTC symbol
     XYZQ after the real delisting; last_seen must stay at the last sighting

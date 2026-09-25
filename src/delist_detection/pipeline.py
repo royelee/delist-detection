@@ -26,7 +26,7 @@ from .listing_status import edgar_lists, listed_today, listing_answers
 from . import manifest as run_manifest
 from .names import names_agree
 from .observations import ObservationIndex, TickerEra, eras_by_key, normalize_ticker, observation_conflicts
-from .openfigi import OpenFigiBlocked
+from .openfigi import OpenFigiBlocked, OpenFigiUnavailable
 from .payout_gate import DEFAULT_TOL, gate_payouts
 from .prefetch import Serialized, warm
 from .reconstruction import _lookup, build_delistings_table, delisting_row, unmatched_override_keys
@@ -736,7 +736,7 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
                 clients.figi, s.sec_id, edgar=clients.edgar, cik=s.issuer_cik,
                 tickers=sorted({e.ticker for e in s.eras}), answer=listing.get(s.sec_id))
             evs, rv = finder.find(security_context(s, listed[s.sec_id]))
-        except (EdgarBlocked, OpenFigiBlocked):
+        except (EdgarBlocked, OpenFigiBlocked, OpenFigiUnavailable):
             raise
         except Exception as exc:  # an overnight run must survive one bad security
             log(f"[{i}/{len(securities)}] {s.sec_id}: ERROR {type(exc).__name__}: {exc}")
@@ -826,7 +826,7 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
                 t = clients.llm_extractor.extract(e.record)
                 if t is not None:
                     llm_terms[key] = t
-        except (EdgarBlocked, OpenFigiBlocked):
+        except (EdgarBlocked, OpenFigiBlocked, OpenFigiUnavailable):
             raise
         except Exception as exc:  # an overnight run must survive one bad extraction
             log(f"{e.sec_id} {e.delist_date}: payout extraction ERROR {type(exc).__name__}: {exc}")

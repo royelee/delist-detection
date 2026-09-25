@@ -17,7 +17,7 @@ import pytest
 
 from delist_detection import edgar, prefetch
 from delist_detection.edgar import SEC_STATS, EdgarBlocked, EdgarClient, PrefetchCancelled, RateLimiter, filling_only
-from delist_detection.openfigi import OpenFigiBlocked
+from delist_detection.openfigi import OpenFigiBlocked, OpenFigiUnavailable
 from delist_detection.prefetch import Serialized, warm
 
 HANG = 5.0      # seconds; reached only when the code under test is wrong
@@ -185,7 +185,8 @@ def test_the_state_factory_reads_fill_only_and_never_refreshes_a_cached_copy(tmp
     assert json.loads(cp.read_text()) == old
 
 
-@pytest.mark.parametrize("refusal", [EdgarBlocked("SEC returned 403"), OpenFigiBlocked("OpenFIGI returned 401")])
+@pytest.mark.parametrize("refusal", [EdgarBlocked("SEC returned 403"), OpenFigiBlocked("OpenFIGI returned 401"),
+                                     OpenFigiUnavailable("OpenFIGI /mapping kept failing after 6 attempts")])
 def test_a_refusal_stops_the_pool_and_is_raised(refusal, caplog):
     lim, mark = _Limiter(), SEC_STATS.snapshot()
     in_flight = threading.Barrier(3, timeout=HANG)   # two workers mid-chain, and the one about to be refused

@@ -1,6 +1,10 @@
 """OpenFIGI v3 client: every mapping job and filter query is cached on disk,
 requests are paced on the ratelimit headers, a 429 is waited out, and a
-401/403 raises OpenFigiBlocked (the CLI exits 2) instead of reading as a miss."""
+401/403 raises OpenFigiBlocked (the CLI exits 2) instead of reading as a miss.
+Timeouts, connection errors, 5xx answers (or 429s) that outlast MAX_RETRIES
+attempts raise OpenFigiUnavailable (the CLI exits 1): an outage, not a refusal.
+Neither is ever cached, and neither falls back to a placeholder: that would
+change sec_ids between runs."""
 from __future__ import annotations
 
 import hashlib
@@ -16,7 +20,13 @@ _REPO_ENV = Path(__file__).resolve().parents[2] / ".env"
 
 
 class OpenFigiBlocked(RuntimeError):
-    """OpenFIGI refused the request (bad key) or kept failing."""
+    """OpenFIGI refused the request (401/403: a bad or missing key)."""
+
+
+class OpenFigiUnavailable(RuntimeError):
+    """OpenFIGI did not answer: timeouts, connection errors or 5xx/429 answers
+    until the retries ran out. Not an OpenFigiBlocked: the key is fine, the run
+    can simply be repeated later."""
 
 
 def resolve_api_key(env_file: str | Path = _REPO_ENV) -> str | None:
@@ -73,7 +83,7 @@ class OpenFigiClient:
             if str(resp.headers.get("ratelimit-remaining", "")).strip() == "0":
                 self.sleep(_wait_seconds(resp.headers, 60))
             return resp.json()
-        raise OpenFigiBlocked(f"OpenFIGI {path} kept failing after {self.MAX_RETRIES} attempts")
+        raise OpenFigiUnavailable(f"OpenFIGI {path} kept failing after {self.MAX_RETRIES} attempts")
 
     def _cache_file(self, kind: str, payload) -> Path:
         h = hashlib.sha1(json.dumps({"kind": kind, "payload": payload}, sort_keys=True).encode()).hexdigest()

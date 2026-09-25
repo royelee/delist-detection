@@ -97,7 +97,7 @@ that turns a list of observations into the seven output tables; see
   last-trade-date confirmation when MIDAS has none.
 - `openfigi.py` — `OpenFigiClient`: OpenFIGI `/v3/mapping` and `/v3/filter`,
   cached on disk, paced on the `ratelimit-*` headers. Owns `OpenFigiBlocked`
-  (401/403).
+  (401/403) and `OpenFigiUnavailable` (timeouts/5xx after its retries).
 - `figi_resolution.py` — pure rules turning an OpenFIGI answer into one US
   composite FIGI: `us_candidates()` groups rows by composite and keeps only US
   venues; `accept()` never trusts Bloomberg's current name alone (a dead line
@@ -249,7 +249,12 @@ conflate them.
 - **OpenFIGI refusals abort too.** A 401/403 from OpenFIGI raises
   `OpenFigiBlocked` (`openfigi.py`); `classify_universe.py`'s CLI catches it
   alongside `EdgarBlocked` and exits 2. A 429 is waited out on the
-  `ratelimit-*`/`retry-after` headers, never cached as an answer. The key
+  `ratelimit-*`/`retry-after` headers, never cached as an answer. Timeouts,
+  connection errors or 5xx answers that outlast the client's retries raise
+  `OpenFigiUnavailable` (not a subclass of `OpenFigiBlocked`): the run stops
+  before writing anything, nothing is cached, no placeholder stands in for the
+  answer (it would change `sec_id`s between runs), and the CLI prints "OpenFIGI
+  unavailable after retries; no outputs written; rerun later" and exits 1. The key
   comes from `OPEN_FIGI_API_KEY` (environment first, then the repo `.env`),
   sent as header `X-OPENFIGI-APIKEY`. Exit 3 is a completed run whose
   `review.csv` has one or more `error` or `resolution_degraded` rows (an answer

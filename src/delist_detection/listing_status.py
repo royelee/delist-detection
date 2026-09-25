@@ -16,7 +16,7 @@ from .evidence import parse_day
 from .figi_resolution import is_placeholder
 from .form25 import MAJOR_EXCHANGES, REGIONAL_EXCHANGES, exchange_label, exchanges_named
 from .observations import normalize_ticker
-from .openfigi import OpenFigiBlocked
+from .openfigi import OpenFigiBlocked, OpenFigiUnavailable
 
 ANNUAL_FORMS = frozenset({"10-K", "10-K405", "10-KSB", "10-KT", "20-F", "40-F"})
 EXCHANGE_VENUES = frozenset({"UN", "UW", "UQ", "UR", "UA", "UP", "UF"})
@@ -83,14 +83,15 @@ def listing_answers(figi, sec_ids: Iterable[str]) -> dict[str, dict]:
     """OpenFIGI's current answer for each composite FIGI in `sec_ids` (placeholders
     skipped), sent as batched mapping requests (`OpenFigiClient.map` chunks them)
     instead of one request per security. Never cached, as in listed_today.
-    OpenFigiBlocked propagates; any other failure returns {}, so each security
-    asks on its own, inside its own error handling."""
+    OpenFigiBlocked and OpenFigiUnavailable (a refusal, or OpenFIGI down after
+    its retries) propagate and stop the run; any other failure returns {}, so
+    each security asks on its own, inside its own error handling."""
     ids = [s for s in dict.fromkeys(sec_ids) if not is_placeholder(s)]
     if figi is None or not ids:
         return {}
     try:
         answers = figi.map([listing_job(s) for s in ids], use_cache=False)
-    except OpenFigiBlocked:
+    except (OpenFigiBlocked, OpenFigiUnavailable):
         raise
     except Exception:          # noqa: BLE001 -- the per-security path reports it
         return {}

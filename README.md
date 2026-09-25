@@ -1037,5 +1037,6 @@ never a price vendor, never Alpha Vantage:
 | Code | Meaning |
 |---|---|
 | `0` | Success, no `error` or `resolution_degraded` rows in `review.csv`. |
+| `1` | Aborted: OpenFIGI unavailable after its retries (timeouts, connection errors or 5xx answers: `OpenFigiUnavailable`) — no output written, the previous tables are kept whole, nothing is cached and no placeholder stands in for the missing answer (that would change `sec_id`s between runs); rerun later. |
 | `2` | Aborted: SEC or OpenFIGI refused the request (`EdgarBlocked` / `OpenFigiBlocked`), or a start-up check failed (no `EDGAR_USER_AGENT`, an unusable SEC rate-lock file, `--sec-workers` outside `[1, 8]`, or a `--review-decisions` file that's missing when given explicitly or fails to load) — no output written. |
 | `3` | Completed, but `review.csv` has one or more `error` rows (one security or extraction raised and was logged instead of aborting the run) or `resolution_degraded` rows (an answer rested on a failed SEC request or a stale copy) — outputs are still written; the run prints a banner to stderr with the counts. |

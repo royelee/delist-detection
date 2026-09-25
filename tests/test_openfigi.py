@@ -70,6 +70,32 @@ def test_429_waits_then_succeeds_and_403_blocks(tmp_path):
         c2.map([{"idType": "TICKER", "idValue": "X"}])
 
 
+class _Timeouts:
+    def __init__(self):
+        self.posts = 0
+
+    def post(self, *a, **k):
+        self.posts += 1
+        raise requests.Timeout("read timed out")
+
+
+def test_an_outage_is_unavailable_not_a_refusal_and_nothing_is_cached(tmp_path):
+    """Code review 2026-09-25, item 5: timeouts or 5xx answers until the retries
+    run out are an outage (OpenFigiUnavailable, the CLI exits 1), not a refusal
+    of the key (OpenFigiBlocked, exit 2); nothing is cached either way."""
+    from delist_detection.openfigi import OpenFigiUnavailable
+
+    c = OpenFigiClient(tmp_path, "k", session=_Timeouts(), sleep=lambda _: None)
+    with pytest.raises(OpenFigiUnavailable) as err:
+        c.map([{"idType": "TICKER", "idValue": "AET"}])
+    assert not isinstance(err.value, OpenFigiBlocked)
+    assert c.session.posts == OpenFigiClient.MAX_RETRIES
+    s = _Session(*[_Resp(503)] * OpenFigiClient.MAX_RETRIES)
+    with pytest.raises(OpenFigiUnavailable):
+        OpenFigiClient(tmp_path, "k", session=s, sleep=lambda _: None).filter("QUESTCOR", exchCode="US")
+    assert list(tmp_path.iterdir()) == []
+
+
 def test_paces_when_budget_is_spent(tmp_path):
     slept = []
     s = _Session(_Resp(body=[AET], headers={"ratelimit-remaining": "0", "ratelimit-reset": "12"}))

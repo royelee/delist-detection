@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 from delist_detection.edgar import EdgarBlocked, EdgarSetupError, require_user_agent, use_machine_wide_limit
 from delist_detection.observations import ObservationIndex, load_observations
-from delist_detection.openfigi import OpenFigiBlocked
+from delist_detection.openfigi import OpenFigiBlocked, OpenFigiUnavailable
 from delist_detection.payout_gate import DEFAULT_TOL
 from delist_detection.pipeline import Overrides, default_clients, run
 from delist_detection.reconstruction import load_float_overrides, load_merger_terms_overrides
@@ -96,6 +96,8 @@ DEFAULT_REVIEW_DECISIONS = str(ROOT / "data" / "review_decisions.csv")
 EXIT_CODES_EPILOG = """\
 Exit codes:
   0  success, no review-row errors
+  1  aborted: OpenFIGI unavailable after its retries (timeouts or 5xx answers,
+     OpenFigiUnavailable); no outputs written, the previous ones are kept whole; rerun later
   2  aborted: SEC or OpenFIGI refused the request (EdgarBlocked/OpenFigiBlocked), or the
      start-up checks failed (no EDGAR_USER_AGENT, an unusable SEC rate-lock file, a
      --review-decisions file that is missing when given explicitly or that fails to load)
@@ -203,9 +205,19 @@ def main() -> int:
     return 3 if error_count or degraded_count else 0
 
 
-if __name__ == "__main__":
+def entry() -> int:
+    """`main()` with an abort turned into its exit code (see EXIT_CODES_EPILOG).
+    Either abort leaves every output table as the previous run wrote it."""
     try:
-        sys.exit(main())
+        return main()
     except (EdgarBlocked, OpenFigiBlocked) as e:
         print(f"ABORTED: {e}", file=sys.stderr)
-        sys.exit(2)
+        return 2
+    except OpenFigiUnavailable as e:
+        print(f"ABORTED: OpenFIGI unavailable after retries; no outputs written; rerun later ({e})",
+              file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(entry())

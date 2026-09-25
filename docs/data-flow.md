@@ -256,7 +256,8 @@ exchange transfer). It runs each stage's own code on N threads
 - **Timeouts.** An EDGAR request (submissions, filing text, full-text and
   company-name search) times out at 30 s; a MIDAS or FTD index page at 60 s; a
   SEC data-file download (a MIDAS or FTD ZIP) at 180 s.
-- **Refusals and Ctrl-C.** A refusal (`EdgarBlocked`/`OpenFigiBlocked`) on any
+- **Refusals and Ctrl-C.** A refusal (`EdgarBlocked`/`OpenFigiBlocked`), or
+  OpenFIGI unavailable after its retries (`OpenFigiUnavailable`), on any
   thread stops the pool: no item starts after it, and every running worker's
   next SEC request raises `PrefetchCancelled` instead of going out; the refusal
   is raised once the workers have stopped. A stopped worker may first sleep out
@@ -293,6 +294,9 @@ previous manifest in place.
 
 `scripts/classify_universe.py` exits:
 - `0` on success;
+- `1` when OpenFIGI is unavailable after its retries (timeouts, connection
+  errors or 5xx answers: `OpenFigiUnavailable`; no output written, nothing
+  cached, no placeholder in its place; rerun later);
 - `2` when SEC or OpenFIGI refuses a request (`EdgarBlocked`/`OpenFigiBlocked`;
   no output written), or when a start-up check fails (no `EDGAR_USER_AGENT`, an
   unusable rate-lock file, `--sec-workers` outside `[1, 8]`, or a

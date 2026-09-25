@@ -62,6 +62,34 @@ def test_argument_parser_defaults():
 def test_parser_epilog_documents_exit_codes():
     epilog = cli.build_parser().epilog or ""
     assert "0" in epilog and "2" in epilog and "3" in epilog
+    assert "1  aborted: OpenFIGI unavailable" in epilog
+
+
+def _entry_with_run_raising(monkeypatch, exc):
+    def boom(*a, **kw):
+        raise exc
+
+    _run_main(monkeypatch, {})                       # sets up the environment and fakes
+    monkeypatch.setattr(cli, "run", boom)
+    return cli.entry()
+
+
+def test_an_openfigi_outage_exits_1_with_no_outputs_written(monkeypatch, capsys):
+    """Code review 2026-09-25, item 5: OpenFIGI down after its retries is not a
+    refusal (exit 2) but an outage: exit 1, and the message says nothing was
+    written and to rerun later."""
+    from delist_detection.openfigi import OpenFigiUnavailable
+
+    rc = _entry_with_run_raising(monkeypatch, OpenFigiUnavailable("OpenFIGI /mapping kept failing after 6 attempts"))
+    assert rc == 1
+    err = capsys.readouterr().err
+    assert "OpenFIGI unavailable after retries; no outputs written; rerun later" in err
+
+
+def test_a_refusal_still_exits_2(monkeypatch, capsys):
+    rc = _entry_with_run_raising(monkeypatch, cli.OpenFigiBlocked("OpenFIGI returned 403 for /mapping"))
+    assert rc == 2 and "ABORTED" in capsys.readouterr().err
+    assert _entry_with_run_raising(monkeypatch, cli.EdgarBlocked("SEC returned 403")) == 2
 
 
 def test_main_returns_0_when_no_review_errors(monkeypatch, capsys):

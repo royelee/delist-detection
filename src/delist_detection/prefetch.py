@@ -21,11 +21,11 @@ from typing import Any
 
 from . import edgar as _edgar
 from .edgar import SEC_STATS, EdgarBlocked, PrefetchCancelled, RateLimiter, fill_only
-from .openfigi import OpenFigiBlocked
+from .openfigi import OpenFigiBlocked, OpenFigiUnavailable
 
 log = logging.getLogger(__name__)
 
-FATAL = (EdgarBlocked, OpenFigiBlocked)
+FATAL = (EdgarBlocked, OpenFigiBlocked, OpenFigiUnavailable)   # stop the pool: a refusal, or OpenFIGI down
 
 
 class Serialized:
@@ -81,7 +81,8 @@ def warm(items: Iterable[Any], task: Callable[..., object], *, workers: int,
     `workers <= 1` warms nothing: the sequential pass fetches everything itself,
     one request at a time.
 
-    A refusal (EdgarBlocked, OpenFigiBlocked) or an interrupt stops the pool: no
+    A refusal (EdgarBlocked, OpenFigiBlocked), OpenFIGI down after its retries
+    (OpenFigiUnavailable) or an interrupt stops the pool: no
     item starts after it, every running worker's next SEC request raises
     PrefetchCancelled instead of going out, and the refusal or interrupt is
     raised here once the workers have stopped. Neither is counted as a failure.

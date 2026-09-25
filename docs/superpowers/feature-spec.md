@@ -483,8 +483,8 @@ line changes observable output.
   `review.csv` as `ticker_range_overlap` / `ticker_shared` rather than
   failing the run.
 - **Unexpected per-security failures don't abort the run.** A per-security
-  or per-merger exception (other than `EdgarBlocked`/`OpenFigiBlocked`,
-  which still abort) is logged and the security is skipped with a review row
+  or per-merger exception (other than `EdgarBlocked`/`OpenFigiBlocked`/
+  `OpenFigiUnavailable`, which still abort) is logged and the security is skipped with a review row
   flagged `error`, so one bad security doesn't fail an overnight full run.
 - **Era splitting (§5, "Observation"; §8.1).** A ticker's observations are
   grouped into eras (runs taken to be one security) in two stages. First,
@@ -654,6 +654,13 @@ line changes observable output.
   payout or successor search whose answer rested on a failed SEC request or a
   stale copy gets a `resolution_degraded` review row; its answer is used for
   the run but never saved, and the CLI exits 3.
+- **An OpenFIGI outage is not a refusal (§9, §10).** Timeouts, connection
+  errors or 5xx answers that outlast the OpenFIGI client's retries raise
+  `OpenFigiUnavailable`, apart from a 401/403 refusal (`OpenFigiBlocked`,
+  exit 2). The run stops before writing any table, so the previous outputs stay
+  whole; nothing is cached, and no placeholder stands in (it would change
+  `sec_id`s between runs). The CLI says "OpenFIGI unavailable after retries; no
+  outputs written; rerun later" and exits 1.
 - **`no_figi` is not in `review.csv` (D19, §7.5, §8.3).** The spec puts a
   placeholder into `review.csv` flagged `no_figi`. Review triage (requested
   later) grades `no_figi` `info`: the placeholder is a stable, joinable key and
