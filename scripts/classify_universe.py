@@ -119,10 +119,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--last-trade-closes", help="CSV sec_id,last_trade_close[,delist_date]")
     p.add_argument("--merger-terms", help="CSV sec_id,cash_per_share,stock_ratio,acquirer_price,acquirer_ticker[,delist_date]")
     p.add_argument("--recoveries", help="CSV sec_id,recovery_ratio[,delist_date]")
-    p.add_argument("--review-decisions", default=DEFAULT_REVIEW_DECISIONS,
+    p.add_argument("--review-decisions", default=None,
                    help="CSV of accepted review flags: sec_id,delist_date,ticker,flag,decision,note "
-                        "(default %(default)s; missing at the default path means no decisions, missing at an "
-                        "explicit path is an error)")
+                        f"(default {DEFAULT_REVIEW_DECISIONS}; missing at the default path means no decisions, "
+                        "missing at an explicitly given path -- even one that happens to spell out the default "
+                        "-- is an error)")
     p.add_argument("--extract-merger-terms-llm", action="store_true",
                    help="Use the LLM extractor to read cash+stock merger terms from EDGAR filings; "
                         "acquirer_price is joined from the SEC fails-to-deliver panel and a sanity gate "
@@ -157,13 +158,19 @@ def main() -> int:
         merger_terms=load_merger_terms_overrides(args.merger_terms) if args.merger_terms else {},
         recoveries=load_float_overrides(args.recoveries, "recovery_ratio") if args.recoveries else {},
     )
+    # None (the argparse default) means the caller didn't pass --review-decisions
+    # at all: a missing file at the default path is fine. Once the flag is given
+    # explicitly -- even spelling out the same path as the default -- a missing
+    # file is an error, so a typo'd path is never silently read as "no decisions".
+    review_decisions_explicit = args.review_decisions is not None
+    review_decisions_path = args.review_decisions if review_decisions_explicit else DEFAULT_REVIEW_DECISIONS
     try:
-        review_decisions = load_decisions(args.review_decisions)
+        review_decisions = load_decisions(review_decisions_path)
     except FileNotFoundError:
-        if args.review_decisions == DEFAULT_REVIEW_DECISIONS:
-            review_decisions = []          # no decisions file at the default path: nothing accepted yet
+        if review_decisions_explicit:
+            p.error(f"--review-decisions {review_decisions_path}: file not found")
         else:
-            p.error(f"--review-decisions {args.review_decisions}: file not found")
+            review_decisions = []          # no decisions file at the default path: nothing accepted yet
     except ReviewDecisionError as exc:
         p.error(str(exc))
     index = ObservationIndex(load_observations(args.observations))

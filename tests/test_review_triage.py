@@ -68,7 +68,8 @@ def test_severities_follow_the_rulings():
     unacceptable = {"error", "resolution_degraded", "review_decision_unmatched"}
     assert {n for n, i in CATALOG.items() if i.severity == "info"} == info
     assert {n for n, i in CATALOG.items() if not i.acceptable} == unacceptable
-    assert {n for n, i in CATALOG.items() if i.severity == "fix"} == unacceptable | {"observation_unresolved"}
+    assert {n for n, i in CATALOG.items() if i.severity == "fix"} == (
+        unacceptable | {"observation_unresolved", "no_dlret"})
     for name in ("merger_at_par", "terms_gate_failed", "payout_gate_failed", "llm_gate_failed",
                  "distress_at_normal_price", "bankruptcy_before_merger", "bankruptcy_tag_unconfirmed",
                  "bankruptcy_text_missing", "no_evidence_default", "last_trade_date_conflict", "no_form25",
@@ -82,17 +83,18 @@ def test_severities_follow_the_rulings():
 # --- row_severity -----------------------------------------------------------
 
 def test_row_severity():
-    # a delisting with no DLRET always needs a person, whatever its flags
-    assert row_severity(_del("S1", "2020-01-02", "AAA", "ftd_close_prior:3", dlret=None)) == "fix"
-    assert row_severity(_del("S1", "2020-01-02", "AAA", "ftd_close_prior:3", dlret=float("nan"))) == "fix"
-    assert row_severity(_del("S1", "2020-01-02", "AAA", "ftd_close_prior:3", dlret="")) == "fix"
+    # row_severity is now purely the most severe of the row's own tokens: it no
+    # longer looks at bucket/dlret at all -- triage() injects `no_dlret` onto a
+    # blank-DLRET delisting row's tokens *before* calling this (see
+    # test_a_blank_dlret_delisting_row_gets_no_dlret_injected below).
+    assert row_severity(_del("S1", "2020-01-02", "AAA", "ftd_close_prior:3", dlret=None)) == "info"
+    assert row_severity(_del("S1", "2020-01-02", "AAA", "ftd_close_prior:3;no_dlret", dlret=None)) == "fix"
     assert row_severity(_del("S1", "2020-01-02", "AAA", "ftd_close_prior:3", dlret=0.1)) == "info"
     assert row_severity(_del("S1", "2020-01-02", "AAA", "merger_at_par;no_figi", dlret=0.0)) == "check"
     assert row_severity(_row("S1", "", "AAA", "error")) == "fix"
     assert row_severity(_row("S1", None, "AAA", "")) == "info"
     # a Form 25 review item carries a date but no bucket: not a delisting row
     assert row_severity(_row("S1", "2020-01-02", "AAA", "form25_unmatched", dlret=None)) == "check"
-    assert row_severity(_row("S1", "2020-01-02", "AAA", "ftd_close_prior:3", dlret=None, bucket="")) == "info"
 
 
 # --- triage: hiding, decisions ------------------------------------------------
@@ -109,7 +111,64 @@ def test_an_info_only_row_leaves_review_but_is_counted():
 
 def test_a_delisting_with_no_dlret_stays_as_fix_even_with_info_flags_only():
     (r,) = triage([_del("S1", "2020-01-02", "AAA", "ftd_close_prior:2", dlret=None)], ()).review_rows
-    assert (r["severity"], r["review_flags"]) == ("fix", "ftd_close_prior:2")
+    assert (r["severity"], r["review_flags"]) == ("fix", "ftd_close_prior:2;no_dlret")
+
+
+# --- no_dlret injection (Task 2 review ruling) -------------------------------
+
+def test_a_blank_dlret_delisting_row_gets_no_dlret_injected():
+    (r,) = triage([_del("S1", "2020-01-02", "AAA", "no_last_close", dlret=None)], ()).review_rows
+    assert (r["severity"], r["review_flags"]) == ("fix", "no_last_close;no_dlret")
+
+
+def test_a_non_blank_zero_dlret_does_not_get_no_dlret():
+    (r,) = triage([_del("S1", "2020-01-02", "AAA", "merger_at_par", dlret=0.0)], ()).review_rows
+    assert r["review_flags"] == "merger_at_par"    # 0.0 is a real value, not blank
+
+
+def test_accepting_the_only_other_flag_keeps_the_row_visible_via_no_dlret():
+    rows = [_del("S1", "2020-01-02", "AAA", "no_last_close", dlret=None)]
+    tri = triage(rows, [_accept("S1", "2020-01-02", "AAA", "no_last_close")])
+    (r,) = tri.review_rows
+    assert (r["severity"], r["review_flags"]) == ("fix", "no_dlret")
+    assert tri.counts == {"fix": 1, "check": 0, "info_hidden": 0, "accepted": 1, "cleared": 0,
+                          "unmatched_decisions": 0}
+
+
+def test_accepting_no_dlret_too_finally_clears_the_row():
+    rows = [_del("S1", "2020-01-02", "AAA", "no_last_close", dlret=None)]
+    tri = triage(rows, [_accept("S1", "2020-01-02", "AAA", "no_last_close"),
+                        _accept("S1", "2020-01-02", "AAA", "no_dlret")])
+    assert tri.review_rows == []
+    assert tri.counts["cleared"] == 1 and tri.counts["accepted"] == 2
+
+
+def test_accept_by_flag_on_no_last_close_then_triage_keeps_the_blank_dlret_row():
+    from delist_detection.review_triage import accept_by_flag
+    rows = [_del("S1", "2020-01-02", "AAA", "no_last_close", dlret=None),         # blank DLRET: must stay
+           _del("S2", "2020-02-02", "BBB", "no_last_close", dlret=0.1)]          # real DLRET: clears
+    decisions = accept_by_flag(rows, "no_last_close", note="sampled, all fine")
+    tri = triage(rows, decisions)
+    assert [(r["sec_id"], r["severity"], r["review_flags"]) for r in tri.review_rows] == [
+        ("S1", "fix", "no_dlret")]
+    assert tri.counts["cleared"] == 1 and tri.counts["accepted"] == 2
+
+
+def test_the_summary_has_a_no_dlret_row_counting_the_blank_dlret_delisting_rows():
+    rows = [_del("S1", "2020-01-02", "AAA", "no_last_close", dlret=None),
+           _del("S2", "2020-02-02", "BBB", "merger_at_par", dlret=0.0),      # not blank: no injection
+           _del("S3", "2020-03-02", "CCC", "no_form25", dlret="")]
+    tri = triage(rows, ())
+    summary = {s["flag"]: s for s in tri.summary_rows}
+    assert "no_dlret" in summary
+    assert (summary["no_dlret"]["severity"], summary["no_dlret"]["rows"], summary["no_dlret"]["in_review"],
+           summary["no_dlret"]["accepted"]) == ("fix", 2, 2, 0)
+    assert summary["no_dlret"]["examples"] == "AAA@2020-01-02; CCC@2020-03-02"
+
+
+def test_no_dlret_never_reaches_a_non_delisting_review_item():
+    (r,) = triage([_row("S1", "2020-01-02", "AAA", "form25_unmatched", dlret=None)], ()).review_rows
+    assert "no_dlret" not in r["review_flags"]
 
 
 def test_an_accepted_token_leaves_the_row_and_an_info_remainder_is_hidden():

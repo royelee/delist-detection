@@ -191,19 +191,23 @@ SEC fails-to-deliver row shows).
 severity, sec_id, delist_date, ticker, cik, bucket, dlret, review_flags, reason, anchor_8k, last_seen
 ```
 
-Every row carries a **`severity`**, the first column: `fix` (a delisting with
-a blank `dlret`, `observation_unresolved`, or the run/decisions file itself
-is broken — `error`, `resolution_degraded`, `review_decision_unmatched`),
-`check` (a rule couldn't settle the answer), or `info` (the answer came from
-a less precise source but nothing suggests it's wrong). A row whose flags are
-*all* `info` never appears here — those flags stay on `delistings.csv`, just
-not surfaced for review. Rows are ordered by what they can do to a return:
-`fix` before `check`; within that, a delisting with a blank `dlret` first,
-then delisting rows by descending `|dlret|`, then everything else; ties break
-on `(sec_id, delist_date, ticker, review_flags)` and a few more columns after
-that, so the order never depends on run-to-run noise. See *Severities and
-accepting a review row* below for the full catalog, `review_summary.csv`,
-and `data/review_decisions.csv`.
+Every row carries a **`severity`**, the first column: `fix` (`no_dlret`,
+`observation_unresolved`, or the run/decisions file itself is broken —
+`error`, `resolution_degraded`, `review_decision_unmatched`), `check` (a rule
+couldn't settle the answer), or `info` (the answer came from a less precise
+source but nothing suggests it's wrong). `no_dlret` is injected onto every
+delisting row whose `dlret` is still blank *before* decisions are applied, so
+accepting the row's other flags never silently makes it disappear — only
+supplying the value or explicitly accepting `no_dlret` does. A row whose
+flags are *all* `info` never appears here — those flags stay on
+`delistings.csv`, just not surfaced for review. Rows are ordered by what they
+can do to a return: `fix` before `check`; within that, a delisting with a
+blank `dlret` first (this grouping reads `bucket`/`dlret` directly, not
+tokens, and is unaffected by decisions), then delisting rows by descending
+`|dlret|`, then everything else; ties break on `(sec_id, delist_date, ticker,
+review_flags)` and a few more columns after that, so the order never depends
+on run-to-run noise. See *Severities and accepting a review row* below for
+the full catalog, `review_summary.csv`, and `data/review_decisions.csv`.
 
 ### `review_summary.csv` — key `flag`, pre-sorted (not key-sorted)
 
@@ -304,8 +308,11 @@ The full flag vocabulary (from `classifier.py`, `ticker_resolver.py`,
 | `observation_conflict:<date>` | The ticker was observed under two or more different names on `<date>` (a snapshot source that backfilled today's ticker: CB is both ACE LTD and CHUBB CORP in 2012-2014); both are kept, and the reason names each with the security it resolved to. `sec_id` is empty |
 | `ticker_unconfirmed` | An era from 2004 on with no fails-to-deliver row under its ticker within 30 days of its first and last observation: the SEC data never shows that ticker then (a snapshot carrying a later ticker, such as APTV in 2012-2013, or a security gone before the snapshot date) |
 
-Plus `review_decision_unmatched`, which `review_triage.triage()` itself
-creates for a stale decision (see below) — it never comes from the pipeline.
+Plus two flags `review_triage.triage()` itself creates — neither ever comes
+from the pipeline, so neither ever reaches `delistings.csv`:
+`review_decision_unmatched` for a stale decision (see below), and `no_dlret`,
+added to every delisting row whose `dlret` is still blank before decisions
+are applied, so accepting the row's other flags never silently drops it.
 
 ### Severities and accepting a review row
 
@@ -313,6 +320,9 @@ Every flag above has a catalog entry (`review_triage.CATALOG`) giving it a
 **severity** — `fix`, `check`, or `info` (see `review.csv`'s columns above)
 — plus a plain-language description and action. `output/review_summary.csv`
 groups the current run by flag; work it top down, then `review.csv` itself.
+`no_dlret` is `fix` and acceptable like any other flag: accept it once you've
+confirmed no value exists to supply, or supply one via `--last-trade-closes`
+/ `--merger-terms` / `--recoveries` and rerun.
 
 Once you've checked a flag on a row and it's fine, record it in
 `data/review_decisions.csv` so it stays accepted on every later run:
@@ -509,7 +519,7 @@ python scripts/observations_from_instruments.py --instruments data/delisted_tick
 # or: scripts/observations_from_snapshots.py --dir <folder of dated index-membership CSVs> --out obs.csv
 python scripts/classify_universe.py --observations obs.csv   # → output/{securities,ticker_history,cusip_history,delistings,payouts,review,review_summary}.csv
 
-pytest -q                                # 1058 unit tests, no network
+pytest -q                                # 1066 unit tests, no network
 ```
 
 `classify_universe.py` prints a summary when it finishes: rows written per

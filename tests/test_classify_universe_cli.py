@@ -123,6 +123,23 @@ def test_an_explicit_missing_review_decisions_path_exits_2(monkeypatch, tmp_path
     assert exc.value.code == 2
 
 
+def test_an_explicit_path_spelling_out_the_default_still_exits_2_when_missing(monkeypatch, tmp_path):
+    """Minor 1 (Task 2 review): comparing the raw path string to
+    DEFAULT_REVIEW_DECISIONS would wrongly treat an explicitly-given path that
+    happens to equal the default as "the default" and silently swallow a
+    missing file. The None-sentinel fix must still exit 2 here."""
+    same_as_default = str(tmp_path / "review_decisions.csv")
+    monkeypatch.setattr(cli, "DEFAULT_REVIEW_DECISIONS", same_as_default)
+    monkeypatch.setenv("EDGAR_USER_AGENT", "Test Co test@example.com")
+    monkeypatch.setattr(cli, "use_machine_wide_limit", lambda *a, **k: None)
+    monkeypatch.setattr(cli, "default_clients", lambda *a, **kw: pytest.fail("no client may be built"))
+    monkeypatch.setattr(sys, "argv", ["classify_universe.py", "--observations", "x.csv",
+                                      "--review-decisions", same_as_default])
+    with pytest.raises(SystemExit) as exc:
+        cli.main()
+    assert exc.value.code == 2
+
+
 def test_a_decisions_file_with_decision_reject_exits_2(monkeypatch, tmp_path):
     path = tmp_path / "decisions.csv"
     path.write_text("sec_id,delist_date,ticker,flag,decision,note\nS1,,X,no_figi,reject,bad\n")

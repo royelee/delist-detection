@@ -12,7 +12,10 @@ with a severity:
              is wrong. A row whose flags are all `info` leaves review.csv (the
              flags stay on delistings.csv).
 
-A delisting row (one with a `bucket`) with no DLRET is `fix` whatever its flags.
+A delisting row (one with a `bucket`) with no DLRET always needs a person:
+`triage()` gives it the token `no_dlret` (`fix`, acceptable) before decisions
+are applied, so accepting its other flags never silently drops it -- only
+accepting `no_dlret` itself (or supplying the value) does.
 
 `triage()` turns the pipeline's merged review rows plus a person's decisions
 (`load_decisions`: "I checked this flag on this row, it is fine") into the
@@ -38,6 +41,7 @@ from .store import replace_on_success
 SEVERITIES = ("fix", "check", "info")        # this order is the sort order
 
 UNMATCHED_FLAG = "review_decision_unmatched"
+NO_DLRET_FLAG = "no_dlret"     # injected by triage() on every delisting row whose DLRET is still blank
 _MAX_EXAMPLES = 3
 
 
@@ -74,6 +78,12 @@ CATALOG: dict[str, FlagInfo] = {
                "security.",
         "Pin a cik or sec_id on the observations (or fix their ticker or name) and rerun; accept it in "
         "data/review_decisions.csv if the security is out of scope."),
+    # --- fix: a delisting has no return yet ---
+    NO_DLRET_FLAG: FlagInfo(
+        "fix", "The delisting has no delisting return (DLRET). `triage()` adds this token to every delisting "
+               "row whose dlret is still blank, so accepting its other flags never silently drops it.",
+        "Supply the missing value via --last-trade-closes, --merger-terms or --recoveries and rerun, or "
+        f"{_accept_if('no value exists to supply')}."),
 
     # --- check: a rule could not settle the answer ---
     # merger terms and payouts
@@ -279,12 +289,25 @@ def _is_delisting(row: Mapping) -> bool:
 
 
 def row_severity(row: Mapping) -> str:
-    """`fix` for a delisting row with a blank DLRET, whatever its flags;
-    otherwise the most severe of its flags' severities (`info` for a row with
-    none)."""
-    if _is_delisting(row) and _blank(row.get("dlret")):
-        return "fix"
+    """The most severe of the row's tokens' catalog severities (`fix` > `check`
+    > `info`); `info` for a row with none. A delisting row with a blank DLRET
+    is `fix` because `triage()` injects the `no_dlret` token (see
+    `_inject_no_dlret`) before this is ever called -- this function itself no
+    longer special-cases the bucket/dlret fields."""
     return _most_severe(flag_info(t).severity for t in _tokens(row.get("review_flags")))
+
+
+def _inject_no_dlret(row: Mapping) -> dict:
+    """A delisting row (non-blank `bucket`) with a blank DLRET always needs a
+    person, whatever its other flags: give it the token `no_dlret` before
+    decisions are applied, so accepting its other flags never silently drops
+    it. Never applied to a non-delisting review item (a Form 25 review item
+    such as `form25_unmatched` carries a date but no bucket)."""
+    if _is_delisting(row) and _blank(row.get("dlret")):
+        tokens = _tokens(row.get("review_flags"))
+        if NO_DLRET_FLAG not in tokens:
+            return {**row, "review_flags": ";".join(tokens + [NO_DLRET_FLAG])}
+    return dict(row)
 
 
 @dataclass(frozen=True)
@@ -438,6 +461,14 @@ def _names(row: Mapping) -> set[str]:
 def triage(rows: list[Mapping], decisions: Sequence[Decision]) -> Triage:
     """The final review.csv rows, the review_summary.csv rows and the counts.
 
+    Before anything else, every delisting row (non-blank `bucket`) whose DLRET
+    is still blank gets the token `no_dlret` (`_inject_no_dlret`) -- so a
+    delisting with no return stays visible until a person supplies the value
+    or explicitly accepts `no_dlret`, even once every one of its other flags
+    is accepted. This happens before decisions are matched, so a decision may
+    target `no_dlret` itself and the summary's "before decisions" counts
+    include it.
+
     A token is accepted by a decision with the same `(sec_id, delist_date,
     ticker)` (stripped, None as "") and exactly that token; accepted tokens
     leave their row. A decision that accepts nothing becomes a
@@ -448,7 +479,9 @@ def triage(rows: list[Mapping], decisions: Sequence[Decision]) -> Triage:
     `(sec_id, delist_date, ticker, review_flags)` and, beyond what those four
     decide, a few more columns (`reason, cik, bucket, dlret, anchor_8k,
     last_seen`) so two rows that still tie never depend on the input order.
-    The input rows are not changed."""
+    The caller's input rows are not mutated (each is copied before its tokens
+    change)."""
+    rows = [_inject_no_dlret(r) for r in rows]
     by_key: dict[tuple[str, str, str, str], Decision] = {}
     for d in decisions:
         by_key.setdefault(_key(d.sec_id, d.delist_date, d.ticker) + (d.flag,), d)

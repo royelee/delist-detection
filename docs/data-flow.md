@@ -544,28 +544,35 @@ fails-to-deliver row later than the next trading day) and
 first observation and no fails-to-deliver row under its own tickers shows it
 trading afterwards: the observations after it are a stale snapshot's).
 
-`review_triage.triage()` (`review_triage.py`) then turns those candidate rows
-plus `data/review_decisions.csv` (`--review-decisions`) into the final
-`output/review.csv`: every row gets a leading `severity` — `fix` (a
-delisting with a blank `dlret`, `observation_unresolved`, or the run/decisions
-file itself is broken: `error`, `resolution_degraded`,
-`review_decision_unmatched`), `check` (a rule couldn't settle it), or `info`
-(a less precise source, nothing suggests it's wrong) — and rows are ordered
-by what they can move: `fix` before `check`; a delisting with a blank `dlret`
-first, then delisting rows by descending `|dlret|`, then everything else;
-ties break on `(sec_id, delist_date, ticker, review_flags)` and, for
-determinism, a few more columns. A row whose remaining flags are all `info`
-is dropped from `review.csv` (its flags stay on `delistings.csv`). A decision
-matches a row by the exact token and by `(sec_id, delist_date, ticker)`
-compared as stripped strings (blank matches blank); `error` and
-`resolution_degraded` can never be accepted; a decision matching no row
-becomes a `fix` `review_decision_unmatched` row instead of vanishing.
-Decisions never change `delistings.csv`. `output/review_summary.csv` (key
-`flag`) has one row per flag name — `severity, flag, rows, in_review,
-accepted, description, action, examples` — for triaging by cause;
-`scripts/accept_review.py --flag NAME --note TEXT [--bucket B]` bulk-appends
-`accept` decisions for every row currently carrying that flag. Written by
-`scripts/classify_universe.py` alongside the other five tables.
+`review_triage.triage()` (`review_triage.py`) first appends the token
+`no_dlret` to every delisting row (non-blank `bucket`) whose `dlret` is still
+blank, *before* any decision is applied — so accepting the row's other flags
+never silently drops a delisting that still has no return; only supplying the
+value or explicitly accepting `no_dlret` does. It then turns those candidate
+rows plus `data/review_decisions.csv` (`--review-decisions`) into the final
+`output/review.csv`: every row gets a leading `severity` — `fix` (`no_dlret`,
+`observation_unresolved`, or the run/decisions file itself is broken:
+`error`, `resolution_degraded`, `review_decision_unmatched`), `check` (a rule
+couldn't settle it), or `info` (a less precise source, nothing suggests it's
+wrong) — and rows are ordered by what they can move: `fix` before `check`; a
+delisting with a blank `dlret` first (this grouping still reads `bucket`/
+`dlret` directly, unaffected by tokens or decisions), then delisting rows by
+descending `|dlret|`, then everything else; ties break on `(sec_id,
+delist_date, ticker, review_flags)` and, for determinism, a few more columns.
+A row whose remaining flags are all `info` is dropped from `review.csv` (its
+flags stay on `delistings.csv`). A decision matches a row by the exact token
+and by `(sec_id, delist_date, ticker)` compared as stripped strings (blank
+matches blank); `error` and `resolution_degraded` can never be accepted; a
+decision matching no row becomes a `fix` `review_decision_unmatched` row
+instead of vanishing. `no_dlret` and `review_decision_unmatched` are the only
+two flags `triage()` itself creates — neither ever comes from the pipeline or
+reaches `delistings.csv`. Decisions never change `delistings.csv`.
+`output/review_summary.csv` (key `flag`) has one row per flag name —
+`severity, flag, rows, in_review, accepted, description, action, examples` —
+for triaging by cause; `scripts/accept_review.py --flag NAME --note TEXT
+[--bucket B]` bulk-appends `accept` decisions for every row currently
+carrying that flag. Written by `scripts/classify_universe.py` alongside the
+other five tables.
 
 `output/web_verification.csv` — independent EDGAR cross-check produced by
 `scripts/verify_against_web.py`. Verdicts:

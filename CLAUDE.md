@@ -28,7 +28,7 @@ editable install.
 
 ```bash
 pip install -e .                         # editable install (Python ≥3.10) — once per env
-pytest                                    # full suite (1058 tests, offline, no network)
+pytest                                    # full suite (1066 tests, offline, no network)
 pytest tests/test_payout_extractor.py -v  # one file
 pytest tests/test_payout_extractor.py::test_match_in_cash_family_altr -v   # one test
 
@@ -258,20 +258,25 @@ conflate them.
   whether or not a decision also exists for it (it can't: both flags are
   `acceptable=False`).
 - **`review.csv` is triaged, not raw; `review_summary.csv` groups it by
-  cause.** `review_triage.triage()` gives every row a `severity` — `fix` (a
-  delisting with a blank DLRET, `observation_unresolved`, or the run/decisions
-  file itself is broken: `error`, `resolution_degraded`,
-  `review_decision_unmatched`), `check` (a rule couldn't settle it), or `info`
-  (a less precise source, nothing suggests it's wrong) — and orders rows by
-  what they can move: `fix` before `check`; within that, a delisting with a
-  blank DLRET first, then delisting rows by descending `|dlret|`, then
-  everything else; ties break on `(sec_id, delist_date, ticker,
-  review_flags)` and, for full determinism, a few more columns after that. A
-  row whose remaining flags are all `info` leaves `review.csv` — those flags
-  stay on `delistings.csv`. `output/review_summary.csv` has one row per flag
-  name: severity, how many rows carried it, how many are still in review, how
-  many tokens were accepted, its catalog description/action, and up to 3
-  examples. `data/review_decisions.csv`
+  cause.** `review_triage.triage()` gives every row a `severity` — `fix`
+  (`no_dlret`, `observation_unresolved`, or the run/decisions file itself is
+  broken: `error`, `resolution_degraded`, `review_decision_unmatched`),
+  `check` (a rule couldn't settle it), or `info` (a less precise source,
+  nothing suggests it's wrong). `no_dlret` is injected onto every delisting
+  row (non-blank `bucket`) whose DLRET is still blank, *before* decisions are
+  applied, so accepting a row's other flags never silently drops a delisting
+  that still has no return — only supplying the value or explicitly accepting
+  `no_dlret` itself does. Rows are ordered by what they can move: `fix`
+  before `check`; within that, a delisting with a blank DLRET first (this
+  grouping is unchanged — it reads `bucket`/`dlret` directly, not tokens),
+  then delisting rows by descending `|dlret|`, then everything else; ties
+  break on `(sec_id, delist_date, ticker, review_flags)` and, for full
+  determinism, a few more columns after that. A row whose remaining flags are
+  all `info` leaves `review.csv` — those flags stay on `delistings.csv`.
+  `output/review_summary.csv` has one row per flag name: severity, how many
+  rows carried it, how many are still in review, how many tokens were
+  accepted, its catalog description/action, and up to 3 examples.
+  `data/review_decisions.csv`
   (`sec_id,delist_date,ticker,flag,decision,note`, `decision` always
   `accept`) is a person's "I checked this exact flag on this exact row, it's
   fine": a decision matches only the identical `(sec_id, delist_date, ticker,
