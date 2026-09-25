@@ -589,6 +589,26 @@ line changes observable output.
   spelling it was observed under, the separator form first — Hubbell's
   merged class keeps "HUBB", its class B (seen as "HUB-B" and "HUBB") is
   "HUB-B", and Viacom class B is "VIA-B" also for its Nasdaq years as VIAB.
+- **The fails description must name the issuer (D21, §8.3).** An era takes
+  an FTD CUSIP only when some fails row of that CUSIP has a description that
+  names the era's company: its observed names or its issuer's EDGAR names,
+  current and former (`names.description_matches`). The match is looser than
+  the name check elsewhere, because SEC cuts descriptions at 30 characters,
+  abbreviates (GEN ELEC, MATLS, HLDGS) and keeps an old name for years after a
+  rename; it only has to tell another company on the same ticker from the
+  company itself. So a snapshot that kept listing a company after it was gone
+  no longer takes the next holder's CUSIP and FIGI (Clear Channel under CCU
+  in 2009 is not Cervecerias Unidas, Station Casinos is not Stantec,
+  ServiceMaster is not Silvercorp, Avaya is not Aviva, Northeast Utilities
+  under ES in 2012 is not EnergySolutions); it resolves by ticker or name,
+  or to its placeholder. An era with no issuer CIK also takes a CUSIP that an
+  era with a known issuer took as that issuer's (CME's 2008 snapshots still
+  say CHICAGO MERCANTILE HLDGS). Where a description is only a brand
+  (FANNIE MAE, FREDDIE MAC) or an old name with no issuer CIK to explain it
+  (AMERCO for UHALB), the caller supplies the CUSIP on the observation:
+  `data/observations.csv` carries it for FNM, FRE and UHALB. The era's last
+  sighting (`era_last_seen`, used only to date the issuer lookup) still counts
+  the ticker's rows of its FTD CUSIPs before this check.
 - **A security's CUSIPs (§7.3, §8.8).** Every CUSIP of an era whose OpenFIGI
   answer is accepted as the security's composite is kept (up to 3 tried per
   era, no extra requests); for a `sec_id` pin or a placeholder, where there is

@@ -32,7 +32,8 @@ from .prefetch import Serialized, warm
 from .reconstruction import _lookup, build_delistings_table, delisting_row, unmatched_override_keys
 from .review_triage import Decision, is_blank, triage
 from .security_master import (
-    FigiResolver, Range, Security, build_securities, era_cusips, era_last_seen, ranges_from_sightings, refine_eras,
+    FigiResolver, Range, Security, build_securities, candidate_cusips, era_last_seen, ranges_from_sightings,
+    refine_eras,
 )
 from .store import write_tables
 from .trading_calendar import next_trading_day, previous_trading_day
@@ -171,6 +172,16 @@ def successor_search_name(edgar, cik: int | None, observed_name: str | None) -> 
     if name:
         return _STATE_TAG.sub("", name).strip()
     return re.sub(r"\s+", " ", _CLASS_WORDS.sub(" ", observed_name or "")).strip(" -")
+
+
+def _issuer_names(edgar, cik: int | None) -> tuple[str, ...]:
+    """Every name EDGAR records for the issuer: its current name and its former
+    names (the submissions JSON the resolver already read)."""
+    sub = edgar.submissions(cik) if cik is not None else None
+    if not isinstance(sub, dict):
+        return ()
+    names = [sub.get("name") or "", *((fn.get("name") or "") for fn in sub.get("formerNames") or [])]
+    return tuple(n for n in names if n.strip())
 
 
 def _issuer_exchange_for_ticker(edgar, cik: int | None, ticker: str) -> str | None:
@@ -631,8 +642,10 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
     meter.done("issuer resolution", mark)
     ciks = {k: r.cik for k, r in cik_res.items()}
 
-    # 3. FIGI per era -> securities
-    cusips = {e.key: era_cusips(e, ftd) for e in eras}
+    # 3. FIGI per era -> securities. An era takes only the FTD CUSIPs whose rows
+    # describe its issuer, by its observed names or the issuer's EDGAR names (D21).
+    issuer_names = {cik: _issuer_names(clients.edgar, cik) for cik in dict.fromkeys(ciks.values()) if cik}
+    cusips = candidate_cusips(eras, ftd, ciks, issuer_names)
     resolutions = FigiResolver(clients.figi).resolve_many(eras, ciks=ciks, cusips=cusips)
     securities = build_securities(resolutions, era_by_key, ciks)
     review: list[ReviewItem] = []

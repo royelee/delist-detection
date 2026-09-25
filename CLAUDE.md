@@ -114,9 +114,11 @@ that turns a list of observations into the seven output tables; see
 - `security_master.py` — `FigiResolver.resolve_many()` (a `sec_id` pin wins;
   else CUSIP jobs, then the ticker, then a name filter — see the spec's
   Implementation notes), `build_securities()` (merges eras sharing a
-  `sec_id`), `era_cusips`/`era_last_seen` (FTD-confirmed CUSIPs and true last
-  sighting), `ranges_from_sightings()` (turns dated sightings into
-  `ticker_history`/`cusip_history` ranges).
+  `sec_id`), `candidate_cusips`/`era_cusips`/`era_last_seen` (FTD-confirmed
+  CUSIPs and true last sighting; an era takes an FTD CUSIP only when a fails
+  row's description names its issuer, `names.description_matches` against the
+  observed and EDGAR names — spec D21), `ranges_from_sightings()` (turns dated
+  sightings into `ticker_history`/`cusip_history` ranges).
 - `form25.py` — parses a Form 25's XML or text (exchange, `class_text`, rule),
   labels the exchange, reads `class_kind` (common/preferred/warrant/unit/…)
   from the class text, and `match_security()`s it to one observed security of

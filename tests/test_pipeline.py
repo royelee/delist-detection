@@ -1876,3 +1876,64 @@ def test_an_acquirer_on_another_ticker_keeps_the_cik_the_resolver_gives(fake_edg
     clients = Clients(edgar=fake_edgar, resolver=_OneAnswerResolver(704415), classifier=None, figi=None,
                       ftd_client=None)
     assert _acquirer_cik(clients, "TVTY", date(2019, 3, 7), _nutrisystem_event()) == 704415
+
+
+# --- code review 2026-09-25, item 1: a stale era must not take another company's CUSIP (spec D21) ---
+
+CCU_DATES = ("2008-01-16", "2008-05-31", "2008-07-25", "2008-11-18", "2009-01-23", "2009-03-20", "2009-06-08")
+
+
+def test_a_stale_era_does_not_take_the_cusip_of_the_next_company_on_its_ticker(fake_edgar, tmp_path):
+    """Real case: Clear Channel (CIK 739708) went private in July 2008, but the
+    snapshots list it under CCU until 2009-06-08. From 2008-09-05 SEC's fails
+    rows under CCU are Cervecerias Unidas' ADR (204429104), so the CUSIP switch
+    splits off a stale Clear Channel era whose only FTD CUSIP is Cervecerias'.
+    That era must not take it (its description names another company), so it
+    never resolves to Cervecerias' FIGI and no range runs on into 2010."""
+    fake_edgar.company_map["CCU"] = {"cik_str": 739708, "ticker": "CCU",
+                                     "title": "CLEAR CHANNEL COMMUNICATIONS INC"}
+    fake_edgar.submissions_by_cik[739708] = []
+    obs = [Observation("CCU", d, "CLEAR CHANNEL COMM INC") for d in CCU_DATES]
+    rows = (_ftd("CCU", "184502102", "CLEAR CHANNEL COMMUNICTNS INC",
+                 ["2007-12-17", "2008-02-01", "2008-04-01", "2008-06-02", "2008-07-31"], 34.75)
+            + _ftd("CCU", "204429104", "COMPANIA CERVECER UNIDAS ADS(5",
+                   ["2008-09-05", "2008-12-01", "2009-03-02", "2009-06-01", "2009-09-01", "2010-06-01"], 34.64))
+    index, clients = _index_clients(fake_edgar, obs, rows, {
+        ("ID_CUSIP", "184502102"): _figi_answer("BBG000BF8BH2", "CCMO", "IHEARTCOMMUNICATIONS INC"),
+        ("ID_CUSIP", "204429104"): _figi_answer("BBG000BBCT50", "CCU", "CIA CERVECERIAS UNI-SPON ADR"),
+        ("TICKER", "CCU"): _figi_answer("BBG000BBCT50", "CCU", "CIA CERVECERIAS UNI-SPON ADR"),
+    })
+
+    run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
+
+    secs = {r["sec_id"] for r in read_table("securities", table_path(tmp_path, "securities"))}
+    assert "BBG000BBCT50" not in secs
+    ch = read_table("cusip_history", table_path(tmp_path, "cusip_history"))
+    assert "204429104" not in {r["cusip"] for r in ch}
+    th = read_table("ticker_history", table_path(tmp_path, "ticker_history"))
+    assert max(r["valid_to"] or "9999" for r in th) <= "2009-06-08"
+
+
+def test_an_era_with_no_issuer_takes_a_cusip_another_era_shows_is_its_issuers(fake_edgar, tmp_path):
+    """Real case: the snapshots call CME "CHICAGO MERCANTILE HLDGS" in 2008-2009,
+    after its 2007 rename to CME Group, and the resolver finds no CIK for that
+    name then. Its fails rows (12572Q105, "CME GROUP, INC") share no word with
+    that name, but the later CME era, whose issuer is known, shows the CUSIP is
+    CME Group's: the old era keeps it and both eras are one security."""
+    fake_edgar.company_map["CME"] = {"cik_str": 1156375, "ticker": "CME", "title": "CME GROUP INC."}
+    fake_edgar.submissions_by_cik[1156375] = [EdgarSubmission("0001156375-02-000001", "10-K", "2002-03-01", "",
+                                                              "", "k.htm")]
+    obs = ([Observation("CME", d, "CHICAGO MERCANTILE HLDGS") for d in ("2008-01-16", "2008-07-25", "2009-06-08")]
+           + [Observation("CME", d, "CME GROUP INC CLASS A") for d in ("2014-06-30", "2015-06-30")])
+    rows = _ftd("CME", "12572Q105", "CME GROUP, INC", ["2008-02-01", "2008-10-01", "2009-06-01", "2010-03-01",
+                                                      "2011-01-03", "2011-11-01", "2012-09-04", "2013-07-01",
+                                                      "2014-05-01", "2015-07-01"], 500.0)
+    index, clients = _index_clients(fake_edgar, obs, rows, {
+        ("ID_CUSIP", "12572Q105"): _figi_answer("BBG000BHLYP4", "CME", "CME GROUP INC"),
+    })
+
+    run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
+
+    assert [r["sec_id"] for r in read_table("securities", table_path(tmp_path, "securities"))] == ["BBG000BHLYP4"]
+    flags = {r["review_flags"] for r in read_table("review", table_path(tmp_path, "review"))}
+    assert "observation_unresolved" not in flags

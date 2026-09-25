@@ -9,7 +9,7 @@ the same FIGI (a reverse split's new CUSIP, a gap no FTD row bridged).
 from __future__ import annotations
 
 from collections import Counter, defaultdict
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import date, timedelta
 
@@ -18,7 +18,7 @@ from .figi_resolution import (
     share_class_from_name, us_candidates,
 )
 from .ftd import FtdIndex, FtdRow
-from .names import names_agree
+from .names import description_matches, names_agree
 from .observations import ERA_GAP_DAYS, Observation, TickerEra, eras_by_key, number_eras
 
 ERA_MIN_RUN = 3          # an FTD CUSIP run shorter than this is noise, not a CUSIP switch
@@ -170,12 +170,29 @@ def refine_eras(eras: Sequence[TickerEra], ftd: FtdIndex) -> list[TickerEra]:
     return number_eras(out)
 
 
-def era_cusips(era: TickerEra, ftd: FtdIndex) -> list[str]:
-    """Candidate CUSIPs for an era: the observed ones, then the FTD ones. A
-    refined era uses its own FTD CUSIPs; otherwise the FTD rows under the ticker
-    around the era whose description agrees with an era name, most rows first."""
+def era_cusips(era: TickerEra, ftd: FtdIndex, issuer_names: Sequence[str] = (),
+               vouched: Collection[str] = ()) -> list[str]:
+    """Candidate CUSIPs for an era: the observed ones, then the FTD ones.
+
+    A refined era takes those of its own FTD CUSIPs whose fails rows describe its
+    issuer (spec D21): some row of the CUSIP has a description that
+    `names.description_matches` the era's observed names or `issuer_names` (the
+    issuer's EDGAR names, current and former, which cover a description that
+    lags a rename or a snapshot that backfilled a later name). A CUSIP whose rows
+    all name another company is not taken, however it came to be the era's: a
+    snapshot that kept listing Clear Channel under CCU after it went private in
+    2008 sees only Cervecerias Unidas' rows there. With none left the era has no
+    FTD CUSIP (and resolves by ticker or name, or to its placeholder).
+    `vouched`: CUSIPs taken without that check, for an era whose issuer is
+    unknown (see `candidate_cusips`).
+
+    An era with no FTD CUSIPs of its own takes the FTD rows under the ticker
+    around it whose description agrees with an era name, most rows first."""
     if era.ftd_cusips:
-        return list(era.cusips) + [c for c in era.ftd_cusips if c not in era.cusips]
+        names = [*era.names, *issuer_names]
+        own = [c for c in era.ftd_cusips if c in vouched
+               or any(description_matches(d, names) for d in {r.description for r in ftd.by_cusip(c)})]
+        return list(era.cusips) + [c for c in own if c not in era.cusips]
     lo = (date.fromisoformat(era.first) - timedelta(days=10)).isoformat()
     hi = (date.fromisoformat(era.last) + timedelta(days=10)).isoformat()
     counts: Counter[str] = Counter()
@@ -184,6 +201,28 @@ def era_cusips(era: TickerEra, ftd: FtdIndex) -> list[str]:
             continue
         counts[r.cusip] += 1
     return list(era.cusips) + [c for c, _ in counts.most_common() if c not in era.cusips]
+
+
+def candidate_cusips(eras: Sequence[TickerEra], ftd: FtdIndex, ciks: Mapping[str, int | None],
+                     issuer_names: Mapping[int, Sequence[str]]) -> dict[str, list[str]]:
+    """`era_cusips` for every era (by key), each checked against its issuer's
+    EDGAR names (`issuer_names`, by CIK).
+
+    An era whose issuer is unknown (no CIK) has only its observed names, which a
+    stale snapshot can leave behind a rename (CME Group is still "CHICAGO
+    MERCANTILE HLDGS" in the 2008 snapshots, and no CIK resolves for that name
+    then). It also takes a CUSIP that an era with a known issuer took as that
+    issuer's: the fails rows tie the CUSIP to that issuer, the ticker and the
+    dates tie it to this era. An era with a known issuer is held to its own
+    issuer's names, so a stale era (Triad Hospitals on TRI in 2008) never takes
+    the CUSIP of the company that later holds its ticker (Thomson Reuters)."""
+    out = {e.key: era_cusips(e, ftd, issuer_names.get(ciks[e.key], ()))
+           for e in eras if ciks.get(e.key) is not None}
+    vouched = {c for taken in out.values() for c in taken}
+    for e in eras:
+        if ciks.get(e.key) is None:
+            out[e.key] = era_cusips(e, ftd, (), vouched)
+    return out
 
 
 def era_last_seen(era: TickerEra, ftd: FtdIndex, horizon_days: int = 400) -> str:

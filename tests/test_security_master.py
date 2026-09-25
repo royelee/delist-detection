@@ -133,6 +133,36 @@ def test_refine_eras_keeps_observations_on_their_side_of_the_split(real_eras, re
     assert era_cusips(foxa_new, real_ftd) == ["35137L105"]
 
 
+def test_every_real_era_keeps_its_own_ftd_cusips(real_eras, real_ftd):
+    """Spec D21's description check (code review 2026-09-25, item 1) must not cost
+    a real security its CUSIP: DELL, DOW, JEF, ADT, FOX/FOXA, GOOG, UA, Z, MON,
+    BF-B and CB's Chubb eras all keep every FTD CUSIP their rows describe."""
+    for eras in real_eras.values():
+        for e in eras:
+            if e.ftd_cusips:
+                assert era_cusips(e, real_ftd) == list(e.ftd_cusips), e.key
+
+
+def test_a_stale_era_takes_no_cusip_whose_rows_name_another_company():
+    """Station Casinos went private in 2007; snapshots still list it under STN in
+    2008-2009, when STN's fails rows are Stantec's. Its EDGAR names don't cover
+    Stantec either, so the era takes no FTD CUSIP; an era whose EDGAR names do
+    cover the description (a later name backfilled: TAPESTRY on Coach's COH rows)
+    keeps it."""
+    stn = _era("STN", ("2008-01-16", "STATION CASINOS INC"), ("2008-05-31", "STATION CASINOS INC"),
+               ("2009-06-08", "STATION CASINOS INC"))
+    ftd = FtdIndex(_rows("STN", "85472N109", ["2008-02-22", "2008-06-02", "2008-09-02", "2009-06-01"],
+                         "STANTEC INC. COM"))
+    (stn,) = refine_eras([stn], ftd)
+    assert stn.ftd_cusips == ("85472N109",)                       # the ticker's rows ...
+    assert era_cusips(stn, ftd, ["STATION CASINOS INC"]) == []    # ... are not the era's
+    coh = _era("COH", ("2012-06-29", "TAPESTRY INC"), ("2012-12-31", "TAPESTRY INC"))
+    ftd = FtdIndex(_rows("COH", "189754104", ["2012-06-01", "2012-09-04", "2012-12-03"], "COACH INC."))
+    (coh,) = refine_eras([coh], ftd)
+    assert era_cusips(coh, ftd) == []
+    assert era_cusips(coh, ftd, ["TAPESTRY, INC.", "COACH INC"]) == ["189754104"]
+
+
 def _rows(symbol, cusip, dates, desc="X CO"):
     return [FtdRow(d, cusip, symbol, desc, 10.0) for d in dates]
 

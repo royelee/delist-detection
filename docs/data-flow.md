@@ -357,9 +357,16 @@ flagged `member_name_mismatch` regardless of which tier resolved the CIK.
 composite FIGI via OpenFIGI, one era at a time:
 
 1. **The era's `sec_id` pin**, when the caller supplied one — wins outright.
-2. **The era's CUSIPs** (`era_cusips`, FTD-confirmed, up to 3), queried via
-   `ID_CUSIP`/`ID_CINS`. Tried first because a CUSIP hit needs no name check
-   (see the spec's Implementation notes).
+2. **The era's CUSIPs** (`candidate_cusips`/`era_cusips`, FTD-confirmed, up
+   to 3), queried via `ID_CUSIP`/`ID_CINS`. Tried first because a CUSIP hit
+   needs no name check (see the spec's Implementation notes) — which holds
+   only because the CUSIP was checked first: an era takes an FTD CUSIP only
+   when some fails row of it has a description that `names.description_matches`
+   the era's observed names or its issuer's EDGAR names (current and former),
+   spec D21. A snapshot that kept listing a company after it was gone (Clear
+   Channel under CCU in 2009, whose rows are Cervecerias Unidas') so takes no
+   CUSIP and resolves by ticker or name, or to its placeholder. An era with no
+   issuer CIK also takes a CUSIP that an era with a known issuer took.
 3. **The era's ticker**, queried via `TICKER`; accepted only when a per-venue
    row carries both the observation's ticker and a name that agrees with the
    observation/EDGAR name.
