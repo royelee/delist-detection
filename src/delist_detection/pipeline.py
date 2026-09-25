@@ -550,8 +550,10 @@ def run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_
     fine") is passed straight to `review_triage.triage`, which writes
     review.csv (severity-ordered, info-only rows hidden, accepted tokens
     removed) and review_summary.csv (review.csv's rows by flag). A decision
-    that accepts nothing becomes a `review_decision_unmatched` row instead of
-    being silently dropped. `RunSummary.review_flags`/the manifest's own
+    that accepts nothing becomes a `review_decision_unmatched:<flag>` row
+    instead of being silently dropped, except under `limit`, where most rows
+    are out of the subset and unmatched decisions are only counted in the
+    log. `RunSummary.review_flags`/the manifest's own
     `review_flags` still count every flag from *before* triage or decisions
     (so exit code 3 always sees every `error`/`resolution_degraded`, decision
     or not); the new `RunSummary.review_counts` (= `tri.counts`, also under
