@@ -476,8 +476,13 @@ line changes observable output.
   and match a later line: the bankrupt General Growth Properties is now
   "GGP, Inc.", the name of the new issuer's GGP line, and Jacobs Engineering
   under a backfilled J in 2012 matches today's Jacobs Solutions line, a new
-  composite since 2022, while its JEC era is on the old one. Such an era keeps
-  its placeholder.
+  composite since 2022, while its JEC era is on the old one. Nor may it take
+  an era off its issuer's placeholder while another era of the same issuer
+  and class has to stay there: that would put one stock on two `sec_id`s on the
+  same dates and end the placeholder in a rename row (ACE LTD, backfilled
+  under CB in 2012-14, while its ACE era finds no FIGI; Gannett under TGNA
+  beside GCI; Weight Watchers under WW beside WTW). Such an era keeps its
+  placeholder.
 - **§8.3's third acceptance route is not built.** Accepting a candidate
   because its name matches the acquirer or successor named in the security's
   delisting 8-K is not implemented: a security whose only OpenFIGI match

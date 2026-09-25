@@ -292,9 +292,10 @@ class FigiResolver:
         EDGAR lists both names for CIK 72741). A dead line Bloomberg renamed to
         its acquirer is still rejected: the acquirer's name is not one of the
         target issuer's names. A candidate taken only through the EDGAR names
-        must also not contradict another era's pin or CUSIP
-        (`_contradicted`). Else the issuer's placeholder, or unresolved with no
-        issuer."""
+        must also not contradict another era's pin or CUSIP (`_contradicted`),
+        nor leave a sibling era of the same issuer and class alone on the
+        issuer's placeholder. Else the issuer's placeholder, or unresolved with
+        no issuer."""
         eras_by_key(eras)                                # every era is keyed by era.key below: refuse duplicates
         issuer_names = issuer_names or {}
         out: dict[str, EraResolution] = {}
@@ -327,46 +328,71 @@ class FigiResolver:
             if c:
                 confirmed[era.key] = c.composite
 
-        def named(era: TickerEra, cands: list[FigiCandidate]) -> FigiCandidate | None:
+        def named(era: TickerEra, cands: list[FigiCandidate]) -> tuple[FigiCandidate | None, bool]:
+            """The accepted candidate, and whether only the EDGAR names accepted it."""
             c = accept(cands, ticker=era.ticker, names=era.names, via_cusip=False)
             edgar = issuer_names.get(ciks.get(era.key), ())
             if c is not None or not edgar:
-                return c
+                return c, False
             c = accept(cands, ticker=era.ticker, names=[*era.names, *edgar], via_cusip=False)
-            return None if c is None or _contradicted(era, c.composite, eras, ciks, confirmed) else c
+            if c is None or _contradicted(era, c.composite, eras, ciks, confirmed):
+                return None, False
+            return c, True
+
+        picks: dict[str, tuple[str, FigiCandidate, bool]] = {}     # era -> (source, candidate, EDGAR names only)
+        for era in eras:
+            if era.key in out:
+                continue
+            c = next((got for got in by_cusip_of[era.key] if got), None)
+            if c:
+                picks[era.key] = ("cusip", c, False)
+                continue
+            c, edgar_only = named(era, us_candidates(answers[plan[era.key][2]].get("data") or []))
+            if c:
+                picks[era.key] = ("ticker", c, edgar_only)
+                continue
+            q = filter_query(era.name or "")
+            if q:
+                rows = self.figi.filter(q, exchCode="US", includeUnlistedEquities=True)
+                c, edgar_only = named(era, us_candidates(rows))
+                if c:
+                    picks[era.key] = ("name", c, edgar_only)
+
+        def group(era: TickerEra) -> tuple[int | None, str]:
+            return ciks.get(era.key), share_class_from_name(era.name)
+
+        # An issuer's placeholder holds its eras of one class that no FIGI confirms.
+        # An era that only the EDGAR names take off it would leave a sibling there:
+        # one stock on two sec_ids, and the placeholder ending in a rename (ACE LTD,
+        # backfilled under CB in 2012-14, while its own ACE era finds no FIGI). Such
+        # an era stays with the group; repeated until no group is split.
+        while True:
+            held = {group(e) for e in eras
+                    if e.key not in out and e.key not in picks and ciks.get(e.key) is not None}
+            split = [e.key for e in eras if e.key in picks and picks[e.key][2] and group(e) in held]
+            if not split:
+                break
+            for k in split:
+                del picks[k]
 
         for era in eras:
             if era.key in out:
                 continue
-            tried, _, t_idx = plan[era.key]
+            tried = plan[era.key][0]
             found, by_cusip = found_of[era.key], by_cusip_of[era.key]
+            if era.key in picks:
+                source, cand, _ = picks[era.key]
 
-            def resolved(sec_id: str, source: str, cand: FigiCandidate) -> EraResolution:
                 def own(c: str, got: FigiCandidate | None, cands: list[FigiCandidate]) -> bool:
-                    if got is not None and got.composite == sec_id:
+                    if got is not None and got.composite == cand.composite:
                         return True
                     # Resolved by ticker or name: the era's own FTD CUSIP stays unless
                     # OpenFIGI maps it to another composite (it often has no record of
                     # an old CUSIP at all).
                     return source != "cusip" and c in era.ftd_cusips and not cands
-                return EraResolution(era.key, sec_id, source, cand, (),
-                                     tuple(c for c, got, f in zip(tried, by_cusip, found) if own(c, got, f)))
-
-            c = next((got for got in by_cusip if got), None)
-            if c:
-                out[era.key] = resolved(c.composite, "cusip", c)
+                out[era.key] = EraResolution(era.key, cand.composite, source, cand, (),
+                                             tuple(c for c, got, f in zip(tried, by_cusip, found) if own(c, got, f)))
                 continue
-            c = named(era, us_candidates(answers[t_idx].get("data") or []))
-            if c:
-                out[era.key] = resolved(c.composite, "ticker", c)
-                continue
-            q = filter_query(era.name or "")
-            if q:
-                rows = self.figi.filter(q, exchCode="US", includeUnlistedEquities=True)
-                c = named(era, us_candidates(rows))
-                if c:
-                    out[era.key] = resolved(c.composite, "name", c)
-                    continue
             cik = ciks.get(era.key)
             if cik is not None:
                 out[era.key] = EraResolution(era.key, placeholder_id(cik, share_class_from_name(era.name)),

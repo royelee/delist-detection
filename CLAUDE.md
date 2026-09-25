@@ -28,7 +28,7 @@ editable install.
 
 ```bash
 pip install -e .                         # editable install (Python ≥3.10) — once per env
-pytest                                    # full suite (1162 tests, offline, no network)
+pytest                                    # full suite (1163 tests, offline, no network)
 pytest tests/test_payout_extractor.py -v  # one file
 pytest tests/test_payout_extractor.py::test_match_in_cash_family_altr -v   # one test
 
@@ -357,8 +357,9 @@ conflate them.
   gets renamed to its acquirer, so acceptance needs a CUSIP match, or a
   ticker+name match against the observation name or, failing that, the
   issuer's EDGAR names (current and former; `FigiResolver` drops such a match
-  when another era's pin or CUSIP contradicts it). The spec's third route, an
-  acquirer/successor name match, is not built (spec §17).
+  when another era's pin or CUSIP contradicts it, or when it would leave a
+  same-class sibling era alone on the issuer's placeholder). The spec's third
+  route, an acquirer/successor name match, is not built (spec §17).
 - **A delisting is a Form 25 removal — not a rename, not a secondary
   withdrawal.** A rename or an exchange move that keeps the security trading
   is not a delisting; withdrawing a secondary/regional listing while the main

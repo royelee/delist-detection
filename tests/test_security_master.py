@@ -419,6 +419,32 @@ def test_edgar_names_do_not_move_an_era_off_the_line_its_issuers_cusip_confirms_
         wyn.key: "BBG000PV2L86", wynd.key: "BBG000PV2L86"}
 
 
+def test_edgar_names_do_not_split_an_issuers_placeholder():
+    """Real case: the snapshots list ACE Ltd under ACE from 2008 and, backfilled,
+    under CB in 2012-2014. CB's ticker hit is Bloomberg's CHUBB LTD line, which
+    ACE's EDGAR names accept; but the ACE era itself finds no FIGI (OpenFIGI knows
+    neither its old CUSIP nor its old ticker) and stays on the issuer placeholder.
+    Taking only the CB era off it would put one stock on two sec_ids on the same
+    dates (and end the placeholder in a rename row), so the CB era stays with it.
+    Wisconsin Energy's two eras both reach WEC ENERGY GROUP only through EDGAR's
+    names, so both go, and no era is left on the placeholder."""
+    ace = _era("ACE", ("2008-07-25", "ACE LTD"), ("2015-12-31", "ACE LTD"))
+    cb = _era("CB", ("2012-06-29", "ACE LTD"), ("2014-06-30", "ACE LTD"))
+    wec08 = _era("WEC", ("2008-01-16", "WISCONSIN ENERGY CORP"), ("2009-06-08", "WISCONSIN ENERGY CORP"))
+    wec14 = _era("WEC", ("2014-12-31", "WISCONSIN ENERGY CORP"))
+    wec = {"data": [_row("BBG000BWP7D9", "US", "WEC", "WEC ENERGY GROUP INC")]}
+    figi = _Figi({("TICKER", "CB"): {"data": [_row("BBG000BR14K5", "US", "CB", "CHUBB LTD")]},
+                  ("TICKER", "WEC"): wec})
+    eras = [ace, cb, wec08, wec14]
+    res = FigiResolver(figi).resolve_many(
+        eras, ciks={ace.key: 896159, cb.key: 896159, wec08.key: 783325, wec14.key: 783325},
+        cusips={ace.key: ["H0023R105"], cb.key: [], wec08.key: ["976657106"], wec14.key: ["976657106"]},
+        issuer_names={896159: ("Chubb Ltd", "ACE LTD", "ACE Ltd"),
+                      783325: ("WEC ENERGY GROUP, INC.", "WISCONSIN ENERGY CORP")})
+    assert {k: r.sec_id for k, r in res.items()} == {ace.key: "CIK896159-COMMON", cb.key: "CIK896159-COMMON",
+                                                    wec08.key: "BBG000BWP7D9", wec14.key: "BBG000BWP7D9"}
+
+
 def test_the_same_issuer_guard_weighs_only_the_same_class_over_overlapping_dates():
     """The guard above is about one share class at one time: an issuer's class A
     line confirmed over the same dates says nothing about its class C era, and a

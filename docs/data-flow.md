@@ -383,7 +383,10 @@ composite FIGI via OpenFIGI, one era at a time:
    era is confirmed on it (old General Growth Properties is now "GGP, Inc.",
    the name of the new issuer's GGP line), or an era of the same issuer and
    class is confirmed on another composite over overlapping dates (Jacobs
-   under a backfilled J in 2012 is not today's Jacobs Solutions line).
+   under a backfilled J in 2012 is not today's Jacobs Solutions line), and
+   when taking it would leave another era of the same issuer and class alone
+   on the issuer's placeholder (ACE LTD under a backfilled CB stays with its
+   ACE era).
 4. **An issuer-name filter search** (`/v3/filter`, legal suffixes stripped)
    as the last resort, accepted by the same name rule as the ticker.
 
