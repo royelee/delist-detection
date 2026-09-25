@@ -8,7 +8,7 @@
     "submissions": 14302,
     "submissions_page": 5140
   },
-  "code_version": "1aad87a-dirty",
+  "code_version": "24c78aa-dirty",
   "degraded_answers": {},
   "latency_ms": {},
   "not_covered": {},
@@ -16,10 +16,10 @@
   "resolution_degraded": 0,
   "review": {
     "accepted": 0,
-    "check": 752,
+    "check": 615,
     "cleared": 0,
-    "fix": 93,
-    "info_hidden": 375,
+    "fix": 151,
+    "info_hidden": 454,
     "unmatched_decisions": 0
   },
   "sec_requests": {},

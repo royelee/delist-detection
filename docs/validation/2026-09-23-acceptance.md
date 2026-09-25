@@ -802,3 +802,74 @@ being marked `fix` implicitly. `review_summary.csv`'s new row:
 the 62 rows' `review_flags` column), `review_summary.csv` (+1 row),
 `run_manifest.json` and `run.log` changed; `delistings.csv` and the other
 four tables are byte-identical to before.
+
+### Fix wave 2: final review (C1, I1, I2, I3, M1-M6)
+
+The whole-feature review (`opus`, `final-review.md`) returned "With fixes":
+one Critical (`append_decisions` could silently destroy an existing
+`data/review_decisions.csv`, dropping extra columns and blanking rows on a
+spaced header or a UTF-8 BOM), two Important routing defects (58
+`ended_without_delisting` rows — a security with no delisting at all, which
+can hide a return as large as -100% — sat at `check` and near the bottom of
+`review.csv`, and the review action invited accepting them; ~80 rows of
+`no_last_close`/`no_last_trade_date` sent a person hunting closes that
+change no output on `exchange_transfer` rows, whose DLRET is always 0), a
+reachable gap (a delisting with a blank DLRET and **no flags at all**, via a
+`--last-trade-closes`/`--recoveries`/`--merger-terms` override resolving to
+no consideration on a non-merger bucket, never reached `review.csv`), and
+five minor fixes (a stale decision's row now names the flag it tried to
+accept; `accept_review.py` refuses a mistyped or over-specific `--flag`
+instead of silently matching nothing, and a bulk-accept of a `fix`-severity
+flag now needs `--yes`; a `--limit` dev run no longer floods `review.csv`
+with unmatched-decision noise; `successor_unknown`'s action asks the right
+question; a stale doc table count). See `.superpowers/sdd/2026-09-24-review-triage/final-fix.md`
+for the controller's exact rulings.
+
+Rerun with no decisions still recorded, `--sec-workers 1`, fully warm caches
+(0 SEC requests, exit 0):
+
+| | Before this fix | After |
+|---|---|---|
+| `review.csv` rows | 845 | 766 |
+| `fix` | 93 | 151 |
+| `check` | 752 | 615 |
+| `info`-only rows hidden | 375 | 454 |
+| `review_summary.csv` rows | 32 | 32 |
+
+`fix` rose by exactly **58** (I1: every `ended_without_delisting` row moved
+from `check` to `fix`, no row count change). `check` fell by **137** = 58
+(the same I1 rows) + 79 (I3: rows whose only remaining severity-bearing
+flags were `no_last_close`/`no_last_trade_date` on an `exchange_transfer`
+row, now graded `info` and hidden). `info_hidden` rose by exactly **79** to
+match. `no_last_close`'s summary row: `rows` unchanged at 163, `in_review`
+drops from 163 to 84 (79 fewer); `no_last_trade_date`: 131 rows, `in_review`
+131 → 52 (also 79 fewer) — the same 79 rows carry both flags, so the net
+`review.csv` row reduction is 79, not 158. I2 added no new rows in this run
+(no override in this universe's inputs happens to resolve to a negative or
+zero consideration on a non-merger bucket), which is expected — I2 closes a
+reachable gap, not one this particular universe's overrides currently hit.
+
+Top 10 `review_summary.csv` rows by severity, then row count:
+
+| Severity | Flag | Rows | In review | Accepted | Examples |
+|---|---|---|---|---|---|
+| `fix` | `no_dlret` | 62 | 62 | 0 | ADCT@2010-12-19; ANAT@2020-07-12; TAHO@2019-03-04 |
+| `fix` | `ended_without_delisting` | 58 | 58 | 0 | ACV; WNR; CCU |
+| `fix` | `observation_unresolved` | 31 | 31 | 0 | AABA; BWC; CBSO |
+| `check` | `no_last_close` | 163 | 84 | 0 | ADCT@2010-12-19; ANAT@2020-07-12; TAHO@2019-03-04 |
+| `check` | `no_form25` | 139 | 139 | 0 | RHD@2009-05-29; SSCC@2009-01-30; IAR@2009-03-31 |
+| `check` | `no_last_trade_date` | 131 | 52 | 0 | ADCT@2010-12-19; ANAT@2020-07-12; CI@2018-12-31 |
+| `check` | `successor_unknown` | 129 | 129 | 0 | CBL@2020-11-04; PRE@2016-03-28; GAS@2016-07-11 |
+| `check` | `delist_date_approx` | 123 | 123 | 0 | TMA@2008-09-29; CBL@2020-11-04; HSC@2023-06-20 |
+| `check` | `form25_unclassified` | 118 | 118 | 0 | AIG@2012-12-13; LO@2015-07-05; AVT@2018-05-17 |
+| `check` | `form25_unmatched` | 78 | 78 | 0 | TMA@2009-01-25; AON@2020-04-11; CCU@2008-08-10 |
+
+`git diff --stat -- output/` confirmed only `review.csv` (195 lines
+changed), `review_summary.csv` (10 lines changed, still 32 rows),
+`run_manifest.json` and `run.log` changed; `delistings.csv` and the other
+four tables are byte-identical to before. All 58 `ended_without_delisting`
+rows verified `severity == fix`. The follow-ups the controller declined to
+implement now (override-CSV exit-1 parity, `form25_unmatched`/
+`form25_unclassified` escalation on securities with no delisting row, an
+offline re-triage tool, a stale-decision prune tool, a bucket override) are
+recorded in `final-fix.md`, not implemented here.
