@@ -50,7 +50,7 @@ issuer resolution: 0 EDGAR requests, 0 SEC data-file downloads (all threads)
 delisting search: 0 EDGAR requests, 0 SEC data-file downloads (all threads)
 payouts: 0 EDGAR requests, 0 SEC data-file downloads (all threads)
 successor search: 0 EDGAR requests, 0 SEC data-file downloads (all threads)
-Rows written: {'securities': 2288, 'ticker_history': 2962, 'cusip_history': 2603, 'delistings': 1004, 'payouts': 624, 'review': 845, 'review_summary': 31}
+Rows written: {'securities': 2288, 'ticker_history': 2962, 'cusip_history': 2603, 'delistings': 1004, 'payouts': 624, 'review': 845, 'review_summary': 32}
 Delistings by bucket: {'merger': 624, 'exchange_transfer': 313, 'liquidation': 48, 'unknown': 12, 'compliance_failure': 6, 'expiration': 1}
 FIGI sources: {'cusip': 1976, 'ticker': 136, 'placeholder': 160}
 Review flags: {'ftd_close_prior': 120, 'resolved_by_current_ticker_map': 136, 'no_form25': 139, 'delist_date_approx': 123, 'successor_unknown': 129, 'ftd_close_lagged': 133, 'acquirer_close_lagged': 29, 'no_last_trade_date': 131, 'no_last_close': 163, 'payout_gate_failed': 12, 'terms_gate_failed': 49, 'merger_at_par': 51, 'last_trade_date_conflict': 45, 'observed_after_delisting': 24, 'no_evidence_default': 12, 'member_name_mismatch': 31, 'distress_at_normal_price': 4, 'llm_gate_failed': 16, 'last_trade_date_unconfirmed': 99, 'resolved_by_cik_map': 12, 'bankruptcy_before_merger': 1, 'bankruptcy_tag_unconfirmed': 1, 'resolved_by_manual_override': 1, 'observation_unresolved': 31, 'no_figi': 170, 'observation_conflict': 6, 'ticker_unconfirmed': 63, 'ended_without_delisting': 58, 'form25_unclassified': 118, 'form25_unmatched': 78, 'ticker_shared': 42}

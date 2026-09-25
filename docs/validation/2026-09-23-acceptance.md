@@ -763,3 +763,42 @@ header-only): `accepted`/`cleared`/`unmatched_decisions` are all 0. Working
 `data/review_decisions.csv` (or bulk-accepting with `scripts/accept_review.py
 --flag NAME --note TEXT`) is the next validation step; none of the causes
 above have been sampled yet.
+
+### Fix round 1: `no_dlret`
+
+The task review found that `triage()` dropped a delisting row with a blank
+DLRET once every one of its *other* flags was accepted, so bulk-accepting a
+cause like `no_last_close` could erase rows whose delisting return was still
+missing (9 of the 93 `fix` rows above). Fix: `triage()` now injects the token
+`no_dlret` (`fix`, acceptable) onto every delisting row whose DLRET is still
+blank, before any decision is applied, so it survives its other flags being
+accepted and is cleared only by supplying the value or explicitly accepting
+`no_dlret`.
+
+Rerun with no decisions still recorded, `--sec-workers 1`, fully warm caches
+(0 SEC requests, exit 0):
+
+| | Before this fix | After |
+|---|---|---|
+| `review.csv` rows | 845 | 845 |
+| `fix` | 93 | 93 |
+| `check` | 752 | 752 |
+| `info`-only rows hidden | 375 | 375 |
+| `review_summary.csv` rows | 31 | 32 |
+
+The totals are unchanged, as expected: the fix doesn't change which rows are
+`fix` (a blank-DLRET delisting row was already `fix` before this round, via a
+special case inside `row_severity` instead of an explicit token), only makes
+the reason visible and individually acceptable. The 62 blank-DLRET delisting
+rows now each carry `no_dlret` explicitly in `review_flags` (e.g.
+`no_last_trade_date;no_last_close;no_dlret` for ADCT@2010-12-19) instead of
+being marked `fix` implicitly. `review_summary.csv`'s new row:
+
+| Severity | Flag | Rows | In review | Accepted | Examples |
+|---|---|---|---|---|---|
+| `fix` | `no_dlret` | 62 | 62 | 0 | ADCT@2010-12-19; ANAT@2020-07-12; TAHO@2019-03-04 |
+
+`git diff --stat -- output/` confirmed only `review.csv` (124 lines changed:
+the 62 rows' `review_flags` column), `review_summary.csv` (+1 row),
+`run_manifest.json` and `run.log` changed; `delistings.csv` and the other
+four tables are byte-identical to before.
