@@ -726,3 +726,40 @@ Carried from the reviews, updated for fix round 3.
   `--recoveries` where the realized loss matters. STILL OPEN.
 - **`names_agree` counts a repeated word twice** ("BROWN & BROWN INC" vs "POE &
   BROWN INC" now disagree); no row in this run changed. STILL OPEN.
+
+## Review triage
+
+`review_triage.py` (2026-09-24 plan) turns the pipeline's raw review rows plus
+`data/review_decisions.csv` into a severity-sorted `review.csv` and a new
+`review_summary.csv`. Rerun with no decisions yet, `--sec-workers 1`, fully
+warm caches (0 SEC requests):
+
+| | Before | After |
+|---|---|---|
+| `review.csv` rows | 1,220 | 845 |
+| `fix` | — | 93 |
+| `check` | — | 752 |
+| `info`-only rows hidden (flags stay on `delistings.csv`) | — | 375 |
+
+`fix` is 31 `observation_unresolved` (a security that couldn't be identified)
+plus 62 delisting rows with a blank DLRET. Every `info`-only row (`no_figi`,
+`resolved_by_current_ticker_map`, `ftd_close_lagged`, `ftd_close_prior`,
+`last_trade_date_unconfirmed`, `acquirer_close_lagged`, `resolved_by_cik_map`,
+`resolved_by_manual_override`) left review.csv without changing
+`delistings.csv`. `output/review_summary.csv` has 31 rows (one per flag); the
+top five by row count:
+
+| Severity | Flag | Rows | In review | Examples |
+|---|---|---|---|---|
+| `fix` | `observation_unresolved` | 31 | 31 | AABA; BWC; CBSO |
+| `check` | `no_last_close` | 163 | 163 | ADCT@2010-12-19; ANAT@2020-07-12; TAHO@2019-03-04 |
+| `check` | `no_form25` | 139 | 139 | RHD@2009-05-29; SSCC@2009-01-30; IAR@2009-03-31 |
+| `check` | `no_last_trade_date` | 131 | 131 | ADCT@2010-12-19; ANAT@2020-07-12; CI@2018-12-31 |
+| `check` | `successor_unknown` | 129 | 129 | CBL@2020-11-04; PRE@2016-03-28; GAS@2016-07-11 |
+
+No decisions have been recorded yet (`data/review_decisions.csv` is
+header-only): `accepted`/`cleared`/`unmatched_decisions` are all 0. Working
+`review_summary.csv` top down and recording each accepted cause in
+`data/review_decisions.csv` (or bulk-accepting with `scripts/accept_review.py
+--flag NAME --note TEXT`) is the next validation step; none of the causes
+above have been sampled yet.
