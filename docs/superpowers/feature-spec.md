@@ -478,11 +478,13 @@ line changes observable output.
   under a backfilled J in 2012 matches today's Jacobs Solutions line, a new
   composite since 2022, while its JEC era is on the old one. Nor may it take
   an era off its issuer's placeholder while another era of the same issuer
-  and class has to stay there: that would put one stock on two `sec_id`s on the
-  same dates and end the placeholder in a rename row (ACE LTD, backfilled
-  under CB in 2012-14, while its ACE era finds no FIGI; Gannett under TGNA
-  beside GCI; Weight Watchers under WW beside WTW). Such an era keeps its
-  placeholder. These guards see only the eras in the same run: a universe
+  and class has to stay there, whatever the two eras' dates: this guard
+  compares only the issuer and the class. Where the dates overlap, taking it
+  would put one stock on two `sec_id`s on the same dates and end the
+  placeholder in a rename row (ACE LTD, backfilled under CB in 2012-14, while
+  its ACE era finds no FIGI; Gannett under TGNA beside GCI; Weight Watchers
+  under WW beside WTW); where they do not, the era stays on the placeholder
+  all the same. These guards see only the eras in the same run: a universe
   that lacks the later issuer's CUSIP-confirmed era cannot contradict the
   match, so an old issuer can silently take the later issuer's line (drop new
   GGP from the observations and General Growth 2008 takes its FIGI; drop JEC
@@ -641,6 +643,27 @@ line changes observable output.
   era, no extra requests); for a `sec_id` pin or a placeholder, where there is
   no composite to check against, the era's first candidate CUSIP is kept
   unchecked.
+- **`share_class` and `figi_source` (§7.1, §8.4).** `share_class` is read
+  from the OpenFIGI candidate's name when that names a class
+  (`share_class_from_name`: `CL A`, `CLASS C`, `SERIES A`, ...), else from the
+  observation name; never from EDGAR's Form 25 class text, which is read only
+  to match a Form 25 to a security (and that match reads the security's
+  `share_class`). A security of several eras takes `figi_source` from its
+  strongest era (a pin, then a CUSIP, then the ticker, then a name search,
+  then the placeholder; the earliest era on a tie) and `share_class` from that
+  same era; when that era names no class, from the earliest other era of the
+  security that does (SBA's CUSIP-confirmed era is cut off at "...REIT CORP
+  CLASS", its other eras say CLASS A). A placeholder's class, in its `sec_id`
+  too, is its era's observed name's.
+- **A CUSIP on an observation is not checked (D21).** D21 has a CUSIP the
+  caller puts on an observation checked against the fails-to-deliver rows;
+  that check is not built. Like a pin, an observation CUSIP is taken as
+  given: it is tried first for the era's FIGI (`era_cusips` puts it ahead of
+  the era's FTD CUSIPs, without the description check) and it is in the
+  security's `cusip_history`. FNM, FRE and UHALB rely on this: their fails
+  descriptions are a brand or an old name that the description check cannot
+  tie to the issuer (see "The fails description must name the issuer"). A
+  wrong CUSIP on an observation therefore goes unflagged.
 - **`securities.name` (§7.1).** The latest observation name of the
   security, not the OpenFIGI name; the OpenFIGI name is used only when no
   observation carries a name.
