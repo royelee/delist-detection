@@ -395,7 +395,9 @@ descriptions slowly — HCP INC COM STK until 2019-11-05, a month after EDGAR
 ends the name — while a name taken only later does not; a description that
 leaves no word to compare, F5,INC. COMMON STOCK, says nothing either way, and
 at least one must name the candidate: 2U INC COM STK confirms no one), and it
-is the only candidate that did.
+is the only candidate that did. Every answer must also have one of the era's
+observed names match an EDGAR name of its issuer (TRI@2008, Triad Hospitals in
+a stale snapshot, holds Thomson Reuters' CUSIP and takes nothing).
 
 - **B, `efts_frequency_renamed`:** tier 6's candidates through G; the one left
   must also carry the era's name at its last sighting and have filed within
@@ -407,12 +409,23 @@ is the only candidate that did.
   this one — the same CUSIP (MHP and MHFI), or a switch: this era's CUSIP last
   trades under its ticker within 5 trading days of another era's new CUSIP's
   first row (no earlier row, 30+ days into the scanned window), trades under
-  no symbol 10 trading days later, and that era's issuer was renamed within 90
-  days from a name matching the old rows (NU → ES, LUK → JEF, KORS → CPRI). A
-  spin-off starting then carries no former name; a merger's acquirer has an
-  older CUSIP.
+  no symbol 10 trading days later; and that era's issuer must be the old
+  CUSIP's, renamed: it existed when the old CUSIP began failing (not Actavis
+  plc, formed in 2013, for Actavis Inc), was renamed within 90 days from a
+  name that names the old rows word by word (`names.description_names`: two
+  words when both sides have two; CITIZENS COMMUNICATIONS does not name CLEAR
+  CHANNEL COMMUNICTNS), and has no other CUSIP of its own trading at the switch
+  (an acquirer that renamed itself at the merger: WEC Energy for Integrys,
+  Catamaran for Catalyst Health Solutions) — NU → ES, LUK → JEF, KORS → CPRI.
+  A spin-off starting then carries no former name.
 
-Each answer carries the `info` flag `issuer_inferred`, whose reason says how.
+At the fixed point every answer is checked again against all it links to; one
+that became ambiguous, or lost its link, is dropped. Each answer carries the
+`check` flag `issuer_inferred`, whose reason says how. Rule C also runs over the
+eras the first pass answered (unpinned): where it points to another issuer, the
+first pass's answer stands and the `check` flag `issuer_cusip_disagrees` names
+both (LSTR@2008's name search took LandStar Inc; the CUSIP it shares with
+LSTR@2012 is Landstar System's).
 The parent/subsidiary case is out of its reach: L-3 Communications Holdings
 merged into its subsidiary L-3 Communications Corp (renamed L3 Technologies),
 whose former name matches the parent's fails rows, so the Holdings eras take

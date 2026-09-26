@@ -564,7 +564,7 @@ python scripts/observations_from_instruments.py --instruments data/delisted_tick
 # or: scripts/observations_from_snapshots.py --dir <folder of dated index-membership CSVs> --out obs.csv
 python scripts/classify_universe.py --observations obs.csv   # → output/{securities,ticker_history,cusip_history,delistings,payouts,review,review_summary}.csv
 
-pytest -q                                # 1281 unit tests, no network
+pytest -q                                # 1296 unit tests, no network
 ```
 
 `classify_universe.py` prints a summary when it finishes: rows written per
@@ -921,8 +921,12 @@ candidate existed by the era's first fails row, every row's description
 matches a name it carried by 30 days after the row's date (an earlier name
 counts: SEC updates descriptions slowly), and it is the only candidate that
 did — so a recycled ticker's later holder (NU → Nu Holdings, ALTR → Altair), a
-spin-off, or a company founded later is refused. Each such answer carries the
-`info` flag `issuer_inferred`.
+spin-off, or a company founded later is refused. The answer must also match
+one of the era's own names, and a CUSIP switch's issuer must be the old
+CUSIP's, renamed — not an acquirer that renamed itself at the merger, nor a
+holding company formed later. Each such answer carries the `check` flag
+`issuer_inferred`; where the CUSIP evidence contradicts a first-pass answer,
+the check flag `issuer_cusip_disagrees` names both CIKs.
 
 Validation: a candidate CIK is only accepted if it filed Form 25 or
 Form 15 within ±540 days of the observed delist date. In strict mode

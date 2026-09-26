@@ -28,7 +28,7 @@ editable install.
 
 ```bash
 pip install -e .                         # editable install (Python ≥3.10) — once per env
-pytest                                    # full suite (1281 tests, offline, no network)
+pytest                                    # full suite (1296 tests, offline, no network)
 pytest tests/test_payout_extractor.py -v  # one file
 pytest tests/test_payout_extractor.py::test_match_in_cash_family_altr -v   # one test
 
@@ -174,7 +174,13 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   (`shared_cusip`/`cusip_handoff`, `security_master.cusip_handoffs`), each
   through guard G (existed by the era's first fails row, every row's
   description matches a name it carried by 30 days after the row, the only
-  candidate that did); each answer carries the info flag `issuer_inferred`.
+  candidate that did) and matching one of the era's own names; a switch's
+  issuer must be the old CUSIP's, renamed (existed when it began, renamed from
+  a name that names its rows word by word, no other CUSIP of its own trading
+  at the switch). Answers are checked again at the fixed point; each carries
+  the check flag `issuer_inferred`. Rule C also runs over first-pass answers:
+  where the CUSIP evidence points elsewhere, the first pass's answer stands
+  and the check flag `issuer_cusip_disagrees` names both CIKs.
 - `security_master.py` — `FigiResolver.resolve_many()` (a `sec_id` pin wins;
   else CUSIP jobs, then the ticker, then a name filter — see the spec's
   Implementation notes), `build_securities()` (merges eras sharing a
