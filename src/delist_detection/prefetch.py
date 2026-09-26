@@ -20,12 +20,10 @@ from concurrent.futures import FIRST_EXCEPTION, ThreadPoolExecutor, wait
 from typing import Any
 
 from . import edgar as _edgar
-from .edgar import SEC_STATS, EdgarBlocked, PrefetchCancelled, RateLimiter, fill_only
-from .openfigi import OpenFigiBlocked, OpenFigiUnavailable
+from .edgar import SEC_STATS, PrefetchCancelled, RateLimiter, fill_only
+from .fatal import FATAL                       # stop the pool: a refusal, or OpenFIGI down
 
 log = logging.getLogger(__name__)
-
-FATAL = (EdgarBlocked, OpenFigiBlocked, OpenFigiUnavailable)   # stop the pool: a refusal, or OpenFIGI down
 
 
 class Serialized:

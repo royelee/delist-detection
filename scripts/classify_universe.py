@@ -14,9 +14,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
-from delist_detection.edgar import EdgarBlocked, EdgarSetupError, require_user_agent, use_machine_wide_limit
+from delist_detection.edgar import EdgarSetupError, require_user_agent, use_machine_wide_limit
+from delist_detection.fatal import FATAL
 from delist_detection.observations import ObservationIndex, load_observations
-from delist_detection.openfigi import OpenFigiBlocked, OpenFigiUnavailable
+from delist_detection.openfigi import OpenFigiUnavailable
 from delist_detection.payout_gate import DEFAULT_TOL
 from delist_detection.pipeline import Overrides, default_clients, run
 from delist_detection.reconstruction import load_float_overrides, load_merger_terms_overrides
@@ -210,13 +211,13 @@ def entry() -> int:
     Either abort leaves every output table as the previous run wrote it."""
     try:
         return main()
-    except (EdgarBlocked, OpenFigiBlocked) as e:
+    except FATAL as e:                  # fatal.FATAL: every exception that stops a run
+        if isinstance(e, OpenFigiUnavailable):
+            print(f"ABORTED: OpenFIGI unavailable after retries; no outputs written; rerun later ({e})",
+                  file=sys.stderr)
+            return 1
         print(f"ABORTED: {e}", file=sys.stderr)
         return 2
-    except OpenFigiUnavailable as e:
-        print(f"ABORTED: OpenFIGI unavailable after retries; no outputs written; rerun later ({e})",
-              file=sys.stderr)
-        return 1
 
 
 if __name__ == "__main__":

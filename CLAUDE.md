@@ -82,6 +82,8 @@ that turns a list of observations into the seven output tables; see
   (`throttle()`), `resolve_user_agent()`, and `sec_get()`: the one SEC request
   path (throttle, User-Agent, SEC_STATS counting, `retry_request`, `EdgarBlocked`
   on 403/429) that `EdgarClient`, `sec_http.py` and `verify_against_web.py` share.
+- `fatal.py` — `FATAL`: the exceptions that stop a run instead of becoming a
+  review row (`EdgarBlocked`, `OpenFigiBlocked`, `OpenFigiUnavailable`).
 - `atomic_io.py` — atomic file writes: `write_atomic` (one cache file, durable,
   through a writer-named temp file), `clean_orphan_temps` (a killed writer's
   leftovers), and `replace_on_success`/`replace_all_on_success` (the output
@@ -273,7 +275,10 @@ conflate them.
   the same output, but a refetch can reorder tied hits (see `docs/data-flow.md`).
 - **OpenFIGI refusals abort too.** A 401/403 from OpenFIGI raises
   `OpenFigiBlocked` (`openfigi.py`); `classify_universe.py`'s CLI catches it
-  alongside `EdgarBlocked` and exits 2. A 429 is waited out on the
+  alongside `EdgarBlocked` and exits 2. Every exception that stops a run is
+  listed once, in `fatal.FATAL`: the pipeline's per-security and per-payout
+  error handling, `listing_status.listing_answers`, the prefetch pool and the
+  CLI all catch that tuple, so a new one is added there only. A 429 is waited out on the
   `ratelimit-*`/`retry-after` headers, never cached as an answer. Timeouts,
   connection errors or 5xx answers that outlast the client's retries raise
   `OpenFigiUnavailable` (not a subclass of `OpenFigiBlocked`): the run stops

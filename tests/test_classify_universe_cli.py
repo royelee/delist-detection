@@ -87,9 +87,23 @@ def test_an_openfigi_outage_exits_1_with_no_outputs_written(monkeypatch, capsys)
 
 
 def test_a_refusal_still_exits_2(monkeypatch, capsys):
-    rc = _entry_with_run_raising(monkeypatch, cli.OpenFigiBlocked("OpenFIGI returned 403 for /mapping"))
+    from delist_detection.edgar import EdgarBlocked
+    from delist_detection.openfigi import OpenFigiBlocked
+
+    rc = _entry_with_run_raising(monkeypatch, OpenFigiBlocked("OpenFIGI returned 403 for /mapping"))
     assert rc == 2 and "ABORTED" in capsys.readouterr().err
-    assert _entry_with_run_raising(monkeypatch, cli.EdgarBlocked("SEC returned 403")) == 2
+    assert _entry_with_run_raising(monkeypatch, EdgarBlocked("SEC returned 403")) == 2
+
+
+def test_every_fatal_exception_is_an_abort_and_nothing_else_is(monkeypatch):
+    """The CLI catches fatal.FATAL, the one list of exceptions that stop a run;
+    any other exception is not turned into an abort code."""
+    from delist_detection.fatal import FATAL
+
+    for exc_type in FATAL:
+        assert _entry_with_run_raising(monkeypatch, exc_type("x")) in (1, 2), exc_type
+    with pytest.raises(ValueError):
+        _entry_with_run_raising(monkeypatch, ValueError("override rows that match no delisting"))
 
 
 def test_main_returns_0_when_no_review_errors(monkeypatch, capsys):

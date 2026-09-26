@@ -18,8 +18,9 @@ from typing import Any, NamedTuple
 
 from .crsp_codes import CrspBucket
 from .delistings import DelistingEvent, DelistingFinder, ReviewItem, SecurityContext
-from .edgar import SEC_STATS, EdgarBlocked
+from .edgar import SEC_STATS
 from .evidence import edgar_names
+from .fatal import FATAL
 from .figi_resolution import FigiCandidate, accept, is_placeholder, share_class_from_name, us_candidates
 from .form25 import SecurityRef
 from .ftd import FtdIndex
@@ -27,7 +28,6 @@ from .listing_status import edgar_lists, issuer_exchange, listed_today, listing_
 from . import manifest as run_manifest
 from .names import names_agree
 from .observations import ObservationIndex, TickerEra, eras_by_key, normalize_ticker, observation_conflicts
-from .openfigi import OpenFigiBlocked, OpenFigiUnavailable
 from .payout_gate import DEFAULT_TOL, gate_payouts
 from .prefetch import Serialized, warm
 from .reconstruction import (
@@ -727,7 +727,7 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
                 clients.figi, s.sec_id, edgar=clients.edgar, cik=s.issuer_cik,
                 tickers=sorted({e.ticker for e in s.eras}), answer=listing.get(s.sec_id))
             found, found_review = finder.find(security_context(s, listed[s.sec_id]))
-        except (EdgarBlocked, OpenFigiBlocked, OpenFigiUnavailable):
+        except FATAL:
             raise
         except Exception as exc:  # an overnight run must survive one bad security
             log(f"[{i}/{len(securities)}] {s.sec_id}: ERROR {type(exc).__name__}: {exc}")
@@ -812,7 +812,7 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
                 t = clients.llm_extractor.extract(e.record)
                 if t is not None:
                     llm_terms[key] = t
-        except (EdgarBlocked, OpenFigiBlocked, OpenFigiUnavailable):
+        except FATAL:
             raise
         except Exception as exc:  # an overnight run must survive one bad extraction
             log(f"{e.sec_id} {e.delist_date}: payout extraction ERROR {type(exc).__name__}: {exc}")
