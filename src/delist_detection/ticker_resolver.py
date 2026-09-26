@@ -20,7 +20,7 @@ import requests
 
 from .atomic_io import clean_orphan_temps, write_atomic
 from .edgar import STALE_KEY, EdgarClient, submissions_fresh_after
-from .evidence import edgar_names, first_filing, names_near, names_until, parse_day, renamed_near
+from .evidence import edgar_names, first_filing, names_between, names_near, names_until, parse_day, renamed_near
 from .fatal import FATAL
 from .figi_resolution import class_letter, share_class_from_name
 from .ftd import FtdIndex, FtdRow
@@ -1077,13 +1077,16 @@ class TickerResolver:
         switch `h` (`evidence.renamed_near`: it was renamed there), when every
         description of the old CUSIP's rows that names a company (one at least)
         names, word by word (`names.description_names`: CITIZENS COMMUNICATIONS
-        is not CLEAR CHANNEL COMMUNICTNS), a name the CIK carried within
-        `GUARD_NAME_DAYS` of that description's first row (QUINTILES
+        is not CLEAR CHANNEL COMMUNICTNS), a name the CIK carried in the
+        `GUARD_NAME_DAYS` up to that description's first row (QUINTILES
         TRANSNATIONAL HLDGS, before Quintiles IMS Holdings) or that former name
         (EDGAR records ACE Ltd's names only from 2009, after its rows began);
-        None otherwise. A name dropped years before is no evidence: CBS Corp's
-        CIK was named VIACOM INC until 2005, TeraWulf's CHROMALINE until 2002. A
-        spin-off starting as its parent's CUSIP ends carries no such name."""
+        None otherwise. A name dropped years before is no evidence (CBS Corp's
+        CIK was named VIACOM INC until 2005, TeraWulf's CHROMALINE until 2002),
+        nor is one taken after the rows began: A & B II, spun off by Alexander &
+        Baldwin Holdings in 2012, took the name Alexander & Baldwin as the
+        Holdings CUSIP switched to Matson's and to its own. A spin-off starting
+        as its parent's CUSIP ends carries no such name."""
         day = parse_day(h.day)
         try:
             sub = self._submissions(cik, h.day)
@@ -1093,11 +1096,11 @@ class TickerResolver:
             self._note_transient(e)
             return None
         former = renamed_near(sub, day, self.RENAME_NEAR_DAYS) if isinstance(sub, dict) and day else None
-        named = [(d, since) for d, since in h.descriptions if names_an_issuer(d)]
+        named = [(d, parse_day(since)) for d, since in h.descriptions if names_an_issuer(d)]
         if former and named and all(
                 any(description_names(d, n)
-                    for n in [*names_near(sub, parse_day(since), self.GUARD_NAME_DAYS), former])
-                for d, since in named):
+                    for n in [*names_between(sub, on - timedelta(days=self.GUARD_NAME_DAYS), on), former])
+                for d, on in named):
             return former
         return None
 

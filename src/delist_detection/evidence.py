@@ -80,7 +80,11 @@ def names_near(sub: dict, on: date, days: int = 30) -> list[str]:
     A delisting date and a rename date are often a day apart (EDGAR ends
     "Halyard Health" on 2018-06-28; HYH's last vendor row is 2018-06-29), so a
     single-day lookup misses the name the index used."""
-    lo, hi = on - timedelta(days=days), on + timedelta(days=days)
+    return names_between(sub, on - timedelta(days=days), on + timedelta(days=days))
+
+
+def names_between(sub: dict, lo: date, hi: date) -> list[str]:
+    """Every name the company carried at some point in [lo, hi], former names first."""
     out: list[str] = []
     last_end: date | None = None
     for fn in sub.get("formerNames") or []:

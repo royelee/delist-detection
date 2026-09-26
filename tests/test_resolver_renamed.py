@@ -408,6 +408,20 @@ def test_the_name_renamed_from_names_rows_edgar_keeps_no_earlier_name_for(eras, 
     assert (h.kind, TickerResolver(_Edgar())._renamed_from(896159, h)) == ("cusip_handoff", "ACE LTD")
 
 
+def test_a_name_the_issuer_took_after_the_old_rows_began_names_none_of_them(eras, ftd):
+    """Alexander & Baldwin Holdings (3453, now Matson) spun off A & B II, Inc.
+    (1545654) in 2012, which took the name Alexander & Baldwin, Inc. as the
+    Holdings CUSIP under ALEX switched to MATX's new one and to the spin-off's
+    ALEX one. The old rows, ALEXANDER & BALDWIN HOLDINGS I, began on 2012-06-08,
+    while the spin-off was still A & B II: the name it took after that does not
+    name them, and the switch to its CUSIP does not make it their issuer."""
+    hs = {h.to_key: h for h in cusip_handoffs(list(eras.values()), ftd)
+          if h.era_key == "ALEX@2012-06-29" and h.kind == "cusip_handoff"}
+    r = TickerResolver(_Edgar())
+    assert (r._renamed_from(1545654, hs["ALEX@2012-12-31"]), r._renamed_from(3453, hs["MATX@2012-12-31"])) == (
+        None, "ALEXANDER & BALDWIN INC")
+
+
 def test_an_era_whose_name_names_no_name_of_the_issuer_takes_nothing(eras, ftd, no_frequency):
     """TRI@2008 is Triad Hospitals (1074771, pinned), which a snapshot kept listing
     after its 2007 buyout; the fails rows under TRI in its span are Thomson
