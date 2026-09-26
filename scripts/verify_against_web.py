@@ -25,7 +25,7 @@ from pathlib import Path
 
 import requests
 
-from delist_detection.edgar import (EdgarBlocked, check_response, require_user_agent, resolve_user_agent, throttle,
+from delist_detection.edgar import (EdgarBlocked, require_user_agent, resolve_user_agent, sec_get,
                                     use_machine_wide_limit)
 from delist_detection.store import read_table
 
@@ -34,15 +34,14 @@ USER_AGENT = resolve_user_agent()
 
 
 def _get(url: str, timeout: int = 30) -> str | None:
+    """`url`'s text through the library's one SEC request path (`edgar.sec_get`:
+    the shared 8 requests/s pacing, one attempt); None for a non-200 or a
+    network error. A 403/429 aborts the run (EdgarBlocked), never a verdict."""
     try:
-        throttle()      # the library's shared SEC pacing (8 requests/s)
-        r = requests.get(url, headers={"User-Agent": USER_AGENT}, timeout=timeout)
-        check_response(r)       # a 403/429 aborts the run (EdgarBlocked), never a verdict
-        if r.status_code != 200:
-            return None
-        return r.text
+        r = sec_get(url, headers={"User-Agent": USER_AGENT}, timeout=timeout, retry=False)
     except requests.RequestException:
         return None
+    return r.text if r.status_code == 200 else None
 
 
 DELIST_FORMS = {"25", "25-NSE", "25/A", "25-NSE/A", "15-12G", "15-12B", "15-15D"}
@@ -55,10 +54,9 @@ WINDOW_BEFORE_DAYS, WINDOW_AFTER_DAYS = 400, 120    # evidence around the delist
 
 
 def _json(url: str) -> dict:
+    """`url`'s JSON object as `_get` fetches it; {} for anything else."""
     try:
-        throttle()
-        r = requests.get(url, headers={"User-Agent": USER_AGENT, "Host": "data.sec.gov"}, timeout=30)
-        check_response(r)
+        r = sec_get(url, headers={"User-Agent": USER_AGENT, "Host": "data.sec.gov"}, timeout=30, retry=False)
         if r.status_code != 200:
             return {}
         d = r.json()

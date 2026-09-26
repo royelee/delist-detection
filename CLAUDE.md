@@ -79,16 +79,18 @@ that turns a list of observations into the seven output tables; see
 - `edgar.py` — throttled, on-disk-cached SEC client. `submissions()`,
   `recent_filings()`, `fetch_filing_text()`/`fetch_filing_raw()` (HTML-stripped
   and raw text caches). Owns `EdgarBlocked`, the shared request throttle
-  (`throttle()`), and `resolve_user_agent()` that `sec_http.py`, `ftd.py`,
-  `midas.py` reuse.
+  (`throttle()`), `resolve_user_agent()`, and `sec_get()`: the one SEC request
+  path (throttle, User-Agent, SEC_STATS counting, `retry_request`, `EdgarBlocked`
+  on 403/429) that `EdgarClient`, `sec_http.py` and `verify_against_web.py` share.
 - `atomic_io.py` — atomic file writes: `write_atomic` (one cache file, durable,
   through a writer-named temp file), `clean_orphan_temps` (a killed writer's
   leftovers), and `replace_on_success`/`replace_all_on_success` (the output
   tables and the decisions file, replaced only when the whole write succeeds).
 - `sec_http.py` — throttled, cached `download()`/`get_text()` for the other SEC
-  data files (FTD and MIDAS ZIPs and their index pages), sharing `edgar.py`'s
-  throttle, User-Agent and `EdgarBlocked` on 403/429. Index pages and ZIPs are
-  both cached through `atomic_io.write_atomic` (text or bytes). Every cache file
+  data files (FTD and MIDAS ZIPs and their index pages), sent through
+  `edgar.sec_get` (so the same throttle, retries and `EdgarBlocked` on
+  403/429). Index pages and ZIPs are both cached through
+  `atomic_io.write_atomic` (text or bytes). Every cache file
   (EDGAR, SEC data files, MIDAS summaries, halt days, OpenFIGI and LLM answers)
   goes through it, and each client removes a killed run's temp files
   (`atomic_io.clean_orphan_temps`, also old `.part` downloads) when it starts.
@@ -226,7 +228,7 @@ conflate them.
   `curl -A "$(python -c 'from delist_detection.edgar import resolve_user_agent as r; print(r())')"`.
   A connection error, a timeout, or a 5xx on `_get_json`/`fetch_filing_raw`/
   `fetch_filing_text`/`full_text_search`/`sec_http` downloads retries up to 3
-  attempts (2s/4s backoff, `edgar.retry_request`); a 403/429 still raises
+  attempts (2s/4s backoff, `edgar.retry_request`, inside `edgar.sec_get`); a 403/429 still raises
   `EdgarBlocked` at once, and a failure is never cached.
   The limiter (`edgar.SEC_LIMITER`) is shared by every thread of the process
   and, through `~/.cache/delist_detection/sec_rate.lock`

@@ -13,23 +13,14 @@ from pathlib import Path
 import requests
 
 from .atomic_io import write_atomic
-from .edgar import SEC_STATS, filling_only, resolve_user_agent, retry_request, throttle
+from .edgar import SEC_STATS, filling_only, resolve_user_agent, sec_get
 
 
 def _get(url: str, session, user_agent: str | None, timeout: int, *, sleep=time.sleep):
-    s = session or requests.Session()
+    """`edgar.sec_get` for an SEC data file, counted as `request:sec_data`;
+    retried, and EdgarBlocked propagates, never retried."""
     headers = {"User-Agent": user_agent or resolve_user_agent(), "Accept": "*/*", "Host": "www.sec.gov"}
-
-    def make():
-        throttle()
-        SEC_STATS.add("request:sec_data")
-        started = time.monotonic()
-        try:
-            return s.get(url, headers=headers, timeout=timeout)
-        finally:
-            SEC_STATS.timing("sec_data", time.monotonic() - started)
-
-    return retry_request(make, sleep=sleep)   # EdgarBlocked propagates, not retried
+    return sec_get(url, session=session, headers=headers, timeout=timeout, endpoint="sec_data", sleep=sleep)
 
 
 def download(url: str, dest: str | Path, *, session=None, user_agent: str | None = None,

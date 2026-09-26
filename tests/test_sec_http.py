@@ -37,7 +37,7 @@ class _Session:
 
 @pytest.fixture(autouse=True)
 def _no_sleep(monkeypatch):
-    monkeypatch.setattr(sec_http, "throttle", lambda: None)
+    monkeypatch.setattr("delist_detection.edgar.throttle", lambda: None)
 
 
 def test_download_caches(tmp_path):
@@ -322,3 +322,36 @@ def test_get_text_on_a_prefetch_thread_keeps_an_old_copy_and_fills_a_missing_one
     assert s.calls == ["m"] and cf.read_text() == "old"
     assert sec_http.get_text("u", cf, max_age_days=30, session=s, user_agent="ua") == "new"      # outside: refreshed
     assert s.calls == ["m", "u"]
+
+
+# --- edgar.sec_get: the one SEC request path --------------------------------
+
+def test_sec_get_counts_each_attempt_under_its_endpoint(monkeypatch):
+    from delist_detection.edgar import sec_get
+    monkeypatch.setattr("delist_detection.edgar.throttle", lambda: None)
+    mark = SEC_STATS.snapshot()
+    s = _Session(_Resp(503), _Resp(text="ok"))
+    resp = sec_get("https://www.sec.gov/files/x.zip", session=s, headers={"User-Agent": "ua"}, timeout=1,
+                   endpoint="sec_data", sleep=lambda _: None)
+    assert resp.text == "ok" and len(s.calls) == 2
+    counts, timings = SEC_STATS.since(mark)
+    assert counts.get("request:sec_data") == 2 and len(timings["sec_data"]) == 2
+
+
+def test_sec_get_names_the_endpoint_from_the_url_by_default(monkeypatch):
+    from delist_detection.edgar import sec_get
+    monkeypatch.setattr("delist_detection.edgar.throttle", lambda: None)
+    mark = SEC_STATS.snapshot()
+    sec_get("https://data.sec.gov/submissions/CIK0000000001.json", session=_Session(_Resp(text="{}")),
+            headers={"User-Agent": "ua"}, timeout=1)
+    assert SEC_STATS.since(mark)[0].get("request:submissions") == 1
+
+
+def test_sec_get_without_retry_makes_one_attempt(monkeypatch):
+    from delist_detection.edgar import sec_get
+    monkeypatch.setattr("delist_detection.edgar.throttle", lambda: None)
+    s = _Session(_Resp(503), _Resp(text="never asked"))
+    assert sec_get("u", session=s, headers={}, timeout=1, retry=False).status_code == 503
+    assert len(s.calls) == 1
+    with pytest.raises(EdgarBlocked):
+        sec_get("u", session=_Session(_Resp(429)), headers={}, timeout=1, retry=False)

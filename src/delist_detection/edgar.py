@@ -350,8 +350,8 @@ def require_user_agent() -> str:
 def throttle() -> None:
     """Wait for the next SEC request slot: this process's, and, once
     `use_machine_wide_limit()` has installed a gate, the machine's across every
-    process sharing the lock file. Every SEC request in the library
-    (EdgarClient, sec_http, verify_against_web) calls this, from any thread. It
+    process sharing the lock file. Every SEC request (`sec_get`, which
+    EdgarClient, sec_http and verify_against_web share) calls this, from any thread. It
     reads the module's SEC_LIMITER at each call, so a test or the CLI can swap
     or extend the limiter."""
     SEC_LIMITER.acquire()
@@ -482,6 +482,46 @@ def retry_request(make_request, *, sleep=time.sleep, max_attempts: int = RETRY_M
     raise last_exc
 
 
+def sec_get(url: str, *, headers: dict[str, str], timeout: float, session=None, endpoint: str | None = None,
+            retry: bool = True, sleep=time.sleep):
+    """GET `url` from SEC: the one request path every SEC client shares
+    (EdgarClient, sec_http, verify_against_web). Each attempt waits for the
+    shared limiter (`throttle`), is counted as `request:<endpoint>` and timed
+    under `endpoint` in SEC_STATS (default: `_endpoint(url)`), and goes out on
+    `session` (default: a one-off `requests.get`) with `headers` as given --
+    the caller's User-Agent and, where it matters, Host.
+
+    With `retry`, through `retry_request`: a transport error or a 5xx is
+    retried with backoff, every thread pausing with it, and a 403/429 raises
+    EdgarBlocked at once. Without it, one attempt: a 403/429 still raises
+    EdgarBlocked at once, and a 5xx or a transport error still pauses every
+    thread for the first backoff (a transport error is then re-raised, a 5xx
+    returned)."""
+    get = session.get if session is not None else requests.get
+    endpoint = endpoint or _endpoint(url)
+
+    def make():
+        throttle()
+        SEC_STATS.add(f"request:{endpoint}")
+        started = time.monotonic()
+        try:
+            return get(url, headers=headers, timeout=timeout)
+        finally:
+            SEC_STATS.timing(endpoint, time.monotonic() - started)
+
+    if retry:
+        return retry_request(make, sleep=sleep)
+    try:
+        resp = make()
+    except requests.RequestException:
+        SEC_LIMITER.pause(RETRY_BACKOFF[0])
+        raise
+    check_response(resp)              # 403/429 -> EdgarBlocked, as on the retried path
+    if resp.status_code >= 500:
+        SEC_LIMITER.pause(RETRY_BACKOFF[0])
+    return resp
+
+
 @dataclass
 class EdgarSubmission:
     """One row from the recent-filings table on submissions.json."""
@@ -590,37 +630,11 @@ class EdgarClient:
         return {"User-Agent": self.user_agent, "Accept": accept, "Host": host}
 
     def _get(self, url: str, *, host: str, accept: str, retry: bool = True):
-        """GET `url` on this thread's session, through the shared limiter, with this
-        request's own headers, counted and timed under its endpoint (SEC_STATS).
-        With `retry`, through `retry_request`: a transport error or a 5xx is
-        retried with backoff, every thread pausing with it, and a 403/429 raises
-        EdgarBlocked at once. Without it, one attempt, a 403/429 still raises
-        EdgarBlocked at once, and a 5xx or a transport error still pauses every
-        thread for the first backoff."""
-        headers = self._headers(host, accept)
-        session = self.session
-        endpoint = _endpoint(url)
-
-        def make():
-            throttle()
-            SEC_STATS.add(f"request:{endpoint}")
-            started = time.monotonic()
-            try:
-                return session.get(url, headers=headers, timeout=30)
-            finally:
-                SEC_STATS.timing(endpoint, time.monotonic() - started)
-
-        if retry:
-            return retry_request(make, sleep=self.sleep)
-        try:
-            resp = make()
-        except requests.RequestException:
-            SEC_LIMITER.pause(RETRY_BACKOFF[0])
-            raise
-        check_response(resp)              # 403/429 -> EdgarBlocked, as on the retried path
-        if resp.status_code >= 500:
-            SEC_LIMITER.pause(RETRY_BACKOFF[0])
-        return resp
+        """GET `url` on this thread's session with this request's own headers
+        (`sec_get`: the shared limiter, SEC_STATS, and with `retry` the shared
+        retries)."""
+        return sec_get(url, session=self.session, headers=self._headers(host, accept), timeout=30,
+                       retry=retry, sleep=self.sleep)
 
     def _lock_for(self, key: str) -> threading.Lock:
         """The lock of one cache file (`key` = its path). Whoever holds it is the
