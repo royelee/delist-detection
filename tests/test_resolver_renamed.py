@@ -169,6 +169,17 @@ def test_the_name_search_ranks_the_company_that_carried_the_name_first():
     assert (res.cik, res.source) == (1507385, "name_search")
 
 
+def test_a_candidate_below_the_first_needs_an_edgar_name_that_agrees():
+    """DPS@2012 carries a name the snapshots backfilled, KEURIG DR PEPPER INC; in
+    2015 the company was Dr Pepper Snapple Group (1418135, Keurig Dr Pepper since
+    2018), which the date check refuses. The search's next candidate, Keurig
+    Green Mountain (909954), shares one word and filed a Form 25 within 540 days
+    (its 2016 buyout), which the loose check alone would accept. A candidate
+    below the first is checked only when one of its EDGAR names agrees with the
+    expected name."""
+    assert TickerResolver(_Edgar()).resolve("DPS", "2015-08-03", name="KEURIG DR PEPPER INC").cik is None
+
+
 NU_MAP = {"NU": {"cik_str": 1691493, "ticker": "NU", "title": "Nu Holdings Ltd."}}
 
 

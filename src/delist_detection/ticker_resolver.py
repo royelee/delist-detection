@@ -69,15 +69,16 @@ class TickerResolver:
         cik_pins: "callable[[str, str | None], int | None] | None" = None,
         today: date | None = None,
         batch_writes: bool = False,
-        retire_old_name_search: bool = RETIRE_OLD_NAME_SEARCH,
+        retire_old_name_search: bool | None = None,
     ) -> None:
         """`today`: the run date bounding submissions freshness (None: the clock).
         `batch_writes`: keep new answers in memory until `flush()` (the pipeline
         flushes after each resolving stage and on the way out of a run) instead
         of rewriting the whole memo file for each one. `retire_old_name_search`:
-        drop a version-2/3 memo file's name_search answers on load
-        (`RETIRE_OLD_NAME_SEARCH`)."""
-        self.retire_old_name_search = retire_old_name_search
+        drop a version-2/3 memo file's name_search answers on load (None: the
+        module's `RETIRE_OLD_NAME_SEARCH`)."""
+        self.retire_old_name_search = (RETIRE_OLD_NAME_SEARCH if retire_old_name_search is None
+                                       else retire_old_name_search)
         self.edgar = edgar
         self.rename_map = {k.upper(): v.upper() for k, v in (rename_map or {}).items()}
         self.manual_overrides = {k.upper(): int(v) for k, v in (manual_overrides or {}).items()}
@@ -417,9 +418,11 @@ class TickerResolver:
         searching for MICHAEL KORS HOLDINGS LTD). The first
         `NAME_SEARCH_CANDIDATES` distinct CIKs found are ranked by the number of
         `name_tokens` words `nm` shares with any of the CIK's EDGAR names,
-        current and former (`_name_match_score`: the search matches a former
+        current and former (`_edgar_name_fit`: the search matches a former
         name, so MICHAEL KORS HOLDINGS LTD finds Capri Holdings), then by the gap
-        between the date and the nearest filing the search listed for it."""
+        between the date and the nearest filing the search listed for it. The
+        first is always a candidate; one ranked below it only when one of its
+        EDGAR names `names_agree`s with `nm`."""
         if not nm:
             return []
         target_d = parse_day(observed_date)
@@ -448,32 +451,42 @@ class TickerResolver:
                 if hits:
                     break  # one form-class per variant is enough
         order = list(found)
-        score = {c: self._name_match_score(c, nm, observed_date) for c in order}
-        ranked = sorted(order, key=lambda c: (-score[c], found[c][1], order.index(c)))
-        return [(c, found[c][0]) for c in ranked]
+        fit = {c: self._edgar_name_fit(c, nm, observed_date) for c in order}
+        ranked = sorted(order, key=lambda c: (-fit[c][0], found[c][1], order.index(c)))
+        # The best candidate is checked as it always was; one below it only when
+        # EDGAR records a name for it that agrees with `nm`: Keurig Green Mountain
+        # shares KEURIG with KEURIG DR PEPPER INC, and its 2016 Form 25 alone
+        # passes the loose check.
+        kept = ranked[:1] + [c for c in ranked[1:] if fit[c][1]]
+        return [(c, found[c][0]) for c in kept]
 
-    def _name_match_score(self, cik: int, ticker_name: str, observed_date: str | None = None) -> int:
-        """Token-overlap score between the expected name and the CIK's EDGAR names.
-
-        Score is the number of `names.name_tokens` words shared by the
-        expected (observed or AV) name and the EDGAR conformed/former names.
-        Used to rank name-search and frequency candidates; a zero-score
-        frequency winner is kept but marked as a name mismatch by the caller
-        (impostor vendor series).
-        """
+    def _edgar_name_fit(self, cik: int, expected: str, observed_date: str | None = None) -> tuple[int, bool]:
+        """How the CIK's EDGAR names (current and former) fit the expected name:
+        the number of `names.name_tokens` words they share with it, and whether
+        one of them `names_agree`s with it. (0, False) when EDGAR cannot answer
+        (the resolve is then marked transient)."""
         try:
             sub = self._submissions(cik, observed_date)
         except FATAL:
             raise
         except Exception as e:
             self._note_transient(e)
-            return 0
+            return 0, False
         if not isinstance(sub, dict):
-            return 0
+            return 0, False
+        names = edgar_names(sub)
         candidate_tokens: set[str] = set()
-        for n in edgar_names(sub):
+        for n in names:
             candidate_tokens |= name_tokens(n)
-        return len(candidate_tokens & name_tokens(ticker_name))
+        return len(candidate_tokens & name_tokens(expected)), any(names_agree(n, expected) for n in names)
+
+    def _name_match_score(self, cik: int, ticker_name: str, observed_date: str | None = None) -> int:
+        """Token-overlap score between the expected name and the CIK's EDGAR names
+        (`_edgar_name_fit`'s count). Used to rank frequency candidates; a
+        zero-score winner is kept but marked as a name mismatch by the caller
+        (impostor vendor series).
+        """
+        return self._edgar_name_fit(cik, ticker_name, observed_date)[0]
 
     def _validate_cik(self, cik: int, observed_date: str, strict: bool = True,
                       window: int = 540) -> bool:
@@ -631,8 +644,7 @@ class TickerResolver:
 
         renamed = self.rename_map.get(t)
         if renamed and renamed != t:
-            # checked with this lookup's observed name; leaves self._transient set for this answer
-            inner = self.resolve(renamed, observed_date, name=observed_name)
+            inner = self.resolve(renamed, observed_date)   # leaves self._transient set for this answer
             res = TickerResolution(ticker=t, cik=inner.cik, name=inner.name, source="rename")
             self._remember(cache_key, res, observed_name)
             return res
