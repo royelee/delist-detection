@@ -487,6 +487,70 @@ def test_build_securities_merges_eras_of_one_figi():
                        "observed": True, "figi_source": "cusip"}
 
 
+def test_figi_source_and_share_class_come_from_the_strongest_era():
+    """Cooper Industries: its 2008 era (the Bermuda "COOPER INDUSTRIES LTD", no
+    class in the name) reached the plc's line only by ticker; its later era, the
+    plc's "CL A", is confirmed by CUSIP. The security is CUSIP-confirmed and
+    class A, whichever era came first."""
+    ltd = _era("CBE", ("2008-06-30", "COOPER INDUSTRIES LTD"))
+    plc = _era("CBE", ("2011-06-30", "COOPER INDUSTRIES PLC CL A"))
+    cand = FigiCandidate("BBG000BBCQD7", "COOPER INDUSTRIES PLC", "CBE", "Common Stock", ())
+    secs = build_securities(
+        {ltd.key: EraResolution(ltd.key, "BBG000BBCQD7", "ticker", cand, ()),
+         plc.key: EraResolution(plc.key, "BBG000BBCQD7", "cusip", cand, ())},
+        {ltd.key: ltd, plc.key: plc}, {ltd.key: 1141982, plc.key: 1141982})
+    s = secs["BBG000BBCQD7"]
+    assert (s.figi_source, s.share_class) == ("cusip", "CLASS A")
+    assert [e.first for e in s.eras] == ["2008-06-30", "2011-06-30"]     # every era, earliest first
+    assert s.name == "COOPER INDUSTRIES PLC CL A"                       # the latest observation name
+
+
+@pytest.mark.parametrize("sources,expected", [
+    (("ticker", "name"), "ticker"),
+    (("name", "ticker"), "ticker"),
+    (("cusip", "ticker"), "cusip"),
+    (("ticker", "pin"), "pin"),
+    (("cusip", "pin"), "pin"),
+    (("name", "name"), "name"),
+])
+def test_figi_source_ranks_pin_cusip_ticker_name(sources, expected):
+    """The strongest evidence any era gives: a pin, then a CUSIP, then the
+    ticker, then a name search; a tie keeps the earliest era."""
+    eras = [_era("X", (f"20{10 + i}-06-30", f"X CORP CLASS {'AB'[i]}")) for i in range(2)]
+    cand = FigiCandidate("BBG000X", "X CORP", "X", "Common Stock", ())
+    res = {e.key: EraResolution(e.key, "BBG000X", src, None if src == "pin" else cand, ())
+           for e, src in zip(eras, sources)}
+    s = build_securities(res, {e.key: e for e in eras}, {e.key: 7 for e in eras})["BBG000X"]
+    assert s.figi_source == expected
+    strongest = sources.index(expected)
+    assert s.share_class == f"CLASS {'AB'[strongest]}"               # from that same era
+
+
+def test_a_strongest_era_with_no_class_takes_the_class_another_era_names():
+    """SBA Communications: its CUSIP-confirmed era's name is cut off before the
+    class letter ("...REIT CORP CLASS"), its ticker-resolved eras say CLASS A. The
+    security stays CUSIP-confirmed and keeps CLASS A: the earliest other era
+    that names a class gives it."""
+    plain = _era("SBAC", ("2008-06-30", "SBA COMMUNICATIONS CORP"))
+    cl_a = _era("SBAC", ("2012-06-29", "SBA COMMUNICATIONS CORP CLASS A"))
+    reit = _era("SBAC", ("2017-06-30", "SBA COMMUNICATIONS REIT CORP CLASS"))
+    cand = FigiCandidate("BBG000D2M0Z7", "SBA COMMUNICATIONS CORP", "SBAC", "REIT", ())
+    eras = [plain, cl_a, reit]
+    res = {e.key: EraResolution(e.key, "BBG000D2M0Z7", src, cand, ())
+           for e, src in zip(eras, ("ticker", "ticker", "cusip"))}
+    s = build_securities(res, {e.key: e for e in eras}, {e.key: 1034054 for e in eras})["BBG000D2M0Z7"]
+    assert (s.figi_source, s.share_class) == ("cusip", "CLASS A")
+
+
+def test_no_era_naming_a_class_leaves_common():
+    eras = [_era("X", ("2010-06-30", "X CORP")), _era("X", ("2012-06-29", "X CORPORATION"))]
+    cand = FigiCandidate("BBG000X", "X CORP", "X", "Common Stock", ())
+    res = {eras[0].key: EraResolution(eras[0].key, "BBG000X", "ticker", cand, ()),
+           eras[1].key: EraResolution(eras[1].key, "BBG000X", "cusip", cand, ())}
+    s = build_securities(res, {e.key: e for e in eras}, {e.key: 7 for e in eras})["BBG000X"]
+    assert (s.figi_source, s.share_class) == ("cusip", "COMMON")
+
+
 def test_monsanto_gap_eras_still_form_one_security():
     """MONSANTO CO seen 2016-06-30 and 2017-12-29 (547 days) with no FTD row in
     between: the gap splits the era, but both halves resolve to Monsanto's FIGI

@@ -423,9 +423,28 @@ class FigiResolver:
         return out
 
 
+# How strongly an era's resolution confirms its FIGI, strongest first: the
+# caller's pin, a CUSIP, the ticker, a name search, the issuer's placeholder.
+SOURCE_STRENGTH = ("pin", "cusip", "ticker", "name", "placeholder")
+
+
+def _share_class(res: EraResolution, era: TickerEra) -> str:
+    """The class the OpenFIGI candidate's name gives, else the era's observed name's."""
+    cand_class = share_class_from_name(res.candidate.name) if res.candidate else "COMMON"
+    return cand_class if cand_class != "COMMON" else share_class_from_name(era.name)
+
+
 def build_securities(resolutions: Mapping[str, EraResolution], eras: Mapping[str, TickerEra],
                      ciks: Mapping[str, int | None]) -> dict[str, Security]:
+    """The securities the eras resolve to, each with its eras earliest first.
+    `figi_source` is the strongest source among its eras (`SOURCE_STRENGTH`; a
+    tie keeps the earliest era), and `share_class` comes from that same era; when
+    that era names no class, from the earliest other era that does (a name cut
+    off before its class letter: SBA's "...REIT CORP CLASS"). The security type
+    and kind come from its earliest era's candidate, the name from its latest
+    named era, the issuer CIK from its latest era with one."""
     out: dict[str, Security] = {}
+    classes: dict[str, list[str]] = defaultdict(list)      # sec_id -> each era's class, earliest first
     for key in sorted(resolutions, key=lambda k: (eras[k].first, k)):
         res = resolutions[key]
         if res.sec_id is None:
@@ -434,17 +453,21 @@ def build_securities(resolutions: Mapping[str, EraResolution], eras: Mapping[str
         sec = out.get(res.sec_id)
         if sec is None:
             name = era.name or (cand.name if cand else "")
-            cand_class = share_class_from_name(cand.name) if cand else "COMMON"
-            share = cand_class if cand_class != "COMMON" else share_class_from_name(era.name)
             stype = cand.security_type if cand else ""
-            sec = Security(res.sec_id, ciks.get(key), share, name, stype, True, res.source,
+            sec = Security(res.sec_id, ciks.get(key), _share_class(res, era), name, stype, True, res.source,
                            security_kind(stype, name))
             out[res.sec_id] = sec
+        elif SOURCE_STRENGTH.index(res.source) < SOURCE_STRENGTH.index(sec.figi_source):
+            sec.figi_source, sec.share_class = res.source, _share_class(res, era)
+        classes[res.sec_id].append(_share_class(res, era))
         sec.eras.append(era)
         if ciks.get(key) is not None:
             sec.issuer_cik = ciks[key]
         if era.name:
             sec.name = era.name
+    for sec in out.values():
+        if sec.share_class == "COMMON":
+            sec.share_class = next((c for c in classes[sec.sec_id] if c != "COMMON"), "COMMON")
     return out
 
 
