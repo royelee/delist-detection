@@ -146,3 +146,39 @@ def read_table(name: str, path: str | Path) -> list[dict[str, str]]:
         if tuple(reader.fieldnames or ()) != spec.columns:
             raise ValueError(f"{path}: columns {reader.fieldnames} do not match table {name!r}")
         return list(reader)
+
+
+@dataclass(frozen=True)
+class FrameTypes:
+    """How `read_frame` types a table's columns: identifiers kept as strings,
+    dates parsed (a blank or bad one is NaT), numbers parsed (blank or bad is
+    NaN); every other column as pandas infers it."""
+    strings: tuple[str, ...] = ()
+    dates: tuple[str, ...] = ()
+    numbers: tuple[str, ...] = ()
+
+
+FRAME_TYPES: dict[str, FrameTypes] = {
+    "delistings": FrameTypes(
+        strings=("sec_id", "ticker", "successor_sec_id", "acquirer_sec_id", "bucket"),
+        dates=("delist_date", "last_trade_date"),
+        numbers=("crsp_code", "last_trade_close", "payout_per_share", "terminal_value", "recovery_ratio", "cik"),
+    ),
+}
+
+
+def read_frame(name: str, path: str | Path):
+    """Table `name` at `path` as a pandas DataFrame, typed by `FRAME_TYPES`
+    (the handling layer's view of delistings.csv). Raises ValueError when the
+    file's columns are not the table's, as `read_table` does."""
+    import pandas as pd  # noqa: PLC0415 -- only the pandas callers pay for the import
+
+    types = FRAME_TYPES.get(name, FrameTypes())
+    df = pd.read_csv(path, dtype={c: str for c in types.strings})
+    if tuple(df.columns) != TABLES[name].columns:
+        raise ValueError(f"{path}: columns {list(df.columns)} do not match table {name!r}")
+    for c in types.dates:
+        df[c] = pd.to_datetime(df[c], errors="coerce")
+    for c in types.numbers:
+        df[c] = pd.to_numeric(df[c], errors="coerce")
+    return df

@@ -34,20 +34,14 @@ from .classifier import DelistRecord
 from .crsp_codes import CrspBucket
 from .exchanges import normalize_exchange
 from .handling import build_train_label_adjustment, build_backtest_exit, build_firm_month_correction
-
-
-_STR_COLS = {"sec_id": str, "ticker": str, "successor_sec_id": str, "acquirer_sec_id": str, "bucket": str}
+from .store import read_frame
 
 
 def load_delistings(path: str) -> pd.DataFrame:
-    """Load a `delistings.csv` (see `store.DELISTINGS_COLUMNS`). No type
-    coercion beyond what's needed to key/compute on the rows."""
-    df = pd.read_csv(path, dtype=_STR_COLS)
-    for c in ("delist_date", "last_trade_date"):
-        df[c] = pd.to_datetime(df[c], errors="coerce")
-    for c in ("crsp_code", "last_trade_close", "payout_per_share", "terminal_value", "recovery_ratio", "cik"):
-        df[c] = pd.to_numeric(df[c], errors="coerce")
-    return df
+    """Load a `delistings.csv` through `store.read_frame` (see
+    `store.FRAME_TYPES`): no type coercion beyond what's needed to key/compute
+    on the rows."""
+    return read_frame("delistings", path)
 
 
 def _iso(v) -> str | None:

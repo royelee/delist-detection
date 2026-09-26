@@ -10,13 +10,13 @@ writes only local CSVs, no network.
 from __future__ import annotations
 
 import argparse
-import csv
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
 from delist_detection.review_triage import CATALOG, ReviewDecisionError, accept_by_flag, append_decisions
+from delist_detection.store import read_table
 
 DEFAULT_REVIEW = str(ROOT / "output" / "review.csv")
 DEFAULT_DECISIONS = str(ROOT / "data" / "review_decisions.csv")
@@ -46,10 +46,11 @@ def main() -> int:
     if not args.note.strip():
         p.error("--note must be non-empty")
     try:
-        with open(args.review, newline="") as fh:
-            review_rows = list(csv.DictReader(fh))
+        review_rows = read_table("review", args.review)
     except FileNotFoundError:
         p.error(f"--review {args.review}: file not found")
+    except ValueError as exc:                 # not a review.csv: its columns are another table's
+        p.error(f"--review {exc}")
     try:
         decisions = accept_by_flag(review_rows, args.flag, note=args.note, bucket=args.bucket)
     except ReviewDecisionError as exc:

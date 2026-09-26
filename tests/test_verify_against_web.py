@@ -111,8 +111,9 @@ def test_an_old_unrelated_8k_does_not_confirm_a_merger(monkeypatch):
 
 def test_main_installs_the_machine_wide_limit_and_checks_the_user_agent_before_any_request(
         monkeypatch, tmp_path):
-    import csv
     import sys
+
+    from delist_detection.store import write_table
 
     events = []
     monkeypatch.setattr(verify, "use_machine_wide_limit", lambda: events.append("machine-wide limit"))
@@ -123,10 +124,7 @@ def test_main_installs_the_machine_wide_limit_and_checks_the_user_agent_before_a
     monkeypatch.setattr(verify.requests, "get", lambda u, **kw: events.append("get") or _JsonResp(body))
     row = _row("BIG", "liquidation", 768835, "BIG LOTS INC", "2024-09-10")
     src, out = tmp_path / "delistings.csv", tmp_path / "web_verification.csv"
-    with src.open("w", newline="") as fh:
-        w = csv.DictWriter(fh, fieldnames=list(row))
-        w.writeheader()
-        w.writerow(row)
+    write_table("delistings", [row], src)            # the script reads it through store.read_table
     monkeypatch.setattr(sys, "argv", ["verify_against_web.py", "--input", str(src), "--output", str(out)])
     assert verify.main() == 0
     assert events[:2] == ["user agent", "machine-wide limit"]

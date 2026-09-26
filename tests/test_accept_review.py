@@ -11,14 +11,14 @@ import pytest
 from delist_detection.review_triage import (
     Decision, ReviewDecisionError, accept_by_flag, append_decisions, load_decisions, triage,
 )
+from delist_detection.store import TABLES
 
 ROOT = Path(__file__).resolve().parents[1]
 SPEC = importlib.util.spec_from_file_location("accept_review_cli", ROOT / "scripts" / "accept_review.py")
 cli = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(cli)
 
-REVIEW_FIELDS = ("sec_id", "delist_date", "ticker", "cik", "bucket", "dlret", "review_flags", "reason", "anchor_8k",
-                 "last_seen")
+REVIEW_FIELDS = TABLES["review"].columns          # the CLI reads review.csv through store.read_table
 
 
 def _row(sec_id, delist_date, ticker, flags, bucket=None, **extra):
@@ -333,3 +333,18 @@ def test_cli_requires_a_non_empty_note(tmp_path, monkeypatch):
     with pytest.raises(SystemExit) as exc:
         cli.main()
     assert exc.value.code == 2
+
+
+def test_cli_refuses_a_file_that_is_not_a_review_table(tmp_path, capsys, monkeypatch):
+    """review.csv is read through store.read_table, which checks its columns: a
+    delistings.csv passed as --review is an argument error, not zero matches."""
+    review = tmp_path / "delistings.csv"
+    review.write_text("sec_id,delist_date,ticker,review_flags\nS1,2020-01-02,AAA,terms_gate_failed:x\n")
+    decisions = tmp_path / "decisions.csv"
+    monkeypatch.setattr(sys, "argv", ["accept_review.py", "--flag", "terms_gate_failed", "--note", "checked",
+                                      "--review", str(review), "--decisions", str(decisions)])
+    with pytest.raises(SystemExit) as exc:
+        cli.main()
+    assert exc.value.code == 2
+    assert "do not match table 'review'" in capsys.readouterr().err
+    assert not decisions.exists()

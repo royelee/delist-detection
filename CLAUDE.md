@@ -168,8 +168,11 @@ that turns a list of observations into the seven output tables; see
 - `store.py` — every output table's column order, key and sort order
   (`TABLES`), `format_cell` (the one cell formatter every table shares),
   `write_table`/`write_tables`/`read_table` (all-or-nothing write via
-  `atomic_io.replace_all_on_success`). A later move to DuckDB changes only
-  this module.
+  `atomic_io.replace_all_on_success`), and `read_frame` (a table as a typed
+  pandas DataFrame, `FRAME_TYPES`: `qlib_adapter.load_delistings` reads
+  through it). Every table read — `qlib_adapter`, `accept_review.py`,
+  `verify_against_web.py` — goes through this module, so a later move to
+  DuckDB changes only this module.
 - `review_triage.py` — pure (no network): `CATALOG` maps every review flag to
   a severity (`fix`/`check`/`info`), a description and an action;
   `row_severity`/`triage()` turn the pipeline's merged review rows plus a

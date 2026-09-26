@@ -190,3 +190,54 @@ def test_write_tables_removes_the_temp_file_of_a_table_that_fails_mid_write(tmp_
     assert table_path(tmp_path, "securities").read_text() == before_sec
     assert table_path(tmp_path, "review").read_text() == before_rev
     assert not list(tmp_path.glob(".*.tmp"))
+
+
+# --- read_frame: the pandas reader the handling layer uses ------------------
+
+def _delistings_as_qlib_adapter_read_them(path):
+    """qlib_adapter.load_delistings's own recipe before it read through
+    store.read_frame; the frames must stay identical, dtypes included."""
+    import pandas as pd
+    df = pd.read_csv(path, dtype={"sec_id": str, "ticker": str, "successor_sec_id": str, "acquirer_sec_id": str,
+                                  "bucket": str})
+    for c in ("delist_date", "last_trade_date"):
+        df[c] = pd.to_datetime(df[c], errors="coerce")
+    for c in ("crsp_code", "last_trade_close", "payout_per_share", "terminal_value", "recovery_ratio", "cik"):
+        df[c] = pd.to_numeric(df[c], errors="coerce")
+    return df
+
+
+def test_read_frame_types_delistings_exactly_as_before(tmp_path):
+    import pandas as pd
+    rows = [
+        {"sec_id": "BBG000FJLFX8", "delist_date": "2018-12-09", "ticker": "AET", "cik": 1122304,
+         "bucket": "merger", "crsp_code": 231, "last_trade_date": "2018-11-28", "last_trade_close": 212.5,
+         "payout_per_share": 145.0, "stock_ratio": 0.8378, "acquirer_price": 80.0, "acquirer_ticker": "CVS",
+         "terminal_value": 212.02, "dlret": -0.002259, "dlret_method": "cash_plus_stock",
+         "review_flags": "ftd_close_lagged;merger_at_par", "successor_sec_id": None, "acquirer_sec_id": "BBG000BGRY34"},
+        {"sec_id": "CIK1-COMMON", "delist_date": "2020-01-02", "ticker": "NA", "cik": None, "bucket": "unknown",
+         "last_trade_date": "", "dlret": float("nan"), "successor_sec_id": "CIK1-COMMON", "reason": "a, quoted; one"},
+        {"sec_id": "Z0012345", "delist_date": "2021-02-30", "ticker": "007", "cik": "x", "bucket": "exchange_transfer",
+         "crsp_code": "", "recovery_ratio": 0.25},
+    ]
+    p = table_path(tmp_path, "delistings")
+    write_table("delistings", rows, p)
+    pd.testing.assert_frame_equal(store.read_frame("delistings", p), _delistings_as_qlib_adapter_read_them(p),
+                                  check_exact=True)
+
+
+def test_read_frame_matches_the_committed_delistings_table():
+    import pandas as pd
+    from pathlib import Path
+    p = Path(__file__).resolve().parents[1] / "output" / "delistings.csv"
+    if not p.exists():
+        pytest.skip("no committed output/delistings.csv")
+    pd.testing.assert_frame_equal(store.read_frame("delistings", p), _delistings_as_qlib_adapter_read_them(p),
+                                  check_exact=True)
+
+
+def test_read_frame_rejects_a_file_of_another_table(tmp_path):
+    p = tmp_path / "delistings.csv"
+    p.write_text("a,b\n1,2\n")
+    with pytest.raises(ValueError, match="do not match"):
+        store.read_frame("delistings", p)

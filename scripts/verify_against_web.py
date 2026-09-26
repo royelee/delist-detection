@@ -27,6 +27,7 @@ import requests
 
 from delist_detection.edgar import (EdgarBlocked, check_response, require_user_agent, resolve_user_agent, throttle,
                                     use_machine_wide_limit)
+from delist_detection.store import read_table
 
 ROOT = Path(__file__).resolve().parents[1]
 USER_AGENT = resolve_user_agent()
@@ -234,8 +235,7 @@ def main() -> int:
     require_user_agent()         # SEC refuses the fallback User-Agent: stop before the first request
     use_machine_wide_limit()     # share the 8 requests/s with every other SEC client on this machine
 
-    with open(args.input) as fh:
-        rows = list(csv.DictReader(fh))
+    rows = read_table("delistings", args.input)
 
     if args.sample > 0:
         import random
