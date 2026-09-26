@@ -74,8 +74,14 @@ that turns a list of observations into the seven output tables: a short
 `_check_overrides`, `_last_trade_closes`, `_merger_payouts`,
 `_find_successors`, then the row builders and `_triage`), each with explicit
 inputs and outputs and the run-wide `_RunContext` (clients, run date, log,
-workers, SEC meter). See `CONTEXT.md` for the vocabulary its docstrings and
-variable names assume (security, era, sighting, pin, …).
+workers, SEC meter `manifest.StageMeter`). Each stage returns what it produces
+(`_Successors` for stage 9, for instance) and `_run` combines the answers
+(`_link_successors` records the successors on the delistings). Helpers that
+belong to one kind of data live with it, not in `pipeline.py`:
+`degraded.py` (the `resolution_degraded` rows and flags), `ftd.close_age`,
+`review_triage.merge_review_rows`, the era review rows in `security_master`.
+See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
+(security, era, sighting, pin, …).
 
 **Classification (network):**
 - `observations.py` — `Observation`, `TickerEra`, `ObservationIndex`: splits
@@ -123,7 +129,9 @@ variable names assume (security, era, sighting, pin, …).
   acquirer-completion price (`close_of`/`close_known_on`: by the security's
   CUSIP on the day, then its symbol); `by_cusip`/`by_symbol` supply CUSIP
   history, `trading_rows` the rows not under a deleted symbol, `symbol_deleted`
-  whether a CUSIP's last rows are all under one, `descriptions` a CUSIP's names.
+  whether a CUSIP's last rows are all under one, `descriptions` a CUSIP's names;
+  `FTD_START` (2004-01-01, the data's first day) and `close_age` (a fails
+  row's close age in trading days, for `ftd_close_prior:<n>`).
 - `midas.py` — `MidasClient`: SEC MIDAS per-security exchange volume (2012+,
   ticker-keyed); `last_trade_day()` confirms the last day with lit+hidden
   exchange volume, suppressed to `None` when the window runs past MIDAS's
@@ -164,7 +172,9 @@ variable names assume (security, era, sighting, pin, …).
   observed and EDGAR names — spec D21). `Issuer` (a CIK and its EDGAR names;
   `issuers_by_era` builds the era key -> `Issuer` map that `candidate_cusips`,
   `resolve_many` and `build_securities` take, the one source of an era's CIK,
-  read with `cik_of`) is its type.
+  read with `cik_of`) is its type. Its era-level review rows:
+  `ticker_unconfirmed_review` (`ticker_unconfirmed`) and
+  `observation_conflict_review` (`observation_conflict:<date>`).
 - `history.py` — a security's dated history: its sightings
   (`ticker_sightings`/`cusip_sightings`, `own_last_seen`, `ticker_on`),
   `ranges_from_sightings()` (dated `Sighting`s into `ticker_history`/
@@ -236,8 +246,16 @@ variable names assume (security, era, sighting, pin, …).
   `ReviewDecisionError` read `data/review_decisions.csv`; `accept_by_flag`/
   `append_decisions` back `scripts/accept_review.py`'s bulk accept.
   `ReviewItem` is a flag raised outside a delisting's own row (the finder's,
-  the security master's and the pipeline's), `.row()` its review row. Called
-  by `pipeline.run()` just before the write; never touches `delistings.csv`.
+  the security master's and the pipeline's), `.row()` its review row;
+  `merge_review_rows` joins rows that share a key. Called by `pipeline.run()`
+  just before the write; never touches `delistings.csv`.
+- `degraded.py` — answers that rested on a failed request or a stale copy:
+  `DegradedWatch` (an SEC read on this thread counted itself degraded),
+  `degraded_item`/`flag_degraded` (the `resolution_degraded` review row and
+  the flag on a delisting's own row), `report_halt_feed_failures` (a
+  last-trade decision that asked a Nasdaq halt-feed day that failed).
+- `manifest.py` — `run_manifest.json` (`build`/`write`) and `StageMeter`, the
+  per-stage SEC traffic it reports.
 - `trading_calendar.py` — NYSE trading days (weekends, exchange holidays,
   unscheduled closures); turns "suspended before the open on D" into the
   actual last trading day and lines up FTD rows (dated D, priced at D−1's close).

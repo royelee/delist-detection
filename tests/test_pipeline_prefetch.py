@@ -16,9 +16,7 @@ from types import SimpleNamespace
 import pytest
 
 import delist_detection.pipeline as pipeline
-from delist_detection import sec_stats
-from delist_detection import sec_limiter
-from delist_detection import edgar
+from delist_detection import edgar, manifest, sec_limiter, sec_stats
 from delist_detection.classifier import DelistClassifier, DelistRecord
 from delist_detection.crsp_codes import CrspBucket
 from delist_detection.delistings import Delisting
@@ -322,7 +320,7 @@ def test_a_memo_that_cannot_be_saved_after_a_complete_run_is_an_error(tmp_path, 
 
 def test_the_stage_meter_counts_edgar_requests_apart_from_data_file_downloads():
     lines = []
-    meter = pipeline._StageMeter(lines.append)
+    meter = manifest.StageMeter(lines.append)
     mark = meter.start()
     sec_stats.SEC_STATS.add("request:submissions")
     sec_stats.SEC_STATS.add("request:sec_data")

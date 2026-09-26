@@ -26,7 +26,7 @@ from .atomic_io import clean_orphan_temps
 from .names import names_agree
 from .observations import normalize_ticker
 from .sec_http import download, get_text
-from .trading_calendar import add_trading_days, next_trading_day
+from .trading_calendar import add_trading_days, next_trading_day, previous_trading_day
 
 _log = logging.getLogger(__name__)
 
@@ -34,6 +34,9 @@ FTD_INDEX_URL = "https://www.sec.gov/data-research/sec-markets-data/fails-delive
 _SEC = "https://www.sec.gov"
 _HALF = re.compile(r"cnsfails(\d{4})(\d{2})([ab])(?:_\d+)?\.zip$", re.I)
 _QTR = re.compile(r"cnsp_sec_fails_(\d{4})q([1-4])\.zip$", re.I)
+
+
+FTD_START = date(2004, 1, 1)      # the first day SEC's fails-to-deliver files cover
 
 
 @dataclass(frozen=True)
@@ -367,3 +370,13 @@ class FtdIndex:
         known on it -- by `cusip` (the security's CUSIP on `day`, when known),
         then by `symbol`."""
         return (self.close_through(day, cusip=cusip) if cusip else None) or self.close_through(day, symbol=symbol)
+
+
+def close_age(row_date: str, last_trade: date) -> int:
+    """Trading days from the close a fails row dated `row_date` carries (that of
+    the trading day before it) to `last_trade`: 1 for a row dated the last
+    trade day itself."""
+    day, n = previous_trading_day(date.fromisoformat(row_date)), 0
+    while day < last_trade:
+        day, n = next_trading_day(day), n + 1
+    return n

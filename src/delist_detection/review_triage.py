@@ -650,3 +650,29 @@ def triage(rows: list[Mapping], decisions: Sequence[Decision], *, report_unmatch
         "unmatched_decisions": len(unmatched),
     }
     return Triage(review_rows, summary_rows, counts)
+
+
+def merge_review_rows(rows: list[dict]) -> list[dict]:
+    """Collapse rows that share `(sec_id, delist_date, ticker, review_flags)`
+    into one, joining their distinct `reason`s with `"; "`. Every other field
+    keeps its first non-empty value."""
+    merged: dict[tuple, dict] = {}
+    order: list[tuple] = []
+    for r in rows:
+        key = (r.get("sec_id"), r.get("delist_date"), r.get("ticker"), r.get("review_flags"))
+        if key not in merged:
+            merged[key] = dict(r)
+            order.append(key)
+            continue
+        existing = merged[key]
+        reasons = [x for x in (existing.get("reason") or "").split("; ") if x]
+        new_reason = r.get("reason") or ""
+        if new_reason and new_reason not in reasons:
+            reasons.append(new_reason)
+        existing["reason"] = "; ".join(reasons)
+        for k, v in r.items():
+            if k == "reason":
+                continue
+            if not existing.get(k) and v:
+                existing[k] = v
+    return [merged[k] for k in order]

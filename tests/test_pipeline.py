@@ -16,7 +16,8 @@ from delist_detection.llm_merger_extractor import MergerTerms
 from delist_detection.observations import Observation, ObservationIndex
 from delist_detection.payout_extractor import PayoutResult
 from delist_detection.acquirers import acquirer_cik
-from delist_detection.pipeline import Clients, Overrides, _merge_review_rows, run
+from delist_detection.pipeline import Clients, Overrides, run
+from delist_detection.review_triage import merge_review_rows
 from delist_detection.history import own_last_seen, ticker_range_review
 from delist_detection.successors import SecurityStart, successor_from_8k12b, successor_in_run, successor_search_name
 from delist_detection.review_triage import Decision
@@ -640,7 +641,7 @@ def test_merge_review_rows_joins_reasons_for_the_same_key():
         {"sec_id": "S1", "delist_date": "2020-01-01", "ticker": "AAA", "review_flags": "error", "reason": "bang",
          "cik": None},
     ]
-    merged = _merge_review_rows(rows)
+    merged = merge_review_rows(rows)
     assert len(merged) == 1
     assert merged[0]["reason"] == "boom; bang"
     assert merged[0]["cik"] == 1                    # the first non-empty value is kept
@@ -651,7 +652,7 @@ def test_merge_review_rows_leaves_distinct_keys_alone():
         {"sec_id": "S1", "delist_date": "2020-01-01", "ticker": "AAA", "review_flags": "error", "reason": "boom"},
         {"sec_id": "S2", "delist_date": "2020-01-01", "ticker": "BBB", "review_flags": "error", "reason": "bang"},
     ]
-    assert _merge_review_rows(rows) == rows
+    assert merge_review_rows(rows) == rows
 
 
 # --- item 10 helper, unit-level ---

@@ -19,10 +19,12 @@ from __future__ import annotations
 import json
 import subprocess
 from datetime import date
+from collections.abc import Callable
 from functools import lru_cache
 from pathlib import Path
 
 from .atomic_io import write_atomic
+from .sec_stats import SEC_STATS
 
 MANIFEST_NAME = "run_manifest.json"
 _ROOT = Path(__file__).resolve().parents[2]
@@ -90,3 +92,24 @@ def write(out_dir: str | Path, manifest: dict) -> Path:
     path = Path(out_dir) / MANIFEST_NAME
     write_atomic(path, json.dumps(manifest, indent=2, sort_keys=True) + "\n")
     return path
+
+
+class StageMeter:
+    """SEC traffic per pipeline stage, from sec_stats.SEC_STATS: logged as each stage
+    ends and kept for run_manifest.json. Counts cover every thread (the warm pass's
+    and the stage's own). EDGAR endpoints are counted apart from SEC data-file
+    downloads (fails-to-deliver and MIDAS ZIPs and their index pages)."""
+
+    def __init__(self, log: Callable) -> None:
+        self.log = log
+        self.stages: dict[str, dict[str, int]] = {}
+
+    def start(self):
+        return SEC_STATS.snapshot()
+
+    def done(self, stage: str, mark) -> None:
+        counts, _ = SEC_STATS.since(mark)
+        edgar_n = sum(v for k, v in counts.items() if k.startswith("request:") and k != "request:sec_data")
+        data_n = counts.get("request:sec_data", 0)
+        self.stages[stage] = {"edgar_requests": edgar_n, "sec_data_downloads": data_n}
+        self.log(f"{stage}: {edgar_n} EDGAR requests, {data_n} SEC data-file downloads (all threads)")

@@ -768,16 +768,23 @@ src/delist_detection/
     fatal.py              FATAL: the exceptions that stop a run (every catch site and the CLI use it)
     trading_calendar.py   NYSE trading-day calendar
     sec_http.py           Throttled, cached downloads shared by ftd.py / midas.py
-    edgar.py              Throttled SEC EDGAR client with on-disk JSON cache
+    edgar.py              Throttled SEC EDGAR client with on-disk JSON cache; sec_get, the one SEC request path
+    sec_limiter.py        The SEC rate limit: 8 requests/s per process and machine-wide (lock file), throttle()
+    sec_stats.py          SEC_STATS: requests, cache answers, latency, degraded answers; fill-only mode
+    retries.py            retrying(): the one retry loop the SEC, OpenFIGI and Nasdaq clients share
+    settings.py           env_setting(): a setting from the environment, else the repo .env
     prefetch.py           warm(): fills the SEC caches on fill-only threads ahead of each sequential stage
-    manifest.py           run_manifest.json: run date, code version, workers, SEC traffic, degraded answers
+    manifest.py           run_manifest.json: run date, code version, workers, SEC traffic, degraded answers; StageMeter
+    degraded.py           resolution_degraded review rows and flags (failed SEC reads, failed halt-feed days)
     ftd.py                SEC fails-to-deliver rows: last-trade closes, CUSIP history
     midas.py               SEC MIDAS per-security exchange volume: last-trade confirmation
     nasdaq_halts.py        Nasdaq code-D halt feed: last-trade confirmation
     openfigi.py            OpenFIGI /v3/mapping and /v3/filter client
     figi_resolution.py     Pure rules: OpenFIGI answer → one US composite FIGI or placeholder
     ticker_resolver.py     6-tier ticker→CIK resolver with strict/loose validation
-    security_master.py     FigiResolver, build_securities, ticker/CUSIP range building
+    security_master.py     Era splits, FigiResolver, build_securities, era review rows
+    history.py             Sightings, ticker_history / cusip_history ranges and rows, range review
+    added_securities.py    AddedAcquirer / AddedSuccessor: securities the run adds, with their one history row
     form25.py               Form 25 parsing, exchange/class labeling, security matching
     listing_status.py       Secondary-listing withdrawal detection; current listing status
     last_trade.py           Last-trade-date decision across notice/8-K/MIDAS/halt

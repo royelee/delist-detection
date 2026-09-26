@@ -17,42 +17,40 @@ from typing import Any
 
 import requests
 
+from . import manifest as run_manifest
 from .acquirers import acquirer_cik, find_acquirer
+from .added_securities import AddedAcquirer, AddedSecurity, AddedSuccessor
 from .crsp_codes import CrspBucket
+from .degraded import DegradedWatch, degraded_item, flag_degraded, report_halt_feed_failures
 from .delistings import SUCCESSOR_UNKNOWN, Delisting, DelistingFinder, SecurityContext
-from .sec_stats import SEC_STATS
 from .evidence import edgar_names
 from .fatal import FATAL
 from .figi_resolution import is_placeholder, share_class_from_name
 from .form25 import SecurityRef
-from .ftd import FtdIndex
+from .ftd import FTD_START, FtdIndex, close_age
+from .history import (
+    Sighting, cusip_sightings, history_rows, own_last_seen, ranges_from_sightings, ticker_on, ticker_range_review,
+    ticker_sightings, value_on,
+)
 from .listing_status import issuer_exchange, listed_today, listing_answers
-from . import manifest as run_manifest
-from .observations import ObservationIndex, TickerEra, eras_by_key, normalize_ticker, observation_conflicts
+from .observations import ObservationIndex, TickerEra, eras_by_key, normalize_ticker
 from .payout_gate import DEFAULT_TOL, GatedPayouts, gate_payouts
 from .prefetch import Serialized, warm
 from .reconstruction import (
     OverrideFileError, build_delistings_table, delisting_row, for_delisting, override_row_name,
     unmatched_override_keys,
 )
-from .review_triage import Decision, ReviewItem, Triage, flag_name, is_blank, triage
-from .added_securities import AddedAcquirer, AddedSecurity, AddedSuccessor
-from .history import (
-    Sighting, cusip_sightings, history_rows, own_last_seen, ranges_from_sightings, ticker_on, ticker_range_review,
-    ticker_sightings, value_on,
-)
+from .review_triage import Decision, ReviewItem, Triage, flag_name, is_blank, merge_review_rows, triage
+from .sec_stats import SEC_STATS
 from .security_master import (
     EraResolution, FigiResolver, Issuer, Security, build_securities, candidate_cusips, cik_of, era_last_seen,
-    issuers_by_era, refine_eras,
+    issuers_by_era, observation_conflict_review, refine_eras, ticker_unconfirmed_review,
 )
 from .store import DelistingKey, write_tables
 from .successors import (
     SecurityStart, successor_from_8k12b, successor_in_run, successor_query, successor_search_args,
 )
 from .ticker_resolver import TickerResolution
-from .trading_calendar import next_trading_day, previous_trading_day
-
-FTD_START = date(2004, 1, 1)
 
 
 @dataclass
@@ -103,7 +101,7 @@ def _issuer_names(edgar, ciks: Iterable[int]) -> tuple[dict[int, tuple[str, ...]
     names: dict[int, tuple[str, ...]] = {}
     degraded: set[int] = set()
     for cik in ciks:
-        watch = _DegradedWatch()
+        watch = DegradedWatch()
         try:
             sub = edgar.submissions(cik)
         except requests.RequestException:
@@ -113,82 +111,6 @@ def _issuer_names(edgar, ciks: Iterable[int]) -> tuple[dict[int, tuple[str, ...]
         if watch.tripped():
             degraded.add(cik)
     return names, degraded
-
-
-TICKER_CONFIRM_DAYS = 30        # an era's ticker counts as confirmed by an FTD row this close to its span
-
-
-def _unconfirmed_review(eras: list[TickerEra], ftd: FtdIndex, resolutions: dict,
-                        issuers: dict[str, Issuer]) -> list[ReviewItem]:
-    """A `ticker_unconfirmed` review row for each era from 2004 on (the start of
-    SEC fails-to-deliver data) with no FTD row under its ticker within
-    `TICKER_CONFIRM_DAYS` of its first and last observation: the SEC data never
-    shows that ticker then, as when a snapshot carries a ticker adopted later
-    (APTV in 2012-2013, when Delphi traded as DLPH)."""
-    out: list[ReviewItem] = []
-    for e in eras:
-        if _to_date(e.last) < FTD_START:
-            continue
-        lo = max(FTD_START, _to_date(e.first) - timedelta(days=TICKER_CONFIRM_DAYS)).isoformat()
-        hi = (_to_date(e.last) + timedelta(days=TICKER_CONFIRM_DAYS)).isoformat()
-        if ftd.by_symbol(e.ticker, lo, hi):
-            continue
-        out.append(ReviewItem(resolutions[e.key].sec_id or "", e.ticker, cik_of(issuers, e.key), "ticker_unconfirmed",
-                              f"{e.key} {e.name or ''}: no fails-to-deliver row under {e.ticker} "
-                              f"from {lo} to {hi}", last_seen=e.last))
-    return out
-
-
-def _conflict_review(eras: list[TickerEra], resolutions: dict) -> list[ReviewItem]:
-    """One `observation_conflict:<date>` review row per ticker seen under two or
-    more names on one date (a snapshot source backfilled today's ticker: CB is
-    both ACE LTD and CHUBB CORP in 2012-2014). The reason names each name with
-    its era and the security that era resolved to. The date is in the flag so
-    each (ticker, date) keeps its own row under review.csv's key."""
-    out: list[ReviewItem] = []
-    for ticker, day, names in observation_conflicts(o for e in eras for o in e.observations):
-        seen = [f"{o.name} ({e.key} -> {resolutions[e.key].sec_id or 'unresolved'})"
-                for e in eras if e.ticker == ticker for o in e.observations if o.as_of == day and o.name]
-        out.append(ReviewItem("", ticker, None, f"observation_conflict:{day}",
-                              f"{ticker} seen on {day} under {len(names)} names: " + "; ".join(dict.fromkeys(seen)),
-                              last_seen=day))
-    return out
-
-
-def _merge_review_rows(rows: list[dict]) -> list[dict]:
-    """Collapse rows that share `(sec_id, delist_date, ticker, review_flags)`
-    into one, joining their distinct `reason`s with `"; "`. Every other field
-    keeps its first non-empty value."""
-    merged: dict[tuple, dict] = {}
-    order: list[tuple] = []
-    for r in rows:
-        key = (r.get("sec_id"), r.get("delist_date"), r.get("ticker"), r.get("review_flags"))
-        if key not in merged:
-            merged[key] = dict(r)
-            order.append(key)
-            continue
-        existing = merged[key]
-        reasons = [x for x in (existing.get("reason") or "").split("; ") if x]
-        new_reason = r.get("reason") or ""
-        if new_reason and new_reason not in reasons:
-            reasons.append(new_reason)
-        existing["reason"] = "; ".join(reasons)
-        for k, v in r.items():
-            if k == "reason":
-                continue
-            if not existing.get(k) and v:
-                existing[k] = v
-    return [merged[k] for k in order]
-
-
-def _close_age(row_date: str, last_trade: date) -> int:
-    """Trading days from the close a fails row dated `row_date` carries (that of
-    the trading day before it) to `last_trade`: 1 for a row dated the last
-    trade day itself."""
-    day, n = previous_trading_day(date.fromisoformat(row_date)), 0
-    while day < last_trade:
-        day, n = next_trading_day(day), n + 1
-    return n
 
 
 def _resolution_source(sec: Security, issuers: dict[str, Issuer], resolutions: dict[str, TickerResolution]) -> str:
@@ -202,91 +124,11 @@ def _resolution_source(sec: Security, issuers: dict[str, Issuer], resolutions: d
     return "security_master"
 
 
-class _StageMeter:
-    """SEC traffic per pipeline stage, from sec_stats.SEC_STATS: logged as each stage
-    ends and kept for run_manifest.json. Counts cover every thread (the warm pass's
-    and the stage's own). EDGAR endpoints are counted apart from SEC data-file
-    downloads (fails-to-deliver and MIDAS ZIPs and their index pages)."""
-
-    def __init__(self, log: Callable) -> None:
-        self.log = log
-        self.stages: dict[str, dict[str, int]] = {}
-
-    def start(self):
-        return SEC_STATS.snapshot()
-
-    def done(self, stage: str, mark) -> None:
-        counts, _ = SEC_STATS.since(mark)
-        edgar_n = sum(v for k, v in counts.items() if k.startswith("request:") and k != "request:sec_data")
-        data_n = counts.get("request:sec_data", 0)
-        self.stages[stage] = {"edgar_requests": edgar_n, "sec_data_downloads": data_n}
-        self.log(f"{stage}: {edgar_n} EDGAR requests, {data_n} SEC data-file downloads (all threads)")
-
-
 def _flush_memo(clients: Clients) -> None:
     """Write the resolver's batched memo now (TickerResolver.flush)."""
     flush = getattr(clients.resolver, "flush", None)
     if flush is not None:
         flush()
-
-
-DEGRADED_FLAG = "resolution_degraded"
-
-
-def _degraded_item(sec_id: str, ticker: str, cik: int | None, what: str, then: str = "",
-                   **where: str) -> ReviewItem:
-    """The `resolution_degraded` review row saying `what` rested on a failed EDGAR
-    request or a stale copy (`then` appended); `where` is its `delist_date` or
-    `last_seen`."""
-    return ReviewItem(sec_id, ticker, cik, DEGRADED_FLAG,
-                      f"{what} rested on a failed EDGAR request or a stale copy{then}", **where)
-
-
-class _DegradedWatch:
-    """Whether an EDGAR answer on this thread rested on a failed request or a stale
-    copy since the watch was made (sec_stats.SEC_STATS.thread_degraded())."""
-
-    def __init__(self) -> None:
-        self._mark = SEC_STATS.thread_degraded()
-
-    def tripped(self) -> bool:
-        return SEC_STATS.thread_degraded() > self._mark
-
-    def report(self, review: list[ReviewItem], item: ReviewItem, flag_rows: Sequence[Delisting] = ()) -> None:
-        """When tripped: add `item` to `review`, and the flag to each of `flag_rows`'
-        own delistings.csv row, so the flag reaches the delisting itself, not only
-        review.csv."""
-        if not self.tripped():
-            return
-        review.append(item)
-        for delisting in flag_rows:
-            _flag_degraded(delisting)
-
-    def report_delisting(self, review: list[ReviewItem], e: Delisting, what: str, *, own_row: bool = True) -> None:
-        """`report` for one delisting's `what`: its review row, and with `own_row`
-        its delistings.csv row too."""
-        self.report(review, _degraded_item(e.sec_id, e.ticker, e.cik, what, delist_date=e.delist_date),
-                    [e] if own_row else ())
-
-
-def _flag_degraded(delisting: Delisting) -> None:
-    if DEGRADED_FLAG not in delisting.flags:
-        delisting.add_flag(DEGRADED_FLAG)
-
-
-def _report_halt_feed_failures(review: list[ReviewItem], delistings: Sequence[Delisting]) -> None:
-    """Each delisting whose last-trade decision asked the Nasdaq halt feed for a
-    day it could not read (`LastTrade.halt_feed_failed`): the same treatment as
-    a failed SEC request -- `resolution_degraded` on its own delistings.csv row,
-    and a review row naming the feed and the days."""
-    for d in delistings:
-        if not d.last_trade.halt_feed_failed:
-            continue
-        days = ", ".join(sorted({day.isoformat() for day in d.last_trade.halt_feed_failed}))
-        review.append(ReviewItem(d.sec_id, d.ticker, d.cik, DEGRADED_FLAG,
-                                 f"the last-trade date rested on a failed Nasdaq halt feed read ({days}); "
-                                 "run again once the feed answers", delist_date=d.delist_date))
-        _flag_degraded(d)
 
 
 def _warm_delisting_search(clients: Clients, ordered: list[Security], listing: dict[str, dict],
@@ -370,7 +212,7 @@ class _RunContext:
     as_of: date
     log: Callable
     sec_workers: int
-    meter: _StageMeter
+    meter: run_manifest.StageMeter
 
 
 def _refine(ctx: _RunContext, index: ObservationIndex,
@@ -464,17 +306,17 @@ def _resolve_securities(ctx: _RunContext, eras: list[TickerEra], era_by_key: dic
                                      f"{era.key} {era.name or ''}".strip(), last_seen=era.last))
     for e in eras:
         if ctx.clients.resolver.is_degraded(e.ticker, answers.last_seen[e.key]):
-            review.append(_degraded_item(resolutions[e.key].sec_id or "", e.ticker, cik_of(issuers, e.key),
+            review.append(degraded_item(resolutions[e.key].sec_id or "", e.ticker, cik_of(issuers, e.key),
                                          f"{e.key} {e.name or ''}: issuer resolution",
                                          "; its answer was used for this run but not saved", last_seen=e.last))
     for e in eras:
         if cik_of(issuers, e.key) in answers.names_degraded:
-            review.append(_degraded_item(resolutions[e.key].sec_id or "", e.ticker, cik_of(issuers, e.key),
+            review.append(degraded_item(resolutions[e.key].sec_id or "", e.ticker, cik_of(issuers, e.key),
                                          f"{e.key} {e.name or ''}: the issuer's EDGAR names",
                                          "; its CUSIPs and FIGI were checked without what could not be read",
                                          last_seen=e.last))
-    review += _conflict_review(eras, resolutions)
-    review += _unconfirmed_review(eras, ftd, resolutions, issuers)
+    review += observation_conflict_review(eras, resolutions)
+    review += ticker_unconfirmed_review(eras, ftd, resolutions, issuers)
     ctx.log(f"{len(securities)} securities; FIGI sources "
             f"{dict(Counter(s.figi_source for s in securities.values()))}")
     return resolutions, securities, review
@@ -572,7 +414,7 @@ def _find_delistings(ctx: _RunContext, securities: dict[str, Security], sec_cusi
     for i, s in enumerate(ordered, 1):
         last_seen = own_last_seen(s, sightings[s.sec_id])
         ticker = s.eras[-1].ticker if s.eras else ""
-        watch = _DegradedWatch()
+        watch = DegradedWatch()
         try:
             # listed_today and the context live inside the try too: a FIGI/EDGAR
             # error there must become a reviewable row for this one security,
@@ -590,9 +432,9 @@ def _find_delistings(ctx: _RunContext, securities: dict[str, Security], sec_cusi
             continue
         delistings += found
         review += found_review
-        watch.report(review, _degraded_item(s.sec_id, ticker, s.issuer_cik, "the delisting search",
+        watch.report(review, degraded_item(s.sec_id, ticker, s.issuer_cik, "the delisting search",
                                             "; run again once SEC answers", last_seen=last_seen), found)
-        _report_halt_feed_failures(review, found)
+        report_halt_feed_failures(review, found)
         if i % 50 == 0:
             log(f"[{i}/{len(securities)}] securities searched; {len(delistings)} delistings so far")
     ctx.meter.done("delisting search", mark)
@@ -652,7 +494,7 @@ def _last_trade_closes(ctx: _RunContext, delistings: list[Delisting], securities
             else:
                 closes[key] = back[0]
                 e.record.evidence["ftd_close_row_date"] = back[1]
-                e.add_flag(f"ftd_close_prior:{_close_age(back[1], e.last_trade.day)}")
+                e.add_flag(f"ftd_close_prior:{close_age(back[1], e.last_trade.day)}")
             continue
         price, _, lagged = got
         closes[key] = price
@@ -689,7 +531,7 @@ def _extract_payouts(ctx: _RunContext, mergers: list[Delisting], closes: dict[De
              workers=ctx.sec_workers, name="payouts")
     for e in mergers:
         key = e.key
-        watch = _DegradedWatch()
+        watch = DegradedWatch()
         try:
             if clients.payout_extractor is not None:
                 raw[key] = clients.payout_extractor.extract(e.record, last_close=closes.get(key))
@@ -780,7 +622,7 @@ def _add_acquirers(ctx: _RunContext, mergers: list[Delisting], trade_day: dict[D
         acquirer_ids[key] = cand.composite
         if cand.composite not in securities:
             if cand.composite not in added:
-                watch = _DegradedWatch()
+                watch = DegradedWatch()
                 acq_cik = acquirer_cik(ctx.clients.resolver, ctx.clients.edgar, acq, day, e)
                 watch.report_delisting(review, e, f"the acquirer {acq} CIK lookup", own_row=False)
                 added[cand.composite] = AddedAcquirer(
@@ -850,7 +692,7 @@ def _find_successors(ctx: _RunContext, delistings: list[Delisting], securities: 
                     successor_search(*successor_query(*args))
             warm(delistings, warm_search, workers=ctx.sec_workers, name="successor search")
         for e in delistings:
-            watch = _DegradedWatch()
+            watch = DegradedWatch()
             args = successor_search_args(clients.edgar, e, starts, securities)
             if args is None:
                 continue
@@ -861,7 +703,7 @@ def _find_successors(ctx: _RunContext, delistings: list[Delisting], securities: 
                                        edgar=clients.edgar,
                                        own_tickers={x.ticker for x in predecessor.eras} | {e.ticker})
             if watch.tripped():
-                found.review.append(_degraded_item(e.sec_id, e.ticker, e.cik, "the successor search",
+                found.review.append(degraded_item(e.sec_id, e.ticker, e.cik, "the successor search",
                                                    delist_date=e.delist_date))
                 found.degraded.append(e.key)
             if hit is None:
@@ -897,7 +739,7 @@ def _link_successors(delistings: list[Delisting], successors: _Successors) -> No
                 d.record.evidence["successor_by"] = how
                 d.record.reason = f"{d.record.reason}; successor by {how.replace('_', ' ')}"
         if d.key in successors.degraded:
-            _flag_degraded(d)
+            flag_degraded(d)
 
 
 def _delisting_rows(delistings: list[Delisting], closes: dict[DelistingKey, float], payouts: _Payouts,
@@ -1007,7 +849,7 @@ def _triage(ctx: _RunContext, review_rows: list[dict], review_decisions: Sequenc
     (merged by key), and every flag counted before triage hides or accepts any:
     that tally feeds RunSummary.review_flags and the manifest, so exit code 3
     still sees every `error` and `resolution_degraded`."""
-    review_rows = _merge_review_rows(review_rows)
+    review_rows = merge_review_rows(review_rows)
     flags = Counter(flag_name(f) for r in review_rows for f in (r.get("review_flags") or "").split(";") if f)
     # A --limit dev subset (or a second universe sharing the repo-relative
     # default data/review_decisions.csv) can only see a fraction of the rows a
@@ -1028,7 +870,7 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
          review_decisions: Sequence[Decision] = ()) -> RunSummary:
     """The run's stages in order (each function's docstring says what it does);
     `run` wraps it with the resolver memo's final flush."""
-    ctx = _RunContext(clients, clients.as_of or date.today(), log, sec_workers, _StageMeter(log))
+    ctx = _RunContext(clients, clients.as_of or date.today(), log, sec_workers, run_manifest.StageMeter(log))
     run_mark = SEC_STATS.snapshot()           # the manifest reports the traffic since here
     eras, era_by_key, ftd, ftd_lo = _refine(ctx, index, limit)                                      # 1
     answers = _resolve_issuers(ctx, eras, ftd)                                                      # 2

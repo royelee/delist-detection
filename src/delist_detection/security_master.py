@@ -17,9 +17,12 @@ from .figi_resolution import (
     FigiCandidate, accept, bloomberg_ticker, filter_query, placeholder_id, security_kind,
     share_class_from_name, us_candidates,
 )
-from .ftd import FtdIndex, FtdRow
+from .ftd import FTD_START, FtdIndex, FtdRow
 from .names import description_matches, names_agree
-from .observations import ERA_GAP_DAYS, Observation, TickerEra, eras_by_key, number_eras
+from .observations import (
+    ERA_GAP_DAYS, Observation, TickerEra, eras_by_key, number_eras, observation_conflicts,
+)
+from .review_triage import ReviewItem
 
 ERA_MIN_RUN = 3          # an FTD CUSIP run shorter than this is noise, not a CUSIP switch
 
@@ -468,4 +471,44 @@ def build_securities(resolutions: Mapping[str, EraResolution], eras: Mapping[str
     for sec in out.values():
         if sec.share_class == "COMMON":
             sec.share_class = next((c for c in classes[sec.sec_id] if c != "COMMON"), "COMMON")
+    return out
+
+
+TICKER_CONFIRM_DAYS = 30        # an era's ticker counts as confirmed by an FTD row this close to its span
+
+
+def ticker_unconfirmed_review(eras: list[TickerEra], ftd: FtdIndex, resolutions: dict,
+                        issuers: dict[str, Issuer]) -> list[ReviewItem]:
+    """A `ticker_unconfirmed` review row for each era from 2004 on (the start of
+    SEC fails-to-deliver data) with no FTD row under its ticker within
+    `TICKER_CONFIRM_DAYS` of its first and last observation: the SEC data never
+    shows that ticker then, as when a snapshot carries a ticker adopted later
+    (APTV in 2012-2013, when Delphi traded as DLPH)."""
+    out: list[ReviewItem] = []
+    for e in eras:
+        if date.fromisoformat(e.last) < FTD_START:
+            continue
+        lo = max(FTD_START, date.fromisoformat(e.first) - timedelta(days=TICKER_CONFIRM_DAYS)).isoformat()
+        hi = (date.fromisoformat(e.last) + timedelta(days=TICKER_CONFIRM_DAYS)).isoformat()
+        if ftd.by_symbol(e.ticker, lo, hi):
+            continue
+        out.append(ReviewItem(resolutions[e.key].sec_id or "", e.ticker, cik_of(issuers, e.key), "ticker_unconfirmed",
+                              f"{e.key} {e.name or ''}: no fails-to-deliver row under {e.ticker} "
+                              f"from {lo} to {hi}", last_seen=e.last))
+    return out
+
+
+def observation_conflict_review(eras: list[TickerEra], resolutions: dict) -> list[ReviewItem]:
+    """One `observation_conflict:<date>` review row per ticker seen under two or
+    more names on one date (a snapshot source backfilled today's ticker: CB is
+    both ACE LTD and CHUBB CORP in 2012-2014). The reason names each name with
+    its era and the security that era resolved to. The date is in the flag so
+    each (ticker, date) keeps its own row under review.csv's key."""
+    out: list[ReviewItem] = []
+    for ticker, day, names in observation_conflicts(o for e in eras for o in e.observations):
+        seen = [f"{o.name} ({e.key} -> {resolutions[e.key].sec_id or 'unresolved'})"
+                for e in eras if e.ticker == ticker for o in e.observations if o.as_of == day and o.name]
+        out.append(ReviewItem("", ticker, None, f"observation_conflict:{day}",
+                              f"{ticker} seen on {day} under {len(names)} names: " + "; ".join(dict.fromkeys(seen)),
+                              last_seen=day))
     return out

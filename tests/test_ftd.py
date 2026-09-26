@@ -3,7 +3,7 @@ import zipfile
 from datetime import date
 
 from delist_detection.ftd import (
-    FtdClient, FtdIndex, FtdRow, is_deleted_symbol, parse_ftd_lines, parse_index_links, period_of,
+    FtdClient, FtdIndex, FtdRow, close_age, is_deleted_symbol, parse_ftd_lines, parse_index_links, period_of,
 )
 
 SAMPLE = """SETTLEMENT DATE|CUSIP|SYMBOL|QUANTITY (FAILS)|DESCRIPTION|PRICE
@@ -339,3 +339,13 @@ def test_close_of_and_close_known_on_try_the_cusip_then_the_symbol():
     assert idx.close_of(date(2019, 9, 3), cusip="22222B200", symbol="RS") == (99.0, "2019-09-04", False)
     assert idx.close_known_on(date(2019, 9, 3), cusip="11111A101", symbol="RS") == (3.0, "2019-09-03")
     assert idx.close_known_on(date(2019, 9, 3), cusip=None, symbol="RS") == (3.0, "2019-09-03")
+
+
+def test_a_fails_rows_close_is_a_trading_day_older_than_its_date():
+    """A row dated D carries the close of the trading day before D: dated the
+    last trade day itself, its close is 1 trading day old; a Monday row after a
+    Friday last trade carries that Friday's close (0); holidays are skipped."""
+    assert close_age("2018-11-28", date(2018, 11, 28)) == 1
+    assert close_age("2018-11-26", date(2018, 11, 28)) == 3
+    assert close_age("2018-12-03", date(2018, 11, 30)) == 0
+    assert close_age("2018-11-23", date(2018, 11, 26)) == 2          # the day before is Thanksgiving
