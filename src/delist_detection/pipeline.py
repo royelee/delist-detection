@@ -278,9 +278,11 @@ def _resolve_issuers(ctx: _RunContext, eras: list[TickerEra], ftd: FtdIndex) -> 
         # resolver (a snapshot of this memo that saves nothing), its answer thrown
         # away. The resolve below then runs one era at a time, in order, on this
         # thread, and finds its requests answered.
-        warm(eras, lambda shadow, e: shadow.resolve(e.ticker, last_seen[e.key], pin=e.cik_pin, name=e.name),
+        warm(eras, lambda shadow, e: shadow.resolve(e.ticker, last_seen[e.key], pin=e.cik_pin, name=e.name,
+                                                    since=e.first),
              workers=workers, state=clients.resolver.shadow, name="issuer resolution")
-    cik_res = {e.key: clients.resolver.resolve(e.ticker, last_seen[e.key], pin=e.cik_pin, name=e.name)
+    cik_res = {e.key: clients.resolver.resolve(e.ticker, last_seen[e.key], pin=e.cik_pin, name=e.name,
+                                               since=e.first)
                for e in eras}
     _flush_memo(clients)
     second = clients.resolver.infer_issuers(eras, ftd, last_seen, {k: r.cik for k, r in cik_res.items()})

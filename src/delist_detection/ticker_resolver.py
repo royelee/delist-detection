@@ -631,7 +631,7 @@ class TickerResolver:
 
     def resolve(self, ticker: str, observed_date: str | None = None, *,
                 pin: int | None | object = _LOOK_UP_PIN,
-                name: str | None | object = _LOOK_UP_NAME) -> TickerResolution:
+                name: str | None | object = _LOOK_UP_NAME, since: str | None = None) -> TickerResolution:
         """`pin`: the caller's own CIK pin for this lookup (None: none), in place of
         `cik_pins(ticker, observed_date)`. `name`: the observed name to check the
         answer with (None: none), in place of `observed_names(ticker,
@@ -639,7 +639,13 @@ class TickerResolver:
         name: a date lookup can land nearer another era of the ticker than the
         era's own observations (its FTD rows run past its last observation) and
         return that era's pin or name. The answer is remembered under the ticker,
-        the date and the observed name its checks used."""
+        the date and the observed name its checks used.
+
+        `since`: the era's first sighting. SEC's ticker map gives today's holder
+        of the ticker, which must have existed by then too, not only at
+        `observed_date`: a company formed while the era traded can have taken
+        its name and ticker (Energizer's 2015 SpinCo for ENERGIZER HOLDINGS INC,
+        2008-2015). A ticker-map answer from the memo is held to it as well."""
         t = ticker.upper().strip()
         observed_name = self._observed_name(t, observed_date, name)
         cache_key = self._key(t, observed_date, observed_name)
@@ -663,10 +669,13 @@ class TickerResolver:
             self._remember(cache_key, res, observed_name)
             return res
 
-        if cache_key in self._memo and self._memo_observed.get(cache_key) == observed_name:
+        memo = self._memo.get(cache_key)
+        if memo is not None and self._memo_observed.get(cache_key) == observed_name and \
+                (memo.source != "company_tickers" or self._existed_by(memo.cik, since)):
             # A rename built on this answer inherits whether it rests on a failed request.
             self._transient = cache_key in self._degraded
-            return self._memo[cache_key]
+            return memo
+        self._transient = False
 
         renamed = self.rename_map.get(t)
         if renamed and renamed != t:
@@ -679,10 +688,11 @@ class TickerResolver:
         companies = self._ensure_companies()
         if t in companies:
             # SEC's map lists today's holder of the ticker: accept it only if
-            # that issuer existed on the date under an agreeing name.
+            # that issuer existed on the date under an agreeing name, and by
+            # the era's first sighting.
             row = companies[t]
             c = int(row["cik_str"])
-            if self._fits_date(c, observed_date, expected) == (True, True):
+            if self._fits_date(c, observed_date, expected) == (True, True) and self._existed_by(c, since):
                 res = TickerResolution(
                     ticker=t,
                     cik=c,
@@ -1016,6 +1026,13 @@ class TickerResolver:
         if trades_at_switch(ftd, h, issuer_cusips.get(cik, set()) - {h.cusip, h.new_cusip}):
             return None
         return self._renamed_from(cik, h)
+
+    def _existed_by(self, cik: int, since: str | None) -> bool:
+        """Whether the CIK had filed by `since` (True when `since` is None)."""
+        if since is None:
+            return True
+        first, on = self._first_filed(cik), parse_day(since)
+        return first is not None and on is not None and first <= on
 
     def _first_filed(self, cik: int) -> date | None:
         """The CIK's first EDGAR filing (None: none, or EDGAR could not answer;

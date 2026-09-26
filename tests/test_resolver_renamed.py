@@ -151,13 +151,36 @@ def test_each_era_is_looked_up_under_its_own_name(index, eras, ftd):
 
     class Spy(TickerResolver):
         def resolve(self, ticker, observed_date=None, **kw):
-            calls.append((ticker, observed_date, kw.get("name")))
+            calls.append((ticker, observed_date, kw.get("name"), kw.get("since")))
             return super().resolve(ticker, observed_date, **kw)
 
     spy = Spy(_Edgar(), observed_names=index.name_on)
     pipeline._resolve_issuers(_ctx(spy), [eras["KORS@2012-06-29"], eras["KORS@2014-12-31"]], ftd)
     assert index.name_on("KORS", "2015-08-03") == "MICHAEL KORS HOLDINGS LTD"
-    assert calls == [("KORS", "2015-08-03", "CAPRI HOLDINGS LTD"), ("KORS", "2019-01-03", "MICHAEL KORS HOLDINGS LTD")]
+    assert calls == [("KORS", "2015-08-03", "CAPRI HOLDINGS LTD", "2012-06-29"),
+                     ("KORS", "2019-01-03", "MICHAEL KORS HOLDINGS LTD", "2014-12-31")]
+
+
+@pytest.mark.parametrize("ticker, holder, last_seen, name, first", [
+    # Energizer Holdings (1999-2015, now Edgewell 1096752); the 2015 SpinCo took the name and ticker
+    ("ENR", 1632790, "2015-07-01", "ENERGIZER HOLDINGS INC", "2008-01-16"),
+    # First American Corp (now CoreLogic 36047); First American Financial, spun off in 2010
+    ("FAF", 1472787, "2010-06-02", "FIRST AMERICAN CORP", "2008-01-16"),
+    # Hertz Global Holdings (2006-2016, now Herc 1364479); the new holding company of 2016
+    ("HTZ", 1657853, "2016-07-01", "HERTZ GLOBAL HOLDINGS INC", "2008-01-16"),
+    # Crane Holdings (2022-23, now Crane NXT 25445); the new Crane Co, first filing 2022-08-30
+    ("CR", 1944013, "2023-04-04", "CRANE HOLDINGS", "2022-06-30"),
+])
+def test_todays_ticker_map_holder_must_have_existed_by_the_eras_first_sighting(ticker, holder, last_seen, name,
+                                                                                   first):
+    """SEC's ticker map gives today's holder, which existed at the era's last
+    sighting under an agreeing name: a company formed while the era traded, which
+    took the old one's name and ticker. It must have existed by the era's first
+    sighting (`since`) too, also when the answer comes from the memo."""
+    title = DATA["issuers"][str(holder)]["name"]
+    r = TickerResolver(_Edgar(tickers={ticker: {"cik_str": holder, "ticker": ticker, "title": title}}))
+    assert r.resolve(ticker, last_seen, name=name).cik == holder          # a caller with no first sighting
+    assert r.resolve(ticker, last_seen, name=name, since=first).cik is None
 
 
 ALTAIR_MAP = {"ALTR": {"cik_str": 1701732, "ticker": "ALTR", "title": "Altair Engineering Inc."}}
