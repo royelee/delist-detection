@@ -10,8 +10,8 @@ from delist_detection.observations import Observation, ObservationIndex, load_ob
 from delist_detection.added_securities import AddedAcquirer, AddedSuccessor
 from delist_detection.history import Range, Sighting, ranges_from_sightings
 from delist_detection.security_master import (
-    EraResolution, FigiResolver, Issuer, Security, build_securities, era_cusips, era_last_seen, issuers_by_era,
-    refine_eras,
+    EraResolution, FigiResolver, Handoff, Issuer, Security, build_securities, era_cusips, era_last_seen,
+    issuers_by_era, refine_eras,
 )
 
 ERAS_FIX = Path(__file__).parent / "fixtures" / "eras"
@@ -470,6 +470,126 @@ def test_the_same_issuer_guard_weighs_only_the_same_class_over_overlapping_dates
         cusips={a.key: ["11111A101"], c.key: [], old.key: ["22222B101"], new.key: []})
     assert {k: r.sec_id for k, r in res.items()} == {a.key: "BBGCLASSA01", c.key: "BBGCLASSC01",
                                                     old.key: "BBGOLDLINE1", new.key: "BBGNEWLINE1"}
+
+
+# --- the CUSIP-handoff join (spec §17) --------------------------------------------
+
+
+def test_a_handoff_join_is_refused_when_another_issuer_is_confirmed_on_its_composite():
+    """Guard (a): E has no pick of its own and shares a CUSIP with F, its own
+    issuer's era, confirmed by CUSIP on Y -- but a different, known issuer's era
+    is also confirmed on Y (`_contradicted`'s first branch: an issuer's names
+    can outlive its stock and match a later line). E does not take Y."""
+    e = _era("EE", ("2012-06-29", "ONE CORP"), ("2014-06-30", "ONE CORP"))
+    f = _era("FF", ("2015-06-30", "ONE CORP NEW"))
+    g = _era("GG", ("2015-06-30", "OTHER CORP"))
+    figi = _Figi({
+        ("ID_CUSIP", "11111F101"): {"data": [_row("BBGSHARED01", "US", "FF", "ONE CORP NEW")]},
+        ("ID_CUSIP", "22222G101"): {"data": [_row("BBGSHARED01", "US", "GG", "OTHER CORP")]},
+    })
+    handoffs = [Handoff(e.key, f.key, "shared_cusip", "00000E101")]
+    res = FigiResolver(figi).resolve_many(
+        [e, f, g], issuers=issuers_by_era({e.key: 1, f.key: 1, g.key: 2}),
+        cusips={e.key: [], f.key: ["11111F101"], g.key: ["22222G101"]}, handoffs=handoffs)
+    assert res[f.key].sec_id == "BBGSHARED01" and res[f.key].source == "cusip"
+    assert res[g.key].sec_id == "BBGSHARED01" and res[g.key].source == "cusip"
+    assert res[e.key].sec_id == "CIK1-COMMON" and res[e.key].source == "placeholder"
+
+
+def test_a_handoff_join_is_refused_when_a_sibling_confirms_another_composite_over_the_same_dates():
+    """Guard (b): E's own issuer and class has another era (H) confirmed, over
+    overlapping dates, on a different composite than the one E's link reaches
+    (`_contradicted`'s second branch): E does not take it."""
+    e = _era("EE", ("2012-06-29", "ALPHA CO"), ("2014-06-30", "ALPHA CO"))
+    f = _era("FF", ("2015-06-30", "ALPHA CO NEW"))
+    h = _era("HH", ("2012-06-29", "ALPHA CO"), ("2014-06-30", "ALPHA CO"))
+    figi = _Figi({
+        ("ID_CUSIP", "11111F101"): {"data": [_row("BBGLINEY001", "US", "FF", "ALPHA CO NEW")]},
+        ("ID_CUSIP", "33333H101"): {"data": [_row("BBGLINEZ001", "US", "HH", "ALPHA CO")]},
+    })
+    handoffs = [Handoff(e.key, f.key, "shared_cusip", "00000E101")]
+    res = FigiResolver(figi).resolve_many(
+        [e, f, h], issuers=issuers_by_era({e.key: 1, f.key: 1, h.key: 1}),
+        cusips={e.key: [], f.key: ["11111F101"], h.key: ["33333H101"]}, handoffs=handoffs)
+    assert res[f.key].sec_id == "BBGLINEY001" and res[h.key].sec_id == "BBGLINEZ001"
+    assert res[e.key].sec_id == "CIK1-COMMON" and res[e.key].source == "placeholder"
+
+
+def test_a_handoff_chain_joins_all_or_none():
+    """Guard (c): two unpicked eras of one issuer and class share a CUSIP (a
+    chain) and reach a confirmed sibling's composite through one of them. Alone,
+    both join it; with a third, unlinked era of the same issuer and class that
+    has no pick of its own (it would be left alone on the placeholder), both
+    chain members are withdrawn together, not just one."""
+    e1 = _era("O1", ("2008-01-16", "MERGED CO"), ("2009-06-08", "MERGED CO"))
+    e2 = _era("O2", ("2012-06-29", "MERGED CO"))
+    f = _era("NW", ("2015-06-30", "MERGED CO NEW"))
+    figi = _Figi({("ID_CUSIP", "44444F101"): {"data": [_row("BBGCHAIN001", "US", "NW", "MERGED CO NEW")]}})
+    handoffs = [Handoff(e1.key, e2.key, "shared_cusip", "SHAREDCUSIP1"),
+               Handoff(e2.key, f.key, "shared_cusip", "HANDOFFCUSIP1")]
+    ciks = issuers_by_era({e1.key: 9, e2.key: 9, f.key: 9})
+    cusips = {e1.key: [], e2.key: [], f.key: ["44444F101"]}
+    alone = FigiResolver(figi).resolve_many([e1, e2, f], issuers=ciks, cusips=cusips, handoffs=handoffs)
+    assert {k: r.sec_id for k, r in alone.items()} == {e1.key: "BBGCHAIN001", e2.key: "BBGCHAIN001",
+                                                       f.key: "BBGCHAIN001"}
+
+    held = _era("H1", ("2016-06-30", "MERGED CO"))
+    res = FigiResolver(figi).resolve_many(
+        [e1, e2, f, held], issuers=issuers_by_era({e1.key: 9, e2.key: 9, f.key: 9, held.key: 9}),
+        cusips={**cusips, held.key: []}, handoffs=handoffs)
+    assert res[f.key].sec_id == "BBGCHAIN001" and res[f.key].source == "cusip"
+    assert res[e1.key].sec_id == "CIK9-COMMON" and res[e1.key].source == "placeholder"
+    assert res[e2.key].sec_id == "CIK9-COMMON" and res[e2.key].source == "placeholder"
+    assert res[held.key].sec_id == "CIK9-COMMON" and res[held.key].source == "placeholder"
+
+
+def test_a_handoff_link_across_share_classes_does_not_join():
+    """The join follows a link only between two eras of the same issuer AND
+    class: a class-A era sharing a CUSIP with a class-B era of the same issuer
+    reaches nothing."""
+    a = _era("AA", ("2012-06-29", "SPLIT CO CLASS A"))
+    b = _era("BB", ("2015-06-30", "SPLIT CO CLASS B"))
+    figi = _Figi({("ID_CUSIP", "55555B101"): {"data": [_row("BBGCLASSB01", "US", "BB", "SPLIT CO CLASS B")]}})
+    handoffs = [Handoff(a.key, b.key, "shared_cusip", "SHAREDXCLASS")]
+    res = FigiResolver(figi).resolve_many(
+        [a, b], issuers=issuers_by_era({a.key: 4, b.key: 4}),
+        cusips={a.key: [], b.key: ["55555B101"]}, handoffs=handoffs)
+    assert res[b.key].sec_id == "BBGCLASSB01"
+    assert res[a.key].sec_id == "CIK4-CLASS-A" and res[a.key].source == "placeholder"
+
+
+def test_a_handoff_link_across_issuers_does_not_join():
+    """The join follows a link only between two eras confirmed to the same
+    issuer CIK: a shared CUSIP between eras of two different issuers (an
+    unresolved ambiguity upstream) reaches nothing."""
+    a = _era("AA", ("2012-06-29", "ONE CO"))
+    b = _era("BB", ("2015-06-30", "TWO CO"))
+    figi = _Figi({("ID_CUSIP", "66666B101"): {"data": [_row("BBGISSUER02", "US", "BB", "TWO CO")]}})
+    handoffs = [Handoff(a.key, b.key, "shared_cusip", "SHAREDXISSUER")]
+    res = FigiResolver(figi).resolve_many(
+        [a, b], issuers=issuers_by_era({a.key: 7, b.key: 8}),
+        cusips={a.key: [], b.key: ["66666B101"]}, handoffs=handoffs)
+    assert res[b.key].sec_id == "BBGISSUER02"
+    assert res[a.key].sec_id == "CIK7-COMMON" and res[a.key].source == "placeholder"
+
+
+def test_an_era_linked_to_two_composites_through_handoffs_takes_neither():
+    """The chain reaches every composite a link from one of its members leads to
+    a confirmed sibling on; reaching two, it joins neither."""
+    e = _era("EE", ("2012-06-29", "SPLIT UP CO"))
+    f1 = _era("F1", ("2015-06-30", "SPLIT UP CO A"))
+    f2 = _era("F2", ("2016-06-30", "SPLIT UP CO B"))
+    figi = _Figi({
+        ("ID_CUSIP", "77777A101"): {"data": [_row("BBGFIRST001", "US", "F1", "SPLIT UP CO A")]},
+        ("ID_CUSIP", "88888B101"): {"data": [_row("BBGSECOND01", "US", "F2", "SPLIT UP CO B")]},
+    })
+    handoffs = [Handoff(e.key, f1.key, "shared_cusip", "SHAREDONE"),
+               Handoff(e.key, f2.key, "shared_cusip", "SHAREDTWO")]
+    res = FigiResolver(figi).resolve_many(
+        [e, f1, f2], issuers=issuers_by_era({e.key: 3, f1.key: 3, f2.key: 3}),
+        cusips={e.key: [], f1.key: ["77777A101"], f2.key: ["88888B101"]}, handoffs=handoffs)
+    assert res[f1.key].sec_id == "BBGFIRST001" and res[f2.key].sec_id == "BBGSECOND01"
+    assert res[e.key].sec_id == "CIK3-COMMON" and res[e.key].source == "placeholder"
 
 
 def test_build_securities_merges_eras_of_one_figi():
