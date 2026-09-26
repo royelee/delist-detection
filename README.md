@@ -564,7 +564,7 @@ python scripts/observations_from_instruments.py --instruments data/delisted_tick
 # or: scripts/observations_from_snapshots.py --dir <folder of dated index-membership CSVs> --out obs.csv
 python scripts/classify_universe.py --observations obs.csv   # → output/{securities,ticker_history,cusip_history,delistings,payouts,review,review_summary}.csv
 
-pytest -q                                # 1249 unit tests, no network
+pytest -q                                # 1281 unit tests, no network
 ```
 
 `classify_universe.py` prints a summary when it finishes: rows written per
@@ -838,7 +838,7 @@ cache/
     openfigi/*                   OpenFIGI mapping/filter response cache
     sec_data/ftd/*, sec_data/midas/*   Downloaded/summarized SEC data files
     nasdaq_halts/*                Nasdaq halt feed cache
-    ticker_resolution.json       Ticker→CIK memo, keyed by (ticker, observed_date)
+    ticker_resolution.json       Ticker→CIK memo, keyed by (ticker, observed_date, observed name)
 
 tests/                            Pytest suite with a FakeEdgar fixture and per-client fakes
 docs/
@@ -900,9 +900,29 @@ validates the candidate looks like a delist *target* (not an *acquirer*):
 5. **The era's own `name` → EDGAR cgi-bin company search.** Generates name
    variants (suffix-stripped, leading 1-3 tokens) and queries the ATOM
    endpoint, using the name from the era's own observations — not a stale
-   index-membership file elsewhere.
+   index-membership file elsewhere, nor a neighbouring era's name. A hit with
+   no name (EDGAR's answer when a query matches several companies) is
+   dropped; up to 5 candidates are ranked by the words the name shares with
+   their EDGAR names, current and former (the search matches a former name:
+   `MICHAEL KORS HOLDINGS LTD` finds Capri Holdings), and checked in that
+   order — one below the first only when one of its EDGAR names agrees.
 6. **EFTS 8-K frequency rank.** Counts CIKs in 8-Ks mentioning the
    ticker in the 120 days pre-delist; strict-validates each candidate.
+
+A renamed issuer files no Form 25 and keeps filing 10-Ks, so tier 6 rejects
+it. A **second pass** (`TickerResolver.infer_issuers`) answers the eras left
+with no CIK and no pin, from the run's own evidence, and never saves its
+answers: the 8-K frequency candidate that alone passes guard G and carried
+the era's name at its last sighting (`efts_frequency_renamed`: KORS@2014 →
+Capri Holdings), else the issuer of an era sharing its CUSIP (`shared_cusip`)
+or taking over from it at a CUSIP switch after a rename (`cusip_handoff`:
+Northeast Utilities' CUSIP ends as Eversource's begins). Guard G: the
+candidate existed by the era's first fails row, every row's description
+matches a name it carried by 30 days after the row's date (an earlier name
+counts: SEC updates descriptions slowly), and it is the only candidate that
+did — so a recycled ticker's later holder (NU → Nu Holdings, ALTR → Altair), a
+spin-off, or a company founded later is refused. Each such answer carries the
+`info` flag `issuer_inferred`.
 
 Validation: a candidate CIK is only accepted if it filed Form 25 or
 Form 15 within ±540 days of the observed delist date. In strict mode

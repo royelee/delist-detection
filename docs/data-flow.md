@@ -54,6 +54,8 @@ one observation per row per file).
               │  6 strategies, precision   │   3. company_tickers.json  4. EFTS Form-25/15
               │  order, strict-validated   │   5. era name → EDGAR company search
               │                            │   6. EFTS 8-K frequency rank
+              │  second pass, never saved  │   the rest: 8-K frequency through guard G,
+              │  (infer_issuers)           │   else a shared CUSIP or a CUSIP handoff
               └─────────────┬──────────────┘
                              │ FigiResolver.resolve_many (OpenFIGI, per era)
                              ▼
@@ -165,14 +167,17 @@ a failure. When the search still fails, a cached hit list is served marked
 stale; with nothing to fall back on, it raises instead of answering "no match".
 
 The ticker→CIK memo lives at `cache/ticker_resolution.json` and is keyed by
-`(ticker, observed_date)` so a recycled ticker resolves to the right issuer per
-date. The file is versioned (`{"__version__": 3, "entries": …}`); versions 2 and
-3 load, and a file before version 2 predates the date and name checks, so it is
-ignored and replaced on the next save. Answers of a withdrawn rule
-(`company_tickers_name_mismatch`, which let today's ticker-map holder beat a
-name-mismatched EFTS candidate) are dropped on load and resolved again. Each
-entry records the era name it was checked with, and a lookup with a different
-name resolves again. Misses are never saved: each run re-derives them, with the
+`(ticker, observed_date, observed name)` (`TICKER|date|NAME`) so a recycled
+ticker resolves to the right issuer per date and an answer holds only for the
+era name it was checked with. The file is versioned (`{"__version__": 4,
+"entries": …}`); versions 2 and 3, keyed `TICKER|date`, load re-keyed from each
+entry's `member_name`, and a file before version 2 predates the date and name
+checks, so it is ignored and replaced on the next save. Answers of a withdrawn
+rule (`company_tickers_name_mismatch`, which let today's ticker-map holder
+beat a name-mismatched EFTS candidate) are dropped on load and resolved again;
+`RETIRE_OLD_NAME_SEARCH` (off) would do the same for a version-2/3 file's
+`name_search` answers, written before the name search ranked its candidates.
+The second pass's answers are never saved. Misses are never saved: each run re-derives them, with the
 current code, from the cached search evidence. An answer reached while an EDGAR
 request failed, or through a stale copy (a submissions JSON or a company-search
 hit served after a failed refetch), is used for the run but never saved, and
@@ -356,15 +361,62 @@ target rather than an acquirer.
    whose display_name contains the literal `(TICKER)`.
 
 5. **The era's own `name` → EDGAR cgi-bin company search.** Uses the `name`
-   carried by the era's own observations (`ObservationIndex.name_on`), not a
-   stale index-membership file elsewhere; generates variants (full name,
-   suffix-stripped, leading 1-3 tokens), and queries
-   `www.sec.gov/cgi-bin/browse-edgar?company=…&type=…&output=atom`.
+   carried by the era's own observations (`pipeline.py` passes
+   `resolve(..., name=era.name)`: a date lookup, `ObservationIndex.name_on`,
+   can land on a neighbouring era's name when FTD rows of a shared CUSIP carry
+   the last sighting past it), not a stale index-membership file elsewhere;
+   generates variants (full name, suffix-stripped, leading 1-3 tokens), and
+   queries `www.sec.gov/cgi-bin/browse-edgar?company=…&type=…&output=atom`. A
+   hit with no name is no candidate: EDGAR answers a query matching several
+   companies with a list and no conformed name, and the CIK read from it is
+   the list's first (MICHAEL → Michael Baker). Up to 5 distinct CIKs are
+   ranked by the words the name shares with their EDGAR names, current and
+   former (the search matches a former name: MICHAEL KORS HOLDINGS LTD finds
+   Capri Holdings), then by date gap, and checked in that order; a candidate
+   below the first only when one of its EDGAR names agrees with the name
+   (Keurig Green Mountain, sharing KEURIG, is no DPS).
 
 6. **EFTS 8-K frequency rank.** Counts CIKs appearing in 8-Ks that mention
    the ticker in the 120 days before delisting. Validates each candidate
    in strict mode (must have Form 25/15 in window AND no 10-K/Q in the
    five years after `delist + 90d` — the latter rejects the acquirer).
+
+**The second pass** (`TickerResolver.infer_issuers`, after the memo is
+flushed). A renamed issuer files no Form 25 and keeps filing 10-Ks, so tier 6
+rejects it, and the company search sees only today's name. The eras left with
+no CIK and no pin, with at least 3 fails rows of their own
+(`security_master.era_rows`, `era_last_seen`'s row choice from the first
+observation to the last sighting), are answered in era-key order, and the
+answers are never saved (they depend on the run's other eras). A candidate CIK
+must pass **guard G**: it existed by the era's first fails row, every row's
+description matches a name it carried by 30 days after the row's date
+(`names.description_matches`; an earlier name counts, since SEC updates
+descriptions slowly — HCP INC COM STK until 2019-11-05, a month after EDGAR
+ends the name — while a name taken only later does not; a description that
+leaves no word to compare, F5,INC. COMMON STOCK, says nothing either way, and
+at least one must name the candidate: 2U INC COM STK confirms no one), and it
+is the only candidate that did.
+
+- **B, `efts_frequency_renamed`:** tier 6's candidates through G; the one left
+  must also carry the era's name at its last sighting and have filed within
+  400 days of it (KORS@2014 → Capri Holdings). Refused: GGP@2014 (Seritage
+  Growth Properties matches too), a spin-off founded after the rows began, an
+  ETN's rows under UAG.
+- **C, `shared_cusip` / `cusip_handoff`,** swept until nothing new links: the
+  issuer, through G, of the eras `security_master.cusip_handoffs` links to
+  this one — the same CUSIP (MHP and MHFI), or a switch: this era's CUSIP last
+  trades under its ticker within 5 trading days of another era's new CUSIP's
+  first row (no earlier row, 30+ days into the scanned window), trades under
+  no symbol 10 trading days later, and that era's issuer was renamed within 90
+  days from a name matching the old rows (NU → ES, LUK → JEF, KORS → CPRI). A
+  spin-off starting then carries no former name; a merger's acquirer has an
+  older CUSIP.
+
+Each answer carries the `info` flag `issuer_inferred`, whose reason says how.
+The parent/subsidiary case is out of its reach: L-3 Communications Holdings
+merged into its subsidiary L-3 Communications Corp (renamed L3 Technologies),
+whose former name matches the parent's fails rows, so the Holdings eras take
+the subsidiary's CIK — pin them.
 
 A pin does not silence the name check: whenever the era carries a `name`,
 the resolved CIK's EDGAR name is checked against it and a disagreement is

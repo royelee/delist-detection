@@ -28,7 +28,7 @@ editable install.
 
 ```bash
 pip install -e .                         # editable install (Python ≥3.10) — once per env
-pytest                                    # full suite (1249 tests, offline, no network)
+pytest                                    # full suite (1281 tests, offline, no network)
 pytest tests/test_payout_extractor.py -v  # one file
 pytest tests/test_payout_extractor.py::test_match_in_cash_family_altr -v   # one test
 
@@ -163,7 +163,18 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   each strict-validated. The pin and the observation name (from
   `ObservationIndex.cik_pin_on`/`.name_on`, wired in by `pipeline.py`) replace
   the old `--cik-map`/`--names` CLI files; the pin still beats every other
-  tier and is never written to the on-disk resolver cache.
+  tier and is never written to the on-disk resolver cache. The pipeline looks
+  each era up under its own pin and name (`resolve(..., pin=, name=)`). The
+  name search drops EDGAR's nameless multi-company hits and ranks up to 5
+  candidates by the words the name shares with their EDGAR names (current
+  and former). `infer_issuers` is a second pass, never cached, for eras left
+  with no CIK and no pin (a renamed issuer files no Form 25 and keeps filing
+  10-Ks): an 8-K frequency candidate (`efts_frequency_renamed`), or the issuer
+  of an era linked by a shared CUSIP or a CUSIP switch after a rename
+  (`shared_cusip`/`cusip_handoff`, `security_master.cusip_handoffs`), each
+  through guard G (existed by the era's first fails row, every row's
+  description matches a name it carried by 30 days after the row, the only
+  candidate that did); each answer carries the info flag `issuer_inferred`.
 - `security_master.py` — `FigiResolver.resolve_many()` (a `sec_id` pin wins;
   else CUSIP jobs, then the ticker, then a name filter — see the spec's
   Implementation notes), `build_securities()` (merges eras sharing a
@@ -481,10 +492,12 @@ conflate them.
   verification proves a wrong CIK, extend that dict — don't patch the resolver.
 - **Payout extraction is cash-only; the DLRET table supports full consideration.** Auto-extraction from EDGAR remains cash-only. The DLRET table abstains (neutral mark) only when no consideration terms are supplied; when stock-leg terms (`stock_ratio`, `acquirer_price`) are provided via `--merger-terms`, it computes the full cash+stock consideration (e.g. AET→CVS: $145 cash + 0.8378 CVS @ $80 = $212.02, DLRET = +11.6%). The `--last-trade-closes`, `--recoveries`, and `--merger-terms` CSVs are keyed by `sec_id` and accept an optional `delist_date` column for per-event overrides (blank/absent = applies to all delistings of that security); a row matching no delisting stops the run.
 - **The resolver cache is versioned.** `cache/ticker_resolution.json` carries
-  `{"__version__": 3, ...}` (versions 2 and 3 load; an older file is ignored, not
-  trusted, and replaced on the next save) and never holds a miss or an answer
-  that rested on a failed request or a stale copy. The pipeline writes it after
-  each resolving stage and on the way out of a run.
+  `{"__version__": 4, ...}`, each answer keyed `TICKER|date|observed name`
+  (versions 2 and 3, keyed `TICKER|date`, load re-keyed from their stored
+  `member_name`; an older file is ignored, not trusted, and replaced on the
+  next save) and never holds a miss, a second-pass (`infer_issuers`) answer, or
+  an answer that rested on a failed request or a stale copy. The pipeline
+  writes it after each resolving stage and on the way out of a run.
 - **`payouts.csv` is gated; `delistings.csv` carries the raw extraction
   alongside it.** Every merger payout is checked against the last trade close
   (`payout_gate.reconcile`) before it reaches `payouts.csv`; `delistings.csv`
