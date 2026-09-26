@@ -7,9 +7,11 @@ import pytest
 from delist_detection.figi_resolution import FigiCandidate
 from delist_detection.ftd import FtdIndex, FtdRow
 from delist_detection.observations import Observation, ObservationIndex, load_observations, split_eras
+from delist_detection.added_securities import AddedAcquirer, AddedSuccessor
+from delist_detection.history import Range, Sighting, ranges_from_sightings
 from delist_detection.security_master import (
-    AddedAcquirer, AddedSuccessor, EraResolution, FigiResolver, Issuer, Range, Security, Sighting, build_securities,
-    era_cusips, era_last_seen, issuers_by_era, ranges_from_sightings, refine_eras,
+    EraResolution, FigiResolver, Issuer, Security, build_securities, era_cusips, era_last_seen, issuers_by_era,
+    refine_eras,
 )
 
 ERAS_FIX = Path(__file__).parent / "fixtures" / "eras"
@@ -643,7 +645,7 @@ def test_ranges_from_sightings_takes_named_sightings():
 
 
 def test_history_rows_end_at_the_last_delisting_or_stay_open_while_listed():
-    from delist_detection.security_master import history_rows
+    from delist_detection.history import history_rows
     sec = Security("BBGX", 1, "COMMON", "X CO", "Common Stock", True, "cusip")
     sig = [Sighting("2020-01-02", "X", "observation"), Sighting("2020-06-30", "XX", "observation"),
            Sighting("2021-01-04", "XX", "observation")]

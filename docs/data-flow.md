@@ -95,7 +95,7 @@ one observation per row per file).
               ┌────────────────────────────┐
               │  enrich() → delistings.csv │   + payouts.csv, review.csv +
               │  (+ ticker_history.csv,    │     review_summary.csv (review_triage),
-              │     cusip_history.csv)     │     cusip_history.csv from ranges_from_sightings
+              │     cusip_history.csv)     │     cusip_history.csv from history.ranges_from_sightings
               └─────────────┬──────────────┘
                              │ handling.py / bmp_correction.py / qlib_adapter.py
                              │ — all keyed on sec_id

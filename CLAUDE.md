@@ -152,15 +152,18 @@ variable names assume (security, era, sighting, pin, …).
   `sec_id`), `candidate_cusips`/`era_cusips`/`era_last_seen` (FTD-confirmed
   CUSIPs and true last sighting; an era takes an FTD CUSIP only when a fails
   row's description names its issuer, `names.description_matches` against the
-  observed and EDGAR names — spec D21), `ranges_from_sightings()` (turns dated
-  `Sighting`s into `ticker_history`/`cusip_history` ranges). `Issuer` (a CIK
-  and its EDGAR names; `issuers_by_era` builds the era key -> `Issuer` map
-  `candidate_cusips` and `resolve_many` take) and `AddedAcquirer`/
-  `AddedSuccessor` (a security the run adds, with its one ticker_history row)
-  are its types. It also builds each security's sightings
-  (`ticker_sightings`/`cusip_sightings`, `own_last_seen`), its
-  `ticker_history`/`cusip_history` rows (`history_rows`), and checks the
-  ticker ranges (`ticker_range_review`: `ticker_range_overlap`/`ticker_shared`).
+  observed and EDGAR names — spec D21). `Issuer` (a CIK and its EDGAR names;
+  `issuers_by_era` builds the era key -> `Issuer` map that `candidate_cusips`,
+  `resolve_many` and `build_securities` take, the one source of an era's CIK,
+  read with `cik_of`) is its type.
+- `history.py` — a security's dated history: its sightings
+  (`ticker_sightings`/`cusip_sightings`, `own_last_seen`, `ticker_on`),
+  `ranges_from_sightings()` (dated `Sighting`s into `ticker_history`/
+  `cusip_history` ranges; `value_on` reads one), its rows (`history_rows`), and
+  the range review (`ticker_range_review`: `ticker_range_overlap`/`ticker_shared`).
+- `added_securities.py` — `AddedAcquirer`/`AddedSuccessor` (`AddedSecurity`): a
+  security the run adds that no observation names, with its one
+  ticker_history row.
 - `successors.py` — the successor after a FIGI change: a security of the run
   that starts right after the last trade (`successor_in_run`, `SecurityStart`),
   else the successor issuer's 8-K12B found by full-text search

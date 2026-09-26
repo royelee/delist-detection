@@ -36,10 +36,14 @@ from .reconstruction import (
     unmatched_override_keys,
 )
 from .review_triage import Decision, ReviewItem, Triage, flag_name, is_blank, triage
+from .added_securities import AddedAcquirer, AddedSecurity, AddedSuccessor
+from .history import (
+    Sighting, cusip_sightings, history_rows, own_last_seen, ranges_from_sightings, ticker_on, ticker_range_review,
+    ticker_sightings, value_on,
+)
 from .security_master import (
-    AddedAcquirer, AddedSecurity, AddedSuccessor, EraResolution, FigiResolver, Issuer, Security, Sighting,
-    build_securities, candidate_cusips, cik_of, cusip_sightings, era_last_seen, history_rows, issuers_by_era,
-    own_last_seen, ranges_from_sightings, refine_eras, ticker_range_review, ticker_sightings, value_on,
+    EraResolution, FigiResolver, Issuer, Security, build_securities, candidate_cusips, cik_of, era_last_seen,
+    issuers_by_era, refine_eras,
 )
 from .store import DelistingKey, write_tables
 from .successors import (
@@ -185,15 +189,6 @@ def _close_age(row_date: str, last_trade: date) -> int:
     while day < last_trade:
         day, n = next_trading_day(day), n + 1
     return n
-
-
-def _ticker_on(sig: list[Sighting]) -> Callable[[str], str | None]:
-    def f(day: str) -> str | None:
-        before = [s.value for s in sig if s.day <= day]
-        if before:
-            return before[-1]
-        return sig[0].value if sig else None
-    return f
 
 
 def _resolution_source(sec: Security, issuers: dict[str, Issuer], resolutions: dict[str, TickerResolution]) -> str:
@@ -524,7 +519,7 @@ def _context_builder(securities: dict[str, Security], sightings: dict[str, list[
         return SecurityContext(
             security=s,
             siblings=sibs,
-            ticker_on=_ticker_on(sig),
+            ticker_on=ticker_on(sig),
             last_seen=own_last_seen(s, sig),
             seen_after=lambda day, sig=sig: any(x.day > day for x in sig),
             listed_today=listed_now,
@@ -948,7 +943,7 @@ def _delisting_rows(delistings: list[Delisting], closes: dict[DelistingKey, floa
 def _history_rows(ctx: _RunContext, securities: dict[str, Security], search: _DelistingSearch,
                   sec_cusips: dict[str, list[str]], ftd: FtdIndex,
                   added: dict[str, AddedSecurity]) -> tuple[list[dict], list[dict]]:
-    """10b. The ticker_history and cusip_history rows (`security_master.history_rows`):
+    """10b. The ticker_history and cusip_history rows (`history.history_rows`):
     each observed security's ranges end at its last delisting's last trade day
     unless it is listed today. An added (acquirer/successor) security gets one
     ticker row, built directly: `ranges_from_sightings`' filter that drops

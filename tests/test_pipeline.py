@@ -17,7 +17,7 @@ from delist_detection.observations import Observation, ObservationIndex
 from delist_detection.payout_extractor import PayoutResult
 from delist_detection.acquirers import acquirer_cik
 from delist_detection.pipeline import Clients, Overrides, _merge_review_rows, run
-from delist_detection.security_master import own_last_seen, ticker_range_review
+from delist_detection.history import own_last_seen, ticker_range_review
 from delist_detection.successors import SecurityStart, successor_from_8k12b, successor_in_run, successor_search_name
 from delist_detection.review_triage import Decision
 from delist_detection.security_master import Security
@@ -233,7 +233,7 @@ def test_own_last_seen_ignores_an_otc_tail_under_another_symbol():
     XYZQ after the real delisting; last_seen must stay at the last sighting
     under the security's own era ticker(s), not the later OTC-tail date."""
     from delist_detection.observations import TickerEra
-    from delist_detection.security_master import Sighting
+    from delist_detection.history import Sighting
 
     era = TickerEra("XYZ", "2020-01-01", "2020-06-15", [])
     sec = Security("BBGXYZ", 555, "COMMON", "XYZ CORP", "Common Stock", True, "cusip", eras=[era])
@@ -1064,7 +1064,7 @@ def test_cusip_history_keeps_a_retired_cusip_closed_and_the_current_one_open(fak
 
 def test_last_trade_close_uses_the_cusip_whose_range_holds_the_last_trade_day():
     from delist_detection.ftd import FtdIndex
-    from delist_detection.security_master import Range, value_on
+    from delist_detection.history import Range, value_on
 
     def close_on(ranges, day, symbol):     # how the pipeline prices a last trade day
         return ftd.close_of(day, cusip=value_on(ranges, day), symbol=symbol)
