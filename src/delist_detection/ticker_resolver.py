@@ -776,7 +776,9 @@ class TickerResolver:
         fewer than `ERA_MIN_ROWS` gets no answer. A candidate CIK must pass the
         guard (`_guard`): it existed by the era's first row, every row's
         description matches a name it carried by `GUARD_NAME_DAYS` after the
-        row's date (`_fits_rows`), and it is the only candidate that did.
+        row's date (`_fits_rows`), and it is the only candidate that did. Every
+        answer also needs one of the era's observed names to match an EDGAR
+        name of its issuer (`_named`).
 
         B (`efts_frequency_renamed`): the first pass's 8-K frequency candidates,
         through the guard, and the one left also carried the era's name at its
@@ -798,7 +800,7 @@ class TickerResolver:
         out: dict[str, InferredIssuer] = {}
         for e in todo:
             self._transient = False
-            got = self._frequency_renamed(e, rows[e.key], last_seen[e.key])
+            got = self._named(e, self._frequency_renamed(e, rows[e.key], last_seen[e.key]), last_seen[e.key])
             if got is not None:
                 out[e.key] = got
             self._mark_inferred(e, last_seen[e.key])
@@ -816,7 +818,8 @@ class TickerResolver:
                 if e.key in out:
                     continue
                 self._transient = False
-                got = self._handoff(rows[e.key], links[e.key], known, ftd, issuer_cusips)
+                got = self._named(e, self._handoff(rows[e.key], links[e.key], known, ftd, issuer_cusips),
+                                  last_seen[e.key])
                 if got is not None:
                     new[e.key] = got
                 self._mark_inferred(e, last_seen[e.key])
@@ -824,6 +827,24 @@ class TickerResolver:
                 return out
             out |= new
             known |= {k: v.cik for k, v in new.items()}
+
+    def _named(self, era: TickerEra, got: InferredIssuer | None, last_seen: str) -> InferredIssuer | None:
+        """`got`, when one of the era's observed names `names.description_matches`
+        some EDGAR name of its issuer, current or former (an era with no name,
+        or none with a word to compare, is not refuted); else None. The fails
+        rows under a stale snapshot's ticker can be the ticker's later holder's:
+        TRI@2008, Triad Hospitals, shares Thomson Reuters' CUSIP."""
+        if got is None or not era.names:
+            return got
+        try:
+            sub = self._submissions(got.cik, last_seen)
+        except FATAL:
+            raise
+        except Exception as e:
+            self._note_transient(e)
+            return None
+        names = edgar_names(sub) if isinstance(sub, dict) else ()
+        return got if any(description_matches(n, names) for n in era.names) else None
 
     def _mark_inferred(self, era: TickerEra, last_seen: str) -> None:
         """A second-pass read that hit a failed request or a stale copy degrades

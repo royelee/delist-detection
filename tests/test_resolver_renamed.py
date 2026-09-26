@@ -329,6 +329,17 @@ def test_a_cusip_switch_to_an_acquirer_or_an_unrelated_issuer_is_refused(eras, f
         dict.fromkeys(["CCU@2008-01-16", "TEG@2008-01-16", "CHSI@2012-06-29", "ACT@2013-06-28"])
 
 
+def test_an_era_whose_name_names_no_name_of_the_issuer_takes_nothing(eras, ftd, no_frequency):
+    """TRI@2008 is Triad Hospitals (1074771, pinned), which a snapshot kept listing
+    after its 2007 buyout; the fails rows under TRI in its span are Thomson
+    Reuters' (THOMSON REUTERS CORP), whose CUSIP TRI@2012 shares. Without the pin
+    and the first pass's answer, that CUSIP would hand the recycled ticker's
+    later holder to it: its name, TRIAD HOSPITALS INC, names none of Thomson
+    Reuters' names."""
+    got = _infer(eras, ftd, list(eras), PASS1, unpin=["TRI@2008-01-16"])
+    assert got.get("TRI@2008-01-16") is None
+
+
 def test_renamed_issuers_still_take_over_their_old_cusips(eras, ftd, no_frequency):
     got = _infer(eras, ftd, list(eras), PASS1)
     want = {"CPO@2008-01-16": 1046257, "HANS@2008-01-16": 865752, "KORS@2012-06-29": 1530721,
