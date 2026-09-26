@@ -16,6 +16,7 @@ import math
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
+from typing import NamedTuple
 
 from .classifier import DelistRecord
 from .crsp_codes import CrspBucket
@@ -147,16 +148,24 @@ def enrich(
 _DLRET_BLANK_IN_TABLE = {DlretMethod.ABSTAIN_NO_CONSIDERATION, DlretMethod.UNKNOWN}
 
 
-def for_delisting(m: Mapping, sec_id: str, delist_date: str | None):
-    """The value `m` holds for one delisting: its exact `(sec_id, delist_date)`
-    entry wins; otherwise the security-wide `sec_id` entry. None if neither is
-    present.
+class DelistingKey(NamedTuple):
+    """One delisting, as delistings.csv keys it. A plain tuple of the same two
+    values is the same key (an override file's `(sec_id, delist_date)` rows)."""
+    sec_id: str
+    delist_date: str | None
+
+
+def for_delisting(m: Mapping, key: tuple[str, str | None]):
+    """The value `m` holds for the delisting `key`: its exact `(sec_id,
+    delist_date)` entry wins; otherwise the security-wide `sec_id` entry. None
+    if neither is present.
 
     This lets a security with more than one delisting carry per-delisting inputs
     while the common single-delisting case stays a plain {sec_id: value} map.
     """
-    if (sec_id, delist_date) in m:
-        return m[(sec_id, delist_date)]
+    sec_id, _ = key
+    if key in m:
+        return m[key]
     return m.get(sec_id)
 
 
@@ -190,21 +199,21 @@ def build_delistings_table(
 
     out: list[EnrichedDelistRecord] = []
     for rec in records:
-        key, delist_date = rec.sec_id or rec.ticker.upper(), rec.delist_date
-        terms = for_delisting(merger_terms, key, delist_date) or {}
-        cash = terms.get("cash_per_share", for_delisting(payouts, key, delist_date))
+        key = DelistingKey(rec.sec_id or rec.ticker.upper(), rec.delist_date)
+        terms = for_delisting(merger_terms, key) or {}
+        cash = terms.get("cash_per_share", for_delisting(payouts, key))
         out.append(enrich(
             rec,
-            exchange=normalize_exchange(for_delisting(exchanges, key, delist_date)),
-            last_trade_close=for_delisting(last_trade_closes, key, delist_date),
+            exchange=normalize_exchange(for_delisting(exchanges, key)),
+            last_trade_close=for_delisting(last_trade_closes, key),
             payout_per_share=cash,
             stock_ratio=terms.get("stock_ratio"),
             acquirer_price=terms.get("acquirer_price"),
             acquirer_ticker=terms.get("acquirer_ticker"),
-            recovery_ratio=for_delisting(recovery_ratios, key, delist_date),
-            payout_source=for_delisting(payout_sources, key, delist_date),
-            payout_confidence=for_delisting(payout_confidences, key, delist_date),
-            extra_flags=for_delisting(payout_flags, key, delist_date) or (),
+            recovery_ratio=for_delisting(recovery_ratios, key),
+            payout_source=for_delisting(payout_sources, key),
+            payout_confidence=for_delisting(payout_confidences, key),
+            extra_flags=for_delisting(payout_flags, key) or (),
         ))
     return out
 

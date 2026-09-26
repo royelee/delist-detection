@@ -212,14 +212,15 @@ def test_own_last_seen_ignores_an_otc_tail_under_another_symbol():
     XYZQ after the real delisting; last_seen must stay at the last sighting
     under the security's own era ticker(s), not the later OTC-tail date."""
     from delist_detection.observations import TickerEra
+    from delist_detection.security_master import Sighting
 
     era = TickerEra("XYZ", "2020-01-01", "2020-06-15", [])
     sec = Security("BBGXYZ", 555, "COMMON", "XYZ CORP", "Common Stock", True, "cusip", eras=[era])
     sig = [
-        ("2020-01-01", "XYZ", "observation"),
-        ("2020-06-15", "XYZ", "observation"),
-        ("2020-07-01", "XYZQ", "ftd"),        # post-delisting OTC tail, later than the real last sighting
-        ("2020-09-01", "XYZQ", "ftd"),
+        Sighting("2020-01-01", "XYZ", "observation"),
+        Sighting("2020-06-15", "XYZ", "observation"),
+        Sighting("2020-07-01", "XYZQ", "ftd"),        # post-delisting OTC tail, later than the real last sighting
+        Sighting("2020-09-01", "XYZQ", "ftd"),
     ]
     assert _own_last_seen(sec, sig) == "2020-06-15"
 
@@ -1672,7 +1673,8 @@ def test_with_no_last_trade_date_the_window_is_anchored_on_the_form25_filing():
     ev = DelistingEvent(sec_id="BBGAPAOLD01", cik=6769, ticker="APAXXXX", delist_date="2021-03-14", record=record,
                         last_trade=LastTrade(None, "", ("no_last_trade_date",)), form25=None, form25_sub=sub,
                         exchange="NASDAQ")
-    starts = {"BBGAPAOLD01": ("2007-12-17", 6769, {"APA"}), "BBGAPANEW01": ("2021-03-01", 1841666, {"APA"})}
+    starts = {"BBGAPAOLD01": pipeline.SecurityStart("2007-12-17", 6769, {"APA"}),
+              "BBGAPANEW01": pipeline.SecurityStart("2021-03-01", 1841666, {"APA"})}
     assert pipeline._successor_in_run(ev, starts) == ("BBGAPANEW01", "same_ticker")
 
 

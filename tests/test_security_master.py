@@ -8,8 +8,8 @@ from delist_detection.figi_resolution import FigiCandidate
 from delist_detection.ftd import FtdIndex, FtdRow
 from delist_detection.observations import Observation, ObservationIndex, load_observations, split_eras
 from delist_detection.security_master import (
-    EraResolution, FigiResolver, Range, build_securities, era_cusips, era_last_seen, ranges_from_sightings,
-    refine_eras,
+    AddedAcquirer, AddedSuccessor, EraResolution, FigiResolver, Issuer, Range, Security, Sighting, build_securities,
+    era_cusips, era_last_seen, issuers_by_era, ranges_from_sightings, refine_eras,
 )
 
 ERAS_FIX = Path(__file__).parent / "fixtures" / "eras"
@@ -277,7 +277,7 @@ def test_resolve_many_orders_routes():
     })
     res = FigiResolver(figi).resolve_many(
         [aet, qcor, goog, fb],
-        ciks={aet.key: 1122304, qcor.key: 1034842, goog.key: 1652044, fb.key: 1326801},
+        issuers=issuers_by_era({aet.key: 1122304, qcor.key: 1034842, goog.key: 1652044, fb.key: 1326801}),
         cusips={aet.key: ["00817Y108"], qcor.key: ["74835Y101"], goog.key: [], fb.key: []},
     )
     assert res[aet.key] == EraResolution(aet.key, "BBG000FJLFX8", "cusip", res[aet.key].candidate, (),
@@ -297,7 +297,7 @@ def test_resolve_many_reports_every_cusip_of_the_era_that_maps_to_its_figi():
         ("ID_CUSIP", "11111A101"): {"data": [_row("BBGRSPLIT01", "US", "RS", "REVERSE SPLIT CO")]},
         ("ID_CUSIP", "99999Z999"): {"data": [_row("BBGOTHER001", "US", "OTH", "OTHER CO")]},
     })
-    res = FigiResolver(figi).resolve_many([era], ciks={era.key: 1},
+    res = FigiResolver(figi).resolve_many([era], issuers=issuers_by_era({era.key: 1}),
                                           cusips={era.key: ["11111A200", "11111A101", "99999Z999"]})
     assert res[era.key].sec_id == "BBGRSPLIT01" and res[era.key].cusips == ("11111A200", "11111A101")
     assert len(figi.jobs) == 4                    # the 3 CUSIP jobs + the ticker job: no extra OpenFIGI call
@@ -317,13 +317,14 @@ def test_a_ticker_resolved_era_keeps_its_ftd_cusip_unless_openfigi_maps_it_elsew
         ("ID_CUSIP", "67890B202"): {"data": [_row("BBGELSEWHR1", "US", "XX", "ELSEWHERE INC"),
                                              _row("BBGELSEWHR2", "US", "YY", "ELSEWHERE INC")]},
     })
-    res = FigiResolver(figi).resolve_many([quiet, moved], ciks={quiet.key: 1, moved.key: 2},
+    res = FigiResolver(figi).resolve_many([quiet, moved], issuers=issuers_by_era({quiet.key: 1, moved.key: 2}),
                                           cusips={quiet.key: ["12345A101"], moved.key: ["67890B202"]})
     assert (res[quiet.key].source, res[quiet.key].cusips) == ("ticker", ("12345A101",))
     assert (res[moved.key].source, res[moved.key].cusips) == ("ticker", ())
     # a CUSIP the era did not get from its own FTD rows still needs OpenFIGI's confirmation
     obs_only = split_eras([Observation("QQ", "2016-06-30", "QUIET CO", cusip="24680C303")])[0]
-    res2 = FigiResolver(figi).resolve_many([obs_only], ciks={obs_only.key: 1}, cusips={obs_only.key: ["24680C303"]})
+    res2 = FigiResolver(figi).resolve_many([obs_only], issuers=issuers_by_era({obs_only.key: 1}),
+                                           cusips={obs_only.key: ["24680C303"]})
     assert res2[obs_only.key].cusips == ()
 
 
@@ -331,7 +332,7 @@ def test_resolve_many_keeps_the_first_cusip_when_nothing_can_verify_it():
     pinned = split_eras([Observation("X", "2020-01-02", "X CORP", sec_id="BBG000PIN001")])[0]
     placeholder = _era("Y", ("2020-01-02", "Y CORP"))
     res = FigiResolver(_Figi({})).resolve_many(
-        [pinned, placeholder], ciks={pinned.key: None, placeholder.key: 5},
+        [pinned, placeholder], issuers=issuers_by_era({pinned.key: None, placeholder.key: 5}),
         cusips={pinned.key: ["PINCUSIP1", "PINCUSIP2"], placeholder.key: ["YCUSIP001"]})
     assert res[pinned.key].cusips == ("PINCUSIP1",)
     assert res[placeholder.key].sec_id == "CIK5-COMMON" and res[placeholder.key].cusips == ("YCUSIP001",)
@@ -340,7 +341,8 @@ def test_resolve_many_keeps_the_first_cusip_when_nothing_can_verify_it():
 def test_pin_and_unresolved():
     pinned = split_eras([Observation("X", "2020-01-02", "X CORP", sec_id="BBG000PIN001")])[0]
     orphan = _era("Y", ("2020-01-02", "Y CORP"))
-    res = FigiResolver(_Figi({})).resolve_many([pinned, orphan], ciks={pinned.key: None, orphan.key: None},
+    res = FigiResolver(_Figi({})).resolve_many([pinned, orphan],
+                                               issuers=issuers_by_era({pinned.key: None, orphan.key: None}),
                                                cusips={pinned.key: [], orphan.key: []})
     assert res[pinned.key].sec_id == "BBG000PIN001" and res[pinned.key].source == "pin"
     assert res[orphan.key].sec_id is None and res[orphan.key].flags == ("observation_unresolved",)
@@ -361,8 +363,9 @@ def test_the_ticker_route_accepts_on_the_issuers_edgar_names_but_never_on_an_acq
     ciks, cusips = {nu.key: 72741, qcor.key: 1034842}, {nu.key: [], qcor.key: []}
     names = {72741: ("EVERSOURCE ENERGY", "NORTHEAST UTILITIES", "NORTHEAST UTILITIES SYSTEM"),
              1034842: ("QUESTCOR PHARMACEUTICALS INC",)}
-    assert FigiResolver(figi).resolve_many([nu], ciks=ciks, cusips=cusips)[nu.key].sec_id == "CIK72741-COMMON"
-    res = FigiResolver(figi).resolve_many([nu, qcor], ciks=ciks, cusips=cusips, issuer_names=names)
+    alone = FigiResolver(figi).resolve_many([nu], issuers=issuers_by_era(ciks), cusips=cusips)
+    assert alone[nu.key].sec_id == "CIK72741-COMMON"
+    res = FigiResolver(figi).resolve_many([nu, qcor], issuers=issuers_by_era(ciks, names), cusips=cusips)
     assert (res[nu.key].sec_id, res[nu.key].source) == ("BBG000BQ87N0", "ticker")
     assert (res[qcor.key].sec_id, res[qcor.key].flags) == ("CIK1034842-COMMON", ("no_figi",))
 
@@ -381,9 +384,9 @@ def test_edgar_names_do_not_hand_an_era_a_figi_another_issuers_cusip_confirms():
                       "Properties, Inc.)", "GENERAL GROWTH PROPERTIES INC"),
              1496048: ("Brookfield Property REIT Inc.", "GGP Inc.", "General Growth Properties, Inc.",
                        "New GGP, Inc.")}
-    res = FigiResolver(figi).resolve_many([old, new], ciks={old.key: 895648, new.key: 1496048},
-                                          cusips={old.key: ["370021107"], new.key: ["36174X101"]},
-                                          issuer_names=names)
+    res = FigiResolver(figi).resolve_many([old, new],
+                                          issuers=issuers_by_era({old.key: 895648, new.key: 1496048}, names),
+                                          cusips={old.key: ["370021107"], new.key: ["36174X101"]})
     assert (res[new.key].sec_id, res[new.key].source) == ("BBG000BG3HG3", "cusip")
     assert res[old.key].sec_id == "CIK895648-COMMON"
 
@@ -413,7 +416,7 @@ def test_edgar_names_do_not_move_an_era_off_the_line_its_issuers_cusip_confirms_
     cusips = {jec.key: ["469814107"], j12.key: [], j22.key: ["46982L108"], wyn.key: ["98310W108"], wynd.key: []}
     names = {52988: ("JACOBS SOLUTIONS INC.", "JACOBS ENGINEERING GROUP INC /DE/"),
              1361658: ("Travel & Leisure Co.", "Wyndham Destinations, Inc.", "WYNDHAM WORLDWIDE CORP")}
-    res = FigiResolver(figi).resolve_many(eras, ciks=ciks, cusips=cusips, issuer_names=names)
+    res = FigiResolver(figi).resolve_many(eras, issuers=issuers_by_era(ciks, names), cusips=cusips)
     assert {k: r.sec_id for k, r in res.items()} == {
         jec.key: "BBG000BMFFQ0", j12.key: "CIK52988-COMMON", j22.key: "BBG019C1BQR4",
         wyn.key: "BBG000PV2L86", wynd.key: "BBG000PV2L86"}
@@ -437,10 +440,10 @@ def test_edgar_names_do_not_split_an_issuers_placeholder():
                   ("TICKER", "WEC"): wec})
     eras = [ace, cb, wec08, wec14]
     res = FigiResolver(figi).resolve_many(
-        eras, ciks={ace.key: 896159, cb.key: 896159, wec08.key: 783325, wec14.key: 783325},
-        cusips={ace.key: ["H0023R105"], cb.key: [], wec08.key: ["976657106"], wec14.key: ["976657106"]},
-        issuer_names={896159: ("Chubb Ltd", "ACE LTD", "ACE Ltd"),
-                      783325: ("WEC ENERGY GROUP, INC.", "WISCONSIN ENERGY CORP")})
+        eras, issuers=issuers_by_era({ace.key: 896159, cb.key: 896159, wec08.key: 783325, wec14.key: 783325},
+                                     {896159: ("Chubb Ltd", "ACE LTD", "ACE Ltd"),
+                                      783325: ("WEC ENERGY GROUP, INC.", "WISCONSIN ENERGY CORP")}),
+        cusips={ace.key: ["H0023R105"], cb.key: [], wec08.key: ["976657106"], wec14.key: ["976657106"]})
     assert {k: r.sec_id for k, r in res.items()} == {ace.key: "CIK896159-COMMON", cb.key: "CIK896159-COMMON",
                                                     wec08.key: "BBG000BWP7D9", wec14.key: "BBG000BWP7D9"}
 
@@ -460,9 +463,9 @@ def test_the_same_issuer_guard_weighs_only_the_same_class_over_overlapping_dates
         ("TICKER", "GMB"): {"data": [_row("BBGNEWLINE1", "US", "GMB", "GAMMA CORP")]},
     })
     res = FigiResolver(figi).resolve_many(
-        [a, c, old, new], ciks={a.key: 1, c.key: 1, old.key: 2, new.key: 2},
-        cusips={a.key: ["11111A101"], c.key: [], old.key: ["22222B101"], new.key: []},
-        issuer_names={1: ("ALPHA CO", "BETA HOLDINGS"), 2: ("GAMMA CORP", "DELTA INC")})
+        [a, c, old, new], issuers=issuers_by_era({a.key: 1, c.key: 1, old.key: 2, new.key: 2},
+                                                 {1: ("ALPHA CO", "BETA HOLDINGS"), 2: ("GAMMA CORP", "DELTA INC")}),
+        cusips={a.key: ["11111A101"], c.key: [], old.key: ["22222B101"], new.key: []})
     assert {k: r.sec_id for k, r in res.items()} == {a.key: "BBGCLASSA01", c.key: "BBGCLASSC01",
                                                     old.key: "BBGOLDLINE1", new.key: "BBGNEWLINE1"}
 
@@ -538,3 +541,38 @@ def test_ranges_from_sightings_takes_one_ticker_per_day_and_never_inverts():
     s4 = [("2020-01-02", "X", "observation"), ("2020-02-03", "Y", "observation")]
     assert ranges_from_sightings(s4, end="2020-01-15", open_ended=False) == [
         Range("X", "2020-01-02", "2020-01-15", "observation")]
+
+
+def test_issuers_by_era_names_each_known_issuer_and_skips_the_unknown():
+    issuers = issuers_by_era({"A": 1, "B": None, "C": 2, "D": 1}, {1: ["ALPHA CO", "OLD ALPHA"]})
+    assert issuers == {"A": Issuer(1, ("ALPHA CO", "OLD ALPHA")), "C": Issuer(2, ()),
+                       "D": Issuer(1, ("ALPHA CO", "OLD ALPHA"))}
+
+
+def test_an_added_acquirers_row_spans_its_fails_rows_or_its_fallback_day():
+    from datetime import date
+
+    from delist_detection.ftd import FtdRow
+    sec = Security("BBGACQ00001", 7, "COMMON", "ACQ CORP", "Common Stock", False, "cusip")
+    acq = AddedAcquirer(sec, "ACQ", date(2018, 11, 28))
+    assert acq.span() == ("2018-11-28", "2018-11-28")
+    acq.rows += [FtdRow("2019-03-05", "C1", "ACQ", "ACQ CORP", 1.0), FtdRow("2018-11-20", "C1", "ACQ", "ACQ CORP", 1.0)]
+    assert acq.history_row(listed=False, exchange=None) == {
+        "sec_id": "BBGACQ00001", "ticker": "ACQ", "exchange": None, "valid_from": "2018-11-20",
+        "valid_to": "2019-03-05", "source": "ftd"}
+    assert acq.history_row(listed=True, exchange="NYSE")["valid_to"] is None
+
+
+def test_an_added_successors_row_starts_on_its_filing_date():
+    sec = Security("BBG009S39JX6", 1652044, "CLASS A", "ALPHABET INC-CL A", "Common Stock", False, "ticker")
+    succ = AddedSuccessor(sec, "GOOGL", "2015-10-05")
+    assert succ.history_row(listed=False, exchange=None) == {
+        "sec_id": "BBG009S39JX6", "ticker": "GOOGL", "exchange": None, "valid_from": "2015-10-05",
+        "valid_to": "2015-10-05", "source": "edgar_8k"}
+
+
+def test_ranges_from_sightings_takes_named_sightings():
+    got = ranges_from_sightings([Sighting("2020-01-02", "AAA", "observation"),
+                                 Sighting("2020-06-30", "AAB", "observation")], end=None, open_ended=True)
+    assert [(r.value, r.valid_from, r.valid_to) for r in got] == [("AAA", "2020-01-02", "2020-06-29"),
+                                                                 ("AAB", "2020-06-30", None)]

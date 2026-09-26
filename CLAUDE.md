@@ -133,7 +133,11 @@ that turns a list of observations into the seven output tables; see
   CUSIPs and true last sighting; an era takes an FTD CUSIP only when a fails
   row's description names its issuer, `names.description_matches` against the
   observed and EDGAR names — spec D21), `ranges_from_sightings()` (turns dated
-  sightings into `ticker_history`/`cusip_history` ranges).
+  `Sighting`s into `ticker_history`/`cusip_history` ranges). `Issuer` (a CIK
+  and its EDGAR names; `issuers_by_era` builds the era key -> `Issuer` map
+  `candidate_cusips` and `resolve_many` take) and `AddedAcquirer`/
+  `AddedSuccessor` (a security the run adds, with its one ticker_history row)
+  are its types.
 - `form25.py` — parses a Form 25's XML or text (exchange, `class_text`, rule),
   labels the exchange, reads `class_kind` (common/preferred/warrant/unit/…)
   from the class text, and `match_security()`s it to one observed security of
@@ -205,7 +209,8 @@ that turns a list of observations into the seven output tables; see
 - `dlret.py` — DLRET hub: `resolve_dlret`/`DlretResult`/`compute_dlret` (self-explaining delisting return). `bmp_correction.py` re-exports for backward compatibility.
 - `reconstruction.py` — `EnrichedDelistRecord`, `enrich`, `build_delistings_table`,
   `delisting_row`. `output/delistings.csv` is the **primary output**, keyed by
-  `(sec_id, delist_date)`.
+  `(sec_id, delist_date)` (`DelistingKey`; `for_delisting` looks a delisting up
+  in a map keyed by it or by the bare `sec_id`).
 - `qlib_adapter.py` — DataFrame splicers over a `(datetime, instrument)` panel,
   where `instrument` is a `sec_id`: `inject_terminal_labels`,
   `apply_backtest_exits`, `apply_bmp_corrections`, each reading every input

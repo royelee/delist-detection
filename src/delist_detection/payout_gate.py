@@ -89,7 +89,7 @@ class GatedPayouts:
         flag for review but is not counted)."""
         return sum(
             any(f.startswith(GATE_FAILED) for f in fl)
-            and key not in self.payouts and not for_delisting(self.merged_terms, *key)
+            and key not in self.payouts and not for_delisting(self.merged_terms, key)
             for key, fl in self.flags.items()
         )
 
@@ -126,12 +126,11 @@ def gate_payouts(
             m.pop(key, None)
 
     for key in keys:
-        sec_id, delist_date = key
-        has_csv = for_delisting(csv_terms, sec_id, delist_date) is not None
+        has_csv = for_delisting(csv_terms, key) is not None
         terms = None if has_csv else llm_terms.get(key)
         r = reconcile(
             out.payouts.get(key),
-            for_delisting(last_closes, sec_id, delist_date),
+            for_delisting(last_closes, key),
             terms,
             acquirer_price(terms.acquirer_ticker, key) if terms and terms.acquirer_ticker else None,
             tol,
@@ -159,8 +158,7 @@ def gate_payouts(
     for key, terms in llm_terms.items():
         if terms.stock_ratio is None or terms.deal_type == "election":
             continue   # settled in pass 1
-        sec_id, delist_date = key
-        if for_delisting(csv_terms, sec_id, delist_date) is not None:
+        if for_delisting(csv_terms, key) is not None:
             out.dropped["csv_override"] += 1
             continue
         acq = (terms.acquirer_ticker or "").strip()
@@ -173,7 +171,7 @@ def gate_payouts(
             out.dropped["no_acq_price"] += 1
             flag_terms_gate_drop(key, "no_acq_price")
             continue
-        last_close = for_delisting(last_closes, sec_id, delist_date)
+        last_close = for_delisting(last_closes, key)
         if last_close is None or last_close <= 0:
             # <=0 guard mirrors _resolve_merger (dlret.py): a zero/blank close
             # would both divide-by-zero here and yield a NaN DLRET downstream.

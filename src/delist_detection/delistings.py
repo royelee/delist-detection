@@ -23,6 +23,7 @@ from .last_trade import LastTrade, decide_last_trade, eightk_last_trade
 from .listing_status import exchanges_around, issuer_exchange, withdrawal_kind
 from .midas import MIDAS_START
 from .nasdaq_halts import last_trade_from_halt
+from .reconstruction import DelistingKey
 from .security_master import Security
 from .trading_calendar import previous_trading_day
 
@@ -71,6 +72,12 @@ class DelistingEvent:
     form25: Form25 | None
     form25_sub: EdgarSubmission | None
     exchange: str
+
+    @property
+    def key(self) -> DelistingKey:
+        """`(sec_id, delist_date)`: the delisting's key in delistings.csv and in
+        every per-delisting map of the run."""
+        return DelistingKey(self.sec_id, self.delist_date)
 
     @property
     def flags(self) -> list[str]:

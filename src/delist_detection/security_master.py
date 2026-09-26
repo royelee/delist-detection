@@ -12,6 +12,7 @@ from collections import Counter, defaultdict
 from collections.abc import Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import date, timedelta
+from typing import ClassVar, NamedTuple
 
 from .figi_resolution import (
     FigiCandidate, accept, bloomberg_ticker, filter_query, placeholder_id, security_kind,
@@ -54,6 +55,27 @@ class EraResolution:
     # or name, its own FTD CUSIP when OpenFIGI has no US line for it; for a pin
     # or a placeholder (nothing to check against) the era's first candidate CUSIP.
     cusips: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class Issuer:
+    """The issuer (CONTEXT.md) of an era's security: its CIK, and every name
+    EDGAR records for it, current and former (`evidence.edgar_names`)."""
+    cik: int
+    names: tuple[str, ...] = ()
+
+
+def issuers_by_era(ciks: Mapping[str, int | None],
+                   names: Mapping[int, Sequence[str]] | None = None) -> dict[str, Issuer]:
+    """Each era's `Issuer`, by era key, for the eras whose issuer CIK is known
+    (`ciks`: era key -> CIK or None), named from `names` (CIK -> EDGAR names)."""
+    names = names or {}
+    return {k: Issuer(cik, tuple(names.get(cik, ()))) for k, cik in ciks.items() if cik is not None}
+
+
+def _cik_of(issuers: Mapping[str, Issuer], era_key: str) -> int | None:
+    issuer = issuers.get(era_key)
+    return issuer.cik if issuer is not None else None
 
 
 def _cusip_runs(rows: Sequence[FtdRow]) -> list[tuple[str, list[FtdRow]]]:
@@ -203,10 +225,10 @@ def era_cusips(era: TickerEra, ftd: FtdIndex, issuer_names: Sequence[str] = (),
     return list(era.cusips) + [c for c, _ in counts.most_common() if c not in era.cusips]
 
 
-def candidate_cusips(eras: Sequence[TickerEra], ftd: FtdIndex, ciks: Mapping[str, int | None],
-                     issuer_names: Mapping[int, Sequence[str]]) -> dict[str, list[str]]:
+def candidate_cusips(eras: Sequence[TickerEra], ftd: FtdIndex,
+                     issuers: Mapping[str, Issuer]) -> dict[str, list[str]]:
     """`era_cusips` for every era (by key), each checked against its issuer's
-    EDGAR names (`issuer_names`, by CIK).
+    EDGAR names (`issuers`, by era key: the eras whose issuer is known).
 
     An era whose issuer is unknown (no CIK) has only its observed names, which a
     stale snapshot can leave behind a rename (CME Group is still "CHICAGO
@@ -216,11 +238,10 @@ def candidate_cusips(eras: Sequence[TickerEra], ftd: FtdIndex, ciks: Mapping[str
     dates tie it to this era. An era with a known issuer is held to its own
     issuer's names, so a stale era (Triad Hospitals on TRI in 2008) never takes
     the CUSIP of the company that later holds its ticker (Thomson Reuters)."""
-    out = {e.key: era_cusips(e, ftd, issuer_names.get(ciks[e.key], ()))
-           for e in eras if ciks.get(e.key) is not None}
+    out = {e.key: era_cusips(e, ftd, issuers[e.key].names) for e in eras if e.key in issuers}
     taken_by_known_issuers = {c for taken in out.values() for c in taken}
     for e in eras:
-        if ciks.get(e.key) is None:
+        if e.key not in issuers:
             out[e.key] = era_cusips(e, ftd, (), taken_by_known_issuers)
     return out
 
@@ -243,7 +264,7 @@ def era_last_seen(era: TickerEra, ftd: FtdIndex, horizon_days: int = 400) -> str
     return best
 
 
-def _contradicted(era: TickerEra, composite: str, eras: Sequence[TickerEra], ciks: Mapping[str, int | None],
+def _contradicted(era: TickerEra, composite: str, eras: Sequence[TickerEra], issuers: Mapping[str, Issuer],
                   confirmed: Mapping[str, str]) -> bool:
     """Whether another era's pin or CUSIP (`confirmed`: era key -> composite)
     rules out `composite` for `era`, a candidate that only the issuer's EDGAR
@@ -254,12 +275,12 @@ def _contradicted(era: TickerEra, composite: str, eras: Sequence[TickerEra], cik
     So the candidate is ruled out when an era of another known issuer is
     confirmed on it, or when an era of the same issuer and share class is
     confirmed on another composite over overlapping dates."""
-    cik, cls = ciks.get(era.key), share_class_from_name(era.name)
+    cik, cls = _cik_of(issuers, era.key), share_class_from_name(era.name)
     for other in eras:
         comp = confirmed.get(other.key)
         if comp is None or other.key == era.key:
             continue
-        other_cik = ciks.get(other.key)
+        other_cik = _cik_of(issuers, other.key)
         if comp == composite:
             if other_cik is not None and other_cik != cik:
                 return True
@@ -279,15 +300,14 @@ class FigiResolver:
     def __init__(self, figi) -> None:
         self.figi = figi
 
-    def resolve_many(self, eras: Sequence[TickerEra], *, ciks: Mapping[str, int | None],
-                     cusips: Mapping[str, list[str]],
-                     issuer_names: Mapping[int, Sequence[str]] | None = None) -> dict[str, EraResolution]:
+    def resolve_many(self, eras: Sequence[TickerEra], *, issuers: Mapping[str, Issuer],
+                     cusips: Mapping[str, list[str]]) -> dict[str, EraResolution]:
         """Each era's FIGI (spec §8.3): a `sec_id` pin; else the first of its
         CUSIPs (`cusips`, at most `MAX_CUSIPS`) that OpenFIGI maps to one US
         composite; else its ticker, then a name search, where a candidate is
         accepted only when its name agrees with the era's observed names or,
         failing that, its issuer's EDGAR names, current and former
-        (`issuer_names`, by CIK: Northeast Utilities, seen under ES before its
+        (`issuers`, by era key: Northeast Utilities, seen under ES before its
         rename, is accepted onto Bloomberg's EVERSOURCE ENERGY line because
         EDGAR lists both names for CIK 72741). A dead line Bloomberg renamed to
         its acquirer is still rejected: the acquirer's name is not one of the
@@ -297,7 +317,6 @@ class FigiResolver:
         issuer's placeholder. Else the issuer's placeholder, or unresolved with
         no issuer."""
         eras_by_key(eras)                                # every era is keyed by era.key below: refuse duplicates
-        issuer_names = issuer_names or {}
         out: dict[str, EraResolution] = {}
         jobs: list[dict] = []
         plan: dict[str, tuple[list[str], list[int], int]] = {}
@@ -331,11 +350,12 @@ class FigiResolver:
         def named(era: TickerEra, cands: list[FigiCandidate]) -> tuple[FigiCandidate | None, bool]:
             """The accepted candidate, and whether only the EDGAR names accepted it."""
             c = accept(cands, ticker=era.ticker, names=era.names, via_cusip=False)
-            edgar = issuer_names.get(ciks.get(era.key), ())
+            issuer = issuers.get(era.key)
+            edgar = issuer.names if issuer is not None else ()
             if c is not None or not edgar:
                 return c, False
             c = accept(cands, ticker=era.ticker, names=[*era.names, *edgar], via_cusip=False)
-            if c is None or _contradicted(era, c.composite, eras, ciks, confirmed):
+            if c is None or _contradicted(era, c.composite, eras, issuers, confirmed):
                 return None, False
             return c, True
 
@@ -359,7 +379,7 @@ class FigiResolver:
                     picks[era.key] = ("name", c, edgar_only)
 
         def group(era: TickerEra) -> tuple[int | None, str]:
-            return ciks.get(era.key), share_class_from_name(era.name)
+            return _cik_of(issuers, era.key), share_class_from_name(era.name)
 
         # An issuer's placeholder holds its eras of one class that no FIGI confirms.
         # An era that only the EDGAR names take off it would leave a sibling there:
@@ -368,7 +388,7 @@ class FigiResolver:
         # an era stays with the group; repeated until no group is split.
         while True:
             held = {group(e) for e in eras
-                    if e.key not in out and e.key not in picks and ciks.get(e.key) is not None}
+                    if e.key not in out and e.key not in picks and e.key in issuers}
             split = [e.key for e in eras if e.key in picks and picks[e.key][2] and group(e) in held]
             if not split:
                 break
@@ -393,7 +413,7 @@ class FigiResolver:
                 out[era.key] = EraResolution(era.key, cand.composite, source, cand, (),
                                              tuple(c for c, got, f in zip(tried, by_cusip, found) if own(c, got, f)))
                 continue
-            cik = ciks.get(era.key)
+            cik = _cik_of(issuers, era.key)
             if cik is not None:
                 out[era.key] = EraResolution(era.key, placeholder_id(cik, share_class_from_name(era.name)),
                                              "placeholder", None, ("no_figi",), tuple(tried[:1]))
@@ -427,6 +447,14 @@ def build_securities(resolutions: Mapping[str, EraResolution], eras: Mapping[str
     return out
 
 
+class Sighting(NamedTuple):
+    """One dated sighting of a security's ticker or CUSIP (`value`), from an
+    observation or an FTD row (`source`: "observation" | "ftd")."""
+    day: str
+    value: str
+    source: str
+
+
 @dataclass(frozen=True)
 class Range:
     value: str
@@ -441,9 +469,9 @@ def value_on(ranges: Iterable[Range], day: date) -> str | None:
     return next((r.value for r in ranges if r.valid_from <= d and (r.valid_to is None or d <= r.valid_to)), None)
 
 
-def ranges_from_sightings(sightings: Iterable[tuple[str, str, str]], *, end: str | None,
+def ranges_from_sightings(sightings: Iterable[Sighting], *, end: str | None,
                           open_ended: bool) -> list[Range]:
-    """Dated `(day, value, source)` sightings -> consecutive ranges of one value.
+    """Dated `(day, value, source)` sightings (`Sighting`) -> consecutive ranges of one value.
 
     Each range runs from its first sighting to the day before the next range's
     first sighting; the last one ends at `end`, or stays open (`open_ended`),
@@ -488,3 +516,51 @@ def ranges_from_sightings(sightings: Iterable[tuple[str, str, str]], *, end: str
             continue                              # never an inverted range
         out.append(Range(v, first, to, "observation" if "observation" in sources else "ftd"))
     return out
+
+
+@dataclass
+class AddedSecurity:
+    """A security the run adds that no observation names -- a merger's acquirer
+    (`AddedAcquirer`) or an exchange transfer's successor (`AddedSuccessor`) --
+    with the one ticker it is known by. Its one ticker_history row, built
+    directly (`ranges_from_sightings` would drop a lone sighting), runs over
+    `span()` and names its `source`."""
+    security: Security
+    ticker: str
+    source: ClassVar[str] = ""
+
+    def span(self) -> tuple[str, str]:
+        """(first, last) day the run saw it."""
+        raise NotImplementedError
+
+    def history_row(self, *, listed: bool, exchange: str | None) -> dict:
+        """Its ticker_history row: open-ended while it is listed today."""
+        first, last = self.span()
+        return {"sec_id": self.security.sec_id, "ticker": self.ticker, "exchange": exchange, "valid_from": first,
+                "valid_to": None if listed else last, "source": self.source}
+
+
+@dataclass
+class AddedAcquirer(AddedSecurity):
+    """A merger's acquirer, seen in the fails rows under its ticker around each
+    merger that names it (every merger's window, not just the first), else on
+    the first such merger's last trade day (`fallback_day`)."""
+    fallback_day: date
+    rows: list[FtdRow] = field(default_factory=list)
+    source: ClassVar[str] = "ftd"
+
+    def span(self) -> tuple[str, str]:
+        dates = sorted(r.date for r in self.rows)
+        first = dates[0] if dates else self.fallback_day.isoformat()
+        return first, (dates[-1] if dates else first)
+
+
+@dataclass
+class AddedSuccessor(AddedSecurity):
+    """An exchange transfer's successor, seen on its 8-K12B's filing date (never
+    before the day after the predecessor's last trade)."""
+    filing_date: str
+    source: ClassVar[str] = "edgar_8k"
+
+    def span(self) -> tuple[str, str]:
+        return self.filing_date, self.filing_date
