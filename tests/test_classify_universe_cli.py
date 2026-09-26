@@ -63,8 +63,11 @@ def test_argument_parser_defaults():
 
 def test_parser_epilog_documents_exit_codes():
     epilog = cli.build_parser().epilog or ""
-    assert "0" in epilog and "2" in epilog and "3" in epilog
-    assert "1  aborted: OpenFIGI unavailable" in epilog
+    for code in ("0  ", "1  ", "2  ", "3  ", "4  "):
+        assert code in epilog
+    assert "1  unexpected crash" in epilog
+    assert "4  aborted: OpenFIGI unavailable" in epilog
+    assert "--merger-terms" in epilog and "match no delisting" in epilog
 
 
 def _entry_with_run_raising(monkeypatch, exc):
@@ -76,14 +79,14 @@ def _entry_with_run_raising(monkeypatch, exc):
     return cli.entry()
 
 
-def test_an_openfigi_outage_exits_1_with_no_outputs_written(monkeypatch, capsys):
-    """OpenFIGI down after its retries is not a
-    refusal (exit 2) but an outage: exit 1, and the message says nothing was
-    written and to rerun later."""
+def test_an_openfigi_outage_exits_4_with_no_outputs_written(monkeypatch, capsys):
+    """OpenFIGI down after its retries is not a refusal (exit 2) nor a crash
+    (exit 1) but an outage: exit 4, and the message says nothing was written
+    and to rerun later."""
     from delist_detection.openfigi import OpenFigiUnavailable
 
     rc = _entry_with_run_raising(monkeypatch, OpenFigiUnavailable("OpenFIGI /mapping kept failing after 6 attempts"))
-    assert rc == 1
+    assert rc == 4
     err = capsys.readouterr().err
     assert "OpenFIGI unavailable after retries; no outputs written; rerun later" in err
 
@@ -97,15 +100,76 @@ def test_a_refusal_still_exits_2(monkeypatch, capsys):
     assert _entry_with_run_raising(monkeypatch, EdgarBlocked("SEC returned 403")) == 2
 
 
-def test_every_fatal_exception_is_an_abort_and_nothing_else_is(monkeypatch):
-    """The CLI catches fatal.FATAL, the one list of exceptions that stop a run;
-    any other exception is not turned into an abort code."""
+def test_every_fatal_exception_has_its_own_exit_code_and_nothing_else_is_caught(monkeypatch):
+    """The CLI catches fatal.FATAL, the one list of exceptions that stop a run,
+    each with its exit code: a refusal 2, an OpenFIGI outage 4. Any other
+    exception is an unexpected crash: it is not caught, so Python exits 1."""
+    from delist_detection.edgar import EdgarBlocked
     from delist_detection.fatal import FATAL
+    from delist_detection.openfigi import OpenFigiBlocked, OpenFigiUnavailable
 
-    for exc_type in FATAL:
-        assert _entry_with_run_raising(monkeypatch, exc_type("x")) in (1, 2), exc_type
+    expected = {EdgarBlocked: 2, OpenFigiBlocked: 2, OpenFigiUnavailable: 4}
+    assert set(FATAL) == set(expected)              # a new fatal exception needs its code here
+    for exc_type, code in expected.items():
+        assert _entry_with_run_raising(monkeypatch, exc_type("x")) == code, exc_type
     with pytest.raises(ValueError):
-        _entry_with_run_raising(monkeypatch, ValueError("override rows that match no delisting"))
+        _entry_with_run_raising(monkeypatch, ValueError("boom"))
+    with pytest.raises(KeyError):
+        _entry_with_run_raising(monkeypatch, KeyError("boom"))
+
+
+def test_an_override_row_that_matches_no_delisting_exits_2_on_one_line(monkeypatch, capsys):
+    """The pipeline finds an override row that names no delisting mid-run, before
+    anything is written: a bad input file (exit 2), not a crash (exit 1)."""
+    from delist_detection.reconstruction import OverrideFileError
+
+    rc = _entry_with_run_raising(monkeypatch, OverrideFileError(
+        "override rows that match no delisting: --recoveries rec.csv line 3: BBG999"))
+    assert rc == 2
+    err = capsys.readouterr().err.strip()
+    assert "\n" not in err and "rec.csv line 3: BBG999" in err and "no outputs written" in err
+
+
+def _entry_with_inputs(monkeypatch, tmp_path, *argv, observations="ticker,as_of\nAET,2018-06-29\n",
+                       default_decisions=None):
+    """entry() over real input files: observations from `observations`, the rest
+    from `argv`; no client may be built."""
+    obs = tmp_path / "obs.csv"
+    obs.write_text(observations)
+    monkeypatch.setenv("EDGAR_USER_AGENT", "Test Co test@example.com")
+    monkeypatch.setattr(cli, "use_machine_wide_limit", lambda *a, **k: None)
+    monkeypatch.setattr(cli, "DEFAULT_REVIEW_DECISIONS", default_decisions or str(tmp_path / "no-decisions.csv"))
+    monkeypatch.setattr(cli, "default_clients", lambda *a, **kw: pytest.fail("no client may be built"))
+    monkeypatch.setattr(sys, "argv", ["classify_universe.py", "--observations", str(obs), *argv])
+    return cli.entry()
+
+
+@pytest.mark.parametrize("flag,text,where", [
+    ("--merger-terms", "sec_id,cash_per_share\nBBG1,1O.5\n", "line 2: cash_per_share '1O.5' is not a number"),
+    ("--merger-terms", "sec_id,stock_ratio,acquirer_price\nBBG1,0.5,\n", "line 2: "),
+    ("--last-trade-closes", "sec_id,close\nBBG1,1\n", "line 1: missing required column"),
+    ("--recoveries", "sec_id,recovery_ratio\nBBG1,abc\n", "line 2: recovery_ratio 'abc' is not a number"),
+])
+def test_a_malformed_override_file_exits_2_naming_the_file_and_line(monkeypatch, capsys, tmp_path, flag, text, where):
+    path = tmp_path / "override.csv"
+    path.write_text(text)
+    assert _entry_with_inputs(monkeypatch, tmp_path, flag, str(path)) == 2
+    err = capsys.readouterr().err.strip()
+    assert "\n" not in err and f"{path} {where}" in err
+
+
+@pytest.mark.parametrize("flag", ["--merger-terms", "--last-trade-closes", "--recoveries", "--review-decisions"])
+def test_a_missing_input_file_exits_2_naming_it(monkeypatch, capsys, tmp_path, flag):
+    missing = tmp_path / "nope.csv"
+    assert _entry_with_inputs(monkeypatch, tmp_path, flag, str(missing)) == 2
+    err = capsys.readouterr().err.strip()
+    assert "\n" not in err and str(missing) in err
+
+
+def test_a_malformed_observations_file_exits_2_naming_the_file_and_line(monkeypatch, capsys, tmp_path):
+    assert _entry_with_inputs(monkeypatch, tmp_path, observations="ticker,as_of\nAET,someday\n") == 2
+    err = capsys.readouterr().err.strip()
+    assert "\n" not in err and "obs.csv" in err and "line 2" in err
 
 
 def test_main_returns_0_when_no_review_errors(monkeypatch, capsys):
@@ -177,45 +241,29 @@ def test_no_review_decisions_file_at_the_default_path_means_no_decisions(monkeyp
     assert _run_main.seen["review_decisions"] == []
 
 
-def test_an_explicit_missing_review_decisions_path_exits_2(monkeypatch, tmp_path):
-    monkeypatch.setenv("EDGAR_USER_AGENT", "Test Co test@example.com")
-    monkeypatch.setattr(cli, "use_machine_wide_limit", lambda *a, **k: None)
-    monkeypatch.setattr(cli, "default_clients", lambda *a, **kw: pytest.fail("no client may be built"))
-    monkeypatch.setattr(sys, "argv", ["classify_universe.py", "--observations", "x.csv",
-                                      "--review-decisions", str(tmp_path / "nope.csv")])
-    with pytest.raises(SystemExit) as exc:
-        cli.main()
-    assert exc.value.code == 2
+def test_an_explicit_missing_review_decisions_path_exits_2(monkeypatch, capsys, tmp_path):
+    missing = tmp_path / "nope.csv"
+    assert _entry_with_inputs(monkeypatch, tmp_path, "--review-decisions", str(missing)) == 2
+    err = capsys.readouterr().err.strip()
+    assert "\n" not in err and str(missing) in err
 
 
 def test_an_explicit_path_spelling_out_the_default_still_exits_2_when_missing(monkeypatch, tmp_path):
-    """Minor 1 (Task 2 review): comparing the raw path string to
-    DEFAULT_REVIEW_DECISIONS would wrongly treat an explicitly-given path that
-    happens to equal the default as "the default" and silently swallow a
-    missing file. The None-sentinel fix must still exit 2 here."""
+    """Comparing the raw path string to DEFAULT_REVIEW_DECISIONS would wrongly
+    treat an explicitly-given path that happens to equal the default as "the
+    default" and silently swallow a missing file: it must still exit 2."""
     same_as_default = str(tmp_path / "review_decisions.csv")
-    monkeypatch.setattr(cli, "DEFAULT_REVIEW_DECISIONS", same_as_default)
-    monkeypatch.setenv("EDGAR_USER_AGENT", "Test Co test@example.com")
-    monkeypatch.setattr(cli, "use_machine_wide_limit", lambda *a, **k: None)
-    monkeypatch.setattr(cli, "default_clients", lambda *a, **kw: pytest.fail("no client may be built"))
-    monkeypatch.setattr(sys, "argv", ["classify_universe.py", "--observations", "x.csv",
-                                      "--review-decisions", same_as_default])
-    with pytest.raises(SystemExit) as exc:
-        cli.main()
-    assert exc.value.code == 2
+    rc = _entry_with_inputs(monkeypatch, tmp_path, "--review-decisions", same_as_default,
+                            default_decisions=same_as_default)
+    assert rc == 2
 
 
-def test_a_decisions_file_with_decision_reject_exits_2(monkeypatch, tmp_path):
+def test_a_decisions_file_with_decision_reject_exits_2_naming_the_line(monkeypatch, capsys, tmp_path):
     path = tmp_path / "decisions.csv"
     path.write_text("sec_id,delist_date,ticker,flag,decision,note\nS1,,X,no_figi,reject,bad\n")
-    monkeypatch.setenv("EDGAR_USER_AGENT", "Test Co test@example.com")
-    monkeypatch.setattr(cli, "use_machine_wide_limit", lambda *a, **k: None)
-    monkeypatch.setattr(cli, "default_clients", lambda *a, **kw: pytest.fail("no client may be built"))
-    monkeypatch.setattr(sys, "argv", ["classify_universe.py", "--observations", "x.csv",
-                                      "--review-decisions", str(path)])
-    with pytest.raises(SystemExit) as exc:
-        cli.main()
-    assert exc.value.code == 2
+    assert _entry_with_inputs(monkeypatch, tmp_path, "--review-decisions", str(path)) == 2
+    err = capsys.readouterr().err.strip()
+    assert "\n" not in err and f"{path}:2" in err
 
 
 def test_an_unusable_rate_lock_stops_the_run_before_any_request(monkeypatch):

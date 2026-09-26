@@ -32,7 +32,8 @@ from .observations import ObservationIndex, TickerEra, eras_by_key, normalize_ti
 from .payout_gate import DEFAULT_TOL, GatedPayouts, gate_payouts
 from .prefetch import Serialized, warm
 from .reconstruction import (
-    DelistingKey, build_delistings_table, delisting_row, for_delisting, unmatched_override_keys,
+    DelistingKey, OverrideFileError, build_delistings_table, delisting_row, for_delisting, override_row_name,
+    unmatched_override_keys,
 )
 from .review_triage import Decision, ReviewItem, Triage, flag_name, is_blank, triage
 from .security_master import (
@@ -333,7 +334,7 @@ def run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_
     after the acquirer lookups, and on the way out, error or not. On the way out
     of an aborted run, a memo that cannot be written is logged and the abort (a
     refusal, an OpenFIGI outage, Ctrl-C) is what reaches the caller, so the CLI
-    still exits with that abort's code (2 for a refusal, 1 for an outage)."""
+    still exits with that abort's code (2 for a refusal, 4 for an OpenFIGI outage)."""
     try:
         summary = _run(index, clients, overrides, out_dir=out_dir, tol=tol, limit=limit, log=log,
                        sec_workers=sec_workers, review_decisions=review_decisions)
@@ -583,14 +584,16 @@ def _find_delistings(ctx: _RunContext, securities: dict[str, Security], sec_cusi
 
 
 def _check_overrides(overrides: Overrides, events: list[Delisting]) -> None:
-    """6. Every override row must name a delisting of this run."""
+    """6. Every override row must name a delisting of this run: one that does not
+    stops the run before anything is written (OverrideFileError, naming each such
+    row's flag, file and line)."""
     keys = [e.key for e in events]
     bad = []
     for name, m in (("--last-trade-closes", overrides.last_trade_closes),
                     ("--merger-terms", overrides.merger_terms), ("--recoveries", overrides.recoveries)):
-        bad += [f"{name}: {k}" for k in unmatched_override_keys(m, keys)]
+        bad += [f"{name} {override_row_name(m, k)}" for k in unmatched_override_keys(m, keys)]
     if bad:
-        raise ValueError("override rows that match no delisting: " + "; ".join(map(str, bad)))
+        raise OverrideFileError("override rows that match no delisting: " + "; ".join(bad))
 
 
 def _last_trade_closes(ctx: _RunContext, events: list[Delisting], securities: dict[str, Security],

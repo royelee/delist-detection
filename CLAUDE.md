@@ -46,7 +46,7 @@ python scripts/accept_review.py --flag terms_gate_failed --note "sampled 5, all 
 # End-to-end pipeline (the canonical way to use the library) — classify a universe → output/delistings.csv (+ 6 more tables), then firm-month-correct a returns panel:
 python scripts/classify_universe.py --observations obs.csv --last-trade-closes lt.csv --merger-terms terms.csv --recoveries rec.csv   # → output/{securities,ticker_history,cusip_history,delistings,payouts,review,review_summary}.csv
 python scripts/compute_corrected_returns.py --panel panel.csv --delistings output/delistings.csv --out corrected.parquet   # firm-month BMP correction, keyed on sec_id
-# override-CSV columns are keyed by sec_id[,delist_date] (a blank/absent delist_date applies to every delisting of that security): lt.csv=`sec_id,last_trade_close[,delist_date]` · terms.csv=`sec_id,cash_per_share,stock_ratio,acquirer_price,acquirer_ticker[,delist_date]` · rec.csv=`sec_id,recovery_ratio[,delist_date]`. A row that matches no delisting stops the run.
+# override-CSV columns are keyed by sec_id[,delist_date] (a blank/absent delist_date applies to every delisting of that security): lt.csv=`sec_id,last_trade_close[,delist_date]` · terms.csv=`sec_id,cash_per_share,stock_ratio,acquirer_price,acquirer_ticker[,delist_date]` · rec.csv=`sec_id,recovery_ratio[,delist_date]`. A malformed file, or a row that matches no delisting, stops the run before anything is written (exit 2, one stderr line naming the file and line).
 # --review-decisions PATH (default data/review_decisions.csv) is read the same way: sec_id,delist_date,ticker,flag,decision,note. Missing at the default path means no decisions; missing at an explicit path, or a bad file, exits 2.
 # (append --limit N to classify_universe for a fast cached/offline subset)
 # Auto-extract cash+stock merger terms with an LLM instead of hand-writing terms.csv (NETWORK: SEC + OpenAI; needs OPENAI_API_KEY + CHAT_MODEL in .env):
@@ -303,12 +303,14 @@ conflate them.
   `OpenFigiUnavailable` (not a subclass of `OpenFigiBlocked`): the run stops
   before writing anything, nothing is cached, no placeholder stands in for the
   answer (it would change `sec_id`s between runs), and the CLI prints "OpenFIGI
-  unavailable after retries; no outputs written; rerun later" and exits 1. The key
+  unavailable after retries; no outputs written; rerun later" and exits 4. The key
   comes from `OPEN_FIGI_API_KEY` (environment first, then the repo `.env`),
   sent as header `X-OPENFIGI-APIKEY`. Exit 3 is a completed run whose
   `review.csv` has one or more `error` or `resolution_degraded` rows (an answer
   rested on a failed SEC request or a stale copy); outputs are still written,
-  and a banner goes to stderr with the counts. This tally is taken *before*
+  and a banner goes to stderr with the counts. A bad input file exits 2 with
+  one stderr line naming the file and line (see *Configurable input paths*),
+  and exit 1 means only an unexpected crash. This tally is taken *before*
   `review_triage.triage()` runs, so it is unaffected by decisions or hidden
   info-only rows — an `error`/`resolution_degraded` row always trips exit 3,
   whether or not a decision also exists for it (it can't: both flags are
@@ -366,9 +368,10 @@ conflate them.
   `classify_universe.py --review-decisions PATH` reads this file (default
   `data/review_decisions.csv`; missing at the default path means no
   decisions; missing at an explicit path, or a `ReviewDecisionError`, is
-  reported on stderr and exits 2 — unlike a bad `--last-trade-closes` /
-  `--merger-terms` / `--recoveries` file, which is not yet guarded and
-  currently crashes with an uncaught traceback, exit 1).
+  reported on one stderr line and exits 2, like a missing or malformed
+  `--observations` / `--last-trade-closes` / `--merger-terms` /
+  `--recoveries` file (`ObservationError`, `reconstruction.OverrideFileError`)
+  and override rows that match no delisting of the run).
 - **`scripts/accept_review.py` refuses mistakes rather than silently doing
   nothing.** `--flag NAME --note TEXT [--bucket B] [--yes] [--dry-run]`
   bulk-accepts every row currently carrying flag `NAME` in one

@@ -2,7 +2,7 @@
 requests are paced on the ratelimit headers, a 429 is waited out, and a
 401/403 raises OpenFigiBlocked (the CLI exits 2) instead of reading as a miss.
 Timeouts, connection errors, 5xx answers (or 429s) that outlast MAX_RETRIES
-attempts raise OpenFigiUnavailable (the CLI exits 1): an outage, not a refusal.
+attempts raise OpenFigiUnavailable (the CLI exits 4): an outage, not a refusal.
 Neither is ever cached, and neither falls back to a placeholder: that would
 change sec_ids between runs."""
 from __future__ import annotations

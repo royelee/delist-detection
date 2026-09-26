@@ -166,6 +166,27 @@ def test_unmatched_override_stops_before_writing(fake_edgar, tmp_path):
     assert not list(tmp_path.glob("*.csv"))
 
 
+def test_an_override_row_that_matches_no_delisting_names_its_file_and_line(fake_edgar, tmp_path):
+    """A loaded override file remembers where each row came from, so the refusal
+    names the flag, the file and the line of every row that matches nothing."""
+    from delist_detection.reconstruction import OverrideFileError, load_float_overrides
+
+    lt = tmp_path / "lt.csv"
+    lt.write_text("sec_id,delist_date,last_trade_close\nBBG000FJLFX8,2018-12-09,212.7\nBBG999,,1\n"
+                  "BBG000FJLFX8,2020-01-01,5\n")
+    out = tmp_path / "out"
+    index, clients = _clients(fake_edgar)
+    overrides = Overrides(last_trade_closes=load_float_overrides(lt, "last_trade_close"))
+    with pytest.raises(OverrideFileError) as exc:
+        run(index, clients, overrides, out_dir=out, log=lambda *_: None)
+    msg = str(exc.value)
+    assert "\n" not in msg
+    assert f"--last-trade-closes {lt} line 3: BBG999" in msg
+    assert f"--last-trade-closes {lt} line 4: BBG000FJLFX8 2020-01-01" in msg
+    assert "line 2" not in msg
+    assert not list(out.glob("*.csv"))
+
+
 def test_refusal_mid_run_keeps_previous_outputs(fake_edgar, tmp_path):
     index, clients = _clients(fake_edgar)
     run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)

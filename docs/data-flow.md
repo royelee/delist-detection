@@ -300,19 +300,28 @@ previous manifest in place.
 
 `scripts/classify_universe.py` exits:
 - `0` on success;
-- `1` when OpenFIGI is unavailable after its retries (timeouts, connection
-  errors or 5xx answers: `OpenFigiUnavailable`; no output written, nothing
-  cached, no placeholder in its place; rerun later);
+- `1` only on an unexpected crash (an uncaught exception: Python's own exit
+  code, with its traceback);
 - `2` when SEC or OpenFIGI refuses a request (`EdgarBlocked`/`OpenFigiBlocked`;
-  no output written), or when a start-up check fails (no `EDGAR_USER_AGENT`, an
-  unusable rate-lock file, `--sec-workers` outside `[1, 8]`, or a
+  no output written); when an input file is bad (one stderr line naming the
+  file and line, no output written): an `--observations` file
+  (`ObservationError`) or an override file (`reconstruction.OverrideFileError`:
+  a missing column, a value that is not a number, an incomplete stock leg, a
+  value with no `sec_id`, a key given twice) that is missing or malformed,
+  override rows that match no delisting of the run (`pipeline._check_overrides`,
+  once the delistings are known, before any table is written), or a
   `--review-decisions` file that's missing when given explicitly or that
-  `review_triage.load_decisions` refuses);
+  `review_triage.load_decisions` refuses; or when a start-up check fails (no
+  `EDGAR_USER_AGENT`, an unusable rate-lock file, a bad argument such as
+  `--sec-workers` outside `[1, 8]` or an unreadable `--as-of`);
 - `3` when the run completed but `review.csv` has one or more `error` rows (one
   security or payout extraction raised and was logged instead of aborting) or
   `resolution_degraded` rows (an answer rested on a failed SEC request or a
   stale copy). Outputs are still written, and a banner naming the counts goes to
-  stderr.
+  stderr;
+- `4` when OpenFIGI is unavailable after its retries (timeouts, connection
+  errors or 5xx answers: `OpenFigiUnavailable`; no output written, nothing
+  cached, no placeholder in its place; rerun later).
 
 ## Resolver strategy in detail
 

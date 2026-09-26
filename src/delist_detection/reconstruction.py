@@ -13,10 +13,10 @@ from __future__ import annotations
 
 import csv
 import math
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import NamedTuple
+from typing import Any, NamedTuple
 
 from .classifier import DelistRecord
 from .crsp_codes import CrspBucket
@@ -250,51 +250,99 @@ def delisting_row(e: EnrichedDelistRecord, **extra) -> dict:
     return row
 
 
-def _key(row: Mapping[str, str], path) -> str | tuple[str, str] | None:
-    sid = (row.get("sec_id") or "").strip()
-    if not sid:
+class OverrideFileError(ValueError):
+    """A `--last-trade-closes` / `--merger-terms` / `--recoveries` file that cannot
+    be trusted (a missing column, a value that is not a number, an incomplete
+    stock leg, a value with no `sec_id`, a key given twice), or a row of one that
+    matches no delisting of the run. The message is one line naming the file and
+    line."""
+
+
+class OverrideRows(dict):
+    """One override file's values by key -- `sec_id` (every delisting of the
+    security) or `(sec_id, delist_date)` (one delisting) -- remembering the file
+    and the line each key came from, so a row can be named when it matches no
+    delisting. Otherwise a plain dict."""
+
+    def __init__(self, path: str | Path) -> None:
+        super().__init__()
+        self.path = str(path)
+        self.lines: dict[str | tuple[str, str], int] = {}
+
+
+def override_row_name(overrides: Mapping, key: str | tuple[str, str]) -> str:
+    """`key` as its override row: `<file> line <n>: <sec_id> [<delist_date>]` for
+    a loaded file (`OverrideRows`), the bare key for any other map."""
+    text = " ".join(key) if isinstance(key, tuple) else key
+    if isinstance(overrides, OverrideRows) and key in overrides.lines:
+        return f"{overrides.path} line {overrides.lines[key]}: {text}"
+    return text
+
+
+def _number(cells: Mapping[str, str], col: str, where: str) -> float | None:
+    text = cells.get(col, "")
+    if not text:
         return None
-    date = (row.get("delist_date") or "").strip()
-    return (sid, date) if date else sid
+    try:
+        return float(text)
+    except ValueError:
+        raise OverrideFileError(f"{where}: {col} {text!r} is not a number") from None
 
 
-def load_float_overrides(path: str | Path, value_col: str) -> dict[str | tuple[str, str], float]:
-    out: dict[str | tuple[str, str], float] = {}
+def _read_overrides(path: str | Path, required: tuple[str, ...],
+                    value_of: Callable[[Mapping[str, str], str], Any]) -> OverrideRows:
+    """Every row of the override CSV at `path` whose `value_of(cells, where)` is
+    not None, keyed by `sec_id` or `(sec_id, delist_date)`. A blank row is
+    skipped; anything that cannot be read as intended raises OverrideFileError."""
+    out = OverrideRows(path)
     with Path(path).open(newline="") as fh:
         reader = csv.DictReader(fh)
-        missing = [c for c in ("sec_id", value_col) if c not in (reader.fieldnames or [])]
+        missing = [c for c in required if c not in (reader.fieldnames or [])]
         if missing:
-            raise ValueError(f"{path}: CSV missing required column(s) {missing}; found {reader.fieldnames}")
+            raise OverrideFileError(f"{path} line 1: missing required column(s) {missing}; "
+                                    f"found {reader.fieldnames}")
         for row in reader:
-            key, val = _key(row, path), (row.get(value_col) or "").strip()
-            if key is not None and val:
-                out[key] = float(val)
-    return out
-
-
-def load_merger_terms_overrides(path: str | Path) -> dict[str | tuple[str, str], dict]:
-    out: dict[str | tuple[str, str], dict] = {}
-    with Path(path).open(newline="") as fh:
-        reader = csv.DictReader(fh)
-        if "sec_id" not in (reader.fieldnames or []):
-            raise ValueError(f"{path}: CSV missing required column 'sec_id'; found {reader.fieldnames}")
-        for row in reader:
-            key = _key(row, path)
-            if key is None:
+            where = f"{path} line {reader.line_num}"
+            cells = {k: (v or "").strip() for k, v in row.items() if isinstance(k, str)}
+            sid, day = cells.get("sec_id", ""), cells.get("delist_date", "")
+            if not sid:
+                if any(cells.values()):
+                    raise OverrideFileError(f"{where}: no sec_id")
                 continue
-            terms: dict = {}
-            for k in ("cash_per_share", "stock_ratio", "acquirer_price"):
-                v = (row.get(k) or "").strip()
-                if v:
-                    terms[k] = float(v)
-            acq = (row.get("acquirer_ticker") or "").strip()
-            if acq:
-                terms["acquirer_ticker"] = acq
-            if ("stock_ratio" in terms) != ("acquirer_price" in terms):
-                raise ValueError(f"{path}: {key} has an incomplete stock leg — stock_ratio and acquirer_price "
-                                 "must both be present or both absent")
-            out[key] = terms
+            value = value_of(cells, where)
+            if value is None:
+                continue
+            key = (sid, day) if day else sid
+            if key in out:
+                raise OverrideFileError(f"{where}: {override_row_name({}, key)} repeats line {out.lines[key]}")
+            out[key], out.lines[key] = value, reader.line_num
     return out
+
+
+def load_float_overrides(path: str | Path, value_col: str) -> OverrideRows:
+    """`--last-trade-closes` / `--recoveries`: `sec_id,<value_col>[,delist_date]`.
+    A row with a blank value is skipped."""
+    return _read_overrides(path, ("sec_id", value_col), lambda cells, where: _number(cells, value_col, where))
+
+
+def _merger_terms(cells: Mapping[str, str], where: str) -> dict:
+    terms: dict = {}
+    for k in ("cash_per_share", "stock_ratio", "acquirer_price"):
+        v = _number(cells, k, where)
+        if v is not None:
+            terms[k] = v
+    if cells.get("acquirer_ticker"):
+        terms["acquirer_ticker"] = cells["acquirer_ticker"]
+    if ("stock_ratio" in terms) != ("acquirer_price" in terms):
+        raise OverrideFileError(f"{where}: incomplete stock leg -- stock_ratio and acquirer_price must both be "
+                                "present or both absent")
+    return terms
+
+
+def load_merger_terms_overrides(path: str | Path) -> OverrideRows:
+    """`--merger-terms`: `sec_id,cash_per_share,stock_ratio,acquirer_price,
+    acquirer_ticker[,delist_date]`; blank cells are left out of a row's terms."""
+    return _read_overrides(path, ("sec_id",), _merger_terms)
 
 
 def unmatched_override_keys(overrides: Mapping, events: Iterable[tuple[str, str]]) -> list:

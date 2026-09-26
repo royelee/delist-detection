@@ -17,12 +17,12 @@ ROOT = Path(__file__).resolve().parents[1]
 
 from delist_detection.edgar import EdgarSetupError, require_user_agent, use_machine_wide_limit
 from delist_detection.fatal import FATAL
-from delist_detection.observations import ObservationIndex, load_observations
+from delist_detection.observations import ObservationError, ObservationIndex, load_observations
 from delist_detection.openfigi import OpenFigiUnavailable
 from delist_detection.payout_gate import DEFAULT_TOL
 from delist_detection.pipeline import Overrides, default_clients, run
-from delist_detection.reconstruction import load_float_overrides, load_merger_terms_overrides
-from delist_detection.review_triage import ReviewDecisionError, load_decisions
+from delist_detection.reconstruction import OverrideFileError, load_float_overrides, load_merger_terms_overrides
+from delist_detection.review_triage import Decision, ReviewDecisionError, load_decisions
 
 KNOWN_RENAMES = {
     # Tiingo ticker -> SEC-current ticker (only when SEC has a different one)
@@ -98,15 +98,28 @@ DEFAULT_REVIEW_DECISIONS = str(ROOT / "data" / "review_decisions.csv")
 EXIT_CODES_EPILOG = """\
 Exit codes:
   0  success, no review-row errors
-  1  aborted: OpenFIGI unavailable after its retries (timeouts or 5xx answers,
-     OpenFigiUnavailable); no outputs written, the previous ones are kept whole; rerun later
-  2  aborted: SEC or OpenFIGI refused the request (EdgarBlocked/OpenFigiBlocked), or the
-     start-up checks failed (no EDGAR_USER_AGENT, an unusable SEC rate-lock file, a
-     --review-decisions file that is missing when given explicitly or that fails to load)
+  1  unexpected crash: an uncaught exception (Python's own exit code, with its traceback)
+  2  aborted, no outputs written: SEC or OpenFIGI refused the request (EdgarBlocked/
+     OpenFigiBlocked); or a bad input file, named with its line on one stderr line (an
+     --observations, --last-trade-closes, --merger-terms or --recoveries file that is
+     missing or malformed, override rows that match no delisting of the run, a
+     --review-decisions file that is missing when given explicitly or that fails to load);
+     or a start-up check failed (no EDGAR_USER_AGENT, an unusable SEC rate-lock file, a
+     bad argument such as --sec-workers or --as-of)
   3  completed, but review.csv has one or more `error` rows, or `resolution_degraded`
      rows (an answer rested on a failed SEC request or a stale copy; run again once SEC
      answers). Outputs are still written; see the stderr banner for the counts
+  4  aborted: OpenFIGI unavailable after its retries (timeouts, connection errors or 5xx
+     answers, OpenFigiUnavailable); no outputs written, the previous ones are kept whole; rerun later
 """
+
+EXIT_REFUSED = 2          # SEC or OpenFIGI refused a request
+EXIT_BAD_INPUT = 2        # a bad input file
+EXIT_OPENFIGI_DOWN = 4    # OpenFIGI unavailable after its retries
+
+# The exceptions that name a bad input file (exit 2): each message is one line
+# naming the file and line.
+BAD_INPUT = (ObservationError, OverrideFileError, ReviewDecisionError)
 
 
 def run_date(text: str) -> date:
@@ -157,6 +170,35 @@ def build_parser() -> argparse.ArgumentParser:
     return p
 
 
+def bad_input(problem: object) -> int:
+    """Report a bad input file on one stderr line; its exit code."""
+    print(f"ABORTED: bad input file; no outputs written: {problem}", file=sys.stderr)
+    return EXIT_BAD_INPUT
+
+
+def read_inputs(args: argparse.Namespace) -> tuple[Overrides, list[Decision], ObservationIndex]:
+    """Every input file, read before any client is built: the override files, the
+    review decisions and the observations. A malformed file raises one of
+    BAD_INPUT; a missing one, OSError."""
+    overrides = Overrides(
+        last_trade_closes=load_float_overrides(args.last_trade_closes, "last_trade_close") if args.last_trade_closes else {},
+        merger_terms=load_merger_terms_overrides(args.merger_terms) if args.merger_terms else {},
+        recoveries=load_float_overrides(args.recoveries, "recovery_ratio") if args.recoveries else {},
+    )
+    # None (the argparse default) means the caller didn't pass --review-decisions
+    # at all: a missing file at the default path is fine. Once the flag is given
+    # explicitly -- even spelling out the same path as the default -- a missing
+    # file is an error, so a typo'd path is never silently read as "no decisions".
+    if args.review_decisions is not None:
+        review_decisions = load_decisions(args.review_decisions)
+    else:
+        try:
+            review_decisions = load_decisions(DEFAULT_REVIEW_DECISIONS)
+        except FileNotFoundError:
+            review_decisions = []          # no decisions file at the default path: nothing accepted yet
+    return overrides, review_decisions, ObservationIndex(load_observations(args.observations))
+
+
 def main() -> int:
     p = build_parser()
     args = p.parse_args()
@@ -168,27 +210,12 @@ def main() -> int:
     except (EdgarSetupError, OSError) as exc:
         p.error(str(exc))
 
-    overrides = Overrides(
-        last_trade_closes=load_float_overrides(args.last_trade_closes, "last_trade_close") if args.last_trade_closes else {},
-        merger_terms=load_merger_terms_overrides(args.merger_terms) if args.merger_terms else {},
-        recoveries=load_float_overrides(args.recoveries, "recovery_ratio") if args.recoveries else {},
-    )
-    # None (the argparse default) means the caller didn't pass --review-decisions
-    # at all: a missing file at the default path is fine. Once the flag is given
-    # explicitly -- even spelling out the same path as the default -- a missing
-    # file is an error, so a typo'd path is never silently read as "no decisions".
-    review_decisions_explicit = args.review_decisions is not None
-    review_decisions_path = args.review_decisions if review_decisions_explicit else DEFAULT_REVIEW_DECISIONS
     try:
-        review_decisions = load_decisions(review_decisions_path)
-    except FileNotFoundError:
-        if review_decisions_explicit:
-            p.error(f"--review-decisions {review_decisions_path}: file not found")
-        else:
-            review_decisions = []          # no decisions file at the default path: nothing accepted yet
-    except ReviewDecisionError as exc:
-        p.error(str(exc))
-    index = ObservationIndex(load_observations(args.observations))
+        overrides, review_decisions, index = read_inputs(args)
+    except BAD_INPUT as exc:
+        return bad_input(exc)
+    except OSError as exc:                 # a missing or unreadable input file
+        return bad_input(f"{exc.filename}: {exc.strerror or exc}")
     clients = default_clients(
         index, cache_dir=Path(args.cache_dir), rename_map=KNOWN_RENAMES, manual_overrides=MANUAL_OVERRIDES,
         extract_payouts=not args.no_extract_payouts, extract_llm=args.extract_merger_terms_llm,
@@ -220,17 +247,22 @@ def main() -> int:
 
 
 def entry() -> int:
-    """`main()` with an abort turned into its exit code (see EXIT_CODES_EPILOG).
-    Either abort leaves every output table as the previous run wrote it."""
+    """`main()` with an abort turned into its exit code (see EXIT_CODES_EPILOG): a
+    refusal, or override rows that match no delisting (found mid-run, before
+    anything is written), exit 2; an OpenFIGI outage exits 4. Every abort leaves
+    every output table as the previous run wrote it. Any other exception is an
+    unexpected crash: it propagates, and Python exits 1."""
     try:
         return main()
+    except BAD_INPUT as e:
+        return bad_input(e)
     except FATAL as e:                  # fatal.FATAL: every exception that stops a run
         if isinstance(e, OpenFigiUnavailable):
             print(f"ABORTED: OpenFIGI unavailable after retries; no outputs written; rerun later ({e})",
                   file=sys.stderr)
-            return 1
+            return EXIT_OPENFIGI_DOWN
         print(f"ABORTED: {e}", file=sys.stderr)
-        return 2
+        return EXIT_REFUSED
 
 
 if __name__ == "__main__":

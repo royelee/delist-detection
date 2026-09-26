@@ -688,7 +688,15 @@ line changes observable output.
   exit 2). The run stops before writing any table, so the previous outputs stay
   whole; nothing is cached, and no placeholder stands in (it would change
   `sec_id`s between runs). The CLI says "OpenFIGI unavailable after retries; no
-  outputs written; rerun later" and exits 1.
+  outputs written; rerun later" and exits 4.
+- **Exit codes (§10).** `classify_universe.py` exits 1 only on an unexpected
+  crash (Python's default for an uncaught exception). A bad input file exits 2
+  with one stderr line naming the file and line, before anything is written: a
+  missing or malformed `--observations`, `--last-trade-closes`,
+  `--merger-terms` or `--recoveries` file, override rows that match no
+  delisting of the run, or a bad `--review-decisions` file. A refusal stays 2,
+  a completed run with `error`/`resolution_degraded` review rows 3, and an
+  OpenFIGI outage is 4.
 - **`no_figi` is not in `review.csv` (D19, §7.5, §8.3).** The spec puts a
   placeholder into `review.csv` flagged `no_figi`. Review triage (requested
   later) grades `no_figi` `info`: the placeholder is a stable, joinable key and

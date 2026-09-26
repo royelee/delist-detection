@@ -81,7 +81,7 @@ class _Timeouts:
 
 def test_an_outage_is_unavailable_not_a_refusal_and_nothing_is_cached(tmp_path):
     """Timeouts or 5xx answers until the retries
-    run out are an outage (OpenFigiUnavailable, the CLI exits 1), not a refusal
+    run out are an outage (OpenFigiUnavailable, the CLI exits 4), not a refusal
     of the key (OpenFigiBlocked, exit 2); nothing is cached either way."""
     from delist_detection.openfigi import OpenFigiUnavailable
 
