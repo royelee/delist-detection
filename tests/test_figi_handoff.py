@@ -108,3 +108,29 @@ def test_a_renamed_tickers_eras_join_the_new_tickers_figi(eras, ftd):
     assert [res[k].cusips for k in KORS] == [("G60754101",), ("G60754101",), ("G1890L107",)]
     assert set(_placed(_resolve(eras, ftd, KORS, handoffs=[])).values()) == {
         ("CIK1530721-COMMON", "placeholder"), ("BBG0029SNR63", "cusip")}
+
+
+NU_ES = ["NU@2008-01-16", "ES@2012-06-29", "ES@2015-06-30"]
+
+
+def test_nu_2008_joins_es_2015s_line_and_frees_es_2012_from_guard_c(eras, ftd):
+    """Northeast Utilities traded as NU (664397106) until Eversource Energy's
+    2015 rename gave it a new CUSIP (30040W108, first failed 2015-02-19, ES's
+    own since); NU's old CUSIP is unknown to OpenFIGI on any US venue, so NU@2008
+    has no pick of its own and joins ES@2015's line through the switch. ES@2012
+    (also Northeast Utilities, before the ticker itself moved to Eversource) has
+    no CUSIP of its own either (its FTD CUSIP 292756202 describes a different,
+    unrelated company, EnergySolutions, that held the ES ticker earlier): it
+    reaches BBG000BQ87N0 only through the EDGAR names on its ticker job, a weak
+    pick. Without NU@2008's handoff pick, that weak pick would be withdrawn by
+    guard (c) (NU@2008, same issuer and class, having no pick of its own would
+    stay on the issuer's placeholder) -- the Task 1 regression."""
+    res = _resolve(eras, ftd, NU_ES)
+    assert _placed(res) == {"NU@2008-01-16": ("BBG000BQ87N0", "handoff"),
+                            "ES@2012-06-29": ("BBG000BQ87N0", "ticker"),
+                            "ES@2015-06-30": ("BBG000BQ87N0", "cusip")}
+    assert res["NU@2008-01-16"].cusips == ("664397106",)
+    without = _resolve(eras, ftd, NU_ES, handoffs=[])
+    assert _placed(without) == {"NU@2008-01-16": ("CIK72741-COMMON", "placeholder"),
+                                "ES@2012-06-29": ("CIK72741-COMMON", "placeholder"),
+                                "ES@2015-06-30": ("BBG000BQ87N0", "cusip")}
