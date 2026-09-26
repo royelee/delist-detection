@@ -856,7 +856,7 @@ class TickerResolver:
             descriptions.setdefault(r.date, set()).add(r.description)
         for day, descs in descriptions.items():
             names = names_near(sub, parse_day(day), self.GUARD_NAME_DAYS)
-            if not names or not all(description_matches(d, names) for d in descs):
+            if not names or not all(description_matches(d, names, empty=False) for d in descs):
                 return False
         return True
 
@@ -928,7 +928,7 @@ class TickerResolver:
             self._note_transient(e)
             return None
         former = renamed_near(sub, day, self.RENAME_NEAR_DAYS) if isinstance(sub, dict) and day else None
-        if former and all(description_matches(d, [former]) for d in h.descriptions):
+        if former and all(description_matches(d, [former], empty=False) for d in h.descriptions):
             return former
         return None
 

@@ -88,7 +88,7 @@ def _joined(text: str) -> set[str]:
     return {"".join(raw[i:i + n]) for n in (2, 3) for i in range(len(raw) - n + 1)}
 
 
-def description_matches(description: str, names: Iterable[str]) -> bool:
+def description_matches(description: str, names: Iterable[str], *, empty: bool = True) -> bool:
     """Whether a fails-to-deliver row's `description` can name the issuer known
     by one of `names` (its observed names and the issuer's EDGAR names, current
     and former). SEC cuts descriptions at 30 characters, abbreviates freely and
@@ -103,12 +103,14 @@ def description_matches(description: str, names: Iterable[str]) -> bool:
     short (GEN ELEC for GENERAL ELECTRIC, MATLS for MATERIALS), or two or three
     of its words run together give a name's word, or the other way round
     (MC DERMOTT, BORG WARNER). With nothing to compare (no word left on one
-    side: "3M COMPANY", "HP INC COM STK") it matches."""
+    side: "3M COMPANY", "HP INC COM STK") the answer is `empty`: a match when
+    telling issuers apart (the default), none when the description must name
+    the issuer (the resolver's second pass)."""
     names = [n for n in names if n]
     d_words = _issuer_words(_name_part(description))
     n_words = [w for n in names for w in _issuer_words(n)]
     if not d_words or not n_words:
-        return True
+        return empty
     d_forms = {f for w in d_words for f in w}
     n_forms = {f for w in n_words for f in w}
     if d_forms & n_forms:

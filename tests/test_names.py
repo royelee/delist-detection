@@ -128,3 +128,12 @@ def test_a_fails_description_matches_its_own_company(description, names):
 ])
 def test_a_fails_description_of_another_company_does_not_match(description, names):
     assert not description_matches(description, names)
+
+
+def test_with_nothing_to_compare_the_answer_is_the_callers():
+    """The resolver's second pass needs the description to name the issuer: 2U's
+    rows (2U INC COM STK) leave no word to compare with SilverSun's."""
+    assert description_matches("2U INC COM STK", ["SilverSun Technologies, Inc."])
+    assert not description_matches("2U INC COM STK", ["SilverSun Technologies, Inc."], empty=False)
+    assert not description_matches("SILVERSUN TECHNOLOGIES", ["3M CO"], empty=False)
+    assert description_matches("SILVERSUN TECHNOLOGIES", ["SilverSun Technologies, Inc."], empty=False)

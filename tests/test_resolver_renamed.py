@@ -375,6 +375,16 @@ def test_the_second_pass_answer_is_used_flagged_and_never_saved(eras, ftd, tmp_p
                                           "shares CUSIP G60754101 with KORS@2014-12-31")]
 
 
+def test_fails_rows_with_no_word_to_compare_confirm_no_issuer(eras, ftd, frequency):
+    """2U's fails rows read 2U INC COM STK: nothing is left once the security words
+    go. Its CUSIP last traded 2024-06-12, days after QXO's new CUSIP began
+    (SilverSun Technologies renamed QXO on 2024-06-06), and GoDaddy, founded
+    before the rows began, ranks among the 8-Ks naming TWOU. Rows that name no
+    issuer confirm none: neither the switch nor the frequency rank answers."""
+    got = _infer(eras, ftd, list(eras), {**RESOLVED, "QXO@2025-06-30": 1236275})
+    assert "TWOU@2018-06-30" not in got
+
+
 def test_an_era_linked_to_two_issuers_takes_neither(eras, ftd, no_frequency):
     issuers = {**DATA["issuers"], "999999": DATA["issuers"]["1530721"]}   # a second issuer passing the guard
     got = _infer(eras, ftd, list(eras), {**RESOLVED, "KORS@2014-12-31": 1530721, "CPRI@2018-12-31": 999999},
