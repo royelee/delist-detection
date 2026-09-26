@@ -1,29 +1,30 @@
 """Capture the golden cases from live EDGAR into tests/fixtures/golden/ (NETWORK).
 
-Run from the repo root as `PYTHONPATH=src:. python scripts/build_golden_fixtures.py`:
-the LLM capture imports `scripts.classify_universe`, which must resolve to this
-repo's scripts/ (a bare run can find another project's `scripts` package).
+Run from the repo root as `PYTHONPATH=src python scripts/build_golden_fixtures.py`.
 
 For each row of data/golden_events.csv this stores everything the resolver,
 classifier and payout reader read for that case, so tests replay it offline:
 submissions (trimmed to -1650/+400 days) for the true CIK, the wrong CIK and
 every candidate CIK a resolver tier can return, the company_tickers row,
-company_search_atom hits for every name variant the resolver issues, the raw
-answers to the two EFTS queries the resolver issues (`efts_raw`, keyed by URL,
-which tests/golden.py serves back to the real EFTS methods), and the text of
-every 8-K carrying items 1.03/2.01/3.01/5.01 plus the closing/announcement
-filings the payout reader would open. `efts_lookup` and `efts_frequency` are
-the resolver's answers at capture time, kept for reading only.
+company_search_atom hits for every name variant the resolver issues, and the
+raw answers to the two EFTS queries the resolver issues (`efts_raw`, keyed by
+URL, which tests/golden.py serves back to the real EFTS methods), plus the
+text of every 8-K carrying items 1.03/2.01/3.01/5.01 and the closing/announcement
+filings the payout reader would open. `efts_raw` is recorded from the live
+answer: the client's search caches are bypassed, so a cached answer can never
+be frozen into a fixture. `efts_lookup` and `efts_frequency` are the resolver's
+answers at capture time, kept for reading only.
 Re-run after changing data/golden_events.csv. `--efts-only` re-captures just
 `efts_raw` into the existing fixtures and leaves every other key untouched.
 
-With OPENAI_API_KEY set (environment or the repo .env) and --raw-tiingo-dir given,
-each merger case also stores `llm_terms` (the LLM merger terms for the classified
-record, read through cache/llm) and `acquirer_price` (the acquirer's raw close
-on observed_delist_date, read from the price directory given by
---raw-tiingo-dir). Without either, a full run skips that capture and keeps the
-terms an earlier run captured. `--llm-only` re-captures just those two keys into
-the existing fixtures and needs both.
+With OPENAI_API_KEY set (environment or the repo .env), each merger case also
+stores `llm_terms` (the LLM merger terms for the classified record, read
+through cache/llm) and `acquirer_price` (the acquirer's close on
+observed_delist_date itself, read from the fails-to-deliver row dated the
+next trading day via FtdIndex.close_after). Without it, a full run skips
+that capture and keeps the terms an earlier run captured. `--llm-only`
+re-captures just those two keys into the existing fixtures and needs
+OPENAI_API_KEY.
 `--only ID` (repeatable, ID = TICKER_DATE) limits any run to the named cases.
 
 Submissions are re-fetched, not read from cache/: a cached copy older than the
@@ -37,21 +38,21 @@ from __future__ import annotations
 import argparse
 import csv
 import json
-import os
 import time
 from dataclasses import asdict
 from datetime import date, timedelta
 from pathlib import Path
 
 import requests
-from dotenv import dotenv_values
 
 from delist_detection.classifier import DelistClassifier
-from delist_detection.edgar import SEC_HOST, EdgarClient
+from delist_detection.edgar import EFTS_SOURCE_KEYS, SEC_HOST, EdgarClient
+from delist_detection.sec_limiter import use_machine_wide_limit
 from delist_detection.filing_selection import announcement_8k, closing_8k, form_filings
+from delist_detection.ftd import FtdClient, FtdIndex
 from delist_detection.llm_client import default_llm_client
 from delist_detection.llm_merger_extractor import LLMMergerTermsExtractor
-from delist_detection.raw_tiingo import RawTiingoPrices
+from delist_detection.settings import env_setting
 from delist_detection.ticker_resolver import TickerResolver
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -62,8 +63,6 @@ TEXT_ITEMS = {"1.03", "2.01", "3.01", "5.01"}
 BEFORE_DAYS, AFTER_DAYS = 1650, 400
 ANY_DISTANCE_FORMS = {"25", "25-NSE", "15-12G", "15-12B", "15-15D", "REVOKED"}
 EFTS_PREFIX = "https://efts.sec.gov/"
-# The resolver reads ciks and display_names; form, file_date and adsh make a fixture readable.
-EFTS_SOURCE_KEYS = ("ciks", "display_names", "form", "file_date", "adsh")
 LLM_KEYS = ("llm_terms", "acquirer_price")
 _efts_raw: dict[str, dict] = {}
 
@@ -92,7 +91,9 @@ def _strict(get):
 
 
 def _recording(get):
-    """Keep every EFTS answer, keyed by URL and trimmed to EFTS_SOURCE_KEYS."""
+    """Keep every EFTS answer the client's session receives, keyed by URL, with
+    `hits.total` and each `_source` cut to EFTS_SOURCE_KEYS: the shape
+    tests/golden.py serves back."""
     def wrapped(*args, **kwargs):
         resp = get(*args, **kwargs)
         url = args[0] if args else kwargs.get("url")
@@ -105,8 +106,18 @@ def _recording(get):
     return wrapped
 
 
+def _client(cache_dir: Path) -> EdgarClient:
+    """The live EDGAR client of a capture. The search caches are bypassed, so a
+    cached answer is never frozen into a fixture; every request is strict; and
+    every EFTS answer is recorded as it arrived. Single-threaded: `session` is
+    this thread's session."""
+    edgar = EdgarClient(cache_dir=cache_dir, search_cache=False)
+    edgar.session.get = _recording(_strict(edgar.session.get))
+    return edgar
+
+
 def _resolver(edgar, row) -> TickerResolver:
-    return TickerResolver(edgar, member_names=lambda *_a, _n=row["member_name"], **_k: _n)
+    return TickerResolver(edgar, observed_names=lambda *_a, _n=row["member_name"], **_k: _n)
 
 
 def _capture_efts(resolver: TickerResolver, t: str, d: str) -> tuple[dict, list, list]:
@@ -117,32 +128,43 @@ def _capture_efts(resolver: TickerResolver, t: str, d: str) -> tuple[dict, list,
     return dict(_efts_raw), lookup, frequency
 
 
-def _refresh_efts(rows) -> None:
+def _refresh_efts(rows, edgar) -> None:
     """Add efts_raw to the existing fixtures; nothing else is fetched or changed."""
     for row in rows:
         t, d = row["ticker"], row["observed_delist_date"]
         path = OUT / f"{t}_{d}.json"
         case = json.loads(path.read_text())
-        case["efts_raw"], _, _ = _capture_efts(_resolver(None, row), t, d)
+        case["efts_raw"], _, _ = _capture_efts(_resolver(edgar, row), t, d)
         path.write_text(json.dumps(case, indent=1))
         print(f"{t} {d}: {len(case['efts_raw'])} EFTS answers")
 
 
 def _openai_key_set() -> bool:
-    return bool(os.environ.get("OPENAI_API_KEY") or dotenv_values(ROOT / ".env").get("OPENAI_API_KEY"))
+    return bool(env_setting("OPENAI_API_KEY", ROOT / ".env"))
 
 
-def _capture_llm(edgar, llm, raw_dir: str, row) -> dict:
+def _acquirer_price(acquirer: str | None, on: date) -> float | None:
+    """The acquirer's close on `on` itself -- read from the SEC fails-to-deliver
+    row dated the next trading day (FtdIndex.close_after). None without an
+    acquirer ticker or a priced row."""
+    if not acquirer:
+        return None
+    ftd = FtdIndex.load(FtdClient(ROOT / "cache" / "sec_data" / "ftd"),
+                        on - timedelta(days=10), on + timedelta(days=10),
+                        symbols={acquirer})
+    close = ftd.close_after(on, symbol=acquirer)
+    return close[0] if close else None
+
+
+def _capture_llm(edgar, llm, row) -> dict:
     """The LLM_KEYS for a merger case, read for the record the classifier returns."""
-    from scripts.classify_universe import _acquirer_price   # needs PYTHONPATH=src:. (see docstring)
-
     t, d = row["ticker"], row["observed_delist_date"]
     rec = DelistClassifier(edgar, _resolver(edgar, row)).classify_ticker(t, d)
     if rec.bucket.value != "merger" or rec.cik != int(row["cik"]):
         raise SystemExit(f"FAILED: {t} {d} classified as {rec.bucket.value} CIK {rec.cik}, "
                          f"expected merger CIK {row['cik']}")
     terms = llm.extract(rec)
-    price = _acquirer_price(RawTiingoPrices(raw_dir), terms.acquirer_ticker, d) if terms else None
+    price = _acquirer_price(terms.acquirer_ticker, date.fromisoformat(d)) if terms else None
     shown = "none" if terms is None else (
         f"{terms.deal_type} cash={terms.cash_per_share} ratio={terms.stock_ratio} "
         f"acquirer={terms.acquirer_ticker} ({terms.source})")
@@ -196,38 +218,31 @@ def main() -> None:
                    help="only re-capture llm_terms and acquirer_price into the existing fixtures")
     p.add_argument("--only", action="append", metavar="ID",
                    help="capture only this case (TICKER_DATE, e.g. BLD_2026-07-01); repeatable")
-    p.add_argument("--raw-tiingo-dir",
-                   help="raw Tiingo per-ticker CSV directory for acquirer_price "
-                        "(the LLM capture runs only with it)")
     args = p.parse_args()
-    requests.get = _recording(_strict(requests.get))   # EFTS calls in ticker_resolver
+    use_machine_wide_limit()    # share the 8 requests/s with every other SEC client on this machine
     rows = list(csv.DictReader((ROOT / "data" / "golden_events.csv").open()))
     if args.only:
         rows = [r for r in rows if f"{r['ticker']}_{r['observed_delist_date']}" in args.only]
         if len(rows) != len(set(args.only)):
             p.error(f"--only names a case that is not in data/golden_events.csv: {args.only}")
+    edgar = _client(ROOT / "cache" / "edgar")
     if args.efts_only:
-        _refresh_efts(rows)
+        _refresh_efts(rows, edgar)
         return
-    edgar = EdgarClient(cache_dir=ROOT / "cache" / "edgar")
-    edgar.session.get = _strict(edgar.session.get)
-    if args.raw_tiingo_dir and not Path(args.raw_tiingo_dir).is_dir():
-        p.error(f"--raw-tiingo-dir is not a directory: {args.raw_tiingo_dir}")
     llm = None
-    if _openai_key_set() and args.raw_tiingo_dir:
+    if _openai_key_set():
         llm = LLMMergerTermsExtractor(edgar, default_llm_client(), cache_dir=ROOT / "cache" / "llm")
     elif args.llm_only:
-        p.error("--llm-only needs OPENAI_API_KEY and --raw-tiingo-dir")
+        p.error("--llm-only needs OPENAI_API_KEY")
     else:
-        print("notice: LLM terms not captured (needs OPENAI_API_KEY and --raw-tiingo-dir); "
-              "existing ones are kept")
+        print("notice: LLM terms not captured (needs OPENAI_API_KEY); existing ones are kept")
     if args.llm_only:
         for row in rows:
             if row["expected_bucket"] != "merger":
                 continue
             path = OUT / f"{row['ticker']}_{row['observed_delist_date']}.json"
             case = json.loads(path.read_text())
-            case.update(_capture_llm(edgar, llm, args.raw_tiingo_dir, row))
+            case.update(_capture_llm(edgar, llm, row))
             path.write_text(json.dumps(case, indent=1))
         return
     companies = edgar.company_tickers()
@@ -282,7 +297,7 @@ def main() -> None:
         }
         path = OUT / f"{t}_{d}.json"
         if llm is not None and row["expected_bucket"] == "merger":
-            case.update(_capture_llm(edgar, llm, args.raw_tiingo_dir, row))
+            case.update(_capture_llm(edgar, llm, row))
         elif path.exists():   # keep the terms an earlier run captured
             old = json.loads(path.read_text())
             case.update({k: old[k] for k in LLM_KEYS if k in old})

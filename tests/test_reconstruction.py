@@ -5,7 +5,11 @@ from delist_detection.classifier import DelistRecord
 from delist_detection.crsp_codes import CrspBucket
 from delist_detection.dlret import DlretMethod
 from delist_detection.exchanges import Exchange
-from delist_detection.reconstruction import enrich, EnrichedDelistRecord
+from delist_detection.reconstruction import (
+    for_delisting, build_delistings_table, delisting_row, enrich, EnrichedDelistRecord,
+    load_float_overrides, load_merger_terms_overrides,
+)
+from delist_detection.store import DelistingKey
 
 
 def _rec(ticker="AET", bucket=CrspBucket.MERGER, code=241, date="2018-11-28"):
@@ -13,6 +17,16 @@ def _rec(ticker="AET", bucket=CrspBucket.MERGER, code=241, date="2018-11-28"):
         ticker=ticker, cik=1122304, observed_delist_date=date,
         crsp_code=code, bucket=bucket, confidence="high",
         reason="M&A 2.01+3.01+5.01", evidence={},
+    )
+
+
+def _drec(sec_id, delist_date, ticker="AET", bucket=CrspBucket.MERGER, code=241):
+    """A record carrying sec_id/delist_date, for build_delistings_table/delisting_row tests."""
+    return DelistRecord(
+        ticker=ticker, cik=1122304, observed_delist_date=delist_date,
+        crsp_code=code, bucket=bucket, confidence="high",
+        reason="M&A 2.01+3.01+5.01", evidence={},
+        sec_id=sec_id, delist_date=delist_date,
     )
 
 
@@ -54,108 +68,106 @@ def test_enrich_carries_classification_fields():
     assert e.bucket is CrspBucket.MERGER
     assert e.reason == "M&A 2.01+3.01+5.01"
 
-from delist_detection.reconstruction import (
-    build_dlret_table, write_dlret_csv, enriched_to_row, DLRET_TABLE_COLUMNS,
-)
+
+def test_enrich_copies_sec_id_and_delist_date():
+    rec = _drec("BBG000BGRY34", "2018-11-28", ticker="AET")
+    e = enrich(rec, exchange=Exchange.NYSE, last_trade_close=190.0, payout_per_share=145.0)
+    assert e.sec_id == "BBG000BGRY34"
+    assert e.delist_date == "2018-11-28"
 
 
-def test_table_column_order_is_contractual():
-    assert DLRET_TABLE_COLUMNS == [
-        "ticker", "bucket", "observed_delist_date", "crsp_code", "dlret", "reason",
-        "exchange", "last_trade_close", "payout_per_share", "stock_ratio",
-        "acquirer_price", "acquirer_ticker", "recovery_ratio", "terminal_value",
-        "dlret_method", "dlret_confidence", "payout_source", "review_flags",
-    ]
-
-
-def test_build_table_keys_on_ticker_and_uses_inputs():
+def test_build_table_keys_on_sec_id_and_uses_inputs():
     records = [
-        _rec(ticker="AET", code=241, date="2018-11-28"),
-        _rec(ticker="ABMD", code=231, date="2023-01-03", bucket=CrspBucket.MERGER),
+        _drec("BBG_AET", "2018-11-28", ticker="AET", code=241),
+        _drec("BBG_ABMD", "2023-01-03", ticker="ABMD", code=231, bucket=CrspBucket.MERGER),
     ]
-    table = build_dlret_table(
+    table = build_delistings_table(
         records,
-        last_trade_closes={"AET": 190.0, "ABMD": 300.0},
-        payouts={"AET": 145.0, "ABMD": 380.0},
-        exchanges={"AET": "NYSE", "ABMD": "NASDAQ"},
-        merger_terms={"AET": {"stock_ratio": 0.8378, "acquirer_price": 80.0, "acquirer_ticker": "CVS"}},
+        last_trade_closes={"BBG_AET": 190.0, "BBG_ABMD": 300.0},
+        payouts={"BBG_AET": 145.0, "BBG_ABMD": 380.0},
+        exchanges={"BBG_AET": "NYSE", "BBG_ABMD": "NASDAQ"},
+        merger_terms={"BBG_AET": {"stock_ratio": 0.8378, "acquirer_price": 80.0, "acquirer_ticker": "CVS"}},
     )
-    by_ticker = {e.ticker: e for e in table}
-    assert by_ticker["AET"].dlret_method is DlretMethod.CASH_PLUS_STOCK
-    assert by_ticker["ABMD"].dlret_method is DlretMethod.CASH_ONLY
-    assert by_ticker["ABMD"].dlret == pytest.approx(380.0 / 300.0 - 1.0)
+    by_sec_id = {e.sec_id: e for e in table}
+    assert by_sec_id["BBG_AET"].dlret_method is DlretMethod.CASH_PLUS_STOCK
+    assert by_sec_id["BBG_ABMD"].dlret_method is DlretMethod.CASH_ONLY
+    assert by_sec_id["BBG_ABMD"].dlret == pytest.approx(380.0 / 300.0 - 1.0)
 
 
 def test_row_blanks_nan_and_none():
-    e = enrich(_rec(), exchange=Exchange.NYSE, last_trade_close=None, payout_per_share=113.0)
-    row = enriched_to_row(e)
-    assert row["dlret"] == ""          # NaN renders blank, never 0
-    assert row["terminal_value"] == ""
+    e = enrich(_drec("BBG_AET", "2018-11-28"), exchange=Exchange.NYSE, last_trade_close=None,
+               payout_per_share=113.0)
+    row = delisting_row(e)
+    assert math.isnan(row["dlret"])          # a raw NaN, not pre-formatted to a string
+    assert row["terminal_value"] is None
     assert row["dlret_method"] == "needs_last_trade"
 
 
-def test_write_csv_roundtrip(tmp_path):
-    import csv
-    records = [_rec(ticker="ABMD", code=231)]
-    table = build_dlret_table(records, last_trade_closes={"ABMD": 300.0}, payouts={"ABMD": 380.0},
-                              exchanges={"ABMD": "NASDAQ"})
-    out = tmp_path / "dlret.csv"
-    write_dlret_csv(table, out)
-    with out.open() as fh:
-        rows = list(csv.DictReader(fh))
-    assert list(rows[0].keys()) == DLRET_TABLE_COLUMNS
-    assert rows[0]["ticker"] == "ABMD"
-    assert rows[0]["dlret_method"] == "cash_only"
-
-
-def test_recycled_ticker_yields_one_row_per_delisting():
+def test_recycled_security_yields_one_row_per_delisting():
     # ALTR was Altera (2015 merger) then Altair (2025). Two DelistRecords with
-    # the same ticker but different dates -> two output rows, one per event.
+    # the same sec_id but different delist_date -> two output rows, one per event.
     # Per-event tuple-keyed maps disambiguate the two events.
     records = [
-        _rec(ticker="ALTR", code=233, date="2015-12-28"),
-        _rec(ticker="ALTR", code=231, date="2025-03-26"),
+        _drec("BBG_ALTR", "2015-12-28", ticker="ALTR", code=233),
+        _drec("BBG_ALTR", "2025-03-26", ticker="ALTR", code=231),
     ]
-    table = build_dlret_table(
+    table = build_delistings_table(
         records,
-        last_trade_closes={("ALTR", "2015-12-28"): 50.0, ("ALTR", "2025-03-26"): 90.0},
-        payouts={("ALTR", "2015-12-28"): 54.0, ("ALTR", "2025-03-26"): 99.0},
+        last_trade_closes={("BBG_ALTR", "2015-12-28"): 50.0, ("BBG_ALTR", "2025-03-26"): 90.0},
+        payouts={("BBG_ALTR", "2015-12-28"): 54.0, ("BBG_ALTR", "2025-03-26"): 99.0},
     )
     assert len(table) == 2
-    by_date = {e.observed_delist_date: e for e in table}
+    by_date = {e.delist_date: e for e in table}
     assert by_date["2015-12-28"].last_trade_close == 50.0
     assert by_date["2025-03-26"].last_trade_close == 90.0
     assert by_date["2015-12-28"].payout_per_share == 54.0
     assert by_date["2025-03-26"].payout_per_share == 99.0
 
 
-def test_load_merger_terms_csv(tmp_path):
-    from delist_detection.reconstruction import load_merger_terms_csv
+def test_recycled_security_bare_default_applies_to_all_events():
+    # A bare-sec_id default in last_trade_closes applies to ALL events when
+    # no per-event tuple key is present (backward-compatible fallback).
+    records = [
+        _drec("BBG_ALTR", "2015-12-28", ticker="ALTR", code=233),
+        _drec("BBG_ALTR", "2025-03-26", ticker="ALTR", code=231),
+    ]
+    table = build_delistings_table(records, last_trade_closes={"BBG_ALTR": 50.0})
+    assert len(table) == 2
+    assert all(e.last_trade_close == 50.0 for e in table)
+
+
+def test_lookup_tuple_wins_over_bare_key():
+    # When a map has both a per-event tuple key and a bare-sec_id fallback,
+    # the tuple wins; a different date falls back to the bare-sec_id default.
+    m = {("BBG_ALTR", "2015-12-28"): 50.0, "BBG_ALTR": 99.0}
+    assert for_delisting(m, ("BBG_ALTR", "2015-12-28")) == 50.0   # tuple wins
+    assert for_delisting(m, DelistingKey("BBG_ALTR", "2099-01-01")) == 99.0   # fallback to bare sec_id
+
+
+def test_load_merger_terms_overrides(tmp_path):
     p = tmp_path / "terms.csv"
     p.write_text(
-        "ticker,cash_per_share,stock_ratio,acquirer_price,acquirer_ticker\n"
-        "AET,145,0.8378,80,CVS\n"
-        "ABMD,380,,,\n"
+        "sec_id,cash_per_share,stock_ratio,acquirer_price,acquirer_ticker\n"
+        "BBG_AET,145,0.8378,80,CVS\n"
+        "BBG_ABMD,380,,,\n"
     )
-    terms = load_merger_terms_csv(p)
-    assert terms["AET"] == {"cash_per_share": 145.0, "stock_ratio": 0.8378,
-                            "acquirer_price": 80.0, "acquirer_ticker": "CVS"}
-    assert terms["ABMD"] == {"cash_per_share": 380.0}  # blanks omitted
+    terms = load_merger_terms_overrides(p)
+    assert terms["BBG_AET"] == {"cash_per_share": 145.0, "stock_ratio": 0.8378,
+                                "acquirer_price": 80.0, "acquirer_ticker": "CVS"}
+    assert terms["BBG_ABMD"] == {"cash_per_share": 380.0}  # blanks omitted
 
 
-def test_load_float_map_csv_reads_values(tmp_path):
-    from delist_detection.reconstruction import load_float_map_csv
+def test_load_float_overrides_reads_values(tmp_path):
     p = tmp_path / "lt.csv"
-    p.write_text("ticker,last_trade_close\nAET,190\nFOO,\n")
-    assert load_float_map_csv(p, "last_trade_close") == {"AET": 190.0}  # blank-value row skipped
+    p.write_text("sec_id,last_trade_close\nBBG_AET,190\nBBG_FOO,\n")
+    assert load_float_overrides(p, "last_trade_close") == {"BBG_AET": 190.0}  # blank-value row skipped
 
 
-def test_load_float_map_csv_raises_on_missing_column(tmp_path):
-    from delist_detection.reconstruction import load_float_map_csv
+def test_load_float_overrides_raises_on_missing_column(tmp_path):
     p = tmp_path / "bad.csv"
-    p.write_text("ticker,close\nAET,190\n")  # 'close' != 'last_trade_close'
+    p.write_text("sec_id,close\nBBG_AET,190\n")  # 'close' != 'last_trade_close'
     with pytest.raises(ValueError):
-        load_float_map_csv(p, "last_trade_close")
+        load_float_overrides(p, "last_trade_close")
 
 
 def test_merger_no_consideration_valid_price_assumes_par():
@@ -163,40 +175,39 @@ def test_merger_no_consideration_valid_price_assumes_par():
     # no computable consideration assumes terminal = last price (arbitrage closed
     # the gap to the deal value), so DLRET = 0 is emitted as ASSUMED_PAR at low
     # confidence — filled, not blank, and self-documenting (not a silent computed 0).
-    e = enrich(_rec(), exchange=Exchange.NYSE, last_trade_close=10.0)
+    e = enrich(_drec("BBG_AET", "2018-11-28"), exchange=Exchange.NYSE, last_trade_close=10.0)
     assert e.dlret_method is DlretMethod.ASSUMED_PAR
     assert e.dlret == 0.0
     assert e.dlret_confidence == "low"
-    row = enriched_to_row(e)
-    assert row["dlret"] == "0.000000"   # filled (was blank under the old abstain rule)
+    row = delisting_row(e)
+    assert row["dlret"] == 0.0   # filled (was blank under the old abstain rule)
 
 
 def test_expiration_with_last_price_assumes_par():
     # Non-equity/fund closures (CRSP 6xx) redeem at NAV ≈ last price → DLRET ≈ 0.
-    e = enrich(_rec(code=600, bucket=CrspBucket.EXPIRATION), exchange=Exchange.NYSE,
+    e = enrich(_drec("BBG_X", "2020-01-02", code=600, bucket=CrspBucket.EXPIRATION), exchange=Exchange.NYSE,
                last_trade_close=25.0)
     assert e.dlret_method is DlretMethod.ASSUMED_PAR
     assert e.dlret == 0.0
-    assert enriched_to_row(e)["dlret"] == "0.000000"
+    assert delisting_row(e)["dlret"] == 0.0
 
 
 def test_no_consideration_no_price_stays_blank():
     # Without a last price there is no denominator, so par cannot be assumed —
-    # the cell stays a NaN/blank rather than fabricate a return.
-    e = enrich(_rec(), exchange=Exchange.NYSE, last_trade_close=None)
+    # the cell stays a NaN row value that renders blank in the abstain case.
+    e = enrich(_drec("BBG_AET", "2018-11-28"), exchange=Exchange.NYSE, last_trade_close=None)
     assert math.isnan(e.dlret)
-    assert enriched_to_row(e)["dlret"] == ""
+    assert delisting_row(e)["dlret"] is None
 
 
-def test_load_merger_terms_csv_raises_on_partial_stock_leg(tmp_path):
-    from delist_detection.reconstruction import load_merger_terms_csv
+def test_load_merger_terms_overrides_raises_on_partial_stock_leg(tmp_path):
     p = tmp_path / "bad_terms.csv"
     p.write_text(
-        "ticker,cash_per_share,stock_ratio,acquirer_price,acquirer_ticker\n"
-        "AET,145,0.8378,,CVS\n"  # stock_ratio present but acquirer_price blank
+        "sec_id,cash_per_share,stock_ratio,acquirer_price,acquirer_ticker\n"
+        "BBG_AET,145,0.8378,,CVS\n"  # stock_ratio present but acquirer_price blank
     )
     with pytest.raises(ValueError, match="incomplete stock leg"):
-        load_merger_terms_csv(p)
+        load_merger_terms_overrides(p)
 
 
 def test_cash_only_invalid_payout_confidence_yields_medium():
@@ -216,53 +227,28 @@ def test_cash_only_invalid_payout_confidence_yields_medium():
     assert e_junk.dlret_confidence == "medium"
 
 
-from delist_detection.reconstruction import _lookup
-
-
-def test_recycled_ticker_bare_default_applies_to_all_events():
-    # A bare-ticker default in last_trade_closes applies to ALL events when
-    # no per-event tuple key is present (backward-compatible fallback).
-    records = [
-        _rec(ticker="ALTR", code=233, date="2015-12-28"),
-        _rec(ticker="ALTR", code=231, date="2025-03-26"),
-    ]
-    table = build_dlret_table(records, last_trade_closes={"ALTR": 50.0})
-    assert len(table) == 2
-    assert all(e.last_trade_close == 50.0 for e in table)
-
-
-def test_lookup_tuple_wins_over_bare_ticker():
-    # When a map has both a per-event tuple key and a bare-ticker fallback,
-    # the tuple wins; a different date falls back to the bare-ticker default.
-    m = {("ALTR", "2015-12-28"): 50.0, "ALTR": 99.0}
-    assert _lookup(m, "ALTR", "2015-12-28") == 50.0   # tuple wins
-    assert _lookup(m, "ALTR", "2099-01-01") == 99.0   # fallback to bare ticker
-
-
-def test_load_float_map_csv_with_date_column_produces_tuple_keys(tmp_path):
-    from delist_detection.reconstruction import load_float_map_csv
+def test_load_float_overrides_with_date_column_produces_tuple_keys(tmp_path):
     p = tmp_path / "lt.csv"
     p.write_text(
-        "ticker,observed_delist_date,last_trade_close\n"
-        "ALTR,2015-12-28,50.0\n"
-        "ALTR,,90.0\n"   # blank date -> bare ticker key
+        "sec_id,delist_date,last_trade_close\n"
+        "BBG_ALTR,2015-12-28,50.0\n"
+        "BBG_ALTR,,90.0\n"   # blank date -> bare sec_id key
     )
-    result = load_float_map_csv(p, "last_trade_close")
-    assert result[("ALTR", "2015-12-28")] == 50.0
-    assert result["ALTR"] == 90.0
+    result = load_float_overrides(p, "last_trade_close")
+    assert result[("BBG_ALTR", "2015-12-28")] == 50.0
+    assert result["BBG_ALTR"] == 90.0
 
 
-def test_load_merger_terms_csv_with_date_column_produces_tuple_keys(tmp_path):
-    from delist_detection.reconstruction import load_merger_terms_csv
+def test_load_merger_terms_overrides_with_date_column_produces_tuple_keys(tmp_path):
     p = tmp_path / "terms.csv"
     p.write_text(
-        "ticker,observed_delist_date,cash_per_share,stock_ratio,acquirer_price,acquirer_ticker\n"
-        "ALTR,2015-12-28,54.0,,,\n"   # per-event key
-        "ALTR,,99.0,,,\n"             # blank date -> bare ticker key
+        "sec_id,delist_date,cash_per_share,stock_ratio,acquirer_price,acquirer_ticker\n"
+        "BBG_ALTR,2015-12-28,54.0,,,\n"   # per-event key
+        "BBG_ALTR,,99.0,,,\n"             # blank date -> bare sec_id key
     )
-    result = load_merger_terms_csv(p)
-    assert result[("ALTR", "2015-12-28")] == {"cash_per_share": 54.0}
-    assert result["ALTR"] == {"cash_per_share": 99.0}
+    result = load_merger_terms_overrides(p)
+    assert result[("BBG_ALTR", "2015-12-28")] == {"cash_per_share": 54.0}
+    assert result["BBG_ALTR"] == {"cash_per_share": 99.0}
 
 
 def test_unknown_deregistered_with_a_price_is_assumed_par():
@@ -278,18 +264,17 @@ def test_unknown_without_deregistration_stays_blank():
     assert e.dlret_method is DlretMethod.UNKNOWN
 
 
-def test_review_flags_is_the_last_column_and_joins_flags():
-    assert DLRET_TABLE_COLUMNS[-1] == "review_flags"
+def test_review_flags_joins_flags():
     rec = DelistRecord("X", 1, "2020-01-02", 570, CrspBucket.COMPLIANCE_FAILURE, "medium", "r",
                        {"flags": ["frozen_tail:120"]})
     e = enrich(rec, last_trade_close=58.97, extra_flags=("payout_gate_failed:25",))
-    row = enriched_to_row(e)
+    row = delisting_row(e)
     assert row["review_flags"] == "frozen_tail:120;payout_gate_failed:25;distress_at_normal_price"
 
 
 def test_no_flags_is_an_empty_cell():
     rec = DelistRecord("Y", 1, "2020-01-02", 231, CrspBucket.MERGER, "high", "r", {})
-    assert enriched_to_row(enrich(rec, last_trade_close=10.0, payout_per_share=10.0))["review_flags"] == ""
+    assert delisting_row(enrich(rec, last_trade_close=10.0, payout_per_share=10.0))["review_flags"] == ""
 
 
 def test_a_merger_left_at_par_is_flagged_for_review():

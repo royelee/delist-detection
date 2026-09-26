@@ -33,3 +33,24 @@ def test_near_event_keeps_only_the_window_around_the_event():
         _f((ON + bgf.timedelta(days=bgf.AFTER_DAYS + 1)).isoformat()),    # too new
     ]
     assert len(bgf._near_event(fs, ON)) == 2
+
+
+def test_the_builder_client_bypasses_the_search_caches(tmp_path, monkeypatch):
+    monkeypatch.setenv("EDGAR_USER_AGENT", "Test Co test@example.com")
+    assert bgf._client(tmp_path).search_cache is False
+
+
+def test_recording_keeps_each_efts_answer_as_the_fixtures_store_it():
+    class _R:
+        status_code = 200
+
+        def json(self):
+            return {"hits": {"total": {"value": 1}, "hits": [
+                {"_id": "a:b", "_score": 1.0, "_source": {"ciks": ["1"], "display_names": ["X"], "sics": ["1"]}}]}}
+
+    bgf._efts_raw.clear()
+    get = bgf._recording(lambda url, **kw: _R())
+    get("https://efts.sec.gov/LATEST/search-index?q=x", headers={}, timeout=30)
+    get("https://data.sec.gov/submissions/CIK0000000001.json", headers={}, timeout=30)
+    assert bgf._efts_raw == {"https://efts.sec.gov/LATEST/search-index?q=x": {"hits": {
+        "total": {"value": 1}, "hits": [{"_source": {"ciks": ["1"], "display_names": ["X"]}}]}}}

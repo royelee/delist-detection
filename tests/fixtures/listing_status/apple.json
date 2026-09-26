@@ -1,0 +1,189 @@
+{
+ "sec_id": "BBG000B9XRY4",
+ "cik": 320193,
+ "observed_tickers": [
+  "AAPL"
+ ],
+ "openfigi": {
+  "data": [
+   {
+    "figi": "BBG000B9XRY4",
+    "compositeFIGI": "BBG000B9XRY4",
+    "exchCode": "US",
+    "ticker": "AAPL",
+    "name": "APPLE INC",
+    "securityType": "Common Stock"
+   },
+   {
+    "figi": "BBG000B9XSK7",
+    "compositeFIGI": "BBG000B9XRY4",
+    "exchCode": "UA",
+    "ticker": "AAPL",
+    "name": "APPLE INC",
+    "securityType": "Common Stock"
+   },
+   {
+    "figi": "BBG000B9XT70",
+    "compositeFIGI": "BBG000B9XRY4",
+    "exchCode": "UC",
+    "ticker": "AAPL",
+    "name": "APPLE INC",
+    "securityType": "Common Stock"
+   },
+   {
+    "figi": "BBG000B9XVV8",
+    "compositeFIGI": "BBG000B9XRY4",
+    "exchCode": "UN",
+    "ticker": "AAPL",
+    "name": "APPLE INC",
+    "securityType": "Common Stock"
+   },
+   {
+    "figi": "BBG000B9XWM6",
+    "compositeFIGI": "BBG000B9XRY4",
+    "exchCode": "UP",
+    "ticker": "AAPL",
+    "name": "APPLE INC",
+    "securityType": "Common Stock"
+   },
+   {
+    "figi": "BBG000B9XXW3",
+    "compositeFIGI": "BBG000B9XRY4",
+    "exchCode": "UB",
+    "ticker": "AAPL",
+    "name": "APPLE INC",
+    "securityType": "Common Stock"
+   },
+   {
+    "figi": "BBG000B9XYZ8",
+    "compositeFIGI": "BBG000B9XRY4",
+    "exchCode": "UM",
+    "ticker": "AAPL",
+    "name": "APPLE INC",
+    "securityType": "Common Stock"
+   },
+   {
+    "figi": "BBG000B9XZT2",
+    "compositeFIGI": "BBG000B9XRY4",
+    "exchCode": "UX",
+    "ticker": "AAPL",
+    "name": "APPLE INC",
+    "securityType": "Common Stock"
+   },
+   {
+    "figi": "BBG000B9Y2J5",
+    "compositeFIGI": "BBG000B9XRY4",
+    "exchCode": "UD",
+    "ticker": "AAPL",
+    "name": "APPLE INC",
+    "securityType": "Common Stock"
+   },
+   {
+    "figi": "BBG000B9Y5X2",
+    "compositeFIGI": "BBG000B9XRY4",
+    "exchCode": "UW",
+    "ticker": "AAPL",
+    "name": "APPLE INC",
+    "securityType": "Common Stock"
+   },
+   {
+    "figi": "BBG000B9Y6P9",
+    "compositeFIGI": "BBG000B9XRY4",
+    "exchCode": "UF",
+    "ticker": "AAPL",
+    "name": "APPLE INC",
+    "securityType": "Common Stock"
+   },
+   {
+    "figi": "BBG000B9Y7F8",
+    "compositeFIGI": "BBG000B9XRY4",
+    "exchCode": "VY",
+    "ticker": "AAPL",
+    "name": "APPLE INC",
+    "securityType": "Common Stock"
+   },
+   {
+    "figi": "BBG000B9Y7W9",
+    "compositeFIGI": "BBG000B9XRY4",
+    "exchCode": "VJ",
+    "ticker": "AAPL",
+    "name": "APPLE INC",
+    "securityType": "Common Stock"
+   },
+   {
+    "figi": "BBG000B9Y8J2",
+    "compositeFIGI": "BBG000B9XRY4",
+    "exchCode": "VK",
+    "ticker": "AAPL",
+    "name": "APPLE INC",
+    "securityType": "Common Stock"
+   },
+   {
+    "figi": "BBG00DJCT4Z6",
+    "compositeFIGI": "BBG000B9XRY4",
+    "exchCode": "VF",
+    "ticker": "AAPL",
+    "name": "APPLE INC",
+    "securityType": "Common Stock"
+   },
+   {
+    "figi": "BBG00THD0WF2",
+    "compositeFIGI": "BBG000B9XRY4",
+    "exchCode": "VL",
+    "ticker": "AAPL",
+    "name": "APPLE INC",
+    "securityType": "Common Stock"
+   },
+   {
+    "figi": "BBG00X1L4PD5",
+    "compositeFIGI": "BBG000B9XRY4",
+    "exchCode": "VG",
+    "ticker": "AAPL",
+    "name": "APPLE INC",
+    "securityType": "Common Stock"
+   },
+   {
+    "figi": "BBG00X1PKZF4",
+    "compositeFIGI": "BBG000B9XRY4",
+    "exchCode": "VP",
+    "ticker": "AAPL",
+    "name": "APPLE INC",
+    "securityType": "Common Stock"
+   },
+   {
+    "figi": "BBG01V7VYB11",
+    "compositeFIGI": "BBG000B9XRY4",
+    "exchCode": "OC",
+    "ticker": "AAPL",
+    "name": "APPLE INC",
+    "securityType": "Common Stock"
+   },
+   {
+    "figi": "BBG01X4J7994",
+    "compositeFIGI": "BBG000B9XRY4",
+    "exchCode": "OD",
+    "ticker": "AAPL",
+    "name": "APPLE INC",
+    "securityType": "Common Stock"
+   },
+   {
+    "figi": "BBG021C07FG3",
+    "compositeFIGI": "BBG000B9XRY4",
+    "exchCode": "VT",
+    "ticker": "AAPL",
+    "name": "APPLE INC",
+    "securityType": "Common Stock"
+   }
+  ]
+ },
+ "submissions": {
+  "name": "Apple Inc.",
+  "tickers": [
+   "AAPL"
+  ],
+  "exchanges": [
+   "Nasdaq"
+  ],
+  "__fetched__": "2026-09-23"
+ }
+}

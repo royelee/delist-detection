@@ -49,6 +49,7 @@ UNKNOWN                 : exit at 0.5 * last_close, flag for review.
 
 from __future__ import annotations
 
+import logging
 import math
 from dataclasses import dataclass
 from datetime import date, datetime
@@ -59,6 +60,8 @@ from .classifier import DelistRecord
 from .crsp_codes import CrspBucket
 from .exchanges import Exchange
 
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_RECOVERY_RATIO = 0.10
 DEFAULT_UNKNOWN_TRAIN_RETURN = -0.5
@@ -81,7 +84,7 @@ class BacktestExit:
     bucket: CrspBucket
     exit_date: date                  # last day position is held (T_exit)
     exit_price: float                # per-share exit value applied at T_exit
-    successor_ticker: str | None = None
+    successor_sec_id: str | None = None
     notes: str = ""
 
 
@@ -114,7 +117,6 @@ def build_train_label_adjustment(
     record: DelistRecord,
     last_close: float,
     payout_per_share: float | None = None,
-    successor_map: Mapping[str, str] | None = None,
     recovery_ratio: float = DEFAULT_RECOVERY_RATIO,
 ) -> TrainLabelAdjustment:
     """Return the forward-return label to use for the *last* training row of `ticker`."""
@@ -140,7 +142,7 @@ def build_train_label_adjustment(
         )
 
     if bucket is CrspBucket.EXCHANGE_TRANSFER:
-        successor = (successor_map or {}).get(record.ticker)
+        successor = record.successor_sec_id
         if successor:
             return TrainLabelAdjustment(
                 ticker=record.ticker, bucket=bucket, delist_date=dd,
@@ -186,7 +188,6 @@ def build_backtest_exit(
     record: DelistRecord,
     last_close: float,
     payout_per_share: float | None = None,
-    successor_map: Mapping[str, str] | None = None,
     recovery_ratio: float = DEFAULT_RECOVERY_RATIO,
 ) -> BacktestExit:
     dd = _parse(record.observed_delist_date) or date.today()
@@ -201,10 +202,10 @@ def build_backtest_exit(
         )
 
     if bucket is CrspBucket.EXCHANGE_TRANSFER:
-        successor = (successor_map or {}).get(record.ticker)
+        successor = record.successor_sec_id
         return BacktestExit(
             ticker=record.ticker, bucket=bucket, exit_date=dd,
-            exit_price=last_close, successor_ticker=successor,
+            exit_price=last_close, successor_sec_id=successor,
             notes="Exchange transfer: hold continues in successor",
         )
 
@@ -234,21 +235,45 @@ def build_backtest_exit(
     )
 
 
-def apply_to_panel(
-    records: Iterable[DelistRecord],
-    last_closes: Mapping[str, float],
-    payouts: Mapping[str, float] | None = None,
-    successor_map: Mapping[str, str] | None = None,
-) -> tuple[list[TrainLabelAdjustment], list[BacktestExit]]:
-    payouts = payouts or {}
-    train_adj: list[TrainLabelAdjustment] = []
-    bt_exits: list[BacktestExit] = []
-    for r in records:
-        lc = last_closes.get(r.ticker, 0.0)
-        po = payouts.get(r.ticker)
-        train_adj.append(build_train_label_adjustment(r, lc, po, successor_map))
-        bt_exits.append(build_backtest_exit(r, lc, po, successor_map))
-    return train_adj, bt_exits
+def adjustments_from_rows(rows: Iterable[Mapping[str, str]]) -> tuple[list[TrainLabelAdjustment], list[BacktestExit]]:
+    """Train-label adjustments and backtest exits straight from delistings.csv rows.
+
+    A row whose `successor_sec_id` equals its own `sec_id` is a continuing
+    security (it kept trading under the same FIGI, e.g. an exchange transfer)
+    and is silently skipped -- it never reaches training or backtest handling
+    because it isn't an exit at all. A row missing `last_trade_close` is also
+    skipped (there's no price to compute a label/exit from), but that one is
+    never silent: spec 11 says nothing is dropped without a trace, so it's
+    logged at WARNING naming the `(sec_id, delist_date)` dropped.
+    """
+    from .qlib_adapter import record_from_row, row_payout   # local import: qlib_adapter imports this module
+
+    train, exits = [], []
+    for row in rows:
+        sec_id = row.get("sec_id")
+        successor = row.get("successor_sec_id")
+        if successor and successor == sec_id:
+            continue
+        close = _float(row.get("last_trade_close"))
+        if close is None:
+            logger.warning("adjustments_from_rows: skipping (sec_id=%s, delist_date=%s): no last_trade_close",
+                           sec_id, row.get("delist_date"))
+            continue
+        rec = record_from_row(row)
+        payout = row_payout(row)
+        recovery = _float(row.get("recovery_ratio"))
+        kw = {"recovery_ratio": recovery} if recovery is not None else {}
+        train.append(build_train_label_adjustment(rec, close, payout, **kw))
+        exits.append(build_backtest_exit(rec, close, payout, **kw))
+    return train, exits
+
+
+def _float(v) -> float | None:
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return None
+    return None if f != f else f
 
 
 def build_firm_month_correction(

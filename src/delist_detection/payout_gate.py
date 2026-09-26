@@ -8,7 +8,7 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
 
-from .reconstruction import _lookup
+from .reconstruction import for_delisting
 
 DEFAULT_TOL = 0.15
 GATE_FAILED = "payout_gate_failed:"
@@ -89,7 +89,7 @@ class GatedPayouts:
         flag for review but is not counted)."""
         return sum(
             any(f.startswith(GATE_FAILED) for f in fl)
-            and key not in self.payouts and not _lookup(self.merged_terms, *key)
+            and key not in self.payouts and not for_delisting(self.merged_terms, key)
             for key, fl in self.flags.items()
         )
 
@@ -102,15 +102,18 @@ def gate_payouts(
     llm_terms: Mapping,
     last_closes: Mapping,
     csv_terms: Mapping,
-    acquirer_price: Callable[[str, str | None], float | None],
+    acquirer_price: Callable[[str, tuple[str, str | None]], float | None],
     tol: float,
 ) -> GatedPayouts:
     """Route every merger payout through the last-close check. Inputs are not mutated.
 
-    keys: (TICKER, date) of every merger record. payouts / sources / confidences: the
-    regex extraction, and llm_terms: MergerTerms, all by those keys. last_closes and
-    csv_terms: the --last-trade-closes and --merger-terms maps (bare-ticker or
-    (ticker, date) keys). A --merger-terms row always wins over the LLM.
+    keys: (sec_id, delist_date) of every merger delisting. payouts / sources / confidences:
+    the regex extraction, and llm_terms: MergerTerms, all by those keys. last_closes and
+    csv_terms: the --last-trade-closes and --merger-terms maps (bare sec_id or
+    (sec_id, delist_date) keys). A --merger-terms row always wins over the LLM.
+    acquirer_price(ticker, key): the acquirer's price on THAT merger's own last-trade
+    day — called with the merger's full key, not just its date, because many mergers
+    can share a delist date and each must be priced on its own last-trade day.
 
     Pass 1 reconciles each key's regex value (and its cash or election LLM terms).
     Pass 2 is the cash+stock gate for the other LLM terms that carry a stock ratio:
@@ -123,14 +126,13 @@ def gate_payouts(
             m.pop(key, None)
 
     for key in keys:
-        tkr, date = key
-        has_csv = _lookup(csv_terms, tkr, date) is not None
+        has_csv = for_delisting(csv_terms, key) is not None
         terms = None if has_csv else llm_terms.get(key)
         r = reconcile(
             out.payouts.get(key),
-            _lookup(last_closes, tkr, date),
+            for_delisting(last_closes, key),
             terms,
-            acquirer_price(terms.acquirer_ticker, date) if terms and terms.acquirer_ticker else None,
+            acquirer_price(terms.acquirer_ticker, key) if terms and terms.acquirer_ticker else None,
             tol,
         )
         if r.flags:
@@ -156,8 +158,7 @@ def gate_payouts(
     for key, terms in llm_terms.items():
         if terms.stock_ratio is None or terms.deal_type == "election":
             continue   # settled in pass 1
-        tkr, date = key
-        if _lookup(csv_terms, tkr, date) is not None:
+        if for_delisting(csv_terms, key) is not None:
             out.dropped["csv_override"] += 1
             continue
         acq = (terms.acquirer_ticker or "").strip()
@@ -165,12 +166,12 @@ def gate_payouts(
             out.dropped["no_acq_ticker"] += 1
             flag_terms_gate_drop(key, "no_acq_ticker")
             continue
-        acq_price = acquirer_price(acq, date)
+        acq_price = acquirer_price(acq, key)
         if acq_price is None:
             out.dropped["no_acq_price"] += 1
             flag_terms_gate_drop(key, "no_acq_price")
             continue
-        last_close = _lookup(last_closes, tkr, date)
+        last_close = for_delisting(last_closes, key)
         if last_close is None or last_close <= 0:
             # <=0 guard mirrors _resolve_merger (dlret.py): a zero/blank close
             # would both divide-by-zero here and yield a NaN DLRET downstream.
@@ -189,7 +190,7 @@ def gate_payouts(
         else:
             # The LLM read this as all-stock and the stock leg alone reconciles, so
             # any cash the regex (mis)read from the filing is wrong. Drop it:
-            # otherwise build_dlret_table's `terms.get("cash_per_share", payouts[...])`
+            # otherwise build_delistings_table's `terms.get("cash_per_share", payouts[...])`
             # fallback would re-add that phantom cash (e.g. MRD 65x).
             drop_payout(key)
         out.merged_terms[key] = d

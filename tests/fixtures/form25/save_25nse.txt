@@ -1,0 +1,129 @@
+<SEC-DOCUMENT>0000876661-24-001142.txt : 20241205
+<SEC-HEADER>0000876661-24-001142.hdr.sgml : 20241205
+<ACCEPTANCE-DATETIME>20241205090325
+ACCESSION NUMBER:		0000876661-24-001142
+CONFORMED SUBMISSION TYPE:	25-NSE
+PUBLIC DOCUMENT COUNT:		2
+FILED AS OF DATE:		20241205
+DATE AS OF CHANGE:		20241205
+EFFECTIVENESS DATE:		20241205
+
+SUBJECT COMPANY:	
+
+	COMPANY DATA:	
+		COMPANY CONFORMED NAME:			Spirit Airlines, Inc.
+		CENTRAL INDEX KEY:			0001498710
+		STANDARD INDUSTRIAL CLASSIFICATION:	AIR TRANSPORTATION, SCHEDULED [4512]
+		ORGANIZATION NAME:           	01 Energy & Transportation
+		IRS NUMBER:				381747023
+		STATE OF INCORPORATION:			DE
+		FISCAL YEAR END:			1231
+
+	FILING VALUES:
+		FORM TYPE:		25-NSE
+		SEC ACT:		1934 Act
+		SEC FILE NUMBER:	001-35186
+		FILM NUMBER:		241527974
+
+	BUSINESS ADDRESS:	
+		STREET 1:		1731 RADIANT DRIVE
+		CITY:			DANIA BEACH
+		STATE:			FL
+		ZIP:			33004
+		BUSINESS PHONE:		954-447-7920
+
+	MAIL ADDRESS:	
+		STREET 1:		1731 RADIANT DRIVE
+		CITY:			DANIA BEACH
+		STATE:			FL
+		ZIP:			33004
+
+FILED BY:		
+
+	COMPANY DATA:	
+		COMPANY CONFORMED NAME:			NEW YORK STOCK EXCHANGE LLC
+		CENTRAL INDEX KEY:			0000876661
+		ORGANIZATION NAME:           	
+		IRS NUMBER:				000000000
+		STATE OF INCORPORATION:			NY
+
+	FILING VALUES:
+		FORM TYPE:		25-NSE
+
+	BUSINESS ADDRESS:	
+		STREET 1:		11 WALL STREET
+		CITY:			NEW YORK
+		STATE:			NY
+		ZIP:			10005
+		BUSINESS PHONE:		212-656-2060
+
+	MAIL ADDRESS:	
+		STREET 1:		11 WALL STREET
+		CITY:			NEW YORK
+		STATE:			NY
+		ZIP:			10005
+
+	FORMER COMPANY:	
+		FORMER CONFORMED NAME:	NEW YORK STOCK EXCHANGE INC
+		DATE OF NAME CHANGE:	19910628
+</SEC-HEADER>
+<DOCUMENT>
+<TYPE>25-NSE
+<SEQUENCE>1
+<FILENAME>primary_doc.xml
+<TEXT>
+<XML>
+<?xml version="1.0"?>
+<notificationOfRemoval>
+
+    <schemaVersion>X0203</schemaVersion>
+
+    <exchange>
+        <cik>0000876661</cik>
+        <entityName>NEW YORK STOCK EXCHANGE LLC</entityName>
+    </exchange>
+
+    <issuer>
+        <cik>0001498710</cik>
+        <entityName>Spirit Airlines, Inc.</entityName>
+        <fileNumber>001-35186</fileNumber>
+        <address>
+            <street1>2800 Executive Way</street1>
+            <city>Miramar</city>
+            <stateOrCountryCode>FL</stateOrCountryCode>
+            <stateOrCountry>FLORIDA</stateOrCountry>
+            <zipCode>33025</zipCode>
+        </address>
+        <telephoneNumber>954-447-7920</telephoneNumber>
+    </issuer>
+
+    <descriptionClassSecurity>Common Stock</descriptionClassSecurity>
+
+    <ruleProvision>17 CFR 240.12d2-2(b)</ruleProvision>
+
+    <signatureData>
+        <signatureName>Emily Fuhrman</signatureName>
+        <signatureTitle>Analyst, Regulation</signatureTitle>
+        <signatureDate>2024-12-05</signatureDate>
+    </signatureData>
+</notificationOfRemoval>
+</XML>
+</TEXT>
+</DOCUMENT>
+<DOCUMENT>
+<TYPE>EX-99.25
+<SEQUENCE>2
+<FILENAME>ruleprovisionnotice.htm
+<TEXT>
+NOTIFICATION OF THE REMOVAL FROM LISTING AND REGISTRATION OF THE STATED SECURITIES
+
+The New York Stock Exchange (the 'NYSE' or the 'Exchange') hereby notifies the Securities and Exchange Commission (the 'Commission') of its intention to remove the Common Stock of Spirit Airlines, Inc. (the "Company") from listing and registration on the Exchange at the opening of business on December 16, 2024, pursuant to the provisions of Rule 12d2-2(b) because, in the opinion of the Exchange, the Common Stock is no longer suitable for continued listing and trading on the Exchange.
+
+The Exchange reached its decision that the Company is no longer suitable for listing pursuant to NYSE Listed Company Manual Section 802.01D after the Company's November 18, 2024, press release and Form 8-K disclosures that the Company has commenced a prearranged Chapter 11 process in the United States Bankruptcy Court for the Southern District of New York. In reaching its delisting determination, NYSE Regulation notes the Company disclosed that all of the Company's existing common stock and other equity interests will be cancelled without any distributions to the holders of such common stock and other equity interests on account thereof.
+
+On November 18, 2024, the Exchange determined that the Company's Common Stock should be suspended from trading and directed the preparation and filing with the Commission of this application for the removal of the Common Stock from listing and registration on the NYSE. The Company was notified on November 18, 2024.
+
+The Company had a right to appeal to a Committee of the Board of Directors of the Exchange (the 'Committee') the determination to delist the Common Stock, provided it filed a written request for such a review with the Secretary of the Exchange within ten business days of receiving notice of the delisting determination. The Company did not file such a request within the specified period. Consequently, all conditions precedent under SEC Rule 12d2-2(b) to the filing of this application have been satisfied.
+</TEXT>
+</DOCUMENT>
+</SEC-DOCUMENT>

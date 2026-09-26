@@ -1,0 +1,25 @@
+{
+ "sec_id": "BBG000BFC8J2",
+ "cik": 816284,
+ "observed_tickers": [
+  "CELG"
+ ],
+ "openfigi": {
+  "data": [
+   {
+    "figi": "BBG000BFCMR2",
+    "compositeFIGI": "BBG000BFC8J2",
+    "exchCode": "UW",
+    "ticker": "CELG",
+    "name": "CELGENE CORP",
+    "securityType": "Common Stock"
+   }
+  ]
+ },
+ "submissions": {
+  "name": "CELGENE CORP /DE/",
+  "tickers": [],
+  "exchanges": [],
+  "__fetched__": null
+ }
+}

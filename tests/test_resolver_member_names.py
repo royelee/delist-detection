@@ -1,4 +1,3 @@
-import delist_detection.ticker_resolver as tr
 from delist_detection.classifier import DelistClassifier
 from delist_detection.edgar import EdgarSubmission
 from delist_detection.ticker_resolver import TickerResolver
@@ -36,15 +35,8 @@ def _f(acc, form, d):
 
 def _real_efts(monkeypatch, hits):
     """Run the real _efts_lookup over these EFTS hits (no network)."""
-    class _Resp:
-        status_code = 200
-
-        def json(self):
-            return {"hits": {"hits": hits}}
-
     monkeypatch.setattr(TickerResolver, "_efts_lookup", _REAL_EFTS_LOOKUP)
-    monkeypatch.setattr(tr.requests, "get", lambda *a, **kw: _Resp())
-    monkeypatch.setattr(tr, "_throttle", lambda: None)
+    monkeypatch.setattr(TickerResolver, "_efts_hits", lambda self, url, window_end=None: hits)
 
 
 def _hit(*pairs):
@@ -61,7 +53,7 @@ CITY = (38067, ("FOREST CITY REALTY TRUST", [], [_f("C1", "10-K", "2018-02-27"),
 
 def test_a_member_name_finds_a_renamed_company_that_filed_no_form25():
     e = _Edgar(dict([AVANOS]), {"HALYARD": 1606498})
-    r = TickerResolver(e, member_names=lambda t, d=None: "HALYARD HEALTH INC")
+    r = TickerResolver(e, observed_names=lambda t, d=None: "HALYARD HEALTH INC")
     assert r.resolve("HYH", "2018-06-29").cik == 1606498
 
 
@@ -74,14 +66,14 @@ def test_without_a_member_name_the_loose_form25_check_still_applies():
 def test_a_frozen_tail_member_is_accepted_through_its_old_form25():
     xto = (868809, ("XTO ENERGY INC", [], [_f("X1", "8-K", "2010-06-25"), _f("X2", "25-NSE", "2010-06-28"),
                                           _f("X3", "15-12B", "2010-07-08")]))
-    r = TickerResolver(_Edgar(dict([xto]), {"XTO": 868809}), member_names=lambda t, d=None: "XTO ENERGY INC")
+    r = TickerResolver(_Edgar(dict([xto]), {"XTO": 868809}), observed_names=lambda t, d=None: "XTO ENERGY INC")
     assert r.resolve("XTO", "2013-02-07").cik == 868809
 
 
 def test_a_long_dead_member_is_not_accepted_for_a_later_event():
     dead = (765258, ("IMCLONE SYSTEMS INC", [], [_f("I1", "10-K", "2008-03-01")]))
     r = TickerResolver(_Edgar(dict([dead]), {"IMCLONE": 765258}),
-                       member_names=lambda t, d=None: "IMCLONE SYSTEMS INC")
+                       observed_names=lambda t, d=None: "IMCLONE SYSTEMS INC")
     assert r.resolve("IMCL", "2018-10-05").cik is None
 
 
@@ -90,7 +82,7 @@ def test_the_date_anchored_efts_hit_beats_the_member_name(monkeypatch):
     monkeypatch.setattr(TickerResolver, "_efts_lookup",
                         lambda self, t, d=None, **kw: (1815737, "FAST Acquisition Corp. (FST)", False))
     r = TickerResolver(_Edgar(dict([FAST, CITY]), {"FOREST": 38067}),
-                       member_names=lambda t, d=None: "FOREST OIL CORP")
+                       observed_names=lambda t, d=None: "FOREST OIL CORP")
     res = r.resolve("FST", "2022-08-25")
     assert (res.cik, res.source) == (1815737, "efts_name_mismatch")
 
@@ -98,7 +90,7 @@ def test_the_date_anchored_efts_hit_beats_the_member_name(monkeypatch):
 def test_the_classifier_flags_a_kept_first_pass_hit_under_another_name(monkeypatch):
     _real_efts(monkeypatch, [_hit(("1815737", "FAST Acquisition Corp.  (FST)  (CIK 0001815737)"))])
     e = _Edgar(dict([FAST, CITY]), {"FOREST": 38067})
-    r = TickerResolver(e, member_names=lambda t, d=None: "FOREST OIL CORP")
+    r = TickerResolver(e, observed_names=lambda t, d=None: "FOREST OIL CORP")
     rec = DelistClassifier(e, r).classify_ticker("FST", "2022-08-25")
     assert rec.cik == 1815737
     assert rec.evidence["resolution_source"] == "efts_name_mismatch"
@@ -114,7 +106,7 @@ def test_the_member_name_tier_runs_before_the_frequency_rank(monkeypatch):
     monkeypatch.setattr(TickerResolver, "_efts_pre_delist_frequency_ranked",
                         lambda self, t, d, top_n=5: [(1299969, "Comstock Inc"), (1409970, "LendingClub")])
     r = TickerResolver(_Edgar(dict([lc, comstock]), {"LENDINGCLUB": 1409970}),
-                       member_names=lambda t, d=None: "LENDINGCLUB CORP")
+                       observed_names=lambda t, d=None: "LENDINGCLUB CORP")
     assert r.resolve("LC", "2026-06-01").cik == 1409970
 
 
@@ -144,7 +136,7 @@ def test_a_live_company_of_the_member_name_does_not_replace_the_efts_company(mon
                     [_f("W0", "10-K", "2023-03-15"), _f("W1", "10-Q", "2023-08-08")]))
     _real_efts(monkeypatch, [_hit(("1854863", "Blue Whale Acquisition Corp I  (CIK 0001854863)"))])
     e = _Edgar(dict([blue, bw]), {"BABCOCK": 1630805})
-    r = TickerResolver(e, member_names=lambda t, d=None: "BABCOCK AND WILCOX")
+    r = TickerResolver(e, observed_names=lambda t, d=None: "BABCOCK AND WILCOX")
     res = r.resolve("BWC", "2023-08-11")
     assert (res.cik, res.source) == (1854863, "efts_name_mismatch")
     rec = DelistClassifier(e, r).classify_ticker("BWC", "2023-08-11")
@@ -159,7 +151,7 @@ def test_a_member_company_with_its_own_form25_replaces_the_efts_fallback(monkeyp
                    [_f("H0", "10-K", "2022-02-09"), _f("H1", "25-NSE", "2023-02-10")]))
     _real_efts(monkeypatch, [_hit(("1829426", "Far Peak Acquisition Corp  (CIK 0001829426)"))])
     r = TickerResolver(_Edgar(dict([far, hp]), {"HEALTHPEAK": 765880}),
-                       member_names=lambda t, d=None: "HEALTHPEAK PROPERTIES INC")
+                       observed_names=lambda t, d=None: "HEALTHPEAK PROPERTIES INC")
     res = r.resolve("PEAK", "2023-02-13")
     assert (res.cik, res.source) == (765880, "name_search")
 
@@ -167,7 +159,7 @@ def test_a_member_company_with_its_own_form25_replaces_the_efts_fallback(monkeyp
 def test_a_member_name_without_usable_words_is_no_expected_name():
     att = (732717, ("AT&T INC.", [], [_f("T0", "10-K", "2020-02-19"), _f("T1", "10-Q", "2023-11-01")]))
     e = _Edgar(dict([att]), {}, tickers={"T": {"cik_str": 732717, "ticker": "T", "title": "AT&T INC."}})
-    r = TickerResolver(e, member_names=lambda t, d=None: "AT&T INC.")
+    r = TickerResolver(e, observed_names=lambda t, d=None: "AT&T INC.")
     assert r._expected_name("T", "2024-01-02") is None
     res = r.resolve("T", "2024-01-02")
     assert (res.cik, res.source) == (732717, "company_tickers")
@@ -202,7 +194,7 @@ def test_a_pinned_ticker_whose_names_differ_carries_both_flags(monkeypatch):
     _real_efts(monkeypatch, [_hit(("1815737", "FAST Acquisition Corp.  (FST)  (CIK 0001815737)"))])
     e = _Edgar(dict([FAST, CITY]), {"FOREST": 38067})
     r = TickerResolver(e, manual_overrides={"FST": 1815737},
-                       member_names=lambda t, d=None: "FOREST OIL CORP")
+                       observed_names=lambda t, d=None: "FOREST OIL CORP")
     rec = DelistClassifier(e, r).classify_ticker("FST", "2022-08-25")
     assert rec.cik == 1815737
     assert rec.evidence["resolution_source"] == "manual"
@@ -217,8 +209,23 @@ def test_a_pinned_ticker_whose_names_agree_gets_neither_flag(monkeypatch):
     _real_efts(monkeypatch, [_hit(("1815737", "FAST Acquisition Corp.  (FST)  (CIK 0001815737)"))])
     e = _Edgar(dict([FAST, CITY]), {"FOREST": 38067})
     r = TickerResolver(e, manual_overrides={"FST": 1815737},
-                       member_names=lambda t, d=None: "FAST ACQUISITION CORP")
+                       observed_names=lambda t, d=None: "FAST ACQUISITION CORP")
     rec = DelistClassifier(e, r).classify_ticker("FST", "2022-08-25")
     assert rec.evidence["resolution_source"] == "manual"
     flags = rec.evidence["flags"]
     assert "member_name_mismatch" not in flags and "resolved_by_manual_override" not in flags
+
+
+def test_a_recycled_tickers_historical_era_keeps_its_dated_filer_not_todays_holder(monkeypatch):
+    """A ticker's historical era whose snapshot name is abbreviated ("DUN BRADST
+    HLDG INC") disagrees with both its real issuer's EDGAR name and today's
+    holder of the ticker, an unrelated company that already existed on the
+    date. The dated EFTS filer (the company that filed a Form 25 near the date)
+    is kept, flagged as a name mismatch; the ticker map's holder never is."""
+    old = (1115222, ("Dun & Bradstreet Corp", [], [_f("D0", "10-K", "2018-03-01"), _f("D1", "25-NSE", "2019-02-08")]))
+    today = (2000002, ("NEWCO BANK", [], [_f("N0", "10-K", "2010-03-01"), _f("N1", "10-Q", "2026-08-01")]))
+    _real_efts(monkeypatch, [_hit(("1115222", "Dun & Bradstreet Corp  (CIK 0001115222)"))])
+    e = _Edgar(dict([old, today]), {}, tickers={"DNB": {"cik_str": 2000002, "ticker": "DNB", "title": "NEWCO BANK"}})
+    r = TickerResolver(e, observed_names=lambda t, d=None: "DUN BRADST HLDG INC")
+    res = r.resolve("DNB", "2019-02-08")
+    assert (res.cik, res.source) == (1115222, "efts_name_mismatch")

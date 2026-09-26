@@ -58,8 +58,8 @@ def test_a_cik_mapped_ticker_whose_names_differ_carries_both_flags(fake_edgar):
     states a fact about the security regardless of how the CIK was pinned, so
     the mismatch flag still fires, and resolved_by_cik_map sits beside it to
     tell review triage the CIK is already settled."""
-    resolver = TickerResolver(fake_edgar, cik_map=lambda t, d: 1701732 if t == "ALTR" else None,
-                              member_names=lambda t, d=None: "FOREST OIL CORP")
+    resolver = TickerResolver(fake_edgar, cik_pins=lambda t, d: 1701732 if t == "ALTR" else None,
+                              observed_names=lambda t, d=None: "FOREST OIL CORP")
     rec = DelistClassifier(fake_edgar, resolver).classify_ticker("ALTR", "2025-03-26")
     assert rec.evidence["resolution_source"] == "cik_map"
     flags = rec.evidence["flags"]
@@ -69,10 +69,10 @@ def test_a_cik_mapped_ticker_whose_names_differ_carries_both_flags(fake_edgar):
 def test_a_cik_mapped_ticker_whose_names_agree_gets_neither_flag(fake_edgar):
     """Unconditional, resolved_by_cik_map would fire on nearly every row once a
     universe-wide map exists and flood review.csv; resolution_source already
-    records "cik_map" in delist_classifications.csv, so provenance isn't lost
+    records "cik_map" in delistings.csv, so provenance isn't lost
     by leaving a settled pin out of flags/review.csv."""
-    resolver = TickerResolver(fake_edgar, cik_map=lambda t, d: 1701732 if t == "ALTR" else None,
-                              member_names=lambda t, d=None: "ALTAIR ENGINEERING INC")
+    resolver = TickerResolver(fake_edgar, cik_pins=lambda t, d: 1701732 if t == "ALTR" else None,
+                              observed_names=lambda t, d=None: "ALTAIR ENGINEERING INC")
     rec = DelistClassifier(fake_edgar, resolver).classify_ticker("ALTR", "2025-03-26")
     assert rec.evidence["resolution_source"] == "cik_map"
     flags = rec.evidence["flags"]
@@ -694,7 +694,7 @@ def test_competition_clearance_in_a_mis_tagged_takeover_is_not_a_petition():
 
 
 def test_an_unpunctuated_standard_caption_still_comes_off():
-    """edgar._strip_html collapses every newline to a space, so a heading that
+    """html_text.strip_html collapses every newline to a space, so a heading that
     ends without punctuation has nothing for the sentence rule to find and the
     caption's own words used to confirm the filing."""
     t = ("Item 1.03 Bankruptcy or Receivership On November 27, 2024 the merger was completed "

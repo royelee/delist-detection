@@ -1,27 +1,12 @@
-"""Apply BMP 2007 firm-month corrections to a monthly panel.
+"""Apply BMP 2007 firm-month corrections to a monthly panel keyed by sec_id.
 
-Usage:
-    python scripts/compute_corrected_returns.py \
-        --panel data/monthly_panel.parquet \
-        --classifications output/delist_classifications.csv \
-        --av-csv data/listing_status_delisted.csv \
-        --payouts data/payouts.csv \
+    PYTHONPATH=src python scripts/compute_corrected_returns.py \
+        --panel data/monthly_panel.parquet --delistings output/delistings.csv \
         --out output/corrected_monthly_panel.parquet
 
-Inputs:
-    --panel: parquet/csv with MultiIndex (date, instrument) and columns
-             ['close', 'monthly_return']. Dates must be month-ends.
-    --classifications: output of scripts/classify_universe.py
-    --av-csv: Alpha Vantage delisted listing-status CSV (used for exchange)
-    --payouts (optional): CSV with columns 'ticker,payout_per_share'
-    --recoveries (optional): CSV with columns 'ticker,recovery_ratio'
-    --last-trade-closes (optional): CSV with columns 'ticker,last_trade_close'
-                       If absent, uses panel close on delist-month-end.
-
-Output: same shape as input with monthly_return spliced to BMP-corrected
-        value at the delisting month; EXPIRATION rows removed.
+--panel: parquet/csv with (date, instrument) where instrument is the sec_id, and
+         columns close, monthly_return; dates are month-ends.
 """
-
 from __future__ import annotations
 
 import argparse
@@ -30,100 +15,28 @@ from pathlib import Path
 
 import pandas as pd
 
-from delist_detection.av_listing import AvListingLoader
 from delist_detection.qlib_adapter import apply_bmp_corrections
-from delist_detection.reconstruction import load_float_map_csv
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
 def _read_panel(path: Path) -> pd.DataFrame:
-    if path.suffix == ".parquet":
-        df = pd.read_parquet(path)
-    else:
-        df = pd.read_csv(path, parse_dates=["date"])
+    df = pd.read_parquet(path) if path.suffix == ".parquet" else pd.read_csv(path, parse_dates=["date"])
     if not isinstance(df.index, pd.MultiIndex):
         df = df.set_index(["date", "instrument"]).sort_index()
     return df
 
 
-def _read_map(path: Path | None, value_col: str) -> dict[str, float]:
-    """Ticker-keyed float map for the firm-month path.
-
-    Delegates CSV parsing/validation to the shared
-    ``reconstruction.load_float_map_csv`` (fail-loud on a missing/mistyped
-    column, blank rows skipped), then collapses any per-event ``(ticker, date)``
-    keys to bare ticker — ``apply_bmp_corrections`` is ticker-keyed, so a
-    recycled ticker's last event wins here (the per-event ``dlret.csv`` path
-    keeps them distinct).
-    """
-    if not path:
-        return {}
-    raw = load_float_map_csv(path, value_col)
-    return {(k[0] if isinstance(k, tuple) else k): v for k, v in raw.items()}
-
-
-def main(argv: list[str] | None = None) -> int:
-    p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--panel", type=Path, required=True)
-    p.add_argument("--classifications", type=Path, required=True)
-    p.add_argument("--av-csv", type=Path, required=True)
-    p.add_argument("--payouts", type=Path, default=None)
-    p.add_argument("--recoveries", type=Path, default=None)
-    p.add_argument("--last-trade-closes", type=Path, default=None)
-    p.add_argument("--out", type=Path, required=True)
-    args = p.parse_args(argv)
-
-    panel = _read_panel(args.panel)
-
-    required_cols = {"monthly_return", "close"}
-    missing = required_cols - set(panel.columns)
-    if missing:
-        raise SystemExit(
-            f"--panel is missing required columns: {sorted(missing)}. "
-            f"Got columns: {list(panel.columns)}"
-        )
-
-    av = AvListingLoader(args.av_csv)
-    cls_df = pd.read_csv(args.classifications, dtype={"ticker": str})
-    exchanges: dict[str, str] = {}
-    for _, row in cls_df.dropna(subset=["ticker"]).iterrows():
-        ticker = str(row["ticker"])
-        observed_date = row.get("observed_delist_date")
-        if pd.isna(observed_date):
-            observed_date = None
-        else:
-            observed_date = str(observed_date)[:10]  # YYYY-MM-DD prefix
-        ex = av.exchange(ticker, observed_date=observed_date)
-        if ex:
-            exchanges[ticker.upper()] = ex
-
-    payouts = _read_map(args.payouts, "payout_per_share")
-    recoveries = _read_map(args.recoveries, "recovery_ratio")
-    last_trades = _read_map(args.last_trade_closes, "last_trade_close")
-
-    corrected = apply_bmp_corrections(
-        panel=panel,
-        classifications_csv=str(args.classifications),
-        payouts=payouts,
-        exchanges=exchanges,
-        last_trade_closes=last_trades,
-        recovery_ratios=recoveries,
-        return_col="monthly_return",
-        close_col="close",
-    )
-
+def main() -> int:
+    p = argparse.ArgumentParser()
+    p.add_argument("--panel", required=True, type=Path)
+    p.add_argument("--delistings", default=str(ROOT / "output" / "delistings.csv"))
+    p.add_argument("--out", required=True, type=Path)
+    args = p.parse_args()
+    out = apply_bmp_corrections(_read_panel(args.panel), args.delistings)
     args.out.parent.mkdir(parents=True, exist_ok=True)
-    if args.out.suffix == ".parquet":
-        corrected.to_parquet(args.out)
-    else:
-        corrected.to_csv(args.out)
-
-    n_before = len(panel)
-    n_after = len(corrected)
-    print(
-        f"BMP correction: {n_before} -> {n_after} rows "
-        f"({n_before - n_after} dropped, "
-        f"{len(cls_df)} delisting events processed)"
-    )
+    out.to_parquet(args.out) if args.out.suffix == ".parquet" else out.to_csv(args.out)
+    print(f"Wrote {args.out}: {len(out)} rows")
     return 0
 
 

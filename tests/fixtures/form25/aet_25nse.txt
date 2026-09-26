@@ -1,0 +1,132 @@
+<SEC-DOCUMENT>0000876661-18-001269.txt : 20181129
+<SEC-HEADER>0000876661-18-001269.hdr.sgml : 20181129
+<ACCEPTANCE-DATETIME>20181129135126
+ACCESSION NUMBER:		0000876661-18-001269
+CONFORMED SUBMISSION TYPE:	25-NSE
+PUBLIC DOCUMENT COUNT:		2
+FILED AS OF DATE:		20181129
+DATE AS OF CHANGE:		20181129
+EFFECTIVENESS DATE:		20181129
+
+SUBJECT COMPANY:	
+
+	COMPANY DATA:	
+		COMPANY CONFORMED NAME:			AETNA INC /PA/
+		CENTRAL INDEX KEY:			0001122304
+		STANDARD INDUSTRIAL CLASSIFICATION:	HOSPITAL & MEDICAL SERVICE PLANS [6324]
+		IRS NUMBER:				232229683
+		STATE OF INCORPORATION:			PA
+		FISCAL YEAR END:			1231
+
+	FILING VALUES:
+		FORM TYPE:		25-NSE
+		SEC ACT:		1934 Act
+		SEC FILE NUMBER:	001-16095
+		FILM NUMBER:		181207865
+
+	BUSINESS ADDRESS:	
+		STREET 1:		151 FARMINGTON AVENUE
+		CITY:			HARTFORD
+		STATE:			CT
+		ZIP:			06156
+		BUSINESS PHONE:		8602730123
+
+	MAIL ADDRESS:	
+		STREET 1:		151 FARMINGTON AVENUE
+		CITY:			HARTFORD
+		STATE:			CT
+		ZIP:			06156
+
+	FORMER COMPANY:	
+		FORMER CONFORMED NAME:	AETNA U S HEALTHCARE INC
+		DATE OF NAME CHANGE:	20000822
+
+FILED BY:		
+
+	COMPANY DATA:	
+		COMPANY CONFORMED NAME:			NEW YORK STOCK EXCHANGE LLC
+		CENTRAL INDEX KEY:			0000876661
+		IRS NUMBER:				000000000
+		STATE OF INCORPORATION:			NY
+
+	FILING VALUES:
+		FORM TYPE:		25-NSE
+
+	BUSINESS ADDRESS:	
+		STREET 1:		11 WALL STREET
+		CITY:			NEW YORK
+		STATE:			NY
+		ZIP:			10005
+		BUSINESS PHONE:		212-656-2060
+
+	MAIL ADDRESS:	
+		STREET 1:		11 WALL STREET
+		CITY:			NEW YORK
+		STATE:			NY
+		ZIP:			10005
+
+	FORMER COMPANY:	
+		FORMER CONFORMED NAME:	NEW YORK STOCK EXCHANGE INC
+		DATE OF NAME CHANGE:	19910628
+</SEC-HEADER>
+<DOCUMENT>
+<TYPE>25-NSE
+<SEQUENCE>1
+<FILENAME>primary_doc.xml
+<TEXT>
+<XML>
+<?xml version="1.0"?>
+<notificationOfRemoval>
+
+    <schemaVersion>X0203</schemaVersion>
+
+    <exchange>
+        <cik>0000876661</cik>
+        <entityName>NEW YORK STOCK EXCHANGE LLC</entityName>
+    </exchange>
+
+    <issuer>
+        <cik>1122304</cik>
+        <entityName>AETNA INC /PA/</entityName>
+        <fileNumber>001-16095</fileNumber>
+        <address>
+            <street1>151 Farmington Ave</street1>
+            <street2></street2>
+            <city>Hartford</city>
+            <stateOrCountryCode>CT</stateOrCountryCode>
+            <stateOrCountry>CONNECTICUT</stateOrCountry>
+            <zipCode>06156-0001</zipCode>
+        </address>
+        <telephoneNumber>(860) 273-0123</telephoneNumber>
+    </issuer>
+
+    <descriptionClassSecurity>Common Stock</descriptionClassSecurity>
+
+    <ruleProvision>17 CFR 240.12d2-2(a)(3)</ruleProvision>
+
+    <signatureData>
+        <signatureName>Victoria Paper</signatureName>
+        <signatureTitle>Senior Analyst</signatureTitle>
+        <signatureDate>2018-11-29</signatureDate>
+    </signatureData>
+</notificationOfRemoval>
+</XML>
+</TEXT>
+</DOCUMENT>
+<DOCUMENT>
+<TYPE>EX-99.25
+<SEQUENCE>2
+<FILENAME>ruleprovisionnotice.htm
+<TEXT>
+NOTIFICATION OF THE REMOVAL FROM LISTING AND REGISTRATION OF THE STATED SECURITIES
+
+The New York Stock Exchange hereby notifies the SEC of its intention to remove the entire class of the stated securities from listing and registration on the Exchange at the opening of business on December 10, 2018, pursuant to the provisions of Rule 12d2-2 (a).
+
+[  X  ] 17 CFR 240.12d2-2(a)(3)  That on November 29, 2018 the instruments representing the securities comprising the entire class of this security came to evidence, by operation of law or otherwise, other securities in substitution therefore and represent no other right except, if such be the fact, the right  to receive an immediate cash payment.
+
+The merger between Aetna Inc. and CVS Health Corporation became effective before the opening on November 29, 2018.  Each share of common stock of Aetna Inc. was exchanged for USD 145 and 0.8378 of a share of CVS Health Corporation Common Stock.
+
+The Exchange also notifies the Securities and Exchange Commission that as a result of the above indicated conditions this security was suspended from trading on November 29, 2018.
+</TEXT>
+</DOCUMENT>
+</SEC-DOCUMENT>

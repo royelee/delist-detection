@@ -11,20 +11,30 @@ import json
 import logging
 import re
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Iterable
 
 import requests
 
-from .edgar import EdgarClient, DEFAULT_UA, _throttle, check_response, EdgarBlocked, submissions_fresh_after
-from .evidence import first_filing, names_near, parse_day
+from .atomic_io import clean_orphan_temps, write_atomic
+from .edgar import STALE_KEY, EdgarClient, submissions_fresh_after
+from .evidence import edgar_names, first_filing, names_near, parse_day
+from .fatal import FATAL
 from .names import name_tokens, names_agree
 
 log = logging.getLogger(__name__)
-# Version 2: {"__version__": 2, "entries": {key: {...TickerResolution, "member_name"}}}.
-# Anything else was written before the date and name checks and is not trusted.
-CACHE_VERSION = 2
+_LOOK_UP_PIN = object()     # resolve(pin=...) default: look the pin up with cik_pins
+# The cache file is {"__version__": N, "entries": {key: {...TickerResolution,
+# "member_name"}}} ("member_name": the observed name the answer was checked with,
+# under its on-disk key). Versions 2 and 3 load; anything older was written before the
+# date and name checks and is not trusted. Version 3 was written while a
+# since-withdrawn rule let today's ticker-map holder beat a name-mismatched EFTS
+# candidate; its answers (source company_tickers_name_mismatch) are dropped on
+# load and resolved again.
+CACHE_VERSION = 3
+_LOADABLE_VERSIONS = frozenset({2, 3})
+_RETIRED_SOURCES = frozenset({"company_tickers_name_mismatch"})
 
 
 @dataclass
@@ -47,20 +57,32 @@ class TickerResolver:
         cache_path: Path | str | None = None,
         name_lookup: "callable[..., str | None] | None" = None,
         *,
-        member_names: "callable[..., str | None] | None" = None,
-        cik_map: "callable[[str, str | None], int | None] | None" = None,
+        observed_names: "callable[..., str | None] | None" = None,
+        cik_pins: "callable[[str, str | None], int | None] | None" = None,
+        today: date | None = None,
+        batch_writes: bool = False,
     ) -> None:
+        """`today`: the run date bounding submissions freshness (None: the clock).
+        `batch_writes`: keep new answers in memory until `flush()` (the pipeline
+        flushes after each resolving stage and on the way out of a run) instead
+        of rewriting the whole memo file for each one."""
         self.edgar = edgar
         self.rename_map = {k.upper(): v.upper() for k, v in (rename_map or {}).items()}
         self.manual_overrides = {k.upper(): int(v) for k, v in (manual_overrides or {}).items()}
         self.cache_path = Path(cache_path) if cache_path else None
         self.name_lookup = name_lookup or (lambda *a, **kw: None)
-        self.member_names = member_names or (lambda *a, **kw: None)  # (ticker, date) -> index-member name
-        self.cik_map = cik_map or (lambda *a, **kw: None)  # (ticker, date) -> CIK from the caller's universe
+        self.observed_names = observed_names or (lambda *a, **kw: None)  # (ticker, date) -> the observation's name
+        self.cik_pins = cik_pins or (lambda *a, **kw: None)  # (ticker, date) -> CIK from the caller's universe
+        self.today = today
+        self.batch_writes = batch_writes
         self._memo: dict[str, TickerResolution] = {}
-        self._memo_member: dict[str, str | None] = {}   # key -> member name the answer was checked with
+        self._memo_observed: dict[str, str | None] = {}   # key -> observed name the answer was checked with
         self._volatile: set[str] = set()   # misses and transient-error answers: this run only
+        self._degraded: set[str] = set()   # keys whose answer rests on a failed request or a stale copy
+        self._dirty = False                # an answer was added since the memo file was last written
         self._transient = False            # a check in the current resolve() hit a transient error
+        if self.cache_path:
+            clean_orphan_temps(self.cache_path.parent)
         if self.cache_path and self.cache_path.exists():
             self._load_cache()
         self._companies: dict[str, dict] | None = None
@@ -70,7 +92,8 @@ class TickerResolver:
             raw = json.loads(self.cache_path.read_text())
         except json.JSONDecodeError:
             raw = None
-        if not (isinstance(raw, dict) and raw.get("__version__") == CACHE_VERSION):
+        version = raw.get("__version__") if isinstance(raw, dict) else None
+        if version not in _LOADABLE_VERSIONS:
             log.warning("%s is not a version-%d resolver cache; ignoring it (the next save replaces it)",
                         self.cache_path, CACHE_VERSION)
             return
@@ -81,30 +104,38 @@ class TickerResolver:
                 continue
             if res.cik is None:  # a persisted miss is retried, never trusted
                 continue
+            if res.source in _RETIRED_SOURCES:   # a withdrawn rule's answer
+                continue
             self._memo[key] = res
-            self._memo_member[key] = d.get("member_name")
+            self._memo_observed[key] = d.get("member_name")
 
-    MEMBER_ALIVE_DAYS = 400          # filed within ±this of the date: the company was operating
-    MEMBER_TAIL_DAYS = 1500          # a Form 25/15 up to this old: a frozen vendor tail (XTO)
+    OBSERVED_ALIVE_DAYS = 400          # filed within ±this of the date: the issuer was operating
+    OBSERVED_TAIL_DAYS = 1500          # a Form 25/15 up to this old: a frozen vendor tail (XTO)
     REPLACE_WINDOW_DAYS = 90         # own Form 25/15 this close: a name-search hit replaces an EFTS fallback
 
     def _expected_name(self, t: str, observed_date: str | None) -> str | None:
-        """The member name, else the AV name: the first with a usable word.
+        """The observed name, else the AV name: the first with a usable word.
 
         A name with no `name_tokens` word ("AT&T INC.", "3M CO", "HP INC")
         cannot agree with anything, so it counts as no expected name."""
-        for n in (self.member_names(t, observed_date), self.name_lookup(t, observed_date)):
+        for n in (self.observed_names(t, observed_date), self.name_lookup(t, observed_date)):
             if n and name_tokens(n):
                 return n
         return None
 
     def _submissions(self, cik: int, observed_date: str | None) -> dict:
         """The company's submissions, fetched again when the cached copy predates
-        the event window (the same freshness the classifier asks for)."""
+        the event window (the same freshness the classifier asks for). An older
+        copy served because that refetch failed is used, but marks this resolve
+        transient: what it leads to is not saved."""
         on = parse_day(observed_date)
         if on is None:
-            return self.edgar.submissions(cik)
-        return self.edgar.submissions(cik, fresh_after=submissions_fresh_after(on))
+            sub = self.edgar.submissions(cik)
+        else:
+            sub = self.edgar.submissions(cik, fresh_after=submissions_fresh_after(on, self.today))
+        if isinstance(sub, dict) and sub.get(STALE_KEY):
+            self._transient = True
+        return sub
 
     def _filings(self, cik: int, observed_date: str | None) -> list:
         """recent_filings, read after a fresh submissions read so both see one copy."""
@@ -122,7 +153,7 @@ class TickerResolver:
         try:
             sub = self._submissions(cik, observed_date)
             filings = self.edgar.recent_filings(cik)
-        except EdgarBlocked:
+        except FATAL:
             raise
         except Exception as e:
             self._note_transient(e)
@@ -133,15 +164,15 @@ class TickerResolver:
                                       any(names_agree(n, expected) for n in names_near(sub, on)))
         return existed, agrees
 
-    def _accept_member_candidate(self, cik: int, observed_date: str | None, expected: str) -> bool:
-        """Accept a name-search hit found through a member name.
+    def _accept_observed_name_candidate(self, cik: int, observed_date: str | None, expected: str) -> bool:
+        """Accept a name-search hit found through an observed name.
 
         A rename files no Form 25 (HYH -> Avanos), and a frozen vendor tail can
         outlast the 540-day window (XTO), so the loose check alone rejects true
         matches. Without that check, the company must have existed on the date,
         carried an agreeing name then, and either been filing within ±400 days
         or filed a Form 25/15 in the 1,500 days before the date. The last two
-        conditions keep out a long-dead member (ImClone for a 2018 date)."""
+        conditions keep out a long-dead issuer (ImClone for a 2018 date)."""
         if not observed_date or self._validate_cik(cik, observed_date, strict=False):
             return True
         existed, agrees = self._fits_date(cik, observed_date, expected)
@@ -152,10 +183,10 @@ class TickerResolver:
             d = parse_day(f.filing_date)
             if d is None:
                 continue
-            if abs((d - on).days) <= self.MEMBER_ALIVE_DAYS:
+            if abs((d - on).days) <= self.OBSERVED_ALIVE_DAYS:
                 return True
             if f.form in {"25", "25-NSE", "15-12G", "15-12B", "15-15D"} and \
-                    on - timedelta(days=self.MEMBER_TAIL_DAYS) <= d <= on + timedelta(days=45):
+                    on - timedelta(days=self.OBSERVED_TAIL_DAYS) <= d <= on + timedelta(days=45):
                 return True
         return False
 
@@ -170,24 +201,43 @@ class TickerResolver:
         if isinstance(exc, requests.RequestException):
             self._transient = True
 
-    def _remember(self, key: str, res: TickerResolution, member: str | None) -> None:
-        self._memo[key] = res
-        self._memo_member[key] = member
-        if res.cik is None or self._transient:   # retried next run, never persisted
+    def _remember(self, key: str, res: TickerResolution, observed_name: str | None) -> None:
+        # A miss or a transient answer is marked volatile (never persisted) before
+        # it enters the memo, and a mark is cleared only after a saveable answer
+        # has replaced the entry: an interrupt between these lines leaves nothing
+        # that the flush on the way out of the run would save wrongly.
+        volatile = res.cik is None or self._transient   # retried next run, never persisted
+        if self._transient:
+            self._degraded.add(key)
+        if volatile:
             self._volatile.add(key)
+        self._memo[key] = res
+        self._memo_observed[key] = observed_name
+        if not self._transient:
+            self._degraded.discard(key)
+        if volatile:
             return
         self._volatile.discard(key)
-        self._persist()
+        self._dirty = True
+        if not self.batch_writes:
+            self.flush()
 
-    def _persist(self) -> None:
-        if not self.cache_path:
+    def flush(self) -> None:
+        """Write the memo file if an answer was added since it was last written
+        (atomically: a crash never leaves a torn memo)."""
+        if not self._dirty or not self.cache_path:
             return
         self.cache_path.parent.mkdir(parents=True, exist_ok=True)
-        entries = {k: {**r.__dict__, "member_name": self._memo_member.get(k)}
+        entries = {k: {**r.__dict__, "member_name": self._memo_observed.get(k)}
                    for k, r in self._memo.items() if k not in self._volatile}
-        self.cache_path.write_text(
-            json.dumps({"__version__": CACHE_VERSION, "entries": entries}, indent=2)
-        )
+        write_atomic(self.cache_path, json.dumps({"__version__": CACHE_VERSION, "entries": entries}, indent=2))
+        self._dirty = False
+
+    def is_degraded(self, ticker: str, observed_date: str | None = None) -> bool:
+        """Whether this run's answer for (ticker, date) rests on a failed EDGAR
+        request or a stale copy. Such an answer is used for the run and never
+        saved; the pipeline flags it `resolution_degraded`."""
+        return f"{ticker.upper().strip()}|{observed_date or ''}" in self._degraded
 
     # CIKs of US exchanges — these file Form 25-NSEs *on behalf of* the issuer,
     # so they appear in every delisting filing's CIK array. Always skip them.
@@ -212,6 +262,13 @@ class TickerResolver:
         1296945,   # Boston Stock Exchange Inc.
     }
 
+    def _efts_hits(self, url: str, window_end: date | None) -> list[dict]:
+        """EFTS `hits.hits` for one of this resolver's queries, sent through the
+        EDGAR client: the shared rate limit, the User-Agent, and the cache
+        (`EdgarClient.efts_search`). Raises requests.RequestException when EDGAR
+        could not answer; the callers then mark this resolve transient."""
+        return self.edgar.efts_search(url, window_end=window_end)
+
     def _efts_pre_delist_frequency_ranked(
         self, ticker: str, observed_date: str, top_n: int = 5
     ) -> list[tuple[int, str]]:
@@ -234,21 +291,10 @@ class TickerResolver:
             f"&dateRange=custom&startdt={lo}&enddt={hi}"
         )
         try:
-            _throttle()
-            resp = requests.get(
-                url,
-                headers={"User-Agent": DEFAULT_UA, "Accept": "application/json"},
-                timeout=30,
-            )
-            check_response(resp)
-            if resp.status_code != 200:
-                self._transient = self._transient or resp.status_code >= 500
-                return []
-            data = resp.json()
-        except (requests.RequestException, json.JSONDecodeError) as e:
+            hits = self._efts_hits(url, d - timedelta(days=1))
+        except requests.RequestException as e:
             self._note_transient(e)
             return []
-        hits = data.get("hits", {}).get("hits", [])
         counts: dict[int, tuple[int, str]] = {}
         token_re = re.compile(rf"\(\s*{re.escape(ticker.upper())}\s*\)")
         for h in hits:
@@ -327,7 +373,7 @@ class TickerResolver:
     def _name_search(
         self, ticker: str, observed_date: str | None
     ) -> tuple[int | None, str | None]:
-        """Resolve via the expected name (index member, else AV) → EDGAR company search.
+        """Resolve via the expected name (observed, else AV) → EDGAR company search.
 
         Collects ALL hits across name variants and forms, then picks the
         best (cik, name) by:
@@ -350,11 +396,13 @@ class TickerResolver:
             for form in ("25-NSE", "25", "15-12G", ""):
                 try:
                     hits = self.edgar.company_search_atom(variant, form_type=form)
-                except EdgarBlocked:
+                except FATAL:
                     raise
                 except Exception as e:
                     self._note_transient(e)
                     hits = []
+                if any(isinstance(h, dict) and h.get(STALE_KEY) for h in hits):
+                    self._transient = True       # a hit served after a failed refetch: never saved
                 for h in hits:
                     cik = int(h["cik"])
                     if cik in self.EXCHANGE_CIKS:
@@ -399,24 +447,21 @@ class TickerResolver:
         """Token-overlap score between the expected name and the CIK's EDGAR names.
 
         Score is the number of `names.name_tokens` words shared by the
-        expected (member or AV) name and the EDGAR conformed/former names.
+        expected (observed or AV) name and the EDGAR conformed/former names.
         Used to rank frequency candidates; a zero-score winner is kept but
         marked as a name mismatch by the caller (impostor vendor series).
         """
         try:
             sub = self._submissions(cik, observed_date)
-        except EdgarBlocked:
+        except FATAL:
             raise
         except Exception as e:
             self._note_transient(e)
             return 0
         if not isinstance(sub, dict):
             return 0
-        names = [sub.get("name", "")] + [
-            x.get("name", "") for x in sub.get("formerNames", []) if isinstance(x, dict)
-        ]
         candidate_tokens: set[str] = set()
-        for n in names:
+        for n in edgar_names(sub):
             candidate_tokens |= name_tokens(n)
         return len(candidate_tokens & name_tokens(ticker_name))
 
@@ -437,7 +482,7 @@ class TickerResolver:
             return True
         try:
             subs = self._filings(cik, observed_date)
-        except EdgarBlocked:
+        except FATAL:
             raise
         except Exception as e:
             self._note_transient(e)
@@ -476,38 +521,29 @@ class TickerResolver:
 
         Returns ``(cik, name, fallback)``. ``fallback`` is True for a
         second-pass candidate whose name disagrees with ``expected_name``:
-        a company that filed a delisting form in the window under another
-        name, which the caller keeps unless the member name finds a company
+        an issuer that filed a delisting form in the window under another
+        name, which the caller keeps unless the observed name finds an issuer
         with its own delisting form near the date.
         """
         ticker_u = ticker.upper()
         forms = "25-NSE,25,15-12G,15-12B,15-15D"
         params = [f"q=%22{ticker_u}%22", f"forms={forms}"]
+        window_end: date | None = None
         if observed_date:
             try:
                 d = datetime.strptime(observed_date, "%Y-%m-%d").date()
                 lo = (d - timedelta(days=90)).isoformat()
                 hi = (d + timedelta(days=90)).isoformat()
                 params += [f"dateRange=custom", f"startdt={lo}", f"enddt={hi}"]
+                window_end = d + timedelta(days=90)
             except ValueError:
                 pass
         url = "https://efts.sec.gov/LATEST/search-index?" + "&".join(params)
         try:
-            _throttle()
-            resp = requests.get(
-                url,
-                headers={"User-Agent": DEFAULT_UA, "Accept": "application/json"},
-                timeout=30,
-            )
-            check_response(resp)
-            if resp.status_code != 200:
-                self._transient = self._transient or resp.status_code >= 500
-                return None, None, False
-            data = resp.json()
-        except (requests.RequestException, json.JSONDecodeError) as e:
-            self._note_transient(e)
+            hits = self._efts_hits(url, window_end)
+        except requests.RequestException as e:
+            self._note_transient(e)          # EDGAR did not answer: never save what this resolve reaches
             return None, None, False
-        hits = data.get("hits", {}).get("hits", [])
         token_re = re.compile(rf"\(\s*{re.escape(ticker_u)}\s*\)")
 
         # First pass: exact (TICKER) match anywhere in display_names.
@@ -544,45 +580,53 @@ class TickerResolver:
                 return fallback[0], fallback[1], True
         return None, None, False
 
-    def resolve(self, ticker: str, observed_date: str | None = None) -> TickerResolution:
+    def resolve(self, ticker: str, observed_date: str | None = None, *,
+                pin: int | None | object = _LOOK_UP_PIN) -> TickerResolution:
+        """`pin`: the caller's own CIK pin for this lookup (None: none), in place of
+        `cik_pins(ticker, observed_date)`. A caller resolving a known era passes
+        its pin: a date lookup can land nearer another era of the ticker than
+        the era's own observations and return that era's pin."""
         t = ticker.upper().strip()
         cache_key = f"{t}|{observed_date or ''}"
-        # The answer holds only for the member name its checks used.
-        member = self.member_names(t, observed_date) or None
+        # The answer holds only for the observed name its checks used.
+        observed_name = self.observed_names(t, observed_date) or None
         self._transient = False
 
-        pinned = self.cik_map(t, observed_date)
+        pinned = self.cik_pins(t, observed_date) if pin is _LOOK_UP_PIN else pin
         if pinned:
-            # The caller's universe states which company this row is: it was
-            # resolved once, against the member name, and reviewed. Nothing this
+            # The caller's universe states which issuer this row is: it was
+            # resolved once, against the observed name, and reviewed. Nothing this
             # resolver can derive from a symbol beats that. This tier answers
             # before the memo read below, so persisting it buys nothing — and
-            # would let a stale pin survive an operator dropping --cik-map to
-            # see what the library resolves on its own, or a ticker later
-            # corrected in the map. Never written to the on-disk cache.
+            # would let a stale pin survive an operator dropping the identity
+            # pin from the observations file to see what the library resolves
+            # on its own, or a ticker later corrected there. Never written to
+            # the on-disk cache.
             return TickerResolution(ticker=t, cik=int(pinned), name=None, source="cik_map")
 
         # Manual overrides always beat the cache — they're the truth.
         if t in self.manual_overrides:
             res = TickerResolution(ticker=t, cik=self.manual_overrides[t], name=None, source="manual")
-            self._remember(cache_key, res, member)
+            self._remember(cache_key, res, observed_name)
             return res
 
-        if cache_key in self._memo and self._memo_member.get(cache_key) == member:
+        if cache_key in self._memo and self._memo_observed.get(cache_key) == observed_name:
+            # A rename built on this answer inherits whether it rests on a failed request.
+            self._transient = cache_key in self._degraded
             return self._memo[cache_key]
 
         renamed = self.rename_map.get(t)
         if renamed and renamed != t:
             inner = self.resolve(renamed, observed_date)   # leaves self._transient set for this answer
             res = TickerResolution(ticker=t, cik=inner.cik, name=inner.name, source="rename")
-            self._remember(cache_key, res, member)
+            self._remember(cache_key, res, observed_name)
             return res
 
         expected = self._expected_name(t, observed_date)
         companies = self._ensure_companies()
         if t in companies:
             # SEC's map lists today's holder of the ticker: accept it only if
-            # that company existed on the date under an agreeing name.
+            # that issuer existed on the date under an agreeing name.
             row = companies[t]
             c = int(row["cik_str"])
             if self._fits_date(c, observed_date, expected) == (True, True):
@@ -592,7 +636,7 @@ class TickerResolver:
                     name=row.get("title"),
                     source="company_tickers",
                 )
-                self._remember(cache_key, res, member)
+                self._remember(cache_key, res, observed_name)
                 return res
 
         cik: int | None = None
@@ -620,10 +664,10 @@ class TickerResolver:
         if cik is None:
             c1, n1 = self._name_search(t, observed_date)
             if fallback is not None:
-                # The member name is a check, never a substitute: it replaces
+                # The observed name is a check, never a substitute: it replaces
                 # the company EFTS found only with its own Form 25/15 near the
                 # date (PEAK -> Healthpeak, WE -> WeWork), not with a live
-                # company of that name (BWC keeps Blue Whale, flagged).
+                # issuer of that name (BWC keeps Blue Whale, flagged).
                 if c1 is not None and self._validate_cik(
                         c1, observed_date, strict=False, window=self.REPLACE_WINDOW_DAYS):
                     cik, name, source = c1, n1, "name_search"
@@ -632,10 +676,10 @@ class TickerResolver:
                     source = "efts_name_mismatch"
             elif c1 is not None:
                 # Loose validation (a real Form 25 in the window), or the
-                # member-name acceptance when the caller supplied a usable
-                # index-member name.
-                if member and name_tokens(member):
-                    ok = self._accept_member_candidate(c1, observed_date, member)
+                # observed-name acceptance when the caller supplied a usable
+                # observed name.
+                if observed_name and name_tokens(observed_name):
+                    ok = self._accept_observed_name_candidate(c1, observed_date, observed_name)
                 else:
                     ok = not observed_date or self._validate_cik(c1, observed_date, strict=False)
                 if ok:
@@ -662,10 +706,27 @@ class TickerResolver:
                 source = "rejected_validation"
 
         res = TickerResolution(ticker=t, cik=cik, name=name, source=source)
-        self._remember(cache_key, res, member)
+        self._remember(cache_key, res, observed_name)
         return res
 
     def resolve_many(
         self, items: Iterable[tuple[str, str | None]]
     ) -> dict[str, TickerResolution]:
         return {t: self.resolve(t, d) for t, d in items}
+
+    def shadow(self) -> "TickerResolver":
+        """A copy for warming the EDGAR caches on another thread: the same EDGAR
+        client, overrides, name callables and run date, and a snapshot of the
+        memo (so it skips every era this resolver already answers). It persists
+        nothing and its answers are thrown away. Call it on the thread that owns
+        this resolver, while that resolver is idle (prefetch.warm does). The
+        ticker map is shared once this resolver has loaded it; until then the
+        shadow loads it itself, only when an era needs it, as a one-worker run
+        would."""
+        s = TickerResolver(self.edgar, rename_map=self.rename_map, manual_overrides=self.manual_overrides,
+                           name_lookup=self.name_lookup, observed_names=self.observed_names, cik_pins=self.cik_pins,
+                           today=self.today)
+        s._memo, s._memo_observed = dict(self._memo), dict(self._memo_observed)
+        s._volatile, s._degraded = set(self._volatile), set(self._degraded)
+        s._companies = self._companies
+        return s

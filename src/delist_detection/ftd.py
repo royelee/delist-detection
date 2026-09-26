@@ -1,0 +1,382 @@
+"""SEC fails-to-deliver data: dated (CUSIP, symbol, description, price) rows.
+
+Two uses: the close on a security's last trading day (a row dated D carries the
+close of the prior trading day), and the CUSIP a symbol carried on a date.
+Rows exist only on days with fails, so a quiet security has gaps.
+
+FTD writes class tickers without a separator ("BFB", "BRKB") where the output
+tables write "BF-B". `FtdIndex` loads a requested ticker under both spellings
+and keys the rows by the separator spelling.
+"""
+from __future__ import annotations
+
+import calendar
+import io
+import logging
+import re
+import zipfile
+from bisect import bisect_left, bisect_right
+from collections import Counter, defaultdict
+from collections.abc import Iterable, Iterator, Mapping
+from dataclasses import dataclass, replace
+from datetime import date, timedelta
+from pathlib import Path
+
+from .atomic_io import clean_orphan_temps
+from .names import names_agree
+from .observations import normalize_ticker
+from .sec_http import download, get_text
+from .trading_calendar import add_trading_days, next_trading_day, previous_trading_day
+
+_log = logging.getLogger(__name__)
+
+FTD_INDEX_URL = "https://www.sec.gov/data-research/sec-markets-data/fails-deliver-data"
+_SEC = "https://www.sec.gov"
+_HALF = re.compile(r"cnsfails(\d{4})(\d{2})([ab])(?:_\d+)?\.zip$", re.I)
+_QTR = re.compile(r"cnsp_sec_fails_(\d{4})q([1-4])\.zip$", re.I)
+
+
+FTD_START = date(2004, 1, 1)      # the first day SEC's fails-to-deliver files cover
+
+
+@dataclass(frozen=True)
+class FtdRow:
+    date: str
+    cusip: str
+    symbol: str
+    description: str
+    price: float | None
+
+
+def is_deleted_symbol(symbol: str) -> bool:
+    """SEC's fails files keep reporting a delisted security under a deleted
+    symbol: its old symbol with "XXXX" appended (ORLYXXXX, LLYVKXXXX; AGRX
+    becomes AGRXXXXX). Such a row records a fail still settling, not trading
+    under a live symbol. A real ticker may end in X or XX (AVXX), never XXXX."""
+    return len(symbol or "") > 4 and symbol.endswith("XXXX")
+
+
+def period_of(url: str) -> tuple[date, date] | None:
+    name = url.rsplit("/", 1)[-1]
+    m = _HALF.search(name)
+    if m:
+        y, mo = int(m.group(1)), int(m.group(2))
+        if m.group(3).lower() == "a":
+            return date(y, mo, 1), date(y, mo, 15)
+        return date(y, mo, 16), date(y, mo, calendar.monthrange(y, mo)[1])
+    m = _QTR.search(name)
+    if m:
+        y, q = int(m.group(1)), int(m.group(2))
+        end_month = 3 * q
+        return date(y, end_month - 2, 1), date(y, end_month, calendar.monthrange(y, end_month)[1])
+    return None
+
+
+def parse_index_links(html: str) -> list[str]:
+    out: list[str] = []
+    seen: set[tuple[date, date]] = set()
+    for href in re.findall(r'href="([^"]+\.zip)"', html, re.I):
+        p = period_of(href)
+        if p is None or p in seen:
+            continue
+        seen.add(p)
+        out.append(href if href.startswith("http") else _SEC + href)
+    return out
+
+
+def parse_ftd_lines(lines: Iterable[str], *, symbols: set[str] | None = None,
+                    cusips: set[str] | None = None, counts: Counter | None = None) -> Iterator[FtdRow]:
+    """Rows from FTD text lines; header, trailer and malformed lines are skipped.
+    `symbols`/`cusips` each filter independently when given (a row passes if it
+    matches either one); both left `None` (the default) means no filtering at
+    all. Filtered on symbol/CUSIP before an `FtdRow` is built (fast path).
+    `counts["rows"]`, when given, counts every well-formed data line, filtered
+    out or not."""
+    for line in lines:
+        parts = line.rstrip("\r\n").split("|")
+        if len(parts) < 6:
+            continue
+        d = parts[0].strip()
+        if len(d) != 8 or not d.isdigit():
+            continue
+        if counts is not None:
+            counts["rows"] += 1
+        cusip = parts[1].strip().upper()
+        symbol = normalize_ticker(parts[2])
+        if symbols is not None or cusips is not None:
+            sym_hit = symbols is not None and symbol in symbols
+            cus_hit = cusips is not None and cusip in cusips
+            if not (sym_hit or cus_hit):
+                continue
+        try:
+            price: float | None = float(parts[-1].strip())
+        except ValueError:
+            price = None
+        yield FtdRow(f"{d[:4]}-{d[4:6]}-{d[6:]}", cusip, symbol, "|".join(parts[4:-1]).strip(), price)
+
+
+class FtdClient:
+    def __init__(self, cache_dir: str | Path, *, session=None, user_agent: str | None = None) -> None:
+        self.dir = Path(cache_dir)
+        self.session, self.user_agent = session, user_agent
+        self._links: list[str] | None = None
+        clean_orphan_temps(self.dir)          # a killed run's cut-off download or index page
+
+    def links(self) -> list[str]:
+        if self._links is None:
+            html = get_text(FTD_INDEX_URL, self.dir / "index.html", max_age_days=7,
+                            session=self.session, user_agent=self.user_agent)
+            self._links = parse_index_links(html)
+        return self._links
+
+    def urls_for(self, lo: date, hi: date) -> list[str]:
+        hits = [(period_of(u), u) for u in self.links()]
+        return [u for p, u in sorted(hits) if p and p[0] <= hi and p[1] >= lo]
+
+    def rows(self, url: str, *, symbols: set[str] | None = None,
+             cusips: set[str] | None = None) -> Iterator[FtdRow]:
+        dest = self.dir / url.rsplit("/", 1)[-1]
+        path = download(url, dest, session=self.session, user_agent=self.user_agent)
+        try:
+            z = zipfile.ZipFile(path)
+        except zipfile.BadZipFile:
+            path.unlink(missing_ok=True)          # a truncated download: fetch it again once
+            z = zipfile.ZipFile(download(url, dest, session=self.session, user_agent=self.user_agent))
+        with z:
+            # Every file member is read, whatever its name: from 2022-05 on the SEC
+            # ships one member without an extension ("cnsfails202401a").
+            for info in z.infolist():
+                if info.is_dir():
+                    continue
+                counts: Counter = Counter()
+                with z.open(info) as fh:
+                    yield from parse_ftd_lines(io.TextIOWrapper(fh, encoding="latin-1"),
+                                               symbols=symbols, cusips=cusips, counts=counts)
+                if not counts["rows"]:
+                    _log.warning(f"{dest.name}: member {info.filename!r} holds no fails-to-deliver rows; skipped")
+
+
+class FtdIndex:
+    def __init__(self, rows: Iterable[FtdRow] = ()) -> None:
+        self._by_symbol: dict[str, list[FtdRow]] = defaultdict(list)
+        self._by_cusip: dict[str, list[FtdRow]] = defaultdict(list)
+        self._seen: set[FtdRow] = set()
+        self._dirty = False
+        # The disjoint [lo, hi] ranges already scanned *as that exact filter
+        # key* (not merely a key that happened to show up under the other
+        # dimension's filter) — see `extend`. Sorted, non-overlapping,
+        # non-adjacent; a key is covered for [lo, hi] only if one of its
+        # merged intervals spans the whole range, so two scans with a gap
+        # between them (e.g. Jan and Mar) don't falsely cover Feb.
+        self._symbol_windows: dict[str, list[tuple[date, date]]] = {}
+        self._cusip_windows: dict[str, list[tuple[date, date]]] = {}
+        # The separator-free FTD spelling of each requested ticker that has a
+        # separator ("BFB" -> "BF-B"); None marks a bare spelling two requested
+        # tickers share, which is left unmapped.
+        self._aliases: dict[str, str | None] = {}
+        # A class ticker's observed names: a bare-spelled row is relabelled to it
+        # only when its description agrees with one of them.
+        self._names: dict[str, list[str]] = {}
+        for r in rows:
+            self.add(r)
+
+    def _learn(self, symbols: set[str], names: Mapping[str, Iterable[str]] | None = None) -> set[str]:
+        """Remember the separator spellings among `symbols` (and the observed
+        names of any of them); returns the file filter: each symbol plus its
+        separator-free spelling."""
+        for t, ns in (names or {}).items():
+            t = normalize_ticker(t)
+            self._names[t] = list(dict.fromkeys([*self._names.get(t, []), *(n for n in ns if n)]))
+        out = set(symbols)
+        for s in symbols:
+            bare = s.replace("-", "")
+            if bare != s:
+                out.add(bare)
+                self._aliases[bare] = s if self._aliases.get(bare, s) == s else None
+        return out
+
+    def _relabel(self, r: FtdRow) -> FtdRow:
+        """A row under a class ticker's bare spelling ("BFB"), keyed by the class
+        ticker ("BF-B") when its description agrees with the ticker's observed
+        names — or when none are known (an acquirer ticker), since there is
+        nothing to check against. Another security trading under the bare
+        symbol keeps it. This holds even when the bare spelling was requested
+        too (index snapshots write "BFB" and "BF.B")."""
+        canon = self._aliases.get(r.symbol)
+        if not canon:
+            return r
+        names = self._names.get(canon)
+        if names and not any(names_agree(r.description, n) for n in names):
+            return r
+        return replace(r, symbol=canon)
+
+    def add(self, r: FtdRow) -> None:
+        r = self._relabel(r)
+        if r in self._seen:
+            return
+        self._seen.add(r)
+        self._by_symbol[r.symbol].append(r)
+        self._by_cusip[r.cusip].append(r)
+        self._dirty = True
+
+    @classmethod
+    def load(cls, client: FtdClient, lo: date, hi: date, *, symbols: Iterable[str] | None = None,
+             cusips: Iterable[str] | None = None,
+             names: Mapping[str, Iterable[str]] | None = None) -> "FtdIndex":
+        """`names`: observed names per class ticker, for the bare-spelling check."""
+        idx = cls()
+        idx._learn(set(), names)
+        idx._scan(client, lo, hi,
+                  None if symbols is None else {normalize_ticker(s) for s in symbols},
+                  None if cusips is None else {c.upper() for c in cusips})
+        return idx
+
+    def extend(self, client: FtdClient, lo: date, hi: date, *, cusips: Iterable[str] = (),
+               symbols: Iterable[str] = ()) -> None:
+        """Scan `[lo, hi]` for any of `cusips`/`symbols` not already covered by
+        an earlier `load`/`extend` scan filtered on that exact key over at
+        least that range. A CUSIP picked up only incidentally through a symbol
+        filter (never itself used as a CUSIP filter) has no recorded CUSIP
+        window, so it is rescanned here as a CUSIP filter — which is not
+        symbol-restricted, so it catches that CUSIP's rows under any symbol
+        (e.g. a ticker change). Rows already indexed are deduped via `_seen`."""
+        cusips = {c.upper() for c in cusips}
+        symbols = {normalize_ticker(s) for s in symbols}
+        new_cusips = {c for c in cusips if not self._covered(self._cusip_windows.get(c, []), lo, hi)}
+        new_symbols = {s for s in symbols if not self._covered(self._symbol_windows.get(s, []), lo, hi)}
+        if new_cusips or new_symbols:
+            self._scan(client, lo, hi, new_symbols or None, new_cusips or None)
+
+    @staticmethod
+    def _covered(intervals: list[tuple[date, date]], lo: date, hi: date) -> bool:
+        """True only when a single already-scanned interval spans all of
+        [lo, hi] — two intervals that merely straddle it (e.g. Jan and Mar
+        around a Feb gap) must not count as covering it."""
+        return any(a <= lo and b >= hi for a, b in intervals)
+
+    @staticmethod
+    def _merge(intervals: list[tuple[date, date]], lo: date, hi: date) -> list[tuple[date, date]]:
+        """`intervals` (already sorted, merged) with `[lo, hi]` folded in,
+        merging any overlapping or adjacent (gap of a single day) intervals."""
+        merged: list[tuple[date, date]] = []
+        for a, b in sorted(intervals + [(lo, hi)]):
+            if merged and a <= merged[-1][1] + timedelta(days=1):
+                merged[-1] = (merged[-1][0], max(merged[-1][1], b))
+            else:
+                merged.append((a, b))
+        return merged
+
+    def _scan(self, client: FtdClient, lo: date, hi: date, symbols: set[str] | None,
+              cusips: set[str] | None) -> None:
+        lo_s, hi_s = lo.isoformat(), hi.isoformat()
+        wanted = None if symbols is None else self._learn(symbols)
+        for url in client.urls_for(lo, hi):
+            for r in client.rows(url, symbols=wanted, cusips=cusips):
+                if lo_s <= r.date <= hi_s:
+                    self.add(r)
+        for keys, windows in ((symbols, self._symbol_windows), (cusips, self._cusip_windows)):
+            for k in keys or ():
+                windows[k] = self._merge(windows.get(k, []), lo, hi)
+
+    def _sort(self) -> None:
+        if self._dirty:
+            for m in (self._by_symbol, self._by_cusip):
+                for v in m.values():
+                    v.sort(key=lambda r: (r.date, r.cusip, r.symbol))
+            self._dirty = False
+
+    @staticmethod
+    def _slice(rows: list[FtdRow], lo: str | None, hi: str | None) -> list[FtdRow]:
+        dates = [r.date for r in rows]
+        i = bisect_left(dates, lo) if lo else 0
+        j = bisect_right(dates, hi) if hi else len(rows)
+        return rows[i:j]
+
+    def by_symbol(self, symbol: str, lo: str | None = None, hi: str | None = None) -> list[FtdRow]:
+        """Rows under `symbol`. A class ticker's bare spelling ("BFB") gives every
+        row FTD wrote under it: its own and those relabelled to the class ticker."""
+        self._sort()
+        s = normalize_ticker(symbol)
+        rows = self._by_symbol.get(s, [])
+        canon = self._aliases.get(s)
+        if canon:
+            rows = sorted(rows + self._by_symbol.get(canon, []), key=lambda r: (r.date, r.cusip, r.symbol))
+        return self._slice(rows, lo, hi)
+
+    def by_cusip(self, cusip: str, lo: str | None = None, hi: str | None = None) -> list[FtdRow]:
+        self._sort()
+        return self._slice(self._by_cusip.get(cusip.upper(), []), lo, hi)
+
+    def descriptions(self, cusip: str) -> set[str]:
+        """Every description the fails rows of `cusip` carry."""
+        return {r.description for r in self.by_cusip(cusip)}
+
+    def trading_rows(self, cusips: Iterable[str]) -> list[FtdRow]:
+        """The rows of `cusips` (each CUSIP's by date, in the order given) that
+        show the security trading: not those under a deleted symbol
+        (`is_deleted_symbol`), which record a fail still settling after the
+        delisting."""
+        return [r for c in cusips for r in self.by_cusip(c) if not is_deleted_symbol(r.symbol)]
+
+    def symbol_deleted(self, cusips: Iterable[str]) -> bool:
+        """Whether `cusips` last failed under a deleted symbol only: after the
+        first "…XXXX" row, no row under a live symbol. The security's symbol was
+        deleted, so it no longer trades under it (HP's pre-2015 CUSIP fails as
+        HPQXXXX after the separation, while EDGAR lists HPQ for today's line)."""
+        rows = sorted((r for c in cusips for r in self.by_cusip(c)), key=lambda r: r.date)
+        first = next((r.date for r in rows if is_deleted_symbol(r.symbol)), None)
+        return first is not None and not any(r.date > first and not is_deleted_symbol(r.symbol) for r in rows)
+
+    def close_after(self, day: date, *, cusip: str | None = None, symbol: str | None = None,
+                    max_lag: int = 3) -> tuple[float, str, bool] | None:
+        """The close of `day`: the first priced row dated on the next trading day,
+        or up to `max_lag` further trading days later (then `lagged` is True; rows
+        after the last trade repeat the last close, but after an OTC move they
+        carry OTC prices, so a lagged value is flagged for review)."""
+        first = next_trading_day(day)
+        last = add_trading_days(first, max_lag)
+        rows = (self.by_cusip(cusip, first.isoformat(), last.isoformat()) if cusip
+                else self.by_symbol(symbol or "", first.isoformat(), last.isoformat()))
+        for r in rows:
+            if r.price is not None and r.price > 0:
+                return r.price, r.date, r.date != first.isoformat()
+        return None
+
+    def close_through(self, day: date, *, cusip: str | None = None, symbol: str | None = None,
+                      max_back: int = 10) -> tuple[float, str] | None:
+        """The latest close known on `day` when no row follows it: the priced row
+        dated on `day` or up to `max_back` trading days earlier, whose price is
+        the close of the trading day before its date. Fails stop once a security
+        stops trading, so a merger's last trade day often has no row after it
+        (Dell Inc.'s rows end on 2013-10-29, its last trade); the spec's
+        fallback is to look back a few rows. Ten trading days (two weeks) keeps
+        the price recent: a pending merger's target trades at a stable spread to
+        its deal price. Returns `(price, row_date)`."""
+        lo = add_trading_days(day, -max_back).isoformat()
+        rows = (self.by_cusip(cusip, lo, day.isoformat()) if cusip
+                else self.by_symbol(symbol or "", lo, day.isoformat()))
+        for r in reversed(rows):
+            if r.price is not None and r.price > 0:
+                return r.price, r.date
+        return None
+
+    def close_of(self, day: date, *, cusip: str | None, symbol: str) -> tuple[float, str, bool] | None:
+        """`close_after(day)` by `cusip` (the security's CUSIP on `day`, when
+        known), then by `symbol`."""
+        return (self.close_after(day, cusip=cusip) if cusip else None) or self.close_after(day, symbol=symbol)
+
+    def close_known_on(self, day: date, *, cusip: str | None, symbol: str) -> tuple[float, str] | None:
+        """`close_through(day)` -- when no row follows `day`, the latest close
+        known on it -- by `cusip` (the security's CUSIP on `day`, when known),
+        then by `symbol`."""
+        return (self.close_through(day, cusip=cusip) if cusip else None) or self.close_through(day, symbol=symbol)
+
+
+def close_age(row_date: str, last_trade: date) -> int:
+    """Trading days from the close a fails row dated `row_date` carries (that of
+    the trading day before it) to `last_trade`: 1 for a row dated the last
+    trade day itself."""
+    day, n = previous_trading_day(date.fromisoformat(row_date)), 0
+    while day < last_trade:
+        day, n = next_trading_day(day), n + 1
+    return n
