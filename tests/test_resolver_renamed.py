@@ -396,6 +396,15 @@ def test_fails_rows_with_no_word_to_compare_confirm_no_issuer(eras, ftd, frequen
     assert "TWOU@2018-06-30" not in got
 
 
+def test_a_description_naming_no_issuer_neither_confirms_nor_refutes(eras, ftd, no_frequency):
+    """F5's fails rows read F5 NETWORKS INC, then F5,INC. COMMON STOCK (WA), which
+    leaves no word to compare. FFIV@2008 (F5 NETWORKS INC; its FTD rows carry its
+    last sighting past the 2021 rename) shares its CUSIP with FFIV@2021, F5 Inc.
+    (1048695): the rows that name an issuer name F5, the others say nothing."""
+    got = _infer(eras, ftd, list(eras), {**RESOLVED, "FFIV@2021-12-31": 1048695})
+    assert got.get("FFIV@2008-01-16") == (1048695, "shared_cusip")
+
+
 def test_an_era_linked_to_two_issuers_takes_neither(eras, ftd, no_frequency):
     issuers = {**DATA["issuers"], "999999": DATA["issuers"]["1530721"]}   # a second issuer passing the guard
     got = _infer(eras, ftd, list(eras), {**RESOLVED, "KORS@2014-12-31": 1530721, "CPRI@2018-12-31": 999999},

@@ -23,7 +23,7 @@ from .edgar import STALE_KEY, EdgarClient, submissions_fresh_after
 from .evidence import edgar_names, first_filing, names_near, names_until, parse_day, renamed_near
 from .fatal import FATAL
 from .ftd import FtdIndex, FtdRow
-from .names import description_matches, name_tokens, names_agree
+from .names import description_matches, name_tokens, names_agree, names_an_issuer
 from .observations import TickerEra
 from .security_master import Handoff, cusip_handoffs, era_rows
 
@@ -835,9 +835,11 @@ class TickerResolver:
         return passing[0] if len(passing) == 1 else None
 
     def _fits_rows(self, cik: int, rows: list[FtdRow]) -> bool:
-        """Whether the CIK existed by the first of `rows` and each row's
-        description `names.description_matches` (with a word to compare) a name
-        it carried by `GUARD_NAME_DAYS` after the row's date. An earlier name
+        """Whether the CIK existed by the first of `rows`, and each row's
+        description that names an issuer (`names.names_an_issuer`; one that
+        leaves no word to compare, F5,INC. COMMON STOCK, says nothing either way,
+        and at least one must name it) `names.description_matches` a name it
+        carried by `GUARD_NAME_DAYS` after the row's date. An earlier name
         counts: SEC updates a description slowly (HCP INC COM STK until the ticker
         changed on 2019-11-05, EDGAR ending the name HCP, INC. on 2019-10-01). A
         company founded later (LMCA's 2013 spin-off for 2012 rows), never so
@@ -856,9 +858,11 @@ class TickerResolver:
             return False
         since: dict[str, str] = {}                  # description -> its first row's date (names only accumulate)
         for r in rows:
-            since.setdefault(r.description, r.date)
-        return all(description_matches(d, names_until(sub, parse_day(day) + timedelta(days=self.GUARD_NAME_DAYS)),
-                                       empty=False) for d, day in since.items())
+            if names_an_issuer(r.description):
+                since.setdefault(r.description, r.date)
+        return bool(since) and all(
+            description_matches(d, names_until(sub, parse_day(day) + timedelta(days=self.GUARD_NAME_DAYS)), empty=False)
+            for d, day in since.items())
 
     def _frequency_renamed(self, era: TickerEra, rows: list[FtdRow], last_seen: str) -> InferredIssuer | None:
         """Fix B: the 8-K frequency candidate that passes the guard, carried the
@@ -917,8 +921,8 @@ class TickerResolver:
     def _renamed_from(self, cik: int, h: Handoff) -> str | None:
         """The CIK's former name that ended within `RENAME_NEAR_DAYS` of the
         switch `h` (`evidence.renamed_near`) and matches every description of the
-        old CUSIP's rows; None when there is none. A spin-off starting as its
-        parent's CUSIP ends carries no such name."""
+        old CUSIP's rows that names an issuer (one at least); None when there is
+        none. A spin-off starting as its parent's CUSIP ends carries no such name."""
         day = parse_day(h.day)
         try:
             sub = self._submissions(cik, h.day)
@@ -928,7 +932,8 @@ class TickerResolver:
             self._note_transient(e)
             return None
         former = renamed_near(sub, day, self.RENAME_NEAR_DAYS) if isinstance(sub, dict) and day else None
-        if former and all(description_matches(d, [former], empty=False) for d in h.descriptions):
+        named = [d for d in h.descriptions if names_an_issuer(d)]
+        if former and named and all(description_matches(d, [former], empty=False) for d in named):
             return former
         return None
 

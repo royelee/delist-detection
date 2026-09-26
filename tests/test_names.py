@@ -1,6 +1,6 @@
 import pytest
 
-from delist_detection.names import description_matches, name_tokens, names_agree
+from delist_detection.names import description_matches, name_tokens, names_agree, names_an_issuer
 
 
 def test_tokens_keep_three_letter_words_and_drop_legal_suffixes():
@@ -137,3 +137,10 @@ def test_with_nothing_to_compare_the_answer_is_the_callers():
     assert not description_matches("2U INC COM STK", ["SilverSun Technologies, Inc."], empty=False)
     assert not description_matches("SILVERSUN TECHNOLOGIES", ["3M CO"], empty=False)
     assert description_matches("SILVERSUN TECHNOLOGIES", ["SilverSun Technologies, Inc."], empty=False)
+
+
+@pytest.mark.parametrize("description, named", [
+    ("2U INC COM STK", False), ("F5,INC. COMMON STOCK (WA)", False), ("3M COMPANY;COM USD0.01", False),
+    ("F5 NETWORKS INC", True), ("HCP INC COM STK (MD)", True)])
+def test_a_description_names_an_issuer_when_a_word_is_left(description, named):
+    assert names_an_issuer(description) is named

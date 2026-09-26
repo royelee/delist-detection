@@ -88,6 +88,12 @@ def _joined(text: str) -> set[str]:
     return {"".join(raw[i:i + n]) for n in (2, 3) for i in range(len(raw) - n + 1)}
 
 
+def names_an_issuer(description: str) -> bool:
+    """Whether a fails-to-deliver description leaves a word to compare once its
+    security words go (2U INC COM STK and F5,INC. COMMON STOCK leave none)."""
+    return bool(_issuer_words(_name_part(description)))
+
+
 def description_matches(description: str, names: Iterable[str], *, empty: bool = True) -> bool:
     """Whether a fails-to-deliver row's `description` can name the issuer known
     by one of `names` (its observed names and the issuer's EDGAR names, current
