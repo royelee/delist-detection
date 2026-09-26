@@ -357,6 +357,13 @@ target rather than an acquirer.
    historical era would otherwise go to today's holder). A wrong answer from a later
    tier is corrected with a `cik` pin or `MANUAL_OVERRIDES`, not here.
 
+   The same first-sighting check holds every CIK a search proposes: tiers 4,
+   5 (each ranked candidate) and 6 (the strict pass) take no company that had
+   not filed by the era's first sighting, and a remembered answer from any of
+   them is held to it too (Alcoa Corp, formed 2016, is no name-search answer
+   for ALCOA INC 2008-2016; the new Clearwire of 2008 no Form 25 answer for
+   the old one's CLWR). Pins, manual overrides and renames are not checked.
+
 4. **EFTS Form-25/15 with date window.** Searches
    `efts.sec.gov/LATEST/search-index` restricted to Form 25, 25-NSE, 15-12G,
    15-12B, 15-15D within ±90 days of the observed delist date. Skips

@@ -564,7 +564,7 @@ python scripts/observations_from_instruments.py --instruments data/delisted_tick
 # or: scripts/observations_from_snapshots.py --dir <folder of dated index-membership CSVs> --out obs.csv
 python scripts/classify_universe.py --observations obs.csv   # → output/{securities,ticker_history,cusip_history,delistings,payouts,review,review_summary}.csv
 
-pytest -q                                # 1305 unit tests, no network
+pytest -q                                # 1309 unit tests, no network
 ```
 
 `classify_universe.py` prints a summary when it finishes: rows written per
@@ -910,6 +910,9 @@ validates the candidate looks like a delist *target* (not an *acquirer*):
    order — one below the first only when one of its EDGAR names agrees.
 6. **EFTS 8-K frequency rank.** Counts CIKs in 8-Ks mentioning the
    ticker in the 120 days pre-delist; strict-validates each candidate.
+
+Tiers 3–6 take only a company that had filed by the era's first sighting,
+also when the answer comes from the resolver cache.
 
 A renamed issuer files no Form 25 and keeps filing 10-Ks, so tier 6 rejects
 it. A **second pass** (`TickerResolver.infer_issuers`) answers the eras left

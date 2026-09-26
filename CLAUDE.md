@@ -28,7 +28,7 @@ editable install.
 
 ```bash
 pip install -e .                         # editable install (Python ≥3.10) — once per env
-pytest                                    # full suite (1305 tests, offline, no network)
+pytest                                    # full suite (1309 tests, offline, no network)
 pytest tests/test_payout_extractor.py -v  # one file
 pytest tests/test_payout_extractor.py::test_match_in_cash_family_altr -v   # one test
 
@@ -164,7 +164,9 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   `ObservationIndex.cik_pin_on`/`.name_on`, wired in by `pipeline.py`) replace
   the old `--cik-map`/`--names` CLI files; the pin still beats every other
   tier and is never written to the on-disk resolver cache. The pipeline looks
-  each era up under its own pin and name (`resolve(..., pin=, name=)`). The
+  each era up under its own pin and name (`resolve(..., pin=, name=)`) and
+  its first sighting (`since=`): every search tier, and a cached answer from
+  one, takes only a company that had filed by then. The
   name search drops EDGAR's nameless multi-company hits and ranks up to 5
   candidates by the words the name shares with their EDGAR names (current
   and former). `infer_issuers` is a second pass, never cached, for eras left
