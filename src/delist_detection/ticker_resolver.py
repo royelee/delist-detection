@@ -1077,9 +1077,12 @@ class TickerResolver:
         switch `h` (`evidence.renamed_near`: it was renamed there), when every
         description of the old CUSIP's rows that names a company (one at least)
         names, word by word (`names.description_names`: CITIZENS COMMUNICATIONS
-        is not CLEAR CHANNEL COMMUNICTNS), a name the CIK carried by
-        `GUARD_NAME_DAYS` after that description's first row (QUINTILES
-        TRANSNATIONAL HLDGS before Quintiles IMS Holdings); None otherwise. A
+        is not CLEAR CHANNEL COMMUNICTNS), a name the CIK carried within
+        `GUARD_NAME_DAYS` of that description's first row (QUINTILES
+        TRANSNATIONAL HLDGS, before Quintiles IMS Holdings) or that former name
+        (EDGAR records ACE Ltd's names only from 2009, after its rows began);
+        None otherwise. A name dropped years before is no evidence: CBS Corp's
+        CIK was named VIACOM INC until 2005, TeraWulf's CHROMALINE until 2002. A
         spin-off starting as its parent's CUSIP ends carries no such name."""
         day = parse_day(h.day)
         try:
@@ -1093,7 +1096,7 @@ class TickerResolver:
         named = [(d, since) for d, since in h.descriptions if names_an_issuer(d)]
         if former and named and all(
                 any(description_names(d, n)
-                    for n in names_until(sub, parse_day(since) + timedelta(days=self.GUARD_NAME_DAYS)))
+                    for n in [*names_near(sub, parse_day(since), self.GUARD_NAME_DAYS), former])
                 for d, since in named):
             return former
         return None

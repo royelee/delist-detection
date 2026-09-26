@@ -384,6 +384,30 @@ def test_each_old_row_is_named_by_a_name_the_issuer_carried_then(eras, ftd, no_f
     assert {k: got.get(k) for k in q} == dict.fromkeys(q, (1478242, "cusip_handoff"))
 
 
+def test_a_name_the_issuer_dropped_years_before_names_no_old_row(eras, ftd, no_frequency):
+    """A CIK's long-gone former name is no evidence about rows filed years later.
+    Mack-Cali Realty's CUSIP (CLI) ended days before TeraWulf's began (IKONICS
+    renamed TeraWulf, 2021): CHROMALINE CORP, its name until 2002, "abbreviates"
+    MACK-CALI's CALI. Viacom (VIA) merged into CBS Corp, which renamed itself
+    ViacomCBS (2019): CBS's CIK was named VIACOM INC until 2005, and its only
+    other line then trading, class B, is another class than VIA's."""
+    resolved = {**PASS1, "WULF@2026-06-30": 1083301, "VIAC@2019-12-31": 813828, "VIACA@2019-12-31": 813828,
+                "PARA@2022-06-30": 813828, "PARAA@2022-06-30": 813828}
+    got = _infer(eras, ftd, list(eras), resolved, unpin=["VIA@2015-06-30"])
+    assert (got.get("CLI@2008-01-16"), got.get("VIA@2015-06-30")) == (None, None)
+
+
+def test_the_name_renamed_from_names_rows_edgar_keeps_no_earlier_name_for(eras, ftd):
+    """ACE Ltd (896159) renamed itself Chubb Ltd as its CUSIP switched to CB's
+    (2016-01-19). EDGAR records its names only from 2009-12-17, after its rows
+    under ACE began (2008-07-21): the name it was renamed from at the switch,
+    ACE LTD, names them. (Guard G still refuses ACE@2008 unpinned: it reads each
+    row against the names EDGAR records by then, and has none for 2008.)"""
+    [h] = [h for h in cusip_handoffs(list(eras.values()), ftd)
+           if h.era_key == "ACE@2008-07-25" and h.to_key == "CB@2016-06-30"]
+    assert (h.kind, TickerResolver(_Edgar())._renamed_from(896159, h)) == ("cusip_handoff", "ACE LTD")
+
+
 def test_an_era_whose_name_names_no_name_of_the_issuer_takes_nothing(eras, ftd, no_frequency):
     """TRI@2008 is Triad Hospitals (1074771, pinned), which a snapshot kept listing
     after its 2007 buyout; the fails rows under TRI in its span are Thomson
