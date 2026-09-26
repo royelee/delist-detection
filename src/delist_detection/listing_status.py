@@ -74,6 +74,23 @@ def edgar_lists(edgar, cik: int, tickers: Iterable[str] | None) -> bool:
     return False
 
 
+def issuer_exchange(edgar, cik: int | None, ticker: str) -> str | None:
+    """The exchange EDGAR's own submissions JSON records for `ticker` (the
+    parallel `tickers`/`exchanges` arrays), mapped to the table's exchange
+    names; None when the issuer, the ticker, or its exchange entry is missing.
+    Reads the submissions JSON the finder already cached -- no new source."""
+    if cik is None:
+        return None
+    sub = edgar.submissions(cik)
+    if not isinstance(sub, dict):
+        return None
+    want = normalize_ticker(ticker)
+    for t, x in zip(sub.get("tickers") or [], sub.get("exchanges") or []):
+        if normalize_ticker(t) == want and x:
+            return exchange_label(x) or None
+    return None
+
+
 def listing_job(sec_id: str) -> dict:
     """The OpenFIGI mapping job listed_today asks about `sec_id`."""
     return {"idType": "COMPOSITE_ID_BB_GLOBAL", "idValue": sec_id}

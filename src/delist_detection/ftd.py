@@ -304,6 +304,26 @@ class FtdIndex:
         self._sort()
         return self._slice(self._by_cusip.get(cusip.upper(), []), lo, hi)
 
+    def descriptions(self, cusip: str) -> set[str]:
+        """Every description the fails rows of `cusip` carry."""
+        return {r.description for r in self.by_cusip(cusip)}
+
+    def trading_rows(self, cusips: Iterable[str]) -> list[FtdRow]:
+        """The rows of `cusips` (each CUSIP's by date, in the order given) that
+        show the security trading: not those under a deleted symbol
+        (`is_deleted_symbol`), which record a fail still settling after the
+        delisting."""
+        return [r for c in cusips for r in self.by_cusip(c) if not is_deleted_symbol(r.symbol)]
+
+    def symbol_deleted(self, cusips: Iterable[str]) -> bool:
+        """Whether `cusips` last failed under a deleted symbol only: after the
+        first "…XXXX" row, no row under a live symbol. The security's symbol was
+        deleted, so it no longer trades under it (HP's pre-2015 CUSIP fails as
+        HPQXXXX after the separation, while EDGAR lists HPQ for today's line)."""
+        rows = sorted((r for c in cusips for r in self.by_cusip(c)), key=lambda r: r.date)
+        first = next((r.date for r in rows if is_deleted_symbol(r.symbol)), None)
+        return first is not None and not any(r.date > first and not is_deleted_symbol(r.symbol) for r in rows)
+
     def close_after(self, day: date, *, cusip: str | None = None, symbol: str | None = None,
                     max_lag: int = 3) -> tuple[float, str, bool] | None:
         """The close of `day`: the first priced row dated on the next trading day,
@@ -336,3 +356,14 @@ class FtdIndex:
             if r.price is not None and r.price > 0:
                 return r.price, r.date
         return None
+
+    def close_of(self, day: date, *, cusip: str | None, symbol: str) -> tuple[float, str, bool] | None:
+        """`close_after(day)` by `cusip` (the security's CUSIP on `day`, when
+        known), then by `symbol`."""
+        return (self.close_after(day, cusip=cusip) if cusip else None) or self.close_after(day, symbol=symbol)
+
+    def close_known_on(self, day: date, *, cusip: str | None, symbol: str) -> tuple[float, str] | None:
+        """`close_through(day)` -- when no row follows `day`, the latest close
+        known on it -- by `cusip` (the security's CUSIP on `day`, when known),
+        then by `symbol`."""
+        return (self.close_through(day, cusip=cusip) if cusip else None) or self.close_through(day, symbol=symbol)

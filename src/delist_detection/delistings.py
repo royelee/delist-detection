@@ -16,14 +16,13 @@ from .crsp_codes import CrspBucket
 from .edgar import EdgarSubmission
 from .figi_resolution import class_letter
 from .form25 import (
-    REGIONAL_EXCHANGES, Form25, SecurityRef, class_kind, class_letters, effective_date, exchange_label, list_form25,
+    REGIONAL_EXCHANGES, Form25, SecurityRef, class_kind, class_letters, effective_date, list_form25,
     match_securities, notice_last_trade, parse_form25, tied_securities,
 )
 from .last_trade import LastTrade, decide_last_trade, eightk_last_trade
-from .listing_status import exchanges_around, withdrawal_kind
+from .listing_status import exchanges_around, issuer_exchange, withdrawal_kind
 from .midas import MIDAS_START
 from .nasdaq_halts import last_trade_from_halt
-from .observations import normalize_ticker
 from .security_master import Security
 from .trading_calendar import previous_trading_day
 
@@ -225,23 +224,6 @@ class DelistingFinder:
             else:
                 groups.append([item])
         return groups
-
-    def _issuer_exchange(self, cik: int, ticker: str) -> str:
-        """The exchange EDGAR's own submissions JSON records for `ticker` (the
-        parallel `tickers`/`exchanges` arrays), mapped to the table's exchange
-        names; "" when the issuer, the ticker, or its exchange entry is
-        missing. Used by the no-Form-25 fallback, which otherwise has no
-        exchange evidence at all."""
-        sub = self.edgar.submissions(cik)
-        if not isinstance(sub, dict):
-            return ""
-        tickers = sub.get("tickers") or []
-        exchanges = sub.get("exchanges") or []
-        want = normalize_ticker(ticker)
-        for t, x in zip(tickers, exchanges):
-            if normalize_ticker(t) == want and x:
-                return exchange_label(x) or ""
-        return ""
 
     def _exchange_rank(self, item: tuple[EdgarSubmission, Form25]) -> tuple[int, str]:
         sub, f25 = item
@@ -514,6 +496,6 @@ class DelistingFinder:
         # whatever exchange EDGAR's own submissions JSON records for this
         # ticker (spec D22) rather than leaving it blank -- which otherwise
         # maps to Exchange.OTHER and applies the wrong Shumway constant.
-        exch = self._issuer_exchange(cik, ticker)
+        exch = issuer_exchange(self.edgar, cik, ticker) or ""
         return self._event(sec, cik, ticker, ended_by, rec, lt, None, None, False, ("no_form25", *extra_flags),
                            exchange=exch)

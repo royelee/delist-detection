@@ -96,7 +96,10 @@ that turns a list of observations into the seven output tables; see
   (`atomic_io.clean_orphan_temps`, also old `.part` downloads) when it starts.
 - `ftd.py` — `FtdClient`/`FtdIndex`: SEC fails-to-deliver rows (`(date, CUSIP,
   symbol, price)`, 2004+). `close_after()` supplies every last-trade close and
-  acquirer-completion price; `by_cusip`/`by_symbol` supply CUSIP history.
+  acquirer-completion price (`close_of`/`close_known_on`: by the security's
+  CUSIP on the day, then its symbol); `by_cusip`/`by_symbol` supply CUSIP
+  history, `trading_rows` the rows not under a deleted symbol, `symbol_deleted`
+  whether a CUSIP's last rows are all under one, `descriptions` a CUSIP's names.
 - `midas.py` — `MidasClient`: SEC MIDAS per-security exchange volume (2012+,
   ticker-keyed); `last_trade_day()` confirms the last day with lit+hidden
   exchange volume, suppressed to `None` when the window runs past MIDAS's
@@ -138,7 +141,8 @@ that turns a list of observations into the seven output tables; see
 - `listing_status.py` — `exchanges_around()`/`withdrawal_kind()`: reads the
   10-K cover page's exchange list before and after a Form 25 to tell a real
   delisting from the withdrawal of a secondary/regional listing while the
-  main one continues; `listed_today()` for the completeness check.
+  main one continues; `listed_today()` for the completeness check;
+  `issuer_exchange()` the exchange EDGAR's submissions JSON lists for a ticker.
 - `last_trade.py` — `eightk_last_trade()` (Item 3.01 text) and
   `decide_last_trade()`, which picks among the Form 25 notice, the 8-K text,
   MIDAS and the Nasdaq halt (MIDAS beats a halt beats text; a text/measured

@@ -31,6 +31,14 @@ def parse_day(s: str | None) -> date | None:
         return None
 
 
+def edgar_names(sub: dict) -> tuple[str, ...]:
+    """Every name EDGAR records for the issuer: its current name, then its former
+    names (`formerNames`), blanks left out."""
+    names = [sub.get("name") or "",
+             *((fn.get("name") or "") for fn in sub.get("formerNames") or [] if isinstance(fn, dict))]
+    return tuple(n for n in names if n.strip())
+
+
 def name_at(sub: dict, on: date) -> str:
     """The EDGAR name on `on`: the formerNames entry whose [from, to] covers it, else the current name."""
     for fn in sub.get("formerNames") or []:

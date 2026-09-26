@@ -306,3 +306,36 @@ def test_a_deleted_symbol_is_the_old_symbol_plus_xxxx():
         assert is_deleted_symbol(s), s
     for s in ("ORLY", "AVXX", "XXX", "XXXX", "", "BXXX"):
         assert not is_deleted_symbol(s), s
+
+
+def _rows(*spec):
+    return [FtdRow(d, c, s, desc, p) for d, c, s, desc, p in spec]
+
+
+def test_trading_rows_skip_a_deleted_symbol_and_keep_the_cusip_order():
+    idx = FtdIndex(_rows(("2020-01-02", "B00000001", "BBB", "B CO", 2.0),
+                         ("2020-01-03", "A00000001", "AAA", "A CO", 1.0),
+                         ("2020-02-03", "A00000001", "AAAXXXX", "A CO", 1.0),
+                         ("2020-01-02", "A00000001", "AAA", "A CO", 1.0)))
+    assert [(r.date, r.cusip) for r in idx.trading_rows(["A00000001", "B00000001"])] == [
+        ("2020-01-02", "A00000001"), ("2020-01-03", "A00000001"), ("2020-01-02", "B00000001")]
+    assert idx.descriptions("a00000001") == {"A CO"}
+
+
+def test_symbol_deleted_needs_the_last_rows_under_a_deleted_symbol_only():
+    rows = _rows(("2015-10-01", "428236103", "HPQ", "HP INC", 1.0),
+                 ("2015-11-02", "428236103", "HPQXXXX", "HP INC", 1.0))
+    assert FtdIndex(rows).symbol_deleted(["428236103"])
+    back = rows + _rows(("2015-12-01", "428236103", "HPQ", "HP INC", 1.0))
+    assert not FtdIndex(back).symbol_deleted(["428236103"])
+    assert not FtdIndex(rows).symbol_deleted([])
+
+
+def test_close_of_and_close_known_on_try_the_cusip_then_the_symbol():
+    idx = FtdIndex(_rows(("2019-09-04", "11111A101", "RS", "RS CO", 2.0),
+                         ("2019-09-04", "00000X000", "RS", "OTHER", 99.0),
+                         ("2019-09-03", "11111A101", "RS", "RS CO", 3.0)))
+    assert idx.close_of(date(2019, 9, 3), cusip="11111A101", symbol="RS") == (2.0, "2019-09-04", False)
+    assert idx.close_of(date(2019, 9, 3), cusip="22222B200", symbol="RS") == (99.0, "2019-09-04", False)
+    assert idx.close_known_on(date(2019, 9, 3), cusip="11111A101", symbol="RS") == (3.0, "2019-09-03")
+    assert idx.close_known_on(date(2019, 9, 3), cusip=None, symbol="RS") == (3.0, "2019-09-03")

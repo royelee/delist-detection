@@ -19,10 +19,11 @@ from typing import Any
 from .crsp_codes import CrspBucket
 from .delistings import DelistingEvent, DelistingFinder, ReviewItem, SecurityContext
 from .edgar import SEC_STATS, EdgarBlocked
+from .evidence import edgar_names
 from .figi_resolution import FigiCandidate, accept, is_placeholder, share_class_from_name, us_candidates
-from .form25 import SecurityRef, exchange_label
-from .ftd import FtdIndex, is_deleted_symbol
-from .listing_status import edgar_lists, listed_today, listing_answers
+from .form25 import SecurityRef
+from .ftd import FtdIndex
+from .listing_status import edgar_lists, issuer_exchange, listed_today, listing_answers
 from . import manifest as run_manifest
 from .names import names_agree
 from .observations import ObservationIndex, TickerEra, eras_by_key, normalize_ticker, observation_conflicts
@@ -32,8 +33,8 @@ from .prefetch import Serialized, warm
 from .reconstruction import build_delistings_table, delisting_row, for_delisting, unmatched_override_keys
 from .review_triage import Decision, flag_name, is_blank, triage
 from .security_master import (
-    FigiResolver, Range, Security, build_securities, candidate_cusips, era_last_seen, ranges_from_sightings,
-    refine_eras,
+    FigiResolver, Security, build_securities, candidate_cusips, era_last_seen, ranges_from_sightings, refine_eras,
+    value_on,
 )
 from .store import write_tables
 from .trading_calendar import next_trading_day, previous_trading_day
@@ -175,33 +176,10 @@ def successor_search_name(edgar, cik: int | None, observed_name: str | None) -> 
 
 
 def _issuer_names(edgar, cik: int | None) -> tuple[str, ...]:
-    """Every name EDGAR records for the issuer: its current name and its former
-    names (the submissions JSON the resolver already read)."""
+    """Every name EDGAR records for the issuer (`evidence.edgar_names` of the
+    submissions JSON the resolver already read)."""
     sub = edgar.submissions(cik) if cik is not None else None
-    if not isinstance(sub, dict):
-        return ()
-    names = [sub.get("name") or "", *((fn.get("name") or "") for fn in sub.get("formerNames") or [])]
-    return tuple(n for n in names if n.strip())
-
-
-def _issuer_exchange_for_ticker(edgar, cik: int | None, ticker: str) -> str | None:
-    """The exchange EDGAR's own submissions JSON records for `ticker` (the
-    parallel `tickers`/`exchanges` arrays), mapped to the table's exchange
-    names; None when the issuer, the ticker, or its exchange entry is
-    missing. Reads the submissions JSON the finder already cached — no new
-    source."""
-    if cik is None:
-        return None
-    sub = edgar.submissions(cik)
-    if not isinstance(sub, dict):
-        return None
-    tickers = sub.get("tickers") or []
-    exchanges = sub.get("exchanges") or []
-    want = normalize_ticker(ticker)
-    for t, x in zip(tickers, exchanges):
-        if normalize_ticker(t) == want and x:
-            return exchange_label(x) or None
-    return None
+    return edgar_names(sub) if isinstance(sub, dict) else ()
 
 
 def _overlaps(a: dict, b: dict) -> bool:
@@ -323,8 +301,7 @@ def _sightings(sec: Security, ftd: FtdIndex, cusips: list[str]) -> list[tuple[st
     sighting of trading: it opens and extends no range, and counts in no
     `seen_after`, `last_seen` or sibling span."""
     out = [(o.as_of, o.ticker, "observation") for e in sec.eras for o in e.observations]
-    for c in cusips:
-        out += [(r.date, r.symbol, "ftd") for r in ftd.by_cusip(c) if not is_deleted_symbol(r.symbol)]
+    out += [(r.date, r.symbol, "ftd") for r in ftd.trading_rows(cusips)]
     label: dict[str, str] = {}
     for t in sorted({o.ticker for e in sec.eras for o in e.observations}, key=lambda t: ("-" not in t, t)):
         label.setdefault(t.replace("-", ""), t)
@@ -335,19 +312,9 @@ def _cusip_sightings(sec: Security, ftd: FtdIndex, cusips: list[str]) -> list[tu
     """Dated `(day, cusip, source)` sightings of the security's CUSIPs: the FTD
     rows of each CUSIP that resolved to it (not those under a deleted symbol),
     and the CUSIPs its observations carry."""
-    out = [(r.date, r.cusip, "ftd") for c in cusips for r in ftd.by_cusip(c) if not is_deleted_symbol(r.symbol)]
+    out = [(r.date, r.cusip, "ftd") for r in ftd.trading_rows(cusips)]
     out += [(o.as_of, o.cusip, "observation") for e in sec.eras for o in e.observations if o.cusip]
     return sorted(set(out))
-
-
-def _symbol_deleted(ftd: FtdIndex, cusips: list[str]) -> bool:
-    """The security's own CUSIPs last failed under a deleted symbol only: after
-    the first "…XXXX" row, no row under a live symbol. Its symbol was deleted,
-    so the security no longer trades under it (HP's pre-2015 CUSIP fails as
-    HPQXXXX after the separation, while EDGAR lists HPQ for today's line)."""
-    rows = sorted((r for c in cusips for r in ftd.by_cusip(c)), key=lambda r: r.date)
-    first = next((r.date for r in rows if is_deleted_symbol(r.symbol)), None)
-    return first is not None and not any(r.date > first and not is_deleted_symbol(r.symbol) for r in rows)
 
 
 SUCCESSOR_BEFORE_DAYS, SUCCESSOR_AFTER_DAYS = 5, 15    # a successor's first sighting around the last trade
@@ -414,30 +381,6 @@ def _acquirer_cik(clients: Clients, acq: str, day: date, target: DelistingEvent)
     if holder == target.cik or not edgar_lists(clients.edgar, holder, [acq]):
         return None
     return holder
-
-
-def _cusip_on(cusip_ranges: list[Range], day: date) -> str | None:
-    """The CUSIP whose range holds `day`, if any."""
-    d = day.isoformat()
-    return next((r.value for r in cusip_ranges if r.valid_from <= d and (r.valid_to is None or d <= r.valid_to)),
-                None)
-
-
-def _close_on(ftd: FtdIndex, cusip_ranges: list[Range], day: date,
-              symbol: str) -> tuple[float, str, bool] | None:
-    """The close of `day` (FTD rows of the next trading days, see
-    `FtdIndex.close_after`), looked up by the CUSIP whose range holds `day`,
-    then by `symbol`."""
-    cusip = _cusip_on(cusip_ranges, day)
-    return (ftd.close_after(day, cusip=cusip) if cusip else None) or ftd.close_after(day, symbol=symbol)
-
-
-def _close_through(ftd: FtdIndex, cusip_ranges: list[Range], day: date, symbol: str) -> tuple[float, str] | None:
-    """When no row follows `day`: the latest close known on it (`FtdIndex.close_through`,
-    a row dated on or a few trading days before `day`), by the CUSIP whose range
-    holds `day`, then by `symbol`."""
-    cusip = _cusip_on(cusip_ranges, day)
-    return (ftd.close_through(day, cusip=cusip) if cusip else None) or ftd.close_through(day, symbol=symbol)
 
 
 def _close_age(row_date: str, last_trade: date) -> int:
@@ -764,7 +707,7 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
     # later line of the issuer may hold today. Its own CUSIP failing only under
     # a deleted symbol at the end says it is not the line listed today.
     retired = frozenset(s.sec_id for s in ordered
-                        if is_placeholder(s.sec_id) and _symbol_deleted(ftd, sec_cusips[s.sec_id]))
+                        if is_placeholder(s.sec_id) and ftd.symbol_deleted(sec_cusips[s.sec_id]))
     if sec_workers > 1:
         _warm_delisting_search(clients, ordered, listing, security_context, sec_workers, retired)
     for i, s in enumerate(ordered, 1):
@@ -825,12 +768,13 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
         sec = securities[e.sec_id]
         cusip_ranges = ranges_from_sightings(_cusip_sightings(sec, ftd, sec_cusips.get(e.sec_id, [])),
                                              end=None, open_ended=True)
-        got = _close_on(ftd, cusip_ranges, e.last_trade.day, e.ticker)
+        cusip = value_on(cusip_ranges, e.last_trade.day)
+        got = ftd.close_of(e.last_trade.day, cusip=cusip, symbol=e.ticker)
         if got is None:
             # Fails stop once trading stops, so no row may follow the last trade
             # day: look back a few rows (spec §16). The flag carries the close's
             # age in trading days (ftd_close_prior:<n>); the evidence the row date.
-            back = _close_through(ftd, cusip_ranges, e.last_trade.day, e.ticker)
+            back = ftd.close_known_on(e.last_trade.day, cusip=cusip, symbol=e.ticker)
             if back is None:
                 e.record.evidence["flags"].append("no_last_close")
             else:
@@ -1065,7 +1009,7 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
             elif rg.valid_to is None:
                 # An open (listed-today) row: pull the exchange from the issuer's
                 # own EDGAR submissions JSON (already cached by the finder).
-                exch = _issuer_exchange_for_ticker(clients.edgar, s.issuer_cik, rg.value)
+                exch = issuer_exchange(clients.edgar, s.issuer_cik, rg.value)
             else:
                 exch = None
             th_rows.append({"sec_id": sid, "ticker": rg.value, "exchange": exch, "valid_from": rg.valid_from,
@@ -1094,7 +1038,7 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
             valid_from = fd
             valid_to = None if is_listed else fd
             source = "edgar_8k"
-        exch = _issuer_exchange_for_ticker(clients.edgar, s.issuer_cik, meta["ticker"]) if is_listed else None
+        exch = issuer_exchange(clients.edgar, s.issuer_cik, meta["ticker"]) if is_listed else None
         th_rows.append({"sec_id": sid, "ticker": meta["ticker"], "exchange": exch, "valid_from": valid_from,
                         "valid_to": valid_to, "source": source})
 

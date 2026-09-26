@@ -16,7 +16,7 @@ from delist_detection.llm_merger_extractor import MergerTerms
 from delist_detection.observations import Observation, ObservationIndex
 from delist_detection.payout_extractor import PayoutResult
 from delist_detection.pipeline import (
-    Clients, Overrides, _acquirer_cik, _issuer_exchange_for_ticker, _merge_review_rows, _own_last_seen,
+    Clients, Overrides, _acquirer_cik, _merge_review_rows, _own_last_seen,
     _ticker_range_review, run, successor_from_8k12b, successor_search_name,
 )
 from delist_detection.review_triage import Decision
@@ -640,9 +640,10 @@ def test_issuer_exchange_for_ticker_reads_the_parallel_arrays(fake_edgar):
     fake_edgar.submissions = lambda cik, fresh_after=None: (
         {"tickers": ["X"], "exchanges": ["NYSE"]} if cik == 1 else {"tickers": [], "exchanges": []}
     )
-    assert _issuer_exchange_for_ticker(fake_edgar, 1, "X") == "NYSE"
-    assert _issuer_exchange_for_ticker(fake_edgar, 1, "Y") is None
-    assert _issuer_exchange_for_ticker(fake_edgar, None, "X") is None
+    from delist_detection.listing_status import issuer_exchange
+    assert issuer_exchange(fake_edgar, 1, "X") == "NYSE"
+    assert issuer_exchange(fake_edgar, 1, "Y") is None
+    assert issuer_exchange(fake_edgar, None, "X") is None
 
 
 
@@ -1041,18 +1042,22 @@ def test_cusip_history_keeps_a_retired_cusip_closed_and_the_current_one_open(fak
 
 def test_last_trade_close_uses_the_cusip_whose_range_holds_the_last_trade_day():
     from delist_detection.ftd import FtdIndex
-    from delist_detection.security_master import Range
+    from delist_detection.security_master import Range, value_on
+
+    def close_on(ranges, day, symbol):     # how the pipeline prices a last trade day
+        return ftd.close_of(day, cusip=value_on(ranges, day), symbol=symbol)
+
     ranges = [Range("11111A101", "2019-06-03", "2020-01-01", "ftd"), Range("11111A200", "2020-01-02", None, "ftd")]
     ftd = FtdIndex(_ftd("RS", "11111A101", "REVERSE SPLIT CO", ["2019-09-04"], price=2.0)
                    + _ftd("RS", "00000X000", "SOMETHING ELSE", ["2019-09-04", "2020-03-03"], price=99.0)
                    + _ftd("RS", "11111A200", "REVERSE SPLIT CO NEW", ["2020-03-03"], price=20.0)
                    + _ftd("RSQ", "22222B200", "OTHER", ["2021-01-05"], price=7.0))
     # by symbol alone, 00000X000 (99.0) would come first on both days
-    assert pipeline._close_on(ftd, ranges, date(2019, 9, 3), "RS") == (2.0, "2019-09-04", False)     # first range
-    assert pipeline._close_on(ftd, ranges, date(2020, 3, 2), "RS") == (20.0, "2020-03-03", False)    # second range
+    assert close_on(ranges, date(2019, 9, 3), "RS") == (2.0, "2019-09-04", False)     # first range
+    assert close_on(ranges, date(2020, 3, 2), "RS") == (20.0, "2020-03-03", False)    # second range
     # the range's CUSIP has no row, or no range holds the day: the symbol
-    assert pipeline._close_on(ftd, ranges, date(2021, 1, 4), "RSQ") == (7.0, "2021-01-05", False)
-    assert pipeline._close_on(ftd, [], date(2021, 1, 4), "RSQ") == (7.0, "2021-01-05", False)
+    assert close_on(ranges, date(2021, 1, 4), "RSQ") == (7.0, "2021-01-05", False)
+    assert close_on([], date(2021, 1, 4), "RSQ") == (7.0, "2021-01-05", False)
 
 
 def test_a_lagged_acquirer_close_flags_the_delisting(fake_edgar, tmp_path, monkeypatch):

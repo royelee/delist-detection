@@ -19,7 +19,7 @@ import requests
 
 from .atomic_io import clean_orphan_temps, write_atomic
 from .edgar import STALE_KEY, EdgarBlocked, EdgarClient, submissions_fresh_after
-from .evidence import first_filing, names_near, parse_day
+from .evidence import edgar_names, first_filing, names_near, parse_day
 from .names import name_tokens, names_agree
 
 log = logging.getLogger(__name__)
@@ -458,11 +458,8 @@ class TickerResolver:
             return 0
         if not isinstance(sub, dict):
             return 0
-        names = [sub.get("name", "")] + [
-            x.get("name", "") for x in sub.get("formerNames", []) if isinstance(x, dict)
-        ]
         candidate_tokens: set[str] = set()
-        for n in names:
+        for n in edgar_names(sub):
             candidate_tokens |= name_tokens(n)
         return len(candidate_tokens & name_tokens(ticker_name))
 

@@ -191,7 +191,7 @@ def era_cusips(era: TickerEra, ftd: FtdIndex, issuer_names: Sequence[str] = (),
     if era.ftd_cusips:
         names = [*era.names, *issuer_names]
         own = [c for c in era.ftd_cusips if c in taken_by_known_issuers
-               or any(description_matches(d, names) for d in {r.description for r in ftd.by_cusip(c)})]
+               or any(description_matches(d, names) for d in ftd.descriptions(c))]
         return list(era.cusips) + [c for c in own if c not in era.cusips]
     lo = (date.fromisoformat(era.first) - timedelta(days=10)).isoformat()
     hi = (date.fromisoformat(era.last) + timedelta(days=10)).isoformat()
@@ -433,6 +433,12 @@ class Range:
     valid_from: str
     valid_to: str | None
     source: str
+
+
+def value_on(ranges: Iterable[Range], day: date) -> str | None:
+    """The value of the range that holds `day`, if any."""
+    d = day.isoformat()
+    return next((r.value for r in ranges if r.valid_from <= d and (r.valid_to is None or d <= r.valid_to)), None)
 
 
 def ranges_from_sightings(sightings: Iterable[tuple[str, str, str]], *, end: str | None,
