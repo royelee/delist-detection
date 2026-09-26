@@ -362,7 +362,11 @@ flagged `member_name_mismatch` regardless of which tier resolved the CIK.
 ## FIGI resolution
 
 `FigiResolver.resolve_many` (`security_master.py`) resolves each era to a US
-composite FIGI via OpenFIGI, one era at a time:
+composite FIGI via OpenFIGI, one era at a time. Each era's `Issuer` (its CIK
+and its EDGAR names, current and former) is read at the end of issuer
+resolution, inside that stage's meter and warm pass; a names read that fails
+leaves the issuer with no EDGAR names for the run and flags its eras
+`resolution_degraded` instead of stopping the run.
 
 1. **The era's `sec_id` pin**, when the caller supplied one — wins outright.
 2. **The era's CUSIPs** (`candidate_cusips`/`era_cusips`, FTD-confirmed, up

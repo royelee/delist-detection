@@ -10,11 +10,13 @@ import copy
 import re
 import sys
 from collections import Counter, defaultdict
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Any, NamedTuple
+
+import requests
 
 from .crsp_codes import CrspBucket
 from .delistings import DelistingEvent, DelistingFinder, ReviewItem, SecurityContext
@@ -177,11 +179,26 @@ def successor_search_name(edgar, cik: int | None, observed_name: str | None) -> 
     return re.sub(r"\s+", " ", _CLASS_WORDS.sub(" ", observed_name or "")).strip(" -")
 
 
-def _issuer_names(edgar, cik: int | None) -> tuple[str, ...]:
-    """Every name EDGAR records for the issuer (`evidence.edgar_names` of the
-    submissions JSON the resolver already read)."""
-    sub = edgar.submissions(cik) if cik is not None else None
-    return edgar_names(sub) if isinstance(sub, dict) else ()
+def _issuer_names(edgar, ciks: Iterable[int]) -> tuple[dict[int, tuple[str, ...]], set[int]]:
+    """Every name EDGAR records for each issuer (`evidence.edgar_names` of the
+    submissions JSON the resolver already read), and the CIKs whose read rested
+    on a failed EDGAR request or a stale copy. A read that fails outright
+    leaves that issuer with no EDGAR names -- its eras are checked against
+    their observed names only -- instead of stopping the run; a refusal
+    (EdgarBlocked) still stops it."""
+    names: dict[int, tuple[str, ...]] = {}
+    degraded: set[int] = set()
+    for cik in ciks:
+        watch = _DegradedWatch()
+        try:
+            sub = edgar.submissions(cik)
+        except requests.RequestException:
+            sub = None
+            degraded.add(cik)
+        names[cik] = edgar_names(sub) if isinstance(sub, dict) else ()
+        if watch.tripped():
+            degraded.add(cik)
+    return names, degraded
 
 
 def _overlaps(a: dict, b: dict) -> bool:
@@ -629,13 +646,18 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
              workers=sec_workers, state=clients.resolver.shadow, name="issuer resolution")
     cik_res = {e.key: clients.resolver.resolve(e.ticker, last_seen[e.key], pin=e.cik_pin) for e in eras}
     _flush_memo(clients)
-    meter.done("issuer resolution", mark)
     ciks = {k: r.cik for k, r in cik_res.items()}
+    # Each issuer's EDGAR names, which step 3 checks CUSIPs and FIGI names
+    # against: read here, inside the stage's meter and warm pass.
+    issuer_ciks = [cik for cik in dict.fromkeys(ciks.values()) if cik]
+    if sec_workers > 1:
+        warm(issuer_ciks, clients.edgar.submissions, workers=sec_workers, name="issuer names")
+    issuer_names, names_degraded = _issuer_names(clients.edgar, issuer_ciks)
+    meter.done("issuer resolution", mark)
 
     # 3. FIGI per era -> securities. An era takes only the FTD CUSIPs whose rows
     # describe its issuer, by its observed names or the issuer's EDGAR names (D21),
     # and a ticker or name hit whose name agrees with those same names (§8.3).
-    issuer_names = {cik: _issuer_names(clients.edgar, cik) for cik in dict.fromkeys(ciks.values()) if cik}
     issuers = issuers_by_era(ciks, issuer_names)
     cusips = candidate_cusips(eras, ftd, issuers)
     resolutions = FigiResolver(clients.figi).resolve_many(eras, issuers=issuers, cusips=cusips)
@@ -651,6 +673,12 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
             review.append(_degraded_item(resolutions[e.key].sec_id or "", e.ticker, ciks.get(e.key),
                                          f"{e.key} {e.name or ''}: issuer resolution",
                                          "; its answer was used for this run but not saved", last_seen=e.last))
+    for e in eras:
+        if ciks.get(e.key) in names_degraded:
+            review.append(_degraded_item(resolutions[e.key].sec_id or "", e.ticker, ciks.get(e.key),
+                                         f"{e.key} {e.name or ''}: the issuer's EDGAR names",
+                                         "; its CUSIPs and FIGI were checked without what could not be read",
+                                         last_seen=e.last))
     review += _conflict_review(eras, resolutions)
     review += _unconfirmed_review(eras, ftd, resolutions, ciks)
     log(f"{len(securities)} securities; FIGI sources "

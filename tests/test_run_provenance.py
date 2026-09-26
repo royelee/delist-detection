@@ -221,3 +221,50 @@ def test_the_manifest_separates_warm_degraded_from_the_sequential_passs_own(tmp_
                          timings={}, stages={}, review_flags={}, review={})
     assert got["degraded_answers"] == {"stale_copy": 1}
     assert got["warm_degraded"] == {"failed_request": 3}
+
+
+def _live_pinned(fake_edgar):
+    """LIVE, its issuer pinned on the observation (so the resolver reads nothing):
+    the first submissions read of CIK 777 is the issuer-names read."""
+    fake_edgar.company_map["LIVE"] = {"cik_str": 777, "ticker": "LIVE", "title": "LIVE CO"}
+    fake_edgar.submissions_by_cik[777] = []
+    return _index_clients(fake_edgar, [Observation("LIVE", "2025-06-30", "LIVE CO", cik=777)], [],
+                          {("TICKER", "LIVE"): LIVE_FIGI})
+
+
+def test_an_issuer_names_read_that_fails_is_a_degraded_answer_not_an_abort(fake_edgar, tmp_path):
+    real = fake_edgar.submissions
+    calls = []
+
+    def first_read_fails(cik, fresh_after=None):
+        calls.append(int(cik))
+        if calls.count(777) == 1:
+            SEC_STATS.degraded("failed_request")        # what EdgarClient records before it raises
+            raise requests.ConnectionError("no route to host")
+        return real(cik, fresh_after=fresh_after)
+
+    index, clients = _live_pinned(fake_edgar)
+    fake_edgar.submissions = first_read_fails
+    run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
+    rows = [r for r in _review(tmp_path) if r["review_flags"] == "resolution_degraded"]
+    assert [(r["ticker"], r["sec_id"]) for r in rows] == [("LIVE", "BBG000LIVE01")]
+    assert "the issuer's EDGAR names rested on a failed EDGAR request" in rows[0]["reason"]
+
+
+def test_the_issuer_names_read_is_metered_with_issuer_resolution_and_warmed(fake_edgar, tmp_path):
+    import threading
+    real = fake_edgar.submissions
+    names_reads = []
+
+    def counted(cik, fresh_after=None):
+        if fresh_after is None and int(cik) == 777 and not names_reads:
+            SEC_STATS.add("request:submissions")        # the one request a cold cache would send
+        names_reads.append(threading.current_thread().name)
+        return real(cik, fresh_after=fresh_after)
+
+    index, clients = _live_pinned(fake_edgar)
+    fake_edgar.submissions = counted
+    run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None, sec_workers=2)
+    stages = json.loads((tmp_path / "run_manifest.json").read_text())["stages"]
+    assert stages["issuer resolution"]["edgar_requests"] == 1
+    assert names_reads[0].startswith("sec-warm")                # the warm pass read it first
