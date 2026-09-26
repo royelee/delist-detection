@@ -232,7 +232,8 @@ class DelistingFinder:
         0, 28 and 55 make two events (day 55 is 55 days from day 0), not one."""
         groups: list[list[tuple[EdgarSubmission, Form25]]] = []
         for item in sorted(candidates, key=lambda i: i[0].filing_date):
-            if groups and (_to_date(item[0].filing_date) - _to_date(groups[-1][0][0].filing_date)).days <= SAME_EVENT_DAYS:
+            gap = (_to_date(item[0].filing_date) - _to_date(groups[-1][0][0].filing_date)).days if groups else None
+            if gap is not None and gap <= SAME_EVENT_DAYS:
                 groups[-1].append(item)
             else:
                 groups.append([item])
