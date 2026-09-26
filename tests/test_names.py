@@ -1,6 +1,6 @@
 import pytest
 
-from delist_detection.names import description_matches, name_tokens, names_agree, names_an_issuer
+from delist_detection.names import description_matches, description_names, name_tokens, names_agree, names_an_issuer
 
 
 def test_tokens_keep_three_letter_words_and_drop_legal_suffixes():
@@ -137,6 +137,23 @@ def test_with_nothing_to_compare_the_answer_is_the_callers():
     assert not description_matches("2U INC COM STK", ["SilverSun Technologies, Inc."], empty=False)
     assert not description_matches("SILVERSUN TECHNOLOGIES", ["3M CO"], empty=False)
     assert description_matches("SILVERSUN TECHNOLOGIES", ["SilverSun Technologies, Inc."], empty=False)
+
+
+@pytest.mark.parametrize("description, name, names", [
+    # a renamed issuer's former name against its old CUSIP's fails rows
+    ("CORN PRODUCTS INT'L INC", "CORN PRODUCTS INTERNATIONAL INC", True),
+    ("HANSEN NATURAL CORP", "HANSEN NATURAL CORP", True),
+    ("MICHAEL KORS HLDGS LTD ORD SHS", "Michael Kors Holdings Ltd", True),
+    ("SIERRA PACIFIC RES (NEW)", "SIERRA PACIFIC RESOURCES /NV/", True),
+    ("HCP INC COM STK (MD)", "HCP, INC.", True),                        # one word a side: one to share
+    ("MC DERMOTT INTL", "MCDERMOTT INTL INC", True),
+    # an acquirer or a stranger renamed at another company's CUSIP's end: one shared word
+    ("CLEAR CHANNEL COMMUNICTNS INC", "CITIZENS COMMUNICATIONS CO", False),
+    ("INTEGRYS ENERGY GROUP INC COM", "WISCONSIN ENERGY CORP", False),
+    ("2U INC COM STK", "SilverSun Technologies, Inc.", False),         # nothing to compare
+])
+def test_a_description_names_a_company_word_by_word(description, name, names):
+    assert description_names(description, name) is names
 
 
 @pytest.mark.parametrize("description, named", [

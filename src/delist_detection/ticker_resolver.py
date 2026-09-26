@@ -23,9 +23,9 @@ from .edgar import STALE_KEY, EdgarClient, submissions_fresh_after
 from .evidence import edgar_names, first_filing, names_near, names_until, parse_day, renamed_near
 from .fatal import FATAL
 from .ftd import FtdIndex, FtdRow
-from .names import description_matches, name_tokens, names_agree, names_an_issuer
+from .names import description_matches, description_names, name_tokens, names_agree, names_an_issuer
 from .observations import TickerEra
-from .security_master import Handoff, cusip_handoffs, era_rows
+from .security_master import Handoff, cusip_handoffs, era_rows, trades_at_switch
 
 log = logging.getLogger(__name__)
 _LOOK_UP_PIN = object()     # resolve(pin=...) default: look the pin up with cik_pins
@@ -109,6 +109,7 @@ class TickerResolver:
         self._degraded: set[str] = set()   # keys whose answer rests on a failed request or a stale copy
         self._dirty = False                # an answer was added since the memo file was last written
         self._transient = False            # a check in the current resolve() hit a transient error
+        self._first_filings: dict[int, date | None] = {}   # CIK -> its first filing (`_first_filed`)
         if self.cache_path:
             clean_orphan_temps(self.cache_path.parent)
         if self.cache_path and self.cache_path.exists():
@@ -784,9 +785,8 @@ class TickerResolver:
 
         C (`shared_cusip`, `cusip_handoff`), after B: the issuers of the eras
         linked to this one by a CUSIP (`security_master.cusip_handoffs`: the
-        same CUSIP, or a switch from this era's CUSIP to theirs, which also
-        needs the issuer to have been renamed from a name matching this era's
-        rows within `RENAME_NEAR_DAYS` of the switch), through the guard. Every
+        same CUSIP, or a switch from this era's CUSIP to theirs, whose issuer
+        must be the old CUSIP's, renamed: `_switch_issuer`), through the guard. Every
         era is judged against the answers known when the sweep began, and
         sweeps repeat until none adds an answer, so a chain of links resolves
         whatever the key order (MHP shares its CUSIP with MHFI, whose CUSIP
@@ -806,13 +806,17 @@ class TickerResolver:
         for h in cusip_handoffs(eras, ftd):
             links[h.era_key].append(h)
         known = {k: c for k, c in ciks.items() if c is not None} | {k: v.cik for k, v in out.items()}
+        by_key = {e.key: e for e in eras}
         while True:
             new: dict[str, InferredIssuer] = {}
+            issuer_cusips: dict[int, set[str]] = defaultdict(set)
+            for k, c in known.items():
+                issuer_cusips[c] |= set(by_key[k].ftd_cusips) | set(by_key[k].cusips)
             for e in todo:
                 if e.key in out:
                     continue
                 self._transient = False
-                got = self._handoff(rows[e.key], links[e.key], known)
+                got = self._handoff(rows[e.key], links[e.key], known, ftd, issuer_cusips)
                 if got is not None:
                     new[e.key] = got
                 self._mark_inferred(e, last_seen[e.key])
@@ -847,13 +851,12 @@ class TickerResolver:
         later, is not the rows' issuer."""
         try:
             sub = self._submissions(cik, rows[-1].date)
-            filings = self.edgar.recent_filings(cik)
         except FATAL:
             raise
         except Exception as e:
             self._note_transient(e)
             return False
-        first = first_filing(filings)
+        first = self._first_filed(cik)
         if first is None or first > parse_day(rows[0].date) or not isinstance(sub, dict):
             return False
         since: dict[str, str] = {}                  # description -> its first row's date (names only accumulate)
@@ -894,18 +897,18 @@ class TickerResolver:
 
     RENAME_NEAR_DAYS = 90        # a switch's issuer was renamed this close to it
 
-    def _handoff(self, rows: list[FtdRow], links: list[Handoff], known: dict[str, int]) -> InferredIssuer | None:
+    def _handoff(self, rows: list[FtdRow], links: list[Handoff], known: dict[str, int], ftd: FtdIndex,
+                 issuer_cusips: dict[int, set[str]]) -> InferredIssuer | None:
         """Fix C: the issuer, through the guard, of the eras `links` leads to
-        (`known`: era key -> CIK); a switch counts only when that issuer was
-        renamed from a name matching the old rows (`_renamed_from`). A shared
-        CUSIP is read first, so it names the answer's source when both lead to
-        the same issuer."""
+        (`known`: era key -> CIK). A switch counts only when that issuer is the
+        old CUSIP's, renamed (`_switch_issuer`). A shared CUSIP is read first, so
+        it names the answer's source when both lead to the same issuer."""
         found: dict[int, tuple[Handoff, str | None]] = {}
         for h in sorted(links, key=lambda h: (h.kind != "shared_cusip", h.to_key)):
             cik = known.get(h.to_key)
             if cik is None or cik in found:
                 continue
-            former = self._renamed_from(cik, h) if h.kind == "cusip_handoff" else None
+            former = self._switch_issuer(cik, h, ftd, issuer_cusips) if h.kind == "cusip_handoff" else None
             if h.kind == "cusip_handoff" and former is None:
                 continue
             found[cik] = (h, former)
@@ -918,11 +921,42 @@ class TickerResolver:
         return InferredIssuer(cik, h.kind, f"its CUSIP {h.cusip} ended as {h.to_key}'s {h.new_cusip} began on "
                                            f"{h.day}; the issuer was renamed from {former}")
 
+    def _switch_issuer(self, cik: int, h: Handoff, ftd: FtdIndex, issuer_cusips: dict[int, set[str]]) -> str | None:
+        """Whether the new CUSIP's issuer `cik` is the switch `h`'s old CUSIP's,
+        renamed: the former name it was renamed from (`_renamed_from`), or None.
+        It must have existed when the old CUSIP began failing (Actavis plc,
+        formed in 2013, is not Actavis Inc's issuer), and have no other CUSIP of
+        its own (`issuer_cusips`: the CUSIPs of the eras known to be its) trading
+        at the switch (`security_master.trades_at_switch`: an acquirer that
+        renamed itself at the merger, as Wisconsin Energy did for Integrys and
+        SXC Health Solutions for Catalyst Health Solutions)."""
+        first = self._first_filed(cik)
+        if first is None or first > parse_day(h.since):
+            return None
+        if trades_at_switch(ftd, h, issuer_cusips.get(cik, set()) - {h.cusip, h.new_cusip}):
+            return None
+        return self._renamed_from(cik, h)
+
+    def _first_filed(self, cik: int) -> date | None:
+        """The CIK's first EDGAR filing (None: none, or EDGAR could not answer;
+        the resolve is then marked transient), read once per resolver."""
+        if cik not in self._first_filings:
+            try:
+                self._first_filings[cik] = first_filing(self.edgar.recent_filings(cik))
+            except FATAL:
+                raise
+            except Exception as e:
+                self._note_transient(e)
+                return None
+        return self._first_filings[cik]
+
     def _renamed_from(self, cik: int, h: Handoff) -> str | None:
         """The CIK's former name that ended within `RENAME_NEAR_DAYS` of the
-        switch `h` (`evidence.renamed_near`) and matches every description of the
-        old CUSIP's rows that names an issuer (one at least); None when there is
-        none. A spin-off starting as its parent's CUSIP ends carries no such name."""
+        switch `h` (`evidence.renamed_near`) and names the company of every
+        description of the old CUSIP's rows that names one (one at least),
+        word by word (`names.description_names`: CITIZENS COMMUNICATIONS is not
+        CLEAR CHANNEL COMMUNICTNS); None when there is none. A spin-off starting
+        as its parent's CUSIP ends carries no such name."""
         day = parse_day(h.day)
         try:
             sub = self._submissions(cik, h.day)
@@ -933,7 +967,7 @@ class TickerResolver:
             return None
         former = renamed_near(sub, day, self.RENAME_NEAR_DAYS) if isinstance(sub, dict) and day else None
         named = [d for d in h.descriptions if names_an_issuer(d)]
-        if former and named and all(description_matches(d, [former], empty=False) for d in named):
+        if former and named and all(description_names(d, former) for d in named):
             return former
         return None
 

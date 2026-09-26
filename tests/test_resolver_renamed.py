@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import csv
 import json
+from dataclasses import replace
 from datetime import date
 from pathlib import Path
 
@@ -103,12 +104,17 @@ def frequency(monkeypatch):
     return given
 
 
-def _infer(eras, ftd, keys, resolved=None, edgar=None):
-    """Pass 2 over the eras `keys`, the others' pass-1 CIKs given in `resolved`:
-    {era key: (CIK, source)} for each era it answered."""
-    chosen = [eras[k] for k in keys]
+def _unpinned(era):
+    return replace(era, observations=[replace(o, cik=None) for o in era.observations])
+
+
+def _infer(eras, ftd, keys, resolved=None, edgar=None, unpin=()):
+    """Pass 2 over the eras `keys`, the others' pass-1 CIKs given in `resolved`
+    and the eras `unpin` stripped of their cik pin: {era key: (CIK, source)} for
+    each era it answered."""
+    chosen = [_unpinned(eras[k]) if k in unpin else eras[k] for k in keys]
     last_seen = {e.key: era_last_seen(e, ftd) for e in chosen}
-    ciks = {e.key: (resolved or {}).get(e.key) for e in chosen}
+    ciks = {e.key: (resolved or {}).get(e.key, e.cik_pin) for e in chosen}     # the first pass answers a pin
     got = TickerResolver(edgar or _Edgar()).infer_issuers(chosen, ftd, last_seen, ciks)
     return {k: (v.cik, v.source) for k, v in got.items()}
 
@@ -290,11 +296,46 @@ RESOLVED = {"CPRI@2018-12-31": 1530721, "ES@2012-06-29": 72741, "ES@2015-06-30":
 
 
 @pytest.fixture
-def no_frequency(frequency):
-    """No 8-K frequency candidates: fix C alone answers."""
-    for t in ("KORS", "NU", "LUK", "LMCA", "BWC", "JDSU", "GGP", "UAG", "FFIV"):
-        frequency[t] = []
-    return frequency
+def no_frequency(monkeypatch):
+    """No 8-K frequency candidates for any ticker: fix C alone answers."""
+    monkeypatch.setattr(TickerResolver, "_efts_pre_delist_frequency_ranked", lambda self, t, d, top_n=5: [])
+
+
+# The committed run's first-pass answers for the eras the C1 tests hand issuers over from
+PASS1 = {**RESOLVED, "PEAK@2019-12-31": 765880, "DOC@2024-06-30": 765880, "FTR@2012-06-29": 20520,
+         "WEC@2008-01-16": 783325, "WEC@2012-06-29": 783325, "WEC@2014-12-31": 783325, "WEC@2015-06-30": 783325,
+         "WEC@2015-12-31": 783325, "CTRX@2012-12-31": 1363851, "SXCI@2012-06-29": 1363851,
+         "INGR@2012-06-29": 1046257, "MNST@2012-06-29": 865752, "MNST@2015-06-30": 865752,
+         "LIFE@2012-06-29": 1073431, "NVE@2012-06-29": 741508, "GGP@2017-06-30": 1496048,
+         "TRI@2012-06-29": 1075124}
+
+
+def test_a_cusip_switch_to_an_acquirer_or_an_unrelated_issuer_is_refused(eras, ftd, no_frequency):
+    """With their first-pass answers withheld:
+    - CCU: Clear Channel went private (last row 2008-07-31) as Citizens
+      Communications became Frontier under a new CUSIP (2008-08-01); the former
+      name CITIZENS COMMUNICATIONS shares one word with CLEAR CHANNEL COMMUNICTNS.
+    - TEG: Integrys was bought by Wisconsin Energy, renamed WEC Energy Group with
+      a new CUSIP on 2015-07-01; one shared word (ENERGY), and the acquirer's own
+      CUSIP traded until 2015-06-30.
+    - CHSI: Catalyst Health Solutions was bought by SXC Health Solutions, renamed
+      Catamaran; HEALTH SOLUTIONS are shared, but SXC's own CUSIP (SXCI) traded
+      until 2012-07-24.
+    - ACT: Actavis Inc (884629, pinned) became a subsidiary of Actavis plc, a
+      holding company that first filed in June 2013, after Actavis Inc's CUSIP
+      began trading in January."""
+    got = _infer(eras, ftd, list(eras), PASS1, unpin=["ACT@2013-06-28"])
+    assert {k: got.get(k) for k in ["CCU@2008-01-16", "TEG@2008-01-16", "CHSI@2012-06-29", "ACT@2013-06-28"]} == \
+        dict.fromkeys(["CCU@2008-01-16", "TEG@2008-01-16", "CHSI@2012-06-29", "ACT@2013-06-28"])
+
+
+def test_renamed_issuers_still_take_over_their_old_cusips(eras, ftd, no_frequency):
+    got = _infer(eras, ftd, list(eras), PASS1)
+    want = {"CPO@2008-01-16": 1046257, "HANS@2008-01-16": 865752, "KORS@2012-06-29": 1530721,
+            "KORS@2014-12-31": 1530721, "HCP@2008-01-16": 765880, "HCP@2014-12-31": 765880,
+            "CZN@2008-01-16": 20520, "IVGN@2008-01-16": 1073431, "SRP@2008-01-16": 741508,
+            "GGP@2014-12-31": 1496048}
+    assert {k: got.get(k, (None,))[0] for k in want} == want
 
 
 def test_a_ticker_change_hands_the_new_tickers_issuer_to_the_old_cusips_eras(eras, ftd, no_frequency):

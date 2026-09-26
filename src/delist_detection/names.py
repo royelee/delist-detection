@@ -88,6 +88,28 @@ def _joined(text: str) -> set[str]:
     return {"".join(raw[i:i + n]) for n in (2, 3) for i in range(len(raw) - n + 1)}
 
 
+def description_names(description: str, name: str) -> bool:
+    """Whether a fails-to-deliver `description` names the company `name` word by
+    word: as many of its issuer words as the shorter side has, up to two, each
+    matching a word of `name` the ways `description_matches` matches one (the
+    same word, a plural S aside, written short, or run together). Stricter than
+    `description_matches`, where one shared word is enough: CITIZENS
+    COMMUNICATIONS does not name CLEAR CHANNEL COMMUNICTNS, while CORN PRODUCTS
+    INTERNATIONAL names CORN PRODUCTS INT'L. With nothing to compare it names
+    nothing."""
+    d_words = _issuer_words(_name_part(description))
+    n_words = _issuer_words(name)
+    if not d_words or not n_words:
+        return False
+    n_forms = {f for w in n_words for f in w}
+    matched = sum(1 for forms in d_words
+                  if forms & n_forms or any(_abbreviates(d, n) for d in forms for n in n_forms))
+    d_forms = {f for w in d_words for f in w}
+    if _joined(_name_part(description)) & n_forms or _joined(name) & d_forms:
+        matched += 1                                    # MC DERMOTT and MCDERMOTT, one way or the other
+    return matched >= min(2, len(d_words), len(n_words))
+
+
 def names_an_issuer(description: str) -> bool:
     """Whether a fails-to-deliver description leaves a word to compare once its
     security words go (2U INC COM STK and F5,INC. COMMON STOCK leave none)."""

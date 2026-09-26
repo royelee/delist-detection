@@ -286,7 +286,8 @@ NEW_CUSIP_MARGIN_DAYS = 30    # a CUSIP first seen closer than this to the scann
 class Handoff:
     """A CUSIP link from the era `era_key` to the era `to_key`, whose issuer it
     may share (`cusip_handoffs`). `kind` is "shared_cusip" (both eras have
-    `cusip`) or "cusip_handoff" (a switch: `cusip` stopped trading as `to_key`'s
+    `cusip`) or "cusip_handoff" (a switch: `cusip`, which first failed on
+    `since`, last traded under the era's ticker on `last` as `to_key`'s
     `new_cusip` began, on `day`); `descriptions` are the old CUSIP's fails
     descriptions under the era's ticker, which the issuer's former name must
     match."""
@@ -297,6 +298,20 @@ class Handoff:
     new_cusip: str = ""
     day: str = ""
     descriptions: tuple[str, ...] = ()
+    since: str = ""
+    last: str = ""
+
+
+def trades_at_switch(ftd: FtdIndex, h: Handoff, cusips: Collection[str]) -> bool:
+    """Whether any of `cusips` (another line of the switch's issuer) trades, not
+    under a deleted symbol, within `SWITCH_DAYS` trading days of the switch `h`:
+    then the issuer is an acquirer that renamed itself at the merger (Wisconsin
+    Energy, WEC Energy Group from Integrys' last day), not the old CUSIP's
+    renamed issuer."""
+    days = sorted([date.fromisoformat(h.last), date.fromisoformat(h.day)])
+    lo = add_trading_days(days[0], -SWITCH_DAYS).isoformat()
+    hi = add_trading_days(days[1], SWITCH_DAYS).isoformat()
+    return any(lo <= r.date <= hi for r in ftd.trading_rows(sorted(cusips)))
 
 
 def cusip_handoffs(eras: Sequence[TickerEra], ftd: FtdIndex) -> list[Handoff]:
@@ -344,9 +359,11 @@ def cusip_handoffs(eras: Sequence[TickerEra], ftd: FtdIndex) -> list[Handoff]:
             lo = add_trading_days(last, -SWITCH_DAYS).isoformat()
             hi = add_trading_days(last, SWITCH_DAYS).isoformat()
             descriptions = tuple(sorted({r.description for r in own}))
+            since = ftd.by_cusip(c)[0].date
             for day, key, new in starts[bisect_left(days, lo):bisect_right(days, hi)]:
                 if key != e.key and new not in cusips_of[e.key]:
-                    out.append(Handoff(e.key, key, "cusip_handoff", c, new, day, descriptions))
+                    out.append(Handoff(e.key, key, "cusip_handoff", c, new, day, descriptions, since,
+                                       own[-1].date))
     return out
 
 
