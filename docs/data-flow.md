@@ -121,7 +121,8 @@ caches one file per day under `cache/nasdaq_halts/`. Each EDGAR payload records
 the day it was fetched (`__fetched__`; an older file is dated by its mtime). The
 resolver's checks and the classifier read a company's submissions fresh as of
 `min(observed + 45 days, as_of)` (`edgar.submissions_fresh_after`), where
-`as_of` is the run date, read once per run and passed to every client. A copy
+`as_of` is the run date, read once per run (`classify_universe.py --as-of
+YYYY-MM-DD`, default today) and passed to every client. A copy
 cached before a later Form 25 is therefore fetched again — except the delisting
 finder's own Form 25 scan (`DelistingFinder.find`, via `EdgarClient.recent_filings`),
 which reads a cached submissions copy with no freshness bound at all, warm-filled

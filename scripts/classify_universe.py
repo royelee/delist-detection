@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from datetime import date
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -108,6 +109,14 @@ Exit codes:
 """
 
 
+def run_date(text: str) -> date:
+    """--as-of's value: a YYYY-MM-DD date."""
+    try:
+        return date.fromisoformat(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"not a YYYY-MM-DD date: {text!r}") from None
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(epilog=EXIT_CODES_EPILOG, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--observations", required=True, help="CSV ticker,as_of[,name,cusip,cik,sec_id]")
@@ -142,6 +151,9 @@ def build_parser() -> argparse.ArgumentParser:
                         "from every other SEC client on this machine through the lock file "
                         "$DELIST_DETECTION_SEC_RATE_LOCK (default ~/.cache/delist_detection/sec_rate.lock), "
                         "shares one 8 requests/s limit, so more threads only fill that limit sooner.")
+    p.add_argument("--as-of", type=run_date, default=None, metavar="YYYY-MM-DD",
+                   help="The run date every freshness rule reads (default: today). Pin it to an earlier run's "
+                        "date (run_manifest.json's as_of) to reproduce that run's tables from the same caches.")
     return p
 
 
@@ -181,6 +193,7 @@ def main() -> int:
         index, cache_dir=Path(args.cache_dir), rename_map=KNOWN_RENAMES, manual_overrides=MANUAL_OVERRIDES,
         extract_payouts=not args.no_extract_payouts, extract_llm=args.extract_merger_terms_llm,
         llm_model=args.llm_model, use_midas=not args.no_midas, use_halts=not args.no_halts,
+        as_of=args.as_of or date.today(),
     )
     log = (lambda *a: None) if args.quiet else None
     summary = run(index, clients, overrides, out_dir=Path(args.output_dir), tol=args.merger_terms_sanity_tol,

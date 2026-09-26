@@ -445,7 +445,8 @@ python scripts/classify_universe.py \
     --last-trade-closes <csv> \
     --merger-terms <csv> \
     --recoveries <csv> \
-    --review-decisions <csv>
+    --review-decisions <csv> \
+    --as-of YYYY-MM-DD
 ```
 
 This runs the full pipeline and writes `output/securities.csv`,
@@ -453,6 +454,9 @@ This runs the full pipeline and writes `output/securities.csv`,
 `review.csv` and `review_summary.csv`. See *Observations and pins* below for
 the required `--observations` input, and *Severities and accepting a review
 row* above for `--review-decisions` (default `data/review_decisions.csv`).
+`--as-of` is the run date every freshness rule reads (default today;
+`run_manifest.json` records it): pass an earlier run's date to reproduce its
+tables byte for byte from the same caches.
 
 > **Note:** Merger rows without a `last_trade_close` (SEC fails-to-deliver
 > found none, and none was supplied via `--last-trade-closes`) emit a

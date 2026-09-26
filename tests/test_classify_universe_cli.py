@@ -3,6 +3,7 @@
 still parse with sane defaults, without touching the network."""
 import importlib.util
 import sys
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -28,13 +29,13 @@ def _run_main(monkeypatch, review_flags, *argv):
     monkeypatch.setattr(cli, "use_machine_wide_limit", lambda *a, **k: None)
     monkeypatch.setattr(cli, "load_observations", lambda path: [])
     monkeypatch.setattr(cli, "ObservationIndex", lambda obs: obs)
-    monkeypatch.setattr(cli, "default_clients", lambda *a, **kw: object())
+    clients_kw = {}
+    monkeypatch.setattr(cli, "default_clients", lambda *a, **kw: clients_kw.update(kw) or object())
     seen = {}
     monkeypatch.setattr(cli, "run", lambda *a, **kw: seen.update(kw) or _FakeSummary(review_flags))
     monkeypatch.setattr(sys, "argv", ["classify_universe.py", "--observations", "x.csv", *argv])
-    rc = cli.main()
-    _run_main.seen = seen
-    return rc
+    _run_main.seen, _run_main.clients_kw = seen, clients_kw
+    return cli.main()
 
 
 def test_manual_overrides_include_kwk():
@@ -57,6 +58,7 @@ def test_argument_parser_defaults():
     assert args.output_dir == str(ROOT / "output")
     assert args.cache_dir == str(ROOT / "cache")
     assert args.sec_workers == 4
+    assert args.as_of is None                        # main() dates the run today
 
 
 def test_parser_epilog_documents_exit_codes():
@@ -117,6 +119,27 @@ def test_main_returns_3_and_prints_banner_when_review_has_errors(monkeypatch, ca
     assert rc == 3
     err = capsys.readouterr().err
     assert "3" in err and "error" in err.lower()
+
+
+def test_as_of_dates_every_client(monkeypatch):
+    """--as-of pins the run date every client's freshness rule reads, so a rerun
+    on a later day can reproduce an earlier run's tables."""
+    assert _run_main(monkeypatch, {}, "--as-of", "2026-09-25") == 0
+    assert _run_main.clients_kw["as_of"] == date(2026, 9, 25)
+
+
+def test_the_run_date_defaults_to_today(monkeypatch):
+    assert _run_main(monkeypatch, {}) == 0
+    assert _run_main.clients_kw["as_of"] == date.today()
+
+
+@pytest.mark.parametrize("bad", ["2026-13-01", "25/09/2026", "yesterday"])
+def test_an_unreadable_as_of_is_refused(monkeypatch, capsys, bad):
+    with pytest.raises(SystemExit) as exc:
+        _run_main(monkeypatch, {}, "--as-of", bad)
+    assert exc.value.code == 2
+    assert "--as-of" in capsys.readouterr().err
+    assert _run_main.clients_kw == {}
 
 
 def test_main_passes_sec_workers_to_run(monkeypatch):

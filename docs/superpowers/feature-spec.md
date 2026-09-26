@@ -668,7 +668,8 @@ line changes observable output.
   prefetches on N threads under that one limit, and a 5xx pauses them all.
 - **Determinism includes the run date (§11).** Every freshness rule reads one
   run date (`as_of`), so "same inputs and caches" means the same caches and the
-  same `as_of`. For those, the tables are byte-identical for any `--sec-workers`:
+  same `as_of` (`classify_universe.py --as-of`, default today). For those, the
+  tables are byte-identical for any `--sec-workers`:
   prefetch threads only fill missing cache entries and never refresh one.
   `run_manifest.json` records `as_of`, the code version, the worker count and
   the SEC traffic.
