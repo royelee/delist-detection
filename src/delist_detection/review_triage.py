@@ -248,6 +248,16 @@ CATALOG: dict[str, FlagInfo] = {
         "Check which company traded under the ticker that day and fix the other name's observation (its "
         f"ticker, or a cik or sec_id pin), or {_ACCEPT}."),
 
+    "issuer_inferred": FlagInfo(
+        "check", "The resolver found no issuer CIK for this ticker era by its ticker or name, so it inferred one "
+                 "from SEC fails-to-deliver CUSIP evidence (the issuer of an era sharing its CUSIP, shared_cusip, "
+                 "or of the new CUSIP its own switched to after a rename, cusip_handoff) or from the ranking of "
+                 "8-Ks naming the ticker (efts_frequency_renamed); the reason says which. Such an answer is never "
+                 "saved in the resolver cache.",
+        "Confirm the issuer named in the reason is the company that traded under the ticker then (its EDGAR "
+        "names and filings around the era's dates); pin the right cik on the observations if it is wrong, or "
+        f"{_ACCEPT}."),
+
     # --- info: a less precise source, nothing suggests it is wrong ---
     "no_figi": FlagInfo(
         "info", "OpenFIGI confirmed no US composite FIGI, so sec_id is a placeholder CIK<cik>-<CLASS>.",
@@ -259,14 +269,6 @@ CATALOG: dict[str, FlagInfo] = {
         "info", "The CIK came from the observations' cik pin although EDGAR's name disagrees (it sits beside "
                 "member_name_mismatch).",
         "Nothing if the pin is right; otherwise correct the cik pin in the observations."),
-    "issuer_inferred": FlagInfo(
-        "info", "The resolver's first pass found no issuer CIK for this ticker era, and its second pass "
-                "inferred one (the reason says how): the one 8-K frequency candidate whose EDGAR names match the "
-                "era's fails rows (efts_frequency_renamed), the issuer of an era sharing its CUSIP "
-                "(shared_cusip), or the issuer that took over its CUSIP at a switch after a rename "
-                "(cusip_handoff). Such an answer is never saved in the resolver cache.",
-        "Check the issuer named in the reason is the company that traded under the ticker then; if not, pin "
-        "the right cik on the observations."),
     "resolved_by_manual_override": FlagInfo(
         "info", "The CIK came from MANUAL_OVERRIDES in scripts/classify_universe.py although EDGAR's name "
                 "disagrees (it sits beside member_name_mismatch).",
