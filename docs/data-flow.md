@@ -416,9 +416,13 @@ a stale snapshot, holds Thomson Reuters' CUSIP and takes nothing).
   CUSIP's, renamed: it existed when the old CUSIP began failing (not Actavis
   plc, formed in 2013, for Actavis Inc), was renamed within 90 days of the
   switch, each old row description is named word by word by a name it carried
-  by then (`names.description_names`: two words when both sides have two;
-  CITIZENS COMMUNICATIONS does not name CLEAR CHANNEL COMMUNICTNS; Quintiles'
-  TRANSNATIONAL rows are named by its pre-2016 name), and it has no other CUSIP
+  within 30 days of that description's first row, or by the name the switch
+  renamed it from (`names.description_names`: two words when both sides have
+  two; CITIZENS COMMUNICATIONS does not name CLEAR CHANNEL COMMUNICTNS;
+  Quintiles' TRANSNATIONAL rows are named by its pre-2016 name; ACE Ltd's 2008
+  rows by ACE LTD, the name it dropped at the switch, as EDGAR keeps its names
+  only from 2009; a name dropped years before names nothing — CBS Corp's
+  VIACOM INC until 2005, TeraWulf's CHROMALINE until 2002), and it has no other CUSIP
   of its own trading at the switch (an acquirer that renamed itself at the
   merger: WEC Energy for Integrys, Catamaran for Catalyst Health Solutions) —
   a CUSIP of another share class, or one born at the switch, does not count
