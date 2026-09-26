@@ -183,6 +183,58 @@ def test_todays_ticker_map_holder_must_have_existed_by_the_eras_first_sighting(t
     assert r.resolve(ticker, last_seen, name=name, since=first).cik is None
 
 
+# EDGAR's company search for ALCOA INC, as it could answer: Alcoa Corp first, then Alcoa Inc.
+AA_SEARCH = {"ALCOA INC|": [{"cik": 1675149, "name": "Alcoa Corp", "form": "10-K", "filing_date": "2017-03-15"},
+                            {"cik": 4281, "name": "ALCOA INC", "form": "10-K", "filing_date": "2017-03-15"}]}
+
+
+def test_the_name_search_takes_no_company_formed_after_the_eras_first_sighting():
+    """Alcoa Inc (4281, named ALCOA INC 1999-2014, now Howmet) traded as AA from
+    2008 until its 2016 split; Alcoa Corp (1675149), first filing 2016-06-29,
+    took the name and the ticker. The search for ALCOA INC ranks Alcoa Corp
+    first: it existed at the era's last sighting under an agreeing name, but not
+    by the era's first, so the next candidate, Alcoa Inc, is the answer. The
+    remembered answer of a caller with no first sighting is held to it too."""
+    r = TickerResolver(_Edgar(search=AA_SEARCH))
+    assert r.resolve("AA", "2016-10-06", name="ALCOA INC").cik == 1675149
+    res = r.resolve("AA", "2016-10-06", name="ALCOA INC", since="2008-01-16")
+    assert (res.cik, res.source) == (4281, "name_search")
+
+
+def test_a_saved_search_answer_is_held_to_the_eras_first_sighting(tmp_path):
+    TickerResolver(_Edgar(search=AA_SEARCH), cache_path=tmp_path / "res.json").resolve(
+        "AA", "2016-10-06", name="ALCOA INC")
+    r = TickerResolver(_Edgar(search={}), cache_path=tmp_path / "res.json")
+    assert r.resolve("AA", "2016-10-06", name="ALCOA INC").cik == 1675149        # served from the file
+    assert r.resolve("AA", "2016-10-06", name="ALCOA INC", since="2008-01-16").cik is None
+
+
+# A company formed in 2015 that took OLDCO's name, and OLDCO; both filed a Form 25
+# on 2016-09-30 and nothing after it.
+NEWCO, OLDCO = 900001, 900002
+LATER_FORMED = {str(NEWCO): {"name": "OLDCO HOLDINGS INC", "formerNames": [],
+                             "filings": [["10-12B", "2015-01-05"], ["25-NSE", "2016-09-30"]]},
+                str(OLDCO): {"name": "OLDCO HOLDINGS INC", "formerNames": [],
+                             "filings": [["10-K", "1995-03-01"], ["10-K", "2016-03-01"], ["25-NSE", "2016-09-30"]]}}
+
+
+def test_the_form_25_search_takes_no_company_formed_after_the_eras_first_sighting(monkeypatch):
+    monkeypatch.setattr(TickerResolver, "_efts_lookup",
+                        lambda self, t, d=None, **kw: (NEWCO, "OLDCO HOLDINGS INC (OLD)", False))
+    r = TickerResolver(_Edgar(issuers=LATER_FORMED, search={}))
+    assert r.resolve("OLD", "2016-10-06", name="OLDCO HOLDINGS INC").cik == NEWCO
+    assert r.resolve("OLD", "2016-10-06", name="OLDCO HOLDINGS INC", since="2008-01-16").cik is None
+
+
+def test_the_8k_frequency_search_takes_no_company_formed_after_the_eras_first_sighting(monkeypatch):
+    monkeypatch.setattr(TickerResolver, "_efts_pre_delist_frequency_ranked",
+                        lambda self, t, d, top_n=5: [(NEWCO, "OLDCO HOLDINGS INC"), (OLDCO, "OLDCO HOLDINGS INC")])
+    r = TickerResolver(_Edgar(issuers=LATER_FORMED, search={}))
+    assert r.resolve("OLD", "2016-10-06", name="OLDCO HOLDINGS INC").cik == NEWCO
+    res = r.resolve("OLD", "2016-10-06", name="OLDCO HOLDINGS INC", since="2008-01-16")
+    assert (res.cik, res.source) == (OLDCO, "efts_frequency")
+
+
 ALTAIR_MAP = {"ALTR": {"cik_str": 1701732, "ticker": "ALTR", "title": "Altair Engineering Inc."}}
 
 

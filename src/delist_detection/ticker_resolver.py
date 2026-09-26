@@ -43,6 +43,9 @@ _LOOK_UP_NAME = object()    # resolve(name=...) default: look the name up with o
 CACHE_VERSION = 4
 _LOADABLE_VERSIONS = frozenset({2, 3, 4})
 _RETIRED_SOURCES = frozenset({"company_tickers_name_mismatch"})
+# Answers the resolver was given rather than found by a search: a remembered one
+# is not held to the era's first sighting (`resolve`'s `since`).
+_GIVEN_SOURCES = frozenset({"cik_map", "manual", "rename"})
 # Version 4's name search ranks its candidates by their EDGAR names and never
 # takes a nameless multi-company hit. With this switch on, a version-2/3 file's
 # name_search answers (written under the old rule) are dropped on load and
@@ -658,11 +661,13 @@ class TickerResolver:
         return that era's pin or name. The answer is remembered under the ticker,
         the date and the observed name its checks used.
 
-        `since`: the era's first sighting. SEC's ticker map gives today's holder
-        of the ticker, which must have existed by then too, not only at
-        `observed_date`: a company formed while the era traded can have taken
-        its name and ticker (Energizer's 2015 SpinCo for ENERGIZER HOLDINGS INC,
-        2008-2015). A ticker-map answer from the memo is held to it as well."""
+        `since`: the era's first sighting. A CIK a search proposes (SEC's ticker
+        map, the Form 25/15 search, the company-name search, the 8-K frequency
+        rank) must have existed by then too, not only at `observed_date`: a
+        company formed while the era traded can have taken its name and ticker
+        (Energizer's 2015 SpinCo for ENERGIZER HOLDINGS INC, 2008-2015; Alcoa
+        Corp, 2016, for ALCOA INC). A remembered answer is held to it as well;
+        a pin, a manual override and a rename are not."""
         t = ticker.upper().strip()
         observed_name = self._observed_name(t, observed_date, name)
         cache_key = self._key(t, observed_date, observed_name)
@@ -688,7 +693,7 @@ class TickerResolver:
 
         memo = self._memo.get(cache_key)
         if memo is not None and self._memo_observed.get(cache_key) == observed_name and \
-                (memo.source != "company_tickers" or self._existed_by(memo.cik, since)):
+                (memo.cik is None or memo.source in _GIVEN_SOURCES or self._existed_by(memo.cik, since)):
             # A rename built on this answer inherits whether it rests on a failed request.
             self._transient = cache_key in self._degraded
             return memo
@@ -725,15 +730,17 @@ class TickerResolver:
 
         # Tier 1: EFTS Form 25 + date — most precise when it returns a hit.
         # Use loose validation: a name in EFTS Form-25 results is already
-        # tightly date-anchored. The company must have existed on the date;
-        # a name that disagrees with the expected one is kept (the row
-        # describes the company that delisted) and marked as a mismatch.
-        # A second-pass hit under another name is held back as a fallback.
+        # tightly date-anchored. The company must have existed on the date
+        # and by the era's first sighting; a name that disagrees with the
+        # expected one is kept (the row describes the company that delisted)
+        # and marked as a mismatch. A second-pass hit under another name is
+        # held back as a fallback.
         c0, n0, weak = self._efts_lookup(t, observed_date, expected_name=expected)
         fallback: tuple[int, str | None] | None = None
         if c0 is not None:
             if not observed_date or self._validate_cik(c0, observed_date, strict=False):
                 existed, agrees = self._fits_date(c0, observed_date, expected)
+                existed = existed and self._existed_by(c0, since)
                 if existed and weak:
                     fallback = (c0, n0)
                 elif existed:
@@ -741,9 +748,10 @@ class TickerResolver:
                     source = "efts" if agrees else "efts_name_mismatch"
 
         # Tier 2: expected name → EDGAR company-name search, its candidates
-        # checked best first.
+        # checked best first, each one that existed by the era's first sighting.
         if cik is None:
-            ranked = self._name_search(t, observed_date, expected)
+            # A generator: a candidate below the one accepted is never read.
+            ranked = ((c, n) for c, n in self._name_search(t, observed_date, expected) if self._existed_by(c, since))
             if fallback is not None:
                 # The observed name is a check, never a substitute: it replaces
                 # the company EFTS found only with its own Form 25/15 near the
@@ -771,12 +779,13 @@ class TickerResolver:
                     (cik, name), source = hit, "name_search"
 
         # Tier 3: 8-K frequency rank — strict validation (must reject the
-        # acquirer, who keeps filing 10-Qs).
+        # acquirer, who keeps filing 10-Qs), of the candidates that existed by
+        # the era's first sighting.
         if cik is None and observed_date:
             ranked = self._efts_pre_delist_frequency_ranked(t, observed_date)
             best: tuple[int, int, int, str] | None = None
             for rank, (cand_cik, cand_name) in enumerate(ranked):
-                if not self._validate_cik(cand_cik, observed_date, strict=True):
+                if not self._existed_by(cand_cik, since) or not self._validate_cik(cand_cik, observed_date, strict=True):
                     continue
                 score = self._name_match_score(cand_cik, expected, observed_date) if expected else 0
                 inv_rank = -rank
