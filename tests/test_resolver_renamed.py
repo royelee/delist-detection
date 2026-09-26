@@ -23,7 +23,7 @@ from delist_detection.edgar import EdgarSubmission
 from delist_detection.ftd import FtdIndex, FtdRow
 from delist_detection.observations import ObservationIndex, load_observations
 from delist_detection.pipeline import Clients, _RunContext
-from delist_detection.security_master import cusip_handoffs, era_last_seen, refine_eras
+from delist_detection.security_master import Handoff, cusip_handoffs, era_last_seen, refine_eras
 from delist_detection.ticker_resolver import TickerResolver
 
 FIX = Path(__file__).parent / "fixtures" / "eras"
@@ -455,6 +455,23 @@ def test_a_description_naming_no_issuer_neither_confirms_nor_refutes(eras, ftd, 
     (1048695): the rows that name an issuer name F5, the others say nothing."""
     got = _infer(eras, ftd, list(eras), {**RESOLVED, "FFIV@2021-12-31": 1048695})
     assert got.get("FFIV@2008-01-16") == (1048695, "shared_cusip")
+
+
+def test_an_answer_that_turns_ambiguous_once_the_links_settle_is_dropped(eras, ftd, no_frequency, monkeypatch):
+    """KORS@2012 links to an era of Capri Holdings (1530721), KORS@2014 to an era
+    of a second issuer passing the guard (999999, Capri's EDGAR record), and the
+    two KORS eras share a CUSIP. Each is answered in the same sweep, before the
+    other's answer is known; at the fixed point each links to both issuers."""
+    from delist_detection import ticker_resolver
+    links = [Handoff("KORS@2012-06-29", "CPRI@2018-12-31", "shared_cusip", "X1"),
+             Handoff("KORS@2014-12-31", "NU@2023-06-30", "shared_cusip", "X2"),
+             Handoff("KORS@2012-06-29", "KORS@2014-12-31", "shared_cusip", "G60754101"),
+             Handoff("KORS@2014-12-31", "KORS@2012-06-29", "shared_cusip", "G60754101")]
+    monkeypatch.setattr(ticker_resolver, "cusip_handoffs", lambda eras, ftd: links)
+    issuers = {**DATA["issuers"], "999999": DATA["issuers"]["1530721"]}
+    got = _infer(eras, ftd, list(eras), {"CPRI@2018-12-31": 1530721, "NU@2023-06-30": 999999},
+                 edgar=_Edgar(issuers))
+    assert (got.get("KORS@2012-06-29"), got.get("KORS@2014-12-31")) == (None, None)
 
 
 def test_an_era_linked_to_two_issuers_takes_neither(eras, ftd, no_frequency):

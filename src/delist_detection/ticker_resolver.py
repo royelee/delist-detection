@@ -807,13 +807,20 @@ class TickerResolver:
         links: dict[str, list[Handoff]] = defaultdict(list)
         for h in cusip_handoffs(eras, ftd):
             links[h.era_key].append(h)
-        known = {k: c for k, c in ciks.items() if c is not None} | {k: v.cik for k, v in out.items()}
+        first_pass = {k: c for k, c in ciks.items() if c is not None}
         by_key = {e.key: e for e in eras}
-        while True:
-            new: dict[str, InferredIssuer] = {}
+
+        def issuers_now() -> tuple[dict[str, int], dict[int, set[str]]]:
+            """Every era's known issuer, and each issuer's CUSIPs (of its eras)."""
+            known = first_pass | {k: v.cik for k, v in out.items()}
             issuer_cusips: dict[int, set[str]] = defaultdict(set)
             for k, c in known.items():
                 issuer_cusips[c] |= set(by_key[k].ftd_cusips) | set(by_key[k].cusips)
+            return known, issuer_cusips
+
+        while True:
+            known, issuer_cusips = issuers_now()
+            new: dict[str, InferredIssuer] = {}
             for e in todo:
                 if e.key in out:
                     continue
@@ -824,9 +831,26 @@ class TickerResolver:
                     new[e.key] = got
                 self._mark_inferred(e, last_seen[e.key])
             if not new:
-                return out
+                break
             out |= new
-            known |= {k: v.cik for k, v in new.items()}
+        # At the fixed point every answer is checked again against all it links
+        # to now: one answered before a linked era was, from another issuer, can
+        # have become ambiguous. Such answers are dropped, and the check repeats
+        # without them until none is dropped.
+        while True:
+            known, issuer_cusips = issuers_now()
+            dropped = []
+            for key, got in out.items():
+                self._transient = False
+                found = self._linked_issuers(links[key], known, ftd, issuer_cusips)
+                candidates = [*found, *([got.cik] if got.source == "efts_frequency_renamed" else [])]
+                if self._guard(candidates, rows[key]) != got.cik:
+                    dropped.append(key)
+                self._mark_inferred(by_key[key], last_seen[key])
+            if not dropped:
+                return out
+            for key in dropped:
+                del out[key]
 
     def _named(self, era: TickerEra, got: InferredIssuer | None, last_seen: str) -> InferredIssuer | None:
         """`got`, when one of the era's observed names `names.description_matches`
@@ -924,6 +948,21 @@ class TickerResolver:
         (`known`: era key -> CIK). A switch counts only when that issuer is the
         old CUSIP's, renamed (`_switch_issuer`). A shared CUSIP is read first, so
         it names the answer's source when both lead to the same issuer."""
+        found = self._linked_issuers(links, known, ftd, issuer_cusips)
+        cik = self._guard(found, rows)
+        if cik is None:
+            return None
+        h, former = found[cik]
+        if h.kind == "shared_cusip":
+            return InferredIssuer(cik, h.kind, f"shares CUSIP {h.cusip} with {h.to_key}")
+        return InferredIssuer(cik, h.kind, f"its CUSIP {h.cusip} ended as {h.to_key}'s {h.new_cusip} began on "
+                                           f"{h.day}; the issuer was renamed from {former}")
+
+    def _linked_issuers(self, links: list[Handoff], known: dict[str, int], ftd: FtdIndex,
+                        issuer_cusips: dict[int, set[str]]) -> dict[int, tuple[Handoff, str | None]]:
+        """The issuers `links` lead to (`known`: era key -> CIK), each with the
+        link that found it first (a shared CUSIP before a switch) and, for a
+        switch, the former name it was renamed from."""
         found: dict[int, tuple[Handoff, str | None]] = {}
         for h in sorted(links, key=lambda h: (h.kind != "shared_cusip", h.to_key)):
             cik = known.get(h.to_key)
@@ -933,14 +972,7 @@ class TickerResolver:
             if h.kind == "cusip_handoff" and former is None:
                 continue
             found[cik] = (h, former)
-        cik = self._guard(found, rows)
-        if cik is None:
-            return None
-        h, former = found[cik]
-        if h.kind == "shared_cusip":
-            return InferredIssuer(cik, h.kind, f"shares CUSIP {h.cusip} with {h.to_key}")
-        return InferredIssuer(cik, h.kind, f"its CUSIP {h.cusip} ended as {h.to_key}'s {h.new_cusip} began on "
-                                           f"{h.day}; the issuer was renamed from {former}")
+        return found
 
     def _switch_issuer(self, cik: int, h: Handoff, ftd: FtdIndex, issuer_cusips: dict[int, set[str]]) -> str | None:
         """Whether the new CUSIP's issuer `cik` is the switch `h`'s old CUSIP's,
