@@ -1193,4 +1193,23 @@ changed row; the rest change no table (checked by pinned warm reruns, below).
    an unexpected crash, 4 for an OpenFIGI outage, 2 with one line naming the
    file and line for a bad input file, including override rows that match no
    delisting.
+4. **Nasdaq halt-feed failures were silent (a06eb45)**, a change on failure
+   only: a halt-feed day that times out, fails to connect, answers 5xx/429
+   after its retry, another status or a body that does not parse is no longer
+   read as "no halts" without a trace. It is never cached, counts as
+   `degraded:nasdaq_halt_feed` in the manifest (not as a failed SEC request),
+   and flags the delisting whose last-trade decision asked for it
+   `resolution_degraded` (exit 3). A 404 is the feed's answer (no halts). No
+   day failed in these reruns, so no table changed.
+5. **Refactors** (6df774d, 551087a, a3c0d75, a5dac19, a8b57d1, 96a899d,
+   ca22c42, 0a41c77, a7dd19c, 80bf63f, 1ce0f39): vocabulary, one
+   `SUCCESSOR_UNKNOWN` constant, `DelistingKey` in `store.py`, one retry loop
+   and one `.env` reader, one source for an era's CIK, stages that return what
+   they produce, and the `security_master.py` / `edgar.py` / `pipeline.py`
+   splits (`history.py`, `added_securities.py`, `sec_limiter.py`,
+   `sec_stats.py`, `retries.py`, `settings.py`, `degraded.py`,
+   `html_text.py`). Pinned warm reruns (`--as-of 2026-09-25 --sec-workers
+   1`) after a5dac19, after a7dd19c and at 1ce0f39 each exited 0 with 0 SEC
+   requests, and every table and `run.log` matched this round's committed
+   outputs byte for byte.
 
