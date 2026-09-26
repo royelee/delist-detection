@@ -303,15 +303,18 @@ class Handoff:
 
 
 def trades_at_switch(ftd: FtdIndex, h: Handoff, cusips: Collection[str]) -> bool:
-    """Whether any of `cusips` (another line of the switch's issuer) trades, not
-    under a deleted symbol, within `SWITCH_DAYS` trading days of the switch `h`:
-    then the issuer is an acquirer that renamed itself at the merger (Wisconsin
-    Energy, WEC Energy Group from Integrys' last day), not the old CUSIP's
-    renamed issuer."""
+    """Whether any of `cusips` (another line of the switch's issuer) that began
+    before the switch trades, not under a deleted symbol, within `SWITCH_DAYS`
+    trading days of the switch `h`: then the issuer is an acquirer that renamed
+    itself at the merger (Wisconsin Energy, WEC Energy Group from Integrys' last
+    day), not the old CUSIP's renamed issuer. A CUSIP whose first row falls
+    inside that window was born at the switch itself (ViacomCBS' class A, as
+    CBS's class B switched)."""
     days = sorted([date.fromisoformat(h.last), date.fromisoformat(h.day)])
     lo = add_trading_days(days[0], -SWITCH_DAYS).isoformat()
     hi = add_trading_days(days[1], SWITCH_DAYS).isoformat()
-    return any(lo <= r.date <= hi for r in ftd.trading_rows(sorted(cusips)))
+    older = [c for c in sorted(cusips) if (rows := ftd.by_cusip(c)) and rows[0].date < lo]
+    return any(lo <= r.date <= hi for r in ftd.trading_rows(older))
 
 
 def cusip_handoffs(eras: Sequence[TickerEra], ftd: FtdIndex) -> list[Handoff]:

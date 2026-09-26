@@ -22,6 +22,7 @@ from .atomic_io import clean_orphan_temps, write_atomic
 from .edgar import STALE_KEY, EdgarClient, submissions_fresh_after
 from .evidence import edgar_names, first_filing, names_near, names_until, parse_day, renamed_near
 from .fatal import FATAL
+from .figi_resolution import class_letter, share_class_from_name
 from .ftd import FtdIndex, FtdRow
 from .names import description_matches, description_names, name_tokens, names_agree, names_an_issuer
 from .observations import TickerEra
@@ -69,6 +70,22 @@ class InferredIssuer:
     cik: int
     source: str
     via: str
+
+
+# The CUSIPs of the eras known to be each issuer's, with the class letter each
+# such era's name states (None: none): issuer CIK -> CUSIP -> letters.
+IssuerLines = dict[int, dict[str, set[str | None]]]
+
+
+def _class_letter(era: TickerEra) -> str | None:
+    """The share class letter the era's name states ("...CLASS B" -> "B"), or None."""
+    return class_letter(share_class_from_name(era.name))
+
+
+def _other_class(letters: set[str | None], era_class: str | None) -> bool:
+    """Whether a CUSIP whose eras state `letters` is of another share class than
+    an era of class `era_class`: both known, and every one of them differs."""
+    return era_class is not None and bool(letters) and all(x is not None and x != era_class for x in letters)
 
 
 @dataclass(frozen=True)
@@ -839,9 +856,10 @@ class TickerResolver:
         def issuers_now() -> tuple[dict[str, int], dict[int, set[str]]]:
             """Every era's known issuer, and each issuer's CUSIPs (of its eras)."""
             known = first_pass | {k: v.cik for k, v in out.items()}
-            issuer_cusips: dict[int, set[str]] = defaultdict(set)
+            issuer_cusips: dict[int, dict[str, set[str | None]]] = defaultdict(lambda: defaultdict(set))
             for k, c in known.items():
-                issuer_cusips[c] |= set(by_key[k].ftd_cusips) | set(by_key[k].cusips)
+                for cusip in {*by_key[k].ftd_cusips, *by_key[k].cusips}:
+                    issuer_cusips[c][cusip].add(_class_letter(by_key[k]))
             return known, issuer_cusips
 
         while True:
@@ -851,8 +869,8 @@ class TickerResolver:
                 if e.key in out:
                     continue
                 self._transient = False
-                got = self._named(e, self._handoff(rows[e.key], links[e.key], known, ftd, issuer_cusips),
-                                  last_seen[e.key])
+                got = self._named(e, self._handoff(rows[e.key], links[e.key], known, ftd, issuer_cusips,
+                                                   _class_letter(e)), last_seen[e.key])
                 if got is not None:
                     new[e.key] = got
                 self._mark_inferred(e, last_seen[e.key])
@@ -868,7 +886,7 @@ class TickerResolver:
             dropped = []
             for key, got in out.items():
                 self._transient = False
-                found = self._linked_issuers(links[key], known, ftd, issuer_cusips)
+                found = self._linked_issuers(links[key], known, ftd, issuer_cusips, _class_letter(by_key[key]))
                 candidates = [*found, *([got.cik] if got.source == "efts_frequency_renamed" else [])]
                 if self._guard(candidates, rows[key]) != got.cik:
                     dropped.append(key)
@@ -883,8 +901,8 @@ class TickerResolver:
             if first is None or e.cik_pin is not None or e.sec_id_pin or len(rows[e.key]) < self.ERA_MIN_ROWS:
                 continue
             self._transient = False
-            got = self._named(e, self._handoff(rows[e.key], links[e.key], known, ftd, issuer_cusips),
-                              last_seen[e.key])
+            got = self._named(e, self._handoff(rows[e.key], links[e.key], known, ftd, issuer_cusips,
+                                               _class_letter(e)), last_seen[e.key])
             if got is not None and got.cik != first:
                 disagreements[e.key] = got
         return SecondPass(out, disagreements)
@@ -980,12 +998,12 @@ class TickerResolver:
     RENAME_NEAR_DAYS = 90        # a switch's issuer was renamed this close to it
 
     def _handoff(self, rows: list[FtdRow], links: list[Handoff], known: dict[str, int], ftd: FtdIndex,
-                 issuer_cusips: dict[int, set[str]]) -> InferredIssuer | None:
+                 issuer_cusips: IssuerLines, era_class: str | None) -> InferredIssuer | None:
         """Fix C: the issuer, through the guard, of the eras `links` leads to
         (`known`: era key -> CIK). A switch counts only when that issuer is the
         old CUSIP's, renamed (`_switch_issuer`). A shared CUSIP is read first, so
         it names the answer's source when both lead to the same issuer."""
-        found = self._linked_issuers(links, known, ftd, issuer_cusips)
+        found = self._linked_issuers(links, known, ftd, issuer_cusips, era_class)
         cik = self._guard(found, rows)
         if cik is None:
             return None
@@ -996,7 +1014,8 @@ class TickerResolver:
                                            f"{h.day}; the issuer was renamed from {former}")
 
     def _linked_issuers(self, links: list[Handoff], known: dict[str, int], ftd: FtdIndex,
-                        issuer_cusips: dict[int, set[str]]) -> dict[int, tuple[Handoff, str | None]]:
+                        issuer_cusips: IssuerLines, era_class: str | None
+                        ) -> dict[int, tuple[Handoff, str | None]]:
         """The issuers `links` lead to (`known`: era key -> CIK), each with the
         link that found it first (a shared CUSIP before a switch) and, for a
         switch, the former name it was renamed from."""
@@ -1005,13 +1024,15 @@ class TickerResolver:
             cik = known.get(h.to_key)
             if cik is None or cik in found:
                 continue
-            former = self._switch_issuer(cik, h, ftd, issuer_cusips) if h.kind == "cusip_handoff" else None
+            former = (self._switch_issuer(cik, h, ftd, issuer_cusips, era_class) if h.kind == "cusip_handoff"
+                      else None)
             if h.kind == "cusip_handoff" and former is None:
                 continue
             found[cik] = (h, former)
         return found
 
-    def _switch_issuer(self, cik: int, h: Handoff, ftd: FtdIndex, issuer_cusips: dict[int, set[str]]) -> str | None:
+    def _switch_issuer(self, cik: int, h: Handoff, ftd: FtdIndex, issuer_cusips: IssuerLines,
+                       era_class: str | None) -> str | None:
         """Whether the new CUSIP's issuer `cik` is the switch `h`'s old CUSIP's,
         renamed: the former name it was renamed from (`_renamed_from`), or None.
         It must have existed when the old CUSIP began failing (Actavis plc,
@@ -1019,11 +1040,15 @@ class TickerResolver:
         its own (`issuer_cusips`: the CUSIPs of the eras known to be its) trading
         at the switch (`security_master.trades_at_switch`: an acquirer that
         renamed itself at the merger, as Wisconsin Energy did for Integrys and
-        SXC Health Solutions for Catalyst Health Solutions)."""
+        SXC Health Solutions for Catalyst Health Solutions). A CUSIP of another
+        share class than the era's (`era_class`; Discovery's series C for series
+        A) does not count, nor does one born at the switch."""
         first = self._first_filed(cik)
         if first is None or first > parse_day(h.since):
             return None
-        if trades_at_switch(ftd, h, issuer_cusips.get(cik, set()) - {h.cusip, h.new_cusip}):
+        others = {c for c, letters in issuer_cusips.get(cik, {}).items()
+                  if c not in (h.cusip, h.new_cusip) and not _other_class(letters, era_class)}
+        if trades_at_switch(ftd, h, others):
             return None
         return self._renamed_from(cik, h)
 

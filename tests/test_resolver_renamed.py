@@ -360,6 +360,19 @@ def test_a_cusip_switch_to_an_acquirer_or_an_unrelated_issuer_is_refused(eras, f
         dict.fromkeys(["CCU@2008-01-16", "TEG@2008-01-16", "CHSI@2012-06-29", "ACT@2013-06-28"])
 
 
+def test_a_dual_class_rename_hands_each_class_its_issuer(eras, ftd, no_frequency):
+    """CBS Corp (813828) merged Viacom and renamed itself ViacomCBS: its class B
+    CUSIP switched to VIAC's new one on 2019-12-05 as class A's switched to
+    VIACA's. Discovery's series A and C both became Warner Bros. Discovery
+    (1437107) in April 2022. The issuer's other line trading at the switch is a
+    sibling class, or a CUSIP born at the switch itself: no sign of an acquirer."""
+    resolved = {**PASS1, "VIAC@2019-12-31": 813828, "VIACA@2019-12-31": 813828, "PARA@2022-06-30": 813828,
+                "PARAA@2022-06-30": 813828, "WBD@2022-06-30": 1437107, "DISCK@2014-12-31": 1437107}
+    got = _infer(eras, ftd, list(eras), resolved, unpin=["CBS@2008-01-16"])
+    assert (got.get("CBS@2008-01-16"), got.get("DISCA@2008-11-18")) == \
+        ((813828, "cusip_handoff"), (1437107, "cusip_handoff"))
+
+
 def test_an_era_whose_name_names_no_name_of_the_issuer_takes_nothing(eras, ftd, no_frequency):
     """TRI@2008 is Triad Hospitals (1074771, pinned), which a snapshot kept listing
     after its 2007 buyout; the fails rows under TRI in its span are Thomson
