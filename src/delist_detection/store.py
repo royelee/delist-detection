@@ -15,6 +15,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
+from typing import NamedTuple
 
 from .atomic_io import replace_all_on_success
 
@@ -25,6 +26,16 @@ class TableSpec:
     columns: tuple[str, ...]
     key: tuple[str, ...]
     sort: bool = True          # False: rows are written in the order given
+
+
+class DelistingKey(NamedTuple):
+    """One delisting, as delistings.csv keys it (`TABLES["delistings"].key`). A
+    plain tuple of the same two values is the same key (an override file's
+    `(sec_id, delist_date)` rows). Here, beside the table keys, so both layers
+    can use it: the finder keys each delisting by it, the handling layer each
+    per-delisting input."""
+    sec_id: str
+    delist_date: str | None
 
 
 DELISTINGS_COLUMNS: tuple[str, ...] = (

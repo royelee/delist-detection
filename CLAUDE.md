@@ -195,7 +195,9 @@ variable names assume (security, era, sighting, pin, …).
   `cache/llm/`. Disabled by default — enabled by `--extract-merger-terms-llm`;
   `acquirer_price` and `last_trade_close` come from `ftd.py`, not a filing.
 - `store.py` — every output table's column order, key and sort order
-  (`TABLES`), `format_cell` (the one cell formatter every table shares),
+  (`TABLES`), `DelistingKey` (a delisting's `(sec_id, delist_date)` key, here so
+  the classification layer — the finder — and the handling layer can both use
+  it without one importing the other), `format_cell` (the one cell formatter every table shares),
   `write_table`/`write_tables`/`read_table` (all-or-nothing write via
   `atomic_io.replace_all_on_success`), and `read_frame` (a table as a typed
   pandas DataFrame, `FRAME_TYPES`: `qlib_adapter.load_delistings` reads
@@ -230,7 +232,7 @@ variable names assume (security, era, sighting, pin, …).
 - `dlret.py` — DLRET hub: `resolve_dlret`/`DlretResult`/`compute_dlret` (self-explaining delisting return). `bmp_correction.py` re-exports for backward compatibility.
 - `reconstruction.py` — `EnrichedDelistRecord`, `enrich`, `build_delistings_table`,
   `delisting_row`. `output/delistings.csv` is the **primary output**, keyed by
-  `(sec_id, delist_date)` (`DelistingKey`; `for_delisting` looks a delisting up
+  `(sec_id, delist_date)` (`store.DelistingKey`; `for_delisting` looks a delisting up
   in a map keyed by it or by the bare `sec_id`).
 - `qlib_adapter.py` — DataFrame splicers over a `(datetime, instrument)` panel,
   where `instrument` is a `sec_id`: `inject_terminal_labels`,

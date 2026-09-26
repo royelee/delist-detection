@@ -16,12 +16,13 @@ import math
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, NamedTuple
+from typing import Any
 
 from .classifier import DelistRecord
 from .crsp_codes import CrspBucket
 from .dlret import DlretMethod, DlretResult, resolve_dlret
 from .exchanges import Exchange, normalize_exchange
+from .store import DelistingKey
 
 
 @dataclass(frozen=True)
@@ -146,13 +147,6 @@ def enrich(
 # mistakes a genuinely-uncomputable row for a realized 0%. EXCHANGE_TRANSFER_ZERO
 # and ASSUMED_PAR keep their explicit 0.
 _DLRET_BLANK_IN_TABLE = {DlretMethod.ABSTAIN_NO_CONSIDERATION, DlretMethod.UNKNOWN}
-
-
-class DelistingKey(NamedTuple):
-    """One delisting, as delistings.csv keys it. A plain tuple of the same two
-    values is the same key (an override file's `(sec_id, delist_date)` rows)."""
-    sec_id: str
-    delist_date: str | None
 
 
 def for_delisting(m: Mapping, key: tuple[str, str | None]):

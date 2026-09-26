@@ -6,9 +6,10 @@ from delist_detection.crsp_codes import CrspBucket
 from delist_detection.dlret import DlretMethod
 from delist_detection.exchanges import Exchange
 from delist_detection.reconstruction import (
-    DelistingKey, for_delisting, build_delistings_table, delisting_row, enrich, EnrichedDelistRecord,
+    for_delisting, build_delistings_table, delisting_row, enrich, EnrichedDelistRecord,
     load_float_overrides, load_merger_terms_overrides,
 )
+from delist_detection.store import DelistingKey
 
 
 def _rec(ticker="AET", bucket=CrspBucket.MERGER, code=241, date="2018-11-28"):
