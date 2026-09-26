@@ -8,7 +8,7 @@ import pytest
 import delist_detection.pipeline as pipeline
 from delist_detection.classifier import DelistClassifier, DelistRecord
 from delist_detection.crsp_codes import CrspBucket
-from delist_detection.delistings import DelistingEvent, DelistingFinder
+from delist_detection.delistings import Delisting, DelistingFinder
 from delist_detection.edgar import EdgarBlocked, EdgarSubmission
 from delist_detection.ftd import FtdRow
 from delist_detection.last_trade import LastTrade
@@ -81,7 +81,7 @@ def _clients(fake_edgar, ftd_rows=None):
            Observation("AET", "2018-06-29", "AETNA INC", cik=1122304),
            Observation("LIVE", "2025-06-30", "LIVE CO", cik=777)]
     index = ObservationIndex(obs)
-    resolver = TickerResolver(fake_edgar, member_names=index.name_on, cik_map=index.cik_pin_on)
+    resolver = TickerResolver(fake_edgar, observed_names=index.name_on, cik_pins=index.cik_pin_on)
     return index, Clients(edgar=fake_edgar, resolver=resolver, classifier=DelistClassifier(fake_edgar, resolver),
                           figi=_Figi(), ftd_client=ftd)
 
@@ -384,7 +384,7 @@ def test_run_writes_an_open_successor_ticker_history_row(fake_edgar, tmp_path, m
                           bucket=CrspBucket.EXCHANGE_TRANSFER, confidence="high", reason="moved exchanges",
                           evidence={"flags": ["successor_unknown"]}, sec_id="BBG000FJLFX8",
                           delist_date="2018-12-09")
-    ev = DelistingEvent(sec_id="BBG000FJLFX8", cik=1122304, ticker="AET", delist_date="2018-12-09", record=record,
+    ev = Delisting(sec_id="BBG000FJLFX8", cik=1122304, ticker="AET", delist_date="2018-12-09", record=record,
                         last_trade=LastTrade(date(2018, 11, 28), "notice_a", ()), form25=None, form25_sub=None,
                         exchange="NYSE")
 
@@ -424,7 +424,7 @@ def test_ticker_history_clips_at_delist_date_when_last_trade_day_is_unconfirmed(
     record = DelistRecord(ticker="AET", cik=1122304, observed_delist_date="2018-11-28", crsp_code=470,
                           bucket=CrspBucket.LIQUIDATION, confidence="low", reason="x",
                           evidence={"flags": []}, sec_id="BBG000FJLFX8", delist_date="2018-12-09")
-    ev = DelistingEvent(sec_id="BBG000FJLFX8", cik=1122304, ticker="AET", delist_date="2018-12-09", record=record,
+    ev = Delisting(sec_id="BBG000FJLFX8", cik=1122304, ticker="AET", delist_date="2018-12-09", record=record,
                         last_trade=LastTrade(None, "", ("last_trade_date_unconfirmed",)), form25=None,
                         form25_sub=None, exchange="")
 
@@ -511,7 +511,7 @@ def test_run_builds_sibling_spans_for_every_security_of_the_issuer(fake_edgar, t
            Observation("BBB", "2020-02-01", "DUAL CLASS CO", cusip="BBBCUSIP1", cik=9001),
            Observation("BBB", "2020-07-01", "DUAL CLASS CO", cusip="BBBCUSIP1", cik=9001)]
     index = ObservationIndex(obs)
-    resolver = TickerResolver(fake_edgar, member_names=index.name_on, cik_map=index.cik_pin_on)
+    resolver = TickerResolver(fake_edgar, observed_names=index.name_on, cik_pins=index.cik_pin_on)
     clients = Clients(edgar=fake_edgar, resolver=resolver, classifier=DelistClassifier(fake_edgar, resolver),
                       figi=figi, ftd_client=_FtdOtcTail())
 
@@ -725,7 +725,7 @@ def test_run_level_acquirer_price_uses_each_mergers_own_last_trade_day(fake_edga
            Observation("S2", "2020-01-01", "TARGET TWO INC", cik=7002),
            Observation("S2", "2020-06-05", "TARGET TWO INC", cik=7002)]
     index = ObservationIndex(obs)
-    resolver = TickerResolver(fake_edgar, member_names=index.name_on, cik_map=index.cik_pin_on)
+    resolver = TickerResolver(fake_edgar, observed_names=index.name_on, cik_pins=index.cik_pin_on)
     clients = Clients(edgar=fake_edgar, resolver=resolver, classifier=DelistClassifier(fake_edgar, resolver),
                       figi=figi, ftd_client=_FtdWithAcquirer())
 
@@ -734,11 +734,11 @@ def test_run_level_acquirer_price_uses_each_mergers_own_last_trade_day(fake_edga
                             bucket=CrspBucket.MERGER, confidence="high", reason="x", evidence={"flags": []},
                             sec_id=sec_id, delist_date=delist_date)
 
-    ev1 = DelistingEvent(sec_id="BBGSEC001", cik=7001, ticker="S1", delist_date="2020-06-15",
+    ev1 = Delisting(sec_id="BBGSEC001", cik=7001, ticker="S1", delist_date="2020-06-15",
                          record=_merger_record("BBGSEC001", "S1", 7001, "2020-06-15"),
                          last_trade=LastTrade(date(2020, 6, 1), "notice_a", ()), form25=None, form25_sub=None,
                          exchange="NYSE")
-    ev2 = DelistingEvent(sec_id="BBGSEC002", cik=7002, ticker="S2", delist_date="2020-06-15",
+    ev2 = Delisting(sec_id="BBGSEC002", cik=7002, ticker="S2", delist_date="2020-06-15",
                          record=_merger_record("BBGSEC002", "S2", 7002, "2020-06-15"),
                          last_trade=LastTrade(date(2020, 6, 5), "notice_a", ()), form25=None, form25_sub=None,
                          exchange="NYSE")
@@ -792,7 +792,7 @@ def test_same_ticker_successor_does_not_overlap_its_predecessor(fake_edgar, tmp_
                           bucket=CrspBucket.EXCHANGE_TRANSFER, confidence="high", reason="holdco reorg",
                           evidence={"flags": ["successor_unknown"]}, sec_id="BBG000FJLFX8",
                           delist_date="2018-12-09")
-    ev = DelistingEvent(sec_id="BBG000FJLFX8", cik=1122304, ticker="AET", delist_date="2018-12-09", record=record,
+    ev = Delisting(sec_id="BBG000FJLFX8", cik=1122304, ticker="AET", delist_date="2018-12-09", record=record,
                         last_trade=LastTrade(date(2018, 11, 28), "notice_a", ()), form25=None, form25_sub=None,
                         exchange="NYSE")
 
@@ -858,7 +858,7 @@ def test_run_writes_one_acquirer_range_spanning_all_its_mergers(fake_edgar, tmp_
            Observation("S2", "2019-01-01", "TARGET TWO INC", cik=7102),
            Observation("S2", "2020-08-25", "TARGET TWO INC", cik=7102)]
     index = ObservationIndex(obs)
-    resolver = TickerResolver(fake_edgar, member_names=index.name_on, cik_map=index.cik_pin_on)
+    resolver = TickerResolver(fake_edgar, observed_names=index.name_on, cik_pins=index.cik_pin_on)
     clients = Clients(edgar=fake_edgar, resolver=resolver, classifier=DelistClassifier(fake_edgar, resolver),
                       figi=figi, ftd_client=_FtdTwoWindows())
 
@@ -866,7 +866,7 @@ def test_run_writes_one_acquirer_range_spanning_all_its_mergers(fake_edgar, tmp_
         rec = DelistRecord(ticker=ticker, cik=cik, observed_delist_date=delist_date, crsp_code=231,
                            bucket=CrspBucket.MERGER, confidence="high", reason="x", evidence={"flags": []},
                            sec_id=sec_id, delist_date=delist_date)
-        return DelistingEvent(sec_id=sec_id, cik=cik, ticker=ticker, delist_date=delist_date, record=rec,
+        return Delisting(sec_id=sec_id, cik=cik, ticker=ticker, delist_date=delist_date, record=rec,
                               last_trade=LastTrade(last_trade_day, "notice_a", ()), form25=None, form25_sub=None,
                               exchange="NYSE")
 
@@ -954,7 +954,7 @@ class _MapFigi:
 
 def _index_clients(fake_edgar, obs, rows, figi_answers):
     index = ObservationIndex(obs)
-    resolver = TickerResolver(fake_edgar, member_names=index.name_on, cik_map=index.cik_pin_on)
+    resolver = TickerResolver(fake_edgar, observed_names=index.name_on, cik_pins=index.cik_pin_on)
     return index, Clients(edgar=fake_edgar, resolver=resolver, classifier=DelistClassifier(fake_edgar, resolver),
                           figi=_MapFigi(figi_answers), ftd_client=_RowsFtdClient(rows))
 
@@ -1082,7 +1082,7 @@ def test_a_lagged_acquirer_close_flags_the_delisting(fake_edgar, tmp_path, monke
         rec = DelistRecord(ticker=ticker, cik=cik, observed_delist_date=delist_date, crsp_code=231,
                            bucket=CrspBucket.MERGER, confidence="high", reason="x", evidence={"flags": []},
                            sec_id=sec_id, delist_date=delist_date)
-        return DelistingEvent(sec_id=sec_id, cik=cik, ticker=ticker, delist_date=delist_date, record=rec,
+        return Delisting(sec_id=sec_id, cik=cik, ticker=ticker, delist_date=delist_date, record=rec,
                               last_trade=LastTrade(last_trade_day, "notice_a", ()), form25=None, form25_sub=None,
                               exchange="NYSE")
 
@@ -1163,7 +1163,7 @@ def test_a_blank_dlret_with_no_flags_still_reaches_review_as_fix_no_dlret(fake_e
     record = DelistRecord(ticker="AET", cik=1122304, observed_delist_date="2018-11-28", crsp_code=470,
                           bucket=CrspBucket.LIQUIDATION, confidence="high", reason="bankruptcy",
                           evidence={"flags": []}, sec_id="BBG000FJLFX8", delist_date="2018-12-09")
-    ev = DelistingEvent(sec_id="BBG000FJLFX8", cik=1122304, ticker="AET", delist_date="2018-12-09", record=record,
+    ev = Delisting(sec_id="BBG000FJLFX8", cik=1122304, ticker="AET", delist_date="2018-12-09", record=record,
                         last_trade=LastTrade(date(2018, 11, 28), "notice_a", ()), form25=None, form25_sub=None,
                         exchange="NYSE")
 
@@ -1238,7 +1238,7 @@ def test_successor_search_quotes_the_predecessor_issuers_edgar_name(fake_edgar, 
     record = DelistRecord(ticker="GOOGL", cik=1288776, observed_delist_date="2015-10-02", crsp_code=300,
                           bucket=CrspBucket.EXCHANGE_TRANSFER, confidence="high", reason="holdco reorg",
                           evidence={"flags": ["successor_unknown"]}, sec_id="BBGGOOGLEA1", delist_date="2015-10-12")
-    ev = DelistingEvent(sec_id="BBGGOOGLEA1", cik=1288776, ticker="GOOGL", delist_date="2015-10-12", record=record,
+    ev = Delisting(sec_id="BBGGOOGLEA1", cik=1288776, ticker="GOOGL", delist_date="2015-10-12", record=record,
                         last_trade=LastTrade(date(2015, 10, 2), "notice_a", ()), form25=None, form25_sub=None,
                         exchange="NASDAQ")
 
@@ -1290,7 +1290,7 @@ def test_the_resolver_tier_reaches_the_delisting_row(fake_edgar, tmp_path, pinne
         obs = [Observation("AET", "2017-06-30", "AETNA INC"), Observation("AET", "2018-06-29", "AETNA INC")]
         index = ObservationIndex(obs)
         clients.resolver = TickerResolver(fake_edgar, manual_overrides={"AET": 1122304},
-                                          member_names=index.name_on, cik_map=index.cik_pin_on)
+                                          observed_names=index.name_on, cik_pins=index.cik_pin_on)
     run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
     (d,) = read_table("delistings", table_path(tmp_path, "delistings"))
     assert d["sec_id"] == "BBG000FJLFX8" and d["resolution_source"] == source
@@ -1370,7 +1370,7 @@ def test_backfilled_names_lose_no_observation_and_are_reviewed(fake_edgar, tmp_p
                   "name": "ACE LTD", "securityType": "Common Stock", "securityType2": "Common Stock"}]
     index = ObservationIndex(obs)
     resolver = TickerResolver(fake_edgar, manual_overrides={"CB": 896159, "AGN": 1578845},
-                              member_names=index.name_on, cik_map=index.cik_pin_on)
+                              observed_names=index.name_on, cik_pins=index.cik_pin_on)
     figi = _MapFigi({
         ("ID_CUSIP", "171232101"): _figi_answer("BBGCHUBBCRP", "CB", "CHUBB CORP"),
         ("ID_CINS", "H1467J104"): _figi_answer("BBGCHUBBLTD", "CB", "CHUBB LTD"),
@@ -1622,7 +1622,7 @@ def _reorg_run(fake_edgar, tmp_path, monkeypatch, new_dates=("2024-10-02", "2024
                           bucket=CrspBucket.EXCHANGE_TRANSFER, confidence="medium", reason="Continued filings",
                           evidence={"flags": ["no_form25", "successor_unknown"]}, sec_id="BBGBLKOLD01",
                           delist_date="2024-10-01")
-    ev = DelistingEvent(sec_id="BBGBLKOLD01", cik=1364742, ticker="BLK", delist_date="2024-10-01", record=record,
+    ev = Delisting(sec_id="BBGBLKOLD01", cik=1364742, ticker="BLK", delist_date="2024-10-01", record=record,
                         last_trade=LastTrade(date(2024, 10, 1), "", ()), form25=None, form25_sub=None,
                         exchange="NYSE")
 
@@ -1670,7 +1670,7 @@ def test_with_no_last_trade_date_the_window_is_anchored_on_the_form25_filing():
                           evidence={"flags": ["successor_unknown"]}, sec_id="BBGAPAOLD01", delist_date="2021-03-14")
     sub = EdgarSubmission("0001354457-21-000304", "25-NSE", "2021-03-04", "", "", "p.xml")
     # the delisting's ticker is the fails rows' deleted-symbol spelling; the old line's own ticker is APA
-    ev = DelistingEvent(sec_id="BBGAPAOLD01", cik=6769, ticker="APAXXXX", delist_date="2021-03-14", record=record,
+    ev = Delisting(sec_id="BBGAPAOLD01", cik=6769, ticker="APAXXXX", delist_date="2021-03-14", record=record,
                         last_trade=LastTrade(None, "", ("no_last_trade_date",)), form25=None, form25_sub=sub,
                         exchange="NASDAQ")
     starts = {"BBGAPAOLD01": SecurityStart("2007-12-17", 6769, {"APA"}),
@@ -1884,7 +1884,7 @@ def _nutrisystem_event():
     record = DelistRecord(ticker="NTRI", cik=1096376, observed_delist_date="2019-03-07", crsp_code=231,
                           bucket=CrspBucket.MERGER, confidence="high", reason="x", evidence={"flags": []},
                           sec_id="BBGNTRI0001", delist_date="2019-03-17")
-    return DelistingEvent(sec_id="BBGNTRI0001", cik=1096376, ticker="NTRI", delist_date="2019-03-17",
+    return Delisting(sec_id="BBGNTRI0001", cik=1096376, ticker="NTRI", delist_date="2019-03-17",
                           record=record, last_trade=LastTrade(date(2019, 3, 7), "midas", ()), form25=None,
                           form25_sub=None, exchange="NASDAQ")
 

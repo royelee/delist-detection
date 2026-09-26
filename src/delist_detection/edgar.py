@@ -116,7 +116,7 @@ def _trim_hits(hits: Any) -> list[dict]:
 
 
 def submissions_fresh_after(on: date, today: date | None = None) -> date:
-    """The `fresh_after` for reading a company's submissions about an event on `on`:
+    """The `fresh_after` for reading an issuer's submissions about an event on `on`:
     `min(on + 45 days, today)`, where `today` is the run date (default: the clock).
     The classifier and the resolver both use it."""
     return min(on + timedelta(days=SUBMISSIONS_FRESH_DAYS), today or date.today())
@@ -697,7 +697,7 @@ class EdgarClient:
                         # a transport error, below.
                         raise requests.RequestException(f"EDGAR sent a non-JSON 200 for {url}") from exc
             except requests.RequestException:
-                # A failed refresh must not turn a company with a usable cached copy
+                # A failed refresh must not turn an issuer with a usable cached copy
                 # into an error row -- every event newer than SUBMISSIONS_FRESH_DAYS
                 # refetches on every run. Serve the cache, marked stale in the
                 # returned dict only, so callers can flag the row.

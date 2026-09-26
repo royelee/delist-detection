@@ -7,7 +7,7 @@ from collections import Counter
 from collections.abc import Collection
 from datetime import date, timedelta
 
-from .delistings import DelistingEvent
+from .delistings import Delisting
 from .figi_resolution import FigiCandidate, accept, us_candidates
 from .ftd import FtdIndex, FtdRow
 from .listing_status import edgar_lists
@@ -36,12 +36,12 @@ def find_acquirer(figi, ftd: FtdIndex, acq: str, day: date,
     return (cand, rows) if cand is not None else None
 
 
-def acquirer_cik(resolver, edgar, acq: str, day: date, target: DelistingEvent) -> int | None:
+def acquirer_cik(resolver, edgar, acq: str, day: date, target: Delisting) -> int | None:
     """The acquirer's issuer CIK. The resolver answers for (ticker, day), so an
     acquirer that took the target's own ticker (Progressive Waste becoming
     Waste Connections under WCN) resolves to the target's CIK, often through the
     target era's pin. Then the SEC ticker map's holder (company_tickers.json)
-    stands in when it is a different company whose EDGAR record lists the
+    stands in when it is a different issuer whose EDGAR record lists the
     ticker on a major exchange today; otherwise the CIK is left unknown rather
     than copied from the target."""
     cik = resolver.resolve(acq, day.isoformat()).cik

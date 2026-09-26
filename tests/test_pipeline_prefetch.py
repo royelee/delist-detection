@@ -19,7 +19,7 @@ import delist_detection.pipeline as pipeline
 from delist_detection import edgar
 from delist_detection.classifier import DelistClassifier, DelistRecord
 from delist_detection.crsp_codes import CrspBucket
-from delist_detection.delistings import DelistingEvent
+from delist_detection.delistings import Delisting
 from delist_detection.edgar import EFTS_KEY, EFTS_SCHEMA, FETCHED_KEY, EdgarBlocked, EdgarClient
 from delist_detection.last_trade import LastTrade
 from delist_detection.midas import MIDAS_INDEX_URL, MidasClient
@@ -89,8 +89,8 @@ def test_resolver_answers_are_saved_even_when_a_later_stage_is_refused(fake_edga
     obs = [Observation("BAD", "2023-05-10", "Bad Co.")]
     index = ObservationIndex(obs)
     _, clients = _index_clients(fake_edgar, obs, [], {})
-    clients.resolver = TickerResolver(fake_edgar, cache_path=cache, member_names=index.name_on,
-                                      cik_map=index.cik_pin_on, batch_writes=True)
+    clients.resolver = TickerResolver(fake_edgar, cache_path=cache, observed_names=index.name_on,
+                                      cik_pins=index.cik_pin_on, batch_writes=True)
 
     def blocked(*a, **k):
         raise EdgarBlocked("SEC returned 403")
@@ -112,8 +112,8 @@ def test_answers_resolved_before_an_abort_inside_issuer_resolution_are_saved(fak
     obs = [Observation("BAD", "2023-05-10", "Bad Co."), Observation("LIQ", "2019-11-06", "Liquidating Trust")]
     index = ObservationIndex(obs)
     _, clients = _index_clients(fake_edgar, obs, [], {})
-    clients.resolver = TickerResolver(fake_edgar, cache_path=cache, member_names=index.name_on,
-                                      cik_map=index.cik_pin_on, batch_writes=True)
+    clients.resolver = TickerResolver(fake_edgar, cache_path=cache, observed_names=index.name_on,
+                                      cik_pins=index.cik_pin_on, batch_writes=True)
     real = TickerResolver.resolve
 
     def cut_short(self, ticker, observed_date=None, **kw):
@@ -379,7 +379,7 @@ def test_the_successor_search_is_warmed_with_the_query_the_sequential_pass_sends
                               bucket=CrspBucket.EXCHANGE_TRANSFER, confidence="high", reason="holdco reorg",
                               evidence={"flags": ["successor_unknown"]}, sec_id="BBGGOOGLEA1",
                               delist_date="2015-10-12")
-        return DelistingEvent(sec_id="BBGGOOGLEA1", cik=1288776, ticker="GOOGL", delist_date="2015-10-12",
+        return Delisting(sec_id="BBGGOOGLEA1", cik=1288776, ticker="GOOGL", delist_date="2015-10-12",
                               record=record, last_trade=LastTrade(date(2015, 10, 2), "notice_a", ()),
                               form25=None, form25_sub=None, exchange="NASDAQ")
 
@@ -565,8 +565,8 @@ def _offline_run(root, out, workers, *, live_cik=None):
            Observation("XFR", "2018-12-31", "XFR CORP", cik=3333),
            Observation("LIVE", "2025-06-30", "LIVE CO", cik=live_cik)]
     index = ObservationIndex(obs)
-    resolver = TickerResolver(edgar_client, cache_path=root / "ticker_resolution.json", member_names=index.name_on,
-                              cik_map=index.cik_pin_on, today=AS_OF, batch_writes=True)
+    resolver = TickerResolver(edgar_client, cache_path=root / "ticker_resolution.json", observed_names=index.name_on,
+                              cik_pins=index.cik_pin_on, today=AS_OF, batch_writes=True)
     clients = Clients(edgar=edgar_client, resolver=resolver,
                       classifier=DelistClassifier(edgar_client, resolver, today=AS_OF), figi=_Figi(),
                       ftd_client=_FtdClient(), midas=MidasClient(root / "midas", session=sec, user_agent=UA),

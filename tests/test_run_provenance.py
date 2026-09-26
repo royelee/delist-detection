@@ -11,7 +11,7 @@ import delist_detection.pipeline as pipeline
 from delist_detection import edgar, manifest
 from delist_detection.classifier import DelistRecord
 from delist_detection.crsp_codes import CrspBucket
-from delist_detection.delistings import DelistingEvent
+from delist_detection.delistings import Delisting
 from delist_detection.edgar import SEC_STATS, EdgarBlocked
 from delist_detection.last_trade import LastTrade
 from delist_detection.observations import Observation
@@ -98,7 +98,7 @@ def test_a_successor_search_whose_efts_refetch_failed_is_flagged_resolution_degr
                           bucket=CrspBucket.EXCHANGE_TRANSFER, confidence="high", reason="moved exchanges",
                           evidence={"flags": ["successor_unknown"]}, sec_id="BBG000FJLFX8",
                           delist_date="2018-12-09")
-    ev = DelistingEvent(sec_id="BBG000FJLFX8", cik=1122304, ticker="AET", delist_date="2018-12-09", record=record,
+    ev = Delisting(sec_id="BBG000FJLFX8", cik=1122304, ticker="AET", delist_date="2018-12-09", record=record,
                         last_trade=LastTrade(date(2018, 11, 28), "notice_a", ()), form25=None, form25_sub=None,
                         exchange="NYSE")
 

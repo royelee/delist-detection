@@ -52,7 +52,9 @@ EXCHANGE_PREFERENCE = ("NYSE", "NASDAQ", "NYSE AMERICAN", "CBOE BZX", "NYSE ARCA
 
 
 @dataclass
-class DelistingEvent:
+class Delisting:
+    """One delisting of one security (CONTEXT.md): the Form 25 group (or the
+    fallback filing) that ended its listing, dated and classified (`record`)."""
     sec_id: str
     cik: int
     ticker: str
@@ -254,7 +256,7 @@ class DelistingFinder:
                                  delist_date=effective_date(sub.filing_date)))
 
     # -- main ------------------------------------------------------------
-    def find(self, ctx: SecurityContext) -> tuple[list[DelistingEvent], list[ReviewItem]]:
+    def find(self, ctx: SecurityContext) -> tuple[list[Delisting], list[ReviewItem]]:
         sec = ctx.security
         if not sec.eras:
             return [], []
@@ -333,8 +335,8 @@ class DelistingFinder:
                     continue        # the next 10-K cover still names it: another class left, not this one
             candidates.append((sub, f25))
 
-        events: list[DelistingEvent] = []
-        last_definitive: DelistingEvent | None = None
+        events: list[Delisting] = []
+        last_definitive: Delisting | None = None
         for group in self._group(candidates):
             earliest_sub = min(group, key=lambda item: item[0].filing_date)[0]
             if last_definitive is not None:
@@ -379,7 +381,7 @@ class DelistingFinder:
 
     def _build_event(self, ctx: SecurityContext, cik: int, filings: list[EdgarSubmission],
                      group: list[tuple[EdgarSubmission, Form25]], eff: str, continued: bool,
-                     extra_flags: tuple[str, ...] = ()) -> DelistingEvent:
+                     extra_flags: tuple[str, ...] = ()) -> Delisting:
         sec = ctx.security
         winner_sub, winner_f25 = min(group, key=self._exchange_rank)
         filing_ticker = ctx.ticker_on(winner_sub.filing_date) or sec.eras[-1].ticker
@@ -396,7 +398,7 @@ class DelistingFinder:
 
     def _event(self, sec: Security, cik: int, ticker: str, delist_date: str, rec: DelistRecord, lt: LastTrade,
                f25: Form25 | None, sub: EdgarSubmission | None, continued: bool,
-               extra_flags: tuple[str, ...] = (), exchange: str = "") -> DelistingEvent:
+               extra_flags: tuple[str, ...] = (), exchange: str = "") -> Delisting:
         rec.sec_id = sec.sec_id
         rec.delist_date = delist_date
         flags = list(lt.flags) + list(extra_flags)
@@ -405,7 +407,7 @@ class DelistingFinder:
                 rec.successor_sec_id = sec.sec_id
             else:
                 flags.append("successor_unknown")
-        event = DelistingEvent(sec.sec_id, cik, ticker, delist_date, rec, lt, f25, sub,
+        event = Delisting(sec.sec_id, cik, ticker, delist_date, rec, lt, f25, sub,
                                f25.exchange if f25 else exchange)
         for f in flags:
             if f not in event.flags:
@@ -471,7 +473,7 @@ class DelistingFinder:
         return group
 
     def _fallback(self, ctx: SecurityContext, cik: int, filings: list[EdgarSubmission],
-                  ticker: str, early: list[EdgarSubmission] | None = None) -> DelistingEvent | None:
+                  ticker: str, early: list[EdgarSubmission] | None = None) -> Delisting | None:
         sec = ctx.security
         rec = self.classifier.classify_event(ticker=ticker, cik=cik, anchor_date=ctx.last_seen, name=sec.name,
                                              expected_name=ctx.expected_name, kind=sec.kind, form25=None,

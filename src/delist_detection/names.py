@@ -1,4 +1,4 @@
-"""Company-name tokens and agreement."""
+"""Issuer-name tokens and agreement."""
 from __future__ import annotations
 
 import re
@@ -47,20 +47,20 @@ def names_agree(a: str, b: str) -> bool:
     return need >= 1 and shared >= need
 
 
-# What a fails-to-deliver description adds after the company's name: the kind of
+# What a fails-to-deliver description adds after the issuer's name: the kind of
 # share and how it is held ("COM STK", "ADR REP 2 ORD SHS", "SH BEN INT", "SER N").
 _SECURITY_WORDS = {"COM", "STK", "SHS", "ORD", "ORDINARY", "ADR", "ADS", "SPON", "SPONSORED", "REP", "USD",
                    "NPV", "PAR", "BEN", "INT", "SBI", "VOTING", "NON", "SER", "DEP"}
 
 
-def _company_part(description: str) -> str:
+def _name_part(description: str) -> str:
     """A fails-to-deliver description without its security tail: the par value
     or the state of incorporation follows a ';' or '(' ("APPLE INC;COM NPV",
     "CYTTA CORP NEW COM STK (NV)")."""
     return re.split(r"[;(]", (description or "").upper(), maxsplit=1)[0]
 
 
-def _company_words(text: str) -> list[set[str]]:
+def _issuer_words(text: str) -> list[set[str]]:
     """`_words` minus security words, each word also without a plural S
     (HANESBRANDS and HANESBRAND are one word)."""
     out = []
@@ -89,13 +89,13 @@ def _joined(text: str) -> set[str]:
 
 
 def description_matches(description: str, names: Iterable[str]) -> bool:
-    """Whether a fails-to-deliver row's `description` can name the company known
+    """Whether a fails-to-deliver row's `description` can name the issuer known
     by one of `names` (its observed names and the issuer's EDGAR names, current
     and former). SEC cuts descriptions at 30 characters, abbreviates freely and
     keeps an old name for years after a rename, so this is much looser than
-    `names_agree`: it only has to tell another company on the same ticker
+    `names_agree`: it only has to tell another issuer on the same ticker
     (Cervecerias Unidas on Clear Channel's CCU, Stantec on Station Casinos' STN)
-    from the company itself.
+    from the issuer itself.
 
     A description matches when, leaving out its security words (COM STK, ADR,
     ORD SHS, ...), one of its words is a word of a name (a plural S aside:
@@ -105,8 +105,8 @@ def description_matches(description: str, names: Iterable[str]) -> bool:
     (MC DERMOTT, BORG WARNER). With nothing to compare (no word left on one
     side: "3M COMPANY", "HP INC COM STK") it matches."""
     names = [n for n in names if n]
-    d_words = _company_words(_company_part(description))
-    n_words = [w for n in names for w in _company_words(n)]
+    d_words = _issuer_words(_name_part(description))
+    n_words = [w for n in names for w in _issuer_words(n)]
     if not d_words or not n_words:
         return True
     d_forms = {f for w in d_words for f in w}
@@ -115,5 +115,5 @@ def description_matches(description: str, names: Iterable[str]) -> bool:
         return True
     if any(_abbreviates(d, n) for d in d_forms for n in n_forms):
         return True
-    return bool(_joined(_company_part(description)) & n_forms
+    return bool(_joined(_name_part(description)) & n_forms
                 or any(_joined(n) & d_forms for n in names))

@@ -117,7 +117,7 @@ def _client(cache_dir: Path) -> EdgarClient:
 
 
 def _resolver(edgar, row) -> TickerResolver:
-    return TickerResolver(edgar, member_names=lambda *_a, _n=row["member_name"], **_k: _n)
+    return TickerResolver(edgar, observed_names=lambda *_a, _n=row["member_name"], **_k: _n)
 
 
 def _capture_efts(resolver: TickerResolver, t: str, d: str) -> tuple[dict, list, list]:

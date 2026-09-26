@@ -15,7 +15,7 @@ from collections.abc import Callable
 from datetime import date, timedelta
 from typing import NamedTuple
 
-from .delistings import DelistingEvent
+from .delistings import Delisting
 from .figi_resolution import FigiCandidate, share_class_from_name, us_candidates
 from .listing_status import edgar_lists
 from .names import names_agree
@@ -61,7 +61,7 @@ def successor_from_8k12b(search: Callable, figi, *, name: str, day: date, exclud
     `successor_unknown` set rather than guess). A display name with no
     ticker parenthetical yields no candidates and makes no OpenFIGI request.
 
-    A filer is skipped when it is another company's own, still-listed stock:
+    A filer is skipped when it is another issuer's own, still-listed stock:
     its EDGAR name does not agree with the predecessor's `name`, none of its
     tickers is one of the predecessor's `own_tickers`, and (with `edgar`) its
     EDGAR record lists one of them on a major exchange today. Clear Channel
@@ -134,7 +134,7 @@ class SecurityStart(NamedTuple):
     tickers: set[str]
 
 
-def successor_in_run(e: DelistingEvent, starts: dict[str, SecurityStart]) -> tuple[str, str] | None:
+def successor_in_run(e: Delisting, starts: dict[str, SecurityStart]) -> tuple[str, str] | None:
     """The one security of the run (observed or added; `starts` by sec_id)
     whose first sighting falls within
     [last trade - SUCCESSOR_BEFORE_DAYS, last trade + SUCCESSOR_AFTER_DAYS] and
@@ -161,7 +161,7 @@ def successor_in_run(e: DelistingEvent, starts: dict[str, SecurityStart]) -> tup
     return next(iter(found.items())) if len(found) == 1 else None
 
 
-def successor_search_args(edgar, e: DelistingEvent, starts: dict[str, SecurityStart],
+def successor_search_args(edgar, e: Delisting, starts: dict[str, SecurityStart],
                           securities: dict[str, Security]) -> tuple[str, date] | None:
     """The (name, day) the successor search sends EDGAR's full-text search for `e`
     (`successor_query` builds the search), or None when it sends none: the

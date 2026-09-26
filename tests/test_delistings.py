@@ -759,11 +759,11 @@ def test_a_delistings_flags_are_its_records_evidence_flags():
     """One list: what the pipeline adds or clears on the event is what the
     delistings.csv row (built from record.evidence) carries, and a found
     successor clears successor_unknown from both views at once."""
-    from delist_detection.delistings import DelistingEvent
+    from delist_detection.delistings import Delisting
     rec = DelistRecord(ticker="GOOGL", cik=1288776, observed_delist_date="2015-10-02", crsp_code=300,
                        bucket=CrspBucket.EXCHANGE_TRANSFER, confidence="high", reason="holdco reorg",
                        evidence={"flags": ["successor_unknown"]}, sec_id="BBGGOOGLEA1", delist_date="2015-10-12")
-    ev = DelistingEvent("BBGGOOGLEA1", 1288776, "GOOGL", "2015-10-12", rec, LastTrade(date(2015, 10, 2), "", ()),
+    ev = Delisting("BBGGOOGLEA1", 1288776, "GOOGL", "2015-10-12", rec, LastTrade(date(2015, 10, 2), "", ()),
                         None, None, "NASDAQ")
     ev.add_flag("ftd_close_lagged")
     assert rec.evidence["flags"] == ev.flags == ["successor_unknown", "ftd_close_lagged"]

@@ -1,4 +1,4 @@
-"""Pure evidence predicates over one company's EDGAR record. No network."""
+"""Pure evidence predicates over one issuer's EDGAR record. No network."""
 from __future__ import annotations
 
 import re

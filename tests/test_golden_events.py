@@ -22,7 +22,7 @@ def _classify(case, monkeypatch, names=None):
     edgar = GoldenEdgar(case)
     patch_efts(monkeypatch, case)
     name = names if names is not None else (lambda t, d=None: case.member_name)
-    resolver = TickerResolver(edgar, manual_overrides=GOLDEN_MANUAL, member_names=name)
+    resolver = TickerResolver(edgar, manual_overrides=GOLDEN_MANUAL, observed_names=name)
     return DelistClassifier(edgar, resolver).classify_ticker(case.ticker, case.observed_delist_date)
 
 
@@ -61,7 +61,7 @@ def test_golden_classify_event_matches_classify_ticker(case, monkeypatch):
     edgar = GoldenEdgar(case)
     patch_efts(monkeypatch, case)
     resolver = TickerResolver(edgar, manual_overrides=GOLDEN_MANUAL,
-                              member_names=lambda t, d=None: case.member_name)
+                              observed_names=lambda t, d=None: case.member_name)
     clf = DelistClassifier(edgar, resolver)
     old = clf.classify_ticker(case.ticker, case.observed_delist_date)
     assert old.cik is not None

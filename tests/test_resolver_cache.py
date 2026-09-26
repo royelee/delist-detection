@@ -32,27 +32,27 @@ def test_an_old_flat_cache_is_ignored_and_replaced(tmp_path, fake_edgar, caplog)
 
 def test_a_v3_cache_round_trips(tmp_path, fake_edgar):
     cache = tmp_path / "res.json"
-    r = TickerResolver(fake_edgar, cache_path=cache, member_names=_member("Altair Engineering Inc"))
+    r = TickerResolver(fake_edgar, cache_path=cache, observed_names=_member("Altair Engineering Inc"))
     assert r.resolve("ALTR", "2025-03-26").cik == 1701732
     saved = json.loads(cache.read_text())
     assert saved == {"__version__": 3, "entries": {KEY: {
         "ticker": "ALTR", "cik": 1701732, "name": "Altair Engineering Inc.",
         "source": "company_tickers", "member_name": "Altair Engineering Inc"}}}
     # a fresh resolver answers from the file, with no EDGAR reads
-    r2 = TickerResolver(None, cache_path=cache, member_names=_member("Altair Engineering Inc"))
+    r2 = TickerResolver(None, cache_path=cache, observed_names=_member("Altair Engineering Inc"))
     assert r2.resolve("ALTR", "2025-03-26").cik == 1701732
 
 
 def test_a_different_member_name_misses_the_cache(tmp_path, fake_edgar):
     cache = tmp_path / "res.json"
     cache.write_text(json.dumps({"__version__": 3, "entries": {KEY: {**STALE, "member_name": "Altera Corp"}}}))
-    same = TickerResolver(fake_edgar, cache_path=cache, member_names=_member("Altera Corp"))
+    same = TickerResolver(fake_edgar, cache_path=cache, observed_names=_member("Altera Corp"))
     assert same.resolve("ALTR", "2025-03-26").cik == 999999
-    other = TickerResolver(fake_edgar, cache_path=cache, member_names=_member("Altair Engineering Inc"))
+    other = TickerResolver(fake_edgar, cache_path=cache, observed_names=_member("Altair Engineering Inc"))
     assert other.resolve("ALTR", "2025-03-26").cik == 1701732
     # an entry saved without a member name misses a lookup that has one
     cache.write_text(json.dumps({"__version__": 3, "entries": {KEY: {**STALE, "member_name": None}}}))
-    named = TickerResolver(fake_edgar, cache_path=cache, member_names=_member("Altair Engineering Inc"))
+    named = TickerResolver(fake_edgar, cache_path=cache, observed_names=_member("Altair Engineering Inc"))
     assert named.resolve("ALTR", "2025-03-26").cik == 1701732
 
 
@@ -117,7 +117,7 @@ def test_every_resolver_read_is_fresh_past_the_event(fake_edgar, monkeypatch):
     monkeypatch.setattr(TickerResolver, "_efts_pre_delist_frequency_ranked",
                         lambda self, t, d, top_n=5: [(999001, "Bad Co.")])
     e = _RecordingEdgar(fake_edgar)
-    r = TickerResolver(e, member_names=_member("Bad Company Holdings"))
+    r = TickerResolver(e, observed_names=_member("Bad Company Holdings"))
     assert r.resolve("ZZZ", "2023-05-12").cik == 999001
     want = date(2023, 6, 26)                      # observed + 45 days (before today)
     assert e.log and {x[2] for x in e.log if x[0] == "sub"} == {want}
@@ -184,7 +184,7 @@ def test_a_cache_drops_only_the_answers_of_a_retired_rule(tmp_path, fake_edgar):
                              "source": "efts_name_mismatch", "member_name": "MACYS INC"},
             "DDS|2026-08-24": {"ticker": "DDS", "cik": 28917, "name": "DILLARD'S, INC.",
                                "source": "company_tickers_name_mismatch", "member_name": "DILLARDS INC CLASS A"}}}))
-        r = TickerResolver(fake_edgar, cache_path=cache, member_names=_member("Altera Corp"))
+        r = TickerResolver(fake_edgar, cache_path=cache, observed_names=_member("Altera Corp"))
         assert set(r._memo) == {KEY, "M|2026-06-30"}
 
 
@@ -225,7 +225,7 @@ class _StaleSearch:
 
 def test_a_name_search_answered_from_a_stale_hit_is_not_persisted(tmp_path, fake_edgar):
     cache = tmp_path / "res.json"
-    r = TickerResolver(_StaleSearch(fake_edgar), cache_path=cache, member_names=_member("Liquidating Trust"))
+    r = TickerResolver(_StaleSearch(fake_edgar), cache_path=cache, observed_names=_member("Liquidating Trust"))
     res = r.resolve("NOPE", "2019-11-06")
     assert (res.cik, res.source) == (999002, "name_search")
     assert r._transient is True
@@ -248,7 +248,7 @@ class _SearchDown:
 
 def test_a_company_search_that_could_not_be_sent_marks_the_resolve_transient(fake_edgar):
     e = _SearchDown(fake_edgar)
-    r = TickerResolver(e, member_names=_member("Nope Holdings Inc"))
+    r = TickerResolver(e, observed_names=_member("Nope Holdings Inc"))
     assert r.resolve("NOPE", "2024-01-01").cik is None
     assert e.searches > 0 and r._transient is True
 
@@ -350,7 +350,7 @@ def test_a_shadow_reads_the_ticker_map_only_when_an_era_needs_it(fake_edgar):
     pin, manual override and memo; a shadow built before that must not read it
     sooner, and once its resolver has the map it shares it."""
     e = _CountingTickers(fake_edgar)
-    r = TickerResolver(e, cik_map=lambda t, d=None: 999001 if t == "BAD" else None)
+    r = TickerResolver(e, cik_pins=lambda t, d=None: 999001 if t == "BAD" else None)
     s = r.shadow()
     assert e.ticker_reads == 0
     assert s.resolve("BAD", "2023-05-10").cik == 999001          # pinned: no map needed
