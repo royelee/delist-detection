@@ -183,7 +183,8 @@ or raw fetch (`fetch_filing_text` and `fetch_filing_raw` are both retried the
 same way), a full-text-search query, or a MIDAS/FTD ZIP download is retried up
 to 3 attempts with 2s/4s backoff (`edgar.retry_request`, inside
 `edgar.sec_get`, the one request path `EdgarClient`, `sec_http.py` and
-`verify_against_web.py` share) before giving up; a 403/429 still raises `EdgarBlocked`
+`verify_against_web.py` share; `verify_against_web.py` asks it for a single
+attempt) before giving up; a 403/429 still raises `EdgarBlocked`
 immediately, never retried, and a failure is never cached as an answer. A
 MIDAS quarter that keeps failing to download, or whose ZIP SEC no longer
 serves (a 404), is remembered in-memory (`MidasClient`) for the rest of the

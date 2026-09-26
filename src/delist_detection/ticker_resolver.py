@@ -18,8 +18,9 @@ from typing import Iterable
 import requests
 
 from .atomic_io import clean_orphan_temps, write_atomic
-from .edgar import STALE_KEY, EdgarBlocked, EdgarClient, submissions_fresh_after
+from .edgar import STALE_KEY, EdgarClient, submissions_fresh_after
 from .evidence import edgar_names, first_filing, names_near, parse_day
+from .fatal import FATAL
 from .names import name_tokens, names_agree
 
 log = logging.getLogger(__name__)
@@ -152,7 +153,7 @@ class TickerResolver:
         try:
             sub = self._submissions(cik, observed_date)
             filings = self.edgar.recent_filings(cik)
-        except EdgarBlocked:
+        except FATAL:
             raise
         except Exception as e:
             self._note_transient(e)
@@ -395,7 +396,7 @@ class TickerResolver:
             for form in ("25-NSE", "25", "15-12G", ""):
                 try:
                     hits = self.edgar.company_search_atom(variant, form_type=form)
-                except EdgarBlocked:
+                except FATAL:
                     raise
                 except Exception as e:
                     self._note_transient(e)
@@ -452,7 +453,7 @@ class TickerResolver:
         """
         try:
             sub = self._submissions(cik, observed_date)
-        except EdgarBlocked:
+        except FATAL:
             raise
         except Exception as e:
             self._note_transient(e)
@@ -481,7 +482,7 @@ class TickerResolver:
             return True
         try:
             subs = self._filings(cik, observed_date)
-        except EdgarBlocked:
+        except FATAL:
             raise
         except Exception as e:
             self._note_transient(e)

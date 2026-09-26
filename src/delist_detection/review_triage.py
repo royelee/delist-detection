@@ -457,7 +457,7 @@ def append_decisions(path: str | Path, decisions: Sequence[Decision], *, dry_run
     `DECISION_COLUMNS` header when missing. A decision already there (same
     `(sec_id, delist_date, ticker, flag)`, stripped) is skipped, and so is a
     repeat within `decisions` itself. Written atomically
-    (`store.replace_on_success`). Returns how many rows would be added
+    (`atomic_io.replace_on_success`). Returns how many rows would be added
     (`dry_run=True`) or were added.
 
     An existing file is validated with `load_decisions`
