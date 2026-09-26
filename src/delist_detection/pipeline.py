@@ -248,12 +248,14 @@ class _IssuerAnswers:
     the tier that found it), its `Issuer` (`issuers`: CIK and EDGAR names, for
     the eras whose issuer is known -- the one source of an era's CIK), the
     era's last sighting the resolver was asked at, the issuer CIKs whose
-    names read was degraded, and the second pass's answers (`inferred`)."""
+    names read was degraded, and the second pass's answers (`inferred`) and
+    contradictions of first-pass answers (`disagreements`)."""
     resolutions: dict[str, TickerResolution]
     issuers: dict[str, Issuer]
     last_seen: dict[str, str]
     names_degraded: set[int]
     inferred: dict[str, InferredIssuer] = field(default_factory=dict)
+    disagreements: dict[str, InferredIssuer] = field(default_factory=dict)
 
 
 def _resolve_issuers(ctx: _RunContext, eras: list[TickerEra], ftd: FtdIndex) -> _IssuerAnswers:
@@ -281,19 +283,20 @@ def _resolve_issuers(ctx: _RunContext, eras: list[TickerEra], ftd: FtdIndex) -> 
     cik_res = {e.key: clients.resolver.resolve(e.ticker, last_seen[e.key], pin=e.cik_pin, name=e.name)
                for e in eras}
     _flush_memo(clients)
-    inferred = clients.resolver.infer_issuers(eras, ftd, last_seen, {k: r.cik for k, r in cik_res.items()})
+    second = clients.resolver.infer_issuers(eras, ftd, last_seen, {k: r.cik for k, r in cik_res.items()})
     tickers = {e.key: e.ticker for e in eras}
-    for key, found in inferred.items():
+    for key, found in second.inferred.items():
         cik_res[key] = TickerResolution(tickers[key], found.cik, None, found.source)
-    if inferred:
-        ctx.log(f"{len(inferred)} issuers inferred in the resolver's second pass")
+    ctx.log(f"resolver's second pass: {len(second.inferred)} issuers inferred, "
+            f"{len(second.disagreements)} first-pass answers its CUSIP evidence contradicts")
     ciks = {k: r.cik for k, r in cik_res.items()}
     issuer_ciks = [cik for cik in dict.fromkeys(ciks.values()) if cik]
     if workers > 1:
         warm(issuer_ciks, clients.edgar.submissions, workers=workers, name="issuer names")
     issuer_names, names_degraded = _issuer_names(clients.edgar, issuer_ciks)
     ctx.meter.done("issuer resolution", mark)
-    return _IssuerAnswers(cik_res, issuers_by_era(ciks, issuer_names), last_seen, names_degraded, inferred)
+    return _IssuerAnswers(cik_res, issuers_by_era(ciks, issuer_names), last_seen, names_degraded, second.inferred,
+                          second.disagreements)
 
 
 def _resolve_securities(ctx: _RunContext, eras: list[TickerEra], era_by_key: dict[str, TickerEra], ftd: FtdIndex,
@@ -324,6 +327,13 @@ def _resolve_securities(ctx: _RunContext, eras: list[TickerEra], era_by_key: dic
         if found is not None:
             review.append(ReviewItem(resolutions[e.key].sec_id or "", e.ticker, found.cik, "issuer_inferred",
                                      f"{e.key} {e.name or ''}: issuer {found.cik} by {found.source}: {found.via}",
+                                     last_seen=e.last))
+        other = answers.disagreements.get(e.key)
+        if other is not None:
+            first = answers.resolutions[e.key]
+            review.append(ReviewItem(resolutions[e.key].sec_id or "", e.ticker, first.cik, "issuer_cusip_disagrees",
+                                     f"{e.key} {e.name or ''}: the resolver gave issuer {first.cik} ({first.source}); "
+                                     f"its CUSIP evidence gives {other.cik} by {other.source}: {other.via}",
                                      last_seen=e.last))
     for e in eras:
         if cik_of(issuers, e.key) in answers.names_degraded:

@@ -77,7 +77,7 @@ def test_severities_follow_the_rulings():
                  "form25_unclassified", "form25_unmatched", "form25_unreadable", "listing_status_unknown",
                  "observed_after_delisting", "member_name_mismatch",
                  "ticker_unconfirmed", "ticker_shared", "ticker_range_overlap", "observation_conflict",
-                 "issuer_inferred"):
+                 "issuer_inferred", "issuer_cusip_disagrees"):
         assert CATALOG[name].severity == "check", name
 
 

@@ -257,6 +257,14 @@ CATALOG: dict[str, FlagInfo] = {
         "Confirm the issuer named in the reason is the company that traded under the ticker then (its EDGAR "
         "names and filings around the era's dates); pin the right cik on the observations if it is wrong, or "
         f"{_ACCEPT}."),
+    "issuer_cusip_disagrees": FlagInfo(
+        "check", "The resolver gave this ticker era one issuer CIK by its ticker or name, but its SEC "
+                 "fails-to-deliver CUSIP evidence points to another (the issuer of an era sharing its CUSIP, or "
+                 "of the new CUSIP its own switched to after a rename); the reason names both. The resolver's "
+                 "answer is kept.",
+        "Check which company traded under the ticker then (the EDGAR names and filings of both CIKs around the "
+        "era's dates); pin the right cik on the observations, or accept it in data/review_decisions.csv if the "
+        "resolver's answer is right."),
 
     # --- info: a less precise source, nothing suggests it is wrong ---
     "no_figi": FlagInfo(

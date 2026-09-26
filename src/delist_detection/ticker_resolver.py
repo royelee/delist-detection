@@ -71,6 +71,16 @@ class InferredIssuer:
     via: str
 
 
+@dataclass(frozen=True)
+class SecondPass:
+    """`TickerResolver.infer_issuers`' answers, by era key: `inferred`, for the
+    eras the first pass left with no CIK; `disagreements`, for the eras whose
+    first-pass CIK their CUSIP evidence (rule C) contradicts -- the first pass's
+    answer stands, and the pipeline flags `issuer_cusip_disagrees`."""
+    inferred: dict[str, InferredIssuer]
+    disagreements: dict[str, InferredIssuer]
+
+
 class TickerResolver:
     def __init__(
         self,
@@ -763,7 +773,7 @@ class TickerResolver:
     GUARD_NAME_DAYS = 30         # a name the candidate took up to this long after a row's date can describe it
 
     def infer_issuers(self, eras: list[TickerEra], ftd: FtdIndex, last_seen: dict[str, str],
-                      ciks: dict[str, int | None]) -> dict[str, InferredIssuer]:
+                      ciks: dict[str, int | None]) -> SecondPass:
         """The second pass: an issuer for each era the first pass left with no
         CIK and that has no pin, in era-key order. A renamed issuer files no
         Form 25 and keeps filing 10-Ks, so the first pass's 8-K frequency tier
@@ -792,7 +802,13 @@ class TickerResolver:
         era is judged against the answers known when the sweep began, and
         sweeps repeat until none adds an answer, so a chain of links resolves
         whatever the key order (MHP shares its CUSIP with MHFI, whose CUSIP
-        switched to SPGI's)."""
+        switched to SPGI's). At the fixed point every answer is checked again.
+
+        Rule C also runs over the eras the first pass answered (unpinned, with
+        enough rows): where it gives another issuer, the first pass's answer
+        stands and the disagreement is returned for review (LSTR@2008's name
+        search took LandStar Inc; the CUSIP it shares with LSTR@2012 is Landstar
+        System's)."""
         rows = {e.key: era_rows(e, ftd, last_seen[e.key]) for e in eras}
         todo = [e for e in sorted(eras, key=lambda e: e.key)
                 if ciks.get(e.key) is None and e.cik_pin is None and not e.sec_id_pin
@@ -848,9 +864,20 @@ class TickerResolver:
                     dropped.append(key)
                 self._mark_inferred(by_key[key], last_seen[key])
             if not dropped:
-                return out
+                break
             for key in dropped:
                 del out[key]
+        disagreements: dict[str, InferredIssuer] = {}
+        for e in sorted(eras, key=lambda e: e.key):
+            first = first_pass.get(e.key)
+            if first is None or e.cik_pin is not None or e.sec_id_pin or len(rows[e.key]) < self.ERA_MIN_ROWS:
+                continue
+            self._transient = False
+            got = self._named(e, self._handoff(rows[e.key], links[e.key], known, ftd, issuer_cusips),
+                              last_seen[e.key])
+            if got is not None and got.cik != first:
+                disagreements[e.key] = got
+        return SecondPass(out, disagreements)
 
     def _named(self, era: TickerEra, got: InferredIssuer | None, last_seen: str) -> InferredIssuer | None:
         """`got`, when one of the era's observed names `names.description_matches`

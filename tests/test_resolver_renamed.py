@@ -23,8 +23,8 @@ from delist_detection.edgar import EdgarSubmission
 from delist_detection.ftd import FtdIndex, FtdRow
 from delist_detection.observations import ObservationIndex, load_observations
 from delist_detection.pipeline import Clients, _RunContext
-from delist_detection.security_master import Handoff, cusip_handoffs, era_last_seen, refine_eras
-from delist_detection.ticker_resolver import TickerResolver
+from delist_detection.security_master import Handoff, cusip_handoffs, era_last_seen, issuers_by_era, refine_eras
+from delist_detection.ticker_resolver import InferredIssuer, TickerResolution, TickerResolver
 
 FIX = Path(__file__).parent / "fixtures" / "eras"
 DATA = json.loads((FIX / "renamed_edgar.json").read_text())
@@ -108,14 +108,22 @@ def _unpinned(era):
     return replace(era, observations=[replace(o, cik=None) for o in era.observations])
 
 
-def _infer(eras, ftd, keys, resolved=None, edgar=None, unpin=()):
-    """Pass 2 over the eras `keys`, the others' pass-1 CIKs given in `resolved`
-    and the eras `unpin` stripped of their cik pin: {era key: (CIK, source)} for
-    each era it answered."""
+def _pinned(era, cik):
+    return replace(era, observations=[replace(o, cik=cik) for o in era.observations])
+
+
+def _second_pass(eras, ftd, keys, resolved=None, edgar=None, unpin=()):
+    """The second pass over the eras `keys`, their first-pass CIKs given in
+    `resolved` (a cik pin otherwise), the eras `unpin` stripped of their pin."""
     chosen = [_unpinned(eras[k]) if k in unpin else eras[k] for k in keys]
     last_seen = {e.key: era_last_seen(e, ftd) for e in chosen}
     ciks = {e.key: (resolved or {}).get(e.key, e.cik_pin) for e in chosen}     # the first pass answers a pin
-    got = TickerResolver(edgar or _Edgar()).infer_issuers(chosen, ftd, last_seen, ciks)
+    return TickerResolver(edgar or _Edgar()).infer_issuers(chosen, ftd, last_seen, ciks)
+
+
+def _infer(eras, ftd, keys, resolved=None, edgar=None, unpin=()):
+    """`_second_pass`'s answers: {era key: (CIK, source)} for each era it answered."""
+    got = _second_pass(eras, ftd, keys, resolved, edgar, unpin).inferred
     return {k: (v.cik, v.source) for k, v in got.items()}
 
 
@@ -455,6 +463,38 @@ def test_a_description_naming_no_issuer_neither_confirms_nor_refutes(eras, ftd, 
     (1048695): the rows that name an issuer name F5, the others say nothing."""
     got = _infer(eras, ftd, list(eras), {**RESOLVED, "FFIV@2021-12-31": 1048695})
     assert got.get("FFIV@2008-01-16") == (1048695, "shared_cusip")
+
+
+def test_cusip_evidence_that_contradicts_a_first_pass_answer_is_reported(eras, ftd, no_frequency):
+    """LSTR@2008 (LANDSTAR SYSTEMS INC) took, by name search, LandStar Inc
+    (1068689; now Data443), another company; LSTR@2012, which shares its CUSIP,
+    is Landstar System (853816) by SEC's ticker map. Rule C runs over eras the
+    first pass answered too: the first pass's answer is kept, and the issuer its
+    CUSIP evidence points to is reported for review. A pinned era is not checked."""
+    lstr = ["LSTR@2008-01-16", "LSTR@2012-06-29"]
+    got = _second_pass(eras, ftd, lstr, {"LSTR@2008-01-16": 1068689, "LSTR@2012-06-29": 853816})
+    assert got.inferred == {}
+    assert got.disagreements["LSTR@2008-01-16"] == InferredIssuer(
+        853816, "shared_cusip", "shares CUSIP 515098101 with LSTR@2012-06-29")
+    pinned = {**eras, "LSTR@2008-01-16": _pinned(eras["LSTR@2008-01-16"], 1068689)}
+    assert "LSTR@2008-01-16" not in _second_pass(pinned, ftd, lstr, {"LSTR@2012-06-29": 853816}).disagreements
+
+
+def test_a_cusip_disagreement_is_flagged_for_review_with_both_issuers(eras, ftd):
+    lstr = [eras["LSTR@2008-01-16"], eras["LSTR@2012-06-29"]]
+    first = {"LSTR@2008-01-16": TickerResolution("LSTR", 1068689, None, "name_search"),
+             "LSTR@2012-06-29": TickerResolution("LSTR", 853816, None, "company_tickers")}
+    answers = pipeline._IssuerAnswers(
+        first, issuers_by_era({k: r.cik for k, r in first.items()}), {e.key: era_last_seen(e, ftd) for e in lstr},
+        set(), disagreements={"LSTR@2008-01-16": InferredIssuer(
+            853816, "shared_cusip", "shares CUSIP 515098101 with LSTR@2012-06-29")})
+    ctx = _ctx(TickerResolver(_Edgar()))
+    ctx.clients.figi = _NoFigi()
+    _, _, review = pipeline._resolve_securities(ctx, lstr, {e.key: e for e in lstr}, ftd, answers)
+    assert [(i.ticker, i.cik, i.reason) for i in review if i.flag == "issuer_cusip_disagrees"] == [
+        ("LSTR", 1068689, "LSTR@2008-01-16 LANDSTAR SYSTEMS INC: the resolver gave issuer 1068689 "
+                          "(name_search); its CUSIP evidence gives 853816 by shared_cusip: shares CUSIP 515098101 "
+                          "with LSTR@2012-06-29")]
 
 
 def test_an_answer_that_turns_ambiguous_once_the_links_settle_is_dropped(eras, ftd, no_frequency, monkeypatch):
