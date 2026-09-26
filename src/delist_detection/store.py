@@ -4,7 +4,8 @@ Every table has one schema here: its column order and its key. All writes go
 through `write_tables`, which formats cells the same way
 everywhere, sorts rows by key (or keeps the given order, for a table whose spec
 has `sort=False`: review.csv comes pre-ordered by `review_triage`), and replaces
-the files only when the whole write succeeds. A later move to DuckDB changes
+the files only once every table's temp file is written (then one rename at a
+time; see `write_tables`). A later move to DuckDB changes
 only this module.
 """
 from __future__ import annotations
@@ -132,11 +133,12 @@ def _write_all(tables: Sequence[tuple[str, Iterable[Mapping[str, object]], str |
 
 
 def write_tables(out_dir: str | Path, tables: Mapping[str, Iterable[Mapping[str, object]]]) -> dict[str, int]:
-    """Write every table in `tables` under `out_dir` atomically as one group
-    (`_write_all`): a later table's formatting or write failure never leaves an
-    earlier table's new file sitting over the previous complete one; on any
-    failure every previous file is left untouched and every temp file is
-    cleaned up.
+    """Write every table in `tables` under `out_dir` as one group (`_write_all`):
+    every table is formatted and written to its own temp file first, so a
+    formatting or write failure in any of them leaves every previous file
+    untouched and every temp file cleaned up. Only then are the temp files
+    renamed into place, one at a time: a process killed between two renames
+    leaves some tables new and the rest old (each one whole).
 
     Returns `{name: row_count}`.
     """

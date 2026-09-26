@@ -562,7 +562,7 @@ python scripts/observations_from_instruments.py --instruments data/delisted_tick
 # or: scripts/observations_from_snapshots.py --dir <folder of dated index-membership CSVs> --out obs.csv
 python scripts/classify_universe.py --observations obs.csv   # → output/{securities,ticker_history,cusip_history,delistings,payouts,review,review_summary}.csv
 
-pytest -q                                # 1186 unit tests, no network
+pytest -q                                # 1248 unit tests, no network
 ```
 
 `classify_universe.py` prints a summary when it finishes: rows written per

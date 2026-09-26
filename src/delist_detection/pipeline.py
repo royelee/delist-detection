@@ -2,7 +2,9 @@
 """End-to-end run: observations -> security master and delistings (spec §8).
 
 Everything is computed first and written last, so a refusal or a bad override
-file never leaves a half-written output over the previous complete one.
+file never leaves a half-written output over the previous complete one (the
+tables are renamed into place one at a time at the very end; see
+`store.write_tables`).
 """
 from __future__ import annotations
 
@@ -891,9 +893,9 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
     review_rows += [item.row() for item in ticker_range_review(th_rows)]
     flags, triaged = _triage(ctx, review_rows, review_decisions, limit)
 
-    # 11. write -- every table formatted and written to temp files first,
-    # renamed into place together, so a later table's failure never leaves an
-    # earlier table's new file sitting over the previous complete one.
+    # 11. write -- every table formatted and written to its temp file first, so
+    # a failure in any leaves every previous table; then renamed into place one
+    # at a time (store.write_tables).
     counts = write_tables(out_dir, {
         "securities": [s.row() for s in securities.values()] + [a.security.row() for a in added.values()],
         "ticker_history": th_rows,

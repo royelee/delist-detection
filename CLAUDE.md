@@ -28,7 +28,7 @@ editable install.
 
 ```bash
 pip install -e .                         # editable install (Python ≥3.10) — once per env
-pytest                                    # full suite (1186 tests, offline, no network)
+pytest                                    # full suite (1248 tests, offline, no network)
 pytest tests/test_payout_extractor.py -v  # one file
 pytest tests/test_payout_extractor.py::test_match_in_cash_family_altr -v   # one test
 
@@ -115,7 +115,8 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
 - `atomic_io.py` — atomic file writes: `write_atomic` (one cache file, durable,
   through a writer-named temp file), `clean_orphan_temps` (a killed writer's
   leftovers), and `replace_on_success`/`replace_all_on_success` (the output
-  tables and the decisions file, replaced only when the whole write succeeds).
+  tables and the decisions file: every temp file is written first and nothing
+  is replaced unless all are; then each is renamed into place, one at a time).
 - `sec_http.py` — throttled, cached `download()`/`get_text()` for the other SEC
   data files (FTD and MIDAS ZIPs and their index pages), sent through
   `edgar.sec_get` (so the same throttle, retries and `EdgarBlocked` on
@@ -234,7 +235,8 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   (`TABLES`), `DelistingKey` (a delisting's `(sec_id, delist_date)` key, here so
   the classification layer — the finder — and the handling layer can both use
   it without one importing the other), `format_cell` (the one cell formatter
-  every table shares), `write_tables`/`read_table` (all-or-nothing write via
+  every table shares), `write_tables`/`read_table` (every table to a temp
+  file first, then renamed into place one by one,
   `atomic_io.replace_all_on_success`), and `read_delistings_frame`
   (delistings.csv as a typed pandas DataFrame: `qlib_adapter.load_delistings`
   reads through it). Every table read — `qlib_adapter`, `accept_review.py`,
@@ -341,9 +343,13 @@ conflate them.
 - **OpenFIGI refusals abort too.** A 401/403 from OpenFIGI raises
   `OpenFigiBlocked` (`openfigi.py`); `classify_universe.py`'s CLI catches it
   alongside `EdgarBlocked` and exits 2. Every exception that stops a run is
-  listed once, in `fatal.FATAL`: the pipeline's per-security and per-payout
-  error handling, `listing_status.listing_answers`, the prefetch pool and the
-  CLI all catch that tuple, so a new one is added there only. A 429 is waited out on the
+  listed once, in `fatal.FATAL`, and every catch site re-raises that tuple
+  before turning a failure into a row, a miss or a transient answer: the
+  pipeline's issuer-names read, delisting search and payout extraction,
+  `listing_status.listing_answers`, the prefetch pool, the ticker resolver's
+  four EDGAR checks (`_fits_date`, `_name_search`, `_name_match_score`,
+  `_validate_cik`), and the CLI, which turns it into the exit code; a new one
+  is added in `fatal.py` only. A 429 is waited out on the
   `ratelimit-*`/`retry-after` headers, never cached as an answer. Timeouts,
   connection errors or 5xx answers that outlast the client's retries raise
   `OpenFigiUnavailable` (not a subclass of `OpenFigiBlocked`): the run stops
@@ -440,9 +446,13 @@ conflate them.
   "rerun classify_universe.py to apply them"; `--dry-run` does not.
 - **Every output is written only after the whole run succeeds.**
   `pipeline.run()` computes every table in memory first and writes all seven
-  only at the end (`store.write_tables`, all or nothing), so a refusal or a
-  bad override CSV midway through a run never leaves a half-written table
-  over the previous complete one.
+  only at the end (`store.write_tables`): each table is formatted and written
+  to its own temp file first, and only then are the temp files renamed over
+  the old tables. So a refusal, a bad override CSV or any failure before the
+  renames leaves every previous table as it was. The renames themselves run
+  one file at a time (`atomic_io.replace_all_on_success`), so a run killed
+  between two renames can leave some tables new and the rest old; each
+  single table is always whole.
 - **`sec_id` is a US composite FIGI, or a placeholder.** When no FIGI can be
   confirmed it is `CIK<cik>-<CLASS>` (`figi_resolution.placeholder_id`) —
   still a stable, joinable key, just not a real FIGI. `figi_resolution.py`

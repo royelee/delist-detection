@@ -97,9 +97,12 @@ def clean_orphan_temps(directory: Path) -> None:
 @contextmanager
 def replace_all_on_success(paths: Sequence[str | Path]) -> Iterator[list[Path]]:
     """Yield one temp path beside each of `paths`; every path is replaced by its
-    temp file, in order, only when the block finishes. On any failure no path
-    is replaced and every temp file is removed, so an abort never leaves a
-    partial file -- or one new file among old ones -- over the last complete set."""
+    temp file, in order, only when the block finishes. A failure inside the
+    block replaces no path and removes every temp file, so it never leaves a
+    partial file, or one new file among old ones, over the last complete set.
+    The replacements themselves are one `os.replace` per path: each file is
+    always whole, but a process killed (or a rename that fails) between two of
+    them leaves the earlier paths new and the later ones old."""
     targets = [Path(p) for p in paths]
     tmps = [p.with_name(f".{p.name}.tmp") for p in targets]
     try:
