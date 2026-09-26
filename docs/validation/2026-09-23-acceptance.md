@@ -1,13 +1,13 @@
-# Acceptance run — security master and delistings (2026-09-23, reruns 2026-09-24 and 2026-09-25)
+# Acceptance run — security master and delistings (2026-09-23, reruns 2026-09-24 to 2026-09-26)
 
 Spec: `docs/superpowers/feature-spec.md` §13. Run on 2026-09-24 against live SEC
 EDGAR, SEC fails-to-deliver (FTD), SEC MIDAS, the Nasdaq halt feed, OpenFIGI and
 OpenAI (`--extract-merger-terms-llm`, model from `CHAT_MODEL`). This note describes
 the run after review fix round 3, on the SEC speed-up (merged at 7779196) plus the
-round-2 and round-3 fixes listed below, **updated for the 2026-09-25 code-review
-fixes, rounds 1 and 2** (see *Code-review fixes (2026-09-25)* and *Code-review
-fixes, round 2* at the end): every count below is from the round-2 rerun unless
-it says otherwise.
+round-2 and round-3 fixes listed below, **updated for the code-review fixes,
+rounds 1 and 2 (2026-09-25) and round 3 (2026-09-26)** (see the three
+*Code-review fixes* sections at the end): every count below is from the round-3
+rerun unless it says otherwise.
 
 ```bash
 DELIST_DETECTION_SEC_RATE_LOCK=/tmp/claude/delist_detection/sec_rate.lock \
@@ -63,8 +63,16 @@ workers:
   3 min 17 s, sent 0 SEC requests and exited 0 with no `error` or
   `resolution_degraded` row.
 
-The tables below and `output/web_verification.csv` are from the code-review
-round-2 rerun (its second pass).
+- **The code-review round-3 rerun** (2026-09-26, code `bd1dcbd`, `--as-of
+  2026-09-25 --sec-workers 1`, run date pinned to the round-2 run's): 3 min 26
+  s, 0 SEC requests, exit 0, no `error` or `resolution_degraded` row. (A
+  first pass of an earlier draft of the share-class rule sent 2 archive
+  requests, 10-K covers around Discovery's 2022 Form 25, now cached.)
+
+The tables below are from the code-review round-3 rerun.
+`output/web_verification.csv` is from the round-2 rerun: the verifier was not
+run again, so round 3's one new delisting row (Discovery Series A 2022) is not
+in it.
 
 ## Input
 
@@ -121,29 +129,30 @@ Wikipedia snapshot CSVs (equities only).
 | `securities.csv` | 2,271 (2,255 observed, 16 added acquirers) |
 | `ticker_history.csv` | 2,851 |
 | `cusip_history.csv` | 2,517 |
-| `delistings.csv` | 1,000 |
+| `delistings.csv` | 1,001 |
 | `payouts.csv` | 627 |
 | `review.csv` | 782 (after triage; 1,220 raw rows before triage existed) |
 
 The old `output/dlret.csv` and `output/delist_classifications.csv` are removed.
 
-**Delistings by bucket:** merger 627, exchange_transfer 307, liquidation 47,
+**Delistings by bucket:** merger 627, exchange_transfer 308, liquidation 47,
 unknown 12, compliance_failure 6, expiration 1.
 
 **Delistings by year:** 2006 1, 2007 29, 2008 40, 2009 40, 2010 32, 2011 41,
 2012 36, 2013 40, 2014 35, 2015 67, 2016 86, 2017 63, 2018 70, 2019 54, 2020 61,
-2021 62, 2022 61, 2023 46, 2024 40, 2025 54, 2026 42.
+2021 62, 2022 62, 2023 46, 2024 40, 2025 54, 2026 42.
 
-**Last trade date source:** MIDAS 530, EX-99.25 notice 192, 8-K item 3.01 30,
+**Last trade date source:** MIDAS 531, EX-99.25 notice 192, 8-K item 3.01 30,
 Nasdaq halt 27, none 221.
 
-**DLRET method:** cash_only 313, exchange_transfer_zero 307, stock_only 123,
+**DLRET method:** cash_only 313, exchange_transfer_zero 308, stock_only 123,
 cash_plus_stock 83, assumed_par 59, shumway_nyse_amex 36, needs_last_trade 35,
 abstain_no_consideration 22, shumway_nasdaq 16, unknown 6.
 
-**FIGI source (securities):** cusip 1,976, ticker 149, placeholder 146.
+**FIGI source (securities):** cusip 2,076, ticker 49, placeholder 146 (a security's
+strongest era since round 3; its earliest era's before: cusip 1,976, ticker 149).
 
-**Resolution source (delistings):** name_search 544, efts 170, company_tickers 128,
+**Resolution source (delistings):** name_search 544, efts 171, company_tickers 128,
 cik_map (pins) 106, manual 37, efts_frequency 12, efts_name_mismatch 1, rename 1,
 none 1.
 
@@ -178,8 +187,8 @@ delisting whose CIK came from `company_tickers.json`. It is noise by design here
 | 3e | HOT, PE, TSS merger, not expiration | PASS: all three code 231 |
 | 3f | Apache: no delisting from the 2020 Chicago withdrawal | PASS: only the 2021-03 APA holdco transfer, linked to APA Corp's line |
 | 3g | GOOG / GOOGL two securities | PASS: BBG009S3NB30 / BBG009S39JX6 |
-| 4 | Every observed security listed today, delisted, or in review | PASS: 2,255 = 1,297 listed + 874 delisted + 84 review, 0 missing (see below) |
-| 5 | `verify_against_web.py` agreement ≥ 98.9% | PASS: 1 of 903 verifiable rows disagrees (99.9%). 97 rows cannot be checked (no Form 25/15 in the window). OK only: 899 / 1,000 = 89.9% |
+| 4 | Every observed security listed today, delisted, or in review | PASS: 2,255 = 1,297 listed + 875 delisted + 83 review, 0 missing (see below) |
+| 5 | `verify_against_web.py` agreement ≥ 98.9% | PASS (round-2 tables; not rerun in round 3): 1 of 903 verifiable rows disagrees (99.9%). 97 rows cannot be checked (no Form 25/15 in the window). OK only: 899 / 1,000 = 89.9% |
 | 6 | `last_trade_close` on ≥ 90% of 2004+ merger delistings | PASS: 570 / 627 = 90.9% with look-back closes; 488 / 627 = 77.8% without them |
 
 **Check 4.** "Listed today" means an open `ticker_history` row, i.e. `listed_today`
@@ -289,9 +298,10 @@ MISMATCH_name 1.
 
 ## Successor links
 
-`successor_sec_id` is filled on 180 of the 307 `exchange_transfer` rows:
+`successor_sec_id` is filled on 181 of the 308 `exchange_transfer` rows:
 
-- 126 point to the security itself (it kept trading after an exchange move).
+- 127 point to the security itself (it kept trading after an exchange move;
+  since round 3 this includes Discovery Series A 2022, see round 3).
 - 54 point to another security of the run, all found by the same-issuer /
   same-ticker rule (024fddc, 700e6d5, 746f2ac). Examples: APA 2021 → APA Corp's
   line, Charter 2016, Apollo 2022, Dell's DVMT tracking stock, Discovery K,
@@ -1073,8 +1083,8 @@ WEAK_no_delist_form 106 → 97).
      securities take the moved eras (ES, CLF, WEC, CXW, NTAP, SM, CNX, AGNC,
      EQT, ICE, PVH, RGA, SWK, CBE, WPG, Wyndham). `figi_source` reads `ticker`
      on 10 of them now, the label of their earliest era; Cooper's
-     `share_class` reads COMMON (was CLASS A) for the same reason; WPG's name
-     is its latest observation, WP GLIMCHER INC.
+     `share_class` reads COMMON (was CLASS A) for the same reason (both FIXED
+     in round 3); WPG's name is its latest observation, WP GLIMCHER INC.
    - **Delistings:** 11 rows gone: the rename rows of NTAP 2008, CNO 2010, SM
      2010, WEC 2015, AGNC 2016, CXW 2016, CLF 2017 and CNX 2017, Cooper's 2009
      redomicile row, Wyndham's backfilled 2014 end and Washington Prime's 2015
@@ -1113,3 +1123,74 @@ the real-ticker era of each finds no FIGI (OpenFIGI knows neither its old CUSIP
 nor its old ticker); GGP 2008 keeps its placeholder and 2009 bankruptcy row;
 AnnTaylor's 2011 rename still ends its sightings (its 2015 merger is not
 reached); CNO's open CUSIP range is Conseco's retired one.
+
+## Code-review fixes, round 3 (2026-09-26)
+
+A third two-axis review. The items that change an output are listed with every
+changed row; the rest change no table (checked by pinned warm reruns, below).
+
+1. **`figi_source` and `share_class` came from a security's earliest era
+   (spec §7.1, §8.4): FIXED (bd1dcbd).** `build_securities` now takes
+   `figi_source` from the security's strongest era (pin, then CUSIP, then
+   ticker, then name search, then placeholder; the earliest era on a tie) and
+   `share_class` from that era; when that era's name gives no class, from the
+   earliest other era of the security that names one. Against the round-2
+   tables:
+   - **`securities.csv`, `figi_source`:** 100 rows go from `ticker` to `cusip`
+     (FIGI sources cusip 1,976 → 2,076, ticker 149 → 49, placeholder 146
+     unchanged). Each is a security whose earliest era was resolved by its
+     ticker and a later era by a CUSIP: 14 of round 2's moved lines (ES, CLF,
+     WEC, CXW, NTAP, SM, CNX, AGNC, EQT, ICE, PVH, RGA, SWK, CBE; round 2's note
+     counted 10) and 86 others, from American Tower and AIG to Aptiv. No
+     `sec_id` changes.
+   - **`securities.csv`, `share_class`, 5 rows:** Cooper Industries
+     BBG000BF2KK4 COMMON → CLASS A (its CUSIP-confirmed plc era, "COOPER
+     INDUSTRIES PLC CL A"); Ralph Lauren BBG000BS0ZF1 COMMON → CLASS A ("RALPH
+     LAUREN CORP CLASS A", CUSIP-confirmed; the earliest era is "POLO RALPH
+     LAUREN CO"); Discovery BBG000CHWP52 COMMON → SERIES A ("DISCOVERY INC
+     SERIES A", CUSIP-confirmed; the earliest era is "DISCOVERY HOLDING CO");
+     Zillow BBG009NRSWJ4 CLASS A → CLASS C (the line is Zillow's class C, Z:
+     its CUSIP-confirmed era is "ZILLOW GROUP INC CLASS C", its earliest,
+     ticker-resolved, Zillow Inc's "ZILLOW INC CLASS A" of 2014); CME Group
+     BBG000BHLYP4 COMMON → CLASS A (its strongest era, the earliest of its
+     CUSIP-confirmed ones, is "CHICAGO MERCANTILE HLDGS", which names no class;
+     its later era "CME GROUP INC CLASS A" gives the class through the
+     fallback). SBA
+     Communications keeps CLASS A: its CUSIP-confirmed era is cut off at "SBA
+     COMMUNICATIONS REIT CORP CLASS", and the fallback takes CLASS A from its
+     earlier eras.
+   - **Discovery Series A, through Form 25 class matching** (the finder
+     matches a Form 25's class text against each security's `share_class`).
+     With DISCA read as COMMON, Discovery's two 25-NSEs of 2022-04-08 were both
+     "ambiguous class" for DISCA and DISCK. Now the Series A filing
+     (0001354457-22-000229) matches DISCA:
+     - `delistings.csv` +1 row: BBG000CHWP52 2022-04-18, DISCA,
+       `exchange_transfer` 304 (medium), last trade 2022-04-08 (MIDAS), close
+       24.43, NASDAQ, DLRET 0 (`exchange_transfer_zero`), no review flag. Its
+       `successor_sec_id` is the security itself: fails rows of its CUSIP
+       25470F104 continue after the effective date, so the finder reads the
+       security as continuing. The handling layer skips such a row (no label,
+       exit or correction). DISCK's row, unchanged, names Warner Bros.
+       Discovery (BBG011386VF4) as successor.
+     - `ticker_history.csv`: DISCA's last range ends 2022-04-08 on NASDAQ (was
+       2022-04-12, no exchange).
+     - `cusip_history.csv`: 25470F104 ends 2022-04-08 (was open to 2025-12-30,
+       from those later fails rows).
+     - `review.csv`: the two `form25_unmatched` rows of 2022-04-18 (DISCA,
+       DISCK) no longer cite the Series A filing, only the Series B one
+       (0001354457-22-000230). Row count, severities and `review_summary.csv`
+       unchanged.
+   - Counts: delistings 1,000 → 1,001 (exchange_transfer 307 → 308; MIDAS last
+     trade 530 → 531; efts resolution 170 → 171); check 4 874 delisted + 84
+     review → 875 + 83; successor links 180 → 181 (self 126 → 127).
+     `payouts.csv`, `review_summary.csv` and every other row are unchanged.
+2. **Spec §17 notes** (no output change): where `share_class` comes from and
+   the strongest-era rule; that D21's check of a caller-supplied observation
+   CUSIP is not built (FNM, FRE and UHALB rely on taking it as given); guard
+   (c)'s wording (it holds whatever the two eras' dates).
+3. **CLI** (no table change): `--as-of YYYY-MM-DD` pins the run date
+   (544fb26), which every rerun above used; exit codes (afe366b): 1 only for
+   an unexpected crash, 4 for an OpenFIGI outage, 2 with one line naming the
+   file and line for a bad input file, including override rows that match no
+   delisting.
+

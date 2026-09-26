@@ -1,14 +1,14 @@
 {
   "as_of": "2026-09-25",
   "cache_answers": {
-    "archives": 6728,
+    "archives": 6731,
     "company_search": 962,
     "company_tickers": 6,
     "full_text_search": 357,
-    "submissions": 16332,
-    "submissions_page": 5098
+    "submissions": 16338,
+    "submissions_page": 5100
   },
-  "code_version": "25dde28-dirty",
+  "code_version": "ab8d051-dirty",
   "degraded_answers": {},
   "latency_ms": {},
   "not_covered": {},

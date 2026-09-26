@@ -1,7 +1,7 @@
 2469 ticker eras
 2660 eras after the FTD split
 issuer resolution: 0 EDGAR requests, 0 SEC data-file downloads (all threads)
-2255 securities; FIGI sources {'cusip': 1960, 'ticker': 149, 'placeholder': 146}
+2255 securities; FIGI sources {'cusip': 2060, 'placeholder': 146, 'ticker': 49}
 [50/2255] securities searched; 23 delistings so far
 [100/2255] securities searched; 45 delistings so far
 [150/2255] securities searched; 64 delistings so far
@@ -21,37 +21,37 @@ issuer resolution: 0 EDGAR requests, 0 SEC data-file downloads (all threads)
 [850/2255] securities searched; 369 delistings so far
 [900/2255] securities searched; 394 delistings so far
 [950/2255] securities searched; 421 delistings so far
-[1000/2255] securities searched; 441 delistings so far
-[1050/2255] securities searched; 455 delistings so far
-[1100/2255] securities searched; 480 delistings so far
-[1150/2255] securities searched; 505 delistings so far
-[1200/2255] securities searched; 530 delistings so far
-[1250/2255] securities searched; 552 delistings so far
-[1300/2255] securities searched; 573 delistings so far
-[1350/2255] securities searched; 596 delistings so far
-[1400/2255] securities searched; 623 delistings so far
-[1450/2255] securities searched; 650 delistings so far
-[1500/2255] securities searched; 671 delistings so far
-[1550/2255] securities searched; 687 delistings so far
-[1600/2255] securities searched; 711 delistings so far
-[1650/2255] securities searched; 727 delistings so far
-[1700/2255] securities searched; 755 delistings so far
-[1750/2255] securities searched; 777 delistings so far
-[1800/2255] securities searched; 792 delistings so far
-[1850/2255] securities searched; 811 delistings so far
-[1900/2255] securities searched; 827 delistings so far
-[1950/2255] securities searched; 841 delistings so far
-[2000/2255] securities searched; 851 delistings so far
-[2050/2255] securities searched; 862 delistings so far
-[2100/2255] securities searched; 868 delistings so far
-[2150/2255] securities searched; 910 delistings so far
-[2200/2255] securities searched; 957 delistings so far
-[2250/2255] securities searched; 994 delistings so far
+[1000/2255] securities searched; 442 delistings so far
+[1050/2255] securities searched; 456 delistings so far
+[1100/2255] securities searched; 481 delistings so far
+[1150/2255] securities searched; 506 delistings so far
+[1200/2255] securities searched; 531 delistings so far
+[1250/2255] securities searched; 553 delistings so far
+[1300/2255] securities searched; 574 delistings so far
+[1350/2255] securities searched; 597 delistings so far
+[1400/2255] securities searched; 624 delistings so far
+[1450/2255] securities searched; 651 delistings so far
+[1500/2255] securities searched; 672 delistings so far
+[1550/2255] securities searched; 688 delistings so far
+[1600/2255] securities searched; 712 delistings so far
+[1650/2255] securities searched; 728 delistings so far
+[1700/2255] securities searched; 756 delistings so far
+[1750/2255] securities searched; 778 delistings so far
+[1800/2255] securities searched; 793 delistings so far
+[1850/2255] securities searched; 812 delistings so far
+[1900/2255] securities searched; 828 delistings so far
+[1950/2255] securities searched; 842 delistings so far
+[2000/2255] securities searched; 852 delistings so far
+[2050/2255] securities searched; 863 delistings so far
+[2100/2255] securities searched; 869 delistings so far
+[2150/2255] securities searched; 911 delistings so far
+[2200/2255] securities searched; 958 delistings so far
+[2250/2255] securities searched; 995 delistings so far
 delisting search: 0 EDGAR requests, 0 SEC data-file downloads (all threads)
 payouts: 0 EDGAR requests, 0 SEC data-file downloads (all threads)
 successor search: 0 EDGAR requests, 0 SEC data-file downloads (all threads)
-Rows written: {'securities': 2271, 'ticker_history': 2851, 'cusip_history': 2517, 'delistings': 1000, 'payouts': 627, 'review': 782, 'review_summary': 32}
-Delistings by bucket: {'merger': 627, 'exchange_transfer': 307, 'liquidation': 47, 'unknown': 12, 'compliance_failure': 6, 'expiration': 1}
-FIGI sources: {'cusip': 1960, 'ticker': 149, 'placeholder': 146}
+Rows written: {'securities': 2271, 'ticker_history': 2851, 'cusip_history': 2517, 'delistings': 1001, 'payouts': 627, 'review': 782, 'review_summary': 32}
+Delistings by bucket: {'merger': 627, 'exchange_transfer': 308, 'liquidation': 47, 'unknown': 12, 'compliance_failure': 6, 'expiration': 1}
+FIGI sources: {'cusip': 2060, 'placeholder': 146, 'ticker': 49}
 Review flags: {'ftd_close_prior': 119, 'resolved_by_current_ticker_map': 128, 'no_form25': 128, 'delist_date_approx': 114, 'successor_unknown': 127, 'ftd_close_lagged': 131, 'acquirer_close_lagged': 29, 'no_last_trade_date': 133, 'no_last_close': 163, 'payout_gate_failed': 12, 'terms_gate_failed': 50, 'merger_at_par': 51, 'last_trade_date_conflict': 45, 'last_trade_date_unconfirmed': 95, 'observed_after_delisting': 29, 'no_evidence_default': 12, 'member_name_mismatch': 28, 'distress_at_normal_price': 3, 'llm_gate_failed': 16, 'resolved_by_cik_map': 9, 'bankruptcy_before_merger': 1, 'bankruptcy_tag_unconfirmed': 1, 'resolved_by_manual_override': 1, 'observation_unresolved': 31, 'no_figi': 156, 'observation_conflict': 6, 'ticker_unconfirmed': 63, 'ended_without_delisting': 93, 'form25_unclassified': 118, 'form25_unmatched': 75, 'ticker_shared': 31}
 Review: 187 fix, 595 check (446 info-only rows hidden, 0 accepted, 0 unmatched decisions)
