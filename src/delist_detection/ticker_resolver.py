@@ -21,7 +21,10 @@ from .atomic_io import clean_orphan_temps, write_atomic
 from .edgar import STALE_KEY, EdgarClient, submissions_fresh_after
 from .evidence import edgar_names, first_filing, names_near, parse_day
 from .fatal import FATAL
-from .names import name_tokens, names_agree
+from .ftd import FtdIndex, FtdRow
+from .names import description_matches, name_tokens, names_agree
+from .observations import TickerEra
+from .security_master import era_rows
 
 log = logging.getLogger(__name__)
 _LOOK_UP_PIN = object()     # resolve(pin=...) default: look the pin up with cik_pins
@@ -52,8 +55,19 @@ class TickerResolution:
     name: str | None
     # 'cik_map' | 'manual' | 'rename' | 'company_tickers' | 'efts' | 'efts_name_mismatch'
     # | 'name_search' | 'efts_frequency' | 'efts_frequency_name_mismatch'
-    # | 'rejected_validation' | 'none'
+    # | 'rejected_validation' | 'none'; the second pass (`TickerResolver.infer_issuers`):
+    # 'efts_frequency_renamed' | 'shared_cusip' | 'cusip_handoff'
     source: str
+
+
+@dataclass(frozen=True)
+class InferredIssuer:
+    """A second-pass answer for an era (`TickerResolver.infer_issuers`): its
+    issuer CIK, the rule that found it (`source`), and what linked them (`via`,
+    for the review item)."""
+    cik: int
+    source: str
+    via: str
 
 
 class TickerResolver:
@@ -740,6 +754,111 @@ class TickerResolver:
         res = TickerResolution(ticker=t, cik=cik, name=name, source=source)
         self._remember(cache_key, res, observed_name)
         return res
+
+    # --- The second pass: eras the first could not resolve -------------------------
+
+    ERA_MIN_ROWS = 3             # an era with fewer fails rows of its own gets no second-pass answer
+    GUARD_NAME_DAYS = 30         # a name the candidate carried this close to a row's date
+
+    def infer_issuers(self, eras: list[TickerEra], ftd: FtdIndex, last_seen: dict[str, str],
+                      ciks: dict[str, int | None]) -> dict[str, InferredIssuer]:
+        """The second pass: an issuer for each era the first pass left with no
+        CIK and that has no pin, in era-key order. A renamed issuer files no
+        Form 25 and keeps filing 10-Ks, so the first pass's 8-K frequency tier
+        rejects it and its company search sees only today's name. The answers
+        depend on the run's other eras and on its fails rows, so they are never
+        saved (the memo keeps only the first pass's).
+
+        Each era is judged on its own fails rows (`security_master.era_rows`,
+        from its first observation to its last sighting `last_seen`); one with
+        fewer than `ERA_MIN_ROWS` gets no answer. A candidate CIK must pass the
+        guard (`_guard`): it existed by the era's first row, on every row's date
+        it carried (within `GUARD_NAME_DAYS`) a name matching the row's
+        description, and it is the only candidate that did.
+
+        B (`efts_frequency_renamed`): the first pass's 8-K frequency candidates,
+        through the guard, and the one left also carried the era's name at its
+        last sighting and filed within `OBSERVED_ALIVE_DAYS` of it (Capri
+        Holdings for KORS@2014)."""
+        rows = {e.key: era_rows(e, ftd, last_seen[e.key]) for e in eras}
+        todo = [e for e in sorted(eras, key=lambda e: e.key)
+                if ciks.get(e.key) is None and e.cik_pin is None and not e.sec_id_pin
+                and len(rows[e.key]) >= self.ERA_MIN_ROWS]
+        out: dict[str, InferredIssuer] = {}
+        for e in todo:
+            self._transient = False
+            got = self._frequency_renamed(e, rows[e.key], last_seen[e.key])
+            if got is not None:
+                out[e.key] = got
+            self._mark_inferred(e, last_seen[e.key])
+        return out
+
+    def _mark_inferred(self, era: TickerEra, last_seen: str) -> None:
+        """A second-pass read that hit a failed request or a stale copy degrades
+        the era's answer, as a first-pass one does (`is_degraded`)."""
+        if self._transient:
+            self._degraded.add(self._key(era.ticker, last_seen, era.name))
+
+    def _guard(self, candidates: Iterable[int], rows: list[FtdRow]) -> int | None:
+        """Guard G: the one candidate (`_fits_rows`) that could be the issuer of
+        `rows`; None when none or several are. The fails descriptions are loose
+        (one shared word matches), so a second match means the rows cannot tell."""
+        passing = [c for c in dict.fromkeys(candidates) if self._fits_rows(c, rows)]
+        return passing[0] if len(passing) == 1 else None
+
+    def _fits_rows(self, cik: int, rows: list[FtdRow]) -> bool:
+        """Whether the CIK existed by the first of `rows` and, on each row's date,
+        carried within `GUARD_NAME_DAYS` a name that `names.description_matches`
+        the row's description. A company founded later (LMCA's 2013 spin-off for
+        2012 rows) or never so named (Penske Automotive for an ETN's rows under
+        UAG) is not the rows' issuer."""
+        try:
+            sub = self._submissions(cik, rows[-1].date)
+            filings = self.edgar.recent_filings(cik)
+        except FATAL:
+            raise
+        except Exception as e:
+            self._note_transient(e)
+            return False
+        first = first_filing(filings)
+        if first is None or first > parse_day(rows[0].date) or not isinstance(sub, dict):
+            return False
+        descriptions: dict[str, set[str]] = {}
+        for r in rows:
+            descriptions.setdefault(r.date, set()).add(r.description)
+        for day, descs in descriptions.items():
+            names = names_near(sub, parse_day(day), self.GUARD_NAME_DAYS)
+            if not names or not all(description_matches(d, names) for d in descs):
+                return False
+        return True
+
+    def _frequency_renamed(self, era: TickerEra, rows: list[FtdRow], last_seen: str) -> InferredIssuer | None:
+        """Fix B: the 8-K frequency candidate that passes the guard, carried the
+        era's name at its last sighting, and filed within `OBSERVED_ALIVE_DAYS`
+        of it."""
+        if not era.name:
+            return None
+        ranked = self._efts_pre_delist_frequency_ranked(era.ticker, last_seen)
+        cik = self._guard([c for c, _ in ranked], rows)
+        on = parse_day(last_seen)
+        if cik is None or on is None:
+            return None
+        try:
+            sub = self._submissions(cik, last_seen)
+            filings = self.edgar.recent_filings(cik)
+        except FATAL:
+            raise
+        except Exception as e:
+            self._note_transient(e)
+            return None
+        named = [n for n in names_near(sub, on) if names_agree(n, era.name)] if isinstance(sub, dict) else []
+        alive = any(abs((d - on).days) <= self.OBSERVED_ALIVE_DAYS
+                    for f in filings if (d := parse_day(f.filing_date)))
+        if not named or not alive:
+            return None
+        return InferredIssuer(cik, "efts_frequency_renamed",
+                              f"the one 8-K frequency candidate whose names match its fails rows; "
+                              f"EDGAR names it {named[0]} then")
 
     def resolve_many(
         self, items: Iterable[tuple[str, str | None]]

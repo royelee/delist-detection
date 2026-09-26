@@ -95,9 +95,22 @@ def eras(index, ftd):
 
 @pytest.fixture
 def frequency(monkeypatch):
-    """The 8-K frequency tier answers with the rank EDGAR gave (the fixture's)."""
+    """The 8-K frequency tier answers with the rank EDGAR gave (the fixture's),
+    or with the rank a test sets for a ticker (`frequency["UAG"] = [...]`)."""
+    given: dict[str, list] = {}
     monkeypatch.setattr(TickerResolver, "_efts_pre_delist_frequency_ranked",
-                        lambda self, t, d, top_n=5: [tuple(x) for x in DATA["frequency"].get(f"{t}|{d}", [])])
+                        lambda self, t, d, top_n=5: [tuple(x) for x in given.get(t, DATA["frequency"].get(f"{t}|{d}", []))])
+    return given
+
+
+def _infer(eras, ftd, keys, resolved=None, edgar=None):
+    """Pass 2 over the eras `keys`, the others' pass-1 CIKs given in `resolved`:
+    {era key: (CIK, source)} for each era it answered."""
+    chosen = [eras[k] for k in keys]
+    last_seen = {e.key: era_last_seen(e, ftd) for e in chosen}
+    ciks = {e.key: (resolved or {}).get(e.key) for e in chosen}
+    got = TickerResolver(edgar or _Edgar()).infer_issuers(chosen, ftd, last_seen, ciks)
+    return {k: (v.cik, v.source) for k, v in got.items()}
 
 
 def test_the_fixture_eras_and_last_sightings_are_the_real_ones(eras, ftd):
@@ -202,3 +215,46 @@ def test_todays_holder_found_by_the_name_search_is_refused_for_an_old_date():
     assert TickerResolver(both).resolve("ALTR", "2015-12-29", name="ALTERA CORP").cik == 768251
     only_altair = _Edgar(tickers=ALTAIR_MAP, search={"ALTERA CORP|25-NSE": [altair]})
     assert TickerResolver(only_altair).resolve("ALTR", "2015-12-29", name="ALTERA CORP").cik is None
+
+
+# --- 1c, fix B: the 8-K frequency rank, through guard G --------------------------------
+
+def test_a_renamed_issuer_that_kept_filing_is_found_by_its_8k_frequency(eras, ftd, frequency):
+    """KORS@2014: Capri Holdings (1530721) leads the rank of 8-Ks naming KORS
+    before 2019-01-03, but kept filing 10-Ks, so the strict check rejects it. It
+    existed by the era's first fails row, carried a name matching every row's
+    description (MICHAEL KORS HLDGS LTD ORD SHS) then, is the only candidate that
+    did, carried the era's name at its last sighting, and filed within 400 days."""
+    assert _infer(eras, ftd, ["KORS@2014-12-31"]) == {"KORS@2014-12-31": (1530721, "efts_frequency_renamed")}
+
+
+def test_two_candidates_passing_the_guard_give_no_answer(eras, ftd, frequency):
+    """GGP@2014 (General Growth Properties, 1496048): Seritage Growth Properties
+    (1628063, first filing 2014-12-19) also ranks, existed by the era's first row,
+    and its name shares GROWTH PROPERTIES with every row's description."""
+    assert [c for c, _ in DATA["frequency"]["GGP|2017-01-27"][:2]] == [1496048, 1628063]
+    assert _infer(eras, ftd, ["GGP@2014-12-31"]) == {}
+
+
+def test_a_candidate_founded_after_the_eras_first_row_is_refused(eras, ftd, frequency):
+    """BWC@2012 (Babcock & Wilcox Co, now BWX Technologies, 1486957): its 2015
+    spin-off Babcock & Wilcox Enterprises (1630805, first filing 2015-03-16) also
+    ranks; offered alone, it is refused."""
+    assert _infer(eras, ftd, ["BWC@2012-06-29"]) == {"BWC@2012-06-29": (1486957, "efts_frequency_renamed")}
+    frequency["BWC"] = [(1630805, "Babcock & Wilcox Enterprises, Inc.")]
+    assert _infer(eras, ftd, ["BWC@2012-06-29"]) == {}
+
+
+def test_rows_of_another_security_under_the_ticker_refuse_the_issuer(eras, ftd, frequency):
+    """UAG@2008 (United Auto Group, now Penske Automotive Group, 1019849): the
+    fails rows under UAG are an exchange-traded note's (E-TRACS UBS BLOOMBERG
+    CMCI AGR), which no name of Penske's matches."""
+    frequency["UAG"] = [(1019849, "PENSKE AUTOMOTIVE GROUP, INC.")]
+    assert _infer(eras, ftd, ["UAG@2008-01-16"]) == {}
+
+
+def test_a_candidate_with_no_filing_within_400_days_of_the_last_sighting_is_refused(eras, ftd, frequency):
+    issuers = dict(DATA["issuers"])
+    capri = issuers["1530721"]
+    issuers["1530721"] = {**capri, "filings": [f for f in capri["filings"] if f[1] < "2017-12-01"]}
+    assert _infer(eras, ftd, ["KORS@2014-12-31"], edgar=_Edgar(issuers)) == {}

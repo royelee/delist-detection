@@ -249,22 +249,30 @@ def candidate_cusips(eras: Sequence[TickerEra], ftd: FtdIndex,
     return out
 
 
+def _own_rows(era: TickerEra, rows: Sequence[FtdRow]) -> list[FtdRow]:
+    """Those of `rows` (under the era's ticker) that are the era's own: of its
+    own FTD CUSIPs when it has them (a name check is too weak: "FOX CORP" agrees
+    with "TWENTY FIRST CENTURY FOX"), else with a description that agrees with
+    an era name (every row, for an era with neither)."""
+    if era.ftd_cusips:
+        return [r for r in rows if r.cusip in era.ftd_cusips]
+    if era.names:
+        return [r for r in rows if any(names_agree(r.description, n) for n in era.names)]
+    return list(rows)
+
+
 def era_last_seen(era: TickerEra, ftd: FtdIndex, horizon_days: int = 400) -> str:
-    """The era's last sighting: its last observation, or a later FTD row under
-    its ticker within `horizon_days` — of the era's own FTD CUSIPs when it has
-    them (a name check is too weak: "FOX CORP" agrees with "TWENTY FIRST
-    CENTURY FOX"), else with a description that agrees with an era name."""
+    """The era's last sighting: its last observation, or a later FTD row of its
+    own (`_own_rows`) under its ticker within `horizon_days`."""
     lo = (date.fromisoformat(era.last) + timedelta(days=1)).isoformat()
     hi = (date.fromisoformat(era.last) + timedelta(days=horizon_days)).isoformat()
-    best = era.last
-    for r in ftd.by_symbol(era.ticker, lo, hi):
-        if era.ftd_cusips:
-            if r.cusip not in era.ftd_cusips:
-                continue
-        elif era.names and not any(names_agree(r.description, n) for n in era.names):
-            continue
-        best = max(best, r.date)
-    return best
+    return max([era.last, *(r.date for r in _own_rows(era, ftd.by_symbol(era.ticker, lo, hi)))])
+
+
+def era_rows(era: TickerEra, ftd: FtdIndex, last_seen: str) -> list[FtdRow]:
+    """The era's own FTD rows (`era_last_seen`'s choice, `_own_rows`) from its
+    first observation to its last sighting `last_seen`, by date."""
+    return _own_rows(era, ftd.by_symbol(era.ticker, era.first, last_seen))
 
 
 def _contradicted(era: TickerEra, composite: str, eras: Sequence[TickerEra], issuers: Mapping[str, Issuer],
