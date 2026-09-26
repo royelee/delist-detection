@@ -104,9 +104,11 @@ sec_id, issuer_cik, share_class, name, security_type, observed, figi_source
 
 `sec_id` is the US composite FIGI, or a placeholder `CIK<cik>-<CLASS>` when
 none is confirmed. `figi_source` is how it was found: `pin`, `ticker`,
-`cusip`, `name`, or `placeholder`. `observed` is `false` for a
-successor/acquirer security added only to price a delisting, never itself
-observed.
+`cusip`, `name`, `handoff` (a renamed ticker's era with no FIGI of its own,
+joined to a same-issuer, same-class sibling's composite through their
+shared-CUSIP or CUSIP-switch evidence — spec §17), or `placeholder`.
+`observed` is `false` for a successor/acquirer security added only to price a
+delisting, never itself observed.
 
 ### `ticker_history.csv` — key `(sec_id, valid_from, ticker)`
 
@@ -564,7 +566,7 @@ python scripts/observations_from_instruments.py --instruments data/delisted_tick
 # or: scripts/observations_from_snapshots.py --dir <folder of dated index-membership CSVs> --out obs.csv
 python scripts/classify_universe.py --observations obs.csv   # → output/{securities,ticker_history,cusip_history,delistings,payouts,review,review_summary}.csv
 
-pytest -q                                # 1309 unit tests, no network
+pytest -q                                # 1318 unit tests, no network
 ```
 
 `classify_universe.py` prints a summary when it finishes: rows written per
@@ -955,7 +957,26 @@ the observation's name or, failing that, one of the issuer's EDGAR names,
 current or former — so Northeast Utilities, seen under ES before its rename,
 takes Bloomberg's EVERSOURCE ENERGY line), then an issuer-name filter search
 — see the spec's Implementation notes for why CUSIP is tried first and when
-an EDGAR-name match is dropped. When nothing is accepted, the security gets the
+an EDGAR-name match is dropped.
+
+An era that still has no pick (a renamed ticker's old CUSIP that OpenFIGI
+knows on no US venue: Michael Kors' G60754101 before Capri Holdings) then
+tries a **CUSIP handoff** (spec §17): the same shared-CUSIP/switch evidence
+`security_master.cusip_handoffs` computes for the issuer resolver (§8.2) links
+it to a sibling era of the *same issuer and share class*; when that sibling
+is itself confirmed by a pin or a CUSIP (KORS' CUSIP switching straight into
+CPRI's, or KORS@2012 sharing a CUSIP with KORS@2014), the era takes the same
+composite and keeps its own CUSIP in `cusip_history` — so both KORS' and
+CPRI's CUSIPs end up under CPRI's `sec_id`. The join follows only same-issuer,
+same-class links; an era whose links reach two different composites takes
+neither. A handoff join still must not contradict another era's pin or CUSIP
+(the same two guards an EDGAR-names-only pick is checked against), and — like
+that same pick — it is withdrawn if it would leave a same-issuer, same-class
+sibling alone on the placeholder; a whole chain of linked eras is withdrawn
+together, never split. `figi_source=handoff` marks the result, ranked just
+above `placeholder`.
+
+When nothing is accepted, the security gets the
 placeholder `sec_id` `CIK<cik>-<CLASS>` (flagged `no_figi`, an `info` flag:
 counted in `review_summary.csv`, not listed in `review.csv`; `securities.csv`
 marks the security `figi_source=placeholder`); with no CIK

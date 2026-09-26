@@ -490,6 +490,26 @@ line changes observable output.
   GGP from the observations and General Growth 2008 takes its FIGI; drop JEC
   and J 2012 takes Jacobs Solutions'). A review flag on every acceptance made
   only through EDGAR names is a follow-up.
+- **A CUSIP handoff joins the new line (§8.3).** An era with no FIGI pick of
+  its own (a renamed ticker's old CUSIP that OpenFIGI knows on no US venue:
+  Michael Kors' G60754101 before Capri Holdings' G1890L107) is joined to a
+  sibling era of the *same issuer and share class* through the same
+  shared-CUSIP/CUSIP-switch evidence the issuer resolver's second pass uses
+  (`security_master.cusip_handoffs`), when that sibling is itself confirmed
+  by a pin or a CUSIP (not by this same join, so the join never chains
+  through an unconfirmed sibling to reach a composite). The era takes the
+  sibling's composite and keeps its own CUSIP in `cusip_history` (KORS's and
+  CPRI's CUSIPs both end up under CPRI's `sec_id`); an era whose links reach
+  two different composites takes neither. The join is checked against the
+  same two guards an EDGAR-names-only pick is (a pin/CUSIP confirming
+  another known issuer on the composite; a same-issuer, same-class sibling
+  confirmed on a different one over overlapping dates), and is withdrawn by
+  the same placeholder-splitting guard: a chain of eras linked by a shared
+  CUSIP joins all together or not at all, so one member never moves off the
+  placeholder while a sibling it shares a CUSIP with has to stay (NU@2008 and
+  ES@2012, one issuer, joined by NU's switch into ES's later CUSIP, must
+  both go or neither). `figi_source=handoff` marks the result, ranked
+  between `name` and `placeholder`.
 - **§8.3's third acceptance route is not built.** Accepting a candidate
   because its name matches the acquirer or successor named in the security's
   delisting 8-K is not implemented: a security whose only OpenFIGI match

@@ -61,8 +61,8 @@ one observation per row per file).
                              ▼
               ┌────────────────────────────┐
               │  FigiResolver: era → sec_id│   sec_id pin → CUSIP → ticker → name filter
-              │  (US composite FIGI, or    │   → placeholder CIK<cik>-<CLASS>
-              │  placeholder)              │
+              │  (US composite FIGI, or    │   → CUSIP handoff (shared CUSIP/switch to a
+              │  placeholder)              │      confirmed sibling) → placeholder CIK<cik>-<CLASS>
               └─────────────┬──────────────┘
                              │ build_securities (merge eras sharing a sec_id)
                              ▼
@@ -489,6 +489,25 @@ leaves the issuer with no EDGAR names for the run and flags its eras
    ACE era).
 4. **An issuer-name filter search** (`/v3/filter`, legal suffixes stripped)
    as the last resort, accepted by the same name rule as the ticker.
+5. **A CUSIP handoff**, for an era steps 2-4 still leave with no pick (a
+   renamed ticker's old CUSIP that OpenFIGI knows on no US venue): the same
+   shared-CUSIP/CUSIP-switch evidence the issuer resolver's second pass uses
+   (`security_master.cusip_handoffs`) links it to a sibling era of the same
+   issuer and share class, and it takes that sibling's composite when the
+   sibling is itself confirmed by a pin or a CUSIP — not by another handoff,
+   so the join never chains through an unconfirmed era to reach a composite.
+   KORS's G60754101 (no US venue) switches straight into CPRI's G1890L107
+   (confirmed by CUSIP), so both KORS eras take CPRI's composite and keep
+   their own CUSIP in `cusip_history`. An era whose links reach two different
+   composites takes neither. The join is checked against the same two guards
+   an EDGAR-names-only pick is (another known issuer confirmed on the
+   composite; a same-issuer, same-class sibling confirmed on a different one
+   over overlapping dates) and the same placeholder-splitting guard below —
+   with one difference: a *chain* of eras linked by a shared CUSIP joins all
+   together or not at all, so NU@2008 and ES@2012 (one issuer, joined by NU's
+   switch into ES's later, CUSIP-confirmed line) must both go or neither, even
+   though only NU@2008 carries the switch itself. `figi_source=handoff` marks
+   the result, ranked between `name` and `placeholder`.
 
 `figi_resolution.us_candidates` keeps only US-venue rows and drops
 when-issued/144A/fund-NAV lines; `accept()` never trusts Bloomberg's current
