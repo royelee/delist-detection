@@ -147,7 +147,7 @@ def enrich(
 _DLRET_BLANK_IN_TABLE = {DlretMethod.ABSTAIN_NO_CONSIDERATION, DlretMethod.UNKNOWN}
 
 
-def _lookup(m: Mapping, sec_id: str, delist_date: str | None):
+def for_delisting(m: Mapping, sec_id: str, delist_date: str | None):
     """The value `m` holds for one delisting: its exact `(sec_id, delist_date)`
     entry wins; otherwise the security-wide `sec_id` entry. None if neither is
     present.
@@ -190,21 +190,21 @@ def build_delistings_table(
 
     out: list[EnrichedDelistRecord] = []
     for rec in records:
-        key, date = rec.sec_id or rec.ticker.upper(), rec.delist_date
-        terms = _lookup(merger_terms, key, date) or {}
-        cash = terms.get("cash_per_share", _lookup(payouts, key, date))
+        key, delist_date = rec.sec_id or rec.ticker.upper(), rec.delist_date
+        terms = for_delisting(merger_terms, key, delist_date) or {}
+        cash = terms.get("cash_per_share", for_delisting(payouts, key, delist_date))
         out.append(enrich(
             rec,
-            exchange=normalize_exchange(_lookup(exchanges, key, date)),
-            last_trade_close=_lookup(last_trade_closes, key, date),
+            exchange=normalize_exchange(for_delisting(exchanges, key, delist_date)),
+            last_trade_close=for_delisting(last_trade_closes, key, delist_date),
             payout_per_share=cash,
             stock_ratio=terms.get("stock_ratio"),
             acquirer_price=terms.get("acquirer_price"),
             acquirer_ticker=terms.get("acquirer_ticker"),
-            recovery_ratio=_lookup(recovery_ratios, key, date),
-            payout_source=_lookup(payout_sources, key, date),
-            payout_confidence=_lookup(payout_confidences, key, date),
-            extra_flags=_lookup(payout_flags, key, date) or (),
+            recovery_ratio=for_delisting(recovery_ratios, key, delist_date),
+            payout_source=for_delisting(payout_sources, key, delist_date),
+            payout_confidence=for_delisting(payout_confidences, key, delist_date),
+            extra_flags=for_delisting(payout_flags, key, delist_date) or (),
         ))
     return out
 

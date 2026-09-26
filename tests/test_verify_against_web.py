@@ -24,7 +24,7 @@ def test_a_refusal_aborts_instead_of_becoming_a_verdict(monkeypatch):
     class _Refused(_Resp):
         status_code = 403
 
-    monkeypatch.setattr(verify, "_throttle", lambda: None)
+    monkeypatch.setattr(verify, "throttle", lambda: None)
     monkeypatch.setattr(verify.requests, "get", lambda *a, **kw: _Refused())
     with pytest.raises(EdgarBlocked):
         verify.fetch_edgar_entity_landing(320193)
@@ -34,7 +34,7 @@ def test_a_refusal_aborts_instead_of_becoming_a_verdict(monkeypatch):
 
 def test_every_edgar_request_is_paced(monkeypatch):
     events = []
-    monkeypatch.setattr(verify, "_throttle", lambda: events.append("throttle"))
+    monkeypatch.setattr(verify, "throttle", lambda: events.append("throttle"))
     monkeypatch.setattr(verify.requests, "get", lambda *a, **kw: events.append("get") or _Resp())
     verify.fetch_edgar_entity_landing(320193)
     verify._get("https://www.sec.gov/cgi-bin/browse-edgar")
@@ -59,7 +59,7 @@ class _JsonResp:
 
 
 def _serve(monkeypatch, by_url):
-    monkeypatch.setattr(verify, "_throttle", lambda: None)
+    monkeypatch.setattr(verify, "throttle", lambda: None)
     monkeypatch.setattr(verify.requests, "get", lambda url, **kw: _JsonResp(by_url[url]))
 
 
@@ -117,7 +117,7 @@ def test_main_installs_the_machine_wide_limit_and_checks_the_user_agent_before_a
     events = []
     monkeypatch.setattr(verify, "use_machine_wide_limit", lambda: events.append("machine-wide limit"))
     monkeypatch.setattr(verify, "require_user_agent", lambda: events.append("user agent") or "Test Co t@example.com")
-    monkeypatch.setattr(verify, "_throttle", lambda: events.append("throttle"))
+    monkeypatch.setattr(verify, "throttle", lambda: events.append("throttle"))
     url = "https://data.sec.gov/submissions/CIK0000768835.json"
     body = _sub("BIG LOTS INC", [("25-NSE", "2024-09-10", ""), ("8-K", "2024-09-10", "1.03,7.01")])
     monkeypatch.setattr(verify.requests, "get", lambda u, **kw: events.append("get") or _JsonResp(body))

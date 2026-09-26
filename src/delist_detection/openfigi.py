@@ -15,7 +15,7 @@ from pathlib import Path
 
 import requests
 
-from .edgar import clean_orphan_temps, write_atomic
+from .atomic_io import clean_orphan_temps, write_atomic
 
 OPENFIGI_URL = "https://api.openfigi.com/v3"
 _REPO_ENV = Path(__file__).resolve().parents[2] / ".env"

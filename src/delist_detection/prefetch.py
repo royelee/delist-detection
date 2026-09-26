@@ -66,7 +66,7 @@ def warm(items: Iterable[Any], task: Callable[..., object], *, workers: int,
 
     `limiter` is a test seam; it defaults to `edgar.SEC_LIMITER`, read at call
     time. A production pass must leave it at that default: real requests reach
-    the limiter through `edgar._throttle`, which reads that global, so a stop
+    the limiter through `edgar.throttle`, which reads that global, so a stop
     bound to any other limiter never cancels them.
 
     `state` is called on this thread once per worker, under `edgar.fill_only()`

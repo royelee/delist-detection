@@ -106,7 +106,7 @@ def test_client_caches_and_finds_deletion(tmp_path):
 
 def test_a_days_feed_cut_off_mid_write_leaves_no_cache_file(tmp_path, writes_fail_midway):
     """A run that dies while caching a day's feed leaves no cut-off XML, which the
-    next run would fail to parse: the feed is written through edgar.write_atomic."""
+    next run would fail to parse: the feed is written through atomic_io.write_atomic."""
     writes_fail_midway(tmp_path)
     with pytest.raises(OSError):
         NasdaqHaltClient(tmp_path, session=_Session(), min_interval=0).halts_on(date(2025, 3, 25))

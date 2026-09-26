@@ -22,7 +22,7 @@ from dataclasses import dataclass, replace
 from datetime import date, timedelta
 from pathlib import Path
 
-from .edgar import clean_orphan_temps
+from .atomic_io import clean_orphan_temps
 from .names import names_agree
 from .observations import normalize_ticker
 from .sec_http import download, get_text

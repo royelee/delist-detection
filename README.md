@@ -760,6 +760,7 @@ python scripts/compute_corrected_returns.py \
 src/delist_detection/
     observations.py      Observation, TickerEra, ObservationIndex — splits sightings into eras
     store.py              Output-table schemas (columns, key, sort), atomic CSV write/read
+    atomic_io.py          Atomic file writes: cache files (write_atomic), output tables (replace_all_on_success)
     trading_calendar.py   NYSE trading-day calendar
     sec_http.py           Throttled, cached downloads shared by ftd.py / midas.py
     edgar.py              Throttled SEC EDGAR client with on-disk JSON cache

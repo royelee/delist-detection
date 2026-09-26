@@ -37,7 +37,7 @@ class _Session:
 
 @pytest.fixture(autouse=True)
 def _no_sleep(monkeypatch):
-    monkeypatch.setattr(sec_http, "_throttle", lambda: None)
+    monkeypatch.setattr(sec_http, "throttle", lambda: None)
 
 
 def test_download_caches(tmp_path):
@@ -58,7 +58,7 @@ def test_download_404_and_block(tmp_path):
 
 def test_a_download_cut_off_mid_write_leaves_no_file(tmp_path, writes_fail_midway):
     """A run that dies mid-download leaves neither a cut-off file nor a
-    leftover part file: the download is written through edgar.write_atomic."""
+    leftover part file: the download is written through atomic_io.write_atomic."""
     writes_fail_midway(tmp_path)
     with pytest.raises(OSError):
         sec_http.download("https://www.sec.gov/f.zip", tmp_path / "f.zip",
@@ -78,7 +78,7 @@ def test_a_download_is_fsynced_before_it_is_renamed_into_place(tmp_path, monkeyp
 
 
 def test_an_index_page_cut_off_mid_write_leaves_no_cache_file(tmp_path, writes_fail_midway):
-    """get_text caches through edgar.write_atomic,
+    """get_text caches through atomic_io.write_atomic,
     so a run that dies mid-write leaves no cut-off index page for the next run."""
     writes_fail_midway(tmp_path)
     with pytest.raises(OSError):
@@ -166,7 +166,7 @@ def test_download_429_raises_at_once_no_retry(tmp_path):
 
 
 def test_fetch_filing_raw(tmp_path, monkeypatch):
-    monkeypatch.setattr("delist_detection.edgar._throttle", lambda: None)
+    monkeypatch.setattr("delist_detection.edgar.throttle", lambda: None)
     s = _Session(_Resp(text="<TYPE>25-NSE\n<descriptionClassSecurity>Common Stock</descriptionClassSecurity>"),
                  _Resp(404))
     ec = EdgarClient(cache_dir=tmp_path, user_agent="ua", session=s)
@@ -180,14 +180,14 @@ def test_fetch_filing_raw(tmp_path, monkeypatch):
 
 
 def test_fetch_filing_raw_blocked(tmp_path, monkeypatch):
-    monkeypatch.setattr("delist_detection.edgar._throttle", lambda: None)
+    monkeypatch.setattr("delist_detection.edgar.throttle", lambda: None)
     ec = EdgarClient(cache_dir=tmp_path, user_agent="ua", session=_Session(_Resp(403)))
     with pytest.raises(EdgarBlocked):
         ec.fetch_filing_raw(1, "0000000000-00-000002")
 
 
 def test_fetch_filing_raw_retries_503_then_succeeds(tmp_path, monkeypatch):
-    monkeypatch.setattr("delist_detection.edgar._throttle", lambda: None)
+    monkeypatch.setattr("delist_detection.edgar.throttle", lambda: None)
     slept = []
     s = _Session(_Resp(503), _Resp(text="hello"))
     ec = EdgarClient(cache_dir=tmp_path, user_agent="ua", session=s, sleep=slept.append)
@@ -197,7 +197,7 @@ def test_fetch_filing_raw_retries_503_then_succeeds(tmp_path, monkeypatch):
 
 
 def test_fetch_filing_raw_three_503s_returns_empty_without_caching(tmp_path, monkeypatch):
-    monkeypatch.setattr("delist_detection.edgar._throttle", lambda: None)
+    monkeypatch.setattr("delist_detection.edgar.throttle", lambda: None)
     s = _Session(_Resp(503), _Resp(503), _Resp(503))
     ec = EdgarClient(cache_dir=tmp_path, user_agent="ua", session=s, sleep=lambda _: None)
     assert ec.fetch_filing_raw(1, "0000000000-00-000004") == ""
@@ -206,7 +206,7 @@ def test_fetch_filing_raw_three_503s_returns_empty_without_caching(tmp_path, mon
 
 
 def test_full_text_search_parses_hits(tmp_path, monkeypatch):
-    monkeypatch.setattr("delist_detection.edgar._throttle", lambda: None)
+    monkeypatch.setattr("delist_detection.edgar.throttle", lambda: None)
     hit = {"_source": {"ciks": ["0001652044"], "display_names": ["Alphabet Inc.  (GOOGL, GOOG)  (CIK 0001652044)"]}}
     s = _Session(_Resp(text=json.dumps({"hits": {"hits": [hit]}})))
     ec = EdgarClient(cache_dir=tmp_path, user_agent="ua", session=s)
@@ -217,7 +217,7 @@ def test_full_text_search_parses_hits(tmp_path, monkeypatch):
 
 
 def test_full_text_search_caches_a_successful_answer(tmp_path, monkeypatch):
-    monkeypatch.setattr("delist_detection.edgar._throttle", lambda: None)
+    monkeypatch.setattr("delist_detection.edgar.throttle", lambda: None)
     hit = {"_source": {"ciks": ["1"], "display_names": ["X CO  (X)  (CIK 0000000001)"]}}
     s = _Session(_Resp(text=json.dumps({"hits": {"hits": [hit]}})))
     ec = EdgarClient(cache_dir=tmp_path, user_agent="ua", session=s)
@@ -229,7 +229,7 @@ def test_full_text_search_caches_a_successful_answer(tmp_path, monkeypatch):
 
 @pytest.mark.parametrize("status", [403, 429])
 def test_full_text_search_blocked(tmp_path, monkeypatch, status):
-    monkeypatch.setattr("delist_detection.edgar._throttle", lambda: None)
+    monkeypatch.setattr("delist_detection.edgar.throttle", lambda: None)
     ec = EdgarClient(cache_dir=tmp_path, user_agent="ua", session=_Session(_Resp(status)))
     with pytest.raises(EdgarBlocked):
         ec.full_text_search("X", "8-K12B", date(2020, 1, 1), date(2020, 2, 1))
@@ -238,7 +238,7 @@ def test_full_text_search_blocked(tmp_path, monkeypatch, status):
 def test_full_text_search_500_returns_empty_and_is_not_cached(tmp_path, monkeypatch):
     # A 5xx is retried up to 3 attempts; all three fail here, so the result is
     # still empty and never cached, but the session must have been asked 3 times.
-    monkeypatch.setattr("delist_detection.edgar._throttle", lambda: None)
+    monkeypatch.setattr("delist_detection.edgar.throttle", lambda: None)
     s = _Session(_Resp(500), _Resp(500), _Resp(500))
     ec = EdgarClient(cache_dir=tmp_path, user_agent="ua", session=s, sleep=lambda _: None)
     assert ec.full_text_search("X", "8-K12B", date(2020, 1, 1), date(2020, 2, 1)) == []
@@ -247,7 +247,7 @@ def test_full_text_search_500_returns_empty_and_is_not_cached(tmp_path, monkeypa
 
 
 def test_full_text_search_network_error_returns_empty(tmp_path, monkeypatch):
-    monkeypatch.setattr("delist_detection.edgar._throttle", lambda: None)
+    monkeypatch.setattr("delist_detection.edgar.throttle", lambda: None)
     s = _Session(requests.ConnectionError("down"), requests.ConnectionError("down"),
                  requests.ConnectionError("down"))
     ec = EdgarClient(cache_dir=tmp_path, user_agent="ua", session=s, sleep=lambda _: None)
@@ -257,7 +257,7 @@ def test_full_text_search_network_error_returns_empty(tmp_path, monkeypatch):
 
 
 def test_full_text_search_retries_503_then_succeeds(tmp_path, monkeypatch):
-    monkeypatch.setattr("delist_detection.edgar._throttle", lambda: None)
+    monkeypatch.setattr("delist_detection.edgar.throttle", lambda: None)
     hit = {"_source": {"ciks": ["1"], "display_names": ["X CO  (X)  (CIK 0000000001)"]}}
     slept = []
     s = _Session(_Resp(503), _Resp(text=json.dumps({"hits": {"hits": [hit]}})))
@@ -269,7 +269,7 @@ def test_full_text_search_retries_503_then_succeeds(tmp_path, monkeypatch):
 
 
 def test_full_text_search_429_raises_at_once_no_retry(tmp_path, monkeypatch):
-    monkeypatch.setattr("delist_detection.edgar._throttle", lambda: None)
+    monkeypatch.setattr("delist_detection.edgar.throttle", lambda: None)
     s = _Session(_Resp(429))
     ec = EdgarClient(cache_dir=tmp_path, user_agent="ua", session=s, sleep=lambda _: None)
     with pytest.raises(EdgarBlocked):
@@ -279,7 +279,7 @@ def test_full_text_search_429_raises_at_once_no_retry(tmp_path, monkeypatch):
 
 def test_full_text_search_caches_an_empty_answer(tmp_path, monkeypatch):
     # An empty answer is written like a hit, with its fetch date; it holds for its TTL.
-    monkeypatch.setattr("delist_detection.edgar._throttle", lambda: None)
+    monkeypatch.setattr("delist_detection.edgar.throttle", lambda: None)
     s = _Session(_Resp(text=json.dumps({"hits": {"hits": []}})))
     ec = EdgarClient(cache_dir=tmp_path, user_agent="ua", session=s)
     assert ec.full_text_search("X", "8-K12B", date(2020, 1, 1), date(2020, 2, 1)) == []
@@ -292,7 +292,7 @@ def test_full_text_search_caches_an_empty_answer(tmp_path, monkeypatch):
 
 
 def test_full_text_search_holds_an_open_windows_answer_for_seven_days_only(tmp_path, monkeypatch):
-    monkeypatch.setattr("delist_detection.edgar._throttle", lambda: None)
+    monkeypatch.setattr("delist_detection.edgar.throttle", lambda: None)
     hit = {"_source": {"ciks": ["1"], "display_names": ["X CO  (X)  (CIK 0000000001)"]}}
     today = date.today()
     lo = today - timedelta(days=30)

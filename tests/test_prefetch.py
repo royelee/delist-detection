@@ -221,7 +221,7 @@ def test_the_process_wide_limiter_is_the_default(monkeypatch):
         if item == "refused":
             in_flight.wait()
             raise EdgarBlocked("SEC returned 403")
-        _mid_chain(lim, edgar._throttle, outcome, in_flight.wait)
+        _mid_chain(lim, edgar.throttle, outcome, in_flight.wait)
 
     with pytest.raises(EdgarBlocked):
         warm(["slow", "refused"], task, workers=2)

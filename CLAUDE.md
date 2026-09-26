@@ -78,15 +78,20 @@ that turns a list of observations into the seven output tables; see
   that neither side's name confirms as continuous.
 - `edgar.py` — throttled, on-disk-cached SEC client. `submissions()`,
   `recent_filings()`, `fetch_filing_text()`/`fetch_filing_raw()` (HTML-stripped
-  and raw text caches). Owns `EdgarBlocked`, the shared request throttle, and
-  `resolve_user_agent()` that `sec_http.py`, `ftd.py`, `midas.py` reuse.
+  and raw text caches). Owns `EdgarBlocked`, the shared request throttle
+  (`throttle()`), and `resolve_user_agent()` that `sec_http.py`, `ftd.py`,
+  `midas.py` reuse.
+- `atomic_io.py` — atomic file writes: `write_atomic` (one cache file, durable,
+  through a writer-named temp file), `clean_orphan_temps` (a killed writer's
+  leftovers), and `replace_on_success`/`replace_all_on_success` (the output
+  tables and the decisions file, replaced only when the whole write succeeds).
 - `sec_http.py` — throttled, cached `download()`/`get_text()` for the other SEC
   data files (FTD and MIDAS ZIPs and their index pages), sharing `edgar.py`'s
   throttle, User-Agent and `EdgarBlocked` on 403/429. Index pages and ZIPs are
-  both cached through `edgar.write_atomic` (text or bytes). Every cache file
+  both cached through `atomic_io.write_atomic` (text or bytes). Every cache file
   (EDGAR, SEC data files, MIDAS summaries, halt days, OpenFIGI and LLM answers)
   goes through it, and each client removes a killed run's temp files
-  (`edgar.clean_orphan_temps`, also old `.part` downloads) when it starts.
+  (`atomic_io.clean_orphan_temps`, also old `.part` downloads) when it starts.
 - `ftd.py` — `FtdClient`/`FtdIndex`: SEC fails-to-deliver rows (`(date, CUSIP,
   symbol, price)`, 2004+). `close_after()` supplies every last-trade close and
   acquirer-completion price; `by_cusip`/`by_symbol` supply CUSIP history.
@@ -100,7 +105,7 @@ that turns a list of observations into the seven output tables; see
   `deletion_halt()` finds a code-`D` ("security deletion") halt as a second
   last-trade-date confirmation when MIDAS has none.
 - `openfigi.py` — `OpenFigiClient`: OpenFIGI `/v3/mapping` and `/v3/filter`,
-  cached on disk (`edgar.write_atomic`: a run that dies mid-write leaves no
+  cached on disk (`atomic_io.write_atomic`: a run that dies mid-write leaves no
   cut-off answer), paced on the `ratelimit-*` headers. Owns `OpenFigiBlocked`
   (401/403) and `OpenFigiUnavailable` (timeouts/5xx after its retries).
 - `figi_resolution.py` — pure rules turning an OpenFIGI answer into one US
@@ -162,8 +167,9 @@ that turns a list of observations into the seven output tables; see
   `acquirer_price` and `last_trade_close` come from `ftd.py`, not a filing.
 - `store.py` — every output table's column order, key and sort order
   (`TABLES`), `format_cell` (the one cell formatter every table shares),
-  `write_table`/`read_table` (atomic write via `replace_on_success`). A later
-  move to DuckDB changes only this module.
+  `write_table`/`write_tables`/`read_table` (all-or-nothing write via
+  `atomic_io.replace_all_on_success`). A later move to DuckDB changes only
+  this module.
 - `review_triage.py` — pure (no network): `CATALOG` maps every review flag to
   a severity (`fix`/`check`/`info`), a description and an action;
   `row_severity`/`triage()` turn the pipeline's merged review rows plus a
@@ -347,7 +353,7 @@ conflate them.
   "rerun classify_universe.py to apply them"; `--dry-run` does not.
 - **Every output is written only after the whole run succeeds.**
   `pipeline.run()` computes every table in memory first and writes all seven
-  only at the end (`store.write_table`'s atomic replace), so a refusal or a
+  only at the end (`store.write_tables`, all or nothing), so a refusal or a
   bad override CSV midway through a run never leaves a half-written table
   over the previous complete one.
 - **`sec_id` is a US composite FIGI, or a placeholder.** When no FIGI can be

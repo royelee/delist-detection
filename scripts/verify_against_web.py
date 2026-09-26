@@ -25,7 +25,7 @@ from pathlib import Path
 
 import requests
 
-from delist_detection.edgar import (EdgarBlocked, _throttle, check_response, require_user_agent, resolve_user_agent,
+from delist_detection.edgar import (EdgarBlocked, check_response, require_user_agent, resolve_user_agent, throttle,
                                     use_machine_wide_limit)
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -34,7 +34,7 @@ USER_AGENT = resolve_user_agent()
 
 def _get(url: str, timeout: int = 30) -> str | None:
     try:
-        _throttle()      # the library's shared SEC pacing (8 requests/s)
+        throttle()      # the library's shared SEC pacing (8 requests/s)
         r = requests.get(url, headers={"User-Agent": USER_AGENT}, timeout=timeout)
         check_response(r)       # a 403/429 aborts the run (EdgarBlocked), never a verdict
         if r.status_code != 200:
@@ -55,7 +55,7 @@ WINDOW_BEFORE_DAYS, WINDOW_AFTER_DAYS = 400, 120    # evidence around the delist
 
 def _json(url: str) -> dict:
     try:
-        _throttle()
+        throttle()
         r = requests.get(url, headers={"User-Agent": USER_AGENT, "Host": "data.sec.gov"}, timeout=30)
         check_response(r)
         if r.status_code != 200:

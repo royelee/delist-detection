@@ -12,7 +12,8 @@ from pathlib import Path
 
 import requests
 
-from .edgar import SEC_STATS, _throttle, filling_only, resolve_user_agent, retry_request, write_atomic
+from .atomic_io import write_atomic
+from .edgar import SEC_STATS, filling_only, resolve_user_agent, retry_request, throttle
 
 
 def _get(url: str, session, user_agent: str | None, timeout: int, *, sleep=time.sleep):
@@ -20,7 +21,7 @@ def _get(url: str, session, user_agent: str | None, timeout: int, *, sleep=time.
     headers = {"User-Agent": user_agent or resolve_user_agent(), "Accept": "*/*", "Host": "www.sec.gov"}
 
     def make():
-        _throttle()
+        throttle()
         SEC_STATS.add("request:sec_data")
         started = time.monotonic()
         try:

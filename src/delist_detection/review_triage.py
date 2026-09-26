@@ -38,7 +38,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from .store import replace_on_success
+from .atomic_io import replace_on_success
 
 SEVERITIES = ("fix", "check", "info")        # this order is the sort order
 

@@ -114,7 +114,7 @@ def test_filter_pages_and_caches(tmp_path):
 
 def test_a_mapping_answer_cut_off_mid_write_leaves_no_cache_file(tmp_path, writes_fail_midway):
     """A run that dies while caching an answer
-    must not leave a cut-off file the next run would trust (edgar.write_atomic)."""
+    must not leave a cut-off file the next run would trust (atomic_io.write_atomic)."""
     c = OpenFigiClient(tmp_path, "k", session=_Session(_Resp(body=[AET]), _Resp(body=[AET])), sleep=lambda _: None)
     writes_fail_midway(tmp_path)
     with pytest.raises(OSError):

@@ -11,12 +11,12 @@ from __future__ import annotations
 
 import csv
 import math
-import os
-from collections.abc import Iterable, Iterator, Mapping, Sequence
-from contextlib import contextmanager
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
+
+from .atomic_io import replace_all_on_success
 
 
 @dataclass(frozen=True)
@@ -75,33 +75,6 @@ def format_cell(v: object) -> str:
     if isinstance(v, (list, tuple)):
         return ";".join(format_cell(x) for x in v)
     return str(v)
-
-
-@contextmanager
-def replace_all_on_success(paths: Sequence[str | Path]) -> Iterator[list[Path]]:
-    """Yield one temp path beside each of `paths`; every path is replaced by its
-    temp file, in order, only when the block finishes. On any failure no path
-    is replaced and every temp file is removed, so an abort never leaves a
-    partial file -- or one new file among old ones -- over the last complete set."""
-    targets = [Path(p) for p in paths]
-    tmps = [p.with_name(f".{p.name}.tmp") for p in targets]
-    try:
-        for p in targets:
-            p.parent.mkdir(parents=True, exist_ok=True)
-        yield tmps
-        for tmp, p in zip(tmps, targets):
-            os.replace(tmp, p)
-    finally:
-        for tmp in tmps:
-            tmp.unlink(missing_ok=True)
-
-
-@contextmanager
-def replace_on_success(path: str | Path) -> Iterator[Path]:
-    """`replace_all_on_success` for one file: yield a temp path beside `path`,
-    which replaces `path` only when the block finishes."""
-    with replace_all_on_success([path]) as (tmp,):
-        yield tmp
 
 
 def table_path(out_dir: str | Path, name: str) -> Path:

@@ -17,7 +17,8 @@ from typing import Iterable
 
 import requests
 
-from .edgar import STALE_KEY, EdgarBlocked, EdgarClient, clean_orphan_temps, submissions_fresh_after, write_atomic
+from .atomic_io import clean_orphan_temps, write_atomic
+from .edgar import STALE_KEY, EdgarBlocked, EdgarClient, submissions_fresh_after
 from .evidence import first_filing, names_near, parse_day
 from .names import name_tokens, names_agree
 

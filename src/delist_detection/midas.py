@@ -23,7 +23,8 @@ from pathlib import Path
 
 import requests
 
-from .edgar import SEC_STATS, clean_orphan_temps, filling_only, write_atomic
+from .atomic_io import clean_orphan_temps, write_atomic
+from .edgar import SEC_STATS, filling_only
 from .observations import normalize_ticker
 from .sec_http import download, get_text
 from .trading_calendar import add_trading_days

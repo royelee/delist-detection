@@ -29,7 +29,7 @@ from .observations import ObservationIndex, TickerEra, eras_by_key, normalize_ti
 from .openfigi import OpenFigiBlocked, OpenFigiUnavailable
 from .payout_gate import DEFAULT_TOL, gate_payouts
 from .prefetch import Serialized, warm
-from .reconstruction import _lookup, build_delistings_table, delisting_row, unmatched_override_keys
+from .reconstruction import build_delistings_table, delisting_row, for_delisting, unmatched_override_keys
 from .review_triage import Decision, flag_name, is_blank, triage
 from .security_master import (
     FigiResolver, Range, Security, build_securities, candidate_cusips, era_last_seen, ranges_from_sightings,
@@ -815,7 +815,7 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
     closes: dict[tuple[str, str], float] = {}
     for e in events:
         key = (e.sec_id, e.delist_date)
-        given = _lookup(overrides.last_trade_closes, e.sec_id, e.delist_date)
+        given = for_delisting(overrides.last_trade_closes, e.sec_id, e.delist_date)
         if given is not None:
             closes[key] = given
             continue
@@ -903,7 +903,7 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
     for e in mergers:
         # A lagged FTD close (no row on the next trading day) may carry an OTC or
         # stale price: flag the delisting when that price made it into its terms.
-        terms = _lookup(gated.merged_terms, e.sec_id, e.delist_date)
+        terms = for_delisting(gated.merged_terms, e.sec_id, e.delist_date)
         if (e.sec_id, e.delist_date) in lagged_acquirer and terms and terms.get("acquirer_price") is not None:
             e.record.evidence["flags"].append("acquirer_close_lagged")
     added: dict[str, Security] = {}
@@ -911,7 +911,7 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
     acquirer_ids: dict[tuple[str, str], str] = {}
     for e in mergers:
         key = (e.sec_id, e.delist_date)
-        terms = _lookup(gated.merged_terms, e.sec_id, e.delist_date)
+        terms = for_delisting(gated.merged_terms, e.sec_id, e.delist_date)
         if not terms:
             continue
         acq = normalize_ticker(terms.get("acquirer_ticker") or "")

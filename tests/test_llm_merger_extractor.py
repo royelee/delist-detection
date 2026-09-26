@@ -210,7 +210,7 @@ def test_cache_hit_second_call_served_from_disk(tmp_path):
 
 def test_an_answer_cut_off_mid_write_leaves_no_cache_file(tmp_path, writes_fail_midway):
     """A run that dies while caching the LLM's answer leaves no cut-off JSON
-    file: the answer is written through edgar.write_atomic."""
+    file: the answer is written through atomic_io.write_atomic."""
     resp = {"deal_type": "cash", "cash_per_share": 113.0, "stock_ratio": None, "acquirer_name": None,
             "acquirer_ticker": None, "confidence": "high", "quote": "$113.00 in cash"}
     ext = LLMMergerTermsExtractor(_FakeEdgarText([_closing_8k()], {"C1": _USABLE_TEXT}), _FakeLlm([resp]),

@@ -15,7 +15,8 @@ from pathlib import Path
 
 import requests
 
-from .edgar import SEC_STATS, clean_orphan_temps, write_atomic
+from .atomic_io import clean_orphan_temps, write_atomic
+from .edgar import SEC_STATS
 from .observations import normalize_ticker
 from .trading_calendar import is_trading_day, previous_trading_day
 

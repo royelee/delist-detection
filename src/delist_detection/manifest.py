@@ -22,7 +22,7 @@ from datetime import date
 from functools import lru_cache
 from pathlib import Path
 
-from .edgar import write_atomic
+from .atomic_io import write_atomic
 
 MANIFEST_NAME = "run_manifest.json"
 _ROOT = Path(__file__).resolve().parents[2]

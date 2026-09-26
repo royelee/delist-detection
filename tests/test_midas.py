@@ -226,7 +226,7 @@ def test_a_quarter_that_yields_no_rows_is_not_cached(tmp_path, caplog):
 def test_a_quarter_summary_cut_off_mid_write_leaves_no_cache_file(tmp_path, writes_fail_midway):
     """A run that dies while caching a quarter's summary leaves no cut-off
     .json.gz, which the next run would fail to decompress: the summary is
-    written through edgar.write_atomic, and the zip stays for the next run."""
+    written through atomic_io.write_atomic, and the zip stays for the next run."""
     _zip_with(tmp_path, (2018, 4), CSV)
     writes_fail_midway(tmp_path)
     with pytest.raises(OSError):

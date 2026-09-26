@@ -6,7 +6,7 @@ from delist_detection.crsp_codes import CrspBucket
 from delist_detection.dlret import DlretMethod
 from delist_detection.exchanges import Exchange
 from delist_detection.reconstruction import (
-    _lookup, build_delistings_table, delisting_row, enrich, EnrichedDelistRecord,
+    for_delisting, build_delistings_table, delisting_row, enrich, EnrichedDelistRecord,
     load_float_overrides, load_merger_terms_overrides,
 )
 
@@ -139,8 +139,8 @@ def test_lookup_tuple_wins_over_bare_key():
     # When a map has both a per-event tuple key and a bare-sec_id fallback,
     # the tuple wins; a different date falls back to the bare-sec_id default.
     m = {("BBG_ALTR", "2015-12-28"): 50.0, "BBG_ALTR": 99.0}
-    assert _lookup(m, "BBG_ALTR", "2015-12-28") == 50.0   # tuple wins
-    assert _lookup(m, "BBG_ALTR", "2099-01-01") == 99.0   # fallback to bare sec_id
+    assert for_delisting(m, "BBG_ALTR", "2015-12-28") == 50.0   # tuple wins
+    assert for_delisting(m, "BBG_ALTR", "2099-01-01") == 99.0   # fallback to bare sec_id
 
 
 def test_load_merger_terms_overrides(tmp_path):

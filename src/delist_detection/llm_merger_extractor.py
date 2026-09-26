@@ -46,7 +46,7 @@ import requests
 
 from .classifier import DelistRecord
 from .crsp_codes import CrspBucket
-from .edgar import clean_orphan_temps, write_atomic
+from .atomic_io import clean_orphan_temps, write_atomic
 from .filing_selection import (
     EdgarSubmission,
     announcement_8k,

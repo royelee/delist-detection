@@ -5,7 +5,7 @@ import pytest
 
 import delist_detection.store as store
 from delist_detection.store import (
-    DELISTINGS_COLUMNS, TABLES, format_cell, read_table, replace_on_success, table_path, write_table, write_tables,
+    DELISTINGS_COLUMNS, TABLES, format_cell, read_table, table_path, write_table, write_tables,
 )
 
 
@@ -190,27 +190,3 @@ def test_write_tables_removes_the_temp_file_of_a_table_that_fails_mid_write(tmp_
     assert table_path(tmp_path, "securities").read_text() == before_sec
     assert table_path(tmp_path, "review").read_text() == before_rev
     assert not list(tmp_path.glob(".*.tmp"))
-
-
-def test_replace_on_success_removes_temp_on_error(tmp_path):
-    target = tmp_path / "x.csv"
-    with pytest.raises(RuntimeError):
-        with replace_on_success(target) as tmp:
-            tmp.write_text("partial")
-            raise RuntimeError
-    assert not target.exists()
-    assert not (tmp_path / ".x.csv.tmp").exists()
-
-
-def test_replace_all_on_success_replaces_every_path_or_none(tmp_path):
-    a, b = tmp_path / "a.csv", tmp_path / "sub" / "b.csv"
-    with store.replace_all_on_success([a, b]) as (ta, tb):
-        ta.write_text("A1")
-        tb.write_text("B1")
-    assert (a.read_text(), b.read_text()) == ("A1", "B1")
-    with pytest.raises(RuntimeError):
-        with store.replace_all_on_success([a, b]) as (ta, tb):
-            ta.write_text("A2")                   # written, but the block fails before it ends
-            raise RuntimeError
-    assert (a.read_text(), b.read_text()) == ("A1", "B1")
-    assert not list(tmp_path.rglob(".*.tmp"))

@@ -12,7 +12,7 @@ from datetime import date
 import pytest
 import requests
 
-from delist_detection import edgar
+from delist_detection import atomic_io, edgar
 from delist_detection.edgar import EdgarClient, fill_only, filling_only
 
 UA = "Test Co test@example.com"
@@ -107,16 +107,16 @@ def test_an_interrupted_write_leaves_the_old_file_whole(tmp_path, monkeypatch):
     def disk_full(src, dst):
         raise OSError("No space left on device")
 
-    monkeypatch.setattr(edgar.os, "replace", disk_full)
+    monkeypatch.setattr(atomic_io.os, "replace", disk_full)
     with pytest.raises(OSError):
-        edgar.write_atomic(path, '{"new": 2}')
+        atomic_io.write_atomic(path, '{"new": 2}')
     assert path.read_text() == '{"old": 1}'
     assert [p.name for p in tmp_path.iterdir()] == ["x.json"]      # no temp file left behind
 
 
 def test_a_write_replaces_the_file_in_one_step(tmp_path):
     path = tmp_path / "x.json"
-    edgar.write_atomic(path, '{"new": 2}')
+    atomic_io.write_atomic(path, '{"new": 2}')
     assert path.read_text() == '{"new": 2}'
     assert [p.name for p in tmp_path.iterdir()] == ["x.json"]
 
@@ -133,9 +133,9 @@ def test_a_write_reaches_the_disk_before_it_replaces_the_file(tmp_path, monkeypa
         events.append("replace")
         real_replace(src, dst)
 
-    monkeypatch.setattr(edgar.os, "fsync", fsync)
-    monkeypatch.setattr(edgar.os, "replace", replace)
-    edgar.write_atomic(tmp_path / "x.json", "{}")
+    monkeypatch.setattr(atomic_io.os, "fsync", fsync)
+    monkeypatch.setattr(atomic_io.os, "replace", replace)
+    atomic_io.write_atomic(tmp_path / "x.json", "{}")
     assert events == ["fsync", "replace", "fsync"]    # the data, the rename, then the directory
 
 

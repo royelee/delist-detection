@@ -278,7 +278,7 @@ def test_the_per_test_limiter_costs_no_real_time_after_a_pause():
     # conftest's limiter runs on a virtual clock that its own sleep advances: a pause
     # left by a failing request neither blocks a test nor spins it in a busy-wait.
     edgar.SEC_LIMITER.pause(60.0)
-    t = threading.Thread(target=edgar._throttle, daemon=True)
+    t = threading.Thread(target=edgar.throttle, daemon=True)
     t.start()
     t.join(5)
     assert not t.is_alive()
@@ -292,7 +292,7 @@ def test_every_sec_request_goes_through_the_shared_limiter(monkeypatch):
             calls.append("acquire")
 
     monkeypatch.setattr(edgar, "SEC_LIMITER", _Probe())
-    edgar._throttle()
+    edgar.throttle()
     assert calls == ["acquire"]
 
 
@@ -374,7 +374,7 @@ def test_use_machine_wide_limit_gates_the_shared_limiter(monkeypatch, tmp_path):
     gate = edgar.use_machine_wide_limit()
     assert edgar.SEC_LIMITER.gate is gate and gate.path == tmp_path / "sec_rate.lock"
     assert edgar.use_machine_wide_limit() is gate          # idempotent
-    edgar._throttle()
+    edgar.throttle()
     assert float((tmp_path / "sec_rate.lock").read_text()) > 0
 
 
