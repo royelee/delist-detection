@@ -45,8 +45,8 @@ from .reconstruction import (
 from .review_triage import Decision, ReviewItem, Triage, flag_name, is_blank, merge_review_rows, triage
 from .sec_stats import SEC_STATS
 from .security_master import (
-    EraResolution, FigiResolver, Issuer, Security, build_securities, candidate_cusips, cik_of, era_last_seen,
-    issuers_by_era, observation_conflict_review, refine_eras, ticker_unconfirmed_review,
+    EraResolution, FigiResolver, Issuer, Security, build_securities, candidate_cusips, cik_of, cusip_handoffs,
+    era_last_seen, issuers_by_era, observation_conflict_review, refine_eras, ticker_unconfirmed_review,
 )
 from .store import DelistingKey, write_tables
 from .successors import (
@@ -306,12 +306,17 @@ def _resolve_securities(ctx: _RunContext, eras: list[TickerEra], era_by_key: dic
                         ) -> tuple[dict[str, EraResolution], dict[str, Security], list[ReviewItem]]:
     """3. FIGI per era -> securities. An era takes only the FTD CUSIPs whose rows
     describe its issuer, by its observed names or the issuer's EDGAR names (D21),
-    and a ticker or name hit whose name agrees with those same names (§8.3).
-    Returns each era's resolution, the securities, and the review items of
-    eras that resolved to no FIGI or rested on a degraded answer."""
+    and a ticker or name hit whose name agrees with those same names (§8.3). An
+    era with no pick of its own still joins a same-issuer, same-class sibling's
+    composite through their shared-CUSIP/switch evidence (`cusip_handoffs`,
+    spec §17), when that sibling is confirmed by a pin or a CUSIP. Returns each
+    era's resolution, the securities, and the review items of eras that
+    resolved to no FIGI or rested on a degraded answer."""
     issuers = answers.issuers
     cusips = candidate_cusips(eras, ftd, issuers)
-    resolutions = FigiResolver(ctx.clients.figi).resolve_many(eras, issuers=issuers, cusips=cusips)
+    handoffs = cusip_handoffs(eras, ftd)
+    resolutions = FigiResolver(ctx.clients.figi, log=ctx.log).resolve_many(eras, issuers=issuers, cusips=cusips,
+                                                                          handoffs=handoffs)
     securities = build_securities(resolutions, era_by_key, issuers)
     review: list[ReviewItem] = []
     for key, res in resolutions.items():

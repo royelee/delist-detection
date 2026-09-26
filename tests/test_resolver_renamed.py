@@ -20,6 +20,7 @@ import pytest
 from delist_detection import manifest as run_manifest
 from delist_detection import pipeline
 from delist_detection.edgar import EdgarSubmission
+from delist_detection.evidence import edgar_names
 from delist_detection.ftd import FtdIndex, FtdRow
 from delist_detection.observations import ObservationIndex, load_observations
 from delist_detection.pipeline import Clients, _RunContext
@@ -581,6 +582,37 @@ def test_the_second_pass_answer_is_used_flagged_and_never_saved(eras, ftd, tmp_p
     inferred = [(i.ticker, i.cik, i.reason) for i in review if i.flag == "issuer_inferred"]
     assert inferred == [("KORS", 1530721, "KORS@2012-06-29 CAPRI HOLDINGS LTD: issuer 1530721 by shared_cusip: "
                                           "shares CUSIP G60754101 with KORS@2014-12-31")]
+
+
+class _KorsCpriFigi:
+    """OpenFIGI: only CPRI's new CUSIP (G1890L107) maps to a US composite; KORS's
+    old CUSIP and every ticker job map to nothing (as the real answers do)."""
+
+    def map(self, jobs):
+        cpri = {"data": [{"compositeFIGI": "BBG0029SNR63", "exchCode": "US", "ticker": "CPRI",
+                          "name": "CAPRI HOLDINGS LTD", "securityType": "Common Stock"}]}
+        return [cpri if j["idType"] == "ID_CINS" and j["idValue"] == "G1890L107" else {"data": []} for j in jobs]
+
+    def filter(self, query, **kw):
+        return []
+
+
+def test_the_pipeline_wires_cusip_handoffs_into_the_figi_stage(eras, ftd):
+    """Spec §17: stage 3 (`pipeline._resolve_securities`) must compute the run's
+    CUSIP handoffs itself and pass them to `FigiResolver.resolve_many` -- not
+    only a caller who builds the links by hand. Given the real KORS/CPRI eras
+    and fails rows, the wiring alone lands the KORS chain on CPRI's composite."""
+    kors = [eras["KORS@2012-06-29"], eras["KORS@2014-12-31"], eras["CPRI@2018-12-31"]]
+    names = {1530721: edgar_names(DATA["issuers"]["1530721"])}
+    issuers = issuers_by_era({e.key: 1530721 for e in kors}, names)
+    answers = pipeline._IssuerAnswers({}, issuers, {e.key: era_last_seen(e, ftd) for e in kors}, set())
+    ctx = _ctx(TickerResolver(_Edgar()))
+    ctx.clients.figi = _KorsCpriFigi()
+    resolutions, securities, review = pipeline._resolve_securities(ctx, kors, {e.key: e for e in kors}, ftd, answers)
+    assert {k: (r.sec_id, r.source) for k, r in resolutions.items()} == {
+        "KORS@2012-06-29": ("BBG0029SNR63", "handoff"), "KORS@2014-12-31": ("BBG0029SNR63", "handoff"),
+        "CPRI@2018-12-31": ("BBG0029SNR63", "cusip")}
+    assert set(securities) == {"BBG0029SNR63"}
 
 
 def test_fails_rows_with_no_word_to_compare_confirm_no_issuer(eras, ftd, frequency):
