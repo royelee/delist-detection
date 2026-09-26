@@ -28,7 +28,7 @@ editable install.
 
 ```bash
 pip install -e .                         # editable install (Python ≥3.10) — once per env
-pytest                                    # full suite (1304 tests, offline, no network)
+pytest                                    # full suite (1305 tests, offline, no network)
 pytest tests/test_payout_extractor.py -v  # one file
 pytest tests/test_payout_extractor.py::test_match_in_cash_family_altr -v   # one test
 
@@ -176,8 +176,8 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   description matches a name it carried by 30 days after the row, the only
   candidate that did) and matching one of the era's own names; a switch's
   issuer must be the old CUSIP's, renamed (existed when it began, renamed near
-  the switch, each old row named word by word by a name it carried within 30
-  days of that row or by the name the switch renamed it from, no
+  the switch, each old row named word by word by a name it carried in the 30
+  days up to that row or by the name the switch renamed it from, no
   other CUSIP of its own and of the same class, begun before the switch,
   trading at it). Answers are checked again at the fixed point; each carries
   the check flag `issuer_inferred`. Rule C also runs over first-pass answers:
