@@ -485,19 +485,13 @@ class _DegradedWatch:
             return
         review.append(item)
         for ev in flag_rows:
-            ev.record.evidence["flags"].append(DEGRADED_FLAG)
+            ev.add_flag(DEGRADED_FLAG)
 
     def report_event(self, review: list[ReviewItem], e: DelistingEvent, what: str, *, own_row: bool = True) -> None:
         """`report` for one delisting's `what`: its review row, and with `own_row`
         its delistings.csv row too."""
         self.report(review, _degraded_item(e.sec_id, e.ticker, e.cik, what, delist_date=e.delist_date),
                     [e] if own_row else ())
-
-
-def _set_successor(e: DelistingEvent, sec_id: str) -> None:
-    """Record `sec_id` as `e`'s successor: its row no longer says `successor_unknown`."""
-    e.record.successor_sec_id = sec_id
-    e.record.evidence["flags"] = [f for f in e.record.evidence["flags"] if f != "successor_unknown"]
 
 
 def _review_item_row(item: ReviewItem) -> dict:
@@ -763,7 +757,7 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
             closes[key] = given
             continue
         if e.last_trade.day is None:
-            e.record.evidence["flags"].append("no_last_close")
+            e.add_flag("no_last_close")
             continue
         sec = securities[e.sec_id]
         cusip_ranges = ranges_from_sightings(_cusip_sightings(sec, ftd, sec_cusips.get(e.sec_id, [])),
@@ -776,16 +770,16 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
             # age in trading days (ftd_close_prior:<n>); the evidence the row date.
             back = ftd.close_known_on(e.last_trade.day, cusip=cusip, symbol=e.ticker)
             if back is None:
-                e.record.evidence["flags"].append("no_last_close")
+                e.add_flag("no_last_close")
             else:
                 closes[key] = back[0]
                 e.record.evidence["ftd_close_row_date"] = back[1]
-                e.record.evidence["flags"].append(f"ftd_close_prior:{_close_age(back[1], e.last_trade.day)}")
+                e.add_flag(f"ftd_close_prior:{_close_age(back[1], e.last_trade.day)}")
             continue
         price, _, lagged = got
         closes[key] = price
         if lagged:
-            e.record.evidence["flags"].append("ftd_close_lagged")
+            e.add_flag("ftd_close_lagged")
 
     # 8. merger payouts, LLM terms, acquirer prices and securities
     payouts_raw, llm_terms = {}, {}
@@ -849,7 +843,7 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
         # stale price: flag the delisting when that price made it into its terms.
         terms = for_delisting(gated.merged_terms, e.sec_id, e.delist_date)
         if (e.sec_id, e.delist_date) in lagged_acquirer and terms and terms.get("acquirer_price") is not None:
-            e.record.evidence["flags"].append("acquirer_close_lagged")
+            e.add_flag("acquirer_close_lagged")
     added: dict[str, Security] = {}
     added_meta: dict[str, dict] = {}
     acquirer_ids: dict[tuple[str, str], str] = {}
@@ -912,7 +906,7 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
         if in_run is None:
             continue
         sid, how = in_run
-        _set_successor(e, sid)
+        e.set_successor(sid)
         e.record.evidence["successor_by"] = how
         e.record.reason = f"{e.record.reason}; successor by {how.replace('_', ' ')}"
     if successor_search is not None:           # else the successor issuer's 8-K12B
@@ -937,7 +931,7 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
             if hit is None:
                 continue
             s_cik, cand, filing_date = hit
-            _set_successor(e, cand.composite)
+            e.set_successor(cand.composite)
             if cand.composite not in securities and cand.composite not in added:
                 added[cand.composite] = Security(cand.composite, s_cik, share_class_from_name(cand.name), cand.name,
                                                  cand.security_type, False, "ticker")

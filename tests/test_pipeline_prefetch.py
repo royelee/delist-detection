@@ -380,7 +380,7 @@ def test_the_successor_search_is_warmed_with_the_query_the_sequential_pass_sends
                               delist_date="2015-10-12")
         return DelistingEvent(sec_id="BBGGOOGLEA1", cik=1288776, ticker="GOOGL", delist_date="2015-10-12",
                               record=record, last_trade=LastTrade(date(2015, 10, 2), "notice_a", ()),
-                              form25=None, form25_sub=None, exchange="NASDAQ", flags=["successor_unknown"])
+                              form25=None, form25_sub=None, exchange="NASDAQ")
 
     class _CannedFinder:
         def __init__(self, edgar, classifier, *, midas=None, halts=None):

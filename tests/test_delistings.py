@@ -1,11 +1,12 @@
 from datetime import date
 from pathlib import Path
 
-from delist_detection.classifier import DelistClassifier
+from delist_detection.classifier import DelistClassifier, DelistRecord
 from delist_detection.crsp_codes import CrspBucket
 from delist_detection.delistings import DelistingFinder, SecurityContext
 from delist_detection.edgar import EdgarSubmission
 from delist_detection.form25 import SecurityRef
+from delist_detection.last_trade import LastTrade
 from delist_detection.observations import Observation, split_eras
 from delist_detection.security_master import Security
 from delist_detection.ticker_resolver import TickerResolver
@@ -752,3 +753,20 @@ def test_a_class_left_ambiguous_still_goes_to_review_when_another_class_matched(
     assert events == []
     assert [r.flag for r in review] == ["form25_unmatched", "ended_without_delisting"]
     assert "no Form 25 matched it" in review[1].reason
+
+
+def test_a_delistings_flags_are_its_records_evidence_flags():
+    """One list: what the pipeline adds or clears on the event is what the
+    delistings.csv row (built from record.evidence) carries, and a found
+    successor clears successor_unknown from both views at once."""
+    from delist_detection.delistings import DelistingEvent
+    rec = DelistRecord(ticker="GOOGL", cik=1288776, observed_delist_date="2015-10-02", crsp_code=300,
+                       bucket=CrspBucket.EXCHANGE_TRANSFER, confidence="high", reason="holdco reorg",
+                       evidence={"flags": ["successor_unknown"]}, sec_id="BBGGOOGLEA1", delist_date="2015-10-12")
+    ev = DelistingEvent("BBGGOOGLEA1", 1288776, "GOOGL", "2015-10-12", rec, LastTrade(date(2015, 10, 2), "", ()),
+                        None, None, "NASDAQ")
+    ev.add_flag("ftd_close_lagged")
+    assert rec.evidence["flags"] == ev.flags == ["successor_unknown", "ftd_close_lagged"]
+    ev.set_successor("BBG009S39JX6")
+    assert rec.successor_sec_id == "BBG009S39JX6"
+    assert rec.evidence["flags"] == ev.flags == ["ftd_close_lagged"]

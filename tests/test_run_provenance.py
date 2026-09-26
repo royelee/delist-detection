@@ -100,7 +100,7 @@ def test_a_successor_search_whose_efts_refetch_failed_is_flagged_resolution_degr
                           delist_date="2018-12-09")
     ev = DelistingEvent(sec_id="BBG000FJLFX8", cik=1122304, ticker="AET", delist_date="2018-12-09", record=record,
                         last_trade=LastTrade(date(2018, 11, 28), "notice_a", ()), form25=None, form25_sub=None,
-                        exchange="NYSE", flags=["successor_unknown"])
+                        exchange="NYSE")
 
     class _CannedFinder:
         def __init__(self, edgar, classifier, *, midas=None, halts=None):

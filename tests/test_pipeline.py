@@ -385,7 +385,7 @@ def test_run_writes_an_open_successor_ticker_history_row(fake_edgar, tmp_path, m
                           delist_date="2018-12-09")
     ev = DelistingEvent(sec_id="BBG000FJLFX8", cik=1122304, ticker="AET", delist_date="2018-12-09", record=record,
                         last_trade=LastTrade(date(2018, 11, 28), "notice_a", ()), form25=None, form25_sub=None,
-                        exchange="NYSE", flags=["successor_unknown"])
+                        exchange="NYSE")
 
     class _CannedFinder:
         def __init__(self, edgar, classifier, *, midas=None, halts=None):
@@ -425,7 +425,7 @@ def test_ticker_history_clips_at_delist_date_when_last_trade_day_is_unconfirmed(
                           evidence={"flags": []}, sec_id="BBG000FJLFX8", delist_date="2018-12-09")
     ev = DelistingEvent(sec_id="BBG000FJLFX8", cik=1122304, ticker="AET", delist_date="2018-12-09", record=record,
                         last_trade=LastTrade(None, "", ("last_trade_date_unconfirmed",)), form25=None,
-                        form25_sub=None, exchange="", flags=[])
+                        form25_sub=None, exchange="")
 
     class _CannedFinder:
         def __init__(self, edgar, classifier, *, midas=None, halts=None):
@@ -736,11 +736,11 @@ def test_run_level_acquirer_price_uses_each_mergers_own_last_trade_day(fake_edga
     ev1 = DelistingEvent(sec_id="BBGSEC001", cik=7001, ticker="S1", delist_date="2020-06-15",
                          record=_merger_record("BBGSEC001", "S1", 7001, "2020-06-15"),
                          last_trade=LastTrade(date(2020, 6, 1), "notice_a", ()), form25=None, form25_sub=None,
-                         exchange="NYSE", flags=[])
+                         exchange="NYSE")
     ev2 = DelistingEvent(sec_id="BBGSEC002", cik=7002, ticker="S2", delist_date="2020-06-15",
                          record=_merger_record("BBGSEC002", "S2", 7002, "2020-06-15"),
                          last_trade=LastTrade(date(2020, 6, 5), "notice_a", ()), form25=None, form25_sub=None,
-                         exchange="NYSE", flags=[])
+                         exchange="NYSE")
 
     class _CannedFinder:
         def __init__(self, edgar, classifier, *, midas=None, halts=None):
@@ -793,7 +793,7 @@ def test_same_ticker_successor_does_not_overlap_its_predecessor(fake_edgar, tmp_
                           delist_date="2018-12-09")
     ev = DelistingEvent(sec_id="BBG000FJLFX8", cik=1122304, ticker="AET", delist_date="2018-12-09", record=record,
                         last_trade=LastTrade(date(2018, 11, 28), "notice_a", ()), form25=None, form25_sub=None,
-                        exchange="NYSE", flags=["successor_unknown"])
+                        exchange="NYSE")
 
     class _CannedFinder:
         def __init__(self, edgar, classifier, *, midas=None, halts=None):
@@ -867,7 +867,7 @@ def test_run_writes_one_acquirer_range_spanning_all_its_mergers(fake_edgar, tmp_
                            sec_id=sec_id, delist_date=delist_date)
         return DelistingEvent(sec_id=sec_id, cik=cik, ticker=ticker, delist_date=delist_date, record=rec,
                               last_trade=LastTrade(last_trade_day, "notice_a", ()), form25=None, form25_sub=None,
-                              exchange="NYSE", flags=[])
+                              exchange="NYSE")
 
     ev1 = _merger_ev("BBGSEC101", "S1", 7101, date(2020, 2, 28), "2020-03-15")
     ev2 = _merger_ev("BBGSEC102", "S2", 7102, date(2020, 9, 2), "2020-09-20")
@@ -1083,7 +1083,7 @@ def test_a_lagged_acquirer_close_flags_the_delisting(fake_edgar, tmp_path, monke
                            sec_id=sec_id, delist_date=delist_date)
         return DelistingEvent(sec_id=sec_id, cik=cik, ticker=ticker, delist_date=delist_date, record=rec,
                               last_trade=LastTrade(last_trade_day, "notice_a", ()), form25=None, form25_sub=None,
-                              exchange="NYSE", flags=[])
+                              exchange="NYSE")
 
     events = {"BBGSEC201": _merger("BBGSEC201", "S1", 7201, date(2020, 6, 1), "2020-06-12"),
               "BBGSEC202": _merger("BBGSEC202", "S2", 7202, date(2020, 9, 1), "2020-09-11")}
@@ -1164,7 +1164,7 @@ def test_a_blank_dlret_with_no_flags_still_reaches_review_as_fix_no_dlret(fake_e
                           evidence={"flags": []}, sec_id="BBG000FJLFX8", delist_date="2018-12-09")
     ev = DelistingEvent(sec_id="BBG000FJLFX8", cik=1122304, ticker="AET", delist_date="2018-12-09", record=record,
                         last_trade=LastTrade(date(2018, 11, 28), "notice_a", ()), form25=None, form25_sub=None,
-                        exchange="NYSE", flags=[])
+                        exchange="NYSE")
 
     class _CannedFinder:
         def __init__(self, edgar, classifier, *, midas=None, halts=None):
@@ -1239,7 +1239,7 @@ def test_successor_search_quotes_the_predecessor_issuers_edgar_name(fake_edgar, 
                           evidence={"flags": ["successor_unknown"]}, sec_id="BBGGOOGLEA1", delist_date="2015-10-12")
     ev = DelistingEvent(sec_id="BBGGOOGLEA1", cik=1288776, ticker="GOOGL", delist_date="2015-10-12", record=record,
                         last_trade=LastTrade(date(2015, 10, 2), "notice_a", ()), form25=None, form25_sub=None,
-                        exchange="NASDAQ", flags=["successor_unknown"])
+                        exchange="NASDAQ")
 
     class _CannedFinder:
         def __init__(self, edgar, classifier, *, midas=None, halts=None):
@@ -1623,7 +1623,7 @@ def _reorg_run(fake_edgar, tmp_path, monkeypatch, new_dates=("2024-10-02", "2024
                           delist_date="2024-10-01")
     ev = DelistingEvent(sec_id="BBGBLKOLD01", cik=1364742, ticker="BLK", delist_date="2024-10-01", record=record,
                         last_trade=LastTrade(date(2024, 10, 1), "", ()), form25=None, form25_sub=None,
-                        exchange="NYSE", flags=["no_form25", "successor_unknown"])
+                        exchange="NYSE")
 
     class _CannedFinder:
         def __init__(self, edgar, classifier, *, midas=None, halts=None):
@@ -1671,7 +1671,7 @@ def test_with_no_last_trade_date_the_window_is_anchored_on_the_form25_filing():
     # the delisting's ticker is the fails rows' deleted-symbol spelling; the old line's own ticker is APA
     ev = DelistingEvent(sec_id="BBGAPAOLD01", cik=6769, ticker="APAXXXX", delist_date="2021-03-14", record=record,
                         last_trade=LastTrade(None, "", ("no_last_trade_date",)), form25=None, form25_sub=sub,
-                        exchange="NASDAQ", flags=["successor_unknown"])
+                        exchange="NASDAQ")
     starts = {"BBGAPAOLD01": ("2007-12-17", 6769, {"APA"}), "BBGAPANEW01": ("2021-03-01", 1841666, {"APA"})}
     assert pipeline._successor_in_run(ev, starts) == ("BBGAPANEW01", "same_ticker")
 
@@ -1884,7 +1884,7 @@ def _nutrisystem_event():
                           sec_id="BBGNTRI0001", delist_date="2019-03-17")
     return DelistingEvent(sec_id="BBGNTRI0001", cik=1096376, ticker="NTRI", delist_date="2019-03-17",
                           record=record, last_trade=LastTrade(date(2019, 3, 7), "midas", ()), form25=None,
-                          form25_sub=None, exchange="NASDAQ", flags=[])
+                          form25_sub=None, exchange="NASDAQ")
 
 
 def test_an_acquirer_on_another_ticker_resolved_to_the_targets_cik_does_not_take_it(fake_edgar):

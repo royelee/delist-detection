@@ -71,7 +71,21 @@ class DelistingEvent:
     form25: Form25 | None
     form25_sub: EdgarSubmission | None
     exchange: str
-    flags: list[str] = field(default_factory=list)
+
+    @property
+    def flags(self) -> list[str]:
+        """The delisting's review flags: its record's `evidence["flags"]`, the one
+        list its delistings.csv row is built from (the classifier's flags, then
+        the finder's and the pipeline's)."""
+        return self.record.evidence.setdefault("flags", [])
+
+    def add_flag(self, flag: str) -> None:
+        self.flags.append(flag)
+
+    def set_successor(self, sec_id: str) -> None:
+        """Record `sec_id` as the successor: the row no longer says `successor_unknown`."""
+        self.record.successor_sec_id = sec_id
+        self.record.evidence["flags"] = [f for f in self.flags if f != "successor_unknown"]
 
 
 @dataclass
@@ -394,12 +408,12 @@ class DelistingFinder:
                 rec.successor_sec_id = sec.sec_id
             else:
                 flags.append("successor_unknown")
-        ev_flags = rec.evidence.setdefault("flags", [])
+        event = DelistingEvent(sec.sec_id, cik, ticker, delist_date, rec, lt, f25, sub,
+                               f25.exchange if f25 else exchange)
         for f in flags:
-            if f not in ev_flags:
-                ev_flags.append(f)
-        return DelistingEvent(sec.sec_id, cik, ticker, delist_date, rec, lt, f25, sub,
-                              f25.exchange if f25 else exchange, flags)
+            if f not in event.flags:
+                event.add_flag(f)
+        return event
 
     # -- no-Form-25 fallback ----------------------------------------------
     def _fallback_date(self, ctx: SecurityContext, ev: dict) -> tuple[str, tuple[str, ...]]:
