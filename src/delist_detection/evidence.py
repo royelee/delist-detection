@@ -94,6 +94,23 @@ def names_near(sub: dict, on: date, days: int = 30) -> list[str]:
     return out
 
 
+def names_until(sub: dict, on: date) -> list[str]:
+    """Every name the company carried on or before `on`, former names first: the
+    former names that began by then (one with no start date counts), and the
+    current name once it began (it runs from the last rename on)."""
+    out: list[str] = []
+    last_end: date | None = None
+    for fn in sub.get("formerNames") or []:
+        f_lo, f_hi = parse_day(fn.get("from")), parse_day(fn.get("to"))
+        if f_hi and (last_end is None or f_hi > last_end):
+            last_end = f_hi
+        if fn.get("name") and (f_lo is None or f_lo <= on):
+            out.append(fn["name"])
+    if (last_end is None or last_end <= on) and sub.get("name"):
+        out.append(sub["name"])
+    return out
+
+
 def first_filing(filings: list[EdgarSubmission]) -> date | None:
     days = [d for f in filings if (d := parse_day(f.filing_date))]
     return min(days) if days else None

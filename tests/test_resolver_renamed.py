@@ -311,6 +311,17 @@ def test_a_ticker_change_hands_the_new_tickers_issuer_to_the_old_cusips_eras(era
         "LUK@2014-12-31": (96223, "cusip_handoff")}
 
 
+def test_a_fails_description_that_lags_the_rename_still_names_the_issuer(eras, ftd, frequency):
+    """HCP -> PEAK (HCP, Inc. renamed Healthpeak Properties). EDGAR ends the name
+    HCP, INC. on 2019-10-01, but the fails rows keep describing HCP INC COM STK
+    until the ticker changes on 2019-11-05. A description may carry an issuer's
+    earlier name (SEC updates them slowly); only a name the candidate took
+    later than 30 days after a row cannot describe it."""
+    got = _infer(eras, ftd, list(eras), {**RESOLVED, "PEAK@2019-12-31": 765880, "DOC@2024-06-30": 765880})
+    assert (got.get("HCP@2008-01-16"), got.get("HCP@2014-12-31")) == \
+        ((765880, "cusip_handoff"), (765880, "cusip_handoff"))
+
+
 def test_an_era_sharing_a_cusip_with_a_resolved_era_takes_its_issuer(eras, ftd, no_frequency):
     """KORS@2012 (named CAPRI HOLDINGS LTD by the snapshots) shares its CUSIP with
     KORS@2014, which the name search resolves to Capri Holdings."""

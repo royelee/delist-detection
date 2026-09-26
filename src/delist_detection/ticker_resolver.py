@@ -20,7 +20,7 @@ import requests
 
 from .atomic_io import clean_orphan_temps, write_atomic
 from .edgar import STALE_KEY, EdgarClient, submissions_fresh_after
-from .evidence import edgar_names, first_filing, names_near, parse_day, renamed_near
+from .evidence import edgar_names, first_filing, names_near, names_until, parse_day, renamed_near
 from .fatal import FATAL
 from .ftd import FtdIndex, FtdRow
 from .names import description_matches, name_tokens, names_agree
@@ -759,7 +759,7 @@ class TickerResolver:
     # --- The second pass: eras the first could not resolve -------------------------
 
     ERA_MIN_ROWS = 3             # an era with fewer fails rows of its own gets no second-pass answer
-    GUARD_NAME_DAYS = 30         # a name the candidate carried this close to a row's date
+    GUARD_NAME_DAYS = 30         # a name the candidate took up to this long after a row's date can describe it
 
     def infer_issuers(self, eras: list[TickerEra], ftd: FtdIndex, last_seen: dict[str, str],
                       ciks: dict[str, int | None]) -> dict[str, InferredIssuer]:
@@ -773,9 +773,9 @@ class TickerResolver:
         Each era is judged on its own fails rows (`security_master.era_rows`,
         from its first observation to its last sighting `last_seen`); one with
         fewer than `ERA_MIN_ROWS` gets no answer. A candidate CIK must pass the
-        guard (`_guard`): it existed by the era's first row, on every row's date
-        it carried (within `GUARD_NAME_DAYS`) a name matching the row's
-        description, and it is the only candidate that did.
+        guard (`_guard`): it existed by the era's first row, every row's
+        description matches a name it carried by `GUARD_NAME_DAYS` after the
+        row's date (`_fits_rows`), and it is the only candidate that did.
 
         B (`efts_frequency_renamed`): the first pass's 8-K frequency candidates,
         through the guard, and the one left also carried the era's name at its
@@ -835,11 +835,14 @@ class TickerResolver:
         return passing[0] if len(passing) == 1 else None
 
     def _fits_rows(self, cik: int, rows: list[FtdRow]) -> bool:
-        """Whether the CIK existed by the first of `rows` and, on each row's date,
-        carried within `GUARD_NAME_DAYS` a name that `names.description_matches`
-        the row's description. A company founded later (LMCA's 2013 spin-off for
-        2012 rows) or never so named (Penske Automotive for an ETN's rows under
-        UAG) is not the rows' issuer."""
+        """Whether the CIK existed by the first of `rows` and each row's
+        description `names.description_matches` (with a word to compare) a name
+        it carried by `GUARD_NAME_DAYS` after the row's date. An earlier name
+        counts: SEC updates a description slowly (HCP INC COM STK until the ticker
+        changed on 2019-11-05, EDGAR ending the name HCP, INC. on 2019-10-01). A
+        company founded later (LMCA's 2013 spin-off for 2012 rows), never so
+        named (Penske Automotive for an ETN's rows under UAG), or so named only
+        later, is not the rows' issuer."""
         try:
             sub = self._submissions(cik, rows[-1].date)
             filings = self.edgar.recent_filings(cik)
@@ -851,14 +854,11 @@ class TickerResolver:
         first = first_filing(filings)
         if first is None or first > parse_day(rows[0].date) or not isinstance(sub, dict):
             return False
-        descriptions: dict[str, set[str]] = {}
+        since: dict[str, str] = {}                  # description -> its first row's date (names only accumulate)
         for r in rows:
-            descriptions.setdefault(r.date, set()).add(r.description)
-        for day, descs in descriptions.items():
-            names = names_near(sub, parse_day(day), self.GUARD_NAME_DAYS)
-            if not names or not all(description_matches(d, names, empty=False) for d in descs):
-                return False
-        return True
+            since.setdefault(r.description, r.date)
+        return all(description_matches(d, names_until(sub, parse_day(day) + timedelta(days=self.GUARD_NAME_DAYS)),
+                                       empty=False) for d, day in since.items())
 
     def _frequency_renamed(self, era: TickerEra, rows: list[FtdRow], last_seen: str) -> InferredIssuer | None:
         """Fix B: the 8-K frequency candidate that passes the guard, carried the
