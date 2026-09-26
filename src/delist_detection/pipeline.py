@@ -266,13 +266,33 @@ class _DegradedWatch:
             return
         review.append(item)
         for delisting in flag_rows:
-            delisting.add_flag(DEGRADED_FLAG)
+            _flag_degraded(delisting)
 
     def report_delisting(self, review: list[ReviewItem], e: Delisting, what: str, *, own_row: bool = True) -> None:
         """`report` for one delisting's `what`: its review row, and with `own_row`
         its delistings.csv row too."""
         self.report(review, _degraded_item(e.sec_id, e.ticker, e.cik, what, delist_date=e.delist_date),
                     [e] if own_row else ())
+
+
+def _flag_degraded(delisting: Delisting) -> None:
+    if DEGRADED_FLAG not in delisting.flags:
+        delisting.add_flag(DEGRADED_FLAG)
+
+
+def _report_halt_feed_failures(review: list[ReviewItem], delistings: Sequence[Delisting]) -> None:
+    """Each delisting whose last-trade decision asked the Nasdaq halt feed for a
+    day it could not read (`LastTrade.halt_feed_failed`): the same treatment as
+    a failed SEC request -- `resolution_degraded` on its own delistings.csv row,
+    and a review row naming the feed and the days."""
+    for d in delistings:
+        if not d.last_trade.halt_feed_failed:
+            continue
+        days = ", ".join(sorted({day.isoformat() for day in d.last_trade.halt_feed_failed}))
+        review.append(ReviewItem(d.sec_id, d.ticker, d.cik, DEGRADED_FLAG,
+                                 f"the last-trade date rested on a failed Nasdaq halt feed read ({days}); "
+                                 "run again once the feed answers", delist_date=d.delist_date))
+        _flag_degraded(d)
 
 
 def _warm_delisting_search(clients: Clients, ordered: list[Security], listing: dict[str, dict],
@@ -577,6 +597,7 @@ def _find_delistings(ctx: _RunContext, securities: dict[str, Security], sec_cusi
         review += found_review
         watch.report(review, _degraded_item(s.sec_id, ticker, s.issuer_cik, "the delisting search",
                                             "; run again once SEC answers", last_seen=last_seen), found)
+        _report_halt_feed_failures(review, found)
         if i % 50 == 0:
             log(f"[{i}/{len(securities)}] securities searched; {len(delistings)} delistings so far")
     ctx.meter.done("delisting search", mark)

@@ -407,10 +407,16 @@ class RequestStats:
         with self._lock:
             self._timings[endpoint].append(seconds)
 
-    def degraded(self, what: str) -> None:
+    def degraded(self, what: str, *, sec: bool = True) -> None:
+        """Count an answer that rested on a failed request or a stale copy under
+        `what`. With `sec` (an SEC answer) it also counts on the calling thread
+        (`thread_degraded`), which the pipeline reads as "a failed SEC request";
+        another source's failure (the Nasdaq halt feed) is only counted, and its
+        client says itself which read failed."""
         prefix = "warm_degraded" if filling_only() else "degraded"
         self.add(f"{prefix}:{what}")
-        self._local.degraded = self.thread_degraded() + 1
+        if sec:
+            self._local.degraded = self.thread_degraded() + 1
 
     def thread_degraded(self) -> int:
         return getattr(self._local, "degraded", 0)

@@ -770,3 +770,50 @@ def test_a_delistings_flags_are_its_records_evidence_flags():
     ev.set_successor("BBG009S39JX6")
     assert rec.successor_sec_id == "BBG009S39JX6"
     assert rec.evidence["flags"] == ev.flags == ["ftd_close_lagged"]
+
+
+class _FailingHalts:
+    """A halt feed that fails every day it is asked for (a timeout), like
+    NasdaqHaltClient: no halts, and the day listed by failed_days()."""
+
+    def __init__(self):
+        self.failed = []
+
+    def deletion_halt(self, symbol, lo, hi, max_days=7):
+        self.failed.append(lo)
+        return None
+
+    def failed_days(self):
+        return tuple(self.failed)
+
+
+class _AnsweringHalts(_FailingHalts):
+    def deletion_halt(self, symbol, lo, hi, max_days=7):
+        return None
+
+
+def test_a_last_trade_decision_that_asked_a_failed_halt_feed_day_says_so(fake_edgar):
+    """With no MIDAS day the finder asks the Nasdaq halt feed; a day it could not
+    read is carried on the delisting's LastTrade, so the pipeline can flag it."""
+    edgar = _aet_edgar(fake_edgar)
+    clf = DelistClassifier(edgar, TickerResolver(edgar))
+    sec = _sec("BBG000FJLFX8", 1122304, "AET", "2017-06-30", "2018-06-29", "AETNA INC")
+    halts = _FailingHalts()
+    (ev,), _ = DelistingFinder(edgar, clf, halts=halts).find(_ctx(sec))
+    assert ev.last_trade.halt_feed_failed == tuple(halts.failed) != ()
+    (ok,), _ = DelistingFinder(edgar, clf, halts=_AnsweringHalts()).find(_ctx(sec))
+    assert ok.last_trade.halt_feed_failed == ()
+    (no_feed,), _ = DelistingFinder(edgar, clf).find(_ctx(sec))
+    assert no_feed.last_trade.halt_feed_failed == ()
+
+
+def test_a_fallback_last_trade_keeps_the_failed_halt_feed_days(fake_edgar):
+    """The no-Form-25 fallback replaces an undated last trade by the last
+    sighting; the halt-feed days its decision failed to read stay with it."""
+    fake_edgar.submissions_by_cik[13000] = [EdgarSubmission("v1", "REVOKED", "2018-01-15", "", "", "")]
+    clf = DelistClassifier(fake_edgar, TickerResolver(fake_edgar))
+    sec = _sec("BBG_V", 13000, "VVV", "2010-01-01", "2015-01-10", "VVV CORP")
+    halts = _FailingHalts()
+    (ev,), _ = DelistingFinder(fake_edgar, clf, halts=halts).find(_ctx(sec, last_seen="2015-01-10"))
+    assert ev.last_trade.day == date(2015, 1, 10) and "last_trade_date_unconfirmed" in ev.last_trade.flags
+    assert ev.last_trade.halt_feed_failed == tuple(halts.failed) != ()

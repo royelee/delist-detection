@@ -64,6 +64,9 @@ class LastTrade:
     day: date | None
     source: str
     flags: tuple[str, ...]
+    # Days of the Nasdaq halt feed this decision asked for and could not read
+    # (nasdaq_halts: a failure, not "no halts"): the decision rests on them.
+    halt_feed_failed: tuple[date, ...] = ()
 
 
 def _confirmed(kind: str) -> bool:

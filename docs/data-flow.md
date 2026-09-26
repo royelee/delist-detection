@@ -316,7 +316,7 @@ previous manifest in place.
   `--sec-workers` outside `[1, 8]` or an unreadable `--as-of`);
 - `3` when the run completed but `review.csv` has one or more `error` rows (one
   security or payout extraction raised and was logged instead of aborting) or
-  `resolution_degraded` rows (an answer rested on a failed SEC request or a
+  `resolution_degraded` rows (an answer rested on a failed SEC or Nasdaq halt-feed request or a
   stale copy). Outputs are still written, and a banner naming the counts goes to
   stderr;
 - `4` when OpenFIGI is unavailable after its retries (timeouts, connection
@@ -519,6 +519,14 @@ README's *Where each date and price comes from* for the full detail):
    nothing, so a day that close to the edge can't be told apart from "the
    next quarter just isn't out yet".
 4. Nasdaq's trade-halt feed (code `D`), used only when MIDAS has no answer.
+   A day's feed that parses, or a 404 (no halts that day), is an answer; a
+   timeout, a connection error, a 429/5xx after the one retry, another
+   status or a body that does not parse is a failure. A failed day reads as
+   no halts for the run but is never cached, is counted in the manifest as
+   `degraded_answers: nasdaq_halt_feed` (not as a failed SEC request), and is
+   carried on the decision (`LastTrade.halt_feed_failed`): the delisting gets
+   `resolution_degraded`, on its own row and in a review row naming the feed
+   and the days, and the CLI exits 3, as for a failed SEC request.
 
 MIDAS beats a halt beats filing-text wording; a disagreement between a
 measured source and filing text is flagged `last_trade_date_conflict`; a

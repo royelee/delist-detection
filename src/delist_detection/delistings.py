@@ -8,7 +8,7 @@ all is reported for review instead of being dropped.
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date, timedelta
 
 from .classifier import DelistClassifier, DelistRecord
@@ -161,27 +161,44 @@ class DelistingFinder:
         return self._eightk_window(cik, filings, filed - timedelta(days=EIGHTK_BEFORE_DAYS),
                                    filed + timedelta(days=EIGHTK_AFTER_DAYS), filed)
 
+    def _halt_feed_failures(self) -> tuple[date, ...]:
+        """The halt feed's failed days so far on this thread (a halt client
+        without `failed_days` never fails)."""
+        failed_days = getattr(self.halts, "failed_days", None)
+        return tuple(failed_days()) if failed_days is not None else ()
+
     def _confirmations(self, tickers: list[str], filed: date, lo: date, hi: date, still_trading: date,
-                       guesses: list[date]) -> tuple[date | None, date | None]:
-        """(MIDAS last day with exchange volume, Nasdaq code-D halt day) over
-        every ticker in `tickers`: MIDAS (asked when `filed` is in its
-        coverage) takes the latest day in `[lo, hi]` before `still_trading`
-        under any of them; the halt feed is asked only when MIDAS has nothing,
-        around the text sources' `guesses`."""
+                       guesses: list[date]) -> tuple[date | None, date | None, tuple[date, ...]]:
+        """(MIDAS last day with exchange volume, Nasdaq code-D halt day, halt
+        feed days that failed to read) over every ticker in `tickers`: MIDAS
+        (asked when `filed` is in its coverage) takes the latest day in `[lo,
+        hi]` before `still_trading` under any of them; the halt feed is asked
+        only when MIDAS has nothing, around the text sources' `guesses`."""
         midas = None
         if self.midas is not None and filed >= MIDAS_START:
             days = [m for t in tickers if (m := self.midas.last_trade_day(t, lo, hi)) is not None
                     and m < still_trading]
             midas = max(days) if days else None
-        halt = None
+        halt, failed = None, ()
         if midas is None and self.halts is not None:
+            before = len(self._halt_feed_failures())
             for t in tickers:
                 h = self.halts.deletion_halt(t, min(guesses) - timedelta(days=2),
                                              max(guesses) + timedelta(days=2), max_days=5)
                 if h:
                     halt = last_trade_from_halt(h)
                     break
-        return midas, halt
+            failed = self._halt_feed_failures()[before:]
+        return midas, halt, failed
+
+    @staticmethod
+    def _decide(notice: tuple[date | None, str], eightk: tuple[date | None, str],
+                confirmations: tuple[date | None, date | None, tuple[date, ...]]) -> LastTrade:
+        """`decide_last_trade` over the text sources and the confirmations,
+        carrying the halt feed days that failed to read."""
+        midas, halt, failed = confirmations
+        lt = decide_last_trade(notice=notice, eightk=eightk, midas=midas, halt=halt)
+        return replace(lt, halt_feed_failed=failed) if failed else lt
 
     @staticmethod
     def _tickers(ctx: SecurityContext | None, ticker: str, lo: date, hi: date) -> list[str]:
@@ -194,10 +211,10 @@ class DelistingFinder:
         notice = notice_last_trade(f25) if f25 else (None, "")
         eightk = self._eightk(cik, filings, filed)
         lo, hi = filed - timedelta(days=MIDAS_BEFORE_DAYS), filed + timedelta(days=MIDAS_AFTER_DAYS)
-        midas, halt = self._confirmations(
+        confirmations = self._confirmations(
             self._tickers(ctx, ticker, lo, hi), filed, lo, hi, filed + timedelta(days=MIDAS_STILL_TRADING_DAYS),
             [d for d, _ in (notice, eightk) if d] or [previous_trading_day(filed)])
-        return decide_last_trade(notice=notice, eightk=eightk, midas=midas, halt=halt)
+        return self._decide(notice, eightk, confirmations)
 
     # -- last trade for a group of Form 25s of one delisting --------------
     def _last_trade_group(self, cik: int, filings: list[EdgarSubmission],
@@ -221,11 +238,11 @@ class DelistingFinder:
 
         lo = earliest_filed - timedelta(days=MIDAS_BEFORE_DAYS)
         hi = latest_eff + timedelta(days=MIDAS_AFTER_DAYS)
-        midas, halt = self._confirmations(
+        confirmations = self._confirmations(
             self._tickers(ctx, ticker, lo, hi), earliest_filed, lo, hi,
             latest_eff + timedelta(days=MIDAS_STILL_TRADING_DAYS),
             [d for d, _ in (notice, eightk) if d] or [previous_trading_day(latest_filed)])
-        return decide_last_trade(notice=notice, eightk=eightk, midas=midas, halt=halt)
+        return self._decide(notice, eightk, confirmations)
 
     # -- grouping -----------------------------------------------------------
     def _group(self, candidates: list[tuple[EdgarSubmission, Form25]]
@@ -509,7 +526,7 @@ class DelistingFinder:
         ended_by, extra_flags = self._fallback_date(ctx, evidence)
         lt = self._last_trade(cik, filings, None, ticker, _to_date(ended_by), ctx)
         if lt.day is None:
-            lt = LastTrade(_to_date(ctx.last_seen), "", ("last_trade_date_unconfirmed",))
+            lt = LastTrade(_to_date(ctx.last_seen), "", ("last_trade_date_unconfirmed",), lt.halt_feed_failed)
         # No Form 25 means no exchange evidence from a filing; fall back to
         # whatever exchange EDGAR's own submissions JSON records for this
         # ticker (spec D22) rather than leaving it blank -- which otherwise

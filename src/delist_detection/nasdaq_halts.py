@@ -3,10 +3,20 @@
 A code-D halt ("security deletion from NASDAQ / CQS") timestamps the end of
 exchange trading, including some NYSE/CQS names. Many delistings have no entry,
 so this only confirms a date; it is not a complete register.
+
+A day's feed is an answer when it parses (cached once the day is past) or when
+the feed says 404 (no halts, not cached). Anything else -- a timeout or a
+connection error, a 429/5xx after the one retry, another status, a body that
+does not parse -- is a failure: the day reads as no halts for this run, is never
+cached, is counted under `degraded:nasdaq_halt_feed` (not as a failed SEC
+request), and is listed by `failed_days()` on the thread that read it, so the
+delisting whose last-trade decision asked for it can be flagged
+`resolution_degraded`.
 """
 from __future__ import annotations
 
 import logging
+import threading
 import time
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
@@ -23,6 +33,7 @@ from .trading_calendar import is_trading_day, previous_trading_day
 HALTS_URL = "https://www.nasdaqtrader.com/rss.aspx?feed=tradehalts&haltdate={mmddyyyy}"
 _NS = {"ndaq": "http://www.nasdaqtrader.com/"}
 _UA = "delist_detection research (halt history lookup)"
+DEGRADED_KEY = "nasdaq_halt_feed"      # SEC_STATS.degraded key of a failed day read
 _log = logging.getLogger(__name__)
 
 
@@ -75,7 +86,20 @@ class NasdaqHaltClient:
         self.sleep = sleep or time.sleep
         self.today = today          # the run date: that day's list can still grow (None: the clock)
         self._last = 0.0
+        self._local = threading.local()       # this thread's failed days
         clean_orphan_temps(self.dir)          # a killed run's cut-off day
+
+    def failed_days(self) -> tuple[date, ...]:
+        """Every day whose feed this client failed to read on the calling thread,
+        in the order asked (a day asked twice and failed twice is listed twice)."""
+        return tuple(getattr(self._local, "failed", ()))
+
+    def _failed(self, day: date, why: str) -> list[Halt]:
+        """Record `day` as a failed read (see the module docstring); no halts."""
+        _log.warning(f"halts_on({day:%Y-%m-%d}): {why}")
+        SEC_STATS.degraded(DEGRADED_KEY, sec=False)
+        self._local.failed = [*self.failed_days(), day]
+        return []
 
     def halts_on(self, day: date) -> list[Halt]:
         cp = self.dir / f"{day:%Y%m%d}.xml"
@@ -91,8 +115,7 @@ class NasdaqHaltClient:
                 resp = self.session.get(HALTS_URL.format(mmddyyyy=f"{day:%m%d%Y}"),
                                         headers={"User-Agent": _UA}, timeout=30)
             except requests.RequestException as e:
-                _log.warning(f"halts_on({day:%Y-%m-%d}): network error: {e}")
-                return []
+                return self._failed(day, f"network error: {e}")
 
             # Check for 429 or 5xx; retry once
             if resp.status_code in (429,) or (500 <= resp.status_code < 600):
@@ -106,22 +129,19 @@ class NasdaqHaltClient:
                     self.sleep(sleep_duration)
                     continue
                 else:
-                    _log.warning(f"halts_on({day:%Y-%m-%d}): {resp.status_code} after retry")
-                    return []
+                    return self._failed(day, f"{resp.status_code} after retry")
 
+            if resp.status_code == 404:
+                return []                      # the feed's answer: no halts that day
             if resp.status_code != 200:
-                _log.warning(f"halts_on({day:%Y-%m-%d}): HTTP {resp.status_code}")
-                return []
+                return self._failed(day, f"HTTP {resp.status_code}")
 
             try:
                 halts = parse_halts_rss(resp.content)
             except ET.ParseError as e:
-                # A malformed body is not "no halts" -- that would silently hide a
-                # real deletion halt. Flag it like every other degraded EDGAR/SEC
-                # read; never cache the day.
-                SEC_STATS.degraded("failed_request")
-                _log.warning(f"halts_on({day:%Y-%m-%d}): parse error: {e}")
-                return []
+                # A malformed body is not "no halts": that would silently hide a
+                # real deletion halt.
+                return self._failed(day, f"parse error: {e}")
 
             if day < (self.today or date.today()):  # today's list can still grow
                 cp.parent.mkdir(parents=True, exist_ok=True)

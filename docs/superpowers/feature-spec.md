@@ -598,10 +598,15 @@ line changes observable output.
   *attached* security (a rights-plan clause, or "PREFERRED"/"PREFERENCE"
   when the text is actually common) rather than always cutting at the
   first comma, so a class letter isn't picked up from the wrong clause.
-- **Nasdaq halt feed failures don't abort (§9).** A halt-feed request that
-  fails (network error, repeated 429/5xx) is logged and treated as "no
-  halt" rather than raised — it's a confirmation source, not one of the
-  required SEC sources, so a run should not fail over it.
+- **Nasdaq halt feed failures don't abort, but are reviewable (§9, §11).** A
+  halt-feed day that fails (a timeout or connection error, a 429/5xx after the
+  one retry, another status but 404, a body that does not parse) is logged and
+  read as "no halt" for the run rather than raised: it is a confirmation
+  source, not one of the required SEC sources. It is never cached, and the
+  delisting whose last-trade decision asked for that day gets
+  `resolution_degraded` (reason: the Nasdaq halt feed and the days), so the
+  CLI exits 3, as for a failed SEC request. A 404 is the feed's answer: no
+  halts that day.
 - **`-W` ticker suffix (§8.3, sideline filtering).** Read as the US warrant
   suffix, not folded into the when-issued check — a warrant line is
   filtered out by `security_kind`/class matching instead, so dropping it in
@@ -703,7 +708,8 @@ line changes observable output.
   an empty answer.
 - **Degraded answers are reviewable (§11 "no silent drop").** An era, security,
   payout or successor search whose answer rested on a failed SEC request or a
-  stale copy gets a `resolution_degraded` review row; its answer is used for
+  stale copy, or a last-trade date that asked a halt-feed day the Nasdaq feed
+  failed to give, gets a `resolution_degraded` review row; its answer is used for
   the run but never saved, and the CLI exits 3.
 - **An OpenFIGI outage is not a refusal (§9, §10).** Timeouts, connection
   errors or 5xx answers that outlast the OpenFIGI client's retries raise

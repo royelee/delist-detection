@@ -107,8 +107,8 @@ Exit codes:
      or a start-up check failed (no EDGAR_USER_AGENT, an unusable SEC rate-lock file, a
      bad argument such as --sec-workers or --as-of)
   3  completed, but review.csv has one or more `error` rows, or `resolution_degraded`
-     rows (an answer rested on a failed SEC request or a stale copy; run again once SEC
-     answers). Outputs are still written; see the stderr banner for the counts
+     rows (an answer rested on a failed SEC or Nasdaq halt-feed request or a stale copy;
+     run again once they answer). Outputs are still written; see the stderr banner for the counts
   4  aborted: OpenFIGI unavailable after its retries (timeouts, connection errors or 5xx
      answers, OpenFigiUnavailable); no outputs written, the previous ones are kept whole; rerun later
 """
@@ -241,7 +241,8 @@ def main() -> int:
               "see review.csv for the affected (sec_id, delist_date) rows.", file=sys.stderr)
     if degraded_count:
         print(f"WARNING: {degraded_count} review row(s) flagged 'resolution_degraded' -- an answer rested on "
-              "a failed SEC request or a stale copy; outputs were still written, run again once SEC answers.",
+              "a failed SEC or Nasdaq halt-feed request or a stale copy; outputs were still written, run again "
+              "once they answer.",
               file=sys.stderr)
     return 3 if error_count or degraded_count else 0
 

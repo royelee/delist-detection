@@ -79,8 +79,9 @@ CATALOG: dict[str, FlagInfo] = {
                "or partial.",
         "Fix the cause and rerun; it cannot be accepted.", acceptable=False),
     "resolution_degraded": FlagInfo(
-        "fix", "An answer rested on a failed SEC request or a stale cached copy, and it was not saved.",
-        "Rerun once SEC answers; it cannot be accepted.", acceptable=False),
+        "fix", "An answer rested on a failed SEC or Nasdaq halt-feed request or a stale cached copy, and it "
+               "was not saved.",
+        "Rerun once SEC (or the halt feed) answers; it cannot be accepted.", acceptable=False),
     UNMATCHED_FLAG: FlagInfo(
         "fix", "A line of the decisions file accepts a flag that no review row carries (a typo, or a line "
                "written against an older run).",

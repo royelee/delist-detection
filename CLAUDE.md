@@ -116,7 +116,12 @@ variable names assume (security, era, sighting, pin, …).
   download is remembered in-memory for the rest of the run.
 - `nasdaq_halts.py` — `NasdaqHaltClient`: Nasdaq's keyless trade-halt feed;
   `deletion_halt()` finds a code-`D` ("security deletion") halt as a second
-  last-trade-date confirmation when MIDAS has none.
+  last-trade-date confirmation when MIDAS has none. A 404 is an answer (no
+  halts); a timeout, connection error, 429/5xx after the retry, other status
+  or unparseable body is a failure: never cached, counted as
+  `degraded:nasdaq_halt_feed`, listed by `failed_days()` on the reading
+  thread, carried on `LastTrade.halt_feed_failed` by the finder, and turned
+  into `resolution_degraded` on that delisting by the pipeline.
 - `openfigi.py` — `OpenFigiClient`: OpenFIGI `/v3/mapping` and `/v3/filter`,
   cached on disk (`atomic_io.write_atomic`: a run that dies mid-write leaves no
   cut-off answer), paced on the `ratelimit-*` headers. Owns `OpenFigiBlocked`
@@ -309,7 +314,7 @@ conflate them.
   comes from `OPEN_FIGI_API_KEY` (environment first, then the repo `.env`),
   sent as header `X-OPENFIGI-APIKEY`. Exit 3 is a completed run whose
   `review.csv` has one or more `error` or `resolution_degraded` rows (an answer
-  rested on a failed SEC request or a stale copy); outputs are still written,
+  rested on a failed SEC or Nasdaq halt-feed request or a stale copy); outputs are still written,
   and a banner goes to stderr with the counts. A bad input file exits 2 with
   one stderr line naming the file and line (see *Configurable input paths*),
   and exit 1 means only an unexpected crash. This tally is taken *before*

@@ -86,6 +86,55 @@ def test_a_payout_read_through_a_failed_request_is_flagged_with_its_delisting(fa
     assert "resolution_degraded" in d["review_flags"].split(";")
 
 
+class _HaltSession:
+    """The Nasdaq halt feed: every day times out, or every day answers 404."""
+
+    def __init__(self, status=None):
+        self.status = status
+
+    def get(self, url, headers=None, timeout=None):
+        if self.status is None:
+            raise requests.Timeout("read timed out")
+        resp = requests.models.Response()
+        resp.status_code = self.status
+        return resp
+
+
+def _with_halt_feed(fake_edgar, tmp_path, session):
+    from delist_detection.nasdaq_halts import NasdaqHaltClient
+
+    index, clients = _clients(fake_edgar)
+    clients.halts = NasdaqHaltClient(tmp_path / "halts", session=session, min_interval=0, sleep=lambda _: None)
+    out = tmp_path / "out"
+    summary = run(index, clients, Overrides(), out_dir=out, log=lambda *_: None)
+    return out, summary
+
+
+def test_a_last_trade_date_that_asked_a_failed_halt_feed_day_is_flagged_resolution_degraded(fake_edgar, tmp_path):
+    """AET's last trade has no MIDAS day, so the finder asks the Nasdaq halt feed;
+    the feed times out. That is not "no halts": the delisting is flagged like one
+    that rested on a failed SEC request, on its own row and in review.csv, with a
+    reason naming the halt feed and the days, and the run exits 3."""
+    out, summary = _with_halt_feed(fake_edgar, tmp_path, _HaltSession())
+    (d,) = _delistings(out)
+    assert "resolution_degraded" in d["review_flags"].split(";")
+    rows = [r for r in _review(out) if "resolution_degraded" in r["review_flags"].split(";")
+            and "Nasdaq halt feed" in r["reason"]]
+    assert [(r["sec_id"], r["delist_date"]) for r in rows] == [("BBG000FJLFX8", "2018-12-09")]
+    assert "2018-11-" in rows[0]["reason"]                          # the days it could not read
+    assert "failed EDGAR request" not in rows[0]["reason"]
+    assert summary.review_flags.get("resolution_degraded", 0) >= 1
+    m = json.loads((out / "run_manifest.json").read_text())
+    assert m["degraded_answers"].get("nasdaq_halt_feed", 0) >= 1 and "failed_request" not in m["degraded_answers"]
+
+
+def test_a_halt_feed_that_answers_404_flags_nothing(fake_edgar, tmp_path):
+    out, summary = _with_halt_feed(fake_edgar, tmp_path, _HaltSession(404))
+    (d,) = _delistings(out)
+    assert "resolution_degraded" not in d["review_flags"]
+    assert summary.review_flags.get("resolution_degraded", 0) == 0
+
+
 def test_a_successor_search_whose_efts_refetch_failed_is_flagged_resolution_degraded(fake_edgar, tmp_path,
                                                                                       monkeypatch):
     """Task 5's review: a stale EFTS answer whose refetch fails is caught by

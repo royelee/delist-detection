@@ -134,37 +134,115 @@ class _SessionMalformed:
         return _Resp("<rss><channel><item></channel></rss>")
 
 
-def test_a_malformed_body_counts_as_degraded_and_is_not_cached(tmp_path, caplog):
-    """A malformed halt-feed answer (SEC sent this twice for
-    2025-05-05, per task-16's live measurement) was treated as "no halts" with
-    no flag anywhere. It must count SEC_STATS.degraded("failed_request"),
-    never cache the day, and log once (already true before this fix)."""
-    caplog.set_level(logging.WARNING)
-    s = _SessionMalformed()
-    c = NasdaqHaltClient(tmp_path, session=s, min_interval=0)
-    mark = SEC_STATS.snapshot()
-    halts = c.halts_on(date(2025, 5, 5))
-    assert halts == []
-    assert not (tmp_path / "20250505.xml").exists()
+def _read_one_day(tmp_path, session, day=date(2025, 3, 25)):
+    """Ask the client for one day's halts through `session`; returns the halts,
+    the client, and the SEC_STATS counts the read added."""
+    c = NasdaqHaltClient(tmp_path, session=session, min_interval=0, sleep=lambda _: None)
+    mark, thread_mark = SEC_STATS.snapshot(), SEC_STATS.thread_degraded()
+    halts = c.halts_on(day)
     counts, _ = SEC_STATS.since(mark)
-    assert counts.get("degraded:failed_request") == 1
+    assert SEC_STATS.thread_degraded() == thread_mark          # never read as a failed SEC request
+    return halts, c, counts
+
+
+def _is_a_failure(tmp_path, halts, c, counts, day=date(2025, 3, 25)):
+    assert halts == []
+    assert c.failed_days() == (day,)
+    assert counts.get("degraded:nasdaq_halt_feed") == 1
+    assert "degraded:failed_request" not in counts
+    assert not (tmp_path / f"{day:%Y%m%d}.xml").exists()                    # never cached
+
+
+def test_a_malformed_body_is_a_halt_feed_failure_and_is_not_cached(tmp_path, caplog):
+    """A malformed halt-feed answer (sent twice for 2025-05-05, per task-16's live
+    measurement) is not "no halts": that would hide a real deletion halt. It
+    counts as a Nasdaq halt-feed failure, never as a failed SEC request, is never
+    cached, and is logged."""
+    caplog.set_level(logging.WARNING)
+    day = date(2025, 5, 5)
+    halts, c, counts = _read_one_day(tmp_path, _SessionMalformed(), day)
+    _is_a_failure(tmp_path, halts, c, counts, day)
     assert "parse error" in caplog.text and "2025-05-05" in caplog.text
 
 
-def test_client_403_logs_warning(tmp_path, caplog):
-    """Test that 403 response logs a warning and returns empty list without caching."""
-    import logging
+class _SessionRaising:
+    def __init__(self, exc):
+        self.exc, self.calls = exc, 0
+
+    def get(self, url, headers=None, timeout=None):
+        self.calls += 1
+        raise self.exc
+
+
+@pytest.mark.parametrize("exc", [requests.Timeout("read timed out"), requests.ConnectionError("reset")])
+def test_a_timeout_or_a_connection_error_is_a_halt_feed_failure(tmp_path, exc):
+    s = _SessionRaising(exc)
+    halts, c, counts = _read_one_day(tmp_path, s)
+    _is_a_failure(tmp_path, halts, c, counts)
+    assert s.calls == 1                       # not retried, as before
+
+
+class _SessionStatus:
+    def __init__(self, *statuses):
+        self.statuses, self.calls = list(statuses), 0
+
+    def get(self, url, headers=None, timeout=None):
+        resp = _Resp("")
+        resp.status_code = self.statuses[min(self.calls, len(self.statuses) - 1)]
+        resp.headers = {}
+        self.calls += 1
+        return resp
+
+
+def test_a_5xx_after_the_retry_is_a_halt_feed_failure(tmp_path):
+    s = _SessionStatus(503, 502)
+    halts, c, counts = _read_one_day(tmp_path, s)
+    _is_a_failure(tmp_path, halts, c, counts)
+    assert s.calls == 2                       # one retry, as before
+
+
+def test_a_404_is_an_answer_no_halts_not_a_failure(tmp_path):
+    halts, c, counts = _read_one_day(tmp_path, _SessionStatus(404))
+    assert halts == [] and c.failed_days() == ()
+    assert not any(k.endswith("nasdaq_halt_feed") for k in counts)
+
+
+def test_a_403_is_a_halt_feed_failure_logged_and_not_cached(tmp_path, caplog):
     caplog.set_level(logging.WARNING)
+    halts, c, counts = _read_one_day(tmp_path, _Session403())
+    _is_a_failure(tmp_path, halts, c, counts)
+    assert "HTTP 403" in caplog.text and "2025-03-25" in caplog.text
 
-    s = _Session403()
-    c = NasdaqHaltClient(tmp_path, session=s, min_interval=0)
-    halts = c.halts_on(date(2025, 3, 25))
 
-    assert halts == []
-    assert "HTTP 403" in caplog.text
-    assert "2025-03-25" in caplog.text
-    # Verify cache file was not created
-    assert not (tmp_path / "20250325.xml").exists()
+def test_a_day_read_after_a_retry_is_no_failure(tmp_path):
+    s = _Session429Then200()
+    s_halts, c, counts = _read_one_day(tmp_path, s)
+    assert len(s_halts) == 2 and c.failed_days() == () and not counts.get("degraded:nasdaq_halt_feed")
+
+
+def test_failed_days_are_kept_per_thread_and_a_warm_thread_counts_apart(tmp_path):
+    """A warm (fill-only) thread's failure is counted as warm_degraded and stays
+    on that thread: the sequential pass sees only its own failed days."""
+    import threading
+
+    from delist_detection.edgar import fill_only
+
+    c = NasdaqHaltClient(tmp_path, session=_SessionRaising(requests.Timeout("t")), min_interval=0,
+                         sleep=lambda _: None)
+    mark = SEC_STATS.snapshot()
+
+    def warm():
+        with fill_only():
+            c.halts_on(date(2025, 3, 24))
+
+    t = threading.Thread(target=warm)
+    t.start()
+    t.join()
+    assert c.failed_days() == ()
+    counts, _ = SEC_STATS.since(mark)
+    assert counts.get("warm_degraded:nasdaq_halt_feed") == 1 and "degraded:nasdaq_halt_feed" not in counts
+    c.halts_on(date(2025, 3, 25))
+    assert c.failed_days() == (date(2025, 3, 25),)
 
 
 FEED_FIX = Path(__file__).parent / "fixtures" / "nasdaq_halts" / "tradehalts_11022020.xml"
