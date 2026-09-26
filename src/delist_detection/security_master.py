@@ -8,6 +8,7 @@ the same FIGI (a reverse split's new CUSIP, a gap no FTD row bridged).
 """
 from __future__ import annotations
 
+from bisect import bisect_left, bisect_right
 from collections import Counter, defaultdict
 from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass, field, replace
@@ -17,7 +18,8 @@ from .figi_resolution import (
     FigiCandidate, accept, bloomberg_ticker, filter_query, placeholder_id, security_kind,
     share_class_from_name, us_candidates,
 )
-from .ftd import FTD_START, FtdIndex, FtdRow
+from .ftd import FTD_START, FtdIndex, FtdRow, is_deleted_symbol
+from .trading_calendar import add_trading_days
 from .names import description_matches, names_agree
 from .observations import (
     ERA_GAP_DAYS, Observation, TickerEra, eras_by_key, number_eras, observation_conflicts,
@@ -273,6 +275,79 @@ def era_rows(era: TickerEra, ftd: FtdIndex, last_seen: str) -> list[FtdRow]:
     """The era's own FTD rows (`era_last_seen`'s choice, `_own_rows`) from its
     first observation to its last sighting `last_seen`, by date."""
     return _own_rows(era, ftd.by_symbol(era.ticker, era.first, last_seen))
+
+
+SWITCH_DAYS = 5               # trading days between an old CUSIP's last row and a new one's first
+SWITCH_TAIL_DAYS = 10         # the old CUSIP trades under no symbol this many trading days past its last row
+NEW_CUSIP_MARGIN_DAYS = 30    # a CUSIP first seen closer than this to the scanned window's start may be older
+
+
+@dataclass(frozen=True)
+class Handoff:
+    """A CUSIP link from the era `era_key` to the era `to_key`, whose issuer it
+    may share (`cusip_handoffs`). `kind` is "shared_cusip" (both eras have
+    `cusip`) or "cusip_handoff" (a switch: `cusip` stopped trading as `to_key`'s
+    `new_cusip` began, on `day`); `descriptions` are the old CUSIP's fails
+    descriptions under the era's ticker, which the issuer's former name must
+    match."""
+    era_key: str
+    to_key: str
+    kind: str
+    cusip: str
+    new_cusip: str = ""
+    day: str = ""
+    descriptions: tuple[str, ...] = ()
+
+
+def cusip_handoffs(eras: Sequence[TickerEra], ftd: FtdIndex) -> list[Handoff]:
+    """The CUSIP links between the eras, pure (no issuer is known here; the
+    resolver's second pass reads them):
+
+    - shared CUSIP: two eras hold one CUSIP (observed, or of their FTD rows):
+      MHP and MHFI, one McGraw-Hill line under two tickers;
+    - switch: an era's FTD CUSIP last trades under its ticker (not under a
+      deleted "...XXXX" symbol) within `SWITCH_DAYS` trading days of the first
+      fails row of another era's FTD CUSIP; that new CUSIP has no earlier row,
+      and starts at least `NEW_CUSIP_MARGIN_DAYS` after the fails window scanned
+      for its ticker opens (else it may be older than the rows show); the old
+      CUSIP trades under no symbol more than `SWITCH_TAIL_DAYS` trading days
+      later (a ticker change that kept the CUSIP is a shared CUSIP instead).
+      KORS's G60754101 last trades 2019-01-03, CPRI's G1890L107 first fails
+      2019-01-02. A merger's acquirer is no switch (its CUSIP is older); a
+      spin-off's is, and the resolver refuses it (the rename check)."""
+    cusips_of = {e.key: set(e.ftd_cusips) | set(e.cusips) for e in eras}
+    holders: dict[str, list[str]] = defaultdict(list)
+    for e in eras:
+        for c in sorted(cusips_of[e.key]):
+            holders[c].append(e.key)
+    out = [Handoff(e.key, k, "shared_cusip", c) for e in eras for c in sorted(cusips_of[e.key])
+           for k in holders[c] if k != e.key]
+    starts: list[tuple[str, str, str]] = []               # (first fails row, era key, CUSIP): the new CUSIPs
+    for e in eras:
+        opened = ftd.scanned_from(e.ticker)
+        for c in e.ftd_cusips:
+            rows = ftd.by_cusip(c)
+            if rows and opened is not None and \
+                    date.fromisoformat(rows[0].date) >= opened + timedelta(days=NEW_CUSIP_MARGIN_DAYS):
+                starts.append((rows[0].date, e.key, c))
+    starts.sort()
+    days = [s[0] for s in starts]
+    for e in eras:
+        for c in e.ftd_cusips:
+            own = [r for r in ftd.by_symbol(e.ticker) if r.cusip == c and not is_deleted_symbol(r.symbol)]
+            if not own:
+                continue
+            last = date.fromisoformat(own[-1].date)
+            tail = add_trading_days(last, SWITCH_TAIL_DAYS).isoformat()
+            if any(r.date > tail for r in ftd.trading_rows([c])):
+                continue
+            lo = add_trading_days(last, -SWITCH_DAYS).isoformat()
+            hi = add_trading_days(last, SWITCH_DAYS).isoformat()
+            descriptions = tuple(sorted({r.description for r in own}))
+            for day, key, new in starts[bisect_left(days, lo):bisect_right(days, hi)]:
+                if key != e.key and new not in cusips_of[e.key]:
+                    out.append(Handoff(e.key, key, "cusip_handoff", c, new, day, descriptions))
+    return out
 
 
 def _contradicted(era: TickerEra, composite: str, eras: Sequence[TickerEra], issuers: Mapping[str, Issuer],

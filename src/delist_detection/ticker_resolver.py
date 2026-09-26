@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+from collections import defaultdict
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -19,12 +20,12 @@ import requests
 
 from .atomic_io import clean_orphan_temps, write_atomic
 from .edgar import STALE_KEY, EdgarClient, submissions_fresh_after
-from .evidence import edgar_names, first_filing, names_near, parse_day
+from .evidence import edgar_names, first_filing, names_near, parse_day, renamed_near
 from .fatal import FATAL
 from .ftd import FtdIndex, FtdRow
 from .names import description_matches, name_tokens, names_agree
 from .observations import TickerEra
-from .security_master import era_rows
+from .security_master import Handoff, cusip_handoffs, era_rows
 
 log = logging.getLogger(__name__)
 _LOOK_UP_PIN = object()     # resolve(pin=...) default: look the pin up with cik_pins
@@ -779,7 +780,17 @@ class TickerResolver:
         B (`efts_frequency_renamed`): the first pass's 8-K frequency candidates,
         through the guard, and the one left also carried the era's name at its
         last sighting and filed within `OBSERVED_ALIVE_DAYS` of it (Capri
-        Holdings for KORS@2014)."""
+        Holdings for KORS@2014).
+
+        C (`shared_cusip`, `cusip_handoff`), after B: the issuers of the eras
+        linked to this one by a CUSIP (`security_master.cusip_handoffs`: the
+        same CUSIP, or a switch from this era's CUSIP to theirs, which also
+        needs the issuer to have been renamed from a name matching this era's
+        rows within `RENAME_NEAR_DAYS` of the switch), through the guard. Every
+        era is judged against the answers known when the sweep began, and
+        sweeps repeat until none adds an answer, so a chain of links resolves
+        whatever the key order (MHP shares its CUSIP with MHFI, whose CUSIP
+        switched to SPGI's)."""
         rows = {e.key: era_rows(e, ftd, last_seen[e.key]) for e in eras}
         todo = [e for e in sorted(eras, key=lambda e: e.key)
                 if ciks.get(e.key) is None and e.cik_pin is None and not e.sec_id_pin
@@ -791,7 +802,24 @@ class TickerResolver:
             if got is not None:
                 out[e.key] = got
             self._mark_inferred(e, last_seen[e.key])
-        return out
+        links: dict[str, list[Handoff]] = defaultdict(list)
+        for h in cusip_handoffs(eras, ftd):
+            links[h.era_key].append(h)
+        known = {k: c for k, c in ciks.items() if c is not None} | {k: v.cik for k, v in out.items()}
+        while True:
+            new: dict[str, InferredIssuer] = {}
+            for e in todo:
+                if e.key in out:
+                    continue
+                self._transient = False
+                got = self._handoff(rows[e.key], links[e.key], known)
+                if got is not None:
+                    new[e.key] = got
+                self._mark_inferred(e, last_seen[e.key])
+            if not new:
+                return out
+            out |= new
+            known |= {k: v.cik for k, v in new.items()}
 
     def _mark_inferred(self, era: TickerEra, last_seen: str) -> None:
         """A second-pass read that hit a failed request or a stale copy degrades
@@ -859,6 +887,50 @@ class TickerResolver:
         return InferredIssuer(cik, "efts_frequency_renamed",
                               f"the one 8-K frequency candidate whose names match its fails rows; "
                               f"EDGAR names it {named[0]} then")
+
+    RENAME_NEAR_DAYS = 90        # a switch's issuer was renamed this close to it
+
+    def _handoff(self, rows: list[FtdRow], links: list[Handoff], known: dict[str, int]) -> InferredIssuer | None:
+        """Fix C: the issuer, through the guard, of the eras `links` leads to
+        (`known`: era key -> CIK); a switch counts only when that issuer was
+        renamed from a name matching the old rows (`_renamed_from`). A shared
+        CUSIP is read first, so it names the answer's source when both lead to
+        the same issuer."""
+        found: dict[int, tuple[Handoff, str | None]] = {}
+        for h in sorted(links, key=lambda h: (h.kind != "shared_cusip", h.to_key)):
+            cik = known.get(h.to_key)
+            if cik is None or cik in found:
+                continue
+            former = self._renamed_from(cik, h) if h.kind == "cusip_handoff" else None
+            if h.kind == "cusip_handoff" and former is None:
+                continue
+            found[cik] = (h, former)
+        cik = self._guard(found, rows)
+        if cik is None:
+            return None
+        h, former = found[cik]
+        if h.kind == "shared_cusip":
+            return InferredIssuer(cik, h.kind, f"shares CUSIP {h.cusip} with {h.to_key}")
+        return InferredIssuer(cik, h.kind, f"its CUSIP {h.cusip} ended as {h.to_key}'s {h.new_cusip} began on "
+                                           f"{h.day}; the issuer was renamed from {former}")
+
+    def _renamed_from(self, cik: int, h: Handoff) -> str | None:
+        """The CIK's former name that ended within `RENAME_NEAR_DAYS` of the
+        switch `h` (`evidence.renamed_near`) and matches every description of the
+        old CUSIP's rows; None when there is none. A spin-off starting as its
+        parent's CUSIP ends carries no such name."""
+        day = parse_day(h.day)
+        try:
+            sub = self._submissions(cik, h.day)
+        except FATAL:
+            raise
+        except Exception as e:
+            self._note_transient(e)
+            return None
+        former = renamed_near(sub, day, self.RENAME_NEAR_DAYS) if isinstance(sub, dict) and day else None
+        if former and all(description_matches(d, [former]) for d in h.descriptions):
+            return former
+        return None
 
     def resolve_many(
         self, items: Iterable[tuple[str, str | None]]

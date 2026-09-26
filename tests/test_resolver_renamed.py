@@ -22,7 +22,7 @@ from delist_detection.edgar import EdgarSubmission
 from delist_detection.ftd import FtdIndex, FtdRow
 from delist_detection.observations import ObservationIndex, load_observations
 from delist_detection.pipeline import Clients, _RunContext
-from delist_detection.security_master import era_last_seen, refine_eras
+from delist_detection.security_master import cusip_handoffs, era_last_seen, refine_eras
 from delist_detection.ticker_resolver import TickerResolver
 
 FIX = Path(__file__).parent / "fixtures" / "eras"
@@ -258,3 +258,90 @@ def test_a_candidate_with_no_filing_within_400_days_of_the_last_sighting_is_refu
     capri = issuers["1530721"]
     issuers["1530721"] = {**capri, "filings": [f for f in capri["filings"] if f[1] < "2017-12-01"]}
     assert _infer(eras, ftd, ["KORS@2014-12-31"], edgar=_Edgar(issuers)) == {}
+
+
+# --- 1c, fix C: CUSIP handoffs -----------------------------------------------------------
+
+def test_cusip_handoffs_link_a_shared_cusip_and_a_cusip_switch(eras, ftd):
+    """KORS -> CPRI (Michael Kors Holdings renamed Capri Holdings, 2018-12-31: the
+    old CUSIP's last KORS row 2019-01-03, the new one's first row 2019-01-02), NU
+    -> ES (Northeast Utilities -> Eversource Energy), LUK -> JEF (Leucadia ->
+    Jefferies Financial Group); the two KORS eras share one CUSIP. NU's later
+    holder, Nu Holdings, starts trading years after Northeast Utilities' CUSIP
+    ended: no link."""
+    links = {(h.era_key, h.to_key): h for h in cusip_handoffs(list(eras.values()), ftd)}
+    got = {k: (links[k].kind, links[k].cusip, links[k].new_cusip, links[k].day) for k in [
+        ("KORS@2014-12-31", "CPRI@2018-12-31"), ("KORS@2012-06-29", "CPRI@2018-12-31"),
+        ("KORS@2012-06-29", "KORS@2014-12-31"), ("NU@2008-01-16", "ES@2015-06-30"),
+        ("LUK@2014-12-31", "JEF@2018-06-30")] if k in links}
+    assert got == {
+        ("KORS@2014-12-31", "CPRI@2018-12-31"): ("cusip_handoff", "G60754101", "G1890L107", "2019-01-02"),
+        ("KORS@2012-06-29", "CPRI@2018-12-31"): ("cusip_handoff", "G60754101", "G1890L107", "2019-01-02"),
+        ("KORS@2012-06-29", "KORS@2014-12-31"): ("shared_cusip", "G60754101", "", ""),
+        ("NU@2008-01-16", "ES@2015-06-30"): ("cusip_handoff", "664397106", "30040W108", "2015-02-19"),
+        ("LUK@2014-12-31", "JEF@2018-06-30"): ("cusip_handoff", "527288104", "47233W109", "2018-05-24")}
+    assert not [k for k in links if k[0] == "NU@2008-01-16" and k[1].startswith("NU@")]
+
+
+RESOLVED = {"CPRI@2018-12-31": 1530721, "ES@2012-06-29": 72741, "ES@2015-06-30": 72741, "JEF@2008-01-16": 1084580,
+            "JEF@2018-06-30": 96223, "NU@2023-06-30": 1691493, "NU@2026-06-30": 1691493, "LMCA@2013-06-28": 1560385,
+            "BWXT@2015-12-31": 1486957, "BW@2015-12-31": 1630805, "VIAV@2015-12-31": 912093,
+            "LITE@2015-12-31": 1633978}      # the committed run's first-pass answers for these eras
+
+
+@pytest.fixture
+def no_frequency(frequency):
+    """No 8-K frequency candidates: fix C alone answers."""
+    for t in ("KORS", "NU", "LUK", "LMCA", "BWC", "JDSU", "GGP", "UAG"):
+        frequency[t] = []
+    return frequency
+
+
+def test_a_ticker_change_hands_the_new_tickers_issuer_to_the_old_cusips_eras(eras, ftd, no_frequency):
+    """The switch needs the issuer of the new CUSIP's era to have carried, within
+    90 days of the switch, a former name matching the old CUSIP's rows (Michael
+    Kors Holdings Ltd until 2018-12-21, NORTHEAST UTILITIES until 2015-04-29,
+    LEUCADIA NATIONAL CORP until 2018-05-15)."""
+    got = _infer(eras, ftd, list(eras), RESOLVED)
+    assert {k: got.get(k) for k in ["KORS@2012-06-29", "KORS@2014-12-31", "NU@2008-01-16", "LUK@2008-01-16",
+                                    "LUK@2012-06-29", "LUK@2014-12-31"]} == {
+        "KORS@2012-06-29": (1530721, "cusip_handoff"), "KORS@2014-12-31": (1530721, "cusip_handoff"),
+        "NU@2008-01-16": (72741, "cusip_handoff"),      # not Nu Holdings
+        "LUK@2008-01-16": (96223, "cusip_handoff"), "LUK@2012-06-29": (96223, "cusip_handoff"),
+        "LUK@2014-12-31": (96223, "cusip_handoff")}
+
+
+def test_an_era_sharing_a_cusip_with_a_resolved_era_takes_its_issuer(eras, ftd, no_frequency):
+    """KORS@2012 (named CAPRI HOLDINGS LTD by the snapshots) shares its CUSIP with
+    KORS@2014, which the name search resolves to Capri Holdings."""
+    got = _infer(eras, ftd, list(eras), {**RESOLVED, "KORS@2014-12-31": 1530721})
+    assert got["KORS@2012-06-29"] == (1530721, "shared_cusip")
+
+
+def test_a_spin_off_starting_as_the_parents_cusip_ends_takes_nothing(eras, ftd, no_frequency):
+    """Babcock & Wilcox Co (BWC) became BWX Technologies (BWXT) as it spun off
+    Babcock & Wilcox Enterprises (BW); JDS Uniphase (JDSU) became Viavi (VIAV) as
+    it spun off Lumentum (LITE). All four new CUSIPs start within a week of the
+    old one's end; the spin-offs carried no former name, and were founded after
+    the old rows began."""
+    got = _infer(eras, ftd, list(eras), RESOLVED)
+    assert (got.get("BWC@2012-06-29"), got.get("JDSU@2008-01-16")) == \
+        ((1486957, "cusip_handoff"), (912093, "cusip_handoff"))
+    spin_offs_only = {k: v for k, v in RESOLVED.items() if k not in ("BWXT@2015-12-31", "VIAV@2015-12-31")}
+    got = _infer(eras, ftd, list(eras), spin_offs_only)
+    assert "BWC@2012-06-29" not in got and "JDSU@2008-01-16" not in got
+
+
+def test_a_switch_to_a_company_founded_after_the_eras_rows_is_refused(eras, ftd, no_frequency):
+    """LMCA@2012 is the Liberty Media that became Starz in January 2013; LMCA then
+    passed to its spin-off Liberty Spinco (1560385, renamed Liberty Media), a new
+    CUSIP within a week and a former name (Liberty Spinco) matching LIBERTY MEDIA
+    CORP NEW LIBERTY. Its first filing (2012-10-19) postdates LMCA@2012's first row."""
+    assert "LMCA@2012-06-29" not in _infer(eras, ftd, list(eras), RESOLVED)
+
+
+def test_an_era_linked_to_two_issuers_takes_neither(eras, ftd, no_frequency):
+    issuers = {**DATA["issuers"], "999999": DATA["issuers"]["1530721"]}   # a second issuer passing the guard
+    got = _infer(eras, ftd, list(eras), {**RESOLVED, "KORS@2014-12-31": 1530721, "CPRI@2018-12-31": 999999},
+                 edgar=_Edgar(issuers))
+    assert "KORS@2012-06-29" not in got

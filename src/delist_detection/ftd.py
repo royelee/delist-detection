@@ -307,6 +307,12 @@ class FtdIndex:
         self._sort()
         return self._slice(self._by_cusip.get(cusip.upper(), []), lo, hi)
 
+    def scanned_from(self, symbol: str) -> date | None:
+        """The first day of the earliest window scanned for `symbol` (None: never
+        scanned): a CUSIP first seen near it may have rows before it."""
+        windows = self._symbol_windows.get(normalize_ticker(symbol))
+        return windows[0][0] if windows else None
+
     def descriptions(self, cusip: str) -> set[str]:
         """Every description the fails rows of `cusip` carry."""
         return {r.description for r in self.by_cusip(cusip)}
