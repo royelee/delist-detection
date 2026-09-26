@@ -12,7 +12,8 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 
-from .edgar import EdgarSubmission, _strip_html
+from .edgar import EdgarSubmission
+from .html_text import strip_html
 from .figi_resolution import class_letter
 from .names import name_tokens
 from .trading_calendar import previous_trading_day
@@ -78,7 +79,7 @@ def _tag(raw: str, tag: str) -> str:
 
 def _notice(raw: str) -> str:
     m = re.search(r"<TYPE>EX-99\.25(.*?)(?=<TYPE>|</DOCUMENT>|\Z)", raw, re.S | re.I)
-    return _strip_html(m.group(1)) if m else ""
+    return strip_html(m.group(1)) if m else ""
 
 
 _CLASS_CAPTION = r"\(\s*Description of (?:the )?class(?:es)? of securit(?:y|ies)\s*\)"
@@ -108,7 +109,7 @@ def parse_form25(raw: str, *, accession: str, form: str, filing_date: str) -> Fo
     class_text = _tag(raw, "descriptionClassSecurity")
     rule = _tag(raw, "ruleProvision")
     if not exch_name:                         # a text Form 25 without the XML document
-        text = _strip_html(raw)
+        text = strip_html(raw)
         exch_name = exchange_label(text[:4000])
         if not class_text:
             class_text = _text_class(text)

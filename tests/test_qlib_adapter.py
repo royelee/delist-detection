@@ -2,7 +2,7 @@ import pandas as pd
 import pytest
 
 from delist_detection.qlib_adapter import inject_terminal_labels, apply_backtest_exits
-from delist_detection.store import table_path, write_table
+from delist_detection.store import table_path, write_tables
 
 
 @pytest.fixture
@@ -18,7 +18,7 @@ def tmp_delistings(tmp_path):
          "crsp_code": 400, "confidence": "medium", "reason": "test", "last_trade_date": "2024-06-28"},
     ]
     p = table_path(tmp_path, "delistings")
-    write_table("delistings", rows, p)
+    write_tables(p.parent, {"delistings": rows})
     return str(p)
 
 
@@ -57,7 +57,7 @@ def test_inject_terminal_labels_skips_continuing_security(panel, tmp_path):
          "last_trade_date": "2024-06-28", "successor_sec_id": "ALPHA_ID"},
     ]
     p = table_path(tmp_path, "delistings")
-    write_table("delistings", rows, p)
+    write_tables(p.parent, {"delistings": rows})
     out = inject_terminal_labels(panel, str(p), horizon_days=3)
     alpha = out.xs("ALPHA_ID", level="instrument")["LABEL"]
     assert alpha.isna().all()
@@ -91,7 +91,7 @@ def test_apply_backtest_exits_skips_continuing_security(tmp_path):
          "last_trade_date": "2024-06-28", "last_trade_close": 999.0, "successor_sec_id": "DELTA_ID"},
     ]
     p = table_path(tmp_path, "delistings")
-    write_table("delistings", rows, p)
+    write_tables(p.parent, {"delistings": rows})
     pos = pd.DataFrame([
         {"date": "2024-06-27", "sec_id": "DELTA_ID", "price": 100.0},
         {"date": "2024-06-28", "sec_id": "DELTA_ID", "price": 100.0},

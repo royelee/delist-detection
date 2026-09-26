@@ -23,10 +23,6 @@ from .observations import normalize_ticker
 from .security_master import Security
 
 
-def _to_date(s: str) -> date:
-    return date.fromisoformat(s)
-
-
 SUCCESSOR_FORMS = "8-K12B,8-K12G3"
 
 
@@ -143,8 +139,8 @@ def successor_in_run(e: Delisting, starts: dict[str, SecurityStart]) -> tuple[st
     the Form 25's filing date stands in for it (the delisting date is ten days
     later), else the delisting date. Returns (sec_id, "same_issuer" |
     "same_ticker"); None for zero or several candidates."""
-    day = e.last_trade.day or (_to_date(e.form25_sub.filing_date) if e.form25_sub is not None
-                               else _to_date(e.delist_date))
+    day = e.last_trade.day or (date.fromisoformat(e.form25_sub.filing_date) if e.form25_sub is not None
+                               else date.fromisoformat(e.delist_date))
     lo = (day - timedelta(days=SUCCESSOR_BEFORE_DAYS)).isoformat()
     hi = (day + timedelta(days=SUCCESSOR_AFTER_DAYS)).isoformat()
     # the delisting's ticker can be a deleted-symbol spelling ("APAXXXX"): match
@@ -172,4 +168,4 @@ def successor_search_args(edgar, e: Delisting, starts: dict[str, SecurityStart],
     if SUCCESSOR_UNKNOWN not in e.flags or successor_in_run(e, starts) is not None:
         return None
     return (successor_search_name(edgar, e.cik, securities[e.sec_id].name),
-            e.last_trade.day or _to_date(e.delist_date))
+            e.last_trade.day or date.fromisoformat(e.delist_date))

@@ -87,10 +87,6 @@ def _stderr(*parts) -> None:
     print(*parts, file=sys.stderr, flush=True)
 
 
-def _to_date(s: str) -> date:
-    return date.fromisoformat(s)
-
-
 def _issuer_names(edgar, ciks: Iterable[int]) -> tuple[dict[int, tuple[str, ...]], set[int]]:
     """Every name EDGAR records for each issuer (`evidence.edgar_names` of the
     submissions JSON the resolver already read), and the CIKs whose read rested
@@ -230,8 +226,8 @@ def _refine(ctx: _RunContext, index: ObservationIndex,
     if not eras:
         raise ValueError("no observations to process")
 
-    lo = max(FTD_START, min(_to_date(e.first) for e in eras) - timedelta(days=30))
-    hi = min(ctx.as_of, max(_to_date(e.last) for e in eras) + timedelta(days=400))
+    lo = max(FTD_START, min(date.fromisoformat(e.first) for e in eras) - timedelta(days=30))
+    hi = min(ctx.as_of, max(date.fromisoformat(e.last) for e in eras) + timedelta(days=400))
     class_names: dict[str, list[str]] = defaultdict(list)     # BF-B's names: checks FTD's "BFB" rows
     for e in eras:
         if "-" in e.ticker:
@@ -717,7 +713,7 @@ def _find_successors(ctx: _RunContext, delistings: list[Delisting], securities: 
                 # filed before the predecessor's actual last trade: clamp valid_from
                 # to no earlier than the day after that last trade (or delist_date
                 # when the last trade day is unknown).
-                not_before = ((e.last_trade.day or _to_date(e.delist_date)) + timedelta(days=1)).isoformat()
+                not_before = ((e.last_trade.day or date.fromisoformat(e.delist_date)) + timedelta(days=1)).isoformat()
                 fd = filing_date or day.isoformat()
                 found.added[cand.composite] = AddedSuccessor(
                     Security(cand.composite, s_cik, share_class_from_name(cand.name), cand.name,

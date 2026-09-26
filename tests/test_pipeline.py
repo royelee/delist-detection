@@ -1064,23 +1064,36 @@ def test_cusip_history_keeps_a_retired_cusip_closed_and_the_current_one_open(fak
 
 
 def test_last_trade_close_uses_the_cusip_whose_range_holds_the_last_trade_day():
+    """`_last_trade_closes` prices each last trade day by the security's CUSIP whose
+    range holds that day (from its fails rows), then by its ticker: by symbol
+    alone, another CUSIP's rows under RS (99.0) would come first on both days."""
     from delist_detection.ftd import FtdIndex
-    from delist_detection.history import Range, value_on
+    from delist_detection.manifest import StageMeter
+    from delist_detection.observations import TickerEra
 
-    def close_on(ranges, day, symbol):     # how the pipeline prices a last trade day
-        return ftd.close_of(day, cusip=value_on(ranges, day), symbol=symbol)
-
-    ranges = [Range("11111A101", "2019-06-03", "2020-01-01", "ftd"), Range("11111A200", "2020-01-02", None, "ftd")]
-    ftd = FtdIndex(_ftd("RS", "11111A101", "REVERSE SPLIT CO", ["2019-09-04"], price=2.0)
+    ftd = FtdIndex(_ftd("RS", "11111A101", "REVERSE SPLIT CO", ["2019-06-03", "2019-09-04"], price=2.0)
                    + _ftd("RS", "00000X000", "SOMETHING ELSE", ["2019-09-04", "2020-03-03"], price=99.0)
-                   + _ftd("RS", "11111A200", "REVERSE SPLIT CO NEW", ["2020-03-03"], price=20.0)
+                   + _ftd("RS", "11111A200", "REVERSE SPLIT CO NEW", ["2020-01-02", "2020-03-03"], price=20.0)
                    + _ftd("RSQ", "22222B200", "OTHER", ["2021-01-05"], price=7.0))
-    # by symbol alone, 00000X000 (99.0) would come first on both days
-    assert close_on(ranges, date(2019, 9, 3), "RS") == (2.0, "2019-09-04", False)     # first range
-    assert close_on(ranges, date(2020, 3, 2), "RS") == (20.0, "2020-03-03", False)    # second range
-    # the range's CUSIP has no row, or no range holds the day: the symbol
-    assert close_on(ranges, date(2021, 1, 4), "RSQ") == (7.0, "2021-01-05", False)
-    assert close_on([], date(2021, 1, 4), "RSQ") == (7.0, "2021-01-05", False)
+    era = TickerEra("RS", "2019-06-03", "2020-12-31", [Observation("RS", "2019-06-03", "REVERSE SPLIT CO")])
+    sec = Security("BBGRS", 5, "COMMON", "REVERSE SPLIT CO", "Common Stock", True, "cusip", eras=[era])
+
+    def delisting(ticker, delist_date, last_trade):
+        record = DelistRecord(ticker=ticker, cik=5, observed_delist_date=delist_date, crsp_code=231,
+                              bucket=CrspBucket.MERGER, confidence="high", reason="x", evidence={},
+                              sec_id="BBGRS", delist_date=delist_date)
+        return Delisting("BBGRS", 5, ticker, delist_date, record, LastTrade(last_trade, "midas", ()), None, None, "")
+
+    first, second, otc = (delisting("RS", "2019-09-13", date(2019, 9, 3)),
+                          delisting("RS", "2020-03-12", date(2020, 3, 2)),
+                          delisting("RSQ", "2021-01-14", date(2021, 1, 4)))
+    ctx = pipeline._RunContext(None, date(2026, 9, 25), lambda *_: None, 1, StageMeter(lambda *_: None))
+    closes = pipeline._last_trade_closes(ctx, [first, second, otc], {"BBGRS": sec},
+                                         {"BBGRS": ["11111A101", "11111A200"]}, ftd, date(2004, 1, 1), Overrides())
+    assert closes[first.key] == 2.0                  # 11111A101's range holds 2019-09-03
+    assert closes[second.key] == 20.0                # 11111A200's range holds 2020-03-02
+    assert closes[otc.key] == 7.0                    # the range's CUSIP has no row that day: the ticker's
+    assert first.flags == second.flags == otc.flags == []
 
 
 def test_a_lagged_acquirer_close_flags_the_delisting(fake_edgar, tmp_path, monkeypatch):

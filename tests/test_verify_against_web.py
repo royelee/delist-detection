@@ -113,7 +113,7 @@ def test_main_installs_the_machine_wide_limit_and_checks_the_user_agent_before_a
         monkeypatch, tmp_path):
     import sys
 
-    from delist_detection.store import write_table
+    from delist_detection.store import write_tables
 
     events = []
     monkeypatch.setattr(verify, "use_machine_wide_limit", lambda: events.append("machine-wide limit"))
@@ -124,7 +124,7 @@ def test_main_installs_the_machine_wide_limit_and_checks_the_user_agent_before_a
     monkeypatch.setattr(verify.requests, "get", lambda u, **kw: events.append("get") or _JsonResp(body))
     row = _row("BIG", "liquidation", 768835, "BIG LOTS INC", "2024-09-10")
     src, out = tmp_path / "delistings.csv", tmp_path / "web_verification.csv"
-    write_table("delistings", [row], src)            # the script reads it through store.read_table
+    write_tables(src.parent, {"delistings": [row]})            # the script reads it through store.read_table
     monkeypatch.setattr(sys, "argv", ["verify_against_web.py", "--input", str(src), "--output", str(out)])
     assert verify.main() == 0
     assert events[:2] == ["user agent", "machine-wide limit"]

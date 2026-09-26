@@ -1,4 +1,5 @@
-from delist_detection.edgar import EdgarClient, _strip_html
+from delist_detection.edgar import EdgarClient
+from delist_detection.html_text import strip_html
 
 
 def test_strip_html_removes_tags_and_scripts():
@@ -8,7 +9,7 @@ def test_strip_html_removes_tags_and_scripts():
         "<body><p>right to receive&nbsp;$113.00 in&#160;cash</p>"
         "<div>without   interest</div></body></html>"
     )
-    out = _strip_html(raw)
+    out = strip_html(raw)
     assert "var a" not in out
     assert "color:red" not in out
     assert "right to receive $113.00 in cash without interest" in out

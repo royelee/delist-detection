@@ -4,7 +4,7 @@ import pandas as pd
 import pytest
 
 from delist_detection.qlib_adapter import apply_bmp_corrections
-from delist_detection.store import table_path, write_table
+from delist_detection.store import table_path, write_tables
 
 
 def _row(sec_id: str, **over) -> dict:
@@ -18,7 +18,7 @@ def _row(sec_id: str, **over) -> dict:
 
 def _write(tmp_path: Path, rows: list) -> Path:
     p = table_path(tmp_path, "delistings")
-    write_table("delistings", rows, p)
+    write_tables(p.parent, {"delistings": rows})
     return p
 
 

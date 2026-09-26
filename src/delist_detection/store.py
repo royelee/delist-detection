@@ -1,10 +1,10 @@
 """CSV storage for the output tables.
 
 Every table has one schema here: its column order and its key. All writes go
-through `write_table`/`write_tables`, which format cells the same way
-everywhere, sort rows by key (or keep the given order, for a table whose spec
-has `sort=False`: review.csv comes pre-ordered by `review_triage`), and replace
-the file only when the whole write succeeds. A later move to DuckDB changes
+through `write_tables`, which formats cells the same way
+everywhere, sorts rows by key (or keeps the given order, for a table whose spec
+has `sort=False`: review.csv comes pre-ordered by `review_triage`), and replaces
+the files only when the whole write succeeds. A later move to DuckDB changes
 only this module.
 """
 from __future__ import annotations
@@ -131,13 +131,6 @@ def _write_all(tables: Sequence[tuple[str, Iterable[Mapping[str, object]], str |
     return counts
 
 
-def write_table(name: str, rows: Iterable[Mapping[str, object]], path: str | Path) -> int:
-    """Write `rows` as table `name` at `path` (`_write_all`); returns the row count.
-    Missing columns are blank; an unknown column or a failing iterator raises
-    before the old file is touched."""
-    return _write_all([(name, rows, path)])[name]
-
-
 def write_tables(out_dir: str | Path, tables: Mapping[str, Iterable[Mapping[str, object]]]) -> dict[str, int]:
     """Write every table in `tables` under `out_dir` atomically as one group
     (`_write_all`): a later table's formatting or write failure never leaves an
@@ -159,37 +152,26 @@ def read_table(name: str, path: str | Path) -> list[dict[str, str]]:
         return list(reader)
 
 
-@dataclass(frozen=True)
-class FrameTypes:
-    """How `read_frame` types a table's columns: identifiers kept as strings,
-    dates parsed (a blank or bad one is NaT), numbers parsed (blank or bad is
-    NaN); every other column as pandas infers it."""
-    strings: tuple[str, ...] = ()
-    dates: tuple[str, ...] = ()
-    numbers: tuple[str, ...] = ()
+# How the handling layer types delistings.csv's columns as a frame: identifiers
+# kept as strings, dates parsed (a blank or bad one is NaT), numbers parsed
+# (blank or bad is NaN); every other column as pandas infers it.
+DELISTINGS_FRAME_STRINGS = ("sec_id", "ticker", "successor_sec_id", "acquirer_sec_id", "bucket")
+DELISTINGS_FRAME_DATES = ("delist_date", "last_trade_date")
+DELISTINGS_FRAME_NUMBERS = ("crsp_code", "last_trade_close", "payout_per_share", "terminal_value", "recovery_ratio",
+                            "cik")
 
 
-FRAME_TYPES: dict[str, FrameTypes] = {
-    "delistings": FrameTypes(
-        strings=("sec_id", "ticker", "successor_sec_id", "acquirer_sec_id", "bucket"),
-        dates=("delist_date", "last_trade_date"),
-        numbers=("crsp_code", "last_trade_close", "payout_per_share", "terminal_value", "recovery_ratio", "cik"),
-    ),
-}
-
-
-def read_frame(name: str, path: str | Path):
-    """Table `name` at `path` as a pandas DataFrame, typed by `FRAME_TYPES`
-    (the handling layer's view of delistings.csv). Raises ValueError when the
-    file's columns are not the table's, as `read_table` does."""
+def read_delistings_frame(path: str | Path):
+    """delistings.csv at `path` as a pandas DataFrame, typed as above (the
+    handling layer's view of it). Raises ValueError when the file's columns are
+    not delistings.csv's, as `read_table` does."""
     import pandas as pd  # noqa: PLC0415 -- only the pandas callers pay for the import
 
-    types = FRAME_TYPES.get(name, FrameTypes())
-    df = pd.read_csv(path, dtype={c: str for c in types.strings})
-    if tuple(df.columns) != TABLES[name].columns:
-        raise ValueError(f"{path}: columns {list(df.columns)} do not match table {name!r}")
-    for c in types.dates:
+    df = pd.read_csv(path, dtype={c: str for c in DELISTINGS_FRAME_STRINGS})
+    if tuple(df.columns) != TABLES["delistings"].columns:
+        raise ValueError(f"{path}: columns {list(df.columns)} do not match table 'delistings'")
+    for c in DELISTINGS_FRAME_DATES:
         df[c] = pd.to_datetime(df[c], errors="coerce")
-    for c in types.numbers:
+    for c in DELISTINGS_FRAME_NUMBERS:
         df[c] = pd.to_numeric(df[c], errors="coerce")
     return df

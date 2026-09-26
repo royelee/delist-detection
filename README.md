@@ -773,6 +773,7 @@ src/delist_detection/
     sec_stats.py          SEC_STATS: requests, cache answers, latency, degraded answers; fill-only mode
     retries.py            retrying(): the one retry loop the SEC, OpenFIGI and Nasdaq clients share
     settings.py           env_setting(): a setting from the environment, else the repo .env
+    html_text.py          strip_html(): filing HTML as plain text (the EDGAR text cache, Form 25 parsing)
     prefetch.py           warm(): fills the SEC caches on fill-only threads ahead of each sequential stage
     manifest.py           run_manifest.json: run date, code version, workers, SEC traffic, degraded answers; StageMeter
     degraded.py           resolution_degraded review rows and flags (failed SEC reads, failed halt-feed days)

@@ -22,6 +22,7 @@ import requests
 
 from . import sec_limiter
 from .atomic_io import clean_orphan_temps, write_atomic
+from .html_text import strip_html
 from .retries import retrying
 from .sec_stats import SEC_STATS, endpoint_of, filling_only
 from .settings import REPO_ENV, env_setting
@@ -109,18 +110,6 @@ def submissions_fresh_after(on: date, today: date | None = None) -> date:
     `min(on + 45 days, today)`, where `today` is the run date (default: the clock).
     The classifier and the resolver both use it."""
     return min(on + timedelta(days=SUBMISSIONS_FRESH_DAYS), today or date.today())
-
-
-def _strip_html(raw: str) -> str:
-    """Strip <script>/<style>/tags, unescape entities, collapse whitespace."""
-    import html as _html
-    import re as _re
-
-    t = _re.sub(r"(?is)<(script|style)[^>]*>.*?</\1>", " ", raw)
-    t = _re.sub(r"(?s)<[^>]+>", " ", t)
-    t = _html.unescape(t)
-    t = _re.sub(r"\s+", " ", t)
-    return t.strip()
 
 
 def _fetched_on(cp: Path, data: Any) -> date:
@@ -564,7 +553,7 @@ class EdgarClient:
                 else:
                     SEC_STATS.degraded("failed_request")
                 return ""
-            text = _strip_html(resp.text)
+            text = strip_html(resp.text)
             write_atomic(cp, text)
             return text
 

@@ -104,7 +104,7 @@ _ITEM_HEADING = re.compile(r"^item\s*\d\.\d{2}[\s.–—-]*", re.I)
 # SEC's own caption for item 1.03, and the whole reason the heading confirms
 # itself. Punctuation after it is optional in real filings — SVB prints
 # "Item 1.03. Bankruptcy or Receivership On March 10, 2023, …" — and
-# `edgar._strip_html` collapses every newline to a space, so neither the
+# `html_text.strip_html` collapses every newline to a space, so neither the
 # sentence rule nor the newline rule has anything to find there. Matching the
 # caption itself is what actually takes it off.
 _ITEM_CAPTION = re.compile(r"^bankruptcy\s+or\s+receivership[\s.,;:–—-]*", re.I)

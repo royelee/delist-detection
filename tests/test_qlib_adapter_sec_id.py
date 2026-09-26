@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 
 from delist_detection.qlib_adapter import apply_backtest_exits, inject_terminal_labels, record_from_row, row_payout
-from delist_detection.store import table_path, write_table
+from delist_detection.store import table_path, write_tables
 
 
 def _csv(tmp_path, **over):
@@ -15,7 +15,7 @@ def _csv(tmp_path, **over):
            "dlret_confidence": "high"}
     row.update(over)
     p = table_path(tmp_path, "delistings")
-    write_table("delistings", [row], p)
+    write_tables(p.parent, {"delistings": [row]})
     return p
 
 

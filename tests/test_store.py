@@ -5,7 +5,7 @@ import pytest
 
 import delist_detection.store as store
 from delist_detection.store import (
-    DELISTINGS_COLUMNS, TABLES, format_cell, read_table, table_path, write_table, write_tables,
+    DELISTINGS_COLUMNS, TABLES, format_cell, read_table, table_path, write_tables,
 )
 
 
@@ -43,7 +43,7 @@ def _review(sec_id, flags):
 
 def test_an_unsorted_table_keeps_its_input_order(tmp_path):
     rows = [_review("S3", "b"), _review("S1", "a"), _review("S2", "c")]
-    write_table("review", rows, table_path(tmp_path, "review"))
+    write_tables(tmp_path, {"review": rows})
     assert [r["sec_id"] for r in read_table("review", table_path(tmp_path, "review"))] == ["S3", "S1", "S2"]
     write_tables(tmp_path / "t", {
         "review": rows,
@@ -66,7 +66,7 @@ def test_write_sorts_by_key_and_round_trips(tmp_path):
         {"sec_id": "BBG1", "issuer_cik": 1, "share_class": "COMMON", "name": "A", "security_type": "Common Stock",
          "observed": False, "figi_source": "cusip"},
     ]
-    assert write_table("securities", rows, p) == 2
+    assert write_tables(p.parent, {"securities": rows}) == {"securities": 2}
     back = read_table("securities", p)
     assert [r["sec_id"] for r in back] == ["BBG1", "BBG2"]
     assert back[0]["observed"] == "false"
@@ -75,15 +75,15 @@ def test_write_sorts_by_key_and_round_trips(tmp_path):
 
 def test_missing_columns_are_blank_and_unknown_columns_raise(tmp_path):
     p = table_path(tmp_path, "cusip_history")
-    write_table("cusip_history", [{"sec_id": "BBG1", "cusip": "00817Y108", "valid_from": "2004-01-02"}], p)
+    write_tables(p.parent, {"cusip_history": [{"sec_id": "BBG1", "cusip": "00817Y108", "valid_from": "2004-01-02"}]})
     assert read_table("cusip_history", p)[0]["valid_to"] == ""
     with pytest.raises(ValueError, match="unknown column"):
-        write_table("cusip_history", [{"sec_id": "x", "bogus": 1}], p)
+        write_tables(p.parent, {"cusip_history": [{"sec_id": "x", "bogus": 1}]})
 
 
 def test_failed_write_keeps_previous_file(tmp_path):
     p = table_path(tmp_path, "securities")
-    write_table("securities", [{"sec_id": "BBG1"}], p)
+    write_tables(p.parent, {"securities": [{"sec_id": "BBG1"}]})
     before = p.read_text()
 
     def boom():
@@ -91,7 +91,7 @@ def test_failed_write_keeps_previous_file(tmp_path):
         raise RuntimeError("mid-run failure")
 
     with pytest.raises(RuntimeError):
-        write_table("securities", boom(), p)
+        write_tables(p.parent, {"securities": boom()})
     assert p.read_text() == before
     assert not list(tmp_path.glob(".*.tmp"))
 
@@ -192,11 +192,11 @@ def test_write_tables_removes_the_temp_file_of_a_table_that_fails_mid_write(tmp_
     assert not list(tmp_path.glob(".*.tmp"))
 
 
-# --- read_frame: the pandas reader the handling layer uses ------------------
+# --- read_delistings_frame: the pandas reader the handling layer uses -----
 
 def _delistings_as_qlib_adapter_read_them(path):
     """qlib_adapter.load_delistings's own recipe before it read through
-    store.read_frame; the frames must stay identical, dtypes included."""
+    store.read_delistings_frame; the frames must stay identical, dtypes included."""
     import pandas as pd
     df = pd.read_csv(path, dtype={"sec_id": str, "ticker": str, "successor_sec_id": str, "acquirer_sec_id": str,
                                   "bucket": str})
@@ -207,7 +207,7 @@ def _delistings_as_qlib_adapter_read_them(path):
     return df
 
 
-def test_read_frame_types_delistings_exactly_as_before(tmp_path):
+def test_read_delistings_frame_types_delistings_exactly_as_before(tmp_path):
     import pandas as pd
     rows = [
         {"sec_id": "BBG000FJLFX8", "delist_date": "2018-12-09", "ticker": "AET", "cik": 1122304,
@@ -221,23 +221,23 @@ def test_read_frame_types_delistings_exactly_as_before(tmp_path):
          "crsp_code": "", "recovery_ratio": 0.25},
     ]
     p = table_path(tmp_path, "delistings")
-    write_table("delistings", rows, p)
-    pd.testing.assert_frame_equal(store.read_frame("delistings", p), _delistings_as_qlib_adapter_read_them(p),
+    write_tables(p.parent, {"delistings": rows})
+    pd.testing.assert_frame_equal(store.read_delistings_frame(p), _delistings_as_qlib_adapter_read_them(p),
                                   check_exact=True)
 
 
-def test_read_frame_matches_the_committed_delistings_table():
+def test_read_delistings_frame_matches_the_committed_delistings_table():
     import pandas as pd
     from pathlib import Path
     p = Path(__file__).resolve().parents[1] / "output" / "delistings.csv"
     if not p.exists():
         pytest.skip("no committed output/delistings.csv")
-    pd.testing.assert_frame_equal(store.read_frame("delistings", p), _delistings_as_qlib_adapter_read_them(p),
+    pd.testing.assert_frame_equal(store.read_delistings_frame(p), _delistings_as_qlib_adapter_read_them(p),
                                   check_exact=True)
 
 
-def test_read_frame_rejects_a_file_of_another_table(tmp_path):
+def test_read_delistings_frame_rejects_a_file_of_another_table(tmp_path):
     p = tmp_path / "delistings.csv"
     p.write_text("a,b\n1,2\n")
     with pytest.raises(ValueError, match="do not match"):
-        store.read_frame("delistings", p)
+        store.read_delistings_frame(p)

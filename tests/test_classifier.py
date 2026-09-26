@@ -694,7 +694,7 @@ def test_competition_clearance_in_a_mis_tagged_takeover_is_not_a_petition():
 
 
 def test_an_unpunctuated_standard_caption_still_comes_off():
-    """edgar._strip_html collapses every newline to a space, so a heading that
+    """html_text.strip_html collapses every newline to a space, so a heading that
     ends without punctuation has nothing for the sentence rule to find and the
     caption's own words used to confirm the filing."""
     t = ("Item 1.03 Bankruptcy or Receivership On November 27, 2024 the merger was completed "

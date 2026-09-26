@@ -191,6 +191,8 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
 - `acquirers.py` — a merger's acquirer as a security: `find_acquirer` (its
   composite FIGI from the fails rows under the acquirer ticker) and
   `acquirer_cik` (its issuer CIK, never the target's).
+- `html_text.py` — `strip_html()`: filing HTML as plain text, for the EDGAR
+  client's text cache and Form 25 parsing.
 - `form25.py` — parses a Form 25's XML or text (exchange, `class_text`, rule),
   labels the exchange, reads `class_kind` (common/preferred/warrant/unit/…)
   from the class text, and `match_security()`s it to one observed security of
@@ -231,11 +233,11 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
 - `store.py` — every output table's column order, key and sort order
   (`TABLES`), `DelistingKey` (a delisting's `(sec_id, delist_date)` key, here so
   the classification layer — the finder — and the handling layer can both use
-  it without one importing the other), `format_cell` (the one cell formatter every table shares),
-  `write_table`/`write_tables`/`read_table` (all-or-nothing write via
-  `atomic_io.replace_all_on_success`), and `read_frame` (a table as a typed
-  pandas DataFrame, `FRAME_TYPES`: `qlib_adapter.load_delistings` reads
-  through it). Every table read — `qlib_adapter`, `accept_review.py`,
+  it without one importing the other), `format_cell` (the one cell formatter
+  every table shares), `write_tables`/`read_table` (all-or-nothing write via
+  `atomic_io.replace_all_on_success`), and `read_delistings_frame`
+  (delistings.csv as a typed pandas DataFrame: `qlib_adapter.load_delistings`
+  reads through it). Every table read — `qlib_adapter`, `accept_review.py`,
   `verify_against_web.py` — goes through this module, so a later move to
   DuckDB changes only this module.
 - `review_triage.py` — pure (no network): `CATALOG` maps every review flag to
