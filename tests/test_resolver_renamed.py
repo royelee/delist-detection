@@ -292,7 +292,7 @@ RESOLVED = {"CPRI@2018-12-31": 1530721, "ES@2012-06-29": 72741, "ES@2015-06-30":
 @pytest.fixture
 def no_frequency(frequency):
     """No 8-K frequency candidates: fix C alone answers."""
-    for t in ("KORS", "NU", "LUK", "LMCA", "BWC", "JDSU", "GGP", "UAG"):
+    for t in ("KORS", "NU", "LUK", "LMCA", "BWC", "JDSU", "GGP", "UAG", "FFIV"):
         frequency[t] = []
     return frequency
 
