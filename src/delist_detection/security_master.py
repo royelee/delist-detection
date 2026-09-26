@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from bisect import bisect_left, bisect_right
 from collections import Counter, defaultdict
-from collections.abc import Collection, Mapping, Sequence
+from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import date, timedelta
 
@@ -403,14 +403,64 @@ def _cusip_job(c: str) -> dict:
     return {"idType": "ID_CINS" if c[:1].isalpha() else "ID_CUSIP", "idValue": c, "includeUnlistedEquities": True}
 
 
+def _link_text(h: Handoff) -> str:
+    if h.kind == "shared_cusip":
+        return f"{h.era_key} shares CUSIP {h.cusip} with {h.to_key}"
+    return f"{h.era_key}'s CUSIP {h.cusip} ended as {h.to_key}'s {h.new_cusip} began on {h.day}"
+
+
+def _handoff_joins(eras: Sequence[TickerEra], issuers: Mapping[str, Issuer], handoffs: Sequence[Handoff],
+                   unpicked: Collection[str], confirmed: Mapping[str, str]) -> dict[str, tuple[str, str, Handoff]]:
+    """The composite each era of `unpicked` (no FIGI pick, a known issuer) takes
+    through its CUSIP links (`handoffs`, `cusip_handoffs`'): era key -> (composite,
+    the confirmed era it is taken from, the link that reached it).
+
+    Only a link between two eras of one issuer and share class counts. The
+    unpicked eras that share a CUSIP form a chain; the chain reaches every
+    composite that a link from one of its members leads to an era confirmed
+    on (`confirmed`: a pin or a CUSIP), and joins it when it reaches exactly
+    one (two composites: none)."""
+    by_key = {e.key: e for e in eras}
+
+    def group(key: str) -> tuple[int | None, str]:
+        return cik_of(issuers, key), share_class_from_name(by_key[key].name)
+
+    links = sorted((h for h in handoffs if h.era_key in by_key and h.to_key in by_key
+                    and group(h.era_key)[0] is not None and group(h.era_key) == group(h.to_key)),
+                   key=lambda h: (h.era_key, h.kind != "shared_cusip", h.to_key))
+    chain = {k: k for k in unpicked}
+
+    def root(k: str) -> str:
+        while chain[k] != k:
+            k = chain[k]
+        return k
+
+    for h in links:
+        if h.kind == "shared_cusip" and h.era_key in chain and h.to_key in chain:
+            a, b = sorted((root(h.era_key), root(h.to_key)))
+            chain[b] = a
+    reach: dict[str, dict[str, tuple[str, Handoff]]] = defaultdict(dict)
+    for h in links:
+        if h.era_key in chain and h.to_key in confirmed:
+            reach[root(h.era_key)].setdefault(confirmed[h.to_key], (h.to_key, h))
+    out: dict[str, tuple[str, str, Handoff]] = {}
+    for k in chain:
+        found = reach.get(root(k), {})
+        if len(found) == 1:
+            [(composite, (anchor, h))] = found.items()
+            out[k] = (composite, anchor, h)
+    return out
+
+
 class FigiResolver:
     MAX_CUSIPS = 3
 
-    def __init__(self, figi) -> None:
+    def __init__(self, figi, log: Callable[[str], None] | None = None) -> None:
         self.figi = figi
+        self.log = log or (lambda msg: None)
 
     def resolve_many(self, eras: Sequence[TickerEra], *, issuers: Mapping[str, Issuer],
-                     cusips: Mapping[str, list[str]]) -> dict[str, EraResolution]:
+                     cusips: Mapping[str, list[str]], handoffs: Sequence[Handoff] = ()) -> dict[str, EraResolution]:
         """Each era's FIGI (spec §8.3): a `sec_id` pin; else the first of its
         CUSIPs (`cusips`, at most `MAX_CUSIPS`) that OpenFIGI maps to one US
         composite; else its ticker, then a name search, where a candidate is
@@ -468,40 +518,58 @@ class FigiResolver:
                 return None, False
             return c, True
 
-        picks: dict[str, tuple[str, FigiCandidate, bool]] = {}     # era -> (source, candidate, EDGAR names only)
+        # era -> (source, composite, candidate, weak: guard (c) may withdraw it)
+        picks: dict[str, tuple[str, str, FigiCandidate | None, bool]] = {}
         for era in eras:
             if era.key in out:
                 continue
             c = next((got for got in by_cusip_of[era.key] if got), None)
             if c:
-                picks[era.key] = ("cusip", c, False)
+                picks[era.key] = ("cusip", c.composite, c, False)
                 continue
             c, edgar_only = named(era, us_candidates(answers[plan[era.key][2]].get("data") or []))
             if c:
-                picks[era.key] = ("ticker", c, edgar_only)
+                picks[era.key] = ("ticker", c.composite, c, edgar_only)
                 continue
             q = filter_query(era.name or "")
             if q:
                 rows = self.figi.filter(q, exchCode="US", includeUnlistedEquities=True)
                 c, edgar_only = named(era, us_candidates(rows))
                 if c:
-                    picks[era.key] = ("name", c, edgar_only)
+                    picks[era.key] = ("name", c.composite, c, edgar_only)
+
+        # A renamed ticker's eras (no pick, their old CUSIP unknown to OpenFIGI on
+        # any US venue) join the line of their issuer's new CUSIP, when that line is
+        # confirmed by a pin or a CUSIP (`_handoff_joins`). The join is weak for
+        # guard (c) below, like an EDGAR-names-only pick.
+        unpicked = [e.key for e in eras if e.key not in out and e.key not in picks and e.key in issuers]
+        by_key = {e.key: e for e in eras}
+        for key, (composite, anchor, h) in _handoff_joins(eras, issuers, handoffs, unpicked, confirmed).items():
+            if _contradicted(by_key[key], composite, eras, issuers, confirmed):
+                continue
+            cand = picks[anchor][2] if anchor in picks else None
+            picks[key] = ("handoff", composite, cand, True)
+            self.log(f"FIGI handoff: {key} joins {composite}, the line {anchor} is confirmed on ({_link_text(h)})")
 
         def group(era: TickerEra) -> tuple[int | None, str]:
             return cik_of(issuers, era.key), share_class_from_name(era.name)
 
         # An issuer's placeholder holds its eras of one class that no FIGI confirms.
-        # An era that only the EDGAR names take off it would leave a sibling there:
-        # one stock on two sec_ids, and the placeholder ending in a rename (ACE LTD,
-        # backfilled under CB in 2012-14, while its own ACE era finds no FIGI). Such
-        # an era stays with the group; repeated until no group is split.
+        # An era that only the EDGAR names or a CUSIP handoff take off it would leave
+        # a sibling there: one stock on two sec_ids, and the placeholder ending in a
+        # rename (ACE LTD, backfilled under CB in 2012-14, while its own ACE era finds
+        # no FIGI). Such an era stays with the group; repeated until no group is split.
         while True:
-            held = {group(e) for e in eras
-                    if e.key not in out and e.key not in picks and e.key in issuers}
-            split = [e.key for e in eras if e.key in picks and picks[e.key][2] and group(e) in held]
+            held: dict[tuple[int | None, str], str] = {}
+            for e in eras:
+                if e.key not in out and e.key not in picks and e.key in issuers:
+                    held.setdefault(group(e), e.key)
+            split = [e.key for e in eras if e.key in picks and picks[e.key][3] and group(e) in held]
             if not split:
                 break
             for k in split:
+                self.log(f"FIGI {picks[k][0]} pick withdrawn: {k} stays on its issuer's placeholder with "
+                         f"{held[group(by_key[k])]} (guard c)")
                 del picks[k]
 
         for era in eras:
@@ -510,16 +578,16 @@ class FigiResolver:
             tried = plan[era.key][0]
             found, by_cusip = found_of[era.key], by_cusip_of[era.key]
             if era.key in picks:
-                source, cand, _ = picks[era.key]
+                source, composite, cand, _ = picks[era.key]
 
                 def own(c: str, got: FigiCandidate | None, cands: list[FigiCandidate]) -> bool:
-                    if got is not None and got.composite == cand.composite:
+                    if got is not None and got.composite == composite:
                         return True
-                    # Resolved by ticker or name: the era's own FTD CUSIP stays unless
-                    # OpenFIGI maps it to another composite (it often has no record of
-                    # an old CUSIP at all).
+                    # Resolved by ticker, name or handoff: the era's own FTD CUSIP stays
+                    # unless OpenFIGI maps it to another composite (it often has no
+                    # record of an old CUSIP at all).
                     return source != "cusip" and c in era.ftd_cusips and not cands
-                out[era.key] = EraResolution(era.key, cand.composite, source, cand, (),
+                out[era.key] = EraResolution(era.key, composite, source, cand, (),
                                              tuple(c for c, got, f in zip(tried, by_cusip, found) if own(c, got, f)))
                 continue
             cik = cik_of(issuers, era.key)
@@ -532,8 +600,9 @@ class FigiResolver:
 
 
 # How strongly an era's resolution confirms its FIGI, strongest first: the
-# caller's pin, a CUSIP, the ticker, a name search, the issuer's placeholder.
-SOURCE_STRENGTH = ("pin", "cusip", "ticker", "name", "placeholder")
+# caller's pin, a CUSIP, the ticker, a name search, a CUSIP handoff to another
+# era's line, the issuer's placeholder.
+SOURCE_STRENGTH = ("pin", "cusip", "ticker", "name", "handoff", "placeholder")
 
 
 def _share_class(res: EraResolution, era: TickerEra) -> str:
