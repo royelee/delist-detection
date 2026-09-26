@@ -564,7 +564,7 @@ python scripts/observations_from_instruments.py --instruments data/delisted_tick
 # or: scripts/observations_from_snapshots.py --dir <folder of dated index-membership CSVs> --out obs.csv
 python scripts/classify_universe.py --observations obs.csv   # → output/{securities,ticker_history,cusip_history,delistings,payouts,review,review_summary}.csv
 
-pytest -q                                # 1296 unit tests, no network
+pytest -q                                # 1302 unit tests, no network
 ```
 
 `classify_universe.py` prints a summary when it finishes: rows written per
@@ -894,7 +894,9 @@ validates the candidate looks like a delist *target* (not an *acquirer*):
 2. **Manual override.** Hand-curated `MANUAL_OVERRIDES` for ~35 short
    ambiguous tickers (`AET`, `X`, `MER`, `KLG`, …) in
    `scripts/classify_universe.py`. Wins over everything below it.
-3. **`company_tickers.json`.** Master active map.
+3. **`company_tickers.json`.** Master active map: today's holder, taken only
+   if it had filed by the era's first sighting and carried an agreeing name at
+   its last (not a company formed while the era traded that took its name).
 4. **EFTS Form-25/15 within ±90 days.** Most precise; skips known
    exchange CIKs (Nasdaq, NYSE, …) automatically.
 5. **The era's own `name` → EDGAR cgi-bin company search.** Generates name

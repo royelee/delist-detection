@@ -349,9 +349,12 @@ target rather than an acquirer.
    short tickers where EFTS picks the wrong issuer (e.g. `AET → 1122304 Aetna`).
 
 3. **company_tickers.json.** Master active-tickers map. Taken only when
-   today's holder of the ticker existed on the date under an agreeing name;
-   a holder whose name disagrees is not used (a recycled ticker's historical
-   era would otherwise go to today's holder). A wrong answer from a later
+   today's holder of the ticker existed on the date under an agreeing name,
+   and had filed by the era's first sighting (`resolve(..., since=era.first)`;
+   also for a memo answer): a company formed while the era traded can have
+   taken its name and ticker (Energizer's 2015 SpinCo, the 2016 Hertz holding
+   company). A holder whose name disagrees is not used (a recycled ticker's
+   historical era would otherwise go to today's holder). A wrong answer from a later
    tier is corrected with a `cik` pin or `MANUAL_OVERRIDES`, not here.
 
 4. **EFTS Form-25/15 with date window.** Searches
@@ -411,13 +414,16 @@ a stale snapshot, holds Thomson Reuters' CUSIP and takes nothing).
   first row (no earlier row, 30+ days into the scanned window), trades under
   no symbol 10 trading days later; and that era's issuer must be the old
   CUSIP's, renamed: it existed when the old CUSIP began failing (not Actavis
-  plc, formed in 2013, for Actavis Inc), was renamed within 90 days from a
-  name that names the old rows word by word (`names.description_names`: two
-  words when both sides have two; CITIZENS COMMUNICATIONS does not name CLEAR
-  CHANNEL COMMUNICTNS), and has no other CUSIP of its own trading at the switch
-  (an acquirer that renamed itself at the merger: WEC Energy for Integrys,
-  Catamaran for Catalyst Health Solutions) — NU → ES, LUK → JEF, KORS → CPRI.
-  A spin-off starting then carries no former name.
+  plc, formed in 2013, for Actavis Inc), was renamed within 90 days of the
+  switch, each old row description is named word by word by a name it carried
+  by then (`names.description_names`: two words when both sides have two;
+  CITIZENS COMMUNICATIONS does not name CLEAR CHANNEL COMMUNICTNS; Quintiles'
+  TRANSNATIONAL rows are named by its pre-2016 name), and it has no other CUSIP
+  of its own trading at the switch (an acquirer that renamed itself at the
+  merger: WEC Energy for Integrys, Catamaran for Catalyst Health Solutions) —
+  a CUSIP of another share class, or one born at the switch, does not count
+  (CBS class B → ViacomCBS as class A's switched too) — NU → ES, LUK → JEF,
+  KORS → CPRI. A spin-off starting then carries no former name.
 
 At the fixed point every answer is checked again against all it links to; one
 that became ambiguous, or lost its link, is dropped. Each answer carries the

@@ -28,7 +28,7 @@ editable install.
 
 ```bash
 pip install -e .                         # editable install (Python ≥3.10) — once per env
-pytest                                    # full suite (1296 tests, offline, no network)
+pytest                                    # full suite (1302 tests, offline, no network)
 pytest tests/test_payout_extractor.py -v  # one file
 pytest tests/test_payout_extractor.py::test_match_in_cash_family_altr -v   # one test
 
@@ -175,9 +175,10 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   through guard G (existed by the era's first fails row, every row's
   description matches a name it carried by 30 days after the row, the only
   candidate that did) and matching one of the era's own names; a switch's
-  issuer must be the old CUSIP's, renamed (existed when it began, renamed from
-  a name that names its rows word by word, no other CUSIP of its own trading
-  at the switch). Answers are checked again at the fixed point; each carries
+  issuer must be the old CUSIP's, renamed (existed when it began, renamed near
+  the switch, each old row named word by word by a name it carried then, no
+  other CUSIP of its own and of the same class, begun before the switch,
+  trading at it). Answers are checked again at the fixed point; each carries
   the check flag `issuer_inferred`. Rule C also runs over first-pass answers:
   where the CUSIP evidence points elsewhere, the first pass's answer stands
   and the check flag `issuer_cusip_disagrees` names both CIKs.
