@@ -42,12 +42,12 @@ DEREG_FALLBACK_AFTER_DAYS = 120     # [last_seen - this, last_seen + this] to da
 
 # Buckets whose delisting ends the security's exchange life even when it is
 # sighted afterwards (OTC trading, a stale snapshot): all but a transfer and
-# an event the classifier could not place.
+# a delisting the classifier could not place.
 ENDING_BUCKETS = frozenset({CrspBucket.MERGER, CrspBucket.LIQUIDATION, CrspBucket.COMPLIANCE_FAILURE,
                             CrspBucket.EXPIRATION})
 
 # Preferred exchange for a multi-exchange delisting group: the filing on the
-# most-senior exchange supplies the event's `exchange` and `form25`/`form25_sub`.
+# most-senior exchange supplies the delisting's `exchange` and `form25`/`form25_sub`.
 EXCHANGE_PREFERENCE = ("NYSE", "NASDAQ", "NYSE AMERICAN", "CBOE BZX", "NYSE ARCA")
 
 
@@ -100,7 +100,7 @@ class SecurityContext:
     # treated as alive at every filing date (the caller doesn't know its span).
     sibling_spans: dict[str, tuple[str, str]] = field(default_factory=dict)
     # The resolver tier that found this security's CIK (e.g. "cik_map",
-    # "manual"); recorded on every DelistRecord this security's events
+    # "manual"); recorded on every DelistRecord this security's delistings
     # produce, in place of the classify_event default "security_master".
     resolution_source: str = "security_master"
     # True when an SEC fails-to-deliver row under one of the security's own
@@ -229,7 +229,7 @@ class DelistingFinder:
         """Chain matched Form 25s into one group per delisting: each filing joins
         the open group when it's within SAME_EVENT_DAYS of the group's EARLIEST
         filing (not its latest member), across exchanges — so filings on days
-        0, 28 and 55 make two events (day 55 is 55 days from day 0), not one."""
+        0, 28 and 55 make two delistings (day 55 is 55 days from day 0), not one."""
         groups: list[list[tuple[EdgarSubmission, Form25]]] = []
         for item in sorted(candidates, key=lambda i: i[0].filing_date):
             gap = (_to_date(item[0].filing_date) - _to_date(groups[-1][0][0].filing_date)).days if groups else None
@@ -336,7 +336,7 @@ class DelistingFinder:
                     continue        # the next 10-K cover still names it: another class left, not this one
             candidates.append((sub, f25))
 
-        events: list[Delisting] = []
+        delistings: list[Delisting] = []
         last_definitive: Delisting | None = None
         for group in self._group(candidates):
             earliest_sub = min(group, key=lambda item: item[0].filing_date)[0]
@@ -347,25 +347,25 @@ class DelistingFinder:
             eff = effective_date(earliest_sub.filing_date)
             continued = bool(ctx.listed_today) or ctx.seen_after(
                 (_to_date(eff) + timedelta(days=SEEN_AFTER_DAYS)).isoformat())
-            ev = self._build_event(ctx, cik, filings, group, eff, continued)
-            events.append(ev)
+            delisting = self._build_delisting(ctx, cik, filings, group, eff, continued)
+            delistings.append(delisting)
             # Sightings after the effective date can be an OTC tail or a stale
-            # snapshot, not a listing: only an exchange transfer (or an event
+            # snapshot, not a listing: only an exchange transfer (or a delisting
             # not classified) continues one. A merger, liquidation, compliance
             # failure or expiration ends the security's exchange life.
-            if not continued or ev.record.bucket in ENDING_BUCKETS:
-                last_definitive = ev
+            if not continued or delisting.record.bucket in ENDING_BUCKETS:
+                last_definitive = delisting
 
         # spec 8.10: run the fallback / ended_without_delisting logic whenever
-        # no event found is a genuine end (every event is `continued`, e.g. an
+        # no delisting found is a genuine end (every one is `continued`, e.g. an
         # exchange transfer the security kept trading through) -- not only
-        # when `events` is empty. Otherwise a security whose only events are
-        # continued ones gets neither a real delisting nor a review row.
+        # when `delistings` is empty. Otherwise a security whose only delistings
+        # are continued ones gets neither a real delisting nor a review row.
         if last_definitive is None:
             if ctx.listed_today is False:
                 fb = self._fallback(ctx, cik, filings, ticker_last, early)
                 if fb is not None:
-                    events.append(fb)
+                    delistings.append(fb)
                 else:
                     # Also next to form25_* rows: those say a filing could not be
                     # placed; accepting one as "not about this security" must not
@@ -378,9 +378,9 @@ class DelistingFinder:
                 review.append(ReviewItem(sec.sec_id, ticker_last, cik, "listing_status_unknown",
                                          "listing status unknown and no delisting found",
                                          last_seen=ctx.last_seen))
-        return events, review
+        return delistings, review
 
-    def _build_event(self, ctx: SecurityContext, cik: int, filings: list[EdgarSubmission],
+    def _build_delisting(self, ctx: SecurityContext, cik: int, filings: list[EdgarSubmission],
                      group: list[tuple[EdgarSubmission, Form25]], eff: str, continued: bool,
                      extra_flags: tuple[str, ...] = ()) -> Delisting:
         sec = ctx.security
@@ -395,9 +395,9 @@ class DelistingFinder:
         rec = self.classifier.classify_event(ticker=ticker, cik=cik, anchor_date=anchor, name=sec.name,
                                              expected_name=ctx.expected_name, kind=sec.kind, form25=winner_sub,
                                              resolution_source=ctx.resolution_source)
-        return self._event(sec, cik, ticker, eff, rec, lt, winner_f25, winner_sub, continued, extra_flags)
+        return self._delisting(sec, cik, ticker, eff, rec, lt, winner_f25, winner_sub, continued, extra_flags)
 
-    def _event(self, sec: Security, cik: int, ticker: str, delist_date: str, rec: DelistRecord, lt: LastTrade,
+    def _delisting(self, sec: Security, cik: int, ticker: str, delist_date: str, rec: DelistRecord, lt: LastTrade,
                f25: Form25 | None, sub: EdgarSubmission | None, continued: bool,
                extra_flags: tuple[str, ...] = (), exchange: str = "") -> Delisting:
         rec.sec_id = sec.sec_id
@@ -408,15 +408,15 @@ class DelistingFinder:
                 rec.successor_sec_id = sec.sec_id
             else:
                 flags.append("successor_unknown")
-        event = Delisting(sec.sec_id, cik, ticker, delist_date, rec, lt, f25, sub,
-                               f25.exchange if f25 else exchange)
+        delisting = Delisting(sec.sec_id, cik, ticker, delist_date, rec, lt, f25, sub,
+                              f25.exchange if f25 else exchange)
         for f in flags:
-            if f not in event.flags:
-                event.add_flag(f)
-        return event
+            if f not in delisting.flags:
+                delisting.add_flag(f)
+        return delisting
 
     # -- no-Form-25 fallback ----------------------------------------------
-    def _fallback_date(self, ctx: SecurityContext, ev: dict) -> tuple[str, tuple[str, ...]]:
+    def _fallback_date(self, ctx: SecurityContext, evidence: dict) -> tuple[str, tuple[str, ...]]:
         """Date a fallback delisting: the confirmed bankruptcy 8-K, then the
         anchor 8-K, then the revocation filing or a Form 15 but only if either
         falls within [last_seen - 30d, last_seen + 120d]; otherwise last_seen
@@ -429,13 +429,13 @@ class DelistingFinder:
         the truth than a multi-year-late revocation date.
         """
         for key in ("bankruptcy_8k", "anchor_8k"):
-            f = ev.get(key)
+            f = evidence.get(key)
             if f and f.get("filing_date"):
                 return f["filing_date"], ()
         lo = (_to_date(ctx.last_seen) - timedelta(days=DEREG_FALLBACK_BEFORE_DAYS)).isoformat()
         hi = (_to_date(ctx.last_seen) + timedelta(days=DEREG_FALLBACK_AFTER_DAYS)).isoformat()
         for key in ("revoked_filing", "dereg_filing"):
-            f = ev.get(key)
+            f = evidence.get(key)
             fd = f.get("filing_date") if f else None
             if fd and lo <= fd <= hi:
                 return fd, ()
@@ -479,8 +479,8 @@ class DelistingFinder:
         rec = self.classifier.classify_event(ticker=ticker, cik=cik, anchor_date=ctx.last_seen, name=sec.name,
                                              expected_name=ctx.expected_name, kind=sec.kind, form25=None,
                                              resolution_source=ctx.resolution_source)
-        ev = rec.evidence or {}
-        if ev.get("delist_filing"):
+        evidence = rec.evidence or {}
+        if evidence.get("delist_filing"):
             # The classifier picked a Form 25 on its own, ignoring class. The
             # main loop already decided about every Form 25 from the floor on,
             # so such a filing was rejected (ambiguous, another sibling's,
@@ -493,16 +493,16 @@ class DelistingFinder:
             # fails-to-deliver row under the security's own tickers shows it
             # trading after it; the observations after it are flagged
             # `observed_after_delisting`.
-            group = self._early_group(ctx, cik, ev["delist_filing"].get("accession") or "", early or [])
+            group = self._early_group(ctx, cik, evidence["delist_filing"].get("accession") or "", early or [])
             if not group:
                 return None
             eff = effective_date(min(s.filing_date for s, _ in group))
             if ctx.ftd_seen_after((_to_date(eff) + timedelta(days=SEEN_AFTER_DAYS)).isoformat()):
                 return None
-            return self._build_event(ctx, cik, filings, group, eff, False, ("observed_after_delisting",))
-        if rec.bucket is CrspBucket.UNKNOWN and not ev.get("deregistered"):
+            return self._build_delisting(ctx, cik, filings, group, eff, False, ("observed_after_delisting",))
+        if rec.bucket is CrspBucket.UNKNOWN and not evidence.get("deregistered"):
             return None
-        ended_by, extra_flags = self._fallback_date(ctx, ev)
+        ended_by, extra_flags = self._fallback_date(ctx, evidence)
         lt = self._last_trade(cik, filings, None, ticker, _to_date(ended_by), ctx)
         if lt.day is None:
             lt = LastTrade(_to_date(ctx.last_seen), "", ("last_trade_date_unconfirmed",))
@@ -511,5 +511,5 @@ class DelistingFinder:
         # ticker (spec D22) rather than leaving it blank -- which otherwise
         # maps to Exchange.OTHER and applies the wrong Shumway constant.
         exch = issuer_exchange(self.edgar, cik, ticker) or ""
-        return self._event(sec, cik, ticker, ended_by, rec, lt, None, None, False, ("no_form25", *extra_flags),
+        return self._delisting(sec, cik, ticker, ended_by, rec, lt, None, None, False, ("no_form25", *extra_flags),
                            exchange=exch)

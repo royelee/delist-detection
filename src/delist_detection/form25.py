@@ -367,7 +367,7 @@ def _notice_day(t: str, involuntary: bool) -> tuple[date | None, str]:
     if m:
         return previous_trading_day(_day(m.group(1))), "notice_nasdaq"
     # "On November 18, 2024, the Exchange determined that the common stock of Spirit Airlines, Inc.
-    # ... should be suspended": allow periods inside the span (company names end in "Inc.").
+    # ... should be suspended": allow periods inside the span (issuer names end in "Inc.").
     m = re.search(rf"on {_DATE},?.{{0,120}}?determined.{{0,400}}?suspended", t, re.I)
     if m:
         return _day(m.group(1)), "notice_b_unconfirmed"

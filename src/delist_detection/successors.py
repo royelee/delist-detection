@@ -47,7 +47,7 @@ def successor_from_8k12b(search: Callable, figi, *, name: str, day: date, exclud
     A display name looks like ``"Alphabet Inc.  (GOOGL, GOOG)  (CIK
     0001652044)"``: the tickers are the parenthetical immediately before the
     trailing ``(CIK ...)`` — never the first parenthetical in the string,
-    which can be part of the company's own legal name (``"Banco Santander
+    which can be part of the issuer's own legal name (``"Banco Santander
     (Brasil) S.A.  (BSBR)  (CIK 0001471119)"`` carries the ticker ``BSBR``,
     not ``Brasil``). Each of those tickers is resolved through OpenFIGI; a
     resolved candidate is kept only when its name agrees
@@ -167,7 +167,7 @@ def successor_search_args(edgar, e: Delisting, starts: dict[str, SecurityStart],
     (`successor_query` builds the search), or None when it sends none: the
     successor is known, or it is a security of this run (`successor_in_run`).
     The warm pass and the sequential loop both ask this, so they send the same
-    searches. Only an event it searches for reads EDGAR (the issuer's
+    searches. Only a delisting it searches for reads EDGAR (the issuer's
     submissions, for its name)."""
     if "successor_unknown" not in e.flags or successor_in_run(e, starts) is not None:
         return None

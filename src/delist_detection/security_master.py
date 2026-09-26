@@ -202,7 +202,7 @@ def era_cusips(era: TickerEra, ftd: FtdIndex, issuer_names: Sequence[str] = (),
     `names.description_matches` the era's observed names or `issuer_names` (the
     issuer's EDGAR names, current and former, which cover a description that
     lags a rename or a snapshot that backfilled a later name). A CUSIP whose rows
-    all name another company is not taken, however it came to be the era's: a
+    all name another issuer is not taken, however it came to be the era's: a
     snapshot that kept listing Clear Channel under CCU after it went private in
     2008 sees only Cervecerias Unidas' rows there. With none left the era has no
     FTD CUSIP (and resolves by ticker or name, or to its placeholder).
@@ -238,7 +238,7 @@ def candidate_cusips(eras: Sequence[TickerEra], ftd: FtdIndex,
     issuer's: the fails rows tie the CUSIP to that issuer, the ticker and the
     dates tie it to this era. An era with a known issuer is held to its own
     issuer's names, so a stale era (Triad Hospitals on TRI in 2008) never takes
-    the CUSIP of the company that later holds its ticker (Thomson Reuters)."""
+    the CUSIP of the issuer that later holds its ticker (Thomson Reuters)."""
     out = {e.key: era_cusips(e, ftd, issuers[e.key].names) for e in eras if e.key in issuers}
     taken_by_known_issuers = {c for taken in out.values() for c in taken}
     for e in eras:

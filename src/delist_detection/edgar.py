@@ -547,23 +547,23 @@ _ATOM_FEED = re.compile(r"\A\s*(?:<\?xml[^>]*\?>\s*)?<feed[\s>].*</feed>\s*\Z", 
 
 
 def _parse_company_atom(text: str) -> list[dict[str, Any]]:
-    """The hits of a cgi-bin/browse-edgar ATOM answer: the top company with each of
-    its filings, or the company alone when it lists none; [] when no company matched."""
+    """The hits of a cgi-bin/browse-edgar ATOM answer: the top issuer with each of
+    its filings, or the issuer alone when it lists none; [] when no issuer matched."""
     ci_cik = re.search(r"<cik>\s*(\d+)\s*</cik>", text)
     if not ci_cik:
         return []
     ci_name = re.search(r"<conformed-name>(.*?)</conformed-name>", text)
-    company_cik = int(ci_cik.group(1))
-    company_name = ci_name.group(1) if ci_name else None
+    issuer_cik = int(ci_cik.group(1))
+    issuer_name = ci_name.group(1) if ci_name else None
     entries = re.findall(r"<entry>(.*?)</entry>", text, flags=re.DOTALL)
     out: list[dict[str, Any]] = []
     for e in entries:
         fd = re.search(r"<filing-date>(\d{4}-\d{2}-\d{2})</filing-date>", e)
         ft = re.search(r"<filing-type>([^<]+)</filing-type>", e)
-        out.append({"cik": company_cik, "name": company_name,
+        out.append({"cik": issuer_cik, "name": issuer_name,
                     "form": ft.group(1) if ft else "", "filing_date": fd.group(1) if fd else ""})
     if not entries:
-        out.append({"cik": company_cik, "name": company_name, "form": "", "filing_date": ""})
+        out.append({"cik": issuer_cik, "name": issuer_name, "form": "", "filing_date": ""})
     return out
 
 
@@ -739,7 +739,7 @@ class EdgarClient:
 
         Uses the cgi-bin/browse-edgar ATOM endpoint. The ATOM XML has a single
         <company-info> block (top match) and an <entry> per filing; we return the
-        top company's CIK with each matching filing.
+        top issuer's CIK with each matching filing.
 
         Every answer, hits or empty, is cached with the day it was fetched and
         trusted for COMPANY_SEARCH_FRESH_DAYS (7): EDGAR's index can catch up, so

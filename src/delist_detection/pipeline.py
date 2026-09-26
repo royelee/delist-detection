@@ -265,10 +265,10 @@ class _DegradedWatch:
         if not self.tripped():
             return
         review.append(item)
-        for ev in flag_rows:
-            ev.add_flag(DEGRADED_FLAG)
+        for delisting in flag_rows:
+            delisting.add_flag(DEGRADED_FLAG)
 
-    def report_event(self, review: list[ReviewItem], e: Delisting, what: str, *, own_row: bool = True) -> None:
+    def report_delisting(self, review: list[ReviewItem], e: Delisting, what: str, *, own_row: bool = True) -> None:
         """`report` for one delisting's `what`: its review row, and with `own_row`
         its delistings.csv row too."""
         self.report(review, _degraded_item(e.sec_id, e.ticker, e.cik, what, delist_date=e.delist_date),
@@ -520,23 +520,23 @@ def _context_builder(securities: dict[str, Security], sightings: dict[str, list[
 
 
 @dataclass
-class _Search:
+class _DelistingSearch:
     """Stage 5's answer: every delisting found, whether each security is listed
     today, each security's dated ticker sightings, and the review items."""
-    events: list[Delisting]
+    delistings: list[Delisting]
     listed: dict[str, bool | None]
     sightings: dict[str, list[Sighting]]
     review: list[ReviewItem]
 
 
 def _find_delistings(ctx: _RunContext, securities: dict[str, Security], sec_cusips: dict[str, list[str]],
-                     ftd: FtdIndex, cik_res: dict[str, TickerResolution]) -> _Search:
+                     ftd: FtdIndex, cik_res: dict[str, TickerResolution]) -> _DelistingSearch:
     """5. Every delisting of every security (`DelistingFinder`), in sec_id order.
     A security whose search fails becomes an `error` review item, not an aborted
     run; only a fatal exception (`fatal.FATAL`) stops it."""
     clients, log = ctx.clients, ctx.log
     finder = DelistingFinder(clients.edgar, clients.classifier, midas=clients.midas, halts=clients.halts)
-    events: list[Delisting] = []
+    delistings: list[Delisting] = []
     listed: dict[str, bool | None] = {}
     review: list[ReviewItem] = []
     sightings = {sid: ticker_sightings(s, ftd, sec_cusips[sid]) for sid, s in securities.items()}
@@ -573,21 +573,21 @@ def _find_delistings(ctx: _RunContext, securities: dict[str, Security], sec_cusi
             review.append(ReviewItem(s.sec_id, ticker, s.issuer_cik, "error",
                                      f"{type(exc).__name__}: {exc}", last_seen=last_seen))
             continue
-        events += found
+        delistings += found
         review += found_review
         watch.report(review, _degraded_item(s.sec_id, ticker, s.issuer_cik, "the delisting search",
                                             "; run again once SEC answers", last_seen=last_seen), found)
         if i % 50 == 0:
-            log(f"[{i}/{len(securities)}] securities searched; {len(events)} delistings so far")
+            log(f"[{i}/{len(securities)}] securities searched; {len(delistings)} delistings so far")
     ctx.meter.done("delisting search", mark)
-    return _Search(events, listed, sightings, review)
+    return _DelistingSearch(delistings, listed, sightings, review)
 
 
-def _check_overrides(overrides: Overrides, events: list[Delisting]) -> None:
+def _check_overrides(overrides: Overrides, delistings: list[Delisting]) -> None:
     """6. Every override row must name a delisting of this run: one that does not
     stops the run before anything is written (OverrideFileError, naming each such
     row's flag, file and line)."""
-    keys = [e.key for e in events]
+    keys = [e.key for e in delistings]
     bad = []
     for name, m in (("--last-trade-closes", overrides.last_trade_closes),
                     ("--merger-terms", overrides.merger_terms), ("--recoveries", overrides.recoveries)):
@@ -596,7 +596,7 @@ def _check_overrides(overrides: Overrides, events: list[Delisting]) -> None:
         raise OverrideFileError("override rows that match no delisting: " + "; ".join(bad))
 
 
-def _last_trade_closes(ctx: _RunContext, events: list[Delisting], securities: dict[str, Security],
+def _last_trade_closes(ctx: _RunContext, delistings: list[Delisting], securities: dict[str, Security],
                        sec_cusips: dict[str, list[str]], ftd: FtdIndex, ftd_lo: date,
                        overrides: Overrides) -> dict[DelistingKey, float]:
     """7. Each delisting's last-trade close: a --last-trade-closes row, else the
@@ -605,14 +605,14 @@ def _last_trade_closes(ctx: _RunContext, events: list[Delisting], securities: di
     The FTD rows were loaded from the eras' first sighting on; a delisting whose
     last trade came earlier (a stale snapshot listed the security after it was
     gone) needs the rows around that day first."""
-    early = [e for e in events if e.last_trade.day is not None and FTD_START <= e.last_trade.day < ftd_lo]
+    early = [e for e in delistings if e.last_trade.day is not None and FTD_START <= e.last_trade.day < ftd_lo]
     if early:
         days = [e.last_trade.day for e in early]
         ftd.extend(ctx.clients.ftd_client, min(days) - timedelta(days=20), max(days) + timedelta(days=10),
                    symbols={e.ticker for e in early},
                    cusips={c for e in early for c in sec_cusips.get(e.sec_id, [])})
     closes: dict[DelistingKey, float] = {}
-    for e in events:
+    for e in delistings:
         key = e.key
         given = for_delisting(overrides.last_trade_closes, e.key)
         if given is not None:
@@ -685,7 +685,7 @@ def _extract_payouts(ctx: _RunContext, mergers: list[Delisting], closes: dict[De
             ctx.log(f"{e.sec_id} {e.delist_date}: payout extraction ERROR {type(exc).__name__}: {exc}")
             review.append(ReviewItem(e.sec_id, e.ticker, e.cik, "error", f"{type(exc).__name__}: {exc}",
                                      delist_date=e.delist_date))
-        watch.report_event(review, e, "payout extraction")
+        watch.report_delisting(review, e, "payout extraction")
     return raw, llm_terms
 
 
@@ -762,7 +762,7 @@ def _add_acquirers(ctx: _RunContext, mergers: list[Delisting], trade_day: dict[D
             if cand.composite not in added:
                 watch = _DegradedWatch()
                 acq_cik = acquirer_cik(ctx.clients.resolver, ctx.clients.edgar, acq, day, e)
-                watch.report_event(review, e, f"the acquirer {acq} CIK lookup", own_row=False)
+                watch.report_delisting(review, e, f"the acquirer {acq} CIK lookup", own_row=False)
                 added[cand.composite] = AddedAcquirer(
                     Security(cand.composite, acq_cik, share_class_from_name(cand.name), cand.name,
                              cand.security_type, False, "cusip"), acq, day)
@@ -773,15 +773,15 @@ def _add_acquirers(ctx: _RunContext, mergers: list[Delisting], trade_day: dict[D
     return acquirer_ids, added
 
 
-def _merger_payouts(ctx: _RunContext, events: list[Delisting], securities: dict[str, Security],
+def _merger_payouts(ctx: _RunContext, delistings: list[Delisting], securities: dict[str, Security],
                     sec_cusips: dict[str, list[str]], ftd: FtdIndex, closes: dict[DelistingKey, float],
                     overrides: Overrides, tol: float) -> _Payouts:
     """8. Merger payouts, LLM terms, acquirer prices and acquirer securities."""
-    mergers = [e for e in events if e.record.bucket is CrspBucket.MERGER]
+    mergers = [e for e in delistings if e.record.bucket is CrspBucket.MERGER]
     review: list[ReviewItem] = []
     mark = ctx.meter.start()
     raw, llm_terms = _extract_payouts(ctx, mergers, closes, review)
-    trade_day = {e.key: e.last_trade.day for e in events}
+    trade_day = {e.key: e.last_trade.day for e in delistings}
     gated = _gate(ctx, mergers, trade_day, ftd, raw, llm_terms, closes, overrides, tol)
     acquirer_ids, added = _add_acquirers(ctx, mergers, trade_day, gated, securities, sec_cusips, ftd, review)
     _flush_memo(ctx.clients)                  # the acquirer lookups resolved tickers
@@ -789,7 +789,7 @@ def _merger_payouts(ctx: _RunContext, events: list[Delisting], securities: dict[
     return _Payouts(raw, llm_terms, gated, acquirer_ids, added, review)
 
 
-def _find_successors(ctx: _RunContext, events: list[Delisting], securities: dict[str, Security],
+def _find_successors(ctx: _RunContext, delistings: list[Delisting], securities: dict[str, Security],
                      sightings: dict[str, list[Sighting]], added: dict[str, AddedSecurity]) -> list[ReviewItem]:
     """9. Successors after a FIGI change: first a security of this run that starts
     right after the last trade under the same issuer or ticker (a holdco
@@ -805,7 +805,7 @@ def _find_successors(ctx: _RunContext, events: list[Delisting], securities: dict
         for sid, sig in sightings.items() if sig}
     for sid, a in added.items():
         starts[sid] = SecurityStart(a.span()[0], a.security.issuer_cik, {a.ticker})
-    for e in events:                           # a security of this run
+    for e in delistings:                       # a security of this run
         in_run = successor_in_run(e, starts) if "successor_unknown" in e.flags else None
         if in_run is None:
             continue
@@ -819,8 +819,8 @@ def _find_successors(ctx: _RunContext, events: list[Delisting], securities: dict
                 args = successor_search_args(clients.edgar, e, starts, securities)
                 if args is not None:
                     successor_search(*successor_query(*args))
-            warm(events, warm_search, workers=ctx.sec_workers, name="successor search")
-        for e in events:
+            warm(delistings, warm_search, workers=ctx.sec_workers, name="successor search")
+        for e in delistings:
             watch = _DegradedWatch()
             args = successor_search_args(clients.edgar, e, starts, securities)
             if args is None:
@@ -831,7 +831,7 @@ def _find_successors(ctx: _RunContext, events: list[Delisting], securities: dict
                                        exclude_cik=e.cik, share_class=predecessor.share_class,
                                        edgar=clients.edgar,
                                        own_tickers={x.ticker for x in predecessor.eras} | {e.ticker})
-            watch.report_event(review, e, "the successor search")
+            watch.report_delisting(review, e, "the successor search")
             if hit is None:
                 continue
             s_cik, cand, filing_date = hit
@@ -851,21 +851,21 @@ def _find_successors(ctx: _RunContext, events: list[Delisting], securities: dict
     return review
 
 
-def _delisting_rows(events: list[Delisting], closes: dict[DelistingKey, float], payouts: _Payouts,
+def _delisting_rows(delistings: list[Delisting], closes: dict[DelistingKey, float], payouts: _Payouts,
                     overrides: Overrides) -> tuple[list[dict], list[dict]]:
     """10a. The delistings.csv rows, and the review rows of those delistings that
     carry a flag or no DLRET."""
     gated = payouts.gated
     table = build_delistings_table(
-        [e.record for e in events], last_trade_closes=closes, payouts=gated.payouts,
-        exchanges={e.key: e.exchange for e in events},
+        [e.record for e in delistings], last_trade_closes=closes, payouts=gated.payouts,
+        exchanges={e.key: e.exchange for e in delistings},
         merger_terms=gated.merged_terms, recovery_ratios=overrides.recoveries,
         payout_sources=gated.sources, payout_confidences=gated.confidences, payout_flags=gated.flags,
     )
-    ev_by_key = {e.key: e for e in events}
+    delisting_by_key = {e.key: e for e in delistings}
     delisting_rows, review_rows = [], []
     for enriched in table:
-        e = ev_by_key[DelistingKey(enriched.sec_id, enriched.delist_date)]
+        e = delisting_by_key[DelistingKey(enriched.sec_id, enriched.delist_date)]
         pr = payouts.raw.get(e.key)
         delisting_rows.append(delisting_row(
             enriched, exchange=e.exchange or None,
@@ -891,7 +891,7 @@ def _delisting_rows(events: list[Delisting], closes: dict[DelistingKey, float], 
     return delisting_rows, review_rows
 
 
-def _history_rows(ctx: _RunContext, securities: dict[str, Security], search: _Search,
+def _history_rows(ctx: _RunContext, securities: dict[str, Security], search: _DelistingSearch,
                   sec_cusips: dict[str, list[str]], ftd: FtdIndex,
                   added: dict[str, AddedSecurity]) -> tuple[list[dict], list[dict]]:
     """10b. The ticker_history and cusip_history rows (`security_master.history_rows`):
@@ -903,7 +903,7 @@ def _history_rows(ctx: _RunContext, securities: dict[str, Security], search: _Se
     clients = ctx.clients
     th_rows, ch_rows = [], []
     final = {}
-    for e in sorted(search.events, key=lambda e: e.delist_date):
+    for e in sorted(search.delistings, key=lambda e: e.delist_date):
         final[e.sec_id] = e
     for sid, s in securities.items():
         last_delisting = final.get(sid)
@@ -932,9 +932,9 @@ def _history_rows(ctx: _RunContext, securities: dict[str, Security], search: _Se
     return th_rows, ch_rows
 
 
-def _payout_rows(payouts: _Payouts, events: list[Delisting]) -> list[dict]:
+def _payout_rows(payouts: _Payouts, delistings: list[Delisting]) -> list[dict]:
     """10c. The payouts.csv rows: each merger's gated payout and where it came from."""
-    ev_by_key = {e.key: e for e in events}
+    delisting_by_key = {e.key: e for e in delistings}
     gated, rows = payouts.gated, []
     for key, pr in payouts.raw.items():
         value = gated.payouts.get(key)
@@ -947,7 +947,7 @@ def _payout_rows(payouts: _Payouts, events: list[Delisting]) -> list[dict]:
             accession = t.source.partition(":")[2] if t is not None else None
         else:
             accession = pr.accession if pr and value is not None else None
-        rows.append({"sec_id": key.sec_id, "delist_date": key.delist_date, "ticker": ev_by_key[key].ticker,
+        rows.append({"sec_id": key.sec_id, "delist_date": key.delist_date, "ticker": delisting_by_key[key].ticker,
                      "payout_per_share": value, "confidence": gated.confidences.get(key, "none"),
                      "source": source, "accession": accession})
     return rows
@@ -982,21 +982,21 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
     `run` wraps it with the resolver memo's final flush."""
     ctx = _RunContext(clients, clients.as_of or date.today(), log, sec_workers, _StageMeter(log))
     run_mark = SEC_STATS.snapshot()           # the manifest reports the traffic since here
-    eras, era_by_key, ftd, ftd_lo = _refine(ctx, index, limit)                                   # 1
-    answers = _resolve_issuers(ctx, eras, ftd)                                                    # 2
-    resolutions, securities, review = _resolve_securities(ctx, eras, era_by_key, ftd, answers)   # 3
-    sec_cusips = _security_cusips(ctx, securities, resolutions, ftd, ftd_lo)                      # 4
-    search = _find_delistings(ctx, securities, sec_cusips, ftd, answers.resolutions)             # 5
-    events = search.events
+    eras, era_by_key, ftd, ftd_lo = _refine(ctx, index, limit)                                      # 1
+    answers = _resolve_issuers(ctx, eras, ftd)                                                      # 2
+    resolutions, securities, review = _resolve_securities(ctx, eras, era_by_key, ftd, answers)      # 3
+    sec_cusips = _security_cusips(ctx, securities, resolutions, ftd, ftd_lo)                        # 4
+    search = _find_delistings(ctx, securities, sec_cusips, ftd, answers.resolutions)                # 5
+    delistings = search.delistings
     review += search.review
-    _check_overrides(overrides, events)                                                           # 6
-    closes = _last_trade_closes(ctx, events, securities, sec_cusips, ftd, ftd_lo, overrides)      # 7
-    payouts = _merger_payouts(ctx, events, securities, sec_cusips, ftd, closes, overrides, tol)   # 8
+    _check_overrides(overrides, delistings)                                                         # 6
+    closes = _last_trade_closes(ctx, delistings, securities, sec_cusips, ftd, ftd_lo, overrides)    # 7
+    payouts = _merger_payouts(ctx, delistings, securities, sec_cusips, ftd, closes, overrides, tol) # 8
     review += payouts.review
-    review += _find_successors(ctx, events, securities, search.sightings, payouts.added)          # 9
+    review += _find_successors(ctx, delistings, securities, search.sightings, payouts.added)        # 9
 
     # 10. rows
-    delisting_rows, review_rows = _delisting_rows(events, closes, payouts, overrides)
+    delisting_rows, review_rows = _delisting_rows(delistings, closes, payouts, overrides)
     review_rows += [item.row() for item in review]
     th_rows, ch_rows = _history_rows(ctx, securities, search, sec_cusips, ftd, payouts.added)
     review_rows += [item.row() for item in ticker_range_review(th_rows)]
@@ -1010,7 +1010,7 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
         "ticker_history": th_rows,
         "cusip_history": ch_rows,
         "delistings": delisting_rows,
-        "payouts": _payout_rows(payouts, events),
+        "payouts": _payout_rows(payouts, delistings),
         "review": triaged.review_rows,
         "review_summary": triaged.summary_rows,
     })
@@ -1018,7 +1018,7 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
     run_manifest.write(out_dir, run_manifest.build(as_of=ctx.as_of, sec_workers=sec_workers, counts=stat_counts,
                                                    timings=stat_timings, stages=ctx.meter.stages,
                                                    review_flags=dict(flags), review=triaged.counts))
-    return RunSummary(counts, dict(Counter(e.record.bucket.value for e in events)),
+    return RunSummary(counts, dict(Counter(e.record.bucket.value for e in delistings)),
                       dict(Counter(s.figi_source for s in securities.values())), dict(flags), dict(triaged.counts))
 
 

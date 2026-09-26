@@ -109,7 +109,7 @@ class TickerResolver:
             self._memo[key] = res
             self._memo_observed[key] = d.get("member_name")
 
-    OBSERVED_ALIVE_DAYS = 400          # filed within ±this of the date: the company was operating
+    OBSERVED_ALIVE_DAYS = 400          # filed within ±this of the date: the issuer was operating
     OBSERVED_TAIL_DAYS = 1500          # a Form 25/15 up to this old: a frozen vendor tail (XTO)
     REPLACE_WINDOW_DAYS = 90         # own Form 25/15 this close: a name-search hit replaces an EFTS fallback
 
