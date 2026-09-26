@@ -16,6 +16,8 @@ from types import SimpleNamespace
 import pytest
 
 import delist_detection.pipeline as pipeline
+from delist_detection import sec_stats
+from delist_detection import sec_limiter
 from delist_detection import edgar
 from delist_detection.classifier import DelistClassifier, DelistRecord
 from delist_detection.crsp_codes import CrspBucket
@@ -129,14 +131,14 @@ def test_answers_resolved_before_an_abort_inside_issuer_resolution_are_saved(fak
 
 
 def test_default_clients_share_one_run_date_and_a_machine_wide_limit(tmp_path, monkeypatch):
-    monkeypatch.setenv(edgar.SEC_RATE_LOCK_ENV, str(tmp_path / "sec_rate.lock"))
+    monkeypatch.setenv(sec_limiter.SEC_RATE_LOCK_ENV, str(tmp_path / "sec_rate.lock"))
     monkeypatch.setenv("EDGAR_USER_AGENT", "Test Co test@example.com")
     index = ObservationIndex([Observation("AET", "2018-06-29", "AETNA INC")])
     c = pipeline.default_clients(index, cache_dir=tmp_path / "cache", as_of=date(2026, 9, 23),
                                  extract_payouts=False)
     assert c.as_of == c.edgar.today == c.resolver.today == c.classifier.today == c.halts.today == date(2026, 9, 23)
     assert c.resolver.batch_writes is True
-    assert edgar.SEC_LIMITER.gate is not None and edgar.SEC_LIMITER.gate.path == tmp_path / "sec_rate.lock"
+    assert sec_limiter.SEC_LIMITER.gate is not None and sec_limiter.SEC_LIMITER.gate.path == tmp_path / "sec_rate.lock"
 
 
 class _Midas:
@@ -257,9 +259,9 @@ def test_a_failure_only_a_warm_worker_meets_is_counted_under_its_stage(fake_edga
 
     monkeypatch.setattr(TickerResolver, "resolve", resolve)
     fake_edgar.fetch_filing_raw = raw
-    mark = edgar.SEC_STATS.snapshot()
+    mark = sec_stats.SEC_STATS.snapshot()
     run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None, sec_workers=4)
-    counts, _ = edgar.SEC_STATS.since(mark)
+    counts, _ = sec_stats.SEC_STATS.since(mark)
     assert all(raised.values())
     assert {stage: counts.get(f"warm_failed:{stage}", 0) for stage in raised} == raised
 
@@ -322,9 +324,9 @@ def test_the_stage_meter_counts_edgar_requests_apart_from_data_file_downloads():
     lines = []
     meter = pipeline._StageMeter(lines.append)
     mark = meter.start()
-    edgar.SEC_STATS.add("request:submissions")
-    edgar.SEC_STATS.add("request:sec_data")
-    edgar.SEC_STATS.add("cache:submissions")          # a cache answer is not a request
+    sec_stats.SEC_STATS.add("request:submissions")
+    sec_stats.SEC_STATS.add("request:sec_data")
+    sec_stats.SEC_STATS.add("cache:submissions")          # a cache answer is not a request
     meter.done("issuer resolution", mark)
     assert meter.stages == {"issuer resolution": {"edgar_requests": 1, "sec_data_downloads": 1}}
     assert lines == ["issuer resolution: 1 EDGAR requests, 1 SEC data-file downloads (all threads)"]

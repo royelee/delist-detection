@@ -20,7 +20,7 @@ import requests
 from .acquirers import acquirer_cik, find_acquirer
 from .crsp_codes import CrspBucket
 from .delistings import SUCCESSOR_UNKNOWN, Delisting, DelistingFinder, SecurityContext
-from .edgar import SEC_STATS
+from .sec_stats import SEC_STATS
 from .evidence import edgar_names
 from .fatal import FATAL
 from .figi_resolution import is_placeholder, share_class_from_name
@@ -203,7 +203,7 @@ def _resolution_source(sec: Security, issuers: dict[str, Issuer], resolutions: d
 
 
 class _StageMeter:
-    """SEC traffic per pipeline stage, from edgar.SEC_STATS: logged as each stage
+    """SEC traffic per pipeline stage, from sec_stats.SEC_STATS: logged as each stage
     ends and kept for run_manifest.json. Counts cover every thread (the warm pass's
     and the stage's own). EDGAR endpoints are counted apart from SEC data-file
     downloads (fails-to-deliver and MIDAS ZIPs and their index pages)."""
@@ -244,7 +244,7 @@ def _degraded_item(sec_id: str, ticker: str, cik: int | None, what: str, then: s
 
 class _DegradedWatch:
     """Whether an EDGAR answer on this thread rested on a failed request or a stale
-    copy since the watch was made (edgar.SEC_STATS.thread_degraded())."""
+    copy since the watch was made (sec_stats.SEC_STATS.thread_degraded())."""
 
     def __init__(self) -> None:
         self._mark = SEC_STATS.thread_degraded()
@@ -1079,9 +1079,10 @@ def default_clients(index: ObservationIndex, *, cache_dir: Path, rename_map: dic
                     use_halts: bool = True, as_of: date | None = None) -> Clients:
     """The production clients. Every client is dated `as_of` (default: today,
     read once here), the resolver batches its memo writes, and the SEC limit is
-    made machine-wide (edgar.use_machine_wide_limit)."""
+    made machine-wide (sec_limiter.use_machine_wide_limit)."""
     from .classifier import DelistClassifier
-    from .edgar import EdgarClient, use_machine_wide_limit
+    from .edgar import EdgarClient
+    from .sec_limiter import use_machine_wide_limit
     from .ftd import FtdClient
     from .midas import MidasClient
     from .nasdaq_halts import NasdaqHaltClient

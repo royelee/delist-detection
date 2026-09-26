@@ -84,10 +84,19 @@ variable names assume (security, era, sighting, pin, …).
   that neither side's name confirms as continuous.
 - `edgar.py` — throttled, on-disk-cached SEC client. `submissions()`,
   `recent_filings()`, `fetch_filing_text()`/`fetch_filing_raw()` (HTML-stripped
-  and raw text caches). Owns `EdgarBlocked`, the shared request throttle
-  (`throttle()`), `resolve_user_agent()`, and `sec_get()`: the one SEC request
-  path (throttle, User-Agent, SEC_STATS counting, `retry_request`, `EdgarBlocked`
-  on 403/429) that `EdgarClient`, `sec_http.py` and `verify_against_web.py` share.
+  and raw text caches). Owns `EdgarBlocked`, `resolve_user_agent()`, and
+  `sec_get()`: the one SEC request path (`sec_limiter.throttle`, User-Agent,
+  `sec_stats` counting, `retry_request`, `EdgarBlocked` on 403/429) that
+  `EdgarClient`, `sec_http.py` and `verify_against_web.py` share.
+- `sec_limiter.py` — the SEC rate limit: `SEC_LIMITER` (a `RateLimiter`, 8
+  request starts/s across the process's threads), `MachineGate` and
+  `use_machine_wide_limit()` (the same limit across every process on the
+  machine through the lock file), `throttle()` (every SEC request waits here),
+  `PrefetchCancelled`.
+- `sec_stats.py` — the counters behind run_manifest.json: `SEC_STATS` (a
+  `RequestStats`: requests, cache answers and latency per endpoint,
+  `endpoint_of`, and degraded answers), and fill-only mode (`fill_only`/
+  `filling_only`: a prefetch thread only fills missing cache entries).
 - `fatal.py` — `FATAL`: the exceptions that stop a run instead of becoming a
   review row (`EdgarBlocked`, `OpenFigiBlocked`, `OpenFigiUnavailable`).
 - `retries.py` — `retrying()`: the one retry loop (attempts, the wait between
@@ -277,10 +286,10 @@ conflate them.
   `fetch_filing_text`/`full_text_search`/`sec_http` downloads retries up to 3
   attempts (2s/4s backoff, `edgar.retry_request`, inside `edgar.sec_get`); a 403/429 still raises
   `EdgarBlocked` at once, and a failure is never cached.
-  The limiter (`edgar.SEC_LIMITER`) is shared by every thread of the process
+  The limiter (`sec_limiter.SEC_LIMITER`) is shared by every thread of the process
   and, through `~/.cache/delist_detection/sec_rate.lock`
   (`$DELIST_DETECTION_SEC_RATE_LOCK`), by every SEC client on the machine
-  (`edgar.use_machine_wide_limit()`, installed by the CLI, `default_clients`,
+  (`sec_limiter.use_machine_wide_limit()`, installed by the CLI, `default_clients`,
   `verify_against_web.py` and `build_golden_fixtures.py`). `--sec-workers N`
   threads prefetch through it (`prefetch.warm`); they only fill missing cache
   entries, so output is byte-identical for any N given the same caches and run

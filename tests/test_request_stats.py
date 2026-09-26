@@ -1,4 +1,4 @@
-"""edgar.SEC_STATS: requests sent and answers read from cache per EDGAR
+"""sec_stats.SEC_STATS: requests sent and answers read from cache per EDGAR
 endpoint, latency, and degraded answers (a stale copy served, a request that
 failed), counted across threads and, for degraded answers, on the calling
 thread alone."""
@@ -10,7 +10,8 @@ import pytest
 import requests
 
 from delist_detection import sec_http
-from delist_detection.edgar import SEC_STATS, STALE_KEY, EdgarClient, FETCHED_KEY, _endpoint, fill_only
+from delist_detection.edgar import FETCHED_KEY, STALE_KEY, EdgarClient
+from delist_detection.sec_stats import SEC_STATS, endpoint_of, fill_only
 
 UA = "Test Co test@example.com"
 SUB_URL = "https://data.sec.gov/submissions/CIK0000000042.json"
@@ -51,7 +52,7 @@ def _client(tmp_path, status=200):
     ("https://www.sec.gov/files/data/fails-deliver-data/cnsfails202401a.zip", "sec_data"),
 ])
 def test_each_url_is_counted_under_its_endpoint(url, endpoint):
-    assert _endpoint(url) == endpoint
+    assert endpoint_of(url) == endpoint
 
 
 def test_requests_and_cache_answers_are_counted_per_endpoint(tmp_path):

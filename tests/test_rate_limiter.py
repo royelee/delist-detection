@@ -9,12 +9,13 @@ from pathlib import Path
 import pytest
 import requests
 
+from delist_detection import sec_limiter
 from delist_detection import edgar
-from delist_detection.edgar import SEC_RATE_LOCK_ENV, MachineGate, PrefetchCancelled, RateLimiter, default_rate_lock_path
+from delist_detection.sec_limiter import SEC_RATE_LOCK_ENV, default_rate_lock_path, MachineGate, PrefetchCancelled, RateLimiter
 
 # The module's own limiter, read at collection time, before conftest's autouse
 # fixture swaps in a per-test one.
-_MODULE_SEC_LIMITER = edgar.SEC_LIMITER
+_MODULE_SEC_LIMITER = sec_limiter.SEC_LIMITER
 
 
 class _Clock:
@@ -160,7 +161,7 @@ def test_a_pause_extended_while_a_caller_waits_holds_it_to_the_new_end():
 def test_retry_request_pauses_every_thread_on_each_failure(monkeypatch):
     c = _Clock()
     lim = _limiter(c)
-    monkeypatch.setattr(edgar, "SEC_LIMITER", lim)
+    monkeypatch.setattr(sec_limiter, "SEC_LIMITER", lim)
     answers = iter([_Resp(503), requests.ConnectionError("reset"), _Resp(200)])
     seen = []                                  # the pool's pause as each attempt starts
 
@@ -184,7 +185,7 @@ def test_retry_request_pauses_every_thread_on_each_failure(monkeypatch):
 def test_a_request_that_keeps_failing_leaves_the_pool_paused(monkeypatch):
     c = _Clock()
     lim = _limiter(c)
-    monkeypatch.setattr(edgar, "SEC_LIMITER", lim)
+    monkeypatch.setattr(sec_limiter, "SEC_LIMITER", lim)
     seen = []
 
     def make():
@@ -204,7 +205,7 @@ def test_a_request_that_keeps_failing_leaves_the_pool_paused(monkeypatch):
 def test_retry_request_with_no_backoff_neither_pauses_nor_sleeps(monkeypatch):
     c = _Clock()
     lim = _limiter(c)
-    monkeypatch.setattr(edgar, "SEC_LIMITER", lim)
+    monkeypatch.setattr(sec_limiter, "SEC_LIMITER", lim)
     slept = []
     assert edgar.retry_request(lambda: _Resp(503), sleep=slept.append, backoff=()).status_code == 503
     assert slept == []
@@ -214,7 +215,7 @@ def test_retry_request_with_no_backoff_neither_pauses_nor_sleeps(monkeypatch):
 def test_retry_request_with_a_short_backoff_reuses_its_last_value(monkeypatch):
     c = _Clock()
     lim = _limiter(c)
-    monkeypatch.setattr(edgar, "SEC_LIMITER", lim)
+    monkeypatch.setattr(sec_limiter, "SEC_LIMITER", lim)
     seen, slept = [], []
 
     def make():
@@ -277,8 +278,8 @@ def test_prefetch_cancelled_passes_through_except_exception():
 def test_the_per_test_limiter_costs_no_real_time_after_a_pause():
     # conftest's limiter runs on a virtual clock that its own sleep advances: a pause
     # left by a failing request neither blocks a test nor spins it in a busy-wait.
-    edgar.SEC_LIMITER.pause(60.0)
-    t = threading.Thread(target=edgar.throttle, daemon=True)
+    sec_limiter.SEC_LIMITER.pause(60.0)
+    t = threading.Thread(target=sec_limiter.throttle, daemon=True)
     t.start()
     t.join(5)
     assert not t.is_alive()
@@ -291,14 +292,14 @@ def test_every_sec_request_goes_through_the_shared_limiter(monkeypatch):
         def acquire(self):
             calls.append("acquire")
 
-    monkeypatch.setattr(edgar, "SEC_LIMITER", _Probe())
-    edgar.throttle()
+    monkeypatch.setattr(sec_limiter, "SEC_LIMITER", _Probe())
+    sec_limiter.throttle()
     assert calls == ["acquire"]
 
 
 def test_the_shared_limiter_allows_8_requests_per_second():
-    assert _MODULE_SEC_LIMITER is not edgar.SEC_LIMITER   # the module's own, not conftest's per-test one
-    assert edgar.SEC_MAX_RATE == 8.0
+    assert _MODULE_SEC_LIMITER is not sec_limiter.SEC_LIMITER   # the module's own, not conftest's per-test one
+    assert sec_limiter.SEC_MAX_RATE == 8.0
     assert _MODULE_SEC_LIMITER.interval == pytest.approx(0.125)
 
 
@@ -371,10 +372,10 @@ def test_the_lock_path_comes_from_the_environment(monkeypatch, tmp_path):
 
 def test_use_machine_wide_limit_gates_the_shared_limiter(monkeypatch, tmp_path):
     monkeypatch.setenv(SEC_RATE_LOCK_ENV, str(tmp_path / "sec_rate.lock"))
-    gate = edgar.use_machine_wide_limit()
-    assert edgar.SEC_LIMITER.gate is gate and gate.path == tmp_path / "sec_rate.lock"
-    assert edgar.use_machine_wide_limit() is gate          # idempotent
-    edgar.throttle()
+    gate = sec_limiter.use_machine_wide_limit()
+    assert sec_limiter.SEC_LIMITER.gate is gate and gate.path == tmp_path / "sec_rate.lock"
+    assert sec_limiter.use_machine_wide_limit() is gate          # idempotent
+    sec_limiter.throttle()
     assert float((tmp_path / "sec_rate.lock").read_text()) > 0
 
 
@@ -382,8 +383,8 @@ def test_an_unwritable_lock_path_fails_at_setup_naming_the_variable(tmp_path):
     blocker = tmp_path / "file"
     blocker.write_text("")
     with pytest.raises(OSError, match=SEC_RATE_LOCK_ENV):
-        edgar.use_machine_wide_limit(blocker / "sub" / "sec_rate.lock")   # a file where a directory must be
-    assert edgar.SEC_LIMITER.gate is None
+        sec_limiter.use_machine_wide_limit(blocker / "sub" / "sec_rate.lock")   # a file where a directory must be
+    assert sec_limiter.SEC_LIMITER.gate is None
 
 
 def test_require_user_agent_refuses_the_fallback(monkeypatch):

@@ -6,18 +6,13 @@ at 8 req/sec and cache every JSON payload, so repeated runs cost nothing.
 
 from __future__ import annotations
 
-import fcntl
 import hashlib
 import json
 import logging
-import math
 import os
 import re
 import threading
 import time
-import weakref
-from collections import Counter, defaultdict
-from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import date, timedelta
 from pathlib import Path
@@ -25,8 +20,10 @@ from typing import Any
 
 import requests
 
+from . import sec_limiter
 from .atomic_io import clean_orphan_temps, write_atomic
 from .retries import retrying
+from .sec_stats import SEC_STATS, endpoint_of, filling_only
 from .settings import REPO_ENV, env_setting
 
 log = logging.getLogger(__name__)
@@ -135,194 +132,6 @@ def _fetched_on(cp: Path, data: Any) -> date:
     return date.fromtimestamp(cp.stat().st_mtime)
 
 
-_FILL_ONLY = threading.local()
-
-
-@contextmanager
-def fill_only():
-    """On the calling thread, EDGAR reads fill missing cache entries but never
-    replace an existing one: a copy older than the caller's `fresh_after`, or an
-    expired search answer, is returned as it is, with no request.
-    `prefetch.warm` runs every task inside this. A warm pass therefore only adds
-    answers the sequential pass would fetch the same way itself, and every
-    refresh happens in the sequential pass, in its own order, exactly as in a
-    one-thread run (spec §11: same inputs and caches -> byte-identical CSVs)."""
-    prev = getattr(_FILL_ONLY, "on", False)
-    _FILL_ONLY.on = True
-    try:
-        yield
-    finally:
-        _FILL_ONLY.on = prev
-
-
-def filling_only() -> bool:
-    """True inside `fill_only()` on this thread."""
-    return getattr(_FILL_ONLY, "on", False)
-
-
-class PrefetchCancelled(BaseException):
-    """Raised at a prefetch worker's next SEC request once its pool is stopping (a
-    refusal on another thread, or Ctrl-C). A BaseException, like KeyboardInterrupt,
-    so the library's `except Exception` handlers let it through and the worker ends
-    without sending another request."""
-
-
-class RateLimiter:
-    """At most `rate` request starts per second across every thread that shares it.
-
-    `acquire()` blocks until the caller may start one request: `interval` after
-    the previous start, and not before a pause set by `pause()` has run out --
-    including a pause set or extended while the caller is already waiting. The
-    lock is held while sleeping, so callers queue behind it and no burst credit
-    builds up. `gate` (a MachineGate) extends the spacing to every process on
-    the machine that shares its lock file; it is taken after the in-process
-    lock, so this process's own threads queue cheaply first. `clock` and `sleep`
-    are injectable so tests never wait.
-    """
-
-    def __init__(self, rate: float, *, clock=time.monotonic, sleep=time.sleep,
-                 gate: "MachineGate | None" = None) -> None:
-        self.interval = 1.0 / rate
-        self._clock, self._sleep = clock, sleep
-        self._lock = threading.Lock()            # held from the wait through the start
-        self._pause_lock = threading.Lock()      # guards _resume_at only; taken after _lock, never before
-        self._last: float | None = None
-        self._resume_at = float("-inf")
-        self._local = threading.local()
-        self.count = 0                           # requests started through this limiter
-        self.gate = gate                         # machine-wide spacing (MachineGate), taken after _lock
-
-    def _raise_if_cancelled(self) -> None:
-        stop = getattr(self._local, "stop", None)
-        if stop is not None and stop.is_set():
-            raise PrefetchCancelled()
-
-    def pause(self, seconds: float) -> None:
-        """Hold every caller's next request start until `seconds` from now. SEC is
-        failing (a 5xx or a dropped connection), so the whole pool backs off
-        together instead of each thread on its own. A longer pause already set is
-        kept."""
-        with self._pause_lock:
-            self._resume_at = max(self._resume_at, self._clock() + seconds)
-
-    def acquire(self) -> None:
-        self._raise_if_cancelled()
-        with self._lock:
-            while True:
-                # stopped while queued behind the lock, or while sleeping: the slot goes unused
-                self._raise_if_cancelled()
-                with self._pause_lock:
-                    ready = self._resume_at
-                if self._last is not None:
-                    ready = max(ready, self._last + self.interval)
-                wait = ready - self._clock()
-                if wait <= 0:
-                    break
-                self._sleep(wait)                # then look again: a pause may have been set meanwhile
-            if self.gate is not None:
-                self.gate.wait_turn()            # every other process sharing the lock file
-                self._raise_if_cancelled()       # stopped while waiting for the machine's turn
-            self._last = self._clock()
-            self.count += 1
-
-    @contextmanager
-    def cancelled_by(self, stop: threading.Event):
-        """Inside this block, the calling thread's acquire() raises PrefetchCancelled
-        once `stop` is set. Other threads are not affected. On exit the event of an
-        enclosing block, if any, applies again."""
-        outer = getattr(self._local, "stop", None)
-        self._local.stop = stop
-        try:
-            yield
-        finally:
-            self._local.stop = outer
-
-
-SEC_MAX_RATE = 8.0      # SEC allows 10 requests/s per client; we stay under it (spec §9, §11)
-SEC_LIMITER = RateLimiter(SEC_MAX_RATE)
-
-SEC_RATE_LOCK_ENV = "DELIST_DETECTION_SEC_RATE_LOCK"
-
-
-def default_rate_lock_path() -> Path:
-    """The machine-wide SEC rate lock file: $DELIST_DETECTION_SEC_RATE_LOCK, else
-    ~/.cache/delist_detection/sec_rate.lock. Outside the repo on purpose: every
-    checkout and worktree on the machine must share it."""
-    env = os.environ.get(SEC_RATE_LOCK_ENV, "").strip()
-    return Path(env).expanduser() if env else Path.home() / ".cache" / "delist_detection" / "sec_rate.lock"
-
-
-class MachineGate:
-    """Spaces SEC request starts across every process on the machine that uses one
-    lock file. The file holds the wall-clock time of the last start. `wait_turn`
-    takes the file's exclusive `flock` and reads that time. If its turn is due,
-    it writes its own start and releases the lock. Otherwise it releases the
-    lock, sleeps until `interval` after that time, and looks again. It never
-    sleeps while it holds the lock, so a process suspended mid-wait (Ctrl-Z, a
-    debugger) cannot stall every other SEC client on the machine. The wait is
-    clamped to [0, interval], and a stamp already waited out is not waited for
-    again, so a wall-clock step can neither stall the pool (a stamp "in the
-    future") nor let a burst through; an unreadable stamp counts as none. The
-    file is opened here, so an unwritable path fails at start-up, not in the
-    middle of a run."""
-
-    def __init__(self, path: str | Path, interval: float, *, wall=time.time, sleep=time.sleep) -> None:
-        self.path, self.interval = Path(path), interval
-        self._wall, self._sleep = wall, sleep
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        self._fd = os.open(self.path, os.O_RDWR | os.O_CREAT, 0o644)
-        weakref.finalize(self, os.close, self._fd)
-
-    def wait_turn(self) -> None:
-        waited_out = None                        # the stamp this call has already slept a turn for
-        while True:
-            fcntl.flock(self._fd, fcntl.LOCK_EX)
-            try:
-                raw = os.pread(self._fd, 64, 0)
-                wait = 0.0 if raw == waited_out else self._wait_after(raw)
-                if wait <= 0:
-                    stamp = f"{self._wall():.6f}".encode("ascii")
-                    os.ftruncate(self._fd, 0)
-                    os.pwrite(self._fd, stamp, 0)
-                    return
-            finally:
-                fcntl.flock(self._fd, fcntl.LOCK_UN)
-            self._sleep(wait)                    # with the lock released; then look again:
-            waited_out = raw                     # another process may have started meanwhile
-
-    def _wait_after(self, raw: bytes) -> float:
-        """How long to wait after the start stamped `raw`, clamped to [0, interval]. A
-        stamp that is unreadable or not finite (nan, inf, -inf -- `time.sleep` raises
-        ValueError on nan) counts as no stamp."""
-        try:
-            last = float(raw.decode("ascii").strip() or "0")
-        except (UnicodeDecodeError, ValueError):
-            last = 0.0
-        if not math.isfinite(last):
-            last = 0.0
-        return min(max(last + self.interval - self._wall(), 0.0), self.interval)
-
-
-def use_machine_wide_limit(path: str | Path | None = None) -> MachineGate:
-    """Extend SEC_LIMITER's spacing to every process on this machine that uses the
-    same lock file (`path`, default `default_rate_lock_path()`). Call it once at
-    start-up, before any SEC request: the CLI, `pipeline.default_clients`,
-    `verify_against_web.py` and `build_golden_fixtures.py` do. Idempotent for one
-    path. Raises OSError, naming the path and SEC_RATE_LOCK_ENV, when the lock
-    file cannot be opened for writing."""
-    p = Path(path).expanduser() if path is not None else default_rate_lock_path()
-    gate = SEC_LIMITER.gate
-    if gate is not None and gate.path == p:
-        return gate
-    try:
-        gate = MachineGate(p, SEC_LIMITER.interval)
-    except OSError as exc:
-        raise OSError(f"cannot open the machine-wide SEC rate lock {p} ({exc}); set {SEC_RATE_LOCK_ENV} "
-                      "to a writable file that every SEC client on this machine uses") from exc
-    SEC_LIMITER.gate = gate
-    return gate
-
-
 class EdgarSetupError(RuntimeError):
     """The client is not set up to talk to SEC: no User-Agent SEC accepts."""
 
@@ -337,97 +146,6 @@ def require_user_agent() -> str:
             "EDGAR_USER_AGENT is not set (environment or the repo .env); SEC refuses the fallback "
             f"User-Agent {FALLBACK_UA!r}. Set it to a name and a contact address, e.g. 'Jane Doe jane@example.com'.")
     return ua
-
-
-def throttle() -> None:
-    """Wait for the next SEC request slot: this process's, and, once
-    `use_machine_wide_limit()` has installed a gate, the machine's across every
-    process sharing the lock file. Every SEC request (`sec_get`, which
-    EdgarClient, sec_http and verify_against_web share) calls this, from any thread. It
-    reads the module's SEC_LIMITER at each call, so a test or the CLI can swap
-    or extend the limiter."""
-    SEC_LIMITER.acquire()
-
-
-def _endpoint(url: str) -> str:
-    """The EDGAR endpoint a URL belongs to, as run_manifest.json counts requests.
-    Everything that is not an EDGAR endpoint (fails-to-deliver and MIDAS ZIPs and
-    their index pages) is `sec_data`."""
-    if "efts.sec.gov" in url:
-        return "full_text_search"
-    if "/cgi-bin/browse-edgar" in url:
-        return "company_search"
-    if "/submissions/CIK" in url and "-submissions-" not in url:
-        return "submissions"
-    if "/submissions/" in url:
-        return "submissions_page"
-    if "/Archives/edgar/" in url:
-        return "archives"
-    if url.endswith("/company_tickers.json"):
-        return "company_tickers"
-    return "sec_data"
-
-
-@dataclass(frozen=True)
-class StatsMark:
-    counts: dict
-    timing_lengths: dict
-
-
-class RequestStats:
-    """The counters behind run_manifest.json, shared by every thread of the
-    process: requests sent and answers read from cache, per endpoint
-    ("request:<endpoint>", "cache:<endpoint>"); answers that rest on a failed
-    request or a stale copy ("degraded:<what>", or "warm_degraded:<what>" on a
-    fill-only/warm thread -- see `filling_only()` -- so `degraded_answers`
-    reflects only what the sequential pass relied on); and each request's
-    latency. A run reports the change since a `snapshot()`. `degraded()` also
-    counts on the calling thread alone (`thread_degraded()`), so the pipeline
-    can tell which era or security a degraded answer served."""
-
-    def __init__(self) -> None:
-        self._lock = threading.Lock()
-        self._counts: Counter = Counter()
-        self._timings: dict[str, list[float]] = defaultdict(list)
-        self._local = threading.local()
-
-    def add(self, key: str) -> None:
-        with self._lock:
-            self._counts[key] += 1
-
-    def timing(self, endpoint: str, seconds: float) -> None:
-        with self._lock:
-            self._timings[endpoint].append(seconds)
-
-    def degraded(self, what: str, *, sec: bool = True) -> None:
-        """Count an answer that rested on a failed request or a stale copy under
-        `what`. With `sec` (an SEC answer) it also counts on the calling thread
-        (`thread_degraded`), which the pipeline reads as "a failed SEC request";
-        another source's failure (the Nasdaq halt feed) is only counted, and its
-        client says itself which read failed."""
-        prefix = "warm_degraded" if filling_only() else "degraded"
-        self.add(f"{prefix}:{what}")
-        if sec:
-            self._local.degraded = self.thread_degraded() + 1
-
-    def thread_degraded(self) -> int:
-        return getattr(self._local, "degraded", 0)
-
-    def snapshot(self) -> StatsMark:
-        with self._lock:
-            return StatsMark(dict(self._counts), {k: len(v) for k, v in self._timings.items()})
-
-    def since(self, mark: StatsMark) -> tuple[dict[str, int], dict[str, list[float]]]:
-        """(counts, latencies in seconds per endpoint) added since `mark`."""
-        with self._lock:
-            counts = {k: v - mark.counts.get(k, 0) for k, v in self._counts.items()
-                      if v != mark.counts.get(k, 0)}
-            timings = {k: list(v[mark.timing_lengths.get(k, 0):]) for k, v in self._timings.items()
-                       if len(v) > mark.timing_lengths.get(k, 0)}
-        return dict(sorted(counts.items())), dict(sorted(timings.items()))
-
-
-SEC_STATS = RequestStats()
 
 
 # Backoff between retry attempts, in seconds: 2s after the 1st failure, 4s
@@ -445,7 +163,7 @@ def retry_request(make_request, *, sleep=time.sleep, max_attempts: int = RETRY_M
     403/429 raises `EdgarBlocked` immediately -- it is never retried. A 404 or
     any other non-5xx response is returned on the first attempt, unchanged.
 
-    After every failed attempt the shared SEC_LIMITER is paused for that
+    After every failed attempt the shared `sec_limiter.SEC_LIMITER` is paused for that
     attempt's backoff (the last attempt for the last backoff), so every other
     thread's next SEC request waits too: while SEC is failing, the pool backs
     off together instead of sending ~8 mostly failing requests a second. An
@@ -465,7 +183,7 @@ def retry_request(make_request, *, sleep=time.sleep, max_attempts: int = RETRY_M
         if not backoff:
             return 0                          # a transport error or a 5xx: retry at once
         seconds = backoff[min(attempt, len(backoff) - 1)]
-        SEC_LIMITER.pause(seconds)            # every thread's next SEC request waits too
+        sec_limiter.SEC_LIMITER.pause(seconds)    # every thread's next SEC request waits too
         return seconds
 
     resp, error = retrying(make_request, attempts=max_attempts, wait=wait, sleep=sleep)
@@ -478,8 +196,8 @@ def sec_get(url: str, *, headers: dict[str, str], timeout: float, session=None, 
             retry: bool = True, sleep=time.sleep):
     """GET `url` from SEC: the one request path every SEC client shares
     (EdgarClient, sec_http, verify_against_web). Each attempt waits for the
-    shared limiter (`throttle`), is counted as `request:<endpoint>` and timed
-    under `endpoint` in SEC_STATS (default: `_endpoint(url)`), and goes out on
+    shared limiter (`sec_limiter.throttle`), is counted as `request:<endpoint>` and timed
+    under `endpoint` in `sec_stats.SEC_STATS` (default: `endpoint_of(url)`), and goes out on
     `session` (default: a one-off `requests.get`) with `headers` as given --
     the caller's User-Agent and, where it matters, Host.
 
@@ -490,10 +208,10 @@ def sec_get(url: str, *, headers: dict[str, str], timeout: float, session=None, 
     thread for the first backoff (a transport error is then re-raised, a 5xx
     returned)."""
     get = session.get if session is not None else requests.get
-    endpoint = endpoint or _endpoint(url)
+    endpoint = endpoint or endpoint_of(url)
 
     def make():
-        throttle()
+        sec_limiter.throttle()
         SEC_STATS.add(f"request:{endpoint}")
         started = time.monotonic()
         try:
@@ -506,11 +224,11 @@ def sec_get(url: str, *, headers: dict[str, str], timeout: float, session=None, 
     try:
         resp = make()
     except requests.RequestException:
-        SEC_LIMITER.pause(RETRY_BACKOFF[0])
+        sec_limiter.SEC_LIMITER.pause(RETRY_BACKOFF[0])
         raise
     check_response(resp)              # 403/429 -> EdgarBlocked, as on the retried path
     if resp.status_code >= 500:
-        SEC_LIMITER.pause(RETRY_BACKOFF[0])
+        sec_limiter.SEC_LIMITER.pause(RETRY_BACKOFF[0])
     return resp
 
 
@@ -672,7 +390,7 @@ class EdgarClient:
                     cp.unlink(missing_ok=True)
                 else:
                     if fresh_after is None or filling_only() or _fetched_on(cp, cached) >= fresh_after:
-                        SEC_STATS.add(f"cache:{_endpoint(url)}")
+                        SEC_STATS.add(f"cache:{endpoint_of(url)}")
                         return cached
             host = "data.sec.gov" if url.startswith(SEC_HOST) else "www.sec.gov"
             try:

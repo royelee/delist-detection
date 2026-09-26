@@ -13,7 +13,8 @@ from pathlib import Path
 import requests
 
 from .atomic_io import write_atomic
-from .edgar import SEC_STATS, filling_only, resolve_user_agent, sec_get
+from .edgar import resolve_user_agent, sec_get
+from .sec_stats import SEC_STATS, filling_only
 
 
 def _get(url: str, session, user_agent: str | None, timeout: int, *, sleep=time.sleep):
@@ -42,7 +43,7 @@ def get_text(url: str, cache_file: str | Path, *, max_age_days: float = 7, sessi
     """`url`'s text, cached in `cache_file` and fetched again once the copy is
     `max_age_days` old; a failed refetch serves the old copy, counted as
     `SEC_STATS.degraded("stale_copy")` since a possibly-outdated index page is
-    otherwise a silent fallback. On a prefetch thread (`edgar.fill_only()`) an
+    otherwise a silent fallback. On a prefetch thread (`sec_stats.fill_only()`) an
     existing copy of any age is returned with no request, so only the
     sequential pass refreshes it, in its own order."""
     cf = Path(cache_file)

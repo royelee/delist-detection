@@ -10,7 +10,8 @@ from pathlib import Path
 import pytest
 import requests
 
-from delist_detection.edgar import EdgarClient, FETCHED_KEY, STALE_KEY, WWW_SEC_HOST, fill_only
+from delist_detection.edgar import FETCHED_KEY, STALE_KEY, WWW_SEC_HOST, EdgarClient
+from delist_detection.sec_stats import fill_only
 
 COMPANY = "SUNPOWER CORP"
 FORM = "25-NSE"

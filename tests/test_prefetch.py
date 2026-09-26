@@ -15,8 +15,11 @@ from datetime import date
 
 import pytest
 
-from delist_detection import edgar, prefetch
-from delist_detection.edgar import SEC_STATS, EdgarBlocked, EdgarClient, PrefetchCancelled, RateLimiter, filling_only
+from delist_detection import sec_limiter
+from delist_detection import prefetch
+from delist_detection.edgar import EdgarBlocked, EdgarClient
+from delist_detection.sec_limiter import PrefetchCancelled, RateLimiter
+from delist_detection.sec_stats import SEC_STATS, filling_only
 from delist_detection.openfigi import OpenFigiBlocked, OpenFigiUnavailable
 from delist_detection.prefetch import Serialized, warm
 
@@ -214,14 +217,14 @@ def test_a_refusal_stops_the_pool_and_is_raised(refusal, caplog):
 
 def test_the_process_wide_limiter_is_the_default(monkeypatch):
     lim = _Limiter()
-    monkeypatch.setattr(edgar, "SEC_LIMITER", lim)   # swapped after prefetch was imported, as conftest does
+    monkeypatch.setattr(sec_limiter, "SEC_LIMITER", lim)   # swapped after prefetch was imported, as conftest does
     in_flight, outcome = threading.Barrier(2, timeout=HANG), []
 
     def task(item):
         if item == "refused":
             in_flight.wait()
             raise EdgarBlocked("SEC returned 403")
-        _mid_chain(lim, edgar.throttle, outcome, in_flight.wait)
+        _mid_chain(lim, sec_limiter.throttle, outcome, in_flight.wait)
 
     with pytest.raises(EdgarBlocked):
         warm(["slow", "refused"], task, workers=2)

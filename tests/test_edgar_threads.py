@@ -12,8 +12,9 @@ from datetime import date
 import pytest
 import requests
 
-from delist_detection import atomic_io, edgar
-from delist_detection.edgar import EdgarClient, fill_only, filling_only
+from delist_detection import atomic_io, edgar, sec_limiter
+from delist_detection.edgar import EdgarClient
+from delist_detection.sec_stats import fill_only, filling_only
 
 UA = "Test Co test@example.com"
 SUB_URL = "https://data.sec.gov/submissions/CIK0000000042.json"
@@ -232,7 +233,7 @@ def test_a_failed_filing_text_request_pauses_every_thread(tmp_path, monkeypatch)
         def pause(self, seconds):
             pauses.append(seconds)
 
-    monkeypatch.setattr(edgar, "SEC_LIMITER", _Probe())
+    monkeypatch.setattr(sec_limiter, "SEC_LIMITER", _Probe())
     client = _client(tmp_path, _Session(status=503))
     assert client.fetch_filing_text(42, "0000000042-24-000001", "a.htm") == ""
     assert pauses == [edgar.RETRY_BACKOFF[0], edgar.RETRY_BACKOFF[1], edgar.RETRY_BACKOFF[1]]

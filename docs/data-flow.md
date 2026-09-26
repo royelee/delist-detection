@@ -201,7 +201,7 @@ payout extraction (one per merger) and the successor search (one per unresolved
 exchange transfer). It runs each stage's own code on N threads
 (`prefetch.warm`) and throws the answers away.
 - **Fill-only threads.** Warm threads only fill missing cache entries; they
-  never refresh an existing one (`edgar.fill_only`). The stage then runs one
+  never refresh an existing one (`sec_stats.fill_only`). The stage then runs one
   item at a time on the main thread, in the usual order, reading exactly what a
   one-thread run reads and refreshing stale copies itself. The same caches and
   run date therefore give byte-identical tables for any N — the *cache tree* can
@@ -236,7 +236,7 @@ exchange transfer). It runs each stage's own code on N threads
   candidate — so two fetches of one query can resolve differently when two
   CIKs tie; sorting hits canonically before use would remove this, left as a
   main-branch follow-up).
-- **The rate limit.** Every thread shares one limiter (`edgar.SEC_LIMITER`:
+- **The rate limit.** Every thread shares one limiter (`sec_limiter.SEC_LIMITER`:
   request starts at least 1/8 s apart). A 5xx or dropped connection pauses
   every thread together. The limit is machine-wide: each start also takes an
   `flock` on `~/.cache/delist_detection/sec_rate.lock`
@@ -244,7 +244,7 @@ exchange transfer). It runs each stage's own code on N threads
   start time, so every SEC client on the machine that uses the same file (runs
   in any worktree, `verify_against_web.py`, `build_golden_fixtures.py`) stays
   under 8 requests/s together. A library caller that builds its own clients
-  instead of using `default_clients` must call `edgar.use_machine_wide_limit()`
+  instead of using `default_clients` must call `sec_limiter.use_machine_wide_limit()`
   itself. A process never sleeps while holding the lock file's `flock` — it
   reads the last start time, releases the lock, then sleeps — so a suspended
   process (Ctrl-Z, a debugger) cannot stall every other SEC client on the
@@ -283,7 +283,7 @@ Each run writes `run_manifest.json` next to the tables:
 - degraded answers (failed requests, stale copies), rejected and not-covered
   full-text searches, and the count of `resolution_degraded` review rows.
   `degraded_answers` counts only what the *sequential* pass rested on; a
-  warm/fill-only thread's own degraded reads (`edgar.filling_only()`) are
+  warm/fill-only thread's own degraded reads (`sec_stats.filling_only()`) are
   counted apart, under `warm_degraded:<what>`, so `degraded_answers` is never
   inflated by a warm thread's own failed attempt at an answer the sequential
   pass never needed (only the sequential pass's own degraded reads can ever

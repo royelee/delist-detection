@@ -7,7 +7,8 @@ import pytest
 import requests
 
 from delist_detection import sec_http
-from delist_detection.edgar import SEC_STATS, EdgarBlocked, EdgarClient, fill_only
+from delist_detection.edgar import EdgarBlocked, EdgarClient
+from delist_detection.sec_stats import SEC_STATS, fill_only
 
 
 class _Resp:
@@ -37,7 +38,7 @@ class _Session:
 
 @pytest.fixture(autouse=True)
 def _no_sleep(monkeypatch):
-    monkeypatch.setattr("delist_detection.edgar.throttle", lambda: None)
+    monkeypatch.setattr("delist_detection.sec_limiter.throttle", lambda: None)
 
 
 def test_download_caches(tmp_path):
@@ -166,7 +167,7 @@ def test_download_429_raises_at_once_no_retry(tmp_path):
 
 
 def test_fetch_filing_raw(tmp_path, monkeypatch):
-    monkeypatch.setattr("delist_detection.edgar.throttle", lambda: None)
+    monkeypatch.setattr("delist_detection.sec_limiter.throttle", lambda: None)
     s = _Session(_Resp(text="<TYPE>25-NSE\n<descriptionClassSecurity>Common Stock</descriptionClassSecurity>"),
                  _Resp(404))
     ec = EdgarClient(cache_dir=tmp_path, user_agent="ua", session=s)
@@ -180,14 +181,14 @@ def test_fetch_filing_raw(tmp_path, monkeypatch):
 
 
 def test_fetch_filing_raw_blocked(tmp_path, monkeypatch):
-    monkeypatch.setattr("delist_detection.edgar.throttle", lambda: None)
+    monkeypatch.setattr("delist_detection.sec_limiter.throttle", lambda: None)
     ec = EdgarClient(cache_dir=tmp_path, user_agent="ua", session=_Session(_Resp(403)))
     with pytest.raises(EdgarBlocked):
         ec.fetch_filing_raw(1, "0000000000-00-000002")
 
 
 def test_fetch_filing_raw_retries_503_then_succeeds(tmp_path, monkeypatch):
-    monkeypatch.setattr("delist_detection.edgar.throttle", lambda: None)
+    monkeypatch.setattr("delist_detection.sec_limiter.throttle", lambda: None)
     slept = []
     s = _Session(_Resp(503), _Resp(text="hello"))
     ec = EdgarClient(cache_dir=tmp_path, user_agent="ua", session=s, sleep=slept.append)
@@ -197,7 +198,7 @@ def test_fetch_filing_raw_retries_503_then_succeeds(tmp_path, monkeypatch):
 
 
 def test_fetch_filing_raw_three_503s_returns_empty_without_caching(tmp_path, monkeypatch):
-    monkeypatch.setattr("delist_detection.edgar.throttle", lambda: None)
+    monkeypatch.setattr("delist_detection.sec_limiter.throttle", lambda: None)
     s = _Session(_Resp(503), _Resp(503), _Resp(503))
     ec = EdgarClient(cache_dir=tmp_path, user_agent="ua", session=s, sleep=lambda _: None)
     assert ec.fetch_filing_raw(1, "0000000000-00-000004") == ""
@@ -206,7 +207,7 @@ def test_fetch_filing_raw_three_503s_returns_empty_without_caching(tmp_path, mon
 
 
 def test_full_text_search_parses_hits(tmp_path, monkeypatch):
-    monkeypatch.setattr("delist_detection.edgar.throttle", lambda: None)
+    monkeypatch.setattr("delist_detection.sec_limiter.throttle", lambda: None)
     hit = {"_source": {"ciks": ["0001652044"], "display_names": ["Alphabet Inc.  (GOOGL, GOOG)  (CIK 0001652044)"]}}
     s = _Session(_Resp(text=json.dumps({"hits": {"hits": [hit]}})))
     ec = EdgarClient(cache_dir=tmp_path, user_agent="ua", session=s)
@@ -217,7 +218,7 @@ def test_full_text_search_parses_hits(tmp_path, monkeypatch):
 
 
 def test_full_text_search_caches_a_successful_answer(tmp_path, monkeypatch):
-    monkeypatch.setattr("delist_detection.edgar.throttle", lambda: None)
+    monkeypatch.setattr("delist_detection.sec_limiter.throttle", lambda: None)
     hit = {"_source": {"ciks": ["1"], "display_names": ["X CO  (X)  (CIK 0000000001)"]}}
     s = _Session(_Resp(text=json.dumps({"hits": {"hits": [hit]}})))
     ec = EdgarClient(cache_dir=tmp_path, user_agent="ua", session=s)
@@ -229,7 +230,7 @@ def test_full_text_search_caches_a_successful_answer(tmp_path, monkeypatch):
 
 @pytest.mark.parametrize("status", [403, 429])
 def test_full_text_search_blocked(tmp_path, monkeypatch, status):
-    monkeypatch.setattr("delist_detection.edgar.throttle", lambda: None)
+    monkeypatch.setattr("delist_detection.sec_limiter.throttle", lambda: None)
     ec = EdgarClient(cache_dir=tmp_path, user_agent="ua", session=_Session(_Resp(status)))
     with pytest.raises(EdgarBlocked):
         ec.full_text_search("X", "8-K12B", date(2020, 1, 1), date(2020, 2, 1))
@@ -238,7 +239,7 @@ def test_full_text_search_blocked(tmp_path, monkeypatch, status):
 def test_full_text_search_500_returns_empty_and_is_not_cached(tmp_path, monkeypatch):
     # A 5xx is retried up to 3 attempts; all three fail here, so the result is
     # still empty and never cached, but the session must have been asked 3 times.
-    monkeypatch.setattr("delist_detection.edgar.throttle", lambda: None)
+    monkeypatch.setattr("delist_detection.sec_limiter.throttle", lambda: None)
     s = _Session(_Resp(500), _Resp(500), _Resp(500))
     ec = EdgarClient(cache_dir=tmp_path, user_agent="ua", session=s, sleep=lambda _: None)
     assert ec.full_text_search("X", "8-K12B", date(2020, 1, 1), date(2020, 2, 1)) == []
@@ -247,7 +248,7 @@ def test_full_text_search_500_returns_empty_and_is_not_cached(tmp_path, monkeypa
 
 
 def test_full_text_search_network_error_returns_empty(tmp_path, monkeypatch):
-    monkeypatch.setattr("delist_detection.edgar.throttle", lambda: None)
+    monkeypatch.setattr("delist_detection.sec_limiter.throttle", lambda: None)
     s = _Session(requests.ConnectionError("down"), requests.ConnectionError("down"),
                  requests.ConnectionError("down"))
     ec = EdgarClient(cache_dir=tmp_path, user_agent="ua", session=s, sleep=lambda _: None)
@@ -257,7 +258,7 @@ def test_full_text_search_network_error_returns_empty(tmp_path, monkeypatch):
 
 
 def test_full_text_search_retries_503_then_succeeds(tmp_path, monkeypatch):
-    monkeypatch.setattr("delist_detection.edgar.throttle", lambda: None)
+    monkeypatch.setattr("delist_detection.sec_limiter.throttle", lambda: None)
     hit = {"_source": {"ciks": ["1"], "display_names": ["X CO  (X)  (CIK 0000000001)"]}}
     slept = []
     s = _Session(_Resp(503), _Resp(text=json.dumps({"hits": {"hits": [hit]}})))
@@ -269,7 +270,7 @@ def test_full_text_search_retries_503_then_succeeds(tmp_path, monkeypatch):
 
 
 def test_full_text_search_429_raises_at_once_no_retry(tmp_path, monkeypatch):
-    monkeypatch.setattr("delist_detection.edgar.throttle", lambda: None)
+    monkeypatch.setattr("delist_detection.sec_limiter.throttle", lambda: None)
     s = _Session(_Resp(429))
     ec = EdgarClient(cache_dir=tmp_path, user_agent="ua", session=s, sleep=lambda _: None)
     with pytest.raises(EdgarBlocked):
@@ -279,7 +280,7 @@ def test_full_text_search_429_raises_at_once_no_retry(tmp_path, monkeypatch):
 
 def test_full_text_search_caches_an_empty_answer(tmp_path, monkeypatch):
     # An empty answer is written like a hit, with its fetch date; it holds for its TTL.
-    monkeypatch.setattr("delist_detection.edgar.throttle", lambda: None)
+    monkeypatch.setattr("delist_detection.sec_limiter.throttle", lambda: None)
     s = _Session(_Resp(text=json.dumps({"hits": {"hits": []}})))
     ec = EdgarClient(cache_dir=tmp_path, user_agent="ua", session=s)
     assert ec.full_text_search("X", "8-K12B", date(2020, 1, 1), date(2020, 2, 1)) == []
@@ -292,7 +293,7 @@ def test_full_text_search_caches_an_empty_answer(tmp_path, monkeypatch):
 
 
 def test_full_text_search_holds_an_open_windows_answer_for_seven_days_only(tmp_path, monkeypatch):
-    monkeypatch.setattr("delist_detection.edgar.throttle", lambda: None)
+    monkeypatch.setattr("delist_detection.sec_limiter.throttle", lambda: None)
     hit = {"_source": {"ciks": ["1"], "display_names": ["X CO  (X)  (CIK 0000000001)"]}}
     today = date.today()
     lo = today - timedelta(days=30)
@@ -328,7 +329,7 @@ def test_get_text_on_a_prefetch_thread_keeps_an_old_copy_and_fills_a_missing_one
 
 def test_sec_get_counts_each_attempt_under_its_endpoint(monkeypatch):
     from delist_detection.edgar import sec_get
-    monkeypatch.setattr("delist_detection.edgar.throttle", lambda: None)
+    monkeypatch.setattr("delist_detection.sec_limiter.throttle", lambda: None)
     mark = SEC_STATS.snapshot()
     s = _Session(_Resp(503), _Resp(text="ok"))
     resp = sec_get("https://www.sec.gov/files/x.zip", session=s, headers={"User-Agent": "ua"}, timeout=1,
@@ -340,7 +341,7 @@ def test_sec_get_counts_each_attempt_under_its_endpoint(monkeypatch):
 
 def test_sec_get_names_the_endpoint_from_the_url_by_default(monkeypatch):
     from delist_detection.edgar import sec_get
-    monkeypatch.setattr("delist_detection.edgar.throttle", lambda: None)
+    monkeypatch.setattr("delist_detection.sec_limiter.throttle", lambda: None)
     mark = SEC_STATS.snapshot()
     sec_get("https://data.sec.gov/submissions/CIK0000000001.json", session=_Session(_Resp(text="{}")),
             headers={"User-Agent": "ua"}, timeout=1)
@@ -349,7 +350,7 @@ def test_sec_get_names_the_endpoint_from_the_url_by_default(monkeypatch):
 
 def test_sec_get_without_retry_makes_one_attempt(monkeypatch):
     from delist_detection.edgar import sec_get
-    monkeypatch.setattr("delist_detection.edgar.throttle", lambda: None)
+    monkeypatch.setattr("delist_detection.sec_limiter.throttle", lambda: None)
     s = _Session(_Resp(503), _Resp(text="never asked"))
     assert sec_get("u", session=s, headers={}, timeout=1, retry=False).status_code == 503
     assert len(s.calls) == 1

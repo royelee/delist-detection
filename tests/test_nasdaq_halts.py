@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 import requests
 
-from delist_detection.edgar import SEC_STATS
+from delist_detection.sec_stats import SEC_STATS
 from delist_detection.nasdaq_halts import Halt, NasdaqHaltClient, last_trade_from_halt, parse_halts_rss
 
 RSS = """﻿<?xml version="1.0" encoding="utf-8"?>
@@ -225,7 +225,7 @@ def test_failed_days_are_kept_per_thread_and_a_warm_thread_counts_apart(tmp_path
     on that thread: the sequential pass sees only its own failed days."""
     import threading
 
-    from delist_detection.edgar import fill_only
+    from delist_detection.sec_stats import fill_only
 
     c = NasdaqHaltClient(tmp_path, session=_SessionRaising(requests.Timeout("t")), min_interval=0,
                          sleep=lambda _: None)

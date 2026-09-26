@@ -13,7 +13,7 @@ from unittest.mock import patch
 import pytest
 import requests
 
-from delist_detection.edgar import SEC_STATS, fill_only
+from delist_detection.sec_stats import SEC_STATS, fill_only
 from delist_detection.midas import MIDAS_INDEX_URL, MidasClient, quarter_of, summarize_midas_csv
 from delist_detection.sec_http import get_text
 
@@ -244,7 +244,7 @@ def test_an_empty_cached_summary_is_read_again(tmp_path):
     assert json.loads(gzip.decompress((tmp_path / "2016_q1.json.gz").read_bytes())) == {"A": ["2016-01-04"]}
 
 
-# The warm finders share the run's own client. A warm thread (edgar.fill_only)
+# The warm finders share the run's own client. A warm thread (sec_stats.fill_only)
 # reads the cached index whatever its age and never refreshes it; nothing it reads
 # or misses may change what the sequential pass reads, which is what a one-thread
 # run reads.

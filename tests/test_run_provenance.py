@@ -12,7 +12,8 @@ from delist_detection import edgar, manifest
 from delist_detection.classifier import DelistRecord
 from delist_detection.crsp_codes import CrspBucket
 from delist_detection.delistings import Delisting
-from delist_detection.edgar import SEC_STATS, EdgarBlocked
+from delist_detection.edgar import EdgarBlocked
+from delist_detection.sec_stats import SEC_STATS
 from delist_detection.last_trade import LastTrade
 from delist_detection.observations import Observation
 from delist_detection.payout_extractor import PayoutResult
@@ -262,7 +263,7 @@ def test_the_manifest_reports_warm_failed_and_rejected_by_stage_or_endpoint():
 
 
 def test_the_manifest_separates_warm_degraded_from_the_sequential_passs_own(tmp_path):
-    # a warm thread's degraded reads (edgar.SEC_STATS, filling_only())
+    # a warm thread's degraded reads (sec_stats.SEC_STATS, filling_only())
     # are counted under warm_degraded:<kind>, apart from degraded_answers, which
     # then reflects only what the sequential pass relied on.
     got = manifest.build(as_of=date(2026, 9, 23), sec_workers=4,

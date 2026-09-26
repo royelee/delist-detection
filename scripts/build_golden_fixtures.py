@@ -46,7 +46,8 @@ from pathlib import Path
 import requests
 
 from delist_detection.classifier import DelistClassifier
-from delist_detection.edgar import EFTS_SOURCE_KEYS, SEC_HOST, EdgarClient, use_machine_wide_limit
+from delist_detection.edgar import EFTS_SOURCE_KEYS, SEC_HOST, EdgarClient
+from delist_detection.sec_limiter import use_machine_wide_limit
 from delist_detection.filing_selection import announcement_8k, closing_8k, form_filings
 from delist_detection.ftd import FtdClient, FtdIndex
 from delist_detection.llm_client import default_llm_client

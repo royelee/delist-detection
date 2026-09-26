@@ -25,8 +25,8 @@ from pathlib import Path
 
 import requests
 
-from delist_detection.edgar import (EdgarBlocked, require_user_agent, resolve_user_agent, sec_get,
-                                    use_machine_wide_limit)
+from delist_detection.edgar import EdgarBlocked, require_user_agent, resolve_user_agent, sec_get
+from delist_detection.sec_limiter import use_machine_wide_limit
 from delist_detection.store import read_table
 
 ROOT = Path(__file__).resolve().parents[1]

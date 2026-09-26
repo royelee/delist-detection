@@ -2,9 +2,9 @@
 
 Before a sequential stage, `warm` runs that stage's per-item work on worker threads
 only for what it fetches. Every request goes through the shared EdgarClient: one
-8 requests/s limiter (machine-wide once `edgar.use_machine_wide_limit` has run),
+8 requests/s limiter (machine-wide once `sec_limiter.use_machine_wide_limit` has run),
 and one lock and one atomic write per cache file. Each task runs under
-`edgar.fill_only()`: it may fetch what is missing from the caches but never
+`sec_stats.fill_only()`: it may fetch what is missing from the caches but never
 refresh what is there, so the sequential pass that follows reads exactly the
 copies a one-thread run would read, and refreshes them itself, in its own order.
 Results are thrown away, so the tables never depend on thread timing (spec §11:
@@ -19,8 +19,9 @@ from collections.abc import Callable, Iterable
 from concurrent.futures import FIRST_EXCEPTION, ThreadPoolExecutor, wait
 from typing import Any
 
-from . import edgar as _edgar
-from .edgar import SEC_STATS, PrefetchCancelled, RateLimiter, fill_only
+from . import sec_limiter
+from .sec_limiter import PrefetchCancelled, RateLimiter
+from .sec_stats import SEC_STATS, fill_only
 from .fatal import FATAL                       # stop the pool: a refusal, or OpenFIGI down
 
 log = logging.getLogger(__name__)
@@ -62,15 +63,15 @@ def warm(items: Iterable[Any], task: Callable[..., object], *, workers: int,
     every item on up to `workers` threads, and return the number of items handed
     to the pool. `name` labels the pass in the log and in SEC_STATS.
 
-    `limiter` is a test seam; it defaults to `edgar.SEC_LIMITER`, read at call
+    `limiter` is a test seam; it defaults to `sec_limiter.SEC_LIMITER`, read at call
     time. A production pass must leave it at that default: real requests reach
-    the limiter through `edgar.throttle`, which reads that global, so a stop
+    the limiter through `sec_limiter.throttle`, which reads that global, so a stop
     bound to any other limiter never cancels them.
 
-    `state` is called on this thread once per worker, under `edgar.fill_only()`
+    `state` is called on this thread once per worker, under `sec_stats.fill_only()`
     like the tasks; a worker takes one of those objects for each item, so an
     object is never used by two threads at once (a shadow resolver, a finder).
-    Every task runs under `edgar.fill_only()`. A task that raises an ordinary
+    Every task runs under `sec_stats.fill_only()`. A task that raises an ordinary
     exception does not stop the pass: the sequential pass meets the same failure
     and records it as it always has. Each such failure is logged at DEBUG with
     its traceback and counted in SEC_STATS as `warm_failed:<name>`, and a pass
@@ -101,7 +102,7 @@ def warm(items: Iterable[Any], task: Callable[..., object], *, workers: int,
     items = list(items)
     if workers <= 1 or not items:
         return 0
-    lim = limiter if limiter is not None else _edgar.SEC_LIMITER
+    lim = limiter if limiter is not None else sec_limiter.SEC_LIMITER
     n = min(workers, len(items))
     states: queue.SimpleQueue = queue.SimpleQueue()
     with fill_only():                      # a factory that reads EDGAR never refreshes a cached copy either

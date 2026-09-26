@@ -24,7 +24,7 @@ from pathlib import Path
 import requests
 
 from .atomic_io import clean_orphan_temps, write_atomic
-from .edgar import SEC_STATS, filling_only
+from .sec_stats import SEC_STATS, filling_only
 from .observations import normalize_ticker
 from .sec_http import download, get_text
 from .trading_calendar import add_trading_days
@@ -118,7 +118,7 @@ class MidasClient:
         self.session, self.user_agent = session, user_agent
         self._links: dict[tuple[int, int], str] | None = None
         self._summaries: dict[tuple[int, int], dict[str, list[str]] | None] = {}
-        # The prefetch threads' own view (edgar.fill_only()), which the sequential
+        # The prefetch threads' own view (sec_stats.fill_only()), which the sequential
         # pass never reads: the index copy they read, whether it was past
         # INDEX_MAX_AGE_DAYS, and the quarters they found nothing for.
         self._fill_links: dict[tuple[int, int], str] | None = None
@@ -153,7 +153,7 @@ class MidasClient:
     def links(self) -> dict[tuple[int, int], str]:
         """Each published quarter's ZIP link, from the index page (fetched again
         once INDEX_MAX_AGE_DAYS old), kept for the run. A prefetch thread
-        (`edgar.fill_only()`) reads the cached page whatever its age, once, into a
+        (`sec_stats.fill_only()`) reads the cached page whatever its age, once, into a
         memo of the prefetch threads' own: the sequential pass reads the page
         itself, and refreshes a stale copy, as a one-thread run does."""
         if self._links is not None:

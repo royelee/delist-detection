@@ -56,14 +56,14 @@ def _latency(timings: dict[str, list[float]]) -> dict[str, dict[str, float]]:
 
 def build(*, as_of: date, sec_workers: int, counts: dict[str, int], timings: dict[str, list[float]],
           stages: dict[str, dict[str, int]], review_flags: dict[str, int], review: dict[str, int]) -> dict:
-    """The manifest of one run. `counts` and `timings` are edgar.SEC_STATS.since()
+    """The manifest of one run. `counts` and `timings` are sec_stats.SEC_STATS.since()
     of the run's start; `stages` is the pipeline's per-stage meter. `warm_failed`
     reports, per warm pass, how many items a worker thread failed on (the
     sequential pass meets and records the same failures itself; a nonzero count
     here only flags a concurrency-only failure worth a second look). `degraded_answers`
     counts only the sequential pass's own degraded reads; a warm/fill-only
     thread's degraded reads are counted separately, under `warm_degraded`
-    (`edgar.RequestStats.degraded`, `edgar.filling_only`). `review` is
+    (`sec_stats.RequestStats.degraded`, `sec_stats.filling_only`). `review` is
     `review_triage.triage()`'s own counts (fix/check/info_hidden/accepted/
     cleared/unmatched_decisions); `review_flags` (used only for
     `resolution_degraded` below) is the flag tally from *before* triage or

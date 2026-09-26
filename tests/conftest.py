@@ -8,6 +8,7 @@ from typing import Any
 
 import pytest
 
+from delist_detection import sec_limiter
 from delist_detection.edgar import EdgarSubmission
 
 
@@ -191,8 +192,7 @@ def _fresh_sec_limiter(monkeypatch, tmp_path_factory):
     another test. DELIST_DETECTION_SEC_RATE_LOCK points at a per-test temporary
     file, outside the test's own tmp_path, so code that installs the
     machine-wide gate never touches the lock file under the home directory."""
-    from delist_detection import edgar
-    monkeypatch.setenv(edgar.SEC_RATE_LOCK_ENV, str(tmp_path_factory.mktemp("sec_rate") / "sec_rate.lock"))
+    monkeypatch.setenv(sec_limiter.SEC_RATE_LOCK_ENV, str(tmp_path_factory.mktemp("sec_rate") / "sec_rate.lock"))
     clock = _VirtualClock()
-    monkeypatch.setattr(edgar, "SEC_LIMITER",
-                        edgar.RateLimiter(edgar.SEC_MAX_RATE, clock=clock.now, sleep=clock.sleep))
+    monkeypatch.setattr(sec_limiter, "SEC_LIMITER",
+                        sec_limiter.RateLimiter(sec_limiter.SEC_MAX_RATE, clock=clock.now, sleep=clock.sleep))

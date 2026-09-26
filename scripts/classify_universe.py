@@ -15,7 +15,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
-from delist_detection.edgar import EdgarSetupError, require_user_agent, use_machine_wide_limit
+from delist_detection.edgar import EdgarSetupError, require_user_agent
+from delist_detection.sec_limiter import use_machine_wide_limit
 from delist_detection.fatal import FATAL
 from delist_detection.observations import ObservationError, ObservationIndex, load_observations
 from delist_detection.openfigi import OpenFigiUnavailable

@@ -9,8 +9,8 @@ from datetime import date, timedelta
 import pytest
 import requests
 
-from delist_detection.edgar import (EFTS_KEY, EFTS_SCHEMA, FETCHED_KEY, SEC_STATS, EdgarBlocked, EdgarClient,
-                                    efts_ttl_days, fill_only)
+from delist_detection.edgar import EFTS_KEY, EFTS_SCHEMA, FETCHED_KEY, EdgarBlocked, EdgarClient, efts_ttl_days
+from delist_detection.sec_stats import SEC_STATS, fill_only
 
 AS_OF = date(2026, 9, 23)
 UA = "Test Co test@example.com"
