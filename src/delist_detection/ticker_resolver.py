@@ -38,6 +38,11 @@ _LOOK_UP_NAME = object()    # resolve(name=...) default: look the name up with o
 CACHE_VERSION = 4
 _LOADABLE_VERSIONS = frozenset({2, 3, 4})
 _RETIRED_SOURCES = frozenset({"company_tickers_name_mismatch"})
+# Version 4's name search ranks its candidates by their EDGAR names and never
+# takes a nameless multi-company hit. With this switch on, a version-2/3 file's
+# name_search answers (written under the old rule) are dropped on load and
+# resolved again, so a warm cache gives what a cold run gives.
+RETIRE_OLD_NAME_SEARCH = False
 
 
 @dataclass
@@ -64,11 +69,15 @@ class TickerResolver:
         cik_pins: "callable[[str, str | None], int | None] | None" = None,
         today: date | None = None,
         batch_writes: bool = False,
+        retire_old_name_search: bool = RETIRE_OLD_NAME_SEARCH,
     ) -> None:
         """`today`: the run date bounding submissions freshness (None: the clock).
         `batch_writes`: keep new answers in memory until `flush()` (the pipeline
         flushes after each resolving stage and on the way out of a run) instead
-        of rewriting the whole memo file for each one."""
+        of rewriting the whole memo file for each one. `retire_old_name_search`:
+        drop a version-2/3 memo file's name_search answers on load
+        (`RETIRE_OLD_NAME_SEARCH`)."""
+        self.retire_old_name_search = retire_old_name_search
         self.edgar = edgar
         self.rename_map = {k.upper(): v.upper() for k, v in (rename_map or {}).items()}
         self.manual_overrides = {k.upper(): int(v) for k, v in (manual_overrides or {}).items()}
@@ -110,6 +119,8 @@ class TickerResolver:
             if res.source in _RETIRED_SOURCES:   # a withdrawn rule's answer
                 continue
             if version < 4:                      # keyed TICKER|date: add the member name
+                if self.retire_old_name_search and res.source == "name_search":
+                    continue
                 key = f"{key}|{d.get('member_name') or ''}"
             self._memo[key] = res
             self._memo_observed[key] = d.get("member_name")
@@ -393,28 +404,27 @@ class TickerResolver:
             add(tokens[0])
         return variants
 
-    def _name_search(
-        self, ticker: str, observed_date: str | None, nm: str | None
-    ) -> tuple[int | None, str | None]:
-        """Resolve via the expected name `nm` (observed, else AV) → EDGAR company search.
+    NAME_SEARCH_CANDIDATES = 5       # distinct CIKs the name search ranks and checks
 
-        Collects ALL hits across name variants and forms, then picks the
-        best (cik, name) by:
-          1. preferring CIKs whose name shares `name_tokens` words with the expected name;
-          2. then preferring hits with `filing_date` closest to observed_date;
-          3. else taking the first non-exchange CIK.
-        """
+    def _name_search(self, ticker: str, observed_date: str | None, nm: str | None) -> list[tuple[int, str]]:
+        """Candidates for the expected name `nm` (observed, else AV) from EDGAR's
+        company search, best first, as (CIK, the name the search gave).
+
+        Every name variant is searched (one form class per variant). A hit with
+        no name is no candidate: EDGAR answers a query that matches several
+        companies with a list and no conformed name, and the CIK read from it is
+        the list's first, whichever company that is (MICHAEL -> Michael Baker,
+        searching for MICHAEL KORS HOLDINGS LTD). The first
+        `NAME_SEARCH_CANDIDATES` distinct CIKs found are ranked by the number of
+        `name_tokens` words `nm` shares with any of the CIK's EDGAR names,
+        current and former (`_name_match_score`: the search matches a former
+        name, so MICHAEL KORS HOLDINGS LTD finds Capri Holdings), then by the gap
+        between the date and the nearest filing the search listed for it."""
         if not nm:
-            return None, None
-        variants = self._name_variants(nm)
-        try:
-            target_d = datetime.strptime(observed_date, "%Y-%m-%d").date() if observed_date else None
-        except ValueError:
-            target_d = None
-
-        # Gather candidates: list of (cik, hit_name, date_delta_days_or_None)
-        candidates: list[tuple[int, str | None, int | None]] = []
-        for variant in variants:
+            return []
+        target_d = parse_day(observed_date)
+        found: dict[int, tuple[str, int]] = {}      # CIK -> (its hit name, date penalty), in the order found
+        for variant in self._name_variants(nm):
             for form in ("25-NSE", "25", "15-12G", ""):
                 try:
                     hits = self.edgar.company_search_atom(variant, form_type=form)
@@ -426,52 +436,30 @@ class TickerResolver:
                 if any(isinstance(h, dict) and h.get(STALE_KEY) for h in hits):
                     self._transient = True       # a hit served after a failed refetch: never saved
                 for h in hits:
-                    cik = int(h["cik"])
-                    if cik in self.EXCHANGE_CIKS:
+                    cik, hit_name = int(h["cik"]), h.get("name")
+                    if not hit_name or cik in self.EXCHANGE_CIKS:
                         continue
-                    fd_str = h.get("filing_date") or ""
-                    delta: int | None = None
-                    if target_d and fd_str:
-                        try:
-                            fd = datetime.strptime(fd_str, "%Y-%m-%d").date()
-                            delta = abs((fd - target_d).days)
-                        except ValueError:
-                            delta = None
-                    candidates.append((cik, h.get("name"), delta))
+                    filed = parse_day(h.get("filing_date"))
+                    penalty = min(abs((filed - target_d).days), 9999) if filed and target_d else 1000
+                    if cik in found:
+                        found[cik] = (found[cik][0], min(found[cik][1], penalty))
+                    elif len(found) < self.NAME_SEARCH_CANDIDATES:
+                        found[cik] = (hit_name, penalty)
                 if hits:
                     break  # one form-class per variant is enough
-
-        if not candidates:
-            return None, None
-
-        # Score each candidate: shared name_tokens with the expected name, then date proximity
-        target_tokens = name_tokens(nm)
-        best: tuple[int, int, int, str | None] | None = None
-        # higher score = better. score order: (name_score, -delta_penalty, -cik_index)
-        for cand_cik, cand_name, delta in candidates:
-            name_score = 0
-            if cand_name:
-                name_score = len(target_tokens & name_tokens(cand_name))
-            # delta bonus: capped at 540 (else uninformative)
-            if delta is None:
-                date_penalty = 1000
-            else:
-                date_penalty = min(delta, 9999)
-            tup = (name_score, -date_penalty, -len(candidates) if best is None else 0, cand_cik, cand_name)
-            cur_key = (tup[0], tup[1])
-            if best is None or cur_key > (best[0], best[1]):
-                best = (name_score, -date_penalty, cand_cik, cand_name)
-        if best is None:
-            return None, None
-        return best[2], best[3] or nm
+        order = list(found)
+        score = {c: self._name_match_score(c, nm, observed_date) for c in order}
+        ranked = sorted(order, key=lambda c: (-score[c], found[c][1], order.index(c)))
+        return [(c, found[c][0]) for c in ranked]
 
     def _name_match_score(self, cik: int, ticker_name: str, observed_date: str | None = None) -> int:
         """Token-overlap score between the expected name and the CIK's EDGAR names.
 
         Score is the number of `names.name_tokens` words shared by the
         expected (observed or AV) name and the EDGAR conformed/former names.
-        Used to rank frequency candidates; a zero-score winner is kept but
-        marked as a name mismatch by the caller (impostor vendor series).
+        Used to rank name-search and frequency candidates; a zero-score
+        frequency winner is kept but marked as a name mismatch by the caller
+        (impostor vendor series).
         """
         try:
             sub = self._submissions(cik, observed_date)
@@ -687,30 +675,35 @@ class TickerResolver:
                     cik, name = c0, n0
                     source = "efts" if agrees else "efts_name_mismatch"
 
-        # Tier 2: expected name → EDGAR company-name search.
+        # Tier 2: expected name → EDGAR company-name search, its candidates
+        # checked best first.
         if cik is None:
-            c1, n1 = self._name_search(t, observed_date, expected)
+            ranked = self._name_search(t, observed_date, expected)
             if fallback is not None:
                 # The observed name is a check, never a substitute: it replaces
                 # the company EFTS found only with its own Form 25/15 near the
                 # date (PEAK -> Healthpeak, WE -> WeWork), not with a live
                 # issuer of that name (BWC keeps Blue Whale, flagged).
-                if c1 is not None and self._validate_cik(
-                        c1, observed_date, strict=False, window=self.REPLACE_WINDOW_DAYS):
-                    cik, name, source = c1, n1, "name_search"
+                hit = next(((c, n) for c, n in ranked if self._validate_cik(
+                    c, observed_date, strict=False, window=self.REPLACE_WINDOW_DAYS)), None)
+                if hit is not None:
+                    (cik, name), source = hit, "name_search"
                 else:
                     cik, name = fallback
                     source = "efts_name_mismatch"
-            elif c1 is not None:
+            else:
                 # Loose validation (a real Form 25 in the window), or the
                 # observed-name acceptance when the caller supplied a usable
                 # observed name.
                 if observed_name and name_tokens(observed_name):
-                    ok = self._accept_observed_name_candidate(c1, observed_date, observed_name)
+                    def ok(c: int) -> bool:
+                        return self._accept_observed_name_candidate(c, observed_date, observed_name)
                 else:
-                    ok = not observed_date or self._validate_cik(c1, observed_date, strict=False)
-                if ok:
-                    cik, name, source = c1, n1, "name_search"
+                    def ok(c: int) -> bool:
+                        return not observed_date or self._validate_cik(c, observed_date, strict=False)
+                hit = next(((c, n) for c, n in ranked if ok(c)), None)
+                if hit is not None:
+                    (cik, name), source = hit, "name_search"
 
         # Tier 3: 8-K frequency rank — strict validation (must reject the
         # acquirer, who keeps filing 10-Qs).

@@ -21,9 +21,11 @@ class _Edgar:
         c = self.companies.get(int(cik))
         return list(c[2]) if c else []
     def company_search_atom(self, company, form_type="25-NSE"):
+        # one company matched: EDGAR's answer carries its conformed name
         for prefix, cik in self.atom.items():
             if company.upper().startswith(prefix):
-                return [{"cik": cik, "name": None, "form": "", "filing_date": ""}]
+                c = self.companies.get(int(cik))
+                return [{"cik": cik, "name": c[0] if c else f"CIK {cik}", "form": "", "filing_date": ""}]
         return []
     def fetch_filing_text(self, *a):
         return ""

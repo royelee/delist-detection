@@ -34,9 +34,10 @@ class _Edgar:
     """EDGAR as the fixture recorded it: submissions (name and former names),
     the thinned filing list, company-search answers, and SEC's ticker map."""
 
-    def __init__(self, issuers=None, tickers=None):
+    def __init__(self, issuers=None, tickers=None, search=None):
         self.issuers = issuers if issuers is not None else DATA["issuers"]
         self.tickers = tickers or {}
+        self.search = search if search is not None else DATA["company_search"]
 
     def company_tickers(self):
         return self.tickers
@@ -53,7 +54,7 @@ class _Edgar:
                 enumerate(d["filings"])]
 
     def company_search_atom(self, company, form_type="25-NSE"):
-        return [dict(h) for h in DATA["company_search"].get(f"{company}|{form_type}", [])]
+        return [dict(h) for h in self.search.get(f"{company}|{form_type}", [])]
 
 
 class _RowsClient:
@@ -144,3 +145,49 @@ def test_a_lookup_is_checked_against_the_name_it_is_given_not_the_nearest_observ
     assert r.resolve("ALTR", "2020-06-30").cik is None
     assert r.resolve("ALTR", "2020-06-30", name="ALTAIR ENGINEERING INC CLASS A").cik == 1701732
     assert r.resolve("ALTR", "2020-06-30", name="ALTERA CORP").cik is None
+
+
+# --- 1b: the name search ranks its candidates by their EDGAR names -------------------
+
+def test_the_name_search_drops_a_nameless_hit_and_takes_the_company_edgar_names_so():
+    """EDGAR's company search matches former names: MICHAEL KORS HOLDINGS LTD
+    finds Capri Holdings (1530721, Michael Kors Holdings Ltd until 2018-12-21).
+    The variant MICHAEL matches many companies; EDGAR then lists them with no
+    name, and the first (Michael Baker, 9263) used to win on its missing date.
+    A nameless hit is no candidate."""
+    res = TickerResolver(_Edgar()).resolve("KORS", "2019-01-03", name="MICHAEL KORS HOLDINGS LTD")
+    assert (res.cik, res.source) == (1530721, "name_search")
+
+
+def test_the_name_search_ranks_the_company_that_carried_the_name_first():
+    """ARCP, American Realty Capital Properties, is VEREIT (1507385) today. The
+    variant AMERICAN REALTY CAPITAL answers with a nameless multi-company hit
+    whose first CIK (1561032, then American Realty Capital Healthcare Trust II)
+    shares three words with the name and passes the date checks: it took ARCP
+    (and HTA) before. Ranked by EDGAR names, VEREIT's former name comes first."""
+    res = TickerResolver(_Edgar()).resolve("ARCP", "2015-07-31", name="AMERICAN REALTY CAPITAL PROPERTIES")
+    assert (res.cik, res.source) == (1507385, "name_search")
+
+
+NU_MAP = {"NU": {"cik_str": 1691493, "ticker": "NU", "title": "Nu Holdings Ltd."}}
+
+
+def test_a_recycled_tickers_holder_is_refused_and_the_name_search_finds_the_old_issuer():
+    """NU was Northeast Utilities (72741, Eversource Energy since 2015-04-29);
+    SEC's ticker map now gives Nu Holdings (1691493, first filing 2016), which
+    did not exist then. The company search's nameless NORTHEAST hit (745651)
+    no longer beats the named 72741."""
+    res = TickerResolver(_Edgar(tickers=NU_MAP)).resolve("NU", "2015-02-20", name="NORTHEAST UTILITIES")
+    assert (res.cik, res.source) == (72741, "name_search")
+
+
+def test_todays_holder_found_by_the_name_search_is_refused_for_an_old_date():
+    """ALTR was Altera (768251) until Intel bought it in 2015, Altair (1701732)
+    from 2017. A company search answering with Altair never gives it Altera's
+    era: it shares no word with ALTERA CORP and did not exist in 2015."""
+    altair = {"cik": 1701732, "name": "Altair Engineering Inc.", "form": "25-NSE", "filing_date": "2025-03-26"}
+    altera = {"cik": 768251, "name": "ALTERA CORP", "form": "25-NSE", "filing_date": "2015-12-28"}
+    both = _Edgar(tickers=ALTAIR_MAP, search={"ALTERA CORP|25-NSE": [altair, altera]})
+    assert TickerResolver(both).resolve("ALTR", "2015-12-29", name="ALTERA CORP").cik == 768251
+    only_altair = _Edgar(tickers=ALTAIR_MAP, search={"ALTERA CORP|25-NSE": [altair]})
+    assert TickerResolver(only_altair).resolve("ALTR", "2015-12-29", name="ALTERA CORP").cik is None

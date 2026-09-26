@@ -68,6 +68,26 @@ def test_a_v3_cache_is_rekeyed_by_its_member_name_and_saved_as_v4(tmp_path, fake
         assert TickerResolver(None, cache_path=cache).resolve("ALTR", "2025-03-26", name="Altera Corp").cik == 999999
 
 
+@pytest.mark.parametrize("retire", [True, False])
+def test_the_switch_retires_the_name_search_answers_of_an_older_cache(tmp_path, retire):
+    """Version 4's name search ranks its candidates by their EDGAR names and never
+    takes a nameless multi-company hit; with the switch on, a version-2/3 file's
+    name_search answers (written under the old rule: ARCP and HTA on one CIK) are
+    dropped on load and resolved again. A version-4 answer is always kept."""
+    arcp = {"ticker": "ARCP", "cik": 1561032, "name": "AMERICAN REALTY CAPITAL PROPERTIES", "source": "name_search",
+            "member_name": "AMERICAN REALTY CAPITAL PROPERTIES"}
+    cache = tmp_path / "res.json"
+    cache.write_text(json.dumps({"__version__": 3, "entries": {OLD_KEY: {**STALE, "member_name": "Altera Corp"},
+                                                               "ARCP|2015-07-31": arcp}}))
+    r = TickerResolver(None, cache_path=cache, retire_old_name_search=retire)
+    kept = {"ALTR|2025-03-26|Altera Corp"} | (set() if retire else {"ARCP|2015-07-31|AMERICAN REALTY CAPITAL PROPERTIES"})
+    assert set(r._memo) == kept
+    cache.write_text(json.dumps({"__version__": 4, "entries": {"ARCP|2015-07-31|AMERICAN REALTY CAPITAL PROPERTIES":
+                                                               {**arcp, "cik": 1507385}}}))
+    assert set(TickerResolver(None, cache_path=cache, retire_old_name_search=retire)._memo) == \
+        {"ARCP|2015-07-31|AMERICAN REALTY CAPITAL PROPERTIES"}
+
+
 def test_a_different_member_name_misses_the_cache(tmp_path, fake_edgar):
     cache = tmp_path / "res.json"
     cache.write_text(json.dumps({"__version__": 3, "entries": {OLD_KEY: {**STALE, "member_name": "Altera Corp"}}}))
