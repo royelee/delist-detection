@@ -9,7 +9,7 @@ the same FIGI (a reverse split's new CUSIP, a gap no FTD row bridged).
 from __future__ import annotations
 
 from collections import Counter, defaultdict
-from collections.abc import Collection, Iterable, Mapping, Sequence
+from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import date, timedelta
 from typing import ClassVar, NamedTuple
@@ -21,6 +21,7 @@ from .figi_resolution import (
 from .ftd import FtdIndex, FtdRow
 from .names import description_matches, names_agree
 from .observations import ERA_GAP_DAYS, Observation, TickerEra, eras_by_key, number_eras
+from .review_triage import ReviewItem
 
 ERA_MIN_RUN = 3          # an FTD CUSIP run shorter than this is noise, not a CUSIP switch
 
@@ -515,6 +516,115 @@ def ranges_from_sightings(sightings: Iterable[Sighting], *, end: str | None,
         if to is not None and to < first:
             continue                              # never an inverted range
         out.append(Range(v, first, to, "observation" if "observation" in sources else "ftd"))
+    return out
+
+
+def ticker_sightings(sec: Security, ftd: FtdIndex, cusips: Sequence[str]) -> list[Sighting]:
+    """Dated `(day, ticker, source)` sightings of the security: its observations
+    and the FTD rows of its CUSIPs. A ticker spelled with or without separators
+    ("BF-B" / "BFB": snapshots write both, FTD keys rows by the separator form)
+    is written one way per security: a spelling it was observed under, the one
+    with a separator first. So Hubbell's merged class keeps "HUBB" while class
+    B, observed as "HUB-B" and "HUBB", is "HUB-B". A row under a deleted
+    symbol ("ORLYXXXX") is a fail still settling after the delisting, not a
+    sighting of trading: it opens and extends no range, and counts in no
+    `seen_after`, `last_seen` or sibling span."""
+    out = [Sighting(o.as_of, o.ticker, "observation") for e in sec.eras for o in e.observations]
+    out += [Sighting(r.date, r.symbol, "ftd") for r in ftd.trading_rows(cusips)]
+    label: dict[str, str] = {}
+    for t in sorted({o.ticker for e in sec.eras for o in e.observations}, key=lambda t: ("-" not in t, t)):
+        label.setdefault(t.replace("-", ""), t)
+    return sorted({s._replace(value=label.get(s.value.replace("-", ""), s.value)) for s in out})
+
+
+def cusip_sightings(sec: Security, ftd: FtdIndex, cusips: Sequence[str]) -> list[Sighting]:
+    """Dated `(day, cusip, source)` sightings of the security's CUSIPs: the FTD
+    rows of each CUSIP that resolved to it (not those under a deleted symbol),
+    and the CUSIPs its observations carry."""
+    out = [Sighting(r.date, r.cusip, "ftd") for r in ftd.trading_rows(cusips)]
+    out += [Sighting(o.as_of, o.cusip, "observation") for e in sec.eras for o in e.observations if o.cusip]
+    return sorted(set(out))
+
+
+def own_last_seen(sec: Security, sig: Sequence[Sighting]) -> str:
+    """The latest sighting under one of the security's own era tickers, else
+    the latest era end date.
+
+    FTD rows found by CUSIP include a post-delisting OTC tail under another
+    symbol (e.g. a bankrupt XYZ trading as XYZQ), which would otherwise push
+    `last_seen` past the real delisting and misdate a fallback delisting.
+    """
+    own = {e.ticker for e in sec.eras}
+    dates = [s.day for s in sig if s.value in own]
+    return dates[-1] if dates else max(e.last for e in sec.eras)
+
+
+def history_rows(sec: Security, sightings: Sequence[Sighting], cusip_sightings: Sequence[Sighting], *,
+                 listed: bool, end: str | None, end_exchange: str | None,
+                 exchange_today: Callable[[str], str | None]) -> tuple[list[dict], list[dict]]:
+    """The security's ticker_history and cusip_history rows: its sightings, up to
+    `end` when it has one (the last trade day of its last delisting, when it is
+    not listed today), as ranges (`ranges_from_sightings`), open-ended while it
+    is `listed`. The ticker range that ends at `end` carries that delisting's
+    exchange (`end_exchange`); an open range the exchange EDGAR lists for its
+    ticker today (`exchange_today(ticker)`); any other range none."""
+    th_rows, ch_rows = [], []
+    clipped = [x for x in sightings if end is None or x.day <= end]
+    for rg in ranges_from_sightings(clipped, end=end, open_ended=listed):
+        if end is not None and rg.valid_to == end:
+            exch = end_exchange
+        elif rg.valid_to is None:
+            exch = exchange_today(rg.value)
+        else:
+            exch = None
+        th_rows.append({"sec_id": sec.sec_id, "ticker": rg.value, "exchange": exch, "valid_from": rg.valid_from,
+                        "valid_to": rg.valid_to, "source": rg.source})
+    cus = [x for x in cusip_sightings if end is None or x.day <= end]
+    for rg in ranges_from_sightings(cus, end=end, open_ended=listed):
+        ch_rows.append({"sec_id": sec.sec_id, "cusip": rg.value, "valid_from": rg.valid_from,
+                        "valid_to": rg.valid_to, "source": rg.source})
+    return th_rows, ch_rows
+
+
+def _overlaps(a: dict, b: dict) -> bool:
+    a_to = a["valid_to"] or "9999-12-31"
+    b_to = b["valid_to"] or "9999-12-31"
+    return a["valid_from"] <= b_to and b["valid_from"] <= a_to
+
+
+def ticker_range_review(th_rows: list[dict]) -> list[ReviewItem]:
+    """Flag, without changing, two `ticker_history` problems (spec 8.5):
+    (a) one security's own ranges overlapping (`ticker_range_overlap`), and
+    (b) one ticker mapping to two different securities on the same day
+    (`ticker_shared`). Each violation names both ranges in its reason."""
+    out: list[ReviewItem] = []
+
+    by_sec: dict[str, list[dict]] = defaultdict(list)
+    by_ticker: dict[str, list[dict]] = defaultdict(list)
+    for r in th_rows:
+        by_sec[r["sec_id"]].append(r)
+        by_ticker[r["ticker"]].append(r)
+
+    def _name(r: dict) -> str:
+        return f"{r['ticker']} {r['valid_from']}..{r['valid_to'] or ''}"
+
+    for sid, rows in by_sec.items():
+        rs = sorted(rows, key=lambda r: r["valid_from"])
+        for i in range(len(rs)):
+            for j in range(i + 1, len(rs)):
+                if _overlaps(rs[i], rs[j]):
+                    out.append(ReviewItem(sid, rs[i]["ticker"], None, "ticker_range_overlap",
+                                          f"{_name(rs[i])} overlaps {_name(rs[j])}"))
+
+    for ticker, rows in by_ticker.items():
+        rs = sorted(rows, key=lambda r: r["valid_from"])
+        for i in range(len(rs)):
+            for j in range(i + 1, len(rs)):
+                if rs[i]["sec_id"] == rs[j]["sec_id"] or not _overlaps(rs[i], rs[j]):
+                    continue
+                out.append(ReviewItem(rs[i]["sec_id"], ticker, None, "ticker_shared",
+                                      f"{_name(rs[i])} ({rs[i]['sec_id']}) overlaps "
+                                      f"{_name(rs[j])} ({rs[j]['sec_id']})"))
     return out
 
 

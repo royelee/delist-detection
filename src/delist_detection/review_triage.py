@@ -347,6 +347,24 @@ def _inject_no_dlret(row: Mapping) -> dict:
 
 
 @dataclass(frozen=True)
+class ReviewItem:
+    """One flag the run raised outside a delisting's own row -- on a security
+    or era (`last_seen`), a Form 25 (`delist_date`), or a stage that failed --
+    with why. `row()` is its review.csv row before triage."""
+    sec_id: str
+    ticker: str
+    cik: int | None
+    flag: str
+    reason: str
+    delist_date: str = ""
+    last_seen: str = ""
+
+    def row(self) -> dict:
+        return {"sec_id": self.sec_id, "delist_date": self.delist_date, "ticker": self.ticker, "cik": self.cik,
+                "review_flags": self.flag, "reason": self.reason, "last_seen": self.last_seen}
+
+
+@dataclass(frozen=True)
 class Decision:
     sec_id: str
     delist_date: str

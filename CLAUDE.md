@@ -67,9 +67,14 @@ them: `ticker, cik, observed_delist_date, crsp_code, bucket, confidence,
 reason, evidence`, plus `sec_id`, `delist_date` and `successor_sec_id` —
 optional fields the new pipeline (`delistings.py`/`pipeline.py`) fills in
 alongside the original ones. `pipeline.py`'s `run()` is the orchestration
-that turns a list of observations into the seven output tables; see
-`CONTEXT.md` for the vocabulary its docstrings and variable names assume
-(security, era, sighting, pin, …).
+that turns a list of observations into the seven output tables: a short
+`_run` calls one function per numbered stage (`_refine`, `_resolve_issuers`,
+`_resolve_securities`, `_security_cusips`, `_find_delistings`,
+`_check_overrides`, `_last_trade_closes`, `_merger_payouts`,
+`_find_successors`, then the row builders and `_triage`), each with explicit
+inputs and outputs and the run-wide `_RunContext` (clients, run date, log,
+workers, SEC meter). See `CONTEXT.md` for the vocabulary its docstrings and
+variable names assume (security, era, sighting, pin, …).
 
 **Classification (network):**
 - `observations.py` — `Observation`, `TickerEra`, `ObservationIndex`: splits
@@ -139,7 +144,18 @@ that turns a list of observations into the seven output tables; see
   and its EDGAR names; `issuers_by_era` builds the era key -> `Issuer` map
   `candidate_cusips` and `resolve_many` take) and `AddedAcquirer`/
   `AddedSuccessor` (a security the run adds, with its one ticker_history row)
-  are its types.
+  are its types. It also builds each security's sightings
+  (`ticker_sightings`/`cusip_sightings`, `own_last_seen`), its
+  `ticker_history`/`cusip_history` rows (`history_rows`), and checks the
+  ticker ranges (`ticker_range_review`: `ticker_range_overlap`/`ticker_shared`).
+- `successors.py` — the successor after a FIGI change: a security of the run
+  that starts right after the last trade (`successor_in_run`, `SecurityStart`),
+  else the successor issuer's 8-K12B found by full-text search
+  (`successor_search_args`, `successor_query`, `successor_from_8k12b`,
+  `successor_search_name`).
+- `acquirers.py` — a merger's acquirer as a security: `find_acquirer` (its
+  composite FIGI from the fails rows under the acquirer ticker) and
+  `acquirer_cik` (its issuer CIK, never the target's).
 - `form25.py` — parses a Form 25's XML or text (exchange, `class_text`, rule),
   labels the exchange, reads `class_kind` (common/preferred/warrant/unit/…)
   from the class text, and `match_security()`s it to one observed security of
@@ -191,8 +207,10 @@ that turns a list of observations into the seven output tables; see
   decisions list into `review.csv` (severity-sorted, info-only rows hidden)
   and `review_summary.csv` (one row per flag). `Decision`/`load_decisions`/
   `ReviewDecisionError` read `data/review_decisions.csv`; `accept_by_flag`/
-  `append_decisions` back `scripts/accept_review.py`'s bulk accept. Called by
-  `pipeline.run()` just before the write; never touches `delistings.csv`.
+  `append_decisions` back `scripts/accept_review.py`'s bulk accept.
+  `ReviewItem` is a flag raised outside a delisting's own row (the finder's,
+  the security master's and the pipeline's), `.row()` its review row. Called
+  by `pipeline.run()` just before the write; never touches `delistings.csv`.
 - `trading_calendar.py` — NYSE trading days (weekends, exchange holidays,
   unscheduled closures); turns "suspended before the open on D" into the
   actual last trading day and lines up FTD rows (dated D, priced at D−1's close).

@@ -780,7 +780,9 @@ src/delist_detection/
     delistings.py            DelistingFinder: finds, groups, dates and classifies delistings
     classifier.py            Form-25 + 8-K-item + Form-15 fingerprint classifier
     crsp_codes.py             CRSP DLSTCD → bucket mapping (the truth table)
-    pipeline.py               run(): observations → security master + delisting table
+    pipeline.py               run(): observations → security master + delisting table, one function per stage
+    successors.py             Successor after a FIGI change: a line of the run, else the successor's 8-K12B
+    acquirers.py              A merger's acquirer as a security: its FIGI (from FTD rows) and issuer CIK
     handling.py               Pure train-label and backtest-exit per bucket
     exchanges.py               Listing-exchange normalization (NYSE/AMEX/NASDAQ/OTHER)
     bmp_correction.py          BMP 2007 firm-month return correction (Shumway constants)

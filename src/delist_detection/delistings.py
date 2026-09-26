@@ -24,6 +24,7 @@ from .listing_status import exchanges_around, issuer_exchange, withdrawal_kind
 from .midas import MIDAS_START
 from .nasdaq_halts import last_trade_from_halt
 from .reconstruction import DelistingKey
+from .review_triage import ReviewItem
 from .security_master import Security
 from .trading_calendar import previous_trading_day
 
@@ -48,17 +49,6 @@ ENDING_BUCKETS = frozenset({CrspBucket.MERGER, CrspBucket.LIQUIDATION, CrspBucke
 # Preferred exchange for a multi-exchange delisting group: the filing on the
 # most-senior exchange supplies the event's `exchange` and `form25`/`form25_sub`.
 EXCHANGE_PREFERENCE = ("NYSE", "NASDAQ", "NYSE AMERICAN", "CBOE BZX", "NYSE ARCA")
-
-
-@dataclass(frozen=True)
-class ReviewItem:
-    sec_id: str
-    ticker: str
-    cik: int | None
-    flag: str
-    reason: str
-    delist_date: str = ""
-    last_seen: str = ""
 
 
 @dataclass

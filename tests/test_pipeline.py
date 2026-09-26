@@ -15,10 +15,10 @@ from delist_detection.last_trade import LastTrade
 from delist_detection.llm_merger_extractor import MergerTerms
 from delist_detection.observations import Observation, ObservationIndex
 from delist_detection.payout_extractor import PayoutResult
-from delist_detection.pipeline import (
-    Clients, Overrides, _acquirer_cik, _merge_review_rows, _own_last_seen,
-    _ticker_range_review, run, successor_from_8k12b, successor_search_name,
-)
+from delist_detection.acquirers import acquirer_cik
+from delist_detection.pipeline import Clients, Overrides, _merge_review_rows, run
+from delist_detection.security_master import own_last_seen, ticker_range_review
+from delist_detection.successors import SecurityStart, successor_from_8k12b, successor_in_run, successor_search_name
 from delist_detection.review_triage import Decision
 from delist_detection.security_master import Security
 from delist_detection.store import read_table, table_path
@@ -222,7 +222,7 @@ def test_own_last_seen_ignores_an_otc_tail_under_another_symbol():
         Sighting("2020-07-01", "XYZQ", "ftd"),        # post-delisting OTC tail, later than the real last sighting
         Sighting("2020-09-01", "XYZQ", "ftd"),
     ]
-    assert _own_last_seen(sec, sig) == "2020-06-15"
+    assert own_last_seen(sec, sig) == "2020-06-15"
 
 
 def test_own_last_seen_falls_back_to_era_end_with_no_own_ticker_sighting():
@@ -230,7 +230,7 @@ def test_own_last_seen_falls_back_to_era_end_with_no_own_ticker_sighting():
 
     era = TickerEra("XYZ", "2020-01-01", "2020-06-15", [])
     sec = Security("BBGXYZ", 555, "COMMON", "XYZ CORP", "Common Stock", True, "cusip", eras=[era])
-    assert _own_last_seen(sec, []) == "2020-06-15"
+    assert own_last_seen(sec, []) == "2020-06-15"
 
 
 # --- successor_from_8k12b resolves the matching-share-class candidate ---
@@ -585,7 +585,7 @@ def test_ticker_range_review_flags_overlap_within_one_security():
         {"sec_id": "S1", "ticker": "AAA", "valid_from": "2020-01-01", "valid_to": "2020-06-01"},
         {"sec_id": "S1", "ticker": "BBB", "valid_from": "2020-03-01", "valid_to": None},
     ]
-    items = _ticker_range_review(rows)
+    items = ticker_range_review(rows)
     assert len(items) == 1
     assert items[0].flag == "ticker_range_overlap" and items[0].sec_id == "S1"
     assert "AAA" in items[0].reason and "BBB" in items[0].reason
@@ -596,7 +596,7 @@ def test_ticker_range_review_flags_a_ticker_shared_by_two_securities():
         {"sec_id": "S1", "ticker": "AAA", "valid_from": "2020-01-01", "valid_to": "2020-06-01"},
         {"sec_id": "S2", "ticker": "AAA", "valid_from": "2020-03-01", "valid_to": None},
     ]
-    items = _ticker_range_review(rows)
+    items = ticker_range_review(rows)
     assert len(items) == 1
     assert items[0].flag == "ticker_shared"
     assert "S1" in items[0].reason and "S2" in items[0].reason
@@ -607,7 +607,7 @@ def test_ticker_range_review_ignores_non_overlapping_ranges():
         {"sec_id": "S1", "ticker": "AAA", "valid_from": "2020-01-01", "valid_to": "2020-06-01"},
         {"sec_id": "S1", "ticker": "BBB", "valid_from": "2020-06-02", "valid_to": None},
     ]
-    assert _ticker_range_review(rows) == []
+    assert ticker_range_review(rows) == []
 
 
 # --- item 13b: duplicate review rows are merged, joining reasons ---
@@ -1673,9 +1673,9 @@ def test_with_no_last_trade_date_the_window_is_anchored_on_the_form25_filing():
     ev = DelistingEvent(sec_id="BBGAPAOLD01", cik=6769, ticker="APAXXXX", delist_date="2021-03-14", record=record,
                         last_trade=LastTrade(None, "", ("no_last_trade_date",)), form25=None, form25_sub=sub,
                         exchange="NASDAQ")
-    starts = {"BBGAPAOLD01": pipeline.SecurityStart("2007-12-17", 6769, {"APA"}),
-              "BBGAPANEW01": pipeline.SecurityStart("2021-03-01", 1841666, {"APA"})}
-    assert pipeline._successor_in_run(ev, starts) == ("BBGAPANEW01", "same_ticker")
+    starts = {"BBGAPAOLD01": SecurityStart("2007-12-17", 6769, {"APA"}),
+              "BBGAPANEW01": SecurityStart("2021-03-01", 1841666, {"APA"})}
+    assert successor_in_run(ev, starts) == ("BBGAPANEW01", "same_ticker")
 
 
 def _same_ticker_acquirer_run(fake_edgar, tmp_path, holder=None, old_tail=()):
@@ -1897,18 +1897,18 @@ def test_an_acquirer_on_another_ticker_resolved_to_the_targets_cik_does_not_take
     ev = _nutrisystem_event()
     clients = Clients(edgar=fake_edgar, resolver=_OneAnswerResolver(1096376), classifier=None, figi=None,
                       ftd_client=None)
-    assert _acquirer_cik(clients, "TVTY", date(2019, 3, 7), ev) is None
+    assert acquirer_cik(clients.resolver, clients.edgar, "TVTY", date(2019, 3, 7), ev) is None
 
     fake_edgar.company_map["TVTY"] = {"cik_str": 704415, "ticker": "TVTY", "title": "Tivity Health, Inc."}
     fake_edgar.submissions_by_cik[704415] = []
     fake_edgar.listings[704415] = [("TVTY", "Nasdaq")]
-    assert _acquirer_cik(clients, "TVTY", date(2019, 3, 7), ev) == 704415
+    assert acquirer_cik(clients.resolver, clients.edgar, "TVTY", date(2019, 3, 7), ev) == 704415
 
 
 def test_an_acquirer_on_another_ticker_keeps_the_cik_the_resolver_gives(fake_edgar):
     clients = Clients(edgar=fake_edgar, resolver=_OneAnswerResolver(704415), classifier=None, figi=None,
                       ftd_client=None)
-    assert _acquirer_cik(clients, "TVTY", date(2019, 3, 7), _nutrisystem_event()) == 704415
+    assert acquirer_cik(clients.resolver, clients.edgar, "TVTY", date(2019, 3, 7), _nutrisystem_event()) == 704415
 
 
 # --- a stale era must not take another company's CUSIP (spec D21) ---

@@ -230,7 +230,7 @@ exchange transfer). It runs each stage's own code on N threads
   between two fetches of the same query: the same cache always gives the same
   output, but a refetch can reorder tied hits (three EDGAR-side places take
   the first match in hit order — the resolver's first pass, the frequency
-  ranking's stable sort of ties, and `successor_from_8k12b`'s first agreeing
+  ranking's stable sort of ties, and `successors.successor_from_8k12b`'s first agreeing
   candidate — so two fetches of one query can resolve differently when two
   CIKs tie; sorting hits canonically before use would remove this, left as a
   main-branch follow-up).
