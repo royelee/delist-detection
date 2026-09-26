@@ -373,6 +373,17 @@ def test_a_dual_class_rename_hands_each_class_its_issuer(eras, ftd, no_frequency
         ((813828, "cusip_handoff"), (1437107, "cusip_handoff"))
 
 
+def test_each_old_row_is_named_by_a_name_the_issuer_carried_then(eras, ftd, no_frequency):
+    """Quintiles Transnational Holdings (1478242) became Quintiles IMS Holdings in
+    2016 and IQVIA in 2017, when its CUSIP switched to IQV's. The old CUSIP's
+    rows read QUINTILES TRANSNATIONAL HLDGS, then QUINTILES IMS HOLDINGS: each is
+    named, word by word, by a name the issuer carried by then, though the name
+    it was renamed from at the switch names only the later rows."""
+    q = ["Q@2013-12-31", "Q@2014-12-31", "Q@2016-12-30"]
+    got = _infer(eras, ftd, list(eras), {**PASS1, "IQV@2017-12-31": 1478242}, unpin=q)
+    assert {k: got.get(k) for k in q} == dict.fromkeys(q, (1478242, "cusip_handoff"))
+
+
 def test_an_era_whose_name_names_no_name_of_the_issuer_takes_nothing(eras, ftd, no_frequency):
     """TRI@2008 is Triad Hospitals (1074771, pinned), which a snapshot kept listing
     after its 2007 buyout; the fails rows under TRI in its span are Thomson

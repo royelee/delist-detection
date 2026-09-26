@@ -289,15 +289,15 @@ class Handoff:
     `cusip`) or "cusip_handoff" (a switch: `cusip`, which first failed on
     `since`, last traded under the era's ticker on `last` as `to_key`'s
     `new_cusip` began, on `day`); `descriptions` are the old CUSIP's fails
-    descriptions under the era's ticker, which the issuer's former name must
-    match."""
+    descriptions under the era's ticker, each with the date of its first row,
+    which a name the issuer carried by then must match."""
     era_key: str
     to_key: str
     kind: str
     cusip: str
     new_cusip: str = ""
     day: str = ""
-    descriptions: tuple[str, ...] = ()
+    descriptions: tuple[tuple[str, str], ...] = ()
     since: str = ""
     last: str = ""
 
@@ -361,7 +361,10 @@ def cusip_handoffs(eras: Sequence[TickerEra], ftd: FtdIndex) -> list[Handoff]:
                 continue
             lo = add_trading_days(last, -SWITCH_DAYS).isoformat()
             hi = add_trading_days(last, SWITCH_DAYS).isoformat()
-            descriptions = tuple(sorted({r.description for r in own}))
+            first_seen: dict[str, str] = {}
+            for r in own:
+                first_seen.setdefault(r.description, r.date)
+            descriptions = tuple(sorted(first_seen.items()))
             since = ftd.by_cusip(c)[0].date
             for day, key, new in starts[bisect_left(days, lo):bisect_right(days, hi)]:
                 if key != e.key and new not in cusips_of[e.key]:

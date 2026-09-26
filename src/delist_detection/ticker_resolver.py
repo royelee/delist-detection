@@ -1074,11 +1074,13 @@ class TickerResolver:
 
     def _renamed_from(self, cik: int, h: Handoff) -> str | None:
         """The CIK's former name that ended within `RENAME_NEAR_DAYS` of the
-        switch `h` (`evidence.renamed_near`) and names the company of every
-        description of the old CUSIP's rows that names one (one at least),
-        word by word (`names.description_names`: CITIZENS COMMUNICATIONS is not
-        CLEAR CHANNEL COMMUNICTNS); None when there is none. A spin-off starting
-        as its parent's CUSIP ends carries no such name."""
+        switch `h` (`evidence.renamed_near`: it was renamed there), when every
+        description of the old CUSIP's rows that names a company (one at least)
+        names, word by word (`names.description_names`: CITIZENS COMMUNICATIONS
+        is not CLEAR CHANNEL COMMUNICTNS), a name the CIK carried by
+        `GUARD_NAME_DAYS` after that description's first row (QUINTILES
+        TRANSNATIONAL HLDGS before Quintiles IMS Holdings); None otherwise. A
+        spin-off starting as its parent's CUSIP ends carries no such name."""
         day = parse_day(h.day)
         try:
             sub = self._submissions(cik, h.day)
@@ -1088,8 +1090,11 @@ class TickerResolver:
             self._note_transient(e)
             return None
         former = renamed_near(sub, day, self.RENAME_NEAR_DAYS) if isinstance(sub, dict) and day else None
-        named = [d for d in h.descriptions if names_an_issuer(d)]
-        if former and named and all(description_names(d, former) for d in named):
+        named = [(d, since) for d, since in h.descriptions if names_an_issuer(d)]
+        if former and named and all(
+                any(description_names(d, n)
+                    for n in names_until(sub, parse_day(since) + timedelta(days=self.GUARD_NAME_DAYS)))
+                for d, since in named):
             return former
         return None
 
