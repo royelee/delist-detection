@@ -259,6 +259,14 @@ CATALOG: dict[str, FlagInfo] = {
         "info", "The CIK came from the observations' cik pin although EDGAR's name disagrees (it sits beside "
                 "member_name_mismatch).",
         "Nothing if the pin is right; otherwise correct the cik pin in the observations."),
+    "issuer_inferred": FlagInfo(
+        "info", "The resolver's first pass found no issuer CIK for this ticker era, and its second pass "
+                "inferred one (the reason says how): the one 8-K frequency candidate whose EDGAR names match the "
+                "era's fails rows (efts_frequency_renamed), the issuer of an era sharing its CUSIP "
+                "(shared_cusip), or the issuer that took over its CUSIP at a switch after a rename "
+                "(cusip_handoff). Such an answer is never saved in the resolver cache.",
+        "Check the issuer named in the reason is the company that traded under the ticker then; if not, pin "
+        "the right cik on the observations."),
     "resolved_by_manual_override": FlagInfo(
         "info", "The CIK came from MANUAL_OVERRIDES in scripts/classify_universe.py although EDGAR's name "
                 "disagrees (it sits beside member_name_mismatch).",

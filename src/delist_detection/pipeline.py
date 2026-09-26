@@ -52,7 +52,7 @@ from .store import DelistingKey, write_tables
 from .successors import (
     SecurityStart, successor_from_8k12b, successor_in_run, successor_query, successor_search_args,
 )
-from .ticker_resolver import TickerResolution
+from .ticker_resolver import InferredIssuer, TickerResolution
 
 
 @dataclass
@@ -247,12 +247,13 @@ class _IssuerAnswers:
     """Stage 2's answer for each era: the resolver's (`resolutions`, by era key:
     the tier that found it), its `Issuer` (`issuers`: CIK and EDGAR names, for
     the eras whose issuer is known -- the one source of an era's CIK), the
-    era's last sighting the resolver was asked at, and the issuer CIKs whose
-    names read was degraded."""
+    era's last sighting the resolver was asked at, the issuer CIKs whose
+    names read was degraded, and the second pass's answers (`inferred`)."""
     resolutions: dict[str, TickerResolution]
     issuers: dict[str, Issuer]
     last_seen: dict[str, str]
     names_degraded: set[int]
+    inferred: dict[str, InferredIssuer] = field(default_factory=dict)
 
 
 def _resolve_issuers(ctx: _RunContext, eras: list[TickerEra], ftd: FtdIndex) -> _IssuerAnswers:
@@ -263,8 +264,10 @@ def _resolve_issuers(ctx: _RunContext, eras: list[TickerEra], ftd: FtdIndex) -> 
     between the two: FTD rows of a shared CUSIP carry KORS@2012's last sighting
     past KORS@2014's first observation). The resolver tier that found it
     (cik_map, manual, company_tickers, ...) is kept for the delisting rows'
-    resolution_source. Then each issuer's EDGAR names, which stage 3 checks
-    CUSIPs and FIGI names against."""
+    resolution_source. Then the resolver's second pass (`infer_issuers`, never
+    saved) for the eras left with no CIK and no pin: a renamed issuer found by
+    its 8-K frequency or by a CUSIP handoff. Then each issuer's EDGAR names,
+    which stage 3 checks CUSIPs and FIGI names against."""
     clients, workers = ctx.clients, ctx.sec_workers
     last_seen = {e.key: era_last_seen(e, ftd) for e in eras}
     mark = ctx.meter.start()
@@ -278,13 +281,19 @@ def _resolve_issuers(ctx: _RunContext, eras: list[TickerEra], ftd: FtdIndex) -> 
     cik_res = {e.key: clients.resolver.resolve(e.ticker, last_seen[e.key], pin=e.cik_pin, name=e.name)
                for e in eras}
     _flush_memo(clients)
+    inferred = clients.resolver.infer_issuers(eras, ftd, last_seen, {k: r.cik for k, r in cik_res.items()})
+    tickers = {e.key: e.ticker for e in eras}
+    for key, found in inferred.items():
+        cik_res[key] = TickerResolution(tickers[key], found.cik, None, found.source)
+    if inferred:
+        ctx.log(f"{len(inferred)} issuers inferred in the resolver's second pass")
     ciks = {k: r.cik for k, r in cik_res.items()}
     issuer_ciks = [cik for cik in dict.fromkeys(ciks.values()) if cik]
     if workers > 1:
         warm(issuer_ciks, clients.edgar.submissions, workers=workers, name="issuer names")
     issuer_names, names_degraded = _issuer_names(clients.edgar, issuer_ciks)
     ctx.meter.done("issuer resolution", mark)
-    return _IssuerAnswers(cik_res, issuers_by_era(ciks, issuer_names), last_seen, names_degraded)
+    return _IssuerAnswers(cik_res, issuers_by_era(ciks, issuer_names), last_seen, names_degraded, inferred)
 
 
 def _resolve_securities(ctx: _RunContext, eras: list[TickerEra], era_by_key: dict[str, TickerEra], ftd: FtdIndex,
@@ -310,6 +319,12 @@ def _resolve_securities(ctx: _RunContext, eras: list[TickerEra], era_by_key: dic
             review.append(degraded_item(resolutions[e.key].sec_id or "", e.ticker, cik_of(issuers, e.key),
                                          f"{e.key} {e.name or ''}: issuer resolution",
                                          "; its answer was used for this run but not saved", last_seen=e.last))
+    for e in eras:
+        found = answers.inferred.get(e.key)
+        if found is not None:
+            review.append(ReviewItem(resolutions[e.key].sec_id or "", e.ticker, found.cik, "issuer_inferred",
+                                     f"{e.key} {e.name or ''}: issuer {found.cik} by {found.source}: {found.via}",
+                                     last_seen=e.last))
     for e in eras:
         if cik_of(issuers, e.key) in answers.names_degraded:
             review.append(degraded_item(resolutions[e.key].sec_id or "", e.ticker, cik_of(issuers, e.key),

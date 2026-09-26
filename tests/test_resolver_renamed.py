@@ -340,6 +340,41 @@ def test_a_switch_to_a_company_founded_after_the_eras_rows_is_refused(eras, ftd,
     assert "LMCA@2012-06-29" not in _infer(eras, ftd, list(eras), RESOLVED)
 
 
+class _NoFigi:
+    """OpenFIGI with no US line for anything."""
+
+    def map(self, jobs):
+        return [{"data": []} for _ in jobs]
+
+    def filter(self, query, **kw):
+        return []
+
+
+def test_the_second_pass_answer_is_used_flagged_and_never_saved(eras, ftd, tmp_path):
+    """KORS@2012 under its own name finds nothing (Capri Holdings was Michael Kors
+    Holdings then); the second pass gives it KORS@2014's issuer through their
+    shared CUSIP. The answer depends on the run's other eras, so the memo file
+    holds only first-pass answers, and the era carries the info flag
+    issuer_inferred, which says how."""
+    kors = [eras["KORS@2012-06-29"], eras["KORS@2014-12-31"], eras["CPRI@2018-12-31"]]
+    edgar = _Edgar(tickers={"CPRI": {"cik_str": 1530721, "ticker": "CPRI", "title": "Capri Holdings Ltd"}})
+    resolver = TickerResolver(edgar, cache_path=tmp_path / "res.json", batch_writes=True)
+    ctx = _ctx(resolver, edgar)
+    answers = pipeline._resolve_issuers(ctx, kors, ftd)
+    res = answers.resolutions
+    assert {k: (r.cik, r.source) for k, r in res.items()} == {
+        "KORS@2012-06-29": (1530721, "shared_cusip"), "KORS@2014-12-31": (1530721, "name_search"),
+        "CPRI@2018-12-31": (1530721, "company_tickers")}
+    assert answers.issuers["KORS@2012-06-29"].cik == 1530721
+    saved = json.loads((tmp_path / "res.json").read_text())["entries"]
+    assert sorted(saved) == ["CPRI|2026-02-04|CAPRI HOLDINGS LTD", "KORS|2019-01-03|MICHAEL KORS HOLDINGS LTD"]
+    ctx.clients.figi = _NoFigi()
+    _, _, review = pipeline._resolve_securities(ctx, kors, {e.key: e for e in kors}, ftd, answers)
+    inferred = [(i.ticker, i.cik, i.reason) for i in review if i.flag == "issuer_inferred"]
+    assert inferred == [("KORS", 1530721, "KORS@2012-06-29 CAPRI HOLDINGS LTD: issuer 1530721 by shared_cusip: "
+                                          "shares CUSIP G60754101 with KORS@2014-12-31")]
+
+
 def test_an_era_linked_to_two_issuers_takes_neither(eras, ftd, no_frequency):
     issuers = {**DATA["issuers"], "999999": DATA["issuers"]["1530721"]}   # a second issuer passing the guard
     got = _infer(eras, ftd, list(eras), {**RESOLVED, "KORS@2014-12-31": 1530721, "CPRI@2018-12-31": 999999},
