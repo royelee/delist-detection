@@ -75,7 +75,7 @@ def _entry_with_run_raising(monkeypatch, exc):
 
 
 def test_an_openfigi_outage_exits_1_with_no_outputs_written(monkeypatch, capsys):
-    """Code review 2026-09-25, item 5: OpenFIGI down after its retries is not a
+    """OpenFIGI down after its retries is not a
     refusal (exit 2) but an outage: exit 1, and the message says nothing was
     written and to rerun later."""
     from delist_detection.openfigi import OpenFigiUnavailable

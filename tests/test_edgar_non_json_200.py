@@ -1,5 +1,5 @@
 """EdgarClient._get_json: a 200 whose body is not JSON must never be cached as
-an answer (final-fix item 1). It is treated exactly like a 5xx or a transport
+an answer. It is treated exactly like a 5xx or a transport
 error: with a usable cached copy, that copy is served marked stale and the
 file on disk is left untouched; with none, it raises and writes nothing. It
 must never be written as `{"__raw__": ...}` -- that could silently overwrite a

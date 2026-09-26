@@ -28,7 +28,7 @@ def test_notice_dates_for_involuntary_removals():
     """Spec 8.8: an involuntary (b) notice's date is the decision day, to be
     confirmed by MIDAS or a halt, whatever its wording: RadioShack's "announcement
     ... at the close of the trading session on February 2, 2015 of the
-    suspension" too (code review 2026-09-25, item 4)."""
+    suspension" too."""
     rsh = _load("rsh_25nse.txt", "0000876661-15-000132", "2015-03-20")
     assert notice_last_trade(rsh) == (date(2015, 2, 2), "notice_b_unconfirmed")
     save = _load("save_25nse.txt", "0000876661-24-001142", "2024-12-05")

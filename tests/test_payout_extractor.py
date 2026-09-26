@@ -178,7 +178,7 @@ def test_dividend_guard_does_not_block_real_payout():
     assert val == 84.00
 
 
-# --- FIX 1: mixed cash+stock deals must NOT emit only the cash leg --------
+# --- mixed cash+stock deals must NOT emit only the cash leg --------
 
 def test_match_mixed_cash_stock_ann_returns_none():
     # ANN / Ascena: cash + fraction of a share of common stock → out of scope.
@@ -320,7 +320,7 @@ def test_match_par_value_far_before_not_suppressed_aria():
     assert val == 24.00
 
 
-# --- FIX 3: non-consideration cash phrases (fees / escrow) -----------------
+# --- non-consideration cash phrases (fees / escrow) -----------------
 
 def test_match_skips_termination_fee():
     text = "the Company shall pay a termination fee of $5.00 in cash"
@@ -334,7 +334,7 @@ def test_match_skips_escrow():
     assert val is None
 
 
-# --- FIX 4: widen neg window so dividend phrasing is caught ----------------
+# --- widen neg window so dividend phrasing is caught ----------------
 
 def test_match_skips_dividend_in_the_amount_of():
     # 'dividend' sits well before the '$' — the original target phrasing.
@@ -487,7 +487,7 @@ def test_all_tiers_miss_returns_none():
     assert res == PayoutResult.none()
 
 
-# --- FIX 5: extract() must never raise on a network error ------------------
+# --- extract() must never raise on a network error ------------------
 
 import requests
 

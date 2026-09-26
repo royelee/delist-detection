@@ -79,14 +79,14 @@ def test_a_flag_no_row_carries_gives_no_decisions():
 
 
 def test_a_full_token_copied_from_review_csv_is_refused_not_silently_zero():
-    """M2 (final review): --flag payout_gate_failed:45.5 (a token, not a flag
+    """--flag payout_gate_failed:45.5 (a token, not a flag
     name) used to silently match nothing and print "added 0 decision(s)"."""
     with pytest.raises(ReviewDecisionError):
         accept_by_flag(ROWS, "terms_gate_failed:no_acq_price", note="x")
 
 
 def test_a_flag_not_in_the_catalog_is_refused_not_silently_zero():
-    """M2 (final review): a typo such as --flag no_last_clsoe used to fall
+    """A typo such as --flag no_last_clsoe used to fall
     back to the generic 'not in the flag catalog' entry (itself acceptable)
     and silently match nothing."""
     with pytest.raises(ReviewDecisionError):
@@ -131,7 +131,7 @@ def test_append_decisions_on_a_missing_path_writes_only_the_new_rows(tmp_path):
     assert path.exists()
 
 
-# --- C1 (final review): append_decisions must never damage an existing file --
+# --- append_decisions must never damage an existing file --
 
 def test_append_decisions_keeps_a_header_with_spaces_after_commas(tmp_path):
     path = tmp_path / "decisions.csv"
@@ -217,7 +217,7 @@ def test_cli_writes_decisions_and_creates_the_file_with_the_header(tmp_path, mon
 
 
 def test_cli_prints_a_warning_when_no_rows_match(tmp_path, monkeypatch, capsys):
-    """M2 (final review): a mistyped or over-specific flag used to print
+    """A mistyped or over-specific flag used to print
     'added 0 decision(s)' and exit 0 with no other sign anything went wrong."""
     review = tmp_path / "review.csv"
     _write_review_csv(review, ROWS)
@@ -270,7 +270,7 @@ def test_cli_dry_run_does_not_print_the_rerun_message(tmp_path, monkeypatch, cap
 
 
 def test_cli_refuses_a_bulk_accept_of_a_fix_severity_flag_without_yes(tmp_path, monkeypatch):
-    """M6 (final review): --flag no_dlret with one note would otherwise clear
+    """--flag no_dlret with one note would otherwise clear
     every blank-DLRET row at once, reopening the hole the no_dlret fix closed."""
     review = tmp_path / "review.csv"
     decisions = tmp_path / "decisions.csv"

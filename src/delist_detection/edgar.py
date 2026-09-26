@@ -693,7 +693,7 @@ class EdgarClient:
         except requests.RequestException:
             SEC_LIMITER.pause(RETRY_BACKOFF[0])
             raise
-        check_response(resp)              # 403/429 -> EdgarBlocked, as on the retried path (3b5c3aa)
+        check_response(resp)              # 403/429 -> EdgarBlocked, as on the retried path
         if resp.status_code >= 500:
             SEC_LIMITER.pause(RETRY_BACKOFF[0])
         return resp
@@ -889,7 +889,7 @@ class EdgarClient:
         readable filing into a degraded row.
         """
         # An empty primary_doc would resolve to the directory-listing URL, which
-        # returns 200 and a useless file index — never fetch it (FIX 7).
+        # returns 200 and a useless file index — never fetch it.
         if not primary_doc:
             return ""
         acc_nodash = accession.replace("-", "")
@@ -910,7 +910,7 @@ class EdgarClient:
             if resp.status_code != 200:
                 # Only a 404 is a stable "not found" worth caching as a sticky miss.
                 # Caching other non-200s (429/503/etc.) would turn a transient outage
-                # into a permanent empty result, so leave the cache untouched (FIX 6).
+                # into a permanent empty result, so leave the cache untouched.
                 if resp.status_code == 404:
                     write_atomic(cp, "")
                 else:

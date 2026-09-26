@@ -125,7 +125,7 @@ class MidasClient:
         self._fill_misses: set[tuple[int, int]] = set()
         # Quarters already warned+counted as a miss this run (warm and sequential
         # share this: `prefetch.Serialized` runs every MidasClient call, warm or
-        # sequential, one at a time -- see final-fix item 6).
+        # sequential, one at a time), so each quarter is warned about once a run.
         self._warned_misses: set[tuple[int, int]] = set()
         clean_orphan_temps(self.dir)          # a killed run's cut-off download, index page or summary
 

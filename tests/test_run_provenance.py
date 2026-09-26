@@ -62,7 +62,7 @@ def test_a_security_searched_through_a_stale_copy_is_flagged_resolution_degraded
     fake_edgar.recent_filings = stale_for_aet
     run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
     assert [r["sec_id"] for r in _review(tmp_path) if r["review_flags"] == "resolution_degraded"] == ["BBG000FJLFX8"]
-    # item 3: the delisting search rested on a stale copy, so the delisting's own
+    # the delisting search rested on a stale copy, so the delisting's own
     # row (not just review.csv) carries the flag too.
     (d,) = _delistings(tmp_path)
     assert "resolution_degraded" in d["review_flags"].split(";")
@@ -80,7 +80,7 @@ def test_a_payout_read_through_a_failed_request_is_flagged_with_its_delisting(fa
     run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
     rows = [r for r in _review(tmp_path) if r["review_flags"] == "resolution_degraded"]
     assert [(r["sec_id"], r["delist_date"]) for r in rows] == [("BBG000FJLFX8", "2018-12-09")]
-    # item 3: the payout read rested on a failed request, so the delisting's own
+    # the payout read rested on a failed request, so the delisting's own
     # row carries the flag too.
     (d,) = _delistings(tmp_path)
     assert "resolution_degraded" in d["review_flags"].split(";")
@@ -125,13 +125,13 @@ def test_a_successor_search_whose_efts_refetch_failed_is_flagged_resolution_degr
     assert [(r["sec_id"], r["delist_date"]) for r in rows] == [("BBG000FJLFX8", "2018-12-09")]
     d = read_table("delistings", table_path(tmp_path, "delistings"))[0]
     assert d["successor_sec_id"] == ""     # left unresolved, not guessed
-    # item 3: the successor search rested on a failed request, so the delisting's
+    # the successor search rested on a failed request, so the delisting's
     # own row carries the flag too.
     assert "resolution_degraded" in d["review_flags"].split(";")
 
 
 def test_an_acquirer_cik_lookup_through_a_stale_copy_is_flagged_naming_the_acquirer(fake_edgar, tmp_path):
-    """item 4: _acquirer_cik falls through to the SEC ticker-map holder's own
+    """_acquirer_cik falls through to the SEC ticker-map holder's own
     submissions JSON (edgar_lists) when the acquirer took the target's own
     ticker -- the Waste Connections 2016 scenario. A stale copy served there
     must add a resolution_degraded row naming the acquirer ticker."""
@@ -157,7 +157,7 @@ def test_a_clean_run_has_no_resolution_degraded_row(fake_edgar, tmp_path):
     index, clients = _clients(fake_edgar)
     run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
     assert not any(r["review_flags"] == "resolution_degraded" for r in _review(tmp_path))
-    # item 3: a clean run's delistings.csv is unaffected too.
+    # a clean run's delistings.csv is unaffected too.
     assert not any("resolution_degraded" in d["review_flags"].split(";") for d in _delistings(tmp_path))
 
 
@@ -213,7 +213,7 @@ def test_the_manifest_reports_warm_failed_and_rejected_by_stage_or_endpoint():
 
 
 def test_the_manifest_separates_warm_degraded_from_the_sequential_passs_own(tmp_path):
-    # item 5: a warm thread's degraded reads (edgar.SEC_STATS, filling_only())
+    # a warm thread's degraded reads (edgar.SEC_STATS, filling_only())
     # are counted under warm_degraded:<kind>, apart from degraded_answers, which
     # then reflects only what the sequential pass relied on.
     got = manifest.build(as_of=date(2026, 9, 23), sec_workers=4,

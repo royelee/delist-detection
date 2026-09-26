@@ -369,7 +369,7 @@ def test_a_quarter_zip_sec_no_longer_serves_is_a_miss(tmp_path):
 
 
 def test_a_midas_miss_after_a_404_logs_one_warning_and_counts_once_per_run(tmp_path, caplog):
-    """item 6: a MIDAS quarter that never yields evidence (a 404 on its ZIP, or a
+    """A MIDAS quarter that never yields evidence (a 404 on its ZIP, or a
     download that keeps failing) otherwise falls back to "no evidence" silently.
     It must log one WARNING and count midas_miss:<yq> in SEC_STATS -- once per
     quarter per run, even though the warm pass and the sequential pass each try

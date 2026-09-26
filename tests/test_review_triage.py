@@ -418,7 +418,7 @@ def test_a_header_only_file_has_no_decisions(tmp_path):
 
 
 def test_load_decisions_ignores_a_utf8_bom(tmp_path):
-    """C1 (final review): a UTF-8 BOM, which Excel writes on a "CSV UTF-8"
+    """A UTF-8 BOM, which Excel writes on a "CSV UTF-8"
     save, must not blank the first header cell (sec_id)."""
     p = tmp_path / "review_decisions.csv"
     p.write_bytes(("﻿" + HEADER + "\nS1,2020-01-02,AAA,merger_at_par,accept,ok\n").encode("utf-8"))

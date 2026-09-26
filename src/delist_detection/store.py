@@ -12,7 +12,7 @@ from __future__ import annotations
 import csv
 import math
 import os
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import date
@@ -78,17 +78,30 @@ def format_cell(v: object) -> str:
 
 
 @contextmanager
-def replace_on_success(path: str | Path):
-    """Yield a temp path beside `path`; `path` is replaced only when the block
-    finishes, so an abort never leaves a partial file over the last complete one."""
-    path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(f".{path.name}.tmp")
+def replace_all_on_success(paths: Sequence[str | Path]) -> Iterator[list[Path]]:
+    """Yield one temp path beside each of `paths`; every path is replaced by its
+    temp file, in order, only when the block finishes. On any failure no path
+    is replaced and every temp file is removed, so an abort never leaves a
+    partial file -- or one new file among old ones -- over the last complete set."""
+    targets = [Path(p) for p in paths]
+    tmps = [p.with_name(f".{p.name}.tmp") for p in targets]
     try:
-        yield tmp
-        os.replace(tmp, path)
+        for p in targets:
+            p.parent.mkdir(parents=True, exist_ok=True)
+        yield tmps
+        for tmp, p in zip(tmps, targets):
+            os.replace(tmp, p)
     finally:
-        tmp.unlink(missing_ok=True)
+        for tmp in tmps:
+            tmp.unlink(missing_ok=True)
+
+
+@contextmanager
+def replace_on_success(path: str | Path) -> Iterator[Path]:
+    """`replace_all_on_success` for one file: yield a temp path beside `path`,
+    which replaces `path` only when the block finishes."""
+    with replace_all_on_success([path]) as (tmp,):
+        yield tmp
 
 
 def table_path(out_dir: str | Path, name: str) -> Path:
@@ -102,73 +115,55 @@ def _sort(spec: TableSpec, rows: list[dict[str, str]]) -> None:
         rows.sort(key=lambda r: tuple(r[k] for k in spec.key) + tuple(r[c] for c in spec.columns))
 
 
-def write_table(name: str, rows: Iterable[Mapping[str, object]], path: str | Path) -> int:
-    """Write `rows` as table `name`; returns the row count. Missing columns are blank;
-    an unknown column raises ValueError before anything is written. Rows are
-    formatted before the file is opened, so a failing iterator leaves the old file."""
+def _formatted(name: str, rows: Iterable[Mapping[str, object]]) -> list[dict[str, str]]:
+    """`rows` as table `name`'s formatted, sorted cells. Missing columns are blank;
+    an unknown column raises ValueError."""
     spec = TABLES[name]
-    formatted: list[dict[str, str]] = []
+    out: list[dict[str, str]] = []
     for r in rows:
         extra = set(r) - set(spec.columns)
         if extra:
             raise ValueError(f"{name}: unknown column(s) {sorted(extra)}")
-        formatted.append({c: format_cell(r.get(c)) for c in spec.columns})
-    _sort(spec, formatted)
-    with replace_on_success(path) as tmp, tmp.open("w", newline="") as fh:
-        w = csv.DictWriter(fh, fieldnames=list(spec.columns), lineterminator="\n")
-        w.writeheader()
-        w.writerows(formatted)
-    return len(formatted)
+        out.append({c: format_cell(r.get(c)) for c in spec.columns})
+    _sort(spec, out)
+    return out
 
 
-def write_tables(out_dir: str | Path, tables: Mapping[str, Iterable[Mapping[str, object]]]) -> dict[str, int]:
-    """Write every table in `tables` atomically as one group.
-
-    Every table's rows are formatted and validated first — an unknown column
-    or a failing iterator raises before any file is touched. Each table is
-    then written to its own temp file, and only once every temp file has
-    been written successfully are they all renamed into place. So a later
-    table's formatting or write failure never leaves an earlier table's new
-    file sitting over the previous complete one; on any failure every
-    previous file is left untouched and every temp file is cleaned up.
-
-    Returns `{name: row_count}`.
-    """
-    formatted: dict[str, tuple] = {}
-    for name, rows in tables.items():
-        spec = TABLES[name]
-        rows_fmt: list[dict[str, str]] = []
-        for r in rows:
-            extra = set(r) - set(spec.columns)
-            if extra:
-                raise ValueError(f"{name}: unknown column(s) {sorted(extra)}")
-            rows_fmt.append({c: format_cell(r.get(c)) for c in spec.columns})
-        _sort(spec, rows_fmt)
-        formatted[name] = (spec, rows_fmt)
-
-    paths = {name: Path(table_path(out_dir, name)) for name in tables}
-    tmp_paths: dict[str, Path] = {}
+def _write_all(tables: Sequence[tuple[str, Iterable[Mapping[str, object]], str | Path]]) -> dict[str, int]:
+    """Write each `(name, rows, path)` as one group: every table is formatted and
+    validated first, so an unknown column or a failing iterator raises before
+    any file is touched; then each goes to its own temp file, and only once every
+    temp file is written are they all renamed into place (`replace_all_on_success`).
+    Returns `{name: row_count}`."""
+    formatted = [(name, _formatted(name, rows)) for name, rows, _ in tables]
     counts: dict[str, int] = {}
-    try:
-        for name, (spec, rows_fmt) in formatted.items():
-            path = paths[name]
-            path.parent.mkdir(parents=True, exist_ok=True)
-            tmp = path.with_name(f".{path.name}.tmp")
-            # Registered before opening: a failure while writing THIS table's
-            # temp file must still get it cleaned up in `finally` below, not
-            # leak it.
-            tmp_paths[name] = tmp
+    with replace_all_on_success([path for _, _, path in tables]) as tmps:
+        for (name, rows_fmt), tmp in zip(formatted, tmps):
             with tmp.open("w", newline="") as fh:
-                w = csv.DictWriter(fh, fieldnames=list(spec.columns), lineterminator="\n")
+                w = csv.DictWriter(fh, fieldnames=list(TABLES[name].columns), lineterminator="\n")
                 w.writeheader()
                 w.writerows(rows_fmt)
             counts[name] = len(rows_fmt)
-        for name, tmp in tmp_paths.items():
-            os.replace(tmp, paths[name])
-    finally:
-        for tmp in tmp_paths.values():
-            tmp.unlink(missing_ok=True)
     return counts
+
+
+def write_table(name: str, rows: Iterable[Mapping[str, object]], path: str | Path) -> int:
+    """Write `rows` as table `name` at `path` (`_write_all`); returns the row count.
+    Missing columns are blank; an unknown column or a failing iterator raises
+    before the old file is touched."""
+    return _write_all([(name, rows, path)])[name]
+
+
+def write_tables(out_dir: str | Path, tables: Mapping[str, Iterable[Mapping[str, object]]]) -> dict[str, int]:
+    """Write every table in `tables` under `out_dir` atomically as one group
+    (`_write_all`): a later table's formatting or write failure never leaves an
+    earlier table's new file sitting over the previous complete one; on any
+    failure every previous file is left untouched and every temp file is
+    cleaned up.
+
+    Returns `{name: row_count}`.
+    """
+    return _write_all([(name, rows, table_path(out_dir, name)) for name, rows in tables.items()])
 
 
 def read_table(name: str, path: str | Path) -> list[dict[str, str]]:

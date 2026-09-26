@@ -45,7 +45,7 @@ class _Session:
         if self.client_box:
             client = self.client_box[0]
             self.held.append(sorted(k for k, lock in client._locks.items() if lock.locked()))
-        # company_search_atom now requires a real ATOM feed body (fix round 1);
+        # company_search_atom now requires a real ATOM feed body;
         # every other call in this file reads the default JSON body.
         if "browse-edgar" in url:
             return _Resp(self.status, "<feed></feed>")

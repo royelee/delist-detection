@@ -78,7 +78,7 @@ def test_a_download_is_fsynced_before_it_is_renamed_into_place(tmp_path, monkeyp
 
 
 def test_an_index_page_cut_off_mid_write_leaves_no_cache_file(tmp_path, writes_fail_midway):
-    """Code review 2026-09-25, item 6: get_text caches through edgar.write_atomic,
+    """get_text caches through edgar.write_atomic,
     so a run that dies mid-write leaves no cut-off index page for the next run."""
     writes_fail_midway(tmp_path)
     with pytest.raises(OSError):
@@ -106,7 +106,7 @@ def test_get_text_refreshes_and_falls_back(tmp_path):
 
 
 def test_get_text_serving_a_stale_index_after_a_failed_refresh_counts_as_degraded(tmp_path):
-    """item 6: a stale index page (the MIDAS/FTD ZIP listing) served after a
+    """A stale index page (the MIDAS/FTD ZIP listing) served after a
     failed refresh is otherwise a silent fallback -- the caller can't tell it
     read a possibly-outdated page. It must count SEC_STATS.degraded("stale_copy")."""
     cf = tmp_path / "index.html"

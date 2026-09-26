@@ -80,7 +80,7 @@ class _Timeouts:
 
 
 def test_an_outage_is_unavailable_not_a_refusal_and_nothing_is_cached(tmp_path):
-    """Code review 2026-09-25, item 5: timeouts or 5xx answers until the retries
+    """Timeouts or 5xx answers until the retries
     run out are an outage (OpenFigiUnavailable, the CLI exits 1), not a refusal
     of the key (OpenFigiBlocked, exit 2); nothing is cached either way."""
     from delist_detection.openfigi import OpenFigiUnavailable
@@ -113,7 +113,7 @@ def test_filter_pages_and_caches(tmp_path):
 
 
 def test_a_mapping_answer_cut_off_mid_write_leaves_no_cache_file(tmp_path, writes_fail_midway):
-    """Code review 2026-09-25, item 6: a run that dies while caching an answer
+    """A run that dies while caching an answer
     must not leave a cut-off file the next run would trust (edgar.write_atomic)."""
     c = OpenFigiClient(tmp_path, "k", session=_Session(_Resp(body=[AET]), _Resp(body=[AET])), sleep=lambda _: None)
     writes_fail_midway(tmp_path)

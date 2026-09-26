@@ -119,9 +119,9 @@ def test_ambiguous_class_goes_to_review(fake_edgar):
     ctx.siblings = [SecurityRef("BBG_A", "CLASS A", "common"), SecurityRef("BBG_B", "CLASS B", "common")]
     events, review = DelistingFinder(edgar, clf).find(ctx)
     # The fallback must not revive the same Form 25 the loop just rejected as
-    # ambiguous (item 1). The security is still neither listed nor delisted,
+    # ambiguous. The security is still neither listed nor delisted,
     # so spec 8.10's `ended_without_delisting` row is written next to the
-    # ambiguity row (code review 2026-09-25, item 2): accepting the Form 25
+    # ambiguity row: accepting the Form 25
     # row as "not about this security" must not drop the security from review.
     assert events == []
     assert [r.flag for r in review] == ["form25_unmatched", "ended_without_delisting"]
@@ -154,7 +154,7 @@ def test_an_involuntary_notice_date_that_nothing_confirms_is_flagged_unconfirmed
     RadioShack notice announces the suspension "at the close of the trading
     session on February 2, 2015"; with no MIDAS or halt to confirm it (MIDAS
     starts in 2012, so every earlier (b) notice is in this case) the date is
-    kept but flagged last_trade_date_unconfirmed (code review 2026-09-25, item 4)."""
+    kept but flagged last_trade_date_unconfirmed."""
     fake_edgar.submissions_by_cik[96289] = [
         EdgarSubmission("0000876661-15-000132", "25-NSE", "2015-03-20", "", "", "primary_doc.xml")]
     fake_edgar.raws["0000876661-15-000132"] = RSH_RAW
@@ -170,7 +170,6 @@ def test_an_involuntary_notice_date_that_nothing_confirms_is_flagged_unconfirmed
     assert ev.last_trade.source == "midas" and ev.last_trade.flags == ()
 
 
-# -- fix round 1 ----------------------------------------------------------
 
 
 def test_unreadable_form25_goes_to_review(fake_edgar):
@@ -181,7 +180,7 @@ def test_unreadable_form25_goes_to_review(fake_edgar):
     events, review = DelistingFinder(fake_edgar, clf).find(_ctx(sec, last_seen="2019-01-09"))
     assert events == []
     # Not listed and not delisted: ended_without_delisting is written next to
-    # the form25_unreadable row (code review 2026-09-25, item 2).
+    # the form25_unreadable row.
     assert [(r.flag, r.delist_date) for r in review] == [("form25_unreadable", "2019-01-20"),
                                                          ("ended_without_delisting", "")]
 
@@ -194,7 +193,7 @@ def test_unclassified_form25_class_goes_to_review(fake_edgar):
     events, review = DelistingFinder(fake_edgar, clf).find(_ctx(sec, last_seen="2019-01-31"))
     assert events == []
     # Not listed and not delisted: ended_without_delisting is written next to
-    # the form25_unclassified row (code review 2026-09-25, item 2).
+    # the form25_unclassified row.
     assert [r.flag for r in review] == ["form25_unclassified", "ended_without_delisting"]
 
 
@@ -439,7 +438,6 @@ def test_cik_none_listed_today_is_quiet(fake_edgar):
     assert events == [] and review == []
 
 
-# -- fix round 3 (final review, wave B) ------------------------------------
 
 
 def test_ticker_is_on_last_trade_date_not_form25_filing_date(fake_edgar):
@@ -738,8 +736,8 @@ def test_a_class_left_ambiguous_still_goes_to_review_when_another_class_matched(
     sibling; Class B has two (the Class B FIGI line and a placeholder for the
     same stock) that no name word tells apart. The placeholder is not matched:
     its review rows say the class was ambiguous and, as it is neither listed
-    nor delisted, that it ended without a delisting (code review 2026-09-25,
-    item 2: accepting the first row must not drop the security from review)."""
+    nor delisted, that it ended without a delisting (accepting the first row
+    must not drop the security from review)."""
     fake_edgar.submissions_by_cik[813828] = [EdgarSubmission("c1", "25", "2019-12-04", "", "", "p.xml")]
     fake_edgar.raws["c1"] = _f25_raw("New York Stock Exchange LLC", class_text=(
         "Class A Common Stock, par value $0.001 per share Class B Common Stock, par value $0.001 per share"))

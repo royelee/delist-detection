@@ -107,10 +107,10 @@ def gate_payouts(
 ) -> GatedPayouts:
     """Route every merger payout through the last-close check. Inputs are not mutated.
 
-    keys: (TICKER, date) of every merger record. payouts / sources / confidences: the
-    regex extraction, and llm_terms: MergerTerms, all by those keys. last_closes and
-    csv_terms: the --last-trade-closes and --merger-terms maps (bare-ticker or
-    (ticker, date) keys). A --merger-terms row always wins over the LLM.
+    keys: (sec_id, delist_date) of every merger delisting. payouts / sources / confidences:
+    the regex extraction, and llm_terms: MergerTerms, all by those keys. last_closes and
+    csv_terms: the --last-trade-closes and --merger-terms maps (bare sec_id or
+    (sec_id, delist_date) keys). A --merger-terms row always wins over the LLM.
     acquirer_price(ticker, key): the acquirer's price on THAT merger's own last-trade
     day — called with the merger's full key, not just its date, because many mergers
     can share a delist date and each must be priced on its own last-trade day.
@@ -126,12 +126,12 @@ def gate_payouts(
             m.pop(key, None)
 
     for key in keys:
-        tkr, date = key
-        has_csv = _lookup(csv_terms, tkr, date) is not None
+        sec_id, delist_date = key
+        has_csv = _lookup(csv_terms, sec_id, delist_date) is not None
         terms = None if has_csv else llm_terms.get(key)
         r = reconcile(
             out.payouts.get(key),
-            _lookup(last_closes, tkr, date),
+            _lookup(last_closes, sec_id, delist_date),
             terms,
             acquirer_price(terms.acquirer_ticker, key) if terms and terms.acquirer_ticker else None,
             tol,
@@ -159,8 +159,8 @@ def gate_payouts(
     for key, terms in llm_terms.items():
         if terms.stock_ratio is None or terms.deal_type == "election":
             continue   # settled in pass 1
-        tkr, date = key
-        if _lookup(csv_terms, tkr, date) is not None:
+        sec_id, delist_date = key
+        if _lookup(csv_terms, sec_id, delist_date) is not None:
             out.dropped["csv_override"] += 1
             continue
         acq = (terms.acquirer_ticker or "").strip()
@@ -173,7 +173,7 @@ def gate_payouts(
             out.dropped["no_acq_price"] += 1
             flag_terms_gate_drop(key, "no_acq_price")
             continue
-        last_close = _lookup(last_closes, tkr, date)
+        last_close = _lookup(last_closes, sec_id, delist_date)
         if last_close is None or last_close <= 0:
             # <=0 guard mirrors _resolve_merger (dlret.py): a zero/blank close
             # would both divide-by-zero here and yield a NaN DLRET downstream.

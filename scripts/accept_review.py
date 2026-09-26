@@ -34,7 +34,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--decisions", default=DEFAULT_DECISIONS,
                    help="decisions CSV to append to (default data/review_decisions.csv)")
     p.add_argument("--yes", action="store_true",
-                   help="Required to bulk-accept a fix-severity flag (M6: one note would otherwise clear every "
+                   help="Required to bulk-accept a fix-severity flag (one note would otherwise clear every "
                         "row of a cause like no_dlret or observation_unresolved at once)")
     p.add_argument("--dry-run", action="store_true", help="Report the count without writing")
     return p
@@ -58,7 +58,7 @@ def main() -> int:
     if not decisions:
         print(f"warning: no review.csv row currently carries flag {args.flag!r}{where}; nothing to accept",
               file=sys.stderr)
-    # M6 (final review): a bulk accept of a fix-severity flag with one note can
+    # A bulk accept of a fix-severity flag with one note can
     # clear every row of a cause like no_dlret or observation_unresolved at once,
     # reopening the hole the no_dlret fix closed -- require --yes for those.
     if decisions and CATALOG[args.flag].severity == "fix" and not args.yes:

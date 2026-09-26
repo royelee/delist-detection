@@ -44,7 +44,7 @@ def _client(tmp_path, responses, sleep=None):
 
 
 def test_empty_primary_doc_no_fetch_no_cache(tmp_path):
-    # FIX 7: empty primary_doc returns "" with no network and no cache file.
+    # empty primary_doc returns "" with no network and no cache file.
     client, session = _client(tmp_path, [])
     acc = "0001234567-21-000123"
     out = client.fetch_filing_text(cik=320193, accession=acc, primary_doc="")
@@ -55,7 +55,7 @@ def test_empty_primary_doc_no_fetch_no_cache(tmp_path):
 
 
 def test_404_is_cached_empty(tmp_path):
-    # FIX 6: a 404 caches "" so the second call does not re-fetch.
+    # a 404 caches "" so the second call does not re-fetch.
     client, session = _client(tmp_path, [_Resp(404, "not found")])
     acc = "0001234567-21-000404"
     out = client.fetch_filing_text(cik=320193, accession=acc, primary_doc="doc.htm")
@@ -71,7 +71,7 @@ def test_404_is_cached_empty(tmp_path):
 
 
 def test_503_is_not_cached(tmp_path):
-    # FIX 6, updated by item 2: a persistent 503 is retried (like fetch_filing_raw,
+    # a persistent 503 is retried (like fetch_filing_raw,
     # up to 3 attempts) and, once every attempt fails, returns "" without caching;
     # a later call retries again because nothing was cached.
     client, session = _client(tmp_path, [_Resp(503, "busy")] * 3, sleep=lambda _: None)
@@ -103,7 +103,7 @@ def test_503_then_200_succeeds(tmp_path):
 
 
 def test_200_nonascii_roundtrips_utf8(tmp_path):
-    # FIX 8: non-ASCII body round-trips through the utf-8 text cache.
+    # non-ASCII body round-trips through the utf-8 text cache.
     body = "<p>cash equal to $113.00’s value § ®</p>"
     client, session = _client(tmp_path, [_Resp(200, body)])
     acc = "0001234567-21-000200"

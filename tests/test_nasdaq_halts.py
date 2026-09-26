@@ -135,7 +135,7 @@ class _SessionMalformed:
 
 
 def test_a_malformed_body_counts_as_degraded_and_is_not_cached(tmp_path, caplog):
-    """item 8: a malformed halt-feed answer (SEC sent this twice for
+    """A malformed halt-feed answer (SEC sent this twice for
     2025-05-05, per task-16's live measurement) was treated as "no halts" with
     no flag anywhere. It must count SEC_STATS.degraded("failed_request"),
     never cache the day, and log once (already true before this fix)."""

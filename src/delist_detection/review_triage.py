@@ -54,7 +54,7 @@ class FlagInfo:
     action: str
     acceptable: bool = True
     # Per-bucket severity overrides, e.g. (("exchange_transfer", "info"),): a flag
-    # whose urgency depends on the delisting bucket (I3, final review). The
+    # whose urgency depends on the delisting bucket. The
     # catalog's own `severity` (used by review_summary.csv) is always the base
     # value; `severity_for` is what `row_severity` actually uses.
     severity_by_bucket: tuple[tuple[str, str], ...] = ()
@@ -294,16 +294,11 @@ def flag_info(token: str) -> FlagInfo:
     return CATALOG.get(flag_name(token), _UNKNOWN)
 
 
-def _blank(v: object) -> bool:
-    return v is None or (isinstance(v, float) and math.isnan(v)) or (isinstance(v, str) and not v.strip())
-
-
 def is_blank(v: object) -> bool:
-    """True for `None`, NaN, or an empty/whitespace-only string -- the same
-    "no value" test `_inject_no_dlret`/`row_severity` use for `dlret`, exposed
-    publicly so `pipeline.py` can decide whether a delisting needs `no_dlret`
-    without reaching into a private helper (I2, final review)."""
-    return _blank(v)
+    """True for `None`, NaN, or an empty/whitespace-only string: the "no value"
+    test for a cell (`_inject_no_dlret` uses it on `dlret`, and so does
+    `pipeline.py` to decide whether a delisting reaches triage)."""
+    return v is None or (isinstance(v, float) and math.isnan(v)) or (isinstance(v, str) and not v.strip())
 
 
 def _text(v: object) -> str:
@@ -321,13 +316,13 @@ def _most_severe(severities) -> str:
 def _is_delisting(row: Mapping) -> bool:
     """A delisting row has a bucket. A Form 25 review item (`form25_unmatched`,
     ...) carries the Form 25's date in `delist_date` but no bucket: it is not one."""
-    return not _blank(row.get("bucket"))
+    return not is_blank(row.get("bucket"))
 
 
 def row_severity(row: Mapping) -> str:
     """The most severe of the row's tokens' catalog severities (`fix` > `check`
     > `info`); `info` for a row with none. A token whose `FlagInfo` carries a
-    `severity_by_bucket` entry for this row's `bucket` (I3, final review: e.g.
+    `severity_by_bucket` entry for this row's `bucket` (e.g.
     `no_last_close` is `info` on an `exchange_transfer` row, whose DLRET is 0
     whatever the close) uses that instead of its base severity -- the base
     severity is what `review_summary.csv`'s own `severity` column shows.
@@ -344,7 +339,7 @@ def _inject_no_dlret(row: Mapping) -> dict:
     decisions are applied, so accepting its other flags never silently drops
     it. Never applied to a non-delisting review item (a Form 25 review item
     such as `form25_unmatched` carries a date but no bucket)."""
-    if _is_delisting(row) and _blank(row.get("dlret")):
+    if _is_delisting(row) and is_blank(row.get("dlret")):
         tokens = _tokens(row.get("review_flags"))
         if NO_DLRET_FLAG not in tokens:
             return {**row, "review_flags": ";".join(tokens + [NO_DLRET_FLAG])}
@@ -447,7 +442,7 @@ def append_decisions(path: str | Path, decisions: Sequence[Decision], *, dry_run
     (`store.replace_on_success`). Returns how many rows would be added
     (`dry_run=True`) or were added.
 
-    C1 (final review): an existing file is validated with `load_decisions`
+    An existing file is validated with `load_decisions`
     first -- a file that does not load (a missing column, a bad decision, an
     unacceptable flag) raises `ReviewDecisionError` and nothing is written, so
     a bad file is never silently rewritten into an empty or half-blanked one.
@@ -507,7 +502,7 @@ def _group(row: Mapping) -> int:
     2: every other row."""
     if not _is_delisting(row):
         return 2
-    return 0 if _blank(row.get("dlret")) else 1
+    return 0 if is_blank(row.get("dlret")) else 1
 
 
 _TIEBREAK = ("sec_id", "delist_date", "ticker", "review_flags", "reason", "cik", "bucket", "dlret", "anchor_8k",
@@ -547,7 +542,7 @@ def triage(rows: list[Mapping], decisions: Sequence[Decision], *, report_unmatch
     leave their row. A decision that accepts nothing becomes a `fix` row whose
     token is `review_decision_unmatched:<flag>` (the flag it names, not the
     bare name -- two stale decisions on one row therefore get distinct review
-    keys) -- unless `report_unmatched` is False (M3, final review: a `--limit`
+    keys) -- unless `report_unmatched` is False (a `--limit`
     dev subset, or a second universe sharing the repo-relative default
     `data/review_decisions.csv`, can only see a fraction of the rows a
     decisions file was written against, so every decision outside that subset
@@ -596,7 +591,7 @@ def triage(rows: list[Mapping], decisions: Sequence[Decision], *, report_unmatch
             note = f" ({d.note})" if d.note else ""
             kept_rows.append({
                 "severity": "fix", "sec_id": d.sec_id, "delist_date": d.delist_date, "ticker": d.ticker,
-                # M1 (final review): the flag it names, not the bare UNMATCHED_FLAG, so two stale decisions
+                # The flag it names, not the bare UNMATCHED_FLAG, so two stale decisions
                 # on one row get distinct keys (sec_id, delist_date, ticker, review_flags) instead of
                 # colliding; the catalog still looks it up by the name before ':'.
                 "review_flags": f"{UNMATCHED_FLAG}:{d.flag}",

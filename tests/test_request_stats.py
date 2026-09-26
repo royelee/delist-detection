@@ -89,7 +89,7 @@ def test_a_failed_filing_text_request_counts_as_degraded(tmp_path):
 
 
 def test_a_degraded_read_on_a_fill_only_thread_counts_as_warm_degraded(tmp_path):
-    # item 5: a warm thread's degraded read must not be counted with the
+    # a warm thread's degraded read must not be counted with the
     # sequential pass's own -- run_manifest.json's degraded_answers should
     # reflect only what the sequential pass relied on.
     client = _client(tmp_path, status=503)

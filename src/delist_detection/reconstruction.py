@@ -147,16 +147,17 @@ def enrich(
 _DLRET_BLANK_IN_TABLE = {DlretMethod.ABSTAIN_NO_CONSIDERATION, DlretMethod.UNKNOWN}
 
 
-def _lookup(m: Mapping, ticker: str, observed_date: str | None):
-    """Per-event lookup: an exact (ticker, observed_date) override wins; otherwise
-    fall back to a bare-ticker default. Returns None if neither is present.
+def _lookup(m: Mapping, sec_id: str, delist_date: str | None):
+    """The value `m` holds for one delisting: its exact `(sec_id, delist_date)`
+    entry wins; otherwise the security-wide `sec_id` entry. None if neither is
+    present.
 
-    This lets a recycled ticker (>1 delisting event) carry per-event inputs while
-    the common single-event case stays a plain {ticker: value} map.
+    This lets a security with more than one delisting carry per-delisting inputs
+    while the common single-delisting case stays a plain {sec_id: value} map.
     """
-    if (ticker, observed_date) in m:
-        return m[(ticker, observed_date)]
-    return m.get(ticker)
+    if (sec_id, delist_date) in m:
+        return m[(sec_id, delist_date)]
+    return m.get(sec_id)
 
 
 def build_delistings_table(
@@ -217,9 +218,9 @@ def delisting_row(e: EnrichedDelistRecord, **extra) -> dict:
     if unknown:
         raise TypeError(f"delisting_row: unexpected field(s) {sorted(unknown)}")
     ev = e.evidence or {}
-    df = ev.get("delist_filing") or {}
-    ak = ev.get("anchor_8k") or {}
-    dr = ev.get("dereg_filing") or {}
+    delist_filing = ev.get("delist_filing") or {}
+    anchor_8k = ev.get("anchor_8k") or {}
+    dereg_filing = ev.get("dereg_filing") or {}
     row = {
         "sec_id": e.sec_id, "delist_date": e.delist_date, "ticker": e.ticker, "cik": e.cik,
         "bucket": e.bucket.value, "crsp_code": e.crsp_code, "confidence": e.confidence, "reason": e.reason,
@@ -230,9 +231,9 @@ def delisting_row(e: EnrichedDelistRecord, **extra) -> dict:
         "dlret": None if e.dlret_method in _DLRET_BLANK_IN_TABLE else e.dlret,
         "dlret_method": e.dlret_method.value, "dlret_confidence": e.dlret_confidence,
         "payout_source": e.payout_source,
-        "delist_filing_form": df.get("form"), "delist_filing_date": df.get("filing_date"),
-        "delist_filing_accession": df.get("accession"), "anchor_8k_items": ak.get("items"),
-        "dereg_form": dr.get("form"), "resolved_name": ev.get("name"),
+        "delist_filing_form": delist_filing.get("form"), "delist_filing_date": delist_filing.get("filing_date"),
+        "delist_filing_accession": delist_filing.get("accession"), "anchor_8k_items": anchor_8k.get("items"),
+        "dereg_form": dereg_filing.get("form"), "resolved_name": ev.get("name"),
         "resolution_source": ev.get("resolution_source"),
         "review_flags": ";".join(e.review_flags),
     }

@@ -182,7 +182,7 @@ def test_refusal_mid_run_keeps_previous_outputs(fake_edgar, tmp_path):
 
 @pytest.mark.parametrize("where", ["listing batch", "one security"])
 def test_an_openfigi_outage_stops_the_run_and_keeps_previous_outputs(fake_edgar, tmp_path, where):
-    """Code review 2026-09-25, item 5: OpenFIGI unavailable after its retries
+    """OpenFIGI unavailable after its retries
     stops the run like a refusal -- no error row, no placeholder in its place
     (that would change sec_ids between runs), nothing written over the
     previous complete outputs -- whether the batched listing ask or one
@@ -232,7 +232,7 @@ def test_own_last_seen_falls_back_to_era_end_with_no_own_ticker_sighting():
     assert _own_last_seen(sec, []) == "2020-06-15"
 
 
-# --- item 3: successor_from_8k12b resolves the matching-share-class candidate ---
+# --- successor_from_8k12b resolves the matching-share-class candidate ---
 
 def _alphabet_hit(a_ticker="GOOGL", c_ticker="GOOG", a_name="Alphabet Inc Class A", c_name="Alphabet Inc Class C",
                   edgar_name="Alphabet Inc"):
@@ -297,7 +297,7 @@ def test_successor_from_8k12b_returns_none_without_a_figi_client():
     assert successor_from_8k12b(lambda *a: [], None, name="X", day=date(2015, 10, 2), exclude_cik=1) is None
 
 
-# --- fix round 2, item 4: the ticker(s) come from the parenthetical right before (CIK ...) ---
+# --- the ticker(s) come from the parenthetical right before (CIK ...) ---
 
 class _RecordingFigi:
     """Like _SuccessorFigi, but remembers every idValue it was asked to map."""
@@ -341,7 +341,7 @@ def test_successor_with_no_ticker_parenthetical_makes_no_figi_request():
     assert figi.calls == []
 
 
-# --- item 2: added (acquirer/successor) securities get a real ticker_history row ---
+# --- added (acquirer/successor) securities get a real ticker_history row ---
 
 def test_run_writes_an_open_acquirer_ticker_history_row(fake_edgar, tmp_path):
     """A cash+stock merger term resolves an acquirer that is listed today; its
@@ -416,7 +416,7 @@ def test_run_writes_an_open_successor_ticker_history_row(fake_edgar, tmp_path, m
     assert d["successor_sec_id"] == "BBGSUX00001"
 
 
-# --- item 9: an unconfirmed last trade day still clips the ranges at delist_date ---
+# --- an unconfirmed last trade day still clips the ranges at delist_date ---
 
 def test_ticker_history_clips_at_delist_date_when_last_trade_day_is_unconfirmed(fake_edgar, tmp_path, monkeypatch):
     index, clients = _clients(fake_edgar)
@@ -442,7 +442,7 @@ def test_ticker_history_clips_at_delist_date_when_last_trade_day_is_unconfirmed(
     assert aet[0]["valid_to"] == "2018-12-09"      # clipped at delist_date, not left at a raw last sighting
 
 
-# --- item 6: run() builds the SecurityContext correctly ---
+# --- run() builds the SecurityContext correctly ---
 
 def test_run_builds_last_seen_and_seen_after_from_the_right_sightings(fake_edgar, tmp_path, monkeypatch):
     rows = list(_FtdClient.ROWS) + [FtdRow("2019-06-01", "00817Y108", "AETQ", "AETNA INC OTC PINK", 0.05)]
@@ -533,7 +533,7 @@ def test_run_builds_sibling_spans_for_every_security_of_the_issuer(fake_edgar, t
     assert aaa_ctx.sibling_spans["BBGBBB00001"] == ("2020-02-01", "2020-07-01")   # not the 2020-08-01 OTC tail
 
 
-# --- item 10: an open ticker_history row's exchange comes from EDGAR's own submissions ---
+# --- an open ticker_history row's exchange comes from EDGAR's own submissions ---
 
 def test_open_ticker_history_row_gets_its_exchange_from_issuer_submissions(fake_edgar, tmp_path):
     index, clients = _clients(fake_edgar)
@@ -552,7 +552,7 @@ def test_open_ticker_history_row_gets_its_exchange_from_issuer_submissions(fake_
     assert live[0]["valid_to"] == "" and live[0]["exchange"] == "NASDAQ"
 
 
-# --- item 11: a per-security failure that isn't EdgarBlocked/OpenFigiBlocked is logged, not fatal ---
+# --- a per-security failure that isn't EdgarBlocked/OpenFigiBlocked is logged, not fatal ---
 
 def test_finder_error_for_one_security_does_not_abort_the_run(fake_edgar, tmp_path, monkeypatch):
     index, clients = _clients(fake_edgar)
@@ -577,7 +577,7 @@ def test_finder_error_for_one_security_does_not_abort_the_run(fake_edgar, tmp_pa
               and "boom" in r["reason"] for r in review)
 
 
-# --- item 8: ticker_history overlap review, without changing the ranges ---
+# --- ticker_history overlap review, without changing the ranges ---
 
 def test_ticker_range_review_flags_overlap_within_one_security():
     rows = [
@@ -645,9 +645,8 @@ def test_issuer_exchange_for_ticker_reads_the_parallel_arrays(fake_edgar):
     assert _issuer_exchange_for_ticker(fake_edgar, None, "X") is None
 
 
-# ===================== fix round 2 =====================
 
-# --- item 1: payouts.csv cites the right accession, at the run() level ---
+# --- payouts.csv cites the right accession, at the run() level ---
 
 class _FakePayoutExtractor:
     def __init__(self, result):
@@ -691,7 +690,7 @@ def test_payouts_csv_cites_the_regex_accession_for_a_regex_sourced_payout(fake_e
     assert row["accession"] == "0000123456-18-000001"
 
 
-# --- item 2: gate_payouts' acquirer_price is keyed by the merger, at the run() level ---
+# --- gate_payouts' acquirer_price is keyed by the merger, at the run() level ---
 
 def test_run_level_acquirer_price_uses_each_mergers_own_last_trade_day(fake_edgar, tmp_path, monkeypatch):
     """Two merger events sharing a delist_date, both with LLM cash+stock terms
@@ -778,7 +777,7 @@ def test_run_level_acquirer_price_uses_each_mergers_own_last_trade_day(fake_edga
     assert d["BBGSEC002"]["acquirer_price"] == "150.000000"
 
 
-# --- item 6: a same-ticker successor does not overlap its predecessor ---
+# --- a same-ticker successor does not overlap its predecessor ---
 
 def test_same_ticker_successor_does_not_overlap_its_predecessor(fake_edgar, tmp_path, monkeypatch):
     """A holding-company reorganization that keeps the ticker must not get a
@@ -824,7 +823,7 @@ def test_same_ticker_successor_does_not_overlap_its_predecessor(fake_edgar, tmp_
     assert not any(r["review_flags"] == "ticker_shared" for r in review)
 
 
-# --- item 7: one ticker_history range per acquirer, across all its mergers ---
+# --- one ticker_history range per acquirer, across all its mergers ---
 
 def test_run_writes_one_acquirer_range_spanning_all_its_mergers(fake_edgar, tmp_path, monkeypatch):
     fake_edgar.company_map["S1"] = {"cik_str": 7101, "ticker": "S1", "title": "TARGET ONE INC"}
@@ -898,7 +897,7 @@ def test_run_writes_one_acquirer_range_spanning_all_its_mergers(fake_edgar, tmp_
     assert acq_rows[0]["valid_from"] == "2020-03-05" and acq_rows[0]["valid_to"] == "2020-09-10"
 
 
-# --- item 8: a listed_today error for one observed security does not abort the run ---
+# --- a listed_today error for one observed security does not abort the run ---
 
 def test_listed_today_error_for_one_security_does_not_abort_the_run(fake_edgar, tmp_path):
     index, clients = _clients(fake_edgar)
@@ -1148,7 +1147,7 @@ def test_a_stale_review_decision_becomes_a_review_decision_unmatched_row(fake_ed
 
 
 def test_a_blank_dlret_with_no_flags_still_reaches_review_as_fix_no_dlret(fake_edgar, tmp_path, monkeypatch):
-    """I2 (final review): resolve_dlret can return NaN with an *empty* flags
+    """resolve_dlret can return NaN with an *empty* flags
     list -- a --last-trade-closes override of 0 on a non-merger bucket, since
     the override was "given" so no_last_close is never added (SEC
     fails-to-deliver data never itself yields a close <= 0). Such a delisting
@@ -1191,7 +1190,7 @@ def test_delistings_csv_is_byte_identical_with_and_without_review_decisions(fake
 
 
 def test_limit_suppresses_unmatched_decision_rows_but_still_counts_and_logs_them(fake_edgar, tmp_path):
-    """M3 (final review): a --limit dev subset can only see a fraction of the
+    """A --limit dev subset can only see a fraction of the
     rows a decisions file was written against; every decision outside it must
     not flood review.csv with review_decision_unmatched rows, but must still
     be counted and logged."""
@@ -1729,7 +1728,7 @@ def test_the_listing_check_asks_openfigi_once_for_all_securities(fake_edgar, tmp
                               ("COMPOSITE_ID_BB_GLOBAL", "BBG000LIVE01")]]
 
 
-# --- fix round 2, item 5: another listed company's own stock is not a successor ---
+# --- another listed company's own stock is not a successor ---
 
 def _cco_hits():
     """EDGAR full-text search for "Clear Channel Outdoor Holdings, Inc." around
@@ -1797,7 +1796,7 @@ def test_a_same_ticker_acquirer_is_never_the_target_itself(fake_edgar, tmp_path)
 
 
 
-# --- fix round 3, item 1: a deleted symbol's fails rows are not trading ---
+# --- a deleted symbol's fails rows are not trading ---
 
 _NASDAQ_F25 = ("<TYPE>25-NSE\n<notificationOfRemoval><exchange><entityName>The Nasdaq Stock Market LLC"
                "</entityName></exchange>\n<descriptionClassSecurity>Common Stock</descriptionClassSecurity>\n"
@@ -1864,7 +1863,7 @@ def test_a_placeholder_whose_late_rows_are_a_deleted_symbol_is_not_listed_today(
     assert ch and all(r["valid_to"] for r in ch)
 
 
-# --- fix round 3, item 4: an acquirer on another ticker that resolves to the target's CIK ---
+# --- an acquirer on another ticker that resolves to the target's CIK ---
 
 class _OneAnswerResolver:
     def __init__(self, cik):
@@ -1905,7 +1904,7 @@ def test_an_acquirer_on_another_ticker_keeps_the_cik_the_resolver_gives(fake_edg
     assert _acquirer_cik(clients, "TVTY", date(2019, 3, 7), _nutrisystem_event()) == 704415
 
 
-# --- code review 2026-09-25, item 1: a stale era must not take another company's CUSIP (spec D21) ---
+# --- a stale era must not take another company's CUSIP (spec D21) ---
 
 CCU_DATES = ("2008-01-16", "2008-05-31", "2008-07-25", "2008-11-18", "2009-01-23", "2009-03-20", "2009-06-08")
 
@@ -1966,7 +1965,7 @@ def test_an_era_with_no_issuer_takes_a_cusip_another_era_shows_is_its_issuers(fa
     assert "observation_unresolved" not in flags
 
 
-# --- code review round 2, item 1: FIGI acceptance by ticker/name also takes the issuer's EDGAR names (spec §8.3) ---
+# --- FIGI acceptance by ticker/name also takes the issuer's EDGAR names (spec §8.3) ---
 
 def test_an_era_under_its_issuers_old_name_is_accepted_on_the_ticker_by_the_edgar_names(fake_edgar, tmp_path):
     """Real case: the snapshots list Northeast Utilities under ES from 2012 (a

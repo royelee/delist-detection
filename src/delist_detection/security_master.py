@@ -171,7 +171,7 @@ def refine_eras(eras: Sequence[TickerEra], ftd: FtdIndex) -> list[TickerEra]:
 
 
 def era_cusips(era: TickerEra, ftd: FtdIndex, issuer_names: Sequence[str] = (),
-               vouched: Collection[str] = ()) -> list[str]:
+               taken_by_known_issuers: Collection[str] = ()) -> list[str]:
     """Candidate CUSIPs for an era: the observed ones, then the FTD ones.
 
     A refined era takes those of its own FTD CUSIPs whose fails rows describe its
@@ -183,14 +183,14 @@ def era_cusips(era: TickerEra, ftd: FtdIndex, issuer_names: Sequence[str] = (),
     snapshot that kept listing Clear Channel under CCU after it went private in
     2008 sees only Cervecerias Unidas' rows there. With none left the era has no
     FTD CUSIP (and resolves by ticker or name, or to its placeholder).
-    `vouched`: CUSIPs taken without that check, for an era whose issuer is
-    unknown (see `candidate_cusips`).
+    `taken_by_known_issuers`: CUSIPs that eras with a known issuer took, taken
+    without that check by an era whose issuer is unknown (see `candidate_cusips`).
 
     An era with no FTD CUSIPs of its own takes the FTD rows under the ticker
     around it whose description agrees with an era name, most rows first."""
     if era.ftd_cusips:
         names = [*era.names, *issuer_names]
-        own = [c for c in era.ftd_cusips if c in vouched
+        own = [c for c in era.ftd_cusips if c in taken_by_known_issuers
                or any(description_matches(d, names) for d in {r.description for r in ftd.by_cusip(c)})]
         return list(era.cusips) + [c for c in own if c not in era.cusips]
     lo = (date.fromisoformat(era.first) - timedelta(days=10)).isoformat()
@@ -218,10 +218,10 @@ def candidate_cusips(eras: Sequence[TickerEra], ftd: FtdIndex, ciks: Mapping[str
     the CUSIP of the company that later holds its ticker (Thomson Reuters)."""
     out = {e.key: era_cusips(e, ftd, issuer_names.get(ciks[e.key], ()))
            for e in eras if ciks.get(e.key) is not None}
-    vouched = {c for taken in out.values() for c in taken}
+    taken_by_known_issuers = {c for taken in out.values() for c in taken}
     for e in eras:
         if ciks.get(e.key) is None:
-            out[e.key] = era_cusips(e, ftd, (), vouched)
+            out[e.key] = era_cusips(e, ftd, (), taken_by_known_issuers)
     return out
 
 

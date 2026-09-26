@@ -134,7 +134,7 @@ def test_refine_eras_keeps_observations_on_their_side_of_the_split(real_eras, re
 
 
 def test_every_real_era_keeps_its_own_ftd_cusips(real_eras, real_ftd):
-    """Spec D21's description check (code review 2026-09-25, item 1) must not cost
+    """Spec D21's description check must not cost
     a real security its CUSIP: DELL, DOW, JEF, ADT, FOX/FOXA, GOOG, UA, Z, MON,
     BF-B and CB's Chubb eras all keep every FTD CUSIP their rows describe."""
     for eras in real_eras.values():

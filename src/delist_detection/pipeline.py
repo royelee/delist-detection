@@ -30,7 +30,7 @@ from .openfigi import OpenFigiBlocked, OpenFigiUnavailable
 from .payout_gate import DEFAULT_TOL, gate_payouts
 from .prefetch import Serialized, warm
 from .reconstruction import _lookup, build_delistings_table, delisting_row, unmatched_override_keys
-from .review_triage import Decision, is_blank, triage
+from .review_triage import Decision, flag_name, is_blank, triage
 from .security_master import (
     FigiResolver, Range, Security, build_securities, candidate_cusips, era_last_seen, ranges_from_sightings,
     refine_eras,
@@ -75,7 +75,7 @@ def _stderr(*parts) -> None:
     print(*parts, file=sys.stderr, flush=True)
 
 
-def _d(s: str) -> date:
+def _to_date(s: str) -> date:
     return date.fromisoformat(s)
 
 
@@ -258,10 +258,10 @@ def _unconfirmed_review(eras: list[TickerEra], ftd: FtdIndex, resolutions: dict,
     (APTV in 2012-2013, when Delphi traded as DLPH)."""
     out: list[ReviewItem] = []
     for e in eras:
-        if _d(e.last) < FTD_START:
+        if _to_date(e.last) < FTD_START:
             continue
-        lo = max(FTD_START, _d(e.first) - timedelta(days=TICKER_CONFIRM_DAYS)).isoformat()
-        hi = (_d(e.last) + timedelta(days=TICKER_CONFIRM_DAYS)).isoformat()
+        lo = max(FTD_START, _to_date(e.first) - timedelta(days=TICKER_CONFIRM_DAYS)).isoformat()
+        hi = (_to_date(e.last) + timedelta(days=TICKER_CONFIRM_DAYS)).isoformat()
         if ftd.by_symbol(e.ticker, lo, hi):
             continue
         out.append(ReviewItem(resolutions[e.key].sec_id or "", e.ticker, ciks.get(e.key), "ticker_unconfirmed",
@@ -363,7 +363,7 @@ def _successor_in_run(e: DelistingEvent, starts: dict[str, tuple[str, int | None
     the Form 25's filing date stands in for it (the delisting date is ten days
     later), else the delisting date. Returns (sec_id, "same_issuer" |
     "same_ticker"); None for zero or several candidates."""
-    day = e.last_trade.day or (_d(e.form25_sub.filing_date) if e.form25_sub is not None else _d(e.delist_date))
+    day = e.last_trade.day or (_to_date(e.form25_sub.filing_date) if e.form25_sub is not None else _to_date(e.delist_date))
     lo = (day - timedelta(days=SUCCESSOR_BEFORE_DAYS)).isoformat()
     hi = (day + timedelta(days=SUCCESSOR_AFTER_DAYS)).isoformat()
     # the delisting's ticker can be a deleted-symbol spelling ("APAXXXX"): match
@@ -391,7 +391,7 @@ def _successor_search_args(edgar, e: DelistingEvent, starts: dict[str, tuple[str
     if "successor_unknown" not in e.flags or _successor_in_run(e, starts) is not None:
         return None
     return (successor_search_name(edgar, e.cik, securities[e.sec_id].name),
-            e.last_trade.day or _d(e.delist_date))
+            e.last_trade.day or _to_date(e.delist_date))
 
 
 def _acquirer_cik(clients: Clients, acq: str, day: date, target: DelistingEvent) -> int | None:
@@ -515,10 +515,52 @@ def _flush_memo(clients: Clients) -> None:
 DEGRADED_FLAG = "resolution_degraded"
 
 
-def _degraded_since(mark: int) -> bool:
+def _degraded_item(sec_id: str, ticker: str, cik: int | None, what: str, then: str = "",
+                   **where: str) -> ReviewItem:
+    """The `resolution_degraded` review row saying `what` rested on a failed EDGAR
+    request or a stale copy (`then` appended); `where` is its `delist_date` or
+    `last_seen`."""
+    return ReviewItem(sec_id, ticker, cik, DEGRADED_FLAG,
+                      f"{what} rested on a failed EDGAR request or a stale copy{then}", **where)
+
+
+class _DegradedWatch:
     """Whether an EDGAR answer on this thread rested on a failed request or a stale
-    copy since `mark` (edgar.SEC_STATS.thread_degraded())."""
-    return SEC_STATS.thread_degraded() > mark
+    copy since the watch was made (edgar.SEC_STATS.thread_degraded())."""
+
+    def __init__(self) -> None:
+        self._mark = SEC_STATS.thread_degraded()
+
+    def tripped(self) -> bool:
+        return SEC_STATS.thread_degraded() > self._mark
+
+    def report(self, review: list[ReviewItem], item: ReviewItem, flag_rows: Sequence[DelistingEvent] = ()) -> None:
+        """When tripped: add `item` to `review`, and the flag to each of `flag_rows`'
+        own delistings.csv row, so the flag reaches the delisting itself, not only
+        review.csv."""
+        if not self.tripped():
+            return
+        review.append(item)
+        for ev in flag_rows:
+            ev.record.evidence["flags"].append(DEGRADED_FLAG)
+
+    def report_event(self, review: list[ReviewItem], e: DelistingEvent, what: str, *, own_row: bool = True) -> None:
+        """`report` for one delisting's `what`: its review row, and with `own_row`
+        its delistings.csv row too."""
+        self.report(review, _degraded_item(e.sec_id, e.ticker, e.cik, what, delist_date=e.delist_date),
+                    [e] if own_row else ())
+
+
+def _set_successor(e: DelistingEvent, sec_id: str) -> None:
+    """Record `sec_id` as `e`'s successor: its row no longer says `successor_unknown`."""
+    e.record.successor_sec_id = sec_id
+    e.record.evidence["flags"] = [f for f in e.record.evidence["flags"] if f != "successor_unknown"]
+
+
+def _review_item_row(item: ReviewItem) -> dict:
+    """A review item as a review.csv row (before triage)."""
+    return {"sec_id": item.sec_id, "delist_date": item.delist_date, "ticker": item.ticker, "cik": item.cik,
+            "review_flags": item.flag, "reason": item.reason, "last_seen": item.last_seen}
 
 
 def _warm_delisting_search(clients: Clients, ordered: list[Security], listing: dict[str, dict],
@@ -567,7 +609,7 @@ def run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_
     log. `RunSummary.review_flags`/the manifest's own
     `review_flags` still count every flag from *before* triage or decisions
     (so exit code 3 always sees every `error`/`resolution_degraded`, decision
-    or not); the new `RunSummary.review_counts` (= `tri.counts`, also under
+    or not); the new `RunSummary.review_counts` (= `triaged.counts`, also under
     the manifest's `"review"` key) reports triage's own tally
     (fix/check/info_hidden/accepted/cleared/unmatched_decisions).
 
@@ -611,8 +653,8 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
     # 1. FTD rows for the eras' tickers (first: they date each era's real last sighting),
     # then split the observation eras further on that evidence (a CUSIP switch, or a
     # gap no FTD row bridges). Every later step works on the refined eras.
-    lo = max(FTD_START, min(_d(e.first) for e in eras) - timedelta(days=30))
-    hi = min(as_of, max(_d(e.last) for e in eras) + timedelta(days=400))
+    lo = max(FTD_START, min(_to_date(e.first) for e in eras) - timedelta(days=30))
+    hi = min(as_of, max(_to_date(e.last) for e in eras) + timedelta(days=400))
     class_names: dict[str, list[str]] = defaultdict(list)     # BF-B's names: checks FTD's "BFB" rows
     for e in eras:
         if "-" in e.ticker:
@@ -658,11 +700,9 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
                                      f"{era.key} {era.name or ''}".strip(), last_seen=era.last))
     for e in eras:
         if clients.resolver.is_degraded(e.ticker, last_seen[e.key]):
-            res = resolutions[e.key]
-            review.append(ReviewItem(res.sec_id or "", e.ticker, ciks.get(e.key), DEGRADED_FLAG,
-                                     f"{e.key} {e.name or ''}: issuer resolution rested on a failed EDGAR request "
-                                     "or a stale copy; its answer was used for this run but not saved",
-                                     last_seen=e.last))
+            review.append(_degraded_item(resolutions[e.key].sec_id or "", e.ticker, ciks.get(e.key),
+                                         f"{e.key} {e.name or ''}: issuer resolution",
+                                         "; its answer was used for this run but not saved", last_seen=e.last))
     review += _conflict_review(eras, resolutions)
     review += _unconfirmed_review(eras, ftd, resolutions, ciks)
     log(f"{len(securities)} securities; FIGI sources "
@@ -729,7 +769,8 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
         _warm_delisting_search(clients, ordered, listing, security_context, sec_workers, retired)
     for i, s in enumerate(ordered, 1):
         own_last_seen = _own_last_seen(s, sightings[s.sec_id])
-        degraded_mark = SEC_STATS.thread_degraded()
+        ticker = s.eras[-1].ticker if s.eras else ""
+        watch = _DegradedWatch()
         try:
             # listed_today and the context live inside the try too: a FIGI/EDGAR
             # error there must become a reviewable row for this one security,
@@ -737,24 +778,18 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
             listed[s.sec_id] = False if s.sec_id in retired else listed_today(
                 clients.figi, s.sec_id, edgar=clients.edgar, cik=s.issuer_cik,
                 tickers=sorted({e.ticker for e in s.eras}), answer=listing.get(s.sec_id))
-            evs, rv = finder.find(security_context(s, listed[s.sec_id]))
+            found, found_review = finder.find(security_context(s, listed[s.sec_id]))
         except (EdgarBlocked, OpenFigiBlocked, OpenFigiUnavailable):
             raise
         except Exception as exc:  # an overnight run must survive one bad security
             log(f"[{i}/{len(securities)}] {s.sec_id}: ERROR {type(exc).__name__}: {exc}")
-            review.append(ReviewItem(s.sec_id, s.eras[-1].ticker if s.eras else "", s.issuer_cik, "error",
+            review.append(ReviewItem(s.sec_id, ticker, s.issuer_cik, "error",
                                      f"{type(exc).__name__}: {exc}", last_seen=own_last_seen))
             continue
-        events += evs
-        review += rv
-        if _degraded_since(degraded_mark):
-            review.append(ReviewItem(s.sec_id, s.eras[-1].ticker if s.eras else "", s.issuer_cik, DEGRADED_FLAG,
-                                     "the delisting search rested on a failed EDGAR request or a stale copy; "
-                                     "run again once SEC answers", last_seen=own_last_seen))
-            # item 3: the flag must reach the delisting's own row (delistings.csv),
-            # not only review.csv.
-            for ev in evs:
-                ev.record.evidence["flags"].append(DEGRADED_FLAG)
+        events += found
+        review += found_review
+        watch.report(review, _degraded_item(s.sec_id, ticker, s.issuer_cik, "the delisting search",
+                                            "; run again once SEC answers", last_seen=own_last_seen), found)
         if i % 50 == 0:
             log(f"[{i}/{len(securities)}] securities searched; {len(events)} delistings so far")
     meter.done("delisting search", mark)
@@ -820,7 +855,7 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
              workers=sec_workers, name="payouts")
     for e in mergers:
         key = (e.sec_id, e.delist_date)
-        degraded_mark = SEC_STATS.thread_degraded()
+        watch = _DegradedWatch()
         try:
             if clients.payout_extractor is not None:
                 payouts_raw[key] = clients.payout_extractor.extract(e.record, last_close=closes.get(key))
@@ -834,12 +869,7 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
             log(f"{e.sec_id} {e.delist_date}: payout extraction ERROR {type(exc).__name__}: {exc}")
             review.append(ReviewItem(e.sec_id, e.ticker, e.cik, "error", f"{type(exc).__name__}: {exc}",
                                      delist_date=e.delist_date))
-        if _degraded_since(degraded_mark):
-            review.append(ReviewItem(e.sec_id, e.ticker, e.cik, DEGRADED_FLAG,
-                                     "payout extraction rested on a failed EDGAR request or a stale copy",
-                                     delist_date=e.delist_date))
-            # item 3: the flag must reach the delisting's own row too.
-            e.record.evidence["flags"].append(DEGRADED_FLAG)
+        watch.report_event(review, e, "payout extraction")
     trade_day = {(e.sec_id, e.delist_date): e.last_trade.day for e in events}
     acq_symbols = {normalize_ticker(t.acquirer_ticker) for t in llm_terms.values() if t.acquirer_ticker}
     acq_symbols |= {normalize_ticker(v["acquirer_ticker"]) for v in overrides.merger_terms.values()
@@ -904,12 +934,9 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
         acquirer_ids[key] = cand.composite
         if cand.composite not in securities:
             if cand.composite not in added:
-                degraded_mark = SEC_STATS.thread_degraded()
+                watch = _DegradedWatch()
                 acq_cik = _acquirer_cik(clients, acq, day, e)
-                if _degraded_since(degraded_mark):
-                    review.append(ReviewItem(e.sec_id, e.ticker, e.cik, DEGRADED_FLAG,
-                                             f"the acquirer {acq} CIK lookup rested on a failed EDGAR request "
-                                             "or a stale copy", delist_date=e.delist_date))
+                watch.report_event(review, e, f"the acquirer {acq} CIK lookup", own_row=False)
                 added[cand.composite] = Security(cand.composite, acq_cik, share_class_from_name(cand.name),
                                                  cand.name, cand.security_type, False, "cusip")
                 added_meta[cand.composite] = {"kind": "acquirer", "ticker": acq, "rows": [], "fallback_day": day}
@@ -941,8 +968,7 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
         if in_run is None:
             continue
         sid, how = in_run
-        e.record.successor_sec_id = sid
-        e.record.evidence["flags"] = [f for f in e.record.evidence["flags"] if f != "successor_unknown"]
+        _set_successor(e, sid)
         e.record.evidence["successor_by"] = how
         e.record.reason = f"{e.record.reason}; successor by {how.replace('_', ' ')}"
     if successor_search is not None:           # else the successor issuer's 8-K12B
@@ -953,7 +979,7 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
                     successor_search(*successor_query(*args))
             warm(events, warm_search, workers=sec_workers, name="successor search")
         for e in events:
-            degraded_mark = SEC_STATS.thread_degraded()
+            watch = _DegradedWatch()
             args = _successor_search_args(clients.edgar, e, starts, securities)
             if args is None:
                 continue
@@ -963,17 +989,11 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
                                        exclude_cik=e.cik, share_class=predecessor.share_class,
                                        edgar=clients.edgar,
                                        own_tickers={x.ticker for x in predecessor.eras} | {e.ticker})
-            if _degraded_since(degraded_mark):
-                review.append(ReviewItem(e.sec_id, e.ticker, e.cik, DEGRADED_FLAG,
-                                         "the successor search rested on a failed EDGAR request or a stale copy",
-                                         delist_date=e.delist_date))
-                # item 3: the flag must reach the delisting's own row too.
-                e.record.evidence["flags"].append(DEGRADED_FLAG)
+            watch.report_event(review, e, "the successor search")
             if hit is None:
                 continue
             s_cik, cand, filing_date = hit
-            e.record.successor_sec_id = cand.composite
-            e.record.evidence["flags"] = [f for f in e.record.evidence["flags"] if f != "successor_unknown"]
+            _set_successor(e, cand.composite)
             if cand.composite not in securities and cand.composite not in added:
                 added[cand.composite] = Security(cand.composite, s_cik, share_class_from_name(cand.name), cand.name,
                                                  cand.security_type, False, "ticker")
@@ -982,7 +1002,7 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
                 # filed before the predecessor's actual last trade: clamp valid_from
                 # to no earlier than the day after that last trade (or delist_date
                 # when the last trade day is unknown).
-                not_before = ((e.last_trade.day or _d(e.delist_date)) + timedelta(days=1)).isoformat()
+                not_before = ((e.last_trade.day or _to_date(e.delist_date)) + timedelta(days=1)).isoformat()
                 fd = filing_date or day.isoformat()
                 added_meta[cand.composite] = {"kind": "successor", "ticker": cand.ticker,
                                               "filing_date": max(fd, not_before)}
@@ -997,11 +1017,11 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
     )
     ev_by_key = {(e.sec_id, e.delist_date): e for e in events}
     delisting_rows, review_rows = [], []
-    for enr in table:
-        e = ev_by_key[(enr.sec_id, enr.delist_date)]
+    for enriched in table:
+        e = ev_by_key[(enriched.sec_id, enriched.delist_date)]
         pr = payouts_raw.get((e.sec_id, e.delist_date))
         delisting_rows.append(delisting_row(
-            enr, exchange=e.exchange or None,
+            enriched, exchange=e.exchange or None,
             last_trade_date=e.last_trade.day.isoformat() if e.last_trade.day else None,
             last_trade_date_source=e.last_trade.source or None,
             successor_sec_id=e.record.successor_sec_id,
@@ -1009,21 +1029,19 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
             raw_payout_per_share=pr.value if pr else None, raw_payout_source=pr.source if pr else None,
             raw_payout_confidence=pr.confidence if pr else None,
         ))
-        # I2 (final review): a delisting with a blank DLRET must reach triage even
-        # with no flags at all -- resolve_dlret can return NaN with no flag added
-        # (e.g. a --last-trade-closes override of 0 or a negative --recoveries/
+        # A delisting with a blank DLRET must reach triage even with no flags at
+        # all -- resolve_dlret can return NaN with no flag added (e.g. a
+        # --last-trade-closes override of 0 or a negative --recoveries/
         # --merger-terms value on a non-merger bucket: the override was "given", so
         # no_last_close is never added). triage() itself drops a flagless row with a
         # real DLRET without counting it, so adding one here is safe either way.
-        if enr.review_flags or is_blank(delisting_rows[-1]["dlret"]):
-            ak = (enr.evidence or {}).get("anchor_8k") or {}
-            review_rows.append({"sec_id": enr.sec_id, "delist_date": enr.delist_date, "ticker": enr.ticker,
-                                "cik": enr.cik, "bucket": enr.bucket.value,
-                                "dlret": delisting_rows[-1]["dlret"], "review_flags": ";".join(enr.review_flags),
-                                "reason": enr.reason, "anchor_8k": ak.get("items")})
-    for r in review:
-        review_rows.append({"sec_id": r.sec_id, "delist_date": r.delist_date, "ticker": r.ticker, "cik": r.cik,
-                            "review_flags": r.flag, "reason": r.reason, "last_seen": r.last_seen})
+        if enriched.review_flags or is_blank(delisting_rows[-1]["dlret"]):
+            anchor_8k = (enriched.evidence or {}).get("anchor_8k") or {}
+            review_rows.append({"sec_id": enriched.sec_id, "delist_date": enriched.delist_date,
+                                "ticker": enriched.ticker, "cik": enriched.cik, "bucket": enriched.bucket.value,
+                                "dlret": delisting_rows[-1]["dlret"], "review_flags": ";".join(enriched.review_flags),
+                                "reason": enriched.reason, "anchor_8k": anchor_8k.get("items")})
+    review_rows += [_review_item_row(item) for item in review]
 
     th_rows, ch_rows = [], []
     final = {}
@@ -1031,18 +1049,19 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
         final[e.sec_id] = e
     for sid, s in securities.items():
         sig = sightings.get(sid, [])
-        fe = final.get(sid)
+        last_delisting = final.get(sid)
         is_listed = bool(listed.get(sid))
         end = None
-        if fe is not None and not is_listed:
+        if last_delisting is not None and not is_listed:
             # A last-trade day we couldn't confirm still clips the ranges at the
             # delisting date -- an unclipped range would otherwise run past a
             # security's real end.
-            end = fe.last_trade.day.isoformat() if fe.last_trade.day is not None else fe.delist_date
+            end = (last_delisting.last_trade.day.isoformat() if last_delisting.last_trade.day is not None
+                   else last_delisting.delist_date)
         clipped = [x for x in sig if end is None or x[0] <= end]
         for rg in ranges_from_sightings(clipped, end=end, open_ended=is_listed):
-            if fe is not None and end is not None and rg.valid_to == end:
-                exch = fe.exchange
+            if last_delisting is not None and end is not None and rg.valid_to == end:
+                exch = last_delisting.exchange
             elif rg.valid_to is None:
                 # An open (listed-today) row: pull the exchange from the issuer's
                 # own EDGAR submissions JSON (already cached by the finder).
@@ -1079,10 +1098,7 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
         th_rows.append({"sec_id": sid, "ticker": meta["ticker"], "exchange": exch, "valid_from": valid_from,
                         "valid_to": valid_to, "source": source})
 
-    for item in _ticker_range_review(th_rows):
-        review_rows.append({"sec_id": item.sec_id, "delist_date": item.delist_date, "ticker": item.ticker,
-                            "cik": item.cik, "review_flags": item.flag, "reason": item.reason,
-                            "last_seen": item.last_seen})
+    review_rows += [_review_item_row(item) for item in _ticker_range_review(th_rows)]
 
     payout_rows = []
     for key, pr in payouts_raw.items():
@@ -1104,17 +1120,17 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
     # Every flag of the run, counted before triage hides or accepts any: this
     # feeds RunSummary.review_flags and the manifest, so exit code 3 still sees
     # every `error` and `resolution_degraded`.
-    flags = Counter(f.split(":", 1)[0] for r in review_rows for f in (r.get("review_flags") or "").split(";") if f)
-    # M3 (final review): a --limit dev subset (or a second universe sharing the
-    # repo-relative default data/review_decisions.csv) can only see a fraction of
-    # the rows a decisions file was written against, so every decision outside it
-    # would otherwise turn into review-noise, not a real signal. report_unmatched
-    # counts them regardless (tri.counts["unmatched_decisions"]); only the rows
-    # (and their review_summary.csv entry) are suppressed.
+    flags = Counter(flag_name(f) for r in review_rows for f in (r.get("review_flags") or "").split(";") if f)
+    # A --limit dev subset (or a second universe sharing the repo-relative
+    # default data/review_decisions.csv) can only see a fraction of the rows a
+    # decisions file was written against, so every decision outside it would
+    # otherwise turn into review-noise, not a real signal. report_unmatched
+    # counts them regardless (triaged.counts["unmatched_decisions"]); only the
+    # rows (and their review_summary.csv entry) are suppressed.
     report_unmatched = limit is None
-    tri = triage(review_rows, review_decisions, report_unmatched=report_unmatched)
-    if not report_unmatched and tri.counts["unmatched_decisions"]:
-        log(f"{tri.counts['unmatched_decisions']} decision(s) in data/review_decisions.csv matched no row in "
+    triaged = triage(review_rows, review_decisions, report_unmatched=report_unmatched)
+    if not report_unmatched and triaged.counts["unmatched_decisions"]:
+        log(f"{triaged.counts['unmatched_decisions']} decision(s) in data/review_decisions.csv matched no row in "
             f"this --limit {limit} subset; not reported as review_decision_unmatched rows")
 
     # 11. write -- every table formatted and written to temp files first,
@@ -1126,15 +1142,15 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
         "cusip_history": ch_rows,
         "delistings": delisting_rows,
         "payouts": payout_rows,
-        "review": tri.review_rows,
-        "review_summary": tri.summary_rows,
+        "review": triaged.review_rows,
+        "review_summary": triaged.summary_rows,
     })
     stat_counts, stat_timings = SEC_STATS.since(run_mark)
     run_manifest.write(out_dir, run_manifest.build(as_of=as_of, sec_workers=sec_workers, counts=stat_counts,
                                                    timings=stat_timings, stages=meter.stages,
-                                                   review_flags=dict(flags), review=tri.counts))
+                                                   review_flags=dict(flags), review=triaged.counts))
     return RunSummary(counts, dict(Counter(e.record.bucket.value for e in events)),
-                      dict(Counter(s.figi_source for s in securities.values())), dict(flags), dict(tri.counts))
+                      dict(Counter(s.figi_source for s in securities.values())), dict(flags), dict(triaged.counts))
 
 
 def default_clients(index: ObservationIndex, *, cache_dir: Path, rename_map: dict | None = None,

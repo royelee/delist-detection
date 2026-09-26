@@ -117,7 +117,7 @@ class NasdaqHaltClient:
             except ET.ParseError as e:
                 # A malformed body is not "no halts" -- that would silently hide a
                 # real deletion halt. Flag it like every other degraded EDGAR/SEC
-                # read; never cache the day (final-fix item 8).
+                # read; never cache the day.
                 SEC_STATS.degraded("failed_request")
                 _log.warning(f"halts_on({day:%Y-%m-%d}): parse error: {e}")
                 return []

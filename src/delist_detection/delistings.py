@@ -103,7 +103,7 @@ class SecurityContext:
     tickers_between: Callable[[str, str], list[str]] = lambda lo, hi: []
 
 
-def _d(s: str) -> date:
+def _to_date(s: str) -> date:
     return date.fromisoformat(s)
 
 
@@ -117,8 +117,8 @@ class DelistingFinder:
         if span is None:
             return True
         first, last = span
-        lo = (_d(first) - timedelta(days=SIBLING_ALIVE_BEFORE_DAYS)).isoformat()
-        hi = (_d(last) + timedelta(days=SIBLING_ALIVE_AFTER_DAYS)).isoformat()
+        lo = (_to_date(first) - timedelta(days=SIBLING_ALIVE_BEFORE_DAYS)).isoformat()
+        hi = (_to_date(last) + timedelta(days=SIBLING_ALIVE_AFTER_DAYS)).isoformat()
         return lo <= filing_date <= hi
 
     def _class_conflict(self, f25: Form25, ref: SecurityRef) -> bool:
@@ -134,8 +134,8 @@ class DelistingFinder:
     def _eightk_window(self, cik: int, filings: list[EdgarSubmission], lo: date, hi: date,
                        anchor: date) -> tuple[date | None, str]:
         cands = [f for f in filings if f.form.startswith("8-K") and "3.01" in f.item_set
-                 and f.filing_date and lo <= _d(f.filing_date) <= hi]
-        for f in sorted(cands, key=lambda f: abs((_d(f.filing_date) - anchor).days)):
+                 and f.filing_date and lo <= _to_date(f.filing_date) <= hi]
+        for f in sorted(cands, key=lambda f: abs((_to_date(f.filing_date) - anchor).days)):
             got = eightk_last_trade(self.edgar.fetch_filing_text(cik, f.accession, f.primary_doc))
             if got[0] is not None:
                 return got
@@ -188,9 +188,9 @@ class DelistingFinder:
                           group: list[tuple[EdgarSubmission, Form25]], ticker: str,
                           ctx: SecurityContext | None = None) -> LastTrade:
         subs = [s for s, _ in group]
-        earliest_filed = _d(min(s.filing_date for s in subs))
-        latest_filed = _d(max(s.filing_date for s in subs))
-        latest_eff = _d(max(effective_date(s.filing_date) for s in subs))
+        earliest_filed = _to_date(min(s.filing_date for s in subs))
+        latest_filed = _to_date(max(s.filing_date for s in subs))
+        latest_eff = _to_date(max(effective_date(s.filing_date) for s in subs))
 
         ordered = sorted(group, key=lambda item: (item[0].form != "25-NSE", item[0].filing_date))
         notice: tuple[date | None, str] = (None, "")
@@ -220,7 +220,7 @@ class DelistingFinder:
         0, 28 and 55 make two events (day 55 is 55 days from day 0), not one."""
         groups: list[list[tuple[EdgarSubmission, Form25]]] = []
         for item in sorted(candidates, key=lambda i: i[0].filing_date):
-            if groups and (_d(item[0].filing_date) - _d(groups[-1][0][0].filing_date)).days <= SAME_EVENT_DAYS:
+            if groups and (_to_date(item[0].filing_date) - _to_date(groups[-1][0][0].filing_date)).days <= SAME_EVENT_DAYS:
                 groups[-1].append(item)
             else:
                 groups.append([item])
@@ -278,7 +278,7 @@ class DelistingFinder:
 
         filings = self.edgar.recent_filings(cik)
         first_seen = min(e.first for e in sec.eras)
-        floor = (_d(first_seen) - timedelta(days=FORM25_LOOKBACK_DAYS)).isoformat()
+        floor = (_to_date(first_seen) - timedelta(days=FORM25_LOOKBACK_DAYS)).isoformat()
 
         review: list[ReviewItem] = []
         seen_review: set[tuple[str, str]] = set()
@@ -331,9 +331,9 @@ class DelistingFinder:
                 continue
             eff = effective_date(sub.filing_date)
             continued = bool(ctx.listed_today) or ctx.seen_after(
-                (_d(eff) + timedelta(days=SEEN_AFTER_DAYS)).isoformat())
+                (_to_date(eff) + timedelta(days=SEEN_AFTER_DAYS)).isoformat())
             if continued:
-                before, after = exchanges_around(self.edgar, cik, filings, _d(sub.filing_date))
+                before, after = exchanges_around(self.edgar, cik, filings, _to_date(sub.filing_date))
                 if withdrawal_kind(f25.exchange, before, after) == "secondary":
                     continue
                 if after is not None and f25.exchange in after:
@@ -345,12 +345,12 @@ class DelistingFinder:
         for group in self._group(candidates):
             earliest_sub = min(group, key=lambda item: item[0].filing_date)[0]
             if last_definitive is not None:
-                gap = (_d(earliest_sub.filing_date) - _d(last_definitive.delist_date)).days
+                gap = (_to_date(earliest_sub.filing_date) - _to_date(last_definitive.delist_date)).days
                 if gap > IGNORE_AFTER_DEFINITIVE_DAYS and not ctx.seen_after(earliest_sub.filing_date):
                     continue        # a security truly gone can't have a later Form 25 of its own
             eff = effective_date(earliest_sub.filing_date)
             continued = bool(ctx.listed_today) or ctx.seen_after(
-                (_d(eff) + timedelta(days=SEEN_AFTER_DAYS)).isoformat())
+                (_to_date(eff) + timedelta(days=SEEN_AFTER_DAYS)).isoformat())
             ev = self._build_event(ctx, cik, filings, group, eff, continued)
             events.append(ev)
             # Sightings after the effective date can be an OTC tail or a stale
@@ -436,8 +436,8 @@ class DelistingFinder:
             f = ev.get(key)
             if f and f.get("filing_date"):
                 return f["filing_date"], ()
-        lo = (_d(ctx.last_seen) - timedelta(days=DEREG_FALLBACK_BEFORE_DAYS)).isoformat()
-        hi = (_d(ctx.last_seen) + timedelta(days=DEREG_FALLBACK_AFTER_DAYS)).isoformat()
+        lo = (_to_date(ctx.last_seen) - timedelta(days=DEREG_FALLBACK_BEFORE_DAYS)).isoformat()
+        hi = (_to_date(ctx.last_seen) + timedelta(days=DEREG_FALLBACK_AFTER_DAYS)).isoformat()
         for key in ("revoked_filing", "dereg_filing"):
             f = ev.get(key)
             fd = f.get("filing_date") if f else None
@@ -462,7 +462,7 @@ class DelistingFinder:
                                                                                      sec.kind, sec.name))
         group: list[tuple[EdgarSubmission, Form25]] = []
         for sub in early:
-            if abs((_d(sub.filing_date) - _d(anchor.filing_date)).days) > SAME_EVENT_DAYS:
+            if abs((_to_date(sub.filing_date) - _to_date(anchor.filing_date)).days) > SAME_EVENT_DAYS:
                 continue
             raw = self.edgar.fetch_filing_raw(cik, sub.accession)
             if not raw:
@@ -501,15 +501,15 @@ class DelistingFinder:
             if not group:
                 return None
             eff = effective_date(min(s.filing_date for s, _ in group))
-            if ctx.ftd_seen_after((_d(eff) + timedelta(days=SEEN_AFTER_DAYS)).isoformat()):
+            if ctx.ftd_seen_after((_to_date(eff) + timedelta(days=SEEN_AFTER_DAYS)).isoformat()):
                 return None
             return self._build_event(ctx, cik, filings, group, eff, False, ("observed_after_delisting",))
         if rec.bucket is CrspBucket.UNKNOWN and not ev.get("deregistered"):
             return None
         ended_by, extra_flags = self._fallback_date(ctx, ev)
-        lt = self._last_trade(cik, filings, None, ticker, _d(ended_by), ctx)
+        lt = self._last_trade(cik, filings, None, ticker, _to_date(ended_by), ctx)
         if lt.day is None:
-            lt = LastTrade(_d(ctx.last_seen), "", ("last_trade_date_unconfirmed",))
+            lt = LastTrade(_to_date(ctx.last_seen), "", ("last_trade_date_unconfirmed",))
         # No Form 25 means no exchange evidence from a filing; fall back to
         # whatever exchange EDGAR's own submissions JSON records for this
         # ticker (spec D22) rather than leaving it blank -- which otherwise
