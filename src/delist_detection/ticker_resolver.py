@@ -25,15 +25,18 @@ from .names import name_tokens, names_agree
 
 log = logging.getLogger(__name__)
 _LOOK_UP_PIN = object()     # resolve(pin=...) default: look the pin up with cik_pins
+_LOOK_UP_NAME = object()    # resolve(name=...) default: look the name up with observed_names
 # The cache file is {"__version__": N, "entries": {key: {...TickerResolution,
 # "member_name"}}} ("member_name": the observed name the answer was checked with,
-# under its on-disk key). Versions 2 and 3 load; anything older was written before the
-# date and name checks and is not trusted. Version 3 was written while a
-# since-withdrawn rule let today's ticker-map holder beat a name-mismatched EFTS
-# candidate; its answers (source company_tickers_name_mismatch) are dropped on
-# load and resolved again.
-CACHE_VERSION = 3
-_LOADABLE_VERSIONS = frozenset({2, 3})
+# under its on-disk key). Version 4 keys an entry `TICKER|date|member name`
+# (`TickerResolver._key`); versions 2 and 3 keyed it `TICKER|date` and load
+# re-keyed from their member_name. Anything older was written before the date and
+# name checks and is not trusted. Version 3 was written while a since-withdrawn
+# rule let today's ticker-map holder beat a name-mismatched EFTS candidate; its
+# answers (source company_tickers_name_mismatch) are dropped on load and resolved
+# again.
+CACHE_VERSION = 4
+_LOADABLE_VERSIONS = frozenset({2, 3, 4})
 _RETIRED_SOURCES = frozenset({"company_tickers_name_mismatch"})
 
 
@@ -106,6 +109,8 @@ class TickerResolver:
                 continue
             if res.source in _RETIRED_SOURCES:   # a withdrawn rule's answer
                 continue
+            if version < 4:                      # keyed TICKER|date: add the member name
+                key = f"{key}|{d.get('member_name') or ''}"
             self._memo[key] = res
             self._memo_observed[key] = d.get("member_name")
 
@@ -113,15 +118,30 @@ class TickerResolver:
     OBSERVED_TAIL_DAYS = 1500          # a Form 25/15 up to this old: a frozen vendor tail (XTO)
     REPLACE_WINDOW_DAYS = 90         # own Form 25/15 this close: a name-search hit replaces an EFTS fallback
 
-    def _expected_name(self, t: str, observed_date: str | None) -> str | None:
-        """The observed name, else the AV name: the first with a usable word.
+    def _observed_name(self, t: str, observed_date: str | None, name: str | None | object = _LOOK_UP_NAME
+                       ) -> str | None:
+        """The observed name a lookup is checked with: `name` when the caller
+        gives one (None: it has none), else the `observed_names` lookup's."""
+        if name is _LOOK_UP_NAME:
+            return self.observed_names(t, observed_date) or None
+        return name or None
+
+    def _expected_name(self, t: str, observed_date: str | None, name: str | None | object = _LOOK_UP_NAME
+                       ) -> str | None:
+        """The observed name (`_observed_name`), else the AV name: the first
+        with a usable word.
 
         A name with no `name_tokens` word ("AT&T INC.", "3M CO", "HP INC")
         cannot agree with anything, so it counts as no expected name."""
-        for n in (self.observed_names(t, observed_date), self.name_lookup(t, observed_date)):
+        for n in (self._observed_name(t, observed_date, name), self.name_lookup(t, observed_date)):
             if n and name_tokens(n):
                 return n
         return None
+
+    @staticmethod
+    def _key(ticker: str, observed_date: str | None, observed_name: str | None) -> str:
+        """The memo key: an answer holds for one ticker, date and observed name."""
+        return f"{ticker.upper().strip()}|{observed_date or ''}|{observed_name or ''}"
 
     def _submissions(self, cik: int, observed_date: str | None) -> dict:
         """The company's submissions, fetched again when the cached copy predates
@@ -233,11 +253,14 @@ class TickerResolver:
         write_atomic(self.cache_path, json.dumps({"__version__": CACHE_VERSION, "entries": entries}, indent=2))
         self._dirty = False
 
-    def is_degraded(self, ticker: str, observed_date: str | None = None) -> bool:
-        """Whether this run's answer for (ticker, date) rests on a failed EDGAR
-        request or a stale copy. Such an answer is used for the run and never
-        saved; the pipeline flags it `resolution_degraded`."""
-        return f"{ticker.upper().strip()}|{observed_date or ''}" in self._degraded
+    def is_degraded(self, ticker: str, observed_date: str | None = None, *,
+                    name: str | None | object = _LOOK_UP_NAME) -> bool:
+        """Whether this run's answer for (ticker, date, observed name: as
+        `resolve` takes it) rests on a failed EDGAR request or a stale copy. Such
+        an answer is used for the run and never saved; the pipeline flags it
+        `resolution_degraded`."""
+        t = ticker.upper().strip()
+        return self._key(t, observed_date, self._observed_name(t, observed_date, name)) in self._degraded
 
     # CIKs of US exchanges — these file Form 25-NSEs *on behalf of* the issuer,
     # so they appear in every delisting filing's CIK array. Always skip them.
@@ -371,9 +394,9 @@ class TickerResolver:
         return variants
 
     def _name_search(
-        self, ticker: str, observed_date: str | None
+        self, ticker: str, observed_date: str | None, nm: str | None
     ) -> tuple[int | None, str | None]:
-        """Resolve via the expected name (observed, else AV) → EDGAR company search.
+        """Resolve via the expected name `nm` (observed, else AV) → EDGAR company search.
 
         Collects ALL hits across name variants and forms, then picks the
         best (cik, name) by:
@@ -381,7 +404,6 @@ class TickerResolver:
           2. then preferring hits with `filing_date` closest to observed_date;
           3. else taking the first non-exchange CIK.
         """
-        nm = self._expected_name(ticker, observed_date)
         if not nm:
             return None, None
         variants = self._name_variants(nm)
@@ -581,15 +603,19 @@ class TickerResolver:
         return None, None, False
 
     def resolve(self, ticker: str, observed_date: str | None = None, *,
-                pin: int | None | object = _LOOK_UP_PIN) -> TickerResolution:
+                pin: int | None | object = _LOOK_UP_PIN,
+                name: str | None | object = _LOOK_UP_NAME) -> TickerResolution:
         """`pin`: the caller's own CIK pin for this lookup (None: none), in place of
-        `cik_pins(ticker, observed_date)`. A caller resolving a known era passes
-        its pin: a date lookup can land nearer another era of the ticker than
-        the era's own observations and return that era's pin."""
+        `cik_pins(ticker, observed_date)`. `name`: the observed name to check the
+        answer with (None: none), in place of `observed_names(ticker,
+        observed_date)`. A caller resolving a known era passes its own pin and
+        name: a date lookup can land nearer another era of the ticker than the
+        era's own observations (its FTD rows run past its last observation) and
+        return that era's pin or name. The answer is remembered under the ticker,
+        the date and the observed name its checks used."""
         t = ticker.upper().strip()
-        cache_key = f"{t}|{observed_date or ''}"
-        # The answer holds only for the observed name its checks used.
-        observed_name = self.observed_names(t, observed_date) or None
+        observed_name = self._observed_name(t, observed_date, name)
+        cache_key = self._key(t, observed_date, observed_name)
         self._transient = False
 
         pinned = self.cik_pins(t, observed_date) if pin is _LOOK_UP_PIN else pin
@@ -617,12 +643,13 @@ class TickerResolver:
 
         renamed = self.rename_map.get(t)
         if renamed and renamed != t:
-            inner = self.resolve(renamed, observed_date)   # leaves self._transient set for this answer
+            # checked with this lookup's observed name; leaves self._transient set for this answer
+            inner = self.resolve(renamed, observed_date, name=observed_name)
             res = TickerResolution(ticker=t, cik=inner.cik, name=inner.name, source="rename")
             self._remember(cache_key, res, observed_name)
             return res
 
-        expected = self._expected_name(t, observed_date)
+        expected = self._expected_name(t, observed_date, observed_name)
         companies = self._ensure_companies()
         if t in companies:
             # SEC's map lists today's holder of the ticker: accept it only if
@@ -662,7 +689,7 @@ class TickerResolver:
 
         # Tier 2: expected name → EDGAR company-name search.
         if cik is None:
-            c1, n1 = self._name_search(t, observed_date)
+            c1, n1 = self._name_search(t, observed_date, expected)
             if fallback is not None:
                 # The observed name is a check, never a substitute: it replaces
                 # the company EFTS found only with its own Form 25/15 near the

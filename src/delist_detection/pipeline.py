@@ -258,11 +258,13 @@ class _IssuerAnswers:
 def _resolve_issuers(ctx: _RunContext, eras: list[TickerEra], ftd: FtdIndex) -> _IssuerAnswers:
     """2. The issuer CIK of each era, resolved at the era's last sighting (index
     snapshots can be months apart, and the resolver's Form 25 search is anchored
-    on this date), with each era's own pin (a pin looked up by (ticker, date) can
-    belong to a neighbouring era when the last sighting falls between the two).
-    The resolver tier that found it (cik_map, manual, company_tickers, ...) is
-    kept for the delisting rows' resolution_source. Then each issuer's EDGAR
-    names, which stage 3 checks CUSIPs and FIGI names against."""
+    on this date), with each era's own pin and name (a pin or name looked up by
+    (ticker, date) can belong to a neighbouring era when the last sighting falls
+    between the two: FTD rows of a shared CUSIP carry KORS@2012's last sighting
+    past KORS@2014's first observation). The resolver tier that found it
+    (cik_map, manual, company_tickers, ...) is kept for the delisting rows'
+    resolution_source. Then each issuer's EDGAR names, which stage 3 checks
+    CUSIPs and FIGI names against."""
     clients, workers = ctx.clients, ctx.sec_workers
     last_seen = {e.key: era_last_seen(e, ftd) for e in eras}
     mark = ctx.meter.start()
@@ -271,9 +273,10 @@ def _resolve_issuers(ctx: _RunContext, eras: list[TickerEra], ftd: FtdIndex) -> 
         # resolver (a snapshot of this memo that saves nothing), its answer thrown
         # away. The resolve below then runs one era at a time, in order, on this
         # thread, and finds its requests answered.
-        warm(eras, lambda shadow, e: shadow.resolve(e.ticker, last_seen[e.key], pin=e.cik_pin),
+        warm(eras, lambda shadow, e: shadow.resolve(e.ticker, last_seen[e.key], pin=e.cik_pin, name=e.name),
              workers=workers, state=clients.resolver.shadow, name="issuer resolution")
-    cik_res = {e.key: clients.resolver.resolve(e.ticker, last_seen[e.key], pin=e.cik_pin) for e in eras}
+    cik_res = {e.key: clients.resolver.resolve(e.ticker, last_seen[e.key], pin=e.cik_pin, name=e.name)
+               for e in eras}
     _flush_memo(clients)
     ciks = {k: r.cik for k, r in cik_res.items()}
     issuer_ciks = [cik for cik in dict.fromkeys(ciks.values()) if cik]
@@ -303,7 +306,7 @@ def _resolve_securities(ctx: _RunContext, eras: list[TickerEra], era_by_key: dic
             review.append(ReviewItem(res.sec_id or "", era.ticker, cik_of(issuers, key), flag,
                                      f"{era.key} {era.name or ''}".strip(), last_seen=era.last))
     for e in eras:
-        if ctx.clients.resolver.is_degraded(e.ticker, answers.last_seen[e.key]):
+        if ctx.clients.resolver.is_degraded(e.ticker, answers.last_seen[e.key], name=e.name):
             review.append(degraded_item(resolutions[e.key].sec_id or "", e.ticker, cik_of(issuers, e.key),
                                          f"{e.key} {e.name or ''}: issuer resolution",
                                          "; its answer was used for this run but not saved", last_seen=e.last))

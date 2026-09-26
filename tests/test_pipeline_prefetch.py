@@ -98,7 +98,7 @@ def test_resolver_answers_are_saved_even_when_a_later_stage_is_refused(fake_edga
     fake_edgar.fetch_filing_raw = blocked                 # the Form 25 search is refused
     with pytest.raises(EdgarBlocked):
         run(index, clients, Overrides(), out_dir=tmp_path / "out", log=lambda *_: None)
-    assert "BAD|2023-05-10" in json.loads(cache.read_text())["entries"]
+    assert "BAD|2023-05-10|Bad Co." in json.loads(cache.read_text())["entries"]
 
 
 @pytest.mark.parametrize("exc", [EdgarBlocked("SEC returned 403"), OpenFigiBlocked("OpenFIGI returned 401"),
@@ -124,7 +124,7 @@ def test_answers_resolved_before_an_abort_inside_issuer_resolution_are_saved(fak
     monkeypatch.setattr(TickerResolver, "resolve", cut_short)
     with pytest.raises(type(exc)):
         run(index, clients, Overrides(), out_dir=tmp_path / "out", log=lambda *_: None)
-    assert set(json.loads(cache.read_text())["entries"]) == {"BAD|2023-05-10"}
+    assert set(json.loads(cache.read_text())["entries"]) == {"BAD|2023-05-10|Bad Co."}
     assert not (tmp_path / "out").exists()
 
 

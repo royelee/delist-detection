@@ -10,7 +10,8 @@ import requests
 from delist_detection.edgar import STALE_KEY
 from delist_detection.ticker_resolver import TickerResolver
 
-KEY = "ALTR|2025-03-26"
+OLD_KEY = "ALTR|2025-03-26"            # a version-2/3 entry's key
+KEY = "ALTR|2025-03-26|"               # version 4: ticker, date, observed name (none here)
 STALE = {"ticker": "ALTR", "cik": 999999, "name": "Altera Corp", "source": "efts"}
 
 
@@ -20,22 +21,22 @@ def _member(name):
 
 def test_an_old_flat_cache_is_ignored_and_replaced(tmp_path, fake_edgar, caplog):
     cache = tmp_path / "res.json"
-    cache.write_text(json.dumps({KEY: STALE}))
+    cache.write_text(json.dumps({OLD_KEY: STALE}))
     with caplog.at_level(logging.WARNING):
         r = TickerResolver(fake_edgar, cache_path=cache)
     assert sum("ignor" in m for m in caplog.messages) == 1
     assert r.resolve("ALTR", "2025-03-26").cik == 1701732      # company_tickers, not the stale 999999
     saved = json.loads(cache.read_text())
-    assert saved["__version__"] == 3
+    assert saved["__version__"] == 4
     assert saved["entries"][KEY]["cik"] == 1701732
 
 
-def test_a_v3_cache_round_trips(tmp_path, fake_edgar):
+def test_a_v4_cache_round_trips(tmp_path, fake_edgar):
     cache = tmp_path / "res.json"
     r = TickerResolver(fake_edgar, cache_path=cache, observed_names=_member("Altair Engineering Inc"))
     assert r.resolve("ALTR", "2025-03-26").cik == 1701732
     saved = json.loads(cache.read_text())
-    assert saved == {"__version__": 3, "entries": {KEY: {
+    assert saved == {"__version__": 4, "entries": {"ALTR|2025-03-26|Altair Engineering Inc": {
         "ticker": "ALTR", "cik": 1701732, "name": "Altair Engineering Inc.",
         "source": "company_tickers", "member_name": "Altair Engineering Inc"}}}
     # a fresh resolver answers from the file, with no EDGAR reads
@@ -43,15 +44,39 @@ def test_a_v3_cache_round_trips(tmp_path, fake_edgar):
     assert r2.resolve("ALTR", "2025-03-26").cik == 1701732
 
 
+def test_a_v3_cache_is_rekeyed_by_its_member_name_and_saved_as_v4(tmp_path, fake_edgar):
+    """Version 4 keys an answer by ticker, date and the observed name its checks
+    used (`T|date|NAME`); a version-2 or -3 entry (keyed `T|date`) is re-keyed from
+    its stored member_name, which stays the on-disk field name."""
+    cache = tmp_path / "res.json"
+    for version in (2, 3):
+        cache.write_text(json.dumps({"__version__": version, "entries": {
+            OLD_KEY: {**STALE, "member_name": "Altera Corp"},
+            "BAD|2023-05-10": {"ticker": "BAD", "cik": 999001, "name": "Bad Co.", "source": "efts",
+                               "member_name": None}}}))
+        r = TickerResolver(None, cache_path=cache)                    # answers from the file alone
+        assert r.resolve("ALTR", "2025-03-26", name="Altera Corp").cik == 999999
+        assert r.resolve("BAD", "2023-05-10", name=None).cik == 999001
+        r._dirty = True                                                # write what was loaded
+        r.flush()
+        saved = json.loads(cache.read_text())
+        assert saved["__version__"] == 4
+        assert saved["entries"] == {
+            "ALTR|2025-03-26|Altera Corp": {**STALE, "member_name": "Altera Corp"},
+            "BAD|2023-05-10|": {"ticker": "BAD", "cik": 999001, "name": "Bad Co.", "source": "efts",
+                                "member_name": None}}
+        assert TickerResolver(None, cache_path=cache).resolve("ALTR", "2025-03-26", name="Altera Corp").cik == 999999
+
+
 def test_a_different_member_name_misses_the_cache(tmp_path, fake_edgar):
     cache = tmp_path / "res.json"
-    cache.write_text(json.dumps({"__version__": 3, "entries": {KEY: {**STALE, "member_name": "Altera Corp"}}}))
+    cache.write_text(json.dumps({"__version__": 3, "entries": {OLD_KEY: {**STALE, "member_name": "Altera Corp"}}}))
     same = TickerResolver(fake_edgar, cache_path=cache, observed_names=_member("Altera Corp"))
     assert same.resolve("ALTR", "2025-03-26").cik == 999999
     other = TickerResolver(fake_edgar, cache_path=cache, observed_names=_member("Altair Engineering Inc"))
     assert other.resolve("ALTR", "2025-03-26").cik == 1701732
     # an entry saved without a member name misses a lookup that has one
-    cache.write_text(json.dumps({"__version__": 3, "entries": {KEY: {**STALE, "member_name": None}}}))
+    cache.write_text(json.dumps({"__version__": 3, "entries": {OLD_KEY: {**STALE, "member_name": None}}}))
     named = TickerResolver(fake_edgar, cache_path=cache, observed_names=_member("Altair Engineering Inc"))
     assert named.resolve("ALTR", "2025-03-26").cik == 1701732
 
@@ -86,7 +111,7 @@ def test_an_answer_reached_through_a_transient_error_is_not_persisted(tmp_path, 
     # a later answer with no transient error is persisted as usual
     assert r.resolve("BAD", "2023-05-10").cik == 999001
     saved = json.loads(cache.read_text())["entries"]
-    assert set(saved) == {"BAD|2023-05-10"}
+    assert set(saved) == {"BAD|2023-05-10|"}
     # the next run retries and finds the right company
     assert TickerResolver(fake_edgar, cache_path=cache).resolve("ALTR", "2025-03-26").cik == 1701732
 
@@ -179,13 +204,13 @@ def test_a_cache_drops_only_the_answers_of_a_retired_rule(tmp_path, fake_edgar):
     kept = {**STALE, "member_name": "Altera Corp"}
     for version in (2, 3):
         cache.write_text(json.dumps({"__version__": version, "entries": {
-            KEY: kept,
+            OLD_KEY: kept,
             "M|2026-06-30": {"ticker": "M", "cik": 1771146, "name": "ETF Opportunities Trust",
                              "source": "efts_name_mismatch", "member_name": "MACYS INC"},
             "DDS|2026-08-24": {"ticker": "DDS", "cik": 28917, "name": "DILLARD'S, INC.",
                                "source": "company_tickers_name_mismatch", "member_name": "DILLARDS INC CLASS A"}}}))
         r = TickerResolver(fake_edgar, cache_path=cache, observed_names=_member("Altera Corp"))
-        assert set(r._memo) == {KEY, "M|2026-06-30"}
+        assert set(r._memo) == {"ALTR|2025-03-26|Altera Corp", "M|2026-06-30|MACYS INC"}
 
 
 class _StaleEdgar:
@@ -293,7 +318,7 @@ def test_batched_writes_reach_the_file_only_on_flush(tmp_path, fake_edgar, monke
     assert r.resolve("BAD", "2023-05-10").cik == 999001
     assert not cache.exists() and writes == []
     r.flush()
-    assert set(json.loads(cache.read_text())["entries"]) == {"ALTR|2025-03-26", "BAD|2023-05-10"}
+    assert set(json.loads(cache.read_text())["entries"]) == {KEY, "BAD|2023-05-10|"}
     r.flush()                                                      # nothing new: no rewrite
     assert writes == [cache]
 
@@ -302,7 +327,7 @@ def test_without_batching_every_new_answer_is_written_at_once(tmp_path, fake_edg
     cache = tmp_path / "res.json"
     r = TickerResolver(fake_edgar, cache_path=cache)
     r.resolve("ALTR", "2025-03-26")
-    assert "ALTR|2025-03-26" in json.loads(cache.read_text())["entries"]
+    assert KEY in json.loads(cache.read_text())["entries"]
 
 
 def test_a_memo_temp_file_left_by_a_killed_process_is_removed(tmp_path, fake_edgar):
@@ -328,7 +353,7 @@ def test_a_shadow_starts_from_its_resolver_memo_and_saves_nothing(tmp_path, fake
     assert len(e.log) == reads                                   # ...with no EDGAR read
     assert s.resolve("ALTR", "2025-03-26").cik == 1701732       # a new answer...
     assert cache.read_text() == saved                            # ...is not saved
-    assert "ALTR|2025-03-26" not in r._memo                      # ...nor seen by its resolver
+    assert KEY not in r._memo                                    # ...nor seen by its resolver
 
 
 class _CountingTickers:
@@ -385,4 +410,4 @@ def test_an_interrupt_right_after_a_transient_answer_enters_the_memo_saves_nothi
     with pytest.raises(KeyboardInterrupt):
         r.resolve("ALTR", "2025-03-26")
     r.flush()                                                     # run()'s way out
-    assert set(json.loads(cache.read_text())["entries"]) == {"BAD|2023-05-10"}
+    assert set(json.loads(cache.read_text())["entries"]) == {"BAD|2023-05-10|"}
