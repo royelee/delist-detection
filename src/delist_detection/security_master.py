@@ -74,7 +74,8 @@ def issuers_by_era(ciks: Mapping[str, int | None],
     return {k: Issuer(cik, tuple(names.get(cik, ()))) for k, cik in ciks.items() if cik is not None}
 
 
-def _cik_of(issuers: Mapping[str, Issuer], era_key: str) -> int | None:
+def cik_of(issuers: Mapping[str, Issuer], era_key: str) -> int | None:
+    """The issuer CIK of the era `era_key`, None when its issuer is unknown."""
     issuer = issuers.get(era_key)
     return issuer.cik if issuer is not None else None
 
@@ -276,12 +277,12 @@ def _contradicted(era: TickerEra, composite: str, eras: Sequence[TickerEra], iss
     So the candidate is ruled out when an era of another known issuer is
     confirmed on it, or when an era of the same issuer and share class is
     confirmed on another composite over overlapping dates."""
-    cik, cls = _cik_of(issuers, era.key), share_class_from_name(era.name)
+    cik, cls = cik_of(issuers, era.key), share_class_from_name(era.name)
     for other in eras:
         comp = confirmed.get(other.key)
         if comp is None or other.key == era.key:
             continue
-        other_cik = _cik_of(issuers, other.key)
+        other_cik = cik_of(issuers, other.key)
         if comp == composite:
             if other_cik is not None and other_cik != cik:
                 return True
@@ -380,7 +381,7 @@ class FigiResolver:
                     picks[era.key] = ("name", c, edgar_only)
 
         def group(era: TickerEra) -> tuple[int | None, str]:
-            return _cik_of(issuers, era.key), share_class_from_name(era.name)
+            return cik_of(issuers, era.key), share_class_from_name(era.name)
 
         # An issuer's placeholder holds its eras of one class that no FIGI confirms.
         # An era that only the EDGAR names take off it would leave a sibling there:
@@ -414,7 +415,7 @@ class FigiResolver:
                 out[era.key] = EraResolution(era.key, cand.composite, source, cand, (),
                                              tuple(c for c, got, f in zip(tried, by_cusip, found) if own(c, got, f)))
                 continue
-            cik = _cik_of(issuers, era.key)
+            cik = cik_of(issuers, era.key)
             if cik is not None:
                 out[era.key] = EraResolution(era.key, placeholder_id(cik, share_class_from_name(era.name)),
                                              "placeholder", None, ("no_figi",), tuple(tried[:1]))
@@ -435,14 +436,15 @@ def _share_class(res: EraResolution, era: TickerEra) -> str:
 
 
 def build_securities(resolutions: Mapping[str, EraResolution], eras: Mapping[str, TickerEra],
-                     ciks: Mapping[str, int | None]) -> dict[str, Security]:
+                     issuers: Mapping[str, Issuer]) -> dict[str, Security]:
     """The securities the eras resolve to, each with its eras earliest first.
     `figi_source` is the strongest source among its eras (`SOURCE_STRENGTH`; a
     tie keeps the earliest era), and `share_class` comes from that same era; when
     that era names no class, from the earliest other era that does (a name cut
     off before its class letter: SBA's "...REIT CORP CLASS"). The security type
     and kind come from its earliest era's candidate, the name from its latest
-    named era, the issuer CIK from its latest era with one."""
+    named era, the issuer CIK from its latest era whose issuer is known
+    (`issuers`, by era key)."""
     out: dict[str, Security] = {}
     classes: dict[str, list[str]] = defaultdict(list)      # sec_id -> each era's class, earliest first
     for key in sorted(resolutions, key=lambda k: (eras[k].first, k)):
@@ -454,15 +456,15 @@ def build_securities(resolutions: Mapping[str, EraResolution], eras: Mapping[str
         if sec is None:
             name = era.name or (cand.name if cand else "")
             stype = cand.security_type if cand else ""
-            sec = Security(res.sec_id, ciks.get(key), _share_class(res, era), name, stype, True, res.source,
-                           security_kind(stype, name))
+            sec = Security(res.sec_id, cik_of(issuers, key), _share_class(res, era), name, stype, True,
+                           res.source, security_kind(stype, name))
             out[res.sec_id] = sec
         elif SOURCE_STRENGTH.index(res.source) < SOURCE_STRENGTH.index(sec.figi_source):
             sec.figi_source, sec.share_class = res.source, _share_class(res, era)
         classes[res.sec_id].append(_share_class(res, era))
         sec.eras.append(era)
-        if ciks.get(key) is not None:
-            sec.issuer_cik = ciks[key]
+        if key in issuers:
+            sec.issuer_cik = issuers[key].cik
         if era.name:
             sec.name = era.name
     for sec in out.values():

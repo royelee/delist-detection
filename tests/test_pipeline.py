@@ -1322,11 +1322,14 @@ def test_resolution_source_comes_from_the_latest_era_that_has_a_cik():
     from delist_detection.ticker_resolver import TickerResolution
     old, new = TickerEra("X", "2010-01-04", "2012-06-29", []), TickerEra("X", "2014-06-30", "2016-06-30", [])
     sec = Security("BBGX", 5, "COMMON", "X CO", "Common Stock", True, "cusip", eras=[old, new])
+    from delist_detection.security_master import Issuer
     res = {old.key: TickerResolution("X", 5, None, "manual"), new.key: TickerResolution("X", None, None, "none")}
-    assert pipeline._resolution_source(sec, res) == "manual"          # the era issuer_cik came from
+    issuers = {old.key: Issuer(5)}
+    assert pipeline._resolution_source(sec, issuers, res) == "manual"          # the era issuer_cik came from
     res[new.key] = TickerResolution("X", 5, None, "company_tickers")
-    assert pipeline._resolution_source(sec, res) == "company_tickers"
-    assert pipeline._resolution_source(sec, {}) == "security_master"
+    issuers[new.key] = Issuer(5)
+    assert pipeline._resolution_source(sec, issuers, res) == "company_tickers"
+    assert pipeline._resolution_source(sec, {}, res) == "security_master"
 
 
 def test_an_era_whose_ticker_the_sec_data_never_shows_is_reviewed(fake_edgar, tmp_path):

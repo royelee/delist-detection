@@ -38,7 +38,7 @@ from .reconstruction import (
 from .review_triage import Decision, ReviewItem, Triage, flag_name, is_blank, triage
 from .security_master import (
     AddedAcquirer, AddedSecurity, AddedSuccessor, EraResolution, FigiResolver, Issuer, Security, Sighting,
-    build_securities, candidate_cusips, cusip_sightings, era_last_seen, history_rows, issuers_by_era,
+    build_securities, candidate_cusips, cik_of, cusip_sightings, era_last_seen, history_rows, issuers_by_era,
     own_last_seen, ranges_from_sightings, refine_eras, ticker_range_review, ticker_sightings, value_on,
 )
 from .store import DelistingKey, write_tables
@@ -115,7 +115,7 @@ TICKER_CONFIRM_DAYS = 30        # an era's ticker counts as confirmed by an FTD 
 
 
 def _unconfirmed_review(eras: list[TickerEra], ftd: FtdIndex, resolutions: dict,
-                        ciks: dict) -> list[ReviewItem]:
+                        issuers: dict[str, Issuer]) -> list[ReviewItem]:
     """A `ticker_unconfirmed` review row for each era from 2004 on (the start of
     SEC fails-to-deliver data) with no FTD row under its ticker within
     `TICKER_CONFIRM_DAYS` of its first and last observation: the SEC data never
@@ -129,7 +129,7 @@ def _unconfirmed_review(eras: list[TickerEra], ftd: FtdIndex, resolutions: dict,
         hi = (_to_date(e.last) + timedelta(days=TICKER_CONFIRM_DAYS)).isoformat()
         if ftd.by_symbol(e.ticker, lo, hi):
             continue
-        out.append(ReviewItem(resolutions[e.key].sec_id or "", e.ticker, ciks.get(e.key), "ticker_unconfirmed",
+        out.append(ReviewItem(resolutions[e.key].sec_id or "", e.ticker, cik_of(issuers, e.key), "ticker_unconfirmed",
                               f"{e.key} {e.name or ''}: no fails-to-deliver row under {e.ticker} "
                               f"from {lo} to {hi}", last_seen=e.last))
     return out
@@ -196,15 +196,14 @@ def _ticker_on(sig: list[Sighting]) -> Callable[[str], str | None]:
     return f
 
 
-def _resolution_source(sec: Security, cik_res: dict) -> str:
+def _resolution_source(sec: Security, issuers: dict[str, Issuer], resolutions: dict[str, TickerResolution]) -> str:
     """The resolver tier ("cik_map", "manual", "company_tickers", ...) that
-    found the security's issuer CIK: that of its latest era with a CIK, the
-    same era `build_securities` takes `issuer_cik` from; "security_master"
-    when none has one."""
+    found the security's issuer CIK: that of its latest era whose issuer is
+    known (`issuers`), the same era `build_securities` takes `issuer_cik` from;
+    "security_master" when none has one."""
     for e in reversed(sec.eras):
-        r = cik_res.get(e.key)
-        if r is not None and r.cik is not None:
-            return r.source or "security_master"
+        if e.key in issuers:
+            return resolutions[e.key].source or "security_master"
     return "security_master"
 
 
@@ -410,11 +409,12 @@ def _refine(ctx: _RunContext, index: ObservationIndex,
 
 @dataclass
 class _IssuerAnswers:
-    """Stage 2's answer for each era: the resolver's (`resolutions`, by era key),
-    its CIK, its `Issuer` (CIK and EDGAR names), the era's last sighting the
-    resolver was asked at, and the issuer CIKs whose names read was degraded."""
+    """Stage 2's answer for each era: the resolver's (`resolutions`, by era key:
+    the tier that found it), its `Issuer` (`issuers`: CIK and EDGAR names, for
+    the eras whose issuer is known -- the one source of an era's CIK), the
+    era's last sighting the resolver was asked at, and the issuer CIKs whose
+    names read was degraded."""
     resolutions: dict[str, TickerResolution]
-    ciks: dict[str, int | None]
     issuers: dict[str, Issuer]
     last_seen: dict[str, str]
     names_degraded: set[int]
@@ -446,7 +446,7 @@ def _resolve_issuers(ctx: _RunContext, eras: list[TickerEra], ftd: FtdIndex) -> 
         warm(issuer_ciks, clients.edgar.submissions, workers=workers, name="issuer names")
     issuer_names, names_degraded = _issuer_names(clients.edgar, issuer_ciks)
     ctx.meter.done("issuer resolution", mark)
-    return _IssuerAnswers(cik_res, ciks, issuers_by_era(ciks, issuer_names), last_seen, names_degraded)
+    return _IssuerAnswers(cik_res, issuers_by_era(ciks, issuer_names), last_seen, names_degraded)
 
 
 def _resolve_securities(ctx: _RunContext, eras: list[TickerEra], era_by_key: dict[str, TickerEra], ftd: FtdIndex,
@@ -457,29 +457,29 @@ def _resolve_securities(ctx: _RunContext, eras: list[TickerEra], era_by_key: dic
     and a ticker or name hit whose name agrees with those same names (§8.3).
     Returns each era's resolution, the securities, and the review items of
     eras that resolved to no FIGI or rested on a degraded answer."""
-    ciks = answers.ciks
-    cusips = candidate_cusips(eras, ftd, answers.issuers)
-    resolutions = FigiResolver(ctx.clients.figi).resolve_many(eras, issuers=answers.issuers, cusips=cusips)
-    securities = build_securities(resolutions, era_by_key, ciks)
+    issuers = answers.issuers
+    cusips = candidate_cusips(eras, ftd, issuers)
+    resolutions = FigiResolver(ctx.clients.figi).resolve_many(eras, issuers=issuers, cusips=cusips)
+    securities = build_securities(resolutions, era_by_key, issuers)
     review: list[ReviewItem] = []
     for key, res in resolutions.items():
         era = era_by_key[key]
         for flag in res.flags:
-            review.append(ReviewItem(res.sec_id or "", era.ticker, ciks.get(key), flag,
+            review.append(ReviewItem(res.sec_id or "", era.ticker, cik_of(issuers, key), flag,
                                      f"{era.key} {era.name or ''}".strip(), last_seen=era.last))
     for e in eras:
         if ctx.clients.resolver.is_degraded(e.ticker, answers.last_seen[e.key]):
-            review.append(_degraded_item(resolutions[e.key].sec_id or "", e.ticker, ciks.get(e.key),
+            review.append(_degraded_item(resolutions[e.key].sec_id or "", e.ticker, cik_of(issuers, e.key),
                                          f"{e.key} {e.name or ''}: issuer resolution",
                                          "; its answer was used for this run but not saved", last_seen=e.last))
     for e in eras:
-        if ciks.get(e.key) in answers.names_degraded:
-            review.append(_degraded_item(resolutions[e.key].sec_id or "", e.ticker, ciks.get(e.key),
+        if cik_of(issuers, e.key) in answers.names_degraded:
+            review.append(_degraded_item(resolutions[e.key].sec_id or "", e.ticker, cik_of(issuers, e.key),
                                          f"{e.key} {e.name or ''}: the issuer's EDGAR names",
                                          "; its CUSIPs and FIGI were checked without what could not be read",
                                          last_seen=e.last))
     review += _conflict_review(eras, resolutions)
-    review += _unconfirmed_review(eras, ftd, resolutions, ciks)
+    review += _unconfirmed_review(eras, ftd, resolutions, issuers)
     ctx.log(f"{len(securities)} securities; FIGI sources "
             f"{dict(Counter(s.figi_source for s in securities.values()))}")
     return resolutions, securities, review
@@ -497,7 +497,7 @@ def _security_cusips(ctx: _RunContext, securities: dict[str, Security], resoluti
 
 
 def _context_builder(securities: dict[str, Security], sightings: dict[str, list[Sighting]],
-                     cik_res: dict[str, TickerResolution]) -> Callable[[Security, bool | None], SecurityContext]:
+                     answers: _IssuerAnswers) -> Callable[[Security, bool | None], SecurityContext]:
     """The finder's `SecurityContext` for a security of the run, given whether it
     is listed today."""
     siblings: dict[int, list[SecurityRef]] = defaultdict(list)
@@ -530,7 +530,7 @@ def _context_builder(securities: dict[str, Security], sightings: dict[str, list[
             listed_today=listed_now,
             expected_name=s.eras[-1].name if s.eras else None,
             sibling_spans=spans,
-            resolution_source=_resolution_source(s, cik_res),
+            resolution_source=_resolution_source(s, answers.issuers, answers.resolutions),
             ftd_seen_after=lambda day, sig=sig, own={e.ticker for e in s.eras}: any(
                 x.day > day for x in sig if x.source == "ftd" and x.value in own),
             tickers_between=lambda lo, hi, sig=sig: list(dict.fromkeys(x.value for x in sig if lo <= x.day <= hi)),
@@ -550,7 +550,7 @@ class _DelistingSearch:
 
 
 def _find_delistings(ctx: _RunContext, securities: dict[str, Security], sec_cusips: dict[str, list[str]],
-                     ftd: FtdIndex, cik_res: dict[str, TickerResolution]) -> _DelistingSearch:
+                     ftd: FtdIndex, answers: _IssuerAnswers) -> _DelistingSearch:
     """5. Every delisting of every security (`DelistingFinder`), in sec_id order.
     A security whose search fails becomes an `error` review item, not an aborted
     run; only a fatal exception (`fatal.FATAL`) stops it."""
@@ -560,7 +560,7 @@ def _find_delistings(ctx: _RunContext, securities: dict[str, Security], sec_cusi
     listed: dict[str, bool | None] = {}
     review: list[ReviewItem] = []
     sightings = {sid: ticker_sightings(s, ftd, sec_cusips[sid]) for sid, s in securities.items()}
-    security_context = _context_builder(securities, sightings, cik_res)
+    security_context = _context_builder(securities, sightings, answers)
 
     ordered = sorted(securities.values(), key=lambda s: s.sec_id)
     # One batched OpenFIGI ask for every security's listing; a failed batch leaves
@@ -1007,7 +1007,7 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
     answers = _resolve_issuers(ctx, eras, ftd)                                                      # 2
     resolutions, securities, review = _resolve_securities(ctx, eras, era_by_key, ftd, answers)      # 3
     sec_cusips = _security_cusips(ctx, securities, resolutions, ftd, ftd_lo)                        # 4
-    search = _find_delistings(ctx, securities, sec_cusips, ftd, answers.resolutions)                # 5
+    search = _find_delistings(ctx, securities, sec_cusips, ftd, answers)                # 5
     delistings = search.delistings
     review += search.review
     _check_overrides(overrides, delistings)                                                         # 6

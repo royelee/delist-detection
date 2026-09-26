@@ -478,7 +478,7 @@ def test_build_securities_merges_eras_of_one_figi():
     secs = build_securities(
         {fb.key: EraResolution(fb.key, "BBG000MM2P62", "cusip", cand, ()),
          meta.key: EraResolution(meta.key, "BBG000MM2P62", "ticker", cand, ())},
-        {fb.key: fb, meta.key: meta}, {fb.key: 1326801, meta.key: 1326801})
+        {fb.key: fb, meta.key: meta}, issuers_by_era({fb.key: 1326801, meta.key: 1326801}))
     s = secs["BBG000MM2P62"]
     assert [e.ticker for e in s.eras] == ["FB", "META"]
     assert s.share_class == "CLASS A" and s.issuer_cik == 1326801 and s.kind == "common" and s.observed
@@ -498,7 +498,7 @@ def test_figi_source_and_share_class_come_from_the_strongest_era():
     secs = build_securities(
         {ltd.key: EraResolution(ltd.key, "BBG000BBCQD7", "ticker", cand, ()),
          plc.key: EraResolution(plc.key, "BBG000BBCQD7", "cusip", cand, ())},
-        {ltd.key: ltd, plc.key: plc}, {ltd.key: 1141982, plc.key: 1141982})
+        {ltd.key: ltd, plc.key: plc}, issuers_by_era({ltd.key: 1141982, plc.key: 1141982}))
     s = secs["BBG000BBCQD7"]
     assert (s.figi_source, s.share_class) == ("cusip", "CLASS A")
     assert [e.first for e in s.eras] == ["2008-06-30", "2011-06-30"]     # every era, earliest first
@@ -520,7 +520,7 @@ def test_figi_source_ranks_pin_cusip_ticker_name(sources, expected):
     cand = FigiCandidate("BBG000X", "X CORP", "X", "Common Stock", ())
     res = {e.key: EraResolution(e.key, "BBG000X", src, None if src == "pin" else cand, ())
            for e, src in zip(eras, sources)}
-    s = build_securities(res, {e.key: e for e in eras}, {e.key: 7 for e in eras})["BBG000X"]
+    s = build_securities(res, {e.key: e for e in eras}, issuers_by_era({e.key: 7 for e in eras}))["BBG000X"]
     assert s.figi_source == expected
     strongest = sources.index(expected)
     assert s.share_class == f"CLASS {'AB'[strongest]}"               # from that same era
@@ -538,7 +538,7 @@ def test_a_strongest_era_with_no_class_takes_the_class_another_era_names():
     eras = [plain, cl_a, reit]
     res = {e.key: EraResolution(e.key, "BBG000D2M0Z7", src, cand, ())
            for e, src in zip(eras, ("ticker", "ticker", "cusip"))}
-    s = build_securities(res, {e.key: e for e in eras}, {e.key: 1034054 for e in eras})["BBG000D2M0Z7"]
+    s = build_securities(res, {e.key: e for e in eras}, issuers_by_era({e.key: 1034054 for e in eras}))["BBG000D2M0Z7"]
     assert (s.figi_source, s.share_class) == ("cusip", "CLASS A")
 
 
@@ -547,7 +547,7 @@ def test_no_era_naming_a_class_leaves_common():
     cand = FigiCandidate("BBG000X", "X CORP", "X", "Common Stock", ())
     res = {eras[0].key: EraResolution(eras[0].key, "BBG000X", "ticker", cand, ()),
            eras[1].key: EraResolution(eras[1].key, "BBG000X", "cusip", cand, ())}
-    s = build_securities(res, {e.key: e for e in eras}, {e.key: 7 for e in eras})["BBG000X"]
+    s = build_securities(res, {e.key: e for e in eras}, issuers_by_era({e.key: 7 for e in eras}))["BBG000X"]
     assert (s.figi_source, s.share_class) == ("cusip", "COMMON")
 
 
@@ -564,7 +564,7 @@ def test_monsanto_gap_eras_still_form_one_security():
     res = {eras[0].key: EraResolution(eras[0].key, "BBG000BGSB57", "cusip", mon, ()),
            eras[1].key: EraResolution(eras[1].key, "BBG000BGSB57", "cusip", mon, ()),
            eras[2].key: EraResolution(eras[2].key, None, "unresolved", None, ("observation_unresolved",))}
-    secs = build_securities(res, {e.key: e for e in eras}, {e.key: 1110783 for e in eras[:2]})
+    secs = build_securities(res, {e.key: e for e in eras}, issuers_by_era({e.key: 1110783 for e in eras[:2]}))
     assert list(secs) == ["BBG000BGSB57"]
     assert [(e.first, e.last) for e in secs["BBG000BGSB57"].eras] == [("2016-06-30", "2016-06-30"),
                                                                      ("2017-12-29", "2017-12-29")]
