@@ -19,7 +19,7 @@ import requests
 
 from .acquirers import acquirer_cik, find_acquirer
 from .crsp_codes import CrspBucket
-from .delistings import Delisting, DelistingFinder, SecurityContext
+from .delistings import SUCCESSOR_UNKNOWN, Delisting, DelistingFinder, SecurityContext
 from .edgar import SEC_STATS
 from .evidence import edgar_names
 from .fatal import FATAL
@@ -806,7 +806,7 @@ def _find_successors(ctx: _RunContext, delistings: list[Delisting], securities: 
     for sid, a in added.items():
         starts[sid] = SecurityStart(a.span()[0], a.security.issuer_cik, {a.ticker})
     for e in delistings:                       # a security of this run
-        in_run = successor_in_run(e, starts) if "successor_unknown" in e.flags else None
+        in_run = successor_in_run(e, starts) if SUCCESSOR_UNKNOWN in e.flags else None
         if in_run is None:
             continue
         sid, how = in_run

@@ -46,6 +46,10 @@ DEREG_FALLBACK_AFTER_DAYS = 120     # [last_seen - this, last_seen + this] to da
 ENDING_BUCKETS = frozenset({CrspBucket.MERGER, CrspBucket.LIQUIDATION, CrspBucket.COMPLIANCE_FAILURE,
                             CrspBucket.EXPIRATION})
 
+# The review flag of an exchange transfer whose successor is not known yet; it
+# comes off the delisting once a successor is found (`Delisting.set_successor`).
+SUCCESSOR_UNKNOWN = "successor_unknown"
+
 # Preferred exchange for a multi-exchange delisting group: the filing on the
 # most-senior exchange supplies the delisting's `exchange` and `form25`/`form25_sub`.
 EXCHANGE_PREFERENCE = ("NYSE", "NASDAQ", "NYSE AMERICAN", "CBOE BZX", "NYSE ARCA")
@@ -84,7 +88,7 @@ class Delisting:
     def set_successor(self, sec_id: str) -> None:
         """Record `sec_id` as the successor: the row no longer says `successor_unknown`."""
         self.record.successor_sec_id = sec_id
-        self.record.evidence["flags"] = [f for f in self.flags if f != "successor_unknown"]
+        self.record.evidence["flags"] = [f for f in self.flags if f != SUCCESSOR_UNKNOWN]
 
 
 @dataclass
@@ -407,7 +411,7 @@ class DelistingFinder:
             if continued:
                 rec.successor_sec_id = sec.sec_id
             else:
-                flags.append("successor_unknown")
+                flags.append(SUCCESSOR_UNKNOWN)
         delisting = Delisting(sec.sec_id, cik, ticker, delist_date, rec, lt, f25, sub,
                               f25.exchange if f25 else exchange)
         for f in flags:

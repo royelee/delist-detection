@@ -15,7 +15,7 @@ from collections.abc import Callable
 from datetime import date, timedelta
 from typing import NamedTuple
 
-from .delistings import Delisting
+from .delistings import SUCCESSOR_UNKNOWN, Delisting
 from .figi_resolution import FigiCandidate, share_class_from_name, us_candidates
 from .listing_status import edgar_lists
 from .names import names_agree
@@ -169,7 +169,7 @@ def successor_search_args(edgar, e: Delisting, starts: dict[str, SecurityStart],
     The warm pass and the sequential loop both ask this, so they send the same
     searches. Only a delisting it searches for reads EDGAR (the issuer's
     submissions, for its name)."""
-    if "successor_unknown" not in e.flags or successor_in_run(e, starts) is not None:
+    if SUCCESSOR_UNKNOWN not in e.flags or successor_in_run(e, starts) is not None:
         return None
     return (successor_search_name(edgar, e.cik, securities[e.sec_id].name),
             e.last_trade.day or _to_date(e.delist_date))
