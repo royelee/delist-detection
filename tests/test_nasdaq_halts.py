@@ -279,3 +279,28 @@ def test_the_halt_feed_caches_only_days_before_its_run_date(tmp_path):
     later = NasdaqHaltClient(tmp_path, session=_RealFeedSession(), min_interval=0, today=date(2020, 11, 3))
     later.halts_on(date(2020, 11, 2))
     assert (tmp_path / "20201102.xml").exists()
+
+
+def test_the_retry_waits_are_the_feeds_own(tmp_path):
+    """A 5xx or 429 is retried once, after its Retry-After or 2 s, with no wait
+    after the second; a transport error is not retried."""
+    slept = []
+    c = NasdaqHaltClient(tmp_path, session=_SessionStatus(503, 503), min_interval=0, sleep=slept.append)
+    assert c.halts_on(date(2025, 3, 25)) == [] and slept == [2.0]
+    slept.clear()
+    s = _SessionRaising(requests.ConnectionError("reset"))
+    NasdaqHaltClient(tmp_path, session=s, min_interval=0, sleep=slept.append).halts_on(date(2025, 3, 25))
+    assert slept == [] and s.calls == 1
+
+
+def test_each_attempt_waits_out_the_pacing_interval(tmp_path, monkeypatch):
+    """The feed is paced before every attempt, the retry included."""
+    import delist_detection.nasdaq_halts as nh
+
+    clock = iter([100.0, 100.0, 100.0, 100.0, 100.0, 100.0])
+    monkeypatch.setattr(nh.time, "monotonic", lambda: next(clock))
+    slept = []
+    c = NasdaqHaltClient(tmp_path, session=_SessionStatus(503, 503), min_interval=1.0, sleep=slept.append)
+    c._last = 100.0
+    c.halts_on(date(2025, 3, 25))
+    assert slept == [1.0, 2.0, 1.0]

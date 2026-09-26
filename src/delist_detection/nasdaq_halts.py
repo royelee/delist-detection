@@ -28,6 +28,7 @@ import requests
 from .atomic_io import clean_orphan_temps, write_atomic
 from .edgar import SEC_STATS
 from .observations import normalize_ticker
+from .retries import retrying
 from .trading_calendar import is_trading_day, previous_trading_day
 
 HALTS_URL = "https://www.nasdaqtrader.com/rss.aspx?feed=tradehalts&haltdate={mmddyyyy}"
@@ -73,6 +74,22 @@ def parse_halts_rss(xml: str | bytes) -> list[Halt]:
     return out
 
 
+def _retried(resp) -> bool:
+    """A 429 or a 5xx: the feed is retried once for it."""
+    return resp.status_code == 429 or 500 <= resp.status_code < 600
+
+
+def _retry_wait(attempt: int, resp, error) -> float | None:
+    """The feed's retry policy (`retries.retrying`): a 429 or 5xx is retried
+    after its Retry-After, else 2 s; an answer or a transport error is not."""
+    if resp is None or not _retried(resp):
+        return None
+    try:
+        return float(resp.headers.get("Retry-After", 2.0))
+    except ValueError:
+        return 2.0
+
+
 def last_trade_from_halt(h: Halt) -> date:
     return previous_trading_day(h.halt_date) if (h.halt_time or "00:00:00") < "09:30:00" else h.halt_date
 
@@ -106,49 +123,33 @@ class NasdaqHaltClient:
         if cp.exists():
             return parse_halts_rss(cp.read_bytes())
 
-        for attempt in range(2):
-            wait = self.min_interval - (time.monotonic() - self._last)
-            if wait > 0:
-                self.sleep(wait)
-            self._last = time.monotonic()
-            try:
-                resp = self.session.get(HALTS_URL.format(mmddyyyy=f"{day:%m%d%Y}"),
-                                        headers={"User-Agent": _UA}, timeout=30)
-            except requests.RequestException as e:
-                return self._failed(day, f"network error: {e}")
+        resp, error = retrying(lambda: self._get(day), attempts=2, wait=_retry_wait, sleep=self.sleep)
+        if error is not None:
+            return self._failed(day, f"network error: {error}")
+        if _retried(resp):
+            return self._failed(day, f"{resp.status_code} after retry")
+        if resp.status_code == 404:
+            return []                      # the feed's answer: no halts that day
+        if resp.status_code != 200:
+            return self._failed(day, f"HTTP {resp.status_code}")
+        try:
+            halts = parse_halts_rss(resp.content)
+        except ET.ParseError as e:
+            # A malformed body is not "no halts": that would silently hide a
+            # real deletion halt.
+            return self._failed(day, f"parse error: {e}")
+        if day < (self.today or date.today()):  # today's list can still grow
+            cp.parent.mkdir(parents=True, exist_ok=True)
+            write_atomic(cp, resp.content)
+        return halts
 
-            # Check for 429 or 5xx; retry once
-            if resp.status_code in (429,) or (500 <= resp.status_code < 600):
-                if attempt == 0:
-                    sleep_duration = 2.0
-                    if "Retry-After" in resp.headers:
-                        try:
-                            sleep_duration = float(resp.headers["Retry-After"])
-                        except ValueError:
-                            pass
-                    self.sleep(sleep_duration)
-                    continue
-                else:
-                    return self._failed(day, f"{resp.status_code} after retry")
-
-            if resp.status_code == 404:
-                return []                      # the feed's answer: no halts that day
-            if resp.status_code != 200:
-                return self._failed(day, f"HTTP {resp.status_code}")
-
-            try:
-                halts = parse_halts_rss(resp.content)
-            except ET.ParseError as e:
-                # A malformed body is not "no halts": that would silently hide a
-                # real deletion halt.
-                return self._failed(day, f"parse error: {e}")
-
-            if day < (self.today or date.today()):  # today's list can still grow
-                cp.parent.mkdir(parents=True, exist_ok=True)
-                write_atomic(cp, resp.content)
-            return halts
-
-        return []
+    def _get(self, day: date):
+        """One request for `day`'s feed, paced `min_interval` after the last."""
+        wait = self.min_interval - (time.monotonic() - self._last)
+        if wait > 0:
+            self.sleep(wait)
+        self._last = time.monotonic()
+        return self.session.get(HALTS_URL.format(mmddyyyy=f"{day:%m%d%Y}"), headers={"User-Agent": _UA}, timeout=30)
 
     def deletion_halt(self, symbol: str, lo: date, hi: date, max_days: int = 7) -> Halt | None:
         want = normalize_ticker(symbol)

@@ -9,16 +9,16 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import time
 from pathlib import Path
 
 import requests
 
 from .atomic_io import clean_orphan_temps, write_atomic
+from .retries import retrying
+from .settings import REPO_ENV, env_setting
 
 OPENFIGI_URL = "https://api.openfigi.com/v3"
-_REPO_ENV = Path(__file__).resolve().parents[2] / ".env"
 
 
 class OpenFigiBlocked(RuntimeError):
@@ -31,15 +31,10 @@ class OpenFigiUnavailable(RuntimeError):
     can simply be repeated later."""
 
 
-def resolve_api_key(env_file: str | Path = _REPO_ENV) -> str | None:
-    key = os.environ.get("OPEN_FIGI_API_KEY", "").strip()
-    if key:
-        return key
-    if not Path(env_file).exists():
-        return None
-    from dotenv import dotenv_values  # noqa: PLC0415
-
-    return (dotenv_values(env_file).get("OPEN_FIGI_API_KEY") or "").strip() or None
+def resolve_api_key(env_file: str | Path = REPO_ENV) -> str | None:
+    """OPEN_FIGI_API_KEY from the environment, else from ``env_file``
+    (`settings.env_setting`); None when neither sets it."""
+    return env_setting("OPEN_FIGI_API_KEY", env_file)
 
 
 def _wait_seconds(headers, default: int) -> int:
@@ -70,23 +65,31 @@ class OpenFigiClient:
         return h
 
     def _post(self, path: str, payload):
-        for attempt in range(self.MAX_RETRIES):
-            try:
-                resp = self.session.post(f"{OPENFIGI_URL}{path}", json=payload, headers=self._headers(),
-                                         timeout=60)
-            except requests.RequestException:
-                self.sleep(min(60, 2 ** attempt))
-                continue
+        """POST `payload` to `path` through `retries.retrying`, up to MAX_RETRIES
+        attempts, waiting after every failed one (the last too): 2**attempt
+        seconds (at most 60) after a transport error; the retry-after /
+        ratelimit-reset header, else 60 s for a 429 and 2**attempt for a 5xx. A
+        401/403 raises OpenFigiBlocked at once; failures that outlast the
+        attempts raise OpenFigiUnavailable."""
+        def send():
+            return self.session.post(f"{OPENFIGI_URL}{path}", json=payload, headers=self._headers(), timeout=60)
+
+        def wait(attempt: int, resp, error) -> float | None:
+            if error is not None:
+                return min(60, 2 ** attempt)
             if resp.status_code in (401, 403):
                 raise OpenFigiBlocked(f"OpenFIGI returned {resp.status_code} for {path}; check OPEN_FIGI_API_KEY")
             if resp.status_code == 429 or resp.status_code >= 500:
-                self.sleep(_wait_seconds(resp.headers, 60 if resp.status_code == 429 else 2 ** attempt))
-                continue
-            resp.raise_for_status()
-            if str(resp.headers.get("ratelimit-remaining", "")).strip() == "0":
-                self.sleep(_wait_seconds(resp.headers, 60))
-            return resp.json()
-        raise OpenFigiUnavailable(f"OpenFIGI {path} kept failing after {self.MAX_RETRIES} attempts")
+                return _wait_seconds(resp.headers, 60 if resp.status_code == 429 else 2 ** attempt)
+            return None
+
+        resp, error = retrying(send, attempts=self.MAX_RETRIES, wait=wait, sleep=self.sleep, wait_after_last=True)
+        if error is not None or resp.status_code == 429 or resp.status_code >= 500:
+            raise OpenFigiUnavailable(f"OpenFIGI {path} kept failing after {self.MAX_RETRIES} attempts")
+        resp.raise_for_status()
+        if str(resp.headers.get("ratelimit-remaining", "")).strip() == "0":
+            self.sleep(_wait_seconds(resp.headers, 60))
+        return resp.json()
 
     def _cache_file(self, kind: str, payload) -> Path:
         h = hashlib.sha1(json.dumps({"kind": kind, "payload": payload}, sort_keys=True).encode()).hexdigest()

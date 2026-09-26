@@ -90,6 +90,13 @@ variable names assume (security, era, sighting, pin, …).
   on 403/429) that `EdgarClient`, `sec_http.py` and `verify_against_web.py` share.
 - `fatal.py` — `FATAL`: the exceptions that stop a run instead of becoming a
   review row (`EdgarBlocked`, `OpenFigiBlocked`, `OpenFigiUnavailable`).
+- `retries.py` — `retrying()`: the one retry loop (attempts, the wait between
+  them) behind SEC's `edgar.retry_request`, `OpenFigiClient._post` and
+  `NasdaqHaltClient.halts_on`; each client passes its own policy (what is
+  retried, how long to wait, what a refusal raises).
+- `settings.py` — `env_setting()`: a setting from the environment, else the
+  repo `.env` (one key only, `os.environ` untouched), behind
+  `edgar.resolve_user_agent` and `openfigi.resolve_api_key`.
 - `atomic_io.py` — atomic file writes: `write_atomic` (one cache file, durable,
   through a writer-named temp file), `clean_orphan_temps` (a killed writer's
   leftovers), and `replace_on_success`/`replace_all_on_success` (the output

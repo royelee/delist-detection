@@ -38,14 +38,12 @@ from __future__ import annotations
 import argparse
 import csv
 import json
-import os
 import time
 from dataclasses import asdict
 from datetime import date, timedelta
 from pathlib import Path
 
 import requests
-from dotenv import dotenv_values
 
 from delist_detection.classifier import DelistClassifier
 from delist_detection.edgar import EFTS_SOURCE_KEYS, SEC_HOST, EdgarClient, use_machine_wide_limit
@@ -53,6 +51,7 @@ from delist_detection.filing_selection import announcement_8k, closing_8k, form_
 from delist_detection.ftd import FtdClient, FtdIndex
 from delist_detection.llm_client import default_llm_client
 from delist_detection.llm_merger_extractor import LLMMergerTermsExtractor
+from delist_detection.settings import env_setting
 from delist_detection.ticker_resolver import TickerResolver
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -140,7 +139,7 @@ def _refresh_efts(rows, edgar) -> None:
 
 
 def _openai_key_set() -> bool:
-    return bool(os.environ.get("OPENAI_API_KEY") or dotenv_values(ROOT / ".env").get("OPENAI_API_KEY"))
+    return bool(env_setting("OPENAI_API_KEY", ROOT / ".env"))
 
 
 def _acquirer_price(acquirer: str | None, on: date) -> float | None:

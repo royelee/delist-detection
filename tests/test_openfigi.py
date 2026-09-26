@@ -139,3 +139,22 @@ def test_resolve_api_key(tmp_path, monkeypatch):
     assert resolve_api_key(env) == "fromenv"
     monkeypatch.delenv("OPEN_FIGI_API_KEY")
     assert resolve_api_key(tmp_path / "missing.env") is None
+
+
+def test_the_retry_waits_are_the_clients_own(tmp_path):
+    """OpenFIGI's own waits, through the shared retry helper: 2**attempt seconds
+    (at most 60) after a transport error, the retry-after/ratelimit-reset
+    header (plus one second) or 2**attempt after a 5xx, 60 s after a 429 with no
+    header -- and a wait after the last attempt too, before giving up."""
+    from delist_detection.openfigi import OpenFigiUnavailable
+
+    slept = []
+    c = OpenFigiClient(tmp_path, "k", session=_Timeouts(), sleep=slept.append)
+    with pytest.raises(OpenFigiUnavailable):
+        c.map([{"idType": "TICKER", "idValue": "AET"}])
+    assert slept == [1, 2, 4, 8, 16, 32]
+    slept.clear()
+    s = _Session(_Resp(503), _Resp(502, headers={"retry-after": "3"}), _Resp(429), _Resp(body=[AET]))
+    assert OpenFigiClient(tmp_path / "b", "k", session=s, sleep=slept.append).map(
+        [{"idType": "TICKER", "idValue": "AET"}]) == [AET]
+    assert slept == [1, 4, 60]

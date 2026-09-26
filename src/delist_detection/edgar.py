@@ -26,6 +26,8 @@ from typing import Any
 import requests
 
 from .atomic_io import clean_orphan_temps, write_atomic
+from .retries import retrying
+from .settings import REPO_ENV, env_setting
 
 log = logging.getLogger(__name__)
 
@@ -35,7 +37,6 @@ WWW_SEC_HOST = "https://www.sec.gov"
 # SEC requires a descriptive User-Agent with a contact, and 403s ones it
 # doesn't accept (SEC has rejected this noreply fallback).
 FALLBACK_UA = "delist_detection/0.1 (r@users.noreply.github.com)"
-_REPO_ENV = Path(__file__).resolve().parents[2] / ".env"
 
 
 class EdgarBlocked(RuntimeError):
@@ -51,19 +52,10 @@ def check_response(resp) -> None:
         )
 
 
-def resolve_user_agent(env_file: str | Path = _REPO_ENV) -> str:
-    """EDGAR_USER_AGENT from the environment, else from ``env_file``, else the fallback.
-
-    Reads only that one key from the file and leaves ``os.environ`` untouched;
-    ``llm_client.default_llm_client`` is the only place that calls ``load_dotenv``.
-    """
-    ua = os.environ.get("EDGAR_USER_AGENT", "").strip()
-    if ua:
-        return ua
-    from dotenv import dotenv_values  # noqa: PLC0415
-
-    ua = (dotenv_values(env_file).get("EDGAR_USER_AGENT") or "").strip()
-    return ua or FALLBACK_UA
+def resolve_user_agent(env_file: str | Path = REPO_ENV) -> str:
+    """EDGAR_USER_AGENT from the environment, else from ``env_file``, else the
+    fallback (`settings.env_setting`: that one key only; ``os.environ`` untouched)."""
+    return env_setting("EDGAR_USER_AGENT", env_file) or FALLBACK_UA
 
 
 DEFAULT_UA = resolve_user_agent()
@@ -465,27 +457,21 @@ def retry_request(make_request, *, sleep=time.sleep, max_attempts: int = RETRY_M
     response is returned (the caller's own `raise_for_status()`/status check
     decides what happens next -- unchanged from before this helper existed).
     """
-    last_exc: requests.RequestException | None = None
-    resp = None
-    for attempt in range(max_attempts):
-        try:
-            resp = make_request()
-        except requests.RequestException as exc:
-            last_exc, resp = exc, None
-        else:
+    def wait(attempt: int, resp, error) -> float | None:
+        if resp is not None:
             check_response(resp)              # 403/429 -> EdgarBlocked, raised at once, never retried
             if resp.status_code < 500:
-                return resp
-            last_exc = None                   # a 5xx is retryable, not a transport exception
+                return None                   # an answer
         if not backoff:
-            continue
-        wait = backoff[min(attempt, len(backoff) - 1)]
-        SEC_LIMITER.pause(wait)               # every thread's next SEC request waits too
-        if attempt < max_attempts - 1:
-            sleep(wait)
-    if resp is not None:
-        return resp
-    raise last_exc
+            return 0                          # a transport error or a 5xx: retry at once
+        seconds = backoff[min(attempt, len(backoff) - 1)]
+        SEC_LIMITER.pause(seconds)            # every thread's next SEC request waits too
+        return seconds
+
+    resp, error = retrying(make_request, attempts=max_attempts, wait=wait, sleep=sleep)
+    if error is not None:
+        raise error
+    return resp
 
 
 def sec_get(url: str, *, headers: dict[str, str], timeout: float, session=None, endpoint: str | None = None,
