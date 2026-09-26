@@ -454,9 +454,11 @@ This runs the full pipeline and writes `output/securities.csv`,
 `review.csv` and `review_summary.csv`. See *Observations and pins* below for
 the required `--observations` input, and *Severities and accepting a review
 row* above for `--review-decisions` (default `data/review_decisions.csv`).
-`--as-of` is the run date every freshness rule reads (default today;
-`run_manifest.json` records it): pass an earlier run's date to reproduce its
-tables byte for byte from the same caches.
+`--as-of` is the run date the EDGAR, full-text-search and resolver freshness
+rules read (default today; `run_manifest.json` records it): pass an earlier
+run's date to reproduce its tables byte for byte from the same caches. Three
+things do not read it: the SEC fails-to-deliver and MIDAS index pages age by
+the wall clock, and OpenFIGI's listed-today check is always live.
 
 > **Note:** Merger rows without a `last_trade_close` (SEC fails-to-deliver
 > found none, and none was supplied via `--last-trade-closes`) emit a
@@ -562,7 +564,7 @@ python scripts/observations_from_instruments.py --instruments data/delisted_tick
 # or: scripts/observations_from_snapshots.py --dir <folder of dated index-membership CSVs> --out obs.csv
 python scripts/classify_universe.py --observations obs.csv   # → output/{securities,ticker_history,cusip_history,delistings,payouts,review,review_summary}.csv
 
-pytest -q                                # 1248 unit tests, no network
+pytest -q                                # 1249 unit tests, no network
 ```
 
 `classify_universe.py` prints a summary when it finishes: rows written per

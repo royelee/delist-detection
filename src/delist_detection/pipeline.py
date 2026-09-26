@@ -35,7 +35,7 @@ from .history import (
     ticker_sightings, value_on,
 )
 from .listing_status import issuer_exchange, listed_today, listing_answers
-from .observations import ObservationIndex, TickerEra, eras_by_key, normalize_ticker
+from .observations import ObservationError, ObservationIndex, TickerEra, eras_by_key, normalize_ticker
 from .payout_gate import DEFAULT_TOL, GatedPayouts, gate_payouts
 from .prefetch import Serialized, warm
 from .reconstruction import (
@@ -226,7 +226,7 @@ def _refine(ctx: _RunContext, index: ObservationIndex,
     ctx.log(f"{len(eras)} ticker eras")
 
     if not eras:
-        raise ValueError("no observations to process")
+        raise ObservationError("no observations to process")
 
     lo = max(FTD_START, min(date.fromisoformat(e.first) for e in eras) - timedelta(days=30))
     hi = min(ctx.as_of, max(date.fromisoformat(e.last) for e in eras) + timedelta(days=400))

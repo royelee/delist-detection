@@ -130,6 +130,15 @@ def test_an_override_row_that_matches_no_delisting_exits_2_on_one_line(monkeypat
     assert "\n" not in err and "rec.csv line 3: BBG999" in err and "no outputs written" in err
 
 
+def test_no_observations_to_process_exits_2(monkeypatch, capsys):
+    """An observations file with no rows (or a --limit that leaves none) is bad
+    input, like a malformed file: exit 2, not an unexpected crash."""
+    from delist_detection.observations import ObservationError
+
+    assert _entry_with_run_raising(monkeypatch, ObservationError("no observations to process")) == 2
+    assert "no observations to process" in capsys.readouterr().err
+
+
 def _entry_with_inputs(monkeypatch, tmp_path, *argv, observations="ticker,as_of\nAET,2018-06-29\n",
                        default_decisions=None):
     """entry() over real input files: observations from `observations`, the rest

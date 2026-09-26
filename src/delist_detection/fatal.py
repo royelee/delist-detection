@@ -5,8 +5,9 @@ or OpenFIGI down after its retries (`OpenFigiUnavailable`) says nothing about
 one security: every later request would fail the same way. Every catch site
 that turns a failure into a row, a miss or a transient answer re-raises
 `FATAL` first:
-- the pipeline's issuer-names read (`_issuer_names`), delisting search
-  (`_find_delistings`) and payout extraction (`_extract_payouts`);
+- the pipeline's delisting search (`_find_delistings`) and payout extraction
+  (`_extract_payouts`); its issuer-names read (`_issuer_names`) catches only
+  `requests.RequestException`, so `FATAL` passes through it untouched;
 - `listing_status.listing_answers`;
 - the prefetch pool (`prefetch.warm`);
 - the ticker resolver's four EDGAR checks (`TickerResolver._fits_date`,

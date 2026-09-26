@@ -339,8 +339,8 @@ def load_merger_terms_overrides(path: str | Path) -> OverrideRows:
     return _read_overrides(path, ("sec_id",), _merger_terms)
 
 
-def unmatched_override_keys(overrides: Mapping, events: Iterable[tuple[str, str]]) -> list:
-    events = list(events)
-    sids = {s for s, _ in events}
-    pairs = set(events)
+def unmatched_override_keys(overrides: Mapping, delistings: Iterable[tuple[str, str]]) -> list:
+    delistings = list(delistings)
+    sids = {s for s, _ in delistings}
+    pairs = set(delistings)
     return [k for k in overrides if (k not in pairs if isinstance(k, tuple) else k not in sids)]

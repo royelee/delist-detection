@@ -694,9 +694,12 @@ line changes observable output.
   `$DELIST_DETECTION_SEC_RATE_LOCK`) that holds the last start time, and waits
   1/8 s past it. `classify_universe.py --sec-workers N` (default 4, at most 8)
   prefetches on N threads under that one limit, and a 5xx pauses them all.
-- **Determinism includes the run date (§11).** Every freshness rule reads one
-  run date (`as_of`), so "same inputs and caches" means the same caches and the
-  same `as_of` (`classify_universe.py --as-of`, default today). For those, the
+- **Determinism includes the run date (§11).** The EDGAR, full-text-search and
+  resolver freshness rules read one run date (`as_of`), so "same inputs and
+  caches" means the same caches and the same `as_of` (`classify_universe.py
+  --as-of`, default today). The fails-to-deliver and MIDAS index pages age by
+  the wall clock and OpenFIGI's listed-today check is live, so a rerun
+  reproduces a run only while those answer the same. For those, the
   tables are byte-identical for any `--sec-workers`:
   prefetch threads only fill missing cache entries and never refresh one.
   `run_manifest.json` records `as_of`, the code version, the worker count and
