@@ -197,6 +197,41 @@ Unchanged in content, re-keyed by `(sec_id, delist_date)` (A6). `review.csv` als
 receives rows with no delisting: `ended_without_delisting`, `no_figi`,
 `form25_unmatched`, `observation_unresolved` (section 8.10).
 
+### 7.6 `observation_map.csv` — key `(ticker, as_of, name, cusip, pin_cik, pin_sec_id)`
+
+One row per distinct input observation (the same de-duplication
+`load_observations` applies to build the eras).
+
+```
+ticker, as_of, name, cusip, pin_cik, pin_sec_id, era, sec_id, issuer_cik,
+history_ticker, in_ticker_history, status
+```
+
+- `pin_cik`/`pin_sec_id` are the observation's own `cik`/`sec_id` columns
+  (kept under their own names since `sec_id` here is the resolved answer,
+  which a pin may or may not equal).
+- `era` is the `TickerEra.key` the observation fell into.
+- `history_ticker` is the security's `ticker_history` value on `as_of`
+  (§8.5); `in_ticker_history` is `true` when a `ticker_history` range of that
+  security under the observed ticker (either separator spelling) covers
+  `as_of`.
+- `status`, first rule that applies:
+  1. `unresolved` — the era's `sec_id` is None.
+  2. `after_delisting` — the security is not listed today and `as_of` is
+     after its `ticker_history` end (the same end date §8.5's clip rule
+     computes).
+  3. `conflict` — `(ticker, as_of)` is in `observations.observation_conflicts`.
+  4. `backfilled_ticker` — `as_of` ≥ 2004-01-31, no fails-to-deliver row of
+     the security's CUSIPs under the observed ticker (either separator
+     spelling) within ±30 days of `as_of`, and at least one such row under
+     another symbol in that window.
+  5. `mapped` — everything else.
+- This is the caller's join surface: index membership comes from this table
+  (every row that resolved names one observation's `sec_id`), and a ticker
+  look-up by date goes through `ticker_history.csv` keyed on
+  `history_ticker`, not the raw observed ticker.
+- `--limit N` runs only ever produce rows for the eras that ran.
+
 ## 8. Functional requirements
 
 ### 8.1 Load observations (FR-1)
@@ -361,7 +396,8 @@ python scripts/classify_universe.py --observations obs.csv \
     [--last-trade-closes lt.csv] [--merger-terms terms.csv] [--recoveries rec.csv] \
     [--extract-merger-terms-llm] [--no-extract-payouts] [--limit N]
 # → output/securities.csv, ticker_history.csv, cusip_history.csv,
-#   delistings.csv, payouts.csv, review.csv
+#   delistings.csv, payouts.csv, review.csv, review_summary.csv,
+#   observation_map.csv
 
 python scripts/observations_from_snapshots.py --dir <folder of dated CSVs> --out obs.csv
 python scripts/observations_from_instruments.py --instruments all.txt --out obs.csv   # (ticker,start,end) → 2 rows each
@@ -400,7 +436,7 @@ architecture, test count).
 
 1. `pytest` passes offline, including the re-keyed 31-case golden set.
 2. A full run on the `qlib_practice` universe (observations from its iShares and
-   Wikipedia snapshot CSVs) writes all six files with no crash and prints coverage.
+   Wikipedia snapshot CSVs) writes all eight files with no crash and prints coverage.
 3. Spot checks:
    - AET: `sec_id` `BBG000FJLFX8`; delisting bucket `merger`; `last_trade_date`
      2018-11-28; `last_trade_close` 212.70.
@@ -773,3 +809,28 @@ line changes observable output.
   rows. Unlike a delisting row's `info` flags, which stay on `delistings.csv`,
   `no_figi` belongs to a security, not a delisting, so it appears on no other
   table.
+- **`ticker_history` is clipped only at the delisting that actually ends the
+  security (§7.2, §8.5).** The spec's simple "the last trade day, unless
+  listed" rule is refined: a delisting whose successor is the security itself
+  (a continuing exchange transfer, D18) never clips it, and neither does one
+  after which the security's own CUSIP keeps trading under its own ticker —
+  at least 20 live fails rows (never a deleted symbol) over at least 60 days,
+  at 2 or more distinct prices, so fails still settling at the last close
+  (a compliance failure's OTC tail) are not mistaken for continued trading. A
+  security none of whose delistings ends it, and that is not listed today
+  either, is left unclipped, ending at its last real sighting rather than at
+  a delisting record that did not actually end it.
+- **A backfilled observation adds no `ticker_history` range (§7.2, §7.6,
+  §8.5, controller ruling).** The user decided backfilled tickers are
+  map-only: an observation `observation_map.csv` marks `backfilled_ticker`
+  is dropped from the security's own ticker-sighting list before
+  `ranges_from_sightings` runs (`history.filtered_ticker_sightings`); the
+  delisting search's own copy of the sightings (Form 25 matching, last-trade
+  dating) is untouched, since dropping it there could misdate or mismatch a
+  filing. FTD-sourced sightings are never dropped — they are the evidence a
+  backfilled observation lacks.
+- **`observation_map.csv`'s `history_ticker`/`in_ticker_history` read the
+  history stage's own output, not a fresh computation (§7.6).** Both are
+  derived from the already-built `ticker_history.csv` rows for the security
+  (grouped by `sec_id`) and its already-computed clipped end date, so the
+  map can never disagree with the table it is describing.

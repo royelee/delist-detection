@@ -85,13 +85,13 @@ classification evidence, and concrete train/backtest mechanics:
 
 ---
 
-## The seven output tables
+## The eight output tables
 
-`classify_universe.py` writes seven CSVs to `output/`, all committed
+`classify_universe.py` writes eight CSVs to `output/`, all committed
 artifacts (one row layout each, fixed column order, ISO dates, `;`-joined
 lists, empty cell for NULL, rows sorted by key unless noted — see
 [`store.py`](src/delist_detection/store.py) for the schema every table
-shares). `delistings.csv` is the primary deliverable; the other six support
+shares). `delistings.csv` is the primary deliverable; the other seven support
 it.
 
 ### `securities.csv` — key `sec_id`
@@ -127,6 +127,19 @@ added successor security's ticker range (exchange-transfer continuations),
 built directly from the 8-K that named it rather than from FTD sightings;
 an added acquirer security's range still comes from `ftd`.
 
+A security's ranges are clipped at the last delisting that actually *ends*
+it, not just its last delisting: one whose successor is the security itself
+(a continuing exchange transfer) never clips it, and neither does one after
+which the security's own CUSIP keeps trading under its own ticker — at least
+20 live fails rows over at least 60 days with 2 or more distinct prices, so
+fails still settling at the last close (a compliance failure's OTC tail)
+don't read as continued trading. A security none of whose delistings ends
+it, and that isn't listed today either, is left unclipped, ending at its
+last real sighting. Separately, an observation `observation_map.csv` marks
+`backfilled_ticker` (below) is never itself a ticker sighting here — a
+caller's snapshot that projects a later ticker backward onto a date the
+security did not yet trade under it opens no range for that ticker.
+
 ### `cusip_history.csv` — key `(sec_id, valid_from, cusip)`
 
 Point-in-time CUSIP ranges, same shape as `ticker_history.csv`:
@@ -136,6 +149,40 @@ sec_id, cusip, valid_from, valid_to, source
 ```
 
 Built from SEC fails-to-deliver rows and caller-supplied CUSIPs.
+
+### `observation_map.csv` — key `(ticker, as_of, name, cusip, pin_cik, pin_sec_id)`
+
+One row per distinct input observation (the same de-duplication
+`load_observations` applies), naming what became of it — the caller's join
+surface for index membership and ticker look-ups.
+
+```
+ticker, as_of, name, cusip, pin_cik, pin_sec_id, era, sec_id, issuer_cik,
+history_ticker, in_ticker_history, status
+```
+
+`pin_cik`/`pin_sec_id` are the observation's own `cik`/`sec_id` columns, kept
+under their own names since `issuer_cik`/`sec_id` here are the *resolved*
+answer. `history_ticker` is the security's `ticker_history` spelling on
+`as_of` (an observed `BFB` gets `BF-B`, the spelling to join panels on);
+`in_ticker_history` is `true` when a `ticker_history` range of that security,
+under the observed ticker (either separator spelling), covers `as_of`.
+`status` is the first of:
+
+| Status | Meaning |
+|---|---|
+| `unresolved` | the era's `sec_id` is None — the observation named no identifiable security |
+| `after_delisting` | the security is not listed today and `as_of` is after its clipped `ticker_history` end (a stale snapshot listed it after it was gone) |
+| `conflict` | `(ticker, as_of)` was seen under two or more names (`observation_conflict:<date>` in `review.csv`) |
+| `backfilled_ticker` | no fails-to-deliver row of the security's CUSIPs under the observed ticker (either separator spelling) within ±30 days of `as_of`, but at least one under another symbol — a caller's snapshot projected a later ticker backward onto a date the security traded under a different one |
+| `mapped` | everything else — the ordinary case |
+
+A `backfilled_ticker` observation still gets its `sec_id` here; it just adds
+no range to `ticker_history` (see above). **Membership from
+`observation_map.csv`, ticker look-ups through `ticker_history.csv` keyed on
+`history_ticker`** — not the raw observed ticker, which a class ticker may
+spell without its separator. Under `--limit N`, only the run's own eras get
+rows, and the run log says how many of the input's observations that is.
 
 ### `delistings.csv` — key `(sec_id, delist_date)` — the primary output
 
@@ -263,7 +310,7 @@ Not every row is settled by clean evidence. `enrich()` collects every
 classifier and payout-gate flag into a `review_flags` column on
 `delistings.csv` (semicolon-joined), and `classify_universe.py` also writes
 `output/review.csv` and `output/review_summary.csv` (plus rows for
-securities with no delisting at all — see *The seven output tables* above),
+securities with no delisting at all — see *The eight output tables* above),
 with the ticker, bucket, `dlret`, reason, `cik`, and anchor 8-K item set, so a
 human can triage without re-deriving which rows the automatic rules could not
 settle on their own. `review.csv` also carries a delisting with a blank
@@ -564,9 +611,9 @@ python scripts/verify_altair.py          # smoke test: ALTR → CRSP 231 high
 # Build an observations CSV, then run the pipeline:
 python scripts/observations_from_instruments.py --instruments data/delisted_tickers.tsv --out obs.csv
 # or: scripts/observations_from_snapshots.py --dir <folder of dated index-membership CSVs> --out obs.csv
-python scripts/classify_universe.py --observations obs.csv   # → output/{securities,ticker_history,cusip_history,delistings,payouts,review,review_summary}.csv
+python scripts/classify_universe.py --observations obs.csv   # → output/{securities,ticker_history,cusip_history,delistings,payouts,review,review_summary,observation_map}.csv
 
-pytest -q                                # 1321 unit tests, no network
+pytest -q                                # 1342 unit tests, no network
 ```
 
 `classify_universe.py` prints a summary when it finishes: rows written per
@@ -813,7 +860,7 @@ scripts/
     verify_altair.py                 End-to-end sanity check on ALTR (Siemens deal)
     observations_from_instruments.py  Legacy (ticker,start,end) file → observations CSV
     observations_from_snapshots.py    Folder of dated snapshot CSVs → observations CSV
-    classify_universe.py              Reads --observations → writes the seven output tables
+    classify_universe.py              Reads --observations → writes the eight output tables
     accept_review.py                  Bulk-accept review.csv rows by flag → appends data/review_decisions.csv
     verify_against_web.py             Independent EDGAR cross-check → output/web_verification.csv
     compute_corrected_returns.py      CLI: read panel + delistings.csv → write BMP-corrected panel

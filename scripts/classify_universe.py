@@ -4,7 +4,8 @@ Reads:  an observations CSV (ticker, as_of[, name, cusip, cik, sec_id]), and
         data/review_decisions.csv (accepted review flags; default path, so a
         missing file there means no decisions)
 Writes: output/securities.csv, ticker_history.csv, cusip_history.csv,
-        delistings.csv, payouts.csv, review.csv, review_summary.csv
+        delistings.csv, payouts.csv, review.csv, review_summary.csv,
+        observation_map.csv
 """
 from __future__ import annotations
 

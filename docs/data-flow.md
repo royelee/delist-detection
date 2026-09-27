@@ -111,6 +111,11 @@ one observation per row per file).
 └─────────────────┘                        └──────────────────────┘
 ```
 
+`observation_map.csv` (one row per input observation, its era, `sec_id` and
+status) is written in the same final row-building stage as the
+`ticker_history.csv`/`cusip_history.csv` box above, from the same eras and
+resolutions; see *Outputs* below for its schema and status rules.
+
 ## Caching
 
 Every EDGAR JSON response is SHA1-keyed and cached in `cache/edgar/*.json`;
@@ -300,7 +305,7 @@ Each run writes `run_manifest.json` next to the tables:
 
 The manifest is not part of the byte-identical-output guarantee: `as_of`, the
 code version and the worker count make it expected to differ between two runs
-even when their seven tables come out identical. A run that aborts leaves the
+even when their eight tables come out identical. A run that aborts leaves the
 previous manifest in place.
 
 `scripts/classify_universe.py` exits:
@@ -668,7 +673,7 @@ goes to `review.csv`.
 
 ## Outputs
 
-Seven CSVs written to `output/`, all committed artifacts; see `store.py` for
+Eight CSVs written to `output/`, all committed artifacts; see `store.py` for
 the exact schema. `delistings.csv` is the primary deliverable.
 
 `output/securities.csv`: one row per identified security — `sec_id`,
@@ -686,6 +691,45 @@ otherwise empty. `ticker_history.source` is `observation`, `ftd`, or
 continuation, spec §8.5) is built directly from the 8-K that named it rather
 than from FTD sightings; an added acquirer security's range still comes from
 `ftd`.
+
+A security's ranges are clipped at the last delisting that actually ends it
+(`pipeline._ends_the_security`), not simply its last delisting: one whose
+successor is the security itself (a continuing exchange transfer, D18) is
+skipped, and so is one after which the security's own CUSIP keeps trading
+under its own ticker — at least 20 live fails rows over at least 60 days with
+2 or more distinct prices, so fails still settling at the last close (a
+compliance failure's OTC tail) don't count as continued trading. A security
+none of whose delistings ends it, and that is not listed today either, is
+left unclipped, ending at its last real sighting. Separately, an observation
+`observation_map.csv` marks `backfilled_ticker` (below) is never itself a
+ticker sighting here (`history.filtered_ticker_sightings`) — a caller's
+snapshot that projects today's ticker back onto a date the security did not
+yet trade under it opens no range for that ticker; the delisting search's own
+copy of the sightings (`ticker_sightings`, used for Form 25 matching and
+last-trade dating) is untouched by either rule.
+
+`output/observation_map.csv` (key `ticker, as_of, name, cusip, pin_cik,
+pin_sec_id`): one row per distinct input observation (after the same
+de-duplication `load_observations` does), naming the era it fell into, the
+`sec_id` it resolved to (blank when none did), the era's issuer CIK, the
+`ticker_history` spelling and coverage on that date (`history_ticker`,
+`in_ticker_history`), and a `status` — the first of:
+
+| Status | Rule |
+|---|---|
+| `unresolved` | the era's `sec_id` is None |
+| `after_delisting` | the security is not listed today and `as_of` is after its clipped `ticker_history` end (the same end date the paragraph above computes, not recomputed) |
+| `conflict` | `(ticker, as_of)` is in `observations.observation_conflicts` (two names, one ticker, one day) |
+| `backfilled_ticker` | `as_of` ≥ 2004-01-31, no fails-to-deliver row of the security's CUSIPs under the observed ticker (either separator spelling) within ±30 days, and at least one such row under another symbol in that window |
+| `mapped` | everything else |
+
+This is the caller's join surface: index membership comes from
+`observation_map.csv` (every row that resolved is one observation's
+`sec_id`), and a ticker lookup on a date goes through `ticker_history.csv` by
+`history_ticker` — the canonical spelling (`BF-B`, not the raw `BFB`) a
+caller's own observed ticker may need normalizing to first. `--limit N` runs
+only ever produce rows for the eras that ran; the log names how many of the
+input's observations that is ("N of M observations mapped").
 
 `output/delistings.csv`: one row per delisting event with the CRSP code,
 bucket, confidence, evidence chain (Form 25 date, 8-K items, Form 15 form
@@ -779,7 +823,7 @@ a token with a `:`; bulk-accepting a `fix`-severity flag needs `--yes`).
 `load_decisions` first (both read `utf-8-sig`, so an Excel BOM doesn't blank
 the first cell) and refuses to touch a file that doesn't load, rewriting a
 valid one with every existing row/column preserved in the file's own header
-order. Written by `scripts/classify_universe.py` alongside the other six
+order. Written by `scripts/classify_universe.py` alongside the other seven
 tables.
 
 `output/web_verification.csv` — independent EDGAR cross-check produced by
