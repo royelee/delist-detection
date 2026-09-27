@@ -39,7 +39,7 @@ BBG000BBXQ71,DLM,merger,231,"M&A change in control (5.01) with delisting/rights 
 BBG000BBY4T5,ANAT,merger,231,Merger filing DEFM14A 2020-03-25 before the delisting,AMERICAN NATIONAL INSURANCE CO,AMERICAN NATIONAL INSURANCE CO /TX/,AMERICAN NATIONAL INSURANCE,3/3,"25=Y,15=Y",OK,
 BBG000BC16H7,LPNT,merger,231,M&A 2.01+3.01+5.01 (acquired by external acquirer),"LEGACY LIFEPOINT HEALTH, INC.","LIFEPOINT HEALTH, INC.; LIFEPOINT HOSPITALS, INC.; Lakers Holding Corp.",LIFEPOINT HEALTH INC,2/2,"25=Y,15=Y",OK,
 BBG000BC26P7,GES,merger,231,M&A 2.01+3.01+5.01 (acquired by external acquirer),GUESS INC,GUESS INC ET AL/CA/,GUESS INC,1/1,"25=Y,15=Y",OK,
-BBG000BC2C10,APA,exchange_transfer,304,Continued 10-K/Q filings >180d after delist (moved to OTC or spun off),APACHE CORP,,APACHE CORP,1/1,"25=Y,15=Y",OK,
+BBG000BC2C10,APA,exchange_transfer,304,Continued 10-K/Q filings >180d after delist (moved to OTC or spun off); successor by same ticker,APACHE CORP,,APACHE CORP,1/1,"25=Y,15=Y",OK,
 BBG000BC40Y8,APC,merger,231,M&A 2.01+3.01+5.01 (acquired by external acquirer),ANADARKO PETROLEUM CORP,,ANADARKO PETROLEUM CORP,2/2,"25=Y,15=Y",OK,
 BBG000BC8G88,ARG,merger,231,M&A 2.01+3.01+5.01 (acquired by external acquirer),AIRGAS INC,,AIRGAS INC,1/1,"25=Y,15=Y",OK,
 BBG000BC9938,VMW,merger,231,M&A 2.01+3.01+5.01 (acquired by external acquirer),VMWARE LLC,"VMWARE, INC.",VMWARE CLASS A INC,1/1,"25=Y,15=Y",OK,

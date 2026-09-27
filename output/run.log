@@ -1,7 +1,7 @@
 2469 ticker eras
 2660 eras after the FTD split
-resolver's second pass: 86 issuers inferred, 7 first-pass answers its CUSIP evidence contradicts
-issuer resolution: 0 EDGAR requests, 0 SEC data-file downloads (all threads)
+resolver's second pass: 87 issuers inferred, 0 first-pass answers its CUSIP evidence contradicts
+issuer resolution: 3 EDGAR requests, 0 SEC data-file downloads (all threads)
 FIGI handoff: ABI@2008-01-16 joins BBG000FJJW82, the line ABI@2008-07-25 is confirmed on (ABI@2008-01-16's CUSIP 038020103 ended as ABI@2008-07-25's 038149100 began on 2008-07-02)
 FIGI handoff: ACAS@2008-01-16 joins BBG000BYR208, the line ACAS@2008-07-25 is confirmed on (ACAS@2008-01-16's CUSIP 024937104 ended as ACAS@2008-07-25's 02503Y103 began on 2008-07-09)
 FIGI handoff: ACE@2008-07-25 joins BBG000BR14K5, the line CB@2016-06-30 is confirmed on (ACE@2008-07-25's CUSIP H0023R105 ended as CB@2016-06-30's H1467J104 began on 2016-01-19)
@@ -98,19 +98,11 @@ FIGI handoff: TYC@2008-01-16 joins BBG000BVWLJ6 with its issuer and class, held 
 FIGI handoff: TYC@2009-03-20 joins BBG000BVWLJ6 with its issuer and class, held with no pick of its own (guard c)
 FIGI handoff: WTW@2008-01-16 joins BBG000DY6735 with its issuer and class, held with no pick of its own (guard c)
 2209 securities; FIGI sources {'cusip': 2060, 'placeholder': 99, 'ticker': 50}
-halts_on(2019-03-18): network error: Exceeded 30 redirects.
-halts_on(2019-03-19): network error: Exceeded 30 redirects.
-halts_on(2019-03-20): network error: Exceeded 30 redirects.
-halts_on(2019-03-21): network error: Exceeded 30 redirects.
 [50/2209] securities searched; 23 delistings so far
 [100/2209] securities searched; 46 delistings so far
 [150/2209] securities searched; 65 delistings so far
 [200/2209] securities searched; 98 delistings so far
 [250/2209] securities searched; 118 delistings so far
-halts_on(2019-03-18): network error: Exceeded 30 redirects.
-halts_on(2019-03-19): network error: Exceeded 30 redirects.
-halts_on(2019-03-20): network error: HTTPSConnectionPool(host='www.nasdaqtrader.com', port=443): Read timed out. (read timeout=30)
-halts_on(2019-03-21): network error: Exceeded 30 redirects.
 [300/2209] securities searched; 142 delistings so far
 [350/2209] securities searched; 159 delistings so far
 [400/2209] securities searched; 183 delistings so far
@@ -154,10 +146,9 @@ delisting search: 0 EDGAR requests, 0 SEC data-file downloads (all threads)
 payouts: 0 EDGAR requests, 0 SEC data-file downloads (all threads)
 successor search: 0 EDGAR requests, 0 SEC data-file downloads (all threads)
 observation_map: 35955 of 35955 observations mapped
-WARNING: 1 review row(s) flagged 'resolution_degraded' -- an answer rested on a failed SEC or Nasdaq halt-feed request or a stale copy; outputs were still written, run again once they answer.
-Rows written: {'securities': 2226, 'ticker_history': 2824, 'cusip_history': 2659, 'delistings': 982, 'payouts': 633, 'review': 761, 'review_summary': 34, 'observation_map': 35955}
+Rows written: {'securities': 2226, 'ticker_history': 2824, 'cusip_history': 2659, 'delistings': 982, 'payouts': 633, 'review': 755, 'review_summary': 32, 'observation_map': 35955}
 Delistings by bucket: {'merger': 633, 'exchange_transfer': 283, 'compliance_failure': 6, 'liquidation': 47, 'unknown': 12, 'expiration': 1}
 FIGI sources: {'cusip': 2060, 'placeholder': 99, 'ticker': 50}
-Review flags: {'ftd_close_prior': 113, 'resolved_by_current_ticker_map': 126, 'no_form25': 96, 'delist_date_approx': 84, 'successor_unknown': 129, 'ftd_close_lagged': 132, 'acquirer_close_lagged': 29, 'no_last_trade_date': 134, 'no_last_close': 163, 'payout_gate_failed': 13, 'terms_gate_failed': 51, 'merger_at_par': 53, 'last_trade_date_unconfirmed': 76, 'last_trade_date_conflict': 45, 'observed_after_delisting': 30, 'no_evidence_default': 12, 'member_name_mismatch': 29, 'distress_at_normal_price': 3, 'llm_gate_failed': 17, 'resolution_degraded': 1, 'resolved_by_cik_map': 10, 'bankruptcy_before_merger': 1, 'bankruptcy_tag_unconfirmed': 1, 'resolved_by_manual_override': 1, 'no_figi': 107, 'issuer_inferred': 75, 'issuer_cusip_disagrees': 5, 'observation_conflict': 6, 'ticker_unconfirmed': 63, 'ended_without_delisting': 74, 'form25_unclassified': 116, 'form25_unmatched': 55, 'ticker_shared': 29}
-Review: 138 fix, 623 check (401 info-only rows hidden, 0 accepted, 0 unmatched decisions)
-EXIT_CODE=3
+Review flags: {'ftd_close_prior': 113, 'resolved_by_current_ticker_map': 126, 'no_form25': 96, 'delist_date_approx': 84, 'successor_unknown': 128, 'ftd_close_lagged': 132, 'acquirer_close_lagged': 29, 'no_last_trade_date': 134, 'no_last_close': 163, 'payout_gate_failed': 13, 'terms_gate_failed': 51, 'merger_at_par': 53, 'last_trade_date_unconfirmed': 76, 'last_trade_date_conflict': 45, 'observed_after_delisting': 30, 'no_evidence_default': 12, 'member_name_mismatch': 29, 'distress_at_normal_price': 3, 'llm_gate_failed': 17, 'resolved_by_cik_map': 10, 'bankruptcy_before_merger': 1, 'bankruptcy_tag_unconfirmed': 1, 'resolved_by_manual_override': 1, 'no_figi': 107, 'issuer_inferred': 76, 'observation_conflict': 6, 'ticker_unconfirmed': 63, 'ended_without_delisting': 74, 'form25_unclassified': 116, 'form25_unmatched': 55, 'ticker_shared': 29}
+Review: 137 fix, 618 check (402 info-only rows hidden, 0 accepted, 0 unmatched decisions)
+EXIT_CODE=0

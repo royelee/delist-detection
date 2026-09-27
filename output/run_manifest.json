@@ -4,27 +4,34 @@
     "archives": 12774,
     "company_search": 1864,
     "company_tickers": 10,
-    "full_text_search": 821,
-    "submissions": 37305,
-    "submissions_page": 14116
+    "full_text_search": 819,
+    "submissions": 37239,
+    "submissions_page": 14100
   },
-  "code_version": "de92331-dirty",
-  "degraded_answers": {
-    "nasdaq_halt_feed": 4
+  "code_version": "7f57ecd-dirty",
+  "degraded_answers": {},
+  "latency_ms": {
+    "submissions": {
+      "max": 155.0,
+      "n": 3,
+      "p50": 97.7,
+      "p95": 155.0
+    }
   },
-  "latency_ms": {},
   "not_covered": {},
   "rejected_queries": {},
-  "resolution_degraded": 1,
+  "resolution_degraded": 0,
   "review": {
     "accepted": 0,
-    "check": 623,
+    "check": 618,
     "cleared": 0,
-    "fix": 138,
-    "info_hidden": 401,
+    "fix": 137,
+    "info_hidden": 402,
     "unmatched_decisions": 0
   },
-  "sec_requests": {},
+  "sec_requests": {
+    "submissions": 3
+  },
   "sec_workers": 4,
   "stages": {
     "delisting search": {
@@ -32,7 +39,7 @@
       "sec_data_downloads": 0
     },
     "issuer resolution": {
-      "edgar_requests": 0,
+      "edgar_requests": 3,
       "sec_data_downloads": 0
     },
     "payouts": {
@@ -44,8 +51,6 @@
       "sec_data_downloads": 0
     }
   },
-  "warm_degraded": {
-    "nasdaq_halt_feed": 4
-  },
+  "warm_degraded": {},
   "warm_failed": {}
 }
