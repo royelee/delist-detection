@@ -820,6 +820,15 @@ def _delisting_rows(delistings: list[Delisting], closes: dict[DelistingKey, floa
 CONTINUATION_MIN_ROWS = 20    # a WRK-like delisting record's own CUSIP must show at least this many live fails rows...
 CONTINUATION_MIN_DAYS = 60    # ...spanning at least this many days...
 CONTINUATION_MIN_PRICES = 2   # ...at 2 or more distinct prices, so fails still settling at the last close don't count
+# The continues-trading exception only ever questions a delisting whose bucket
+# is a reorganization that can plausibly leave the listing itself running (a
+# holdco merger, an exchange transfer) -- never a liquidation, compliance
+# failure or expiration, whose whole premise is that the exchange listing
+# ended: ticker_history records exchange listings (CONTEXT.md "Listing"), and
+# OTC pink-sheet fails after a real bankruptcy delisting are not that listing
+# continuing (RHD, Smurfit-Stone, Idearc, GGP, SunPower, Endo: real, varied-
+# price OTC trading for years, but the exchange listing itself is long gone).
+CONTINUATION_BUCKETS = frozenset({CrspBucket.MERGER, CrspBucket.EXCHANGE_TRANSFER})
 
 
 def _continues_after(s: Security, after: str, sec_cusips: dict[str, list[str]], ftd: FtdIndex) -> bool:
@@ -844,13 +853,25 @@ def _continues_after(s: Security, after: str, sec_cusips: dict[str, list[str]], 
 def _ends_the_security(e: Delisting, s: Security, sec_cusips: dict[str, list[str]], ftd: FtdIndex) -> bool:
     """Whether delisting `e` is the kind that actually ends security `s`
     (Phase 4): not one whose successor is the security itself (a continuing
-    exchange transfer, D18), and not one after which `s`'s own CUSIP keeps
-    trading under its own ticker (`_continues_after`: a WRK-like delisting
-    record that did not really end trading)."""
+    exchange transfer, D18); and, for a merger or exchange_transfer whose
+    last-trade day is *confirmed* (`e.last_trade.day` set and not flagged
+    `last_trade_date_unconfirmed`) -- an unconfirmed day is a guess (the
+    no-Form-25 "continued 10-K/Q filings" fallback substitutes the security's
+    own last sighting when it has no last-trade evidence at all, e.g. Monster
+    Worldwide's and SunPower's 2008-09 fallback rows; Bank of Ozarks has no
+    day at all) and too weak a signal to second-guess against fails evidence
+    -- there is no established day to test continuation from -- not one
+    after which `s`'s own CUSIP keeps trading under its own ticker
+    (`_continues_after`: a WRK-like delisting record that did not really end
+    trading, confirmed by a real EX-99.25 notice/8-K/MIDAS/halt day). A
+    liquidation, compliance_failure, expiration or unknown delisting always
+    ends the security, whatever fails rows follow."""
     if e.record.successor_sec_id == e.sec_id:
         return False
-    after = e.last_trade.day.isoformat() if e.last_trade.day is not None else e.delist_date
-    return not _continues_after(s, after, sec_cusips, ftd)
+    if (e.record.bucket not in CONTINUATION_BUCKETS or e.last_trade.day is None
+            or "last_trade_date_unconfirmed" in e.last_trade.flags):
+        return True
+    return not _continues_after(s, e.last_trade.day.isoformat(), sec_cusips, ftd)
 
 
 def _history_rows(ctx: _RunContext, securities: dict[str, Security], search: _DelistingSearch,

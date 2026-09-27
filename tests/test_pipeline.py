@@ -633,19 +633,22 @@ def test_a_merger_with_the_same_cusip_still_trading_under_its_own_ticker_does_no
     assert aet[0]["valid_to"] == continuing[-1].date       # extends to the real last sighting instead
 
 
-def test_a_compliance_failure_with_settling_same_symbol_fails_still_clips_the_history(fake_edgar, tmp_path,
-                                                                                      monkeypatch):
-    """A compliance failure's fails rows keep appearing under the same symbol
-    after the delisting (unsettled fails), but at one price only -- fewer than
-    2 distinct prices, so it is not real continued trading and the history
-    stays clipped at the delisting."""
-    # settling at the same price the close-pricing row (2018-11-29) already
-    # carries: a delisted security's fails keep reporting its frozen last price,
-    # not a fresh one, so this is one distinct price, not two.
-    settling = _continuing_rows("AET", "00817Y108", "AETNA INC.(NEW)", start="2018-12-03", count=25, prices=(212.70,))
-    index, clients = _clients(fake_edgar, ftd_rows=list(_FtdClient.ROWS) + settling)
-    record = DelistRecord(ticker="AET", cik=1122304, observed_delist_date="2018-11-28", crsp_code=560,
-                          bucket=CrspBucket.COMPLIANCE_FAILURE, confidence="high", reason="x",
+def test_a_bankruptcy_liquidation_with_varying_price_otc_fails_still_clips_the_history(fake_edgar, tmp_path,
+                                                                                       monkeypatch):
+    """RHD/Smurfit-Stone/Idearc/GGP-like: a bankruptcy (liquidation) delisting
+    is followed by years of real, varying-price OTC pink-sheet fails -- unlike
+    a WRK-like reorg, the listing itself did not carry on (CONTEXT.md
+    "Listing": ticker_history records exchange listings, and a delisting
+    leaves the security on no exchange). The continues-trading exception
+    applies only to merger/exchange_transfer buckets, so a liquidation always
+    clips, however much (and however varied) the fails evidence that follows
+    -- the old <2-distinct-price guard alone would have wrongly un-clipped
+    this (many rows, many distinct prices, well past 60 days)."""
+    varying = _continuing_rows("AET", "00817Y108", "AETNA INC.(NEW)", start="2018-12-03", count=200, step_days=10,
+                               prices=(0.50, 0.75, 1.10, 0.30, 0.90))
+    index, clients = _clients(fake_edgar, ftd_rows=list(_FtdClient.ROWS) + varying)
+    record = DelistRecord(ticker="AET", cik=1122304, observed_delist_date="2018-11-28", crsp_code=470,
+                          bucket=CrspBucket.LIQUIDATION, confidence="high", reason="Bankruptcy",
                           evidence={"flags": []}, sec_id="BBG000FJLFX8", delist_date="2018-12-09")
     ev = Delisting(sec_id="BBG000FJLFX8", cik=1122304, ticker="AET", delist_date="2018-12-09", record=record,
                         last_trade=LastTrade(date(2018, 11, 28), "notice_a", ()), form25=None, form25_sub=None,
@@ -664,6 +667,75 @@ def test_a_compliance_failure_with_settling_same_symbol_fails_still_clips_the_hi
     th = read_table("ticker_history", table_path(tmp_path, "ticker_history"))
     aet = [r for r in th if r["sec_id"] == "BBG000FJLFX8"]
     assert aet[0]["valid_to"] == "2018-11-28"
+
+
+def test_a_merger_with_no_last_trade_date_at_all_still_clips_despite_continuing_fails_rows(
+        fake_edgar, tmp_path, monkeypatch):
+    """Bank-of-Ozarks-like: a merger/exchange_transfer delisting with no
+    last-trade date at all (`no_last_trade_date`) is too weak a signal to
+    trust "fails rows show it kept trading past X" against -- there is no X
+    to compare to. It still clips at delist_date, whatever fails evidence
+    follows; only a delisting with an established, confirmed last-trade day
+    can be second-guessed by continued trading."""
+    continuing = _continuing_rows("AET", "00817Y108", "AETNA INC.(NEW)", start="2018-12-03", count=25)
+    index, clients = _clients(fake_edgar, ftd_rows=list(_FtdClient.ROWS) + continuing)
+    record = DelistRecord(ticker="AET", cik=1122304, observed_delist_date="2018-11-28", crsp_code=200,
+                          bucket=CrspBucket.MERGER, confidence="high", reason="M&A 2.01+3.01",
+                          evidence={"flags": []}, sec_id="BBG000FJLFX8", delist_date="2018-12-09")
+    ev = Delisting(sec_id="BBG000FJLFX8", cik=1122304, ticker="AET", delist_date="2018-12-09", record=record,
+                        last_trade=LastTrade(None, "", ("no_last_trade_date",)), form25=None, form25_sub=None,
+                        exchange="")
+
+    class _CannedFinder:
+        def __init__(self, edgar, classifier, *, midas=None, halts=None):
+            pass
+
+        def find(self, ctx):
+            return ([ev], []) if ctx.security.sec_id == "BBG000FJLFX8" else ([], [])
+
+    monkeypatch.setattr(pipeline, "DelistingFinder", _CannedFinder)
+    run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
+
+    th = read_table("ticker_history", table_path(tmp_path, "ticker_history"))
+    aet = [r for r in th if r["sec_id"] == "BBG000FJLFX8"]
+    assert aet[0]["valid_to"] == "2018-12-09"      # clipped at delist_date -- no established last-trade day to test
+
+
+def test_a_merger_with_an_unconfirmed_last_trade_date_still_clips_despite_continuing_fails_rows(
+        fake_edgar, tmp_path, monkeypatch):
+    """Monster Worldwide/SunPower-like: the no-Form-25 "continued 10-K/Q
+    filings" fallback (delistings.py's `_fallback_delisting`) never claims to
+    know when trading stopped -- when it finds no last-trade evidence at all
+    it substitutes the security's own last observed sighting date, flagged
+    `last_trade_date_unconfirmed`. That guessed date is too weak to trust
+    "fails rows show it kept trading past X" against (Monster Worldwide
+    traded normally as MNST on NYSE for years after this fallback guessed
+    2009-06-08; the guess, not the listing, was wrong). Only a *confirmed*
+    last-trade day (no `last_trade_date_unconfirmed` flag) can be
+    second-guessed by continued trading."""
+    continuing = _continuing_rows("AET", "00817Y108", "AETNA INC.(NEW)", start="2018-12-03", count=25)
+    index, clients = _clients(fake_edgar, ftd_rows=list(_FtdClient.ROWS) + continuing)
+    record = DelistRecord(ticker="AET", cik=1122304, observed_delist_date="2018-11-28", crsp_code=304,
+                          bucket=CrspBucket.EXCHANGE_TRANSFER, confidence="medium",
+                          reason="Continued 10-K/Q filings >180d after delist (moved to OTC or spun off)",
+                          evidence={"flags": []}, sec_id="BBG000FJLFX8", delist_date="2018-12-09")
+    ev = Delisting(sec_id="BBG000FJLFX8", cik=1122304, ticker="AET", delist_date="2018-12-09", record=record,
+                        last_trade=LastTrade(date(2018, 11, 28), "", ("last_trade_date_unconfirmed",)),
+                        form25=None, form25_sub=None, exchange="")
+
+    class _CannedFinder:
+        def __init__(self, edgar, classifier, *, midas=None, halts=None):
+            pass
+
+        def find(self, ctx):
+            return ([ev], []) if ctx.security.sec_id == "BBG000FJLFX8" else ([], [])
+
+    monkeypatch.setattr(pipeline, "DelistingFinder", _CannedFinder)
+    run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
+
+    th = read_table("ticker_history", table_path(tmp_path, "ticker_history"))
+    aet = [r for r in th if r["sec_id"] == "BBG000FJLFX8"]
+    assert aet[0]["valid_to"] == "2018-11-28"      # clipped at the guessed last-trade day -- never confirmed
 
 
 # --- run() builds the SecurityContext correctly ---
