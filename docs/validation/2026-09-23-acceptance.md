@@ -1437,3 +1437,151 @@ caller named — KORS, JDSU, MHFI, LUK, DSW, PAH, HCP — is now in
 backfill or correctly clipped (`after_delisting`/`after_unconfirmed_
 delisting`), none `unresolved`.
 
+## Fix round 1 (2026-09-26, controller review of Task 4)
+
+Three items from the controller's review of Task 4's live run, addressed on
+top of it (base 2644efe).
+
+### 1. A continuing merger/exchange_transfer now gets `successor_sec_id` = itself
+
+**The bug.** DIS's newly-found 2019-03-30 delisting (Task 4's DIS pin) had
+`bucket=merger`, `dlret=-0.079458`, no successor: `handling.py`/
+`qlib_adapter.py` would read that as a real universe exit and sell Disney at
+-7.9% in March 2019, though the security kept trading as DIS under the same
+CUSIP the whole time (`ticker_history` was already correctly left unclipped,
+via `_ends_the_security`/`_continues_after`). WRK's pre-existing 2018-11-15
+merger row (`dlret=0`, no successor) is the identical pattern. The two
+tables disagreed because they used two different predicates for "does this
+delisting end the security": `ticker_history`'s clip used the strong,
+FTD-confirmed check (>=20 live fails rows over >=60 days at >=2 prices under
+the security's own CUSIP and ticker after a confirmed last-trade day);
+`delistings.csv`'s successor link used a weaker, classification-time
+`continued = listed_today or seen_after(...)` check, and only for the
+`exchange_transfer` bucket — a continuing `merger` never got a successor
+link of any kind.
+
+**The fix** (`src/delist_detection/pipeline.py`, commit 3de7fbf). No change
+to the classifier, bucket assignment or DLRET computation. `_delisting_endings()`
+computes `_ends_the_security` once for every delisting, shared by
+`_history_rows` (the ticker_history clip, behavior unchanged, now reads the
+map instead of recomputing it) and the new `_mark_continuing_delistings()`,
+which sets `successor_sec_id` to the delisting's own `sec_id` — via
+`Delisting.set_successor`, the same method a real cross-security successor
+link uses — for any merger or exchange_transfer the shared predicate says
+continues. Only ever fills a blank successor: a real, different successor a
+search already found is never overwritten, and a liquidation/
+compliance_failure/expiration/unknown delisting is untouched (the predicate
+never returns "continues" for one). Test-first (`tests/test_pipeline.py`):
+a DIS-like continuing merger gets `successor_sec_id` = itself; a real cash
+merger whose own CUSIP stops trading keeps no successor; a liquidation with
+a long OTC tail is untouched; an existing real successor (MWV -> WRK) is
+never overwritten. 1350 tests (+4).
+
+**Every delisting row whose successor changed on the real data** (3, not 2
+— all reasonable):
+- `BBG000BH4R78` DIS 2019-03-30: `successor_sec_id` blank -> `BBG000BH4R78`
+  (itself). Correct — the 2019 holding-company reorganization, DIS kept
+  trading.
+- `BBG008NXC572` WRK 2018-11-15: `successor_sec_id` blank -> `BBG008NXC572`
+  (itself). Correct — the pre-existing WestRock holdco-wrap case (`dlret=0`,
+  stock_ratio 1.0 at the same price).
+- `BBG000M34GG1` MIC (Macquarie Infrastructure Corp) 2021-10-03:
+  `successor_sec_id` blank -> `BBG000M34GG1` (itself). Not previously named
+  by the controller, but the same real pattern: crsp_code 200
+  ("acquisition with delisting"), `stock_ratio` 1.0, `dlret=0` — a 2021
+  corporate action that did not end the security, followed by MIC's real,
+  final going-private merger on 2022-07-31 (crsp_code 231, no successor,
+  correctly left alone: a private-equity buyout has no public successor
+  security).
+
+### 2. The `issuer_cusip_disagrees` family pinned (data, commit 7f57ecd)
+
+Pinned APA@2012-06-29, D@2012-06-29, D@2014-12-31, PENN@2008-01-16 and
+MSTR@2024-06-30 to the CIK each era's own CUSIP evidence names, every one
+verified against cached EDGAR names/former-names at the era's dates first
+(see the commit message for the full detail: each wrong pass-1 answer is an
+unrelated company — SmartStop Self Storage for APA, VWR Funding and a CNH
+equipment trust for D, IVERIC bio for PENN, Bitwise Funds Trust for MSTR).
+**HIG did not check out as the flag's literal reading suggests**: its
+`issuer_cusip_disagrees` fires symmetrically between HIG@2012-06-29 and
+HIG@2025-06-30, each citing the other's answer as its "CUSIP evidence."
+Checked both: HIG@2012-06-29's own pass-1 answer (1352526, "Hartford
+Financial Management Inc.", no former names) is wrong; HIG@2025-06-30's own
+pass-1 answer (874766, "HARTFORD INSURANCE GROUP, INC.", formerly "HARTFORD
+FINANCIAL SERVICES GROUP..." since 1997, covering both eras' real observed
+names) is already correct. Only HIG@2012-06-29 is pinned, to 874766;
+HIG@2025-06-30 is left alone — pinning it to 1352526 would have replaced a
+correct answer with a wrong one.
+
+**Effect on the live rerun**: `issuer_cusip_disagrees` drops from 5 to 0.
+Apache's 2021-03-14 delisting recovers its real successor link
+(`BBG00YTS96G2`) once `APA@2012-06-29`'s FIGI resolution correctly rejoins
+`BBG000BC2C10` (the pre-2021 Apache Corp composite, same as `APA@2008` and
+`APA@2014`) instead of wrongly extending `BBG00YTS96G2`'s (the 2021 entity's)
+`ticker_history` back to 2012-06-29; `successor_unknown` drops from 129 to
+128. `securities.csv` is otherwise unchanged (0 diffs) — every one of these
+eras' FIGI resolution was already CUSIP-correct; only the issuer CIK
+metadata (and, for APA, which composite the era belongs to) was wrong.
+`ticker_history` changes by exactly one range: `BBG00YTS96G2`'s "APA" range
+now starts 2021-03-02 (was wrongly 2012-06-29). `HIG@2008-01-16` (not
+pinned) also gains `issuer_cik` 874766 as a side effect (a sibling-inference
+pass picking up the corrected 2012 answer) — a harmless, correct bonus,
+matching its real historical identity.
+
+### 3. The Nasdaq halt feed for 2019-03-18..21
+
+Direct, out-of-pipeline requests (`requests.Session().get(...)`, the same
+URL and User-Agent `NasdaqHaltClient` uses, `www.nasdaqtrader.com` explicitly
+allowed) succeeded immediately for all four days with no redirect at all —
+the "Exceeded 30 redirects"/timeout failures on Task 4's four rerun attempts
+were a transient sandbox/network condition, not a persistent block or a
+real code issue. Fetched all four days through the real `NasdaqHaltClient`
+(writing `cache/nasdaq_halts/2019031{8,9}.xml`, `2019032{0,1}.xml`), so this
+round's rerun read them from cache. Result: `resolution_degraded` drops from
+1 to 0, DIS's row loses its `resolution_degraded` flag, and the run exits 0.
+
+### Rerun and verifier
+
+`DELIST_DETECTION_SEC_RATE_LOCK=... PYTHONPATH=src python
+scripts/classify_universe.py --observations data/observations.csv
+--extract-merger-terms-llm --sec-workers 4 --as-of 2026-09-25`: **exit 0**,
+3 SEC requests (fully warm otherwise), 0 `resolution_degraded`, 0
+`issuer_cusip_disagrees`. Verifier: OK 904, `WEAK_no_delist_form` 75,
+`OK_recycled_ticker` 3, **0 MISMATCH** of 982 — identical to Task 4's
+numbers (this round changes provenance/successor metadata, not delisting
+identity or dates).
+
+### Diff vs the committed Task 4 outputs (2644efe)
+
+| Table | Added | Removed | Changed |
+|---|---|---|---|
+| securities | 0 | 0 | 0 |
+| ticker_history | 1 | 1 | 0 |
+| cusip_history | 0 | 0 | 0 |
+| delistings | 0 | 0 | 4 |
+| payouts | 0 | 0 | 0 |
+| review | -6 rows (761 -> 755) | | |
+| review_summary | 0 | 2 (`resolution_degraded`, `issuer_cusip_disagrees`) | 4 |
+| observation_map | 58 | 58 | 7 |
+
+`observation_map`'s 58 added/58 removed are the pinned rows' key changing
+(the table is keyed in part on `pin_cik`, which the pins changed) — the same
+58 rows, not new or dropped observations; its 7 "changed" rows are
+`HIG@2008-01-16`'s `issuer_cik` gain described above. `review.csv` loses
+exactly the 5 `issuer_cusip_disagrees` rows and DIS's `resolution_degraded`
+row.
+
+### The caller's metric (unchanged this round)
+
+`in_ticker_history` stays **35,426 of 35,955** — none of this round's fixes
+touch observation-date ticker coverage; they correct successor-link
+metadata and issuer CIKs for securities whose `sec_id`/`ticker_history`
+coverage was already right (except APA's internal composite boundary,
+which does not change any observation's `in_ticker_history` answer).
+
+### Commits
+
+`3de7fbf` (successor-link fix + tests), `7f57ecd` (the five pins), the
+outputs and this note (see the two commits after this file's edit). No
+push; `feat/observation-map` only.
+
