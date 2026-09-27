@@ -129,13 +129,23 @@ an added acquirer security's range still comes from `ftd`.
 
 A security's ranges are clipped at the last delisting that actually *ends*
 it, not just its last delisting: one whose successor is the security itself
-(a continuing exchange transfer) never clips it, and neither does one after
-which the security's own CUSIP keeps trading under its own ticker — at least
-20 live fails rows over at least 60 days with 2 or more distinct prices, so
-fails still settling at the last close (a compliance failure's OTC tail)
-don't read as continued trading. A security none of whose delistings ends
-it, and that isn't listed today either, is left unclipped, ending at its
-last real sighting. Separately, an observation `observation_map.csv` marks
+(a continuing exchange transfer) never clips it. Beyond that, only a
+`merger` or `exchange_transfer` delisting with a *confirmed* last-trade day
+can be second-guessed by continued trading — it doesn't clip either when the
+security's own CUSIP keeps trading under its own ticker afterward, at least
+20 live fails rows over at least 60 days with 2 or more distinct prices
+(WRK). A `liquidation`, `compliance_failure`, `expiration` or `unknown`
+delisting always clips, however much (and however varied) the fails
+evidence that follows: `ticker_history` records exchange listings, and
+years of real, varying-price OTC trading after a bankruptcy delisting (RHD,
+Smurfit-Stone, Idearc, GGP) is not that listing continuing. An *unconfirmed*
+last-trade day — the no-Form-25 "continued 10-K/Q filings" fallback
+substitutes the security's own last sighting when it has no last-trade
+evidence at all — is too weak a guess to second-guess against fails
+evidence either (Monster Worldwide, SunPower). A security none of whose
+delistings ends it, and that isn't listed today either, is left unclipped,
+ending at its last real sighting. Separately, an observation
+`observation_map.csv` marks
 `backfilled_ticker` (below) is never itself a ticker sighting here — a
 caller's snapshot that projects a later ticker backward onto a date the
 security did not yet trade under it opens no range for that ticker.
@@ -613,7 +623,7 @@ python scripts/observations_from_instruments.py --instruments data/delisted_tick
 # or: scripts/observations_from_snapshots.py --dir <folder of dated index-membership CSVs> --out obs.csv
 python scripts/classify_universe.py --observations obs.csv   # → output/{securities,ticker_history,cusip_history,delistings,payouts,review,review_summary,observation_map}.csv
 
-pytest -q                                # 1342 unit tests, no network
+pytest -q                                # 1344 unit tests, no network
 ```
 
 `classify_universe.py` prints a summary when it finishes: rows written per

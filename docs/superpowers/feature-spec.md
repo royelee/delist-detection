@@ -810,16 +810,28 @@ line changes observable output.
   `no_figi` belongs to a security, not a delisting, so it appears on no other
   table.
 - **`ticker_history` is clipped only at the delisting that actually ends the
-  security (§7.2, §8.5).** The spec's simple "the last trade day, unless
-  listed" rule is refined: a delisting whose successor is the security itself
-  (a continuing exchange transfer, D18) never clips it, and neither does one
-  after which the security's own CUSIP keeps trading under its own ticker —
+  security (§7.2, §8.5, controller ruling).** The spec's simple "the last
+  trade day, unless listed" rule is refined: a delisting whose successor is
+  the security itself (a continuing exchange transfer, D18) never clips it.
+  Beyond that, only a `merger` or `exchange_transfer` delisting whose
+  last-trade day is *confirmed* (not blank, not flagged
+  `last_trade_date_unconfirmed`) can be second-guessed at all — because
+  `ticker_history` records exchange listings, and a `liquidation`,
+  `compliance_failure`, `expiration` or `unknown` delisting's whole premise is
+  that the exchange listing ended, an OTC pink-sheet tail afterward is not
+  that listing continuing, however many fails rows and however varied their
+  prices (R H Donnelley, Smurfit-Stone, Idearc, General Growth Properties);
+  nor is a *guessed* last-trade day evidence of anything — the classifier's
+  no-Form-25 "continued 10-K/Q filings" fallback substitutes the security's
+  own last sighting when it has no last-trade evidence at all, and Monster
+  Worldwide and SunPower both traded on, normally, for years past such a
+  guess. Only when the day is confirmed does continued trading override it:
   at least 20 live fails rows (never a deleted symbol) over at least 60 days,
-  at 2 or more distinct prices, so fails still settling at the last close
-  (a compliance failure's OTC tail) are not mistaken for continued trading. A
-  security none of whose delistings ends it, and that is not listed today
-  either, is left unclipped, ending at its last real sighting rather than at
-  a delisting record that did not actually end it.
+  at 2 or more distinct prices, so fails still settling at the last close are
+  not mistaken for continued trading (WRK). A security none of whose
+  delistings ends it, and that is not listed today either, is left unclipped,
+  ending at its last real sighting rather than at a delisting record that did
+  not actually end it.
 - **A backfilled observation adds no `ticker_history` range (§7.2, §7.6,
   §8.5, controller ruling).** The user decided backfilled tickers are
   map-only: an observation `observation_map.csv` marks `backfilled_ticker`

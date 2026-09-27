@@ -28,7 +28,7 @@ editable install.
 
 ```bash
 pip install -e .                         # editable install (Python ≥3.10) — once per env
-pytest                                    # full suite (1342 tests, offline, no network)
+pytest                                    # full suite (1344 tests, offline, no network)
 pytest tests/test_payout_extractor.py -v  # one file
 pytest tests/test_payout_extractor.py::test_match_in_cash_family_altr -v   # one test
 
@@ -505,13 +505,24 @@ conflate them.
   merger).
 - **`ticker_history` is clipped only at the delisting that actually ends the
   security.** One whose successor is the security itself (a continuing
-  exchange transfer) never clips it, and neither does one after which the
-  security's own CUSIP keeps trading under its own ticker — at least 20 live
-  fails rows over at least 60 days with 2 or more distinct prices, so fails
-  still settling at the last close (a compliance failure's OTC tail) don't
-  read as continued trading. A security none of whose delistings ends it, and
-  that isn't listed today either, is left unclipped, ending at its last real
-  sighting.
+  exchange transfer) never clips it. Otherwise, only a `merger` or
+  `exchange_transfer` delisting with a *confirmed* last-trade day (not
+  `last_trade_date_unconfirmed`, and not blank) can be second-guessed: it
+  doesn't clip either when the security's own CUSIP keeps trading under its
+  own ticker afterward — at least 20 live fails rows over at least 60 days
+  with 2 or more distinct prices, so fails still settling at the last close
+  don't read as continued trading (WRK). A `liquidation`, `compliance_failure`,
+  `expiration` or `unknown` delisting always clips, however much (and however
+  varied) the fails evidence that follows — `ticker_history` records exchange
+  listings, and OTC pink-sheet trading after a real bankruptcy delisting is
+  not that listing continuing (RHD, Smurfit-Stone, Idearc, GGP). An
+  *unconfirmed* last-trade day (the no-Form-25 "continued 10-K/Q filings"
+  fallback substitutes the security's own last sighting when it has no
+  last-trade evidence at all) is too weak a guess to second-guess against
+  fails evidence either — Monster Worldwide and SunPower traded normally for
+  years after such a guess; the guess, not the listing, was wrong. A security
+  none of whose delistings ends it, and that isn't listed today either, is
+  left unclipped, ending at its last real sighting.
 - **`observation_map.csv` is the caller's join surface, not a review table.**
   Every distinct input observation gets one row: its era, its `sec_id` (blank
   when unresolved), the era's issuer CIK, the security's `ticker_history`

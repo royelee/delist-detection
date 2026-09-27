@@ -695,12 +695,28 @@ than from FTD sightings; an added acquirer security's range still comes from
 A security's ranges are clipped at the last delisting that actually ends it
 (`pipeline._ends_the_security`), not simply its last delisting: one whose
 successor is the security itself (a continuing exchange transfer, D18) is
-skipped, and so is one after which the security's own CUSIP keeps trading
-under its own ticker — at least 20 live fails rows over at least 60 days with
-2 or more distinct prices, so fails still settling at the last close (a
-compliance failure's OTC tail) don't count as continued trading. A security
-none of whose delistings ends it, and that is not listed today either, is
-left unclipped, ending at its last real sighting. Separately, an observation
+skipped. Beyond that, only a `merger` or `exchange_transfer` delisting with a
+*confirmed* last-trade day (`e.last_trade.day` set and not flagged
+`last_trade_date_unconfirmed`) is second-guessed at all: it is also skipped
+when the security's own CUSIP keeps trading under its own ticker afterward —
+at least 20 live fails rows over at least 60 days with 2 or more distinct
+prices, so fails still settling at the last close don't count as continued
+trading (WRK, a merger record after which WestRock kept trading). A
+`liquidation`, `compliance_failure`, `expiration` or `unknown` delisting
+always clips, however much (and however varied) the fails evidence that
+follows: `ticker_history` records exchange listings (CONTEXT.md "Listing"),
+and years of real, varying-price OTC pink-sheet trading after a bankruptcy
+delisting (R H Donnelley, Smurfit-Stone Container, Idearc, General Growth
+Properties) is not that listing continuing. An *unconfirmed* last-trade day
+is equally too weak to second-guess: the classifier's no-Form-25 "continued
+10-K/Q filings >180d after delist" fallback (`delistings.py`'s
+`_fallback_delisting`) substitutes the security's own last observed sighting
+when it has no last-trade evidence at all, flagged
+`last_trade_date_unconfirmed` — Monster Worldwide and SunPower both traded
+normally for years past such a guessed date; the guess, not the listing, was
+wrong. A security none of whose delistings ends it, and that is not listed
+today either, is left unclipped, ending at its last real sighting.
+Separately, an observation
 `observation_map.csv` marks `backfilled_ticker` (below) is never itself a
 ticker sighting here (`history.filtered_ticker_sightings`) — a caller's
 snapshot that projects today's ticker back onto a date the security did not
