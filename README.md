@@ -566,7 +566,7 @@ python scripts/observations_from_instruments.py --instruments data/delisted_tick
 # or: scripts/observations_from_snapshots.py --dir <folder of dated index-membership CSVs> --out obs.csv
 python scripts/classify_universe.py --observations obs.csv   # → output/{securities,ticker_history,cusip_history,delistings,payouts,review,review_summary}.csv
 
-pytest -q                                # 1318 unit tests, no network
+pytest -q                                # 1321 unit tests, no network
 ```
 
 `classify_universe.py` prints a summary when it finishes: rows written per
@@ -970,11 +970,21 @@ composite and keeps its own CUSIP in `cusip_history` — so both KORS' and
 CPRI's CUSIPs end up under CPRI's `sec_id`. The join follows only same-issuer,
 same-class links; an era whose links reach two different composites takes
 neither. A handoff join still must not contradict another era's pin or CUSIP
-(the same two guards an EDGAR-names-only pick is checked against), and — like
-that same pick — it is withdrawn if it would leave a same-issuer, same-class
-sibling alone on the placeholder; a whole chain of linked eras is withdrawn
-together, never split. `figi_source=handoff` marks the result, ranked just
-above `placeholder`.
+(the same two guards an EDGAR-names-only pick is checked against).
+
+A sibling era of the same issuer and class left with no pick of its own at
+all (a backfilled or stale-snapshot ticker: HCP's own eras find no FIGI, but
+PEAK@2012 — a 2012-2014 snapshot artifact naming HCP's later ticker before
+it existed — never does either) no longer holds a group's picks to the
+placeholder outright: it instead **follows the group onto its composite**,
+taking a `handoff` pick of its own, when the same two guards don't rule it
+out there either (HCP@2008/2014 and PEAK@2012 all land on Healthpeak's
+composite together). Only when a guard does rule it out for that sibling
+specifically — or when the group's own picks disagree on the composite (two
+chains reaching two composites) — is the whole group withdrawn to the
+placeholder together, exactly as before; an era's own CUSIP-confirmed pick is
+never touched by this guard either way. `figi_source=handoff` marks a joined
+sibling too, ranked just above `placeholder`.
 
 When nothing is accepted, the security gets the
 placeholder `sec_id` `CIK<cik>-<CLASS>` (flagged `no_figi`, an `info` flag:

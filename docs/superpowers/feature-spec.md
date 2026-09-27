@@ -503,13 +503,28 @@ line changes observable output.
   two different composites takes neither. The join is checked against the
   same two guards an EDGAR-names-only pick is (a pin/CUSIP confirming
   another known issuer on the composite; a same-issuer, same-class sibling
-  confirmed on a different one over overlapping dates), and is withdrawn by
-  the same placeholder-splitting guard: a chain of eras linked by a shared
-  CUSIP joins all together or not at all, so one member never moves off the
-  placeholder while a sibling it shares a CUSIP with has to stay (NU@2008 and
-  ES@2012, one issuer, joined by NU's switch into ES's later CUSIP, must
-  both go or neither). `figi_source=handoff` marks the result, ranked
-  between `name` and `placeholder`.
+  confirmed on a different one over overlapping dates): NU@2008 and ES@2012
+  (one issuer) both reach ES's composite this way, NU@2008 through the switch
+  itself and ES@2012 through the placeholder-splitting guard below (its own
+  EDGAR-names-only pick, no longer withdrawn now that NU@2008 has a pick of
+  its own). `figi_source=handoff` marks the result, ranked between `name` and
+  `placeholder`.
+- **The placeholder-splitting guard follows a held sibling onto the group's
+  composite instead of withdrawing it (§8.3, controller ruling).** The
+  original design withdrew an EDGAR-names-only or CUSIP-handoff pick
+  unconditionally whenever it would leave a same-issuer, same-class sibling
+  with no pick of its own alone on the issuer's placeholder (ACE LTD backfilled
+  under CB, HCP@2008/2014 reaching Healthpeak's line while the 2012-2014
+  snapshot artifact PEAK@2012 has no pick at all). The ruling instead has that
+  sibling **follow the group onto its composite** as a `handoff` pick of its
+  own, when the same two guards above do not rule it out there too (so
+  HCP@2008, HCP@2014 and PEAK@2012 all land on Healthpeak's composite
+  together, and ACE and CB both land on Chubb's). Only when a guard rules the
+  sibling out specifically, or when the group's own picks disagree on the
+  composite (two chains reaching two composites), is the whole group withdrawn
+  to the placeholder together instead — the original behavior, now the
+  exception rather than the rule. An era's own CUSIP-confirmed pick is never
+  touched by this guard either way.
 - **§8.3's third acceptance route is not built.** Accepting a candidate
   because its name matches the acquirer or successor named in the security's
   delisting 8-K is not implemented: a security whose only OpenFIGI match

@@ -483,10 +483,9 @@ leaves the issuer with no EDGAR names for the run and flags its eras
    era is confirmed on it (old General Growth Properties is now "GGP, Inc.",
    the name of the new issuer's GGP line), or an era of the same issuer and
    class is confirmed on another composite over overlapping dates (Jacobs
-   under a backfilled J in 2012 is not today's Jacobs Solutions line), and
-   when taking it would leave another era of the same issuer and class alone
-   on the issuer's placeholder (ACE LTD under a backfilled CB stays with its
-   ACE era).
+   under a backfilled J in 2012 is not today's Jacobs Solutions line) — see
+   the placeholder-splitting guard below for what happens to a sibling era
+   this leaves with no pick of its own.
 4. **An issuer-name filter search** (`/v3/filter`, legal suffixes stripped)
    as the last resort, accepted by the same name rule as the ticker.
 5. **A CUSIP handoff**, for an era steps 2-4 still leave with no pick (a
@@ -502,12 +501,29 @@ leaves the issuer with no EDGAR names for the run and flags its eras
    composites takes neither. The join is checked against the same two guards
    an EDGAR-names-only pick is (another known issuer confirmed on the
    composite; a same-issuer, same-class sibling confirmed on a different one
-   over overlapping dates) and the same placeholder-splitting guard below —
-   with one difference: a *chain* of eras linked by a shared CUSIP joins all
-   together or not at all, so NU@2008 and ES@2012 (one issuer, joined by NU's
-   switch into ES's later, CUSIP-confirmed line) must both go or neither, even
-   though only NU@2008 carries the switch itself. `figi_source=handoff` marks
-   the result, ranked between `name` and `placeholder`.
+   over overlapping dates), with one difference from the placeholder-splitting
+   guard below: a *chain* of eras linked by a shared CUSIP joins all together
+   or not at all, so NU@2008 and ES@2012 (one issuer, joined by NU's switch
+   into ES's later, CUSIP-confirmed line) must both go or neither, even though
+   only NU@2008 carries the switch itself. `figi_source=handoff` marks the
+   result, ranked between `name` and `placeholder`.
+
+**The placeholder-splitting guard** (controller ruling, superseding the
+original all-or-none-withdrawal design): an issuer's placeholder holds every
+era of one class that no FIGI confirms. A sibling era of the same issuer and
+class left with *no pick at all* (a backfilled or stale-snapshot ticker: HCP's
+own eras find no FIGI, but PEAK@2012 — a 2012-2014 snapshot artifact naming
+HCP's later ticker before it existed — never does either) no longer holds a
+group's ticker/name/handoff picks to the placeholder outright. Instead it
+**follows the group onto its composite** itself, as a `handoff` pick, when the
+same two guards (another known issuer confirmed on the composite; a
+same-issuer, same-class sibling confirmed on a different one over overlapping
+dates) do not rule it out there too — so HCP@2008, HCP@2014 and PEAK@2012 all
+land on Healthpeak's composite together. Only when a guard rules the sibling
+out specifically, or when the group's own picks disagree on the composite
+(two chains reaching two composites), is the whole group withdrawn to the
+placeholder together instead, exactly as the original design did
+unconditionally; either way an era's own CUSIP-confirmed pick is untouched.
 
 `figi_resolution.us_candidates` keeps only US-venue rows and drops
 when-issued/144A/fund-NAV lines; `accept()` never trusts Bloomberg's current
