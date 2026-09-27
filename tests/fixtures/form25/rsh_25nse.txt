@@ -1,0 +1,145 @@
+<SEC-DOCUMENT>0000876661-15-000132.txt : 20150320
+<SEC-HEADER>0000876661-15-000132.hdr.sgml : 20150320
+<ACCEPTANCE-DATETIME>20150320130126
+ACCESSION NUMBER:		0000876661-15-000132
+CONFORMED SUBMISSION TYPE:	25-NSE
+PUBLIC DOCUMENT COUNT:		2
+FILED AS OF DATE:		20150320
+DATE AS OF CHANGE:		20150320
+EFFECTIVENESS DATE:		20150320
+
+SUBJECT COMPANY:	
+
+	COMPANY DATA:	
+		COMPANY CONFORMED NAME:			RADIOSHACK CORP
+		CENTRAL INDEX KEY:			0000096289
+		STANDARD INDUSTRIAL CLASSIFICATION:	RETAIL-RADIO TV & CONSUMER ELECTRONICS STORES [5731]
+		IRS NUMBER:				751047710
+		STATE OF INCORPORATION:			DE
+		FISCAL YEAR END:			1114
+
+	FILING VALUES:
+		FORM TYPE:		25-NSE
+		SEC ACT:		1934 Act
+		SEC FILE NUMBER:	001-05571
+		FILM NUMBER:		15715633
+
+	BUSINESS ADDRESS:	
+		STREET 1:		300 RADIOSHACK CIRCLE
+		CITY:			FORT WORTH
+		STATE:			TX
+		ZIP:			76102
+		BUSINESS PHONE:		817-415-3700
+
+	MAIL ADDRESS:	
+		STREET 1:		300 RADIOSHACK CIRCLE
+		CITY:			FORT WORTH
+		STATE:			TX
+		ZIP:			76102
+
+	FORMER COMPANY:	
+		FORMER CONFORMED NAME:	TANDY CORP /DE/
+		DATE OF NAME CHANGE:	19920703
+
+	FORMER COMPANY:	
+		FORMER CONFORMED NAME:	TANDY LEATHER CO
+		DATE OF NAME CHANGE:	19681216
+
+	FORMER COMPANY:	
+		FORMER CONFORMED NAME:	AMERICAN HIDE & LEATHER CO
+		DATE OF NAME CHANGE:	19660825
+
+FILED BY:		
+
+	COMPANY DATA:	
+		COMPANY CONFORMED NAME:			NEW YORK STOCK EXCHANGE LLC
+		CENTRAL INDEX KEY:			0000876661
+		IRS NUMBER:				000000000
+		STATE OF INCORPORATION:			NY
+
+	FILING VALUES:
+		FORM TYPE:		25-NSE
+
+	BUSINESS ADDRESS:	
+		STREET 1:		11 WALL STREET
+		CITY:			NEW YORK
+		STATE:			NY
+		ZIP:			10005
+		BUSINESS PHONE:		212-656-2060
+
+	MAIL ADDRESS:	
+		STREET 1:		11 WALL STREET
+		CITY:			NEW YORK
+		STATE:			NY
+		ZIP:			10005
+
+	FORMER COMPANY:	
+		FORMER CONFORMED NAME:	NEW YORK STOCK EXCHANGE INC
+		DATE OF NAME CHANGE:	19910628
+</SEC-HEADER>
+<DOCUMENT>
+<TYPE>25-NSE
+<SEQUENCE>1
+<FILENAME>primary_doc.xml
+<TEXT>
+<XML>
+<?xml version="1.0"?>
+<notificationOfRemoval>
+
+    <schemaVersion>X0203</schemaVersion>
+
+    <exchange>
+        <cik>0000876661</cik>
+        <entityName>NEW YORK STOCK EXCHANGE LLC</entityName>
+    </exchange>
+
+    <issuer>
+        <cik>96289</cik>
+        <entityName>RADIOSHACK CORP</entityName>
+        <fileNumber>001-05571</fileNumber>
+        <address>
+            <street1>300 RadioShack Circle</street1>
+            <street2>Mail Stop CF4-101</street2>
+            <city>Fort Worth</city>
+            <stateOrCountryCode>TX</stateOrCountryCode>
+            <stateOrCountry>TEXAS</stateOrCountry>
+            <zipCode>76102</zipCode>
+        </address>
+        <telephoneNumber>(817) 415-3021</telephoneNumber>
+    </issuer>
+
+    <descriptionClassSecurity>Common Stock</descriptionClassSecurity>
+
+    <ruleProvision>17 CFR 240.12d2-2(b)</ruleProvision>
+
+    <signatureData>
+        <signatureName>Paras Madho</signatureName>
+        <signatureTitle>Director</signatureTitle>
+        <signatureDate>2015-03-20</signatureDate>
+    </signatureData>
+</notificationOfRemoval>
+</XML>
+</TEXT>
+</DOCUMENT>
+<DOCUMENT>
+<TYPE>EX-99.25
+<SEQUENCE>2
+<FILENAME>ruleprovisionnotice.htm
+<TEXT>
+NOTIFICATION OF THE REMOVAL FROM LISTING AND REGISTRATION OF THE STATED SECURITIES
+
+New York Stock Exchange LLC ('NYSE' or the 'Exchange') hereby notifies the Securities and Exchange Commission (the 'Commission') of its intention to remove the entire class of Common Stock (the 'Common Stock') of RadioShack Corporation (the 'Company') from listing and registration on the Exchange at the opening of business on March 31, 2015, pursuant to the provisions of Rule 12d2-2(b) because, in the opinion of the Exchange, the Common Stock is no longer suitable for continued listing and trading on the Exchange.
+
+NYSE Regulation reached its decision to delist the Common Stock because the Company informed the NYSE that it did not intend to submit a business plan to address its noncompliance with the NYSE&#146;s continued listing standard in Section 802.01B of the Listed Company Manual (the 'Manual') that requires maintenance of either (i) an average global market capitalization over a consecutive 30 trading day period of at least $50,000,000 or (ii) stockholders' equity of at least $50,000,000.  In addition, the Company was noncompliant with Section 802.01D of the Manual as the Common Stock was trading at an 'abnormally low' price.
+
+1.  Section 802.03 of the Manual states that once a company is notified by the Exchange that it is below the continued listing criteria set forth in Section 802.01 of the Manual it has 30 days to notify the Exchange whether it intends to submit a plan to regain compliance, otherwise suspension and delisting proceedings will commence.
+
+2. NYSE Regulation, on February 2, 2015, determined that the Common Stock of the Company should be suspended immediately from trading, and directed the preparation and filing with the SEC of this application for the removal of the Common Stock from listing and registration on the Exchange. The Company was notified by phone on February 2, 2015 and by letter on February 3, 2015.
+
+3.  Pursuant to the above authorization, a press release was issued on February 2, 2015 and an announcement was made on the 'ticker' of the Exchange immediately and at the close of the trading session on February 2, 2015 of the suspension of trading in the Common Stock. Similar information was included on the Exchange&#146;s website.
+
+4. The Company had a right to appeal to the Committee for Review (the 'Committee') of the Board of Directors of NYSE Regulation the determination to delist the Common Stock, provided that it filed a written request for such a review with the Secretary of the Exchange within ten business days of receiving notice of the delisting determination.  The Company did not file such request within the specified time period.  Consequently, all conditions precedent under SEC Rule 12d2-2(b) to the filing of this application have been satisfied.
+
+</TEXT>
+</DOCUMENT>
+</SEC-DOCUMENT>

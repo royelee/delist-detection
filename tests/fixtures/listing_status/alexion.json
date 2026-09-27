@@ -1,0 +1,25 @@
+{
+ "sec_id": "BBG000G30YX4",
+ "cik": 899866,
+ "observed_tickers": [
+  "ALXN"
+ ],
+ "openfigi": {
+  "data": [
+   {
+    "figi": "BBG000G32HL2",
+    "compositeFIGI": "BBG000G30YX4",
+    "exchCode": "UW",
+    "ticker": "ALXN",
+    "name": "ALEXION PHARMACEUTICALS INC",
+    "securityType": "Common Stock"
+   }
+  ]
+ },
+ "submissions": {
+  "name": "ALEXION PHARMACEUTICALS, INC.",
+  "tickers": [],
+  "exchanges": [],
+  "__fetched__": null
+ }
+}

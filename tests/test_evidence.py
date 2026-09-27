@@ -155,3 +155,11 @@ def test_item_text_falls_back_to_the_first_match_when_every_section_is_short():
 
 def test_item_text_with_no_match_is_empty():
     assert item_text("nothing here", "1.03") == ""
+
+
+def test_edgar_names_lists_the_current_name_then_the_former_ones():
+    from delist_detection.evidence import edgar_names
+    sub = {"name": "Eversource Energy",
+           "formerNames": [{"name": "NORTHEAST UTILITIES"}, {"name": " "}, {"name": None}, "junk"]}
+    assert edgar_names(sub) == ("Eversource Energy", "NORTHEAST UTILITIES")
+    assert edgar_names({"name": None, "formerNames": None}) == ()

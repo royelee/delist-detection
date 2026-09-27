@@ -1,0 +1,195 @@
+{
+ "sec_id": "BBG009S39JX6",
+ "cik": 1652044,
+ "observed_tickers": [
+  "GOOGL"
+ ],
+ "openfigi": {
+  "data": [
+   {
+    "figi": "BBG009S39JX6",
+    "compositeFIGI": "BBG009S39JX6",
+    "exchCode": "US",
+    "ticker": "GOOGL",
+    "name": "ALPHABET INC-CL A",
+    "securityType": "Common Stock"
+   },
+   {
+    "figi": "BBG009S4MSH7",
+    "compositeFIGI": "BBG009S39JX6",
+    "exchCode": "UA",
+    "ticker": "GOOGL",
+    "name": "ALPHABET INC-CL A",
+    "securityType": "Common Stock"
+   },
+   {
+    "figi": "BBG009S4MSJ5",
+    "compositeFIGI": "BBG009S39JX6",
+    "exchCode": "UC",
+    "ticker": "GOOGL",
+    "name": "ALPHABET INC-CL A",
+    "securityType": "Common Stock"
+   },
+   {
+    "figi": "BBG009S4MSL2",
+    "compositeFIGI": "BBG009S39JX6",
+    "exchCode": "UN",
+    "ticker": "GOOGL",
+    "name": "ALPHABET INC-CL A",
+    "securityType": "Common Stock"
+   },
+   {
+    "figi": "BBG009S4MSM1",
+    "compositeFIGI": "BBG009S39JX6",
+    "exchCode": "UP",
+    "ticker": "GOOGL",
+    "name": "ALPHABET INC-CL A",
+    "securityType": "Common Stock"
+   },
+   {
+    "figi": "BBG009S4MSP8",
+    "compositeFIGI": "BBG009S39JX6",
+    "exchCode": "UB",
+    "ticker": "GOOGL",
+    "name": "ALPHABET INC-CL A",
+    "securityType": "Common Stock"
+   },
+   {
+    "figi": "BBG009S4MSR6",
+    "compositeFIGI": "BBG009S39JX6",
+    "exchCode": "UM",
+    "ticker": "GOOGL",
+    "name": "ALPHABET INC-CL A",
+    "securityType": "Common Stock"
+   },
+   {
+    "figi": "BBG009S4MSS5",
+    "compositeFIGI": "BBG009S39JX6",
+    "exchCode": "UX",
+    "ticker": "GOOGL",
+    "name": "ALPHABET INC-CL A",
+    "securityType": "Common Stock"
+   },
+   {
+    "figi": "BBG009S4MSY8",
+    "compositeFIGI": "BBG009S39JX6",
+    "exchCode": "UD",
+    "ticker": "GOOGL",
+    "name": "ALPHABET INC-CL A",
+    "securityType": "Common Stock"
+   },
+   {
+    "figi": "BBG009S4MT03",
+    "compositeFIGI": "BBG009S39JX6",
+    "exchCode": "UW",
+    "ticker": "GOOGL",
+    "name": "ALPHABET INC-CL A",
+    "securityType": "Common Stock"
+   },
+   {
+    "figi": "BBG009S4MT12",
+    "compositeFIGI": "BBG009S39JX6",
+    "exchCode": "UF",
+    "ticker": "GOOGL",
+    "name": "ALPHABET INC-CL A",
+    "securityType": "Common Stock"
+   },
+   {
+    "figi": "BBG009S4MT21",
+    "compositeFIGI": "BBG009S39JX6",
+    "exchCode": "VY",
+    "ticker": "GOOGL",
+    "name": "ALPHABET INC-CL A",
+    "securityType": "Common Stock"
+   },
+   {
+    "figi": "BBG009S4MT30",
+    "compositeFIGI": "BBG009S39JX6",
+    "exchCode": "VJ",
+    "ticker": "GOOGL",
+    "name": "ALPHABET INC-CL A",
+    "securityType": "Common Stock"
+   },
+   {
+    "figi": "BBG009S4MT49",
+    "compositeFIGI": "BBG009S39JX6",
+    "exchCode": "VK",
+    "ticker": "GOOGL",
+    "name": "ALPHABET INC-CL A",
+    "securityType": "Common Stock"
+   },
+   {
+    "figi": "BBG00DJH1KR8",
+    "compositeFIGI": "BBG009S39JX6",
+    "exchCode": "VF",
+    "ticker": "GOOGL",
+    "name": "ALPHABET INC-CL A",
+    "securityType": "Common Stock"
+   },
+   {
+    "figi": "BBG00THH68K4",
+    "compositeFIGI": "BBG009S39JX6",
+    "exchCode": "VL",
+    "ticker": "GOOGL",
+    "name": "ALPHABET INC-CL A",
+    "securityType": "Common Stock"
+   },
+   {
+    "figi": "BBG00X1PB4B7",
+    "compositeFIGI": "BBG009S39JX6",
+    "exchCode": "VG",
+    "ticker": "GOOGL",
+    "name": "ALPHABET INC-CL A",
+    "securityType": "Common Stock"
+   },
+   {
+    "figi": "BBG00X1SRJQ5",
+    "compositeFIGI": "BBG009S39JX6",
+    "exchCode": "VP",
+    "ticker": "GOOGL",
+    "name": "ALPHABET INC-CL A",
+    "securityType": "Common Stock"
+   },
+   {
+    "figi": "BBG01V7Z42N1",
+    "compositeFIGI": "BBG009S39JX6",
+    "exchCode": "OC",
+    "ticker": "GOOGL",
+    "name": "ALPHABET INC-CL A",
+    "securityType": "Common Stock"
+   },
+   {
+    "figi": "BBG01X4MF2D8",
+    "compositeFIGI": "BBG009S39JX6",
+    "exchCode": "OD",
+    "ticker": "GOOGL",
+    "name": "ALPHABET INC-CL A",
+    "securityType": "Common Stock"
+   },
+   {
+    "figi": "BBG021BYKN87",
+    "compositeFIGI": "BBG009S39JX6",
+    "exchCode": "VT",
+    "ticker": "GOOGL",
+    "name": "ALPHABET INC-CL A",
+    "securityType": "Common Stock"
+   }
+  ]
+ },
+ "submissions": {
+  "name": "Alphabet Inc.",
+  "tickers": [
+   "GOOGL",
+   "GOOG",
+   "GOOGM",
+   "GOOGN"
+  ],
+  "exchanges": [
+   "Nasdaq",
+   "Nasdaq",
+   "Nasdaq",
+   "Nasdaq"
+  ],
+  "__fetched__": "2026-09-23"
+ }
+}

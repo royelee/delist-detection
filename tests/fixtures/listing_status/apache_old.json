@@ -1,0 +1,25 @@
+{
+ "sec_id": "BBG000BC2C10",
+ "cik": 6769,
+ "observed_tickers": [
+  "APA"
+ ],
+ "openfigi": {
+  "data": [
+   {
+    "figi": "BBG000BC2Q46",
+    "compositeFIGI": "BBG000BC2C10",
+    "exchCode": "UW",
+    "ticker": "9990302D",
+    "name": "APACHE CORP",
+    "securityType": "Common Stock"
+   }
+  ]
+ },
+ "submissions": {
+  "name": "APACHE CORP",
+  "tickers": [],
+  "exchanges": [],
+  "__fetched__": "2026-09-23"
+ }
+}

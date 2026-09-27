@@ -1,0 +1,180 @@
+import pytest
+
+from delist_detection.observations import (
+    Observation, ObservationError, ObservationIndex, TickerEra, eras_by_key, load_observations, normalize_ticker,
+    number_eras, observation_conflicts, observations_from_instruments, observations_from_snapshots, split_eras,
+    write_observations,
+)
+
+
+def test_normalize_ticker():
+    assert normalize_ticker(" brk.b ") == "BRK-B"
+    assert normalize_ticker("BF/A") == "BF-A"
+    assert normalize_ticker("BRK B") == "BRK-B"
+    assert normalize_ticker("AET") == "AET"
+
+
+def test_load_validates_and_dedupes(tmp_path):
+    p = tmp_path / "obs.csv"
+    p.write_text(
+        "ticker,as_of,name,cusip,cik,sec_id\n"
+        "aet,2018-06-29,AETNA INC,00817y108,1122304,\n"
+        "AET,2018-06-29,AETNA INC,00817Y108,1122304,\n"
+        "BF.A,2018-06-29,BROWN FORMAN CORP CLASS A,,,\n"
+    )
+    obs = load_observations(p)
+    assert obs == [
+        Observation("AET", "2018-06-29", "AETNA INC", "00817Y108", 1122304, None),
+        Observation("BF-A", "2018-06-29", "BROWN FORMAN CORP CLASS A", None, None, None),
+    ]
+
+
+def test_load_reports_bad_rows(tmp_path):
+    p = tmp_path / "obs.csv"
+    p.write_text("ticker,as_of\n,2018-01-01\nAET,2018-13-01\nAET,2018-01-02\n")
+    with pytest.raises(ObservationError, match="line 2.*line 3"):
+        load_observations(p)
+    q = tmp_path / "noas.csv"
+    q.write_text("ticker,name\nAET,x\n")
+    with pytest.raises(ObservationError, match="as_of"):
+        load_observations(q)
+
+
+def test_recycled_ticker_splits_into_two_eras():
+    # The two Monsanto sightings 547 days apart stay together here: a bare gap
+    # no longer splits at the observation stage (FTD evidence decides that, in
+    # security_master.refine_eras; test_monsanto_gap_eras_still_form_one_security).
+    obs = [
+        Observation("MON", "2016-06-30", "MONSANTO CO"),
+        Observation("MON", "2017-12-29", "MONSANTO CO"),
+        Observation("MON", "2021-12-31", "MONUMENT CIRCLE ACQUISITION CORP"),
+    ]
+    eras = split_eras(obs)
+    assert [(e.first, e.last, e.name) for e in eras] == [
+        ("2016-06-30", "2017-12-29", "MONSANTO CO"),
+        ("2021-12-31", "2021-12-31", "MONUMENT CIRCLE ACQUISITION CORP"),
+    ]
+
+
+def test_two_names_on_one_date_keep_both_eras_under_unique_keys():
+    # Real CB rows: one snapshot source backfilled today's ticker, so CB is both
+    # ACE LTD and CHUBB CORP on each date. Every era is kept; only a key that
+    # would collide gets a sequence suffix.
+    obs = [Observation("CB", "2009-06-08", "CHUBB CORP"),
+           Observation("CB", "2012-06-29", "ACE LTD"), Observation("CB", "2012-06-29", "CHUBB CORP"),
+           Observation("CB", "2012-12-31", "ACE LTD"), Observation("CB", "2012-12-31", "CHUBB CORP"),
+           Observation("CB", "2016-06-30", "CHUBB LTD")]
+    eras = split_eras(obs)
+    assert [e.key for e in eras] == ["CB@2009-06-08", "CB@2012-06-29", "CB@2012-06-29#1", "CB@2012-12-31",
+                                     "CB@2012-12-31#1"]
+    assert sorted((o.as_of, o.name) for e in eras for o in e.observations) == sorted((o.as_of, o.name) for o in obs)
+    assert list(eras_by_key(eras)) == [e.key for e in eras]
+
+
+def test_eras_by_key_refuses_a_duplicate_key():
+    a = TickerEra("CB", "2012-06-29", "2012-06-29", [Observation("CB", "2012-06-29", "ACE LTD")])
+    b = TickerEra("CB", "2012-06-29", "2012-06-29", [Observation("CB", "2012-06-29", "CHUBB CORP")])
+    with pytest.raises(ValueError, match="CB@2012-06-29"):
+        eras_by_key([a, b])
+    assert list(eras_by_key(number_eras([a, b]))) == ["CB@2012-06-29", "CB@2012-06-29#1"]
+
+
+def test_observation_conflicts_lists_each_ticker_date_with_two_names():
+    obs = [Observation("CB", "2012-06-29", "ACE LTD"), Observation("CB", "2012-06-29", "CHUBB CORP"),
+           Observation("AGN", "2014-06-30", "ALLERGAN INC"), Observation("AGN", "2014-06-30", "ALLERGAN PLC"),
+           Observation("RGA", "2014-12-31", "REINSURANCE GROUP OF AMERICA INC"),
+           Observation("RGA", "2014-12-31", "Reinsurance Group of America Inc."),     # same name, spelled apart
+           Observation("CB", "2016-06-30", "CHUBB LTD")]
+    assert observation_conflicts(obs) == [("AGN", "2014-06-30", ("ALLERGAN INC", "ALLERGAN PLC")),
+                                          ("CB", "2012-06-29", ("ACE LTD", "CHUBB CORP"))]
+
+
+def test_bare_gap_does_not_split_observations():
+    # Names that share their one distinctive word agree, and a gap alone no
+    # longer splits: DELL (Dell Inc. to 2013, Dell Technologies from 2018) is
+    # one observation era, split later by FTD evidence (refine_eras).
+    dell = split_eras([Observation("DELL", "2013-06-28", "DELL INC."),
+                       Observation("DELL", "2018-12-31", "DELL TECHNOLOGIES INC CLASS C")])
+    assert [(e.first, e.last) for e in dell] == [("2013-06-28", "2018-12-31")]
+    same = split_eras([Observation("X", "2009-06-08", "FOO INC"), Observation("X", "2012-06-29", "FOO INC")])
+    assert len(same) == 1
+    unnamed = split_eras([Observation("X", "2009-06-08"), Observation("X", "2012-06-29")])
+    assert len(unnamed) == 1
+
+
+def test_class_letter_change_splits_but_common_is_unknown():
+    a_to_c = split_eras([Observation("GOOG", "2013-12-31", "GOOGLE INC CLASS A"),
+                         Observation("GOOG", "2014-06-30", "GOOGLE INC CLASS C")])
+    assert [(e.first, e.last) for e in a_to_c] == [("2013-12-31", "2013-12-31"), ("2014-06-30", "2014-06-30")]
+    # COMMON (no class in the name) is unknown: it neither splits nor hides a later change
+    assert len(split_eras([Observation("GOOG", "2013-06-28", "GOOGLE INC"),
+                           Observation("GOOG", "2013-12-31", "GOOGLE INC CLASS A")])) == 1
+    assert len(split_eras([Observation("UA", "2016-06-30", "UNDER ARMOUR A INC"),
+                           Observation("UA", "2016-12-30", "UNDER ARMOUR INC CLASS C")])) == 1
+    a_blank_c = split_eras([Observation("Z", "2015-06-30", "ZILLOW GROUP INC CLASS A"),
+                            Observation("Z", "2015-09-30", "ZILLOW GROUP INC"),
+                            Observation("Z", "2015-12-31", "ZILLOW GROUP INC CLASS C")])
+    assert [(e.first, e.last) for e in a_blank_c] == [("2015-06-30", "2015-09-30"), ("2015-12-31", "2015-12-31")]
+    # the letter is what counts: "CLASS A" and "SERIES A" are the same class (LMCA, real names)
+    assert len(split_eras([Observation("LMCA", "2012-12-31", "LIBERTY MEDIA CORP CLASS A"),
+                           Observation("LMCA", "2013-06-28", "LIBERTY MEDIA CORP SERIES A")])) == 1
+
+
+def test_name_change_without_gap_splits_but_same_name_does_not():
+    same = split_eras([Observation("X", "2020-06-30", "FOO INC"), Observation("X", "2020-12-31", "FOO INC")])
+    assert len(same) == 1
+    changed = split_eras([Observation("X", "2020-06-30", "FOREST OIL CORP"),
+                          Observation("X", "2020-12-31", "FAST ACQUISITION CORP")])
+    assert len(changed) == 2
+
+
+def test_pin_change_splits():
+    eras = split_eras([Observation("X", "2020-06-30", cik=1), Observation("X", "2020-12-31", cik=2)])
+    assert [e.cik_pin for e in eras] == [1, 2]
+
+
+def test_index_lookups():
+    idx = ObservationIndex([
+        Observation("ALTR", "2015-06-30", "ALTERA CORP"),
+        Observation("ALTR", "2024-06-28", "ALTAIR ENGINEERING INC", cik=1701732),
+    ])
+    assert len(idx.eras()) == 2
+    assert idx.name_on("ALTR", "2015-12-28") == "ALTERA CORP"
+    assert idx.name_on("ALTR", "2025-03-26") == "ALTAIR ENGINEERING INC"
+    assert idx.name_on("ALTR", "2010-01-01") == "ALTERA CORP"      # nearest after when none before
+    assert idx.cik_pin_on("ALTR", "2025-03-26") == 1701732
+    assert idx.cik_pin_on("ALTR", "2015-12-28") is None
+    assert idx.era_for("ALTR", "2025-03-26").first == "2024-06-28"
+    assert idx.name_on("ZZZZ") is None
+
+
+def test_write_round_trip(tmp_path):
+    obs = [Observation("B", "2020-01-02"), Observation("A", "2020-01-02", "A CO", "123456789", 7, "BBG1")]
+    p = tmp_path / "o.csv"
+    assert write_observations(obs, p) == 2
+    assert load_observations(p) == sorted(obs, key=lambda o: (o.ticker, o.as_of))
+
+
+def test_from_instruments(tmp_path):
+    p = tmp_path / "all.txt"
+    p.write_text("AABA\t2000-01-03\t2019-11-06\nBRK.B\t2000-01-03\t2026-05-22\n")
+    obs = observations_from_instruments(p)
+    assert [(o.ticker, o.as_of) for o in obs] == [
+        ("AABA", "2000-01-03"), ("AABA", "2019-11-06"), ("BRK-B", "2000-01-03"), ("BRK-B", "2026-05-22")]
+
+
+def test_from_snapshots(tmp_path):
+    (tmp_path / "2018-06-29.csv").write_text(
+        "ticker,name,asset_class\nAET,AETNA INC,Equity\nXTSLA,BLK CSH FND,Money Market\n")
+    (tmp_path / "russell_20180102.csv").write_text("Ticker,Name\nAET,AETNA INC\n")
+    (tmp_path / "2013-06-29.csv").write_text("ticker,name\n")          # header-only placeholder
+    (tmp_path / "notes.csv").write_text("ticker,name\nZZZ,no date in name\n")
+    obs = observations_from_snapshots(tmp_path, where={"asset_class": "Equity"})
+    assert [(o.ticker, o.as_of, o.name) for o in obs] == [
+        ("AET", "2018-01-02", "AETNA INC"), ("AET", "2018-06-29", "AETNA INC")]
+
+
+def test_where_ignored_when_column_blank(tmp_path):
+    (tmp_path / "russell_2008-01-16.csv").write_text("ticker,name,asset_class\nAET,AETNA INC,\n")
+    obs = observations_from_snapshots(tmp_path, where={"asset_class": "Equity"})
+    assert [o.ticker for o in obs] == ["AET"]

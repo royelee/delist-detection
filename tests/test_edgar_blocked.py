@@ -42,6 +42,25 @@ def test_company_search_and_text_raise_on_refusal(tmp_path):
         c.fetch_filing_text(320193, "0000320193-24-000001", "a.htm")
 
 
+class _CountingSession:
+    def __init__(self, status):
+        self.status, self.headers, self.calls = status, {}, []
+
+    def get(self, url, headers=None, timeout=None):
+        self.calls.append(url)
+        return _Resp(self.status)
+
+
+@pytest.mark.parametrize("status", [403, 429])
+def test_a_company_search_refusal_is_sent_once_and_caches_nothing(tmp_path, status):
+    session = _CountingSession(status)
+    c = EdgarClient(cache_dir=tmp_path, session=session, sleep=lambda _: None)
+    with pytest.raises(EdgarBlocked):
+        c.company_search_atom("APPLE")
+    assert len(session.calls) == 1                    # never retried
+    assert not list(tmp_path.glob("*.json"))
+
+
 def test_resolver_propagates_refusal_and_caches_nothing(tmp_path, fake_edgar, monkeypatch):
     def boom(self, *a, **kw):
         raise EdgarBlocked("403")

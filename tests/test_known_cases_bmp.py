@@ -1,4 +1,4 @@
-"""Sanity tests on real delisting cases from output/delist_classifications.csv.
+"""Sanity tests on real delisting cases from output/delistings.csv.
 
 These pin the expected BMP-corrected return to published deal terms so a
 regression in the formula or the constants table is caught immediately.

@@ -1,4 +1,4 @@
-"""Pure evidence predicates over one company's EDGAR record. No network."""
+"""Pure evidence predicates over one issuer's EDGAR record. No network."""
 from __future__ import annotations
 
 import re
@@ -29,6 +29,14 @@ def parse_day(s: str | None) -> date | None:
         return datetime.strptime((s or "")[:10], "%Y-%m-%d").date()
     except ValueError:
         return None
+
+
+def edgar_names(sub: dict) -> tuple[str, ...]:
+    """Every name EDGAR records for the issuer: its current name, then its former
+    names (`formerNames`), blanks left out."""
+    names = [sub.get("name") or "",
+             *((fn.get("name") or "") for fn in sub.get("formerNames") or [] if isinstance(fn, dict))]
+    return tuple(n for n in names if n.strip())
 
 
 def name_at(sub: dict, on: date) -> str:
@@ -72,7 +80,11 @@ def names_near(sub: dict, on: date, days: int = 30) -> list[str]:
     A delisting date and a rename date are often a day apart (EDGAR ends
     "Halyard Health" on 2018-06-28; HYH's last vendor row is 2018-06-29), so a
     single-day lookup misses the name the index used."""
-    lo, hi = on - timedelta(days=days), on + timedelta(days=days)
+    return names_between(sub, on - timedelta(days=days), on + timedelta(days=days))
+
+
+def names_between(sub: dict, lo: date, hi: date) -> list[str]:
+    """Every name the company carried at some point in [lo, hi], former names first."""
     out: list[str] = []
     last_end: date | None = None
     for fn in sub.get("formerNames") or []:
@@ -83,6 +95,23 @@ def names_near(sub: dict, on: date, days: int = 30) -> list[str]:
             out.append(fn["name"])
     if (last_end is None or last_end <= hi) and sub.get("name"):
         out.append(sub["name"])      # the current name runs from the last rename on
+    return out
+
+
+def names_until(sub: dict, on: date) -> list[str]:
+    """Every name the company carried on or before `on`, former names first: the
+    former names that began by then (one with no start date counts), and the
+    current name once it began (it runs from the last rename on)."""
+    out: list[str] = []
+    last_end: date | None = None
+    for fn in sub.get("formerNames") or []:
+        f_lo, f_hi = parse_day(fn.get("from")), parse_day(fn.get("to"))
+        if f_hi and (last_end is None or f_hi > last_end):
+            last_end = f_hi
+        if fn.get("name") and (f_lo is None or f_lo <= on):
+            out.append(fn["name"])
+    if (last_end is None or last_end <= on) and sub.get("name"):
+        out.append(sub["name"])
     return out
 
 

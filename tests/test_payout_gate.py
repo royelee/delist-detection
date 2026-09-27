@@ -114,7 +114,7 @@ def _gate(payout=None, terms=None, close=10.0, csv=None, price=None):
         {} if terms is None else {K: terms},
         {} if close is None else {"ABC": close},
         csv or {},
-        lambda ticker, date: price,
+        lambda ticker, key: price,
         DEFAULT_TOL,
     )
 
@@ -133,7 +133,7 @@ def test_an_election_stock_leg_drops_the_payout_and_writes_terms():
     payouts = {K: 505.0}
     g = gate_payouts([K], payouts, {K: "8K_2.01"}, {K: "high"},
                      {K: _terms("election", 505.0, 20.2, "QXO")}, {"ABC": 354.53}, {},
-                     lambda ticker, date: 16.54, DEFAULT_TOL)
+                     lambda ticker, key: 16.54, DEFAULT_TOL)
     assert K not in g.payouts and payouts == {K: 505.0}
     assert (g.sources[K], g.confidences[K]) == ("llm_election_stock", "high")
     assert g.merged_terms[K] == {"stock_ratio": 20.2, "acquirer_price": 16.54, "acquirer_ticker": "QXO"}
@@ -234,3 +234,27 @@ def test_gate_failed_skips_a_row_merger_terms_settled():
 def test_gate_failed_counts_a_row_nothing_settled():
     g = _gate(payout=25.0, close=12.18)
     assert (K in g.payouts, g.flags[K], g.gate_failed) == (False, ("payout_gate_failed:25",), 1)
+
+
+# --- acquirer_price is called with the merger's own (sec_id, delist_date) key ---
+
+def test_acquirer_price_is_keyed_by_the_merger_not_just_its_shared_delist_date():
+    """Two mergers can share a delist_date; acquirer_price must be called with
+    each merger's own key so a caller can price the acquirer on THAT merger's
+    own last-trade day, not some other merger's that happens to share the date."""
+    k1 = ("SEC1", "2020-06-01")
+    k2 = ("SEC2", "2020-06-01")
+    prices_by_key = {k1: 100.0, k2: 200.0}
+
+    def acquirer_price(ticker, key):
+        assert isinstance(key, tuple)          # the full key, not a bare date string
+        return prices_by_key[key]
+
+    g = gate_payouts(
+        [k1, k2], {}, {}, {},
+        {k1: _terms("stock", None, 0.5, "ACQ"), k2: _terms("stock", None, 0.5, "ACQ")},
+        {"SEC1": 50.0, "SEC2": 100.0}, {},
+        acquirer_price, DEFAULT_TOL,
+    )
+    assert g.merged_terms[k1] == {"stock_ratio": 0.5, "acquirer_price": 100.0, "acquirer_ticker": "ACQ"}
+    assert g.merged_terms[k2] == {"stock_ratio": 0.5, "acquirer_price": 200.0, "acquirer_ticker": "ACQ"}

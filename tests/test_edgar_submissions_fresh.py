@@ -101,22 +101,55 @@ class _FailingSession(_Session):
 
 def test_a_transport_failure_during_a_refresh_serves_the_cached_copy(tmp_path):
     # R2: a ticker with a usable cached copy must not become an error row.
+    # The transport error is retried 3 times (backoff injected to stay fast)
+    # before the refresh gives up and falls back to the cache.
     stale = {"name": "Stale Co", "__fetched__": "2026-05-26"}
     session = _FailingSession()
-    client = EdgarClient(cache_dir=tmp_path, session=session)
+    client = EdgarClient(cache_dir=tmp_path, session=session, sleep=lambda _: None)
     cp = client._cache_path(URL)
     cp.write_text(json.dumps(stale))
     got = client.submissions(42, fresh_after=EVENT)
     assert got == {**stale, "__stale__": True}
-    assert session.calls == [URL]
+    assert session.calls == [URL, URL, URL]
     assert json.loads(cp.read_text()) == stale          # the mark is never written to disk
 
 
 def test_a_transport_failure_without_a_cached_copy_still_raises(tmp_path):
     session = _FailingSession()
-    client = EdgarClient(cache_dir=tmp_path, session=session)
+    client = EdgarClient(cache_dir=tmp_path, session=session, sleep=lambda _: None)
     with pytest.raises(requests.RequestException):
         client.submissions(42, fresh_after=EVENT)
+    assert session.calls == [URL, URL, URL]
+
+
+def test_a_transport_failure_then_success_is_not_marked_stale(tmp_path):
+    """The retry actually helps: a connection error on the first attempt
+    followed by a 200 on the second must return the fresh answer, with no
+    STALE_KEY -- not fall back to the cache at all."""
+    stale = {"name": "Stale Co", "__fetched__": "2026-05-26"}
+
+    class _FlakyThenGoodSession(_Session):
+        def __init__(self):
+            super().__init__()
+            self.attempt = 0
+
+        def get(self, url, headers=None, timeout=None):
+            self.calls.append(url)
+            self.attempt += 1
+            if self.attempt == 1:
+                raise requests.ConnectionError("blip")
+            return _Resp(200, {"name": "Fresh Co"})
+
+    slept = []
+    session = _FlakyThenGoodSession()
+    client = EdgarClient(cache_dir=tmp_path, session=session, sleep=slept.append)
+    cp = client._cache_path(URL)
+    cp.write_text(json.dumps(stale))
+    got = client.submissions(42, fresh_after=EVENT)
+    assert got == {"name": "Fresh Co", "__fetched__": date.today().isoformat()}
+    assert "__stale__" not in got
+    assert session.calls == [URL, URL]
+    assert slept == [2]
 
 
 def test_a_refusal_during_a_refresh_still_raises_even_with_a_cached_copy(tmp_path):
@@ -142,17 +175,21 @@ class _ServerErrorSession(_Session):
 def test_a_5xx_during_a_refresh_serves_the_cached_copy(tmp_path):
     """Deliberate: requests.HTTPError is a RequestException, so SEC returning a
     5xx during a freshness refetch is treated like any other failed refresh —
-    the cached copy is served, marked stale, rather than the row erroring out."""
+    the cached copy is served, marked stale, rather than the row erroring out.
+    The 5xx is retried 3 times (backoff injected to stay fast) first."""
     stale = {"name": "Stale Co", "__fetched__": "2026-05-26"}
     session = _ServerErrorSession()
-    client = EdgarClient(cache_dir=tmp_path, session=session)
+    client = EdgarClient(cache_dir=tmp_path, session=session, sleep=lambda _: None)
     cp = client._cache_path(URL)
     cp.write_text(json.dumps(stale))
     assert client.submissions(42, fresh_after=EVENT) == {**stale, "__stale__": True}
     assert json.loads(cp.read_text()) == stale          # the 5xx never touches the cache
+    assert session.calls == [URL, URL, URL]
 
 
 def test_a_5xx_without_a_cached_copy_still_raises(tmp_path):
-    client = EdgarClient(cache_dir=tmp_path, session=_ServerErrorSession())
+    session = _ServerErrorSession()
+    client = EdgarClient(cache_dir=tmp_path, session=session, sleep=lambda _: None)
     with pytest.raises(requests.HTTPError):
         client.submissions(42, fresh_after=EVENT)
+    assert session.calls == [URL, URL, URL]

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="ISO-8859-1" ?>
+  <feed xmlns="http://www.w3.org/2005/Atom">
+    <author>
+      <email>webmaster@sec.gov</email>
+      <name>Webmaster</name>
+    </author>
+    <id>https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&amp;company=ZZQX NONEXISTENT HOLDINGS&amp;type=25&amp;owner=include&amp;count=10</id>
+    <link href="https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&amp;company=ZZQX NONEXISTENT HOLDINGS&amp;type=25&amp;owner=include&amp;count=10&amp;start=0&amp;output=atom" rel="self" type="application/atom+xml" />
+    <link href="https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&amp;company=ZZQX NONEXISTENT HOLDINGS&amp;type=25&amp;owner=include&amp;count=10&amp;start=0" rel="alternate" type="text/html" />
+    <title>Company Search Feed</title>
+    <updated>2026-09-24T04:18:52-04:00</updated>
+  </feed>

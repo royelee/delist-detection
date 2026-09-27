@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="ISO-8859-1" ?>
+  <feed xmlns="http://www.w3.org/2005/Atom">
+    <author>
+      <email>webmaster@sec.gov</email>
+      <name>Webmaster</name>
+    </author>
+    <entry title="ARRAY(0x5638a2ce91b0)">
+      <content type="text/xml">
+        <company-info name="ARRAY(0x5638a2db9140)">
+          <addresses>
+            <address type="business">
+              <city>WARREN</city>
+              <phone>9089032000</phone>
+              <state>NJ</state>
+              <street1>15 MOUNTAIN VIEW ROAD</street1>
+              <zip>07059</zip>
+            </address>
+            <address type="mailing">
+              <city>WARREN</city>
+              <state>NJ</state>
+              <street1>15 MOUNTAIN VIEW ROAD</street1>
+              <zip>07059</zip>
+            </address>
+          </addresses>
+          <cancelled-ma-flag>N</cancelled-ma-flag>
+          <cik>0000020171</cik>
+          <fiscal-year-end>1231</fiscal-year-end>
+          <irs-number>132595722</irs-number>
+          <last-date>2016-02-22</last-date>
+          <revoke-flag>N</revoke-flag>
+          <revoked-ma-flag>N</revoked-ma-flag>
+          <sic>6331</sic>
+          <state>NJ</state>
+          <state-of-incorporation>NJ</state-of-incorporation>
+        </company-info>
+      </content>
+      <id>urn:tag:www.sec.gov:cik=0000020171</id>
+      <link href="https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&amp;CIK=0000020171&amp;owner=exclude&amp;hidefilings=0" type="text/html" />
+      <summary type="html">&lt;strong&gt;CIK:&lt;/strong&gt; 0000020171, &lt;strong&gt;State:&lt;/strong&gt; NJ&lt;br /&gt;&lt;strong&gt;SIC:&lt;/strong&gt; FIRE, MARINE &amp;amp; CASUALTY INSURANCE</summary>
+      <updated>2026-09-24T04:18:54-04:00</updated>
+    </entry>
+    <entry title="ARRAY(0x5638a2db5980)">
+      <content type="text/xml">
+        <company-info name="ARRAY(0x5638a2dc51b8)">
+          <addresses>
+            <address type="business">
+              <city>PHILADELPHIA</city>
+              <phone>2156401000</phone>
+              <state>PA</state>
+              <street1>2000 ARCH STREET</street1>
+              <zip>19103</zip>
+            </address>
+            <address type="mailing">
+              <city>PHILADELPHIA</city>
+              <state>PA</state>
+              <street1>2000 ARCH STREET</street1>
+              <zip>19103</zip>
+            </address>
+          </addresses>
+          <cancelled-ma-flag>N</cancelled-ma-flag>
+          <cik>0001086754</cik>
+          <fiscal-year-end>1231</fiscal-year-end>
+          <irs-number>582457246</irs-number>
+          <last-date>2026-06-05</last-date>
+          <revoke-flag>N</revoke-flag>
+          <revoked-ma-flag>N</revoked-ma-flag>
+          <sic>6311</sic>
+          <state>PA</state>
+        </company-info>
+      </content>
+      <id>urn:tag:www.sec.gov:cik=0001086754</id>
+      <link href="https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&amp;CIK=0001086754&amp;owner=exclude&amp;hidefilings=0" type="text/html" />
+      <summary type="html">&lt;strong&gt;CIK:&lt;/strong&gt; 0001086754, &lt;strong&gt;State:&lt;/strong&gt; PA&lt;br /&gt;&lt;strong&gt;SIC:&lt;/strong&gt; LIFE INSURANCE</summary>
+      <updated>2026-09-24T04:18:54-04:00</updated>
+    </entry>
+    <entry title="ARRAY(0x5638a2dc3080)">
+      <content type="text/xml">
+        <company-info name="ARRAY(0x5638a2dc38c0)">
+          <addresses>
+            <address type="business">
+              <city>ZURICH</city>
+              <phone>41 0 43 456 7600</phone>
+              <state>V8</state>
+              <street1>BARENGASSE 32</street1>
+              <zip>CH-8001</zip>
+            </address>
+            <address type="mailing">
+              <city>ZURICH</city>
+              <state>V8</state>
+              <street1>BARENGASSE 32</street1>
+              <zip>CH-8001</zip>
+            </address>
+          </addresses>
+          <cancelled-ma-flag>N</cancelled-ma-flag>
+          <cik>0000896159</cik>
+          <fiscal-year-end>1231</fiscal-year-end>
+          <irs-number>000000000</irs-number>
+          <last-date>2026-09-03</last-date>
+          <revoke-flag>N</revoke-flag>
+          <revoked-ma-flag>N</revoked-ma-flag>
+          <sic>6331</sic>
+          <state>V8</state>
+          <state-of-incorporation>V8</state-of-incorporation>
+        </company-info>
+      </content>
+      <id>urn:tag:www.sec.gov:cik=0000896159</id>
+      <link href="https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&amp;CIK=0000896159&amp;owner=exclude&amp;hidefilings=0" type="text/html" />
+      <summary type="html">&lt;strong&gt;CIK:&lt;/strong&gt; 0000896159, &lt;strong&gt;State:&lt;/strong&gt; V8&lt;br /&gt;&lt;strong&gt;SIC:&lt;/strong&gt; FIRE, MARINE &amp;amp; CASUALTY INSURANCE</summary>
+      <updated>2026-09-24T04:18:54-04:00</updated>
+    </entry>
+    <id>https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&amp;company=CHUBB&amp;type=25&amp;owner=include&amp;count=10</id>
+    <link href="https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&amp;company=CHUBB&amp;type=25&amp;owner=include&amp;count=10&amp;start=0&amp;output=atom" rel="self" type="application/atom+xml" />
+    <link href="https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&amp;company=CHUBB&amp;type=25&amp;owner=include&amp;count=10&amp;start=0" rel="alternate" type="text/html" />
+    <title>Company Search Feed</title>
+    <updated>2026-09-24T04:18:54-04:00</updated>
+  </feed>

@@ -16,7 +16,7 @@ PRICE is NOT resolved here: a later integration step joins it from a price
 panel and enforces the cash+stock sanity gate. ``to_merger_terms_dict()``
 therefore emits ``cash_per_share`` / ``stock_ratio`` / ``acquirer_ticker``
 (omitting any that are ``None``) — exactly the shape
-``reconstruction.build_dlret_table`` consumes via ``--merger-terms``;
+``reconstruction.build_delistings_table`` consumes via ``--merger-terms``;
 ``acquirer_price`` is added downstream.
 
 Miss → drop
@@ -46,6 +46,7 @@ import requests
 
 from .classifier import DelistRecord
 from .crsp_codes import CrspBucket
+from .atomic_io import clean_orphan_temps, write_atomic
 from .filing_selection import (
     EdgarSubmission,
     announcement_8k,
@@ -78,7 +79,7 @@ class MergerTerms:
     quote: str
 
     def to_merger_terms_dict(self) -> dict:
-        """Project to the dict shape ``build_dlret_table`` consumes.
+        """Project to the dict shape ``build_delistings_table`` consumes.
 
         Emits ``cash_per_share`` / ``stock_ratio`` / ``acquirer_ticker``,
         OMITTING any that are ``None``. ``acquirer_price`` is intentionally
@@ -230,6 +231,7 @@ class LLMMergerTermsExtractor:
         self.model = model or os.environ.get("CHAT_MODEL", "model")
         self.cache_dir = Path(cache_dir)
         self.max_filings = max_filings
+        clean_orphan_temps(self.cache_dir)    # a killed run's cut-off answer
 
     # ------------------------------------------------------------------ #
     # Public API
@@ -379,7 +381,7 @@ class LLMMergerTermsExtractor:
             raw = self.llm.extract(SYSTEM_PROMPT, user_prompt, RESULT_SCHEMA)
             if isinstance(raw, dict):
                 self.cache_dir.mkdir(parents=True, exist_ok=True)
-                cache_path.write_text(json.dumps(raw))
+                write_atomic(cache_path, json.dumps(raw))
 
         return self._to_terms(raw, filing)
 

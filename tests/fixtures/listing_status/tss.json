@@ -1,0 +1,25 @@
+{
+ "sec_id": "BBG000C1JTL6",
+ "cik": 721683,
+ "observed_tickers": [
+  "TSS"
+ ],
+ "openfigi": {
+  "data": [
+   {
+    "figi": "BBG000C1JVY7",
+    "compositeFIGI": "BBG000C1JTL6",
+    "exchCode": "UN",
+    "ticker": "TSS",
+    "name": "TOTAL SYSTEM SERVICES INC",
+    "securityType": "Common Stock"
+   }
+  ]
+ },
+ "submissions": {
+  "name": "TOTAL SYSTEM SERVICES INC",
+  "tickers": [],
+  "exchanges": [],
+  "__fetched__": null
+ }
+}

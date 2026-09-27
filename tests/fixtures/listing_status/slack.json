@@ -1,0 +1,25 @@
+{
+ "sec_id": "BBG007G7V505",
+ "cik": 1764925,
+ "observed_tickers": [
+  "WORK"
+ ],
+ "openfigi": {
+  "data": [
+   {
+    "figi": "BBG00N9MZKR9",
+    "compositeFIGI": "BBG007G7V505",
+    "exchCode": "UN",
+    "ticker": "WORK",
+    "name": "SLACK TECHNOLOGIES INC- CL A",
+    "securityType": "Common Stock"
+   }
+  ]
+ },
+ "submissions": {
+  "name": "Slack Technologies, Inc.",
+  "tickers": [],
+  "exchanges": [],
+  "__fetched__": null
+ }
+}

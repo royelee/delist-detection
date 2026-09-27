@@ -1,13 +1,15 @@
 """Cross-check classifications by reading independent web sources.
 
-For each ticker in `output/delist_classifications.csv`, hit a verification
-URL (the EDGAR entity landing page or Wikipedia) and ask: does the
-classification match what an independent source says?
+For each ticker in `output/delistings.csv`, hit a verification URL (the EDGAR
+entity landing page) and ask: does the classification match what an
+independent source says? The name checked against EDGAR is the row's own
+`resolved_name` — the name our own resolver settled on, not a name sourced
+from elsewhere.
 
 This script reads pre-built per-ticker probe lists from the user (or a
 default sampling stratified across buckets) and writes
 `output/web_verification.csv` with columns:
-    ticker, our_bucket, web_says, agree, evidence_url, note
+    sec_id, ticker, our_bucket, web_says, agree, evidence_url, note
 """
 
 from __future__ import annotations
@@ -15,77 +17,129 @@ from __future__ import annotations
 import argparse
 import csv
 import json
-import os
 import re
 import sys
 import time
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 import requests
 
-from delist_detection.edgar import resolve_user_agent
+from delist_detection.edgar import EdgarBlocked, require_user_agent, resolve_user_agent, sec_get
+from delist_detection.sec_limiter import use_machine_wide_limit
+from delist_detection.store import read_table
 
 ROOT = Path(__file__).resolve().parents[1]
 USER_AGENT = resolve_user_agent()
 
 
 def _get(url: str, timeout: int = 30) -> str | None:
+    """`url`'s text through the library's one SEC request path (`edgar.sec_get`:
+    the shared 8 requests/s pacing, one attempt); None for a non-200 or a
+    network error. A 403/429 aborts the run (EdgarBlocked), never a verdict."""
     try:
-        r = requests.get(url, headers={"User-Agent": USER_AGENT}, timeout=timeout)
-        if r.status_code != 200:
-            return None
-        return r.text
+        r = sec_get(url, headers={"User-Agent": USER_AGENT}, timeout=timeout, retry=False)
     except requests.RequestException:
         return None
+    return r.text if r.status_code == 200 else None
 
 
-def fetch_edgar_entity_landing(cik: int) -> dict:
-    """Pull the company submissions.json — most authoritative source.
+DELIST_FORMS = {"25", "25-NSE", "25/A", "25-NSE/A", "15-12G", "15-12B", "15-15D"}
+# Filings that put a company in a merger: a tender offer (SC 14D9 / SC TO-T), a
+# merger proxy or information statement, merger communications (425), a
+# going-private statement. Many targets file no 8-K 2.01/5.01 at completion.
+MERGER_DOCS = {"SC 14D9", "SC 14D9/A", "SC TO-T", "SC TO-T/A", "DEFM14A", "DEFM14C", "PREM14A", "PREM14C",
+               "425", "SC 13E3", "SC 13E3/A"}
+WINDOW_BEFORE_DAYS, WINDOW_AFTER_DAYS = 400, 120    # evidence around the delisting date
 
-    Returns relevant fields for verification: name, formerNames, tickers,
-    SIC code, and a list of (form, date) tuples for the delisting filings.
-    """
-    cs = str(cik).zfill(10)
-    url = f"https://data.sec.gov/submissions/CIK{cs}.json"
+
+def _json(url: str) -> dict:
+    """`url`'s JSON object as `_get` fetches it; {} for anything else."""
     try:
-        r = requests.get(url, headers={"User-Agent": USER_AGENT, "Host": "data.sec.gov"},
-                         timeout=30)
+        r = sec_get(url, headers={"User-Agent": USER_AGENT, "Host": "data.sec.gov"}, timeout=30, retry=False)
         if r.status_code != 200:
             return {}
         d = r.json()
     except (requests.RequestException, json.JSONDecodeError):
         return {}
-    recent = d.get("filings", {}).get("recent", {})
-    forms = recent.get("form", [])
-    dates = recent.get("filingDate", [])
-    items_l = recent.get("items", [])
-    delist_filings = []
-    for f, dt, it in zip(forms, dates, items_l):
-        if f in {"25", "25-NSE", "15-12G", "15-12B", "15-15D", "8-K"}:
-            delist_filings.append({"form": f, "date": dt, "items": it})
+    return d if isinstance(d, dict) else {}
+
+
+def _rows(block: dict) -> list[dict]:
+    forms = block.get("form", []) or []
+    dates = block.get("filingDate", []) or []
+    items = block.get("items", []) or [""] * len(forms)
+    return [{"form": f, "date": d, "items": i or ""} for f, d, i in zip(forms, dates, items)]
+
+
+def fetch_edgar_entity_landing(cik: int, around: date | None = None) -> dict:
+    """Pull the company submissions.json — most authoritative source.
+
+    Returns the name, formerNames, tickers, SIC, and every filing as
+    {form, date, items}: the `recent` block plus each older submissions file
+    whose filing span overlaps the window around `around` (all of them when
+    `around` is None), so a delisting older than the recent block is seen.
+    """
+    base = "https://data.sec.gov/submissions/"
+    d = _json(f"{base}CIK{str(cik).zfill(10)}.json")
+    if not d:
+        return {}
+    filings = _rows(d.get("filings", {}).get("recent", {}))
+    lo = hi = None
+    if around is not None:
+        lo = (around - timedelta(days=WINDOW_BEFORE_DAYS)).isoformat()
+        hi = (around + timedelta(days=WINDOW_AFTER_DAYS)).isoformat()
+    for f in d.get("filings", {}).get("files", []) or []:
+        if lo and not ((f.get("filingFrom") or "") <= hi and (f.get("filingTo") or "9999") >= lo):
+            continue
+        filings += _rows(_json(base + f["name"]))
     return {
         "name": d.get("name"),
         "formerNames": [x.get("name") for x in d.get("formerNames", [])],
         "tickers": d.get("tickers", []),
         "sic": d.get("sic"),
         "sicDescription": d.get("sicDescription"),
-        "delist_filings": delist_filings[:30],
+        "filings": filings,
     }
 
 
-def verify_one(row: dict, av_name: str | None = None) -> dict:
+_STOP = {"CORP", "CORPORATION", "INC", "COMPANY", "HOLDINGS", "LTD", "LIMITED", "GROUP", "INTERNATIONAL",
+         "TRUST", "PARTNERS", "FUND", "BANK", "BANCORP", "BANCSHARES", "HOLDING", "THE",
+         "CLASS", "SERIES", "COMMON", "STOCK", "SHARES", "ORDINARY"}
+
+
+def _toks(s: str) -> set[str]:
+    """Name words of four or more letters, legal and share-class words dropped,
+    from the text as written and split on camelCase boundaries (EDGAR's
+    "BlackRock" is both BLACKROCK and BLACK, ROCK; "BrownForman" gives BROWN)."""
+    out: set[str] = set()
+    for text in (s, re.sub(r"(?<=[a-z])(?=[A-Z])", " ", s)):
+        out |= {w for w in re.sub(r"[^A-Za-z]+", " ", text).upper().split() if len(w) >= 4 and w not in _STOP}
+    return out
+
+
+def _day(s: str) -> date | None:
+    try:
+        return datetime.strptime(s or "", "%Y-%m-%d").date()
+    except ValueError:
+        return None
+
+
+def verify_one(row: dict) -> dict:
     """Return a verification dict for one classification row."""
     ticker = row["ticker"]
     bucket = row["bucket"]
     cik = row.get("cik")
+    resolved_name = row.get("resolved_name") or ""
     verdict = {
+        "sec_id": row.get("sec_id", ""),
         "ticker": ticker,
         "our_bucket": bucket,
         "our_code": row.get("crsp_code"),
         "our_reason": row.get("reason"),
         "edgar_name": "",
         "former_names": "",
-        "av_name": av_name or "",
+        "resolved_name": resolved_name,
         "name_match": "",
         "delist_form_present": "",
         "verdict": "",
@@ -100,7 +154,9 @@ def verify_one(row: dict, av_name: str | None = None) -> dict:
         verdict["verdict"] = "bad_cik"
         return verdict
 
-    info = fetch_edgar_entity_landing(cik_i)
+    observed = row.get("last_trade_date") or row.get("delist_date") or ""
+    od = _day(observed) if observed != "nan" else None
+    info = fetch_edgar_entity_landing(cik_i, around=od)
     if not info:
         verdict["verdict"] = "no_entity_data"
         return verdict
@@ -110,83 +166,58 @@ def verify_one(row: dict, av_name: str | None = None) -> dict:
     verdict["edgar_name"] = edgar_name
     verdict["former_names"] = formers
 
-    def _toks(s: str) -> set[str]:
-        # Split on non-alpha AND on camelCase boundaries (BrownForman → Brown, Forman)
-        cc = re.sub(r"(?<=[a-z])(?=[A-Z])", " ", s)
-        clean = re.sub(r"[^A-Za-z]+", " ", cc).upper()
-        return {t for t in clean.split()
-                if len(t) >= 4 and t not in {"CORP","CORPORATION","INC","COMPANY",
-                "HOLDINGS","LTD","LIMITED","GROUP","INTERNATIONAL","TRUST",
-                "PARTNERS","FUND","BANK","BANCORP","BANCSHARES","HOLDING","THE"}}
-
     name_pool_str = " ".join([edgar_name] + (info.get("formerNames", []) or []))
     pool_toks = _toks(name_pool_str)
-    av_tokens = list(_toks(av_name)) if av_name else []
-    matched_tokens = [t for t in av_tokens if t in pool_toks]
-    verdict["name_match"] = f"{len(matched_tokens)}/{len(av_tokens)}"
+    name_tokens = sorted(_toks(resolved_name)) if resolved_name else []
+    matched_tokens = [t for t in name_tokens if t in pool_toks]
+    verdict["name_match"] = f"{len(matched_tokens)}/{len(name_tokens)}"
 
-    forms_in = {f["form"] for f in info.get("delist_filings", [])}
-    has_25 = bool({"25", "25-NSE"} & forms_in)
+    filings = info.get("filings", [])
+    # Evidence counts only around the delisting: an old 8-K 2.01 is another deal.
+    if od is not None:
+        lo, hi = od - timedelta(days=WINDOW_BEFORE_DAYS), od + timedelta(days=WINDOW_AFTER_DAYS)
+        near = [f for f in filings if (d := _day(f["date"])) is not None and lo <= d <= hi]
+    else:
+        near = filings
+    forms_in = {f["form"] for f in near}
+    has_25 = bool({"25", "25-NSE", "25/A", "25-NSE/A"} & forms_in)
     has_15 = bool({"15-12G", "15-12B", "15-15D"} & forms_in)
-    verdict["delist_form_present"] = (
-        f"25={'Y' if has_25 else 'N'},15={'Y' if has_15 else 'N'}"
-    )
+    verdict["delist_form_present"] = f"25={'Y' if has_25 else 'N'},15={'Y' if has_15 else 'N'}"
 
     # Date-proximity check: does the EDGAR entity have a delist filing within
     # ±30 days of the observed date? If so, the CIK is plausibly correct even
-    # when names don't match (i.e. ticker recycling — AV name is stale).
-    observed = row.get("observed_delist_date") or ""
-    near_25 = False
-    if observed and observed != "nan":
-        from datetime import datetime as _dt
-        try:
-            od = _dt.strptime(observed, "%Y-%m-%d").date()
-            for f in info.get("delist_filings", []):
-                if f.get("form") not in {"25", "25-NSE", "15-12G"}:
-                    continue
-                try:
-                    fd = _dt.strptime(f.get("date", ""), "%Y-%m-%d").date()
-                except ValueError:
-                    continue
-                if abs((fd - od).days) <= 30:
-                    near_25 = True
-                    break
-        except ValueError:
-            pass
+    # when names don't match (i.e. ticker recycling — resolved_name is stale).
+    near_25 = od is not None and any(
+        f["form"] in {"25", "25-NSE", "15-12G"} and (d := _day(f["date"])) is not None and abs((d - od).days) <= 30
+        for f in filings)
+
+    def _item(code: str) -> bool:
+        return any(f["form"].startswith("8-K") and code in (f.get("items") or "") for f in near)
 
     # Build a verdict.
-    if av_name and av_tokens and len(matched_tokens) == 0:
+    if resolved_name and name_tokens and len(matched_tokens) == 0:
         if near_25:
             verdict["verdict"] = "OK_recycled_ticker"
-            verdict["note"] = "AV name stale (ticker recycled); CIK has Form 25 within ±30d of observed"
+            verdict["note"] = "resolved_name stale (ticker recycled); CIK has Form 25 within ±30d of observed"
             return verdict
         verdict["verdict"] = "MISMATCH_name"
-        verdict["note"] = "AV name shares no tokens with EDGAR name"
+        verdict["note"] = "resolved_name shares no tokens with EDGAR name"
         return verdict
     if not has_25 and not has_15:
         verdict["verdict"] = "WEAK_no_delist_form"
         return verdict
     # Bucket-specific cross-checks
     if bucket == "merger":
-        # M&A should have 8-K with item 2.01 or 5.01
-        has_ma_items = any(
-            ("2.01" in (f.get("items") or "") or "5.01" in (f.get("items") or ""))
-            for f in info.get("delist_filings", []) if f["form"] == "8-K"
-        )
-        verdict["verdict"] = "OK" if has_ma_items else "WEAK_no_ma_items"
+        # an 8-K 2.01/5.01, or a merger document (tender offer, merger proxy, 425)
+        has_ma = _item("2.01") or _item("5.01") or bool(MERGER_DOCS & forms_in)
+        verdict["verdict"] = "OK" if has_ma else "WEAK_no_ma_items"
         return verdict
     if bucket == "compliance_failure":
-        has_3_01 = any(
-            "3.01" in (f.get("items") or "")
-            for f in info.get("delist_filings", []) if f["form"] == "8-K"
-        )
-        verdict["verdict"] = "OK" if has_3_01 else "WEAK_no_3_01"
+        verdict["verdict"] = "OK" if _item("3.01") else "WEAK_no_3_01"
         return verdict
     if bucket == "liquidation":
-        verdict["verdict"] = "OK" if has_15 else "WEAK_no_form15"
-        return verdict
-    if bucket == "exchange_transfer":
-        verdict["verdict"] = "OK"
+        # a Form 15, or the bankruptcy 8-K (item 1.03) itself
+        verdict["verdict"] = "OK" if has_15 or _item("1.03") else "WEAK_no_form15"
         return verdict
     verdict["verdict"] = "OK"
     return verdict
@@ -194,25 +225,15 @@ def verify_one(row: dict, av_name: str | None = None) -> dict:
 
 def main() -> int:
     p = argparse.ArgumentParser()
-    p.add_argument("--input", default=str(ROOT / "output" / "delist_classifications.csv"))
+    p.add_argument("--input", default=str(ROOT / "output" / "delistings.csv"))
     p.add_argument("--output", default=str(ROOT / "output" / "web_verification.csv"))
     p.add_argument("--sample", type=int, default=0,
                    help="Stratified random sample size (0 = all)")
-    p.add_argument("--av-csv", default=os.environ.get(
-        "AV_LISTING_CSV",
-        str(ROOT / "data" / "listing_status_delisted.csv")))
     args = p.parse_args()
+    require_user_agent()         # SEC refuses the fallback User-Agent: stop before the first request
+    use_machine_wide_limit()     # share the 8 requests/s with every other SEC client on this machine
 
-    # Load AV names for cross-validation
-    av_names: dict[str, str] = {}
-    with open(args.av_csv) as fh:
-        for r in csv.DictReader(fh):
-            t = (r.get("symbol") or "").upper()
-            if t:
-                av_names[t] = r.get("name") or ""
-
-    with open(args.input) as fh:
-        rows = list(csv.DictReader(fh))
+    rows = read_table("delistings", args.input)
 
     if args.sample > 0:
         import random
@@ -231,13 +252,13 @@ def main() -> int:
     counts: dict[str, int] = {}
     with out_path.open("w", newline="") as fh:
         w = csv.DictWriter(fh, fieldnames=[
-            "ticker", "our_bucket", "our_code", "our_reason",
-            "edgar_name", "former_names", "av_name", "name_match",
+            "sec_id", "ticker", "our_bucket", "our_code", "our_reason",
+            "edgar_name", "former_names", "resolved_name", "name_match",
             "delist_form_present", "verdict", "note",
         ])
         w.writeheader()
         for i, r in enumerate(rows, 1):
-            v = verify_one(r, av_name=av_names.get(r["ticker"].upper()))
+            v = verify_one(r)
             w.writerow(v)
             counts[v["verdict"]] = counts.get(v["verdict"], 0) + 1
             if i % 25 == 0:
@@ -251,4 +272,8 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except EdgarBlocked as e:
+        print(f"ABORTED: {e}", file=sys.stderr)
+        sys.exit(2)

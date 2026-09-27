@@ -1,0 +1,192 @@
+{
+ "sec_id": "BBG000DWG505",
+ "cik": 1067983,
+ "observed_tickers": [
+  "BRK-B",
+  "BRKB"
+ ],
+ "openfigi": {
+  "data": [
+   {
+    "figi": "BBG000DWG505",
+    "compositeFIGI": "BBG000DWG505",
+    "exchCode": "US",
+    "ticker": "BRK/B",
+    "name": "BERKSHIRE HATHAWAY INC-CL B",
+    "securityType": "Common Stock"
+   },
+   {
+    "figi": "BBG000DWG587",
+    "compositeFIGI": "BBG000DWG505",
+    "exchCode": "UA",
+    "ticker": "BRK/B",
+    "name": "BERKSHIRE HATHAWAY INC-CL B",
+    "securityType": "Common Stock"
+   },
+   {
+    "figi": "BBG000DWG5L2",
+    "compositeFIGI": "BBG000DWG505",
+    "exchCode": "UC",
+    "ticker": "BRK/B",
+    "name": "BERKSHIRE HATHAWAY INC-CL B",
+    "securityType": "Common Stock"
+   },
+   {
+    "figi": "BBG000DWH8Q0",
+    "compositeFIGI": "BBG000DWG505",
+    "exchCode": "UN",
+    "ticker": "BRK/B",
+    "name": "BERKSHIRE HATHAWAY INC-CL B",
+    "securityType": "Common Stock"
+   },
+   {
+    "figi": "BBG000DWH997",
+    "compositeFIGI": "BBG000DWG505",
+    "exchCode": "UP",
+    "ticker": "BRK/B",
+    "name": "BERKSHIRE HATHAWAY INC-CL B",
+    "securityType": "Common Stock"
+   },
+   {
+    "figi": "BBG000DWHB29",
+    "compositeFIGI": "BBG000DWG505",
+    "exchCode": "UB",
+    "ticker": "BRK/B",
+    "name": "BERKSHIRE HATHAWAY INC-CL B",
+    "securityType": "Common Stock"
+   },
+   {
+    "figi": "BBG000DWHBB9",
+    "compositeFIGI": "BBG000DWG505",
+    "exchCode": "UT",
+    "ticker": "BRK/B",
+    "name": "BERKSHIRE HATHAWAY INC-CL B",
+    "securityType": "Common Stock"
+   },
+   {
+    "figi": "BBG000DWHBK9",
+    "compositeFIGI": "BBG000DWG505",
+    "exchCode": "UM",
+    "ticker": "BRK/B",
+    "name": "BERKSHIRE HATHAWAY INC-CL B",
+    "securityType": "Common Stock"
+   },
+   {
+    "figi": "BBG000DWHCM5",
+    "compositeFIGI": "BBG000DWG505",
+    "exchCode": "UX",
+    "ticker": "BRK/B",
+    "name": "BERKSHIRE HATHAWAY INC-CL B",
+    "securityType": "Common Stock"
+   },
+   {
+    "figi": "BBG000DWHGG3",
+    "compositeFIGI": "BBG000DWG505",
+    "exchCode": "UD",
+    "ticker": "BRK/B",
+    "name": "BERKSHIRE HATHAWAY INC-CL B",
+    "securityType": "Common Stock"
+   },
+   {
+    "figi": "BBG000DWHJP7",
+    "compositeFIGI": "BBG000DWG505",
+    "exchCode": "UF",
+    "ticker": "BRK/B",
+    "name": "BERKSHIRE HATHAWAY INC-CL B",
+    "securityType": "Common Stock"
+   },
+   {
+    "figi": "BBG000DWHK74",
+    "compositeFIGI": "BBG000DWG505",
+    "exchCode": "VY",
+    "ticker": "BRK/B",
+    "name": "BERKSHIRE HATHAWAY INC-CL B",
+    "securityType": "Common Stock"
+   },
+   {
+    "figi": "BBG000DWHKY4",
+    "compositeFIGI": "BBG000DWG505",
+    "exchCode": "VJ",
+    "ticker": "BRK/B",
+    "name": "BERKSHIRE HATHAWAY INC-CL B",
+    "securityType": "Common Stock"
+   },
+   {
+    "figi": "BBG000DWHLJ9",
+    "compositeFIGI": "BBG000DWG505",
+    "exchCode": "VK",
+    "ticker": "BRK/B",
+    "name": "BERKSHIRE HATHAWAY INC-CL B",
+    "securityType": "Common Stock"
+   },
+   {
+    "figi": "BBG00DJDFRW1",
+    "compositeFIGI": "BBG000DWG505",
+    "exchCode": "VF",
+    "ticker": "BRK/B",
+    "name": "BERKSHIRE HATHAWAY INC-CL B",
+    "securityType": "Common Stock"
+   },
+   {
+    "figi": "BBG00THDNF82",
+    "compositeFIGI": "BBG000DWG505",
+    "exchCode": "VL",
+    "ticker": "BRK/B",
+    "name": "BERKSHIRE HATHAWAY INC-CL B",
+    "securityType": "Common Stock"
+   },
+   {
+    "figi": "BBG00X1LS7C0",
+    "compositeFIGI": "BBG000DWG505",
+    "exchCode": "VG",
+    "ticker": "BRK/B",
+    "name": "BERKSHIRE HATHAWAY INC-CL B",
+    "securityType": "Common Stock"
+   },
+   {
+    "figi": "BBG00X1Q6J91",
+    "compositeFIGI": "BBG000DWG505",
+    "exchCode": "VP",
+    "ticker": "BRK/B",
+    "name": "BERKSHIRE HATHAWAY INC-CL B",
+    "securityType": "Common Stock"
+   },
+   {
+    "figi": "BBG01V7WKW45",
+    "compositeFIGI": "BBG000DWG505",
+    "exchCode": "OC",
+    "ticker": "BRK/B",
+    "name": "BERKSHIRE HATHAWAY INC-CL B",
+    "securityType": "Common Stock"
+   },
+   {
+    "figi": "BBG01X4JVVJ7",
+    "compositeFIGI": "BBG000DWG505",
+    "exchCode": "OD",
+    "ticker": "BRK/B",
+    "name": "BERKSHIRE HATHAWAY INC-CL B",
+    "securityType": "Common Stock"
+   },
+   {
+    "figi": "BBG021C26JS9",
+    "compositeFIGI": "BBG000DWG505",
+    "exchCode": "VT",
+    "ticker": "BRK/B",
+    "name": "BERKSHIRE HATHAWAY INC-CL B",
+    "securityType": "Common Stock"
+   }
+  ]
+ },
+ "submissions": {
+  "name": "BERKSHIRE HATHAWAY INC",
+  "tickers": [
+   "BRK-B",
+   "BRK-A"
+  ],
+  "exchanges": [
+   "NYSE",
+   "NYSE"
+  ],
+  "__fetched__": "2026-09-23"
+ }
+}

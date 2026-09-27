@@ -5,11 +5,7 @@ import csv
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from types import SimpleNamespace
 
-import requests
-
-from delist_detection import ticker_resolver
 from delist_detection.edgar import EdgarSubmission
 from delist_detection.llm_merger_extractor import MergerTerms
 from delist_detection.ticker_resolver import TickerResolver
@@ -87,18 +83,12 @@ class GoldenEdgar:
         p = FIX / "text" / f"{int(cik)}_{accession}.txt"
         return p.read_text(encoding="utf-8") if p.exists() else ""
 
+    def fetch_filing_raw(self, cik, accession):
+        p = FIX / "raw" / f"{int(cik)}_{accession}.txt"
+        return p.read_text(encoding="utf-8") if p.exists() else ""
+
     def company_search_atom(self, company, form_type="25-NSE"):
         return self.data["atom"].get(f"{company}|{form_type}", [])
-
-
-class _EftsAnswer:
-    status_code = 200
-
-    def __init__(self, url: str, payload: dict) -> None:
-        self.url, self._payload = url, payload
-
-    def json(self) -> dict:
-        return self._payload
 
 
 def patch_efts(monkeypatch, case: GoldenCase) -> None:
@@ -107,7 +97,5 @@ def patch_efts(monkeypatch, case: GoldenCase) -> None:
     raw = case.data["efts_raw"]
     for name, method in _REAL_EFTS.items():
         monkeypatch.setattr(TickerResolver, name, method)
-    monkeypatch.setattr(ticker_resolver, "requests", SimpleNamespace(
-        get=lambda url, *a, **kw: _EftsAnswer(url, raw.get(url, {"hits": {"hits": []}})),
-        RequestException=requests.RequestException))
-    monkeypatch.setattr(ticker_resolver, "_throttle", lambda: None)
+    monkeypatch.setattr(TickerResolver, "_efts_hits",
+                        lambda self, url, window_end=None: raw.get(url, {"hits": {"hits": []}})["hits"]["hits"])
