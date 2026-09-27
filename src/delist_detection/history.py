@@ -6,14 +6,18 @@ one security; this module dates what that security was called when."""
 from __future__ import annotations
 
 from collections import Counter, defaultdict
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import NamedTuple
 
 from .ftd import FtdIndex
+from .observations import TickerEra
 from .review_triage import ReviewItem
 from .security_master import Security
+
+BACKFILL_START = "2004-01-31"      # spec §7.x: the earliest as_of the backfilled_ticker check applies to
+BACKFILL_WINDOW_DAYS = 30
 
 
 class Sighting(NamedTuple):
@@ -204,4 +208,107 @@ def ticker_range_review(th_rows: list[dict]) -> list[ReviewItem]:
                 out.append(ReviewItem(rs[i]["sec_id"], ticker, None, "ticker_shared",
                                       f"{_name(rs[i])} ({rs[i]['sec_id']}) overlaps "
                                       f"{_name(rs[j])} ({rs[j]['sec_id']})"))
+    return out
+
+
+def _bare(ticker: str) -> str:
+    return ticker.replace("-", "")
+
+
+def is_backfilled(as_of: str, ticker: str, cusips: Sequence[str], ftd: FtdIndex) -> bool:
+    """spec §7.x rule 4: `as_of` is on or after `BACKFILL_START`, no fails-to-deliver
+    row of `cusips` under `ticker` (either separator spelling) within
+    `BACKFILL_WINDOW_DAYS` days of `as_of`, and at least one such row under
+    another symbol in that window -- a snapshot source backfilled a ticker the
+    security was not actually seen trading under then (Yahoo stays YHOO in
+    2012 fails; a 2012 snapshot backfills CB, Chubb's later ticker). Used both
+    for `observation_map.csv`'s `backfilled_ticker` status and (Phase 4 rule 2)
+    to drop a backfilled observation from `ticker_history`'s own sightings."""
+    if as_of < BACKFILL_START or not cusips:
+        return False
+    day = date.fromisoformat(as_of)
+    lo = (day - timedelta(days=BACKFILL_WINDOW_DAYS)).isoformat()
+    hi = (day + timedelta(days=BACKFILL_WINDOW_DAYS)).isoformat()
+    rows = [r for r in ftd.trading_rows(cusips) if lo <= r.date <= hi]
+    if not rows:
+        return False
+    bare = _bare(ticker)
+    own = any(_bare(r.symbol) == bare for r in rows)
+    other = any(_bare(r.symbol) != bare for r in rows)
+    return not own and other
+
+
+def filtered_ticker_sightings(sightings: Sequence[Sighting], cusips: Sequence[str],
+                              ftd: FtdIndex) -> list[Sighting]:
+    """`sightings` (a security's dated ticker sightings, `ticker_sightings`) with
+    every observation sighting `is_backfilled` drops (Phase 4 rule 2): a
+    caller's snapshot that assigned a ticker to a security before any SEC
+    fails-to-deliver row shows it trading that way adds no `ticker_history`
+    range under that spelling (Yahoo stays YHOO in 2012; the Chubb line loses
+    its backfilled CB 2012-14 ranges). FTD sightings are untouched -- they are
+    the evidence a backfilled ticker lacks -- and so is the delisting search's
+    own copy of `ticker_sightings`, which never calls this."""
+    return [s for s in sightings if not (s.source == "observation" and is_backfilled(s.day, s.value, cusips, ftd))]
+
+
+def _in_ticker_history(ticker: str, as_of: str, ranges: Sequence[Range]) -> bool:
+    bare = _bare(ticker)
+    return any(_bare(r.value) == bare and r.valid_from <= as_of and (r.valid_to is None or as_of <= r.valid_to)
+              for r in ranges)
+
+
+def _observation_status(as_of: str, ticker: str, sec_id: str | None, end: str | None, is_listed: bool | None,
+                        conflict: bool, cusips: Sequence[str], ftd: FtdIndex) -> str:
+    """The first rule that applies (spec §7.x): `unresolved` (no `sec_id`),
+    `after_delisting` (the security is not listed today and `as_of` is past
+    its clipped history end), `conflict` ((ticker, as_of) is a two-name
+    observation conflict), `backfilled_ticker` (`is_backfilled`), else
+    `mapped`."""
+    if sec_id is None:
+        return "unresolved"
+    if not is_listed and end is not None and as_of > end:
+        return "after_delisting"
+    if conflict:
+        return "conflict"
+    if is_backfilled(as_of, ticker, cusips, ftd):
+        return "backfilled_ticker"
+    return "mapped"
+
+
+def observation_map_rows(eras: Iterable[TickerEra], sec_id_of: Mapping[str, str | None],
+                         issuer_cik_of: Mapping[str, int | None], sec_cusips: Mapping[str, Sequence[str]],
+                         ftd: FtdIndex, ends: Mapping[str, str | None], listed: Mapping[str, bool | None],
+                         th_rows: Sequence[Mapping[str, object]],
+                         conflicts: Iterable[tuple[str, str]]) -> list[dict]:
+    """observation_map.csv's rows (spec §7.x): one row per observation of `eras`
+    (every era of the run, refined; `--limit` already trims which ones), naming
+    its era, its sec_id (`sec_id_of`, keyed by era key; None when unresolved)
+    and issuer CIK (`issuer_cik_of`), the `ticker_history` spelling and coverage
+    on its date (`history_ticker`/`in_ticker_history`, from `th_rows`, already
+    built by the history stage), and a `status` (`_observation_status`).
+
+    `ends`/`listed` are the history stage's own per-security end date (None:
+    still open) and listed-today answer, so `after_delisting` never
+    recomputes what `history_rows` already decided."""
+    ranges_by_sec: dict[str, list[Range]] = defaultdict(list)
+    for r in th_rows:
+        ranges_by_sec[r["sec_id"]].append(Range(r["ticker"], r["valid_from"], r["valid_to"], r["source"]))
+    conflict_set = set(conflicts)
+    out: list[dict] = []
+    for era in eras:
+        sec_id = sec_id_of.get(era.key)
+        issuer_cik = issuer_cik_of.get(era.key)
+        ranges = ranges_by_sec.get(sec_id, []) if sec_id is not None else []
+        cusips = sec_cusips.get(sec_id, []) if sec_id is not None else ()
+        for o in era.observations:
+            status = _observation_status(o.as_of, o.ticker, sec_id, ends.get(sec_id) if sec_id else None,
+                                         listed.get(sec_id) if sec_id else None,
+                                         (o.ticker, o.as_of) in conflict_set, cusips, ftd)
+            out.append({
+                "ticker": o.ticker, "as_of": o.as_of, "name": o.name, "cusip": o.cusip, "pin_cik": o.cik,
+                "pin_sec_id": o.sec_id, "era": era.key, "sec_id": sec_id, "issuer_cik": issuer_cik,
+                "history_ticker": value_on(ranges, date.fromisoformat(o.as_of)) if ranges else None,
+                "in_ticker_history": _in_ticker_history(o.ticker, o.as_of, ranges),
+                "status": status,
+            })
     return out
