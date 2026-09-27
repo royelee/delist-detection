@@ -31,11 +31,13 @@ from .figi_resolution import is_placeholder, share_class_from_name
 from .form25 import SecurityRef
 from .ftd import FTD_START, FtdIndex, close_age
 from .history import (
-    Sighting, cusip_sightings, history_rows, own_last_seen, ranges_from_sightings, ticker_on, ticker_range_review,
-    ticker_sightings, value_on,
+    Sighting, cusip_sightings, filtered_ticker_sightings, history_rows, observation_map_rows, own_last_seen,
+    ranges_from_sightings, ticker_on, ticker_range_review, ticker_sightings, value_on,
 )
 from .listing_status import issuer_exchange, listed_today, listing_answers
-from .observations import ObservationError, ObservationIndex, TickerEra, eras_by_key, normalize_ticker
+from .observations import (
+    ObservationError, ObservationIndex, TickerEra, eras_by_key, normalize_ticker, observation_conflicts,
+)
 from .payout_gate import DEFAULT_TOL, GatedPayouts, gate_payouts
 from .prefetch import Serialized, warm
 from .reconstruction import (
@@ -164,7 +166,7 @@ def _warm_delisting_search(clients: Clients, ordered: list[Security], listing: d
 def run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_dir: Path,
         tol: float = DEFAULT_TOL, limit: int | None = None, log: Callable = _stderr,
         sec_workers: int = 1, review_decisions: Sequence[Decision] = ()) -> RunSummary:
-    """Observations -> the seven tables under `out_dir` (spec §8): `review_decisions`
+    """Observations -> the eight tables under `out_dir` (spec §8): `review_decisions`
     (`review_triage.load_decisions`: "I checked this flag on this row, it is
     fine") is passed straight to `review_triage.triage`, which writes
     review.csv (severity-ordered, info-only rows hidden, accepted tokens
@@ -815,20 +817,63 @@ def _delisting_rows(delistings: list[Delisting], closes: dict[DelistingKey, floa
     return delisting_rows, review_rows
 
 
+CONTINUATION_MIN_ROWS = 20    # a WRK-like delisting record's own CUSIP must show at least this many live fails rows...
+CONTINUATION_MIN_DAYS = 60    # ...spanning at least this many days...
+CONTINUATION_MIN_PRICES = 2   # ...at 2 or more distinct prices, so fails still settling at the last close don't count
+
+
+def _continues_after(s: Security, after: str, sec_cusips: dict[str, list[str]], ftd: FtdIndex) -> bool:
+    """Whether security `s`'s own CUSIP keeps trading under its own ticker(s)
+    strictly after the ISO date `after` (Phase 4's clip rule): at least
+    `CONTINUATION_MIN_ROWS` live fails rows (never a deleted symbol; a fail
+    still settling after the real end) over at least `CONTINUATION_MIN_DAYS`
+    days, with `CONTINUATION_MIN_PRICES` or more distinct prices -- so a
+    compliance failure's OTC tail settling at one price is not mistaken for
+    continued trading (WRK stops being clipped; ARD and compliance failures
+    stay clipped)."""
+    own = {e.ticker for e in s.eras}
+    rows = [r for r in ftd.trading_rows(sec_cusips.get(s.sec_id, [])) if r.symbol in own and r.date > after]
+    if len(rows) < CONTINUATION_MIN_ROWS:
+        return False
+    dates = [r.date for r in rows]
+    if (date.fromisoformat(max(dates)) - date.fromisoformat(min(dates))).days < CONTINUATION_MIN_DAYS:
+        return False
+    return len({r.price for r in rows if r.price is not None}) >= CONTINUATION_MIN_PRICES
+
+
+def _ends_the_security(e: Delisting, s: Security, sec_cusips: dict[str, list[str]], ftd: FtdIndex) -> bool:
+    """Whether delisting `e` is the kind that actually ends security `s`
+    (Phase 4): not one whose successor is the security itself (a continuing
+    exchange transfer, D18), and not one after which `s`'s own CUSIP keeps
+    trading under its own ticker (`_continues_after`: a WRK-like delisting
+    record that did not really end trading)."""
+    if e.record.successor_sec_id == e.sec_id:
+        return False
+    after = e.last_trade.day.isoformat() if e.last_trade.day is not None else e.delist_date
+    return not _continues_after(s, after, sec_cusips, ftd)
+
+
 def _history_rows(ctx: _RunContext, securities: dict[str, Security], search: _DelistingSearch,
                   sec_cusips: dict[str, list[str]], ftd: FtdIndex,
-                  added: dict[str, AddedSecurity]) -> tuple[list[dict], list[dict]]:
+                  added: dict[str, AddedSecurity]) -> tuple[list[dict], list[dict], dict[str, str | None]]:
     """10b. The ticker_history and cusip_history rows (`history.history_rows`):
-    each observed security's ranges end at its last delisting's last trade day
-    unless it is listed today. An added (acquirer/successor) security gets one
-    ticker row, built directly: `ranges_from_sightings`' filter that drops
+    each observed security's ranges end at the last delisting that actually
+    ends it (`_ends_the_security`) -- its last trade day, or its delist_date
+    when the last trade day is unconfirmed -- unless it is listed today or no
+    delisting ends it. An added (acquirer/successor) security gets one ticker
+    row, built directly: `ranges_from_sightings`' filter that drops
     single-value FTD sightings would otherwise silently drop a successor's lone
-    8-K12B-dated sighting."""
+    8-K12B-dated sighting. Also returns each observed security's end date (or
+    None), so `observation_map_rows` can flag `after_delisting` without
+    recomputing it."""
     clients = ctx.clients
     th_rows, ch_rows = [], []
-    final = {}
+    ends: dict[str, str | None] = {}
+    final: dict[str, Delisting] = {}
     for e in sorted(search.delistings, key=lambda e: e.delist_date):
-        final[e.sec_id] = e
+        s = securities.get(e.sec_id)
+        if s is not None and _ends_the_security(e, s, sec_cusips, ftd):
+            final[e.sec_id] = e
     for sid, s in securities.items():
         last_delisting = final.get(sid)
         is_listed = bool(search.listed.get(sid))
@@ -839,8 +884,13 @@ def _history_rows(ctx: _RunContext, securities: dict[str, Security], search: _De
             # security's real end.
             end = (last_delisting.last_trade.day.isoformat() if last_delisting.last_trade.day is not None
                    else last_delisting.delist_date)
+        ends[sid] = end
+        # Phase 4 rule 2: a backfilled observation is not a ticker sighting here
+        # (this security's own ticker_history ranges) -- the delisting search's
+        # own sightings (`search.sightings`, built once in stage 5) are untouched.
+        own_sightings = filtered_ticker_sightings(search.sightings.get(sid, []), sec_cusips.get(sid, []), ftd)
         th, ch = history_rows(
-            s, search.sightings.get(sid, []), cusip_sightings(s, ftd, sec_cusips.get(sid, [])),
+            s, own_sightings, cusip_sightings(s, ftd, sec_cusips.get(sid, [])),
             listed=is_listed, end=end, end_exchange=last_delisting.exchange if last_delisting else None,
             # An open (listed-today) row: the exchange from the issuer's own EDGAR
             # submissions JSON (already cached by the finder).
@@ -852,7 +902,7 @@ def _history_rows(ctx: _RunContext, securities: dict[str, Security], search: _De
                                       tickers=[a.ticker]))
         exch = issuer_exchange(clients.edgar, a.security.issuer_cik, a.ticker) if is_listed else None
         th_rows.append(a.history_row(listed=is_listed, exchange=exch))
-    return th_rows, ch_rows
+    return th_rows, ch_rows, ends
 
 
 def _payout_rows(payouts: _Payouts, delistings: list[Delisting]) -> list[dict]:
@@ -873,6 +923,24 @@ def _payout_rows(payouts: _Payouts, delistings: list[Delisting]) -> list[dict]:
         rows.append({"sec_id": key.sec_id, "delist_date": key.delist_date, "ticker": delisting_by_key[key].ticker,
                      "payout_per_share": value, "confidence": gated.confidences.get(key, "none"),
                      "source": source, "accession": accession})
+    return rows
+
+
+def _observation_map(ctx: _RunContext, index: ObservationIndex, eras: list[TickerEra],
+                     resolutions: dict[str, EraResolution], issuers: dict[str, Issuer],
+                     sec_cusips: dict[str, list[str]], ftd: FtdIndex, ends: dict[str, str | None],
+                     listed: dict[str, bool | None], th_rows: list[dict]) -> list[dict]:
+    """10e. observation_map.csv's rows (`history.observation_map_rows`): every
+    observation of the run's eras (`--limit` already trims which ones), its
+    era, sec_id, issuer CIK, `ticker_history` spelling/coverage on its date,
+    and status. The log names how many of the input's observations that is,
+    so a `--limit` subset's smaller count is not mistaken for a bug."""
+    sec_id_of = {k: r.sec_id for k, r in resolutions.items()}
+    issuer_cik_of = {k: cik_of(issuers, k) for k in resolutions}
+    conflicts = [(t, d) for t, d, _ in observation_conflicts(o for e in eras for o in e.observations)]
+    rows = observation_map_rows(eras, sec_id_of, issuer_cik_of, sec_cusips, ftd, ends, listed, th_rows, conflicts)
+    total = sum(len(e.observations) for e in index.eras())
+    ctx.log(f"observation_map: {len(rows)} of {total} observations mapped")
     return rows
 
 
@@ -924,8 +992,10 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
     # 10. rows
     delisting_rows, review_rows = _delisting_rows(delistings, closes, payouts, overrides)
     review_rows += [item.row() for item in review]
-    th_rows, ch_rows = _history_rows(ctx, securities, search, sec_cusips, ftd, added)
+    th_rows, ch_rows, ends = _history_rows(ctx, securities, search, sec_cusips, ftd, added)
     review_rows += [item.row() for item in ticker_range_review(th_rows)]
+    map_rows = _observation_map(ctx, index, eras, resolutions, answers.issuers, sec_cusips, ftd, ends,
+                                search.listed, th_rows)
     flags, triaged = _triage(ctx, review_rows, review_decisions, limit)
 
     # 11. write -- every table formatted and written to its temp file first, so
@@ -939,6 +1009,7 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
         "payouts": _payout_rows(payouts, delistings),
         "review": triaged.review_rows,
         "review_summary": triaged.summary_rows,
+        "observation_map": map_rows,
     })
     stat_counts, stat_timings = SEC_STATS.since(run_mark)
     run_manifest.write(out_dir, run_manifest.build(as_of=ctx.as_of, sec_workers=sec_workers, counts=stat_counts,
