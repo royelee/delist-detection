@@ -470,11 +470,15 @@ class FigiResolver:
         rename, is accepted onto Bloomberg's EVERSOURCE ENERGY line because
         EDGAR lists both names for CIK 72741). A dead line Bloomberg renamed to
         its acquirer is still rejected: the acquirer's name is not one of the
-        target issuer's names. A candidate taken only through the EDGAR names
-        must also not contradict another era's pin or CUSIP (`_contradicted`),
-        nor leave a sibling era of the same issuer and class alone on the
-        issuer's placeholder. Else the issuer's placeholder, or unresolved with
-        no issuer."""
+        target issuer's names. A candidate taken only through the EDGAR names,
+        or through a CUSIP handoff (`handoffs`, spec §17), must also not
+        contradict another era's pin or CUSIP (`_contradicted`). A sibling era
+        of the same issuer and class left with no pick of its own instead
+        follows such a pick onto its composite when `_contradicted` does not
+        rule it out there too; if it does, or if the group's picks disagree on
+        the composite, the whole group is withdrawn to the placeholder
+        together. Else the issuer's placeholder, or unresolved with no
+        issuer."""
         eras_by_key(eras)                                # every era is keyed by era.key below: refuse duplicates
         out: dict[str, EraResolution] = {}
         jobs: list[dict] = []
@@ -558,19 +562,47 @@ class FigiResolver:
         # An era that only the EDGAR names or a CUSIP handoff take off it would leave
         # a sibling there: one stock on two sec_ids, and the placeholder ending in a
         # rename (ACE LTD, backfilled under CB in 2012-14, while its own ACE era finds
-        # no FIGI). Such an era stays with the group; repeated until no group is split.
+        # no FIGI). Such a sibling instead follows the group onto its composite (a
+        # "handoff" pick) when the two guards above do not contradict it there
+        # (`_contradicted`); if they do, or if the group's picks disagree on the
+        # composite (two chains reaching two composites), the whole group is
+        # withdrawn to the placeholder instead, all its picks together, never split.
+        # Repeated until no group changes.
         while True:
-            held: dict[tuple[int | None, str], str] = {}
+            held: dict[tuple[int | None, str], list[str]] = defaultdict(list)
             for e in eras:
                 if e.key not in out and e.key not in picks and e.key in issuers:
-                    held.setdefault(group(e), e.key)
-            split = [e.key for e in eras if e.key in picks and picks[e.key][3] and group(e) in held]
-            if not split:
+                    held[group(e)].append(e.key)
+            if not held:
                 break
-            for k in split:
-                self.log(f"FIGI {picks[k][0]} pick withdrawn: {k} stays on its issuer's placeholder with "
-                         f"{held[group(by_key[k])]} (guard c)")
-                del picks[k]
+            changed = False
+            for grp, siblings in held.items():
+                weak_keys = [e.key for e in eras if e.key in picks and picks[e.key][3] and group(e) == grp]
+                if not weak_keys:
+                    continue
+                changed = True
+                composites = {picks[k][1] for k in weak_keys}
+                if len(composites) > 1:
+                    for k in weak_keys:
+                        self.log(f"FIGI {picks[k][0]} pick withdrawn: {k} stays on its issuer's placeholder; "
+                                 f"its issuer and class reach more than one composite (guard c)")
+                        del picks[k]
+                    continue
+                composite = next(iter(composites))
+                blocked_by = next((s for s in siblings
+                                   if _contradicted(by_key[s], composite, eras, issuers, confirmed)), None)
+                if blocked_by is not None:
+                    for k in weak_keys:
+                        self.log(f"FIGI {picks[k][0]} pick withdrawn: {k} stays on its issuer's placeholder with "
+                                 f"{blocked_by} (guard c)")
+                        del picks[k]
+                    continue
+                for s in siblings:
+                    picks[s] = ("handoff", composite, picks[weak_keys[0]][2], True)
+                    self.log(f"FIGI handoff: {s} joins {composite} with its issuer and class, "
+                            f"held with no pick of its own (guard c)")
+            if not changed:
+                break
 
         for era in eras:
             if era.key in out:

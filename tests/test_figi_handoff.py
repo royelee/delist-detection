@@ -122,15 +122,22 @@ def test_nu_2008_joins_es_2015s_line_and_frees_es_2012_from_guard_c(eras, ftd):
     no CUSIP of its own either (its FTD CUSIP 292756202 describes a different,
     unrelated company, EnergySolutions, that held the ES ticker earlier): it
     reaches BBG000BQ87N0 only through the EDGAR names on its ticker job, a weak
-    pick. Without NU@2008's handoff pick, that weak pick would be withdrawn by
-    guard (c) (NU@2008, same issuer and class, having no pick of its own would
-    stay on the issuer's placeholder) -- the Task 1 regression."""
+    pick. NU@2008 either takes it directly through the switch, or -- with no
+    switch link at all -- follows ES@2012's weak pick onto the same composite
+    anyway (guard (c)'s "held sibling follows the chain" rule): nothing here
+    contradicts it. Only stripped of every same-issuer, same-class weak pick to
+    follow (no ES@2012 in the run at all) does NU@2008 stay on the placeholder."""
     res = _resolve(eras, ftd, NU_ES)
     assert _placed(res) == {"NU@2008-01-16": ("BBG000BQ87N0", "handoff"),
                             "ES@2012-06-29": ("BBG000BQ87N0", "ticker"),
                             "ES@2015-06-30": ("BBG000BQ87N0", "cusip")}
     assert res["NU@2008-01-16"].cusips == ("664397106",)
-    without = _resolve(eras, ftd, NU_ES, handoffs=[])
-    assert _placed(without) == {"NU@2008-01-16": ("CIK72741-COMMON", "placeholder"),
-                                "ES@2012-06-29": ("CIK72741-COMMON", "placeholder"),
-                                "ES@2015-06-30": ("BBG000BQ87N0", "cusip")}
+
+    without_link = _resolve(eras, ftd, NU_ES, handoffs=[])
+    assert _placed(without_link) == {"NU@2008-01-16": ("BBG000BQ87N0", "handoff"),
+                                     "ES@2012-06-29": ("BBG000BQ87N0", "ticker"),
+                                     "ES@2015-06-30": ("BBG000BQ87N0", "cusip")}
+
+    without_es2012 = _resolve(eras, ftd, ["NU@2008-01-16", "ES@2015-06-30"], handoffs=[])
+    assert _placed(without_es2012) == {"NU@2008-01-16": ("CIK72741-COMMON", "placeholder"),
+                                       "ES@2015-06-30": ("BBG000BQ87N0", "cusip")}

@@ -424,15 +424,16 @@ def test_edgar_names_do_not_move_an_era_off_the_line_its_issuers_cusip_confirms_
         wyn.key: "BBG000PV2L86", wynd.key: "BBG000PV2L86"}
 
 
-def test_edgar_names_do_not_split_an_issuers_placeholder():
+def test_a_held_sibling_follows_its_edgar_name_only_group_onto_the_composite():
     """Real case: the snapshots list ACE Ltd under ACE from 2008 and, backfilled,
     under CB in 2012-2014. CB's ticker hit is Bloomberg's CHUBB LTD line, which
-    ACE's EDGAR names accept; but the ACE era itself finds no FIGI (OpenFIGI knows
-    neither its old CUSIP nor its old ticker) and stays on the issuer placeholder.
-    Taking only the CB era off it would put one stock on two sec_ids on the same
-    dates (and end the placeholder in a rename row), so the CB era stays with it.
+    ACE's EDGAR names accept; the ACE era itself finds no FIGI of its own
+    (OpenFIGI knows neither its old CUSIP nor its old ticker), but nothing
+    contradicts it there (guard (a)/(b)), so it follows CB's group onto CHUBB
+    LTD instead of leaving CB alone on the placeholder: one stock ends on one
+    sec_id, not two, and the placeholder holds no era of this issuer/class.
     Wisconsin Energy's two eras both reach WEC ENERGY GROUP only through EDGAR's
-    names, so both go, and no era is left on the placeholder."""
+    names too, with no held sibling at all, so both go as before."""
     ace = _era("ACE", ("2008-07-25", "ACE LTD"), ("2015-12-31", "ACE LTD"))
     cb = _era("CB", ("2012-06-29", "ACE LTD"), ("2014-06-30", "ACE LTD"))
     wec08 = _era("WEC", ("2008-01-16", "WISCONSIN ENERGY CORP"), ("2009-06-08", "WISCONSIN ENERGY CORP"))
@@ -446,8 +447,51 @@ def test_edgar_names_do_not_split_an_issuers_placeholder():
                                      {896159: ("Chubb Ltd", "ACE LTD", "ACE Ltd"),
                                       783325: ("WEC ENERGY GROUP, INC.", "WISCONSIN ENERGY CORP")}),
         cusips={ace.key: ["H0023R105"], cb.key: [], wec08.key: ["976657106"], wec14.key: ["976657106"]})
-    assert {k: r.sec_id for k, r in res.items()} == {ace.key: "CIK896159-COMMON", cb.key: "CIK896159-COMMON",
+    assert {k: r.sec_id for k, r in res.items()} == {ace.key: "BBG000BR14K5", cb.key: "BBG000BR14K5",
                                                     wec08.key: "BBG000BWP7D9", wec14.key: "BBG000BWP7D9"}
+    assert res[ace.key].source == "handoff" and res[cb.key].source == "ticker"
+
+
+def test_a_held_sibling_contradicted_by_guard_b_still_withdraws_the_whole_group():
+    """CB's own pick reaches CHUBB LTD uncontradicted (guard (b) is dated: a
+    same-issuer, same-class era confirmed elsewhere only blocks a pick over
+    *overlapping* dates, and ZZ's single day falls outside CB's 2012-2014
+    span). ACE spans 2008-2015, so ZZ's day falls inside *its* span: guard (b)
+    blocks ACE's join there, and the old all-or-none applies -- the whole
+    group, including CB's own successful pick, stays on the placeholder."""
+    ace = _era("ACE", ("2008-07-25", "ACE LTD"), ("2015-12-31", "ACE LTD"))
+    cb = _era("CB", ("2012-06-29", "ACE LTD"), ("2014-06-30", "ACE LTD"))
+    zz = _era("ZZ", ("2009-01-16", "ACE LTD"))
+    figi = _Figi({("TICKER", "CB"): {"data": [_row("BBG000BR14K5", "US", "CB", "CHUBB LTD")]},
+                  ("ID_CUSIP", "99999Z101"): {"data": [_row("BBGZZOTHER01", "US", "ZZ", "SOME OTHER LINE")]}})
+    eras = [ace, cb, zz]
+    res = FigiResolver(figi).resolve_many(
+        eras, issuers=issuers_by_era({ace.key: 896159, cb.key: 896159, zz.key: 896159},
+                                     {896159: ("Chubb Ltd", "ACE LTD", "ACE Ltd")}),
+        cusips={ace.key: ["H0023R105"], cb.key: [], zz.key: ["99999Z101"]})
+    assert res[zz.key].sec_id == "BBGZZOTHER01" and res[zz.key].source == "cusip"
+    assert res[ace.key].sec_id == "CIK896159-COMMON" and res[ace.key].source == "placeholder"
+    assert res[cb.key].sec_id == "CIK896159-COMMON" and res[cb.key].source == "placeholder"
+
+
+def test_a_held_groups_picks_reaching_two_composites_move_nobody():
+    """CB's ticker hit reaches CHUBB LTD; a second, unrelated era of the same
+    issuer and class (a stray backfilled row under a third ticker) reaches a
+    different composite through its own EDGAR-name-only pick. With the group's
+    weak picks disagreeing on the composite, the held sibling ACE cannot follow
+    either one, and nobody in the group moves off the placeholder."""
+    ace = _era("ACE", ("2008-07-25", "ACE LTD"), ("2015-12-31", "ACE LTD"))
+    cb = _era("CB", ("2012-06-29", "ACE LTD"), ("2014-06-30", "ACE LTD"))
+    zz = _era("ZZ", ("2013-06-28", "ACE LTD"))
+    figi = _Figi({("TICKER", "CB"): {"data": [_row("BBG000BR14K5", "US", "CB", "CHUBB LTD")]},
+                  ("TICKER", "ZZ"): {"data": [_row("BBGSECONDONE", "US", "ZZ", "CHUBB LTD")]}})
+    eras = [ace, cb, zz]
+    res = FigiResolver(figi).resolve_many(
+        eras, issuers=issuers_by_era({ace.key: 896159, cb.key: 896159, zz.key: 896159},
+                                     {896159: ("Chubb Ltd", "ACE LTD", "ACE Ltd")}),
+        cusips={ace.key: ["H0023R105"], cb.key: [], zz.key: []})
+    assert {k: r.sec_id for k, r in res.items()} == {ace.key: "CIK896159-COMMON", cb.key: "CIK896159-COMMON",
+                                                    zz.key: "CIK896159-COMMON"}
 
 
 def test_the_same_issuer_guard_weighs_only_the_same_class_over_overlapping_dates():
@@ -515,12 +559,13 @@ def test_a_handoff_join_is_refused_when_a_sibling_confirms_another_composite_ove
     assert res[e.key].sec_id == "CIK1-COMMON" and res[e.key].source == "placeholder"
 
 
-def test_a_handoff_chain_joins_all_or_none():
-    """Guard (c): two unpicked eras of one issuer and class share a CUSIP (a
-    chain) and reach a confirmed sibling's composite through one of them. Alone,
-    both join it; with a third, unlinked era of the same issuer and class that
-    has no pick of its own (it would be left alone on the placeholder), both
-    chain members are withdrawn together, not just one."""
+def test_an_unlinked_held_sibling_follows_a_handoff_chain_onto_its_composite():
+    """Guard (c) (controller ruling): two unpicked eras of one issuer and class
+    share a CUSIP (a chain) and reach a confirmed sibling's composite through
+    one of them. A third, unlinked era of the same issuer and class with no
+    pick of its own (HCP@2008/2014 + PEAK@2012's real shape) does not hold the
+    chain back any more: since nothing contradicts it there, it follows the
+    chain onto the same composite too, as a `handoff` pick of its own."""
     e1 = _era("O1", ("2008-01-16", "MERGED CO"), ("2009-06-08", "MERGED CO"))
     e2 = _era("O2", ("2012-06-29", "MERGED CO"))
     f = _era("NW", ("2015-06-30", "MERGED CO NEW"))
@@ -537,7 +582,36 @@ def test_a_handoff_chain_joins_all_or_none():
     res = FigiResolver(figi).resolve_many(
         [e1, e2, f, held], issuers=issuers_by_era({e1.key: 9, e2.key: 9, f.key: 9, held.key: 9}),
         cusips={**cusips, held.key: []}, handoffs=handoffs)
+    assert {k: r.sec_id for k, r in res.items()} == {e1.key: "BBGCHAIN001", e2.key: "BBGCHAIN001",
+                                                     f.key: "BBGCHAIN001", held.key: "BBGCHAIN001"}
+    assert res[held.key].source == "handoff"
+
+
+def test_a_held_sibling_contradicted_over_its_own_dates_still_withdraws_the_chain():
+    """Same chain as above, but a fourth, unrelated era of the same issuer and
+    class is confirmed (by CUSIP) on a different composite over dates that
+    overlap only the held sibling's (not the chain's own eras' dates): guard
+    (b) blocks the sibling there, so the chain's own handoff picks (e1, e2) are
+    withdrawn along with it -- the old all-or-none stays for a sibling guard
+    (a)/(b) rules out. The independently CUSIP-confirmed anchor (f) and the
+    contradicting era (bad) are untouched; only the weak, chain-formed picks
+    are withdrawn."""
+    e1 = _era("O1", ("2008-01-16", "MERGED CO"), ("2009-06-08", "MERGED CO"))
+    e2 = _era("O2", ("2012-06-29", "MERGED CO"))
+    f = _era("NW", ("2015-06-30", "MERGED CO NEW"))
+    held = _era("H1", ("2016-06-30", "MERGED CO"))
+    bad = _era("BAD", ("2016-01-16", "SOMETHING ELSE"), ("2016-12-31", "SOMETHING ELSE"))
+    figi = _Figi({("ID_CUSIP", "44444F101"): {"data": [_row("BBGCHAIN001", "US", "NW", "MERGED CO NEW")]},
+                  ("ID_CUSIP", "55555B101"): {"data": [_row("BBGBADLINE1", "US", "BAD", "SOMETHING ELSE")]}})
+    handoffs = [Handoff(e1.key, e2.key, "shared_cusip", "SHAREDCUSIP1"),
+               Handoff(e2.key, f.key, "shared_cusip", "HANDOFFCUSIP1")]
+    eras = [e1, e2, f, held, bad]
+    res = FigiResolver(figi).resolve_many(
+        eras, issuers=issuers_by_era({e1.key: 9, e2.key: 9, f.key: 9, held.key: 9, bad.key: 9}),
+        cusips={e1.key: [], e2.key: [], f.key: ["44444F101"], held.key: [], bad.key: ["55555B101"]},
+        handoffs=handoffs)
     assert res[f.key].sec_id == "BBGCHAIN001" and res[f.key].source == "cusip"
+    assert res[bad.key].sec_id == "BBGBADLINE1" and res[bad.key].source == "cusip"
     assert res[e1.key].sec_id == "CIK9-COMMON" and res[e1.key].source == "placeholder"
     assert res[e2.key].sec_id == "CIK9-COMMON" and res[e2.key].source == "placeholder"
     assert res[held.key].sec_id == "CIK9-COMMON" and res[held.key].source == "placeholder"
