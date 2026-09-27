@@ -1213,3 +1213,227 @@ changed row; the rest change no table (checked by pinned warm reruns, below).
    requests, and every table and `run.log` matched this round's committed
    outputs byte for byte.
 
+## Task 4 — pins, live rerun, verification, the caller's metric (2026-09-26)
+
+Plan: `docs/superpowers/plans/2026-09-26-observation-map.md` (Phase 5), branch
+`feat/observation-map`, base 07547c5 (Tasks 1-3: resolver fixes for renamed
+tickers, the FIGI-handoff join, `observation_map.csv` and the ticker_history
+clip rule). This is the **first live rerun since eaf0e14** (the round-3
+baseline this section diffs against) to exercise any of Tasks 1-4's code, so
+every change below is a mix of (a) Task 1-3 resolver/handoff improvements
+finally visible in a full run, and (b) this task's own pins and its
+`after_unconfirmed_delisting` status.
+
+**Code change.** `observation_map.csv` gains a fourth status,
+`after_unconfirmed_delisting` (checked after `unresolved`, before
+`after_delisting`): an observation past a security's clip whose ending
+delisting has no confirmed last-trade day (`last_trade.day` is `None`, or
+flagged `last_trade_date_unconfirmed`) — the clip is a guess (Bank of
+Ozarks' no-Form-25 fallback has none at all; Monster Worldwide's substitutes
+a last sighting), so the caller keeps and checks the member instead of
+dropping it. `pipeline._history_rows` now also returns `end_confirmed:
+dict[str, bool]`, threaded through `_observation_map` into
+`history.observation_map_rows`/`_observation_status`. Also fixed three Task-3
+review nits (stale "seven CSVs" comment, a garbled sentence about
+`backfilled_ticker` repeated in three docs, a misnamed `BACKFILL_START`
+test) and added a direct `is_backfilled` bare-vs-dashed test. 1346 tests
+(+2; commit 46dbf35).
+
+**Pins (data/observations.csv, 179 rows across 18 tickers, cik column only,
+commits d2debac and de92331).** Every target CIK verified against cached
+EDGAR submissions (name/former-name at the era's own dates) before pinning:
+
+| Era | Pin | Verified as |
+|---|---|---|
+| LLL@2008/2012/2014 | 1056239 | L-3 Communications Holdings (all 3 name variants) |
+| ARCP@2014 | 1507385 | VEREIT, formerly American Realty Capital Properties |
+| HTA@2013-12-31, HTA@2014-12-31 | 1360604 | Healthcare Realty Trust, formerly Healthcare Trust of America |
+| COG@2008 (one era, 2008-2021) | 858470 | Coterra Energy, formerly Cabot Oil & Gas Corp |
+| HMA@2008 | 792985 | Health Management Associates, Inc |
+| RGC@2008 | 1168696 | Regal Entertainment Group |
+| WTM@2008 | 776867 | White Mountains Insurance Group Ltd |
+| LSTR@2008 | 853816 | Landstar System Inc |
+| AABA@2012 | 1011006 | Altaba Inc, formerly Yahoo Inc |
+| QRTEA@2012 | 1355096 | QVC Group, formerly Qurate Retail/Liberty Interactive/Liberty Media |
+| UAG@2008 | 1019849 | Penske Automotive Group, formerly United Auto Group Inc |
+| LCAPA@2008 | 1355096 | same Liberty Media Corp CIK as QRTEA (a 2008-09 tracking stock) |
+| RRI@2008-01-16, RRI@2009-06-08 | 1126294 | GenOn Energy, formerly RRI/Reliant Energy |
+| FNF@2014-12-31 | 1331875 | Fidelity National Financial (era name "FNF GROUP INC" is initials-only) |
+| QRVO@2017 | 1604778 | Qorvo (era name misspelled "QUORVO INC") |
+| ALEX@2008, ALEX@2012-06-29 | 3453 | Matson Inc, formerly Alexander & Baldwin through 2012-06-25 |
+| OZRK 2017-2018 | 1569650 (was 1038205) | Bank OZK, the ticker-continuing entity after the 2017 holdco merger |
+| DIS (all 36 obs, applied after the live run) | 1001039 | TWDC Enterprises 18 Corp, formerly "WALT DISNEY CO/" 1996-2019-03-18 |
+
+The `ALEX@2012-12-31` era is deliberately left to the ticker-wide
+`MANUAL_OVERRIDE` (1545654, correct only from that date on). DIS is one
+continuous, unsplit era (2008-2026, same CUSIP straight through the 2019
+Fox-related holding-company reorg, still listed today), so its pin
+necessarily also covers post-2019 observations under the pre-reorg entity's
+CIK — every tier had refused the real post-2019 holdco (1744489) because it
+didn't exist by DIS's first sighting, the same later-formed-holder guard
+Task 1 built elsewhere; a residual, not a defect, and strictly better than
+the blank issuer_cik it replaces.
+
+**Skipped from the "after the live run" conditional list.** AA, ETN, FOX,
+FOXA, ICE (issuer only), LBTYA, MDT, Z, PRGO and CLWR all already resolved
+correctly on the live tiers, matching the brief's expected CIKs exactly — no
+pin applied. CFFN@2008's live answer, 1074433 ("CAPITOL FEDERAL FINANCIAL",
+no rename on record), is correct as filed; the brief's fallback, 1054851, is
+an unrelated individual filer ("WADA KEIZO") and was not applied.
+
+**Re-checks.**
+- **CWH/HRP → Equity Commonwealth.** After the HMA pin frees CIK 803649 (no
+  longer wrongly shared with HMA), `CWH@2012` and `HRP@2008` both join
+  `BBG000BLG1L7` (issuer 803649, name "EQUITY COMMONWEALTH REIT"), whose
+  `ticker_history` now shows the full HRP (2007-2010) → CWH (2010-2014) →
+  EQC (2014-2025) chain as one continuous, still-observed security — correct,
+  and matching the real HRPT→CommonWealth REIT→Equity Commonwealth rename.
+  HMA itself resolves cleanly to its own composite, `BBG000CT56K1` (issuer
+  792985), with no collision.
+- **OZRK.** Now resolves to 1569650 and joins `BBG000QFJJW0` (issuer 1569650,
+  "BANK OZK") via the FIGI handoff to `OZK@2018-12-31`; `ticker_history`
+  shows OZRK (2008-2018) → OZK (2018-present), open, still listed. No
+  delisting record at all — correct, since the 2017 holdco merger was a
+  ticker/CUSIP switch, not a real Form-25 delisting. The old "no last-trade
+  day" clip problem no longer arises.
+- **AGN@2014 "ALLERGAN PLC" pin (1578845).** Kept. Verified: 1578845 is
+  Actavis plc (later renamed Allergan plc), the entity that genuinely
+  acquired Allergan, Inc. in 2015 and continued trading as ticker AGN; this
+  single 2014-06-30 observation is a snapshot artifact (labeled roughly nine
+  months before the deal closed 2015-03-16/27) but the pin's CIK is
+  factually right. Both this era and the old-Allergan-Inc era harmlessly
+  converge on the security's one real composite, `BBG000BHQ1H0`, whose
+  `delistings.csv` row (2015-03-27, `merger`, ACT $129.22 cash + 0.3683
+  shares @ $305, `dlret` +0.55%) correctly captures the real 2015 M&A
+  economics; the "continues trading" exception correctly leaves
+  `ticker_history` open past 2015 since the same ticker/CUSIP line kept
+  trading. No change.
+
+**Live rerun.** `DELIST_DETECTION_SEC_RATE_LOCK=... PYTHONPATH=src python
+scripts/classify_universe.py --observations data/observations.csv
+--extract-merger-terms-llm --sec-workers 4 --as-of 2026-09-25`, four times:
+(1) before the DIS pin, ~10 min, 596 SEC requests, exit 0; (2) after the DIS
+pin, ~9 min, ~9 SEC requests (mostly cached), exit 3 (1 `resolution_degraded`
+row: DIS's newly-found 2019-03-30 delisting needs the Nasdaq halt feed to
+confirm its last-trade day around 2019-03-18..21, and
+`www.nasdaqtrader.com` answered "Exceeded 30 redirects"/read-timeout from
+this sandbox on every attempt); (3) and (4) rerun per the brief's "rerun
+once" rule, both fully warm (0-5 SEC requests) and both still exit 3 with the
+*same single* `resolution_degraded` row and *identical* other counts —
+the halt-feed failure is a stable, reproducible sandbox/network-reachability
+issue for that specific date range, not a flaky retry target. Committed
+outputs are run (4)'s. `dlret`/`dlret_method`/`dlret_confidence` for that one
+row are unaffected (the last-trade day still resolves from the EX-99 notice,
+`ex99_notice`); only its confidence provenance is degraded pending a future
+rerun once the feed answers.
+
+**Verifier** (`verify_against_web.py`): OK 904, `WEAK_no_delist_form` 75,
+`OK_recycled_ticker` 3, **0 MISMATCH**, of 982 delistings.
+
+**Output diff vs eaf0e14** (`observation_map.csv` is new, 35,955 rows):
+
+| Table | Before | After | Added | Removed | Changed |
+|---|---|---|---|---|---|
+| securities | 2271 | 2226 | 13 | 58 | 9 |
+| ticker_history | 2851 | 2824 | 353 | 380 | 84 |
+| cusip_history | 2517 | 2659 | 269 | 127 | 17 |
+| delistings | 1001 | 982 | 26 | 45 | 4 |
+| payouts | 627 | 633 | 7 | 1 | 0 |
+| review | 782 | 761 | — | — | — |
+| review_summary | 32 | 34 | 3 | 1 | 21 |
+
+- **securities.csv:** 58 placeholders removed — each one's issuer now joins
+  its real successor's composite via a Task-2 FIGI handoff or a Task-4 pin
+  (e.g. `CIK803649-COMMON`→`BBG000BLG1L7`/EQC, `CIK833444-COMMON`→
+  `BBG000BVWLJ6`/JCI, `CIK1038205-COMMON`→`BBG000QFJJW0`/OZK). 13 added: 2
+  real FIGI (`BBG000DY6735` WW International via the WTW/WW handoff;
+  `BBG000BH2CW5` Gildan Activewear, a brand-new real-world event — Gildan
+  acquired Hanesbrands in Nov 2025, first visible now that HBI's issuer got a
+  CIK for the first time) and 11 new placeholders, of which 4 are directly
+  our pins (UAG, RRI, ICE — CIK now correct but FIGI stays a placeholder,
+  QRTEA) and 7 (Dril-Quip, Washington Post, DSW, a Liberty Media Class A
+  sibling of LCAPA, CBS Outdoor Americas, Consol Energy, Liz Claiborne) are
+  Task 1-3 resolver fixes surfacing for the first time. 9 `issuer_cik`
+  changes: LLL and DIS move from a wrong CIK to the pinned one; 5 previously
+  blank `issuer_cik`s (IDTI, ITG, HBI, the new Gannett, Light Wonder, Gardner
+  Denver) are filled by the same Task 1-3 improvements; `CIK1011006-COMMON`'s
+  name changes YAHOO! INC → ALTABA INC once the AABA pin merges that era in.
+- **delistings.csv:** 26 added, almost all newly-resolved issuers finding
+  their real Form 25/8-K for the first time (DIS 2019-03-30 merger from the
+  DIS pin; IDTI, ITG, GCI, HBI mergers and CREE/UBNT/GDI/WPO/LIZ/DRQ/CEIX
+  exchange-transfers from Task 1-3 resolver fixes; TMA's compliance_failure
+  re-dated to its real 2009-01-25 filing once its CUSIP-switch handoff
+  resolves). 45 removed — every one was a placeholder security's own
+  synthetic exchange_transfer/rename delisting record, eliminated because
+  its issuer now correctly joins a continuing real composite (TYC→JCI,
+  HCP/PEAK→DOC, HTA→HR, WW, OZRK→OZK, ACT→AGN, etc.) — a real correctness
+  gain: these were never true universe exits. 4 changed: AABA/YHOO's ticker
+  and close pick up the AABA pin; two rows gain a better `resolution_source`
+  or a real successor FIGI in place of a placeholder; **one regression**,
+  Apache Corp's 2021-03-14 holdco-reorg delisting (`BBG000BC2C10`) loses its
+  in-run successor link (`successor_sec_id` blank, `successor_unknown`
+  added) — traced to a **newly-surfaced wrong pass-1 answer**: era
+  `APA@2012-06-29` gets CIK 1410567 ("SmartStop Self Storage") from
+  `efts_frequency_name_mismatch`, though its own CUSIP evidence
+  (037411105) matches `APA@2008-01-16`'s (the real Apache Corp, 6769) —
+  correctly flagged `issuer_cusip_disagrees` and, via the resulting
+  `ticker_shared` overlap, pushes that era's placeholder FIGI resolution
+  onto the *2021* APA Corp composite (`BBG00YTS96G2`) on a ticker+name
+  accept rather than CUSIP, extending its `ticker_history` back to
+  2012-06-29 and breaking `successor_in_run`'s date-window match for the
+  real 2021 event. `dlret`/`dlret_method`/`dlret_confidence` for the Apache
+  row are unchanged (`0.000000`/`exchange_transfer_zero`, independent of the
+  successor link) — a provenance/review-cleanliness regression, not a
+  value regression. Not caused by any Task 4 pin; **not fixed here** (out of
+  scope: needs either a pin, `APA@2012-06-29` → 6769, or extending Task 1's
+  existence-by-first-sighting guard to the FIGI-resolution accept() path,
+  not only the CIK-resolution tiers). Four further `issuer_cusip_disagrees`
+  rows surfaced by this run for the same reason (D/Dominion, PENN/Penn
+  National Gaming, HIG/Hartford, MSTR/MicroStrategy) are correctly flagged
+  `check` in `review.csv` and not otherwise acted on — candidates for a
+  future pinning round, the same way COG/HMA/RGC/WTM/ARCP became this task's
+  pins after Task 1 surfaced them.
+- **ticket_history.csv / cusip_history.csv:** WRK-like un-clipping, backfilled
+  ranges gone (Task 3, already reviewed) plus every renamed ticker the plan
+  named now present and joined into one continuous range set: KORS→CPRI,
+  JDSU→VIAV, MHFI→SPGI, LUK→JEF, DSW (own placeholder, see below), PAH→ESI,
+  HCP/PEAK→DOC, TYC→JCI, WW/WTW, SIRI, DDR→SITE, ACE/CB→CB, plus this task's
+  own DIS (kept open past 2019, "continues trading") and OZRK→OZK.
+- **review_summary.csv:** `observation_unresolved` (`fix`, was 31) is gone
+  entirely — 0 unresolved observations remain. `resolution_degraded` (`fix`,
+  1: DIS) takes its place among `fix` rows. Two flags new since Task 1:
+  `issuer_inferred` (`check`, 75) and `issuer_cusip_disagrees` (`check`, 5).
+
+**The caller's metric** (`observation_map.csv`, 35,955 rows, one per distinct
+observation):
+
+| Status | Count |
+|---|---|
+| mapped | 35,427 |
+| after_delisting | 270 |
+| backfilled_ticker | 138 |
+| after_unconfirmed_delisting | 108 |
+| conflict | 12 |
+| unresolved | 0 |
+
+`in_ticker_history` true: **35,426 of 35,955** (was 35,375 by the caller's
+own `ticker_history` match) — 35,419 `mapped` + 7 `conflict` (the two AGN
+2014-06-30 rows, both correctly true since ALLERGAN INC and ALLERGAN PLC
+share one continuous composite; 5 of the CB/ACE `conflict` rows, the CHUBB
+CORP name, correctly true). 529 still false, fully accounted for: 270
+`after_delisting` (confirmed clip), 138 `backfilled_ticker` (by design, map-
+only), 108 `after_unconfirmed_delisting` (this task's new status — the
+caller should keep and check these members), 8 `mapped` (7 are LCAPA/LINTA,
+two Liberty Media tracking-stock tickers of 2008-09 collapsed onto one
+placeholder since neither confirms its own CUSIP, so only one ticker's
+range is active per date; 1 is TGNA@2015-06-30, a snapshot that recorded the
+new ticker two days before the real 2015-07-02 CUSIP switch), and 5
+`conflict` (the ACE LTD name on CB's 2012-2014 backfill rows — correctly
+false, ACE Ltd never traded as "CB"). An independent ticker-level spot check
+(any `ticker_history` row under the bare ticker, any date) drops from 51 to
+30 tickers fully absent, 21 newly covered, 0 regressions. Every ticker the
+caller named — KORS, JDSU, MHFI, LUK, DSW, PAH, HCP — is now in
+`ticker_history`; all 30 still-fully-absent tickers are either the AABA
+backfill or correctly clipped (`after_delisting`/`after_unconfirmed_
+delisting`), none `unresolved`.
+
