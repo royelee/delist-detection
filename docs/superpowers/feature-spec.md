@@ -217,15 +217,22 @@ history_ticker, in_ticker_history, status
   `as_of`.
 - `status`, first rule that applies:
   1. `unresolved` — the era's `sec_id` is None.
-  2. `after_delisting` — the security is not listed today and `as_of` is
-     after its `ticker_history` end (the same end date §8.5's clip rule
-     computes).
-  3. `conflict` — `(ticker, as_of)` is in `observations.observation_conflicts`.
-  4. `backfilled_ticker` — `as_of` ≥ 2004-01-31, no fails-to-deliver row of
+  2. `after_unconfirmed_delisting` — the security is not listed today, `as_of`
+     is after its `ticker_history` end (the same end date §8.5's clip rule
+     computes), and the delisting that set that clip has no confirmed
+     last-trade day (`last_trade.day` is None, or flagged
+     `last_trade_date_unconfirmed`) — the clip is a guess, so the caller
+     keeps this member and checks the delisting rather than dropping it
+     (controller ruling).
+  3. `after_delisting` — the security is not listed today and `as_of` is
+     after its `ticker_history` end, whose delisting has a confirmed
+     last-trade day.
+  4. `conflict` — `(ticker, as_of)` is in `observations.observation_conflicts`.
+  5. `backfilled_ticker` — `as_of` ≥ 2004-01-31, no fails-to-deliver row of
      the security's CUSIPs under the observed ticker (either separator
      spelling) within ±30 days of `as_of`, and at least one such row under
      another symbol in that window.
-  5. `mapped` — everything else.
+  6. `mapped` — everything else.
 - This is the caller's join surface: index membership comes from this table
   (every row that resolved names one observation's `sec_id`), and a ticker
   look-up by date goes through `ticker_history.csv` keyed on
@@ -834,8 +841,9 @@ line changes observable output.
   not actually end it.
 - **A backfilled observation adds no `ticker_history` range (§7.2, §7.6,
   §8.5, controller ruling).** The user decided backfilled tickers are
-  map-only: an observation `observation_map.csv` marks `backfilled_ticker`
-  is dropped from the security's own ticker-sighting list before
+  map-only: an observation that `observation_map.csv` marks
+  `backfilled_ticker` is dropped from the security's own ticker-sighting list
+  before
   `ranges_from_sightings` runs (`history.filtered_ticker_sightings`); the
   delisting search's own copy of the sightings (Form 25 matching, last-trade
   dating) is untouched, since dropping it there could misdate or mismatch a

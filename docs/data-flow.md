@@ -716,9 +716,9 @@ when it has no last-trade evidence at all, flagged
 normally for years past such a guessed date; the guess, not the listing, was
 wrong. A security none of whose delistings ends it, and that is not listed
 today either, is left unclipped, ending at its last real sighting.
-Separately, an observation
-`observation_map.csv` marks `backfilled_ticker` (below) is never itself a
-ticker sighting here (`history.filtered_ticker_sightings`) — a caller's
+Separately, an observation that `observation_map.csv` marks
+`backfilled_ticker` (below) is never itself a ticker sighting here
+(`history.filtered_ticker_sightings`) — a caller's
 snapshot that projects today's ticker back onto a date the security did not
 yet trade under it opens no range for that ticker; the delisting search's own
 copy of the sightings (`ticker_sightings`, used for Form 25 matching and
@@ -734,7 +734,8 @@ de-duplication `load_observations` does), naming the era it fell into, the
 | Status | Rule |
 |---|---|
 | `unresolved` | the era's `sec_id` is None |
-| `after_delisting` | the security is not listed today and `as_of` is after its clipped `ticker_history` end (the same end date the paragraph above computes, not recomputed) |
+| `after_unconfirmed_delisting` | the security is not listed today, `as_of` is after its clipped `ticker_history` end (the same end date the paragraph above computes, not recomputed), and the delisting that set that clip has no confirmed last-trade day (`last_trade.day` is None, or flagged `last_trade_date_unconfirmed`) — the clip is a guess, so the caller keeps and checks this member instead of dropping it |
+| `after_delisting` | the security is not listed today and `as_of` is after its clipped `ticker_history` end, whose delisting has a confirmed last-trade day |
 | `conflict` | `(ticker, as_of)` is in `observations.observation_conflicts` (two names, one ticker, one day) |
 | `backfilled_ticker` | `as_of` ≥ 2004-01-31, no fails-to-deliver row of the security's CUSIPs under the observed ticker (either separator spelling) within ±30 days, and at least one such row under another symbol in that window |
 | `mapped` | everything else |

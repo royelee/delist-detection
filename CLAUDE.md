@@ -208,8 +208,11 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   the ticker_history-building sightings only — the delisting search's own
   copy is untouched. `observation_map_rows()` builds `observation_map.csv`:
   one row per observation, its era, `sec_id`, issuer CIK, `ticker_history`
-  spelling/coverage on its date, and a status (`unresolved`, `after_delisting`,
-  `conflict`, `backfilled_ticker`, `mapped`) — the caller's join surface:
+  spelling/coverage on its date, and a status (`unresolved`,
+  `after_unconfirmed_delisting` — past the clip, but the delisting that set it
+  has no confirmed last-trade day, so the caller keeps and checks the member
+  rather than dropping it — `after_delisting`, `conflict`, `backfilled_ticker`,
+  `mapped`) — the caller's join surface:
   membership from this table, ticker look-ups through `ticker_history` by
   `history_ticker`. `pipeline._ends_the_security`/`_continues_after` (not
   here: they read `Delisting` records) decide which delisting actually clips a

@@ -3,7 +3,8 @@ history.observation_map_rows: observation_map.csv's rows (spec §7.x).
 history.filtered_ticker_sightings: Phase 4 rule 2, a backfilled observation
 adds no ticker_history range."""
 from delist_detection.ftd import FtdIndex, FtdRow
-from delist_detection.history import Sighting, filtered_ticker_sightings, observation_map_rows, ticker_on
+from delist_detection.history import (Sighting, filtered_ticker_sightings, is_backfilled, observation_map_rows,
+                                      ticker_on)
 from delist_detection.observations import Observation, TickerEra
 
 
@@ -28,7 +29,7 @@ def test_a_resolved_and_listed_observation_is_mapped():
     era = TickerEra("X", "2020-01-02", "2020-01-02", [Observation("X", "2020-01-02", "X CORP")])
     th_rows = [_th("BBGX", "X", "2020-01-02", None)]
     rows = observation_map_rows([era], {era.key: "BBGX"}, {era.key: 1}, {"BBGX": []}, FtdIndex(), {"BBGX": None},
-                                {"BBGX": True}, th_rows, [])
+                                {"BBGX": False}, {"BBGX": True}, th_rows, [])
     assert rows == [{"ticker": "X", "as_of": "2020-01-02", "name": "X CORP", "cusip": None, "pin_cik": None,
                      "pin_sec_id": None, "era": era.key, "sec_id": "BBGX", "issuer_cik": 1,
                      "history_ticker": "X", "in_ticker_history": True, "status": "mapped"}]
@@ -36,7 +37,7 @@ def test_a_resolved_and_listed_observation_is_mapped():
 
 def test_an_era_with_no_sec_id_is_unresolved():
     era = TickerEra("NU", "2020-01-02", "2020-01-02", [Observation("NU", "2020-01-02", "NU HOLDINGS")])
-    rows = observation_map_rows([era], {era.key: None}, {era.key: None}, {}, FtdIndex(), {}, {}, [], [])
+    rows = observation_map_rows([era], {era.key: None}, {era.key: None}, {}, FtdIndex(), {}, {}, {}, [], [])
     assert rows == [{"ticker": "NU", "as_of": "2020-01-02", "name": "NU HOLDINGS", "cusip": None, "pin_cik": None,
                      "pin_sec_id": None, "era": era.key, "sec_id": None, "issuer_cik": None,
                      "history_ticker": None, "in_ticker_history": False, "status": "unresolved"}]
@@ -47,10 +48,25 @@ def test_an_observation_after_the_clipped_history_end_of_a_delisted_security_is_
         Observation("OZRK", "2017-01-02", "BANK OZK"), Observation("OZRK", "2018-06-29", "BANK OZK")])
     th_rows = [_th("BBGOZRK", "OZRK", "2017-01-02", "2017-12-31")]
     rows = observation_map_rows([era], {era.key: "BBGOZRK"}, {era.key: 5}, {"BBGOZRK": []}, FtdIndex(),
-                                {"BBGOZRK": "2017-12-31"}, {"BBGOZRK": False}, th_rows, [])
+                                {"BBGOZRK": "2017-12-31"}, {"BBGOZRK": True}, {"BBGOZRK": False}, th_rows, [])
     statuses = {r["as_of"]: r["status"] for r in rows}
     assert statuses == {"2017-01-02": "mapped", "2018-06-29": "after_delisting"}
     # after_delisting rows still carry their sec_id
+    assert next(r for r in rows if r["as_of"] == "2018-06-29")["sec_id"] == "BBGOZRK"
+
+
+def test_an_observation_after_a_clip_set_by_an_unconfirmed_last_trade_day_is_after_unconfirmed_delisting():
+    """Bank of Ozarks-like: the delisting that set the clip has no confirmed
+    last-trade day (`end_confirmed` false for that sec_id), so the caller
+    should keep and check this member rather than drop it as after_delisting."""
+    era = TickerEra("OZRK", "2017-01-02", "2018-06-29", [
+        Observation("OZRK", "2017-01-02", "BANK OZK"), Observation("OZRK", "2018-06-29", "BANK OZK")])
+    th_rows = [_th("BBGOZRK", "OZRK", "2017-01-02", "2017-12-31")]
+    rows = observation_map_rows([era], {era.key: "BBGOZRK"}, {era.key: 5}, {"BBGOZRK": []}, FtdIndex(),
+                                {"BBGOZRK": "2017-12-31"}, {"BBGOZRK": False}, {"BBGOZRK": False}, th_rows, [])
+    statuses = {r["as_of"]: r["status"] for r in rows}
+    assert statuses == {"2017-01-02": "mapped", "2018-06-29": "after_unconfirmed_delisting"}
+    # after_unconfirmed_delisting rows still carry their sec_id
     assert next(r for r in rows if r["as_of"] == "2018-06-29")["sec_id"] == "BBGOZRK"
 
 
@@ -58,7 +74,7 @@ def test_an_observation_on_a_still_listed_securitys_ticker_is_never_after_delist
     era = TickerEra("X", "2020-01-02", "2020-06-01", [Observation("X", "2020-06-01", "X CORP")])
     th_rows = [_th("BBGX", "X", "2020-01-02", None)]
     rows = observation_map_rows([era], {era.key: "BBGX"}, {era.key: 1}, {"BBGX": []}, FtdIndex(),
-                                {"BBGX": "2020-01-15"}, {"BBGX": True}, th_rows, [])
+                                {"BBGX": "2020-01-15"}, {"BBGX": True}, {"BBGX": True}, th_rows, [])
     assert rows[0]["status"] == "mapped"
 
 
@@ -67,7 +83,7 @@ def test_a_ticker_seen_under_two_names_on_one_date_is_conflict():
     th_rows = [_th("BBGCB", "CB", "2012-06-29", None)]
     conflicts = [("CB", "2012-06-29")]
     rows = observation_map_rows([era], {era.key: "BBGCB"}, {era.key: 1}, {"BBGCB": []}, FtdIndex(),
-                                {"BBGCB": None}, {"BBGCB": True}, th_rows, conflicts)
+                                {"BBGCB": None}, {"BBGCB": False}, {"BBGCB": True}, th_rows, conflicts)
     assert rows[0]["status"] == "conflict"
 
 
@@ -80,7 +96,7 @@ def test_backfilled_ticker_when_no_ftd_row_under_the_observed_ticker_but_another
     ftd = FtdIndex([FtdRow("2012-06-28", "CUSIP1", "YHOO", "YAHOO INC", 15.0),
                     FtdRow("2012-07-02", "CUSIP1", "YHOO", "YAHOO INC", 16.0)])
     rows = observation_map_rows([era], {era.key: "BBGCHUBB"}, {era.key: 1}, {"BBGCHUBB": ["CUSIP1"]}, ftd,
-                                {"BBGCHUBB": None}, {"BBGCHUBB": True}, th_rows, [])
+                                {"BBGCHUBB": None}, {"BBGCHUBB": False}, {"BBGCHUBB": True}, th_rows, [])
     assert rows[0]["status"] == "backfilled_ticker"
 
 
@@ -89,15 +105,15 @@ def test_an_observed_ticker_with_its_own_ftd_row_nearby_is_not_backfilled():
     th_rows = [_th("BBGCHUBB", "CB", "2012-06-29", None)]
     ftd = FtdIndex([FtdRow("2012-06-28", "CUSIP1", "CB", "CHUBB CORP", 70.0)])
     rows = observation_map_rows([era], {era.key: "BBGCHUBB"}, {era.key: 1}, {"BBGCHUBB": ["CUSIP1"]}, ftd,
-                                {"BBGCHUBB": None}, {"BBGCHUBB": True}, th_rows, [])
+                                {"BBGCHUBB": None}, {"BBGCHUBB": False}, {"BBGCHUBB": True}, th_rows, [])
     assert rows[0]["status"] == "mapped"
 
 
-def test_backfilled_ticker_requires_as_of_on_or_after_the_ftd_start():
+def test_backfilled_ticker_requires_as_of_on_or_after_backfill_start():
     era = TickerEra("CB", "2003-01-02", "2003-01-02", [Observation("CB", "2003-01-02", "CHUBB CORP")])
     th_rows = [_th("BBGCHUBB", "CB", "2003-01-02", None)]
     rows = observation_map_rows([era], {era.key: "BBGCHUBB"}, {era.key: 1}, {"BBGCHUBB": ["CUSIP1"]}, FtdIndex(),
-                                {"BBGCHUBB": None}, {"BBGCHUBB": True}, th_rows, [])
+                                {"BBGCHUBB": None}, {"BBGCHUBB": False}, {"BBGCHUBB": True}, th_rows, [])
     assert rows[0]["status"] == "mapped"
 
 
@@ -108,7 +124,7 @@ def test_history_ticker_gives_the_separator_spelling_for_an_observed_bare_ticker
     era = TickerEra("BFB", "2020-01-02", "2020-01-02", [Observation("BFB", "2020-01-02", "BROWN-FORMAN")])
     th_rows = [_th("BBGBF", "BF-B", "2020-01-02", None)]
     rows = observation_map_rows([era], {era.key: "BBGBF"}, {era.key: 1}, {"BBGBF": []}, FtdIndex(),
-                                {"BBGBF": None}, {"BBGBF": True}, th_rows, [])
+                                {"BBGBF": None}, {"BBGBF": False}, {"BBGBF": True}, th_rows, [])
     assert rows[0]["history_ticker"] == "BF-B" and rows[0]["in_ticker_history"] is True
 
 
@@ -119,7 +135,7 @@ def test_row_count_equals_the_number_of_observations_given():
     th_rows = [_th("BBGX", "X", "2020-01-02", None), _th("BBGY", "Y", "2020-01-02", None)]
     rows = observation_map_rows([era1, era2], {era1.key: "BBGX", era2.key: "BBGY"}, {era1.key: 1, era2.key: 2},
                                 {"BBGX": [], "BBGY": []}, FtdIndex(), {"BBGX": None, "BBGY": None},
-                                {"BBGX": True, "BBGY": True}, th_rows, [])
+                                {"BBGX": False, "BBGY": False}, {"BBGX": True, "BBGY": True}, th_rows, [])
     assert len(rows) == 3
 
 
@@ -149,5 +165,15 @@ def test_pin_columns_carry_the_observations_own_cik_and_sec_id_pins():
     obs = Observation("X", "2020-01-02", "X CORP", cusip="000000000", cik=42, sec_id="BBGPIN")
     era = TickerEra("X", "2020-01-02", "2020-01-02", [obs])
     rows = observation_map_rows([era], {era.key: "BBGPIN"}, {era.key: 42}, {"BBGPIN": []}, FtdIndex(),
-                                {"BBGPIN": None}, {"BBGPIN": True}, [], [])
+                                {"BBGPIN": None}, {"BBGPIN": False}, {"BBGPIN": True}, [], [])
     assert (rows[0]["pin_cik"], rows[0]["pin_sec_id"], rows[0]["cusip"]) == (42, "BBGPIN", "000000000")
+
+
+# --- is_backfilled: separator-insensitive symbol matching ---
+
+def test_is_backfilled_treats_a_bare_fails_row_symbol_as_the_observed_dashed_tickers_own():
+    """The observed ticker is dashed ("BF-B"); the fails row is spelled bare
+    ("BFB") -- still the ticker's own row (compared with the separator
+    stripped from both sides), so not backfilled."""
+    ftd = FtdIndex([FtdRow("2012-06-28", "CUSIP1", "BFB", "BROWN-FORMAN", 70.0)])
+    assert is_backfilled("2012-06-29", "BF-B", ["CUSIP1"], ftd) is False

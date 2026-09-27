@@ -581,7 +581,7 @@ def _tree(root):
 
 def _one_and_n(tmp_path, monkeypatch, caplog, workers, *, stale_hits=(), **universe):
     """One worker and `workers` workers, each run from its own clone of one seeded
-    cache (`_seed(stale_hits=)`): both write the same seven CSVs, byte for byte,
+    cache (`_seed(stale_hits=)`): both write the same eight CSVs, byte for byte,
     and no warm task of the N-worker run raises (else a check that something never
     happens on a warm worker could pass because the worker died first). Returns
     each run's request log and the cache tree it leaves behind."""

@@ -257,15 +257,20 @@ def _in_ticker_history(ticker: str, as_of: str, ranges: Sequence[Range]) -> bool
               for r in ranges)
 
 
-def _observation_status(as_of: str, ticker: str, sec_id: str | None, end: str | None, is_listed: bool | None,
-                        conflict: bool, cusips: Sequence[str], ftd: FtdIndex) -> str:
+def _observation_status(as_of: str, ticker: str, sec_id: str | None, end: str | None, end_confirmed: bool,
+                        is_listed: bool | None, conflict: bool, cusips: Sequence[str], ftd: FtdIndex) -> str:
     """The first rule that applies (spec §7.x): `unresolved` (no `sec_id`),
-    `after_delisting` (the security is not listed today and `as_of` is past
-    its clipped history end), `conflict` ((ticker, as_of) is a two-name
-    observation conflict), `backfilled_ticker` (`is_backfilled`), else
-    `mapped`."""
+    `after_unconfirmed_delisting` (the security is not listed today, `as_of`
+    is past its clipped history end, and the delisting that set that clip has
+    no confirmed last-trade day -- the clip is a guess, so the caller keeps
+    and checks this member rather than dropping it), `after_delisting` (same,
+    but the ending delisting's last-trade day is confirmed), `conflict`
+    ((ticker, as_of) is a two-name observation conflict), `backfilled_ticker`
+    (`is_backfilled`), else `mapped`."""
     if sec_id is None:
         return "unresolved"
+    if not is_listed and end is not None and as_of > end and not end_confirmed:
+        return "after_unconfirmed_delisting"
     if not is_listed and end is not None and as_of > end:
         return "after_delisting"
     if conflict:
@@ -277,8 +282,8 @@ def _observation_status(as_of: str, ticker: str, sec_id: str | None, end: str | 
 
 def observation_map_rows(eras: Iterable[TickerEra], sec_id_of: Mapping[str, str | None],
                          issuer_cik_of: Mapping[str, int | None], sec_cusips: Mapping[str, Sequence[str]],
-                         ftd: FtdIndex, ends: Mapping[str, str | None], listed: Mapping[str, bool | None],
-                         th_rows: Sequence[Mapping[str, object]],
+                         ftd: FtdIndex, ends: Mapping[str, str | None], end_confirmed: Mapping[str, bool],
+                         listed: Mapping[str, bool | None], th_rows: Sequence[Mapping[str, object]],
                          conflicts: Iterable[tuple[str, str]]) -> list[dict]:
     """observation_map.csv's rows (spec §7.x): one row per observation of `eras`
     (every era of the run, refined; `--limit` already trims which ones), naming
@@ -288,8 +293,12 @@ def observation_map_rows(eras: Iterable[TickerEra], sec_id_of: Mapping[str, str 
     built by the history stage), and a `status` (`_observation_status`).
 
     `ends`/`listed` are the history stage's own per-security end date (None:
-    still open) and listed-today answer, so `after_delisting` never
-    recomputes what `history_rows` already decided."""
+    still open) and listed-today answer, so `after_delisting`/
+    `after_unconfirmed_delisting` never recompute what `history_rows` already
+    decided. `end_confirmed` says whether the delisting that set `ends[sec_id]`
+    has a confirmed last-trade day (false when it's a guess, e.g. Bank of
+    Ozarks' no-Form-25 fallback with no day at all) -- it picks between the
+    two statuses and is ignored when `ends[sec_id]` is None."""
     ranges_by_sec: dict[str, list[Range]] = defaultdict(list)
     for r in th_rows:
         ranges_by_sec[r["sec_id"]].append(Range(r["ticker"], r["valid_from"], r["valid_to"], r["source"]))
@@ -302,6 +311,7 @@ def observation_map_rows(eras: Iterable[TickerEra], sec_id_of: Mapping[str, str 
         cusips = sec_cusips.get(sec_id, []) if sec_id is not None else ()
         for o in era.observations:
             status = _observation_status(o.as_of, o.ticker, sec_id, ends.get(sec_id) if sec_id else None,
+                                         bool(end_confirmed.get(sec_id)) if sec_id else False,
                                          listed.get(sec_id) if sec_id else None,
                                          (o.ticker, o.as_of) in conflict_set, cusips, ftd)
             out.append({

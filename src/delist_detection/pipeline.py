@@ -875,8 +875,8 @@ def _ends_the_security(e: Delisting, s: Security, sec_cusips: dict[str, list[str
 
 
 def _history_rows(ctx: _RunContext, securities: dict[str, Security], search: _DelistingSearch,
-                  sec_cusips: dict[str, list[str]], ftd: FtdIndex,
-                  added: dict[str, AddedSecurity]) -> tuple[list[dict], list[dict], dict[str, str | None]]:
+                  sec_cusips: dict[str, list[str]], ftd: FtdIndex, added: dict[str, AddedSecurity]
+                  ) -> tuple[list[dict], list[dict], dict[str, str | None], dict[str, bool]]:
     """10b. The ticker_history and cusip_history rows (`history.history_rows`):
     each observed security's ranges end at the last delisting that actually
     ends it (`_ends_the_security`) -- its last trade day, or its delist_date
@@ -885,11 +885,13 @@ def _history_rows(ctx: _RunContext, securities: dict[str, Security], search: _De
     row, built directly: `ranges_from_sightings`' filter that drops
     single-value FTD sightings would otherwise silently drop a successor's lone
     8-K12B-dated sighting. Also returns each observed security's end date (or
-    None), so `observation_map_rows` can flag `after_delisting` without
-    recomputing it."""
+    None) and whether that end came from a confirmed last-trade day, so
+    `observation_map_rows` can flag `after_delisting`/`after_unconfirmed_delisting`
+    without recomputing either."""
     clients = ctx.clients
     th_rows, ch_rows = [], []
     ends: dict[str, str | None] = {}
+    end_confirmed: dict[str, bool] = {}
     final: dict[str, Delisting] = {}
     for e in sorted(search.delistings, key=lambda e: e.delist_date):
         s = securities.get(e.sec_id)
@@ -899,13 +901,17 @@ def _history_rows(ctx: _RunContext, securities: dict[str, Security], search: _De
         last_delisting = final.get(sid)
         is_listed = bool(search.listed.get(sid))
         end = None
+        confirmed = False
         if last_delisting is not None and not is_listed:
             # A last-trade day we couldn't confirm still clips the ranges at the
             # delisting date -- an unclipped range would otherwise run past a
             # security's real end.
+            confirmed = (last_delisting.last_trade.day is not None
+                        and "last_trade_date_unconfirmed" not in last_delisting.last_trade.flags)
             end = (last_delisting.last_trade.day.isoformat() if last_delisting.last_trade.day is not None
                    else last_delisting.delist_date)
         ends[sid] = end
+        end_confirmed[sid] = confirmed
         # Phase 4 rule 2: a backfilled observation is not a ticker sighting here
         # (this security's own ticker_history ranges) -- the delisting search's
         # own sightings (`search.sightings`, built once in stage 5) are untouched.
@@ -923,7 +929,7 @@ def _history_rows(ctx: _RunContext, securities: dict[str, Security], search: _De
                                       tickers=[a.ticker]))
         exch = issuer_exchange(clients.edgar, a.security.issuer_cik, a.ticker) if is_listed else None
         th_rows.append(a.history_row(listed=is_listed, exchange=exch))
-    return th_rows, ch_rows, ends
+    return th_rows, ch_rows, ends, end_confirmed
 
 
 def _payout_rows(payouts: _Payouts, delistings: list[Delisting]) -> list[dict]:
@@ -950,7 +956,8 @@ def _payout_rows(payouts: _Payouts, delistings: list[Delisting]) -> list[dict]:
 def _observation_map(ctx: _RunContext, index: ObservationIndex, eras: list[TickerEra],
                      resolutions: dict[str, EraResolution], issuers: dict[str, Issuer],
                      sec_cusips: dict[str, list[str]], ftd: FtdIndex, ends: dict[str, str | None],
-                     listed: dict[str, bool | None], th_rows: list[dict]) -> list[dict]:
+                     end_confirmed: dict[str, bool], listed: dict[str, bool | None],
+                     th_rows: list[dict]) -> list[dict]:
     """10e. observation_map.csv's rows (`history.observation_map_rows`): every
     observation of the run's eras (`--limit` already trims which ones), its
     era, sec_id, issuer CIK, `ticker_history` spelling/coverage on its date,
@@ -959,7 +966,8 @@ def _observation_map(ctx: _RunContext, index: ObservationIndex, eras: list[Ticke
     sec_id_of = {k: r.sec_id for k, r in resolutions.items()}
     issuer_cik_of = {k: cik_of(issuers, k) for k in resolutions}
     conflicts = [(t, d) for t, d, _ in observation_conflicts(o for e in eras for o in e.observations)]
-    rows = observation_map_rows(eras, sec_id_of, issuer_cik_of, sec_cusips, ftd, ends, listed, th_rows, conflicts)
+    rows = observation_map_rows(eras, sec_id_of, issuer_cik_of, sec_cusips, ftd, ends, end_confirmed, listed,
+                                th_rows, conflicts)
     total = sum(len(e.observations) for e in index.eras())
     ctx.log(f"observation_map: {len(rows)} of {total} observations mapped")
     return rows
@@ -1013,10 +1021,10 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
     # 10. rows
     delisting_rows, review_rows = _delisting_rows(delistings, closes, payouts, overrides)
     review_rows += [item.row() for item in review]
-    th_rows, ch_rows, ends = _history_rows(ctx, securities, search, sec_cusips, ftd, added)
+    th_rows, ch_rows, ends, end_confirmed = _history_rows(ctx, securities, search, sec_cusips, ftd, added)
     review_rows += [item.row() for item in ticker_range_review(th_rows)]
     map_rows = _observation_map(ctx, index, eras, resolutions, answers.issuers, sec_cusips, ftd, ends,
-                                search.listed, th_rows)
+                                end_confirmed, search.listed, th_rows)
     flags, triaged = _triage(ctx, review_rows, review_decisions, limit)
 
     # 11. write -- every table formatted and written to its temp file first, so

@@ -144,11 +144,11 @@ substitutes the security's own last sighting when it has no last-trade
 evidence at all — is too weak a guess to second-guess against fails
 evidence either (Monster Worldwide, SunPower). A security none of whose
 delistings ends it, and that isn't listed today either, is left unclipped,
-ending at its last real sighting. Separately, an observation
-`observation_map.csv` marks
-`backfilled_ticker` (below) is never itself a ticker sighting here — a
-caller's snapshot that projects a later ticker backward onto a date the
-security did not yet trade under it opens no range for that ticker.
+ending at its last real sighting. Separately, an observation that
+`observation_map.csv` marks `backfilled_ticker` (below) is never itself a
+ticker sighting here — a caller's snapshot that projects a later ticker
+backward onto a date the security did not yet trade under it opens no range
+for that ticker.
 
 ### `cusip_history.csv` — key `(sec_id, valid_from, cusip)`
 
@@ -182,7 +182,8 @@ under the observed ticker (either separator spelling), covers `as_of`.
 | Status | Meaning |
 |---|---|
 | `unresolved` | the era's `sec_id` is None — the observation named no identifiable security |
-| `after_delisting` | the security is not listed today and `as_of` is after its clipped `ticker_history` end (a stale snapshot listed it after it was gone) |
+| `after_unconfirmed_delisting` | the security is not listed today, `as_of` is after its clipped `ticker_history` end, and the delisting that set that clip has no confirmed last-trade day (`last_trade.day` is None, or flagged `last_trade_date_unconfirmed`) — the clip is a guess (e.g. Bank of Ozarks' no-Form-25 fallback), so keep and check this member rather than dropping it |
+| `after_delisting` | the security is not listed today and `as_of` is after its clipped `ticker_history` end, whose delisting has a *confirmed* last-trade day (a stale snapshot listed it after it was really gone) |
 | `conflict` | `(ticker, as_of)` was seen under two or more names (`observation_conflict:<date>` in `review.csv`) |
 | `backfilled_ticker` | no fails-to-deliver row of the security's CUSIPs under the observed ticker (either separator spelling) within ±30 days of `as_of`, but at least one under another symbol — a caller's snapshot projected a later ticker backward onto a date the security traded under a different one |
 | `mapped` | everything else — the ordinary case |
