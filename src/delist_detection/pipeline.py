@@ -874,18 +874,55 @@ def _ends_the_security(e: Delisting, s: Security, sec_cusips: dict[str, list[str
     return not _continues_after(s, e.last_trade.day.isoformat(), sec_cusips, ftd)
 
 
+def _delisting_endings(delistings: Iterable[Delisting], securities: dict[str, Security],
+                       sec_cusips: dict[str, list[str]], ftd: FtdIndex) -> dict[DelistingKey, bool]:
+    """Whether each delisting actually ends its security (`_ends_the_security`),
+    computed once and shared by the ticker_history clip (`_history_rows`) and
+    the continuing-delisting successor link (`_mark_continuing_delistings`) --
+    so the two tables can never disagree on which delistings are real exits.
+    A delisting whose security is not in `securities` (no security object to
+    test continuation against) has no entry."""
+    out: dict[DelistingKey, bool] = {}
+    for e in delistings:
+        s = securities.get(e.sec_id)
+        if s is not None:
+            out[e.key] = _ends_the_security(e, s, sec_cusips, ftd)
+    return out
+
+
+def _mark_continuing_delistings(delistings: Iterable[Delisting], endings: dict[DelistingKey, bool]) -> None:
+    """A merger or exchange_transfer that `endings` says does not end its
+    security (the DIS 2019 holding-company reorg, WRK's 2018 one) gets
+    `successor_sec_id` set to its own `sec_id`, via `Delisting.set_successor`
+    -- the same treatment `delistings.py` already gives a classification-time
+    `continued` exchange_transfer, now also covering a merger and any
+    exchange_transfer the *stronger*, FTD-confirmed check (not the weaker
+    `listed_today`/`seen_after` one) catches. `handling.py`/`qlib_adapter.py`
+    already skip a row whose successor is itself, so this is never a real
+    universe exit. Only ever fills a blank successor: a real, different
+    successor a search already found (MWV -> WRK) is never overwritten, and a
+    liquidation/compliance_failure/expiration/unknown delisting is untouched
+    (`endings` is never False for one)."""
+    for e in delistings:
+        if not e.record.successor_sec_id and endings.get(e.key) is False:
+            e.set_successor(e.sec_id)
+
+
 def _history_rows(ctx: _RunContext, securities: dict[str, Security], search: _DelistingSearch,
-                  sec_cusips: dict[str, list[str]], ftd: FtdIndex, added: dict[str, AddedSecurity]
+                  sec_cusips: dict[str, list[str]], ftd: FtdIndex, added: dict[str, AddedSecurity],
+                  endings: dict[DelistingKey, bool]
                   ) -> tuple[list[dict], list[dict], dict[str, str | None], dict[str, bool]]:
     """10b. The ticker_history and cusip_history rows (`history.history_rows`):
     each observed security's ranges end at the last delisting that actually
-    ends it (`_ends_the_security`) -- its last trade day, or its delist_date
-    when the last trade day is unconfirmed -- unless it is listed today or no
-    delisting ends it. An added (acquirer/successor) security gets one ticker
-    row, built directly: `ranges_from_sightings`' filter that drops
-    single-value FTD sightings would otherwise silently drop a successor's lone
-    8-K12B-dated sighting. Also returns each observed security's end date (or
-    None) and whether that end came from a confirmed last-trade day, so
+    ends it (`endings`, `_delisting_endings`/`_ends_the_security`, computed
+    once and shared with `_mark_continuing_delistings` so the two tables never
+    disagree) -- its last trade day, or its delist_date when the last trade
+    day is unconfirmed -- unless it is listed today or no delisting ends it.
+    An added (acquirer/successor) security gets one ticker row, built
+    directly: `ranges_from_sightings`' filter that drops single-value FTD
+    sightings would otherwise silently drop a successor's lone 8-K12B-dated
+    sighting. Also returns each observed security's end date (or None) and
+    whether that end came from a confirmed last-trade day, so
     `observation_map_rows` can flag `after_delisting`/`after_unconfirmed_delisting`
     without recomputing either."""
     clients = ctx.clients
@@ -894,8 +931,7 @@ def _history_rows(ctx: _RunContext, securities: dict[str, Security], search: _De
     end_confirmed: dict[str, bool] = {}
     final: dict[str, Delisting] = {}
     for e in sorted(search.delistings, key=lambda e: e.delist_date):
-        s = securities.get(e.sec_id)
-        if s is not None and _ends_the_security(e, s, sec_cusips, ftd):
+        if endings.get(e.key):
             final[e.sec_id] = e
     for sid, s in securities.items():
         last_delisting = final.get(sid)
@@ -1018,10 +1054,17 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
     review += successors.review
     added = {**payouts.added, **successors.added}         # the acquirers and successors the run adds
 
+    # Computed once, shared by the delistings.csv successor link and the
+    # ticker_history clip below, so the two tables never disagree on which
+    # delistings are real exits (a WRK/DIS-like continuing merger or
+    # exchange_transfer gets successor_sec_id = itself).
+    endings = _delisting_endings(delistings, securities, sec_cusips, ftd)
+    _mark_continuing_delistings(delistings, endings)
+
     # 10. rows
     delisting_rows, review_rows = _delisting_rows(delistings, closes, payouts, overrides)
     review_rows += [item.row() for item in review]
-    th_rows, ch_rows, ends, end_confirmed = _history_rows(ctx, securities, search, sec_cusips, ftd, added)
+    th_rows, ch_rows, ends, end_confirmed = _history_rows(ctx, securities, search, sec_cusips, ftd, added, endings)
     review_rows += [item.row() for item in ticker_range_review(th_rows)]
     map_rows = _observation_map(ctx, index, eras, resolutions, answers.issuers, sec_cusips, ftd, ends,
                                 end_confirmed, search.listed, th_rows)

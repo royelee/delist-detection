@@ -1369,6 +1369,76 @@ def test_last_trade_close_uses_the_cusip_whose_range_holds_the_last_trade_day():
     assert first.flags == second.flags == otc.flags == []
 
 
+# --- _delisting_endings / _mark_continuing_delistings: a continuing merger or
+# exchange_transfer (the DIS/WRK pattern) gets successor_sec_id = itself, the
+# same predicate the ticker_history clip uses, computed once ---
+
+def _continuation_case(bucket, last_trade_day, own_cusip, own_ticker, fails_after, *,
+                       existing_successor=None):
+    from delist_detection.ftd import FtdIndex
+    from delist_detection.observations import TickerEra
+    era = TickerEra(own_ticker, "2007-12-01", "2026-06-30",
+                    [Observation(own_ticker, "2007-12-01", "TEST CO")])
+    sec = Security("BBGTEST", 5, "COMMON", "TEST CO", "Common Stock", True, "cusip", eras=[era])
+    record = DelistRecord(ticker=own_ticker, cik=5, observed_delist_date="2019-03-30", crsp_code=231,
+                          bucket=bucket, confidence="high", reason="x", evidence={"flags": []},
+                          sec_id="BBGTEST", delist_date="2019-03-30", successor_sec_id=existing_successor)
+    delisting = Delisting("BBGTEST", 5, own_ticker, "2019-03-30", record,
+                          LastTrade(last_trade_day, "ex99_notice", ()), None, None, "NYSE")
+    ftd = FtdIndex(fails_after)
+    securities = {"BBGTEST": sec}
+    sec_cusips = {"BBGTEST": [own_cusip]}
+    endings = pipeline._delisting_endings([delisting], securities, sec_cusips, ftd)
+    pipeline._mark_continuing_delistings([delisting], endings)
+    return delisting
+
+
+def _continuing_fails(ticker, cusip, n=20, start=date(2019, 4, 1), step_days=4):
+    dates = [(start + timedelta(days=i * step_days)).isoformat() for i in range(n)]
+    prices = [110.0 if i % 2 == 0 else 111.0 for i in range(n)]     # 2 distinct prices
+    return [FtdRow(d, cusip, ticker, "TEST CO", p) for d, p in zip(dates, prices)]
+
+
+def test_a_disney_like_continuing_merger_gets_successor_itself():
+    """A merger whose own CUSIP keeps trading under its own ticker well past a
+    confirmed last-trade day (>=20 rows over >=60 days at >=2 prices) does not
+    end the security (`_ends_the_security`): its successor_sec_id becomes its
+    own sec_id, so handling.py/qlib_adapter skip it as a continuing security,
+    not a real exit -- the DIS 2019 holding-company reorg."""
+    fails = _continuing_fails("DIS", "254687106", n=20, start=date(2019, 4, 1), step_days=4)
+    d = _continuation_case(CrspBucket.MERGER, date(2019, 3, 19), "254687106", "DIS", fails)
+    assert d.record.successor_sec_id == "BBGTEST"
+
+
+def test_a_real_cash_merger_whose_cusip_stops_trading_keeps_no_successor():
+    """No fails rows at all under the security's own ticker after the last
+    trade day: a real exit, `_ends_the_security` is True, no self-successor is
+    added (and no existing successor is disturbed)."""
+    d = _continuation_case(CrspBucket.MERGER, date(2015, 3, 16), "037411105", "AGN", [])
+    assert d.record.successor_sec_id is None
+
+
+def test_a_liquidation_with_a_long_otc_tail_is_untouched():
+    """A liquidation always ends the security, whatever fails rows follow (a
+    bankrupt security's years of OTC trading is not the exchange listing
+    continuing): `_ends_the_security` never questions it, so its successor
+    link is left alone even with abundant continuing trading."""
+    fails = _continuing_fails("XYZ", "CUSIPXYZ0", n=30, start=date(2009, 1, 10), step_days=20)
+    d = _continuation_case(CrspBucket.LIQUIDATION, date(2009, 1, 5), "CUSIPXYZ0", "XYZ", fails)
+    assert d.record.successor_sec_id is None
+
+
+def test_a_continuing_delisting_never_overwrites_a_real_successor_already_found():
+    """A continuing merger/exchange_transfer that already has a real,
+    different successor (found by the successor search, e.g. MWV -> WRK) is
+    never overwritten with a self-reference -- only a blank successor is ever
+    filled."""
+    fails = _continuing_fails("DIS", "254687106", n=20, start=date(2019, 4, 1), step_days=4)
+    d = _continuation_case(CrspBucket.MERGER, date(2019, 3, 19), "254687106", "DIS", fails,
+                           existing_successor="BBGOTHER")
+    assert d.record.successor_sec_id == "BBGOTHER"
+
+
 def test_a_lagged_acquirer_close_flags_the_delisting(fake_edgar, tmp_path, monkeypatch):
     """The acquirer's price is its FTD close on the merger's last trade day; when
     no row sits on the next trading day and a later row is used, the delisting
