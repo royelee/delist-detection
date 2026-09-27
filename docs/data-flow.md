@@ -841,7 +841,7 @@ a token with a `:`; bulk-accepting a `fix`-severity flag needs `--yes`).
 the first cell) and refuses to touch a file that doesn't load, rewriting a
 valid one with every existing row/column preserved in the file's own header
 order. Written by `scripts/classify_universe.py` alongside the other seven
-tables.
+output tables (eight in all, counting `observation_map.csv`).
 
 `output/web_verification.csv` — independent EDGAR cross-check produced by
 `scripts/verify_against_web.py`. Verdicts:

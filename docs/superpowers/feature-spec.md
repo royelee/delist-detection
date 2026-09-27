@@ -238,6 +238,13 @@ history_ticker, in_ticker_history, status
   look-up by date goes through `ticker_history.csv` keyed on
   `history_ticker`, not the raw observed ticker.
 - `--limit N` runs only ever produce rows for the eras that ran.
+- One `sec_id` can carry two `issuer_cik` values across its rows. That is
+  expected when the security kept its composite FIGI through a change of
+  issuer CIK: a holding-company reorganization, an inversion or redomicile,
+  a mutual-holding-company conversion, a merger of equals whose surviving
+  registrant took a new CIK (e.g. Allergan, BB&T → Truist, II-VI → Coherent).
+  Each era carries the issuer that filed for it at the time; the security is
+  one line. It is not the wrong-issuer failure the resolver guards against.
 
 ## 8. Functional requirements
 
