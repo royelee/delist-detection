@@ -70,6 +70,10 @@ TABLES: dict[str, TableSpec] = {t.name: t for t in (
     TableSpec("review_summary",
               ("severity", "flag", "rows", "in_review", "accepted", "description", "action", "examples"),
               ("flag",), sort=False),
+    TableSpec("observation_map",
+              ("ticker", "as_of", "name", "cusip", "pin_cik", "pin_sec_id", "era", "sec_id", "issuer_cik",
+               "history_ticker", "in_ticker_history", "status"),
+              ("ticker", "as_of", "name", "cusip", "pin_cik", "pin_sec_id")),
 )}
 
 

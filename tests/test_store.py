@@ -37,6 +37,14 @@ def test_review_tables_keep_their_given_order_and_every_other_table_sorts():
     assert {n for n, spec in TABLES.items() if not spec.sort} == {"review", "review_summary"}
 
 
+def test_observation_map_columns_and_key():
+    assert TABLES["observation_map"].columns == (
+        "ticker", "as_of", "name", "cusip", "pin_cik", "pin_sec_id", "era", "sec_id", "issuer_cik",
+        "history_ticker", "in_ticker_history", "status")
+    assert TABLES["observation_map"].key == ("ticker", "as_of", "name", "cusip", "pin_cik", "pin_sec_id")
+    assert TABLES["observation_map"].sort is True
+
+
 def _review(sec_id, flags):
     return {"severity": "check", "sec_id": sec_id, "delist_date": "2020-01-01", "ticker": "A", "review_flags": flags}
 
