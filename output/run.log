@@ -1,57 +1,163 @@
 2469 ticker eras
 2660 eras after the FTD split
+resolver's second pass: 86 issuers inferred, 7 first-pass answers its CUSIP evidence contradicts
 issuer resolution: 0 EDGAR requests, 0 SEC data-file downloads (all threads)
-2255 securities; FIGI sources {'cusip': 2060, 'placeholder': 146, 'ticker': 49}
-[50/2255] securities searched; 23 delistings so far
-[100/2255] securities searched; 45 delistings so far
-[150/2255] securities searched; 64 delistings so far
-[200/2255] securities searched; 97 delistings so far
-[250/2255] securities searched; 116 delistings so far
-[300/2255] securities searched; 139 delistings so far
-[350/2255] securities searched; 156 delistings so far
-[400/2255] securities searched; 180 delistings so far
-[450/2255] securities searched; 202 delistings so far
-[500/2255] securities searched; 224 delistings so far
-[550/2255] securities searched; 241 delistings so far
-[600/2255] securities searched; 264 delistings so far
-[650/2255] securities searched; 276 delistings so far
-[700/2255] securities searched; 305 delistings so far
-[750/2255] securities searched; 323 delistings so far
-[800/2255] securities searched; 350 delistings so far
-[850/2255] securities searched; 369 delistings so far
-[900/2255] securities searched; 394 delistings so far
-[950/2255] securities searched; 421 delistings so far
-[1000/2255] securities searched; 442 delistings so far
-[1050/2255] securities searched; 456 delistings so far
-[1100/2255] securities searched; 481 delistings so far
-[1150/2255] securities searched; 506 delistings so far
-[1200/2255] securities searched; 531 delistings so far
-[1250/2255] securities searched; 553 delistings so far
-[1300/2255] securities searched; 574 delistings so far
-[1350/2255] securities searched; 597 delistings so far
-[1400/2255] securities searched; 624 delistings so far
-[1450/2255] securities searched; 651 delistings so far
-[1500/2255] securities searched; 672 delistings so far
-[1550/2255] securities searched; 688 delistings so far
-[1600/2255] securities searched; 712 delistings so far
-[1650/2255] securities searched; 728 delistings so far
-[1700/2255] securities searched; 756 delistings so far
-[1750/2255] securities searched; 778 delistings so far
-[1800/2255] securities searched; 793 delistings so far
-[1850/2255] securities searched; 812 delistings so far
-[1900/2255] securities searched; 828 delistings so far
-[1950/2255] securities searched; 842 delistings so far
-[2000/2255] securities searched; 852 delistings so far
-[2050/2255] securities searched; 863 delistings so far
-[2100/2255] securities searched; 869 delistings so far
-[2150/2255] securities searched; 911 delistings so far
-[2200/2255] securities searched; 958 delistings so far
-[2250/2255] securities searched; 995 delistings so far
+FIGI handoff: ABI@2008-01-16 joins BBG000FJJW82, the line ABI@2008-07-25 is confirmed on (ABI@2008-01-16's CUSIP 038020103 ended as ABI@2008-07-25's 038149100 began on 2008-07-02)
+FIGI handoff: ACAS@2008-01-16 joins BBG000BYR208, the line ACAS@2008-07-25 is confirmed on (ACAS@2008-01-16's CUSIP 024937104 ended as ACAS@2008-07-25's 02503Y103 began on 2008-07-09)
+FIGI handoff: ACE@2008-07-25 joins BBG000BR14K5, the line CB@2016-06-30 is confirmed on (ACE@2008-07-25's CUSIP H0023R105 ended as CB@2016-06-30's H1467J104 began on 2016-01-19)
+FIGI handoff: ACT@2014-12-31 joins BBG000FH8PX5, the line AGN@2015-06-30 is confirmed on (ACT@2014-12-31's CUSIP G0083B108 ended as AGN@2015-06-30's G0177J108 began on 2015-06-15)
+FIGI handoff: AIV@2012-06-29 joins BBG000DD3510, the line AIV@2019-06-30 is confirmed on (AIV@2012-06-29's CUSIP 03748R101 ended as AIV@2019-06-30's 03748R754 began on 2019-02-22)
+FIGI handoff: AMB@2008-01-16 joins BBG000B9Z0J8, the line PLD@2012-06-29 is confirmed on (AMB@2008-01-16's CUSIP 00163T109 ended as PLD@2012-06-29's 74340W103 began on 2011-06-06)
+FIGI handoff: ARCP@2014-06-30 joins BBG001J4J8T9, the line VER@2015-12-31 is confirmed on (ARCP@2014-06-30's CUSIP 02917T104 ended as VER@2015-12-31's 92339V100 began on 2015-07-31)
+FIGI handoff: ATK@2008-01-16 joins BBG000C4VW39, the line OA@2015-06-30 is confirmed on (ATK@2008-01-16's CUSIP 018804104 ended as OA@2015-06-30's 68557N103 began on 2015-02-13)
+FIGI handoff: AWH@2008-01-16 joins BBG000N8Y8W6, the line AWH@2014-12-31 is confirmed on (AWH@2008-01-16's CUSIP G0219G203 ended as AWH@2014-12-31's H01531104 began on 2010-12-02)
+FIGI handoff: BWC@2012-06-29 joins BBG000D86F25, the line BWXT@2015-12-31 is confirmed on (BWC@2012-06-29's CUSIP 05615F102 ended as BWXT@2015-12-31's 05605H100 began on 2015-07-06)
+FIGI handoff: CBS@2008-01-16 joins BBG000C496P7, the line PARA@2022-06-30 is confirmed on (CBS@2008-01-16's CUSIP 124857202 ended as PARA@2022-06-30's 92556H206 began on 2019-12-05)
+FIGI handoff: CFX@2012-06-29 joins BBG000C5Z443, the line ENOV@2022-06-30 is confirmed on (CFX@2012-06-29's CUSIP 194014106 ended as ENOV@2022-06-30's 194014502 began on 2022-04-06)
+FIGI handoff: CLNS@2017-06-30 joins BBG00D30HGP6, the line CLNY@2018-06-30 is confirmed on (CLNS@2017-06-30's CUSIP 19625W104 ended as CLNY@2018-06-30's 19626G108 began on 2018-06-25)
+FIGI handoff: COH@2008-01-16 joins BBG000BY29C7, the line TPR@2017-12-31 is confirmed on (COH@2008-01-16's CUSIP 189754104 ended as TPR@2017-12-31's 876030107 began on 2017-10-31)
+FIGI handoff: COH@2012-06-29 joins BBG000BY29C7, the line TPR@2017-12-31 is confirmed on (COH@2008-01-16's CUSIP 189754104 ended as TPR@2017-12-31's 876030107 began on 2017-10-31)
+FIGI handoff: COH@2014-12-31 joins BBG000BY29C7, the line TPR@2017-12-31 is confirmed on (COH@2008-01-16's CUSIP 189754104 ended as TPR@2017-12-31's 876030107 began on 2017-10-31)
+FIGI handoff: CPO@2008-01-16 joins BBG000BXPZB7, the line INGR@2012-06-29 is confirmed on (CPO@2008-01-16's CUSIP 219023108 ended as INGR@2012-06-29's 457187102 began on 2012-06-04)
+FIGI handoff: CREE@2008-01-16 joins BBG000BG14P4, the line WOLF@2021-12-31 is confirmed on (CREE@2008-01-16's CUSIP 225447101 ended as WOLF@2021-12-31's 977852102 began on 2021-10-05)
+FIGI handoff: CWH@2012-06-29 joins BBG000BLG1L7, the line EQC@2014-12-31 is confirmed on (CWH@2012-06-29's CUSIP 203233101 ended as EQC@2014-12-31's 294628102 began on 2014-08-04)
+FIGI handoff: DDR@2018-06-30 joins BBG000BGZ832, the line SITC@2018-12-31 is confirmed on (DDR@2018-06-30's CUSIP 23317H854 ended as SITC@2018-12-31's 82981J109 began on 2018-10-12)
+FIGI handoff: DLPH@2015-06-30 joins BBG001QD41M9, the line APTV@2017-12-31 is confirmed on (DLPH@2015-06-30's CUSIP G27823106 ended as APTV@2017-12-31's G6095L109 began on 2017-12-06)
+FIGI handoff: DPS@2012-06-29 joins BBG000TJM7F0, the line KDP@2018-12-31 is confirmed on (DPS@2012-06-29's CUSIP 26138E109 ended as KDP@2018-12-31's 49271V100 began on 2018-07-11)
+FIGI handoff: DPS@2014-12-31 joins BBG000TJM7F0, the line KDP@2018-12-31 is confirmed on (DPS@2012-06-29's CUSIP 26138E109 ended as KDP@2018-12-31's 49271V100 began on 2018-07-11)
+FIGI handoff: DTV@2012-06-29 joins BBG000FL1TC8, the line DTV@2012-12-31 is confirmed on (DTV@2012-06-29's CUSIP 25490A101 ended as DTV@2012-12-31's 25490A309 began on 2012-08-29)
+FIGI handoff: DWDP@2017-12-31 joins BBG00BN961G4, the line DD@2019-06-30 is confirmed on (DWDP@2017-12-31's CUSIP 26078J100 ended as DD@2019-06-30's 26614N102 began on 2019-06-04)
+FIGI handoff: FO@2008-01-16 joins BBG000FBR384, the line BEAM@2012-06-29 is confirmed on (FO@2008-01-16's CUSIP 349631101 ended as BEAM@2012-06-29's 073730103 began on 2011-10-05)
+FIGI handoff: FPL@2008-01-16 joins BBG000BJSBJ0, the line NEE@2012-06-29 is confirmed on (FPL@2008-01-16's CUSIP 302571104 ended as NEE@2012-06-29's 65339F101 began on 2010-06-04)
+FIGI handoff: GCI@2008-01-16 joins BBG000BK5DP1, the line TGNA@2015-06-30 is confirmed on (GCI@2008-01-16's CUSIP 364730101 ended as TGNA@2015-06-30's 87901J105 began on 2015-07-02)
+FIGI handoff: HANS@2008-01-16 joins BBG000CXD6X9, the line MNST@2012-06-29 is confirmed on (HANS@2008-01-16's CUSIP 411310105 ended as MNST@2012-06-29's 611740101 began on 2012-01-09)
+FIGI handoff: HB@2008-01-16 joins BBG000BKWCS0, the line HRC@2012-06-29 is confirmed on (HB@2008-01-16's CUSIP 431573104 ended as HRC@2012-06-29's 431475102 began on 2008-04-04)
+FIGI handoff: HCN@2008-01-16 joins BBG000BKY1G5, the line HCN@2015-12-31 is confirmed on (HCN@2008-01-16's CUSIP 42217K106 ended as HCN@2015-12-31's 95040Q104 began on 2015-10-01)
+FIGI handoff: HCP@2008-01-16 joins BBG000BKYDP9, the line DOC@2024-06-30 is confirmed on (HCP@2008-01-16's CUSIP 40414L109 ended as DOC@2024-06-30's 42250P103 began on 2019-11-05)
+FIGI handoff: HCP@2014-12-31 joins BBG000BKYDP9, the line DOC@2024-06-30 is confirmed on (HCP@2008-01-16's CUSIP 40414L109 ended as DOC@2024-06-30's 42250P103 began on 2019-11-05)
+FIGI handoff: HOC@2008-01-16 joins BBG000BL9JQ1, the line HFC@2012-06-29 is confirmed on (HOC@2008-01-16's CUSIP 435758305 ended as HFC@2012-06-29's 436106108 began on 2011-07-05)
+FIGI handoff: HPQ@2008-01-16 joins BBG000KHWT55, the line HPQ@2015-12-31 is confirmed on (HPQ@2008-01-16's CUSIP 428236103 ended as HPQ@2015-12-31's 40434L105 began on 2015-11-06)
+FIGI handoff: HRS@2008-01-16 joins BBG000BLGFJ9, the line LHX@2019-06-30 is confirmed on (HRS@2008-01-16's CUSIP 413875105 ended as LHX@2019-06-30's 502431109 began on 2019-07-01)
+FIGI handoff: HTA@2014-12-31 joins BBG000PRJCX9, the line HR@2022-12-31 is confirmed on (HTA@2014-12-31's CUSIP 42225P501 ended as HR@2022-12-31's 42226K105 began on 2022-07-22)
+FIGI handoff: IAC@2020-12-31 joins BBG00S1LR2C3, the line IAC@2021-06-30 is confirmed on (IAC@2020-12-31's CUSIP 44891N109 ended as IAC@2021-06-30's 44891N208 began on 2021-05-26)
+FIGI handoff: ISIS@2015-06-30 joins BBG000JH6683, the line IONS@2015-12-31 is confirmed on (ISIS@2015-06-30's CUSIP 464330109 ended as IONS@2015-12-31's 462222100 began on 2015-12-22)
+FIGI handoff: IVGN@2008-01-16 joins BBG000CKJ0P3, the line LIFE@2012-06-29 is confirmed on (IVGN@2008-01-16's CUSIP 46185R100 ended as LIFE@2012-06-29's 53217V109 began on 2008-11-25)
+FIGI handoff: JDSU@2008-01-16 joins BBG000BP7JB0, the line VIAV@2015-12-31 is confirmed on (JDSU@2008-01-16's CUSIP 46612J507 ended as VIAV@2015-12-31's 925550105 began on 2015-08-07)
+FIGI handoff: KORS@2012-06-29 joins BBG0029SNR63, the line CPRI@2018-12-31 is confirmed on (KORS@2012-06-29's CUSIP G60754101 ended as CPRI@2018-12-31's G1890L107 began on 2019-01-02)
+FIGI handoff: KORS@2014-12-31 joins BBG0029SNR63, the line CPRI@2018-12-31 is confirmed on (KORS@2012-06-29's CUSIP G60754101 ended as CPRI@2018-12-31's G1890L107 began on 2019-01-02)
+FIGI handoff: LEAF@2015-06-30 joins BBG005497GZ3, the line OMF@2015-12-31 is confirmed on (LEAF@2015-06-30's CUSIP 85172J101 ended as OMF@2015-12-31's 68268W103 began on 2015-11-27)
+FIGI handoff: LTD@2008-01-16 joins BBG000BNGTQ7, the line LB@2013-06-28 is confirmed on (LTD@2008-01-16's CUSIP 532716107 ended as LB@2013-06-28's 501797104 began on 2013-04-01)
+FIGI handoff: LUK@2008-01-16 joins BBG000BNHSP9, the line JEF@2018-06-30 is confirmed on (LUK@2008-01-16's CUSIP 527288104 ended as JEF@2018-06-30's 47233W109 began on 2018-05-24)
+FIGI handoff: LUK@2012-06-29 joins BBG000BNHSP9, the line JEF@2018-06-30 is confirmed on (LUK@2008-01-16's CUSIP 527288104 ended as JEF@2018-06-30's 47233W109 began on 2018-05-24)
+FIGI handoff: LUK@2014-12-31 joins BBG000BNHSP9, the line JEF@2018-06-30 is confirmed on (LUK@2008-01-16's CUSIP 527288104 ended as JEF@2018-06-30's 47233W109 began on 2018-05-24)
+FIGI handoff: MFS@2016-06-30 joins BBG0081JXTR0, the line WBT@2017-06-30 is confirmed on (MFS@2016-06-30's CUSIP 563568104 ended as WBT@2017-06-30's 949090104 began on 2017-03-07)
+FIGI handoff: MHFI@2012-06-29 joins BBG000BP1Q11, the line SPGI@2016-06-30 is confirmed on (MHFI@2012-06-29's CUSIP 580645109 ended as SPGI@2016-06-30's 78409V104 began on 2016-04-28)
+FIGI handoff: MHFI@2014-12-31 joins BBG000BP1Q11, the line SPGI@2016-06-30 is confirmed on (MHFI@2012-06-29's CUSIP 580645109 ended as SPGI@2016-06-30's 78409V104 began on 2016-04-28)
+FIGI handoff: MHP@2008-01-16 joins BBG000BP1Q11, the line SPGI@2016-06-30 is confirmed on (MHFI@2012-06-29's CUSIP 580645109 ended as SPGI@2016-06-30's 78409V104 began on 2016-04-28)
+FIGI handoff: MOT@2008-01-16 joins BBG000BP8Z50, the line MSI@2012-06-29 is confirmed on (MOT@2008-01-16's CUSIP 620076109 ended as MSI@2012-06-29's 620076307 began on 2011-01-06)
+FIGI handoff: NE@2009-06-08 joins BBG000DTMH63, the line NE@2015-06-30 is confirmed on (NE@2009-06-08's CUSIP H5833N103 ended as NE@2015-06-30's G65431101 began on 2013-11-21)
+FIGI handoff: NU@2008-01-16 joins BBG000BQ87N0, the line ES@2015-06-30 is confirmed on (NU@2008-01-16's CUSIP 664397106 ended as ES@2015-06-30's 30040W108 began on 2015-02-19)
+FIGI handoff: OZRK@2017-06-30 joins BBG000QFJJW0, the line OZK@2018-12-31 is confirmed on (OZRK@2017-06-30's CUSIP 063904106 ended as OZK@2018-12-31's 06417N103 began on 2018-07-16)
+FIGI handoff: PAH@2014-06-30 joins BBG005C4XHR3, the line ESI@2019-06-30 is confirmed on (PAH@2014-06-30's CUSIP 72766Q105 ended as ESI@2019-06-30's 28618M106 began on 2019-02-01)
+FIGI handoff: PCLN@2012-06-29 joins BBG000BLBVN4, the line BKNG@2018-06-30 is confirmed on (PCLN@2012-06-29's CUSIP 741503403 ended as BKNG@2018-06-30's 09857L108 began on 2018-02-27)
+FIGI handoff: PCLN@2014-12-31 joins BBG000BLBVN4, the line BKNG@2018-06-30 is confirmed on (PCLN@2012-06-29's CUSIP 741503403 ended as BKNG@2018-06-30's 09857L108 began on 2018-02-27)
+FIGI handoff: PCS@2008-01-16 joins BBG000NDV1D4, the line TMUS@2013-06-28 is confirmed on (PCS@2008-01-16's CUSIP 591708102 ended as TMUS@2013-06-28's 872590104 began on 2013-05-01)
+FIGI handoff: PDX@2008-01-16 joins BBG000H8LGK2, the line MD@2012-06-29 is confirmed on (PDX@2008-01-16's CUSIP 705324101 ended as MD@2012-06-29's 58502B106 began on 2009-01-02)
+FIGI handoff: Q@2013-12-31 joins BBG00333FYS2, the line IQV@2017-12-31 is confirmed on (Q@2013-12-31's CUSIP 74876Y101 ended as IQV@2017-12-31's 46266C105 began on 2017-11-16)
+FIGI handoff: Q@2014-12-31 joins BBG00333FYS2, the line IQV@2017-12-31 is confirmed on (Q@2013-12-31's CUSIP 74876Y101 ended as IQV@2017-12-31's 46266C105 began on 2017-11-16)
+FIGI handoff: Q@2016-12-30 joins BBG00333FYS2, the line IQV@2017-12-31 is confirmed on (Q@2013-12-31's CUSIP 74876Y101 ended as IQV@2017-12-31's 46266C105 began on 2017-11-16)
+FIGI handoff: SERV@2014-12-31 joins BBG002WMH2F2, the line TMX@2020-12-31 is confirmed on (SERV@2014-12-31's CUSIP 81761R109 ended as TMX@2020-12-31's 88087E100 began on 2020-10-05)
+FIGI handoff: SIRI@2008-11-18 joins BBG000BT0093, the line SIRI@2013-12-31 is confirmed on (SIRI@2008-11-18's CUSIP 82967N108 ended as SIRI@2013-12-31's 82968B103 began on 2013-11-18)
+FIGI handoff: SRP@2008-01-16 joins BBG000BBDPQ4, the line NVE@2012-06-29 is confirmed on (SRP@2008-01-16's CUSIP 826428104 ended as NVE@2012-06-29's 67073Y106 began on 2008-11-21)
+FIGI handoff: SSS@2016-06-30 joins BBG000C42VL3, the line LSI@2016-12-30 is confirmed on (SSS@2016-06-30's CUSIP 84610H108 ended as LSI@2016-12-30's 53223X107 began on 2016-08-15)
+FIGI handoff: TMA@2008-01-16 joins BBG000BBG3P1, the line TMA@2008-11-18 is confirmed on (TMA@2008-01-16's CUSIP 885218107 ended as TMA@2008-11-18's 885218800 began on 2008-10-02)
+FIGI handoff: TMK@2008-01-16 joins BBG000BVD6X4, the line GL@2019-12-31 is confirmed on (TMK@2008-01-16's CUSIP 891027104 ended as GL@2019-12-31's 37959E102 began on 2019-08-09)
+FIGI handoff: TSO@2008-01-16 joins BBG000BVPPM1, the line ANDV@2017-12-31 is confirmed on (TSO@2008-01-16's CUSIP 881609101 ended as ANDV@2017-12-31's 03349M105 began on 2017-08-02)
+FIGI handoff: TYC@2014-12-31 joins BBG000BVWLJ6, the line JCI@2016-12-30 is confirmed on (TYC@2014-12-31's CUSIP G91442106 ended as JCI@2016-12-30's G51502105 began on 2016-09-07)
+FIGI handoff: UBNT@2018-06-30 joins BBG001R72SR9, the line UI@2019-12-31 is confirmed on (UBNT@2018-06-30's CUSIP 90347A100 ended as UI@2019-12-31's 90353W103 began on 2019-08-20)
+FIGI handoff: UTR@2008-01-16 joins BBG000H3GDJ8, the line KMPR@2012-06-29 is confirmed on (UTR@2008-01-16's CUSIP 913275103 ended as KMPR@2012-06-29's 488401100 began on 2011-08-25)
+FIGI handoff: UTX@2008-01-16 joins BBG000BW8S60, the line RTX@2020-06-30 is confirmed on (UTX@2008-01-16's CUSIP 913017109 ended as RTX@2020-06-30's 75513E101 began on 2020-04-03)
+FIGI handoff: UTX@2012-06-29 joins BBG000BW8S60, the line RTX@2020-06-30 is confirmed on (UTX@2008-01-16's CUSIP 913017109 ended as RTX@2020-06-30's 75513E101 began on 2020-04-03)
+FIGI handoff: UTX@2014-12-31 joins BBG000BW8S60, the line RTX@2020-06-30 is confirmed on (UTX@2008-01-16's CUSIP 913017109 ended as RTX@2020-06-30's 75513E101 began on 2020-04-03)
+FIGI handoff: VNTV@2012-06-29 joins BBG0027Y18M0, the line WP@2018-06-30 is confirmed on (VNTV@2012-06-29's CUSIP 92210H105 ended as WP@2018-06-30's 981558109 began on 2018-01-16)
+FIGI handoff: WFR@2008-01-16 joins BBG000F80SZ5, the line SUNE@2014-12-31 is confirmed on (WFR@2008-01-16's CUSIP 552715104 ended as SUNE@2014-12-31's 86732Y109 began on 2013-06-03)
+FIGI handoff: WLP@2008-01-16 joins BBG000BCG930, the line ANTM@2012-06-29 is confirmed on (WLP@2008-01-16's CUSIP 94973V107 ended as ANTM@2012-06-29's 036752103 began on 2014-12-03)
+FIGI handoff: WTR@2008-01-16 joins BBG000BRMJN6, the line WTRG@2020-06-30 is confirmed on (WTR@2008-01-16's CUSIP 03836W103 ended as WTRG@2020-06-30's 29670G102 began on 2020-02-03)
+FIGI handoff: WTR@2012-06-29 joins BBG000BRMJN6, the line WTRG@2020-06-30 is confirmed on (WTR@2008-01-16's CUSIP 03836W103 ended as WTRG@2020-06-30's 29670G102 began on 2020-02-03)
+FIGI handoff: WTR@2014-12-31 joins BBG000BRMJN6, the line WTRG@2020-06-30 is confirmed on (WTR@2008-01-16's CUSIP 03836W103 ended as WTRG@2020-06-30's 29670G102 began on 2020-02-03)
+FIGI handoff: XL@2008-01-16 joins BBG000C9W1Y1, the line XL@2012-06-29 is confirmed on (XL@2008-01-16's CUSIP G98255105 ended as XL@2012-06-29's G98290102 began on 2010-07-02)
+FIGI handoff: ABI@2009-06-08 joins BBG000FJJW82 with its issuer and class, held with no pick of its own (guard c)
+FIGI handoff: ACE@2008-01-16 joins BBG000BR14K5 with its issuer and class, held with no pick of its own (guard c)
+FIGI handoff: DDR@2008-01-16 joins BBG000BGZ832 with its issuer and class, held with no pick of its own (guard c)
+FIGI handoff: DDR@2012-06-29 joins BBG000BGZ832 with its issuer and class, held with no pick of its own (guard c)
+FIGI handoff: HRP@2008-01-16 joins BBG000BLG1L7 with its issuer and class, held with no pick of its own (guard c)
+FIGI handoff: HTA@2013-12-31 joins BBG000PRJCX9 with its issuer and class, held with no pick of its own (guard c)
+FIGI handoff: PEAK@2012-06-29 joins BBG000BKYDP9 with its issuer and class, held with no pick of its own (guard c)
+FIGI handoff: SIRI@2008-01-16 joins BBG000BT0093 with its issuer and class, held with no pick of its own (guard c)
+FIGI handoff: TYC@2008-01-16 joins BBG000BVWLJ6 with its issuer and class, held with no pick of its own (guard c)
+FIGI handoff: TYC@2009-03-20 joins BBG000BVWLJ6 with its issuer and class, held with no pick of its own (guard c)
+FIGI handoff: WTW@2008-01-16 joins BBG000DY6735 with its issuer and class, held with no pick of its own (guard c)
+2209 securities; FIGI sources {'cusip': 2060, 'placeholder': 99, 'ticker': 50}
+halts_on(2019-03-18): network error: Exceeded 30 redirects.
+halts_on(2019-03-19): network error: Exceeded 30 redirects.
+halts_on(2019-03-20): network error: Exceeded 30 redirects.
+halts_on(2019-03-21): network error: Exceeded 30 redirects.
+[50/2209] securities searched; 23 delistings so far
+[100/2209] securities searched; 46 delistings so far
+[150/2209] securities searched; 65 delistings so far
+[200/2209] securities searched; 98 delistings so far
+[250/2209] securities searched; 118 delistings so far
+halts_on(2019-03-18): network error: Exceeded 30 redirects.
+halts_on(2019-03-19): network error: Exceeded 30 redirects.
+halts_on(2019-03-20): network error: HTTPSConnectionPool(host='www.nasdaqtrader.com', port=443): Read timed out. (read timeout=30)
+halts_on(2019-03-21): network error: Exceeded 30 redirects.
+[300/2209] securities searched; 142 delistings so far
+[350/2209] securities searched; 159 delistings so far
+[400/2209] securities searched; 183 delistings so far
+[450/2209] securities searched; 206 delistings so far
+[500/2209] securities searched; 229 delistings so far
+[550/2209] securities searched; 246 delistings so far
+[600/2209] securities searched; 269 delistings so far
+[650/2209] securities searched; 281 delistings so far
+[700/2209] securities searched; 310 delistings so far
+[750/2209] securities searched; 328 delistings so far
+[800/2209] securities searched; 355 delistings so far
+[850/2209] securities searched; 374 delistings so far
+[900/2209] securities searched; 400 delistings so far
+[950/2209] securities searched; 427 delistings so far
+[1000/2209] securities searched; 448 delistings so far
+[1050/2209] securities searched; 463 delistings so far
+[1100/2209] securities searched; 488 delistings so far
+[1150/2209] securities searched; 515 delistings so far
+[1200/2209] securities searched; 539 delistings so far
+[1250/2209] securities searched; 562 delistings so far
+[1300/2209] securities searched; 583 delistings so far
+[1350/2209] securities searched; 605 delistings so far
+[1400/2209] securities searched; 632 delistings so far
+[1450/2209] securities searched; 660 delistings so far
+[1500/2209] securities searched; 680 delistings so far
+[1550/2209] securities searched; 699 delistings so far
+[1600/2209] securities searched; 722 delistings so far
+[1650/2209] securities searched; 738 delistings so far
+[1700/2209] securities searched; 767 delistings so far
+[1750/2209] securities searched; 790 delistings so far
+[1800/2209] securities searched; 805 delistings so far
+[1850/2209] securities searched; 824 delistings so far
+[1900/2209] securities searched; 840 delistings so far
+[1950/2209] securities searched; 855 delistings so far
+[2000/2209] securities searched; 866 delistings so far
+[2050/2209] securities searched; 877 delistings so far
+[2100/2209] securities searched; 883 delistings so far
+[2150/2209] securities searched; 924 delistings so far
+[2200/2209] securities searched; 973 delistings so far
 delisting search: 0 EDGAR requests, 0 SEC data-file downloads (all threads)
 payouts: 0 EDGAR requests, 0 SEC data-file downloads (all threads)
 successor search: 0 EDGAR requests, 0 SEC data-file downloads (all threads)
-Rows written: {'securities': 2271, 'ticker_history': 2851, 'cusip_history': 2517, 'delistings': 1001, 'payouts': 627, 'review': 782, 'review_summary': 32}
-Delistings by bucket: {'merger': 627, 'exchange_transfer': 308, 'liquidation': 47, 'unknown': 12, 'compliance_failure': 6, 'expiration': 1}
-FIGI sources: {'cusip': 2060, 'placeholder': 146, 'ticker': 49}
-Review flags: {'ftd_close_prior': 119, 'resolved_by_current_ticker_map': 128, 'no_form25': 128, 'delist_date_approx': 114, 'successor_unknown': 127, 'ftd_close_lagged': 131, 'acquirer_close_lagged': 29, 'no_last_trade_date': 133, 'no_last_close': 163, 'payout_gate_failed': 12, 'terms_gate_failed': 50, 'merger_at_par': 51, 'last_trade_date_conflict': 45, 'last_trade_date_unconfirmed': 95, 'observed_after_delisting': 29, 'no_evidence_default': 12, 'member_name_mismatch': 28, 'distress_at_normal_price': 3, 'llm_gate_failed': 16, 'resolved_by_cik_map': 9, 'bankruptcy_before_merger': 1, 'bankruptcy_tag_unconfirmed': 1, 'resolved_by_manual_override': 1, 'observation_unresolved': 31, 'no_figi': 156, 'observation_conflict': 6, 'ticker_unconfirmed': 63, 'ended_without_delisting': 93, 'form25_unclassified': 118, 'form25_unmatched': 75, 'ticker_shared': 31}
-Review: 187 fix, 595 check (446 info-only rows hidden, 0 accepted, 0 unmatched decisions)
+observation_map: 35955 of 35955 observations mapped
+WARNING: 1 review row(s) flagged 'resolution_degraded' -- an answer rested on a failed SEC or Nasdaq halt-feed request or a stale copy; outputs were still written, run again once they answer.
+Rows written: {'securities': 2226, 'ticker_history': 2824, 'cusip_history': 2659, 'delistings': 982, 'payouts': 633, 'review': 761, 'review_summary': 34, 'observation_map': 35955}
+Delistings by bucket: {'merger': 633, 'exchange_transfer': 283, 'compliance_failure': 6, 'liquidation': 47, 'unknown': 12, 'expiration': 1}
+FIGI sources: {'cusip': 2060, 'placeholder': 99, 'ticker': 50}
+Review flags: {'ftd_close_prior': 113, 'resolved_by_current_ticker_map': 126, 'no_form25': 96, 'delist_date_approx': 84, 'successor_unknown': 129, 'ftd_close_lagged': 132, 'acquirer_close_lagged': 29, 'no_last_trade_date': 134, 'no_last_close': 163, 'payout_gate_failed': 13, 'terms_gate_failed': 51, 'merger_at_par': 53, 'last_trade_date_unconfirmed': 76, 'last_trade_date_conflict': 45, 'observed_after_delisting': 30, 'no_evidence_default': 12, 'member_name_mismatch': 29, 'distress_at_normal_price': 3, 'llm_gate_failed': 17, 'resolution_degraded': 1, 'resolved_by_cik_map': 10, 'bankruptcy_before_merger': 1, 'bankruptcy_tag_unconfirmed': 1, 'resolved_by_manual_override': 1, 'no_figi': 107, 'issuer_inferred': 75, 'issuer_cusip_disagrees': 5, 'observation_conflict': 6, 'ticker_unconfirmed': 63, 'ended_without_delisting': 74, 'form25_unclassified': 116, 'form25_unmatched': 55, 'ticker_shared': 29}
+Review: 138 fix, 623 check (401 info-only rows hidden, 0 accepted, 0 unmatched decisions)
+EXIT_CODE=3

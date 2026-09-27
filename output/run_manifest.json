@@ -1,29 +1,31 @@
 {
   "as_of": "2026-09-25",
   "cache_answers": {
-    "archives": 6731,
-    "company_search": 962,
-    "company_tickers": 6,
-    "full_text_search": 357,
-    "submissions": 16338,
-    "submissions_page": 5100
+    "archives": 12774,
+    "company_search": 1864,
+    "company_tickers": 10,
+    "full_text_search": 821,
+    "submissions": 37305,
+    "submissions_page": 14116
   },
-  "code_version": "ab8d051-dirty",
-  "degraded_answers": {},
+  "code_version": "de92331-dirty",
+  "degraded_answers": {
+    "nasdaq_halt_feed": 4
+  },
   "latency_ms": {},
   "not_covered": {},
   "rejected_queries": {},
-  "resolution_degraded": 0,
+  "resolution_degraded": 1,
   "review": {
     "accepted": 0,
-    "check": 595,
+    "check": 623,
     "cleared": 0,
-    "fix": 187,
-    "info_hidden": 446,
+    "fix": 138,
+    "info_hidden": 401,
     "unmatched_decisions": 0
   },
   "sec_requests": {},
-  "sec_workers": 1,
+  "sec_workers": 4,
   "stages": {
     "delisting search": {
       "edgar_requests": 0,
@@ -42,6 +44,8 @@
       "sec_data_downloads": 0
     }
   },
-  "warm_degraded": {},
+  "warm_degraded": {
+    "nasdaq_halt_feed": 4
+  },
   "warm_failed": {}
 }
