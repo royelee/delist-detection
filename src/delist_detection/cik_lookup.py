@@ -10,6 +10,7 @@ resolver's name tier would otherwise send, an endpoint SEC throttles hard
 from __future__ import annotations
 
 import re
+import threading
 import time
 from bisect import bisect_left
 from collections.abc import Iterable
@@ -102,10 +103,12 @@ class CikLookupClient:
         self.path = Path(cache_dir) / "cik-lookup-data.txt"
         self.session, self.user_agent, self.sleep = session, user_agent, sleep
         self._index: CikNameIndex | None = None
+        self._lock = threading.Lock()         # the warm pass's resolvers share one client
 
     def index(self) -> CikNameIndex:
-        if self._index is None:
-            text = get_text(CIK_LOOKUP_URL, self.path, max_age_days=CIK_LOOKUP_MAX_AGE_DAYS,
-                            session=self.session, user_agent=self.user_agent, sleep=self.sleep)
-            self._index = CikNameIndex.from_text(text)
-        return self._index
+        with self._lock:
+            if self._index is None:
+                text = get_text(CIK_LOOKUP_URL, self.path, max_age_days=CIK_LOOKUP_MAX_AGE_DAYS,
+                                session=self.session, user_agent=self.user_agent, sleep=self.sleep)
+                self._index = CikNameIndex.from_text(text)
+            return self._index

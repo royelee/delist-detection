@@ -22,6 +22,7 @@ from .atomic_io import clean_orphan_temps, write_atomic
 from .edgar import STALE_KEY, EdgarClient, submissions_fresh_after
 from .evidence import edgar_names, first_filing, names_between, names_near, names_until, parse_day, renamed_near
 from .fatal import FATAL
+from .cik_lookup import CikNameIndex
 from .figi_resolution import class_letter, share_class_from_name
 from .ftd import FtdIndex, FtdRow
 from .names import description_matches, description_names, name_tokens, names_agree, names_an_issuer
@@ -115,13 +116,17 @@ class TickerResolver:
         today: date | None = None,
         batch_writes: bool = False,
         retire_old_name_search: bool | None = None,
+        name_index: "CikNameIndex | callable[[], CikNameIndex] | None" = None,
     ) -> None:
         """`today`: the run date bounding submissions freshness (None: the clock).
         `batch_writes`: keep new answers in memory until `flush()` (the pipeline
         flushes after each resolving stage and on the way out of a run) instead
         of rewriting the whole memo file for each one. `retire_old_name_search`:
         drop a version-2/3 memo file's name_search answers on load (None: the
-        module's `RETIRE_OLD_NAME_SEARCH`)."""
+        module's `RETIRE_OLD_NAME_SEARCH`). `name_index`: SEC's
+        cik-lookup-data.txt as a `cik_lookup.CikNameIndex`, or a callable that
+        loads one on first use; the name tier then finds its candidates there
+        instead of in the live company search (`_name_search`)."""
         self.retire_old_name_search = (RETIRE_OLD_NAME_SEARCH if retire_old_name_search is None
                                        else retire_old_name_search)
         self.edgar = edgar
@@ -133,6 +138,9 @@ class TickerResolver:
         self.cik_pins = cik_pins or (lambda *a, **kw: None)  # (ticker, date) -> CIK from the caller's universe
         self.today = today
         self.batch_writes = batch_writes
+        self._name_index_source = name_index
+        self._name_index: CikNameIndex | None = name_index if isinstance(name_index, CikNameIndex) else None
+        self._name_index_failed = False
         self._memo: dict[str, TickerResolution] = {}
         self._memo_observed: dict[str, str | None] = {}   # key -> observed name the answer was checked with
         self._volatile: set[str] = set()   # misses and transient-error answers: this run only
@@ -453,6 +461,43 @@ class TickerResolver:
 
     NAME_SEARCH_CANDIDATES = 5       # distinct CIKs the name search ranks and checks
 
+    def _index(self) -> CikNameIndex | None:
+        """The name index, loaded on first use; None without one, or when it
+        cannot be loaded (logged once; the live company search stands in for
+        it). A refusal (`fatal.FATAL`) stops the run."""
+        if self._name_index is None and self._name_index_source is not None and not self._name_index_failed:
+            try:
+                self._name_index = self._name_index_source()
+            except FATAL:
+                raise
+            except requests.RequestException as e:
+                log.warning("SEC's cik-lookup-data.txt could not be loaded (%s); using the live company search", e)
+                self._name_index_failed = True
+        return self._name_index
+
+    def _index_candidates(self, index: CikNameIndex, nm: str) -> dict[int, tuple[str, int]]:
+        """The name tier's candidates from the index, as `_name_search` collects
+        them from the live search (CIK -> (the name found, date penalty 1000: the
+        file has no dates)): every spelling's exact matches, else every
+        spelling's prefix matches; each spelling's matches ranked by the words
+        they share with `nm` (`names.name_tokens`), then the shorter name, then
+        the CIK; the first `NAME_SEARCH_CANDIDATES` distinct CIKs. The file lists
+        funds and individuals too: the checks after the search weed them out."""
+        want = name_tokens(nm)
+        variants = self._name_variants(nm)
+        found: dict[int, tuple[str, int]] = {}
+        for pick in (0, 1):                      # the exact matches, then the prefix matches
+            for variant in variants:
+                hits = index.split_search(variant)[pick]
+                for h in sorted(hits, key=lambda h: (-len(name_tokens(h.name) & want), len(h.name), h.cik)):
+                    if len(found) >= self.NAME_SEARCH_CANDIDATES:
+                        return found
+                    if h.cik not in self.EXCHANGE_CIKS and h.cik not in found:
+                        found[h.cik] = (h.name, 1000)
+            if found:
+                return found
+        return found
+
     def _name_search(self, ticker: str, observed_date: str | None, nm: str | None) -> list[tuple[int, str]]:
         """Candidates for the expected name `nm` (observed, else AV) from EDGAR's
         company search, best first, as (CIK, the name the search gave).
@@ -468,12 +513,15 @@ class TickerResolver:
         name, so MICHAEL KORS HOLDINGS LTD finds Capri Holdings), then by the gap
         between the date and the nearest filing the search listed for it. The
         first is always a candidate; one ranked below it only when one of its
-        EDGAR names `names_agree`s with `nm`."""
+        EDGAR names `names_agree`s with `nm`. With a name index (SEC's
+        cik-lookup-data.txt) the candidates come from it instead
+        (`_index_candidates`) and the live search is not asked."""
         if not nm:
             return []
         target_d = parse_day(observed_date)
         found: dict[int, tuple[str, int]] = {}      # CIK -> (its hit name, date penalty), in the order found
-        for variant in self._name_variants(nm):
+        index = self._index()
+        for variant in ([] if index is not None else self._name_variants(nm)):
             for form in ("25-NSE", "25", "15-12G", ""):
                 try:
                     hits = self.edgar.company_search_atom(variant, form_type=form)
@@ -496,6 +544,8 @@ class TickerResolver:
                         found[cik] = (hit_name, penalty)
                 if hits:
                     break  # one form-class per variant is enough
+        if index is not None:
+            found = self._index_candidates(index, nm)
         order = list(found)
         fit = {c: self._edgar_name_fit(c, nm, observed_date) for c in order}
         ranked = sorted(order, key=lambda c: (-fit[c][0], found[c][1], order.index(c)))
@@ -1129,7 +1179,8 @@ class TickerResolver:
         would."""
         s = TickerResolver(self.edgar, rename_map=self.rename_map, manual_overrides=self.manual_overrides,
                            name_lookup=self.name_lookup, observed_names=self.observed_names, cik_pins=self.cik_pins,
-                           today=self.today)
+                           today=self.today, name_index=self._name_index or self._name_index_source)
+        s._name_index_failed = self._name_index_failed
         s._memo, s._memo_observed = dict(self._memo), dict(self._memo_observed)
         s._volatile, s._degraded = set(self._volatile), set(self._degraded)
         s._companies = self._companies
