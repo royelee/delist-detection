@@ -152,4 +152,23 @@ dates in `ticker_history.csv`.
 
 ## Full run
 
-The full run is still in progress (see below); results will be added here if it completes.
+**Not completed in this session.** Three attempts on `data/observations.csv`
+(2,469 eras, as_of 2026-09-25) from a cold cache each stopped in issuer
+resolution with `EdgarBlocked`: SEC answered HTTP 429 to its company-name search
+(`cgi-bin/browse-edgar`), the resolver's fallback tier.
+
+| attempt | SEC workers | how long | notes |
+|---|---|---|---|
+| 1 | 8 | about 1 h | |
+| 2 | 2 | a few minutes | |
+| 3 | 1 | about 1.5 h | after a 25-minute pause |
+
+As designed, a refusal writes nothing, so `output/` is still the `c43bdd0` run
+with the blank `ticker_successor_sec_id` column added. The resolver cache kept
+343 era answers, and the EDGAR and SEC data caches are warm. The next run needs
+fewer company searches, but still a long, well-spaced cold pass. Following
+CLAUDE.md, start it once no other SEC client is running:
+
+    python scripts/classify_universe.py --observations data/observations.csv --as-of 2026-09-25 --sec-workers 1
+
+Then check the case table and the ticker overlaps again on the full output.
