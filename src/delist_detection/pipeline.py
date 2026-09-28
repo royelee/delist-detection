@@ -27,6 +27,10 @@ from .degraded import DegradedWatch, degraded_item, flag_degraded, report_halt_f
 from .delistings import SUCCESSOR_UNKNOWN, Delisting, DelistingFinder, SecurityContext
 from .evidence import edgar_names
 from .fatal import FATAL
+from .handoffs import (
+    HandoffDecision, HandoffOutcome, apply_handoffs, continuation_filing, cusip_switch, decide_handoff,
+    drop_resolved_shared, find_handoffs,
+)
 from .figi_resolution import is_placeholder, share_class_from_name
 from .form25 import SecurityRef
 from .ftd import FTD_START, FtdIndex, close_age
@@ -54,6 +58,7 @@ from .security_master import (
 from .store import DelistingKey, write_tables
 from .successors import (
     SecurityStart, successor_from_8k12b, successor_in_run, successor_query, successor_search_args,
+    successor_search_name,
 )
 from .ticker_resolver import InferredIssuer, TickerResolution
 
@@ -786,6 +791,64 @@ def _link_successors(delistings: list[Delisting], successors: _Successors) -> No
             flag_degraded(d)
 
 
+def _handoffs(ctx: _RunContext, delistings: list[Delisting], securities: dict[str, Security],
+              search: _DelistingSearch, sec_cusips: dict[str, list[str]], ftd: FtdIndex, payouts: _Payouts,
+              review: list[ReviewItem]) -> HandoffOutcome:
+    """9b. Ticker handoffs (`handoffs.py`): every pair of securities of the run
+    where one stops trading under a ticker and the other starts under it within
+    days (`find_handoffs`, over the sightings `ticker_history` is built from:
+    backfilled observations dropped), decided on the successor issuer's
+    8-K12B/8-K12G3 (EDGAR full-text search), else on timing and identity
+    (`decide_handoff`), then acted on (`apply_handoffs`): a continuation's
+    missing row is added, a successor or a ticker successor set, and the review
+    items it resolves dropped. A merger whose payout the gate kept counts as
+    reconciled. Returns the outcome; the caller adds its rows."""
+    clients, edgar = ctx.clients, ctx.clients.edgar
+    fts = getattr(edgar, "full_text_search", None)
+    sightings = {sid: filtered_ticker_sightings(sig, sec_cusips.get(sid, []), ftd)
+                 for sid, sig in search.sightings.items()}
+    pairs = find_handoffs(sightings)
+    mark = ctx.meter.start()
+
+    def filing_args(p) -> tuple[str, date, int] | None:
+        a, b = securities[p.a], securities[p.b]
+        if fts is None or b.issuer_cik is None:
+            return None
+        return successor_search_name(edgar, a.issuer_cik, a.name), date.fromisoformat(p.b_first), b.issuer_cik
+
+    if fts is not None and ctx.sec_workers > 1:
+        def warm_search(p) -> None:
+            args = filing_args(p)
+            if args is not None:
+                fts(*successor_query(args[0], args[1]))
+        warm(pairs, warm_search, workers=ctx.sec_workers, name="handoff search")
+    decisions: list[HandoffDecision] = []
+    degraded: list[ReviewItem] = []
+    for p in pairs:
+        watch = DegradedWatch()
+        args = filing_args(p)
+        filing = continuation_filing(fts, name=args[0], day=args[1], successor_cik=args[2]) if args else None
+        if watch.tripped():
+            a = securities[p.a]
+            degraded.append(degraded_item(p.a, p.ticker, a.issuer_cik, f"the handoff search ({p.ticker} to {p.b})",
+                                          last_seen=p.a_last))
+        a_cik, b_cik = securities[p.a].issuer_cik, securities[p.b].issuer_cik
+        decision = decide_handoff(p, filing=filing, same_issuer=a_cik is not None and a_cik == b_cik,
+                                  cusip_switch=cusip_switch(ftd, p, sec_cusips.get(p.a, []), sec_cusips.get(p.b, [])))
+        if decision is not None:
+            decisions.append(decision)
+    ctx.meter.done("handoff search", mark)
+    gated = payouts.gated
+    reconciled = {e.key for e in delistings if for_delisting(gated.payouts, e.key) is not None
+                  or for_delisting(gated.merged_terms, e.key)}
+    outcome = apply_handoffs(decisions, delistings, securities, review, reconciled=reconciled)
+    for d in outcome.added:
+        d.exchange = issuer_exchange(edgar, d.cik, d.ticker) or ""
+    outcome.review += degraded
+    ctx.log(f"handoffs: {len(pairs)} candidate pairs; {outcome.counts}")
+    return outcome
+
+
 def _delisting_rows(delistings: list[Delisting], closes: dict[DelistingKey, float], payouts: _Payouts,
                     overrides: Overrides) -> tuple[list[dict], list[dict]]:
     """10a. The delistings.csv rows, and the review rows of those delistings that
@@ -1071,11 +1134,18 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
     endings = _delisting_endings(delistings, securities, sec_cusips, ftd)
     _mark_continuing_delistings(delistings, endings)
 
+    handoffs = _handoffs(ctx, delistings, securities, search, sec_cusips, ftd, payouts, review)       # 9b
+    review = handoffs.review
+    if handoffs.added:
+        delistings += handoffs.added
+        closes.update(_last_trade_closes(ctx, handoffs.added, securities, sec_cusips, ftd, ftd_lo, overrides))
+        endings = _delisting_endings(delistings, securities, sec_cusips, ftd)
+
     # 10. rows
     delisting_rows, review_rows = _delisting_rows(delistings, closes, payouts, overrides)
     review_rows += [item.row() for item in review]
     th_rows, ch_rows, ends, end_confirmed = _history_rows(ctx, securities, search, sec_cusips, ftd, added, endings)
-    review_rows += [item.row() for item in ticker_range_review(th_rows)]
+    review_rows += [item.row() for item in drop_resolved_shared(ticker_range_review(th_rows), handoffs.resolved_pairs)]
     map_rows = _observation_map(ctx, index, eras, resolutions, answers.issuers, sec_cusips, ftd, ends,
                                 end_confirmed, search.listed, th_rows)
     flags, triaged = _triage(ctx, review_rows, review_decisions, limit)
@@ -1096,7 +1166,8 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
     stat_counts, stat_timings = SEC_STATS.since(run_mark)
     run_manifest.write(out_dir, run_manifest.build(as_of=ctx.as_of, sec_workers=sec_workers, counts=stat_counts,
                                                    timings=stat_timings, stages=ctx.meter.stages,
-                                                   review_flags=dict(flags), review=triaged.counts))
+                                                   review_flags=dict(flags), review=triaged.counts,
+                                                   handoffs=handoffs.counts))
     return RunSummary(counts, dict(Counter(e.record.bucket.value for e in delistings)),
                       dict(Counter(s.figi_source for s in securities.values())), dict(flags), dict(triaged.counts))
 

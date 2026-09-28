@@ -57,7 +57,8 @@ def _latency(timings: dict[str, list[float]]) -> dict[str, dict[str, float]]:
 
 
 def build(*, as_of: date, sec_workers: int, counts: dict[str, int], timings: dict[str, list[float]],
-          stages: dict[str, dict[str, int]], review_flags: dict[str, int], review: dict[str, int]) -> dict:
+          stages: dict[str, dict[str, int]], review_flags: dict[str, int], review: dict[str, int],
+          handoffs: dict[str, int] | None = None) -> dict:
     """The manifest of one run. `counts` and `timings` are sec_stats.SEC_STATS.since()
     of the run's start; `stages` is the pipeline's per-stage meter. `warm_failed`
     reports, per warm pass, how many items a worker thread failed on (the
@@ -69,7 +70,10 @@ def build(*, as_of: date, sec_workers: int, counts: dict[str, int], timings: dic
     `review_triage.triage()`'s own counts (fix/check/info_hidden/accepted/
     cleared/unmatched_decisions); `review_flags` (used only for
     `resolution_degraded` below) is the flag tally from *before* triage or
-    decisions, so exit code 3 always sees every `error`/`resolution_degraded`."""
+    decisions, so exit code 3 always sees every `error`/`resolution_degraded`.
+    `handoffs` is the handoff pass's counts (`handoffs.apply_handoffs`: pairs
+    decided, continuations by filing and by timing, takeovers, conflicts, rows
+    added)."""
     return {
         "as_of": as_of.isoformat(),
         "code_version": code_version(),
@@ -85,6 +89,7 @@ def build(*, as_of: date, sec_workers: int, counts: dict[str, int], timings: dic
         "stages": stages,
         "resolution_degraded": review_flags.get("resolution_degraded", 0),
         "review": review,
+        "handoffs": handoffs or {},
     }
 
 

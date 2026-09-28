@@ -222,8 +222,11 @@ def test_the_manifest_records_what_the_run_rested_on(fake_edgar, tmp_path):
     # _by_prefix helper would otherwise silently drop.
     assert set(m) == {"as_of", "code_version", "sec_workers", "sec_requests", "cache_answers",
                       "degraded_answers", "warm_degraded", "rejected_queries", "not_covered", "warm_failed",
-                      "latency_ms", "stages", "resolution_degraded", "review"}
-    assert set(m["stages"]) == {"issuer resolution", "delisting search", "payouts", "successor search"}
+                      "latency_ms", "stages", "resolution_degraded", "review", "handoffs"}
+    assert set(m["stages"]) == {"issuer resolution", "delisting search", "payouts", "successor search",
+                                "handoff search"}
+    assert m["handoffs"] == {"handoffs": 0, "continuations_by_filing": 0, "continuations_by_timing": 0,
+                             "takeovers": 0, "conflicts": 0, "rows_added": 0}
     assert m["resolution_degraded"] == 0
     assert m["review"] == {"fix": 0, "check": 2, "info_hidden": 0, "accepted": 0, "cleared": 0,
                            "unmatched_decisions": 0}     # review_triage.triage()'s own tally

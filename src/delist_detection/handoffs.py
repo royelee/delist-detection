@@ -323,10 +323,13 @@ def apply_handoffs(decisions: Sequence[HandoffDecision], delistings: Sequence[De
                                           f"{p.b} continues it under {p.ticker} ({decision.evidence})",
                                           delist_date=d.delist_date))
                 _continue(d, decision)
-            else:
+            elif d.record.successor_sec_id != p.b:           # else the successor search already linked B
                 d.set_successor(p.b)
+                d.record.reason = f"{d.record.reason}; successor by handoff ({decision.evidence})"
                 if CONTINUATION_FLAG not in d.flags:
                     d.add_flag(CONTINUATION_FLAG)
+            d.record.evidence["handoff"] = {"ticker": p.ticker, "successor": p.b, "evidence": decision.evidence,
+                                            "a_last": p.a_last, "b_first": p.b_first}
         resolved.add((_bare(p.ticker), p.a, p.b))
         accession = _UNMATCHED_FORM25.match(form25.reason).group(2) if form25 is not None else None
         for i, r in enumerate(review):

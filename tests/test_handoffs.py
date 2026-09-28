@@ -254,6 +254,7 @@ def test_an_existing_exchange_transfer_near_the_handoff_takes_the_successor():
     assert out.added == []
     assert row.record.successor_sec_id == "NEW" and SUCCESSOR_UNKNOWN not in row.flags
     assert "handoff_continuation" in row.flags and row.record.bucket is CrspBucket.EXCHANGE_TRANSFER
+    assert row.record.reason.endswith("; successor by handoff (timing:cik)")
 
 
 def test_a_merger_row_is_rewritten_on_filing_evidence_and_the_old_bucket_is_reviewed():
