@@ -22,16 +22,18 @@ from .sec_http import get_text
 CIK_LOOKUP_URL = "https://www.sec.gov/Archives/edgar/cik-lookup-data.txt"
 CIK_LOOKUP_MAX_AGE_DAYS = 30      # SEC refreshes the file; a copy this old is fetched again
 
-_PUNCT = re.compile(r"[&.,'’\"()]")
+_DOTS = re.compile(r"\.")                              # "N.V." -> "NV", "U.S." -> "US"
+_PUNCT = re.compile(r"[&,'’\"()]")
 _STATE_TAG = re.compile(r"\s*/[A-Z]{1,3}/?\s*$")      # EDGAR's "/DE/", "/NY", "/TA"
 _SPACES = re.compile(r"\s+")
 
 
 def normalize_name(name: str) -> str:
     """`name` as the index compares it: uppercase, EDGAR's trailing state tag
-    dropped, `&` and punctuation read as spaces, whitespace collapsed."""
+    dropped, periods dropped ("NIELSEN N.V." is "NIELSEN NV", as the snapshots
+    write it), `&` and other punctuation read as spaces, whitespace collapsed."""
     s = _STATE_TAG.sub("", (name or "").upper().strip())
-    return _SPACES.sub(" ", _PUNCT.sub(" ", s)).strip()
+    return _SPACES.sub(" ", _PUNCT.sub(" ", _DOTS.sub("", s))).strip()
 
 
 class NameHit(NamedTuple):
