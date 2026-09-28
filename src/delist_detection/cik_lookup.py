@@ -10,6 +10,7 @@ resolver's name tier would otherwise send, an endpoint SEC throttles hard
 from __future__ import annotations
 
 import re
+import time
 from bisect import bisect_left
 from collections.abc import Iterable
 from pathlib import Path
@@ -96,14 +97,15 @@ class CikLookupClient:
     failed refetch serves the old copy, counted as degraded). Built once, on the
     first `index()`."""
 
-    def __init__(self, cache_dir: str | Path, *, session=None, user_agent: str | None = None) -> None:
+    def __init__(self, cache_dir: str | Path, *, session=None, user_agent: str | None = None,
+                 sleep=time.sleep) -> None:
         self.path = Path(cache_dir) / "cik-lookup-data.txt"
-        self.session, self.user_agent = session, user_agent
+        self.session, self.user_agent, self.sleep = session, user_agent, sleep
         self._index: CikNameIndex | None = None
 
     def index(self) -> CikNameIndex:
         if self._index is None:
             text = get_text(CIK_LOOKUP_URL, self.path, max_age_days=CIK_LOOKUP_MAX_AGE_DAYS,
-                            session=self.session, user_agent=self.user_agent)
+                            session=self.session, user_agent=self.user_agent, sleep=self.sleep)
             self._index = CikNameIndex.from_text(text)
         return self._index

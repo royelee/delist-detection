@@ -1,7 +1,14 @@
 """SEC's cik-lookup-data.txt as a local name -> CIK index (cik-lookup plan)."""
+import os
+import time
 from pathlib import Path
 
-from delist_detection.cik_lookup import CikNameIndex, normalize_name
+import pytest
+import requests
+
+from delist_detection.cik_lookup import CIK_LOOKUP_URL, CikLookupClient, CikNameIndex, normalize_name
+from delist_detection.edgar import EdgarBlocked
+from delist_detection.sec_stats import SEC_STATS
 
 EXCERPT = (Path(__file__).parent / "fixtures" / "cik_lookup" / "excerpt.txt").read_text(encoding="latin-1")
 
@@ -59,3 +66,68 @@ def test_punctuation_and_state_tags_do_not_block_a_match():
 
 def test_an_unknown_or_blank_query_finds_nothing():
     assert _index().search("NO SUCH COMPANY") == [] and _index().search("  ") == []
+
+
+# --- CikLookupClient (Task 2) --------------------------------------------------------------
+
+
+class _Resp:
+    def __init__(self, status=200, text=""):
+        self.status_code, self.text, self.content, self.url = status, text, text.encode(), CIK_LOOKUP_URL
+
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            raise requests.HTTPError(str(self.status_code))
+
+
+class _Session:
+    def __init__(self, *responses):
+        self.responses, self.calls, self.headers = list(responses), [], {}
+
+    def get(self, url, headers=None, timeout=None):
+        self.calls.append(url)
+        r = self.responses.pop(0)
+        if isinstance(r, Exception):
+            raise r
+        return r
+
+
+@pytest.fixture
+def _no_throttle(monkeypatch):
+    monkeypatch.setattr("delist_detection.sec_limiter.throttle", lambda: None)
+
+
+def test_the_client_downloads_once_and_reads_the_cache_after(tmp_path, _no_throttle):
+    s = _Session(_Resp(text=EXCERPT))
+    idx = CikLookupClient(tmp_path, session=s, user_agent="ua").index()
+    assert len(idx) == 27 and s.calls == [CIK_LOOKUP_URL]
+    assert (tmp_path / "cik-lookup-data.txt").read_text(encoding="latin-1") == EXCERPT
+    again = _Session()
+    assert len(CikLookupClient(tmp_path, session=again, user_agent="ua").index()) == 27 and again.calls == []
+
+
+def test_a_copy_older_than_30_days_is_fetched_again(tmp_path, _no_throttle):
+    (tmp_path / "cik-lookup-data.txt").write_text("OLD CO:0000000001:\n")
+    old = time.time() - 31 * 86400
+    os.utime(tmp_path / "cik-lookup-data.txt", (old, old))
+    s = _Session(_Resp(text="NEW CO:0000000002:\n"))
+    assert [h.cik for h in CikLookupClient(tmp_path, session=s, user_agent="ua").index().search("NEW CO")] == [2]
+    assert len(s.calls) == 1
+
+
+def test_a_failed_refetch_serves_the_old_copy_as_degraded(tmp_path, _no_throttle):
+    (tmp_path / "cik-lookup-data.txt").write_text("OLD CO:0000000001:\n")
+    old = time.time() - 31 * 86400
+    os.utime(tmp_path / "cik-lookup-data.txt", (old, old))
+    mark = SEC_STATS.snapshot()
+    failing = _Session(*[requests.ConnectionError("down")] * 3)
+    assert [h.cik for h in CikLookupClient(tmp_path, session=failing, user_agent="ua",
+                                                           sleep=lambda _: None).index().search("OLD CO")] == [1]
+    counts, _ = SEC_STATS.since(mark)
+    assert counts.get("degraded:stale_copy") == 1
+
+
+def test_a_refusal_raises(tmp_path, _no_throttle):
+    with pytest.raises(EdgarBlocked):
+        CikLookupClient(tmp_path, session=_Session(_Resp(429)), user_agent="ua").index()
+    assert not (tmp_path / "cik-lookup-data.txt").exists()
