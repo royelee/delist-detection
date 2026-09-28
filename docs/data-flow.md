@@ -62,7 +62,9 @@ one observation per row per file).
               ┌────────────────────────────┐
               │  FigiResolver: era → sec_id│   sec_id pin → CUSIP → ticker → name filter
               │  (US composite FIGI, or    │   → CUSIP handoff (shared CUSIP/switch to a
-              │  placeholder)              │      confirmed sibling) → placeholder CIK<cik>-<CLASS>
+              │  placeholder)              │      confirmed sibling) → backfill → placeholder
+              │  + identity guard          │   no ticker/name pick for an unconfirmed era;
+              │                            │   a weak era crossing a confirmed range detached
               └─────────────┬──────────────┘
                              │ build_securities (merge eras sharing a sec_id)
                              ▼
@@ -93,6 +95,14 @@ one observation per row per file).
               └─────────────┬──────────────┘
                              │ ftd.close_after (last-trade + acquirer closes),
                              │ payout_extractor / llm_merger_extractor, payout_gate
+                             ▼
+              ┌────────────────────────────┐
+              │  successors, then the      │   successor search (a line of the run, else the
+              │  handoff pass (handoffs.py)│   successor's 8-K12B); ticker handoffs: a
+              │                            │   continuation's row + successor, a takeover's
+              │                            │   ticker_successor_sec_id
+              └─────────────┬──────────────┘
+                             │
                              ▼
               ┌────────────────────────────┐
               │  enrich() → delistings.csv │   + payouts.csv, review.csv +
@@ -513,6 +523,37 @@ leaves the issuer with no EDGAR names for the run and flags its eras
    only NU@2008 carries the switch itself. `figi_source=handoff` marks the
    result, ranked between `name` and `placeholder`.
 
+**The identity guard** (handoff plan, Part 1). The ticker and name tiers
+answer with whoever holds the ticker or the name *today*, so:
+
+- An era the fails data covers but never shows under its ticker (no row
+  under it within 30 days of its span while rows of other symbols exist then:
+  `security_master.guarded_eras`, the same fact `ticker_unconfirmed` reports)
+  is not asked the ticker or name tier. It is placed (`figi_source=backfill`)
+  on the one composite an era of its own issuer and class is confirmed on (by
+  a pin or a CUSIP) over overlapping dates: APTV in 2012-2013 lands on
+  Delphi's DLPH line, Jacobs under J in 2012-2014 on the JEC line, and the
+  observations become `backfilled_ticker` in `observation_map.csv`. With no
+  such line, or two, it takes its placeholder.
+- A plain own-name ticker or name pick is checked against the other eras'
+  confirmations (`_contradicted`) like an EDGAR-name pick.
+- After the eras are resolved, a weak era (a ticker or name pick) whose merge
+  would carry its security's range for the ticker across another security's
+  confirmed span of that ticker (`crossing_weak_eras`: the confirmed span lies
+  wholly between the weak era and another era of its own security) is taken
+  back out and resolved again without the pick, until none crosses
+  (`resolve_with_identity_guard`), with an `identity_detached` review row. ITT
+  in 2008-2009 (CUSIP 450911102, no US line in OpenFIGI) reached today's ITT
+  Inc line by ticker, which would have run 2008..today across the 2011 line's
+  2011-2016 range. A weak era that merely shares dates with another security's
+  era (ACE backfilled under CB in 2012-2014) is left to the observation-conflict
+  review.
+- A placeholder is not the line listed today when a FIGI security of its
+  issuer and class, sharing one of its tickers, begins after its last
+  observation (`superseded_placeholders`): EDGAR's ticker list names the
+  issuer's current line, which would otherwise keep an old placeholder's range
+  open over every later line.
+
 **The placeholder-splitting guard** (controller ruling, superseding the
 original all-or-none-withdrawal design): an issuer's placeholder holds every
 era of one class that no FIGI confirms. A sibling era of the same issuer and
@@ -670,6 +711,48 @@ last trade (`ftd.close_through`; the row's date is kept in the evidence as
 how a reader tells its age. Missing → `--last-trade-closes`
 override; otherwise `dlret` stays blank (`needs_last_trade`) and the row
 goes to `review.csv`.
+
+## Ticker handoffs
+
+`handoffs.py`, run by `pipeline._handoffs` after the successor search and
+before the history rows (so a row it adds clips the predecessor's ranges like
+any other delisting). A handoff is one security of the run stopping under a
+ticker and another starting under it within days (CONTEXT.md).
+
+1. **Finding** (`find_handoffs`): per ticker (either separator spelling), the
+   securities sighted under it in the order they began under it, over the
+   sightings `ticker_history` is built from (backfilled observations
+   dropped); each and the next to begin form a pair when the next one's first
+   sighting falls within [−`OVERLAP_DAYS`, `TAKEOVER_DAYS`] = [−10, 120] days
+   of the first one's last (CZR's two lines overlap 8 days, COHR waits 74).
+2. **Deciding** (`decide_handoff`), the first that applies: a continuation by
+   filing (EDGAR full-text search for an 8-K12B/8-K12G3 filed by B's issuer
+   naming A's issuer, 30 days before to 60 after B's first sighting,
+   `continuation_filing`; the filer may keep A's CIK, as Aon did); a
+   continuation by timing and identity (at most `CONTINUATION_DAYS` = 10
+   days apart, B sighted under no ticker before then, and the same issuer CIK
+   or the ticker's CUSIP switching from A's to B's in the fails data,
+   `cusip_switch`); a takeover (B traded before, under another ticker);
+   otherwise nothing, and any `ticker_shared` row stays.
+3. **Acting** (`apply_handoffs`). A continuation with no delisting of A near
+   the handoff writes one: dated by A's ambiguous-class Form 25 within 30 days
+   (its `form25_unmatched` row) or the day after A's last sighting, last trade
+   on that sighting, `exchange_transfer` (CRSP 304, so DLRET 0),
+   `successor_sec_id` = B, confidence `high` on a filing and `medium` on
+   timing, flag `handoff_continuation`. A row near it takes B as its
+   successor; an `unknown` or merger row is rewritten to the continuation's
+   values (a merger keeps its old bucket in a `handoff_rebucketed` row),
+   except a merger whose payout reconciled against timing evidence alone, a
+   liquidation/compliance failure/expiration, or a row naming another
+   successor: those stand, with a `handoff_conflict` row. A continuation drops
+   A's `ended_without_delisting`, the ambiguous Form 25 rows of A and B it
+   rests on, and the pair's `ticker_shared` rows. A takeover sets
+   `ticker_successor_sec_id` = B on A's delisting nearest the handoff, else
+   writes `handoff_takeover_no_delisting`.
+
+`run_manifest.json`'s `handoffs` key counts the pairs decided, continuations
+by filing and by timing, takeovers, conflicts and rows added; its `stages`
+carry the `handoff search` SEC traffic.
 
 ## Outputs
 

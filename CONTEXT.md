@@ -32,7 +32,17 @@ The handling class a delisting's CRSP code maps to: `merger`, `exchange_transfer
 _Avoid_: category
 
 **Successor**:
-The security a holder keeps after an `exchange_transfer` delisting. It is the same security after an exchange move, and a different one when the FIGI changes, as with Google to Alphabet.
+The security a holder's shares became, one for one, after a delisting that did not end their holding: the same security after an exchange move, a different one when the FIGI changes (Google to Alphabet, a holding-company reorganization). A successor means a continuation, so the ticker's price series is one series across it. Recorded as `successor_sec_id`.
+
+**Handoff**:
+One security of the run stops trading under a ticker and another security of the run starts trading under the same ticker within days. A handoff is a continuation, a ticker takeover, or neither.
+_Avoid_: ticker reuse (a reuse years later is no handoff)
+
+**Continuation**:
+A handoff in which the holders' shares became the new security's one for one: a holding-company reorganization, a redomicile, a rename or a share reclassification (AON 2020, Liberty's 2023 reclassification). The old security gets an `exchange_transfer` delisting with a zero return, and the new one is its successor.
+
+**Ticker takeover**:
+A handoff in which another, already trading security takes the ticker over, typically an acquirer that renames itself after its target (II-VI as Coherent Corp on COHR, Eldorado as Caesars on CZR). The target keeps its own delisting (a merger); the taker is recorded as `ticker_successor_sec_id`, never as a successor, since the ticker's price series before the handoff is the target's, not the taker's.
 
 **Observation**:
 A caller-supplied record that a ticker was seen on a date, with the name and CUSIP it carried then when known.

@@ -86,6 +86,16 @@ change, the old row ends the calendar day before the new row starts (FB ends
 which is all the `exchange_transfer` "hold successor" rule needs. Spin-off and
 new-share-class links can return as a table when a price step needs them.
 
+  *Amendment (2026-09-28, handoff plan).* `successor_sec_id` means a
+  continuation only: the holders' shares became the successor's one for one
+  and the ticker's price series continues. Besides the exchange-transfer
+  successor search, the handoff pass (`handoffs.py`) now sets it for a
+  continuation of any original bucket (a holding-company reorganization, a
+  redomicile, a rename or a reclassification; a merger row is rewritten only
+  on the successor issuer's own 8-K12B/8-K12G3). A ticker takeover (an
+  acquirer that renamed itself into its target's ticker) goes in a new column,
+  `ticker_successor_sec_id`, never in `successor_sec_id`.
+
 **D12. Identity pins travel on observations.** An observation may carry a `cik` or
 `sec_id`. A pin beats every resolver tier (as `--cik-map` does today) and still
 gets the name check. `--names` and `--cik-map` go away. `MANUAL_OVERRIDES` stays
@@ -114,6 +124,13 @@ Aetna's 2018 25-NSE says "Common Stock"; Discovery's three 2022 25-NSEs say
    EDGAR's ticker list).
 A Form 25 that still matches zero or several securities creates no row and goes
 to `review.csv`.
+
+  *Amendment (2026-09-28, handoff plan).* This stays true of the Form 25
+  matcher: an ambiguous class still creates no row there. But when the two
+  lines it could not tell apart are a ticker handoff that the handoff pass
+  decides is a continuation, the pass creates the predecessor's row (an
+  `exchange_transfer` with a zero return, dated by that Form 25) and drops the
+  `form25_unmatched` rows it explains.
 
 **D17. Withdrawing a secondary listing is not a delisting.** A Form 25 counts only
 when the security has no exchange listing left afterwards (it left the
