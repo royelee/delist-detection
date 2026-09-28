@@ -20,11 +20,13 @@ built, so a row it adds clips the predecessor's range like any other delisting.
 from __future__ import annotations
 
 from collections import defaultdict
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date
 
+from .ftd import FtdIndex
 from .history import Sighting
+from .successors import successor_query
 
 OVERLAP_DAYS = 10         # B's first sighting under the ticker may precede A's last by this much (CZR: 8)
 CONTINUATION_DAYS = 10    # a continuation by timing: A's last and B's first sighting this close
@@ -83,3 +85,67 @@ def find_handoffs(sightings: Mapping[str, Sequence[Sighting]]) -> list[HandoffPa
             if -OVERLAP_DAYS <= _days(a_last, b_first) <= TAKEOVER_DAYS:
                 out.append(HandoffPair(label[(t, a)], a, b, a_last, b_first, first_any[b]))
     return sorted(out, key=lambda p: (p.ticker, p.a_last, p.a, p.b))
+
+
+@dataclass(frozen=True)
+class HandoffDecision:
+    """What a pair is: `kind` "continuation" or "takeover", on what evidence
+    (`evidence`: "<form> <accession>" of the successor issuer's filing, or
+    "timing:cik" / "timing:cusip" for a continuation by timing and identity,
+    "timing" for a takeover), and whether a filing settled it (`by_filing`)."""
+    pair: HandoffPair
+    kind: str
+    evidence: str
+    by_filing: bool
+
+
+def continuation_filing(search: Callable, *, name: str, day: date,
+                        successor_cik: int) -> tuple[str, str, str] | None:
+    """The successor-issuer filing (8-K12B / 8-K12G3, Rule 12g-3) that
+    `successor_cik` filed naming the predecessor's issuer `name` around `day`
+    (EDGAR full-text search, `successors.successor_query`: 30 days before to 60
+    after), as (form, accession, filing date); None without one. The filer may
+    keep the predecessor's CIK (Aon plc's 2020 move from the UK to Ireland)."""
+    for h in search(*successor_query(name, day)):
+        src = h.get("_source", h)
+        if successor_cik in {int(c) for c in src.get("ciks") or []}:
+            return src.get("form") or "", src.get("adsh") or "", src.get("file_date") or ""
+    return None
+
+
+def cusip_switch(ftd: FtdIndex, pair: HandoffPair, a_cusips: Sequence[str], b_cusips: Sequence[str]) -> bool:
+    """Whether the pair's ticker switches CUSIP in the fails data at the
+    handoff: a CUSIP of A's last fails under the ticker, and a different CUSIP
+    of B's first fails under it, both within `CONTINUATION_DAYS` of B's first
+    sighting (ITT 2016: 450911201 last fails 2016-05-17, 45073V108 first
+    2016-05-18)."""
+    rows = ftd.by_symbol(pair.ticker)
+    a_rows = [r for r in rows if r.cusip in a_cusips]
+    b_rows = [r for r in rows if r.cusip in b_cusips and r.cusip not in a_cusips]
+    if not a_rows or not b_rows:
+        return False
+    return all(abs(_days(pair.b_first, d)) <= CONTINUATION_DAYS for d in (a_rows[-1].date, b_rows[0].date))
+
+
+def decide_handoff(pair: HandoffPair, *, filing: tuple[str, str, str] | None, same_issuer: bool,
+                   cusip_switch: bool) -> HandoffDecision | None:
+    """What the pair is, the first rule that applies:
+
+    1. a continuation by filing: B's issuer filed an 8-K12B/8-K12G3 naming A's
+       issuer (`filing`, `continuation_filing`);
+    2. a continuation by timing and identity: A's last and B's first sighting
+       are at most `CONTINUATION_DAYS` apart, B was sighted under no ticker
+       before `CONTINUATION_DAYS` ahead of A's last, and the two share an issuer
+       CIK (`same_issuer`) or the ticker's CUSIP switches from A's to B's
+       (`cusip_switch`);
+    3. a takeover: B traded before (under another ticker: IIVI, ERI);
+    4. otherwise nothing (None)."""
+    if filing is not None:
+        form, accession, _ = filing
+        return HandoffDecision(pair, "continuation", f"{form} {accession}".strip(), True)
+    existed = _days(pair.b_first_any, pair.a_last) > CONTINUATION_DAYS
+    if abs(pair.gap) <= CONTINUATION_DAYS and not existed and (same_issuer or cusip_switch):
+        return HandoffDecision(pair, "continuation", "timing:cik" if same_issuer else "timing:cusip", False)
+    if existed:
+        return HandoffDecision(pair, "takeover", "timing", False)
+    return None
