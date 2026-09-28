@@ -39,6 +39,7 @@ from .successors import successor_query
 OVERLAP_DAYS = 10         # B's first sighting under the ticker may precede A's last by this much (CZR: 8)
 CONTINUATION_DAYS = 10    # a continuation by timing: A's last and B's first sighting this close
 TAKEOVER_DAYS = 120       # B's first sighting at most this long after A's last (COHR: 74)
+ISSUER_AGE_DAYS = 365     # B's issuer filing with EDGAR this long before the handoff: a company that existed
 
 
 def _bare(ticker: str) -> str:
@@ -54,13 +55,17 @@ class HandoffPair:
     """Security `a` stops trading under `ticker` (its last sighting under it,
     `a_last`) and security `b` starts under it (`b_first`); `b_first_any` is
     `b`'s first sighting under any ticker (earlier than `b_first` for a taker
-    that traded under its own ticker first)."""
+    that traded under its own ticker first); `a_last_any` is `a`'s last
+    sighting under any ticker (later than `a_last` when `a` lived on under
+    another ticker: Delphi Automotive as APTV, after the spun-off Delphi
+    Technologies took DLPH)."""
     ticker: str
     a: str
     b: str
     a_last: str
     b_first: str
     b_first_any: str
+    a_last_any: str = ""
 
     @property
     def gap(self) -> int:
@@ -79,6 +84,7 @@ def find_handoffs(sightings: Mapping[str, Sequence[Sighting]]) -> list[HandoffPa
     spans: dict[str, dict[str, list[str]]] = defaultdict(dict)       # bare ticker -> sec_id -> [first, last]
     label: dict[tuple[str, str], str] = {}
     first_any: dict[str, str] = {}
+    last_any: dict[str, str] = {}
     for sid, sig in sightings.items():
         for s in sig:
             t = _bare(s.value)
@@ -86,12 +92,13 @@ def find_handoffs(sightings: Mapping[str, Sequence[Sighting]]) -> list[HandoffPa
             span[0], span[1] = min(span[0], s.day), max(span[1], s.day)
             label.setdefault((t, sid), s.value)
             first_any[sid] = min(first_any.get(sid, s.day), s.day)
+            last_any[sid] = max(last_any.get(sid, s.day), s.day)
     out: list[HandoffPair] = []
     for t, by_sec in spans.items():
         ordered = sorted(by_sec.items(), key=lambda kv: (kv[1][0], kv[0]))
         for (a, (_, a_last)), (b, (b_first, _)) in zip(ordered, ordered[1:]):
             if -OVERLAP_DAYS <= _days(a_last, b_first) <= TAKEOVER_DAYS:
-                out.append(HandoffPair(label[(t, a)], a, b, a_last, b_first, first_any[b]))
+                out.append(HandoffPair(label[(t, a)], a, b, a_last, b_first, first_any[b], last_any[a]))
     return sorted(out, key=lambda p: (p.ticker, p.a_last, p.a, p.b))
 
 
@@ -135,9 +142,29 @@ def cusip_switch(ftd: FtdIndex, pair: HandoffPair, a_cusips: Sequence[str], b_cu
     return all(abs(_days(pair.b_first, d)) <= CONTINUATION_DAYS for d in (a_rows[-1].date, b_rows[0].date))
 
 
+def issuer_carries_on(pair: HandoffPair, securities: Mapping[str, Security],
+                      first_seen: Mapping[str, str]) -> bool:
+    """Whether A's issuer starts another security of the run (not B, and not of
+    B's issuer) within `CONTINUATION_DAYS` of A's last sighting: A's holders
+    kept A's issuer under a new line and ticker, while B, another issuer's line,
+    took the old ticker (Liberty Media's 2013 split: the old issuer went on as
+    STRZA, the spun-off Liberty Media took LMCA). `first_seen`: each security's
+    first sighting."""
+    a, b = securities.get(pair.a), securities.get(pair.b)
+    if a is None or b is None or a.issuer_cik is None or a.issuer_cik == b.issuer_cik:
+        return False
+    return any(s.issuer_cik == a.issuer_cik and sid not in (pair.a, pair.b) and sid in first_seen
+               and abs(_days(pair.a_last, first_seen[sid])) <= CONTINUATION_DAYS
+               for sid, s in securities.items())
+
+
 def decide_handoff(pair: HandoffPair, *, filing: tuple[str, str, str] | None, same_issuer: bool,
-                   cusip_switch: bool) -> HandoffDecision | None:
-    """What the pair is, the first rule that applies:
+                   cusip_switch: bool, issuer_carries_on: bool = False,
+                   b_issuer_since: str | None = None) -> HandoffDecision | None:
+    """What the pair is, the first rule that applies. A that lived on under
+    another ticker (`pair.a_last_any` past `CONTINUATION_DAYS` after A's last
+    sighting under this one) is no continuation at all: B took a ticker A
+    left, as a spin-off does.
 
     1. a continuation by filing: B's issuer filed an 8-K12B/8-K12G3 naming A's
        issuer (`filing`, `continuation_filing`);
@@ -145,17 +172,24 @@ def decide_handoff(pair: HandoffPair, *, filing: tuple[str, str, str] | None, sa
        are at most `CONTINUATION_DAYS` apart, B was sighted under no ticker
        before `CONTINUATION_DAYS` ahead of A's last, and the two share an issuer
        CIK (`same_issuer`) or the ticker's CUSIP switches from A's to B's
-       (`cusip_switch`);
-    3. a takeover: B traded before (under another ticker: IIVI, ERI);
+       (`cusip_switch`), and A's issuer does not carry on in another line while
+       B is another issuer's (`issuer_carries_on`);
+    3. a takeover: B traded before (under another ticker: IIVI), or B's issuer
+       is another, older company (it filed with EDGAR `ISSUER_AGE_DAYS` before A's
+       last sighting, `b_issuer_since`: Eldorado, unobserved as ERI, took CZR);
     4. otherwise nothing (None)."""
-    if filing is not None:
+    lived_on = bool(pair.a_last_any) and _days(pair.a_last, pair.a_last_any) > CONTINUATION_DAYS
+    if filing is not None and not lived_on:
         form, accession, _ = filing
         return HandoffDecision(pair, "continuation", f"{form} {accession}".strip(), True)
     existed = _days(pair.b_first_any, pair.a_last) > CONTINUATION_DAYS
-    if abs(pair.gap) <= CONTINUATION_DAYS and not existed and (same_issuer or cusip_switch):
+    if (abs(pair.gap) <= CONTINUATION_DAYS and not existed and not lived_on and not issuer_carries_on
+            and (same_issuer or cusip_switch)):
         return HandoffDecision(pair, "continuation", "timing:cik" if same_issuer else "timing:cusip", False)
-    if existed:
-        return HandoffDecision(pair, "takeover", "timing", False)
+    older = (not same_issuer and b_issuer_since is not None
+             and _days(b_issuer_since, pair.a_last) > ISSUER_AGE_DAYS)
+    if existed or older:
+        return HandoffDecision(pair, "takeover", "timing" if existed else "timing:issuer", False)
     return None
 
 

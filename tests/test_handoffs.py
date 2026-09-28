@@ -10,7 +10,7 @@ from delist_detection.delistings import SUCCESSOR_UNKNOWN, Delisting
 from delist_detection.ftd import FtdIndex, FtdRow
 from delist_detection.handoffs import (
     CONTINUATION_DAYS, OVERLAP_DAYS, TAKEOVER_DAYS, HandoffDecision, HandoffPair, apply_handoffs, continuation_filing,
-    cusip_switch, decide_handoff, drop_resolved_shared, find_handoffs,
+    cusip_switch, decide_handoff, drop_resolved_shared, find_handoffs, issuer_carries_on,
 )
 from delist_detection.history import Sighting
 from delist_detection.last_trade import LastTrade
@@ -38,7 +38,7 @@ def test_a_clean_adjoin_is_a_candidate():
         "OLD": _sig(("2014-12-31", "MNST", "observation"), ("2015-06-12", "MNST")),
         "NEW": _sig(("2015-06-15", "MNST"), ("2015-12-31", "MNST", "observation")),
     })
-    assert pairs == [HandoffPair("MNST", "OLD", "NEW", "2015-06-12", "2015-06-15", "2015-06-15")]
+    assert pairs == [HandoffPair("MNST", "OLD", "NEW", "2015-06-12", "2015-06-15", "2015-06-15", "2015-06-12")]
     assert pairs[0].gap == 3
 
 
@@ -146,6 +146,51 @@ def test_a_line_that_traded_before_under_another_ticker_takes_the_ticker_over():
         cohr, "takeover", "timing", False)
     czr = _pair("2020-07-30", "2020-07-22", "2015-06-30", "CZR")
     assert decide_handoff(czr, filing=None, same_issuer=False, cusip_switch=False).kind == "takeover"
+
+
+def test_a_line_that_lived_on_under_another_ticker_is_continued_by_nobody():
+    """DLPH 2017: Delphi Automotive renamed itself Aptiv and moved to APTV on
+    2017-12-05; the spun-off Delphi Technologies (a new CUSIP under DLPH from
+    2017-12-07) took the old ticker. The CUSIP switch under DLPH is real, but A
+    lived on: no continuation, whatever the evidence."""
+    (p,) = find_handoffs({
+        "DELPHI": _sig(("2017-06-30", "DLPH", "observation"), ("2017-12-05", "DLPH"), ("2017-12-06", "APTV"),
+                       ("2018-06-29", "APTV", "observation")),
+        "DLPHTECH": _sig(("2017-12-07", "DLPH"), ("2017-12-29", "DLPH", "observation")),
+    })
+    assert (p.a_last, p.a_last_any) == ("2017-12-05", "2018-06-29")
+    assert decide_handoff(p, filing=None, same_issuer=False, cusip_switch=True) is None
+    assert decide_handoff(p, filing=FILING, same_issuer=False, cusip_switch=True) is None
+
+
+def test_an_issuer_that_carries_on_in_another_line_hands_its_ticker_to_nobody():
+    """LMCA 2013: old Liberty Media (CIK 1507934) went on as Starz (STRZA, a new
+    line of its own from 2013-01-17), while the spun-off Liberty Media (CIK
+    1560385) took LMCA. By timing, no continuation; the same issuer's new
+    lines of a reclassification (FWONA and LSXMA, one CIK) do not count."""
+    secs = {"OLD": _sec("OLD", cik=1507934), "STARZ": _sec("STARZ", cik=1507934),
+            "NEWLMC": _sec("NEWLMC", cik=1560385)}
+    p = HandoffPair("LMCA", "OLD", "NEWLMC", "2013-01-16", "2013-01-23", "2013-01-17", "2013-01-16")
+    first = {"OLD": "2011-11-30", "STARZ": "2013-01-17", "NEWLMC": "2013-01-17"}
+    assert issuer_carries_on(p, secs, first)
+    assert decide_handoff(p, filing=None, same_issuer=False, cusip_switch=True, issuer_carries_on=True) is None
+    reclass = {"FWONA": _sec("FWONA", cik=1560385), "FWONA2": _sec("FWONA2", cik=1560385),
+               "LSXMA2": _sec("LSXMA2", cik=1560385)}
+    q = HandoffPair("FWONA", "FWONA", "FWONA2", "2023-08-04", "2023-08-07", "2023-08-07", "2023-08-04")
+    assert not issuer_carries_on(q, reclass, {"FWONA": "2017-01-26", "FWONA2": "2023-08-07", "LSXMA2": "2023-08-07"})
+
+
+def test_an_older_issuer_that_takes_the_ticker_is_a_takeover_even_unseen_before():
+    """CZR 2020: Eldorado Resorts (CIK 1590895, filing since 2013), not observed
+    as ERI, renamed itself Caesars Entertainment Inc and took CZR with a new
+    CUSIP. Its line has no earlier sighting, but its issuer is an older,
+    different company."""
+    czr = _pair("2020-07-30", "2020-07-22", ticker="CZR")
+    assert decide_handoff(czr, filing=None, same_issuer=False, cusip_switch=False) is None
+    d = decide_handoff(czr, filing=None, same_issuer=False, cusip_switch=False, b_issuer_since="2013-10-01")
+    assert (d.kind, d.evidence) == ("takeover", "timing:issuer")
+    new = decide_handoff(czr, filing=None, same_issuer=False, cusip_switch=False, b_issuer_since="2020-03-01")
+    assert new is None                                                   # a new issuer: a spin-off or a new holdco
 
 
 def test_otherwise_nothing():

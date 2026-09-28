@@ -2042,19 +2042,16 @@ def test_no_successor_is_linked_when_nothing_starts_near_the_last_trade(fake_edg
     assert d["BBGBLKOLD01"]["successor_sec_id"] == "" and "successor_unknown" in d["BBGBLKOLD01"]["review_flags"]
 
 
-def test_two_candidates_leave_the_in_run_search_to_the_handoff_pass(fake_edgar, tmp_path, monkeypatch):
+def test_two_candidates_leave_the_successor_unknown(fake_edgar, tmp_path, monkeypatch):
     """A second security of the old issuer also starts on 2024-10-03: the in-run
-    successor search (same issuer or ticker) is ambiguous and links nothing.
-    The handoff pass looks at the ticker itself: the line that took BLK over
-    within days, of the same issuer and new, is the continuation."""
+    successor search is ambiguous, and the handoff pass does not guess either:
+    with no 8-K12B, the old issuer carrying on in a line of its own while
+    another issuer's line takes BLK is a spin-off's shape, not a continuation."""
     extra_obs = [Observation("BLKX", "2024-12-31", "BLACKROCK INC SERIES X", cik=1364742)]
     extra_rows = _ftd("BLKX", "09247X999", "BLACKROCK INC SERIES X", ["2024-10-03", "2024-11-01", "2024-12-31"])
     extra = {("ID_CUSIP", "09247X999"): _figi_answer("BBGBLKX0001", "BLKX", "BLACKROCK INC SERIES X")}
     d = _reorg_run(fake_edgar, tmp_path, monkeypatch, extra_obs=extra_obs, extra_rows=extra_rows, extra_figi=extra)
-    old = d["BBGBLKOLD01"]
-    assert old["successor_sec_id"] == "BBGBLKNEW01" and "successor_unknown" not in old["review_flags"]
-    assert "handoff_continuation" in old["review_flags"]
-    assert old["reason"] == "Continued filings; successor by handoff (timing:cusip)"   # two issuers, one CUSIP switch
+    assert d["BBGBLKOLD01"]["successor_sec_id"] == "" and "successor_unknown" in d["BBGBLKOLD01"]["review_flags"]
 
 
 def test_with_no_last_trade_date_the_window_is_anchored_on_the_form25_filing():
@@ -2405,6 +2402,44 @@ def test_an_era_under_its_issuers_old_name_is_accepted_on_the_ticker_by_the_edga
     th = read_table("ticker_history", table_path(tmp_path, "ticker_history"))
     assert [(r["sec_id"], r["ticker"], r["valid_from"]) for r in th] == [("BBG000BQ87N0", "ES", "2012-06-29")]
     assert read_table("delistings", table_path(tmp_path, "delistings")) == []
+
+
+def _holdco_run(fake_edgar, tmp_path, search=None):
+    """The HC holding-company reorganization below, run end to end."""
+    fake_edgar.company_map["HC"] = {"cik_str": 999, "ticker": "HC", "title": "HOLDCO INC"}
+    fake_edgar.submissions_by_cik[999] = []
+    fake_edgar.listings[999] = [("HC", "NYSE")]
+    if search is not None:
+        fake_edgar.full_text_search = search
+    obs = [Observation("HC", d, "HOLDCO INC", cik=999) for d in ("2014-06-30", "2014-12-31", "2015-12-31",
+                                                                  "2016-06-30")]
+    rows = (_ftd("HC", "111111101", "HOLDCO INC", ["2014-06-02", "2014-10-01", "2015-01-02", "2015-04-01",
+                                                   "2015-06-12"])
+            + _ftd("HC", "222222202", "HOLDCO INC NEW", ["2015-06-15", "2015-09-01", "2016-01-04", "2016-06-01"]))
+    index, clients = _index_clients(fake_edgar, obs, rows, {
+        ("ID_CUSIP", "111111101"): _figi_answer("BBGHCOLD001", "HC", "HOLDCO INC"),
+        ("ID_CUSIP", "222222202"): _figi_answer("BBGHCNEW001", "HC", "HOLDCO INC"),
+        ("COMPOSITE_ID_BB_GLOBAL", "BBGHCNEW001"): {"data": [{"figi": "BBGHCNEW002", "compositeFIGI": "BBGHCNEW001",
+                                                              "exchCode": "UN", "ticker": "HC", "name": "HOLDCO INC",
+                                                              "securityType": "Common Stock"}]},
+    })
+    run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
+    return read_table("delistings", table_path(tmp_path, "delistings"))
+
+
+def test_a_continuation_by_the_successor_issuers_8k12b_is_high_confidence(fake_edgar, tmp_path):
+    hit = {"_source": {"ciks": ["0000000999"], "form": "8-K12B", "file_date": "2015-06-15",
+                       "adsh": "0000000999-15-000042", "display_names": ["Holdco Inc (HC) (CIK 0000000999)"]}}
+    asked = []
+
+    def search(q, forms, lo, hi):
+        asked.append((q, forms))
+        return [hit]
+
+    (d,) = _holdco_run(fake_edgar, tmp_path, search)
+    assert ('"HOLDCO INC"', "8-K12B,8-K12G3") in asked
+    assert (d["successor_sec_id"], d["confidence"]) == ("BBGHCNEW001", "high")
+    assert "8-K12B 0000000999-15-000042" in d["reason"]
 
 
 def test_a_continuation_the_finder_found_no_row_for_clips_the_old_line_at_its_last_sighting(fake_edgar, tmp_path):

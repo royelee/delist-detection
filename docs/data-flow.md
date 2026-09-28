@@ -732,8 +732,15 @@ ticker and another starting under it within days (CONTEXT.md).
    continuation by timing and identity (at most `CONTINUATION_DAYS` = 10
    days apart, B sighted under no ticker before then, and the same issuer CIK
    or the ticker's CUSIP switching from A's to B's in the fails data,
-   `cusip_switch`); a takeover (B traded before, under another ticker);
-   otherwise nothing, and any `ticker_shared` row stays.
+   `cusip_switch`); a takeover (B traded before, under another ticker, or
+   B's issuer is another company that filed with EDGAR over a year before:
+   Eldorado, never observed as ERI, took CZR); otherwise nothing, and any
+   `ticker_shared` row stays. Two guards stop a spin-off that takes the old
+   ticker from reading as a continuation: A that lives on under another
+   ticker (Delphi Automotive as APTV while Delphi Technologies took DLPH) is
+   continued by nobody, and no continuation by timing is taken while A's
+   issuer starts another line of its own at the handoff and B is another
+   issuer's (old Liberty Media as STRZA while the new one took LMCA).
 3. **Acting** (`apply_handoffs`). A continuation with no delisting of A near
    the handoff writes one: dated by A's ambiguous-class Form 25 within 30 days
    (its `form25_unmatched` row) or the day after A's last sighting, last trade

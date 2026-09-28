@@ -29,7 +29,7 @@ from .evidence import edgar_names
 from .fatal import FATAL
 from .handoffs import (
     HandoffDecision, HandoffOutcome, apply_handoffs, continuation_filing, cusip_switch, decide_handoff,
-    drop_resolved_shared, find_handoffs,
+    drop_resolved_shared, find_handoffs, issuer_carries_on,
 )
 from .figi_resolution import is_placeholder, share_class_from_name
 from .form25 import SecurityRef
@@ -798,8 +798,9 @@ def _handoffs(ctx: _RunContext, delistings: list[Delisting], securities: dict[st
     where one stops trading under a ticker and the other starts under it within
     days (`find_handoffs`, over the sightings `ticker_history` is built from:
     backfilled observations dropped), decided on the successor issuer's
-    8-K12B/8-K12G3 (EDGAR full-text search), else on timing and identity
-    (`decide_handoff`), then acted on (`apply_handoffs`): a continuation's
+    8-K12B/8-K12G3 (EDGAR full-text search), else on timing and identity, else
+    as a takeover by a line or an issuer that existed before (`decide_handoff`:
+    the issuer's first EDGAR filing dates it), then acted on (`apply_handoffs`): a continuation's
     missing row is added, a successor or a ticker successor set, and the review
     items it resolves dropped. A merger whose payout the gate kept counts as
     reconciled. Returns the outcome; the caller adds its rows."""
@@ -822,6 +823,13 @@ def _handoffs(ctx: _RunContext, delistings: list[Delisting], securities: dict[st
             if args is not None:
                 fts(*successor_query(args[0], args[1]))
         warm(pairs, warm_search, workers=ctx.sec_workers, name="handoff search")
+    first_seen = {sid: sig[0].day for sid, sig in sightings.items() if sig}
+
+    def issuer_since(cik: int | None) -> str | None:
+        """The issuer's first EDGAR filing (the finder already read its filings)."""
+        dates = [f.filing_date for f in edgar.recent_filings(cik) if f.filing_date] if cik is not None else []
+        return min(dates) if dates else None
+
     decisions: list[HandoffDecision] = []
     degraded: list[ReviewItem] = []
     for p in pairs:
@@ -833,8 +841,11 @@ def _handoffs(ctx: _RunContext, delistings: list[Delisting], securities: dict[st
             degraded.append(degraded_item(p.a, p.ticker, a.issuer_cik, f"the handoff search ({p.ticker} to {p.b})",
                                           last_seen=p.a_last))
         a_cik, b_cik = securities[p.a].issuer_cik, securities[p.b].issuer_cik
-        decision = decide_handoff(p, filing=filing, same_issuer=a_cik is not None and a_cik == b_cik,
-                                  cusip_switch=cusip_switch(ftd, p, sec_cusips.get(p.a, []), sec_cusips.get(p.b, [])))
+        same = a_cik is not None and a_cik == b_cik
+        decision = decide_handoff(p, filing=filing, same_issuer=same,
+                                  cusip_switch=cusip_switch(ftd, p, sec_cusips.get(p.a, []), sec_cusips.get(p.b, [])),
+                                  issuer_carries_on=issuer_carries_on(p, securities, first_seen),
+                                  b_issuer_since=None if same else issuer_since(b_cik))
         if decision is not None:
             decisions.append(decision)
     ctx.meter.done("handoff search", mark)
