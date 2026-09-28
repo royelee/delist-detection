@@ -868,3 +868,194 @@ def test_find_acquirer_counts_only_cusips_that_are_not_the_targets():
     cand, rows = find_acquirer(figi, ftd, "ASH", date(2016, 9, 19), {"044209104"})
     assert cand.composite == "BBGASHNEW01" and [r.cusip for r in rows] == ["044186104"]
     assert find_acquirer(figi, ftd, "ASH", date(2016, 9, 19), {"044209104", "044186104"}) is None
+
+
+# --- the identity guard (handoff plan, Part 1) ------------------------------------------
+
+
+def _aptv_eras():
+    """Real shape: Delphi traded as DLPH from 2011 (CUSIP G6095L109, renamed Aptiv
+    and APTV in December 2017; a new CUSIP G3265R107 and FIGI from 2024-12-19).
+    The snapshots also list APTV in 2012-2013, when no fails row shows APTV at
+    all: that era's ticker hit is today's line."""
+    dlph = _era("DLPH", ("2012-06-29", "DELPHI AUTOMOTIVE PLC"), ("2017-06-30", "DELPHI AUTOMOTIVE PLC"))
+    aptv12 = _era("APTV", ("2012-06-29", "APTIV PLC"), ("2013-12-31", "APTIV PLC"))
+    aptv17 = _era("APTV", ("2017-12-31", "APTIV PLC"), ("2024-06-30", "APTIV PLC"))
+    aptv24 = _era("APTV", ("2024-12-31", "APTIV PLC"), ("2026-06-30", "APTIV PLC"))
+    figi = _Figi({
+        ("ID_CINS", "G6095L109"): {"data": [_row("BBG001QD41M9", "US", "APTV", "APTIV PLC")]},
+        ("ID_CINS", "G3265R107"): {"data": [_row("BBG01R914LT5", "US", "APTV", "APTIV PLC")]},
+        ("TICKER", "APTV"): {"data": [_row("BBG01R914LT5", "US", "APTV", "APTIV PLC")]},
+    })
+    eras = [dlph, aptv12, aptv17, aptv24]
+    cusips = {dlph.key: ["G6095L109"], aptv12.key: [], aptv17.key: ["G6095L109"], aptv24.key: ["G3265R107"]}
+    return eras, figi, cusips
+
+
+def test_an_era_its_ticker_never_traded_under_takes_no_ticker_or_name_pick():
+    """Part 1 (1): APTV@2012 has no fails row under APTV in its window
+    (`unconfirmed`). It never takes the ticker's answer (today's line); it
+    is placed on the one line its own issuer and class are confirmed on over
+    its dates (DLPH's), as a backfilled ticker."""
+    eras, figi, cusips = _aptv_eras()
+    dlph, aptv12, aptv17, aptv24 = eras
+    issuers = issuers_by_era({e.key: 1521332 for e in eras}, {1521332: ("Aptiv PLC", "Delphi Automotive PLC")})
+    # Without the fails evidence, the own-name guard (DLPH is confirmed elsewhere
+    # over the same dates) already refuses today's line, but places it nowhere.
+    before = FigiResolver(figi).resolve_many(eras, issuers=issuers, cusips=cusips)
+    assert before[aptv12.key].sec_id == "CIK1521332-COMMON"
+    figi.filter_calls.clear()
+    res = FigiResolver(figi).resolve_many(eras, issuers=issuers, cusips=cusips, unconfirmed={aptv12.key})
+    assert {k: r.sec_id for k, r in res.items()} == {
+        dlph.key: "BBG001QD41M9", aptv12.key: "BBG001QD41M9", aptv17.key: "BBG001QD41M9",
+        aptv24.key: "BBG01R914LT5"}
+    assert res[aptv12.key].source == "backfill"
+    assert figi.filter_calls == []                                     # no name search for it either
+
+
+def test_an_unconfirmed_era_with_no_line_of_its_own_over_its_dates_gets_the_placeholder():
+    """With no same-issuer, same-class era confirmed over its dates (or with two
+    such lines), an unconfirmed era takes neither the ticker hit, nor a name
+    hit, nor a guess: it stays on its issuer's placeholder."""
+    eras, figi, cusips = _aptv_eras()
+    dlph, aptv12, aptv17, aptv24 = eras
+    alone = [aptv12, aptv24]
+    res = FigiResolver(figi).resolve_many(alone, issuers=issuers_by_era({e.key: 1521332 for e in alone}),
+                                          cusips={k: cusips[k] for k in (aptv12.key, aptv24.key)},
+                                          unconfirmed={aptv12.key})
+    assert (res[aptv12.key].sec_id, res[aptv12.key].source) == ("CIK1521332-COMMON", "placeholder")
+    other = _era("DLPX", ("2012-06-29", "DELPHI AUTOMOTIVE PLC"), ("2013-06-28", "DELPHI AUTOMOTIVE PLC"))
+    two = [dlph, other, aptv12]
+    figi.answers[("ID_CUSIP", "99999X109")] = {"data": [_row("BBGSECONDLN1", "US", "DLPX", "DELPHI AUTOMOTIVE PLC")]}
+    res = FigiResolver(figi).resolve_many(two, issuers=issuers_by_era({e.key: 1521332 for e in two}),
+                                          cusips={dlph.key: ["G6095L109"], other.key: ["99999X109"],
+                                                  aptv12.key: []}, unconfirmed={aptv12.key})
+    assert res[aptv12.key].source == "placeholder"
+
+
+def test_an_own_name_ticker_pick_is_checked_against_other_eras_confirmations():
+    """Part 1 (2): a ticker hit whose name agrees with the era's own observed
+    name still yields to another issuer's era confirmed on that composite by
+    its CUSIP (`_contradicted`), like an EDGAR-name pick."""
+    old = _era("GGP", ("2008-01-16", "GGP INC"), ("2009-06-08", "GGP INC"))
+    new = _era("GGP", ("2017-06-30", "GGP INC"), ("2018-06-30", "GGP INC"))
+    ggp = {"data": [_row("BBG000BG3HG3", "US", "GGP", "GGP INC", "REIT")]}
+    figi = _Figi({("ID_CUSIP", "36174X101"): ggp, ("TICKER", "GGP"): ggp})
+    res = FigiResolver(figi).resolve_many([old, new], issuers=issuers_by_era({old.key: 895648, new.key: 1496048}),
+                                          cusips={old.key: ["370021107"], new.key: ["36174X101"]})
+    assert res[new.key].sec_id == "BBG000BG3HG3"
+    assert (res[old.key].sec_id, res[old.key].source) == ("CIK895648-COMMON", "placeholder")
+
+
+def _itt_eras():
+    """Real shape: ITT Corporation (CIK 216228) seen under ITT in 2008-09 with
+    CUSIP 450911102, which OpenFIGI has no US line for; the 2011 line
+    (450911201, BBG000BMB7R1) to 2016-05-17; the 2016 holding company's line
+    (45073V108, BBG00CVQZQ96) since. The 2008 era's ticker hit is today's line,
+    and "ITT CORPORATION" agrees with "ITT INC"."""
+    itt08 = _era("ITT", ("2008-01-16", "ITT CORPORATION"), ("2009-06-08", "ITT CORPORATION"))
+    itt12 = _era("ITT", ("2012-06-29", "ITT CORP"), ("2015-12-31", "ITT CORP"))
+    itt16 = _era("ITT", ("2016-06-30", "ITT INC"), ("2026-06-30", "ITT INC"))
+    figi = _Figi({
+        ("ID_CUSIP", "450911201"): {"data": [_row("BBG000BMB7R1", "US", "ITT", "ITT CORP")]},
+        ("ID_CUSIP", "45073V108"): {"data": [_row("BBG00CVQZQ96", "US", "ITT", "ITT INC")]},
+        ("TICKER", "ITT"): {"data": [_row("BBG00CVQZQ96", "US", "ITT", "ITT INC")]},
+    })
+    eras = [itt08, itt12, itt16]
+    cusips = {itt08.key: ["450911102"], itt12.key: ["450911201"], itt16.key: ["45073V108"]}
+    return eras, figi, cusips
+
+
+def test_a_weak_era_whose_merge_would_swallow_another_securitys_confirmed_range_is_detached():
+    """Part 1 (3): ITT@2008's ticker pick merges it into BBG00CVQZQ96, whose
+    ITT range would then run 2008..today across BBG000BMB7R1's CUSIP-confirmed
+    2012-2015 era. The weak era is taken back out and resolved without its
+    ticker pick (here: its issuer's placeholder); the report names it."""
+    from delist_detection.security_master import crossing_weak_eras, resolve_with_identity_guard
+    eras, figi, cusips = _itt_eras()
+    itt08, itt12, itt16 = eras
+    issuers = issuers_by_era({e.key: 216228 for e in eras})
+    first = FigiResolver(figi).resolve_many(eras, issuers=issuers, cusips=cusips)
+    assert first[itt08.key].sec_id == "BBG00CVQZQ96"                    # the bug
+    assert crossing_weak_eras(first, {e.key: e for e in eras}) == {itt08.key: ("BBG00CVQZQ96", "BBG000BMB7R1")}
+    res, detached = resolve_with_identity_guard(FigiResolver(figi), eras, issuers=issuers, cusips=cusips)
+    assert detached == {itt08.key: ("BBG00CVQZQ96", "BBG000BMB7R1")}
+    assert {k: r.sec_id for k, r in res.items()} == {itt08.key: "CIK216228-COMMON", itt12.key: "BBG000BMB7R1",
+                                                    itt16.key: "BBG00CVQZQ96"}
+
+
+def test_a_weak_era_that_only_overlaps_another_securitys_era_is_not_detached():
+    """Only a merge that crosses a confirmed range is undone. ACE's backfilled CB
+    era (2012-2014) shares its dates with Chubb Corp's own CB era, which the
+    observation-conflict review reports; it is kept on the ACE/Chubb Ltd line
+    it reached. A weak era with no other era of its security on the far side
+    of the confirmed one crosses nothing either."""
+    from delist_detection.security_master import crossing_weak_eras
+    chubb = _era("CB", ("2008-01-16", "CHUBB CORP"), ("2015-12-31", "CHUBB CORP"))
+    cb_ace = _era("CB", ("2012-06-29", "ACE LTD"), ("2014-06-30", "ACE LTD"))
+    cb_new = _era("CB", ("2016-06-30", "CHUBB LTD"), ("2026-06-30", "CHUBB LTD"))
+    res = {chubb.key: EraResolution(chubb.key, "BBGCHUBBCORP", "cusip", None, ()),
+           cb_ace.key: EraResolution(cb_ace.key, "BBG000BR14K5", "ticker", None, ()),
+           cb_new.key: EraResolution(cb_new.key, "BBG000BR14K5", "cusip", None, ())}
+    assert crossing_weak_eras(res, {e.key: e for e in (chubb, cb_ace, cb_new)}) == {}
+    lone = {chubb.key: res[chubb.key],
+            cb_new.key: EraResolution(cb_new.key, "BBG000BR14K5", "ticker", None, ())}
+    assert crossing_weak_eras(lone, {e.key: e for e in (chubb, cb_new)}) == {}
+
+
+def test_a_placeholder_whose_ticker_a_later_line_of_its_issuer_and_class_holds_is_superseded():
+    """Part 1 (4), traced from J: the snapshots list Jacobs under J in 2012-2014
+    (it traded as JEC); that era found no FIGI and sits on CIK52988-COMMON.
+    EDGAR lists J for CIK 52988 today -- the 2022 holding company's line -- so
+    the placeholder read as listed today and its J range ran 2012..open over
+    both FIGI lines. A placeholder is superseded (not the line listed today)
+    when a FIGI security of its issuer and class, sharing one of its tickers,
+    begins after its own last observation; not when that line began before, is
+    another class, or shares no ticker."""
+    from delist_detection.security_master import superseded_placeholders
+    j12 = _era("J", ("2012-06-29", "JACOBS ENGINEERING GROUP INC"), ("2014-06-30", "JACOBS ENGINEERING GROUP INC"))
+    j19 = _era("J", ("2019-12-31", "JACOBS ENGINEERING GROUP INC"), ("2022-06-30", "JACOBS ENGINEERING GROUP INC"))
+    j22 = _era("J", ("2022-12-31", "JACOBS SOLUTIONS INC"), ("2026-06-30", "JACOBS SOLUTIONS INC"))
+
+    def sec(sid, cls, *eras, cik=52988):
+        return Security(sid, cik, cls, eras[-1].name, "", True, "placeholder" if sid.startswith("CIK") else "cusip",
+                        eras=list(eras))
+
+    secs = {s.sec_id: s for s in (sec("CIK52988-COMMON", "COMMON", j12), sec("BBG000BMFFQ0", "COMMON", j19),
+                                  sec("BBG019C1BQR4", "COMMON", j22))}
+    assert superseded_placeholders(secs) == {"CIK52988-COMMON"}
+    assert superseded_placeholders({k: v for k, v in secs.items() if k != "BBG000BMFFQ0"}) == {"CIK52988-COMMON"}
+    only_earlier = {"CIK52988-COMMON": sec("CIK52988-COMMON", "COMMON", j22), "BBG000BMFFQ0": secs["BBG000BMFFQ0"]}
+    assert superseded_placeholders(only_earlier) == set()
+    other_class = {"CIK52988-COMMON": secs["CIK52988-COMMON"], "BBG019C1BQR4": sec("BBG019C1BQR4", "CLASS B", j22)}
+    assert superseded_placeholders(other_class) == set()
+    other_issuer = {"CIK52988-COMMON": secs["CIK52988-COMMON"],
+                    "BBG019C1BQR4": sec("BBG019C1BQR4", "COMMON", j22, cik=1)}
+    assert superseded_placeholders(other_issuer) == set()
+    jec = _era("JEC", ("2019-12-31", "JACOBS SOLUTIONS INC"))
+    other_ticker = {"CIK52988-COMMON": secs["CIK52988-COMMON"], "BBG019C1BQR4": sec("BBG019C1BQR4", "COMMON", jec)}
+    assert superseded_placeholders(other_ticker) == set()
+
+
+def test_unconfirmed_eras_are_those_no_fails_row_shows_under_their_ticker():
+    """The fact `ticker_unconfirmed_review` reports, as a set of era keys: from
+    2004 on, no fails row under the era's ticker within 30 days of its span."""
+    from delist_detection.security_master import unconfirmed_eras
+    aptv12 = _era("APTV", ("2012-06-29", "APTIV PLC"), ("2013-12-31", "APTIV PLC"))
+    aptv17 = _era("APTV", ("2017-12-31", "APTIV PLC"))
+    old = _era("OLD", ("2001-06-29", "OLD CO"))
+    ftd = FtdIndex([FtdRow("2018-01-05", "G6095L109", "APTV", "APTIV PLC", 90.0),
+                    FtdRow("2012-07-02", "G6095L109", "DLPH", "DELPHI AUTOMOTIVE PLC", 25.0)])
+    assert unconfirmed_eras([aptv12, aptv17, old], ftd) == {aptv12.key}
+
+
+def test_only_an_unconfirmed_era_the_fails_data_covers_is_guarded():
+    """The guard acts on evidence of absence: an unconfirmed era is guarded only
+    when the loaded fails data has rows (of any symbol) in its window. With no
+    fails row at all then, the data says nothing about its ticker."""
+    from delist_detection.security_master import guarded_eras
+    aptv12 = _era("APTV", ("2012-06-29", "APTIV PLC"), ("2013-12-31", "APTIV PLC"))
+    live = _era("LIVE", ("2025-06-30", "LIVE CO"))
+    ftd = FtdIndex([FtdRow("2012-07-02", "G6095L109", "DLPH", "DELPHI AUTOMOTIVE PLC", 25.0)])
+    assert guarded_eras([aptv12, live], ftd) == {aptv12.key}
+    assert ftd.has_rows("2012-07-02", "2012-07-02") and not ftd.has_rows("2012-07-03", "2025-01-01")

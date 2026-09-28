@@ -235,6 +235,13 @@ CATALOG: dict[str, FlagInfo] = {
         "check", "SEC fails-to-deliver data never shows this ticker near the era's first and last observation "
                  "(the snapshot may carry a ticker adopted later).",
         f"Check which ticker the company traded under then and fix the observations, or {_ACCEPT}."),
+    "identity_detached": FlagInfo(
+        "check", "A ticker era that reached a security only by its ticker or a name search was taken back out of "
+                 "it: merged in, it would have carried that security's range for the ticker across another "
+                 "security's CUSIP- or pin-confirmed range (the reason names both). The era was resolved again "
+                 "without that pick.",
+        "Check which security traded under the ticker over the era's dates; pin its sec_id or cik on the "
+        f"observations if the new answer is wrong, or {_ACCEPT}."),
     "ticker_shared": FlagInfo(
         "check", "Two securities hold the same ticker on overlapping dates in ticker_history (the reason names "
                  "both ranges).",

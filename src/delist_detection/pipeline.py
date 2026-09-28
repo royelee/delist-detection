@@ -48,7 +48,8 @@ from .review_triage import Decision, ReviewItem, Triage, flag_name, is_blank, me
 from .sec_stats import SEC_STATS
 from .security_master import (
     EraResolution, FigiResolver, Issuer, Security, build_securities, candidate_cusips, cik_of, cusip_handoffs,
-    era_last_seen, issuers_by_era, observation_conflict_review, refine_eras, ticker_unconfirmed_review,
+    detached_review, era_last_seen, issuers_by_era, observation_conflict_review, refine_eras,
+    resolve_with_identity_guard, superseded_placeholders, ticker_unconfirmed_review, guarded_eras,
 )
 from .store import DelistingKey, write_tables
 from .successors import (
@@ -311,16 +312,21 @@ def _resolve_securities(ctx: _RunContext, eras: list[TickerEra], era_by_key: dic
     and a ticker or name hit whose name agrees with those same names (§8.3). An
     era with no pick of its own still joins a same-issuer, same-class sibling's
     composite through their shared-CUSIP/switch evidence (`cusip_handoffs`,
-    spec §17), when that sibling is confirmed by a pin or a CUSIP. Returns each
-    era's resolution, the securities, and the review items of eras that
-    resolved to no FIGI or rested on a degraded answer."""
+    spec §17), when that sibling is confirmed by a pin or a CUSIP. An era no
+    fails row shows under its ticker takes no ticker or name pick (a backfilled
+    ticker: it is placed on its issuer's line then, if there is exactly one),
+    and a weak era whose merge would cross another security's confirmed range
+    is taken back out (`resolve_with_identity_guard`). Returns each era's
+    resolution, the securities, and the review items of eras that resolved to
+    no FIGI, were taken back out, or rested on a degraded answer."""
     issuers = answers.issuers
     cusips = candidate_cusips(eras, ftd, issuers)
     handoffs = cusip_handoffs(eras, ftd)
-    resolutions = FigiResolver(ctx.clients.figi, log=ctx.log).resolve_many(eras, issuers=issuers, cusips=cusips,
-                                                                          handoffs=handoffs)
+    resolutions, detached = resolve_with_identity_guard(
+        FigiResolver(ctx.clients.figi, log=ctx.log), eras, issuers=issuers, cusips=cusips, handoffs=handoffs,
+        unconfirmed=guarded_eras(eras, ftd))
     securities = build_securities(resolutions, era_by_key, issuers)
-    review: list[ReviewItem] = []
+    review: list[ReviewItem] = detached_review(detached, era_by_key, resolutions, issuers)
     for key, res in resolutions.items():
         era = era_by_key[key]
         for flag in res.flags:
@@ -441,9 +447,12 @@ def _find_delistings(ctx: _RunContext, securities: dict[str, Security], sec_cusi
     mark = ctx.meter.start()
     # A placeholder has no FIGI to ask; EDGAR answers for its ticker, which a
     # later line of the issuer may hold today. Its own CUSIP failing only under
-    # a deleted symbol at the end says it is not the line listed today.
+    # a deleted symbol at the end says it is not the line listed today, and so
+    # does a later FIGI line of its issuer and class under its ticker
+    # (`superseded_placeholders`).
     retired = frozenset(s.sec_id for s in ordered
-                        if is_placeholder(s.sec_id) and ftd.symbol_deleted(sec_cusips[s.sec_id]))
+                        if is_placeholder(s.sec_id) and ftd.symbol_deleted(sec_cusips[s.sec_id])) \
+        | superseded_placeholders(securities)
     if ctx.sec_workers > 1:
         _warm_delisting_search(clients, ordered, listing, security_context, ctx.sec_workers, retired)
     for i, s in enumerate(ordered, 1):

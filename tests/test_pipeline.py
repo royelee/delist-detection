@@ -1,5 +1,6 @@
 import csv
 import json
+from dataclasses import replace
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -1742,7 +1743,15 @@ def test_backfilled_names_lose_no_observation_and_are_reviewed(fake_edgar, tmp_p
     they resolve on their own — to ACE's line (now Chubb Ltd, merging with CB's
     2016+ era) when the name search finds it, else to an issuer placeholder."""
     obs, rows = _eras_fixture({"CB", "AGN"})
-    fake_edgar.company_map["CB"] = {"cik_str": 896159, "ticker": "CB", "title": "Chubb Ltd"}
+    # Chubb Corp is its own issuer (CIK 20171), pinned as a caller would: the
+    # ticker-level override below names ACE/Chubb Ltd's CIK for every CB era.
+    obs = [replace(o, cik=20171) if o.name == "CHUBB CORP" else o for o in obs]
+    fake_edgar.company_map["CBCORP"] = {"cik_str": 20171, "ticker": "CBCORP", "title": "CHUBB CORP"}
+    fake_edgar.submissions_by_cik[20171] = []
+    # Without the name hit, nothing names ACE's line either: not even the issuer's
+    # EDGAR title (Chubb Ltd's would place it there through the EDGAR names).
+    fake_edgar.company_map["CB"] = {"cik_str": 896159, "ticker": "CB",
+                                    "title": "Chubb Ltd" if name_hit else "ACE INA HOLDINGS"}
     fake_edgar.company_map["AGN"] = {"cik_str": 1578845, "ticker": "AGN", "title": "Allergan plc"}
     fake_edgar.submissions_by_cik[896159] = []
     fake_edgar.submissions_by_cik[1578845] = []

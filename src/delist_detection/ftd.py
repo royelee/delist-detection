@@ -161,6 +161,7 @@ class FtdIndex:
         self._by_symbol: dict[str, list[FtdRow]] = defaultdict(list)
         self._by_cusip: dict[str, list[FtdRow]] = defaultdict(list)
         self._seen: set[FtdRow] = set()
+        self._dates: list[str] = []            # every row's date, sorted by `_sort`
         self._dirty = False
         # The disjoint [lo, hi] ranges already scanned *as that exact filter
         # key* (not merely a key that happened to show up under the other
@@ -217,6 +218,7 @@ class FtdIndex:
         self._seen.add(r)
         self._by_symbol[r.symbol].append(r)
         self._by_cusip[r.cusip].append(r)
+        self._dates.append(r.date)
         self._dirty = True
 
     @classmethod
@@ -283,6 +285,7 @@ class FtdIndex:
             for m in (self._by_symbol, self._by_cusip):
                 for v in m.values():
                     v.sort(key=lambda r: (r.date, r.cusip, r.symbol))
+            self._dates.sort()
             self._dirty = False
 
     @staticmethod
@@ -306,6 +309,14 @@ class FtdIndex:
     def by_cusip(self, cusip: str, lo: str | None = None, hi: str | None = None) -> list[FtdRow]:
         self._sort()
         return self._slice(self._by_cusip.get(cusip.upper(), []), lo, hi)
+
+    def has_rows(self, lo: str, hi: str) -> bool:
+        """Whether any row at all (of any symbol or CUSIP) is dated in [lo, hi]:
+        the loaded fails data says something about those days, so a symbol with
+        no row then did not fail then."""
+        self._sort()
+        i = bisect_left(self._dates, lo)
+        return i < len(self._dates) and self._dates[i] <= hi
 
     def scanned_from(self, symbol: str) -> date | None:
         """The first day of the earliest window scanned for `symbol` (None: never

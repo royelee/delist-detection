@@ -116,6 +116,20 @@ Cases: COHR, CZR (takeovers); PNFP (a 2026 holdco merger, to verify).
 - **J.** `CIK52988-COMMON` (placeholder, J 2012-06-29..open) re-covers the whole history of `BBG000BMFFQ0`
   (JEC→J, ..2022-08-29) and `BBG019C1BQR4` (2022-08-30..), all CIK 52988. Not yet traced; it probably comes from
   the placeholder path. Task 1 starts by tracing it.
+  - *Traced (Task 1).* The snapshots list Jacobs under J in 2012-2014 (era `J@2012-06-29`, "JACOBS ENGINEERING
+    GROUP INC"), while it traded as JEC; no fails row shows J then (`ticker_unconfirmed`, 2012-05-30..2014-07-30).
+    OpenFIGI's J answer is today's `BBG019C1BQR4`, which only the EDGAR names accept; `_contradicted` refuses it
+    (the JEC era of the same issuer and class is CUSIP-confirmed on `BBG000BMFFQ0` over those dates, pinned by
+    `test_edgar_names_do_not_move_an_era_off_the_line_its_issuers_cusip_confirms_for_those_dates`), so the era falls
+    to the placeholder `CIK52988-COMMON`. A placeholder has no FIGI to ask, so `listed_today` asks EDGAR, which lists
+    J for CIK 52988 today (the 2022 holding company's line): the placeholder reads as listed today, its range stays
+    open from 2012-06-29, and it overlaps both FIGI lines.
+  - *Fixed by two rules.* (i) A guarded unconfirmed era is placed ("backfill") on the one line its issuer and
+    class are confirmed on over its dates: `J@2012-06-29` joins `BBG000BMFFQ0`, whose fails rows under JEC make its
+    2012-2014 J observations `backfilled_ticker` (no `ticker_history` range). (ii) As a backstop,
+    `security_master.superseded_placeholders`: a placeholder is not the line listed today when a FIGI security of
+    its issuer and class, sharing one of its tickers, begins after its last observation (the pipeline adds it to
+    the `retired` set, so its range ends at its own last sighting).
 - **General rule that fails.** When an era cannot be confirmed by its own CUSIP, the TICKER and name tiers answer
   with today's holder of the ticker. The acceptance check only needs one shared core word. The one guard against
   this (`_contradicted`) is skipped for plain own-name picks, and it compares pre-merge era bounds, so the overlap
