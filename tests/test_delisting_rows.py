@@ -128,3 +128,10 @@ def test_blank_rows_and_blank_values_are_still_skipped(tmp_path):
 
 def test_an_override_file_error_is_a_value_error():
     assert issubclass(OverrideFileError, ValueError)
+
+
+def test_a_delisting_row_takes_the_ticker_successor_and_leaves_it_blank_by_default():
+    (e,) = build_delistings_table([_rec("BBG1", "2022-07-01")])
+    assert delisting_row(e)["ticker_successor_sec_id"] is None
+    row = delisting_row(e, ticker_successor_sec_id="BBG000BLW102")
+    assert row["ticker_successor_sec_id"] == "BBG000BLW102"

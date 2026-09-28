@@ -75,7 +75,8 @@ class DelistRecord:
     evidence: dict = field(default_factory=dict)
     sec_id: str | None = None                 # the security's US composite FIGI (or placeholder)
     delist_date: str | None = None            # Form 25 effective date (filing + 10 days) or fallback filing date
-    successor_sec_id: str | None = None       # for exchange_transfer: the security a holder keeps
+    successor_sec_id: str | None = None       # a continuation: the security a holder's shares became, one for one
+    ticker_successor_sec_id: str | None = None   # another security that took over this ticker (not a continuation)
 
     def to_dict(self) -> dict:
         d = asdict(self)

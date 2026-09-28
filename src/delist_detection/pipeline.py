@@ -807,6 +807,7 @@ def _delisting_rows(delistings: list[Delisting], closes: dict[DelistingKey, floa
             last_trade_date=e.last_trade.day.isoformat() if e.last_trade.day else None,
             last_trade_date_source=e.last_trade.source or None,
             successor_sec_id=e.record.successor_sec_id,
+            ticker_successor_sec_id=e.record.ticker_successor_sec_id,
             acquirer_sec_id=payouts.acquirer_ids.get(e.key),
             raw_payout_per_share=pr.value if pr else None, raw_payout_source=pr.source if pr else None,
             raw_payout_confidence=pr.confidence if pr else None,
