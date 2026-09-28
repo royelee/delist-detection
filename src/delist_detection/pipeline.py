@@ -1188,8 +1188,11 @@ def default_clients(index: ObservationIndex, *, cache_dir: Path, rename_map: dic
                     extract_llm: bool = False, llm_model: str | None = None, use_midas: bool = True,
                     use_halts: bool = True, as_of: date | None = None) -> Clients:
     """The production clients. Every client is dated `as_of` (default: today,
-    read once here), the resolver batches its memo writes, and the SEC limit is
-    made machine-wide (sec_limiter.use_machine_wide_limit)."""
+    read once here), the resolver batches its memo writes and finds its name
+    candidates in SEC's cik-lookup-data.txt (`cik_lookup.CikLookupClient`, loaded
+    on first use), and the SEC limit is made machine-wide
+    (sec_limiter.use_machine_wide_limit)."""
+    from .cik_lookup import CikLookupClient
     from .classifier import DelistClassifier
     from .edgar import EdgarClient
     from .sec_limiter import use_machine_wide_limit
@@ -1207,7 +1210,9 @@ def default_clients(index: ObservationIndex, *, cache_dir: Path, rename_map: dic
                               manual_overrides={k: v for k, v in (manual_overrides or {}).items() if v > 0},
                               cache_path=cache_dir / "ticker_resolution.json",
                               observed_names=index.name_on, cik_pins=index.cik_pin_on, today=as_of,
-                              batch_writes=True)
+                              batch_writes=True,
+                              # the name tier searches SEC's cik-lookup-data.txt, not the live company search
+                              name_index=CikLookupClient(cache_dir / "sec_data" / "cik_lookup").index)
     llm = None
     if extract_llm:
         from .llm_client import default_llm_client

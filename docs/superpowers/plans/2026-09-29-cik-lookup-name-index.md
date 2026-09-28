@@ -81,7 +81,8 @@ longer file.
 ### Wiring
 
 - `pipeline.default_clients` gives the resolver a lazy `CikLookupClient(cache_dir / "sec_data" / "cik_lookup")`.
-- `sec_stats.endpoint_of` counts the download as its own endpoint, `cik_lookup`.
+- The download goes through `sec_http.get_text`, so `run_manifest.json` counts it under `sec_data` like the other
+  SEC data files. (Planned as its own `cik_lookup` endpoint; dropped as unneeded, since a run sends at most one.)
 
 ## Tasks
 
@@ -107,7 +108,7 @@ Test first; keep the offline suite green; one commit per task.
   - a fund sharing a name prefix loses to the company whose Form 25 fits;
   - without an index, the live search is used unchanged;
   - an index that cannot load falls back to the live search.
-- **Task 4 — wiring.** `default_clients`, the `cik_lookup` endpoint in `sec_stats`, CLAUDE.md, the
+- **Task 4 — wiring.** `default_clients`, CLAUDE.md, the
   `docs/data-flow.md` resolver section, and the measured-speed note.
 - **Task 5 — live check.** Resolve the case-ticker eras and a sample of the full universe's eras twice, with the
   live search and with the index. Compare the CIKs and explain every difference. Then rerun

@@ -385,7 +385,22 @@ target rather than an acquirer.
    known exchange CIKs (Nasdaq 1354457, NYSE LLC 876661, Cboe BZX 1417835, …) and prefers hits
    whose display_name contains the literal `(TICKER)`.
 
-5. **The era's own `name` → EDGAR cgi-bin company search.** Uses the `name`
+5. **The era's own `name` → SEC's name index.** In a production run
+   (`pipeline.default_clients`) the candidates come from SEC's
+   `cik-lookup-data.txt` (`cik_lookup.py`): about a million `NAME:CIK:` lines,
+   every name each CIK filed under (MICHAEL KORS HOLDINGS LTD and CAPRI
+   HOLDINGS LTD are both CIK 1530721), funds and individuals included,
+   downloaded once and refreshed after 30 days under
+   `cache/sec_data/cik_lookup/`. Names are compared normalized (case,
+   punctuation, `&` and EDGAR's `/DE/` state tag ignored). Every spelling's
+   exact matches are the candidates; with none, every spelling's prefix
+   matches on whole words; each ranked by the words shared with the name, at
+   most 5 CIKs; the file has no dates, so the ranking and checks below carry
+   on without a date gap. No live company search is sent. A resolver built
+   without the index (the offline tests, the golden replay), or whose index
+   cannot be loaded, uses the live search:
+
+   **The era's own `name` → EDGAR cgi-bin company search.** Uses the `name`
    carried by the era's own observations (`pipeline.py` passes
    `resolve(..., name=era.name)`: a date lookup, `ObservationIndex.name_on`,
    can land on a neighbouring era's name when FTD rows of a shared CUSIP carry

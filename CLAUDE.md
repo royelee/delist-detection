@@ -28,7 +28,7 @@ editable install.
 
 ```bash
 pip install -e .                         # editable install (Python ≥3.10) — once per env
-pytest                                    # full suite (1395 tests, offline, no network)
+pytest                                    # full suite (1413 tests, offline, no network)
 pytest tests/test_payout_extractor.py -v  # one file
 pytest tests/test_payout_extractor.py::test_match_in_cash_family_altr -v   # one test
 
@@ -161,7 +161,12 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
 - `ticker_resolver.py` — `(ticker, as_of_date) → CIK`, 6 strategies in order of
   precision (caller's `cik` pin → manual override → `company_tickers.json` →
   EFTS Form-25/15 → observation-name company search → 8-K frequency rank),
-  each strict-validated. The pin and the observation name (from
+  each strict-validated. The name tier finds its candidates in SEC's
+  `cik-lookup-data.txt` (`cik_lookup.py`: `CikLookupClient`, cached 30 days
+  under `cache/sec_data/cik_lookup/`, and `CikNameIndex`, exact then
+  whole-word prefix matches; `name_index=`, wired by `default_clients`), not
+  in the live company search, which runs only without an index (the offline
+  tests, the golden replay) or when it cannot load. The pin and the observation name (from
   `ObservationIndex.cik_pin_on`/`.name_on`, wired in by `pipeline.py`) replace
   the old `--cik-map`/`--names` CLI files; the pin still beats every other
   tier and is never written to the on-disk resolver cache. The pipeline looks
@@ -388,11 +393,13 @@ conflate them.
   rerun whose caches are already warm (a warm pass redoes each stage's CPU
   work but sends no request, so 4 workers is about 50% slower than 1 on a
   fully warm rerun); the CLI default stays 4. SEC's company-name search
-  (`cgi-bin/browse-edgar`, the resolver's fallback tier) is 89% of cold
+  (`cgi-bin/browse-edgar`, the resolver's fallback tier) was 89% of cold
   issuer-resolution time and can slow to ~10 s/request after about 1,500
-  searches in under an hour, recovering after ~20 idle minutes — every such
-  answer is a normal 200, so nothing in the code notices the slowdown; it only
-  costs time. Peak memory is 1.8–4.2 GB (mostly data, likely the fails-to-deliver panel; not profiled);
+  searches in under an hour, recovering after ~20 idle minutes; on 2026-09-28
+  it answered HTTP 429 (a run-stopping `EdgarBlocked`) three times in a cold
+  full run, at 8, 2 and 1 workers. That is why the name tier now reads SEC's
+  `cik-lookup-data.txt` (one ~38 MB download; building the index takes about
+  9 s and ~440 MB) instead of searching. Peak memory is 1.8–4.2 GB (mostly data, likely the fails-to-deliver panel; not profiled);
   threads add at most about 37 MB (measured). SEC does not keep full-text-search hit order
   stable between two fetches of the same query: the same cache always gives
   the same output, but a refetch can reorder tied hits (see `docs/data-flow.md`).
