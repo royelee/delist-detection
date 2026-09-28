@@ -19,13 +19,21 @@ built, so a row it adds clips the predecessor's range like any other delisting.
 """
 from __future__ import annotations
 
+import re
 from collections import defaultdict
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 
+from .classifier import DelistRecord
+from .crsp_codes import CrspBucket
+from .delistings import Delisting
 from .ftd import FtdIndex
 from .history import Sighting
+from .last_trade import LastTrade
+from .review_triage import ReviewItem
+from .security_master import Security
+from .store import DelistingKey
 from .successors import successor_query
 
 OVERLAP_DAYS = 10         # B's first sighting under the ticker may precede A's last by this much (CZR: 8)
@@ -149,3 +157,192 @@ def decide_handoff(pair: HandoffPair, *, filing: tuple[str, str, str] | None, sa
     if existed:
         return HandoffDecision(pair, "takeover", "timing", False)
     return None
+
+
+CONTINUATION_CODE = 304          # the classifier's exchange-transfer code (`_rename_or_transfer`)
+FORM25_NEAR_DAYS = 30            # an ambiguous Form 25 of A this close to its last sighting dates the new row
+CONTINUATION_FLAG = "handoff_continuation"
+_UNMATCHED_FORM25 = re.compile(r"^(\S+) (\S+) \(.*\): ambiguous class$")
+# A's review rows a continuation explains: it did end, by the handoff.
+_RESOLVED_FLAGS = ("ended_without_delisting",)
+
+
+@dataclass
+class HandoffOutcome:
+    """`apply_handoffs`' answer: the delisting rows it adds, the review items
+    (the input's, less those a continuation resolves, plus its own), the pairs
+    whose `ticker_shared` rows a continuation resolves (`drop_resolved_shared`),
+    and the counts for run_manifest.json."""
+    added: list[Delisting]
+    review: list[ReviewItem]
+    resolved_pairs: set[tuple[str, str, str]]
+    counts: dict[str, int]
+
+
+def _day_of(d: Delisting) -> date:
+    return d.last_trade.day or date.fromisoformat(d.delist_date)
+
+
+def _near(delistings: Sequence[Delisting], pair: HandoffPair, sec_id: str, days: int) -> Delisting | None:
+    """`sec_id`'s delisting nearest the handoff: its last trade (else its
+    delisting date) within `days` before A's last sighting and `days` after the
+    later of A's last and B's first sighting."""
+    lo = date.fromisoformat(pair.a_last) - timedelta(days=days)
+    hi = date.fromisoformat(max(pair.a_last, pair.b_first)) + timedelta(days=days)
+    near = [d for d in delistings if d.sec_id == sec_id and lo <= _day_of(d) <= hi]
+    a = date.fromisoformat(pair.a_last)
+    return min(near, key=lambda d: (abs((_day_of(d) - a).days), d.delist_date), default=None)
+
+
+def _unmatched_form25(review: Sequence[ReviewItem], pair: HandoffPair) -> ReviewItem | None:
+    """A's `form25_unmatched` ambiguous-class item within `FORM25_NEAR_DAYS` of
+    its last sighting, nearest first."""
+    a = date.fromisoformat(pair.a_last)
+    items = [r for r in review if r.sec_id == pair.a and r.flag == "form25_unmatched" and r.delist_date
+             and _UNMATCHED_FORM25.match(r.reason)
+             and abs((date.fromisoformat(r.delist_date) - a).days) <= FORM25_NEAR_DAYS]
+    return min(items, key=lambda r: (abs((date.fromisoformat(r.delist_date) - a).days), r.delist_date), default=None)
+
+
+def _continuation_reason(decision: HandoffDecision) -> str:
+    p = decision.pair
+    return (f"Continuation ({decision.evidence}): {p.a} last traded as {p.ticker} on {p.a_last} and {p.b} "
+            f"took the ticker from {p.b_first}; holders' shares became {p.b}'s")
+
+
+def _continuation_row(decision: HandoffDecision, sec: Security, form25: ReviewItem | None) -> Delisting | None:
+    """The delisting row a continuation writes for A, which has none near it."""
+    p = decision.pair
+    if sec.issuer_cik is None:
+        return None
+    evidence: dict = {"flags": [CONTINUATION_FLAG], "name": sec.name,
+                      "handoff": {"ticker": p.ticker, "successor": p.b, "evidence": decision.evidence,
+                                  "a_last": p.a_last, "b_first": p.b_first}}
+    if form25 is not None:
+        form, accession = _UNMATCHED_FORM25.match(form25.reason).groups()
+        delist_date = form25.delist_date
+        filed = (date.fromisoformat(delist_date) - timedelta(days=10)).isoformat()   # form25.effective_date
+        evidence["delist_filing"] = {"form": form, "filing_date": filed, "accession": accession}
+    else:
+        delist_date = (date.fromisoformat(p.a_last) + timedelta(days=1)).isoformat()
+    rec = DelistRecord(p.ticker, sec.issuer_cik, p.a_last, CONTINUATION_CODE, CrspBucket.EXCHANGE_TRANSFER,
+                       "high" if decision.by_filing else "medium", _continuation_reason(decision), evidence,
+                       sec_id=sec.sec_id, delist_date=delist_date, successor_sec_id=p.b)
+    return Delisting(sec.sec_id, sec.issuer_cik, p.ticker, delist_date, rec,
+                     LastTrade(date.fromisoformat(p.a_last), "last_sighting", ()), None, None, "")
+
+
+def _continue(d: Delisting, decision: HandoffDecision) -> None:
+    """Rewrite A's row `d` to the continuation's values."""
+    d.record.bucket, d.record.crsp_code = CrspBucket.EXCHANGE_TRANSFER, CONTINUATION_CODE
+    d.record.confidence = "high" if decision.by_filing else "medium"
+    d.record.reason = _continuation_reason(decision)
+    d.set_successor(decision.pair.b)
+    if CONTINUATION_FLAG not in d.flags:
+        d.add_flag(CONTINUATION_FLAG)
+
+
+def apply_handoffs(decisions: Sequence[HandoffDecision], delistings: Sequence[Delisting],
+                   securities: Mapping[str, Security], review: Sequence[ReviewItem], *,
+                   reconciled: Collection[DelistingKey] = ()) -> HandoffOutcome:
+    """Act on each decided pair (A hands the ticker to B).
+
+    A continuation:
+    - with no delisting of A near the handoff (`_near`, `CONTINUATION_DAYS`),
+      writes one: dated by A's ambiguous-class Form 25 within
+      `FORM25_NEAR_DAYS` of A's last sighting (its effective date, as every
+      Form 25 row), else the day after that sighting; last trade on A's last
+      sighting; an `exchange_transfer` (code 304, so a zero return) whose
+      successor is B; confidence high on a filing, medium on timing; flagged
+      `handoff_continuation`, the evidence in its reason;
+    - with one, sets its successor to B, rewriting an `unknown` or a merger
+      row to the continuation's values -- except a merger whose payout was
+      reconciled (`reconciled`, by delisting key) on timing evidence alone,
+      which stands, with a `handoff_conflict` item; a rewritten merger keeps its
+      old bucket in a `handoff_rebucketed` item. A row that ended A in
+      another way (a liquidation, a compliance failure, an expiration), or that
+      already names another successor or itself, stands too, with a
+      `handoff_conflict` item.
+    A continuation that wrote or kept a row resolves A's `ended_without_delisting`
+    item, the ambiguous-class Form 25 items of A and B it rests on, and the
+    pair's `ticker_shared` rows (`resolved_pairs`).
+
+    A takeover sets `ticker_successor_sec_id` to B on A's delisting nearest the
+    handoff (within `TAKEOVER_DAYS`), else writes a
+    `handoff_takeover_no_delisting` item."""
+    added: list[Delisting] = []
+    own: list[ReviewItem] = []
+    drop: set[int] = set()
+    resolved: set[tuple[str, str, str]] = set()
+    counts = {"handoffs": len(decisions), "continuations_by_filing": 0, "continuations_by_timing": 0,
+              "takeovers": 0, "conflicts": 0, "rows_added": 0}
+    rows = list(delistings)
+    for decision in decisions:
+        p = decision.pair
+        if decision.kind == "takeover":
+            counts["takeovers"] += 1
+            d = _near(rows, p, p.a, TAKEOVER_DAYS)
+            if d is not None:
+                d.record.ticker_successor_sec_id = p.b
+            else:
+                sec = securities.get(p.a)
+                own.append(ReviewItem(p.a, p.ticker, sec.issuer_cik if sec else None, "handoff_takeover_no_delisting",
+                                      f"{p.b} took over {p.ticker} from {p.b_first} ({p.a} last seen under it "
+                                      f"{p.a_last}), but {p.a} has no delisting to record it on",
+                                      last_seen=p.a_last))
+            continue
+        counts["continuations_by_filing" if decision.by_filing else "continuations_by_timing"] += 1
+        d = _near(rows, p, p.a, CONTINUATION_DAYS)
+        form25 = _unmatched_form25(review, p)
+        if d is None:
+            d = _continuation_row(decision, securities[p.a], form25)
+            if d is None:
+                continue
+            added.append(d)
+            rows.append(d)
+            counts["rows_added"] += 1
+        else:
+            bucket = d.record.bucket
+            conflict = None
+            if d.record.successor_sec_id not in (None, "", p.b):
+                conflict = f"its row already names {d.record.successor_sec_id} as its successor"
+            elif bucket is CrspBucket.MERGER and not decision.by_filing and d.key in reconciled:
+                conflict = "its merger row has a reconciled payout and only timing says otherwise"
+            elif bucket not in (CrspBucket.MERGER, CrspBucket.EXCHANGE_TRANSFER, CrspBucket.UNKNOWN):
+                conflict = f"its row is a {bucket.value}"
+            if conflict is not None:
+                counts["conflicts"] += 1
+                own.append(ReviewItem(p.a, d.ticker, d.cik, "handoff_conflict",
+                                      f"{p.b} continues {p.a} under {p.ticker} ({decision.evidence}), but "
+                                      f"{conflict}; the row stands", delist_date=d.delist_date))
+                continue
+            if bucket is not CrspBucket.EXCHANGE_TRANSFER:
+                if bucket is CrspBucket.MERGER:
+                    own.append(ReviewItem(p.a, d.ticker, d.cik, "handoff_rebucketed",
+                                          f"was {bucket.value} (CRSP {d.record.crsp_code}: {d.record.reason}); "
+                                          f"{p.b} continues it under {p.ticker} ({decision.evidence})",
+                                          delist_date=d.delist_date))
+                _continue(d, decision)
+            else:
+                d.set_successor(p.b)
+                if CONTINUATION_FLAG not in d.flags:
+                    d.add_flag(CONTINUATION_FLAG)
+        resolved.add((_bare(p.ticker), p.a, p.b))
+        accession = _UNMATCHED_FORM25.match(form25.reason).group(2) if form25 is not None else None
+        for i, r in enumerate(review):
+            if r.sec_id == p.a and r.flag in _RESOLVED_FLAGS:
+                drop.add(i)
+            elif (accession and r.flag == "form25_unmatched" and r.sec_id in (p.a, p.b)
+                  and accession in r.reason.split()):
+                drop.add(i)
+    kept = [r for i, r in enumerate(review) if i not in drop]
+    return HandoffOutcome(added, kept + own, resolved, counts)
+
+
+def drop_resolved_shared(items: Sequence[ReviewItem], resolved: Collection[tuple[str, str, str]]) -> list[ReviewItem]:
+    """`items` less the `ticker_shared` rows (`history.ticker_range_review`) that
+    name both securities of a continuation the pass resolved."""
+    def solved(r: ReviewItem) -> bool:
+        return r.flag == "ticker_shared" and any(
+            _bare(r.ticker) == t and f"({a})" in r.reason and f"({b})" in r.reason for t, a, b in resolved)
+    return [r for r in items if not solved(r)]
