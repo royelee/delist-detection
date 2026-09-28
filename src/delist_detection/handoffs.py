@@ -22,7 +22,7 @@ from __future__ import annotations
 import re
 from collections import defaultdict
 from collections.abc import Callable, Collection, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, timedelta
 
 from .classifier import DelistRecord
@@ -238,6 +238,13 @@ def _unmatched_form25(review: Sequence[ReviewItem], pair: HandoffPair) -> Review
     return min(items, key=lambda r: (abs((date.fromisoformat(r.delist_date) - a).days), r.delist_date), default=None)
 
 
+def _last_day(pair: HandoffPair) -> date:
+    """A's last trading day in a continuation: its last sighting under the
+    ticker, but never on or after B's first (a fails row is dated the day after
+    the close it carries, so the two can meet: ST 2018, AON 2020)."""
+    return min(date.fromisoformat(pair.a_last), date.fromisoformat(pair.b_first) - timedelta(days=1))
+
+
 def _continuation_reason(decision: HandoffDecision) -> str:
     p = decision.pair
     return (f"Continuation ({decision.evidence}): {p.a} last traded as {p.ticker} on {p.a_last} and {p.b} "
@@ -259,11 +266,12 @@ def _continuation_row(decision: HandoffDecision, sec: Security, form25: ReviewIt
         evidence["delist_filing"] = {"form": form, "filing_date": filed, "accession": accession}
     else:
         delist_date = (date.fromisoformat(p.a_last) + timedelta(days=1)).isoformat()
-    rec = DelistRecord(p.ticker, sec.issuer_cik, p.a_last, CONTINUATION_CODE, CrspBucket.EXCHANGE_TRANSFER,
+    last = _last_day(p)
+    rec = DelistRecord(p.ticker, sec.issuer_cik, last.isoformat(), CONTINUATION_CODE, CrspBucket.EXCHANGE_TRANSFER,
                        "high" if decision.by_filing else "medium", _continuation_reason(decision), evidence,
                        sec_id=sec.sec_id, delist_date=delist_date, successor_sec_id=p.b)
     return Delisting(sec.sec_id, sec.issuer_cik, p.ticker, delist_date, rec,
-                     LastTrade(date.fromisoformat(p.a_last), "last_sighting", ()), None, None, "")
+                     LastTrade(last, "last_sighting", ()), None, None, "")
 
 
 def _continue(d: Delisting, decision: HandoffDecision) -> None:
@@ -286,7 +294,7 @@ def apply_handoffs(decisions: Sequence[HandoffDecision], delistings: Sequence[De
       writes one: dated by A's ambiguous-class Form 25 within
       `FORM25_NEAR_DAYS` of A's last sighting (its effective date, as every
       Form 25 row), else the day after that sighting; last trade on A's last
-      sighting; an `exchange_transfer` (code 304, so a zero return) whose
+      sighting, but before B's first (`_last_day`); an `exchange_transfer` (code 304, so a zero return) whose
       successor is B; confidence high on a filing, medium on timing; flagged
       `handoff_continuation`, the evidence in its reason;
     - with one, sets its successor to B, rewriting an `unknown` or a merger
@@ -297,7 +305,8 @@ def apply_handoffs(decisions: Sequence[HandoffDecision], delistings: Sequence[De
       another way (a liquidation, a compliance failure, an expiration), or that
       already names another successor or itself, stands too, with a
       `handoff_conflict` item.
-    A continuation that wrote or kept a row resolves A's `ended_without_delisting`
+    A kept row with no last-trade day takes `_last_day`, so A's range ends
+    before B's begins. A continuation that wrote or kept a row resolves A's `ended_without_delisting`
     item, the ambiguous-class Form 25 items of A and B it rests on, and the
     pair's `ticker_shared` rows (`resolved_pairs`).
 
@@ -362,6 +371,9 @@ def apply_handoffs(decisions: Sequence[HandoffDecision], delistings: Sequence[De
                 d.record.reason = f"{d.record.reason}; successor by handoff ({decision.evidence})"
                 if CONTINUATION_FLAG not in d.flags:
                     d.add_flag(CONTINUATION_FLAG)
+            if d.last_trade.day is None:            # A's range ends where B's begins (PNFP 2026)
+                d.last_trade = replace(d.last_trade, day=_last_day(p), source="last_sighting")
+                d.record.evidence["flags"] = [f for f in d.flags if f != "no_last_trade_date"]
             d.record.evidence["handoff"] = {"ticker": p.ticker, "successor": p.b, "evidence": decision.evidence,
                                             "a_last": p.a_last, "b_first": p.b_first}
         resolved.add((_bare(p.ticker), p.a, p.b))

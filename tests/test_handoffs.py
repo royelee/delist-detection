@@ -289,6 +289,22 @@ def test_a_continuation_by_timing_with_no_form25_is_dated_the_day_after_and_is_m
     assert out.counts["continuations_by_timing"] == 1
 
 
+def test_the_old_line_ends_before_the_new_one_begins():
+    """ST 2018: both lines sighted on 2018-03-28 (a fails row carries the day
+    before's close): the old line's last trade is 2018-03-27. A kept row with
+    no last-trade day (PNFP 2026) takes the same day."""
+    st = HandoffPair("ST", "OLD", "NEW", "2018-03-28", "2018-03-28", "2018-03-28", "2018-03-28")
+    (d,) = apply_handoffs([HandoffDecision(st, "continuation", "timing:cik", False)], [],
+                          {"OLD": _sec("OLD"), "NEW": _sec("NEW")}, []).added
+    assert d.last_trade.day == date(2018, 3, 27) and d.delist_date == "2018-03-29"
+    row = _delisting("OLD", "2026-01-12", CrspBucket.MERGER, "2026-01-02", flags=("no_last_trade_date",))
+    row.last_trade = LastTrade(None, "", ("no_last_trade_date",))
+    p = HandoffPair("PNFP", "OLD", "NEW", "2026-01-12", "2026-01-05", "2026-01-05", "2026-01-12")
+    apply_handoffs([HandoffDecision(p, "continuation", "8-K12B X", True)], [row],
+                   {"OLD": _sec("OLD"), "NEW": _sec("NEW")}, [])
+    assert row.last_trade.day == date(2026, 1, 4) and "no_last_trade_date" not in row.flags
+
+
 def test_an_existing_exchange_transfer_near_the_handoff_takes_the_successor():
     """ITT 2016: the old line's fallback exchange_transfer row (successor_unknown)."""
     row = _delisting("OLD", "2016-05-17", CrspBucket.EXCHANGE_TRANSFER, "2016-05-17", code=304,
