@@ -64,7 +64,8 @@ def test_every_catalog_entry_is_complete():
 
 def test_severities_follow_the_rulings():
     info = {"no_figi", "resolved_by_current_ticker_map", "resolved_by_cik_map", "resolved_by_manual_override",
-            "ftd_close_prior", "ftd_close_lagged", "acquirer_close_lagged", "last_trade_date_unconfirmed"}
+            "ftd_close_prior", "ftd_close_lagged", "acquirer_close_lagged", "last_trade_date_unconfirmed",
+            "handoff_continuation"}
     unacceptable = {"error", "resolution_degraded", "review_decision_unmatched"}
     assert {n for n, i in CATALOG.items() if i.severity == "info"} == info
     assert {n for n, i in CATALOG.items() if not i.acceptable} == unacceptable
@@ -76,8 +77,9 @@ def test_severities_follow_the_rulings():
                  "delist_date_approx", "successor_unknown", "no_last_close", "no_last_trade_date",
                  "form25_unclassified", "form25_unmatched", "form25_unreadable", "listing_status_unknown",
                  "observed_after_delisting", "member_name_mismatch",
-                 "ticker_unconfirmed", "ticker_shared", "ticker_range_overlap", "observation_conflict",
-                 "issuer_inferred", "issuer_cusip_disagrees"):
+                 "ticker_unconfirmed", "identity_detached", "ticker_shared", "ticker_range_overlap", "observation_conflict",
+                 "issuer_inferred", "issuer_cusip_disagrees",
+                 "handoff_rebucketed", "handoff_conflict", "handoff_takeover_no_delisting"):
         assert CATALOG[name].severity == "check", name
 
 

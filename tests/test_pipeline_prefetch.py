@@ -137,6 +137,10 @@ def test_default_clients_share_one_run_date_and_a_machine_wide_limit(tmp_path, m
     assert c.as_of == c.edgar.today == c.resolver.today == c.classifier.today == c.halts.today == date(2026, 9, 23)
     assert c.resolver.batch_writes is True
     assert sec_limiter.SEC_LIMITER.gate is not None and sec_limiter.SEC_LIMITER.gate.path == tmp_path / "sec_rate.lock"
+    # the resolver's name tier reads SEC's cik-lookup-data.txt under the cache, loaded on first use
+    loader = c.resolver._name_index_source
+    assert loader.__self__.path == tmp_path / "cache" / "sec_data" / "cik_lookup" / "cik-lookup-data.txt"
+    assert c.resolver._name_index is None
 
 
 class _Midas:

@@ -15,7 +15,7 @@ from dataclasses import dataclass, field, replace
 from datetime import date, timedelta
 
 from .figi_resolution import (
-    FigiCandidate, accept, bloomberg_ticker, filter_query, placeholder_id, security_kind,
+    FigiCandidate, accept, bloomberg_ticker, filter_query, is_placeholder, placeholder_id, security_kind,
     share_class_from_name, us_candidates,
 )
 from .ftd import FTD_START, FtdIndex, FtdRow, is_deleted_symbol
@@ -383,7 +383,11 @@ def _contradicted(era: TickerEra, composite: str, eras: Sequence[TickerEra], iss
     today's JACOBS SOLUTIONS line, a new composite since the 2022 reorganization.
     So the candidate is ruled out when an era of another known issuer is
     confirmed on it, or when an era of the same issuer and share class is
-    confirmed on another composite over overlapping dates."""
+    confirmed on another composite over overlapping dates. A pick the era's own
+    observed name accepts is not checked here: a line keeps its composite
+    through a change of issuer (Merck's 2009 reverse merger, Medtronic's and
+    Eaton's redomiciles), and an era's issuer CIK can be today's holder's (the
+    2008 Merck era resolves to CIK 310158, Schering-Plough's then)."""
     cik, cls = cik_of(issuers, era.key), share_class_from_name(era.name)
     for other in eras:
         comp = confirmed.get(other.key)
@@ -460,7 +464,8 @@ class FigiResolver:
         self.log = log or (lambda msg: None)
 
     def resolve_many(self, eras: Sequence[TickerEra], *, issuers: Mapping[str, Issuer],
-                     cusips: Mapping[str, list[str]], handoffs: Sequence[Handoff] = ()) -> dict[str, EraResolution]:
+                     cusips: Mapping[str, list[str]], handoffs: Sequence[Handoff] = (),
+                     unconfirmed: Collection[str] = (), barred: Collection[str] = ()) -> dict[str, EraResolution]:
         """Each era's FIGI (spec §8.3): a `sec_id` pin; else the first of its
         CUSIPs (`cusips`, at most `MAX_CUSIPS`) that OpenFIGI maps to one US
         composite; else its ticker, then a name search, where a candidate is
@@ -478,7 +483,18 @@ class FigiResolver:
         rule it out there too; if it does, or if the group's picks disagree on
         the composite, the whole group is withdrawn to the placeholder
         together. Else the issuer's placeholder, or unresolved with no
-        issuer."""
+        issuer.
+
+        The ticker and name tiers answer with whoever holds the ticker or name
+        today. They are not asked for an era of `barred` (a weak pick
+        `crossing_weak_eras` took back out), nor for an era of `unconfirmed` (no
+        fails row shows its ticker then: `unconfirmed_eras`) that an era of its
+        issuer and class, confirmed by a pin or a CUSIP over overlapping dates on
+        exactly one composite, places: that is a ticker a snapshot backfilled,
+        and it is placed ("backfill") on that composite. An unconfirmed era with
+        no such line keeps the ticker and name tiers: a stale snapshot's dead
+        company (Dow Jones in 2008) finds its own line there, and a later
+        holder's pick is caught by `crossing_weak_eras`."""
         eras_by_key(eras)                                # every era is keyed by era.key below: refuse duplicates
         out: dict[str, EraResolution] = {}
         jobs: list[dict] = []
@@ -510,6 +526,18 @@ class FigiResolver:
             if c:
                 confirmed[era.key] = c.composite
 
+        def group(era: TickerEra) -> tuple[int | None, str]:
+            return cik_of(issuers, era.key), share_class_from_name(era.name)
+
+        def backfill_line(era: TickerEra) -> str | None:
+            """The one composite an era of the era's issuer and class is confirmed
+            on over its dates, if there is exactly one."""
+            if era.key not in issuers:
+                return None
+            lines = {confirmed[o.key] for o in eras if o.key in confirmed and o.key != era.key
+                     and group(o) == group(era) and o.first <= era.last and era.first <= o.last}
+            return next(iter(lines)) if len(lines) == 1 else None
+
         def named(era: TickerEra, cands: list[FigiCandidate]) -> tuple[FigiCandidate | None, bool]:
             """The accepted candidate, and whether only the EDGAR names accepted it."""
             c = accept(cands, ticker=era.ticker, names=era.names, via_cusip=False)
@@ -531,6 +559,8 @@ class FigiResolver:
             if c:
                 picks[era.key] = ("cusip", c.composite, c, False)
                 continue
+            if era.key in barred or (era.key in unconfirmed and backfill_line(era) is not None):
+                continue                      # the ticker and name tiers answer with today's holder
             c, edgar_only = named(era, us_candidates(answers[plan[era.key][2]].get("data") or []))
             if c:
                 picks[era.key] = ("ticker", c.composite, c, edgar_only)
@@ -555,8 +585,18 @@ class FigiResolver:
             picks[key] = ("handoff", composite, cand, True)
             self.log(f"FIGI handoff: {key} joins {composite}, the line {anchor} is confirmed on ({_link_text(h)})")
 
-        def group(era: TickerEra) -> tuple[int | None, str]:
-            return cik_of(issuers, era.key), share_class_from_name(era.name)
+        # A backfilled ticker (an unconfirmed era: Jacobs listed under J in
+        # 2012-14, when it traded as JEC) is the line its issuer and class traded
+        # on then.
+        for era in eras:
+            if era.key not in unconfirmed or era.key in out or era.key in picks:
+                continue
+            composite = backfill_line(era)
+            if composite is not None:
+                anchor = next(o.key for o in eras if confirmed.get(o.key) == composite)
+                picks[era.key] = ("backfill", composite, picks[anchor][2] if anchor in picks else None, False)
+                self.log(f"FIGI backfill: {era.key} joins {composite}, the line its issuer and class traded on "
+                         f"over its dates (no fails row under {era.ticker} then)")
 
         # An issuer's placeholder holds its eras of one class that no FIGI confirms.
         # An era that only the EDGAR names or a CUSIP handoff take off it would leave
@@ -633,8 +673,105 @@ class FigiResolver:
 
 # How strongly an era's resolution confirms its FIGI, strongest first: the
 # caller's pin, a CUSIP, the ticker, a name search, a CUSIP handoff to another
-# era's line, the issuer's placeholder.
-SOURCE_STRENGTH = ("pin", "cusip", "ticker", "name", "handoff", "placeholder")
+# era's line, a backfilled ticker placed on its issuer's line then, the
+# issuer's placeholder.
+SOURCE_STRENGTH = ("pin", "cusip", "ticker", "name", "handoff", "backfill", "placeholder")
+CONFIRMED_SOURCES = ("pin", "cusip")          # an era whose own evidence names its line
+WEAK_SOURCES = ("ticker", "name")             # an era the ticker or a name answered for, with today's holder
+
+
+def crossing_weak_eras(resolutions: Mapping[str, EraResolution],
+                       eras: Mapping[str, TickerEra]) -> dict[str, tuple[str, str]]:
+    """The weak eras (`WEAK_SOURCES`) whose merge into their security would carry
+    its range for their ticker across another security's confirmed era of that
+    ticker (`CONFIRMED_SOURCES`): era key -> (its sec_id, the crossed sec_id).
+
+    ITT@2008-01-16 reached today's ITT line only by ticker; merged into it, that
+    line's ITT range would run 2008..today, across the 2011 line's CUSIP-confirmed
+    2012-2015 era. A weak era crosses when another security's confirmed span of
+    the ticker lies wholly between it and another era of its own security under
+    that ticker. A weak era that merely shares dates with another security's era (a
+    backfilled name, `observation_conflict_review`) crosses nothing: the
+    confirmed span is the other security's, over all its confirmed eras of the
+    ticker (a refined era can be a single observation)."""
+    by_ticker: dict[str, list[tuple[TickerEra, EraResolution]]] = defaultdict(list)
+    for key, res in resolutions.items():
+        if res.sec_id is not None:
+            by_ticker[eras[key].ticker].append((eras[key], res))
+    out: dict[str, tuple[str, str]] = {}
+    for items in by_ticker.values():
+        spans: dict[str, tuple[str, str]] = {}           # sec_id -> its confirmed eras' span under the ticker
+        for e, r in items:
+            if r.source in CONFIRMED_SOURCES:
+                lo, hi = spans.get(r.sec_id, (e.first, e.last))
+                spans[r.sec_id] = (min(lo, e.first), max(hi, e.last))
+        for era, res in items:
+            if res.source not in WEAK_SOURCES:
+                continue
+            own = [e for e, r in items if r.sec_id == res.sec_id and e.key != era.key]
+            for other, (first, last) in sorted(spans.items()):
+                if other != res.sec_id and any((era.last < first and last < e.first)
+                                               or (e.last < first and last < era.first) for e in own):
+                    out[era.key] = (res.sec_id, other)
+                    break
+    return out
+
+
+def resolve_with_identity_guard(resolver: "FigiResolver", eras: Sequence[TickerEra], *,
+                                issuers: Mapping[str, Issuer], cusips: Mapping[str, list[str]],
+                                handoffs: Sequence[Handoff] = (), unconfirmed: Collection[str] = ()
+                                ) -> tuple[dict[str, EraResolution], dict[str, tuple[str, str]]]:
+    """`resolver.resolve_many`, then each weak era whose merge would cross another
+    security's confirmed range (`crossing_weak_eras`) taken back out and resolved
+    again without its ticker or name pick, until none crosses. Returns the
+    resolutions and the detached eras (era key -> (the sec_id its weak pick gave,
+    the sec_id it crossed)), for the review."""
+    by_key = eras_by_key(eras)
+    detached: dict[str, tuple[str, str]] = {}
+    while True:
+        res = resolver.resolve_many(eras, issuers=issuers, cusips=cusips, handoffs=handoffs,
+                                    unconfirmed=unconfirmed, barred=set(detached))
+        new = {k: v for k, v in crossing_weak_eras(res, by_key).items() if k not in detached}
+        if not new:
+            return res, detached
+        for k, (sid, crossed) in new.items():
+            resolver.log(f"FIGI {res[k].source} pick withdrawn: {k} would carry {sid}'s {by_key[k].ticker} range "
+                         f"across {crossed}'s confirmed one")
+        detached.update(new)
+
+
+def detached_review(detached: Mapping[str, tuple[str, str]], eras: Mapping[str, TickerEra],
+                    resolutions: Mapping[str, EraResolution], issuers: Mapping[str, Issuer]) -> list[ReviewItem]:
+    """One `identity_detached` review row per era `resolve_with_identity_guard`
+    took off the security its weak pick gave it."""
+    out: list[ReviewItem] = []
+    for key, (sid, crossed) in sorted(detached.items()):
+        e = eras[key]
+        now = resolutions[key].sec_id or "unresolved"
+        out.append(ReviewItem(resolutions[key].sec_id or "", e.ticker, cik_of(issuers, key), "identity_detached",
+                              f"{key} {e.name or ''}: its ticker or name pick {sid} would carry that security's {e.ticker} range across {crossed}'s "
+                              f"confirmed one; resolved again as {now}", last_seen=e.last))
+    return out
+
+
+def superseded_placeholders(securities: Mapping[str, Security]) -> set[str]:
+    """The placeholder securities that are not the line listed today under their
+    ticker: a FIGI security of the same issuer and class, sharing one of their
+    tickers, begins after their last observation. EDGAR's ticker list names
+    the issuer's current line (J for CIK 52988 is the 2022 holding company's),
+    which would otherwise keep an old placeholder open over every later line."""
+    out: set[str] = set()
+    for p in securities.values():
+        if not is_placeholder(p.sec_id) or p.issuer_cik is None or not p.eras:
+            continue
+        tickers, last = {e.ticker for e in p.eras}, max(e.last for e in p.eras)
+        for s in securities.values():
+            if (not is_placeholder(s.sec_id) and s.eras and s.issuer_cik == p.issuer_cik
+                    and s.share_class == p.share_class and tickers & {e.ticker for e in s.eras}
+                    and min(e.first for e in s.eras) > last):
+                out.add(p.sec_id)
+                break
+    return out
 
 
 def _share_class(res: EraResolution, era: TickerEra) -> str:
@@ -684,21 +821,38 @@ def build_securities(resolutions: Mapping[str, EraResolution], eras: Mapping[str
 TICKER_CONFIRM_DAYS = 30        # an era's ticker counts as confirmed by an FTD row this close to its span
 
 
+def _confirm_window(e: TickerEra) -> tuple[str, str]:
+    lo = max(FTD_START, date.fromisoformat(e.first) - timedelta(days=TICKER_CONFIRM_DAYS)).isoformat()
+    return lo, (date.fromisoformat(e.last) + timedelta(days=TICKER_CONFIRM_DAYS)).isoformat()
+
+
+def unconfirmed_eras(eras: Sequence[TickerEra], ftd: FtdIndex) -> set[str]:
+    """The keys of the eras from 2004 on (the start of SEC fails-to-deliver data)
+    with no FTD row under their ticker within `TICKER_CONFIRM_DAYS` of their
+    first and last observation: the SEC data never shows that ticker then, as
+    when a snapshot carries a ticker adopted later (APTV in 2012-2013, when
+    Delphi traded as DLPH)."""
+    return {e.key for e in eras if date.fromisoformat(e.last) >= FTD_START and not ftd.by_symbol(e.ticker,
+                                                                                               *_confirm_window(e))}
+
+
+def guarded_eras(eras: Sequence[TickerEra], ftd: FtdIndex) -> set[str]:
+    """The `unconfirmed_eras` whose window the loaded fails data covers (some row
+    of another symbol falls in it): the data shows the ticker was not failing
+    then, rather than having nothing to say. Their ticker and name tiers are
+    not asked (`FigiResolver.resolve_many`'s `unconfirmed`)."""
+    return {k for k in unconfirmed_eras(eras, ftd) if ftd.has_rows(*_confirm_window(eras_by_key(eras)[k]))}
+
+
 def ticker_unconfirmed_review(eras: list[TickerEra], ftd: FtdIndex, resolutions: dict,
                         issuers: dict[str, Issuer]) -> list[ReviewItem]:
-    """A `ticker_unconfirmed` review row for each era from 2004 on (the start of
-    SEC fails-to-deliver data) with no FTD row under its ticker within
-    `TICKER_CONFIRM_DAYS` of its first and last observation: the SEC data never
-    shows that ticker then, as when a snapshot carries a ticker adopted later
-    (APTV in 2012-2013, when Delphi traded as DLPH)."""
+    """A `ticker_unconfirmed` review row for each era of `unconfirmed_eras`."""
     out: list[ReviewItem] = []
+    unconfirmed = unconfirmed_eras(eras, ftd)
     for e in eras:
-        if date.fromisoformat(e.last) < FTD_START:
+        if e.key not in unconfirmed:
             continue
-        lo = max(FTD_START, date.fromisoformat(e.first) - timedelta(days=TICKER_CONFIRM_DAYS)).isoformat()
-        hi = (date.fromisoformat(e.last) + timedelta(days=TICKER_CONFIRM_DAYS)).isoformat()
-        if ftd.by_symbol(e.ticker, lo, hi):
-            continue
+        lo, hi = _confirm_window(e)
         out.append(ReviewItem(resolutions[e.key].sec_id or "", e.ticker, cik_of(issuers, e.key), "ticker_unconfirmed",
                               f"{e.key} {e.name or ''}: no fails-to-deliver row under {e.ticker} "
                               f"from {lo} to {hi}", last_seen=e.last))

@@ -212,7 +212,8 @@ def build_delistings_table(
     return out
 
 
-_ROW_EXTRAS = ("exchange", "last_trade_date", "last_trade_date_source", "successor_sec_id", "acquirer_sec_id",
+_ROW_EXTRAS = ("exchange", "last_trade_date", "last_trade_date_source", "successor_sec_id", "ticker_successor_sec_id",
+               "acquirer_sec_id",
                "raw_payout_per_share", "raw_payout_source", "raw_payout_confidence")
 
 
@@ -227,7 +228,7 @@ def delisting_row(e: EnrichedDelistRecord, **extra) -> dict:
     row = {
         "sec_id": e.sec_id, "delist_date": e.delist_date, "ticker": e.ticker, "cik": e.cik,
         "bucket": e.bucket.value, "crsp_code": e.crsp_code, "confidence": e.confidence, "reason": e.reason,
-        "exchange": e.exchange.value,
+        "exchange": e.exchange.value, "ticker_successor_sec_id": None,
         "last_trade_close": e.last_trade_close, "payout_per_share": e.payout_per_share,
         "stock_ratio": e.stock_ratio, "acquirer_price": e.acquirer_price, "acquirer_ticker": e.acquirer_ticker,
         "recovery_ratio": e.recovery_ratio, "terminal_value": e.terminal_value,

@@ -205,6 +205,27 @@ CATALOG: dict[str, FlagInfo] = {
         "cause; if the bucket itself is wrong, no bucket override exists, so note it for a classifier rule "
         f"instead of chasing the successor. Otherwise find the security the holders kept and add an "
         f"observation of it; {_accept_if('none exists')}."),
+    "handoff_continuation": FlagInfo(
+        "info", "The handoff pass found that another security of the run took over this one's ticker as a "
+                "continuation (a holding-company reorganization, redomicile, rename or reclassification: the "
+                "holders' shares became the successor's one for one), so the row is an exchange transfer to "
+                "successor_sec_id with a zero return; the reason gives the evidence (the successor issuer's "
+                "8-K12B/8-K12G3, or timing:cik / timing:cusip).",
+        f"Nothing unless the successor is wrong: read the cited filing, or {_ACCEPT}."),
+    "handoff_rebucketed": FlagInfo(
+        "check", "A merger row the handoff pass rewrote as a continuation (an exchange transfer to the successor), "
+                 "on the successor issuer's own 8-K12B/8-K12G3; the reason keeps the old bucket and code.",
+        f"Read the cited filing: if holders received something else than the successor's shares, report it; "
+        f"otherwise {_ACCEPT}."),
+    "handoff_conflict": FlagInfo(
+        "check", "The handoff pass found a continuation into another security of the run, but this delisting row "
+                 "says otherwise (a reconciled merger payout, a liquidation, or another successor) and was left "
+                 "as it is.",
+        f"Read both securities' filings around the date and decide which is right; {_accept_if('the row is')}."),
+    "handoff_takeover_no_delisting": FlagInfo(
+        "check", "Another security of the run took over this security's ticker (an acquirer renamed into it), but "
+                 "this security has no delisting row to record that on (ticker_successor_sec_id).",
+        f"Find how this security ended (its Form 25 or merger filing); {_accept_if('none exists')}."),
     "observed_after_delisting": FlagInfo(
         "check", "The delisting is a Form 25 filed before the observations stopped: a stale snapshot kept "
                  "listing a security already gone.",
@@ -235,6 +256,13 @@ CATALOG: dict[str, FlagInfo] = {
         "check", "SEC fails-to-deliver data never shows this ticker near the era's first and last observation "
                  "(the snapshot may carry a ticker adopted later).",
         f"Check which ticker the company traded under then and fix the observations, or {_ACCEPT}."),
+    "identity_detached": FlagInfo(
+        "check", "A ticker era that reached a security only by its ticker or a name search was taken back out of "
+                 "it: merged in, it would have carried that security's range for the ticker across another "
+                 "security's CUSIP- or pin-confirmed range (the reason names both). The era was resolved again "
+                 "without that pick.",
+        "Check which security traded under the ticker over the era's dates; pin its sec_id or cik on the "
+        f"observations if the new answer is wrong, or {_ACCEPT}."),
     "ticker_shared": FlagInfo(
         "check", "Two securities hold the same ticker on overlapping dates in ticker_history (the reason names "
                  "both ranges).",

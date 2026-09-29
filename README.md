@@ -106,7 +106,10 @@ sec_id, issuer_cik, share_class, name, security_type, observed, figi_source
 none is confirmed. `figi_source` is how it was found: `pin`, `ticker`,
 `cusip`, `name`, `handoff` (a renamed ticker's era with no FIGI of its own,
 joined to a same-issuer, same-class sibling's composite through their
-shared-CUSIP or CUSIP-switch evidence — spec §17), or `placeholder`.
+shared-CUSIP or CUSIP-switch evidence — spec §17), `backfill` (an era whose
+ticker no fails-to-deliver row shows then, placed on the one line its issuer
+and class traded on over its dates: APTV in 2012-2013 is Delphi's DLPH line),
+or `placeholder`.
 `observed` is `false` for a successor/acquirer security added only to price a
 delisting, never itself observed.
 
@@ -203,8 +206,8 @@ and the full audit trail explaining how it was computed. There are no
 
 ```
 sec_id, delist_date, ticker, cik, bucket, crsp_code, confidence, reason,
-exchange, last_trade_date, last_trade_close, successor_sec_id, acquirer_sec_id,
-acquirer_ticker, payout_per_share, stock_ratio, acquirer_price, recovery_ratio,
+exchange, last_trade_date, last_trade_close, successor_sec_id, ticker_successor_sec_id,
+acquirer_sec_id, acquirer_ticker, payout_per_share, stock_ratio, acquirer_price, recovery_ratio,
 terminal_value, dlret, dlret_method, dlret_confidence, payout_source,
 delist_filing_form, delist_filing_date, delist_filing_accession, anchor_8k_items,
 dereg_form, resolved_name, resolution_source, last_trade_date_source,
@@ -212,6 +215,20 @@ raw_payout_per_share, raw_payout_source, raw_payout_confidence, review_flags
 ```
 
 These are `DELISTINGS_COLUMNS` in [`store.py`](src/delist_detection/store.py).
+`successor_sec_id` means continuation only: the holders' shares became that
+security's one for one, and the ticker's price series continues into it (an
+exchange move keeps the security itself; a holding-company reorganization,
+redomicile, rename or share reclassification names the new line).
+`ticker_successor_sec_id` records a ticker takeover instead: another security
+of the run, already trading, took over this row's ticker within
+`TAKEOVER_DAYS` (120) of its last trade (II-VI renamed itself Coherent Corp
+and took COHR; Eldorado became Caesars and took CZR). The two never mean the
+same thing: a consumer reads the successor's prices as this security's
+continuation, and must not read a ticker successor's prices as this
+security's history. Both are filled by the run's handoff pass (see
+[`docs/data-flow.md`](docs/data-flow.md), *Ticker handoffs*), which also
+writes the predecessor's delisting row for a continuation whose Form 25 no
+class text could tell apart (flag `handoff_continuation`).
 Each row is an `EnrichedDelistRecord` produced by `enrich`, and the table is
 built by `build_delistings_table` / `delisting_row` in
 [`reconstruction.py`](src/delist_detection/reconstruction.py). `delist_date`
@@ -374,6 +391,11 @@ The full flag vocabulary (from `classifier.py`, `ticker_resolver.py`,
 | `error` | An unexpected exception processing one security; logged and skipped rather than aborting the run |
 | `ticker_range_overlap` | Two of one security's own `ticker_history` ranges overlap |
 | `ticker_shared` | The same ticker maps to two different securities on the same day |
+| `identity_detached` | A ticker era that reached a security only by its ticker or a name search was taken back out of it: merged in, it would have carried that security's range for the ticker across another security's CUSIP- or pin-confirmed range (ITT in 2008-2009, whose ticker hit is today's ITT Inc line, across the 2011 line). It was resolved again without that pick |
+| `handoff_continuation` | (info) The handoff pass found that another security of the run continued this one under its ticker (a holding-company reorganization, redomicile, rename or reclassification), so the row is an `exchange_transfer` to `successor_sec_id` with a zero return; the reason gives the evidence: the successor issuer's 8-K12B/8-K12G3, or `timing:cik`/`timing:cusip` |
+| `handoff_rebucketed` | A merger row the handoff pass rewrote as a continuation on the successor issuer's own 8-K12B/8-K12G3; the reason keeps the old bucket and code |
+| `handoff_conflict` | The handoff pass found a continuation, but the row says otherwise (a merger whose payout reconciled, against timing evidence alone; a liquidation; another successor) and was left as it is |
+| `handoff_takeover_no_delisting` | Another security of the run took over this security's ticker, but this security has no delisting row to record the takeover on |
 | `observation_conflict:<date>` | The ticker was observed under two or more different names on `<date>` (a snapshot source that backfilled today's ticker: CB is both ACE LTD and CHUBB CORP in 2012-2014); both are kept, and the reason names each with the security it resolved to. `sec_id` is empty |
 | `ticker_unconfirmed` | An era from 2004 on with no fails-to-deliver row under its ticker within 30 days of its first and last observation: the SEC data never shows that ticker then (a snapshot carrying a later ticker, such as APTV in 2012-2013, or a security gone before the snapshot date) |
 

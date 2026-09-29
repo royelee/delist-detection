@@ -22,6 +22,7 @@ from .atomic_io import clean_orphan_temps, write_atomic
 from .edgar import STALE_KEY, EdgarClient, submissions_fresh_after
 from .evidence import edgar_names, first_filing, names_between, names_near, names_until, parse_day, renamed_near
 from .fatal import FATAL
+from .cik_lookup import CikNameIndex, normalize_name
 from .figi_resolution import class_letter, share_class_from_name
 from .ftd import FtdIndex, FtdRow
 from .names import description_matches, description_names, name_tokens, names_agree, names_an_issuer
@@ -115,13 +116,17 @@ class TickerResolver:
         today: date | None = None,
         batch_writes: bool = False,
         retire_old_name_search: bool | None = None,
+        name_index: "CikNameIndex | callable[[], CikNameIndex] | None" = None,
     ) -> None:
         """`today`: the run date bounding submissions freshness (None: the clock).
         `batch_writes`: keep new answers in memory until `flush()` (the pipeline
         flushes after each resolving stage and on the way out of a run) instead
         of rewriting the whole memo file for each one. `retire_old_name_search`:
         drop a version-2/3 memo file's name_search answers on load (None: the
-        module's `RETIRE_OLD_NAME_SEARCH`)."""
+        module's `RETIRE_OLD_NAME_SEARCH`). `name_index`: SEC's
+        cik-lookup-data.txt as a `cik_lookup.CikNameIndex`, or a callable that
+        loads one on first use; the name tier then finds its candidates there
+        instead of in the live company search (`_name_search`)."""
         self.retire_old_name_search = (RETIRE_OLD_NAME_SEARCH if retire_old_name_search is None
                                        else retire_old_name_search)
         self.edgar = edgar
@@ -133,6 +138,9 @@ class TickerResolver:
         self.cik_pins = cik_pins or (lambda *a, **kw: None)  # (ticker, date) -> CIK from the caller's universe
         self.today = today
         self.batch_writes = batch_writes
+        self._name_index_source = name_index
+        self._name_index: CikNameIndex | None = name_index if isinstance(name_index, CikNameIndex) else None
+        self._name_index_failed = False
         self._memo: dict[str, TickerResolution] = {}
         self._memo_observed: dict[str, str | None] = {}   # key -> observed name the answer was checked with
         self._volatile: set[str] = set()   # misses and transient-error answers: this run only
@@ -453,6 +461,196 @@ class TickerResolver:
 
     NAME_SEARCH_CANDIDATES = 5       # distinct CIKs the name search ranks and checks
 
+    def _index(self) -> CikNameIndex | None:
+        """The name index, loaded on first use; None without one, or when it
+        cannot be loaded (logged once; the live company search stands in for
+        it). A refusal (`fatal.FATAL`) stops the run."""
+        if self._name_index is None and self._name_index_source is not None and not self._name_index_failed:
+            try:
+                self._name_index = self._name_index_source()
+            except FATAL:
+                raise
+            except requests.RequestException as e:
+                log.warning("SEC's cik-lookup-data.txt could not be loaded (%s); using the live company search", e)
+                self._name_index_failed = True
+        return self._name_index
+
+    INDEX_PROBE = 10                             # index matches per spelling whose filings are read
+    NAME_SEARCH_FORMS = ("25-NSE", "25", "15-12G")  # the live search's form filters, in its order
+    EXACT_ACTIVE_DAYS = 365                      # an exact-name holder filing this near the date is the company
+    CARRIED_YEARS = 5                            # a name carried this long before the date still counts (snapshots lag)
+
+    def _form_dates(self, cik: int, observed_date: str | None, form: str) -> list[date]:
+        """The dates of the CIK's filings whose form starts with `form`, from its
+        submissions JSON's recent filings (a delisted company's Form 25 or 15 is
+        among its last)."""
+        try:
+            sub = self._submissions(cik, observed_date)
+        except FATAL:
+            raise
+        except Exception as e:
+            self._note_transient(e)
+            return []
+        recent = (sub.get("filings") or {}).get("recent") or {} if isinstance(sub, dict) else {}
+        return [d for f, fd in zip(recent.get("form") or [], recent.get("filingDate") or [])
+                if f.startswith(form) and (d := parse_day(fd)) is not None]
+
+    def _index_candidates(self, index: CikNameIndex, nm: str,
+                          observed_date: str | None) -> dict[int, tuple[str, int]]:
+        """The name tier's candidates from the index, found as the live company
+        search finds them (CIK -> (the name found, date penalty)). For each
+        spelling of `nm` (`_name_variants`), the entries equal to it or starting
+        with it (EDGAR's character prefix: snapshots cut names short, COCA COLA
+        ENTERPRISE):
+          - when more than `INDEX_PROBE` CIKs match (EDGAR's unnamed list), a
+            spelling that keeps every word of `nm` reads the top `INDEX_PROBE`
+            of the entries carrying every word, by fit (MEDCO HEALTH SOLUTIONS
+            and its pharmacy subsidiaries); a cut-off one reads nothing
+            (NORTHEAST of NORTHEAST UTILITIES, S P of S&P GLOBAL);
+          - the one CIK whose name is exactly the spelling, when it filed
+            within `EXACT_ACTIVE_DAYS` of the date, is the answer, as EDGAR's
+            company page (FIRST REPUBLIC BANK never filed a Form 25; Republic
+            First Bancorp, once FIRST REPUBLIC BANCORP, did);
+          - else they go through the live search's form filters, in its order
+            (`NAME_SEARCH_FORMS`): the first under which any of them filed
+            decides, and a CIK counts only when it is the one that did, or the
+            one of them the query names (`_one_filer`; EDGAR names no company
+            when several match; WACHOVIA CORP's filer is WACHOVIA CORP NEW, not
+            the dead holder of the exact name). With no filer under any of them, the one CIK whose name is
+            exactly the spelling gives it, as EDGAR's company page does
+            (NORTHEAST UTILITIES never filed a Form 25), else a spelling left
+            with one CIK; its penalty then counts from its nearest filing of
+            any form, as that page lists them (MOTOROLA INC in 2010 ranks
+            before a prefix match's Form 25).
+        The penalty is the days between the date and the CIK's nearest such
+        filing. The file lists funds, individuals and subsidiaries (WEATHERFORD
+        YVONNE, BOSTON PROPERTIES LTD PARTNERSHIP): the form filter is what keeps
+        them out, as it did in the live search."""
+        want = name_tokens(nm)
+        target = parse_day(observed_date)
+        found: dict[int, tuple[str, int]] = {}
+        for variant in self._name_variants(nm):
+            exact, prefix = index.split_search(variant)
+            names: dict[int, str] = {}
+            for h in sorted(exact + prefix, key=lambda h: (-len(name_tokens(h.name) & want), len(h.name), h.cik)):
+                if h.cik not in self.EXCHANGE_CIKS:
+                    names.setdefault(h.cik, h.name)
+            probe = list(names)
+            if len(probe) > self.INDEX_PROBE:
+                # A cut-off spelling that drops a word of the name is EDGAR's
+                # unnamed list (NORTHEAST of NORTHEAST UTILITIES, S P of S&P GLOBAL).
+                keeps_name = bool(want) and want <= name_tokens(variant)
+                probe = [c for c in probe if keeps_name and want <= name_tokens(names[c])][:self.INDEX_PROBE]
+            chosen: list[tuple[int, int]] = []
+            exact_ciks = {h.cik for h in exact} & set(probe)
+            gaps = {c: self._filing_gap(c, target) for c in exact_ciks}
+            active = [c for c, g in gaps.items() if g <= self.EXACT_ACTIVE_DAYS]
+            if len(active) > 1:
+                active = [c for c in active if self._carried_on(c, variant, target)]
+            if len(active) == 1:
+                # EDGAR's company page for the one company of that exact name
+                # still filing (FIRST REPUBLIC BANK, not the one Merrill bought in
+                # 2007; DIVERSIFIED HEALTHCARE TRUST, a 2020 name a snapshot
+                # carries back to 2014), of two the one that carried it (TCF
+                # FINANCIAL CORP in 2014, not its 2019 taker); a holder that
+                # stopped long before goes through the filters (WACHOVIA CORP).
+                chosen = [(active[0], gaps[active[0]])]
+            for form in (() if chosen else self.NAME_SEARCH_FORMS):
+                dated = {c: self._form_dates(c, observed_date, form) for c in probe}
+                filers = [c for c in probe if dated[c]]
+                if filers:
+                    if len(filers) == 1 and not self._carried_on(filers[0], variant, target):
+                        continue         # its name is years old (FIRST REPUBLIC BANCORP, 1996-97): not this filter's answer
+                    if len(filers) > 1:
+                        filers = self._one_filer(filers, exact, name_tokens(normalize_name(nm)), variant, target)
+                    if len(filers) == 1:
+                        c = filers[0]
+                        chosen = [(c, min(min(abs((d - target).days) for d in dated[c]), 9999)
+                                   if target else 1000)]
+                    break
+            else:
+                if not chosen and (len(exact_ciks) == 1 or len(probe) == 1):
+                    only = next(iter(exact_ciks)) if len(exact_ciks) == 1 else probe[0]
+                    chosen = [(only, self._filing_gap(only, target))]
+            for c, penalty in chosen:
+                if c in found:
+                    found[c] = (found[c][0], min(found[c][1], penalty))
+                elif len(found) < self.NAME_SEARCH_CANDIDATES:
+                    found[c] = (names[c], penalty)
+        return found
+
+    def _filing_gap(self, cik: int, on: date | None) -> int:
+        """Days between `on` and the CIK's nearest filing of any form, as the
+        company page the live search opens lists them (1000: unknown)."""
+        if on is None:
+            return 1000
+        try:
+            days = [d for f in self.edgar.recent_filings(cik) if (d := parse_day(f.filing_date))]
+        except FATAL:
+            raise
+        except Exception as e:
+            self._note_transient(e)
+            return 1000
+        return min((abs((d - on).days) for d in days), default=1000)
+
+    def _one_filer(self, filers: list[int], exact, want: set[str], spelling: str,
+                   on: date | None) -> list[int]:
+        """Several CIKs of a spelling filed under one form: EDGAR names no company
+        then, except the one the query names. The filers the query names are
+        those whose name is exactly the spelling (MOTOROLA INC, not MOTOROLA
+        MOBILITY HOLDINGS; AMB PROPERTY CORP, not its LP), else those with a
+        name carried by 30 days after the date made of exactly the observed
+        name's words (ANHEUSER BUSCH COMPANIES, not ANHEUSER-BUSCH INBEV;
+        SMURFIT STONE CONTAINER CORP, not SMURFIT-STONE CONTAINER
+        ENTERPRISES); none named, none kept (APTIV: Aptiv PLC was Delphi in
+        2013, Aptiv Solutions another company). Of several named, the ones that
+        had carried the name by 30 days after the date (TCF FINANCIAL CORP in
+        2014: old TCF, not Chemical Financial, renamed in 2019), then the ones
+        carrying it within 30 days of it (ALBERTO CULVER CO in 2010: the 2006
+        spin-off, not the old company renamed)."""
+        exact_ciks = {h.cik for h in exact}
+        named = [c for c in filers if c in exact_ciks] or [
+            c for c in filers
+            if want and any(name_tokens(normalize_name(n)) == want for n in self._names_by(c, on))]
+        for near in (False, True):
+            if len(named) <= 1:
+                break
+            named = [c for c in named if self._carried_on(c, spelling, on, near=near)] or named
+        return named
+
+    def _names_by(self, cik: int, on: date | None, near: bool = False) -> list[str]:
+        """The CIK's EDGAR names carried from `CARRIED_YEARS` before `on` to 30
+        days after it (`near`: within 30 days of it), by its submissions JSON;
+        none before its first filing."""
+        if on is None:
+            return []
+        try:
+            sub = self._submissions(cik, on.isoformat())
+        except FATAL:
+            raise
+        except Exception as e:
+            self._note_transient(e)
+            return []
+        if not isinstance(sub, dict) or sub.get("__not_found__"):
+            return []
+        if not self._existed_by(cik, (on + timedelta(days=30)).isoformat()):
+            return []            # a name with no start date is no name before the CIK filed (Motorola SpinCo, 2010)
+        if near:
+            return names_near(sub, on)
+        return names_between(sub, on - timedelta(days=365 * self.CARRIED_YEARS), on + timedelta(days=30))
+
+    def _carried_on(self, cik: int, spelling: str, on: date | None, near: bool = False) -> bool:
+        """Whether the CIK carried a name starting with `spelling` (as the index
+        compares names) in the `CARRIED_YEARS` before `on` or up to 30 days
+        after it, by its submissions JSON. A name it carried a few years before
+        counts: snapshot names lag renames (CHICAGO MERCANTILE HLDGS, CME
+        Group's name until 2007); one it took only later does not (TCF
+        FINANCIAL CORP, Chemical Financial's from 2019), nor one it dropped long
+        before (FIRST REPUBLIC BANCORP, Republic First's in 1996-97). `near`:
+        carried within 30 days of `on`."""
+        key = normalize_name(spelling)
+        return any(normalize_name(n).startswith(key) for n in self._names_by(cik, on, near))
+
     def _name_search(self, ticker: str, observed_date: str | None, nm: str | None) -> list[tuple[int, str]]:
         """Candidates for the expected name `nm` (observed, else AV) from EDGAR's
         company search, best first, as (CIK, the name the search gave).
@@ -468,12 +666,15 @@ class TickerResolver:
         name, so MICHAEL KORS HOLDINGS LTD finds Capri Holdings), then by the gap
         between the date and the nearest filing the search listed for it. The
         first is always a candidate; one ranked below it only when one of its
-        EDGAR names `names_agree`s with `nm`."""
+        EDGAR names `names_agree`s with `nm`. With a name index (SEC's
+        cik-lookup-data.txt) the candidates come from it instead
+        (`_index_candidates`) and the live search is not asked."""
         if not nm:
             return []
         target_d = parse_day(observed_date)
         found: dict[int, tuple[str, int]] = {}      # CIK -> (its hit name, date penalty), in the order found
-        for variant in self._name_variants(nm):
+        index = self._index()
+        for variant in ([] if index is not None else self._name_variants(nm)):
             for form in ("25-NSE", "25", "15-12G", ""):
                 try:
                     hits = self.edgar.company_search_atom(variant, form_type=form)
@@ -496,6 +697,8 @@ class TickerResolver:
                         found[cik] = (hit_name, penalty)
                 if hits:
                     break  # one form-class per variant is enough
+        if index is not None:
+            found = self._index_candidates(index, nm, observed_date)
         order = list(found)
         fit = {c: self._edgar_name_fit(c, nm, observed_date) for c in order}
         ranked = sorted(order, key=lambda c: (-fit[c][0], found[c][1], order.index(c)))
@@ -1129,7 +1332,8 @@ class TickerResolver:
         would."""
         s = TickerResolver(self.edgar, rename_map=self.rename_map, manual_overrides=self.manual_overrides,
                            name_lookup=self.name_lookup, observed_names=self.observed_names, cik_pins=self.cik_pins,
-                           today=self.today)
+                           today=self.today, name_index=self._name_index or self._name_index_source)
+        s._name_index_failed = self._name_index_failed
         s._memo, s._memo_observed = dict(self._memo), dict(self._memo_observed)
         s._volatile, s._degraded = set(self._volatile), set(self._degraded)
         s._companies = self._companies

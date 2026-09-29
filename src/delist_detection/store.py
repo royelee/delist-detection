@@ -41,7 +41,8 @@ class DelistingKey(NamedTuple):
 
 DELISTINGS_COLUMNS: tuple[str, ...] = (
     "sec_id", "delist_date", "ticker", "cik", "bucket", "crsp_code", "confidence", "reason",
-    "exchange", "last_trade_date", "last_trade_close", "successor_sec_id", "acquirer_sec_id",
+    "exchange", "last_trade_date", "last_trade_close", "successor_sec_id", "ticker_successor_sec_id",
+    "acquirer_sec_id",
     "acquirer_ticker", "payout_per_share", "stock_ratio", "acquirer_price", "recovery_ratio",
     "terminal_value", "dlret", "dlret_method", "dlret_confidence", "payout_source",
     "delist_filing_form", "delist_filing_date", "delist_filing_accession", "anchor_8k_items",
@@ -161,7 +162,8 @@ def read_table(name: str, path: str | Path) -> list[dict[str, str]]:
 # How the handling layer types delistings.csv's columns as a frame: identifiers
 # kept as strings, dates parsed (a blank or bad one is NaT), numbers parsed
 # (blank or bad is NaN); every other column as pandas infers it.
-DELISTINGS_FRAME_STRINGS = ("sec_id", "ticker", "successor_sec_id", "acquirer_sec_id", "bucket")
+DELISTINGS_FRAME_STRINGS = ("sec_id", "ticker", "successor_sec_id", "ticker_successor_sec_id", "acquirer_sec_id",
+                            "bucket")
 DELISTINGS_FRAME_DATES = ("delist_date", "last_trade_date")
 DELISTINGS_FRAME_NUMBERS = ("crsp_code", "last_trade_close", "payout_per_share", "terminal_value", "recovery_ratio",
                             "cik")

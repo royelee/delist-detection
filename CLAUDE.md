@@ -28,7 +28,7 @@ editable install.
 
 ```bash
 pip install -e .                         # editable install (Python ≥3.10) — once per env
-pytest                                    # full suite (1344 tests, offline, no network)
+pytest                                    # full suite (1428 tests, offline, no network)
 pytest tests/test_payout_extractor.py -v  # one file
 pytest tests/test_payout_extractor.py::test_match_in_cash_family_altr -v   # one test
 
@@ -65,14 +65,15 @@ The codebase splits cleanly into a **classification layer** (network: EDGAR,
 OpenFIGI, SEC data files) and a **handling layer** (pure, no network). The
 `DelistRecord` dataclass (`classifier.py`) is the hand-off object between
 them: `ticker, cik, observed_delist_date, crsp_code, bucket, confidence,
-reason, evidence`, plus `sec_id`, `delist_date` and `successor_sec_id` —
+reason, evidence`, plus `sec_id`, `delist_date`, `successor_sec_id` (a
+continuation only) and `ticker_successor_sec_id` (a ticker takeover) —
 optional fields the new pipeline (`delistings.py`/`pipeline.py`) fills in
 alongside the original ones. `pipeline.py`'s `run()` is the orchestration
 that turns a list of observations into the eight output tables: a short
 `_run` calls one function per numbered stage (`_refine`, `_resolve_issuers`,
 `_resolve_securities`, `_security_cusips`, `_find_delistings`,
 `_check_overrides`, `_last_trade_closes`, `_merger_payouts`,
-`_find_successors`, then the row builders and `_triage`), each with explicit
+`_find_successors`, `_handoffs`, then the row builders and `_triage`), each with explicit
 inputs and outputs and the run-wide `_RunContext` (clients, run date, log,
 workers, SEC meter `manifest.StageMeter`). Each stage returns what it produces
 (`_Successors` for stage 9, for instance) and `_run` combines the answers
@@ -160,7 +161,17 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
 - `ticker_resolver.py` — `(ticker, as_of_date) → CIK`, 6 strategies in order of
   precision (caller's `cik` pin → manual override → `company_tickers.json` →
   EFTS Form-25/15 → observation-name company search → 8-K frequency rank),
-  each strict-validated. The pin and the observation name (from
+  each strict-validated. The name tier finds its candidates in SEC's
+  `cik-lookup-data.txt` (`cik_lookup.py`: `CikLookupClient`, cached 30 days
+  under `cache/sec_data/cik_lookup/`, and `CikNameIndex`, exact then
+  character-prefix matches, read through their submissions JSON as the live
+  search answered, `_index_candidates`: the one active holder of the exact
+  name, else the 25-NSE/25/15-12G form filter's one filer the query names
+  (`_one_filer`), else the exact name; `name_index=`, wired by
+  `default_clients`; the rules and the cases behind them in
+  `docs/data-flow.md`), not
+  in the live company search, which runs only without an index (the offline
+  tests, the golden replay) or when it cannot load. The pin and the observation name (from
   `ObservationIndex.cik_pin_on`/`.name_on`, wired in by `pipeline.py`) replace
   the old `--cik-map`/`--names` CLI files; the pin still beats every other
   tier and is never written to the on-disk resolver cache. The pipeline looks
@@ -194,8 +205,18 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   observed and EDGAR names — spec D21). `Issuer` (a CIK and its EDGAR names;
   `issuers_by_era` builds the era key -> `Issuer` map that `candidate_cusips`,
   `resolve_many` and `build_securities` take, the one source of an era's CIK,
-  read with `cik_of`) is its type. Its era-level review rows:
-  `ticker_unconfirmed_review` (`ticker_unconfirmed`) and
+  read with `cik_of`) is its type. The identity guard: an era the fails
+  data covers but never shows under its ticker (`guarded_eras`), when the one
+  line its issuer and class are confirmed on over its dates exists, is placed
+  on it (`figi_source=backfill`) instead of asking the ticker or name tier
+  (with no such line it keeps them: a stale snapshot's dead company finds its
+  own line; own-name picks are not checked by `_contradicted`, since a line
+  keeps its composite through a change of issuer, Merck 2009); `resolve_with_identity_guard` takes back
+  a weak era whose merge would cross another security's confirmed span of the
+  ticker (`crossing_weak_eras`, review `identity_detached`, `detached_review`);
+  `superseded_placeholders` marks a placeholder a later FIGI line of its
+  issuer and class holds the ticker for (not listed today). Its era-level
+  review rows: `ticker_unconfirmed_review` (`ticker_unconfirmed`) and
   `observation_conflict_review` (`observation_conflict:<date>`).
 - `history.py` — a security's dated history: its sightings
   (`ticker_sightings`/`cusip_sightings`, `own_last_seen`, `ticker_on`),
@@ -226,6 +247,16 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   else the successor issuer's 8-K12B found by full-text search
   (`successor_search_args`, `successor_query`, `successor_from_8k12b`,
   `successor_search_name`).
+- `handoffs.py` — ticker handoffs (CONTEXT.md: one security stops under a
+  ticker, another of the run starts under it within days): `find_handoffs`
+  (candidate pairs, [-10, 120] days), `decide_handoff` (continuation by the
+  successor issuer's 8-K12B/8-K12G3 `continuation_filing`, else by timing and
+  the same CIK or a `cusip_switch`; else a takeover when the new line traded
+  before), `apply_handoffs` (a continuation's missing `exchange_transfer` row
+  or its successor, `handoff_continuation`/`handoff_rebucketed`/
+  `handoff_conflict`; a takeover's `ticker_successor_sec_id` or
+  `handoff_takeover_no_delisting`), `drop_resolved_shared`. Run by
+  `pipeline._handoffs` after the successor search, before the history rows.
 - `acquirers.py` — a merger's acquirer as a security: `find_acquirer` (its
   composite FIGI from the fails rows under the acquirer ticker) and
   `acquirer_cik` (its issuer CIK, never the target's).
@@ -369,11 +400,13 @@ conflate them.
   rerun whose caches are already warm (a warm pass redoes each stage's CPU
   work but sends no request, so 4 workers is about 50% slower than 1 on a
   fully warm rerun); the CLI default stays 4. SEC's company-name search
-  (`cgi-bin/browse-edgar`, the resolver's fallback tier) is 89% of cold
+  (`cgi-bin/browse-edgar`, the resolver's fallback tier) was 89% of cold
   issuer-resolution time and can slow to ~10 s/request after about 1,500
-  searches in under an hour, recovering after ~20 idle minutes — every such
-  answer is a normal 200, so nothing in the code notices the slowdown; it only
-  costs time. Peak memory is 1.8–4.2 GB (mostly data, likely the fails-to-deliver panel; not profiled);
+  searches in under an hour, recovering after ~20 idle minutes; on 2026-09-28
+  it answered HTTP 429 (a run-stopping `EdgarBlocked`) three times in a cold
+  full run, at 8, 2 and 1 workers. That is why the name tier now reads SEC's
+  `cik-lookup-data.txt` (one ~38 MB download; building the index takes about
+  9 s and ~440 MB) instead of searching. Peak memory is 1.8–4.2 GB (mostly data, likely the fails-to-deliver panel; not profiled);
   threads add at most about 37 MB (measured). SEC does not keep full-text-search hit order
   stable between two fetches of the same query: the same cache always gives
   the same output, but a refetch can reorder tied hits (see `docs/data-flow.md`).

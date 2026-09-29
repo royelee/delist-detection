@@ -206,8 +206,8 @@ def _delistings_as_qlib_adapter_read_them(path):
     """qlib_adapter.load_delistings's own recipe before it read through
     store.read_delistings_frame; the frames must stay identical, dtypes included."""
     import pandas as pd
-    df = pd.read_csv(path, dtype={"sec_id": str, "ticker": str, "successor_sec_id": str, "acquirer_sec_id": str,
-                                  "bucket": str})
+    df = pd.read_csv(path, dtype={"sec_id": str, "ticker": str, "successor_sec_id": str,
+                                  "ticker_successor_sec_id": str, "acquirer_sec_id": str, "bucket": str})
     for c in ("delist_date", "last_trade_date"):
         df[c] = pd.to_datetime(df[c], errors="coerce")
     for c in ("crsp_code", "last_trade_close", "payout_per_share", "terminal_value", "recovery_ratio", "cik"):
@@ -249,3 +249,18 @@ def test_read_delistings_frame_rejects_a_file_of_another_table(tmp_path):
     p.write_text("a,b\n1,2\n")
     with pytest.raises(ValueError, match="do not match"):
         store.read_delistings_frame(p)
+
+
+def test_delistings_carry_the_ticker_successor_right_after_the_successor():
+    """Handoff plan, Task 2: `ticker_successor_sec_id` (another security took over
+    this ticker, e.g. an acquirer that renamed itself into it) sits right after
+    `successor_sec_id` (a continuation), and is blank unless a row sets it."""
+    cols = TABLES["delistings"].columns
+    assert cols[cols.index("successor_sec_id") + 1] == "ticker_successor_sec_id"
+    assert "ticker_successor_sec_id" in store.DELISTINGS_FRAME_STRINGS
+
+
+def test_the_ticker_successor_is_blank_by_default(tmp_path):
+    write_tables(tmp_path, {"delistings": [{"sec_id": "BBG1", "delist_date": "2022-07-01", "bucket": "merger"}]})
+    (row,) = read_table("delistings", table_path(tmp_path, "delistings"))
+    assert row["ticker_successor_sec_id"] == "" and row["successor_sec_id"] == ""

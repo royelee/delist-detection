@@ -27,6 +27,10 @@ from .degraded import DegradedWatch, degraded_item, flag_degraded, report_halt_f
 from .delistings import SUCCESSOR_UNKNOWN, Delisting, DelistingFinder, SecurityContext
 from .evidence import edgar_names
 from .fatal import FATAL
+from .handoffs import (
+    HandoffDecision, HandoffOutcome, apply_handoffs, continuation_filing, cusip_switch, decide_handoff,
+    drop_resolved_shared, find_handoffs, issuer_carries_on, predecessor_names,
+)
 from .figi_resolution import is_placeholder, share_class_from_name
 from .form25 import SecurityRef
 from .ftd import FTD_START, FtdIndex, close_age
@@ -48,7 +52,8 @@ from .review_triage import Decision, ReviewItem, Triage, flag_name, is_blank, me
 from .sec_stats import SEC_STATS
 from .security_master import (
     EraResolution, FigiResolver, Issuer, Security, build_securities, candidate_cusips, cik_of, cusip_handoffs,
-    era_last_seen, issuers_by_era, observation_conflict_review, refine_eras, ticker_unconfirmed_review,
+    detached_review, era_last_seen, issuers_by_era, observation_conflict_review, refine_eras,
+    resolve_with_identity_guard, superseded_placeholders, ticker_unconfirmed_review, guarded_eras,
 )
 from .store import DelistingKey, write_tables
 from .successors import (
@@ -311,16 +316,21 @@ def _resolve_securities(ctx: _RunContext, eras: list[TickerEra], era_by_key: dic
     and a ticker or name hit whose name agrees with those same names (§8.3). An
     era with no pick of its own still joins a same-issuer, same-class sibling's
     composite through their shared-CUSIP/switch evidence (`cusip_handoffs`,
-    spec §17), when that sibling is confirmed by a pin or a CUSIP. Returns each
-    era's resolution, the securities, and the review items of eras that
-    resolved to no FIGI or rested on a degraded answer."""
+    spec §17), when that sibling is confirmed by a pin or a CUSIP. An era no
+    fails row shows under its ticker takes no ticker or name pick (a backfilled
+    ticker: it is placed on its issuer's line then, if there is exactly one),
+    and a weak era whose merge would cross another security's confirmed range
+    is taken back out (`resolve_with_identity_guard`). Returns each era's
+    resolution, the securities, and the review items of eras that resolved to
+    no FIGI, were taken back out, or rested on a degraded answer."""
     issuers = answers.issuers
     cusips = candidate_cusips(eras, ftd, issuers)
     handoffs = cusip_handoffs(eras, ftd)
-    resolutions = FigiResolver(ctx.clients.figi, log=ctx.log).resolve_many(eras, issuers=issuers, cusips=cusips,
-                                                                          handoffs=handoffs)
+    resolutions, detached = resolve_with_identity_guard(
+        FigiResolver(ctx.clients.figi, log=ctx.log), eras, issuers=issuers, cusips=cusips, handoffs=handoffs,
+        unconfirmed=guarded_eras(eras, ftd))
     securities = build_securities(resolutions, era_by_key, issuers)
-    review: list[ReviewItem] = []
+    review: list[ReviewItem] = detached_review(detached, era_by_key, resolutions, issuers)
     for key, res in resolutions.items():
         era = era_by_key[key]
         for flag in res.flags:
@@ -441,9 +451,12 @@ def _find_delistings(ctx: _RunContext, securities: dict[str, Security], sec_cusi
     mark = ctx.meter.start()
     # A placeholder has no FIGI to ask; EDGAR answers for its ticker, which a
     # later line of the issuer may hold today. Its own CUSIP failing only under
-    # a deleted symbol at the end says it is not the line listed today.
+    # a deleted symbol at the end says it is not the line listed today, and so
+    # does a later FIGI line of its issuer and class under its ticker
+    # (`superseded_placeholders`).
     retired = frozenset(s.sec_id for s in ordered
-                        if is_placeholder(s.sec_id) and ftd.symbol_deleted(sec_cusips[s.sec_id]))
+                        if is_placeholder(s.sec_id) and ftd.symbol_deleted(sec_cusips[s.sec_id])) \
+        | superseded_placeholders(securities)
     if ctx.sec_workers > 1:
         _warm_delisting_search(clients, ordered, listing, security_context, ctx.sec_workers, retired)
     for i, s in enumerate(ordered, 1):
@@ -777,6 +790,83 @@ def _link_successors(delistings: list[Delisting], successors: _Successors) -> No
             flag_degraded(d)
 
 
+def _handoffs(ctx: _RunContext, delistings: list[Delisting], securities: dict[str, Security],
+              search: _DelistingSearch, sec_cusips: dict[str, list[str]], ftd: FtdIndex, payouts: _Payouts,
+              review: list[ReviewItem]) -> HandoffOutcome:
+    """9b. Ticker handoffs (`handoffs.py`): every pair of securities of the run
+    where one stops trading under a ticker and the other starts under it within
+    days (`find_handoffs`, over the sightings `ticker_history` is built from:
+    backfilled observations dropped), decided on the successor issuer's
+    8-K12B/8-K12G3 (EDGAR full-text search), else on timing and identity, else
+    as a takeover by a line or an issuer that existed before (`decide_handoff`:
+    the issuer's first EDGAR filing dates it), then acted on (`apply_handoffs`): a continuation's
+    missing row is added, a successor or a ticker successor set, and the review
+    items it resolves dropped. A merger whose payout the gate kept counts as
+    reconciled. Returns the outcome; the caller adds its rows."""
+    clients, edgar = ctx.clients, ctx.clients.edgar
+    fts = getattr(edgar, "full_text_search", None)
+    sightings = {sid: filtered_ticker_sightings(sig, sec_cusips.get(sid, []), ftd)
+                 for sid, sig in search.sightings.items()}
+    pairs = find_handoffs(sightings)
+    mark = ctx.meter.start()
+
+    def filing_args(p) -> tuple[list[str], date, int] | None:
+        a, b = securities[p.a], securities[p.b]
+        if fts is None or b.issuer_cik is None:
+            return None
+        sub = edgar.submissions(a.issuer_cik) if a.issuer_cik is not None else None
+        return predecessor_names(sub, p.a_last, a.name), date.fromisoformat(p.b_first), b.issuer_cik
+
+    def find_filing(p):
+        args = filing_args(p)
+        if args is None:
+            return None
+        names, day, cik = args
+        return next((f for n in names if (f := continuation_filing(fts, name=n, day=day, successor_cik=cik))), None)
+
+    if fts is not None and ctx.sec_workers > 1:
+        def warm_search(p) -> None:
+            args = filing_args(p)
+            if args is not None:
+                for n in args[0]:
+                    fts(*successor_query(n, args[1]))
+        warm(pairs, warm_search, workers=ctx.sec_workers, name="handoff search")
+    first_seen = {sid: sig[0].day for sid, sig in sightings.items() if sig}
+
+    def issuer_since(cik: int | None) -> str | None:
+        """The issuer's first EDGAR filing (the finder already read its filings)."""
+        dates = [f.filing_date for f in edgar.recent_filings(cik) if f.filing_date] if cik is not None else []
+        return min(dates) if dates else None
+
+    decisions: list[HandoffDecision] = []
+    degraded: list[ReviewItem] = []
+    for p in pairs:
+        watch = DegradedWatch()
+        filing = find_filing(p)
+        if watch.tripped():
+            a = securities[p.a]
+            degraded.append(degraded_item(p.a, p.ticker, a.issuer_cik, f"the handoff search ({p.ticker} to {p.b})",
+                                          last_seen=p.a_last))
+        a_cik, b_cik = securities[p.a].issuer_cik, securities[p.b].issuer_cik
+        same = a_cik is not None and a_cik == b_cik
+        decision = decide_handoff(p, filing=filing, same_issuer=same,
+                                  cusip_switch=cusip_switch(ftd, p, sec_cusips.get(p.a, []), sec_cusips.get(p.b, [])),
+                                  issuer_carries_on=issuer_carries_on(p, securities, first_seen),
+                                  b_issuer_since=None if same else issuer_since(b_cik))
+        if decision is not None:
+            decisions.append(decision)
+    ctx.meter.done("handoff search", mark)
+    gated = payouts.gated
+    reconciled = {e.key for e in delistings if for_delisting(gated.payouts, e.key) is not None
+                  or for_delisting(gated.merged_terms, e.key)}
+    outcome = apply_handoffs(decisions, delistings, securities, review, reconciled=reconciled)
+    for d in outcome.added:
+        d.exchange = issuer_exchange(edgar, d.cik, d.ticker) or ""
+    outcome.review += degraded
+    ctx.log(f"handoffs: {len(pairs)} candidate pairs; {outcome.counts}")
+    return outcome
+
+
 def _delisting_rows(delistings: list[Delisting], closes: dict[DelistingKey, float], payouts: _Payouts,
                     overrides: Overrides) -> tuple[list[dict], list[dict]]:
     """10a. The delistings.csv rows, and the review rows of those delistings that
@@ -798,6 +888,7 @@ def _delisting_rows(delistings: list[Delisting], closes: dict[DelistingKey, floa
             last_trade_date=e.last_trade.day.isoformat() if e.last_trade.day else None,
             last_trade_date_source=e.last_trade.source or None,
             successor_sec_id=e.record.successor_sec_id,
+            ticker_successor_sec_id=e.record.ticker_successor_sec_id,
             acquirer_sec_id=payouts.acquirer_ids.get(e.key),
             raw_payout_per_share=pr.value if pr else None, raw_payout_source=pr.source if pr else None,
             raw_payout_confidence=pr.confidence if pr else None,
@@ -1061,11 +1152,18 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
     endings = _delisting_endings(delistings, securities, sec_cusips, ftd)
     _mark_continuing_delistings(delistings, endings)
 
+    handoffs = _handoffs(ctx, delistings, securities, search, sec_cusips, ftd, payouts, review)       # 9b
+    review = handoffs.review
+    if handoffs.added:
+        delistings += handoffs.added
+        closes.update(_last_trade_closes(ctx, handoffs.added, securities, sec_cusips, ftd, ftd_lo, overrides))
+        endings = _delisting_endings(delistings, securities, sec_cusips, ftd)
+
     # 10. rows
     delisting_rows, review_rows = _delisting_rows(delistings, closes, payouts, overrides)
     review_rows += [item.row() for item in review]
     th_rows, ch_rows, ends, end_confirmed = _history_rows(ctx, securities, search, sec_cusips, ftd, added, endings)
-    review_rows += [item.row() for item in ticker_range_review(th_rows)]
+    review_rows += [item.row() for item in drop_resolved_shared(ticker_range_review(th_rows), handoffs.resolved_pairs)]
     map_rows = _observation_map(ctx, index, eras, resolutions, answers.issuers, sec_cusips, ftd, ends,
                                 end_confirmed, search.listed, th_rows)
     flags, triaged = _triage(ctx, review_rows, review_decisions, limit)
@@ -1086,7 +1184,8 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
     stat_counts, stat_timings = SEC_STATS.since(run_mark)
     run_manifest.write(out_dir, run_manifest.build(as_of=ctx.as_of, sec_workers=sec_workers, counts=stat_counts,
                                                    timings=stat_timings, stages=ctx.meter.stages,
-                                                   review_flags=dict(flags), review=triaged.counts))
+                                                   review_flags=dict(flags), review=triaged.counts,
+                                                   handoffs=handoffs.counts))
     return RunSummary(counts, dict(Counter(e.record.bucket.value for e in delistings)),
                       dict(Counter(s.figi_source for s in securities.values())), dict(flags), dict(triaged.counts))
 
@@ -1096,8 +1195,11 @@ def default_clients(index: ObservationIndex, *, cache_dir: Path, rename_map: dic
                     extract_llm: bool = False, llm_model: str | None = None, use_midas: bool = True,
                     use_halts: bool = True, as_of: date | None = None) -> Clients:
     """The production clients. Every client is dated `as_of` (default: today,
-    read once here), the resolver batches its memo writes, and the SEC limit is
-    made machine-wide (sec_limiter.use_machine_wide_limit)."""
+    read once here), the resolver batches its memo writes and finds its name
+    candidates in SEC's cik-lookup-data.txt (`cik_lookup.CikLookupClient`, loaded
+    on first use), and the SEC limit is made machine-wide
+    (sec_limiter.use_machine_wide_limit)."""
+    from .cik_lookup import CikLookupClient
     from .classifier import DelistClassifier
     from .edgar import EdgarClient
     from .sec_limiter import use_machine_wide_limit
@@ -1115,7 +1217,9 @@ def default_clients(index: ObservationIndex, *, cache_dir: Path, rename_map: dic
                               manual_overrides={k: v for k, v in (manual_overrides or {}).items() if v > 0},
                               cache_path=cache_dir / "ticker_resolution.json",
                               observed_names=index.name_on, cik_pins=index.cik_pin_on, today=as_of,
-                              batch_writes=True)
+                              batch_writes=True,
+                              # the name tier searches SEC's cik-lookup-data.txt, not the live company search
+                              name_index=CikLookupClient(cache_dir / "sec_data" / "cik_lookup").index)
     llm = None
     if extract_llm:
         from .llm_client import default_llm_client

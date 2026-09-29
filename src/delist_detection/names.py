@@ -4,7 +4,7 @@ from __future__ import annotations
 import re
 from collections.abc import Iterable
 
-_STOP = {"CORP", "CORPORATION", "INC", "INCORPORATED", "COMPANY", "COS", "HOLDINGS", "HOLDING",
+_STOP = {"CORP", "CORPORATION", "INC", "INCORPORATED", "COMPANY", "COMPANIES", "COS", "HOLDINGS", "HOLDING",
          "LTD", "LIMITED", "LLC", "PLC", "GROUP", "INTERNATIONAL", "INTL", "TRUST", "PARTNERS",
          "FUND", "BANK", "BANCORP", "BANCSHARES", "CLASS", "SERIES", "COMMON", "STOCK", "SHARES",
          "THE", "AND", "NEW"}

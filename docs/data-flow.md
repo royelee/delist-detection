@@ -62,7 +62,9 @@ one observation per row per file).
               ┌────────────────────────────┐
               │  FigiResolver: era → sec_id│   sec_id pin → CUSIP → ticker → name filter
               │  (US composite FIGI, or    │   → CUSIP handoff (shared CUSIP/switch to a
-              │  placeholder)              │      confirmed sibling) → placeholder CIK<cik>-<CLASS>
+              │  placeholder)              │      confirmed sibling) → backfill → placeholder
+              │  + identity guard          │   no ticker/name pick for an unconfirmed era;
+              │                            │   a weak era crossing a confirmed range detached
               └─────────────┬──────────────┘
                              │ build_securities (merge eras sharing a sec_id)
                              ▼
@@ -93,6 +95,14 @@ one observation per row per file).
               └─────────────┬──────────────┘
                              │ ftd.close_after (last-trade + acquirer closes),
                              │ payout_extractor / llm_merger_extractor, payout_gate
+                             ▼
+              ┌────────────────────────────┐
+              │  successors, then the      │   successor search (a line of the run, else the
+              │  handoff pass (handoffs.py)│   successor's 8-K12B); ticker handoffs: a
+              │                            │   continuation's row + successor, a takeover's
+              │                            │   ticker_successor_sec_id
+              └─────────────┬──────────────┘
+                             │
                              ▼
               ┌────────────────────────────┐
               │  enrich() → delistings.csv │   + payouts.csv, review.csv +
@@ -375,7 +385,42 @@ target rather than an acquirer.
    known exchange CIKs (Nasdaq 1354457, NYSE LLC 876661, Cboe BZX 1417835, …) and prefers hits
    whose display_name contains the literal `(TICKER)`.
 
-5. **The era's own `name` → EDGAR cgi-bin company search.** Uses the `name`
+5. **The era's own `name` → SEC's name index.** In a production run
+   (`pipeline.default_clients`) the candidates come from SEC's
+   `cik-lookup-data.txt` (`cik_lookup.py`): about a million `NAME:CIK:` lines,
+   every name each CIK filed under (MICHAEL KORS HOLDINGS LTD and CAPRI
+   HOLDINGS LTD are both CIK 1530721), funds and individuals included,
+   downloaded once and refreshed after 30 days under
+   `cache/sec_data/cik_lookup/`. Names are compared normalized (case,
+   periods, hyphens, punctuation, `&` and EDGAR's `/DE/` state tag ignored).
+   For each spelling, its exact and character-prefix matches (snapshots cut
+   names short: COCA COLA ENTERPRISE) stand in for the live search, read
+   through their cached submissions JSON (`_index_candidates`):
+   - the one CIK whose name is exactly the spelling and that filed within a
+     year of the date is the answer, as EDGAR's company page was (FIRST
+     REPUBLIC BANK never filed a Form 25); of several such, the one that
+     carried the name (TCF FINANCIAL CORP in 2014, not its 2019 taker);
+   - else the live search's form filter: under 25-NSE, then 25, then
+     15-12G, the first form any of them filed decides. A lone filer counts
+     when it carried the matched name in the 5 years before the date or just
+     after (not FIRST REPUBLIC BANCORP, another bank's name in 1996-97).
+     Of several, only the one the query names counts (`_one_filer`: the
+     exact name, else exactly the observed name's words, ANHEUSER BUSCH
+     COMPANIES, not ANHEUSER-BUSCH INBEV; then the one that carried the
+     name by the date, then on it); none named, none;
+   - with no filer, the one CIK of that exact name, else a spelling's only
+     CIK, its date gap counted from its nearest filing;
+   - a spelling matching more than 10 CIKs is read only when it keeps every
+     word of the name (MEDCO HEALTH SOLUTIONS and its pharmacy subsidiaries:
+     the top 10 carrying every word); a cut-off one (NORTHEAST of NORTHEAST
+     UTILITIES, S P of S&P GLOBAL) names nothing.
+   Without the form filter the file's funds, individuals and subsidiaries win
+   (WEATHERFORD YVONNE for WEATHERFORD INTL, a first attempt showed). No live
+   company search is sent. A resolver built
+   without the index (the offline tests, the golden replay), or whose index
+   cannot be loaded, uses the live search:
+
+   **The era's own `name` → EDGAR cgi-bin company search.** Uses the `name`
    carried by the era's own observations (`pipeline.py` passes
    `resolve(..., name=era.name)`: a date lookup, `ObservationIndex.name_on`,
    can land on a neighbouring era's name when FTD rows of a shared CUSIP carry
@@ -512,6 +557,44 @@ leaves the issuer with no EDGAR names for the run and flags its eras
    into ES's later, CUSIP-confirmed line) must both go or neither, even though
    only NU@2008 carries the switch itself. `figi_source=handoff` marks the
    result, ranked between `name` and `placeholder`.
+
+**The identity guard** (handoff plan, Part 1). The ticker and name tiers
+answer with whoever holds the ticker or the name *today*, so:
+
+- An era the fails data covers but never shows under its ticker (no row
+  under it within 30 days of its span while rows of other symbols exist then:
+  `security_master.guarded_eras`, the same fact `ticker_unconfirmed` reports)
+  and that an era of its own issuer and class places -- confirmed (by a pin
+  or a CUSIP) over overlapping dates on exactly one composite -- is a ticker a
+  snapshot backfilled: it is not asked the ticker or name tier, and is placed
+  (`figi_source=backfill`) on that composite. Jacobs under J in 2012-2014
+  lands on the JEC line, and its observations become `backfilled_ticker` in
+  `observation_map.csv`. An unconfirmed era with no such line keeps the ticker
+  and name tiers: a stale snapshot's dead company finds its own line there
+  (Dow Jones and Mellon, listed in 2008 after they were acquired), and a
+  later holder's line is caught below (APTV in 2012-13).
+- A plain own-name pick is not checked against other eras' confirmations: a
+  line keeps its composite through a change of issuer (Merck's 2009 reverse
+  merger, Medtronic's and Eaton's redomiciles), and an era's issuer CIK can be
+  today's holder's. (The handoff plan asked for that check; the full run of
+  2026-09-29 showed it and a blanket unconfirmed-era guard turning some 40
+  correct FIGIs into placeholders, so neither is kept.)
+- After the eras are resolved, a weak era (a ticker or name pick) whose merge
+  would carry its security's range for the ticker across another security's
+  confirmed span of that ticker (`crossing_weak_eras`: the confirmed span lies
+  wholly between the weak era and another era of its own security) is taken
+  back out and resolved again without the pick, until none crosses
+  (`resolve_with_identity_guard`), with an `identity_detached` review row. ITT
+  in 2008-2009 (CUSIP 450911102, no US line in OpenFIGI) reached today's ITT
+  Inc line by ticker, which would have run 2008..today across the 2011 line's
+  2011-2016 range. A weak era that merely shares dates with another security's
+  era (ACE backfilled under CB in 2012-2014) is left to the observation-conflict
+  review.
+- A placeholder is not the line listed today when a FIGI security of its
+  issuer and class, sharing one of its tickers, begins after its last
+  observation (`superseded_placeholders`): EDGAR's ticker list names the
+  issuer's current line, which would otherwise keep an old placeholder's range
+  open over every later line.
 
 **The placeholder-splitting guard** (controller ruling, superseding the
 original all-or-none-withdrawal design): an issuer's placeholder holds every
@@ -670,6 +753,63 @@ last trade (`ftd.close_through`; the row's date is kept in the evidence as
 how a reader tells its age. Missing → `--last-trade-closes`
 override; otherwise `dlret` stays blank (`needs_last_trade`) and the row
 goes to `review.csv`.
+
+## Ticker handoffs
+
+`handoffs.py`, run by `pipeline._handoffs` after the successor search and
+before the history rows (so a row it adds clips the predecessor's ranges like
+any other delisting). A handoff is one security of the run stopping under a
+ticker and another starting under it within days (CONTEXT.md).
+
+1. **Finding** (`find_handoffs`): per ticker (either separator spelling), the
+   securities sighted under it in the order they began under it, over the
+   sightings `ticker_history` is built from (backfilled observations
+   dropped); each and the next to begin form a pair when the next one's first
+   sighting falls within [−`OVERLAP_DAYS`, `TAKEOVER_DAYS`] = [−10, 120] days
+   of the first one's last (CZR's two lines overlap 8 days, COHR waits 74).
+2. **Deciding** (`decide_handoff`), the first that applies: a continuation by
+   filing (EDGAR full-text search for an 8-K12B/8-K12G3 filed by B's issuer
+   naming A's issuer, under its EDGAR names around the handoff, today's, and
+   its observed name (`predecessor_names`: Ashland Inc's CIK is ASHLAND LLC
+   today), 30 days before to 60 after B's first sighting,
+   `continuation_filing`; the filer may keep A's CIK, as Aon did); a
+   continuation by timing and identity (at most `CONTINUATION_DAYS` = 10
+   days apart, B sighted under no ticker before then, and the same issuer CIK
+   or the ticker's CUSIP switching from A's to B's in the fails data,
+   `cusip_switch`); a takeover (B traded before, under another ticker, or
+   B's issuer is another company that filed with EDGAR over a year before:
+   Eldorado, never observed as ERI, took CZR); otherwise nothing, and any
+   `ticker_shared` row stays. Two guards stop a spin-off that takes the old
+   ticker from reading as a continuation: A that lives on under another
+   ticker (Delphi Automotive as APTV while Delphi Technologies took DLPH) is
+   continued by nobody, and no continuation by timing is taken while A's
+   issuer starts another line of its own at the handoff and B is another
+   issuer's (old Liberty Media as STRZA while the new one took LMCA).
+3. **Acting** (`apply_handoffs`). A continuation with no delisting of A near
+   the handoff writes one: dated by A's ambiguous-class Form 25 (its
+   `form25_unmatched` row) that took effect after A's last sighting and within
+   30 days after the later of A's last and B's first sighting (not the Braves
+   split-off's Form 25 a week before FWONA's last sighting; old LabCorp's five
+   weeks after its sparse last fails row), else the day after A's last
+   sighting; last trade on that sighting, but before B's first, `exchange_transfer` (CRSP 304, so DLRET 0),
+   `successor_sec_id` = B, confidence `high` on a filing and `medium` on
+   timing, flag `handoff_continuation`. A row near it takes B as its
+   successor; an `unknown` or merger row is rewritten to the continuation's
+   values (a merger keeps its old bucket in a `handoff_rebucketed` row),
+   except a merger on timing evidence between two issuers (an acquirer's new
+   holding company takes the target's ticker too: Wendy's into Wendy's/Arby's
+   at 4.25 shares, IGT for cash and stock), or whose payout reconciled
+   against timing evidence alone, a
+   liquidation/compliance failure/expiration, or a row naming another
+   successor: those stand, with a `handoff_conflict` row. A continuation drops
+   A's `ended_without_delisting`, the ambiguous Form 25 rows of A and B it
+   rests on, and the pair's `ticker_shared` rows. A takeover sets
+   `ticker_successor_sec_id` = B on A's delisting nearest the handoff, else
+   writes `handoff_takeover_no_delisting`.
+
+`run_manifest.json`'s `handoffs` key counts the pairs decided, continuations
+by filing and by timing, takeovers, conflicts and rows added; its `stages`
+carry the `handoff search` SEC traffic.
 
 ## Outputs
 
