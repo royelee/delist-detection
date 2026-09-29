@@ -107,7 +107,50 @@ def test_with_no_filer_a_spelling_matching_one_cik_gives_it_and_a_broad_one_read
     e = _Edgar({9000 + i: (f"MANY THINGS FUND {i} LP", [], []) for i in range(15)})
     r = TickerResolver(e, name_index=_index(*many))
     assert r._index_candidates(r._index(), "MANY THINGS", "2012-06-29") == {}
-    assert e.read == []                   # more matches than INDEX_PROBE: EDGAR's unnamed list, nothing read
+    assert r._index_candidates(r._index(), "MANY THINGS UNLIMITED", "2012-06-29") == {}
+    assert len(set(e.read)) == 10         # MANY THINGS: the top INDEX_PROBE read, no filer among 15: no candidate
+                                          # MANY THINGS UNLIMITED: no match carries every word, nothing read
+
+
+def test_of_several_companies_under_one_name_the_one_that_carried_it_on_the_date_is_the_candidate():
+    """TCF FINANCIAL CORP is two CIKs' name: old TCF (814184) until its 2019
+    merger, then Chemical Financial (19612), renamed TCF. Both filed a 25-NSE.
+    In 2012 only old TCF carried the name (the full run of 2026-09-29 found no
+    issuer for TCF@2012 and lost the era)."""
+    old = (814184, ("TCF FINANCIAL CORP", [], [_f("T1", "10-K", "2012-02-14"), _f("T2", "25-NSE", "2019-08-01")]))
+    new = (19612, ("TCF FINANCIAL CORP", [{"name": "CHEMICAL FINANCIAL CORP", "from": "1995-08-10T00:00:00.000Z",
+                                           "to": "2019-08-01T00:00:00.000Z"}],
+                   [_f("C1", "10-K", "2015-06-23"), _f("C2", "25-NSE", "2021-06-09")]))
+    idx = _index("TCF FINANCIAL CORP:0000814184:", "TCF FINANCIAL CORP:0000019612:",
+                 "CHEMICAL FINANCIAL CORP:0000019612:")
+    r = TickerResolver(_Edgar(dict([old, new])), name_index=idx)
+    assert list(r._index_candidates(idx, "TCF FINANCIAL CORP", "2014-06-30")) == [814184]
+
+
+def test_a_dead_holder_of_the_exact_name_loses_to_the_form25_filer_that_matches_it():
+    """WACHOVIA CORP is exactly one CIK's name (104019, the pre-2001 Wachovia);
+    the live search's Form 25 filter answered it with WACHOVIA CORP NEW (36995,
+    First Union renamed), the one that filed. The run took 104019 and lost
+    Wachovia's 2008 merger."""
+    dead = (104019, ("WACHOVIA CORP", [], [_f("D1", "10-K", "2002-02-19")]))
+    live = (36995, ("WACHOVIA CORP NEW", [{"name": "FIRST UNION CORP", "from": "1994-02-11T00:00:00.000Z",
+                                          "to": "2001-09-07T00:00:00.000Z"}],
+                    [_f("W1", "10-K", "2008-02-28"), _f("W2", "25-NSE", "2008-12-31")]))
+    idx = _index("WACHOVIA CORP:0000104019:", "WACHOVIA CORP NEW:0000036995:", "FIRST UNION CORP:0000036995:")
+    r = TickerResolver(_Edgar(dict([dead, live])), name_index=idx)
+    assert list(r._index_candidates(idx, "WACHOVIA CORP", "2009-06-08")) == [36995]
+
+
+def test_a_broad_spelling_reads_the_matches_carrying_every_word_of_the_name():
+    """MEDCO HEALTH SOLUTIONS matches 17 CIKs, most of them Medco's pharmacy
+    subsidiaries; the company is the one that filed a Form 25 (the run found no
+    issuer and lost Medco's 2012 merger)."""
+    medco = (1170650, ("MEDCO HEALTH SOLUTIONS INC", [], [_f("M1", "10-K", "2008-02-20"), _f("M2", "25", "2012-04-17")]))
+    subs = {1556600 + i: (f"MEDCO HEALTH SOLUTIONS OF CITY {i} LLC", [], []) for i in range(16)}
+    idx = _index("MEDCO HEALTH SOLUTIONS INC:0001170650:",
+                 *(f"{n[0]}:{c:010d}:" for c, n in subs.items()))
+    r = TickerResolver(_Edgar({**subs, **dict([medco])}), name_index=idx)
+    assert list(r._index_candidates(idx, "MEDCO HEALTH SOLUTIONS", "2009-06-08")) == [1170650]
 
 
 def test_a_fund_sharing_the_prefix_loses_to_the_company_whose_form25_fits():
