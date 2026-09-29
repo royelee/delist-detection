@@ -374,7 +374,7 @@ def cusip_handoffs(eras: Sequence[TickerEra], ftd: FtdIndex) -> list[Handoff]:
 
 
 def _contradicted(era: TickerEra, composite: str, eras: Sequence[TickerEra], issuers: Mapping[str, Issuer],
-                  confirmed: Mapping[str, str], *, other_issuers: bool = True) -> bool:
+                  confirmed: Mapping[str, str]) -> bool:
     """Whether another era's pin or CUSIP (`confirmed`: era key -> composite)
     rules out `composite` for `era`, a candidate that only the issuer's EDGAR
     names accept. An issuer's names can outlive its stock and match a later
@@ -383,11 +383,11 @@ def _contradicted(era: TickerEra, composite: str, eras: Sequence[TickerEra], iss
     today's JACOBS SOLUTIONS line, a new composite since the 2022 reorganization.
     So the candidate is ruled out when an era of another known issuer is
     confirmed on it, or when an era of the same issuer and share class is
-    confirmed on another composite over overlapping dates. With
-    `other_issuers=False` only the second test applies: a pick the era's own
-    observed name accepts may well sit on a line another issuer's era is
-    confirmed on, since a line keeps its composite through a change of issuer
-    (Merck's 2009 reverse merger, Medtronic's and Eaton's redomiciles)."""
+    confirmed on another composite over overlapping dates. A pick the era's own
+    observed name accepts is not checked here: a line keeps its composite
+    through a change of issuer (Merck's 2009 reverse merger, Medtronic's and
+    Eaton's redomiciles), and an era's issuer CIK can be today's holder's (the
+    2008 Merck era resolves to CIK 310158, Schering-Plough's then)."""
     cik, cls = cik_of(issuers, era.key), share_class_from_name(era.name)
     for other in eras:
         comp = confirmed.get(other.key)
@@ -395,7 +395,7 @@ def _contradicted(era: TickerEra, composite: str, eras: Sequence[TickerEra], iss
             continue
         other_cik = cik_of(issuers, other.key)
         if comp == composite:
-            if other_issuers and other_cik is not None and other_cik != cik:
+            if other_cik is not None and other_cik != cik:
                 return True
         elif (other_cik == cik and share_class_from_name(other.name) == cls
               and other.first <= era.last and era.first <= other.last):
@@ -486,14 +486,15 @@ class FigiResolver:
         issuer.
 
         The ticker and name tiers answer with whoever holds the ticker or name
-        today, so neither is asked for an era of `unconfirmed` (no fails row
-        shows its ticker then: `unconfirmed_eras`) or of `barred` (a weak pick
-        `crossing_weak_eras` took back out). A plain own-name pick is checked
-        by `_contradicted`'s same-issuer test (another line of its issuer and
-        class confirmed over its dates). An `unconfirmed` era with no pick of its own is
-        a ticker a snapshot backfilled: it is placed ("backfill") on the one
-        composite an era of its issuer and class is confirmed on (by a pin or
-        a CUSIP) over overlapping dates, when there is exactly one."""
+        today. They are not asked for an era of `barred` (a weak pick
+        `crossing_weak_eras` took back out), nor for an era of `unconfirmed` (no
+        fails row shows its ticker then: `unconfirmed_eras`) that an era of its
+        issuer and class, confirmed by a pin or a CUSIP over overlapping dates on
+        exactly one composite, places: that is a ticker a snapshot backfilled,
+        and it is placed ("backfill") on that composite. An unconfirmed era with
+        no such line keeps the ticker and name tiers: a stale snapshot's dead
+        company (Dow Jones in 2008) finds its own line there, and a later
+        holder's pick is caught by `crossing_weak_eras`."""
         eras_by_key(eras)                                # every era is keyed by era.key below: refuse duplicates
         out: dict[str, EraResolution] = {}
         jobs: list[dict] = []
@@ -525,17 +526,25 @@ class FigiResolver:
             if c:
                 confirmed[era.key] = c.composite
 
+        def group(era: TickerEra) -> tuple[int | None, str]:
+            return cik_of(issuers, era.key), share_class_from_name(era.name)
+
+        def backfill_line(era: TickerEra) -> str | None:
+            """The one composite an era of the era's issuer and class is confirmed
+            on over its dates, if there is exactly one."""
+            if era.key not in issuers:
+                return None
+            lines = {confirmed[o.key] for o in eras if o.key in confirmed and o.key != era.key
+                     and group(o) == group(era) and o.first <= era.last and era.first <= o.last}
+            return next(iter(lines)) if len(lines) == 1 else None
+
         def named(era: TickerEra, cands: list[FigiCandidate]) -> tuple[FigiCandidate | None, bool]:
             """The accepted candidate, and whether only the EDGAR names accepted it."""
             c = accept(cands, ticker=era.ticker, names=era.names, via_cusip=False)
             issuer = issuers.get(era.key)
             edgar = issuer.names if issuer is not None else ()
-            if c is not None:
-                if _contradicted(era, c.composite, eras, issuers, confirmed, other_issuers=False):
-                    return None, False
+            if c is not None or not edgar:
                 return c, False
-            if not edgar:
-                return None, False
             c = accept(cands, ticker=era.ticker, names=[*era.names, *edgar], via_cusip=False)
             if c is None or _contradicted(era, c.composite, eras, issuers, confirmed):
                 return None, False
@@ -550,7 +559,7 @@ class FigiResolver:
             if c:
                 picks[era.key] = ("cusip", c.composite, c, False)
                 continue
-            if era.key in unconfirmed or era.key in barred:
+            if era.key in barred or (era.key in unconfirmed and backfill_line(era) is not None):
                 continue                      # the ticker and name tiers answer with today's holder
             c, edgar_only = named(era, us_candidates(answers[plan[era.key][2]].get("data") or []))
             if c:
@@ -576,18 +585,14 @@ class FigiResolver:
             picks[key] = ("handoff", composite, cand, True)
             self.log(f"FIGI handoff: {key} joins {composite}, the line {anchor} is confirmed on ({_link_text(h)})")
 
-        def group(era: TickerEra) -> tuple[int | None, str]:
-            return cik_of(issuers, era.key), share_class_from_name(era.name)
-
-        # A backfilled ticker (an unconfirmed era: APTV listed in 2012-13, when
-        # Delphi traded as DLPH) is the line its issuer and class traded on then.
+        # A backfilled ticker (an unconfirmed era: Jacobs listed under J in
+        # 2012-14, when it traded as JEC) is the line its issuer and class traded
+        # on then.
         for era in eras:
-            if era.key not in unconfirmed or era.key in out or era.key in picks or era.key not in issuers:
+            if era.key not in unconfirmed or era.key in out or era.key in picks:
                 continue
-            lines = {confirmed[o.key] for o in eras if o.key in confirmed and o.key != era.key
-                     and group(o) == group(era) and o.first <= era.last and era.first <= o.last}
-            if len(lines) == 1:
-                composite = next(iter(lines))
+            composite = backfill_line(era)
+            if composite is not None:
                 anchor = next(o.key for o in eras if confirmed.get(o.key) == composite)
                 picks[era.key] = ("backfill", composite, picks[anchor][2] if anchor in picks else None, False)
                 self.log(f"FIGI backfill: {era.key} joins {composite}, the line its issuer and class traded on "

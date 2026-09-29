@@ -82,18 +82,32 @@ def test_two_filers_under_one_form_name_no_candidate_as_edgar_did():
     b = (2, ("ACME CORP DEL", [], [_f("B", "25-NSE", "2011-05-01")]))
     idx = _index("ACME CORP:0000000001:", "ACME CORP DEL:0000000002:")
     r = TickerResolver(_Edgar(dict([a, b])), name_index=idx)
-    assert r._index_candidates(idx, "ACME CORP", "2012-06-29") == {}
+    assert r._index_candidates(idx, "ACME CO", "2012-06-29") == {}
 
 
-def test_with_no_filer_a_spelling_matching_one_cik_gives_it_and_the_probe_is_capped():
+def test_a_name_exactly_one_companys_is_the_candidate_whatever_it_filed():
+    """NORTHEAST UTILITIES (NU, 2008-2015) never filed a Form 25; EDGAR's search
+    answered its exact name with the company. A broad spelling of it
+    (NORTHEAST) matches dozens of companies and names none: Northeast Bancorp's
+    Form 25 must not win (the full run of 2026-09-29 took it)."""
+    nu = (72741, ("EVERSOURCE ENERGY", [], [_f("N", "10-K", "2015-02-20")]))
+    bank = (811831, ("NORTHEAST BANCORP /ME/", [], [_f("B", "25-NSE", "2014-12-01")]))
+    lines = ["NORTHEAST UTILITIES:0000072741:", "NORTHEAST BANCORP /ME/:0000811831:"]
+    lines += [f"NORTHEAST FUND {i} LP:{9000 + i:010d}:" for i in range(12)]
+    idx = _index(*lines)
+    r = TickerResolver(_Edgar(dict([nu, bank])), name_index=idx)
+    assert r._index_candidates(idx, "NORTHEAST UTILITIES", "2015-02-20") == {72741: ("NORTHEAST UTILITIES", 1000)}
+
+
+def test_with_no_filer_a_spelling_matching_one_cik_gives_it_and_a_broad_one_reads_nothing():
     solo = (7, ("SOLO WIDGETS INC", [], [_f("S", "10-K", "2012-02-01")]))
     r = TickerResolver(_Edgar(dict([solo])), name_index=_index("SOLO WIDGETS INC:0000000007:"))
-    assert r._index_candidates(r._index(), "SOLO WIDGETS INC", "2012-06-29") == {7: ("SOLO WIDGETS INC", 1000)}
+    assert r._index_candidates(r._index(), "SOLO WIDGETS", "2012-06-29") == {7: ("SOLO WIDGETS INC", 1000)}
     many = [f"MANY THINGS FUND {i} LP:{9000 + i:010d}:" for i in range(15)]
     e = _Edgar({9000 + i: (f"MANY THINGS FUND {i} LP", [], []) for i in range(15)})
     r = TickerResolver(e, name_index=_index(*many))
     assert r._index_candidates(r._index(), "MANY THINGS", "2012-06-29") == {}
-    assert len(set(e.read)) == TickerResolver.INDEX_PROBE             # only the top matches' filings are read
+    assert e.read == []                   # more matches than INDEX_PROBE: EDGAR's unnamed list, nothing read
 
 
 def test_a_fund_sharing_the_prefix_loses_to_the_company_whose_form25_fits():

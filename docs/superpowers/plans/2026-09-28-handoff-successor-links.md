@@ -363,3 +363,20 @@ and `tests/test_delistings.py` fakes; no test may touch the network.
 - **Design question for that plan.** The FIGI does not change, so the security master's key cannot split the
   security by itself. Options include a post-emergence placeholder security linked as successor, or a clip with
   the relisted range kept under a new identity.
+
+## Deviations found by the full run (2026-09-29)
+
+- **Part 1 (1), narrowed.** A blanket "no ticker or name pick for an unconfirmed era" turned about 30 correct
+  FIGIs into placeholders. Stale snapshots list dead companies (DJ, MEL, TXU in 2008), and their ticker pick is
+  their own dead line. 2012 snapshots list renamed companies under today's ticker on the same FIGI (TT for IR).
+  An unconfirmed era now skips the ticker and name tiers only when the backfill placement has its line. APTV
+  2012-13 is caught by (3), and J by the placement.
+- **Part 1 (2), dropped.** Checking own-name picks with `_contradicted` broke lines that kept their composite
+  through a change of issuer (Merck 2009, Medtronic, Eaton, Accenture), and eras whose resolved CIK is today's
+  holder's (MRK 2008 on CIK 310158). No case of the table needs it.
+- **Merger rows on timing across two issuers stand** (`handoff_conflict`): WEN 2008, IGT 2015 and EVHC 2016 were
+  acquisitions for other shares or cash. Timing rewrites a merger only on the same issuer.
+- **The 8-K12B search** also tries the predecessor's EDGAR names around the handoff and its observed name
+  (Ashland Inc's CIK is ASHLAND LLC today).
+- **A continuation's Form 25** must take effect on or after A's last sighting, within 30 days of the later of
+  A's last and B's first sighting (the Braves split-off's Form 25 dated FWONA wrongly; LH's was 36 days away).

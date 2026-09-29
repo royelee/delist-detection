@@ -497,42 +497,58 @@ class TickerResolver:
                           observed_date: str | None) -> dict[int, tuple[str, int]]:
         """The name tier's candidates from the index, found as the live company
         search finds them (CIK -> (the name found, date penalty)). For each
-        spelling of `nm` (`_name_variants`): the index entries equal to it or
-        starting with it, as EDGAR's character prefix does (snapshots cut names
-        short: COCA COLA ENTERPRISE), ranked exact first, then by the words shared
-        with `nm`, the shorter name, the CIK; the first `INDEX_PROBE` distinct
-        CIKs are read. Then the live search's form filters, in its order
+        spelling of `nm` (`_name_variants`): a name equal to it on exactly one
+        CIK gives that CIK, as EDGAR's company page does. Otherwise the entries
+        equal to it or starting with it, as EDGAR's character prefix does
+        (snapshots cut names short: COCA COLA ENTERPRISE), when they are no more
+        than `INDEX_PROBE` distinct CIKs (more is EDGAR's unnamed list: no
+        candidate), go through the live search's form filters, in its order
         (`NAME_SEARCH_FORMS`): the first under which any of them filed decides,
         and a CIK counts only when it is the one that did (EDGAR names no company
-        when several match), its penalty the days between the date and its
-        nearest such filing. With no filer under any of them, a spelling that
-        matches exactly one CIK gives it. The file lists funds, individuals and
+        when several match). With no filer under any of them, a spelling that
+        matches exactly one CIK gives it. The penalty is the days between the
+        date and the CIK's nearest such filing. The file lists funds, individuals and
         subsidiaries (WEATHERFORD YVONNE, BOSTON PROPERTIES LTD PARTNERSHIP):
         the form filter is what keeps them out, as it did in the live search."""
         want = name_tokens(nm)
         target = parse_day(observed_date)
+
+        def gap(c: int) -> int:
+            dates = [d for form in self.NAME_SEARCH_FORMS for d in self._form_dates(c, observed_date, form)]
+            return min(min(abs((d - target).days) for d in dates), 9999) if dates and target else 1000
+
         found: dict[int, tuple[str, int]] = {}
         for variant in self._name_variants(nm):
             exact, prefix = index.split_search(variant)
+            exact_ciks = list(dict.fromkeys(h.cik for h in exact if h.cik not in self.EXCHANGE_CIKS))
             names: dict[int, str] = {}
-            for rank, h in sorted([(0, h) for h in exact] + [(1, h) for h in prefix],
-                                  key=lambda x: (x[0], -len(name_tokens(x[1].name) & want), len(x[1].name), x[1].cik)):
-                if h.cik not in self.EXCHANGE_CIKS:
-                    names.setdefault(h.cik, h.name)
-            probe = list(names)[: self.INDEX_PROBE]
             chosen: tuple[int, int] | None = None
-            for form in self.NAME_SEARCH_FORMS:
-                dated = {c: self._form_dates(c, observed_date, form) for c in probe}
-                filers = [c for c in probe if dated[c]]
-                if filers:
-                    if len(filers) == 1:
-                        c = filers[0]
-                        gap = min(abs((d - target).days) for d in dated[c]) if target else 1000
-                        chosen = (c, min(gap, 9999))
-                    break
+            if len(exact_ciks) == 1:
+                # EDGAR answers a name that is exactly one company's with that
+                # company, whatever the form filter (NORTHEAST UTILITIES).
+                c = exact_ciks[0]
+                names[c] = next(h.name for h in exact if h.cik == c)
+                chosen = (c, gap(c))
             else:
-                if len(names) == 1:
-                    chosen = (probe[0], 1000)
+                for h in sorted(exact + prefix, key=lambda h: (-len(name_tokens(h.name) & want), len(h.name), h.cik)):
+                    if h.cik not in self.EXCHANGE_CIKS:
+                        names.setdefault(h.cik, h.name)
+                # A spelling matching more companies than are read is answered by
+                # EDGAR with an unnamed list: no candidate ("NORTHEAST", "S P").
+                if len(names) <= self.INDEX_PROBE:
+                    probe = list(names)
+                    for form in self.NAME_SEARCH_FORMS:
+                        dated = {c: self._form_dates(c, observed_date, form) for c in probe}
+                        filers = [c for c in probe if dated[c]]
+                        if filers:
+                            if len(filers) == 1:
+                                c = filers[0]
+                                chosen = (c, min(min(abs((d - target).days) for d in dated[c]), 9999)
+                                          if target else 1000)
+                            break
+                    else:
+                        if len(names) == 1:
+                            chosen = (probe[0], 1000)
             if chosen is not None:
                 c, penalty = chosen
                 if c in found:

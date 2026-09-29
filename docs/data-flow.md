@@ -549,17 +549,21 @@ answer with whoever holds the ticker or the name *today*, so:
 - An era the fails data covers but never shows under its ticker (no row
   under it within 30 days of its span while rows of other symbols exist then:
   `security_master.guarded_eras`, the same fact `ticker_unconfirmed` reports)
-  is not asked the ticker or name tier. It is placed (`figi_source=backfill`)
-  on the one composite an era of its own issuer and class is confirmed on (by
-  a pin or a CUSIP) over overlapping dates: APTV in 2012-2013 lands on
-  Delphi's DLPH line, Jacobs under J in 2012-2014 on the JEC line, and the
-  observations become `backfilled_ticker` in `observation_map.csv`. With no
-  such line, or two, it takes its placeholder.
-- A plain own-name ticker or name pick yields when another era of its issuer
-  and class is confirmed on a different composite over its dates
-  (`_contradicted`'s same-issuer test only: a line keeps its composite through
-  a change of issuer, as Merck's did in 2009, so another issuer confirmed on
-  it is no contradiction for an own-name pick).
+  and that an era of its own issuer and class places -- confirmed (by a pin
+  or a CUSIP) over overlapping dates on exactly one composite -- is a ticker a
+  snapshot backfilled: it is not asked the ticker or name tier, and is placed
+  (`figi_source=backfill`) on that composite. Jacobs under J in 2012-2014
+  lands on the JEC line, and its observations become `backfilled_ticker` in
+  `observation_map.csv`. An unconfirmed era with no such line keeps the ticker
+  and name tiers: a stale snapshot's dead company finds its own line there
+  (Dow Jones and Mellon, listed in 2008 after they were acquired), and a
+  later holder's line is caught below (APTV in 2012-13).
+- A plain own-name pick is not checked against other eras' confirmations: a
+  line keeps its composite through a change of issuer (Merck's 2009 reverse
+  merger, Medtronic's and Eaton's redomiciles), and an era's issuer CIK can be
+  today's holder's. (The handoff plan asked for that check; the full run of
+  2026-09-29 showed it and a blanket unconfirmed-era guard turning some 40
+  correct FIGIs into placeholders, so neither is kept.)
 - After the eras are resolved, a weak era (a ticker or name pick) whose merge
   would carry its security's range for the ticker across another security's
   confirmed span of that ticker (`crossing_weak_eras`: the confirmed span lies

@@ -900,10 +900,8 @@ def test_an_era_its_ticker_never_traded_under_takes_no_ticker_or_name_pick():
     eras, figi, cusips = _aptv_eras()
     dlph, aptv12, aptv17, aptv24 = eras
     issuers = issuers_by_era({e.key: 1521332 for e in eras}, {1521332: ("Aptiv PLC", "Delphi Automotive PLC")})
-    # Without the fails evidence, the own-name guard (DLPH is confirmed elsewhere
-    # over the same dates) already refuses today's line, but places it nowhere.
     before = FigiResolver(figi).resolve_many(eras, issuers=issuers, cusips=cusips)
-    assert before[aptv12.key].sec_id == "CIK1521332-COMMON"
+    assert before[aptv12.key].sec_id == "BBG01R914LT5"                 # the bug: today's line
     figi.filter_calls.clear()
     res = FigiResolver(figi).resolve_many(eras, issuers=issuers, cusips=cusips, unconfirmed={aptv12.key})
     assert {k: r.sec_id for k, r in res.items()} == {
@@ -913,37 +911,31 @@ def test_an_era_its_ticker_never_traded_under_takes_no_ticker_or_name_pick():
     assert figi.filter_calls == []                                     # no name search for it either
 
 
-def test_an_unconfirmed_era_with_no_line_of_its_own_over_its_dates_gets_the_placeholder():
-    """With no same-issuer, same-class era confirmed over its dates (or with two
-    such lines), an unconfirmed era takes neither the ticker hit, nor a name
-    hit, nor a guess: it stays on its issuer's placeholder."""
+def test_an_unconfirmed_era_with_no_line_to_be_placed_on_keeps_the_ticker_tier():
+    """Only a line of its own issuer and class over its dates takes an
+    unconfirmed era off the ticker tier. With none (or two), the ticker answers
+    as before: a stale snapshot's dead company finds its own line there (Dow
+    Jones, listed in 2008 after News Corp bought it in 2007), and a later
+    holder's line is caught by the crossing check (APTV17 lies between)."""
+    from delist_detection.security_master import resolve_with_identity_guard
     eras, figi, cusips = _aptv_eras()
     dlph, aptv12, aptv17, aptv24 = eras
     alone = [aptv12, aptv24]
     res = FigiResolver(figi).resolve_many(alone, issuers=issuers_by_era({e.key: 1521332 for e in alone}),
                                           cusips={k: cusips[k] for k in (aptv12.key, aptv24.key)},
                                           unconfirmed={aptv12.key})
-    assert (res[aptv12.key].sec_id, res[aptv12.key].source) == ("CIK1521332-COMMON", "placeholder")
-    other = _era("DLPX", ("2012-06-29", "DELPHI AUTOMOTIVE PLC"), ("2013-06-28", "DELPHI AUTOMOTIVE PLC"))
-    two = [dlph, other, aptv12]
-    figi.answers[("ID_CUSIP", "99999X109")] = {"data": [_row("BBGSECONDLN1", "US", "DLPX", "DELPHI AUTOMOTIVE PLC")]}
-    res = FigiResolver(figi).resolve_many(two, issuers=issuers_by_era({e.key: 1521332 for e in two}),
-                                          cusips={dlph.key: ["G6095L109"], other.key: ["99999X109"],
-                                                  aptv12.key: []}, unconfirmed={aptv12.key})
-    assert res[aptv12.key].source == "placeholder"
-
-
-def test_an_own_name_ticker_pick_yields_to_its_issuers_line_confirmed_over_its_dates():
-    """Part 1 (2): a ticker hit whose name agrees with the era's own observed
-    name still yields when another era of its issuer and class is confirmed on
-    a different composite over the same dates."""
-    old = _era("ACME", ("2012-06-29", "ACME CORP"), ("2013-12-31", "ACME CORP"))
-    line = _era("ACMX", ("2012-06-29", "ACME CORP"), ("2014-06-30", "ACME CORP"))
-    figi = _Figi({("TICKER", "ACME"): {"data": [_row("BBGTODAYLIN1", "US", "ACME", "ACME CORP")]},
-                  ("ID_CUSIP", "11111A101"): {"data": [_row("BBGTHENLINE1", "US", "ACMX", "ACME CORP")]}})
-    res = FigiResolver(figi).resolve_many([old, line], issuers=issuers_by_era({old.key: 5, line.key: 5}),
-                                          cusips={old.key: [], line.key: ["11111A101"]})
-    assert (res[old.key].sec_id, res[old.key].source) == ("CIK5-COMMON", "placeholder")
+    assert (res[aptv12.key].sec_id, res[aptv12.key].source) == ("BBG01R914LT5", "ticker")
+    three = [aptv12, aptv17, aptv24]
+    res, detached = resolve_with_identity_guard(
+        FigiResolver(figi), three, issuers=issuers_by_era({e.key: 1521332 for e in three}),
+        cusips={k: cusips[k] for k in (aptv12.key, aptv17.key, aptv24.key)}, unconfirmed={aptv12.key})
+    assert detached == {aptv12.key: ("BBG01R914LT5", "BBG001QD41M9")}
+    assert res[aptv12.key].sec_id == "CIK1521332-COMMON"
+    dj = _era("DJ", ("2008-01-16", "DOW JONES & CO INC"), ("2009-06-08", "DOW JONES & CO INC"))
+    djfigi = _Figi({("TICKER", "DJ"): {"data": [_row("BBG000BH5K72", "US", "DJ", "DOW JONES & CO INC")]}})
+    res = FigiResolver(djfigi).resolve_many([dj], issuers=issuers_by_era({dj.key: 29924}), cusips={dj.key: []},
+                                            unconfirmed={dj.key})
+    assert (res[dj.key].sec_id, res[dj.key].source) == ("BBG000BH5K72", "ticker")
 
 
 def test_an_own_name_pick_keeps_a_line_that_changed_issuer():

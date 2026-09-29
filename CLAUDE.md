@@ -203,11 +203,12 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   `issuers_by_era` builds the era key -> `Issuer` map that `candidate_cusips`,
   `resolve_many` and `build_securities` take, the one source of an era's CIK,
   read with `cik_of`) is its type. The identity guard: an era the fails
-  data covers but never shows under its ticker (`guarded_eras`) takes no
-  ticker or name pick, only the one line its issuer and class are confirmed
-  on over its dates (`figi_source=backfill`) or its placeholder; an own-name
-  pick is checked by `_contradicted`'s same-issuer test only (a line keeps its
-  composite through a change of issuer, Merck 2009); `resolve_with_identity_guard` takes back
+  data covers but never shows under its ticker (`guarded_eras`), when the one
+  line its issuer and class are confirmed on over its dates exists, is placed
+  on it (`figi_source=backfill`) instead of asking the ticker or name tier
+  (with no such line it keeps them: a stale snapshot's dead company finds its
+  own line; own-name picks are not checked by `_contradicted`, since a line
+  keeps its composite through a change of issuer, Merck 2009); `resolve_with_identity_guard` takes back
   a weak era whose merge would cross another security's confirmed span of the
   ticker (`crossing_weak_eras`, review `identity_detached`, `detached_review`);
   `superseded_placeholders` marks a placeholder a later FIGI line of its
