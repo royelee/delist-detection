@@ -505,10 +505,6 @@ class TickerResolver:
             of the entries carrying every word, by fit (MEDCO HEALTH SOLUTIONS
             and its pharmacy subsidiaries); a cut-off one reads nothing
             (NORTHEAST of NORTHEAST UTILITIES, S P of S&P GLOBAL);
-          - of those, the CIKs that had carried a name starting with the
-            spelling by 30 days after the date stand for all, when any had (TCF
-            FINANCIAL CORP was old TCF's name in 2012, Chemical Financial's only
-            from 2019);
           - they go through the live search's form filters, in its order
             (`NAME_SEARCH_FORMS`): the first under which any of them filed
             decides, and a CIK counts only when it is the one that did, or the
@@ -539,14 +535,13 @@ class TickerResolver:
                 # unnamed list (NORTHEAST of NORTHEAST UTILITIES, S P of S&P GLOBAL).
                 keeps_name = bool(want) and want <= name_tokens(variant)
                 probe = [c for c in probe if keeps_name and want <= name_tokens(names[c])][:self.INDEX_PROBE]
-            carriers = [c for c in probe if self._carried_on(c, variant, target)]
-            probe = carriers or probe
             chosen: list[tuple[int, int]] = []
             for form in self.NAME_SEARCH_FORMS:
                 dated = {c: self._form_dates(c, observed_date, form) for c in probe}
                 filers = [c for c in probe if dated[c]]
                 if filers:
-                    filers = self._one_filer(filers, exact, name_tokens(normalize_name(nm)), variant, target)
+                    if len(filers) > 1:
+                        filers = self._one_filer(filers, exact, name_tokens(normalize_name(nm)), variant, target)
                     if len(filers) == 1:
                         c = filers[0]
                         chosen = [(c, min(min(abs((d - target).days) for d in dated[c]), 9999)
@@ -583,23 +578,27 @@ class TickerResolver:
     def _one_filer(self, filers: list[int], exact, want: set[str], spelling: str,
                    on: date | None) -> list[int]:
         """Several CIKs of a spelling filed under one form: EDGAR names no company
-        then, except the one the query names. Each step keeps the filers it
-        applies to, when any, until one is left: the name is exactly the
-        spelling (MOTOROLA INC, not MOTOROLA MOBILITY HOLDINGS; AMB PROPERTY
-        CORP, not its LP); a name carried by 30 days after the date has exactly
-        the observed name's words (ANHEUSER BUSCH COMPANIES, not ANHEUSER-BUSCH
-        INBEV; SMURFIT STONE CONTAINER CORP, not SMURFIT-STONE CONTAINER
-        ENTERPRISES); the name was carried within 30 days of the date (ALBERTO
-        CULVER CO in 2010: the 2006 spin-off, not the old company renamed)."""
+        then, except the one the query names. The filers the query names are
+        those whose name is exactly the spelling (MOTOROLA INC, not MOTOROLA
+        MOBILITY HOLDINGS; AMB PROPERTY CORP, not its LP), else those with a
+        name carried by 30 days after the date made of exactly the observed
+        name's words (ANHEUSER BUSCH COMPANIES, not ANHEUSER-BUSCH INBEV;
+        SMURFIT STONE CONTAINER CORP, not SMURFIT-STONE CONTAINER
+        ENTERPRISES); none named, none kept (APTIV: Aptiv PLC was Delphi in
+        2013, Aptiv Solutions another company). Of several named, the ones that
+        had carried the name by 30 days after the date (TCF FINANCIAL CORP in
+        2014: old TCF, not Chemical Financial, renamed in 2019), then the ones
+        carrying it within 30 days of it (ALBERTO CULVER CO in 2010: the 2006
+        spin-off, not the old company renamed)."""
         exact_ciks = {h.cik for h in exact}
-        steps = (lambda c: c in exact_ciks,
-                 lambda c: bool(want) and any(name_tokens(normalize_name(n)) == want for n in self._names_by(c, on)),
-                 lambda c: self._carried_on(c, spelling, on, near=True))
-        for keep in steps:
-            if len(filers) == 1:
+        named = [c for c in filers if c in exact_ciks] or [
+            c for c in filers
+            if want and any(name_tokens(normalize_name(n)) == want for n in self._names_by(c, on))]
+        for near in (False, True):
+            if len(named) <= 1:
                 break
-            filers = [c for c in filers if keep(c)] or filers
-        return filers
+            named = [c for c in named if self._carried_on(c, spelling, on, near=near)] or named
+        return named
 
     def _names_by(self, cik: int, on: date | None, near: bool = False) -> list[str]:
         """The CIK's EDGAR names carried by 30 days after `on` (`near`: within 30

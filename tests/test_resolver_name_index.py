@@ -250,3 +250,16 @@ def test_of_several_filers_the_one_carrying_exactly_the_names_words_then_the_nam
     idx = _index("ALBERTO CULVER CO:0000003327:", "ALBERTO CULVER CO:0001368457:")
     r = TickerResolver(_Edgar(dict([old, new])), name_index=idx)
     assert list(r._index_candidates(idx, "ALBERTO CULVER CO", "2010-07-09")) == [1368457]
+
+
+def test_of_two_filers_one_the_query_does_not_name_is_no_candidate_whatever_the_date():
+    """APTIV PLC in 2013: Delphi (1521332) took the name only in 2017, Aptiv
+    Solutions (1193940) is another company; both filed. EDGAR's search named
+    neither (the run of 20bdc19 put APTV 2012-13 on Aptiv Solutions)."""
+    delphi = (1521332, ("Aptiv PLC", [{"name": "Delphi Automotive PLC", "from": "2011-05-19T00:00:00.000Z",
+                                       "to": "2017-12-05T00:00:00.000Z"}], [_f("D", "25-NSE", "2024-12-20")]))
+    other = (1193940, ("APTIV SOLUTIONS, INC.", [], [_f("A1", "10-K", "2011-03-01"), _f("A2", "15-12G", "2014-11-01"),
+                                                    _f("A3", "25-NSE", "2014-10-20")]))
+    idx = _index("APTIV PLC:0001521332:", "DELPHI AUTOMOTIVE PLC:0001521332:", "APTIV SOLUTIONS, INC.:0001193940:")
+    r = TickerResolver(_Edgar(dict([delphi, other])), name_index=idx)
+    assert 1193940 not in r._index_candidates(idx, "APTIV PLC", "2013-12-31")   # Delphi's: its checks reject it
