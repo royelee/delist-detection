@@ -45,11 +45,13 @@ def test_exact_matches_come_before_prefix_matches():
     assert (_ciks(exact), _ciks(prefix)) == ([804269], [1037688])
 
 
-def test_a_prefix_matches_on_a_word_boundary_only():
-    """EDGAR's prefix search, on whole words: BARNES finds BARNES & NOBLE and
-    BARNES BANCORP, never BARNESANDNOBLE COM."""
+def test_a_prefix_matches_by_character_as_edgar_does():
+    """EDGAR's company search matches a prefix by character: a snapshot's name
+    cut off mid-word still finds the company (COCA COLA ENTERPRISE, 2008)."""
+    idx = CikNameIndex.from_text("COCA COLA ENTERPRISES INC:0000804055:\nCOCA COLA CO:0000021344:\n")
+    assert [h.cik for h in idx.search("COCA COLA ENTERPRISE")] == [804055]
     ciks = set(_ciks(_index().search("BARNES")))
-    assert {890491, 1634117, 1222169, 2150699} <= ciks and 1069665 not in ciks
+    assert {890491, 1634117, 1222169, 2150699, 1069665} <= ciks
 
 
 def test_a_former_name_finds_the_current_cik():

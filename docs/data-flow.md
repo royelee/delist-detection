@@ -392,11 +392,16 @@ target rather than an acquirer.
    HOLDINGS LTD are both CIK 1530721), funds and individuals included,
    downloaded once and refreshed after 30 days under
    `cache/sec_data/cik_lookup/`. Names are compared normalized (case,
-   punctuation, `&` and EDGAR's `/DE/` state tag ignored). Every spelling's
-   exact matches are the candidates; with none, every spelling's prefix
-   matches on whole words; each ranked by the words shared with the name, at
-   most 5 CIKs; the file has no dates, so the ranking and checks below carry
-   on without a date gap. No live company search is sent. A resolver built
+   periods, punctuation, `&` and EDGAR's `/DE/` state tag ignored). For each
+   spelling, its exact and character-prefix matches (snapshots cut names
+   short: COCA COLA ENTERPRISE) are ranked exact first, then by shared words,
+   and the top 10 CIKs' filing lists (their cached submissions JSON) stand in
+   for the live search's form filter: under 25-NSE, then 25, then 15-12G, the
+   first form any of them filed decides, and a CIK counts only when it is the
+   only one that did, its date gap the distance to that filing; with no filer,
+   a spelling matching a single CIK gives it. Without that filter the file's
+   funds, individuals and subsidiaries win (WEATHERFORD YVONNE for
+   WEATHERFORD INTL, a first attempt showed). No live company search is sent. A resolver built
    without the index (the offline tests, the golden replay), or whose index
    cannot be loaded, uses the live search:
 
@@ -764,7 +769,10 @@ ticker and another starting under it within days (CONTEXT.md).
    timing, flag `handoff_continuation`. A row near it takes B as its
    successor; an `unknown` or merger row is rewritten to the continuation's
    values (a merger keeps its old bucket in a `handoff_rebucketed` row),
-   except a merger whose payout reconciled against timing evidence alone, a
+   except a merger on timing evidence between two issuers (an acquirer's new
+   holding company takes the target's ticker too: Wendy's into Wendy's/Arby's
+   at 4.25 shares, IGT for cash and stock), or whose payout reconciled
+   against timing evidence alone, a
    liquidation/compliance failure/expiration, or a row naming another
    successor: those stand, with a `handoff_conflict` row. A continuation drops
    A's `ended_without_delisting`, the ambiguous Form 25 rows of A and B it

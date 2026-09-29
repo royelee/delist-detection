@@ -29,7 +29,7 @@ from .evidence import edgar_names
 from .fatal import FATAL
 from .handoffs import (
     HandoffDecision, HandoffOutcome, apply_handoffs, continuation_filing, cusip_switch, decide_handoff,
-    drop_resolved_shared, find_handoffs, issuer_carries_on,
+    drop_resolved_shared, find_handoffs, issuer_carries_on, predecessor_names,
 )
 from .figi_resolution import is_placeholder, share_class_from_name
 from .form25 import SecurityRef
@@ -58,7 +58,6 @@ from .security_master import (
 from .store import DelistingKey, write_tables
 from .successors import (
     SecurityStart, successor_from_8k12b, successor_in_run, successor_query, successor_search_args,
-    successor_search_name,
 )
 from .ticker_resolver import InferredIssuer, TickerResolution
 
@@ -811,17 +810,26 @@ def _handoffs(ctx: _RunContext, delistings: list[Delisting], securities: dict[st
     pairs = find_handoffs(sightings)
     mark = ctx.meter.start()
 
-    def filing_args(p) -> tuple[str, date, int] | None:
+    def filing_args(p) -> tuple[list[str], date, int] | None:
         a, b = securities[p.a], securities[p.b]
         if fts is None or b.issuer_cik is None:
             return None
-        return successor_search_name(edgar, a.issuer_cik, a.name), date.fromisoformat(p.b_first), b.issuer_cik
+        sub = edgar.submissions(a.issuer_cik) if a.issuer_cik is not None else None
+        return predecessor_names(sub, p.a_last, a.name), date.fromisoformat(p.b_first), b.issuer_cik
+
+    def find_filing(p):
+        args = filing_args(p)
+        if args is None:
+            return None
+        names, day, cik = args
+        return next((f for n in names if (f := continuation_filing(fts, name=n, day=day, successor_cik=cik))), None)
 
     if fts is not None and ctx.sec_workers > 1:
         def warm_search(p) -> None:
             args = filing_args(p)
             if args is not None:
-                fts(*successor_query(args[0], args[1]))
+                for n in args[0]:
+                    fts(*successor_query(n, args[1]))
         warm(pairs, warm_search, workers=ctx.sec_workers, name="handoff search")
     first_seen = {sid: sig[0].day for sid, sig in sightings.items() if sig}
 
@@ -834,8 +842,7 @@ def _handoffs(ctx: _RunContext, delistings: list[Delisting], securities: dict[st
     degraded: list[ReviewItem] = []
     for p in pairs:
         watch = DegradedWatch()
-        args = filing_args(p)
-        filing = continuation_filing(fts, name=args[0], day=args[1], successor_cik=args[2]) if args else None
+        filing = find_filing(p)
         if watch.tripped():
             a = securities[p.a]
             degraded.append(degraded_item(p.a, p.ticker, a.issuer_cik, f"the handoff search ({p.ticker} to {p.b})",

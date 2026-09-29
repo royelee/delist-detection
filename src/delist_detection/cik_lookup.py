@@ -45,8 +45,7 @@ class NameHit(NamedTuple):
 class CikNameIndex:
     """The entries of cik-lookup-data.txt, sorted by normalized name, searched
     the way EDGAR's company search matches: a name equal to the query, or
-    starting with it followed by a space (whole words: BARNES finds BARNES &
-    NOBLE INC, not BARNESANDNOBLE COM INC)."""
+    starting with it."""
 
     def __init__(self, entries: Iterable[tuple[str, int, str]]) -> None:
         self._entries = sorted(set(entries))
@@ -71,20 +70,19 @@ class CikNameIndex:
         return len(self._entries)
 
     def split_search(self, query: str) -> tuple[list[NameHit], list[NameHit]]:
-        """(the entries whose name equals `query`, those that start with it as
-        whole words), each sorted by normalized name then CIK."""
+        """(the entries whose name equals `query`, those that start with it), each
+        sorted by normalized name then CIK. The prefix is by character, as
+        EDGAR's company search matches: a snapshot's cut-off COCA COLA ENTERPRISE
+        finds COCA COLA ENTERPRISES INC."""
         q = normalize_name(query)
         if not q:
             return [], []
         exact: list[NameHit] = []
         prefix: list[NameHit] = []
         for key, cik, name in self._entries[bisect_left(self._keys, q):]:
-            if key == q:
-                exact.append(NameHit(cik, name))
-            elif key.startswith(q + " "):
-                prefix.append(NameHit(cik, name))
-            elif not key.startswith(q):
+            if not key.startswith(q):
                 break
+            (exact if key == q else prefix).append(NameHit(cik, name))
         return exact, prefix
 
     def search(self, query: str) -> list[NameHit]:

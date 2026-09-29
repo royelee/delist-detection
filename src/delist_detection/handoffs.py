@@ -28,6 +28,7 @@ from datetime import date, timedelta
 from .classifier import DelistRecord
 from .crsp_codes import CrspBucket
 from .delistings import Delisting
+from .evidence import names_near
 from .ftd import FtdIndex
 from .history import Sighting
 from .last_trade import LastTrade
@@ -126,6 +127,29 @@ def continuation_filing(search: Callable, *, name: str, day: date,
         if successor_cik in {int(c) for c in src.get("ciks") or []}:
             return src.get("form") or "", src.get("adsh") or "", src.get("file_date") or ""
     return None
+
+
+_CLASS_WORDS = re.compile(r"\b(?:CL(?:ASS)?|SER(?:IES)?)\s*-?\s*[A-Z0-9]\b|-[A-Z]$", re.I)
+_STATE_TAG = re.compile(r"\s*/[A-Z]+/?\s*$")
+
+
+def predecessor_names(sub: dict | None, a_last: str, observed: str | None) -> list[str]:
+    """The names to search A's successor-issuer filing under, as an 8-K12B would
+    print A's issuer: the EDGAR names it carried within 30 days of its last
+    sighting (a reorganization often renames the old company right after:
+    Ashland Inc's CIK is ASHLAND LLC today), then its current EDGAR name, then
+    its observed name without class words; state tags dropped, each once."""
+    names: list[str] = []
+    if isinstance(sub, dict):
+        names += names_near(sub, date.fromisoformat(a_last), 30)
+        names.append(sub.get("name") or "")
+    names.append(_CLASS_WORDS.sub(" ", observed or ""))
+    out: list[str] = []
+    for n in names:
+        n = re.sub(r"\s+", " ", _STATE_TAG.sub("", n)).strip(" -")
+        if n and n.upper() not in {o.upper() for o in out}:
+            out.append(n)
+    return out
 
 
 def cusip_switch(ftd: FtdIndex, pair: HandoffPair, a_cusips: Sequence[str], b_cusips: Sequence[str]) -> bool:
@@ -298,9 +322,10 @@ def apply_handoffs(decisions: Sequence[HandoffDecision], delistings: Sequence[De
       successor is B; confidence high on a filing, medium on timing; flagged
       `handoff_continuation`, the evidence in its reason;
     - with one, sets its successor to B, rewriting an `unknown` or a merger
-      row to the continuation's values -- except a merger whose payout was
-      reconciled (`reconciled`, by delisting key) on timing evidence alone,
-      which stands, with a `handoff_conflict` item; a rewritten merger keeps its
+      row to the continuation's values -- except a merger on timing evidence
+      between two issuers (`timing:cusip`), or whose payout was reconciled
+      (`reconciled`, by delisting key) on timing evidence alone, which stands,
+      with a `handoff_conflict` item; a rewritten merger keeps its
       old bucket in a `handoff_rebucketed` item. A row that ended A in
       another way (a liquidation, a compliance failure, an expiration), or that
       already names another successor or itself, stands too, with a
@@ -349,6 +374,12 @@ def apply_handoffs(decisions: Sequence[HandoffDecision], delistings: Sequence[De
             conflict = None
             if d.record.successor_sec_id not in (None, "", p.b):
                 conflict = f"its row already names {d.record.successor_sec_id} as its successor"
+            elif bucket is CrspBucket.MERGER and decision.evidence == "timing:cusip":
+                # Another issuer's new line taking the target's ticker is also an
+                # acquirer's holding company (Wendy's into Wendy's/Arby's at 4.25
+                # shares, IGT into IGT PLC for cash and stock): only a filing says
+                # the holders' shares carried over one for one.
+                conflict = "its merger row says holders were paid, and only timing across two issuers says otherwise"
             elif bucket is CrspBucket.MERGER and not decision.by_filing and d.key in reconciled:
                 conflict = "its merger row has a reconciled payout and only timing says otherwise"
             elif bucket not in (CrspBucket.MERGER, CrspBucket.EXCHANGE_TRANSFER, CrspBucket.UNKNOWN):

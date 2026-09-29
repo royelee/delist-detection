@@ -933,18 +933,33 @@ def test_an_unconfirmed_era_with_no_line_of_its_own_over_its_dates_gets_the_plac
     assert res[aptv12.key].source == "placeholder"
 
 
-def test_an_own_name_ticker_pick_is_checked_against_other_eras_confirmations():
+def test_an_own_name_ticker_pick_yields_to_its_issuers_line_confirmed_over_its_dates():
     """Part 1 (2): a ticker hit whose name agrees with the era's own observed
-    name still yields to another issuer's era confirmed on that composite by
-    its CUSIP (`_contradicted`), like an EDGAR-name pick."""
-    old = _era("GGP", ("2008-01-16", "GGP INC"), ("2009-06-08", "GGP INC"))
-    new = _era("GGP", ("2017-06-30", "GGP INC"), ("2018-06-30", "GGP INC"))
-    ggp = {"data": [_row("BBG000BG3HG3", "US", "GGP", "GGP INC", "REIT")]}
-    figi = _Figi({("ID_CUSIP", "36174X101"): ggp, ("TICKER", "GGP"): ggp})
-    res = FigiResolver(figi).resolve_many([old, new], issuers=issuers_by_era({old.key: 895648, new.key: 1496048}),
-                                          cusips={old.key: ["370021107"], new.key: ["36174X101"]})
-    assert res[new.key].sec_id == "BBG000BG3HG3"
-    assert (res[old.key].sec_id, res[old.key].source) == ("CIK895648-COMMON", "placeholder")
+    name still yields when another era of its issuer and class is confirmed on
+    a different composite over the same dates."""
+    old = _era("ACME", ("2012-06-29", "ACME CORP"), ("2013-12-31", "ACME CORP"))
+    line = _era("ACMX", ("2012-06-29", "ACME CORP"), ("2014-06-30", "ACME CORP"))
+    figi = _Figi({("TICKER", "ACME"): {"data": [_row("BBGTODAYLIN1", "US", "ACME", "ACME CORP")]},
+                  ("ID_CUSIP", "11111A101"): {"data": [_row("BBGTHENLINE1", "US", "ACMX", "ACME CORP")]}})
+    res = FigiResolver(figi).resolve_many([old, line], issuers=issuers_by_era({old.key: 5, line.key: 5}),
+                                          cusips={old.key: [], line.key: ["11111A101"]})
+    assert (res[old.key].sec_id, res[old.key].source) == ("CIK5-COMMON", "placeholder")
+
+
+def test_an_own_name_pick_keeps_a_line_that_changed_issuer():
+    """Merck & Co: the 2008 era (old Merck, CIK 64978) reaches BBG000BPD168 by
+    ticker under its own name; the line kept that composite through the 2009
+    reverse merger into Schering-Plough (CIK 310158), whose later era is
+    confirmed on it by CUSIP. Another issuer confirmed on the composite does
+    not undo an own-name pick (the full run of 2026-09-29 lost MRK, MDT, ETN,
+    ACN ... to placeholders when it did)."""
+    mrk08 = _era("MRK", ("2008-01-16", "MERCK & CO INC"), ("2009-06-08", "MERCK & CO INC"))
+    mrk12 = _era("MRK", ("2012-06-29", "MERCK & CO INC"), ("2026-06-30", "MERCK & CO INC"))
+    merck = {"data": [_row("BBG000BPD168", "US", "MRK", "MERCK & CO. INC.")]}
+    figi = _Figi({("TICKER", "MRK"): merck, ("ID_CUSIP", "58933Y105"): merck})
+    res = FigiResolver(figi).resolve_many([mrk08, mrk12], issuers=issuers_by_era({mrk08.key: 64978, mrk12.key: 310158}),
+                                          cusips={mrk08.key: [], mrk12.key: ["58933Y105"]})
+    assert (res[mrk08.key].sec_id, res[mrk08.key].source) == ("BBG000BPD168", "ticker")
 
 
 def _itt_eras():

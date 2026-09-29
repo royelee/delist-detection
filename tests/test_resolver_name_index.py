@@ -16,14 +16,18 @@ class _Edgar:
     """Companies by CIK; the live company search is counted, answering by prefix."""
 
     def __init__(self, companies, atom=None):
-        self.companies, self.atom, self.searches = companies, atom or {}, []
+        self.companies, self.atom, self.searches, self.read = companies, atom or {}, [], []
 
     def company_tickers(self):
         return {}
 
     def submissions(self, cik, fresh_after=None):
         c = self.companies.get(int(cik))
-        return {"name": c[0], "formerNames": c[1], "sic": ""} if c else {"__not_found__": True}
+        if not c:
+            return {"__not_found__": True}
+        self.read.append(int(cik))
+        recent = {"form": [f.form for f in c[2]], "filingDate": [f.filing_date for f in c[2]]}
+        return {"name": c[0], "formerNames": c[1], "sic": "", "filings": {"recent": recent}}
 
     def recent_filings(self, cik):
         c = self.companies.get(int(cik))
@@ -61,25 +65,35 @@ def test_the_name_tier_resolves_through_the_index_and_sends_no_company_search():
     assert (res.cik, res.source) == (1606498, "name_search") and e.searches == []
 
 
-def test_exact_names_are_the_only_candidates_when_there_are_any():
-    idx = _index("AMERICREDIT CORP:0000804269:", "AMERICREDIT CORP OF CALIFORNIA:0001037688:")
-    e = _Edgar({804269: ("AMERICREDIT CORP", [], []), 1037688: ("AMERICREDIT CORP OF CALIFORNIA", [], [])})
-    r = TickerResolver(e, name_index=idx)
-    assert [c for c, _ in r._name_search("ACF", "2010-09-30", "AMERICREDIT CORP")] == [804269]
+def test_the_live_searchs_form_filter_picks_the_one_filer():
+    """The file has no forms; the live search asked for Form 25 filers first.
+    Of the matches, the one company that filed a 25-NSE is the candidate: not
+    the partnership or the individual sharing the name."""
+    reit = (1037540, ("BOSTON PROPERTIES INC", [], [_f("R1", "10-K", "2012-02-28"), _f("R2", "25-NSE", "2012-05-01")]))
+    lp = (1043121, ("BOSTON PROPERTIES LTD PARTNERSHIP", [], [_f("P1", "10-K", "2012-02-28")]))
+    idx = _index("BOSTON PROPERTIES INC:0001037540:", "BOSTON PROPERTIES LTD PARTNERSHIP:0001043121:")
+    r = TickerResolver(_Edgar(dict([reit, lp])), name_index=idx)
+    assert r._index_candidates(idx, "BOSTON PROPERTIES INC", "2012-06-29") == {
+        1037540: ("BOSTON PROPERTIES INC", 59)}                      # its 25-NSE, 59 days before the date
 
 
-def test_prefix_candidates_are_ranked_by_shared_words_and_capped():
-    """No exact name: the prefix matches of each spelling, most words shared with
-    the observed name first, at most NAME_SEARCH_CANDIDATES CIKs looked at."""
-    lines = [f"ACME HOLDINGS FUND {i} LP:{9000 + i:010d}:" for i in range(8)]
-    lines.append("ACME HOLDINGS WIDGETS INC:0000000777:")
-    idx = _index(*lines)
-    looked: list[int] = []
-    e = _Edgar({})
-    r = TickerResolver(e, name_index=idx)
-    r._edgar_name_fit = lambda cik, expected, observed_date=None: (looked.append(cik) or (0, False))
-    r._name_search("ACW", "2012-06-29", "ACME HOLDINGS WIDGETS CORP")
-    assert looked[0] == 777 and len(looked) == TickerResolver.NAME_SEARCH_CANDIDATES
+def test_two_filers_under_one_form_name_no_candidate_as_edgar_did():
+    a = (1, ("ACME CORP", [], [_f("A", "25-NSE", "2012-05-01")]))
+    b = (2, ("ACME CORP DEL", [], [_f("B", "25-NSE", "2011-05-01")]))
+    idx = _index("ACME CORP:0000000001:", "ACME CORP DEL:0000000002:")
+    r = TickerResolver(_Edgar(dict([a, b])), name_index=idx)
+    assert r._index_candidates(idx, "ACME CORP", "2012-06-29") == {}
+
+
+def test_with_no_filer_a_spelling_matching_one_cik_gives_it_and_the_probe_is_capped():
+    solo = (7, ("SOLO WIDGETS INC", [], [_f("S", "10-K", "2012-02-01")]))
+    r = TickerResolver(_Edgar(dict([solo])), name_index=_index("SOLO WIDGETS INC:0000000007:"))
+    assert r._index_candidates(r._index(), "SOLO WIDGETS INC", "2012-06-29") == {7: ("SOLO WIDGETS INC", 1000)}
+    many = [f"MANY THINGS FUND {i} LP:{9000 + i:010d}:" for i in range(15)]
+    e = _Edgar({9000 + i: (f"MANY THINGS FUND {i} LP", [], []) for i in range(15)})
+    r = TickerResolver(e, name_index=_index(*many))
+    assert r._index_candidates(r._index(), "MANY THINGS", "2012-06-29") == {}
+    assert len(set(e.read)) == TickerResolver.INDEX_PROBE             # only the top matches' filings are read
 
 
 def test_a_fund_sharing_the_prefix_loses_to_the_company_whose_form25_fits():

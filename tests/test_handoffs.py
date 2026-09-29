@@ -10,7 +10,7 @@ from delist_detection.delistings import SUCCESSOR_UNKNOWN, Delisting
 from delist_detection.ftd import FtdIndex, FtdRow
 from delist_detection.handoffs import (
     CONTINUATION_DAYS, OVERLAP_DAYS, TAKEOVER_DAYS, HandoffDecision, HandoffPair, apply_handoffs, continuation_filing,
-    cusip_switch, decide_handoff, drop_resolved_shared, find_handoffs, issuer_carries_on,
+    cusip_switch, decide_handoff, drop_resolved_shared, find_handoffs, issuer_carries_on, predecessor_names,
 )
 from delist_detection.history import Sighting
 from delist_detection.last_trade import LastTrade
@@ -345,6 +345,26 @@ def test_a_merger_row_with_a_reconciled_payout_stands_against_timing_evidence():
     assert out.counts["conflicts"] == 1
 
 
+def test_a_merger_row_stands_against_a_cusip_switch_between_two_issuers():
+    """IGT 2015: GTECH's new holding company, International Game Technology PLC,
+    took IGT when it bought International Game Technology for $13.69 and 0.1819
+    shares. A CUSIP switch between two issuers is no evidence of a one-for-one
+    exchange: the merger row stands, reviewed as handoff_conflict. On the same
+    issuer (a holding company of its own), timing rewrites it."""
+    row = _delisting("OLD", "2015-04-17", CrspBucket.MERGER, "2015-04-07", ticker="IGT")
+    p = HandoffPair("IGT", "OLD", "NEW", "2015-04-07", "2015-04-08", "2015-04-08", "2015-04-07")
+    out = apply_handoffs([HandoffDecision(p, "continuation", "timing:cusip", False)], [row],
+                         {"OLD": _sec("OLD"), "NEW": _sec("NEW", cik=1)}, [])
+    assert row.record.bucket is CrspBucket.MERGER and row.record.successor_sec_id is None
+    assert [i.flag for i in out.review] == ["handoff_conflict"]
+    same = _delisting("OLD", "2016-09-30", CrspBucket.MERGER, "2016-09-19", ticker="ASH")
+    q = HandoffPair("ASH", "OLD", "NEW", "2016-09-19", "2016-09-20", "2016-09-20", "2016-09-19")
+    out = apply_handoffs([HandoffDecision(q, "continuation", "timing:cik", False)], [same],
+                         {"OLD": _sec("OLD"), "NEW": _sec("NEW")}, [])
+    assert same.record.bucket is CrspBucket.EXCHANGE_TRANSFER and same.record.successor_sec_id == "NEW"
+    assert [i.flag for i in out.review] == ["handoff_rebucketed"]
+
+
 def test_a_takeover_fills_the_ticker_successor_on_the_targets_row():
     """COHR 2022: Coherent's merger row stays a merger; II-VI took the ticker."""
     row = _delisting("COHERENT", "2022-07-11", CrspBucket.MERGER, "2022-06-30", ticker="COHR")
@@ -373,3 +393,15 @@ def test_the_pairs_ticker_shared_rows_are_resolved():
               ReviewItem("OLD", "AON", None, "ticker_shared",
                          "AON 2004-01-02..2020-04-01 (OLD) overlaps AON 2001-04-01..2004-01-05 (THIRD)")]
     assert drop_resolved_shared(shared, out.resolved_pairs) == shared[1:]
+
+
+def test_the_filing_is_searched_under_the_predecessors_names_around_the_handoff():
+    """Ashland 2016: the old company's CIK is ASHLAND LLC today; the 8-K12B names
+    Ashland Inc., its name at the handoff. The observed name, class words
+    dropped, is tried last; each name once, state tags dropped."""
+    sub = {"name": "ASHLAND LLC", "formerNames": [
+        {"name": "ASHLAND INC.", "from": "2005-06-30T00:00:00.000Z", "to": "2016-09-20T00:00:00.000Z"},
+        {"name": "ASHLAND INC /KY/", "from": "1994-01-01T00:00:00.000Z", "to": "2005-06-29T00:00:00.000Z"}]}
+    assert predecessor_names(sub, "2016-09-19", "ASHLAND INC CLASS A") == ["ASHLAND INC.", "ASHLAND LLC",
+                                                                          "ASHLAND INC"]
+    assert predecessor_names(None, "2016-09-19", "HOLDCO INC") == ["HOLDCO INC"]

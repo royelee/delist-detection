@@ -475,27 +475,70 @@ class TickerResolver:
                 self._name_index_failed = True
         return self._name_index
 
-    def _index_candidates(self, index: CikNameIndex, nm: str) -> dict[int, tuple[str, int]]:
-        """The name tier's candidates from the index, as `_name_search` collects
-        them from the live search (CIK -> (the name found, date penalty 1000: the
-        file has no dates)): every spelling's exact matches, else every
-        spelling's prefix matches; each spelling's matches ranked by the words
-        they share with `nm` (`names.name_tokens`), then the shorter name, then
-        the CIK; the first `NAME_SEARCH_CANDIDATES` distinct CIKs. The file lists
-        funds and individuals too: the checks after the search weed them out."""
+    INDEX_PROBE = 10                             # index matches per spelling whose filings are read
+    NAME_SEARCH_FORMS = ("25-NSE", "25", "15-12G")  # the live search's form filters, in its order
+
+    def _form_dates(self, cik: int, observed_date: str | None, form: str) -> list[date]:
+        """The dates of the CIK's filings whose form starts with `form`, from its
+        submissions JSON's recent filings (a delisted company's Form 25 or 15 is
+        among its last)."""
+        try:
+            sub = self._submissions(cik, observed_date)
+        except FATAL:
+            raise
+        except Exception as e:
+            self._note_transient(e)
+            return []
+        recent = (sub.get("filings") or {}).get("recent") or {} if isinstance(sub, dict) else {}
+        return [d for f, fd in zip(recent.get("form") or [], recent.get("filingDate") or [])
+                if f.startswith(form) and (d := parse_day(fd)) is not None]
+
+    def _index_candidates(self, index: CikNameIndex, nm: str,
+                          observed_date: str | None) -> dict[int, tuple[str, int]]:
+        """The name tier's candidates from the index, found as the live company
+        search finds them (CIK -> (the name found, date penalty)). For each
+        spelling of `nm` (`_name_variants`): the index entries equal to it or
+        starting with it, as EDGAR's character prefix does (snapshots cut names
+        short: COCA COLA ENTERPRISE), ranked exact first, then by the words shared
+        with `nm`, the shorter name, the CIK; the first `INDEX_PROBE` distinct
+        CIKs are read. Then the live search's form filters, in its order
+        (`NAME_SEARCH_FORMS`): the first under which any of them filed decides,
+        and a CIK counts only when it is the one that did (EDGAR names no company
+        when several match), its penalty the days between the date and its
+        nearest such filing. With no filer under any of them, a spelling that
+        matches exactly one CIK gives it. The file lists funds, individuals and
+        subsidiaries (WEATHERFORD YVONNE, BOSTON PROPERTIES LTD PARTNERSHIP):
+        the form filter is what keeps them out, as it did in the live search."""
         want = name_tokens(nm)
-        variants = self._name_variants(nm)
+        target = parse_day(observed_date)
         found: dict[int, tuple[str, int]] = {}
-        for pick in (0, 1):                      # the exact matches, then the prefix matches
-            for variant in variants:
-                hits = index.split_search(variant)[pick]
-                for h in sorted(hits, key=lambda h: (-len(name_tokens(h.name) & want), len(h.name), h.cik)):
-                    if len(found) >= self.NAME_SEARCH_CANDIDATES:
-                        return found
-                    if h.cik not in self.EXCHANGE_CIKS and h.cik not in found:
-                        found[h.cik] = (h.name, 1000)
-            if found:
-                return found
+        for variant in self._name_variants(nm):
+            exact, prefix = index.split_search(variant)
+            names: dict[int, str] = {}
+            for rank, h in sorted([(0, h) for h in exact] + [(1, h) for h in prefix],
+                                  key=lambda x: (x[0], -len(name_tokens(x[1].name) & want), len(x[1].name), x[1].cik)):
+                if h.cik not in self.EXCHANGE_CIKS:
+                    names.setdefault(h.cik, h.name)
+            probe = list(names)[: self.INDEX_PROBE]
+            chosen: tuple[int, int] | None = None
+            for form in self.NAME_SEARCH_FORMS:
+                dated = {c: self._form_dates(c, observed_date, form) for c in probe}
+                filers = [c for c in probe if dated[c]]
+                if filers:
+                    if len(filers) == 1:
+                        c = filers[0]
+                        gap = min(abs((d - target).days) for d in dated[c]) if target else 1000
+                        chosen = (c, min(gap, 9999))
+                    break
+            else:
+                if len(names) == 1:
+                    chosen = (probe[0], 1000)
+            if chosen is not None:
+                c, penalty = chosen
+                if c in found:
+                    found[c] = (found[c][0], min(found[c][1], penalty))
+                elif len(found) < self.NAME_SEARCH_CANDIDATES:
+                    found[c] = (names[c], penalty)
         return found
 
     def _name_search(self, ticker: str, observed_date: str | None, nm: str | None) -> list[tuple[int, str]]:
@@ -545,7 +588,7 @@ class TickerResolver:
                 if hits:
                     break  # one form-class per variant is enough
         if index is not None:
-            found = self._index_candidates(index, nm)
+            found = self._index_candidates(index, nm, observed_date)
         order = list(found)
         fit = {c: self._edgar_name_fit(c, nm, observed_date) for c in order}
         ranked = sorted(order, key=lambda c: (-fit[c][0], found[c][1], order.index(c)))

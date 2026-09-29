@@ -374,7 +374,7 @@ def cusip_handoffs(eras: Sequence[TickerEra], ftd: FtdIndex) -> list[Handoff]:
 
 
 def _contradicted(era: TickerEra, composite: str, eras: Sequence[TickerEra], issuers: Mapping[str, Issuer],
-                  confirmed: Mapping[str, str]) -> bool:
+                  confirmed: Mapping[str, str], *, other_issuers: bool = True) -> bool:
     """Whether another era's pin or CUSIP (`confirmed`: era key -> composite)
     rules out `composite` for `era`, a candidate that only the issuer's EDGAR
     names accept. An issuer's names can outlive its stock and match a later
@@ -383,7 +383,11 @@ def _contradicted(era: TickerEra, composite: str, eras: Sequence[TickerEra], iss
     today's JACOBS SOLUTIONS line, a new composite since the 2022 reorganization.
     So the candidate is ruled out when an era of another known issuer is
     confirmed on it, or when an era of the same issuer and share class is
-    confirmed on another composite over overlapping dates."""
+    confirmed on another composite over overlapping dates. With
+    `other_issuers=False` only the second test applies: a pick the era's own
+    observed name accepts may well sit on a line another issuer's era is
+    confirmed on, since a line keeps its composite through a change of issuer
+    (Merck's 2009 reverse merger, Medtronic's and Eaton's redomiciles)."""
     cik, cls = cik_of(issuers, era.key), share_class_from_name(era.name)
     for other in eras:
         comp = confirmed.get(other.key)
@@ -391,7 +395,7 @@ def _contradicted(era: TickerEra, composite: str, eras: Sequence[TickerEra], iss
             continue
         other_cik = cik_of(issuers, other.key)
         if comp == composite:
-            if other_cik is not None and other_cik != cik:
+            if other_issuers and other_cik is not None and other_cik != cik:
                 return True
         elif (other_cik == cik and share_class_from_name(other.name) == cls
               and other.first <= era.last and era.first <= other.last):
@@ -485,7 +489,8 @@ class FigiResolver:
         today, so neither is asked for an era of `unconfirmed` (no fails row
         shows its ticker then: `unconfirmed_eras`) or of `barred` (a weak pick
         `crossing_weak_eras` took back out). A plain own-name pick is checked
-        by `_contradicted` too. An `unconfirmed` era with no pick of its own is
+        by `_contradicted`'s same-issuer test (another line of its issuer and
+        class confirmed over its dates). An `unconfirmed` era with no pick of its own is
         a ticker a snapshot backfilled: it is placed ("backfill") on the one
         composite an era of its issuer and class is confirmed on (by a pin or
         a CUSIP) over overlapping dates, when there is exactly one."""
@@ -526,7 +531,9 @@ class FigiResolver:
             issuer = issuers.get(era.key)
             edgar = issuer.names if issuer is not None else ()
             if c is not None:
-                return (None, False) if _contradicted(era, c.composite, eras, issuers, confirmed) else (c, False)
+                if _contradicted(era, c.composite, eras, issuers, confirmed, other_issuers=False):
+                    return None, False
+                return c, False
             if not edgar:
                 return None, False
             c = accept(cands, ticker=era.ticker, names=[*era.names, *edgar], via_cusip=False)
