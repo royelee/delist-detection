@@ -124,7 +124,7 @@ def test_of_several_companies_under_one_name_the_one_that_carried_it_on_the_date
     merger, then Chemical Financial (19612), renamed TCF. Both filed a 25-NSE.
     In 2012 only old TCF carried the name (the full run of 2026-09-29 found no
     issuer for TCF@2012 and lost the era)."""
-    old = (814184, ("TCF FINANCIAL CORP", [], [_f("T1", "10-K", "2012-02-14"), _f("T2", "25-NSE", "2019-08-01")]))
+    old = (814184, ("TCF FINANCIAL CORP", [], [_f("T1", "10-K", "2014-02-14"), _f("T2", "25-NSE", "2019-08-01")]))
     new = (19612, ("TCF FINANCIAL CORP", [{"name": "CHEMICAL FINANCIAL CORP", "from": "1995-08-10T00:00:00.000Z",
                                            "to": "2019-08-01T00:00:00.000Z"}],
                    [_f("C1", "10-K", "2015-06-23"), _f("C2", "25-NSE", "2021-06-09")]))
@@ -263,3 +263,35 @@ def test_of_two_filers_one_the_query_does_not_name_is_no_candidate_whatever_the_
     idx = _index("APTIV PLC:0001521332:", "DELPHI AUTOMOTIVE PLC:0001521332:", "APTIV SOLUTIONS, INC.:0001193940:")
     r = TickerResolver(_Edgar(dict([delphi, other])), name_index=idx)
     assert 1193940 not in r._index_candidates(idx, "APTIV PLC", "2013-12-31")   # Delphi's: its checks reject it
+
+
+def test_the_one_active_company_named_exactly_the_spelling_comes_before_the_form_filter():
+    """FIRST REPUBLIC BANK (FRC, 2012-22) never filed a Form 25; Republic First
+    Bancorp, named FIRST REPUBLIC BANCORP in 1996-97, did in 2023. The bank,
+    filing near the date, is the company (the run of 20bdc19 took the other and
+    gave First Republic its 2023 delisting), nor the First Republic Bank
+    Merrill bought in 2007, which stopped filing then: a holder of the exact
+    name that stopped years before is not the company (WACHOVIA CORP, above)."""
+    bank = (1132979, ("FIRST REPUBLIC BANK", [], [_f("K1", "8-K", "2012-04-12"), _f("K2", "8-K", "2013-01-15")]))
+    merrills = (1097256, ("FIRST REPUBLIC BANK", [], [_f("M1", "10-K", "2007-03-01"), _f("M2", "25", "2007-10-01")]))
+    other = (834285, ("REPUBLIC FIRST BANCORP INC", [{"name": "FIRST REPUBLIC BANCORP INC /DE/",
+                                                      "from": "1996-08-14T00:00:00.000Z", "to": "1997-03-28T00:00:00.000Z"}],
+                      [_f("R1", "10-K", "2012-03-15"), _f("R2", "25-NSE", "2023-10-12")]))
+    idx = _index("FIRST REPUBLIC BANK:0001132979:", "FIRST REPUBLIC BANK:0001097256:",
+                 "FIRST REPUBLIC BANCORP INC /DE/:0000834285:", "REPUBLIC FIRST BANCORP INC:0000834285:")
+    r = TickerResolver(_Edgar(dict([bank, merrills, other])), name_index=idx)
+    found = r._index_candidates(idx, "FIRST REPUBLIC BANK", "2012-06-29")
+    assert found[1132979] == ("FIRST REPUBLIC BANK", 78) and 834285 not in found
+    assert r.resolve("FRC", "2012-06-29", name="FIRST REPUBLIC BANK").cik == 1132979
+
+
+def test_a_later_name_a_snapshot_carries_back_still_names_its_one_active_holder():
+    """DIVERSIFIED HEALTHCARE TRUST (DHC) observed in 2014: Senior Housing
+    Properties Trust took that name in 2020. The one company of that exact
+    name, filing near the date, is still the answer."""
+    dhc = (1075415, ("DIVERSIFIED HEALTHCARE TRUST", [{"name": "SENIOR HOUSING PROPERTIES TRUST",
+                                                       "from": "1998-12-01T00:00:00.000Z", "to": "2020-01-02T00:00:00.000Z"}],
+                     [_f("S1", "10-K", "2014-02-28"), _f("S2", "10-Q", "2014-05-01")]))
+    idx = _index("DIVERSIFIED HEALTHCARE TRUST:0001075415:", "SENIOR HOUSING PROPERTIES TRUST:0001075415:")
+    r = TickerResolver(_Edgar(dict([dhc])), name_index=idx)
+    assert list(r._index_candidates(idx, "DIVERSIFIED HEALTHCARE TRUST", "2014-06-30")) == [1075415]

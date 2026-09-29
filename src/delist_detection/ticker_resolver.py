@@ -477,6 +477,8 @@ class TickerResolver:
 
     INDEX_PROBE = 10                             # index matches per spelling whose filings are read
     NAME_SEARCH_FORMS = ("25-NSE", "25", "15-12G")  # the live search's form filters, in its order
+    EXACT_ACTIVE_DAYS = 365                      # an exact-name holder filing this near the date is the company
+    CARRIED_YEARS = 5                            # a name carried this long before the date still counts (snapshots lag)
 
     def _form_dates(self, cik: int, observed_date: str | None, form: str) -> list[date]:
         """The dates of the CIK's filings whose form starts with `form`, from its
@@ -505,7 +507,11 @@ class TickerResolver:
             of the entries carrying every word, by fit (MEDCO HEALTH SOLUTIONS
             and its pharmacy subsidiaries); a cut-off one reads nothing
             (NORTHEAST of NORTHEAST UTILITIES, S P of S&P GLOBAL);
-          - they go through the live search's form filters, in its order
+          - the one CIK whose name is exactly the spelling, when it filed
+            within `EXACT_ACTIVE_DAYS` of the date, is the answer, as EDGAR's
+            company page (FIRST REPUBLIC BANK never filed a Form 25; Republic
+            First Bancorp, once FIRST REPUBLIC BANCORP, did);
+          - else they go through the live search's form filters, in its order
             (`NAME_SEARCH_FORMS`): the first under which any of them filed
             decides, and a CIK counts only when it is the one that did, or the
             one of them the query names (`_one_filer`; EDGAR names no company
@@ -536,10 +542,25 @@ class TickerResolver:
                 keeps_name = bool(want) and want <= name_tokens(variant)
                 probe = [c for c in probe if keeps_name and want <= name_tokens(names[c])][:self.INDEX_PROBE]
             chosen: list[tuple[int, int]] = []
-            for form in self.NAME_SEARCH_FORMS:
+            exact_ciks = {h.cik for h in exact} & set(probe)
+            gaps = {c: self._filing_gap(c, target) for c in exact_ciks}
+            active = [c for c, g in gaps.items() if g <= self.EXACT_ACTIVE_DAYS]
+            if len(active) > 1:
+                active = [c for c in active if self._carried_on(c, variant, target)]
+            if len(active) == 1:
+                # EDGAR's company page for the one company of that exact name
+                # still filing (FIRST REPUBLIC BANK, not the one Merrill bought in
+                # 2007; DIVERSIFIED HEALTHCARE TRUST, a 2020 name a snapshot
+                # carries back to 2014), of two the one that carried it (TCF
+                # FINANCIAL CORP in 2014, not its 2019 taker); a holder that
+                # stopped long before goes through the filters (WACHOVIA CORP).
+                chosen = [(active[0], gaps[active[0]])]
+            for form in (() if chosen else self.NAME_SEARCH_FORMS):
                 dated = {c: self._form_dates(c, observed_date, form) for c in probe}
                 filers = [c for c in probe if dated[c]]
                 if filers:
+                    if len(filers) == 1 and not self._carried_on(filers[0], variant, target):
+                        continue         # its name is years old (FIRST REPUBLIC BANCORP, 1996-97): not this filter's answer
                     if len(filers) > 1:
                         filers = self._one_filer(filers, exact, name_tokens(normalize_name(nm)), variant, target)
                     if len(filers) == 1:
@@ -548,12 +569,9 @@ class TickerResolver:
                                    if target else 1000)]
                     break
             else:
-                exact_ciks = {h.cik for h in exact} & set(probe)
-                if len(exact_ciks) == 1:
-                    only = exact_ciks.pop()
+                if not chosen and (len(exact_ciks) == 1 or len(probe) == 1):
+                    only = next(iter(exact_ciks)) if len(exact_ciks) == 1 else probe[0]
                     chosen = [(only, self._filing_gap(only, target))]
-                elif len(probe) == 1:
-                    chosen = [(probe[0], self._filing_gap(probe[0], target))]
             for c, penalty in chosen:
                 if c in found:
                     found[c] = (found[c][0], min(found[c][1], penalty))
@@ -601,8 +619,9 @@ class TickerResolver:
         return named
 
     def _names_by(self, cik: int, on: date | None, near: bool = False) -> list[str]:
-        """The CIK's EDGAR names carried by 30 days after `on` (`near`: within 30
-        days of it), by its submissions JSON; none before its first filing."""
+        """The CIK's EDGAR names carried from `CARRIED_YEARS` before `on` to 30
+        days after it (`near`: within 30 days of it), by its submissions JSON;
+        none before its first filing."""
         if on is None:
             return []
         try:
@@ -616,14 +635,18 @@ class TickerResolver:
             return []
         if not self._existed_by(cik, (on + timedelta(days=30)).isoformat()):
             return []            # a name with no start date is no name before the CIK filed (Motorola SpinCo, 2010)
-        return names_near(sub, on) if near else names_until(sub, on + timedelta(days=30))
+        if near:
+            return names_near(sub, on)
+        return names_between(sub, on - timedelta(days=365 * self.CARRIED_YEARS), on + timedelta(days=30))
 
     def _carried_on(self, cik: int, spelling: str, on: date | None, near: bool = False) -> bool:
-        """Whether the CIK had carried a name starting with `spelling` (as the
-        index compares names) by 30 days after `on`, by its submissions JSON. A
-        name it carried before counts: snapshot names lag renames (CHICAGO
-        MERCANTILE HLDGS, CME Group's name until 2007); one it took only later
-        does not (TCF FINANCIAL CORP, Chemical Financial's from 2019). `near`:
+        """Whether the CIK carried a name starting with `spelling` (as the index
+        compares names) in the `CARRIED_YEARS` before `on` or up to 30 days
+        after it, by its submissions JSON. A name it carried a few years before
+        counts: snapshot names lag renames (CHICAGO MERCANTILE HLDGS, CME
+        Group's name until 2007); one it took only later does not (TCF
+        FINANCIAL CORP, Chemical Financial's from 2019), nor one it dropped long
+        before (FIRST REPUBLIC BANCORP, Republic First's in 1996-97). `near`:
         carried within 30 days of `on`."""
         key = normalize_name(spelling)
         return any(normalize_name(n).startswith(key) for n in self._names_by(cik, on, near))
