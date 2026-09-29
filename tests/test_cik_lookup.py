@@ -29,6 +29,7 @@ def test_normalize_name_drops_case_punctuation_ampersands_and_the_state_tag():
     assert normalize_name("") == ""
     assert normalize_name("NIELSEN N.V.") == normalize_name("NIELSEN NV") == "NIELSEN NV"   # NLSN, live check
     assert normalize_name("U.S. STEEL CORP") == "US STEEL CORP"
+    assert normalize_name("ANHEUSER-BUSCH COMPANIES, INC.") == "ANHEUSER BUSCH COMPANIES INC"   # BUD, full run
 
 
 def test_the_excerpt_parses_every_named_line_and_skips_nameless_ones():

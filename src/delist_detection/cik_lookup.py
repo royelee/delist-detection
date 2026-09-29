@@ -23,7 +23,7 @@ CIK_LOOKUP_URL = "https://www.sec.gov/Archives/edgar/cik-lookup-data.txt"
 CIK_LOOKUP_MAX_AGE_DAYS = 30      # SEC refreshes the file; a copy this old is fetched again
 
 _DOTS = re.compile(r"\.")                              # "N.V." -> "NV", "U.S." -> "US"
-_PUNCT = re.compile(r"[&,'’\"()]")
+_PUNCT = re.compile(r"[&,'’\"()-]")
 _STATE_TAG = re.compile(r"\s*/[A-Z]{1,3}/?\s*$")      # EDGAR's "/DE/", "/NY", "/TA"
 _SPACES = re.compile(r"\s+")
 

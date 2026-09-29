@@ -9,6 +9,7 @@ def test_tokens_keep_three_letter_words_and_drop_legal_suffixes():
     assert name_tokens("FOREST OIL CORP") == {"FOREST", "OIL"}
     assert name_tokens("BABCOCK AND WILCOX") == {"BABCOCK", "WILCOX"}
     assert name_tokens("LEAP WIRELESS INTL INC") == {"LEAP", "WIRELESS"}
+    assert name_tokens("ANHEUSER BUSCH COMPANIES INC") == name_tokens("ANHEUSER BUSCH COS INC")   # COS is COMPANIES
 
 
 def test_agreement_needs_two_shared_words_unless_a_name_has_one():
