@@ -164,7 +164,9 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   each strict-validated. The name tier finds its candidates in SEC's
   `cik-lookup-data.txt` (`cik_lookup.py`: `CikLookupClient`, cached 30 days
   under `cache/sec_data/cik_lookup/`, and `CikNameIndex`, exact then
-  whole-word prefix matches; `name_index=`, wired by `default_clients`), not
+  character-prefix matches, each spelling's top 10 put through the live
+  search's 25-NSE/25/15-12G form filter read from their submissions JSON,
+  `_index_candidates`; `name_index=`, wired by `default_clients`), not
   in the live company search, which runs only without an index (the offline
   tests, the golden replay) or when it cannot load. The pin and the observation name (from
   `ObservationIndex.cik_pin_on`/`.name_on`, wired in by `pipeline.py`) replace
@@ -204,7 +206,8 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   data covers but never shows under its ticker (`guarded_eras`) takes no
   ticker or name pick, only the one line its issuer and class are confirmed
   on over its dates (`figi_source=backfill`) or its placeholder; an own-name
-  pick is checked by `_contradicted`; `resolve_with_identity_guard` takes back
+  pick is checked by `_contradicted`'s same-issuer test only (a line keeps its
+  composite through a change of issuer, Merck 2009); `resolve_with_identity_guard` takes back
   a weak era whose merge would cross another security's confirmed span of the
   ticker (`crossing_weak_eras`, review `identity_detached`, `detached_review`);
   `superseded_placeholders` marks a placeholder a later FIGI line of its
