@@ -405,3 +405,37 @@ def test_the_filing_is_searched_under_the_predecessors_names_around_the_handoff(
     assert predecessor_names(sub, "2016-09-19", "ASHLAND INC CLASS A") == ["ASHLAND INC.", "ASHLAND LLC",
                                                                           "ASHLAND INC"]
     assert predecessor_names(None, "2016-09-19", "HOLDCO INC") == ["HOLDCO INC"]
+
+
+def _unmatched(sec_id, accession, delist_date, class_text="Common Stock"):
+    return ReviewItem(sec_id, "TT", 1, "form25_unmatched", f"25-NSE {accession} ('{class_text}'): ambiguous class",
+                      delist_date=delist_date)
+
+
+def test_the_continuation_row_takes_a_form25_effective_after_the_last_sighting_not_one_before():
+    """FWONA 2023: the Braves split-off's Form 25 took effect on 2023-07-28, a
+    week before the old Formula One line's last sighting (2023-08-04); the
+    reclassification's own took effect on 2023-08-13. A delisting takes effect
+    after the last trade: the row is dated by the later one, whose review rows
+    the continuation resolves; the Braves rows stay."""
+    p = HandoffPair("FWONA", "OLD", "NEW", "2023-08-04", "2023-08-07", "2023-08-07", "2023-08-04")
+    braves = _unmatched("OLD", "0001354457-23-000512", "2023-07-28", "Series A Liberty Braves Common Stock")
+    reclass = _unmatched("OLD", "0001354457-23-000564", "2023-08-13", "Series A Liberty Formula One Common Stock")
+    out = apply_handoffs([HandoffDecision(p, "continuation", "timing:cik", False)], [],
+                         {"OLD": _sec("OLD"), "NEW": _sec("NEW")}, [braves, reclass])
+    (d,) = out.added
+    assert d.delist_date == "2023-08-13"
+    assert d.record.evidence["delist_filing"]["accession"] == "0001354457-23-000564"
+    assert out.review == [braves]
+
+
+def test_the_form25_window_runs_from_the_later_of_the_two_sightings():
+    """LH 2024: old LabCorp's last fails row 2024-04-24 (sparse), the holding
+    company's first 2024-05-22; old LabCorp's Form 25 took effect 2024-05-30,
+    36 days after the first but 8 after the second."""
+    p = HandoffPair("LH", "OLD", "NEW", "2024-04-24", "2024-05-22", "2024-05-22", "2024-04-24")
+    f25 = _unmatched("OLD", "0000876661-24-000366", "2024-05-30", "Common Stock (CUSIP # 50540R409)")
+    out = apply_handoffs([HandoffDecision(p, "continuation", "8-K12B 0000920148-24-000063", True)], [],
+                         {"OLD": _sec("OLD"), "NEW": _sec("NEW")}, [f25])
+    (d,) = out.added
+    assert d.delist_date == "2024-05-30" and out.review == []

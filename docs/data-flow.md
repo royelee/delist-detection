@@ -767,9 +767,12 @@ ticker and another starting under it within days (CONTEXT.md).
    issuer starts another line of its own at the handoff and B is another
    issuer's (old Liberty Media as STRZA while the new one took LMCA).
 3. **Acting** (`apply_handoffs`). A continuation with no delisting of A near
-   the handoff writes one: dated by A's ambiguous-class Form 25 within 30 days
-   (its `form25_unmatched` row) or the day after A's last sighting, last trade
-   on that sighting, `exchange_transfer` (CRSP 304, so DLRET 0),
+   the handoff writes one: dated by A's ambiguous-class Form 25 (its
+   `form25_unmatched` row) that took effect after A's last sighting and within
+   30 days after the later of A's last and B's first sighting (not the Braves
+   split-off's Form 25 a week before FWONA's last sighting; old LabCorp's five
+   weeks after its sparse last fails row), else the day after A's last
+   sighting; last trade on that sighting, but before B's first, `exchange_transfer` (CRSP 304, so DLRET 0),
    `successor_sec_id` = B, confidence `high` on a filing and `medium` on
    timing, flag `handoff_continuation`. A row near it takes B as its
    successor; an `unknown` or merger row is rewritten to the continuation's

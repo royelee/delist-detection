@@ -218,7 +218,7 @@ def decide_handoff(pair: HandoffPair, *, filing: tuple[str, str, str] | None, sa
 
 
 CONTINUATION_CODE = 304          # the classifier's exchange-transfer code (`_rename_or_transfer`)
-FORM25_NEAR_DAYS = 30            # an ambiguous Form 25 of A this close to its last sighting dates the new row
+FORM25_NEAR_DAYS = 30            # an ambiguous Form 25 of A this soon after the handoff dates the new row
 CONTINUATION_FLAG = "handoff_continuation"
 _UNMATCHED_FORM25 = re.compile(r"^(\S+) (\S+) \(.*\): ambiguous class$")
 # A's review rows a continuation explains: it did end, by the handoff.
@@ -253,13 +253,18 @@ def _near(delistings: Sequence[Delisting], pair: HandoffPair, sec_id: str, days:
 
 
 def _unmatched_form25(review: Sequence[ReviewItem], pair: HandoffPair) -> ReviewItem | None:
-    """A's `form25_unmatched` ambiguous-class item within `FORM25_NEAR_DAYS` of
-    its last sighting, nearest first."""
+    """A's `form25_unmatched` ambiguous-class item for the handoff: effective on
+    or after A's last sighting (a delisting takes effect after the last trade:
+    the Braves split-off's Form 25, a week before FWONA's last sighting, is
+    another event), and no more than `FORM25_NEAR_DAYS` after the later of A's
+    last and B's first sighting (fails rows can be sparse: old LabCorp's last is
+    five weeks before its Form 25, the holding company's first one week);
+    nearest A's last sighting first."""
     a = date.fromisoformat(pair.a_last)
+    hi = date.fromisoformat(max(pair.a_last, pair.b_first)) + timedelta(days=FORM25_NEAR_DAYS)
     items = [r for r in review if r.sec_id == pair.a and r.flag == "form25_unmatched" and r.delist_date
-             and _UNMATCHED_FORM25.match(r.reason)
-             and abs((date.fromisoformat(r.delist_date) - a).days) <= FORM25_NEAR_DAYS]
-    return min(items, key=lambda r: (abs((date.fromisoformat(r.delist_date) - a).days), r.delist_date), default=None)
+             and _UNMATCHED_FORM25.match(r.reason) and a <= date.fromisoformat(r.delist_date) <= hi]
+    return min(items, key=lambda r: (r.delist_date, r.reason), default=None)
 
 
 def _last_day(pair: HandoffPair) -> date:
@@ -315,9 +320,10 @@ def apply_handoffs(decisions: Sequence[HandoffDecision], delistings: Sequence[De
 
     A continuation:
     - with no delisting of A near the handoff (`_near`, `CONTINUATION_DAYS`),
-      writes one: dated by A's ambiguous-class Form 25 within
-      `FORM25_NEAR_DAYS` of A's last sighting (its effective date, as every
-      Form 25 row), else the day after that sighting; last trade on A's last
+      writes one: dated by A's ambiguous-class Form 25 that took effect after
+      A's last sighting and within `FORM25_NEAR_DAYS` of the handoff
+      (`_unmatched_form25`; its effective date, as every Form 25 row), else the
+      day after that sighting; last trade on A's last
       sighting, but before B's first (`_last_day`); an `exchange_transfer` (code 304, so a zero return) whose
       successor is B; confidence high on a filing, medium on timing; flagged
       `handoff_continuation`, the evidence in its reason;
