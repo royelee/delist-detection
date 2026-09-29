@@ -555,8 +555,11 @@ answer with whoever holds the ticker or the name *today*, so:
   Delphi's DLPH line, Jacobs under J in 2012-2014 on the JEC line, and the
   observations become `backfilled_ticker` in `observation_map.csv`. With no
   such line, or two, it takes its placeholder.
-- A plain own-name ticker or name pick is checked against the other eras'
-  confirmations (`_contradicted`) like an EDGAR-name pick.
+- A plain own-name ticker or name pick yields when another era of its issuer
+  and class is confirmed on a different composite over its dates
+  (`_contradicted`'s same-issuer test only: a line keeps its composite through
+  a change of issuer, as Merck's did in 2009, so another issuer confirmed on
+  it is no contradiction for an own-name pick).
 - After the eras are resolved, a weak era (a ticker or name pick) whose merge
   would carry its security's range for the ticker across another security's
   confirmed span of that ticker (`crossing_weak_eras`: the confirmed span lies
@@ -747,7 +750,9 @@ ticker and another starting under it within days (CONTEXT.md).
    of the first one's last (CZR's two lines overlap 8 days, COHR waits 74).
 2. **Deciding** (`decide_handoff`), the first that applies: a continuation by
    filing (EDGAR full-text search for an 8-K12B/8-K12G3 filed by B's issuer
-   naming A's issuer, 30 days before to 60 after B's first sighting,
+   naming A's issuer, under its EDGAR names around the handoff, today's, and
+   its observed name (`predecessor_names`: Ashland Inc's CIK is ASHLAND LLC
+   today), 30 days before to 60 after B's first sighting,
    `continuation_filing`; the filer may keep A's CIK, as Aon did); a
    continuation by timing and identity (at most `CONTINUATION_DAYS` = 10
    days apart, B sighted under no ticker before then, and the same issuer CIK
