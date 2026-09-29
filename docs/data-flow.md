@@ -392,16 +392,31 @@ target rather than an acquirer.
    HOLDINGS LTD are both CIK 1530721), funds and individuals included,
    downloaded once and refreshed after 30 days under
    `cache/sec_data/cik_lookup/`. Names are compared normalized (case,
-   periods, punctuation, `&` and EDGAR's `/DE/` state tag ignored). For each
-   spelling, its exact and character-prefix matches (snapshots cut names
-   short: COCA COLA ENTERPRISE) are ranked exact first, then by shared words,
-   and the top 10 CIKs' filing lists (their cached submissions JSON) stand in
-   for the live search's form filter: under 25-NSE, then 25, then 15-12G, the
-   first form any of them filed decides, and a CIK counts only when it is the
-   only one that did, its date gap the distance to that filing; with no filer,
-   a spelling matching a single CIK gives it. Without that filter the file's
-   funds, individuals and subsidiaries win (WEATHERFORD YVONNE for
-   WEATHERFORD INTL, a first attempt showed). No live company search is sent. A resolver built
+   periods, hyphens, punctuation, `&` and EDGAR's `/DE/` state tag ignored).
+   For each spelling, its exact and character-prefix matches (snapshots cut
+   names short: COCA COLA ENTERPRISE) stand in for the live search, read
+   through their cached submissions JSON (`_index_candidates`):
+   - the one CIK whose name is exactly the spelling and that filed within a
+     year of the date is the answer, as EDGAR's company page was (FIRST
+     REPUBLIC BANK never filed a Form 25); of several such, the one that
+     carried the name (TCF FINANCIAL CORP in 2014, not its 2019 taker);
+   - else the live search's form filter: under 25-NSE, then 25, then
+     15-12G, the first form any of them filed decides. A lone filer counts
+     when it carried the matched name in the 5 years before the date or just
+     after (not FIRST REPUBLIC BANCORP, another bank's name in 1996-97).
+     Of several, only the one the query names counts (`_one_filer`: the
+     exact name, else exactly the observed name's words, ANHEUSER BUSCH
+     COMPANIES, not ANHEUSER-BUSCH INBEV; then the one that carried the
+     name by the date, then on it); none named, none;
+   - with no filer, the one CIK of that exact name, else a spelling's only
+     CIK, its date gap counted from its nearest filing;
+   - a spelling matching more than 10 CIKs is read only when it keeps every
+     word of the name (MEDCO HEALTH SOLUTIONS and its pharmacy subsidiaries:
+     the top 10 carrying every word); a cut-off one (NORTHEAST of NORTHEAST
+     UTILITIES, S P of S&P GLOBAL) names nothing.
+   Without the form filter the file's funds, individuals and subsidiaries win
+   (WEATHERFORD YVONNE for WEATHERFORD INTL, a first attempt showed). No live
+   company search is sent. A resolver built
    without the index (the offline tests, the golden replay), or whose index
    cannot be loaded, uses the live search:
 

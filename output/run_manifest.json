@@ -1,45 +1,47 @@
 {
   "as_of": "2026-09-25",
   "cache_answers": {
-    "archives": 12774,
-    "company_search": 1864,
-    "company_tickers": 10,
-    "full_text_search": 819,
-    "submissions": 37239,
-    "submissions_page": 14100
+    "archives": 12835,
+    "company_tickers": 14,
+    "full_text_search": 2634,
+    "submissions": 60085,
+    "submissions_page": 17972
   },
-  "code_version": "7f57ecd-dirty",
+  "code_version": "76edc38",
   "degraded_answers": {},
-  "latency_ms": {
-    "submissions": {
-      "max": 155.0,
-      "n": 3,
-      "p50": 97.7,
-      "p95": 155.0
-    }
+  "handoffs": {
+    "conflicts": 14,
+    "continuations_by_filing": 38,
+    "continuations_by_timing": 35,
+    "handoffs": 81,
+    "rows_added": 26,
+    "takeovers": 8
   },
+  "latency_ms": {},
   "not_covered": {},
   "rejected_queries": {},
   "resolution_degraded": 0,
   "review": {
     "accepted": 0,
-    "check": 618,
+    "check": 628,
     "cleared": 0,
-    "fix": 137,
-    "info_hidden": 402,
+    "fix": 100,
+    "info_hidden": 427,
     "unmatched_decisions": 0
   },
-  "sec_requests": {
-    "submissions": 3
-  },
-  "sec_workers": 4,
+  "sec_requests": {},
+  "sec_workers": 8,
   "stages": {
     "delisting search": {
       "edgar_requests": 0,
       "sec_data_downloads": 0
     },
+    "handoff search": {
+      "edgar_requests": 0,
+      "sec_data_downloads": 0
+    },
     "issuer resolution": {
-      "edgar_requests": 3,
+      "edgar_requests": 0,
       "sec_data_downloads": 0
     },
     "payouts": {

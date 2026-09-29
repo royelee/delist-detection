@@ -2,7 +2,7 @@
 
 Branch `feat/handoff-successor-links`. Checks the plan's case table
 (`docs/superpowers/plans/2026-09-28-handoff-successor-links.md`) against a live
-run on the case tickers.
+run on the case tickers, then against the full universe.
 
 ## What was run
 
@@ -14,7 +14,9 @@ run on the case tickers.
   input was run twice: once with the code at `8deab45` (the plan's base
   `c43bdd0` plus the plan itself), and once with this branch. Both used an
   empty review-decisions file.
-- **Full run** (`data/observations.csv`, 2,469 eras): see *Full run* below.
+- **Full run** (`data/observations.csv`, 2,469 eras, as_of 2026-09-25, 8 SEC
+  workers, `--extract-merger-terms-llm` as the committed `c43bdd0` run): see
+  *Full run* below. `output/` is that run, at `76edc38`.
 
 ## Case-ticker run: before and after
 
@@ -31,13 +33,28 @@ run on the case tickers.
 were 12 continuations by filing, 9 by timing and 2 takeovers, with no
 conflicts. The pass added 19 rows.
 
+The 11 `form25_unmatched` rows left are Form 25s whose class text
+`form25.match_security` cannot pin to one observed security (`ambiguous
+class`); the full run leaves the same 11:
+- 6: Liberty Media's 2023-07-28 Form 25 for the Braves split-off ("Series A
+  Liberty Braves Common Stock & Series C ..."), once on each Liberty tracker
+  line of CIK 1560385.
+- 2: Linde's Form 25 of 2023-11-16 ("Ordinary Shares"), on both LIN lines.
+- 1: the 2024-09-19 Form 25 for Liberty SiriusXM's three series, on LSXMK.
+- 2: IAC's Form 25 of the July 2020 separation ("Common Stock"), on both IAC
+  lines.
+Every row of the case table still has its delisting (from its own Form 25 or
+from the handoff).
+
 Apart from the CZR overlap, no two securities share a ticker on overlapping
 dates in `ticker_history.csv`.
 
 ## Case table
 
 "Evidence" is what the run decided on: an 8-K12B/8-K12G3 accession, or
-`timing:cik`.
+`timing:cik`. The full run at `76edc38` gives every row below unchanged,
+except the Liberty and LH delisting dates, which the Form 25 dating fix moved
+(FWONA, FWONK, LSXMA, LSXMK on 2023-08-13; LH on 2024-05-30).
 
 | Ticker | Result | Evidence | Old line ends / new line starts |
 |---|---|---|---|
@@ -138,6 +155,16 @@ dates in `ticker_history.csv`.
   (the JEC line) as a backfill, and its five observations are
   `backfilled_ticker`. The placeholder `CIK52988-COMMON` is gone.
 
+- **Narrowed after the full run.** As the plan wrote them, guard 1 (no ticker
+  or name pick for an unconfirmed era) and rule 2 (own-name picks checked by
+  `_contradicted`) turned about 40 correct FIGIs of the full universe into
+  placeholders: stale snapshots list dead companies (DJ, MEL, TXU in 2008)
+  whose ticker pick is their own dead line, and lines keep their composite
+  through a change of issuer (Merck 2009, Medtronic, Eaton). Guard 1 now skips
+  the ticker and name tiers only when the backfill placement has the era's
+  line; rule 2 is dropped. The plan's *Deviations found by the full run*
+  records both. ITT, J and APTV above are unchanged by it.
+
 ### Other continuations the subset found
 
 - **LMCA and LMCK 2016.** The April 2016 Liberty recapitalization into
@@ -152,23 +179,113 @@ dates in `ticker_history.csv`.
 
 ## Full run
 
-**Not completed in this session.** Three attempts on `data/observations.csv`
-(2,469 eras, as_of 2026-09-25) from a cold cache each stopped in issuer
-resolution with `EdgarBlocked`: SEC answered HTTP 429 to its company-name search
-(`cgi-bin/browse-edgar`), the resolver's fallback tier.
+### How it got done
 
-| attempt | SEC workers | how long | notes |
-|---|---|---|---|
-| 1 | 8 | about 1 h | |
-| 2 | 2 | a few minutes | |
-| 3 | 1 | about 1.5 h | after a 25-minute pause |
+- **Three aborts on SEC 429s (2026-09-28).** Each cold attempt stopped in
+  issuer resolution with `EdgarBlocked`: SEC answered HTTP 429 to its
+  company-name search (`cgi-bin/browse-edgar`), the resolver's fallback tier,
+  at 8, 2 and 1 workers (about 1 h, a few minutes, and 1.5 h after a
+  25-minute pause).
+- **The name index.** The name tier now reads SEC's `cik-lookup-data.txt`
+  instead (`docs/superpowers/plans/2026-09-29-cik-lookup-name-index.md`); a
+  full run sends no company search.
+- **Five more full runs** found what the case run could not, each fixed test
+  first before the next: the identity guard's cost (above), merger rows
+  rewritten on timing across issuers, the 8-K12B search under older names, the
+  Form 25 dating of a continuation (*Found by the full run*, below), and the
+  name index's answers where the live search's differed (the index plan's
+  *Rules found by the full runs*; every rule was replayed over the 698 cached
+  name-tier answers before the next run).
+- **LLM merger terms.** The committed `c43bdd0` run used
+  `--extract-merger-terms-llm`; without it `merger_at_par` rose from 53 to 269,
+  so the final run uses it too (`gpt-5.4-mini`, answers cached under
+  `cache/llm/`).
 
-As designed, a refusal writes nothing, so `output/` is still the `c43bdd0` run
-with the blank `ticker_successor_sec_id` column added. The resolver cache kept
-343 era answers, and the EDGAR and SEC data caches are warm. The next run needs
-fewer company searches, but still a long, well-spaced cold pass. Following
-CLAUDE.md, start it once no other SEC client is running:
+### Found by the full run and fixed
 
-    python scripts/classify_universe.py --observations data/observations.csv --as-of 2026-09-25 --sec-workers 1
+- **Merger rows on timing across two issuers stand** (`handoff_conflict`, 14
+  rows): WEN 2008, IGT 2015 and EVHC 2016 were acquisitions for other shares or
+  cash; the first full run rewrote them as continuations. Timing rewrites a
+  merger only on the same issuer.
+- **The 8-K12B search** also tries the predecessor's EDGAR names around the
+  handoff and its observed name (Ashland Inc's CIK is ASHLAND LLC today).
+- **A continuation's Form 25** must take effect on or after A's last
+  sighting, within 30 days of the later of A's last and B's first sighting:
+  the Braves split-off's Form 25 had dated the Liberty trackers' handoff
+  (now 2023-08-13), and LH's was 36 days away (now 2024-05-30).
 
-Then check the case table and the ticker overlaps again on the full output.
+### Result (`output/`, code `76edc38`, against the committed `c43bdd0` run)
+
+| | `c43bdd0` | `76edc38` |
+|---|---|---|
+| delistings | 982 | 1,017 |
+| merger / exchange_transfer / liquidation | 633 / 283 / 47 | 624 / 328 / 48 |
+| compliance_failure / unknown / expiration | 6 / 12 / 1 | 6 / 9 / 2 |
+| securities (FIGI by CUSIP / ticker / placeholder) | 2,077 / 50 / 99 | 2,078 / 50 / 100 |
+| security pairs sharing a ticker on overlapping dates | 30 | 11 |
+| review: fix / check | 137 / 618 | 100 / 628 |
+
+`run_manifest.json`'s `handoffs`: 96 candidate pairs, 81 decided: 38
+continuations by filing, 35 by timing, 8 takeovers, 14 conflicts; 26 rows
+added.
+
+Review flags that moved:
+
+| flag | `c43bdd0` | `76edc38` |
+|---|---|---|
+| `ended_without_delisting` | 74 | 43 |
+| `form25_unmatched` | 55 | 30 |
+| `ticker_shared` | 29 | 10 |
+| `no_dlret` | 63 | 56 |
+| `no_last_trade_date` | 134 | 124 |
+| `successor_unknown` | 128 | 126 |
+| `merger_at_par` | 53 | 53 |
+| `handoff_continuation` / `handoff_rebucketed` / `handoff_conflict` | – | 45 / 15 / 14 |
+| `identity_detached` | – | 5 |
+| `observation_unresolved` | – | 1 (APTV 2012-13) |
+
+- **Case table.** Every row as above.
+- **Ticker overlaps.** No new pair; the 11 left (APA, AVGO, CI, CZR, DTV, GCI,
+  GOOG, IACI, LVNTA, QDEL, SPW) were all in `c43bdd0`. CZR is the takeover's
+  8-day overlap, in review by design.
+- **Delistings the committed run lacked** (besides the 26 the handoffs added):
+  real ones its issuer answers missed, ACV 2011 (Unilever), WNR 2017
+  (Andeavor), PTHN 2017 (Thermo Fisher), SCS 2025 (HNI), CIT 2022 (First
+  Citizens), HTZ 2020 (bankruptcy), TMUSR 2020 (rights expired); and three
+  below.
+- **Delistings it had that this run does not:** WRK 2018 and ABBI 2008
+  (below).
+- **`sec_id` or issuer changes** (`observation_map.csv`: 153 observations of
+  21 tickers): corrections ITT, XRX, HTZ (old lines instead of today's), J
+  (backfill), TCF 2012-14 (old TCF's line), ACV (the 2006 spin-off, 1368457),
+  PTHN (Patheon NV), RLGY (Realogy Holdings), WFT 2009 (Weatherford's Swiss
+  CIK after its February 2009 move), APTV 2012-13 (no longer today's Aptiv
+  line); issuers found where there were none: OCN, SCS, SEAS, WNR, CIT, TMUSR;
+  the rest are the gaps below (WRK, ABBI, TWO, NWA, Z).
+
+### Known gaps, left for later
+
+- **XOM 2026-07-12, `merger`.** ExxonMobil's redomiciliation into a Texas
+  holding company (8-K 0001193125-26-291986: one share for one, XOM kept
+  trading), after the committed run. It is a continuation, but the run
+  observes no new XOM line to hand the ticker to. WFT 2014-07-03 (Weatherford's
+  move from Switzerland to Ireland, `merger_at_par`) is the same shape.
+- **WRK.** The 2015-24 era spans WestRock's 2018 holding-company
+  reorganization (CIK 1636023, then 1732845): no single issuer passes the
+  resolver, so the era has none. The committed run's WRK 2018 `merger` was
+  that reorganization, not an exit; neither run finds the real 2024 exit
+  (Smurfit Westrock).
+- **ABBI 2008-09.** The snapshots carry ABBI after Abraxis split in November
+  2007 (the old company became APP Pharmaceuticals, APPX; the new one traded
+  as ABII). The era now resolves to the new Abraxis (1409012) and gets a weak
+  `exchange_transfer` guess (`no_form25`); the committed run's 2008 merger
+  was APP's. Either answer rests on a stale ticker.
+- **TWO 2013-17** takes CIK 1406587 (Capitol Acquisition, the SPAC Two
+  Harbors merged with) from the EFTS tier with a name mismatch; the committed
+  run had 1465740. **NWA 2008-09** (NORTHWEST AIRLS CORP) finds no issuer
+  under that abbreviation. **Z 2014** is detached from Zillow Group's line
+  (`identity_detached`: it would cross another line's confirmed Z range) onto
+  its issuer's placeholder, `CIK1334814-CLASS-A`. None costs a delisting.
+- **`output/web_verification.csv`** is still the `c43bdd0` run's; rerun
+  `scripts/verify_against_web.py` on the new `delistings.csv` before relying on
+  it.

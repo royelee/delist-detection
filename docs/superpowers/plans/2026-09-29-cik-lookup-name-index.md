@@ -114,3 +114,25 @@ Test first; keep the offline suite green; one commit per task.
   live search and with the index. Compare the CIKs and explain every difference. Then rerun
   `classify_universe.py` on `data/observations.csv` (as_of 2026-09-25) with the index. If it completes, finish the
   handoff plan's Task 8 checks on the full output and record them in the validation note.
+
+## Rules found by the full runs (2026-09-29)
+
+The first index version answered differently from the live search in ways only the full universe showed. Each fix
+was checked by replaying the 698 cached name-tier answers offline, then by a full run with the LLM merger terms
+(`docs/2026-09-28-handoff-validation.md`).
+
+| Case | Wrong answer | Rule now |
+|---|---|---|
+| WEATHERFORD INTL, NIELSEN N.V. | a fund or an individual (WEATHERFORD YVONNE); a missed match | the live search's form filter emulated from submissions JSON; periods dropped |
+| NORTHEAST UTILITIES (NU) | Northeast Bancorp, through the spelling NORTHEAST | a spelling matching more than 10 CIKs reads nothing unless it keeps every word of the name |
+| MEDCO HEALTH SOLUTIONS (MHS) | none: 17 matches, most of them its subsidiaries | such a spelling reads the top 10 entries carrying every word |
+| WACHOVIA CORP (WB) | 104019, the pre-2001 Wachovia, which holds the exact name | the exact name wins before the form filter only while its holder still files (within a year) |
+| FIRST REPUBLIC BANK (FRC) | Republic First Bancorp, FIRST REPUBLIC BANCORP in 1996-97, the shortened spelling's only Form 25 filer | the exact-name holder that still files wins; a lone filer counts only with a name carried in the 5 years before the date |
+| TCF FINANCIAL CORP, GANNETT CO INC (2012-14) | none: two or three CIKs took the name at different times | the one that carried the name by the date |
+| DIVERSIFIED HEALTHCARE TRUST (2014) | none: a 2020 name carried back by a snapshot | a lone active exact-name holder is not vetoed by the date |
+| ANHEUSER BUSCH COS INC (BUD) | the brewery subsidiary; then none | hyphens read as spaces, COMPANIES a filler like COS; of several filers, the one with exactly the name's words |
+| MOTOROLA INC, AMB PROPERTY CORP | Motorola Mobility; the operating partnership | of several filers, the exact name; an exact-name answer's date gap counts from its nearest filing, not 1000 |
+| ALBERTO CULVER CO (ACV, 2010) | 3327, the old company renamed in 2006 | of several named filers, the one carrying the name on the date (the 2006 spin-off) |
+| CHICAGO MERCANTILE HLDGS (CME) | the exchange subsidiary | a name carried a few years before counts: the snapshot lags CME Group's 2007 rename |
+| APTIV PLC (2012-13) | Aptiv Solutions, another company | the date decides only among filers the query names |
+| S&P GLOBAL INC (MHFI) | an S&P fund trust, through the spelling S P | as NORTHEAST |

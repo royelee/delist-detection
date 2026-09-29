@@ -28,7 +28,7 @@ editable install.
 
 ```bash
 pip install -e .                         # editable install (Python ≥3.10) — once per env
-pytest                                    # full suite (1419 tests, offline, no network)
+pytest                                    # full suite (1428 tests, offline, no network)
 pytest tests/test_payout_extractor.py -v  # one file
 pytest tests/test_payout_extractor.py::test_match_in_cash_family_altr -v   # one test
 
@@ -164,9 +164,12 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   each strict-validated. The name tier finds its candidates in SEC's
   `cik-lookup-data.txt` (`cik_lookup.py`: `CikLookupClient`, cached 30 days
   under `cache/sec_data/cik_lookup/`, and `CikNameIndex`, exact then
-  character-prefix matches, each spelling's top 10 put through the live
-  search's 25-NSE/25/15-12G form filter read from their submissions JSON,
-  `_index_candidates`; `name_index=`, wired by `default_clients`), not
+  character-prefix matches, read through their submissions JSON as the live
+  search answered, `_index_candidates`: the one active holder of the exact
+  name, else the 25-NSE/25/15-12G form filter's one filer the query names
+  (`_one_filer`), else the exact name; `name_index=`, wired by
+  `default_clients`; the rules and the cases behind them in
+  `docs/data-flow.md`), not
   in the live company search, which runs only without an index (the offline
   tests, the golden replay) or when it cannot load. The pin and the observation name (from
   `ObservationIndex.cik_pin_on`/`.name_on`, wired in by `pipeline.py`) replace
