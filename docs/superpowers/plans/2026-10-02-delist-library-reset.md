@@ -1,0 +1,195 @@
+# Delist Library Reset: Roadmap
+
+> **For agentic workers:** this file orders the reset's plans and is not executed task by task. Execute
+> reset-1 (`docs/superpowers/plans/2026-10-02-reset-1-scorecard-golden-audit.md`) with
+> superpowers:subagent-driven-development or superpowers:executing-plans. Each later plan is written in full
+> when the plan before it lands.
+
+**Goal:** Take the library from 88.8% lifecycle coverage to at least 99%, prove each lifecycle's
+correctness, and publish the two-table contract qlib_practice reads.
+
+**Spec:** `docs/superpowers/specs/2026-10-02-delist-library-reset.md`, a Markdown copy of
+https://claude.ai/artifact/Y9MT7c869AXSyT4gvYQ852. Exit-kind and valuation rules: "How to handle a ticker event"
+(https://claude.ai/artifact/76LqFYrd5D14NC53fKxC9x, a Claude Doc). Code removal: "Delist Library Cleanup"
+(https://claude.ai/artifact/VP1F4A16ZsXgMTcjrwnBkq).
+
+## Why several plans
+
+The spec's "Order of work" has four steps: measure, one verdict per row, publish the contract, close the gaps.
+Each step depends on what the step before it produces. The scorecard ranks the gaps, the verdict defines
+`uncertain`, and the contract defines the columns the gap work fills. Each plan below produces working, tested
+software on its own. Only reset-1 is written in full now. Writing reset-2 to reset-4 in detail first would fix
+their designs against numbers that reset-1's audit is about to change, and against operator decisions not yet
+taken.
+
+## Baseline
+
+Measured on 2026-10-02 from the committed `output/` (as_of 2026-09-25, library main `d1a367e`). reset-1's
+scorecard reproduces these numbers from the tables.
+
+| Line | Today |
+| --- | --- |
+| L1 coverage, input tickers | 1,970 of 2,219 (88.8%) |
+| L1 coverage, securities | 1,962 of 2,210. Uncovered: 119 left view, 51 ended incomplete, 46 closed with no event, 32 with no interval |
+| L2 quality of covered tickers | 1,547 high, 296 medium, 127 low |
+| R1.1 sightings mapped | 35,419 of 35,955 |
+| R1.2 identity | 2,060 FIGI via CUSIP, 50 ticker only, 100 placeholders, 14 FIGI rows with no CIK |
+| R1.3 transfers with no successor | 126 (53 placeholders) |
+| R1.4 review rows | 728 over 507 securities |
+| R2.1 last trade date | 841 of 883 real endings; 41 missing inside the window |
+| R2.2 unknown reason | 9; 139 endings from the continued-filings rule |
+| R2.3 blank DLRT inside the window | 54: 32 wait for a last close, 22 have no value |
+| R2.4 assumed par | 59 (51 inside the window) |
+| R2.5 / R2.6 distress | 54 endings, 39 carry a flag |
+
+Where this differs from the spec's hand count, the scorecard's definition is the one used from now on:
+
+- R2.4: 59 and 51. The spec's 60 and 52 also counted one continuing merger row.
+- R2.6 sub-counts: 33 rows with a last-trade-date flag, 8 with a ticker-map identity, 3 at a normal price. The
+  spec has 29, 6 and 1. The total, 39 flagged, matches.
+- R2.2: 139 real endings come from the continued-filings rule. The spec's 123 counted review rows.
+- R1.4: 507 securities. The spec's 508 counted the blank `sec_id`.
+- Continuations in the audit census: 70. The spec has 73.
+
+Found while building the golden set, and not in the spec:
+
+- **FOX/FOXA.** Twenty-First Century Fox's sightings from 2013 to 2018 (CIK 1308161, class A and class B) are
+  mapped to Fox Corp's FIGIs (`BBG00JHNJW99`, `BBG00JHNKJY8`). The 2019 Disney merger ending is missing, and
+  Fox Corp inherits 21CF's history. reset-1 pins both as known-wrong golden cases for reset-4b.
+- **LVNTA.** The placeholder `CIK1355096-COMMON` has about 400 ticker intervals that alternate between LINTA,
+  LCAPA, LVNTA and QVCA every few days. Liberty's tracking stocks are being merged into one line. This is for
+  reset-4b.
+
+## The plans
+
+| ID | Plan | Needs | What it must move | Spec decisions it rests on |
+| --- | --- | --- | --- | --- |
+| reset-1 | Scorecard, golden set, accuracy audit (written) | nothing | M1 and R1.6. Sets the floor | 5, 17 |
+| reset-2 | One verdict per row; `uncertain.csv` | reset-1 | R1.4. The library-side hard gates of decision 17 | 1, 4 |
+| reset-3 | The contract, side by side with today's tables | reset-2 | golden `MRK-2008` | 6, 7, 9, 10, 12 |
+| reset-3q | qlib_practice switches every reader (in the qlib_practice repo) | reset-3 | the consumer's gates | 8, 13, 15, 16 |
+| reset-4a | End-of-era resolver | reset-2 | L1 left view and closed with no event (165). Golden `YHOO` and the 20 sampled rows | 9, 11 |
+| reset-4b | Identity evidence | reset-1 | R1.2, L1 no interval. Golden `FOXA-2015`, `FOX-2015`, `ERA` | 1, 7 |
+| reset-4c | Values: blank mergers and assumed par | reset-3 | R2.3, R2.4 | 2, 4 |
+| reset-4d | Distress certainty and liquidation values | reset-2 | R2.5, R2.6. Golden `PDLI` | 3 |
+| reset-4e | Missing last trade dates | reset-1 | R2.1 | 12 |
+| reset-4f | Values of drops to OTC | reset-4a, reset-3 | the drops reset-4a separates | 11 |
+
+The reset is done when `L1.coverage_tickers` reads at least 0.99 and the accuracy audit's census and random
+sample meet decision 17. The golden set's `fixed_by` column uses these IDs.
+
+Before each later plan is written, confirm with the operator the decisions it rests on. The spec lists 17
+decisions with proposed answers. reset-1 adopts 5 and 17 as proposed. Decision 14 (spin-offs) is a store check
+in qlib_practice and needs no library plan unless that check fails.
+
+### reset-1: Scorecard, golden set, accuracy audit
+
+Written: `docs/superpowers/plans/2026-10-02-reset-1-scorecard-golden-audit.md`. It adds `output/scorecard.json`
+to every run, a floor in `data/scorecard.json` that no later change may lower, a 51-case lifecycle golden set
+(27 pass and 24 known wrong), and the decision-17 audit worksheet (321 census rows and 100 random rows), filled
+from sources.
+
+### reset-2: One verdict per row
+
+- A `verdict` module gives `confirmed` or `uncertain` to each seed, each security and each ending, under the
+  spec's invariants ("Invariants the library's build enforces"). A confirmed security has a FIGI, or a unique
+  CIK and class. A placeholder also needs a filing check that the ticker appears under that CIK (decision 1).
+  Its dated intervals must cover every seed that resolved to it. A confirmed ending has a filing-backed exit
+  kind and a last trade date from an exchange-print source (MIDAS, an exchange notice, 8-K item 3.01, a Nasdaq
+  halt) that is not after the Form 25 effective date. The verdict never covers the value. The one exception is
+  decision 4: assumed par after a failed payout gate (JCI 2016) is uncertain.
+- `uncertain.csv` has the columns `kind` (seed, security or ending), `ticker`, `sec_id`, `date`, `reason` and
+  `candidates`.
+- The scorecard gains the uncertain counts. `R1.4.review_rows` leaves the floor by a deliberate floor edit.
+  `review.csv` stays until reset-3 publishes the contract (cleanup step 4).
+- Decision 17's library-side hard gate becomes a build check: no harsh fill on an ending whose identity or date
+  is uncertain.
+
+### reset-3: The contract
+
+- `security_history` has 7 columns and carries the issuer CIK in force on each interval. Golden `MRK-2008`
+  then flips: old Merck & Co was the issuer in 2008.
+- `delistings` v2 has 11 columns: `exit_kind`, `drop_reason`, `continuation`, `successor_sec_id`,
+  `ticker_successor_sec_id`, `dlret`, `dlret_fill`, `terminal_value` and `verdict`, keyed by `sec_id` with one
+  ending per security. An earlier ending goes to `uncertain.csv`. Today's bucket and CRSP code map to
+  `exit_kind` and `drop_reason`. Shumway values and assumed par move to `dlret_fill`. A continuation's `dlret`
+  is blank.
+- The run also writes the seed echo, `price_requests.csv` out and its answers in (`last_close`,
+  `received_close`, `otc_print`; this replaces `--last-trade-closes`), `id_changes.csv` with placeholders built
+  from a class code (decision 7), and `schema_version` in `run_manifest.json`.
+- For one release the contract is written under `output/contract/`, beside today's tables (decision 6).
+- `lifecycle.Tables` gains a reader for the contract tables. The golden judge and the scorecard then read
+  `exit_kind` and `dlret_fill` from them, and `lifecycle.EXIT_KIND_OF_BUCKET` is deleted.
+- **Risk to measure first: seeds-only input.** Today a ticker history ends at the security's last sighting, and
+  later sightings are what carry it forward. Over-seeding is harmless, so qlib_practice can keep passing every
+  sighting as a seed. Run the scorecard on a seeds-only input before qlib_practice drops the extra rows. If
+  coverage falls, keep every sighting until reset-4a lands.
+
+### reset-3q: qlib_practice switch (in the qlib_practice repo)
+
+From the spec's step 3, in one qlib_practice change:
+
+- Rename `issuer_cik`, `valid_from`/`valid_to` and `review_flags`.
+- Split `bucket` and `dlret_method` into `exit_kind`, `drop_reason`, `continuation` and `dlret_fill`.
+- Key the overrides and the drop list on `sec_id`.
+- Build membership from the seed echo (decision 8).
+- Answer `price_requests.csv` from the store.
+- Bump the minimum library commit.
+
+Decisions 13 (label compounding), 15 (exits booked in the account series) and 16 (the drop list never removes a
+panel row) are changes in qlib_practice only.
+
+### reset-4a: End-of-era resolver
+
+This is the spec's "The end-of-era resolver (the R1.3 fix)". One function runs once per security, at the last
+date its history is known, and answers "what happened next?" by trying the six branches in order. Each branch
+needs evidence about the security, not only about the registrant. It replaces
+`classifier._detect_continued_filings` and the clip decision now spread over `pipeline._delisting_endings`,
+`_ends_the_security`, `_continues_after` and `listing_status`.
+
+- Test set: the 20 sampled golden rows, golden `YHOO`, and the 117 `census:left_view` rows of reset-1's audit
+  once they are filled.
+- Acceptance: `L1.left_view` and `L1.closed_no_event` fall (165 today), the sampled golden cases flip to `pass`
+  (except `ERA`, which waits for reset-4b), and no golden `pass` case breaks.
+
+### reset-4b: Identity evidence
+
+- The 50 ticker-only FIGIs, the tier that produced APTV and ITT.
+- The 100 placeholders, with decision 1's filing check.
+- The 14 FIGI rows with no CIK (Applied Materials, DuPont, Fannie Mae and US Airways among them).
+- The 32 securities with no interval.
+- FOX/FOXA, ERA, and LVNTA's tracking-stock intervals.
+
+### reset-4c: Values
+
+- The 22 endings inside the window with a blank value. Decision 2: value them by hand through the deal-terms
+  input, or publish assumed par as `dlret_fill = 0.0`, and never use the drop list.
+- The 59 assumed-par rows (decision 4), including JCI 2016.
+
+### reset-4d: Distress certainty and liquidation values
+
+- The 33 distress endings whose last trade date is contested.
+- The 8 identified through today's ticker map, and the 3 marked "distress at a normal price".
+- PDLI: a voluntary wind-down that paid distributions. It is a liquidation, not `compliance_failure`.
+- Liquidation payment schedules (none exist today), and the AABA and PDLI values from those payments
+  (decision 3).
+
+### reset-4e: Missing last trade dates
+
+There are 42 real endings with no last trade date, 41 inside the window: 34 mergers, 5 transfers, 1
+liquidation, 1 unknown and 1 expiration. Only exchange-print sources count. Feasibility from the spec: 230 of
+1,017 endings have no exchange-print source, 62 of 183 of them before 2012.
+
+### reset-4f: Values of drops to OTC
+
+This is decision 11: the first off-exchange print within 10 trading days, requested through
+`price_requests.csv` (`otc_print`). The spec measured 37 of 175 drops and distress endings with a usable print,
+so expect fills, not OTC values, in the first release.
+
+## Cleanup interleaving
+
+The Delist Library Cleanup page runs after reset-1. Each removal group is one commit. `securities`,
+`ticker_history`, `cusip_history` and `delistings` must come out byte-identical, and the scorecard must not
+change. `review_triage.py` and its two tables are removed only after reset-3 publishes the verdict and
+`uncertain.csv`. Simplifying the core modules comes last, one module at a time, each behind the golden set and
+the scorecard.
