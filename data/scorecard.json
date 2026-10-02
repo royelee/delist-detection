@@ -6,6 +6,12 @@
   "golden": "golden_lifecycles.csv",
   "audit": "accuracy_audit.csv",
   "floor": {
+    "A.census.assumed_par.errors": 17,
+    "A.census.blank_no_value.errors": 11,
+    "A.census.continuation.errors": 27,
+    "A.census.distress.errors": 49,
+    "A.census.left_view.errors": 114,
+    "A.random.upper95": 0.177208,
     "G.pass": 27,
     "L1.closed_no_event": 46,
     "L1.coverage_securities": 0.887783,

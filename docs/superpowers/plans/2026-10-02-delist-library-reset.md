@@ -41,6 +41,33 @@ scorecard reproduces these numbers from the tables.
 | R2.3 blank DLRT inside the window | 54: 32 wait for a last close, 22 have no value |
 | R2.4 assumed par | 59 (51 inside the window) |
 | R2.5 / R2.6 distress | 54 endings, 39 carry a flag |
+| A.random | 11 wrong of 99 checked; the 95% upper bound on the error rate is 17.7% |
+| A.census.left_view | 114 wrong of 115 |
+| A.census.distress | 49 wrong of 54 (about 12 once bankruptcy reads as `dropped`; see below) |
+| A.census.continuation | 27 wrong of 69 |
+| A.census.blank_no_value | 11 wrong of 21 |
+| A.census.assumed_par | 17 wrong of 58 |
+
+The A lines come from reset-1's accuracy audit (`data/accuracy_audit.csv`, filled from SEC filings on
+2026-10-02; 416 of 421 rows filled, 5 left pending with the reason in `note`). A row is wrong when any field
+the checker verified disagrees with the output. The wrong rows are the test set for the plan that owns them:
+
+- **left_view goes to reset-4a.** Nearly every left-view ending is false. Most were acquisitions the library
+  read as transfers. The rest kept trading (renames, reverse splits, holding-company moves) or were dropped
+  to OTC after a bankruptcy.
+- **distress goes to reset-4d.** 42 of the 49 differ only in vocabulary. The truth uses the contract's
+  `dropped` for a bankruptcy delisting, while today's bucket says `liquidation`; both get the same −0.90 mark.
+  reset-3's mapping from the CRSP code removes those. About 12 are substantive: PDLI is a liquidation, WOLF
+  2025 and TDW 2017 swapped old shares for new ones in prepackaged Chapter 11 cases while still listed, three
+  were continuations, and the rest are wrong last trade dates.
+- **blank_no_value and assumed_par go to reset-4c.** Their notes record each deal's consideration, so reset-4c
+  can value them.
+- **continuation goes to reset-4a or reset-4b.** Several links were not one for one (CHTR, MTCH, DVMT,
+  LMCA/LMCK, CSAL, S, AZPN), and one issuer was wrong (SPB).
+- **random:** the 11 wrong rows are mostly identity or ending mistakes the census groups do not catch. CFFN's
+  2008 issuer is the old Capitol Federal Financial (CIK 1074433), not 1490906. EPE and MER read "closed with no
+  event": EPE was dropped to OTC in 2019 and MER merged into Bank of America in 2008. AQNT and AT ended in 2007,
+  before their 2008 sightings.
 
 Where this differs from the spec's hand count, the scorecard's definition is the one used from now on:
 
