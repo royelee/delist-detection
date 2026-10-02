@@ -150,3 +150,12 @@ def test_tables_read_the_written_tables(tmp_path):
                                   "delistings": t.delistings, "observation_map": t.observation_map})
     back = Tables.read(tmp_path)
     assert back.securities == t.securities and back.delistings == t.delistings and back.review == []
+
+
+def test_tables_read_takes_uncertain_csv_when_it_is_there(tmp_path):
+    t = tables([sec("A")], [iv("A", "AAA", "2010-01-04")], [], [obs("AAA", "2010-06-30", "A")])
+    store.write_tables(tmp_path, {"securities": t.securities, "ticker_history": t.ticker_history,
+                                  "delistings": t.delistings, "observation_map": t.observation_map})
+    assert Tables.read(tmp_path).uncertain is None
+    store.write_tables(tmp_path, {"uncertain": []})
+    assert Tables.read(tmp_path).uncertain == []

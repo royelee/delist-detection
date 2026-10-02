@@ -24,15 +24,13 @@ from datetime import date
 from pathlib import Path
 
 from .atomic_io import write_atomic
-from .lifecycle import (CLOSED_NO_EVENT, ENDED_INCOMPLETE, HIGH, LEFT_VIEW, LOW, MEDIUM, NO_INTERVAL,
+from .lifecycle import (CLOSED_NO_EVENT, CONTINUED_FILINGS, DISTRESS, ENDED_INCOMPLETE, EXCHANGE_PRINT_SOURCES,
+                        HIGH, LEFT_VIEW, LOW, MEDIUM, NO_INTERVAL,
                         NO_MAPPED_SIGHTING, LifecycleView, Tables, flag_names)
 from .truth import KNOWN_WRONG, PASS, TruthCase, clopper_pearson_upper, judge_all, load_truth
 
 SCORECARD_NAME = "scorecard.json"
 UP, DOWN = "up", "down"
-DISTRESS = ("liquidation", "compliance_failure")
-EXCHANGE_PRINT_SOURCES = ("midas", "ex99_notice", "8k_301", "nasdaq_halt")
-CONTINUED_FILINGS = "Continued 10-K/Q filings"
 CENSUS_GROUPS = ("distress", "continuation", "left_view", "blank_no_value", "assumed_par")
 
 # Every floored number and the direction that is better. A number not listed

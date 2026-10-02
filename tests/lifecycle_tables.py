@@ -25,15 +25,17 @@ def iv(sec_id, ticker, start, end=""):
 
 
 def ending(sec_id, delist_date, bucket="merger", *, ltd="", dlret="", method="cash_only", successor="",
-           confidence="high", dlret_confidence="high", flags="", reason="", source="midas"):
+           confidence="high", dlret_confidence="high", flags="", reason="", source="midas", **cells):
     return _row("delistings", sec_id=sec_id, delist_date=delist_date, bucket=bucket, last_trade_date=ltd,
                 dlret=dlret, dlret_method=method, successor_sec_id=successor, confidence=confidence,
                 dlret_confidence=dlret_confidence, review_flags=flags, reason=reason,
-                last_trade_date_source=source if ltd else "")
+                last_trade_date_source=source if ltd else "", **cells)
 
 
-def obs(ticker, as_of, sec_id="", status="mapped"):
-    return _row("observation_map", ticker=ticker, as_of=as_of, sec_id=sec_id, status=status)
+def obs(ticker, as_of, sec_id="", status="mapped", *, era=None, name=""):
+    """An observation_map row; its era starts on its own date unless `era` says otherwise."""
+    return _row("observation_map", ticker=ticker, as_of=as_of, sec_id=sec_id, status=status,
+                era=era or f"{ticker}@{as_of}", name=name)
 
 
 def review(sec_id, flags="no_form25"):

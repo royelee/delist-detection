@@ -50,6 +50,9 @@ LOW_FLAGS = frozenset({"last_trade_date_conflict", "resolved_by_current_ticker_m
 EXIT_KIND_OF_BUCKET = {"merger": "merger", "exchange_transfer": "exchange", "liquidation": "liquidation",
                        "compliance_failure": "dropped", "expiration": "expiration"}
 EXIT_KINDS = frozenset({"merger", "exchange", "liquidation", "dropped", "lost_source", "expiration"})
+DISTRESS = ("liquidation", "compliance_failure")                         # today's distress buckets
+EXCHANGE_PRINT_SOURCES = ("midas", "ex99_notice", "8k_301", "nasdaq_halt")  # last trade dates from an exchange print
+CONTINUED_FILINGS = "Continued 10-K/Q filings"                           # the continued-filings rule's reason
 
 
 def flag_names(row: Mapping[str, str]) -> set[str]:
@@ -65,15 +68,19 @@ class Tables:
     delistings: Sequence[Mapping[str, str]]
     observation_map: Sequence[Mapping[str, str]]
     review: Sequence[Mapping[str, str]] = ()
+    uncertain: Sequence[Mapping[str, str]] | None = None     # None: no uncertain.csv (a run before reset-2)
 
     @classmethod
     def read(cls, out_dir: str | Path) -> Tables:
-        """The tables under `out_dir` (store.read_table: a column mismatch raises)."""
+        """The tables under `out_dir` (store.read_table: a column mismatch raises).
+        review.csv may be missing (no rows); uncertain.csv may be missing (None)."""
         def rd(name: str) -> list[dict[str, str]]:
             return store.read_table(name, store.table_path(out_dir, name))
-        review_path = store.table_path(out_dir, "review")
+
+        def optional(name: str) -> list[dict[str, str]] | None:
+            return rd(name) if store.table_path(out_dir, name).exists() else None
         return cls(rd("securities"), rd("ticker_history"), rd("delistings"), rd("observation_map"),
-                   rd("review") if review_path.exists() else [])
+                   optional("review") or [], optional("uncertain"))
 
 
 @dataclass(frozen=True)

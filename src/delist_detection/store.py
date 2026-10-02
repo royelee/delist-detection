@@ -50,6 +50,11 @@ DELISTINGS_COLUMNS: tuple[str, ...] = (
     "raw_payout_per_share", "raw_payout_source", "raw_payout_confidence", "review_flags",
 )
 
+# uncertain.csv (verdict.Verdicts.uncertain_rows): one row per uncertain seed,
+# security or ending. `kind` is seed | security | ending; `reason` holds
+# `;`-joined `code` or `code:detail` items; `candidates` the other sec_ids involved.
+UNCERTAIN_COLUMNS: tuple[str, ...] = ("kind", "ticker", "sec_id", "date", "reason", "candidates")
+
 TABLES: dict[str, TableSpec] = {t.name: t for t in (
     TableSpec("securities",
               ("sec_id", "issuer_cik", "share_class", "name", "security_type", "observed", "figi_source"),
@@ -75,6 +80,7 @@ TABLES: dict[str, TableSpec] = {t.name: t for t in (
               ("ticker", "as_of", "name", "cusip", "pin_cik", "pin_sec_id", "era", "sec_id", "issuer_cik",
                "history_ticker", "in_ticker_history", "status"),
               ("ticker", "as_of", "name", "cusip", "pin_cik", "pin_sec_id")),
+    TableSpec("uncertain", UNCERTAIN_COLUMNS, ("kind", "sec_id", "date", "ticker")),
 )}
 
 
