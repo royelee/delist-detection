@@ -111,3 +111,9 @@ def test_clopper_pearson_upper_bound():
     assert clopper_pearson_upper(1, 100) == pytest.approx(0.0466, abs=1e-4)
     assert clopper_pearson_upper(0, 0) == 1.0 and clopper_pearson_upper(5, 5) == 1.0
     assert clopper_pearson_upper(0, 300) < clopper_pearson_upper(0, 100) < clopper_pearson_upper(1, 100)
+
+
+def test_write_truth_accepts_a_str_path(tmp_path):
+    from delist_detection.truth import write_truth
+    write_truth(str(tmp_path / "t.csv"), [GOOD])
+    assert load_truth(tmp_path / "t.csv", allow_pending=True) == load_truth(_write(tmp_path / "s.csv", [GOOD]))

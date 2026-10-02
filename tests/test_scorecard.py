@@ -115,10 +115,18 @@ def test_load_config_reads_the_window_floor_and_truth_files(tmp_path):
 @pytest.mark.parametrize("raw, says", [
     ({"windw": None}, "unknown key"), ({"window": {"start": "2006-01-02"}}, "window needs"),
     ({"window": {"start": "2024-01-02", "end": "2006-01-02"}}, "starts after"),
-    ({"floor": {"L1.tickers": 5}}, "floor entries"), ({"floor": {"G.pass": "many"}}, "floor entries")])
+    ({"floor": {"L1.tickers": 5}}, "floor entries"), ({"floor": {"G.pass": "many"}}, "floor entries"),
+    ([1, 2], "not an object"), ({"floor": [1]}, "floor must be"), ({"floor": {"G.pass": True}}, "floor entries"),
+    ({"window": [1]}, "window must be")])
 def test_load_config_refuses_a_bad_file(tmp_path, raw, says):
     with pytest.raises(ScorecardConfigError, match=says):
         sc.load_config(_config(tmp_path, raw))
+
+
+def test_load_config_refuses_a_file_that_is_not_utf8(tmp_path):
+    (tmp_path / "scorecard.json").write_bytes(b"\xff\xfe\x00")
+    with pytest.raises(ScorecardConfigError, match="not JSON"):
+        sc.load_config(tmp_path / "scorecard.json")
 
 
 def test_load_config_refuses_text_that_is_not_json(tmp_path):

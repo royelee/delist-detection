@@ -26,7 +26,7 @@ from pathlib import Path
 from .atomic_io import write_atomic
 from .lifecycle import (CLOSED_NO_EVENT, ENDED_INCOMPLETE, HIGH, LEFT_VIEW, LOW, MEDIUM, NO_INTERVAL,
                         NO_MAPPED_SIGHTING, LifecycleView, Tables, flag_names)
-from .truth import KNOWN_WRONG, PASS, TruthCase, TruthFileError, clopper_pearson_upper, judge_all, load_truth
+from .truth import KNOWN_WRONG, PASS, TruthCase, clopper_pearson_upper, judge_all, load_truth
 
 SCORECARD_NAME = "scorecard.json"
 UP, DOWN = "up", "down"
@@ -87,8 +87,13 @@ def load_config(path: str | Path) -> ScorecardConfig:
     path = Path(path)
     try:
         raw = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as exc:
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
         raise ScorecardConfigError(f"{path}: not JSON ({exc})") from None
+    if not isinstance(raw, dict):
+        raise ScorecardConfigError(f"{path}: the top level is not an object")
+    for key in ("window", "floor"):
+        if raw.get(key) is not None and not isinstance(raw[key], dict):
+            raise ScorecardConfigError(f"{path}: {key} must be an object")
     unknown = set(raw) - {"window", "floor", "golden", "audit"}
     if unknown:
         raise ScorecardConfigError(f"{path}: unknown key(s) {sorted(unknown)}")
@@ -103,7 +108,7 @@ def load_config(path: str | Path) -> ScorecardConfig:
             raise ScorecardConfigError(f"{path}: window starts after it ends")
         window = Window(start, end)
     floor = raw.get("floor") or {}
-    bad = sorted(k for k, v in floor.items() if k not in METRICS or not isinstance(v, (int, float)))
+    bad = sorted(k for k, v in floor.items() if k not in METRICS or isinstance(v, bool) or not isinstance(v, (int, float)))
     if bad:
         raise ScorecardConfigError(f"{path}: floor entries {bad} are not floored metrics with a number")
 

@@ -81,6 +81,14 @@ def test_a_bad_config_exits_2(tmp_path, out, capsys):
     assert "ABORTED" in capsys.readouterr().err
 
 
+def test_a_manifest_without_as_of_exits_2(tmp_path, out, capsys):
+    (out / "run_manifest.json").write_text("{}")
+    cfg = tmp_path / "scorecard.json"
+    cfg.write_text("{}")
+    assert scorecard_script.main(["--output-dir", str(out), "--config", str(cfg)]) == 2
+    assert "no as_of" in capsys.readouterr().err
+
+
 def test_draw_writes_a_pending_worksheet_once(tmp_path, out, capsys):
     cfg = _config(tmp_path, {})
     sheet = tmp_path / "audit.csv"

@@ -34,7 +34,12 @@ LIFECYCLE_COLUMNS = ("unit", "key", "sec_id", "kind", "quality", "chain", "final
 
 def tables_as_of(out_dir: Path) -> date:
     path = out_dir / MANIFEST_NAME
-    return date.fromisoformat(json.loads(path.read_text())["as_of"]) if path.exists() else date.today()
+    if not path.exists():
+        return date.today()
+    manifest = json.loads(path.read_text())
+    if not isinstance(manifest, dict) or "as_of" not in manifest:
+        raise ValueError(f"{path}: no as_of")
+    return date.fromisoformat(manifest["as_of"])
 
 
 def lifecycle_rows(view: LifecycleView) -> list[dict[str, str]]:

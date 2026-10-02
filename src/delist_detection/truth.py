@@ -150,7 +150,7 @@ def write_truth(path: str | Path, rows: Sequence[dict[str, str]]) -> None:
     w = csv.DictWriter(buf, fieldnames=list(TRUTH_COLUMNS), lineterminator="\n")
     w.writeheader()
     w.writerows(rows)
-    write_atomic(path, buf.getvalue())
+    write_atomic(Path(path), buf.getvalue())
 
 
 def judge(case: TruthCase, view: LifecycleView) -> Judgement:
