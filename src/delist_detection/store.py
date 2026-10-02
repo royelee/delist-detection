@@ -119,6 +119,13 @@ def _formatted(name: str, rows: Iterable[Mapping[str, object]]) -> list[dict[str
     return out
 
 
+def formatted(name: str, rows: Iterable[Mapping[str, object]]) -> list[dict[str, str]]:
+    """`rows` as table `name` is written: every cell formatted, missing columns
+    blank, sorted by key -- the rows `read_table` would read back. An unknown
+    column raises ValueError."""
+    return _formatted(name, rows)
+
+
 def _write_all(tables: Sequence[tuple[str, Iterable[Mapping[str, object]], str | Path]]) -> dict[str, int]:
     """Write each `(name, rows, path)` as one group: every table is formatted and
     validated first, so an unknown column or a failing iterator raises before

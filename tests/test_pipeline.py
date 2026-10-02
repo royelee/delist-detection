@@ -23,6 +23,10 @@ from delist_detection.history import own_last_seen, ticker_range_review
 from delist_detection.successors import SecurityStart, successor_from_8k12b, successor_in_run, successor_search_name
 from delist_detection.review_triage import Decision
 from delist_detection.security_master import Security
+from delist_detection import scorecard as run_scorecard
+from delist_detection.lifecycle import Tables
+from delist_detection.scorecard import ScorecardConfig, Window
+from delist_detection.truth import TruthCase
 from delist_detection.store import read_table, table_path
 from delist_detection.ticker_resolver import TickerResolution, TickerResolver
 
@@ -2481,3 +2485,35 @@ def test_a_continuation_the_finder_found_no_row_for_clips_the_old_line_at_its_la
     m = json.loads((tmp_path / "run_manifest.json").read_text())
     assert m["handoffs"] == {"handoffs": 1, "continuations_by_filing": 0, "continuations_by_timing": 1,
                              "takeovers": 0, "conflicts": 0, "rows_added": 1}
+
+
+def test_run_writes_the_scorecard_of_the_tables_it_wrote(fake_edgar, tmp_path):
+    index, clients = _clients(fake_edgar)
+    config = ScorecardConfig(window=Window("2006-01-02", "2024-12-29"))
+    run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None, scorecard=config)
+    card = json.loads((tmp_path / "scorecard.json").read_text())
+    m = card["metrics"]
+    assert (m["L1.tickers"], m["L1.securities"], m["R1.1.sightings"], m["R2.endings"]) == (2, 2, 3, 1)
+    assert card["window"] == {"start": "2006-01-02", "end": "2024-12-29"} and "R2.3.blank_dlret_in_window" in m
+    # the same numbers scripts/scorecard.py computes from the written tables
+    again = run_scorecard.build(Tables.read(tmp_path), as_of=date.fromisoformat(card["as_of"]), config=config)
+    assert card == {**json.loads(json.dumps(again)), "drops": []}
+
+
+def test_run_reports_floor_drops_and_failing_golden_cases(fake_edgar, tmp_path):
+    index, clients = _clients(fake_edgar)
+    golden = [TruthCase(case="AET", group="golden", ticker="AET", on="2017-06-30", issuer_cik="999", status="pass")]
+    config = ScorecardConfig(floor={"G.pass": 1, "L1.coverage_tickers": 1.0}, golden=golden)
+    logged = []
+    summary = run(index, clients, Overrides(), out_dir=tmp_path, log=logged.append, scorecard=config)
+    assert summary.scorecard_drops == ["G.pass: 1 -> 0"]               # coverage holds at 1.0
+    assert summary.golden_failures == ["AET: issuer_cik 1122304 != 999"]
+    assert "scorecard drop: G.pass: 1 -> 0" in logged
+
+
+def test_a_limit_subset_is_never_compared_to_the_floor(fake_edgar, tmp_path):
+    index, clients = _clients(fake_edgar)
+    config = ScorecardConfig(floor={"G.pass": 1})
+    summary = run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None, limit=1, scorecard=config)
+    assert summary.scorecard_drops == []
+    assert json.loads((tmp_path / "scorecard.json").read_text())["drops"] == []

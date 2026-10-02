@@ -20,6 +20,7 @@ from typing import Any
 import requests
 
 from . import manifest as run_manifest
+from . import scorecard as run_scorecard
 from .acquirers import acquirer_cik, find_acquirer
 from .added_securities import AddedAcquirer, AddedSecurity, AddedSuccessor
 from .crsp_codes import CrspBucket
@@ -55,7 +56,8 @@ from .security_master import (
     detached_review, era_last_seen, issuers_by_era, observation_conflict_review, refine_eras,
     resolve_with_identity_guard, superseded_placeholders, ticker_unconfirmed_review, guarded_eras,
 )
-from .store import DelistingKey, write_tables
+from .lifecycle import Tables
+from .store import DelistingKey, formatted, write_tables
 from .successors import (
     SecurityStart, successor_from_8k12b, successor_in_run, successor_query, successor_search_args,
 )
@@ -90,6 +92,8 @@ class RunSummary:
     figi_sources: dict[str, int]
     review_flags: dict[str, int]
     review_counts: dict[str, int] = field(default_factory=dict)     # review_triage.triage()'s counts
+    scorecard_drops: list[str] = field(default_factory=list)        # floored scorecard numbers that got worse
+    golden_failures: list[str] = field(default_factory=list)        # golden `pass` cases the tables now fail
 
 
 def _stderr(*parts) -> None:
@@ -170,8 +174,11 @@ def _warm_delisting_search(clients: Clients, ordered: list[Security], listing: d
 
 def run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_dir: Path,
         tol: float = DEFAULT_TOL, limit: int | None = None, log: Callable = _stderr,
-        sec_workers: int = 1, review_decisions: Sequence[Decision] = ()) -> RunSummary:
-    """Observations -> the eight tables under `out_dir` (spec §8): `review_decisions`
+        sec_workers: int = 1, review_decisions: Sequence[Decision] = (),
+        scorecard: run_scorecard.ScorecardConfig = run_scorecard.ScorecardConfig()) -> RunSummary:
+    """Observations -> the eight tables under `out_dir` (spec §8), then
+    scorecard.json (`scorecard.build` over those tables, `scorecard`'s window,
+    floor and truth cases; floor drops are not checked under `limit`): `review_decisions`
     (`review_triage.load_decisions`: "I checked this flag on this row, it is
     fine") is passed straight to `review_triage.triage`, which writes
     review.csv (severity-ordered, info-only rows hidden, accepted tokens
@@ -198,7 +205,7 @@ def run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_
     still exits with that abort's code (2 for a refusal, 4 for an OpenFIGI outage)."""
     try:
         summary = _run(index, clients, overrides, out_dir=out_dir, tol=tol, limit=limit, log=log,
-                       sec_workers=sec_workers, review_decisions=review_decisions)
+                       sec_workers=sec_workers, review_decisions=review_decisions, scorecard=scorecard)
     except BaseException:
         try:
             _flush_memo(clients)
@@ -1122,9 +1129,28 @@ def _triage(ctx: _RunContext, review_rows: list[dict], review_decisions: Sequenc
     return flags, triaged
 
 
+def _scorecard(ctx: _RunContext, tables: dict[str, list[dict]], config: run_scorecard.ScorecardConfig,
+               limit: int | None) -> dict:
+    """10e. The scorecard of the tables about to be written (read as
+    store.read_table would read them back), with `drops`: the floored numbers
+    that got worse. A --limit subset sees a fraction of the universe, so its
+    numbers are never compared to the floor."""
+    def rows(name: str) -> list[dict[str, str]]:
+        return formatted(name, tables[name])
+    card = run_scorecard.build(Tables(rows("securities"), rows("ticker_history"), rows("delistings"),
+                                      rows("observation_map"), rows("review")), as_of=ctx.as_of, config=config)
+    card["drops"] = run_scorecard.drops(card, config.floor) if limit is None else []
+    for line in card["drops"]:
+        ctx.log(f"scorecard drop: {line}")
+    for line in card["golden_failures"]:
+        ctx.log(f"golden case failing: {line}")
+    return card
+
+
 def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_dir: Path, tol: float,
          limit: int | None, log: Callable, sec_workers: int,
-         review_decisions: Sequence[Decision] = ()) -> RunSummary:
+         review_decisions: Sequence[Decision] = (),
+         scorecard: run_scorecard.ScorecardConfig = run_scorecard.ScorecardConfig()) -> RunSummary:
     """The run's stages in order (each function's docstring says what it does);
     `run` wraps it with the resolver memo's final flush."""
     ctx = _RunContext(clients, clients.as_of or date.today(), log, sec_workers, run_manifest.StageMeter(log))
@@ -1168,10 +1194,7 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
                                 end_confirmed, search.listed, th_rows)
     flags, triaged = _triage(ctx, review_rows, review_decisions, limit)
 
-    # 11. write -- every table formatted and written to its temp file first, so
-    # a failure in any leaves every previous table; then renamed into place one
-    # at a time (store.write_tables).
-    counts = write_tables(out_dir, {
+    tables = {
         "securities": [s.row() for s in securities.values()] + [a.security.row() for a in added.values()],
         "ticker_history": th_rows,
         "cusip_history": ch_rows,
@@ -1180,14 +1203,22 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
         "review": triaged.review_rows,
         "review_summary": triaged.summary_rows,
         "observation_map": map_rows,
-    })
+    }
+    card = _scorecard(ctx, tables, scorecard, limit)                                                # 10e
+
+    # 11. write -- every table formatted and written to its temp file first, so
+    # a failure in any leaves every previous table; then renamed into place one
+    # at a time (store.write_tables). scorecard.json and the manifest follow.
+    counts = write_tables(out_dir, tables)
+    run_scorecard.write(out_dir, card)
     stat_counts, stat_timings = SEC_STATS.since(run_mark)
     run_manifest.write(out_dir, run_manifest.build(as_of=ctx.as_of, sec_workers=sec_workers, counts=stat_counts,
                                                    timings=stat_timings, stages=ctx.meter.stages,
                                                    review_flags=dict(flags), review=triaged.counts,
                                                    handoffs=handoffs.counts))
     return RunSummary(counts, dict(Counter(e.record.bucket.value for e in delistings)),
-                      dict(Counter(s.figi_source for s in securities.values())), dict(flags), dict(triaged.counts))
+                      dict(Counter(s.figi_source for s in securities.values())), dict(flags), dict(triaged.counts),
+                      scorecard_drops=card["drops"], golden_failures=card["golden_failures"])
 
 
 def default_clients(index: ObservationIndex, *, cache_dir: Path, rename_map: dict | None = None,
