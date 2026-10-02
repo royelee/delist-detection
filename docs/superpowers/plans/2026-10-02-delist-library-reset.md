@@ -43,7 +43,7 @@ scorecard reproduces these numbers from the tables.
 | R2.5 / R2.6 distress | 54 endings, 39 carry a flag |
 | A.random | 11 wrong of 99 checked; the 95% upper bound on the error rate is 17.7% |
 | A.census.left_view | 114 wrong of 115 |
-| A.census.distress | 49 wrong of 54 (about 12 once bankruptcy reads as `dropped`; see below) |
+| A.census.distress | 49 wrong of 54 (42 once bankruptcy reads as `dropped`, leaving 7; see below) |
 | A.census.continuation | 27 wrong of 69 |
 | A.census.blank_no_value | 11 wrong of 21 |
 | A.census.assumed_par | 17 wrong of 58 |
@@ -55,11 +55,14 @@ the checker verified disagrees with the output. The wrong rows are the test set 
 - **left_view goes to reset-4a.** Nearly every left-view ending is false. Most were acquisitions the library
   read as transfers. The rest kept trading (renames, reverse splits, holding-company moves) or were dropped
   to OTC after a bankruptcy.
-- **distress goes to reset-4d.** 42 of the 49 differ only in vocabulary. The truth uses the contract's
-  `dropped` for a bankruptcy delisting, while today's bucket says `liquidation`; both get the same −0.90 mark.
-  reset-3's mapping from the CRSP code removes those. About 12 are substantive: PDLI is a liquidation, WOLF
-  2025 and TDW 2017 swapped old shares for new ones in prepackaged Chapter 11 cases while still listed, three
-  were continuations, and the rest are wrong last trade dates.
+- **distress goes to reset-4d.** 42 of the 49 differ only in vocabulary: 36 differ only as `liquidation` vs
+  `dropped`, and 6 differ in that and the last trade date. The truth uses the contract's `dropped` for a
+  bankruptcy delisting, while today's bucket says `liquidation`; both get the same −0.90 mark. reset-3's mapping
+  from the CRSP code removes those. The other 7 are substantive: PDLI is a liquidation (the library says
+  `dropped`); WOLF 2025, TDW 2017 and HTZ 2020 swapped old shares for new ones in bankruptcy plans at a ratio
+  other than one for one (HTZ's old stock was cancelled for about 3% of the new stock, TDW's ended at its 2017
+  effective date), so each is an `exchange`; CHK has no ending in the output; GGWPQ ends in 2010 where the
+  line kept trading as GGP until 2018; and TMA's last trade date is off.
 - **blank_no_value and assumed_par go to reset-4c.** Their notes record each deal's consideration, so reset-4c
   can value them.
 - **continuation goes to reset-4a or reset-4b.** Several links were not one for one (CHTR, MTCH, DVMT,
