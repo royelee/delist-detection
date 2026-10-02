@@ -13,6 +13,7 @@ import os
 import re
 import threading
 import time
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date, timedelta
 from pathlib import Path
@@ -690,17 +691,21 @@ class EdgarClient:
                                                   FETCHED_KEY: self.today.isoformat(), EFTS_KEY: hits}))
             return list(hits)
 
-    def full_text_search(self, q: str, forms: str, lo: date, hi: date) -> list[dict]:
+    def full_text_search(self, q: str, forms: str, lo: date, hi: date, *,
+                         ciks: Sequence[int] = ()) -> list[dict]:
         """EDGAR full-text search hits (`hits.hits`, trimmed as `efts_search` trims
         them) for `q` within `forms`, filed in `[lo, hi]`, cached as `efts_search`
-        caches them. [] when EDGAR could not answer: the successor search then
-        leaves `successor_unknown` set. A 403/429 raises `EdgarBlocked`.
+        caches them; `ciks` limits the search to those filers' own filings. []
+        when EDGAR could not answer: the successor search then leaves
+        `successor_unknown` set. A 403/429 raises `EdgarBlocked`.
         """
         url = (
             "https://efts.sec.gov/LATEST/search-index?"
             f"q={requests.utils.quote(q)}&forms={requests.utils.quote(forms)}"
             f"&dateRange=custom&startdt={lo.isoformat()}&enddt={hi.isoformat()}"
         )
+        if ciks:
+            url += "&ciks=" + ",".join(f"{int(c):010d}" for c in ciks)
         try:
             return self.efts_search(url, window_end=hi)
         except requests.RequestException:
