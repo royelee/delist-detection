@@ -59,3 +59,17 @@ _Avoid_: priority, urgency
 **Review decision**:
 A line in `data/review_decisions.csv` recording that a person checked one exact flag on one exact row and it's fine (`sec_id, delist_date, ticker, flag, decision, note`). The pipeline reads it on every run, so an accepted flag stays off `review.csv`; a decision naming a flag no row carries becomes a `review_decision_unmatched:<flag>` row rather than being silently dropped (unless the run used `--limit`, which only counts it). A decision never changes `delistings.csv`.
 _Avoid_: override, exception, waiver
+
+**Lifecycle**:
+What the output tables say happened to a security from its first ticker interval to today: it is still trading (`active`), it ended with a known reason, a last trade date and a return (`ended`), or it stops short of that (`ended_incomplete`, `left_view`, `closed_no_event`, `no_interval`). An ending that names a successor continues the lifecycle there. An input ticker's lifecycle is the one of the security its earliest mapped observation resolved to.
+_Avoid_: history, chain
+
+**Covered**:
+A lifecycle that reaches `active` or `ended` with nothing missing on the way. Coverage, the share of input tickers whose lifecycle is covered, is the reset's headline number.
+
+**Truth case**:
+One security's outcome checked by hand at a cited source, naming the security by a ticker and a date it traded and listing only what was checked. The golden set and the accuracy audit are both made of truth cases.
+_Avoid_: test case, expectation
+
+**Floor**:
+The best value each scorecard number has reached (`data/scorecard.json`). No later change may make a floored number worse.

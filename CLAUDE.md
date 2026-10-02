@@ -28,12 +28,14 @@ editable install.
 
 ```bash
 pip install -e .                         # editable install (Python ≥3.10) — once per env
-pytest                                    # full suite (1428 tests, offline, no network)
+pytest   # full suite (1545 tests + 24 known-wrong golden xfails, offline, no network)
 pytest tests/test_payout_extractor.py -v  # one file
 pytest tests/test_payout_extractor.py::test_match_in_cash_family_altr -v   # one test
 
 python scripts/verify_altair.py          # smoke: ALTR → CRSP 231, high
-python scripts/classify_universe.py --observations obs.csv   # → output/{securities,ticker_history,cusip_history,delistings,payouts,review,review_summary,observation_map}.csv (NETWORK; free when cached)
+python scripts/scorecard.py              # offline: recompute output/'s scorecard vs data/scorecard.json; --check (exit 1 on a drop or a failing golden case), --write, --raise-floor, --lifecycles PATH
+python scripts/draw_audit_sample.py --out data/accuracy_audit.csv   # offline: draw the decision-17 audit worksheet once (census + 100 random, seed 7)
+python scripts/classify_universe.py --observations obs.csv   # → output/{securities,ticker_history,cusip_history,delistings,payouts,review,review_summary,observation_map}.csv + scorecard.json (NETWORK; free when cached)
 python scripts/classify_universe.py --observations obs.csv --limit 20 --no-extract-payouts --no-midas --no-halts   # fast dev subset
 python scripts/classify_universe.py --observations obs.csv --sec-workers 1   # one SEC request at a time (default: 4 prefetch threads, max 8, one machine-wide 8 req/s limit)
 python scripts/classify_universe.py --observations obs.csv --as-of 2026-09-25   # pin the run date (default today; run_manifest.json records it) to reproduce an earlier run's tables from the same caches
@@ -44,11 +46,12 @@ python scripts/regen_payout_fixtures.py  # refetch golden 8-K fixtures from live
 python scripts/build_golden_fixtures.py  # rebuild the 31-case golden regression set (NETWORK); --efts-only / --llm-only / --only ID
 python scripts/accept_review.py --flag terms_gate_failed --note "sampled 5, all fine"   # bulk-accept every current review.csv row carrying that flag → appends to data/review_decisions.csv (offline); --bucket narrows, --dry-run previews, --yes required for a fix-severity flag
 # End-to-end pipeline (the canonical way to use the library) — classify a universe → output/delistings.csv (+ 7 more tables), then firm-month-correct a returns panel:
-python scripts/classify_universe.py --observations obs.csv --last-trade-closes lt.csv --merger-terms terms.csv --recoveries rec.csv   # → output/{securities,ticker_history,cusip_history,delistings,payouts,review,review_summary,observation_map}.csv
+python scripts/classify_universe.py --observations obs.csv --last-trade-closes lt.csv --merger-terms terms.csv --recoveries rec.csv   # → output/{securities,ticker_history,cusip_history,delistings,payouts,review,review_summary,observation_map}.csv + scorecard.json
 python scripts/compute_corrected_returns.py --panel panel.csv --delistings output/delistings.csv --out corrected.parquet   # firm-month BMP correction, keyed on sec_id
 # override-CSV columns are keyed by sec_id[,delist_date] (a blank/absent delist_date applies to every delisting of that security): lt.csv=`sec_id,last_trade_close[,delist_date]` · terms.csv=`sec_id,cash_per_share,stock_ratio,acquirer_price,acquirer_ticker[,delist_date]` · rec.csv=`sec_id,recovery_ratio[,delist_date]`. A malformed file, or a row that matches no delisting, stops the run before anything is written (exit 2, one stderr line naming the file and line).
 # --review-decisions PATH (default data/review_decisions.csv) is read the same way: sec_id,delist_date,ticker,flag,decision,note. Missing at the default path means no decisions; missing at an explicit path, or a bad file, exits 2.
-# (append --limit N to classify_universe for a fast cached/offline subset)
+# (append --limit N --output-dir /tmp/sub to classify_universe
+# for a fast cached/offline subset; never write a subset into output/, the committed-output tests read it)
 # Auto-extract cash+stock merger terms with an LLM instead of hand-writing terms.csv (NETWORK: SEC + OpenAI; needs OPENAI_API_KEY + CHAT_MODEL in .env):
 python scripts/classify_universe.py --observations obs.csv --extract-merger-terms-llm   # → output/delistings.csv with cash_plus_stock/stock_only rows
 # LLM reads cash leg + stock ratio + acquirer ticker from EDGAR; acquirer_price is joined from SEC fails-to-deliver closes around the deal-completion date; a sanity gate (--merger-terms-sanity-tol, default 0.15) drops any term whose terminal value doesn't reconcile with last_trade_close. An explicit --merger-terms row always overrides the LLM. Calibrate the prompt with `python scripts/eval_merger_extractor.py` (10 labeled deals, live) before trusting a run.
@@ -357,6 +360,28 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   that kept the same FIGI) — it isn't an exit, so no label/exit/correction
   is emitted for it.
 
+**Measurement (pure), over the output tables as string rows:**
+- `lifecycle.py` — `Tables` (the tables `store.read_table` returns) and
+  `LifecycleView`: every security's and every input ticker's lifecycle
+  (`active`, `ended`, `ended_incomplete`, `left_view`, `closed_no_event`,
+  `no_interval`, `loop`; `active`/`ended` are covered), quality (the weakest
+  `event_grade` on a covered chain, `medium` for a ticker-only FIGI), and the
+  look-ups a truth case needs (`security_on`, `issuer_of`, `tickers_of`,
+  `end_of`). `EXIT_KIND_OF_BUCKET` maps today's bucket to the contract's
+  `exit_kind` until reset-3 publishes that column.
+- `truth.py` — truth cases, checked by hand at a cited source: the golden set
+  (`data/golden_lifecycles.csv`, `pass` or `known_wrong` + `fixed_by`) and the
+  decision-17 audit (`data/accuracy_audit.csv`, `census:<group>` or `random`;
+  an unfilled row is pending). `load_truth`, `write_truth`, `judge` (one
+  mismatch per checked field that disagrees), `clopper_pearson_upper`.
+- `scorecard.py` — `build` (the spec's gap table as one flat dict: L1/L2, R1.x,
+  R2.x, G.x, A.x), `METRICS` (each floored number's good direction), `drops`,
+  `raise_floor`, `load_config` (`data/scorecard.json`: the caller's window, the
+  floor, the two truth files), `write` (`output/scorecard.json`).
+- `audit.py` — decision 17's sample: `census` (each ending in its first group of
+  distress, continuation, left_view, blank_no_value, assumed_par), `random_sample`
+  (seeded, avoiding census chains), `worksheet_rows`.
+
 There are **two return-correction APIs** for different research conventions:
 event-level (`handling.py`) vs CRSP-style firm-month (`bmp_correction.py`). Don't
 conflate them.
@@ -514,6 +539,19 @@ conflate them.
   existing column — including ones `load_decisions` itself ignores — in the
   file's own header order, never reformatted or dropped. A real write prints
   "rerun classify_universe.py to apply them"; `--dry-run` does not.
+- **The scorecard only moves one way.** Every run builds `output/scorecard.json`
+  (`pipeline._scorecard`, stage 10e) from the rows it is about to write and
+  writes it after the eight tables, before the manifest. `data/scorecard.json`
+  holds the caller's training window (data, never code), the floor and the two
+  truth files. `tests/test_scorecard_floor.py` recomputes the scorecard from the
+  committed `output/` and fails when a floored number got worse, a floored
+  metric disappeared, or a golden `pass` case fails;
+  `tests/test_golden_lifecycles.py` runs every golden case (`known_wrong` is a
+  strict xfail, so a fix forces the row to flip to `pass`). A plan that improves
+  a number runs `scripts/scorecard.py --raise-floor`; a floor entry is lowered
+  only by hand, with the reason in the commit. A `--limit` run is never compared
+  to the floor. A drop or a failing golden case warns on stderr and never changes
+  the exit code; a bad config or truth file exits 2.
 - **Every output is written only after the whole run succeeds.**
   `pipeline.run()` computes every table in memory first and writes all eight
   only at the end (`store.write_tables`): each table is formatted and written

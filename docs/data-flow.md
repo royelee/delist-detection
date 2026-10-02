@@ -318,6 +318,13 @@ code version and the worker count make it expected to differ between two runs
 even when their eight tables come out identical. A run that aborts leaves the
 previous manifest in place.
 
+`scorecard.json` is built at stage 10e from the same rows the tables are
+written from (`store.formatted`), so it equals what `scripts/scorecard.py`
+recomputes from the written CSVs. It is written after the tables and before the
+manifest, carries `drops` (floored numbers that got worse; never computed under
+`--limit`) and `golden_failures`, and is compared to `data/scorecard.json`'s
+floor. It is deterministic for the same tables, config and run date.
+
 `scripts/classify_universe.py` exits:
 - `0` on success;
 - `1` only on an unexpected crash (an uncaught exception: Python's own exit

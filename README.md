@@ -94,6 +94,13 @@ lists, empty cell for NULL, rows sorted by key unless noted — see
 shares). `delistings.csv` is the primary deliverable; the other seven support
 it.
 
+Next to the tables, every run writes `run_manifest.json` (what the run rested
+on) and `scorecard.json`: lifecycle coverage and quality per input ticker and
+per security, the gap-table lines (identity, last trade dates, values,
+distress), the golden set's result and the accuracy audit's error bound. It is
+compared to the floor in `data/scorecard.json`; `scripts/scorecard.py`
+recomputes it offline from the committed tables.
+
 ### `securities.csv` — key `sec_id`
 
 One row per identified security.
