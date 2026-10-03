@@ -305,6 +305,13 @@ This is decision 11: the first off-exchange print within 10 trading days, reques
 `price_requests.csv` (`otc_print`). The spec measured 37 of 175 drops and distress endings with a usable print,
 so expect fills, not OTC values, in the first release.
 
+- Done (first step, plan `2026-10-02-reset-4f-otc-prints.md`): `price_requests.csv` asks for one `otc_print` per
+  dropped or liquidation contract ending (51 requests, 987 -> 1038 rows, each dated the trading day after the last
+  trade), and an answered print values a liquidation or compliance_failure ending (`dlret_method` `otc_print`,
+  DLRET = print / last close - 1). The acceptance rebuild changed only `contract/price_requests.csv`; the scorecard
+  did not move. An offline answers pass (3 prints at half the close) gave DLRET -0.5 and a blank `dlret_fill`.
+  Left: the OTC branch of the end-of-era resolver, CRSP 520 labels, and the caller's answers from qlib_practice.
+
 ## Cleanup interleaving
 
 The Delist Library Cleanup page runs after reset-1. Each removal group is one commit. `securities`,
