@@ -530,7 +530,12 @@ def _apply_price_answers(overrides: Overrides, delistings: list[Delisting]) -> O
     whose last trade day it names, a received_close answer that delisting's
     acquirer price. A last close --last-trade-closes also gives stops the run
     (OverrideFileError). An answer whose delisting this run does not have is
-    refused at stage 10g with every other answer to no request."""
+    refused at stage 10g with every other answer to no request.
+
+    Always called on the caller's own overrides, never on a result of this
+    function: the handoff stage (9b) adds delistings and `_run` applies the
+    answers again over all of them, and a second application on an
+    already-applied copy would see its own closes as given twice."""
     if not overrides.price_answers:
         return overrides
     by_day = {(e.sec_id, e.last_trade.day.isoformat()): e for e in delistings if e.last_trade.day is not None}
@@ -1296,7 +1301,8 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
     delistings = search.delistings
     review += search.review
     _check_overrides(overrides, delistings)                                                         # 6
-    overrides = _apply_price_answers(overrides, delistings)                                         # 6b
+    given = overrides                                     # the caller's overrides, before the answers join them
+    overrides = _apply_price_answers(given, delistings)                                             # 6b
     closes = _last_trade_closes(ctx, delistings, securities, sec_cusips, ftd, ftd_lo, overrides)    # 7
     payouts = _merger_payouts(ctx, delistings, securities, sec_cusips, ftd, closes, overrides, tol) # 8
     review += payouts.review
@@ -1316,6 +1322,7 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
     review = handoffs.review
     if handoffs.added:
         delistings += handoffs.added
+        overrides = _apply_price_answers(given, delistings)   # the added delistings take their answers too
         closes.update(_last_trade_closes(ctx, handoffs.added, securities, sec_cusips, ftd, ftd_lo, overrides))
         endings = _delisting_endings(delistings, securities, sec_cusips, ftd)
 

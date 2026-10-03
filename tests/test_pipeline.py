@@ -994,10 +994,10 @@ def test_payouts_csv_cites_the_regex_accession_for_a_regex_sourced_payout(fake_e
 
 # --- gate_payouts' acquirer_price is keyed by the merger, at the run() level ---
 
-def test_run_level_acquirer_price_uses_each_mergers_own_last_trade_day(fake_edgar, tmp_path, monkeypatch):
-    """Two merger events sharing a delist_date, both with LLM cash+stock terms
-    naming the same acquirer, must each get the acquirer's close on THEIR OWN
-    last trade day -- not whichever day a shared-by-date map happened to hold."""
+def _two_stock_mergers(fake_edgar, monkeypatch):
+    """Two merger events sharing a delist_date, both with LLM stock terms naming
+    acquirer ACQ (FTD closes 100.0 on 2020-06-02, 150.0 on 2020-06-08); the
+    targets' last trade days are 2020-06-01 and 2020-06-05."""
     fake_edgar.company_map["S1"] = {"cik_str": 7001, "ticker": "S1", "title": "TARGET ONE INC"}
     fake_edgar.company_map["S2"] = {"cik_str": 7002, "ticker": "S2", "title": "TARGET TWO INC"}
     fake_edgar.submissions_by_cik[7001] = []
@@ -1036,11 +1036,11 @@ def test_run_level_acquirer_price_uses_each_mergers_own_last_trade_day(fake_edga
 
     ev1 = Delisting(sec_id="BBGSEC001", cik=7001, ticker="S1", delist_date="2020-06-15",
                          record=_merger_record("BBGSEC001", "S1", 7001, "2020-06-15"),
-                         last_trade=LastTrade(date(2020, 6, 1), "notice_a", ()), form25=None, form25_sub=None,
+                         last_trade=LastTrade(date(2020, 6, 1), "midas", ()), form25=None, form25_sub=None,
                          exchange="NYSE")
     ev2 = Delisting(sec_id="BBGSEC002", cik=7002, ticker="S2", delist_date="2020-06-15",
                          record=_merger_record("BBGSEC002", "S2", 7002, "2020-06-15"),
-                         last_trade=LastTrade(date(2020, 6, 5), "notice_a", ()), form25=None, form25_sub=None,
+                         last_trade=LastTrade(date(2020, 6, 5), "midas", ()), form25=None, form25_sub=None,
                          exchange="NYSE")
 
     class _CannedFinder:
@@ -1070,6 +1070,13 @@ def test_run_level_acquirer_price_uses_each_mergers_own_last_trade_day(fake_edga
         ("BBGSEC001", "2020-06-15"): terms1,
         ("BBGSEC002", "2020-06-15"): terms2,
     })
+    return index, clients
+
+
+def test_run_level_acquirer_price_uses_each_mergers_own_last_trade_day(fake_edgar, tmp_path, monkeypatch):
+    """Each merger gets the acquirer's close on THEIR OWN last trade day -- not
+    whichever day a shared-by-date map happened to hold."""
+    index, clients = _two_stock_mergers(fake_edgar, monkeypatch)
     overrides = Overrides(last_trade_closes={"BBGSEC001": 100.0, "BBGSEC002": 150.0})
 
     run(index, clients, overrides, out_dir=tmp_path, log=lambda *_: None)
@@ -1077,6 +1084,39 @@ def test_run_level_acquirer_price_uses_each_mergers_own_last_trade_day(fake_edga
     d = {r["sec_id"]: r for r in read_table("delistings", table_path(tmp_path, "delistings"))}
     assert d["BBGSEC001"]["acquirer_price"] == "100.000000"
     assert d["BBGSEC002"]["acquirer_price"] == "150.000000"
+
+
+def test_an_answered_received_close_is_the_acquirer_price(fake_edgar, tmp_path, monkeypatch):
+    from delist_detection.price_requests import key_of
+    index, clients = _two_stock_mergers(fake_edgar, monkeypatch)
+    first = tmp_path / "first"
+    run(index, clients, Overrides(), out_dir=first, log=lambda *_: None)
+    ask = next(r for r in read_table("price_requests", table_path(first, "price_requests"))
+               if r["sec_id"] == "BBGSEC001" and r["kind"] == "received_close")
+    index, clients = _two_stock_mergers(fake_edgar, monkeypatch)
+    second = tmp_path / "second"
+    run(index, clients, Overrides(last_trade_closes={"BBGSEC001": 100.0, "BBGSEC002": 150.0},
+                                  price_answers={key_of(ask): 105.0}), out_dir=second, log=lambda *_: None)
+    d = {r["sec_id"]: r for r in read_table("delistings", table_path(second, "delistings"))}
+    assert d["BBGSEC001"]["acquirer_price"] == "105.000000"
+    assert d["BBGSEC002"]["acquirer_price"] == "150.000000"
+
+
+def test_apply_price_answers_resolves_each_answer_to_its_delisting():
+    from delist_detection.price_requests import PriceKey
+    def stand_in(sec_id, day):
+        return type("D", (), {"sec_id": sec_id, "key": (sec_id, "2020-06-15"),
+                              "last_trade": type("L", (), {"day": day})()})()
+    a, b = stand_in("A", date(2020, 6, 1)), stand_in("B", date(2020, 6, 5))
+    answers = {PriceKey("A", "2020-06-01", "last_close", "A", "2020-06-01"): 11.0,
+               PriceKey("B", "2020-06-05", "received_close", "ACQ", "2020-06-05"): 22.0,
+               PriceKey("B", "2020-01-01", "last_close", "B", "2020-01-01"): 33.0}
+    got = pipeline._apply_price_answers(Overrides(price_answers=answers), [a, b])
+    assert got.last_trade_closes == {("A", "2020-06-15"): 11.0}
+    assert got.acquirer_prices == {("B", "2020-06-15"): ("ACQ", 22.0)}
+    unmatched = Overrides(price_answers={PriceKey("Z", "2020-06-01", "last_close", "Z", "2020-06-01"): 1.0})
+    again = pipeline._apply_price_answers(unmatched, [a, b])
+    assert again.last_trade_closes == {} and again.acquirer_prices == {}
 
 
 # --- a same-ticker successor does not overlap its predecessor ---
