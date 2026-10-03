@@ -30,7 +30,7 @@ from .evidence import edgar_names
 from .fatal import FATAL
 from .handoffs import (
     HandoffDecision, HandoffOutcome, apply_handoffs, continuation_filing, cusip_switch, decide_handoff,
-    drop_resolved_shared, find_handoffs, issuer_carries_on, predecessor_names,
+    drop_resolved_shared, find_handoffs, issuer_carries_on, own_continuation_filing, predecessor_names,
 )
 from .figi_resolution import is_placeholder, share_class_from_name
 from .form25 import SecurityRef, notice_last_trade, parse_form25
@@ -909,7 +909,7 @@ def _handoffs(ctx: _RunContext, delistings: list[Delisting], securities: dict[st
     where one stops trading under a ticker and the other starts under it within
     days (`find_handoffs`, over the sightings `ticker_history` is built from:
     backfilled observations dropped), decided on the successor issuer's
-    8-K12B/8-K12G3 (EDGAR full-text search), else on timing and identity, else
+    8-K12B/8-K12G3 (EDGAR full-text search, else its own filing list), else on timing and identity, else
     as a takeover by a line or an issuer that existed before (`decide_handoff`:
     the issuer's first EDGAR filing dates it), then acted on (`apply_handoffs`): a continuation's
     missing row is added, a successor or a ticker successor set, and the review
@@ -931,10 +931,16 @@ def _handoffs(ctx: _RunContext, delistings: list[Delisting], securities: dict[st
 
     def find_filing(p):
         args = filing_args(p)
-        if args is None:
+        if args is not None:
+            names, day, cik = args
+            hit = next((f for n in names if (f := continuation_filing(fts, name=n, day=day, successor_cik=cik))),
+                       None)
+            if hit is not None:
+                return hit
+        b_cik = securities[p.b].issuer_cik
+        if b_cik is None:
             return None
-        names, day, cik = args
-        return next((f for n in names if (f := continuation_filing(fts, name=n, day=day, successor_cik=cik))), None)
+        return own_continuation_filing(edgar.recent_filings(b_cik), date.fromisoformat(p.b_first))
 
     if fts is not None and ctx.sec_workers > 1:
         def warm_search(p) -> None:

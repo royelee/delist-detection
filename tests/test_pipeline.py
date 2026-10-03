@@ -2623,10 +2623,10 @@ def test_an_era_under_its_issuers_old_name_is_accepted_on_the_ticker_by_the_edga
     assert read_table("delistings", table_path(tmp_path, "delistings")) == []
 
 
-def _holdco_run(fake_edgar, tmp_path, search=None):
+def _holdco_run(fake_edgar, tmp_path, search=None, filings=()):
     """The HC holding-company reorganization below, run end to end."""
     fake_edgar.company_map["HC"] = {"cik_str": 999, "ticker": "HC", "title": "HOLDCO INC"}
-    fake_edgar.submissions_by_cik[999] = []
+    fake_edgar.submissions_by_cik[999] = list(filings)
     fake_edgar.listings[999] = [("HC", "NYSE")]
     if search is not None:
         fake_edgar.full_text_search = search
@@ -2659,6 +2659,29 @@ def test_a_continuation_by_the_successor_issuers_8k12b_is_high_confidence(fake_e
     assert ('"HOLDCO INC"', "8-K12B,8-K12G3") in asked
     assert (d["successor_sec_id"], d["confidence"]) == ("BBGHCNEW001", "high")
     assert "8-K12B 0000000999-15-000042" in d["reason"]
+
+
+def test_a_continuation_by_the_successors_own_8k12b_when_the_search_finds_none(fake_edgar, tmp_path):
+    filing = EdgarSubmission("0000000999-15-000042", "8-K12B", "2015-06-15", "", "", "x.htm")
+    (d,) = _holdco_run(fake_edgar, tmp_path, lambda q, forms, lo, hi: [], filings=[filing])
+    assert (d["successor_sec_id"], d["confidence"]) == ("BBGHCNEW001", "high")
+    assert "8-K12B 0000000999-15-000042" in d["reason"]
+
+
+def test_a_search_hit_means_the_filing_list_is_not_read_for_the_continuation(fake_edgar, tmp_path):
+    hit = {"_source": {"ciks": ["0000000999"], "form": "8-K12B", "file_date": "2015-06-15",
+                       "adsh": "0000000999-15-000042", "display_names": ["Holdco Inc (HC) (CIK 0000000999)"]}}
+    import delist_detection.handoffs as handoffs
+    calls = []
+    real = handoffs.own_continuation_filing
+    handoffs.own_continuation_filing = lambda *a, **k: calls.append(a) or real(*a, **k)
+    pipeline.own_continuation_filing = handoffs.own_continuation_filing
+    try:
+        (d,) = _holdco_run(fake_edgar, tmp_path, lambda q, forms, lo, hi: [hit])
+    finally:
+        handoffs.own_continuation_filing = real
+        pipeline.own_continuation_filing = real
+    assert calls == [] and d["successor_sec_id"] == "BBGHCNEW001"
 
 
 def test_a_continuation_the_finder_found_no_row_for_clips_the_old_line_at_its_last_sighting(fake_edgar, tmp_path):

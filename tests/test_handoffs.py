@@ -6,11 +6,12 @@ import pytest
 
 from delist_detection.classifier import DelistRecord
 from delist_detection.crsp_codes import CrspBucket
+from delist_detection.edgar import EdgarSubmission
 from delist_detection.delistings import SUCCESSOR_UNKNOWN, Delisting
 from delist_detection.ftd import FtdIndex, FtdRow
 from delist_detection.handoffs import (
     CONTINUATION_DAYS, OVERLAP_DAYS, TAKEOVER_DAYS, HandoffDecision, HandoffPair, apply_handoffs, continuation_filing,
-    cusip_switch, decide_handoff, drop_resolved_shared, find_handoffs, issuer_carries_on, predecessor_names,
+    cusip_switch, own_continuation_filing, decide_handoff, drop_resolved_shared, find_handoffs, issuer_carries_on, predecessor_names,
 )
 from delist_detection.history import Sighting
 from delist_detection.last_trade import LastTrade
@@ -439,3 +440,19 @@ def test_the_form25_window_runs_from_the_later_of_the_two_sightings():
                          {"OLD": _sec("OLD"), "NEW": _sec("NEW")}, [f25])
     (d,) = out.added
     assert d.delist_date == "2024-05-30" and out.review == []
+
+
+def _sub(form, day, acc="0000000001-19-000001"):
+    return EdgarSubmission(accession=acc, form=form, filing_date=day, report_date="", items="", primary_doc="")
+
+
+def test_own_continuation_filing_reads_the_successors_filing_list():
+    filings = [_sub("8-K", "2019-07-31", "a"), _sub("8-K12B", "2019-07-31", "b"), _sub("10-Q", "2019-08-02", "c")]
+    assert own_continuation_filing(filings, date(2019, 8, 1)) == ("8-K12B", "b", "2019-07-31")
+    assert own_continuation_filing([_sub("8-K12G3", "2019-09-20", "d")], date(2019, 8, 1)) == ("8-K12G3", "d", "2019-09-20")
+
+
+def test_own_continuation_filing_keeps_to_the_search_window():
+    assert own_continuation_filing([_sub("8-K12B", "2019-06-30")], date(2019, 8, 1)) is None    # 32 days before
+    assert own_continuation_filing([_sub("8-K12B", "2019-10-01")], date(2019, 8, 1)) is None    # 61 days after
+    assert own_continuation_filing([_sub("8-K", "2019-07-31")], date(2019, 8, 1)) is None

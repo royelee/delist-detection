@@ -28,6 +28,7 @@ from datetime import date, timedelta
 from .classifier import DelistRecord
 from .crsp_codes import CrspBucket
 from .delistings import Delisting
+from .edgar import EdgarSubmission
 from .evidence import names_near
 from .ftd import FtdIndex
 from .history import Sighting
@@ -127,6 +128,23 @@ def continuation_filing(search: Callable, *, name: str, day: date,
         if successor_cik in {int(c) for c in src.get("ciks") or []}:
             return src.get("form") or "", src.get("adsh") or "", src.get("file_date") or ""
     return None
+
+
+SUCCESSOR_FORMS_12G3 = ("8-K12B", "8-K12G3")
+
+
+def own_continuation_filing(filings: Sequence[EdgarSubmission], day: date) -> tuple[str, str, str] | None:
+    """The successor issuer's own 8-K12B/8-K12G3 (Rule 12g-3) in its filing list,
+    in the window `continuation_filing`'s search uses (30 days before `day`, B's
+    first sighting, to 60 after), as (form, accession, filing date); the first
+    by filing date. Where the full-text search for the predecessor's name finds
+    nothing, the successor's own registration is the filing that says the
+    holders' shares carried over (Xerox Holdings 2019, Cigna 2018)."""
+    lo, hi = day - timedelta(days=30), day + timedelta(days=60)
+    hits = sorted((f.filing_date, f.form, f.accession) for f in filings
+                  if f.form in SUCCESSOR_FORMS_12G3 and f.filing_date
+                  and lo <= date.fromisoformat(f.filing_date) <= hi)
+    return (hits[0][1], hits[0][2], hits[0][0]) if hits else None
 
 
 _CLASS_WORDS = re.compile(r"\b(?:CL(?:ASS)?|SER(?:IES)?)\s*-?\s*[A-Z0-9]\b|-[A-Z]$", re.I)
