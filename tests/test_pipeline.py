@@ -67,7 +67,7 @@ class _FtdClient:
                 yield r
 
 
-def _clients(fake_edgar, ftd_rows=None):
+def _clients(fake_edgar, ftd_rows=None, extra_obs=()):
     fake_edgar.submissions_by_cik[1122304] = [
         EdgarSubmission("0000876661-18-001269", "25-NSE", "2018-11-29", "", "", "primary_doc.xml"),
         EdgarSubmission("0001122304-18-000178", "8-K", "2018-11-28", "2018-11-28", "2.01,3.01,5.01,9.01", "k.htm"),
@@ -85,7 +85,7 @@ def _clients(fake_edgar, ftd_rows=None):
         ftd.ROWS = ftd_rows
     obs = [Observation("AET", "2017-06-30", "AETNA INC", cik=1122304),
            Observation("AET", "2018-06-29", "AETNA INC", cik=1122304),
-           Observation("LIVE", "2025-06-30", "LIVE CO", cik=777)]
+           Observation("LIVE", "2025-06-30", "LIVE CO", cik=777), *extra_obs]
     index = ObservationIndex(obs)
     resolver = TickerResolver(fake_edgar, observed_names=index.name_on, cik_pins=index.cik_pin_on)
     return index, Clients(edgar=fake_edgar, resolver=resolver, classifier=DelistClassifier(fake_edgar, resolver),
@@ -1503,7 +1503,7 @@ def test_run_is_deterministic(fake_edgar, tmp_path):
     run(index, clients, Overrides(), out_dir=tmp_path / "a", log=lambda *_: None)
     run(index, clients, Overrides(), out_dir=tmp_path / "b", log=lambda *_: None)
     names = ["securities", "ticker_history", "cusip_history", "delistings", "payouts", "review", "review_summary",
-             "observation_map"]
+             "observation_map", "uncertain"]
     for name in names:
         assert table_path(tmp_path / "a", name).read_bytes() == table_path(tmp_path / "b", name).read_bytes(), name
     assert sorted(p.name for p in (tmp_path / "a").glob("*.csv")) == sorted(f"{n}.csv" for n in names)
@@ -2517,3 +2517,52 @@ def test_a_limit_subset_is_never_compared_to_the_floor(fake_edgar, tmp_path):
     summary = run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None, limit=1, scorecard=config)
     assert summary.scorecard_drops == []
     assert json.loads((tmp_path / "scorecard.json").read_text())["drops"] == []
+
+
+def test_every_run_writes_uncertain_csv(fake_edgar, tmp_path):
+    index, clients = _clients(fake_edgar)
+    summary = run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
+    assert read_table("uncertain", table_path(tmp_path, "uncertain")) == []
+    assert summary.uncertain == {"seed": 0, "security": 0, "ending": 0}
+
+
+def test_a_sighting_after_the_ending_is_an_uncertain_seed_but_not_an_uncertain_security(fake_edgar, tmp_path):
+    index, clients = _clients(fake_edgar, extra_obs=(Observation("AET", "2019-06-28", "AETNA INC", cik=1122304),))
+    summary = run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
+    rows = read_table("uncertain", table_path(tmp_path, "uncertain"))
+    assert rows == [{"kind": "seed", "ticker": "AET", "sec_id": "BBG000FJLFX8", "date": "2019-06-28",
+                     "reason": "outside_security_history", "candidates": ""}]
+    assert summary.uncertain == {"seed": 1, "security": 0, "ending": 0}
+
+
+class _SearchEdgar:
+    def __init__(self, hits):
+        self.hits, self.calls = hits, []
+
+    def full_text_search(self, q, forms, lo, hi, *, ciks=()):
+        self.calls.append((q, tuple(ciks)))
+        return self.hits
+
+
+def test_ticker_evidence_asks_the_search_only_for_a_placeholder_without_a_ticker_tier():
+    from types import SimpleNamespace
+    from delist_detection import manifest as run_manifest
+    from delist_detection.observations import TickerEra
+    edgar = _SearchEdgar([{"_id": "a:d", "_source": {"ciks": ["0000000555"], "adsh": "0000000555-16-000001"}}])
+    ctx = pipeline._RunContext(SimpleNamespace(edgar=edgar), date(2026, 9, 25), lambda *_: None, 1,
+                               run_manifest.StageMeter(lambda *_: None))
+    securities = {
+        "CIK555-COMMON": Security("CIK555-COMMON", 555, "COMMON", "PHX CO", "", True, "placeholder",
+                                  eras=[TickerEra("PHX", "2015-06-30", "2016-06-30")]),
+        "CIK777-COMMON": Security("CIK777-COMMON", 777, "COMMON", "PIN CO", "", True, "placeholder",
+                                  eras=[TickerEra("PIN", "2015-06-30", "2016-06-30")]),
+        "BBGFIGI": Security("BBGFIGI", 888, "COMMON", "FIGI CO", "", True, "cusip",
+                            eras=[TickerEra("FIG", "2015-06-30", "2016-06-30")]),
+    }
+    answers = pipeline._IssuerAnswers(
+        resolutions={"PHX@2015-06-30": TickerResolution("PHX", 555, None, "name_search"),
+                     "PIN@2015-06-30": TickerResolution("PIN", 777, None, "cik_map")},
+        issuers={}, last_seen={}, names_degraded=set())
+    assert pipeline._ticker_evidence(ctx, securities, answers) == {
+        "CIK555-COMMON": "filing:0000000555-16-000001", "CIK777-COMMON": "tier:cik_map"}
+    assert edgar.calls == [('"PHX"', (555,))]

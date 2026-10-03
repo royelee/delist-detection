@@ -57,11 +57,13 @@ from .security_master import (
     resolve_with_identity_guard, superseded_placeholders, ticker_unconfirmed_review, guarded_eras,
 )
 from .lifecycle import Tables
+from .ticker_evidence import EraEvidence, evidence_for
 from .store import DelistingKey, formatted, write_tables
 from .successors import (
     SecurityStart, successor_from_8k12b, successor_in_run, successor_query, successor_search_args,
 )
 from .ticker_resolver import InferredIssuer, TickerResolution
+from .verdict import decide as decide_verdicts
 
 
 @dataclass
@@ -94,6 +96,7 @@ class RunSummary:
     review_counts: dict[str, int] = field(default_factory=dict)     # review_triage.triage()'s counts
     scorecard_drops: list[str] = field(default_factory=list)        # floored scorecard numbers that got worse
     golden_failures: list[str] = field(default_factory=list)        # golden `pass` cases the tables now fail
+    uncertain: dict[str, int] = field(default_factory=dict)         # uncertain verdicts per kind (verdict.Verdicts.counts)
 
 
 def _stderr(*parts) -> None:
@@ -1129,16 +1132,44 @@ def _triage(ctx: _RunContext, review_rows: list[dict], review_decisions: Sequenc
     return flags, triaged
 
 
-def _scorecard(ctx: _RunContext, tables: dict[str, list[dict]], config: run_scorecard.ScorecardConfig,
-               limit: int | None) -> dict:
-    """10e. The scorecard of the tables about to be written (read as
-    store.read_table would read them back), with `drops`: the floored numbers
-    that got worse. A --limit subset sees a fraction of the universe, so its
-    numbers are never compared to the floor."""
+def _era_tier(answers: _IssuerAnswers, era_key: str) -> str:
+    """The resolver tier that found an era's CIK: its first-pass answer, else its
+    second-pass one, else ""."""
+    if era_key in answers.resolutions:
+        return answers.resolutions[era_key].source
+    if era_key in answers.inferred:
+        return answers.inferred[era_key].source
+    return ""
+
+
+def _ticker_evidence(ctx: _RunContext, securities: dict[str, Security], answers: _IssuerAnswers) -> dict[str, str]:
+    """10e. What ties each placeholder's ticker to its CIK (decision 1;
+    ticker_evidence.evidence_for): a resolver tier that names the ticker, else
+    a full-text hit in the CIK's own filings. A client without full-text
+    search (a test double) gives every other placeholder no evidence."""
+    search = getattr(ctx.clients.edgar, "full_text_search", None)
+    mark = ctx.meter.start()
+    out = {s.sec_id: evidence_for(s.issuer_cik,
+                                  [EraEvidence(e.ticker, e.first, e.last, _era_tier(answers, e.key)) for e in s.eras],
+                                  search)
+           for s in securities.values() if s.figi_source == "placeholder"}
+    ctx.meter.done("ticker evidence", mark)
+    return out
+
+
+def _as_read(tables: dict[str, list[dict]]) -> Tables:
+    """The tables about to be written, as store.read_table would read them back."""
     def rows(name: str) -> list[dict[str, str]]:
         return formatted(name, tables[name])
-    card = run_scorecard.build(Tables(rows("securities"), rows("ticker_history"), rows("delistings"),
-                                      rows("observation_map"), rows("review")), as_of=ctx.as_of, config=config)
+    return Tables(rows("securities"), rows("ticker_history"), rows("delistings"), rows("observation_map"),
+                  rows("review"), rows("uncertain") if "uncertain" in tables else None)
+
+
+def _scorecard(ctx: _RunContext, read: Tables, config: run_scorecard.ScorecardConfig, limit: int | None) -> dict:
+    """10g. The scorecard of the tables about to be written (`read`), with
+    `drops`: the floored numbers that got worse. A --limit subset sees a
+    fraction of the universe, so its numbers are never compared to the floor."""
+    card = run_scorecard.build(read, as_of=ctx.as_of, config=config)
     card["drops"] = run_scorecard.drops(card, config.floor) if limit is None else []
     for line in card["drops"]:
         ctx.log(f"scorecard drop: {line}")
@@ -1204,7 +1235,10 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
         "review_summary": triaged.summary_rows,
         "observation_map": map_rows,
     }
-    card = _scorecard(ctx, tables, scorecard, limit)                                                # 10e
+    evidence = _ticker_evidence(ctx, securities, answers)                                          # 10e
+    verdicts = decide_verdicts(_as_read(tables), evidence)                                         # 10f
+    tables["uncertain"] = verdicts.uncertain_rows()
+    card = _scorecard(ctx, _as_read(tables), scorecard, limit)                                     # 10g
 
     # 11. write -- every table formatted and written to its temp file first, so
     # a failure in any leaves every previous table; then renamed into place one
@@ -1218,7 +1252,8 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
                                                    handoffs=handoffs.counts))
     return RunSummary(counts, dict(Counter(e.record.bucket.value for e in delistings)),
                       dict(Counter(s.figi_source for s in securities.values())), dict(flags), dict(triaged.counts),
-                      scorecard_drops=card["drops"], golden_failures=card["golden_failures"])
+                      scorecard_drops=card["drops"], golden_failures=card["golden_failures"],
+                      uncertain=verdicts.counts())
 
 
 def default_clients(index: ObservationIndex, *, cache_dir: Path, rename_map: dict | None = None,

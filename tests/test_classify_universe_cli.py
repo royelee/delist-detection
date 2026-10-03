@@ -23,6 +23,7 @@ class _FakeSummary:
         self.counts, self.buckets, self.figi_sources = {}, {}, {}
         self.review_flags = review_flags
         self.scorecard_drops, self.golden_failures = [], []
+        self.uncertain = {}
         self.review_counts = review_counts or {"fix": 0, "check": 0, "info_hidden": 0, "accepted": 0,
                                                "cleared": 0, "unmatched_decisions": 0}
 
@@ -328,3 +329,10 @@ def test_scorecard_drops_and_golden_failures_warn_without_changing_the_exit_code
     err = capsys.readouterr().err
     assert "1 scorecard number(s) got worse" in err and "L1.coverage_tickers: 0.9 -> 0.8" in err
     assert "1 golden case(s) now fail" in err and "ICPT" in err
+
+
+def test_main_prints_the_uncertain_counts(monkeypatch, capsys):
+    summary = _FakeSummary({})
+    summary.uncertain = {"seed": 3, "security": 1, "ending": 2}
+    assert _run_main(monkeypatch, {}, summary=summary) == 0
+    assert "Uncertain (uncertain.csv): 1 securities, 2 endings, 3 seeds" in capsys.readouterr().out

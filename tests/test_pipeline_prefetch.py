@@ -585,7 +585,7 @@ def _tree(root):
 
 def _one_and_n(tmp_path, monkeypatch, caplog, workers, *, stale_hits=(), **universe):
     """One worker and `workers` workers, each run from its own clone of one seeded
-    cache (`_seed(stale_hits=)`): both write the same eight CSVs, byte for byte,
+    cache (`_seed(stale_hits=)`): both write the same nine CSVs, byte for byte,
     and no warm task of the N-worker run raises (else a check that something never
     happens on a warm worker could pass because the worker died first). Returns
     each run's request log and the cache tree it leaves behind."""
@@ -602,7 +602,7 @@ def _one_and_n(tmp_path, monkeypatch, caplog, workers, *, stale_hits=(), **unive
     assert [r.getMessage() for r in caplog.records if r.name == "delist_detection.prefetch"] == []
     csv1 = {p.name: p.read_bytes() for p in (tmp_path / "out1").glob("*.csv")}
     csvn = {p.name: p.read_bytes() for p in (tmp_path / "outn").glob("*.csv")}
-    assert len(csv1) == 8 and csv1 == csvn         # the six tables, review_summary.csv and observation_map.csv
+    assert len(csv1) == 9 and csv1 == csvn         # the six tables, review_summary, observation_map and uncertain
     return (sec1, _tree(tmp_path / "one")), (secn, _tree(tmp_path / "n"))
 
 

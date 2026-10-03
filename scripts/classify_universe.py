@@ -5,7 +5,7 @@ Reads:  an observations CSV (ticker, as_of[, name, cusip, cik, sec_id]), and
         missing file there means no decisions)
 Writes: output/securities.csv, ticker_history.csv, cusip_history.csv,
         delistings.csv, payouts.csv, review.csv, review_summary.csv,
-        observation_map.csv, then scorecard.json (data/scorecard.json: the training window,
+        observation_map.csv, uncertain.csv, then scorecard.json (data/scorecard.json: the training window,
         the floor and the truth files)
 """
 from __future__ import annotations
@@ -253,6 +253,9 @@ def main() -> int:
     print(f"Review: {rc.get('fix', 0)} fix, {rc.get('check', 0)} check "
           f"({rc.get('info_hidden', 0)} info-only rows hidden, {rc.get('accepted', 0)} accepted, "
           f"{rc.get('unmatched_decisions', 0)} unmatched decisions)")
+    u = summary.uncertain
+    print(f"Uncertain (uncertain.csv): {u.get('security', 0)} securities, {u.get('ending', 0)} endings, "
+          f"{u.get('seed', 0)} seeds")
     error_count = summary.review_flags.get("error", 0)
     degraded_count = summary.review_flags.get("resolution_degraded", 0)
     if error_count:
