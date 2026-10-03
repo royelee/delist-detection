@@ -1,3 +1,5 @@
+import pytest
+
 from delist_detection.figi_resolution import (
     FigiCandidate, accept, bloomberg_ticker, class_letter, filter_query, is_placeholder, placeholder_id,
     security_kind, share_class_from_name, us_candidates,
@@ -59,6 +61,12 @@ def test_share_class_and_placeholders():
     assert placeholder_id(1122304, None) == "CIK1122304-COMMON"
     assert placeholder_id(14693, "CLASS A") == "CIK14693-CLASS-A"
     assert is_placeholder("CIK1-COMMON") and not is_placeholder("BBG000FJLFX8")
+
+
+def test_a_placeholder_is_built_from_a_class_code_only():
+    assert placeholder_id(1, "SERIES A") == "CIK1-SERIES-A"
+    with pytest.raises(ValueError):
+        placeholder_id(1, "Class A Common Stock")
 
 
 def test_small_helpers():

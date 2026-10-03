@@ -1,0 +1,121 @@
+"""The contract (spec: Delist Library Reset, "The contract"; decisions 6, 7, 9,
+10 and 12): the tables qlib_practice will read, built from the run's own tables
+and verdicts and written under output/contract/ beside today's tables for one
+release.
+
+- security_history.csv (`security_history_rows`): one row per security per
+  interval in which its ticker and its issuer CIK hold;
+- delistings.csv (`delisting_rows`): one row per ended security, its last real
+  ending; an earlier one is uncertain (`verdict`, `earlier_ending`);
+- seeds.csv (`seed_rows`): every input observation with its sec_id and verdict;
+- price_requests.csv: `price_requests.request_rows`;
+- id_changes.csv (`id_change_rows`): the baseline run's placeholders that now
+  hold a FIGI.
+
+run_manifest.json carries store.CONTRACT_SCHEMA_VERSION. Pure."""
+from __future__ import annotations
+
+from collections import defaultdict
+from collections.abc import Collection, Mapping, Sequence
+from datetime import date, timedelta
+
+from .exit_kind import ending_fields
+from .lifecycle import Tables
+from .verdict import Verdicts, published_last_trade_date, seed_key
+
+ECHOED = ("ticker", "as_of", "name", "cusip", "pin_cik", "pin_sec_id", "sec_id")
+
+
+def last_endings(delistings: Sequence[Mapping[str, str]]) -> dict[str, Mapping[str, str]]:
+    """Each security's last real ending (its successor is not itself), by delist
+    date: the one contract/delistings.csv keeps (decision 12)."""
+    out: dict[str, Mapping[str, str]] = {}
+    for r in sorted((r for r in delistings if r["successor_sec_id"] != r["sec_id"]), key=lambda r: r["delist_date"]):
+        out[r["sec_id"]] = r
+    return out
+
+
+def delisting_rows(tables: Tables, verdicts: Verdicts) -> list[dict[str, object]]:
+    """contract/delistings.csv: one row per ended security (`exit_kind.ending_fields`,
+    `verdict.published_last_trade_date`, its ending's verdict). A continuation
+    carries no terminal value."""
+    rows: list[dict[str, object]] = []
+    for sid, r in last_endings(tables.delistings).items():
+        f = ending_fields(r)
+        rows.append({
+            "sec_id": sid, "last_trade_date": published_last_trade_date(r), "exit_kind": f.exit_kind,
+            "drop_reason": f.drop_reason, "continuation": f.continuation,
+            "successor_sec_id": r["successor_sec_id"] if f.continuation else "",
+            "ticker_successor_sec_id": r["ticker_successor_sec_id"], "dlret": f.dlret, "dlret_fill": f.dlret_fill,
+            "terminal_value": "" if f.continuation else r["terminal_value"],
+            "verdict": verdicts.endings[(sid, r["delist_date"])].word,
+        })
+    return rows
+
+
+def seed_rows(tables: Tables, verdicts: Verdicts) -> list[dict[str, str]]:
+    """contract/seeds.csv: every input observation (observation_map's input
+    columns), its sec_id (blank when unplaced) and its verdict."""
+    return [{**{c: r[c] for c in ECHOED}, "verdict": verdicts.seeds[seed_key(r)].word}
+            for r in tables.observation_map]
+
+
+def _issuer_on(timeline: Sequence[tuple[str, str]], day: str, default: str) -> str:
+    if not timeline:
+        return default
+    cik = timeline[0][1]
+    for since, c in timeline:
+        if since <= day:
+            cik = c
+    return cik
+
+
+def _day_before(iso: str) -> str:
+    return (date.fromisoformat(iso) - timedelta(days=1)).isoformat()
+
+
+def security_history_rows(tables: Tables, issuers: Mapping[str, Sequence[tuple[str, str]]],
+                          leave_out: Collection[str] = ()) -> list[dict[str, str]]:
+    """contract/security_history.csv: each ticker_history range, split where the
+    issuer CIK in force changes. `issuers` is each security's issuer timeline
+    (`issuer_in_force.issuer_changes`: [(from ISO date, CIK)], earliest first); a
+    day before its first entry takes that entry's CIK, and a security with no
+    timeline takes its securities.csv CIK. `leave_out` names securities not
+    published (the merger acquirers the run adds)."""
+    secs = {s["sec_id"]: s for s in tables.securities}
+    out: list[dict[str, str]] = []
+    for r in tables.ticker_history:
+        sid = r["sec_id"]
+        if sid in leave_out:
+            continue
+        s, timeline = secs.get(sid, {}), issuers.get(sid, ())
+        start, end = r["valid_from"], r["valid_to"]
+        bounds = [start, *(d for d, _ in timeline[1:] if start < d and (not end or d <= end))]
+        for i, lo in enumerate(bounds):
+            hi = _day_before(bounds[i + 1]) if i + 1 < len(bounds) else end
+            out.append({"sec_id": sid, "issuer_id": _issuer_on(timeline, lo, s.get("issuer_cik", "")),
+                        "start_date": lo, "end_date": hi, "ticker": r["ticker"],
+                        "security_name": s.get("name", ""), "share_class": s.get("share_class", "")})
+    return out
+
+
+def id_change_rows(baseline: Sequence[Mapping[str, str]], securities: Sequence[Mapping[str, str]],
+                   changed_on: str) -> list[dict[str, str]]:
+    """contract/id_changes.csv (decision 7): each placeholder of the baseline run
+    (its securities.csv rows) that this run no longer has and whose issuer and
+    class exactly one FIGI security of this run holds. Not cumulative: git keeps
+    the earlier files."""
+    now = {s["sec_id"] for s in securities}
+    figis: dict[tuple[str, str], set[str]] = defaultdict(set)
+    for s in securities:
+        if s["figi_source"] != "placeholder" and s["issuer_cik"]:
+            figis[(s["issuer_cik"], s["share_class"])].add(s["sec_id"])
+    rows = []
+    for b in baseline:
+        if b["figi_source"] != "placeholder" or b["sec_id"] in now:
+            continue
+        found = figis.get((b["issuer_cik"], b["share_class"]), set())
+        if len(found) == 1:
+            rows.append({"old_sec_id": b["sec_id"], "new_sec_id": next(iter(found)), "changed_on": changed_on,
+                         "issuer_cik": b["issuer_cik"], "share_class": b["share_class"]})
+    return rows

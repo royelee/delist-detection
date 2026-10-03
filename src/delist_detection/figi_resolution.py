@@ -100,9 +100,17 @@ def class_letter(share_class: str | None) -> str | None:
     return m.group(1) if m else None
 
 
+SHARE_CLASS_CODE = re.compile(r"COMMON|CLASS [A-Z]|SERIES [A-Z0-9]")     # share_class_from_name's values
+
+
 def placeholder_id(cik: int, share_class: str | None) -> str:
-    cls = re.sub(r"[^A-Z0-9]+", "-", (share_class or "COMMON").upper()).strip("-") or "COMMON"
-    return f"CIK{int(cik)}-{cls}"
+    """`CIK<cik>-<CLASS>` from a class code (decision 7): COMMON, CLASS X or
+    SERIES X, as `share_class_from_name` gives it. Free class text could give one
+    class two IDs, so anything else raises ValueError."""
+    code = (share_class or "COMMON").upper().strip()
+    if not SHARE_CLASS_CODE.fullmatch(code):
+        raise ValueError(f"placeholder_id: {share_class!r} is not a class code")
+    return f"CIK{int(cik)}-{code.replace(' ', '-')}"
 
 
 def is_placeholder(sec_id: str) -> bool:
