@@ -28,7 +28,7 @@ editable install.
 
 ```bash
 pip install -e .                         # editable install (Python ≥3.10) — once per env
-pytest   # full suite (1685 tests + 17 known-wrong golden xfails, offline, no network)
+pytest   # full suite (1695 tests + 17 known-wrong golden xfails, offline, no network)
 pytest tests/test_payout_extractor.py -v  # one file
 pytest tests/test_payout_extractor.py::test_match_in_cash_family_altr -v   # one test
 
@@ -84,7 +84,7 @@ window began, so (eligibility decided first, then) rows for [end − 1095 d, end
 CUSIPs `history.backfill_cusips` finds that no other security holds and its sightings are rebuilt; no `sec_id`
 or issuer changes),
 `_check_overrides`, `_last_trade_closes`, `_merger_payouts`,
-`_find_successors`, `_handoffs`, then the row builders and `_triage`), each with explicit
+`_find_successors`, `_handoffs`, `_date_from_notices` (stage 9c: a handoff continuation row's last trade day from its own Form 25's confirmed EX-99.25 notice, when before the successor's first sighting and no later than the effective date; metered as "handoff notice dates"), then the row builders and `_triage`), each with explicit
 inputs and outputs and the run-wide `_RunContext` (clients, run date, log,
 workers, SEC meter `manifest.StageMeter`). Each stage returns what it produces
 (`_Successors` for stage 9, for instance) and `_run` combines the answers
@@ -288,7 +288,11 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
 - `last_trade.py` — `eightk_last_trade()` (Item 3.01 text) and
   `decide_last_trade()`, which picks among the Form 25 notice, the 8-K text,
   MIDAS and the Nasdaq halt (MIDAS beats a halt beats text; a text/measured
-  disagreement is flagged `last_trade_date_conflict`).
+  disagreement is flagged `last_trade_date_conflict`). The text's `_OPEN`
+  wordings (suspended/halted "before the open", "prior to the market opening",
+  "before market open", "prior to the commencement of trading", "as of the open
+  of business", "at the opening of business" on D) date the last trade on the
+  trading day before D (source `8k_301`, kind `8k_open`).
 - `delistings.py` — `DelistingFinder.find()`: lists an issuer's Form 25s,
   matches and groups them into one delisting per removal (chained within
   `SAME_EVENT_DAYS` of the group's earliest filing, across exchanges), dates

@@ -751,7 +751,10 @@ README's *Where each date and price comes from* for the full detail):
    (rule 12d2-2(b)) the date is the Exchange's decision day, whatever the
    wording (NYSE announces the suspension "at the close of the trading
    session on D"), so it counts only once MIDAS or a halt confirms it.
-2. The closing 8-K's Item 3.01 text.
+2. The closing 8-K's Item 3.01 text. An opening wording ("before the open",
+   "prior to the market opening", "before market open", "prior to the
+   commencement of trading", "as of the open of business", "at the opening of
+   business" on D) dates the last trade on the trading day before D.
 3. SEC MIDAS per-security exchange volume (2012+) — the last day with
    nonzero exchange volume, when it falls in a plausible window. When the
    requested window runs past MIDAS's coverage end (the last day of the
@@ -841,6 +844,15 @@ ticker and another starting under it within days (CONTEXT.md).
    rests on, and the pair's `ticker_shared` rows. A takeover sets
    `ticker_successor_sec_id` = B on A's delisting nearest the handoff, else
    writes `handoff_takeover_no_delisting`.
+
+**Stage 9c** (`pipeline._date_from_notices`) runs right after this stage, before
+the added rows' price answers and closes. A continuation row built from an
+unmatched Form 25 starts with its last sighting as its last trade day; 9c gives
+it the day that Form 25's own EX-99.25 notice states (source `ex99_notice`, and
+`observed_delist_date`), only when the day is confirmed (an involuntary
+12d2-2(b) notice is not), is before B's first sighting, and is no later than the
+row's `delist_date`. A failed read keeps the sighting and is reported as
+`resolution_degraded`. Its SEC traffic is the `handoff notice dates` stage.
 
 `run_manifest.json`'s `handoffs` key counts the pairs decided, continuations
 by filing and by timing, takeovers, conflicts and rows added; its `stages`
