@@ -28,6 +28,7 @@ from .lifecycle import (CLOSED_NO_EVENT, CONTINUED_FILINGS, ENDED_INCOMPLETE, EX
                         HIGH, LEFT_VIEW, LOW, MEDIUM, NO_INTERVAL,
                         NO_MAPPED_SIGHTING, Lifecycle, LifecycleView, Tables, flag_names)
 from .exit_kind import ending_fields, is_distress
+from .payout_rule import VALUE_RULES
 from .truth import KNOWN_WRONG, PASS, TruthCase, clopper_pearson_upper, judge_all, load_truth
 from .verdict import ENDING, SECURITY, SEED
 
@@ -50,6 +51,7 @@ METRICS: dict[str, str] = {
     "R2.2.unknown_reason": DOWN, "R2.2.continued_filings_rule": DOWN,
     "R2.3.blank_dlret_in_window": DOWN, "R2.3.blank_no_value_in_window": DOWN,
     "R2.4.assumed_par": DOWN,
+    "R2.7.payout_rule_known": UP,
     "R2.5.distress_blank_dlret": DOWN, "R2.5.distress_no_last_trade_date": DOWN,
     "R2.6.distress_flagged": DOWN,
     "G.pass": UP,
@@ -196,6 +198,10 @@ def _ending_lines(tables: Tables, window: Window | None) -> dict[str, float]:
         "R2.6.distress_ticker_map": sum("resolved_by_current_ticker_map" in flag_names(r) for r in distress),
         "R2.6.distress_normal_price": sum("distress_at_normal_price" in flag_names(r) for r in distress),
     }
+    if tables.contract_delistings is not None:
+        counts = Counter(r["value_rule"] for r in tables.contract_delistings)
+        out.update({f"R2.7.value_rule.{rule}": counts.get(rule, 0) for rule in sorted(VALUE_RULES)})
+        out["R2.7.payout_rule_known"] = len(tables.contract_delistings) - counts.get("unknown", 0)
     if inw is not None:
         blank_w = [r for r in blank if inw(r)]
         out.update({

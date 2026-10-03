@@ -82,3 +82,20 @@ def test_id_changes_name_the_figi_that_now_holds_a_placeholders_issuer_and_class
         {"old_sec_id": "CIK100-COMMON", "new_sec_id": "BBG000NEW100", "changed_on": "2026-09-25",
          "issuer_cik": "100", "share_class": "COMMON"}]
     assert id_change_rows([], now, "2026-09-25") == []
+
+
+def test_delisting_rows_carry_the_payout_rule_columns_and_the_inputs_of_a_failed_gate():
+    from types import SimpleNamespace
+
+    from delist_detection.payout_rule import MergerInputs
+    from delist_detection.store import CONTRACT_DELISTINGS_COLUMNS, DelistingKey
+    t = tables([sec("M")], [iv("M", "MMM", "2010-01-04", "2015-03-02")],
+               [ending("M", "2015-03-10", ltd="2015-03-02", method="assumed_par", last_trade_close="10")],
+               [obs("MMM", "2012-06-29", "M")])
+    llm = SimpleNamespace(deal_type="cash_and_stock", cash_per_share=65.5, stock_ratio=0.8025, acquirer_ticker="QSR",
+                          source="8-K:1")
+    inputs = {DelistingKey("M", "2015-03-10"): MergerInputs(llm=llm, acquirer_sec_id="BBG0QSR")}
+    (row,) = delisting_rows(t, decide(t, {}), inputs)
+    assert set(row) == set(CONTRACT_DELISTINGS_COLUMNS)
+    assert (row["value_rule"], row["terms_gate"], row["price_sec_id"], row["price_date"]) == (
+        "cash_plus_stock", "failed", "BBG0QSR", "2015-03-03")

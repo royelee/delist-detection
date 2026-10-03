@@ -26,6 +26,7 @@ Pure: reads the tables as `store.read_table` returns them (every cell a string).
 """
 from __future__ import annotations
 
+import csv
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
@@ -65,6 +66,7 @@ class Tables:
     review: Sequence[Mapping[str, str]] = ()
     uncertain: Sequence[Mapping[str, str]] | None = None     # None: no uncertain.csv (a run before reset-2)
     security_history: Sequence[Mapping[str, str]] | None = None     # None: no contract (a run before reset-3)
+    contract_delistings: Sequence[Mapping[str, str]] | None = None  # None: no payout rule (a run before schema 2)
 
     @classmethod
     def read(cls, out_dir: str | Path) -> Tables:
@@ -76,8 +78,17 @@ class Tables:
 
         def optional(name: str) -> list[dict[str, str]] | None:
             return rd(name) if store.table_path(out_dir, name).exists() else None
+        def contract_delistings() -> list[dict[str, str]] | None:
+            """None for a file of schema 1 (no payout-rule columns): a run before schema 2."""
+            path = store.table_path(out_dir, "contract_delistings")
+            if not path.exists():
+                return None
+            with path.open(newline="") as fh:
+                header = next(csv.reader(fh), [])
+            return rd("contract_delistings") if "value_rule" in header else None
         return cls(rd("securities"), rd("ticker_history"), rd("delistings"), rd("observation_map"),
-                   optional("review") or [], optional("uncertain"), optional("security_history"))
+                   optional("review") or [], optional("uncertain"), optional("security_history"),
+                   contract_delistings())
 
 
 @dataclass(frozen=True)

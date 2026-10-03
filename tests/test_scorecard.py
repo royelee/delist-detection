@@ -169,3 +169,18 @@ def test_an_audited_wrong_row_counts_as_confirmed_but_wrong_unless_listed():
     assert sc.build(_with_uncertain([]), as_of=AS_OF, config=config)["metrics"]["V.audit.confirmed_but_wrong"] == 2
     listed = _with_uncertain([_uncertain("ending", "A", "2012-03-10")])
     assert sc.build(listed, as_of=AS_OF, config=config)["metrics"]["V.audit.confirmed_but_wrong"] == 1
+
+
+def test_build_counts_endings_by_value_rule_and_the_known_ones():
+    from tests.lifecycle_tables import cend
+    t = tables([sec("A")], [], [], [],
+               contract_delistings=[cend("A", "cash"), cend("B", "cash"), cend("C", "continuation"), cend("D", "unknown")])
+    m = sc.build(t, as_of=AS_OF)["metrics"]
+    assert (m["R2.7.value_rule.cash"], m["R2.7.value_rule.continuation"], m["R2.7.value_rule.unknown"]) == (2, 1, 1)
+    assert m["R2.7.value_rule.otc_print"] == 0 and m["R2.7.payout_rule_known"] == 3
+    assert sc.METRICS["R2.7.payout_rule_known"] == sc.UP
+
+
+def test_build_has_no_value_rule_lines_without_the_contract():
+    m = sc.build(_tables(), as_of=AS_OF)["metrics"]
+    assert not [k for k in m if k.startswith("R2.7.")]

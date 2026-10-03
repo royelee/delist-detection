@@ -21,6 +21,8 @@ from datetime import date, timedelta
 
 from .exit_kind import ending_fields
 from .lifecycle import Tables
+from .payout_rule import MergerInputs, value_fields
+from .store import DelistingKey
 from .verdict import Verdicts, published_last_trade_date, seed_key
 
 ECHOED = ("ticker", "as_of", "name", "cusip", "pin_cik", "pin_sec_id", "sec_id")
@@ -35,20 +37,25 @@ def last_endings(delistings: Sequence[Mapping[str, str]]) -> dict[str, Mapping[s
     return out
 
 
-def delisting_rows(tables: Tables, verdicts: Verdicts) -> list[dict[str, object]]:
+def delisting_rows(tables: Tables, verdicts: Verdicts,
+                   inputs: Mapping[DelistingKey, MergerInputs] | None = None) -> list[dict[str, object]]:
     """contract/delistings.csv: one row per ended security (`exit_kind.ending_fields`,
-    `verdict.published_last_trade_date`, its ending's verdict). A continuation
+    `verdict.published_last_trade_date`, its ending's verdict, and the payout rule
+    `payout_rule.value_fields`; `inputs` are the mergers' pre-gate reads). A continuation
     carries no terminal value."""
     rows: list[dict[str, object]] = []
+    inputs = inputs or {}
     for sid, r in last_endings(tables.delistings).items():
         f = ending_fields(r)
+        ltd = published_last_trade_date(r)
         rows.append({
-            "sec_id": sid, "last_trade_date": published_last_trade_date(r), "exit_kind": f.exit_kind,
+            "sec_id": sid, "last_trade_date": ltd, "exit_kind": f.exit_kind,
             "drop_reason": f.drop_reason, "continuation": f.continuation,
             "successor_sec_id": r["successor_sec_id"] if f.continuation else "",
             "ticker_successor_sec_id": r["ticker_successor_sec_id"], "dlret": f.dlret, "dlret_fill": f.dlret_fill,
             "terminal_value": "" if f.continuation else r["terminal_value"],
             "verdict": verdicts.endings[(sid, r["delist_date"])].word,
+            **value_fields(r, ltd, inputs.get(DelistingKey(sid, r["delist_date"]))),
         })
     return rows
 

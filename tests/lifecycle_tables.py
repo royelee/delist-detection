@@ -49,6 +49,11 @@ def hist(sec_id, issuer, start, end="", ticker="AAA"):
 
 
 def tables(securities=(), history=(), delistings=(), observations=(), reviews=(), *, uncertain=None,
-           security_history=None) -> Tables:
+           security_history=None, contract_delistings=None) -> Tables:
     return Tables(list(securities), list(history), list(delistings), list(observations), list(reviews),
-                  uncertain, security_history)
+                  uncertain, security_history, contract_delistings)
+
+
+def cend(sec_id, value_rule):
+    """A contract/delistings.csv row."""
+    return _row("contract_delistings", sec_id=sec_id, value_rule=value_rule)

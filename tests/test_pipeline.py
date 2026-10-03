@@ -1712,7 +1712,7 @@ def test_every_run_writes_the_contract_beside_todays_tables(fake_edgar, tmp_path
     hist = read_table("security_history", table_path(tmp_path, "security_history"))
     assert {r["sec_id"] for r in hist} >= {"BBG000FJLFX8", "BBG000LIVE01"}
     assert {r["issuer_id"] for r in hist if r["sec_id"] == "BBG000FJLFX8"} == {"1122304"}
-    assert json.loads((tmp_path / "run_manifest.json").read_text())["schema_version"] == 1
+    assert json.loads((tmp_path / "run_manifest.json").read_text())["schema_version"] == 2
 
 
 def test_id_changes_compare_the_run_with_a_baseline(fake_edgar, tmp_path):

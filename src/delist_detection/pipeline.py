@@ -68,6 +68,7 @@ from .verdict import Verdicts
 from .verdict import decide as decide_verdicts
 from .contract import delisting_rows as contract_delisting_rows
 from .contract import id_change_rows, last_endings, security_history_rows, seed_rows
+from .payout_rule import merger_inputs
 from .issuer_in_force import Sighting as IssuerSighting
 from .issuer_in_force import issuer_changes
 from .price_requests import LAST_CLOSE, OTC_PRINT, RECEIVED_CLOSE, key_of, request_rows, stock_legs
@@ -1310,7 +1311,8 @@ def _as_read(tables: dict[str, list[dict]]) -> Tables:
         return formatted(name, tables[name])
     return Tables(rows("securities"), rows("ticker_history"), rows("delistings"), rows("observation_map"),
                   rows("review"), rows("uncertain") if "uncertain" in tables else None,
-                  rows("security_history") if "security_history" in tables else None)
+                  rows("security_history") if "security_history" in tables else None,
+                  rows("contract_delistings") if "contract_delistings" in tables else None)
 
 
 def _issuers_in_force(ctx: _RunContext, observation_map: Sequence[Mapping[str, str]]) -> dict[str, list[tuple[str, str]]]:
@@ -1353,8 +1355,10 @@ def _contract(ctx: _RunContext, read: Tables, verdicts: Verdicts, payouts: _Payo
     delistings, one row per ended security; the seed echo; the price requests;
     and the placeholders of `id_baseline` (a securities.csv) that now hold a FIGI."""
     issuers = _issuers_in_force(ctx, read.observation_map)
-    ended = contract_delisting_rows(read, verdicts)
     endings = last_endings(read.delistings)
+    inputs = merger_inputs(list(endings.values()), payouts.llm_terms, payouts.raw, overrides.merger_terms,
+                           payouts.acquirer_ids)
+    ended = contract_delisting_rows(read, verdicts, inputs)
     legs = stock_legs(list(endings.values()), payouts.llm_terms, overrides.merger_terms, payouts.acquirer_ids)
     requests = request_rows(ended, endings, legs)
     unrequested = sorted(set(overrides.price_answers) - {key_of(r) for r in requests})

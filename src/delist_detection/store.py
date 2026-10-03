@@ -58,12 +58,15 @@ UNCERTAIN_COLUMNS: tuple[str, ...] = ("kind", "ticker", "sec_id", "date", "reaso
 
 # The contract (spec: Delist Library Reset, "The contract"; contract.py), written
 # under contract/ beside the tables above for one release (decision 6).
-CONTRACT_SCHEMA_VERSION = 1
+CONTRACT_SCHEMA_VERSION = 2       # 2: contract/delistings.csv gains the payout-rule columns
 SECURITY_HISTORY_COLUMNS: tuple[str, ...] = (
     "sec_id", "issuer_id", "start_date", "end_date", "ticker", "security_name", "share_class")
 CONTRACT_DELISTINGS_COLUMNS: tuple[str, ...] = (
     "sec_id", "last_trade_date", "exit_kind", "drop_reason", "continuation", "successor_sec_id",
-    "ticker_successor_sec_id", "dlret", "dlret_fill", "terminal_value", "verdict")
+    "ticker_successor_sec_id", "dlret", "dlret_fill", "terminal_value", "verdict",
+    # the payout rule (payout_rule.py): what one share turned into, for the caller to price
+    "value_rule", "cash_per_share", "cash_currency", "stock_ratio", "price_sec_id", "price_ticker", "price_date",
+    "recovery_ratio", "terms_source", "terms_gate", "value_formula")
 SEEDS_COLUMNS: tuple[str, ...] = ("ticker", "as_of", "name", "cusip", "pin_cik", "pin_sec_id", "sec_id", "verdict")
 PRICE_REQUEST_COLUMNS: tuple[str, ...] = ("sec_id", "last_trade_date", "kind", "lookup_sec_id", "lookup_ticker", "date")
 ID_CHANGES_COLUMNS: tuple[str, ...] = ("old_sec_id", "new_sec_id", "changed_on", "issuer_cik", "share_class")
