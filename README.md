@@ -269,8 +269,8 @@ keeps earlier versions. `run_manifest.json` carries `schema_version`
 
 `lost_source` is not produced until reset-4a.
 
-**Values.** `cash_only`, `stock_only`, `cash_plus_stock`, `recovery_ratio` and
-`worthless` are measured, in `dlret`. Shumway marks, assumed par and an
+**Values.** `cash_only`, `stock_only`, `cash_plus_stock`, `recovery_ratio`,
+`otc_print` and `worthless` are measured, in `dlret`. Shumway marks, assumed par and an
 exchange transfer's 0.0 are fills, in `dlret_fill`; a fill is never in
 `dlret`. A continuation has neither. Transfers with no successor keep today's
 0.0 as a fill, so labels built from `delistings.csv` do not move until reset-4a
@@ -706,7 +706,7 @@ exits = dl.assign(
 | confidence | what it is | suggested use |
 |---|---|---|
 | `high` | exact cash payout from a closing 8-K (`cash_only`), or an exchange transfer (`exchange_transfer_zero`) | use as-is |
-| `medium` | reconstructed cash+stock / all-stock terminal, or a Shumway/recovery mark | use as-is; spot-check large \|dlret\| |
+| `medium` | reconstructed cash+stock / all-stock terminal, or an OTC-print/Shumway/recovery mark | use as-is; spot-check large \|dlret\| |
 | `low` | `assumed_par` neutral estimate (completed deal / fund closure, terminal assumed = last price → DLRET ≈ 0) | down-weight, or exclude from training and treat the row as a drop |
 
 Because the table is never blank and never *silently* zero, both `DLRET.fillna(0)`
@@ -720,7 +720,7 @@ are one-liners — the choice is yours and stays explicit.
 | Cash merger at a premium | `payout/last_close − 1` > 0 | positive terminal return — kept, not dropped |
 | Completed stock / cash+stock merger | ≈ 0 | premium already earned pre-close; no extra shock |
 | Exchange transfer | 0 | continues at successor; re-link, don't exit |
-| Liquidation | `recovery − 1`, else Shumway −0.30 / −0.55 | partial loss |
+| Liquidation | `--recoveries` ratio − 1, else an answered OTC print, else Shumway −0.30 / −0.55 | partial loss |
 | Compliance failure / SEC revocation | −1.0 | total loss — the correction that matters most |
 
 > **Programmatic alternative.** If you prefer typed helpers over the CSV, the
@@ -728,6 +728,8 @@ are one-liners — the choice is yours and stays explicit.
 > `build_backtest_exit` (see *API → Handling*), and the CRSP-style firm-month
 > form from `apply_bmp_corrections` (see *BMP 2007 firm-month return correction*).
 > `delistings.csv` is the precomputed, audit-trailed output of those paths.
+> The event-level helpers (`handling.py`) do not read the OTC print; the
+> firm-month correction (`apply_bmp_corrections`) and `delistings.csv` do.
 
 ---
 
@@ -917,12 +919,14 @@ corrected_panel = apply_bmp_corrections(
 )
 ```
 
-Shumway constants used when DLRET is not observed:
+A liquidation takes a `--recoveries` ratio, else an answered OTC print, else the
+Shumway mark; a compliance failure takes an answered OTC print, else the Shumway
+mark. Shumway constants used when DLRET is not observed:
 
 | Bucket | NYSE/AMEX | Nasdaq | Source |
 |---|---|---|---|
-| COMPLIANCE_FAILURE | -0.30 | -0.55 | Shumway 1997, Shumway-Warther 1999 |
-| LIQUIDATION (no recovery) | -0.30 | -0.55 | as above |
+| COMPLIANCE_FAILURE (no OTC print) | -0.30 | -0.55 | Shumway 1997, Shumway-Warther 1999 |
+| LIQUIDATION (no recovery ratio, no OTC print) | -0.30 | -0.55 | as above |
 | MERGER | payout-driven | payout-driven | EDGAR 8-K Item 2.01 |
 | EXCHANGE_TRANSFER | 0 | 0 | security continues at successor |
 | EXPIRATION | NaN (drop) | NaN (drop) | not equity universe |

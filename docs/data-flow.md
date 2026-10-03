@@ -813,7 +813,14 @@ ticker and another starting under it within days (CONTEXT.md).
    naming A's issuer, under its EDGAR names around the handoff, today's, and
    its observed name (`predecessor_names`: Ashland Inc's CIK is ASHLAND LLC
    today), 30 days before to 60 after B's first sighting,
-   `continuation_filing`; the filer may keep A's CIK, as Aon did); a
+   `continuation_filing`; the filer may keep A's CIK, as Aon did). When the
+   search finds nothing, or none exists, B's issuer's own filing list is read for
+   the same 8-K12B/8-K12G3 in the same window (`own_continuation_filing`): a
+   1:1 holding-company reorganization (Xerox 2019, Cigna 2018, Broadcom 2016/2018,
+   QuidelOrtho 2022) names no predecessor the search can match. It is skipped
+   when A's issuer carries on in another line, as that filing names no
+   predecessor. A filing settles the continuation, so a merger row is rebucketed
+   (`handoff_rebucketed`). Next, a
    continuation by timing and identity (at most `CONTINUATION_DAYS` = 10
    days apart, B sighted under no ticker before then, and the same issuer CIK
    or the ticker's CUSIP switching from A's to B's in the fails data,

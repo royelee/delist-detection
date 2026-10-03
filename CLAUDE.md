@@ -28,7 +28,7 @@ editable install.
 
 ```bash
 pip install -e .                         # editable install (Python ≥3.10) — once per env
-pytest   # full suite (1705 tests + 17 known-wrong golden xfails, offline, no network)
+pytest   # full suite (1711 tests + 17 known-wrong golden xfails, offline, no network)
 pytest tests/test_payout_extractor.py -v  # one file
 pytest tests/test_payout_extractor.py::test_match_in_cash_family_altr -v   # one test
 
@@ -264,7 +264,9 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
 - `handoffs.py` — ticker handoffs (CONTEXT.md: one security stops under a
   ticker, another of the run starts under it within days): `find_handoffs`
   (candidate pairs, [-10, 120] days), `decide_handoff` (continuation by the
-  successor issuer's 8-K12B/8-K12G3 `continuation_filing`, else by timing and
+  successor issuer's 8-K12B/8-K12G3 `continuation_filing`, found by the full-text
+  search for the predecessor's name, else in the successor issuer's own filing list,
+  `own_continuation_filing`, unless the old issuer carries on in another line; else by timing and
   the same CIK or a `cusip_switch`; else a takeover when the new line traded
   before), `apply_handoffs` (a continuation's missing `exchange_transfer` row
   or its successor, `handoff_continuation`/`handoff_rebucketed`/
