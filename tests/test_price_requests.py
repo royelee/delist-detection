@@ -50,6 +50,8 @@ def test_answers_are_read_by_request_and_a_blank_price_is_unanswered(tmp_path):
 @pytest.mark.parametrize("row,message", [
     ("A,2018-11-28,last_close,A,AET,2018-11-28,abc", "not a number"),
     ("A,2018-11-28,last_close,A,AET,2018-11-28,-1", "not positive"),
+    ("A,2018-11-28,last_close,A,AET,2018-11-28,inf", "not positive"),
+    ("A,2018-11-28,last_close,A,AET,2018-11-28,nan", "not positive"),
     ("A,2018-11-28,closing,A,AET,2018-11-28,191", "kind"),
 ])
 def test_a_bad_answer_names_its_file_and_line(tmp_path, row, message):

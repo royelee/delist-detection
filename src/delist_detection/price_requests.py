@@ -104,7 +104,7 @@ def load_answers(path: str | Path) -> dict[PriceKey, float]:
                 price = float(cell)
             except ValueError:
                 raise OverrideFileError(f"{where}: price {cell!r} is not a number") from None
-            if math.isnan(price) or price <= 0:
+            if not math.isfinite(price) or price <= 0:
                 raise OverrideFileError(f"{where}: price {cell!r} is not positive")
             out[key_of(row)] = price
     return out
