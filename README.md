@@ -85,13 +85,13 @@ classification evidence, and concrete train/backtest mechanics:
 
 ---
 
-## The eight output tables
+## The nine output tables
 
-`classify_universe.py` writes eight CSVs to `output/`, all committed
+`classify_universe.py` writes nine CSVs to `output/`, all committed
 artifacts (one row layout each, fixed column order, ISO dates, `;`-joined
 lists, empty cell for NULL, rows sorted by key unless noted — see
 [`store.py`](src/delist_detection/store.py) for the schema every table
-shares). `delistings.csv` is the primary deliverable; the other seven support
+shares). `delistings.csv` is the primary deliverable; the other eight support
 it.
 
 Next to the tables, every run writes `run_manifest.json` (what the run rested
@@ -204,6 +204,19 @@ no range to `ticker_history` (see above). **Membership from
 `history_ticker`** — not the raw observed ticker, which a class ticker may
 spell without its separator. Under `--limit N`, only the run's own eras get
 rows, and the run log says how many of the input's observations that is.
+
+### `uncertain.csv` — key `(kind, sec_id, date, ticker)`
+
+One row per uncertain verdict a person must act on: `kind` is `security`
+(identity not confirmed: a placeholder no filing ties to its ticker, an era's
+first sighting outside its history, a ticker another security holds at the
+same time), `ending` (not filing-backed, no exchange-printed last trade date,
+identity through today's ticker map, a timing-only continuation, assumed par
+after a failed payout gate, or its security uncertain) or `seed` (a sighting
+not placed, seen under two names, or outside its security's history).
+`reason` lists the codes; `candidates` the other `sec_id`s involved. A person
+answers a row with a pin, an override or a drop-list row; a security or ending
+not listed is confirmed.
 
 ### `delistings.csv` — key `(sec_id, delist_date)` — the primary output
 
@@ -345,7 +358,7 @@ Not every row is settled by clean evidence. `enrich()` collects every
 classifier and payout-gate flag into a `review_flags` column on
 `delistings.csv` (semicolon-joined), and `classify_universe.py` also writes
 `output/review.csv` and `output/review_summary.csv` (plus rows for
-securities with no delisting at all — see *The eight output tables* above),
+securities with no delisting at all — see *The nine output tables* above),
 with the ticker, bucket, `dlret`, reason, `cik`, and anchor 8-K item set, so a
 human can triage without re-deriving which rows the automatic rules could not
 settle on their own. `review.csv` also carries a delisting with a blank
@@ -900,7 +913,7 @@ scripts/
     verify_altair.py                 End-to-end sanity check on ALTR (Siemens deal)
     observations_from_instruments.py  Legacy (ticker,start,end) file → observations CSV
     observations_from_snapshots.py    Folder of dated snapshot CSVs → observations CSV
-    classify_universe.py              Reads --observations → writes the eight output tables
+    classify_universe.py              Reads --observations → writes the nine output tables
     accept_review.py                  Bulk-accept review.csv rows by flag → appends data/review_decisions.csv
     verify_against_web.py             Independent EDGAR cross-check → output/web_verification.csv
     compute_corrected_returns.py      CLI: read panel + delistings.csv → write BMP-corrected panel

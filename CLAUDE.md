@@ -28,14 +28,14 @@ editable install.
 
 ```bash
 pip install -e .                         # editable install (Python ≥3.10) — once per env
-pytest   # full suite (1552 tests + 24 known-wrong golden xfails, offline, no network)
+pytest   # full suite (1589 tests + 24 known-wrong golden xfails, offline, no network)
 pytest tests/test_payout_extractor.py -v  # one file
 pytest tests/test_payout_extractor.py::test_match_in_cash_family_altr -v   # one test
 
 python scripts/verify_altair.py          # smoke: ALTR → CRSP 231, high
 python scripts/scorecard.py              # offline: recompute output/'s scorecard vs data/scorecard.json; --check (exit 1 on a drop or a failing golden case), --write, --raise-floor, --lifecycles PATH
 python scripts/draw_audit_sample.py --out data/accuracy_audit.csv   # offline: draw the decision-17 audit worksheet once (census + 100 random, seed 7)
-python scripts/classify_universe.py --observations obs.csv   # → output/{securities,ticker_history,cusip_history,delistings,payouts,review,review_summary,observation_map}.csv + scorecard.json (NETWORK; free when cached)
+python scripts/classify_universe.py --observations obs.csv   # → output/{securities,ticker_history,cusip_history,delistings,payouts,review,review_summary,observation_map,uncertain}.csv + scorecard.json (NETWORK; free when cached)
 python scripts/classify_universe.py --observations obs.csv --limit 20 --no-extract-payouts --no-midas --no-halts   # fast dev subset
 python scripts/classify_universe.py --observations obs.csv --sec-workers 1   # one SEC request at a time (default: 4 prefetch threads, max 8, one machine-wide 8 req/s limit)
 python scripts/classify_universe.py --observations obs.csv --as-of 2026-09-25   # pin the run date (default today; run_manifest.json records it) to reproduce an earlier run's tables from the same caches
@@ -46,7 +46,7 @@ python scripts/regen_payout_fixtures.py  # refetch golden 8-K fixtures from live
 python scripts/build_golden_fixtures.py  # rebuild the 31-case golden regression set (NETWORK); --efts-only / --llm-only / --only ID
 python scripts/accept_review.py --flag terms_gate_failed --note "sampled 5, all fine"   # bulk-accept every current review.csv row carrying that flag → appends to data/review_decisions.csv (offline); --bucket narrows, --dry-run previews, --yes required for a fix-severity flag
 # End-to-end pipeline (the canonical way to use the library) — classify a universe → output/delistings.csv (+ 7 more tables), then firm-month-correct a returns panel:
-python scripts/classify_universe.py --observations obs.csv --last-trade-closes lt.csv --merger-terms terms.csv --recoveries rec.csv   # → output/{securities,ticker_history,cusip_history,delistings,payouts,review,review_summary,observation_map}.csv + scorecard.json
+python scripts/classify_universe.py --observations obs.csv --last-trade-closes lt.csv --merger-terms terms.csv --recoveries rec.csv   # → output/{securities,ticker_history,cusip_history,delistings,payouts,review,review_summary,observation_map,uncertain}.csv + scorecard.json
 python scripts/compute_corrected_returns.py --panel panel.csv --delistings output/delistings.csv --out corrected.parquet   # firm-month BMP correction, keyed on sec_id
 # override-CSV columns are keyed by sec_id[,delist_date] (a blank/absent delist_date applies to every delisting of that security): lt.csv=`sec_id,last_trade_close[,delist_date]` · terms.csv=`sec_id,cash_per_share,stock_ratio,acquirer_price,acquirer_ticker[,delist_date]` · rec.csv=`sec_id,recovery_ratio[,delist_date]`. A malformed file, or a row that matches no delisting, stops the run before anything is written (exit 2, one stderr line naming the file and line).
 # --review-decisions PATH (default data/review_decisions.csv) is read the same way: sec_id,delist_date,ticker,flag,decision,note. Missing at the default path means no decisions; missing at an explicit path, or a bad file, exits 2.
@@ -72,7 +72,7 @@ reason, evidence`, plus `sec_id`, `delist_date`, `successor_sec_id` (a
 continuation only) and `ticker_successor_sec_id` (a ticker takeover) —
 optional fields the new pipeline (`delistings.py`/`pipeline.py`) fills in
 alongside the original ones. `pipeline.py`'s `run()` is the orchestration
-that turns a list of observations into the eight output tables: a short
+that turns a list of observations into the nine output tables: a short
 `_run` calls one function per numbered stage (`_refine`, `_resolve_issuers`,
 `_resolve_securities`, `_security_cusips`, `_find_delistings`,
 `_check_overrides`, `_last_trade_closes`, `_merger_payouts`,
@@ -381,6 +381,18 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
 - `audit.py` — decision 17's sample: `census` (each ending in its first group of
   distress, continuation, left_view, blank_no_value, assumed_par), `random_sample`
   (seeded, avoiding census chains), `worksheet_rows`.
+- `verdict.py` — one verdict per seed (an observation_map row), security and
+  ending (a delistings.csv row whose successor is not itself): `decide`
+  returns `Verdicts`; `uncertain_rows()` is `uncertain.csv`. The rules are the
+  spec's invariants, read from the tables (FIGI source, intervals, each
+  ending's reason, flags, last-trade source and Form 25 date) plus each
+  placeholder's ticker evidence. A seed is an era's first sighting for the
+  security's coverage rule; later sightings outside the history are listed
+  seeds only.
+- `ticker_evidence.py` — decision 1: what ties a placeholder's ticker to its
+  CIK. A resolver tier that names the ticker (`TICKER_TIERS`), else one
+  EDGAR full-text search of the CIK's own filings (`full_text_search(...,
+  ciks=)`), cached like every search.
 
 There are **two return-correction APIs** for different research conventions:
 event-level (`handling.py`) vs CRSP-style firm-month (`bmp_correction.py`). Don't
@@ -540,8 +552,8 @@ conflate them.
   file's own header order, never reformatted or dropped. A real write prints
   "rerun classify_universe.py to apply them"; `--dry-run` does not.
 - **The scorecard only moves one way.** Every run builds `output/scorecard.json`
-  (`pipeline._scorecard`, stage 10e) from the rows it is about to write and
-  writes it after the eight tables, before the manifest. `data/scorecard.json`
+  (`pipeline._scorecard`, stage 10g) from the rows it is about to write and
+  writes it after the nine tables, before the manifest. `data/scorecard.json`
   holds the caller's training window (data, never code), the floor and the two
   truth files. `tests/test_scorecard_floor.py` recomputes the scorecard from the
   committed `output/` and fails when a floored number got worse, a floored
@@ -552,8 +564,18 @@ conflate them.
   only by hand, with the reason in the commit. A `--limit` run is never compared
   to the floor. A drop or a failing golden case warns on stderr and never changes
   the exit code; a bad config or truth file exits 2.
+- **Every seed, security and ending has a verdict, and every uncertain one is
+  in `uncertain.csv`.** `kind` is seed | security | ending; `reason` holds
+  `code` or `code:detail` items (verdict.py's docstring lists them). The
+  verdict covers identity, exit kind and the last trade date, never the value
+  (except assumed par after a failed payout gate, decision 4). A seed whose
+  only problem is its security is counted, not listed. Pipeline stages 10e
+  (ticker evidence: about one cached EDGAR search per placeholder without a
+  ticker tier), 10f (verdicts) and 10g (scorecard) run before the write;
+  `uncertain.csv` is written with the other tables. The scorecard's V lines
+  read it; a committed output without it has no V lines.
 - **Every output is written only after the whole run succeeds.**
-  `pipeline.run()` computes every table in memory first and writes all eight
+  `pipeline.run()` computes every table in memory first and writes all nine
   only at the end (`store.write_tables`): each table is formatted and written
   to its own temp file first, and only then are the temp files renamed over
   the old tables. So a refusal, a bad override CSV or any failure before the
@@ -648,7 +670,7 @@ conflate them.
   `--observations` (a CSV of `ticker, as_of[, name, cusip, cik, sec_id]`,
   built by `observations_from_snapshots.py` / `observations_from_instruments.py`
   or hand-supplied) and reads `--output-dir`/`--cache-dir` with repo-local
-  defaults; it writes eight tables to `output/`, all committed artifacts.
+  defaults; it writes nine tables to `output/`, all committed artifacts.
 
 ## Design/plan docs
 

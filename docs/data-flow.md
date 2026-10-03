@@ -315,15 +315,22 @@ Each run writes `run_manifest.json` next to the tables:
 
 The manifest is not part of the byte-identical-output guarantee: `as_of`, the
 code version and the worker count make it expected to differ between two runs
-even when their eight tables come out identical. A run that aborts leaves the
+even when their nine tables come out identical. A run that aborts leaves the
 previous manifest in place.
 
-`scorecard.json` is built at stage 10e from the same rows the tables are
+`scorecard.json` is built at stage 10g from the same rows the tables are
 written from (`store.formatted`), so it equals what `scripts/scorecard.py`
 recomputes from the written CSVs. It is written after the tables and before the
 manifest, carries `drops` (floored numbers that got worse; never computed under
 `--limit`) and `golden_failures`, and is compared to `data/scorecard.json`'s
 floor. It is deterministic for the same tables, config and run date.
+
+Before the write, stage 10e gathers each placeholder's ticker evidence
+(`ticker_evidence.evidence_for`: a resolver tier that names the ticker, else
+one full-text search of the CIK's own filings), 10f decides every verdict
+(`verdict.decide` over the rows about to be written) and adds `uncertain.csv`
+to the group, and 10g builds the scorecard from the same rows, so its V lines
+count exactly what `uncertain.csv` lists.
 
 `scripts/classify_universe.py` exits:
 - `0` on success;
@@ -820,7 +827,7 @@ carry the `handoff search` SEC traffic.
 
 ## Outputs
 
-Eight CSVs written to `output/`, all committed artifacts; see `store.py` for
+Nine CSVs written to `output/`, all committed artifacts; see `store.py` for
 the exact schema. `delistings.csv` is the primary deliverable.
 
 `output/securities.csv`: one row per identified security — `sec_id`,
@@ -987,8 +994,8 @@ a token with a `:`; bulk-accepting a `fix`-severity flag needs `--yes`).
 `load_decisions` first (both read `utf-8-sig`, so an Excel BOM doesn't blank
 the first cell) and refuses to touch a file that doesn't load, rewriting a
 valid one with every existing row/column preserved in the file's own header
-order. Written by `scripts/classify_universe.py` alongside the other seven
-output tables (eight in all, counting `observation_map.csv`).
+order. Written by `scripts/classify_universe.py` alongside the other eight
+output tables (nine in all, counting `uncertain.csv`).
 
 `output/web_verification.csv` — independent EDGAR cross-check produced by
 `scripts/verify_against_web.py`. Verdicts:

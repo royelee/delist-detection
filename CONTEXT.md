@@ -73,3 +73,7 @@ _Avoid_: test case, expectation
 
 **Floor**:
 The best value each scorecard number has reached (`data/scorecard.json`). No later change may make a floored number worse.
+
+**Verdict**:
+`confirmed` or `uncertain`, one per seed, security and ending. Confirmed means the evidence the spec requires is in hand: a FIGI or a filing tying a placeholder's ticker to its CIK, a history covering every introduction, a filing-backed exit kind and an exchange-printed last trade date. Uncertain rows go to `uncertain.csv` for a person to pin, override or drop.
+_Avoid_: confidence, review
