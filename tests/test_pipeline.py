@@ -2592,3 +2592,44 @@ def test_ticker_evidence_asks_the_search_only_for_a_placeholder_without_a_ticker
     assert pipeline._ticker_evidence(ctx, securities, answers) == {
         "CIK555-COMMON": "filing:0000000555-16-000001", "CIK777-COMMON": "tier:cik_map"}
     assert edgar.calls == [('"PHX"', (555,))]
+
+
+def test_price_answers_change_value_columns_only(fake_edgar, tmp_path):
+    from delist_detection.price_requests import key_of
+    index, clients = _clients(fake_edgar)
+    first = tmp_path / "first"
+    run(index, clients, Overrides(), out_dir=first, log=lambda *_: None)
+    requests = read_table("price_requests", table_path(first, "price_requests"))
+    ask = next(r for r in requests if r["sec_id"] == "BBG000FJLFX8" and r["kind"] == "last_close")
+    answered = {key_of(ask): 191.32}
+    index, clients = _clients(fake_edgar)
+    second = tmp_path / "second"
+    run(index, clients, Overrides(price_answers=answered), out_dir=second, log=lambda *_: None)
+    aet = next(r for r in read_table("delistings", table_path(second, "delistings")) if r["sec_id"] == "BBG000FJLFX8")
+    assert aet["last_trade_close"] == "191.320000"
+    for name in ("securities", "ticker_history", "observation_map", "security_history", "seeds", "price_requests"):
+        assert table_path(first, name).read_bytes() == table_path(second, name).read_bytes(), name
+
+
+def test_an_answer_to_no_request_stops_the_run_before_anything_is_written(fake_edgar, tmp_path):
+    from delist_detection.price_requests import PriceKey
+    from delist_detection.reconstruction import OverrideFileError
+    index, clients = _clients(fake_edgar)
+    stray = {PriceKey("BBG000FJLFX8", "2001-01-02", "last_close", "AET", "2001-01-02"): 10.0}
+    with pytest.raises(OverrideFileError, match="answer no request"):
+        run(index, clients, Overrides(price_answers=stray), out_dir=tmp_path, log=lambda *_: None)
+    assert not list(tmp_path.rglob("*.csv"))
+
+
+def test_a_last_close_given_twice_stops_the_run(fake_edgar, tmp_path):
+    from delist_detection.price_requests import key_of
+    from delist_detection.reconstruction import OverrideFileError
+    index, clients = _clients(fake_edgar)
+    first = tmp_path / "first"
+    run(index, clients, Overrides(), out_dir=first, log=lambda *_: None)
+    ask = next(r for r in read_table("price_requests", table_path(first, "price_requests"))
+               if r["sec_id"] == "BBG000FJLFX8" and r["kind"] == "last_close")
+    index, clients = _clients(fake_edgar)
+    with pytest.raises(OverrideFileError, match="both give the last close"):
+        run(index, clients, Overrides(last_trade_closes={"BBG000FJLFX8": 190.0}, price_answers={key_of(ask): 191.32}),
+            out_dir=tmp_path / "second", log=lambda *_: None)

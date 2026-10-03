@@ -25,6 +25,7 @@ from delist_detection.observations import ObservationError, ObservationIndex, lo
 from delist_detection.openfigi import OpenFigiUnavailable
 from delist_detection.payout_gate import DEFAULT_TOL
 from delist_detection.pipeline import Overrides, default_clients, run
+from delist_detection.price_requests import load_answers
 from delist_detection.reconstruction import OverrideFileError, load_float_overrides, load_merger_terms_overrides
 from delist_detection.review_triage import Decision, ReviewDecisionError, load_decisions
 from delist_detection.scorecard import ScorecardConfig, ScorecardConfigError, load_config
@@ -153,6 +154,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--last-trade-closes", help="CSV sec_id,last_trade_close[,delist_date]")
     p.add_argument("--merger-terms", help="CSV sec_id,cash_per_share,stock_ratio,acquirer_price,acquirer_ticker[,delist_date]")
     p.add_argument("--recoveries", help="CSV sec_id,recovery_ratio[,delist_date]")
+    p.add_argument("--price-answers",
+                   help="contract/price_requests.csv answered: its columns plus price (raw as-traded closes)")
     p.add_argument("--id-baseline", default=None,
                    help="securities.csv to list placeholder->FIGI changes against in contract/id_changes.csv "
                         "(default: OUTPUT_DIR/securities.csv when it exists)")
@@ -207,6 +210,7 @@ def read_inputs(args: argparse.Namespace) -> tuple[Overrides, list[Decision], Ob
         last_trade_closes=load_float_overrides(args.last_trade_closes, "last_trade_close") if args.last_trade_closes else {},
         merger_terms=load_merger_terms_overrides(args.merger_terms) if args.merger_terms else {},
         recoveries=load_float_overrides(args.recoveries, "recovery_ratio") if args.recoveries else {},
+        price_answers=load_answers(args.price_answers) if args.price_answers else {},
     )
     # None (the argparse default) means the caller didn't pass --review-decisions
     # at all: a missing file at the default path is fine. Once the flag is given

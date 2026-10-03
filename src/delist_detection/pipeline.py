@@ -12,7 +12,7 @@ import copy
 import sys
 from collections import Counter, defaultdict
 from collections.abc import Callable, Iterable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
@@ -69,7 +69,7 @@ from .contract import delisting_rows as contract_delisting_rows
 from .contract import id_change_rows, last_endings, security_history_rows, seed_rows
 from .issuer_in_force import Sighting as IssuerSighting
 from .issuer_in_force import issuer_changes
-from .price_requests import key_of, request_rows, stock_legs
+from .price_requests import LAST_CLOSE, RECEIVED_CLOSE, key_of, request_rows, stock_legs
 
 
 @dataclass
@@ -91,6 +91,8 @@ class Overrides:
     last_trade_closes: dict = field(default_factory=dict)
     merger_terms: dict = field(default_factory=dict)
     recoveries: dict = field(default_factory=dict)
+    price_answers: dict = field(default_factory=dict)      # price_requests.PriceKey -> price (--price-answers)
+    acquirer_prices: dict = field(default_factory=dict)    # DelistingKey -> (acquirer ticker, price), from price_answers
 
 
 @dataclass
@@ -522,6 +524,33 @@ def _check_overrides(overrides: Overrides, delistings: list[Delisting]) -> None:
         raise OverrideFileError("override rows that match no delisting: " + "; ".join(bad))
 
 
+def _apply_price_answers(overrides: Overrides, delistings: list[Delisting]) -> Overrides:
+    """6b. The caller's price answers (--price-answers) as this run's overrides: a
+    last_close answer is the last-trade close of the delisting of its sec_id
+    whose last trade day it names, a received_close answer that delisting's
+    acquirer price. A last close --last-trade-closes also gives stops the run
+    (OverrideFileError). An answer whose delisting this run does not have is
+    refused at stage 10g with every other answer to no request."""
+    if not overrides.price_answers:
+        return overrides
+    by_day = {(e.sec_id, e.last_trade.day.isoformat()): e for e in delistings if e.last_trade.day is not None}
+    closes, prices, twice = dict(overrides.last_trade_closes), {}, []
+    for k, price in overrides.price_answers.items():
+        e = by_day.get((k.sec_id, k.last_trade_date))
+        if e is None:
+            continue
+        if k.kind == LAST_CLOSE:
+            if for_delisting(overrides.last_trade_closes, e.key) is not None:
+                twice.append(f"{k.sec_id} {k.last_trade_date}")
+            closes[e.key] = price
+        elif k.kind == RECEIVED_CLOSE:
+            prices[e.key] = (k.lookup_ticker, price)
+    if twice:
+        raise OverrideFileError("--price-answers and --last-trade-closes both give the last close of: "
+                                + "; ".join(twice))
+    return replace(overrides, last_trade_closes=closes, acquirer_prices=prices)
+
+
 def _last_trade_closes(ctx: _RunContext, delistings: list[Delisting], securities: dict[str, Security],
                        sec_cusips: dict[str, list[str]], ftd: FtdIndex, ftd_lo: date,
                        overrides: Overrides) -> dict[DelistingKey, float]:
@@ -635,6 +664,9 @@ def _gate(ctx: _RunContext, mergers: list[Delisting], trade_day: dict[DelistingK
     lagged_acquirer: set[DelistingKey] = set()
 
     def acquirer_price(ticker: str, key: DelistingKey) -> float | None:
+        answered = overrides.acquirer_prices.get(key)
+        if answered is not None and answered[0] == normalize_ticker(ticker or ""):
+            return answered[1]
         # Priced on THAT merger's own last-trade day: many mergers can share a
         # delist_date, so a plain date->day map would misprice one with another's.
         day = trade_day.get(key)
@@ -1219,11 +1251,17 @@ def _contract(ctx: _RunContext, read: Tables, verdicts: Verdicts, payouts: _Payo
     ended = contract_delisting_rows(read, verdicts)
     endings = last_endings(read.delistings)
     legs = stock_legs(list(endings.values()), payouts.llm_terms, overrides.merger_terms, payouts.acquirer_ids)
+    requests = request_rows(ended, endings, legs)
+    unrequested = sorted(set(overrides.price_answers) - {key_of(r) for r in requests})
+    if unrequested:
+        raise OverrideFileError("--price-answers rows that answer no request of this run: "
+                                + "; ".join(" ".join(k) for k in unrequested[:5])
+                                + (f" (and {len(unrequested) - 5} more)" if len(unrequested) > 5 else ""))
     return {
         "security_history": security_history_rows(read, issuers, leave_out=set(payouts.added) - successor_ids),
         "contract_delistings": ended,
         "seeds": seed_rows(read, verdicts),
-        "price_requests": request_rows(ended, endings, legs),
+        "price_requests": requests,
         "id_changes": id_change_rows(id_baseline, read.securities, ctx.as_of.isoformat()),
     }
 
@@ -1258,6 +1296,7 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
     delistings = search.delistings
     review += search.review
     _check_overrides(overrides, delistings)                                                         # 6
+    overrides = _apply_price_answers(overrides, delistings)                                         # 6b
     closes = _last_trade_closes(ctx, delistings, securities, sec_cusips, ftd, ftd_lo, overrides)    # 7
     payouts = _merger_payouts(ctx, delistings, securities, sec_cusips, ftd, closes, overrides, tol) # 8
     review += payouts.review

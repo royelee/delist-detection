@@ -343,3 +343,10 @@ def test_main_prints_the_uncertain_counts(monkeypatch, capsys):
     summary.uncertain = {"seed": 3, "security": 1, "ending": 2}
     assert _run_main(monkeypatch, {}, summary=summary) == 0
     assert "Uncertain (uncertain.csv): 1 securities, 2 endings, 3 seeds" in capsys.readouterr().out
+
+
+def test_a_bad_price_answers_file_exits_2(tmp_path, monkeypatch, capsys):
+    bad = tmp_path / "answers.csv"
+    bad.write_text("sec_id,last_trade_date,kind,lookup_sec_id,lookup_ticker,date,price\nA,2018-11-28,last_close,A,AET,2018-11-28,abc\n")
+    rc = _entry_with_inputs(monkeypatch, tmp_path, "--price-answers", str(bad))
+    assert rc == 2 and "answers.csv:2" in capsys.readouterr().err
