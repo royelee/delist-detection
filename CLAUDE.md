@@ -28,7 +28,7 @@ editable install.
 
 ```bash
 pip install -e .                         # editable install (Python ≥3.10) — once per env
-pytest   # full suite (1673 tests + 17 known-wrong golden xfails, offline, no network)
+pytest   # full suite (1676 tests + 17 known-wrong golden xfails, offline, no network)
 pytest tests/test_payout_extractor.py -v  # one file
 pytest tests/test_payout_extractor.py::test_match_in_cash_family_altr -v   # one test
 
@@ -78,6 +78,11 @@ alongside the original ones. `pipeline.py`'s `run()` is the orchestration
 that turns a list of observations into the nine output tables: a short
 `_run` calls one function per numbered stage (`_refine`, `_resolve_issuers`,
 `_resolve_securities`, `_security_cusips`, `_find_delistings`,
+`_dead_before_sighting` (stage 5b: a security whose real ending came before its
+first observation and that has no trading fails row died before the run's fails
+window began, so rows for [end − 1095 d, end + 10 d] are loaded, it takes the
+CUSIPs `history.backfill_cusips` finds and its sightings are rebuilt; no `sec_id`
+or issuer changes),
 `_check_overrides`, `_last_trade_closes`, `_merger_payouts`,
 `_find_successors`, `_handoffs`, then the row builders and `_triage`), each with explicit
 inputs and outputs and the run-wide `_RunContext` (clients, run date, log,
@@ -227,8 +232,10 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
 - `history.py` — a security's dated history: its sightings
   (`ticker_sightings`/`cusip_sightings`, `own_last_seen`, `ticker_on`),
   `ranges_from_sightings()` (dated `Sighting`s into `ticker_history`/
-  `cusip_history` ranges; `value_on` reads one), its rows (`history_rows`), and
-  the range review (`ticker_range_review`: `ticker_range_overlap`/`ticker_shared`).
+  `cusip_history` ranges; `value_on` reads one), `backfill_cusips()` (the
+  CUSIPs of fails rows under a dead security's tickers in the 120 days before its
+  end, not under a deleted symbol, whose description names its issuer), its rows
+  (`history_rows`), and the range review (`ticker_range_review`: `ticker_range_overlap`/`ticker_shared`).
   `filtered_ticker_sightings()` drops a backfilled observation
   (`is_backfilled`: no fails-to-deliver row of the security's CUSIPs under the
   observed ticker within 30 days, but at least one under another symbol) from

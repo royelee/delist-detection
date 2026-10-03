@@ -93,6 +93,12 @@ one observation per row per file).
               │  DelistRecord per delisting│   sec_id, delist_date, crsp_code, bucket,
               │                            │   confidence, reason, evidence
               └─────────────┬──────────────┘
+                             │ stage 5b (_dead_before_sighting): a security whose real
+                             │ ending came before its first observation and with no
+                             │ trading fails row gets rows loaded for [end − 1095 d,
+                             │ end + 10 d], takes the CUSIPs of rows under its tickers
+                             │ in the 120 days before the end that name its issuer
+                             │ (history.backfill_cusips), and its sightings are rebuilt
                              │ ftd.close_after (last-trade + acquirer closes),
                              │ payout_extractor / llm_merger_extractor, payout_gate
                              ▼
