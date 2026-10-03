@@ -70,7 +70,7 @@ from .contract import delisting_rows as contract_delisting_rows
 from .contract import id_change_rows, last_endings, security_history_rows, seed_rows
 from .issuer_in_force import Sighting as IssuerSighting
 from .issuer_in_force import issuer_changes
-from .price_requests import LAST_CLOSE, RECEIVED_CLOSE, key_of, request_rows, stock_legs
+from .price_requests import LAST_CLOSE, OTC_PRINT, RECEIVED_CLOSE, key_of, request_rows, stock_legs
 
 
 BACKFILL_DAYS = 1095   # how far before a dead-before-sighting security's end its fails rows are loaded
@@ -97,6 +97,7 @@ class Overrides:
     recoveries: dict = field(default_factory=dict)
     price_answers: dict = field(default_factory=dict)      # price_requests.PriceKey -> price (--price-answers)
     acquirer_prices: dict = field(default_factory=dict)    # DelistingKey -> (acquirer ticker, price), from price_answers
+    otc_prints: dict = field(default_factory=dict)         # DelistingKey -> OTC print, from price_answers
 
 
 @dataclass
@@ -579,7 +580,8 @@ def _apply_price_answers(overrides: Overrides, delistings: list[Delisting]) -> O
     """6b. The caller's price answers (--price-answers) as this run's overrides: a
     last_close answer is the last-trade close of the delisting of its sec_id
     whose last trade day it names, a received_close answer that delisting's
-    acquirer price. A last close --last-trade-closes also gives stops the run
+    acquirer price, an otc_print answer that delisting's first off-exchange
+    print. A last close --last-trade-closes also gives stops the run
     (OverrideFileError). An answer whose delisting this run does not have is
     refused at stage 10g with every other answer to no request.
 
@@ -590,7 +592,7 @@ def _apply_price_answers(overrides: Overrides, delistings: list[Delisting]) -> O
     if not overrides.price_answers:
         return overrides
     by_day = {(e.sec_id, e.last_trade.day.isoformat()): e for e in delistings if e.last_trade.day is not None}
-    closes, prices, twice = dict(overrides.last_trade_closes), {}, []
+    closes, prices, otc, twice = dict(overrides.last_trade_closes), {}, {}, []
     for k, price in overrides.price_answers.items():
         e = by_day.get((k.sec_id, k.last_trade_date))
         if e is None:
@@ -601,10 +603,12 @@ def _apply_price_answers(overrides: Overrides, delistings: list[Delisting]) -> O
             closes[e.key] = price
         elif k.kind == RECEIVED_CLOSE:
             prices[e.key] = (k.lookup_ticker, price)
+        elif k.kind == OTC_PRINT:
+            otc[e.key] = price
     if twice:
         raise OverrideFileError("--price-answers and --last-trade-closes both give the last close of: "
                                 + "; ".join(twice))
-    return replace(overrides, last_trade_closes=closes, acquirer_prices=prices)
+    return replace(overrides, last_trade_closes=closes, acquirer_prices=prices, otc_prints=otc)
 
 
 def _last_trade_closes(ctx: _RunContext, delistings: list[Delisting], securities: dict[str, Security],
@@ -1022,7 +1026,7 @@ def _delisting_rows(delistings: list[Delisting], closes: dict[DelistingKey, floa
     table = build_delistings_table(
         [e.record for e in delistings], last_trade_closes=closes, payouts=gated.payouts,
         exchanges={e.key: e.exchange for e in delistings},
-        merger_terms=gated.merged_terms, recovery_ratios=overrides.recoveries,
+        merger_terms=gated.merged_terms, recovery_ratios=overrides.recoveries, otc_prints=overrides.otc_prints,
         payout_sources=gated.sources, payout_confidences=gated.confidences, payout_flags=gated.flags,
     )
     delisting_by_key = {e.key: e for e in delistings}

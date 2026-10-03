@@ -13,15 +13,28 @@ def test_requests_ask_the_last_close_and_a_stock_legs_received_close():
     endings = {"A": ending("A", "2018-12-10", ltd="2018-11-28", ticker="AET"),
                "B": ending("B", "2019-01-10", ltd="2019-01-03", ticker="BBB"),
                "C": ending("C", "2015-03-10", "exchange_transfer", successor="Z", ltd="2015-03-02", ticker="CCC")}
-    contract = [{"sec_id": "A", "last_trade_date": "2018-11-28", "continuation": False},
-                {"sec_id": "B", "last_trade_date": "", "continuation": False},
-                {"sec_id": "C", "last_trade_date": "2015-03-02", "continuation": True}]
+    contract = [{"sec_id": "A", "last_trade_date": "2018-11-28", "continuation": False, "exit_kind": "merger"},
+                {"sec_id": "B", "last_trade_date": "", "continuation": False, "exit_kind": "merger"},
+                {"sec_id": "C", "last_trade_date": "2015-03-02", "continuation": True, "exit_kind": "merger"}]
     legs = {DelistingKey("A", "2018-12-10"): ("CVS", "BBG000BGRY34")}
     assert request_rows(contract, endings, legs) == [
         {"sec_id": "A", "last_trade_date": "2018-11-28", "kind": LAST_CLOSE, "lookup_sec_id": "A",
          "lookup_ticker": "AET", "date": "2018-11-28"},
         {"sec_id": "A", "last_trade_date": "2018-11-28", "kind": RECEIVED_CLOSE, "lookup_sec_id": "BBG000BGRY34",
          "lookup_ticker": "CVS", "date": "2018-11-29"}]
+
+
+def test_a_drop_or_distress_ending_asks_for_the_first_otc_print():
+    endings = {k: ending(k, "2015-03-10", ltd="2015-03-06", ticker="T" + k) for k in "DLMCB"}
+    row = lambda k, kind, ltd="2015-03-06", cont=False: {
+        "sec_id": k, "last_trade_date": ltd, "continuation": cont, "exit_kind": kind}
+    contract = [row("D", "dropped"), row("L", "liquidation"), row("M", "merger"),
+                row("C", "dropped", cont=True), row("B", "dropped", ltd="")]
+    got = request_rows(contract, endings, {})
+    assert [(r["sec_id"], r["kind"]) for r in got] == [
+        ("D", LAST_CLOSE), ("D", "otc_print"), ("L", LAST_CLOSE), ("L", "otc_print"), ("M", LAST_CLOSE)]
+    assert got[1] == {"sec_id": "D", "last_trade_date": "2015-03-06", "kind": "otc_print", "lookup_sec_id": "D",
+                      "lookup_ticker": "TD", "date": "2015-03-09"}
 
 
 def test_a_stock_leg_comes_from_the_llm_terms_unless_the_caller_gave_terms():

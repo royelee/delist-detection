@@ -5,8 +5,9 @@ back.
 One `last_close` per contract ending with a last trade date that is not a
 continuation (the security's own close on that day), and one `received_close`
 per stock leg the library read from a filing (the acquirer's close on the
-ex-date, the trading day after the last trade). `otc_print` requests start with
-reset-4f. The answers file is this file plus a `price` column (raw as-traded
+ex-date, the trading day after the last trade). One `otc_print` per drop or
+distress ending (`OTC_EXIT_KINDS`), dated the session after the last trade; the
+caller answers with the first off-exchange print within 10 sessions. The answers file is this file plus a `price` column (raw as-traded
 closes). An answered last close replaces the library's fails-to-deliver close
 and an answered received close the acquirer price, so a second run with the
 answers changes values only. An answer is matched on `PriceKey`;
@@ -27,6 +28,7 @@ from .trading_calendar import next_trading_day
 
 LAST_CLOSE, RECEIVED_CLOSE, OTC_PRINT = "last_close", "received_close", "otc_print"
 KINDS = (LAST_CLOSE, RECEIVED_CLOSE, OTC_PRINT)
+OTC_EXIT_KINDS = frozenset({"dropped", "liquidation"})   # decision 11: a drop or distress ending's first off-exchange print
 
 
 class PriceKey(NamedTuple):
@@ -64,7 +66,8 @@ def request_rows(contract_rows: Sequence[Mapping[str, Any]], endings: Mapping[st
                  legs: Mapping[DelistingKey, tuple[str, str]]) -> list[dict[str, str]]:
     """price_requests.csv: per contract ending (`endings`: each sec_id's last real
     delistings.csv row, contract.last_endings) with a last trade date and no
-    continuation, its last close, and the received close of its stock leg."""
+    continuation, its last close, the first OTC print of a drop or distress ending, and the
+    received close of its stock leg."""
     out: list[dict[str, str]] = []
     for c in contract_rows:
         ltd = c["last_trade_date"]
@@ -73,6 +76,10 @@ def request_rows(contract_rows: Sequence[Mapping[str, Any]], endings: Mapping[st
         r = endings[c["sec_id"]]
         out.append({"sec_id": c["sec_id"], "last_trade_date": ltd, "kind": LAST_CLOSE,
                     "lookup_sec_id": c["sec_id"], "lookup_ticker": r["ticker"], "date": ltd})
+        if c["exit_kind"] in OTC_EXIT_KINDS:
+            out.append({"sec_id": c["sec_id"], "last_trade_date": ltd, "kind": OTC_PRINT,
+                        "lookup_sec_id": c["sec_id"], "lookup_ticker": r["ticker"],
+                        "date": next_trading_day(date.fromisoformat(ltd)).isoformat()})
         leg = legs.get(DelistingKey(r["sec_id"], r["delist_date"]))
         if leg is not None:
             out.append({"sec_id": c["sec_id"], "last_trade_date": ltd, "kind": RECEIVED_CLOSE,

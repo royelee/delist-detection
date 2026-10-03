@@ -1258,6 +1258,16 @@ def test_apply_price_answers_resolves_each_answer_to_its_delisting():
     assert again.last_trade_closes == {} and again.acquirer_prices == {}
 
 
+def test_apply_price_answers_reads_an_otc_print_without_touching_the_other_maps():
+    from delist_detection.price_requests import PriceKey
+    d = type("D", (), {"sec_id": "A", "key": ("A", "2020-06-15"),
+                       "last_trade": type("L", (), {"day": date(2020, 6, 1)})()})()
+    answers = {PriceKey("A", "2020-06-01", "otc_print", "A", "2020-06-02"): 0.4}
+    got = pipeline._apply_price_answers(Overrides(price_answers=answers), [d])
+    assert got.otc_prints == {("A", "2020-06-15"): 0.4}
+    assert got.last_trade_closes == {} and got.acquirer_prices == {}
+
+
 # --- a same-ticker successor does not overlap its predecessor ---
 
 def test_same_ticker_successor_does_not_overlap_its_predecessor(fake_edgar, tmp_path, monkeypatch):
