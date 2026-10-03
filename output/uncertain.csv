@@ -19,7 +19,6 @@ ending,CAL,BBG000BDXVW8,2010-10-14,resolved_from_continued_filings;assumed_par_a
 ending,CNB,BBG000BF2JS9,2009-09-18,last_trade_date_unconfirmed,
 ending,CCE,BBG000BF5RY1,2016-06-10,assumed_par_after_failed_gate,
 ending,CCU,BBG000BF8BH2,2008-08-10,resolved_from_continued_filings,
-ending,CI,BBG000BFMBQ6,2018-12-31,security_uncertain;no_last_trade_date,
 ending,CMCSK,BBG000BFTJ91,2015-12-21,continued_filings_rule,
 ending,AHL,BBG000BFVKZ6,2019-02-25,resolved_from_continued_filings,
 ending,GPOR,BBG000BG09F5,2021-02-12,issuer_from_todays_ticker_map,
@@ -87,7 +86,6 @@ ending,KSE,BBG000BV52H0,2007-09-07,security_uncertain,
 ending,TXU,BBG000BVW841,2009-06-08,continued_filings_rule;last_trade_not_exchange_print:none;last_trade_date_unconfirmed,
 ending,WBS,BBG000BWMX63,2026-08-30,issuer_from_todays_ticker_map,
 ending,WEN,BBG000BWPN99,2008-10-11,assumed_par_after_failed_gate,
-ending,XRX,BBG000BX5ZF5,2019-08-11,resolved_from_continued_filings,
 ending,MLNM,BBG000BX67G5,2008-05-24,no_last_trade_date,
 ending,JNS,BBG000BYD720,2017-06-09,assumed_par_after_failed_gate,
 ending,XMSR,BBG000C070N2,2009-06-08,continued_filings_rule;last_trade_not_exchange_print:none;last_trade_date_unconfirmed,
@@ -100,10 +98,8 @@ ending,URS,BBG000C3HNW5,2014-10-30,assumed_par_after_failed_gate,
 ending,PL,BBG000C3JJC4,2015-02-12,resolved_from_continued_filings,
 ending,MASI,BBG000C3W281,2026-06-20,issuer_from_todays_ticker_map,
 ending,PARA,BBG000C496P7,2025-08-17,assumed_par_after_failed_gate,
-ending,AVGO,BBG000C4DPX1,2016-02-08,assumed_par_after_failed_gate,
 ending,BGCP,BBG000C4MWH4,2023-07-05,resolved_from_continued_filings,
 ending,Q,BBG000C4Y9D6,2011-04-11,resolved_from_continued_filings,
-ending,QDEL,BBG000C6GN04,2022-06-06,security_uncertain;no_last_trade_date,
 ending,WMG,BBG000C7B169,2011-07-31,issuer_from_todays_ticker_map;resolved_from_continued_filings,
 ending,JNY,BBG000C7WZ16,2010-10-15,continued_filings_rule;last_trade_not_exchange_print:none;last_trade_date_unconfirmed,
 ending,ANN,BBG000C9N6Q9,2011-03-15,continued_filings_rule;last_trade_not_exchange_print:none;last_trade_date_unconfirmed,
@@ -114,10 +110,8 @@ ending,PX,BBG000CGQ6M4,2018-11-10,assumed_par_after_failed_gate,
 ending,CLI,BBG000CL1HL7,2021-12-10,continued_filings_rule;last_trade_not_exchange_print:none;last_trade_date_unconfirmed,
 ending,ODP,BBG000CNZC55,2020-07-11,resolved_from_continued_filings;no_last_trade_date,
 ending,JNC,BBG000CS7CB8,2007-11-25,security_uncertain;resolved_from_continued_filings,
-ending,MNST,BBG000CXD6X9,2015-06-22,continuation_by_timing_only,
 ending,ACF,BBG000CXLZ20,2010-10-11,resolved_from_continued_filings,
 ending,EV,BBG000DBVBY4,2021-03-11,assumed_par_after_failed_gate,
-ending,BG,BBG000DGPR66,2023-11-11,assumed_par_after_failed_gate,
 ending,MNST,BBG000DGZ1B6,2009-06-08,continued_filings_rule;last_trade_not_exchange_print:none;last_trade_date_unconfirmed,
 ending,MIR,BBG000DQV8M1,2010-12-17,assumed_par_after_failed_gate,
 ending,POM,BBG000DQX1D4,2016-04-03,resolved_from_continued_filings,
@@ -195,7 +189,6 @@ ending,BKFS,BBG007SV7NV3,2017-10-03,resolved_from_continued_filings,
 ending,NSA,BBG008417VN4,2026-08-01,issuer_from_todays_ticker_map,
 ending,VRM,BBG009NGKQ45,2024-02-13,issuer_from_todays_ticker_map;continued_filings_rule;last_trade_not_exchange_print:none;last_trade_date_unconfirmed,
 ending,LKSD,BBG009R0CVG1,2020-04-13,last_trade_not_exchange_print:none;last_trade_date_unconfirmed,
-ending,AVGO,BBG009XV39D8,2018-04-14,security_uncertain;no_last_trade_date,
 ending,MTCH,BBG00B6WH9G3,2020-07-10,continuation_by_timing_only,
 ending,TEAM,BBG00BDQ1H13,2022-10-10,continuation_by_timing_only,
 ending,LSXMA,BBG00BFHD827,2023-08-13,continuation_by_timing_only,
@@ -295,7 +288,6 @@ ending,NYCB,CIK910073-COMMON,2024-07-12,continued_filings_rule;last_trade_not_ex
 ending,DF,CIK931336-COMMON,2013-08-26,continued_filings_rule;last_trade_not_exchange_print:none;last_trade_date_unconfirmed,
 ending,DTV,CIK944868-COMMON,2009-11-29,security_uncertain;no_last_trade_date,
 security,BOL,BBG000BDLLR9,2004-11-16,seeds_outside_history:1 from 2008-01-16,
-security,CI,BBG000BFMBQ6,2007-12-18,ticker_overlap:CI,BBG00KXRCDP0
 security,DJ,BBG000BH5K72,2005-01-28,seeds_outside_history:1 from 2008-01-16,
 security,CDWC,BBG000BHD665,2004-11-09,seeds_outside_history:1 from 2008-01-16,
 security,GOOGL,BBG000BHSKN9,2007-12-27,ticker_overlap:GOOG,BBG002W96FT9
@@ -309,7 +301,6 @@ security,MEL,BBG000BNXLK1,2004-07-07,seeds_outside_history:1 from 2008-01-16,
 security,SPXC,BBG000BTGCV5,2008-01-24,ticker_overlap:SPW,CIK88205-COMMON
 security,TEK,BBG000BV3594,2004-12-10,seeds_outside_history:1 from 2008-01-16,
 security,KSE,BBG000BV52H0,2004-11-15,seeds_outside_history:1 from 2008-01-16,
-security,QDEL,BBG000C6GN04,2008-04-03,ticker_overlap:QDEL,BBG017TGV7M2
 security,HCR,BBG000CG0HP5,2007-12-17,seeds_outside_history:1 from 2008-01-16,
 security,JNC,BBG000CS7CB8,2005-03-09,seeds_outside_history:1 from 2008-01-16,
 security,CKFR,BBG000FHN2M1,2004-12-31,seeds_outside_history:1 from 2008-01-16,
@@ -320,10 +311,6 @@ security,THE,BBG000L93Q69,2004-09-16,seeds_outside_history:1 from 2008-01-16,
 security,GOOG,BBG002W96FT9,2014-04-04,ticker_overlap:GOOG,BBG000BHSKN9
 security,LVNTA,BBG0038K9G41,2012-08-21,ticker_overlap:LVNTA,CIK1355096-COMMON
 security,GCI,BBG006XVD9G0,2015-07-01,ticker_overlap:GCI,BBG000BK5DP1
-security,AVGO,BBG009XV39D8,2016-02-01,ticker_overlap:AVGO,BBG00KHY5S69
-security,AVGO,BBG00KHY5S69,2018-04-06,ticker_overlap:AVGO,BBG009XV39D8
-security,CI,BBG00KXRCDP0,2018-12-24,ticker_overlap:CI,BBG000BFMBQ6
-security,QDEL,BBG017TGV7M2,2022-05-31,ticker_overlap:QDEL,BBG000C6GN04
 security,LLYVA,BBG01HMFL081,2023-08-04,ticker_overlap:LLYVA,BBG01YY256K1
 security,LLYVK,BBG01HMFLTN1,2023-08-04,ticker_overlap:LLYVK,BBG01YYX1Z14
 security,LLYVA,BBG01YY256K1,2025-12-17,ticker_overlap:LLYVA,BBG01HMFL081

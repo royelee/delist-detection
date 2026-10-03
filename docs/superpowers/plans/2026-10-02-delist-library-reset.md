@@ -238,6 +238,22 @@ needs evidence about the security, not only about the registrant. It replaces
   Left for reset-4a2: the issuer-seen-after guard, holdco reorganizations, OpenFIGI's later ticker, a new CUSIP in
   the fails data, closed-with-no-event securities with no delisting row, and consolidating the clip logic
   (`_ends_the_security`, `_continues_after`, `listing_status`) into the resolver.
+- Done (second step) 2026-10-03 (plan `2026-10-02-reset-4a2-holdco-continuations`, rulings 1-4). When the full-text
+  search finds no continuation filing, the handoff stage reads the successor issuer's own filing list for an
+  8-K12B/8-K12G3 within [B's first sighting - 30 d, + 60 d], and skips that read when A's issuer carries on in another
+  line. Six holdco reorganizations became continuations with their successors (merger -> exchange_transfer 304,
+  dlret 0): CI 2018, XRX 2019, AVGO 2016, AVGO 2018, QDEL 2022 and BG 2023 (Bunge Limited -> Bunge Global SA, 8-K12G3,
+  its merger-at-par row was wrong). APA and MNST keep their continuations on stronger evidence (8-K12B, high).
+  `handoffs` counts: conflicts 17 -> 11, continuations_by_filing 38 -> 47, by_timing 34 -> 25 (80 handoffs, 27 rows
+  added, 8 takeovers unchanged). Audit cases that changed: XRX 2007-12-17, AVGO 2010-09-30 and QDEL 2008-04-03 now
+  match; AVGO 2016-02-01 (blank_no_value) now says "no final ending (active)", so `V.audit.confirmed_but_wrong`
+  41 -> 42: the audit row asks the last trade date of a final ending but the 2018 Broadcom Ltd -> Broadcom Inc exchange
+  is 1:1 with no exit kind and the chain now continues; the truth row needs its last_trade_date read on the
+  continuation. Moved: `A.census.{assumed_par,blank_no_value,continuation}.errors` -1 each, `L1.securities_covered`
+  2033 -> 2036, `L1.ended_incomplete` 63 -> 60, `V.uncertain_endings` 295 -> 288, `V.uncertain_securities` 59 -> 53.
+  Floor lowered by hand: `V.audit.confirmed_but_wrong` 41 -> 42. Waits: the 15 no-Form-25 fallback endings MIDAS
+  shows still trading (an operator decision), LLYVA/LLYVK (a split-off registered another way), ODP and UNIT
+  (successor lines not in the run).
 
 ### reset-4b: Identity evidence
 

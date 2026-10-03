@@ -4,15 +4,15 @@
     "archives": 7220,
     "company_tickers": 8,
     "full_text_search": 573,
-    "submissions": 23755,
-    "submissions_page": 7276
+    "submissions": 23809,
+    "submissions_page": 7315
   },
-  "code_version": "93258db",
+  "code_version": "345cb62",
   "degraded_answers": {},
   "handoffs": {
-    "conflicts": 17,
-    "continuations_by_filing": 38,
-    "continuations_by_timing": 34,
+    "conflicts": 11,
+    "continuations_by_filing": 47,
+    "continuations_by_timing": 25,
     "handoffs": 80,
     "rows_added": 27,
     "takeovers": 8
@@ -25,8 +25,8 @@
     "accepted": 0,
     "check": 589,
     "cleared": 0,
-    "fix": 104,
-    "info_hidden": 444,
+    "fix": 101,
+    "info_hidden": 445,
     "unmatched_decisions": 0
   },
   "schema_version": 1,

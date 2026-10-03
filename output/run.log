@@ -259,9 +259,11 @@ dead before first sighting: 0 EDGAR requests, 0 SEC data-file downloads (all thr
 payouts: 0 EDGAR requests, 0 SEC data-file downloads (all threads)
 successor search: 0 EDGAR requests, 0 SEC data-file downloads (all threads)
 handoff search: 0 EDGAR requests, 0 SEC data-file downloads (all threads)
-handoffs: 95 candidate pairs; {'handoffs': 80, 'continuations_by_filing': 38, 'continuations_by_timing': 34, 'takeovers': 8, 'conflicts': 17, 'rows_added': 27}
+handoffs: 95 candidate pairs; {'handoffs': 80, 'continuations_by_filing': 47, 'continuations_by_timing': 25, 'takeovers': 8, 'conflicts': 11, 'rows_added': 27}
 handoff rows dated from their Form 25 notice: 10
 handoff notice dates: 0 EDGAR requests, 0 SEC data-file downloads (all threads)
 observation_map: 35955 of 35955 observations mapped
 ticker evidence: 0 EDGAR requests, 0 SEC data-file downloads (all threads)
 issuers in force: 0 EDGAR requests, 0 SEC data-file downloads (all threads)
+scorecard drop: V.audit.confirmed_but_wrong: 41 -> 42
+WARNING: 1 scorecard number(s) got worse than the floor in data/scorecard.json: V.audit.confirmed_but_wrong: 41 -> 42
