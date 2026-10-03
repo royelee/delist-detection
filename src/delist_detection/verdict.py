@@ -178,8 +178,10 @@ class Verdicts:
             key = (kind, sec_id, day, ticker)
             row = rows.setdefault(key, {"kind": kind, "ticker": ticker, "sec_id": sec_id, "date": day,
                                         "reason": "", "candidates": ""})
-            reasons = [x for x in row["reason"].split(";") if x] + [x for x in v.reasons if x not in row["reason"]]
-            cands = [x for x in row["candidates"].split(";") if x] + [x for x in v.candidates if x not in row["candidates"]]
+            reasons = [x for x in row["reason"].split(";") if x]
+            cands = [x for x in row["candidates"].split(";") if x]
+            reasons += [x for x in v.reasons if x not in reasons]
+            cands += [x for x in v.candidates if x not in cands]
             row["reason"], row["candidates"] = ";".join(reasons), ";".join(cands)
 
         for sid, v in self.securities.items():

@@ -1,7 +1,7 @@
 import pytest
 
 from delist_detection import store
-from delist_detection.verdict import ENDING, SECURITY, SEED, decide, is_introduction
+from delist_detection.verdict import ENDING, SECURITY, SEED, Verdict, Verdicts, _seed_key, decide, is_introduction
 from tests.lifecycle_tables import ending, iv, obs, sec, tables
 
 GOOD = dict(ltd="2015-03-02", dlret="0.01", reason="M&A 2.01+3.01+5.01", delist_filing_form="25-NSE",
@@ -117,6 +117,17 @@ def test_uncertain_rows_round_trip_through_the_uncertain_table(tmp_path):
     assert store.read_table("uncertain", store.table_path(tmp_path, "uncertain")) == rows == [
         {"kind": ENDING, "ticker": "AAA", "sec_id": "A", "date": "2015-03-10", "reason": "no_last_trade_date",
          "candidates": ""}]
+
+
+def test_merged_reasons_are_deduplicated_by_whole_value_not_substring():
+    o = [obs("AAA", "2010-06-30", "A", name="ALPHA"), obs("AAA", "2010-06-30", "A", name="ALFA")]
+    k1, k2 = (_seed_key(r) for r in o)
+    t = tables([sec("A")], [iv("A", "AAA", "2010-01-04", "2015-03-02")], [], o)
+    v = Verdicts(t, {}, {}, {k1: Verdict(("outside_security_history:AB",), ("AB",)),
+                             k2: Verdict(("outside_security_history:A",), ("A",))})
+    (row,) = v.uncertain_rows()
+    assert row["reason"] == "outside_security_history:AB;outside_security_history:A"
+    assert row["candidates"] == "AB;A"
 
 
 def test_one_security_seen_under_two_names_on_a_day_is_one_uncertain_row():

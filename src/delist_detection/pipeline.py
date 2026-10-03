@@ -1095,7 +1095,7 @@ def _observation_map(ctx: _RunContext, index: ObservationIndex, eras: list[Ticke
                      sec_cusips: dict[str, list[str]], ftd: FtdIndex, ends: dict[str, str | None],
                      end_confirmed: dict[str, bool], listed: dict[str, bool | None],
                      th_rows: list[dict]) -> list[dict]:
-    """10e. observation_map.csv's rows (`history.observation_map_rows`): every
+    """10c2. observation_map.csv's rows (`history.observation_map_rows`): every
     observation of the run's eras (`--limit` already trims which ones), its
     era, sec_id, issuer CIK, `ticker_history` spelling/coverage on its date,
     and status. The log names how many of the input's observations that is,
@@ -1221,6 +1221,7 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
     review_rows += [item.row() for item in review]
     th_rows, ch_rows, ends, end_confirmed = _history_rows(ctx, securities, search, sec_cusips, ftd, added, endings)
     review_rows += [item.row() for item in drop_resolved_shared(ticker_range_review(th_rows), handoffs.resolved_pairs)]
+    # 10c2. observation_map rows (the payout rows, 10c, are built with the tables below)
     map_rows = _observation_map(ctx, index, eras, resolutions, answers.issuers, sec_cusips, ftd, ends,
                                 end_confirmed, search.listed, th_rows)
     flags, triaged = _triage(ctx, review_rows, review_decisions, limit)
