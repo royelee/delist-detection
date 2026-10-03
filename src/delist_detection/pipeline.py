@@ -11,7 +11,7 @@ from __future__ import annotations
 import copy
 import sys
 from collections import Counter, defaultdict
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from pathlib import Path
@@ -63,7 +63,13 @@ from .successors import (
     SecurityStart, successor_from_8k12b, successor_in_run, successor_query, successor_search_args,
 )
 from .ticker_resolver import InferredIssuer, TickerResolution
+from .verdict import Verdicts
 from .verdict import decide as decide_verdicts
+from .contract import delisting_rows as contract_delisting_rows
+from .contract import id_change_rows, last_endings, security_history_rows, seed_rows
+from .issuer_in_force import Sighting as IssuerSighting
+from .issuer_in_force import issuer_changes
+from .price_requests import key_of, request_rows, stock_legs
 
 
 @dataclass
@@ -178,8 +184,11 @@ def _warm_delisting_search(clients: Clients, ordered: list[Security], listing: d
 def run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_dir: Path,
         tol: float = DEFAULT_TOL, limit: int | None = None, log: Callable = _stderr,
         sec_workers: int = 1, review_decisions: Sequence[Decision] = (),
-        scorecard: run_scorecard.ScorecardConfig = run_scorecard.ScorecardConfig()) -> RunSummary:
-    """Observations -> the eight tables under `out_dir` (spec §8), then
+        scorecard: run_scorecard.ScorecardConfig = run_scorecard.ScorecardConfig(),
+        id_baseline: Sequence[Mapping[str, str]] = ()) -> RunSummary:
+    """Observations -> the nine tables under `out_dir` and the contract under
+    `out_dir`/contract/ (contract.py; `id_baseline`: the securities.csv rows
+    id_changes.csv compares with) (spec §8), then
     scorecard.json (`scorecard.build` over those tables, `scorecard`'s window,
     floor and truth cases; floor drops are not checked under `limit`): `review_decisions`
     (`review_triage.load_decisions`: "I checked this flag on this row, it is
@@ -208,7 +217,8 @@ def run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_
     still exits with that abort's code (2 for a refusal, 4 for an OpenFIGI outage)."""
     try:
         summary = _run(index, clients, overrides, out_dir=out_dir, tol=tol, limit=limit, log=log,
-                       sec_workers=sec_workers, review_decisions=review_decisions, scorecard=scorecard)
+                       sec_workers=sec_workers, review_decisions=review_decisions, scorecard=scorecard,
+                       id_baseline=id_baseline)
     except BaseException:
         try:
             _flush_memo(clients)
@@ -1162,11 +1172,64 @@ def _as_read(tables: dict[str, list[dict]]) -> Tables:
     def rows(name: str) -> list[dict[str, str]]:
         return formatted(name, tables[name])
     return Tables(rows("securities"), rows("ticker_history"), rows("delistings"), rows("observation_map"),
-                  rows("review"), rows("uncertain") if "uncertain" in tables else None)
+                  rows("review"), rows("uncertain") if "uncertain" in tables else None,
+                  rows("security_history") if "security_history" in tables else None)
+
+
+def _issuers_in_force(ctx: _RunContext, observation_map: Sequence[Mapping[str, str]]) -> dict[str, list[tuple[str, str]]]:
+    """Each security's issuer timeline (issuer_in_force.issuer_changes) from its
+    sightings: every observation_map row with a sec_id, except a conflict (two
+    names that day). A submissions read that fails keeps the era's CIK; a refusal
+    (`fatal.FATAL`) stops the run. Without a name index (a test double's
+    resolver), every sighting keeps its era's CIK."""
+    edgar, memo = ctx.clients.edgar, {}
+
+    def submissions(cik: int):
+        if cik not in memo:
+            try:
+                memo[cik] = edgar.submissions(cik)
+            except FATAL:
+                raise
+            except requests.RequestException:
+                memo[cik] = None
+        return memo[cik]
+
+    index_of = getattr(ctx.clients.resolver, "name_index", None)
+    index = index_of() if callable(index_of) else None
+
+    def exact_names(name: str) -> list[int]:
+        return [h.cik for h in index.split_search(name)[0]] if index is not None else []
+
+    mark = ctx.meter.start()
+    out = issuer_changes((IssuerSighting(r["sec_id"], r["as_of"], r["name"], r["issuer_cik"])
+                          for r in observation_map if r["sec_id"] and r["status"] != "conflict"),
+                         submissions, exact_names)
+    ctx.meter.done("issuers in force", mark)
+    return out
+
+
+def _contract(ctx: _RunContext, read: Tables, verdicts: Verdicts, payouts: _Payouts, successor_ids: set[str],
+              overrides: Overrides, id_baseline: Sequence[Mapping[str, str]]) -> dict[str, list[dict]]:
+    """10g. The contract (contract.py), written under contract/ beside today's
+    tables (decision 6): security_history with each interval's issuer in force
+    (`_issuers_in_force`), leaving out the merger acquirers the run adds;
+    delistings, one row per ended security; the seed echo; the price requests;
+    and the placeholders of `id_baseline` (a securities.csv) that now hold a FIGI."""
+    issuers = _issuers_in_force(ctx, read.observation_map)
+    ended = contract_delisting_rows(read, verdicts)
+    endings = last_endings(read.delistings)
+    legs = stock_legs(list(endings.values()), payouts.llm_terms, overrides.merger_terms, payouts.acquirer_ids)
+    return {
+        "security_history": security_history_rows(read, issuers, leave_out=set(payouts.added) - successor_ids),
+        "contract_delistings": ended,
+        "seeds": seed_rows(read, verdicts),
+        "price_requests": request_rows(ended, endings, legs),
+        "id_changes": id_change_rows(id_baseline, read.securities, ctx.as_of.isoformat()),
+    }
 
 
 def _scorecard(ctx: _RunContext, read: Tables, config: run_scorecard.ScorecardConfig, limit: int | None) -> dict:
-    """10g. The scorecard of the tables about to be written (`read`), with
+    """10h. The scorecard of the tables about to be written (`read`), with
     `drops`: the floored numbers that got worse. A --limit subset sees a
     fraction of the universe, so its numbers are never compared to the floor."""
     card = run_scorecard.build(read, as_of=ctx.as_of, config=config)
@@ -1181,7 +1244,8 @@ def _scorecard(ctx: _RunContext, read: Tables, config: run_scorecard.ScorecardCo
 def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_dir: Path, tol: float,
          limit: int | None, log: Callable, sec_workers: int,
          review_decisions: Sequence[Decision] = (),
-         scorecard: run_scorecard.ScorecardConfig = run_scorecard.ScorecardConfig()) -> RunSummary:
+         scorecard: run_scorecard.ScorecardConfig = run_scorecard.ScorecardConfig(),
+         id_baseline: Sequence[Mapping[str, str]] = ()) -> RunSummary:
     """The run's stages in order (each function's docstring says what it does);
     `run` wraps it with the resolver memo's final flush."""
     ctx = _RunContext(clients, clients.as_of or date.today(), log, sec_workers, run_manifest.StageMeter(log))
@@ -1239,7 +1303,9 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
     evidence = _ticker_evidence(ctx, securities, answers)                                          # 10e
     verdicts = decide_verdicts(_as_read(tables), evidence)                                         # 10f
     tables["uncertain"] = verdicts.uncertain_rows()
-    card = _scorecard(ctx, _as_read(tables), scorecard, limit)                                     # 10g
+    tables.update(_contract(ctx, _as_read(tables), verdicts, payouts, set(successors.added), overrides,
+                            id_baseline))                                                          # 10g
+    card = _scorecard(ctx, _as_read(tables), scorecard, limit)                                     # 10h
 
     # 11. write -- every table formatted and written to its temp file first, so
     # a failure in any leaves every previous table; then renamed into place one

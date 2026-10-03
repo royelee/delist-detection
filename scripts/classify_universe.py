@@ -5,7 +5,8 @@ Reads:  an observations CSV (ticker, as_of[, name, cusip, cik, sec_id]), and
         missing file there means no decisions)
 Writes: output/securities.csv, ticker_history.csv, cusip_history.csv,
         delistings.csv, payouts.csv, review.csv, review_summary.csv,
-        observation_map.csv, uncertain.csv, then scorecard.json (data/scorecard.json: the training window,
+        observation_map.csv, uncertain.csv, contract/{security_history,delistings,seeds,
+        price_requests,id_changes}.csv, then scorecard.json (data/scorecard.json: the training window,
         the floor and the truth files)
 """
 from __future__ import annotations
@@ -27,6 +28,7 @@ from delist_detection.pipeline import Overrides, default_clients, run
 from delist_detection.reconstruction import OverrideFileError, load_float_overrides, load_merger_terms_overrides
 from delist_detection.review_triage import Decision, ReviewDecisionError, load_decisions
 from delist_detection.scorecard import ScorecardConfig, ScorecardConfigError, load_config
+from delist_detection.store import read_table
 from delist_detection.truth import TruthFileError
 
 KNOWN_RENAMES = {
@@ -151,6 +153,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--last-trade-closes", help="CSV sec_id,last_trade_close[,delist_date]")
     p.add_argument("--merger-terms", help="CSV sec_id,cash_per_share,stock_ratio,acquirer_price,acquirer_ticker[,delist_date]")
     p.add_argument("--recoveries", help="CSV sec_id,recovery_ratio[,delist_date]")
+    p.add_argument("--id-baseline", default=None,
+                   help="securities.csv to list placeholder->FIGI changes against in contract/id_changes.csv "
+                        "(default: OUTPUT_DIR/securities.csv when it exists)")
     p.add_argument("--review-decisions", default=None,
                    help="CSV of accepted review flags: sec_id,delist_date,ticker,flag,decision,note "
                         f"(default {DEFAULT_REVIEW_DECISIONS}; missing at the default path means no decisions, "
@@ -218,6 +223,19 @@ def read_inputs(args: argparse.Namespace) -> tuple[Overrides, list[Decision], Ob
             read_scorecard(args.scorecard))
 
 
+def read_id_baseline(args: argparse.Namespace) -> list[dict[str, str]]:
+    """The securities.csv rows contract/id_changes.csv compares with: --id-baseline,
+    else the output folder's own when it exists (read before the run replaces it),
+    else none. A file that is not a securities.csv raises OverrideFileError."""
+    path = Path(args.id_baseline) if args.id_baseline else Path(args.output_dir) / "securities.csv"
+    if args.id_baseline is None and not path.exists():
+        return []
+    try:
+        return read_table("securities", path)
+    except ValueError as exc:
+        raise OverrideFileError(str(exc)) from None
+
+
 def main() -> int:
     p = build_parser()
     args = p.parse_args()
@@ -231,6 +249,7 @@ def main() -> int:
 
     try:
         overrides, review_decisions, index, scorecard = read_inputs(args)
+        id_baseline = read_id_baseline(args)
     except BAD_INPUT as exc:
         return bad_input(exc)
     except OSError as exc:                 # a missing or unreadable input file
@@ -244,7 +263,7 @@ def main() -> int:
     log = (lambda *a: None) if args.quiet else None
     summary = run(index, clients, overrides, out_dir=Path(args.output_dir), tol=args.merger_terms_sanity_tol,
                   limit=args.limit, sec_workers=args.sec_workers, review_decisions=review_decisions,
-                  scorecard=scorecard, **({"log": log} if log else {}))
+                  scorecard=scorecard, id_baseline=id_baseline, **({"log": log} if log else {}))
     print("Rows written:", summary.counts)
     print("Delistings by bucket:", summary.buckets)
     print("FIGI sources:", summary.figi_sources)
@@ -256,6 +275,10 @@ def main() -> int:
     u = summary.uncertain
     print(f"Uncertain (uncertain.csv): {u.get('security', 0)} securities, {u.get('ending', 0)} endings, "
           f"{u.get('seed', 0)} seeds")
+    c = summary.counts
+    print(f"Contract (contract/): {c.get('security_history', 0)} security intervals, "
+          f"{c.get('contract_delistings', 0)} endings, {c.get('price_requests', 0)} price requests, "
+          f"{c.get('id_changes', 0)} id changes")
     error_count = summary.review_flags.get("error", 0)
     degraded_count = summary.review_flags.get("resolution_degraded", 0)
     if error_count:

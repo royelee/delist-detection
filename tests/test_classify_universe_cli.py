@@ -159,6 +159,13 @@ def _entry_with_inputs(monkeypatch, tmp_path, *argv, observations="ticker,as_of\
     return cli.entry()
 
 
+def test_a_bad_id_baseline_exits_2(tmp_path, monkeypatch, capsys):
+    bad = tmp_path / "securities.csv"
+    bad.write_text("sec_id,oops\nX,1\n")
+    rc = _entry_with_inputs(monkeypatch, tmp_path, "--id-baseline", str(bad))
+    assert rc == 2 and "securities.csv" in capsys.readouterr().err
+
+
 @pytest.mark.parametrize("flag,text,where", [
     ("--merger-terms", "sec_id,cash_per_share\nBBG1,1O.5\n", "line 2: cash_per_share '1O.5' is not a number"),
     ("--merger-terms", "sec_id,stock_ratio,acquirer_price\nBBG1,0.5,\n", "line 2: "),

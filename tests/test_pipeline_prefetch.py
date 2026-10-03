@@ -600,9 +600,11 @@ def _one_and_n(tmp_path, monkeypatch, caplog, workers, *, stale_hits=(), **unive
     caplog.clear()
     secn = _offline_run(tmp_path / "n", tmp_path / "outn", workers, **universe)
     assert [r.getMessage() for r in caplog.records if r.name == "delist_detection.prefetch"] == []
-    csv1 = {p.name: p.read_bytes() for p in (tmp_path / "out1").glob("*.csv")}
-    csvn = {p.name: p.read_bytes() for p in (tmp_path / "outn").glob("*.csv")}
-    assert len(csv1) == 9 and csv1 == csvn         # the six tables, review_summary, observation_map and uncertain
+    csv1 = {str(p.relative_to(tmp_path / "out1")): p.read_bytes() for p in (tmp_path / "out1").rglob("*.csv")}
+    csvn = {str(p.relative_to(tmp_path / "outn")): p.read_bytes() for p in (tmp_path / "outn").rglob("*.csv")}
+    # the six tables, review_summary, observation_map and uncertain, plus the contract's five files
+    # (security_history, delistings, seeds, price_requests, id_changes)
+    assert len(csv1) == 14 and csv1 == csvn
     return (sec1, _tree(tmp_path / "one")), (secn, _tree(tmp_path / "n"))
 
 

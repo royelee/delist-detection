@@ -1504,9 +1504,35 @@ def test_run_is_deterministic(fake_edgar, tmp_path):
     run(index, clients, Overrides(), out_dir=tmp_path / "b", log=lambda *_: None)
     names = ["securities", "ticker_history", "cusip_history", "delistings", "payouts", "review", "review_summary",
              "observation_map", "uncertain"]
-    for name in names:
+    contract = ["security_history", "contract_delistings", "seeds", "price_requests", "id_changes"]
+    for name in names + contract:
         assert table_path(tmp_path / "a", name).read_bytes() == table_path(tmp_path / "b", name).read_bytes(), name
     assert sorted(p.name for p in (tmp_path / "a").glob("*.csv")) == sorted(f"{n}.csv" for n in names)
+
+
+def test_every_run_writes_the_contract_beside_todays_tables(fake_edgar, tmp_path):
+    index, clients = _clients(fake_edgar)
+    summary = run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
+    for name in ("security_history", "contract_delistings", "seeds", "price_requests", "id_changes"):
+        assert table_path(tmp_path, name).exists() and name in summary.counts
+    ended = {r["sec_id"]: r for r in read_table("contract_delistings", table_path(tmp_path, "contract_delistings"))}
+    assert ended["BBG000FJLFX8"]["exit_kind"] == "merger"
+    assert ended["BBG000FJLFX8"]["verdict"] in ("confirmed", "uncertain")
+    seeds = read_table("seeds", table_path(tmp_path, "seeds"))
+    assert len(seeds) == len(read_table("observation_map", table_path(tmp_path, "observation_map")))
+    hist = read_table("security_history", table_path(tmp_path, "security_history"))
+    assert {r["sec_id"] for r in hist} >= {"BBG000FJLFX8", "BBG000LIVE01"}
+    assert {r["issuer_id"] for r in hist if r["sec_id"] == "BBG000FJLFX8"} == {"1122304"}
+    assert json.loads((tmp_path / "run_manifest.json").read_text())["schema_version"] == 1
+
+
+def test_id_changes_compare_the_run_with_a_baseline(fake_edgar, tmp_path):
+    index, clients = _clients(fake_edgar)
+    baseline = [{"sec_id": "CIK1122304-COMMON", "issuer_cik": "1122304", "share_class": "COMMON",
+                 "name": "AETNA INC", "security_type": "", "observed": "true", "figi_source": "placeholder"}]
+    run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None, id_baseline=baseline)
+    rows = read_table("id_changes", table_path(tmp_path, "id_changes"))
+    assert [(r["old_sec_id"], r["new_sec_id"]) for r in rows] == [("CIK1122304-COMMON", "BBG000FJLFX8")]
 
 
 def test_review_decisions_accept_a_flag_and_are_counted_in_the_manifest(fake_edgar, tmp_path):
