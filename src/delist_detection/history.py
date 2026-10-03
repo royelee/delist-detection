@@ -339,6 +339,6 @@ def backfill_cusips(tickers: Iterable[str], end: str, ftd: FtdIndex, names: Iter
     counts: Counter[str] = Counter()
     for t in sorted(set(tickers)):
         for r in ftd.by_symbol(t, lo, end):
-            if not is_deleted_symbol(r.symbol) and description_matches(r.description, names):
+            if not is_deleted_symbol(r.symbol) and description_matches(r.description, names, empty=False):
                 counts[r.cusip] += 1
     return [c for c, _ in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))]

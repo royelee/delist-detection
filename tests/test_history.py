@@ -191,3 +191,12 @@ def test_backfill_cusips_names_the_issuers_cusip_before_its_end():
     ])
     assert backfill_cusips(["BOL"], "2007-11-05", ftd, ["BAUSCH & LOMB INC"]) == ["071707103"]
     assert backfill_cusips(["BOL"], "2007-11-05", ftd, ["SOMEONE ELSE"]) == []
+
+
+def test_backfill_cusips_with_no_names_matches_nothing():
+    from delist_detection.history import backfill_cusips
+    ftd = FtdIndex([
+        FtdRow("2007-10-01", "071707103", "BOL", "BAUSCH & LOMB INC COM", 60.0),
+        FtdRow("2007-09-01", "999999999", "BOL", "OTHER WIDGETS CO", 5.0),
+    ])
+    assert backfill_cusips(["BOL"], "2007-11-05", ftd, []) == []
