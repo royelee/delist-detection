@@ -708,7 +708,13 @@ security-master rebuild — see the spec's §8.7):
 | 8-K item 1.03 whose own Item 1.03 section reports a bankruptcy, searched 540 days before to 30 days after the anchor date (an unreadable section still counts, flagged `bankruptcy_text_missing`). Exception: when that 1.03 is more than 180 days before the anchor and a change-in-control 8-K (5.01, or 2.01 with 3.01 or 3.03) falls within 30 days of it, the merger path wins instead and the row is flagged `bankruptcy_before_merger` | 470 | LIQUIDATION |
 | A rename near the anchor, or a 3.01 notice that reads as a listing transfer rather than a deficiency, with the company still reporting results afterward. Yields to the merger path whenever a nearby 8-K shows an acquisition (5.01, or 2.01 with 3.01 or 3.03) | 304 | EXCHANGE_TRANSFER |
 | SPAC trust liquidation (blank-check company, redeemed at trust value) | 600 | EXPIRATION |
-| 10-K / 10-Q / 20-F filed more than 180 days after the anchor | 304 | EXCHANGE_TRANSFER |
+| 10-K / 10-Q / 20-F filed more than 180 days after the anchor: the end-of-era resolver (`end_of_era.py`) takes the first branch that fits, reading 8-K items, successor filings and Form 25s in [end − 30 d, end + 120 d] and merger filings in [end − 540 d, end + 30 d]: | | |
+| (1) the security still traded after the end (the finder's `continued`) | 304 | EXCHANGE_TRANSFER |
+| (2) a successor registration (8-K12B, 8-K12G3); stage 9 finds the successor | 304 | EXCHANGE_TRANSFER |
+| (3) a change in control (8-K item 5.01) | 231 (or the 8-K items' own merger code, 200/233) | MERGER |
+| (4) a completed acquisition (8-K item 2.01) with a merger filing or a Form 25 | 231 (or the items' own merger code) | MERGER |
+| (5) a 3.01 notice whose text cites a listing deficiency | 570 | COMPLIANCE_FAILURE |
+| (6) none of the above: today's continued-filings reason, unchanged | 304 | EXCHANGE_TRANSFER |
 | None of the above: the 8-K item fingerprint decides, anchored on the matched Form 25's filing date (or the fallback filing date). A Form 25 more than 45 days from the anchor is a frozen tail, flagged `frozen_tail:<days>` | | |
 | 8-K items 2.01 + 3.01 + 5.01 | 231 | MERGER |
 | 8-K items 2.01 + 5.01 | 233 | MERGER |

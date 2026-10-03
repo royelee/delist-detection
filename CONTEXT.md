@@ -27,6 +27,9 @@ A run of one ticker's observations that the library takes to be one security, be
 The removal of a security from its US exchange listing, after which it is listed on no exchange or has moved to another one. It is recorded by a Form 25 (or, where none was filed, by the filing that ended its trading) and classified by a CRSP `DLSTCD` code. A rename is not a delisting, and neither is withdrawing a secondary listing while the main one continues. A security can have more than one, such as an exchange transfer followed years later by a merger.
 _Avoid_: termination, delist event
 
+**End of era**:
+The last date a security's history is known, and what happened next: it kept trading, moved to a new exchange, took a new ticker or CUSIP, was merged away, was liquidated, or nobody can tell. The end-of-era resolver (`end_of_era.py`) reads EDGAR for what the registrant did after that date, in a fixed branch order.
+
 **Bucket**:
 The handling class a delisting's CRSP code maps to: `merger`, `exchange_transfer`, `liquidation`, `compliance_failure`, `expiration`, or `active` when no delisting occurred. The bucket, not the exact code, decides the training label and the backtest exit.
 _Avoid_: category

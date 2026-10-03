@@ -28,7 +28,7 @@ editable install.
 
 ```bash
 pip install -e .                         # editable install (Python ≥3.10) — once per env
-pytest   # full suite (1648 tests + 24 known-wrong golden xfails, offline, no network)
+pytest   # full suite (1663 tests + 24 known-wrong golden xfails, offline, no network)
 pytest tests/test_payout_extractor.py -v  # one file
 pytest tests/test_payout_extractor.py::test_match_in_cash_family_altr -v   # one test
 
@@ -291,7 +291,23 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   Form 15**), now anchored on the Form 25/fallback filing date rather than a
   vendor end date. `_classify_items()` maps an 8-K item set to a `DLSTCD`
   code; the surrounding logic handles asset-type short-circuits,
-  exchange-transfer detection, and SEC-revocation. Rule order unchanged.
+  exchange-transfer detection, and SEC-revocation. Rule order unchanged; the
+  continued-filings rule (rule 8) now asks `end_of_era.resolve` instead of
+  deciding alone, and records the branch in `evidence["end_of_era"]`.
+- `end_of_era.py` — the end-of-era resolver's first step: where the registrant
+  kept filing after the end. `signals()` reads the filings in the windows around
+  the end date (8-K items, successor filings and Form 25s in [end − 30 d,
+  end + 120 d]; merger filings — DEFM14A, DEFM14C, PREM14A, SC 14D9, SC TO-T,
+  SC TO-I, SC 13E3, 425, S-4 — in [end − 540 d, end + 30 d]); `resolve()` takes
+  the first branch that fits: (1) still trading after the end (the finder's
+  `continued`, passed as `classify_event(..., trading_after=)`) → today's
+  transfer; (2) a successor registration (8-K12B, 8-K12G3) → a transfer whose
+  successor stage 9 finds; (3) a change in control (8-K 5.01) → merger; (4) a
+  completed acquisition (8-K 2.01) with a merger filing or a Form 25 → merger;
+  (5) a 3.01 notice whose text cites a listing deficiency → compliance failure
+  570; (6) else today's continued-filings transfer (304), its reason string
+  unchanged (`lifecycle.CONTINUED_FILINGS` is its prefix). EDGAR evidence only.
+  Tried only where the continued-filings rule fires.
 - `crsp_codes.py` — the truth table: `DLST_CODE_TO_BUCKET` plus a leading-digit
   range fallthrough (`2xx→merger`, `3xx→exchange_transfer`, `4xx→liquidation`,
   `5xx→compliance_failure`, `6xx→expiration`). **The bucket — not the exact code
