@@ -254,6 +254,11 @@ needs evidence about the security, not only about the registrant. It replaces
   Floor lowered by hand: `V.audit.confirmed_but_wrong` 41 -> 42. Waits: the 15 no-Form-25 fallback endings MIDAS
   shows still trading (an operator decision), LLYVA/LLYVK (a split-off registered another way), ODP and UNIT
   (successor lines not in the run).
+- Next (reset-4a3): a bankruptcy branch ahead of "still trading after the end". When an 8-K 1.03 and an item 3.01
+  suspension fall near the end, and the trading after is under another symbol (a Q suffix or OTC), the ending is a
+  bankruptcy drop to OTC (exit kind `dropped`, drop reason `bankruptcy`, CRSP 574/470). It is then valued by reset-4f's
+  `otc_print` request. Golden case CBL-2008 (known_wrong): CBL went Chapter 11 on 2020-11-01, the NYSE suspended it on
+  2020-11-02, and it traded as CBLAQ until the 2021 emergence, whose new common is a new security.
 
 ### reset-4b: Identity evidence
 
