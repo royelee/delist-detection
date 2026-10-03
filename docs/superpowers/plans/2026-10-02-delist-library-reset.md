@@ -60,7 +60,10 @@ tables from the same caches, so the refresh changes data only: about 75 of 1,016
 issuer CIKs of 8 securities. It lowered 14 floor entries by hand, among them L2 low 127 to 147, R2.4 assumed par
 59 to 62 and securities coverage 88.8% to 88.5%. It also moved golden `CB-2010` to `known_wrong`
 (`reset-4c`): the cached merger-terms answer now prices ACE under its post-merger ticker. `data/scorecard.json`
-holds the current floor; the table above keeps the numbers the plans were written against.
+holds the current floor; the table above keeps the numbers the plans were written against. Reset-2's refresh run
+and reset-3's first acceptance run had the LLM endpoint (api.openai.com) blocked by the agent sandbox. The
+complete rebuild, with every input, changed one ending only (Z 2015, a continuation, now flagged
+`terms_gate_failed`), so the 14 lowered numbers stand as a data change, and `R1.4.review_rows` moved 712 -> 713.
 
 The A lines come from reset-1's accuracy audit (`data/accuracy_audit.csv`, filled from SEC filings on
 2026-10-02; 416 of 421 rows filled, 5 left pending with the reason in `note`). A row is wrong when any field
@@ -184,7 +187,8 @@ from sources.
   Seeds-only measurement (2952 seeds against 35955 observations): `L1.coverage_tickers` 0.8553 (full run 0.8851),
   `L1.coverage_securities` 0.8545 (0.8855), `L1.left_view` 157 (120), `L1.closed_no_event` 70 (49),
   `R1.1.mapped_share` 0.9766 (0.9850), `V.uncertain_seeds` 44 (390). Coverage falls, so by the rule above
-  qlib_practice keeps passing every sighting until reset-4a lands.
+  qlib_practice keeps passing every sighting until reset-4a lands. The published output comes from the run with
+  every input, the LLM included; it also lowered `R1.4.review_rows` 712 -> 713 by hand (one more row flagged).
 
 ### reset-3q: qlib_practice switch (in the qlib_practice repo)
 

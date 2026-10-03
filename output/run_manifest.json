@@ -1,13 +1,13 @@
 {
   "as_of": "2026-09-25",
   "cache_answers": {
-    "archives": 6740,
+    "archives": 6738,
     "company_tickers": 6,
     "full_text_search": 639,
-    "submissions": 23688,
+    "submissions": 23695,
     "submissions_page": 7171
   },
-  "code_version": "5de02ec",
+  "code_version": "0859655",
   "degraded_answers": {},
   "handoffs": {
     "conflicts": 13,
@@ -17,29 +17,20 @@
     "rows_added": 27,
     "takeovers": 8
   },
-  "latency_ms": {
-    "submissions": {
-      "max": 305.7,
-      "n": 7,
-      "p50": 189.6,
-      "p95": 305.7
-    }
-  },
+  "latency_ms": {},
   "not_covered": {},
   "rejected_queries": {},
   "resolution_degraded": 0,
   "review": {
     "accepted": 0,
-    "check": 609,
+    "check": 610,
     "cleared": 0,
     "fix": 103,
-    "info_hidden": 432,
+    "info_hidden": 431,
     "unmatched_decisions": 0
   },
   "schema_version": 1,
-  "sec_requests": {
-    "submissions": 7
-  },
+  "sec_requests": {},
   "sec_workers": 1,
   "stages": {
     "delisting search": {
@@ -55,7 +46,7 @@
       "sec_data_downloads": 0
     },
     "issuers in force": {
-      "edgar_requests": 7,
+      "edgar_requests": 0,
       "sec_data_downloads": 0
     },
     "payouts": {

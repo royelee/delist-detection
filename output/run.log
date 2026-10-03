@@ -260,8 +260,6 @@ handoff search: 0 EDGAR requests, 0 SEC data-file downloads (all threads)
 handoffs: 95 candidate pairs; {'handoffs': 80, 'continuations_by_filing': 38, 'continuations_by_timing': 34, 'takeovers': 8, 'conflicts': 13, 'rows_added': 27}
 observation_map: 35955 of 35955 observations mapped
 ticker evidence: 0 EDGAR requests, 0 SEC data-file downloads (all threads)
-issuers in force: 7 EDGAR requests, 0 SEC data-file downloads (all threads)
-scorecard drop: V.uncertain_distress: 19 -> 20
-scorecard drop: V.uncertain_endings: 266 -> 268
-scorecard drop: V.uncertain_endings_in_window: 234 -> 236
-WARNING: 3 scorecard number(s) got worse than the floor in data/scorecard.json: V.uncertain_distress: 19 -> 20; V.uncertain_endings: 266 -> 268; V.uncertain_endings_in_window: 234 -> 236
+issuers in force: 0 EDGAR requests, 0 SEC data-file downloads (all threads)
+scorecard drop: R1.4.review_rows: 712 -> 713
+WARNING: 1 scorecard number(s) got worse than the floor in data/scorecard.json: R1.4.review_rows: 712 -> 713
