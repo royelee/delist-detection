@@ -56,7 +56,7 @@ scorecard reproduces these numbers from the tables.
 The V lines were measured by reset-2's acceptance run on 2026-10-02, after `output/` was refreshed. The
 committed tables could no longer be rebuilt from any cache on disk: the run that produced them (2026-09-28,
 code `76edc38`) used a cache state that no longer exists. Reset-1's and reset-2's code give byte-identical
-tables from the same caches, so the refresh changes data only: about 75 of 1,017 delisting rows and the
+tables from the same caches, so the refresh changes data only: about 75 of 1,016 delisting rows and the
 issuer CIKs of 8 securities. It lowered 14 floor entries by hand, among them L2 low 127 to 147, R2.4 assumed par
 59 to 62 and securities coverage 88.8% to 88.5%. It also moved golden `CB-2010` to `known_wrong`
 (`reset-4c`): the cached merger-terms answer now prices ACE under its post-merger ticker. `data/scorecard.json`
