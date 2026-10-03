@@ -299,6 +299,29 @@ needs evidence about the security, not only about the registrant. It replaces
 - Liquidation payment schedules (none exist today), and the AABA and PDLI values from those payments
   (decision 3).
 
+**Research (2026-10-03, offline, not yet planned).** 60 distress endings, 26 uncertain. The group counts on
+today's output are 37 with a contested last trade date (22 conflicting, 15 unconfirmed), 9 identified through
+today's ticker map and 4 distress at a normal price.
+
+- **No payments in the cache.** No liquidating payment after a last trade is cached for any ending. AABA is an
+  `exchange_transfer` here, not distress, and none of its filing text is cached. PDLI has only an estimate:
+  net assets in liquidation of about $3.38 a share against a $2.47 close. Decision 3's values need a payment
+  source, either fetched 8-K 8.01 liquidating distributions or the caller's `--recoveries`. That choice and its
+  network and LLM cost are the operator's.
+- **Relabels with cached evidence: 19.**
+  - BMET 2007 is a $46.00 cash LBO, a merger.
+  - TSP 2024 is a voluntary delisting, not distress.
+  - FMD 2013, GOCO 2022 and YRCW 2010 are not endings in those years. Their real ends are FMD's $5.05 merger in
+    2016, GOCO's Chapter 11 in 2026 and YRCW's Form 25 in 2023.
+  - PDLI is a voluntary liquidation.
+  - IMB, CNB and GNC filed a bankruptcy 8-K 1.03 before their Form 25 but carry 573/580. TMA, SPNV and WFT filed
+    theirs after the delisting, so compliance is right for them.
+  - Seven old equities were exchanged for new securities in a plan: WOLF, HTZ, TDW, NE, WLL, UNT and XOG.
+- **Worthless, stated in cached text.** Four rows say the equity was cancelled for nothing: CHK, EVA, RHD and DNR.
+- **No path in the cache: 33 rows.**
+
+Memo and per-case table: `.superpowers/sdd/reset-4d-research/` (gitignored; the counts above are the record).
+
 ### reset-4e: Missing last trade dates
 
 There are 42 real endings with no last trade date, 41 inside the window: 34 mergers, 5 transfers, 1
