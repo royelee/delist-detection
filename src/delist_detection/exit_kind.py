@@ -31,7 +31,7 @@ DROP_REASON_OF_CODE = {
     "560": "capital", "570": "guidelines", "584": "guidelines", "573": "sec_order", "585": "sec_order",
     "580": "filings_fees",
 }
-MEASURED_METHODS = frozenset({"cash_only", "stock_only", "cash_plus_stock", "recovery_ratio", "worthless"})
+MEASURED_METHODS = frozenset({"cash_only", "stock_only", "cash_plus_stock", "recovery_ratio", "otc_print", "worthless"})
 FILL_METHODS = frozenset({"assumed_par", "shumway_nyse_amex", "shumway_nasdaq", "exchange_transfer_zero"})
 
 

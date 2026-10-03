@@ -64,3 +64,9 @@ def test_every_code_maps_into_the_contract_vocabulary():
         f = ending_fields(ending("S", "2010-01-04", bucket.value, crsp_code=str(code)))
         assert f.exit_kind in EXIT_KINDS
         assert f.drop_reason == "" or (f.exit_kind == "dropped" and f.drop_reason in DROP_REASONS)
+
+
+def test_an_otc_print_value_is_a_measured_dlret_not_a_fill():
+    f = ending_fields(ending("S", "2012-05-01", "compliance_failure", dlret="-0.750000", method="otc_print",
+                             crsp_code="500"))
+    assert (f.dlret, f.dlret_fill) == ("-0.750000", "")

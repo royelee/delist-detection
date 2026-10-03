@@ -297,3 +297,11 @@ def test_a_non_merger_par_row_is_not_flagged_merger_at_par():
     e = enrich(rec, last_trade_close=10.0)
     assert e.dlret_method is DlretMethod.ASSUMED_PAR
     assert "merger_at_par" not in e.review_flags
+
+
+def test_an_otc_print_values_a_compliance_failure_row():
+    rec = _drec("BBG_X", "2020-03-02", ticker="X", bucket=CrspBucket.COMPLIANCE_FAILURE, code=550)
+    key = ("BBG_X", "2020-03-02")
+    (e,) = build_delistings_table([rec], last_trade_closes={key: 2.0}, otc_prints={key: 0.5})
+    assert e.dlret_method is DlretMethod.OTC_PRINT
+    assert round(e.dlret, 6) == -0.75

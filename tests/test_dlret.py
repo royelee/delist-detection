@@ -128,3 +128,22 @@ def test_merger_no_consideration_bad_price_stays_nan_drop():
     ok = resolve_dlret(CrspBucket.MERGER, Exchange.NYSE, last_trade_close=10.0)
     assert ok.value == 0.0
     assert ok.method is DlretMethod.ABSTAIN_NO_CONSIDERATION
+
+
+def test_an_otc_print_values_a_drop():
+    r = resolve_dlret(CrspBucket.COMPLIANCE_FAILURE, Exchange.NASDAQ, 2.00, otc_print=0.50)
+    assert (round(r.value, 6), r.method, r.terminal_value) == (-0.75, DlretMethod.OTC_PRINT, 0.50)
+    r = resolve_dlret(CrspBucket.LIQUIDATION, Exchange.NYSE, 4.00, otc_print=1.00)
+    assert (round(r.value, 6), r.method) == (-0.75, DlretMethod.OTC_PRINT)
+
+
+def test_a_recovery_ratio_beats_an_otc_print_and_a_merger_ignores_it():
+    r = resolve_dlret(CrspBucket.LIQUIDATION, Exchange.NYSE, 4.00, recovery_ratio=0.5, otc_print=1.00)
+    assert r.method is DlretMethod.RECOVERY_RATIO
+    m = resolve_dlret(CrspBucket.MERGER, Exchange.NYSE, 10.0, payout_per_share=12.0, otc_print=1.00)
+    assert m.method is DlretMethod.CASH_ONLY
+
+
+def test_without_a_print_a_drop_keeps_its_mark():
+    r = resolve_dlret(CrspBucket.COMPLIANCE_FAILURE, Exchange.NASDAQ, 2.00)
+    assert r.method is DlretMethod.SHUMWAY_NASDAQ

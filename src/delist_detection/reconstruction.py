@@ -71,7 +71,7 @@ def _dlret_confidence(value: float, method: DlretMethod, payout_confidence: str 
     if method in (
         DlretMethod.CASH_PLUS_STOCK, DlretMethod.STOCK_ONLY,
         DlretMethod.SHUMWAY_NYSE_AMEX, DlretMethod.SHUMWAY_NASDAQ,
-        DlretMethod.RECOVERY_RATIO,
+        DlretMethod.RECOVERY_RATIO, DlretMethod.OTC_PRINT,
     ):
         return "medium"
     return "low"                         # ABSTAIN_NO_CONSIDERATION / UNKNOWN
@@ -90,10 +90,12 @@ def enrich(
     payout_source: str | None = None,
     payout_confidence: str | None = None,
     extra_flags: Iterable[str] = (),
+    otc_print: float | None = None,
 ) -> EnrichedDelistRecord:
     res = resolve_dlret(
         record.bucket, exchange, last_trade_close,
         payout_per_share, stock_ratio, acquirer_price, recovery_ratio,
+        otc_print=otc_print,
     )
     # No empty DLRET in the table: a completed merger or a fund/non-equity closure
     # with a known last price but no computable consideration has terminal value
@@ -171,6 +173,7 @@ def build_delistings_table(
     exchanges: Mapping | None = None,
     merger_terms: Mapping | None = None,
     recovery_ratios: Mapping | None = None,
+    otc_prints: Mapping | None = None,
     payout_sources: Mapping | None = None,
     payout_confidences: Mapping | None = None,
     payout_flags: Mapping | None = None,
@@ -187,6 +190,7 @@ def build_delistings_table(
     exchanges = exchanges or {}
     merger_terms = merger_terms or {}
     recovery_ratios = recovery_ratios or {}
+    otc_prints = otc_prints or {}
     payout_sources = payout_sources or {}
     payout_confidences = payout_confidences or {}
     payout_flags = payout_flags or {}
@@ -205,6 +209,7 @@ def build_delistings_table(
             acquirer_price=terms.get("acquirer_price"),
             acquirer_ticker=terms.get("acquirer_ticker"),
             recovery_ratio=for_delisting(recovery_ratios, key),
+            otc_print=for_delisting(otc_prints, key),
             payout_source=for_delisting(payout_sources, key),
             payout_confidence=for_delisting(payout_confidences, key),
             extra_flags=for_delisting(payout_flags, key) or (),

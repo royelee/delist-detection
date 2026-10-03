@@ -38,6 +38,7 @@ class DlretMethod(str, Enum):
     NEEDS_LAST_TRADE = "needs_last_trade"
     EXCHANGE_TRANSFER_ZERO = "exchange_transfer_zero"
     RECOVERY_RATIO = "recovery_ratio"
+    OTC_PRINT = "otc_print"
     SHUMWAY_NYSE_AMEX = "shumway_nyse_amex"
     SHUMWAY_NASDAQ = "shumway_nasdaq"
     WORTHLESS = "worthless"            # reserved; not emitted in v1
@@ -118,6 +119,7 @@ def resolve_dlret(
     stock_ratio: float | None = None,
     acquirer_price: float | None = None,
     recovery_ratio: float | None = None,
+    otc_print: float | None = None,
 ) -> DlretResult:
     if bucket is CrspBucket.EXPIRATION:
         return DlretResult(float("nan"), DlretMethod.DROPPED_EXPIRATION, None)
@@ -140,9 +142,13 @@ def resolve_dlret(
                 recovery_ratio - 1.0, DlretMethod.RECOVERY_RATIO,
                 recovery_ratio * last_trade_close,
             )
+        if otc_print is not None and otc_print > 0:
+            return DlretResult(otc_print / last_trade_close - 1.0, DlretMethod.OTC_PRINT, otc_print)
         return _shumway_result(exchange)
 
     if bucket is CrspBucket.COMPLIANCE_FAILURE:
+        if otc_print is not None and otc_print > 0:
+            return DlretResult(otc_print / last_trade_close - 1.0, DlretMethod.OTC_PRINT, otc_print)
         return _shumway_result(exchange)
 
     # ACTIVE / UNKNOWN: no shock by default (preserves original behavior).
