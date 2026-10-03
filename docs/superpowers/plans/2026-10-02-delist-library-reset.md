@@ -289,6 +289,16 @@ There are 42 real endings with no last trade date, 41 inside the window: 34 merg
 liquidation, 1 unknown and 1 expiration. Only exchange-print sources count. Feasibility from the spec: 230 of
 1,017 endings have no exchange-print source, 62 of 183 of them before 2012.
 
+- Done (first step) 2026-10-02 (plan `2026-10-02-reset-4e-print-dates.md`). Exchange-print dates the caches held:
+  stage 9c dated 10 handoff continuation rows from their Form 25 notice (S, NLSN, XL, ST, AON 2020, CR, J, LIN, LH,
+  APTV), and the new 8-K 3.01 wordings dated GOOGL, GOOG, XRX, WTNY, ANAT, ENDPQ (and RVI, SSCC; WFT's source changed
+  from a halt to 8-K 3.01 on the same day). 17 contract endings gained a published `last_trade_date`;
+  `R2.1.missing_last_trade_date` 46 -> 43, `L1.ended_incomplete` 67 -> 63. Floor entries lowered by hand: `L2.low`
+  171 -> 174, `L2.high_share` 0.753808 -> 0.752208 (Ruling 2), `A.census.continuation.errors` 28 -> 29,
+  `V.audit.confirmed_but_wrong` 40 -> 41 (GOOG), `V.uncertain_seeds` 390 -> 392 (SSCC). Left (Ruling 1): PHLY's
+  halt window, AON 2012, the 17 event-day sentences, the 52 still-trading endings (reset-4a2) and the 33 before MIDAS.
+  Follow-up: a successor's range could start the trading day after its predecessor's last trade (GOOG 2015-10-05).
+
 ### reset-4f: Values of drops to OTC
 
 This is decision 11: the first off-exchange print within 10 trading days, requested through

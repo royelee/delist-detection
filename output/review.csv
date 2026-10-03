@@ -18,16 +18,13 @@ fix,BBG000BQ3F39,2011-05-07,NOVL,758004,merger,,no_last_trade_date;no_last_close
 fix,BBG000BRB2F4,2015-09-10,PLL,75829,merger,,no_last_close;no_dlret,M&A 2.01+3.01+5.01 (acquired by external acquirer),"1.02,2.01,3.01,3.03,5.01,5.02,5.03,9.01",
 fix,BBG000BS3FD4,2008-03-27,RESP,780434,merger,,no_last_trade_date;no_last_close;no_dlret,Merger filing SC 14D9 2008-01-03 before the delisting,"3.01,5.02,5.03,8.01,9.01",
 fix,BBG000BWDFD4,2025-08-17,PARAA,813828,merger,,no_last_close;no_dlret,M&A 2.01+3.01+5.01 (acquired by external acquirer),"1.01,1.02,2.01,3.01,3.03,5.01,5.02,5.03,9.01",
-fix,BBG000BX5ZF5,2019-08-11,XRX,108772,merger,,no_last_trade_date;no_last_close;terms_gate_failed:no_acq_price;no_dlret,"Completed acquisition (8-K item 2.01 filed 2019-11-15, DEFM14A 2019-04-23); the registrant kept filing after it",,
 fix,BBG000BX67G5,2008-05-24,MLNM,1002637,merger,,member_name_mismatch;no_last_trade_date;no_last_close;no_dlret,Merger filing SC 14D9 2008-04-11 before the delisting,"3.01,5.03,8.01,9.01",
 fix,BBG000C0BGS7,2009-10-30,SEPR,877357,merger,,no_last_trade_date;no_last_close;no_dlret,"M&A change in control (5.01) with delisting/rights change, closing 8-K without 2.01","2.04,3.01,3.02,3.03,5.01,5.02,5.03,8.01,9.01",
-fix,BBG000C0HQ54,2022-09-24,ENDPQ,1593034,liquidation,,no_last_trade_date;no_last_close;no_dlret,Bankruptcy (8-K item 1.03 filed 2022-08-17),,
 fix,BBG000C1R174,2009-11-02,HLTH,1009575,merger,,no_last_trade_date;no_last_close;terms_gate_failed:no_acq_price;no_dlret,Merger filing 425 2009-09-15 before the delisting,"2.02,7.01",
 fix,BBG000C4FB79,2012-03-16,TRH,862510,merger,,no_last_close;no_dlret,M&A 2.01+3.01+5.01 (acquired by external acquirer),"2.01,3.01,3.03,5.01,5.02,9.01",
 fix,BBG000C6GN04,2022-06-06,QDEL,353569,merger,,no_last_trade_date;no_last_close;terms_gate_failed:no_acq_ticker;no_dlret,Merger filing 425 2022-05-06 before the delisting,5.07,
 fix,BBG000CB2ZY4,2011-02-28,KG,1047699,merger,,no_last_trade_date;no_last_close;no_dlret,Merger filing SC 14D9 2010-10-22 before the delisting,"3.01,9.01",
 fix,BBG000CGQ485,2008-12-04,IMCL,765258,merger,,no_last_trade_date;no_last_close;no_dlret,"M&A change in control (5.01) with delisting/rights change, closing 8-K without 2.01","1.01,3.03,5.01,5.02,5.03,8.01,9.01",
-fix,BBG000CH11X8,2011-06-16,WTNY,106926,merger,,no_last_trade_date;no_last_close;terms_gate_failed:no_acq_price;no_dlret,"M&A change in control (5.01) with delisting/rights change, closing 8-K without 2.01","3.01,3.03,5.01,9.01",
 fix,BBG000FHN2M1,2007-12-14,CKFR,949341,merger,,no_last_trade_date;observed_after_delisting;no_last_close;no_dlret,Merger filing DEFM14A 2007-09-20 before the delisting,"5.02,7.01,9.01",
 fix,BBG000FRVFM1,2011-12-15,PPDI,1003124,merger,,member_name_mismatch;no_last_trade_date;no_last_close;no_dlret,M&A 2.01+3.01+5.01 (acquired by external acquirer),"2.01,3.01,3.03,5.01,5.03,9.01",
 fix,BBG000KBQZ88,2015-08-02,CTRX,1363851,merger,,no_last_trade_date;no_last_close;no_dlret,M&A 2.01+3.01+5.01 (acquired by external acquirer),"1.02,2.01,3.01,3.03,5.01,5.02,7.01,9.01",
@@ -112,7 +109,7 @@ check,BBG000BT0CM2,2023-05-12,SIVB,719739,liquidation,-0.550000,last_trade_date_
 check,BBG000CSY9H9,2023-07-20,BBBY,886158,liquidation,-0.550000,last_trade_date_conflict,Bankruptcy (8-K item 1.03 filed 2023-04-24),,
 check,BBG000DY8ZS4,2019-05-15,WFT,1603923,compliance_failure,-0.550000,no_form25;delist_date_approx,"Listing deficiency notice (8-K 2019-05-16), no merger evidence; the registrant kept filing after it",,
 check,BBG000FVQ185,2024-09-30,SPWR,867773,liquidation,-0.550000,last_trade_date_conflict,Bankruptcy (8-K item 1.03 filed 2024-08-06),,
-check,BBG000K1X873,2009-01-30,SSCC,919226,liquidation,-0.550000,last_trade_date_unconfirmed;no_form25,Bankruptcy (8-K item 1.03 filed 2009-01-30),,
+check,BBG000K1X873,2009-01-30,SSCC,919226,liquidation,-0.550000,no_form25;ftd_close_lagged,Bankruptcy (8-K item 1.03 filed 2009-01-30),,
 check,BBG000PSSG77,2009-03-31,IAR,1367396,liquidation,-0.550000,last_trade_date_unconfirmed;no_form25,Bankruptcy (8-K item 1.03 filed 2009-03-31),,
 check,BBG009R0CVG1,2020-04-13,LKSD,1669812,liquidation,-0.550000,last_trade_date_unconfirmed;no_form25;ftd_close_prior:1,Bankruptcy (8-K item 1.03 filed 2020-04-13),,
 check,CIK1808220-CLASS-A,2022-11-17,GOCO,1808220,compliance_failure,-0.550000,resolved_by_current_ticker_map;last_trade_date_unconfirmed;no_form25;delist_date_approx;ftd_close_prior:1,"Listing deficiency notice (8-K 2022-11-22), no merger evidence; the registrant kept filing after it",,
@@ -134,6 +131,7 @@ check,BBG000J0D904,2024-09-20,BIG,768835,liquidation,-0.300000,last_trade_date_c
 check,BBG004M25Z09,2016-06-18,SSE,1532930,liquidation,-0.300000,last_trade_date_conflict;ftd_close_lagged,Bankruptcy (8-K item 1.03 filed 2016-06-07),,
 check,BBG007FH8JX4,2024-10-21,EVA,1592057,liquidation,-0.300000,last_trade_date_conflict,Bankruptcy (8-K item 1.03 filed 2024-03-13),,
 check,BBG00GBV88T6,2016-05-14,BTU,1064728,liquidation,-0.300000,resolved_by_current_ticker_map;last_trade_date_conflict,Bankruptcy (8-K item 1.03 filed 2016-04-13),,
+check,BBG00HY28P97,2020-10-18,GTX,1735707,liquidation,-0.300000,resolved_by_current_ticker_map;last_trade_date_conflict,Bankruptcy (8-K item 1.03 filed 2020-09-21),,
 check,BBG00W7FH7G7,2023-12-02,WE,1813756,liquidation,-0.300000,last_trade_date_conflict,Bankruptcy (8-K item 1.03 filed 2023-11-07),,
 check,BBG00Z6DX554,2020-07-30,CHK,895126,liquidation,-0.300000,resolved_by_current_ticker_map;member_name_mismatch;last_trade_date_conflict;distress_at_normal_price,Bankruptcy (8-K item 1.03 filed 2020-06-29),,
 check,CIK1037676-COMMON,2016-02-08,ACI,1037676,liquidation,-0.300000,last_trade_date_conflict,Bankruptcy (8-K item 1.03 filed 2016-01-11),,
@@ -142,11 +140,13 @@ check,BBG000BM1RP0,2009-08-14,FCL,1301063,merger,0.088827,last_trade_date_unconf
 check,BBG000G61VB6,2007-07-23,BOT,1161448,merger,-0.067783,observed_after_delisting;ftd_close_prior:2;acquirer_close_lagged,Merger filing 425 2007-07-10 before the delisting,"1.01,8.01,9.01",
 check,BBG000BSVZM9,2009-11-04,SGP,310158,merger,0.041687,last_trade_date_unconfirmed;no_form25;delist_date_approx;ftd_close_prior:1,"Completed acquisition (8-K item 2.01 filed 2009-11-04, 425 2009-09-03); the registrant kept filing after it",,
 check,BBG000BNXLK1,2007-07-12,MEL,64782,merger,0.026444,observed_after_delisting;ftd_close_prior:3;acquirer_close_lagged,Merger filing 425 2007-05-17 before the delisting,"8.01,9.01",
+check,BBG000F0PF65,2018-06-25,TWX,1105705,merger,0.017326,last_trade_date_conflict,M&A 2.01+3.01+5.01 (acquired by external acquirer),"1.02,2.01,3.01,3.03,5.01,5.02,5.03,8.01,9.01",
 check,CIK718482-COMMON,2007-10-11,AGE,718482,merger,0.016927,observed_after_delisting,Merger filing 425 2007-09-28 before the delisting,8.01,
 check,BBG000D1QCF1,2017-01-27,FTI,1135152,merger,-0.013947,last_trade_date_conflict,M&A 2.01+3.01+5.01 (acquired by external acquirer),"2.01,3.01,3.03,5.01,5.02,5.03,9.01",
 check,BBG005DKMJ67,2025-04-29,LTRPA,1606745,merger,-0.012692,last_trade_date_unconfirmed;no_form25;ftd_close_prior:1,"M&A 2.01+3.01+5.01 (acquired by external acquirer) (no Form 25 anchor, 8-K-only)","1.02,2.01,3.01,3.03,5.01,5.02,5.03,9.01",
 check,BBG004TPGBP5,2024-02-02,MRTX,1576263,merger,-0.011925,payout_gate_failed:12,M&A 2.01+3.01+5.01 (acquired by external acquirer),"1.02,2.01,3.01,3.03,5.01,5.02,5.03,8.01,9.01",
 check,BBG000BF1R66,2016-01-24,CB,20171,merger,0.011833,last_trade_date_conflict,M&A 2.01+3.01+5.01 (acquired by external acquirer),"1.01,1.02,2.01,3.01,3.03,5.01,5.02,5.03,9.01",
+check,BBG004DF9V32,2014-11-24,ATHL,1574648,merger,0.005500,last_trade_date_conflict;ftd_close_prior:5,"M&A change in control (5.01) with delisting/rights change, closing 8-K without 2.01","3.01,3.03,5.01,5.02,5.03,8.01,9.01",
 check,CIK835541-COMMON,2007-10-13,SLR,835541,merger,0.005168,observed_after_delisting,Merger filing 425 2007-09-13 before the delisting,,
 check,BBG000BV52H0,2007-09-07,KSE,1062379,merger,-0.004739,observed_after_delisting,"M&A change in control (5.01) with delisting/rights change, closing 8-K without 2.01","3.01,5.01,5.02,5.03",
 check,CIK65873-COMMON,2007-11-30,AT,65873,merger,0.004213,observed_after_delisting;ftd_close_prior:1;payout_gate_failed:481.37,Change in control (8-K item 5.01 filed 2007-11-21); the registrant kept filing after it,,
@@ -157,9 +157,9 @@ check,BBG00928YVY7,2019-04-14,ARRS,1645494,merger,0.002843,last_trade_date_confl
 check,CIK1074771-COMMON,2007-08-05,TRI,1074771,merger,0.002599,observed_after_delisting,Merger filing DEFM14A 2007-05-08 before the delisting,,
 check,CIK1038914-COMMON,2007-12-23,GSF,1038914,merger,0.002376,observed_after_delisting;acquirer_close_lagged,M&A 2.01+3.01+5.01 (acquired by external acquirer),"2.01,3.01,5.01",
 check,CIK1124887-COMMON,2007-11-23,CEN,1124887,merger,0.001669,observed_after_delisting,Change in control (8-K item 5.01 filed 2007-11-09); the registrant kept filing after it,,
+check,BBG000BLXT19,2020-11-02,IMMU,722830,merger,0.001593,last_trade_date_conflict,M&A 2.01+3.01+5.01 (acquired by external acquirer),"2.01,3.01,3.03,5.01,5.02,5.03,9.01",
 check,BBG000CP95B7,2013-01-07,AGP,1064863,merger,0.001415,last_trade_date_conflict;ftd_close_prior:1,M&A 2.01+3.01+5.01 (acquired by external acquirer),"2.01,3.01,3.03,5.01,5.02,5.03,9.01",
 check,BBG000BDWKC5,2018-11-15,CA,356028,merger,0.001350,member_name_mismatch,M&A 2.01+3.01+5.01 (acquired by external acquirer),"1.02,2.01,3.01,3.03,5.01,5.02,5.03,9.01",
-check,BBG000DBTPX7,2015-12-25,AWAY,1366684,merger,0.001341,last_trade_date_conflict,M&A 2.01+3.01+5.01 (acquired by external acquirer),"1.01,2.01,2.03,3.01,3.03,5.01,5.02,5.03,9.01",
 check,CIK1116521-COMMON,2007-11-05,AV,1116521,merger,0.001144,observed_after_delisting,Change in control (8-K item 5.01 filed 2007-11-01); the registrant kept filing after it,,
 check,CIK845752-COMMON,2007-08-11,AH,845752,merger,0.001138,observed_after_delisting;ftd_close_prior:1,Merger filing DEFM14A 2007-06-26 before the delisting,"8.01,9.01",
 check,BBG000C90DH9,2025-12-08,IPG,51644,merger,0.001058,last_trade_date_conflict,M&A 2.01+3.01+5.01 (acquired by external acquirer),"1.02,2.01,3.01,3.03,5.01,5.02,5.03,9.01",
@@ -181,7 +181,6 @@ check,BBG000B9YSK6,2020-11-04,CBL,910612,exchange_transfer,0.000000,resolved_by_
 check,BBG000BB2N27,2014-12-25,THI,1345111,merger,0.000000,llm_gate_failed;merger_at_par,M&A 2.01+3.01+5.01 (acquired by external acquirer),"1.01,1.02,2.01,3.01,3.03,5.01,5.02,5.03,9.01",
 check,BBG000BBB3K1,2017-08-04,RAI,1275283,merger,0.000000,payout_gate_failed:29.44;terms_gate_failed:fail_sanity;merger_at_par,M&A 2.01+3.01+5.01 (acquired by external acquirer),"1.01,1.02,2.01,3.01,3.03,5.01,5.02,5.03,9.01",
 check,BBG000BBG2C7,2013-10-11,CNH,1024519,merger,0.000000,ftd_close_prior:2;merger_at_par,Merger filing 425 2013-09-18 before the delisting,,
-check,BBG000BBY4T5,2020-07-12,ANAT,904163,exchange_transfer,0.000000,no_last_close;handoff_continuation;terms_gate_failed:no_acq_price,Continuation (8-K12B 0001193125-20-186637): BBG000BBY4T5 last traded as ANAT on 2020-06-30 and BBG00RQ70GQ2 took the ticker from 2020-07-06; holders' shares became BBG00RQ70GQ2's,"1.01,3.01,3.03,5.02,8.01,9.01",
 check,BBG000BCNYT9,2020-01-16,AVP,8868,merger,0.000000,terms_gate_failed:fail_sanity;merger_at_par,Change in control (8-K item 5.01 filed 2020-01-03); the registrant kept filing after it,,
 check,BBG000BD4VG8,2017-07-15,BHI,808362,exchange_transfer,0.000000,successor_unknown,Successor registration 8-K12B 2017-07-03: the security continues under a successor; the registrant kept filing after it,,
 check,BBG000BDHNB7,2019-06-21,BMS,11199,merger,0.000000,ftd_close_lagged;terms_gate_failed:fail_sanity;merger_at_par,M&A 2.01+3.01+5.01 (acquired by external acquirer),"1.02,2.01,3.01,3.03,5.01,5.02,5.03,9.01",
@@ -192,7 +191,7 @@ check,BBG000BF5RY1,2016-06-10,CCE,1491675,merger,0.000000,last_trade_date_confli
 check,BBG000BFTJ91,2015-12-21,CMCSK,1166691,exchange_transfer,0.000000,successor_unknown,Continued 10-K/Q filings >180d after delist (moved to OTC or spun off),,
 check,BBG000BGFLL5,2013-11-23,NYX,1368007,merger,0.000000,llm_gate_failed;merger_at_par,"M&A change in control (5.01) with delisting/rights change, closing 8-K without 2.01","2.03,3.01,3.03,5.01,5.02,9.01",
 check,BBG000BGMX22,2010-10-14,HEW,1168478,merger,0.000000,ftd_close_prior:7;llm_gate_failed;merger_at_par,M&A 2.01+3.01+5.01 (acquired by external acquirer),"1.02,2.01,3.01,3.03,5.01,5.02,5.03,9.01",
-check,BBG000BHSKN9,2015-10-12,GOOGL,1288776,exchange_transfer,0.000000,no_evidence_default;no_last_close;handoff_continuation,Continuation (8-K12B 0001193125-15-336577): BBG000BHSKN9 last traded as GOOGL on 2015-10-05 and BBG009S39JX6 took the ticker from 2015-10-06; holders' shares became BBG009S39JX6's,"1.01,3.01,3.03,5.02,5.03,9.01",
+check,BBG000BHSKN9,2015-10-12,GOOGL,1288776,exchange_transfer,0.000000,no_evidence_default;handoff_continuation,Continuation (8-K12B 0001193125-15-336577): BBG000BHSKN9 last traded as GOOGL on 2015-10-05 and BBG009S39JX6 took the ticker from 2015-10-06; holders' shares became BBG009S39JX6's,"1.01,3.01,3.03,5.02,5.03,9.01",
 check,BBG000BHW628,2016-06-11,WCN,1057058,merger,0.000000,last_trade_date_conflict,M&A 2.01+3.01+5.01 (acquired by external acquirer),"1.01,1.02,2.01,3.01,3.03,5.01,5.02,5.03,9.01",
 check,BBG000BJ9D07,2016-09-08,ROVI,1424454,merger,0.000000,no_form25;terms_gate_failed:fail_sanity;merger_at_par,"M&A 2.01+5.01 (subsidiary buyback / parent acquisition) (no Form 25 anchor, 8-K-only)","1.01,2.01,3.03,5.01,5.02,5.03,9.01",
 check,BBG000BJBMG7,2016-01-14,FCE-A,38067,exchange_transfer,0.000000,last_trade_date_conflict;handoff_continuation;terms_gate_failed:no_acq_ticker,Continuation (8-K12B 0001647509-16-000020): BBG000BJBMG7 last traded as FCE-A on 2016-01-04 and BBG009WMBWP6 took the ticker from 2016-01-05; holders' shares became BBG009WMBWP6's,,
@@ -276,7 +275,7 @@ check,BBG001D9S707,2010-05-25,DYN,1379895,exchange_transfer,0.000000,last_trade_
 check,BBG001KWG293,2021-06-25,GRUB,1594109,merger,0.000000,last_trade_date_conflict;terms_gate_failed:no_acq_price;merger_at_par,M&A 2.01+3.01+5.01 (acquired by external acquirer),"2.01,3.01,3.03,5.01,5.02,5.03,8.01,9.01",
 check,BBG001YMS0B8,2015-07-12,KRFT,1545158,merger,0.000000,payout_gate_failed:72.5;terms_gate_failed:fail_sanity;merger_at_par,M&A 2.01+3.01+5.01 (acquired by external acquirer),"1.02,2.01,3.01,3.03,5.01,5.02,5.03,8.01,9.01",
 check,BBG002B67HB2,2025-08-01,UNIT,1620280,merger,0.000000,last_trade_date_unconfirmed;no_form25;payout_gate_failed:13;terms_gate_failed:no_acq_ticker;merger_at_par,"M&A 2.01+3.01+5.01 (acquired by external acquirer) (no Form 25 anchor, 8-K-only)","2.01,3.01,3.03,5.01,5.02,5.03,8.01,9.01",
-check,BBG002W96FT9,2015-10-12,GOOG,1288776,exchange_transfer,0.000000,no_evidence_default;no_last_close;handoff_continuation,Continuation (8-K12B 0001193125-15-336577): BBG002W96FT9 last traded as GOOG on 2015-10-05 and BBG009S3NB30 took the ticker from 2015-10-06; holders' shares became BBG009S3NB30's,"1.01,3.01,3.03,5.02,5.03,9.01",
+check,BBG002W96FT9,2015-10-12,GOOG,1288776,exchange_transfer,0.000000,no_evidence_default;handoff_continuation,Continuation (8-K12B 0001193125-15-336577): BBG002W96FT9 last traded as GOOG on 2015-10-05 and BBG009S3NB30 took the ticker from 2015-10-06; holders' shares became BBG009S3NB30's,"1.01,3.01,3.03,5.02,5.03,9.01",
 check,BBG004P33PN3,2026-05-11,CWENA,1567683,unknown,0.000000,no_evidence_default,Delisted/deregistered without merger or distress evidence,"1.01,3.03,5.03,5.07,7.01,9.01",
 check,BBG0055XMF02,2021-06-17,STAY,1581164,expiration,0.000000,no_form25;delist_date_approx,Non-equity security (unit),,
 check,BBG005DKMJ67,2023-11-30,LTRPA,1606745,exchange_transfer,0.000000,last_trade_date_conflict;ftd_close_lagged,Continued 10-K/Q filings >180d after delist (moved to OTC or spun off),,
@@ -428,7 +427,7 @@ check,BBG000BH5K72,,DJ,29924,,,ticker_unconfirmed,DJ@2008-01-16 DOW JONES & CO I
 check,BBG000BHD665,,CDWC,899171,,,ticker_unconfirmed,CDWC@2008-01-16 CDW CORP: no fails-to-deliver row under CDWC from 2007-12-17 to 2009-07-08,,2009-06-08
 check,BBG000BHLYP4,,CME,1156375,,,issuer_inferred,CME@2008-01-16 CHICAGO MERCANTILE HLDGS: issuer 1156375 by shared_cusip: shares CUSIP 12572Q105 with CME@2014-06-30,,2009-06-08
 check,BBG000BHLYP4,2008-07-21,CME,1156375,,,form25_unclassified,"25 0001193125-08-149919 (': 20 South Wacker Drive Chicago, IL 60606') has no recognized class",,
-check,BBG000BHSKN9,,GOOG,,,,ticker_shared,GOOG 2007-12-27..2014-04-06 (BBG000BHSKN9) overlaps GOOG 2014-04-04..2015-10-05 (BBG002W96FT9),,
+check,BBG000BHSKN9,,GOOG,,,,ticker_shared,GOOG 2007-12-27..2014-04-06 (BBG000BHSKN9) overlaps GOOG 2014-04-04..2015-10-02 (BBG002W96FT9),,
 check,BBG000BHVJJ3,,EMC,790070,,,issuer_inferred,EMC@2008-01-16 E M C CORP: issuer 790070 by shared_cusip: shares CUSIP 268648102 with EMC@2012-06-29,,2009-06-08
 check,BBG000BHZ5J9,,EQT,33213,,,issuer_inferred,EQT@2009-03-20 EQUITABLE RESOURCES INC: issuer 33213 by shared_cusip: shares CUSIP 26884L109 with EQT@2012-06-29,,2009-06-08
 check,BBG000BJ3QD0,,DADE,1183920,,,ticker_unconfirmed,DADE@2008-01-16 DADE BEHRING HLDGS INC: no fails-to-deliver row under DADE from 2007-12-17 to 2009-07-08,,2009-06-08
@@ -522,7 +521,6 @@ check,BBG000BWQTD0,,WFSL,936528,,,issuer_inferred,WFSL@2008-01-16 WASHINGTON FED
 check,BBG000BWVSR1,,WMI,823768,,,issuer_inferred,WMI@2008-01-16 WASTE MGMT INC: issuer 823768 by shared_cusip: shares CUSIP 94106L109 with WM@2012-06-29,,2009-06-08
 check,BBG000BWZBT2,,WRI,828916,,,issuer_inferred,WRI@2008-01-16 WEINGARTEN RLTY INVS: issuer 828916 by shared_cusip: shares CUSIP 948741103 with WRI@2012-06-29,,2009-06-08
 check,BBG000BX5ZF5,,XRX,108772,,,identity_detached,XRX@2008-01-16 XEROX CORP: its ticker or name pick BBG00NNG2ZJ8 would carry that security's XRX range across BBG000BX5ZF5's confirmed one; resolved again as BBG000BX5ZF5,,2016-12-30
-check,BBG000BX5ZF5,,XRX,,,,ticker_shared,XRX 2007-12-17..2019-08-11 (BBG000BX5ZF5) overlaps XRX 2019-08-02.. (BBG00NNG2ZJ8),,
 check,BBG000BX5ZF5,2019-08-11,XRX,108772,,,handoff_conflict,"BBG00NNG2ZJ8 continues BBG000BX5ZF5 under XRX (timing:cusip), but its merger row says holders were paid, and only timing across two issuers says otherwise; the row stands",,
 check,BBG000BXM6V2,,UA,1336917,,,handoff_takeover_no_delisting,"BBG009DTD8H2 took over UA from 2016-12-08 (BBG000BXM6V2 last seen under it 2016-12-07), but BBG000BXM6V2 has no delisting to record it on",,2016-12-07
 check,BBG000BXM6V2,,UAA,1336917,,,ticker_unconfirmed,UAA@2012-06-29 UNDER ARMOUR INC CLASS A: no fails-to-deliver row under UAA from 2012-05-30 to 2014-07-30,,2014-06-30

@@ -1,13 +1,13 @@
 {
   "as_of": "2026-09-25",
   "cache_answers": {
-    "archives": 7202,
-    "company_tickers": 7,
+    "archives": 7220,
+    "company_tickers": 8,
     "full_text_search": 573,
     "submissions": 23755,
     "submissions_page": 7276
   },
-  "code_version": "5b8e8bb",
+  "code_version": "29e4484",
   "degraded_answers": {},
   "handoffs": {
     "conflicts": 17,
@@ -23,10 +23,10 @@
   "resolution_degraded": 0,
   "review": {
     "accepted": 0,
-    "check": 588,
+    "check": 589,
     "cleared": 0,
-    "fix": 107,
-    "info_hidden": 445,
+    "fix": 104,
+    "info_hidden": 444,
     "unmatched_decisions": 0
   },
   "schema_version": 1,
@@ -38,6 +38,10 @@
       "sec_data_downloads": 0
     },
     "delisting search": {
+      "edgar_requests": 0,
+      "sec_data_downloads": 0
+    },
+    "handoff notice dates": {
       "edgar_requests": 0,
       "sec_data_downloads": 0
     },

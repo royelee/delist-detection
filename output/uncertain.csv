@@ -87,12 +87,11 @@ ending,KSE,BBG000BV52H0,2007-09-07,security_uncertain,
 ending,TXU,BBG000BVW841,2009-06-08,continued_filings_rule;last_trade_not_exchange_print:none;last_trade_date_unconfirmed,
 ending,WBS,BBG000BWMX63,2026-08-30,issuer_from_todays_ticker_map,
 ending,WEN,BBG000BWPN99,2008-10-11,assumed_par_after_failed_gate,
-ending,XRX,BBG000BX5ZF5,2019-08-11,security_uncertain;resolved_from_continued_filings;no_last_trade_date,
+ending,XRX,BBG000BX5ZF5,2019-08-11,resolved_from_continued_filings,
 ending,MLNM,BBG000BX67G5,2008-05-24,no_last_trade_date,
 ending,JNS,BBG000BYD720,2017-06-09,assumed_par_after_failed_gate,
 ending,XMSR,BBG000C070N2,2009-06-08,continued_filings_rule;last_trade_not_exchange_print:none;last_trade_date_unconfirmed,
 ending,SEPR,BBG000C0BGS7,2009-10-30,no_last_trade_date,
-ending,ENDPQ,BBG000C0HQ54,2022-09-24,no_last_trade_date,
 ending,TCF,BBG000C0NY96,2019-08-11,assumed_par_after_failed_gate,
 ending,PCYC,BBG000C11MQ5,2015-06-05,assumed_par_after_failed_gate,
 ending,HLTH,BBG000C1R174,2009-11-02,no_last_trade_date,
@@ -112,7 +111,6 @@ ending,KG,BBG000CB2ZY4,2011-02-28,no_last_trade_date,
 ending,HCR,BBG000CG0HP5,2008-01-05,security_uncertain,
 ending,IMCL,BBG000CGQ485,2008-12-04,no_last_trade_date,
 ending,PX,BBG000CGQ6M4,2018-11-10,assumed_par_after_failed_gate,
-ending,WTNY,BBG000CH11X8,2011-06-16,no_last_trade_date,
 ending,CLI,BBG000CL1HL7,2021-12-10,continued_filings_rule;last_trade_not_exchange_print:none;last_trade_date_unconfirmed,
 ending,ODP,BBG000CNZC55,2020-07-11,resolved_from_continued_filings;no_last_trade_date,
 ending,JNC,BBG000CS7CB8,2007-11-25,security_uncertain;resolved_from_continued_filings,
@@ -145,7 +143,6 @@ ending,LVLT,BBG000HZFZX3,2017-11-11,resolved_from_continued_filings,
 ending,CCO,BBG000J453J8,2019-05-12,issuer_from_todays_ticker_map;resolved_from_continued_filings,
 ending,FNF,BBG000JBSJZ4,2014-07-01,issuer_from_todays_ticker_map;continued_filings_rule,
 ending,SOV,BBG000JXRXK2,2009-06-08,continued_filings_rule;last_trade_not_exchange_print:none;last_trade_date_unconfirmed,
-ending,SSCC,BBG000K1X873,2009-01-30,last_trade_not_exchange_print:none;last_trade_date_unconfirmed,
 ending,GXP,BBG000K3T8L8,2018-06-16,assumed_par_after_failed_gate,
 ending,CTRX,BBG000KBQZ88,2015-08-02,no_last_trade_date,
 ending,AYR,BBG000KZCJJ4,2020-04-09,issuer_from_todays_ticker_map;resolved_from_continued_filings,
@@ -312,7 +309,6 @@ security,MEL,BBG000BNXLK1,2004-07-07,seeds_outside_history:1 from 2008-01-16,
 security,SPXC,BBG000BTGCV5,2008-01-24,ticker_overlap:SPW,CIK88205-COMMON
 security,TEK,BBG000BV3594,2004-12-10,seeds_outside_history:1 from 2008-01-16,
 security,KSE,BBG000BV52H0,2004-11-15,seeds_outside_history:1 from 2008-01-16,
-security,XRX,BBG000BX5ZF5,2007-12-17,ticker_overlap:XRX,BBG00NNG2ZJ8
 security,QDEL,BBG000C6GN04,2008-04-03,ticker_overlap:QDEL,BBG017TGV7M2
 security,HCR,BBG000CG0HP5,2007-12-17,seeds_outside_history:1 from 2008-01-16,
 security,JNC,BBG000CS7CB8,2005-03-09,seeds_outside_history:1 from 2008-01-16,
@@ -327,7 +323,6 @@ security,GCI,BBG006XVD9G0,2015-07-01,ticker_overlap:GCI,BBG000BK5DP1
 security,AVGO,BBG009XV39D8,2016-02-01,ticker_overlap:AVGO,BBG00KHY5S69
 security,AVGO,BBG00KHY5S69,2018-04-06,ticker_overlap:AVGO,BBG009XV39D8
 security,CI,BBG00KXRCDP0,2018-12-24,ticker_overlap:CI,BBG000BFMBQ6
-security,XRX,BBG00NNG2ZJ8,2019-08-02,ticker_overlap:XRX,BBG000BX5ZF5
 security,QDEL,BBG017TGV7M2,2022-05-31,ticker_overlap:QDEL,BBG000C6GN04
 security,LLYVA,BBG01HMFL081,2023-08-04,ticker_overlap:LLYVA,BBG01YY256K1
 security,LLYVK,BBG01HMFLTN1,2023-08-04,ticker_overlap:LLYVK,BBG01YYX1Z14
@@ -602,6 +597,8 @@ seed,EAS,BBG000HZT3L2,2008-11-18,outside_security_history,
 seed,EAS,BBG000HZT3L2,2009-01-23,outside_security_history,
 seed,EAS,BBG000HZT3L2,2009-03-20,outside_security_history,
 seed,EAS,BBG000HZT3L2,2009-06-08,outside_security_history,
+seed,SSCC,BBG000K1X873,2009-03-20,outside_security_history,
+seed,SSCC,BBG000K1X873,2009-06-08,outside_security_history,
 seed,THE,BBG000L93Q69,2008-01-16,outside_security_history,
 seed,THE,BBG000L93Q69,2008-05-31,outside_security_history,
 seed,THE,BBG000L93Q69,2008-07-25,outside_security_history,

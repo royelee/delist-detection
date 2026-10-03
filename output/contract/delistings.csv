@@ -33,8 +33,8 @@ BBG000BBSX81,2016-01-14,merger,,false,,,0.001870,,11.671780,confirmed
 BBG000BBVCN6,2016-09-02,dropped,bankruptcy,false,,,,-0.300000,,confirmed
 BBG000BBVK30,2012-01-04,dropped,bankruptcy,false,,,,-0.300000,,confirmed
 BBG000BBXQ71,2011-03-08,merger,,false,,,0.000000,,19.000000,confirmed
-BBG000BBY4T5,,exchange,,true,BBG00RQ70GQ2,,,,,confirmed
-BBG000BC15S7,,exchange,,true,BBG00SSQFPK6,,,,,confirmed
+BBG000BBY4T5,2020-07-01,exchange,,true,BBG00RQ70GQ2,,,,,confirmed
+BBG000BC15S7,2020-03-31,exchange,,true,BBG00SSQFPK6,,,,,confirmed
 BBG000BC16H7,2018-11-15,merger,,false,,,0.000154,,65.000000,confirmed
 BBG000BC26P7,2026-01-22,merger,,false,,,-0.003569,,16.750000,confirmed
 BBG000BC2C10,,exchange,,true,BBG00YTS96G2,,,,,uncertain
@@ -98,7 +98,7 @@ BBG000BG09F5,2020-11-25,dropped,bankruptcy,false,,,,-0.550000,,uncertain
 BBG000BG14P4,2025-09-26,dropped,bankruptcy,false,,,,-0.300000,,uncertain
 BBG000BG1DH3,2022-06-30,merger,,false,,BBG000BLW102,0.000543,,266.364500,confirmed
 BBG000BG4JL2,2012-09-28,merger,,false,,,0.004464,,45.000000,confirmed
-BBG000BG7423,,exchange,,true,BBG017BXPZ85,,,,,confirmed
+BBG000BG7423,2022-05-16,exchange,,true,BBG017BXPZ85,,,,,confirmed
 BBG000BG8814,2018-02-28,merger,,false,,,0.000435,,23.000000,confirmed
 BBG000BGCGB0,2011-01-13,merger,,false,,,0.000635,,31.500000,confirmed
 BBG000BGFLL5,2013-11-12,merger,,false,,,,0.000000,45.290000,uncertain
@@ -131,7 +131,7 @@ BBG000BHK836,2021-05-13,merger,,false,,,0.000970,,57.395638,confirmed
 BBG000BHNPN3,2012-07-02,merger,,false,,,0.000706,,92.064988,confirmed
 BBG000BHQ1H0,2015-03-16,merger,,false,,BBG000FH8PX5,0.005543,,241.551500,confirmed
 BBG000BHQYG9,2018-11-29,merger,,false,,,0.000422,,72.150400,confirmed
-BBG000BHSKN9,,exchange,,true,BBG009S39JX6,,,,,uncertain
+BBG000BHSKN9,2015-10-02,exchange,,true,BBG009S39JX6,,,,,uncertain
 BBG000BHVJJ3,2016-09-06,merger,,false,,,0.002267,,29.115857,confirmed
 BBG000BHW628,2016-06-01,merger,,false,,,0.000000,,67.180000,confirmed
 BBG000BHWTB8,2016-11-30,merger,,false,,,-0.029237,,63.119000,confirmed
@@ -186,7 +186,7 @@ BBG000BMB7R1,,exchange,,true,BBG00CVQZQ96,,,,,uncertain
 BBG000BMDV41,2016-09-06,merger,,false,,BBG000BVWLJ6,,0.000000,48.900000,uncertain
 BBG000BMDZF0,2019-06-28,merger,,false,,,0.002851,,245.869000,confirmed
 BBG000BMFD58,2020-10-05,merger,,false,,,0.001548,,40.031878,confirmed
-BBG000BMFFQ0,,exchange,,true,BBG019C1BQR4,,,,,confirmed
+BBG000BMFFQ0,2022-08-26,exchange,,true,BBG019C1BQR4,,,,,confirmed
 BBG000BMGL77,2008-07-02,merger,,false,,,0.000589,,34.000000,confirmed
 BBG000BMJYW8,2011-06-02,merger,,false,,BBG000B9Z0J8,-0.000076,,15.208848,confirmed
 BBG000BMKDM3,2025-12-10,merger,,false,,,0.000719,,83.500000,confirmed
@@ -289,7 +289,7 @@ BBG000BWZBT2,2021-08-03,merger,,false,,,-0.010168,,31.120320,confirmed
 BBG000BX0R13,2011-06-24,merger,,false,,,0.002018,,382.770993,confirmed
 BBG000BX3B60,2008-10-06,merger,,false,,,0.000375,,80.000000,confirmed
 BBG000BX3TD3,2025-06-17,merger,,false,,,0.002918,,55.000000,confirmed
-BBG000BX5ZF5,,merger,,false,,,,,,uncertain
+BBG000BX5ZF5,2019-07-31,merger,,false,,,0.000000,,32.100000,uncertain
 BBG000BX67G5,,merger,,false,,,,,,uncertain
 BBG000BX6BJ3,2022-10-18,merger,,false,,,0.000271,,848.020000,confirmed
 BBG000BX8DC4,2025-09-05,merger,,false,,,-0.000416,,24.000000,confirmed
@@ -306,7 +306,7 @@ BBG000C01DF9,2008-07-09,merger,,false,,,0.000385,,78.000000,confirmed
 BBG000C070N2,,exchange,,false,,,,0.000000,,uncertain
 BBG000C0BGS7,,merger,,false,,,,,,uncertain
 BBG000C0F570,2022-02-11,merger,,false,,,0.000690,,195.054412,confirmed
-BBG000C0HQ54,,dropped,bankruptcy,false,,,,,,uncertain
+BBG000C0HQ54,2022-08-25,dropped,bankruptcy,false,,,,-0.550000,,confirmed
 BBG000C0MF34,2016-01-29,merger,,false,,,0.000213,,235.000000,confirmed
 BBG000C0NY96,2019-07-31,merger,,false,,BBG000BFK8Y6,,0.000000,42.040000,uncertain
 BBG000C0PBV9,2008-12-31,merger,,false,,,0.061215,,1.920800,confirmed
@@ -320,7 +320,7 @@ BBG000C1R174,,merger,,false,,,,,,uncertain
 BBG000C1SCJ6,2019-05-02,merger,,false,,,0.000423,,331.500000,confirmed
 BBG000C1XKF6,,exchange,,true,BBG01Z7V4LL1,,,,,confirmed
 BBG000C22QV7,2026-04-08,merger,,false,,,0.000000,,42.150000,confirmed
-BBG000C240W1,,exchange,,true,BBG004S5X3Y9,,,,,confirmed
+BBG000C240W1,2013-07-10,exchange,,true,BBG004S5X3Y9,,,,,confirmed
 BBG000C2H3F0,2021-06-03,merger,,false,,,0.000000,,80.000000,confirmed
 BBG000C2HB99,2012-04-09,merger,,false,,,-0.039863,,47.113920,confirmed
 BBG000C2NV89,2008-08-25,merger,,false,,,0.001603,,25.000000,confirmed
@@ -360,7 +360,7 @@ BBG000C8FRK0,2011-10-13,merger,,false,,,0.000123,,81.500000,confirmed
 BBG000C8H633,2024-11-21,merger,,false,,,-0.000543,,28.534500,confirmed
 BBG000C90DH9,2025-11-26,merger,,false,,,0.001058,,24.596000,confirmed
 BBG000C9N6Q9,,exchange,,false,,,,0.000000,,uncertain
-BBG000C9W1Y1,,exchange,,true,BBG00DBBG1M0,,,,,confirmed
+BBG000C9W1Y1,2016-07-22,exchange,,true,BBG00DBBG1M0,,,,,confirmed
 BBG000CB2ZY4,,merger,,false,,,,,,uncertain
 BBG000CCFBC5,2012-08-10,merger,,false,,,0.000241,,41.500000,confirmed
 BBG000CF2GH6,2017-02-15,merger,,false,,,0.000417,,24.000000,confirmed
@@ -368,7 +368,7 @@ BBG000CG0HP5,2007-12-21,merger,,false,,,0.000149,,67.000000,uncertain
 BBG000CGQ485,,merger,,false,,,,,,uncertain
 BBG000CGQ6M4,2018-10-30,merger,,false,,,,0.000000,164.500000,uncertain
 BBG000CGT2S4,2016-04-29,dropped,bankruptcy,false,,,,-0.300000,,confirmed
-BBG000CH11X8,,merger,,false,,,,,,uncertain
+BBG000CH11X8,2011-06-03,merger,,false,,,0.003200,,13.392720,confirmed
 BBG000CKJ0P3,2014-02-03,merger,,false,,,-0.000526,,76.000000,confirmed
 BBG000CKRZF8,2008-04-18,merger,,false,,,0.009787,,56.507690,confirmed
 BBG000CL1HL7,,exchange,,false,,,,0.000000,,uncertain
@@ -398,7 +398,7 @@ BBG000D2ZTS8,2025-11-28,merger,,false,,,0.003654,,6.493640,confirmed
 BBG000D3MB18,2013-06-07,merger,,false,,,0.017136,,50.490650,confirmed
 BBG000D6L294,2021-09-30,merger,,false,,,0.001808,,87.357696,confirmed
 BBG000D7DN13,2013-07-09,merger,,false,,,0.002004,,5.000000,confirmed
-BBG000D9DMK0,,exchange,,true,BBG01MMT6PL7,,,,,confirmed
+BBG000D9DMK0,2024-05-17,exchange,,true,BBG01MMT6PL7,,,,,confirmed
 BBG000D9V7T4,2020-10-16,merger,,false,,,0.000000,,59.230000,confirmed
 BBG000DBTPX7,2015-12-14,merger,,false,,,0.001341,,35.817950,confirmed
 BBG000DBVBY4,2021-02-26,merger,,false,,,,0.000000,72.210000,uncertain
@@ -500,7 +500,7 @@ BBG000JN7HR4,2011-11-04,merger,,false,,,0.000584,,68.500000,confirmed
 BBG000JN9BQ6,2014-09-24,dropped,bankruptcy,false,,,,-0.550000,,confirmed
 BBG000JXRXK2,,exchange,,false,,,,0.000000,,uncertain
 BBG000K14Q84,2017-04-05,merger,,false,,,0.000000,,28.300000,confirmed
-BBG000K1X873,,dropped,bankruptcy,false,,,,-0.550000,,uncertain
+BBG000K1X873,2009-02-03,dropped,bankruptcy,false,,,,-0.550000,,confirmed
 BBG000K3T8L8,2018-06-04,merger,,false,,,,0.000000,31.990000,uncertain
 BBG000K7PWX7,2015-08-06,merger,,false,,,0.004326,,48.750000,confirmed
 BBG000KBQZ88,,merger,,false,,,,,,uncertain
@@ -561,7 +561,7 @@ BBG000QQFVK6,2021-10-21,merger,,false,,,0.003433,,13.195140,confirmed
 BBG000QRFNK2,2018-08-17,merger,,false,,,0.000434,,23.040000,confirmed
 BBG000QS8XF2,2018-07-17,merger,,false,,,0.000147,,68.000000,confirmed
 BBG000QW8XR0,2017-09-15,merger,,false,,,0.000451,,66.500000,confirmed
-BBG000R06BX2,,exchange,,true,BBG0088CYPX8,,,,,confirmed
+BBG000R06BX2,2015-08-28,exchange,,true,BBG0088CYPX8,,,,,confirmed
 BBG000R23VW8,2021-04-20,merger,,false,,,0.001256,,172.486320,confirmed
 BBG000R33BD1,2023-09-25,merger,,false,,,0.000812,,172.500000,confirmed
 BBG000R33RF4,2015-08-27,merger,,false,,,0.000172,,232.000000,confirmed
@@ -581,7 +581,7 @@ BBG000VBZJB8,2014-01-02,merger,,false,,,-0.000233,,37.371295,confirmed
 BBG000VCQPM0,2019-10-28,merger,,false,,,0.000325,,92.250000,confirmed
 BBG000VD6768,2022-05-20,merger,,false,,,0.004214,,8.214472,confirmed
 BBG000VMWHH5,2022-04-08,merger,,false,,,,0.000000,24.420000,uncertain
-BBG000W4G3B9,,exchange,,true,BBG00JPGYW43,,,,,confirmed
+BBG000W4G3B9,2018-03-27,exchange,,true,BBG00JPGYW43,,,,,confirmed
 BBG000WCRGZ4,2016-04-27,merger,,false,,,-0.000351,,28.500000,confirmed
 BBG0014FFY08,2023-10-05,merger,,false,,,0.001720,,116.500000,confirmed
 BBG0014GG205,2019-01-31,merger,,false,,,0.001814,,8.395200,confirmed
@@ -604,7 +604,7 @@ BBG001NFKJ68,2023-11-07,merger,,false,,,0.000115,,87.000000,confirmed
 BBG001NY45K9,2021-01-06,merger,,false,,,0.003423,,9.462280,confirmed
 BBG001P3K000,2020-12-14,merger,,false,,,0.001505,,106.500000,confirmed
 BBG001PJFKH9,2018-07-30,merger,,false,,,-0.024390,,18.000000,confirmed
-BBG001QD41M9,,exchange,,true,BBG01R914LT5,,,,,confirmed
+BBG001QD41M9,2024-12-17,exchange,,true,BBG01R914LT5,,,,,confirmed
 BBG001YMS0B8,2015-07-02,merger,,false,,,,0.000000,88.190000,uncertain
 BBG001Z7M393,2015-09-30,merger,,false,,,0.005808,,17.501054,confirmed
 BBG0020B4JG7,2022-09-09,merger,,false,,,0.000870,,23.000000,confirmed
@@ -621,7 +621,7 @@ BBG002BHBHM1,2020-10-12,dropped,bankruptcy,false,,,,-0.300000,,uncertain
 BBG002DZS299,2022-06-21,merger,,false,,,0.035619,,66.000000,confirmed
 BBG002PQMF02,2019-10-23,merger,,false,,,-0.055882,,3.210000,confirmed
 BBG002V098F7,2025-09-30,merger,,false,,,0.011338,,213.180000,confirmed
-BBG002W96FT9,,exchange,,true,BBG009S3NB30,,,,,uncertain
+BBG002W96FT9,2015-10-02,exchange,,true,BBG009S3NB30,,,,,uncertain
 BBG002WMH2F2,2022-10-11,merger,,false,,,-0.087140,,34.570000,confirmed
 BBG002ZM63J5,2020-03-06,merger,,false,,,0.000286,,35.000000,confirmed
 BBG0033377Y3,2020-12-23,merger,,false,,,0.000179,,56.000000,confirmed
@@ -729,7 +729,7 @@ BBG00GLNJ018,2026-01-29,merger,,false,,,-0.000676,,27.361500,confirmed
 BBG00GQK3WB5,2025-01-21,merger,,false,,,0.000531,,56.500000,confirmed
 BBG00GSNPM07,2026-06-30,merger,,false,,,0.000962,,52.000000,uncertain
 BBG00GTWPCQ0,2020-10-01,merger,,false,,,0.000580,,17.029878,confirmed
-BBG00GVR8YQ9,,exchange,,true,BBG01FND0CC1,,,,,confirmed
+BBG00GVR8YQ9,2023-03-01,exchange,,true,BBG01FND0CC1,,,,,confirmed
 BBG00GX77LW3,2023-09-01,merger,,false,,,,,,confirmed
 BBG00HJ8K617,2023-09-29,merger,,false,,,0.000000,,1.000000,confirmed
 BBG00HPDM5Z2,2022-12-05,merger,,false,,,0.000000,,34.250000,confirmed
