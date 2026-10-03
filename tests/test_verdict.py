@@ -73,6 +73,8 @@ def test_two_securities_holding_one_ticker_at_once_are_both_uncertain_unless_an_
     (dict(bucket="unknown"), "unknown_exit_kind"),
     (dict(flags="resolved_by_current_ticker_map"), "issuer_from_todays_ticker_map"),
     (dict(method="assumed_par", flags="payout_gate_failed:34.88"), "assumed_par_after_failed_gate"),
+    (dict(method="assumed_par", flags="llm_gate_failed:no_acq_price"), "assumed_par_after_failed_gate"),
+    (dict(method="assumed_par", flags="terms_gate_failed:no_acq_price"), "assumed_par_after_failed_gate"),
 ])
 def test_each_ending_rule(cells, reason):
     row = ending("A", "2015-03-10", **{**GOOD, **cells})
@@ -170,3 +172,8 @@ def test_an_ending_the_resolver_relabelled_stays_uncertain():
                        reason="Change in control (8-K item 5.01 filed 2020-11-02); the registrant kept filing after it")],
                [obs("AAA", "2010-01-04", "S")])
     assert "resolved_from_continued_filings" in decide(t, {}).endings[("S", "2020-11-30")].reasons
+
+
+def test_a_failed_gate_on_a_merger_valued_another_way_is_not_the_assumed_par_rule():
+    row = ending("A", "2015-03-10", **{**GOOD, "method": "cash_only", "flags": "llm_gate_failed:no_acq_price"})
+    assert "assumed_par_after_failed_gate" not in _one(row).endings[("A", "2015-03-10")].reasons

@@ -20,7 +20,7 @@ enforces"; decisions 1, 4 and 9).
   exchange's notice, 8-K item 3.01) that is confirmed, that no other text
   source contradicts unless MIDAS or a halt measured it, and that falls no
   later than the Form 25's effective date. The value never decides the
-  verdict, except assumed par after a failed payout gate (decision 4).
+  verdict, except assumed par after a failed payout, LLM or terms gate (decision 4).
   An ending that is not its security's last (one that ended, returned and
   ended again) is uncertain, `earlier_ending:<the last one's delist_date>`: the
   contract keeps one ending per security (decision 12).
@@ -47,6 +47,7 @@ from .exit_kind import ending_fields
 SEED, SECURITY, ENDING = "seed", "security", "ending"
 FORM25_EFFECTIVE_DAYS = 10               # a Form 25 takes effect 10 days after it is filed
 MEASURED_SOURCES = frozenset({"midas", "nasdaq_halt"})
+GATE_FAILED = frozenset({"payout_gate_failed", "llm_gate_failed", "terms_gate_failed"})   # decision 4's failed gates
 SECURITY_UNCERTAIN = "security_uncertain"
 CONFIRMED, UNCERTAIN = "confirmed", "uncertain"
 
@@ -148,7 +149,7 @@ def _ending_reasons(row: Mapping[str, str], security: Verdict | None) -> list[st
         reasons.append("no_evidence_default")
     if not ending_fields(row).exit_kind:
         reasons.append("unknown_exit_kind")
-    if row["dlret_method"] == "assumed_par" and "payout_gate_failed" in flags:
+    if row["dlret_method"] == "assumed_par" and flags & GATE_FAILED:
         reasons.append("assumed_par_after_failed_gate")
     if _is_continuation(row):
         if "(timing:cik)" in row["reason"]:
