@@ -563,6 +563,63 @@ git commit -m "Acceptance: the end-of-era resolver's first step (reset-4a)"
 
 ---
 
+### Task 6 (added during execution, 2026-10-02): resolver endings stay uncertain
+
+Task 5's first rebuild (left view 120 → 63, audit left-view errors 114 → 76) showed 13 audit rows becoming
+confirmed but wrong: they were wrong before, under the continued-filings rule's uncertain reason, and lost that
+reason when the resolver relabelled them. Until reset-4a2 adds security-level checks (a later sighting of the same
+issuer, a new CUSIP, OpenFIGI's later ticker), an ending the resolver relabelled stays uncertain.
+
+**Files:**
+- Modify: `src/delist_detection/lifecycle.py` (a constant), `src/delist_detection/end_of_era.py`, `src/delist_detection/verdict.py`
+- Test: `tests/test_end_of_era.py`, `tests/test_verdict.py`
+
+**Interfaces:**
+- Produces: `lifecycle.RESOLVED_FROM_CONTINUED_FILINGS = "; the registrant kept filing after it"`; every resolver
+  reason except branch 1 and branch 6 contains it; `verdict._ending_reasons` adds `resolved_from_continued_filings`.
+
+- [ ] **Step 1: Write the failing tests**
+
+Add to `tests/test_end_of_era.py`:
+
+```python
+from delist_detection.lifecycle import RESOLVED_FROM_CONTINUED_FILINGS
+
+
+def test_every_relabelled_ending_says_the_registrant_kept_filing():
+    for s in (_s(successor_filing="8-K12B 2020-12-01"), _s(item_filed={"5.01": "2020-11-02"}),
+              _s(item_filed={"2.01": "2020-11-02"}, delist_filing="25-NSE 2020-11-03"),
+              _s(item_filed={"3.01": "2020-11-02"}, deficiency_notice="8-K 2020-11-02")):
+        assert RESOLVED_FROM_CONTINUED_FILINGS in resolve(s, None).reason
+    assert RESOLVED_FROM_CONTINUED_FILINGS not in resolve(_s(), None).reason
+```
+
+Add to `tests/test_verdict.py`:
+
+```python
+def test_an_ending_the_resolver_relabelled_stays_uncertain():
+    t = tables([sec("S")], [iv("S", "AAA", "2010-01-04", "2020-11-19")],
+               [ending("S", "2020-11-30", ltd="2020-11-19", dlret="0.100000",
+                       reason="Change in control (8-K item 5.01 filed 2020-11-02); the registrant kept filing after it")],
+               [obs("AAA", "2010-01-04", "S")])
+    assert "resolved_from_continued_filings" in decide(t, {}).endings[("S", "2020-11-30")].reasons
+```
+
+- [ ] **Step 2:** Run both files; expect an ImportError on `RESOLVED_FROM_CONTINUED_FILINGS` and the verdict test
+  failing.
+- [ ] **Step 3: Implement.** In `lifecycle.py`, after `CONTINUED_FILINGS`, add
+  `RESOLVED_FROM_CONTINUED_FILINGS = "; the registrant kept filing after it"   # end_of_era's relabelled endings`.
+  In `end_of_era.py`, import it, replace the local `kept` with it, and end the successor branch's reason with it
+  too (`f"Successor registration {s.successor_filing}: the security continues under a successor{RESOLVED_FROM_CONTINUED_FILINGS}"`);
+  update the existing successor test's `startswith` if needed (it checks only the start). In `verdict.py`, import it
+  and in `_ending_reasons`, after the `continued_filings_rule` check, add
+  `if RESOLVED_FROM_CONTINUED_FILINGS in row["reason"]: reasons.append("resolved_from_continued_filings")`; list the
+  new reason in the module docstring's ending paragraph ("an ending the end-of-era resolver relabelled from the
+  continued-filings rule stays uncertain until its security-level checks exist").
+- [ ] **Step 4:** Run `tests/test_end_of_era.py`, `tests/test_verdict.py`, `tests/test_classifier.py`, then the full
+  suite (expect 1665 passed, 24 xfailed).
+- [ ] **Step 5: Commit** — `git commit -m "verdict: endings the resolver relabelled stay uncertain (reset-4a)"`
+
 ## Self-review
 
 - **Spec coverage.** Branch order 1–6 of the spec's resolver table, restricted to the continued-filings case
