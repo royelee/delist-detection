@@ -139,6 +139,16 @@ def test_row_count_equals_the_number_of_observations_given():
     assert len(rows) == 3
 
 
+def test_a_masked_fails_symbol_is_not_a_ticker_sighting():
+    """SEC's 2007 fails files mask some symbols (**********): not a ticker."""
+    from delist_detection.history import ticker_sightings
+    from delist_detection.security_master import Security
+    sec = Security("CIK1-COMMON", 1, "COMMON", "AAA INC", "Common Stock", False, "placeholder")
+    ftd = FtdIndex([FtdRow("2007-03-01", "CUSIP1", "AAA", "AAA INC", 5.0),
+                    FtdRow("2007-03-02", "CUSIP1", "**********", "AAA INC", 5.0)])
+    assert {s.value for s in ticker_sightings(sec, ftd, ["CUSIP1"])} == {"AAA"}
+
+
 # --- filtered_ticker_sightings: Phase 4 rule 2 ---
 
 def test_filtered_ticker_sightings_drops_a_backfilled_observation_but_keeps_ftd_evidence():

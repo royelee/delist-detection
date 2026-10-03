@@ -103,7 +103,9 @@ def ticker_sightings(sec: Security, ftd: FtdIndex, cusips: Sequence[str]) -> lis
     sighting of trading: it opens and extends no range, and counts in no
     `seen_after`, `last_seen` or sibling span."""
     out = [Sighting(o.as_of, o.ticker, "observation") for e in sec.eras for o in e.observations]
-    out += [Sighting(r.date, r.symbol, "ftd") for r in ftd.trading_rows(cusips)]
+    # SEC's 2007 fails files mask some symbols (**********): not a ticker
+    out += [Sighting(r.date, r.symbol, "ftd") for r in ftd.trading_rows(cusips)
+            if any(ch.isalpha() for ch in r.symbol)]
     label: dict[str, str] = {}
     for t in sorted({o.ticker for e in sec.eras for o in e.observations}, key=lambda t: ("-" not in t, t)):
         label.setdefault(t.replace("-", ""), t)
