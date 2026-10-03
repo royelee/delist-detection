@@ -177,7 +177,6 @@ def _ending_lines(tables: Tables, window: Window | None) -> dict[str, float]:
     missing_ltd = [r for r in real if not r["last_trade_date"]]
     blank = [r for r in real if not r["dlret"]]
     distress = [r for r in real if is_distress(r)]
-    assumed_par = [r for r in real if fields[id(r)].exit_kind == "merger" and fields[id(r)].dlret_fill]
     out: dict[str, float] = {
         "R1.3.transfer_no_successor": len(xfer),
         "R1.3.transfer_no_successor_placeholder": sum(r["sec_id"].startswith("CIK") for r in xfer),
@@ -187,7 +186,7 @@ def _ending_lines(tables: Tables, window: Window | None) -> dict[str, float]:
         "R2.1.exchange_print_source": sum(r["last_trade_date_source"] in EXCHANGE_PRINT_SOURCES for r in real),
         "R2.2.unknown_reason": sum(not fields[id(r)].exit_kind for r in real),
         "R2.2.continued_filings_rule": sum(r["reason"].startswith(CONTINUED_FILINGS) for r in real),
-        "R2.4.assumed_par": len(assumed_par),
+        "R2.4.assumed_par": sum(r["dlret_method"] == "assumed_par" for r in real),
         "R2.5.distress": len(distress),
         "R2.5.distress_blank_dlret": sum(not r["dlret"] for r in distress),
         "R2.5.distress_no_last_trade_date": sum(not r["last_trade_date"] for r in distress),
@@ -204,7 +203,7 @@ def _ending_lines(tables: Tables, window: Window | None) -> dict[str, float]:
             "R2.3.blank_dlret_in_window": len(blank_w),
             "R2.3.blank_needs_last_close_in_window": sum(r["dlret_method"] == "needs_last_trade" for r in blank_w),
             "R2.3.blank_no_value_in_window": sum(r["dlret_method"] != "needs_last_trade" for r in blank_w),
-            "R2.4.assumed_par_in_window": sum(inw(r) for r in assumed_par),
+            "R2.4.assumed_par_in_window": sum(r["dlret_method"] == "assumed_par" and inw(r) for r in real),
             "R2.5.distress_in_window": sum(inw(r) for r in distress),
         })
     return out
