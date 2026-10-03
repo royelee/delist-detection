@@ -16,6 +16,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import date, datetime, timedelta
 from typing import Iterable
 
+from . import end_of_era
 from .crsp_codes import CrspBucket, bucket_for_code
 from .edgar import STALE_KEY, EdgarClient, EdgarSubmission, submissions_fresh_after
 from .evidence import (
@@ -206,6 +207,22 @@ class DelistClassifier:
             if lo <= fd <= delist_date:
                 return True
         return False
+
+    def _deficiency_notice(self, cik: int, filings: list[EdgarSubmission], on: date) -> str:
+        """`"8-K <date>"` of the first 8-K with item 3.01 in the resolver's window
+        around `on` whose 3.01 text cites a listing deficiency, else ""."""
+        lo = on - timedelta(days=end_of_era.ITEMS_BEFORE_DAYS)
+        hi = on + timedelta(days=end_of_era.ITEMS_AFTER_DAYS)
+        for f in sorted(filings, key=lambda f: f.filing_date):
+            if not f.form.startswith("8-K") or "3.01" not in f.item_set:
+                continue
+            d = _parse_date(f.filing_date)
+            if d is None or not lo <= d <= hi:
+                continue
+            text = self.edgar.fetch_filing_text(cik, f.accession, f.primary_doc)
+            if cites_listing_deficiency(item_text(text, "3.01")):
+                return f"8-K {f.filing_date}"
+        return ""
 
     def _pick_delist_filing(
         self,
@@ -562,8 +579,9 @@ class DelistClassifier:
         *,
         expected_name: str | None,
         delist_filing_override: EdgarSubmission | None = None,
+        trading_after: bool = False,
     ) -> DelistRecord:
-        observed = _parse_date(observed_delist_date) if observed_delist_date else None
+        observed =_parse_date(observed_delist_date) if observed_delist_date else None
 
         flags: list[str] = []
         if observed:
@@ -696,15 +714,23 @@ class DelistClassifier:
 
         # Exchange-transfer override is the strongest single signal —
         # check it BEFORE the Form-25-or-not branches.
+        # The registrant kept filing after the end: the end-of-era resolver reads the
+        # evidence around the end (a successor filing, a change in control, a completed
+        # acquisition, a deficiency notice) before calling it an exchange transfer.
         if observed and self._detect_continued_filings(filings, observed):
+            era = end_of_era.signals(filings, observed, trading_after=trading_after,
+                                     deficiency_notice=self._deficiency_notice(resolution.cik, filings, observed))
+            items_code, _ = self._classify_items(set(era.item_filed))
+            verdict = end_of_era.resolve(era, items_code)
+            evidence["end_of_era"] = verdict.branch
             return DelistRecord(
                 ticker=ticker.upper(),
                 cik=resolution.cik,
                 observed_delist_date=observed_delist_date,
-                crsp_code=304,
-                bucket=CrspBucket.EXCHANGE_TRANSFER,
+                crsp_code=verdict.crsp_code,
+                bucket=verdict.bucket,
                 confidence="medium",
-                reason="Continued 10-K/Q filings >180d after delist (moved to OTC or spun off)",
+                reason=verdict.reason,
                 evidence=evidence,
             )
 
@@ -805,6 +831,7 @@ class DelistClassifier:
         kind: str = "common",
         form25: EdgarSubmission | None = None,
         resolution_source: str = "security_master",
+        trading_after: bool = False,
     ) -> DelistRecord:
         """Classify one delisting of a security whose issuer is already known.
 
@@ -817,6 +844,8 @@ class DelistClassifier:
         drives the classifier's cik_map/manual-override qualifiers) exactly as
         `classify_ticker` records the resolver tier that found the CIK; the
         security master's own resolution defaults to "security_master".
+        `trading_after`: the security still traded after the end (the delisting
+        finder's `continued`); the end-of-era resolver then keeps today's transfer.
         """
         if kind in NON_EQUITY_KINDS:
             return DelistRecord(
@@ -827,7 +856,7 @@ class DelistClassifier:
             )
         resolution = TickerResolution(ticker.upper(), int(cik), name, resolution_source)
         return self._classify_resolved(ticker, resolution, anchor_date, expected_name=expected_name,
-                                       delist_filing_override=form25)
+                                       delist_filing_override=form25, trading_after=trading_after)
 
     def classify_many(
         self, items: Iterable[tuple[str, str | None]]

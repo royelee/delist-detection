@@ -723,3 +723,51 @@ def test_svbs_real_unpunctuated_heading_still_confirms_through_the_body():
     assert section.count("\n") == 0                     # the stripped text has no newlines
     assert not _drop_heading(section).lower().startswith("bankruptcy or receivership")
     assert _confirms_bankruptcy(t) is True
+
+
+def _era_classify(filings, texts=None, *, trading_after=False):
+    e = _TextEdgar(filings, texts or {})
+    from delist_detection.ticker_resolver import TickerResolver
+    return DelistClassifier(e, TickerResolver(e)).classify_event(
+        ticker="REORG", cik=5, anchor_date="2020-11-20", trading_after=trading_after)
+
+
+_KEPT_FILING = EdgarSubmission("Q1", "10-Q", "2021-08-05", "", "", "q.htm")     # > 180 days after the end
+
+
+def test_a_change_in_control_beats_the_continued_filings_rule():
+    rec = _era_classify([EdgarSubmission("K1", "8-K", "2020-11-02", "", "2.01,3.01,5.01", "k.htm"),
+                         EdgarSubmission("F1", "25-NSE", "2020-11-03", "", "", "p.xml"), _KEPT_FILING])
+    assert (rec.bucket, rec.crsp_code) == (CrspBucket.MERGER, 231)
+    assert rec.reason.startswith("Change in control") and rec.evidence["end_of_era"] == "change_in_control"
+
+
+def test_a_completed_acquisition_with_a_proxy_is_a_merger():
+    rec = _era_classify([EdgarSubmission("P1", "DEFM14A", "2020-08-01", "", "", "p.htm"),
+                         EdgarSubmission("K1", "8-K", "2020-11-02", "", "2.01,9.01", "k.htm"), _KEPT_FILING])
+    assert (rec.bucket, rec.crsp_code) == (CrspBucket.MERGER, 231) and rec.reason.startswith("Completed acquisition")
+
+
+def test_a_deficiency_notice_is_a_compliance_failure_and_a_merger_notice_is_not():
+    k = EdgarSubmission("K1", "8-K", "2020-11-02", "", "3.01", "k.htm")
+    bad = _era_classify([k, _KEPT_FILING], {"K1": "Item 3.01 Notice of Delisting. The Company is not in compliance "
+                                                   "with the minimum bid price requirement."})
+    other = _era_classify([k, _KEPT_FILING], {"K1": "Item 3.01 Notice of Delisting. In connection with the merger, "
+                                                     "the Company notified the exchange."})
+    assert (bad.bucket, bad.crsp_code) == (CrspBucket.COMPLIANCE_FAILURE, 570)
+    assert (other.bucket, other.crsp_code) == (CrspBucket.EXCHANGE_TRANSFER, 304)
+    assert other.reason.startswith("Continued 10-K/Q filings")
+
+
+def test_a_security_still_trading_keeps_todays_transfer():
+    rec = _era_classify([EdgarSubmission("K1", "8-K", "2020-11-02", "", "5.01", "k.htm"), _KEPT_FILING],
+                        trading_after=True)
+    assert (rec.bucket, rec.crsp_code) == (CrspBucket.EXCHANGE_TRANSFER, 304)
+    assert rec.reason == "Continued 10-K/Q filings >180d after delist (moved to OTC or spun off)"
+
+
+def test_continued_filings_alone_keep_todays_reason():
+    rec = _era_classify([_KEPT_FILING])
+    assert (rec.bucket, rec.crsp_code, rec.confidence) == (CrspBucket.EXCHANGE_TRANSFER, 304, "medium")
+    assert rec.reason == "Continued 10-K/Q filings >180d after delist (moved to OTC or spun off)"
+    assert rec.evidence["end_of_era"] == "continued_filings"
