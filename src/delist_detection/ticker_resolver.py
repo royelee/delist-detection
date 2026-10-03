@@ -475,6 +475,11 @@ class TickerResolver:
                 self._name_index_failed = True
         return self._name_index
 
+    def name_index(self) -> CikNameIndex | None:
+        """SEC's name index (cik-lookup-data.txt), loaded on first use; None without
+        one or when it cannot be loaded. A refusal (`fatal.FATAL`) stops the run."""
+        return self._index()
+
     INDEX_PROBE = 10                             # index matches per spelling whose filings are read
     NAME_SEARCH_FORMS = ("25-NSE", "25", "15-12G")  # the live search's form filters, in its order
     EXACT_ACTIVE_DAYS = 365                      # an exact-name holder filing this near the date is the company
