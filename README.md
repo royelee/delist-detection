@@ -232,7 +232,9 @@ security_history.csv  key sec_id, start_date, ticker
   sec_id, issuer_id, start_date, end_date, ticker, security_name, share_class
 delistings.csv        key sec_id — one row per ended security, its last real ending
   sec_id, last_trade_date, exit_kind, drop_reason, continuation, successor_sec_id,
-  ticker_successor_sec_id, dlret, dlret_fill, terminal_value, verdict
+  ticker_successor_sec_id, dlret, dlret_fill, terminal_value, verdict,
+  value_rule, cash_per_share, cash_currency, stock_ratio, price_sec_id, price_ticker,
+  price_date, recovery_ratio, terms_source, terms_gate, value_formula
 seeds.csv             key ticker, as_of, name, cusip, pin_cik, pin_sec_id — the seed echo
   ticker, as_of, name, cusip, pin_cik, pin_sec_id, sec_id, verdict
 price_requests.csv    key sec_id, kind, date, lookup_ticker
@@ -253,7 +255,25 @@ Co, CIK 64978, to the new one). Successors stay, so a continuation's
 baseline `securities.csv` (`--id-baseline`, default the output folder's own,
 read before the run writes) that now hold a FIGI; it is not cumulative, git
 keeps earlier versions. `run_manifest.json` carries `schema_version`
-(`store.CONTRACT_SCHEMA_VERSION`, now 1).
+(`store.CONTRACT_SCHEMA_VERSION`, now 2: `delistings.csv` gained the payout-rule
+columns).
+
+**Payout rule** (`payout_rule.py`). The library need not price an ending; it
+publishes what one share turned into and the caller, which holds the prices,
+computes `dlret = payout per share / last trading close − 1`. `value_rule` is
+`cash`, `stock`, `cash_plus_stock` (payout = `cash_per_share + stock_ratio ×
+price(price_ticker, price_date)`, the acquirer's close the trading day after the
+last trade), `otc_print` (the security's own first off-exchange print from
+`price_date`), `recovery` (`recovery_ratio` × last close), `worthless`,
+`transfer` (same shares, 0), `continuation` (not an exit), `expiration` or
+`unknown`. `terms_source` says where the terms came from (`8K_2.01`, `llm`,
+`--merger-terms`); `terms_gate` is `passed` or `failed` (the library's own check
+against its fails-based close) or blank (an override, or no close to check).
+A merger whose terms the gate dropped is still published, `failed`, so the caller
+can value it with real prices and re-check; an election the gate dropped
+publishes nothing. `cash_currency` is always blank (no source records one).
+`dlret`, `dlret_fill` and `terminal_value` are unchanged; use the fill when you
+have no price.
 
 **Exit kind**, from today's bucket and CRSP code (`exit_kind.py`):
 

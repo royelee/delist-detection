@@ -439,6 +439,14 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   with the observed name, else the one other CIK SEC's name index lists under that name whose name agreed then
   (MRK 2008: old Merck & Co, CIK 64978). `issuer_changes` dates each change: it sorts sightings by day then CIK
   and records at most one change per day (a same-day sighting under another CIK changes nothing).
+- `payout_rule.py` — the payout rule of each contract ending (`value_fields`, the eleven columns after `verdict` in
+  `contract/delistings.csv`, schema version 2): `value_rule` (`VALUE_RULES`), `cash_per_share`, `stock_ratio`,
+  `price_sec_id`/`price_ticker`/`price_date` (the acquirer for a stock leg, the security itself for `otc_print`; the
+  trading day after the last trade), `recovery_ratio`, `terms_source`, `terms_gate` and `value_formula`; the caller
+  computes `dlret = payout / last close − 1` with its own prices. `merger_inputs` collects a merger's `--merger-terms`
+  row, LLM terms and regex read from before the payout gate: terms the gate dropped are still published,
+  `terms_gate=failed` (a failed election publishes nothing). `cash_currency` is always blank. The scorecard counts
+  `R2.7.value_rule.<rule>` and floors `R2.7.payout_rule_known`.
 - `price_requests.py` — `contract/price_requests.csv` (`last_close` per ending with a published date,
   `received_close` per LLM-read stock leg, `otc_print` per `dropped`/`liquidation` ending that is not a continuation, dated the session after the last trade) and `load_answers` for `--price-answers`,
   which refuses a price that is not a finite positive number.
