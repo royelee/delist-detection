@@ -105,3 +105,18 @@ def test_firm_month_merger_includes_stock_leg():
     )
     assert fm.dlret == pytest.approx(0.11592, abs=1e-4)
     assert fm.firm_month_return == pytest.approx((0.95) * (1.11592) - 1.0, abs=1e-4)
+
+
+def test_compute_dlret_takes_an_otc_print():
+    from delist_detection.dlret import compute_dlret
+    assert compute_dlret(CrspBucket.COMPLIANCE_FAILURE, Exchange.NASDAQ, 2.0, otc_print=0.5) == pytest.approx(-0.75)
+
+
+def test_firm_month_correction_uses_an_otc_print():
+    out = build_firm_month_correction(
+        record=_rec(bucket=CrspBucket.COMPLIANCE_FAILURE, code=500),
+        prior_month_end_close=4.0, last_trade_close=2.0,
+        exchange=Exchange.NASDAQ, otc_print=0.5,
+    )
+    assert out.dlret == pytest.approx(-0.75)
+    assert out.firm_month_return == pytest.approx(0.5 * 0.25 - 1.0)

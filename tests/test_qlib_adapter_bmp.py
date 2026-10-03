@@ -174,3 +174,17 @@ def test_apply_bmp_corrections_no_warn_for_merger_fallback(monthly_panel, tmp_pa
     assert not any("ALTR" in m for m in msgs), (
         f"did not expect a fallback warning for ALTR (MERGER): {msgs}"
     )
+
+
+def test_apply_bmp_corrections_uses_an_otc_print_not_the_shumway_mark(monthly_panel, tmp_path):
+    rows = [
+        _row("RSH_ID", ticker="RSH", cik=1144980, bucket="compliance_failure", crsp_code=584,
+             reason="Form 25 + Form 15", exchange="NYSE", delist_date="2015-02-09",
+             last_trade_date="2015-02-06", last_trade_close=0.40, payout_per_share=None,
+             dlret_method="otc_print", terminal_value=0.20),
+    ]
+    csv_path = _write(tmp_path, rows)
+    out = apply_bmp_corrections(monthly_panel, str(csv_path), return_col="monthly_return")
+    # R_partial = -0.20; DLRET = 0.20/0.40 - 1 = -0.50; R_month = 0.8 * 0.5 - 1 = -0.60
+    rsh = out.xs("RSH_ID", level="instrument")
+    assert rsh.loc[pd.Timestamp("2015-02-28"), "monthly_return"] == pytest.approx(-0.60, rel=1e-3)

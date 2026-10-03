@@ -163,9 +163,11 @@ def compute_dlret(
     recovery_ratio: float | None = None,
     stock_ratio: float | None = None,
     acquirer_price: float | None = None,
+    otc_print: float | None = None,
 ) -> float:
     """Backward-compatible float facade over `resolve_dlret`."""
     return resolve_dlret(
         bucket, exchange, last_trade_close, payout_per_share,
         stock_ratio, acquirer_price, recovery_ratio,
+        otc_print=otc_print,
     ).value

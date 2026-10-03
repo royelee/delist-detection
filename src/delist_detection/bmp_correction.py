@@ -37,6 +37,7 @@ def bmp_firm_month_return(
     recovery_ratio: float | None = None,
     stock_ratio: float | None = None,
     acquirer_price: float | None = None,
+    otc_print: float | None = None,
 ) -> float:
     """Compound R_partial and DLRET into the corrected firm-month return.
 
@@ -50,6 +51,7 @@ def bmp_firm_month_return(
         recovery_ratio=recovery_ratio,
         stock_ratio=stock_ratio,
         acquirer_price=acquirer_price,
+        otc_print=otc_print,
     )
     if math.isnan(dlret):
         return float("nan")

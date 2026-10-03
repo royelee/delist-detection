@@ -259,6 +259,7 @@ def apply_bmp_corrections(
         prior_close = float(df.loc[(prior_month_end, sec_id), close_col])
         provided_last_trade = _num(row.get("last_trade_close"))
         recov = _num(row.get("recovery_ratio"))
+        otc = _num(row.get("terminal_value")) if _str(row.get("dlret_method")) == "otc_print" else None
         if provided_last_trade is None:
             last_trade_close = float(df.loc[(delist_month_end, sec_id), close_col])
             bucket = rec.bucket
@@ -288,6 +289,7 @@ def apply_bmp_corrections(
             exchange=ex,
             payout_per_share=row_payout(row),
             recovery_ratio=recov,
+            otc_print=otc,
         )
 
         if fm.drop:
