@@ -59,6 +59,14 @@ def test_a_bad_answer_names_its_file_and_line(tmp_path, row, message):
         load_answers(_answers(tmp_path, row))
 
 
+def test_a_repeated_request_with_another_price_is_refused_and_with_the_same_price_is_fine(tmp_path):
+    row = "A,2018-11-28,last_close,A,AET,2018-11-28,"
+    assert load_answers(_answers(tmp_path, row + "191.32", row + "191.32")) == {
+        PriceKey("A", "2018-11-28", LAST_CLOSE, "AET", "2018-11-28"): 191.32}
+    with pytest.raises(OverrideFileError, match=r"answers.csv:3: a second price for the same request \(first on line 2\)"):
+        load_answers(_answers(tmp_path, row + "191.32", row + "190"))
+
+
 def test_an_answers_file_without_the_price_column_is_refused(tmp_path):
     with pytest.raises(OverrideFileError, match="price"):
         load_answers(_answers(tmp_path, "A,2018-11-28,last_close,A,AET,2018-11-28",

@@ -88,6 +88,7 @@ def load_answers(path: str | Path) -> dict[PriceKey, float]:
     OverrideFileError naming the file and line."""
     p = Path(path)
     out: dict[PriceKey, float] = {}
+    first_line: dict[PriceKey, int] = {}
     with p.open(newline="", encoding="utf-8-sig") as fh:
         reader = csv.DictReader(fh)
         missing = [c for c in (*PRICE_REQUEST_COLUMNS, "price") if c not in (reader.fieldnames or [])]
@@ -106,5 +107,10 @@ def load_answers(path: str | Path) -> dict[PriceKey, float]:
                 raise OverrideFileError(f"{where}: price {cell!r} is not a number") from None
             if not math.isfinite(price) or price <= 0:
                 raise OverrideFileError(f"{where}: price {cell!r} is not positive")
-            out[key_of(row)] = price
+            key = key_of(row)
+            if key in out and out[key] != price:
+                raise OverrideFileError(
+                    f"{where}: a second price for the same request (first on line {first_line[key]})")
+            out[key] = price
+            first_line.setdefault(key, line)
     return out

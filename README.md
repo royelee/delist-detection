@@ -241,6 +241,10 @@ id_changes.csv        key old_sec_id
   old_sec_id, new_sec_id, changed_on, issuer_cik, share_class
 ```
 
+A blank `exit_kind` means no kind is asserted (today's `unknown` bucket); such
+a row's verdict is always `uncertain`, so a reader must not filter it away as
+"no ending".
+
 `security_history.csv` holds every `ticker_history` range except those of the
 merger acquirers the run adds, split where the issuer in force changes (the
 CIK that carried the security's name that day; MRK 2008 moves from old Merck &

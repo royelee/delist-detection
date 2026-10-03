@@ -36,6 +36,14 @@ def test_a_continuation_names_its_successor_and_carries_no_value():
     assert a["last_trade_date"] == "2015-03-02"
 
 
+def test_an_unknown_bucket_ending_has_a_blank_exit_kind_and_an_uncertain_verdict():
+    t = tables([sec("U")], [iv("U", "UUU", "2010-01-04", "2015-03-02")],
+               [ending("U", "2015-03-10", "unknown", method="needs_last_trade")],
+               [obs("UUU", "2012-06-29", "U")])
+    (row,) = delisting_rows(t, decide(t, {}))
+    assert row["exit_kind"] == "" and row["verdict"] == "uncertain"
+
+
 def test_the_seed_echo_keeps_every_observation_with_its_sec_id_and_verdict():
     t = _run_tables()
     rows = seed_rows(t, decide(t, {}))

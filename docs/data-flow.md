@@ -336,6 +336,8 @@ count exactly what `uncertain.csv` lists.
 submissions read per issuer CIK, and SEC's name index for a sighting whose era
 CIK did not carry its name that day), then `contract.py`'s rows and
 `price_requests.request_rows`. A price answer to no request stops the run here.
+A blank `exit_kind` in the contract means no kind is asserted; such a row's
+verdict is always `uncertain`, so a reader must not filter it away as "no ending".
 10h, the scorecard.
 
 `scripts/classify_universe.py` exits:
