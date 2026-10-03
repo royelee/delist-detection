@@ -1,5 +1,7 @@
 from datetime import date
 
+import pytest
+
 from delist_detection.last_trade import LastTrade, decide_last_trade, eightk_last_trade
 
 
@@ -54,3 +56,19 @@ def test_decide_unconfirmed_and_missing():
     assert lt == LastTrade(date(2024, 11, 18), "ex99_notice", ("last_trade_date_unconfirmed",))
     assert decide_last_trade(notice=(None, ""), eightk=(None, ""), midas=None, halt=None) \
         == LastTrade(None, "", ("no_last_trade_date",))
+
+
+@pytest.mark.parametrize("sentence, last_day", [
+    ("trading in the shares will be suspended prior to the market opening on October 2, 2015", date(2015, 10, 1)),
+    ("the common stock will be suspended prior to the commencement of trading on July 2, 2018", date(2018, 6, 29)),
+    ("the listing will be suspended as of the open of business on July 1, 2020", date(2020, 6, 30)),
+    ("trading was suspended at the opening of business on August 18, 2022", date(2022, 8, 17)),
+])
+def test_eightk_suspension_before_the_open_in_other_words(sentence, last_day):
+    """GOOGL/GOOG/XRX, WTNY, ANAT and ENDPQ's 8-K wordings: the last trade day
+    is the trading day before D (July 2, 2018 is a Monday)."""
+    assert eightk_last_trade(_k(sentence)) == (last_day, "8k_open")
+
+
+def test_a_notice_received_on_a_day_is_not_a_suspension():
+    assert eightk_last_trade(_k("On August 18, 2022, the Company received a notice from the Exchange")) == (None, "")

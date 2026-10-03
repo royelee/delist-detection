@@ -17,7 +17,9 @@ from .trading_calendar import previous_trading_day
 
 _MONTHS = ("January|February|March|April|May|June|July|August|September|October|November|December")
 _DATE = rf"((?:{_MONTHS})\s+\d{{1,2}},\s+\d{{4}})"
-_OPEN = r"(?:prior to|before) (?:the )?(?:open|opening)(?: of (?:the )?(?:trading|market))?"
+_OPEN = (r"(?:(?:prior to|before) (?:the )?(?:(?:market )?open(?:ing)?|commencement of trading)"
+         r"(?: of (?:the )?(?:trading|market|business))?"
+         r"|(?:as of|at) the open(?:ing)? of business)")
 _CLOSE = r"(?:at|after|following) the close(?: of (?:the )?(?:trading|market|business)(?: day| session)?)?"
 
 
