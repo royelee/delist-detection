@@ -11,7 +11,9 @@ enforces"; decisions 1, 4 and 9).
 - An ending (a delistings.csv row whose successor is not the security itself)
   is confirmed when its security is confirmed, its issuer CIK did not come
   from today's ticker map, and its exit kind rests on a filing: not the
-  continued-filings rule, not the no-evidence default, not unknown. A
+  continued-filings rule, not the no-evidence default, not unknown. An
+  ending the end-of-era resolver relabelled from the continued-filings rule
+  stays uncertain until its security-level checks exist. A
   continuation (a successor other than itself) must rest on a successor
   filing or a CUSIP switch, not on timing alone. Any other ending needs a
   last trade date from an exchange print (MIDAS, a Nasdaq halt, the
@@ -38,7 +40,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import date, timedelta
 
-from .lifecycle import CONTINUED_FILINGS, EXCHANGE_PRINT_SOURCES, Tables, flag_names
+from .lifecycle import (CONTINUED_FILINGS, EXCHANGE_PRINT_SOURCES, RESOLVED_FROM_CONTINUED_FILINGS, Tables,
+                        flag_names)
 from .exit_kind import ending_fields
 
 SEED, SECURITY, ENDING = "seed", "security", "ending"
@@ -139,6 +142,8 @@ def _ending_reasons(row: Mapping[str, str], security: Verdict | None) -> list[st
         reasons.append("issuer_from_todays_ticker_map")
     if row["reason"].startswith(CONTINUED_FILINGS):
         reasons.append("continued_filings_rule")
+    if RESOLVED_FROM_CONTINUED_FILINGS in row["reason"]:
+        reasons.append("resolved_from_continued_filings")
     if "no_evidence_default" in flags:
         reasons.append("no_evidence_default")
     if not ending_fields(row).exit_kind:

@@ -162,3 +162,11 @@ def test_the_published_last_trade_date_needs_an_exchange_print_before_the_form25
 def test_a_verdict_reads_confirmed_or_uncertain():
     assert Verdict().word == "confirmed"
     assert Verdict(("no_last_trade_date",)).word == "uncertain"
+
+
+def test_an_ending_the_resolver_relabelled_stays_uncertain():
+    t = tables([sec("S")], [iv("S", "AAA", "2010-01-04", "2020-11-19")],
+               [ending("S", "2020-11-30", ltd="2020-11-19", dlret="0.100000",
+                       reason="Change in control (8-K item 5.01 filed 2020-11-02); the registrant kept filing after it")],
+               [obs("AAA", "2010-01-04", "S")])
+    assert "resolved_from_continued_filings" in decide(t, {}).endings[("S", "2020-11-30")].reasons

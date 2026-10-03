@@ -25,6 +25,7 @@ from datetime import date, timedelta
 
 from .crsp_codes import CrspBucket
 from .edgar import EdgarSubmission
+from .lifecycle import RESOLVED_FROM_CONTINUED_FILINGS
 
 ITEMS_BEFORE_DAYS, ITEMS_AFTER_DAYS = 30, 120          # 8-K items, successor filings, Form 25s around the end
 MERGER_FILING_BEFORE_DAYS, MERGER_FILING_AFTER_DAYS = 540, 30
@@ -93,12 +94,12 @@ def resolve(s: EraSignals, items_code: int | None) -> EraVerdict:
     code for the window's 8-K item set (`_classify_items`); a merger keeps it when it
     is a merger code, else 231."""
     merger_code = items_code if items_code in MERGER_CODES else 231
-    kept = "; the registrant kept filing after it"
+    kept = RESOLVED_FROM_CONTINUED_FILINGS
     if s.trading_after:
         return EraVerdict("trading", 304, CrspBucket.EXCHANGE_TRANSFER, CONTINUED)
     if s.successor_filing:
         return EraVerdict("successor", 304, CrspBucket.EXCHANGE_TRANSFER,
-                          f"Successor registration {s.successor_filing}: the security continues under a successor")
+                          f"Successor registration {s.successor_filing}: the security continues under a successor{kept}")
     if "5.01" in s.item_filed:
         return EraVerdict("change_in_control", merger_code, CrspBucket.MERGER,
                           f"Change in control (8-K item 5.01 filed {s.item_filed['5.01']}){kept}")

@@ -68,3 +68,14 @@ def test_nothing_else_keeps_todays_continued_filings_transfer():
     assert (v.branch, v.crsp_code, v.bucket, v.reason) == ("continued_filings", 304, CrspBucket.EXCHANGE_TRANSFER,
                                                            CONTINUED)
     assert CONTINUED == "Continued 10-K/Q filings >180d after delist (moved to OTC or spun off)"
+
+
+from delist_detection.lifecycle import RESOLVED_FROM_CONTINUED_FILINGS
+
+
+def test_every_relabelled_ending_says_the_registrant_kept_filing():
+    for s in (_s(successor_filing="8-K12B 2020-12-01"), _s(item_filed={"5.01": "2020-11-02"}),
+              _s(item_filed={"2.01": "2020-11-02"}, delist_filing="25-NSE 2020-11-03"),
+              _s(item_filed={"3.01": "2020-11-02"}, deficiency_notice="8-K 2020-11-02")):
+        assert RESOLVED_FROM_CONTINUED_FILINGS in resolve(s, None).reason
+    assert RESOLVED_FROM_CONTINUED_FILINGS not in resolve(_s(), None).reason

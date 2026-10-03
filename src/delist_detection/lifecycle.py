@@ -47,6 +47,7 @@ LOW_FLAGS = frozenset({"last_trade_date_conflict", "resolved_by_current_ticker_m
 
 EXCHANGE_PRINT_SOURCES = ("midas", "ex99_notice", "8k_301", "nasdaq_halt")  # last trade dates from an exchange print
 CONTINUED_FILINGS = "Continued 10-K/Q filings"                           # the continued-filings rule's reason
+RESOLVED_FROM_CONTINUED_FILINGS = "; the registrant kept filing after it"   # end_of_era's relabelled endings
 
 
 def flag_names(row: Mapping[str, str]) -> set[str]:
