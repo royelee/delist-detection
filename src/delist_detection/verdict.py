@@ -36,6 +36,7 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 
 from .lifecycle import CONTINUED_FILINGS, EXCHANGE_PRINT_SOURCES, Tables, flag_names
+from .exit_kind import ending_fields
 
 SEED, SECURITY, ENDING = "seed", "security", "ending"
 FORM25_EFFECTIVE_DAYS = 10               # a Form 25 takes effect 10 days after it is filed
@@ -112,7 +113,7 @@ def _ending_reasons(row: Mapping[str, str], security: Verdict | None) -> list[st
         reasons.append("continued_filings_rule")
     if "no_evidence_default" in flags:
         reasons.append("no_evidence_default")
-    if row["bucket"] == "unknown":
+    if not ending_fields(row).exit_kind:
         reasons.append("unknown_exit_kind")
     if row["dlret_method"] == "assumed_par" and "payout_gate_failed" in flags:
         reasons.append("assumed_par_after_failed_gate")

@@ -34,7 +34,8 @@ from datetime import date
 from pathlib import Path
 
 from .atomic_io import write_atomic
-from .lifecycle import ACTIVE, ENDED, EXIT_KIND_OF_BUCKET, EXIT_KINDS, LifecycleView
+from .exit_kind import EXIT_KINDS, ending_fields
+from .lifecycle import ACTIVE, ENDED, LifecycleView
 
 TRUTH_COLUMNS = ("case", "group", "ticker", "on", "issuer_cik", "tickers", "terminal", "ends_after", "exit_kind",
                  "last_trade_date", "dlret", "dlret_tol", "successor_ticker", "status", "fixed_by", "source",
@@ -177,7 +178,7 @@ def judge(case: TruthCase, view: LifecycleView) -> Judgement:
         if final is None:
             bad.append(f"no final ending ({lc.kind})")
         else:
-            kind = EXIT_KIND_OF_BUCKET.get(final["bucket"], "")
+            kind = ending_fields(final).exit_kind
             if case.exit_kind and kind != case.exit_kind:
                 bad.append(f"exit_kind {kind or '(none)'} != {case.exit_kind}")
             if case.last_trade_date and final["last_trade_date"] != case.last_trade_date:

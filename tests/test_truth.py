@@ -80,6 +80,16 @@ def test_judge_passes_when_every_checked_field_agrees():
     assert judge(case, _view()).mismatches == ()
 
 
+def test_judge_reads_a_bankruptcy_as_dropped():
+    t = tables([sec("S", cik="100")], [iv("S", "AAA", "2010-01-04", "2020-05-01")],
+               [ending("S", "2020-05-11", "liquidation", ltd="2020-05-01", dlret="-0.550000",
+                       method="shumway_nasdaq", crsp_code="470")],
+               [obs("AAA", "2012-06-29", "S")])
+    assert judge(_case(exit_kind="dropped"), LifecycleView(t)).mismatches == ()
+    assert judge(_case(exit_kind="liquidation"), LifecycleView(t)).mismatches == (
+        "exit_kind dropped != liquidation",)
+
+
 @pytest.mark.parametrize("cells, says", [
     (dict(issuer_cik="999"), "issuer_cik 100 != 999"),
     (dict(tickers=("AAA", "ZZZ")), "tickers missing ZZZ"),

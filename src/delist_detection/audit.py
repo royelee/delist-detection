@@ -17,7 +17,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 
 from .lifecycle import LEFT_VIEW, LifecycleView
-from .scorecard import CENSUS_GROUPS, DISTRESS, Window
+from .exit_kind import is_distress
+from .scorecard import CENSUS_GROUPS, Window
 from .truth import TRUTH_COLUMNS
 
 
@@ -35,7 +36,7 @@ def _census_group(row: Mapping[str, str], left_view_rows: set[tuple[str, str]], 
     if row["successor_sec_id"] == row["sec_id"]:
         return None                                     # a continuing move: not an ending
     tests = {
-        "distress": row["bucket"] in DISTRESS,
+        "distress": is_distress(row),
         "continuation": bool(row["successor_sec_id"]),
         "left_view": key in left_view_rows,
         "blank_no_value": (not row["dlret"] and row["dlret_method"] != "needs_last_trade"

@@ -32,6 +32,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from . import store
+from .exit_kind import ending_fields
 
 ACTIVE, ENDED = "active", "ended"
 ENDED_INCOMPLETE, LEFT_VIEW = "ended_incomplete", "left_view"
@@ -44,13 +45,6 @@ HIGH, MEDIUM, LOW = "high", "medium", "low"
 _RANK = {HIGH: 0, MEDIUM: 1, LOW: 2}
 LOW_FLAGS = frozenset({"last_trade_date_conflict", "resolved_by_current_ticker_map"})
 
-# Today's bucket -> the contract's exit_kind (spec Part 3, delistings.exit_kind).
-# `unknown` has none. The contract's own exit_kind column replaces this map
-# once it is published.
-EXIT_KIND_OF_BUCKET = {"merger": "merger", "exchange_transfer": "exchange", "liquidation": "liquidation",
-                       "compliance_failure": "dropped", "expiration": "expiration"}
-EXIT_KINDS = frozenset({"merger", "exchange", "liquidation", "dropped", "lost_source", "expiration"})
-DISTRESS = ("liquidation", "compliance_failure")                         # today's distress buckets
 EXCHANGE_PRINT_SOURCES = ("midas", "ex99_notice", "8k_301", "nasdaq_halt")  # last trade dates from an exchange print
 CONTINUED_FILINGS = "Continued 10-K/Q filings"                           # the continued-filings rule's reason
 
@@ -202,9 +196,10 @@ class LifecycleView:
         if e["successor_sec_id"]:
             kind, chain2, events = self._walk(e["successor_sec_id"], chain)
             return kind, chain2, [e] + events
-        if e["bucket"] == "exchange_transfer":
+        kind = ending_fields(e).exit_kind
+        if kind == "exchange":
             return LEFT_VIEW, chain, [e]
-        complete = e["bucket"] != "unknown" and e["last_trade_date"] and e["dlret"]
+        complete = kind != "" and e["last_trade_date"] and e["dlret"]
         return (ENDED if complete else ENDED_INCOMPLETE), chain, [e]
 
     def by_security(self) -> dict[str, Lifecycle]:

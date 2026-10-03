@@ -24,9 +24,10 @@ from datetime import date
 from pathlib import Path
 
 from .atomic_io import write_atomic
-from .lifecycle import (CLOSED_NO_EVENT, CONTINUED_FILINGS, DISTRESS, ENDED_INCOMPLETE, EXCHANGE_PRINT_SOURCES,
+from .lifecycle import (CLOSED_NO_EVENT, CONTINUED_FILINGS, ENDED_INCOMPLETE, EXCHANGE_PRINT_SOURCES,
                         HIGH, LEFT_VIEW, LOW, MEDIUM, NO_INTERVAL,
                         NO_MAPPED_SIGHTING, Lifecycle, LifecycleView, Tables, flag_names)
+from .exit_kind import ending_fields, is_distress
 from .truth import KNOWN_WRONG, PASS, TruthCase, clopper_pearson_upper, judge_all, load_truth
 from .verdict import ENDING, SECURITY, SEED
 
@@ -171,10 +172,12 @@ def _identity_lines(tables: Tables) -> dict[str, float]:
 def _ending_lines(tables: Tables, window: Window | None) -> dict[str, float]:
     real = [r for r in tables.delistings if r["successor_sec_id"] != r["sec_id"]]
     inw = (lambda r: window.contains(r["delist_date"])) if window else None
-    xfer = [r for r in real if r["bucket"] == "exchange_transfer" and not r["successor_sec_id"]]
+    fields = {id(r): ending_fields(r) for r in real}
+    xfer = [r for r in real if fields[id(r)].exit_kind == "exchange" and not fields[id(r)].continuation]
     missing_ltd = [r for r in real if not r["last_trade_date"]]
     blank = [r for r in real if not r["dlret"]]
-    distress = [r for r in real if r["bucket"] in DISTRESS]
+    distress = [r for r in real if is_distress(r)]
+    assumed_par = [r for r in real if fields[id(r)].exit_kind == "merger" and fields[id(r)].dlret_fill]
     out: dict[str, float] = {
         "R1.3.transfer_no_successor": len(xfer),
         "R1.3.transfer_no_successor_placeholder": sum(r["sec_id"].startswith("CIK") for r in xfer),
@@ -182,9 +185,9 @@ def _ending_lines(tables: Tables, window: Window | None) -> dict[str, float]:
         "R2.1.with_last_trade_date": len(real) - len(missing_ltd),
         "R2.1.missing_last_trade_date": len(missing_ltd),
         "R2.1.exchange_print_source": sum(r["last_trade_date_source"] in EXCHANGE_PRINT_SOURCES for r in real),
-        "R2.2.unknown_reason": sum(r["bucket"] == "unknown" for r in real),
+        "R2.2.unknown_reason": sum(not fields[id(r)].exit_kind for r in real),
         "R2.2.continued_filings_rule": sum(r["reason"].startswith(CONTINUED_FILINGS) for r in real),
-        "R2.4.assumed_par": sum(r["dlret_method"] == "assumed_par" for r in real),
+        "R2.4.assumed_par": len(assumed_par),
         "R2.5.distress": len(distress),
         "R2.5.distress_blank_dlret": sum(not r["dlret"] for r in distress),
         "R2.5.distress_no_last_trade_date": sum(not r["last_trade_date"] for r in distress),
@@ -201,7 +204,7 @@ def _ending_lines(tables: Tables, window: Window | None) -> dict[str, float]:
             "R2.3.blank_dlret_in_window": len(blank_w),
             "R2.3.blank_needs_last_close_in_window": sum(r["dlret_method"] == "needs_last_trade" for r in blank_w),
             "R2.3.blank_no_value_in_window": sum(r["dlret_method"] != "needs_last_trade" for r in blank_w),
-            "R2.4.assumed_par_in_window": sum(r["dlret_method"] == "assumed_par" and inw(r) for r in real),
+            "R2.4.assumed_par_in_window": sum(inw(r) for r in assumed_par),
             "R2.5.distress_in_window": sum(inw(r) for r in distress),
         })
     return out
@@ -233,7 +236,7 @@ def _verdict_lines(tables: Tables, view: LifecycleView, window: Window | None,
     """The V lines, from uncertain.csv; none when the run wrote no uncertain.csv."""
     if unc is None:
         return {}
-    distress = {(r["sec_id"], r["delist_date"]) for r in tables.delistings if r["bucket"] in DISTRESS}
+    distress = {(r["sec_id"], r["delist_date"]) for r in tables.delistings if is_distress(r)}
     by_ticker = view.by_input_ticker()
     tickers = sum(lc.kind == NO_MAPPED_SIGHTING or unc.touches(lc) for lc in by_ticker.values())
     out: dict[str, float] = {
