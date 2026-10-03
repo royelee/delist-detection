@@ -171,6 +171,20 @@ from sources.
   later sightings are what carry it forward. Over-seeding is harmless, so qlib_practice can keep passing every
   sighting as a seed. Run the scorecard on a seeds-only input before qlib_practice drops the extra rows. If
   coverage falls, keep every sighting until reset-4a lands.
+- Done 2026-10-02 (plan `2026-10-02-reset-3-contract.md`). Decisions 6, 7, 9, 10 and 12 were adopted as proposed.
+  The acceptance rebuild left today's eight tables byte-identical; `uncertain.csv` changed only by `earlier_ending`
+  reasons (6 earlier endings: APA, HNZ, IPHI, WFT, AOC, GGP). `output/contract/` has 2846 security intervals, 875
+  endings (618 merger, 193 exchange of which 69 continuations, 53 dropped: 47 bankruptcy, 3 sec_order, 3
+  filings_fees; 2 expiration; 9 blank; 148 blank `last_trade_date`), 35955 seeds, 964 price requests and 0 id
+  changes. Golden `MRK-2008` flipped to `pass` (MRK intervals before 2009-11-04 carry issuer 64978). Floor entries
+  lowered by hand because an earlier ending is uncertain (one ending per security, decision 12):
+  `V.uncertain_distress` 19 -> 20, `V.uncertain_endings` 266 -> 268, `V.uncertain_endings_in_window` 234 -> 236.
+  `--raise-floor` then raised `A.census.continuation.errors` 27 -> 25, `A.census.distress.errors` 49 -> 13,
+  `V.audit.confirmed_but_wrong` 76 -> 45 and `G.pass` 26 -> 27.
+  Seeds-only measurement (2952 seeds against 35955 observations): `L1.coverage_tickers` 0.8553 (full run 0.8851),
+  `L1.coverage_securities` 0.8545 (0.8855), `L1.left_view` 157 (120), `L1.closed_no_event` 70 (49),
+  `R1.1.mapped_share` 0.9766 (0.9850), `V.uncertain_seeds` 44 (390). Coverage falls, so by the rule above
+  qlib_practice keeps passing every sighting until reset-4a lands.
 
 ### reset-3q: qlib_practice switch (in the qlib_practice repo)
 

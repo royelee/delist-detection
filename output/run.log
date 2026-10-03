@@ -260,20 +260,8 @@ handoff search: 0 EDGAR requests, 0 SEC data-file downloads (all threads)
 handoffs: 95 candidate pairs; {'handoffs': 80, 'continuations_by_filing': 38, 'continuations_by_timing': 34, 'takeovers': 8, 'conflicts': 13, 'rows_added': 27}
 observation_map: 35955 of 35955 observations mapped
 ticker evidence: 0 EDGAR requests, 0 SEC data-file downloads (all threads)
-scorecard drop: G.pass: 27 -> 26
-scorecard drop: L1.closed_no_event: 46 -> 49
-scorecard drop: L1.coverage_securities: 0.887783 -> 0.885469
-scorecard drop: L1.coverage_tickers: 0.887787 -> 0.885083
-scorecard drop: L1.ended_incomplete: 51 -> 52
-scorecard drop: L1.left_view: 119 -> 120
-scorecard drop: L2.high_share: 0.785279 -> 0.78055
-scorecard drop: L2.low: 127 -> 147
-scorecard drop: R1.1.mapped_share: 0.985092 -> 0.984981
-scorecard drop: R2.1.missing_last_trade_date: 42 -> 43
-scorecard drop: R2.1.missing_last_trade_date_in_window: 41 -> 42
-scorecard drop: R2.2.unknown_reason: 9 -> 10
-scorecard drop: R2.3.blank_dlret_in_window: 54 -> 55
-scorecard drop: R2.4.assumed_par: 59 -> 62
-golden case failing: CB-2010: dlret 0.011833 != 0.019589 +/- 0.005
-WARNING: 14 scorecard number(s) got worse than the floor in data/scorecard.json: G.pass: 27 -> 26; L1.closed_no_event: 46 -> 49; L1.coverage_securities: 0.887783 -> 0.885469; L1.coverage_tickers: 0.887787 -> 0.885083; L1.ended_incomplete: 51 -> 52; L1.left_view: 119 -> 120; L2.high_share: 0.785279 -> 0.78055; L2.low: 127 -> 147; R1.1.mapped_share: 0.985092 -> 0.984981; R2.1.missing_last_trade_date: 42 -> 43; R2.1.missing_last_trade_date_in_window: 41 -> 42; R2.2.unknown_reason: 9 -> 10; R2.3.blank_dlret_in_window: 54 -> 55; R2.4.assumed_par: 59 -> 62
-WARNING: 1 golden case(s) now fail: CB-2010: dlret 0.011833 != 0.019589 +/- 0.005
+issuers in force: 7 EDGAR requests, 0 SEC data-file downloads (all threads)
+scorecard drop: V.uncertain_distress: 19 -> 20
+scorecard drop: V.uncertain_endings: 266 -> 268
+scorecard drop: V.uncertain_endings_in_window: 234 -> 236
+WARNING: 3 scorecard number(s) got worse than the floor in data/scorecard.json: V.uncertain_distress: 19 -> 20; V.uncertain_endings: 266 -> 268; V.uncertain_endings_in_window: 234 -> 236

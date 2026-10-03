@@ -26,7 +26,7 @@ ITT,golden,ITT,2012-06-29,216228,,active,,,,,,ITT,pass,,library PR #6,,2016 hold
 J,golden,J,2020-06-30,52988,JEC;J,active,,,,,,J,pass,,library PR #6,,2022 holding-company continuation
 FOXA-2020,golden,FOXA,2020-06-30,1754301,,active,,,,,,,pass,,spec golden list,,Fox Corp class A
 FOX-2020,golden,FOX,2020-06-30,1754301,,active,,,,,,,pass,,spec golden list,,Fox Corp class B
-MRK-2008,golden,MRK,2008-06-30,64978,,,,,,,,,known_wrong,reset-3,,,one composite FIGI across the 2009 Schering-Plough merger; old Merck & Co was the issuer in 2008
+MRK-2008,golden,MRK,2008-06-30,64978,,,,,,,,,pass,,,,one composite FIGI across the 2009 Schering-Plough merger; old Merck & Co was the issuer in 2008
 FOXA-2015,golden,FOXA,2015-06-30,1308161,,,,merger,,,,,known_wrong,reset-4b,,,Twenty-First Century Fox class A; acquired by Disney 2019; output maps it to Fox Corp's FIGI
 FOX-2015,golden,FOX,2015-06-30,1308161,,,,merger,,,,,known_wrong,reset-4b,,,Twenty-First Century Fox class B; as FOXA-2015
 YHOO,golden,YHOO,2010-06-30,1011006,YHOO;AABA,,,liquidation,,,,,known_wrong,reset-4a,https://www.sec.gov/Archives/edgar/data/1011006/000119312519262790/d794671dex991.htm,,renamed Altaba (AABA) 2017-06-16; dissolved 2019-10-04 after a stockholder-approved liquidation

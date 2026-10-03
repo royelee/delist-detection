@@ -4,10 +4,10 @@
     "archives": 6740,
     "company_tickers": 6,
     "full_text_search": 639,
-    "submissions": 21573,
+    "submissions": 23688,
     "submissions_page": 7171
   },
-  "code_version": "8044872",
+  "code_version": "5de02ec",
   "degraded_answers": {},
   "handoffs": {
     "conflicts": 13,
@@ -17,7 +17,14 @@
     "rows_added": 27,
     "takeovers": 8
   },
-  "latency_ms": {},
+  "latency_ms": {
+    "submissions": {
+      "max": 305.7,
+      "n": 7,
+      "p50": 189.6,
+      "p95": 305.7
+    }
+  },
   "not_covered": {},
   "rejected_queries": {},
   "resolution_degraded": 0,
@@ -29,7 +36,10 @@
     "info_hidden": 432,
     "unmatched_decisions": 0
   },
-  "sec_requests": {},
+  "schema_version": 1,
+  "sec_requests": {
+    "submissions": 7
+  },
   "sec_workers": 1,
   "stages": {
     "delisting search": {
@@ -42,6 +52,10 @@
     },
     "issuer resolution": {
       "edgar_requests": 0,
+      "sec_data_downloads": 0
+    },
+    "issuers in force": {
+      "edgar_requests": 7,
       "sec_data_downloads": 0
     },
     "payouts": {
