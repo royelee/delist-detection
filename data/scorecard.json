@@ -39,11 +39,11 @@
     "R2.5.distress_blank_dlret": 3,
     "R2.5.distress_no_last_trade_date": 2,
     "R2.6.distress_flagged": 45,
-    "V.audit.confirmed_but_wrong": 44,
+    "V.audit.confirmed_but_wrong": 40,
     "V.uncertain_distress": 26,
-    "V.uncertain_endings": 266,
-    "V.uncertain_endings_in_window": 234,
-    "V.uncertain_input_tickers_share": 0.111762,
+    "V.uncertain_endings": 298,
+    "V.uncertain_endings_in_window": 264,
+    "V.uncertain_input_tickers_share": 0.126183,
     "V.uncertain_securities": 61,
     "V.uncertain_seeds": 390
   }

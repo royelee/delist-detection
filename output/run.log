@@ -262,7 +262,7 @@ handoffs: 95 candidate pairs; {'handoffs': 80, 'continuations_by_filing': 38, 'c
 observation_map: 35955 of 35955 observations mapped
 ticker evidence: 0 EDGAR requests, 0 SEC data-file downloads (all threads)
 issuers in force: 0 EDGAR requests, 0 SEC data-file downloads (all threads)
-scorecard drop: L1.ended_incomplete: 57 -> 67
-scorecard drop: L2.high_share: 0.761668 -> 0.753808
-scorecard drop: L2.low: 169 -> 171
-WARNING: 3 scorecard number(s) got worse than the floor in data/scorecard.json: L1.ended_incomplete: 57 -> 67; L2.high_share: 0.761668 -> 0.753808; L2.low: 169 -> 171
+scorecard drop: V.uncertain_endings: 266 -> 298
+scorecard drop: V.uncertain_endings_in_window: 234 -> 264
+scorecard drop: V.uncertain_input_tickers_share: 0.111762 -> 0.126183
+WARNING: 3 scorecard number(s) got worse than the floor in data/scorecard.json: V.uncertain_endings: 266 -> 298; V.uncertain_endings_in_window: 234 -> 264; V.uncertain_input_tickers_share: 0.111762 -> 0.126183

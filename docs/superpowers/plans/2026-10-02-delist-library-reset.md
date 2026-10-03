@@ -264,6 +264,16 @@ needs evidence about the security, not only about the registrant. It replaces
 - The 22 endings inside the window with a blank value. Decision 2: value them by hand through the deal-terms
   input, or publish assumed par as `dlret_fill = 0.0`, and never use the drop list.
 - The 59 assumed-par rows (decision 4), including JCI 2016.
+- Done (first step) 2026-10-02 (plan `2026-10-02-reset-4c-failed-gates.md`). Decision 4's rule: an ending valued at
+  assumed par after a failed payout, LLM or terms gate is uncertain (`assumed_par_after_failed_gate`). 32 endings
+  became uncertain (18 already uncertain gained the reason): `V.uncertain_endings` 266 -> 298,
+  `V.uncertain_endings_in_window` 234 -> 264, `V.uncertain_input_tickers_share` 0.111762 -> 0.126183; the eight
+  tables other than `uncertain.csv` are byte-identical, `contract/delistings.csv` changes only its verdict column.
+  `V.audit.confirmed_but_wrong` 44 -> 40. Floor entries lowered by hand (Ruling 2, "decision 4: assumed par after a
+  failed LLM or terms gate is uncertain"): those three. The research (137 blank or assumed-par merger endings): 33
+  of 55 blanks have a cash payout but no last close and 37 have no last trade date (reset-4e's work); 24 are not
+  merger exits (reset-4a2); only 8 have no consideration recorded. Left: decision 2's hand-valued terms, a sanity
+  filter for placeholder fails prices (0.01, 1.00) and the price answers' received closes, all after reset-4e.
 
 ### reset-4d: Distress certainty and liquidation values
 
