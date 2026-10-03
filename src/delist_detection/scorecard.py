@@ -26,8 +26,9 @@ from pathlib import Path
 from .atomic_io import write_atomic
 from .lifecycle import (CLOSED_NO_EVENT, CONTINUED_FILINGS, DISTRESS, ENDED_INCOMPLETE, EXCHANGE_PRINT_SOURCES,
                         HIGH, LEFT_VIEW, LOW, MEDIUM, NO_INTERVAL,
-                        NO_MAPPED_SIGHTING, LifecycleView, Tables, flag_names)
+                        NO_MAPPED_SIGHTING, Lifecycle, LifecycleView, Tables, flag_names)
 from .truth import KNOWN_WRONG, PASS, TruthCase, clopper_pearson_upper, judge_all, load_truth
+from .verdict import ENDING, SECURITY, SEED
 
 SCORECARD_NAME = "scorecard.json"
 UP, DOWN = "up", "down"
@@ -52,6 +53,9 @@ METRICS: dict[str, str] = {
     "R2.6.distress_flagged": DOWN,
     "G.pass": UP,
     "A.random.upper95": DOWN,
+    "V.uncertain_seeds": DOWN, "V.uncertain_securities": DOWN, "V.uncertain_endings": DOWN,
+    "V.uncertain_endings_in_window": DOWN, "V.uncertain_distress": DOWN, "V.uncertain_input_tickers_share": DOWN,
+    "V.audit.confirmed_but_wrong": DOWN,
     **{f"A.census.{g}.errors": DOWN for g in CENSUS_GROUPS},
 }
 
@@ -203,7 +207,51 @@ def _ending_lines(tables: Tables, window: Window | None) -> dict[str, float]:
     return out
 
 
-def _truth_lines(view: LifecycleView, config: ScorecardConfig) -> dict[str, float]:
+@dataclass(frozen=True)
+class _Uncertain:
+    """uncertain.csv's rows as look-ups."""
+    seeds: int
+    securities: frozenset[str]
+    endings: frozenset[tuple[str, str]]          # (sec_id, delist_date)
+
+    @classmethod
+    def of(cls, rows: Sequence[Mapping[str, str]]) -> _Uncertain:
+        return cls(sum(r["kind"] == SEED for r in rows),
+                   frozenset(r["sec_id"] for r in rows if r["kind"] == SECURITY),
+                   frozenset((r["sec_id"], r["date"]) for r in rows if r["kind"] == ENDING))
+
+    def touches(self, lc: Lifecycle) -> bool:
+        """A lifecycle whose chain holds an uncertain security, or whose final
+        ending is uncertain."""
+        if set(lc.chain) & self.securities:
+            return True
+        return lc.final is not None and (lc.final["sec_id"], lc.final["delist_date"]) in self.endings
+
+
+def _verdict_lines(tables: Tables, view: LifecycleView, window: Window | None,
+                   unc: _Uncertain | None) -> dict[str, float]:
+    """The V lines, from uncertain.csv; none when the run wrote no uncertain.csv."""
+    if unc is None:
+        return {}
+    distress = {(r["sec_id"], r["delist_date"]) for r in tables.delistings if r["bucket"] in DISTRESS}
+    by_ticker = view.by_input_ticker()
+    tickers = sum(lc.kind == NO_MAPPED_SIGHTING or unc.touches(lc) for lc in by_ticker.values())
+    out: dict[str, float] = {
+        "V.uncertain_seeds": unc.seeds, "V.uncertain_securities": len(unc.securities),
+        "V.uncertain_endings": len(unc.endings), "V.uncertain_distress": len(unc.endings & distress),
+        "V.uncertain_input_tickers": tickers, "V.uncertain_input_tickers_share": _share(tickers, len(by_ticker)),
+    }
+    if window is not None:
+        out["V.uncertain_endings_in_window"] = sum(window.contains(day) for _, day in unc.endings)
+    return out
+
+
+def _audited_uncertain(case: TruthCase, view: LifecycleView, unc: _Uncertain) -> bool:
+    sec = view.security_on(case.ticker, case.on)
+    return sec is None or unc.touches(view.lifecycle(sec))
+
+
+def _truth_lines(view: LifecycleView, config: ScorecardConfig, unc: _Uncertain | None = None) -> dict[str, float]:
     out: dict[str, float] = {}
     golden = judge_all(config.golden, view)
     if golden:
@@ -224,14 +272,18 @@ def _truth_lines(view: LifecycleView, config: ScorecardConfig) -> dict[str, floa
             rows = [j for j in audit if j.case.group == f"census:{g}"]
             out[f"A.census.{g}.n"] = len(rows)
             out[f"A.census.{g}.errors"] = sum(not j.ok for j in rows)
+        if unc is not None:
+            out["V.audit.confirmed_but_wrong"] = sum(not j.ok and not _audited_uncertain(j.case, view, unc)
+                                                     for j in audit)
     return out
 
 
 def build(tables: Tables, *, as_of: date, config: ScorecardConfig = ScorecardConfig()) -> dict:
     """The scorecard of one run's tables: {"as_of", "window", "metrics", "golden_failures"}."""
     view = LifecycleView(tables)
+    unc = None if tables.uncertain is None else _Uncertain.of(tables.uncertain)
     metrics = {**_lifecycle_lines(view), **_identity_lines(tables), **_ending_lines(tables, config.window),
-               **_truth_lines(view, config)}
+               **_verdict_lines(tables, view, config.window, unc), **_truth_lines(view, config, unc)}
     failures = [f"{j.case.case}: {'; '.join(j.mismatches)}" for j in judge_all(config.golden, view)
                 if j.case.status == PASS and not j.ok]
     window = None if config.window is None else {"start": config.window.start, "end": config.window.end}

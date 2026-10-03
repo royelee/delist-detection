@@ -139,3 +139,33 @@ def test_write_puts_sorted_json_next_to_the_tables(tmp_path):
     path = sc.write(tmp_path, {"metrics": {"b": 1, "a": 2}, "as_of": "2026-09-25"})
     assert path.name == "scorecard.json" and json.loads(path.read_text())["metrics"] == {"a": 2, "b": 1}
     assert path.read_text().index('"a"') < path.read_text().index('"b"')
+
+
+def _uncertain(kind, sec_id, day, reason="x"):
+    return {"kind": kind, "ticker": "", "sec_id": sec_id, "date": day, "reason": reason, "candidates": ""}
+
+
+def _with_uncertain(rows):
+    t = _tables()
+    return type(t)(t.securities, t.ticker_history, t.delistings, t.observation_map, t.review, rows)
+
+
+def test_verdict_lines_count_uncertain_csv_and_appear_only_with_it():
+    assert not any(k.startswith("V.") for k in sc.build(_tables(), as_of=AS_OF)["metrics"])
+    rows = [_uncertain("security", "C", "2008-01-02"), _uncertain("ending", "D", "2025-02-10"),
+            _uncertain("ending", "A", "2012-03-10"), _uncertain("seed", "", "2010-06-30")]
+    m = sc.build(_with_uncertain(rows), as_of=AS_OF,
+                 config=ScorecardConfig(window=Window("2006-01-02", "2024-12-29")))["metrics"]
+    assert (m["V.uncertain_seeds"], m["V.uncertain_securities"], m["V.uncertain_endings"]) == (1, 1, 2)
+    assert (m["V.uncertain_distress"], m["V.uncertain_endings_in_window"]) == (1, 1)      # D is a 2025 liquidation
+    # AAA (A's ending), CCC (security C), DDD (D's ending), GGG (no mapped sighting)
+    assert m["V.uncertain_input_tickers"] == 4 and m["V.uncertain_input_tickers_share"] == round(4 / 7, 6)
+
+
+def test_an_audited_wrong_row_counts_as_confirmed_but_wrong_unless_listed():
+    audit = [_case("r1", group="random", exit_kind="liquidation"),
+             _case("r2", group="random", ticker="CCC", on="2010-06-30", terminal="ended")]
+    config = ScorecardConfig(audit=audit)
+    assert sc.build(_with_uncertain([]), as_of=AS_OF, config=config)["metrics"]["V.audit.confirmed_but_wrong"] == 2
+    listed = _with_uncertain([_uncertain("ending", "A", "2012-03-10")])
+    assert sc.build(listed, as_of=AS_OF, config=config)["metrics"]["V.audit.confirmed_but_wrong"] == 1
