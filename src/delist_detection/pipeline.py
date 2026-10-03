@@ -938,8 +938,8 @@ def _handoffs(ctx: _RunContext, delistings: list[Delisting], securities: dict[st
             if hit is not None:
                 return hit
         b_cik = securities[p.b].issuer_cik
-        if b_cik is None:
-            return None
+        if b_cik is None or issuer_carries_on(p, securities, first_seen):
+            return None     # the filing names no predecessor: not for an A whose issuer went on in another line
         return own_continuation_filing(edgar.recent_filings(b_cik), date.fromisoformat(p.b_first))
 
     if fts is not None and ctx.sec_workers > 1:

@@ -2668,20 +2668,49 @@ def test_a_continuation_by_the_successors_own_8k12b_when_the_search_finds_none(f
     assert "8-K12B 0000000999-15-000042" in d["reason"]
 
 
-def test_a_search_hit_means_the_filing_list_is_not_read_for_the_continuation(fake_edgar, tmp_path):
+def test_a_search_hit_means_the_filing_list_is_not_read_for_the_continuation(fake_edgar, tmp_path, monkeypatch):
     hit = {"_source": {"ciks": ["0000000999"], "form": "8-K12B", "file_date": "2015-06-15",
                        "adsh": "0000000999-15-000042", "display_names": ["Holdco Inc (HC) (CIK 0000000999)"]}}
-    import delist_detection.handoffs as handoffs
     calls = []
-    real = handoffs.own_continuation_filing
-    handoffs.own_continuation_filing = lambda *a, **k: calls.append(a) or real(*a, **k)
-    pipeline.own_continuation_filing = handoffs.own_continuation_filing
-    try:
-        (d,) = _holdco_run(fake_edgar, tmp_path, lambda q, forms, lo, hi: [hit])
-    finally:
-        handoffs.own_continuation_filing = real
-        pipeline.own_continuation_filing = real
+    real = pipeline.own_continuation_filing
+    monkeypatch.setattr(pipeline, "own_continuation_filing", lambda *a, **k: calls.append(a) or real(*a, **k))
+    (d,) = _holdco_run(fake_edgar, tmp_path, lambda q, forms, lo, hi: [hit])
     assert calls == [] and d["successor_sec_id"] == "BBGHCNEW001"
+
+
+def test_the_successors_own_8k12b_settles_a_continuation_with_no_full_text_search_at_all(fake_edgar, tmp_path):
+    assert not hasattr(fake_edgar, "full_text_search")
+    filing = EdgarSubmission("0000000999-15-000042", "8-K12B", "2015-06-15", "", "", "x.htm")
+    (d,) = _holdco_run(fake_edgar, tmp_path, filings=[filing])
+    assert (d["successor_sec_id"], d["confidence"]) == ("BBGHCNEW001", "high")
+    assert "8-K12B 0000000999-15-000042" in d["reason"]
+
+
+def test_the_successors_filing_list_is_not_asked_when_the_old_issuer_carries_on(fake_edgar, tmp_path):
+    """A (issuer 999) stops under HC and goes on as HX; B, another issuer's line (888) with an 8-K12B of its
+    own, takes HC. The filing list must not make B a continuation of A."""
+    fake_edgar.company_map["HC"] = {"cik_str": 999, "ticker": "HC", "title": "HOLDCO INC"}
+    fake_edgar.company_map["HX"] = {"cik_str": 999, "ticker": "HX", "title": "HOLDCO INC"}
+    fake_edgar.submissions_by_cik[999] = []
+    fake_edgar.submissions_by_cik[888] = [EdgarSubmission("0000000888-15-000042", "8-K12B", "2015-06-15", "", "",
+                                                          "x.htm")]
+    fake_edgar.listings[999] = [("HC", "NYSE")]
+    fake_edgar.listings[888] = [("HC", "NYSE")]
+    obs = ([Observation("HC", d, "HOLDCO INC", cik=999) for d in ("2014-06-30", "2014-12-31")]
+           + [Observation("HC", d, "NEWCO INC", cik=888) for d in ("2015-12-31", "2016-06-30")]
+           + [Observation("HX", d, "HOLDCO INC", cik=999) for d in ("2015-12-31", "2016-06-30")])
+    rows = (_ftd("HC", "111111101", "HOLDCO INC", ["2014-06-02", "2014-10-01", "2015-01-02", "2015-04-01",
+                                                   "2015-06-12"])
+            + _ftd("HC", "222222202", "NEWCO INC", ["2015-06-15", "2015-09-01", "2016-01-04", "2016-06-01"])
+            + _ftd("HX", "333333303", "HOLDCO INC", ["2015-06-18", "2015-09-01", "2016-01-04", "2016-06-01"]))
+    index, clients = _index_clients(fake_edgar, obs, rows, {
+        ("ID_CUSIP", "111111101"): _figi_answer("BBGHCOLD001", "HC", "HOLDCO INC"),
+        ("ID_CUSIP", "222222202"): _figi_answer("BBGHCNEW001", "HC", "NEWCO INC"),
+        ("ID_CUSIP", "333333303"): _figi_answer("BBGHXHOL001", "HX", "HOLDCO INC"),
+    })
+    run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
+    rows_out = read_table("delistings", table_path(tmp_path, "delistings"))
+    assert not [r for r in rows_out if r["successor_sec_id"] == "BBGHCNEW001" or "8-K12B" in r["reason"]]
 
 
 def test_a_continuation_the_finder_found_no_row_for_clips_the_old_line_at_its_last_sighting(fake_edgar, tmp_path):
