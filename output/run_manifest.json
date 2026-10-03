@@ -7,7 +7,7 @@
     "submissions": 23755,
     "submissions_page": 7276
   },
-  "code_version": "6679d6c",
+  "code_version": "5b8e8bb",
   "degraded_answers": {},
   "handoffs": {
     "conflicts": 17,
@@ -33,6 +33,10 @@
   "sec_requests": {},
   "sec_workers": 1,
   "stages": {
+    "dead before first sighting": {
+      "edgar_requests": 0,
+      "sec_data_downloads": 0
+    },
     "delisting search": {
       "edgar_requests": 0,
       "sec_data_downloads": 0

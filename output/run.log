@@ -255,6 +255,7 @@ FIGI handoff: WTW@2008-01-16 joins BBG000DY6735 with its issuer and class, held 
 [2200/2209] securities searched; 980 delistings so far
 delisting search: 0 EDGAR requests, 0 SEC data-file downloads (all threads)
 dead before first sighting: 31 securities took CUSIPs from fails rows before their end
+dead before first sighting: 0 EDGAR requests, 0 SEC data-file downloads (all threads)
 payouts: 0 EDGAR requests, 0 SEC data-file downloads (all threads)
 successor search: 0 EDGAR requests, 0 SEC data-file downloads (all threads)
 handoff search: 0 EDGAR requests, 0 SEC data-file downloads (all threads)
@@ -262,7 +263,3 @@ handoffs: 95 candidate pairs; {'handoffs': 80, 'continuations_by_filing': 38, 'c
 observation_map: 35955 of 35955 observations mapped
 ticker evidence: 0 EDGAR requests, 0 SEC data-file downloads (all threads)
 issuers in force: 0 EDGAR requests, 0 SEC data-file downloads (all threads)
-scorecard drop: V.uncertain_endings: 266 -> 298
-scorecard drop: V.uncertain_endings_in_window: 234 -> 264
-scorecard drop: V.uncertain_input_tickers_share: 0.111762 -> 0.126183
-WARNING: 3 scorecard number(s) got worse than the floor in data/scorecard.json: V.uncertain_endings: 266 -> 298; V.uncertain_endings_in_window: 234 -> 264; V.uncertain_input_tickers_share: 0.111762 -> 0.126183
