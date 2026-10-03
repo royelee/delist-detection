@@ -47,6 +47,20 @@ scorecard reproduces these numbers from the tables.
 | A.census.continuation | 27 wrong of 69 |
 | A.census.blank_no_value | 11 wrong of 21 |
 | A.census.assumed_par | 17 wrong of 58 |
+| V.uncertain_securities | 55 (34 with seeds outside their history, 18 with a ticker overlap, 3 placeholders with no ticker filing) |
+| V.uncertain_endings | 266 (234 inside the window, 19 distress) |
+| V.uncertain_seeds | 390 listed |
+| V.uncertain_input_tickers | 243 (11.0% of input tickers) |
+| V.audit.confirmed_but_wrong | 76 |
+
+The V lines were measured by reset-2's acceptance run on 2026-10-02, after `output/` was refreshed. The
+committed tables could no longer be rebuilt from any cache on disk: the run that produced them (2026-09-28,
+code `76edc38`) used a cache state that no longer exists. Reset-1's and reset-2's code give byte-identical
+tables from the same caches, so the refresh changes data only: about 75 of 1,017 delisting rows and the
+issuer CIKs of 8 securities. It lowered 14 floor entries by hand, among them L2 low 127 to 147, R2.4 assumed par
+59 to 62 and securities coverage 88.8% to 88.5%. It also moved golden `CB-2010` to `known_wrong`
+(`reset-4c`): the cached merger-terms answer now prices ACE under its post-merger ticker. `data/scorecard.json`
+holds the current floor; the table above keeps the numbers the plans were written against.
 
 The A lines come from reset-1's accuracy audit (`data/accuracy_audit.csv`, filled from SEC filings on
 2026-10-02; 416 of 421 rows filled, 5 left pending with the reason in `note`). A row is wrong when any field
@@ -134,6 +148,9 @@ from sources.
   `review.csv` stays until reset-3 publishes the contract (cleanup step 4).
 - Decision 17's library-side hard gate becomes a build check: no harsh fill on an ending whose identity or date
   is uncertain.
+- Done 2026-10-02 (plan `2026-10-02-reset-2-verdicts.md`). Decision 1 was answered on 2026-10-02: an EDGAR
+  check. Decision 4 was adopted as proposed. The check confirmed the ticker of 96 of the 99 placeholders,
+  through a resolver tier or a filing, so 3 stay uncertain for that reason.
 
 ### reset-3: The contract
 

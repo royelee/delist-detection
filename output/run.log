@@ -1,6 +1,6 @@
 2469 ticker eras
 2660 eras after the FTD split
-resolver's second pass: 91 issuers inferred, 0 first-pass answers its CUSIP evidence contradicts
+resolver's second pass: 76 issuers inferred, 0 first-pass answers its CUSIP evidence contradicts
 issuer resolution: 0 EDGAR requests, 0 SEC data-file downloads (all threads)
 FIGI handoff: ABI@2008-01-16 joins BBG000FJJW82, the line ABI@2008-07-25 is confirmed on (ABI@2008-01-16's CUSIP 038020103 ended as ABI@2008-07-25's 038149100 began on 2008-07-02)
 FIGI handoff: ACAS@2008-01-16 joins BBG000BYR208, the line ACAS@2008-07-25 is confirmed on (ACAS@2008-01-16's CUSIP 024937104 ended as ACAS@2008-07-25's 02503Y103 began on 2008-07-09)
@@ -208,59 +208,72 @@ FIGI handoff: SIRI@2008-01-16 joins BBG000BT0093 with its issuer and class, held
 FIGI handoff: TYC@2008-01-16 joins BBG000BVWLJ6 with its issuer and class, held with no pick of its own (guard c)
 FIGI handoff: TYC@2009-03-20 joins BBG000BVWLJ6 with its issuer and class, held with no pick of its own (guard c)
 FIGI handoff: WTW@2008-01-16 joins BBG000DY6735 with its issuer and class, held with no pick of its own (guard c)
-2210 securities; FIGI sources {'cusip': 2060, 'placeholder': 100, 'ticker': 50}
-[50/2210] securities searched; 25 delistings so far
-[100/2210] securities searched; 48 delistings so far
-[150/2210] securities searched; 67 delistings so far
-[200/2210] securities searched; 100 delistings so far
-[250/2210] securities searched; 120 delistings so far
-[300/2210] securities searched; 144 delistings so far
-[350/2210] securities searched; 161 delistings so far
-[400/2210] securities searched; 185 delistings so far
-[450/2210] securities searched; 209 delistings so far
-[500/2210] securities searched; 232 delistings so far
-[550/2210] securities searched; 249 delistings so far
-[600/2210] securities searched; 272 delistings so far
-[650/2210] securities searched; 284 delistings so far
-[700/2210] securities searched; 313 delistings so far
-[750/2210] securities searched; 331 delistings so far
-[800/2210] securities searched; 358 delistings so far
-[850/2210] securities searched; 377 delistings so far
-[900/2210] securities searched; 403 delistings so far
-[950/2210] securities searched; 430 delistings so far
-[1000/2210] securities searched; 451 delistings so far
-[1050/2210] securities searched; 466 delistings so far
-[1100/2210] securities searched; 491 delistings so far
-[1150/2210] securities searched; 518 delistings so far
-[1200/2210] securities searched; 542 delistings so far
-[1250/2210] securities searched; 566 delistings so far
-[1300/2210] securities searched; 587 delistings so far
-[1350/2210] securities searched; 609 delistings so far
-[1400/2210] securities searched; 637 delistings so far
-[1450/2210] securities searched; 665 delistings so far
-[1500/2210] securities searched; 685 delistings so far
-[1550/2210] securities searched; 704 delistings so far
-[1600/2210] securities searched; 727 delistings so far
-[1650/2210] securities searched; 743 delistings so far
-[1700/2210] securities searched; 772 delistings so far
-[1750/2210] securities searched; 795 delistings so far
-[1800/2210] securities searched; 810 delistings so far
-[1850/2210] securities searched; 830 delistings so far
-[1900/2210] securities searched; 846 delistings so far
-[1950/2210] securities searched; 862 delistings so far
-[2000/2210] securities searched; 873 delistings so far
-[2050/2210] securities searched; 884 delistings so far
-[2100/2210] securities searched; 890 delistings so far
-[2150/2210] securities searched; 931 delistings so far
-[2200/2210] securities searched; 981 delistings so far
+2209 securities; FIGI sources {'cusip': 2060, 'placeholder': 99, 'ticker': 50}
+[50/2209] securities searched; 24 delistings so far
+[100/2209] securities searched; 47 delistings so far
+[150/2209] securities searched; 66 delistings so far
+[200/2209] securities searched; 99 delistings so far
+[250/2209] securities searched; 119 delistings so far
+[300/2209] securities searched; 143 delistings so far
+[350/2209] securities searched; 160 delistings so far
+[400/2209] securities searched; 184 delistings so far
+[450/2209] securities searched; 208 delistings so far
+[500/2209] securities searched; 231 delistings so far
+[550/2209] securities searched; 248 delistings so far
+[600/2209] securities searched; 271 delistings so far
+[650/2209] securities searched; 283 delistings so far
+[700/2209] securities searched; 312 delistings so far
+[750/2209] securities searched; 330 delistings so far
+[800/2209] securities searched; 357 delistings so far
+[850/2209] securities searched; 376 delistings so far
+[900/2209] securities searched; 402 delistings so far
+[950/2209] securities searched; 429 delistings so far
+[1000/2209] securities searched; 450 delistings so far
+[1050/2209] securities searched; 465 delistings so far
+[1100/2209] securities searched; 490 delistings so far
+[1150/2209] securities searched; 517 delistings so far
+[1200/2209] securities searched; 541 delistings so far
+[1250/2209] securities searched; 564 delistings so far
+[1300/2209] securities searched; 585 delistings so far
+[1350/2209] securities searched; 607 delistings so far
+[1400/2209] securities searched; 635 delistings so far
+[1450/2209] securities searched; 663 delistings so far
+[1500/2209] securities searched; 683 delistings so far
+[1550/2209] securities searched; 702 delistings so far
+[1600/2209] securities searched; 725 delistings so far
+[1650/2209] securities searched; 741 delistings so far
+[1700/2209] securities searched; 770 delistings so far
+[1750/2209] securities searched; 793 delistings so far
+[1800/2209] securities searched; 808 delistings so far
+[1850/2209] securities searched; 829 delistings so far
+[1900/2209] securities searched; 845 delistings so far
+[1950/2209] securities searched; 861 delistings so far
+[2000/2209] securities searched; 872 delistings so far
+[2050/2209] securities searched; 883 delistings so far
+[2100/2209] securities searched; 889 delistings so far
+[2150/2209] securities searched; 930 delistings so far
+[2200/2209] securities searched; 980 delistings so far
 delisting search: 0 EDGAR requests, 0 SEC data-file downloads (all threads)
 payouts: 0 EDGAR requests, 0 SEC data-file downloads (all threads)
 successor search: 0 EDGAR requests, 0 SEC data-file downloads (all threads)
 handoff search: 0 EDGAR requests, 0 SEC data-file downloads (all threads)
-handoffs: 96 candidate pairs; {'handoffs': 81, 'continuations_by_filing': 38, 'continuations_by_timing': 35, 'takeovers': 8, 'conflicts': 14, 'rows_added': 26}
+handoffs: 95 candidate pairs; {'handoffs': 80, 'continuations_by_filing': 38, 'continuations_by_timing': 34, 'takeovers': 8, 'conflicts': 13, 'rows_added': 27}
 observation_map: 35955 of 35955 observations mapped
-Rows written: {'securities': 2228, 'ticker_history': 2828, 'cusip_history': 2660, 'delistings': 1017, 'payouts': 639, 'review': 728, 'review_summary': 38, 'observation_map': 35955}
-Delistings by bucket: {'merger': 624, 'exchange_transfer': 328, 'compliance_failure': 6, 'liquidation': 48, 'unknown': 9, 'expiration': 2}
-FIGI sources: {'cusip': 2060, 'placeholder': 100, 'ticker': 50}
-Review flags: {'ftd_close_prior': 116, 'resolved_by_current_ticker_map': 108, 'no_form25': 97, 'delist_date_approx': 85, 'successor_unknown': 126, 'ftd_close_lagged': 136, 'acquirer_close_lagged': 30, 'no_last_trade_date': 124, 'no_last_close': 165, 'payout_gate_failed': 13, 'terms_gate_failed': 53, 'merger_at_par': 53, 'last_trade_date_unconfirmed': 78, 'last_trade_date_conflict': 45, 'handoff_continuation': 45, 'observed_after_delisting': 30, 'no_evidence_default': 12, 'member_name_mismatch': 27, 'distress_at_normal_price': 3, 'llm_gate_failed': 20, 'resolved_by_cik_map': 10, 'bankruptcy_before_merger': 1, 'bankruptcy_tag_unconfirmed': 1, 'resolved_by_manual_override': 1, 'identity_detached': 5, 'no_figi': 108, 'observation_unresolved': 1, 'issuer_inferred': 83, 'observation_conflict': 6, 'ticker_unconfirmed': 63, 'form25_unclassified': 117, 'ended_without_delisting': 43, 'form25_unmatched': 30, 'handoff_rebucketed': 15, 'handoff_conflict': 14, 'handoff_takeover_no_delisting': 1, 'ticker_shared': 10}
-Review: 100 fix, 628 check (427 info-only rows hidden, 0 accepted, 0 unmatched decisions)
+ticker evidence: 0 EDGAR requests, 0 SEC data-file downloads (all threads)
+scorecard drop: G.pass: 27 -> 26
+scorecard drop: L1.closed_no_event: 46 -> 49
+scorecard drop: L1.coverage_securities: 0.887783 -> 0.885469
+scorecard drop: L1.coverage_tickers: 0.887787 -> 0.885083
+scorecard drop: L1.ended_incomplete: 51 -> 52
+scorecard drop: L1.left_view: 119 -> 120
+scorecard drop: L2.high_share: 0.785279 -> 0.78055
+scorecard drop: L2.low: 127 -> 147
+scorecard drop: R1.1.mapped_share: 0.985092 -> 0.984981
+scorecard drop: R2.1.missing_last_trade_date: 42 -> 43
+scorecard drop: R2.1.missing_last_trade_date_in_window: 41 -> 42
+scorecard drop: R2.2.unknown_reason: 9 -> 10
+scorecard drop: R2.3.blank_dlret_in_window: 54 -> 55
+scorecard drop: R2.4.assumed_par: 59 -> 62
+golden case failing: CB-2010: dlret 0.011833 != 0.019589 +/- 0.005
+WARNING: 14 scorecard number(s) got worse than the floor in data/scorecard.json: G.pass: 27 -> 26; L1.closed_no_event: 46 -> 49; L1.coverage_securities: 0.887783 -> 0.885469; L1.coverage_tickers: 0.887787 -> 0.885083; L1.ended_incomplete: 51 -> 52; L1.left_view: 119 -> 120; L2.high_share: 0.785279 -> 0.78055; L2.low: 127 -> 147; R1.1.mapped_share: 0.985092 -> 0.984981; R2.1.missing_last_trade_date: 42 -> 43; R2.1.missing_last_trade_date_in_window: 41 -> 42; R2.2.unknown_reason: 9 -> 10; R2.3.blank_dlret_in_window: 54 -> 55; R2.4.assumed_par: 59 -> 62
+WARNING: 1 golden case(s) now fail: CB-2010: dlret 0.011833 != 0.019589 +/- 0.005
