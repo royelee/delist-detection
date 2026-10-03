@@ -3,7 +3,7 @@ import pytest
 from delist_detection import store
 from delist_detection.lifecycle import (ACTIVE, CLOSED_NO_EVENT, ENDED, ENDED_INCOMPLETE, HIGH, LEFT_VIEW, LOOP, LOW,
                                         MEDIUM, NO_INTERVAL, NO_MAPPED_SIGHTING, LifecycleView, Tables, event_grade)
-from tests.lifecycle_tables import ending, iv, obs, sec, tables
+from tests.lifecycle_tables import ending, hist, iv, obs, sec, tables
 
 
 def _kind(t, sec_id="A"):
@@ -159,3 +159,22 @@ def test_tables_read_takes_uncertain_csv_when_it_is_there(tmp_path):
     assert Tables.read(tmp_path).uncertain is None
     store.write_tables(tmp_path, {"uncertain": []})
     assert Tables.read(tmp_path).uncertain == []
+
+
+def test_tables_read_takes_security_history_when_the_run_wrote_one(tmp_path):
+    from delist_detection.store import write_tables
+    write_tables(tmp_path, {"securities": [], "ticker_history": [], "delistings": [], "observation_map": []})
+    assert Tables.read(tmp_path).security_history is None
+    write_tables(tmp_path, {"security_history": [hist("S", "100", "2010-01-04")]})
+    assert Tables.read(tmp_path).security_history == [hist("S", "100", "2010-01-04")]
+
+
+def test_issuer_of_reads_the_issuer_in_force_on_the_day():
+    t = tables([sec("S", cik="310158")], [iv("S", "MRK", "2008-01-02")], [], [obs("MRK", "2008-06-30", "S")],
+               security_history=[hist("S", "64978", "2008-01-02", "2009-11-03", "MRK"),
+                                 hist("S", "310158", "2009-11-04", "", "MRK")])
+    view = LifecycleView(t)
+    assert view.issuer_of("S", "2008-06-30") == "64978"
+    assert view.issuer_of("S", "2012-06-29") == "310158"
+    assert view.issuer_of("S") == "310158"
+    assert LifecycleView(tables([sec("S", cik="310158")])).issuer_of("S", "2008-06-30") == "310158"

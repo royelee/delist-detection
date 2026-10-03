@@ -63,18 +63,20 @@ class Tables:
     observation_map: Sequence[Mapping[str, str]]
     review: Sequence[Mapping[str, str]] = ()
     uncertain: Sequence[Mapping[str, str]] | None = None     # None: no uncertain.csv (a run before reset-2)
+    security_history: Sequence[Mapping[str, str]] | None = None     # None: no contract (a run before reset-3)
 
     @classmethod
     def read(cls, out_dir: str | Path) -> Tables:
         """The tables under `out_dir` (store.read_table: a column mismatch raises).
-        review.csv may be missing (no rows); uncertain.csv may be missing (None)."""
+        review.csv may be missing (no rows); uncertain.csv may be missing (None);
+        contract/security_history.csv may be missing (None)."""
         def rd(name: str) -> list[dict[str, str]]:
             return store.read_table(name, store.table_path(out_dir, name))
 
         def optional(name: str) -> list[dict[str, str]] | None:
             return rd(name) if store.table_path(out_dir, name).exists() else None
         return cls(rd("securities"), rd("ticker_history"), rd("delistings"), rd("observation_map"),
-                   optional("review") or [], optional("uncertain"))
+                   optional("review") or [], optional("uncertain"), optional("security_history"))
 
 
 @dataclass(frozen=True)
@@ -120,9 +122,13 @@ class LifecycleView:
     _endings: dict[str, list[Mapping[str, str]]] = field(init=False)
     _securities: dict[str, Mapping[str, str]] = field(init=False)
     _mapped: dict[tuple[str, str], str] = field(init=False)
+    _history: dict[str, list[Mapping[str, str]]] = field(init=False)
     _memo: dict[str, Lifecycle] = field(init=False, default_factory=dict)
 
     def __post_init__(self) -> None:
+        self._history = defaultdict(list)
+        for r in self.tables.security_history or ():
+            self._history[r["sec_id"]].append(r)
         self._intervals = defaultdict(list)
         for r in self.tables.ticker_history:
             self._intervals[r["sec_id"]].append(r)
@@ -138,7 +144,13 @@ class LifecycleView:
     def observed(self) -> list[str]:
         return sorted(s for s, r in self._securities.items() if r.get("observed") == "true")
 
-    def issuer_of(self, sec_id: str) -> str:
+    def issuer_of(self, sec_id: str, on: str = "") -> str:
+        """The security's issuer CIK: the contract's issuer in force on `on`
+        (security_history.csv) when an interval of it covers that day, else
+        securities.csv's."""
+        for r in self._history.get(sec_id, ()) if on else ():
+            if r["start_date"] <= on and (not r["end_date"] or on <= r["end_date"]):
+                return r["issuer_id"]
         return self._securities.get(sec_id, {}).get("issuer_cik", "")
 
     def figi_source_of(self, sec_id: str) -> str:

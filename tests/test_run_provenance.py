@@ -220,7 +220,7 @@ def test_the_manifest_records_what_the_run_rested_on(fake_edgar, tmp_path):
     # warm_failed is added beyond the brief: SEC_STATS also counts warm_failed:<stage>
     # (Task 9), and the manifest reports every counter group the brief's own
     # _by_prefix helper would otherwise silently drop.
-    assert set(m) == {"as_of", "code_version", "sec_workers", "sec_requests", "cache_answers",
+    assert set(m) == {"as_of", "code_version", "schema_version", "sec_workers", "sec_requests", "cache_answers",
                       "degraded_answers", "warm_degraded", "rejected_queries", "not_covered", "warm_failed",
                       "latency_ms", "stages", "resolution_degraded", "review", "handoffs"}
     assert set(m["stages"]) == {"issuer resolution", "delisting search", "payouts", "successor search",

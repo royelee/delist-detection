@@ -5,7 +5,7 @@ import pytest
 from delist_detection.lifecycle import LifecycleView
 from delist_detection.truth import (TRUTH_COLUMNS, TruthCase, TruthFileError, clopper_pearson_upper, judge,
                                     load_truth)
-from tests.lifecycle_tables import ending, iv, obs, sec, tables
+from tests.lifecycle_tables import ending, hist, iv, obs, sec, tables
 
 
 def _write(path, rows, header=TRUTH_COLUMNS, bom=False):
@@ -127,3 +127,10 @@ def test_write_truth_accepts_a_str_path(tmp_path):
     from delist_detection.truth import write_truth
     write_truth(str(tmp_path / "t.csv"), [GOOD])
     assert load_truth(tmp_path / "t.csv", allow_pending=True) == load_truth(_write(tmp_path / "s.csv", [GOOD]))
+
+
+def test_judge_checks_the_issuer_in_force_on_the_case_date():
+    t = tables([sec("S", cik="310158")], [iv("S", "AAA", "2008-01-02")], [], [obs("AAA", "2008-06-30", "S")],
+               security_history=[hist("S", "64978", "2008-01-02", "2009-11-03"),
+                                 hist("S", "310158", "2009-11-04")])
+    assert judge(_case(on="2008-06-30", issuer_cik="64978"), LifecycleView(t)).mismatches == ()

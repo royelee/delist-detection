@@ -42,5 +42,13 @@ def review(sec_id, flags="no_form25"):
     return _row("review", severity="check", sec_id=sec_id, review_flags=flags)
 
 
-def tables(securities=(), history=(), delistings=(), observations=(), reviews=()) -> Tables:
-    return Tables(list(securities), list(history), list(delistings), list(observations), list(reviews))
+def hist(sec_id, issuer, start, end="", ticker="AAA"):
+    """A contract/security_history.csv row."""
+    return _row("security_history", sec_id=sec_id, issuer_id=issuer, start_date=start, end_date=end, ticker=ticker,
+                security_name=sec_id, share_class="COMMON")
+
+
+def tables(securities=(), history=(), delistings=(), observations=(), reviews=(), *, uncertain=None,
+           security_history=None) -> Tables:
+    return Tables(list(securities), list(history), list(delistings), list(observations), list(reviews),
+                  uncertain, security_history)

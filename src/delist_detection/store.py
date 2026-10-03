@@ -27,6 +27,7 @@ class TableSpec:
     columns: tuple[str, ...]
     key: tuple[str, ...]
     sort: bool = True          # False: rows are written in the order given
+    file: str = ""             # the path under the output folder; "" means "<name>.csv"
 
 
 class DelistingKey(NamedTuple):
@@ -55,6 +56,19 @@ DELISTINGS_COLUMNS: tuple[str, ...] = (
 # `;`-joined `code` or `code:detail` items; `candidates` the other sec_ids involved.
 UNCERTAIN_COLUMNS: tuple[str, ...] = ("kind", "ticker", "sec_id", "date", "reason", "candidates")
 
+# The contract (spec: Delist Library Reset, "The contract"; contract.py), written
+# under contract/ beside the tables above for one release (decision 6).
+CONTRACT_SCHEMA_VERSION = 1
+SECURITY_HISTORY_COLUMNS: tuple[str, ...] = (
+    "sec_id", "issuer_id", "start_date", "end_date", "ticker", "security_name", "share_class")
+CONTRACT_DELISTINGS_COLUMNS: tuple[str, ...] = (
+    "sec_id", "last_trade_date", "exit_kind", "drop_reason", "continuation", "successor_sec_id",
+    "ticker_successor_sec_id", "dlret", "dlret_fill", "terminal_value", "verdict")
+SEEDS_COLUMNS: tuple[str, ...] = ("ticker", "as_of", "name", "cusip", "pin_cik", "pin_sec_id", "sec_id", "verdict")
+PRICE_REQUEST_COLUMNS: tuple[str, ...] = ("sec_id", "last_trade_date", "kind", "lookup_sec_id", "lookup_ticker", "date")
+ID_CHANGES_COLUMNS: tuple[str, ...] = ("old_sec_id", "new_sec_id", "changed_on", "issuer_cik", "share_class")
+CONTRACT_TABLES = ("security_history", "contract_delistings", "seeds", "price_requests", "id_changes")
+
 TABLES: dict[str, TableSpec] = {t.name: t for t in (
     TableSpec("securities",
               ("sec_id", "issuer_cik", "share_class", "name", "security_type", "observed", "figi_source"),
@@ -81,6 +95,14 @@ TABLES: dict[str, TableSpec] = {t.name: t for t in (
                "history_ticker", "in_ticker_history", "status"),
               ("ticker", "as_of", "name", "cusip", "pin_cik", "pin_sec_id")),
     TableSpec("uncertain", UNCERTAIN_COLUMNS, ("kind", "sec_id", "date", "ticker")),
+    TableSpec("security_history", SECURITY_HISTORY_COLUMNS, ("sec_id", "start_date", "ticker"),
+              file="contract/security_history.csv"),
+    TableSpec("contract_delistings", CONTRACT_DELISTINGS_COLUMNS, ("sec_id",), file="contract/delistings.csv"),
+    TableSpec("seeds", SEEDS_COLUMNS, ("ticker", "as_of", "name", "cusip", "pin_cik", "pin_sec_id"),
+              file="contract/seeds.csv"),
+    TableSpec("price_requests", PRICE_REQUEST_COLUMNS, ("sec_id", "kind", "date", "lookup_ticker"),
+              file="contract/price_requests.csv"),
+    TableSpec("id_changes", ID_CHANGES_COLUMNS, ("old_sec_id",), file="contract/id_changes.csv"),
 )}
 
 
@@ -101,7 +123,9 @@ def format_cell(v: object) -> str:
 
 
 def table_path(out_dir: str | Path, name: str) -> Path:
-    return Path(out_dir) / f"{name}.csv"
+    """Where table `name` lives under `out_dir`: its spec's `file`, else `<name>.csv`."""
+    spec = TABLES.get(name)
+    return Path(out_dir) / (spec.file if spec is not None and spec.file else f"{name}.csv")
 
 
 def _sort(spec: TableSpec, rows: list[dict[str, str]]) -> None:

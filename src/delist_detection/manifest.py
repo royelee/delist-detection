@@ -25,6 +25,7 @@ from pathlib import Path
 
 from .atomic_io import write_atomic
 from .sec_stats import SEC_STATS
+from .store import CONTRACT_SCHEMA_VERSION
 
 MANIFEST_NAME = "run_manifest.json"
 _ROOT = Path(__file__).resolve().parents[2]
@@ -73,10 +74,12 @@ def build(*, as_of: date, sec_workers: int, counts: dict[str, int], timings: dic
     decisions, so exit code 3 always sees every `error`/`resolution_degraded`.
     `handoffs` is the handoff pass's counts (`handoffs.apply_handoffs`: pairs
     decided, continuations by filing and by timing, takeovers, conflicts, rows
-    added)."""
+    added). `schema_version` is the contract's (store.CONTRACT_SCHEMA_VERSION),
+    asserted by the consumer's reader."""
     return {
         "as_of": as_of.isoformat(),
         "code_version": code_version(),
+        "schema_version": CONTRACT_SCHEMA_VERSION,
         "sec_workers": sec_workers,
         "sec_requests": _by_prefix(counts, "request:"),
         "cache_answers": _by_prefix(counts, "cache:"),

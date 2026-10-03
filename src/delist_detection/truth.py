@@ -162,8 +162,8 @@ def judge(case: TruthCase, view: LifecycleView) -> Judgement:
         return Judgement(case, (f"no single security traded {case.ticker} on {case.on}",))
     lc = view.lifecycle(sec)
     bad: list[str] = []
-    if case.issuer_cik and view.issuer_of(sec).lstrip("0") != case.issuer_cik:
-        bad.append(f"issuer_cik {view.issuer_of(sec) or '(blank)'} != {case.issuer_cik}")
+    if case.issuer_cik and view.issuer_of(sec, case.on).lstrip("0") != case.issuer_cik:
+        bad.append(f"issuer_cik {view.issuer_of(sec, case.on) or '(blank)'} != {case.issuer_cik}")
     if case.tickers:
         missing = sorted(set(case.tickers) - view.tickers_of(lc.chain))
         if missing:
