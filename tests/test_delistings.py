@@ -392,6 +392,42 @@ def test_successor_is_itself_when_continued(fake_edgar):
     assert "successor_unknown" not in ev.flags
 
 
+class _RecordingClassifier(DelistClassifier):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.calls: list[dict] = []
+
+    def classify_event(self, *args, **kwargs):
+        self.calls.append(dict(kwargs))
+        return super().classify_event(*args, **kwargs)
+
+
+def test_form25_path_tells_the_classifier_whether_the_security_traded_after(fake_edgar):
+    fake_edgar.submissions_by_cik[9003] = [
+        EdgarSubmission("m1", "25", "2015-01-05", "", "", "p.xml"),
+        EdgarSubmission("m2", "10-K", "2015-09-01", "", "", "k.htm"),
+    ]
+    fake_edgar.raws["m1"] = NYSE_COMMON_RAW
+    clf = _RecordingClassifier(fake_edgar, TickerResolver(fake_edgar))
+    sec = _sec("BBG_M", 9003, "MMM", "2010-01-01", "2015-01-04", "MMM CORP")
+    DelistingFinder(fake_edgar, clf).find(_ctx(sec, listed=True, seen_after=True))
+    assert clf.calls[-1]["trading_after"] is True
+    clf.calls.clear()
+    sec = _sec("BBG_M", 9003, "MMM", "2010-01-01", "2015-01-04", "MMM CORP")
+    DelistingFinder(fake_edgar, clf).find(_ctx(sec, last_seen="2015-01-04"))
+    assert clf.calls[-1]["trading_after"] is False
+
+
+def test_fallback_path_does_not_claim_trading_after(fake_edgar):
+    fake_edgar.submissions_by_cik[9004] = [
+        EdgarSubmission("n1", "10-K", "2012-03-01", "", "", "k.htm"),
+    ]
+    clf = _RecordingClassifier(fake_edgar, TickerResolver(fake_edgar))
+    sec = _sec("BBG_N", 9004, "NNN", "2010-01-01", "2012-06-01", "NNN CORP")
+    DelistingFinder(fake_edgar, clf).find(_ctx(sec, last_seen="2012-06-01"))
+    assert all(not c.get("trading_after", False) for c in clf.calls)
+
+
 def test_successor_unknown_when_not_continued(fake_edgar):
     fake_edgar.submissions_by_cik[9002] = [
         EdgarSubmission("l1", "25", "2015-01-05", "", "", "p.xml"),

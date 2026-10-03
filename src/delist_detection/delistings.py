@@ -411,7 +411,8 @@ class DelistingFinder:
         anchor = lt.day.isoformat() if lt.day else winner_sub.filing_date
         rec = self.classifier.classify_event(ticker=ticker, cik=cik, anchor_date=anchor, name=sec.name,
                                              expected_name=ctx.expected_name, kind=sec.kind, form25=winner_sub,
-                                             resolution_source=ctx.resolution_source)
+                                             resolution_source=ctx.resolution_source,
+                                             trading_after=continued)
         return self._delisting(sec, cik, ticker, eff, rec, lt, winner_f25, winner_sub, continued, extra_flags)
 
     def _delisting(self, sec: Security, cik: int, ticker: str, delist_date: str, rec: DelistRecord, lt: LastTrade,
