@@ -36,7 +36,7 @@ from .figi_resolution import is_placeholder, share_class_from_name
 from .form25 import SecurityRef
 from .ftd import FTD_START, FtdIndex, close_age
 from .history import (
-    Sighting, cusip_sightings, filtered_ticker_sightings, history_rows, observation_map_rows, own_last_seen,
+    Sighting, backfill_cusips, cusip_sightings, filtered_ticker_sightings, history_rows, observation_map_rows, own_last_seen,
     ranges_from_sightings, ticker_on, ticker_range_review, ticker_sightings, value_on,
 )
 from .listing_status import issuer_exchange, listed_today, listing_answers
@@ -70,6 +70,9 @@ from .contract import id_change_rows, last_endings, security_history_rows, seed_
 from .issuer_in_force import Sighting as IssuerSighting
 from .issuer_in_force import issuer_changes
 from .price_requests import LAST_CLOSE, RECEIVED_CLOSE, key_of, request_rows, stock_legs
+
+
+BACKFILL_DAYS = 1095   # how far before a dead-before-sighting security's end its fails rows are loaded
 
 
 @dataclass
@@ -509,6 +512,44 @@ def _find_delistings(ctx: _RunContext, securities: dict[str, Security], sec_cusi
             log(f"[{i}/{len(securities)}] securities searched; {len(delistings)} delistings so far")
     ctx.meter.done("delisting search", mark)
     return _DelistingSearch(delistings, listed, sightings, review)
+
+
+def _dead_before_sighting(ctx: _RunContext, securities: dict[str, Security], delistings: list[Delisting],
+                          sec_cusips: dict[str, list[str]], ftd: FtdIndex, sightings: dict[str, list[Sighting]],
+                          issuers: dict[str, Issuer]) -> list[str]:
+    """5b. A security whose real ending (its successor not itself) came before its
+    first observation, and none of whose CUSIPs has a trading fails row, died
+    before a stale snapshot listed it: the run's fails window starts after it. Its
+    rows under its tickers from BACKFILL_DAYS before the end are loaded; the CUSIPs
+    whose rows before the end name its issuer (`history.backfill_cusips`) become
+    its CUSIPs, and its sightings are rebuilt, so the close, history and contract
+    stages see them. Returns the sec_ids that took CUSIPs."""
+    ends: dict[str, str] = {}
+    for e in delistings:
+        if e.record.successor_sec_id == e.sec_id:
+            continue
+        day = e.last_trade.day.isoformat() if e.last_trade.day else e.delist_date
+        ends[e.sec_id] = min(ends.get(e.sec_id, day), day)
+    fixed: list[str] = []
+    for sid, end in sorted(ends.items()):
+        s = securities.get(sid)
+        seen = [o.as_of for era in (s.eras if s else ()) for o in era.observations]
+        if s is None or not seen or end >= min(seen) or ftd.trading_rows(sec_cusips.get(sid, [])):
+            continue
+        end_day = date.fromisoformat(end)
+        lo, hi = end_day - timedelta(days=BACKFILL_DAYS), end_day + timedelta(days=10)
+        tickers = sorted({era.ticker for era in s.eras})
+        ftd.extend(ctx.clients.ftd_client, lo, hi, symbols=tickers)
+        names = [n for era in s.eras for n in (era.name, *(issuers[era.key].names if era.key in issuers else ())) if n]
+        found = backfill_cusips(tickers, end, ftd, names)
+        if not found:
+            continue
+        ftd.extend(ctx.clients.ftd_client, lo, hi, cusips=found)
+        sec_cusips[sid] = list(dict.fromkeys([*sec_cusips.get(sid, []), *found]))
+        sightings[sid] = ticker_sightings(s, ftd, sec_cusips[sid])
+        fixed.append(sid)
+    ctx.log(f"dead before first sighting: {len(fixed)} securities took CUSIPs from fails rows before their end")
+    return fixed
 
 
 def _check_overrides(overrides: Overrides, delistings: list[Delisting]) -> None:
@@ -1300,6 +1341,7 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
     search = _find_delistings(ctx, securities, sec_cusips, ftd, answers)                            # 5
     delistings = search.delistings
     review += search.review
+    _dead_before_sighting(ctx, securities, delistings, sec_cusips, ftd, search.sightings, answers.issuers)   # 5b
     _check_overrides(overrides, delistings)                                                         # 6
     given = overrides                                     # the caller's overrides, before the answers join them
     overrides = _apply_price_answers(given, delistings)                                             # 6b

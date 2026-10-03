@@ -212,6 +212,65 @@ def test_a_backfilled_observation_adds_no_ticker_history_range(fake_edgar, tmp_p
     assert any(r["ticker"] == "ACE" for r in th)          # the real 2012 evidence is untouched
 
 
+class _WindowedFtdClient:
+    """An FTD double that answers only rows inside the window asked for."""
+
+    def __init__(self, rows):
+        self.all_rows = rows
+
+    def urls_for(self, lo, hi):
+        return [(lo.isoformat(), hi.isoformat())]
+
+    def rows(self, url, *, symbols=None, cusips=None):
+        lo, hi = url
+        for r in self.all_rows:
+            if lo <= r.date <= hi and ((symbols and r.symbol in symbols) or (cusips and r.cusip in cusips)):
+                yield r
+
+
+def _dead_before_sighting_universe(fake_edgar, observed):
+    fake_edgar.submissions_by_cik[1122304] = [
+        EdgarSubmission("0000876661-18-001269", "25-NSE", "2018-11-29", "", "", "primary_doc.xml"),
+        EdgarSubmission("0001122304-18-000178", "8-K", "2018-11-28", "2018-11-28", "2.01,3.01,5.01,9.01", "k.htm"),
+        EdgarSubmission("0001122304-18-000184", "15-12B", "2018-12-10", "", "", "f.htm"),
+    ]
+    fake_edgar.submissions_by_cik[777] = []
+    fake_edgar.company_map["AET"] = {"cik_str": 1122304, "ticker": "AET", "title": "AETNA INC /PA/"}
+    fake_edgar.company_map["LIVE"] = {"cik_str": 777, "ticker": "LIVE", "title": "LIVE CO"}
+    fake_edgar.listings[777] = [("LIVE", "NYSE")]
+    fake_edgar.raws["0000876661-18-001269"] = AET_RAW
+    fake_edgar.texts["0001122304-18-000178"] = ("Item 3.01 Notice. trading suspended prior to the opening of trading "
+                                                "on November 29, 2018 " + "x" * 300)
+    rows = [FtdRow("2018-06-29", "00817Y108", "AET", "AETNA INC COM", 180.0),
+            FtdRow("2018-07-02", "00817Y108", "AET", "AETNA INC COM", 181.0),
+            FtdRow("2018-11-28", "00817Y108", "AET", "AETNA INC COM", 212.70)]
+    obs = [*(Observation("AET", d, "AETNA INC", cik=1122304) for d in observed),
+           Observation("LIVE", "2025-06-30", "LIVE CO", cik=777)]
+    index = ObservationIndex(obs)
+    resolver = TickerResolver(fake_edgar, observed_names=index.name_on, cik_pins=index.cik_pin_on)
+    return index, Clients(edgar=fake_edgar, resolver=resolver, classifier=DelistClassifier(fake_edgar, resolver),
+                          figi=_Figi(), ftd_client=_WindowedFtdClient(rows))
+
+
+def test_a_security_dead_before_its_first_sighting_takes_its_cusips_from_earlier_fails_rows(fake_edgar, tmp_path):
+    index, clients = _dead_before_sighting_universe(fake_edgar, ["2019-06-28"])
+    logged = []
+    run(index, clients, Overrides(), out_dir=tmp_path, log=logged.append)
+    assert any("dead before first sighting: 1" in str(m) for m in logged)
+    th = [r for r in read_table("ticker_history", table_path(tmp_path, "ticker_history"))
+          if r["ticker"] == "AET"]
+    assert th and th[0]["valid_to"] == "2018-11-28" and th[0]["valid_from"].startswith("2018")
+    ch = read_table("cusip_history", table_path(tmp_path, "cusip_history"))
+    assert "00817Y108" in {r["cusip"] for r in ch}
+
+
+def test_a_security_observed_before_its_ending_is_not_dead_before_its_first_sighting(fake_edgar, tmp_path):
+    index, clients = _clients(fake_edgar)
+    logged = []
+    run(index, clients, Overrides(), out_dir=tmp_path, log=logged.append)
+    assert any("dead before first sighting: 0" in str(m) for m in logged)
+
+
 def test_missing_close_leaves_blank_dlret_and_review(fake_edgar, tmp_path):
     rows = [FtdRow("2018-06-29", "00817Y108", "AET", "AETNA INC.(NEW)", 180.0),
             FtdRow("2018-07-02", "00817Y108", "AET", "AETNA INC.(NEW)", 181.0)]    # nothing after the last trade
