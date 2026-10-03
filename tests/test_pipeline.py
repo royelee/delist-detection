@@ -271,6 +271,86 @@ def test_a_security_observed_before_its_ending_is_not_dead_before_its_first_sigh
     assert any("dead before first sighting: 0" in str(m) for m in logged)
 
 
+class _RecordingFtdClient(_WindowedFtdClient):
+    def __init__(self, rows):
+        super().__init__(rows)
+        self.asked = []
+
+    def rows(self, url, *, symbols=None, cusips=None):
+        self.asked.append((set(symbols or ()), set(cusips or ())))
+        yield from super().rows(url, symbols=symbols, cusips=cusips)
+
+
+def _stage_5b(rows, specs, endings, sec_cusips=None, loaded=()):
+    """Run stage 5b directly. specs: sid -> (ticker, first observation day);
+    endings: (sid, last trade day, successor sid or None); loaded: rows already in the index."""
+    from types import SimpleNamespace
+    from delist_detection.ftd import FtdIndex
+    from delist_detection.manifest import StageMeter
+    from delist_detection.observations import TickerEra
+    securities = {}
+    for sid, (ticker, first) in specs.items():
+        era = TickerEra(ticker, first, first, [Observation(ticker, first, "AETNA INC")])
+        securities[sid] = Security(sid, 1, "", "AETNA INC", "Common Stock", True, "ticker", eras=[era])
+    delistings = [SimpleNamespace(sec_id=sid, delist_date=day, last_trade=SimpleNamespace(day=date.fromisoformat(day)),
+                                  record=SimpleNamespace(successor_sec_id=succ))
+                  for sid, day, succ in endings]
+    client = _RecordingFtdClient(rows)
+    ctx = SimpleNamespace(clients=SimpleNamespace(ftd_client=client), log=lambda *_: None,
+                          meter=StageMeter(lambda *_: None))
+    ftd = FtdIndex(loaded)
+    held = {sid: list((sec_cusips or {}).get(sid, [])) for sid in specs}
+    sightings = {sid: [] for sid in specs}
+    fixed = pipeline._dead_before_sighting(ctx, securities, delistings, held, ftd, sightings, {})
+    return fixed, held, sightings, securities, client, ctx
+
+
+def _aet_rows(ticker="AET", cusip="00817Y108"):
+    return [FtdRow("2018-11-20", cusip, ticker, "AETNA INC COM", 180.0),
+            FtdRow("2018-11-27", cusip, ticker, "AETNA INC COM", 181.0)]
+
+
+def test_stage_5b_reads_the_last_real_ending_not_the_first():
+    # ended 2018-11-28, seen from 2019-06-28, ended again 2020-03-02: not dead before its sighting
+    fixed, held, sightings, *_ = _stage_5b(
+        _aet_rows(), {"S1": ("AET", "2019-06-28")},
+        [("S1", "2018-11-28", None), ("S1", "2020-03-02", None)])
+    assert fixed == [] and held["S1"] == [] and sightings["S1"] == []
+
+
+def test_stage_5b_decides_eligibility_before_loading_any_rows():
+    # both die before they are seen and share a ticker; SB already holds CUSIP_B, whose rows SA's load brings in
+    rows = _aet_rows(cusip="CUSIP_A") + [FtdRow("2018-11-26", "CUSIP_B", "AET", "AETNA INC COM", 182.0)]
+    fixed, held, *_ = _stage_5b(
+        rows, {"SA": ("AET", "2019-06-28"), "SB": ("AET", "2019-06-29")},
+        [("SA", "2018-11-28", None), ("SB", "2018-11-28", None)], sec_cusips={"SB": ["CUSIP_B"]})
+    assert sorted(fixed) == ["SA", "SB"]
+    assert held["SA"] == ["CUSIP_A"] and held["SB"] == ["CUSIP_B"]
+
+
+def test_stage_5b_drops_a_cusip_another_security_holds():
+    fixed, held, *_ = _stage_5b(
+        _aet_rows(), {"S1": ("AET", "2019-06-28"), "S2": ("ZZZ", "2019-06-28")},
+        [("S1", "2018-11-28", None)], sec_cusips={"S2": ["00817Y108"]})
+    assert fixed == [] and held["S1"] == [] and held["S2"] == ["00817Y108"]
+
+
+def test_stage_5b_keeps_identity_and_is_metered():
+    fixed, held, sightings, securities, _, ctx = _stage_5b(
+        _aet_rows(), {"S1": ("AET", "2019-06-28")}, [("S1", "2018-11-28", None)])
+    assert fixed == ["S1"] and held["S1"] == ["00817Y108"]
+    assert securities["S1"].sec_id == "S1" and securities["S1"].issuer_cik == 1
+    assert "dead before first sighting" in ctx.meter.stages
+
+
+def test_stage_5b_skips_a_security_whose_cusip_already_trades_and_asks_for_no_rows():
+    live = [FtdRow("2019-07-01", "00817Y108", "AET", "AETNA INC COM", 190.0)]
+    fixed, held, _, _, client, _ = _stage_5b(
+        _aet_rows(), {"S1": ("AET", "2019-06-28")}, [("S1", "2018-11-28", None)],
+        sec_cusips={"S1": ["00817Y108"]}, loaded=live)
+    assert fixed == [] and client.asked == [] and held["S1"] == ["00817Y108"]
+
+
 def test_missing_close_leaves_blank_dlret_and_review(fake_edgar, tmp_path):
     rows = [FtdRow("2018-06-29", "00817Y108", "AET", "AETNA INC.(NEW)", 180.0),
             FtdRow("2018-07-02", "00817Y108", "AET", "AETNA INC.(NEW)", 181.0)]    # nothing after the last trade

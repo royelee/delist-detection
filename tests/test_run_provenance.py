@@ -224,7 +224,8 @@ def test_the_manifest_records_what_the_run_rested_on(fake_edgar, tmp_path):
                       "degraded_answers", "warm_degraded", "rejected_queries", "not_covered", "warm_failed",
                       "latency_ms", "stages", "resolution_degraded", "review", "handoffs"}
     assert set(m["stages"]) == {"issuer resolution", "delisting search", "payouts", "successor search",
-                                "handoff search", "ticker evidence", "issuers in force"}
+                                "handoff search", "ticker evidence", "issuers in force",
+                                "dead before first sighting"}
     assert m["handoffs"] == {"handoffs": 0, "continuations_by_filing": 0, "continuations_by_timing": 0,
                              "takeovers": 0, "conflicts": 0, "rows_added": 0}
     assert m["resolution_degraded"] == 0

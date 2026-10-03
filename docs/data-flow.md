@@ -93,12 +93,12 @@ one observation per row per file).
               │  DelistRecord per delisting│   sec_id, delist_date, crsp_code, bucket,
               │                            │   confidence, reason, evidence
               └─────────────┬──────────────┘
-                             │ stage 5b (_dead_before_sighting): a security whose real
-                             │ ending came before its first observation and with no
+                             │ stage 5b (_dead_before_sighting): a security whose last
+                             │ real ending came before its first observation and with no
                              │ trading fails row gets rows loaded for [end − 1095 d,
                              │ end + 10 d], takes the CUSIPs of rows under its tickers
                              │ in the 120 days before the end that name its issuer
-                             │ (history.backfill_cusips), and its sightings are rebuilt
+                             │ (history.backfill_cusips; not CUSIPs another security holds), and its sightings are rebuilt
                              │ ftd.close_after (last-trade + acquirer closes),
                              │ payout_extractor / llm_merger_extractor, payout_gate
                              ▼
@@ -798,7 +798,8 @@ ticker and another starting under it within days (CONTEXT.md).
 1. **Finding** (`find_handoffs`): per ticker (either separator spelling), the
    securities sighted under it in the order they began under it, over the
    sightings `ticker_history` is built from (backfilled observations
-   dropped); each and the next to begin form a pair when the next one's first
+   dropped; a fails row is a sighting only when its symbol has a letter, because
+   SEC's Aug–Dec 2007 files mask some symbols as "**********"); each and the next to begin form a pair when the next one's first
    sighting falls within [−`OVERLAP_DAYS`, `TAKEOVER_DAYS`] = [−10, 120] days
    of the first one's last (CZR's two lines overlap 8 days, COHR waits 74).
 2. **Deciding** (`decide_handoff`), the first that applies: a continuation by
