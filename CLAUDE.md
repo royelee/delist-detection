@@ -28,7 +28,7 @@ editable install.
 
 ```bash
 pip install -e .                         # editable install (Python ≥3.10) — once per env
-pytest   # full suite (1676 tests + 17 known-wrong golden xfails, offline, no network)
+pytest   # full suite (1680 tests + 17 known-wrong golden xfails, offline, no network)
 pytest tests/test_payout_extractor.py -v  # one file
 pytest tests/test_payout_extractor.py::test_match_in_cash_family_altr -v   # one test
 
@@ -610,7 +610,7 @@ conflate them.
   in `uncertain.csv`.** `kind` is seed | security | ending; `reason` holds
   `code` or `code:detail` items (verdict.py's docstring lists them). The
   verdict covers identity, exit kind and the last trade date, never the value
-  (except assumed par after a failed payout gate, decision 4). A seed whose
+  (except assumed par after a failed payout, LLM or terms gate, decision 4). A seed whose
   only problem is its security is counted, not listed. Pipeline stages 10e
   (ticker evidence: about one cached EDGAR search per placeholder without a
   ticker tier), 10f (verdicts), 10g (the contract) and 10h (scorecard) run

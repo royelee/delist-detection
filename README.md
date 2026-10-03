@@ -215,7 +215,7 @@ One row per uncertain verdict a person must act on: `kind` is `security`
 first sighting outside its history, a ticker another security holds at the
 same time), `ending` (not filing-backed, no exchange-printed last trade date,
 identity through today's ticker map, a timing-only continuation, assumed par
-after a failed payout gate, or its security uncertain) or `seed` (a sighting
+after a failed payout, LLM or terms gate, or its security uncertain) or `seed` (a sighting
 not placed, seen under two names, or outside its security's history).
 `reason` lists the codes; `candidates` the other `sec_id`s involved. A person
 answers a row with a pin, an override or a drop-list row; a security or ending
