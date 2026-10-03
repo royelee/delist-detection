@@ -84,13 +84,15 @@ def issuer_changes(sightings: Iterable[Sighting], submissions: Submissions,
                    exact_names: ExactNames) -> dict[str, list[tuple[str, str]]]:
     """sec_id -> [(from ISO date, CIK)], earliest first: the CIK in force on the
     security's first sighting with one, then each change. A sighting with no CIK
-    changes nothing."""
+    changes nothing. Sightings are ordered by (day, CIK, name); a change is recorded
+    only on a sighting dated after the previous one, so a same-day sighting under
+    another CIK changes nothing and the dates strictly increase."""
     by_sec: dict[str, list[Sighting]] = defaultdict(list)
     for s in sightings:
         by_sec[s.sec_id].append(s)
     out: dict[str, list[tuple[str, str]]] = {}
     for sid, rows in by_sec.items():
-        rows.sort(key=lambda s: s.day)
+        rows.sort(key=lambda s: (s.day, s.cik, s.name))
         timeline: list[tuple[str, str]] = []
         last_day = ""
         for s in rows:
@@ -99,7 +101,7 @@ def issuer_changes(sightings: Iterable[Sighting], submissions: Submissions,
                 continue
             if not timeline:
                 timeline.append((s.day, cik))
-            elif cik != timeline[-1][1]:
+            elif s.day > last_day and cik != timeline[-1][1]:
                 sub = submissions(int(cik))
                 since = agreeing_since(sub, s.name, date.fromisoformat(s.day)) if isinstance(sub, dict) else None
                 after = (date.fromisoformat(last_day) + timedelta(days=1)).isoformat()

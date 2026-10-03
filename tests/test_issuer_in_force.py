@@ -51,6 +51,29 @@ def test_a_change_date_never_falls_on_or_before_the_last_sighting_under_the_old_
     assert out == {"S": [("2009-12-31", "64978"), ("2010-01-01", "310158")]}
 
 
+AGREE = {1: {"name": "ACME INC", "formerNames": []}, 2: {"name": "ACME INC", "formerNames": []}}
+
+
+def test_same_day_sightings_under_two_ciks_give_one_entry_for_that_day():
+    rows = [Sighting("S", "2020-01-01", "ACME INC", "2"), Sighting("S", "2020-01-01", "ACME INC", "1")]
+    assert issuer_changes(rows, AGREE.get, lambda n: []) == {"S": [("2020-01-01", "1")]}
+
+
+def test_a_b_a_gives_strictly_increasing_dates():
+    rows = [Sighting("S", "2020-01-01", "ACME INC", "1"), Sighting("S", "2020-01-02", "ACME INC", "2"),
+            Sighting("S", "2020-01-03", "ACME INC", "1")]
+    out = issuer_changes(rows, AGREE.get, lambda n: [])["S"]
+    assert [c for _, c in out] == ["1", "2", "1"]
+    days = [d for d, _ in out]
+    assert days == sorted(set(days))
+
+
+def test_input_order_does_not_change_the_timeline():
+    rows = [Sighting("S", "2020-01-01", "ACME INC", "1"), Sighting("S", "2020-01-02", "ACME INC", "2"),
+            Sighting("S", "2020-01-02", "ACME INC", "1"), Sighting("S", "2020-01-03", "ACME INC", "1")]
+    assert issuer_changes(rows, AGREE.get, lambda n: []) == issuer_changes(rows[::-1], AGREE.get, lambda n: [])
+
+
 def test_the_resolver_hands_out_its_name_index(fake_edgar):
     index = CikNameIndex.from_text("MERCK & CO INC:0000064978:\n")
     assert TickerResolver(fake_edgar, name_index=index).name_index() is index
