@@ -77,3 +77,15 @@ The best value each scorecard number has reached (`data/scorecard.json`). No lat
 **Verdict**:
 `confirmed` or `uncertain`, one per seed, security and ending. Confirmed means the evidence the spec requires is in hand: a FIGI or a filing tying a placeholder's ticker to its CIK, a history covering every introduction, a filing-backed exit kind and an exchange-printed last trade date. Uncertain rows go to `uncertain.csv` for a person to pin, override or drop.
 _Avoid_: confidence, review
+
+**Contract**:
+The tables the consumer reads (`output/contract/`): security_history, one-ending-per-security delistings, the seed echo, price requests, id changes, and `schema_version` in the manifest. Built from today's tables by `contract.py`; written beside them for one release.
+
+**Exit kind**:
+The contract's kind of ending: merger, exchange, liquidation, dropped (with a drop reason), lost_source, expiration. A continuation is an exchange whose successor is held by the same holders one for one.
+
+**Fill** (`dlret_fill`):
+A value the library assumes rather than measures: a Shumway mark, assumed par, a transfer's 0.0. Never in `dlret`.
+
+**Issuer in force**:
+The CIK that carried a security's name on a given day; it can change while the security continues (a reverse merger, a holding-company reorganization).

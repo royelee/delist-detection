@@ -94,6 +94,9 @@ lists, empty cell for NULL, rows sorted by key unless noted — see
 shares). `delistings.csv` is the primary deliverable; the other eight support
 it.
 
+The run also writes the contract, the tables `qlib_practice` will read, under
+`output/contract/` (see *contract/* below), beside these for one release.
+
 Next to the tables, every run writes `run_manifest.json` (what the run rested
 on) and `scorecard.json`: lifecycle coverage and quality per input ticker and
 per security, the gap-table lines (identity, last trade dates, values,
@@ -217,6 +220,72 @@ not placed, seen under two names, or outside its security's history).
 `reason` lists the codes; `candidates` the other `sec_id`s involved. A person
 answers a row with a pin, an override or a drop-list row; a security or ending
 not listed is confirmed.
+
+### `contract/` — the tables qlib_practice will read
+
+Written to `output/contract/` by stage 10g, from the tables and verdicts above
+(`contract.py`), beside today's nine tables for one release (their columns do
+not change). Five files, columns as in [`store.py`](src/delist_detection/store.py):
+
+```
+security_history.csv  key sec_id, start_date, ticker
+  sec_id, issuer_id, start_date, end_date, ticker, security_name, share_class
+delistings.csv        key sec_id — one row per ended security, its last real ending
+  sec_id, last_trade_date, exit_kind, drop_reason, continuation, successor_sec_id,
+  ticker_successor_sec_id, dlret, dlret_fill, terminal_value, verdict
+seeds.csv             key ticker, as_of, name, cusip, pin_cik, pin_sec_id — the seed echo
+  ticker, as_of, name, cusip, pin_cik, pin_sec_id, sec_id, verdict
+price_requests.csv    key sec_id, kind, date, lookup_ticker
+  sec_id, last_trade_date, kind, lookup_sec_id, lookup_ticker, date
+id_changes.csv        key old_sec_id
+  old_sec_id, new_sec_id, changed_on, issuer_cik, share_class
+```
+
+`security_history.csv` holds every `ticker_history` range except those of the
+merger acquirers the run adds, split where the issuer in force changes (the
+CIK that carried the security's name that day; MRK 2008 moves from old Merck &
+Co, CIK 64978, to the new one). Successors stay, so a continuation's
+`successor_sec_id` resolves. `id_changes.csv` lists the placeholders of a
+baseline `securities.csv` (`--id-baseline`, default the output folder's own,
+read before the run writes) that now hold a FIGI; it is not cumulative, git
+keeps earlier versions. `run_manifest.json` carries `schema_version`
+(`store.CONTRACT_SCHEMA_VERSION`, now 1).
+
+**Exit kind**, from today's bucket and CRSP code (`exit_kind.py`):
+
+| today's bucket and code | `exit_kind` | `drop_reason` |
+|---|---|---|
+| `merger` | `merger` | |
+| `exchange_transfer` | `exchange` (`continuation` when its successor is another security) | |
+| `liquidation`, code 470 (bankruptcy) | `dropped` | `bankruptcy` |
+| `liquidation`, other codes | `liquidation` | |
+| `compliance_failure` | `dropped` | the code's reason: 570 `guidelines`, 573 `sec_order`, 580 `filings_fees`, and CRSP's meaning for the other 5xx codes |
+| `expiration` | `expiration` | |
+| `unknown` | blank (no kind asserted; its verdict is uncertain) | |
+
+`lost_source` is not produced until reset-4a.
+
+**Values.** `cash_only`, `stock_only`, `cash_plus_stock`, `recovery_ratio` and
+`worthless` are measured, in `dlret`. Shumway marks, assumed par and an
+exchange transfer's 0.0 are fills, in `dlret_fill`; a fill is never in
+`dlret`. A continuation has neither. Transfers with no successor keep today's
+0.0 as a fill, so labels built from `delistings.csv` do not move until reset-4a
+and reset-4f decide which are real drops.
+
+**Published last trade date.** `last_trade_date` is published only when an
+exchange print gave it and it is no later than the Form 25 effective date,
+otherwise blank. An exchange-print date with a text conflict stays published:
+it is blanked only when the date itself is uncertain.
+
+**Price requests and `--price-answers`.** `price_requests.csv` asks for one
+`last_close` per contract ending with a published date that is not a
+continuation, and one `received_close` per LLM-read stock leg (a
+`--merger-terms` stock leg carries its own price); `otc_print` waits for
+reset-4f. Fill a `price` column (a finite positive number) and rerun with
+`--price-answers answered.csv`: a second run changes values only. An answer is
+matched on `(sec_id, last_trade_date, kind, lookup_ticker, date)`;
+`lookup_sec_id` is informational. An answer to no request, or a last close also
+given by `--last-trade-closes`, exits 2 before anything is written.
 
 ### `delistings.csv` — key `(sec_id, delist_date)` — the primary output
 
@@ -913,6 +982,7 @@ scripts/
     verify_altair.py                 End-to-end sanity check on ALTR (Siemens deal)
     observations_from_instruments.py  Legacy (ticker,start,end) file → observations CSV
     observations_from_snapshots.py    Folder of dated snapshot CSVs → observations CSV
+    seeds_from_observations.py        Observations CSV → one row per introduction (the seeds-only input)
     classify_universe.py              Reads --observations → writes the nine output tables
     accept_review.py                  Bulk-accept review.csv rows by flag → appends data/review_decisions.csv
     verify_against_web.py             Independent EDGAR cross-check → output/web_verification.csv

@@ -318,7 +318,7 @@ code version and the worker count make it expected to differ between two runs
 even when their nine tables come out identical. A run that aborts leaves the
 previous manifest in place.
 
-`scorecard.json` is built at stage 10g from the same rows the tables are
+`scorecard.json` is built at stage 10h from the same rows the tables are
 written from (`store.formatted`), so it equals what `scripts/scorecard.py`
 recomputes from the written CSVs. It is written after the tables and before the
 manifest, carries `drops` (floored numbers that got worse; never computed under
@@ -329,8 +329,14 @@ Before the write, stage 10e gathers each placeholder's ticker evidence
 (`ticker_evidence.evidence_for`: a resolver tier that names the ticker, else
 one full-text search of the CIK's own filings), 10f decides every verdict
 (`verdict.decide` over the rows about to be written) and adds `uncertain.csv`
-to the group, and 10g builds the scorecard from the same rows, so its V lines
+to the group, and 10h builds the scorecard from the same rows, so its V lines
 count exactly what `uncertain.csv` lists.
+
+10g, the contract (`pipeline._contract`): `_issuers_in_force` (one cached
+submissions read per issuer CIK, and SEC's name index for a sighting whose era
+CIK did not carry its name that day), then `contract.py`'s rows and
+`price_requests.request_rows`. A price answer to no request stops the run here.
+10h, the scorecard.
 
 `scripts/classify_universe.py` exits:
 - `0` on success;
@@ -828,7 +834,10 @@ carry the `handoff search` SEC traffic.
 ## Outputs
 
 Nine CSVs written to `output/`, all committed artifacts; see `store.py` for
-the exact schema. `delistings.csv` is the primary deliverable.
+the exact schema. `delistings.csv` is the primary deliverable. The run also
+writes the contract under `output/contract/` (stage 10g): `security_history.csv`,
+`delistings.csv` (one row per ended security), `seeds.csv`, `price_requests.csv`
+and `id_changes.csv`, beside the nine tables for one release.
 
 `output/securities.csv`: one row per identified security — `sec_id`,
 `issuer_cik`, `share_class`, `name`, `security_type`, `observed`,
