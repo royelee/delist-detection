@@ -7,7 +7,7 @@
     "submissions": 23755,
     "submissions_page": 7276
   },
-  "code_version": "7c52b86",
+  "code_version": "bf0702c",
   "degraded_answers": {},
   "handoffs": {
     "conflicts": 17,
@@ -23,9 +23,9 @@
   "resolution_degraded": 0,
   "review": {
     "accepted": 0,
-    "check": 584,
+    "check": 588,
     "cleared": 0,
-    "fix": 111,
+    "fix": 107,
     "info_hidden": 445,
     "unmatched_decisions": 0
   },

@@ -265,30 +265,30 @@ ending,STN,CIK898660-COMMON,2009-06-08,continued_filings_rule;last_trade_not_exc
 ending,NYCB,CIK910073-COMMON,2024-07-12,continued_filings_rule;last_trade_not_exchange_print:none;last_trade_date_unconfirmed,
 ending,DF,CIK931336-COMMON,2013-08-26,continued_filings_rule;last_trade_not_exchange_print:none;last_trade_date_unconfirmed,
 ending,DTV,CIK944868-COMMON,2009-11-29,security_uncertain;no_last_trade_date,
-security,,BBG000BDLLR9,,seeds_outside_history:1 from 2008-01-16,
+security,BOL,BBG000BDLLR9,2004-11-16,seeds_outside_history:1 from 2008-01-16,
 security,CI,BBG000BFMBQ6,2007-12-18,ticker_overlap:CI,BBG00KXRCDP0
-security,,BBG000BH5K72,,seeds_outside_history:1 from 2008-01-16,
-security,,BBG000BHD665,,seeds_outside_history:1 from 2008-01-16,
+security,DJ,BBG000BH5K72,2005-01-28,seeds_outside_history:1 from 2008-01-16,
+security,CDWC,BBG000BHD665,2004-11-09,seeds_outside_history:1 from 2008-01-16,
 security,GOOGL,BBG000BHSKN9,2007-12-27,ticker_overlap:GOOG,BBG002W96FT9
-security,,BBG000BJ3QD0,,seeds_outside_history:1 from 2008-01-16,
-security,,BBG000BJV732,,seeds_outside_history:1 from 2008-01-16,
-security,,BBG000BJXXX0,,seeds_outside_history:1 from 2008-01-16,
+security,DADE,BBG000BJ3QD0,2004-11-29,seeds_outside_history:1 from 2008-01-16,
+security,FRK,BBG000BJV732,2004-12-03,seeds_outside_history:1 from 2008-01-16,
+security,IFIN,BBG000BJXXX0,2004-07-14,seeds_outside_history:1 from 2008-01-16,
 security,TGNA,BBG000BK5DP1,2007-12-19,ticker_overlap:GCI,BBG006XVD9G0
 security,IAC,BBG000BKQG80,2008-08-26,ticker_overlap:IACI,CIK891103-COMMON
-security,,BBG000BMZLP6,,seeds_outside_history:1 from 2008-01-16,
-security,,BBG000BNXLK1,,seeds_outside_history:1 from 2008-01-16,
+security,AQNT,BBG000BMZLP6,2004-08-24,seeds_outside_history:1 from 2008-01-16,
+security,MEL,BBG000BNXLK1,2004-07-07,seeds_outside_history:1 from 2008-01-16,
 security,SPXC,BBG000BTGCV5,2008-01-24,ticker_overlap:SPW,CIK88205-COMMON
-security,,BBG000BV3594,,seeds_outside_history:1 from 2008-01-16,
-security,,BBG000BV52H0,,seeds_outside_history:1 from 2008-01-16,
+security,TEK,BBG000BV3594,2004-12-10,seeds_outside_history:1 from 2008-01-16,
+security,KSE,BBG000BV52H0,2004-11-15,seeds_outside_history:1 from 2008-01-16,
 security,XRX,BBG000BX5ZF5,2007-12-17,ticker_overlap:XRX,BBG00NNG2ZJ8
 security,QDEL,BBG000C6GN04,2008-04-03,ticker_overlap:QDEL,BBG017TGV7M2
 security,HCR,BBG000CG0HP5,2007-12-17,seeds_outside_history:1 from 2008-01-16,
-security,,BBG000CS7CB8,,seeds_outside_history:1 from 2008-01-16,
-security,,BBG000FHN2M1,,seeds_outside_history:1 from 2008-01-16,
+security,JNC,BBG000CS7CB8,2005-03-09,seeds_outside_history:1 from 2008-01-16,
+security,CKFR,BBG000FHN2M1,2004-12-31,seeds_outside_history:1 from 2008-01-16,
 security,ABI,BBG000FJJW82,2008-01-07,seeds_outside_history:1 from 2009-06-08,
 security,DTV,BBG000FL1TC8,2009-11-20,ticker_overlap:DTV,CIK944868-COMMON
-security,,BBG000G61VB6,,seeds_outside_history:1 from 2008-01-16,
-security,,BBG000L93Q69,,seeds_outside_history:1 from 2008-01-16,
+security,BOT,BBG000G61VB6,2005-10-25,seeds_outside_history:1 from 2008-01-16,
+security,THE,BBG000L93Q69,2004-09-16,seeds_outside_history:1 from 2008-01-16,
 security,GOOG,BBG002W96FT9,2014-04-04,ticker_overlap:GOOG,BBG000BHSKN9
 security,LVNTA,BBG0038K9G41,2012-08-21,ticker_overlap:LVNTA,CIK1355096-COMMON
 security,GCI,BBG006XVD9G0,2015-07-01,ticker_overlap:GCI,BBG000BK5DP1
@@ -301,28 +301,28 @@ security,LLYVA,BBG01HMFL081,2023-08-04,ticker_overlap:LLYVA,BBG01YY256K1
 security,LLYVK,BBG01HMFLTN1,2023-08-04,ticker_overlap:LLYVK,BBG01YYX1Z14
 security,LLYVA,BBG01YY256K1,2025-12-17,ticker_overlap:LLYVA,BBG01HMFL081
 security,LLYVK,BBG01YYX1Z14,2025-12-17,ticker_overlap:LLYVK,BBG01HMFLTN1
-security,,CIK1038914-COMMON,,seeds_outside_history:1 from 2008-01-16,
-security,,CIK1052045-COMMON,,seeds_outside_history:1 from 2008-01-16,
-security,,CIK1074771-COMMON,,seeds_outside_history:1 from 2008-01-16,
-security,,CIK1116521-COMMON,,seeds_outside_history:1 from 2008-01-16,
-security,,CIK1124887-COMMON,,seeds_outside_history:1 from 2008-01-16,
-security,,CIK1156826-COMMON,,seeds_outside_history:1 from 2008-01-16,
+security,GSF,CIK1038914-COMMON,2004-11-26,seeds_outside_history:1 from 2008-01-16,
+security,SVM,CIK1052045-COMMON,2004-07-26,seeds_outside_history:1 from 2008-01-16,
+security,TRI,CIK1074771-COMMON,2004-07-26,seeds_outside_history:1 from 2008-01-16,
+security,AV,CIK1116521-COMMON,2004-11-02,seeds_outside_history:1 from 2008-01-16,
+security,CEN,CIK1124887-COMMON,2004-11-10,seeds_outside_history:1 from 2008-01-16,
+security,ASN,CIK1156826-COMMON,2004-10-13,seeds_outside_history:1 from 2008-01-16,
 security,NCRA,CIK1308161-CLASS-A,2012-06-29,placeholder_without_ticker_filing:CIK 1308161,
-security,,CIK1319048-COMMON,,seeds_outside_history:1 from 2008-01-16,
+security,CHAP,CIK1319048-COMMON,2005-08-02,seeds_outside_history:1 from 2008-01-16,
 security,UAC-C,CIK1336917-CLASS-C,2016-06-30,placeholder_without_ticker_filing:CIK 1336917,
 security,QRTEA,CIK1355096-COMMON,2007-12-17,ticker_overlap:LVNTA,BBG0038K9G41
 security,,CIK1355096-SERIES-A,,seeds_outside_history:1 from 2012-06-29,
-security,,CIK18568-COMMON,,seeds_outside_history:1 from 2008-01-16,
-security,,CIK230463-COMMON,,seeds_outside_history:1 from 2008-01-16,
-security,,CIK351346-COMMON,,seeds_outside_history:1 from 2008-01-16,
-security,,CIK47580-COMMON,,seeds_outside_history:1 from 2008-01-16,
+security,CBSS,CIK18568-COMMON,2004-10-12,seeds_outside_history:1 from 2008-01-16,
+security,PPP,CIK230463-COMMON,2004-11-08,seeds_outside_history:1 from 2008-01-16,
+security,BMET,CIK351346-COMMON,2004-04-02,seeds_outside_history:1 from 2008-01-16,
+security,HLT,CIK47580-COMMON,2004-11-01,seeds_outside_history:1 from 2008-01-16,
 security,HUB-B,CIK48898-CLASS-B,2008-01-16,placeholder_without_ticker_filing:CIK 48898,
-security,,CIK65873-COMMON,,seeds_outside_history:1 from 2008-01-16,
-security,,CIK718482-COMMON,,seeds_outside_history:1 from 2008-01-16,
-security,,CIK737874-COMMON,,seeds_outside_history:1 from 2008-01-16,
-security,,CIK835541-COMMON,,seeds_outside_history:1 from 2008-01-16,
-security,,CIK845752-COMMON,,seeds_outside_history:1 from 2008-01-16,
-security,,CIK849778-COMMON,,seeds_outside_history:1 from 2008-01-16,
+security,AT,CIK65873-COMMON,2004-12-07,seeds_outside_history:1 from 2008-01-16,
+security,AGE,CIK718482-COMMON,2004-09-30,seeds_outside_history:1 from 2008-01-16,
+security,LI,CIK737874-COMMON,2004-10-18,seeds_outside_history:1 from 2008-01-16,
+security,SLR,CIK835541-COMMON,2004-10-01,seeds_outside_history:1 from 2008-01-16,
+security,AH,CIK845752-COMMON,2004-08-05,seeds_outside_history:1 from 2008-01-16,
+security,CYTC,CIK849778-COMMON,2005-02-08,seeds_outside_history:1 from 2008-01-16,
 security,SPW,CIK88205-COMMON,2008-01-16,ticker_overlap:SPW,BBG000BTGCV5
 security,IAC,CIK891103-COMMON,2008-01-07,ticker_overlap:IACI,BBG000BKQG80
 security,DTV,CIK944868-COMMON,2007-12-21,ticker_overlap:DTV,BBG000FL1TC8

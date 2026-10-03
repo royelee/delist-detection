@@ -246,6 +246,18 @@ needs evidence about the security, not only about the registrant. It replaces
 - The 14 FIGI rows with no CIK (Applied Materials, DuPont, Fannie Mae and US Airways among them).
 - The 32 securities with no interval.
 - FOX/FOXA, ERA, and LVNTA's tracking-stock intervals.
+- Done (first step) 2026-10-02 (plan `2026-10-02-reset-4b-dead-before-sighting.md`). 31 securities that died before
+  their first sighting (delisted 2006-12 to 2008-02, before the 2008-01-16 snapshot; the fails window began
+  2007-12-17) now load fails rows for [end - 1095 d, end + 10 d] and take their CUSIPs from rows under their tickers
+  in the 120 days before the end whose description names the issuer (pipeline stage 5b, `history.backfill_cusips`).
+  No `sec_id` or issuer CIK changed. `L1.no_interval` 32 -> 1, coverage 0.909009 -> 0.918515 (securities) and
+  0.907616 -> 0.91708 (tickers), `R2.3.blank_dlret_in_window` 61 -> 57, `A.random.upper95` 0.177208 -> 0.153275.
+  SEC's 2007 fails files mask some symbols (`**********`, Aug-Dec 2007): a masked row is no longer a ticker
+  sighting (it still shows the CUSIP trading). Floor entries lowered by hand (Ruling 4): `L1.ended_incomplete`
+  57 -> 67, `L2.low` 169 -> 171, `L2.high_share` 0.761668 -> 0.753808, because those 31 securities now end incomplete
+  or low-grade until their identity and values are worked. Left for the later reset-4b steps: the 50 ticker-only
+  FIGIs, the 99 placeholders, the no-CIK FIGI rows, the 9 FOX/FOXA-style share-class contradictions (AA, ALEX, CB,
+  CHK, FOX, FOXA, GM, IR, LBTYA), ERA, LVNTA.
 
 ### reset-4c: Values
 

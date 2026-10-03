@@ -262,7 +262,7 @@ BBG000BV1Y93,2016-06-30,merger,,false,,,-0.003256,,27.550000,confirmed
 BBG000BV2BR2,2020-06-29,merger,,false,,,0.000690,,145.000000,confirmed
 BBG000BV3594,2007-11-21,merger,,false,,,0.000000,,38.000000,uncertain
 BBG000BV3SC0,2015-01-12,merger,,false,,,0.001565,,79.323910,confirmed
-BBG000BV52H0,2007-08-24,merger,,false,,,,,,uncertain
+BBG000BV52H0,2007-08-24,merger,,false,,,-0.004739,,42.000000,uncertain
 BBG000BV75B7,2021-01-06,merger,,false,,,0.000304,,131.500000,confirmed
 BBG000BV7LP7,2015-01-29,merger,,false,,,-0.005128,,34.920000,confirmed
 BBG000BV7YT5,2012-02-10,merger,,false,,,0.003764,,32.000000,confirmed
@@ -805,7 +805,7 @@ CIK1124887-COMMON,2007-11-08,merger,,false,,,0.001669,,36.000000,uncertain
 CIK1126294-COMMON,,merger,,false,,,,0.000000,3.530000,uncertain
 CIK1138118-COMMON,,exchange,,true,BBG000C04224,,,,,confirmed
 CIK1141399-COMMON,,merger,,false,,,,,,uncertain
-CIK1156826-COMMON,2007-10-05,merger,,false,,,,,,uncertain
+CIK1156826-COMMON,2007-10-05,merger,,false,,,0.000824,,60.750000,uncertain
 CIK1166126-COMMON,2020-05-18,dropped,bankruptcy,false,,,,-0.300000,,confirmed
 CIK1169055-COMMON,2009-03-26,exchange,,true,BBG000DTMH63,,,,,confirmed
 CIK1170565-COMMON,,exchange,,true,BBG000DY8ZS4,,,,,confirmed
@@ -837,7 +837,7 @@ CIK1808220-CLASS-A,,dropped,guidelines,false,,,,-0.550000,,uncertain
 CIK18568-COMMON,,merger,,false,,,,,,uncertain
 CIK1929561-COMMON,,exchange,,false,,,,0.000000,,uncertain
 CIK20520-COMMON,,exchange,,false,,,,0.000000,,uncertain
-CIK230463-COMMON,2007-11-06,merger,,false,,,,0.000000,59.470000,uncertain
+CIK230463-COMMON,2007-11-06,merger,,false,,,,0.000000,59.370000,uncertain
 CIK23666-COMMON,2012-06-28,exchange,,true,BBG000BT4T69,,,,,uncertain
 CIK314808-CLASS-A,,merger,,false,,,,0.000000,3.970000,uncertain
 CIK314808-COMMON,2009-12-22,exchange,,false,,,,0.000000,,uncertain
@@ -852,10 +852,10 @@ CIK65873-COMMON,2007-11-16,merger,,false,,,0.004213,,71.500000,uncertain
 CIK708819-COMMON,,merger,,false,,,,0.000000,22.010000,uncertain
 CIK709519-COMMON,,merger,,false,,,,,,uncertain
 CIK716006-COMMON,,dropped,guidelines,false,,,,-0.550000,,uncertain
-CIK718482-COMMON,2007-09-28,merger,,false,,,,,,uncertain
+CIK718482-COMMON,2007-09-28,merger,,false,,,0.016927,,85.167660,uncertain
 CIK730464-COMMON,2017-05-23,exchange,,false,,,,0.000000,,confirmed
 CIK733269-COMMON,,exchange,,false,,,,0.000000,,uncertain
-CIK737874-COMMON,2007-09-28,merger,,false,,,,,,uncertain
+CIK737874-COMMON,2007-09-28,merger,,false,,,0.000852,,35.250000,uncertain
 CIK73887-COMMON,,exchange,,false,,,,0.000000,,uncertain
 CIK804055-COMMON,2010-10-01,merger,,false,,,,0.000000,22.010000,confirmed
 CIK835541-COMMON,2007-10-01,merger,,false,,,0.005168,,3.890000,uncertain
