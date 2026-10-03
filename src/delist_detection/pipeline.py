@@ -33,7 +33,8 @@ from .handoffs import (
     drop_resolved_shared, find_handoffs, issuer_carries_on, predecessor_names,
 )
 from .figi_resolution import is_placeholder, share_class_from_name
-from .form25 import SecurityRef
+from .form25 import SecurityRef, notice_last_trade, parse_form25
+from .last_trade import decide_last_trade
 from .ftd import FTD_START, FtdIndex, close_age
 from .history import (
     Sighting, backfill_cusips, cusip_sightings, filtered_ticker_sightings, history_rows, observation_map_rows, own_last_seen,
@@ -974,6 +975,35 @@ def _handoffs(ctx: _RunContext, delistings: list[Delisting], securities: dict[st
     return outcome
 
 
+def _date_from_notices(ctx: _RunContext, added: list[Delisting]) -> int:
+    """9c. A continuation row the handoff stage built from an unmatched Form 25
+    carries its last sighting as its last trade day; when that Form 25's notice
+    states a confirmed last day of trading (`form25.notice_last_trade`,
+    `last_trade.decide_last_trade`), the row takes it (source `ex99_notice`). A
+    read that fails keeps the sighting; a refusal (`fatal.FATAL`) stops the run."""
+    redated = 0
+    for d in added:
+        filing = (d.record.evidence or {}).get("delist_filing")
+        if not filing or d.last_trade.source != "last_sighting":
+            continue
+        try:
+            raw = ctx.clients.edgar.fetch_filing_raw(d.cik, filing["accession"])
+        except FATAL:
+            raise
+        except requests.RequestException:
+            continue
+        if not raw:
+            continue
+        f25 = parse_form25(raw, accession=filing["accession"], form=filing["form"], filing_date=filing["filing_date"])
+        lt = decide_last_trade(notice=notice_last_trade(f25), eightk=(None, ""), midas=None, halt=None)
+        if lt.day is not None and "last_trade_date_unconfirmed" not in lt.flags:
+            d.last_trade = lt
+            d.record.observed_delist_date = lt.day.isoformat()   # handoffs.py dates the record the same as the row
+            redated += 1
+    ctx.log(f"handoff rows dated from their Form 25 notice: {redated}")
+    return redated
+
+
 def _delisting_rows(delistings: list[Delisting], closes: dict[DelistingKey, float], payouts: _Payouts,
                     overrides: Overrides) -> tuple[list[dict], list[dict]]:
     """10a. The delistings.csv rows, and the review rows of those delistings that
@@ -1373,6 +1403,7 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
     review = handoffs.review
     if handoffs.added:
         delistings += handoffs.added
+        _date_from_notices(ctx, handoffs.added)   # 9c
         overrides = _apply_price_answers(given, delistings)   # the added delistings take their answers too
         closes.update(_last_trade_closes(ctx, handoffs.added, securities, sec_cusips, ftd, ftd_lo, overrides))
         endings = _delisting_endings(delistings, securities, sec_cusips, ftd)

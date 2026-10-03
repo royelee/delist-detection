@@ -2812,3 +2812,46 @@ def test_a_last_close_given_twice_stops_the_run(fake_edgar, tmp_path):
     with pytest.raises(OverrideFileError, match="both give the last close"):
         run(index, clients, Overrides(last_trade_closes={"BBG000FJLFX8": 190.0}, price_answers={key_of(ask): 191.32}),
             out_dir=tmp_path / "second", log=lambda *_: None)
+
+
+class _RawEdgar:
+    def __init__(self, raw):
+        self.raw, self.asked = raw, []
+
+    def fetch_filing_raw(self, cik, accession):
+        self.asked.append((cik, accession))
+        return self.raw
+
+
+def _continuation(source="last_sighting"):
+    evidence = {"flags": ["handoff_continuation"],
+                "delist_filing": {"form": "25-NSE", "filing_date": "2026-08-27", "accession": "0000876661-26-000712"}}
+    rec = DelistRecord("LEG", 58492, "2026-08-25", 304, CrspBucket.EXCHANGE_TRANSFER, "high", "Continuation", evidence,
+                       sec_id="OLD", delist_date="2026-09-06", successor_sec_id="NEW")
+    return Delisting("OLD", 58492, "LEG", "2026-09-06", rec, LastTrade(date(2026, 8, 25), source, ()), None, None, "")
+
+
+def _notice_ctx(edgar):
+    from types import SimpleNamespace
+
+    from delist_detection.manifest import StageMeter
+    return pipeline._RunContext(SimpleNamespace(edgar=edgar), date(2026, 9, 25), lambda *_: None, 1,
+                                StageMeter(lambda *_: None))
+
+
+def test_a_handoff_continuation_takes_its_form25_notice_day():
+    raw = (Path(__file__).parent / "fixtures" / "form25" / "leg_25nse_before_market_open.txt").read_text(
+        encoding="utf-8", errors="replace")
+    d = _continuation()
+    assert pipeline._date_from_notices(_notice_ctx(_RawEdgar(raw)), [d]) == 1
+    assert (d.last_trade.day, d.last_trade.source) == (date(2026, 8, 26), "ex99_notice")
+    assert d.record.observed_delist_date == "2026-08-26"
+
+
+def test_a_handoff_continuation_without_a_dated_notice_keeps_its_sighting():
+    d, edgar = _continuation(), _RawEdgar("<TYPE>25-NSE no notice here")
+    assert pipeline._date_from_notices(_notice_ctx(edgar), [d]) == 0
+    assert (d.last_trade.day, d.last_trade.source) == (date(2026, 8, 25), "last_sighting")
+    other = _continuation(source="midas")
+    pipeline._date_from_notices(_notice_ctx(edgar), [other])
+    assert edgar.asked == [(58492, "0000876661-26-000712")]    # a row dated another way is never re-read
