@@ -216,6 +216,28 @@ needs evidence about the security, not only about the registrant. It replaces
   once they are filled.
 - Acceptance: `L1.left_view` and `L1.closed_no_event` fall (165 today), the sampled golden cases flip to `pass`
   (except `ERA`, which waits for reset-4b), and no golden `pass` case breaks.
+- Done (first step) 2026-10-02 (plan `2026-10-02-reset-4a-end-of-era.md`). Decision 11 holds as the overnight
+  ruling. Only the classifier's continued-filings rule changed: it now asks `end_of_era.resolve`, EDGAR evidence
+  only (still trading, successor registration, change in control, completed acquisition, listing-deficiency
+  notice, else today's transfer). Task 6 keeps every relabelled ending uncertain (`resolved_from_continued_filings`).
+  Two rebuilds (identical tables; the second after Task 6): 85 endings changed, all from `exchange_transfer`:
+  44 to merger (change in control), 20 to merger (completed acquisition), 6 to compliance_failure (deficiency
+  notice), 15 kept their bucket. Moved: `L1.left_view` 120 -> 63, `R2.2.continued_filings_rule` 136 -> 51,
+  `R1.3.transfer_no_successor` 126 -> 63, coverage 0.885469 -> 0.909009 (tickers 0.885083 -> 0.907616),
+  `A.census.left_view.errors` 114 -> 76. Golden flips known_wrong -> pass: MDC, SGP, ACF, BNI, UFS, CPN, CPGX
+  (G.pass 27 -> 34); YHOO, EXBD, XON, WTW, LIZ, ACXM, DF, MNI, ESV, DRQ, STN, LVNTA stay known_wrong.
+  Floor entries lowered by hand: `R2.*`, `L1.ended_incomplete` and `L2.*` ("reset-4a turns false transfers into
+  mergers and distress endings whose values reset-4c and reset-4d still have to find": L1.ended_incomplete
+  52 -> 57, L2.low 147 -> 169, L2.high_share 0.78055 -> 0.761668, R2.1.missing_last_trade_date 43 -> 46 (in
+  window 42 -> 43), R2.3.blank_dlret_in_window 55 -> 61, R2.3.blank_no_value_in_window 22 -> 27, R2.4.assumed_par
+  62 -> 79, R2.5.distress_blank_dlret 1 -> 3, R2.5.distress_no_last_trade_date 1 -> 2, R2.6.distress_flagged
+  39 -> 45); `A.census.continuation.errors` 25 -> 28 (four continuations, XRX holdco, WBD, LLYVA, LLYVK, read
+  as ended; the issuer-seen-after guard is reset-4a2); `V.uncertain_distress` 20 -> 26,
+  `V.uncertain_securities` 55 -> 61, `V.uncertain_input_tickers_share` 0.109509 -> 0.111762 (new
+  compliance-failure endings and histories clipped at real endings are honestly uncertain).
+  Left for reset-4a2: the issuer-seen-after guard, holdco reorganizations, OpenFIGI's later ticker, a new CUSIP in
+  the fails data, closed-with-no-event securities with no delisting row, and consolidating the clip logic
+  (`_ends_the_security`, `_continues_after`, `listing_status`) into the resolver.
 
 ### reset-4b: Identity evidence
 

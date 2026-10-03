@@ -1,16 +1,16 @@
 {
   "as_of": "2026-09-25",
   "cache_answers": {
-    "archives": 6738,
-    "company_tickers": 6,
-    "full_text_search": 639,
-    "submissions": 23695,
-    "submissions_page": 7171
+    "archives": 7202,
+    "company_tickers": 7,
+    "full_text_search": 573,
+    "submissions": 23755,
+    "submissions_page": 7276
   },
-  "code_version": "0859655",
+  "code_version": "7c52b86",
   "degraded_answers": {},
   "handoffs": {
-    "conflicts": 13,
+    "conflicts": 17,
     "continuations_by_filing": 38,
     "continuations_by_timing": 34,
     "handoffs": 80,
@@ -23,10 +23,10 @@
   "resolution_degraded": 0,
   "review": {
     "accepted": 0,
-    "check": 610,
+    "check": 584,
     "cleared": 0,
-    "fix": 103,
-    "info_hidden": 431,
+    "fix": 111,
+    "info_hidden": 445,
     "unmatched_decisions": 0
   },
   "schema_version": 1,
