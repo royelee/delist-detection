@@ -581,7 +581,7 @@ class DelistClassifier:
         delist_filing_override: EdgarSubmission | None = None,
         trading_after: bool = False,
     ) -> DelistRecord:
-        observed =_parse_date(observed_delist_date) if observed_delist_date else None
+        observed = _parse_date(observed_delist_date) if observed_delist_date else None
 
         flags: list[str] = []
         if observed:

@@ -28,7 +28,7 @@ editable install.
 
 ```bash
 pip install -e .                         # editable install (Python ≥3.10) — once per env
-pytest   # full suite (1663 tests + 24 known-wrong golden xfails, offline, no network)
+pytest   # full suite (1673 tests + 17 known-wrong golden xfails, offline, no network)
 pytest tests/test_payout_extractor.py -v  # one file
 pytest tests/test_payout_extractor.py::test_match_in_cash_family_altr -v   # one test
 
@@ -292,7 +292,7 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   vendor end date. `_classify_items()` maps an 8-K item set to a `DLSTCD`
   code; the surrounding logic handles asset-type short-circuits,
   exchange-transfer detection, and SEC-revocation. Rule order unchanged; the
-  continued-filings rule (rule 8) now asks `end_of_era.resolve` instead of
+  continued-filings rule now asks `end_of_era.resolve` instead of
   deciding alone, and records the branch in `evidence["end_of_era"]`.
 - `end_of_era.py` — the end-of-era resolver's first step: where the registrant
   kept filing after the end. `signals()` reads the filings in the windows around

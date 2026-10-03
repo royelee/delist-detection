@@ -425,6 +425,7 @@ def test_fallback_path_does_not_claim_trading_after(fake_edgar):
     clf = _RecordingClassifier(fake_edgar, TickerResolver(fake_edgar))
     sec = _sec("BBG_N", 9004, "NNN", "2010-01-01", "2012-06-01", "NNN CORP")
     DelistingFinder(fake_edgar, clf).find(_ctx(sec, last_seen="2012-06-01"))
+    assert clf.calls
     assert all(not c.get("trading_after", False) for c in clf.calls)
 
 
