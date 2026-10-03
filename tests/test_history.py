@@ -177,3 +177,17 @@ def test_is_backfilled_treats_a_bare_fails_row_symbol_as_the_observed_dashed_tic
     stripped from both sides), so not backfilled."""
     ftd = FtdIndex([FtdRow("2012-06-28", "CUSIP1", "BFB", "BROWN-FORMAN", 70.0)])
     assert is_backfilled("2012-06-29", "BF-B", ["CUSIP1"], ftd) is False
+
+
+def test_backfill_cusips_names_the_issuers_cusip_before_its_end():
+    from delist_detection.history import backfill_cusips
+    ftd = FtdIndex([
+        FtdRow("2007-10-01", "071707103", "BOL", "BAUSCH & LOMB INC COM", 60.0),
+        FtdRow("2007-10-15", "071707103", "BOL", "BAUSCH & LOMB INC COM", 61.0),
+        FtdRow("2007-09-01", "999999999", "BOL", "OTHER WIDGETS CO", 5.0),        # another issuer's description
+        FtdRow("2007-10-20", "071707103", "BOLXXXX", "BAUSCH & LOMB INC COM", 61.0),  # deleted symbol
+        FtdRow("2008-06-01", "888888888", "BOL", "BAUSCH LATER CORP", 9.0),        # after the end
+        FtdRow("2007-03-01", "777777777", "BOL", "BAUSCH & LOMB INC COM", 50.0),   # before the window
+    ])
+    assert backfill_cusips(["BOL"], "2007-11-05", ftd, ["BAUSCH & LOMB INC"]) == ["071707103"]
+    assert backfill_cusips(["BOL"], "2007-11-05", ftd, ["SOMEONE ELSE"]) == []

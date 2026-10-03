@@ -11,7 +11,8 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import NamedTuple
 
-from .ftd import FtdIndex
+from .ftd import FtdIndex, is_deleted_symbol
+from .names import description_matches
 from .observations import TickerEra
 from .review_triage import ReviewItem
 from .security_master import Security
@@ -322,3 +323,22 @@ def observation_map_rows(eras: Iterable[TickerEra], sec_id_of: Mapping[str, str 
                 "status": status,
             })
     return out
+
+
+BACKFILL_CUSIP_DAYS = 120     # the days before a dead-before-sighting security's end whose rows name its CUSIP
+
+
+def backfill_cusips(tickers: Iterable[str], end: str, ftd: FtdIndex, names: Iterable[str]) -> list[str]:
+    """The CUSIPs of a security that died before its first sighting: those of the
+    fails rows under one of its `tickers` in the BACKFILL_CUSIP_DAYS before its `end`
+    (ISO), not under a deleted symbol, whose description names its issuer
+    (`names.description_matches` against its observed and EDGAR `names`). Rows
+    after the end never count: a later issuer may reuse the ticker. Most rows first."""
+    names = list(names)
+    lo = (date.fromisoformat(end) - timedelta(days=BACKFILL_CUSIP_DAYS)).isoformat()
+    counts: Counter[str] = Counter()
+    for t in sorted(set(tickers)):
+        for r in ftd.by_symbol(t, lo, end):
+            if not is_deleted_symbol(r.symbol) and description_matches(r.description, names):
+                counts[r.cusip] += 1
+    return [c for c, _ in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))]
