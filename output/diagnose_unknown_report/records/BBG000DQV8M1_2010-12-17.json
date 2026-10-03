@@ -5,7 +5,7 @@
  "report": "reports/BBG000DQV8M1_2010-12-17.md",
  "event_type": "merger",
  "consideration": "stock",
- "confidence": "inferred",
+ "confidence": "verified",
  "exit_kind": "merger",
  "drop_reason": "",
  "continuation": false,
@@ -27,16 +27,14 @@
   "issuer": "agree",
   "ticker_history": "agree"
  },
- "confidence_reasons": [
-  "terms: ticker GEN and first session 2010-12-06 rest on fails rows (CUSIP 37244E107 under GEN from 20101206; RRI CUSIP 74971X107 ends 20101203), not a filing"
- ],
+ "confidence_reasons": [],
  "library_wrong": true,
  "cause": "terms_misread",
  "golden_worthy": true,
- "sec_evidence": 3,
+ "sec_evidence": 4,
  "web_evidence": 0,
  "open_checks": [
-  "confirm NYSE symbol GEN from a GenOn filing"
+  "no GenOn line in the run for 2010-12-06; GEN in the run is Gen Digital (2022)"
  ],
  "verdict": "Real stock merger at 2.835 RRI Energy (renamed GenOn, GEN) shares per MIR share; library has the wrong price ticker (RRI), causing failed gate and assumed par.",
  "verification": {
@@ -47,5 +45,6 @@
   ],
   "fields_refuted": [],
   "notes": "8-K 0001193125-10-275719 confirms 2.835 RRI Energy shares per MIR share and that RRI was renamed GenOn on the closing date, 2010-12-03. Fails rows show RRI CUSIP 74971X107 under RRI only through 2010-12-03, and GenOn CUSIP 37244E107 under GEN from 2010-12-06. So the library's RRI price ticker cannot be priced on 2010-12-06, and GEN is right. The symbol GEN rests on fails rows, not a filing, so the report's confidence stays inferred. Section 9 was appended to the report and a verification object added to the record JSON."
- }
+ },
+ "price_sec_id": ""
 }

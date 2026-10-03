@@ -5,7 +5,7 @@
  "report": "reports/BBG000BB2N27_2014-12-25.md",
  "event_type": "merger",
  "consideration": "cash_and_stock",
- "confidence": "inferred",
+ "confidence": "verified",
  "exit_kind": "merger",
  "drop_reason": "",
  "continuation": false,
@@ -27,16 +27,16 @@
   "issuer": "agree",
   "ticker_history": "agree"
  },
- "confidence_reasons": [
-  "terms: price_date 2014-12-15 is worked out as the trading day after the last THI trade; no filing read states QSR's first trading day (QSR fails rows begin 2014-12-17)"
- ],
+ "confidence_reasons": [],
  "library_wrong": false,
  "cause": "currency_missing",
  "golden_worthy": true,
- "sec_evidence": 3,
+ "sec_evidence": 4,
  "web_evidence": 0,
  "open_checks": [
-  "confirm QSR first trading day from an RBI filing"
+  "cash leg in CAD; no fails close for QSR on 2014-12-15",
+  "QSR ticker_history starts 2014-12-17; the filing says 2014-12-15"
  ],
- "verdict": "Real cash-and-stock merger (C$65.50 + 0.8025 QSR per share); only the CAD currency is missing from the library's terms."
+ "verdict": "Real cash-and-stock merger (C$65.50 + 0.8025 QSR per share); only the CAD currency is missing from the library's terms.",
+ "price_sec_id": "BBG0076WG2V1"
 }

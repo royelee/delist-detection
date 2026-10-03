@@ -5,7 +5,7 @@
  "report": "reports/BBG01HLM8W28_2024-09-19.md",
  "event_type": "merger",
  "consideration": "stock",
- "confidence": "inferred",
+ "confidence": "verified",
  "exit_kind": "merger",
  "drop_reason": "",
  "continuation": false,
@@ -27,16 +27,15 @@
   "issuer": "agree",
   "ticker_history": "agree"
  },
- "confidence_reasons": [
-  "terms.price_ticker: SIRI for New Sirius not read in a filing; rests on known successor ticker (worked out)"
- ],
+ "confidence_reasons": [],
  "library_wrong": true,
  "cause": "terms_not_extracted",
  "golden_worthy": true,
- "sec_evidence": 3,
+ "sec_evidence": 4,
  "web_evidence": 0,
  "open_checks": [
-  "confirm New Sirius symbol SIRI and first trading day 2024-09-10 from an 8-A12B or filing"
+  "ticker_history gives SIRI on 2024-09-10 to old Sirius; pick New Sirius by CUSIP",
+  "resolved_from_continued_filings keeps LSXMA uncertain after the price fix"
  ],
  "verdict": "Real stock merger (0.8375 New Sirius share per LSXMA, last trade 2024-09-09); library right except it lacks the SIRI price ticker and falls back to assumed par.",
  "verification": {
@@ -46,5 +45,6 @@
   ],
   "fields_refuted": [],
   "notes": "Ratio 0.8375, 2024-09-09 last trade confirmed in Liberty 8-K 0001104659-24-098251. SIRI on Nasdaq stated on cover of Sirius XM Holdings 8-K 0001104659-24-098372 and 8-K12B 0001104659-24-098260 (New Sirius renamed Sirius XM Holdings), so the ticker is read from a filing, not only worked out. First trading day not read."
- }
+ },
+ "price_sec_id": "BBG01KJQM3Y8"
 }
