@@ -341,7 +341,10 @@ count exactly what `uncertain.csv` lists.
 10g, the contract (`pipeline._contract`): `_issuers_in_force` (one cached
 submissions read per issuer CIK, and SEC's name index for a sighting whose era
 CIK did not carry its name that day), then `contract.py`'s rows and
-`price_requests.request_rows`. A price answer to no request stops the run here.
+`price_requests.request_rows`. A price answer to no request stops the run here. An `otc_print` answer
+becomes `Overrides.otc_prints`, applied at stage 6b and again after the handoff
+stage; `dlret.resolve_dlret(..., otc_print=)` then values a liquidation or
+compliance-failure ending as `print / last_close − 1` (`dlret_method` `otc_print`).
 A blank `exit_kind` in the contract means no kind is asserted; such a row's
 verdict is always `uncertain`, so a reader must not filter it away as "no ending".
 10h, the scorecard.

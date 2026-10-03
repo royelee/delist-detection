@@ -28,7 +28,7 @@ editable install.
 
 ```bash
 pip install -e .                         # editable install (Python ≥3.10) — once per env
-pytest   # full suite (1695 tests + 17 known-wrong golden xfails, offline, no network)
+pytest   # full suite (1705 tests + 17 known-wrong golden xfails, offline, no network)
 pytest tests/test_payout_extractor.py -v  # one file
 pytest tests/test_payout_extractor.py::test_match_in_cash_family_altr -v   # one test
 
@@ -377,7 +377,7 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
 - `bmp_correction.py` + `exchanges.py` — firm-month BMP 2007 correction:
   `R_month = (1+R_partial)(1+DLRET)−1`, synthesizing `DLRET` per bucket with
   exchange-specific Shumway constants when no realized delist return is observed.
-- `dlret.py` — DLRET hub: `resolve_dlret`/`DlretResult`/`compute_dlret` (self-explaining delisting return). `bmp_correction.py` re-exports for backward compatibility.
+- `dlret.py` — DLRET hub: `resolve_dlret`/`DlretResult`/`compute_dlret` (self-explaining delisting return; `otc_print=` gives `DlretMethod.OTC_PRINT` on a liquidation or compliance_failure, a `--recoveries` ratio winning, a merger ignoring it). `bmp_correction.py` re-exports for backward compatibility.
 - `reconstruction.py` — `EnrichedDelistRecord`, `enrich`, `build_delistings_table`,
   `delisting_row`. `output/delistings.csv` is the **primary output**, keyed by
   `(sec_id, delist_date)` (`store.DelistingKey`; `for_delisting` looks a delisting up
@@ -425,7 +425,7 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   EDGAR full-text search of the CIK's own filings (`full_text_search(...,
   ciks=)`), cached like every search.
 - `exit_kind.py` — one delistings.csv row in the contract's terms: `ending_fields` (exit kind, drop reason,
-  continuation, `dlret` and `dlret_fill`) and `is_distress`. Today's bucket and CRSP code map to the exit kind
+  continuation, `dlret` and `dlret_fill`; `MEASURED_METHODS` includes `otc_print`, so an answered OTC print is a value, not a fill) and `is_distress`. Today's bucket and CRSP code map to the exit kind
   (a code-470 bankruptcy is `dropped` for `bankruptcy`; `unknown` asserts none). The contract, the golden judge
   and the scorecard all read through it.
 - `contract.py` — the contract's rows (spec "The contract", decisions 6, 7, 9, 10, 12), written under
@@ -438,7 +438,7 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   (MRK 2008: old Merck & Co, CIK 64978). `issuer_changes` dates each change: it sorts sightings by day then CIK
   and records at most one change per day (a same-day sighting under another CIK changes nothing).
 - `price_requests.py` — `contract/price_requests.csv` (`last_close` per ending with a published date,
-  `received_close` per LLM-read stock leg; `otc_print` from reset-4f) and `load_answers` for `--price-answers`,
+  `received_close` per LLM-read stock leg, `otc_print` per `dropped`/`liquidation` ending that is not a continuation, dated the session after the last trade) and `load_answers` for `--price-answers`,
   which refuses a price that is not a finite positive number.
 
 There are **two return-correction APIs** for different research conventions:

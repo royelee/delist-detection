@@ -7,10 +7,11 @@ continuation (the security's own close on that day), and one `received_close`
 per stock leg the library read from a filing (the acquirer's close on the
 ex-date, the trading day after the last trade). One `otc_print` per drop or
 distress ending (`OTC_EXIT_KINDS`), dated the session after the last trade; the
-caller answers with the first off-exchange print within 10 sessions. The answers file is this file plus a `price` column (raw as-traded
-closes). An answered last close replaces the library's fails-to-deliver close
-and an answered received close the acquirer price, so a second run with the
-answers changes values only. An answer is matched on `PriceKey`;
+caller answers with the first off-exchange print within 10 sessions. The
+answers file is this file plus a `price` column (raw as-traded closes). An
+answered last close replaces the library's fails-to-deliver close, an answered
+received close the acquirer price, and an answered OTC print values the drop
+(dlret.OTC_PRINT), so a second run with the answers changes values only. An answer is matched on `PriceKey`;
 `lookup_sec_id` is informational."""
 from __future__ import annotations
 

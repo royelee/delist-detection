@@ -284,8 +284,10 @@ it is blanked only when the date itself is uncertain.
 **Price requests and `--price-answers`.** `price_requests.csv` asks for one
 `last_close` per contract ending with a published date that is not a
 continuation, and one `received_close` per LLM-read stock leg (a
-`--merger-terms` stock leg carries its own price); `otc_print` waits for
-reset-4f. Fill a `price` column (a finite positive number) and rerun with
+`--merger-terms` stock leg carries its own price), and one `otc_print` per
+`dropped` or `liquidation` ending that is not a continuation (dated the session
+after the last trade; answer with the first off-exchange print within 10
+sessions, which values the drop as `print / last_close − 1`). Fill a `price` column (a finite positive number) and rerun with
 `--price-answers answered.csv`: a second run changes values only. An answer is
 matched on `(sec_id, last_trade_date, kind, lookup_ticker, date)`;
 `lookup_sec_id` is informational. An answer to no request, or a last close also
@@ -411,6 +413,7 @@ causes sort first.
 | `merger` | `abstain_no_consideration` | *(blank)* | No consideration **and** no last price |
 | `exchange_transfer` | `exchange_transfer_zero` | `0` | Security continues at successor exchange |
 | `liquidation` | `recovery_ratio` | `recovery_ratio − 1` | Recovery ratio supplied |
+| `liquidation` / `compliance_failure` | `otc_print` | `otc_print / last_close − 1` | First off-exchange print supplied (`--price-answers`); a `--recoveries` ratio wins for a liquidation; **`medium` confidence** |
 | `liquidation` | `shumway_nyse_amex` | `−0.30` | No recovery; NYSE/AMEX listing |
 | `liquidation` | `shumway_nasdaq` | `−0.55` | No recovery; Nasdaq listing |
 | `compliance_failure` | `worthless` | `−1.0` | Exchange kicked the ticker; equity is worthless |
@@ -1258,6 +1261,11 @@ never a price vendor, never Alpha Vantage:
   `ftd_close_prior:<n>`, `<n>` its age in trading days; DLRET uses it as the
   last close), before giving up (`no_last_close`) — override with
   `--last-trade-closes`.
+* **A handoff continuation's `last_trade_date`** — a continuation row the
+  handoff stage builds from an unmatched Form 25 takes the last day its own
+  Form 25's EX-99.25 notice states (source `ex99_notice`), only when the day is
+  confirmed, before the successor's first sighting and no later than the
+  effective date.
 
 ---
 
