@@ -1,0 +1,53 @@
+{
+ "case_id": "BBG000BF5RY1_2016-06-10",
+ "sec_id": "BBG000BF5RY1",
+ "ticker": "CCE",
+ "report": "reports/BBG000BF5RY1_2016-06-10.md",
+ "event_type": "merger",
+ "consideration": "cash_and_stock",
+ "confidence": "inferred",
+ "exit_kind": "merger",
+ "drop_reason": "",
+ "continuation": false,
+ "successor_ticker": "CCE",
+ "last_trade_date": "2016-05-27",
+ "value_rule": "cash_plus_stock",
+ "cash_per_share": 14.5,
+ "cash_currency": "USD",
+ "stock_ratio": 1.0,
+ "price_ticker": "CCE",
+ "price_date": "2016-05-31",
+ "value_formula": "(14.50 USD + 1.0 × price(CCE[CCEP], 2016-05-31)) / last_close − 1",
+ "status": {
+  "exit_kind": "agree",
+  "last_trade_date": "wrong",
+  "successor": "agree",
+  "value_rule": "agree",
+  "terms": "wrong",
+  "issuer": "agree",
+  "ticker_history": "wrong"
+ },
+ "confidence_reasons": [
+  "last_trade_date: worked out from the 8-K Item 3.01 suspension date (2016-05-31 open) and the NYSE calendar, agreeing with fails rows",
+  "terms price ticker/date for the CCEP leg: fails rows (CUSIP G25839104 under CCE from 2016-06-01 carrying the 05-31 close); no filing states the first trading day"
+ ],
+ "library_wrong": true,
+ "cause": "other:midas_date_from_reused_ticker_and_acquirer_ticker_missing",
+ "golden_worthy": true,
+ "sec_evidence": 4,
+ "web_evidence": 0,
+ "open_checks": [
+  "CCEP first NYSE trading day from a filing or exchange notice (web search unavailable)"
+ ],
+ "verdict": "Real merger ($14.50 cash + 1 CCEP share); library's last trade date 2016-05-31 is wrong (should be 2016-05-27) and the stock leg lacks its price ticker CCE.",
+ "verification": {
+  "upheld": true,
+  "fields_upheld": [
+   "last_trade_date",
+   "terms",
+   "ticker_history"
+  ],
+  "fields_refuted": [],
+  "notes": "8-K Item 3.01 suspension at the open of 2016-05-31 plus 05-30 holiday gives last trade 05-27; fails rows (CCE 19122T109 last row 05-31 at the 05-27 close) agree. Cash 14.50 and ratio 1 match 8-K Item 2.01; price ticker CCE rests on fails rows (G25839104 under CCE), price date should be 05-31. The 8-K names the acquirer shares 'Orange Shares', so the CCEP name link is from fails rows only. ticker_history follows last trade."
+ }
+}

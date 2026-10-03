@@ -1,0 +1,55 @@
+{
+ "case_id": "BBG000BCTL84_2012-01-08",
+ "sec_id": "BBG000BCTL84",
+ "ticker": "PMI",
+ "report": "reports/BBG000BCTL84_2012-01-08.md",
+ "event_type": "bankruptcy",
+ "consideration": "none",
+ "confidence": "inferred",
+ "exit_kind": "dropped",
+ "drop_reason": "bankruptcy",
+ "continuation": false,
+ "successor_ticker": "",
+ "last_trade_date": "2011-10-21",
+ "value_rule": "otc_print",
+ "cash_per_share": null,
+ "cash_currency": "",
+ "stock_ratio": null,
+ "price_ticker": "PPMIQ",
+ "price_date": "2011-11-29",
+ "value_formula": "otc_print(PPMIQ, from 2011-11-29) / last_close(2011-10-21) - 1",
+ "status": {
+  "exit_kind": "agree",
+  "last_trade_date": "wrong",
+  "successor": "agree",
+  "value_rule": "agree",
+  "terms": "wrong",
+  "issuer": "agree",
+  "ticker_history": "wrong"
+ },
+ "confidence_reasons": [
+  "successor: worked out from the cited filings naming none; no successor search done",
+  "payout rule: fails rows (PPMIQ from 2011-11-30) and decision 11, no filing states it",
+  "terms: worked out from fails rows and the suspension date; price date 2011-11-29 is not an observed print"
+ ],
+ "library_wrong": true,
+ "cause": "other:ex99_notice_date_is_bankruptcy_not_halt",
+ "golden_worthy": true,
+ "sec_evidence": 4,
+ "web_evidence": 0,
+ "open_checks": [
+  "first PPMIQ OTC session (about 2011-11-29; fails rows start 2011-11-30)"
+ ],
+ "verdict": "Real bankruptcy drop with the right kind and rule, but the last trade is 2011-10-21 (NYSE halt, stated in the 8-K), not 2011-11-23.",
+ "verification": {
+  "case_id": "BBG000BCTL84_2012-01-08",
+  "upheld": true,
+  "fields_upheld": [
+   "last_trade_date",
+   "terms",
+   "ticker_history"
+  ],
+  "fields_refuted": [],
+  "notes": "8-K 2011-11-29 states the NYSE halted trading on Oct 21, 2011, the last day the stock traded on the NYSE. The Form 25-NSE notice says trading was halted since 2011-10-21 and uses 2011-11-23 only as the bankruptcy date. Fails rows for CUSIP 69344M101 show PMI to 2011-11-29 and PPMIQ from 2011-11-30. Terms are upheld in part: price_ticker PPMIQ is backed, but the 2011-11-29 price_date is an unverified estimate (the first OTC session could fall between 2011-11-28 and 2011-11-30). The library's 2011-11-25 is still unsupported. ticker_history follows last_trade_date. Section 9 appended to the report; verification added to the JSON record."
+ }
+}

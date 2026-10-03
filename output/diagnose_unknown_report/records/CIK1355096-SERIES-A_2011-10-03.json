@@ -1,0 +1,53 @@
+{
+ "case_id": "CIK1355096-SERIES-A_2011-10-03",
+ "sec_id": "CIK1355096-SERIES-A",
+ "ticker": "",
+ "report": "reports/CIK1355096-SERIES-A_2011-10-03.md",
+ "event_type": "none",
+ "consideration": "none",
+ "confidence": "verified",
+ "exit_kind": "",
+ "drop_reason": "",
+ "continuation": false,
+ "successor_ticker": "",
+ "last_trade_date": "",
+ "value_rule": "continuation",
+ "cash_per_share": null,
+ "cash_currency": "",
+ "stock_ratio": null,
+ "price_ticker": "",
+ "price_date": "",
+ "value_formula": "",
+ "status": {
+  "exit_kind": "wrong",
+  "last_trade_date": "wrong",
+  "successor": "agree",
+  "value_rule": "wrong",
+  "terms": "wrong",
+  "issuer": "agree",
+  "ticker_history": "wrong"
+ },
+ "confidence_reasons": [],
+ "library_wrong": true,
+ "cause": "other:form25_class_matched_wrong_tracking_stock",
+ "golden_worthy": true,
+ "sec_evidence": 3,
+ "web_evidence": 0,
+ "open_checks": [
+  "confirm via OpenFIGI that Series A (LINTA/QRTEA) and CIK1355096-COMMON are the same composite FIGI"
+ ],
+ "verdict": "No ending: the 2011-09-23 Form 25 covered Liberty Capital and Starz tracking stocks while Liberty Interactive Series A kept trading, so the library's merger row is false.",
+ "verification": {
+  "case_id": "CIK1355096-SERIES-A_2011-10-03",
+  "upheld": true,
+  "fields_upheld": [
+   "exit_kind",
+   "last_trade_date",
+   "value_rule",
+   "terms",
+   "ticker_history"
+  ],
+  "fields_refuted": [],
+  "notes": "Form 25-NSE 2011-09-23 lists only Liberty Capital/Starz classes; 8-K Item 2.01 redeems only those; LINTA fails rows on 53071M104 continue to 2011-12-29. The report's quoted 8-K sentence is not in the cached text and its row counts are off; the conclusion is unaffected. Merged FIGI identity (SERIES-A, COMMON, BBG000PCQQL6) is unchecked."
+ }
+}

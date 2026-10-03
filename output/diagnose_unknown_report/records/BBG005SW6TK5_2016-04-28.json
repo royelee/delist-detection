@@ -1,0 +1,12 @@
+{"case_id": "BBG005SW6TK5_2016-04-28", "sec_id": "BBG005SW6TK5", "ticker": "LMCK", "report": "reports/BBG005SW6TK5_2016-04-28.md",
+ "event_type": "reclassification", "consideration": "stock", "confidence": "inferred",
+ "exit_kind": "merger", "drop_reason": "", "continuation": false, "successor_ticker": "LSXMK, BATRK, LMCK",
+ "last_trade_date": "2016-04-15",
+ "value_rule": "stock",
+ "cash_per_share": null, "cash_currency": "USD", "stock_ratio": null, "price_ticker": "LSXMK+BATRK+LMCK", "price_date": "2016-04-18",
+ "value_formula": "(1 x price(LSXMK) + 0.1 x price(BATRK) + 0.25 x price(LMCK), 2016-04-18) / last_close - 1",
+ "status": {"exit_kind": "wrong", "last_trade_date": "wrong", "successor": "wrong", "value_rule": "wrong", "terms": "missing", "issuer": "agree", "ticker_history": "wrong"},
+ "confidence_reasons": ["last trade date 2016-04-15 worked out from 8-K dates (reclass completed 04-15, new stocks began 04-18), not stated", "Series C basket ratios assumed equal to the Series A ratios the 8-K states (1 / 0.1 / 0.25)"],
+ "library_wrong": true, "cause": "other:tracking_stock_reclassification_basket",
+ "golden_worthy": true, "sec_evidence": 3, "web_evidence": 0, "open_checks": ["confirm Series C ratios in proxy or 424B3", "confirm old LMCK last trading day 2016-04-15", "decide multi-leg basket representation in the contract"], "verdict": "Old LMCK was reclassified into three new tracking stocks (LSXMK, BATRK, LMCK) on 2016-04-15, a stock replacement and not a one-for-one continuation.",
+ "verification": {"upheld": true, "fields_upheld": ["exit_kind", "last_trade_date", "successor", "value_rule", "ticker_history"], "fields_refuted": [], "notes": "8-K 0001560385-16-000077: each share exchanged for 1 / 0.1 / 0.25 of the corresponding series (so Series C ratio is filing-supported), charter filed after the close 2016-04-15, new stocks trading from 2016-04-18; fails rows for 531229300 priced 38.26 on 04-18 (the 04-15 close). exit_kind merger vs exchange with continuation false is a judgment call. 04-15 is not stated as an exchange print, so the published last_trade_date may stay blank under decision 12."}}

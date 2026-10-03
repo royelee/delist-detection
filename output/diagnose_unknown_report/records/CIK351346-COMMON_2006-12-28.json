@@ -1,0 +1,51 @@
+{
+  "case_id": "CIK351346-COMMON_2006-12-28",
+  "sec_id": "CIK351346-COMMON",
+  "ticker": "BMET",
+  "report": "reports/CIK351346-COMMON_2006-12-28.md",
+  "event_type": "merger",
+  "consideration": "cash",
+  "confidence": "verified",
+  "exit_kind": "merger",
+  "drop_reason": "",
+  "continuation": false,
+  "successor_ticker": "",
+  "last_trade_date": "2007-09-25",
+  "value_rule": "cash",
+  "cash_per_share": 46.0,
+  "cash_currency": "USD",
+  "stock_ratio": null,
+  "price_ticker": "",
+  "price_date": "",
+  "value_formula": "46.00 USD / last_close - 1",
+  "status": {
+    "exit_kind": "wrong",
+    "last_trade_date": "wrong",
+    "successor": "agree",
+    "value_rule": "wrong",
+    "terms": "missing",
+    "issuer": "agree",
+    "ticker_history": "wrong"
+  },
+  "confidence_reasons": [],
+  "library_wrong": true,
+  "cause": "other:rights_only_form25_matched_to_common",
+  "golden_worthy": true,
+  "sec_evidence": 7,
+  "web_evidence": 0,
+  "open_checks": [
+    "Read the 2007-01-12 8-K Item 3.01 to see what notice it gave"
+  ],
+  "verdict": "Biomet common was cashed out at $46.00 by LVB Acquisition with last trade 2007-09-25; the library's 2006-12-28 ending came from a Form 25 that covered only the preferred share purchase rights.",
+  "verification": {
+    "upheld": true,
+    "fields_upheld": [
+      "exit_kind",
+      "last_trade_date",
+      "value_rule",
+      "ticker_history"
+    ],
+    "fields_refuted": [],
+    "notes": "Form 25 0001104659-06-082100 relates solely to the Preferred Share Purchase Rights; 8-K 0000903423-07-000915 shows $46.00 cash conversion and Nasdaq withdrawal at close of business 2007-09-25; fails to 2007-09-26 at $45.99. Jan 2007 8-K 3.01 was a Nasdaq staff determination (late filing), not a delisting. Minor nit: 25-NSE statutory effectiveness is filing+10 days, not same day."
+  }
+}

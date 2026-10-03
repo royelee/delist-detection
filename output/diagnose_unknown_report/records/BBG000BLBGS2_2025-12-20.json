@@ -1,0 +1,56 @@
+{
+ "case_id": "BBG000BLBGS2_2025-12-20",
+ "sec_id": "BBG000BLBGS2",
+ "ticker": "SCS",
+ "report": "reports/BBG000BLBGS2_2025-12-20.md",
+ "event_type": "merger",
+ "consideration": "cash_or_stock_election",
+ "confidence": "inferred",
+ "exit_kind": "merger",
+ "drop_reason": "",
+ "continuation": false,
+ "successor_ticker": "HNI",
+ "last_trade_date": "2025-12-09",
+ "value_rule": "cash_plus_stock",
+ "cash_per_share": 7.2,
+ "cash_currency": "USD",
+ "stock_ratio": 0.2192,
+ "price_ticker": "HNI",
+ "price_date": "2025-12-10",
+ "value_formula": "(7.20 USD + 0.2192 x price(HNI, 2025-12-10)) / last_close - 1",
+ "status": {
+  "exit_kind": "agree",
+  "last_trade_date": "agree",
+  "successor": "agree",
+  "value_rule": "agree",
+  "terms": "missing",
+  "issuer": "agree",
+  "ticker_history": "agree"
+ },
+ "confidence_reasons": [
+  "last_trade_date: worked out from merger effective 2025-12-10 plus MIDAS and fails rows; no filing states the last trading day"
+ ],
+ "library_wrong": true,
+ "cause": "currency_missing",
+ "golden_worthy": true,
+ "sec_evidence": 4,
+ "web_evidence": 0,
+ "open_checks": [
+  "exchange notice stating SCS last trading day 2025-12-09"
+ ],
+ "verdict": "Real cash-and-stock merger into HNI closed 2025-12-10; library kind, date and terms are right but cash currency is blank and value is assumed par.",
+ "verification": {
+  "case_id": "BBG000BLBGS2_2025-12-20",
+  "upheld": true,
+  "fields_upheld": [
+   "terms",
+   "value_rule",
+   "exit_kind",
+   "last_trade_date",
+   "continuation",
+   "assumed_par_after_failed_gate"
+  ],
+  "fields_refuted": [],
+  "notes": "8-K 2025-12-11 (0001193125-25-315864) and 8-K 2025-08-04 (0001193125-25-172239) confirm $7.20 + 0.2192 HNI as the default mixed package, merger closed 2025-12-10; the 25-NSE is effective 2025-12-10. The library's cash_currency is blank (the report's finding stands). The gate-failure cause (missing HNI price) is a guess. The report's table says the last fails row is 2025-12-09, but the rows run to 2025-12-12; this does not change the date."
+ }
+}

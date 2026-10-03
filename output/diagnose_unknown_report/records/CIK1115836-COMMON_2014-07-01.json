@@ -1,0 +1,50 @@
+{
+ "case_id": "CIK1115836-COMMON_2014-07-01",
+ "sec_id": "CIK1115836-COMMON",
+ "ticker": "OEH",
+ "report": "reports/CIK1115836-COMMON_2014-07-01.md",
+ "event_type": "name_change",
+ "consideration": "none",
+ "confidence": "verified",
+ "exit_kind": "",
+ "drop_reason": "",
+ "continuation": false,
+ "successor_ticker": "BEL",
+ "last_trade_date": "",
+ "value_rule": "unknown",
+ "cash_per_share": null,
+ "cash_currency": "",
+ "stock_ratio": null,
+ "price_ticker": "",
+ "price_date": "",
+ "value_formula": "none: not an exit (rename OEH to BEL)",
+ "status": {
+  "exit_kind": "wrong",
+  "last_trade_date": "agree",
+  "successor": "agree",
+  "value_rule": "wrong",
+  "terms": "agree",
+  "issuer": "agree",
+  "ticker_history": "wrong"
+ },
+ "confidence_reasons": [],
+ "library_wrong": true,
+ "cause": "rename_not_followed",
+ "golden_worthy": true,
+ "sec_evidence": 3,
+ "web_evidence": 0,
+ "open_checks": [
+  "confirm CUSIP reissue G67743107 to G1154H107 date (fails rows only)"
+ ],
+ "verdict": "Not a delisting: Orient-Express Hotels renamed Belmond Ltd. (2014-06-30) and ticker OEH changed to BEL on 2014-07-28 on the same NYSE class A shares.",
+ "verification": {
+  "upheld": true,
+  "fields_upheld": [
+   "exit_kind",
+   "value_rule",
+   "ticker_history"
+  ],
+  "fields_refuted": [],
+  "notes": "8-K 2014-07-02 Item 5.03 and 10-Q 2014-08-01 confirm rename and OEH to BEL on NYSE class A shares; no Form 25/15/8-K12B in 2014-04..10. CUSIP reissue rests on fails rows only (caveat)."
+ }
+}

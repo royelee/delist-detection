@@ -1,0 +1,54 @@
+{
+ "case_id": "BBG000BQHGR6_2026-09-28",
+ "sec_id": "BBG000BQHGR6",
+ "ticker": "OKE",
+ "report": "reports/BBG000BQHGR6_2026-09-28.md",
+ "event_type": "reorganization",
+ "consideration": "none",
+ "confidence": "inferred",
+ "exit_kind": "exchange",
+ "drop_reason": "",
+ "continuation": true,
+ "successor_ticker": "OKE",
+ "last_trade_date": "2026-09-09",
+ "value_rule": "continuation",
+ "cash_per_share": null,
+ "cash_currency": "",
+ "stock_ratio": null,
+ "price_ticker": "",
+ "price_date": "",
+ "value_formula": "not an exit (1:1 conversion into new ONEOK, Inc. shares, return 0)",
+ "status": {
+  "exit_kind": "wrong",
+  "last_trade_date": "agree",
+  "successor": "missing",
+  "value_rule": "wrong",
+  "terms": "agree",
+  "issuer": "agree",
+  "ticker_history": "unknown"
+ },
+ "confidence_reasons": [
+  "last_trade_date: worked out from the 8-K12B effective date 2026-09-10 (last Legacy trading day before it), no filing states the last day",
+  "successor: filing names the new line (CUSIP 30609A109) but its sec_id is not in the run"
+ ],
+ "library_wrong": true,
+ "cause": "holdco_not_linked",
+ "golden_worthy": true,
+ "sec_evidence": 3,
+ "web_evidence": 0,
+ "open_checks": [
+  "new line's FIGI and whether OpenFIGI keeps BBG000BQHGR6",
+  "a filing or print stating Legacy ONEOK's last trading day"
+ ],
+ "verdict": "A 1:1 holdco reorganization effective 2026-09-10 (OKE continues on NYSE, new CUSIP 30609A109), a continuation, not an unknown ending.",
+ "verification": {
+  "case_id": "BBG000BQHGR6_2026-09-28",
+  "upheld": true,
+  "fields_upheld": [
+   "exit_kind",
+   "value_rule"
+  ],
+  "fields_refuted": [],
+  "notes": "The 8-K12B of 2026-09-10 (0001193125-26-387972) confirms the report. Each Legacy ONEOK share converted automatically into one new ONEOK, Inc. share with the same rights, under OGCA 1081.G with no stockholder vote. Holders received no cash. The $9B Apollo contribution went to Holdings/OpCo, not to shareholders. OKE continues on the NYSE with new CUSIP 30609A109. ONEOK, Inc. files under the same CIK as the Rule 12g-3(a) successor. The Form 25-NSE of 2026-09-18 (0000876661-26-000770) only strikes the old class. So this is a continuation (exit_kind exchange, value_rule continuation), as reference.md's 1:1 holdco rule says. The successor's sec_id remains unknown. Section 9 appended to the report and a verification object added to the record JSON."
+ }
+}

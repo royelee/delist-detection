@@ -1,0 +1,49 @@
+{
+ "case_id": "BBG003PGJHP5_2026-08-03",
+ "sec_id": "BBG003PGJHP5",
+ "ticker": "TMHC",
+ "report": "reports/BBG003PGJHP5_2026-08-03.md",
+ "event_type": "merger",
+ "consideration": "cash",
+ "confidence": "verified",
+ "exit_kind": "merger",
+ "drop_reason": "",
+ "continuation": false,
+ "successor_ticker": "",
+ "last_trade_date": "2026-07-24",
+ "value_rule": "cash",
+ "cash_per_share": 72.5,
+ "cash_currency": "USD",
+ "stock_ratio": null,
+ "price_ticker": "",
+ "price_date": "",
+ "value_formula": "72.50 USD / last_close - 1",
+ "status": {
+  "exit_kind": "agree",
+  "last_trade_date": "wrong",
+  "successor": "agree",
+  "value_rule": "agree",
+  "terms": "agree",
+  "issuer": "agree",
+  "ticker_history": "wrong"
+ },
+ "confidence_reasons": [],
+ "library_wrong": true,
+ "cause": "other:last_trade_off_by_one_notice_vs_8k",
+ "golden_worthy": true,
+ "sec_evidence": 4,
+ "web_evidence": 0,
+ "open_checks": [
+  "exchange print for 2026-07-24 would independently confirm the last trade date"
+ ],
+ "verdict": "Real $72.50 cash merger into Berkshire Hathaway's sub; library's kind and terms are right but its last trade date 2026-07-23 is a day early (8-K: suspended after the close on 2026-07-24).",
+ "verification": {
+  "upheld": true,
+  "fields_upheld": [
+   "last_trade_date",
+   "ticker_history"
+  ],
+  "fields_refuted": [],
+  "notes": "8-K 2026-07-24 Item 3.01: NYSE asked to suspend 'following the closing of trading on July 24, 2026'; Form 25-NSE says only 'suspended from trading on July 24' (no before-open wording). 2026-07-24 is a Friday and not after the Form 25 effectiveness date. No exchange print checked."
+ }
+}

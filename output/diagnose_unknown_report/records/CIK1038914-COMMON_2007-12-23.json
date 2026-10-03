@@ -1,0 +1,11 @@
+{"case_id": "CIK1038914-COMMON_2007-12-23", "sec_id": "CIK1038914-COMMON", "ticker": "GSF", "report": "reports/CIK1038914-COMMON_2007-12-23.md",
+ "event_type": "merger", "consideration": "cash_and_stock", "confidence": "verified",
+ "exit_kind": "merger", "drop_reason": "", "continuation": false, "successor_ticker": "RIG",
+ "last_trade_date": "2007-11-26",
+ "value_rule": "cash_plus_stock",
+ "cash_per_share": 22.46, "cash_currency": "USD", "stock_ratio": 0.4757, "price_ticker": "RIG", "price_date": "2007-11-27",
+ "value_formula": "(22.46 USD + 0.4757 x price(RIG, 2007-11-27)) / last_close - 1",
+ "status": {"exit_kind": "agree", "last_trade_date": "agree", "successor": "agree", "value_rule": "agree", "terms": "missing", "issuer": "agree", "ticker_history": "agree"},
+ "confidence_reasons": [],
+ "library_wrong": false, "cause": "library_right_but_uncertain",
+ "golden_worthy": true, "sec_evidence": 3, "web_evidence": 0, "open_checks": [], "verdict": "Real cash-and-stock merger into Transocean (0.4757 shares + $22.46); library right except blank currency, uncertain only from post-ending seeds."}

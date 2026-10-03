@@ -1,0 +1,52 @@
+{
+ "case_id": "BBG000C4MWH4_2023-07-05",
+ "sec_id": "BBG000C4MWH4",
+ "ticker": "BGCP",
+ "report": "reports/BBG000C4MWH4_2023-07-05.md",
+ "event_type": "reorganization",
+ "consideration": "stock",
+ "confidence": "inferred",
+ "exit_kind": "exchange",
+ "drop_reason": "",
+ "continuation": true,
+ "successor_ticker": "BGC",
+ "last_trade_date": "2023-06-30",
+ "value_rule": "continuation",
+ "cash_per_share": null,
+ "cash_currency": "",
+ "stock_ratio": 1.0,
+ "price_ticker": "",
+ "price_date": "",
+ "value_formula": "none (continuation; 1 BGC Group Class A per BGCP share, no cash)",
+ "status": {
+  "exit_kind": "agree",
+  "last_trade_date": "agree",
+  "successor": "missing",
+  "value_rule": "wrong",
+  "terms": "agree",
+  "issuer": "agree",
+  "ticker_history": "agree"
+ },
+ "confidence_reasons": [
+  "last_trade_date: worked out from the 8-K12B saying BGC begins trading 2023-07-03 and the Form 25 filed 2023-06-30; no filing states the last BGCP trading day (MIDAS agrees)"
+ ],
+ "library_wrong": true,
+ "cause": "successor_not_in_run",
+ "golden_worthy": true,
+ "sec_evidence": 1,
+ "web_evidence": 0,
+ "open_checks": [
+  "BGC Group Class A FIGI and issuer CIK (8-K12B filed under CIK 1094831)",
+  "filing or notice stating the last BGCP trading day"
+ ],
+ "verdict": "BGC Partners Class A became BGC Group Class A one for one on 2023-06-30, a continuation the library left without a successor.",
+ "verification": {
+  "case_id": "BBG000C4MWH4_2023-07-05",
+  "upheld": true,
+  "fields_upheld": [
+   "value_rule"
+  ],
+  "fields_refuted": [],
+  "notes": "8-K12B 0001193125-23-180979: each BGCP Class A share converted into the right to receive one BGC Group Class A share, no cash for Class A; successor issuer; new CUSIP 088929104. A 1:1 holdco reorg is a continuation (decision 9). Effective date 06-30 not independently confirmed (filing says 12:02 a.m. on the Closing Date), irrelevant to value_rule."
+ }
+}

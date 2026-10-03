@@ -1,0 +1,11 @@
+{"case_id": "BBG005PWSVQ3_2016-08-31", "sec_id": "BBG005PWSVQ3", "ticker": "WPG", "report": "reports/BBG005PWSVQ3_2016-08-31.md",
+ "event_type": "name_change", "consideration": "none", "confidence": "verified",
+ "exit_kind": "", "drop_reason": "", "continuation": false, "successor_ticker": "WPG",
+ "last_trade_date": "",
+ "value_rule": "continuation", "cash_per_share": null, "cash_currency": "", "stock_ratio": null, "price_ticker": "", "price_date": "",
+ "value_formula": "none (rename; holder keeps the same shares)",
+ "status": {"exit_kind": "wrong", "last_trade_date": "wrong", "successor": "agree", "value_rule": "agree", "terms": "agree", "issuer": "agree", "ticker_history": "wrong"},
+ "confidence_reasons": [],
+ "library_wrong": true, "cause": "rename_not_followed",
+ "golden_worthy": true, "sec_evidence": 4, "web_evidence": 0, "open_checks": [], "verdict": "A rename (WP Glimcher to Washington Prime Group, effective 2016-08-30, CUSIP 92939N102 to 93964W108, still WPG), not a delisting; the library's continued-filings exchange transfer is spurious.",
+ "verification": {"upheld": true, "fields_upheld": ["exit_kind", "last_trade_date", "ticker_history"], "fields_refuted": [], "notes": "8-K 2016-09-02 Item 5.03: name change effective on 2016-08-30 Articles of Amendment, same CIK 1594686; no Form 25/15/8-K12B/8-K12G3 2016-06..2017-06; fails rows show WPG continuing under CUSIP 93964W108 from 2016-09-01 at 13.74 after 13.75 on old CUSIP. last_trade_date is blank in the library, wrong only in that no ending exists."}}

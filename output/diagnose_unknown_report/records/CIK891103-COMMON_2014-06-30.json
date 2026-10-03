@@ -1,0 +1,12 @@
+{"case_id": "CIK891103-COMMON_2014-06-30", "sec_id": "CIK891103-COMMON", "ticker": "IAC", "report": "reports/CIK891103-COMMON_2014-06-30.md",
+ "event_type": "reorganization", "consideration": "stock", "confidence": "verified",
+ "exit_kind": "merger", "drop_reason": "", "continuation": false, "successor_ticker": "IAC;MTCH",
+ "last_trade_date": "2020-06-30", "value_rule": "stock", "cash_per_share": null, "cash_currency": "", "stock_ratio": 1.0,
+ "price_ticker": "IAC;MTCH", "price_date": "2020-07-01",
+ "value_formula": "(1 x price(IAC, 2020-07-01) + 2.1584 x price(MTCH, 2020-07-01)) / last_close(2020-06-30) - 1",
+ "status": {"exit_kind": "wrong", "last_trade_date": "wrong", "successor": "missing", "value_rule": "wrong", "terms": "missing", "issuer": "agree", "ticker_history": "wrong"},
+ "confidence_reasons": [], "library_wrong": true, "cause": "continued_filings_guess",
+ "golden_worthy": true, "sec_evidence": 3, "web_evidence": 0,
+ "open_checks": ["confirm Class M traded as MTCH from 2020-07-01", "add New IAC and Match to the run", "caller window must cover 2020"],
+ "verdict": "The 2014-06-30 ending is an artifact of the observation window; the real ending is 2020-06-30, Old IAC shares exchanged for 1 New IAC plus 2.1584 Match (Class M) shares.",
+ "verification": {"upheld": true, "fields_upheld": ["exit_kind", "last_trade_date", "value_rule", "ticker_history"], "fields_refuted": [], "notes": "25-NSE 0001354457-20-000290 (2020-06-30) and 8-K 0001104659-20-080606 (Items 2.01/3.01) confirm 1 New IAC + 2.1584 Class M and suspension before the 2020-07-01 open; regular 10-K/Qs and no Form 25/15 in 2014-2019. Caveats: stock_ratio holds one leg of a two-leg deal; merger vs split-up is a judgment call. MTCH trading from 2020-07-01 confirmed by the 8-K."}}

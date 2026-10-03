@@ -1,0 +1,57 @@
+{
+ "case_id": "BBG001D9S707_2010-05-25",
+ "sec_id": "BBG001D9S707",
+ "ticker": "DYN",
+ "report": "reports/BBG001D9S707_2010-05-25.md",
+ "event_type": "bankruptcy",
+ "consideration": "other",
+ "confidence": "inferred",
+ "exit_kind": "dropped",
+ "drop_reason": "bankruptcy",
+ "continuation": false,
+ "successor_ticker": "",
+ "last_trade_date": "2012-07-05",
+ "value_rule": "otc_print",
+ "cash_per_share": null,
+ "cash_currency": "",
+ "stock_ratio": null,
+ "price_ticker": "DYNIQ",
+ "price_date": "2012-07-06",
+ "value_formula": "first OTC print of DYNIQ within 10 trading days / last_close - 1",
+ "status": {
+  "exit_kind": "wrong",
+  "last_trade_date": "wrong",
+  "successor": "agree",
+  "value_rule": "wrong",
+  "terms": "missing",
+  "issuer": "agree",
+  "ticker_history": "wrong"
+ },
+ "confidence_reasons": [
+  "last_trade_date: worked out from 8-K 'suspended immediately on July 6, 2012' and the July 4 holiday, not read",
+  "terms: DYNIQ symbol and OTC dates come from fails rows; first OTC print date not confirmed",
+  "value_rule: OTC rule follows decision 11; no filing states the first OTC session"
+ ],
+ "library_wrong": true,
+ "cause": "continued_filings_guess",
+ "golden_worthy": true,
+ "sec_evidence": 6,
+ "web_evidence": 0,
+ "open_checks": [
+  "exact last NYSE print date 2012-07-05 vs 2012-07-06",
+  "first DYNIQ OTC session",
+  "follow reverse-split CUSIP change 26817G102 to 26817G300"
+ ],
+ "verdict": "The 2010-05-25 end is a 1-for-5 reverse split with a CUSIP change, not an ending; the real ending is the July 2012 bankruptcy drop to OTC (DYNIQ).",
+ "verification": {
+  "upheld": true,
+  "fields_upheld": [
+   "exit_kind",
+   "last_trade_date",
+   "value_rule",
+   "ticker_history"
+  ],
+  "fields_refuted": [],
+  "notes": "Reverse split 8-K 2010-05-25 and fails rows (26817G300 as DYN 2010-05-26..2012-07-11, DYNIQ 2012-07-12..2012-10-16) show no 2010 ending. Form 25-NSE 2012-07-25 states suspension before the open on 2012-07-06, so last trade 2012-07-05. First OTC print not confirmed."
+ }
+}

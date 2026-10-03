@@ -1,0 +1,10 @@
+{"case_id": "BBG000BQ3F39_2011-05-07", "sec_id": "BBG000BQ3F39", "ticker": "NOVL", "report": "reports/BBG000BQ3F39_2011-05-07.md",
+ "event_type": "acquisition", "consideration": "cash", "confidence": "verified",
+ "exit_kind": "merger", "drop_reason": "", "continuation": false, "successor_ticker": "",
+ "last_trade_date": "2011-04-27",
+ "value_rule": "cash", "cash_per_share": 6.10, "cash_currency": "USD", "stock_ratio": null, "price_ticker": "", "price_date": "",
+ "value_formula": "6.10 USD / last_close - 1",
+ "status": {"exit_kind": "agree", "last_trade_date": "missing", "successor": "agree", "value_rule": "agree", "terms": "missing", "issuer": "agree", "ticker_history": "wrong"},
+ "confidence_reasons": [],
+ "library_wrong": false, "cause": "no_last_trade_print",
+ "golden_worthy": true, "sec_evidence": 4, "web_evidence": 0, "open_checks": [], "verdict": "Attachmate cash merger at $6.10, last Nasdaq trade 2011-04-27 per 8-K item 3.01; library row right except missing last trade date (and USD currency)."}

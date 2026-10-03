@@ -1,0 +1,48 @@
+{
+ "case_id": "BBG000BPTDN6_2010-10-11",
+ "sec_id": "BBG000BPTDN6",
+ "ticker": "NTY",
+ "report": "reports/BBG000BPTDN6_2010-10-11.md",
+ "event_type": "going_private",
+ "consideration": "cash",
+ "confidence": "verified",
+ "exit_kind": "merger",
+ "drop_reason": "",
+ "continuation": false,
+ "successor_ticker": "",
+ "last_trade_date": "2010-09-30",
+ "value_rule": "cash",
+ "cash_per_share": 55.0,
+ "cash_currency": "USD",
+ "stock_ratio": null,
+ "price_ticker": "",
+ "price_date": "",
+ "value_formula": "55.00 USD / last_close - 1",
+ "status": {
+  "exit_kind": "wrong",
+  "last_trade_date": "agree",
+  "successor": "agree",
+  "value_rule": "wrong",
+  "terms": "missing",
+  "issuer": "agree",
+  "ticker_history": "agree"
+ },
+ "confidence_reasons": [],
+ "library_wrong": true,
+ "cause": "continued_filings_guess",
+ "golden_worthy": true,
+ "sec_evidence": 4,
+ "web_evidence": 0,
+ "open_checks": [],
+ "verdict": "NBTY was acquired by a Carlyle affiliate for $55.00 cash, effective before the open on 2010-10-01; the library's exchange-transfer label and 0.0 fill are wrong, its last trade date 2010-09-30 is right.",
+ "verification": {
+  "case_id": "BBG000BPTDN6_2010-10-11",
+  "upheld": true,
+  "fields_upheld": [
+   "exit_kind",
+   "value_rule"
+  ],
+  "fields_refuted": [],
+  "notes": "Form 25-NSE 0000876661-10-000366 says the Alphabet Merger Sub (Carlyle affiliate) merger took effect before the open on 2010-10-01 and each NBTY common share was converted into $55.00 in cash; the share was suspended from trading on 2010-10-01. The DEFM14A 0001193125-10-195297 confirms $55.00 cash without interest. There is no stock leg and no successor line, so the merger/cash rule holds and the transfer label with 0.0 fill is wrong. The report's last trade date 2010-09-30 also checks out. Report section 9 and the record JSON were updated."
+ }
+}

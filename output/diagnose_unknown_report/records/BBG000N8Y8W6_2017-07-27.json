@@ -1,0 +1,13 @@
+{"case_id": "BBG000N8Y8W6_2017-07-27", "sec_id": "BBG000N8Y8W6", "ticker": "AWH", "report": "reports/BBG000N8Y8W6_2017-07-27.md",
+ "event_type": "acquisition", "consideration": "cash_and_stock", "confidence": "inferred",
+ "exit_kind": "merger", "drop_reason": "", "continuation": false, "successor_ticker": "FFH",
+ "last_trade_date": "",
+ "value_rule": "cash_plus_stock",
+ "cash_per_share": 23.0, "cash_currency": "USD", "stock_ratio": 0.057937, "price_ticker": "FFH", "price_date": "",
+ "value_formula": "(23.00 USD + 0.057937 x price(FFH, day after last trade)) / last_close - 1; $5.00 special dividend separate",
+ "status": {"exit_kind": "agree", "last_trade_date": "missing", "successor": "agree", "value_rule": "wrong", "terms": "wrong", "issuer": "agree", "ticker_history": "agree"},
+ "confidence_reasons": ["last_trade_date: no filing states it; Form 25 effective 2017-07-27 is only an upper bound and fails rows are not exchange prints"],
+ "library_wrong": true, "cause": "terms_not_extracted",
+ "golden_worthy": true, "sec_evidence": 6, "web_evidence": 0, "open_checks": ["exchange print or NYSE notice for the last AWH trade day", "confirm squeeze-out merger pays the same package", "treatment of the $5.00 special dividend"], "verdict": "Real cash-plus-stock merger with Fairfax ($23.00 + 0.057937 FFH, plus a $5.00 special dividend); the library published only the cash leg and no last trade date.",
+ "verification": {"upheld": true, "fields_upheld": ["value_rule", "terms"], "fields_refuted": [],
+  "notes": "8-K 2017-07-12 (0001104659-17-044656) and DEFM14A (0001047469-17-004976) confirm $23.00 cash + 0.057937 Fairfax share per common share. The $5.00 special dividend was paid by the company outside the Offer, so treating it as separate holds; the DEFM14A also sums it to $28.00 cash, a small ambiguity."}}

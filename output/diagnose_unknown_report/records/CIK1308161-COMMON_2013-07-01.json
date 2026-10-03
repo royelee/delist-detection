@@ -1,0 +1,65 @@
+{
+ "case_id": "CIK1308161-COMMON_2013-07-01",
+ "sec_id": "CIK1308161-COMMON",
+ "ticker": "NWS-A",
+ "report": "reports/CIK1308161-COMMON_2013-07-01.md",
+ "event_type": "name_change",
+ "consideration": "none",
+ "confidence": "inferred",
+ "exit_kind": "",
+ "drop_reason": "",
+ "continuation": false,
+ "successor_ticker": "FOXA",
+ "last_trade_date": "",
+ "value_rule": "transfer",
+ "cash_per_share": null,
+ "cash_currency": "",
+ "stock_ratio": null,
+ "price_ticker": "",
+ "price_date": "",
+ "value_formula": "none (rename plus spin-off, not an exit)",
+ "status": {
+  "exit_kind": "wrong",
+  "last_trade_date": "wrong",
+  "successor": "wrong",
+  "value_rule": "wrong",
+  "terms": "wrong",
+  "issuer": "agree",
+  "ticker_history": "wrong"
+ },
+ "confidence_reasons": [
+  "exit kind: 8-K says renamed Twenty-First Century Fox; the CUSIP change 65248E104 to 90130A101 in fails rows is not explained by a filing read",
+  "last trade date: none; fails rows only",
+  "spin-off ratio not read"
+ ],
+ "library_wrong": true,
+ "cause": "rename_not_followed",
+ "golden_worthy": true,
+ "sec_evidence": 2,
+ "web_evidence": 0,
+ "open_checks": [
+  "confirm the CUSIP change and spin-off ratio in the 8-K or Form 10",
+  "confirm FOXA first trading day"
+ ],
+ "verdict": "Not a merger: old News Corp spun off its publishing business and renamed itself 21st Century Fox on 2013-06-28; no ending.",
+ "verification": {
+  "upheld": false,
+  "fields_upheld": [
+   "exit_kind",
+   "value_rule",
+   "terms",
+   "ticker_history"
+  ],
+  "fields_refuted": [
+   {
+    "field": "last_trade_date",
+    "why": "the source row's published last_trade_date is blank, which already matches the corrected answer; 2013-07-01 is only the internal delist_date"
+   },
+   {
+    "field": "successor",
+    "why": "library successor_sec_id is blank and the report's own corrected value is blank; the status should be agree"
+   }
+  ],
+  "notes": "Verdict upheld: 8-K 0001193125-13-281456 shows rename to Twenty-First Century Fox plus a 1-for-4 spin-off distribution; no Form 25/15 in 2013-06..12. Correction: the 0.25 ratio is the spin-off ratio stated in Item 2.01, not unread. CUSIP change 65248E104 to 90130A101 still unexplained, so a continuation with successor link is possible."
+ }
+}

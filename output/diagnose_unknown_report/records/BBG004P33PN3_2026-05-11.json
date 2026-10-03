@@ -1,0 +1,49 @@
+{
+ "case_id": "BBG004P33PN3_2026-05-11",
+ "sec_id": "BBG004P33PN3",
+ "ticker": "CWENA",
+ "report": "reports/BBG004P33PN3_2026-05-11.md",
+ "event_type": "reorganization",
+ "consideration": "none",
+ "confidence": "verified",
+ "exit_kind": "exchange",
+ "drop_reason": "",
+ "continuation": true,
+ "successor_ticker": "CWEN",
+ "last_trade_date": "2026-04-30",
+ "value_rule": "continuation",
+ "cash_per_share": null,
+ "cash_currency": "",
+ "stock_ratio": 1.0,
+ "price_ticker": "",
+ "price_date": "",
+ "value_formula": "none (continuation; 1 Class C share per Class A share)",
+ "status": {
+  "exit_kind": "wrong",
+  "last_trade_date": "agree",
+  "successor": "wrong",
+  "value_rule": "wrong",
+  "terms": "agree",
+  "issuer": "agree",
+  "ticker_history": "agree"
+ },
+ "confidence_reasons": [],
+ "library_wrong": true,
+ "cause": "other:class_conversion_not_linked",
+ "golden_worthy": true,
+ "sec_evidence": 3,
+ "web_evidence": 0,
+ "open_checks": [],
+ "verdict": "Class A converted 1:1 into Class C (CWEN) on 2026-05-01 with no cash: a continuation to BBG008LJ4TF3, not an unknown ending.",
+ "verification": {
+  "case_id": "BBG004P33PN3_2026-05-11",
+  "upheld": true,
+  "fields_upheld": [
+   "exit_kind",
+   "successor",
+   "value_rule"
+  ],
+  "fields_refuted": [],
+  "notes": "8-K 0001104659-26-053557 states each Class A share converted into one Class C share on 2026-05-01 with no Class A left and no economic change. 25-NSE 0000876661-26-000380 gives the substitution wording, and the \"right to receive immediate cash payment\" clause is boilerplate. BBG008LJ4TF3 is the same issuer's Class C (CWEN), still trading per the fails rows. That is a decision-9 continuation. Last trade 2026-04-30 confirmed. Section 9 and the verification object were written to the report and record."
+ }
+}

@@ -1,0 +1,50 @@
+{
+ "case_id": "BBG00WYYC600_2017-11-09",
+ "sec_id": "BBG00WYYC600",
+ "ticker": "WLL",
+ "report": "reports/BBG00WYYC600_2017-11-09.md",
+ "event_type": "reverse_split",
+ "consideration": "none",
+ "confidence": "verified",
+ "exit_kind": "",
+ "drop_reason": "",
+ "continuation": true,
+ "successor_ticker": "WLL",
+ "last_trade_date": "2017-11-08",
+ "value_rule": "continuation",
+ "cash_per_share": null,
+ "cash_currency": "",
+ "stock_ratio": 0.25,
+ "price_ticker": "",
+ "price_date": "",
+ "value_formula": "none; 1-for-4 reverse split, same security under new CUSIP 966387409",
+ "status": {
+  "exit_kind": "wrong",
+  "last_trade_date": "missing",
+  "successor": "agree",
+  "value_rule": "agree",
+  "terms": "agree",
+  "issuer": "agree",
+  "ticker_history": "agree"
+ },
+ "confidence_reasons": [],
+ "library_wrong": true,
+ "cause": "other:reverse_split_cusip_change_read_as_ending",
+ "golden_worthy": true,
+ "sec_evidence": 1,
+ "web_evidence": 0,
+ "open_checks": [
+  "whether BBG00WYYC600 and BBG000PX3XC0 should be one sec_id via the 8-K CUSIP statement"
+ ],
+ "verdict": "Not a delisting: a 1-for-4 reverse split on 2017-11-08 gave WLL a new CUSIP while it kept trading on the NYSE; the library's continuation link is right but its ending and missing last trade date are not.",
+ "verification": {
+  "case_id": "BBG00WYYC600_2017-11-09",
+  "upheld": true,
+  "fields_upheld": [
+   "exit_kind",
+   "last_trade_date"
+  ],
+  "fields_refuted": [],
+  "notes": "8-K 0001193125-17-337932 states a 1-for-4 reverse split effective 5:00 p.m. ET 2017-11-08. The same Common Stock continues on the NYSE as WLL from the 2017-11-09 open under new CUSIP 966387409, with cash only for fractions. No Form 25, 25-NSE or Form 15 from 2017-11 to 2019-12. Fails rows show the CUSIP switch with the price about 4x. So there is no ending, and the 2017-11-08 last-trade date is worked out from the filing. Report section 9 and the record JSON updated."
+ }
+}

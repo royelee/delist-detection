@@ -1,0 +1,10 @@
+{"case_id": "BBG000JBSJZ4_2014-07-01", "sec_id": "BBG000JBSJZ4", "ticker": "FNF", "report": "reports/BBG000JBSJZ4_2014-07-01.md",
+ "event_type": "reorganization", "consideration": "none", "confidence": "inferred",
+ "exit_kind": "exchange", "drop_reason": "", "continuation": true, "successor_ticker": "FNF",
+ "last_trade_date": "2014-06-30",
+ "value_rule": "continuation", "cash_per_share": null, "cash_currency": "", "stock_ratio": null, "price_ticker": "", "price_date": "",
+ "value_formula": "not an exit: each old share = 1 FNF Group share + 0.3333 FNFV Group share",
+ "status": {"exit_kind": "agree", "last_trade_date": "missing", "successor": "agree", "value_rule": "agree", "terms": "agree", "issuer": "agree", "ticker_history": "unknown"},
+ "confidence_reasons": ["last_trade_date: worked out from fails rows (old CUSIP's last row 2014-07-01 is priced at the 2014-06-30 close; new CUSIP regular rows start 2014-07-02), no filing states it", "successor: filing shows same registrant/CIK; the new CUSIP line comes from fails rows"],
+ "library_wrong": false, "cause": "library_right_but_uncertain",
+ "golden_worthy": true, "sec_evidence": 3, "web_evidence": 0, "open_checks": ["confirm last day of old FNF trading from an NYSE notice or print", "record the 0.3333 FNFV Group distribution on the successor"], "verdict": "A 2014-06-30 tracking-stock recapitalization (1 FNF Group + 0.3333 FNFV per share, same issuer and ticker) is a continuation, as the library says; only its evidence is weak and the last trade day is 2014-06-30."}

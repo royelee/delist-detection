@@ -1,0 +1,12 @@
+{"case_id": "BBG0069FL5L5_2016-09-26", "sec_id": "BBG0069FL5L5", "ticker": "MRD", "report": "reports/BBG0069FL5L5_2016-09-26.md",
+ "event_type": "merger", "consideration": "stock", "confidence": "verified",
+ "exit_kind": "merger", "drop_reason": "", "continuation": false, "successor_ticker": "RRC",
+ "last_trade_date": "2016-09-15",
+ "value_rule": "stock",
+ "cash_per_share": null, "cash_currency": "USD", "stock_ratio": 0.375, "price_ticker": "RRC", "price_date": "2016-09-16",
+ "value_formula": "0.375 x price(RRC, 2016-09-16) / last_close - 1",
+ "status": {"exit_kind": "agree", "last_trade_date": "agree", "successor": "agree",
+            "value_rule": "agree", "terms": "agree", "issuer": "agree", "ticker_history": "agree"},
+ "confidence_reasons": [],
+ "library_wrong": false, "cause": "library_right_but_uncertain",
+ "golden_worthy": true, "sec_evidence": 2, "web_evidence": 0, "open_checks": ["last close came from lagged fails rows; an exchange print would let the payout gate pass"], "verdict": "Stock-for-stock merger into Range Resources at 0.375 RRC per MRD share; library kind, date and terms are right, only its price gate failed."}

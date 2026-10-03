@@ -1,0 +1,53 @@
+{
+ "case_id": "CIK1019849-COMMON_2009-06-08",
+ "sec_id": "CIK1019849-COMMON",
+ "ticker": "UAG",
+ "report": "reports/CIK1019849-COMMON_2009-06-08.md",
+ "event_type": "ticker_change",
+ "consideration": "none",
+ "confidence": "verified",
+ "exit_kind": "",
+ "drop_reason": "",
+ "continuation": false,
+ "successor_ticker": "PAG",
+ "last_trade_date": "",
+ "value_rule": "continuation",
+ "cash_per_share": null,
+ "cash_currency": "",
+ "stock_ratio": null,
+ "price_ticker": "",
+ "price_date": "",
+ "value_formula": "none (no exit)",
+ "status": {
+  "exit_kind": "wrong",
+  "last_trade_date": "wrong",
+  "successor": "wrong",
+  "value_rule": "wrong",
+  "terms": "agree",
+  "issuer": "agree",
+  "ticker_history": "wrong"
+ },
+ "confidence_reasons": [],
+ "library_wrong": true,
+ "cause": "rename_not_followed",
+ "golden_worthy": true,
+ "sec_evidence": 3,
+ "web_evidence": 0,
+ "open_checks": [
+  "exact date of the UAG to PAG rename (before 2007-07-02 per fails rows)"
+ ],
+ "verdict": "Not a delisting: United Auto Group renamed Penske Automotive Group (PAG) on the same CUSIP and kept trading; the UAG placeholder duplicates BBG000H6K1B0.",
+ "verification": {
+  "case_id": "CIK1019849-COMMON_2009-06-08",
+  "upheld": true,
+  "fields_upheld": [
+   "exit_kind",
+   "last_trade_date",
+   "successor",
+   "value_rule",
+   "ticker_history"
+  ],
+  "fields_refuted": [],
+  "notes": "The report's verdict stands, with one minor correction to a date. The FY2008 10-K (0001362310-09-003530, filed 2009-03-11) says the common stock trades on the NYSE under PAG. EDGAR lists no Form 25, Form 15, or 8-K item 1.03/2.01/3.01/5.01 for CIK 1019849 in 2007-2009. Fails rows for CUSIP 70959W103 run under PAG to 2009-12-31, not only to 2009-06-30 as the report says. The corrected rename date is about 2007-12-07 (8-K Item 5.03, 0001299933-07-007057, already headed Penske Automotive Group), not \"before 2007-07-02\". The PAG ticker_history for BBG000H6K1B0 starts 2007-12-19, before the UAG placeholder's first sighting on 2008-01-16, so UAG was already a stale ticker. I appended \"## 9. Verification\" to the report and added a \"verification\" object to the record JSON."
+ }
+}

@@ -1,0 +1,53 @@
+{
+ "case_id": "CIK1575828-COMMON_2021-10-01",
+ "sec_id": "CIK1575828-COMMON",
+ "ticker": "FI",
+ "report": "reports/CIK1575828-COMMON_2021-10-01.md",
+ "event_type": "reorganization",
+ "consideration": "none",
+ "confidence": "verified",
+ "exit_kind": "exchange",
+ "drop_reason": "",
+ "continuation": true,
+ "successor_ticker": "XPRO",
+ "last_trade_date": "2021-10-01",
+ "value_rule": "continuation",
+ "cash_per_share": null,
+ "cash_currency": "",
+ "stock_ratio": null,
+ "price_ticker": "",
+ "price_date": "",
+ "value_formula": "none (not an exit; 1 FI share -> 1/6 XPRO share after a 1-for-6 reverse split)",
+ "status": {
+  "exit_kind": "wrong",
+  "last_trade_date": "wrong",
+  "successor": "missing",
+  "value_rule": "wrong",
+  "terms": "wrong",
+  "issuer": "agree",
+  "ticker_history": "missing"
+ },
+ "confidence_reasons": [],
+ "library_wrong": true,
+ "cause": "rename_not_followed",
+ "golden_worthy": true,
+ "sec_evidence": 2,
+ "web_evidence": 0,
+ "open_checks": [
+  "XPRO sec_id/FIGI not in the run",
+  "last trade day 2021-10-01 rests on 8-K first-trading-day statement plus fails rows, not an exchange print"
+ ],
+ "verdict": "Frank's International was the legal acquirer: it renamed to Expro Group Holdings (XPRO) with a 1-for-6 reverse split, so FI holders kept their shares and the row is a continuation, not a stock merger.",
+ "verification": {
+  "case_id": "CIK1575828-COMMON_2021-10-01",
+  "upheld": true,
+  "fields_upheld": [
+   "exit_kind",
+   "last_trade_date",
+   "value_rule",
+   "terms"
+  ],
+  "fields_refuted": [],
+  "notes": "8-K 0001193125-21-289897 confirms Frank's is the surviving registrant, renamed Expro Group Holdings, trading as XPRO from 2021-10-04 after a one-for-six reverse split. The 1.2120 ratio is paid to Expro shareholders, and FI holders get no consideration. No Form 25 or Form 15 for FI appears in the filings list. Two caveats. A 1-for-6 reverse split with a CUSIP change is not literally the 1:1 of decision 9. The last trade date of 2021-10-01 is inferred from forward-looking 8-K text plus fails rows, not an exchange print, so the library's blank is defensible under decision 12. Section 9 appended to the report and a verification object added to the record JSON."
+ }
+}

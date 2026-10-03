@@ -1,0 +1,55 @@
+{
+ "case_id": "BBG000BJXKD0_2018-06-16",
+ "sec_id": "BBG000BJXKD0",
+ "ticker": "WR",
+ "report": "reports/BBG000BJXKD0_2018-06-16.md",
+ "event_type": "merger",
+ "consideration": "stock",
+ "confidence": "inferred",
+ "exit_kind": "merger",
+ "drop_reason": "",
+ "continuation": false,
+ "successor_ticker": "EVRG",
+ "last_trade_date": "2018-06-04",
+ "value_rule": "stock",
+ "cash_per_share": null,
+ "cash_currency": "",
+ "stock_ratio": 1.0,
+ "price_ticker": "EVRG",
+ "price_date": "2018-06-05",
+ "value_formula": "1.0 \u00d7 price(EVRG, 2018-06-05) / last_close \u2212 1",
+ "status": {
+  "exit_kind": "agree",
+  "last_trade_date": "agree",
+  "successor": "agree",
+  "value_rule": "agree",
+  "terms": "missing",
+  "issuer": "agree",
+  "ticker_history": "agree"
+ },
+ "confidence_reasons": [
+  "price_ticker EVRG and price_date 2018-06-05 rest on the run's ticker_history for BBG00H433CR2, not on a filing read"
+ ],
+ "library_wrong": true,
+ "cause": "terms_not_extracted",
+ "golden_worthy": true,
+ "sec_evidence": 3,
+ "web_evidence": 0,
+ "open_checks": [
+  "confirm EVRG first trading day 2018-06-05 from a filing"
+ ],
+ "verdict": "Real 1:1 stock merger into Evergy on 2018-06-04; library kind, date and ratio right but acquirer ticker missing so value is assumed par.",
+ "verification": {
+  "case_id": "BBG000BJXKD0_2018-06-16",
+  "upheld": true,
+  "fields_upheld": [
+   "terms",
+   "exit_kind",
+   "continuation",
+   "last_trade_date",
+   "cause"
+  ],
+  "fields_refuted": [],
+  "notes": "8-K 2018-06-04 and Form 25-NSE confirm a 1:1 Evergy conversion with no cash, and a suspension on June 5, so the last trade was June 4. EVRG and the 2018-06-05 price date rest only on ticker_history, not on a filing. Treating the deal as a continuation is the one reading that could flip the result. Merger stands because Evergy also absorbed Great Plains holders at 0.5981."
+ }
+}

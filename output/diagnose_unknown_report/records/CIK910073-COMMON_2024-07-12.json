@@ -1,0 +1,49 @@
+{
+ "case_id": "CIK910073-COMMON_2024-07-12",
+ "sec_id": "CIK910073-COMMON",
+ "ticker": "NYCB",
+ "report": "reports/CIK910073-COMMON_2024-07-12.md",
+ "event_type": "reverse_split",
+ "consideration": "none",
+ "confidence": "verified",
+ "exit_kind": "",
+ "drop_reason": "",
+ "continuation": false,
+ "successor_ticker": "FLG",
+ "last_trade_date": "",
+ "value_rule": "continuation",
+ "cash_per_share": null,
+ "cash_currency": "",
+ "stock_ratio": null,
+ "price_ticker": "",
+ "price_date": "",
+ "value_formula": "none; not an ending (1-for-3 reverse split, same security; renamed Flagstar Financial FLG 2024-10-25)",
+ "status": {
+  "exit_kind": "wrong",
+  "last_trade_date": "wrong",
+  "successor": "agree",
+  "value_rule": "wrong",
+  "terms": "agree",
+  "issuer": "agree",
+  "ticker_history": "wrong"
+ },
+ "confidence_reasons": [],
+ "library_wrong": true,
+ "cause": "other:reverse_split_new_cusip_read_as_ending",
+ "golden_worthy": true,
+ "sec_evidence": 2,
+ "web_evidence": 0,
+ "open_checks": [],
+ "verdict": "No ending: a 1-for-3 reverse split (new CUSIP 649445400) kept the same NYSE stock trading, later renamed Flagstar Financial (FLG); the library's 2024-07-12 exchange transfer is invented.",
+ "verification": {
+  "upheld": true,
+  "fields_upheld": [
+   "exit_kind",
+   "last_trade_date",
+   "value_rule",
+   "ticker_history"
+  ],
+  "fields_refuted": [],
+  "notes": "8-K 2024-07-16 confirms 1-for-3 combination of same NYSE common; no Form 25/15/8-K12B 2024-06..2025-03; fails rows show CUSIP 649445400 under NYCB 2024-07-15..2024-10-28 then FLG from 2024-10-29. Minor date correction to section 5 only."
+ }
+}

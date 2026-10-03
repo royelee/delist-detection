@@ -1,0 +1,51 @@
+{
+ "case_id": "BBG01HMFLTN1_2025-12-25",
+ "sec_id": "BBG01HMFLTN1",
+ "ticker": "LLYVK",
+ "report": "reports/BBG01HMFLTN1_2025-12-25.md",
+ "event_type": "reorganization",
+ "consideration": "stock",
+ "confidence": "verified",
+ "exit_kind": "exchange",
+ "drop_reason": "",
+ "continuation": true,
+ "successor_ticker": "LLYVK",
+ "last_trade_date": "2025-12-15",
+ "value_rule": "continuation",
+ "cash_per_share": null,
+ "cash_currency": "",
+ "stock_ratio": 1.0,
+ "price_ticker": "",
+ "price_date": "",
+ "value_formula": "not an exit (continuation to BBG01YYX1Z14)",
+ "status": {
+  "exit_kind": "wrong",
+  "last_trade_date": "missing",
+  "successor": "missing",
+  "value_rule": "wrong",
+  "terms": "wrong",
+  "issuer": "agree",
+  "ticker_history": "wrong"
+ },
+ "confidence_reasons": [],
+ "library_wrong": true,
+ "cause": "holdco_not_linked",
+ "golden_worthy": true,
+ "sec_evidence": 4,
+ "web_evidence": 0,
+ "open_checks": [
+  "first trading date of the new LLYVK line (run's first observation is 2025-12-17)"
+ ],
+ "verdict": "A 1:1 split-off redemption into Liberty Live Holdings (same ticker LLYVK), so a continuation to BBG01YYX1Z14, not a merger.",
+ "verification": {
+  "upheld": true,
+  "fields_upheld": [
+   "exit_kind",
+   "value_rule",
+   "terms",
+   "ticker_history"
+  ],
+  "fields_refuted": [],
+  "notes": "8-K 2025-12-15 Item 2.01 confirms 1:1 redemption into same series of Liberty Live Holdings, no cash; Item 3.01 delisting effective 2025-12-15 after 4:05pm Effective Time; library ticker_history end 2025-12-25 is Form 25 +10d. Caveat: split-off to a separate issuer, continuation per decision 9 reading."
+ }
+}

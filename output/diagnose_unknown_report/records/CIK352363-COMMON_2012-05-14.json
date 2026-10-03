@@ -1,0 +1,54 @@
+{
+ "case_id": "CIK352363-COMMON_2012-05-14",
+ "sec_id": "CIK352363-COMMON",
+ "ticker": "LIZ",
+ "report": "reports/CIK352363-COMMON_2012-05-14.md",
+ "event_type": "name_change",
+ "consideration": "none",
+ "confidence": "verified",
+ "exit_kind": "",
+ "drop_reason": "",
+ "continuation": true,
+ "successor_ticker": "FNP",
+ "last_trade_date": "",
+ "value_rule": "continuation",
+ "cash_per_share": null,
+ "cash_currency": "",
+ "stock_ratio": null,
+ "price_ticker": "",
+ "price_date": "",
+ "value_formula": "none (name change to Fifth & Pacific, ticker FNP; not an exit)",
+ "status": {
+  "exit_kind": "wrong",
+  "last_trade_date": "wrong",
+  "successor": "wrong",
+  "value_rule": "wrong",
+  "terms": "agree",
+  "issuer": "agree",
+  "ticker_history": "wrong"
+ },
+ "confidence_reasons": [],
+ "library_wrong": true,
+ "cause": "rename_not_followed",
+ "golden_worthy": true,
+ "sec_evidence": 2,
+ "web_evidence": 0,
+ "open_checks": [
+  "confirm BBG000C4WJT9 is the composite FIGI of the LIZ line too",
+  "merge the FNP era (CUSIP 316645100) and the KATE line into one security"
+ ],
+ "verdict": "Liz Claiborne renamed itself Fifth & Pacific (FNP) on 2012-05-14 with shares unaffected and still on the NYSE, so the library's exchange-transfer ending is a false ending.",
+ "verification": {
+  "case_id": "CIK352363-COMMON_2012-05-14",
+  "upheld": true,
+  "fields_upheld": [
+   "exit_kind",
+   "last_trade_date",
+   "successor",
+   "value_rule",
+   "ticker_history"
+  ],
+  "fields_refuted": [],
+  "notes": "8-K 0001104659-12-038519 item 5.03: the name change took effect 2012-05-14, shares were unaffected and still trade on the NYSE, with a new CUSIP (316645100) and symbol (FNP). The filings list for 2012-04..08 shows no Form 25 or Form 15. 8-K 0001104659-14-015426 confirms the later FNP to KATE rename (CUSIP 485865109, effective 2014-02-26). Fails rows show LIZ to 2012-05-14, FNP from 2012-05-15, KATE from 2014-02-26. A rename is not an ending, so the library's 304 row is false. Nuance: \"successor\" is moot because there is no ending. The report's open check on whether BBG000C4WJT9 is also the LIZ line's composite FIGI is still unresolved."
+ }
+}

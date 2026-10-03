@@ -1,0 +1,48 @@
+{
+ "case_id": "CIK23666-COMMON_2012-07-13",
+ "sec_id": "CIK23666-COMMON",
+ "ticker": "SLE",
+ "report": "reports/CIK23666-COMMON_2012-07-13.md",
+ "event_type": "name_change",
+ "consideration": "none",
+ "confidence": "verified",
+ "exit_kind": "",
+ "drop_reason": "",
+ "continuation": true,
+ "successor_ticker": "HSH",
+ "last_trade_date": "2012-06-28",
+ "value_rule": "continuation",
+ "cash_per_share": null,
+ "cash_currency": "",
+ "stock_ratio": 0.2,
+ "price_ticker": "",
+ "price_date": "",
+ "value_formula": "none (continuation: same security, ticker SLE -> HSH, 1-for-5 reverse split)",
+ "status": {
+  "exit_kind": "wrong",
+  "last_trade_date": "agree",
+  "successor": "agree",
+  "value_rule": "agree",
+  "terms": "agree",
+  "issuer": "agree",
+  "ticker_history": "wrong"
+ },
+ "confidence_reasons": [],
+ "library_wrong": true,
+ "cause": "rename_not_followed",
+ "golden_worthy": true,
+ "sec_evidence": 1,
+ "web_evidence": 0,
+ "open_checks": [],
+ "verdict": "Sara Lee was renamed Hillshire Brands with a 1-for-5 reverse split (new CUSIP, ticker HSH) and kept trading on NYSE; no ending, the library split one security into two sec_ids.",
+ "verification": {
+  "case_id": "CIK23666-COMMON_2012-07-13",
+  "upheld": true,
+  "fields_upheld": [
+   "exit_kind",
+   "ticker_history"
+  ],
+  "fields_refuted": [],
+  "notes": "8-K 2012-07-05 (0001193125-12-295170) confirms a 1-for-5 reverse split and a name change to Hillshire Brands, effective 2012-06-28. It says the shares continue on NYSE as HSH under the same issuer, with a new CUSIP. The library found no Form 25, so there was no ending, and it split one security into two sec_ids."
+ }
+}

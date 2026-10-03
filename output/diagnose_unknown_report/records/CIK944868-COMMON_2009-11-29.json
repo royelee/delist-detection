@@ -1,0 +1,55 @@
+{
+ "case_id": "CIK944868-COMMON_2009-11-29",
+ "sec_id": "CIK944868-COMMON",
+ "ticker": "DTV",
+ "report": "reports/CIK944868-COMMON_2009-11-29.md",
+ "event_type": "reorganization",
+ "consideration": "stock (1:1 into new DIRECTV Class A)",
+ "confidence": "inferred",
+ "exit_kind": "exchange",
+ "drop_reason": "",
+ "continuation": true,
+ "successor_ticker": "DTV",
+ "last_trade_date": "2009-11-19",
+ "value_rule": "continuation",
+ "cash_per_share": null,
+ "cash_currency": "",
+ "stock_ratio": 1.0,
+ "price_ticker": "",
+ "price_date": "",
+ "value_formula": "none (continuation: same holders, one for one, no cash)",
+ "status": {
+  "exit_kind": "wrong",
+  "last_trade_date": "missing",
+  "successor": "wrong",
+  "value_rule": "wrong",
+  "terms": "wrong",
+  "issuer": "agree",
+  "ticker_history": "wrong"
+ },
+ "confidence_reasons": [
+  "last_trade_date worked out from the 8-K effective time (5:15 pm EST 2009-11-19) and fails rows, no exchange print or notice date read",
+  "successor FIGI link rests on fails rows (CUSIP 25490A101 under DTV from 2009-11-20) and the library's securities table"
+ ],
+ "library_wrong": true,
+ "cause": "holdco_not_linked",
+ "golden_worthy": true,
+ "sec_evidence": 3,
+ "web_evidence": 0,
+ "open_checks": [
+  "read the 25-NSE EX-99.25 suspension date"
+ ],
+ "verdict": "The Group merged into new DIRECTV 1:1 on 2009-11-19 with the same DTV ticker: a continuation to BBG000FL1TC8, not a merger with stock terms.",
+ "verification": {
+  "upheld": true,
+  "fields_upheld": [
+   "exit_kind",
+   "successor",
+   "value_rule",
+   "terms",
+   "ticker_history"
+  ],
+  "fields_refuted": [],
+  "notes": "8-K 2009-11-20 (0001104659-09-066017): Group holders got one Class A DTV per share, no cash; effective 5:15 pm EST 2009-11-19; fails rows show old CUSIP 25459L106 last 2009-11-19 and new CUSIP 25490A101 from 2009-11-20. Successor FIGI link is inferred from fails rows and the library's securities table. 25-NSE EX-99.25 text not read, so last_trade_date stays worked out."
+ }
+}

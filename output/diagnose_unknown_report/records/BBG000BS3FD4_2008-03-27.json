@@ -1,0 +1,52 @@
+{
+ "case_id": "BBG000BS3FD4_2008-03-27",
+ "sec_id": "BBG000BS3FD4",
+ "ticker": "RESP",
+ "report": "reports/BBG000BS3FD4_2008-03-27.md",
+ "event_type": "merger",
+ "consideration": "cash",
+ "confidence": "inferred",
+ "exit_kind": "merger",
+ "drop_reason": "",
+ "continuation": false,
+ "successor_ticker": "",
+ "last_trade_date": "2008-03-14",
+ "value_rule": "cash",
+ "cash_per_share": 66.0,
+ "cash_currency": "USD",
+ "stock_ratio": null,
+ "price_ticker": "",
+ "price_date": "",
+ "value_formula": "66.00 USD / last_close - 1",
+ "status": {
+  "exit_kind": "agree",
+  "last_trade_date": "missing",
+  "successor": "agree",
+  "value_rule": "agree",
+  "terms": "missing",
+  "issuer": "agree",
+  "ticker_history": "wrong"
+ },
+ "confidence_reasons": [
+  "last_trade_date: worked out from the 2008-03-14 merger effective date in the 8-K 3.01; no filing or exchange print states the last session"
+ ],
+ "library_wrong": true,
+ "cause": "no_last_trade_print",
+ "golden_worthy": true,
+ "sec_evidence": 3,
+ "web_evidence": 0,
+ "open_checks": [
+  "confirm last exchange session 2008-03-14 from a Nasdaq notice or press release",
+  "publish cash_currency=USD"
+ ],
+ "verdict": "Real $66.00 cash merger into Philips closed 2008-03-14; library kind and terms are right but it has no last trade date (probably 2008-03-14) and no currency.",
+ "verification": {
+  "case_id": "BBG000BS3FD4_2008-03-27",
+  "upheld": true,
+  "fields_upheld": [
+   "ticker_history"
+  ],
+  "fields_refuted": [],
+  "notes": "Library end 2008-03-27 is the Form 25 effective date (filed 2008-03-17 + 10 d) used as a fallback; 8-K 0000950123-08-003040 shows merger 2008-03-14, offer expired 2008-03-13 5pm, so end is too late. Corrected date 2008-03-14 is unconfirmed (could be 2008-03-13)."
+ }
+}

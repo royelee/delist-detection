@@ -1,0 +1,54 @@
+{
+ "case_id": "CIK88205-COMMON_2015-09-28",
+ "sec_id": "CIK88205-COMMON",
+ "ticker": "SPW",
+ "report": "reports/CIK88205-COMMON_2015-09-28.md",
+ "event_type": "ticker_change",
+ "consideration": "none",
+ "confidence": "inferred",
+ "exit_kind": "",
+ "drop_reason": "",
+ "continuation": true,
+ "successor_ticker": "SPXC",
+ "last_trade_date": "",
+ "value_rule": "continuation",
+ "cash_per_share": null,
+ "cash_currency": "",
+ "stock_ratio": null,
+ "price_ticker": "",
+ "price_date": "",
+ "value_formula": "not an exit",
+ "status": {
+  "exit_kind": "wrong",
+  "last_trade_date": "wrong",
+  "successor": "wrong",
+  "value_rule": "agree",
+  "terms": "agree",
+  "issuer": "agree",
+  "ticker_history": "wrong"
+ },
+ "confidence_reasons": [
+  "successor/same-security link rests on fails rows and the library's cusip_history (CUSIP 784635104 continues under BBG000BTGCV5), not a filing",
+  "SPW to SPXC ticker change date not read from a filing"
+ ],
+ "library_wrong": true,
+ "cause": "identity_wrong",
+ "golden_worthy": true,
+ "sec_evidence": 2,
+ "web_evidence": 0,
+ "open_checks": [
+  "confirm SPW to SPXC change date from NYSE notice or 8-K Ex 99.1"
+ ],
+ "verdict": "Not an ending: SPX Corp kept CUSIP 784635104 and renamed its ticker SPW to SPXC after the SPX FLOW spin-off; the placeholder duplicates BBG000BTGCV5.",
+ "verification": {
+  "upheld": true,
+  "fields_upheld": [
+   "exit_kind",
+   "last_trade_date",
+   "successor",
+   "ticker_history"
+  ],
+  "fields_refuted": [],
+  "notes": "8-K 2015-09-28 Ex 99.1 confirms SPX Corp stays listed and trades as SPXC from 2015-09-28; fails rows show CUSIP 784635104 continuing SPW to SPXC. Minor: SPW's last print was 2015-09-25 (SPXC first on 2015-09-28), not 09-28. Closes the open check on the ticker change date."
+ }
+}

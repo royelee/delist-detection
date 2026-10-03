@@ -1,0 +1,52 @@
+{
+ "case_id": "BBG000DZCFX4_2020-06-02",
+ "sec_id": "BBG000DZCFX4",
+ "ticker": "LPI",
+ "report": "reports/BBG000DZCFX4_2020-06-02.md",
+ "event_type": "reverse_split",
+ "consideration": "none",
+ "confidence": "verified",
+ "exit_kind": "",
+ "drop_reason": "",
+ "continuation": false,
+ "successor_ticker": "LPI",
+ "last_trade_date": "",
+ "value_rule": "unknown",
+ "cash_per_share": null,
+ "cash_currency": "",
+ "stock_ratio": null,
+ "price_ticker": "",
+ "price_date": "",
+ "value_formula": "no exit; 1-for-20 reverse split, same security continues",
+ "status": {
+  "exit_kind": "wrong",
+  "last_trade_date": "wrong",
+  "successor": "wrong",
+  "value_rule": "wrong",
+  "terms": "agree",
+  "issuer": "agree",
+  "ticker_history": "wrong"
+ },
+ "confidence_reasons": [],
+ "library_wrong": true,
+ "cause": "other:reverse_split_cusip_change_read_as_ending",
+ "golden_worthy": true,
+ "sec_evidence": 2,
+ "web_evidence": 0,
+ "open_checks": [
+  "later rename and end of the LPI line not checked"
+ ],
+ "verdict": "Not a delisting: a 1-for-20 reverse split changed the CUSIP on 2020-06-01 while LPI kept trading on the NYSE.",
+ "verification": {
+  "upheld": true,
+  "fields_upheld": [
+   "exit_kind",
+   "last_trade_date",
+   "successor",
+   "value_rule",
+   "ticker_history"
+  ],
+  "fields_refuted": [],
+  "notes": "8-K 2020-06-01 item 5.03 confirms 1-for-20 reverse split, continued NYSE trading as LPI, new CUSIP 516806205; no Form 25/15 in 2020-05..2021-06; fails rows show new CUSIP under LPI from 2020-06-04. Successor label is moot because no ending exists."
+ }
+}

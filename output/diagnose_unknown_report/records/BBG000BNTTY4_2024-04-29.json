@@ -1,0 +1,49 @@
+{
+ "case_id": "BBG000BNTTY4_2024-04-29",
+ "sec_id": "BBG000BNTTY4",
+ "ticker": "MDC",
+ "report": "reports/BBG000BNTTY4_2024-04-29.md",
+ "event_type": "merger",
+ "consideration": "cash",
+ "confidence": "verified",
+ "exit_kind": "merger",
+ "drop_reason": "",
+ "continuation": false,
+ "successor_ticker": "",
+ "last_trade_date": "2024-04-18",
+ "value_rule": "cash",
+ "cash_per_share": 63.0,
+ "cash_currency": "USD",
+ "stock_ratio": null,
+ "price_ticker": "",
+ "price_date": "",
+ "value_formula": "63.00 USD / last_close - 1",
+ "status": {
+  "exit_kind": "agree",
+  "last_trade_date": "agree",
+  "successor": "agree",
+  "value_rule": "agree",
+  "terms": "missing",
+  "issuer": "agree",
+  "ticker_history": "agree"
+ },
+ "confidence_reasons": [],
+ "library_wrong": true,
+ "cause": "currency_missing",
+ "golden_worthy": true,
+ "sec_evidence": 4,
+ "web_evidence": 0,
+ "open_checks": [
+  "what the June 2024 Form 25 / 15-12G cover (not needed for this ending)"
+ ],
+ "verdict": "Real USD 63.00 all-cash merger with a Sekisui House affiliate, last trade 2024-04-18; library right except the blank cash currency.",
+ "verification": {
+  "case_id": "BBG000BNTTY4_2024-04-29",
+  "upheld": true,
+  "fields_upheld": [
+   "terms.cash_currency"
+  ],
+  "fields_refuted": [],
+  "notes": "8-K 2024-04-19 Item 2.01 says $63.00 cash and the 25-NSE (0000876661-24-000286) says USD 63.00, so the blank cash_currency is a real gap. Amount, cash rule and last trade date 2024-04-18 also hold. I did not investigate the library delist_date 2024-04-29 against the 25-NSE effective date 2024-04-19; the report does not call it wrong."
+ }
+}

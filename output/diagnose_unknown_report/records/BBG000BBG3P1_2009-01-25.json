@@ -1,0 +1,57 @@
+{
+ "case_id": "BBG000BBG3P1_2009-01-25",
+ "sec_id": "BBG000BBG3P1",
+ "ticker": "TMA",
+ "report": "reports/BBG000BBG3P1_2009-01-25.md",
+ "event_type": "exchange_delisting",
+ "consideration": "none",
+ "confidence": "inferred",
+ "exit_kind": "dropped",
+ "drop_reason": "price",
+ "continuation": false,
+ "successor_ticker": "",
+ "last_trade_date": "2008-12-04",
+ "value_rule": "otc_print",
+ "cash_per_share": null,
+ "cash_currency": "",
+ "stock_ratio": null,
+ "price_ticker": "THMR",
+ "price_date": "2008-12-05",
+ "value_formula": "otc_print(THMR, from 2008-12-05) / last_close - 1",
+ "status": {
+  "exit_kind": "agree",
+  "last_trade_date": "wrong",
+  "successor": "agree",
+  "value_rule": "agree",
+  "terms": "wrong",
+  "issuer": "agree",
+  "ticker_history": "wrong"
+ },
+ "confidence_reasons": [
+  "successor: fails rows (same CUSIP 885218800 kept trading as THMR/THMRQ)",
+  "value_rule: worked out from fails rows (same CUSIP trades OTC after the suspension); no filing states a payout",
+  "terms: THMR from fails rows (first seen 2008-12-11); price_date 2008-12-05 worked out as the session after the last exchange trade"
+ ],
+ "library_wrong": true,
+ "cause": "wrong_exit_kind",
+ "golden_worthy": true,
+ "sec_evidence": 4,
+ "web_evidence": 0,
+ "open_checks": [
+  "why a 2012 SEC revocation reason (573) attached to this 2009 row",
+  "first THMR print date (fails rows show it from 2008-12-11)"
+ ],
+ "verdict": "NYSE suspended TMA on 2008-12-05 for a sub-$1 price, trading moved OTC as THMR on the same CUSIP; library has the right kind but the wrong drop reason (sec_order vs price), last trade (2008-12-01 vs 2008-12-04) and OTC ticker (TMA vs THMR).",
+ "verification": {
+  "case_id": "BBG000BBG3P1_2009-01-25",
+  "upheld": true,
+  "fields_upheld": [
+   "last_trade_date",
+   "terms",
+   "ticker_history",
+   "drop_reason"
+  ],
+  "fields_refuted": [],
+  "notes": "The 8-K of 2008-12-02 (item 3.01) and the Form 25-NSE of 2009-01-15 (EX-99.25) both say the stock was suspended before the open on Fri 2008-12-05. The last trade is therefore 2008-12-04, and the library's 2008-12-01 is the notice date. The EX-99.25 also states the price deficiency (average close under $1.00, section 802.01C), which supports drop_reason=price rather than sec_order. The library's price_date of 2008-12-02 falls before the suspension. Fails rows for CUSIP 885218800 show TMA through 2008-12-10 (settlement lag) and THMR from 2008-12-11, so THMR is the same security's OTC symbol. ticker_history ends TMA at 2008-12-01 and should end 2008-12-04. Caveat: no source shows the first THMR print date, so price_date 2008-12-05 is worked out and confidence stays inferred. Section 9 was appended to the report and a verification object added to the record JSON."
+ }
+}

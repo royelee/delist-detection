@@ -1,0 +1,57 @@
+{
+ "case_id": "CIK1308161-CLASS-A_2013-06-28",
+ "sec_id": "CIK1308161-CLASS-A",
+ "ticker": "NCRA",
+ "report": "reports/CIK1308161-CLASS-A_2013-06-28.md",
+ "event_type": "reorganization",
+ "consideration": "none",
+ "confidence": "inferred",
+ "exit_kind": "exchange",
+ "drop_reason": "",
+ "continuation": true,
+ "successor_ticker": "FOXA",
+ "last_trade_date": "2013-06-28",
+ "value_rule": "continuation",
+ "cash_per_share": null,
+ "cash_currency": "",
+ "stock_ratio": null,
+ "price_ticker": "",
+ "price_date": "",
+ "value_formula": "none (continuation; NWSA spin-off 0.25 per old share is a distribution on the continuing line)",
+ "status": {
+  "exit_kind": "wrong",
+  "last_trade_date": "missing",
+  "successor": "missing",
+  "value_rule": "wrong",
+  "terms": "wrong",
+  "issuer": "agree",
+  "ticker_history": "wrong"
+ },
+ "confidence_reasons": [
+  "successor: FOXA / CUSIP 90130A101 from fails rows, the 8-K does not state the CUSIP",
+  "last_trade_date: worked out from the separation effective 4:30 pm ET 2013-06-28, no exchange print",
+  "ticker NCRA is Nocera Inc in fails data; identity rests on the name-only observation"
+ ],
+ "library_wrong": true,
+ "cause": "wrong_exit_kind",
+ "golden_worthy": true,
+ "sec_evidence": 1,
+ "web_evidence": 0,
+ "open_checks": [
+  "last trading day under CUSIP 65248E104 (MIDAS or Nasdaq notice)",
+  "merge CLASS-A into CIK1308161-COMMON and add the FOXA successor line"
+ ],
+ "verdict": "A spin-off of new News Corp plus a rename to Twenty-First Century Fox: a continuation to the FOXA line, not a 0.25 NWSA merger.",
+ "verification": {
+  "case_id": "CIK1308161-CLASS-A_2013-06-28",
+  "upheld": true,
+  "fields_upheld": [
+   "exit_kind",
+   "value_rule",
+   "terms",
+   "ticker_history"
+  ],
+  "fields_refuted": [],
+  "notes": "8-K 0001193125-13-281456 shows the same CIK renamed Twenty-First Century Fox, with the Item 2.01 spin-off a 1-for-4 NWSA distribution and cash only for fractions. That is a continuation, not merger consideration. Fails rows show NCRA is Nocera Inc, CUSIP 65248E104 as NWSA to 2013-07-01 and then NWSAXXXX, and CUSIP 90130A101 as FOXA from 2013-07-03 at 29.21. Caveats: the report's FOXA start of 2013-07-01 is not in the fails rows, and last_trade_date 2013-06-28 has no exchange print."
+ }
+}
