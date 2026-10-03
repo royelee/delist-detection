@@ -39,6 +39,7 @@
     "R2.5.distress_blank_dlret": 2,
     "R2.5.distress_no_last_trade_date": 1,
     "R2.6.distress_flagged": 44,
+    "R2.7.payout_rule_known": 855,
     "V.audit.confirmed_but_wrong": 42,
     "V.uncertain_distress": 24,
     "V.uncertain_endings": 288,

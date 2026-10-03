@@ -270,8 +270,9 @@ last trade), `otc_print` (the security's own first off-exchange print from
 `--merger-terms`); `terms_gate` is `passed` or `failed` (the library's own check
 against its fails-based close) or blank (an override, or no close to check).
 A merger whose terms the gate dropped is still published, `failed`, so the caller
-can value it with real prices and re-check; an election the gate dropped
-publishes nothing. `cash_currency` is always blank (no source records one).
+can value it with real prices and re-check (an election's two legs are both
+published; THI's cash is Canadian dollars, which is why `cash_currency`
+stays blank). `cash_currency` is always blank (no source records one).
 `dlret`, `dlret_fill` and `terminal_value` are unchanged; use the fill when you
 have no price.
 

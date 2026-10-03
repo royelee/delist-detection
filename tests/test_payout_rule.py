@@ -65,10 +65,11 @@ def test_a_gated_out_regex_read_is_published_as_failed_with_its_source():
     assert (f["value_rule"], f["cash_per_share"], f["terms_source"], f["terms_gate"]) == ("cash", 29.44, "8K_2.01", "failed")
 
 
-def test_a_failed_election_publishes_nothing():
-    r = ending("A", "2014-12-20", method="assumed_par", last_trade_close="10")
-    f = value_fields(r, LTD, MergerInputs(llm=_terms("election", cash=10, ratio=1.0, ticker="X")))
-    assert f["value_rule"] == "unknown" and f["terms_gate"] == ""
+def test_a_failed_election_publishes_both_legs_as_read():
+    r = ending("THI", "2014-12-20", method="assumed_par", last_trade_close="10")
+    f = value_fields(r, LTD, MergerInputs(llm=_terms("election", cash=65.5, ratio=0.8025, ticker="QSR")))
+    assert (f["value_rule"], f["terms_gate"]) == ("cash_plus_stock", "failed")
+    assert f["value_formula"] == "(65.50 + 0.8025 × price(QSR, 2014-12-15)) / last_close − 1"
 
 
 def test_a_merger_terms_override_wins_and_carries_no_gate():

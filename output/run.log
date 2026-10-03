@@ -265,5 +265,3 @@ handoff notice dates: 0 EDGAR requests, 0 SEC data-file downloads (all threads)
 observation_map: 35955 of 35955 observations mapped
 ticker evidence: 0 EDGAR requests, 0 SEC data-file downloads (all threads)
 issuers in force: 0 EDGAR requests, 0 SEC data-file downloads (all threads)
-scorecard drop: V.audit.confirmed_but_wrong: 41 -> 42
-WARNING: 1 scorecard number(s) got worse than the floor in data/scorecard.json: V.audit.confirmed_but_wrong: 41 -> 42

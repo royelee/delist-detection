@@ -350,7 +350,7 @@ verdict is always `uncertain`, so a reader must not filter it away as "no ending
 `contract/delistings.csv` also carries each ending's payout rule (`payout_rule.value_fields`; `merger_inputs`
 hands it the `--merger-terms` row, the LLM terms and regex read from before the payout gate, and the acquirer's
 sec_id): a merger's terms come from the override, else the delistings.csv row (`terms_gate` passed, or blank
-when no last close existed), else the pre-gate read (`terms_gate=failed`; a failed election publishes nothing).
+when no last close existed), else the pre-gate read (`terms_gate=failed`; a failed election publishes both legs as read).
 The scorecard counts endings by `R2.7.value_rule.<rule>` and `R2.7.payout_rule_known`.
 10h, the scorecard.
 

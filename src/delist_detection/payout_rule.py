@@ -11,7 +11,8 @@ trade, as price_requests dates it), `recovery_ratio`, `terms_source`, `terms_gat
 A merger's terms come, in order, from a --merger-terms row (no gate), from the terms its delistings.csv row carries
 (they passed the payout gate; `terms_gate` is `passed`, or blank when no last close existed to check them), else
 from what the library read before the gate dropped them (the LLM terms, else the regex payout): `terms_gate` is
-`failed`. An election the gate dropped publishes nothing (`unknown`): its legs are alternatives. Pure, on string rows
+`failed`. An election the gate dropped publishes both legs as read (THI's "election" is cash and stock; the failed
+gate tells the caller to re-check). Pure, on string rows
 as store.read_table returns them."""
 from __future__ import annotations
 
@@ -83,7 +84,7 @@ def _merger(row: Mapping[str, str], last_trade_date: str, inputs: MergerInputs) 
         ticker = row["acquirer_ticker"] or (llm.acquirer_ticker if llm else "")
         source = row["payout_source"] or "llm"
         gate = PASSED if row["last_trade_close"] else ""
-    elif llm is not None and llm.deal_type != "election" and (llm.cash_per_share or llm.stock_ratio):
+    elif llm is not None and (llm.cash_per_share or llm.stock_ratio):
         cash, ratio, ticker = llm.cash_per_share, llm.stock_ratio, llm.acquirer_ticker or ""
         source, gate = "llm", FAILED
     elif inputs.raw_value is not None:

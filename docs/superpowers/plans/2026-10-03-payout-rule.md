@@ -37,9 +37,11 @@ rule, the market prices stay with the caller. Roadmap: values of drops and merge
    override, for a row with no last close (the gate could not run) and for rules with no terms; `failed` for pre-gate
    terms published after the gate dropped them (including a gate that could not check for want of a close, when the
    row carries no terms at all). Cost if wrong: qlib_practice treats a `failed` row's terms as unverified.
-3. **Election deals that fail the gate publish nothing** (`unknown`): cash and stock are alternatives the holder
-   chose between, and no rule here says which. Cost: those endings stay `unknown`; a passed election is on the row
-   and publishes normally.
+3. **Election deals that fail the gate publish both legs as read** (`terms_gate=failed`). First drafted as
+   `unknown` (the legs can be alternatives), reversed on the acceptance run: THI, which the brief names, is labelled
+   `election` by the LLM yet pays C$65.50 cash and 0.8025 QSR shares. Cost if wrong: a true either/or election is
+   overstated as cash plus stock; `failed` tells the caller to re-check. A passed election is on the row and
+   publishes normally.
 4. **`cash_currency` is always blank**: no library source records a currency, and the brief forbids guessing USD.
 5. **A stock leg with no acquirer ticker** publishes `stock_ratio` with a blank `price_ticker`; qlib_practice cannot
    price it and uses the fill.

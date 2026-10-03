@@ -445,7 +445,7 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   trading day after the last trade), `recovery_ratio`, `terms_source`, `terms_gate` and `value_formula`; the caller
   computes `dlret = payout / last close − 1` with its own prices. `merger_inputs` collects a merger's `--merger-terms`
   row, LLM terms and regex read from before the payout gate: terms the gate dropped are still published,
-  `terms_gate=failed` (a failed election publishes nothing). `cash_currency` is always blank. The scorecard counts
+  `terms_gate=failed` (a failed election publishes both legs as read). `cash_currency` is always blank. The scorecard counts
   `R2.7.value_rule.<rule>` and floors `R2.7.payout_rule_known`.
 - `price_requests.py` — `contract/price_requests.csv` (`last_close` per ending with a published date,
   `received_close` per LLM-read stock leg, `otc_print` per `dropped`/`liquidation` ending that is not a continuation, dated the session after the last trade) and `load_answers` for `--price-answers`,
