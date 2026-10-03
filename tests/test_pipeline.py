@@ -2823,8 +2823,8 @@ class _RawEdgar:
         return self.raw
 
 
-def _continuation(source="last_sighting"):
-    evidence = {"flags": ["handoff_continuation"],
+def _continuation(source="last_sighting", b_first="2026-08-27"):
+    evidence = {"flags": ["handoff_continuation"], "handoff": {"b_first": b_first},
                 "delist_filing": {"form": "25-NSE", "filing_date": "2026-08-27", "accession": "0000876661-26-000712"}}
     rec = DelistRecord("LEG", 58492, "2026-08-25", 304, CrspBucket.EXCHANGE_TRANSFER, "high", "Continuation", evidence,
                        sec_id="OLD", delist_date="2026-09-06", successor_sec_id="NEW")
@@ -2843,15 +2843,48 @@ def test_a_handoff_continuation_takes_its_form25_notice_day():
     raw = (Path(__file__).parent / "fixtures" / "form25" / "leg_25nse_before_market_open.txt").read_text(
         encoding="utf-8", errors="replace")
     d = _continuation()
-    assert pipeline._date_from_notices(_notice_ctx(_RawEdgar(raw)), [d]) == 1
+    assert pipeline._date_from_notices(_notice_ctx(_RawEdgar(raw)), [d], []) == 1
     assert (d.last_trade.day, d.last_trade.source) == (date(2026, 8, 26), "ex99_notice")
     assert d.record.observed_delist_date == "2026-08-26"
 
 
 def test_a_handoff_continuation_without_a_dated_notice_keeps_its_sighting():
     d, edgar = _continuation(), _RawEdgar("<TYPE>25-NSE no notice here")
-    assert pipeline._date_from_notices(_notice_ctx(edgar), [d]) == 0
+    assert pipeline._date_from_notices(_notice_ctx(edgar), [d], []) == 0
     assert (d.last_trade.day, d.last_trade.source) == (date(2026, 8, 25), "last_sighting")
     other = _continuation(source="midas")
-    pipeline._date_from_notices(_notice_ctx(edgar), [other])
+    pipeline._date_from_notices(_notice_ctx(edgar), [other], [])
     assert edgar.asked == [(58492, "0000876661-26-000712")]    # a row dated another way is never re-read
+
+
+def _form25_text(name):
+    return (Path(__file__).parent / "fixtures" / "form25" / name).read_text(encoding="utf-8", errors="replace")
+
+
+def test_a_dated_but_unconfirmed_notice_keeps_the_sighting():
+    d = _continuation()
+    assert pipeline._date_from_notices(_notice_ctx(_RawEdgar(_form25_text("rsh_25nse.txt"))), [d], []) == 0
+    assert (d.last_trade.day, d.last_trade.source) == (date(2026, 8, 25), "last_sighting")
+
+
+def test_a_failed_notice_read_is_reported_and_keeps_the_sighting():
+    from delist_detection.sec_stats import SEC_STATS
+
+    class Failing(_RawEdgar):
+        def fetch_filing_raw(self, cik, accession):
+            SEC_STATS.degraded("failed_request")
+            return ""
+
+    d, review = _continuation(), []
+    assert pipeline._date_from_notices(_notice_ctx(Failing("")), [d], review) == 0
+    assert d.last_trade.source == "last_sighting"
+    assert "resolution_degraded" in d.flags
+    assert [r.flag for r in review] == ["resolution_degraded"]
+
+
+def test_a_notice_day_on_or_after_the_successors_first_sighting_keeps_the_sighting():
+    raw = _form25_text("leg_25nse_before_market_open.txt")
+    for b_first in ("2026-08-26", "2026-08-20"):
+        d = _continuation(b_first=b_first)
+        assert pipeline._date_from_notices(_notice_ctx(_RawEdgar(raw)), [d], []) == 0
+        assert (d.last_trade.day, d.last_trade.source) == (date(2026, 8, 25), "last_sighting")

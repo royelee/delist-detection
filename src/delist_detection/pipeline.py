@@ -975,32 +975,42 @@ def _handoffs(ctx: _RunContext, delistings: list[Delisting], securities: dict[st
     return outcome
 
 
-def _date_from_notices(ctx: _RunContext, added: list[Delisting]) -> int:
+def _date_from_notices(ctx: _RunContext, added: list[Delisting], review: list[ReviewItem]) -> int:
     """9c. A continuation row the handoff stage built from an unmatched Form 25
     carries its last sighting as its last trade day; when that Form 25's notice
     states a confirmed last day of trading (`form25.notice_last_trade`,
-    `last_trade.decide_last_trade`), the row takes it (source `ex99_notice`). A
-    read that fails keeps the sighting; a refusal (`fatal.FATAL`) stops the run."""
+    `last_trade.decide_last_trade`), the row takes it (source `ex99_notice`),
+    provided the day is before the successor's first sighting
+    (`evidence["handoff"]["b_first"]`; the cap is skipped when absent) and no
+    later than the Form 25 effective date (`delist_date`); otherwise the
+    sighting stays. A read that rested on a failed request or a stale copy keeps
+    the sighting and is reported as `resolution_degraded` (row and review item);
+    a refusal (`fatal.FATAL`) stops the run."""
+    mark = ctx.meter.start()
     redated = 0
     for d in added:
         filing = (d.record.evidence or {}).get("delist_filing")
         if not filing or d.last_trade.source != "last_sighting":
             continue
-        try:
-            raw = ctx.clients.edgar.fetch_filing_raw(d.cik, filing["accession"])
-        except FATAL:
-            raise
-        except requests.RequestException:
+        watch = DegradedWatch()
+        raw = ctx.clients.edgar.fetch_filing_raw(d.cik, filing["accession"])
+        if watch.tripped():
+            watch.report_delisting(review, d, "the handoff row's Form 25 notice")
             continue
         if not raw:
             continue
         f25 = parse_form25(raw, accession=filing["accession"], form=filing["form"], filing_date=filing["filing_date"])
         lt = decide_last_trade(notice=notice_last_trade(f25), eightk=(None, ""), midas=None, halt=None)
-        if lt.day is not None and "last_trade_date_unconfirmed" not in lt.flags:
-            d.last_trade = lt
-            d.record.observed_delist_date = lt.day.isoformat()   # handoffs.py dates the record the same as the row
-            redated += 1
+        if lt.day is None or "last_trade_date_unconfirmed" in lt.flags:
+            continue
+        b_first = (d.record.evidence.get("handoff") or {}).get("b_first")
+        if (b_first and lt.day >= date.fromisoformat(b_first)) or lt.day > date.fromisoformat(d.delist_date):
+            continue
+        d.last_trade = lt
+        d.record.observed_delist_date = lt.day.isoformat()   # handoffs.py dates the record the same as the row
+        redated += 1
     ctx.log(f"handoff rows dated from their Form 25 notice: {redated}")
+    ctx.meter.done("handoff notice dates", mark)
     return redated
 
 
@@ -1401,9 +1411,9 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
 
     handoffs = _handoffs(ctx, delistings, securities, search, sec_cusips, ftd, payouts, review)       # 9b
     review = handoffs.review
+    _date_from_notices(ctx, handoffs.added, review)       # 9c: before the added rows' closes are read
     if handoffs.added:
         delistings += handoffs.added
-        _date_from_notices(ctx, handoffs.added)   # 9c
         overrides = _apply_price_answers(given, delistings)   # the added delistings take their answers too
         closes.update(_last_trade_closes(ctx, handoffs.added, securities, sec_cusips, ftd, ftd_lo, overrides))
         endings = _delisting_endings(delistings, securities, sec_cusips, ftd)
