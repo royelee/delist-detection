@@ -17,7 +17,7 @@ import re
 import zipfile
 from bisect import bisect_left, bisect_right
 from collections import Counter, defaultdict
-from collections.abc import Iterable, Iterator, Mapping
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import date, timedelta
 from pathlib import Path
@@ -54,6 +54,16 @@ def is_deleted_symbol(symbol: str) -> bool:
     becomes AGRXXXXX). Such a row records a fail still settling, not trading
     under a live symbol. A real ticker may end in X or XX (AVXX), never XXXX."""
     return len(symbol or "") > 4 and symbol.endswith("XXXX")
+
+
+def settled_last(rows: Sequence[FtdRow]) -> FtdRow:
+    """The row that opens the last run of one price in the date-sorted, non-empty `rows`: fails still settling
+    after a security's last trade repeat its last close, so its last trade lies near that row, not the last one
+    (Sara Lee's 803111103 fails at 18.50 from 2012-06-29 to 2012-07-13, after its last trade on 2012-06-28)."""
+    i = len(rows) - 1
+    while i > 0 and rows[i - 1].price == rows[-1].price:
+        i -= 1
+    return rows[i]
 
 
 def period_of(url: str) -> tuple[date, date] | None:

@@ -10,8 +10,8 @@ from delist_detection.observations import Observation, ObservationIndex, load_ob
 from delist_detection.added_securities import AddedAcquirer, AddedSuccessor
 from delist_detection.history import Range, Sighting, ranges_from_sightings
 from delist_detection.security_master import (
-    EraResolution, FigiResolver, Handoff, Issuer, Security, build_securities, era_cusips, era_last_seen,
-    issuers_by_era, refine_eras,
+    EraResolution, FigiResolver, Handoff, Issuer, Security, build_securities, cusip_handoffs, era_cusips,
+    era_last_seen, issuers_by_era, refine_eras,
 )
 
 ERAS_FIX = Path(__file__).parent / "fixtures" / "eras"
@@ -1066,3 +1066,47 @@ def test_only_an_unconfirmed_era_the_fails_data_covers_is_guarded():
     ftd = FtdIndex([FtdRow("2012-07-02", "G6095L109", "DLPH", "DELPHI AUTOMOTIVE PLC", 25.0)])
     assert guarded_eras([aptv12, live], ftd) == {aptv12.key}
     assert ftd.has_rows("2012-07-02", "2012-07-02") and not ftd.has_rows("2012-07-03", "2025-01-01")
+
+
+def _sle_hsh(settling=True):
+    """Sara Lee (SLE, 803111103) renamed Hillshire Brands (HSH, 432589109) in 2012: SLE's last trade 2012-06-28,
+    its fails still settling at 18.50 until 2012-07-13; HSH's first row 2012-07-03. With `settling` False, SLE's
+    rows after 2012-06-28 carry changing prices: it kept trading beside HSH."""
+    tail = [18.50] * 4 if settling else [18.50, 18.61, 18.40, 18.72]
+    sle = [("2012-05-01", 20.1), ("2012-05-15", 19.9), ("2012-06-01", 19.2), ("2012-06-15", 18.9),
+           ("2012-06-27", 18.78), ("2012-06-28", 18.63),
+           *zip(("2012-06-29", "2012-07-02", "2012-07-03", "2012-07-13"), tail)]
+    hsh = [("2012-07-03", 29.75), ("2012-07-05", 29.99), ("2012-07-06", 29.73), ("2012-07-09", 29.56),
+           ("2012-08-01", 30.10), ("2012-09-04", 31.00)]
+    rows = ([FtdRow(d, "803111103", "SLE", "SARA LEE CORP", p) for d, p in sle]
+            + [FtdRow(d, "432589109", "HSH", "HILLSHIRE BRANDS CO", p) for d, p in hsh])
+    index = ObservationIndex([Observation("SLE", "2012-03-30", "SARA LEE CORP"),
+                              Observation("SLE", "2012-06-29", "SARA LEE CORP"),
+                              Observation("HSH", "2012-07-31", "HILLSHIRE BRANDS CO"),
+                              Observation("HSH", "2012-12-31", "HILLSHIRE BRANDS CO")])
+    ftd = FtdIndex.load(_RowsClient(rows), date(2012, 1, 3), date(2013, 1, 31), symbols={"SLE", "HSH"})
+    return refine_eras(index.eras(), ftd), ftd
+
+
+def test_a_switch_is_timed_from_the_old_cusips_last_price_change_not_its_settling_tail():
+    """U2 (sub-plan 5a, SLE 2012): HSH's first row is eight trading days before SLE's last fails row, but three
+    after the row that opens SLE's one-price settling tail; the switch is timed from that row."""
+    eras, ftd = _sle_hsh()
+    links = [(h.era_key, h.to_key, h.kind, h.cusip, h.new_cusip, h.day, h.last) for h in cusip_handoffs(eras, ftd)]
+    assert links == [("SLE@2012-03-30", "HSH@2012-07-31", "cusip_handoff", "803111103", "432589109", "2012-07-03",
+                      "2012-07-13")]
+
+
+def test_an_old_cusip_still_trading_beside_the_new_one_is_no_switch():
+    """Must not change: SLE's rows keep changing price for eight trading days after HSH's first row (two lines
+    trading side by side, as a spin-off's), so nothing settles and no switch is read."""
+    eras, ftd = _sle_hsh(settling=False)
+    assert [h for h in cusip_handoffs(eras, ftd) if h.kind == "cusip_handoff"] == []
+
+
+def test_settled_last_is_the_row_that_opens_the_last_one_price_run():
+    from delist_detection.ftd import settled_last
+    rows = [FtdRow(d, "1", "X", "X", p) for d, p in (("2012-06-28", 18.63), ("2012-06-29", 18.5),
+                                                     ("2012-07-02", 18.5), ("2012-07-13", 18.5))]
+    assert settled_last(rows).date == "2012-06-29" and settled_last(rows[:1]).date == "2012-06-28"
+    assert settled_last(rows[:2]).date == "2012-06-29"

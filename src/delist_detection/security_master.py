@@ -18,7 +18,7 @@ from .figi_resolution import (
     FigiCandidate, accept, bloomberg_ticker, filter_query, is_placeholder, placeholder_id, security_kind,
     share_class_from_name, us_candidates,
 )
-from .ftd import FTD_START, FtdIndex, FtdRow, is_deleted_symbol
+from .ftd import FTD_START, FtdIndex, FtdRow, is_deleted_symbol, settled_last
 from .trading_calendar import add_trading_days
 from .names import description_matches, names_agree
 from .observations import (
@@ -325,7 +325,9 @@ def cusip_handoffs(eras: Sequence[TickerEra], ftd: FtdIndex) -> list[Handoff]:
       MHP and MHFI, one McGraw-Hill line under two tickers;
     - switch: an era's FTD CUSIP last trades under its ticker (not under a
       deleted "...XXXX" symbol) within `SWITCH_DAYS` trading days of the first
-      fails row of another era's FTD CUSIP; that new CUSIP has no earlier row,
+      fails row of another era's FTD CUSIP (from `SWITCH_DAYS` before the row
+      that opens the old CUSIP's last one-price run, `ftd.settled_last`, to
+      `SWITCH_DAYS` after its last row); that new CUSIP has no earlier row,
       and starts at least `NEW_CUSIP_MARGIN_DAYS` after the fails window scanned
       for its ticker opens (else it may be older than the rows show); the old
       CUSIP trades under no symbol more than `SWITCH_TAIL_DAYS` trading days
@@ -359,7 +361,9 @@ def cusip_handoffs(eras: Sequence[TickerEra], ftd: FtdIndex) -> list[Handoff]:
             tail = add_trading_days(last, SWITCH_TAIL_DAYS).isoformat()
             if any(r.date > tail for r in ftd.trading_rows([c])):
                 continue
-            lo = add_trading_days(last, -SWITCH_DAYS).isoformat()
+            # From the row that opens the old CUSIP's last one-price run: a fail still settling at the last close
+            # can outlast the switch by days (SLE's rows run to 2012-07-13; HSH's begin 2012-07-03).
+            lo = add_trading_days(date.fromisoformat(settled_last(own).date), -SWITCH_DAYS).isoformat()
             hi = add_trading_days(last, SWITCH_DAYS).isoformat()
             first_seen: dict[str, str] = {}
             for r in own:
