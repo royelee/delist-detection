@@ -414,7 +414,9 @@ def _contradicted(era: TickerEra, composite: str, eras: Sequence[TickerEra], iss
     return False
 
 
-def _cusip_job(c: str) -> dict:
+def cusip_job(c: str) -> dict:
+    """The OpenFIGI mapping job for a CUSIP (a letter-first one is a CINS): every caller asks it the same way, so
+    they share OpenFIGI's cache."""
     return {"idType": "ID_CINS" if c[:1].isalpha() else "ID_CUSIP", "idValue": c, "includeUnlistedEquities": True}
 
 
@@ -528,7 +530,7 @@ class FigiResolver:
             idx = []
             for c in tried:
                 idx.append(len(jobs))
-                jobs.append(_cusip_job(c))
+                jobs.append(cusip_job(c))
             t_idx = len(jobs)
             jobs.append({"idType": "TICKER", "idValue": bloomberg_ticker(era.ticker), "includeUnlistedEquities": True})
             plan[era.key] = (tried, idx, t_idx)

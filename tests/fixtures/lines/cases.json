@@ -1,0 +1,488 @@
+{
+ "as_of": "2026-09-25",
+ "cases": {
+  "BBG000BBG3P1": {
+   "cusips": [
+    "885218107",
+    "885218800"
+   ],
+   "extra_cusips": [],
+   "extra_symbols": [],
+   "figi_source": "cusip",
+   "issuer_cik": 892535,
+   "name": "THORNBURG MORTGAGE INC",
+   "note": "TMA 2008: the same CUSIP under THMR after a delisting, an OTC move",
+   "share_class": "COMMON",
+   "tickers": [
+    "TMA"
+   ]
+  },
+  "BBG000BLH3P8": {
+   "cusips": [
+    "415864107"
+   ],
+   "extra_cusips": [],
+   "extra_symbols": [],
+   "figi_source": "cusip",
+   "issuer_cik": 45876,
+   "name": "HARSCO CORP",
+   "note": "HSC 2023: Harsco renamed Enviri (NVRI) on the same CUSIP",
+   "share_class": "COMMON",
+   "tickers": [
+    "HSC"
+   ]
+  },
+  "BBG000BN6349": {
+   "cusips": [
+    "320771108"
+   ],
+   "extra_cusips": [],
+   "extra_symbols": [],
+   "figi_source": "ticker",
+   "issuer_cik": 1262279,
+   "name": "FIRST MARBLEHEAD CORP",
+   "note": "FMD 2013: a reverse split under the same ticker, the same composite",
+   "share_class": "COMMON",
+   "tickers": [
+    "FMD"
+   ]
+  },
+  "BBG000BRWGG9": {
+   "cusips": [
+    "767754104"
+   ],
+   "extra_cusips": [],
+   "extra_symbols": [],
+   "figi_source": "ticker",
+   "issuer_cik": 84129,
+   "name": "RITE AID CORP",
+   "note": "RAD 2019: a reverse split; then the OTC RADCQ that is no step",
+   "share_class": "COMMON",
+   "tickers": [
+    "RAD"
+   ]
+  },
+  "BBG000D9V7T4": {
+   "cusips": [
+    "002535300"
+   ],
+   "extra_cusips": [],
+   "extra_symbols": [],
+   "figi_source": "cusip",
+   "issuer_cik": 706688,
+   "name": "AARONS INC.",
+   "note": "AAN 2020: the old registrant stopped filing at its reorganization",
+   "share_class": "COMMON",
+   "tickers": [
+    "AAN"
+   ]
+  },
+  "BBG000F2XXP2": {
+   "cusips": [
+    "829226109"
+   ],
+   "extra_cusips": [],
+   "extra_symbols": [],
+   "figi_source": "cusip",
+   "issuer_cik": 912752,
+   "name": "SINCLAIR BROADCAST GROUP INC CLASS",
+   "note": "SBGI 2023: a new holding company of another CIK",
+   "share_class": "CLASS A",
+   "tickers": [
+    "SBGI"
+   ]
+  },
+  "BBG000FC9SM1": {
+   "cusips": [
+    "059692103"
+   ],
+   "extra_cusips": [],
+   "extra_symbols": [],
+   "figi_source": "cusip",
+   "issuer_cik": 701853,
+   "name": "BANCORPSOUTH INC",
+   "note": "BXS 2017: a 10-Q filed after the step for the quarter before it",
+   "share_class": "COMMON",
+   "tickers": [
+    "BXS"
+   ]
+  },
+  "BBG001D9S707": {
+   "cusips": [
+    "26817G102"
+   ],
+   "extra_cusips": [],
+   "extra_symbols": [],
+   "figi_source": "cusip",
+   "issuer_cik": 1379895,
+   "name": "DYNEGY INC",
+   "note": "DYN 2010: a reverse split stated only in the 8-K text; the new CUSIP has its own composite",
+   "share_class": "COMMON",
+   "tickers": [
+    "DYN"
+   ]
+  },
+  "BBG002B67HB2": {
+   "cusips": [
+    "91325V108"
+   ],
+   "extra_cusips": [],
+   "extra_symbols": [],
+   "figi_source": "ticker",
+   "issuer_cik": 1620280,
+   "name": "UNITI GROUP INC",
+   "note": "UNIT 2025: the old registrant merged out (R1 before R2)",
+   "share_class": "COMMON",
+   "tickers": [
+    "UNIT"
+   ]
+  },
+  "BBG009NGKQ45": {
+   "cusips": [
+    "92918V109"
+   ],
+   "extra_cusips": [],
+   "extra_symbols": [
+    "VRMWW"
+   ],
+   "figi_source": "cusip",
+   "issuer_cik": 1580864,
+   "name": "VROOM INC",
+   "note": "VRM 2024: a reverse split; then bankruptcy (VRMMQ) and a 2025 relist that is no step",
+   "share_class": "COMMON",
+   "tickers": [
+    "VRM"
+   ]
+  },
+  "BBG00D30HGP6": {
+   "cusips": [
+    "19625W104",
+    "19626G108"
+   ],
+   "extra_cusips": [],
+   "extra_symbols": [
+    "DBRG"
+   ],
+   "figi_source": "cusip",
+   "issuer_cik": 1679688,
+   "name": "COLONY CAPITAL INC CLASS A",
+   "note": "CLNY 2021: Colony renamed DigitalBridge (DBRG), new CUSIP, no US line for it",
+   "share_class": "CLASS A",
+   "tickers": [
+    "CLNS",
+    "CLNY"
+   ]
+  },
+  "BBG00JM9V731": {
+   "cusips": [
+    "G39108108"
+   ],
+   "extra_cusips": [],
+   "extra_symbols": [],
+   "figi_source": "cusip",
+   "issuer_cik": 1718512,
+   "name": "GATES INDUSTRIAL PLC",
+   "note": "GTES 2026: a redomicile at a Form 25; the new CUSIP has its own composite",
+   "share_class": "COMMON",
+   "tickers": [
+    "GTES"
+   ]
+  },
+  "BBG00WYYC600": {
+   "cusips": [
+    "966387102"
+   ],
+   "extra_cusips": [],
+   "extra_symbols": [],
+   "figi_source": "ticker",
+   "issuer_cik": 1255474,
+   "name": "WHITING PETROLEUM CORP",
+   "note": "WLL 2017: the new CUSIP is another security's of the run",
+   "share_class": "COMMON",
+   "tickers": [
+    "WLL"
+   ]
+  },
+  "CIK1066104-COMMON": {
+   "cusips": [
+    "21988R102"
+   ],
+   "extra_cusips": [],
+   "extra_symbols": [],
+   "figi_source": "placeholder",
+   "issuer_cik": 1066104,
+   "name": "CORPORATE EXECUTIVE",
+   "note": "EXBD 2012: Corporate Executive Board renamed CEB on the same CUSIP",
+   "share_class": "COMMON",
+   "tickers": [
+    "EXBD"
+   ]
+  },
+  "CIK1075415-COMMON": {
+   "cusips": [
+    "81721M109"
+   ],
+   "extra_cusips": [],
+   "extra_symbols": [
+    "DHC",
+    "DHCNI",
+    "DHCNL"
+   ],
+   "figi_source": "placeholder",
+   "issuer_cik": 1075415,
+   "name": "SENIOR HOUSING PROPERTIES TRUST RE",
+   "note": "SNH 2020: Senior Housing renamed Diversified Healthcare (DHC), new CUSIP, beside notes",
+   "share_class": "COMMON",
+   "tickers": [
+    "SNH"
+   ]
+  },
+  "CIK1115836-COMMON": {
+   "cusips": [
+    "G67743107"
+   ],
+   "extra_cusips": [],
+   "extra_symbols": [],
+   "figi_source": "placeholder",
+   "issuer_cik": 1115836,
+   "name": "ORIENT-EXPRESS HOTELS",
+   "note": "OEH 2014: a placeholder whose new CUSIP names Belmond's FIGI line",
+   "share_class": "COMMON",
+   "tickers": [
+    "OEH"
+   ]
+  },
+  "CIK1469372-CLASS-A": {
+   "cusips": [
+    "55826P100"
+   ],
+   "extra_cusips": [],
+   "extra_symbols": [],
+   "figi_source": "placeholder",
+   "issuer_cik": 1469372,
+   "name": "MADISON SQUARE GARDEN ORD CLASS A",
+   "note": "MSG 2015: the ticker passed to another issuer",
+   "share_class": "CLASS A",
+   "tickers": [
+    "MSG"
+   ]
+  },
+  "CIK1507934-CLASS-A": {
+   "cusips": [
+    "530322106"
+   ],
+   "extra_cusips": [],
+   "extra_symbols": [],
+   "figi_source": "placeholder",
+   "issuer_cik": 1507934,
+   "name": "LIBERTY MEDIA CORP CLASS A",
+   "note": "LMCA 2013: the ticker passed to another issuer",
+   "share_class": "CLASS A",
+   "tickers": [
+    "LMCA"
+   ]
+  }
+ },
+ "holders": {
+  "002535300": [
+   "BBG000D9V7T4"
+  ],
+  "059692103": [
+   "BBG000FC9SM1"
+  ],
+  "19626G108": [
+   "BBG00D30HGP6"
+  ],
+  "21988R102": [
+   "CIK1066104-COMMON"
+  ],
+  "26817G102": [
+   "BBG001D9S707"
+  ],
+  "320771108": [
+   "BBG000BN6349"
+  ],
+  "415864107": [
+   "BBG000BLH3P8"
+  ],
+  "530322106": [
+   "CIK1507934-CLASS-A"
+  ],
+  "531229102": [
+   "BBG003P9ZSL3"
+  ],
+  "55825T103": [
+   "BBG007FG0C23"
+  ],
+  "55826P100": [
+   "CIK1469372-CLASS-A"
+  ],
+  "767754104": [
+   "BBG000BRWGG9"
+  ],
+  "81721M109": [
+   "CIK1075415-COMMON"
+  ],
+  "829226109": [
+   "BBG000F2XXP2"
+  ],
+  "885218107": [
+   "BBG000BBG3P1"
+  ],
+  "885218800": [
+   "BBG000BBG3P1"
+  ],
+  "91325V108": [
+   "BBG002B67HB2"
+  ],
+  "92918V109": [
+   "BBG009NGKQ45"
+  ],
+  "966387102": [
+   "BBG00WYYC600"
+  ],
+  "966387409": [
+   "BBG000PX3XC0"
+  ],
+  "G39108108": [
+   "BBG00JM9V731"
+  ],
+  "G67743107": [
+   "CIK1115836-COMMON"
+  ]
+ },
+ "run": {
+  "BBG000BBG3P1": {
+   "figi_source": "cusip",
+   "issuer_cik": 892535,
+   "name": "THORNBURG MORTGAGE INC",
+   "share_class": "COMMON"
+  },
+  "BBG000BLH3P8": {
+   "figi_source": "cusip",
+   "issuer_cik": 45876,
+   "name": "HARSCO CORP",
+   "share_class": "COMMON"
+  },
+  "BBG000BN6349": {
+   "figi_source": "ticker",
+   "issuer_cik": 1262279,
+   "name": "FIRST MARBLEHEAD CORP",
+   "share_class": "COMMON"
+  },
+  "BBG000BRWGG9": {
+   "figi_source": "ticker",
+   "issuer_cik": 84129,
+   "name": "RITE AID CORP",
+   "share_class": "COMMON"
+  },
+  "BBG000D9V7T4": {
+   "figi_source": "cusip",
+   "issuer_cik": 706688,
+   "name": "AARONS INC.",
+   "share_class": "COMMON"
+  },
+  "BBG000F2XXP2": {
+   "figi_source": "cusip",
+   "issuer_cik": 912752,
+   "name": "SINCLAIR BROADCAST GROUP INC CLASS",
+   "share_class": "CLASS A"
+  },
+  "BBG000FC9SM1": {
+   "figi_source": "cusip",
+   "issuer_cik": 701853,
+   "name": "BANCORPSOUTH INC",
+   "share_class": "COMMON"
+  },
+  "BBG000PX3XC0": {
+   "figi_source": "cusip",
+   "issuer_cik": 1255474,
+   "name": "WHITING PETROLEUM CORP",
+   "share_class": "COMMON"
+  },
+  "BBG001D9S707": {
+   "figi_source": "cusip",
+   "issuer_cik": 1379895,
+   "name": "DYNEGY INC",
+   "share_class": "COMMON"
+  },
+  "BBG002B67HB2": {
+   "figi_source": "ticker",
+   "issuer_cik": 1620280,
+   "name": "UNITI GROUP INC",
+   "share_class": "COMMON"
+  },
+  "BBG003P9ZSL3": {
+   "figi_source": "cusip",
+   "issuer_cik": 1560385,
+   "name": "LIBERTY MEDIA CORP SERIES A",
+   "share_class": "SERIES A"
+  },
+  "BBG007FG0C23": {
+   "figi_source": "cusip",
+   "issuer_cik": 1636519,
+   "name": "MADISON SQUARE GARDEN SPORTS CORP",
+   "share_class": "CLASS A"
+  },
+  "BBG009NGKQ45": {
+   "figi_source": "cusip",
+   "issuer_cik": 1580864,
+   "name": "VROOM INC",
+   "share_class": "COMMON"
+  },
+  "BBG00D30HGP6": {
+   "figi_source": "cusip",
+   "issuer_cik": 1679688,
+   "name": "COLONY CAPITAL INC CLASS A",
+   "share_class": "CLASS A"
+  },
+  "BBG00JM9V731": {
+   "figi_source": "cusip",
+   "issuer_cik": 1718512,
+   "name": "GATES INDUSTRIAL PLC",
+   "share_class": "COMMON"
+  },
+  "BBG00WYYC600": {
+   "figi_source": "ticker",
+   "issuer_cik": 1255474,
+   "name": "WHITING PETROLEUM CORP",
+   "share_class": "COMMON"
+  },
+  "BBG01GJ3NY88": {
+   "figi_source": "cusip",
+   "issuer_cik": 1971213,
+   "name": "SINCLAIR INC",
+   "share_class": "COMMON"
+  },
+  "CIK1066104-COMMON": {
+   "figi_source": "placeholder",
+   "issuer_cik": 1066104,
+   "name": "CORPORATE EXECUTIVE",
+   "share_class": "COMMON"
+  },
+  "CIK1075415-COMMON": {
+   "figi_source": "placeholder",
+   "issuer_cik": 1075415,
+   "name": "SENIOR HOUSING PROPERTIES TRUST RE",
+   "share_class": "COMMON"
+  },
+  "CIK1115836-COMMON": {
+   "figi_source": "placeholder",
+   "issuer_cik": 1115836,
+   "name": "ORIENT-EXPRESS HOTELS",
+   "share_class": "COMMON"
+  },
+  "CIK1469372-CLASS-A": {
+   "figi_source": "placeholder",
+   "issuer_cik": 1469372,
+   "name": "MADISON SQUARE GARDEN ORD CLASS A",
+   "share_class": "CLASS A"
+  },
+  "CIK1507934-CLASS-A": {
+   "figi_source": "placeholder",
+   "issuer_cik": 1507934,
+   "name": "LIBERTY MEDIA CORP CLASS A",
+   "share_class": "CLASS A"
+  }
+ }
+}
