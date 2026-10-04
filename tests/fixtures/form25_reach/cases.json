@@ -1,0 +1,5006 @@
+{
+ "as_of": "2026-09-25",
+ "cases": {
+  "BBG000BBG3P1": {
+   "note": "TMA 2008: a revocation after the 25-NSE (R6a)",
+   "other_cik": null
+  },
+  "BBG000BC2C10": {
+   "note": "APA: the Chicago withdrawal of 2020 (regional) and the 2021 holdco (R6b refuses)",
+   "other_cik": null
+  },
+  "BBG000BF2JS9": {
+   "note": "CNB 2009: a revocation after the 25-NSE (R6a)",
+   "other_cik": null
+  },
+  "BBG000BFTJ91": {
+   "note": "CMCSK 2015: a reclassification, no notice text (R6b refuses)",
+   "other_cik": null
+  },
+  "BBG000BGZ9V9": {
+   "note": "ASNA 2020: a bankruptcy 8-K whose first Item 1.03 is a cross-reference (5g sub-rule 2)",
+   "other_cik": null
+  },
+  "BBG000BLY636": {
+   "note": "IMB 2008: a revocation after the 25-NSE (R6a)",
+   "other_cik": null
+  },
+  "BBG000BP62Y3": {
+   "note": "MNI 2020: a removal under (b) the OTC tail continued (C)",
+   "other_cik": null
+  },
+  "BBG000BPTDN6": {
+   "note": "NTY 2010: the notice's cash conversion owns the row (R6b)",
+   "other_cik": null
+  },
+  "BBG000BRF6B5": {
+   "note": "RHD 2009: a removal under (b) the OTC tail continued (C), a market-cap 3.01 (wording)",
+   "other_cik": null
+  },
+  "BBG000BVW841": {
+   "note": "TXU 2007: a 25-NSE before the first sighting (E)",
+   "other_cik": null
+  },
+  "BBG000C070N2": {
+   "note": "XMSR 2008: a 25-NSE a stale observation continued (C)",
+   "other_cik": null
+  },
+  "BBG000CNFQW6": {
+   "note": "PRGO: two CIKs in force, so no other CIK (R5) and no 2013 ending",
+   "other_cik": null
+  },
+  "BBG000CS7CB8": {
+   "note": "JNC 2007: an early group the fallback finds today",
+   "other_cik": null
+  },
+  "BBG000D9DMK0": {
+   "note": "LH: an old holdco line the sibling slack keeps from a false ending",
+   "other_cik": null
+  },
+  "BBG000DGZ1B6": {
+   "note": "MWW 2016: a 25-NSE after the alive window (L); the 2008 transfer stays",
+   "other_cik": null
+  },
+  "BBG000JXRXK2": {
+   "note": "SOV 2009: a 25-NSE a stale observation and a cover continued (C)",
+   "other_cik": null
+  },
+  "BBG000MJRJJ2": {
+   "note": "HHC 2023: a holding company's formation (R6b refuses)",
+   "other_cik": null
+  },
+  "BBG000P4BQM9": {
+   "note": "SPB 2018: the old Spectrum Brands' 25-NSE under its own CIK (R5)",
+   "other_cik": 1487730
+  },
+  "BBG000PSSG77": {
+   "note": "IAR 2008: a removal under (b) the OTC tail continued (C)",
+   "other_cik": null
+  },
+  "BBG000VMWHH5": {
+   "note": "DISCK 2022: an exchange's 25-NSE beside an 8-A12B for the new class (no R7)",
+   "other_cik": null
+  },
+  "BBG001QD41M9": {
+   "note": "APTV: an old redomiciled line the sibling slack keeps from a false ending",
+   "other_cik": null
+  },
+  "BBG0038K9G41": {
+   "note": "LVNTA 2018: a Series A 25-NSE its own Series A takes, beside a duplicate placeholder whose fails say SER A (R2 must not tie them)",
+   "other_cik": null
+  },
+  "BBG004P33PN3": {
+   "note": "CWENA 2026: an exchange's 25-NSE beside an 8-A12B/A (no R7)",
+   "other_cik": null
+  },
+  "BBG005CPNTQ2": {
+   "note": "KHC 2026: the issuer's Form 25 with its 8-A12B (R7)",
+   "other_cik": null
+  },
+  "BBG005DKMJ67": {
+   "note": "LTRPA 2023: a Nasdaq removal under (b), then an OTC merger (C, ruling G4)",
+   "other_cik": null
+  },
+  "BBG009R0CVG1": {
+   "note": "LKSD 2020: a removal under (b), OTC under the same symbol (C)",
+   "other_cik": null
+  },
+  "BBG00B4Z2YX0": {
+   "note": "LAUR: listed today, so no early reach",
+   "other_cik": null
+  },
+  "BBG00B6WH9G3": {
+   "note": "MTCH 2020: the old Match Group's 25-NSE under its own CIK (R5)",
+   "other_cik": 1575189
+  },
+  "BBG00GVR8YQ9": {
+   "note": "LIN: an old redomiciled line the sibling slack keeps from a false ending",
+   "other_cik": null
+  },
+  "CIK1355096-SERIES-A": {
+   "note": "Liberty Series A 2011: a 25-NSE of the Capital and Starz groups (R3)",
+   "other_cik": null
+  },
+  "CIK1469372-CLASS-A": {
+   "note": "MSG 2015: the issuer's Form 25 with its 8-A12B ten days earlier (continued)",
+   "other_cik": null
+  },
+  "CIK351346-COMMON": {
+   "note": "BMET 2007: a rights-only Form 25 (R3), the 25-NSE before the first sighting (E), the notice's 'acquired by' (R6b)",
+   "other_cik": null
+  },
+  "CIK48898-CLASS-B": {
+   "note": "HUB-B 2015: a reclassification (R6b refuses)",
+   "other_cik": null
+  },
+  "CIK65873-COMMON": {
+   "note": "AT 2007: an early group the fallback finds today",
+   "other_cik": null
+  },
+  "CIK867773-COMMON": {
+   "note": "SPWRA 2011: a Class A & Class B 25-NSE, two letterless commons (R2)",
+   "other_cik": null
+  },
+  "CIK898660-COMMON": {
+   "note": "STN 2007: a 25-NSE before the first sighting (E)",
+   "other_cik": null
+  }
+ },
+ "ftd_from": "2007-12-17",
+ "securities": {
+  "BBG000BBG3P1": {
+   "cusips": [
+    "885218107",
+    "885218800"
+   ],
+   "eras": {
+    "TMA@2008-01-16": [
+     [
+      "TMA",
+      "2008-01-16",
+      "THORNBURG MORTGAGE INC",
+      "",
+      ""
+     ],
+     [
+      "TMA",
+      "2008-05-31",
+      "THORNBURG MORTGAGE INC",
+      "",
+      ""
+     ],
+     [
+      "TMA",
+      "2008-07-25",
+      "THORNBURG MORTGAGE INC",
+      "",
+      ""
+     ]
+    ],
+    "TMA@2008-11-18": [
+     [
+      "TMA",
+      "2008-11-18",
+      "THORNBURG MORTGAGE INC",
+      "",
+      ""
+     ],
+     [
+      "TMA",
+      "2009-01-23",
+      "THORNBURG MORTGAGE INC",
+      "",
+      ""
+     ],
+     [
+      "TMA",
+      "2009-03-20",
+      "THORNBURG MORTGAGE INC",
+      "",
+      ""
+     ],
+     [
+      "TMA",
+      "2009-06-08",
+      "THORNBURG MORTGAGE INC",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "issuer_cik": 892535,
+   "line_tickers": [],
+   "listed": false,
+   "name": "THORNBURG MORTGAGE INC",
+   "observed": true,
+   "security_type": "Common Stock",
+   "share_class": "COMMON"
+  },
+  "BBG000BC2C10": {
+   "cusips": [
+    "037411105"
+   ],
+   "eras": {
+    "APA@2008-01-16": [
+     [
+      "APA",
+      "2008-01-16",
+      "APACHE CORP",
+      "",
+      ""
+     ],
+     [
+      "APA",
+      "2008-05-31",
+      "APACHE CORP",
+      "",
+      ""
+     ],
+     [
+      "APA",
+      "2008-07-25",
+      "APACHE CORP",
+      "",
+      ""
+     ],
+     [
+      "APA",
+      "2008-11-18",
+      "APACHE CORP",
+      "",
+      ""
+     ],
+     [
+      "APA",
+      "2009-01-23",
+      "APACHE CORP",
+      "",
+      ""
+     ],
+     [
+      "APA",
+      "2009-03-20",
+      "APACHE CORP",
+      "",
+      ""
+     ],
+     [
+      "APA",
+      "2009-06-08",
+      "APACHE CORP",
+      "",
+      ""
+     ]
+    ],
+    "APA@2012-06-29": [
+     [
+      "APA",
+      "2012-06-29",
+      "APA CORP",
+      "",
+      "6769"
+     ],
+     [
+      "APA",
+      "2012-12-31",
+      "APA CORP",
+      "",
+      "6769"
+     ],
+     [
+      "APA",
+      "2013-06-28",
+      "APA CORP",
+      "",
+      "6769"
+     ],
+     [
+      "APA",
+      "2013-12-31",
+      "APA CORP",
+      "",
+      "6769"
+     ],
+     [
+      "APA",
+      "2014-06-30",
+      "APA CORP",
+      "",
+      "6769"
+     ]
+    ],
+    "APA@2014-12-31": [
+     [
+      "APA",
+      "2014-12-31",
+      "APACHE CORP",
+      "",
+      ""
+     ],
+     [
+      "APA",
+      "2015-06-30",
+      "APACHE CORP",
+      "",
+      ""
+     ],
+     [
+      "APA",
+      "2015-12-31",
+      "APACHE CORP",
+      "",
+      ""
+     ],
+     [
+      "APA",
+      "2016-06-30",
+      "APACHE CORP",
+      "",
+      ""
+     ],
+     [
+      "APA",
+      "2016-12-30",
+      "APACHE CORP",
+      "",
+      ""
+     ],
+     [
+      "APA",
+      "2017-06-30",
+      "APACHE CORP",
+      "",
+      ""
+     ],
+     [
+      "APA",
+      "2017-12-31",
+      "APACHE CORP",
+      "",
+      ""
+     ],
+     [
+      "APA",
+      "2018-06-30",
+      "APACHE CORP",
+      "",
+      ""
+     ],
+     [
+      "APA",
+      "2018-12-31",
+      "APACHE CORP",
+      "",
+      ""
+     ],
+     [
+      "APA",
+      "2019-06-30",
+      "APACHE CORP",
+      "",
+      ""
+     ],
+     [
+      "APA",
+      "2019-12-31",
+      "APACHE CORP",
+      "",
+      ""
+     ],
+     [
+      "APA",
+      "2020-06-30",
+      "APACHE CORP",
+      "",
+      ""
+     ],
+     [
+      "APA",
+      "2020-12-31",
+      "APACHE CORP",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "issuer_cik": 6769,
+   "line_tickers": [],
+   "listed": false,
+   "name": "APACHE CORP",
+   "observed": true,
+   "security_type": "Common Stock",
+   "share_class": "COMMON"
+  },
+  "BBG000BF2JS9": {
+   "cusips": [
+    "195493309"
+   ],
+   "eras": {
+    "CNB@2008-01-16": [
+     [
+      "CNB",
+      "2008-01-16",
+      "COLONIAL BANCGROUP INC",
+      "",
+      ""
+     ],
+     [
+      "CNB",
+      "2008-05-31",
+      "COLONIAL BANCGROUP INC",
+      "",
+      ""
+     ],
+     [
+      "CNB",
+      "2008-07-25",
+      "COLONIAL BANCGROUP INC",
+      "",
+      ""
+     ],
+     [
+      "CNB",
+      "2008-11-18",
+      "COLONIAL BANCGROUP INC",
+      "",
+      ""
+     ],
+     [
+      "CNB",
+      "2009-01-23",
+      "COLONIAL BANCGROUP INC",
+      "",
+      ""
+     ],
+     [
+      "CNB",
+      "2009-03-20",
+      "COLONIAL BANCGROUP INC",
+      "",
+      ""
+     ],
+     [
+      "CNB",
+      "2009-06-08",
+      "COLONIAL BANCGROUP INC",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "issuer_cik": 92339,
+   "line_tickers": [],
+   "listed": false,
+   "name": "COLONIAL BANCGROUP INC",
+   "observed": true,
+   "security_type": "Common Stock",
+   "share_class": "COMMON"
+  },
+  "BBG000BFT2L4": {
+   "cusips": [
+    "20030N101"
+   ],
+   "eras": {
+    "CMCSA@2008-01-16": [
+     [
+      "CMCSA",
+      "2008-01-16",
+      "COMCAST CORP",
+      "",
+      ""
+     ],
+     [
+      "CMCSA",
+      "2008-05-31",
+      "COMCAST CORP",
+      "",
+      ""
+     ],
+     [
+      "CMCSA",
+      "2008-07-25",
+      "COMCAST CORP",
+      "",
+      ""
+     ],
+     [
+      "CMCSA",
+      "2008-11-18",
+      "COMCAST CORP",
+      "",
+      ""
+     ],
+     [
+      "CMCSA",
+      "2009-01-23",
+      "COMCAST CORP",
+      "",
+      ""
+     ],
+     [
+      "CMCSA",
+      "2009-03-20",
+      "COMCAST CORP",
+      "",
+      ""
+     ],
+     [
+      "CMCSA",
+      "2009-06-08",
+      "COMCAST CORP",
+      "",
+      ""
+     ],
+     [
+      "CMCSA",
+      "2012-06-29",
+      "COMCAST CORP CLASS A",
+      "",
+      ""
+     ],
+     [
+      "CMCSA",
+      "2012-12-31",
+      "COMCAST CORP CLASS A",
+      "",
+      ""
+     ],
+     [
+      "CMCSA",
+      "2013-06-28",
+      "COMCAST CORP CLASS A",
+      "",
+      ""
+     ],
+     [
+      "CMCSA",
+      "2013-12-31",
+      "COMCAST CORP CLASS A",
+      "",
+      ""
+     ],
+     [
+      "CMCSA",
+      "2014-06-30",
+      "COMCAST CORP CLASS A",
+      "",
+      ""
+     ],
+     [
+      "CMCSA",
+      "2014-12-31",
+      "COMCAST A CORP",
+      "",
+      ""
+     ],
+     [
+      "CMCSA",
+      "2015-06-30",
+      "COMCAST A CORP",
+      "",
+      ""
+     ],
+     [
+      "CMCSA",
+      "2015-12-31",
+      "COMCAST A CORP",
+      "",
+      ""
+     ],
+     [
+      "CMCSA",
+      "2016-06-30",
+      "COMCAST A CORP",
+      "",
+      ""
+     ],
+     [
+      "CMCSA",
+      "2016-12-30",
+      "COMCAST A CORP",
+      "",
+      ""
+     ],
+     [
+      "CMCSA",
+      "2017-06-30",
+      "COMCAST A CORP",
+      "",
+      ""
+     ],
+     [
+      "CMCSA",
+      "2017-12-31",
+      "COMCAST A CORP",
+      "",
+      ""
+     ],
+     [
+      "CMCSA",
+      "2018-06-30",
+      "COMCAST A CORP",
+      "",
+      ""
+     ],
+     [
+      "CMCSA",
+      "2018-12-31",
+      "COMCAST CORP CLASS A",
+      "",
+      ""
+     ],
+     [
+      "CMCSA",
+      "2019-06-30",
+      "COMCAST CORP CLASS A",
+      "",
+      ""
+     ],
+     [
+      "CMCSA",
+      "2019-12-31",
+      "COMCAST CORP CLASS A",
+      "",
+      ""
+     ],
+     [
+      "CMCSA",
+      "2020-06-30",
+      "COMCAST CORP CLASS A",
+      "",
+      ""
+     ],
+     [
+      "CMCSA",
+      "2020-12-31",
+      "COMCAST CORP CLASS A",
+      "",
+      ""
+     ],
+     [
+      "CMCSA",
+      "2021-06-30",
+      "COMCAST CORP CLASS A",
+      "",
+      ""
+     ],
+     [
+      "CMCSA",
+      "2021-12-31",
+      "COMCAST CORP CLASS A",
+      "",
+      ""
+     ],
+     [
+      "CMCSA",
+      "2022-06-30",
+      "COMCAST CORP CLASS A",
+      "",
+      ""
+     ],
+     [
+      "CMCSA",
+      "2022-12-31",
+      "COMCAST CORP CLASS A",
+      "",
+      ""
+     ],
+     [
+      "CMCSA",
+      "2023-06-30",
+      "COMCAST CORP CLASS A",
+      "",
+      ""
+     ],
+     [
+      "CMCSA",
+      "2023-12-31",
+      "COMCAST CORP CLASS A",
+      "",
+      ""
+     ],
+     [
+      "CMCSA",
+      "2024-06-30",
+      "COMCAST CORP CLASS A",
+      "",
+      ""
+     ],
+     [
+      "CMCSA",
+      "2024-12-31",
+      "COMCAST CORP CLASS A",
+      "",
+      ""
+     ],
+     [
+      "CMCSA",
+      "2025-06-30",
+      "COMCAST CORP CLASS A",
+      "",
+      ""
+     ],
+     [
+      "CMCSA",
+      "2025-12-31",
+      "COMCAST CORP CLASS A",
+      "",
+      ""
+     ],
+     [
+      "CMCSA",
+      "2026-06-30",
+      "COMCAST CORP CLASS A",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "issuer_cik": 1166691,
+   "line_tickers": [],
+   "listed": true,
+   "name": "COMCAST CORP CLASS A",
+   "observed": true,
+   "security_type": "Common Stock",
+   "share_class": "CLASS A"
+  },
+  "BBG000BFTJ91": {
+   "cusips": [
+    "20030N200"
+   ],
+   "eras": {
+    "CMCSK@2015-06-30": [
+     [
+      "CMCSK",
+      "2015-06-30",
+      "COMCAST SPECIAL CORP CLASS A",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "issuer_cik": 1166691,
+   "line_tickers": [],
+   "listed": false,
+   "name": "COMCAST SPECIAL CORP CLASS A",
+   "observed": true,
+   "security_type": "Common Stock",
+   "share_class": "CLASS A"
+  },
+  "BBG000BGZ9V9": {
+   "cusips": [
+    "04351G101",
+    "04351G200"
+   ],
+   "eras": {
+    "ASNA@2012-06-29": [
+     [
+      "ASNA",
+      "2012-06-29",
+      "ASCENA RETAIL GROUP INC",
+      "",
+      ""
+     ],
+     [
+      "ASNA",
+      "2012-12-31",
+      "ASCENA RETAIL GROUP INC",
+      "",
+      ""
+     ],
+     [
+      "ASNA",
+      "2013-06-28",
+      "ASCENA RETAIL GROUP INC",
+      "",
+      ""
+     ],
+     [
+      "ASNA",
+      "2013-12-31",
+      "ASCENA RETAIL GROUP INC",
+      "",
+      ""
+     ],
+     [
+      "ASNA",
+      "2014-06-30",
+      "ASCENA RETAIL GROUP INC",
+      "",
+      ""
+     ],
+     [
+      "ASNA",
+      "2014-12-31",
+      "ASCENA RETAIL GROUP INC.",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "handoff",
+   "issuer_cik": 1498301,
+   "line_tickers": [],
+   "listed": false,
+   "name": "ASCENA RETAIL GROUP INC.",
+   "observed": true,
+   "security_type": "Common Stock",
+   "share_class": "COMMON"
+  },
+  "BBG000BKQG80": {
+   "cusips": [
+    "44919P508"
+   ],
+   "eras": {
+    "IAC@2016-06-30": [
+     [
+      "IAC",
+      "2016-06-30",
+      "IAC INTERACTIVE",
+      "",
+      "891103"
+     ],
+     [
+      "IAC",
+      "2016-12-30",
+      "IAC INTERACTIVE",
+      "",
+      "891103"
+     ],
+     [
+      "IAC",
+      "2017-06-30",
+      "IAC INTERACTIVE",
+      "",
+      "891103"
+     ],
+     [
+      "IAC",
+      "2017-12-31",
+      "IAC INTERACTIVE",
+      "",
+      "891103"
+     ],
+     [
+      "IAC",
+      "2018-06-30",
+      "IAC INTERACTIVE",
+      "",
+      "891103"
+     ],
+     [
+      "IAC",
+      "2018-12-31",
+      "IAC INTERACTIVE",
+      "",
+      "891103"
+     ],
+     [
+      "IAC",
+      "2019-06-30",
+      "IAC INTERACTIVE",
+      "",
+      "891103"
+     ],
+     [
+      "IAC",
+      "2019-12-31",
+      "IAC INTERACTIVE",
+      "",
+      "891103"
+     ],
+     [
+      "IAC",
+      "2020-06-30",
+      "IAC INTERACTIVE",
+      "",
+      "891103"
+     ]
+    ],
+    "IACI@2008-11-18": [
+     [
+      "IACI",
+      "2008-11-18",
+      "IAC INTERACTIVECORP",
+      "",
+      "891103"
+     ],
+     [
+      "IACI",
+      "2009-01-23",
+      "IAC INTERACTIVECORP",
+      "",
+      "891103"
+     ],
+     [
+      "IACI",
+      "2009-03-20",
+      "IAC INTERACTIVECORP",
+      "",
+      "891103"
+     ],
+     [
+      "IACI",
+      "2009-06-08",
+      "IAC INTERACTIVECORP",
+      "",
+      "891103"
+     ]
+    ],
+    "IACI@2014-12-31": [
+     [
+      "IACI",
+      "2014-12-31",
+      "IAC INTERACTIVE",
+      "",
+      "891103"
+     ],
+     [
+      "IACI",
+      "2015-06-30",
+      "IAC INTERACTIVE",
+      "",
+      "891103"
+     ],
+     [
+      "IACI",
+      "2015-12-31",
+      "IAC INTERACTIVE",
+      "",
+      "891103"
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "issuer_cik": 891103,
+   "line_tickers": [],
+   "listed": false,
+   "name": "IAC INTERACTIVE",
+   "observed": true,
+   "security_type": "Common Stock",
+   "share_class": "COMMON"
+  },
+  "BBG000BLK267": {
+   "cusips": [
+    "443510201",
+    "443510607"
+   ],
+   "eras": {
+    "HUBB@2012-06-29": [
+     [
+      "HUBB",
+      "2012-06-29",
+      "HUBBELL INC",
+      "",
+      ""
+     ],
+     [
+      "HUBB",
+      "2012-12-31",
+      "HUBBELL INC",
+      "",
+      ""
+     ],
+     [
+      "HUBB",
+      "2013-06-28",
+      "HUBBELL INC",
+      "",
+      ""
+     ],
+     [
+      "HUBB",
+      "2013-12-31",
+      "HUBBELL INC",
+      "",
+      ""
+     ],
+     [
+      "HUBB",
+      "2014-06-30",
+      "HUBBELL INC",
+      "",
+      ""
+     ]
+    ],
+    "HUBB@2015-12-31": [
+     [
+      "HUBB",
+      "2015-12-31",
+      "HUBBELL INC",
+      "",
+      ""
+     ],
+     [
+      "HUBB",
+      "2016-06-30",
+      "HUBBELL INC",
+      "",
+      ""
+     ],
+     [
+      "HUBB",
+      "2016-12-30",
+      "HUBBELL INC",
+      "",
+      ""
+     ],
+     [
+      "HUBB",
+      "2017-06-30",
+      "HUBBELL INC",
+      "",
+      ""
+     ],
+     [
+      "HUBB",
+      "2017-12-31",
+      "HUBBELL INC",
+      "",
+      ""
+     ],
+     [
+      "HUBB",
+      "2018-06-30",
+      "HUBBELL INC",
+      "",
+      ""
+     ],
+     [
+      "HUBB",
+      "2018-12-31",
+      "HUBBELL INC",
+      "",
+      ""
+     ],
+     [
+      "HUBB",
+      "2019-06-30",
+      "HUBBELL INC",
+      "",
+      ""
+     ],
+     [
+      "HUBB",
+      "2019-12-31",
+      "HUBBELL INC",
+      "",
+      ""
+     ],
+     [
+      "HUBB",
+      "2020-06-30",
+      "HUBBELL INC",
+      "",
+      ""
+     ],
+     [
+      "HUBB",
+      "2020-12-31",
+      "HUBBELL INC",
+      "",
+      ""
+     ],
+     [
+      "HUBB",
+      "2021-06-30",
+      "HUBBELL INC",
+      "",
+      ""
+     ],
+     [
+      "HUBB",
+      "2021-12-31",
+      "HUBBELL INC",
+      "",
+      ""
+     ],
+     [
+      "HUBB",
+      "2022-06-30",
+      "HUBBELL INC",
+      "",
+      ""
+     ],
+     [
+      "HUBB",
+      "2022-12-31",
+      "HUBBELL INC",
+      "",
+      ""
+     ],
+     [
+      "HUBB",
+      "2023-06-30",
+      "HUBBELL INC",
+      "",
+      ""
+     ],
+     [
+      "HUBB",
+      "2023-12-31",
+      "HUBBELL INC",
+      "",
+      ""
+     ],
+     [
+      "HUBB",
+      "2024-06-30",
+      "HUBBELL INC",
+      "",
+      ""
+     ],
+     [
+      "HUBB",
+      "2024-12-31",
+      "HUBBELL INC",
+      "",
+      ""
+     ],
+     [
+      "HUBB",
+      "2025-06-30",
+      "HUBBELL INC",
+      "",
+      ""
+     ],
+     [
+      "HUBB",
+      "2025-12-31",
+      "HUBBELL INC",
+      "",
+      ""
+     ],
+     [
+      "HUBB",
+      "2026-06-30",
+      "HUBBELL INC",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "issuer_cik": 48898,
+   "line_tickers": [],
+   "listed": true,
+   "name": "HUBBELL INC",
+   "observed": true,
+   "security_type": "Common Stock",
+   "share_class": "COMMON"
+  },
+  "BBG000BLY636": {
+   "cusips": [
+    "456607100"
+   ],
+   "eras": {
+    "IMB@2008-01-16": [
+     [
+      "IMB",
+      "2008-01-16",
+      "INDYMAC BANCORP INC",
+      "",
+      ""
+     ],
+     [
+      "IMB",
+      "2008-05-31",
+      "INDYMAC BANCORP INC",
+      "",
+      ""
+     ],
+     [
+      "IMB",
+      "2008-07-25",
+      "INDYMAC BANCORP INC",
+      "",
+      ""
+     ],
+     [
+      "IMB",
+      "2008-11-18",
+      "INDYMAC BANCORP INC",
+      "",
+      ""
+     ],
+     [
+      "IMB",
+      "2009-01-23",
+      "INDYMAC BANCORP INC",
+      "",
+      ""
+     ],
+     [
+      "IMB",
+      "2009-03-20",
+      "INDYMAC BANCORP INC",
+      "",
+      ""
+     ],
+     [
+      "IMB",
+      "2009-06-08",
+      "INDYMAC BANCORP INC",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "issuer_cik": 773468,
+   "line_tickers": [],
+   "listed": false,
+   "name": "INDYMAC BANCORP INC",
+   "observed": true,
+   "security_type": "Common Stock",
+   "share_class": "COMMON"
+  },
+  "BBG000BP62Y3": {
+   "cusips": [
+    "579489105",
+    "579489303"
+   ],
+   "eras": {
+    "MNI@2008-01-16": [
+     [
+      "MNI",
+      "2008-01-16",
+      "MCCLATCHY CO",
+      "",
+      ""
+     ],
+     [
+      "MNI",
+      "2008-05-31",
+      "MCCLATCHY CO",
+      "",
+      ""
+     ],
+     [
+      "MNI",
+      "2008-07-25",
+      "MCCLATCHY CO",
+      "",
+      ""
+     ],
+     [
+      "MNI",
+      "2008-11-18",
+      "MCCLATCHY CO",
+      "",
+      ""
+     ],
+     [
+      "MNI",
+      "2009-01-23",
+      "MCCLATCHY CO",
+      "",
+      ""
+     ],
+     [
+      "MNI",
+      "2009-03-20",
+      "MCCLATCHY CO",
+      "",
+      ""
+     ],
+     [
+      "MNI",
+      "2009-06-08",
+      "MCCLATCHY CO",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "handoff",
+   "issuer_cik": 1056087,
+   "line_tickers": [],
+   "listed": false,
+   "name": "MCCLATCHY CO",
+   "observed": true,
+   "security_type": "Common Stock",
+   "share_class": "CLASS A"
+  },
+  "BBG000BPTDN6": {
+   "cusips": [
+    "628782104"
+   ],
+   "eras": {
+    "NTY@2008-01-16": [
+     [
+      "NTY",
+      "2008-01-16",
+      "NBTY INC",
+      "",
+      ""
+     ],
+     [
+      "NTY",
+      "2008-05-31",
+      "NBTY INC",
+      "",
+      ""
+     ],
+     [
+      "NTY",
+      "2008-07-25",
+      "NBTY INC",
+      "",
+      ""
+     ],
+     [
+      "NTY",
+      "2008-11-18",
+      "NBTY INC",
+      "",
+      ""
+     ],
+     [
+      "NTY",
+      "2009-01-23",
+      "NBTY INC",
+      "",
+      ""
+     ],
+     [
+      "NTY",
+      "2009-03-20",
+      "NBTY INC",
+      "",
+      ""
+     ],
+     [
+      "NTY",
+      "2009-06-08",
+      "NBTY INC",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "issuer_cik": 70793,
+   "line_tickers": [],
+   "listed": false,
+   "name": "NBTY INC",
+   "observed": true,
+   "security_type": "Common Stock",
+   "share_class": "COMMON"
+  },
+  "BBG000BRF6B5": {
+   "cusips": [
+    "74955W307"
+   ],
+   "eras": {
+    "RHD@2008-01-16": [
+     [
+      "RHD",
+      "2008-01-16",
+      "R H DONNELLEY CORP",
+      "",
+      ""
+     ],
+     [
+      "RHD",
+      "2008-05-31",
+      "R H DONNELLEY CORP",
+      "",
+      ""
+     ],
+     [
+      "RHD",
+      "2008-07-25",
+      "R H DONNELLEY CORP",
+      "",
+      ""
+     ],
+     [
+      "RHD",
+      "2008-11-18",
+      "R H DONNELLEY CORP",
+      "",
+      ""
+     ],
+     [
+      "RHD",
+      "2009-01-23",
+      "R H DONNELLEY CORP",
+      "",
+      ""
+     ],
+     [
+      "RHD",
+      "2009-03-20",
+      "R H DONNELLEY CORP",
+      "",
+      ""
+     ],
+     [
+      "RHD",
+      "2009-06-08",
+      "R H DONNELLEY CORP",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "issuer_cik": 30419,
+   "line_tickers": [],
+   "listed": false,
+   "name": "R H DONNELLEY CORP",
+   "observed": true,
+   "security_type": "Common Stock",
+   "share_class": "COMMON"
+  },
+  "BBG000BVW841": {
+   "cusips": [],
+   "eras": {
+    "TXU@2008-01-16": [
+     [
+      "TXU",
+      "2008-01-16",
+      "TXU CORP",
+      "",
+      "1023291"
+     ],
+     [
+      "TXU",
+      "2008-05-31",
+      "TXU CORP",
+      "",
+      "1023291"
+     ],
+     [
+      "TXU",
+      "2008-07-25",
+      "TXU CORP",
+      "",
+      "1023291"
+     ],
+     [
+      "TXU",
+      "2008-11-18",
+      "TXU CORP",
+      "",
+      "1023291"
+     ],
+     [
+      "TXU",
+      "2009-01-23",
+      "TXU CORP",
+      "",
+      "1023291"
+     ],
+     [
+      "TXU",
+      "2009-03-20",
+      "TXU CORP",
+      "",
+      "1023291"
+     ],
+     [
+      "TXU",
+      "2009-06-08",
+      "TXU CORP",
+      "",
+      "1023291"
+     ]
+    ]
+   },
+   "figi_source": "ticker",
+   "issuer_cik": 1023291,
+   "line_tickers": [],
+   "listed": false,
+   "name": "TXU CORP",
+   "observed": true,
+   "security_type": "Common Stock",
+   "share_class": "COMMON"
+  },
+  "BBG000C070N2": {
+   "cusips": [
+    "983759101"
+   ],
+   "eras": {
+    "XMSR@2008-01-16": [
+     [
+      "XMSR",
+      "2008-01-16",
+      "XM SATELLITE RADIO HLDGS",
+      "",
+      ""
+     ],
+     [
+      "XMSR",
+      "2008-05-31",
+      "XM SATELLITE RADIO HLDGS",
+      "",
+      ""
+     ],
+     [
+      "XMSR",
+      "2008-07-25",
+      "XM SATELLITE RADIO HLDGS",
+      "",
+      ""
+     ],
+     [
+      "XMSR",
+      "2008-11-18",
+      "XM SATELLITE RADIO HLDGS",
+      "",
+      ""
+     ],
+     [
+      "XMSR",
+      "2009-01-23",
+      "XM SATELLITE RADIO HLDGS",
+      "",
+      ""
+     ],
+     [
+      "XMSR",
+      "2009-03-20",
+      "XM SATELLITE RADIO HLDGS",
+      "",
+      ""
+     ],
+     [
+      "XMSR",
+      "2009-06-08",
+      "XM SATELLITE RADIO HLDGS",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "issuer_cik": 1091530,
+   "line_tickers": [],
+   "listed": false,
+   "name": "XM SATELLITE RADIO HLDGS",
+   "observed": true,
+   "security_type": "Common Stock",
+   "share_class": "CLASS A"
+  },
+  "BBG000CHWP52": {
+   "cusips": [
+    "25468Y107",
+    "25470F104"
+   ],
+   "eras": {
+    "DISCA@2008-01-16": [
+     [
+      "DISCA",
+      "2008-01-16",
+      "DISCOVERY HOLDING CO",
+      "",
+      ""
+     ],
+     [
+      "DISCA",
+      "2008-05-31",
+      "DISCOVERY HOLDING CO",
+      "",
+      ""
+     ],
+     [
+      "DISCA",
+      "2008-07-25",
+      "DISCOVERY HOLDING CO",
+      "",
+      ""
+     ]
+    ],
+    "DISCA@2008-11-18": [
+     [
+      "DISCA",
+      "2008-11-18",
+      "DISCOVERY HOLDING CO",
+      "",
+      ""
+     ],
+     [
+      "DISCA",
+      "2009-01-23",
+      "DISCOVERY HOLDING CO",
+      "",
+      ""
+     ],
+     [
+      "DISCA",
+      "2009-03-20",
+      "DISCOVERY HOLDING CO",
+      "",
+      ""
+     ],
+     [
+      "DISCA",
+      "2009-06-08",
+      "DISCOVERY HOLDING CO",
+      "",
+      ""
+     ],
+     [
+      "DISCA",
+      "2012-06-29",
+      "DISCOVERY INC SERIES A",
+      "",
+      ""
+     ],
+     [
+      "DISCA",
+      "2012-12-31",
+      "DISCOVERY INC SERIES A",
+      "",
+      ""
+     ],
+     [
+      "DISCA",
+      "2013-06-28",
+      "DISCOVERY INC SERIES A",
+      "",
+      ""
+     ],
+     [
+      "DISCA",
+      "2013-12-31",
+      "DISCOVERY INC SERIES A",
+      "",
+      ""
+     ],
+     [
+      "DISCA",
+      "2014-06-30",
+      "DISCOVERY INC SERIES A",
+      "",
+      ""
+     ],
+     [
+      "DISCA",
+      "2014-12-31",
+      "DISCOVERY COMMUNICATIONS-A",
+      "",
+      ""
+     ],
+     [
+      "DISCA",
+      "2015-06-30",
+      "DISCOVERY COMMUNICATIONS-A",
+      "",
+      ""
+     ],
+     [
+      "DISCA",
+      "2015-12-31",
+      "DISCOVERY COMMUNICATIONS-A",
+      "",
+      ""
+     ],
+     [
+      "DISCA",
+      "2016-06-30",
+      "DISCOVERY COMMUNICATIONS-A",
+      "",
+      ""
+     ],
+     [
+      "DISCA",
+      "2016-12-30",
+      "DISCOVERY COMMUNICATIONS-A",
+      "",
+      ""
+     ],
+     [
+      "DISCA",
+      "2017-06-30",
+      "DISCOVERY COMMUNICATIONS INC SERIE",
+      "",
+      ""
+     ],
+     [
+      "DISCA",
+      "2017-12-31",
+      "DISCOVERY COMMUNICATIONS INC SERIE",
+      "",
+      ""
+     ],
+     [
+      "DISCA",
+      "2018-06-30",
+      "DISCOVERY INC SERIES A",
+      "",
+      ""
+     ],
+     [
+      "DISCA",
+      "2018-12-31",
+      "DISCOVERY INC SERIES A",
+      "",
+      ""
+     ],
+     [
+      "DISCA",
+      "2019-06-30",
+      "DISCOVERY INC SERIES A",
+      "",
+      ""
+     ],
+     [
+      "DISCA",
+      "2019-12-31",
+      "DISCOVERY INC SERIES A",
+      "",
+      ""
+     ],
+     [
+      "DISCA",
+      "2020-06-30",
+      "DISCOVERY INC SERIES A",
+      "",
+      ""
+     ],
+     [
+      "DISCA",
+      "2020-12-31",
+      "DISCOVERY INC SERIES A",
+      "",
+      ""
+     ],
+     [
+      "DISCA",
+      "2021-06-30",
+      "DISCOVERY INC SERIES A",
+      "",
+      ""
+     ],
+     [
+      "DISCA",
+      "2021-12-31",
+      "DISCOVERY INC SERIES A",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "issuer_cik": 1437107,
+   "line_tickers": [],
+   "listed": false,
+   "name": "DISCOVERY INC SERIES A",
+   "observed": true,
+   "security_type": "Common Stock",
+   "share_class": "SERIES A"
+  },
+  "BBG000CNFQW6": {
+   "cusips": [
+    "714290103",
+    "G97822103"
+   ],
+   "eras": {
+    "PRGO@2012-06-29": [
+     [
+      "PRGO",
+      "2012-06-29",
+      "PERRIGO COMPANY",
+      "",
+      ""
+     ],
+     [
+      "PRGO",
+      "2012-12-31",
+      "PERRIGO COMPANY",
+      "",
+      ""
+     ],
+     [
+      "PRGO",
+      "2013-06-28",
+      "PERRIGO COMPANY",
+      "",
+      ""
+     ]
+    ],
+    "PRGO@2013-12-31": [
+     [
+      "PRGO",
+      "2013-12-31",
+      "PERRIGO PLC",
+      "",
+      ""
+     ],
+     [
+      "PRGO",
+      "2014-06-30",
+      "PERRIGO PLC",
+      "",
+      ""
+     ],
+     [
+      "PRGO",
+      "2014-12-31",
+      "PERRIGO PLC",
+      "",
+      ""
+     ],
+     [
+      "PRGO",
+      "2015-06-30",
+      "PERRIGO PLC",
+      "",
+      ""
+     ],
+     [
+      "PRGO",
+      "2015-12-31",
+      "PERRIGO PLC",
+      "",
+      ""
+     ],
+     [
+      "PRGO",
+      "2016-06-30",
+      "PERRIGO PLC",
+      "",
+      ""
+     ],
+     [
+      "PRGO",
+      "2016-12-30",
+      "PERRIGO PLC",
+      "",
+      ""
+     ],
+     [
+      "PRGO",
+      "2017-06-30",
+      "PERRIGO PLC",
+      "",
+      ""
+     ],
+     [
+      "PRGO",
+      "2017-12-31",
+      "PERRIGO PLC",
+      "",
+      ""
+     ],
+     [
+      "PRGO",
+      "2018-06-30",
+      "PERRIGO PLC",
+      "",
+      ""
+     ],
+     [
+      "PRGO",
+      "2018-12-31",
+      "PERRIGO PLC",
+      "",
+      ""
+     ],
+     [
+      "PRGO",
+      "2019-06-30",
+      "PERRIGO PLC",
+      "",
+      ""
+     ],
+     [
+      "PRGO",
+      "2019-12-31",
+      "PERRIGO PLC",
+      "",
+      ""
+     ],
+     [
+      "PRGO",
+      "2020-06-30",
+      "PERRIGO PLC",
+      "",
+      ""
+     ],
+     [
+      "PRGO",
+      "2020-12-31",
+      "PERRIGO PLC",
+      "",
+      ""
+     ],
+     [
+      "PRGO",
+      "2021-06-30",
+      "PERRIGO PLC",
+      "",
+      ""
+     ],
+     [
+      "PRGO",
+      "2021-12-31",
+      "PERRIGO PLC",
+      "",
+      ""
+     ],
+     [
+      "PRGO",
+      "2022-06-30",
+      "PERRIGO PLC",
+      "",
+      ""
+     ],
+     [
+      "PRGO",
+      "2022-12-31",
+      "PERRIGO PLC",
+      "",
+      ""
+     ],
+     [
+      "PRGO",
+      "2023-06-30",
+      "PERRIGO PLC",
+      "",
+      ""
+     ],
+     [
+      "PRGO",
+      "2023-12-31",
+      "PERRIGO PLC",
+      "",
+      ""
+     ],
+     [
+      "PRGO",
+      "2024-06-30",
+      "PERRIGO PLC",
+      "",
+      ""
+     ],
+     [
+      "PRGO",
+      "2024-12-31",
+      "PERRIGO PLC",
+      "",
+      ""
+     ],
+     [
+      "PRGO",
+      "2025-06-30",
+      "PERRIGO PLC",
+      "",
+      ""
+     ],
+     [
+      "PRGO",
+      "2025-12-31",
+      "PERRIGO PLC",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "issuer_cik": 1585364,
+   "line_tickers": [],
+   "listed": true,
+   "name": "PERRIGO PLC",
+   "observed": true,
+   "security_type": "Common Stock",
+   "share_class": "COMMON"
+  },
+  "BBG000CS7CB8": {
+   "cusips": [
+    "67090F106"
+   ],
+   "eras": {
+    "JNC@2008-01-16": [
+     [
+      "JNC",
+      "2008-01-16",
+      "NUVEEN INVESTMENTS INC",
+      "",
+      ""
+     ],
+     [
+      "JNC",
+      "2008-05-31",
+      "NUVEEN INVESTMENTS INC",
+      "",
+      ""
+     ],
+     [
+      "JNC",
+      "2008-07-25",
+      "NUVEEN INVESTMENTS INC",
+      "",
+      ""
+     ],
+     [
+      "JNC",
+      "2008-11-18",
+      "NUVEEN INVESTMENTS INC",
+      "",
+      ""
+     ],
+     [
+      "JNC",
+      "2009-01-23",
+      "NUVEEN INVESTMENTS INC",
+      "",
+      ""
+     ],
+     [
+      "JNC",
+      "2009-03-20",
+      "NUVEEN INVESTMENTS INC",
+      "",
+      ""
+     ],
+     [
+      "JNC",
+      "2009-06-08",
+      "NUVEEN INVESTMENTS INC",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "ticker",
+   "issuer_cik": 885708,
+   "line_tickers": [],
+   "listed": false,
+   "name": "NUVEEN INVESTMENTS INC",
+   "observed": true,
+   "security_type": "Common Stock",
+   "share_class": "CLASS A"
+  },
+  "BBG000D9DMK0": {
+   "cusips": [
+    "50540R409"
+   ],
+   "eras": {
+    "LH@2008-01-16": [
+     [
+      "LH",
+      "2008-01-16",
+      "LABORATORY CORP OF AMER",
+      "",
+      ""
+     ],
+     [
+      "LH",
+      "2008-05-31",
+      "LABORATORY CORP OF AMER",
+      "",
+      ""
+     ],
+     [
+      "LH",
+      "2008-07-25",
+      "LABORATORY CORP OF AMER",
+      "",
+      ""
+     ],
+     [
+      "LH",
+      "2008-11-18",
+      "LABORATORY CORP OF AMER",
+      "",
+      ""
+     ],
+     [
+      "LH",
+      "2009-01-23",
+      "LABORATORY CORP OF AMER",
+      "",
+      ""
+     ],
+     [
+      "LH",
+      "2009-03-20",
+      "LABORATORY CORP OF AMER",
+      "",
+      ""
+     ],
+     [
+      "LH",
+      "2009-06-08",
+      "LABORATORY CORP OF AMER",
+      "",
+      ""
+     ]
+    ],
+    "LH@2012-06-29": [
+     [
+      "LH",
+      "2012-06-29",
+      "LABORATORY CORPORATION OF AMERICA",
+      "",
+      ""
+     ],
+     [
+      "LH",
+      "2012-12-31",
+      "LABORATORY CORPORATION OF AMERICA",
+      "",
+      ""
+     ],
+     [
+      "LH",
+      "2013-06-28",
+      "LABORATORY CORPORATION OF AMERICA",
+      "",
+      ""
+     ],
+     [
+      "LH",
+      "2013-12-31",
+      "LABORATORY CORPORATION OF AMERICA",
+      "",
+      ""
+     ],
+     [
+      "LH",
+      "2014-06-30",
+      "LABORATORY CORPORATION OF AMERICA",
+      "",
+      ""
+     ],
+     [
+      "LH",
+      "2014-12-31",
+      "LABORATORY CORPORATION OF AMERICA",
+      "",
+      ""
+     ],
+     [
+      "LH",
+      "2015-06-30",
+      "LABORATORY CORPORATION OF AMERICA",
+      "",
+      ""
+     ],
+     [
+      "LH",
+      "2015-12-31",
+      "LABORATORY CORPORATION OF AMERICA",
+      "",
+      ""
+     ],
+     [
+      "LH",
+      "2016-06-30",
+      "LABORATORY CORPORATION OF AMERICA",
+      "",
+      ""
+     ],
+     [
+      "LH",
+      "2016-12-30",
+      "LABORATORY CORPORATION OF AMERICA",
+      "",
+      ""
+     ],
+     [
+      "LH",
+      "2017-06-30",
+      "LABORATORY CORPORATION OF AMERICA",
+      "",
+      ""
+     ],
+     [
+      "LH",
+      "2017-12-31",
+      "LABORATORY CORPORATION OF AMERICA",
+      "",
+      ""
+     ],
+     [
+      "LH",
+      "2018-06-30",
+      "LABORATORY CORPORATION OF AMERICA",
+      "",
+      ""
+     ],
+     [
+      "LH",
+      "2018-12-31",
+      "LABORATORY CORPORATION OF AMERICA",
+      "",
+      ""
+     ],
+     [
+      "LH",
+      "2019-06-30",
+      "LABORATORY CORPORATION OF AMERICA",
+      "",
+      ""
+     ],
+     [
+      "LH",
+      "2019-12-31",
+      "LABORATORY CORPORATION OF AMERICA",
+      "",
+      ""
+     ],
+     [
+      "LH",
+      "2020-06-30",
+      "LABORATORY CORPORATION OF AMERICA",
+      "",
+      ""
+     ],
+     [
+      "LH",
+      "2020-12-31",
+      "LABORATORY CORPORATION OF AMERICA",
+      "",
+      ""
+     ],
+     [
+      "LH",
+      "2021-06-30",
+      "LABORATORY CORPORATION OF AMERICA",
+      "",
+      ""
+     ],
+     [
+      "LH",
+      "2021-12-31",
+      "LABORATORY CORPORATION OF AMERICA",
+      "",
+      ""
+     ],
+     [
+      "LH",
+      "2022-06-30",
+      "LABORATORY CORPORATION OF AMERICA",
+      "",
+      ""
+     ],
+     [
+      "LH",
+      "2022-12-31",
+      "LABORATORY CORPORATION OF AMERICA",
+      "",
+      ""
+     ],
+     [
+      "LH",
+      "2023-06-30",
+      "LABORATORY CORPORATION OF AMERICA",
+      "",
+      ""
+     ],
+     [
+      "LH",
+      "2023-12-31",
+      "LABORATORY CORPORATION OF AMERICA",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "issuer_cik": 920148,
+   "line_tickers": [],
+   "listed": false,
+   "name": "LABORATORY CORPORATION OF AMERICA",
+   "observed": true,
+   "security_type": "Common Stock",
+   "share_class": "COMMON"
+  },
+  "BBG000DGZ1B6": {
+   "cusips": [
+    "611742107"
+   ],
+   "eras": {
+    "MNST@2008-01-16": [
+     [
+      "MNST",
+      "2008-01-16",
+      "MONSTER WORLDWIDE INC",
+      "",
+      ""
+     ],
+     [
+      "MNST",
+      "2008-05-31",
+      "MONSTER WORLDWIDE INC",
+      "",
+      ""
+     ],
+     [
+      "MNST",
+      "2008-07-25",
+      "MONSTER WORLDWIDE INC",
+      "",
+      ""
+     ],
+     [
+      "MNST",
+      "2008-11-18",
+      "MONSTER WORLDWIDE INC",
+      "",
+      ""
+     ],
+     [
+      "MNST",
+      "2009-01-23",
+      "MONSTER WORLDWIDE INC",
+      "",
+      ""
+     ],
+     [
+      "MNST",
+      "2009-03-20",
+      "MONSTER WORLDWIDE INC",
+      "",
+      ""
+     ],
+     [
+      "MNST",
+      "2009-06-08",
+      "MONSTER WORLDWIDE INC",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "issuer_cik": 1020416,
+   "line_tickers": [],
+   "listed": false,
+   "name": "MONSTER WORLDWIDE INC",
+   "observed": true,
+   "security_type": "Common Stock",
+   "share_class": "COMMON"
+  },
+  "BBG000DS5588": {
+   "cusips": [
+    "84790A105"
+   ],
+   "eras": {
+    "SPB@2018-12-31": [
+     [
+      "SPB",
+      "2018-12-31",
+      "SPECTRUM BRANDS HOLDINGS INC",
+      "",
+      ""
+     ],
+     [
+      "SPB",
+      "2019-06-30",
+      "SPECTRUM BRANDS HOLDINGS INC",
+      "",
+      ""
+     ],
+     [
+      "SPB",
+      "2019-12-31",
+      "SPECTRUM BRANDS HOLDINGS INC",
+      "",
+      ""
+     ],
+     [
+      "SPB",
+      "2020-06-30",
+      "SPECTRUM BRANDS HOLDINGS INC",
+      "",
+      ""
+     ],
+     [
+      "SPB",
+      "2020-12-31",
+      "SPECTRUM BRANDS HOLDINGS INC",
+      "",
+      ""
+     ],
+     [
+      "SPB",
+      "2021-06-30",
+      "SPECTRUM BRANDS HOLDINGS INC",
+      "",
+      ""
+     ],
+     [
+      "SPB",
+      "2021-12-31",
+      "SPECTRUM BRANDS HOLDINGS INC",
+      "",
+      ""
+     ],
+     [
+      "SPB",
+      "2022-06-30",
+      "SPECTRUM BRANDS HOLDINGS INC",
+      "",
+      ""
+     ],
+     [
+      "SPB",
+      "2022-12-31",
+      "SPECTRUM BRANDS HOLDINGS INC",
+      "",
+      ""
+     ],
+     [
+      "SPB",
+      "2023-06-30",
+      "SPECTRUM BRANDS HOLDINGS INC",
+      "",
+      ""
+     ],
+     [
+      "SPB",
+      "2023-12-31",
+      "SPECTRUM BRANDS HOLDINGS INC",
+      "",
+      ""
+     ],
+     [
+      "SPB",
+      "2024-06-30",
+      "SPECTRUM BRANDS HOLDINGS INC",
+      "",
+      ""
+     ],
+     [
+      "SPB",
+      "2024-12-31",
+      "SPECTRUM BRANDS HOLDINGS INC",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "issuer_cik": 109177,
+   "line_tickers": [],
+   "listed": true,
+   "name": "SPECTRUM BRANDS HOLDINGS INC",
+   "observed": true,
+   "security_type": "Common Stock",
+   "share_class": "COMMON"
+  },
+  "BBG000FVQ185": {
+   "cusips": [
+    "867652406"
+   ],
+   "eras": {
+    "SPWR@2014-06-30": [
+     [
+      "SPWR",
+      "2014-06-30",
+      "SUNPOWER CORP",
+      "",
+      ""
+     ],
+     [
+      "SPWR",
+      "2014-12-31",
+      "SUNPOWER CORP.",
+      "",
+      ""
+     ],
+     [
+      "SPWR",
+      "2015-06-30",
+      "SUNPOWER CORP.",
+      "",
+      ""
+     ],
+     [
+      "SPWR",
+      "2015-12-31",
+      "SUNPOWER CORP.",
+      "",
+      ""
+     ],
+     [
+      "SPWR",
+      "2016-06-30",
+      "SUNPOWER CORP.",
+      "",
+      ""
+     ],
+     [
+      "SPWR",
+      "2016-12-30",
+      "SUNPOWER CORP.",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "issuer_cik": 867773,
+   "line_tickers": [],
+   "listed": false,
+   "name": "SUNPOWER CORP.",
+   "observed": true,
+   "security_type": "Common Stock",
+   "share_class": "COMMON"
+  },
+  "BBG000JXRXK2": {
+   "cusips": [
+    "845905108"
+   ],
+   "eras": {
+    "SOV@2008-01-16": [
+     [
+      "SOV",
+      "2008-01-16",
+      "SOVEREIGN BANCORP INC",
+      "",
+      ""
+     ],
+     [
+      "SOV",
+      "2008-05-31",
+      "SOVEREIGN BANCORP INC",
+      "",
+      ""
+     ],
+     [
+      "SOV",
+      "2008-07-25",
+      "SOVEREIGN BANCORP INC",
+      "",
+      ""
+     ],
+     [
+      "SOV",
+      "2008-11-18",
+      "SOVEREIGN BANCORP INC",
+      "",
+      ""
+     ],
+     [
+      "SOV",
+      "2009-01-23",
+      "SOVEREIGN BANCORP INC",
+      "",
+      ""
+     ],
+     [
+      "SOV",
+      "2009-03-20",
+      "SOVEREIGN BANCORP INC",
+      "",
+      ""
+     ],
+     [
+      "SOV",
+      "2009-06-08",
+      "SOVEREIGN BANCORP INC",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "issuer_cik": 811830,
+   "line_tickers": [],
+   "listed": false,
+   "name": "SOVEREIGN BANCORP INC",
+   "observed": true,
+   "security_type": "Common Stock",
+   "share_class": "COMMON"
+  },
+  "BBG000MJRJJ2": {
+   "cusips": [
+    "44267D107"
+   ],
+   "eras": {
+    "HHC@2012-06-29": [
+     [
+      "HHC",
+      "2012-06-29",
+      "HOWARD HUGHES CORP",
+      "",
+      ""
+     ],
+     [
+      "HHC",
+      "2012-12-31",
+      "HOWARD HUGHES CORP",
+      "",
+      ""
+     ],
+     [
+      "HHC",
+      "2013-06-28",
+      "HOWARD HUGHES CORP",
+      "",
+      ""
+     ],
+     [
+      "HHC",
+      "2013-12-31",
+      "HOWARD HUGHES CORP",
+      "",
+      ""
+     ],
+     [
+      "HHC",
+      "2014-06-30",
+      "HOWARD HUGHES CORP",
+      "",
+      ""
+     ],
+     [
+      "HHC",
+      "2014-12-31",
+      "HOWARD HUGHES CORP.",
+      "",
+      ""
+     ],
+     [
+      "HHC",
+      "2015-06-30",
+      "HOWARD HUGHES CORP.",
+      "",
+      ""
+     ],
+     [
+      "HHC",
+      "2015-12-31",
+      "HOWARD HUGHES CORP.",
+      "",
+      ""
+     ],
+     [
+      "HHC",
+      "2016-06-30",
+      "HOWARD HUGHES CORP.",
+      "",
+      ""
+     ],
+     [
+      "HHC",
+      "2016-12-30",
+      "HOWARD HUGHES CORP",
+      "",
+      ""
+     ],
+     [
+      "HHC",
+      "2017-06-30",
+      "HOWARD HUGHES CORP",
+      "",
+      ""
+     ],
+     [
+      "HHC",
+      "2017-12-31",
+      "HOWARD HUGHES CORP",
+      "",
+      ""
+     ],
+     [
+      "HHC",
+      "2018-06-30",
+      "HOWARD HUGHES CORP",
+      "",
+      ""
+     ],
+     [
+      "HHC",
+      "2018-12-31",
+      "HOWARD HUGHES CORP",
+      "",
+      ""
+     ],
+     [
+      "HHC",
+      "2019-06-30",
+      "HOWARD HUGHES CORP",
+      "",
+      ""
+     ],
+     [
+      "HHC",
+      "2019-12-31",
+      "HOWARD HUGHES CORP",
+      "",
+      ""
+     ],
+     [
+      "HHC",
+      "2020-06-30",
+      "HOWARD HUGHES CORP",
+      "",
+      ""
+     ],
+     [
+      "HHC",
+      "2020-12-31",
+      "HOWARD HUGHES CORP",
+      "",
+      ""
+     ],
+     [
+      "HHC",
+      "2021-06-30",
+      "HOWARD HUGHES CORP",
+      "",
+      ""
+     ],
+     [
+      "HHC",
+      "2021-12-31",
+      "HOWARD HUGHES CORP",
+      "",
+      ""
+     ],
+     [
+      "HHC",
+      "2022-06-30",
+      "HOWARD HUGHES CORP",
+      "",
+      ""
+     ],
+     [
+      "HHC",
+      "2022-12-31",
+      "HOWARD HUGHES CORP",
+      "",
+      ""
+     ],
+     [
+      "HHC",
+      "2023-06-30",
+      "HOWARD HUGHES CORP",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "issuer_cik": 1498828,
+   "line_tickers": [],
+   "listed": false,
+   "name": "HOWARD HUGHES CORP",
+   "observed": true,
+   "security_type": "Common Stock",
+   "share_class": "COMMON"
+  },
+  "BBG000NS03H7": {
+   "cusips": [
+    "553573106"
+   ],
+   "eras": {
+    "MSGN@2015-12-31": [
+     [
+      "MSGN",
+      "2015-12-31",
+      "MSG NETWORKS INC",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "issuer_cik": 1469372,
+   "line_tickers": [],
+   "listed": false,
+   "name": "MSG NETWORKS INC",
+   "observed": true,
+   "security_type": "Common Stock",
+   "share_class": "COMMON"
+  },
+  "BBG000P4BQM9": {
+   "cusips": [
+    "84763R101"
+   ],
+   "eras": {
+    "SPB@2014-06-30": [
+     [
+      "SPB",
+      "2014-06-30",
+      "SPECTRUM BRANDS HOLDINGS INC",
+      "",
+      ""
+     ],
+     [
+      "SPB",
+      "2014-12-31",
+      "SPECTRUM BRANDS HOLDINGS INC",
+      "",
+      ""
+     ],
+     [
+      "SPB",
+      "2015-06-30",
+      "SPECTRUM BRANDS HOLDINGS INC",
+      "",
+      ""
+     ],
+     [
+      "SPB",
+      "2015-12-31",
+      "SPECTRUM BRANDS HOLDINGS INC",
+      "",
+      ""
+     ],
+     [
+      "SPB",
+      "2016-06-30",
+      "SPECTRUM BRANDS HOLDINGS INC",
+      "",
+      ""
+     ],
+     [
+      "SPB",
+      "2016-12-30",
+      "SPECTRUM BRANDS HOLDINGS INC",
+      "",
+      ""
+     ],
+     [
+      "SPB",
+      "2017-06-30",
+      "SPECTRUM BRANDS HOLDINGS INC",
+      "",
+      ""
+     ],
+     [
+      "SPB",
+      "2017-12-31",
+      "SPECTRUM BRANDS HOLDINGS INC",
+      "",
+      ""
+     ],
+     [
+      "SPB",
+      "2018-06-30",
+      "SPECTRUM BRANDS HOLDINGS INC",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "issuer_cik": 109177,
+   "line_tickers": [],
+   "listed": false,
+   "name": "SPECTRUM BRANDS HOLDINGS INC",
+   "observed": true,
+   "security_type": "Common Stock",
+   "share_class": "COMMON"
+  },
+  "BBG000PCQQL6": {
+   "cusips": [
+    "74915M100"
+   ],
+   "eras": {
+    "QRTEA@2018-06-30": [
+     [
+      "QRTEA",
+      "2018-06-30",
+      "QURATE RETAIL INC SERIES A",
+      "",
+      ""
+     ],
+     [
+      "QRTEA",
+      "2018-12-31",
+      "QURATE RETAIL INC SERIES A",
+      "",
+      ""
+     ],
+     [
+      "QRTEA",
+      "2019-06-30",
+      "QURATE RETAIL INC SERIES A",
+      "",
+      ""
+     ],
+     [
+      "QRTEA",
+      "2019-12-31",
+      "QURATE RETAIL INC SERIES A",
+      "",
+      ""
+     ],
+     [
+      "QRTEA",
+      "2020-06-30",
+      "QURATE RETAIL INC SERIES A",
+      "",
+      ""
+     ],
+     [
+      "QRTEA",
+      "2020-12-31",
+      "QURATE RETAIL INC SERIES A",
+      "",
+      ""
+     ],
+     [
+      "QRTEA",
+      "2021-06-30",
+      "QURATE RETAIL INC SERIES A",
+      "",
+      ""
+     ],
+     [
+      "QRTEA",
+      "2021-12-31",
+      "QURATE RETAIL INC SERIES A",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "issuer_cik": 1355096,
+   "line_tickers": [],
+   "listed": false,
+   "name": "QURATE RETAIL INC SERIES A",
+   "observed": true,
+   "security_type": "Common Stock",
+   "share_class": "SERIES A"
+  },
+  "BBG000PSSG77": {
+   "cusips": [
+    "451663108"
+   ],
+   "eras": {
+    "IAR@2008-01-16": [
+     [
+      "IAR",
+      "2008-01-16",
+      "IDEARC INC",
+      "",
+      ""
+     ],
+     [
+      "IAR",
+      "2008-05-31",
+      "IDEARC INC",
+      "",
+      ""
+     ],
+     [
+      "IAR",
+      "2008-07-25",
+      "IDEARC INC",
+      "",
+      ""
+     ],
+     [
+      "IAR",
+      "2008-11-18",
+      "IDEARC INC",
+      "",
+      ""
+     ],
+     [
+      "IAR",
+      "2009-01-23",
+      "IDEARC INC",
+      "",
+      ""
+     ],
+     [
+      "IAR",
+      "2009-03-20",
+      "IDEARC INC",
+      "",
+      ""
+     ],
+     [
+      "IAR",
+      "2009-06-08",
+      "IDEARC INC",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "issuer_cik": 1367396,
+   "line_tickers": [],
+   "listed": false,
+   "name": "IDEARC INC",
+   "observed": true,
+   "security_type": "Common Stock",
+   "share_class": "COMMON"
+  },
+  "BBG000VMWHH5": {
+   "cusips": [
+    "25470F302"
+   ],
+   "eras": {
+    "DISCK@2014-12-31": [
+     [
+      "DISCK",
+      "2014-12-31",
+      "DISCOVERY COMMUNICATIONS-C",
+      "",
+      ""
+     ],
+     [
+      "DISCK",
+      "2015-06-30",
+      "DISCOVERY COMMUNICATIONS-C",
+      "",
+      ""
+     ],
+     [
+      "DISCK",
+      "2015-12-31",
+      "DISCOVERY COMMUNICATIONS-C",
+      "",
+      ""
+     ],
+     [
+      "DISCK",
+      "2016-06-30",
+      "DISCOVERY COMMUNICATIONS-C",
+      "",
+      ""
+     ],
+     [
+      "DISCK",
+      "2016-12-30",
+      "DISCOVERY COMMUNICATIONS-C",
+      "",
+      ""
+     ],
+     [
+      "DISCK",
+      "2017-06-30",
+      "DISCOVERY COMMUNICATIONS INC SERIE",
+      "",
+      ""
+     ],
+     [
+      "DISCK",
+      "2017-12-31",
+      "DISCOVERY COMMUNICATIONS INC SERIE",
+      "",
+      ""
+     ],
+     [
+      "DISCK",
+      "2018-06-30",
+      "DISCOVERY INC SERIES C",
+      "",
+      ""
+     ],
+     [
+      "DISCK",
+      "2018-12-31",
+      "DISCOVERY INC SERIES C",
+      "",
+      ""
+     ],
+     [
+      "DISCK",
+      "2019-06-30",
+      "DISCOVERY INC SERIES C",
+      "",
+      ""
+     ],
+     [
+      "DISCK",
+      "2019-12-31",
+      "DISCOVERY INC SERIES C",
+      "",
+      ""
+     ],
+     [
+      "DISCK",
+      "2020-06-30",
+      "DISCOVERY INC SERIES C",
+      "",
+      ""
+     ],
+     [
+      "DISCK",
+      "2020-12-31",
+      "DISCOVERY INC SERIES C",
+      "",
+      ""
+     ],
+     [
+      "DISCK",
+      "2021-06-30",
+      "DISCOVERY INC SERIES C",
+      "",
+      ""
+     ],
+     [
+      "DISCK",
+      "2021-12-31",
+      "DISCOVERY INC SERIES C",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "issuer_cik": 1437107,
+   "line_tickers": [],
+   "listed": false,
+   "name": "DISCOVERY INC SERIES C",
+   "observed": true,
+   "security_type": "Common Stock",
+   "share_class": "CLASS C"
+  },
+  "BBG001QD41M9": {
+   "cusips": [
+    "G27823106",
+    "G6095L109"
+   ],
+   "eras": {
+    "APTV@2017-12-31": [
+     [
+      "APTV",
+      "2017-12-31",
+      "APTIV PLC",
+      "",
+      ""
+     ],
+     [
+      "APTV",
+      "2018-06-30",
+      "APTIV PLC",
+      "",
+      ""
+     ],
+     [
+      "APTV",
+      "2018-12-31",
+      "APTIV PLC",
+      "",
+      ""
+     ],
+     [
+      "APTV",
+      "2019-06-30",
+      "APTIV PLC",
+      "",
+      ""
+     ],
+     [
+      "APTV",
+      "2019-12-31",
+      "APTIV PLC",
+      "",
+      ""
+     ],
+     [
+      "APTV",
+      "2020-06-30",
+      "APTIV PLC",
+      "",
+      ""
+     ],
+     [
+      "APTV",
+      "2020-12-31",
+      "APTIV PLC",
+      "",
+      ""
+     ],
+     [
+      "APTV",
+      "2021-06-30",
+      "APTIV PLC",
+      "",
+      ""
+     ],
+     [
+      "APTV",
+      "2021-12-31",
+      "APTIV PLC",
+      "",
+      ""
+     ],
+     [
+      "APTV",
+      "2022-06-30",
+      "APTIV PLC",
+      "",
+      ""
+     ],
+     [
+      "APTV",
+      "2022-12-31",
+      "APTIV PLC",
+      "",
+      ""
+     ],
+     [
+      "APTV",
+      "2023-06-30",
+      "APTIV PLC",
+      "",
+      ""
+     ],
+     [
+      "APTV",
+      "2023-12-31",
+      "APTIV PLC",
+      "",
+      ""
+     ],
+     [
+      "APTV",
+      "2024-06-30",
+      "APTIV PLC",
+      "",
+      ""
+     ]
+    ],
+    "DLPH@2015-06-30": [
+     [
+      "DLPH",
+      "2015-06-30",
+      "DELPHI AUTOMOTIVE PLC",
+      "",
+      ""
+     ],
+     [
+      "DLPH",
+      "2015-12-31",
+      "DELPHI AUTOMOTIVE PLC",
+      "",
+      ""
+     ],
+     [
+      "DLPH",
+      "2016-06-30",
+      "DELPHI AUTOMOTIVE PLC",
+      "",
+      ""
+     ],
+     [
+      "DLPH",
+      "2016-12-30",
+      "DELPHI AUTOMOTIVE PLC",
+      "",
+      ""
+     ],
+     [
+      "DLPH",
+      "2017-06-30",
+      "DELPHI AUTOMOTIVE PLC",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "issuer_cik": 1521332,
+   "line_tickers": [],
+   "listed": false,
+   "name": "APTIV PLC",
+   "observed": true,
+   "security_type": "Common Stock",
+   "share_class": "COMMON"
+  },
+  "BBG0038K9G41": {
+   "cusips": [
+    "53071M880",
+    "53071M856"
+   ],
+   "eras": {
+    "LVNTA@2012-12-31": [
+     [
+      "LVNTA",
+      "2012-12-31",
+      "LIBERTY VENTURES - SER A",
+      "",
+      ""
+     ],
+     [
+      "LVNTA",
+      "2013-06-28",
+      "LIBERTY VENTURES - SER A",
+      "",
+      ""
+     ],
+     [
+      "LVNTA",
+      "2013-12-31",
+      "LIBERTY VENTURES - SER A",
+      "",
+      ""
+     ],
+     [
+      "LVNTA",
+      "2014-06-30",
+      "LIBERTY VENTURES - SER A",
+      "",
+      ""
+     ],
+     [
+      "LVNTA",
+      "2014-12-31",
+      "LIBERTY VENTURES - SER A",
+      "",
+      ""
+     ],
+     [
+      "LVNTA",
+      "2015-06-30",
+      "LIBERTY VENTURES - SER A",
+      "",
+      ""
+     ],
+     [
+      "LVNTA",
+      "2015-12-31",
+      "LIBERTY VENTURES - SER A",
+      "",
+      ""
+     ],
+     [
+      "LVNTA",
+      "2016-06-30",
+      "LIBERTY VENTURES - SER A",
+      "",
+      ""
+     ]
+    ],
+    "LVNTA@2017-06-30": [
+     [
+      "LVNTA",
+      "2017-06-30",
+      "LIBERTY INTERACTIVE VENTURE CORP S",
+      "",
+      ""
+     ],
+     [
+      "LVNTA",
+      "2017-12-31",
+      "LIBERTY INTERACTIVE VENTURE CORP S",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "issuer_cik": 1355096,
+   "line_tickers": [],
+   "listed": false,
+   "name": "LIBERTY INTERACTIVE VENTURE CORP S",
+   "observed": true,
+   "security_type": "Tracking Stk",
+   "share_class": "SERIES A"
+  },
+  "BBG004P33PN3": {
+   "cusips": [
+    "18539C105"
+   ],
+   "eras": {
+    "CWENA@2023-06-30": [
+     [
+      "CWENA",
+      "2023-06-30",
+      "CLEARWAY ENERGY INC CLASS A",
+      "",
+      ""
+     ],
+     [
+      "CWENA",
+      "2023-12-31",
+      "CLEARWAY ENERGY INC CLASS A",
+      "",
+      ""
+     ],
+     [
+      "CWENA",
+      "2024-06-30",
+      "CLEARWAY ENERGY INC CLASS A",
+      "",
+      ""
+     ],
+     [
+      "CWENA",
+      "2024-12-31",
+      "CLEARWAY ENERGY INC CLASS A",
+      "",
+      ""
+     ],
+     [
+      "CWENA",
+      "2025-06-30",
+      "CLEARWAY ENERGY INC CLASS A",
+      "",
+      ""
+     ],
+     [
+      "CWENA",
+      "2025-12-31",
+      "CLEARWAY ENERGY INC CLASS A",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "issuer_cik": 1567683,
+   "line_tickers": [],
+   "listed": false,
+   "name": "CLEARWAY ENERGY INC CLASS A",
+   "observed": true,
+   "security_type": "Common Stock",
+   "share_class": "CLASS A"
+  },
+  "BBG005CPNTQ2": {
+   "cusips": [
+    "500754106"
+   ],
+   "eras": {
+    "KHC@2015-12-31": [
+     [
+      "KHC",
+      "2015-12-31",
+      "KRAFT HEINZ",
+      "",
+      ""
+     ],
+     [
+      "KHC",
+      "2016-06-30",
+      "KRAFT HEINZ",
+      "",
+      ""
+     ],
+     [
+      "KHC",
+      "2016-12-30",
+      "KRAFT HEINZ",
+      "",
+      ""
+     ],
+     [
+      "KHC",
+      "2017-06-30",
+      "KRAFT HEINZ",
+      "",
+      ""
+     ],
+     [
+      "KHC",
+      "2017-12-31",
+      "KRAFT HEINZ",
+      "",
+      ""
+     ],
+     [
+      "KHC",
+      "2018-06-30",
+      "KRAFT HEINZ",
+      "",
+      ""
+     ],
+     [
+      "KHC",
+      "2018-12-31",
+      "KRAFT HEINZ",
+      "",
+      ""
+     ],
+     [
+      "KHC",
+      "2019-06-30",
+      "KRAFT HEINZ",
+      "",
+      ""
+     ],
+     [
+      "KHC",
+      "2019-12-31",
+      "KRAFT HEINZ",
+      "",
+      ""
+     ],
+     [
+      "KHC",
+      "2020-06-30",
+      "KRAFT HEINZ",
+      "",
+      ""
+     ],
+     [
+      "KHC",
+      "2020-12-31",
+      "KRAFT HEINZ",
+      "",
+      ""
+     ],
+     [
+      "KHC",
+      "2021-06-30",
+      "KRAFT HEINZ",
+      "",
+      ""
+     ],
+     [
+      "KHC",
+      "2021-12-31",
+      "KRAFT HEINZ",
+      "",
+      ""
+     ],
+     [
+      "KHC",
+      "2022-06-30",
+      "KRAFT HEINZ",
+      "",
+      ""
+     ],
+     [
+      "KHC",
+      "2022-12-31",
+      "KRAFT HEINZ",
+      "",
+      ""
+     ],
+     [
+      "KHC",
+      "2023-06-30",
+      "KRAFT HEINZ",
+      "",
+      ""
+     ],
+     [
+      "KHC",
+      "2023-12-31",
+      "KRAFT HEINZ",
+      "",
+      ""
+     ],
+     [
+      "KHC",
+      "2024-06-30",
+      "KRAFT HEINZ",
+      "",
+      ""
+     ],
+     [
+      "KHC",
+      "2024-12-31",
+      "KRAFT HEINZ",
+      "",
+      ""
+     ],
+     [
+      "KHC",
+      "2025-06-30",
+      "KRAFT HEINZ",
+      "",
+      ""
+     ],
+     [
+      "KHC",
+      "2025-12-31",
+      "KRAFT HEINZ",
+      "",
+      ""
+     ],
+     [
+      "KHC",
+      "2026-06-30",
+      "KRAFT HEINZ",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "issuer_cik": 1637459,
+   "line_tickers": [],
+   "listed": true,
+   "name": "KRAFT HEINZ",
+   "observed": true,
+   "security_type": "Common Stock",
+   "share_class": "COMMON"
+  },
+  "BBG005DKMJ67": {
+   "cusips": [
+    "531465102"
+   ],
+   "eras": {
+    "LTRPA@2014-12-31": [
+     [
+      "LTRPA",
+      "2014-12-31",
+      "LIBERTY TRIPADVISOR HOLDINGS INC S",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "issuer_cik": 1606745,
+   "line_tickers": [],
+   "listed": false,
+   "name": "LIBERTY TRIPADVISOR HOLDINGS INC S",
+   "observed": true,
+   "security_type": "Common Stock",
+   "share_class": "CLASS A"
+  },
+  "BBG008LJ4TF3": {
+   "cusips": [
+    "18539C204"
+   ],
+   "eras": {
+    "CWEN@2023-06-30": [
+     [
+      "CWEN",
+      "2023-06-30",
+      "CLEARWAY ENERGY INC CLASS C",
+      "",
+      ""
+     ],
+     [
+      "CWEN",
+      "2023-12-31",
+      "CLEARWAY ENERGY INC CLASS C",
+      "",
+      ""
+     ],
+     [
+      "CWEN",
+      "2024-06-30",
+      "CLEARWAY ENERGY INC CLASS C",
+      "",
+      ""
+     ],
+     [
+      "CWEN",
+      "2024-12-31",
+      "CLEARWAY ENERGY INC CLASS C",
+      "",
+      ""
+     ],
+     [
+      "CWEN",
+      "2025-06-30",
+      "CLEARWAY ENERGY INC CLASS C",
+      "",
+      ""
+     ],
+     [
+      "CWEN",
+      "2025-12-31",
+      "CLEARWAY ENERGY INC CLASS C",
+      "",
+      ""
+     ],
+     [
+      "CWEN",
+      "2026-06-30",
+      "CLEARWAY ENERGY INC CLASS C",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "issuer_cik": 1567683,
+   "line_tickers": [],
+   "listed": true,
+   "name": "CLEARWAY ENERGY INC CLASS C",
+   "observed": true,
+   "security_type": "Common Stock",
+   "share_class": "CLASS C"
+  },
+  "BBG009R0CVG1": {
+   "cusips": [
+    "50218P107"
+   ],
+   "eras": {
+    "LKSD@2016-12-30": [
+     [
+      "LKSD",
+      "2016-12-30",
+      "LSC COMMUNICATIONS INC",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "issuer_cik": 1669812,
+   "line_tickers": [],
+   "listed": false,
+   "name": "LSC COMMUNICATIONS INC",
+   "observed": true,
+   "security_type": "Common Stock",
+   "share_class": "COMMON"
+  },
+  "BBG00B4Z2YX0": {
+   "cusips": [],
+   "eras": {
+    "LAUR@2008-01-16": [
+     [
+      "LAUR",
+      "2008-01-16",
+      "LAUREATE EDUCATION INC",
+      "",
+      ""
+     ],
+     [
+      "LAUR",
+      "2008-05-31",
+      "LAUREATE EDUCATION INC",
+      "",
+      ""
+     ],
+     [
+      "LAUR",
+      "2008-07-25",
+      "LAUREATE EDUCATION INC",
+      "",
+      ""
+     ],
+     [
+      "LAUR",
+      "2008-11-18",
+      "LAUREATE EDUCATION INC",
+      "",
+      ""
+     ],
+     [
+      "LAUR",
+      "2009-01-23",
+      "LAUREATE EDUCATION INC",
+      "",
+      ""
+     ],
+     [
+      "LAUR",
+      "2009-03-20",
+      "LAUREATE EDUCATION INC",
+      "",
+      ""
+     ],
+     [
+      "LAUR",
+      "2009-06-08",
+      "LAUREATE EDUCATION INC",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "ticker",
+   "issuer_cik": 912766,
+   "line_tickers": [],
+   "listed": true,
+   "name": "LAUREATE EDUCATION INC",
+   "observed": true,
+   "security_type": "Common Stock",
+   "share_class": "COMMON"
+  },
+  "BBG00B6WH9G3": {
+   "cusips": [
+    "57665R106"
+   ],
+   "eras": {
+    "MTCH@2015-12-31": [
+     [
+      "MTCH",
+      "2015-12-31",
+      "MATCH GROUP INC",
+      "",
+      ""
+     ],
+     [
+      "MTCH",
+      "2016-06-30",
+      "MATCH GROUP INC",
+      "",
+      ""
+     ],
+     [
+      "MTCH",
+      "2016-12-30",
+      "MATCH GROUP INC",
+      "",
+      ""
+     ],
+     [
+      "MTCH",
+      "2017-06-30",
+      "MATCH GROUP INC",
+      "",
+      ""
+     ],
+     [
+      "MTCH",
+      "2017-12-31",
+      "MATCH GROUP INC",
+      "",
+      ""
+     ],
+     [
+      "MTCH",
+      "2018-06-30",
+      "MATCH GROUP INC",
+      "",
+      ""
+     ],
+     [
+      "MTCH",
+      "2018-12-31",
+      "MATCH GROUP INC",
+      "",
+      ""
+     ],
+     [
+      "MTCH",
+      "2019-06-30",
+      "MATCH GROUP INC",
+      "",
+      ""
+     ],
+     [
+      "MTCH",
+      "2019-12-31",
+      "MATCH GROUP INC",
+      "",
+      ""
+     ],
+     [
+      "MTCH",
+      "2020-06-30",
+      "MATCH GROUP INC",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "issuer_cik": 891103,
+   "line_tickers": [],
+   "listed": false,
+   "name": "MATCH GROUP INC",
+   "observed": true,
+   "security_type": "Common Stock",
+   "share_class": "COMMON"
+  },
+  "BBG00GVR8YQ9": {
+   "cusips": [
+    "G5494J103"
+   ],
+   "eras": {
+    "LIN@2018-12-31": [
+     [
+      "LIN",
+      "2018-12-31",
+      "LINDE PLC",
+      "",
+      ""
+     ],
+     [
+      "LIN",
+      "2019-06-30",
+      "LINDE PLC",
+      "",
+      ""
+     ],
+     [
+      "LIN",
+      "2019-12-31",
+      "LINDE PLC",
+      "",
+      ""
+     ],
+     [
+      "LIN",
+      "2020-06-30",
+      "LINDE PLC",
+      "",
+      ""
+     ],
+     [
+      "LIN",
+      "2020-12-31",
+      "LINDE PLC",
+      "",
+      ""
+     ],
+     [
+      "LIN",
+      "2022-06-30",
+      "LINDE PLC",
+      "",
+      ""
+     ],
+     [
+      "LIN",
+      "2022-12-31",
+      "LINDE PLC",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "issuer_cik": 1707925,
+   "line_tickers": [],
+   "listed": false,
+   "name": "LINDE PLC",
+   "observed": true,
+   "security_type": "Common Stock",
+   "share_class": "COMMON"
+  },
+  "BBG00VT0KNC3": {
+   "cusips": [
+    "57667L107"
+   ],
+   "eras": {
+    "MTCH@2020-12-31": [
+     [
+      "MTCH",
+      "2020-12-31",
+      "MATCH GROUP INC",
+      "",
+      ""
+     ],
+     [
+      "MTCH",
+      "2021-06-30",
+      "MATCH GROUP INC",
+      "",
+      ""
+     ],
+     [
+      "MTCH",
+      "2021-12-31",
+      "MATCH GROUP INC",
+      "",
+      ""
+     ],
+     [
+      "MTCH",
+      "2022-06-30",
+      "MATCH GROUP INC",
+      "",
+      ""
+     ],
+     [
+      "MTCH",
+      "2022-12-31",
+      "MATCH GROUP INC",
+      "",
+      ""
+     ],
+     [
+      "MTCH",
+      "2023-06-30",
+      "MATCH GROUP INC",
+      "",
+      ""
+     ],
+     [
+      "MTCH",
+      "2023-12-31",
+      "MATCH GROUP INC",
+      "",
+      ""
+     ],
+     [
+      "MTCH",
+      "2024-06-30",
+      "MATCH GROUP INC",
+      "",
+      ""
+     ],
+     [
+      "MTCH",
+      "2024-12-31",
+      "MATCH GROUP INC",
+      "",
+      ""
+     ],
+     [
+      "MTCH",
+      "2025-06-30",
+      "MATCH GROUP INC",
+      "",
+      ""
+     ],
+     [
+      "MTCH",
+      "2025-12-31",
+      "MATCH GROUP INC",
+      "",
+      ""
+     ],
+     [
+      "MTCH",
+      "2026-06-30",
+      "MATCH GROUP INC",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "issuer_cik": 891103,
+   "line_tickers": [],
+   "listed": true,
+   "name": "MATCH GROUP INC",
+   "observed": true,
+   "security_type": "Common Stock",
+   "share_class": "COMMON"
+  },
+  "BBG011386VF4": {
+   "cusips": [
+    "934423104"
+   ],
+   "eras": {
+    "WBD@2022-06-30": [
+     [
+      "WBD",
+      "2022-06-30",
+      "WARNER BROS. DISCOVERY INC SERIES",
+      "",
+      ""
+     ],
+     [
+      "WBD",
+      "2022-12-31",
+      "WARNER BROS. DISCOVERY INC SERIES",
+      "",
+      ""
+     ],
+     [
+      "WBD",
+      "2023-06-30",
+      "WARNER BROS. DISCOVERY INC SERIES",
+      "",
+      ""
+     ],
+     [
+      "WBD",
+      "2023-12-31",
+      "WARNER BROS. DISCOVERY INC SERIES",
+      "",
+      ""
+     ],
+     [
+      "WBD",
+      "2024-06-30",
+      "WARNER BROS. DISCOVERY INC SERIES",
+      "",
+      ""
+     ],
+     [
+      "WBD",
+      "2024-12-31",
+      "WARNER BROS. DISCOVERY INC SERIES",
+      "",
+      ""
+     ],
+     [
+      "WBD",
+      "2025-06-30",
+      "WARNER BROS. DISCOVERY INC SERIES",
+      "",
+      ""
+     ],
+     [
+      "WBD",
+      "2025-12-31",
+      "WARNER BROS. DISCOVERY INC SERIES",
+      "",
+      ""
+     ],
+     [
+      "WBD",
+      "2026-06-30",
+      "WARNER BROS. DISCOVERY INC SERIES",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "issuer_cik": 1437107,
+   "line_tickers": [],
+   "listed": true,
+   "name": "WARNER BROS. DISCOVERY INC SERIES",
+   "observed": true,
+   "security_type": "Common Stock",
+   "share_class": "COMMON"
+  },
+  "BBG01FND0CC1": {
+   "cusips": [
+    "G54950103"
+   ],
+   "eras": {
+    "LIN@2023-06-30": [
+     [
+      "LIN",
+      "2023-06-30",
+      "LINDE PLC",
+      "",
+      ""
+     ],
+     [
+      "LIN",
+      "2023-12-31",
+      "LINDE PLC",
+      "",
+      ""
+     ],
+     [
+      "LIN",
+      "2024-06-30",
+      "LINDE PLC",
+      "",
+      ""
+     ],
+     [
+      "LIN",
+      "2024-12-31",
+      "LINDE PLC",
+      "",
+      ""
+     ],
+     [
+      "LIN",
+      "2025-06-30",
+      "LINDE PLC",
+      "",
+      ""
+     ],
+     [
+      "LIN",
+      "2025-12-31",
+      "LINDE PLC",
+      "",
+      ""
+     ],
+     [
+      "LIN",
+      "2026-06-30",
+      "LINDE PLC",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "issuer_cik": 1707925,
+   "line_tickers": [],
+   "listed": true,
+   "name": "LINDE PLC",
+   "observed": true,
+   "security_type": "Common Stock",
+   "share_class": "COMMON"
+  },
+  "BBG01MMT6PL7": {
+   "cusips": [
+    "504922105"
+   ],
+   "eras": {
+    "LH@2024-06-30": [
+     [
+      "LH",
+      "2024-06-30",
+      "LABCORP HOLDINGS INC",
+      "",
+      ""
+     ],
+     [
+      "LH",
+      "2024-12-31",
+      "LABCORP HOLDINGS INC",
+      "",
+      ""
+     ],
+     [
+      "LH",
+      "2025-06-30",
+      "LABCORP HOLDINGS INC",
+      "",
+      ""
+     ],
+     [
+      "LH",
+      "2025-12-31",
+      "LABCORP HOLDINGS INC",
+      "",
+      ""
+     ],
+     [
+      "LH",
+      "2026-06-30",
+      "LABCORP HOLDINGS INC",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "issuer_cik": 920148,
+   "line_tickers": [],
+   "listed": true,
+   "name": "LABCORP HOLDINGS INC",
+   "observed": true,
+   "security_type": "Common Stock",
+   "share_class": "COMMON"
+  },
+  "BBG01R914LT5": {
+   "cusips": [
+    "G3265R107"
+   ],
+   "eras": {
+    "APTV@2024-12-31": [
+     [
+      "APTV",
+      "2024-12-31",
+      "APTIV LTD",
+      "",
+      ""
+     ],
+     [
+      "APTV",
+      "2025-06-30",
+      "APTIV PLC",
+      "",
+      ""
+     ],
+     [
+      "APTV",
+      "2025-12-31",
+      "APTIV PLC",
+      "",
+      ""
+     ],
+     [
+      "APTV",
+      "2026-06-30",
+      "APTIV PLC",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "issuer_cik": 1521332,
+   "line_tickers": [],
+   "listed": true,
+   "name": "APTIV PLC",
+   "observed": true,
+   "security_type": "Common Stock",
+   "share_class": "COMMON"
+  },
+  "CIK1355096-COMMON": {
+   "cusips": [
+    "53071M104",
+    "53071M302",
+    "53071M880"
+   ],
+   "eras": {
+    "LCAPA@2008-01-16": [
+     [
+      "LCAPA",
+      "2008-01-16",
+      "LIBERTY CAPITAL",
+      "",
+      "1355096"
+     ],
+     [
+      "LCAPA",
+      "2008-05-31",
+      "LIBERTY CAPITAL",
+      "",
+      "1355096"
+     ],
+     [
+      "LCAPA",
+      "2008-07-25",
+      "LIBERTY CAPITAL",
+      "",
+      "1355096"
+     ],
+     [
+      "LCAPA",
+      "2008-11-18",
+      "LIBERTY CAPITAL",
+      "",
+      "1355096"
+     ],
+     [
+      "LCAPA",
+      "2009-01-23",
+      "LIBERTY CAPITAL",
+      "",
+      "1355096"
+     ],
+     [
+      "LCAPA",
+      "2009-03-20",
+      "LIBERTY CAPITAL",
+      "",
+      "1355096"
+     ],
+     [
+      "LCAPA",
+      "2009-06-08",
+      "LIBERTY CAPITAL",
+      "",
+      "1355096"
+     ]
+    ],
+    "LINTA@2008-01-16": [
+     [
+      "LINTA",
+      "2008-01-16",
+      "LIBERTY INTERACTIVE",
+      "",
+      ""
+     ],
+     [
+      "LINTA",
+      "2008-05-31",
+      "LIBERTY INTERACTIVE",
+      "",
+      ""
+     ],
+     [
+      "LINTA",
+      "2008-07-25",
+      "LIBERTY INTERACTIVE",
+      "",
+      ""
+     ],
+     [
+      "LINTA",
+      "2008-11-18",
+      "LIBERTY INTERACTIVE",
+      "",
+      ""
+     ],
+     [
+      "LINTA",
+      "2009-01-23",
+      "LIBERTY INTERACTIVE",
+      "",
+      ""
+     ],
+     [
+      "LINTA",
+      "2009-03-20",
+      "LIBERTY INTERACTIVE",
+      "",
+      ""
+     ],
+     [
+      "LINTA",
+      "2009-06-08",
+      "LIBERTY INTERACTIVE",
+      "",
+      ""
+     ]
+    ],
+    "LVNTA@2016-12-30": [
+     [
+      "LVNTA",
+      "2016-12-30",
+      "LIBERTY INTERACTIVE VENTURE CORP S",
+      "",
+      ""
+     ]
+    ],
+    "QVCA@2014-12-31": [
+     [
+      "QVCA",
+      "2014-12-31",
+      "LIBERTY INTERACTIVE CORP SERIES A",
+      "",
+      ""
+     ],
+     [
+      "QVCA",
+      "2015-06-30",
+      "LIBERTY INTERACTIVE QVC GROUP CORP",
+      "",
+      ""
+     ],
+     [
+      "QVCA",
+      "2015-12-31",
+      "LIBERTY INTERACTIVE QVC GROUP CORP",
+      "",
+      ""
+     ],
+     [
+      "QVCA",
+      "2016-06-30",
+      "LIBERTY INTERACTIVE QVC GROUP CORP",
+      "",
+      ""
+     ],
+     [
+      "QVCA",
+      "2016-12-30",
+      "LIBERTY INTERACTIVE QVC GROUP CORP",
+      "",
+      ""
+     ],
+     [
+      "QVCA",
+      "2017-06-30",
+      "LIBERTY INTERACTIVE QVC GROUP CORP",
+      "",
+      ""
+     ],
+     [
+      "QVCA",
+      "2017-12-31",
+      "LIBERTY INTERACTIVE QVC GROUP CORP",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "placeholder",
+   "issuer_cik": 1355096,
+   "line_tickers": [
+    "QRTEA"
+   ],
+   "listed": false,
+   "name": "LIBERTY INTERACTIVE VENTURE CORP S",
+   "observed": true,
+   "security_type": "",
+   "share_class": "COMMON"
+  },
+  "CIK1355096-SERIES-A": {
+   "cusips": [],
+   "eras": {
+    "QRTEA@2012-06-29": [
+     [
+      "QRTEA",
+      "2012-06-29",
+      "QURATE RETAIL GROUP CORP SERIES A",
+      "",
+      "1355096"
+     ],
+     [
+      "QRTEA",
+      "2012-12-31",
+      "QURATE RETAIL GROUP CORP SERIES A",
+      "",
+      "1355096"
+     ],
+     [
+      "QRTEA",
+      "2013-06-28",
+      "QURATE RETAIL GROUP CORP SERIES A",
+      "",
+      "1355096"
+     ],
+     [
+      "QRTEA",
+      "2013-12-31",
+      "QURATE RETAIL GROUP CORP SERIES A",
+      "",
+      "1355096"
+     ],
+     [
+      "QRTEA",
+      "2014-06-30",
+      "QURATE RETAIL GROUP CORP SERIES A",
+      "",
+      "1355096"
+     ]
+    ]
+   },
+   "figi_source": "placeholder",
+   "issuer_cik": 1355096,
+   "line_tickers": [],
+   "listed": false,
+   "name": "QURATE RETAIL GROUP CORP SERIES A",
+   "observed": true,
+   "security_type": "",
+   "share_class": "SERIES A"
+  },
+  "CIK1469372-CLASS-A": {
+   "cusips": [
+    "55826P100"
+   ],
+   "eras": {
+    "MSG@2012-06-29": [
+     [
+      "MSG",
+      "2012-06-29",
+      "MADISON SQUARE GARDEN CLASS A",
+      "",
+      "1469372"
+     ],
+     [
+      "MSG",
+      "2012-12-31",
+      "MADISON SQUARE GARDEN CLASS A",
+      "",
+      "1469372"
+     ],
+     [
+      "MSG",
+      "2013-06-28",
+      "MADISON SQUARE GARDEN CLASS A",
+      "",
+      "1469372"
+     ],
+     [
+      "MSG",
+      "2013-12-31",
+      "MADISON SQUARE GARDEN CLASS A",
+      "",
+      "1469372"
+     ],
+     [
+      "MSG",
+      "2014-06-30",
+      "MADISON SQUARE GARDEN CLASS A",
+      "",
+      "1469372"
+     ],
+     [
+      "MSG",
+      "2014-12-31",
+      "MADISON SQUARE GARDEN ORD CLASS A",
+      "",
+      "1469372"
+     ],
+     [
+      "MSG",
+      "2015-06-30",
+      "MADISON SQUARE GARDEN ORD CLASS A",
+      "",
+      "1469372"
+     ]
+    ]
+   },
+   "figi_source": "placeholder",
+   "issuer_cik": 1469372,
+   "line_tickers": [],
+   "listed": false,
+   "name": "MADISON SQUARE GARDEN ORD CLASS A",
+   "observed": true,
+   "security_type": "",
+   "share_class": "CLASS A"
+  },
+  "CIK351346-COMMON": {
+   "cusips": [
+    "090613100"
+   ],
+   "eras": {
+    "BMET@2008-01-16": [
+     [
+      "BMET",
+      "2008-01-16",
+      "BIOMET INC",
+      "",
+      ""
+     ],
+     [
+      "BMET",
+      "2008-05-31",
+      "BIOMET INC",
+      "",
+      ""
+     ],
+     [
+      "BMET",
+      "2008-07-25",
+      "BIOMET INC",
+      "",
+      ""
+     ],
+     [
+      "BMET",
+      "2008-11-18",
+      "BIOMET INC",
+      "",
+      ""
+     ],
+     [
+      "BMET",
+      "2009-01-23",
+      "BIOMET INC",
+      "",
+      ""
+     ],
+     [
+      "BMET",
+      "2009-03-20",
+      "BIOMET INC",
+      "",
+      ""
+     ],
+     [
+      "BMET",
+      "2009-06-08",
+      "BIOMET INC",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "placeholder",
+   "issuer_cik": 351346,
+   "line_tickers": [],
+   "listed": false,
+   "name": "BIOMET INC",
+   "observed": true,
+   "security_type": "",
+   "share_class": "COMMON"
+  },
+  "CIK48898-CLASS-B": {
+   "cusips": [
+    "443510201"
+   ],
+   "eras": {
+    "HUB-B@2008-01-16": [
+     [
+      "HUB-B",
+      "2008-01-16",
+      "HUBBELL INC",
+      "",
+      ""
+     ],
+     [
+      "HUB-B",
+      "2008-05-31",
+      "HUBBELL INC",
+      "",
+      ""
+     ],
+     [
+      "HUB-B",
+      "2008-07-25",
+      "HUBBELL INC",
+      "",
+      ""
+     ],
+     [
+      "HUB-B",
+      "2008-11-18",
+      "HUBBELL INC",
+      "",
+      ""
+     ],
+     [
+      "HUB-B",
+      "2009-01-23",
+      "HUBBELL INC",
+      "",
+      ""
+     ],
+     [
+      "HUB-B",
+      "2009-03-20",
+      "HUBBELL INC",
+      "",
+      ""
+     ],
+     [
+      "HUB-B",
+      "2009-06-08",
+      "HUBBELL INC",
+      "",
+      ""
+     ],
+     [
+      "HUB-B",
+      "2014-12-31",
+      "HUBBELL INC. CL B",
+      "",
+      ""
+     ],
+     [
+      "HUB-B",
+      "2015-06-30",
+      "HUBBELL INC. CL B",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "placeholder",
+   "issuer_cik": 48898,
+   "line_tickers": [],
+   "listed": false,
+   "name": "HUBBELL INC. CL B",
+   "observed": true,
+   "security_type": "",
+   "share_class": "CLASS B"
+  },
+  "CIK65873-COMMON": {
+   "cusips": [
+    "020039103"
+   ],
+   "eras": {
+    "AT@2008-01-16": [
+     [
+      "AT",
+      "2008-01-16",
+      "ALLTEL CORP",
+      "",
+      "65873"
+     ],
+     [
+      "AT",
+      "2008-05-31",
+      "ALLTEL CORP",
+      "",
+      "65873"
+     ],
+     [
+      "AT",
+      "2008-07-25",
+      "ALLTEL CORP",
+      "",
+      "65873"
+     ],
+     [
+      "AT",
+      "2008-11-18",
+      "ALLTEL CORP",
+      "",
+      "65873"
+     ],
+     [
+      "AT",
+      "2009-01-23",
+      "ALLTEL CORP",
+      "",
+      "65873"
+     ],
+     [
+      "AT",
+      "2009-03-20",
+      "ALLTEL CORP",
+      "",
+      "65873"
+     ],
+     [
+      "AT",
+      "2009-06-08",
+      "ALLTEL CORP",
+      "",
+      "65873"
+     ]
+    ]
+   },
+   "figi_source": "placeholder",
+   "issuer_cik": 65873,
+   "line_tickers": [],
+   "listed": false,
+   "name": "ALLTEL CORP",
+   "observed": true,
+   "security_type": "",
+   "share_class": "COMMON"
+  },
+  "CIK867773-COMMON": {
+   "cusips": [
+    "867652109"
+   ],
+   "eras": {
+    "SPWR@2008-01-16": [
+     [
+      "SPWR",
+      "2008-01-16",
+      "SUNPOWER CORP",
+      "",
+      ""
+     ],
+     [
+      "SPWR",
+      "2008-05-31",
+      "SUNPOWER CORP",
+      "",
+      ""
+     ],
+     [
+      "SPWR",
+      "2008-07-25",
+      "SUNPOWER CORP",
+      "",
+      ""
+     ],
+     [
+      "SPWR",
+      "2008-11-18",
+      "SUNPOWER CORP",
+      "",
+      ""
+     ],
+     [
+      "SPWR",
+      "2009-01-23",
+      "SUNPOWER CORP",
+      "",
+      ""
+     ],
+     [
+      "SPWR",
+      "2009-03-20",
+      "SUNPOWER CORP",
+      "",
+      ""
+     ],
+     [
+      "SPWR",
+      "2009-06-08",
+      "SUNPOWER CORP",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "placeholder",
+   "issuer_cik": 867773,
+   "line_tickers": [
+    "SPWRA"
+   ],
+   "listed": false,
+   "name": "SUNPOWER CORP",
+   "observed": true,
+   "security_type": "",
+   "share_class": "COMMON"
+  },
+  "CIK891103-COMMON": {
+   "cusips": [
+    "44919P300"
+   ],
+   "eras": {
+    "IAC@2012-06-29": [
+     [
+      "IAC",
+      "2012-06-29",
+      "IAC INTERACTIVE",
+      "",
+      "891103"
+     ],
+     [
+      "IAC",
+      "2012-12-31",
+      "IAC INTERACTIVE",
+      "",
+      "891103"
+     ],
+     [
+      "IAC",
+      "2013-06-28",
+      "IAC INTERACTIVE",
+      "",
+      "891103"
+     ],
+     [
+      "IAC",
+      "2013-12-31",
+      "IAC INTERACTIVE",
+      "",
+      "891103"
+     ],
+     [
+      "IAC",
+      "2014-06-30",
+      "IAC INTERACTIVE",
+      "",
+      "891103"
+     ]
+    ],
+    "IACI@2008-01-16": [
+     [
+      "IACI",
+      "2008-01-16",
+      "IAC INTERACTIVECORP",
+      "",
+      "891103"
+     ],
+     [
+      "IACI",
+      "2008-05-31",
+      "IAC INTERACTIVECORP",
+      "",
+      "891103"
+     ],
+     [
+      "IACI",
+      "2008-07-25",
+      "IAC INTERACTIVECORP",
+      "",
+      "891103"
+     ]
+    ]
+   },
+   "figi_source": "placeholder",
+   "issuer_cik": 891103,
+   "line_tickers": [],
+   "listed": false,
+   "name": "IAC INTERACTIVE",
+   "observed": true,
+   "security_type": "",
+   "share_class": "COMMON"
+  },
+  "CIK898660-COMMON": {
+   "cusips": [],
+   "eras": {
+    "STN@2008-01-16": [
+     [
+      "STN",
+      "2008-01-16",
+      "STATION CASINOS INC",
+      "",
+      ""
+     ],
+     [
+      "STN",
+      "2008-05-31",
+      "STATION CASINOS INC",
+      "",
+      ""
+     ],
+     [
+      "STN",
+      "2008-07-25",
+      "STATION CASINOS INC",
+      "",
+      ""
+     ],
+     [
+      "STN",
+      "2008-11-18",
+      "STATION CASINOS INC",
+      "",
+      ""
+     ],
+     [
+      "STN",
+      "2009-01-23",
+      "STATION CASINOS INC",
+      "",
+      ""
+     ],
+     [
+      "STN",
+      "2009-03-20",
+      "STATION CASINOS INC",
+      "",
+      ""
+     ],
+     [
+      "STN",
+      "2009-06-08",
+      "STATION CASINOS INC",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "placeholder",
+   "issuer_cik": 898660,
+   "line_tickers": [],
+   "listed": false,
+   "name": "STATION CASINOS INC",
+   "observed": true,
+   "security_type": "",
+   "share_class": "COMMON"
+  }
+ }
+}
