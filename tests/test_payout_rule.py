@@ -31,6 +31,16 @@ def test_a_stock_merger_names_the_acquirer_and_the_day_after_the_last_trade():
     assert f["value_formula"] == "0.8025 × price(QSR, 2014-12-15) / last_close − 1"
 
 
+def test_a_stock_leg_names_its_acquirers_ticker_on_the_price_date():
+    """Sub-plan 5e: CAL 2010's terms say UAUA, which UAL Corp traded as until the closing; the acquirer security
+    traded as UAL on the price date, and that is the price ticker, in the formula too."""
+    r = ending("A", "2014-12-20", last_trade_close="10")
+    f = value_fields(r, LTD, MergerInputs(llm=_terms("stock", ratio=1.05, ticker="UAUA"), acquirer_sec_id="BBG0UAL",
+                                          price_ticker="UAL"))
+    assert (f["price_ticker"], f["price_sec_id"], f["terms_gate"]) == ("UAL", "BBG0UAL", "failed")
+    assert f["value_formula"] == "1.05 × price(UAL, 2014-12-15) / last_close − 1"
+
+
 def test_cash_plus_stock_formula():
     r = ending("A", "2014-12-20", method="cash_plus_stock", last_trade_close="10", payout_per_share="65.5",
                stock_ratio="0.8025", acquirer_ticker="QSR")

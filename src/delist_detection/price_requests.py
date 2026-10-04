@@ -45,21 +45,25 @@ def key_of(row: Mapping[str, Any]) -> PriceKey:
 
 
 def stock_legs(endings: Sequence[Mapping[str, str]], llm_terms: Mapping[DelistingKey, Any],
-               merger_terms: Mapping, acquirer_ids: Mapping[DelistingKey, str]
-               ) -> dict[DelistingKey, tuple[str, str]]:
+               merger_terms: Mapping, acquirer_ids: Mapping[DelistingKey, str],
+               price_tickers: Mapping[DelistingKey, str] = {}) -> dict[DelistingKey, tuple[str, str]]:
     """The acquirer (ticker, sec_id) of each ending whose LLM terms read a stock
-    ratio and an acquirer ticker. A --merger-terms row for the ending wins and
-    carries its own acquirer price, so it asks nothing. Read before the payout
-    gate's verdict, so an answer that changes the gate does not change the
-    requests; the acquirer sec_id is "" when the run found none."""
+    ratio and name its acquirer: by the acquirer security's symbol on the price
+    date (`price_tickers`, sub-plan 5e), else the terms' ticker. A --merger-terms
+    row for the ending wins and carries its own acquirer price, so it asks
+    nothing. Read before the payout gate's verdict, so an answer that changes the
+    gate does not change the requests; the acquirer sec_id is "" when the run
+    found none."""
     out: dict[DelistingKey, tuple[str, str]] = {}
     for r in endings:
         key = DelistingKey(r["sec_id"], r["delist_date"])
         if for_delisting(merger_terms, key):
             continue
         t = llm_terms.get(key)
-        if t is not None and t.stock_ratio and t.acquirer_ticker:
-            out[key] = (normalize_ticker(t.acquirer_ticker), acquirer_ids.get(key, ""))
+        ticker = price_tickers.get(key) or (normalize_ticker(t.acquirer_ticker) if t is not None and
+                                            t.acquirer_ticker else "")
+        if t is not None and t.stock_ratio and ticker:
+            out[key] = (ticker, acquirer_ids.get(key, ""))
     return out
 
 

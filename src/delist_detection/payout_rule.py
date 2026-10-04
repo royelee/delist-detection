@@ -41,10 +41,11 @@ class MergerInputs:
     raw_value: float | None = None                # the regex payout read, before the gate
     raw_source: str = ""
     acquirer_sec_id: str = ""
+    price_ticker: str = ""        # the acquirer security's symbol on the price date (sub-plan 5e), over the terms'
 
 
 def merger_inputs(endings: Sequence[Mapping[str, str]], llm_terms: Mapping, raw: Mapping, merger_terms: Mapping,
-                  acquirer_ids: Mapping) -> dict[DelistingKey, MergerInputs]:
+                  acquirer_ids: Mapping, price_tickers: Mapping = {}) -> dict[DelistingKey, MergerInputs]:
     """The inputs of each merger-bucket ending (`endings`: delistings.csv rows)."""
     out: dict[DelistingKey, MergerInputs] = {}
     for r in endings:
@@ -54,7 +55,7 @@ def merger_inputs(endings: Sequence[Mapping[str, str]], llm_terms: Mapping, raw:
         pr = raw.get(key)
         out[key] = MergerInputs(for_delisting(merger_terms, key), llm_terms.get(key),
                                 getattr(pr, "value", None), getattr(pr, "source", "") or "",
-                                acquirer_ids.get(key, "") or r["acquirer_sec_id"])
+                                acquirer_ids.get(key, "") or r["acquirer_sec_id"], price_tickers.get(key, ""))
     return out
 
 
@@ -92,7 +93,7 @@ def _merger(row: Mapping[str, str], last_trade_date: str, inputs: MergerInputs) 
         source, gate = inputs.raw_source or "regex", FAILED
     else:
         return out
-    ticker = normalize_ticker(ticker) if ticker else ""
+    ticker = inputs.price_ticker or (normalize_ticker(ticker) if ticker else "")
     price_date = _day_after(last_trade_date)
     leg = ""
     if ratio:

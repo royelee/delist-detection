@@ -46,6 +46,19 @@ def test_a_stock_leg_comes_from_the_llm_terms_unless_the_caller_gave_terms():
         DelistingKey("A", "2018-12-10"): ("CVS", "BBG000BGRY34")}
 
 
+def test_a_stock_leg_asks_for_its_acquirers_symbol_on_the_price_date():
+    """Sub-plan 5e: the request names the acquirer security's ticker on the price date (CAL 2010: UAL, not the
+    terms' UAUA), and a leg whose terms named no ticker asks too once its acquirer line is known (GXP 2018)."""
+    a, b = ending("A", "2010-10-14"), ending("B", "2018-06-16")
+    llm = {DelistingKey("A", "2010-10-14"): SimpleNamespace(stock_ratio=1.05, acquirer_ticker="UAUA"),
+           DelistingKey("B", "2018-06-16"): SimpleNamespace(stock_ratio=0.5981, acquirer_ticker=None)}
+    ids = {DelistingKey("A", "2010-10-14"): "BBG000M65M61", DelistingKey("B", "2018-06-16"): "BBG00H433CR2"}
+    tickers = {DelistingKey("A", "2010-10-14"): "UAL", DelistingKey("B", "2018-06-16"): "EVRG"}
+    assert stock_legs([a, b], llm, {}, ids, tickers) == {
+        DelistingKey("A", "2010-10-14"): ("UAL", "BBG000M65M61"),
+        DelistingKey("B", "2018-06-16"): ("EVRG", "BBG00H433CR2")}
+
+
 def _answers(tmp_path, *rows, header="sec_id,last_trade_date,kind,lookup_sec_id,lookup_ticker,date,price"):
     p = tmp_path / "answers.csv"
     p.write_text("\n".join([header, *rows]) + "\n")
