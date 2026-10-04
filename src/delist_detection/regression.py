@@ -25,7 +25,7 @@ from .contract import id_change_rows
 from .diagnosis_truth import REGRESSION_PENDING, RULING_PENDING, DiagnosisCase
 
 REPORT_COLUMNS = ("sec_id", "table", "field", "kind", "old", "new")
-CHANGED, ADDED, REMOVED = "changed", "added", "removed"
+CHANGED, ADDED, REMOVED, RENAMED = "changed", "added", "removed", "renamed"
 # Columns the diff leaves out: the key, the verdict (5i changes it on purpose), and every column that is a function of
 # other columns and of prices (a dlret moves with any price answer and says nothing the truth set scores).
 SKIPPED_COLUMNS = frozenset({"sec_id", "verdict", "dlret", "dlret_fill", "terminal_value", "value_formula",
@@ -120,7 +120,8 @@ def build_report(repo: str | Path, rev: str, out_dir: str | Path, cases: Sequenc
     base, new = snapshot_at(repo, rev, out_dir), read_snapshot(out_dir)
     if id_changes is None:
         id_changes = id_changes_since(repo, rev, out_dir, new.id_changes)
-    return diff_contract(base, new, excluded(cases, base.delistings, new.delistings, id_changes=id_changes))
+    return diff_contract(base, new, excluded(cases, base.delistings, new.delistings, id_changes=id_changes),
+                         renames=id_changes)
 
 
 def successor_chain(sec_ids: Collection[str], *delistings: Sequence[Mapping[str, str]]) -> set[str]:
@@ -174,10 +175,47 @@ def _ranges(rows: Sequence[Mapping[str, str]]) -> dict[str, str]:
     return {k: ";".join(sorted(v)) for k, v in by.items()}
 
 
-def diff_contract(base: Snapshot, new: Snapshot, exclude: Collection[str] = ()) -> list[dict[str, str]]:
+def renamed_to(renames: Sequence[Mapping[str, str]]) -> dict[str, str]:
+    """Each renamed placeholder's sec_id now (`renames`: id_changes rows), a chain of renames followed to its end
+    (P renamed to M, M to F: P is F now)."""
+    step = {r["old_sec_id"]: r["new_sec_id"] for r in renames if r.get("old_sec_id") and r.get("new_sec_id")}
+    out: dict[str, str] = {}
+    for old in step:
+        now, seen = step[old], {old}
+        while now in step and now not in seen:
+            seen.add(now)
+            now = step[now]
+        out[old] = now
+    return out
+
+
+def _rekeyed(base: Snapshot, moved: Mapping[str, str]) -> Snapshot:
+    """`base` with each renamed placeholder's rows under its sec_id now: its contract/delistings.csv row becomes
+    that security's when the security had none of its own (its own row wins otherwise; of several placeholders the
+    first in sec_id order wins), and its ticker ranges join that security's."""
+    rows = {r["sec_id"]: r for r in base.delistings}
+    out = [r for r in base.delistings if r["sec_id"] not in moved]
+    taken = {r["sec_id"] for r in out}
+    for old in sorted(moved):
+        r, new_id = rows.get(old), moved[old]
+        if r is not None and new_id not in taken:
+            out.append({**r, "sec_id": new_id})
+            taken.add(new_id)
+    history = [{**r, "sec_id": moved.get(r["sec_id"], r["sec_id"])} for r in base.security_history]
+    return Snapshot(out, history, base.id_changes)
+
+
+def diff_contract(base: Snapshot, new: Snapshot, exclude: Collection[str] = (),
+                  renames: Sequence[Mapping[str, str]] | None = None) -> list[dict[str, str]]:
     """Every change from `base` to `new` outside `exclude`: delistings rows first (by sec_id, then column), then
-    ticker ranges, then new id_changes rows."""
+    ticker ranges, then the placeholder renames. A renamed placeholder (`renames`, id_changes rows; default the
+    run's own contract/id_changes.csv) is compared under the sec_id it holds now (`_rekeyed`), so a placeholder a
+    line folded into a FIGI shows as one `renamed` row under that FIGI, plus whatever of the FIGI's own row and
+    ranges really changed, never as its own removed row and the FIGI's added one. A rename the base run already
+    listed in its own contract/id_changes.csv is not reported again."""
     skip = set(exclude)
+    moved = renamed_to(new.id_changes if renames is None else renames)
+    base = _rekeyed(base, moved)
     out: list[dict[str, str]] = []
     old_rows = {r["sec_id"]: r for r in base.delistings}
     new_rows = {r["sec_id"]: r for r in new.delistings}
@@ -197,9 +235,9 @@ def diff_contract(base: Snapshot, new: Snapshot, exclude: Collection[str] = ()) 
             kind = ADDED if sec not in old_r else REMOVED if sec not in new_r else CHANGED
             out.append(_row(sec, "security_history", "ranges", kind, old_r.get(sec, ""), new_r.get(sec, "")))
     seen = {(r["old_sec_id"], r["new_sec_id"]) for r in base.id_changes}
-    for r in new.id_changes:
-        if (r["old_sec_id"], r["new_sec_id"]) not in seen and r["old_sec_id"] not in skip:
-            out.append(_row(r["old_sec_id"], "id_changes", "new_sec_id", ADDED, r["old_sec_id"], r["new_sec_id"]))
+    for old, now in sorted(moved.items(), key=lambda kv: (kv[1], kv[0])):
+        if (old, now) not in seen and old not in skip and now not in skip:
+            out.append(_row(now, "id_changes", "sec_id", RENAMED, old, now))
     return out
 
 

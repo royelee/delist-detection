@@ -44,8 +44,53 @@ def test_added_and_removed_rows_and_ticker_ranges_and_id_changes():
     rows = rg.diff_contract(base, new)
     assert [(r["sec_id"], r["table"], r["kind"]) for r in rows] == [
         ("A", "delistings", "removed"), ("B", "delistings", "added"), ("A", "security_history", "changed"),
-        ("B", "security_history", "added"), ("CIK9-COMMON", "id_changes", "added")]
-    assert rows[2]["old"] == "AAA:2008-01-02..2010-01-01:1" and rows[4]["new"] == "BBGX"
+        ("B", "security_history", "added"), ("BBGX", "id_changes", "renamed")]
+    assert rows[2]["old"] == "AAA:2008-01-02..2010-01-01:1"
+    assert (rows[4]["field"], rows[4]["old"], rows[4]["new"]) == ("sec_id", "CIK9-COMMON", "BBGX")
+
+
+def _rename(old, new):
+    return {"old_sec_id": old, "new_sec_id": new, "changed_on": "", "issuer_cik": "9", "share_class": "COMMON"}
+
+
+def test_a_folded_placeholder_is_one_renamed_row_under_its_figi():
+    """N1 (sub-plan 5a): a placeholder a line folded into a FIGI takes its ending and ranges there. Compared under
+    the FIGI it holds now, it is one rename, not its own removed row and the FIGI's changed one."""
+    base = _snap([contract_row("CIK9-COMMON", exit_kind="merger", last_trade_date="2014-08-28")],
+                 [hist("CIK9-COMMON", "9", "2008-01-02", "2012-07-02", ticker="SLE"),
+                  hist("BBGF", "9", "2012-07-03", "2014-08-28", ticker="HSH")])
+    new = _snap([contract_row("BBGF", exit_kind="merger", last_trade_date="2014-08-28")],
+                [hist("BBGF", "9", "2008-01-02", "2012-07-02", ticker="SLE"),
+                 hist("BBGF", "9", "2012-07-03", "2014-08-28", ticker="HSH")])
+    rows = rg.diff_contract(base, new, renames=[_rename("CIK9-COMMON", "BBGF")])
+    assert rows == [{"sec_id": "BBGF", "table": "id_changes", "field": "sec_id", "kind": "renamed",
+                     "old": "CIK9-COMMON", "new": "BBGF"}]
+
+
+def test_a_folded_placeholder_whose_ending_changed_shows_the_change_under_its_figi():
+    base = _snap([contract_row("CIK9-COMMON", exit_kind="exchange", successor_sec_id="BBGF")])
+    new = _snap([contract_row("BBGF", exit_kind="merger")])
+    rows = rg.diff_contract(base, new, renames=[_rename("CIK9-COMMON", "BBGF")])
+    assert [(r["sec_id"], r["table"], r["field"], r["kind"]) for r in rows] == [
+        ("BBGF", "delistings", "exit_kind", "changed"), ("BBGF", "delistings", "successor_sec_id", "changed"),
+        ("BBGF", "id_changes", "sec_id", "renamed")]
+
+
+def test_the_figis_own_base_row_wins_over_its_folded_placeholders():
+    base = _snap([contract_row("CIK9-COMMON", exit_kind="exchange"), contract_row("BBGF", exit_kind="merger")])
+    new = _snap([contract_row("BBGF", exit_kind="merger")])
+    assert [r["kind"] for r in rg.diff_contract(base, new, renames=[_rename("CIK9-COMMON", "BBGF")])] == ["renamed"]
+
+
+def test_a_rename_into_an_excluded_security_is_not_reported():
+    base = _snap([contract_row("CIK9-COMMON", exit_kind="exchange")])
+    new = _snap([contract_row("BBGF", exit_kind="merger")])
+    assert rg.diff_contract(base, new, exclude={"BBGF", "CIK9-COMMON"}, renames=[_rename("CIK9-COMMON", "BBGF")]) == []
+
+
+def test_renamed_to_follows_a_chain_of_renames():
+    assert rg.renamed_to([_rename("CIK9-COMMON", "MID"), _rename("MID", "BBGF")]) == {"CIK9-COMMON": "BBGF",
+                                                                                     "MID": "BBGF"}
 
 
 def test_excluded_securities_are_left_out():

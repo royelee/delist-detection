@@ -6,7 +6,8 @@
 It reads:
 - output/diagnose_unknown_report/loop/<label>/round-<N>/cases.csv, and the records/*.json beside it;
 - the truth file and its legs;
-- the contract at --base and under --output-dir.
+- the contract at --base and under --output-dir, the run's securities and the placeholders renamed since --base
+  (a regression of a sec_id the run lacks, or of a renamed placeholder, adds no truth row).
 
 It writes the truth file, appends data/diagnosis_truth_changes.csv and the ledger, and writes the round's
 summary.md. It prints one JSON line of counts. Offline (git only). Exit 2: a missing or unreadable input.
@@ -22,7 +23,7 @@ from delist_detection import diagnosis_loop as dl
 from delist_detection.atomic_io import write_atomic
 from delist_detection.diagnosis_truth import COLUMNS, LibraryRows, judge_all, load_legs, parse_rows
 from delist_detection.lifecycle import Tables
-from delist_detection.regression import RegressionInputError, read_snapshot, snapshot_at
+from delist_detection.regression import RegressionInputError, id_changes_since, read_snapshot, snapshot_at
 from delist_detection.truth import TruthFileError
 from delist_detection.truth_update import apply_round, flip_statuses
 
@@ -51,6 +52,7 @@ def main(argv: list[str] | None = None) -> int:
         truth_rows = dl.read_csv(args.truth)
         legs = load_legs(args.legs) if args.legs.exists() else {}
         base, new = snapshot_at(args.repo, args.base, args.output_dir), read_snapshot(args.output_dir)
+        renamed = {r["old_sec_id"] for r in id_changes_since(args.repo, args.base, args.output_dir, new.id_changes)}
         ledger = dl.read_ledger(args.loop_dir / "diagnosed.csv")
         tables = Tables.read(args.output_dir)
     except (RegressionInputError, TruthFileError, ValueError, OSError) as exc:
@@ -61,7 +63,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         res = apply_round(cases, records, truth_rows, {r["sec_id"]: r for r in base.delistings},
                           {r["sec_id"]: r for r in new.delistings}, label=args.label, round_no=args.round,
-                          report_dir=rel_reports, ledger_keys=dl.ledger_keys(ledger))
+                          report_dir=rel_reports, ledger_keys=dl.ledger_keys(ledger),
+                          run_sec_ids={r["sec_id"] for r in tables.securities}, renamed=renamed)
     except ValueError as exc:
         print(f"ABORTED: {exc}", file=sys.stderr)
         return 2

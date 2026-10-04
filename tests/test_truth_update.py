@@ -13,7 +13,7 @@ from delist_detection import diagnosis_truth as dt
 from delist_detection import store
 from delist_detection import truth_update as tu
 from tests.diagnosis_rows import truth_row
-from tests.lifecycle_tables import contract_row
+from tests.lifecycle_tables import contract_row, sec
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -29,9 +29,9 @@ def _record(verdicts, confidence="verified", upheld=True, refuted=()):
             "verification": {"upheld": upheld, "fields_refuted": list(refuted), "fields_upheld": [], "notes": ""}}
 
 
-def _apply(cases, records, truth=(), base=None, new=None, keys=frozenset()):
+def _apply(cases, records, truth=(), base=None, new=None, keys=frozenset(), **kw):
     return tu.apply_round(cases, records, list(truth), base or {}, new or {}, label="5a", round_no=1,
-                          report_dir="loop/5a/round-1/reports", ledger_keys=keys)
+                          report_dir="loop/5a/round-1/reports", ledger_keys=keys, **kw)
 
 
 BASE = {"Z": contract_row("Z", exit_kind="merger", last_trade_date="2010-09-30", value_rule="cash")}
@@ -46,6 +46,21 @@ def test_a_verified_upheld_new_value_enters_the_truth_as_pass():
     assert (row["case_id"], row["status"], row["last_trade_date"], row["exit_kind"]) == (
         "Z_5a-r1", "pass", "2010-10-01", "merger")
     assert [r["outcome"] for r in res.ledger_rows] == ["new_right"] and res.changes[0]["field"] == "(row)"
+
+
+NEW_RIGHT = _record([{"field": "last_trade_date", "right": "new", "value": "2010-10-01", "missed_filing": ""}])
+
+
+def test_a_regression_of_a_security_the_run_no_longer_holds_adds_no_truth_row():
+    """N1 (sub-plan 5a): a truth row under a sec_id the run lacks could only be judged a sec_id mismatch."""
+    res = _apply([REG], {"Z_5a-r1": NEW_RIGHT}, base=BASE, new=NEW, run_sec_ids={"Y"})
+    assert res.truth_rows == [] and res.changes == []
+    assert [(r["key"], r["outcome"]) for r in res.ledger_rows] == [("k-Z_5a-r1-last_trade_date", "new_right")]
+
+
+def test_a_regression_of_a_renamed_placeholder_adds_no_truth_row():
+    res = _apply([REG], {"Z_5a-r1": NEW_RIGHT}, base=BASE, new=NEW, run_sec_ids={"Z"}, renamed={"Z"})
+    assert res.truth_rows == [] and [r["outcome"] for r in res.ledger_rows] == ["new_right"]
 
 
 def test_an_old_value_enters_as_known_wrong_for_the_sub_plan():
@@ -272,7 +287,7 @@ def _round(tmp_path):
                              "ticker_history": [], "delistings": [], "observation_map": []})
     _git(repo, "add", "-A")
     _git(repo, "commit", "-q", "-m", "base")
-    store.write_tables(out, {"contract_delistings": [NEW["Z"]]})
+    store.write_tables(out, {"contract_delistings": [NEW["Z"]], "securities": [sec("Z")]})
     rdir = tmp_path / "loop" / "5a" / "round-1"
     (rdir / "records").mkdir(parents=True)
     dl.write_ledger(tmp_path / "loop" / "diagnosed.csv", [])
@@ -311,3 +326,19 @@ def test_script_dry_run_writes_nothing_and_prints_the_counts(tmp_path, capsys):
     assert [r["field"] for r in dl.read_csv(tmp_path / "changes.csv")] == ["(row)"]
     assert [r["outcome"] for r in dl.read_ledger(tmp_path / "loop" / "diagnosed.csv")] == ["new_right"]
     assert (rdir / "summary.md").exists()
+
+
+def test_script_adds_no_truth_row_for_a_security_the_run_no_longer_holds(tmp_path, capsys):
+    rdir, argv = _round(tmp_path)
+    repo_out = Path(argv[argv.index("--output-dir") + 1])
+    store.write_tables(repo_out, {"securities": [sec("Y")]})
+    case = _case("Z_5a-r1", "regression", "Z", ["last_trade_date"], ["2010-09-30"], ["2010-10-01"])
+    with (rdir / "cases.csv").open("w", newline="") as fh:
+        w = csv.DictWriter(fh, fieldnames=list(case), lineterminator="\n")
+        w.writeheader()
+        w.writerow(case)
+    (rdir / "records" / "Z_5a-r1.json").write_text(json.dumps(NEW_RIGHT))
+    dt.write_diagnosis_truth(tmp_path / "truth.csv", [])
+    assert _script().main(argv) == 0
+    assert dl.read_csv(tmp_path / "truth.csv") == []
+    assert [r["outcome"] for r in dl.read_ledger(tmp_path / "loop" / "diagnosed.csv")] == ["new_right"]

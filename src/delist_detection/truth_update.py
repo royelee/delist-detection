@@ -16,6 +16,8 @@
   and names a filing the earlier report missed or misread (`missed_filing`, an SEC accession number: anything else
   is no citation). A verdict about the shape, the ending or a leg sends the case to `ruling_pending` instead: the
   operator rewrites such rows.
+- A regression of a sec_id the run no longer holds, or of a placeholder renamed since the base commit, enters
+  only the ledger (sub-plan 5a: a placeholder a line folds into a FIGI is not a truth row of its own).
 - A `pending` ledger row is never re-diagnosed automatically: the operator settles it, or deletes the ledger row
   to retry (spec 1.6).
 - A case with no usable record (the agent failed: none, not a JSON object, or without `field_verdicts`,
@@ -122,7 +124,12 @@ def _truth_right_keys(case_id: str, right: Mapping[str, str], fields: Sequence[s
 def apply_round(cases: Sequence[Mapping[str, str]], records: Mapping[str, Mapping],
                 truth_rows: Sequence[Mapping[str, str]], base_contract: Mapping[str, Mapping[str, str]],
                 new_contract: Mapping[str, Mapping[str, str]], *, label: str, round_no: int, report_dir: str,
-                ledger_keys: Collection[str] = frozenset()) -> RoundResult:
+                ledger_keys: Collection[str] = frozenset(), run_sec_ids: Collection[str] | None = None,
+                renamed: Collection[str] = ()) -> RoundResult:
+    """One round's diagnoses applied (the module docstring's rules). A regression of a security the run no longer
+    holds (`run_sec_ids`: the run's securities, None for no check) or of a placeholder renamed since the base
+    commit (`renamed`: the old sec_ids) settles its ledger keys and adds no truth row: a truth row under an id
+    the run lacks could only ever be judged a `sec_id` mismatch."""
     rows = [dict(r) for r in truth_rows]
     by_case = {r["case_id"]: r for r in rows}
     in_truth = {r["sec_id"] for r in rows}
@@ -148,7 +155,8 @@ def apply_round(cases: Sequence[Mapping[str, str]], records: Mapping[str, Mappin
                     if usable else PENDING
                 ledger.append(_ledger(k, REGRESSION, sec, label, round_no, outcome, report))
             touching = [f for f in fields if f in SCORED or f in WHOLE_ROW]
-            if sec in in_truth or not touching:
+            gone = (run_sec_ids is not None and sec not in run_sec_ids) or sec in renamed
+            if sec in in_truth or not touching or gone:
                 continue
             if usable and all(right[f] in (OLD, NEW) for f in touching):
                 row = _regression_row(case, right, fields, a, b, base_contract.get(sec), new_contract.get(sec))
