@@ -3043,7 +3043,7 @@ def _line_run(fake_edgar, tmp_path, *, filings, figi, new_rows, old_figi=True, l
     run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None, id_baseline=id_baseline)
     return {name: read_table(name, table_path(tmp_path, name)) for name in (
         "securities", "cusip_history", "ticker_history", "delistings", "contract_delistings", "id_changes",
-        "review_summary")}
+        "review_summary", "uncertain")}
 
 
 def _flag_count(t, flag):
@@ -3139,8 +3139,55 @@ def test_an_unknown_form25_at_the_lines_switch_becomes_the_continuation(fake_edg
                   new_rows=_rs_new_rows())
     [d] = t["delistings"]
     assert (d["bucket"], d["crsp_code"], d["successor_sec_id"]) == ("exchange_transfer", "304", "BBGRSNEW1")
-    assert "line_continuation" in d["review_flags"].split(";")
+    # no_evidence_default went with the `unknown` kind; the two others are info on an exchange transfer
+    assert d["review_flags"].split(";") == ["no_last_trade_date", "no_last_close", "line_continuation"]
+    assert d["confidence"] == "medium"
     assert t["contract_delistings"][0]["continuation"] == "true"
+    assert not [u for u in t["uncertain"] if u["kind"] == "ending"]
+
+
+def _unit_delisting(sec_id, bucket, code, flags):
+    from types import SimpleNamespace
+    record = DelistRecord(ticker="RS", cik=4242, observed_delist_date="2012-09-24", crsp_code=code, bucket=bucket,
+                          confidence="high", reason="r", evidence={"flags": list(flags)}, sec_id=sec_id,
+                          delist_date="2012-10-04")
+    return Delisting(sec_id, 4242, "RS", "2012-10-04", record, LastTrade(date(2012, 9, 24), "notice_a", ()),
+                     None, None, "NYSE")
+
+
+def _line_successor(sec_id):
+    from delist_detection.figi_resolution import FigiCandidate
+    from delist_detection.line_follow import LineStep, LineSuccessor
+    step = LineStep(sec_id, "switch", RS_OLD, RS_NEW, "RS", "2012-09-17", "2012-09-25")
+    return LineSuccessor(sec_id, "BBGRSNEW1", FigiCandidate("BBGRSNEW1", "REVERSE SPLIT CO", "RS", "Common Stock", ()),
+                         step, "8-K 2012-09-24")
+
+
+@pytest.mark.parametrize("bucket,code", [(CrspBucket.LIQUIDATION, 450), (CrspBucket.COMPLIANCE_FAILURE, 560),
+                                         (CrspBucket.EXPIRATION, 600), (CrspBucket.MERGER, 231)])
+def test_distress_expiration_and_merger_endings_at_the_switch_take_no_line_successor(bucket, code):
+    from delist_detection.ftd import FtdIndex
+    d = _unit_delisting("BBGRS01", bucket, code, [])
+    securities = {"BBGRS01": Security("BBGRS01", 4242, "COMMON", "REVERSE SPLIT CO", "", True, "cusip")}
+    found = pipeline._Successors()
+    pipeline._line_successor_links([d], securities, {}, {"BBGRS01": _line_successor("BBGRS01")}, FtdIndex(), found)
+    assert found.links == {} and found.added == {} and found.rebucketed == {}
+
+
+def test_a_delisting_without_a_line_link_still_gets_the_in_run_successor_search():
+    from types import SimpleNamespace
+    from delist_detection import manifest as run_manifest
+    from delist_detection.history import Sighting
+    ctx = pipeline._RunContext(SimpleNamespace(edgar=SimpleNamespace()), date(2026, 9, 25), lambda *_: None, 1,
+                               run_manifest.StageMeter(lambda *_: None))
+    on_line = _unit_delisting("BBGRS01", CrspBucket.EXCHANGE_TRANSFER, 304, ["successor_unknown"])
+    other = _unit_delisting("BBGOTH1", CrspBucket.EXCHANGE_TRANSFER, 304, ["successor_unknown"])
+    securities = {sid: Security(sid, 4242, "COMMON", "CO", "", True, "cusip") for sid in ("BBGRS01", "BBGOTH1")}
+    securities["BBGNEW2"] = Security("BBGNEW2", 4242, "COMMON", "CO", "", True, "cusip")
+    sightings = {"BBGNEW2": [Sighting("2012-09-26", "RS", "observation")]}
+    found = pipeline._find_successors(ctx, [on_line, other], securities, sightings, {},
+                                      {"BBGRS01": _line_successor("BBGRS01")})
+    assert found.links == {on_line.key: ("BBGRSNEW1", "line_follow"), other.key: ("BBGNEW2", "same_issuer")}
 
 
 def test_a_line_successor_is_never_added_for_an_ending_that_does_not_need_it(fake_edgar, tmp_path):

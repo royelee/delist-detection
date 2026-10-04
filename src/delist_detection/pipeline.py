@@ -1184,7 +1184,8 @@ def _link_successors(delistings: list[Delisting], successors: _Successors) -> No
             if reason is not None:                  # an `unknown` row at the line's switch: the continuation
                 d.record.bucket, d.record.crsp_code, d.record.reason = (CrspBucket.EXCHANGE_TRANSFER,
                                                                         CONTINUATION_CODE, reason)
-                d.add_flag(LINE_CONTINUATION)
+                d.record.confidence = "medium"     # as a handoff continuation without a successor filing
+                d.record.evidence["flags"] = [f for f in d.flags if f != "no_evidence_default"] + [LINE_CONTINUATION]
             d.set_successor(sid)
             if how is not None:
                 d.record.evidence["successor_by"] = how
