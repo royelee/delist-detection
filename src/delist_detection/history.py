@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from collections import Counter, defaultdict
 from collections.abc import Callable, Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, timedelta
 from typing import NamedTuple
 
@@ -114,11 +114,14 @@ def ticker_sightings(sec: Security, ftd: FtdIndex, cusips: Sequence[str]) -> lis
     return sorted({s._replace(value=label.get(s.value.replace("-", ""), s.value)) for s in out})
 
 
-def cusip_sightings(sec: Security, ftd: FtdIndex, cusips: Sequence[str]) -> list[Sighting]:
+def cusip_sightings(sec: Security, ftd: FtdIndex, cusips: Sequence[str],
+                    successor_starts: Mapping[str, str] = {}) -> list[Sighting]:
     """Dated `(day, cusip, source)` sightings of the security's CUSIPs: the FTD
-    rows of each CUSIP that resolved to it (not those under a deleted symbol),
+    rows of each CUSIP that resolved to it (not those under a deleted symbol,
+    nor under a ticker a successor security took from `successor_starts`' day on),
     and the CUSIPs its observations carry."""
-    out = [Sighting(r.date, r.cusip, "ftd") for r in ftd.trading_rows(cusips)]
+    out = [Sighting(r.date, r.cusip, "ftd") for r in ftd.trading_rows(cusips)
+           if r.date < successor_starts.get(r.symbol, "~")]
     out += [Sighting(o.as_of, o.cusip, "observation") for e in sec.eras for o in e.observations if o.cusip]
     return sorted(set(out))
 
@@ -149,16 +152,28 @@ def own_last_seen(sec: Security, sig: Sequence[Sighting]) -> str:
 
 def history_rows(sec: Security, sightings: Sequence[Sighting], cusip_sightings: Sequence[Sighting], *,
                  listed: bool, end: str | None, end_exchange: str | None,
-                 exchange_today: Callable[[str], str | None]) -> tuple[list[dict], list[dict]]:
+                 exchange_today: Callable[[str], str | None],
+                 successor_starts: Mapping[str, str] = {}) -> tuple[list[dict], list[dict]]:
     """The security's ticker_history and cusip_history rows: its sightings, up to
     `end` when it has one (the last trade day of its last delisting, when it is
     not listed today), as ranges (`ranges_from_sightings`), open-ended while it
     is `listed`. The ticker range that ends at `end` carries that delisting's
     exchange (`end_exchange`); an open range the exchange EDGAR lists for its
-    ticker today (`exchange_today(ticker)`); any other range none."""
+    ticker today (`exchange_today(ticker)`); any other range none.
+
+    `successor_starts` (ticker -> the day a successor security took it, `pipeline._successor_starts`): sightings
+    under that ticker from that day on are the successor's, not this security's, so the ticker's range ends the
+    day before (and a range that would start then is dropped)."""
     th_rows, ch_rows = [], []
-    clipped = [x for x in sightings if end is None or x.day <= end]
+    clipped = [x for x in sightings if (end is None or x.day <= end) and x.day < successor_starts.get(x.value, "~")]
     for rg in ranges_from_sightings(clipped, end=end, open_ended=listed):
+        start = successor_starts.get(rg.value)
+        valid_to = rg.valid_to
+        if start is not None and (valid_to is None or valid_to >= start):
+            valid_to = (date.fromisoformat(start) - timedelta(days=1)).isoformat()
+            if valid_to < rg.valid_from:
+                continue
+        rg = replace(rg, valid_to=valid_to) if valid_to != rg.valid_to else rg
         if end is not None and rg.valid_to == end:
             exch = end_exchange
         elif rg.valid_to is None:

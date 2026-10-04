@@ -2993,6 +2993,102 @@ def test_a_merger_whose_cusip_goes_on_under_a_line_ticker_does_not_end_the_secur
     assert pipeline._ends_the_security(d, sec, {"BBGTEST": ["11111T101"]}, ftd) is False
 
 
+# --- Task 13b (sub-plan 5a): a successor's ticker is not its predecessor's ---
+
+def _successor_case(bucket, last_trade_day, successor_first, fails, *, observed_successor=True):
+    """S ("BBGOLD", own ticker TEST, line ticker TEST) with a delisting whose successor X ("BBGNEW") holds TEST from
+    `successor_first`; `fails` are S's own CUSIP's rows. Returns what `_history_rows` would be fed."""
+    from delist_detection.added_securities import AddedLineSuccessor
+    from delist_detection.ftd import FtdIndex
+    from delist_detection.history import Sighting
+    from delist_detection.observations import TickerEra
+    era = TickerEra("TEST", "2007-12-01", "2012-03-30", [Observation("TEST", "2007-12-01", "TEST CO")])
+    old = Security("BBGOLD", 5, "COMMON", "TEST CO", "Common Stock", True, "cusip", eras=[era],
+                   line_tickers=frozenset({"TEST"}))
+    new = Security("BBGNEW", 6, "COMMON", "TEST PLC", "Common Stock", True, "cusip")
+    record = DelistRecord(ticker="TEST", cik=5, observed_delist_date="2012-03-31", crsp_code=303, bucket=bucket,
+                          confidence="high", reason="x", evidence={"flags": []}, sec_id="BBGOLD",
+                          delist_date="2012-03-31", successor_sec_id="BBGNEW")
+    d = Delisting("BBGOLD", 5, "TEST", "2012-03-31", record, LastTrade(last_trade_day, "ex99_notice", ()), None,
+                  None, "NYSE")
+    ftd = FtdIndex(fails)
+    securities, added = {"BBGOLD": old}, {}
+    sightings = {"BBGOLD": [Sighting("2007-12-01", "TEST", "observation")]}
+    if observed_successor:
+        securities["BBGNEW"] = new
+        sightings["BBGNEW"] = [Sighting(successor_first, "TEST", "observation")]
+    else:
+        added["BBGNEW"] = AddedLineSuccessor(new, "TEST", successor_first, [])
+    cusips = {"BBGOLD": ["11111T101"]}
+    starts = pipeline._successor_starts([d], securities, sightings, cusips, ftd, added)
+    return d, old, cusips, ftd, starts
+
+
+def _th(old, ftd, cusips, starts, end, extra_first="2012-04-03"):
+    from delist_detection.history import Sighting, cusip_sightings, history_rows
+    sig = [Sighting("2007-12-01", "TEST", "observation")] + [
+        Sighting(r.date, r.symbol, "ftd") for r in ftd.trading_rows(cusips["BBGOLD"])]
+    th, ch = history_rows(old, sig, cusip_sightings(old, ftd, cusips["BBGOLD"], starts.get("BBGOLD", {})),
+                          listed=False, end=end, end_exchange="NYSE", exchange_today=lambda t: None,
+                          successor_starts=starts.get("BBGOLD", {}))
+    return th, ch
+
+
+def test_a_successors_ticker_is_not_the_predecessors_AON_shape():
+    """AON 2012: the old CUSIP's fails rows keep coming under TEST after the continuation took the ticker, at
+    changing prices. They are the successor's: the continuation clips S, its TEST range ends at the last trade, the
+    successor holds TEST from its first day and no ticker is shared."""
+    fails = (_continuing_fails("TEST", "11111T101", n=3, start=date(2012, 3, 1), step_days=10)
+             + _continuing_fails("TEST", "11111T101", n=20, start=date(2012, 4, 3), step_days=4))
+    d, old, cusips, ftd, starts = _successor_case(CrspBucket.EXCHANGE_TRANSFER, date(2012, 3, 30), "2012-04-03",
+                                                  fails)
+    assert starts == {"BBGOLD": {"TEST": "2012-04-03"}}
+    assert pipeline._ends_the_security(d, old, cusips, ftd, starts["BBGOLD"]) is True
+    assert pipeline._ends_the_security(d, old, cusips, ftd) is False          # the old behaviour, no map
+    th, ch = _th(old, ftd, cusips, starts, "2012-03-30")
+    assert [(r["ticker"], r["valid_to"]) for r in th] == [("TEST", "2012-03-30")]
+    assert [r["valid_to"] for r in ch] == ["2012-03-30"]
+    new_th = [{"sec_id": "BBGNEW", "ticker": "TEST", "exchange": "NYSE", "valid_from": "2012-04-03",
+               "valid_to": None, "source": "observation"}]
+    assert ticker_range_review(th + new_th) == []
+
+
+def test_a_successors_ticker_is_not_the_predecessors_STX_shape():
+    """STX 2021: a line successor (added) starts its ticker on 2021-05-19, before the predecessor's last sighting
+    (the old CUSIP's settling tail under the same ticker). The predecessor's range ends the day before."""
+    tail = [FtdRow(d, "11111T101", "TEST", "TEST CO", 10.0)
+            for d in ("2021-05-17", "2021-05-18", "2021-05-24", "2021-05-28")]
+    d, old, cusips, ftd, starts = _successor_case(CrspBucket.EXCHANGE_TRANSFER, None, "2021-05-19", tail,
+                                                  observed_successor=False)
+    assert starts == {"BBGOLD": {"TEST": "2021-05-19"}}
+    th, ch = _th(old, ftd, cusips, starts, None)
+    assert [(r["ticker"], r["valid_to"]) for r in th] == [("TEST", "2021-05-18")]
+    new_th = [{"sec_id": "BBGNEW", "ticker": "TEST", "exchange": None, "valid_from": "2021-05-19",
+               "valid_to": None, "source": "ftd"}]
+    assert ticker_range_review(th + new_th) == []
+
+
+def test_a_successor_on_another_ticker_changes_nothing_MWV_shape():
+    """MWV -> WRK: the successor trades under another ticker, so S's own rows are all S's."""
+    fails = _continuing_fails("TEST", "11111T101", n=20, start=date(2012, 4, 3), step_days=4)
+    d, old, cusips, ftd, starts = _successor_case(CrspBucket.MERGER, date(2012, 3, 30), "2012-04-03", fails)
+    from delist_detection.history import Sighting
+    other = pipeline._successor_starts([d], {"BBGOLD": old, "BBGNEW": old},
+                                       {"BBGNEW": [Sighting("2012-04-03", "WRK", "observation")]}, cusips, ftd, {})
+    assert other == {"BBGOLD": {"WRK": "2012-04-03"}}
+    assert pipeline._ends_the_security(d, old, cusips, ftd, other["BBGOLD"]) is False   # the WRK-like own rows count
+
+
+def test_a_security_with_no_successor_taking_its_ticker_keeps_every_row_WRK_shape():
+    """The existing continues-after tests (`test_a_disney_like_continuing_merger_gets_successor_itself`) pin the
+    default; a delisting whose successor is the security itself yields no start."""
+    fails = _continuing_fails("TEST", "11111T101", n=20, start=date(2012, 4, 3), step_days=4)
+    d, old, cusips, ftd, _ = _successor_case(CrspBucket.MERGER, date(2012, 3, 30), "2012-04-03", fails)
+    d.record = replace(d.record, successor_sec_id="BBGOLD")
+    assert pipeline._successor_starts([d], {"BBGOLD": old}, {}, cusips, ftd, {}) == {}
+    assert pipeline._ends_the_security(d, old, cusips, ftd, {}) is False
+
+
 # --- sub-plan 5a, stage 4b: a line followed past the observations (pipeline._follow_lines) ---
 
 LINE_F25 = ("<TYPE>25-NSE\n<notificationOfRemoval><exchange><entityName>New York Stock Exchange LLC</entityName>"

@@ -772,6 +772,12 @@ conflate them.
   years after such a guess; the guess, not the listing, was wrong. A security
   none of whose delistings ends it, and that isn't listed today either, is
   left unclipped, ending at its last real sighting.
+  A successor's ticker is not its predecessor's (`pipeline._successor_starts`, one map shared by the clip check and
+  the ranges): when a delisting's successor is another security X that holds ticker T from day F (X's first
+  sighting under T, no earlier than 30 days before the delisting's last trade day, else its delist date), the
+  security's fails rows and sightings under T from F on are X's. They do not count as it continuing
+  (`_continues_after`: AON 2012), and its T range (and old-CUSIP range) ends the day before F (`history_rows`:
+  STX 2021, CRC 2016, ODP 2020).
 - **`observation_map.csv` is the caller's join surface, not a review table.**
   Every distinct input observation gets one row: its era, its `sec_id` (blank
   when unresolved), the era's issuer CIK, the security's `ticker_history`
