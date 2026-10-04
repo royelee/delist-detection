@@ -440,3 +440,14 @@ def test_other_registrant_reraises_fatal_and_treats_a_request_failure_as_failed(
     assert lf.other_registrant(hits(requests.Timeout("slow")), _Edgar({}), name="X Co", day=date(2012, 9, 26),
                                cik=1, own_tickers=set()) == lf.READ_FAILED
     assert _corr(other=lf.READ_FAILED, filings=[_f("8-K", "2012-09-24", "5.03"), LATER_10Q]) == ("", "read_failed")
+
+
+# --- sub-plan 5c: "changed from X to Y" names Y ---
+
+def test_a_symbol_changed_from_one_ticker_to_another_names_the_new_one():
+    """RRI Energy's 2010 8-K: "our ticker symbol was changed from “RRI” to “GEN,”" -- the first pattern alone reads
+    RRI, the old one, which the line follow drops as its own; GEN is the line's new symbol."""
+    from delist_detection.line_follow import text_symbols  # noqa: E402
+    from tests import issuer_role_cases as ic  # noqa: E402
+    assert "GEN" in text_symbols([ic.EDGAR["texts"]["0000950123-10-111604"]])
+    assert "XYZ" in text_symbols(['the trading symbol of the common stock changed from "ABC" to "XYZ" today'])

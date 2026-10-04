@@ -52,6 +52,10 @@ _NOT_COMMON = re.compile(r"pref|warrant|right|unit|\bWRT\b", re.I)     # OpenFIG
 _SYMBOL = re.compile(r"[A-Z]{1,5}(?:-[A-Z])?")
 # "under the ticker symbol “CHX”", "the new trading symbol for the common stock is FNP"; the ticker is upper case
 _TEXT_SYMBOL = re.compile(r"(?i:symbol)[^.;]{0,60}?(?:\b(?i:is|to|of|under)\b\s*|[\"“'(])\s*[\"“'(]?([A-Z]{1,5})\b(?![a-z])")
+# "our ticker symbol was changed from “RRI” to “GEN,”": the symbol after "to" (sub-plan 5c; the first pattern
+# alone reads RRI, the old one)
+_TEXT_SYMBOL_CHANGE = re.compile(r"(?i:symbol)[^.;]{0,60}?\b(?i:from)\s+[\"“'(]?[A-Z]{1,5}[\"”')]?,?\s+(?i:to)\s+"
+                                 r"[\"“'(]?([A-Z]{1,5})\b(?![a-z])")
 _STATE_TAG = re.compile(r"\s*/[A-Z]+/?\s*$")          # EDGAR's "AETNA INC /PA/"
 # "the CUSIP number changed to 316645100": a nine-character CUSIP within 60 characters of the word
 _TEXT_CUSIP = re.compile(r"(?i:CUSIP)(?:\s*(?i:No)\.)?[^.;]{0,60}?\b([0-9A-Za-z]{8}[0-9])\b")
@@ -231,9 +235,9 @@ def candidate_steps(sec_id: str, cusips: Sequence[str], tickers: Collection[str]
 
 
 def text_symbols(texts: Iterable[str]) -> set[str]:
-    """The ticker symbols an 8-K's text names as the stock's new one ("under the ticker symbol "CHX""),
-    upper-case."""
-    return {m.group(1) for t in texts for m in _TEXT_SYMBOL.finditer(t or "")}
+    """The ticker symbols an 8-K's text names as the stock's new one ("under the ticker symbol "CHX"", "changed
+    from "RRI" to "GEN""), upper-case."""
+    return {m.group(1) for t in texts for rx in (_TEXT_SYMBOL, _TEXT_SYMBOL_CHANGE) for m in rx.finditer(t or "")}
 
 
 def cusip_check_digit_ok(cusip: str) -> bool:
