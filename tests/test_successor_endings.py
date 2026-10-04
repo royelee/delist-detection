@@ -88,3 +88,73 @@ def test_the_predecessors_form25_at_the_successors_first_day_is_not_its_ending(f
     rows = [FtdRow("2020-06-02", "65249B109", "NEWC", "NEWCO CORP", 10.0)]
     assert _ends(fake_edgar, monkeypatch, {SID: AddedLineSuccessor(_security(), "NEWC", "2020-05-20", rows)}
                  ).delistings == []
+
+
+class _FailingHalts:
+    """A Nasdaq halt feed whose every day fails to answer."""
+
+    def __init__(self):
+        self.failed = []
+
+    def deletion_halt(self, ticker, lo, hi, max_days=5):
+        self.failed.append(lo)
+        return None
+
+    def failed_days(self):
+        return tuple(self.failed)
+
+
+def _ctx(edgar, monkeypatch):
+    clients = pipeline.Clients(edgar=edgar, resolver=None, classifier=DelistClassifier(edgar, TickerResolver(edgar)),
+                               figi=None, ftd_client=None, as_of=date(2026, 9, 25))
+    monkeypatch.setattr(pipeline, "listed_today", lambda *a, **k: False)
+    return clients, pipeline._RunContext(clients, date(2026, 9, 25), lambda *a: None, 1, StageMeter(lambda *a: None))
+
+
+def test_a_failed_halt_feed_read_makes_the_ending_resolution_degraded(fake_edgar, monkeypatch):
+    edgar = _edgar(fake_edgar)
+    edgar.texts["K-1"] = "Item 3.01 Notice of Delisting. " + "x" * 300        # no 8-K text date: the feed is asked
+    clients, ctx = _ctx(edgar, monkeypatch)
+    finder = DelistingFinder(edgar, clients.classifier, halts=_FailingHalts())
+    a = AddedSuccessor(_security(), "NEWC", "2016-09-08")
+    ends = pipeline._successor_endings(ctx, finder, {SID: a}, {}, {}, FtdIndex([]),
+                                       pipeline._IssuerAnswers({}, {}, {}, set()))
+    assert [d.delist_date for d in ends.delistings] == ["2020-06-11"]
+    assert "resolution_degraded" in ends.delistings[0].flags
+    degraded = [r for r in ends.review if r.flag == "resolution_degraded"]
+    assert len(degraded) == 1 and "halt feed" in degraded[0].reason
+
+
+def test_the_finders_review_rows_are_kept(fake_edgar, monkeypatch):
+    from delist_detection.review_triage import ReviewItem
+    edgar = _edgar(fake_edgar)
+    clients, ctx = _ctx(edgar, monkeypatch)
+    item = ReviewItem(SID, "NEWC", CIK, "ticker_unconfirmed", "from the finder")
+
+    class _Finder:
+        def find(self, context, fallback=True):
+            return [], [item]
+
+    ends = pipeline._successor_endings(ctx, _Finder(), {SID: AddedSuccessor(_security(), "NEWC", "2016-09-08")},
+                                       {}, {}, FtdIndex([]), pipeline._IssuerAnswers({}, {}, {}, set()))
+    assert ends.review == [item]
+
+
+def test_a_line_successors_span_is_clipped_at_its_own_last_trade(fake_edgar, monkeypatch):
+    """California Resources' 2016 line: fails rows run on past the last trade of its own ending."""
+    rows = [FtdRow(f"2020-0{m}-15", "65249B109", "NEWC", "NEWCO CORP", 10.0 + m) for m in range(1, 9)]
+    a = AddedLineSuccessor(_security(), "NEWC", "2019-06-03", rows)
+    ends = _ends(fake_edgar, monkeypatch, {SID: a})
+    assert ends.delistings[0].last_trade.day == date(2020, 6, 1)
+    assert a.span() == ("2019-06-03", "2020-06-01")
+
+
+def test_the_role_refusals_are_logged_once_as_one_line(fake_edgar, monkeypatch):
+    from types import SimpleNamespace as NS
+    lines = []
+    ctx = pipeline._RunContext(None, date(2026, 9, 25), lines.append, 1, StageMeter(lambda *a: None))
+    rows = [NS(sec_id="B", record=NS(evidence={"survived": "each share of Mirant ..."})),
+            NS(sec_id="A", record=NS(evidence={"survived": "the Company issued ..."})),
+            NS(sec_id="C", record=NS(evidence={}))]
+    pipeline._log_role_refusals(ctx, rows)
+    assert lines == ["role refusal: 2 rows (A, B)"]

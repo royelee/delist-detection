@@ -179,3 +179,109 @@ def test_a_cash_take_private_whose_insiders_rolled_over_is_a_target_not_an_acqui
     own = X.own_exchange([text], names=["CONTINENTAL RESOURCES INC"], class_letter=None)
     assert own is not None and (own.ratio, own.cash, own.one_for_one) == (0.0, True, False)
     assert X.acquires([text], names=["CONTINENTAL RESOURCES INC"]) == ""
+
+
+# --- the whole-branch review's findings (final fix wave) ---
+_SUB = (" Each share of common stock of Eagle Acquisition Corp. was converted into one share of common stock of the "
+        "Company.")
+
+
+def _no_role_refusal(own_sentence: str, names=("TARGET INC",)):
+    """A cash target's own conversion: read as its own exchange, so the role refusal (own is None and acquires or
+    distributes) cannot fire."""
+    texts = [own_sentence + _SUB]
+    own = X.own_exchange(texts, names=list(names), class_letter=None)
+    assert own is not None and own.cash and not own.one_for_one
+    return own
+
+
+@pytest.mark.parametrize("sentence", [
+    # (a) the consideration is defined elsewhere
+    "Each share of the Company's common stock was cancelled and converted into the right to receive the Merger "
+    "Consideration.",
+    "Each share of the Company's common stock was converted into the right to receive the Per Share Merger "
+    "Consideration.",
+    "Each share of the Company's common stock was converted into the right to receive the Offer Price.",
+    "Each share of the Company's common stock was converted into the right to receive cash in an amount equal to "
+    "$25.00.",
+    "Each share of the Company's common stock was converted into the right to receive cash consideration of $25.00.",
+    # (c) a conversion verb beats "holders of record" / "distributed" in the sentence
+    "Each share of the Company's common stock held by holders of record was converted into the right to receive "
+    "$25.00 in cash.",
+    "Each share of the Company's common stock was converted into the right to receive $25.00 in cash, which the "
+    "paying agent distributed to stockholders.",
+])
+def test_a_cash_targets_own_conversion_is_read_so_the_role_refusal_cannot_fire(sentence):
+    _no_role_refusal(sentence)
+
+
+def test_a_cash_target_that_distributed_a_spin_off_first_is_no_distributor():
+    text = ("Prior to the merger, the Company distributed one share of SpinCo common stock for every four shares of "
+            "the Company's common stock held. At the effective time each share of the Company's common stock was "
+            "converted into the right to receive the Per Share Merger Consideration.")
+    own = X.own_exchange([text], names=["TARGET INC"], class_letter=None)
+    assert own is not None and own.cash
+
+
+def test_a_top_up_option_issue_is_no_acquirer_sentence():
+    text = ("On May 1, 2012, Purchaser accepted for payment all Shares validly tendered. Purchaser exercised its "
+            "Top-Up Option, and the Company issued 12,345,678 shares of Common Stock to Purchaser pursuant to the "
+            "Top-Up Option under the Merger Agreement. At the effective time of the Merger, each Share was converted "
+            "into the right to receive $25.00 in cash.")
+    assert X.acquires([text], names=["TARGET INC"]) == ""
+    # ... while a real issue under the merger agreement still is one
+    real = ("the Company issued an aggregate of 79,241,916 Common Shares to Sabine Investor Holdings pursuant to the "
+            "Amended Merger Agreement")
+    assert X.acquires([real], names=["FOREST OIL CORP"]) != ""
+
+
+@pytest.mark.parametrize("text", [
+    "As a result of the Merger, the Common Stock was converted into the right to receive 1.275 shares of Stanley "
+    "common stock, and Stanley assumed its outstanding stock options.",
+    "At the Effective Time, each Share was converted into the right to receive 0.5 shares of Parent common stock, "
+    "and the Company became a wholly owned subsidiary of Parent.",
+    "Upon the Closing, each Share was converted into the right to receive 0.5 shares of Parent common stock, and "
+    "Parent funded its payment from cash on hand.",
+])
+def test_a_stock_targets_target_clause_is_cut_before_its_pronouns(text):
+    assert X.acquires([text], names=["TARGET INC"]) == ""
+
+
+@pytest.mark.parametrize("sentence, one_for_one", [
+    ("each share of Series A Liberty SiriusXM common stock was reclassified into one share of new Series A Liberty "
+     "SiriusXM common stock and 0.2500 of a share of Series A Liberty Live common stock.", False),
+    ("each share of Acme common stock was converted into the right to receive one share of Holdco common stock "
+     "and one contingent value right.", False),
+    ("each share of Acme common stock was converted into one share of Holdco common stock and one-half of one "
+     "warrant to purchase Holdco common stock.", False),
+    ("each share of Acme common stock was converted into one share of Holdco common stock and 0.2 shares of "
+     "Holdco Series A preferred stock.", False),
+    ("each share of Acme common stock was converted into one share of Newco common stock.", True),
+    ("each share of Acme common stock was converted into one share of Newco common stock, and the Company "
+     "became a wholly owned subsidiary of Newco.", True),
+])
+def test_a_second_non_cash_leg_breaks_one_for_one(sentence, one_for_one):
+    names = ["LIBERTY MEDIA CORP"] if "Liberty" in sentence else ["ACME CORP"]
+    own = X.own_exchange([sentence], names=names, class_letter="A" if "Liberty" in sentence else "")
+    assert own is not None and own.ratio == 1.0 and not own.cash and own.one_for_one is one_for_one
+
+
+def test_the_target_letter_is_read_from_the_first_leg_only():
+    own = X.own_exchange(["each share of Acme common stock was converted into one share of Holdco common stock "
+                          "and 0.2 shares of Holdco Series A preferred stock."], names=["ACME CORP"], class_letter="")
+    assert own.target_letter == ""
+
+
+@pytest.mark.parametrize("leg", ["a one-time special cash dividend of $16.50 per share",
+                                 "the special cash dividend of $16.50 per share"])
+def test_a_special_dividend_leg_is_never_cash_consideration(leg):
+    own = X.own_exchange(["Each share of Kraft common stock was converted into the right to receive one share of "
+                          f"Kraft Heinz common stock and {leg}."], names=["Kraft Foods Group, Inc."], class_letter="")
+    assert (own.cash, own.one_for_one, own.special_dividends) == (False, True, (16.5,))
+
+
+def test_a_sentence_ends_after_plc_or_inc_when_a_sentence_starter_follows():
+    text = ("Each share of Acme common stock was converted into one ordinary share of Newco plc. Holders of Beta Corp. "
+            "stock received 2.0 shares.")
+    own = X.own_exchange([text], names=["ACME CORP"], class_letter="")
+    assert own.target_names == ("Newco",) and own.sentence.endswith("Newco plc.")

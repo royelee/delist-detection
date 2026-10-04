@@ -98,7 +98,7 @@ window began, so (eligibility decided first, then) rows for [end − 1095 d, end
 CUSIPs `history.backfill_cusips` finds that no other security holds and its sightings are rebuilt; no `sec_id`
 or issuer changes),
 `_check_overrides`, `_last_trade_closes`, `_merger_payouts`,
-`_r1_continuations` (stage 8b: a merger whose published terms are one share and no cash, whose registrant's filings say the same of its own shares (`exchange_terms.own_exchange`), into a new issuer at most `NEW_ISSUER_DAYS` old or the same issuer (`successors.successor_by_terms`, else the new issuer's 8-K12B), is an exchange transfer to that successor, flagged `r1_continuation`, its payout reads dropped; the LLM's final terms must agree and a name tie is required; metered as "R1 continuations"),
+`_r1_continuations` (stage 8b: a merger whose published terms are one share and no cash, whose registrant's filings say the same of its own shares (`exchange_terms.own_exchange`), into a new issuer at most `NEW_ISSUER_DAYS` old or the same issuer (`successors.successor_by_terms`, else the new issuer's 8-K12B), is an exchange transfer to that successor, flagged `r1_continuation`, its payout reads dropped; the LLM's final terms must agree; the new issuer is named by the R1 statement's target (the name tie, below), its 8-K12B candidate included; a degraded read keeps the merger and flags the row; the run logs `role refusal: N rows (...)`, the delistings whose end-of-era reading refused a merger on the registrant's role; metered as "R1 continuations"),
 `_find_successors` (stage 9, with sub-plan 5c's `_terms_links` before the 8-K12B search: the same issuer's class, a new issuer, or the security's own same-CIK 8-K12B line via OpenFIGI and R2; a name tie for any 8-K12B link), `_handoffs`, `_date_from_notices` (stage 9c: a handoff continuation row's last trade day from its own Form 25's confirmed EX-99.25 notice, when before the successor's first sighting and no later than the effective date; metered as "handoff notice dates"), `_successor_endings` (stage 9d: the Form 25 search, matches only, for the line and 8-K12B successors the run added; metered as "successor endings"), then the row builders and `_triage`), each with explicit
 inputs and outputs and the run-wide `_RunContext` (clients, run date, log,
 workers, SEC meter `manifest.StageMeter`). Each stage returns what it produces
@@ -807,8 +807,16 @@ conflate them.
   continuation only into a new issuer (first EDGAR filing at most 1,095 days before) or the same issuer: stage 5
   gives it when no 8-K item code decides, stage 8b rewrites a merger whose published terms say one share and no
   cash, stage 9 links a transfer to the security the statement names or to the new line its own same-CIK 8-K12B
-  moved it to (OpenFIGI's CUSIP job, R2). The added successors take their own Form 25 endings (stage 9d). A text
-  never decides a merger row alone: the LLM's terms must agree.
+  moved it to (OpenFIGI's CUSIP job, R2). The added successors take their own Form 25 endings (stage 9d; a failed
+  Nasdaq halt-feed read there is `resolution_degraded` too, and a line successor's span ends at its own last
+  trade). A text never decides a merger row alone: the LLM's terms must agree. The name tie (a new issuer is a
+  successor only when the R1 statement's target names it: one of its tickers of two letters or more is a word of a
+  target name, or a target name agrees, `names.names_agree`, with one of its EDGAR names) is carried by
+  `successors.successor_by_terms` (stage 9's terms link and 8b's in-run link), by 8b's 8-K12B candidate
+  (`_r1_successor`) and, as a registrant of that name first filed at most 1,095 days before or the registrant's own
+  name, by stage 5's R1 (`classifier._names_new_issuer`); the same-CIK own-registration link and the same-issuer
+  class link need none. A second leg after the first share (more shares, rights, warrants, units or a CVR) is no
+  one-for-one.
 - **A line is followed past its observations (sub-plan 5a, rulings R1 and R2).** Stage 4b follows each security
   across a reverse split or a rename the fails rows show after the caller's last observation, before the Form 25
   search: so a later real ending is found instead of a guess anchored on the old ticker's last row. A step needs a

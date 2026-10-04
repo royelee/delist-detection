@@ -486,7 +486,7 @@ class DelistClassifier:
         # Sub-plan 5c, R1: no 8-K item code, but the filings state each share became one share, with no cash (a
         # reclassification into another class, Clearway 2026; a holding company's formation, ONEOK 2026)
         r1 = self._one_for_one(cik, evidence.get("name"), filings, [observed, anchor], delist_filing)
-        if r1 is not None:
+        if r1 is not None and (r1.target_own or self._names_new_issuer(r1, cik, anchor)):
             _add_flag(flags, "r1_continuation")
             return rec(304, CrspBucket.EXCHANGE_TRANSFER, "medium",
                        f"Continuation (R1): each share became one share {r1.target[:80].strip()}, no cash")
@@ -817,6 +817,31 @@ class DelistClassifier:
         texts = exchange_terms.read_texts(self.edgar, cik, filings, days, self._matched_form25(cik, form25))
         own = exchange_terms.own_exchange(texts, names=names, class_letter=letter, class_words=words)
         return own if own is not None and own.one_for_one else None
+
+    def _names_new_issuer(self, own: exchange_terms.OwnExchange, cik: int, day: date | None) -> bool:
+        """R1's condition for a target that does not name the registrant by a pronoun: it carries a name the
+        registrant itself carried (the same CIK: ONEOK's 2026 holding company, "Legacy ONEOK" into "ONEOK"), or it
+        names a registrant of another CIK (EDGAR's ticker file) whose first filing is at most
+        `successors.NEW_ISSUER_DAYS` before `day` -- never an existing acquirer (LVNTA into GCI Liberty). False
+        when neither is found."""
+        from .names import names_agree
+        from .successors import NEW_ISSUER_DAYS
+        if day is None or not own.target_names:
+            return False
+        sub = self.edgar.submissions(cik)
+        if any(names_agree(t, n) for t in own.target_names
+               for n in exchange_terms.registrant_names(sub, day) if n):
+            return True
+        company_tickers = getattr(self.edgar, "company_tickers", None)
+        for entry in (company_tickers().values() if company_tickers is not None else ()):
+            other = entry.get("cik_str")
+            if other is None or int(other) == cik or not any(names_agree(t, entry.get("title", ""))
+                                                             for t in own.target_names):
+                continue
+            filed = [f.filing_date for f in self.edgar.recent_filings(int(other)) if f.filing_date]
+            if filed and (day - date.fromisoformat(min(filed)[:10])).days <= NEW_ISSUER_DAYS:
+                return True
+        return False
 
     def _notice_says_acquired(self, cik: int, sub: EdgarSubmission) -> bool:
         """Whether the matched Form 25's EX-99.25 notice says its class was acquired or converted into cash

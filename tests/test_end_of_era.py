@@ -132,6 +132,13 @@ def test_a_survivor_takes_no_merger_branch_and_goes_on_to_the_notice_or_the_cont
     assert (v.branch, v.crsp_code, v.bucket) == ("delisting_notice", 570, CrspBucket.COMPLIANCE_FAILURE)
 
 
+def test_a_survivor_that_filed_chapter_11_before_the_sale_is_still_a_bankruptcy():
+    """A liquidation is not a merger: the bankruptcy sub-rule comes before the survivor guard."""
+    v = resolve(_s(item_filed={"1.03": "2020-09-10", "2.01": "2020-11-02"}, merger_filing="DEFM14A 2020-10-01",
+                   bankruptcy_filing="8-K 2020-09-10", survived="the Company issued an aggregate of ..."), 470)
+    assert (v.branch, v.crsp_code, v.bucket) == ("bankruptcy", 470, CrspBucket.LIQUIDATION)
+
+
 def test_merges_says_when_branch_3_or_4_would_decide():
     assert merges(_s(item_filed={"5.01": "2020-11-02"}))
     assert merges(_s(item_filed={"2.01": "2020-11-02"}, delist_filing="25-NSE 2020-11-03"))

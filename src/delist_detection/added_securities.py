@@ -53,14 +53,16 @@ class AddedAcquirer(AddedSecurity):
 class AddedLineSuccessor(AddedSecurity):
     """A FIGI line's successor the line follow found (pipeline stage 4b; R2: the line's new CUSIP has its own
     composite): seen from the step's first row (`first`) through that CUSIP's fails rows under the line's new
-    ticker (`rows`)."""
+    ticker (`rows`), clipped at the last trade of its own ending when the run found one (`last`, pipeline stage 9d:
+    its fails rows can run past it)."""
     first: str
     rows: list[FtdRow] = field(default_factory=list)
+    last: str = ""
     source: ClassVar[str] = "ftd"
 
     def span(self) -> tuple[str, str]:
         dates = sorted({self.first, *(r.date for r in self.rows)})
-        return dates[0], dates[-1]
+        return dates[0], max(dates[0], min(dates[-1], self.last)) if self.last else dates[-1]
 
 
 @dataclass

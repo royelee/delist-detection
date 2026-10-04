@@ -145,3 +145,96 @@ def test_a_merger_terms_override_decides_the_row():
     over = pipeline.Overrides(merger_terms={"BBG000BHBK84": {"stock_ratio": 1.0}})
     pipeline._r1_continuations(ctx, found, securities, sightings, ic._payouts("BBG000BHBK84", found), over)
     assert found[0].record.bucket is CrspBucket.MERGER
+
+
+# --- stage 8b's 8-K12B path (final fix wave) ---
+from types import SimpleNamespace as _NS  # noqa: E402
+
+import requests  # noqa: E402
+
+
+class _Ages:
+    def __init__(self, since="2016-06-01", names=("TITAN TECHNOLOGIES CORP",)):
+        self._since, self._names = since, names
+
+    def since(self, cik):
+        return self._since
+
+    def names(self, cik):
+        return self._names
+
+
+def _r1_ctx(monkeypatch, cand):
+    monkeypatch.setattr(pipeline, "successor_search_name", lambda *a: "Rovi Corp")
+    monkeypatch.setattr(pipeline, "successor_from_8k12b", lambda *a, **k: (999, cand, "2016-07-20"))
+    edgar = _NS(full_text_search=lambda *a, **k: [])
+    clients = _NS(edgar=edgar, figi=None)
+    return pipeline._RunContext(clients, date(2026, 9, 25), lambda *a: None, 1,
+                                pipeline.run_manifest.StageMeter(lambda *a: None))
+
+
+def _r1_call(ctx, target, ages):
+    own = OwnExchange(1.0, False, "of Titan Technologies Corporation common stock", (target,), "", False, "s")
+    e = _NS(cik=1, ticker="ROVI", sec_id="R", delist_date="2016-07-20", last_trade=_NS(day=None))
+    sec = _NS(share_class="COMMON", name="ROVI CORP", own_tickers=lambda: {"ROVI"})
+    out = pipeline._R1()
+    pending: dict = {}
+    link = pipeline._r1_successor(ctx, e, sec, own, date(2016, 7, 20), {}, ages, {}, {}, out, pending)
+    return link, pending
+
+
+def test_an_8k12b_successor_needs_the_name_tie(monkeypatch):
+    """ROVI-shaped: a candidate the R1 statement does not name is refused; the one it names is taken."""
+    cand = _NS(composite="BBGTITAN", ticker="TTEC", name="TITAN TECHNOLOGIES CORP", security_type="Common Stock")
+    ctx = _r1_ctx(monkeypatch, cand)
+    link, pending = _r1_call(ctx, "Titan Technologies Corporation", _Ages())
+    assert link == ("BBGTITAN", pipeline.BY_TERMS) and list(pending) == ["BBGTITAN"]
+    link, pending = _r1_call(ctx, "Some Other Holdings", _Ages())
+    assert link is None and pending == {}
+
+
+def test_the_issuer_age_reads_survive_a_request_failure_and_count_it():
+    from delist_detection.fatal import FATAL
+
+    class _Edgar:
+        def recent_filings(self, cik):
+            raise requests.ConnectionError("down")
+
+        def submissions(self, cik):
+            raise requests.Timeout("slow")
+
+    ages = pipeline._IssuerAge(_Edgar())
+    assert ages.since(5) is None and ages.names(5) == () and ages.failures == 2
+
+    class _Blocked(_Edgar):
+        def recent_filings(self, cik):
+            raise FATAL[0]("blocked")
+
+    with pytest.raises(FATAL):
+        pipeline._IssuerAge(_Blocked()).since(5)
+
+
+def test_a_failed_issuer_age_read_makes_the_rewritten_row_resolution_degraded():
+    """DOW 2017: reading the new issuer's filing list fails. The merger stays, flagged degraded on its own row and
+    in review; no successor is added."""
+    class _Edgar(ic.FixtureEdgar):
+        owner = None                 # armed once the finder has read the registrant's own filings
+
+        def recent_filings(self, cik):
+            if self.owner is not None and cik != self.owner:
+                raise requests.ConnectionError("down")
+            return super().recent_filings(cik)
+
+    edgar = _Edgar()
+    c = ic.clients(edgar)
+    found, _ = ic.find("BBG000BHBK84", c)
+    edgar.owner = found[0].cik
+    securities, _, cusips, ftd = ic.world()
+    sightings = {sid: pipeline.ticker_sightings(s, ftd, cusips[sid]) for sid, s in securities.items()}
+    ctx = pipeline._RunContext(c, ic.AS_OF, lambda *a: None, 1, pipeline.run_manifest.StageMeter(lambda *a: None))
+    r1 = pipeline._r1_continuations(ctx, found, securities, sightings, ic._payouts("BBG000BHBK84", found),
+                                    pipeline.Overrides())
+    assert found[0].record.bucket is CrspBucket.MERGER and r1.added == {}
+    assert "resolution_degraded" in found[0].flags
+    assert [i.flag for i in r1.review] == ["resolution_degraded"]
+

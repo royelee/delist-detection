@@ -40,7 +40,12 @@ _SAME_NUMBER = re.compile(r"^(?:an?\s+(?:equal|like|equivalent|identical)\s+numb
                           r"|an?\s+equivalent|an?)$", re.I)
 _ENUMERATOR = re.compile(r"\(\s*(?:[ivx]{1,4}|\d{1,2}|[a-h])\s*\)")       # "(i)", "(ii)", "(1)", "(a)"
 _SENTENCE_END = re.compile(r"(?<!\bInc)(?<!\bCorp)(?<!\bCo)(?<!\bLtd)(?<!\bNo)(?<!\bU\.S)(?<!\bN\.V)(?<!\bS\.A)"
-                           r"(?<!\bL\.P)(?<!\bplc)(?<!\bMr)(?<!\bMs)(?<!\bJr)[.;]\s+(?=[A-Z•\"])|\s•\s")
+                           r"(?<!\bL\.P)(?<!\bplc)(?<!\bMr)(?<!\bMs)(?<!\bJr)[.;]\s+(?=[A-Z•\"])|\s•\s|\x00")
+# a legal suffix's period ends the sentence when a sentence starter follows ("... of Newco plc. Holders of ...")
+_SUFFIX_END = re.compile(r"\b(Inc|Corp|Co|Ltd|plc|N\.V|S\.A|L\.P)\.\s+(?=(?:Each|The|Holders?|At|In|On|Upon|Pursuant|As|"
+                         r"Following|Immediately|Prior|After|Item|All|Any|This|These|It|Its|Under|Such|Subject|For|"
+                         r"Effective|Also|Additionally|Except|When|If|Thereafter|Then|Parent|Newco|Holdco)\b)")
+_BREAK = "\x00"
 _PAREN = re.compile(r"\((?:[^()]|\([^()]*\))*\)")
 _DEFINED = re.compile(r'\(\s*(?:the\s+|each,?\s+an?\s+)?"\s*([^"()]{1,40}?)\s*"\s*(?:,[^()]{0,40})?\)')
 # 'Howard Hughes Holdings Inc., a Delaware corporation and direct wholly owned subsidiary of the Company ("Holdco")':
@@ -62,6 +67,10 @@ _FOR_EACH = re.compile(r"\bfor\s+each\s+(?:outstanding\s+|issued\s+and\s+outstan
 _FOR_EVERY = re.compile(r"\bfor\s+every\s+\w+\s+shares?\s+of\s+(?P<subj>[^;.]{0,160})", re.I)
 _DISTRIBUTION = re.compile(r"\bRecord\s+Date\b|\bholders?\s+of\s+record\b|\bof\s+record\s+(?:as\s+of|on|at)\b"
                            r"|\b(?:the\s+)?Distribution\b|\bdistributed\b|\bpro\s+rata\b|\bfor\s+every\b")
+# a statement with a conversion verb is an exchange: "holders of record" and "distributed" (the paying agent) do not
+# make it a distribution
+_STRONG_VERB = re.compile(r"convert|exchang|reclassif|redeem|redemption", re.I)
+_DISTRIBUTION_STRONG = re.compile(r"\bRecord\s+Date\b|\b(?:the\s+)?Distribution\b|\bpro\s+rata\b|\bfor\s+every\b")
 _SHARES_OF = re.compile(r"\b(?:shares?|stock)\s+of\s+", re.I)
 _EACH = re.compile(r"\beach\s+", re.I)
 _LETTER = re.compile(r"\b(?:Class|Series)\s+([A-Z])(?![\w-])")
@@ -70,8 +79,12 @@ _LETTER = re.compile(r"\b(?:Class|Series)\s+([A-Z])(?![\w-])")
 _NOT_SHARES = re.compile(r"\b(?:options?|restricted|awards?|warrants?|preferred|RSUs?|units?|debentures?|notes?|"
                          r"convertible|rights?|exchangeable|Merger\s+Sub\w*|Purchaser|Rollover)\b", re.I)
 # a cash consideration: "converted into the right to receive $74.28 in cash"
-_CASH_CONSIDERATION = re.compile(r"\b(?:into|for)\s+(?:the\s+right\s+to\s+receive\s+)?(?:an\s+amount\s+(?:in\s+cash\s+)?"
-                                 r"equal\s+to\s+)?(?:US)?\$\s?\d[\d.,]*", re.I)
+# or the defined price ("the Per Share Merger Consideration", "the Offer Price"), "cash in an amount equal to $", "cash
+# consideration of $"
+_CASH_CONSIDERATION = re.compile(r"\b(?:into|for)\s+(?:the\s+right\s+to\s+receive\s+)?(?:(?:an\s+amount\s+(?:in\s+cash\s+)?"
+                                 r"equal\s+to\s+|cash\s+(?:in\s+an\s+amount\s+equal\s+to|consideration\s+of)\s+)?"
+                                 r"(?:US)?\$\s?\d[\d.,]*|the\s+(?:Per\s+Share\s+)?(?:Merger|Offer)\s+"
+                                 r"(?:Consideration|Price)\b)", re.I)
 _PAR = re.compile(r"(?:,\s*)?(?:with(?:out)?\s+)?(?:no\s+)?(?:a\s+)?(?:par|nominal)\s+value(?:\s+of)?"
                   r"(?:\s+(?:US)?\$\s?[\d.,]+(?:\s+\d/\d)?)?(?:\s+per\s+share)?"
                   r"|(?:US)?\$\s?[\d.,]+\s+(?:par|nominal)\s+value(?:\s+per\s+share)?", re.I)
@@ -79,7 +92,8 @@ _LIEU = re.compile(r"(?:with\s+|and\s+|plus\s+)?(?:any\s+)?cash\s+(?:being\s+)?(
                    r"(?:to\s+[^;]{0,60}?)?in\s+lieu\s+of\s+(?:any\s+|issuing\s+)?fraction\w*(?:\s+(?:of\s+a\s+)?shares?)?"
                    r"|in\s+lieu\s+of\s+(?:any\s+)?fraction\w*(?:\s+shares?)?", re.I)
 # "and a special one-time cash dividend of $17.50": a dividend, never consideration (operator ruling 2026-10-04)
-_DIVIDEND_LEG = re.compile(r"(?:,?\s*(?:and|plus)\s+)?an?\s+special\s+(?:one-time\s+)?(?:cash\s+)?dividend"
+_DIVIDEND_LEG = re.compile(r"(?:,?\s*(?:and|plus)\s+)?(?:an?|the)\s+(?:one-time\s+)?special\s+(?:one-time\s+)?"
+                           r"(?:cash\s+)?dividend"
                            r"(?:\s+(?:of|in\s+the\s+amount\s+of|equal\s+to))?\s+(?:US)?\$\s?[\d.,]+(?:\s+per\s+share)?",
                            re.I)
 _CASH = re.compile(r"\$\s?\d|\bin\s+cash\b|\bcash\s+(?:consideration|payment|amount)\b|\b(?:and|plus)\s+cash\b", re.I)
@@ -93,6 +107,12 @@ _SPECIAL_DIVIDEND = re.compile(r"special\s+(?:one-time\s+)?(?:cash\s+)?dividend[
 # pursuant to the Amended Merger Agreement"
 _ISSUED = re.compile(r"\bthe\s+Company\s+issued\s+(?:an\s+aggregate\s+of\s+)?[\d,]+\s+(?:\w+\s+){0,3}shares\b[^.;]{0,240}?"
                      r"\b(?:Merger|Combination|Contribution|Exchange)\s+Agreement\b", re.I)
+_TOP_UP = re.compile(r"\bTop-?\s?Up\b", re.I)
+# a second leg after the first: "and 0.25 of a share of Series A Liberty Live common stock", "and one contingent value
+# right", "and one-half of one warrant"
+_EXTRA_LEG = re.compile(r"\b(?:and|plus)\s+(?:an?|one|two|three|\d[\d.,]*|one-(?:half|third|quarter|tenth))\s+"
+                        r"(?:of\s+(?:an?\s+|one\s+)?)?(?:[\w-]+\s+){0,3}?(?:shares?|warrants?|rights?|units?|CVRs?)\b",
+                        re.I)
 # A target clause ends where the sentence goes on to something else
 _TARGET_END = re.compile(r",?\s+(?:having|effective|which|that|with|subject|pursuant|and|plus|as|in\s+accordance)\b|;",
                          re.I)
@@ -100,7 +120,8 @@ _CAP_RUN = re.compile(r"[A-Z][A-Za-z0-9&'.-]*(?:\s+(?:of\s+|&\s+)?[A-Z][A-Za-z0-
 _CLASS_WORDS = {"CLASS", "SERIES", "COMMON", "STOCK", "SHARE", "SHARES", "ORDINARY", "PREFERRED", "VOTING",
                 "NON-VOTING", "CAPITAL", "SPECIAL", "ADS", "ADSS", "AMERICAN", "DEPOSITARY", "EFFECTIVE", "TIME",
                 "UNITS", "UNIT"}
-_NOT_PARTIES = {"THE", "THE COMPANY", "COMPANY", "EACH", "UPON", "AT", "PURSUANT", "IN", "AS", "ON", "ALL", "ANY"}
+_NOT_PARTIES = {"THE", "THE COMPANY", "COMPANY", "EACH", "UPON", "AT", "PURSUANT", "IN", "AS", "ON", "ALL", "ANY",
+                "MERGER", "EFFECTIVE TIME", "CLOSING"}
 _NEW_TERM = re.compile(r"^(?:New|Holdco|Parent|Successor)\b")
 _OLD_TERM = re.compile(r"^(?:Old|Legacy|Former|Predecessor)\s+")
 _OWN_PRONOUN = re.compile(r"\b(?:the\s+Company|Company's|our|its|we)\b", re.I)
@@ -140,11 +161,13 @@ class OwnExchange:
     sentence: str
     ambiguous: bool = False
     special_dividends: tuple[float, ...] = ()
+    extra_leg: bool = False
 
     @property
     def one_for_one(self) -> bool:
-        """One share per share, no cash, one reading (R1)."""
-        return self.ratio == 1.0 and not self.cash and not self.ambiguous
+        """One share per share, no cash, one reading, and no second leg of shares, rights, warrants, units or CVRs
+        (R1: only one security comes back)."""
+        return self.ratio == 1.0 and not self.cash and not self.ambiguous and not self.extra_leg
 
 
 def normalize(text: str) -> str:
@@ -192,6 +215,7 @@ def _qty(s: str) -> float | None:
 def _clauses(text: str) -> list[tuple[str, str]]:
     """(clause, its sentence) for every clause of a normalized text: sentences split at their ends, then at their
     enumerators ("(i)", "(2)")."""
+    text = _SUFFIX_END.sub(lambda m: m.group(1) + "." + _BREAK, text)
     return [(c, s) for s in _SENTENCE_END.split(text) for c in _ENUMERATOR.split(s) if c.strip()]
 
 
@@ -203,6 +227,12 @@ def _subject_phrase(before: str) -> str:
         return before[hits[-1].end():]
     hits = list(_EACH.finditer(before))
     return before[hits[-1].end():] if hits else before[-200:]
+
+
+def _distribution(sentence: str, verb_context: str) -> bool:
+    """Whether the holders kept their shares: a record date, "for every", "the Distribution"; "holders of record" or
+    "distributed" alone do not make it one when a conversion verb states the statement."""
+    return bool((_DISTRIBUTION_STRONG if _STRONG_VERB.search(verb_context) else _DISTRIBUTION).search(sentence))
 
 
 def statements(text: str) -> list[Statement]:
@@ -222,7 +252,8 @@ def statements(text: str) -> list[Statement]:
                 if _VERB.search(before[-160:]):
                     subject = _subject_phrase(before)
                     out.append(Statement(0.0, True, subject.strip(" ,"), "", sentence,
-                                         frozenset(_LETTER.findall(subject)), "", bool(_DISTRIBUTION.search(sentence))))
+                                         frozenset(_LETTER.findall(subject)), "",
+                                         _distribution(sentence, before[-160:])))
                 continue
             ratio = _qty(m.group("qty"))
             if ratio is None:
@@ -238,7 +269,7 @@ def statements(text: str) -> list[Statement]:
             letters = _LETTER.findall(target)
             out.append(Statement(ratio, bool(_CASH.search(consideration)), subject.strip(" ,"), target.strip(" ,"),
                                  sentence, frozenset(_LETTER.findall(subject)), letters[0] if letters else "",
-                                 bool(_DISTRIBUTION.search(sentence))))
+                                 _distribution(sentence, before[-160:] + " " + m.group("lead"))))
     return out
 
 
@@ -373,14 +404,17 @@ def own_exchange(texts: Iterable[str], *, names: Sequence[str], class_letter: st
     for p in parties(named):
         target_names.append(p)
         target_names += [v for k, v in terms.items() if k.upper() == p.upper() or k.upper() in p.upper().split()]
-    letter = st.target_letter or (class_letter or "" if re.search(r"corresponding\s+(?:series|class)", st.target, re.I)
-                                  else "")
+    letters = _LETTER.findall(named)
+    letter = letters[0] if letters else (class_letter or "" if re.search(
+        r"corresponding\s+(?:series|class)", st.target, re.I) else "")
+    rest = _PAR.sub(" ", st.target)[cut.start():] if cut else ""
+    extra = bool(_EXTRA_LEG.search(rest))
     target_own = bool(_OWN_PRONOUN.search(named)) or not parties(named)
     dividends = sorted({float((m.group(1) or m.group(2)).replace(",", ""))
                         for t in texts for m in _SPECIAL_DIVIDEND.finditer(t)})
     return OwnExchange(st.ratio, st.cash or _cash_for_class(texts, own, class_letter), st.target,
                        tuple(dict.fromkeys(target_names)), letter, target_own, st.sentence,
-                       len({(s.ratio, s.cash) for s in found}) > 1, tuple(dividends))
+                       len({(s.ratio, s.cash) for s in found}) > 1, tuple(dividends), extra)
 
 
 def acquires(texts: Iterable[str], *, names: Sequence[str]) -> str:
@@ -395,12 +429,14 @@ def acquires(texts: Iterable[str], *, names: Sequence[str]) -> str:
             if st.distribution or _NOT_SHARES.search(head) or _first_party_own(head, own) is not False:
                 continue
             target = st.target[:160]
+            cut = _TARGET_END.search(target)
+            target = target[:cut.start()] if cut else target
             if re.search(r"\b(?:our|its)\b|\bthe\s+Company\b", target) or (
                     _names_own(target, own) and not re.search(r"\bNew\s", target)):
                 return st.sentence[:300]
-        m = _ISSUED.search(t)
-        if m is not None:
-            return t[m.start():m.end()][:300]
+        for m in _ISSUED.finditer(t):
+            if not _TOP_UP.search(m.group(0)):      # the top-up option's shares are the offer's, not a merger issue
+                return t[m.start():m.end()][:300]
     return ""
 
 

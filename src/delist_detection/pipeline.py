@@ -69,7 +69,7 @@ from .ticker_evidence import EraEvidence, evidence_for
 from .store import DelistingKey, formatted, write_tables
 from .successors import (
     NEW_ISSUER_DAYS, SUCCESSOR_AFTER_DAYS, SUCCESSOR_BEFORE_DAYS, SecurityStart, successor_anchor, successor_by_terms,
-    successor_from_8k12b, successor_in_run, successor_query, successor_search_args, successor_search_name,
+    _named as successor_named, successor_from_8k12b, successor_in_run, successor_query, successor_search_args, successor_search_name,
 )
 from .ticker_resolver import InferredIssuer, TickerResolution
 from .verdict import Verdicts
@@ -1117,16 +1117,29 @@ class _IssuerAge:
         self.edgar = edgar
         self._since: dict[int, str | None] = {}
         self._names: dict[int, tuple[str, ...]] = {}
+        self.failures = 0           # reads that failed after the client's retries: the answer is "unknown"
 
     def since(self, cik: int) -> str | None:
         if cik not in self._since:
-            dates = [f.filing_date for f in self.edgar.recent_filings(cik) if f.filing_date]
+            try:
+                dates = [f.filing_date for f in self.edgar.recent_filings(cik) if f.filing_date]
+            except FATAL:
+                raise
+            except requests.RequestException:
+                self.failures += 1
+                return None
             self._since[cik] = min(dates) if dates else None
         return self._since[cik]
 
     def names(self, cik: int) -> tuple[str, ...]:
         if cik not in self._names:
-            sub = self.edgar.submissions(cik)
+            try:
+                sub = self.edgar.submissions(cik)
+            except FATAL:
+                raise
+            except requests.RequestException:
+                self.failures += 1
+                return ()
             self._names[cik] = edgar_names(sub) if isinstance(sub, dict) else ()
         return self._names[cik]
 
@@ -1172,10 +1185,13 @@ class _R1:
 
 def _r1_successor(ctx: _RunContext, e: Delisting, sec: Security, own: exchange_terms.OwnExchange, day: date,
                   starts: dict[str, SecurityStart], ages: _IssuerAge, securities: dict[str, Security],
-                  added: Mapping[str, AddedSecurity], out: _R1) -> tuple[str, str] | None:
+                  added: Mapping[str, AddedSecurity], out: _R1,
+                  pending: dict[str, AddedSecurity]) -> tuple[str, str] | None:
     """The successor of a merger row R1 rewrites: a security of the run (`successors.successor_by_terms`), else
     the new issuer whose 8-K12B names the registrant (`successors.successor_from_8k12b`, its filer at most
-    NEW_ISSUER_DAYS old), added as a security of its own (`AddedSuccessor`, seen from the day after `day`)."""
+    NEW_ISSUER_DAYS old and named by the R1 statement's target, the stage-9 name tie), to be added as a security of
+    its own (`AddedSuccessor`, seen from the day after `day`) in `pending`: the caller adds it once the reading is
+    known not to be degraded."""
     link = successor_by_terms(e, own, day, starts, issuer_since=ages.since, issuer_names=ages.names)
     search = getattr(ctx.clients.edgar, "full_text_search", None)
     if link is not None or search is None:
@@ -1189,9 +1205,11 @@ def _r1_successor(ctx: _RunContext, e: Delisting, sec: Security, own: exchange_t
     since = ages.since(s_cik)
     if since is None or (day - date.fromisoformat(since[:10])).days > NEW_ISSUER_DAYS:
         return None
+    if not successor_named(own, {cand.ticker}, ages.names(s_cik)):
+        return None
     if cand.composite not in securities and cand.composite not in added:
         not_before = (day + timedelta(days=1)).isoformat()
-        out.added.setdefault(cand.composite, AddedSuccessor(
+        pending.setdefault(cand.composite, AddedSuccessor(
             Security(cand.composite, s_cik, share_class_from_name(cand.name), cand.name, cand.security_type, False,
                      "ticker"), cand.ticker, max(filed or not_before, not_before)))
     return cand.composite, BY_TERMS
@@ -1219,19 +1237,22 @@ def _r1_continuations(ctx: _RunContext, delistings: list[Delisting], securities:
         terms = _contract_terms(payouts, e.key)
         if terms is None or terms[1] is None or abs(terms[1] - 1.0) > 1e-9:
             continue
-        watch = DegradedWatch()
+        watch, failed = DegradedWatch(), ages.failures
         sec = securities[e.sec_id]
         own, _, day = _own_exchange(edgar, e, sec)
         cash = terms[0]
-        link = None
+        link, pending = None, {}
         if own is not None and own.one_for_one and (
                 not cash or any(abs(cash - d) < 0.005 for d in own.special_dividends)):
-            link = _r1_successor(ctx, e, sec, own, day, starts, ages, securities, payouts.added, out)
-        if watch.tripped():
-            out.review.append(degraded_item(e.sec_id, e.ticker, e.cik, "the R1 reading", delist_date=e.delist_date))
+            link = _r1_successor(ctx, e, sec, own, day, starts, ages, securities, payouts.added, out, pending)
+        if watch.tripped() or ages.failures > failed:
+            watch_item = degraded_item(e.sec_id, e.ticker, e.cik, "the R1 reading", delist_date=e.delist_date)
+            out.review.append(watch_item)
+            flag_degraded(e)
             continue
         if link is None:
             continue
+        out.added.update(pending)
         sid, how = link
         old = (e.record.bucket.value, e.record.crsp_code, e.record.reason)
         e.record.bucket, e.record.crsp_code = CrspBucket.EXCHANGE_TRANSFER, CONTINUATION_CODE
@@ -1358,14 +1379,14 @@ def _terms_links(ctx: _RunContext, delistings: list[Delisting], securities: dict
     for e in delistings:
         if e.key in found.links or SUCCESSOR_UNKNOWN not in e.flags or e.sec_id not in securities:
             continue
-        watch = DegradedWatch()
+        watch, failed = DegradedWatch(), ages.failures
         own, texts, day = _own_exchange(edgar, e, securities[e.sec_id])
         link = None
         if own is not None and own.one_for_one:
             link = successor_by_terms(e, own, day, starts, issuer_since=ages.since, issuer_names=ages.names)
             if link is None:
                 link = _own_registration_link(ctx, e, texts, day, securities, sec_cusips, ftd, taken, found)
-        if watch.tripped():
+        if watch.tripped() or ages.failures > failed:
             found.review.append(degraded_item(e.sec_id, e.ticker, e.cik, "the successor terms reading",
                                               delist_date=e.delist_date))
             found.degraded.append(e.key)
@@ -1593,8 +1614,8 @@ def _successor_endings(ctx: _RunContext, finder: DelistingFinder, added: Mapping
         watch = DegradedWatch()
         try:
             listed = listed_today(clients.figi, sid, edgar=clients.edgar, cik=cik, tickers=[a.ticker])
-            found = [] if listed else finder.find(_context_builder(world, sightings, answers, ftd, cusips)(s, listed),
-                                                  fallback=False)[0]
+            found, found_review = ([], []) if listed else finder.find(
+                _context_builder(world, sightings, answers, ftd, cusips)(s, listed), fallback=False)
         except FATAL:
             raise
         except Exception as exc:  # one added successor must not abort the run
@@ -1607,17 +1628,27 @@ def _successor_endings(ctx: _RunContext, finder: DelistingFinder, added: Mapping
                    and not (d.form25_sub is not None and d.form25_sub.filing_date <= start)]
         watch.report(out.review, degraded_item(sid, a.ticker, cik, "the successor ending search",
                                                "; run again once SEC answers"), endings)
+        report_halt_feed_failures(out.review, endings)
+        out.review += found_review
         if not endings:
             continue
         out.delistings += endings
         out.securities[sid] = s
         out.cusips[sid] = cusips[sid]
-        if isinstance(a, AddedSuccessor) and endings[-1].last_trade.day is not None:
+        if isinstance(a, (AddedSuccessor, AddedLineSuccessor)) and endings[-1].last_trade.day is not None:
             a.last = endings[-1].last_trade.day.isoformat()
     ctx.log(f"successor endings: {len(out.delistings)} for {len(out.securities)} added successors "
             f"({', '.join(sorted(out.securities)) or 'none'})")
     ctx.meter.done("successor endings", mark)
     return out
+
+
+def _log_role_refusals(ctx: _RunContext, delistings: Sequence[Delisting]) -> None:
+    """The delistings whose end-of-era reading took the registrant's role into account (sub-plan 5c, rule 1: the
+    registrant acquired or distributed, `evidence["survived"]`), as one log line the operator can check after a
+    network run."""
+    sids = sorted(d.sec_id for d in delistings if (d.record.evidence or {}).get("survived"))
+    ctx.log(f"role refusal: {len(sids)} rows ({', '.join(sids)})")
 
 
 def _date_from_notices(ctx: _RunContext, added: list[Delisting], review: list[ReviewItem]) -> int:
@@ -2191,6 +2222,7 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
         overrides = _apply_price_answers(given, delistings)
         closes.update(_last_trade_closes(ctx, ends.delistings, {**securities, **ends.securities},
                                          {**sec_cusips, **ends.cusips}, ftd, ftd_lo, overrides))
+    _log_role_refusals(ctx, delistings)
     # The handoff stage creates continuation delistings (AON 2012) and sets successors: the clip and the ranges read
     # the starts and endings of the final delistings. (The first pass above only decides which stage-9 delistings
     # are self-successor continuations, before the handoff stage.)

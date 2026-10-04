@@ -771,3 +771,31 @@ def test_continued_filings_alone_keep_todays_reason():
     assert (rec.bucket, rec.crsp_code, rec.confidence) == (CrspBucket.EXCHANGE_TRANSFER, 304, "medium")
     assert rec.reason == "Continued 10-K/Q filings >180d after delist (moved to OTC or spun off)"
     assert rec.evidence["end_of_era"] == "continued_filings"
+
+
+def test_stage_5_r1_names_a_new_issuer_never_an_existing_acquirer(fake_edgar):
+    """R1's condition (sub-plan 5c): the target registrant first filed at most NEW_ISSUER_DAYS before the event."""
+    from datetime import date
+    from delist_detection.edgar import EdgarSubmission
+    from delist_detection.exchange_terms import OwnExchange
+
+    class _Edgar:
+        def submissions(self, cik):
+            return {"name": "Predecessor Corp"}
+
+        def company_tickers(self):
+            return {"HOLD": {"cik_str": 2, "ticker": "HOLD", "title": "Holdco Inc."},
+                    "OLD": {"cik_str": 3, "ticker": "OLD", "title": "Oldco Inc."}}
+
+        def recent_filings(self, cik):
+            return [EdgarSubmission("A", "8-K", {2: "2017-03-01", 3: "1995-03-01"}[cik], "", "", "d.htm")]
+
+    c = DelistClassifier(_Edgar(), TickerResolver(fake_edgar))
+
+    def mk(name):
+        return OwnExchange(1.0, False, "", (name,), "", False, "s")
+
+    assert c._names_new_issuer(mk("Holdco"), 1, date(2017, 9, 1))
+    assert not c._names_new_issuer(mk("Oldco"), 1, date(2017, 9, 1))
+    assert not c._names_new_issuer(mk("Nobody"), 1, date(2017, 9, 1))
+    assert c._names_new_issuer(mk("Predecessor"), 1, date(2017, 9, 1))        # the registrant's own name: same CIK

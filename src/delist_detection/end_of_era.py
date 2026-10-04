@@ -122,14 +122,15 @@ def resolve(s: EraSignals, items_code: int | None) -> EraVerdict:
     if "5.01" in s.item_filed and not s.survived:
         return EraVerdict("change_in_control", merger_code, CrspBucket.MERGER,
                           f"Change in control (8-K item 5.01 filed {s.item_filed['5.01']}){kept}")
-    if "2.01" in s.item_filed and (s.merger_filing or s.delist_filing) and not s.survived:
+    if "2.01" in s.item_filed and (s.merger_filing or s.delist_filing):
         if s.bankruptcy_filing and s.bankruptcy_filing[-10:] <= s.item_filed["2.01"]:
             return EraVerdict("bankruptcy", 470, CrspBucket.LIQUIDATION,
                               f"Bankruptcy ({s.bankruptcy_filing}, item 1.03) before the completed sale "
                               f"(8-K item 2.01 filed {s.item_filed['2.01']}){kept}")
-        return EraVerdict("completed_merger", merger_code, CrspBucket.MERGER,
-                          f"Completed acquisition (8-K item 2.01 filed {s.item_filed['2.01']}, "
-                          f"{s.merger_filing or s.delist_filing}){kept}")
+        if not s.survived:             # a survivor acquired or distributed: no merger ending (rule 1, 5c)
+            return EraVerdict("completed_merger", merger_code, CrspBucket.MERGER,
+                              f"Completed acquisition (8-K item 2.01 filed {s.item_filed['2.01']}, "
+                              f"{s.merger_filing or s.delist_filing}){kept}")
     if "3.01" in s.item_filed and s.deficiency_notice:
         return EraVerdict("delisting_notice", 570, CrspBucket.COMPLIANCE_FAILURE,
                           f"Listing deficiency notice ({s.deficiency_notice}), no merger evidence{kept}")
