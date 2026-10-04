@@ -363,7 +363,10 @@ def class_letters(class_text: str) -> set[str]:
 # R3: a lettered tracking-stock segment ("Series A Liberty Capital Common Stock"). Its group words are the words
 # between the letter and COMMON STOCK, less the issuer's own EDGAR name words and these.
 _GROUP = re.compile(r"^\W*(?:SERIES|CLASS)\s+[A-Z]\s+(.+?)\s+COMMON\s+STOCK", re.I)
-_GROUP_STOP = frozenset({"SPECIAL", "NON", "VOTING", "NONVOTING", "NEW", "OLD", "ORDINARY"})
+# CAPITAL is deliberately not a stop word: it is Liberty Capital's group word (the Liberty Series A reach case).
+_GROUP_STOP = frozenset({"SPECIAL", "NON", "VOTING", "NONVOTING", "NEW", "OLD", "ORDINARY", "SUBORDINATE",
+                         "SUBORDINATED", "CONVERTIBLE", "RESTRICTED", "LIMITED", "PARTICIPATING", "REDEEMABLE",
+                         "EXCHANGEABLE", "MULTIPLE"})
 
 
 def _meets(word: str, words: set[str]) -> bool:
@@ -381,7 +384,8 @@ def other_class(f25: Form25, ref: SecurityRef, issuer_names: Iterable[str] = ())
     Stock, Series A Liberty Starz Common Stock" is not Liberty Interactive's Series A)."""
     if class_kind(f25.class_text) != "common":
         return ""
-    if f25.solely and class_kind(f25.solely) not in ("common", "other"):
+    if (f25.solely and class_kind(f25.solely) not in ("common", "other")
+            and not re.search(r"\b(?:COMMON|ORDINARY|SHARES)\b", f25.solely.upper())):
         return f"relates solely to {f25.solely}"
     issuer_words = {w for n in issuer_names for w in name_tokens(n)}
     groups = []

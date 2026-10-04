@@ -367,7 +367,8 @@ class DelistingFinder:
                     SecurityRef(sec.sec_id, sec.share_class, sec.kind, sec.name))
 
     def _issuer_names(self, cik: int) -> tuple[str, ...]:
-        """The issuer's EDGAR names (current and former), for R3's group words; () when they cannot be read."""
+        """The issuer's EDGAR names (current and former), for R3's group words. A failed submissions read gives (): R3 then
+        refuses less, since no issuer words are removed from a Form 25's group words."""
         sub = self.edgar.submissions(cik)
         return edgar_names(sub) if isinstance(sub, dict) else ()
 

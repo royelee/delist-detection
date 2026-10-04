@@ -405,3 +405,21 @@ def test_two_letterless_siblings_both_hinted_the_letter_stay_tied():
             SecurityRef("CIK_A", "COMMON", "common", "SUNPOWER CORP", "A")]
     assert match_securities(SUNPOWER_2011, refs) == ([], "ambiguous class")
     assert tied_securities(SUNPOWER_2011, refs) == {"BBG_A", "CIK_A"}
+
+
+@pytest.mark.parametrize("class_text,solely", [
+    ("Common Stock and Warrants", "Common Stock and Warrants"),
+    ("Class A Common Stock and Warrants", "Class A Common Stock and Warrants"),
+])
+def test_a_spac_form25_solely_about_common_and_warrants_is_the_commons(class_text, solely):
+    f = Form25("a", "25-NSE", "2022-01-03", "NASDAQ", class_text, "", "", solely)
+    assert other_class(f, SecurityRef("S", "COMMON", "common", "SOME ACQUISITION CORP")) == ""
+
+
+@pytest.mark.parametrize("class_text", [
+    "Class A Subordinate Voting Common Stock", "Class A Convertible Common Stock",
+    "Series A Non-Voting Common Stock",
+])
+def test_a_generic_class_descriptor_is_no_tracking_group(class_text):
+    f = Form25("a", "25-NSE", "2022-01-03", "NASDAQ", class_text, "", "")
+    assert other_class(f, SecurityRef("S", "CLASS A", "common", "SOME CORP CLASS A"), ("Some Corp",)) == ""
