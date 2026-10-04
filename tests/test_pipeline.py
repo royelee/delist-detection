@@ -2423,12 +2423,14 @@ _NASDAQ_F25 = ("<TYPE>25-NSE\n<notificationOfRemoval><exchange><entityName>The N
                "<ruleProvision>17 CFR 240.12d2-2(a)(3)</ruleProvision></notificationOfRemoval>")
 
 
-def _retired_cusip_run(fake_edgar, tmp_path, tail_symbol):
+def _retired_cusip_run(fake_edgar, tmp_path, tail_symbol, tail_dates=("2025-12-31", "2026-01-15", "2026-02-02"),
+                       tail_prices=(10.0,)):
     """Liberty Live's 2025 split-off as the fails files show it: the old line's
     CUSIP keeps failing after its Form 25 (2025-12-15, effective 12-25) under
     the deleted symbol LLYKXXXX, while the new line trades LLYK under a new
     CUSIP from 2025-12-17. The old issuer keeps filing 10-Qs, so the
-    classifier reads an exchange transfer."""
+    classifier reads an exchange transfer. The old CUSIP's rows after the Form
+    25 are dated `tail_dates`, priced in turn from `tail_prices`."""
     fake_edgar.submissions_by_cik[5555] = [
         EdgarSubmission("f1", "25-NSE", "2025-12-15", "", "", "p.xml"),
         EdgarSubmission("q1", "10-Q", "2026-08-05", "2026-06-30", "", "q.htm")]
@@ -2438,7 +2440,8 @@ def _retired_cusip_run(fake_edgar, tmp_path, tail_symbol):
            + [Observation("LLYK", "2026-06-30", "LIBERTY LIVE HOLDINGS INC", cik=6666)])
     rows = (_ftd("LLYK", "53229D101", "LIBERTY LIVE CORP",
                  ["2024-06-28", "2024-12-31", "2025-06-30", "2025-10-01", "2025-12-12"])
-            + _ftd(tail_symbol, "53229D101", "LIBERTY LIVE CORP", ["2025-12-31", "2026-01-15", "2026-02-02"])
+            + [FtdRow(d, "53229D101", tail_symbol, "LIBERTY LIVE CORP", tail_prices[i % len(tail_prices)])
+               for i, d in enumerate(tail_dates)]
             + _ftd("LLYK", "53230X101", "LIBERTY LIVE HOLDINGS INC", ["2025-12-17", "2026-01-15", "2026-06-30"]))
     index, clients = _index_clients(fake_edgar, obs, rows, {
         ("ID_CUSIP", "53229D101"): _figi_answer("BBGLLYKOLD1", "LLYK", "LIBERTY LIVE CORP"),
@@ -2457,9 +2460,20 @@ def test_deleted_symbol_fails_after_the_delisting_are_not_continued_trading(fake
     assert not [r for r in th if r["ticker"].endswith("XXXX")]
 
 
-def test_live_symbol_fails_after_the_delisting_still_read_as_continued(fake_edgar, tmp_path):
-    d, _ = _retired_cusip_run(fake_edgar, tmp_path, "LLYK")
+def test_live_symbol_trading_after_the_delisting_still_reads_as_continued(fake_edgar, tmp_path):
+    """Sub-plan 5b (C): the old CUSIP trading on under a live symbol (LLYKV), 22 rows over 31 days at two prices,
+    is the security going on after its Form 25 (`ftd.trades_after`)."""
+    days = [f"2026-01-{d:02d}" for d in (2, 5, 6, 7, 8, 9, 12, 13, 14, 15, 16, 20, 21, 22, 23, 26, 27, 28, 29, 30)] \
+        + ["2026-02-02", "2026-02-03"]
+    d, _ = _retired_cusip_run(fake_edgar, tmp_path, "LLYKV", tail_dates=days, tail_prices=(10.0, 10.5))
     assert d["BBGLLYKOLD1"]["successor_sec_id"] == "BBGLLYKOLD1"
+
+
+def test_a_few_live_symbol_fails_after_the_delisting_are_no_continued_trading(fake_edgar, tmp_path):
+    """Sub-plan 5b (C): three fails rows under the live symbol after the Form 25 are fails still settling, not the
+    security trading on: the new line is its successor, as with the deleted symbol."""
+    d, _ = _retired_cusip_run(fake_edgar, tmp_path, "LLYK")
+    assert d["BBGLLYKOLD1"]["successor_sec_id"] == "BBGLLYKNEW1"
 
 
 def test_a_placeholder_whose_late_rows_are_a_deleted_symbol_is_not_listed_today(fake_edgar, tmp_path):
@@ -3425,3 +3439,26 @@ def test_openfigi_unavailable_in_stage_4b_stops_the_run_and_writes_nothing(fake_
     with pytest.raises(OpenFigiUnavailable):
         run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
     assert not list(tmp_path.glob("*.csv"))
+
+
+# --- sub-plan 5b, C: the finder's context reads trading from the security's own CUSIPs ---
+
+def _one_security_context(rows, cusip="74955W307"):
+    from delist_detection.ftd import FtdIndex
+    from delist_detection.history import ticker_sightings
+    from delist_detection.observations import TickerEra
+    s = Security("BBG_RHD", 30419, "COMMON", "R H DONNELLEY CORP", "Common Stock", True, "cusip",
+                 eras=[TickerEra("RHD", "2008-01-16", "2008-12-31", [Observation("RHD", "2008-01-16", "R H DONNELLEY"),
+                                                                    Observation("RHD", "2008-12-31", "R H DONNELLEY")])])
+    ftd = FtdIndex(rows)
+    cusips = {s.sec_id: [cusip]}
+    build = pipeline._context_builder({s.sec_id: s}, {s.sec_id: ticker_sightings(s, ftd, cusips[s.sec_id])},
+                                      pipeline._IssuerAnswers({}, {}, {}, set()), ftd, cusips)
+    return build(s, False)
+
+
+def test_the_finders_context_reads_trading_from_the_securitys_own_cusip_under_any_symbol():
+    days = [f"2009-02-{d:02d}" for d in range(2, 28)]
+    rows = [FtdRow(d, "74955W307", "RHDC", "R H DONNELLEY CORP", 1.0 + (i % 2) / 10) for i, d in enumerate(days)]
+    ctx = _one_security_context(rows)
+    assert ctx.trades_after("2009-01-31") and not ctx.trades_after("2009-02-10")

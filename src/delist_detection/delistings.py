@@ -16,8 +16,8 @@ from .crsp_codes import CrspBucket
 from .edgar import EdgarSubmission
 from .figi_resolution import class_letter
 from .form25 import (
-    REGIONAL_EXCHANGES, Form25, SecurityRef, class_kind, class_letters, effective_date, list_form25,
-    match_securities, notice_last_trade, parse_form25, tied_securities,
+    REGIONAL_EXCHANGES, Form25, SecurityRef, class_kind, class_letters, effective_date, is_involuntary,
+    list_form25, match_securities, notice_last_trade, parse_form25, tied_securities,
 )
 from .last_trade import LastTrade, decide_last_trade, eightk_last_trade
 from .listing_status import exchanges_around, issuer_exchange, withdrawal_kind
@@ -122,6 +122,23 @@ class SecurityContext:
     # line (a reverse split, a redomicile that kept the composite). A Form 25 filed at one while the security
     # trades on removed the old CUSIP, not the security (QGEN 2026, Acxiom/LiveRamp 2018).
     cusip_switches: tuple[str, ...] = ()
+    # True when the fails rows of the security's own CUSIPs, under any symbol it trades under, show it still
+    # trading after the given ISO day (`ftd.trades_after`). With `listed_today`, the one sign that a security went
+    # on after a Form 25 (`DelistingFinder._continued`): an observation can be a stale snapshot (XMSR 2008, SOV
+    # 2009). Unknown (the default) counts as no.
+    trades_after: Callable[[str], bool] = lambda day: False
+
+
+@dataclass
+class _Scan:
+    """The finder's working state for one security: the ticker its review rows carry, the review items and the
+    keys already raised, whether some Form 25 could not be placed, and the Form 25s from before the floor (the
+    fallback's to judge)."""
+    ticker: str
+    review: list[ReviewItem] = field(default_factory=list)
+    seen: set[tuple[str, str]] = field(default_factory=set)
+    had_unmatched: bool = False
+    older: list[EdgarSubmission] = field(default_factory=list)
 
 
 class DelistingFinder:
@@ -287,6 +304,74 @@ class DelistingFinder:
         review.append(ReviewItem(sec.sec_id, ticker, cik, flag, reason,
                                  delist_date=effective_date(sub.filing_date)))
 
+    # -- whether the security went on after a Form 25 ------------------------
+    def _continued(self, ctx: SecurityContext, sub: EdgarSubmission, f25: Form25) -> bool:
+        """Whether the security went on trading after this Form 25: it is listed today; or the Form 25 is not an
+        exchange's removal under rule 12d2-2(b) (`form25.is_involuntary`) and the security's own CUSIPs trade on
+        after its effective date plus SEEN_AFTER_DAYS (`SecurityContext.trades_after`). An observation alone never
+        continues a security: a stale snapshot lists one long after it was acquired (XMSR 2008, SOV 2009), and the
+        OTC tail after a removal under (b) is not the listing going on (R.H. Donnelley, Idearc, LSC
+        Communications)."""
+        if ctx.listed_today:
+            return True
+        if is_involuntary(f25):
+            return False
+        after = date.fromisoformat(effective_date(sub.filing_date)) + timedelta(days=SEEN_AFTER_DAYS)
+        return ctx.trades_after(after.isoformat())
+
+    def _not_this_removal(self, ctx: SecurityContext, filer: int, filings: list[EdgarSubmission],
+                          sub: EdgarSubmission, f25: Form25) -> bool:
+        """A Form 25 the security traded through that removed something else: the old CUSIP at the security's own
+        CUSIP switch (U6), a secondary listing while the main one went on (Apache/Chicago 2020), or another class
+        when the next 10-K cover still names the exchange."""
+        if self._at_own_switch(ctx, sub.filing_date):
+            return True             # the old CUSIP left the exchange as the security went on under its new one
+        before, after = exchanges_around(self.edgar, filer, filings, date.fromisoformat(sub.filing_date))
+        if withdrawal_kind(f25.exchange, before, after) == "secondary":
+            return True
+        return after is not None and f25.exchange in after   # another class left, not this one
+
+    # -- one Form 25 against the security --------------------------------------
+    def _judge(self, ctx: SecurityContext, scan: _Scan, filer: int, sub: EdgarSubmission,
+               refs: list[SecurityRef]) -> Form25 | None:
+        """The Form 25 `sub` of CIK `filer`, parsed, when it removed this security: readable, not a regional
+        exchange's, of a recognized class, matched to this security among `refs` (`match_securities`) with no
+        class-letter conflict. Else None, and a filing that could not be placed gets its review row."""
+        sec, ticker = ctx.security, scan.ticker
+        raw = self.edgar.fetch_filing_raw(filer, sub.accession)
+        if not raw:
+            scan.had_unmatched = True
+            self._review(scan.review, scan.seen, sec, ticker, filer, "form25_unreadable",
+                         f"no filing text for {sub.form} {sub.accession}", sub)
+            return None
+        f25 = parse_form25(raw, accession=sub.accession, form=sub.form, filing_date=sub.filing_date)
+        if f25.exchange in REGIONAL_EXCHANGES:
+            return None
+        if class_kind(f25.class_text) == "other":
+            scan.had_unmatched = True
+            self._review(scan.review, scan.seen, sec, ticker, filer, "form25_unclassified",
+                         f"{sub.form} {sub.accession} ({f25.class_text!r}) has no recognized class", sub)
+            return None
+        matched, why = match_securities(f25, refs)
+        if not matched:
+            if why == "ambiguous class":
+                scan.had_unmatched = True
+                self._review(scan.review, scan.seen, sec, ticker, filer, "form25_unmatched",
+                             f"{sub.form} {sub.accession} ({f25.class_text!r}): {why}", sub)
+            return None
+        if sec.sec_id not in matched:
+            if sec.sec_id in tied_securities(f25, refs):
+                # another class of this Form 25 matched; this one shares its
+                # letter with a sibling no name word tells apart, or has none
+                scan.had_unmatched = True
+                self._review(scan.review, scan.seen, sec, ticker, filer, "form25_unmatched",
+                             f"{sub.form} {sub.accession} ({f25.class_text!r}): ambiguous class", sub)
+            return None
+        ref = next((r for r in refs if r.sec_id == sec.sec_id), None)
+        if ref is not None and self._class_conflict(f25, ref):
+            return None
+        return f25
+
     # -- main ------------------------------------------------------------
     def find(self, ctx: SecurityContext) -> tuple[list[Delisting], list[ReviewItem]]:
         sec = ctx.security
@@ -309,16 +394,11 @@ class DelistingFinder:
         filings = self.edgar.recent_filings(cik)
         first_seen = min(e.first for e in sec.eras)
         floor = (date.fromisoformat(first_seen) - timedelta(days=FORM25_LOOKBACK_DAYS)).isoformat()
-
-        review: list[ReviewItem] = []
-        seen_review: set[tuple[str, str]] = set()
-        had_unmatched = False
+        scan = _Scan(ticker_last)
         candidates: list[tuple[EdgarSubmission, Form25]] = []
-        early: list[EdgarSubmission] = []       # before the floor: only the fallback may take one
-
         for sub in list_form25(filings):
             if sub.filing_date < floor:
-                early.append(sub)
+                scan.older.append(sub)          # before the floor: only the fallback may take one
                 continue
             # Filings that plainly aren't about any security of this issuer
             # (none of the observed securities were even alive on this date)
@@ -327,68 +407,28 @@ class DelistingFinder:
             alive = [r for r in ctx.siblings if self._alive_at(ctx, r.sec_id, sub.filing_date)]
             if not alive:
                 continue
-            raw = self.edgar.fetch_filing_raw(cik, sub.accession)
-            if not raw:
-                had_unmatched = True
-                self._review(review, seen_review, sec, ticker_last, cik, "form25_unreadable",
-                             f"no filing text for {sub.form} {sub.accession}", sub)
+            f25 = self._judge(ctx, scan, cik, sub, alive)
+            if f25 is None:
                 continue
-            f25 = parse_form25(raw, accession=sub.accession, form=sub.form, filing_date=sub.filing_date)
-            if f25.exchange in REGIONAL_EXCHANGES:
+            if self._continued(ctx, sub, f25) and self._not_this_removal(ctx, cik, filings, sub, f25):
                 continue
-            if class_kind(f25.class_text) == "other":
-                had_unmatched = True
-                self._review(review, seen_review, sec, ticker_last, cik, "form25_unclassified",
-                             f"{sub.form} {sub.accession} ({f25.class_text!r}) has no recognized class", sub)
-                continue
-            matched, why = match_securities(f25, alive)
-            if not matched:
-                if why == "ambiguous class":
-                    had_unmatched = True
-                    self._review(review, seen_review, sec, ticker_last, cik, "form25_unmatched",
-                                 f"{sub.form} {sub.accession} ({f25.class_text!r}): {why}", sub)
-                continue
-            if sec.sec_id not in matched:
-                if sec.sec_id in tied_securities(f25, alive):
-                    # another class of this Form 25 matched; this one shares its
-                    # letter with a sibling no name word tells apart, or has none
-                    had_unmatched = True
-                    self._review(review, seen_review, sec, ticker_last, cik, "form25_unmatched",
-                                 f"{sub.form} {sub.accession} ({f25.class_text!r}): ambiguous class", sub)
-                continue
-            ref = next((r for r in alive if r.sec_id == sec.sec_id), None)
-            if ref is not None and self._class_conflict(f25, ref):
-                continue
-            eff = effective_date(sub.filing_date)
-            continued = bool(ctx.listed_today) or ctx.seen_after(
-                (date.fromisoformat(eff) + timedelta(days=SEEN_AFTER_DAYS)).isoformat())
-            if continued:
-                if self._at_own_switch(ctx, sub.filing_date):
-                    continue        # the old CUSIP left the exchange as the security went on under its new one
-                before, after = exchanges_around(self.edgar, cik, filings, date.fromisoformat(sub.filing_date))
-                if withdrawal_kind(f25.exchange, before, after) == "secondary":
-                    continue
-                if after is not None and f25.exchange in after:
-                    continue        # the next 10-K cover still names it: another class left, not this one
             candidates.append((sub, f25))
 
         delistings: list[Delisting] = []
         last_definitive: Delisting | None = None
         for group in self._group(candidates):
-            earliest_sub = min(group, key=lambda item: item[0].filing_date)[0]
+            earliest_sub, earliest_f25 = min(group, key=lambda item: item[0].filing_date)
             if last_definitive is not None:
                 gap = (date.fromisoformat(earliest_sub.filing_date) - date.fromisoformat(last_definitive.delist_date)).days
                 if gap > IGNORE_AFTER_DEFINITIVE_DAYS and not ctx.seen_after(earliest_sub.filing_date):
                     continue        # a security truly gone can't have a later Form 25 of its own
             eff = effective_date(earliest_sub.filing_date)
-            continued = bool(ctx.listed_today) or ctx.seen_after(
-                (date.fromisoformat(eff) + timedelta(days=SEEN_AFTER_DAYS)).isoformat())
+            continued = self._continued(ctx, earliest_sub, earliest_f25)
             delisting = self._build_delisting(ctx, cik, filings, group, eff, continued)
             delistings.append(delisting)
-            # Sightings after the effective date can be an OTC tail or a stale
-            # snapshot, not a listing: only an exchange transfer (or a delisting
-            # not classified) continues one. A merger, liquidation, compliance
-            # failure or expiration ends the security's exchange life.
+            # Only an exchange transfer (or a delisting not classified) that the
+            # security traded through continues it. A merger, liquidation,
+            # compliance failure or expiration ends the security's exchange life.
             if not continued or delisting.record.bucket in ENDING_BUCKETS:
                 last_definitive = delisting
 
@@ -397,9 +437,10 @@ class DelistingFinder:
         # exchange transfer the security kept trading through) -- not only
         # when `delistings` is empty. Otherwise a security whose only delistings
         # are continued ones gets neither a real delisting nor a review row.
+        review = scan.review
         if last_definitive is None:
             if ctx.listed_today is False:
-                fb = self._fallback(ctx, cik, filings, ticker_last, early)
+                fb = self._fallback(ctx, cik, filings, ticker_last, scan.older)
                 if fb is not None:
                     delistings.append(fb)
                 else:
@@ -407,7 +448,7 @@ class DelistingFinder:
                     # placed; accepting one as "not about this security" must not
                     # drop the security itself from review (spec 8.10, G6).
                     why = ("no Form 25 matched it (see its form25_* rows) and no other delisting filing found"
-                           if had_unmatched else "no Form 25 or delisting filing found")
+                           if scan.had_unmatched else "no Form 25 or delisting filing found")
                     review.append(ReviewItem(sec.sec_id, ticker_last, cik, "ended_without_delisting",
                                              f"not listed today and {why}", last_seen=ctx.last_seen))
             elif ctx.listed_today is None:

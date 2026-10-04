@@ -63,6 +63,31 @@ def is_unassigned_symbol(symbol: str) -> bool:
     return len(symbol or "") > 4 and symbol.endswith("ZZZZ")
 
 
+TRADING_MIN_ROWS = 20     # fails rows after a day that show a security still trading: at least this many...
+TRADING_MIN_DAYS = 20     # ...spanning at least this many days...
+TRADING_MIN_PRICES = 2    # ...at two or more prices (fails still settling at the last close repeat one price)
+
+
+def is_trading_symbol(symbol: str) -> bool:
+    """Whether a fails row's symbol is one a security trades under: not a deleted "…XXXX" or unassigned "…ZZZZ"
+    symbol, and no digit (SEC's pair-off placeholders such as "F104PAIROFF" carry part of the CUSIP)."""
+    return bool(symbol) and not is_deleted_symbol(symbol) and not is_unassigned_symbol(symbol) \
+        and not any(ch.isdigit() for ch in symbol)
+
+
+def trades_after(rows: Iterable[FtdRow], after: str) -> bool:
+    """Whether the fails rows of a security's own CUSIPs (`rows`) show it still trading after the ISO day `after`,
+    under any symbol it trades under (`is_trading_symbol`; an OTC symbol counts): at least TRADING_MIN_ROWS rows
+    over at least TRADING_MIN_DAYS days, at TRADING_MIN_PRICES or more prices."""
+    later = [r for r in rows if r.date > after and is_trading_symbol(r.symbol)]
+    if len(later) < TRADING_MIN_ROWS:
+        return False
+    days = sorted(r.date for r in later)
+    if (date.fromisoformat(days[-1]) - date.fromisoformat(days[0])).days < TRADING_MIN_DAYS:
+        return False
+    return len({r.price for r in later if r.price is not None}) >= TRADING_MIN_PRICES
+
+
 def settled_last(rows: Sequence[FtdRow]) -> FtdRow:
     """The row that opens the last run of one price in the date-sorted, non-empty `rows`: fails still settling
     after a security's last trade repeat its last close, so its last trade lies near that row, not the last one

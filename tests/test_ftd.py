@@ -349,3 +349,32 @@ def test_a_fails_rows_close_is_a_trading_day_older_than_its_date():
     assert close_age("2018-11-26", date(2018, 11, 28)) == 3
     assert close_age("2018-12-03", date(2018, 11, 30)) == 0
     assert close_age("2018-11-23", date(2018, 11, 26)) == 2          # the day before is Thanksgiving
+
+
+# --- sub-plan 5b, C: whether a security's own CUSIPs trade on after a day ---
+
+from delist_detection.ftd import is_trading_symbol, trades_after  # noqa: E402
+
+
+def _tail_rows(symbol, days, prices=(10.0, 10.5)):
+    return [FtdRow(d, "74955W307", symbol, "R H DONNELLEY CORP", prices[i % len(prices)]) for i, d in enumerate(days)]
+
+
+JANUARY = [f"2020-01-{d:02d}" for d in range(2, 23)]       # 21 rows, 2020-01-02 .. 2020-01-22: 20 days apart
+
+
+def test_twenty_rows_over_twenty_days_at_two_prices_show_trading_after_the_day():
+    assert trades_after(_tail_rows("RHDC", JANUARY), "2020-01-01")
+    assert not trades_after(_tail_rows("RHDC", JANUARY[:-1]), "2020-01-01")     # 19 days apart
+    assert not trades_after(_tail_rows("RHDC", JANUARY), "2020-01-02")          # 20 rows after the day, 19 days apart
+
+
+def test_fails_settling_at_one_price_are_no_trading():
+    assert not trades_after(_tail_rows("RHDC", JANUARY, prices=(1.28,)), "2020-01-01")
+
+
+def test_an_otc_symbol_counts_and_a_deleted_unassigned_or_pair_off_symbol_does_not():
+    for symbol in ("RHDC", "RHDCQ", "**********"):
+        assert is_trading_symbol(symbol) and trades_after(_tail_rows(symbol, JANUARY), "2020-01-01")
+    for symbol in ("RHDXXXX", "RHDZZZZ", "F104PAIROFF", ""):
+        assert not is_trading_symbol(symbol) and not trades_after(_tail_rows(symbol, JANUARY), "2020-01-01")

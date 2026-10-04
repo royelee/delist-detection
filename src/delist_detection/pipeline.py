@@ -36,7 +36,7 @@ from .handoffs import (
 from .figi_resolution import FigiCandidate, is_placeholder, share_class_from_name
 from .form25 import SecurityRef, notice_last_trade, parse_form25
 from .last_trade import decide_last_trade
-from .ftd import FTD_START, FtdIndex, close_age
+from .ftd import FTD_START, FtdIndex, close_age, trades_after
 from .history import (
     Sighting, backfill_cusips, cusip_sightings, filtered_ticker_sightings, history_rows, observation_map_rows, own_last_seen,
     ranges_from_sightings, ticker_on, ticker_range_review, ticker_sightings, value_on,
@@ -670,6 +670,7 @@ def _context_builder(securities: dict[str, Security], sightings: dict[str, list[
     def security_context(s: Security, listed_now: bool | None) -> SecurityContext:
         sig = sightings[s.sec_id]
         sibs = siblings.get(s.issuer_cik) or [SecurityRef(s.sec_id, s.share_class, s.kind, s.name)]
+        rows = ftd.trading_rows(sec_cusips.get(s.sec_id, []))
         # sec_id -> (first sighting, last own-ticker sighting) for every security
         # sharing this issuer CIK, from the same sightings built above; a sibling
         # with no sightings gets no entry (the finder treats it as alive at every
@@ -697,6 +698,7 @@ def _context_builder(securities: dict[str, Security], sightings: dict[str, list[
                 x.day > day for x in sig if x.source == "ftd" and x.value in own),
             tickers_between=lambda lo, hi, sig=sig: list(dict.fromkeys(x.value for x in sig if lo <= x.day <= hi)),
             cusip_switches=_cusip_switches(s, ftd, sec_cusips.get(s.sec_id, [])),
+            trades_after=lambda day, rows=rows: trades_after(rows, day),
         )
 
     return security_context

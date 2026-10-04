@@ -49,10 +49,11 @@ def _aet_edgar(fake_edgar):
     return fake_edgar
 
 
-def _ctx(sec, *, listed=False, seen_after=False, last_seen="2018-11-28"):
+def _ctx(sec, *, listed=False, seen_after=False, last_seen="2018-11-28", trades_after=False):
     return SecurityContext(security=sec, siblings=[SecurityRef(sec.sec_id, sec.share_class, sec.kind)],
                            ticker_on=lambda d: sec.eras[-1].ticker, last_seen=last_seen,
-                           seen_after=lambda d: seen_after, listed_today=listed, expected_name=sec.name)
+                           seen_after=lambda d: seen_after, listed_today=listed, expected_name=sec.name,
+                           trades_after=lambda d: trades_after)
 
 
 def _f25_raw(entity_name, class_text="Common Stock", rule="17 CFR 240.12d2-2(a)(3)", form_tag="25"):
@@ -577,7 +578,7 @@ def test_completeness_only_continued_event_still_gets_fallback_review(fake_edgar
     fake_edgar.raws["k1"] = NYSE_COMMON_RAW
     clf = DelistClassifier(fake_edgar, TickerResolver(fake_edgar))
     sec = _sec("BBG_K", 9001, "KKK", "2010-01-01", "2015-01-04", "KKK CORP")
-    ctx = _ctx(sec, listed=False, seen_after=True, last_seen="2015-06-01")
+    ctx = _ctx(sec, listed=False, seen_after=True, trades_after=True, last_seen="2015-06-01")
     events, review = DelistingFinder(fake_edgar, clf).find(ctx)
     assert len(events) == 1
     assert events[0].record.bucket is CrspBucket.EXCHANGE_TRANSFER
@@ -597,7 +598,7 @@ def test_completeness_continued_transfer_then_later_merger_yields_both(fake_edga
     fake_edgar.raws["e1"] = NYSE_COMMON_RAW
     clf = DelistClassifier(fake_edgar, TickerResolver(fake_edgar))
     sec = _sec("BBG_TWO", 20000, "TWOD", "2010-01-01", "2014-12-31", "TWOD CORP")
-    ctx = _ctx(sec, listed=False, seen_after=True, last_seen="2018-03-15")
+    ctx = _ctx(sec, listed=False, seen_after=True, trades_after=True, last_seen="2018-03-15")
     events, review = DelistingFinder(fake_edgar, clf).find(ctx)
     assert len(events) == 2
     buckets = {ev.record.bucket for ev in events}
@@ -900,3 +901,51 @@ def test_a_form25_at_an_own_switch_of_a_security_that_stopped_trading_still_coun
     finder, sec = _switch_case(fake_edgar)
     events, _ = finder.find(replace(_ctx(sec, listed=False, seen_after=False), cusip_switches=("2026-01-07",)))
     assert [e.delist_date for e in events] == ["2026-01-18"]
+
+
+# --- sub-plan 5b, C: what continues a security after a Form 25 ---
+
+def _stale_merger(fake_edgar, rule="17 CFR 240.12d2-2(a)(3)"):
+    """XM Satellite-like: Nasdaq removed the class A (25-NSE 2008-07-29) at the merger (8-K item 5.01 the next
+    day); the issuer kept filing for its debt; a stale snapshot lists the security until 2009-06-08."""
+    fake_edgar.submissions_by_cik[30101] = [
+        EdgarSubmission("x25", "25-NSE", "2008-07-29", "", "", "p.xml"),
+        EdgarSubmission("x8k", "8-K", "2008-07-30", "2008-07-30", "2.01,5.01", "k.htm"),
+        EdgarSubmission("xq", "10-Q", "2009-05-01", "2009-03-31", "", "q.htm")]
+    fake_edgar.raws["x25"] = _f25_raw("The Nasdaq Stock Market LLC", rule=rule)
+    clf = DelistClassifier(fake_edgar, TickerResolver(fake_edgar))
+    sec = _sec("BBG_XMSR", 30101, "XMSR", "2008-01-16", "2009-06-08", "XM SATELLITE RADIO HLDGS")
+    return DelistingFinder(fake_edgar, clf), sec
+
+
+def test_a_stale_observation_after_the_form25_no_longer_continues_the_security(fake_edgar):
+    finder, sec = _stale_merger(fake_edgar)
+    events, _ = finder.find(_ctx(sec, listed=False, seen_after=True, last_seen="2009-06-08"))
+    assert [(e.delist_date, e.record.bucket, e.record.successor_sec_id) for e in events] == [
+        ("2008-08-08", CrspBucket.MERGER, None)]
+
+
+def test_the_securitys_own_cusip_trading_on_after_the_form25_continues_it(fake_edgar):
+    finder, sec = _stale_merger(fake_edgar)
+    events, _ = finder.find(_ctx(sec, listed=False, trades_after=True, last_seen="2009-06-08"))
+    assert (events[0].record.bucket, events[0].record.successor_sec_id) == (CrspBucket.EXCHANGE_TRANSFER, "BBG_XMSR")
+
+
+def test_trading_on_after_a_removal_under_rule_b_is_the_otc_tail_not_the_listing(fake_edgar):
+    """R.H. Donnelley, Idearc, LSC Communications: an exchange's removal under 12d2-2(b), then OTC trading under
+    the same CUSIP; only a listing today continues such a security."""
+    finder, sec = _stale_merger(fake_edgar, rule="17 CFR 240.12d2-2(b)")
+    events, _ = finder.find(_ctx(sec, listed=False, trades_after=True, last_seen="2009-06-08"))
+    assert [(e.record.bucket, e.record.successor_sec_id) for e in events] == [(CrspBucket.MERGER, None)]
+    events, _ = finder.find(_ctx(sec, listed=True, trades_after=False, last_seen="2009-06-08"))
+    assert [(e.record.bucket, e.record.successor_sec_id) for e in events] == [
+        (CrspBucket.EXCHANGE_TRANSFER, "BBG_XMSR")]
+
+
+def test_a_form25_at_the_own_cusip_switch_of_a_security_not_listed_today_still_removed_the_old_cusip(fake_edgar):
+    """Review Focus (C with U6): Acxiom/LiveRamp 2018-like, not listed today: the new CUSIP's fails rows continue
+    the security (`trades_after`), so the Form 25 at its own CUSIP switch is no delisting."""
+    finder, sec = _switch_case(fake_edgar)
+    ctx = replace(_ctx(sec, listed=False, trades_after=True), cusip_switches=("2026-01-07",))
+    events, review = finder.find(ctx)
+    assert all(e.form25_sub is None for e in events)

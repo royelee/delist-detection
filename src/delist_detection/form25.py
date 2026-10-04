@@ -72,6 +72,12 @@ class Form25:
     notice_text: str
 
 
+def is_involuntary(f25: Form25) -> bool:
+    """An exchange's removal under rule 12d2-2(b) (a listing deficiency, a price, a market value), not a
+    voluntary withdrawal or a merger's (a) filing: the class went to no other exchange."""
+    return "(b)" in (f25.rule or "")
+
+
 def _tag(raw: str, tag: str) -> str:
     m = re.search(rf"<{tag}>\s*(.*?)\s*</{tag}>", raw, re.S | re.I)
     return html.unescape(m.group(1)).strip() if m else ""
@@ -339,7 +345,7 @@ def notice_last_trade(f25: Form25) -> tuple[date | None, str]:
     t = re.sub(r"\s+", " ", f25.notice_text or "")
     if not t:
         return None, ""
-    involuntary = "(b)" in (f25.rule or "")
+    involuntary = is_involuntary(f25)
     day, kind = _notice_day(t, involuntary)
     if day is not None and involuntary:
         return day, "notice_b_unconfirmed"
