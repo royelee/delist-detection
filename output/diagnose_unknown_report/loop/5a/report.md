@@ -125,3 +125,15 @@ The truth now holds 293 cases: 57 pass, 236 known_wrong, and 0 ruling_pending.
 6. **Carried to later sub-plans**:
    - A rename's ticker boundary from the 8-K or MIDAS (5d).
    - Task 13's command passes `--id-baseline <base securities.csv>` on any rerun of a sub-plan.
+
+## 9. Operator rulings applied (2026-10-04)
+
+1. Flipped the 8 golden cases to pass: EXBD, XON, LIZ, ACXM, DF, MNI, ESV and DRQ.
+2. `truth.judge` now reads `ends_after` as "must not end before". The audit puts the true last trade there.
+   - The golden set meant "must trade past this day", so every golden `ends_after` moved one day later. The test is
+     the same: end <= X is end < X+1. No golden outcome changed, and WTW stays known_wrong.
+   - The audit now reads V.audit.confirmed_but_wrong 36, below its original floor of 42.
+   - A.census errors fell: left_view 76→44, continuation 28→16.
+3. SPWRA's continuation truth row stands, fixed_by 5c.
+
+The suite now has 2052 passed and 246 xfailed, and `--check --base 794ef8d` exits 0.

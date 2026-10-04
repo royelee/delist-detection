@@ -414,3 +414,4 @@ CIK1056087-COMMON_2016-05-25,fixed_by,5a,5g,controller ruling 2026-10-04 (5a acc
 CIK20520-COMMON_2017-07-10,fixed_by,5a,5g,controller ruling 2026-10-04 (5a acceptance): the line is followed; what remains is the OTC print's ticker FTRCQ,
 CIK931336-COMMON_2013-08-26,fixed_by,5a,5g,controller ruling 2026-10-04 (5a acceptance): the line is followed; what remains is the OTC print's ticker DFODQ,
 BBG00Y04KP80_5a-r2,fixed_by,5a,5h,"controller ruling 2026-10-04 (5a acceptance): the 2014 CRC era holds the post-2020 line's FIGI BBG00Y04KP80; the genuine 2014-2020 line is BBG0060B3M63 (identity, 5h)",output/diagnose_unknown_report/loop/5a/round-2/reports/BBG00Y04KP80_5a-r2.md
+CIK867773-COMMON_2009-06-08,fixed_by,5b,5c,operator ruling 2026-10-04: the truth's continuation into SPWR stands (not R2's one security); the successor link is 5c's,

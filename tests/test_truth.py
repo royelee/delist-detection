@@ -80,6 +80,12 @@ def test_judge_passes_when_every_checked_field_agrees():
     assert judge(case, _view()).mismatches == ()
 
 
+def test_a_lifecycle_ending_on_its_ends_after_day_passes():
+    """Operator ruling 2026-10-04: ends_after means the lifecycle must not end *before* the day. The audit puts the
+    true last trade there (FMD 2016-08-22), so a lifecycle that ends exactly then is right."""
+    assert judge(_case(ends_after="2018-06-29"), _view()).mismatches == ()
+
+
 def test_judge_reads_a_bankruptcy_as_dropped():
     t = tables([sec("S", cik="100")], [iv("S", "AAA", "2010-01-04", "2020-05-01")],
                [ending("S", "2020-05-11", "liquidation", ltd="2020-05-01", dlret="-0.550000",
@@ -94,7 +100,7 @@ def test_judge_reads_a_bankruptcy_as_dropped():
     (dict(issuer_cik="999"), "issuer_cik 100 != 999"),
     (dict(tickers=("AAA", "ZZZ")), "tickers missing ZZZ"),
     (dict(terminal="active"), "terminal ended != active"),
-    (dict(ends_after="2018-06-29"), "ends 2018-06-29, on or before 2018-06-29"),
+    (dict(ends_after="2018-07-02"), "ends 2018-06-29, before 2018-07-02"),
     (dict(exit_kind="liquidation"), "exit_kind merger != liquidation"),
     (dict(last_trade_date="2018-06-28"), "last_trade_date 2018-06-29 != 2018-06-28"),
     (dict(dlret=0.05), "dlret 0.012 != 0.05 +/- 0.005"),

@@ -10,7 +10,8 @@ a random sample). A case names a security by a ticker and a date it traded
     issuer_cik        the issuer CIK of the security found at (ticker, on)
     tickers           `;`-joined tickers its lifecycle must have traded under
     terminal          active | ended
-    ends_after        the lifecycle must not end on or before this date
+    ends_after        the lifecycle must not end before this date (ending on it is right: the audit puts the
+                      true last trade there; operator ruling 2026-10-04)
     exit_kind         merger | exchange | liquidation | dropped | lost_source | expiration
                       (of the lifecycle's final ending)
     last_trade_date   of the final ending
@@ -171,8 +172,8 @@ def judge(case: TruthCase, view: LifecycleView) -> Judgement:
     if case.terminal and lc.kind != case.terminal:
         bad.append(f"terminal {lc.kind} != {case.terminal}")
     end = view.end_of(lc)
-    if case.ends_after and end is not None and end <= case.ends_after:
-        bad.append(f"ends {end}, on or before {case.ends_after}")
+    if case.ends_after and end is not None and end < case.ends_after:
+        bad.append(f"ends {end}, before {case.ends_after}")
     final = lc.final
     if case.exit_kind or case.last_trade_date or case.dlret is not None:
         if final is None:
