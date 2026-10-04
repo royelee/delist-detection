@@ -179,29 +179,39 @@ _ITEM_HEAD = re.compile(r"item\s*\d\.\d{2}", re.I)
 ITEM_MIN_SECTION = 200   # shorter than this is an index entry or a cross-reference, not a section
 
 
-def item_text(text: str, item: str, width: int = 1500) -> str:
-    """The `Item {item}` section of `text` (any case).
+def item_sections(text: str, item: str, width: int = 1500) -> list[str]:
+    """Every `Item {item}` section of `text` (any case), in order.
 
-    The section runs from the heading to the next `Item N.NN` heading or `width`
-    characters, whichever comes first. An 8-K's cover page indexes every item it
-    carries, and the body cross-references items too, so the first match is
-    usually a one-line entry that says nothing: take the first match whose
-    section is at least ITEM_MIN_SECTION characters. If every match is shorter
-    (a short filing with one heading), fall back to the first match and `width`
-    characters.
+    A section runs from a mention of the item to the next `Item N.NN` heading or
+    `width` characters, whichever comes first. An 8-K's cover page indexes every
+    item it carries, and the body cross-references items too, so a mention is
+    often a one-line entry that says nothing: only sections of at least
+    ITEM_MIN_SECTION characters count. If every one is shorter (a short filing
+    with one heading), the first mention and `width` characters is the one
+    section. A cross-reference long enough to count ("The information set forth
+    below in Item 1.03 ... is incorporated by reference in this Item 1.01":
+    Ascena 2020) can come before the item's own section, so a reader that looks
+    for wording reads every section, not only the first.
     """
     text = text or ""
     matches = list(re.finditer(rf"item\s*{re.escape(item)}", text, re.I))
     if not matches:
-        return ""
+        return []
+    out = []
     for m in matches:
         end = min(len(text), m.start() + width)
         nxt = _ITEM_HEAD.search(text, m.end())
         if nxt and nxt.start() < end:
             end = nxt.start()
         if end - m.start() >= ITEM_MIN_SECTION:
-            return text[m.start():end]
-    return text[matches[0].start():matches[0].start() + width]
+            out.append(text[m.start():end])
+    return out or [text[matches[0].start():matches[0].start() + width]]
+
+
+def item_text(text: str, item: str, width: int = 1500) -> str:
+    """The first `Item {item}` section of `text` (`item_sections`), else ""."""
+    sections = item_sections(text, item, width)
+    return sections[0] if sections else ""
 
 
 def says_listing_transfer(text: str) -> bool:

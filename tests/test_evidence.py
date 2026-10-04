@@ -163,3 +163,32 @@ def test_edgar_names_lists_the_current_name_then_the_former_ones():
            "formerNames": [{"name": "NORTHEAST UTILITIES"}, {"name": " "}, {"name": None}, "junk"]}
     assert edgar_names(sub) == ("Eversource Energy", "NORTHEAST UTILITIES")
     assert edgar_names({"name": None, "formerNames": None}) == ()
+
+
+# --- sub-plan 5b: every Item section ---
+
+from delist_detection.evidence import item_sections, item_text  # noqa: E402
+
+# Ascena's 2020 bankruptcy 8-K, shortened: its first "Item 1.03" is a cross-reference long enough to read as the
+# section; the item's own section, which reports the Chapter 11 cases, comes next.
+CROSS_REFERENCED_103 = (
+    "Item 1.01 Entry into a Material Definitive Agreement. The information set forth below in Item 1.03 in this "
+    "Current Report on Form 8-K under the captions “Restructuring Support Agreement” and “Backstop Commitment "
+    "Letter for the DIP Term Facility” is hereby incorporated by reference in this Item 1.01. Item 1.03 "
+    "Bankruptcy or Receivership. Voluntary Petition for Reorganization On July 23, 2020, Ascena Retail Group, Inc. "
+    "and certain of its subsidiaries commenced voluntary cases under chapter 11 of title 11 of the United States "
+    "Code in the United States Bankruptcy Court for the Eastern District of Virginia. " + "x" * 300
+    + " Item 2.04 Triggering Events.")
+
+
+def test_item_sections_are_every_section_of_the_item_and_item_text_the_first():
+    sections = item_sections(CROSS_REFERENCED_103, "1.03")
+    assert len(sections) == 2
+    assert sections[0].startswith("Item 1.03 in this Current Report") and "chapter 11" not in sections[0]
+    assert sections[1].startswith("Item 1.03 Bankruptcy or Receivership") and "chapter 11" in sections[1]
+    assert item_text(CROSS_REFERENCED_103, "1.03") == sections[0]
+
+
+def test_a_short_filing_has_one_section_and_a_filing_without_the_item_none():
+    assert item_sections("Item 1.03 Bankruptcy. Chapter 11.", "1.03") == ["Item 1.03 Bankruptcy. Chapter 11."]
+    assert item_sections("Item 8.01 Other Events.", "1.03") == [] and item_text("Item 8.01", "1.03") == ""

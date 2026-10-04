@@ -79,3 +79,38 @@ def test_every_relabelled_ending_says_the_registrant_kept_filing():
               _s(item_filed={"3.01": "2020-11-02"}, deficiency_notice="8-K 2020-11-02")):
         assert RESOLVED_FROM_CONTINUED_FILINGS in resolve(s, None).reason
     assert RESOLVED_FROM_CONTINUED_FILINGS not in resolve(_s(), None).reason
+
+
+# --- sub-plan 5b, 5g sub-rule 2: a confirmed bankruptcy before a completed sale ---
+
+def test_a_confirmed_bankruptcy_before_the_completed_sale_is_a_bankruptcy():
+    """A Chapter 11 asset sale is no merger: the 8-K item 1.03 the classifier confirmed (`bankruptcy_filing`) on
+    or before the item 2.01 beats the completed-acquisition branch."""
+    v = resolve(_s(item_filed={"1.03": "2020-09-10", "2.01": "2020-11-24"}, delist_filing="25-NSE 2020-08-11",
+                   bankruptcy_filing="8-K 2020-09-10"), 470)
+    assert (v.branch, v.crsp_code, v.bucket) == ("bankruptcy", 470, CrspBucket.LIQUIDATION)
+    assert v.reason.startswith("Bankruptcy (8-K 2020-09-10, item 1.03) before the completed sale")
+    assert RESOLVED_FROM_CONTINUED_FILINGS in v.reason
+
+
+def test_a_bankruptcy_after_the_sale_or_unconfirmed_leaves_the_completed_merger():
+    for bk in ("8-K 2020-12-01", ""):
+        v = resolve(_s(item_filed={"1.03": "2020-12-01", "2.01": "2020-11-24"}, delist_filing="25-NSE 2020-08-11",
+                       bankruptcy_filing=bk), 470)
+        assert (v.branch, v.crsp_code, v.bucket) == ("completed_merger", 231, CrspBucket.MERGER)
+
+
+def test_a_bankruptcy_and_a_sale_with_no_merger_filing_or_form25_keep_the_continued_filings_default():
+    v = resolve(_s(item_filed={"1.03": "2020-09-10", "2.01": "2020-11-24"}, bankruptcy_filing="8-K 2020-09-10"), 470)
+    assert v.branch == "continued_filings"
+
+
+def test_a_change_in_control_still_comes_before_the_bankruptcy_branch():
+    v = resolve(_s(item_filed={"1.03": "2020-09-10", "2.01": "2020-11-24", "5.01": "2020-11-24"},
+                   bankruptcy_filing="8-K 2020-09-10"), 233)
+    assert (v.branch, v.crsp_code) == ("change_in_control", 233)
+
+
+def test_the_bankruptcy_filing_is_the_classifiers_answer_carried_on_the_signals():
+    s = signals([_f("8-K", "2020-12-01", "1.03")], END, trading_after=False, bankruptcy_filing="8-K 2020-12-01")
+    assert s.bankruptcy_filing == "8-K 2020-12-01" and s.item_filed == {"1.03": "2020-12-01"}

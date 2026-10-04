@@ -25,6 +25,7 @@ from .evidence import (
     cites_listing_deficiency,
     filed_operating_between,
     is_spac,
+    item_sections,
     item_text,
     mentions_bankruptcy,
     merger_evidence,
@@ -142,13 +143,13 @@ def _drop_heading(section: str) -> str:
 
 
 def _confirms_bankruptcy(text: str) -> bool:
-    """The filing's Item 1.03 section reports a bankruptcy. Wording elsewhere
-    (credit-agreement boilerplate in a takeover 8-K) confirms nothing, and
-    neither does the standard heading on its own."""
-    section = item_text(text, "1.03")
-    if not section:
-        return False
-    return bool(_BANKRUPTCY_BODY.search(section)) or mentions_bankruptcy(_drop_heading(section))
+    """An Item 1.03 section of the filing reports a bankruptcy. Every section is
+    read (`evidence.item_sections`): a cross-reference to Item 1.03 can come
+    first (Ascena 2020). Wording elsewhere (credit-agreement boilerplate in a
+    takeover 8-K) confirms nothing, and neither does the standard heading on its
+    own."""
+    return any(bool(_BANKRUPTCY_BODY.search(section)) or mentions_bankruptcy(_drop_heading(section))
+               for section in item_sections(text, "1.03"))
 
 
 def _near(d1: date | None, d2: date | None, days: int) -> bool:
@@ -331,11 +332,12 @@ class DelistClassifier:
         scored.sort(key=lambda x: x[0])
         return scored[0][1]
 
-    def _confirmed_bankruptcy(self, cik, filings, on, flags, before: int = 540):
-        """First 1.03 8-K in the window whose Item 1.03 section mentions a
-        bankruptcy. An empty text (fetch miss) counts as confirmed, since the tag
-        is SEC's own metadata, and adds the flag `bankruptcy_text_missing`."""
-        for f in bankruptcy_8ks(filings, on, before=before):
+    def _confirmed_bankruptcy(self, cik, filings, on, flags, before: int = 540, after: int = 30):
+        """First 1.03 8-K in [on - before, on + after] whose Item 1.03 section
+        mentions a bankruptcy. An empty text (fetch miss) counts as confirmed,
+        since the tag is SEC's own metadata, and adds the flag
+        `bankruptcy_text_missing`."""
+        for f in bankruptcy_8ks(filings, on, before=before, after=after):
             text = self.edgar.fetch_filing_text(cik, f.accession, f.primary_doc)
             if not text:
                 _add_flag(flags, "bankruptcy_text_missing")
@@ -343,6 +345,13 @@ class DelistClassifier:
             if _confirms_bankruptcy(text):
                 return f
         return None
+
+    def _bankruptcy_in_window(self, cik: int, filings: list[EdgarSubmission], on: date, flags: list[str]) -> str:
+        """`"8-K <date>"` of the first 8-K in the end-of-era resolver's item window around `on` whose Item 1.03
+        text confirms a bankruptcy (`_confirmed_bankruptcy`), else "" (5g sub-rule 2)."""
+        bk = self._confirmed_bankruptcy(cik, filings, on, flags, before=end_of_era.ITEMS_BEFORE_DAYS,
+                                        after=end_of_era.ITEMS_AFTER_DAYS)
+        return f"8-K {bk.filing_date}" if bk is not None else ""
 
     def _emerged_before_merger(self, cik, filings, observed, flags) -> bool:
         """The confirmed bankruptcy predates an acquisition the company was still
@@ -719,7 +728,9 @@ class DelistClassifier:
         # acquisition, a deficiency notice) before calling it an exchange transfer.
         if observed and self._detect_continued_filings(filings, observed):
             era = end_of_era.signals(filings, observed, trading_after=trading_after,
-                                     deficiency_notice=self._deficiency_notice(resolution.cik, filings, observed))
+                                     deficiency_notice=self._deficiency_notice(resolution.cik, filings, observed),
+                                     bankruptcy_filing=self._bankruptcy_in_window(resolution.cik, filings, observed,
+                                                                                  flags))
             items_code, _ = self._classify_items(set(era.item_filed))
             verdict = end_of_era.resolve(era, items_code)
             evidence["end_of_era"] = verdict.branch
