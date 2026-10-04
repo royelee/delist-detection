@@ -1017,6 +1017,27 @@ def test_the_issuers_own_form25_in_a_group_with_the_exchanges_moves_the_class(fa
     assert (ev.record.crsp_code, ev.record.successor_sec_id) == (304, "BBG_KHC")
 
 
+def test_an_exchange_move_in_a_later_member_of_the_group_continues_it_though_the_earliest_is_the_exchanges(fake_edgar):
+    """Final review I1: the exchange's 25-NSE on D, the issuer's own 25 with its 8-A12B on D+1, not listed today and
+    no fails rows: the group is the move (304, the security itself), not a definitive `unknown` ending."""
+    finder, sec = _exchange_move(fake_edgar)
+    fake_edgar.submissions_by_cik[30201] = [
+        EdgarSubmission("kn", "25-NSE", "2026-09-07", "", "", "p.xml"),
+        EdgarSubmission("k25", "25", "2026-09-08", "", "", "p.xml"),
+        EdgarSubmission("k8a", "8-A12B", "2026-09-08", "", "", "a.htm")]
+    fake_edgar.raws["kn"] = _f25_raw("The Nasdaq Stock Market LLC", form_tag="25-NSE")
+    (ev,), _ = finder.find(_ctx(sec, listed=False, last_seen="2026-09-04"))
+    assert (ev.record.crsp_code, ev.record.successor_sec_id) == (304, "BBG_KHC")
+
+
+def test_an_8a12b_amendment_beside_the_issuers_form25_moves_nothing(fake_edgar):
+    """Final review M3: a rights-plan amendment is filed on 8-A12B/A (Biomet 2006); it registers no class."""
+    finder, sec = _exchange_move(fake_edgar)
+    fake_edgar.submissions_by_cik[30201][1] = EdgarSubmission("k8a", "8-A12B/A", "2026-09-08", "", "", "a.htm")
+    (ev,), _ = finder.find(_ctx(sec, listed=True, last_seen="2026-09-04"))
+    assert ev.record.bucket is CrspBucket.UNKNOWN
+
+
 # --- sub-plan 5b, E: early reach ---
 
 def _two_early_groups(fake_edgar):
@@ -1070,6 +1091,55 @@ def test_an_early_form25_whose_text_cannot_be_read_raises_no_review_row(fake_edg
     events, review = finder.find(_ctx(sec, listed=False, last_seen="2009-06-08"))
     assert not any(r.flag == "form25_unreadable" for r in review)
     assert all(e.form25_sub is None or e.form25_sub.accession != "t2" for e in events)
+
+
+def test_an_unreadable_latest_early_form25_lets_no_older_early_group_be_the_ending(fake_edgar):
+    """Final review I2: t2 (the later group) cannot be read, t1 (January 2007) can: E takes neither; the fallback
+    decides as before 5b (a continued-filings transfer at the last sighting), not an ending at t1's date."""
+    finder, sec = _two_early_groups(fake_edgar)
+    del fake_edgar.raws["t2"]
+    events, _ = finder.find(_ctx(sec, listed=False, last_seen="2009-06-08"))
+    assert all(e.form25_sub is None for e in events)
+    assert [(e.delist_date, e.record.crsp_code) for e in events] == [("2009-06-08", 304)]
+
+
+def test_an_early_form25_naming_another_class_letter_does_not_end_a_letterless_security(fake_edgar):
+    """Final review M1: "Class B Common Stock" matched the letterless security by elimination ([own] alone)."""
+    fake_edgar.submissions_by_cik[40001] = [
+        EdgarSubmission("b1", "25-NSE", "2007-10-23", "", "", "p.xml"),
+        EdgarSubmission("q1", "10-Q", "2008-05-15", "2008-03-31", "", "q.htm")]
+    fake_edgar.raws["b1"] = _f25_raw("New York Stock Exchange LLC", class_text="Class B Common Stock",
+                                     form_tag="25-NSE")
+    clf = DelistClassifier(fake_edgar, TickerResolver(fake_edgar))
+    sec = _sec("BBG_X", 40001, "XX", "2008-01-16", "2009-06-08", "XX CORP")
+    events, _ = DelistingFinder(fake_edgar, clf).find(_ctx(sec, listed=False, last_seen="2009-06-08"))
+    assert all(e.form25_sub is None for e in events)
+
+
+def test_an_early_issuer_form25_with_its_8a12b_is_a_move_not_an_ending(fake_edgar):
+    """Final review M2: the issuer's own Form 25 (12d2-2(c)) with its 8-A12B before the first sighting."""
+    fake_edgar.submissions_by_cik[40003] = [
+        EdgarSubmission("m8a", "8-A12B", "2007-06-28", "", "", "a.htm"),
+        EdgarSubmission("m25", "25", "2007-06-30", "", "", "p.xml"),
+        EdgarSubmission("q1", "10-Q", "2008-05-15", "2008-03-31", "", "q.htm")]
+    fake_edgar.raws["m25"] = _f25_raw("The Nasdaq Stock Market LLC", rule="17 CFR 240.12d2-2(c)")
+    clf = DelistClassifier(fake_edgar, TickerResolver(fake_edgar))
+    sec = _sec("BBG_M", 40003, "MM", "2008-01-16", "2009-06-08", "MM CORP")
+    events, _ = DelistingFinder(fake_edgar, clf).find(_ctx(sec, listed=False, last_seen="2009-06-08"))
+    assert all(e.form25_sub is None or e.form25_sub.accession != "m25" for e in events)
+
+
+def test_the_fallbacks_early_form25_solely_about_rights_is_not_the_delisting(fake_edgar):
+    """Final review M5: R3's `other_class` applies to the fallback's early group too."""
+    finder, sec = _two_early_groups(fake_edgar)
+    solely = ("<TYPE>25-NSE\n<notificationOfRemoval><exchange><entityName>New York Stock Exchange LLC</entityName>"
+              "</exchange>\n<descriptionClassSecurity>Common Shares; Preferred Share Purchase Rights"
+              "</descriptionClassSecurity>\n<ruleProvision>17 CFR 240.12d2-2(a)(3)</ruleProvision>"
+              "This Notification relates solely to the withdrawal from listing of the Preferred Share "
+              "Purchase Rights from the exchange.</notificationOfRemoval>")
+    fake_edgar.raws["t1"] = fake_edgar.raws["t2"] = solely
+    events, _ = finder.find(_ctx(sec, listed=False, last_seen="2009-06-08"))
+    assert all(e.form25_sub is None for e in events)
 
 
 # --- sub-plan 5b, R3: a Form 25 about another class matches no security ---
@@ -1168,5 +1238,13 @@ def test_the_other_cik_in_forces_form25_of_another_class_is_no_delisting(fake_ed
     its preferred stock's removal is not the common's."""
     finder, sec = _old_issuers_removal(fake_edgar)
     fake_edgar.raws["s25"] = _f25_raw("New York Stock Exchange LLC", class_text="6.25% Preferred Stock, Series A")
+    events, _ = finder.find(replace(_ctx(sec, listed=False, last_seen="2018-07-16"), other_cik=1487730))
+    assert all(e.form25_sub is None for e in events)
+
+
+def test_the_other_cik_in_forces_form25_of_another_class_letter_is_no_delisting_of_a_letterless_security(fake_edgar):
+    """Final review M1: R5 matches against [own] alone, so "Class B Common Stock" needs the letter rule too."""
+    finder, sec = _old_issuers_removal(fake_edgar)
+    fake_edgar.raws["s25"] = _f25_raw("New York Stock Exchange LLC", class_text="Class B Common Stock")
     events, _ = finder.find(replace(_ctx(sec, listed=False, last_seen="2018-07-16"), other_cik=1487730))
     assert all(e.form25_sub is None for e in events)

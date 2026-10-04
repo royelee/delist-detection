@@ -36,7 +36,7 @@ from .handoffs import (
 from .figi_resolution import FigiCandidate, class_letter, is_placeholder, share_class_from_name
 from .form25 import SecurityRef, letter_hint, notice_last_trade, parse_form25
 from .last_trade import decide_last_trade
-from .ftd import FTD_START, FtdIndex, FtdRow, close_age, trades_after
+from .ftd import FTD_START, FtdIndex, FtdRow, close_age, is_trading_symbol, trades_after
 from .history import (
     Sighting, backfill_cusips, cusip_sightings, filtered_ticker_sightings, history_rows, observation_map_rows, own_last_seen,
     ranges_from_sightings, ticker_on, ticker_range_review, ticker_sightings, value_on,
@@ -669,7 +669,7 @@ def _rows_near(rows: Sequence[FtdRow], day: str) -> bool:
     """Whether a trading fails row of the security's own CUSIPs (`rows`) is dated in the LATE_ROW_DAYS up to the
     ISO day `day`."""
     lo = (date.fromisoformat(day) - timedelta(days=LATE_ROW_DAYS)).isoformat()
-    return any(lo <= r.date <= day for r in rows)
+    return any(lo <= r.date <= day and is_trading_symbol(r.symbol) for r in rows)
 
 
 def _context_builder(securities: dict[str, Security], sightings: dict[str, list[Sighting]],
@@ -1697,20 +1697,27 @@ def _as_read(tables: dict[str, list[dict]]) -> Tables:
                   rows("contract_delistings") if "contract_delistings" in tables else None)
 
 
-def _in_force_reads(ctx: _RunContext) -> tuple[Callable[[int], Any], Callable[[str], list[int]]]:
+def _in_force_reads(ctx: _RunContext, failed: set[int] | None = None
+                    ) -> tuple[Callable[[int], Any], Callable[[str], list[int]]]:
     """The two EDGAR reads `issuer_in_force` takes: a CIK's submissions (memoized; a read that fails is None, a
-    refusal (`fatal.FATAL`) stops the run) and the CIKs SEC's name index lists under exactly a name (none without
-    an index: a test double's resolver)."""
+    refusal (`fatal.FATAL`) stops the run; `failed` collects each CIK whose answer failed or rested on a stale
+    copy) and the CIKs SEC's name index lists under exactly a name (none without an index: a test double's
+    resolver)."""
     edgar, memo = ctx.clients.edgar, {}
 
     def submissions(cik: int):
         if cik not in memo:
+            watch = DegradedWatch()
             try:
                 memo[cik] = edgar.submissions(cik)
             except FATAL:
                 raise
             except requests.RequestException:
                 memo[cik] = None
+                if failed is not None:
+                    failed.add(cik)
+            if watch.tripped() and failed is not None:
+                failed.add(cik)
         return memo[cik]
 
     index_of = getattr(ctx.clients.resolver, "name_index", None)
@@ -1723,21 +1730,39 @@ def _in_force_reads(ctx: _RunContext) -> tuple[Callable[[int], Any], Callable[[s
 
 
 def _other_issuers(ctx: _RunContext, eras: list[TickerEra], resolutions: dict[str, EraResolution],
-                   issuers: dict[str, Issuer], securities: dict[str, Security]) -> dict[str, int]:
+                   issuers: dict[str, Issuer], securities: dict[str, Security],
+                   review: list[ReviewItem] | None = None) -> dict[str, int]:
     """4c. R5: each security whose issuer in force (`issuer_in_force.issuer_changes`, over its eras' observations
     with their era's CIK, a (ticker, day) seen under two names left out, as stage 10g reads them) was one CIK
     other than its own issuer CIK on every sighting: that CIK, whose Form 25s the finder reads too. Spectrum
     Brands 2010-2018 was the old Spectrum Brands (CIK 1487730) while today's CIK 109177 holds the security. A
-    security whose issuer changed in its span has none (Perrigo: CIK 820096 until 2013, then its own)."""
-    submissions, exact_names = _in_force_reads(ctx)
+    security whose issuer changed in its span has none (Perrigo: CIK 820096 until 2013, then its own). A security
+    for whose answer a submissions read failed or was stale gets a `resolution_degraded` row in `review`: the
+    other CIK's Form 25s it may have lost are not read until a rerun."""
+    failed: set[int] = set()
+    read, exact_names = _in_force_reads(ctx, failed)
+    touched: set[int] = set()
+
+    def submissions(cik: int):
+        touched.add(cik)
+        return read(cik)
+
     conflicts = {(t, d) for t, d, _ in observation_conflicts(o for e in eras for o in e.observations)}
     sightings = [IssuerSighting(r.sec_id, o.as_of, o.name or "", str(cik_of(issuers, e.key) or ""))
                  for e in eras if (r := resolutions.get(e.key)) is not None and r.sec_id
                  for o in e.observations if (o.ticker, o.as_of) not in conflicts]
     mark = ctx.meter.start()
     out: dict[str, int] = {}
-    for sid, timeline in issuer_changes(sightings, submissions, exact_names).items():
+    by_sec: dict[str, list[IssuerSighting]] = defaultdict(list)
+    for x in sightings:
+        by_sec[x.sec_id].append(x)
+    for sid, rows in sorted(by_sec.items()):
+        touched.clear()
+        timeline = issuer_changes(rows, submissions, exact_names).get(sid, [])
         s = securities.get(sid)
+        if s is not None and review is not None and touched & failed:
+            review.append(degraded_item(sid, s.eras[-1].ticker, s.issuer_cik, "the other issuer in force",
+                                        "; run again once SEC answers"))
         if s is not None and s.issuer_cik is not None and len(timeline) == 1 and timeline[0][1] != str(s.issuer_cik):
             out[sid] = int(timeline[0][1])
     ctx.log(f"other issuer in force: {len(out)} securities ({', '.join(sorted(out)[:5])}"
@@ -1822,7 +1847,7 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
     # a folded placeholder's review items follow it to its FIGI line, where it holds a FIGI after all
     review = [replace(r, sec_id=lines.renames.get(r.sec_id, r.sec_id)) for r in review + lines.review
               if not (r.flag == "no_figi" and r.sec_id in lines.renames)]
-    other_ciks = _other_issuers(ctx, eras, resolutions, answers.issuers, securities)                # 4c
+    other_ciks = _other_issuers(ctx, eras, resolutions, answers.issuers, securities, review)        # 4c
     search = _find_delistings(ctx, securities, sec_cusips, ftd, answers, set(lines.successors),
                               other_ciks)                                                           # 5
     delistings = search.delistings

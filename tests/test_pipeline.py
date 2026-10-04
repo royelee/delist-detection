@@ -3474,6 +3474,13 @@ def test_the_finders_context_sees_its_own_cusip_trading_in_the_30_days_up_to_a_d
     assert not ctx.cusip_rows_near("2016-12-01") and not ctx.cusip_rows_near("2016-10-02")
 
 
+def test_the_finders_late_reach_ignores_unassigned_and_pair_off_rows():
+    """Final review M6: `ZZZZ` and pair-off symbols are no trading (`ftd.is_trading_symbol`)."""
+    rows = [FtdRow("2016-10-31", "74955W307", "MWWZZZZ", "MONSTER WORLDWIDE", 3.4),
+            FtdRow("2016-10-31", "74955W307", "M104PAIROFF", "MONSTER WORLDWIDE", 3.4)]
+    assert not _one_security_context(rows).cusip_rows_near("2016-11-01")
+
+
 # --- sub-plan 5b, R2: the finder's view of a letterless class ---
 
 def test_a_letterless_security_takes_the_letter_of_its_own_cusips_fails_descriptions():
@@ -3542,3 +3549,20 @@ def test_an_issuer_that_changed_within_the_span_or_never_changed_gives_no_other_
                                                                                              "PLAIN CO")])
     ctx = _in_force_run({777: {"name": "PLAIN CO"}}, {"PLAIN CO": [777]})
     assert pipeline._other_issuers(ctx, [era], resolutions, issuers, {s.sec_id: s}) == {}
+
+
+def test_a_failed_read_of_a_submissions_file_in_the_other_issuer_stage_degrades_the_security():
+    """Final review M4: the other CIK's failed read dropped R5 with no row; it is now a `resolution_degraded` row."""
+    import requests
+    obs = [Observation("SPB", d, "SPECTRUM BRANDS HOLDINGS INC") for d in ("2010-06-30", "2014-06-30", "2018-06-29")]
+    s, era, resolutions, issuers = _security_with_era("BBG000P4BQM9", 109177, "SPB", obs)
+    ctx = _in_force_run({109177: HRG, 1487730: OLD_SPB}, {"SPECTRUM BRANDS HOLDINGS INC": [109177, 1487730]})
+
+    def submissions(cik):
+        if cik == 1487730:
+            raise requests.ConnectionError("down")
+        return HRG
+    ctx.clients.edgar.submissions = submissions
+    review = []
+    assert pipeline._other_issuers(ctx, [era], resolutions, issuers, {s.sec_id: s}, review) == {}
+    assert [(r.sec_id, r.flag) for r in review] == [("BBG000P4BQM9", "resolution_degraded")]

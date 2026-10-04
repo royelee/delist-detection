@@ -353,13 +353,16 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   matched to a sibling security that wasn't alive on the filing date. `SecurityContext.cusip_switches`: a Form 25
   within `OWN_SWITCH_DAYS` (5) trading days of the security's own CUSIP switch, while it trades on, is no
   delisting (QGEN 2026). Sub-plan 5b: `_continued` (listed today; the issuer's own Form 25 (25 or 25/A, not
-  25-NSE, not under (b)) with its 8-A12B within `EIGHT_A_DAYS`, 10, R7; or, not under (b),
+  25-NSE, not under (b)) with its 8-A12B (not 8-A12B/A, a rights-plan amendment) within `EIGHT_A_DAYS`, 10, R7; judged on every member
+  of a group, the earliest member anchoring the row; or, not under (b),
   `SecurityContext.trades_after`; an observation alone never continues a security), `_judge` (one Form 25 against
   the security), early reach (Form 25s up to `EARLY_REACH_DAYS`, 365, before the floor, for a security gone today,
-  the latest early group, flagged `observed_after_delisting`), late reach (`SecurityContext.cusip_rows_near`,
-  `LATE_ROW_DAYS` 30; takes only a Form 25 that names no class letter, or the security's own share-class letter or
-  its `letter_hint`), and the other CIK in force (`SecurityContext.other_cik`, R5; the delisting carries the filer
-  CIK). An `unknown` row of a continued group with the issuer's 8-A12B becomes 304 with the security as its own
+  the latest early group, flagged `observed_after_delisting`; none when an unreadable early Form 25 is dated
+  after it, or for an issuer's own Form 25 with its 8-A12B), late reach (`SecurityContext.cusip_rows_near`,
+  `LATE_ROW_DAYS` 30; and, with early reach where the security stands alone, the other CIK's reach, take only a Form 25 that names
+  no class letter, or the security's own share-class letter or its `letter_hint`, `_names_other_letter`), and the
+  other CIK in force (`SecurityContext.other_cik`, R5; the delisting carries the filer
+  CIK; stage 4c gives a security whose submissions read failed a `resolution_degraded` row). An `unknown` row of a continued group with the issuer's 8-A12B becomes 304 with the security as its own
   successor.
 - `classifier.py` — the filing-trio fingerprint (**Form 25 + 8-K item codes +
   Form 15**), now anchored on the Form 25/fallback filing date rather than a

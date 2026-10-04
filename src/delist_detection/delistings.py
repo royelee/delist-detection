@@ -42,7 +42,7 @@ DEREG_FALLBACK_BEFORE_DAYS = 30     # a fallback revocation or Form 15 must be w
 OWN_SWITCH_DAYS = 5                 # trading days between a Form 25 and the security's own CUSIP switch it removed
 DEREG_FALLBACK_AFTER_DAYS = 120     # [last_seen - this, last_seen + this] to date the delisting
 EIGHT_A_DAYS = 10                   # the issuer's own Form 25 and its 8-A12B this close together: an exchange move
-EIGHT_A_FORMS = frozenset({"8-A12B", "8-A12B/A"})
+EIGHT_A_FORMS = frozenset({"8-A12B"})      # not 8-A12B/A: a rights-plan amendment registers no class (Biomet 2006)
 ISSUER_FORM25_FORMS = frozenset({"25", "25/A"})      # filed by the issuer, not by the exchange (25-NSE)
 EARLY_REACH_DAYS = 365              # gone today: Form 25s this far before the floor are judged in the main scan
 LATE_ROW_DAYS = 30                  # no sibling alive: the security's own CUSIP traded this close before the Form 25
@@ -376,12 +376,14 @@ class DelistingFinder:
         return edgar_names(sub) if isinstance(sub, dict) else ()
 
     def _judge(self, ctx: SecurityContext, scan: _Scan, filer: int, sub: EdgarSubmission,
-               refs: list[SecurityRef], issuer_names: tuple[str, ...], *, quiet: bool = False) -> Form25 | None:
+               refs: list[SecurityRef], issuer_names: tuple[str, ...], *, quiet: bool = False,
+               by_elimination: bool = False) -> Form25 | None:
         """The Form 25 `sub` of CIK `filer`, parsed, when it removed this security: readable, not a regional
         exchange's, of a recognized class, not about another class (`form25.other_class`, R3, against the filer's
         EDGAR names `issuer_names`), matched to this security among `refs` (`match_securities`) with no
         class-letter conflict. Else None; a filing that could not be placed gets its review row unless `quiet`
-        (the early window's filings)."""
+        (the early window's filings). `by_elimination`: `refs` is the security alone, so a Form 25 that names a
+        class letter must name the security's own (`_names_other_letter`)."""
         sec, ticker = ctx.security, scan.ticker
         raw = self.edgar.fetch_filing_raw(filer, sub.accession)
         if not raw:
@@ -420,7 +422,18 @@ class DelistingFinder:
         ref = next((r for r in refs if r.sec_id == sec.sec_id), None)
         if ref is not None and self._class_conflict(f25, ref):
             return None
+        if by_elimination and self._names_other_letter(f25, self._own_ref(ctx)):
+            return None
         return f25
+
+    @staticmethod
+    def _names_other_letter(f25: Form25, own: SecurityRef) -> bool:
+        """Whether a Form 25 reached through the security alone (late reach, early reach, the other CIK's) names a
+        class letter and none is the security's own (its share class's, else its fails descriptions' hint): a
+        letterless security takes only a Form 25 that names no letter."""
+        letters = class_letters(f25.class_text)
+        mine = {class_letter(own.share_class) or own.letter_hint} - {None}
+        return bool(letters and not letters & mine)
 
     # -- main ------------------------------------------------------------
     def find(self, ctx: SecurityContext) -> tuple[list[Delisting], list[ReviewItem]]:
@@ -452,6 +465,7 @@ class DelistingFinder:
         scan = _Scan(ticker_last)
         names = self._issuer_names(cik)
         early: list[tuple[EdgarSubmission, Form25]] = []
+        early_unreadable: list[str] = []        # filing dates of early-window Form 25s that could not be read
         candidates: list[tuple[EdgarSubmission, Form25]] = []
         for sub in list_form25(filings):
             if sub.filing_date < floor:
@@ -460,12 +474,15 @@ class DelistingFinder:
                     continue
                 refs = [own] + [r for r in ctx.siblings
                                 if r.sec_id != sec.sec_id and self._alive_at(ctx, r.sec_id, sub.filing_date)]
-                f25 = self._judge(ctx, scan, cik, sub, refs, names, quiet=True)
+                f25 = self._judge(ctx, scan, cik, sub, refs, names, quiet=True, by_elimination=len(refs) == 1)
                 after = date.fromisoformat(effective_date(sub.filing_date)) + timedelta(days=SEEN_AFTER_DAYS)
-                if f25 is not None and not ctx.trades_after(after.isoformat()):
+                if f25 is not None and self._eight_a(sub, f25, filings) is not None:
+                    pass                            # the issuer moved the class (R7), no ending
+                elif f25 is not None and not ctx.trades_after(after.isoformat()):
                     early.append((sub, f25))
                 elif f25 is None and sub in scan.unreadable:
                     scan.older.append(sub)          # never read: the fallback may still take it
+                    early_unreadable.append(sub.filing_date)
                 continue
             # Filings that plainly aren't about any security of this issuer
             # (none of the observed securities were even alive on this date)
@@ -481,16 +498,11 @@ class DelistingFinder:
                     continue
                 alive = [own]
                 late = True
-            f25 = self._judge(ctx, scan, cik, sub, alive, names)
+            # late reach only for a Form 25 that names no class letter, or the security's own (its share
+            # class's, else its fails descriptions' hint); another lettered one stays for the normal paths
+            f25 = self._judge(ctx, scan, cik, sub, alive, names, by_elimination=late)
             if f25 is None:
                 continue
-            if late:
-                # late reach only for a Form 25 that names no class letter, or the security's own (its share
-                # class's, else its fails descriptions' hint); another lettered one stays for the normal paths
-                letters = class_letters(f25.class_text)
-                mine = {class_letter(own.share_class) or own.letter_hint} - {None}
-                if letters and not letters & mine:
-                    continue
             if self._continued(ctx, sub, f25, filings) and self._not_this_removal(ctx, cik, filings, sub, f25):
                 continue
             candidates.append((sub, f25))
@@ -502,13 +514,13 @@ class DelistingFinder:
         delistings: list[Delisting] = []
         last_definitive: Delisting | None = None
         for filer, filer_filings, group in groups:
-            earliest_sub, earliest_f25 = min(group, key=lambda item: item[0].filing_date)
+            earliest_sub, _ = min(group, key=lambda item: item[0].filing_date)
             if last_definitive is not None:
                 gap = (date.fromisoformat(earliest_sub.filing_date) - date.fromisoformat(last_definitive.delist_date)).days
                 if gap > IGNORE_AFTER_DEFINITIVE_DAYS and not ctx.seen_after(earliest_sub.filing_date):
                     continue        # a security truly gone can't have a later Form 25 of its own
             eff = effective_date(earliest_sub.filing_date)
-            continued = self._continued(ctx, earliest_sub, earliest_f25, filer_filings)
+            continued = any(self._continued(ctx, s, f, filer_filings) for s, f in group)     # R7: any member's move
             delisting = self._build_delisting(ctx, filer, filer_filings, group, eff, continued)
             delistings.append(delisting)
             # Only an exchange transfer (or a delisting not classified) that the
@@ -522,10 +534,12 @@ class DelistingFinder:
         # Form 25s of January 2007); the observations after it are flagged.
         if last_definitive is None and early:
             group = self._group(early)[-1]
-            eff = effective_date(min(s.filing_date for s, _ in group))
-            last_definitive = self._build_delisting(ctx, cik, filings, group, eff, False,
-                                                    ("observed_after_delisting",))
-            delistings.insert(0, last_definitive)
+            if not any(d > max(s.filing_date for s, _ in group) for d in early_unreadable):
+                # (an unreadable Form 25 after the latest readable group might be the real ending: the fallback decides)
+                eff = effective_date(min(s.filing_date for s, _ in group))
+                last_definitive = self._build_delisting(ctx, cik, filings, group, eff, False,
+                                                        ("observed_after_delisting",))
+                delistings.insert(0, last_definitive)
 
         # spec 8.10: run the fallback / ended_without_delisting logic whenever
         # no delisting found is a genuine end (every one is `continued`, e.g. an
@@ -564,7 +578,7 @@ class DelistingFinder:
         for sub in list_form25(filings):
             if sub.filing_date < floor:
                 continue
-            f25 = self._judge(ctx, scan, other, sub, [own], names)
+            f25 = self._judge(ctx, scan, other, sub, [own], names, by_elimination=True)
             if f25 is None:
                 continue
             if self._continued(ctx, sub, f25, filings) and self._not_this_removal(ctx, other, filings, sub, f25):
@@ -664,7 +678,8 @@ class DelistingFinder:
             if not raw:
                 continue
             f25 = parse_form25(raw, accession=sub.accession, form=sub.form, filing_date=sub.filing_date)
-            if f25.exchange in REGIONAL_EXCHANGES or class_kind(f25.class_text) == "other":
+            if f25.exchange in REGIONAL_EXCHANGES or class_kind(f25.class_text) == "other" \
+                    or other_class(f25, own, self._issuer_names(cik)):
                 continue
             alive = [own] + [r for r in ctx.siblings
                              if r.sec_id != sec.sec_id and self._alive_at(ctx, r.sec_id, sub.filing_date)]
