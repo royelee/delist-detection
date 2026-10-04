@@ -681,3 +681,4 @@ BBG00ZHCT050_2023-07-15,fixed_by,5d,5f,5d: its last trade fields match the repla
 CIK1319048-COMMON_2007-09-24,fixed_by,5d,5f,5d: its last trade fields match the replay; left cash_currency (5f),docs/superpowers/plans/research/2026-10-04-5d-last-trade.md
 CIK351346-COMMON_2006-12-28,fixed_by,5d,5f,5d: its last trade fields match the replay; left cash_currency (5f),docs/superpowers/plans/research/2026-10-04-5d-last-trade.md
 CIK709519-COMMON_2010-02-05,fixed_by,5d,5f,5d: its last trade fields match the replay; left cash_currency (5f),docs/superpowers/plans/research/2026-10-04-5d-last-trade.md
+BBG000BQHGR6_2026-09-28,fixed_by,5h,5d,"5h ruling 2026-10-04 (identity follows the issuer and FIGI, R2): 5h links the continuation (its successor BBG024TZWVN1 past the fails data's end); what remains is the last trade date (worked out, so blank in the contract), 5d's",docs/superpowers/plans/research/2026-10-04-5h-identity.md
