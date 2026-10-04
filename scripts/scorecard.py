@@ -2,7 +2,8 @@
 the floor in --config (spec: Delist Library Reset, step 1 "Measure first").
 
   python scripts/scorecard.py                    # every number, then drops and failing golden cases
-  python scripts/scorecard.py --check            # exit 1 if a floored number got worse a golden pass case fails, or a diagnosis pass case fails
+  python scripts/scorecard.py --check            # exit 1 if a floored number got worse a golden pass case fails, or a diagnosis pass case fails,
+                                                 # or output/regression_report.csv has a regression not settled in --ledger
   python scripts/scorecard.py --write            # also rewrite <output-dir>/scorecard.json
   python scripts/scorecard.py --raise-floor      # move the config's floor to every better number (never worse)
   python scripts/scorecard.py --lifecycles l.csv # one row per input ticker and per security
@@ -79,6 +80,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--config", type=Path, default=ROOT / "data" / "scorecard.json")
     p.add_argument("--check", action="store_true")
     p.add_argument("--write", action="store_true")
+    p.add_argument("--ledger", type=Path, default=ROOT / LEDGER, help="the diagnosis loop's diagnosed.csv")
     p.add_argument("--raise-floor", action="store_true")
     p.add_argument("--lifecycles", type=Path)
     args = p.parse_args(argv)
@@ -93,7 +95,7 @@ def main(argv: list[str] | None = None) -> int:
     card["drops"] = drops(card, config.floor)
     report = args.output_dir / "regression_report.csv"
     if report.exists():
-        left = unexplained(read_csv(report), config.diagnosis, settled_keys(read_csv(ROOT / LEDGER)))
+        left = unexplained(read_csv(report), config.diagnosis, settled_keys(read_csv(args.ledger)))
         card["metrics"]["D.unexplained_regressions"] = len({r["sec_id"] for r in left})
     for name, value in sorted(card["metrics"].items()):
         print(f"{name:48} {value}")

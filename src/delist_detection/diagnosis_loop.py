@@ -126,7 +126,8 @@ def _field_name(r: Mapping[str, str]) -> str:
 
 def case_rows(mismatches: Sequence[Mismatch], regressions: Sequence[Mapping[str, str]], tables: Tables, *,
               label: str, round_no: int, truth_sec: Mapping[str, str]) -> list[dict[str, str]]:
-    """One case row per security and round. Mode mismatch lists its mismatched truth fields (side_a the truth,
+    """One case row per truth case (mismatch mode) or security (regression mode) and round; a mismatch case's id
+    starts with its truth case_id, since two truth cases can share a sec_id. Mode mismatch lists its mismatched truth fields (side_a the truth,
     side_b the library); mode regression lists its report rows (side_a old, side_b new). `truth_sec` maps a truth
     case_id to its sec_id."""
     groups: dict[tuple[str, str], list[tuple[str, str, str, str]]] = {}
@@ -141,7 +142,7 @@ def case_rows(mismatches: Sequence[Mismatch], regressions: Sequence[Mapping[str,
         ctx = context(tables, sec)
         ticker = ctx["tickers"].split(";")[-1] if ctx["tickers"] else ""
         out.append({
-            "case_id": f"{sec}_{label}-r{round_no}", "mode": mode, "sec_id": sec, "ticker": ticker,
+            "case_id": f"{key if mode == MISMATCH else sec}_{label}-r{round_no}", "mode": mode, "sec_id": sec, "ticker": ticker,
             "truth_case_id": key if mode == MISMATCH else "",
             "keys": json.dumps([i[0] for i in items]), "fields": json.dumps([i[1] for i in items]),
             "side_a": json.dumps([i[2] for i in items]), "side_b": json.dumps([i[3] for i in items]), **ctx})

@@ -117,5 +117,6 @@ def test_check_fails_while_a_regression_is_unexplained(tmp_path, out, capsys):
     (out / "regression_report.csv").write_text("sec_id,table,field,kind,old,new\nZ,delistings,exit_kind,changed,"
                                                "merger,exchange\n")
     cfg = _config(tmp_path, {})
-    assert scorecard_script.main(["--output-dir", str(out), "--config", str(cfg), "--check"]) == 1
+    assert scorecard_script.main(["--output-dir", str(out), "--config", str(cfg), "--check",
+                                 "--ledger", str(tmp_path / "no_ledger.csv")]) == 1
     assert "D.unexplained_regressions" in capsys.readouterr().out

@@ -1,10 +1,17 @@
 """diagnosis_loop: error keys, the ledger, case rows and placeholder renames (spec 1.7)."""
+import importlib.util
 import json
+import os
+import subprocess
+from pathlib import Path
 
 from delist_detection import diagnosis_loop as dl
 from delist_detection import diagnosis_truth as dt
+from delist_detection import store
 from tests.diagnosis_rows import truth_row
 from tests.lifecycle_tables import contract_row, ending, hist, tables
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
 def _judged(contract):
@@ -53,7 +60,7 @@ def test_case_rows_group_errors_by_security_with_json_cells():
     t = tables(security_history=[hist("Z", "9", "2008-01-02", "", "ZZZ")])
     rows = dl.case_rows(list(j.mismatches), reg, t, label="5a", round_no=1, truth_sec={"A_2010-01-04": "A"})
     assert [(r["case_id"], r["mode"], r["truth_case_id"]) for r in rows] == [
-        ("A_5a-r1", "mismatch", "A_2010-01-04"), ("Z_5a-r1", "regression", "")]
+        ("A_2010-01-04_5a-r1", "mismatch", "A_2010-01-04"), ("Z_5a-r1", "regression", "")]
     assert json.loads(rows[0]["fields"]) == ["exit_kind", "last_trade_date"]
     assert json.loads(rows[0]["side_a"]) == ["merger", "2010-01-01"]
     assert json.loads(rows[0]["side_b"]) == ["exchange", "2010-01-02"]
@@ -70,3 +77,81 @@ def test_rename_truth_follows_id_changes():
     assert renamed[0]["case_id"] == "CIK9-COMMON_2010-01-04"
     assert [(c["case_id"], c["field"], c["old"], c["new"]) for c in changes] == [
         ("CIK9-COMMON_2010-01-04", "sec_id", "CIK9-COMMON", "BBGX")]
+
+
+def test_two_truth_cases_of_one_security_get_distinct_case_ids():
+    cases = dt.parse_rows([truth_row("A_2010-01-04", "A", exit_kind="merger"),
+                           truth_row("A_2012-02-03", "A", exit_kind="merger")])
+    judged = dt.judge_all(cases, dt.LibraryRows.of(tables(contract_delistings=[
+        contract_row("A", exit_kind="exchange")])))
+    mism = [m for j in judged for m in j.mismatches]
+    rows = dl.case_rows(mism, [], tables(), label="5a", round_no=1,
+                        truth_sec={c.case_id: c.sec_id for c in cases})
+    assert len({r["case_id"] for r in rows}) == len(rows) == 2
+
+
+# the round script, end to end on temporary paths
+_spec = importlib.util.spec_from_file_location("truth_loop_round", ROOT / "scripts" / "truth_loop_round.py")
+round_script = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(round_script)
+
+
+def _git(repo, *args):
+    subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True,
+                   env={**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t",
+                        "GIT_COMMITTER_EMAIL": "t@t"})
+
+
+def _write_out(out, contract, ids=()):
+    store.write_tables(out, {"securities": [], "ticker_history": [], "delistings": [], "observation_map": [],
+                             "contract_delistings": contract,
+                             "security_history": [hist("Z", "1", "2008-01-02", "2010-01-01", "ZZZ")],
+                             "id_changes": list(ids)})
+
+
+def _argv(tmp_path, repo, *extra):
+    return ["--repo", str(repo), "--output-dir", str(repo / "output"), "--truth", str(tmp_path / "truth.csv"),
+            "--legs", str(tmp_path / "legs.csv"), "--changes", str(tmp_path / "changes.csv"),
+            "--loop-dir", str(tmp_path / "loop"), *extra]
+
+
+def test_seed_ledger_twice_adds_nothing(tmp_path, capsys):
+    repo = tmp_path / "repo"
+    _write_out(repo / "output", [contract_row("A", exit_kind="exchange", last_trade_date="2010-01-02")])
+    dt.write_diagnosis_truth(tmp_path / "truth.csv", [truth_row("A_2010-01-04", "A", exit_kind="merger",
+                                                                last_trade_date="2010-01-01")])
+    argv = _argv(tmp_path, repo, "--label", "5-0", "--seed-ledger")
+    assert round_script.main(argv) == 0
+    assert json.loads(capsys.readouterr().out)["seeded"] == 2
+    assert round_script.main(argv) == 0
+    assert json.loads(capsys.readouterr().out)["seeded"] == 0
+    ledger = dl.read_ledger(tmp_path / "loop" / "diagnosed.csv")
+    assert len(ledger) == 2 and len(dl.ledger_keys(ledger)) == 2 and {r["outcome"] for r in ledger} == {"known"}
+
+
+def test_a_round_renames_truth_and_reports_a_regression(tmp_path, capsys):
+    repo = tmp_path / "repo"
+    out = repo / "output"
+    out.mkdir(parents=True)
+    _git(repo, "init", "-q")
+    _write_out(out, [contract_row("Z", exit_kind="merger"), contract_row("CIK9-COMMON", exit_kind="merger")])
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", "base")
+    ids = [{"old_sec_id": "CIK9-COMMON", "new_sec_id": "BBGX", "changed_on": "2026-10-04", "issuer_cik": "9",
+            "share_class": "COMMON"}]
+    _write_out(out, [contract_row("Z", exit_kind="exchange"), contract_row("BBGX", exit_kind="merger")], ids)
+    dt.write_diagnosis_truth(tmp_path / "truth.csv",
+                             [truth_row("CIK9-COMMON_2010-01-04", "CIK9-COMMON", exit_kind="merger")])
+    assert round_script.main(_argv(tmp_path, repo, "--label", "5a", "--base", "HEAD", "--round", "1")) == 0
+    printed = json.loads(capsys.readouterr().out)
+    assert (printed["mismatches_new"], printed["regressions_new"], printed["renamed"]) == (0, 3, 1)
+    # Z changed; the old placeholder's contract row is gone and its id change is new (BBGX is in the truth set)
+    assert [(c["case_id"], c["mode"]) for c in printed["cases"]] == [("CIK9-COMMON_5a-r1", "regression"),
+                                                                    ("Z_5a-r1", "regression")]
+    renamed = dl.read_csv(tmp_path / "truth.csv")
+    assert [(r["case_id"], r["sec_id"]) for r in renamed] == [("CIK9-COMMON_2010-01-04", "BBGX")]
+    [change] = dl.read_csv(tmp_path / "changes.csv")
+    assert (change["case_id"], change["old"], change["new"]) == ("CIK9-COMMON_2010-01-04", "CIK9-COMMON", "BBGX")
+    assert Path(printed["path"]) == tmp_path / "loop" / "5a" / "round-1" / "cases.csv"
+    cases = dl.read_csv(Path(printed["path"]))
+    assert [r["case_id"] for r in cases] == ["CIK9-COMMON_5a-r1", "Z_5a-r1"]
