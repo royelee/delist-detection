@@ -14,13 +14,12 @@ summary.md. It prints one JSON line of counts. Offline (git only). Exit 2: a mis
 from __future__ import annotations
 
 import argparse
-import csv
 import json
 import sys
 from pathlib import Path
 
 from delist_detection import diagnosis_loop as dl
-from delist_detection.atomic_io import replace_all_on_success
+from delist_detection.atomic_io import write_atomic
 from delist_detection.diagnosis_truth import COLUMNS, LibraryRows, judge_all, load_legs, parse_rows
 from delist_detection.lifecycle import Tables
 from delist_detection.regression import RegressionInputError, read_snapshot, snapshot_at
@@ -73,19 +72,14 @@ def main(argv: list[str] | None = None) -> int:
                "dry_run": args.dry_run}
     if not args.dry_run:
         # The truth file, the change log and the ledger move together: all three are replaced, or none.
-        sets = ((COLUMNS, res.truth_rows), (dl.CHANGE_COLUMNS, dl.read_csv(args.changes) + res.changes),
-                (dl.LEDGER_COLUMNS, ledger + res.ledger_rows))
-        with replace_all_on_success([args.truth, args.changes, args.loop_dir / "diagnosed.csv"]) as tmps:
-            for tmp, (cols, rows) in zip(tmps, sets):
-                with tmp.open("w", newline="", encoding="utf-8") as fh:
-                    w = csv.DictWriter(fh, fieldnames=list(cols), lineterminator="\n")
-                    w.writeheader()
-                    w.writerows({c: r[c] for c in cols} for r in rows)
+        dl.write_together([(args.truth, COLUMNS, res.truth_rows),
+                           (args.changes, dl.CHANGE_COLUMNS, dl.read_csv(args.changes) + res.changes),
+                           (args.loop_dir / "diagnosed.csv", dl.LEDGER_COLUMNS, ledger + res.ledger_rows)])
         lines = [f"# Loop {args.label}, round {args.round}", "", f"- cases: {len(cases)}, records: {len(records)}",
                  f"- truth changes: {len(res.changes)}", f"- retried next round (no record): {res.pending or 'none'}",
                  "", "| case | field | old | new | reason |", "| --- | --- | --- | --- | --- |"]
         lines += [f"| {c['case_id']} | {c['field']} | {c['old']} | {c['new']} | {c['reason']} |" for c in res.changes]
-        (round_dir / "summary.md").write_text("\n".join(lines) + "\n")
+        write_atomic(round_dir / "summary.md", "\n".join(lines) + "\n")
     print(json.dumps(summary))
     return 0
 

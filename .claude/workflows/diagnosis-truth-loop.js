@@ -45,23 +45,27 @@ const VERDICT = {
       why: { type: 'string' } }, required: ['field', 'why'] } }, notes: { type: 'string' } },
   required: ['case_id', 'upheld', 'fields_upheld', 'fields_refuted', 'notes'],
 }
-const ROUND = {
-  type: 'object',
-  properties: { mismatches_new: { type: 'integer' }, regressions_new: { type: 'integer' },
-    cases: { type: 'array', items: { type: 'object', properties: { case_id: { type: 'string' },
-      mode: { type: 'string' }, ticker: { type: 'string' } }, required: ['case_id', 'mode'] } },
-    path: { type: 'string' } },
-  required: ['mismatches_new', 'regressions_new', 'cases', 'path'],
-}
+// A runner agent returns the command's exit code and its last stdout line, verbatim; the script parses the line
+// itself (an agent's transcription of a case list could drop or invent a case) and stops on a non-zero exit.
+const RUN = { type: 'object', properties: { exit_code: { type: 'integer' }, stdout: { type: 'string' } },
+  required: ['exit_code', 'stdout'] }
+const ROUND = RUN
+const UPDATE = RUN
 const WRITTEN = { type: 'object', properties: { written: { type: 'array', items: { type: 'string' } } },
   required: ['written'] }
-const UPDATE = { type: 'object', properties: { output: { type: 'string' } }, required: ['output'] }
 
 function runner(cmd) {
   return `Run exactly this one command from the repo root (your working directory) with the Bash tool, then return
-its last output line in the structured answer. Do not edit any file, fix anything or run anything else.
+its exit code as exit_code and its last stdout line, copied verbatim, as stdout (an empty string when it printed
+nothing). Do not edit any file, fix anything or run anything else.
 
 ${cmd}`
+}
+
+function parsed(res, what) {
+  if (!res) throw new Error(`${what}: the runner agent returned nothing`)
+  if (res.exit_code !== 0) throw new Error(`${what} exited ${res.exit_code}: ${res.stdout}`)
+  try { return JSON.parse(res.stdout) } catch (e) { throw new Error(`${what}: stdout is not JSON: ${res.stdout}`) }
 }
 
 function diagnosePrompt(c, dir) {
@@ -101,37 +105,52 @@ for (let round = 1; round <= maxRounds; round++) {
     `output/diagnose_unknown_report/loop/${label}/round-${round}`
   let listed
   if (args.casesPath) {
-    listed = await agent(runner(`${PY} -c "import csv,json; print(json.dumps({'mismatches_new': 0, 'regressions_new': 0, 'path': '${args.casesPath}', 'cases': [{'case_id': r['case_id'], 'mode': r['mode'], 'ticker': r['ticker']} for r in csv.DictReader(open('${args.casesPath}'))]}))"`),
-      { label: 'round:prepared', phase: 'Round', schema: ROUND, model: 'sonnet', effort: 'low' })
+    listed = parsed(await agent(runner(`${PY} -c "import csv,json; print(json.dumps({'mismatches_new': 0, 'regressions_new': 0, 'path': '${args.casesPath}', 'cases': [{'case_id': r['case_id'], 'mode': r['mode'], 'ticker': r['ticker']} for r in csv.DictReader(open('${args.casesPath}'))]}))"`),
+      { label: 'round:prepared', phase: 'Round', schema: ROUND, model: 'sonnet', effort: 'low' }), 'round:prepared')
   } else {
-    listed = await agent(runner(`${PY} scripts/truth_loop_round.py --label ${label} --base ${args.base} --round ${round}`),
-      { label: `round:${round}`, phase: 'Round', schema: ROUND, model: 'sonnet', effort: 'low' })
+    listed = parsed(await agent(runner(`${PY} scripts/truth_loop_round.py --label ${label} --base ${args.base} --round ${round}`),
+      { label: `round:${round}`, phase: 'Round', schema: ROUND, model: 'sonnet', effort: 'low' }), `round ${round}`)
   }
-  if (!listed || !listed.cases.length) { log(`round ${round}: no new errors`); break }
+  const dry = (args.dryRun || args.casesPath) ? ' --dry-run' : ''
+  const update = async () => parsed(await agent(
+    runner(`${PY} scripts/update_truth.py --label ${label} --round ${round} --base ${args.base}${dry}`),
+    { label: `update:${round}`, phase: 'Update', schema: UPDATE, model: 'sonnet', effort: 'low' }), `update ${round}`)
+  if (!listed.cases.length) {
+    // No new error: the update step still runs on the empty cases.csv, so a known_wrong case the run now matches
+    // becomes pass (flip_statuses), and then the loop stops.
+    log(`round ${round}: no new errors`)
+    summaries.push({ round, cases: 0, missing: [], update: await update() })
+    break
+  }
   log(`round ${round}: ${listed.cases.length} case(s) (${listed.mismatches_new} mismatches, ${listed.regressions_new} regressions)`)
   const done = await pipeline(listed.cases,
     c => limited(() => agent(diagnosePrompt(c, dir), { label: `diagnose:${c.ticker || c.case_id}`,
       phase: 'Diagnose', schema: RECORD, model: 'sonnet' })),
     (r, c) => r ? limited(() => agent(verifyPrompt(c, r, dir), { label: `verify:${c.ticker || c.case_id}`,
       phase: 'Verify', schema: VERDICT, model: 'sonnet' })).then(v => ({ record: r, verification: v })) : null)
+  // update_truth.py reads the record files and treats a case without a complete one as failed: it changes nothing
+  // and leaves no ledger row, so the next round diagnoses it again.
   const missing = listed.cases.filter((c, i) => !done[i] || !done[i].verification).map(c => c.case_id)
-  if (missing.length) log(`round ${round}: no record or no verification for ${missing.join(', ')} (retried next round)`)
-  // A verifier sometimes returns its verdict without writing it into the record; update_truth.py reads the file.
-  const verdicts = {}
-  listed.cases.forEach((c, i) => { if (done[i] && done[i].verification) verdicts[c.case_id] = done[i].verification })
-  if (Object.keys(verdicts).length) {
-    const wb = await agent(`For each case id below, read ${dir}/records/<case_id>.json. If it has no "verification" key,
-add the given object under "verification" with the Write tool, keeping every other key unchanged. Do not touch a
-record that already has a "verification" key. Edit nothing else. Return the list of case ids you wrote.
+  if (missing.length) log(`round ${round}: no record or no verification for ${missing.join(', ')}: left out of the update, retried next round`)
+  // An agent sometimes returns its result without writing it into the record file (the diagnose agent its record,
+  // the verifier its verdict). The returned values are written back here when the file is missing or lacks a key.
+  const returned = {}
+  listed.cases.forEach((c, i) => {
+    if (done[i] && done[i].verification) returned[c.case_id] = { record: done[i].record, verification: done[i].verification }
+  })
+  if (Object.keys(returned).length) {
+    const wb = await agent(`For each case id below, check ${dir}/records/<case_id>.json. It is complete when it exists
+and has all of the keys "field_verdicts", "confidence" and "verification". Leave a complete file untouched. Otherwise
+write the file with the Write tool: when it is missing, the given "record" merged with the given "verification" (as
+the key "verification"); when it exists, every key it has, plus each of those three keys it lacks taken from the given
+values (field_verdicts and confidence from "record", verification from "verification"). Edit nothing else. Return the
+list of case ids you wrote.
 
-${JSON.stringify(verdicts, null, 1)}`,
+${JSON.stringify(returned, null, 1)}`,
       { label: `writeback:${round}`, phase: 'Update', schema: WRITTEN, model: 'sonnet', effort: 'low' })
-    log(`round ${round}: wrote ${wb ? wb.written.length : 0} verification(s) back into the records`)
+    log(`round ${round}: wrote ${wb ? wb.written.length : 0} record(s) back into the files`)
   }
-  const dry = (args.dryRun || args.casesPath) ? ' --dry-run' : ''
-  const upd = await agent(runner(`${PY} scripts/update_truth.py --label ${label} --round ${round} --base ${args.base}${dry}`),
-    { label: `update:${round}`, phase: 'Update', schema: UPDATE, model: 'sonnet', effort: 'low' })
-  summaries.push({ round, cases: listed.cases.length, missing, update: upd && upd.output })
+  summaries.push({ round, cases: listed.cases.length, missing, update: await update() })
   if (args.casesPath) break
 }
 return { label, rounds: summaries }
