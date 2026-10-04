@@ -8,7 +8,8 @@ cases it targets (from the case map), the rules it adds (from spec section 3), a
 tests pin. Each ends with the truth loop (spec 1.7) and is accepted only when:
 
 - `D.mismatches` fell and the floor was raised (`scripts/scorecard.py --raise-floor`);
-- `D.unexplained_regressions` is 0 and `scripts/scorecard.py --check` passes;
+- `scripts/scorecard.py --check --base <the sub-plan's base commit>` passes: no floored drop, no failing golden or
+  diagnosis `pass` case, and `D.unexplained_regressions` 0 (without `--base` the regression check does not run);
 - the golden replay set, the golden lifecycles and the floor test are green (`pytest`);
 - the operator has the sub-plan's report (mismatches per field before and after, regressions and how the loop
   settled them, truth changes, uncertain endings and L1 coverage before and after).
@@ -17,7 +18,7 @@ Work stays on the worktree branch; merging or pushing is the operator's call.
 
 | Sub-plan | Plan file | Depends on | Target | Status |
 | --- | --- | --- | --- | --- |
-| 5-0 Truth set and loop | `2026-10-03-reset-5-0-truth-set.md` | none | the truth file, judge, regression report, diagnose modes, truth updates, loop workflow | written |
+| 5-0 Truth set and loop | `2026-10-03-reset-5-0-truth-set.md` | none | the truth file, judge, regression report, diagnose modes, truth updates, loop workflow | done (282 cases: 19 pass, 263 known_wrong; D.mismatches 756) |
 | 5a One line across a CUSIP or ticker change | to write | 5-0 | 43 cases (F1) | |
 | 5b Form 25 reach, matching and ownership | to write | 5a | 50 cases (F4, F5) | |
 | 5c Issuer role and successor links | to write | 5a, 5b | 26 cases (F2, F3) | |
@@ -27,6 +28,14 @@ Work stays on the worktree branch; merging or pushing is the operator's call.
 | 5g Distress | to write | 5a, 5b | 13 cases (F9) plus endings 5a brings out | |
 | 5h Identity | to write | 5a | 6 cases (F11) | |
 | 5i Verdict and evidence | to write | all | 40 cases (F10 and the verdict-only rulings) | |
+
+Carried from 5-0's final review into 5a's plan, as its first task: a placeholder outside the truth set that 5a folds
+into a FIGI line must not become a truth row of its own (the regression path adds no truth row for a sec_id that is
+not in the run or is a renamed placeholder, and the regression report folds the placeholder's removed row into its
+FIGI's added row as one rename). Also carried, for the sub-plan that first needs it:
+- update_truth's status flips must read payout legs before 5f;
+- a malformed record JSON should be retried, not abort the update;
+- a prepared `casesPath` must sit at `loop/<label>/round-<N>/cases.csv`.
 
 Before writing each plan: replay the cases the reader notes call "unconfirmed mechanism" (5b: XMSR, SOV, TXU, RHDC,
 IDARQ, LKSD; 5e: the gate false-fails NYX, SCS, EV, SUN, THE) on cached data and record what the code actually does.

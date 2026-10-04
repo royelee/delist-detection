@@ -28,7 +28,7 @@ editable install.
 
 ```bash
 pip install -e .                         # editable install (Python ≥3.10) — once per env
-pytest   # full suite (1831 passed, 281 xfailed: 18 known-wrong golden + the diagnosis truth set's known_wrong cases, all strict; offline, no network)
+pytest   # full suite (1842 passed, 281 xfailed: 18 known-wrong golden + the diagnosis truth set's known_wrong cases, all strict; offline, no network)
 pytest tests/test_payout_extractor.py -v  # one file
 pytest tests/test_payout_extractor.py::test_match_in_cash_family_altr -v   # one test
 
