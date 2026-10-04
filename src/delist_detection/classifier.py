@@ -12,11 +12,11 @@ Pipeline per ticker:
 from __future__ import annotations
 
 import re
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from datetime import date, datetime, timedelta
 from typing import Iterable
 
-from . import end_of_era
+from . import end_of_era, exchange_terms
 from .crsp_codes import CrspBucket, bucket_for_code
 from .edgar import STALE_KEY, EdgarClient, EdgarSubmission, submissions_fresh_after
 from .evidence import (
@@ -33,7 +33,8 @@ from .evidence import (
     says_listing_transfer,
     still_operating,
 )
-from .form25 import notice_says_acquired, parse_form25
+from .figi_resolution import share_class_from_name
+from .form25 import Form25, notice_says_acquired, parse_form25
 from .ticker_resolver import TickerResolution, TickerResolver
 
 
@@ -482,6 +483,13 @@ class DelistClassifier:
         if delinquent:
             return rec(580, CrspBucket.COMPLIANCE_FAILURE, "medium",
                        "Delinquent filer (NT 10-K/Q in the prior year), no merger evidence")
+        # Sub-plan 5c, R1: no 8-K item code, but the filings state each share became one share, with no cash (a
+        # reclassification into another class, Clearway 2026; a holding company's formation, ONEOK 2026)
+        r1 = self._one_for_one(cik, evidence.get("name"), filings, [observed, anchor], delist_filing)
+        if r1 is not None:
+            _add_flag(flags, "r1_continuation")
+            return rec(304, CrspBucket.EXCHANGE_TRANSFER, "medium",
+                       f"Continuation (R1): each share became one share {r1.target[:80].strip()}, no cash")
         flags.append("no_evidence_default")
         return rec(None, CrspBucket.UNKNOWN, "low",
                    "Delisted/deregistered without merger or distress evidence",
@@ -736,9 +744,14 @@ class DelistClassifier:
                                      deficiency_notice=self._deficiency_notice(resolution.cik, filings, observed),
                                      bankruptcy_filing=self._bankruptcy_in_window(resolution.cik, filings, observed,
                                                                                   flags))
+            if end_of_era.merges(era):
+                era = replace(era, survived=self._survived(resolution.cik, resolution.name, filings, observed,
+                                                           era, delist_filing_override))
             items_code, _ = self._classify_items(set(era.item_filed))
             verdict = end_of_era.resolve(era, items_code)
             evidence["end_of_era"] = verdict.branch
+            if era.survived:
+                evidence["survived"] = era.survived
             if (owned and verdict.branch == "continued_filings"
                     and self._notice_says_acquired(resolution.cik, delist_filing_override)):
                 # Sub-plan 5b, R6b: the matched Form 25's own notice says the class was acquired or paid in cash
@@ -766,6 +779,44 @@ class DelistClassifier:
             )
         return self._classify_filings(ticker, resolution, observed_delist_date, observed, filings, delist_filing,
                                       dereg, evidence, flags)
+
+    def _matched_form25(self, cik: int, sub: EdgarSubmission | None) -> Form25 | None:
+        """The parsed Form 25 the delisting finder matched (`sub`), for its EX-99.25 notice; None without one or
+        when its text cannot be read."""
+        fetch = getattr(self.edgar, "fetch_filing_raw", None)
+        raw = fetch(cik, sub.accession) if sub is not None and fetch is not None else ""
+        return parse_form25(raw, accession=sub.accession, form=sub.form, filing_date=sub.filing_date) if raw else None
+
+    def _survived(self, cik: int, name: str | None, filings: list[EdgarSubmission], observed: date,
+                  era: end_of_era.EraSignals, form25: EdgarSubmission | None) -> str:
+        """Sub-plan 5c, rule 1: the sentence that says the registrant survived the transaction its 8-K items
+        call a merger -- its own shares were not exchanged (`exchange_terms.own_exchange` finds no statement
+        about them), and another party's shares became its own or it issued its shares to the other party
+        (`acquires`: RRI Energy acquiring Mirant, SXC acquiring Catalyst, Forest Oil issuing shares to Sabine), or
+        its holders received another company's shares and kept theirs (`distributes`: News Corp's 2013
+        separation) -- else "". Read in the 8-Ks around the end and around the 5.01 and 2.01 8-Ks, and the
+        matched Form 25's notice; names in force before the earliest of those days. Never rename or separation
+        words alone (BNI, CAL, TXU, LGFA were targets renamed after closing)."""
+        days = [observed] + [d for item in ("5.01", "2.01") if (d := _parse_date(era.item_filed.get(item, "")))]
+        names = exchange_terms.registrant_names(self.edgar.submissions(cik), min(days), name or "")
+        texts = exchange_terms.read_texts(self.edgar, cik, filings, days, self._matched_form25(cik, form25))
+        if exchange_terms.own_exchange(texts, names=names, class_letter=None) is not None:
+            return ""
+        return exchange_terms.acquires(texts, names=names) or exchange_terms.distributes(texts, names=names)
+
+    def _one_for_one(self, cik: int, name: str | None, filings: list[EdgarSubmission], days: list[date],
+                     form25: EdgarSubmission | None) -> exchange_terms.OwnExchange | None:
+        """Sub-plan 5c, R1: the filings around `days` state each share of the security's own class became one
+        share, with no cash (`exchange_terms.own_exchange`, the class read from the security's name); else
+        None."""
+        days = [d for d in days if d]
+        if not days:
+            return None
+        letter, words = exchange_terms.class_of(share_class_from_name(name), name)
+        names = exchange_terms.registrant_names(self.edgar.submissions(cik), min(days), name or "")
+        texts = exchange_terms.read_texts(self.edgar, cik, filings, days, self._matched_form25(cik, form25))
+        own = exchange_terms.own_exchange(texts, names=names, class_letter=letter, class_words=words)
+        return own if own is not None and own.one_for_one else None
 
     def _notice_says_acquired(self, cik: int, sub: EdgarSubmission) -> bool:
         """Whether the matched Form 25's EX-99.25 notice says its class was acquired or converted into cash

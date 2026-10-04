@@ -114,3 +114,27 @@ def test_a_change_in_control_still_comes_before_the_bankruptcy_branch():
 def test_the_bankruptcy_filing_is_the_classifiers_answer_carried_on_the_signals():
     s = signals([_f("8-K", "2020-12-01", "1.03")], END, trading_after=False, bankruptcy_filing="8-K 2020-12-01")
     assert s.bankruptcy_filing == "8-K 2020-12-01" and s.item_filed == {"1.03": "2020-12-01"}
+
+
+# --- sub-plan 5c, rule 1: a registrant that survived the transaction ---
+from delist_detection.end_of_era import merges  # noqa: E402
+
+
+def test_a_survivor_takes_no_merger_branch_and_goes_on_to_the_notice_or_the_continued_filings():
+    """RRI Energy acquired Mirant (5.01), Forest Oil issued its shares to Sabine (2.01 with a proxy) and was then
+    removed for its price: neither is a merger ending."""
+    acquirer = "each outstanding share of common stock of Mirant was converted into ... shares of our common stock"
+    v = resolve(_s(item_filed={"5.01": "2020-11-02"}, survived=acquirer), 231)
+    assert (v.branch, v.crsp_code, v.bucket, v.reason) == ("continued_filings", 304, CrspBucket.EXCHANGE_TRANSFER,
+                                                           CONTINUED)
+    v = resolve(_s(item_filed={"2.01": "2020-11-02", "3.01": "2020-11-09"}, merger_filing="DEFM14A 2020-10-01",
+                   deficiency_notice="8-K 2020-11-09", survived="the Company issued an aggregate of ..."), 200)
+    assert (v.branch, v.crsp_code, v.bucket) == ("delisting_notice", 570, CrspBucket.COMPLIANCE_FAILURE)
+
+
+def test_merges_says_when_branch_3_or_4_would_decide():
+    assert merges(_s(item_filed={"5.01": "2020-11-02"}))
+    assert merges(_s(item_filed={"2.01": "2020-11-02"}, delist_filing="25-NSE 2020-11-03"))
+    assert not merges(_s(item_filed={"2.01": "2020-11-02"}))
+    assert not merges(_s(item_filed={"5.01": "2020-11-02"}, successor_filing="8-K12B 2020-11-03"))
+    assert not merges(_s(item_filed={"5.01": "2020-11-02"}, trading_after=True))

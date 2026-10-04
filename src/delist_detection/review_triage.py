@@ -301,6 +301,10 @@ CATALOG: dict[str, FlagInfo] = {
                 "(the same security, a placeholder folded into a FIGI line, or a line continued by another FIGI).",
         "Nothing unless the step looks wrong; read the filing the reason names, and pin the observations' sec_id "
         "if the new rows are another security's."),
+    "r1_continuation": FlagInfo(
+        "info", "The registrant's filings state each share of the security became one share, with no cash (ruling "
+                "R1), so the row is an exchange transfer to successor_sec_id with a zero return (sub-plan 5c).",
+        "Nothing unless the filing says holders were paid or got another ratio; then the row is a merger."),
     "line_continuation": FlagInfo(
         "info", "An unknown delisting at the security's own CUSIP switch is an exchange transfer to its line "
                 "successor: the line follow (stage 4b) found the new CUSIP trading on as a FIGI of its own (R2), "

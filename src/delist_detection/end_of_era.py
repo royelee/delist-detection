@@ -13,6 +13,9 @@ around the end first, in the spec's order:
    unless a bankruptcy 8-K (item 1.03, its text confirmed by the classifier) came on
    or before it: a Chapter 11 asset sale is a liquidation (470; 5g sub-rule 2, built
    in sub-plan 5b);
+   branches 3 and 4 never fire for a registrant that survived the transaction (`survived`,
+   sub-plan 5c rule 1: its own shares were not exchanged, and it acquired another party
+   or distributed another company's shares to its holders): the resolution goes on to 5;
 5. a delisting notice (8-K item 3.01) whose text cites a listing deficiency: a
    compliance failure;
 6. otherwise the continued filings stand: today's transfer, reason unchanged.
@@ -49,6 +52,7 @@ class EraSignals:
     delist_filing: str = ""           # "<form> <date>" of the first Form 25 in the window
     deficiency_notice: str = ""       # "8-K <date>" of the first 3.01 notice citing a listing deficiency
     bankruptcy_filing: str = ""       # "8-K <date>" of the first 8-K in the window whose item 1.03 text confirms
+    survived: str = ""                # the sentence that says the registrant acquired or distributed (rule 1, 5c)
 
 
 @dataclass(frozen=True)
@@ -95,6 +99,15 @@ def signals(filings: Iterable[EdgarSubmission], on: date, *, trading_after: bool
     return EraSignals(trading_after, item_filed, successor, merger, delist, deficiency_notice, bankruptcy_filing)
 
 
+def merges(s: EraSignals) -> bool:
+    """Whether branch 3 or 4 would decide (a change in control, or a completed acquisition with a merger filing
+    or a Form 25, and neither branch 1 nor branch 2 first): the only signals for which the classifier reads
+    whether the registrant survived (`survived`)."""
+    if s.trading_after or s.successor_filing:
+        return False
+    return "5.01" in s.item_filed or ("2.01" in s.item_filed and bool(s.merger_filing or s.delist_filing))
+
+
 def resolve(s: EraSignals, items_code: int | None) -> EraVerdict:
     """The branch that decides (module docstring). `items_code` is the classifier's
     code for the window's 8-K item set (`_classify_items`); a merger keeps it when it
@@ -106,10 +119,10 @@ def resolve(s: EraSignals, items_code: int | None) -> EraVerdict:
     if s.successor_filing:
         return EraVerdict("successor", 304, CrspBucket.EXCHANGE_TRANSFER,
                           f"Successor registration {s.successor_filing}: the security continues under a successor{kept}")
-    if "5.01" in s.item_filed:
+    if "5.01" in s.item_filed and not s.survived:
         return EraVerdict("change_in_control", merger_code, CrspBucket.MERGER,
                           f"Change in control (8-K item 5.01 filed {s.item_filed['5.01']}){kept}")
-    if "2.01" in s.item_filed and (s.merger_filing or s.delist_filing):
+    if "2.01" in s.item_filed and (s.merger_filing or s.delist_filing) and not s.survived:
         if s.bankruptcy_filing and s.bankruptcy_filing[-10:] <= s.item_filed["2.01"]:
             return EraVerdict("bankruptcy", 470, CrspBucket.LIQUIDATION,
                               f"Bankruptcy ({s.bankruptcy_filing}, item 1.03) before the completed sale "
