@@ -4,10 +4,10 @@
     "archives": 14562,
     "company_tickers": 12,
     "full_text_search": 1048,
-    "submissions": 44373,
-    "submissions_page": 15474
+    "submissions": 44379,
+    "submissions_page": 15480
   },
-  "code_version": "10514c6-dirty",
+  "code_version": "dea3ed0-dirty",
   "degraded_answers": {},
   "handoffs": {
     "conflicts": 11,
