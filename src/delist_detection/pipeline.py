@@ -1514,7 +1514,7 @@ def _mark_continuing_delistings(delistings: Iterable[Delisting], endings: dict[D
 def _history_rows(ctx: _RunContext, securities: dict[str, Security], search: _DelistingSearch,
                   sec_cusips: dict[str, list[str]], ftd: FtdIndex, added: dict[str, AddedSecurity],
                   endings: dict[DelistingKey, bool], successor_starts: Mapping[str, Mapping[str, str]] = {}
-                  ) -> tuple[list[dict], list[dict], dict[str, str | None], dict[str, bool]]:
+                  ) -> tuple[list[dict], list[dict], dict[str, str | None], dict[str, bool], dict[str, bool | None]]:
     """10b. The ticker_history and cusip_history rows (`history.history_rows`):
     each observed security's ranges end at the last delisting that actually
     ends it (`endings`, `_delisting_endings`/`_ends_the_security`, computed
@@ -1527,9 +1527,12 @@ def _history_rows(ctx: _RunContext, securities: dict[str, Security], search: _De
     sighting. Also returns each observed security's end date (or None) and
     whether that end came from a confirmed last-trade day, so
     `observation_map_rows` can flag `after_delisting`/`after_unconfirmed_delisting`
-    without recomputing either."""
+    without recomputing either. A security that has an ending and whose ticker a successor security took
+    (`successor_starts`) is not listed today, whatever its issuer's EDGAR listing says: the issuer's listing is
+    the successor's (AON 2012: the same CIK lists AON today). Also returns the listed answers as used."""
     clients = ctx.clients
     th_rows, ch_rows = [], []
+    listed: dict[str, bool | None] = dict(search.listed)
     ends: dict[str, str | None] = {}
     end_confirmed: dict[str, bool] = {}
     final: dict[str, Delisting] = {}
@@ -1539,6 +1542,8 @@ def _history_rows(ctx: _RunContext, securities: dict[str, Security], search: _De
     for sid, s in securities.items():
         last_delisting = final.get(sid)
         is_listed = bool(search.listed.get(sid))
+        if is_listed and last_delisting is not None and sid in successor_starts:
+            is_listed = listed[sid] = False
         end = None
         confirmed = False
         if last_delisting is not None and not is_listed:
@@ -1570,7 +1575,7 @@ def _history_rows(ctx: _RunContext, securities: dict[str, Security], search: _De
                                       tickers=[a.ticker]))
         exch = issuer_exchange(clients.edgar, a.security.issuer_cik, a.ticker) if is_listed else None
         th_rows.append(a.history_row(listed=is_listed, exchange=exch))
-    return th_rows, ch_rows, ends, end_confirmed
+    return th_rows, ch_rows, ends, end_confirmed, listed
 
 
 def _payout_rows(payouts: _Payouts, delistings: list[Delisting]) -> list[dict]:
@@ -1795,17 +1800,21 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
         delistings += handoffs.added
         overrides = _apply_price_answers(given, delistings)   # the added delistings take their answers too
         closes.update(_last_trade_closes(ctx, handoffs.added, securities, sec_cusips, ftd, ftd_lo, overrides))
-        endings = _delisting_endings(delistings, securities, sec_cusips, ftd, starts)
+    # The handoff stage creates continuation delistings (AON 2012) and sets successors: the clip and the ranges read
+    # the starts and endings of the final delistings. (The first pass above only decides which stage-9 delistings
+    # are self-successor continuations, before the handoff stage.)
+    starts = _successor_starts(delistings, securities, search.sightings, sec_cusips, ftd, added)
+    endings = _delisting_endings(delistings, securities, sec_cusips, ftd, starts)
 
     # 10. rows
     delisting_rows, review_rows = _delisting_rows(delistings, closes, payouts, overrides)
     review_rows += [item.row() for item in review]
-    th_rows, ch_rows, ends, end_confirmed = _history_rows(ctx, securities, search, sec_cusips, ftd, added,
+    th_rows, ch_rows, ends, end_confirmed, listed = _history_rows(ctx, securities, search, sec_cusips, ftd, added,
                                                                   endings, starts)
     review_rows += [item.row() for item in drop_resolved_shared(ticker_range_review(th_rows), handoffs.resolved_pairs)]
     # 10c2. observation_map rows (the payout rows, 10c, are built with the tables below)
     map_rows = _observation_map(ctx, index, eras, resolutions, answers.issuers, sec_cusips, ftd, ends,
-                                end_confirmed, search.listed, th_rows)
+                                end_confirmed, listed, th_rows)
     flags, triaged = _triage(ctx, review_rows, review_decisions, limit)
 
     tables = {

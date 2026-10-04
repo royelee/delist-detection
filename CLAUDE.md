@@ -776,7 +776,9 @@ conflate them.
   the ranges): when a delisting's successor is another security X that holds ticker T from day F (X's first
   sighting under T on or after the delisting's confirmed last trade day, or from 30 days before its delist date
   when the day is unconfirmed or missing, and never more than 120 days after that anchor: a later one is a
-  recycled ticker, no F), the
+  recycled ticker, no F; computed again from the final delistings after the handoff stage, which creates
+  continuation rows, and a security with an ending whose ticker a successor took is not listed today, whatever its
+  issuer's EDGAR listing says: AON 2012), the
   security's fails rows and sightings under T from F on are X's. They do not count as it continuing
   (`_continues_after`: AON 2012), and its T range (and old-CUSIP range) ends the day before F (`history_rows`:
   STX 2021, CRC 2016, ODP 2020).

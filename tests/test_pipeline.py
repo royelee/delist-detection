@@ -2754,6 +2754,40 @@ def test_a_continuation_the_finder_found_no_row_for_clips_the_old_line_at_its_la
                              "takeovers": 0, "conflicts": 0, "rows_added": 1}
 
 
+def test_a_handoff_continuation_clips_the_old_line_whose_ticker_the_issuer_still_lists(fake_edgar, tmp_path):
+    """Task 13b (AON 2012): the old line's issuer (same CIK) still lists the ticker the new line took, so stage 5
+    reads the old line as listed today and nothing clipped it (open TEST range, ticker_shared with the new line).
+    The continuation row is created by the handoff stage; the successor starts are taken from the final
+    delistings, and a security whose ticker its successor took is not listed under it: it is clipped at its last
+    trade."""
+    fake_edgar.company_map["HC"] = {"cik_str": 999, "ticker": "HC", "title": "HOLDCO INC"}
+    fake_edgar.submissions_by_cik[999] = []
+    fake_edgar.listings[999] = [("HC", "NYSE")]
+    obs = [Observation("HC", d, "HOLDCO INC", cik=999) for d in ("2014-06-30", "2014-12-31", "2015-12-31",
+                                                                  "2016-06-30")]
+    rows = (_ftd("HC", "111111101", "HOLDCO INC", ["2014-06-02", "2014-10-01", "2015-01-02", "2015-04-01",
+                                                   "2015-06-12"])
+            + _ftd("HC", "222222202", "HOLDCO INC NEW", ["2015-06-15", "2015-09-01", "2016-01-04", "2016-06-01"]))
+    index, clients = _index_clients(fake_edgar, obs, rows, {
+        ("ID_CUSIP", "111111101"): _figi_answer("BBGHCOLD001", "HC", "HOLDCO INC"),
+        ("ID_CUSIP", "222222202"): _figi_answer("BBGHCNEW001", "HC", "HOLDCO INC"),
+        ("COMPOSITE_ID_BB_GLOBAL", "BBGHCOLD001"): {"data": [{"figi": "BBGHCOLD002", "compositeFIGI": "BBGHCOLD001",
+                                                              "exchCode": "UN", "ticker": "HC", "name": "HOLDCO INC",
+                                                              "securityType": "Common Stock"}]},
+        ("COMPOSITE_ID_BB_GLOBAL", "BBGHCNEW001"): {"data": [{"figi": "BBGHCNEW002", "compositeFIGI": "BBGHCNEW001",
+                                                              "exchCode": "UN", "ticker": "HC", "name": "HOLDCO INC",
+                                                              "securityType": "Common Stock"}]},
+    })
+    run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
+    (d,) = read_table("delistings", table_path(tmp_path, "delistings"))
+    assert d["review_flags"].split(";")[0] == "handoff_continuation" and d["successor_sec_id"] == "BBGHCNEW001"
+    th = {(r["sec_id"], r["ticker"]): (r["valid_from"], r["valid_to"])
+          for r in read_table("ticker_history", table_path(tmp_path, "ticker_history"))}
+    assert th == {("BBGHCOLD001", "HC"): ("2014-06-02", "2015-06-12"), ("BBGHCNEW001", "HC"): ("2015-06-15", "")}
+    review = read_table("review", table_path(tmp_path, "review"))
+    assert not [r for r in review if r["review_flags"] in ("ended_without_delisting", "ticker_shared")]
+
+
 def test_run_writes_the_scorecard_of_the_tables_it_wrote(fake_edgar, tmp_path):
     index, clients = _clients(fake_edgar)
     config = ScorecardConfig(window=Window("2006-01-02", "2024-12-29"))
