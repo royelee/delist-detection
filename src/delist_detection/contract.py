@@ -107,11 +107,13 @@ def security_history_rows(tables: Tables, issuers: Mapping[str, Sequence[tuple[s
 
 
 def id_change_rows(baseline: Sequence[Mapping[str, str]], securities: Sequence[Mapping[str, str]],
-                   changed_on: str) -> list[dict[str, str]]:
+                   changed_on: str, renames: Mapping[str, str] = {}) -> list[dict[str, str]]:
     """contract/id_changes.csv (decision 7): each placeholder of the baseline run
-    (its securities.csv rows) that this run no longer has and whose issuer and
-    class exactly one FIGI security of this run holds. Not cumulative: git keeps
-    the earlier files."""
+    (its securities.csv rows) that this run no longer has and that a line
+    follow folded into a FIGI security of this run (`renames`: old sec_id -> new,
+    pipeline stage 4b; FTR's CIK holds a later FIGI line too), else whose issuer
+    and class exactly one FIGI security of this run holds. Not cumulative: git
+    keeps the earlier files."""
     now = {s["sec_id"] for s in securities}
     figis: dict[tuple[str, str], set[str]] = defaultdict(set)
     for s in securities:
@@ -121,7 +123,8 @@ def id_change_rows(baseline: Sequence[Mapping[str, str]], securities: Sequence[M
     for b in baseline:
         if b["figi_source"] != "placeholder" or b["sec_id"] in now:
             continue
-        found = figis.get((b["issuer_cik"], b["share_class"]), set())
+        found = {renames[b["sec_id"]]} if renames.get(b["sec_id"]) in now else \
+            figis.get((b["issuer_cik"], b["share_class"]), set())
         if len(found) == 1:
             rows.append({"old_sec_id": b["sec_id"], "new_sec_id": next(iter(found)), "changed_on": changed_on,
                          "issuer_cik": b["issuer_cik"], "share_class": b["share_class"]})

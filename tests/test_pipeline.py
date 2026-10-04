@@ -2991,3 +2991,148 @@ def test_a_merger_whose_cusip_goes_on_under_a_line_ticker_does_not_end_the_secur
     assert pipeline._ends_the_security(d, sec, {"BBGTEST": ["11111T101"]}, ftd) is True
     sec.line_tickers = frozenset({"TSTN"})
     assert pipeline._ends_the_security(d, sec, {"BBGTEST": ["11111T101"]}, ftd) is False
+
+
+# --- sub-plan 5a, stage 4b: a line followed past the observations (pipeline._follow_lines) ---
+
+LINE_F25 = ("<TYPE>25-NSE\n<notificationOfRemoval><exchange><entityName>New York Stock Exchange LLC</entityName>"
+            "</exchange>\n<descriptionClassSecurity>Common Stock</descriptionClassSecurity>\n"
+            "<ruleProvision>17 CFR 240.12d2-2(a)(3)</ruleProvision></notificationOfRemoval>")
+RS_OLD, RS_NEW = "11111A101", "11111A200"
+
+
+def _weekly(start, n):
+    """`n` Mondays from the Monday ISO `start`."""
+    day = date.fromisoformat(start)
+    return [(day + timedelta(weeks=i)).isoformat() for i in range(n)]
+
+
+def _priced(symbol, cusip, desc, dates, first_price=10.0):
+    return [FtdRow(d, cusip, symbol, desc, round(first_price + i * 0.01, 2)) for i, d in enumerate(dates)]
+
+
+def _rs_new_rows(symbol="RS", until=91, desc="REVERSE SPLIT CO NEW"):
+    """RS's new CUSIP: its first-day RSZZZZ row on 2012-09-25, then weekly rows from 2012-10-01 (91 weeks: to
+    2014-06-16)."""
+    return [FtdRow("2012-09-25", RS_NEW, "RSZZZZ", desc, 0.01),
+            *_priced(symbol, RS_NEW, desc, _weekly("2012-10-01", until), 40.0)]
+
+
+SPLIT_8K = EdgarSubmission("0000004242-12-000031", "8-K", "2012-09-24", "2012-09-24", "5.03,9.01", "k.htm")
+LATER_10Q = EdgarSubmission("0000004242-13-000004", "10-Q", "2013-02-08", "2012-12-31", "", "q.htm")
+MERGER_8K = EdgarSubmission("0000004242-14-000020", "8-K", "2014-06-10", "2014-06-10", "2.01,3.01,5.01,9.01", "m.htm")
+MERGER_F25 = EdgarSubmission("0000876661-14-000300", "25-NSE", "2014-06-10", "", "", "primary_doc.xml")
+
+
+def _line_run(fake_edgar, tmp_path, *, filings, figi, new_rows, old_figi=True, listings=(), id_baseline=(),
+              extra_obs=()):
+    """RS (CIK 4242), observed 2008-2009, its old CUSIP failing weekly under RS until 2012-09-17, then `new_rows`;
+    `figi`: OpenFIGI's answers beyond the old CUSIP's (BBGRS01 unless `old_figi` is False)."""
+    fake_edgar.company_map["RS"] = {"cik_str": 4242, "ticker": "RS", "title": "REVERSE SPLIT CO"}
+    fake_edgar.submissions_by_cik[4242] = list(filings)
+    fake_edgar.listings[4242] = list(listings)
+    fake_edgar.raws["0000876661-14-000300"] = LINE_F25
+    fake_edgar.texts["0000004242-14-000020"] = ("Item 3.01. trading suspended prior to the opening of trading on "
+                                                "June 20, 2014 " + "x" * 300)
+    obs = [Observation("RS", d, "REVERSE SPLIT CO", cik=4242) for d in ("2008-01-16", "2008-06-30", "2009-06-08")]
+    rows = _priced("RS", RS_OLD, "REVERSE SPLIT CO", _weekly("2008-01-07", 247)) + list(new_rows)
+    answers = dict(figi)
+    if old_figi:
+        answers[("ID_CUSIP", RS_OLD)] = _figi_answer("BBGRS01", "RS", "REVERSE SPLIT CO")
+    index, clients = _index_clients(fake_edgar, [*obs, *extra_obs], rows, answers)
+    run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None, id_baseline=id_baseline)
+    return {name: read_table(name, table_path(tmp_path, name)) for name in (
+        "securities", "cusip_history", "ticker_history", "delistings", "contract_delistings", "id_changes",
+        "review_summary")}
+
+
+def _flag_count(t, flag):
+    return next((r["rows"] for r in t["review_summary"] if r["flag"] == flag), "0")
+
+
+def test_a_reverse_split_after_the_observations_stop_is_followed_to_the_lines_real_ending(fake_edgar, tmp_path):
+    """RS's observations stop in 2009; in 2012 a reverse split (8-K 5.03) gives it a new CUSIP under the same
+    ticker, with the same composite; it merges in 2014, a Form 25 more than 400 days after the old CUSIP's last
+    row. Followed, the line is one security with both CUSIPs, and its one delisting is the 2014 merger."""
+    t = _line_run(fake_edgar, tmp_path, filings=[SPLIT_8K, LATER_10Q, MERGER_8K, MERGER_F25],
+                  figi={("ID_CUSIP", RS_NEW): _figi_answer("BBGRS01", "RS", "REVERSE SPLIT CO")},
+                  new_rows=_rs_new_rows())
+    assert [r["sec_id"] for r in t["securities"]] == ["BBGRS01"]
+    assert [r["cusip"] for r in t["cusip_history"]] == [RS_OLD, RS_NEW]
+    assert [(r["sec_id"], r["delist_date"], r["bucket"]) for r in t["delistings"]] == [
+        ("BBGRS01", "2014-06-20", "merger")]
+    assert [(r["ticker"], r["valid_from"], r["valid_to"]) for r in t["ticker_history"]] == [
+        ("RS", "2008-01-07", "2014-06-19")]
+    assert _flag_count(t, "line_followed") == "1"
+
+
+def test_a_bankruptcy_before_the_switch_keeps_the_line_where_it_was(fake_edgar, tmp_path):
+    """Must not change (UAL 2006): an 8-K item 1.03 within 180 days before the new CUSIP's first row means the
+    plan cancelled the old shares; the new CUSIP is not the old line's."""
+    bankrupt = EdgarSubmission("0000004242-12-000020", "8-K", "2012-06-01", "2012-06-01", "1.03", "b.htm")
+    t = _line_run(fake_edgar, tmp_path, filings=[bankrupt, SPLIT_8K, LATER_10Q, MERGER_8K, MERGER_F25],
+                  figi={("ID_CUSIP", RS_NEW): _figi_answer("BBGRS01", "RS", "REVERSE SPLIT CO")},
+                  new_rows=_rs_new_rows())
+    assert [r["cusip"] for r in t["cusip_history"]] == [RS_OLD]
+    assert "2014-06-20" not in {r["delist_date"] for r in t["delistings"]}
+    assert _flag_count(t, "line_follow_refused") == "1"
+
+
+def test_a_registrant_that_merged_out_at_the_switch_is_not_followed(fake_edgar, tmp_path):
+    """Must not change (UNIT 2025, R1 before R2): no periodic report for a period after the switch."""
+    t = _line_run(fake_edgar, tmp_path, filings=[SPLIT_8K, MERGER_8K, MERGER_F25],
+                  figi={("ID_CUSIP", RS_NEW): _figi_answer("BBGRS01", "RS", "REVERSE SPLIT CO")},
+                  new_rows=_rs_new_rows())
+    assert [r["cusip"] for r in t["cusip_history"]] == [RS_OLD]
+    assert _flag_count(t, "line_follow_refused") == "1"
+
+
+def test_a_new_cusip_another_issuers_security_holds_is_never_followed(fake_edgar, tmp_path):
+    """Must not change (new LMCA 2013): another issuer's observed line holds the new CUSIP under the ticker."""
+    fake_edgar.company_map["RSX"] = {"cik_str": 5353, "ticker": "RSX", "title": "OTHER CO"}
+    fake_edgar.submissions_by_cik[5353] = []
+    t = _line_run(fake_edgar, tmp_path, filings=[SPLIT_8K, LATER_10Q, MERGER_8K, MERGER_F25],
+                  figi={("ID_CUSIP", RS_NEW): _figi_answer("BBGOTHER1", "RS", "OTHER CO")},
+                  new_rows=_rs_new_rows(desc="OTHER CO"),
+                  extra_obs=[Observation("RS", d, "OTHER CO", cik=5353) for d in ("2013-06-28", "2013-12-31")])
+    assert {r["sec_id"]: r["cusip"] for r in t["cusip_history"]} == {"BBGRS01": RS_OLD, "BBGOTHER1": RS_NEW}
+    assert _flag_count(t, "line_followed") == "0"
+
+
+def test_a_rename_on_the_same_cusip_keeps_a_placeholder_listed_under_its_new_ticker(fake_edgar, tmp_path):
+    """A placeholder renamed on the same CUSIP (RS -> RSNW, as HSC became NVRI): its line ticker makes it listed
+    today (EDGAR lists RSNW), so it has no ending and an open RSNW range."""
+    rows = _priced("RSNW", RS_OLD, "REVERSE SPLIT CO", _weekly("2012-10-01", 700), 40.0)
+    t = _line_run(fake_edgar, tmp_path, filings=[LATER_10Q], figi={}, new_rows=rows, old_figi=False,
+                  listings=[("RSNW", "NYSE")])
+    assert [r["sec_id"] for r in t["securities"]] == ["CIK4242-COMMON"]
+    assert t["contract_delistings"] == []
+    assert [(r["ticker"], r["valid_to"]) for r in t["ticker_history"]] == [("RS", "2012-09-30"), ("RSNW", "")]
+
+
+def test_a_placeholder_folds_into_the_figi_line_its_new_cusip_names(fake_edgar, tmp_path):
+    """R2 for a placeholder: OpenFIGI knows no US line for the old CUSIP but names one for the new: the
+    placeholder becomes that FIGI line, and contract/id_changes.csv says so by name."""
+    baseline = [{"sec_id": "CIK4242-COMMON", "issuer_cik": "4242", "share_class": "COMMON", "name": "RS",
+                 "security_type": "", "observed": "true", "figi_source": "placeholder"}]
+    t = _line_run(fake_edgar, tmp_path, filings=[SPLIT_8K, LATER_10Q, MERGER_8K, MERGER_F25],
+                  figi={("ID_CUSIP", RS_NEW): _figi_answer("BBGRSNEW1", "RS", "REVERSE SPLIT CO")},
+                  new_rows=_rs_new_rows(), old_figi=False, id_baseline=baseline)
+    assert [(r["sec_id"], r["figi_source"]) for r in t["securities"]] == [("BBGRSNEW1", "handoff")]
+    assert [(r["old_sec_id"], r["new_sec_id"]) for r in t["id_changes"]] == [("CIK4242-COMMON", "BBGRSNEW1")]
+    assert [(r["sec_id"], r["delist_date"]) for r in t["delistings"]] == [("BBGRSNEW1", "2014-06-20")]
+    assert (_flag_count(t, "no_figi"), _flag_count(t, "line_followed")) == ("0", "1")    # its items moved with it
+
+
+def test_a_form25_at_the_lines_own_switch_while_it_trades_on_leaves_no_ending(fake_edgar, tmp_path):
+    """QGEN 2026 / Acxiom 2018 (U6): the line, listed today, switched to a new CUSIP of the same composite as a
+    25-NSE removed the old one; that Form 25 is no delisting."""
+    switch_f25 = EdgarSubmission("0000876661-12-000300", "25-NSE", "2012-09-24", "", "", "primary_doc.xml")
+    fake_edgar.raws["0000876661-12-000300"] = LINE_F25
+    listed = {"data": [{"figi": "BBGRS02", "compositeFIGI": "BBGRS01", "exchCode": "UN", "ticker": "RS",
+                        "name": "REVERSE SPLIT CO"}]}
+    t = _line_run(fake_edgar, tmp_path, filings=[SPLIT_8K, switch_f25, LATER_10Q],
+                  figi={("ID_CUSIP", RS_NEW): _figi_answer("BBGRS01", "RS", "REVERSE SPLIT CO"),
+                        ("COMPOSITE_ID_BB_GLOBAL", "BBGRS01"): listed},
+                  new_rows=_rs_new_rows(until=700), listings=[("RS", "NYSE")])
+    assert t["delistings"] == [] and t["contract_delistings"] == []

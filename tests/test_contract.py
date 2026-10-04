@@ -99,3 +99,15 @@ def test_delisting_rows_carry_the_payout_rule_columns_and_the_inputs_of_a_failed
     assert set(row) == set(CONTRACT_DELISTINGS_COLUMNS)
     assert (row["value_rule"], row["terms_gate"], row["price_sec_id"], row["price_date"]) == (
         "cash_plus_stock", "failed", "BBG0QSR", "2015-03-03")
+
+
+def test_id_changes_name_the_figi_a_line_follow_folded_a_placeholder_into():
+    """Sub-plan 5a (FTR): CIK 20520 holds two FIGI lines, Frontier's and the post-bankruptcy FYBR, so the
+    issuer-and-class rule names none; the line follow's own rename names the FIGI."""
+    baseline = [_sec_row("CIK20520-COMMON", "20520", "placeholder")]
+    now = [_sec_row("BBGFTR00001", "20520", "handoff"), _sec_row("BBG010MVVVW7", "20520", "cusip")]
+    assert id_change_rows(baseline, now, "2026-09-25") == []
+    assert id_change_rows(baseline, now, "2026-09-25", {"CIK20520-COMMON": "BBGFTR00001"}) == [
+        {"old_sec_id": "CIK20520-COMMON", "new_sec_id": "BBGFTR00001", "changed_on": "2026-09-25",
+         "issuer_cik": "20520", "share_class": "COMMON"}]
+    assert id_change_rows(baseline, now, "2026-09-25", {"CIK20520-COMMON": "BBGGONE0001"}) == []

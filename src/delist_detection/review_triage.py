@@ -295,6 +295,18 @@ CATALOG: dict[str, FlagInfo] = {
         "resolver's answer is right."),
 
     # --- info: a less precise source, nothing suggests it is wrong ---
+    "line_followed": FlagInfo(
+        "info", "The line follow (pipeline stage 4b) found the security trading on past its observations under a "
+                "new CUSIP or ticker; the reason names the step, the filing that states it and what R2 made of it "
+                "(the same security, a placeholder folded into a FIGI line, or a line continued by another FIGI).",
+        "Nothing unless the step looks wrong; read the filing the reason names, and pin the observations' sec_id "
+        "if the new rows are another security's."),
+    "line_follow_refused": FlagInfo(
+        "info", "A step of the security's line in the fails rows was not followed; after the colon, why "
+                "(bankruptcy, otc_move, name, class, merged_out, other_registrant, no_filing, unsettled, "
+                "other_issuer). The security's answer is the one it had without the step.",
+        "Nothing unless the security did go on under the new CUSIP or ticker as the same line; then pin the "
+        "observations' sec_id."),
     "no_figi": FlagInfo(
         "info", "OpenFIGI confirmed no US composite FIGI, so sec_id is a placeholder CIK<cik>-<CLASS>.",
         "If the security had a FIGI, pin its sec_id or cusip on the observations; otherwise nothing to do."),
