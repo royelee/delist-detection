@@ -1,0 +1,283 @@
+case_id,ticker,cause_group,library_wrong,confidence,reader_theme,family,sub_plan
+BBG000B9YSK6_2020-11-04,CBL,resolver_no_bankruptcy_branch,True,inferred,"B: T5. Bankruptcy endings the resolver does not branch on, and reset-4a3 ",F9,5g
+BBG000BB2N27_2014-12-25,THI,currency_missing,False,verified,C: 7. cash_currency is always blank — 4 cases (and every cash row),F8,5f
+BBG000BB5HV5_2010-12-19,ADCT,no_last_trade_print,False,inferred,B: T2. No filing states the last session: infer it from the closing day (,F6r,5d
+BBG000BBB3K1_2017-08-04,RAI,terms_misread,True,verified,C: 5. LLM reads the wrong figure for the operative consideration — 4 case,F8,5f
+BBG000BBBP59_2016-03-28,PRE,library_right_but_uncertain,False,inferred,A: Theme 1. Merger relabelled by the end-of-era resolver although the For,F4,5b
+BBG000BBG3P1_2009-01-25,TMA,wrong_exit_kind,True,inferred,E: Theme 5. A later SEC revocation outranks the real delisting reason (3),F9,5g
+BBG000BC2C10_2021-03-14,APA,no_last_trade_print,False,inferred,B: T1. A stated last day in a filing the reader did not use (8 cases),F6,5d
+BBG000BCKC47_2016-07-11,GAS,library_right_but_uncertain,False,verified,A: Theme 1. Merger relabelled by the end-of-era resolver although the For,F4,5b
+BBG000BCNYT9_2020-01-16,AVP,library_right_but_uncertain,False,verified,A: Theme 4. Assumed par after a failed gate whose terms are right (`assum,F7,5e
+BBG000BCTL84_2012-01-08,PMI,last_trade_date_misread,True,inferred,"B: T3. Date-source precedence: halts, bare ""suspended on D"", after-close ",F6,5d
+BBG000BD4VG8_2017-07-15,BHI,holdco_not_linked,True,verified,"D: Theme 5. 1:1 holding-company reorganization (new CIK), successor line ",F2,5c
+BBG000BDHNB7_2019-06-21,BMS,library_right_but_uncertain,False,verified,A: Theme 4. Assumed par after a failed gate whose terms are right (`assum,F7,5e
+BBG000BDKN87_2010-02-26,BNI,library_right_but_uncertain,False,verified,A: Theme 1. Merger relabelled by the end-of-era resolver although the For,F4,5b
+BBG000BDLLR9_2007-11-05,BOL,library_right_but_uncertain,False,verified,A: Theme 5. Stale caller seeds after a confirmed ending make the security,F10,5i
+BBG000BDN878_2019-03-04,TAHO,wrong_exit_kind,True,verified,"E: Theme 6. A foreign-filer or press-release-only deal has no 8-K items, ",F8,5f
+BBG000BDXVW8_2010-10-14,CAL,price_security_wrong,True,verified,"C: 1. Acquirer found by CIK and line, priced by CUSIP (the CAL/RTN fix) —",F7,5e
+BBG000BF2JS9_2009-09-18,CNB,wrong_exit_kind,True,inferred,E: Theme 5. A later SEC revocation outranks the real delisting reason (3),F9,5g
+BBG000BF5RY1_2016-06-10,CCE,reused_ticker_data,True,inferred,"B: T4. Ticker reuse: volume, prints and closes read by ticker after anoth",F6,5d
+BBG000BF8BH2_2008-08-10,CCU,library_right_but_uncertain,False,inferred,A: Theme 1. Merger relabelled by the end-of-era resolver although the For,F4,5b
+BBG000BFTJ91_2015-12-21,CMCSK,holdco_not_linked,True,verified,"D: Theme 4. Same-issuer share-class reclassification or conversion, 1:1, ",F2,5c
+BBG000BFVKZ6_2019-02-25,AHL,library_right_but_uncertain,False,verified,A: Theme 1. Merger relabelled by the end-of-era resolver although the For,F4,5b
+BBG000BG09F5_2021-02-12,GPOR,terms_misread,True,verified,"C: 2. OTC print priced under the security's own OTC symbol, CUSIP-aware —",F9,5g
+BBG000BG14P4_2025-10-09,WOLF,price_security_wrong,True,inferred,"C: 2. OTC print priced under the security's own OTC symbol, CUSIP-aware —",F9,5g
+BBG000BGFLL5_2013-11-23,NYX,currency_missing,False,verified,"C: 8. Gate false-fails on correct terms (stale close, missing acquirer pr",F7,5e
+BBG000BGMX22_2010-10-14,HEW,library_right_but_uncertain,False,verified,A: Theme 4. Assumed par after a failed gate whose terms are right (`assum,F7,5e
+BBG000BGYDX9_2023-06-30,DBD,no_last_trade_print,True,inferred,"B: T3. Date-source precedence: halts, bare ""suspended on D"", after-close ",F6,5d
+BBG000BH2T94_2011-12-11,GLBL,no_last_trade_print,True,verified,B: T1. A stated last day in a filing the reader did not use (8 cases),F6,5d
+BBG000BH5K72_2007-12-28,DJ,library_right_but_uncertain,False,inferred,A: Theme 5. Stale caller seeds after a confirmed ending make the security,F10,5i
+BBG000BHBGN6_2022-12-03,CLR,library_right_but_uncertain,False,verified,A: Theme 1. Merger relabelled by the end-of-era resolver although the For,F4,5b
+BBG000BHBK84_2017-09-11,DOW,library_right_but_uncertain,False,verified,A: Theme 1. Merger relabelled by the end-of-era resolver although the For,F4,5b
+BBG000BHCDF1_2011-12-08,DPL,library_right_but_uncertain,False,verified,A: Theme 1. Merger relabelled by the end-of-era resolver although the For,F4,5b
+BBG000BHD665_2007-10-22,CDWC,no_last_trade_print,True,inferred,B: T1. A stated last day in a filing the reader did not use (8 cases),F6,5d
+BBG000BHFHP8_2021-12-10,UFS,currency_missing,False,verified,C: 7. cash_currency is always blank — 4 cases (and every cash row),F8,5f
+BBG000BHSKN9_2015-10-12,GOOGL,library_right_but_uncertain,False,verified,A: Theme 6. Same-issuer holdco continuation: `no_evidence_default` and `t,F10,5i
+BBG000BJ27C4_2012-07-15,PGN,library_right_but_uncertain,False,inferred,A: Theme 1. Merger relabelled by the end-of-era resolver although the For,F4,5b
+BBG000BJ3QD0_2007-11-16,DADE,no_last_trade_print,False,inferred,B: T2. No filing states the last session: infer it from the closing day (,F6r,5d
+BBG000BJ9D07_2016-09-08,ROVI,holdco_not_linked,True,inferred,D: Theme 7. Add an unobserved successor line (new CIK) and link it,F2,5c
+BBG000BJCFP1_2013-03-11,JEF,library_right_but_uncertain,False,inferred,A: Theme 1. Merger relabelled by the end-of-era resolver although the For,F4,5b
+BBG000BJV732_2007-12-01,FRK,terms_misread,True,inferred,C: 4. Election and proration packages — 8 cases,F8,5f
+BBG000BJVZF7_2014-07-12,FRX,library_right_but_uncertain,False,verified,A: Theme 4. Assumed par after a failed gate whose terms are right (`assum,F7,5e
+BBG000BJXKD0_2018-06-16,WR,terms_not_extracted,True,verified,"C: 1. Acquirer found by CIK and line, priced by CUSIP (the CAL/RTN fix) —",F7,5e
+BBG000BJXXX0_2007-07-12,IFIN,no_last_trade_print,False,inferred,B: T2. No filing states the last session: infer it from the closing day (,F6r,5d
+BBG000BK1FD3_2014-12-04,FWLT,terms_misread,True,inferred,C: 4. Election and proration packages — 8 cases,F8,5f
+BBG000BK5DP1_2026-03-30,TGNA,library_right_but_uncertain,False,verified,A: No library change,none,none
+BBG000BK7SL0_2011-04-18,GENZ,no_last_trade_print,False,inferred,B: T2. No filing states the last session: infer it from the closing day (,F6r,5d
+BBG000BKKXG0_2008-12-11,PHLY,no_last_trade_print,False,inferred,B: T2. No filing states the last session: infer it from the closing day (,F6r,5d
+BBG000BKQ3V3_2018-07-13,SDRL,resolver_no_bankruptcy_branch,True,inferred,"B: T5. Bankruptcy endings the resolver does not branch on, and reset-4a3 ",F9,5g
+BBG000BL9439_2013-07-28,HNZ,library_right_but_uncertain,False,verified,A: Theme 1. Merger relabelled by the end-of-era resolver although the For,F4,5b
+BBG000BLBGS2_2025-12-20,SCS,currency_missing,True,inferred,"C: 8. Gate false-fails on correct terms (stale close, missing acquirer pr",F7,5e
+BBG000BLH3P8_2023-06-20,HSC,rename_not_followed,True,verified,D: Theme 1. Follow a rename or CUSIP switch before the fallback ending is,F1,5a
+BBG000BLPBL5_2026-08-27,AVB,terms_misread,True,inferred,C: No library change (1),none,none
+BBG000BLY636_2008-08-17,IMB,wrong_exit_kind,True,inferred,E: Theme 5. A later SEC revocation outranks the real delisting reason (3),F9,5g
+BBG000BM1RP0_2009-08-14,FCL,no_last_trade_print,True,inferred,B: T2. No filing states the last session: infer it from the closing day (,F6r,5d
+BBG000BMB7R1_2016-05-17,ITT,library_right_but_uncertain,False,inferred,A: Theme 2. Continuation or rename with no Form 25 that a successor filin,F2,5i
+BBG000BMDV41_2016-09-16,JCI,reused_ticker_data,True,verified,"B: T4. Ticker reuse: volume, prints and closes read by ticker after anoth",F6,5d
+BBG000BMZ7P7_2021-12-24,KSU,library_right_but_uncertain,False,verified,A: Theme 1. Merger relabelled by the end-of-era resolver although the For,F4,5b
+BBG000BMZLP6_2007-08-20,AQNT,no_last_trade_print,True,inferred,B: T2. No filing states the last session: infer it from the closing day (,F6r,5d
+BBG000BN53G7_2026-09-06,LEG,terms_not_extracted,False,inferred,"C: 1. Acquirer found by CIK and line, priced by CUSIP (the CAL/RTN fix) —",F7,5e
+BBG000BN6349_2013-12-02,FMD,continued_filings_guess,True,verified,B: T6. A reverse split's new CUSIP read as the end of the security (12 ca,F1,5a
+BBG000BNTTY4_2024-04-29,MDC,currency_missing,True,verified,C: 7. cash_currency is always blank — 4 cases (and every cash row),F8,5f
+BBG000BNVNY4_2021-12-12,MDP,terms_misread,True,verified,C: 3. Stock leg is a security other than the named acquirer; multi-leg an,F8,5f
+BBG000BNXLK1_2007-07-12,MEL,library_right_but_uncertain,False,inferred,A: Theme 5. Stale caller seeds after a confirmed ending make the security,F10,5i
+BBG000BP0KQ8_2026-08-14,EA,library_right_but_uncertain,False,verified,A: Theme 3. Issuer from today's company_tickers.json although the Form 25,F10,5i
+BBG000BPQD31_2020-11-26,MYL,holdco_not_linked,True,inferred,"D: Theme 5. 1:1 holding-company reorganization (new CIK), successor line ",F2,5c
+BBG000BPQVR5_2015-07-12,RKT,terms_misread,True,inferred,C: 4. Election and proration packages — 8 cases,F8,5f
+BBG000BPTDN6_2010-10-11,NTY,continued_filings_guess,True,verified,B: T9. A found Form 25 is overridden by the continued-filings rule (1 cas,F4,5b
+BBG000BQ3F39_2011-05-07,NOVL,no_last_trade_print,False,verified,B: T1. A stated last day in a filing the reader did not use (8 cases),F6,5d
+BBG000BQHGR6_2026-09-28,OKE,holdco_not_linked,True,inferred,D: Theme 7. Add an unobserved successor line (new CIK) and link it,F2,5c
+BBG000BRF689_2016-10-14,PNY,library_right_but_uncertain,False,verified,A: Theme 1. Merger relabelled by the end-of-era resolver although the For,F4,5b
+BBG000BRF6B5_2009-05-29,RHDC,form25_matching,True,verified,E: Theme 4. A real Form 25 exists but the finder reports `no_form25` (5),F5,5b
+BBG000BRWGG9_2019-04-22,RAD,continued_filings_guess,True,inferred,B: T6. A reverse split's new CUSIP read as the end of the security (12 ca,F1,5a
+BBG000BS3FD4_2008-03-27,RESP,no_last_trade_print,True,inferred,B: T2. No filing states the last session: infer it from the closing day (,F6r,5d
+BBG000BSD7C2_2020-04-13,RTN,terms_misread,True,verified,"C: 1. Acquirer found by CIK and line, priced by CUSIP (the CAL/RTN fix) —",F7,5e
+BBG000BSGQN5_2015-10-11,RYL,terms_misread,True,verified,"C: 1. Acquirer found by CIK and line, priced by CUSIP (the CAL/RTN fix) —",F7,5e
+BBG000BSVZM9_2009-11-04,SGP,no_last_trade_print,False,inferred,B: T2. No filing states the last session: infer it from the closing day (,F6r,5d
+BBG000BT0093_2024-09-10,SIRI,library_right_but_uncertain,False,inferred,A: Theme 2. Continuation or rename with no Form 25 that a successor filin,F2,5i
+BBG000BTMDX4_2012-04-06,SUG,library_right_but_uncertain,False,inferred,A: Theme 1. Merger relabelled by the end-of-era resolver although the For,F4,5b
+BBG000BTN971_2012-10-20,SUN,currency_missing,False,inferred,"C: 8. Gate false-fails on correct terms (stale close, missing acquirer pr",F7,5e
+BBG000BTQ9G8_2017-08-02,SVU,continued_filings_guess,True,verified,B: T6. A reverse split's new CUSIP read as the end of the security (12 ca,F1,5a
+BBG000BV18Z1_2017-05-18,TDW,last_trade_date_misread,True,inferred,"B: T5. Bankruptcy endings the resolver does not branch on, and reset-4a3 ",F9,5g
+BBG000BV3594_2007-12-06,TEK,library_right_but_uncertain,False,verified,A: Theme 5. Stale caller seeds after a confirmed ending make the security,F10,5i
+BBG000BV52H0_2007-09-07,KSE,library_right_but_uncertain,False,verified,A: Theme 5. Stale caller seeds after a confirmed ending make the security,F10,5i
+BBG000BVW841_2009-06-08,TXU,continued_filings_guess,True,inferred,B: T8. The Form 25 exists but the finder never matches it to this securit,F5,5b
+BBG000BWMX63_2026-08-30,WBS,library_right_but_uncertain,False,verified,A: Theme 3. Issuer from today's company_tickers.json although the Form 25,F10,5i
+BBG000BWPN99_2008-10-11,WEN,reused_ticker_data,False,verified,"B: T4. Ticker reuse: volume, prints and closes read by ticker after anoth",F6,5d
+BBG000BX67G5_2008-05-24,MLNM,no_last_trade_print,True,inferred,B: T2. No filing states the last session: infer it from the closing day (,F6r,5d
+BBG000BYD720_2017-06-09,JNS,library_right_but_uncertain,False,inferred,A: Theme 4. Assumed par after a failed gate whose terms are right (`assum,F7,5e
+BBG000C070N2_2009-06-08,XMSR,continued_filings_guess,True,inferred,B: T8. The Form 25 exists but the finder never matches it to this securit,F5,5b
+BBG000C0BGS7_2009-10-30,SEPR,no_last_trade_print,False,verified,B: T1. A stated last day in a filing the reader did not use (8 cases),F6,5d
+BBG000C0NY96_2019-08-11,TCF,terms_misread,True,verified,"C: 1. Acquirer found by CIK and line, priced by CUSIP (the CAL/RTN fix) —",F7,5e
+BBG000C11MQ5_2015-06-05,PCYC,terms_not_extracted,True,inferred,"C: 6. Stock leg not extracted when a cash read comes first, or the leg is",F8,5f
+BBG000C1R174_2009-11-02,HLTH,no_last_trade_print,False,inferred,B: T2. No filing states the last session: infer it from the closing day (,F6r,5d
+BBG000C2YHG9_2024-01-08,DISH,library_right_but_uncertain,False,inferred,A: Theme 1. Merger relabelled by the end-of-era resolver although the For,F4,5b
+BBG000C3HNW5_2014-10-30,URS,library_right_but_uncertain,False,verified,A: Theme 4. Assumed par after a failed gate whose terms are right (`assum,F7,5e
+BBG000C3JJC4_2015-02-12,PL,library_right_but_uncertain,False,verified,A: Theme 1. Merger relabelled by the end-of-era resolver although the For,F4,5b
+BBG000C3W281_2026-06-20,MASI,currency_missing,False,verified,C: 7. cash_currency is always blank — 4 cases (and every cash row),F8,5f
+BBG000C496P7_2025-08-17,PARA,terms_misread,True,inferred,C: 4. Election and proration packages — 8 cases,F8,5f
+BBG000C4MWH4_2023-07-05,BGCP,successor_not_in_run,True,inferred,D: Theme 6. Same-CIK successor registration (8-K12B filed by the same reg,F1,5a
+BBG000C4Y9D6_2011-04-11,Q,library_right_but_uncertain,False,verified,A: Theme 1. Merger relabelled by the end-of-era resolver although the For,F4,5b
+BBG000C7B169_2011-07-31,WMG,library_right_but_uncertain,False,verified,A: Theme 1. Merger relabelled by the end-of-era resolver although the For,F4,5b
+BBG000C7WZ16_2010-10-15,JNY,rename_not_followed,True,verified,D: Theme 1. Follow a rename or CUSIP switch before the fallback ending is,F1,5a
+BBG000C9N6Q9_2011-03-15,ANN,rename_not_followed,True,verified,D: Theme 1. Follow a rename or CUSIP switch before the fallback ending is,F1,5a
+BBG000CB2ZY4_2011-02-28,KG,no_last_trade_print,True,verified,B: T1. A stated last day in a filing the reader did not use (8 cases),F6,5d
+BBG000CG0HP5_2008-01-05,HCR,library_right_but_uncertain,False,verified,A: Theme 5. Stale caller seeds after a confirmed ending make the security,F10,5i
+BBG000CGQ485_2008-12-04,IMCL,no_last_trade_print,False,inferred,B: T2. No filing states the last session: infer it from the closing day (,F6r,5d
+BBG000CGQ6M4_2018-11-10,PX,library_right_but_uncertain,False,verified,A: Theme 4. Assumed par after a failed gate whose terms are right (`assum,F7,5e
+BBG000CL1HL7_2021-12-10,CLI,rename_not_followed,True,verified,D: Theme 1. Follow a rename or CUSIP switch before the fallback ending is,F1,5a
+BBG000CNZC55_2020-07-11,ODP,successor_not_in_run,True,inferred,D: Theme 7. Add an unobserved successor line (new CIK) and link it,F2,5c
+BBG000CS7CB8_2007-11-25,JNC,library_right_but_uncertain,False,verified,A: Theme 1. Merger relabelled by the end-of-era resolver although the For,F4,5b
+BBG000CXLZ20_2010-10-11,ACF,library_right_but_uncertain,False,verified,A: Theme 1. Merger relabelled by the end-of-era resolver although the For,F4,5b
+BBG000DBVBY4_2021-03-11,EV,currency_missing,True,verified,"C: 8. Gate false-fails on correct terms (stale close, missing acquirer pr",F7,5e
+BBG000DGZ1B6_2009-06-08,MWW,continued_filings_guess,True,verified,B: T8. The Form 25 exists but the finder never matches it to this securit,F5,5b
+BBG000DQV8M1_2010-12-17,MIR,terms_misread,True,verified,"C: 1. Acquirer found by CIK and line, priced by CUSIP (the CAL/RTN fix) —",F7,5e
+BBG000DQX1D4_2016-04-03,POM,library_right_but_uncertain,False,verified,A: Theme 1. Merger relabelled by the end-of-era resolver although the For,F4,5b
+BBG000DST2V3_2012-06-04,EP,terms_misread,True,inferred,"C: 8. Gate false-fails on correct terms (stale close, missing acquirer pr",F7,5e
+BBG000DY6735_2013-12-31,WW,continued_filings_guess,True,inferred,B: T7. The fallback ends a security at the caller's last sighting (4 case,F11,5h
+BBG000DY8ZS4_2019-05-15,WFT,late_form25,True,verified,B: T8. The Form 25 exists but the finder never matches it to this securit,F5,5b
+BBG000DZCFX4_2020-06-02,LPI,reverse_split_read_as_ending,True,verified,E: Theme 1. A same-issuer CUSIP switch at a split is not an ending (7),F1,5a
+BBG000F2XXP2_2023-05-31,SBGI,holdco_not_linked,True,inferred,"D: Theme 5. 1:1 holding-company reorganization (new CIK), successor line ",F2,5c
+BBG000FBWYH0_2026-07-06,PRA,library_right_but_uncertain,False,verified,A: Theme 3. Issuer from today's company_tickers.json although the Form 25,F10,5i
+BBG000FHN2M1_2007-12-14,CKFR,no_last_trade_print,True,inferred,B: T2. No filing states the last session: infer it from the closing day (,F6r,5d
+BBG000FJJW82_2008-12-06,ABI,currency_missing,False,inferred,"C: 1. Acquirer found by CIK and line, priced by CUSIP (the CAL/RTN fix) —",F7,5e
+BBG000FL1TC8_2015-08-03,DTV,library_right_but_uncertain,False,inferred,A: No library change,none,none
+BBG000FRVFM1_2011-12-15,PPDI,no_last_trade_print,False,verified,B: T1. A stated last day in a filing the reader did not use (8 cases),F6,5d
+BBG000FVQ434_2016-07-23,IHS,library_right_but_uncertain,False,verified,A: Theme 4. Assumed par after a failed gate whose terms are right (`assum,F7,5e
+BBG000FXYZF9_2008-11-10,WM,no_last_trade_print,True,inferred,"B: T3. Date-source precedence: halts, bare ""suspended on D"", after-close ",F6,5d
+BBG000G0PPW3_2016-12-11,AMSG,terms_misread,True,verified,"C: 1. Acquirer found by CIK and line, priced by CUSIP (the CAL/RTN fix) —",F7,5e
+BBG000G61VB6_2007-07-23,BOT,terms_misread,True,verified,C: 5. LLM reads the wrong figure for the operative consideration — 4 case,F8,5f
+BBG000G6BN50_2017-07-28,PNRA,library_right_but_uncertain,False,inferred,A: Theme 4. Assumed par after a failed gate whose terms are right (`assum,F7,5e
+BBG000GTYWL7_2026-01-18,QGEN,reverse_split_read_as_ending,True,inferred,E: Theme 1. A same-issuer CUSIP switch at a split is not an ending (7),F1,5a
+BBG000GYLKX3_2013-10-07,SFD,library_right_but_uncertain,False,verified,A: Theme 1. Merger relabelled by the end-of-era resolver although the For,F4,5b
+BBG000H89QJ6_2016-05-28,TWC,terms_misread,True,verified,C: 5. LLM reads the wrong figure for the operative consideration — 4 case,F8,5f
+BBG000HZFZX3_2017-11-11,LVLT,library_right_but_uncertain,False,verified,A: Theme 1. Merger relabelled by the end-of-era resolver although the For,F4,5b
+BBG000J453J8_2019-05-12,CCO,holdco_not_linked,True,verified,D: Theme 6. Same-CIK successor registration (8-K12B filed by the same reg,F1,5a
+BBG000JBSJZ4_2014-07-01,FNF,library_right_but_uncertain,False,inferred,A: Theme 2. Continuation or rename with no Form 25 that a successor filin,F2,5i
+BBG000JXRXK2_2009-06-08,SOV,continued_filings_guess,True,verified,B: T8. The Form 25 exists but the finder never matches it to this securit,F5,5b
+BBG000K3T8L8_2018-06-16,GXP,terms_not_extracted,False,inferred,"C: 1. Acquirer found by CIK and line, priced by CUSIP (the CAL/RTN fix) —",F7,5e
+BBG000KBQZ88_2015-08-02,CTRX,no_last_trade_print,False,verified,B: T1. A stated last day in a filing the reader did not use (8 cases),F6,5d
+BBG000KZCJJ4_2020-04-09,AYR,library_right_but_uncertain,False,verified,A: Theme 1. Merger relabelled by the end-of-era resolver although the For,F4,5b
+BBG000L93Q69_2007-07-22,THE,currency_missing,False,inferred,"C: 8. Gate false-fails on correct terms (stale close, missing acquirer pr",F7,5e
+BBG000M34GG1_2022-07-31,MIC,terms_misread,True,verified,C: 5. LLM reads the wrong figure for the operative consideration — 4 case,F8,5f
+BBG000MJRJJ2_2023-08-24,HHC,holdco_not_linked,True,verified,"D: Theme 5. 1:1 holding-company reorganization (new CIK), successor line ",F2,5c
+BBG000N8Y8W6_2017-07-27,AWH,terms_not_extracted,True,inferred,C: 3. Stock leg is a security other than the named acquirer; multi-leg an,F8,5f
+BBG000P1K2X6_2026-07-26,GTLS,library_right_but_uncertain,False,verified,A: Theme 3. Issuer from today's company_tickers.json although the Form 25,F10,5i
+BBG000P4BQM9_2018-07-16,SPB,wrong_exit_kind,True,verified,E: Theme 4. A real Form 25 exists but the finder reports `no_form25` (5),F5,5b
+BBG000PJ88D0_2015-08-27,GTI,library_right_but_uncertain,False,verified,A: Theme 1. Merger relabelled by the end-of-era resolver although the For,F4,5b
+BBG000PSSG77_2009-03-31,IDARQ,form25_matching,True,verified,E: Theme 4. A real Form 25 exists but the finder reports `no_form25` (5),F5,5b
+BBG000PTXBV3_2016-07-22,HTS,library_right_but_uncertain,False,verified,A: Theme 4. Assumed par after a failed gate whose terms are right (`assum,F7,5e
+BBG000PYZSR8_2016-05-18,CHTR,wrong_exit_kind,True,inferred,E: Theme 7. Same-issuer holdco combinations with a ratio or election are ,F8,5f
+BBG000Q02P20_2011-11-14,MGI,continued_filings_guess,True,inferred,B: T6. A reverse split's new CUSIP read as the end of the security (12 ca,F1,5a
+BBG000Q5RW63_2014-07-01,NRF,library_right_but_uncertain,False,verified,A: Theme 2. Continuation or rename with no Form 25 that a successor filin,F2,5i
+BBG000QDST26_2016-10-24,ITC,library_right_but_uncertain,False,verified,A: Theme 1. Merger relabelled by the end-of-era resolver although the For,F4,5b
+BBG000QGWY50_2025-06-12,BLUE,terms_misread,True,inferred,C: 4. Election and proration packages — 8 cases,F8,5f
+BBG000V31J96_2018-03-24,CPN,library_right_but_uncertain,False,verified,A: Theme 1. Merger relabelled by the end-of-era resolver although the For,F4,5b
+BBG000VMWHH5_2022-04-18,DISCK,holdco_not_linked,True,verified,"D: Theme 4. Same-issuer share-class reclassification or conversion, 1:1, ",F2,5c
+BBG0017T9998_2020-07-30,CZR,terms_misread,True,inferred,C: 4. Election and proration packages — 8 cases,F8,5f
+BBG001BP9474_2015-02-27,EGL,successor_not_in_run,True,inferred,D: Theme 7. Add an unobserved successor line (new CIK) and link it,F2,5c
+BBG001D9S707_2010-05-25,DYN,continued_filings_guess,True,inferred,B: T6. A reverse split's new CUSIP read as the end of the security (12 ca,F1,5a
+BBG001KWG293_2021-06-25,GRUB,price_security_wrong,False,inferred,"C: 1. Acquirer found by CIK and line, priced by CUSIP (the CAL/RTN fix) —",F7,5e
+BBG001YMS0B8_2015-07-12,KRFT,library_right_but_uncertain,False,verified,A: Theme 4. Assumed par after a failed gate whose terms are right (`assum,F7,5e
+BBG00265T6Q4_2023-02-13,STOR,library_right_but_uncertain,False,verified,A: Theme 1. Merger relabelled by the end-of-era resolver although the For,F4,5b
+BBG002B67HB2_2025-08-01,UNIT,holdco_not_linked,True,inferred,D: Does not fit,F7,5e
+BBG002BHBHM1_2020-10-23,MNK,last_trade_date_misread,True,inferred,"B: T3. Date-source precedence: halts, bare ""suspended on D"", after-close ",F6,5d
+BBG002W96FT9_2015-10-12,GOOG,library_right_but_uncertain,False,verified,A: Theme 6. Same-issuer holdco continuation: `no_evidence_default` and `t,F10,5i
+BBG0038K9G41_2018-03-19,LVNTA,library_right_but_uncertain,False,inferred,A: Theme 6. Same-issuer holdco continuation: `no_evidence_default` and `t,F10,5i
+BBG003P9ZSL3_2016-04-28,LMCA,reclassification_not_linked,True,inferred,D: Spec question: one-to-many reclassification (no rule yet),F2r,5f
+BBG003PGJHP5_2026-08-03,TMHC,last_trade_date_misread,True,verified,"B: T3. Date-source precedence: halts, bare ""suspended on D"", after-close ",F6,5d
+BBG004P33PN3_2026-05-11,CWENA,reclassification_not_linked,True,verified,"D: Theme 4. Same-issuer share-class reclassification or conversion, 1:1, ",F2,5c
+BBG005CPNTQ2_2026-09-18,KHC,form25_matching,True,inferred,E: Theme 8. A Form 25 with a same-day 8-A12B for the same class is an exc,F4,5b
+BBG005DKMJ67_2025-04-29,LTRPA,no_last_trade_print,False,inferred,B: T2. No filing states the last session: infer it from the closing day (,F6r,5d
+BBG005PWSVQ3_2016-08-31,WPG,rename_not_followed,True,verified,D: Theme 1. Follow a rename or CUSIP switch before the fallback ending is,F1,5a
+BBG005SW6TK5_2016-04-28,LMCK,reclassification_not_linked,True,inferred,D: Spec question: one-to-many reclassification (no rule yet),F2r,5f
+BBG0060HN0R3_2016-03-04,KING,wrong_exit_kind,True,verified,"E: Theme 6. A foreign-filer or press-release-only deal has no 8-K items, ",F8,5f
+BBG0069FL5L5_2016-09-26,MRD,library_right_but_uncertain,False,verified,A: Theme 4. Assumed par after a failed gate whose terms are right (`assum,F7,5e
+BBG006F8QZK4_2024-12-07,VSTO,terms_misread,True,verified,C: 3. Stock leg is a security other than the named acquirer; multi-leg an,F8,5f
+BBG006GNRZ83_2026-08-30,LBRDA,library_right_but_uncertain,False,inferred,A: Theme 3. Issuer from today's company_tickers.json although the Form 25,F10,5i
+BBG006GNSZW5_2026-08-30,LBRDK,library_right_but_uncertain,False,inferred,A: Theme 3. Issuer from today's company_tickers.json although the Form 25,F10,5i
+BBG006KY8KV2_2017-10-17,TERP,continued_filings_guess,True,verified,B: T6. A reverse split's new CUSIP read as the end of the security (12 ca,F1,5a
+BBG006LYGNL7_2021-10-16,ARD,terms_not_extracted,False,verified,C: 3. Stock leg is a security other than the named acquirer; multi-leg an,F8,5f
+BBG006XVD9G0_2019-11-30,GCI,terms_not_extracted,False,verified,"C: 1. Acquirer found by CIK and line, priced by CUSIP (the CAL/RTN fix) —",F7,5e
+BBG0077VS2C0_2026-07-11,BLD,library_right_but_uncertain,False,verified,A: Theme 4. Assumed par after a failed gate whose terms are right (`assum,F7,5e
+BBG0077WYXF0_2016-07-11,CPGX,library_right_but_uncertain,False,verified,A: Theme 1. Merger relabelled by the end-of-era resolver although the For,F4,5b
+BBG007KGRPY4_2026-05-24,APLS,library_right_but_uncertain,False,verified,A: Theme 3. Issuer from today's company_tickers.json although the Form 25,F10,5i
+BBG007SV7NV3_2017-10-03,BKFS,library_right_but_uncertain,False,inferred,A: Theme 2. Continuation or rename with no Form 25 that a successor filin,F2,5i
+BBG008417VN4_2026-08-01,NSA,library_right_but_uncertain,False,verified,A: Theme 3. Issuer from today's company_tickers.json although the Form 25,F10,5i
+BBG009NGKQ45_2024-02-13,VRM,continued_filings_guess,True,inferred,B: T6. A reverse split's new CUSIP read as the end of the security (12 ca,F1,5a
+BBG009R0CVG1_2020-04-13,LKSD,form25_matching,True,inferred,E: Theme 4. A real Form 25 exists but the finder reports `no_form25` (5),F5,5b
+BBG00B6WH9G3_2020-07-10,MTCH,wrong_exit_kind,True,verified,E: Theme 7. Same-issuer holdco combinations with a ratio or election are ,F8,5f
+BBG00BDQ1H13_2022-10-10,TEAM,library_right_but_uncertain,False,verified,A: Theme 7. Continuation linked by timing and same CIK only (`continuatio,F2,5i
+BBG00BFHD827_2023-08-13,LSXMA,library_right_but_uncertain,False,inferred,A: Theme 7. Continuation linked by timing and same CIK only (`continuatio,F2,5i
+BBG00BFHD9S7_2023-08-13,LSXMK,library_right_but_uncertain,False,inferred,A: Theme 7. Continuation linked by timing and same CIK only (`continuatio,F2,5i
+BBG00BFHDCV6_2023-08-13,FWONA,library_right_but_uncertain,False,inferred,A: Theme 7. Continuation linked by timing and same CIK only (`continuatio,F2,5i
+BBG00BFHDFR4_2023-08-13,FWONK,library_right_but_uncertain,False,inferred,A: Theme 7. Continuation linked by timing and same CIK only (`continuatio,F2,5i
+BBG00CW2JCN1_2022-01-13,ATH,library_right_but_uncertain,False,verified,A: Theme 1. Merger relabelled by the end-of-era resolver although the For,F4,5b
+BBG00D1WHZD9_2020-11-09,HTZ,price_security_wrong,True,verified,"C: 2. OTC print priced under the security's own OTC symbol, CUSIP-aware —",F9,5g
+BBG00D30HGP6_2021-06-23,CLNY,rename_not_followed,True,verified,D: Theme 1. Follow a rename or CUSIP switch before the fallback ending is,F1,5a
+BBG00DJ2LJF5_2019-01-07,DVMT,wrong_exit_kind,True,verified,E: Theme 7. Same-issuer holdco combinations with a ratio or election are ,F8,5f
+BBG00FFJY867_2025-05-17,LGFB,terms_not_extracted,True,verified,C: 3. Stock leg is a security other than the named acquirer; multi-leg an,F8,5f
+BBG00GBV88T6_2016-05-14,BTU,terms_misread,True,verified,"C: 2. OTC print priced under the security's own OTC symbol, CUSIP-aware —",F9,5g
+BBG00GSNPM07_2026-07-11,JHG,library_right_but_uncertain,False,verified,A: Theme 3. Issuer from today's company_tickers.json although the Form 25,F10,5i
+BBG00HY28P97_2020-10-18,GTX,price_security_wrong,True,inferred,"C: 2. OTC print priced under the security's own OTC symbol, CUSIP-aware —",F9,5g
+BBG00JM9V731_2026-07-30,GTES,successor_not_in_run,True,verified,D: Theme 6. Same-CIK successor registration (8-K12B filed by the same reg,F1,5a
+BBG00K7K2XZ0_2020-12-31,GLIBA,terms_misread,True,inferred,"C: 1. Acquirer found by CIK and line, priced by CUSIP (the CAL/RTN fix) —",F7,5e
+BBG00LT2PDY4_2021-08-05,BPYU,wrong_exit_kind,True,verified,"E: Theme 6. A foreign-filer or press-release-only deal has no 8-K items, ",F8,5f
+BBG00VNLZL95_2020-08-06,TMUSR,no_last_trade_print,False,verified,B: T8. The Form 25 exists but the finder never matches it to this securit,F5,5b
+BBG00W5FS571_2025-01-09,BEPC,library_right_but_uncertain,False,verified,A: Theme 2. Continuation or rename with no Form 25 that a successor filin,F2,5i
+BBG00WYYC600_2017-11-09,WLL,reverse_split_read_as_ending,True,verified,E: Theme 1. A same-issuer CUSIP switch at a split is not an ending (7),F1,5a
+BBG00Z6DX554_2020-07-30,EXE,identity_wrong,True,verified,E: Theme 11. One sec_id spans a pre-bankruptcy stock and the re-listed ne,F1,5a
+BBG00ZHCT050_2023-07-15,DSEY,no_last_trade_print,True,inferred,B: T2. No filing states the last session: infer it from the closing day (,F6r,5d
+BBG011FS2K38_2026-05-29,MCW,library_right_but_uncertain,False,verified,A: Theme 3. Issuer from today's company_tickers.json although the Form 25,F10,5i
+BBG012BV9SK0_2026-07-17,OLPX,library_right_but_uncertain,False,verified,A: Theme 3. Issuer from today's company_tickers.json although the Form 25,F10,5i
+BBG014QJ5BV6_2026-05-25,EHAB,library_right_but_uncertain,False,verified,A: Theme 3. Issuer from today's company_tickers.json although the Form 25,F10,5i
+BBG01HLM8W28_2024-09-19,LSXMA,terms_not_extracted,True,verified,"C: 1. Acquirer found by CIK and line, priced by CUSIP (the CAL/RTN fix) —",F7,5e
+BBG01HMFL081_2025-12-25,LLYVA,holdco_not_linked,True,verified,"D: Theme 5. 1:1 holding-company reorganization (new CIK), successor line ",F2,5c
+BBG01HMFLTN1_2025-12-25,LLYVK,holdco_not_linked,True,verified,"D: Theme 5. 1:1 holding-company reorganization (new CIK), successor line ",F2,5c
+CIK1018005-COMMON_2012-10-01,CWTR,continued_filings_guess,True,inferred,B: T6. A reverse split's new CUSIP read as the end of the security (12 ca,F1,5a
+CIK1019849-COMMON_2009-06-08,UAG,rename_not_followed,True,verified,D: Theme 2. Merge two securities of the run that are one issuer line (pla,F1,5a
+CIK1038914-COMMON_2007-12-23,GSF,library_right_but_uncertain,False,verified,A: Theme 5. Stale caller seeds after a confirmed ending make the security,F10,5i
+CIK104207-COMMON_2015-01-09,WAG,holdco_not_linked,True,verified,"D: Theme 5. 1:1 holding-company reorganization (new CIK), successor line ",F2,5c
+CIK1042893-COMMON_2024-09-04,DRQ,rename_not_followed,True,inferred,D: Theme 3. The registrant is the acquirer or survivor: end-of-era 2.01/5,F3,5c
+CIK1052045-COMMON_2007-08-04,SVM,library_right_but_uncertain,True,verified,A: Theme 1. Merger relabelled by the end-of-era resolver although the For,F4,5b
+CIK1056087-COMMON_2016-05-25,MNI,continued_filings_guess,True,inferred,B: T6. A reverse split's new CUSIP read as the end of the security (12 ca,F1,5a
+CIK1066104-COMMON_2012-08-13,EXBD,rename_not_followed,True,inferred,D: Theme 1. Follow a rename or CUSIP switch before the fallback ending is,F1,5a
+CIK1074771-COMMON_2007-08-05,TRI,currency_missing,False,verified,C: 7. cash_currency is always blank — 4 cases (and every cash row),F8,5f
+CIK1075415-COMMON_2020-01-07,SNH,rename_not_followed,True,verified,D: Theme 1. Follow a rename or CUSIP switch before the fallback ending is,F1,5a
+CIK1095651-COMMON_2013-12-19,SFI,rename_not_followed,True,verified,D: Theme 1. Follow a rename or CUSIP switch before the fallback ending is,F1,5a
+CIK1115836-COMMON_2014-07-01,OEH,rename_not_followed,True,verified,D: Theme 1. Follow a rename or CUSIP switch before the fallback ending is,F1,5a
+CIK1116521-COMMON_2007-11-05,AV,library_right_but_uncertain,False,verified,A: Theme 1. Merger relabelled by the end-of-era resolver although the For,F4,5b
+CIK1124887-COMMON_2007-11-23,CEN,library_right_but_uncertain,False,verified,A: Theme 1. Merger relabelled by the end-of-era resolver although the For,F4,5b
+CIK1126294-COMMON_2010-12-03,RRI,rename_not_followed,True,inferred,D: Theme 3. The registrant is the acquirer or survivor: end-of-era 2.01/5,F3,5c
+CIK1141399-COMMON_2008-09-20,ABBI,identity_wrong,True,inferred,"E: Theme 9. The name tier picks the issuer that held the name, not the co",F11,5h
+CIK1156826-COMMON_2007-10-20,ASN,library_right_but_uncertain,False,verified,A: Theme 5. Stale caller seeds after a confirmed ending make the security,F10,5i
+CIK1282266-COMMON_2015-04-27,WIN,continued_filings_guess,True,verified,B: T6. A reverse split's new CUSIP read as the end of the security (12 ca,F1,5a
+CIK1308161-CLASS-A_2013-06-28,NCRA,wrong_exit_kind,True,inferred,E: Theme 2. The end-of-era resolver reads the issuer's own 2.01/5.01 as b,F3,5c
+CIK1308161-COMMON_2013-07-01,NWS-A,rename_not_followed,True,inferred,D: Theme 3. The registrant is the acquirer or survivor: end-of-era 2.01/5,F3,5c
+CIK1319048-COMMON_2007-09-24,CHAP,no_last_trade_print,False,inferred,B: T2. No filing states the last session: infer it from the closing day (,F6r,5d
+CIK1336917-CLASS-C_2016-06-30,UAC-C,continued_filings_guess,True,verified,B: T7. The fallback ends a security at the caller's last sighting (4 case,F11,5h
+CIK1355096-COMMON_2018-04-11,QRTEA,rename_not_followed,False,inferred,A: Theme 6. Same-issuer holdco continuation: `no_evidence_default` and `t,F10,5i
+CIK1355096-SERIES-A_2011-10-03,,form25_matching,True,verified,"E: Theme 3. A Form 25 for rights only, or a different class, is matched t",F5,5b
+CIK1363851-COMMON_2012-07-24,SXCI,rename_not_followed,True,inferred,D: Theme 3. The registrant is the acquirer or survivor: end-of-era 2.01/5,F3,5c
+CIK1469372-CLASS-A_2015-10-02,MSG,rename_not_followed,True,inferred,D: Theme 2. Merge two securities of the run that are one issuer line (pla,F1,5a
+CIK1498301-COMMON_2020-08-21,ASNA,resolver_no_bankruptcy_branch,True,verified,"B: T5. Bankruptcy endings the resolver does not branch on, and reset-4a3 ",F9,5g
+CIK1507934-CLASS-A_2013-01-16,LMCA,successor_not_in_run,True,inferred,D: Theme 1. Follow a rename or CUSIP switch before the fallback ending is,F1,5a
+CIK1575828-COMMON_2021-10-01,FI,rename_not_followed,True,verified,D: Theme 3. The registrant is the acquirer or survivor: end-of-era 2.01/5,F3,5c
+CIK1606498-COMMON_2018-07-11,HYH,rename_not_followed,True,inferred,D: Theme 1. Follow a rename or CUSIP switch before the fallback ending is,F1,5a
+CIK1620280-COMMON_2017-02-28,CSAL,library_right_but_uncertain,False,inferred,A: Theme 2. Continuation or rename with no Form 25 that a successor filin,F2,5i
+CIK1710366-COMMON_2025-01-16,CEIX,rename_not_followed,True,verified,D: Theme 3. The registrant is the acquirer or survivor: end-of-era 2.01/5,F3,5c
+CIK1723089-COMMON_2021-01-10,APY,rename_not_followed,True,verified,D: Theme 1. Follow a rename or CUSIP switch before the fallback ending is,F1,5a
+CIK1803737-COMMON_2022-06-30,EHAB-WI,identity_wrong,True,verified,E: Theme 10. A placeholder is never folded into the real FIGI line it dup,F1,5a
+CIK1808220-CLASS-A_2022-11-17,GOCO,reverse_split_read_as_ending,True,verified,E: Theme 1. A same-issuer CUSIP switch at a split is not an ending (7),F1,5a
+CIK18568-COMMON_2007-09-16,CBSS,terms_not_extracted,True,inferred,C: 4. Election and proration packages — 8 cases,F8,5f
+CIK1929561-COMMON_2022-12-31,RXO-WI,continued_filings_guess,True,verified,B: T7. The fallback ends a security at the caller's last sighting (4 case,F11,5h
+CIK20520-COMMON_2017-07-10,FTR,continued_filings_guess,True,inferred,B: T6. A reverse split's new CUSIP read as the end of the security (12 ca,F1,5a
+CIK230463-COMMON_2008-02-07,PPP,library_right_but_uncertain,False,verified,A: Theme 4. Assumed par after a failed gate whose terms are right (`assum,F7,5e
+CIK23666-COMMON_2012-07-13,SLE,rename_not_followed,True,verified,D: Theme 2. Merge two securities of the run that are one issuer line (pla,F1,5a
+CIK314808-CLASS-A_2019-04-11,ESV,wrong_exit_kind,True,inferred,"D: Theme 5. 1:1 holding-company reorganization (new CIK), successor line ",F2,5c
+CIK314808-COMMON_2010-01-08,ESV,successor_not_in_run,True,verified,"D: Theme 5. 1:1 holding-company reorganization (new CIK), successor line ",F2,5c
+CIK351346-COMMON_2006-12-28,BMET,form25_matching,True,verified,"E: Theme 3. A Form 25 for rights only, or a different class, is matched t",F5,5b
+CIK352363-COMMON_2012-05-14,LIZ,rename_not_followed,True,verified,D: Theme 2. Merge two securities of the run that are one issuer line (pla,F1,5a
+CIK38079-COMMON_2015-01-25,FST,wrong_exit_kind,True,verified,E: Theme 2. The end-of-era resolver reads the issuer's own 2.01/5.01 as b,F3,5c
+CIK47580-COMMON_2007-11-04,HLT,library_right_but_uncertain,False,verified,A: Theme 5. Stale caller seeds after a confirmed ending make the security,F10,5i
+CIK48898-CLASS-B_2016-01-03,HUB-B,reclassification_not_linked,True,inferred,"D: Theme 4. Same-issuer share-class reclassification or conversion, 1:1, ",F2,5c
+CIK65873-COMMON_2007-11-30,AT,library_right_but_uncertain,False,verified,A: Theme 1. Merger relabelled by the end-of-era resolver although the For,F4,5b
+CIK708819-COMMON_2018-05-08,MDR,reverse_split_read_as_ending,True,verified,E: Theme 1. A same-issuer CUSIP switch at a split is not an ending (7),F1,5a
+CIK709519-COMMON_2010-02-05,SUNW,no_last_trade_print,True,inferred,B: T2. No filing states the last session: infer it from the closing day (,F6r,5d
+CIK716006-COMMON_2010-10-04,YRCW,reverse_split_read_as_ending,True,verified,E: Theme 1. A same-issuer CUSIP switch at a split is not an ending (7),F1,5a
+CIK718482-COMMON_2007-10-11,AGE,library_right_but_uncertain,False,inferred,A: Theme 5. Stale caller seeds after a confirmed ending make the security,F10,5i
+CIK733269-COMMON_2018-09-30,ACXM,holdco_not_linked,True,verified,D: Theme 6. Same-CIK successor registration (8-K12B filed by the same reg,F1,5a
+CIK737874-COMMON_2007-10-11,LI,library_right_but_uncertain,False,verified,A: Theme 5. Stale caller seeds after a confirmed ending make the security,F10,5i
+CIK73887-COMMON_2013-06-28,ERA,identity_wrong,True,verified,"E: Theme 9. The name tier picks the issuer that held the name, not the co",F11,5h
+CIK804055-COMMON_2010-10-15,CCE,terms_misread,True,inferred,C: 3. Stock leg is a security other than the named acquirer; multi-leg an,F8,5f
+CIK835541-COMMON_2007-10-13,SLR,terms_not_extracted,True,inferred,C: 4. Election and proration packages — 8 cases,F8,5f
+CIK845752-COMMON_2007-08-11,AH,library_right_but_uncertain,False,verified,A: Theme 5. Stale caller seeds after a confirmed ending make the security,F10,5i
+CIK849778-COMMON_2007-11-01,CYTC,terms_misread,True,inferred,"C: 6. Stock leg not extracted when a cash read comes first, or the leg is",F8,5f
+CIK867773-COMMON_2009-06-08,SPWRA,continued_filings_guess,True,inferred,B: T8. The Form 25 exists but the finder never matches it to this securit,F5,5b
+CIK88205-COMMON_2015-09-28,SPW,identity_wrong,True,inferred,E: Theme 10. A placeholder is never folded into the real FIGI line it dup,F1,5a
+CIK886835-COMMON_2020-10-12,SPNV,terms_misread,True,verified,"C: 2. OTC print priced under the security's own OTC symbol, CUSIP-aware —",F9,5g
+CIK891103-COMMON_2014-06-30,IAC,continued_filings_guess,True,verified,B: T7. The fallback ends a security at the caller's last sighting (4 case,F11,5h
+CIK898660-COMMON_2009-06-08,STN,form25_matching,True,inferred,E: Theme 4. A real Form 25 exists but the finder reports `no_form25` (5),F5,5b
+CIK910073-COMMON_2024-07-12,NYCB,reverse_split_read_as_ending,True,verified,E: Theme 1. A same-issuer CUSIP switch at a split is not an ending (7),F1,5a
+CIK931336-COMMON_2013-08-26,DF,continued_filings_guess,True,inferred,B: T6. A reverse split's new CUSIP read as the end of the security (12 ca,F1,5a
+CIK944868-COMMON_2009-11-29,DTV,holdco_not_linked,True,inferred,"D: Theme 5. 1:1 holding-company reorganization (new CIK), successor line ",F2,5c
