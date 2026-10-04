@@ -15,7 +15,11 @@ _DEFICIENCY_TEXT = re.compile(
     r"not\s+in\s+compliance|failure\s+to\s+(?:timely\s+)?file|delinquen|"
     r"failure\s+to\s+(?:comply\s+with|satisfy)\s+(?:the|its|one\s+or\s+more)\s+continued\s+listing|"
     r"abnormally\s+low|average\s+global\s+market\s+capitali[sz]ation|"
-    r"no\s+longer\s+suitable\s+for\s+(?:continued\s+)?listing|commence(?:d)?\s+proceedings\s+to\s+delist", re.I)
+    r"no\s+longer\s+suitable\s+for\s+(?:continued\s+)?listing|commence(?:d)?\s+proceedings\s+to\s+delist|"
+    # sub-plan 5b: NYSE's market-capitalization removals (R.H. Donnelley 2008: "no longer complies with NYSE
+    # continued listing requirements ... average market capitalization")
+    r"no\s+longer\s+compl(?:ies|y)\s+with|below\s+(?:the\s+)?(?:NYSE|Exchange|Nasdaq)['’]?s?\s+continued\s+listing|"
+    r"fallen\s+below\s+.{0,40}continued\s+listing|average\s+(?:total\s+)?market\s+capitali[sz]ation", re.I)
 
 SPAC_SIC = "6770"
 _SPAC_NAME = re.compile(r"\bacquisition\s+corp", re.I)

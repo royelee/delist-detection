@@ -192,3 +192,41 @@ def test_item_sections_are_every_section_of_the_item_and_item_text_the_first():
 def test_a_short_filing_has_one_section_and_a_filing_without_the_item_none():
     assert item_sections("Item 1.03 Bankruptcy. Chapter 11.", "1.03") == ["Item 1.03 Bankruptcy. Chapter 11."]
     assert item_sections("Item 8.01 Other Events.", "1.03") == [] and item_text("Item 8.01", "1.03") == ""
+
+
+# --- sub-plan 5b: NYSE's market-capitalization wording is a listing deficiency ---
+
+import pytest  # noqa: E402
+
+from delist_detection.evidence import cites_listing_deficiency  # noqa: E402
+from tests import form25_cases as fc  # noqa: E402
+
+# R.H. Donnelley's 8-K of 2009-01-02, Item 3.01: NYSE's market-capitalization standard (Rule 802.01B)
+RHD_301 = ("Item 3.01. Notice of Delisting or Failure to Satisfy a Continued Listing Rule or Standard; Transfer of "
+           "Listing. (a) On December 31, 2008, R.H. Donnelley Corporation (the “Company”) was notified by the New "
+           "York Stock Exchange (“NYSE”) that it no longer complies with NYSE continued listing requirements. "
+           "Specifically, the Company no longer complies with Rule 802.01B, which requires that the Company's "
+           "average market capitalization over a consecutive 30-day trading period not be less than $25 million.")
+
+
+def test_nyses_market_capitalization_notice_cites_a_listing_deficiency():
+    assert cites_listing_deficiency(RHD_301)
+    assert cites_listing_deficiency(item_text(fc.EDGAR["texts"]["0001144204-08-071879"], "3.01"))
+
+
+@pytest.mark.parametrize("text", [
+    "the Company no longer complies with the NYSE's continued listing standards",
+    "the Company had fallen below two of the NYSE’s continued listing standards",
+    "its stockholders' equity was below the Exchange's continued listing standards",
+    "requires that the Company’s average total market capitalization over 30 trading days exceed $75 million",
+])
+def test_each_new_wording_cites_a_listing_deficiency(text):
+    assert cites_listing_deficiency(text)
+
+
+@pytest.mark.parametrize("text", [
+    "Following the merger, the common stock will no longer be listed on the New York Stock Exchange.",
+    "The Company requested that the NYSE suspend trading before the open on the closing date.",
+])
+def test_a_merger_notice_cites_no_listing_deficiency(text):
+    assert not cites_listing_deficiency(text)
