@@ -949,3 +949,54 @@ def test_a_form25_at_the_own_cusip_switch_of_a_security_not_listed_today_still_r
     ctx = replace(_ctx(sec, listed=False, trades_after=True), cusip_switches=("2026-01-07",))
     events, review = finder.find(ctx)
     assert all(e.form25_sub is None for e in events)
+
+
+# --- sub-plan 5b, R7: the issuer's own Form 25 with its 8-A12B moves the class ---
+
+def _exchange_move(fake_edgar, *, form="25", eight_a="2026-09-08", rule=""):
+    """Kraft Heinz 2026: the issuer filed its own Form 25 (Nasdaq) and an 8-A12B (NYSE) the same day; no 8-K
+    near it, so the classifier alone leaves the row `unknown`."""
+    fake_edgar.submissions_by_cik[30201] = [
+        EdgarSubmission("k25", form, "2026-09-08", "", "", "p.xml"),
+        EdgarSubmission("k8a", "8-A12B", eight_a, "", "", "a.htm")]
+    fake_edgar.raws["k25"] = _f25_raw("The Nasdaq Stock Market LLC", rule=rule, form_tag=form)
+    clf = DelistClassifier(fake_edgar, TickerResolver(fake_edgar))
+    sec = _sec("BBG_KHC", 30201, "KHC", "2015-07-06", "2026-06-30", "KRAFT HEINZ CO")
+    return DelistingFinder(fake_edgar, clf), sec
+
+
+def test_the_issuers_form25_with_its_8a12b_is_an_exchange_transfer_of_the_security_itself(fake_edgar):
+    finder, sec = _exchange_move(fake_edgar)
+    (ev,), review = finder.find(_ctx(sec, listed=True, last_seen="2026-09-04"))
+    assert (ev.record.crsp_code, ev.record.bucket, ev.record.successor_sec_id) == (
+        304, CrspBucket.EXCHANGE_TRANSFER, "BBG_KHC")
+    assert ev.record.reason == "Exchange transfer: the issuer's Form 25 2026-09-08 with its 8-A12B 2026-09-08"
+    assert "no_evidence_default" not in ev.flags and review == []
+
+
+def test_an_exchanges_form25_an_8a12b_eleven_days_off_or_a_removal_under_b_moves_nothing(fake_edgar):
+    """DISCK and CWENA: an exchange's 25-NSE beside an 8-A12B for the replacement class is a real ending."""
+    for kw in ({"form": "25-NSE"}, {"eight_a": "2026-08-28"}, {"rule": "17 CFR 240.12d2-2(b)"}):
+        finder, sec = _exchange_move(fake_edgar, **kw)
+        (ev,), _ = finder.find(_ctx(sec, listed=True, last_seen="2026-09-04"))
+        assert ev.record.bucket is CrspBucket.UNKNOWN, kw
+
+
+def test_the_issuers_exchange_move_continues_a_security_not_listed_today(fake_edgar):
+    """Monster Worldwide 2008, MSG 2015: the move continues the security even with no fails rows after it."""
+    finder, sec = _exchange_move(fake_edgar, eight_a="2026-08-29")
+    events, _ = finder.find(_ctx(sec, listed=False, last_seen="2026-09-04"))
+    assert events[0].record.successor_sec_id == "BBG_KHC"
+
+
+def test_the_issuers_own_form25_in_a_group_with_the_exchanges_moves_the_class(fake_edgar):
+    """Review Focus (R7): the exchange's 25-NSE first, the issuer's own Form 25 with its 8-A12B a day later: one
+    group, and the move found on the issuer's filing."""
+    finder, sec = _exchange_move(fake_edgar)
+    fake_edgar.submissions_by_cik[30201] = [
+        EdgarSubmission("kn", "25-NSE", "2026-09-07", "", "", "p.xml"),
+        EdgarSubmission("k25", "25", "2026-09-08", "", "", "p.xml"),
+        EdgarSubmission("k8a", "8-A12B", "2026-09-08", "", "", "a.htm")]
+    fake_edgar.raws["kn"] = _f25_raw("The Nasdaq Stock Market LLC", form_tag="25-NSE")
+    (ev,), _ = finder.find(_ctx(sec, listed=True, last_seen="2026-09-04"))
+    assert (ev.record.crsp_code, ev.record.successor_sec_id) == (304, "BBG_KHC")

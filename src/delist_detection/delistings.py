@@ -40,6 +40,9 @@ EIGHTK_GROUP_AFTER_DAYS = 15                       # group 8-K window: latest fi
 DEREG_FALLBACK_BEFORE_DAYS = 30     # a fallback revocation or Form 15 must be within
 OWN_SWITCH_DAYS = 5                 # trading days between a Form 25 and the security's own CUSIP switch it removed
 DEREG_FALLBACK_AFTER_DAYS = 120     # [last_seen - this, last_seen + this] to date the delisting
+EIGHT_A_DAYS = 10                   # the issuer's own Form 25 and its 8-A12B this close together: an exchange move
+EIGHT_A_FORMS = frozenset({"8-A12B", "8-A12B/A"})
+ISSUER_FORM25_FORMS = frozenset({"25", "25/A"})      # filed by the issuer, not by the exchange (25-NSE)
 
 # Buckets whose delisting ends the security's exchange life even when it is
 # sighted afterwards (OTC trading, a stale snapshot): all but a transfer and
@@ -305,14 +308,32 @@ class DelistingFinder:
                                  delist_date=effective_date(sub.filing_date)))
 
     # -- whether the security went on after a Form 25 ------------------------
-    def _continued(self, ctx: SecurityContext, sub: EdgarSubmission, f25: Form25) -> bool:
-        """Whether the security went on trading after this Form 25: it is listed today; or the Form 25 is not an
-        exchange's removal under rule 12d2-2(b) (`form25.is_involuntary`) and the security's own CUSIPs trade on
-        after its effective date plus SEEN_AFTER_DAYS (`SecurityContext.trades_after`). An observation alone never
-        continues a security: a stale snapshot lists one long after it was acquired (XMSR 2008, SOV 2009), and the
-        OTC tail after a removal under (b) is not the listing going on (R.H. Donnelley, Idearc, LSC
-        Communications)."""
+    @staticmethod
+    def _eight_a(sub: EdgarSubmission, f25: Form25, filings: list[EdgarSubmission]) -> EdgarSubmission | None:
+        """The issuer's 8-A12B filed within EIGHT_A_DAYS of its own Form 25 (form 25 or 25/A, not an exchange's
+        25-NSE, and not a removal under rule 12d2-2(b)), nearest first: the class registered on the exchange it
+        moved to as it left the old one (R7: Kraft Heinz 2026, Monster Worldwide 2008, MSG 2015). None for any
+        other Form 25: an exchange's 25-NSE beside an 8-A12B for a replacement class is a real ending (DISCK
+        2022, CWENA 2026)."""
+        if sub.form not in ISSUER_FORM25_FORMS or is_involuntary(f25):
+            return None
+        day = date.fromisoformat(sub.filing_date)
+        near = [(abs((date.fromisoformat(f.filing_date) - day).days), f.filing_date, f) for f in filings
+                if f.form in EIGHT_A_FORMS and f.filing_date
+                and abs((date.fromisoformat(f.filing_date) - day).days) <= EIGHT_A_DAYS]
+        return min(near, key=lambda x: (x[0], x[1]))[2] if near else None
+
+    def _continued(self, ctx: SecurityContext, sub: EdgarSubmission, f25: Form25,
+                   filings: list[EdgarSubmission]) -> bool:
+        """Whether the security went on trading after this Form 25: it is listed today; or the issuer moved the
+        class to another exchange (`_eight_a`, R7); or the Form 25 is not an exchange's removal under rule
+        12d2-2(b) (`form25.is_involuntary`) and the security's own CUSIPs trade on after its effective date plus
+        SEEN_AFTER_DAYS (`SecurityContext.trades_after`). An observation alone never continues a security: a
+        stale snapshot lists one long after it was acquired (XMSR 2008, SOV 2009), and the OTC tail after a
+        removal under (b) is not the listing going on (R.H. Donnelley, Idearc, LSC Communications)."""
         if ctx.listed_today:
+            return True
+        if self._eight_a(sub, f25, filings) is not None:
             return True
         if is_involuntary(f25):
             return False
@@ -410,7 +431,7 @@ class DelistingFinder:
             f25 = self._judge(ctx, scan, cik, sub, alive)
             if f25 is None:
                 continue
-            if self._continued(ctx, sub, f25) and self._not_this_removal(ctx, cik, filings, sub, f25):
+            if self._continued(ctx, sub, f25, filings) and self._not_this_removal(ctx, cik, filings, sub, f25):
                 continue
             candidates.append((sub, f25))
 
@@ -423,7 +444,7 @@ class DelistingFinder:
                 if gap > IGNORE_AFTER_DEFINITIVE_DAYS and not ctx.seen_after(earliest_sub.filing_date):
                     continue        # a security truly gone can't have a later Form 25 of its own
             eff = effective_date(earliest_sub.filing_date)
-            continued = self._continued(ctx, earliest_sub, earliest_f25)
+            continued = self._continued(ctx, earliest_sub, earliest_f25, filings)
             delisting = self._build_delisting(ctx, cik, filings, group, eff, continued)
             delistings.append(delisting)
             # Only an exchange transfer (or a delisting not classified) that the
@@ -473,6 +494,14 @@ class DelistingFinder:
                                              expected_name=ctx.expected_name, kind=sec.kind, form25=winner_sub,
                                              resolution_source=ctx.resolution_source,
                                              trading_after=continued)
+        if continued and rec.bucket is CrspBucket.UNKNOWN:
+            moved = next(((s, a) for s, f in sorted(group, key=lambda i: i[0].filing_date)
+                          if (a := self._eight_a(s, f, filings)) is not None), None)
+            if moved is not None:          # R7: the issuer moved the class (Kraft Heinz 2026, Nasdaq to NYSE)
+                s, a = moved
+                rec.crsp_code, rec.bucket, rec.confidence = 304, CrspBucket.EXCHANGE_TRANSFER, "high"
+                rec.reason = f"Exchange transfer: the issuer's Form 25 {s.filing_date} with its 8-A12B {a.filing_date}"
+                rec.evidence["flags"] = [f for f in rec.evidence.get("flags", []) if f != "no_evidence_default"]
         return self._delisting(sec, cik, ticker, eff, rec, lt, winner_f25, winner_sub, continued, extra_flags)
 
     def _delisting(self, sec: Security, cik: int, ticker: str, delist_date: str, rec: DelistRecord, lt: LastTrade,
