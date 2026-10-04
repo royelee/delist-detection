@@ -429,32 +429,47 @@ class _Lines:
 
 class _IssuerReads:
     """The EDGAR reads the line follow makes, each issuer's once: its submissions JSON, its filing list and an
-    8-K's text. A read that fails is no answer (None, [], ""); a refusal (`fatal.FATAL`) stops the run."""
+    8-K's text. A read that fails is no answer (None, [], "") for the step that asked and is never stored, so a
+    later step asks again; a refusal (`fatal.FATAL`) stops the run. `degraded` holds every CIK one of whose reads
+    failed or counted itself degraded (a stale copy, a retried failure): each of its steps gets a
+    `resolution_degraded` item."""
 
     def __init__(self, edgar) -> None:
         self.edgar, self._subs, self._filings = edgar, {}, {}
+        self.degraded: set[int] = set()
 
-    @staticmethod
-    def _safe(fn, *args, default):
+    def _read(self, cik: int, fn, *args, default):
+        """`(answer, ok)`: `fn(*args)`, or `default` when the request failed."""
+        watch = DegradedWatch()
         try:
-            return fn(*args)
+            answer = fn(*args)
         except FATAL:
             raise
         except requests.RequestException:
-            return default
+            self.degraded.add(cik)
+            return default, False
+        if watch.tripped():
+            self.degraded.add(cik)
+        return answer, True
 
     def sub(self, cik: int):
         if cik not in self._subs:
-            self._subs[cik] = self._safe(self.edgar.submissions, cik, default=None)
+            answer, ok = self._read(cik, self.edgar.submissions, cik, default=None)
+            if not ok:
+                return None
+            self._subs[cik] = answer
         return self._subs[cik]
 
     def filings(self, cik: int) -> list:
         if cik not in self._filings:
-            self._filings[cik] = self._safe(self.edgar.recent_filings, cik, default=[])
+            answer, ok = self._read(cik, self.edgar.recent_filings, cik, default=[])
+            if not ok:
+                return []
+            self._filings[cik] = answer
         return self._filings[cik]
 
     def text(self, cik: int, f) -> str:
-        return self._safe(self.edgar.fetch_filing_text, cik, f.accession, f.primary_doc, default="") or ""
+        return self._read(cik, self.edgar.fetch_filing_text, cik, f.accession, f.primary_doc, default="")[0] or ""
 
 
 def _cusip_holders(sec_cusips: Mapping[str, Sequence[str]]) -> dict[str, set[str]]:
@@ -553,6 +568,7 @@ def _follow_lines(ctx: _RunContext, securities: dict[str, Security], resolutions
         figi_answers = dict(zip(switch_cusips, clients.figi.map([cusip_job(c) for c in switch_cusips]))) \
             if switch_cusips else {}
         moved: set[str] = set()
+        taken: dict[str, str] = {}       # a new CUSIP a security attached or folded into this round: its holder
         for sid in todo:
             if not steps[sid] or sid not in out.securities:
                 continue
@@ -571,7 +587,10 @@ def _follow_lines(ctx: _RunContext, securities: dict[str, Security], resolutions
                 step, s, composites(figi_answers[step.new_cusip]) if step.kind == SWITCH else None, out.securities)
             if decision is not None and decision.kind == REFUSED:
                 refused = decision.why
-            if watch.tripped():
+            elif decision is not None and decision.kind in (ATTACH, FOLD) and step.kind == SWITCH \
+                    and taken.setdefault(step.new_cusip, decision.composite or sid) != (decision.composite or sid):
+                refused = "other_issuer"     # another security of the run took this CUSIP earlier in the round
+            if watch.tripped() or cik in reads.degraded:
                 out.review.append(degraded_item(sid, step.symbol, cik, f"the line follow ({what})",
                                                 "; run again once SEC answers", last_seen=step.old_last))
             if refused:

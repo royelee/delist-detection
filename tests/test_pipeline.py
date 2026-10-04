@@ -3136,3 +3136,25 @@ def test_a_form25_at_the_lines_own_switch_while_it_trades_on_leaves_no_ending(fa
                         ("COMPOSITE_ID_BB_GLOBAL", "BBGRS01"): listed},
                   new_rows=_rs_new_rows(until=700), listings=[("RS", "NYSE")])
     assert t["delistings"] == [] and t["contract_delistings"] == []
+
+
+def test_openfigi_unavailable_in_stage_4b_stops_the_run_and_writes_nothing(fake_edgar, tmp_path):
+    """The new CUSIP's OpenFIGI answer is first asked by the line follow; no placeholder stands in for it."""
+    from delist_detection.openfigi import OpenFigiUnavailable
+
+    class _Down(_MapFigi):
+        def map(self, jobs, use_cache=True):
+            if any(j["idValue"] == RS_NEW for j in jobs):
+                raise OpenFigiUnavailable("down")
+            return super().map(jobs, use_cache)
+
+    fake_edgar.company_map["RS"] = {"cik_str": 4242, "ticker": "RS", "title": "REVERSE SPLIT CO"}
+    fake_edgar.submissions_by_cik[4242] = [SPLIT_8K, LATER_10Q, MERGER_8K, MERGER_F25]
+    obs = [Observation("RS", d, "REVERSE SPLIT CO", cik=4242) for d in ("2008-01-16", "2008-06-30", "2009-06-08")]
+    rows = _priced("RS", RS_OLD, "REVERSE SPLIT CO", _weekly("2008-01-07", 247)) + _rs_new_rows()
+    answers = {("ID_CUSIP", RS_OLD): _figi_answer("BBGRS01", "RS", "REVERSE SPLIT CO")}
+    index, clients = _index_clients(fake_edgar, obs, rows, answers)
+    clients.figi = _Down(answers)
+    with pytest.raises(OpenFigiUnavailable):
+        run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
+    assert not list(tmp_path.glob("*.csv"))
