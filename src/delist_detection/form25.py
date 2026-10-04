@@ -415,13 +415,30 @@ def notice_last_trade(f25: Form25) -> tuple[date | None, str]:
     Nasdaq halt must confirm it, else the delisting is flagged
     `last_trade_date_unconfirmed` (`last_trade.decide_last_trade`)."""
     t = re.sub(r"\s+", " ", f25.notice_text or "")
-    if not t:
-        return None, ""
     involuntary = is_involuntary(f25)
-    day, kind = _notice_day(t, involuntary)
+    day, kind = _notice_day(t, involuntary) if t else (None, "")
     if day is not None and involuntary:
         return day, "notice_b_unconfirmed"
+    if day is None:
+        return _class_expiry(f25)
     return day, kind
+
+
+_EXPIRING = re.compile(r"\bexpir\w*\s+(?:on\s+)?(?:(\d{1,2})/(\d{1,2})/(\d{4})|((?:January|February|March|April|May|"
+                       r"June|July|August|September|October|November|December)\s+\d{1,2},\s+\d{4}))", re.I)
+
+
+def _class_expiry(f25: Form25) -> tuple[date | None, str]:
+    """A rights or warrant class whose name dates its expiry ("Subscription Rights Expiring 7/27/2020": TMUSR
+    2020, 5d): that day, the class's last trading day, kind `notice_expiry`; else (None, "")."""
+    if class_kind(f25.class_text) not in ("right", "warrant"):
+        return None, ""
+    m = _EXPIRING.search(f25.class_text or "")
+    if not m:
+        return None, ""
+    if m.group(4):
+        return _day(m.group(4)), "notice_expiry"
+    return date(int(m.group(3)), int(m.group(1)), int(m.group(2))), "notice_expiry"
 
 
 def _notice_day(t: str, involuntary: bool) -> tuple[date | None, str]:

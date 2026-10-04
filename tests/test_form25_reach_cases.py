@@ -64,10 +64,10 @@ MOVES = {
     'BBG009R0CVG1': ('C',
         ([('2020-01-24', 'exchange_transfer', 304, '2019-12-27', True, '0000876661-20-000026', 1669812), ('2020-04-13', 'liquidation', 470, '2020-04-09', False, '', 1669812)], []),
         ([('2020-01-24', 'compliance_failure', 570, '2019-12-27', False, '0000876661-20-000026', 1669812)], [])),
-    # KHC 2026
+    # KHC 2026 (5d rule 1 reads its 8-K's "at market close on September 11": the last Nasdaq day of the move)
     'BBG005CPNTQ2': ('R7',
         ([('2026-09-18', 'unknown', None, '', False, '0001637459-26-000062', 1637459)], []),
-        ([('2026-09-18', 'exchange_transfer', 304, '', True, '0001637459-26-000062', 1637459)], [])),
+        ([('2026-09-18', 'exchange_transfer', 304, '2026-09-11', True, '0001637459-26-000062', 1637459)], [])),
     # TXU 2007
     'BBG000BVW841': ('E',
         ([('2009-06-08', 'exchange_transfer', 304, '2009-06-08', False, '', 1023291)], []),
@@ -75,7 +75,7 @@ MOVES = {
     # BMET 2007 (Task 5's notice reading decides its code)
     'CIK351346-COMMON': ('E',
         ([('2006-12-28', 'compliance_failure', 570, '', False, '0001104659-06-082100', 351346)], []),
-        ([('2007-10-05', 'merger', 231, '', False, '0001354457-07-000287', 351346)], [])),
+        ([('2007-10-05', 'merger', 231, '2007-09-25', False, '0001354457-07-000287', 351346)], [])),   # 5d rule 1
     # STN 2007
     'CIK898660-COMMON': ('E',
         ([('2009-06-08', 'exchange_transfer', 304, '2009-06-08', False, '', 898660)], []),
@@ -91,7 +91,7 @@ MOVES = {
     # SPWRA 2011
     'CIK867773-COMMON': ('R2',
         ([], ['ended_without_delisting', 'form25_unmatched']),
-        ([('2011-11-26', 'exchange_transfer', 304, '', False, '0001354457-11-000248', 867773)], [])),
+        ([('2011-11-26', 'exchange_transfer', 304, '2011-11-16', False, '0001354457-11-000248', 867773)], [])),   # 5d rule 4
     # SPB 2018
     'BBG000P4BQM9': ('R5',
         ([('2018-07-16', 'merger', 231, '2018-07-16', False, '', 109177)], []),
@@ -104,7 +104,7 @@ MOVES = {
 
 # the guards: securities whose outcome no rule of 5b changes
 STAY = {
-    'BBG000BC2C10': ([('2021-03-14', 'exchange_transfer', 304, '', False, '0001354457-21-000304', 6769)], []),   # APA
+    'BBG000BC2C10': ([('2021-03-14', 'exchange_transfer', 304, '2021-03-01', False, '0001354457-21-000304', 6769)], []),   # APA (5d rule 4: the 8-K's March 1)
     'BBG000BFTJ91': ([('2015-12-21', 'exchange_transfer', 304, '2015-12-11', False, '0001354457-15-000245', 1166691)], []),   # CMCSK 2015
     'BBG000CNFQW6': ([], []),   # PRGO
     'BBG000CS7CB8': ([('2007-11-25', 'merger', 231, '2007-11-13', False, '0000876661-07-000879', 885708)], []),   # JNC 2007
@@ -116,7 +116,7 @@ STAY = {
     'BBG004P33PN3': ([('2026-05-11', 'unknown', None, '2026-04-30', False, '0000876661-26-000380', 1567683)], []),   # CWENA 2026
     'BBG00B4Z2YX0': ([], []),   # LAUR
     'BBG00GVR8YQ9': ([], ['ended_without_delisting', 'form25_unmatched']),   # LIN
-    'CIK1469372-CLASS-A': ([('2015-08-03', 'exchange_transfer', 304, '', True, '0001193125-15-262759', 1469372), ('2015-10-02', 'exchange_transfer', 304, '2015-10-02', False, '', 1469372)], []),   # MSG 2015
+    'CIK1469372-CLASS-A': ([('2015-08-03', 'exchange_transfer', 304, '2015-07-24', True, '0001193125-15-262759', 1469372), ('2015-10-02', 'exchange_transfer', 304, '2015-10-02', False, '', 1469372)], []),   # MSG 2015 (5d rule 1: the move's 8-K)
     'CIK48898-CLASS-B': ([('2016-01-03', 'exchange_transfer', 304, '2015-12-23', False, '0000876661-15-000665', 48898)], ['form25_unmatched']),   # HUB-B 2015
     'CIK65873-COMMON': ([('2007-11-30', 'merger', 231, '2007-11-16', False, '0000876661-07-000891', 65873)], []),   # AT 2007
 }

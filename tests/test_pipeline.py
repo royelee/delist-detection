@@ -3325,8 +3325,10 @@ def test_an_unknown_form25_at_the_lines_switch_becomes_the_continuation(fake_edg
                   new_rows=_rs_new_rows())
     [d] = t["delistings"]
     assert (d["bucket"], d["crsp_code"], d["successor_sec_id"]) == ("exchange_transfer", "304", "BBGRSNEW1")
-    # no_evidence_default went with the `unknown` kind; the two others are info on an exchange transfer
-    assert d["review_flags"].split(";") == ["no_last_trade_date", "no_last_close", "line_continuation"]
+    # no_evidence_default went with the `unknown` kind; the others are info on an exchange transfer. Nothing states
+    # the last trade, so the exchange's Form 25 day is the worked-out one (5d rule 4: closing_day, unconfirmed)
+    assert d["review_flags"].split(";") == ["last_trade_date_unconfirmed", "ftd_close_prior:1", "line_continuation"]
+    assert (d["last_trade_date"], d["last_trade_date_source"]) == ("2012-09-24", "closing_day")
     assert d["confidence"] == "medium"
     assert t["contract_delistings"][0]["continuation"] == "true"
     assert not [u for u in t["uncertain"] if u["kind"] == "ending"]

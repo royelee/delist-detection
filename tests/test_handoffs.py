@@ -306,6 +306,20 @@ def test_the_old_line_ends_before_the_new_one_begins():
     assert row.last_trade.day == date(2026, 1, 4) and "no_last_trade_date" not in row.flags
 
 
+def test_a_worked_out_closing_day_never_reaches_the_successors_first_day():
+    """5d rule 4: a kept row's closing day (the Form 25 day, 2013-11-13) on the day the successor was first sighted
+    under the ticker is cut to the old line's last day before it; one before it stands."""
+    p = HandoffPair("X", "OLD", "NEW", "2013-11-12", "2013-11-13", "2013-11-13")
+    late = _delisting("OLD", "2013-11-23", CrspBucket.EXCHANGE_TRANSFER, "2013-11-13", code=304)
+    late.last_trade = LastTrade(date(2013, 11, 13), "closing_day", ("last_trade_date_unconfirmed",))
+    early = _delisting("OLD", "2013-11-23", CrspBucket.EXCHANGE_TRANSFER, "2013-11-11", code=304)
+    early.last_trade = LastTrade(date(2013, 11, 11), "closing_day", ("last_trade_date_unconfirmed",))
+    for row, day, source in ((late, date(2013, 11, 12), "last_sighting"), (early, date(2013, 11, 11), "closing_day")):
+        apply_handoffs([HandoffDecision(p, "continuation", "8-K12B X", True)], [row],
+                       {"OLD": _sec("OLD"), "NEW": _sec("NEW")}, [])
+        assert (row.last_trade.day, row.last_trade.source) == (day, source)
+
+
 def test_an_existing_exchange_transfer_near_the_handoff_takes_the_successor():
     """ITT 2016: the old line's fallback exchange_transfer row (successor_unknown)."""
     row = _delisting("OLD", "2016-05-17", CrspBucket.EXCHANGE_TRANSFER, "2016-05-17", code=304,

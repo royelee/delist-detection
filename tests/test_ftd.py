@@ -341,6 +341,18 @@ def test_close_of_and_close_known_on_try_the_cusip_then_the_symbol():
     assert idx.close_known_on(date(2019, 9, 3), cusip=None, symbol="RS") == (3.0, "2019-09-03")
 
 
+def test_the_symbol_fallback_skips_another_securitys_cusip():
+    """WEN 2008 (5d rule 3): no row of Wendy's own CUSIP follows its last trade (2008-09-29); the symbol's next row
+    is Wendy's/Arby's new CUSIP ($5.26), another security of the run, so the close is Wendy's own last one."""
+    idx = FtdIndex(_rows(("2008-09-26", "950590109", "WEN", "WENDYS INTERNATIONAL", 22.15),
+                         ("2008-10-01", "950587105", "WEN", "WENDY'S/ARBY'S GROUP INC CL A", 5.26)))
+    assert idx.close_of(date(2008, 9, 29), cusip="950590109", symbol="WEN") == (5.26, "2008-10-01", True)
+    assert idx.close_of(date(2008, 9, 29), cusip="950590109", symbol="WEN", skip={"950587105"}) is None
+    assert idx.close_known_on(date(2008, 9, 29), cusip="950590109", symbol="WEN", skip={"950587105"}) \
+        == (22.15, "2008-09-26")
+    assert idx.close_known_on(date(2008, 10, 2), cusip=None, symbol="WEN", skip={"950587105"}) == (22.15, "2008-09-26")
+
+
 def test_a_fails_rows_close_is_a_trading_day_older_than_its_date():
     """A row dated D carries the close of the trading day before D: dated the
     last trade day itself, its close is 1 trading day old; a Monday row after a

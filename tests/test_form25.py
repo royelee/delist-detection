@@ -423,3 +423,18 @@ def test_a_spac_form25_solely_about_common_and_warrants_is_the_commons(class_tex
 def test_a_generic_class_descriptor_is_no_tracking_group(class_text):
     f = Form25("a", "25-NSE", "2022-01-03", "NASDAQ", class_text, "", "")
     assert other_class(f, SecurityRef("S", "CLASS A", "common", "SOME CORP CLASS A"), ("Some Corp",)) == ""
+
+
+def test_a_rights_class_expiring_on_a_day_last_traded_that_day():
+    """TMUSR 2020 (5d): Nasdaq's 25-NSE for "Subscription Rights Expiring 7/27/2020" carries an empty notice; the
+    class text dates the expiry, the rights' last trading day (operator ruling of the 5b pre-check)."""
+    f = Form25("0001354457-20-000356", "25-NSE", "2020-07-27", "NASDAQ", "Subscription Rights Expiring 7/27/2020",
+               "17 CFR 240.12d2-2(a)(2)", "2 form25.txt form25")
+    assert notice_last_trade(f) == (date(2020, 7, 27), "notice_expiry")
+    warrants = Form25("a", "25-NSE", "2021-05-03", "NYSE", "Warrants expiring May 3, 2021", "", "")
+    assert notice_last_trade(warrants) == (date(2021, 5, 3), "notice_expiry")
+    # a common stock's text never dates an expiry; a notice's own day wins over the class text
+    assert notice_last_trade(Form25("a", "25-NSE", "2020-07-27", "NASDAQ", "Common Stock", "", "")) == (None, "")
+    stated = Form25("a", "25-NSE", "2020-07-27", "NASDAQ", "Rights Expiring 7/27/2020", "17 CFR 240.12d2-2(a)(3)",
+                    "the security was suspended from trading on July 24, 2020")
+    assert notice_last_trade(stated) == (date(2020, 7, 23), "notice_a")

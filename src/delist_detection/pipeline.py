@@ -38,6 +38,7 @@ from .figi_resolution import FigiCandidate, class_letter, is_placeholder, share_
 from .form25 import SecurityRef, letter_hint, notice_last_trade, parse_form25
 from .last_trade import decide_last_trade
 from .ftd import FTD_START, FtdIndex, FtdRow, close_age, is_trading_symbol, trades_after
+from .trading_calendar import previous_trading_day
 from .history import (
     Sighting, backfill_cusips, cusip_sightings, filtered_ticker_sightings, history_rows, observation_map_rows, own_last_seen,
     ranges_from_sightings, ticker_on, ticker_range_review, ticker_sightings, value_on,
@@ -673,6 +674,25 @@ def _rows_near(rows: Sequence[FtdRow], day: str) -> bool:
     return any(lo <= r.date <= day and is_trading_symbol(r.symbol) for r in rows)
 
 
+def _ticker_taken(ftd: FtdIndex, ticker: str, own: Collection[str], lo: str, hi: str) -> str | None:
+    """The first day another CUSIP traded under `ticker` within the ISO window [lo, hi] once the security's own
+    CUSIPs (`own`) stopped: the trading day before that CUSIP's first priced fails row there (a row carries the
+    close of the trading day before it), when that row comes on or after the own CUSIPs' last row under the ticker
+    -- else None. None too when the own CUSIPs have no row under the ticker in the window (the tenure there is not
+    known: Peabody's, Chesapeake's own new CUSIPs). A $0.01 placeholder row is no trade (APA Corp's first row,
+    2021-03-02, beside Apache's own row carrying its March 1 close). 5d rule 3: CCEP's shares under CCE from
+    2016-05-31, Johnson Controls plc's under JCI from 2016-09-06."""
+    rows = [r for r in ftd.by_symbol(ticker, lo, hi) if r.price is not None and r.price > PLACEHOLDER_PRICE]
+    mine = [r.date for r in rows if r.cusip in own]
+    if not mine:
+        return None
+    other = next((r.date for r in rows if r.cusip not in own and r.date > mine[0] and r.date >= mine[-1]), None)
+    return previous_trading_day(date.fromisoformat(other)).isoformat() if other else None
+
+
+PLACEHOLDER_PRICE = 0.01        # a fails row priced at or below this carries no close (a new CUSIP's placeholder)
+
+
 def _context_builder(securities: dict[str, Security], sightings: dict[str, list[Sighting]],
                      answers: _IssuerAnswers, ftd: FtdIndex, sec_cusips: dict[str, list[str]],
                      other_ciks: Mapping[str, int] = {}) -> Callable[[Security, bool | None], SecurityContext]:
@@ -717,6 +737,8 @@ def _context_builder(securities: dict[str, Security], sightings: dict[str, list[
             trades_after=lambda day, rows=rows: trades_after(rows, day),
             cusip_rows_near=lambda day, rows=rows: _rows_near(rows, day),
             other_cik=other_ciks.get(s.sec_id),
+            ticker_taken=lambda ticker, lo, hi, own=frozenset(sec_cusips.get(s.sec_id, [])): _ticker_taken(
+                ftd, ticker, own, lo, hi),
         )
 
     return security_context
@@ -906,8 +928,11 @@ def _last_trade_closes(ctx: _RunContext, delistings: list[Delisting], securities
                    symbols={e.ticker for e in early},
                    cusips={c for e in early for c in sec_cusips.get(e.sec_id, [])})
     closes: dict[DelistingKey, float] = {}
+    held = {c for cs in sec_cusips.values() for c in cs}
     for e in delistings:
         key = e.key
+        # by symbol, a row of a CUSIP another security holds is that security's close (WEN 2008, 5d rule 3)
+        skip = held - set(sec_cusips.get(e.sec_id, []))
         given = for_delisting(overrides.last_trade_closes, e.key)
         if given is not None:
             closes[key] = given
@@ -919,12 +944,12 @@ def _last_trade_closes(ctx: _RunContext, delistings: list[Delisting], securities
         cusip_ranges = ranges_from_sightings(cusip_sightings(sec, ftd, sec_cusips.get(e.sec_id, [])),
                                              end=None, open_ended=True)
         cusip = value_on(cusip_ranges, e.last_trade.day)
-        got = ftd.close_of(e.last_trade.day, cusip=cusip, symbol=e.ticker)
+        got = ftd.close_of(e.last_trade.day, cusip=cusip, symbol=e.ticker, skip=skip)
         if got is None:
             # Fails stop once trading stops, so no row may follow the last trade
             # day: look back a few rows (spec §16). The flag carries the close's
             # age in trading days (ftd_close_prior:<n>); the evidence the row date.
-            back = ftd.close_known_on(e.last_trade.day, cusip=cusip, symbol=e.ticker)
+            back = ftd.close_known_on(e.last_trade.day, cusip=cusip, symbol=e.ticker, skip=skip)
             if back is None:
                 e.add_flag("no_last_close")
             else:

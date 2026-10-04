@@ -32,7 +32,7 @@ from .edgar import EdgarSubmission
 from .evidence import names_near
 from .ftd import FtdIndex
 from .history import Sighting
-from .last_trade import LastTrade
+from .last_trade import CLOSING_DAY, LastTrade
 from .review_triage import ReviewItem
 from .security_master import Security
 from .store import DelistingKey
@@ -429,6 +429,9 @@ def apply_handoffs(decisions: Sequence[HandoffDecision], delistings: Sequence[De
             if d.last_trade.day is None:            # A's range ends where B's begins (PNFP 2026)
                 d.last_trade = replace(d.last_trade, day=_last_day(p), source="last_sighting")
                 d.record.evidence["flags"] = [f for f in d.flags if f != "no_last_trade_date"]
+            elif d.last_trade.source == CLOSING_DAY and d.last_trade.day > _last_day(p):
+                # a worked-out closing day (5d rule 4) never reaches the day B was first sighted under the ticker
+                d.last_trade = replace(d.last_trade, day=_last_day(p), source="last_sighting")
             d.record.evidence["handoff"] = {"ticker": p.ticker, "successor": p.b, "evidence": decision.evidence,
                                             "a_last": p.a_last, "b_first": p.b_first}
         resolved.add((_bare(p.ticker), p.a, p.b))

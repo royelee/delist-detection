@@ -17,7 +17,7 @@ import re
 import zipfile
 from bisect import bisect_left, bisect_right
 from collections import Counter, defaultdict
-from collections.abc import Iterable, Iterator, Mapping, Sequence
+from collections.abc import Collection, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import date, timedelta
 from pathlib import Path
@@ -393,22 +393,24 @@ class FtdIndex:
         return first is not None and not any(r.date > first and not is_deleted_symbol(r.symbol) for r in rows)
 
     def close_after(self, day: date, *, cusip: str | None = None, symbol: str | None = None,
-                    max_lag: int = 3) -> tuple[float, str, bool] | None:
+                    max_lag: int = 3, skip: Collection[str] = ()) -> tuple[float, str, bool] | None:
         """The close of `day`: the first priced row dated on the next trading day,
         or up to `max_lag` further trading days later (then `lagged` is True; rows
         after the last trade repeat the last close, but after an OTC move they
-        carry OTC prices, so a lagged value is flagged for review)."""
+        carry OTC prices, so a lagged value is flagged for review). By symbol, a
+        row of a CUSIP in `skip` (another security's) is not this one's."""
         first = next_trading_day(day)
         last = add_trading_days(first, max_lag)
         rows = (self.by_cusip(cusip, first.isoformat(), last.isoformat()) if cusip
-                else self.by_symbol(symbol or "", first.isoformat(), last.isoformat()))
+                else [r for r in self.by_symbol(symbol or "", first.isoformat(), last.isoformat())
+                      if r.cusip not in skip])
         for r in rows:
             if r.price is not None and r.price > 0:
                 return r.price, r.date, r.date != first.isoformat()
         return None
 
     def close_through(self, day: date, *, cusip: str | None = None, symbol: str | None = None,
-                      max_back: int = 10) -> tuple[float, str] | None:
+                      max_back: int = 10, skip: Collection[str] = ()) -> tuple[float, str] | None:
         """The latest close known on `day` when no row follows it: the priced row
         dated on `day` or up to `max_back` trading days earlier, whose price is
         the close of the trading day before its date. Fails stop once a security
@@ -419,22 +421,27 @@ class FtdIndex:
         its deal price. Returns `(price, row_date)`."""
         lo = add_trading_days(day, -max_back).isoformat()
         rows = (self.by_cusip(cusip, lo, day.isoformat()) if cusip
-                else self.by_symbol(symbol or "", lo, day.isoformat()))
+                else [r for r in self.by_symbol(symbol or "", lo, day.isoformat()) if r.cusip not in skip])
         for r in reversed(rows):
             if r.price is not None and r.price > 0:
                 return r.price, r.date
         return None
 
-    def close_of(self, day: date, *, cusip: str | None, symbol: str) -> tuple[float, str, bool] | None:
+    def close_of(self, day: date, *, cusip: str | None, symbol: str,
+                 skip: Collection[str] = ()) -> tuple[float, str, bool] | None:
         """`close_after(day)` by `cusip` (the security's CUSIP on `day`, when
-        known), then by `symbol`."""
-        return (self.close_after(day, cusip=cusip) if cusip else None) or self.close_after(day, symbol=symbol)
+        known), then by `symbol`, never from a row of a CUSIP in `skip` (one
+        another security holds: Wendy's/Arby's new CUSIP under WEN, 5d rule 3)."""
+        return (self.close_after(day, cusip=cusip) if cusip else None) \
+            or self.close_after(day, symbol=symbol, skip=skip)
 
-    def close_known_on(self, day: date, *, cusip: str | None, symbol: str) -> tuple[float, str] | None:
+    def close_known_on(self, day: date, *, cusip: str | None, symbol: str,
+                       skip: Collection[str] = ()) -> tuple[float, str] | None:
         """`close_through(day)` -- when no row follows `day`, the latest close
         known on it -- by `cusip` (the security's CUSIP on `day`, when known),
-        then by `symbol`."""
-        return (self.close_through(day, cusip=cusip) if cusip else None) or self.close_through(day, symbol=symbol)
+        then by `symbol` (skipping `skip`'s CUSIPs, as `close_of`)."""
+        return (self.close_through(day, cusip=cusip) if cusip else None) \
+            or self.close_through(day, symbol=symbol, skip=skip)
 
 
 def close_age(row_date: str, last_trade: date) -> int:
