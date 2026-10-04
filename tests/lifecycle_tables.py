@@ -57,3 +57,8 @@ def tables(securities=(), history=(), delistings=(), observations=(), reviews=()
 def cend(sec_id, value_rule):
     """A contract/delistings.csv row."""
     return _row("contract_delistings", sec_id=sec_id, value_rule=value_rule)
+
+
+def contract_row(sec_id, **cells):
+    """A contract/delistings.csv row with any of its columns set."""
+    return _row("contract_delistings", sec_id=sec_id, **cells)

@@ -21,13 +21,16 @@ from __future__ import annotations
 
 import csv
 import io
+from collections import defaultdict
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
 
 from .atomic_io import write_atomic
+from .contract import last_endings
 from .exit_kind import DROP_REASONS, EXIT_KINDS
+from .lifecycle import Tables
 from .payout_rule import VALUE_RULES
 from .truth import TruthFileError
 
@@ -212,3 +215,116 @@ def write_diagnosis_truth(path: str | Path, rows: Sequence[Mapping[str, str]]) -
 def write_legs(path: str | Path, rows: Sequence[Mapping[str, str]]) -> None:
     """Write leg rows (every LEG_COLUMNS key) to `path` in one atomic replace."""
     _write(path, LEG_COLUMNS, rows)
+
+
+MISMATCH_FIELDS = (*SCORED, "internal_last_trade_date", "shape", "ending", "legs")
+LEG_FIELDS = ("ratio", "price_sec_id", "price_ticker", "price_date")
+
+
+@dataclass(frozen=True)
+class Mismatch:
+    case_id: str
+    field: str
+    truth: str
+    library: str
+
+    def __str__(self) -> str:
+        return f"{self.field} {self.library or '(blank)'} != {self.truth or '(blank)'}"
+
+
+@dataclass(frozen=True)
+class CaseJudgement:
+    case: DiagnosisCase
+    mismatches: tuple[Mismatch, ...]
+
+    @property
+    def ok(self) -> bool:
+        return not self.mismatches
+
+
+@dataclass(frozen=True)
+class LibraryRows:
+    """What the judge reads from one run: the contract row and the last real ending of each security, and its
+    payout legs (None: the run has no contract/payout_legs.csv yet, before sub-plan 5f)."""
+    contract: Mapping[str, Mapping[str, str]]
+    last_endings: Mapping[str, Mapping[str, str]]
+    legs: Mapping[str, Sequence[Mapping[str, str]]] | None = None
+
+    @classmethod
+    def of(cls, tables: Tables, legs_rows: Sequence[Mapping[str, str]] | None = None) -> LibraryRows:
+        legs = None
+        if legs_rows is not None:
+            grouped: dict[str, list[Mapping[str, str]]] = defaultdict(list)
+            for r in legs_rows:
+                grouped[r["sec_id"]].append(r)
+            legs = {k: sorted(v, key=lambda r: int(r["leg"])) for k, v in grouped.items()}
+        return cls({r["sec_id"]: r for r in tables.contract_delistings or ()}, last_endings(tables.delistings), legs)
+
+
+def field_key(name: str) -> str:
+    """The MISMATCH_FIELDS entry a mismatch counts under (every `legN.x` is `legs`)."""
+    return "legs" if name.startswith("leg") and name != "legs" else name
+
+
+def _same(name: str, truth: str, library: str) -> bool:
+    truth, library = truth.strip(), (library or "").strip()
+    if truth == NOT_SCORED:
+        return True
+    if name in NUMBERS and truth and library:
+        try:
+            return f"{float(truth):.6g}" == f"{float(library):.6g}"
+        except ValueError:
+            return False
+    if name == "continuation":
+        return truth.lower() == library.lower()
+    return truth == library
+
+
+def _judge_legs(case: DiagnosisCase, rows: Sequence[Mapping[str, str]] | None) -> list[Mismatch]:
+    if rows is None:
+        return [Mismatch(case.case_id, "legs", f"{len(case.legs)} legs", "(no payout_legs table)")]
+    out = []
+    if len(rows) != len(case.legs):
+        out.append(Mismatch(case.case_id, "legs", f"{len(case.legs)} legs", f"{len(rows)} legs"))
+    for leg, row in zip(case.legs, rows):
+        for name in LEG_FIELDS:
+            want = getattr(leg, name)
+            if not _same("stock_ratio" if name == "ratio" else name, want, row.get(name, "")):
+                out.append(Mismatch(case.case_id, f"leg{leg.leg}.{name}", want, row.get(name, "")))
+    return out
+
+
+def judge_case(case: DiagnosisCase, lib: LibraryRows) -> CaseJudgement:
+    """Compare one case to one run; every scored field that disagrees is one Mismatch (spec 1.3)."""
+    row, end = lib.contract.get(case.sec_id), lib.last_endings.get(case.sec_id)
+    bad: list[Mismatch] = []
+
+    def miss(name: str, truth: str, library: str) -> None:
+        bad.append(Mismatch(case.case_id, name, truth, library))
+
+    if case.shape == NO_ENDING:
+        if row is not None:
+            miss("shape", NO_ENDING, "ending")
+        return CaseJudgement(case, tuple(bad))
+    if case.shape == ENDING_MOVED and end is not None and end["delist_date"] == case.old_delist_date:
+        miss("shape", ENDING_MOVED, f"ending {case.old_delist_date}")
+    scored = [f for f in SCORED if case.fields[f] != NOT_SCORED]
+    if row is None:
+        if case.shape == ENDING or scored:
+            miss("ending", "present", "(no contract row)")
+        return CaseJudgement(case, tuple(bad))
+    for name in scored:
+        if not _same(name, case.fields[name], row.get(name, "")):
+            miss(name, case.fields[name], row.get(name, ""))
+    if case.internal_last_trade_date not in ("", NOT_SCORED):
+        got = end["last_trade_date"] if end else ""
+        if got != case.internal_last_trade_date:
+            miss("internal_last_trade_date", case.internal_last_trade_date, got)
+    if case.legs:
+        bad.extend(_judge_legs(case, None if lib.legs is None else lib.legs.get(case.sec_id, [])))
+    return CaseJudgement(case, tuple(bad))
+
+
+def judge_all(cases: Sequence[DiagnosisCase], lib: LibraryRows) -> list[CaseJudgement]:
+    """Every case that is not ruling_pending, judged."""
+    return [judge_case(c, lib) for c in cases if c.status != RULING_PENDING]
