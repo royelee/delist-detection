@@ -1070,3 +1070,20 @@ def test_an_early_form25_whose_text_cannot_be_read_raises_no_review_row(fake_edg
     events, review = finder.find(_ctx(sec, listed=False, last_seen="2009-06-08"))
     assert not any(r.flag == "form25_unreadable" for r in review)
     assert all(e.form25_sub is None or e.form25_sub.accession != "t2" for e in events)
+
+
+# --- sub-plan 5b, R3: a Form 25 about another class matches no security ---
+
+def test_a_form25_of_other_tracking_groups_is_no_delisting_of_the_series_a(fake_edgar):
+    """Liberty 2011: the 25-NSE of the Capital and Starz groups is not the Series A placeholder's (it matched by
+    elimination before: the issuer's only common of the run alive then)."""
+    fake_edgar.submissions_by_cik[30401] = [EdgarSubmission("l25", "25-NSE", "2011-09-23", "", "", "p.xml")]
+    fake_edgar.company_map["LINTA"] = {"cik_str": 30401, "ticker": "LINTA", "title": "Liberty Interactive Corp"}
+    fake_edgar.raws["l25"] = _f25_raw("The Nasdaq Stock Market LLC", class_text=(
+        "Series A Liberty Capital Common Stock, Series B Liberty Capital Common Stock, Liberty Starz Ser A Common "
+        "Stock, Liberty Starz Ser B Common Stock"))
+    clf = DelistClassifier(fake_edgar, TickerResolver(fake_edgar))
+    sec = _sec("CIK30401-SERIES-A", 30401, "LINTA", "2008-01-16", "2011-06-30", "QURATE RETAIL GROUP CORP SERIES A")
+    sec.share_class = "SERIES A"
+    events, review = DelistingFinder(fake_edgar, clf).find(_ctx(sec, listed=False, last_seen="2011-06-30"))
+    assert events == [] and [r.flag for r in review] == ["ended_without_delisting"]

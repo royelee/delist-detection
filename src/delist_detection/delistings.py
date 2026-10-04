@@ -14,10 +14,11 @@ from datetime import date, timedelta
 from .classifier import DelistClassifier, DelistRecord
 from .crsp_codes import CrspBucket
 from .edgar import EdgarSubmission
+from .evidence import edgar_names
 from .figi_resolution import class_letter
 from .form25 import (
     REGIONAL_EXCHANGES, Form25, SecurityRef, class_kind, class_letters, effective_date, is_involuntary,
-    list_form25, match_securities, notice_last_trade, parse_form25, tied_securities,
+    list_form25, match_securities, notice_last_trade, other_class, parse_form25, tied_securities,
 )
 from .last_trade import LastTrade, decide_last_trade, eightk_last_trade
 from .listing_status import exchanges_around, issuer_exchange, withdrawal_kind
@@ -361,10 +362,16 @@ class DelistingFinder:
         return next((r for r in ctx.siblings if r.sec_id == sec.sec_id),
                     SecurityRef(sec.sec_id, sec.share_class, sec.kind, sec.name))
 
+    def _issuer_names(self, cik: int) -> tuple[str, ...]:
+        """The issuer's EDGAR names (current and former), for R3's group words; () when they cannot be read."""
+        sub = self.edgar.submissions(cik)
+        return edgar_names(sub) if isinstance(sub, dict) else ()
+
     def _judge(self, ctx: SecurityContext, scan: _Scan, filer: int, sub: EdgarSubmission,
-               refs: list[SecurityRef], *, quiet: bool = False) -> Form25 | None:
+               refs: list[SecurityRef], issuer_names: tuple[str, ...], *, quiet: bool = False) -> Form25 | None:
         """The Form 25 `sub` of CIK `filer`, parsed, when it removed this security: readable, not a regional
-        exchange's, of a recognized class, matched to this security among `refs` (`match_securities`) with no
+        exchange's, of a recognized class, not about another class (`form25.other_class`, R3, against the filer's
+        EDGAR names `issuer_names`), matched to this security among `refs` (`match_securities`) with no
         class-letter conflict. Else None; a filing that could not be placed gets its review row unless `quiet`
         (the early window's filings)."""
         sec, ticker = ctx.security, scan.ticker
@@ -384,6 +391,8 @@ class DelistingFinder:
                 scan.had_unmatched = True
                 self._review(scan.review, scan.seen, sec, ticker, filer, "form25_unclassified",
                              f"{sub.form} {sub.accession} ({f25.class_text!r}) has no recognized class", sub)
+            return None
+        if other_class(f25, self._own_ref(ctx), issuer_names):
             return None
         matched, why = match_securities(f25, refs)
         if not matched:
@@ -433,6 +442,7 @@ class DelistingFinder:
             if ctx.listed_today is False else floor
         own = self._own_ref(ctx)
         scan = _Scan(ticker_last)
+        names = self._issuer_names(cik)
         early: list[tuple[EdgarSubmission, Form25]] = []
         candidates: list[tuple[EdgarSubmission, Form25]] = []
         for sub in list_form25(filings):
@@ -442,7 +452,7 @@ class DelistingFinder:
                     continue
                 refs = [own] + [r for r in ctx.siblings
                                 if r.sec_id != sec.sec_id and self._alive_at(ctx, r.sec_id, sub.filing_date)]
-                f25 = self._judge(ctx, scan, cik, sub, refs, quiet=True)
+                f25 = self._judge(ctx, scan, cik, sub, refs, names, quiet=True)
                 after = date.fromisoformat(effective_date(sub.filing_date)) + timedelta(days=SEEN_AFTER_DAYS)
                 if f25 is not None and not ctx.trades_after(after.isoformat()):
                     early.append((sub, f25))
@@ -456,7 +466,7 @@ class DelistingFinder:
             alive = [r for r in ctx.siblings if self._alive_at(ctx, r.sec_id, sub.filing_date)]
             if not alive:
                 continue
-            f25 = self._judge(ctx, scan, cik, sub, alive)
+            f25 = self._judge(ctx, scan, cik, sub, alive, names)
             if f25 is None:
                 continue
             if self._continued(ctx, sub, f25, filings) and self._not_this_removal(ctx, cik, filings, sub, f25):

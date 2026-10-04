@@ -319,3 +319,45 @@ from tests import form25_cases as fc  # noqa: E402
 def test_a_real_notice_says_the_class_was_acquired_only_without_a_reorganization(accession, acquired):
     f = parse_form25(fc.EDGAR["raws"][accession], accession=accession, form="25-NSE", filing_date="2000-01-01")
     assert notice_says_acquired(f) is acquired
+
+
+# --- sub-plan 5b, R3: a Form 25 about another class ---
+
+from delist_detection.form25 import other_class  # noqa: E402
+
+LIBERTY_2011 = ("Series A Liberty Capital Common Stock, Series B Liberty Capital Common Stock, Liberty Starz Ser A "
+                "Common Stock, Liberty Starz Ser B Common Stock")
+LIBERTY_NAMES = ("QVC Group, Inc.", "Qurate Retail, Inc.", "Liberty Interactive Corp", "LIBERTY MEDIA CORP",
+                 "Liberty Media Holding CORP")
+
+
+def test_a_form25_of_other_tracking_groups_is_not_about_the_series_a_of_another():
+    """Liberty Media's 2011 25-NSE removed the Liberty Capital and Liberty Starz groups; the Series A placeholder
+    of Liberty Interactive (later Qurate) kept trading."""
+    f = Form25("a", "25-NSE", "2011-09-23", "NASDAQ", LIBERTY_2011, "", "")
+    ref = SecurityRef("CIK1355096-SERIES-A", "SERIES A", "common", "QURATE RETAIL GROUP CORP SERIES A")
+    assert other_class(f, ref, LIBERTY_NAMES) == "names another group (CAPITAL)"
+
+
+@pytest.mark.parametrize("class_text,name", [
+    ("Series A Liberty Ventures Common Stock & Series B Liberty Ventures Common Stock",
+     "LIBERTY INTERACTIVE VENTURE CORP S"),                                      # LVNTA 2018: VENTURE, VENTURES
+    ("Class A Special Common Stock", "COMCAST SPECIAL CORP CLASS A"),             # CMCSK 2015: SPECIAL is no group
+    ("Series N Non-Voting Common Stock", "U HAUL NON VOTING SERIES N"),           # U-Haul 2022
+    ("Series A Liberty SiriusXM Common Stock", "LIBERTY MEDIA LIBERTY SIRIUSXM COR"),
+    ("Common Stock", "BIOMET INC"),
+], ids=["LVNTA", "CMCSK", "UHALB", "LSXMA", "plain"])
+def test_a_form25_of_the_securitys_own_group_or_of_no_group_is_its_own(class_text, name):
+    f = Form25("a", "25-NSE", "2018-03-09", "NASDAQ", class_text, "", "")
+    assert other_class(f, SecurityRef("S", "SERIES A", "common", name), LIBERTY_NAMES) == ""
+
+
+def test_a_form25_that_relates_solely_to_the_rights_is_not_about_the_common():
+    """Biomet 2006 (0001104659-06-082100): "Common Shares; Preferred Share Purchase Rights", and the notification
+    "relates solely to the withdrawal from listing of the Preferred Share Purchase Rights"."""
+    raw = fc.EDGAR["raws"]["0001104659-06-082100"]
+    f = parse_form25(raw, accession="0001104659-06-082100", form="25", filing_date="2006-12-18")
+    assert (f.class_text, f.solely) == ("Common Shares; Preferred Share Purchase Rights",
+                                        "Preferred Share Purchase Rights")
+    assert other_class(f, SecurityRef("CIK351346-COMMON", "COMMON", "common", "BIOMET INC")) == \
+        "relates solely to Preferred Share Purchase Rights"

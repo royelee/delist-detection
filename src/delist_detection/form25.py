@@ -70,6 +70,9 @@ class Form25:
     class_text: str
     rule: str
     notice_text: str
+    # The class a "This Notification relates solely to ..." sentence names ("Preferred Share Purchase Rights": BMET
+    # 2006), else "".
+    solely: str = ""
 
 
 def is_involuntary(f25: Form25) -> bool:
@@ -109,6 +112,17 @@ def _text_class(text: str) -> str:
     return ""
 
 
+_SOLELY = re.compile(r"relates\s+solely\s+to\s+(?:the\s+)?(?:withdrawal\s+from\s+listing\s+of\s+(?:the\s+|our\s+)?)?"
+                     r"(.{3,80}?)\s+from", re.I)
+
+
+def _solely(raw: str) -> str:
+    """The class a "This Notification relates solely to the withdrawal from listing of <class> from ..." sentence
+    names, anywhere in the filing, else ""."""
+    m = _SOLELY.search(re.sub(r"\s+", " ", strip_html(raw)))
+    return m.group(1).strip() if m else ""
+
+
 def parse_form25(raw: str, *, accession: str, form: str, filing_date: str) -> Form25:
     exch_block = re.search(r"<exchange>(.*?)</exchange>", raw, re.S | re.I)
     exch_name = _tag(exch_block.group(1), "entityName") if exch_block else ""
@@ -120,7 +134,7 @@ def parse_form25(raw: str, *, accession: str, form: str, filing_date: str) -> Fo
         if not class_text:
             class_text = _text_class(text)
     return Form25(accession, form, filing_date, exchange_label(exch_name) or exch_name.upper(),
-                  class_text, rule, _notice(raw))
+                  class_text, rule, _notice(raw), _solely(raw))
 
 
 def list_form25(filings: Iterable[EdgarSubmission]) -> list[EdgarSubmission]:
@@ -327,6 +341,43 @@ def match_security(f25: Form25, refs: Sequence[SecurityRef]) -> tuple[str | None
 def class_letters(class_text: str) -> set[str]:
     """Every class letter the Form 25's text names."""
     return {class_letter(label) for label, _ in _lettered_segments(class_text)} - {None}
+
+
+# R3: a lettered tracking-stock segment ("Series A Liberty Capital Common Stock"). Its group words are the words
+# between the letter and COMMON STOCK, less the issuer's own EDGAR name words and these.
+_GROUP = re.compile(r"^\W*(?:SERIES|CLASS)\s+[A-Z]\s+(.+?)\s+COMMON\s+STOCK", re.I)
+_GROUP_STOP = frozenset({"SPECIAL", "NON", "VOTING", "NONVOTING", "NEW", "OLD", "ORDINARY"})
+
+
+def _meets(word: str, words: set[str]) -> bool:
+    """`word` is one of `words`, or one is a prefix of the other and both have five or more letters (VENTURE,
+    VENTURES)."""
+    return any(word == w or (min(len(word), len(w)) >= 5 and (word.startswith(w) or w.startswith(word)))
+               for w in words)
+
+
+def other_class(f25: Form25, ref: SecurityRef, issuer_names: Iterable[str] = ()) -> str:
+    """Why a common-class Form 25 of the security's issuer is about another class than `ref` (R3), else "": it
+    "relates solely to" a class that is not common (BMET 2006: "Common Shares; Preferred Share Purchase Rights",
+    solely the rights), or it has lettered tracking-stock segments and none of their group words (less the
+    issuer's EDGAR name words, `issuer_names`) is a word of the security's name ("Series A Liberty Capital Common
+    Stock, Series A Liberty Starz Common Stock" is not Liberty Interactive's Series A)."""
+    if class_kind(f25.class_text) != "common":
+        return ""
+    if f25.solely and class_kind(f25.solely) not in ("common", "other"):
+        return f"relates solely to {f25.solely}"
+    issuer_words = {w for n in issuer_names for w in name_tokens(n)}
+    groups = []
+    for _, seg in _lettered_segments(f25.class_text):
+        m = _GROUP.search(seg.strip())
+        if m:
+            words = name_tokens(m.group(1)) - issuer_words - _GROUP_STOP
+            if words:
+                groups.append(words)
+    mine = name_tokens(ref.name)
+    if groups and not any(_meets(w, mine) for g in groups for w in g):
+        return "names another group (" + ", ".join(sorted(set().union(*groups))) + ")"
+    return ""
 
 
 def _day(s: str) -> date:
