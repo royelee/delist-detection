@@ -14,7 +14,7 @@ import json
 from collections.abc import Collection, Mapping, Sequence
 from pathlib import Path
 
-from .atomic_io import write_atomic
+from .atomic_io import replace_all_on_success, write_atomic
 from .contract import last_endings
 from .diagnosis_truth import CaseJudgement, Mismatch
 from .lifecycle import Tables
@@ -46,6 +46,17 @@ def _write_csv(path: str | Path, columns: Sequence[str], rows: Sequence[Mapping[
     w.writeheader()
     w.writerows(rows)
     write_atomic(Path(path), buf.getvalue())
+
+
+def write_together(sets: Sequence[tuple[str | Path, Sequence[str], Sequence[Mapping[str, str]]]]) -> None:
+    """Write several CSVs (path, columns, rows) so they are replaced together or not at all
+    (`atomic_io.replace_all_on_success`): the truth file, its change log and the ledger must not disagree."""
+    with replace_all_on_success([path for path, _, _ in sets]) as tmps:
+        for tmp, (_, columns, rows) in zip(tmps, sets):
+            with tmp.open("w", newline="", encoding="utf-8") as fh:
+                w = csv.DictWriter(fh, fieldnames=list(columns), lineterminator="\n")
+                w.writeheader()
+                w.writerows({c: r[c] for c in columns} for r in rows)
 
 
 def read_csv(path: str | Path) -> list[dict[str, str]]:

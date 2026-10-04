@@ -2,8 +2,10 @@
 the floor in --config (spec: Delist Library Reset, step 1 "Measure first").
 
   python scripts/scorecard.py                    # every number, then drops and failing golden cases
-  python scripts/scorecard.py --check            # exit 1 if a floored number got worse a golden pass case fails, or a diagnosis pass case fails,
-                                                 # or output/regression_report.csv has a regression not settled in --ledger
+  python scripts/scorecard.py --check            # exit 1 if a floored number got worse, a golden pass case fails or a
+                                                 # diagnosis pass case fails
+  python scripts/scorecard.py --check --base REV # also recompute the regression report against commit REV (a sub-plan's
+                                                 # base) and fail on a regression the --ledger has not settled
   python scripts/scorecard.py --write            # also rewrite <output-dir>/scorecard.json
   python scripts/scorecard.py --raise-floor      # move the config's floor to every better number (never worse)
   python scripts/scorecard.py --lifecycles l.csv # one row per input ticker and per security
@@ -29,7 +31,7 @@ from delist_detection.diagnosis_loop import LEDGER, read_csv, settled_keys
 from delist_detection.lifecycle import LifecycleView, Tables
 from delist_detection.manifest import MANIFEST_NAME
 from delist_detection.scorecard import (ScorecardConfigError, build, drops, load_config, raise_floor, write)
-from delist_detection.regression import unexplained
+from delist_detection.regression import RegressionInputError, build_report, unexplained
 from delist_detection.truth import TruthFileError
 
 LEGS_FILE = "contract/payout_legs.csv"
@@ -80,6 +82,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--config", type=Path, default=ROOT / "data" / "scorecard.json")
     p.add_argument("--check", action="store_true")
     p.add_argument("--write", action="store_true")
+    p.add_argument("--base", help="a commit: recompute the regression report against it and count "
+                   "D.unexplained_regressions (without it there is no such metric)")
+    p.add_argument("--repo", type=Path, default=ROOT)
     p.add_argument("--ledger", type=Path, default=ROOT / LEDGER, help="the diagnosis loop's diagnosed.csv")
     p.add_argument("--raise-floor", action="store_true")
     p.add_argument("--lifecycles", type=Path)
@@ -93,9 +98,14 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     card = build(tables, as_of=as_of, config=config, legs_rows=legs_rows(args.output_dir))
     card["drops"] = drops(card, config.floor)
-    report = args.output_dir / "regression_report.csv"
-    if report.exists():
-        left = unexplained(read_csv(report), config.diagnosis, settled_keys(read_csv(args.ledger)))
+    if args.base:
+        # Recomputed here, never read from output/regression_report.csv, which can be stale.
+        try:
+            rows = build_report(args.repo, args.base, args.output_dir, config.diagnosis)
+        except RegressionInputError as exc:
+            print(f"ABORTED: {exc}", file=sys.stderr)
+            return 2
+        left = unexplained(rows, config.diagnosis, settled_keys(read_csv(args.ledger)))
         card["metrics"]["D.unexplained_regressions"] = len({r["sec_id"] for r in left})
     for name, value in sorted(card["metrics"].items()):
         print(f"{name:48} {value}")

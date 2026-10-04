@@ -97,11 +97,12 @@ def test_a_missing_legs_file_means_no_legs(tmp_path):
     assert dt.load_diagnosis_truth(path, tmp_path / "absent.csv")[0].legs == ()
 
 
-from tests.lifecycle_tables import contract_row, ending, tables
+from tests.lifecycle_tables import contract_row, ending, sec, tables
 
 
-def _lib(contract=(), delistings=(), legs_rows=None):
-    return dt.LibraryRows.of(tables(delistings=list(delistings), contract_delistings=list(contract)), legs_rows)
+def _lib(contract=(), delistings=(), legs_rows=None, securities=("S1", "S2")):
+    return dt.LibraryRows.of(tables([sec(s) for s in securities], delistings=list(delistings),
+                                    contract_delistings=list(contract)), legs_rows)
 
 
 def _case(**cells):
@@ -137,6 +138,16 @@ def test_no_ending_wants_no_contract_row():
     assert dt.judge_case(_case(shape="no_ending"), _lib()).ok
     j = dt.judge_case(_case(shape="no_ending"), _lib([contract_row("S1", exit_kind="exchange")]))
     assert [(m.field, m.library) for m in j.mismatches] == [("shape", "ending")]
+
+
+def test_a_case_whose_security_is_not_in_the_run_is_one_sec_id_mismatch_for_any_shape():
+    lib = _lib(securities=("BBGX",))
+    for shape in dt.SHAPES:
+        case = dt.parse_rows([truth_row("CIK9-COMMON_2010-01-04", "CIK9-COMMON", shape=shape, exit_kind="merger")])[0]
+        j = dt.judge_case(case, lib)
+        assert [(m.field, m.truth, m.library) for m in j.mismatches] == [
+            ("sec_id", "CIK9-COMMON", "(not in the run)")]
+    assert "sec_id" in dt.MISMATCH_FIELDS
 
 
 def test_ending_moved_refuses_the_old_ending_and_scores_the_later_one():

@@ -1,13 +1,17 @@
 """scripts/scorecard.py and scripts/draw_audit_sample.py over small tables in a temp folder."""
 import importlib.util
 import json
+import os
+import subprocess
 from pathlib import Path
 
 import pytest
 
+from delist_detection import diagnosis_truth as dt
 from delist_detection import store
 from delist_detection.truth import load_truth
-from tests.lifecycle_tables import ending, iv, obs, sec, tables
+from tests.diagnosis_rows import truth_row
+from tests.lifecycle_tables import contract_row, ending, iv, obs, sec, tables
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -99,11 +103,6 @@ def test_draw_writes_a_pending_worksheet_once(tmp_path, out, capsys):
     assert draw_script.main(argv) == 2 and "exists" in capsys.readouterr().err
 
 
-from delist_detection import diagnosis_truth as dt
-from tests.diagnosis_rows import truth_row
-from tests.lifecycle_tables import contract_row
-
-
 def test_check_fails_on_a_failing_diagnosis_pass_case(tmp_path, out, capsys):
     store.write_tables(out, {"contract_delistings": [contract_row("A", exit_kind="merger", value_rule="cash")]})
     dt.write_diagnosis_truth(tmp_path / "d.csv", [truth_row("A_2012-03-10", "A", exit_kind="exchange")])
@@ -113,10 +112,44 @@ def test_check_fails_on_a_failing_diagnosis_pass_case(tmp_path, out, capsys):
     assert "DIAGNOSIS FAILING A_2012-03-10: exit_kind merger != exchange" in capsys.readouterr().out
 
 
-def test_check_fails_while_a_regression_is_unexplained(tmp_path, out, capsys):
-    (out / "regression_report.csv").write_text("sec_id,table,field,kind,old,new\nZ,delistings,exit_kind,changed,"
-                                               "merger,exchange\n")
-    cfg = _config(tmp_path, {})
-    assert scorecard_script.main(["--output-dir", str(out), "--config", str(cfg), "--check",
-                                 "--ledger", str(tmp_path / "no_ledger.csv")]) == 1
+def _vc(repo, *args):
+    subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True,
+                   env={**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t",
+                        "GIT_COMMITTER_EMAIL": "t@t"})
+
+
+def _run_tables(out, z_exit):
+    store.write_tables(out, {"securities": [sec("A"), sec("Z")], "ticker_history": [], "delistings": [],
+                             "observation_map": [], "security_history": [],
+                             "contract_delistings": [contract_row("A", exit_kind="merger", value_rule="cash"),
+                                                     contract_row("Z", exit_kind=z_exit, value_rule="cash")]})
+    (out / "run_manifest.json").write_text(json.dumps({"as_of": "2026-09-25"}))
+
+
+def test_check_base_fails_on_an_unexplained_regression_and_passes_once_the_security_is_in_the_truth(tmp_path, capsys):
+    repo = tmp_path / "repo"
+    out = repo / "output"
+    out.mkdir(parents=True)
+    _vc(repo, "init", "-q")
+    _run_tables(out, "merger")
+    _vc(repo, "add", "-A")
+    _vc(repo, "commit", "-q", "-m", "base")
+    _run_tables(out, "exchange")
+    # a stale report on disk (an empty one) must not decide the result
+    (out / "regression_report.csv").write_text("sec_id,table,field,kind,old,new\n")
+    truth = tmp_path / "truth.csv"
+    dt.write_diagnosis_truth(truth, [truth_row("A_2010-01-04", "A", exit_kind="merger")])
+    cfg = tmp_path / "scorecard.json"
+    cfg.write_text(json.dumps({"floor": {}, "diagnosis": "truth.csv"}))
+    argv = ["--output-dir", str(out), "--config", str(cfg), "--repo", str(repo), "--ledger",
+            str(tmp_path / "none.csv"), "--check"]
+    assert scorecard_script.main(argv) == 0                    # no --base: no regression metric, no check
+    assert "D.unexplained_regressions" not in capsys.readouterr().out
+    assert scorecard_script.main([*argv, "--base", "HEAD"]) == 1
+    assert "D.unexplained_regressions" in capsys.readouterr().out
+    dt.write_diagnosis_truth(truth, [truth_row("A_2010-01-04", "A", exit_kind="merger"),
+                                     truth_row("Z_2010-01-04", "Z", exit_kind="exchange")])
+    (out / "regression_report.csv").write_text(
+        "sec_id,table,field,kind,old,new\nZ,delistings,exit_kind,changed,merger,exchange\n")   # stale, the other way
+    assert scorecard_script.main([*argv, "--base", "HEAD"]) == 0
     assert "D.unexplained_regressions" in capsys.readouterr().out

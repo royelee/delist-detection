@@ -9,14 +9,14 @@ from delist_detection import diagnosis_loop as dl
 from delist_detection import diagnosis_truth as dt
 from delist_detection import store
 from tests.diagnosis_rows import truth_row
-from tests.lifecycle_tables import contract_row, ending, hist, tables
+from tests.lifecycle_tables import contract_row, ending, hist, sec, tables
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 def _judged(contract):
     cases = dt.parse_rows([truth_row("A_2010-01-04", "A", exit_kind="merger", last_trade_date="2010-01-01")])
-    return dt.judge_all(cases, dt.LibraryRows.of(tables(contract_delistings=contract)))
+    return dt.judge_all(cases, dt.LibraryRows.of(tables([sec("A")], contract_delistings=contract)))
 
 
 def test_mismatch_key_names_the_case_field_and_both_values():
@@ -102,8 +102,9 @@ def _git(repo, *args):
                         "GIT_COMMITTER_EMAIL": "t@t"})
 
 
-def _write_out(out, contract, ids=()):
-    store.write_tables(out, {"securities": [], "ticker_history": [], "delistings": [], "observation_map": [],
+def _write_out(out, contract, ids=(), securities=None):
+    store.write_tables(out, {"securities": [sec(c["sec_id"]) for c in contract] if securities is None else securities,
+                             "ticker_history": [], "delistings": [], "observation_map": [],
                              "contract_delistings": contract,
                              "security_history": [hist("Z", "1", "2008-01-02", "2010-01-01", "ZZZ")],
                              "id_changes": list(ids)})
@@ -154,3 +155,25 @@ def test_a_round_renames_truth_and_reports_a_regression(tmp_path, capsys):
     assert Path(printed["path"]) == tmp_path / "loop" / "5a" / "round-1" / "cases.csv"
     cases = dl.read_csv(Path(printed["path"]))
     assert [r["case_id"] for r in cases] == ["Z_5a-r1"]
+
+
+def test_a_round_renames_through_the_base_commits_securities_when_id_changes_is_empty(tmp_path, capsys):
+    # id_changes.csv is not cumulative: this run's is empty, yet the placeholder of the base commit now holds a FIGI.
+    repo = tmp_path / "repo"
+    out = repo / "output"
+    out.mkdir(parents=True)
+    _git(repo, "init", "-q")
+    _write_out(out, [contract_row("Z", exit_kind="merger")],
+               securities=[sec("Z"), sec("CIK9-COMMON", cik="9", figi_source="placeholder")])
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", "base")
+    _write_out(out, [contract_row("Z", exit_kind="merger")], securities=[sec("Z"), sec("BBGX", cik="9")])
+    dt.write_diagnosis_truth(tmp_path / "truth.csv", [truth_row("CIK9-COMMON_2010-01-04", "CIK9-COMMON",
+                                                                shape="no_ending")])
+    assert round_script.main(_argv(tmp_path, repo, "--label", "5a", "--base", "HEAD", "--round", "1")) == 0
+    printed = json.loads(capsys.readouterr().out)
+    assert (printed["mismatches_new"], printed["renamed"], printed["cases"]) == (0, 1, [])
+    assert [(r["case_id"], r["sec_id"]) for r in dl.read_csv(tmp_path / "truth.csv")] == [
+        ("CIK9-COMMON_2010-01-04", "BBGX")]
+    [change] = dl.read_csv(tmp_path / "changes.csv")
+    assert (change["old"], change["new"]) == ("CIK9-COMMON", "BBGX")

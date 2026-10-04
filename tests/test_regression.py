@@ -26,6 +26,15 @@ def test_a_changed_field_is_one_row_and_the_verdict_column_is_ignored():
                                             "kind": "changed", "old": "2010-09-30", "new": "2010-10-01"}]
 
 
+def test_columns_that_follow_other_columns_and_prices_are_not_reported():
+    old = dict(dlret="0.1", dlret_fill="", terminal_value="11", value_formula="cash", terms_source="regex",
+               terms_gate="passed")
+    new = dict(dlret="0.2", dlret_fill="assumed_par", terminal_value="12", value_formula="cash+stock",
+               terms_source="llm", terms_gate="failed")
+    base, now = _snap([contract_row("A", **old)]), _snap([contract_row("A", **new)])
+    assert rg.diff_contract(base, now) == []
+
+
 def test_added_and_removed_rows_and_ticker_ranges_and_id_changes():
     base = _snap([contract_row("A", exit_kind="merger")], [hist("A", "1", "2008-01-02", "2010-01-01")])
     new = _snap([contract_row("B", exit_kind="exchange")],

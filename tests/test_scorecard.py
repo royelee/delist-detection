@@ -197,7 +197,8 @@ def test_diagnosis_lines_count_mismatches_by_field_and_list_failing_pass_cases()
         truth_row("B_2010-05-10", "B", status="known_wrong", fixed_by="5a", shape="no_ending"),
         truth_row("C_2011-01-01", "C", status="ruling_pending", exit_kind="merger"),
     ])
-    t = tables(delistings=[ending("A", "2012-03-10", ltd="2012-03-01"),
+    t = tables([sec("A"), sec("B"), sec("C")],
+               delistings=[ending("A", "2012-03-10", ltd="2012-03-01"),
                            ending("B", "2010-05-10", "exchange_transfer")],
                contract_delistings=[contract_row("A", exit_kind="merger", value_rule="cash",
                                                  cash_per_share="9.000000"),
@@ -205,6 +206,7 @@ def test_diagnosis_lines_count_mismatches_by_field_and_list_failing_pass_cases()
     card = sc.build(t, as_of=AS_OF, config=ScorecardConfig(diagnosis=cases))
     m = card["metrics"]
     assert (m["D.cases"], m["D.ruling_pending"], m["D.known_wrong"], m["D.cases_matching"]) == (3, 1, 1, 0)
+    assert sc.METRICS["D.ruling_pending"] == sc.DOWN and "D.mismatches.sec_id" in sc.METRICS
     assert (m["D.mismatches"], m["D.mismatches.cash_per_share"], m["D.mismatches.shape"]) == (2, 1, 1)
     assert m["D.mismatches.exit_kind"] == 0 and m["D.known_wrong_now_right"] == 0
     assert card["diagnosis_failures"] == ["A_2012-03-10: cash_per_share 9.000000 != 10"]

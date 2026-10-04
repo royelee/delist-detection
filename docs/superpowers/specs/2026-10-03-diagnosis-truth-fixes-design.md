@@ -86,7 +86,10 @@ scored). `scorecard.build` adds:
 
 - `D.mismatches` (total) and `D.mismatches.<field>`, floored (good direction: down).
 - `D.cases_matching`, `D.known_wrong`, `D.ruling_pending`.
-- `D.unexplained_regressions`, from the regression report (1.4), floored at zero.
+- `D.unexplained_regressions`, from the regression report (1.4), recomputed by `scripts/scorecard.py --base <commit>`
+  (there is no such metric without `--base`); `--check --base` fails when it is above zero.
+- `D.mismatches.sec_id`: a truth case whose sec_id is not in the run's securities (a placeholder folded into a FIGI
+  line that the truth file was not renamed for) is judged by that one mismatch, in any shape.
 
 `data/scorecard.json` names the truth file, as it names the other two. A `known_wrong` row is a strict xfail: when the
 library starts matching it, the check fails until its status is flipped to `pass`, as the golden set does today.
@@ -98,6 +101,13 @@ library starts matching it, the check fails until its status is flipped to `pass
 for every security not in the truth file and not on a truth case's successor chain. It also lists placeholders whose
 sec_id changed (`contract/id_changes.csv`). It writes `output/regression_report.csv`: one row per changed field,
 with old and new values. A regressed row is "unexplained" until the loop settles it in the truth file (1.6).
+
+The report compares the contract's own columns, not the ones that are functions of other columns and of prices:
+`dlret`, `dlret_fill`, `terminal_value`, `value_formula`, `terms_source` and `terms_gate` are skipped, beside
+`verdict`. A price answer then cannot flood the report with derived changes, and one verdict on such a column cannot
+leave a whole regression case pending. The cost: a change in `dlret` alone, outside the truth set, is not reported
+(the scorecard's R2 lines still count fills and assumed par). Renames are found by comparing the base commit's
+`securities.csv` with the run's (`contract/id_changes.csv` is not cumulative) and merged with the run's own rows.
 
 ### 1.5 Diagnose modes
 

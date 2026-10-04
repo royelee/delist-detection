@@ -2,10 +2,11 @@
 field that changed between a base commit's run and this one, for securities outside the diagnosis truth set and
 its successor chains.
 
-A security's contract/delistings.csv row is compared column by column. The verdict column is left out: the loop
-judges classification, and sub-plan 5i changes verdicts on purpose. Its contract/security_history.csv rows are
-compared as one list of ranges, and a new contract/id_changes.csv row (a placeholder that now holds a FIGI) is
-listed too. A report row is explained when the ledger settled that exact change as right (`new_right`); a
+A security's contract/delistings.csv row is compared column by column. The verdict column and the columns
+derived from other columns and prices (`SKIPPED_COLUMNS`) are left out: the loop judges classification, and
+sub-plan 5i changes verdicts on purpose. Its contract/security_history.csv rows are compared as one list of ranges,
+and a new contract/id_changes.csv row (a placeholder that now holds a FIGI) is listed too. A report row is
+explained when the ledger settled that exact change as right (`new_right`); a
 regressed row the loop added to the truth file as ruling_pending (fixed_by `regression`) stays unexplained until
 the operator settles it."""
 from __future__ import annotations
@@ -20,11 +21,15 @@ from pathlib import Path
 
 from . import store
 from .atomic_io import write_atomic
+from .contract import id_change_rows
 from .diagnosis_truth import REGRESSION_PENDING, RULING_PENDING, DiagnosisCase
 
 REPORT_COLUMNS = ("sec_id", "table", "field", "kind", "old", "new")
 CHANGED, ADDED, REMOVED = "changed", "added", "removed"
-SKIPPED_COLUMNS = frozenset({"sec_id", "verdict"})
+# Columns the diff leaves out: the key, the verdict (5i changes it on purpose), and every column that is a function of
+# other columns and of prices (a dlret moves with any price answer and says nothing the truth set scores).
+SKIPPED_COLUMNS = frozenset({"sec_id", "verdict", "dlret", "dlret_fill", "terminal_value", "value_formula",
+                             "terms_source", "terms_gate"})
 BRIEF_COLUMNS = ("exit_kind", "drop_reason", "continuation", "successor_sec_id", "last_trade_date", "value_rule")
 
 
@@ -68,23 +73,54 @@ def read_snapshot(out_dir: str | Path) -> Snapshot:
     return Snapshot(rows("contract_delistings"), rows("security_history"), rows("id_changes", required=False))
 
 
+def _at(repo: str | Path, rev: str, out_dir: str | Path, name: str, required: bool = True) -> list[dict[str, str]]:
+    """Table `name` under `out_dir` as commit `rev` of the repository `repo` holds it (`out_dir` lies inside
+    `repo`); [] when the commit lacks it and it is not `required`."""
+    root = Path(repo).resolve()
+    path = store.table_path(Path(out_dir).resolve(), name)
+    try:
+        rel = path.relative_to(root).as_posix()
+    except ValueError:
+        raise RegressionInputError(f"{path}: not inside the repository {root}") from None
+    done = subprocess.run(["git", "-C", str(root), "show", f"{rev}:{rel}"], capture_output=True, text=True)
+    if done.returncode != 0:
+        if required:
+            raise RegressionInputError(f"{rev}:{rel}: {done.stderr.strip() or 'not in that commit'}")
+        return []
+    if name == "securities":
+        return list(csv.DictReader(io.StringIO(done.stdout)))
+    return _rows(done.stdout, name, f"{rev}:{rel}")
+
+
 def snapshot_at(repo: str | Path, rev: str, out_dir: str | Path) -> Snapshot:
     """The contract files as commit `rev` of git repository `repo` holds them (`out_dir` lies inside `repo`)."""
-    root = Path(repo).resolve()
+    return Snapshot(_at(repo, rev, out_dir, "contract_delistings"), _at(repo, rev, out_dir, "security_history"),
+                    _at(repo, rev, out_dir, "id_changes", required=False))
 
-    def rows(name: str, required: bool = True) -> list[dict[str, str]]:
-        path = store.table_path(Path(out_dir).resolve(), name)
-        try:
-            rel = path.relative_to(root).as_posix()
-        except ValueError:
-            raise RegressionInputError(f"{path}: not inside the repository {root}") from None
-        done = subprocess.run(["git", "-C", str(root), "show", f"{rev}:{rel}"], capture_output=True, text=True)
-        if done.returncode != 0:
-            if required:
-                raise RegressionInputError(f"{rev}:{rel}: {done.stderr.strip() or 'not in that commit'}")
-            return []
-        return _rows(done.stdout, name, f"{rev}:{rel}")
-    return Snapshot(rows("contract_delistings"), rows("security_history"), rows("id_changes", required=False))
+
+def id_changes_since(repo: str | Path, rev: str, out_dir: str | Path,
+                     run_id_changes: Sequence[Mapping[str, str]] = ()) -> list[dict[str, str]]:
+    """Every placeholder that now holds a FIGI since commit `rev`: `contract.id_change_rows` over that commit's
+    securities.csv and this run's, plus the run's own contract/id_changes.csv rows (`run_id_changes`). The run's
+    file is not cumulative (it lists one run's renames, empty on the next), so a rename that happened over several
+    runs is found only by comparing against the base commit. A missing securities.csv on either side gives no
+    computed renames."""
+    now = store.table_path(out_dir, "securities")
+    run = list(csv.DictReader(now.open(newline="", encoding="utf-8"))) if now.exists() else []
+    found = id_change_rows(_at(repo, rev, out_dir, "securities", required=False), run, "") if run else []
+    seen = {(r["old_sec_id"], r["new_sec_id"]) for r in run_id_changes}
+    return [dict(r) for r in run_id_changes] + [r for r in found if (r["old_sec_id"], r["new_sec_id"]) not in seen]
+
+
+def build_report(repo: str | Path, rev: str, out_dir: str | Path, cases: Sequence[DiagnosisCase],
+                 id_changes: Sequence[Mapping[str, str]] | None = None) -> list[dict[str, str]]:
+    """The regression report of the run under `out_dir` against commit `rev`: the one place that reads both
+    snapshots, builds the exclusion set (truth cases, successor chains and renames) and diffs. `id_changes` are the
+    renames to exclude (default: `id_changes_since`)."""
+    base, new = snapshot_at(repo, rev, out_dir), read_snapshot(out_dir)
+    if id_changes is None:
+        id_changes = id_changes_since(repo, rev, out_dir, new.id_changes)
+    return diff_contract(base, new, excluded(cases, base.delistings, new.delistings, id_changes=id_changes))
 
 
 def successor_chain(sec_ids: Collection[str], *delistings: Sequence[Mapping[str, str]]) -> set[str]:

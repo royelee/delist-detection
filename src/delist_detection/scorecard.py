@@ -60,7 +60,7 @@ METRICS: dict[str, str] = {
     "R2.5.distress_blank_dlret": DOWN, "R2.5.distress_no_last_trade_date": DOWN,
     "R2.6.distress_flagged": DOWN,
     "G.pass": UP,
-    "D.mismatches": DOWN, "D.cases_matching": UP,
+    "D.mismatches": DOWN, "D.cases_matching": UP, "D.ruling_pending": DOWN,
     **{f"D.mismatches.{f}": DOWN for f in MISMATCH_FIELDS},
     "A.random.upper95": DOWN,
     "V.uncertain_seeds": DOWN, "V.uncertain_securities": DOWN, "V.uncertain_endings": DOWN,

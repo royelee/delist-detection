@@ -22,7 +22,7 @@ from __future__ import annotations
 import csv
 import io
 from collections import defaultdict
-from collections.abc import Mapping, Sequence
+from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
@@ -217,7 +217,7 @@ def write_legs(path: str | Path, rows: Sequence[Mapping[str, str]]) -> None:
     _write(path, LEG_COLUMNS, rows)
 
 
-MISMATCH_FIELDS = (*SCORED, "internal_last_trade_date", "shape", "ending", "legs")
+MISMATCH_FIELDS = (*SCORED, "internal_last_trade_date", "shape", "ending", "legs", "sec_id")
 LEG_FIELDS = ("ratio", "price_sec_id", "price_ticker", "price_date")
 
 
@@ -244,10 +244,12 @@ class CaseJudgement:
 
 @dataclass(frozen=True)
 class LibraryRows:
-    """What the judge reads from one run: the contract row and the last real ending of each security, and its
-    payout legs (None: the run has no contract/payout_legs.csv yet, before sub-plan 5f)."""
+    """What the judge reads from one run: the contract row and the last real ending of each security, the run's
+    securities (a case whose sec_id is gone from the run cannot be judged: a `no_ending` row would pass on it),
+    and its payout legs (None: the run has no contract/payout_legs.csv yet, before sub-plan 5f)."""
     contract: Mapping[str, Mapping[str, str]]
     last_endings: Mapping[str, Mapping[str, str]]
+    sec_ids: Collection[str]
     legs: Mapping[str, Sequence[Mapping[str, str]]] | None = None
 
     @classmethod
@@ -258,7 +260,8 @@ class LibraryRows:
             for r in legs_rows:
                 grouped[r["sec_id"]].append(r)
             legs = {k: sorted(v, key=lambda r: int(r["leg"])) for k, v in grouped.items()}
-        return cls({r["sec_id"]: r for r in tables.contract_delistings or ()}, last_endings(tables.delistings), legs)
+        return cls({r["sec_id"]: r for r in tables.contract_delistings or ()}, last_endings(tables.delistings),
+                   frozenset(r["sec_id"] for r in tables.securities), legs)
 
 
 def field_key(name: str) -> str:
@@ -295,13 +298,19 @@ def _judge_legs(case: DiagnosisCase, rows: Sequence[Mapping[str, str]] | None) -
 
 
 def judge_case(case: DiagnosisCase, lib: LibraryRows) -> CaseJudgement:
-    """Compare one case to one run; every scored field that disagrees is one Mismatch (spec 1.3)."""
+    """Compare one case to one run; every scored field that disagrees is one Mismatch (spec 1.3). A case whose
+    sec_id is not in the run's securities gives one `sec_id` mismatch and nothing else."""
     row, end = lib.contract.get(case.sec_id), lib.last_endings.get(case.sec_id)
     bad: list[Mismatch] = []
 
     def miss(name: str, truth: str, library: str) -> None:
         bad.append(Mismatch(case.case_id, name, truth, library))
 
+    if case.sec_id not in lib.sec_ids:
+        # A security folded into another (a placeholder that now holds a FIGI) has no contract row either, which
+        # would read as "no ending" and pass a no_ending case; the case must be renamed or ruled on instead.
+        miss("sec_id", case.sec_id, "(not in the run)")
+        return CaseJudgement(case, tuple(bad))
     if case.shape == NO_ENDING:
         if row is not None:
             miss("shape", NO_ENDING, "ending")

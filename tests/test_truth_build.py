@@ -1,7 +1,7 @@
 """truth_build: one normalized JSON row into one truth row (spec 1.2)."""
 from delist_detection import diagnosis_truth as dt
 from delist_detection import truth_build as tb
-from tests.lifecycle_tables import contract_row, tables
+from tests.lifecycle_tables import contract_row, sec, tables
 
 FIELDS = {f: "" for f in dt.SCORED}
 
@@ -105,7 +105,7 @@ def test_review_markdown_lists_counts_pending_questions_and_residuals():
     b, _ = _assemble(_norm(case_id="BBGB_2010-01-04", sec_id="BBGB",
                            pending=[{"field": "stock_ratio", "question": "final proration?"}]))
     cases = dt.parse_rows([a, b])
-    lib = dt.LibraryRows.of(tables(contract_delistings=[contract_row("BBGA", exit_kind="merger", value_rule="cash",
+    lib = dt.LibraryRows.of(tables([sec("BBGA"), sec("BBGB")], contract_delistings=[contract_row("BBGA", exit_kind="merger", value_rule="cash",
                                                                       cash_per_share="9.000000")]))
     text = tb.review_markdown([a, b], dt.judge_all(cases, lib))
     assert "known_wrong" in text and "final proration?" in text and "cash_per_share" in text

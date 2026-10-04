@@ -4,7 +4,9 @@
   python scripts/truth_loop_round.py --label 5-0 --seed-ledger
 
 A round does five things:
-1. It renames truth rows whose placeholder now holds a FIGI (contract/id_changes.csv).
+1. It renames truth rows whose placeholder now holds a FIGI: by the run's contract/id_changes.csv and by comparing
+   the --base commit's securities.csv with the run's (that file is not cumulative), and writes the truth file and
+   the change log together.
 2. It judges the run under --output-dir against the truth file.
 3. It writes output/regression_report.csv against --base.
 4. It keeps the errors the ledger has not seen.
@@ -21,11 +23,10 @@ import sys
 from pathlib import Path
 
 from delist_detection import diagnosis_loop as dl
-from delist_detection.diagnosis_truth import (COLUMNS, LibraryRows, judge_all, load_legs, parse_rows,
-                                              write_diagnosis_truth)
+from delist_detection.diagnosis_truth import COLUMNS, LibraryRows, judge_all, load_legs, parse_rows
 from delist_detection.lifecycle import Tables
-from delist_detection.regression import (RegressionInputError, diff_contract, excluded, read_snapshot,
-                                         regression_key, snapshot_at, write_report)
+from delist_detection.regression import (RegressionInputError, build_report, id_changes_since, regression_key,
+                                         write_report)
 from delist_detection.truth import TruthFileError
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -54,19 +55,20 @@ def main(argv: list[str] | None = None) -> int:
     ledger_path = args.loop_dir / "diagnosed.csv"
     try:
         truth_rows = dl.read_csv(args.truth)
-        id_changes = dl.read_csv(args.output_dir / "contract" / "id_changes.csv")
+        run_ids = dl.read_csv(args.output_dir / "contract" / "id_changes.csv")
+        id_changes = run_ids if args.seed_ledger else id_changes_since(args.repo, args.base, args.output_dir, run_ids)
         truth_rows, renames = dl.rename_truth(truth_rows, id_changes)
         legs = load_legs(args.legs) if args.legs.exists() else {}
         cases = parse_rows(truth_rows, str(args.truth), legs)
         tables = Tables.read(args.output_dir)
         judged = judge_all(cases, LibraryRows.of(tables, _legs_rows(args.output_dir)))
         ledger = dl.read_ledger(ledger_path)
-    except (TruthFileError, ValueError, OSError) as exc:
+    except (TruthFileError, RegressionInputError, ValueError, OSError) as exc:
         print(f"ABORTED: {exc}", file=sys.stderr)
         return 2
     if renames:
-        write_diagnosis_truth(args.truth, [{c: r[c] for c in COLUMNS} for r in truth_rows])
-        dl.write_changes(args.changes, dl.read_csv(args.changes) + renames)
+        dl.write_together([(args.truth, COLUMNS, truth_rows),
+                           (args.changes, dl.CHANGE_COLUMNS, dl.read_csv(args.changes) + renames)])
     keys = dl.ledger_keys(ledger)
     if args.seed_ledger:
         seeded = dl.seed_rows(judged, keys, args.label)
@@ -74,11 +76,10 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps({"label": args.label, "seeded": len(seeded), "ledger": str(ledger_path)}))
         return 0
     try:
-        base, new = snapshot_at(args.repo, args.base, args.output_dir), read_snapshot(args.output_dir)
+        report = build_report(args.repo, args.base, args.output_dir, cases, id_changes)
     except RegressionInputError as exc:
         print(f"ABORTED: {exc}", file=sys.stderr)
         return 2
-    report = diff_contract(base, new, excluded(cases, base.delistings, new.delistings, id_changes=new.id_changes))
     write_report(args.output_dir / "regression_report.csv", report)
     mismatches = [m for j in judged for m in j.mismatches if dl.mismatch_key(m) not in keys]
     regressions = [r for r in report if regression_key(r) not in keys]
