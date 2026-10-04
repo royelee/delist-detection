@@ -49,7 +49,7 @@ from .line_follow import (
 )
 from .listing_status import edgar_lists, issuer_exchange, listed_today, listing_answers
 from .observations import (
-    ObservationError, ObservationIndex, TickerEra, eras_by_key, normalize_ticker, observation_conflicts,
+    Observation, ObservationError, ObservationIndex, TickerEra, eras_by_key, normalize_ticker, observation_conflicts,
 )
 from .payout_gate import DEFAULT_TOL, GatedPayouts, gate_payouts
 from .prefetch import Serialized, warm
@@ -730,6 +730,7 @@ class _DelistingSearch:
     listed: dict[str, bool | None]
     sightings: dict[str, list[Sighting]]
     review: list[ReviewItem]
+    finder: DelistingFinder | None = None      # the sequential finder, which stage 9d reuses
 
 
 def _find_delistings(ctx: _RunContext, securities: dict[str, Security], sec_cusips: dict[str, list[str]],
@@ -791,7 +792,7 @@ def _find_delistings(ctx: _RunContext, securities: dict[str, Security], sec_cusi
         if i % 50 == 0:
             log(f"[{i}/{len(securities)}] securities searched; {len(delistings)} delistings so far")
     ctx.meter.done("delisting search", mark)
-    return _DelistingSearch(delistings, listed, sightings, review)
+    return _DelistingSearch(delistings, listed, sightings, review, finder)
 
 
 def _dead_before_sighting(ctx: _RunContext, securities: dict[str, Security], delistings: list[Delisting],
@@ -1552,6 +1553,73 @@ def _handoffs(ctx: _RunContext, delistings: list[Delisting], securities: dict[st
     return outcome
 
 
+PREDECESSOR_FORM25_DAYS = 30     # stage 9d: a successor's Form 25 this close to its first day is its predecessor's
+
+
+@dataclass
+class _SuccessorEndings:
+    """Stage 9d's answer: the endings found for the successors the run added, the securities they were searched
+    as (one era over each successor's span) with their CUSIPs, and the degraded-answer review items."""
+    delistings: list[Delisting] = field(default_factory=list)
+    securities: dict[str, Security] = field(default_factory=dict)
+    cusips: dict[str, list[str]] = field(default_factory=dict)
+    review: list[ReviewItem] = field(default_factory=list)
+
+
+def _successor_endings(ctx: _RunContext, finder: DelistingFinder, added: Mapping[str, AddedSecurity],
+                       securities: dict[str, Security], sec_cusips: dict[str, list[str]], ftd: FtdIndex,
+                       answers: _IssuerAnswers) -> _SuccessorEndings:
+    """9d. The Form 25 search (`DelistingFinder.find`, Form 25 matches only: no fallback ending for a security no
+    observation names) for each successor the run added: a line successor (`AddedLineSuccessor`, seen over its new
+    CUSIP's fails rows: California Resources' 2016 line, Dynegy's 2010 line, ODP Corp) and an 8-K12B successor
+    (`AddedSuccessor`, alive from its 8-K12B until its issuer's own Form 25: TiVo Corp, Rovi's successor). Each is
+    searched as a security with one era over that span, beside the run's securities of its issuer; a successor
+    listed today keeps no ending. An 8-K12B successor's span then runs to the ending's last trade."""
+    clients, out = ctx.clients, _SuccessorEndings()
+    mark = ctx.meter.start()
+    for sid, a in sorted(added.items()):
+        cik = a.security.issuer_cik
+        if isinstance(a, AddedAcquirer) or cik is None or sid in securities:
+            continue
+        rows = list(getattr(a, "rows", []))
+        first, last = a.span()
+        end = last if rows else ctx.as_of.isoformat()
+        era = TickerEra(a.ticker, first, end, [Observation(a.ticker, first, a.security.name),
+                                               Observation(a.ticker, end, a.security.name)])
+        s = replace(a.security, eras=[era])
+        world = {x.sec_id: x for x in securities.values() if x.issuer_cik == cik} | {sid: s}
+        cusips = {x: list(sec_cusips.get(x, [])) for x in world} | {sid: sorted({r.cusip for r in rows})}
+        sightings = {x: ticker_sightings(world[x], ftd, cusips[x]) for x in world}
+        watch = DegradedWatch()
+        try:
+            listed = listed_today(clients.figi, sid, edgar=clients.edgar, cik=cik, tickers=[a.ticker])
+            found = [] if listed else finder.find(_context_builder(world, sightings, answers, ftd, cusips)(s, listed),
+                                                  fallback=False)[0]
+        except FATAL:
+            raise
+        except Exception as exc:  # one added successor must not abort the run
+            ctx.log(f"{sid}: successor ending search ERROR {type(exc).__name__}: {exc}")
+            out.review.append(ReviewItem(sid, a.ticker, cik, "error", f"{type(exc).__name__}: {exc}"))
+            continue
+        # a Form 25 filed within PREDECESSOR_FORM25_DAYS of the successor's first day removed its predecessor
+        start = (date.fromisoformat(first) + timedelta(days=PREDECESSOR_FORM25_DAYS)).isoformat()
+        endings = [d for d in found if d.record.successor_sec_id != sid
+                   and not (d.form25_sub is not None and d.form25_sub.filing_date <= start)]
+        watch.report(out.review, degraded_item(sid, a.ticker, cik, "the successor ending search",
+                                               "; run again once SEC answers"), endings)
+        if not endings:
+            continue
+        out.delistings += endings
+        out.securities[sid] = s
+        out.cusips[sid] = cusips[sid]
+        if isinstance(a, AddedSuccessor) and endings[-1].last_trade.day is not None:
+            a.last = endings[-1].last_trade.day.isoformat()
+    ctx.log(f"successor endings: {len(out.delistings)} for {len(out.securities)} added successors "
+            f"({', '.join(sorted(out.securities)) or 'none'})")
+    ctx.meter.done("successor endings", mark)
+    return out
+
+
 def _date_from_notices(ctx: _RunContext, added: list[Delisting], review: list[ReviewItem]) -> int:
     """9c. A continuation row the handoff stage built from an unmatched Form 25
     carries its last sighting as its last trade day; when that Form 25's notice
@@ -2116,6 +2184,13 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
         delistings += handoffs.added
         overrides = _apply_price_answers(given, delistings)   # the added delistings take their answers too
         closes.update(_last_trade_closes(ctx, handoffs.added, securities, sec_cusips, ftd, ftd_lo, overrides))
+    ends = _successor_endings(ctx, search.finder, added, securities, sec_cusips, ftd, answers)      # 9d
+    review += ends.review
+    if ends.delistings:
+        delistings += ends.delistings
+        overrides = _apply_price_answers(given, delistings)
+        closes.update(_last_trade_closes(ctx, ends.delistings, {**securities, **ends.securities},
+                                         {**sec_cusips, **ends.cusips}, ftd, ftd_lo, overrides))
     # The handoff stage creates continuation delistings (AON 2012) and sets successors: the clip and the ranges read
     # the starts and endings of the final delistings. (The first pass above only decides which stage-9 delistings
     # are self-successor continuations, before the handoff stage.)

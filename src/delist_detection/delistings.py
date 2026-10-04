@@ -436,7 +436,9 @@ class DelistingFinder:
         return bool(letters and not letters & mine)
 
     # -- main ------------------------------------------------------------
-    def find(self, ctx: SecurityContext) -> tuple[list[Delisting], list[ReviewItem]]:
+    def find(self, ctx: SecurityContext, *, fallback: bool = True) -> tuple[list[Delisting], list[ReviewItem]]:
+        """The security's delistings and review items. `fallback=False` (pipeline stage 9d, a successor the run
+        added): Form 25 matches only, no fallback ending and no review item for a security without one."""
         sec = ctx.security
         if not sec.eras:
             return [], []
@@ -547,6 +549,8 @@ class DelistingFinder:
         # when `delistings` is empty. Otherwise a security whose only delistings
         # are continued ones gets neither a real delisting nor a review row.
         review = scan.review
+        if not fallback:
+            return delistings, review
         if last_definitive is None:
             if ctx.listed_today is False:
                 fb = self._fallback(ctx, cik, filings, ticker_last, scan.older)

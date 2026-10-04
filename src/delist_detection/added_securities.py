@@ -66,9 +66,12 @@ class AddedLineSuccessor(AddedSecurity):
 @dataclass
 class AddedSuccessor(AddedSecurity):
     """An exchange transfer's successor, seen on its 8-K12B's filing date (never
-    before the day after the predecessor's last trade)."""
+    before the day after the predecessor's last trade), through `last`: the last
+    trade of its own ending when the run found one (pipeline stage 9d), else that
+    day alone."""
     filing_date: str
+    last: str = ""
     source: ClassVar[str] = "edgar_8k"
 
     def span(self) -> tuple[str, str]:
-        return self.filing_date, self.filing_date
+        return self.filing_date, max(self.filing_date, self.last or self.filing_date)
