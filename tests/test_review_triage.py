@@ -65,7 +65,7 @@ def test_every_catalog_entry_is_complete():
 def test_severities_follow_the_rulings():
     info = {"no_figi", "resolved_by_current_ticker_map", "resolved_by_cik_map", "resolved_by_manual_override",
             "ftd_close_prior", "ftd_close_lagged", "acquirer_close_lagged", "last_trade_date_unconfirmed",
-            "handoff_continuation", "line_followed", "line_follow_refused"}
+            "handoff_continuation", "line_followed", "line_follow_refused", "line_continuation"}
     unacceptable = {"error", "resolution_degraded", "review_decision_unmatched"}
     assert {n for n, i in CATALOG.items() if i.severity == "info"} == info
     assert {n for n, i in CATALOG.items() if not i.acceptable} == unacceptable

@@ -22,14 +22,14 @@ import requests
 from . import manifest as run_manifest
 from . import scorecard as run_scorecard
 from .acquirers import acquirer_cik, find_acquirer
-from .added_securities import AddedAcquirer, AddedSecurity, AddedSuccessor
+from .added_securities import AddedAcquirer, AddedLineSuccessor, AddedSecurity, AddedSuccessor
 from .crsp_codes import CrspBucket
 from .degraded import DegradedWatch, degraded_item, flag_degraded, report_halt_feed_failures
 from .delistings import SUCCESSOR_UNKNOWN, Delisting, DelistingFinder, SecurityContext
 from .evidence import edgar_names
 from .fatal import FATAL
 from .handoffs import (
-    HandoffDecision, HandoffOutcome, apply_handoffs, continuation_filing, cusip_switch, decide_handoff,
+    CONTINUATION_CODE, HandoffDecision, HandoffOutcome, apply_handoffs, continuation_filing, cusip_switch, decide_handoff,
     drop_resolved_shared, find_handoffs, issuer_carries_on, own_continuation_filing, predecessor_names,
 )
 from .figi_resolution import FigiCandidate, is_placeholder, share_class_from_name
@@ -66,7 +66,8 @@ from .lifecycle import Tables
 from .ticker_evidence import EraEvidence, evidence_for
 from .store import DelistingKey, formatted, write_tables
 from .successors import (
-    SecurityStart, successor_from_8k12b, successor_in_run, successor_query, successor_search_args,
+    SUCCESSOR_AFTER_DAYS, SUCCESSOR_BEFORE_DAYS, SecurityStart, successor_from_8k12b, successor_in_run,
+    successor_query, successor_search_args,
 )
 from .ticker_resolver import InferredIssuer, TickerResolution
 from .verdict import Verdicts
@@ -1046,22 +1047,63 @@ def _merger_payouts(ctx: _RunContext, delistings: list[Delisting], securities: d
     return _Payouts(raw, llm_terms, gated, acquirer_ids, added, extraction_review + acquirer_review)
 
 
+LINE_FOLLOW, LINE_CONTINUATION = "line_follow", "line_continuation"
+
+
 @dataclass
 class _Successors:
     """Stage 9's answer: each delisting's successor (`links`, by delisting: the
-    successor's sec_id and how the run found it -- "same_issuer" or
-    "same_ticker" for a security of the run, None for an 8-K12B hit), the
-    successors the run adds as securities of their own, the review items, and
-    the delistings whose own row a degraded search answer flags."""
+    successor's sec_id and how the run found it -- "line_follow" for stage 4b's
+    line successor, "same_issuer" or "same_ticker" for a security of the run,
+    None for an 8-K12B hit), the successors the run adds as securities of their
+    own, the review items, the delistings whose own row a degraded search answer
+    flags, and the `unknown` rows a line successor rewrites as continuations
+    (`rebucketed`, by delisting: the new reason)."""
     links: dict[DelistingKey, tuple[str, str | None]] = field(default_factory=dict)
     added: dict[str, AddedSecurity] = field(default_factory=dict)
     review: list[ReviewItem] = field(default_factory=list)
     degraded: list[DelistingKey] = field(default_factory=list)
+    rebucketed: dict[DelistingKey, str] = field(default_factory=dict)
+
+
+def _line_successor_links(delistings: list[Delisting], securities: dict[str, Security],
+                          acquirers: dict[str, AddedSecurity], line_successors: Mapping[str, LineSuccessor],
+                          ftd: FtdIndex, found: _Successors) -> None:
+    """A FIGI line another composite continues (stage 4b's `line_successors`, R2): each of its delistings that
+    still needs a successor (`successor_unknown`) or a kind (`unknown`: GTES 2026's Form 25 at its redomicile),
+    whose last trade (else Form 25 filing date, else delisting date) lies within [-SUCCESSOR_BEFORE_DAYS,
+    +SUCCESSOR_AFTER_DAYS] days of the step's first row, takes that composite as its successor; an `unknown` row
+    becomes the continuation. The composite is added as a security of its own (`AddedLineSuccessor`) when the run
+    has none, and only for a delisting that takes it."""
+    for e in delistings:
+        ls = line_successors.get(e.sec_id)
+        if ls is None or not (SUCCESSOR_UNKNOWN in e.flags or e.record.bucket is CrspBucket.UNKNOWN):
+            continue
+        day = e.last_trade.day or (date.fromisoformat(e.form25_sub.filing_date) if e.form25_sub is not None
+                                   else date.fromisoformat(e.delist_date))
+        lo = (day - timedelta(days=SUCCESSOR_BEFORE_DAYS)).isoformat()
+        hi = (day + timedelta(days=SUCCESSOR_AFTER_DAYS)).isoformat()
+        if not lo <= ls.step.first <= hi:
+            continue
+        found.links[e.key] = (ls.composite, LINE_FOLLOW)
+        if e.record.bucket is CrspBucket.UNKNOWN:
+            found.rebucketed[e.key] = (
+                f"Continuation (line follow, {ls.evidence}): {e.ticker}'s new CUSIP {ls.step.new_cusip} traded from "
+                f"{ls.step.first} as {ls.composite}, its own FIGI; holders' shares became {ls.composite}'s")
+        x = ls.composite
+        if x not in securities and x not in acquirers and x not in found.added:
+            rows = [r for r in ftd.trading_rows([ls.step.new_cusip]) if r.symbol == ls.step.symbol]
+            found.added[x] = AddedLineSuccessor(
+                Security(x, securities[e.sec_id].issuer_cik, share_class_from_name(ls.candidate.name),
+                         ls.candidate.name, ls.candidate.security_type, False, "cusip"),
+                ls.step.symbol, ls.step.first, rows)
 
 
 def _find_successors(ctx: _RunContext, delistings: list[Delisting], securities: dict[str, Security],
-                     sightings: dict[str, list[Sighting]], acquirers: dict[str, AddedSecurity]) -> _Successors:
-    """9. Successors after a FIGI change: first a security of this run (observed,
+                     sightings: dict[str, list[Sighting]], acquirers: dict[str, AddedSecurity],
+                     line_successors: Mapping[str, LineSuccessor] = {}, ftd: FtdIndex | None = None) -> _Successors:
+    """9. Successors after a FIGI change: first the line successor stage 4b found
+    (`_line_successor_links`), then a security of this run (observed,
     or an acquirer the run adds) that starts right after the last trade under the
     same issuer or ticker (a holdco reorganization's new line, a rename's new
     FIGI), then the successor issuer's 8-K12B (search: EDGAR full-text search,
@@ -1070,23 +1112,32 @@ def _find_successors(ctx: _RunContext, delistings: list[Delisting], securities: 
     clients, found = ctx.clients, _Successors()
     successor_search = getattr(clients.edgar, "full_text_search", None)
     mark = ctx.meter.start()
+    if line_successors:
+        _line_successor_links(delistings, securities, acquirers, line_successors, ftd or FtdIndex(), found)
+    linked = set(found.links)
     starts: dict[str, SecurityStart] = {
         sid: SecurityStart(sig[0].day, securities[sid].issuer_cik, {x.value for x in sig})
         for sid, sig in sightings.items() if sig}
     for sid, a in acquirers.items():
         starts[sid] = SecurityStart(a.span()[0], a.security.issuer_cik, {a.ticker})
     for e in delistings:                       # a security of this run
+        if e.key in linked:
+            continue
         in_run = successor_in_run(e, starts) if SUCCESSOR_UNKNOWN in e.flags else None
         if in_run is not None:
             found.links[e.key] = in_run
     if successor_search is not None:           # else the successor issuer's 8-K12B
         if ctx.sec_workers > 1:
             def warm_search(e: Delisting) -> None:
+                if e.key in linked:
+                    return
                 args = successor_search_args(clients.edgar, e, starts, securities)
                 if args is not None:
                     successor_search(*successor_query(*args))
             warm(delistings, warm_search, workers=ctx.sec_workers, name="successor search")
         for e in delistings:
+            if e.key in linked:
+                continue
             watch = DegradedWatch()
             args = successor_search_args(clients.edgar, e, starts, securities)
             if args is None:
@@ -1129,6 +1180,11 @@ def _link_successors(delistings: list[Delisting], successors: _Successors) -> No
         link = successors.links.get(d.key)
         if link is not None:
             sid, how = link
+            reason = successors.rebucketed.get(d.key)
+            if reason is not None:                  # an `unknown` row at the line's switch: the continuation
+                d.record.bucket, d.record.crsp_code, d.record.reason = (CrspBucket.EXCHANGE_TRANSFER,
+                                                                        CONTINUATION_CODE, reason)
+                d.add_flag(LINE_CONTINUATION)
             d.set_successor(sid)
             if how is not None:
                 d.record.evidence["successor_by"] = how
@@ -1652,7 +1708,8 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
     closes = _last_trade_closes(ctx, delistings, securities, sec_cusips, ftd, ftd_lo, overrides)    # 7
     payouts = _merger_payouts(ctx, delistings, securities, sec_cusips, ftd, closes, overrides, tol) # 8
     review += payouts.review
-    successors = _find_successors(ctx, delistings, securities, search.sightings, payouts.added)     # 9
+    successors = _find_successors(ctx, delistings, securities, search.sightings, payouts.added,
+                                  lines.successors, ftd)                                            # 9
     _link_successors(delistings, successors)
     review += successors.review
     added = {**payouts.added, **successors.added}         # the acquirers and successors the run adds

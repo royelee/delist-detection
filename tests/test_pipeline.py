@@ -3110,6 +3110,54 @@ def test_a_rename_on_the_same_cusip_keeps_a_placeholder_listed_under_its_new_tic
     assert [(r["ticker"], r["valid_to"]) for r in t["ticker_history"]] == [("RS", "2012-09-30"), ("RSNW", "")]
 
 
+LATER_10K = EdgarSubmission("0000004242-13-000011", "10-K", "2013-06-14", "2013-03-31", "", "k10.htm")
+
+
+def test_a_figi_line_whose_new_cusip_has_its_own_figi_ends_as_a_continuation_to_it(fake_edgar, tmp_path):
+    """U7 (DYN 2010, R2): the reverse split's new CUSIP has its own composite, so the old FIGI line ends at the
+    switch, an exchange transfer whose successor is the new line, which the run adds as a security of its own."""
+    t = _line_run(fake_edgar, tmp_path, filings=[SPLIT_8K, LATER_10Q, LATER_10K],
+                  figi={("ID_CUSIP", RS_NEW): _figi_answer("BBGRSNEW1", "RS", "REVERSE SPLIT CO")},
+                  new_rows=_rs_new_rows())
+    assert {(r["sec_id"], r["observed"]) for r in t["securities"]} == {("BBGRS01", "true"), ("BBGRSNEW1", "false")}
+    [d] = t["delistings"]
+    assert (d["sec_id"], d["bucket"], d["successor_sec_id"]) == ("BBGRS01", "exchange_transfer", "BBGRSNEW1")
+    assert "successor by line follow" in d["reason"]
+    [c] = t["contract_delistings"]
+    assert (c["sec_id"], c["continuation"], c["successor_sec_id"]) == ("BBGRS01", "true", "BBGRSNEW1")
+    assert ("BBGRSNEW1", "RS", "2012-09-25") in {(r["sec_id"], r["ticker"], r["valid_from"])
+                                                 for r in t["ticker_history"]}
+
+
+def test_an_unknown_form25_at_the_lines_switch_becomes_the_continuation(fake_edgar, tmp_path):
+    """U7 (GTES 2026): the Form 25 filed at a redomicile that gave the line a CUSIP with its own composite was
+    classified `unknown`; with the line successor it is the exchange transfer to it."""
+    switch_f25 = EdgarSubmission("0000876661-12-000300", "25-NSE", "2012-09-24", "", "", "primary_doc.xml")
+    fake_edgar.raws["0000876661-12-000300"] = LINE_F25
+    t = _line_run(fake_edgar, tmp_path, filings=[SPLIT_8K, switch_f25, LATER_10Q],
+                  figi={("ID_CUSIP", RS_NEW): _figi_answer("BBGRSNEW1", "RS", "REVERSE SPLIT CO")},
+                  new_rows=_rs_new_rows())
+    [d] = t["delistings"]
+    assert (d["bucket"], d["crsp_code"], d["successor_sec_id"]) == ("exchange_transfer", "304", "BBGRSNEW1")
+    assert "line_continuation" in d["review_flags"].split(";")
+    assert t["contract_delistings"][0]["continuation"] == "true"
+
+
+def test_a_line_successor_is_never_added_for_an_ending_that_does_not_need_it(fake_edgar, tmp_path):
+    """Must not change (WCN, AAN): a merger at the switch keeps its kind and takes no line successor, and the
+    composite is not added to the run."""
+    merger_8k = EdgarSubmission("0000004242-12-000040", "8-K", "2012-09-24", "2012-09-24", "2.01,3.01,5.01,9.01",
+                                "m.htm")
+    merger_f25 = EdgarSubmission("0000876661-12-000300", "25-NSE", "2012-09-24", "", "", "primary_doc.xml")
+    fake_edgar.raws["0000876661-12-000300"] = LINE_F25
+    t = _line_run(fake_edgar, tmp_path, filings=[SPLIT_8K, merger_8k, merger_f25, LATER_10Q],
+                  figi={("ID_CUSIP", RS_NEW): _figi_answer("BBGRSNEW1", "RS", "REVERSE SPLIT CO")},
+                  new_rows=_rs_new_rows())
+    [d] = t["delistings"]
+    assert (d["bucket"], d["successor_sec_id"]) == ("merger", "")
+    assert "BBGRSNEW1" not in {r["sec_id"] for r in t["securities"]}
+
+
 def test_a_placeholder_folds_into_the_figi_line_its_new_cusip_names(fake_edgar, tmp_path):
     """R2 for a placeholder: OpenFIGI knows no US line for the old CUSIP but names one for the new: the
     placeholder becomes that FIGI line, and contract/id_changes.csv says so by name."""

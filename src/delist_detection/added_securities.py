@@ -1,7 +1,7 @@
 """The securities a run adds that no observation names -- a merger's acquirer
-(`acquirers.find_acquirer`) and an exchange transfer's successor
-(`successors.successor_from_8k12b`) -- each with the one ticker_history row the
-run can give it."""
+(`acquirers.find_acquirer`), an exchange transfer's successor
+(`successors.successor_from_8k12b`) and a FIGI line's successor the line follow
+found (`line_follow`) -- each with the one ticker_history row the run can give it."""
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -47,6 +47,20 @@ class AddedAcquirer(AddedSecurity):
         dates = sorted(r.date for r in self.rows)
         first = dates[0] if dates else self.fallback_day.isoformat()
         return first, (dates[-1] if dates else first)
+
+
+@dataclass
+class AddedLineSuccessor(AddedSecurity):
+    """A FIGI line's successor the line follow found (pipeline stage 4b; R2: the line's new CUSIP has its own
+    composite): seen from the step's first row (`first`) through that CUSIP's fails rows under the line's new
+    ticker (`rows`)."""
+    first: str
+    rows: list[FtdRow] = field(default_factory=list)
+    source: ClassVar[str] = "ftd"
+
+    def span(self) -> tuple[str, str]:
+        dates = sorted({self.first, *(r.date for r in self.rows)})
+        return dates[0], dates[-1]
 
 
 @dataclass
