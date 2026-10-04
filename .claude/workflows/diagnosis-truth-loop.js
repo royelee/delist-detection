@@ -14,7 +14,7 @@ const LIMIT = 5
 let running = 0
 const waiting = []
 async function limited(fn) {
-  if (running >= LIMIT) await new Promise(resolve => waiting.push(resolve))
+  while (running >= LIMIT) await new Promise(resolve => waiting.push(resolve))
   running++
   try { return await fn() } finally { running--; const next = waiting.shift(); if (next) next() }
 }
@@ -53,6 +53,8 @@ const ROUND = {
     path: { type: 'string' } },
   required: ['mismatches_new', 'regressions_new', 'cases', 'path'],
 }
+const WRITTEN = { type: 'object', properties: { written: { type: 'array', items: { type: 'string' } } },
+  required: ['written'] }
 const UPDATE = { type: 'object', properties: { output: { type: 'string' } }, required: ['output'] }
 
 function runner(cmd) {
@@ -89,6 +91,8 @@ Append "## 9. Verification" to the report and add a "verification" object (your 
 ${dir}/records/${c.case_id}.json. Edit only those two files. Return the result object.`
 }
 
+if (!args.label) throw new Error('diagnosis-truth-loop: args.label is missing')
+if (!args.base) throw new Error('diagnosis-truth-loop: args.base is missing')
 const label = args.label
 const maxRounds = args.maxRounds || 3
 const summaries = []
@@ -112,6 +116,18 @@ for (let round = 1; round <= maxRounds; round++) {
       phase: 'Verify', schema: VERDICT, model: 'sonnet' })).then(v => ({ record: r, verification: v })) : null)
   const missing = listed.cases.filter((c, i) => !done[i] || !done[i].verification).map(c => c.case_id)
   if (missing.length) log(`round ${round}: no record or no verification for ${missing.join(', ')} (retried next round)`)
+  // A verifier sometimes returns its verdict without writing it into the record; update_truth.py reads the file.
+  const verdicts = {}
+  listed.cases.forEach((c, i) => { if (done[i] && done[i].verification) verdicts[c.case_id] = done[i].verification })
+  if (Object.keys(verdicts).length) {
+    const wb = await agent(`For each case id below, read ${dir}/records/<case_id>.json. If it has no "verification" key,
+add the given object under "verification" with the Write tool, keeping every other key unchanged. Do not touch a
+record that already has a "verification" key. Edit nothing else. Return the list of case ids you wrote.
+
+${JSON.stringify(verdicts, null, 1)}`,
+      { label: `writeback:${round}`, phase: 'Update', schema: WRITTEN, model: 'sonnet', effort: 'low' })
+    log(`round ${round}: wrote ${wb ? wb.written.length : 0} verification(s) back into the records`)
+  }
   const dry = (args.dryRun || args.casesPath) ? ' --dry-run' : ''
   const upd = await agent(runner(`${PY} scripts/update_truth.py --label ${label} --round ${round} --base ${args.base}${dry}`),
     { label: `update:${round}`, phase: 'Update', schema: UPDATE, model: 'sonnet', effort: 'low' })

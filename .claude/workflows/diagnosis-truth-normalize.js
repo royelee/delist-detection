@@ -36,7 +36,7 @@ const LIMIT = 5
 let running = 0
 const waiting = []
 async function limited(fn) {
-  if (running >= LIMIT) await new Promise(resolve => waiting.push(resolve))
+  while (running >= LIMIT) await new Promise(resolve => waiting.push(resolve))
   running++
   try { return await fn() } finally { running--; const next = waiting.shift(); if (next) next() }
 }
@@ -58,6 +58,7 @@ output/diagnose_unknown_report/truth_rows/<case_id>.json. Then return {"rows": [
 Do not edit any other file, run the pipeline, commit or dispatch subagents.`
 }
 
+if (!Array.isArray(args.cases) || !args.cases.length) throw new Error('diagnosis-truth-normalize: args.cases must be a non-empty array of case ids')
 const ids = args.cases
 const size = args.batch || 10
 const batches = []
