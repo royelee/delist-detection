@@ -1,0 +1,72 @@
+{
+ "case_id": "BBG000CF8227_5a-r1",
+ "sec_id": "BBG000CF8227",
+ "ticker": "DBI",
+ "report": "reports/BBG000CF8227_5a-r1.md",
+ "mode": "regression",
+ "event_type": "ticker_change",
+ "consideration": "none",
+ "confidence": "verified",
+ "exit_kind": "",
+ "drop_reason": "",
+ "continuation": false,
+ "successor_ticker": "DBI",
+ "last_trade_date": "",
+ "value_rule": "continuation",
+ "cash_per_share": null,
+ "cash_currency": "",
+ "stock_ratio": null,
+ "price_ticker": "",
+ "price_date": "",
+ "value_formula": "n/a (rename, not an exit)",
+ "status": {
+  "exit_kind": "agree",
+  "last_trade_date": "agree",
+  "successor": "agree",
+  "value_rule": "agree",
+  "terms": "agree",
+  "issuer": "agree",
+  "ticker_history": "wrong"
+ },
+ "confidence_reasons": [],
+ "library_wrong": false,
+ "cause": "rename_not_followed",
+ "golden_worthy": true,
+ "sec_evidence": 1,
+ "web_evidence": 0,
+ "open_checks": [
+  "ticker_history boundary: DSW should end 2019-04-01 and DBI start 2019-04-02; new run is one day late",
+  "confirm FIGI BBG000CF8227 via OpenFIGI"
+ ],
+ "verdict": "A rename DSW to DBI at the 2019-04-02 open is not an ending, so removing the exchange row is right; the new ticker ranges are one day late.",
+ "field_verdicts": [
+  {
+   "field": "delistings.removed",
+   "right": "new",
+   "value": "no delisting row (rename)",
+   "missed_filing": ""
+  },
+  {
+   "field": "security_history.ranges",
+   "right": "neither",
+   "value": "DSW:2007-12-17..2019-04-01;DBI:2019-04-02..",
+   "missed_filing": ""
+  },
+  {
+   "field": "id_changes.sec_id",
+   "right": "new",
+   "value": "BBG000CF8227",
+   "missed_filing": ""
+  }
+ ],
+ "verification": {
+  "upheld": true,
+  "fields_upheld": [
+   "delistings.removed",
+   "security_history.ranges",
+   "id_changes.sec_id"
+  ],
+  "fields_refuted": [],
+  "notes": "8-K 0001319947-19-000011 and the CIK's 2019 filing list (no Form 25/15) and fails rows confirm a rename with no ending and range boundaries DSW..2019-04-01, DBI 2019-04-02..; FIGI not rechecked with OpenFIGI."
+ }
+}

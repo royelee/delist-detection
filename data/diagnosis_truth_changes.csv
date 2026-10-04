@@ -293,3 +293,124 @@ CIK910073-COMMON_2024-07-12,price_ticker,,*,operator ruling 2026-10-03 (5a pre-c
 CIK910073-COMMON_2024-07-12,price_date,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
 CIK910073-COMMON_2024-07-12,recovery_ratio,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
 CIK1019849-COMMON_2009-06-08,fixed_by,5a,5h,sub-plan 5a dropped U4: the stricter ticker confirmation changed 13 other eras (more than 10),
+CIK1018005-COMMON_2012-10-01,sec_id,CIK1018005-COMMON,BBG000BJ3CN0,contract/id_changes.csv: the placeholder now holds a FIGI,
+CIK1042893-COMMON_2024-09-04,sec_id,CIK1042893-COMMON,BBG000BVDBY2,contract/id_changes.csv: the placeholder now holds a FIGI,
+CIK1056087-COMMON_2016-05-25,sec_id,CIK1056087-COMMON,BBG000BP62Y3,contract/id_changes.csv: the placeholder now holds a FIGI,
+CIK1075415-COMMON_2020-01-07,sec_id,CIK1075415-COMMON,BBG000BM2GS0,contract/id_changes.csv: the placeholder now holds a FIGI,
+CIK1095651-COMMON_2013-12-19,sec_id,CIK1095651-COMMON,BBG000H35J52,contract/id_changes.csv: the placeholder now holds a FIGI,
+CIK1115836-COMMON_2014-07-01,sec_id,CIK1115836-COMMON,BBG000BKZ5F6,contract/id_changes.csv: the placeholder now holds a FIGI,
+CIK1282266-COMMON_2015-04-27,sec_id,CIK1282266-COMMON,BBG000BFJ645,contract/id_changes.csv: the placeholder now holds a FIGI,
+CIK1498301-COMMON_2020-08-21,sec_id,CIK1498301-COMMON,BBG000BGZ9V9,contract/id_changes.csv: the placeholder now holds a FIGI,
+CIK1575828-COMMON_2021-10-01,sec_id,CIK1575828-COMMON,BBG004K27P01,contract/id_changes.csv: the placeholder now holds a FIGI,
+CIK1606498-COMMON_2018-07-11,sec_id,CIK1606498-COMMON,BBG005L86G05,contract/id_changes.csv: the placeholder now holds a FIGI,
+CIK1710366-COMMON_2025-01-16,sec_id,CIK1710366-COMMON,BBG00HC114X0,contract/id_changes.csv: the placeholder now holds a FIGI,
+CIK1723089-COMMON_2021-01-10,sec_id,CIK1723089-COMMON,BBG00JH9TZ56,contract/id_changes.csv: the placeholder now holds a FIGI,
+CIK1803737-COMMON_2022-06-30,sec_id,CIK1803737-COMMON,BBG014QJ5BV6,contract/id_changes.csv: the placeholder now holds a FIGI,
+CIK1929561-COMMON_2022-12-31,sec_id,CIK1929561-COMMON,BBG0160DYCH4,contract/id_changes.csv: the placeholder now holds a FIGI,
+CIK20520-COMMON_2017-07-10,sec_id,CIK20520-COMMON,BBG000FH5YM1,contract/id_changes.csv: the placeholder now holds a FIGI,
+CIK23666-COMMON_2012-07-13,sec_id,CIK23666-COMMON,BBG000BT4T69,contract/id_changes.csv: the placeholder now holds a FIGI,
+CIK314808-CLASS-A_2019-04-11,sec_id,CIK314808-CLASS-A,BBG000BJ2VQ6,contract/id_changes.csv: the placeholder now holds a FIGI,
+CIK708819-COMMON_2018-05-08,sec_id,CIK708819-COMMON,BBG000BNW1S8,contract/id_changes.csv: the placeholder now holds a FIGI,
+CIK733269-COMMON_2018-09-30,sec_id,CIK733269-COMMON,BBG000BB4HM6,contract/id_changes.csv: the placeholder now holds a FIGI,
+CIK88205-COMMON_2015-09-28,sec_id,CIK88205-COMMON,BBG000BTGCV5,contract/id_changes.csv: the placeholder now holds a FIGI,
+CIK910073-COMMON_2024-07-12,sec_id,CIK910073-COMMON,BBG000BVXPZ8,contract/id_changes.csv: the placeholder now holds a FIGI,
+CIK931336-COMMON_2013-08-26,sec_id,CIK931336-COMMON,BBG000BBMT95,contract/id_changes.csv: the placeholder now holds a FIGI,
+BBG000C9N6Q9_2011-03-15,last_trade_date,,2015-08-21,diagnosis BBG000C9N6Q9_2011-03-15_5a-r1 cites 0000876661-15-000370,output/diagnose_unknown_report/loop/5a/round-1/reports/BBG000C9N6Q9_2011-03-15_5a-r1.md
+BBG000C9N6Q9_2011-03-15,price_date,,2015-08-24,diagnosis BBG000C9N6Q9_2011-03-15_5a-r1 cites 0000876661-15-000370,output/diagnose_unknown_report/loop/5a/round-1/reports/BBG000C9N6Q9_2011-03-15_5a-r1.md
+BBG000B9WJ73_5a-r1,(row),,added (ruling_pending),5a loop round 1: regression,output/diagnose_unknown_report/loop/5a/round-1/reports/BBG000B9WJ73_5a-r1.md
+BBG000BDCQ25_5a-r1,(row),,added (ruling_pending),5a loop round 1: regression,output/diagnose_unknown_report/loop/5a/round-1/reports/BBG000BDCQ25_5a-r1.md
+BBG000CF8227_5a-r1,(row),,added (pass),5a loop round 1: regression,output/diagnose_unknown_report/loop/5a/round-1/reports/BBG000CF8227_5a-r1.md
+BBG000CG9XT7_5a-r1,(row),,added (pass),5a loop round 1: regression,output/diagnose_unknown_report/loop/5a/round-1/reports/BBG000CG9XT7_5a-r1.md
+BBG000QN4GY3_5a-r1,(row),,added (pass),5a loop round 1: regression,output/diagnose_unknown_report/loop/5a/round-1/reports/BBG000QN4GY3_5a-r1.md
+BBG000BLH3P8_2023-06-20,status,known_wrong,pass,the library now matches,
+BBG000C4MWH4_2023-07-05,status,known_wrong,pass,the library now matches,
+BBG000CL1HL7_2021-12-10,status,known_wrong,pass,the library now matches,
+BBG000DZCFX4_2020-06-02,status,known_wrong,pass,the library now matches,
+BBG000GTYWL7_2026-01-18,status,known_wrong,pass,the library now matches,
+BBG000Q02P20_2011-11-14,status,known_wrong,pass,the library now matches,
+BBG001D9S707_2010-05-25,status,known_wrong,pass,the library now matches,
+BBG005PWSVQ3_2016-08-31,status,known_wrong,pass,the library now matches,
+BBG00D30HGP6_2021-06-23,status,known_wrong,pass,the library now matches,
+BBG00JM9V731_2026-07-30,status,known_wrong,pass,the library now matches,
+CIK1042893-COMMON_2024-09-04,status,known_wrong,pass,the library now matches,
+CIK1066104-COMMON_2012-08-13,status,known_wrong,pass,the library now matches,
+CIK1075415-COMMON_2020-01-07,status,known_wrong,pass,the library now matches,
+CIK1095651-COMMON_2013-12-19,status,known_wrong,pass,the library now matches,
+CIK1115836-COMMON_2014-07-01,status,known_wrong,pass,the library now matches,
+CIK1282266-COMMON_2015-04-27,status,known_wrong,pass,the library now matches,
+CIK1606498-COMMON_2018-07-11,status,known_wrong,pass,the library now matches,
+CIK1710366-COMMON_2025-01-16,status,known_wrong,pass,the library now matches,
+CIK1723089-COMMON_2021-01-10,status,known_wrong,pass,the library now matches,
+CIK1803737-COMMON_2022-06-30,status,known_wrong,pass,the library now matches,
+CIK1929561-COMMON_2022-12-31,status,known_wrong,pass,the library now matches,
+CIK23666-COMMON_2012-07-13,status,known_wrong,pass,the library now matches,
+CIK352363-COMMON_2012-05-14,status,known_wrong,pass,the library now matches,
+CIK708819-COMMON_2018-05-08,status,known_wrong,pass,the library now matches,
+CIK716006-COMMON_2010-10-04,status,known_wrong,pass,the library now matches,
+CIK733269-COMMON_2018-09-30,status,known_wrong,pass,the library now matches,
+CIK88205-COMMON_2015-09-28,status,known_wrong,pass,the library now matches,
+CIK910073-COMMON_2024-07-12,status,known_wrong,pass,the library now matches,
+BBG000BH8XX2_5a-r2,(row),,added (pass),5a loop round 2: regression,output/diagnose_unknown_report/loop/5a/round-2/reports/BBG000BH8XX2_5a-r2.md
+BBG000F0KF42_5a-r2,(row),,added (pass),5a loop round 2: regression,output/diagnose_unknown_report/loop/5a/round-2/reports/BBG000F0KF42_5a-r2.md
+BBG000MG3Y65_5a-r2,(row),,added (pass),5a loop round 2: regression,output/diagnose_unknown_report/loop/5a/round-2/reports/BBG000MG3Y65_5a-r2.md
+BBG000MMR2C9_5a-r2,(row),,added (ruling_pending),5a loop round 2: regression,output/diagnose_unknown_report/loop/5a/round-2/reports/BBG000MMR2C9_5a-r2.md
+BBG000QL8VH9_5a-r2,(row),,added (ruling_pending),5a loop round 2: regression,output/diagnose_unknown_report/loop/5a/round-2/reports/BBG000QL8VH9_5a-r2.md
+BBG00Y04KP80_5a-r2,(row),,added (known_wrong),5a loop round 2: regression,output/diagnose_unknown_report/loop/5a/round-2/reports/BBG00Y04KP80_5a-r2.md
+BBG000B9WJ73_5a-r1,price_sec_id,*,BBG000B9WJ73,"controller ruling 2026-10-04 (5a loop, delegated autonomy): ACI: placeholder renamed to its FIGI (R2 fold); price_sec_id follows; skeptic upheld",output/diagnose_unknown_report/loop/5a/round-1/reports/BBG000B9WJ73_5a-r1.md
+BBG000B9WJ73_5a-r1,status,ruling_pending,pass,"controller ruling 2026-10-04 (5a loop, delegated autonomy): settled; judged against the run",output/diagnose_unknown_report/loop/5a/round-1/reports/BBG000B9WJ73_5a-r1.md
+BBG000B9WJ73_5a-r1,fixed_by,regression,,"controller ruling 2026-10-04 (5a loop, delegated autonomy): settled",output/diagnose_unknown_report/loop/5a/round-1/reports/BBG000B9WJ73_5a-r1.md
+BBG000BDCQ25_5a-r1,shape,ending,no_ending,"controller ruling 2026-10-04 (5a loop, delegated autonomy): PRDO: rename CECO->PRDO, no ending (upheld); boundary 1-2 days late vs 8-K 0001564590-19-046273 (5d)",output/diagnose_unknown_report/loop/5a/round-1/reports/BBG000BDCQ25_5a-r1.md
+BBG000BDCQ25_5a-r1,exit_kind,*,,"controller ruling 2026-10-04 (5a loop, delegated autonomy): PRDO: rename CECO->PRDO, no ending (upheld); boundary 1-2 days late vs 8-K 0001564590-19-046273 (5d)",output/diagnose_unknown_report/loop/5a/round-1/reports/BBG000BDCQ25_5a-r1.md
+BBG000BDCQ25_5a-r1,drop_reason,*,,"controller ruling 2026-10-04 (5a loop, delegated autonomy): PRDO: rename CECO->PRDO, no ending (upheld); boundary 1-2 days late vs 8-K 0001564590-19-046273 (5d)",output/diagnose_unknown_report/loop/5a/round-1/reports/BBG000BDCQ25_5a-r1.md
+BBG000BDCQ25_5a-r1,continuation,*,,"controller ruling 2026-10-04 (5a loop, delegated autonomy): PRDO: rename CECO->PRDO, no ending (upheld); boundary 1-2 days late vs 8-K 0001564590-19-046273 (5d)",output/diagnose_unknown_report/loop/5a/round-1/reports/BBG000BDCQ25_5a-r1.md
+BBG000BDCQ25_5a-r1,successor_sec_id,*,,"controller ruling 2026-10-04 (5a loop, delegated autonomy): PRDO: rename CECO->PRDO, no ending (upheld); boundary 1-2 days late vs 8-K 0001564590-19-046273 (5d)",output/diagnose_unknown_report/loop/5a/round-1/reports/BBG000BDCQ25_5a-r1.md
+BBG000BDCQ25_5a-r1,last_trade_date,*,,"controller ruling 2026-10-04 (5a loop, delegated autonomy): PRDO: rename CECO->PRDO, no ending (upheld); boundary 1-2 days late vs 8-K 0001564590-19-046273 (5d)",output/diagnose_unknown_report/loop/5a/round-1/reports/BBG000BDCQ25_5a-r1.md
+BBG000BDCQ25_5a-r1,value_rule,*,,"controller ruling 2026-10-04 (5a loop, delegated autonomy): PRDO: rename CECO->PRDO, no ending (upheld); boundary 1-2 days late vs 8-K 0001564590-19-046273 (5d)",output/diagnose_unknown_report/loop/5a/round-1/reports/BBG000BDCQ25_5a-r1.md
+BBG000BDCQ25_5a-r1,cash_per_share,*,,"controller ruling 2026-10-04 (5a loop, delegated autonomy): PRDO: rename CECO->PRDO, no ending (upheld); boundary 1-2 days late vs 8-K 0001564590-19-046273 (5d)",output/diagnose_unknown_report/loop/5a/round-1/reports/BBG000BDCQ25_5a-r1.md
+BBG000BDCQ25_5a-r1,cash_currency,*,,"controller ruling 2026-10-04 (5a loop, delegated autonomy): PRDO: rename CECO->PRDO, no ending (upheld); boundary 1-2 days late vs 8-K 0001564590-19-046273 (5d)",output/diagnose_unknown_report/loop/5a/round-1/reports/BBG000BDCQ25_5a-r1.md
+BBG000BDCQ25_5a-r1,stock_ratio,*,,"controller ruling 2026-10-04 (5a loop, delegated autonomy): PRDO: rename CECO->PRDO, no ending (upheld); boundary 1-2 days late vs 8-K 0001564590-19-046273 (5d)",output/diagnose_unknown_report/loop/5a/round-1/reports/BBG000BDCQ25_5a-r1.md
+BBG000BDCQ25_5a-r1,price_sec_id,*,,"controller ruling 2026-10-04 (5a loop, delegated autonomy): PRDO: rename CECO->PRDO, no ending (upheld); boundary 1-2 days late vs 8-K 0001564590-19-046273 (5d)",output/diagnose_unknown_report/loop/5a/round-1/reports/BBG000BDCQ25_5a-r1.md
+BBG000BDCQ25_5a-r1,price_ticker,*,,"controller ruling 2026-10-04 (5a loop, delegated autonomy): PRDO: rename CECO->PRDO, no ending (upheld); boundary 1-2 days late vs 8-K 0001564590-19-046273 (5d)",output/diagnose_unknown_report/loop/5a/round-1/reports/BBG000BDCQ25_5a-r1.md
+BBG000BDCQ25_5a-r1,price_date,*,,"controller ruling 2026-10-04 (5a loop, delegated autonomy): PRDO: rename CECO->PRDO, no ending (upheld); boundary 1-2 days late vs 8-K 0001564590-19-046273 (5d)",output/diagnose_unknown_report/loop/5a/round-1/reports/BBG000BDCQ25_5a-r1.md
+BBG000BDCQ25_5a-r1,recovery_ratio,*,,"controller ruling 2026-10-04 (5a loop, delegated autonomy): PRDO: rename CECO->PRDO, no ending (upheld); boundary 1-2 days late vs 8-K 0001564590-19-046273 (5d)",output/diagnose_unknown_report/loop/5a/round-1/reports/BBG000BDCQ25_5a-r1.md
+BBG000BDCQ25_5a-r1,status,ruling_pending,pass,"controller ruling 2026-10-04 (5a loop, delegated autonomy): settled; judged against the run",output/diagnose_unknown_report/loop/5a/round-1/reports/BBG000BDCQ25_5a-r1.md
+BBG000BDCQ25_5a-r1,fixed_by,regression,,"controller ruling 2026-10-04 (5a loop, delegated autonomy): settled",output/diagnose_unknown_report/loop/5a/round-1/reports/BBG000BDCQ25_5a-r1.md
+BBG000MMR2C9_5a-r2,price_sec_id,*,BBG000MMR2C9,"controller ruling 2026-10-04 (5a loop, delegated autonomy): XCO: placeholder renamed to its FIGI (R2 fold); price_sec_id follows; skeptic upheld",output/diagnose_unknown_report/loop/5a/round-2/reports/BBG000MMR2C9_5a-r2.md
+BBG000MMR2C9_5a-r2,status,ruling_pending,pass,"controller ruling 2026-10-04 (5a loop, delegated autonomy): settled; judged against the run",output/diagnose_unknown_report/loop/5a/round-2/reports/BBG000MMR2C9_5a-r2.md
+BBG000MMR2C9_5a-r2,fixed_by,regression,,"controller ruling 2026-10-04 (5a loop, delegated autonomy): settled",output/diagnose_unknown_report/loop/5a/round-2/reports/BBG000MMR2C9_5a-r2.md
+BBG000QL8VH9_5a-r2,shape,ending,no_ending,"controller ruling 2026-10-04 (5a loop, delegated autonomy): PGEN: rename XON->PGEN, no ending (upheld); boundary 2-3 days late vs 8-K 0001193125-20-023400 (5d)",output/diagnose_unknown_report/loop/5a/round-2/reports/BBG000QL8VH9_5a-r2.md
+BBG000QL8VH9_5a-r2,exit_kind,*,,"controller ruling 2026-10-04 (5a loop, delegated autonomy): PGEN: rename XON->PGEN, no ending (upheld); boundary 2-3 days late vs 8-K 0001193125-20-023400 (5d)",output/diagnose_unknown_report/loop/5a/round-2/reports/BBG000QL8VH9_5a-r2.md
+BBG000QL8VH9_5a-r2,drop_reason,*,,"controller ruling 2026-10-04 (5a loop, delegated autonomy): PGEN: rename XON->PGEN, no ending (upheld); boundary 2-3 days late vs 8-K 0001193125-20-023400 (5d)",output/diagnose_unknown_report/loop/5a/round-2/reports/BBG000QL8VH9_5a-r2.md
+BBG000QL8VH9_5a-r2,continuation,*,,"controller ruling 2026-10-04 (5a loop, delegated autonomy): PGEN: rename XON->PGEN, no ending (upheld); boundary 2-3 days late vs 8-K 0001193125-20-023400 (5d)",output/diagnose_unknown_report/loop/5a/round-2/reports/BBG000QL8VH9_5a-r2.md
+BBG000QL8VH9_5a-r2,successor_sec_id,*,,"controller ruling 2026-10-04 (5a loop, delegated autonomy): PGEN: rename XON->PGEN, no ending (upheld); boundary 2-3 days late vs 8-K 0001193125-20-023400 (5d)",output/diagnose_unknown_report/loop/5a/round-2/reports/BBG000QL8VH9_5a-r2.md
+BBG000QL8VH9_5a-r2,last_trade_date,*,,"controller ruling 2026-10-04 (5a loop, delegated autonomy): PGEN: rename XON->PGEN, no ending (upheld); boundary 2-3 days late vs 8-K 0001193125-20-023400 (5d)",output/diagnose_unknown_report/loop/5a/round-2/reports/BBG000QL8VH9_5a-r2.md
+BBG000QL8VH9_5a-r2,value_rule,*,,"controller ruling 2026-10-04 (5a loop, delegated autonomy): PGEN: rename XON->PGEN, no ending (upheld); boundary 2-3 days late vs 8-K 0001193125-20-023400 (5d)",output/diagnose_unknown_report/loop/5a/round-2/reports/BBG000QL8VH9_5a-r2.md
+BBG000QL8VH9_5a-r2,cash_per_share,*,,"controller ruling 2026-10-04 (5a loop, delegated autonomy): PGEN: rename XON->PGEN, no ending (upheld); boundary 2-3 days late vs 8-K 0001193125-20-023400 (5d)",output/diagnose_unknown_report/loop/5a/round-2/reports/BBG000QL8VH9_5a-r2.md
+BBG000QL8VH9_5a-r2,cash_currency,*,,"controller ruling 2026-10-04 (5a loop, delegated autonomy): PGEN: rename XON->PGEN, no ending (upheld); boundary 2-3 days late vs 8-K 0001193125-20-023400 (5d)",output/diagnose_unknown_report/loop/5a/round-2/reports/BBG000QL8VH9_5a-r2.md
+BBG000QL8VH9_5a-r2,stock_ratio,*,,"controller ruling 2026-10-04 (5a loop, delegated autonomy): PGEN: rename XON->PGEN, no ending (upheld); boundary 2-3 days late vs 8-K 0001193125-20-023400 (5d)",output/diagnose_unknown_report/loop/5a/round-2/reports/BBG000QL8VH9_5a-r2.md
+BBG000QL8VH9_5a-r2,price_sec_id,*,,"controller ruling 2026-10-04 (5a loop, delegated autonomy): PGEN: rename XON->PGEN, no ending (upheld); boundary 2-3 days late vs 8-K 0001193125-20-023400 (5d)",output/diagnose_unknown_report/loop/5a/round-2/reports/BBG000QL8VH9_5a-r2.md
+BBG000QL8VH9_5a-r2,price_ticker,*,,"controller ruling 2026-10-04 (5a loop, delegated autonomy): PGEN: rename XON->PGEN, no ending (upheld); boundary 2-3 days late vs 8-K 0001193125-20-023400 (5d)",output/diagnose_unknown_report/loop/5a/round-2/reports/BBG000QL8VH9_5a-r2.md
+BBG000QL8VH9_5a-r2,price_date,*,,"controller ruling 2026-10-04 (5a loop, delegated autonomy): PGEN: rename XON->PGEN, no ending (upheld); boundary 2-3 days late vs 8-K 0001193125-20-023400 (5d)",output/diagnose_unknown_report/loop/5a/round-2/reports/BBG000QL8VH9_5a-r2.md
+BBG000QL8VH9_5a-r2,recovery_ratio,*,,"controller ruling 2026-10-04 (5a loop, delegated autonomy): PGEN: rename XON->PGEN, no ending (upheld); boundary 2-3 days late vs 8-K 0001193125-20-023400 (5d)",output/diagnose_unknown_report/loop/5a/round-2/reports/BBG000QL8VH9_5a-r2.md
+BBG000QL8VH9_5a-r2,status,ruling_pending,pass,"controller ruling 2026-10-04 (5a loop, delegated autonomy): settled; judged against the run",output/diagnose_unknown_report/loop/5a/round-2/reports/BBG000QL8VH9_5a-r2.md
+BBG000QL8VH9_5a-r2,fixed_by,regression,,"controller ruling 2026-10-04 (5a loop, delegated autonomy): settled",output/diagnose_unknown_report/loop/5a/round-2/reports/BBG000QL8VH9_5a-r2.md
+BBG000C9N6Q9_2011-03-15,price_sec_id,CIK1498301-COMMON,BBG000BGZ9V9,contract/id_changes.csv: the placeholder now holds a FIGI,
+CIK1018005-COMMON_2012-10-01,price_sec_id,CIK1018005-COMMON,BBG000BJ3CN0,contract/id_changes.csv: the placeholder now holds a FIGI,
+CIK1056087-COMMON_2016-05-25,price_sec_id,CIK1056087-COMMON,BBG000BP62Y3,contract/id_changes.csv: the placeholder now holds a FIGI,
+CIK1498301-COMMON_2020-08-21,price_sec_id,CIK1498301-COMMON,BBG000BGZ9V9,contract/id_changes.csv: the placeholder now holds a FIGI,
+CIK20520-COMMON_2017-07-10,price_sec_id,CIK20520-COMMON,BBG000FH5YM1,contract/id_changes.csv: the placeholder now holds a FIGI,
+CIK314808-COMMON_2010-01-08,successor_sec_id,CIK314808-CLASS-A,BBG000BJ2VQ6,contract/id_changes.csv: the placeholder now holds a FIGI,
+CIK931336-COMMON_2013-08-26,price_sec_id,CIK931336-COMMON,BBG000BBMT95,contract/id_changes.csv: the placeholder now holds a FIGI,
+BBG000BN6349_2013-12-02,fixed_by,5a,5f,controller ruling 2026-10-04 (5a acceptance): the line is followed; what remains is cash_currency,
+BBG000BRWGG9_2019-04-22,fixed_by,5a,5g,"controller ruling 2026-10-04 (5a acceptance): the line is followed; what remains is the bankruptcy drop reason, OTC ticker and dates",
+BBG000BTQ9G8_2017-08-02,fixed_by,5a,5f,controller ruling 2026-10-04 (5a acceptance): the line is followed; what remains is cash_currency,
+BBG000C7WZ16_2010-10-15,fixed_by,5a,5f,controller ruling 2026-10-04 (5a acceptance): the line is followed; what remains is cash_currency,
+BBG000C9N6Q9_2011-03-15,fixed_by,5a,5f,controller ruling 2026-10-04 (5a acceptance): the line is followed; what remains is cash_currency (5f) and the ASNA leg's security (5e),
+BBG000J453J8_2019-05-12,fixed_by,5a,5c,controller ruling 2026-10-04 (5a acceptance): the line is followed; what remains is the continuation link: its 13-trading-day CUSIP gap is beyond the line follow's window,
+BBG006KY8KV2_2017-10-17,fixed_by,5a,5e,controller ruling 2026-10-04 (5a acceptance): the line is followed; what remains is the acquirer's line BEPC,
+BBG009NGKQ45_2024-02-13,fixed_by,5a,5g,controller ruling 2026-10-04 (5a acceptance): the line is followed; what remains is the OTC ticker VRMMQ and the last trade date,
+CIK1018005-COMMON_2012-10-01,fixed_by,5a,5g,controller ruling 2026-10-04 (5a acceptance): the line is followed; what remains is the OTC print's ticker CWTRQ,
+CIK1056087-COMMON_2016-05-25,fixed_by,5a,5g,controller ruling 2026-10-04 (5a acceptance): the line is followed; what remains is the 2020 bankruptcy ending the followed line reaches is not found yet,
+CIK20520-COMMON_2017-07-10,fixed_by,5a,5g,controller ruling 2026-10-04 (5a acceptance): the line is followed; what remains is the OTC print's ticker FTRCQ,
+CIK931336-COMMON_2013-08-26,fixed_by,5a,5g,controller ruling 2026-10-04 (5a acceptance): the line is followed; what remains is the OTC print's ticker DFODQ,
+BBG00Y04KP80_5a-r2,fixed_by,5a,5h,"controller ruling 2026-10-04 (5a acceptance): the 2014 CRC era holds the post-2020 line's FIGI BBG00Y04KP80; the genuine 2014-2020 line is BBG0060B3M63 (identity, 5h)",output/diagnose_unknown_report/loop/5a/round-2/reports/BBG00Y04KP80_5a-r2.md

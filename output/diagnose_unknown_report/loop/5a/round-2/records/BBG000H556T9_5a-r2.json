@@ -1,0 +1,56 @@
+{
+  "case_id": "BBG000H556T9_5a-r2",
+  "sec_id": "BBG000H556T9",
+  "ticker": "HON",
+  "report": "reports/BBG000H556T9_5a-r2.md",
+  "event_type": "reverse_split_with_spin_off",
+  "consideration": "none",
+  "confidence": "verified",
+  "exit_kind": "",
+  "drop_reason": "",
+  "continuation": false,
+  "successor_ticker": "HON",
+  "last_trade_date": "",
+  "value_rule": "unknown",
+  "cash_per_share": null,
+  "cash_currency": "",
+  "stock_ratio": null,
+  "price_ticker": "",
+  "price_date": "",
+  "value_formula": "no exit; same security continues under HON",
+  "status": {
+    "exit_kind": "agree",
+    "last_trade_date": "agree",
+    "successor": "agree",
+    "value_rule": "agree",
+    "terms": "agree",
+    "issuer": "agree",
+    "ticker_history": "wrong"
+  },
+  "confidence_reasons": [],
+  "library_wrong": true,
+  "cause": "other:ZZZZ-suffixed fails symbol on old CUSIP counted as a ticker range",
+  "golden_worthy": true,
+  "sec_evidence": 1,
+  "web_evidence": 0,
+  "open_checks": [],
+  "verdict": "HON stayed one continuous security through the 2026-06-29 reverse split; the HONZZZZ range is a fails placeholder symbol, so the old single HON range is right.",
+  "mode": "regression",
+  "field_verdicts": [
+    {
+      "field": "security_history.ranges",
+      "right": "old",
+      "value": "HON:2007-12-18..:773840",
+      "missed_filing": ""
+    }
+  ],
+  "verification": {
+    "upheld": true,
+    "fields_upheld": [
+      "security_history.ranges"
+    ],
+    "fields_refuted": [],
+    "notes": "8-K 0000773840-26-000084 Item 5.03 confirms a 1-for-2 reverse split effective 2026-06-29 with ticker HON kept and new CUSIP 438516205. No Form 25 was found. ftd.py treats a \"...ZZZZ\" symbol as a placeholder, not a ticker. So the old single HON range is right. I did not re-check the fails rows directly.",
+    "case_id": "BBG000H556T9_5a-r2"
+  }
+}

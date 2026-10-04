@@ -19,7 +19,7 @@ Work stays on the worktree branch; merging or pushing is the operator's call.
 | Sub-plan | Plan file | Depends on | Target | Status |
 | --- | --- | --- | --- | --- |
 | 5-0 Truth set and loop | `2026-10-03-reset-5-0-truth-set.md` | none | the truth file, judge, regression report, diagnose modes, truth updates, loop workflow | done (282 cases: 19 pass, 263 known_wrong; D.mismatches 756) |
-| 5a One line across a CUSIP or ticker change | `2026-10-03-reset-5a-line-continuity.md` | 5-0 | 43 cases (F1) | written |
+| 5a One line across a CUSIP or ticker change | `2026-10-03-reset-5a-line-continuity.md` | 5-0 | 43 cases (F1) | done (D.mismatches 755 -> 649; 28 of 43 cases pass); accepted by the controller, operator review of `output/diagnose_unknown_report/loop/5a/report.md` section 8 pending |
 | 5b Form 25 reach, matching and ownership | to write | 5a | 50 cases (F4, F5) | |
 | 5c Issuer role and successor links | to write | 5a, 5b | 26 cases (F2, F3) | |
 | 5d Last trade date | to write | 5a, 5b | 33 cases (F6) | |
@@ -28,6 +28,14 @@ Work stays on the worktree branch; merging or pushing is the operator's call.
 | 5g Distress | to write | 5a, 5b | 13 cases (F9) plus endings 5a brings out | |
 | 5h Identity | to write | 5a | 6 cases (F11) | |
 | 5i Verdict and evidence | to write | all | 40 cases (F10 and the verdict-only rulings) | |
+
+Carried from 5a:
+- 5d: a same-CUSIP rename's ticker boundary is 1–3 days late against the 8-K (the ranges come from fails rows): PRDO,
+  PGEN, LC, DSW, RLGY. Date it from the 8-K's effective date or MIDAS.
+- Every sub-plan's full run passes `--id-baseline <the base commit's output/securities.csv>` whenever `output/`
+  already holds a run of the sub-plan. The default baseline, the previous `output/`, misses the sub-plan's own folds.
+- The loop's agents sometimes label a verdict against their own text (HON) or return no skeptic. Settle such rows
+  from the record's text and the cited filings.
 
 Carried from 5-0's final review into 5a's plan, as its first task: a placeholder outside the truth set that 5a folds
 into a FIGI line must not become a truth row of its own (the regression path adds no truth row for a sec_id that is

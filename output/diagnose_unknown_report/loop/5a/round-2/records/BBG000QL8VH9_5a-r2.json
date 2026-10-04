@@ -1,0 +1,76 @@
+{
+  "case_id": "BBG000QL8VH9_5a-r2",
+  "sec_id": "BBG000QL8VH9",
+  "ticker": "PGEN",
+  "report": "reports/BBG000QL8VH9_5a-r2.md",
+  "mode": "regression",
+  "event_type": "ticker_change",
+  "consideration": "none",
+  "confidence": "verified",
+  "exit_kind": "",
+  "drop_reason": "",
+  "continuation": false,
+  "successor_ticker": "",
+  "last_trade_date": "",
+  "value_rule": "continuation",
+  "cash_per_share": null,
+  "cash_currency": "",
+  "stock_ratio": null,
+  "price_ticker": "",
+  "price_date": "",
+  "value_formula": "n/a",
+  "status": {
+    "exit_kind": "agree",
+    "last_trade_date": "agree",
+    "successor": "agree",
+    "value_rule": "agree",
+    "terms": "agree",
+    "issuer": "agree",
+    "ticker_history": "agree"
+  },
+  "confidence_reasons": [],
+  "library_wrong": false,
+  "cause": "rename_not_followed",
+  "golden_worthy": false,
+  "sec_evidence": 4,
+  "web_evidence": 0,
+  "open_checks": [
+    "PGEN range starts 2020-02-05 though the symbol changed effective 2020-02-03 (minor)"
+  ],
+  "verdict": "Same security renamed Intrexon to Precigen (XON to PGEN, 2020-02-03) after a 2018 NYSE-to-Nasdaq move; no ending, so the new run's removal of the transfer row is right.",
+  "field_verdicts": [
+    {
+      "field": "delistings.removed",
+      "right": "new",
+      "value": "no ending row",
+      "missed_filing": ""
+    },
+    {
+      "field": "security_history.ranges",
+      "right": "new",
+      "value": "XON:2013-08-13..2020-02-04:1356090|PGEN:2020-02-05..:1356090",
+      "missed_filing": ""
+    },
+    {
+      "field": "id_changes.sec_id",
+      "right": "new",
+      "value": "BBG000QL8VH9",
+      "missed_filing": ""
+    }
+  ],
+  "verification": {
+    "upheld": false,
+    "fields_upheld": [
+      "delistings.removed",
+      "id_changes.sec_id"
+    ],
+    "fields_refuted": [
+      {
+        "field": "security_history.ranges",
+        "why": "8-K 0001193125-20-023400 shows the symbol change took effect at the open of 2020-02-03, so XON's last session was 2020-01-31. The old XON end (2020-01-31) is correct. The new XON end (2020-02-04) comes from fails rows lagging by settlement and is wrong. PGEN's start (2020-02-05) is late in both runs. The new run removes the gap but is less accurate, so neither side is right and 'new' is not supported."
+      }
+    ],
+    "notes": "Removal of the 2020 exchange row is right: this was a rename, and the only Form 25 is the 2018 NYSE to Nasdaq move. The FIGI rename of the placeholder is expected. I appended section 9 and a verification object to the report and the record json.",
+    "case_id": "BBG000QL8VH9_5a-r2"
+  }
+}

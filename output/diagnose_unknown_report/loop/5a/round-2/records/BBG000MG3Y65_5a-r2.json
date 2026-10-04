@@ -1,0 +1,63 @@
+{
+  "case_id": "BBG000MG3Y65_5a-r2",
+  "sec_id": "BBG000MG3Y65",
+  "ticker": "TWO",
+  "report": "reports/BBG000MG3Y65_5a-r2.md",
+  "event_type": "merger",
+  "consideration": "cash",
+  "confidence": "verified",
+  "exit_kind": "merger",
+  "drop_reason": "",
+  "continuation": false,
+  "successor_ticker": "",
+  "last_trade_date": "2026-08-24",
+  "value_rule": "cash",
+  "cash_per_share": 12.0,
+  "cash_currency": "USD",
+  "stock_ratio": null,
+  "price_ticker": "",
+  "price_date": "",
+  "value_formula": "12.00 USD / last_close - 1",
+  "status": {
+    "exit_kind": "agree",
+    "last_trade_date": "agree",
+    "successor": "agree",
+    "value_rule": "agree",
+    "terms": "agree",
+    "issuer": "agree",
+    "ticker_history": "agree"
+  },
+  "confidence_reasons": [],
+  "library_wrong": false,
+  "cause": "library_right_but_uncertain",
+  "golden_worthy": true,
+  "sec_evidence": 3,
+  "web_evidence": 0,
+  "open_checks": [],
+  "verdict": "TWO common was cashed out at $12.00 in the CCM merger closing 2026-08-25 with last trade 2026-08-24; the new run is right, the base run missed the ending.",
+  "mode": "regression",
+  "field_verdicts": [
+    {
+      "field": "delistings.added",
+      "right": "new",
+      "value": "exit_kind=merger;drop_reason=;continuation=false;successor_sec_id=;last_trade_date=2026-08-24;value_rule=cash",
+      "missed_filing": ""
+    },
+    {
+      "field": "security_history.ranges",
+      "right": "new",
+      "value": "TWO:2009-11-09..2026-08-24:1465740",
+      "missed_filing": ""
+    }
+  ],
+  "verification": {
+    "upheld": true,
+    "fields_upheld": [
+      "delistings.added",
+      "security_history.ranges"
+    ],
+    "fields_refuted": [],
+    "notes": "Re-read 8-K 0001104659-26-100622. Item 2.01: closing 2026-08-25, common converted to $12.00 cash, preferred stayed outstanding. Item 3.01: NYSE asked to suspend trading before the open on the Closing Date, so the last trade was 2026-08-24. The added merger ending and the range ending 2026-08-24 are right. I did not read the Form 25-NSE 0000876661-26-000705 itself.",
+    "case_id": "BBG000MG3Y65_5a-r2"
+  }
+}

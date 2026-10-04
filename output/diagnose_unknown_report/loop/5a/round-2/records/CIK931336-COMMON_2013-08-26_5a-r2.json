@@ -1,0 +1,68 @@
+{
+  "case_id": "CIK931336-COMMON_2013-08-26_5a-r2",
+  "sec_id": "BBG000BBMT95",
+  "ticker": "DF",
+  "report": "reports/CIK931336-COMMON_2013-08-26_5a-r2.md",
+  "mode": "mismatch",
+  "event_type": "bankruptcy",
+  "consideration": "none",
+  "confidence": "inferred",
+  "exit_kind": "dropped",
+  "drop_reason": "bankruptcy",
+  "continuation": false,
+  "successor_ticker": "",
+  "last_trade_date": "2019-11-11",
+  "value_rule": "otc_print",
+  "cash_per_share": null,
+  "cash_currency": "",
+  "stock_ratio": null,
+  "price_ticker": "DFODQ",
+  "price_date": "2019-11-12",
+  "value_formula": "otc_print(DFODQ, from 2019-11-12) / last_close - 1",
+  "status": {
+    "exit_kind": "agree",
+    "last_trade_date": "agree",
+    "successor": "agree",
+    "value_rule": "agree",
+    "terms": "wrong",
+    "issuer": "agree",
+    "ticker_history": "agree"
+  },
+  "confidence_reasons": [
+    "price_ticker DFODQ rests on SEC fails rows of CUSIP 242370203 (DFODQ from 2019-11-15), not on a filing",
+    "price_sec_id rests on contract/id_changes.csv (placeholder renamed to the FIGI), not on a filing"
+  ],
+  "library_wrong": true,
+  "cause": "other:otc_symbol_not_looked_up",
+  "golden_worthy": false,
+  "sec_evidence": 2,
+  "web_evidence": 0,
+  "field_verdicts": [
+    {
+      "field": "price_sec_id",
+      "right": "library",
+      "value": "BBG000BBMT95",
+      "missed_filing": ""
+    },
+    {
+      "field": "price_ticker",
+      "right": "truth",
+      "value": "DFODQ",
+      "missed_filing": ""
+    }
+  ],
+  "open_checks": [
+    "confirm DFODQ as the symbol of the first OTC session 2019-11-12 (not on SEC)"
+  ],
+  "verdict": "The library's sec_id is the truth's placeholder renamed to a FIGI, but its OTC price ticker DF is wrong: the stock traded as DFODQ after 2019-11-12.",
+  "verification": {
+    "upheld": true,
+    "fields_upheld": [
+      "price_sec_id",
+      "price_ticker"
+    ],
+    "fields_refuted": [],
+    "notes": "price_sec_id: id_changes.csv row maps CIK931336-COMMON to BBG000BBMT95 (same CIK 931336, COMMON), so the truth value is a stale placeholder and the library is right; no missed filing is claimed. price_ticker: fails rows for CUSIP 242370203 show DF through 2019-11-14 and DFODQ from 2019-11-15 (28 rows to 2019-12-31), so the otc_print should use DFODQ; truth is right. Open check remains that the first OTC session symbol is not on SEC.",
+    "case_id": "CIK931336-COMMON_2013-08-26_5a-r2"
+  }
+}
