@@ -1,0 +1,26 @@
+{
+ "case_id": "BBG000BB5HV5_2010-12-19",
+ "sec_id": "BBG000BB5HV5",
+ "shape": "ending",
+ "fields": {
+  "exit_kind": "merger",
+  "drop_reason": "",
+  "continuation": "false",
+  "successor_sec_id": "",
+  "last_trade_date": "",
+  "value_rule": "cash",
+  "cash_per_share": "12.75",
+  "cash_currency": "USD",
+  "stock_ratio": "",
+  "price_sec_id": "",
+  "price_ticker": "",
+  "price_date": "",
+  "recovery_ratio": ""
+ },
+ "internal_last_trade_date": "2010-12-09",
+ "legs": [],
+ "identity_check": null,
+ "residual": "",
+ "pending": [],
+ "notes": "Tyco tender then short-form merger 2010-12-09, $12.75 cash; no filing states last trade day"
+}

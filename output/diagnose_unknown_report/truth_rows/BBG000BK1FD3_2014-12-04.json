@@ -1,0 +1,26 @@
+{
+ "case_id": "BBG000BK1FD3_2014-12-04",
+ "sec_id": "BBG000BK1FD3",
+ "shape": "ending",
+ "fields": {
+  "exit_kind": "merger",
+  "drop_reason": "",
+  "continuation": "false",
+  "successor_sec_id": "",
+  "last_trade_date": "",
+  "value_rule": "cash_plus_stock",
+  "cash_per_share": "16.00",
+  "cash_currency": "USD",
+  "stock_ratio": "0.8998",
+  "price_sec_id": "*",
+  "price_ticker": "AMFW",
+  "price_date": "",
+  "recovery_ratio": ""
+ },
+ "internal_last_trade_date": "",
+ "legs": [],
+ "identity_check": null,
+ "residual": "",
+ "pending": [],
+ "notes": "Amec exchange offer default package $16.00 + 0.8998 AMFW (R4); no filing states last trade; AMFW not in run; operator ruling 2026-10-03: no source states the last session: internal date not scored"
+}

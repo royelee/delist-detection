@@ -1,0 +1,41 @@
+{
+ "case_id": "BBG00BFHD827_2023-08-13",
+ "sec_id": "BBG00BFHD827",
+ "shape": "ending",
+ "fields": {
+  "exit_kind": "merger",
+  "drop_reason": "",
+  "continuation": "false",
+  "successor_sec_id": "",
+  "last_trade_date": "",
+  "value_rule": "basket",
+  "cash_per_share": "",
+  "cash_currency": "",
+  "stock_ratio": "",
+  "price_sec_id": "",
+  "price_ticker": "",
+  "price_date": "",
+  "recovery_ratio": ""
+ },
+ "internal_last_trade_date": "2023-08-03",
+ "legs": [
+  {
+   "leg": 1,
+   "ratio": "1",
+   "price_sec_id": "BBG01HLM8W28",
+   "price_ticker": "LSXMA",
+   "price_date": ""
+  },
+  {
+   "leg": 2,
+   "ratio": "0.25",
+   "price_sec_id": "*",
+   "price_ticker": "LLYVA",
+   "price_date": ""
+  }
+ ],
+ "identity_check": null,
+ "residual": "",
+ "pending": [],
+ "notes": "8-K 2023-08-03 3.03: reclassification effective 5pm 2023-08-03 gives 1 new LSXMA plus 0.25 LLYVA per old share (no cash); one-to-many reclassification so basket (R3), not an R1 continuation; last trade date worked out from effective time, not published.; operator ruling 2026-10-03: Liberty Live leg sec_id not scored until the run holds it"
+}

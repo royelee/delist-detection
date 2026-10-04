@@ -1,0 +1,34 @@
+{
+ "case_id": "BBG006F8QZK4_2024-12-07",
+ "sec_id": "BBG006F8QZK4",
+ "shape": "ending",
+ "fields": {
+  "exit_kind": "merger",
+  "drop_reason": "",
+  "continuation": "false",
+  "successor_sec_id": "",
+  "last_trade_date": "2024-11-26",
+  "value_rule": "basket",
+  "cash_per_share": "25.75",
+  "cash_currency": "USD",
+  "stock_ratio": "",
+  "price_sec_id": "",
+  "price_ticker": "",
+  "price_date": "",
+  "recovery_ratio": ""
+ },
+ "internal_last_trade_date": "2024-11-26",
+ "legs": [
+  {
+   "leg": 1,
+   "ratio": "1.0",
+   "price_sec_id": "*",
+   "price_ticker": "GEAR",
+   "price_date": "2024-11-27"
+  }
+ ],
+ "identity_check": null,
+ "residual": "",
+ "pending": [],
+ "notes": "8-K and Form 25-NSE: USD 25.75 cash plus one Revelyst (GEAR) spin-off share (R3 basket), effective before open 2024-11-27"
+}

@@ -1,0 +1,29 @@
+{
+ "case_id": "BBG00WYYC600_2017-11-09",
+ "sec_id": "BBG00WYYC600",
+ "shape": "no_ending",
+ "fields": {
+  "exit_kind": "",
+  "drop_reason": "",
+  "continuation": "",
+  "successor_sec_id": "",
+  "last_trade_date": "",
+  "value_rule": "",
+  "cash_per_share": "",
+  "cash_currency": "",
+  "stock_ratio": "",
+  "price_sec_id": "",
+  "price_ticker": "",
+  "price_date": "",
+  "recovery_ratio": ""
+ },
+ "internal_last_trade_date": "",
+ "legs": [],
+ "identity_check": {
+  "old_cusip": "966387102",
+  "new_cusip": "966387409"
+ },
+ "residual": "",
+ "pending": [],
+ "notes": "1-for-4 reverse split 2017-11-08, same WLL common, new CUSIP; last old-CUSIP day 2017-11-08 (not published, line continues)"
+}

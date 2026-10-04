@@ -1,0 +1,26 @@
+{
+ "case_id": "BBG000BHFHP8_2021-12-10",
+ "sec_id": "BBG000BHFHP8",
+ "shape": "ending",
+ "fields": {
+  "exit_kind": "merger",
+  "drop_reason": "",
+  "continuation": "false",
+  "successor_sec_id": "",
+  "last_trade_date": "2021-11-29",
+  "value_rule": "cash",
+  "cash_per_share": "55.50",
+  "cash_currency": "USD",
+  "stock_ratio": "",
+  "price_sec_id": "",
+  "price_ticker": "",
+  "price_date": "",
+  "recovery_ratio": ""
+ },
+ "internal_last_trade_date": "2021-11-29",
+ "legs": [],
+ "identity_check": null,
+ "residual": "",
+ "pending": [],
+ "notes": "8-K item 3.01: NYSE suspended before open 2021-11-30 so last trade 2021-11-29; 55.50 USD cash."
+}

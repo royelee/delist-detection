@@ -1,0 +1,26 @@
+{
+ "case_id": "BBG000BBB3K1_2017-08-04",
+ "sec_id": "BBG000BBB3K1",
+ "shape": "ending",
+ "fields": {
+  "exit_kind": "merger",
+  "drop_reason": "",
+  "continuation": "false",
+  "successor_sec_id": "",
+  "last_trade_date": "2017-07-24",
+  "value_rule": "cash_plus_stock",
+  "cash_per_share": "29.44",
+  "cash_currency": "USD",
+  "stock_ratio": "0.5260",
+  "price_sec_id": "*",
+  "price_ticker": "BTI",
+  "price_date": "2017-07-25",
+  "recovery_ratio": ""
+ },
+ "internal_last_trade_date": "2017-07-24",
+ "legs": [],
+ "identity_check": null,
+ "residual": "",
+ "pending": [],
+ "notes": "8-K 2017-07-25: 0.5260 BAT ADS + $29.44; suspended before open 2017-07-25; BTI not in run"
+}

@@ -1,0 +1,26 @@
+{
+ "case_id": "CIK38079-COMMON_2015-01-25",
+ "sec_id": "CIK38079-COMMON",
+ "shape": "ending",
+ "fields": {
+  "exit_kind": "dropped",
+  "drop_reason": "guidelines",
+  "continuation": "false",
+  "successor_sec_id": "",
+  "last_trade_date": "2014-12-15",
+  "value_rule": "otc_print",
+  "cash_per_share": "",
+  "cash_currency": "",
+  "stock_ratio": "",
+  "price_sec_id": "CIK38079-COMMON",
+  "price_ticker": "FSTO",
+  "price_date": "2014-12-16",
+  "recovery_ratio": ""
+ },
+ "internal_last_trade_date": "2014-12-15",
+ "legs": [],
+ "identity_check": null,
+ "residual": "",
+ "pending": [],
+ "notes": "NYSE back-door-listing delisting (102.01, 802.01C), stock moved to OTCQB as FSTO; no consideration; suspension 2014-12-16 per 8-K 3.01 and Form 25 notice"
+}

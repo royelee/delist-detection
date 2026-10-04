@@ -1,0 +1,26 @@
+{
+ "case_id": "BBG000N8Y8W6_2017-07-27",
+ "sec_id": "BBG000N8Y8W6",
+ "shape": "ending",
+ "fields": {
+  "exit_kind": "merger",
+  "drop_reason": "",
+  "continuation": "false",
+  "successor_sec_id": "",
+  "last_trade_date": "",
+  "value_rule": "cash_plus_stock",
+  "cash_per_share": "23.00",
+  "cash_currency": "USD",
+  "stock_ratio": "0.057937",
+  "price_sec_id": "*",
+  "price_ticker": "FFH",
+  "price_date": "",
+  "recovery_ratio": ""
+ },
+ "internal_last_trade_date": "",
+ "legs": [],
+ "identity_check": null,
+ "residual": "",
+ "pending": [],
+ "notes": "Fairfax exchange offer: 23.00 USD + 0.057937 FFH; the $5.00 special dividend is paid outside the offer and not consideration; last trade date not sourced.; operator ruling 2026-10-03: no source states the last session: internal date not scored"
+}

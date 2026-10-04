@@ -1,0 +1,26 @@
+{
+ "case_id": "CIK1355096-SERIES-A_2011-10-03",
+ "sec_id": "CIK1355096-SERIES-A",
+ "shape": "no_ending",
+ "fields": {
+  "exit_kind": "",
+  "drop_reason": "",
+  "continuation": "",
+  "successor_sec_id": "",
+  "last_trade_date": "",
+  "value_rule": "",
+  "cash_per_share": "",
+  "cash_currency": "",
+  "stock_ratio": "",
+  "price_sec_id": "",
+  "price_ticker": "",
+  "price_date": "",
+  "recovery_ratio": ""
+ },
+ "internal_last_trade_date": "",
+ "legs": [],
+ "identity_check": null,
+ "residual": "",
+ "pending": [],
+ "notes": "2011 Form 25-NSE covered only Liberty Capital and Starz tracking stocks; Series A (LINTA, CUSIP 53071M104) unaffected"
+}

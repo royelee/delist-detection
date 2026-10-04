@@ -1,0 +1,26 @@
+{
+ "case_id": "BBG000BLY636_2008-08-17",
+ "sec_id": "BBG000BLY636",
+ "shape": "ending",
+ "fields": {
+  "exit_kind": "dropped",
+  "drop_reason": "bankruptcy",
+  "continuation": "false",
+  "successor_sec_id": "",
+  "last_trade_date": "*",
+  "value_rule": "otc_print",
+  "cash_per_share": "",
+  "cash_currency": "",
+  "stock_ratio": "",
+  "price_sec_id": "BBG000BLY636",
+  "price_ticker": "IDMC",
+  "price_date": "*",
+  "recovery_ratio": ""
+ },
+ "internal_last_trade_date": "",
+ "legs": [],
+ "identity_check": null,
+ "residual": "",
+ "pending": [],
+ "notes": "IndyMac: NYSE suspension after bank seizure, Chapter 7 2008-07-31; bankruptcy drop (judgment call per skeptic), OTC IDMC; last trade 2008-07-11 inferred, no filing states it (8-K says suspended immediately 07-14).; operator ruling 2026-10-03: suspended immediately on D: the last trade date is not scored"
+}

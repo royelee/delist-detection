@@ -1,0 +1,26 @@
+{
+ "case_id": "CIK1038914-COMMON_2007-12-23",
+ "sec_id": "CIK1038914-COMMON",
+ "shape": "ending",
+ "fields": {
+  "exit_kind": "merger",
+  "drop_reason": "",
+  "continuation": "false",
+  "successor_sec_id": "",
+  "last_trade_date": "2007-11-26",
+  "value_rule": "cash_plus_stock",
+  "cash_per_share": "22.46",
+  "cash_currency": "USD",
+  "stock_ratio": "0.4757",
+  "price_sec_id": "*",
+  "price_ticker": "RIG",
+  "price_date": "2007-11-27",
+  "recovery_ratio": ""
+ },
+ "internal_last_trade_date": "",
+ "legs": [],
+ "identity_check": null,
+ "residual": "",
+ "pending": [],
+ "notes": "GlobalSantaFe/Transocean: US$22.46 + 0.4757 RIG; 8-K 3.01 delisting at close 2007-11-26, Form 25 notice suspended 2007-11-27"
+}

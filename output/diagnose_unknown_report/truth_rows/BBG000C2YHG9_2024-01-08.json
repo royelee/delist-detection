@@ -1,0 +1,26 @@
+{
+ "case_id": "BBG000C2YHG9_2024-01-08",
+ "sec_id": "BBG000C2YHG9",
+ "shape": "ending",
+ "fields": {
+  "exit_kind": "merger",
+  "drop_reason": "",
+  "continuation": "false",
+  "successor_sec_id": "",
+  "last_trade_date": "2023-12-29",
+  "value_rule": "stock",
+  "cash_per_share": "",
+  "cash_currency": "",
+  "stock_ratio": "0.350877",
+  "price_sec_id": "BBG000TGLV00",
+  "price_ticker": "SATS",
+  "price_date": "2024-01-02",
+  "recovery_ratio": ""
+ },
+ "internal_last_trade_date": "2023-12-29",
+ "legs": [],
+ "identity_check": null,
+ "residual": "",
+ "pending": [],
+ "notes": "DISH to SATS 0.350877 stock merger; MIDAS 2023-12-29 agrees with Form 25 effective date"
+}

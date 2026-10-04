@@ -1,0 +1,26 @@
+{
+ "case_id": "BBG000BJXKD0_2018-06-16",
+ "sec_id": "BBG000BJXKD0",
+ "shape": "ending",
+ "fields": {
+  "exit_kind": "exchange",
+  "drop_reason": "",
+  "continuation": "true",
+  "successor_sec_id": "BBG00H433CR2",
+  "last_trade_date": "2018-06-04",
+  "value_rule": "continuation",
+  "cash_per_share": "",
+  "cash_currency": "",
+  "stock_ratio": "",
+  "price_sec_id": "",
+  "price_ticker": "",
+  "price_date": "",
+  "recovery_ratio": ""
+ },
+ "internal_last_trade_date": "2018-06-04",
+ "legs": [],
+ "identity_check": null,
+ "residual": "",
+ "pending": [],
+ "notes": "Westar 1:1 into Evergy, no cash: continuation by R1 even though Great Plains holders joined at 0.5981; Form 25 suspended June 5"
+}

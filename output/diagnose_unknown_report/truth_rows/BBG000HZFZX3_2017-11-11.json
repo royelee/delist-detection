@@ -1,0 +1,26 @@
+{
+ "case_id": "BBG000HZFZX3_2017-11-11",
+ "sec_id": "BBG000HZFZX3",
+ "shape": "ending",
+ "fields": {
+  "exit_kind": "merger",
+  "drop_reason": "",
+  "continuation": "false",
+  "successor_sec_id": "",
+  "last_trade_date": "2017-10-31",
+  "value_rule": "cash_plus_stock",
+  "cash_per_share": "26.50",
+  "cash_currency": "USD",
+  "stock_ratio": "1.4286",
+  "price_sec_id": "BBG000BGLRN3",
+  "price_ticker": "CTL",
+  "price_date": "2017-11-01",
+  "recovery_ratio": ""
+ },
+ "internal_last_trade_date": "",
+ "legs": [],
+ "identity_check": null,
+ "residual": "",
+ "pending": [],
+ "notes": "8-K 2017-11-01 and Form 25-NSE: $26.50 + 1.4286 CTL; suspended on merger date"
+}

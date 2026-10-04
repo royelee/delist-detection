@@ -1,0 +1,26 @@
+{
+ "case_id": "BBG000BHSKN9_2015-10-12",
+ "sec_id": "BBG000BHSKN9",
+ "shape": "ending",
+ "fields": {
+  "exit_kind": "exchange",
+  "drop_reason": "",
+  "continuation": "true",
+  "successor_sec_id": "BBG009S39JX6",
+  "last_trade_date": "2015-10-02",
+  "value_rule": "continuation",
+  "cash_per_share": "",
+  "cash_currency": "",
+  "stock_ratio": "",
+  "price_sec_id": "",
+  "price_ticker": "",
+  "price_date": "",
+  "recovery_ratio": ""
+ },
+ "internal_last_trade_date": "2015-10-02",
+ "legs": [],
+ "identity_check": null,
+ "residual": "",
+ "pending": [],
+ "notes": "Alphabet 2015 1:1 holdco; 8-K 3.01 suspension after close 2015-10-02; 8-K12B successor"
+}

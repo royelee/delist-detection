@@ -1,0 +1,26 @@
+{
+ "case_id": "BBG000BNVNY4_2021-12-12",
+ "sec_id": "BBG000BNVNY4",
+ "shape": "ending",
+ "fields": {
+  "exit_kind": "merger",
+  "drop_reason": "",
+  "continuation": "false",
+  "successor_sec_id": "",
+  "last_trade_date": "2021-12-01",
+  "value_rule": "cash",
+  "cash_per_share": "59.17",
+  "cash_currency": "USD",
+  "stock_ratio": "",
+  "price_sec_id": "",
+  "price_ticker": "",
+  "price_date": "",
+  "recovery_ratio": ""
+ },
+ "internal_last_trade_date": "2021-12-01",
+ "legs": [],
+ "identity_check": null,
+ "residual": "",
+ "pending": [],
+ "notes": "8-K 2.01: 16.99 Gray + 42.18 Dotdash (via one-to-one Holdings share) = 59.17 USD; skeptic upheld."
+}

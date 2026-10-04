@@ -1,0 +1,26 @@
+{
+ "case_id": "CIK314808-COMMON_2010-01-08",
+ "sec_id": "CIK314808-COMMON",
+ "shape": "ending",
+ "fields": {
+  "exit_kind": "exchange",
+  "drop_reason": "",
+  "continuation": "true",
+  "successor_sec_id": "CIK314808-CLASS-A",
+  "last_trade_date": "2009-12-22",
+  "value_rule": "continuation",
+  "cash_per_share": "",
+  "cash_currency": "",
+  "stock_ratio": "",
+  "price_sec_id": "",
+  "price_ticker": "",
+  "price_date": "",
+  "recovery_ratio": ""
+ },
+ "internal_last_trade_date": "2009-12-22",
+ "legs": [],
+ "identity_check": null,
+ "residual": "",
+ "pending": [],
+ "notes": "1:1 holdco reorganization Ensco Delaware to Ensco plc ADS, no cash (R1); last trade from Form 25 notice suspended 2009-12-23"
+}

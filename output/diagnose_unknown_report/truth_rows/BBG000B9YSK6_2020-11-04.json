@@ -1,0 +1,26 @@
+{
+ "case_id": "BBG000B9YSK6_2020-11-04",
+ "sec_id": "BBG000B9YSK6",
+ "shape": "ending",
+ "fields": {
+  "exit_kind": "dropped",
+  "drop_reason": "bankruptcy",
+  "continuation": "false",
+  "successor_sec_id": "",
+  "last_trade_date": "2020-10-30",
+  "value_rule": "otc_print",
+  "cash_per_share": "",
+  "cash_currency": "",
+  "stock_ratio": "",
+  "price_sec_id": "BBG000B9YSK6",
+  "price_ticker": "CBLAQ",
+  "price_date": "2020-11-02",
+  "recovery_ratio": ""
+ },
+ "internal_last_trade_date": "2020-10-30",
+ "legs": [],
+ "identity_check": null,
+ "residual": "",
+ "pending": [],
+ "notes": "Ch11 2020-11-01, NYSE suspension 2020-11-02 (8-K 3.01), OTC as CBLAQ; first OTC print; operator ruling 2026-10-03: R8: last trade 2020-10-30"
+}

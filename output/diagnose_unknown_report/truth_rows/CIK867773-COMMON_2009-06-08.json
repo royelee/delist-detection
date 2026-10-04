@@ -1,0 +1,26 @@
+{
+ "case_id": "CIK867773-COMMON_2009-06-08",
+ "sec_id": "CIK867773-COMMON",
+ "shape": "ending",
+ "fields": {
+  "exit_kind": "exchange",
+  "drop_reason": "",
+  "continuation": "true",
+  "successor_sec_id": "BBG000FVQ185",
+  "last_trade_date": "",
+  "value_rule": "continuation",
+  "cash_per_share": "",
+  "cash_currency": "",
+  "stock_ratio": "",
+  "price_sec_id": "",
+  "price_ticker": "",
+  "price_date": "",
+  "recovery_ratio": ""
+ },
+ "internal_last_trade_date": "2011-11-16",
+ "legs": [],
+ "identity_check": null,
+ "residual": "",
+ "pending": [],
+ "notes": "SPWRA Class A reclassified share-for-share into Common (SPWR) 2011-11-16 5pm; ending later than library's 2009 guess; date from effective time, not an exchange print"
+}

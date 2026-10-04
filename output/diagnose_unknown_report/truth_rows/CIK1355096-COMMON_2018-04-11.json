@@ -1,0 +1,29 @@
+{
+ "case_id": "CIK1355096-COMMON_2018-04-11",
+ "sec_id": "CIK1355096-COMMON",
+ "shape": "no_ending",
+ "fields": {
+  "exit_kind": "",
+  "drop_reason": "",
+  "continuation": "",
+  "successor_sec_id": "",
+  "last_trade_date": "",
+  "value_rule": "",
+  "cash_per_share": "",
+  "cash_currency": "",
+  "stock_ratio": "",
+  "price_sec_id": "",
+  "price_ticker": "",
+  "price_date": "",
+  "recovery_ratio": ""
+ },
+ "internal_last_trade_date": "",
+ "legs": [],
+ "identity_check": {
+  "old_cusip": "53071M104",
+  "new_cusip": "74915M100"
+ },
+ "residual": "",
+ "pending": [],
+ "notes": "Liberty Interactive renamed Qurate Retail 2018-04-09; Series A kept trading as QRTEA with CUSIP change; link to BBG000PCQQL6 per fails rows"
+}

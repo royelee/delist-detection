@@ -1,0 +1,29 @@
+{
+ "case_id": "BBG000GTYWL7_2026-01-18",
+ "sec_id": "BBG000GTYWL7",
+ "shape": "no_ending",
+ "fields": {
+  "exit_kind": "",
+  "drop_reason": "",
+  "continuation": "",
+  "successor_sec_id": "",
+  "last_trade_date": "",
+  "value_rule": "",
+  "cash_per_share": "",
+  "cash_currency": "",
+  "stock_ratio": "",
+  "price_sec_id": "",
+  "price_ticker": "",
+  "price_date": "",
+  "recovery_ratio": ""
+ },
+ "internal_last_trade_date": "",
+ "legs": [],
+ "identity_check": {
+  "old_cusip": "N72482206",
+  "new_cusip": "N72482156"
+ },
+ "residual": "",
+ "pending": [],
+ "notes": "QGEN reverse split/capital repayment, CUSIP change N72482206 to N72482156, still NYSE listed (20-F)"
+}

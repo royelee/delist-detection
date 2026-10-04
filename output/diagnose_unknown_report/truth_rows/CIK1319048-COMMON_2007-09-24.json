@@ -1,0 +1,26 @@
+{
+ "case_id": "CIK1319048-COMMON_2007-09-24",
+ "sec_id": "CIK1319048-COMMON",
+ "shape": "ending",
+ "fields": {
+  "exit_kind": "merger",
+  "drop_reason": "",
+  "continuation": "false",
+  "successor_sec_id": "",
+  "last_trade_date": "",
+  "value_rule": "cash",
+  "cash_per_share": "86.00",
+  "cash_currency": "USD",
+  "stock_ratio": "",
+  "price_sec_id": "",
+  "price_ticker": "",
+  "price_date": "",
+  "recovery_ratio": ""
+ },
+ "internal_last_trade_date": "2007-09-14",
+ "legs": [],
+ "identity_check": null,
+ "residual": "",
+ "pending": [],
+ "notes": "Gerdau Ameristeel cash merger, 86.00 USD (DEFM14A); last trade 2007-09-14 only worked out from Form 25 filing date, unpublished"
+}

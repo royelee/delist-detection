@@ -1,0 +1,26 @@
+{
+ "case_id": "BBG000PYZSR8_2016-05-18",
+ "sec_id": "BBG000PYZSR8",
+ "shape": "ending",
+ "fields": {
+  "exit_kind": "merger",
+  "drop_reason": "",
+  "continuation": "false",
+  "successor_sec_id": "",
+  "last_trade_date": "",
+  "value_rule": "stock",
+  "cash_per_share": "",
+  "cash_currency": "",
+  "stock_ratio": "0.9042",
+  "price_sec_id": "BBG000VPGNR2",
+  "price_ticker": "CHTR",
+  "price_date": "",
+  "recovery_ratio": ""
+ },
+ "internal_last_trade_date": "2016-05-17",
+ "legs": [],
+ "identity_check": null,
+ "residual": "",
+ "pending": [],
+ "notes": "R1: 0.9042 new CHTR per old share, no cash, new CUSIP: stock merger; last trade 05-17 worked out only (no print), so unpublished"
+}

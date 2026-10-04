@@ -1,0 +1,26 @@
+{
+ "case_id": "BBG000BF5RY1_2016-06-10",
+ "sec_id": "BBG000BF5RY1",
+ "shape": "ending",
+ "fields": {
+  "exit_kind": "merger",
+  "drop_reason": "",
+  "continuation": "false",
+  "successor_sec_id": "",
+  "last_trade_date": "2016-05-27",
+  "value_rule": "cash_plus_stock",
+  "cash_per_share": "14.50",
+  "cash_currency": "USD",
+  "stock_ratio": "1.0",
+  "price_sec_id": "*",
+  "price_ticker": "CCE",
+  "price_date": "2016-05-31",
+  "recovery_ratio": ""
+ },
+ "internal_last_trade_date": "2016-05-27",
+ "legs": [],
+ "identity_check": null,
+ "residual": "",
+ "pending": [],
+ "notes": "CCE/CCEP: 8-K 3.01 suspension at open of 2016-05-31 (05-30 holiday) so last trade 05-27; 14.50 USD + 1 CCEP share (ticker CCE) priced 2016-05-31; skeptic upheld"
+}

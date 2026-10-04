@@ -1,0 +1,26 @@
+{
+ "case_id": "BBG00DJ2LJF5_2019-01-07",
+ "sec_id": "BBG00DJ2LJF5",
+ "shape": "ending",
+ "fields": {
+  "exit_kind": "merger",
+  "drop_reason": "",
+  "continuation": "false",
+  "successor_sec_id": "",
+  "last_trade_date": "2018-12-27",
+  "value_rule": "cash_plus_stock",
+  "cash_per_share": "76.97",
+  "cash_currency": "USD",
+  "stock_ratio": "0.6479",
+  "price_sec_id": "BBG00DW3SZS1",
+  "price_ticker": "DELL",
+  "price_date": "2018-12-28",
+  "recovery_ratio": ""
+ },
+ "internal_last_trade_date": "2018-12-27",
+ "legs": [],
+ "identity_check": null,
+ "residual": "",
+ "pending": [],
+ "notes": "8-K 2018-12-28: Class V election deal $120 cash or 1.8066 Class C, cash prorated 0.6414; published the prorated elector package (R4); skeptic notes aggregate would be 70.23 / 0.7493."
+}

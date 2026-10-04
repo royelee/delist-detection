@@ -1,0 +1,26 @@
+{
+ "case_id": "BBG000BLPBL5_2026-08-27",
+ "sec_id": "BBG000BLPBL5",
+ "shape": "ending",
+ "fields": {
+  "exit_kind": "merger",
+  "drop_reason": "",
+  "continuation": "false",
+  "successor_sec_id": "",
+  "last_trade_date": "2026-08-14",
+  "value_rule": "stock",
+  "cash_per_share": "",
+  "cash_currency": "",
+  "stock_ratio": "2.793",
+  "price_sec_id": "BBG000BG8M31",
+  "price_ticker": "EQR",
+  "price_date": "2026-08-17",
+  "recovery_ratio": ""
+ },
+ "internal_last_trade_date": "2026-08-14",
+ "legs": [],
+ "identity_check": null,
+ "residual": "",
+ "pending": [],
+ "notes": "AVB: 2.793 Equity Residential (Vivmark) shares; skeptic refuted the report's price_date change (EQR traded 2026-08-17 on same sec_id); last trade 2026-08-14 not stated by a filing; cash only for fractions.; operator ruling 2026-10-03: last trade 2026-08-14 from the Form 25 notice; price ticker EQR per the skeptic"
+}

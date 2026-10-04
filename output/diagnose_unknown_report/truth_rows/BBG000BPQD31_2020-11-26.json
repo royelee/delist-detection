@@ -1,0 +1,26 @@
+{
+ "case_id": "BBG000BPQD31_2020-11-26",
+ "sec_id": "BBG000BPQD31",
+ "shape": "ending",
+ "fields": {
+  "exit_kind": "exchange",
+  "drop_reason": "",
+  "continuation": "true",
+  "successor_sec_id": "BBG00Y4RQNH4",
+  "last_trade_date": "",
+  "value_rule": "continuation",
+  "cash_per_share": "",
+  "cash_currency": "",
+  "stock_ratio": "",
+  "price_sec_id": "",
+  "price_ticker": "",
+  "price_date": "",
+  "recovery_ratio": ""
+ },
+ "internal_last_trade_date": "2020-11-16",
+ "legs": [],
+ "identity_check": null,
+ "residual": "",
+ "pending": [],
+ "notes": "R1/BHI: 1 VTRS per MYL share, $12B cash went to Pfizer not holders; last trade worked out, not published."
+}

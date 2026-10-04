@@ -1,0 +1,26 @@
+{
+ "case_id": "BBG0017T9998_2020-07-30",
+ "sec_id": "BBG0017T9998",
+ "shape": "ending",
+ "fields": {
+  "exit_kind": "merger",
+  "drop_reason": "",
+  "continuation": "false",
+  "successor_sec_id": "",
+  "last_trade_date": "2020-07-17",
+  "value_rule": "cash",
+  "cash_per_share": "12.41",
+  "cash_currency": "USD",
+  "stock_ratio": "",
+  "price_sec_id": "",
+  "price_ticker": "",
+  "price_date": "",
+  "recovery_ratio": ""
+ },
+ "internal_last_trade_date": "2020-07-17",
+ "legs": [],
+ "identity_check": null,
+ "residual": "",
+ "pending": [],
+ "notes": "Election deal (R4): no filing states the final aggregate; no-election default is cash ~$12.41; the report's aggregate 8.93 + 0.0915 ERI is worked out, not stated. Last trade 2020-07-20 best estimate, no print (2020-07-17 possible); operator ruling 2026-10-03: R8: suspended on the 2020-07-20 closing date, last trade 2020-07-17"
+}

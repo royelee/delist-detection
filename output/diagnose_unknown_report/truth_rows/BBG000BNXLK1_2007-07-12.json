@@ -1,0 +1,26 @@
+{
+ "case_id": "BBG000BNXLK1_2007-07-12",
+ "sec_id": "BBG000BNXLK1",
+ "shape": "ending",
+ "fields": {
+  "exit_kind": "exchange",
+  "drop_reason": "",
+  "continuation": "true",
+  "successor_sec_id": "BBG000BD8PN9",
+  "last_trade_date": "",
+  "value_rule": "continuation",
+  "cash_per_share": "",
+  "cash_currency": "",
+  "stock_ratio": "",
+  "price_sec_id": "",
+  "price_ticker": "",
+  "price_date": "",
+  "recovery_ratio": ""
+ },
+ "internal_last_trade_date": "2007-06-29",
+ "legs": [],
+ "identity_check": null,
+ "residual": "",
+ "pending": [],
+ "notes": "R1: 1 BK share per Mellon share, no cash, even though BNY holders got 0.9434; successor BK line; last trade worked out from Sunday effective date, not published."
+}

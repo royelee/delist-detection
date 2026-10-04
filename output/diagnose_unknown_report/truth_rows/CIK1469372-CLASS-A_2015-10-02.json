@@ -1,0 +1,29 @@
+{
+ "case_id": "CIK1469372-CLASS-A_2015-10-02",
+ "sec_id": "CIK1469372-CLASS-A",
+ "shape": "no_ending",
+ "fields": {
+  "exit_kind": "",
+  "drop_reason": "",
+  "continuation": "",
+  "successor_sec_id": "",
+  "last_trade_date": "",
+  "value_rule": "",
+  "cash_per_share": "",
+  "cash_currency": "",
+  "stock_ratio": "",
+  "price_sec_id": "",
+  "price_ticker": "",
+  "price_date": "",
+  "recovery_ratio": ""
+ },
+ "internal_last_trade_date": "",
+ "legs": [],
+ "identity_check": {
+  "old_cusip": "55826P100",
+  "new_cusip": "553573106"
+ },
+ "residual": "",
+ "pending": [],
+ "notes": "8-K 2015-10-06: same CIK renamed MSG Networks (MSGN) 2015-09-30 plus 1-for-3 spin-off distribution; no Form 25; CUSIP change from fails rows (R2)."
+}

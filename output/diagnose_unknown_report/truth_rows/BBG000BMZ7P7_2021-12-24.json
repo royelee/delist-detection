@@ -1,0 +1,26 @@
+{
+ "case_id": "BBG000BMZ7P7_2021-12-24",
+ "sec_id": "BBG000BMZ7P7",
+ "shape": "ending",
+ "fields": {
+  "exit_kind": "merger",
+  "drop_reason": "",
+  "continuation": "false",
+  "successor_sec_id": "",
+  "last_trade_date": "2021-12-13",
+  "value_rule": "cash_plus_stock",
+  "cash_per_share": "90.00",
+  "cash_currency": "USD",
+  "stock_ratio": "2.884",
+  "price_sec_id": "*",
+  "price_ticker": "CP",
+  "price_date": "2021-12-14",
+  "recovery_ratio": ""
+ },
+ "internal_last_trade_date": "2021-12-13",
+ "legs": [],
+ "identity_check": null,
+ "residual": "",
+ "pending": [],
+ "notes": "Form 25-NSE notice: USD 90.00 + 2.884 CP, suspended 2021-12-14; CP not in run."
+}

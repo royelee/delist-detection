@@ -1,0 +1,26 @@
+{
+ "case_id": "BBG000BLBGS2_2025-12-20",
+ "sec_id": "BBG000BLBGS2",
+ "shape": "ending",
+ "fields": {
+  "exit_kind": "merger",
+  "drop_reason": "",
+  "continuation": "false",
+  "successor_sec_id": "",
+  "last_trade_date": "",
+  "value_rule": "cash_plus_stock",
+  "cash_per_share": "7.20",
+  "cash_currency": "USD",
+  "stock_ratio": "0.2192",
+  "price_sec_id": "*",
+  "price_ticker": "HNI",
+  "price_date": "",
+  "recovery_ratio": ""
+ },
+ "internal_last_trade_date": "2025-12-09",
+ "legs": [],
+ "identity_check": null,
+ "residual": "",
+ "pending": [],
+ "notes": "Steelcase: default mixed package $7.20 + 0.2192 HNI (8-K 2025-12-11); last trade 2025-12-09 worked out, not stated; HNI not in run."
+}

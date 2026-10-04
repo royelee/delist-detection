@@ -1,0 +1,10 @@
+{"case_id": "BBG000BRF6B5_2009-05-29", "sec_id": "BBG000BRF6B5", "shape": "ending",
+ "fields": {"exit_kind": "dropped", "drop_reason": "guidelines", "continuation": "false", "successor_sec_id": "", "last_trade_date": "2008-12-31",
+            "value_rule": "otc_print", "cash_per_share": "", "cash_currency": "", "stock_ratio": "", "price_sec_id": "BBG000BRF6B5",
+            "price_ticker": "RHDC", "price_date": "2009-01-02", "recovery_ratio": ""},
+ "internal_last_trade_date": "2008-12-31",
+ "legs": [],
+ "identity_check": null,
+ "residual": "",
+ "pending": [],
+ "notes": "NYSE Rule 802.01B market-cap removal, suspended before open 2009-01-02 per 8-K 3.01 (Form 25-NSE 2009-01-16), then Pink Sheets as RHDC; bankruptcy 2009-05 came after."}

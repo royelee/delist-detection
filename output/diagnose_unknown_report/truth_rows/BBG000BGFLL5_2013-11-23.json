@@ -1,0 +1,26 @@
+{
+ "case_id": "BBG000BGFLL5_2013-11-23",
+ "sec_id": "BBG000BGFLL5",
+ "shape": "ending",
+ "fields": {
+  "exit_kind": "merger",
+  "drop_reason": "",
+  "continuation": "false",
+  "successor_sec_id": "",
+  "last_trade_date": "2013-11-12",
+  "value_rule": "cash_plus_stock",
+  "cash_per_share": "11.27",
+  "cash_currency": "USD",
+  "stock_ratio": "0.1703",
+  "price_sec_id": "BBG000C1FB75",
+  "price_ticker": "ICE",
+  "price_date": "2013-11-13",
+  "recovery_ratio": ""
+ },
+ "internal_last_trade_date": "2013-11-12",
+ "legs": [],
+ "identity_check": null,
+ "residual": "",
+ "pending": [],
+ "notes": "8-K and Form 25-NSE notice: standard package 11.27 USD + 0.1703 ICE, suspended 2013-11-13 so last trade 2013-11-12."
+}

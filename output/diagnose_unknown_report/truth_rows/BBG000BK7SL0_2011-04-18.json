@@ -1,0 +1,26 @@
+{
+ "case_id": "BBG000BK7SL0_2011-04-18",
+ "sec_id": "BBG000BK7SL0",
+ "shape": "ending",
+ "fields": {
+  "exit_kind": "merger",
+  "drop_reason": "",
+  "continuation": "false",
+  "successor_sec_id": "",
+  "last_trade_date": "",
+  "value_rule": "cash",
+  "cash_per_share": "74.00",
+  "cash_currency": "USD",
+  "stock_ratio": "",
+  "price_sec_id": "",
+  "price_ticker": "",
+  "price_date": "",
+  "recovery_ratio": ""
+ },
+ "internal_last_trade_date": "2011-04-08",
+ "legs": [],
+ "identity_check": null,
+ "residual": "",
+ "pending": [],
+ "notes": "Genzyme: US$74.00 cash plus one CVR per share (CVR in notes, not value); no filing states last trade day, 2011-04-08 is upper bound."
+}

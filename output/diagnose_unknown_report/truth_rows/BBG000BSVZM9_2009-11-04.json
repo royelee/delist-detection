@@ -1,0 +1,10 @@
+{"case_id": "BBG000BSVZM9_2009-11-04", "sec_id": "BBG000BSVZM9", "shape": "ending",
+ "fields": {"exit_kind": "merger", "drop_reason": "", "continuation": "false", "successor_sec_id": "", "last_trade_date": "",
+            "value_rule": "cash_plus_stock", "cash_per_share": "10.50", "cash_currency": "USD", "stock_ratio": "0.5767", "price_sec_id": "BBG000BPD168",
+            "price_ticker": "MRK", "price_date": "", "recovery_ratio": ""},
+ "internal_last_trade_date": "2009-11-03",
+ "legs": [],
+ "identity_check": null,
+ "residual": "",
+ "pending": [],
+ "notes": "Merck/Schering-Plough: $10.50 cash + 0.5767 New Merck (MRK) per share per 8-K item 2.01; last trade 2009-11-03 worked out from closing and fails rows, no exchange print, so unpublished."}

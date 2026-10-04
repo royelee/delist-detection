@@ -1,0 +1,26 @@
+{
+ "case_id": "BBG012BV9SK0_2026-07-17",
+ "sec_id": "BBG012BV9SK0",
+ "shape": "ending",
+ "fields": {
+  "exit_kind": "merger",
+  "drop_reason": "",
+  "continuation": "false",
+  "successor_sec_id": "",
+  "last_trade_date": "2026-07-06",
+  "value_rule": "cash",
+  "cash_per_share": "2.06",
+  "cash_currency": "USD",
+  "stock_ratio": "",
+  "price_sec_id": "",
+  "price_ticker": "",
+  "price_date": "",
+  "recovery_ratio": ""
+ },
+ "internal_last_trade_date": "",
+ "legs": [],
+ "identity_check": null,
+ "residual": "",
+ "pending": [],
+ "notes": "Henkel cash merger $2.06; 8-K 3.01 ceased trading before open 2026-07-07"
+}

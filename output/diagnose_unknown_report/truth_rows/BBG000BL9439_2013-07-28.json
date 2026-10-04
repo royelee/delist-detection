@@ -1,0 +1,26 @@
+{
+ "case_id": "BBG000BL9439_2013-07-28",
+ "sec_id": "BBG000BL9439",
+ "shape": "ending",
+ "fields": {
+  "exit_kind": "merger",
+  "drop_reason": "",
+  "continuation": "false",
+  "successor_sec_id": "",
+  "last_trade_date": "2013-06-07",
+  "value_rule": "cash",
+  "cash_per_share": "72.50",
+  "cash_currency": "USD",
+  "stock_ratio": "",
+  "price_sec_id": "",
+  "price_ticker": "",
+  "price_date": "",
+  "recovery_ratio": ""
+ },
+ "internal_last_trade_date": "2013-06-07",
+ "legs": [],
+ "identity_check": null,
+ "residual": "",
+ "pending": [],
+ "notes": "Heinz: $72.50 cash; 8-K item 3.01 halt after close 2013-06-07."
+}

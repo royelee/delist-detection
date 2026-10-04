@@ -1,0 +1,26 @@
+{
+ "case_id": "BBG000BH2T94_2011-12-11",
+ "sec_id": "BBG000BH2T94",
+ "shape": "ending",
+ "fields": {
+  "exit_kind": "merger",
+  "drop_reason": "",
+  "continuation": "false",
+  "successor_sec_id": "",
+  "last_trade_date": "2011-12-01",
+  "value_rule": "cash",
+  "cash_per_share": "8.00",
+  "cash_currency": "USD",
+  "stock_ratio": "",
+  "price_sec_id": "",
+  "price_ticker": "",
+  "price_date": "",
+  "recovery_ratio": ""
+ },
+ "internal_last_trade_date": "2011-12-01",
+ "legs": [],
+ "identity_check": null,
+ "residual": "",
+ "pending": [],
+ "notes": "8-K item 3.01: suspended after close on 2011-12-01; item 2.01 8.00 per share cash."
+}

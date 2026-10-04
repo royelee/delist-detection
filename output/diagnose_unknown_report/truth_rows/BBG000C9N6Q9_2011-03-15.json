@@ -1,0 +1,29 @@
+{
+ "case_id": "BBG000C9N6Q9_2011-03-15",
+ "sec_id": "BBG000C9N6Q9",
+ "shape": "ending_moved",
+ "fields": {
+  "exit_kind": "merger",
+  "drop_reason": "",
+  "continuation": "false",
+  "successor_sec_id": "",
+  "last_trade_date": "",
+  "value_rule": "cash_plus_stock",
+  "cash_per_share": "37.34",
+  "cash_currency": "USD",
+  "stock_ratio": "0.68",
+  "price_sec_id": "CIK1498301-COMMON",
+  "price_ticker": "ASNA",
+  "price_date": "",
+  "recovery_ratio": ""
+ },
+ "internal_last_trade_date": "2015-08-21",
+ "legs": [],
+ "identity_check": {
+  "old_cusip": "036115103",
+  "new_cusip": "035623107"
+ },
+ "residual": "",
+ "pending": [],
+ "notes": "2011 event is a name change (8-K 5.03, CUSIP 036115103 to 035623107); real ending is the Ascena merger effective 2015-08-21 per 2015 Form 25-NSE; last trade worked out from the effective date.; operator ruling 2026-10-03: price ticker ASNA on line CIK1498301-COMMON"
+}

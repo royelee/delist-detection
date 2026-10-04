@@ -1,0 +1,26 @@
+{
+ "case_id": "BBG000QDST26_2016-10-24",
+ "sec_id": "BBG000QDST26",
+ "shape": "ending",
+ "fields": {
+  "exit_kind": "merger",
+  "drop_reason": "",
+  "continuation": "false",
+  "successor_sec_id": "",
+  "last_trade_date": "2016-10-13",
+  "value_rule": "cash_plus_stock",
+  "cash_per_share": "22.57",
+  "cash_currency": "USD",
+  "stock_ratio": "0.7520",
+  "price_sec_id": "BBG000K9SSS5",
+  "price_ticker": "FTS",
+  "price_date": "2016-10-14",
+  "recovery_ratio": ""
+ },
+ "internal_last_trade_date": "2016-10-13",
+ "legs": [],
+ "identity_check": null,
+ "residual": "",
+ "pending": [],
+ "notes": "8-K item 3.01 suspension before NYSE open 2016-10-14; US$22.57 + 0.7520 Fortis shares"
+}

@@ -1,0 +1,26 @@
+{
+ "case_id": "BBG000Q5RW63_2014-07-01",
+ "sec_id": "BBG000Q5RW63",
+ "shape": "ending",
+ "fields": {
+  "exit_kind": "exchange",
+  "drop_reason": "",
+  "continuation": "true",
+  "successor_sec_id": "BBG006QRCDZ8",
+  "last_trade_date": "",
+  "value_rule": "continuation",
+  "cash_per_share": "",
+  "cash_currency": "",
+  "stock_ratio": "",
+  "price_sec_id": "",
+  "price_ticker": "",
+  "price_date": "",
+  "recovery_ratio": ""
+ },
+ "internal_last_trade_date": "",
+ "legs": [],
+ "identity_check": null,
+ "residual": "",
+ "pending": [],
+ "notes": "8-K12B: 1:1 holdco reorg, uninterrupted trading, spin-off after exchange is a distribution on successor"
+}

@@ -1,0 +1,26 @@
+{
+ "case_id": "BBG006XVD9G0_2019-11-30",
+ "sec_id": "BBG006XVD9G0",
+ "shape": "ending",
+ "fields": {
+  "exit_kind": "merger",
+  "drop_reason": "",
+  "continuation": "false",
+  "successor_sec_id": "",
+  "last_trade_date": "2019-11-19",
+  "value_rule": "cash_plus_stock",
+  "cash_per_share": "6.25",
+  "cash_currency": "USD",
+  "stock_ratio": "0.5427",
+  "price_sec_id": "*",
+  "price_ticker": "GCI",
+  "price_date": "2019-11-20",
+  "recovery_ratio": ""
+ },
+ "internal_last_trade_date": "2019-11-19",
+ "legs": [],
+ "identity_check": null,
+ "residual": "",
+ "pending": [],
+ "notes": "Cash plus stock merger into New Media (renamed GCI); Form 25 notice suspended 2019-11-20; acquirer line not in run."
+}

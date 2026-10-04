@@ -1,0 +1,26 @@
+{
+ "case_id": "BBG001KWG293_2021-06-25",
+ "sec_id": "BBG001KWG293",
+ "shape": "ending",
+ "fields": {
+  "exit_kind": "merger",
+  "drop_reason": "",
+  "continuation": "false",
+  "successor_sec_id": "",
+  "last_trade_date": "2021-06-15",
+  "value_rule": "stock",
+  "cash_per_share": "",
+  "cash_currency": "",
+  "stock_ratio": "3.355",
+  "price_sec_id": "*",
+  "price_ticker": "*",
+  "price_date": "2021-06-16",
+  "recovery_ratio": ""
+ },
+ "internal_last_trade_date": "2021-06-15",
+ "legs": [],
+ "identity_check": null,
+ "residual": "JET ADS (CUSIP 48214T305) trades OTC and the run has no ticker or price source for it",
+ "pending": [],
+ "notes": "Stock merger 3.355 JET ADS per share; last trade 06-15 from MIDAS, 8-K says only suspended June 15 (06-14 not excluded); operator ruling 2026-10-03: JET ADS: price_sec_id and price_ticker not scored (no non-fails symbol source)"
+}

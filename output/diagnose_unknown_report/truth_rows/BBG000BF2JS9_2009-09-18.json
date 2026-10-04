@@ -1,0 +1,26 @@
+{
+ "case_id": "BBG000BF2JS9_2009-09-18",
+ "sec_id": "BBG000BF2JS9",
+ "shape": "ending",
+ "fields": {
+  "exit_kind": "dropped",
+  "drop_reason": "bankruptcy",
+  "continuation": "false",
+  "successor_sec_id": "",
+  "last_trade_date": "2009-08-17",
+  "value_rule": "otc_print",
+  "cash_per_share": "",
+  "cash_currency": "",
+  "stock_ratio": "",
+  "price_sec_id": "BBG000BF2JS9",
+  "price_ticker": "*",
+  "price_date": "2009-08-18",
+  "recovery_ratio": ""
+ },
+ "internal_last_trade_date": "2009-08-17",
+ "legs": [],
+ "identity_check": null,
+ "residual": "",
+ "pending": [],
+ "notes": "Colonial BancGroup: bank closed, NYSE suspension 8-K 3.01 on 2009-08-17, Chapter 11 8-K 1.03; skeptic upheld bankruptcy over sec_order; own OTC symbol unconfirmed"
+}

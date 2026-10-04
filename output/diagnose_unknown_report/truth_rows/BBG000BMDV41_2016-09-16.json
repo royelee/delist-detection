@@ -1,0 +1,26 @@
+{
+ "case_id": "BBG000BMDV41_2016-09-16",
+ "sec_id": "BBG000BMDV41",
+ "shape": "ending",
+ "fields": {
+  "exit_kind": "merger",
+  "drop_reason": "",
+  "continuation": "false",
+  "successor_sec_id": "",
+  "last_trade_date": "2016-09-02",
+  "value_rule": "cash_plus_stock",
+  "cash_per_share": "5.7293",
+  "cash_currency": "USD",
+  "stock_ratio": "0.8357",
+  "price_sec_id": "BBG000BVWLJ6",
+  "price_ticker": "JCI",
+  "price_date": "2016-09-06",
+  "recovery_ratio": ""
+ },
+ "internal_last_trade_date": "2016-09-02",
+ "legs": [],
+ "identity_check": null,
+ "residual": "",
+ "pending": [],
+ "notes": "JCI: default package $5.7293 + 0.8357 new JCI (Tyco); 8-K says NYSE suspended before open 2016-09-06, so last trade 2016-09-02 (skeptic upheld)."
+}

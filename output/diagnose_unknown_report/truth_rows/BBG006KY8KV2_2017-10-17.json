@@ -1,0 +1,29 @@
+{
+ "case_id": "BBG006KY8KV2_2017-10-17",
+ "sec_id": "BBG006KY8KV2",
+ "shape": "ending_moved",
+ "fields": {
+  "exit_kind": "merger",
+  "drop_reason": "",
+  "continuation": "false",
+  "successor_sec_id": "",
+  "last_trade_date": "2020-07-30",
+  "value_rule": "stock",
+  "cash_per_share": "",
+  "cash_currency": "",
+  "stock_ratio": "0.47625",
+  "price_sec_id": "BBG00W5FS571",
+  "price_ticker": "BEPC",
+  "price_date": "2020-07-31",
+  "recovery_ratio": ""
+ },
+ "internal_last_trade_date": "2020-07-30",
+ "legs": [],
+ "identity_check": {
+  "old_cusip": "88104R100",
+  "new_cusip": "88104R209"
+ },
+ "residual": "",
+ "pending": [],
+ "notes": "2017 Brookfield control purchase was not an ending; real ending 8-K 2020-07-31: 0.47625 BEPC shares or BEP units (election, same ratio), ceased trading before open 2020-07-31"
+}

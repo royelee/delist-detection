@@ -1,0 +1,26 @@
+{
+ "case_id": "BBG000BGYDX9_2023-06-30",
+ "sec_id": "BBG000BGYDX9",
+ "shape": "ending",
+ "fields": {
+  "exit_kind": "dropped",
+  "drop_reason": "bankruptcy",
+  "continuation": "false",
+  "successor_sec_id": "",
+  "last_trade_date": "",
+  "value_rule": "otc_print",
+  "cash_per_share": "",
+  "cash_currency": "",
+  "stock_ratio": "",
+  "price_sec_id": "BBG000BGYDX9",
+  "price_ticker": "DBDQQ",
+  "price_date": "",
+  "recovery_ratio": ""
+ },
+ "internal_last_trade_date": "2023-06-01",
+ "legs": [],
+ "identity_check": null,
+ "residual": "",
+ "pending": [],
+ "notes": "Skeptic: filings say only suspended June 2 (no before-the-open wording), so 2023-06-01 is worked out, not published; OTC symbol DBDQQ from 2023-06-05; old equity cancelled."
+}

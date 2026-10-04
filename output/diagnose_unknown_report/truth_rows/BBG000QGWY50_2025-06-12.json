@@ -1,0 +1,26 @@
+{
+ "case_id": "BBG000QGWY50_2025-06-12",
+ "sec_id": "BBG000QGWY50",
+ "shape": "ending",
+ "fields": {
+  "exit_kind": "merger",
+  "drop_reason": "",
+  "continuation": "false",
+  "successor_sec_id": "",
+  "last_trade_date": "2025-05-30",
+  "value_rule": "cash",
+  "cash_per_share": "5.00",
+  "cash_currency": "USD",
+  "stock_ratio": "",
+  "price_sec_id": "",
+  "price_ticker": "",
+  "price_date": "",
+  "recovery_ratio": ""
+ },
+ "internal_last_trade_date": "2025-05-30",
+ "legs": [],
+ "identity_check": null,
+ "residual": "",
+ "pending": [],
+ "notes": "8-K item 3.01 halt before open 2025-06-02; election deal, no default fixed; report publishes the $5.00 all-cash alternative (R4); CVR alternative ($3.00 + CVR up to $6.84) noted only"
+}

@@ -1,0 +1,26 @@
+{
+ "case_id": "BBG000BDN878_2019-03-04",
+ "sec_id": "BBG000BDN878",
+ "shape": "ending",
+ "fields": {
+  "exit_kind": "merger",
+  "drop_reason": "",
+  "continuation": "false",
+  "successor_sec_id": "",
+  "last_trade_date": "2019-02-21",
+  "value_rule": "cash_plus_stock",
+  "cash_per_share": "0.67",
+  "cash_currency": "USD",
+  "stock_ratio": "0.1929",
+  "price_sec_id": "*",
+  "price_ticker": "PAAS",
+  "price_date": "2019-02-22",
+  "recovery_ratio": ""
+ },
+ "internal_last_trade_date": "2019-02-21",
+ "legs": [],
+ "identity_check": null,
+ "residual": "",
+ "pending": [],
+ "notes": "Tahoe/PAAS arrangement, default prorated package 0.67 USD + 0.1929 PAAS (6-K 2019-02-22); CVR 0.0497 PAAS contingent excluded, cash electors got US$3.40; Form 25 notice"
+}

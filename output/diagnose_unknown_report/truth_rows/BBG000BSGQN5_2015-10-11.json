@@ -1,0 +1,10 @@
+{"case_id": "BBG000BSGQN5_2015-10-11", "sec_id": "BBG000BSGQN5", "shape": "ending",
+ "fields": {"exit_kind": "merger", "drop_reason": "", "continuation": "false", "successor_sec_id": "", "last_trade_date": "2015-09-30",
+            "value_rule": "stock", "cash_per_share": "", "cash_currency": "", "stock_ratio": "1.0191", "price_sec_id": "BBG000BTFDR9",
+            "price_ticker": "CAA", "price_date": "2015-10-01", "recovery_ratio": ""},
+ "internal_last_trade_date": "2015-09-30",
+ "legs": [],
+ "identity_check": null,
+ "residual": "",
+ "pending": [],
+ "notes": "1.0191 post-split CalAtlantic (CAA) shares per Ryland share, cash only for fractions; last trade from Form 25 EX-99.25 (merger effective before open 2015-10-01)."}

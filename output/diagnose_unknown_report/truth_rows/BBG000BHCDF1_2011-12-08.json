@@ -1,0 +1,26 @@
+{
+ "case_id": "BBG000BHCDF1_2011-12-08",
+ "sec_id": "BBG000BHCDF1",
+ "shape": "ending",
+ "fields": {
+  "exit_kind": "merger",
+  "drop_reason": "",
+  "continuation": "false",
+  "successor_sec_id": "",
+  "last_trade_date": "",
+  "value_rule": "cash",
+  "cash_per_share": "30.00",
+  "cash_currency": "USD",
+  "stock_ratio": "",
+  "price_sec_id": "",
+  "price_ticker": "",
+  "price_date": "",
+  "recovery_ratio": ""
+ },
+ "internal_last_trade_date": "2011-11-25",
+ "legs": [],
+ "identity_check": null,
+ "residual": "",
+ "pending": [],
+ "notes": "30.00 USD cash; last trade 2011-11-25 derived from effective date 2011-11-28 and Form 25, no filing states trading stopped, so not published."
+}

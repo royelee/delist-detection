@@ -1,0 +1,29 @@
+{
+ "case_id": "CIK1808220-CLASS-A_2022-11-17",
+ "sec_id": "CIK1808220-CLASS-A",
+ "shape": "no_ending",
+ "fields": {
+  "exit_kind": "",
+  "drop_reason": "",
+  "continuation": "",
+  "successor_sec_id": "",
+  "last_trade_date": "",
+  "value_rule": "",
+  "cash_per_share": "",
+  "cash_currency": "",
+  "stock_ratio": "",
+  "price_sec_id": "",
+  "price_ticker": "",
+  "price_date": "",
+  "recovery_ratio": ""
+ },
+ "internal_last_trade_date": "",
+ "legs": [],
+ "identity_check": {
+  "old_cusip": "38046W105",
+  "new_cusip": "38046W204"
+ },
+ "residual": "",
+ "pending": [],
+ "notes": "8-K 2022-11-18 5.03: 1-for-15 reverse split, GOCO stayed on Nasdaq; no Form 25 (R2)."
+}

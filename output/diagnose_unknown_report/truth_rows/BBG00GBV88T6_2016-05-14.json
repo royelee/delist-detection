@@ -1,0 +1,26 @@
+{
+ "case_id": "BBG00GBV88T6_2016-05-14",
+ "sec_id": "BBG00GBV88T6",
+ "shape": "ending",
+ "fields": {
+  "exit_kind": "dropped",
+  "drop_reason": "bankruptcy",
+  "continuation": "false",
+  "successor_sec_id": "",
+  "last_trade_date": "2016-04-12",
+  "value_rule": "otc_print",
+  "cash_per_share": "",
+  "cash_currency": "",
+  "stock_ratio": "",
+  "price_sec_id": "BBG00GBV88T6",
+  "price_ticker": "BTUUQ",
+  "price_date": "2016-04-13",
+  "recovery_ratio": ""
+ },
+ "internal_last_trade_date": "",
+ "legs": [],
+ "identity_check": null,
+ "residual": "",
+ "pending": [],
+ "notes": "8-K 3.01: NYSE suspended trading 2016-04-13 so last trade 2016-04-12; OTC Pink as BTUUQ; skeptic upheld."
+}

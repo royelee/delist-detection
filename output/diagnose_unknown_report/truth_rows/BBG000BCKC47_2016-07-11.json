@@ -1,0 +1,26 @@
+{
+ "case_id": "BBG000BCKC47_2016-07-11",
+ "sec_id": "BBG000BCKC47",
+ "shape": "ending",
+ "fields": {
+  "exit_kind": "merger",
+  "drop_reason": "",
+  "continuation": "false",
+  "successor_sec_id": "",
+  "last_trade_date": "2016-06-30",
+  "value_rule": "cash",
+  "cash_per_share": "66.00",
+  "cash_currency": "USD",
+  "stock_ratio": "",
+  "price_sec_id": "",
+  "price_ticker": "",
+  "price_date": "",
+  "recovery_ratio": ""
+ },
+ "internal_last_trade_date": "2016-06-30",
+ "legs": [],
+ "identity_check": null,
+ "residual": "",
+ "pending": [],
+ "notes": "Southern cash merger $66; EX-99.25 says suspended 2016-07-01, last day 2016-06-30"
+}

@@ -1,0 +1,26 @@
+{
+ "case_id": "BBG000BG14P4_2025-10-09",
+ "sec_id": "BBG000BG14P4",
+ "shape": "ending",
+ "fields": {
+  "exit_kind": "dropped",
+  "drop_reason": "bankruptcy",
+  "continuation": "false",
+  "successor_sec_id": "",
+  "last_trade_date": "2025-09-26",
+  "value_rule": "stock",
+  "cash_per_share": "",
+  "cash_currency": "",
+  "stock_ratio": "0.008352",
+  "price_sec_id": "*",
+  "price_ticker": "WOLF",
+  "price_date": "2025-09-29",
+  "recovery_ratio": ""
+ },
+ "internal_last_trade_date": "2025-09-26",
+ "legs": [],
+ "identity_check": null,
+ "residual": "",
+ "pending": [],
+ "notes": "Wolfspeed Ch.11: old equity cancelled for 0.008352 new WOLF per share (1,306,896/156,479,390), old line never traded OTC so stock (R6); contingent 871,287 shares excluded; price_date is day after last trade per rule (fails rows suggest 09-30, unresolved)"
+}

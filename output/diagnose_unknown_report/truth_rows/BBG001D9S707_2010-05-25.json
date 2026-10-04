@@ -1,0 +1,29 @@
+{
+ "case_id": "BBG001D9S707_2010-05-25",
+ "sec_id": "BBG001D9S707",
+ "shape": "ending_moved",
+ "fields": {
+  "exit_kind": "dropped",
+  "drop_reason": "bankruptcy",
+  "continuation": "false",
+  "successor_sec_id": "",
+  "last_trade_date": "2012-07-05",
+  "value_rule": "otc_print",
+  "cash_per_share": "",
+  "cash_currency": "",
+  "stock_ratio": "",
+  "price_sec_id": "BBG001D9S707",
+  "price_ticker": "DYNIQ",
+  "price_date": "2012-07-06",
+  "recovery_ratio": ""
+ },
+ "internal_last_trade_date": "2012-07-05",
+ "legs": [],
+ "identity_check": {
+  "old_cusip": "26817G102",
+  "new_cusip": "26817G300"
+ },
+ "residual": "",
+ "pending": [],
+ "notes": "2010 reverse split is no ending; real ending 2012 Chapter 11: Form 25-NSE notice says suspended before open 2012-07-06 so last trade 2012-07-05; old line traded OTC as DYNIQ so otc_print (R6)"
+}

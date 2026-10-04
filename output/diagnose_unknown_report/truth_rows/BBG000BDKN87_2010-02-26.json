@@ -1,0 +1,26 @@
+{
+ "case_id": "BBG000BDKN87_2010-02-26",
+ "sec_id": "BBG000BDKN87",
+ "shape": "ending",
+ "fields": {
+  "exit_kind": "merger",
+  "drop_reason": "",
+  "continuation": "false",
+  "successor_sec_id": "",
+  "last_trade_date": "2010-02-12",
+  "value_rule": "cash",
+  "cash_per_share": "100.00",
+  "cash_currency": "USD",
+  "stock_ratio": "",
+  "price_sec_id": "",
+  "price_ticker": "",
+  "price_date": "",
+  "recovery_ratio": ""
+ },
+ "internal_last_trade_date": "2010-02-12",
+ "legs": [],
+ "identity_check": null,
+ "residual": "",
+ "pending": [],
+ "notes": "BNSF/Berkshire election deal, $100 cash default (stock election is $100/VWAP, no fixed ratio); Form 25 notice dates suspension 2010-02-16"
+}

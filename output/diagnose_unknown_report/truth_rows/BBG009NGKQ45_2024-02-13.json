@@ -1,0 +1,29 @@
+{
+ "case_id": "BBG009NGKQ45_2024-02-13",
+ "sec_id": "BBG009NGKQ45",
+ "shape": "ending_moved",
+ "fields": {
+  "exit_kind": "dropped",
+  "drop_reason": "bankruptcy",
+  "continuation": "false",
+  "successor_sec_id": "",
+  "last_trade_date": "2024-11-29",
+  "value_rule": "otc_print",
+  "cash_per_share": "",
+  "cash_currency": "",
+  "stock_ratio": "",
+  "price_sec_id": "BBG009NGKQ45",
+  "price_ticker": "VRMMQ",
+  "price_date": "2024-12-02",
+  "recovery_ratio": ""
+ },
+ "internal_last_trade_date": "2024-11-29",
+ "legs": [],
+ "identity_check": {
+  "old_cusip": "92918V109",
+  "new_cusip": "92918V208"
+ },
+ "residual": "",
+ "pending": [],
+ "notes": "2024-02-13 is a 1-for-80 reverse split (same ticker); real ending is the Chapter 11 delisting, last trade 2024-11-29 per 8-K 2024-11-26 (suspended at open 2024-12-02), then VRMMQ OTC print; first print date unconfirmed."
+}

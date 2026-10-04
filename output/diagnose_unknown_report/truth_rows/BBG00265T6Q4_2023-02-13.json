@@ -1,0 +1,26 @@
+{
+ "case_id": "BBG00265T6Q4_2023-02-13",
+ "sec_id": "BBG00265T6Q4",
+ "shape": "ending",
+ "fields": {
+  "exit_kind": "merger",
+  "drop_reason": "",
+  "continuation": "false",
+  "successor_sec_id": "",
+  "last_trade_date": "2023-02-02",
+  "value_rule": "cash",
+  "cash_per_share": "32.25",
+  "cash_currency": "USD",
+  "stock_ratio": "",
+  "price_sec_id": "",
+  "price_ticker": "",
+  "price_date": "",
+  "recovery_ratio": ""
+ },
+ "internal_last_trade_date": "2023-02-02",
+ "legs": [],
+ "identity_check": null,
+ "residual": "",
+ "pending": [],
+ "notes": "All-cash merger USD 32.25; Form 25 notice says suspended 2023-02-03, merger effective before the open"
+}

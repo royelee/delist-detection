@@ -1,0 +1,26 @@
+{
+ "case_id": "BBG00BDQ1H13_2022-10-10",
+ "sec_id": "BBG00BDQ1H13",
+ "shape": "ending",
+ "fields": {
+  "exit_kind": "exchange",
+  "drop_reason": "",
+  "continuation": "true",
+  "successor_sec_id": "BBG01BGWHFR5",
+  "last_trade_date": "2022-09-30",
+  "value_rule": "continuation",
+  "cash_per_share": "",
+  "cash_currency": "",
+  "stock_ratio": "",
+  "price_sec_id": "",
+  "price_ticker": "",
+  "price_date": "",
+  "recovery_ratio": ""
+ },
+ "internal_last_trade_date": "2022-09-30",
+ "legs": [],
+ "identity_check": null,
+ "residual": "",
+ "pending": [],
+ "notes": "8-K: scheme cancelled each Class A ordinary share for one Class A common share, no cash; effective after close 2022-09-30; Form 25 effective same day."
+}

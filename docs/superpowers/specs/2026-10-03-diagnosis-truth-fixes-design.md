@@ -164,6 +164,16 @@ changes, mismatches left, rows pending a ruling. A saved workflow runs steps 2 t
   states the ratio and the old line did not trade OTC first; `otc_print` (decision 11) when it did. Cases: SDRL, WOLF.
 - **R7. One FIGI over pre- and post-bankruptcy stock under a reused ticker** (EXE) goes on the residual list for now:
   splitting it needs a new id scheme for one case.
+- **R8. A suspension "on D" with no timing word, or a halt at the open on D, means the last trade was the trading day
+  before D** (operator ruling 2026-10-03, settling the truth file's pending rows: CBL 2020-10-30, WM 2008-09-25, CZR
+  2020-07-17). "Suspended immediately on D" stays unscored, since trading may have happened that morning (IMB, MNI).
+  Sub-plan 5d implements R8 in the library's 8-K and notice readers.
+
+The same review settled the other pending rows: a worked-out internal date with no source is not scored; a price
+date is the trading day after the published last trade; a security the run does not hold yet is `*` until a
+sub-plan adds it; an OTC symbol from the security's own CUSIP after the last trade is accepted; an election's
+default package is what non-electors got (SUG: 1.0 ETE unit); TDW's warrants, EP's warrant leg, GRUB's OTC ADS and
+EXE are residual; PCYC's dollar-valued stock leg is unscored and left to 5f.
 
 ### 2.2 Existing rules the truth build applies (no ruling)
 

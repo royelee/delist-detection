@@ -1,0 +1,29 @@
+{
+ "case_id": "CIK23666-COMMON_2012-07-13",
+ "sec_id": "CIK23666-COMMON",
+ "shape": "no_ending",
+ "fields": {
+  "exit_kind": "",
+  "drop_reason": "",
+  "continuation": "",
+  "successor_sec_id": "",
+  "last_trade_date": "",
+  "value_rule": "",
+  "cash_per_share": "",
+  "cash_currency": "",
+  "stock_ratio": "",
+  "price_sec_id": "",
+  "price_ticker": "",
+  "price_date": "",
+  "recovery_ratio": ""
+ },
+ "internal_last_trade_date": "",
+ "legs": [],
+ "identity_check": {
+  "old_cusip": "803111103",
+  "new_cusip": "432589109"
+ },
+ "residual": "",
+ "pending": [],
+ "notes": "Sara Lee renamed Hillshire Brands with 1-for-5 reverse split, same issuer and NYSE line; spin-off dividend is not an exchange term (R2)"
+}

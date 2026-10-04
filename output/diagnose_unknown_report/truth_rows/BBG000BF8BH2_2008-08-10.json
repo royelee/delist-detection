@@ -1,0 +1,26 @@
+{
+ "case_id": "BBG000BF8BH2_2008-08-10",
+ "sec_id": "BBG000BF8BH2",
+ "shape": "ending",
+ "fields": {
+  "exit_kind": "merger",
+  "drop_reason": "",
+  "continuation": "false",
+  "successor_sec_id": "",
+  "last_trade_date": "",
+  "value_rule": "cash",
+  "cash_per_share": "36.00",
+  "cash_currency": "USD",
+  "stock_ratio": "",
+  "price_sec_id": "",
+  "price_ticker": "",
+  "price_date": "",
+  "recovery_ratio": ""
+ },
+ "internal_last_trade_date": "2008-07-30",
+ "legs": [],
+ "identity_check": null,
+ "residual": "",
+ "pending": [],
+ "notes": "Clear Channel LBO $36.00 cash default (election one CC Media Class A share); no filing states last trade, date worked out from effective date and fails rows"
+}

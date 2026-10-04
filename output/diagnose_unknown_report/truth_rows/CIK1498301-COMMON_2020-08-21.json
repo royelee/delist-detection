@@ -1,0 +1,26 @@
+{
+ "case_id": "CIK1498301-COMMON_2020-08-21",
+ "sec_id": "CIK1498301-COMMON",
+ "shape": "ending",
+ "fields": {
+  "exit_kind": "dropped",
+  "drop_reason": "bankruptcy",
+  "continuation": "false",
+  "successor_sec_id": "",
+  "last_trade_date": "2020-08-03",
+  "value_rule": "otc_print",
+  "cash_per_share": "",
+  "cash_currency": "",
+  "stock_ratio": "",
+  "price_sec_id": "CIK1498301-COMMON",
+  "price_ticker": "ASNAQ",
+  "price_date": "2020-08-04",
+  "recovery_ratio": ""
+ },
+ "internal_last_trade_date": "2020-08-03",
+ "legs": [],
+ "identity_check": null,
+ "residual": "",
+ "pending": [],
+ "notes": "Chapter 11; 8-K 3.01 suspension at open 2020-08-04; OTC Pink ASNAQ; 2.01 was an asset sale."
+}

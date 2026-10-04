@@ -1,0 +1,26 @@
+{
+ "case_id": "BBG000BNTTY4_2024-04-29",
+ "sec_id": "BBG000BNTTY4",
+ "shape": "ending",
+ "fields": {
+  "exit_kind": "merger",
+  "drop_reason": "",
+  "continuation": "false",
+  "successor_sec_id": "",
+  "last_trade_date": "2024-04-18",
+  "value_rule": "cash",
+  "cash_per_share": "63.00",
+  "cash_currency": "USD",
+  "stock_ratio": "",
+  "price_sec_id": "",
+  "price_ticker": "",
+  "price_date": "",
+  "recovery_ratio": ""
+ },
+ "internal_last_trade_date": "2024-04-18",
+ "legs": [],
+ "identity_check": null,
+ "residual": "",
+ "pending": [],
+ "notes": "8-K 3.01 and 25-NSE: suspended before open 2024-04-19; USD 63.00 cash."
+}

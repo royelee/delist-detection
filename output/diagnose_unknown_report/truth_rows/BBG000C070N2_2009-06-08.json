@@ -1,0 +1,26 @@
+{
+ "case_id": "BBG000C070N2_2009-06-08",
+ "sec_id": "BBG000C070N2",
+ "shape": "ending",
+ "fields": {
+  "exit_kind": "merger",
+  "drop_reason": "",
+  "continuation": "false",
+  "successor_sec_id": "",
+  "last_trade_date": "",
+  "value_rule": "stock",
+  "cash_per_share": "",
+  "cash_currency": "",
+  "stock_ratio": "4.6",
+  "price_sec_id": "BBG000BT0093",
+  "price_ticker": "SIRI",
+  "price_date": "",
+  "recovery_ratio": ""
+ },
+ "internal_last_trade_date": "2008-07-28",
+ "legs": [],
+ "identity_check": null,
+ "residual": "",
+ "pending": [],
+ "notes": "XMSR to SIRI 4.6 stock merger 2008-07-28; last trade date worked out from completion date, not published"
+}

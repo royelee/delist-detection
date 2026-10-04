@@ -1,0 +1,26 @@
+{
+ "case_id": "BBG000C11MQ5_2015-06-05",
+ "sec_id": "BBG000C11MQ5",
+ "shape": "ending",
+ "fields": {
+  "exit_kind": "merger",
+  "drop_reason": "",
+  "continuation": "false",
+  "successor_sec_id": "",
+  "last_trade_date": "2015-05-22",
+  "value_rule": "cash_plus_stock",
+  "cash_per_share": "152.25",
+  "cash_currency": "USD",
+  "stock_ratio": "*",
+  "price_sec_id": "BBG0025Y4RY4",
+  "price_ticker": "ABBV",
+  "price_date": "2015-05-26",
+  "recovery_ratio": ""
+ },
+ "internal_last_trade_date": "2015-05-22",
+ "legs": [],
+ "identity_check": null,
+ "residual": "Floating stock leg ($109.00 / AbbVie Trading Price) cannot be expressed as a fixed stock_ratio.",
+ "pending": [],
+ "notes": "PCYC default package $152.25 cash plus AbbVie shares worth $109.00 over the ABBV trading price; MIDAS agrees on 2015-05-22; operator ruling 2026-10-03: a dollar-valued stock leg over a VWAP: stock_ratio not scored"
+}

@@ -1,0 +1,26 @@
+{
+ "case_id": "BBG00Z6DX554_2020-07-30",
+ "sec_id": "BBG00Z6DX554",
+ "shape": "ending",
+ "fields": {
+  "exit_kind": "dropped",
+  "drop_reason": "bankruptcy",
+  "continuation": "false",
+  "successor_sec_id": "",
+  "last_trade_date": "2020-06-26",
+  "value_rule": "otc_print",
+  "cash_per_share": "",
+  "cash_currency": "",
+  "stock_ratio": "",
+  "price_sec_id": "BBG00Z6DX554",
+  "price_ticker": "CHKAQ",
+  "price_date": "2020-06-29",
+  "recovery_ratio": ""
+ },
+ "internal_last_trade_date": "2020-06-26",
+ "legs": [],
+ "identity_check": null,
+ "residual": "R7: one FIGI spans the old CHK stock and the post-bankruptcy stock (new CUSIP 165167735 from 2021-02-12)",
+ "pending": [],
+ "notes": "Chapter 11 2020-06-28; NYSE suspended 2020-06-29 per 8-K 3.01 and Form 25; OTC Pink CHKAQ from 2020-06-30; skeptic upheld CHKAQ."
+}

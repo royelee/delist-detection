@@ -1,0 +1,26 @@
+{
+ "case_id": "CIK18568-COMMON_2007-09-16",
+ "sec_id": "CIK18568-COMMON",
+ "shape": "ending",
+ "fields": {
+  "exit_kind": "merger",
+  "drop_reason": "",
+  "continuation": "false",
+  "successor_sec_id": "",
+  "last_trade_date": "",
+  "value_rule": "cash_plus_stock",
+  "cash_per_share": "34.34",
+  "cash_currency": "USD",
+  "stock_ratio": "1.462",
+  "price_sec_id": "*",
+  "price_ticker": "BBV",
+  "price_date": "",
+  "recovery_ratio": ""
+ },
+ "internal_last_trade_date": "2007-09-06",
+ "legs": [],
+ "identity_check": null,
+ "residual": "",
+ "pending": [],
+ "notes": "BBVA cash-or-2.8 ADS election closed 2007-09-07; aggregate package inferred from 425 totals (47.8% cash/52.2% stock); no filing states last session; operator ruling 2026-10-03: price_sec_id not scored until the run holds the security"
+}

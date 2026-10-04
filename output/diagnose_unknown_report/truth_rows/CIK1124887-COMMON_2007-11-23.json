@@ -1,0 +1,26 @@
+{
+ "case_id": "CIK1124887-COMMON_2007-11-23",
+ "sec_id": "CIK1124887-COMMON",
+ "shape": "ending",
+ "fields": {
+  "exit_kind": "merger",
+  "drop_reason": "",
+  "continuation": "false",
+  "successor_sec_id": "",
+  "last_trade_date": "2007-11-08",
+  "value_rule": "cash",
+  "cash_per_share": "36.00",
+  "cash_currency": "USD",
+  "stock_ratio": "",
+  "price_sec_id": "",
+  "price_ticker": "",
+  "price_date": "",
+  "recovery_ratio": ""
+ },
+ "internal_last_trade_date": "2007-11-08",
+ "legs": [],
+ "identity_check": null,
+ "residual": "",
+ "pending": [],
+ "notes": "Ceridian LBO cash $36.00; Form 25-NSE notice: suspended 2007-11-09, last trade 2007-11-08."
+}

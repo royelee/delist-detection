@@ -1,0 +1,26 @@
+{
+ "case_id": "BBG000K3T8L8_2018-06-16",
+ "sec_id": "BBG000K3T8L8",
+ "shape": "ending",
+ "fields": {
+  "exit_kind": "merger",
+  "drop_reason": "",
+  "continuation": "false",
+  "successor_sec_id": "",
+  "last_trade_date": "2018-06-04",
+  "value_rule": "stock",
+  "cash_per_share": "",
+  "cash_currency": "",
+  "stock_ratio": "0.5981",
+  "price_sec_id": "BBG00H433CR2",
+  "price_ticker": "EVRG",
+  "price_date": "2018-06-05",
+  "recovery_ratio": ""
+ },
+ "internal_last_trade_date": "2018-06-04",
+ "legs": [],
+ "identity_check": null,
+ "residual": "",
+ "pending": [],
+ "notes": "8-K 2018-06-04 and Form 25 notice: 0.5981 EVRG per share; last trade from MIDAS print 2018-06-04"
+}

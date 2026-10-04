@@ -1,0 +1,26 @@
+{
+ "case_id": "BBG000GYLKX3_2013-10-07",
+ "sec_id": "BBG000GYLKX3",
+ "shape": "ending",
+ "fields": {
+  "exit_kind": "merger",
+  "drop_reason": "",
+  "continuation": "false",
+  "successor_sec_id": "",
+  "last_trade_date": "2013-09-26",
+  "value_rule": "cash",
+  "cash_per_share": "34.00",
+  "cash_currency": "USD",
+  "stock_ratio": "",
+  "price_sec_id": "",
+  "price_ticker": "",
+  "price_date": "",
+  "recovery_ratio": ""
+ },
+ "internal_last_trade_date": "",
+ "legs": [],
+ "identity_check": null,
+ "residual": "",
+ "pending": [],
+ "notes": "8-K 2013-09-26 $34 cash; Form 25-NSE suspended 2013-09-27"
+}

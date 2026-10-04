@@ -1,0 +1,26 @@
+{
+ "case_id": "BBG006LYGNL7_2021-10-16",
+ "sec_id": "BBG006LYGNL7",
+ "shape": "ending",
+ "fields": {
+  "exit_kind": "merger",
+  "drop_reason": "",
+  "continuation": "false",
+  "successor_sec_id": "",
+  "last_trade_date": "2021-10-05",
+  "value_rule": "stock",
+  "cash_per_share": "",
+  "cash_currency": "",
+  "stock_ratio": "2.5",
+  "price_sec_id": "BBG00ZF0FGT2",
+  "price_ticker": "AMBP",
+  "price_date": "2021-10-06",
+  "recovery_ratio": ""
+ },
+ "internal_last_trade_date": "2021-10-05",
+ "legs": [],
+ "identity_check": null,
+ "residual": "",
+ "pending": [],
+ "notes": "Issuer exchange offer 2.5 AMBP per share; last trade from AGSA press release 2021-10-05; $1.25 dividend is on the old share."
+}

@@ -1,0 +1,26 @@
+{
+ "case_id": "CIK804055-COMMON_2010-10-15",
+ "sec_id": "CIK804055-COMMON",
+ "shape": "ending",
+ "fields": {
+  "exit_kind": "merger",
+  "drop_reason": "",
+  "continuation": "false",
+  "successor_sec_id": "",
+  "last_trade_date": "2010-10-01",
+  "value_rule": "cash_plus_stock",
+  "cash_per_share": "10.00",
+  "cash_currency": "USD",
+  "stock_ratio": "1.0",
+  "price_sec_id": "BBG000BF5RY1",
+  "price_ticker": "CCE",
+  "price_date": "2010-10-04",
+  "recovery_ratio": ""
+ },
+ "internal_last_trade_date": "2010-10-01",
+ "legs": [],
+ "identity_check": null,
+ "residual": "",
+ "pending": [],
+ "notes": "Cash+1 New CCE share per old; 8-K 3.01 suspension before open 2010-10-04; price leg is the new CCE line"
+}

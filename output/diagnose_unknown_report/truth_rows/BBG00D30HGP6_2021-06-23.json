@@ -1,0 +1,29 @@
+{
+ "case_id": "BBG00D30HGP6_2021-06-23",
+ "sec_id": "BBG00D30HGP6",
+ "shape": "no_ending",
+ "fields": {
+  "exit_kind": "",
+  "drop_reason": "",
+  "continuation": "",
+  "successor_sec_id": "",
+  "last_trade_date": "",
+  "value_rule": "",
+  "cash_per_share": "",
+  "cash_currency": "",
+  "stock_ratio": "",
+  "price_sec_id": "",
+  "price_ticker": "",
+  "price_date": "",
+  "recovery_ratio": ""
+ },
+ "internal_last_trade_date": "",
+ "legs": [],
+ "identity_check": {
+  "old_cusip": "19626G108",
+  "new_cusip": "25401T108"
+ },
+ "residual": "",
+ "pending": [],
+ "notes": "Colony Capital renamed DigitalBridge (8-K 5.03), CLNY to DBRG on 2021-06-22, same issuer, no consideration; skeptic upheld."
+}

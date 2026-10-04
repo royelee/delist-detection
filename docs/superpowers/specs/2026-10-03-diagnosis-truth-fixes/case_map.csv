@@ -42,14 +42,14 @@ BBG000BJVZF7_2014-07-12,FRX,library_right_but_uncertain,False,verified,A: Theme 
 BBG000BJXKD0_2018-06-16,WR,terms_not_extracted,True,verified,"C: 1. Acquirer found by CIK and line, priced by CUSIP (the CAL/RTN fix) —",F7,5e
 BBG000BJXXX0_2007-07-12,IFIN,no_last_trade_print,False,inferred,B: T2. No filing states the last session: infer it from the closing day (,F6r,5d
 BBG000BK1FD3_2014-12-04,FWLT,terms_misread,True,inferred,C: 4. Election and proration packages — 8 cases,F8,5f
-BBG000BK5DP1_2026-03-30,TGNA,library_right_but_uncertain,False,verified,A: No library change,none,none
+BBG000BK5DP1_2026-03-30,TGNA,library_right_but_uncertain,False,verified,A: No library change,none,5f
 BBG000BK7SL0_2011-04-18,GENZ,no_last_trade_print,False,inferred,B: T2. No filing states the last session: infer it from the closing day (,F6r,5d
 BBG000BKKXG0_2008-12-11,PHLY,no_last_trade_print,False,inferred,B: T2. No filing states the last session: infer it from the closing day (,F6r,5d
 BBG000BKQ3V3_2018-07-13,SDRL,resolver_no_bankruptcy_branch,True,inferred,"B: T5. Bankruptcy endings the resolver does not branch on, and reset-4a3 ",F9,5g
 BBG000BL9439_2013-07-28,HNZ,library_right_but_uncertain,False,verified,A: Theme 1. Merger relabelled by the end-of-era resolver although the For,F4,5b
 BBG000BLBGS2_2025-12-20,SCS,currency_missing,True,inferred,"C: 8. Gate false-fails on correct terms (stale close, missing acquirer pr",F7,5e
 BBG000BLH3P8_2023-06-20,HSC,rename_not_followed,True,verified,D: Theme 1. Follow a rename or CUSIP switch before the fallback ending is,F1,5a
-BBG000BLPBL5_2026-08-27,AVB,terms_misread,True,inferred,C: No library change (1),none,none
+BBG000BLPBL5_2026-08-27,AVB,terms_misread,True,inferred,C: No library change (1),none,5e
 BBG000BLY636_2008-08-17,IMB,wrong_exit_kind,True,inferred,E: Theme 5. A later SEC revocation outranks the real delisting reason (3),F9,5g
 BBG000BM1RP0_2009-08-14,FCL,no_last_trade_print,True,inferred,B: T2. No filing states the last session: infer it from the closing day (,F6r,5d
 BBG000BMB7R1_2016-05-17,ITT,library_right_but_uncertain,False,inferred,A: Theme 2. Continuation or rename with no Form 25 that a successor filin,F2,5i
@@ -121,7 +121,7 @@ BBG000F2XXP2_2023-05-31,SBGI,holdco_not_linked,True,inferred,"D: Theme 5. 1:1 ho
 BBG000FBWYH0_2026-07-06,PRA,library_right_but_uncertain,False,verified,A: Theme 3. Issuer from today's company_tickers.json although the Form 25,F10,5i
 BBG000FHN2M1_2007-12-14,CKFR,no_last_trade_print,True,inferred,B: T2. No filing states the last session: infer it from the closing day (,F6r,5d
 BBG000FJJW82_2008-12-06,ABI,currency_missing,False,inferred,"C: 1. Acquirer found by CIK and line, priced by CUSIP (the CAL/RTN fix) —",F7,5e
-BBG000FL1TC8_2015-08-03,DTV,library_right_but_uncertain,False,inferred,A: No library change,none,none
+BBG000FL1TC8_2015-08-03,DTV,library_right_but_uncertain,False,inferred,A: No library change,none,5f
 BBG000FRVFM1_2011-12-15,PPDI,no_last_trade_print,False,verified,B: T1. A stated last day in a filing the reader did not use (8 cases),F6,5d
 BBG000FVQ434_2016-07-23,IHS,library_right_but_uncertain,False,verified,A: Theme 4. Assumed par after a failed gate whose terms are right (`assum,F7,5e
 BBG000FXYZF9_2008-11-10,WM,no_last_trade_print,True,inferred,"B: T3. Date-source precedence: halts, bare ""suspended on D"", after-close ",F6,5d

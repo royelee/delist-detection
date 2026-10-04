@@ -1,0 +1,26 @@
+{
+ "case_id": "BBG00VNLZL95_2020-08-06",
+ "sec_id": "BBG00VNLZL95",
+ "shape": "ending",
+ "fields": {
+  "exit_kind": "expiration",
+  "drop_reason": "",
+  "continuation": "false",
+  "successor_sec_id": "",
+  "last_trade_date": "2020-07-27",
+  "value_rule": "expiration",
+  "cash_per_share": "",
+  "cash_currency": "",
+  "stock_ratio": "",
+  "price_sec_id": "",
+  "price_ticker": "",
+  "price_date": "",
+  "recovery_ratio": ""
+ },
+ "internal_last_trade_date": "",
+ "legs": [],
+ "identity_check": null,
+ "residual": "",
+ "pending": [],
+ "notes": "TMUSR rights expired 2020-07-27; 424B5 and 8-K 2020-08-04 (not extended), Form 25-NSE effective 2020-07-27"
+}

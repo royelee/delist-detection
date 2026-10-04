@@ -1,0 +1,48 @@
+{
+ "case_id": "BBG005SW6TK5_2016-04-28",
+ "sec_id": "BBG005SW6TK5",
+ "shape": "ending",
+ "fields": {
+  "exit_kind": "merger",
+  "drop_reason": "",
+  "continuation": "false",
+  "successor_sec_id": "",
+  "last_trade_date": "",
+  "value_rule": "basket",
+  "cash_per_share": "",
+  "cash_currency": "",
+  "stock_ratio": "",
+  "price_sec_id": "",
+  "price_ticker": "",
+  "price_date": "",
+  "recovery_ratio": ""
+ },
+ "internal_last_trade_date": "2016-04-15",
+ "legs": [
+  {
+   "leg": 1,
+   "ratio": "1",
+   "price_sec_id": "BBG00BFHD9S7",
+   "price_ticker": "LSXMK",
+   "price_date": ""
+  },
+  {
+   "leg": 2,
+   "ratio": "0.1",
+   "price_sec_id": "*",
+   "price_ticker": "BATRK",
+   "price_date": ""
+  },
+  {
+   "leg": 3,
+   "ratio": "0.25",
+   "price_sec_id": "BBG00BFHDFR4",
+   "price_ticker": "LMCK",
+   "price_date": ""
+  }
+ ],
+ "identity_check": null,
+ "residual": "",
+ "pending": [],
+ "notes": "8-K 2016-04-19: old LMCK Series C reclassified into three tracking stocks, stock only (R3 basket); no filing states the last trade day"
+}

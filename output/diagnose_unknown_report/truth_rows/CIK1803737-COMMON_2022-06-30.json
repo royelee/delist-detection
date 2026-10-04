@@ -1,0 +1,26 @@
+{
+ "case_id": "CIK1803737-COMMON_2022-06-30",
+ "sec_id": "CIK1803737-COMMON",
+ "shape": "no_ending",
+ "fields": {
+  "exit_kind": "",
+  "drop_reason": "",
+  "continuation": "",
+  "successor_sec_id": "",
+  "last_trade_date": "",
+  "value_rule": "",
+  "cash_per_share": "",
+  "cash_currency": "",
+  "stock_ratio": "",
+  "price_sec_id": "",
+  "price_ticker": "",
+  "price_date": "",
+  "recovery_ratio": ""
+ },
+ "internal_last_trade_date": "",
+ "legs": [],
+ "identity_check": null,
+ "residual": "",
+ "pending": [],
+ "notes": "EHAB-WI when-issued alias of regular-way EHAB (BBG014QJ5BV6, CUSIP 29332G102), spin-off effective 2022-07-01; 8-K 5.01 is the separation, no Form 25; no old CUSIP known so no identity check."
+}

@@ -1,0 +1,26 @@
+{
+ "case_id": "BBG002BHBHM1_2020-10-23",
+ "sec_id": "BBG002BHBHM1",
+ "shape": "ending",
+ "fields": {
+  "exit_kind": "dropped",
+  "drop_reason": "bankruptcy",
+  "continuation": "false",
+  "successor_sec_id": "",
+  "last_trade_date": "2020-10-09",
+  "value_rule": "otc_print",
+  "cash_per_share": "",
+  "cash_currency": "",
+  "stock_ratio": "",
+  "price_sec_id": "BBG002BHBHM1",
+  "price_ticker": "MNKKQ",
+  "price_date": "2020-10-12",
+  "recovery_ratio": ""
+ },
+ "internal_last_trade_date": "2020-10-09",
+ "legs": [],
+ "identity_check": null,
+ "residual": "",
+ "pending": [],
+ "notes": "Bankruptcy drop; Form 25 notice: suspended prior to open 2020-10-12 so last trade 10-09; OTC symbol MNKKQ from fails rows only; operator ruling 2026-10-03: OTC symbol MNKKQ accepted (the security's own CUSIP after the last trade)"
+}

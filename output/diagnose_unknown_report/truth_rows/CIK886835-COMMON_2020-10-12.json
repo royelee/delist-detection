@@ -1,0 +1,26 @@
+{
+ "case_id": "CIK886835-COMMON_2020-10-12",
+ "sec_id": "CIK886835-COMMON",
+ "shape": "ending",
+ "fields": {
+  "exit_kind": "dropped",
+  "drop_reason": "guidelines",
+  "continuation": "false",
+  "successor_sec_id": "",
+  "last_trade_date": "2020-09-17",
+  "value_rule": "otc_print",
+  "cash_per_share": "",
+  "cash_currency": "",
+  "stock_ratio": "",
+  "price_sec_id": "CIK886835-COMMON",
+  "price_ticker": "SPNX",
+  "price_date": "2020-09-18",
+  "recovery_ratio": ""
+ },
+ "internal_last_trade_date": "2020-09-17",
+ "legs": [],
+ "identity_check": null,
+ "residual": "",
+ "pending": [],
+ "notes": "NYSE 802.01B suspension 2020-09-17 per 8-K 3.01; OTC symbol SPNX; value is first OTC print"
+}

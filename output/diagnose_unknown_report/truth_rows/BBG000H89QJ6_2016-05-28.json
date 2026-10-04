@@ -1,0 +1,26 @@
+{
+ "case_id": "BBG000H89QJ6_2016-05-28",
+ "sec_id": "BBG000H89QJ6",
+ "shape": "ending",
+ "fields": {
+  "exit_kind": "merger",
+  "drop_reason": "",
+  "continuation": "false",
+  "successor_sec_id": "",
+  "last_trade_date": "2016-05-17",
+  "value_rule": "cash_plus_stock",
+  "cash_per_share": "100.00",
+  "cash_currency": "USD",
+  "stock_ratio": "0.48908178",
+  "price_sec_id": "BBG000VPGNR2",
+  "price_ticker": "CHTR",
+  "price_date": "2016-05-18",
+  "recovery_ratio": ""
+ },
+ "internal_last_trade_date": "",
+ "legs": [],
+ "identity_check": null,
+ "residual": "",
+ "pending": [],
+ "notes": "Form 25-NSE notice: Option A default $100 + 0.48908178 New Charter; suspended 2016-05-18; Option B and 0.5409 old-Charter equivalent not used"
+}
