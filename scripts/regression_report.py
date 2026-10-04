@@ -33,7 +33,7 @@ def main(argv: list[str] | None = None) -> int:
     except (RegressionInputError, TruthFileError) as exc:
         print(f"ABORTED: {exc}", file=sys.stderr)
         return 2
-    rows = diff_contract(base, new, excluded(cases, base.delistings, new.delistings))
+    rows = diff_contract(base, new, excluded(cases, base.delistings, new.delistings, id_changes=new.id_changes))
     write_report(args.out, rows)
     print(f"{len(rows)} changed field(s) in {len({r['sec_id'] for r in rows})} securities -> {args.out}")
     return 0

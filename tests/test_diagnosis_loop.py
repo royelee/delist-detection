@@ -144,14 +144,13 @@ def test_a_round_renames_truth_and_reports_a_regression(tmp_path, capsys):
                              [truth_row("CIK9-COMMON_2010-01-04", "CIK9-COMMON", exit_kind="merger")])
     assert round_script.main(_argv(tmp_path, repo, "--label", "5a", "--base", "HEAD", "--round", "1")) == 0
     printed = json.loads(capsys.readouterr().out)
-    assert (printed["mismatches_new"], printed["regressions_new"], printed["renamed"]) == (0, 3, 1)
-    # Z changed; the old placeholder's contract row is gone and its id change is new (BBGX is in the truth set)
-    assert [(c["case_id"], c["mode"]) for c in printed["cases"]] == [("CIK9-COMMON_5a-r1", "regression"),
-                                                                    ("Z_5a-r1", "regression")]
+    assert (printed["mismatches_new"], printed["regressions_new"], printed["renamed"]) == (0, 1, 1)
+    # the renamed placeholder (removed row, new id change) belongs to its truth case, so only Z shows
+    assert [(c["case_id"], c["mode"]) for c in printed["cases"]] == [("Z_5a-r1", "regression")]
     renamed = dl.read_csv(tmp_path / "truth.csv")
     assert [(r["case_id"], r["sec_id"]) for r in renamed] == [("CIK9-COMMON_2010-01-04", "BBGX")]
     [change] = dl.read_csv(tmp_path / "changes.csv")
     assert (change["case_id"], change["old"], change["new"]) == ("CIK9-COMMON_2010-01-04", "CIK9-COMMON", "BBGX")
     assert Path(printed["path"]) == tmp_path / "loop" / "5a" / "round-1" / "cases.csv"
     cases = dl.read_csv(Path(printed["path"]))
-    assert [r["case_id"] for r in cases] == ["CIK9-COMMON_5a-r1", "Z_5a-r1"]
+    assert [r["case_id"] for r in cases] == ["Z_5a-r1"]

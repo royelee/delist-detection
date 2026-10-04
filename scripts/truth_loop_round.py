@@ -78,7 +78,7 @@ def main(argv: list[str] | None = None) -> int:
     except RegressionInputError as exc:
         print(f"ABORTED: {exc}", file=sys.stderr)
         return 2
-    report = diff_contract(base, new, excluded(cases, base.delistings, new.delistings))
+    report = diff_contract(base, new, excluded(cases, base.delistings, new.delistings, id_changes=new.id_changes))
     write_report(args.output_dir / "regression_report.csv", report)
     mismatches = [m for j in judged for m in j.mismatches if dl.mismatch_key(m) not in keys]
     regressions = [r for r in report if regression_key(r) not in keys]

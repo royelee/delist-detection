@@ -108,10 +108,19 @@ def _pending_regression(c: DiagnosisCase) -> bool:
     return c.status == RULING_PENDING and c.fixed_by == REGRESSION_PENDING
 
 
-def excluded(cases: Sequence[DiagnosisCase], *delistings: Sequence[Mapping[str, str]]) -> set[str]:
+def excluded(cases: Sequence[DiagnosisCase], *delistings: Sequence[Mapping[str, str]],
+             id_changes: Sequence[Mapping[str, str]] = ()) -> set[str]:
     """The securities the report leaves out: every truth case's security and its successor chain, except a
-    regressed row the loop could not settle (it keeps showing until the operator does)."""
-    return successor_chain({c.sec_id for c in cases if not _pending_regression(c)}, *delistings)
+    regressed row the loop could not settle (it keeps showing until the operator does). A placeholder whose
+    `id_changes` row names an excluded security as its new sec_id is left out too (repeated, so a chain of
+    renames is), since the rename belongs to the truth case."""
+    out = successor_chain({c.sec_id for c in cases if not _pending_regression(c)}, *delistings)
+    grew = True
+    while grew:
+        old = {r["old_sec_id"] for r in id_changes if r["new_sec_id"] in out}
+        grew = not old <= out
+        out |= old
+    return out
 
 
 def _row(sec: str, table: str, name: str, kind: str, old: str, new: str) -> dict[str, str]:

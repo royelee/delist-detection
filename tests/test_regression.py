@@ -57,6 +57,16 @@ def test_excluded_keeps_loop_added_pending_rows_in_the_report():
     assert rg.excluded(cases, [contract_row("A", successor_sec_id="B")]) == {"A", "B"}
 
 
+def test_excluded_leaves_out_placeholders_renamed_to_a_truth_security():
+    cases = dt.parse_rows([truth_row("A_2010-01-04", "A")])
+    ids = [{"old_sec_id": "CIK1-COMMON", "new_sec_id": "MID", "changed_on": "", "issuer_cik": "1",
+            "share_class": "COMMON"},
+           {"old_sec_id": "MID", "new_sec_id": "A", "changed_on": "", "issuer_cik": "1", "share_class": "COMMON"},
+           {"old_sec_id": "CIK2-COMMON", "new_sec_id": "OTHER", "changed_on": "", "issuer_cik": "2",
+            "share_class": "COMMON"}]
+    assert rg.excluded(cases, id_changes=ids) == {"A", "MID", "CIK1-COMMON"}
+
+
 def test_unexplained_counts_rows_not_settled_and_pending_regressions():
     rows = [{"sec_id": "Z", "table": "delistings", "field": "exit_kind", "kind": "changed", "old": "a", "new": "b"},
             {"sec_id": "Y", "table": "security_history", "field": "ranges", "kind": "changed", "old": "x",
