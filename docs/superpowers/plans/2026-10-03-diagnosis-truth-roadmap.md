@@ -20,7 +20,7 @@ Work stays on the worktree branch; merging or pushing is the operator's call.
 | --- | --- | --- | --- | --- |
 | 5-0 Truth set and loop | `2026-10-03-reset-5-0-truth-set.md` | none | the truth file, judge, regression report, diagnose modes, truth updates, loop workflow | done (282 cases: 19 pass, 263 known_wrong; D.mismatches 756) |
 | 5a One line across a CUSIP or ticker change | `2026-10-03-reset-5a-line-continuity.md` | 5-0 | 43 cases (F1) | done (D.mismatches 755 -> 649; 28 of 43 cases pass); accepted by the controller, operator review of `output/diagnose_unknown_report/loop/5a/report.md` section 8 pending |
-| 5b Form 25 reach, matching and ownership | `2026-10-04-reset-5b-form25-reach.md` | 5a | 50 cases (F4, F5) | written |
+| 5b Form 25 reach, matching and ownership | `2026-10-04-reset-5b-form25-reach.md` | 5a | 50 cases (F4, F5) | done (D.mismatches 646 -> 596; 58 -> 78 cases match); accepted by the controller, operator review of `output/diagnose_unknown_report/loop/5b/report.md` section 8 pending |
 | 5c Issuer role and successor links | to write | 5a, 5b | 26 cases (F2, F3) | |
 | 5d Last trade date | to write | 5a, 5b | 33 cases (F6) | |
 | 5e Acquirer security and the gate | to write | 5a, 5c | 35 cases (F7) | |

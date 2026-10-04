@@ -1,0 +1,60 @@
+{
+ "case_id": "CIK867773-COMMON_2009-06-08_5b-r1",
+ "sec_id": "CIK867773-COMMON",
+ "ticker": "SPWRA",
+ "report": "reports/CIK867773-COMMON_2009-06-08_5b-r1.md",
+ "mode": "mismatch",
+ "event_type": "reorganization",
+ "consideration": "none",
+ "confidence": "inferred",
+ "exit_kind": "exchange",
+ "drop_reason": "",
+ "continuation": true,
+ "successor_ticker": "SPWR",
+ "last_trade_date": "",
+ "value_rule": "continuation",
+ "cash_per_share": null,
+ "cash_currency": "",
+ "stock_ratio": null,
+ "price_ticker": "",
+ "price_date": "",
+ "value_formula": "not an exit",
+ "status": {
+  "exit_kind": "agree",
+  "last_trade_date": "agree",
+  "successor": "agree",
+  "value_rule": "agree",
+  "terms": "agree",
+  "issuer": "agree",
+  "ticker_history": "wrong"
+ },
+ "confidence_reasons": [
+  "internal last trade date 2011-11-16 is worked out from the 8-K's 5 pm EST effective time on 2011-11-16; no exchange print was read",
+  "successor ticker SPWR is not read from a filing"
+ ],
+ "library_wrong": true,
+ "cause": "no_last_trade_print",
+ "golden_worthy": false,
+ "sec_evidence": 2,
+ "web_evidence": 0,
+ "open_checks": [
+  "exchange print (MIDAS or Nasdaq notice) for the last SPWRA session 2011-11-16"
+ ],
+ "verdict": "Truth is right: Class A was reclassified into Common at 5 pm EST on 2011-11-16, so the internal last trade date is 2011-11-16; the library leaves it blank.",
+ "field_verdicts": [
+  {
+   "field": "internal_last_trade_date",
+   "right": "truth",
+   "value": "2011-11-16",
+   "missed_filing": ""
+  }
+ ],
+ "verification": {
+  "upheld": true,
+  "fields_upheld": [
+   "internal_last_trade_date"
+  ],
+  "fields_refuted": [],
+  "notes": "8-K 0001193125-11-314493 effective 5 pm EST 2011-11-16 (after close); 25-NSE 0001354457-11-000248 effective 2011-11-16. Truth 2011-11-16 stands."
+ }
+}

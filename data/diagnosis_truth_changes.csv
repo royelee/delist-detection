@@ -441,3 +441,71 @@ BBG005DKMJ67_2025-04-29,internal_last_trade_date,2025-04-29,,"operator ruling 20
 BBG00VNLZL95_2020-08-06,fixed_by,5b,5d,operator ruling 2026-10-04 (5b pre-check): re-route: the expiry date in the class text,docs/superpowers/plans/research/2026-10-04-5b-form25-reach.md
 BBG000BJ27C4_2012-07-15,status,known_wrong,pass,operator ruling 2026-10-04 (5b pre-check) G2: the case now matches the run,
 BBG000BJ27C4_2012-07-15,fixed_by,5b,,operator ruling 2026-10-04 (5b pre-check) G2: the case now matches the run,
+BBG000CHWP52_2022-04-18,case,,added,operator pre-ruling 2026-10-04 (5b plan): Series A reclassified one for one into WBD with DISCB and DISCK; mirrors DISCK's row; not a 5b regression to narrow,docs/superpowers/plans/research/2026-10-04-5b-form25-reach.md
+BBG000BLG1L7_2025-04-21,case,,added,"operator pre-ruling 2026-10-04 (5b plan): a voluntary delisting during the liquidation; exit_kind liquidation, the rest open; not a 5b regression to narrow",docs/superpowers/plans/research/2026-10-04-5b-form25-reach.md
+BBG009R0CVG1_2020-04-13,last_trade_date,,2019-12-27,diagnosis BBG009R0CVG1_2020-04-13_5b-r1 cites 0000876661-20-000026,output/diagnose_unknown_report/loop/5b/round-1/reports/BBG009R0CVG1_2020-04-13_5b-r1.md
+BBG009R0CVG1_2020-04-13,price_date,,2019-12-30,diagnosis BBG009R0CVG1_2020-04-13_5b-r1 cites 0000876661-20-000026,output/diagnose_unknown_report/loop/5b/round-1/reports/BBG009R0CVG1_2020-04-13_5b-r1.md
+BBG009R0CVG1_2020-04-13,internal_last_trade_date,2019-12-26,2019-12-27,diagnosis BBG009R0CVG1_2020-04-13_5b-r1 cites 0000876661-20-000026,output/diagnose_unknown_report/loop/5b/round-1/reports/BBG009R0CVG1_2020-04-13_5b-r1.md
+BBG000BHRRV6_5b-r1,(row),,added (pass),5b loop round 1: regression,output/diagnose_unknown_report/loop/5b/round-1/reports/BBG000BHRRV6_5b-r1.md
+BBG000BMLYZ2_5b-r1,(row),,added (ruling_pending),5b loop round 1: regression,output/diagnose_unknown_report/loop/5b/round-1/reports/BBG000BMLYZ2_5b-r1.md
+BBG000BNY0W3_5b-r1,(row),,added (pass),5b loop round 1: regression,output/diagnose_unknown_report/loop/5b/round-1/reports/BBG000BNY0W3_5b-r1.md
+BBG000BRMVZ6_5b-r1,(row),,added (pass),5b loop round 1: regression,output/diagnose_unknown_report/loop/5b/round-1/reports/BBG000BRMVZ6_5b-r1.md
+BBG000BSYVD5_5b-r1,(row),,added (pass),5b loop round 1: regression,output/diagnose_unknown_report/loop/5b/round-1/reports/BBG000BSYVD5_5b-r1.md
+BBG000BVK2W6_5b-r1,(row),,added (pass),5b loop round 1: regression,output/diagnose_unknown_report/loop/5b/round-1/reports/BBG000BVK2W6_5b-r1.md
+BBG000C0ZL64_5b-r1,(row),,added (pass),5b loop round 1: regression,output/diagnose_unknown_report/loop/5b/round-1/reports/BBG000C0ZL64_5b-r1.md
+BBG000C1TTV4_5b-r1,(row),,added (pass),5b loop round 1: regression,output/diagnose_unknown_report/loop/5b/round-1/reports/BBG000C1TTV4_5b-r1.md
+BBG000C4ZNF2_5b-r1,(row),,added (pass),5b loop round 1: regression,output/diagnose_unknown_report/loop/5b/round-1/reports/BBG000C4ZNF2_5b-r1.md
+BBG000G8M3Q5_5b-r1,(row),,added (pass),5b loop round 1: regression,output/diagnose_unknown_report/loop/5b/round-1/reports/BBG000G8M3Q5_5b-r1.md
+BBG000R3BYX0_5b-r1,(row),,added (pass),5b loop round 1: regression,output/diagnose_unknown_report/loop/5b/round-1/reports/BBG000R3BYX0_5b-r1.md
+BBG000RFD341_5b-r1,(row),,added (pass),5b loop round 1: regression,output/diagnose_unknown_report/loop/5b/round-1/reports/BBG000RFD341_5b-r1.md
+BBG0057K5Y79_5b-r1,(row),,added (ruling_pending),5b loop round 1: regression,output/diagnose_unknown_report/loop/5b/round-1/reports/BBG0057K5Y79_5b-r1.md
+BBG000BF2JS9_2009-09-18,status,known_wrong,pass,the library now matches,
+BBG000P4BQM9_2018-07-16,status,known_wrong,pass,the library now matches,
+BBG005CPNTQ2_2026-09-18,status,known_wrong,pass,the library now matches,
+BBG009R0CVG1_2020-04-13,status,known_wrong,pass,the library now matches,
+BBG00B6WH9G3_2020-07-10,status,known_wrong,pass,the library now matches,
+CIK1355096-SERIES-A_2011-10-03,status,known_wrong,pass,the library now matches,
+CIK898660-COMMON_2009-06-08,last_trade_date,,2007-11-07,diagnosis CIK898660-COMMON_2009-06-08_5b-r2 cites 0000876661-07-000873,output/diagnose_unknown_report/loop/5b/round-2/reports/CIK898660-COMMON_2009-06-08_5b-r2.md
+BBG000BLDXH5_5b-r2,(row),,added (pass),5b loop round 2: regression,output/diagnose_unknown_report/loop/5b/round-2/reports/BBG000BLDXH5_5b-r2.md
+BBG000CNNMD7_5b-r2,(row),,added (ruling_pending),5b loop round 2: regression,output/diagnose_unknown_report/loop/5b/round-2/reports/BBG000CNNMD7_5b-r2.md
+BBG000K1T0M8_5b-r2,(row),,added (ruling_pending),5b loop round 2: regression,output/diagnose_unknown_report/loop/5b/round-2/reports/BBG000K1T0M8_5b-r2.md
+BBG0016WLQ18_5b-r2,(row),,added (ruling_pending),5b loop round 2: regression,output/diagnose_unknown_report/loop/5b/round-2/reports/BBG0016WLQ18_5b-r2.md
+BBG000BMLYZ2_5b-r1,exit_kind,*,dropped,"controller ruling 2026-10-04 (5b loop, delegated autonomy): NYSE removal for abnormally low price (8-K 3.01, Form 25-NSE EX-99.25); skeptic upheld",output/diagnose_unknown_report/loop/5b/round-1/reports/BBG000BMLYZ2_5b-r1.md
+BBG000BMLYZ2_5b-r1,drop_reason,*,price,"controller ruling 2026-10-04 (5b loop, delegated autonomy): NYSE removal for abnormally low price (8-K 3.01, Form 25-NSE EX-99.25); skeptic upheld",output/diagnose_unknown_report/loop/5b/round-1/reports/BBG000BMLYZ2_5b-r1.md
+BBG000BMLYZ2_5b-r1,status,ruling_pending,known_wrong,"controller ruling 2026-10-04 (5b loop, delegated autonomy): settled; judged against the run",output/diagnose_unknown_report/loop/5b/round-1/reports/BBG000BMLYZ2_5b-r1.md
+BBG000BMLYZ2_5b-r1,fixed_by,regression,5g,"controller ruling 2026-10-04 (5b loop, delegated autonomy): settled",output/diagnose_unknown_report/loop/5b/round-1/reports/BBG000BMLYZ2_5b-r1.md
+BBG0057K5Y79_5b-r1,exit_kind,*,dropped,"controller ruling 2026-10-04 (5b loop, delegated autonomy): NYSE 802.01D delisting, OTC EPEG afterwards (8-K, Form 25-NSE); skeptic upheld",output/diagnose_unknown_report/loop/5b/round-1/reports/BBG0057K5Y79_5b-r1.md
+BBG0057K5Y79_5b-r1,drop_reason,*,guidelines,"controller ruling 2026-10-04 (5b loop, delegated autonomy): NYSE 802.01D delisting, OTC EPEG afterwards (8-K, Form 25-NSE); skeptic upheld",output/diagnose_unknown_report/loop/5b/round-1/reports/BBG0057K5Y79_5b-r1.md
+BBG0057K5Y79_5b-r1,value_rule,*,otc_print,"controller ruling 2026-10-04 (5b loop, delegated autonomy): NYSE 802.01D delisting, OTC EPEG afterwards (8-K, Form 25-NSE); skeptic upheld",output/diagnose_unknown_report/loop/5b/round-1/reports/BBG0057K5Y79_5b-r1.md
+BBG0057K5Y79_5b-r1,price_ticker,*,EPEG,"controller ruling 2026-10-04 (5b loop, delegated autonomy): NYSE 802.01D delisting, OTC EPEG afterwards (8-K, Form 25-NSE); skeptic upheld",output/diagnose_unknown_report/loop/5b/round-1/reports/BBG0057K5Y79_5b-r1.md
+BBG0057K5Y79_5b-r1,status,ruling_pending,known_wrong,"controller ruling 2026-10-04 (5b loop, delegated autonomy): settled; judged against the run",output/diagnose_unknown_report/loop/5b/round-1/reports/BBG0057K5Y79_5b-r1.md
+BBG0057K5Y79_5b-r1,fixed_by,regression,5g,"controller ruling 2026-10-04 (5b loop, delegated autonomy): settled",output/diagnose_unknown_report/loop/5b/round-1/reports/BBG0057K5Y79_5b-r1.md
+BBG000CNNMD7_5b-r2,ticker,,SKYF,"controller ruling 2026-10-04 (5b loop, delegated autonomy): acquired by Huntington 2007-07 (DEFM14A, Form 25-NSE); skeptic upheld",output/diagnose_unknown_report/loop/5b/round-2/reports/BBG000CNNMD7_5b-r2.md
+BBG000CNNMD7_5b-r2,exit_kind,*,merger,"controller ruling 2026-10-04 (5b loop, delegated autonomy): acquired by Huntington 2007-07 (DEFM14A, Form 25-NSE); skeptic upheld",output/diagnose_unknown_report/loop/5b/round-2/reports/BBG000CNNMD7_5b-r2.md
+BBG000CNNMD7_5b-r2,continuation,*,false,"controller ruling 2026-10-04 (5b loop, delegated autonomy): acquired by Huntington 2007-07 (DEFM14A, Form 25-NSE); skeptic upheld",output/diagnose_unknown_report/loop/5b/round-2/reports/BBG000CNNMD7_5b-r2.md
+BBG000CNNMD7_5b-r2,value_rule,*,cash_plus_stock,"controller ruling 2026-10-04 (5b loop, delegated autonomy): acquired by Huntington 2007-07 (DEFM14A, Form 25-NSE); skeptic upheld",output/diagnose_unknown_report/loop/5b/round-2/reports/BBG000CNNMD7_5b-r2.md
+BBG000CNNMD7_5b-r2,stock_ratio,*,1.098,"controller ruling 2026-10-04 (5b loop, delegated autonomy): acquired by Huntington 2007-07 (DEFM14A, Form 25-NSE); skeptic upheld",output/diagnose_unknown_report/loop/5b/round-2/reports/BBG000CNNMD7_5b-r2.md
+BBG000CNNMD7_5b-r2,status,ruling_pending,known_wrong,"controller ruling 2026-10-04 (5b loop, delegated autonomy): settled; judged against the run",output/diagnose_unknown_report/loop/5b/round-2/reports/BBG000CNNMD7_5b-r2.md
+BBG000CNNMD7_5b-r2,fixed_by,regression,5f,"controller ruling 2026-10-04 (5b loop, delegated autonomy): settled",output/diagnose_unknown_report/loop/5b/round-2/reports/BBG000CNNMD7_5b-r2.md
+BBG000K1T0M8_5b-r2,exit_kind,*,merger,"controller ruling 2026-10-04 (5b loop, delegated autonomy): 2025-05-06 arrangement, a 1.12 LION + 1.12 STRZ basket (Form 25-NSE, 8-K); skeptic upheld",output/diagnose_unknown_report/loop/5b/round-2/reports/BBG000K1T0M8_5b-r2.md
+BBG000K1T0M8_5b-r2,continuation,*,false,"controller ruling 2026-10-04 (5b loop, delegated autonomy): 2025-05-06 arrangement, a 1.12 LION + 1.12 STRZ basket (Form 25-NSE, 8-K); skeptic upheld",output/diagnose_unknown_report/loop/5b/round-2/reports/BBG000K1T0M8_5b-r2.md
+BBG000K1T0M8_5b-r2,status,ruling_pending,pass,"controller ruling 2026-10-04 (5b loop, delegated autonomy): settled; judged against the run",output/diagnose_unknown_report/loop/5b/round-2/reports/BBG000K1T0M8_5b-r2.md
+BBG000K1T0M8_5b-r2,fixed_by,regression,,"controller ruling 2026-10-04 (5b loop, delegated autonomy): settled",output/diagnose_unknown_report/loop/5b/round-2/reports/BBG000K1T0M8_5b-r2.md
+BBG0016WLQ18_5b-r2,exit_kind,*,dropped,"controller ruling 2026-10-04 (5b loop, delegated autonomy): Chapter 11 2020-06-23, NYSE 802.01D delisting (8-K 3.01); skeptic upheld",output/diagnose_unknown_report/loop/5b/round-2/reports/BBG0016WLQ18_5b-r2.md
+BBG0016WLQ18_5b-r2,drop_reason,*,bankruptcy,"controller ruling 2026-10-04 (5b loop, delegated autonomy): Chapter 11 2020-06-23, NYSE 802.01D delisting (8-K 3.01); skeptic upheld",output/diagnose_unknown_report/loop/5b/round-2/reports/BBG0016WLQ18_5b-r2.md
+BBG0016WLQ18_5b-r2,status,ruling_pending,pass,"controller ruling 2026-10-04 (5b loop, delegated autonomy): settled; judged against the run",output/diagnose_unknown_report/loop/5b/round-2/reports/BBG0016WLQ18_5b-r2.md
+BBG0016WLQ18_5b-r2,fixed_by,regression,,"controller ruling 2026-10-04 (5b loop, delegated autonomy): settled",output/diagnose_unknown_report/loop/5b/round-2/reports/BBG0016WLQ18_5b-r2.md
+BBG000BBBP59_2016-03-28,fixed_by,5b,5f,controller ruling 2026-10-04 (5b acceptance): the Form 25 is reached and owned; what remains is cash_currency,
+BBG000BF8BH2_2008-08-10,fixed_by,5b,5f,controller ruling 2026-10-04 (5b acceptance): the Form 25 is reached and owned; what remains is cash_currency,
+BBG000BHCDF1_2011-12-08,fixed_by,5b,5f,controller ruling 2026-10-04 (5b acceptance): the Form 25 is reached and owned; what remains is cash_currency,
+BBG000BJCFP1_2013-03-11,fixed_by,5b,5e,controller ruling 2026-10-04 (5b acceptance): the Form 25 is reached and owned; what remains is the acquirer line,
+BBG000BPTDN6_2010-10-11,fixed_by,5b,5f,controller ruling 2026-10-04 (5b acceptance): the Form 25 is reached and owned; what remains is cash_currency,
+BBG000BRF6B5_2009-05-29,fixed_by,5b,5g,controller ruling 2026-10-04 (5b acceptance): the Form 25 is reached and owned; what remains is the OTC print ticker,
+BBG000BVW841_2009-06-08,fixed_by,5b,5f,controller ruling 2026-10-04 (5b acceptance): the Form 25 is reached and owned; what remains is cash_currency,
+BBG000C070N2_2009-06-08,fixed_by,5b,5e,controller ruling 2026-10-04 (5b acceptance): the Form 25 is reached and owned; what remains is the acquirer line,
+BBG000DGZ1B6_2009-06-08,fixed_by,5b,5f,controller ruling 2026-10-04 (5b acceptance): the Form 25 is reached and owned; what remains is cash_currency,
+BBG000JXRXK2_2009-06-08,fixed_by,5b,5e,controller ruling 2026-10-04 (5b acceptance): the Form 25 is reached and owned; what remains is the acquirer ticker,
+BBG000PSSG77_2009-03-31,fixed_by,5b,5g,controller ruling 2026-10-04 (5b acceptance): the Form 25 is reached and owned; what remains is the OTC print and dates,
+CIK351346-COMMON_2006-12-28,fixed_by,5b,5d,"controller ruling 2026-10-04 (5b acceptance): the Form 25 is reached and owned; what remains is the last trade date (and currency, 5f)",
+CIK898660-COMMON_2009-06-08,fixed_by,5b,5f,controller ruling 2026-10-04 (5b acceptance): the Form 25 is reached and owned; what remains is cash_currency,
+BBG005DKMJ67_2025-04-29,fixed_by,5b,5g,controller ruling 2026-10-04 (5b acceptance): the 2023 removal is now the ending (G4); what remains is the drop reason (guidelines vs price),
