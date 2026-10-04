@@ -6,7 +6,11 @@ Rows exist only on days with fails, so a quiet security has gaps.
 
 FTD writes class tickers without a separator ("BFB", "BRKB") where the output
 tables write "BF-B". `FtdIndex` loads a requested ticker under both spellings
-and keys the rows by the separator spelling.
+and keys the rows by the separator spelling. A one-letter class suffix can also
+sit on the symbol FTD uses whole (a snapshot's "UAC-C" for Under Armour's class C,
+which FTD lists as "UAC"): that base spelling is loaded too, and its rows that
+name the class letter and agree with the ticker's observed names are keyed by
+the class ticker (sub-plan 5h).
 """
 from __future__ import annotations
 
@@ -37,6 +41,8 @@ _QTR = re.compile(r"cnsp_sec_fails_(\d{4})q([1-4])\.zip$", re.I)
 
 
 FTD_START = date(2004, 1, 1)      # the first day SEC's fails-to-deliver files cover
+_CLASS_SUFFIX = re.compile(r"([A-Z]+)-([A-Z])")             # a one-letter class ticker: base, letter ("UAC-C")
+_DESC_CLASS = re.compile(r"\bCL(?:ASS)?\s*-?\s*([A-Z])\b")   # the class letter a fails description names ("CL C")
 
 
 @dataclass(frozen=True)
@@ -220,13 +226,17 @@ class FtdIndex:
         # A class ticker's observed names: a bare-spelled row is relabelled to it
         # only when its description agrees with one of them.
         self._names: dict[str, list[str]] = {}
+        # The class ticker whose one-letter suffix sits on a symbol FTD spells whole ("UAC" -> ("UAC-C", "C"));
+        # None marks a base two requested class tickers share.
+        self._bases: dict[str, tuple[str, str] | None] = {}
         for r in rows:
             self.add(r)
 
     def _learn(self, symbols: set[str], names: Mapping[str, Iterable[str]] | None = None) -> set[str]:
         """Remember the separator spellings among `symbols` (and the observed
         names of any of them); returns the file filter: each symbol plus its
-        separator-free spelling."""
+        separator-free spelling, and a one-letter class ticker's base ("UAC" of
+        "UAC-C")."""
         for t, ns in (names or {}).items():
             t = normalize_ticker(t)
             self._names[t] = list(dict.fromkeys([*self._names.get(t, []), *(n for n in ns if n)]))
@@ -236,6 +246,11 @@ class FtdIndex:
             if bare != s:
                 out.add(bare)
                 self._aliases[bare] = s if self._aliases.get(bare, s) == s else None
+            m = _CLASS_SUFFIX.fullmatch(s)
+            if m:
+                out.add(m.group(1))
+                got = (s, m.group(2))
+                self._bases[m.group(1)] = got if self._bases.get(m.group(1), got) == got else None
         return out
 
     def _relabel(self, r: FtdRow) -> FtdRow:
@@ -244,12 +259,30 @@ class FtdIndex:
         names — or when none are known (an acquirer ticker), since there is
         nothing to check against. Another security trading under the bare
         symbol keeps it. This holds even when the bare spelling was requested
-        too (index snapshots write "BFB" and "BF.B")."""
+        too (index snapshots write "BFB" and "BF.B").
+
+        A row under a class ticker's base ("UAC" of "UAC-C") is keyed by the
+        class ticker only when the ticker's observed names are known, its
+        description agrees with one of them and names the ticker's class letter
+        ("UNDER ARMOUR INC CL C"): the base is usually another security's own
+        symbol (HEICO's common HEI beside HEI-A, Lennar's class A LEN beside
+        LEN-B, Viacom's class A VIA beside VIA-B)."""
         canon = self._aliases.get(r.symbol)
         if not canon:
-            return r
+            return self._relabel_base(r)
         names = self._names.get(canon)
         if names and not any(names_agree(r.description, n) for n in names):
+            return r
+        return replace(r, symbol=canon)
+
+    def _relabel_base(self, r: FtdRow) -> FtdRow:
+        got = self._bases.get(r.symbol)
+        if not got:
+            return r
+        canon, letter = got
+        names = self._names.get(canon)
+        m = _DESC_CLASS.search(r.description.upper())
+        if not names or m is None or m.group(1) != letter or not any(names_agree(r.description, n) for n in names):
             return r
         return replace(r, symbol=canon)
 
@@ -339,7 +372,9 @@ class FtdIndex:
 
     def by_symbol(self, symbol: str, lo: str | None = None, hi: str | None = None) -> list[FtdRow]:
         """Rows under `symbol`. A class ticker's bare spelling ("BFB") gives every
-        row FTD wrote under it: its own and those relabelled to the class ticker."""
+        row FTD wrote under it: its own and those relabelled to the class ticker.
+        A class ticker's base ("UAC" of "UAC-C") gives only the rows left under it:
+        it is usually another security's own ticker (VIA beside VIA-B)."""
         self._sort()
         s = normalize_ticker(symbol)
         rows = self._by_symbol.get(s, [])

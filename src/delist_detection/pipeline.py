@@ -35,7 +35,7 @@ from .handoffs import (
     CONTINUATION_CODE, HandoffDecision, HandoffOutcome, apply_handoffs, continuation_filing, cusip_switch, decide_handoff,
     drop_resolved_shared, find_handoffs, issuer_carries_on, own_continuation_filing, predecessor_names,
 )
-from .figi_resolution import FigiCandidate, class_letter, is_placeholder, share_class_from_name
+from .figi_resolution import FigiCandidate, class_letter, is_placeholder, placeholder_id, share_class_from_name
 from .form25 import SecurityRef, letter_hint, notice_last_trade, parse_form25
 from .last_trade import decide_last_trade
 from .ftd import FTD_START, FtdIndex, FtdRow, close_age, is_trading_symbol, trades_after
@@ -44,8 +44,10 @@ from .history import (
     Sighting, backfill_cusips, cusip_sightings, filtered_ticker_sightings, history_rows, observation_map_rows, own_last_seen,
     ranges_from_sightings, ticker_on, ticker_range_review, ticker_sightings, value_on,
 )
+from .line_follow import Decision as LineDecision
 from .line_follow import (
-    ATTACH, FOLD, MAX_ROUNDS, READ_FAILED, REFUSED, SUCCESSOR, SUCCESSOR_FORMS, SWITCH, LineEnd, LineStep, LineSuccessor, candidate_steps,
+    ATTACH, FOLD, MAX_ROUNDS, READ_FAILED, REFUSED, SUCCESSOR, SUCCESSOR_FORMS, SWITCH, LineEnd, LineStep,
+    LineSuccessor, candidate_steps,
     composites, corroborate, decide, eightks_near, is_line_symbol, line_end, name_on, other_registrant, text_cusips,
     text_symbols,
 )
@@ -66,6 +68,7 @@ from .security_master import (
     EraResolution, FigiResolver, Issuer, Security, build_securities, candidate_cusips, cik_of, cusip_handoffs,
     cusip_job, detached_review, era_last_seen, issuers_by_era, observation_conflict_review, refine_eras,
     resolve_with_identity_guard, superseded_placeholders, ticker_unconfirmed_review, guarded_eras,
+    foreign_ticker_eras,
 )
 from .lifecycle import Tables
 from .ticker_evidence import EraEvidence, evidence_for
@@ -74,7 +77,7 @@ from .successors import (
     NEW_ISSUER_DAYS, SUCCESSOR_AFTER_DAYS, SUCCESSOR_BEFORE_DAYS, SecurityStart, successor_anchor, successor_by_terms,
     _named as successor_named, successor_from_8k12b, successor_in_run, successor_query, successor_search_args, successor_search_name,
 )
-from .ticker_resolver import InferredIssuer, TickerResolution
+from .ticker_resolver import InferredIssuer, TickerResolution, TickerResolver
 from .verdict import Verdicts
 from .verdict import decide as decide_verdicts
 from .contract import delisting_rows as contract_delisting_rows
@@ -304,6 +307,14 @@ class _IssuerAnswers:
     disagreements: dict[str, InferredIssuer] = field(default_factory=dict)
 
 
+def _name_period_checks(resolver, eras: list[TickerEra], ftd: FtdIndex, last_seen: dict[str, str],
+                        answers: dict[str, TickerResolution]) -> dict[str, InferredIssuer]:
+    """2b. The resolver's name-search answers checked against each era's span and its ticker's fails rows
+    (`TickerResolver.name_period_checks`, sub-plan 5h); none from a resolver without the check (a test double)."""
+    check = getattr(resolver, "name_period_checks", None)
+    return check(eras, ftd, last_seen, answers) if callable(check) else {}
+
+
 def _resolve_issuers(ctx: _RunContext, eras: list[TickerEra], ftd: FtdIndex) -> _IssuerAnswers:
     """2. The issuer CIK of each era, resolved at the era's last sighting (index
     snapshots can be months apart, and the resolver's Form 25 search is anchored
@@ -331,8 +342,13 @@ def _resolve_issuers(ctx: _RunContext, eras: list[TickerEra], ftd: FtdIndex) -> 
                                                since=e.first)
                for e in eras}
     _flush_memo(clients)
-    second = clients.resolver.infer_issuers(eras, ftd, last_seen, {k: r.cik for k, r in cik_res.items()})
     tickers = {e.key: e.ticker for e in eras}
+    checked = _name_period_checks(clients.resolver, eras, ftd, last_seen, cik_res)                 # 2b
+    for key, found in checked.items():
+        cik_res[key] = TickerResolution(tickers[key], found.cik, None, found.source)
+    ctx.log(f"name checks: {len(checked)} name-search answers replaced"
+            + (f" ({', '.join(f'{k} -> {v.cik}' for k, v in sorted(checked.items()))})" if checked else ""))
+    second = clients.resolver.infer_issuers(eras, ftd, last_seen, {k: r.cik for k, r in cik_res.items()})
     for key, found in second.inferred.items():
         cik_res[key] = TickerResolution(tickers[key], found.cik, None, found.source)
     ctx.log(f"resolver's second pass: {len(second.inferred)} issuers inferred, "
@@ -343,8 +359,15 @@ def _resolve_issuers(ctx: _RunContext, eras: list[TickerEra], ftd: FtdIndex) -> 
         warm(issuer_ciks, clients.edgar.submissions, workers=workers, name="issuer names")
     issuer_names, names_degraded = _issuer_names(clients.edgar, issuer_ciks)
     ctx.meter.done("issuer resolution", mark)
-    return _IssuerAnswers(cik_res, issuers_by_era(ciks, issuer_names), last_seen, names_degraded, second.inferred,
-                          second.disagreements)
+    # stage 2b's answers are reported as issuer_inferred, as the second pass's are
+    return _IssuerAnswers(cik_res, issuers_by_era(ciks, issuer_names), last_seen, names_degraded,
+                          {**checked, **second.inferred}, second.disagreements)
+
+
+def _trading_span(ftd: FtdIndex, cusip: str) -> tuple[str, str] | None:
+    """The first and last day a CUSIP's fails rows show it trading (`FtdIndex.trading_rows`), None for none."""
+    rows = ftd.trading_rows([cusip])
+    return (rows[0].date, rows[-1].date) if rows else None
 
 
 def _resolve_securities(ctx: _RunContext, eras: list[TickerEra], era_by_key: dict[str, TickerEra], ftd: FtdIndex,
@@ -365,9 +388,10 @@ def _resolve_securities(ctx: _RunContext, eras: list[TickerEra], era_by_key: dic
     issuers = answers.issuers
     cusips = candidate_cusips(eras, ftd, issuers)
     handoffs = cusip_handoffs(eras, ftd)
+    foreign = foreign_ticker_eras(eras, ftd, issuers)
     resolutions, detached = resolve_with_identity_guard(
-        FigiResolver(ctx.clients.figi, log=ctx.log), eras, issuers=issuers, cusips=cusips, handoffs=handoffs,
-        unconfirmed=guarded_eras(eras, ftd))
+        FigiResolver(ctx.clients.figi, log=ctx.log, cusip_span=lambda c: _trading_span(ftd, c), foreign=foreign),
+        eras, issuers=issuers, cusips=cusips, handoffs=handoffs, unconfirmed=guarded_eras(eras, ftd) | foreign)
     securities = build_securities(resolutions, era_by_key, issuers)
     review: list[ReviewItem] = detached_review(detached, era_by_key, resolutions, issuers)
     for key, res in resolutions.items():
@@ -520,6 +544,26 @@ def _fold(out: _Lines, p: str, x: str, cand: FigiCandidate, step: LineStep, tick
     out.renames[p] = x
 
 
+def _today_holder_fold(decision: LineDecision | None, s: Security, resolutions: Mapping[str, EraResolution],
+                       tickers: Collection[str]) -> LineDecision | None:
+    """A SUCCESSOR decision made a FOLD (sub-plan 5h, R2): the line's composite came from the ticker tier alone
+    (its CUSIPs have none of their own), that candidate is today's holder of one of the line's tickers, and the
+    step's new composite has left them (its ticker today is another): the ticker answered with the line that took
+    the ticker over later, and the line's own next CUSIP names its real composite. California Resources' 2014 era
+    took CRC's post-2020 line BBG00Y04KP80 by ticker, while its 2016 reverse split's CUSIP is BBG0060B3M63 (CRCQQ
+    after the 2020 bankruptcy); Peabody's took BTU's post-2017 line, its 2015 split's being BTUUQ's. A line whose
+    ticker candidate left the ticker (an old line OpenFIGI still lists under it) keeps its successor."""
+    if decision is None or decision.kind != SUCCESSOR or decision.candidate is None or s.figi_source != "ticker":
+        return decision
+    picks = [r.candidate for e in s.eras if (r := resolutions.get(e.key)) is not None and r.source == "ticker"
+             and r.candidate is not None]
+    own = {normalize_ticker(t) for t in tickers}
+    if not picks or any(normalize_ticker(c.ticker) not in own for c in picks) \
+            or normalize_ticker(decision.candidate.ticker) in own:
+        return decision
+    return LineDecision(FOLD, decision.composite, candidate=decision.candidate)
+
+
 def _follow_lines(ctx: _RunContext, securities: dict[str, Security], resolutions: dict[str, EraResolution],
                   era_by_key: dict[str, TickerEra], sec_cusips: dict[str, list[str]], ftd: FtdIndex, ftd_lo: date,
                   answers: _IssuerAnswers) -> _Lines:
@@ -602,6 +646,7 @@ def _follow_lines(ctx: _RunContext, securities: dict[str, Security], resolutions
             what = f"{step.old_cusip} -> {step.new_cusip} under {step.symbol} from {step.first}"
             decision = None if refused else decide(
                 step, s, composites(figi_answers[step.new_cusip]) if step.kind == SWITCH else None, out.securities)
+            decision = _today_holder_fold(decision, s, out.resolutions, own(sid))
             if decision is not None and decision.kind == REFUSED:
                 refused = decision.why
             elif decision is not None and decision.kind in (ATTACH, FOLD) and step.kind == SWITCH \
@@ -741,6 +786,7 @@ def _context_builder(securities: dict[str, Security], sightings: dict[str, list[
             other_cik=other_ciks.get(s.sec_id),
             ticker_taken=lambda ticker, lo, hi, own=frozenset(sec_cusips.get(s.sec_id, [])): _ticker_taken(
                 ftd, ticker, own, lo, hi),
+            has_cusips=bool(sec_cusips.get(s.sec_id)),
         )
 
     return security_context
@@ -1551,12 +1597,15 @@ def _own_registration_link(ctx: _RunContext, e: Delisting, texts: list[str], day
     if x.composite == e.sec_id:
         return e.sec_id, BY_OWN_REGISTRATION
     new_rows = [r for r in ftd.trading_rows([cusip]) if r.symbol in tickers]
-    if not new_rows:
-        return None
+    data_end = ftd.last_date()
+    if not new_rows and not (named and data_end is not None and data_end < day.isoformat()):
+        return None      # (5h) a CUSIP the texts name, after the fails data's last day, has no row to show yet: OKE 2026
     if x.composite not in securities and x.composite not in taken and x.composite not in found.added:
+        symbol, first = (new_rows[0].symbol, new_rows[0].date) if new_rows else \
+            (e.ticker, (day + timedelta(days=1)).isoformat())
         found.added[x.composite] = AddedLineSuccessor(
             Security(x.composite, e.cik, share_class_from_name(x.name), x.name, x.security_type, False, "cusip"),
-            new_rows[0].symbol, new_rows[0].date, new_rows)
+            symbol, first, new_rows)
     return x.composite, BY_OWN_REGISTRATION
 
 
@@ -2260,7 +2309,7 @@ def _in_force_reads(ctx: _RunContext, failed: set[int] | None = None
 
 def _other_issuers(ctx: _RunContext, eras: list[TickerEra], resolutions: dict[str, EraResolution],
                    issuers: dict[str, Issuer], securities: dict[str, Security],
-                   review: list[ReviewItem] | None = None) -> dict[str, int]:
+                   review: list[ReviewItem] | None = None, rows_decided: Collection[str] = ()) -> dict[str, int]:
     """4c. R5: each security whose issuer in force (`issuer_in_force.issuer_changes`, over its eras' observations
     with their era's CIK, a (ticker, day) seen under two names left out, as stage 10g reads them) was one CIK
     other than its own issuer CIK on every sighting: that CIK, whose Form 25s the finder reads too. Spectrum
@@ -2277,7 +2326,9 @@ def _other_issuers(ctx: _RunContext, eras: list[TickerEra], resolutions: dict[st
         return read(cik)
 
     conflicts = {(t, d) for t, d, _ in observation_conflicts(o for e in eras for o in e.observations)}
-    sightings = [IssuerSighting(r.sec_id, o.as_of, o.name or "", str(cik_of(issuers, e.key) or ""))
+    # an era whose issuer its ticker's fails rows decided (stage 2b) keeps it: its observed name was refuted
+    sightings = [IssuerSighting(r.sec_id, o.as_of, "" if e.key in rows_decided else o.name or "",
+                                str(cik_of(issuers, e.key) or ""))
                  for e in eras if (r := resolutions.get(e.key)) is not None and r.sec_id
                  for o in e.observations if (o.ticker, o.as_of) not in conflicts]
     mark = ctx.meter.start()
@@ -2300,31 +2351,52 @@ def _other_issuers(ctx: _RunContext, eras: list[TickerEra], resolutions: dict[st
     return out
 
 
-def _issuers_in_force(ctx: _RunContext, observation_map: Sequence[Mapping[str, str]]) -> dict[str, list[tuple[str, str]]]:
+def _issuers_in_force(ctx: _RunContext, observation_map: Sequence[Mapping[str, str]],
+                      rows_decided: Collection[str] = ()) -> dict[str, list[tuple[str, str]]]:
     """Each security's issuer timeline (issuer_in_force.issuer_changes) from its
     sightings: every observation_map row with a sec_id, except a conflict (two
     names that day). A submissions read that fails keeps the era's CIK; a refusal
     (`fatal.FATAL`) stops the run. Without a name index (a test double's
-    resolver), every sighting keeps its era's CIK."""
+    resolver), every sighting keeps its era's CIK. A sighting of an era whose
+    issuer its ticker's fails rows decided (`rows_decided`, stage 2b's
+    `ticker_rows`) keeps its era's CIK too: its observed name is the one those
+    rows refuted (ERA 2013's BRISTOW GROUP INC)."""
     submissions, exact_names = _in_force_reads(ctx)
     mark = ctx.meter.start()
-    out = issuer_changes((IssuerSighting(r["sec_id"], r["as_of"], r["name"], r["issuer_cik"])
+    out = issuer_changes((IssuerSighting(r["sec_id"], r["as_of"], "" if r["era"] in rows_decided else r["name"],
+                                         r["issuer_cik"])
                           for r in observation_map if r["sec_id"] and r["status"] != "conflict"),
                          submissions, exact_names)
     ctx.meter.done("issuers in force", mark)
     return out
 
 
+def _era_renames(eras: Sequence[TickerEra], resolutions: Mapping[str, EraResolution],
+                 issuers: Mapping[str, Issuer]) -> dict[str, str]:
+    """The placeholder each era of a known issuer would hold (its issuer and its name's class) -> the one FIGI its
+    eras hold now, for contract/id_changes.csv: a placeholder stage 3 joined to its issuer's line across a class
+    label (sub-plan 5h: MSG's CLASS A eras on MSG Networks' plain-named line) is a rename too. A placeholder whose
+    eras now hold two FIGIs, or that an era still holds, is no rename."""
+    held: dict[str, set[str]] = defaultdict(set)
+    kept = {r.sec_id for r in resolutions.values() if r.sec_id and is_placeholder(r.sec_id)}
+    for e in eras:
+        cik, r = cik_of(issuers, e.key), resolutions.get(e.key)
+        if cik is None or r is None or not r.sec_id or is_placeholder(r.sec_id):
+            continue
+        held[placeholder_id(cik, share_class_from_name(e.name))].add(r.sec_id)
+    return {p: next(iter(f)) for p, f in held.items() if len(f) == 1 and p not in kept}
+
+
 def _contract(ctx: _RunContext, read: Tables, verdicts: Verdicts, payouts: _Payouts, successor_ids: set[str],
               overrides: Overrides, id_baseline: Sequence[Mapping[str, str]],
-              renames: Mapping[str, str] = {}) -> dict[str, list[dict]]:
+              renames: Mapping[str, str] = {}, rows_decided: Collection[str] = ()) -> dict[str, list[dict]]:
     """10g. The contract (contract.py), written under contract/ beside today's
     tables (decision 6): security_history with each interval's issuer in force
     (`_issuers_in_force`), leaving out the merger acquirers the run adds;
     delistings, one row per ended security; the seed echo; the price requests;
     and the placeholders of `id_baseline` (a securities.csv) that now hold a FIGI
     (`renames`: stage 4b's folds, by name, whatever other FIGI lines the issuer has)."""
-    issuers = _issuers_in_force(ctx, read.observation_map)
+    issuers = _issuers_in_force(ctx, read.observation_map, rows_decided)
     endings = last_endings(read.delistings)
     inputs = merger_inputs(list(endings.values()), payouts.llm_terms, payouts.raw, overrides.merger_terms,
                            payouts.acquirer_ids, payouts.price_tickers)
@@ -2377,7 +2449,8 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
     # a folded placeholder's review items follow it to its FIGI line, where it holds a FIGI after all
     review = [replace(r, sec_id=lines.renames.get(r.sec_id, r.sec_id)) for r in review + lines.review
               if not (r.flag == "no_figi" and r.sec_id in lines.renames)]
-    other_ciks = _other_issuers(ctx, eras, resolutions, answers.issuers, securities, review)        # 4c
+    rows_decided = {k for k, v in answers.inferred.items() if v.source == TickerResolver.TICKER_ROWS}
+    other_ciks = _other_issuers(ctx, eras, resolutions, answers.issuers, securities, review, rows_decided)  # 4c
     search = _find_delistings(ctx, securities, sec_cusips, ftd, answers, set(lines.successors),
                               other_ciks)                                                           # 5
     delistings = search.delistings
@@ -2454,7 +2527,8 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
     # an acquirer the run added that R1 made a merger row's successor is in the contract's history (Sinclair Inc)
     successor_ids = set(successors.added) | set(r1.added) | {sid for sid, _ in r1.links.values()}
     tables.update(_contract(ctx, _as_read(tables), verdicts, payouts, successor_ids, overrides,
-                            id_baseline, lines.renames))                                           # 10g
+                            id_baseline, {**_era_renames(eras, resolutions, answers.issuers), **lines.renames},
+                            rows_decided))                                                          # 10g
     card = _scorecard(ctx, _as_read(tables), scorecard, limit)                                     # 10h
 
     # 11. write -- every table formatted and written to its temp file first, so

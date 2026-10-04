@@ -8,6 +8,7 @@ the same FIGI (a reverse split's new CUSIP, a gap no FTD row bridged).
 """
 from __future__ import annotations
 
+import re
 from bisect import bisect_left, bisect_right
 from collections import Counter, defaultdict
 from collections.abc import Callable, Collection, Mapping, Sequence
@@ -15,8 +16,8 @@ from dataclasses import dataclass, field, replace
 from datetime import date, timedelta
 
 from .figi_resolution import (
-    FigiCandidate, accept, bloomberg_ticker, filter_query, is_placeholder, placeholder_id, security_kind,
-    share_class_from_name, us_candidates,
+    FigiCandidate, accept, bloomberg_ticker, class_letter, filter_query, is_placeholder, placeholder_id,
+    security_kind, share_class_from_name, us_candidates,
 )
 from .ftd import FTD_START, FtdIndex, FtdRow, is_deleted_symbol, settled_last
 from .trading_calendar import add_trading_days
@@ -426,9 +427,33 @@ def _link_text(h: Handoff) -> str:
     return f"{h.era_key}'s CUSIP {h.cusip} ended as {h.to_key}'s {h.new_cusip} began on {h.day}"
 
 
+_LINE_CLASS = re.compile(r"(?:-\s*|\bCL(?:ASS)?\s*-?\s*)([A-Z])\s*$")
+
+
+def line_class_letter(name: str) -> str | None:
+    """The class letter an OpenFIGI (Bloomberg) security name ends with: "MSG NETWORKS INC- A", "STARZ - A",
+    "GRAHAM HOLDINGS CO-CLASS B" (None: none)."""
+    m = _LINE_CLASS.search((name or "").upper().strip())
+    return m.group(1) if m else None
+
+
+def one_class_issuers(eras: Sequence[TickerEra], issuers: Mapping[str, Issuer]) -> set[int]:
+    """The issuer CIKs whose eras in the run name at most one class letter (`share_class_from_name`'s CLASS X or
+    SERIES X): for them a plain-named era and a lettered one are one share class."""
+    letters: dict[int, set[str]] = defaultdict(set)
+    for e in eras:
+        cik = cik_of(issuers, e.key)
+        if cik is None:
+            continue
+        letter = class_letter(share_class_from_name(e.name))
+        letters[cik] |= {letter} if letter else set()
+    return {cik for cik, found in letters.items() if len(found) <= 1}
+
+
 def _handoff_joins(eras: Sequence[TickerEra], issuers: Mapping[str, Issuer], handoffs: Sequence[Handoff],
                    unpicked: Collection[str], confirmed: Mapping[str, str],
-                   picked: Mapping[str, str] | None = None) -> dict[str, tuple[str, str, Handoff]]:
+                   picked: Mapping[str, str] | None = None,
+                   line_names: Mapping[str, str] | None = None) -> dict[str, tuple[str, str, Handoff]]:
     """The composite each era of `unpicked` (no FIGI pick, a known issuer) takes
     through its CUSIP links (`handoffs`, `cusip_handoffs`'): era key -> (composite,
     the confirmed era it is taken from, the link that reached it).
@@ -441,14 +466,37 @@ def _handoff_joins(eras: Sequence[TickerEra], issuers: Mapping[str, Issuer], han
     or name tier picked on its own observed name (`picked`: era key ->
     composite, the picks guard (c) cannot withdraw): one CUSIP under two
     tickers of one issuer is one line, so SPW (2008-2015) joins the composite
-    SPXC's ticker gives, with OpenFIGI knowing that CUSIP on no US venue."""
+    SPXC's ticker gives, with OpenFIGI knowing that CUSIP on no US venue.
+
+    A CUSIP switch also links a lettered era to a plain-named one of its issuer
+    (sub-plan 5h) when OpenFIGI names the plain era's confirmed line with the
+    same letter (`line_names`: era key -> its line's OpenFIGI name; Bloomberg's
+    "MSG NETWORKS INC- A", "STARZ - A") and the issuer's eras name no other
+    letter (`one_class_issuers`): the plain name is that class under a name that
+    does not say so (The Madison Square Garden Company's class A MSG, renamed MSG
+    Networks; Liberty Media's class A LMCA, renamed Starz). Not a line OpenFIGI
+    names with no letter: Hubbell's class B was reclassified into its plain
+    common in 2015 (R1, a continuation). Not a shared CUSIP: a tracking stock's
+    series share a letter (Liberty Interactive's LINTA, LVNTA and QVCA, all series
+    A). An issuer whose eras name two letters keeps them apart (Alphabet's GOOGL
+    and GOOG, Discovery's A and C, Brown-Forman's A and B)."""
     by_key = {e.key: e for e in eras}
+    one_class = one_class_issuers(eras, issuers)
 
     def group(key: str) -> tuple[int | None, str]:
         return cik_of(issuers, key), share_class_from_name(by_key[key].name)
 
-    links = sorted((h for h in handoffs if h.era_key in by_key and h.to_key in by_key
-                    and group(h.era_key)[0] is not None and group(h.era_key) == group(h.to_key)),
+    names = line_names or {}
+
+    def linked(h: Handoff) -> bool:
+        a, b = group(h.era_key), group(h.to_key)
+        if a[0] is None or a == b:
+            return a[0] is not None
+        letter = class_letter(a[1])
+        return (h.kind == "cusip_handoff" and a[0] == b[0] and a[0] in one_class and letter is not None
+                and class_letter(b[1]) is None and line_class_letter(names.get(h.to_key, "")) == letter)
+
+    links = sorted((h for h in handoffs if h.era_key in by_key and h.to_key in by_key and linked(h)),
                    key=lambda h: (h.era_key, h.kind != "shared_cusip", h.to_key))
     chain = {k: k for k in unpicked}
 
@@ -482,9 +530,16 @@ def _handoff_joins(eras: Sequence[TickerEra], issuers: Mapping[str, Issuer], han
 class FigiResolver:
     MAX_CUSIPS = 3
 
-    def __init__(self, figi, log: Callable[[str], None] | None = None) -> None:
+    def __init__(self, figi, log: Callable[[str], None] | None = None,
+                 cusip_span: Callable[[str], tuple[str, str] | None] | None = None,
+                 foreign: Collection[str] = ()) -> None:
+        """`cusip_span`: a CUSIP's first and last trading fails row (ISO days; None when it has none), for
+        `resolve_many`'s backfill of the `foreign` eras (`foreign_ticker_eras`): the dates a confirmed era's line
+        traded over."""
         self.figi = figi
         self.log = log or (lambda msg: None)
+        self.cusip_span = cusip_span
+        self.foreign = frozenset(foreign)
 
     def resolve_many(self, eras: Sequence[TickerEra], *, issuers: Mapping[str, Issuer],
                      cusips: Mapping[str, list[str]], handoffs: Sequence[Handoff] = (),
@@ -538,27 +593,37 @@ class FigiResolver:
         found_of: dict[str, list[list[FigiCandidate]]] = {}
         by_cusip_of: dict[str, list[FigiCandidate | None]] = {}
         confirmed = {k: r.sec_id for k, r in out.items()}      # era -> composite of its pin or CUSIP
+        confirmed_by: dict[str, str] = {}                       # era -> the CUSIP that confirmed it
         for era in eras:
             if era.key in out:
                 continue
-            _, idx, _ = plan[era.key]
+            tried, idx, _ = plan[era.key]
             found_of[era.key] = [us_candidates(answers[i].get("data") or []) for i in idx]
             by_cusip_of[era.key] = [accept(f, ticker=era.ticker, names=era.names, via_cusip=True)
                                     for f in found_of[era.key]]
-            c = next((got for got in by_cusip_of[era.key] if got), None)
+            c = next(((got, cusip) for got, cusip in zip(by_cusip_of[era.key], tried) if got), None)
             if c:
-                confirmed[era.key] = c.composite
+                confirmed[era.key], confirmed_by[era.key] = c[0].composite, c[1]
 
         def group(era: TickerEra) -> tuple[int | None, str]:
             return cik_of(issuers, era.key), share_class_from_name(era.name)
 
         def backfill_line(era: TickerEra) -> str | None:
             """The one composite an era of the era's issuer and class is confirmed
-            on over its dates, if there is exactly one."""
+            on over its dates, if there is exactly one. For an era whose ticker's
+            rows are another security's (`foreign`), with no era confirmed over
+            them, the one composite whose confirming CUSIP traded over them
+            (`cusip_span`, sub-plan 5h: United Auto Group's 2008-09 era under its
+            stale ticker UAG, on Penske Automotive's line, observed only from 2014,
+            whose CUSIP 70959W103 traded as PAG since 2007)."""
             if era.key not in issuers:
                 return None
-            lines = {confirmed[o.key] for o in eras if o.key in confirmed and o.key != era.key
-                     and group(o) == group(era) and o.first <= era.last and era.first <= o.last}
+            others = [o for o in eras if o.key in confirmed and o.key != era.key and group(o) == group(era)]
+            lines = {confirmed[o.key] for o in others if o.first <= era.last and era.first <= o.last}
+            if not lines and self.cusip_span is not None and era.key in self.foreign:
+                lines = {confirmed[o.key] for o in others if o.key in confirmed_by
+                         and (span := self.cusip_span(confirmed_by[o.key])) is not None
+                         and span[0] <= era.last and era.first <= span[1]}
             return next(iter(lines)) if len(lines) == 1 else None
 
         def named(era: TickerEra, cands: list[FigiCandidate]) -> tuple[FigiCandidate | None, bool]:
@@ -602,8 +667,10 @@ class FigiResolver:
         unpicked = [e.key for e in eras if e.key not in out and e.key not in picks and e.key in issuers]
         by_key = {e.key: e for e in eras}
         strong = {k: p[1] for k, p in picks.items() if p[0] in ("ticker", "name") and not p[3]}
+        line_names = {k: c.name for k in confirmed_by
+                      if (c := next((got for got in by_cusip_of[k] if got), None)) is not None}
         for key, (composite, anchor, h) in _handoff_joins(eras, issuers, handoffs, unpicked, confirmed,
-                                                          strong).items():
+                                                          strong, line_names).items():
             if _contradicted(by_key[key], composite, eras, issuers, confirmed):
                 continue
             cand = picks[anchor][2] if anchor in picks else None
@@ -859,6 +926,24 @@ def unconfirmed_eras(eras: Sequence[TickerEra], ftd: FtdIndex) -> set[str]:
     Delphi traded as DLPH)."""
     return {e.key for e in eras if date.fromisoformat(e.last) >= FTD_START and not ftd.by_symbol(e.ticker,
                                                                                                *_confirm_window(e))}
+
+
+def foreign_ticker_eras(eras: Sequence[TickerEra], ftd: FtdIndex, issuers: Mapping[str, Issuer]) -> set[str]:
+    """The keys of the eras of a known issuer (`issuers`) with fails rows under their ticker within
+    `TICKER_CONFIRM_DAYS` of their span, none of which can name the era's issuer (`names.description_matches`
+    against the era's observed names and its issuer's EDGAR names): another security's rows (sub-plan 5h, UAG in
+    2008-2009: UBS's E-TRACS notes under UAG while United Auto Group traded as PAG). Like a `guarded_eras` era,
+    such an era is placed on the line its issuer and class traded on then, when there is exactly one
+    (`FigiResolver.resolve_many`'s `unconfirmed`); else it keeps the ticker and name tiers."""
+    out: set[str] = set()
+    for e in eras:
+        if e.key not in issuers or date.fromisoformat(e.last) < FTD_START:
+            continue
+        rows = ftd.by_symbol(e.ticker, *_confirm_window(e))
+        known = [*e.names, *issuers[e.key].names]
+        if rows and known and not any(description_matches(r.description, known) for r in rows):
+            out.add(e.key)
+    return out
 
 
 def guarded_eras(eras: Sequence[TickerEra], ftd: FtdIndex) -> set[str]:

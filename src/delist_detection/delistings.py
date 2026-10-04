@@ -21,6 +21,7 @@ from .form25 import (
     list_form25, match_securities, notice_last_trade, other_class, parse_form25, tied_securities,
 )
 from .last_trade import CLOSING_DAY, LastTrade, closing_day, decide_last_trade, eightk_last_trade, reading_rank
+from .lifecycle import CONTINUED_FILINGS
 from .listing_status import exchanges_around, issuer_exchange, withdrawal_kind
 from .midas import MIDAS_START
 from .nasdaq_halts import last_trade_from_halt
@@ -149,6 +150,9 @@ class SecurityContext:
     # before, so a read by ticker (MIDAS, a Nasdaq halt) from that day on is the other security's (5d rule 3:
     # CCEP under CCE 2016, Johnson Controls plc under JCI 2016). Unknown (the default): no bound.
     ticker_taken: Callable[[str, str, str], str | None] = lambda ticker, lo, hi: None
+    # Whether the security has a CUSIP of its own (fails rows that could show it stop); None: unknown. A security
+    # with none gets no continued-filings ending dated by its last sighting alone (sub-plan 5h, `_fallback`).
+    has_cusips: bool | None = None
 
 
 @dataclass
@@ -785,6 +789,12 @@ class DelistingFinder:
         if rec.bucket is CrspBucket.UNKNOWN and not evidence.get("deregistered"):
             return None
         ended_by, extra_flags = self._fallback_date(ctx, evidence)
+        if ctx.has_cusips is False and "delist_date_approx" in extra_flags \
+                and (rec.reason or "").startswith(CONTINUED_FILINGS):
+            # 5h: the continued-filings guess dated by the last sighting alone, for a security with no CUSIP whose
+            # fails rows could show it stop: nothing says it ended there (WW 2013, a later name a snapshot
+            # carried back; the line traded on to its 2025 bankruptcy). No ending; ended_without_delisting.
+            return None
         lt = self._last_trade(cik, filings, None, ticker, date.fromisoformat(ended_by), ctx)
         if lt.day is None and rec.bucket is CrspBucket.MERGER:
             # Rule 4 (5d): a merger with no Form 25 ends on the closing day its completion 8-K (the latest with

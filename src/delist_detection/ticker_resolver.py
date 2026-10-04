@@ -1321,6 +1321,78 @@ class TickerResolver:
             return former
         return None
 
+    # --- Stage 2b: a name-search answer checked against the era's span and its ticker's rows (sub-plan 5h) -----
+
+    NAME_IN_FORCE = "name_in_force"     # source: the one other holder of the name that carried it over the era
+    TICKER_ROWS = "ticker_rows"         # source: the one other holder of the name its ticker's fails rows describe
+
+    def name_period_checks(self, eras: list[TickerEra], ftd: FtdIndex, last_seen: dict[str, str],
+                           answers: dict[str, TickerResolution]) -> dict[str, InferredIssuer]:
+        """A name-search answer (`answers[k].source` "name_search") replaced by another CIK that SEC's name index
+        lists under exactly the era's observed name, never saved (the memo keeps the first pass's answer):
+
+        - `name_in_force`: the answer's CIK carried no name agreeing with the observed one from the era's first
+          sighting to its last (`last_seen`), and exactly one other such CIK, filing by the first sighting, did
+          (ABBI 2008-2009: APP Pharmaceuticals dropped "Abraxis BioScience" in 2007; the new Abraxis carried it);
+        - `ticker_rows`: else, the era's own fails rows (`security_master.era_rows`, at least `ERA_MIN_ROWS`)
+          are not the answer's (guard G's `_fits_rows`) and exactly one other such CIK's they are (ERA 2013: the
+          rows under ERA say ERA GROUP INC, the company later renamed Bristow Group Inc; the old Bristow Group
+          traded as BRS).
+
+        A pinned era, one with no name or no name index, keeps its answer. Answers keyed by era."""
+        index = self._index()
+        out: dict[str, InferredIssuer] = {}
+        if index is None:
+            return out
+        for e in sorted(eras, key=lambda e: e.key):
+            res = answers.get(e.key)
+            if res is None or res.cik is None or res.source != "name_search" or e.cik_pin is not None \
+                    or e.sec_id_pin or not e.name:
+                continue
+            holders = sorted({h.cik for h in index.split_search(e.name)[0]} - {res.cik} - self.EXCHANGE_CIKS)
+            if not holders:
+                continue
+            self._transient = False
+            got = self._name_in_force(e, res.cik, holders, last_seen[e.key])
+            if got is None:
+                got = self._ticker_rows_tie(e, res.cik, holders, era_rows(e, ftd, last_seen[e.key]))
+            if got is not None:
+                out[e.key] = got
+            self._mark_inferred(e, last_seen[e.key])
+        return out
+
+    def _carried_over(self, cik: int, name: str, lo: date, hi: date) -> bool:
+        """Whether the CIK carried a name agreeing with `name` at some point in [lo, hi] (its submissions JSON)."""
+        try:
+            sub = self._submissions(cik, hi.isoformat())
+        except FATAL:
+            raise
+        except Exception as e:
+            self._note_transient(e)
+            return False
+        return isinstance(sub, dict) and any(names_agree(n, name) for n in names_between(sub, lo, hi))
+
+    def _name_in_force(self, era: TickerEra, first: int, holders: list[int], last: str) -> InferredIssuer | None:
+        lo, hi = parse_day(era.first), parse_day(last)
+        if lo is None or hi is None or self._carried_over(first, era.name, lo, hi):
+            return None
+        found = [c for c in holders if self._existed_by(c, era.first) and self._carried_over(c, era.name, lo, hi)]
+        if len(found) != 1:
+            return None
+        return InferredIssuer(found[0], self.NAME_IN_FORCE,
+                              f"{first} did not carry the name from {era.first} to {last}; {found[0]} did")
+
+    def _ticker_rows_tie(self, era: TickerEra, first: int, holders: list[int],
+                         rows: list[FtdRow]) -> InferredIssuer | None:
+        if len(rows) < self.ERA_MIN_ROWS or self._fits_rows(first, rows):
+            return None
+        found = [c for c in holders if self._existed_by(c, era.first) and self._fits_rows(c, rows)]
+        if len(found) != 1:
+            return None
+        return InferredIssuer(found[0], self.TICKER_ROWS,
+                              f"its fails rows under {era.ticker} ({rows[0].description}) are {found[0]}'s, "
+                              f"not {first}'s")
+
     def resolve_many(
         self, items: Iterable[tuple[str, str | None]]
     ) -> dict[str, TickerResolution]:

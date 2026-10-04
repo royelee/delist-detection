@@ -14,15 +14,15 @@ import pytest
 from tests import issuer_role_cases as ic
 
 # The rules of sub-plan 5c built so far, in task order; each task adds its own
-RULES_DONE: set[str] = {"stage5", "r1", "links"}
-ORDER = ("stage5", "r1", "links")
+RULES_DONE: set[str] = {"stage5", "r1", "links", "5h"}
+ORDER = ("stage5", "r1", "links", "5h")   # 5h: sub-plan 5h's no-CUSIP rule (no continued-filings guess at a last sighting)
 
 # sec_id -> (its outcome before 5c, [(rule, its outcome once the rule is built), ...] in ORDER)
 MOVES = {
     'CIK1126294-COMMON': ([('2010-12-03', 'merger', 231, '', '')], [('stage5', [('2010-12-03', 'exchange_transfer', 304, '', '')])]),   # RRI 2010
     'CIK1363851-COMMON': ([('2012-07-24', 'merger', 231, '', '')], [('stage5', [('2012-07-24', 'exchange_transfer', 304, 'BBG000KBQZ88', 'same_issuer')])]),   # SXCI 2012
     'CIK1308161-COMMON': ([('2009-01-08', 'exchange_transfer', 304, 'CIK1308161-COMMON', ''), ('2013-07-01', 'merger', 231, '', '')], [('stage5', [('2009-01-08', 'exchange_transfer', 304, 'CIK1308161-COMMON', ''), ('2013-07-01', 'exchange_transfer', 304, '', '')])]),   # NWS-A 2013
-    'CIK1308161-CLASS-A': ([('2013-06-28', 'merger', 231, '', '')], [('stage5', [('2013-06-28', 'exchange_transfer', 304, '', '')])]),   # NCRA 2013
+    'CIK1308161-CLASS-A': ([('2013-06-28', 'merger', 231, '', '')], [('stage5', [('2013-06-28', 'exchange_transfer', 304, '', '')]), ('5h', [])]),   # NCRA 2013: a CUSIP-less duplicate, no ending (5h)
     'CIK38079-COMMON': ([('2015-01-25', 'merger', 200, '', '')], [('stage5', [('2015-01-25', 'compliance_failure', 570, '', '')])]),   # FST 2014
     'BBG000BQHGR6': ([('2026-09-28', 'unknown', None, '', '')], [('stage5', [('2026-09-28', 'exchange_transfer', 304, '', '')])]),   # OKE 2026
     'BBG000BHBK84': ([('2017-09-11', 'merger', 231, '', '')], [('r1', [('2017-09-11', 'exchange_transfer', 304, 'BBG00BN961G4', 'new_issuer')])]),   # DOW 2017

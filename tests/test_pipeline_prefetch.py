@@ -431,7 +431,8 @@ AET_FILINGS = [("0000876661-18-001269", "25-NSE", "2018-11-29", "", "", "primary
                ("0001047469-18-000999", "DEFM14A", "2018-02-08", "", "", "defm.htm")]
 OLD_FILINGS = [("0000876661-19-000100", "25-NSE", "2019-02-01", "", "", "primary_doc.xml")]
 # XFR files no Form 25 and keeps filing reports long after its last sighting: an
-# exchange transfer to an unknown successor, which stage 9 searches for.
+# exchange transfer to an unknown successor, which stage 9 searches for. Its CUSIP is
+# observed: a security with none gets no such guess at its last sighting (sub-plan 5h).
 XFR_FILINGS = [("0000003333-19-000010", "10-Q", "2019-08-09", "2019-06-30", "", "q.htm"),
                ("0000003333-20-000004", "10-K", "2020-03-02", "2019-12-31", "", "k.htm")]
 STALE_HIT_FILINGS = [("0000005555-20-000002", "10-K", "2020-03-02", "2019-12-31", "", "k.htm"),
@@ -565,8 +566,8 @@ def _offline_run(root, out, workers, *, live_cik=None):
            Observation("AET", "2018-06-29", "AETNA INC", cik=1122304),
            Observation("OLD", "2018-06-29", "OLD CO INC", cik=2222),
            Observation("OLD", "2018-12-31", "OLD CO INC", cik=2222),
-           Observation("XFR", "2018-06-29", "XFR CORP", cik=3333),
-           Observation("XFR", "2018-12-31", "XFR CORP", cik=3333),
+           Observation("XFR", "2018-06-29", "XFR CORP", cusip="98400X101", cik=3333),
+           Observation("XFR", "2018-12-31", "XFR CORP", cusip="98400X101", cik=3333),
            Observation("LIVE", "2025-06-30", "LIVE CO", cik=live_cik)]
     index = ObservationIndex(obs)
     resolver = TickerResolver(edgar_client, cache_path=root / "ticker_resolution.json", observed_names=index.name_on,
