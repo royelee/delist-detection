@@ -101,6 +101,26 @@ def test_delisting_rows_carry_the_payout_rule_columns_and_the_inputs_of_a_failed
         "cash_plus_stock", "failed", "BBG0QSR", "2015-03-03")
 
 
+def test_delisting_rows_take_each_endings_distress_terms():
+    """Sub-plan 5g: stage 9e's OTC symbol and plan ratio, keyed by the ending's DelistingKey."""
+    from delist_detection.distress import DistressTerms
+    from delist_detection.store import DelistingKey
+    t = tables([sec("H"), sec("S")], [iv("H", "HTZ", "2016-07-05", "2020-10-29"), iv("S", "SDRL", "2010-04-16",
+                                                                                   "2018-07-02")],
+               [ending("H", "2020-11-09", "liquidation", ltd="2020-10-29", method="shumway_nyse_amex",
+                       crsp_code="470", ticker="HTZ"),
+                ending("S", "2018-07-13", "liquidation", ltd="2018-07-02", method="shumway_nyse_amex",
+                       crsp_code="470", ticker="SDRL")],
+               [obs("HTZ", "2019-06-28", "H"), obs("SDRL", "2016-06-30", "S")])
+    terms = {DelistingKey("H", "2020-11-09"): DistressTerms(otc_symbol="HTZGQ"),
+             DelistingKey("S", "2018-07-13"): DistressTerms(plan_ratio="0.0037345", plan_ticker="SDRL",
+                                                            plan_source="form25_notice")}
+    rows = {r["sec_id"]: r for r in delisting_rows(t, decide(t, {}), distress=terms)}
+    assert (rows["H"]["value_rule"], rows["H"]["price_ticker"]) == ("otc_print", "HTZGQ")
+    assert (rows["S"]["value_rule"], rows["S"]["stock_ratio"], rows["S"]["price_ticker"]) == \
+        ("stock", "0.0037345", "SDRL")
+
+
 def test_id_changes_name_the_figi_a_line_follow_folded_a_placeholder_into():
     """Sub-plan 5a (FTR): CIK 20520 holds two FIGI lines, Frontier's and the post-bankruptcy FYBR, so the
     issuer-and-class rule names none; the line follow's own rename names the FIGI."""

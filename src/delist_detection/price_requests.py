@@ -71,8 +71,9 @@ def request_rows(contract_rows: Sequence[Mapping[str, Any]], endings: Mapping[st
                  legs: Mapping[DelistingKey, tuple[str, str]]) -> list[dict[str, str]]:
     """price_requests.csv: per contract ending (`endings`: each sec_id's last real
     delistings.csv row, contract.last_endings) with a last trade date and no
-    continuation, its last close, the first OTC print of a drop or distress ending, and the
-    received close of its stock leg."""
+    continuation, its last close, the first OTC print of a drop or distress ending (under
+    its published OTC symbol), and the received close of its stock leg (`legs`: a merger's,
+    or a bankruptcy plan's new line)."""
     out: list[dict[str, str]] = []
     for c in contract_rows:
         ltd = c["last_trade_date"]
@@ -81,9 +82,11 @@ def request_rows(contract_rows: Sequence[Mapping[str, Any]], endings: Mapping[st
         r = endings[c["sec_id"]]
         out.append({"sec_id": c["sec_id"], "last_trade_date": ltd, "kind": LAST_CLOSE,
                     "lookup_sec_id": c["sec_id"], "lookup_ticker": r["ticker"], "date": ltd})
-        if c["exit_kind"] in OTC_EXIT_KINDS:
+        if c["exit_kind"] in OTC_EXIT_KINDS and c.get("value_rule") != "stock":
+            # under the OTC symbol the contract publishes (sub-plan 5g), else the exchange ticker as a hint; a
+            # bankruptcy plan's new shares (ruling R6) are no OTC print: their stock leg asks a received close
             out.append({"sec_id": c["sec_id"], "last_trade_date": ltd, "kind": OTC_PRINT,
-                        "lookup_sec_id": c["sec_id"], "lookup_ticker": r["ticker"],
+                        "lookup_sec_id": c["sec_id"], "lookup_ticker": c.get("price_ticker") or r["ticker"],
                         "date": next_trading_day(date.fromisoformat(ltd)).isoformat()})
         leg = legs.get(DelistingKey(r["sec_id"], r["delist_date"]))
         if leg is not None:

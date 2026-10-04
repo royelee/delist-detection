@@ -27,8 +27,14 @@ from .acquirers import acquirer_cik, find_acquirer
 from .added_securities import AddedAcquirer, AddedLineSuccessor, AddedSecurity, AddedSuccessor
 from .crsp_codes import CrspBucket
 from .degraded import DegradedWatch, degraded_item, flag_degraded, report_halt_feed_failures
-from .delistings import LATE_ROW_DAYS, SUCCESSOR_UNKNOWN, Delisting, DelistingFinder, SecurityContext
-from .evidence import edgar_names
+from .delistings import (
+    ISSUER_FORM25_FORMS, LATE_ROW_DAYS, SUCCESSOR_UNKNOWN, Delisting, DelistingFinder, SecurityContext,
+)
+from .distress import (
+    BANKRUPTCY_WORDS, OTC_SYMBOL_DAYS, DistressTerms, otc_symbol_from_fails, otc_symbol_from_text, plan_ratio,
+    price_only, substitutes_new_shares,
+)
+from .evidence import edgar_names, item_sections
 from .fatal import FATAL
 from .handoffs import (
     TAKEOVER_DAYS,
@@ -1935,6 +1941,104 @@ def _date_from_notices(ctx: _RunContext, added: list[Delisting], review: list[Re
     return redated
 
 
+NOTICE_BEFORE_DAYS, NOTICE_AFTER_DAYS = 30, 60     # 9e: the 3.01 8-Ks read around a drop's last trade...
+REASON_AFTER_DAYS = 30                             # ...those that state its removal's reason, when no Form 25 does
+PLAN_BEFORE_DAYS, PLAN_AFTER_DAYS = 5, 10          # a bankruptcy plan's 8-Ks (item 1.03 or 3.03) around its Form 25
+PLAN_ITEMS = frozenset({"1.03", "3.03"})
+PRICE_CODE = 552                                   # CRSP: price fell below the acceptable level (drop reason price)
+DISTRESS_BUCKETS = frozenset({CrspBucket.LIQUIDATION, CrspBucket.COMPLIANCE_FAILURE, CrspBucket.UNKNOWN})
+
+
+def _eightks(edgar, cik: int, lo: date, hi: date, items: Collection[str]) -> list:
+    """The issuer's 8-Ks carrying one of `items`, filed in [lo, hi], earliest first."""
+    return [f for f in sorted(edgar.recent_filings(cik), key=lambda f: (f.filing_date, f.accession))
+            if f.form.startswith("8-K") and set(items) & f.item_set and lo.isoformat() <= f.filing_date <= hi.isoformat()]
+
+
+def _distress(ctx: _RunContext, delistings: list[Delisting], sec_cusips: Mapping[str, list[str]], ftd: FtdIndex,
+              review: list[ReviewItem]) -> dict[DelistingKey, DistressTerms]:
+    """9e. Sub-plan 5g: what a drop or a bankruptcy ending needs beyond its classification (`distress.py`), for each
+    delisting in the liquidation, compliance-failure or unknown bucket that names no successor; its last trade day
+    (else its delisting date) anchors every read.
+
+    1. A bankruptcy plan exchange (ruling R6): the matched Form 25's notice says the class came to evidence new
+       shares, the ending is a bankruptcy (code 470, or the notice says so: an unknown ending then becomes 470), and
+       the old line never traded off the exchange (`otc_symbol_from_fails` reads nothing). Its ratio, from the notice
+       or the plan's 8-Ks (item 1.03 or 3.03, PLAN_BEFORE_DAYS/PLAN_AFTER_DAYS around the Form 25), makes the stock
+       rule on the new line under the same ticker.
+    2. The drop reason: a compliance failure (570, 580) whose removal the exchange stated for a price deficiency
+       only (`price_only` on the exchange's Form 25 notice, else, without a Form 25, on the 3.01 items in
+       [last trade - NOTICE_BEFORE_DAYS, last trade + REASON_AFTER_DAYS]) is CRSP 552. An issuer's own Form 25 (a
+       voluntary removal) states no exchange reason: unchanged.
+    3. The OTC symbol of a liquidation or a compliance failure: the security's own CUSIPs' fails rows after the
+       last trade (stage 4 loaded them to the run date), else the first 3.01 8-K in [last trade -
+       NOTICE_BEFORE_DAYS, last trade + NOTICE_AFTER_DAYS] that names one, else "" (published blank).
+
+    A read that rested on a failed request or a stale copy is reported `resolution_degraded` (row and review item);
+    a refusal (`fatal.FATAL`) stops the run. Returns each delisting's terms, for the contract (stage 10g)."""
+    mark = ctx.meter.start()
+    edgar, out, counts = ctx.clients.edgar, {}, Counter()
+
+    def text(d: Delisting, f) -> str:
+        return edgar.fetch_filing_text(d.cik, f.accession, f.primary_doc) or ""
+
+    for d in delistings:
+        rec = d.record
+        if rec.bucket not in DISTRESS_BUCKETS or rec.successor_sec_id:
+            continue
+        last = d.last_trade.day or date.fromisoformat(d.delist_date)
+        rows = [r for c in sec_cusips.get(d.sec_id, ())
+                for r in ftd.by_cusip(c, last.isoformat(), (last + timedelta(days=OTC_SYMBOL_DAYS)).isoformat())]
+        fails_symbol = otc_symbol_from_fails(rows, d.ticker, last)
+        notice = d.form25.notice_text if d.form25 is not None else ""
+        terms, watch = DistressTerms(), DegradedWatch()
+        bankrupt_notice = bool(BANKRUPTCY_WORDS.search(notice))
+        if (fails_symbol is None and substitutes_new_shares(notice) and rec.bucket is not CrspBucket.COMPLIANCE_FAILURE
+                and (rec.crsp_code == 470 or bankrupt_notice)):
+            plan = plan_ratio(notice, [])
+            if plan is None:
+                filed = date.fromisoformat(d.form25.filing_date)
+                plan = plan_ratio(notice, [text(d, f) for f in _eightks(
+                    edgar, d.cik, filed - timedelta(days=PLAN_BEFORE_DAYS), filed + timedelta(days=PLAN_AFTER_DAYS),
+                    PLAN_ITEMS)])
+            if rec.bucket is CrspBucket.UNKNOWN and bankrupt_notice:
+                rec.crsp_code, rec.bucket, rec.confidence = 470, CrspBucket.LIQUIDATION, "medium"
+                rec.reason = (f"Bankruptcy plan exchange (Form 25 {d.form25.filing_date} notice: the class came to "
+                              f"evidence new shares)")
+                rec.evidence["flags"] = [f for f in d.flags if f != "no_evidence_default"]
+                counts["plan bankruptcy"] += 1
+            if plan is not None and rec.bucket is CrspBucket.LIQUIDATION:
+                terms = DistressTerms(plan_ratio=plan[0], plan_ticker=d.ticker, plan_source=plan[1])
+                counts["plan ratio"] += 1
+        if rec.bucket is CrspBucket.COMPLIANCE_FAILURE and rec.crsp_code in (570, 580):
+            if d.form25 is None:
+                stated = "\n".join(s for f in _eightks(edgar, d.cik, last - timedelta(days=NOTICE_BEFORE_DAYS),
+                                                       last + timedelta(days=REASON_AFTER_DAYS), ("3.01",))
+                                   for s in item_sections(text(d, f), "3.01"))
+            else:
+                stated = "" if d.form25.form in ISSUER_FORM25_FORMS else notice
+            if price_only(stated):
+                rec.crsp_code = PRICE_CODE
+                rec.reason += " (its stated reason: a price deficiency)"
+                counts["price"] += 1
+        if not terms.plan_ratio and rec.bucket is not CrspBucket.UNKNOWN:
+            symbol = fails_symbol
+            if symbol is None:
+                symbol = next((s for f in _eightks(edgar, d.cik, last - timedelta(days=NOTICE_BEFORE_DAYS),
+                                                   last + timedelta(days=NOTICE_AFTER_DAYS), ("3.01",))
+                               if (s := otc_symbol_from_text(text(d, f)))), "")
+                counts["otc symbol from a notice" if symbol else "otc symbol unknown"] += 1
+            else:
+                counts["otc symbol from fails"] += 1
+            terms = replace(terms, otc_symbol=symbol)
+        if watch.tripped():
+            watch.report_delisting(review, d, "the drop's or the bankruptcy's notices (stage 9e)")
+        out[d.key] = terms
+    ctx.log(f"distress endings: {dict(sorted(counts.items()))}")
+    ctx.meter.done("distress notices", mark)
+    return out
+
+
 def _delisting_rows(delistings: list[Delisting], closes: dict[DelistingKey, float], payouts: _Payouts,
                     overrides: Overrides) -> tuple[list[dict], list[dict]]:
     """10a. The delistings.csv rows, and the review rows of those delistings that
@@ -2389,20 +2493,24 @@ def _era_renames(eras: Sequence[TickerEra], resolutions: Mapping[str, EraResolut
 
 def _contract(ctx: _RunContext, read: Tables, verdicts: Verdicts, payouts: _Payouts, successor_ids: set[str],
               overrides: Overrides, id_baseline: Sequence[Mapping[str, str]],
-              renames: Mapping[str, str] = {}, rows_decided: Collection[str] = ()) -> dict[str, list[dict]]:
+              renames: Mapping[str, str] = {}, rows_decided: Collection[str] = (),
+              distress: Mapping[DelistingKey, DistressTerms] | None = None) -> dict[str, list[dict]]:
     """10g. The contract (contract.py), written under contract/ beside today's
     tables (decision 6): security_history with each interval's issuer in force
     (`_issuers_in_force`), leaving out the merger acquirers the run adds;
-    delistings, one row per ended security; the seed echo; the price requests;
-    and the placeholders of `id_baseline` (a securities.csv) that now hold a FIGI
-    (`renames`: stage 4b's folds, by name, whatever other FIGI lines the issuer has)."""
+    delistings, one row per ended security (a drop's OTC symbol and a bankruptcy
+    plan's ratio from stage 9e, `distress`); the seed echo; the price requests (a
+    plan's new line asks a received close); and the placeholders of `id_baseline`
+    (a securities.csv) that now hold a FIGI (`renames`: stage 4b's folds, by name,
+    whatever other FIGI lines the issuer has)."""
     issuers = _issuers_in_force(ctx, read.observation_map, rows_decided)
     endings = last_endings(read.delistings)
     inputs = merger_inputs(list(endings.values()), payouts.llm_terms, payouts.raw, overrides.merger_terms,
                            payouts.acquirer_ids, payouts.price_tickers)
-    ended = contract_delisting_rows(read, verdicts, inputs)
+    ended = contract_delisting_rows(read, verdicts, inputs, distress)
     legs = stock_legs(list(endings.values()), payouts.llm_terms, overrides.merger_terms, payouts.acquirer_ids,
                       payouts.price_tickers)
+    legs.update({k: (t.plan_ticker, "") for k, t in (distress or {}).items() if t.plan_ratio and k not in legs})
     requests = request_rows(ended, endings, legs)
     unrequested = sorted(set(overrides.price_answers) - {key_of(r) for r in requests})
     if unrequested:
@@ -2493,6 +2601,7 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
         overrides = _apply_price_answers(given, delistings)
         closes.update(_last_trade_closes(ctx, ends.delistings, {**securities, **ends.securities},
                                          {**sec_cusips, **ends.cusips}, ftd, ftd_lo, overrides))
+    distress = _distress(ctx, delistings, {**sec_cusips, **ends.cusips}, ftd, review)              # 9e
     _log_role_refusals(ctx, delistings)
     # The handoff stage creates continuation delistings (AON 2012) and sets successors: the clip and the ranges read
     # the starts and endings of the final delistings. (The first pass above only decides which stage-9 delistings
@@ -2528,7 +2637,7 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
     successor_ids = set(successors.added) | set(r1.added) | {sid for sid, _ in r1.links.values()}
     tables.update(_contract(ctx, _as_read(tables), verdicts, payouts, successor_ids, overrides,
                             id_baseline, {**_era_renames(eras, resolutions, answers.issuers), **lines.renames},
-                            rows_decided))                                                          # 10g
+                            rows_decided, distress=distress))                                       # 10g
     card = _scorecard(ctx, _as_read(tables), scorecard, limit)                                     # 10h
 
     # 11. write -- every table formatted and written to its temp file first, so

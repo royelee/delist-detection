@@ -129,3 +129,44 @@ def test_expiration_and_unknown_buckets():
     assert value_fields(ending("A", "2014-12-20", "expiration", method="dropped_expiration"), LTD)["value_rule"] == "expiration"
     assert value_fields(ending("A", "2014-12-20", "unknown", method="unknown"), LTD)["value_rule"] == "unknown"
     assert {"cash", "unknown", "recovery"} <= VALUE_RULES
+
+
+# -- sub-plan 5g: the OTC symbol and a bankruptcy plan's stock rule (DistressTerms, stage 9e) -------------------
+
+from delist_detection.distress import DistressTerms  # noqa: E402
+
+
+def test_a_drop_is_priced_under_its_own_otc_symbol():
+    r = ending("A", "2020-11-09", "liquidation", method="shumway_nyse_amex", crsp_code="470", ticker="HTZ")
+    f = value_fields(r, "2020-10-29", distress=DistressTerms(otc_symbol="HTZGQ"))
+    assert (f["value_rule"], f["price_sec_id"], f["price_ticker"], f["price_date"]) == \
+        ("otc_print", "A", "HTZGQ", "2020-10-30")
+    assert f["value_formula"] == "otc_print(HTZGQ, from 2020-10-30) / last_close − 1"
+
+
+def test_an_unknown_otc_symbol_is_blank_not_the_exchange_symbol_left_behind():
+    r = ending("A", "2023-05-12", "liquidation", method="shumway_nasdaq", crsp_code="470", ticker="SIVB")
+    f = value_fields(r, "2023-03-09", distress=DistressTerms())
+    assert (f["value_rule"], f["price_sec_id"], f["price_ticker"]) == ("otc_print", "A", "")
+    assert f["value_formula"] == "otc_print(?, from 2023-03-10) / last_close − 1"
+
+
+def test_a_bankruptcy_plan_exchange_is_the_stock_rule_on_the_new_line():
+    r = ending("A", "2018-07-13", "liquidation", method="shumway_nyse_amex", crsp_code="470", ticker="SDRL")
+    f = value_fields(r, "2018-07-02", distress=DistressTerms(plan_ratio="0.0037345", plan_ticker="SDRL",
+                                                                   plan_source="form25_notice"))
+    assert (f["value_rule"], f["stock_ratio"], f["price_sec_id"], f["price_ticker"], f["price_date"]) == \
+        ("stock", "0.0037345", "", "SDRL", "2018-07-03")
+    assert (f["terms_source"], f["terms_gate"], f["cash_per_share"]) == ("form25_notice", "", None)
+    assert f["value_formula"] == "0.0037345 × price(SDRL, 2018-07-03) / last_close − 1"
+
+
+def test_a_callers_recovery_beats_the_plan():
+    r = ending("A", "2018-07-13", "liquidation", method="recovery_ratio", crsp_code="470", recovery_ratio="0.2")
+    assert value_fields(r, "2018-07-02", distress=DistressTerms(plan_ratio="0.0037345", plan_ticker="SDRL"))[
+        "value_rule"] == "recovery"
+
+
+def test_without_distress_terms_a_drop_keeps_its_exchange_symbol():
+    r = ending("A", "2014-12-20", "compliance_failure", method="shumway_nasdaq", crsp_code="570", ticker="ABCD")
+    assert value_fields(r, LTD)["price_ticker"] == "ABCD"

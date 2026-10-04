@@ -93,6 +93,18 @@ def test_a_repeated_request_with_another_price_is_refused_and_with_the_same_pric
         load_answers(_answers(tmp_path, row + "191.32", row + "190"))
 
 
+def test_the_otc_print_is_asked_under_the_published_otc_symbol_and_a_plan_asks_no_print():
+    endings = {k: ending(k, "2015-03-10", ltd="2015-03-06", ticker="T" + k) for k in "DUP"}
+    row = lambda k, rule, ticker: {"sec_id": k, "last_trade_date": "2015-03-06", "continuation": False,
+                                   "exit_kind": "dropped", "value_rule": rule, "price_ticker": ticker}
+    contract = [row("D", "otc_print", "TDQ"), row("U", "otc_print", ""), row("P", "stock", "TP")]
+    legs = {DelistingKey("P", "2015-03-10"): ("TP", "")}
+    got = request_rows(contract, endings, legs)
+    assert [(r["sec_id"], r["kind"], r["lookup_ticker"]) for r in got] == [
+        ("D", LAST_CLOSE, "TD"), ("D", "otc_print", "TDQ"), ("U", LAST_CLOSE, "TU"), ("U", "otc_print", "TU"),
+        ("P", LAST_CLOSE, "TP"), ("P", RECEIVED_CLOSE, "TP")]
+
+
 def test_an_answers_file_without_the_price_column_is_refused(tmp_path):
     with pytest.raises(OverrideFileError, match="price"):
         load_answers(_answers(tmp_path, "A,2018-11-28,last_close,A,AET,2018-11-28",

@@ -19,6 +19,7 @@ from collections import defaultdict
 from collections.abc import Collection, Mapping, Sequence
 from datetime import date, timedelta
 
+from .distress import DistressTerms
 from .exit_kind import ending_fields
 from .lifecycle import Tables
 from .payout_rule import MergerInputs, value_fields
@@ -38,16 +39,19 @@ def last_endings(delistings: Sequence[Mapping[str, str]]) -> dict[str, Mapping[s
 
 
 def delisting_rows(tables: Tables, verdicts: Verdicts,
-                   inputs: Mapping[DelistingKey, MergerInputs] | None = None) -> list[dict[str, object]]:
+                   inputs: Mapping[DelistingKey, MergerInputs] | None = None,
+                   distress: Mapping[DelistingKey, DistressTerms] | None = None) -> list[dict[str, object]]:
     """contract/delistings.csv: one row per ended security (`exit_kind.ending_fields`,
     `verdict.published_last_trade_date`, its ending's verdict, and the payout rule
-    `payout_rule.value_fields`; `inputs` are the mergers' pre-gate reads). A continuation
+    `payout_rule.value_fields`; `inputs` are the mergers' pre-gate reads, `distress` the drops'
+    and bankruptcies' OTC symbols and plan ratios, pipeline stage 9e). A continuation
     carries no terminal value."""
     rows: list[dict[str, object]] = []
     inputs = inputs or {}
     for sid, r in last_endings(tables.delistings).items():
         f = ending_fields(r)
         ltd = published_last_trade_date(r)
+        key = DelistingKey(sid, r["delist_date"])
         rows.append({
             "sec_id": sid, "last_trade_date": ltd, "exit_kind": f.exit_kind,
             "drop_reason": f.drop_reason, "continuation": f.continuation,
@@ -55,7 +59,9 @@ def delisting_rows(tables: Tables, verdicts: Verdicts,
             "ticker_successor_sec_id": r["ticker_successor_sec_id"], "dlret": f.dlret, "dlret_fill": f.dlret_fill,
             "terminal_value": "" if f.continuation else r["terminal_value"],
             "verdict": verdicts.endings[(sid, r["delist_date"])].word,
-            **value_fields(r, ltd, inputs.get(DelistingKey(sid, r["delist_date"]))),
+            # no distress map at all: a caller of this pure function, the exchange ticker as before
+            **value_fields(r, ltd, inputs.get(key),
+                           None if distress is None else distress.get(key, DistressTerms())),
         })
     return rows
 
