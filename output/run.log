@@ -215,80 +215,84 @@ FIGI handoff: WTW@2008-01-16 joins BBG000DY6735 with its issuer and class, held 
 2206 securities; FIGI sources {'cusip': 2061, 'placeholder': 95, 'ticker': 50}
 line follow: {'attach': 74, 'fold': 26, 'refused:bankruptcy': 6, 'refused:merged_out': 12, 'refused:name': 4, 'refused:no_filing': 2, 'refused:otc_move': 15, 'refused:other_registrant': 2, 'successor': 8}; 26 placeholders folded, 8 line successors
 line follow: 0 EDGAR requests, 0 SEC data-file downloads (all threads)
+other issuer in force: 2 securities (BBG000P4BQM9, BBG00B6WH9G3)
+other issuers in force: 0 EDGAR requests, 0 SEC data-file downloads (all threads)
+halts_on(2010-11-11): parse error: mismatched tag: line 7, column 9
 [50/2205] securities searched; 25 delistings so far
 [100/2205] securities searched; 48 delistings so far
 [150/2205] securities searched; 69 delistings so far
 [200/2205] securities searched; 103 delistings so far
 [250/2205] securities searched; 121 delistings so far
 [300/2205] securities searched; 146 delistings so far
-[350/2205] securities searched; 168 delistings so far
-[400/2205] securities searched; 188 delistings so far
-[450/2205] securities searched; 211 delistings so far
-[500/2205] securities searched; 235 delistings so far
-[550/2205] securities searched; 256 delistings so far
-[600/2205] securities searched; 281 delistings so far
-[650/2205] securities searched; 292 delistings so far
-[700/2205] securities searched; 314 delistings so far
-[750/2205] securities searched; 335 delistings so far
-[800/2205] securities searched; 360 delistings so far
-[850/2205] securities searched; 383 delistings so far
-[900/2205] securities searched; 404 delistings so far
-[950/2205] securities searched; 433 delistings so far
-[1000/2205] securities searched; 455 delistings so far
-[1050/2205] securities searched; 472 delistings so far
-[1100/2205] securities searched; 493 delistings so far
-[1150/2205] securities searched; 519 delistings so far
-[1200/2205] securities searched; 545 delistings so far
-[1250/2205] securities searched; 568 delistings so far
-[1300/2205] securities searched; 590 delistings so far
-[1350/2205] securities searched; 612 delistings so far
-[1400/2205] securities searched; 634 delistings so far
-[1450/2205] securities searched; 665 delistings so far
-[1500/2205] securities searched; 691 delistings so far
-[1550/2205] securities searched; 711 delistings so far
-[1600/2205] securities searched; 728 delistings so far
-[1650/2205] securities searched; 749 delistings so far
-[1700/2205] securities searched; 773 delistings so far
-[1750/2205] securities searched; 800 delistings so far
-[1800/2205] securities searched; 819 delistings so far
-[1850/2205] securities searched; 834 delistings so far
-[1900/2205] securities searched; 854 delistings so far
-[1950/2205] securities searched; 865 delistings so far
-[2000/2205] securities searched; 882 delistings so far
-[2050/2205] securities searched; 895 delistings so far
-[2100/2205] securities searched; 905 delistings so far
-[2150/2205] securities searched; 920 delistings so far
-[2200/2205] securities searched; 963 delistings so far
-delisting search: 0 EDGAR requests, 0 SEC data-file downloads (all threads)
-dead before first sighting: 31 securities took CUSIPs from fails rows before their end
+[350/2205] securities searched; 169 delistings so far
+[400/2205] securities searched; 189 delistings so far
+[450/2205] securities searched; 212 delistings so far
+[500/2205] securities searched; 237 delistings so far
+[550/2205] securities searched; 259 delistings so far
+[600/2205] securities searched; 285 delistings so far
+[650/2205] securities searched; 296 delistings so far
+[700/2205] securities searched; 319 delistings so far
+[750/2205] securities searched; 341 delistings so far
+[800/2205] securities searched; 366 delistings so far
+[850/2205] securities searched; 389 delistings so far
+[900/2205] securities searched; 411 delistings so far
+[950/2205] securities searched; 441 delistings so far
+[1000/2205] securities searched; 464 delistings so far
+[1050/2205] securities searched; 481 delistings so far
+[1100/2205] securities searched; 502 delistings so far
+[1150/2205] securities searched; 528 delistings so far
+[1200/2205] securities searched; 554 delistings so far
+[1250/2205] securities searched; 577 delistings so far
+[1300/2205] securities searched; 600 delistings so far
+[1350/2205] securities searched; 622 delistings so far
+[1400/2205] securities searched; 643 delistings so far
+[1450/2205] securities searched; 674 delistings so far
+[1500/2205] securities searched; 701 delistings so far
+[1550/2205] securities searched; 721 delistings so far
+[1600/2205] securities searched; 738 delistings so far
+[1650/2205] securities searched; 759 delistings so far
+[1700/2205] securities searched; 783 delistings so far
+[1750/2205] securities searched; 810 delistings so far
+[1800/2205] securities searched; 828 delistings so far
+[1850/2205] securities searched; 844 delistings so far
+[1900/2205] securities searched; 864 delistings so far
+[1950/2205] securities searched; 875 delistings so far
+[2000/2205] securities searched; 892 delistings so far
+[2050/2205] securities searched; 905 delistings so far
+[2100/2205] securities searched; 915 delistings so far
+[2150/2205] securities searched; 930 delistings so far
+[2200/2205] securities searched; 973 delistings so far
+delisting search: 146 EDGAR requests, 0 SEC data-file downloads (all threads)
+dead before first sighting: 34 securities took CUSIPs from fails rows before their end
 dead before first sighting: 0 EDGAR requests, 0 SEC data-file downloads (all threads)
-payouts: 0 EDGAR requests, 0 SEC data-file downloads (all threads)
-successor search: 0 EDGAR requests, 0 SEC data-file downloads (all threads)
+payouts: 50 EDGAR requests, 0 SEC data-file downloads (all threads)
+successor search: 1 EDGAR requests, 0 SEC data-file downloads (all threads)
 handoff search: 0 EDGAR requests, 0 SEC data-file downloads (all threads)
-handoffs: 96 candidate pairs; {'handoffs': 81, 'continuations_by_filing': 47, 'continuations_by_timing': 26, 'takeovers': 8, 'conflicts': 11, 'rows_added': 28}
+handoffs: 96 candidate pairs; {'handoffs': 81, 'continuations_by_filing': 47, 'continuations_by_timing': 26, 'takeovers': 8, 'conflicts': 12, 'rows_added': 27}
 handoff rows dated from their Form 25 notice: 10
 handoff notice dates: 0 EDGAR requests, 0 SEC data-file downloads (all threads)
 observation_map: 35955 of 35955 observations mapped
 ticker evidence: 0 EDGAR requests, 0 SEC data-file downloads (all threads)
 issuers in force: 0 EDGAR requests, 0 SEC data-file downloads (all threads)
-scorecard drop: D.mismatches.ending: 0 -> 1
-scorecard drop: D.mismatches.sec_id: 0 -> 22
-scorecard drop: L1.closed_no_event: 49 -> 56
-scorecard drop: L2.high_share: 0.754412 -> 0.749638
-scorecard drop: L2.low: 172 -> 179
-scorecard drop: R1.1.mapped_share: 0.984981 -> 0.984842
-scorecard drop: R2.1.missing_last_trade_date: 40 -> 41
-scorecard drop: R2.1.missing_last_trade_date_in_window: 37 -> 38
-scorecard drop: R2.5.distress_blank_dlret: 2 -> 3
-scorecard drop: R2.5.distress_no_last_trade_date: 1 -> 2
-scorecard drop: R2.6.distress_flagged: 44 -> 48
-scorecard drop: R2.7.payout_rule_known: 855 -> 842
-scorecard drop: V.audit.confirmed_but_wrong: 42 -> 57
-WARNING: 13 scorecard number(s) got worse than the floor in data/scorecard.json: D.mismatches.ending: 0 -> 1; D.mismatches.sec_id: 0 -> 22; L1.closed_no_event: 49 -> 56; L2.high_share: 0.754412 -> 0.749638; L2.low: 172 -> 179; R1.1.mapped_share: 0.984981 -> 0.984842; R2.1.missing_last_trade_date: 40 -> 41; R2.1.missing_last_trade_date_in_window: 37 -> 38; R2.5.distress_blank_dlret: 2 -> 3; R2.5.distress_no_last_trade_date: 1 -> 2; R2.6.distress_flagged: 44 -> 48; R2.7.payout_rule_known: 855 -> 842; V.audit.confirmed_but_wrong: 42 -> 57
-Rows written: {'securities': 2233, 'ticker_history': 2882, 'cusip_history': 2765, 'delistings': 996, 'payouts': 712, 'review': 663, 'review_summary': 40, 'observation_map': 35955, 'uncertain': 697, 'security_history': 2897, 'contract_delistings': 858, 'seeds': 35955, 'price_requests': 1052, 'id_changes': 30}
-Delistings by bucket: {'liquidation': 56, 'merger': 688, 'exchange_transfer': 232, 'compliance_failure': 11, 'unknown': 7, 'expiration': 2}
+scorecard drop: A.census.distress.errors: 12 -> 13
+scorecard drop: L1.no_interval: 1 -> 2
+scorecard drop: L2.high_share: 0.749638 -> 0.741659
+scorecard drop: L2.low: 179 -> 193
+scorecard drop: R1.1.mapped_share: 0.984842 -> 0.983118
+scorecard drop: R2.1.missing_last_trade_date_in_window: 38 -> 39
+scorecard drop: R2.4.assumed_par: 69 -> 72
+scorecard drop: R2.6.distress_flagged: 48 -> 53
+scorecard drop: V.uncertain_distress: 24 -> 27
+scorecard drop: V.uncertain_endings: 254 -> 266
+scorecard drop: V.uncertain_endings_in_window: 220 -> 232
+scorecard drop: V.uncertain_input_tickers_share: 0.105904 -> 0.112213
+scorecard drop: V.uncertain_securities: 51 -> 55
+scorecard drop: V.uncertain_seeds: 392 -> 459
+WARNING: 14 scorecard number(s) got worse than the floor in data/scorecard.json: A.census.distress.errors: 12 -> 13; L1.no_interval: 1 -> 2; L2.high_share: 0.749638 -> 0.741659; L2.low: 179 -> 193; R1.1.mapped_share: 0.984842 -> 0.983118; R2.1.missing_last_trade_date_in_window: 38 -> 39; R2.4.assumed_par: 69 -> 72; R2.6.distress_flagged: 48 -> 53; V.uncertain_distress: 24 -> 27; V.uncertain_endings: 254 -> 266; V.uncertain_endings_in_window: 220 -> 232; V.uncertain_input_tickers_share: 0.105904 -> 0.112213; V.uncertain_securities: 51 -> 55; V.uncertain_seeds: 392 -> 459
+Rows written: {'securities': 2233, 'ticker_history': 2868, 'cusip_history': 2766, 'delistings': 1005, 'payouts': 730, 'review': 639, 'review_summary': 40, 'observation_map': 35955, 'uncertain': 780, 'security_history': 2883, 'contract_delistings': 877, 'seeds': 35955, 'price_requests': 1098, 'id_changes': 0}
+Delistings by bucket: {'liquidation': 61, 'merger': 706, 'exchange_transfer': 217, 'compliance_failure': 13, 'unknown': 6, 'expiration': 2}
 FIGI sources: {'cusip': 2061, 'placeholder': 69, 'handoff': 25, 'ticker': 50}
-Review flags: {'last_trade_date_conflict': 53, 'ftd_close_prior': 108, 'resolved_by_current_ticker_map': 124, 'no_form25': 59, 'delist_date_approx': 46, 'successor_unknown': 26, 'ftd_close_lagged': 135, 'acquirer_close_lagged': 36, 'llm_gate_failed': 25, 'merger_at_par': 66, 'no_last_trade_date': 122, 'no_last_close': 153, 'payout_gate_failed': 17, 'terms_gate_failed': 58, 'last_trade_date_unconfirmed': 49, 'handoff_continuation': 54, 'observed_after_delisting': 30, 'no_evidence_default': 9, 'member_name_mismatch': 37, 'distress_at_normal_price': 4, 'resolved_by_cik_map': 11, 'bankruptcy_before_merger': 1, 'bankruptcy_tag_unconfirmed': 1, 'line_continuation': 1, 'identity_detached': 5, 'no_figi': 75, 'observation_unresolved': 1, 'issuer_inferred': 68, 'observation_conflict': 6, 'ticker_unconfirmed': 61, 'line_follow_refused': 41, 'line_followed': 103, 'ended_without_delisting': 49, 'form25_unclassified': 116, 'form25_unmatched': 33, 'handoff_rebucketed': 24, 'handoff_conflict': 11, 'handoff_takeover_no_delisting': 1, 'ticker_shared': 8}
-Review: 105 fix, 558 check (560 info-only rows hidden, 0 accepted, 0 unmatched decisions)
-Uncertain (uncertain.csv): 51 securities, 254 endings, 526 seeds
-Contract (contract/): 2897 security intervals, 858 endings, 1052 price requests, 30 id changes
+Review flags: {'last_trade_date_conflict': 59, 'ftd_close_prior': 110, 'resolved_by_current_ticker_map': 125, 'no_form25': 48, 'delist_date_approx': 40, 'successor_unknown': 21, 'ftd_close_lagged': 139, 'acquirer_close_lagged': 36, 'llm_gate_failed': 25, 'merger_at_par': 69, 'no_last_trade_date': 123, 'no_last_close': 151, 'payout_gate_failed': 18, 'terms_gate_failed': 60, 'last_trade_date_unconfirmed': 39, 'handoff_continuation': 53, 'observed_after_delisting': 32, 'no_evidence_default': 8, 'member_name_mismatch': 37, 'distress_at_normal_price': 5, 'resolved_by_cik_map': 9, 'bankruptcy_before_merger': 2, 'bankruptcy_tag_unconfirmed': 1, 'line_continuation': 1, 'identity_detached': 5, 'no_figi': 75, 'observation_unresolved': 1, 'issuer_inferred': 68, 'observation_conflict': 6, 'ticker_unconfirmed': 61, 'line_follow_refused': 41, 'line_followed': 103, 'ended_without_delisting': 29, 'form25_unclassified': 116, 'form25_unmatched': 26, 'handoff_rebucketed': 24, 'handoff_conflict': 12, 'handoff_takeover_no_delisting': 1, 'ticker_shared': 8}
+Review: 84 fix, 555 check (567 info-only rows hidden, 0 accepted, 0 unmatched decisions)
+Uncertain (uncertain.csv): 55 securities, 266 endings, 593 seeds
+Contract (contract/): 2883 security intervals, 877 endings, 1098 price requests, 0 id changes

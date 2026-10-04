@@ -1,36 +1,52 @@
 {
   "as_of": "2026-09-25",
   "cache_answers": {
-    "archives": 14562,
+    "archives": 14614,
     "company_tickers": 12,
-    "full_text_search": 1048,
-    "submissions": 44379,
-    "submissions_page": 15480
+    "full_text_search": 1037,
+    "submissions": 50391,
+    "submissions_page": 15447
   },
-  "code_version": "dea3ed0-dirty",
+  "code_version": "5f85fd2-dirty",
   "degraded_answers": {},
   "handoffs": {
-    "conflicts": 11,
+    "conflicts": 12,
     "continuations_by_filing": 47,
     "continuations_by_timing": 26,
     "handoffs": 81,
-    "rows_added": 28,
+    "rows_added": 27,
     "takeovers": 8
   },
-  "latency_ms": {},
+  "latency_ms": {
+    "archives": {
+      "max": 1015.3,
+      "n": 196,
+      "p50": 142.3,
+      "p95": 316.6
+    },
+    "full_text_search": {
+      "max": 444.7,
+      "n": 1,
+      "p50": 444.7,
+      "p95": 444.7
+    }
+  },
   "not_covered": {},
   "rejected_queries": {},
   "resolution_degraded": 0,
   "review": {
     "accepted": 0,
-    "check": 558,
+    "check": 555,
     "cleared": 0,
-    "fix": 105,
-    "info_hidden": 560,
+    "fix": 84,
+    "info_hidden": 567,
     "unmatched_decisions": 0
   },
   "schema_version": 2,
-  "sec_requests": {},
+  "sec_requests": {
+    "archives": 196,
+    "full_text_search": 1
+  },
   "sec_workers": 4,
   "stages": {
     "dead before first sighting": {
@@ -38,7 +54,7 @@
       "sec_data_downloads": 0
     },
     "delisting search": {
-      "edgar_requests": 0,
+      "edgar_requests": 146,
       "sec_data_downloads": 0
     },
     "handoff notice dates": {
@@ -61,12 +77,16 @@
       "edgar_requests": 0,
       "sec_data_downloads": 0
     },
-    "payouts": {
+    "other issuers in force": {
       "edgar_requests": 0,
       "sec_data_downloads": 0
     },
+    "payouts": {
+      "edgar_requests": 50,
+      "sec_data_downloads": 0
+    },
     "successor search": {
-      "edgar_requests": 0,
+      "edgar_requests": 1,
       "sec_data_downloads": 0
     },
     "ticker evidence": {
@@ -74,6 +94,8 @@
       "sec_data_downloads": 0
     }
   },
-  "warm_degraded": {},
+  "warm_degraded": {
+    "nasdaq_halt_feed": 1
+  },
   "warm_failed": {}
 }
