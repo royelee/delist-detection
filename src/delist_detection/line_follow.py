@@ -40,7 +40,8 @@ NAME_DAYS = 30                # the new rows' descriptions must name a name in f
 RECENT_DAYS = 120             # a step this close to the run date may have no periodic report after it yet
 MAX_ROUNDS = 3                # steps followed per line (WIN's two reverse splits, LPI's switch then rename)
 MAX_TEXTS = 5                 # 8-K texts read per step for a reverse split or the new CUSIP
-PERIODIC_FORMS = frozenset({"10-K", "10-Q", "20-F", "40-F", "10-KT", "10-QT"})
+PERIODIC_FORMS = frozenset({"10-K", "10-Q", "20-F", "40-F", "10-KT", "10-QT", "10-K405", "10-KSB", "10-KSB40",
+                            "10-QSB"})
 SUCCESSOR_FORMS = frozenset({"8-K12B", "8-K12G3"})
 _REVERSE_SPLIT = re.compile(r"reverse\s+(?:stock\s+)?split|share\s+consolidation", re.I)
 _SYMBOL = re.compile(r"[A-Z]{1,5}(?:-[A-Z])?")

@@ -80,6 +80,12 @@ def test_no_otc_deleted_unassigned_or_cusip_tail_symbol_is_a_new_symbol(symbol):
     assert _steps(OLD + _rows(symbol, "11111A101", "REVERSE SPLIT CO", "2012-09-26", 5)) == []
 
 
+def test_an_adrs_five_letter_otc_symbol_ending_in_y_is_no_new_symbol():
+    """ABCDY: an ADR's OTC symbol. `is_otc_symbol` names it; `candidate_steps` takes no step from it."""
+    assert lf.is_otc_symbol("ABCDY", {"RS"}) and not lf.is_otc_symbol("ABCD", {"RS"})
+    assert _steps(OLD + _rows("ABCDY", "11111A101", "REVERSE SPLIT CO", "2012-09-26", 5)) == []
+
+
 def test_a_cusip_another_security_holds_is_never_a_step():
     """WLL 2017: the new CUSIP is already another security's line of the run."""
     new = _rows("RS", "11111A200", "REVERSE SPLIT CO NEW", "2012-09-26", 5)
@@ -186,6 +192,22 @@ def test_a_registrant_that_merged_out_refuses_the_step():
     assert _corr(filings=[_f("8-K", "2012-09-24", "5.03"), _f("15-12G", "2012-09-27")]) == ("", "merged_out")
     assert _corr(filings=[_f("8-K", "2012-09-24", "5.03"), _f("10-Q", "2012-10-10", report="2012-06-30")]) == (
         "", "merged_out")
+
+
+@pytest.mark.parametrize("form", ["10-QSB", "10-KSB", "10-KSB40", "10-K405", "10-QT", "10-KT"])
+def test_a_small_business_or_older_periodic_report_carries_the_registrant_on(form):
+    """2006: an issuer that files only a 10-QSB (or another periodic form) for a period after the step carries on."""
+    step = lf.LineStep("BBGRS", lf.SWITCH, "11111A101", "11111A200", "RS", "2006-09-25", "2006-09-26",
+                       ("REVERSE SPLIT CO NEW",))
+    f = [_f("8-K", "2006-09-24", "5.03"), _f(form, "2007-02-14", report="2006-12-31")]
+    assert _corr(step, filings=f) == ("8-K 5.03 2006-09-24", "")
+
+
+@pytest.mark.parametrize("filed, refused", [("2012-03-30", True), ("2012-03-29", False),   # first - 180, first - 181
+                                            ("2012-10-26", True), ("2012-10-27", False)])  # first + 30, first + 31
+def test_an_8k_item_1_03_refuses_a_step_only_within_its_window(filed, refused):
+    f = [_f("8-K", filed, "1.03"), _f("8-K", "2012-09-24", "5.03"), LATER_10Q]
+    assert _corr(filings=f) == (("", "bankruptcy") if refused else ("8-K 5.03 2012-09-24", ""))
 
 
 def test_the_registrants_own_successor_registration_carries_it_on():
