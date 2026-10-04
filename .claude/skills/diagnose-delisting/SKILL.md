@@ -97,6 +97,35 @@ the right answer, the decision table and the cause tags. `example-THI.md` is a f
 `library_wrong` is true when any of `exit_kind`, `last_trade_date`, `successor`, `value_rule` or `terms` is
 `wrong`.
 
+## Modes (the diagnosis truth loop)
+
+Besides the uncertain rows of `source.csv` (mode `uncertain`, steps 1–5 above), the truth loop (spec
+`docs/superpowers/specs/2026-10-03-diagnosis-truth-fixes-design.md`, 1.5) sends two other kinds of case. Its case
+row is in `output/diagnose_unknown_report/loop/<label>/round-<N>/cases.csv`: `mode`, `sec_id`, `ticker`,
+`truth_case_id`, and three JSON lists of the same length: `fields`, `side_a`, `side_b`, plus the context columns of
+`source.csv`.
+
+- `regression`: a contract field changed for a security outside the truth set; `side_a` is the old value (the
+  sub-plan's base run), `side_b` the new one. Decide, field by field, which one the filings support. A field named
+  `delistings.added` / `delistings.removed` means the whole contract row appeared or disappeared;
+  `security_history.ranges` compares the ticker ranges.
+- `mismatch`: the library disagrees with the truth file; `side_a` is the truth, `side_b` the library. The truth came
+  from an earlier report (`truth_case_id`'s report under `output/diagnose_unknown_report/reports/`): read it first.
+  Decide, field by field, which value the filings support. If the library is right, name the filing the earlier
+  report missed or misread (its accession number) in `missed_filing`; without one, the truth will not change.
+
+Write the report and the record under the round's folder (`reports/<case_id>.md`, `records/<case_id>.json`), not
+under `output/diagnose_unknown_report/reports/`. Section 2 of the report shows both values and the evidence for
+each field. The record has every key of the uncertain-mode record, plus:
+
+```json
+"mode": "regression | mismatch",
+"field_verdicts": [{"field": "<as in fields>", "right": "old | new | truth | library | neither",
+                    "value": "<the right value>", "missed_filing": "<accession, mismatch mode only, or empty>"}]
+```
+
+`confidence` follows the same rule as in uncertain mode. Every loop record gets a skeptic pass, whatever it decides.
+
 ## Rules
 
 - Every fact in the report has a citation; a fact you could not source is written as unknown, never guessed.
