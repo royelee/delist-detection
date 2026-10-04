@@ -9,7 +9,7 @@ from delist_detection.edgar import EdgarSubmission
 from delist_detection.figi_resolution import us_candidates
 from delist_detection.ftd import FtdIndex, FtdRow
 from delist_detection.observations import TickerEra
-from delist_detection.security_master import Security
+from delist_detection.security_master import SWITCH_DAYS, Security
 
 
 def _rows(symbol, cusip, desc, start, n, *, step=1, prices=None):
@@ -350,14 +350,70 @@ def _edge(offset):
 
 
 @pytest.mark.parametrize("offset, found", [(lf.LINE_DAYS, True), (lf.LINE_DAYS + 1, False),
-                                           (-lf.LINE_DAYS, True), (-lf.LINE_DAYS - 1, False)])
+                                           (-SWITCH_DAYS, True), (-SWITCH_DAYS - 1, False)])
 def test_the_window_bounds_a_switch_found_by_symbol(offset, found):
     steps = _steps(OLD + _from("RS", "11111A200", _edge(offset)))
     assert [s.new_cusip for s in steps] == (["11111A200"] if found else [])
 
 
 @pytest.mark.parametrize("offset, found", [(lf.LINE_DAYS, True), (lf.LINE_DAYS + 1, False),
-                                           (-lf.LINE_DAYS, True), (-lf.LINE_DAYS - 1, False)])
+                                           (-SWITCH_DAYS, True), (-SWITCH_DAYS - 1, False)])
 def test_the_window_bounds_a_switch_found_by_its_cusip(offset, found):
     steps = _steps(OLD + _from("XYZ", "316645100", _edge(offset)), extra_cusips={"316645100"})
     assert [s.new_cusip for s in steps] == (["316645100"] if found else [])
+
+
+# --- the final fix wave ---
+
+def test_a_new_cusip_beside_an_old_line_still_trading_at_changing_prices_is_no_step():
+    """CHTR 2026: the issuer's new preferred first trades 7 trading days before the end of the data while the
+    common goes on at changing prices; a live line's `last` is the data end, so only the settled row can tell."""
+    new = _rows("RSP", "11111A306", "REVERSE SPLIT CO PFD", "2012-09-14", 7)
+    assert _steps(OLD + new, extra_symbols={"RSP"}) == []
+    near = _rows("RSP", "11111A306", "REVERSE SPLIT CO PFD", "2012-09-20", 4)      # 3 trading days before the end
+    assert len(_steps(OLD + near, extra_symbols={"RSP"})) == 1
+
+
+def test_the_own_ticker_pick_is_made_before_held_cusips_are_dropped():
+    """LMCA 2016: the new CUSIP under the line's own ticker is another security's; the leftover under another
+    symbol is not the line's."""
+    new = (_rows("RS", "11111A200", "REVERSE SPLIT CO", "2012-09-26", 5)
+           + _rows("RSB", "11111A309", "REVERSE SPLIT CO B", "2012-09-26", 5))
+    assert _steps(OLD + new, extra_symbols={"RSB"}, holders={"11111A200": {"BBGOTHER"}}) == []
+    [st] = _steps(OLD + new, extra_symbols={"RSB"}, holders={"11111A309": {"BBGOTHER"}})
+    assert st.new_cusip == "11111A200"
+
+
+@pytest.mark.parametrize("kind", ["Preferred Stock", "Warrant", "Right", "Unit"])
+def test_a_candidate_typed_preferred_warrant_right_or_unit_is_refused(kind):
+    cand = us_candidates([{"figi": "BBGP", "compositeFIGI": "BBGP", "exchCode": "US", "ticker": "RSP",
+                           "name": "REVERSE SPLIT CO", "securityType": kind}])
+    assert len(cand) == 1
+    d = lf.decide(STEP, _sec("BBGRS"), cand, {})
+    assert (d.kind, d.why) == (lf.REFUSED, "type")
+    assert lf.decide(STEP, _sec("BBGRS"), _cand("BBGP"), {}).kind == lf.SUCCESSOR      # a common stays a successor
+
+
+def test_other_registrant_reraises_fatal_and_treats_a_request_failure_as_failed():
+    import requests
+    from delist_detection.fatal import FATAL
+
+    def hits(exc):
+        def search(q, forms, lo, hi):
+            raise exc
+        return search
+    with pytest.raises(FATAL):
+        lf.other_registrant(hits(FATAL[0]("blocked")), _Edgar({}), name="X Co", day=date(2012, 9, 26), cik=1,
+                            own_tickers=set())
+
+    class Down(_Edgar):
+        def submissions(self, cik):
+            raise requests.ConnectionError("down")
+
+    def search(q, forms, lo, hi):
+        return [_hit(7, "Other Inc (OTH) (CIK 0000000007)")]
+    assert lf.other_registrant(search, Down({}), name="X Co", day=date(2012, 9, 26), cik=1,
+                               own_tickers=set()) == lf.READ_FAILED
+    assert lf.other_registrant(hits(requests.Timeout("slow")), _Edgar({}), name="X Co", day=date(2012, 9, 26),
+                               cik=1, own_tickers=set()) == lf.READ_FAILED
+    assert _corr(other=lf.READ_FAILED, filings=[_f("8-K", "2012-09-24", "5.03"), LATER_10Q]) == ("", "read_failed")

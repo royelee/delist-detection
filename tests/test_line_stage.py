@@ -67,7 +67,7 @@ def _world(specs):
     return build_securities(res, eras, issuers), res, eras, cusips, SimpleNamespace(issuers=issuers)
 
 
-def _stage(monkeypatch, specs, nxt, *, figi=None, edgar=None):
+def _stage(monkeypatch, specs, nxt, *, figi=None, edgar=None, line_end=None):
     """Stage 4b over `specs`, every line's step scripted: `nxt` maps a CUSIP to the one it switches to."""
     def steps_of(sid, cusips, tickers, ftd, **kw):
         if cusips and cusips[-1] in nxt:
@@ -75,7 +75,7 @@ def _stage(monkeypatch, specs, nxt, *, figi=None, edgar=None):
         return []
 
     monkeypatch.setattr(pipeline, "candidate_steps", steps_of)
-    monkeypatch.setattr(pipeline, "line_end", lambda *a, **k: None)
+    monkeypatch.setattr(pipeline, "line_end", lambda *a, **k: line_end)
     monkeypatch.setattr(pipeline, "corroborate", lambda step, **kw: ("8-K 5.03", ""))
     log = lambda *a: None
     ctx = _RunContext(Clients(edgar=edgar or _Edgar(), resolver=None, classifier=None, figi=figi or _Figi(),
@@ -133,7 +133,7 @@ def test_a_new_cusip_one_security_took_is_held_for_the_rest_of_the_round(monkeyp
     for order in (specs, list(reversed(specs))):
         lines = _stage(monkeypatch, order, {"A1": "C9", "B1": "C9"})
         assert lines.sec_cusips == {"BBGA": ["A1", "C9"], "BBGB": ["B1"]}
-        assert sorted(_flags(lines)) == [("BBGA", "line_followed"), ("BBGB", "line_follow_refused:other_issuer")]
+        assert sorted(_flags(lines)) == [("BBGA", "line_followed"), ("BBGB", "line_follow_refused:taken")]
 
 
 def test_a_new_cusip_whose_composite_another_issuers_security_holds_is_refused(monkeypatch):
@@ -187,3 +187,61 @@ def test_a_failed_read_inside_the_stage_gives_a_resolution_degraded_row(monkeypa
 
     lines = _stage(monkeypatch, [("BBGA", 1, "AA", ["A1"])], {"A1": "A2"}, edgar=_Edgar(down))
     assert ("BBGA", "resolution_degraded") in _flags(lines)
+
+
+def test_two_lines_of_one_round_cannot_take_the_same_successor_composite(monkeypatch):
+    """Two FIGI lines whose new CUSIPs both map to BBGX1: the first (sec_id order) is its successor, the second is
+    refused `taken`, in any input order."""
+    specs = [("BBGA", 1, "AA", ["A1"]), ("BBGB", 2, "BB", ["B1"])]
+    for order in (specs, list(reversed(specs))):
+        lines = _stage(monkeypatch, order, {"A1": "A2", "B1": "B2"},
+                       figi=_Figi({"A2": _answer("BBGX1"), "B2": _answer("BBGX1")}))
+        assert set(lines.successors) == {"BBGA"}
+        assert sorted(_flags(lines)) == [("BBGA", "line_followed"), ("BBGB", "line_follow_refused:taken")]
+
+
+def test_a_failed_read_that_leaves_no_step_still_gives_a_resolution_degraded_row(monkeypatch):
+    def down(cik):
+        raise requests.ConnectionError("down")
+
+    lines = _stage(monkeypatch, [("BBGA", 1, "AA", ["A1"])], {}, edgar=_Edgar(down))
+    assert _flags(lines) == [("BBGA", "resolution_degraded")]
+
+
+def test_a_failed_8k_text_read_that_leaves_no_step_gives_one_resolution_degraded_row(monkeypatch):
+    from delist_detection.edgar import EdgarSubmission
+    from delist_detection.line_follow import LineEnd
+
+    class Down(_Edgar):
+        def recent_filings(self, cik):
+            return [EdgarSubmission("a1", "8-K", "2012-01-05", "", "5.03", "d.htm")]
+
+        def fetch_filing_text(self, cik, accession, primary_doc):
+            raise requests.ConnectionError("down")
+
+    lines = _stage(monkeypatch, [("BBGA", 1, "AA", ["A1"])], {}, edgar=Down(),
+                   line_end=LineEnd("A1", "2012-01-01", "2012-01-01"))
+    assert _flags(lines) == [("BBGA", "resolution_degraded")]
+
+
+def test_the_text_sources_filter_the_8ks_before_the_cap():
+    """A busy issuer's coded 8-K among more than MAX_TEXTS uncoded ones nearer the day is still read."""
+    from delist_detection.edgar import EdgarSubmission
+    from delist_detection.line_follow import MAX_TEXTS, LineEnd
+
+    uncoded = [EdgarSubmission(f"u{i}", "8-K", "2012-01-01", "", "8.01", "d.htm") for i in range(MAX_TEXTS + 2)]
+    coded = EdgarSubmission("c1", "8-K", "2012-01-20", "", "5.03", "d.htm")
+    read = []
+
+    class Many(_Edgar):
+        def recent_filings(self, cik):
+            return [*uncoded, coded]
+
+        def fetch_filing_text(self, cik, accession, primary_doc):
+            read.append(accession)
+            return "the CUSIP number changed to 316645100"
+
+    securities, *_ = _world([("BBGA", 1, "AA", ["A1"])])
+    symbols, cusips = pipeline._text_sources(_IssuerReads(Many()), securities["BBGA"],
+                                             LineEnd("A1", "2012-01-01", "2012-01-01"))
+    assert read == ["c1"] and cusips == {"316645100"}

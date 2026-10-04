@@ -146,10 +146,23 @@ def test_a_line_whose_next_cusip_is_another_securitys_takes_no_step(sec_id, ftd)
 
 
 def test_sbgis_new_holding_company_is_never_its_line(ftd):
-    """Must not change (SBGI 2023): the new holding company, another CIK, holds the new CUSIP's composite."""
+    """Must not change (SBGI 2023): the new holding company, another CIK, replaces the registrant. The real run
+    adds the holdco (BBG01GJ3NY88, which this fixture's RUN holds) only in stage 8, so the guard stage 4b has is the 8-K12B search: an 8-K12B
+    filed by another CIK naming Sinclair refuses the step in `corroborate`."""
+    case = DATA["cases"]["BBG000F2XXP2"]
     step, evidence, refused, decision = follow("BBG000F2XXP2", ftd)
-    assert (step.new_cusip, refused) == ("829242106", "")
-    assert (decision.kind, decision.why) == (lf.REFUSED, "other_issuer")
+    assert (step.new_cusip, refused) == ("829242106", "")           # without the search, nothing refuses it
+    hit = {"_source": {"ciks": ["0001971213"], "display_names": ["Sinclair, Inc. (SBGI) (CIK 0001971213)"],
+                       "form": "8-K12B", "file_date": step.first}}
+    first, cik = date.fromisoformat(step.first), case["issuer_cik"]
+    evidence, refused = lf.corroborate(
+        step, filings=EDGAR_FIX.filings(cik), sub=EDGAR_FIX.submissions(cik), share_class=case["share_class"],
+        text_of=lambda f: EDGAR["texts"].get(f.accession, ""), as_of=AS_OF,
+        listed_now=lambda: edgar_lists(EDGAR_FIX, cik, [*case["tickers"], step.symbol]),
+        other_registrant=lambda: lf.other_registrant(
+            lambda q, forms, lo, hi: [hit], EDGAR_FIX, name=lf.name_on(EDGAR_FIX.submissions(cik), first, case["name"]),
+            day=first, cik=cik, own_tickers=case["tickers"]))
+    assert (evidence, refused) == ("", "other_registrant")
 
 
 @pytest.mark.parametrize("sec_id,otc", [("BBG009NGKQ45", "VRMMQ"), ("BBG000BRWGG9", "RADCQ")])

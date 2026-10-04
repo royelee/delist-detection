@@ -41,7 +41,7 @@ from .history import (
     ranges_from_sightings, ticker_on, ticker_range_review, ticker_sightings, value_on,
 )
 from .line_follow import (
-    ATTACH, FOLD, MAX_ROUNDS, REFUSED, SUCCESSOR_FORMS, SWITCH, LineEnd, LineStep, LineSuccessor, candidate_steps,
+    ATTACH, FOLD, MAX_ROUNDS, READ_FAILED, REFUSED, SUCCESSOR, SUCCESSOR_FORMS, SWITCH, LineEnd, LineStep, LineSuccessor, candidate_steps,
     composites, corroborate, decide, eightks_near, is_line_symbol, line_end, name_on, other_registrant, text_cusips,
     text_symbols,
 )
@@ -486,10 +486,19 @@ def _text_sources(reads: _IssuerReads, s: Security, end: LineEnd) -> tuple[set[s
     ChampionX "CHX", Liz Claiborne's "316645100" and "FNP"): read only when one of them is an 8-K item 5.03 or
     3.03 or an 8-K12B/8-K12G3, within `line_follow.FILING_DAYS` of the line's settled last row."""
     day = date.fromisoformat(end.settled)
-    near = [f for f in eightks_near(reads.filings(s.issuer_cik), day)
-            if f.form in SUCCESSOR_FORMS or {"5.03", "3.03"} & f.item_set]
+    near = eightks_near(reads.filings(s.issuer_cik), day,
+                        lambda f: f.form in SUCCESSOR_FORMS or bool({"5.03", "3.03"} & f.item_set))
     texts = [reads.text(s.issuer_cik, f) for f in near]
     return {t for t in text_symbols(texts) if is_line_symbol(t)} - s.own_tickers(), text_cusips(texts)
+
+
+def _other_registrant(reads: _IssuerReads, search, edgar, cik: int, name: str, day: date,
+                      own_tickers: set[str]) -> int | None:
+    """`line_follow.other_registrant`; a failed read marks `cik` degraded (the step is refused `read_failed`)."""
+    other = other_registrant(search, edgar, name=name, day=day, cik=cik, own_tickers=own_tickers)
+    if other == READ_FAILED:
+        reads.degraded.add(cik)
+    return other
 
 
 def _fold(out: _Lines, p: str, x: str, cand: FigiCandidate, step: LineStep, tickers: dict[str, set[str]]) -> None:
@@ -542,6 +551,7 @@ def _follow_lines(ctx: _RunContext, securities: dict[str, Security], resolutions
     ftd.extend(clients.ftd_client, ftd_lo, ctx.as_of, symbols=spellings | {t for v in extra.values() for t in v})
     named: dict[str, set[str]] = defaultdict(set)
     counts: Counter[str] = Counter()
+    flagged: set[str] = set()            # securities whose step already got a resolution_degraded item
     for round_no in range(1, MAX_ROUNDS + 1):
         holders = _cusip_holders(out.sec_cusips)
 
@@ -581,8 +591,8 @@ def _follow_lines(ctx: _RunContext, securities: dict[str, Security], resolutions
                 step, filings=reads.filings(cik), sub=reads.sub(cik), share_class=s.share_class,
                 text_of=lambda f, cik=cik: reads.text(cik, f), as_of=ctx.as_of,
                 listed_now=lambda: edgar_lists(edgar, cik, sorted(own(sid) | {step.symbol})),
-                other_registrant=lambda: other_registrant(search, edgar, name=name_on(reads.sub(cik), first, s.name),
-                                                          day=first, cik=cik, own_tickers=own(sid)))
+                other_registrant=lambda: _other_registrant(reads, search, edgar, cik, name_on(reads.sub(cik), first, s.name),
+                                                           first, own(sid)))
             what = f"{step.old_cusip} -> {step.new_cusip} under {step.symbol} from {step.first}"
             decision = None if refused else decide(
                 step, s, composites(figi_answers[step.new_cusip]) if step.kind == SWITCH else None, out.securities)
@@ -590,8 +600,12 @@ def _follow_lines(ctx: _RunContext, securities: dict[str, Security], resolutions
                 refused = decision.why
             elif decision is not None and decision.kind in (ATTACH, FOLD) and step.kind == SWITCH \
                     and taken.setdefault(step.new_cusip, decision.composite or sid) != (decision.composite or sid):
-                refused = "other_issuer"     # another security of the run took this CUSIP earlier in the round
+                refused = "taken"     # another security of the run took this CUSIP earlier in the round
+            elif decision is not None and decision.kind == SUCCESSOR \
+                    and taken.setdefault(decision.composite, sid) != sid:
+                refused = "taken"     # ... or this successor composite
             if watch.tripped() or cik in reads.degraded:
+                flagged.add(sid)
                 out.review.append(degraded_item(sid, step.symbol, cik, f"the line follow ({what})",
                                                 "; run again once SEC answers", last_seen=step.old_last))
             if refused:
@@ -622,6 +636,10 @@ def _follow_lines(ctx: _RunContext, securities: dict[str, Security], resolutions
         todo = sorted(sid for sid in moved if sid in out.securities)
         if not todo:
             break
+    for sid, s in sorted(out.securities.items()):       # a failed read that left no step: its answer still rested on it
+        if s.issuer_cik in reads.degraded and sid not in flagged:
+            out.review.append(degraded_item(sid, min(own(sid), default=""), s.issuer_cik, "the line follow",
+                                            "; run again once SEC answers"))
     ctx.log(f"line follow: {dict(sorted(counts.items()))}; {len(out.renames)} placeholders folded, "
             f"{len(out.successors)} line successors")
     ctx.meter.done("line follow", mark)

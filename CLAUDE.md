@@ -296,14 +296,17 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   next step in the fails rows within ±`LINE_DAYS` (10) trading days of the old CUSIP's settled last row: a new
   CUSIP under the line's ticker, its `…ZZZZ`/`…D` spellings, a ticker of the issuer EDGAR lists or its 8-K text
   names (`text_symbols`, `text_cusips`), or the same CUSIP under a new non-OTC ticker; never a CUSIP another
-  security holds, nor a switch while the old CUSIP trades on); `corroborate` (R1: refused for an 8-K 1.03 in
+  security holds, nor a switch while the old CUSIP trades on at changing prices more than `SWITCH_DAYS` trading
+  days after the new CUSIP's first row (CHTR's new preferred); the own-ticker pick is made before held CUSIPs are
+  dropped, and a pick another security holds is no step (LMCA 2016)); `corroborate` (R1: refused for an 8-K 1.03 in
   [first − 180, first + 30] d, an OTC move, a description that names no name in force, a class conflict, a
-  registrant that merged out or that another CIK's 8-K12B/12G3 replaces (`other_registrant`), or no filing stating
-  the change; the registrant carries on by a periodic report in `PERIODIC_FORMS`, which includes the small-business
+  registrant that merged out or that another CIK's 8-K12B/12G3 replaces (`other_registrant`), no filing stating
+  the change, or a failed `other_registrant` read (`read_failed`); the registrant carries on by a periodic report in `PERIODIC_FORMS`, which includes the small-business
   forms 10-K405, 10-KSB, 10-KSB40 and 10-QSB); `decide` (R2: attach, fold a placeholder, a line successor, or
-  refused). Run by `pipeline._follow_lines` (stage 4b), up to `MAX_ROUNDS` steps a line; a CUSIP one security took
-  is held for the rest of the round. A failed EDGAR read is never cached, and any degraded read of a CIK gives each
-  of that CIK's steps a `resolution_degraded` row. Review flags `line_followed`, `line_follow_refused:<why>`
+  refused: `unsettled`, `type` for an OpenFIGI preferred/warrant/right/unit, `other_issuer`, `class`). Run by `pipeline._follow_lines` (stage 4b), up to `MAX_ROUNDS` steps a line; a CUSIP, or a successor composite, one
+  security took is held for the rest of the round (a second is refused `taken`). A FIGI line with a line successor
+  is not listed today (stage 5's `retired`). A failed EDGAR read is never cached, and any degraded read of a CIK gives each
+  of that CIK's steps a `resolution_degraded` row, and so does a security with no step when a read of its CIK failed. Review flags `line_followed`, `line_follow_refused:<why>`
   (info). Its real cases replay offline from `tests/fixtures/lines/` (`scripts/build_line_fixtures.py`).
 - `acquirers.py` — a merger's acquirer as a security: `find_acquirer` (its
   composite FIGI from the fails rows under the acquirer ticker) and

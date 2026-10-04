@@ -308,8 +308,8 @@ CATALOG: dict[str, FlagInfo] = {
         "Nothing unless the filing says holders were paid or got another ratio; then the row is a merger."),
     "line_follow_refused": FlagInfo(
         "info", "A step of the security's line in the fails rows was not followed; after the colon, why "
-                "(bankruptcy, otc_move, name, class, merged_out, other_registrant, no_filing, unsettled, "
-                "other_issuer). The security's answer is the one it had without the step.",
+                "(bankruptcy, otc_move, name, class, merged_out, other_registrant, read_failed, no_filing, "
+                "unsettled, other_issuer, type, taken). The security's answer is the one it had without the step.",
         "Nothing unless the security did go on under the new CUSIP or ticker as the same line; then pin the "
         "observations' sec_id."),
     "no_figi": FlagInfo(

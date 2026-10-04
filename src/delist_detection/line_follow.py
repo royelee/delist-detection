@@ -18,14 +18,17 @@ from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date, timedelta
 
+import requests
+
 from .edgar import EdgarSubmission
 from .evidence import name_at, names_between
+from .fatal import FATAL
 from .figi_resolution import FigiCandidate, class_letter, is_placeholder, share_class_from_name, us_candidates
 from .ftd import FtdIndex, FtdRow, is_deleted_symbol, is_unassigned_symbol, settled_last
 from .listing_status import edgar_lists
 from .names import description_names, names_agree
 from .observations import normalize_ticker
-from .security_master import SWITCH_TAIL_DAYS, Security
+from .security_master import SWITCH_DAYS, SWITCH_TAIL_DAYS, Security
 from .successors import successor_query
 from .trading_calendar import add_trading_days
 
@@ -38,12 +41,14 @@ RENAME_DAYS = 90              # an EDGAR rename this close to the first new row 
 BANKRUPTCY_BEFORE_DAYS, BANKRUPTCY_AFTER_DAYS = 180, 30    # an 8-K item 1.03 in this window refuses the step
 NAME_DAYS = 30                # the new rows' descriptions must name a name in force this long from the first row
 RECENT_DAYS = 120             # a step this close to the run date may have no periodic report after it yet
+READ_FAILED = -1              # `other_registrant`: the read failed, nothing is known of another registrant
 MAX_ROUNDS = 3                # steps followed per line (WIN's two reverse splits, LPI's switch then rename)
 MAX_TEXTS = 5                 # 8-K texts read per step for a reverse split or the new CUSIP
 PERIODIC_FORMS = frozenset({"10-K", "10-Q", "20-F", "40-F", "10-KT", "10-QT", "10-K405", "10-KSB", "10-KSB40",
                             "10-QSB"})
 SUCCESSOR_FORMS = frozenset({"8-K12B", "8-K12G3"})
 _REVERSE_SPLIT = re.compile(r"reverse\s+(?:stock\s+)?split|share\s+consolidation", re.I)
+_NOT_COMMON = re.compile(r"pref|warrant|right|unit", re.I)     # OpenFIGI securityType of a line that is no common
 _SYMBOL = re.compile(r"[A-Z]{1,5}(?:-[A-Z])?")
 # "under the ticker symbol “CHX”", "the new trading symbol for the common stock is FNP"; the ticker is upper case
 _TEXT_SYMBOL = re.compile(r"(?i:symbol)[^.;]{0,60}?(?:\b(?i:is|to|of|under)\b\s*|[\"“'(])\s*[\"“'(]?([A-Z]{1,5})\b(?![a-z])")
@@ -166,10 +171,12 @@ def candidate_steps(sec_id: str, cusips: Sequence[str], tickers: Collection[str]
     trading days either side of the settled last row. `holders` maps a CUSIP to the securities of the run that
     hold it.
 
-    - SWITCH: a CUSIP not among `cusips` and held by no other security, whose first row (under any symbol) falls in
+    - SWITCH: a CUSIP not among `cusips`, whose first row (under any symbol) falls in
       the window and that has at least `MIN_NEW_ROWS` rows, found under one of `tickers`, its "...ZZZZ" or "...D"
       spelling, one of `extra_symbols` (the issuer's other tickers), or among `extra_cusips` (CUSIPs its 8-K text
-      names). None when the old CUSIP trades on past `SWITCH_TAIL_DAYS` after its last row under the tickers (a
+      names). The one picked (below) is dropped, and no step is taken, when another security holds it. None when
+      the old CUSIP's settled row is more than `SWITCH_DAYS` trading days after the new CUSIP's first row (the old
+      line trades on at changing prices beside it: CHTR's new preferred), and None when the old CUSIP trades on past `SWITCH_TAIL_DAYS` after its last row under the tickers (a
       spin-off took the ticker while the old line went on: GOOG, AAN).
     - NEW_SYMBOL: the old CUSIP's first row under a line symbol that is not one of `tickers` and not an OTC
       symbol (`is_otc_symbol`), in the window, with at least `MIN_NEW_ROWS` rows under it. None when another
@@ -191,17 +198,19 @@ def candidate_steps(sec_id: str, cusips: Sequence[str], tickers: Collection[str]
         found.update({c: "" for c in extra_cusips if c not in found})
         switches: dict[str, LineStep] = {}
         for c, s in sorted(found.items()):
-            if c in cusips or _others(holders, c, sec_id):
+            if c in cusips:
                 continue
             new_rows = ftd.by_cusip(c)
             if not new_rows or not lo <= new_rows[0].date <= hi or len(new_rows) < MIN_NEW_ROWS:
                 continue
             first = new_rows[0].date
+            if end.settled > _days(first, SWITCH_DAYS):
+                continue     # the old line kept trading at changing prices beside the new CUSIP (CHTR's preferred)
             until = (date.fromisoformat(first) + timedelta(days=NAME_DAYS)).isoformat()
             descs = tuple(sorted({x.description for x in new_rows if x.date <= until}))
             switches[c] = LineStep(sec_id, SWITCH, end.cusip, c, _line_symbol_of(new_rows, own, s), end.settled,
                                    first, descs)
-        steps += _one_switch(switches, own)
+        steps += [st for st in _one_switch(switches, own) if not _others(holders, st.new_cusip, sec_id)]
 
     if not _others(holders, end.cusip, sec_id):
         renamed: dict[str, list[FtdRow]] = {}
@@ -255,10 +264,11 @@ def _near(filings: Sequence[EdgarSubmission], day: date, before: int, after: int
     return [f for f in filings if keep(f) and (d := _filed(f)) is not None and lo <= d <= hi]
 
 
-def eightks_near(filings: Sequence[EdgarSubmission], day: date) -> list[EdgarSubmission]:
-    """The issuer's 8-Ks within `FILING_DAYS` of `day`, nearest first, at most `MAX_TEXTS`: the ones whose text
-    may state a reverse split or name the new CUSIP or ticker."""
-    near = _near(filings, day, FILING_DAYS, FILING_DAYS, lambda f: f.form.startswith("8-K"))
+def eightks_near(filings: Sequence[EdgarSubmission], day: date,
+                 keep: Callable[[EdgarSubmission], bool] = lambda f: True) -> list[EdgarSubmission]:
+    """The issuer's 8-Ks within `FILING_DAYS` of `day` that pass `keep`, nearest first, at most `MAX_TEXTS` (the
+    filter first, then the cap): the ones whose text may state a reverse split or name the new CUSIP or ticker."""
+    near = _near(filings, day, FILING_DAYS, FILING_DAYS, lambda f: f.form.startswith("8-K") and keep(f))
     return sorted(near, key=lambda f: (abs((_filed(f) - day).days), f.filing_date))[:MAX_TEXTS]
 
 
@@ -282,6 +292,7 @@ def corroborate(step: LineStep, *, filings: Sequence[EdgarSubmission], sub: Mapp
       8-K12B/8-K12G3 within `FILING_DAYS`, and it is not a step within `RECENT_DAYS` of the run date of a line
       listed today (UNIT 2025: Uniti Group LLC filed a 15-12G and no 10-Q);
     - "other_registrant" (R1): another CIK's 8-K12B/8-K12G3 names the issuer (SBGI 2023's new holding company);
+    - "read_failed": `other_registrant` could not read (`READ_FAILED`): nothing is known of another registrant;
     - "no_filing" (a switch only): no 8-K item 5.03 or 3.03, own 8-K12B/8-K12G3 or 8-K text stating a reverse
       split or naming the new CUSIP within `FILING_DAYS`, and no EDGAR rename within `RENAME_DAYS`.
 
@@ -307,7 +318,10 @@ def corroborate(step: LineStep, *, filings: Sequence[EdgarSubmission], sub: Mapp
                    for f in filings)
     if not (periodic or own_successor or ((as_of - first).days <= RECENT_DAYS and listed_now())):
         return "", "merged_out"
-    if other_registrant() is not None:
+    other = other_registrant()
+    if other == READ_FAILED:
+        return "", "read_failed"
+    if other is not None:
         return "", "other_registrant"
     if step.kind == NEW_SYMBOL:
         return "same CUSIP", ""
@@ -343,24 +357,30 @@ def other_registrant(search: Callable | None, edgar, *, name: str, day: date, ci
     (`successors.successor_query`): a new registrant took the old one's place (R1). A filer that is another
     issuer's own, still-listed stock is skipped, as `successors.successor_from_8k12b` skips it: its EDGAR name
     does not agree with `name`, none of its tickers is one of `own_tickers`, and EDGAR lists one of them on a major
-    exchange today (iHeartMedia's 8-K12G3 names its subsidiary Clear Channel Outdoor). None without a search."""
+    exchange today (iHeartMedia's 8-K12G3 names its subsidiary Clear Channel Outdoor). None without a search;
+    `READ_FAILED` when a read failed (`fatal.FATAL` is re-raised)."""
     if search is None or not name:
         return None
-    own = {normalize_ticker(t) for t in own_tickers}
-    for h in search(*successor_query(name, day)):
-        src = h.get("_source", h)
-        for cik_s, disp in zip(src.get("ciks") or [], src.get("display_names") or []):
-            other = int(cik_s)
-            if other == cik:
-                continue
-            m = re.search(r"\(([^()]*)\)\s*\(CIK\s+\d+\)\s*$", disp)
-            tickers = [normalize_ticker(t) for t in m.group(1).split(",") if t.strip()] if m else []
-            edgar_name = disp[: m.start()].strip() if m else re.sub(r"\s*\(CIK\s+\d+\)\s*$", "", disp).strip()
-            if (tickers and not names_agree(name, edgar_name) and not own & set(tickers)
-                    and edgar_lists(edgar, other, tickers)):
-                continue
-            return other
-    return None
+    try:
+        own = {normalize_ticker(t) for t in own_tickers}
+        for h in search(*successor_query(name, day)):
+            src = h.get("_source", h)
+            for cik_s, disp in zip(src.get("ciks") or [], src.get("display_names") or []):
+                other = int(cik_s)
+                if other == cik:
+                    continue
+                m = re.search(r"\(([^()]*)\)\s*\(CIK\s+\d+\)\s*$", disp)
+                tickers = [normalize_ticker(t) for t in m.group(1).split(",") if t.strip()] if m else []
+                edgar_name = disp[: m.start()].strip() if m else re.sub(r"\s*\(CIK\s+\d+\)\s*$", "", disp).strip()
+                if (tickers and not names_agree(name, edgar_name) and not own & set(tickers)
+                        and edgar_lists(edgar, other, tickers)):
+                    continue
+                return other
+        return None
+    except FATAL:
+        raise
+    except requests.RequestException:
+        return READ_FAILED
 
 
 def composites(answer: Mapping) -> list[FigiCandidate] | None:
@@ -374,7 +394,8 @@ def decide(step: LineStep, sec: Security, cands: list[FigiCandidate] | None,
            securities: Mapping[str, Security]) -> Decision:
     """R2 for `step` of security `sec`: a new symbol of the same CUSIP is the same security (ATTACH). A switch
     follows its new CUSIP's US composites (`cands`): none, or `sec`'s own, ATTACH; several, or an OpenFIGI error,
-    REFUSED "unsettled"; one other composite X: REFUSED "other_issuer" when a security of the run of another
+    REFUSED "unsettled"; one other composite X: REFUSED "type" when OpenFIGI types it a preferred, warrant, right
+    or unit (CHTR's new preferred CHTRP), REFUSED "other_issuer" when a security of the run of another
     issuer holds X, REFUSED "class" when one of another share class does, else FOLD into X for a placeholder (the
     truth set's reading of R2 for a line with no composite) and SUCCESSOR X for a FIGI line."""
     if step.kind == NEW_SYMBOL:
@@ -384,6 +405,8 @@ def decide(step: LineStep, sec: Security, cands: list[FigiCandidate] | None,
     if not cands or cands[0].composite == sec.sec_id:
         return Decision(ATTACH, cands[0].composite if cands else "", candidate=cands[0] if cands else None)
     x = cands[0]
+    if _NOT_COMMON.search(x.security_type):
+        return Decision(REFUSED, x.composite, "type", x)
     holder = securities.get(x.composite)
     if holder is not None and holder.issuer_cik is not None and holder.issuer_cik != sec.issuer_cik:
         return Decision(REFUSED, x.composite, "other_issuer", x)
