@@ -14,13 +14,14 @@ summary.md. It prints one JSON line of counts. Offline (git only). Exit 2: a mis
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 import sys
 from pathlib import Path
 
 from delist_detection import diagnosis_loop as dl
-from delist_detection.diagnosis_truth import (COLUMNS, LibraryRows, judge_all, load_legs, parse_rows,
-                                              write_diagnosis_truth)
+from delist_detection.atomic_io import replace_all_on_success
+from delist_detection.diagnosis_truth import COLUMNS, LibraryRows, judge_all, load_legs, parse_rows
 from delist_detection.lifecycle import Tables
 from delist_detection.regression import RegressionInputError, read_snapshot, snapshot_at
 from delist_detection.truth import TruthFileError
@@ -58,18 +59,28 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     rel_reports = (round_dir / "reports").relative_to(args.repo).as_posix() if round_dir.is_relative_to(args.repo) \
         else str(round_dir / "reports")
-    res = apply_round(cases, records, truth_rows, {r["sec_id"]: r for r in base.delistings},
-                      {r["sec_id"]: r for r in new.delistings}, label=args.label, round_no=args.round,
-                      report_dir=rel_reports, ledger_keys=dl.ledger_keys(ledger))
+    try:
+        res = apply_round(cases, records, truth_rows, {r["sec_id"]: r for r in base.delistings},
+                          {r["sec_id"]: r for r in new.delistings}, label=args.label, round_no=args.round,
+                          report_dir=rel_reports, ledger_keys=dl.ledger_keys(ledger))
+    except ValueError as exc:
+        print(f"ABORTED: {exc}", file=sys.stderr)
+        return 2
     judged = judge_all(parse_rows(res.truth_rows, "updated truth", legs), LibraryRows.of(tables))
     res.changes += flip_statuses(res.truth_rows, {j.case.case_id for j in judged if j.ok})
     summary = {"label": args.label, "round": args.round, "cases": len(cases), "records": len(records),
                "truth_changes": len(res.changes), "ledger_rows": len(res.ledger_rows), "retry": res.pending,
                "dry_run": args.dry_run}
     if not args.dry_run:
-        write_diagnosis_truth(args.truth, [{c: r[c] for c in COLUMNS} for r in res.truth_rows])
-        dl.write_changes(args.changes, dl.read_csv(args.changes) + res.changes)
-        dl.write_ledger(args.loop_dir / "diagnosed.csv", ledger + res.ledger_rows)
+        # The truth file, the change log and the ledger move together: all three are replaced, or none.
+        sets = ((COLUMNS, res.truth_rows), (dl.CHANGE_COLUMNS, dl.read_csv(args.changes) + res.changes),
+                (dl.LEDGER_COLUMNS, ledger + res.ledger_rows))
+        with replace_all_on_success([args.truth, args.changes, args.loop_dir / "diagnosed.csv"]) as tmps:
+            for tmp, (cols, rows) in zip(tmps, sets):
+                with tmp.open("w", newline="", encoding="utf-8") as fh:
+                    w = csv.DictWriter(fh, fieldnames=list(cols), lineterminator="\n")
+                    w.writeheader()
+                    w.writerows({c: r[c] for c in cols} for r in rows)
         lines = [f"# Loop {args.label}, round {args.round}", "", f"- cases: {len(cases)}, records: {len(records)}",
                  f"- truth changes: {len(res.changes)}", f"- retried next round (no record): {res.pending or 'none'}",
                  "", "| case | field | old | new | reason |", "| --- | --- | --- | --- | --- |"]

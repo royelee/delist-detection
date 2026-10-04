@@ -10,6 +10,8 @@
 - A mismatched truth field changes only when the diagnosis is verified and upheld, finds the library's value right,
   and names a filing the earlier report missed or misread (`missed_filing`). A verdict about the shape, the ending
   or a leg sends the case to `ruling_pending` instead: the operator rewrites such rows.
+- A `pending` ledger row is never re-diagnosed automatically: the operator settles it, or deletes the ledger row
+  to retry (spec 1.6).
 - A case with no record (the agent failed) changes nothing and leaves no ledger row, so the next round retries it.
 - `flip_statuses` turns a known_wrong case that now matches into `pass`.
 
@@ -66,7 +68,8 @@ def _regression_row(case: Mapping[str, str], right: Mapping[str, str], fields: S
         row["shape"] = ENDING if side else NO_ENDING
         row.update({f: (side or {}).get(f, "") for f in SCORED})
         return row
-    row.update({f: (new_row or base_row or {}).get(f, "") for f in SCORED})
+    # Seed from the base row, then take the diagnosed side per field: a truth row never takes an undiagnosed value.
+    row.update({f: (base_row or new_row or {}).get(f, "") for f in SCORED})
     for f, o, n in zip(fields, old, new):
         if f in SCORED:
             row[f] = n if right[f] == NEW else o
@@ -105,7 +108,7 @@ def apply_round(cases: Sequence[Mapping[str, str]], records: Mapping[str, Mappin
                 continue
             if ok:
                 row = _regression_row(case, right, fields, a, b, base_contract.get(sec), new_contract.get(sec))
-                all_new = all(right[f] == NEW for f in fields)
+                all_new = all(right[f] == NEW for f in fields if f in SCORED or f in WHOLE_ROW)
                 row.update(status=PASS if all_new else KNOWN_WRONG, fixed_by="" if all_new else label,
                            confidence=rec.get("confidence", ""), skeptic="upheld",
                            note=f"added by the {label} loop: regression of {', '.join(fields)}")
@@ -121,7 +124,10 @@ def apply_round(cases: Sequence[Mapping[str, str]], records: Mapping[str, Mappin
             changes.append(_change(row["case_id"], "(row)", "", f"added ({row['status']})",
                                    f"{label} loop round {round_no}: regression", report))
         else:
-            truth = by_case[case["truth_case_id"]]
+            truth = by_case.get(case["truth_case_id"])
+            if truth is None:
+                raise ValueError(
+                    f"case {case['case_id']}: truth case {case['truth_case_id']!r} is not in the truth rows")
             for f, k, t, lib in zip(fields, keys, a, b):
                 v = verdicts.get(f) or {}
                 if usable and v.get("right") == LIBRARY and v.get("missed_filing"):

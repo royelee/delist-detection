@@ -1,9 +1,21 @@
 """truth_update: what a round's diagnoses may change in the truth file (spec 1.6)."""
+import csv
+import importlib.util
 import json
+import os
+import subprocess
+from pathlib import Path
 
+import pytest
+
+from delist_detection import diagnosis_loop as dl
+from delist_detection import diagnosis_truth as dt
+from delist_detection import store
 from delist_detection import truth_update as tu
 from tests.diagnosis_rows import truth_row
 from tests.lifecycle_tables import contract_row
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
 def _case(case_id, mode, sec, fields, a, b, truth_case_id="", keys=None):
@@ -114,3 +126,91 @@ def test_flip_statuses_turns_matching_known_wrong_cases_into_pass():
     changes = tu.flip_statuses(rows, {"A_2010-01-04"})
     assert [(r["status"], r["fixed_by"]) for r in rows] == [("pass", ""), ("known_wrong", "5a")]
     assert [(c["case_id"], c["old"], c["new"]) for c in changes] == [("A_2010-01-04", "known_wrong", "pass")]
+
+
+def test_a_truth_row_takes_the_base_value_for_a_field_the_case_does_not_hold():
+    new = {"Z": contract_row("Z", exit_kind="exchange", last_trade_date="2010-10-01", value_rule="cash")}
+    res = _apply([REG], {"Z_5a-r1": _record([{"field": "last_trade_date", "right": "new", "value": "2010-10-01",
+                                               "missed_filing": ""}])}, base=BASE, new=new)
+    [row] = res.truth_rows
+    assert (row["exit_kind"], row["last_trade_date"]) == ("merger", "2010-10-01")
+
+
+def test_a_mixed_case_is_pass_when_the_truth_touching_fields_are_all_new():
+    case = _case("N_5a-r1", "regression", "N", ["delistings.added", "security_history.ranges"],
+                 ["", "a"], ["exit_kind=merger", "b"])
+    verdicts = [{"field": "delistings.added", "right": "new", "value": "", "missed_filing": ""},
+                {"field": "security_history.ranges", "right": "old", "value": "a", "missed_filing": ""}]
+    res = _apply([case], {"N_5a-r1": _record(verdicts)}, new={"N": contract_row("N", exit_kind="merger")})
+    [row] = res.truth_rows
+    assert (row["status"], row["fixed_by"], row["exit_kind"]) == ("pass", "", "merger")
+    assert sorted(r["outcome"] for r in res.ledger_rows) == ["new_right", "old_right"]
+
+
+def test_a_mismatch_naming_an_absent_truth_case_is_an_error():
+    case = _case("A_5a-r1", "mismatch", "A", ["last_trade_date"], ["x"], ["y"], truth_case_id="A_gone")
+    with pytest.raises(ValueError, match="A_5a-r1.*A_gone"):
+        _apply([case], {"A_5a-r1": _record([])})
+
+
+def _script():
+    spec = importlib.util.spec_from_file_location("update_truth", ROOT / "scripts" / "update_truth.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def _git(repo, *args):
+    subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True,
+                   env={**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t",
+                        "GIT_COMMITTER_EMAIL": "t@t"})
+
+
+def _round(tmp_path):
+    repo = tmp_path / "repo"
+    out = repo / "output"
+    out.mkdir(parents=True)
+    _git(repo, "init", "-q")
+    store.write_tables(out, {"contract_delistings": [BASE["Z"]], "security_history": [], "securities": [],
+                             "ticker_history": [], "delistings": [], "observation_map": []})
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", "base")
+    store.write_tables(out, {"contract_delistings": [NEW["Z"]]})
+    rdir = tmp_path / "loop" / "5a" / "round-1"
+    (rdir / "records").mkdir(parents=True)
+    dl.write_ledger(tmp_path / "loop" / "diagnosed.csv", [])
+    argv = ["--label", "5a", "--round", "1", "--base", "HEAD", "--repo", str(repo), "--output-dir", str(out),
+            "--truth", str(tmp_path / "truth.csv"), "--legs", str(tmp_path / "legs.csv"),
+            "--changes", str(tmp_path / "changes.csv"), "--loop-dir", str(tmp_path / "loop")]
+    return rdir, argv
+
+
+def test_script_exits_2_when_cases_csv_is_missing(tmp_path, capsys):
+    rdir, argv = _round(tmp_path)
+    assert _script().main(argv) == 2
+    assert "cases.csv" in capsys.readouterr().err
+
+
+def test_script_dry_run_writes_nothing_and_prints_the_counts(tmp_path, capsys):
+    rdir, argv = _round(tmp_path)
+    case = _case("Z_5a-r1", "regression", "Z", ["last_trade_date"], ["2010-09-30"], ["2010-10-01"])
+    with (rdir / "cases.csv").open("w", newline="") as fh:
+        w = csv.DictWriter(fh, fieldnames=list(case), lineterminator="\n")
+        w.writeheader()
+        w.writerow(case)
+    rec = _record([{"field": "last_trade_date", "right": "new", "value": "", "missed_filing": ""}])
+    (rdir / "records" / "Z_5a-r1.json").write_text(json.dumps(rec))
+    dt.write_diagnosis_truth(tmp_path / "truth.csv", [])
+    truth = (tmp_path / "truth.csv").read_bytes()
+    ledger = (tmp_path / "loop" / "diagnosed.csv").read_bytes()
+    assert _script().main(argv + ["--dry-run"]) == 0
+    line = json.loads(capsys.readouterr().out)
+    assert (line["cases"], line["records"], line["truth_changes"], line["dry_run"]) == (1, 1, 1, True)
+    assert truth == (tmp_path / "truth.csv").read_bytes()
+    assert not (tmp_path / "changes.csv").exists() and not (rdir / "summary.md").exists()
+    assert ledger == (tmp_path / "loop" / "diagnosed.csv").read_bytes()
+    assert _script().main(argv) == 0
+    assert [r["case_id"] for r in dl.read_csv(tmp_path / "truth.csv")] == ["Z_5a-r1"]
+    assert [r["field"] for r in dl.read_csv(tmp_path / "changes.csv")] == ["(row)"]
+    assert [r["outcome"] for r in dl.read_ledger(tmp_path / "loop" / "diagnosed.csv")] == ["new_right"]
+    assert (rdir / "summary.md").exists()
