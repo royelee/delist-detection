@@ -755,3 +755,26 @@ mis|CIK944868-COMMON_2009-11-29|value_rule|continuation|stock,mismatch,CIK944868
 mis|CIK944868-COMMON_2009-11-29|stock_ratio||1.000000,mismatch,CIK944868-COMMON,5-0,0,known,reports/CIK944868-COMMON_2009-11-29.md
 mis|CIK944868-COMMON_2009-11-29|price_ticker||DTV,mismatch,CIK944868-COMMON,5-0,0,known,reports/CIK944868-COMMON_2009-11-29.md
 mis|CIK944868-COMMON_2009-11-29|internal_last_trade_date|2009-11-19|,mismatch,CIK944868-COMMON,5-0,0,known,reports/CIK944868-COMMON_2009-11-29.md
+mis|BBG000BLH3P8_2023-06-20|shape|ending_moved|ending 2023-06-20,mismatch,BBG000BLH3P8,5a-precheck,0,known,reports/BBG000BLH3P8_2023-06-20.md
+mis|BBG000CL1HL7_2021-12-10|shape|ending_moved|ending 2021-12-10,mismatch,BBG000CL1HL7,5a-precheck,0,known,reports/BBG000CL1HL7_2021-12-10.md
+mis|BBG000DZCFX4_2020-06-02|shape|ending_moved|ending 2020-06-02,mismatch,BBG000DZCFX4,5a-precheck,0,known,reports/BBG000DZCFX4_2020-06-02.md
+mis|BBG000Q02P20_2011-11-14|shape|ending_moved|ending 2011-11-14,mismatch,BBG000Q02P20,5a-precheck,0,known,reports/BBG000Q02P20_2011-11-14.md
+mis|BBG005PWSVQ3_2016-08-31|shape|ending_moved|ending 2016-08-31,mismatch,BBG005PWSVQ3,5a-precheck,0,known,reports/BBG005PWSVQ3_2016-08-31.md
+mis|BBG00JM9V731_2026-07-30|exit_kind|exchange|,mismatch,BBG00JM9V731,5a-precheck,0,known,reports/BBG00JM9V731_2026-07-30.md
+mis|BBG00JM9V731_2026-07-30|continuation|true|false,mismatch,BBG00JM9V731,5a-precheck,0,known,reports/BBG00JM9V731_2026-07-30.md
+mis|BBG00JM9V731_2026-07-30|value_rule|continuation|unknown,mismatch,BBG00JM9V731,5a-precheck,0,known,reports/BBG00JM9V731_2026-07-30.md
+mis|CIK1066104-COMMON_2012-08-13|shape|ending_moved|ending 2012-08-13,mismatch,CIK1066104-COMMON,5a-precheck,0,known,reports/CIK1066104-COMMON_2012-08-13.md
+mis|CIK1095651-COMMON_2013-12-19|shape|ending_moved|ending 2013-12-19,mismatch,CIK1095651-COMMON,5a-precheck,0,known,reports/CIK1095651-COMMON_2013-12-19.md
+mis|CIK1115836-COMMON_2014-07-01|shape|ending_moved|ending 2014-07-01,mismatch,CIK1115836-COMMON,5a-precheck,0,known,reports/CIK1115836-COMMON_2014-07-01.md
+mis|CIK1282266-COMMON_2015-04-27|shape|ending_moved|ending 2015-04-27,mismatch,CIK1282266-COMMON,5a-precheck,0,known,reports/CIK1282266-COMMON_2015-04-27.md
+mis|CIK1469372-CLASS-A_2015-10-02|shape|ending_moved|ending 2015-10-02,mismatch,CIK1469372-CLASS-A,5a-precheck,0,known,reports/CIK1469372-CLASS-A_2015-10-02.md
+mis|CIK1507934-CLASS-A_2013-01-16|shape|ending_moved|ending 2013-01-16,mismatch,CIK1507934-CLASS-A,5a-precheck,0,known,reports/CIK1507934-CLASS-A_2013-01-16.md
+mis|CIK1606498-COMMON_2018-07-11|shape|ending_moved|ending 2018-07-11,mismatch,CIK1606498-COMMON,5a-precheck,0,known,reports/CIK1606498-COMMON_2018-07-11.md
+mis|CIK1723089-COMMON_2021-01-10|shape|ending_moved|ending 2021-01-10,mismatch,CIK1723089-COMMON,5a-precheck,0,known,reports/CIK1723089-COMMON_2021-01-10.md
+mis|CIK1803737-COMMON_2022-06-30|shape|ending_moved|ending 2022-06-30,mismatch,CIK1803737-COMMON,5a-precheck,0,known,reports/CIK1803737-COMMON_2022-06-30.md
+mis|CIK1808220-CLASS-A_2022-11-17|shape|ending_moved|ending 2022-11-17,mismatch,CIK1808220-CLASS-A,5a-precheck,0,known,reports/CIK1808220-CLASS-A_2022-11-17.md
+mis|CIK23666-COMMON_2012-07-13|shape|ending_moved|ending 2012-07-13,mismatch,CIK23666-COMMON,5a-precheck,0,known,reports/CIK23666-COMMON_2012-07-13.md
+mis|CIK352363-COMMON_2012-05-14|shape|ending_moved|ending 2012-05-14,mismatch,CIK352363-COMMON,5a-precheck,0,known,reports/CIK352363-COMMON_2012-05-14.md
+mis|CIK708819-COMMON_2018-05-08|shape|ending_moved|ending 2018-05-08,mismatch,CIK708819-COMMON,5a-precheck,0,known,reports/CIK708819-COMMON_2018-05-08.md
+mis|CIK716006-COMMON_2010-10-04|shape|ending_moved|ending 2010-10-04,mismatch,CIK716006-COMMON,5a-precheck,0,known,reports/CIK716006-COMMON_2010-10-04.md
+mis|CIK910073-COMMON_2024-07-12|shape|ending_moved|ending 2024-07-12,mismatch,CIK910073-COMMON,5a-precheck,0,known,reports/CIK910073-COMMON_2024-07-12.md
