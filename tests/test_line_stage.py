@@ -53,6 +53,9 @@ class _Ftd:
     def extend(self, *a, **k):
         pass
 
+    def last_date(self):
+        return "2026-09-25"
+
 
 def _world(specs):
     """specs: (sec_id, cik, ticker, [cusips]) -> (securities, resolutions, era_by_key, sec_cusips, answers)."""

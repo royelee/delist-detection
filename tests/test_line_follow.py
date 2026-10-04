@@ -9,7 +9,7 @@ from delist_detection.edgar import EdgarSubmission
 from delist_detection.figi_resolution import us_candidates
 from delist_detection.ftd import FtdIndex, FtdRow
 from delist_detection.observations import TickerEra
-from delist_detection.security_master import SWITCH_DAYS, Security
+from delist_detection.security_master import Security  # noqa: F401
 
 
 def _rows(symbol, cusip, desc, start, n, *, step=1, prices=None):
@@ -350,14 +350,14 @@ def _edge(offset):
 
 
 @pytest.mark.parametrize("offset, found", [(lf.LINE_DAYS, True), (lf.LINE_DAYS + 1, False),
-                                           (-SWITCH_DAYS, True), (-SWITCH_DAYS - 1, False)])
+                                           (-lf.LINE_DAYS, True), (-lf.LINE_DAYS - 1, False)])
 def test_the_window_bounds_a_switch_found_by_symbol(offset, found):
     steps = _steps(OLD + _from("RS", "11111A200", _edge(offset)))
     assert [s.new_cusip for s in steps] == (["11111A200"] if found else [])
 
 
 @pytest.mark.parametrize("offset, found", [(lf.LINE_DAYS, True), (lf.LINE_DAYS + 1, False),
-                                           (-SWITCH_DAYS, True), (-SWITCH_DAYS - 1, False)])
+                                           (-lf.LINE_DAYS, True), (-lf.LINE_DAYS - 1, False)])
 def test_the_window_bounds_a_switch_found_by_its_cusip(offset, found):
     steps = _steps(OLD + _from("XYZ", "316645100", _edge(offset)), extra_cusips={"316645100"})
     assert [s.new_cusip for s in steps] == (["316645100"] if found else [])
@@ -369,9 +369,32 @@ def test_a_new_cusip_beside_an_old_line_still_trading_at_changing_prices_is_no_s
     """CHTR 2026: the issuer's new preferred first trades 7 trading days before the end of the data while the
     common goes on at changing prices; a live line's `last` is the data end, so only the settled row can tell."""
     new = _rows("RSP", "11111A306", "REVERSE SPLIT CO PFD", "2012-09-14", 7)
-    assert _steps(OLD + new, extra_symbols={"RSP"}) == []
+    edge = {"extra_symbols": {"RSP"}, "data_end": "2012-09-25"}
+    assert _steps(OLD + new, **edge) == []
     near = _rows("RSP", "11111A306", "REVERSE SPLIT CO PFD", "2012-09-20", 4)      # 3 trading days before the end
-    assert len(_steps(OLD + near, extra_symbols={"RSP"})) == 1
+    assert len(_steps(OLD + near, **edge)) == 1
+    # BYND-shaped: the old line stopped 4 days before the new CUSIP started, near the data end
+    stopped = _rows("RS", "11111A101", "REVERSE SPLIT CO", "2012-08-01", 36)       # last row 2012-09-19
+    later = _rows("RSP", "11111A306", "REVERSE SPLIT CO", "2012-09-25", 5)
+    assert len(_steps(stopped + later, extra_symbols={"RSP"}, data_end="2012-10-01")) == 1
+
+
+def test_a_mid_history_line_keeps_the_whole_window_even_with_an_overlap_at_changing_prices():
+    """HYH 2018: the old CUSIP's last rows overlap the new CUSIP's first by 7 trading days, long before the data's
+    end: a step. The same overlap at the data's edge (CHTR) is none."""
+    new = _rows("RSP", "11111A306", "REVERSE SPLIT CO", "2012-09-14", 7)
+    assert len(_steps(OLD + new, extra_symbols={"RSP"}, data_end="2013-06-03")) == 1
+    assert _steps(OLD + new, extra_symbols={"RSP"}, data_end="2012-09-25") == []
+
+
+@pytest.mark.parametrize("security_type", ["Equity WRT", "Preferred Stock", "Warrant"])
+def test_a_warrant_or_preferred_type_is_not_common(security_type):
+    assert lf._NOT_COMMON.search(security_type)
+
+
+@pytest.mark.parametrize("security_type", ["Common Stock", "ADR", "REIT", "MLP", "Ltd Part", "Tracking Stk", "ETP"])
+def test_a_common_like_type_passes_the_type_refusal(security_type):
+    assert not lf._NOT_COMMON.search(security_type)
 
 
 def test_the_own_ticker_pick_is_made_before_held_cusips_are_dropped():

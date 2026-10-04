@@ -327,6 +327,12 @@ class FtdIndex:
         self._sort()
         return self._slice(self._by_cusip.get(cusip.upper(), []), lo, hi)
 
+    def last_date(self) -> str | None:
+        """The date of the latest row loaded (the last day the fails data covers, to the loaded symbols); None when
+        empty."""
+        self._sort()
+        return self._dates[-1] if self._dates else None
+
     def has_rows(self, lo: str, hi: str) -> bool:
         """Whether any row at all (of any symbol or CUSIP) is dated in [lo, hi]:
         the loaded fails data says something about those days, so a symbol with

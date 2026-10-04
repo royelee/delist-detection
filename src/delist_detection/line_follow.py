@@ -48,7 +48,7 @@ PERIODIC_FORMS = frozenset({"10-K", "10-Q", "20-F", "40-F", "10-KT", "10-QT", "1
                             "10-QSB"})
 SUCCESSOR_FORMS = frozenset({"8-K12B", "8-K12G3"})
 _REVERSE_SPLIT = re.compile(r"reverse\s+(?:stock\s+)?split|share\s+consolidation", re.I)
-_NOT_COMMON = re.compile(r"pref|warrant|right|unit", re.I)     # OpenFIGI securityType of a line that is no common
+_NOT_COMMON = re.compile(r"pref|warrant|right|unit|\bWRT\b", re.I)     # OpenFIGI securityType of a line that is no common
 _SYMBOL = re.compile(r"[A-Z]{1,5}(?:-[A-Z])?")
 # "under the ticker symbol “CHX”", "the new trading symbol for the common stock is FNP"; the ticker is upper case
 _TEXT_SYMBOL = re.compile(r"(?i:symbol)[^.;]{0,60}?(?:\b(?i:is|to|of|under)\b\s*|[\"“'(])\s*[\"“'(]?([A-Z]{1,5})\b(?![a-z])")
@@ -166,7 +166,7 @@ def _one_switch(switches: Mapping[str, LineStep], tickers: Collection[str]) -> l
 
 def candidate_steps(sec_id: str, cusips: Sequence[str], tickers: Collection[str], ftd: FtdIndex, *,
                     holders: Mapping[str, Collection[str]] = {}, extra_symbols: Collection[str] = (),
-                    extra_cusips: Collection[str] = (), days: int = LINE_DAYS) -> list[LineStep]:
+                    extra_cusips: Collection[str] = (), days: int = LINE_DAYS, data_end: str | None = None) -> list[LineStep]:
     """The next steps of a security's line in the fails rows (pure). Its `line_end` opens a window of `days`
     trading days either side of the settled last row. `holders` maps a CUSIP to the securities of the run that
     hold it.
@@ -175,8 +175,10 @@ def candidate_steps(sec_id: str, cusips: Sequence[str], tickers: Collection[str]
       the window and that has at least `MIN_NEW_ROWS` rows, found under one of `tickers`, its "...ZZZZ" or "...D"
       spelling, one of `extra_symbols` (the issuer's other tickers), or among `extra_cusips` (CUSIPs its 8-K text
       names). The one picked (below) is dropped, and no step is taken, when another security holds it. None when
-      the old CUSIP's settled row is more than `SWITCH_DAYS` trading days after the new CUSIP's first row (the old
-      line trades on at changing prices beside it: CHTR's new preferred), and None when the old CUSIP trades on past `SWITCH_TAIL_DAYS` after its last row under the tickers (a
+      the old CUSIP's last row is within `SWITCH_TAIL_DAYS` trading days of `data_end` (the last day the fails
+      index covers; the old line has not been seen to stop) and its settled row is more than `SWITCH_DAYS`
+      trading days after the new CUSIP's first row (the old line trades on at changing prices beside it: CHTR's
+      new preferred; no `data_end`: the rule is off), and None when the old CUSIP trades on past `SWITCH_TAIL_DAYS` after its last row under the tickers (a
       spin-off took the ticker while the old line went on: GOOG, AAN).
     - NEW_SYMBOL: the old CUSIP's first row under a line symbol that is not one of `tickers` and not an OTC
       symbol (`is_otc_symbol`), in the window, with at least `MIN_NEW_ROWS` rows under it. None when another
@@ -191,6 +193,9 @@ def candidate_steps(sec_id: str, cusips: Sequence[str], tickers: Collection[str]
     lo, hi = _days(end.settled, -days), _days(end.settled, days)
     steps: list[LineStep] = []
 
+    # a live line has no stop for the tail check below to see: at the data's edge a switch needs the old line to
+    # have stopped (its settled row no more than SWITCH_DAYS after the new CUSIP's first row)
+    at_edge = data_end is not None and end.last >= _days(data_end, -SWITCH_TAIL_DAYS)
     tail = _days(end.last, SWITCH_TAIL_DAYS)
     if not any(r.date > tail for r in ftd.trading_rows([end.cusip])):
         scan = {s for t in own for s in (t, t.replace("-", "") + "ZZZZ", t.replace("-", "") + "D")}
@@ -204,7 +209,7 @@ def candidate_steps(sec_id: str, cusips: Sequence[str], tickers: Collection[str]
             if not new_rows or not lo <= new_rows[0].date <= hi or len(new_rows) < MIN_NEW_ROWS:
                 continue
             first = new_rows[0].date
-            if end.settled > _days(first, SWITCH_DAYS):
+            if at_edge and end.settled > _days(first, SWITCH_DAYS):
                 continue     # the old line kept trading at changing prices beside the new CUSIP (CHTR's preferred)
             until = (date.fromisoformat(first) + timedelta(days=NAME_DAYS)).isoformat()
             descs = tuple(sorted({x.description for x in new_rows if x.date <= until}))
@@ -394,7 +399,7 @@ def decide(step: LineStep, sec: Security, cands: list[FigiCandidate] | None,
            securities: Mapping[str, Security]) -> Decision:
     """R2 for `step` of security `sec`: a new symbol of the same CUSIP is the same security (ATTACH). A switch
     follows its new CUSIP's US composites (`cands`): none, or `sec`'s own, ATTACH; several, or an OpenFIGI error,
-    REFUSED "unsettled"; one other composite X: REFUSED "type" when OpenFIGI types it a preferred, warrant, right
+    REFUSED "unsettled"; one other composite X: REFUSED "type" when OpenFIGI types it a preferred, warrant (also "Equity WRT"), right
     or unit (CHTR's new preferred CHTRP), REFUSED "other_issuer" when a security of the run of another
     issuer holds X, REFUSED "class" when one of another share class does, else FOLD into X for a placeholder (the
     truth set's reading of R2 for a line with no composite) and SUCCESSOR X for a FIGI line."""

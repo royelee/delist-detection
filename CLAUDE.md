@@ -297,7 +297,9 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   CUSIP under the line's ticker, its `…ZZZZ`/`…D` spellings, a ticker of the issuer EDGAR lists or its 8-K text
   names (`text_symbols`, `text_cusips`), or the same CUSIP under a new non-OTC ticker; never a CUSIP another
   security holds, nor a switch while the old CUSIP trades on at changing prices more than `SWITCH_DAYS` trading
-  days after the new CUSIP's first row (CHTR's new preferred); the own-ticker pick is made before held CUSIPs are
+  days after the new CUSIP's first row, applied only at the data edge (the old CUSIP's last row within
+  `SWITCH_TAIL_DAYS` of `FtdIndex.last_date()`, passed as `data_end`: a live line has no stop to see; CHTR's new
+  preferred; elsewhere the window is ±`LINE_DAYS` both sides, HYH 2018); the own-ticker pick is made before held CUSIPs are
   dropped, and a pick another security holds is no step (LMCA 2016)); `corroborate` (R1: refused for an 8-K 1.03 in
   [first − 180, first + 30] d, an OTC move, a description that names no name in force, a class conflict, a
   registrant that merged out or that another CIK's 8-K12B/12G3 replaces (`other_registrant`), no filing stating

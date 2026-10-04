@@ -557,7 +557,8 @@ def _follow_lines(ctx: _RunContext, securities: dict[str, Security], resolutions
 
         def steps_of(sid: str) -> list[LineStep]:
             return candidate_steps(sid, out.sec_cusips.get(sid, []), own(sid), ftd, holders=holders,
-                                   extra_symbols=extra.get(sid, ()), extra_cusips=named.get(sid, ()))
+                                   extra_symbols=extra.get(sid, ()), extra_cusips=named.get(sid, ()),
+                                   data_end=ftd.last_date())
 
         steps = {sid: steps_of(sid) for sid in todo}
         new_symbols: set[str] = set()
