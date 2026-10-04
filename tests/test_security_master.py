@@ -1110,3 +1110,38 @@ def test_settled_last_is_the_row_that_opens_the_last_one_price_run():
                                                      ("2012-07-02", 18.5), ("2012-07-13", 18.5))]
     assert settled_last(rows).date == "2012-06-29" and settled_last(rows[:1]).date == "2012-06-28"
     assert settled_last(rows[:2]).date == "2012-06-29"
+
+
+def _spw_spxc(spxc_name="SPX CORP"):
+    """SPX's one CUSIP 784635104 under SPW (2008-2015) and SPXC (from 2015-09-29). OpenFIGI knows the CUSIP on no
+    US venue; SPXC's ticker gives BBG000BTGCV5."""
+    spw = _era("SPW", ("2008-01-16", "SPX CORP"), ("2015-06-30", "SPX CORP"))
+    spxc = _era("SPXC", ("2015-12-31", spxc_name))
+    figi = _Figi({("TICKER", "SPXC"): {"data": [_row("BBG000BTGCV5", "US", "SPXC", "SPX CORP")]}})
+    handoffs = [Handoff(spw.key, spxc.key, "shared_cusip", "784635104"),
+                Handoff(spxc.key, spw.key, "shared_cusip", "784635104")]
+    return spw, spxc, figi, handoffs
+
+
+def test_a_shared_cusip_reaches_a_sibling_the_ticker_tier_picked_on_its_own_name():
+    """U3 (sub-plan 5a, SPW 2015): SPW shares its CUSIP with SPXC, an era of its issuer and class the ticker tier
+    picked on its observed name. One CUSIP under two tickers of one issuer is one line: SPW joins that composite
+    instead of keeping a placeholder beside it."""
+    spw, spxc, figi, handoffs = _spw_spxc()
+    res = FigiResolver(figi).resolve_many([spw, spxc], issuers=issuers_by_era({spw.key: 88205, spxc.key: 88205}),
+                                          cusips={spw.key: ["784635104"], spxc.key: ["784635104"]},
+                                          handoffs=handoffs)
+    assert (res[spxc.key].sec_id, res[spxc.key].source) == ("BBG000BTGCV5", "ticker")
+    assert (res[spw.key].sec_id, res[spw.key].source) == ("BBG000BTGCV5", "handoff")
+
+
+def test_a_shared_cusip_does_not_carry_a_class_onto_another_classes_ticker_pick():
+    """Must not change: the reach still needs one issuer and one class (two classes of one issuer, MSG A and B)."""
+    a = _era("AA", ("2012-06-29", "SPLIT CO CLASS A"))
+    b = _era("BB", ("2015-06-30", "SPLIT CO CLASS B"))
+    figi = _Figi({("TICKER", "BB"): {"data": [_row("BBGCLASSB01", "US", "BB", "SPLIT CO CLASS B")]}})
+    handoffs = [Handoff(a.key, b.key, "shared_cusip", "SHAREDXCLASS")]
+    res = FigiResolver(figi).resolve_many([a, b], issuers=issuers_by_era({a.key: 4, b.key: 4}),
+                                          cusips={a.key: [], b.key: []}, handoffs=handoffs)
+    assert (res[b.key].sec_id, res[b.key].source) == ("BBGCLASSB01", "ticker")
+    assert res[a.key].sec_id == "CIK4-CLASS-A"

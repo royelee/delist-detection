@@ -418,7 +418,8 @@ def _link_text(h: Handoff) -> str:
 
 
 def _handoff_joins(eras: Sequence[TickerEra], issuers: Mapping[str, Issuer], handoffs: Sequence[Handoff],
-                   unpicked: Collection[str], confirmed: Mapping[str, str]) -> dict[str, tuple[str, str, Handoff]]:
+                   unpicked: Collection[str], confirmed: Mapping[str, str],
+                   picked: Mapping[str, str] | None = None) -> dict[str, tuple[str, str, Handoff]]:
     """The composite each era of `unpicked` (no FIGI pick, a known issuer) takes
     through its CUSIP links (`handoffs`, `cusip_handoffs`'): era key -> (composite,
     the confirmed era it is taken from, the link that reached it).
@@ -427,7 +428,11 @@ def _handoff_joins(eras: Sequence[TickerEra], issuers: Mapping[str, Issuer], han
     unpicked eras that share a CUSIP form a chain; the chain reaches every
     composite that a link from one of its members leads to an era confirmed
     on (`confirmed`: a pin or a CUSIP), and joins it when it reaches exactly
-    one (two composites: none)."""
+    one (two composites: none). A shared CUSIP also reaches an era the ticker
+    or name tier picked on its own observed name (`picked`: era key ->
+    composite, the picks guard (c) cannot withdraw): one CUSIP under two
+    tickers of one issuer is one line, so SPW (2008-2015) joins the composite
+    SPXC's ticker gives, with OpenFIGI knowing that CUSIP on no US venue."""
     by_key = {e.key: e for e in eras}
 
     def group(key: str) -> tuple[int | None, str]:
@@ -447,10 +452,15 @@ def _handoff_joins(eras: Sequence[TickerEra], issuers: Mapping[str, Issuer], han
         if h.kind == "shared_cusip" and h.era_key in chain and h.to_key in chain:
             a, b = sorted((root(h.era_key), root(h.to_key)))
             chain[b] = a
+    picked = picked or {}
     reach: dict[str, dict[str, tuple[str, Handoff]]] = defaultdict(dict)
     for h in links:
-        if h.era_key in chain and h.to_key in confirmed:
+        if h.era_key not in chain:
+            continue
+        if h.to_key in confirmed:
             reach[root(h.era_key)].setdefault(confirmed[h.to_key], (h.to_key, h))
+        elif h.kind == "shared_cusip" and h.to_key in picked:
+            reach[root(h.era_key)].setdefault(picked[h.to_key], (h.to_key, h))
     out: dict[str, tuple[str, str, Handoff]] = {}
     for k in chain:
         found = reach.get(root(k), {})
@@ -582,7 +592,9 @@ class FigiResolver:
         # guard (c) below, like an EDGAR-names-only pick.
         unpicked = [e.key for e in eras if e.key not in out and e.key not in picks and e.key in issuers]
         by_key = {e.key: e for e in eras}
-        for key, (composite, anchor, h) in _handoff_joins(eras, issuers, handoffs, unpicked, confirmed).items():
+        strong = {k: p[1] for k, p in picks.items() if p[0] in ("ticker", "name") and not p[3]}
+        for key, (composite, anchor, h) in _handoff_joins(eras, issuers, handoffs, unpicked, confirmed,
+                                                          strong).items():
             if _contradicted(by_key[key], composite, eras, issuers, confirmed):
                 continue
             cand = picks[anchor][2] if anchor in picks else None
