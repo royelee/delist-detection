@@ -1089,7 +1089,7 @@ def _sle_hsh(settling=True):
 
 
 def test_a_switch_is_timed_from_the_old_cusips_last_price_change_not_its_settling_tail():
-    """U2 (sub-plan 5a, SLE 2012): HSH's first row is eight trading days before SLE's last fails row, but three
+    """U2 (sub-plan 5a, SLE 2012): HSH's first row is seven trading days before SLE's last fails row, but two
     after the row that opens SLE's one-price settling tail; the switch is timed from that row."""
     eras, ftd = _sle_hsh()
     links = [(h.era_key, h.to_key, h.kind, h.cusip, h.new_cusip, h.day, h.last) for h in cusip_handoffs(eras, ftd)]

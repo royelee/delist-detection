@@ -28,7 +28,7 @@ editable install.
 
 ```bash
 pip install -e .                         # editable install (Python ≥3.10) — once per env
-pytest   # full suite (1842 passed, 281 xfailed: 18 known-wrong golden + the diagnosis truth set's known_wrong cases, all strict; offline, no network)
+pytest   # full suite (1973 passed, 281 xfailed: 18 known-wrong golden + the diagnosis truth set's known_wrong cases, all strict; offline, no network)
 pytest tests/test_payout_extractor.py -v  # one file
 pytest tests/test_payout_extractor.py::test_match_in_cash_family_altr -v   # one test
 
@@ -41,6 +41,7 @@ python scripts/update_truth.py --label 5a --round 1 --base <commit>      # offli
 python scripts/scorecard.py --base REV --ledger PATH   # the ledger scorecard reads for D.unexplained_regressions (default output/diagnose_unknown_report/loop/diagnosed.csv; computed only with --base, never from output/regression_report.csv)
 # The loop: run the Workflow tool with scriptPath ".claude/workflows/diagnosis-truth-loop.js" and args {"label": "<sub-plan>", "base": "<commit>"} (prepared cases: add "casesPath", which makes the update a dry run; at most 3 rounds, 5 agents). Normalization: scriptPath ".claude/workflows/diagnosis-truth-normalize.js", args {"cases": [...], "batch": 10}. Workflows are run by path; name lookup does not find them.
 python scripts/draw_audit_sample.py --out data/accuracy_audit.csv   # offline: draw the decision-17 audit worksheet once (census + 100 random, seed 7)
+python scripts/build_line_fixtures.py    # offline: tests/fixtures/lines/ (the line follow's real cases) from the local caches; rerun only to add a case
 python scripts/classify_universe.py --observations obs.csv   # → output/{securities,ticker_history,cusip_history,delistings,payouts,review,review_summary,observation_map,uncertain}.csv + contract/{security_history,delistings,seeds,price_requests,id_changes}.csv + scorecard.json (NETWORK; free when cached)
 python scripts/classify_universe.py --observations obs.csv --limit 20 --no-extract-payouts --no-midas --no-halts   # fast dev subset
 python scripts/classify_universe.py --observations obs.csv --sec-workers 1   # one SEC request at a time (default: 4 prefetch threads, max 8, one machine-wide 8 req/s limit)
@@ -83,7 +84,10 @@ optional fields the new pipeline (`delistings.py`/`pipeline.py`) fills in
 alongside the original ones. `pipeline.py`'s `run()` is the orchestration
 that turns a list of observations into the nine output tables: a short
 `_run` calls one function per numbered stage (`_refine`, `_resolve_issuers`,
-`_resolve_securities`, `_security_cusips`, `_find_delistings`,
+`_resolve_securities`, `_security_cusips`, `_follow_lines` (stage 4b: each security's line followed past its
+observations across a CUSIP or ticker change, `line_follow.py`; the same security takes the new CUSIP and ticker,
+a placeholder folds into the FIGI line its new CUSIP names, a FIGI line with another composite records a line
+successor for stage 9; metered as "line follow"), `_find_delistings`,
 `_dead_before_sighting` (stage 5b: a security whose last real ending came before its
 first observation and that has no trading fails row died before the run's fails
 window began, so (eligibility decided first, then) rows for [end − 1095 d, end + 10 d] are loaded, it takes the
@@ -105,7 +109,9 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
 - `observations.py` — `Observation`, `TickerEra`, `ObservationIndex`: splits
   one ticker's observations into eras (runs that belong to one security),
   splitting on a name mismatch, a pin change, or a gap over `ERA_GAP_DAYS`
-  that neither side's name confirms as continuous.
+  that neither side's name confirms as continuous. `regular_way` maps a when-issued ticker to its regular-way one
+  (EHAB-WI is EHAB): `ObservationIndex` groups by it and each era carries it, while each observation keeps the
+  caller's ticker.
 - `edgar.py` — throttled, on-disk-cached SEC client. `submissions()`,
   `recent_filings()`, `fetch_filing_text()`/`fetch_filing_raw()` (HTML-stripped
   and raw text caches). Owns `EdgarBlocked`, `resolve_user_agent()`, and
@@ -150,7 +156,9 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   history, `trading_rows` the rows not under a deleted symbol, `symbol_deleted`
   whether a CUSIP's last rows are all under one, `descriptions` a CUSIP's names;
   `FTD_START` (2004-01-01, the data's first day) and `close_age` (a fails
-  row's close age in trading days, for `ftd_close_prior:<n>`).
+  row's close age in trading days, for `ftd_close_prior:<n>`). `is_unassigned_symbol` (a new CUSIP's first-day
+  `…ZZZZ` rows, no ticker) and `settled_last` (the row that opens a CUSIP's last one-price run: the fails still
+  settling after its last trade).
 - `midas.py` — `MidasClient`: SEC MIDAS per-security exchange volume (2012+,
   ticker-keyed); `last_trade_day()` confirms the last day with lit+hidden
   exchange volume, suppressed to `None` when the window runs past MIDAS's
@@ -234,7 +242,10 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   `superseded_placeholders` marks a placeholder a later FIGI line of its
   issuer and class holds the ticker for (not listed today). Its era-level
   review rows: `ticker_unconfirmed_review` (`ticker_unconfirmed`) and
-  `observation_conflict_review` (`observation_conflict:<date>`).
+  `observation_conflict_review` (`observation_conflict:<date>`). `Security.line_tickers`/`own_tickers()` (the era
+  tickers and the ones stage 4b found; every own-ticker check reads it); `cusip_handoffs` times a switch from
+  `ftd.settled_last` (SLE to HSH); `_handoff_joins` lets a shared CUSIP reach an era the ticker or name tier picked
+  on its own name (SPW to SPXC); `cusip_job` is the one OpenFIGI CUSIP job.
 - `history.py` — a security's dated history: its sightings
   (`ticker_sightings`/`cusip_sightings`, `own_last_seen`, `ticker_on`; a fails row is a ticker
   sighting only when its symbol has a letter, because SEC's Aug–Dec 2007 files mask some symbols as "**********"),
@@ -258,8 +269,10 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   `history_ticker`. `pipeline._ends_the_security`/`_continues_after` (not
   here: they read `Delisting` records) decide which delisting actually clips a
   security's ranges — skipping one whose successor is the security itself, or
-  one after which its own CUSIP keeps trading under its own ticker.
-- `added_securities.py` — `AddedAcquirer`/`AddedSuccessor` (`AddedSecurity`): a
+  one after which its own CUSIP keeps trading under its own ticker. A first-day `…ZZZZ` row is no ticker sighting;
+  an observation is a sighting of its era's ticker.
+- `added_securities.py` — `AddedAcquirer`/`AddedSuccessor`/`AddedLineSuccessor` (`AddedSecurity`; the last a FIGI
+  line's successor stage 4b found, linked in stage 9 and added only for an ending that takes it): a
   security the run adds that no observation names, with its one
   ticker_history row.
 - `successors.py` — the successor after a FIGI change: a security of the run
@@ -279,6 +292,19 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   `handoff_conflict`; a takeover's `ticker_successor_sec_id` or
   `handoff_takeover_no_delisting`), `drop_resolved_shared`. Run by
   `pipeline._handoffs` after the successor search, before the history rows.
+- `line_follow.py` — sub-plan 5a, pure: a security's line across a CUSIP or ticker change. `candidate_steps` (the
+  next step in the fails rows within ±`LINE_DAYS` (10) trading days of the old CUSIP's settled last row: a new
+  CUSIP under the line's ticker, its `…ZZZZ`/`…D` spellings, a ticker of the issuer EDGAR lists or its 8-K text
+  names (`text_symbols`, `text_cusips`), or the same CUSIP under a new non-OTC ticker; never a CUSIP another
+  security holds, nor a switch while the old CUSIP trades on); `corroborate` (R1: refused for an 8-K 1.03 in
+  [first − 180, first + 30] d, an OTC move, a description that names no name in force, a class conflict, a
+  registrant that merged out or that another CIK's 8-K12B/12G3 replaces (`other_registrant`), or no filing stating
+  the change; the registrant carries on by a periodic report in `PERIODIC_FORMS`, which includes the small-business
+  forms 10-K405, 10-KSB, 10-KSB40 and 10-QSB); `decide` (R2: attach, fold a placeholder, a line successor, or
+  refused). Run by `pipeline._follow_lines` (stage 4b), up to `MAX_ROUNDS` steps a line; a CUSIP one security took
+  is held for the rest of the round. A failed EDGAR read is never cached, and any degraded read of a CIK gives each
+  of that CIK's steps a `resolution_degraded` row. Review flags `line_followed`, `line_follow_refused:<why>`
+  (info). Its real cases replay offline from `tests/fixtures/lines/` (`scripts/build_line_fixtures.py`).
 - `acquirers.py` — a merger's acquirer as a security: `find_acquirer` (its
   composite FIGI from the fails rows under the acquirer ticker) and
   `acquirer_cik` (its issuer CIK, never the target's).
@@ -306,7 +332,9 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   `SAME_EVENT_DAYS` of the group's earliest filing, across exchanges), dates
   and classifies each, and falls back to the classifier's no-Form-25 paths
   when none exists. `SecurityContext.sibling_spans` keeps a Form 25 from being
-  matched to a sibling security that wasn't alive on the filing date.
+  matched to a sibling security that wasn't alive on the filing date. `SecurityContext.cusip_switches`: a Form 25
+  within `OWN_SWITCH_DAYS` (5) trading days of the security's own CUSIP switch, while it trades on, is no
+  delisting (QGEN 2026).
 - `classifier.py` — the filing-trio fingerprint (**Form 25 + 8-K item codes +
   Form 15**), now anchored on the Form 25/fallback filing date rather than a
   vendor end date. `_classify_items()` maps an 8-K item set to a `DLSTCD`
@@ -423,12 +451,14 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   round script and the scorecard all call it) and `id_changes_since` finds renames against the base commit.
   `SKIPPED_COLUMNS` leaves out `verdict` and the price-derived columns. `unexplained` gives the rows the ledger has
   not settled; they become `D.unexplained_regressions`, which `scripts/scorecard.py --check --base <commit>`
-  requires to be 0.
+  requires to be 0. A renamed placeholder is compared under its FIGI (`renamed_to`): one `renamed` id_changes row
+  (`regression.RENAMED`, `diff_contract(..., renames=)`) instead of its removed row and the FIGI's added one.
 - `diagnosis_loop.py` — the loop's ledger (`output/diagnose_unknown_report/loop/diagnosed.csv`), error keys, case
   rows for the diagnose workflow, and placeholder renames (`contract/id_changes.csv` and the base commit's securities.csv, `regression.id_changes_since`; `write_together` writes the truth file and its change log as one set).
 - `truth_update.py` — spec 1.6's rules for what a round's diagnoses may change in the truth file. A regression is
   added only when it is verified and upheld. A mismatch changes the truth only when the diagnosis cites a filing the
-  earlier report missed. `flip_statuses` turns a known_wrong case that now matches into pass.
+  earlier report missed. `flip_statuses` turns a known_wrong case that now matches into pass. A regression of a sec_id the run lacks, or
+  of a renamed placeholder, adds no truth row (`apply_round`: `run_sec_ids`, `renamed`).
 - `truth_build.py` — the first truth file, built from the normalization workflow's JSON rows (the R2 FIGI check,
   pending fields, the residual list, statuses).
 - `scorecard.py` — `build` (the spec's gap table as one flat dict: L1/L2, R1.x,
@@ -457,7 +487,7 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
 - `contract.py` — the contract's rows (spec "The contract", decisions 6, 7, 9, 10, 12), written under
   `output/contract/` beside today's tables for one release: `security_history_rows` (ticker ranges split where
   the issuer in force changes), `delisting_rows` (one per ended security, its last), `seed_rows` (the seed
-  echo), `id_change_rows` (baseline placeholders that now hold a FIGI). `run_manifest.json` carries
+  echo), `id_change_rows` (baseline placeholders that now hold a FIGI; stage 4b's folds by name, `renames`). `run_manifest.json` carries
   `schema_version` (`store.CONTRACT_SCHEMA_VERSION`).
 - `issuer_in_force.py` — the issuer CIK on each sighting's date: the era's CIK when its EDGAR name that day agrees
   with the observed name, else the one other CIK SEC's name index lists under that name whose name agreed then
@@ -708,6 +738,15 @@ conflate them.
   one continues (Apache/Chicago 2020) creates no row (`listing_status.py`). A
   security can have more than one delisting (an exchange transfer, later a
   merger).
+- **A line is followed past its observations (sub-plan 5a, rulings R1 and R2).** Stage 4b follows each security
+  across a reverse split or a rename the fails rows show after the caller's last observation, before the Form 25
+  search: so a later real ending is found instead of a guess anchored on the old ticker's last row. A step needs a
+  filing that states it (an 8-K 5.03/3.03, an own 8-K12B/12G3, an EDGAR rename, or 8-K text) and an old registrant
+  that carries on (a periodic report for a period after the step, or its own 8-K12B; listed today for a step
+  within 120 days of the run date; no other CIK's 8-K12B/12G3 naming it). R2 decides identity: the same composite
+  or none is one security; a placeholder folds into the FIGI line its new CUSIP names (contract/id_changes.csv
+  names it); another composite is a line successor, linked by stage 9 as a continuation (an `unknown` row at the
+  switch is rewritten, `line_continuation`: it drops `no_evidence_default` and gets medium confidence).
 - **`ticker_history` is clipped only at the delisting that actually ends the
   security.** One whose successor is the security itself (a continuing
   exchange transfer) never clips it. Otherwise, only a `merger` or
