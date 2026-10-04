@@ -217,6 +217,13 @@ CATALOG: dict[str, FlagInfo] = {
                  "on the successor issuer's own 8-K12B/8-K12G3; the reason keeps the old bucket and code.",
         f"Read the cited filing: if holders received something else than the successor's shares, report it; "
         f"otherwise {_ACCEPT}."),
+    "r1_rebucketed": FlagInfo(
+        "check", "A merger row ruling R1 rewrote as a continuation (an exchange transfer to successor_sec_id): its "
+                 "terms were one share and no cash, the registrant's filings say each of its shares became one "
+                 "share of the successor, and the successor is a new issuer's or the same issuer's (sub-plan 5c); "
+                 "the reason keeps the old bucket and code.",
+        f"Read the filing the delisting's evidence quotes: if holders received cash or another ratio, report it; "
+        f"otherwise {_ACCEPT}."),
     "handoff_conflict": FlagInfo(
         "check", "The handoff pass found a continuation into another security of the run, but this delisting row "
                  "says otherwise (a reconciled merger payout, a liquidation, or another successor) and was left "

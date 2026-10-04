@@ -80,7 +80,7 @@ def test_severities_follow_the_rulings():
                  "observed_after_delisting", "member_name_mismatch",
                  "ticker_unconfirmed", "identity_detached", "ticker_shared", "ticker_range_overlap", "observation_conflict",
                  "issuer_inferred", "issuer_cusip_disagrees",
-                 "handoff_rebucketed", "handoff_conflict", "handoff_takeover_no_delisting"):
+                 "handoff_rebucketed", "handoff_conflict", "handoff_takeover_no_delisting", "r1_rebucketed"):
         assert CATALOG[name].severity == "check", name
 
 

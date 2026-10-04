@@ -19,6 +19,7 @@ from typing import Any
 
 import requests
 
+from . import exchange_terms
 from . import manifest as run_manifest
 from . import scorecard as run_scorecard
 from .acquirers import acquirer_cik, find_acquirer
@@ -67,8 +68,8 @@ from .lifecycle import Tables
 from .ticker_evidence import EraEvidence, evidence_for
 from .store import DelistingKey, formatted, write_tables
 from .successors import (
-    SUCCESSOR_AFTER_DAYS, SUCCESSOR_BEFORE_DAYS, SecurityStart, successor_from_8k12b, successor_in_run,
-    successor_query, successor_search_args,
+    NEW_ISSUER_DAYS, SUCCESSOR_AFTER_DAYS, SUCCESSOR_BEFORE_DAYS, SecurityStart, successor_anchor, successor_by_terms,
+    successor_from_8k12b, successor_in_run, successor_query, successor_search_args, successor_search_name,
 )
 from .ticker_resolver import InferredIssuer, TickerResolution
 from .verdict import Verdicts
@@ -1088,6 +1089,170 @@ def _merger_payouts(ctx: _RunContext, delistings: list[Delisting], securities: d
     return _Payouts(raw, llm_terms, gated, acquirer_ids, added, extraction_review + acquirer_review)
 
 
+R1_CONTINUATION, R1_REBUCKETED = "r1_continuation", "r1_rebucketed"
+BY_TERMS, BY_OWN_REGISTRATION = "terms", "own_registration"
+# the payout flags a merger row carries that a continuation does not
+_PAYOUT_FLAGS = frozenset({"terms_gate_failed", "payout_gate_failed", "llm_gate_failed", "merger_at_par",
+                           "acquirer_close_lagged"})
+
+
+def _starts(securities: dict[str, Security], sightings: dict[str, list[Sighting]],
+            added: Mapping[str, AddedSecurity]) -> dict[str, SecurityStart]:
+    """How each security of the run shows up, for the successor searches (`successors.SecurityStart`): an observed
+    one by its sightings, an added one by its span and ticker."""
+    starts = {sid: SecurityStart(sig[0].day, securities[sid].issuer_cik, {x.value for x in sig}, sig[-1].day,
+                                 securities[sid].share_class)
+              for sid, sig in sightings.items() if sig and sid in securities}
+    for sid, a in added.items():
+        first, last = a.span()
+        starts[sid] = SecurityStart(first, a.security.issuer_cik, {a.ticker}, last, a.security.share_class)
+    return starts
+
+
+class _IssuerAge:
+    """Each issuer's first EDGAR filing and its EDGAR names, read once (the finder already read most of them)."""
+
+    def __init__(self, edgar) -> None:
+        self.edgar = edgar
+        self._since: dict[int, str | None] = {}
+        self._names: dict[int, tuple[str, ...]] = {}
+
+    def since(self, cik: int) -> str | None:
+        if cik not in self._since:
+            dates = [f.filing_date for f in self.edgar.recent_filings(cik) if f.filing_date]
+            self._since[cik] = min(dates) if dates else None
+        return self._since[cik]
+
+    def names(self, cik: int) -> tuple[str, ...]:
+        if cik not in self._names:
+            sub = self.edgar.submissions(cik)
+            self._names[cik] = edgar_names(sub) if isinstance(sub, dict) else ()
+        return self._names[cik]
+
+
+def _own_exchange(edgar, e: Delisting, sec: Security) -> tuple[exchange_terms.OwnExchange | None, list[str], date]:
+    """What `e`'s security's own shares became (`exchange_terms.own_exchange`), the texts it was read in and the
+    day it was read around (`successors.successor_anchor`; the 8-K the classifier anchored on is read too)."""
+    day = successor_anchor(e)
+    days = [day]
+    filed = ((e.record.evidence or {}).get("anchor_8k") or {}).get("filing_date")
+    if filed:
+        days.append(date.fromisoformat(filed))
+    texts = exchange_terms.read_texts(edgar, e.cik, edgar.recent_filings(e.cik), days, e.form25)
+    letter, words = exchange_terms.class_of(sec.share_class, sec.name)
+    names = exchange_terms.registrant_names(edgar.submissions(e.cik), min(days), sec.name)
+    return exchange_terms.own_exchange(texts, names=names, class_letter=letter, class_words=words), texts, day
+
+
+def _contract_terms(payouts: _Payouts, key: DelistingKey) -> tuple[float | None, float | None] | None:
+    """The (cash, stock ratio) the contract publishes for a merger without a --merger-terms row
+    (`payout_rule._merger`'s order): the terms the payout gate kept, else the LLM's as read, else the regex cash;
+    None with none."""
+    gated = payouts.gated
+    terms = for_delisting(gated.merged_terms, key) or {}
+    cash = gated.payouts.get(key)
+    if terms or cash is not None:
+        return terms.get("cash_per_share", cash), terms.get("stock_ratio")
+    llm = payouts.llm_terms.get(key)
+    if llm is not None and (llm.cash_per_share or llm.stock_ratio):
+        return llm.cash_per_share, llm.stock_ratio
+    pr = payouts.raw.get(key)
+    return (pr.value, None) if pr is not None and pr.value is not None else None
+
+
+@dataclass
+class _R1:
+    """Stage 8b's answer: the merger rows it rewrote as continuations (by delisting: the successor and how it was
+    found), the successors it adds as securities of their own, and its review items."""
+    links: dict[DelistingKey, tuple[str, str]] = field(default_factory=dict)
+    added: dict[str, AddedSecurity] = field(default_factory=dict)
+    review: list[ReviewItem] = field(default_factory=list)
+
+
+def _r1_successor(ctx: _RunContext, e: Delisting, sec: Security, own: exchange_terms.OwnExchange, day: date,
+                  starts: dict[str, SecurityStart], ages: _IssuerAge, securities: dict[str, Security],
+                  added: Mapping[str, AddedSecurity], out: _R1) -> tuple[str, str] | None:
+    """The successor of a merger row R1 rewrites: a security of the run (`successors.successor_by_terms`), else
+    the new issuer whose 8-K12B names the registrant (`successors.successor_from_8k12b`, its filer at most
+    NEW_ISSUER_DAYS old), added as a security of its own (`AddedSuccessor`, seen from the day after `day`)."""
+    link = successor_by_terms(e, own, day, starts, issuer_since=ages.since, issuer_names=ages.names)
+    search = getattr(ctx.clients.edgar, "full_text_search", None)
+    if link is not None or search is None:
+        return link
+    hit = successor_from_8k12b(search, ctx.clients.figi, name=successor_search_name(ctx.clients.edgar, e.cik, sec.name),
+                               day=day, exclude_cik=e.cik, share_class=sec.share_class, edgar=ctx.clients.edgar,
+                               own_tickers=sec.own_tickers() | {e.ticker})
+    if hit is None:
+        return None
+    s_cik, cand, filed = hit
+    since = ages.since(s_cik)
+    if since is None or (day - date.fromisoformat(since[:10])).days > NEW_ISSUER_DAYS:
+        return None
+    if cand.composite not in securities and cand.composite not in added:
+        not_before = (day + timedelta(days=1)).isoformat()
+        out.added.setdefault(cand.composite, AddedSuccessor(
+            Security(cand.composite, s_cik, share_class_from_name(cand.name), cand.name, cand.security_type, False,
+                     "ticker"), cand.ticker, max(filed or not_before, not_before)))
+    return cand.composite, BY_TERMS
+
+
+def _r1_continuations(ctx: _RunContext, delistings: list[Delisting], securities: dict[str, Security],
+                      sightings: dict[str, list[Sighting]], payouts: _Payouts, overrides: Overrides) -> _R1:
+    """8b. A merger that ruling R1 makes a continuation (sub-plan 5c): its published terms are one share and no
+    cash (a special dividend is no cash: operator ruling 2026-10-04), no --merger-terms row decides it, the
+    registrant's own filings say the same of its own shares (`exchange_terms.own_exchange`, one reading: a
+    multi-step deal's intermediate one-for-one, Jefferies 2013, has the LLM's 0.81 against it), and the holders'
+    new shares are a new issuer's or the same issuer's (`_r1_successor`). The row becomes an exchange transfer
+    (304) to that successor, flagged `r1_continuation`, its payout reads dropped (a continuation has no value),
+    and an `r1_rebucketed` review item keeps its old bucket. An existing acquirer is never a continuation (LVNTA
+    into GCI Liberty, Towers Watson into Willis, Waste Connections into Progressive Waste)."""
+    edgar, out = ctx.clients.edgar, _R1()
+    mark = ctx.meter.start()
+    ages = _IssuerAge(edgar)
+    starts = _starts(securities, sightings, payouts.added)
+    gated = payouts.gated
+    for e in delistings:
+        if e.record.bucket is not CrspBucket.MERGER or e.sec_id not in securities \
+                or for_delisting(overrides.merger_terms, e.key):
+            continue
+        terms = _contract_terms(payouts, e.key)
+        if terms is None or terms[1] is None or abs(terms[1] - 1.0) > 1e-9:
+            continue
+        watch = DegradedWatch()
+        sec = securities[e.sec_id]
+        own, _, day = _own_exchange(edgar, e, sec)
+        cash = terms[0]
+        link = None
+        if own is not None and own.one_for_one and (
+                not cash or any(abs(cash - d) < 0.005 for d in own.special_dividends)):
+            link = _r1_successor(ctx, e, sec, own, day, starts, ages, securities, payouts.added, out)
+        if watch.tripped():
+            out.review.append(degraded_item(e.sec_id, e.ticker, e.cik, "the R1 reading", delist_date=e.delist_date))
+            continue
+        if link is None:
+            continue
+        sid, how = link
+        old = (e.record.bucket.value, e.record.crsp_code, e.record.reason)
+        e.record.bucket, e.record.crsp_code = CrspBucket.EXCHANGE_TRANSFER, CONTINUATION_CODE
+        e.record.confidence = "medium"
+        e.record.reason = (f"Continuation (R1): each share became one {own.target[:80].strip(' ,')}, no cash; "
+                           f"successor by {how.replace('_', ' ')}")
+        e.record.evidence["flags"] = [f for f in e.flags if flag_name(f) not in _PAYOUT_FLAGS] + [R1_CONTINUATION]
+        e.record.evidence["r1"] = {"sentence": own.sentence[:300], "was": f"{old[0]} {old[1]}"}
+        e.record.evidence["successor_by"] = how
+        for m in (payouts.raw, payouts.llm_terms, payouts.acquirer_ids, gated.payouts, gated.sources,
+                  gated.confidences, gated.merged_terms, gated.flags):
+            m.pop(e.key, None)
+        e.set_successor(sid)
+        out.links[e.key] = link
+        out.review.append(ReviewItem(e.sec_id, e.ticker, e.cik, R1_REBUCKETED,
+                                     f"was {old[0]} (CRSP {old[1]}: {old[2]}); R1 makes it a continuation into {sid}",
+                                     delist_date=e.delist_date))
+    ctx.log(f"R1 continuations: {len(out.links)} merger rows ({', '.join(sorted(k.sec_id for k in out.links))})")
+    ctx.meter.done("R1 continuations", mark)
+    return out
+
+
 LINE_FOLLOW, LINE_CONTINUATION = "line_follow", "line_continuation"
 
 
@@ -1859,11 +2024,13 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
     closes = _last_trade_closes(ctx, delistings, securities, sec_cusips, ftd, ftd_lo, overrides)    # 7
     payouts = _merger_payouts(ctx, delistings, securities, sec_cusips, ftd, closes, overrides, tol) # 8
     review += payouts.review
-    successors = _find_successors(ctx, delistings, securities, search.sightings, payouts.added,
+    r1 = _r1_continuations(ctx, delistings, securities, search.sightings, payouts, overrides)      # 8b
+    review += r1.review
+    successors = _find_successors(ctx, delistings, securities, search.sightings, {**payouts.added, **r1.added},
                                   lines.successors, ftd)                                            # 9
     _link_successors(delistings, successors)
     review += successors.review
-    added = {**payouts.added, **successors.added}         # the acquirers and successors the run adds
+    added = {**payouts.added, **r1.added, **successors.added}     # the acquirers and successors the run adds
 
     # Computed once, shared by the delistings.csv successor link and the
     # ticker_history clip below, so the two tables never disagree on which
@@ -1910,7 +2077,9 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
     evidence = _ticker_evidence(ctx, securities, answers)                                          # 10e
     verdicts = decide_verdicts(_as_read(tables), evidence)                                         # 10f
     tables["uncertain"] = verdicts.uncertain_rows()
-    tables.update(_contract(ctx, _as_read(tables), verdicts, payouts, set(successors.added), overrides,
+    # an acquirer the run added that R1 made a merger row's successor is in the contract's history (Sinclair Inc)
+    successor_ids = set(successors.added) | set(r1.added) | {sid for sid, _ in r1.links.values()}
+    tables.update(_contract(ctx, _as_read(tables), verdicts, payouts, successor_ids, overrides,
                             id_baseline, lines.renames))                                           # 10g
     card = _scorecard(ctx, _as_read(tables), scorecard, limit)                                     # 10h
 

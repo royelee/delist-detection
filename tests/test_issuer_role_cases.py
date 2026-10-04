@@ -14,7 +14,7 @@ import pytest
 from tests import issuer_role_cases as ic
 
 # The rules of sub-plan 5c built so far, in task order; each task adds its own
-RULES_DONE: set[str] = {"stage5"}
+RULES_DONE: set[str] = {"stage5", "r1"}
 ORDER = ("stage5", "r1", "links")
 
 # sec_id -> (its outcome before 5c, [(rule, its outcome once the rule is built), ...] in ORDER)

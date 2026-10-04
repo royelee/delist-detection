@@ -11,12 +11,13 @@ full-text search (`successor_search_args`, `successor_query`,
 from __future__ import annotations
 
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Mapping, Sequence
 from datetime import date, timedelta
 from typing import NamedTuple
 
 from .delistings import SUCCESSOR_UNKNOWN, Delisting
-from .figi_resolution import FigiCandidate, share_class_from_name, us_candidates
+from .exchange_terms import OwnExchange
+from .figi_resolution import FigiCandidate, class_letter, share_class_from_name, us_candidates
 from .listing_status import edgar_lists
 from .names import names_agree
 from .observations import normalize_ticker
@@ -122,12 +123,14 @@ SUCCESSOR_BEFORE_DAYS, SUCCESSOR_AFTER_DAYS = 5, 15    # a successor's first sig
 
 
 class SecurityStart(NamedTuple):
-    """How a security of the run (observed or added) first shows up, for the
-    in-run successor search: its first sighting, its issuer CIK, and every
-    ticker it was sighted under."""
+    """How a security of the run (observed or added) shows up, for the in-run
+    successor search: its first sighting, its issuer CIK, every ticker it was
+    sighted under, its last sighting and its share class."""
     first_seen: str
     issuer_cik: int | None
     tickers: set[str]
+    last_seen: str = ""
+    share_class: str = ""
 
 
 def successor_in_run(e: Delisting, starts: dict[str, SecurityStart]) -> tuple[str, str] | None:
@@ -169,3 +172,72 @@ def successor_search_args(edgar, e: Delisting, starts: dict[str, SecurityStart],
         return None
     return (successor_search_name(edgar, e.cik, securities[e.sec_id].name),
             e.last_trade.day or date.fromisoformat(e.delist_date))
+
+
+NEW_ISSUER_DAYS = 1095    # R1 (operator, 2026-10-04): an issuer that first filed with EDGAR at most this long before
+#                           the event is a new one (new holding companies measured 0-548 days: DowDuPont 548, Linde
+#                           517, Viatris 388; existing acquirers 4,125-8,442)
+SAME_ISSUER_CLASS, NEW_ISSUER = "same_issuer_class", "new_issuer"
+
+
+def successor_anchor(e: Delisting) -> date:
+    """The day a successor of `e` is looked for around: its last trade, else its Form 25's filing date, else the
+    8-K the classifier anchored on, else (approximate) its delisting date."""
+    if e.last_trade.day is not None:
+        return e.last_trade.day
+    if e.form25_sub is not None:
+        return date.fromisoformat(e.form25_sub.filing_date)
+    filed = ((e.record.evidence or {}).get("anchor_8k") or {}).get("filing_date")
+    return date.fromisoformat(filed) if filed else date.fromisoformat(e.delist_date)
+
+
+def _named(exchange: OwnExchange, tickers: set[str], names: Sequence[str]) -> bool:
+    """The R1 target clause names the candidate: one of its tickers (two letters or more) is a word of a target
+    name ("BHGE's Class A common stock"), or a target name agrees with one of its EDGAR names
+    (`names.names_agree`: "DowDuPont" and DowDuPont Inc.; "Holdco", expanded, and Howard Hughes Holdings Inc.)."""
+    words = {w.upper() for t in exchange.target_names for w in re.findall(r"[A-Za-z0-9]+", t)}
+    if {normalize_ticker(t).replace("-", "") for t in tickers if len(t) >= 2} & words:
+        return True
+    return any(names_agree(t, n) for t in exchange.target_names for n in names if n)
+
+
+def successor_by_terms(e: Delisting, exchange: OwnExchange, day: date, starts: Mapping[str, SecurityStart], *,
+                       issuer_since: Callable[[int], str | None],
+                       issuer_names: Callable[[int], Sequence[str]]) -> tuple[str, str] | None:
+    """The security the R1 statement says the holders' shares became, one for one with no cash
+    (`exchange.one_for_one`), among the run's (`starts`):
+
+    - of the same issuer (SAME_ISSUER_CLASS: a reclassification, CMCSK into CMCSA, Clearway's Class A into Class C,
+      Discovery into WBD): of the class letter the target names ("" for a plain common), sighted by
+      `day` + SUCCESSOR_AFTER_DAYS and not gone before `day`, the target naming the registrant or the security;
+    - of a new issuer (NEW_ISSUER: a holding company, BHGE, Howard Hughes Holdings, Viatris): first sighted within
+      [day - SUCCESSOR_BEFORE_DAYS, day + SUCCESSOR_AFTER_DAYS], its issuer's first EDGAR filing
+      (`issuer_since`) at most NEW_ISSUER_DAYS before `day`, the target naming it (`_named`: a ticker or an EDGAR
+      name, `issuer_names`). An existing company is never a continuation (LVNTA into GCI Liberty, WCN into
+      Progressive Waste), and without the name tie a new registrant sighted in the window is not one either
+      (AABA and BHGE, MSG and Alphabet).
+
+    Several: the one of the class letter the target names. Returns (sec_id, how); None for none or a tie."""
+    if not exchange.one_for_one:
+        return None
+    lo = (day - timedelta(days=SUCCESSOR_BEFORE_DAYS)).isoformat()
+    hi = (day + timedelta(days=SUCCESSOR_AFTER_DAYS)).isoformat()
+    found: dict[str, str] = {}
+    for sid, st in starts.items():
+        if sid == e.sec_id or st.issuer_cik is None:
+            continue
+        if st.issuer_cik == e.cik:
+            alive = not st.last_seen or st.last_seen >= day.isoformat()
+            if (st.first_seen <= hi and alive and (class_letter(st.share_class) or "") == exchange.target_letter
+                    and (exchange.target_own or _named(exchange, st.tickers, issuer_names(st.issuer_cik)))):
+                found[sid] = SAME_ISSUER_CLASS
+        elif lo <= st.first_seen <= hi:
+            since = issuer_since(st.issuer_cik)
+            if since is None or (day - date.fromisoformat(since[:10])).days > NEW_ISSUER_DAYS:
+                continue
+            if _named(exchange, st.tickers, issuer_names(st.issuer_cik)):
+                found[sid] = NEW_ISSUER
+    if len(found) > 1:
+        found = {sid: how for sid, how in found.items()
+                 if (class_letter(starts[sid].share_class) or "") == exchange.target_letter}
+    return next(iter(found.items())) if len(found) == 1 else None
