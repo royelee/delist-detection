@@ -658,9 +658,13 @@ class DelistClassifier:
         }
 
         # SEC-revoked: explicit Order of Suspension/Revocation by the SEC.
-        # The submissions JSON marks these with form code 'REVOKED'.
+        # The submissions JSON marks these with form code 'REVOKED'. A matched
+        # Form 25 the security did not trade past owns its row: a revocation filed
+        # after it never decides it (sub-plan 5b, R6a: Colonial BancGroup, IndyMac
+        # and Thornburg were removed from the exchange first).
+        owned = delist_filing_override is not None and not trading_after
         for f in filings:
-            if f.form == "REVOKED":
+            if f.form == "REVOKED" and not (owned and f.filing_date > delist_filing_override.filing_date):
                 return DelistRecord(
                     ticker=ticker.upper(),
                     cik=resolution.cik,

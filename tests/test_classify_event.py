@@ -113,3 +113,35 @@ def test_a_bankruptcy_filed_within_the_resolvers_window_beats_the_completed_sale
     sub = next(f for f in fake_edgar.recent_filings(30002) if f.form == "25-NSE")
     rec = _clf(fake_edgar).classify_event(ticker="SALE", cik=30002, anchor_date="2020-01-09", form25=sub)
     assert (rec.crsp_code, rec.bucket, rec.evidence["end_of_era"]) == (470, CrspBucket.LIQUIDATION, "bankruptcy")
+
+
+# --- sub-plan 5b, R6a: a revocation after a matched Form 25 does not decide it ---
+
+def _revoked_case(fake_edgar, revoked_on):
+    """Colonial BancGroup-like: the exchange removed the common (2009-09-08, last trade 2009-08-17) after a
+    Chapter 11 8-K (2009-08-20); SEC revoked the registration on `revoked_on`."""
+    fake_edgar.submissions_by_cik[30003] = [
+        EdgarSubmission("cb25", "25-NSE", "2009-09-08", "", "", "p.xml"),
+        EdgarSubmission("cbbk", "8-K", "2009-08-20", "2009-08-20", "1.03", "k.htm"),
+        EdgarSubmission("cbrv", "REVOKED", revoked_on, "", "", "")]
+    fake_edgar.raws["cb25"] = NASDAQ_REMOVAL
+    fake_edgar.texts["cbbk"] = CHAPTER_11
+    return next(f for f in fake_edgar.recent_filings(30003) if f.form == "25-NSE")
+
+
+def test_a_revocation_filed_after_the_matched_form25_does_not_decide_its_row(fake_edgar):
+    sub = _revoked_case(fake_edgar, "2010-06-01")
+    rec = _clf(fake_edgar).classify_event(ticker="CNB", cik=30003, anchor_date="2009-08-17", form25=sub)
+    assert (rec.crsp_code, rec.bucket) == (470, CrspBucket.LIQUIDATION)
+
+
+def test_a_revocation_still_decides_when_it_came_first_or_no_form25_owns_the_row(fake_edgar):
+    """A revocation before the Form 25, a row with no matched Form 25 (the fallback's), and a Form 25 the
+    security traded past (`trading_after`) keep today's revocation branch (573)."""
+    sub = _revoked_case(fake_edgar, "2009-09-01")
+    clf = _clf(fake_edgar)
+    assert clf.classify_event(ticker="CNB", cik=30003, anchor_date="2009-08-17", form25=sub).crsp_code == 573
+    sub = _revoked_case(fake_edgar, "2010-06-01")
+    assert clf.classify_event(ticker="CNB", cik=30003, anchor_date="2009-08-17").crsp_code == 573
+    assert clf.classify_event(ticker="CNB", cik=30003, anchor_date="2009-08-17", form25=sub,
+                              trading_after=True).crsp_code == 573
