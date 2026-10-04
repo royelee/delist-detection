@@ -101,7 +101,7 @@ def _script():
     return mod
 
 
-def test_script_writes_the_report(tmp_path, capsys):
+def test_script_writes_the_report(tmp_path):
     repo, out = _repo(tmp_path)
     store.write_tables(out, {"contract_delistings": [contract_row("Z", exit_kind="exchange")]})
     report = tmp_path / "report.csv"
@@ -119,3 +119,23 @@ def test_script_exits_2_when_the_base_lacks_the_contract(tmp_path, capsys):
             "--out", str(tmp_path / "r.csv")]
     assert _script().main(argv) == 2
     assert "HEAD:output/contract/delistings.csv" in capsys.readouterr().err
+
+
+def test_script_exits_2_when_the_base_history_lacks_a_column(tmp_path, capsys):
+    repo, out = _repo(tmp_path, with_contract=False)
+    store.write_tables(out, {"contract_delistings": [contract_row("Z")]})
+    (out / "contract" / "security_history.csv").write_text("sec_id,ticker,start_date,end_date\n")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", "old history")
+    store.write_tables(out, {"contract_delistings": [contract_row("Z")], "security_history": []})
+    argv = ["--repo", str(repo), "--base", "HEAD", "--output-dir", str(out), "--truth", str(tmp_path / "none.csv"),
+            "--out", str(tmp_path / "r.csv")]
+    assert _script().main(argv) == 2
+    err = capsys.readouterr().err
+    assert "issuer_id" in err and "HEAD:output/contract/security_history.csv" in err
+
+
+def test_snapshot_at_refuses_an_output_folder_outside_the_repo(tmp_path):
+    repo, _ = _repo(tmp_path)
+    with pytest.raises(rg.RegressionInputError, match="not inside"):
+        rg.snapshot_at(repo, "HEAD", tmp_path / "elsewhere")

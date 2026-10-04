@@ -40,8 +40,20 @@ class Snapshot:
     id_changes: Sequence[Mapping[str, str]] = field(default=())
 
 
-def _rows(text: str) -> list[dict[str, str]]:
-    return list(csv.DictReader(io.StringIO(text)))
+REQUIRED_COLUMNS = {
+    "contract_delistings": ("sec_id", "successor_sec_id"),
+    "security_history": ("sec_id", "ticker", "start_date", "end_date", "issuer_id"),
+    "id_changes": ("old_sec_id", "new_sec_id"),
+}
+
+
+def _rows(text: str, table: str, where: str) -> list[dict[str, str]]:
+    """The rows of one contract file, after its header is checked (an empty file is checked by its header)."""
+    reader = csv.DictReader(io.StringIO(text))
+    missing = [c for c in REQUIRED_COLUMNS[table] if c not in (reader.fieldnames or [])]
+    if missing:
+        raise RegressionInputError(f"{where}: missing column(s) {', '.join(missing)}")
+    return list(reader)
 
 
 def read_snapshot(out_dir: str | Path) -> Snapshot:
@@ -52,7 +64,7 @@ def read_snapshot(out_dir: str | Path) -> Snapshot:
             if required:
                 raise RegressionInputError(f"{path}: missing")
             return []
-        return _rows(path.read_text(encoding="utf-8"))
+        return _rows(path.read_text(encoding="utf-8"), name, str(path))
     return Snapshot(rows("contract_delistings"), rows("security_history"), rows("id_changes", required=False))
 
 
@@ -61,13 +73,17 @@ def snapshot_at(repo: str | Path, rev: str, out_dir: str | Path) -> Snapshot:
     root = Path(repo).resolve()
 
     def rows(name: str, required: bool = True) -> list[dict[str, str]]:
-        rel = store.table_path(Path(out_dir).resolve(), name).relative_to(root).as_posix()
+        path = store.table_path(Path(out_dir).resolve(), name)
+        try:
+            rel = path.relative_to(root).as_posix()
+        except ValueError:
+            raise RegressionInputError(f"{path}: not inside the repository {root}") from None
         done = subprocess.run(["git", "-C", str(root), "show", f"{rev}:{rel}"], capture_output=True, text=True)
         if done.returncode != 0:
             if required:
                 raise RegressionInputError(f"{rev}:{rel}: {done.stderr.strip() or 'not in that commit'}")
             return []
-        return _rows(done.stdout)
+        return _rows(done.stdout, name, f"{rev}:{rel}")
     return Snapshot(rows("contract_delistings"), rows("security_history"), rows("id_changes", required=False))
 
 
