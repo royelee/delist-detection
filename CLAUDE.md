@@ -28,7 +28,7 @@ editable install.
 
 ```bash
 pip install -e .                         # editable install (Python ≥3.10) — once per env
-pytest   # full suite (2197 passed, 244 xfailed: 10 known-wrong golden + the diagnosis truth set's known_wrong cases, all strict; offline, no network)
+pytest   # full suite (2310 passed, 240 xfailed: 10 known-wrong golden + the diagnosis truth set's known_wrong cases, all strict; offline, no network)
 pytest tests/test_payout_extractor.py -v  # one file
 pytest tests/test_payout_extractor.py::test_match_in_cash_family_altr -v   # one test
 
@@ -43,6 +43,7 @@ python scripts/scorecard.py --base REV --ledger PATH   # the ledger scorecard re
 python scripts/draw_audit_sample.py --out data/accuracy_audit.csv   # offline: draw the decision-17 audit worksheet once (census + 100 random, seed 7)
 python scripts/build_line_fixtures.py    # offline: tests/fixtures/lines/ (the line follow's real cases) from the local caches; rerun only to add a case
 python scripts/build_form25_fixtures.py  # offline: tests/fixtures/form25_reach/ (sub-plan 5b's real Form 25 cases) from the local caches; rerun only to add a case
+python scripts/build_issuer_role_fixtures.py  # offline: tests/fixtures/issuer_role/ (sub-plan 5c's real cases) from the local caches; rerun only to add a case
 python scripts/classify_universe.py --observations obs.csv   # → output/{securities,ticker_history,cusip_history,delistings,payouts,review,review_summary,observation_map,uncertain}.csv + contract/{security_history,delistings,seeds,price_requests,id_changes}.csv + scorecard.json (NETWORK; free when cached)
 python scripts/classify_universe.py --observations obs.csv --limit 20 --no-extract-payouts --no-midas --no-halts   # fast dev subset
 python scripts/classify_universe.py --observations obs.csv --sec-workers 1   # one SEC request at a time (default: 4 prefetch threads, max 8, one machine-wide 8 req/s limit)
@@ -97,7 +98,8 @@ window began, so (eligibility decided first, then) rows for [end − 1095 d, end
 CUSIPs `history.backfill_cusips` finds that no other security holds and its sightings are rebuilt; no `sec_id`
 or issuer changes),
 `_check_overrides`, `_last_trade_closes`, `_merger_payouts`,
-`_find_successors`, `_handoffs`, `_date_from_notices` (stage 9c: a handoff continuation row's last trade day from its own Form 25's confirmed EX-99.25 notice, when before the successor's first sighting and no later than the effective date; metered as "handoff notice dates"), then the row builders and `_triage`), each with explicit
+`_r1_continuations` (stage 8b: a merger whose published terms are one share and no cash, whose registrant's filings say the same of its own shares (`exchange_terms.own_exchange`), into a new issuer at most `NEW_ISSUER_DAYS` old or the same issuer (`successors.successor_by_terms`, else the new issuer's 8-K12B), is an exchange transfer to that successor, flagged `r1_continuation`, its payout reads dropped; the LLM's final terms must agree and a name tie is required; metered as "R1 continuations"),
+`_find_successors` (stage 9, with sub-plan 5c's `_terms_links` before the 8-K12B search: the same issuer's class, a new issuer, or the security's own same-CIK 8-K12B line via OpenFIGI and R2; a name tie for any 8-K12B link), `_handoffs`, `_date_from_notices` (stage 9c: a handoff continuation row's last trade day from its own Form 25's confirmed EX-99.25 notice, when before the successor's first sighting and no later than the effective date; metered as "handoff notice dates"), `_successor_endings` (stage 9d: the Form 25 search, matches only, for the line and 8-K12B successors the run added; metered as "successor endings"), then the row builders and `_triage`), each with explicit
 inputs and outputs and the run-wide `_RunContext` (clients, run date, log,
 workers, SEC meter `manifest.StageMeter`). Each stage returns what it produces
 (`_Successors` for stage 9, for instance) and `_run` combines the answers
@@ -279,12 +281,15 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
 - `added_securities.py` — `AddedAcquirer`/`AddedSuccessor`/`AddedLineSuccessor` (`AddedSecurity`; the last a FIGI
   line's successor stage 4b found, linked in stage 9 and added only for an ending that takes it): a
   security the run adds that no observation names, with its one
-  ticker_history row.
+  ticker_history row. An `AddedSuccessor`'s span runs to its own ending's last trade when stage 9d found one
+  (`last`).
 - `successors.py` — the successor after a FIGI change: a security of the run
   that starts right after the last trade (`successor_in_run`, `SecurityStart`),
   else the successor issuer's 8-K12B found by full-text search
   (`successor_search_args`, `successor_query`, `successor_from_8k12b`,
-  `successor_search_name`).
+  `successor_search_name`). Sub-plan 5c: `successor_by_terms` (the security an R1 statement names: the same
+  issuer's class the target names, or a new issuer's line, at most `NEW_ISSUER_DAYS` (1095) old, first sighted in
+  the window and named by the target) and `successor_anchor` (last trade, Form 25, anchor 8-K, delisting date).
 - `handoffs.py` — ticker handoffs (CONTEXT.md: one security stops under a
   ticker, another of the run starts under it within days): `find_handoffs`
   (candidate pairs, [-10, 120] days), `decide_handoff` (continuation by the
@@ -300,7 +305,7 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
 - `line_follow.py` — sub-plan 5a, pure: a security's line across a CUSIP or ticker change. `candidate_steps` (the
   next step in the fails rows within ±`LINE_DAYS` (10) trading days of the old CUSIP's settled last row: a new
   CUSIP under the line's ticker, its `…ZZZZ`/`…D` spellings, a ticker of the issuer EDGAR lists or its 8-K text
-  names (`text_symbols`, `text_cusips`), or the same CUSIP under a new non-OTC ticker; never a CUSIP another
+  names (`text_symbols`, which also reads "symbol ... changed from X to Y" as Y, curly quotes included: sub-plan 5c, RRI to GEN; `text_cusips`), or the same CUSIP under a new non-OTC ticker; never a CUSIP another
   security holds, nor a switch while the old CUSIP trades on at changing prices more than `SWITCH_DAYS` trading
   days after the new CUSIP's first row, applied only at the data edge (the old CUSIP's last row within
   `SWITCH_TAIL_DAYS` of `FtdIndex.last_date()`, passed as `data_end`: a live line has no stop to see; CHTR's new
@@ -374,7 +379,9 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   matched Form 25 the security did not trade past never decides its row (R6a); the continued-filings default
   (`continued_filings`) gives way to that Form 25's path when its notice says the class was acquired (R6b,
   `_classify_filings`; any answer but a merger is 231, `evidence["end_of_era"] == "form25_notice"`);
-  `_confirms_bankruptcy` reads every Item 1.03 section (`evidence.item_sections`).
+  `_confirms_bankruptcy` reads every Item 1.03 section (`evidence.item_sections`). Sub-plan 5c: `_survived` (rule 1,
+  before end-of-era branches 3 and 4) and `_one_for_one` (R1: a one-for-one, no-cash statement of the security's
+  class before the no-evidence default gives 304 with `r1_continuation`).
 - `end_of_era.py` — the end-of-era resolver's first step: where the registrant
   kept filing after the end. `signals()` reads the filings in the windows around
   the end date (8-K items, successor filings and Form 25s in [end − 30 d,
@@ -390,13 +397,25 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   (5) a 3.01 notice whose text cites a listing deficiency → compliance failure
   570; (6) else today's continued-filings transfer (304), its reason string
   unchanged (`lifecycle.CONTINUED_FILINGS` is its prefix). EDGAR evidence only.
-  Tried only where the continued-filings rule fires.
+  Tried only where the continued-filings rule fires. Sub-plan 5c, rule 1: branches 3 and 4 never fire when
+  `EraSignals.survived` holds (the classifier found no exchange of the registrant's own shares, and an acquirer's
+  or a distributor's statement); `merges` says when they would.
 - `crsp_codes.py` — the truth table: `DLST_CODE_TO_BUCKET` plus a leading-digit
   range fallthrough (`2xx→merger`, `3xx→exchange_transfer`, `4xx→liquidation`,
   `5xx→compliance_failure`, `6xx→expiration`). **The bucket — not the exact code
   — drives all downstream handling.**
 - `payout_extractor.py` — bridges the layers: extracts the per-share **cash**
   merger consideration from EDGAR filing text (network, regex) for the `merger` bucket.
+- `exchange_terms.py` — what a filing says the registrant's own shares became (sub-plan 5c, R1): `statements`
+  reads each "each share of S ... converted into N shares of T" (and "received N shares of T for each share",
+  "on a one-for-one basis", a cash one); `own_exchange` keeps those whose subject is the registrant's (its EDGAR
+  names in the year before the event, a defined term for one, "the Company"/"its"/"our") and the security's class,
+  and gives the ratio, cash in the exchange (par values, cash in lieu of fractions and special dividends set aside:
+  a special dividend is never consideration; rollover shares and cash conversions are read), the target clause and
+  its names (defined terms expanded), the target's class letter, and whether readings disagree (`ambiguous`);
+  `acquires` (another party's shares became the registrant's, or it issued shares under the merger agreement) and
+  `distributes` ("for every four shares", kept) are the registrant's other roles; `read_texts` reads the 8-Ks
+  around an ending's days and its Form 25 notice. Pure apart from `read_texts`.
 - `llm_merger_extractor.py` — the **cash+stock** counterpart: an LLM reads a
   filing and returns full structured terms (`cash_per_share`, `stock_ratio`,
   `acquirer_ticker`) the regex extractor can't generalize over. Uses
@@ -782,6 +801,14 @@ conflate them.
   Form 25 solely about rights or about another tracking group is not the common's. The matched Form 25's notice
   outranks the continued-filings default when it says the class was acquired, and a later SEC revocation never
   decides its row.
+- **An ending's kind follows the registrant's role and R1 (sub-plan 5c).** A registrant whose filings state no
+  exchange of its own shares, and that acquired another party or distributed another company's shares, gets no
+  merger from end-of-era branches 3 and 4. A one-for-one exchange with no cash (a special dividend is no cash) is a
+  continuation only into a new issuer (first EDGAR filing at most 1,095 days before) or the same issuer: stage 5
+  gives it when no 8-K item code decides, stage 8b rewrites a merger whose published terms say one share and no
+  cash, stage 9 links a transfer to the security the statement names or to the new line its own same-CIK 8-K12B
+  moved it to (OpenFIGI's CUSIP job, R2). The added successors take their own Form 25 endings (stage 9d). A text
+  never decides a merger row alone: the LLM's terms must agree.
 - **A line is followed past its observations (sub-plan 5a, rulings R1 and R2).** Stage 4b follows each security
   across a reverse split or a rename the fails rows show after the caller's last observation, before the Form 25
   search: so a later real ending is found instead of a guess anchored on the old ticker's last row. A step needs a
