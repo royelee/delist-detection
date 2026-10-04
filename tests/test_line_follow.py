@@ -310,3 +310,32 @@ def test_composites_reads_an_answer():
     assert lf.composites({"warning": "No identifier found."}) == []
     assert [c.composite for c in lf.composites({"data": [{"compositeFIGI": "BBGX", "exchCode": "US", "ticker": "X",
                                                           "name": "X CO"}]})] == ["BBGX"]
+
+
+# --- the LINE_DAYS window, each bound pinned on its own ---
+
+def _from(symbol, cusip, first, n=5):
+    """`n` fails rows on consecutive trading days from the trading day `first`."""
+    from delist_detection.trading_calendar import add_trading_days
+    return [FtdRow(add_trading_days(date.fromisoformat(first), i).isoformat(), cusip, symbol, "REVERSE SPLIT CO",
+                   20.0 + i) for i in range(n)]
+
+
+def _edge(offset):
+    """The trading day `offset` trading days from the old line's settled last row."""
+    settled = lf.line_end(["11111A101"], {"RS"}, FtdIndex(OLD)).settled
+    return lf._days(settled, offset)
+
+
+@pytest.mark.parametrize("offset, found", [(lf.LINE_DAYS, True), (lf.LINE_DAYS + 1, False),
+                                           (-lf.LINE_DAYS, True), (-lf.LINE_DAYS - 1, False)])
+def test_the_window_bounds_a_switch_found_by_symbol(offset, found):
+    steps = _steps(OLD + _from("RS", "11111A200", _edge(offset)))
+    assert [s.new_cusip for s in steps] == (["11111A200"] if found else [])
+
+
+@pytest.mark.parametrize("offset, found", [(lf.LINE_DAYS, True), (lf.LINE_DAYS + 1, False),
+                                           (-lf.LINE_DAYS, True), (-lf.LINE_DAYS - 1, False)])
+def test_the_window_bounds_a_switch_found_by_its_cusip(offset, found):
+    steps = _steps(OLD + _from("XYZ", "316645100", _edge(offset)), extra_cusips={"316645100"})
+    assert [s.new_cusip for s in steps] == (["316645100"] if found else [])
