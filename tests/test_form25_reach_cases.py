@@ -12,7 +12,7 @@ import delist_detection.delistings as delistings
 from tests import form25_cases as fc
 
 # The rules of sub-plan 5b built so far; each task adds its own (the cases it moves change then, and only then)
-RULES_DONE: set[str] = {"1.03", "R6a", "R6b", "C", "R7", "E", "R3", "L"}
+RULES_DONE: set[str] = {"1.03", "R6a", "R6b", "C", "R7", "E", "R3", "L", "R2"}
 
 # sec_id -> (the rule that moves it, its outcome before 5b, its outcome after)
 MOVES = {

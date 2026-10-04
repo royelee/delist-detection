@@ -253,6 +253,19 @@ class SecurityRef:
     share_class: str
     kind: str
     name: str = ""
+    # The class letter the security's own CUSIP fails descriptions name ("SUNPOWER CORP CL A"), for a share
+    # class without a letter of its own (`letter_hint`); None when they name none, or two.
+    letter_hint: str | None = None
+
+
+_DESCRIPTION_LETTER = re.compile(r"\b(?:CL|CLASS|SER|SERIES)\s+([A-Z])\b")
+
+
+def letter_hint(descriptions: Iterable[str]) -> str | None:
+    """The one class letter a security's own CUSIP fails descriptions name ("CL A", "CLASS A", "SER A"); None
+    when they name none, or more than one."""
+    letters = {m.group(1) for d in descriptions for m in _DESCRIPTION_LETTER.finditer((d or "").upper())}
+    return letters.pop() if len(letters) == 1 else None
 
 
 def _named_by(segment: str, hits: Sequence[SecurityRef]) -> list[SecurityRef]:
@@ -283,6 +296,10 @@ def _class_matches(f25: Form25, same: Sequence[SecurityRef]
     for label, seg in _lettered_segments(f25.class_text):
         letter = class_letter(label)
         hits = [r for r in same if class_letter(r.share_class) == letter]
+        if not hits:
+            # R2: no sibling's class carries the letter; a letterless one whose own CUSIP's fails descriptions
+            # name it does (SunPower's "Class A & Class B" 25-NSE, 2011: the class A placeholder, "CL A")
+            hits = [r for r in same if class_letter(r.share_class) is None and r.letter_hint == letter]
         named = len(hits) > 1
         picked = _named_by(seg, hits) if named else hits
         if len(picked) == 1:

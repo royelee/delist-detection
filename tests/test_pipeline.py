@@ -3472,3 +3472,16 @@ def test_the_finders_context_sees_its_own_cusip_trading_in_the_30_days_up_to_a_d
     ctx = _one_security_context(rows)
     assert ctx.cusip_rows_near("2016-11-01") and ctx.cusip_rows_near("2016-10-31")
     assert not ctx.cusip_rows_near("2016-12-01") and not ctx.cusip_rows_near("2016-10-02")
+
+
+# --- sub-plan 5b, R2: the finder's view of a letterless class ---
+
+def test_a_letterless_security_takes_the_letter_of_its_own_cusips_fails_descriptions():
+    from delist_detection.ftd import FtdIndex
+    ftd = FtdIndex([FtdRow("2011-06-01", "867652109", "SPWRA", "SUNPOWER CORP CL A", 20.0),
+                    FtdRow("2011-06-01", "867652307", "SPWRB", "SUNPOWER CORP CL B", 19.0)])
+    plain = Security("CIK867773-COMMON", 867773, "COMMON", "SUNPOWER CORP", "", True, "placeholder")
+    lettered = Security("BBG_B", 867773, "CLASS B", "SUNPOWER CORP CL B", "", True, "cusip")
+    assert pipeline._security_ref(plain, ftd, ["867652109"]).letter_hint == "A"
+    assert pipeline._security_ref(lettered, ftd, ["867652307"]).letter_hint is None
+    assert pipeline._security_ref(plain, ftd, []).letter_hint is None

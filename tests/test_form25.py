@@ -361,3 +361,47 @@ def test_a_form25_that_relates_solely_to_the_rights_is_not_about_the_common():
                                         "Preferred Share Purchase Rights")
     assert other_class(f, SecurityRef("CIK351346-COMMON", "COMMON", "common", "BIOMET INC")) == \
         "relates solely to Preferred Share Purchase Rights"
+
+
+# --- sub-plan 5b, R2: a letterless common takes the letter its own fails descriptions name ---
+
+from delist_detection.form25 import letter_hint  # noqa: E402
+
+
+def test_the_letter_a_securitys_fails_descriptions_name():
+    assert letter_hint(["SUNPOWER CORP CL A"]) == "A"
+    assert letter_hint(["LIBERTY INTERACTIVE CORP SER A", "LIBERTY INTERACTIVE CORP"]) == "A"
+    assert letter_hint(["X CORP CLASS A", "X CORP CL B"]) is None
+    assert letter_hint(["SUNPOWER CORP", ""]) is None
+
+
+SUNPOWER_2011 = Form25("a", "25-NSE", "2011-11-16", "NASDAQ", "Common Stock Class A & Common Stock Class B", "", "")
+
+
+def test_a_class_no_siblings_share_class_carries_goes_to_the_letterless_one_its_fails_name():
+    """SunPower 2011: the class A placeholder ("SUNPOWER CORP CL A") and the recombined SPWR line, both letterless;
+    without the hint the 25-NSE ties them."""
+    refs = [SecurityRef("CIK867773-COMMON", "COMMON", "common", "SUNPOWER CORP", "A"),
+            SecurityRef("BBG000FVQ185", "COMMON", "common", "SUNPOWER CORP.")]
+    assert match_securities(SUNPOWER_2011, refs) == (["CIK867773-COMMON"], "class A")
+    no_hint = [SecurityRef(r.sec_id, r.share_class, r.kind, r.name) for r in refs]
+    assert match_securities(SUNPOWER_2011, no_hint) == ([], "ambiguous class")
+
+
+def test_a_hint_never_competes_with_a_share_class_that_carries_the_letter():
+    """LVNTA 2018: the duplicate placeholder's fails say SER A too; LVNTA's own Series A takes the Form 25."""
+    f = Form25("a", "25-NSE", "2018-03-09", "NASDAQ",
+               "Series A Liberty Ventures Common Stock & Series B Liberty Ventures Common Stock", "", "")
+    refs = [SecurityRef("BBG0038K9G41", "SERIES A", "common", "LIBERTY INTERACTIVE VENTURE CORP S"),
+            SecurityRef("CIK1355096-COMMON", "COMMON", "common", "LIBERTY INTERACTIVE VENTURE CORP S", "A"),
+            SecurityRef("BBG000PCQQL6", "SERIES A", "common", "QURATE RETAIL INC SERIES A")]
+    assert match_securities(f, refs)[0] == ["BBG0038K9G41"]
+
+
+def test_two_letterless_siblings_both_hinted_the_letter_stay_tied():
+    """Review Focus (R2): a FIGI line and a placeholder of one class A, both letterless and both "CL A" in their
+    fails: the hint cannot tell them apart, so the Form 25 stays ambiguous, as before."""
+    refs = [SecurityRef("BBG_A", "COMMON", "common", "SUNPOWER CORP", "A"),
+            SecurityRef("CIK_A", "COMMON", "common", "SUNPOWER CORP", "A")]
+    assert match_securities(SUNPOWER_2011, refs) == ([], "ambiguous class")
+    assert tied_securities(SUNPOWER_2011, refs) == {"BBG_A", "CIK_A"}

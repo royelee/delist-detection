@@ -33,8 +33,8 @@ from .handoffs import (
     CONTINUATION_CODE, HandoffDecision, HandoffOutcome, apply_handoffs, continuation_filing, cusip_switch, decide_handoff,
     drop_resolved_shared, find_handoffs, issuer_carries_on, own_continuation_filing, predecessor_names,
 )
-from .figi_resolution import FigiCandidate, is_placeholder, share_class_from_name
-from .form25 import SecurityRef, notice_last_trade, parse_form25
+from .figi_resolution import FigiCandidate, class_letter, is_placeholder, share_class_from_name
+from .form25 import SecurityRef, letter_hint, notice_last_trade, parse_form25
 from .last_trade import decide_last_trade
 from .ftd import FTD_START, FtdIndex, FtdRow, close_age, trades_after
 from .history import (
@@ -657,6 +657,14 @@ def _cusip_switches(s: Security, ftd: FtdIndex, cusips: Sequence[str]) -> tuple[
     return tuple(sorted(first.values())[1:])
 
 
+def _security_ref(s: Security, ftd: FtdIndex, cusips: Sequence[str]) -> SecurityRef:
+    """The finder's view of a security (`form25.SecurityRef`): its class, kind and name, and for a class with no
+    letter the one its own CUSIPs' fails descriptions name (`form25.letter_hint`, R2: SunPower's class A placeholder,
+    "SUNPOWER CORP CL A")."""
+    hint = None if class_letter(s.share_class) else letter_hint(d for c in cusips for d in ftd.descriptions(c))
+    return SecurityRef(s.sec_id, s.share_class, s.kind, s.name, hint)
+
+
 def _rows_near(rows: Sequence[FtdRow], day: str) -> bool:
     """Whether a trading fails row of the security's own CUSIPs (`rows`) is dated in the LATE_ROW_DAYS up to the
     ISO day `day`."""
@@ -672,11 +680,11 @@ def _context_builder(securities: dict[str, Security], sightings: dict[str, list[
     siblings: dict[int, list[SecurityRef]] = defaultdict(list)
     for s in securities.values():
         if s.issuer_cik is not None:
-            siblings[s.issuer_cik].append(SecurityRef(s.sec_id, s.share_class, s.kind, s.name))
+            siblings[s.issuer_cik].append(_security_ref(s, ftd, sec_cusips.get(s.sec_id, [])))
 
     def security_context(s: Security, listed_now: bool | None) -> SecurityContext:
         sig = sightings[s.sec_id]
-        sibs = siblings.get(s.issuer_cik) or [SecurityRef(s.sec_id, s.share_class, s.kind, s.name)]
+        sibs = siblings.get(s.issuer_cik) or [_security_ref(s, ftd, sec_cusips.get(s.sec_id, []))]
         rows = ftd.trading_rows(sec_cusips.get(s.sec_id, []))
         # sec_id -> (first sighting, last own-ticker sighting) for every security
         # sharing this issuer CIK, from the same sightings built above; a sibling
