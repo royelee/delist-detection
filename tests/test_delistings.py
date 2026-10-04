@@ -1,3 +1,4 @@
+from dataclasses import replace
 from datetime import date
 from pathlib import Path
 
@@ -854,3 +855,15 @@ def test_a_fallback_last_trade_keeps_the_failed_halt_feed_days(fake_edgar):
     (ev,), _ = DelistingFinder(fake_edgar, clf, halts=halts).find(_ctx(sec, last_seen="2015-01-10"))
     assert ev.last_trade.day == date(2015, 1, 10) and "last_trade_date_unconfirmed" in ev.last_trade.flags
     assert ev.last_trade.halt_feed_failed == tuple(halts.failed) != ()
+
+
+def test_a_line_the_line_follow_moved_to_a_new_ticker_is_reviewed_under_it(fake_edgar):
+    """U5 (sub-plan 5a): with no Form 25 and no fallback filing, a line that went on as NVRI is reviewed under
+    its latest own ticker, NVRI, not its last era's."""
+    fake_edgar.submissions_by_cik[45876] = []
+    clf = DelistClassifier(fake_edgar, TickerResolver(fake_edgar))
+    sec = _sec("BBG000BLH3P8", 45876, "HSC", "2008-01-16", "2023-06-20", "HARSCO CORP")
+    sec.line_tickers = frozenset({"NVRI"})
+    ctx = replace(_ctx(sec, last_seen="2026-05-29"), ticker_on=lambda d: "NVRI" if d >= "2023-06-21" else "HSC")
+    events, review = DelistingFinder(fake_edgar, clf).find(ctx)
+    assert events == [] and [(r.flag, r.ticker) for r in review] == [("ended_without_delisting", "NVRI")]

@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import NamedTuple
 
-from .ftd import FtdIndex, is_deleted_symbol
+from .ftd import FtdIndex, is_deleted_symbol, is_unassigned_symbol
 from .names import description_matches
 from .observations import TickerEra
 from .review_triage import ReviewItem
@@ -104,9 +104,10 @@ def ticker_sightings(sec: Security, ftd: FtdIndex, cusips: Sequence[str]) -> lis
     sighting of trading: it opens and extends no range, and counts in no
     `seen_after`, `last_seen` or sibling span."""
     out = [Sighting(o.as_of, e.ticker, "observation") for e in sec.eras for o in e.observations]
-    # SEC's 2007 fails files mask some symbols (**********): not a ticker
+    # SEC's 2007 fails files mask some symbols (**********), and a new CUSIP's first rows carry the ticker with
+    # "ZZZZ" appended (FMDZZZZ): neither is a ticker
     out += [Sighting(r.date, r.symbol, "ftd") for r in ftd.trading_rows(cusips)
-            if any(ch.isalpha() for ch in r.symbol)]
+            if any(ch.isalpha() for ch in r.symbol) and not is_unassigned_symbol(r.symbol)]
     label: dict[str, str] = {}
     for t in sorted({e.ticker for e in sec.eras}, key=lambda t: ("-" not in t, t)):
         label.setdefault(t.replace("-", ""), t)
@@ -134,14 +135,14 @@ def ticker_on(sightings: Sequence[Sighting]) -> Callable[[str], str | None]:
 
 
 def own_last_seen(sec: Security, sig: Sequence[Sighting]) -> str:
-    """The latest sighting under one of the security's own era tickers, else
+    """The latest sighting under one of the security's own tickers (its eras' and its line's), else
     the latest era end date.
 
     FTD rows found by CUSIP include a post-delisting OTC tail under another
     symbol (e.g. a bankrupt XYZ trading as XYZQ), which would otherwise push
     `last_seen` past the real delisting and misdate a fallback delisting.
     """
-    own = {e.ticker for e in sec.eras}
+    own = sec.own_tickers()
     dates = [s.day for s in sig if s.value in own]
     return dates[-1] if dates else max(e.last for e in sec.eras)
 

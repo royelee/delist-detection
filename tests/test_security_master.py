@@ -1189,3 +1189,17 @@ def test_a_join_to_a_picked_composite_is_still_withdrawn_when_another_issuers_cu
         cusips={spw.key: [], spxc.key: [], gg.key: ["22222G101"]}, handoffs=handoffs)
     assert res[spxc.key].sec_id == "BBG000BTGCV5"
     assert (res[spw.key].sec_id, res[spw.key].source) == ("CIK88205-COMMON", "placeholder")
+
+
+def test_a_placeholder_whose_line_ticker_a_later_figi_line_holds_is_superseded():
+    """U5 (sub-plan 5a): Aon's placeholder traded as AOC, then (the line follow found) as AON; Aon plc's later FIGI
+    line of the same issuer and class holds AON. The placeholder is not the line listed today."""
+    from delist_detection.security_master import superseded_placeholders
+    aoc = _era("AOC", ("2008-01-16", "AON CORP"), ("2009-06-08", "AON CORP"))
+    aon = _era("AON", ("2012-06-29", "AON PLC"))
+    p = Security("CIK315293-COMMON", 315293, "COMMON", "AON CORP", "", True, "placeholder", eras=[aoc],
+                 line_tickers=frozenset({"AON"}))
+    s = Security("BBG00AONPLC1", 315293, "COMMON", "AON PLC", "Common Stock", True, "cusip", eras=[aon])
+    assert superseded_placeholders({p.sec_id: p, s.sec_id: s}) == {"CIK315293-COMMON"}
+    p.line_tickers = frozenset()
+    assert superseded_placeholders({p.sec_id: p, s.sec_id: s}) == set()

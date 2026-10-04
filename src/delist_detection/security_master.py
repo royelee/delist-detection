@@ -40,6 +40,13 @@ class Security:
     figi_source: str
     kind: str = "common"
     eras: list[TickerEra] = field(default_factory=list)
+    # The tickers the line follow (pipeline stage 4b, `line_follow`) found the security trading under after its
+    # observations stopped (HSC's NVRI, Senior Housing's DHC).
+    line_tickers: frozenset[str] = frozenset()
+
+    def own_tickers(self) -> set[str]:
+        """Every ticker the security is known to have traded under: its eras' and its line's."""
+        return {e.ticker for e in self.eras} | set(self.line_tickers)
 
     def row(self) -> dict:
         return {"sec_id": self.sec_id, "issuer_cik": self.issuer_cik, "share_class": self.share_class,
@@ -780,10 +787,10 @@ def superseded_placeholders(securities: Mapping[str, Security]) -> set[str]:
     for p in securities.values():
         if not is_placeholder(p.sec_id) or p.issuer_cik is None or not p.eras:
             continue
-        tickers, last = {e.ticker for e in p.eras}, max(e.last for e in p.eras)
+        tickers, last = p.own_tickers(), max(e.last for e in p.eras)
         for s in securities.values():
             if (not is_placeholder(s.sec_id) and s.eras and s.issuer_cik == p.issuer_cik
-                    and s.share_class == p.share_class and tickers & {e.ticker for e in s.eras}
+                    and s.share_class == p.share_class and tickers & s.own_tickers()
                     and min(e.first for e in s.eras) > last):
                 out.add(p.sec_id)
                 break

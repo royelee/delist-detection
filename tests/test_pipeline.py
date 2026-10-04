@@ -2973,3 +2973,21 @@ def test_a_when_issued_observation_joins_its_regular_way_security(fake_edgar, tm
               if r["ticker"] == "EHAB-WI")
     assert (wi["sec_id"], wi["history_ticker"], wi["in_ticker_history"], wi["status"]) == (
         "BBG014QJ5BV6", "EHAB", "true", "mapped")
+
+
+def test_a_merger_whose_cusip_goes_on_under_a_line_ticker_does_not_end_the_security():
+    """U5 (sub-plan 5a): the continues-after rule counts the tickers the line follow added: TEST's own CUSIP keeps
+    trading as TSTN (a rename the line follow found), so the merger record is no real exit."""
+    from delist_detection.ftd import FtdIndex
+    from delist_detection.observations import TickerEra
+    era = TickerEra("TEST", "2007-12-01", "2019-03-29", [Observation("TEST", "2007-12-01", "TEST CO")])
+    sec = Security("BBGTEST", 5, "COMMON", "TEST CO", "Common Stock", True, "cusip", eras=[era])
+    record = DelistRecord(ticker="TEST", cik=5, observed_delist_date="2019-03-30", crsp_code=231,
+                          bucket=CrspBucket.MERGER, confidence="high", reason="x", evidence={"flags": []},
+                          sec_id="BBGTEST", delist_date="2019-03-30")
+    d = Delisting("BBGTEST", 5, "TEST", "2019-03-30", record, LastTrade(date(2019, 3, 29), "ex99_notice", ()),
+                  None, None, "NYSE")
+    ftd = FtdIndex(_continuing_fails("TSTN", "11111T101"))
+    assert pipeline._ends_the_security(d, sec, {"BBGTEST": ["11111T101"]}, ftd) is True
+    sec.line_tickers = frozenset({"TSTN"})
+    assert pipeline._ends_the_security(d, sec, {"BBGTEST": ["11111T101"]}, ftd) is False

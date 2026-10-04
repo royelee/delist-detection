@@ -280,6 +280,9 @@ class DelistingFinder:
             return [], []
         cik = sec.issuer_cik
         ticker_last = sec.eras[-1].ticker
+        if sec.line_tickers:            # the line went on under a ticker the line follow found: its latest one
+            latest = ctx.ticker_on(ctx.last_seen)
+            ticker_last = latest if latest in sec.own_tickers() else ticker_last
         if cik is None:
             if ctx.listed_today is False:
                 return [], [ReviewItem(sec.sec_id, ticker_last, None, "ended_without_delisting",

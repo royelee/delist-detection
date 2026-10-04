@@ -183,7 +183,7 @@ def _warm_delisting_search(clients: Clients, ordered: list[Security], listing: d
             return
         now = False if s.sec_id in retired else listed_today(
             None, s.sec_id, edgar=clients.edgar, cik=s.issuer_cik,
-            tickers=sorted({e.ticker for e in s.eras}), answer=answer)
+            tickers=sorted(s.own_tickers()), answer=answer)
         finder.find(context(s, now))
 
     warm(ordered, task, workers=workers, state=make_finder, name="delisting search")
@@ -441,7 +441,7 @@ def _context_builder(securities: dict[str, Security], sightings: dict[str, list[
             expected_name=s.eras[-1].name if s.eras else None,
             sibling_spans=spans,
             resolution_source=_resolution_source(s, answers.issuers, answers.resolutions),
-            ftd_seen_after=lambda day, sig=sig, own={e.ticker for e in s.eras}: any(
+            ftd_seen_after=lambda day, sig=sig, own=s.own_tickers(): any(
                 x.day > day for x in sig if x.source == "ftd" and x.value in own),
             tickers_between=lambda lo, hi, sig=sig: list(dict.fromkeys(x.value for x in sig if lo <= x.day <= hi)),
         )
@@ -497,7 +497,7 @@ def _find_delistings(ctx: _RunContext, securities: dict[str, Security], sec_cusi
             # not abort the whole overnight run.
             listed[s.sec_id] = False if s.sec_id in retired else listed_today(
                 clients.figi, s.sec_id, edgar=clients.edgar, cik=s.issuer_cik,
-                tickers=sorted({e.ticker for e in s.eras}), answer=listing.get(s.sec_id))
+                tickers=sorted(s.own_tickers()), answer=listing.get(s.sec_id))
             found, found_review = finder.find(security_context(s, listed[s.sec_id]))
         except FATAL:
             raise
@@ -548,7 +548,7 @@ def _dead_before_sighting(ctx: _RunContext, securities: dict[str, Security], del
         s = securities[sid]
         end_day = date.fromisoformat(end)
         lo, hi = end_day - timedelta(days=BACKFILL_DAYS), end_day + timedelta(days=10)
-        tickers = sorted({era.ticker for era in s.eras})
+        tickers = sorted(s.own_tickers())
         ftd.extend(ctx.clients.ftd_client, lo, hi, symbols=tickers)
         names = [n for era in s.eras for n in (era.name, *(issuers[era.key].names if era.key in issuers else ())) if n]
         held = {c for other, cs in sec_cusips.items() if other != sid for c in cs}
@@ -862,7 +862,7 @@ def _find_successors(ctx: _RunContext, delistings: list[Delisting], securities: 
             hit = successor_from_8k12b(successor_search, clients.figi, name=name, day=day,
                                        exclude_cik=e.cik, share_class=predecessor.share_class,
                                        edgar=clients.edgar,
-                                       own_tickers={x.ticker for x in predecessor.eras} | {e.ticker})
+                                       own_tickers=predecessor.own_tickers() | {e.ticker})
             if watch.tripped():
                 found.review.append(degraded_item(e.sec_id, e.ticker, e.cik, "the successor search",
                                                    delist_date=e.delist_date))
@@ -1089,7 +1089,7 @@ def _continues_after(s: Security, after: str, sec_cusips: dict[str, list[str]], 
     compliance failure's OTC tail settling at one price is not mistaken for
     continued trading (WRK stops being clipped; ARD and compliance failures
     stay clipped)."""
-    own = {e.ticker for e in s.eras}
+    own = s.own_tickers()
     rows = [r for r in ftd.trading_rows(sec_cusips.get(s.sec_id, [])) if r.symbol in own and r.date > after]
     if len(rows) < CONTINUATION_MIN_ROWS:
         return False

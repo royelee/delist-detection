@@ -56,6 +56,13 @@ def is_deleted_symbol(symbol: str) -> bool:
     return len(symbol or "") > 4 and symbol.endswith("XXXX")
 
 
+def is_unassigned_symbol(symbol: str) -> bool:
+    """A new CUSIP's first fails rows, before the exchange assigns it a symbol, carry the ticker with "ZZZZ"
+    appended (FMDZZZZ, JNYZZZZ, NYCBZZZZ), often at $0.01 or $1.00. Like a deleted "...XXXX" symbol, it is no
+    ticker the security traded under."""
+    return len(symbol or "") > 4 and symbol.endswith("ZZZZ")
+
+
 def settled_last(rows: Sequence[FtdRow]) -> FtdRow:
     """The row that opens the last run of one price in the date-sorted, non-empty `rows`: fails still settling
     after a security's last trade repeat its last close, so its last trade lies near that row, not the last one

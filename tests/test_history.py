@@ -3,9 +3,10 @@ history.observation_map_rows: observation_map.csv's rows (spec §7.x).
 history.filtered_ticker_sightings: Phase 4 rule 2, a backfilled observation
 adds no ticker_history range."""
 from delist_detection.ftd import FtdIndex, FtdRow
-from delist_detection.history import (Sighting, filtered_ticker_sightings, is_backfilled, observation_map_rows,
-                                      ticker_on)
+from delist_detection.history import (Sighting, cusip_sightings, filtered_ticker_sightings, is_backfilled,
+                                      observation_map_rows, own_last_seen, ticker_on, ticker_sightings)
 from delist_detection.observations import Observation, TickerEra
+from delist_detection.security_master import Security
 
 
 def test_the_ticker_on_a_day_is_the_latest_sighting_on_or_before_it():
@@ -210,3 +211,35 @@ def test_backfill_cusips_with_no_names_matches_nothing():
         FtdRow("2007-09-01", "999999999", "BOL", "OTHER WIDGETS CO", 5.0),
     ])
     assert backfill_cusips(["BOL"], "2007-11-05", ftd, []) == []
+
+
+# --- sub-plan 5a, U5: a security's own tickers include its line's (Security.line_tickers) ---
+
+def _hsc(line_tickers=frozenset()):
+    era = TickerEra("HSC", "2008-01-16", "2023-06-20", [Observation("HSC", "2008-01-16", "HARSCO CORP")])
+    return Security("BBG000BLH3P8", 45876, "COMMON", "HARSCO CORP", "Common Stock", True, "cusip", eras=[era],
+                    line_tickers=frozenset(line_tickers))
+
+
+def test_own_tickers_are_the_eras_and_the_lines():
+    assert _hsc().own_tickers() == {"HSC"} and _hsc({"NVRI"}).own_tickers() == {"HSC", "NVRI"}
+
+
+def test_own_last_seen_counts_a_ticker_the_line_follow_found():
+    """Harsco renamed itself Enviri (NVRI) in 2023 on the same CUSIP: once the line follow adds NVRI, the
+    security's last own sighting is its last NVRI row, not its last HSC one."""
+    sig = [Sighting("2023-06-20", "HSC", "ftd"), Sighting("2024-01-02", "NVRI", "ftd")]
+    assert own_last_seen(_hsc(), sig) == "2023-06-20"
+    assert own_last_seen(_hsc({"NVRI"}), sig) == "2024-01-02"
+
+
+def test_a_first_day_zzzz_row_is_no_ticker_sighting_but_still_a_cusip_sighting():
+    """A new CUSIP's first fails row carries the ticker with ZZZZ appended (FMDZZZZ): no ticker range opens under
+    it, while the CUSIP's own range starts that day."""
+    era = TickerEra("FMD", "2008-01-16", "2008-01-16", [Observation("FMD", "2008-01-16", "FIRST MARBLEHEAD")])
+    sec = Security("BBG000BN6349", 1262279, "COMMON", "FIRST MARBLEHEAD", "Common Stock", True, "cusip", eras=[era])
+    ftd = FtdIndex([FtdRow("2013-12-03", "320771207", "FMDZZZZ", "FIRST MARBLEHEAD CORP", 0.01),
+                    FtdRow("2013-12-04", "320771207", "FMD", "FIRST MARBLEHEAD CORP", 5.41),
+                    FtdRow("2013-12-05", "320771207", "FMD", "FIRST MARBLEHEAD CORP", 5.50)])
+    assert {s.value for s in ticker_sightings(sec, ftd, ["320771207"]) if s.source == "ftd"} == {"FMD"}
+    assert cusip_sightings(sec, ftd, ["320771207"])[0] == Sighting("2013-12-03", "320771207", "ftd")
