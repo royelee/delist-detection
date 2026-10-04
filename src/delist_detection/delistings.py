@@ -136,6 +136,9 @@ class SecurityContext:
     # True when the security's own CUSIPs have a trading fails row in the LATE_ROW_DAYS up to the given ISO day:
     # a Form 25 filed long after the security's last sighting still reaches it (Monster Worldwide 2016, L).
     cusip_rows_near: Callable[[str], bool] = lambda day: False
+    # The one CIK other than `security.issuer_cik` that was the issuer in force over the security's whole span
+    # (`pipeline._other_issuers`), whose Form 25s are read too (R5: the old Spectrum Brands, the old Match Group).
+    other_cik: int | None = None
 
 
 @dataclass
@@ -491,18 +494,22 @@ class DelistingFinder:
             if self._continued(ctx, sub, f25, filings) and self._not_this_removal(ctx, cik, filings, sub, f25):
                 continue
             candidates.append((sub, f25))
+        groups = [(cik, filings, g) for g in self._group(candidates)]
+        if ctx.other_cik is not None and ctx.other_cik != cik:
+            groups += self._other_issuer_groups(ctx, scan, floor, own)
+        groups.sort(key=lambda x: min(s.filing_date for s, _ in x[2]))
 
         delistings: list[Delisting] = []
         last_definitive: Delisting | None = None
-        for group in self._group(candidates):
+        for filer, filer_filings, group in groups:
             earliest_sub, earliest_f25 = min(group, key=lambda item: item[0].filing_date)
             if last_definitive is not None:
                 gap = (date.fromisoformat(earliest_sub.filing_date) - date.fromisoformat(last_definitive.delist_date)).days
                 if gap > IGNORE_AFTER_DEFINITIVE_DAYS and not ctx.seen_after(earliest_sub.filing_date):
                     continue        # a security truly gone can't have a later Form 25 of its own
             eff = effective_date(earliest_sub.filing_date)
-            continued = self._continued(ctx, earliest_sub, earliest_f25, filings)
-            delisting = self._build_delisting(ctx, cik, filings, group, eff, continued)
+            continued = self._continued(ctx, earliest_sub, earliest_f25, filer_filings)
+            delisting = self._build_delisting(ctx, filer, filer_filings, group, eff, continued)
             delistings.append(delisting)
             # Only an exchange transfer (or a delisting not classified) that the
             # security traded through continues it. A merger, liquidation,
@@ -544,6 +551,26 @@ class DelistingFinder:
                                          "listing status unknown and no delisting found",
                                          last_seen=ctx.last_seen))
         return delistings, review
+
+    def _other_issuer_groups(self, ctx: SecurityContext, scan: _Scan, floor: str, own: SecurityRef
+                             ) -> list[tuple[int, list[EdgarSubmission], list[tuple[EdgarSubmission, Form25]]]]:
+        """R5: the Form 25s, from the floor on, of the one other CIK in force over the security's whole span
+        (`SecurityContext.other_cik`), matched against this security alone, grouped; each group carries its
+        filer CIK and filing list, which date and classify it (old Spectrum Brands 2018, old Match Group 2020)."""
+        other = ctx.other_cik
+        filings = self.edgar.recent_filings(other)
+        names = self._issuer_names(other)
+        found = []
+        for sub in list_form25(filings):
+            if sub.filing_date < floor:
+                continue
+            f25 = self._judge(ctx, scan, other, sub, [own], names)
+            if f25 is None:
+                continue
+            if self._continued(ctx, sub, f25, filings) and self._not_this_removal(ctx, other, filings, sub, f25):
+                continue
+            found.append((sub, f25))
+        return [(other, filings, g) for g in self._group(found)]
 
     def _build_delisting(self, ctx: SecurityContext, cik: int, filings: list[EdgarSubmission],
                      group: list[tuple[EdgarSubmission, Form25]], eff: str, continued: bool,

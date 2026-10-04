@@ -12,7 +12,7 @@ import delist_detection.delistings as delistings
 from tests import form25_cases as fc
 
 # The rules of sub-plan 5b built so far; each task adds its own (the cases it moves change then, and only then)
-RULES_DONE: set[str] = {"1.03", "R6a", "R6b", "C", "R7", "E", "R3", "L", "R2"}
+RULES_DONE: set[str] = {"1.03", "R6a", "R6b", "C", "R7", "E", "R3", "L", "R2", "R5"}
 
 # sec_id -> (the rule that moves it, its outcome before 5b, its outcome after)
 MOVES = {
@@ -153,3 +153,10 @@ def test_the_sibling_slack_keeps_an_old_redomiciled_line_from_a_false_ending(sec
     assert fc.outcome(sec_id)[0] == []
     monkeypatch.setattr(delistings, "SIBLING_ALIVE_BEFORE_DAYS", 0)
     assert [r[0] for r in fc.outcome(sec_id)[0]] == [day]
+
+
+def test_reading_a_cik_in_force_over_part_of_the_span_would_give_perrigo_a_2013_row():
+    """PRGO (binding: no 2013 ending): the old Perrigo Company (CIK 820096) was in force only until 2013, so R5
+    reads no other CIK for it; reading that CIK would give the listed PRGO a 2013 row."""
+    assert fc.outcome("BBG000CNFQW6") == ([], [])
+    assert [r[0] for r in fc.outcome("BBG000CNFQW6", other_cik=820096)[0]] == ["2013-06-15"]

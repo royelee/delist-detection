@@ -673,8 +673,8 @@ def _rows_near(rows: Sequence[FtdRow], day: str) -> bool:
 
 
 def _context_builder(securities: dict[str, Security], sightings: dict[str, list[Sighting]],
-                     answers: _IssuerAnswers, ftd: FtdIndex, sec_cusips: dict[str, list[str]]
-                     ) -> Callable[[Security, bool | None], SecurityContext]:
+                     answers: _IssuerAnswers, ftd: FtdIndex, sec_cusips: dict[str, list[str]],
+                     other_ciks: Mapping[str, int] = {}) -> Callable[[Security, bool | None], SecurityContext]:
     """The finder's `SecurityContext` for a security of the run, given whether it
     is listed today."""
     siblings: dict[int, list[SecurityRef]] = defaultdict(list)
@@ -715,6 +715,7 @@ def _context_builder(securities: dict[str, Security], sightings: dict[str, list[
             cusip_switches=_cusip_switches(s, ftd, sec_cusips.get(s.sec_id, [])),
             trades_after=lambda day, rows=rows: trades_after(rows, day),
             cusip_rows_near=lambda day, rows=rows: _rows_near(rows, day),
+            other_cik=other_ciks.get(s.sec_id),
         )
 
     return security_context
@@ -731,19 +732,21 @@ class _DelistingSearch:
 
 
 def _find_delistings(ctx: _RunContext, securities: dict[str, Security], sec_cusips: dict[str, list[str]],
-                     ftd: FtdIndex, answers: _IssuerAnswers, moved_on: Collection[str] = ()) -> _DelistingSearch:
+                     ftd: FtdIndex, answers: _IssuerAnswers, moved_on: Collection[str] = (),
+                     other_ciks: Mapping[str, int] = {}) -> _DelistingSearch:
     """5. Every delisting of every security (`DelistingFinder`), in sec_id order.
     A security whose search fails becomes an `error` review item, not an aborted
     run; only a fatal exception (`fatal.FATAL`) stops it. A FIGI line another
     composite continues (`moved_on`: stage 4b's line successors) is not listed
-    today: its line went on under that composite."""
+    today: its line went on under that composite. `other_ciks` (stage 4c, R5): the
+    other CIK in force over a security's whole span, whose Form 25s are read too."""
     clients, log = ctx.clients, ctx.log
     finder = DelistingFinder(clients.edgar, clients.classifier, midas=clients.midas, halts=clients.halts)
     delistings: list[Delisting] = []
     listed: dict[str, bool | None] = {}
     review: list[ReviewItem] = []
     sightings = {sid: ticker_sightings(s, ftd, sec_cusips[sid]) for sid, s in securities.items()}
-    security_context = _context_builder(securities, sightings, answers, ftd, sec_cusips)
+    security_context = _context_builder(securities, sightings, answers, ftd, sec_cusips, other_ciks)
 
     ordered = sorted(securities.values(), key=lambda s: s.sec_id)
     # One batched OpenFIGI ask for every security's listing; a failed batch leaves
@@ -1694,12 +1697,10 @@ def _as_read(tables: dict[str, list[dict]]) -> Tables:
                   rows("contract_delistings") if "contract_delistings" in tables else None)
 
 
-def _issuers_in_force(ctx: _RunContext, observation_map: Sequence[Mapping[str, str]]) -> dict[str, list[tuple[str, str]]]:
-    """Each security's issuer timeline (issuer_in_force.issuer_changes) from its
-    sightings: every observation_map row with a sec_id, except a conflict (two
-    names that day). A submissions read that fails keeps the era's CIK; a refusal
-    (`fatal.FATAL`) stops the run. Without a name index (a test double's
-    resolver), every sighting keeps its era's CIK."""
+def _in_force_reads(ctx: _RunContext) -> tuple[Callable[[int], Any], Callable[[str], list[int]]]:
+    """The two EDGAR reads `issuer_in_force` takes: a CIK's submissions (memoized; a read that fails is None, a
+    refusal (`fatal.FATAL`) stops the run) and the CIKs SEC's name index lists under exactly a name (none without
+    an index: a test double's resolver)."""
     edgar, memo = ctx.clients.edgar, {}
 
     def submissions(cik: int):
@@ -1718,6 +1719,40 @@ def _issuers_in_force(ctx: _RunContext, observation_map: Sequence[Mapping[str, s
     def exact_names(name: str) -> list[int]:
         return [h.cik for h in index.split_search(name)[0]] if index is not None else []
 
+    return submissions, exact_names
+
+
+def _other_issuers(ctx: _RunContext, eras: list[TickerEra], resolutions: dict[str, EraResolution],
+                   issuers: dict[str, Issuer], securities: dict[str, Security]) -> dict[str, int]:
+    """4c. R5: each security whose issuer in force (`issuer_in_force.issuer_changes`, over its eras' observations
+    with their era's CIK, a (ticker, day) seen under two names left out, as stage 10g reads them) was one CIK
+    other than its own issuer CIK on every sighting: that CIK, whose Form 25s the finder reads too. Spectrum
+    Brands 2010-2018 was the old Spectrum Brands (CIK 1487730) while today's CIK 109177 holds the security. A
+    security whose issuer changed in its span has none (Perrigo: CIK 820096 until 2013, then its own)."""
+    submissions, exact_names = _in_force_reads(ctx)
+    conflicts = {(t, d) for t, d, _ in observation_conflicts(o for e in eras for o in e.observations)}
+    sightings = [IssuerSighting(r.sec_id, o.as_of, o.name or "", str(cik_of(issuers, e.key) or ""))
+                 for e in eras if (r := resolutions.get(e.key)) is not None and r.sec_id
+                 for o in e.observations if (o.ticker, o.as_of) not in conflicts]
+    mark = ctx.meter.start()
+    out: dict[str, int] = {}
+    for sid, timeline in issuer_changes(sightings, submissions, exact_names).items():
+        s = securities.get(sid)
+        if s is not None and s.issuer_cik is not None and len(timeline) == 1 and timeline[0][1] != str(s.issuer_cik):
+            out[sid] = int(timeline[0][1])
+    ctx.log(f"other issuer in force: {len(out)} securities ({', '.join(sorted(out)[:5])}"
+            f"{', ...' if len(out) > 5 else ''})")
+    ctx.meter.done("other issuers in force", mark)
+    return out
+
+
+def _issuers_in_force(ctx: _RunContext, observation_map: Sequence[Mapping[str, str]]) -> dict[str, list[tuple[str, str]]]:
+    """Each security's issuer timeline (issuer_in_force.issuer_changes) from its
+    sightings: every observation_map row with a sec_id, except a conflict (two
+    names that day). A submissions read that fails keeps the era's CIK; a refusal
+    (`fatal.FATAL`) stops the run. Without a name index (a test double's
+    resolver), every sighting keeps its era's CIK."""
+    submissions, exact_names = _in_force_reads(ctx)
     mark = ctx.meter.start()
     out = issuer_changes((IssuerSighting(r["sec_id"], r["as_of"], r["name"], r["issuer_cik"])
                           for r in observation_map if r["sec_id"] and r["status"] != "conflict"),
@@ -1787,7 +1822,9 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
     # a folded placeholder's review items follow it to its FIGI line, where it holds a FIGI after all
     review = [replace(r, sec_id=lines.renames.get(r.sec_id, r.sec_id)) for r in review + lines.review
               if not (r.flag == "no_figi" and r.sec_id in lines.renames)]
-    search = _find_delistings(ctx, securities, sec_cusips, ftd, answers, set(lines.successors))      # 5
+    other_ciks = _other_issuers(ctx, eras, resolutions, answers.issuers, securities)                # 4c
+    search = _find_delistings(ctx, securities, sec_cusips, ftd, answers, set(lines.successors),
+                              other_ciks)                                                           # 5
     delistings = search.delistings
     review += search.review
     _dead_before_sighting(ctx, securities, delistings, sec_cusips, ftd, search.sightings, answers.issuers)   # 5b

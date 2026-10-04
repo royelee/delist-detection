@@ -122,11 +122,15 @@ def finder(edgar: FixtureEdgar | None = None) -> DelistingFinder:
     return DelistingFinder(edgar, classifier, midas=FixtureMidas(), halts=FixtureHalts())
 
 
-def context(sec_id: str):
-    """The case's `SecurityContext`, as stage 5 builds it (`pipeline._context_builder`)."""
+def context(sec_id: str, *, other_cik: int | None | str = "fixture"):
+    """The case's `SecurityContext`, as stage 5 builds it (`pipeline._context_builder`); its other CIK in force
+    (R5) is the fixture's (from the committed run's contract/security_history.csv) unless `other_cik` says
+    otherwise."""
     securities, cusips, ftd = world()
     sightings = {sid: ticker_sightings(s, ftd, cusips[sid]) for sid, s in securities.items()}
-    build = pipeline._context_builder(securities, sightings, pipeline._IssuerAnswers({}, {}, {}, set()), ftd, cusips)
+    other = DATA["cases"][sec_id]["other_cik"] if other_cik == "fixture" else other_cik
+    build = pipeline._context_builder(securities, sightings, pipeline._IssuerAnswers({}, {}, {}, set()), ftd, cusips,
+                                      {sec_id: other} if other else {})
     return build(securities[sec_id], DATA["securities"][sec_id]["listed"])
 
 

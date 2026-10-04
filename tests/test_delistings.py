@@ -1133,3 +1133,40 @@ def test_a_late_form25_naming_the_securitys_own_hinted_letter_is_still_reached(f
     ctx.siblings = [SecurityRef("BBG_MWW", "COMMON", "common", "MONSTER WORLDWIDE INC", "B")]
     events, _ = finder.find(ctx)
     assert [e.form25_sub.accession for e in events if e.form25_sub] == ["m25"]
+
+
+# --- sub-plan 5b, R5: the other CIK in force ---
+
+def _old_issuers_removal(fake_edgar):
+    """Spectrum Brands 2018: NYSE filed the 25-NSE under the old Spectrum Brands (CIK 1487730), the issuer in force
+    over the whole span; today's CIK (109177) filed none."""
+    fake_edgar.submissions_by_cik[109177] = []
+    fake_edgar.submissions_by_cik[1487730] = [
+        EdgarSubmission("s8", "8-K", "2018-07-13", "2018-07-13", "2.01,3.01,5.01,9.01", "k.htm"),
+        EdgarSubmission("s25", "25-NSE", "2018-07-16", "", "", "p.xml")]
+    fake_edgar.raws["s25"] = NYSE_COMMON_RAW
+    clf = DelistClassifier(fake_edgar, TickerResolver(fake_edgar))
+    sec = _sec("BBG000P4BQM9", 109177, "SPB", "2010-06-30", "2018-06-29", "SPECTRUM BRANDS HOLDINGS INC")
+    return DelistingFinder(fake_edgar, clf), sec
+
+
+def test_the_other_cik_in_forces_form25_is_read_and_dates_and_classifies_the_delisting(fake_edgar):
+    finder, sec = _old_issuers_removal(fake_edgar)
+    (ev,), _ = finder.find(replace(_ctx(sec, listed=False, last_seen="2018-07-16"), other_cik=1487730))
+    assert (ev.cik, ev.form25_sub.accession, ev.delist_date) == (1487730, "s25", "2018-07-26")
+    assert (ev.record.cik, ev.record.bucket) == (1487730, CrspBucket.MERGER)
+
+
+def test_without_an_other_cik_the_old_issuers_form25_is_never_seen(fake_edgar):
+    finder, sec = _old_issuers_removal(fake_edgar)
+    events, _ = finder.find(_ctx(sec, listed=False, last_seen="2018-07-16"))
+    assert all(e.cik == 109177 and e.form25_sub is None for e in events)
+
+
+def test_the_other_cik_in_forces_form25_of_another_class_is_no_delisting(fake_edgar):
+    """Review Focus (R5): the old issuer's Form 25s are matched against the security alone, by kind and letter:
+    its preferred stock's removal is not the common's."""
+    finder, sec = _old_issuers_removal(fake_edgar)
+    fake_edgar.raws["s25"] = _f25_raw("New York Stock Exchange LLC", class_text="6.25% Preferred Stock, Series A")
+    events, _ = finder.find(replace(_ctx(sec, listed=False, last_seen="2018-07-16"), other_cik=1487730))
+    assert all(e.form25_sub is None for e in events)

@@ -3485,3 +3485,60 @@ def test_a_letterless_security_takes_the_letter_of_its_own_cusips_fails_descript
     assert pipeline._security_ref(plain, ftd, ["867652109"]).letter_hint == "A"
     assert pipeline._security_ref(lettered, ftd, ["867652307"]).letter_hint is None
     assert pipeline._security_ref(plain, ftd, []).letter_hint is None
+
+
+# --- sub-plan 5b, R5: the one other CIK in force over a security's whole span ---
+
+def _in_force_run(subs, exact):
+    """A run context whose EDGAR answers `subs` (CIK -> submissions JSON) and whose resolver's name index lists
+    `exact` (name -> CIKs)."""
+    from types import SimpleNamespace
+    from delist_detection import manifest as run_manifest
+    index = SimpleNamespace(split_search=lambda name: ([SimpleNamespace(cik=c) for c in exact.get(name, [])], []))
+    clients = SimpleNamespace(edgar=SimpleNamespace(submissions=lambda cik: subs.get(cik)),
+                              resolver=SimpleNamespace(name_index=lambda: index))
+    return pipeline._RunContext(clients, date(2026, 9, 25), lambda *_: None, 1, run_manifest.StageMeter(lambda *_: None))
+
+
+def _security_with_era(sec_id, cik, ticker, observations):
+    from delist_detection.observations import TickerEra
+    from delist_detection.security_master import EraResolution, Issuer
+    era = TickerEra(ticker, observations[0].as_of, observations[-1].as_of, observations)
+    s = Security(sec_id, cik, "COMMON", observations[-1].name, "Common Stock", True, "cusip", eras=[era])
+    return s, era, {era.key: EraResolution(era.key, sec_id, "cusip", None, ())}, {era.key: Issuer(cik, ())}
+
+
+HRG = {"name": "SPECTRUM BRANDS HOLDINGS, INC.",
+       "formerNames": [{"name": "HRG GROUP, INC.", "from": "2014-01-01T00:00:00.000Z", "to": "2018-07-13T00:00:00.000Z"},
+                       {"name": "HARBINGER GROUP INC.", "from": "2009-12-14T00:00:00.000Z",
+                        "to": "2014-01-01T00:00:00.000Z"}]}
+OLD_SPB = {"name": "SB/RH HOLDINGS, LLC",
+           "formerNames": [{"name": "SPECTRUM BRANDS HOLDINGS, INC.", "from": "2010-06-16T00:00:00.000Z",
+                            "to": "2018-07-13T00:00:00.000Z"}]}
+
+
+def test_the_one_other_cik_in_force_on_every_sighting_is_read_too():
+    """Spectrum Brands 2010-2018: today's CIK 109177 was Harbinger/HRG Group then; the old Spectrum Brands (CIK
+    1487730) carried the observed name on every sighting."""
+    obs = [Observation("SPB", d, "SPECTRUM BRANDS HOLDINGS INC") for d in ("2010-06-30", "2014-06-30", "2018-06-29")]
+    s, era, resolutions, issuers = _security_with_era("BBG000P4BQM9", 109177, "SPB", obs)
+    ctx = _in_force_run({109177: HRG, 1487730: OLD_SPB}, {"SPECTRUM BRANDS HOLDINGS INC": [109177, 1487730]})
+    assert pipeline._other_issuers(ctx, [era], resolutions, issuers, {s.sec_id: s}) == {"BBG000P4BQM9": 1487730}
+
+
+def test_an_issuer_that_changed_within_the_span_or_never_changed_gives_no_other_cik():
+    """Perrigo: the old Perrigo Company (CIK 820096) until 2013, then Perrigo plc (its own CIK 1585364): two CIKs in
+    force, so none is read (reading 820096 would give listed PRGO a 2013 row). A security whose own CIK carried
+    the name throughout has none either."""
+    plc = {"name": "Perrigo Co plc",
+           "formerNames": [{"name": "BLISFIELD LTD", "from": "2012-01-01T00:00:00.000Z",
+                            "to": "2013-08-27T00:00:00.000Z"}]}
+    obs = [Observation("PRGO", "2012-06-29", "PERRIGO CO"), Observation("PRGO", "2015-06-30", "PERRIGO CO PLC")]
+    s, era, resolutions, issuers = _security_with_era("BBG000CNFQW6", 1585364, "PRGO", obs)
+    ctx = _in_force_run({1585364: plc, 820096: {"name": "PERRIGO CO", "formerNames": []}},
+                        {"PERRIGO CO": [820096, 1585364]})
+    assert pipeline._other_issuers(ctx, [era], resolutions, issuers, {s.sec_id: s}) == {}
+    s, era, resolutions, issuers = _security_with_era("BBG_PLAIN", 777, "PLN", [Observation("PLN", "2015-06-30",
+                                                                                             "PLAIN CO")])
+    ctx = _in_force_run({777: {"name": "PLAIN CO"}}, {"PLAIN CO": [777]})
+    assert pipeline._other_issuers(ctx, [era], resolutions, issuers, {s.sec_id: s}) == {}
