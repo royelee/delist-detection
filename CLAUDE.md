@@ -28,7 +28,7 @@ editable install.
 
 ```bash
 pip install -e .                         # editable install (Python ≥3.10) — once per env
-pytest   # full suite (2362 passed, 223 xfailed: 10 known-wrong golden + the diagnosis truth set's known_wrong cases, all strict; offline, no network)
+pytest   # full suite (2459 passed, 225 xfailed: 10 known-wrong golden + the diagnosis truth set's known_wrong cases, all strict; offline, no network)
 pytest tests/test_payout_extractor.py -v  # one file
 pytest tests/test_payout_extractor.py::test_match_in_cash_family_altr -v   # one test
 
@@ -44,6 +44,7 @@ python scripts/draw_audit_sample.py --out data/accuracy_audit.csv   # offline: d
 python scripts/build_line_fixtures.py    # offline: tests/fixtures/lines/ (the line follow's real cases) from the local caches; rerun only to add a case
 python scripts/build_form25_fixtures.py  # offline: tests/fixtures/form25_reach/ (sub-plan 5b's real Form 25 cases) from the local caches; rerun only to add a case
 python scripts/build_issuer_role_fixtures.py  # offline: tests/fixtures/issuer_role/ (sub-plan 5c's real cases) from the local caches; rerun only to add a case
+python scripts/build_last_trade_fixtures.py  # offline: tests/fixtures/last_trade/ (sub-plan 5d's last trade cases, 5c's builder) from the local caches
 python scripts/classify_universe.py --observations obs.csv   # → output/{securities,ticker_history,cusip_history,delistings,payouts,review,review_summary,observation_map,uncertain}.csv + contract/{security_history,delistings,seeds,price_requests,id_changes}.csv + scorecard.json (NETWORK; free when cached)
 python scripts/classify_universe.py --observations obs.csv --limit 20 --no-extract-payouts --no-midas --no-halts   # fast dev subset
 python scripts/classify_universe.py --observations obs.csv --sec-workers 1   # one SEC request at a time (default: 4 prefetch threads, max 8, one machine-wide 8 req/s limit)
@@ -157,7 +158,8 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
 - `ftd.py` — `FtdClient`/`FtdIndex`: SEC fails-to-deliver rows (`(date, CUSIP,
   symbol, price)`, 2004+). `close_after()` supplies every last-trade close and
   acquirer-completion price (`close_of`/`close_known_on`: by the security's
-  CUSIP on the day, then its symbol); `by_cusip`/`by_symbol` supply CUSIP
+  CUSIP on the day, then its symbol, never from a row of a CUSIP another security of the run holds: `skip`,
+  WEN 2008, sub-plan 5d); `by_cusip`/`by_symbol` supply CUSIP
   history, `trading_rows` the rows not under a deleted symbol, `symbol_deleted`
   whether a CUSIP's last rows are all under one, `descriptions` a CUSIP's names;
   `FTD_START` (2004-01-01, the data's first day) and `close_age` (a fails
@@ -348,8 +350,21 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   disagreement is flagged `last_trade_date_conflict`). The text's `_OPEN`
   wordings (suspended/halted "before the open", "prior to the market opening",
   "before market open", "prior to the commencement of trading", "as of the open
-  of business", "at the opening of business" on D) date the last trade on the
-  trading day before D (source `8k_301`, kind `8k_open`).
+  of business", "at the opening of business", a halt "at the NYSE market open" on D) date the last trade on the
+  trading day before D (source `8k_301`, kind `8k_open`). Sub-plan 5d: the reader reads every 3.01 section
+  (`sections_3_01`: to the next item heading, not a cross-reference) sentence by sentence (`_read_sentence`, a
+  stop word in the sentence, never a record date): `_CLOSE` ("at/after/following/as of the close/closing of
+  trading/business/market [on <venue>] on D"; the Closing Date and an "after the Effective Time" at 4 p.m. or
+  later resolve from the filing), the last day ("last day ... traded", "which was the last day", "continue to be
+  listed through D"), a bare "suspended (trading ...) on D" (`8k_suspended`, the trading day before D: ruling R8)
+  and "suspended immediately on D" (D, unconfirmed); a stated timing ranks first (`reading_rank`). Source order:
+  MIDAS, then a halt (but the 8-K's day when it puts the halt at the open of the halt day, `OPEN_KINDS`: WM 2008,
+  ruling R8), the notice's own timing, then an 8-K timing that disagrees with the notice's bare date
+  (`BARE_NOTICE_KINDS`: TMHC 2026), then the notice, then the 8-K. `closing_day(texts, lo, hi)` (rule 4): when nothing states the last
+  trade, the latest completion the 8-Ks state in the window (a defined Closing Date, "On D, ... completed its
+  acquisition", "Merger Sub merged with and into", "the closing of the transactions on D", "the evening of D", an
+  effective time with a clock time; the trading day before when every clock time that day is before 9:30 a.m.):
+  source `closing_day` (`CLOSING_DAY`), never published.
 - `delistings.py` — `DelistingFinder.find()`: lists an issuer's Form 25s,
   matches and groups them into one delisting per removal (chained within
   `SAME_EVENT_DAYS` of the group's earliest filing, across exchanges), dates
@@ -368,7 +383,19 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   no class letter, or the security's own share-class letter or its `letter_hint`, `_names_other_letter`), and the
   other CIK in force (`SecurityContext.other_cik`, R5; the delisting carries the filer
   CIK; stage 4c gives a security whose submissions read failed a `resolution_degraded` row). An `unknown` row of a continued group with the issuer's 8-A12B becomes 304 with the security as its own
-  successor.
+  successor. Sub-plan 5d (last trade date): `_eightk_window` keeps the best-ranked 3.01 reading of the window
+  (stops at a stated timing); `_confirmations` (rule 3): a MIDAS or halt day after a text day, under a ticker
+  another CUSIP began trading under by then (`SecurityContext.ticker_taken`, `pipeline._ticker_taken`: the trading
+  day before that CUSIP's first priced fails row, on or after the security's own last one under the ticker; none
+  without an own row), is the other's: MIDAS is read up to the day before, the halt dropped (CCE, JCI 2016, GRUB
+  2021); without a disagreeing text day nothing is bounded (a successor's first fails rows can lag its first day:
+  Sinclair Inc 2023, new TCF 2019). With no text day the halt feed is asked around the Form 25 day too (PHLY
+  2008). Rule 4: a row still undated, not continued, under an exchange's Form 25
+  (not the issuer's 25), takes `_closing_day` (the 8-Ks in [F − 10, F + 10] for [F − 10, F],
+  `CLOSING_BEFORE_DAYS`/`CLOSING_TEXT_AFTER_DAYS`) else the Form 25 day F, source `closing_day`, flagged
+  `last_trade_date_unconfirmed`, after the classification (whose anchor stays F); a no-Form-25 merger fallback
+  takes the closing day its latest 2.01/5.01 8-K near the last sighting states (FCL, SGP 2009), never after the
+  last sighting.
 - `classifier.py` — the filing-trio fingerprint (**Form 25 + 8-K item codes +
   Form 15**), now anchored on the Form 25/fallback filing date rather than a
   vendor end date. `_classify_items()` maps an 8-K item set to a `DLSTCD`
@@ -843,7 +870,10 @@ conflate them.
   fallback substitutes the security's own last sighting when it has no
   last-trade evidence at all) is too weak a guess to second-guess against
   fails evidence either — Monster Worldwide and SunPower traded normally for
-  years after such a guess; the guess, not the listing, was wrong. A security
+  years after such a guess; the guess, not the listing, was wrong. A worked-out
+  closing day (sub-plan 5d rule 4, source `closing_day`) is unconfirmed too: it
+  clips the ranges at that day, before the Form 25's effective date, and is
+  never second-guessed nor published. A security
   none of whose delistings ends it, and that isn't listed today either, is
   left unclipped, ending at its last real sighting.
   A successor's ticker is not its predecessor's (`pipeline._successor_starts`, one map shared by the clip check and

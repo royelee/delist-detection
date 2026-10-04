@@ -22,7 +22,7 @@ Work stays on the worktree branch; merging or pushing is the operator's call.
 | 5a One line across a CUSIP or ticker change | `2026-10-03-reset-5a-line-continuity.md` | 5-0 | 43 cases (F1) | done (D.mismatches 755 -> 649; 28 of 43 cases pass); accepted by the controller, operator review of `output/diagnose_unknown_report/loop/5a/report.md` section 8 pending |
 | 5b Form 25 reach, matching and ownership | `2026-10-04-reset-5b-form25-reach.md` | 5a | 50 cases (F4, F5) | done (D.mismatches 646 -> 596; 58 -> 78 cases match); accepted by the controller, operator review of `output/diagnose_unknown_report/loop/5b/report.md` section 8 pending |
 | 5c Issuer role and successor links | `2026-10-04-reset-5c-issuer-successors.md` | 5a, 5b | 26 cases (F2, F3) | done (D.mismatches 588 -> 478; 16 of 26 pass); accepted by the controller; report `output/diagnose_unknown_report/loop/5c/report.md` |
-| 5d Last trade date | to write | 5a, 5b | 33 cases (F6) | |
+| 5d Last trade date | `research/2026-10-04-5d-last-trade.md` (design note, no plan) | 5a, 5b | 33 cases (F6), 39 with the routed rows | built (offline replay D.mismatches 483 -> 414 on the ruled truth); the controller's review, network run and loop pending |
 | 5e Acquirer security and the gate | to write | 5a, 5c | 35 cases (F7) | |
 | 5f Terms extraction (LLM schema, legs, schema 3) | to write | 5e | 33 cases (F8) | |
 | 5g Distress | to write | 5a, 5b | 13 cases (F9) plus endings 5a brings out | |
