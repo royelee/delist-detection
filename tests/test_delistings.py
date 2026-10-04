@@ -1116,3 +1116,20 @@ def test_a_late_form25_with_no_fails_row_of_the_security_near_it_is_still_ignore
     finder, ctx = _late_merger(fake_edgar)
     events, _ = finder.find(ctx)
     assert all(e.form25_sub is None for e in events)
+
+
+def test_a_late_form25_of_a_class_b_does_not_reach_a_letterless_security_through_late_reach(fake_edgar):
+    finder, ctx = _late_merger(fake_edgar)
+    fake_edgar.raws["m25"] = _f25_raw("New York Stock Exchange LLC", class_text="Class B Common Stock")
+    ctx.cusip_rows_near = lambda day: True
+    events, _ = finder.find(ctx)
+    assert all(e.form25_sub is None for e in events)
+
+
+def test_a_late_form25_naming_the_securitys_own_hinted_letter_is_still_reached(fake_edgar):
+    finder, ctx = _late_merger(fake_edgar)
+    fake_edgar.raws["m25"] = _f25_raw("New York Stock Exchange LLC", class_text="Class B Common Stock")
+    ctx.cusip_rows_near = lambda day: True
+    ctx.siblings = [SecurityRef("BBG_MWW", "COMMON", "common", "MONSTER WORLDWIDE INC", "B")]
+    events, _ = finder.find(ctx)
+    assert [e.form25_sub.accession for e in events if e.form25_sub] == ["m25"]

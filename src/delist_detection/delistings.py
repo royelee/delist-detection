@@ -472,13 +472,22 @@ class DelistingFinder:
             # the filing (a line that went on under a ticker it was never seen
             # under: Monster Worldwide's NYSE MWW, 2016).
             alive = [r for r in ctx.siblings if self._alive_at(ctx, r.sec_id, sub.filing_date)]
+            late = False
             if not alive:
                 if not ctx.cusip_rows_near(sub.filing_date):
                     continue
                 alive = [own]
+                late = True
             f25 = self._judge(ctx, scan, cik, sub, alive, names)
             if f25 is None:
                 continue
+            if late:
+                # late reach only for a Form 25 that names no class letter, or the security's own (its share
+                # class's, else its fails descriptions' hint); another lettered one stays for the normal paths
+                letters = class_letters(f25.class_text)
+                mine = {class_letter(own.share_class) or own.letter_hint} - {None}
+                if letters and not letters & mine:
+                    continue
             if self._continued(ctx, sub, f25, filings) and self._not_this_removal(ctx, cik, filings, sub, f25):
                 continue
             candidates.append((sub, f25))
