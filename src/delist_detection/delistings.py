@@ -45,6 +45,7 @@ EIGHT_A_DAYS = 10                   # the issuer's own Form 25 and its 8-A12B th
 EIGHT_A_FORMS = frozenset({"8-A12B", "8-A12B/A"})
 ISSUER_FORM25_FORMS = frozenset({"25", "25/A"})      # filed by the issuer, not by the exchange (25-NSE)
 EARLY_REACH_DAYS = 365              # gone today: Form 25s this far before the floor are judged in the main scan
+LATE_ROW_DAYS = 30                  # no sibling alive: the security's own CUSIP traded this close before the Form 25
 
 # Buckets whose delisting ends the security's exchange life even when it is
 # sighted afterwards (OTC trading, a stale snapshot): all but a transfer and
@@ -132,6 +133,9 @@ class SecurityContext:
     # on after a Form 25 (`DelistingFinder._continued`): an observation can be a stale snapshot (XMSR 2008, SOV
     # 2009). Unknown (the default) counts as no.
     trades_after: Callable[[str], bool] = lambda day: False
+    # True when the security's own CUSIPs have a trading fails row in the LATE_ROW_DAYS up to the given ISO day:
+    # a Form 25 filed long after the security's last sighting still reaches it (Monster Worldwide 2016, L).
+    cusip_rows_near: Callable[[str], bool] = lambda day: False
 
 
 @dataclass
@@ -462,10 +466,15 @@ class DelistingFinder:
             # Filings that plainly aren't about any security of this issuer
             # (none of the observed securities were even alive on this date)
             # get no review item at all, so these checks come before the
-            # readability/classification ones below.
+            # readability/classification ones below. L: the security itself
+            # still counts when its own CUSIP traded within LATE_ROW_DAYS before
+            # the filing (a line that went on under a ticker it was never seen
+            # under: Monster Worldwide's NYSE MWW, 2016).
             alive = [r for r in ctx.siblings if self._alive_at(ctx, r.sec_id, sub.filing_date)]
             if not alive:
-                continue
+                if not ctx.cusip_rows_near(sub.filing_date):
+                    continue
+                alive = [own]
             f25 = self._judge(ctx, scan, cik, sub, alive, names)
             if f25 is None:
                 continue

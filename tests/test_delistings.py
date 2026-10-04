@@ -1087,3 +1087,32 @@ def test_a_form25_of_other_tracking_groups_is_no_delisting_of_the_series_a(fake_
     sec.share_class = "SERIES A"
     events, review = DelistingFinder(fake_edgar, clf).find(_ctx(sec, listed=False, last_seen="2011-06-30"))
     assert events == [] and [r.flag for r in review] == ["ended_without_delisting"]
+
+
+# --- sub-plan 5b, L: late reach ---
+
+def _late_merger(fake_edgar):
+    """Monster Worldwide 2016: NYSE removed the common at the Randstad merger (25-NSE 2016-11-01), years after the
+    caller's last observation (2009-06-08) and the security's own alive window (+400 days)."""
+    fake_edgar.submissions_by_cik[30501] = [
+        EdgarSubmission("m8", "8-K", "2016-11-01", "2016-11-01", "2.01,3.01,5.01,9.01", "k.htm"),
+        EdgarSubmission("m25", "25-NSE", "2016-11-01", "", "", "p.xml")]
+    fake_edgar.raws["m25"] = NYSE_COMMON_RAW
+    clf = DelistClassifier(fake_edgar, TickerResolver(fake_edgar))
+    sec = _sec("BBG_MWW", 30501, "MNST", "2008-01-16", "2009-06-08", "MONSTER WORLDWIDE INC")
+    ctx = _ctx(sec, listed=False, last_seen="2009-06-08")
+    ctx.sibling_spans = {"BBG_MWW": ("2008-01-16", "2009-06-08")}
+    return DelistingFinder(fake_edgar, clf), ctx
+
+
+def test_a_form25_after_the_alive_window_reaches_a_security_whose_cusip_traded_up_to_it(fake_edgar):
+    finder, ctx = _late_merger(fake_edgar)
+    ctx.cusip_rows_near = lambda day: day == "2016-11-01"
+    (ev,), review = finder.find(ctx)
+    assert (ev.delist_date, ev.form25_sub.accession, ev.record.bucket) == ("2016-11-11", "m25", CrspBucket.MERGER)
+
+
+def test_a_late_form25_with_no_fails_row_of_the_security_near_it_is_still_ignored(fake_edgar):
+    finder, ctx = _late_merger(fake_edgar)
+    events, _ = finder.find(ctx)
+    assert all(e.form25_sub is None for e in events)

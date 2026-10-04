@@ -25,7 +25,7 @@ from .acquirers import acquirer_cik, find_acquirer
 from .added_securities import AddedAcquirer, AddedLineSuccessor, AddedSecurity, AddedSuccessor
 from .crsp_codes import CrspBucket
 from .degraded import DegradedWatch, degraded_item, flag_degraded, report_halt_feed_failures
-from .delistings import SUCCESSOR_UNKNOWN, Delisting, DelistingFinder, SecurityContext
+from .delistings import LATE_ROW_DAYS, SUCCESSOR_UNKNOWN, Delisting, DelistingFinder, SecurityContext
 from .evidence import edgar_names
 from .fatal import FATAL
 from .handoffs import (
@@ -36,7 +36,7 @@ from .handoffs import (
 from .figi_resolution import FigiCandidate, is_placeholder, share_class_from_name
 from .form25 import SecurityRef, notice_last_trade, parse_form25
 from .last_trade import decide_last_trade
-from .ftd import FTD_START, FtdIndex, close_age, trades_after
+from .ftd import FTD_START, FtdIndex, FtdRow, close_age, trades_after
 from .history import (
     Sighting, backfill_cusips, cusip_sightings, filtered_ticker_sightings, history_rows, observation_map_rows, own_last_seen,
     ranges_from_sightings, ticker_on, ticker_range_review, ticker_sightings, value_on,
@@ -657,6 +657,13 @@ def _cusip_switches(s: Security, ftd: FtdIndex, cusips: Sequence[str]) -> tuple[
     return tuple(sorted(first.values())[1:])
 
 
+def _rows_near(rows: Sequence[FtdRow], day: str) -> bool:
+    """Whether a trading fails row of the security's own CUSIPs (`rows`) is dated in the LATE_ROW_DAYS up to the
+    ISO day `day`."""
+    lo = (date.fromisoformat(day) - timedelta(days=LATE_ROW_DAYS)).isoformat()
+    return any(lo <= r.date <= day for r in rows)
+
+
 def _context_builder(securities: dict[str, Security], sightings: dict[str, list[Sighting]],
                      answers: _IssuerAnswers, ftd: FtdIndex, sec_cusips: dict[str, list[str]]
                      ) -> Callable[[Security, bool | None], SecurityContext]:
@@ -699,6 +706,7 @@ def _context_builder(securities: dict[str, Security], sightings: dict[str, list[
             tickers_between=lambda lo, hi, sig=sig: list(dict.fromkeys(x.value for x in sig if lo <= x.day <= hi)),
             cusip_switches=_cusip_switches(s, ftd, sec_cusips.get(s.sec_id, [])),
             trades_after=lambda day, rows=rows: trades_after(rows, day),
+            cusip_rows_near=lambda day, rows=rows: _rows_near(rows, day),
         )
 
     return security_context

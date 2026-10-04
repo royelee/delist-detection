@@ -3462,3 +3462,13 @@ def test_the_finders_context_reads_trading_from_the_securitys_own_cusip_under_an
     rows = [FtdRow(d, "74955W307", "RHDC", "R H DONNELLEY CORP", 1.0 + (i % 2) / 10) for i, d in enumerate(days)]
     ctx = _one_security_context(rows)
     assert ctx.trades_after("2009-01-31") and not ctx.trades_after("2009-02-10")
+
+
+# --- sub-plan 5b, L: a fails row of the security's own CUSIP near a day ---
+
+def test_the_finders_context_sees_its_own_cusip_trading_in_the_30_days_up_to_a_day():
+    rows = [FtdRow("2016-10-03", "74955W307", "MWW", "MONSTER WORLDWIDE", 3.3),
+            FtdRow("2016-10-31", "74955W307", "MWW", "MONSTER WORLDWIDE", 3.4)]
+    ctx = _one_security_context(rows)
+    assert ctx.cusip_rows_near("2016-11-01") and ctx.cusip_rows_near("2016-10-31")
+    assert not ctx.cusip_rows_near("2016-12-01") and not ctx.cusip_rows_near("2016-10-02")
