@@ -1,0 +1,111 @@
+"""Build data/diagnosis_truth.csv (and its legs) from the normalization pass (spec
+2026-10-03-diagnosis-truth-fixes, 1.2).
+
+  python scripts/build_diagnosis_truth.py             # NETWORK: OpenFIGI for new CUSIPs not yet cached
+  python scripts/build_diagnosis_truth.py --no-figi   # offline: no R2 check (lists the unchecked cases)
+
+Reads output/diagnose_unknown_report/truth_rows/*.json, records/*.json (confidence, verification), the case map
+(sub-plan per case) and the run's tables. Writes the truth file, the legs file and
+output/diagnose_unknown_report/truth_review.md. Exit 2: a missing input or a row the truth loader refuses.
+"""
+from __future__ import annotations
+
+import argparse
+import csv
+import json
+import sys
+from pathlib import Path
+
+from delist_detection.atomic_io import write_atomic
+from delist_detection.diagnosis_truth import (COLUMNS, Leg, LibraryRows, judge_case, parse_rows,
+                                              write_diagnosis_truth, write_legs)
+from delist_detection.figi_resolution import us_candidates
+from delist_detection.lifecycle import Tables
+from delist_detection.openfigi import OpenFigiClient, resolve_api_key
+from delist_detection.truth import TruthFileError
+from delist_detection.truth_build import assemble, final_status, review_markdown
+
+ROOT = Path(__file__).resolve().parents[1]
+DIAG = ROOT / "output" / "diagnose_unknown_report"
+
+
+def _figi(no_figi: bool):
+    if no_figi:
+        return lambda cusip: None
+    client = OpenFigiClient(ROOT / "cache" / "openfigi", resolve_api_key())
+
+    def composite_of(cusip: str) -> str | None:
+        ans = client.map([{"idType": "ID_CUSIP", "idValue": cusip, "includeUnlistedEquities": True}])[0]
+        cands = us_candidates(ans.get("data") or [])
+        return cands[0].composite if len(cands) == 1 else None
+    return composite_of
+
+
+def main(argv: list[str] | None = None) -> int:
+    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    p.add_argument("--rows", type=Path, default=DIAG / "truth_rows")
+    p.add_argument("--records", type=Path, default=DIAG / "records")
+    p.add_argument("--case-map", type=Path,
+                   default=ROOT / "docs/superpowers/specs/2026-10-03-diagnosis-truth-fixes/case_map.csv")
+    p.add_argument("--output-dir", type=Path, default=ROOT / "output")
+    p.add_argument("--out", type=Path, default=ROOT / "data" / "diagnosis_truth.csv")
+    p.add_argument("--legs", type=Path, default=ROOT / "data" / "diagnosis_truth_legs.csv")
+    p.add_argument("--review", type=Path, default=DIAG / "truth_review.md")
+    p.add_argument("--no-figi", action="store_true")
+    args = p.parse_args(argv)
+    try:
+        norms = [json.loads(f.read_text()) for f in sorted(args.rows.glob("*.json"))]
+        with args.case_map.open(newline="") as fh:
+            sub_plan = {r["case_id"]: r["sub_plan"] for r in csv.DictReader(fh)}
+        tables = Tables.read(args.output_dir)
+    except (OSError, ValueError) as exc:
+        print(f"ABORTED: {exc}", file=sys.stderr)
+        return 2
+    missing = sorted(set(sub_plan) - {n["case_id"] for n in norms})
+    if missing:
+        print(f"ABORTED: no truth row for {len(missing)} case(s): {missing[:10]}", file=sys.stderr)
+        return 2
+    securities = {r["sec_id"] for r in tables.securities}
+    composite_of = _figi(args.no_figi)
+    rows, legs = [], []
+    for n in norms:
+        rec_path = args.records / f"{n['case_id']}.json"
+        rec = json.loads(rec_path.read_text()) if rec_path.exists() else {}
+        v = rec.get("verification")
+        meta = {"ticker": rec.get("ticker", ""), "report": rec.get("report", ""),
+                "confidence": rec.get("confidence", ""),
+                "skeptic": "" if not v else ("upheld" if v.get("upheld") else "refuted")}
+        row, leg_rows = assemble(n, meta, composite_of=composite_of, securities=securities)
+        rows.append(row)
+        legs += leg_rows
+    if args.no_figi:
+        unchecked = [n["case_id"] for n in norms if (n.get("identity_check") or {}).get("new_cusip")]
+        print(f"--no-figi: R2 not checked for {len(unchecked)} case(s): {unchecked[:10]}")
+    legs_by_case: dict[str, tuple[Leg, ...]] = {}
+    for lg in sorted(legs, key=lambda r: (r["case_id"], int(r["leg"]))):
+        legs_by_case[lg["case_id"]] = legs_by_case.get(lg["case_id"], ()) + (
+            Leg(int(lg["leg"]), lg["ratio"], lg["price_sec_id"], lg["price_ticker"], lg["price_date"]),)
+    try:
+        lib = LibraryRows.of(tables)
+        for row in rows:
+            # A row assemble left without a status is judged as if it were `pass`; final_status then decides.
+            [case] = parse_rows([{**row, "status": row["status"] or "pass"}], f"truth row {row['case_id']}",
+                                legs_by_case)
+            final_status(row, judge_case(case, lib).ok, sub_plan.get(row["case_id"], ""))
+        cases = parse_rows(rows, "built truth", legs_by_case)
+    except TruthFileError as exc:
+        print(f"ABORTED: {exc}", file=sys.stderr)
+        return 2
+    rows.sort(key=lambda r: r["case_id"])
+    write_diagnosis_truth(args.out, [{c: r[c] for c in COLUMNS} for r in rows])
+    write_legs(args.legs, sorted(legs, key=lambda r: (r["case_id"], int(r["leg"]))))
+    judged = [judge_case(c, lib) for c in cases if c.status != "ruling_pending"]
+    args.review.parent.mkdir(parents=True, exist_ok=True)
+    write_atomic(args.review, review_markdown(rows, judged))
+    status = {s: sum(r["status"] == s for r in rows) for s in ("pass", "known_wrong", "ruling_pending")}
+    print(f"{len(rows)} truth rows {status}, {len(legs)} legs -> {args.out}, review {args.review}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
