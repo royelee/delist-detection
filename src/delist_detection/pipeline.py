@@ -1305,15 +1305,85 @@ def _line_successor_links(delistings: list[Delisting], securities: dict[str, Sec
                 ls.step.symbol, ls.step.first, rows)
 
 
+def _own_registration_link(ctx: _RunContext, e: Delisting, texts: list[str], day: date, securities: dict[str, Security],
+                           sec_cusips: dict[str, list[str]], ftd: FtdIndex, taken: Collection[str],
+                           found: _Successors) -> tuple[str, str] | None:
+    """Sub-plan 5c, rule 4 under the same CIK: the registrant's own successor registration (8-K12B/8-K12G3 in its
+    filing list, `handoffs.own_continuation_filing`) moved the holders, one for one, to a new CUSIP -- the one the
+    texts name that is not the security's own (ONEOK 2026's notice: "ONEOK, Inc. (New, CUSIP: 30609A109)"), else
+    the first fails row's under one of its tickers in [day, day + SUCCESSOR_AFTER_DAYS] (Clear Channel Outdoor
+    2019's 18453H106). R2 on that CUSIP's one US composite: the security's own is the security going on (it is its
+    own successor); another is its successor, added as a security of its own (`AddedLineSuccessor`) when the run
+    has none. Several composites or an OpenFIGI error: no link."""
+    if own_continuation_filing(ctx.clients.edgar.recent_filings(e.cik), day) is None:
+        return None
+    mine = set(sec_cusips.get(e.sec_id, []))
+    named = sorted(text_cusips(texts) - mine)
+    tickers = securities[e.sec_id].own_tickers() | {e.ticker}
+    hi = (day + timedelta(days=SUCCESSOR_AFTER_DAYS)).isoformat()
+    rows = sorted((r for t in tickers for r in ftd.by_symbol(t, day.isoformat(), hi)
+                   if r.cusip not in mine and is_line_symbol(r.symbol)), key=lambda r: (r.date, r.cusip))
+    cusip = named[0] if len(named) == 1 else (rows[0].cusip if rows and not named else None)
+    if cusip is None:
+        return None
+    cands = composites(ctx.clients.figi.map([cusip_job(cusip)])[0])
+    if cands is None or len(cands) != 1:
+        return None
+    x = cands[0]
+    if x.composite == e.sec_id:
+        return e.sec_id, BY_OWN_REGISTRATION
+    new_rows = [r for r in ftd.trading_rows([cusip]) if r.symbol in tickers]
+    if not new_rows:
+        return None
+    if x.composite not in securities and x.composite not in taken and x.composite not in found.added:
+        found.added[x.composite] = AddedLineSuccessor(
+            Security(x.composite, e.cik, share_class_from_name(x.name), x.name, x.security_type, False, "cusip"),
+            new_rows[0].symbol, new_rows[0].date, new_rows)
+    return x.composite, BY_OWN_REGISTRATION
+
+
+def _terms_links(ctx: _RunContext, delistings: list[Delisting], securities: dict[str, Security],
+                 starts: dict[str, SecurityStart], sec_cusips: dict[str, list[str]], ftd: FtdIndex,
+                 taken: Collection[str], found: _Successors) -> None:
+    """Sub-plan 5c, rules 3 and 4: an exchange transfer still without a successor whose registrant's filings
+    state each share of its class became one share, with no cash (R1, `exchange_terms.own_exchange` around
+    `successors.successor_anchor`), takes the security of the run that statement names
+    (`successors.successor_by_terms`: the same issuer's other class, CMCSK into CMCSA, HUB-B into HUBB, CWENA
+    into CWEN; a new issuer's, BHI into BHGE, HHC into HHH), else the line its own successor registration moved
+    the holders to (`_own_registration_link`: CCO 2019, OKE 2026). The link's `how` is "terms" or
+    "own_registration"."""
+    edgar = ctx.clients.edgar
+    ages = _IssuerAge(edgar)
+    for e in delistings:
+        if e.key in found.links or SUCCESSOR_UNKNOWN not in e.flags or e.sec_id not in securities:
+            continue
+        watch = DegradedWatch()
+        own, texts, day = _own_exchange(edgar, e, securities[e.sec_id])
+        link = None
+        if own is not None and own.one_for_one:
+            link = successor_by_terms(e, own, day, starts, issuer_since=ages.since, issuer_names=ages.names)
+            if link is None:
+                link = _own_registration_link(ctx, e, texts, day, securities, sec_cusips, ftd, taken, found)
+        if watch.tripped():
+            found.review.append(degraded_item(e.sec_id, e.ticker, e.cik, "the successor terms reading",
+                                              delist_date=e.delist_date))
+            found.degraded.append(e.key)
+        if link is not None:
+            found.links[e.key] = link
+
+
 def _find_successors(ctx: _RunContext, delistings: list[Delisting], securities: dict[str, Security],
                      sightings: dict[str, list[Sighting]], acquirers: dict[str, AddedSecurity],
-                     line_successors: Mapping[str, LineSuccessor] = {}, ftd: FtdIndex | None = None) -> _Successors:
+                     line_successors: Mapping[str, LineSuccessor] = {}, ftd: FtdIndex | None = None,
+                     sec_cusips: dict[str, list[str]] | None = None) -> _Successors:
     """9. Successors after a FIGI change: first the line successor stage 4b found
     (`_line_successor_links`), then a security of this run (observed,
     or an acquirer the run adds) that starts right after the last trade under the
     same issuer or ticker (a holdco reorganization's new line, a rename's new
     FIGI), then the successor issuer's 8-K12B (search: EDGAR full-text search,
-    wired in default_clients). `_link_successors` records the answer on the
+    wired in default_clients). Before the 8-K12B search, sub-plan 5c's links
+    (`_terms_links`): the security or the line the registrant's own filings say
+    the shares became, one for one. `_link_successors` records the answer on the
     delistings."""
     clients, found = ctx.clients, _Successors()
     successor_search = getattr(clients.edgar, "full_text_search", None)
@@ -1321,17 +1391,16 @@ def _find_successors(ctx: _RunContext, delistings: list[Delisting], securities: 
     if line_successors:
         _line_successor_links(delistings, securities, acquirers, line_successors, ftd or FtdIndex(), found)
     linked = set(found.links)
-    starts: dict[str, SecurityStart] = {
-        sid: SecurityStart(sig[0].day, securities[sid].issuer_cik, {x.value for x in sig})
-        for sid, sig in sightings.items() if sig}
-    for sid, a in acquirers.items():
-        starts[sid] = SecurityStart(a.span()[0], a.security.issuer_cik, {a.ticker})
+    starts = _starts(securities, sightings, acquirers)
     for e in delistings:                       # a security of this run
         if e.key in linked:
             continue
         in_run = successor_in_run(e, starts) if SUCCESSOR_UNKNOWN in e.flags else None
         if in_run is not None:
             found.links[e.key] = in_run
+    # what the registrant's filings say the shares became, one for one (sub-plan 5c, rules 3 and 4)
+    _terms_links(ctx, delistings, securities, starts, sec_cusips or {}, ftd or FtdIndex(), set(acquirers), found)
+    linked = set(found.links)
     if successor_search is not None:           # else the successor issuer's 8-K12B
         if ctx.sec_workers > 1:
             def warm_search(e: Delisting) -> None:
@@ -2027,7 +2096,7 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
     r1 = _r1_continuations(ctx, delistings, securities, search.sightings, payouts, overrides)      # 8b
     review += r1.review
     successors = _find_successors(ctx, delistings, securities, search.sightings, {**payouts.added, **r1.added},
-                                  lines.successors, ftd)                                            # 9
+                                  lines.successors, ftd, sec_cusips)                                # 9
     _link_successors(delistings, successors)
     review += successors.review
     added = {**payouts.added, **r1.added, **successors.added}     # the acquirers and successors the run adds
