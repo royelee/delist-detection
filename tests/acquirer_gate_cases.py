@@ -45,6 +45,9 @@ class FixtureEdgar:
     def company_tickers(self):
         return {}
 
+    def recent_filings(self, cik):
+        return []           # the first filing is unknown: the issuer check passes on its names alone
+
 
 class FixtureFigi:
     def map(self, jobs, *, use_cache=True):

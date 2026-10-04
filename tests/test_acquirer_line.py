@@ -62,6 +62,35 @@ def test_the_holder_of_the_terms_ticker_on_the_last_trade_day():
     assert idx.holder("UAL", L, P, exclude="TARGET") == "BBG000M65M61"
 
 
+def test_a_ticker_handed_to_a_new_holder_at_the_closing_is_the_new_holders():
+    """WCRX 2013: Actavis Inc held ACT until the last trade day; Actavis plc, the holding company Warner Chilcott's
+    holders received shares of, held it from the day after the price date."""
+    secs = [_sec("CIK884629-COMMON", 884629), _sec("BBG000FH8PX5", 1578845), _sec("TARGET", 1323854)]
+    sightings = {"CIK884629-COMMON": [Sighting("2013-01-25", "ACT", "observation"),
+                                      Sighting("2013-09-30", "ACT", "observation")],
+                 "BBG000FH8PX5": [Sighting("2013-10-02", "ACT", "observation"),
+                                  Sighting("2013-12-31", "ACT", "observation")]}
+    idx = _index(secs, sightings, {}, [])
+    assert idx.holder("ACT", date(2013, 9, 30), date(2013, 10, 1), exclude="TARGET") == "BBG000FH8PX5"
+    # a hold that runs past the price date stands (CAL: UAUA's fails rows to 2010-10-15)
+    assert _cal().holder("UAUA", L, P, exclude="TARGET") == "CIK100517-COMMON"
+
+
+def test_a_holders_issuer_must_have_filed_by_the_last_trade_and_carry_the_acquirer_name():
+    """ASD 2008: the run's IR line from 2007 belongs to CIK 1699150 (Ingersoll Rand Inc, first filed in 2017), a
+    security-master error the acquirer must not inherit; a name that agrees with none of its EDGAR names fails too."""
+    from delist_detection.acquirer_line import issuer_fits
+    subs = _subs({1699150: {"name": "Ingersoll Rand Inc.", "formerNames": []},
+                  100517: {"name": "United Airlines Holdings, Inc.",
+                           "formerNames": [{"name": "UAL CORP /DE/", "from": "1994-01-01", "to": "2019-06-27"}]}})
+    first = {1699150: date(2017, 3, 1), 100517: date(1994, 1, 1)}.get
+    assert not issuer_fits(subs, first, 1699150, "Ingersoll Rand", date(2008, 6, 5))
+    assert issuer_fits(subs, first, 100517, "UAL Corporation", L)
+    assert not issuer_fits(subs, first, 100517, "Continental Airlines", L)
+    assert issuer_fits(subs, first, 100517, "", L)                   # no name to check
+    assert issuer_fits(subs, lambda cik: None, 100517, "UAL Corporation", L)   # an unknown first filing
+
+
 def test_the_line_whose_cusip_begins_at_the_closing_is_chosen_over_the_tickers_old_line():
     idx = _cal()
     assert idx.closing_cusip("BBG000M65M61", L, P) == "910047109"

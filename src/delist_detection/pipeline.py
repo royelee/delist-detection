@@ -1070,6 +1070,12 @@ def _acquirer_lines(ctx: _RunContext, mergers: list[Delisting], llm_terms: Mappi
                 return None            # never remembered: a failed read is no answer
         return subs_cache[cik]
 
+    ages = _IssuerAge(edgar)
+
+    def first_filed(cik: int) -> date | None:
+        since = ages.since(cik)
+        return date.fromisoformat(since[:10]) if since else None
+
     issuers: dict[DelistingKey, tuple[str | None, int | None]] = {}
     for key, (e, (ticker, name, _)) in sorted(legs.items()):
         last = e.last_trade.day
@@ -1077,6 +1083,8 @@ def _acquirer_lines(ctx: _RunContext, mergers: list[Delisting], llm_terms: Mappi
         watch = DegradedWatch()
         holder = index.holder(ticker, last, day, exclude=e.sec_id) if ticker else None
         cik = securities[holder].issuer_cik if holder else None
+        if cik is not None and not acquirer_line.issuer_fits(subs, first_filed, int(cik), name, last):
+            holder, cik = None, None
         try:
             if cik is None and ticker and resolver is not None:
                 cik = acquirer_line.issuer_by_ticker(resolver, subs, ticker, name, last, target_cik=e.cik)

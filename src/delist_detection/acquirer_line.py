@@ -98,15 +98,18 @@ class LineIndex:
 
     def holder(self, ticker: str, last: date, price_day: date, *, exclude: str) -> str | None:
         """The one security other than `exclude` (the target) that held `ticker` on the last trade day, else whose
-        hold of it began after it and by CLOSING_DAYS after the price date; None when none or several did."""
+        hold of it began after it and by CLOSING_DAYS after the price date; None when none or several did. A hold
+        that ended before the price date, the ticker taken in that span by another security, was handed over at
+        the closing: the new holder's (Actavis Inc's ACT to Actavis plc, 2013)."""
         t = normalize_ticker(ticker)
         if not t:
             return None
         held = [(sid, r) for sid, r in self._held.get(t, []) if sid != exclude]
-        d, hi = last.isoformat(), add_trading_days(price_day, CLOSING_DAYS).isoformat()
+        d, p, hi = last.isoformat(), price_day.isoformat(), add_trading_days(price_day, CLOSING_DAYS).isoformat()
         on = {sid for sid, r in held if r.valid_from <= d and (r.valid_to is None or d <= r.valid_to)}
-        if not on:
-            on = {sid for sid, r in held if d < r.valid_from <= hi}
+        after = {sid for sid, r in held if d < r.valid_from <= hi} - on
+        if not on or (after and all(r.valid_to is not None and r.valid_to < p for sid, r in held if sid in on)):
+            on = after
         return next(iter(on)) if len(on) == 1 else None
 
     def lines(self, cik: int, *, exclude: str) -> list[str]:
@@ -200,6 +203,17 @@ Submissions = Callable[[int], object]
 def _names(subs: Submissions, cik: int) -> tuple[str, ...]:
     sub = subs(cik)
     return edgar_names(sub) if isinstance(sub, dict) else ()
+
+
+def issuer_fits(subs: Submissions, first_filed: Callable[[int], date | None], cik: int, name: str, last: date) -> bool:
+    """Whether the issuer of a holder line can be the terms' acquirer: it filed with EDGAR by the last trade day (the
+    run's IR line of 2007 carries Ingersoll Rand Inc, first filed in 2017: a security-master error the acquirer must
+    not inherit; an unknown first filing passes), and one of its EDGAR names agrees with the terms' acquirer name
+    (none to check: any)."""
+    first = first_filed(cik)
+    if first is not None and first > last:
+        return False
+    return not name or any(names_agree(name, n) for n in _names(subs, cik))
 
 
 def issuer_by_ticker(resolver, subs: Submissions, ticker: str, name: str, last: date, *,
