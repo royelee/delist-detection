@@ -14,6 +14,8 @@ DEFAULT_TOL = 0.15
 GATE_FAILED = "payout_gate_failed:"
 LLM_GATE_FAILED = "llm_gate_failed"
 DROP_REASONS = ("csv_override", "no_acq_ticker", "no_acq_price", "no_last_close", "fail_sanity")
+PACKAGE = "llm_election_package"     # an election's default cash-and-stock package settled the row
+BY_TICKER, BY_LINE = "ticker", "line"   # which acquirer price settled a stock leg (`GatedPayouts.priced_by`)
 
 
 @dataclass(frozen=True)
@@ -61,6 +63,11 @@ def reconcile(regex_value, last_close, llm_terms, acquirer_price, tol) -> Reconc
                 return Reconciled(None, ratio, acquirer_price, "llm_election_stock", settled_flags)
             if cash_fits:
                 return Reconciled(cash, None, None, "llm_election_cash", settled_flags)
+            # Neither leg alone: the LLM read the default package (cash AND stock per share, which electing holders
+            # could trade for all cash or all stock, prorated: NYX, EV, SUN). The two legs together are near the
+            # close only then; an either-or election's legs together are twice it (sub-plan 5e).
+            if stock is not None and cash is not None and _fits(cash + stock, last_close, tol):
+                return Reconciled(cash, ratio, acquirer_price, PACKAGE, settled_flags)
         elif ratio is None and _fits(cash, last_close, tol):
             # A cash deal, including the cash + CVR deals the LLM labels "other".
             return Reconciled(cash, None, None, "llm", tuple(flags))
@@ -81,6 +88,7 @@ class GatedPayouts:
     llm_cash: int = 0
     emitted: int = 0
     dropped: dict = field(default_factory=lambda: dict.fromkeys(DROP_REASONS, 0))
+    priced_by: dict = field(default_factory=dict)    # key -> BY_TICKER | BY_LINE: the price that settled its stock leg
 
     @property
     def gate_failed(self) -> int:
@@ -104,6 +112,7 @@ def gate_payouts(
     csv_terms: Mapping,
     acquirer_price: Callable[[str, tuple[str, str | None]], float | None],
     tol: float,
+    line_price: Callable[[tuple[str, str | None]], tuple[str, float] | None] | None = None,
 ) -> GatedPayouts:
     """Route every merger payout through the last-close check. Inputs are not mutated.
 
@@ -114,6 +123,9 @@ def gate_payouts(
     acquirer_price(ticker, key): the acquirer's price on THAT merger's own last-trade
     day — called with the merger's full key, not just its date, because many mergers
     can share a delist date and each must be priced on its own last-trade day.
+    line_price(key): the (ticker, price) of the acquirer's line (`acquirer_line`, sub-plan 5e), tried when the
+    terms' ticker gives no price or its price does not reconcile; `priced_by` records which one settled a stock
+    leg. A ticker price that reconciles is never replaced.
 
     Pass 1 reconciles each key's regex value (and its cash or election LLM terms).
     Pass 2 is the cash+stock gate for the other LLM terms that carry a stock ratio:
@@ -125,30 +137,46 @@ def gate_payouts(
         for m in (out.payouts, out.sources, out.confidences):
             m.pop(key, None)
 
+    def prices(ticker: str, key) -> list[tuple[str, str, float]]:
+        """(how, ticker, price) to try, in order: the terms' ticker's, then the acquirer line's when it differs."""
+        got = []
+        if ticker:
+            p = acquirer_price(ticker, key)
+            if p is not None:
+                got.append((BY_TICKER, ticker, p))
+        line = line_price(key) if line_price is not None else None
+        if line is not None and line[1] is not None and all(abs(line[1] - p) > 1e-9 for _, _, p in got):
+            got.append((BY_LINE, line[0], line[1]))
+        return got
+
     for key in keys:
         has_csv = for_delisting(csv_terms, key) is not None
         terms = None if has_csv else llm_terms.get(key)
-        r = reconcile(
-            out.payouts.get(key),
-            for_delisting(last_closes, key),
-            terms,
-            acquirer_price(terms.acquirer_ticker, key) if terms and terms.acquirer_ticker else None,
-            tol,
-        )
+        regex, close = out.payouts.get(key), for_delisting(last_closes, key)
+        if terms is not None and terms.deal_type == "election":
+            tried = [(how, t, reconcile(regex, close, terms, p, tol))
+                     for how, t, p in prices(terms.acquirer_ticker or "", key)]
+            how, used, r = next(((h, t, x) for h, t, x in tried if x.source.startswith("llm")), None) \
+                or (tried[0] if tried else (BY_TICKER, terms.acquirer_ticker, reconcile(regex, close, terms, None, tol)))
+        else:
+            how, used = BY_TICKER, terms.acquirer_ticker if terms else None
+            r = reconcile(regex, close, terms,
+                          acquirer_price(terms.acquirer_ticker, key) if terms and terms.acquirer_ticker else None, tol)
         if r.flags:
             out.flags[key] = r.flags
         if r.cash is not None:
             out.payouts[key] = r.cash
         else:
             drop_payout(key)
-        if r.source.startswith("llm"):   # llm | llm_election_cash | llm_election_stock
+        if r.source.startswith("llm"):   # llm | llm_election_cash | llm_election_stock | llm_election_package
             out.sources[key] = r.source
             out.confidences[key] = terms.confidence or "medium"
-            if r.cash is not None:
+            if r.cash is not None and r.stock_ratio is None:
                 out.llm_cash += 1
-        if r.stock_ratio is not None:   # an election's stock leg; terms is set, so no CSV row
-            out.merged_terms[key] = {"stock_ratio": r.stock_ratio, "acquirer_price": r.acquirer_price,
-                                     "acquirer_ticker": terms.acquirer_ticker}
+        if r.stock_ratio is not None:   # an election's stock leg or package; terms is set, so no CSV row
+            d = {"stock_ratio": r.stock_ratio, "acquirer_price": r.acquirer_price, "acquirer_ticker": used}
+            out.merged_terms[key] = {"cash_per_share": r.cash, **d} if r.cash is not None else d
+            out.priced_by[key] = how
 
     def flag_terms_gate_drop(key, reason: str) -> None:
         # Every drop reason but csv_override gets a flag: a merger row the rules
@@ -162,12 +190,12 @@ def gate_payouts(
             out.dropped["csv_override"] += 1
             continue
         acq = (terms.acquirer_ticker or "").strip()
-        if not acq:
+        tried = prices(acq, key)
+        if not acq and not tried:
             out.dropped["no_acq_ticker"] += 1
             flag_terms_gate_drop(key, "no_acq_ticker")
             continue
-        acq_price = acquirer_price(acq, key)
-        if acq_price is None:
+        if not tried:
             out.dropped["no_acq_price"] += 1
             flag_terms_gate_drop(key, "no_acq_price")
             continue
@@ -179,11 +207,14 @@ def gate_payouts(
             flag_terms_gate_drop(key, "no_last_close")
             continue
         cash = terms.cash_per_share
-        terminal = (cash or 0.0) + terms.stock_ratio * acq_price
-        if _gap(terminal, last_close) > tol:
+        fit = next(((how, t, p) for how, t, p in tried
+                    if _gap((cash or 0.0) + terms.stock_ratio * p, last_close) <= tol), None)
+        if fit is None:
             out.dropped["fail_sanity"] += 1
             flag_terms_gate_drop(key, "fail_sanity")
             continue
+        how, acq, acq_price = fit
+        out.priced_by[key] = how
         d = {"stock_ratio": terms.stock_ratio, "acquirer_price": acq_price, "acquirer_ticker": acq}
         if cash is not None:
             d["cash_per_share"] = cash

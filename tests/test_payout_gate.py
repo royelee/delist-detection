@@ -258,3 +258,72 @@ def test_acquirer_price_is_keyed_by_the_merger_not_just_its_shared_delist_date()
     )
     assert g.merged_terms[k1] == {"stock_ratio": 0.5, "acquirer_price": 100.0, "acquirer_ticker": "ACQ"}
     assert g.merged_terms[k2] == {"stock_ratio": 0.5, "acquirer_price": 200.0, "acquirer_ticker": "ACQ"}
+
+
+# --- sub-plan 5e: an election's default package, and the acquirer line's price ---
+
+def test_an_election_whose_legs_together_reconcile_is_its_default_package():
+    """NYX 2013: $11.27 and 0.1703 ICE Group per share (the default package; holders could elect all cash or all
+    stock, prorated). Neither leg alone is near the $45.29 close; the two together, at ICE's $199.84, are."""
+    r = reconcile(None, 45.29, _terms("election", 11.27, 0.1703, "ICE"), 199.84, DEFAULT_TOL)
+    assert (r.cash, r.stock_ratio, r.acquirer_price, r.source, r.flags) == (
+        11.27, 0.1703, 199.84, "llm_election_package", ())
+
+
+def test_an_either_or_election_is_never_summed():
+    # BLD's elections, $505 or 20.2 QXO at $17.28: the two legs together are twice the close
+    r = reconcile(None, 700.0, _terms("election", 505.0, 20.2, "QXO"), 17.28, DEFAULT_TOL)
+    assert (r.source, r.flags) == ("none", ("llm_gate_failed",))
+
+
+def test_a_package_election_writes_its_cash_and_its_stock_leg():
+    # SUN 2012: the regex read the $25.00 cash leg, so its failed flag is dropped once the package settles the row
+    g = _gate(payout=25.0, terms=_terms("election", 25.0, 0.5245, "ETP"), close=46.75, price=41.62)
+    assert g.merged_terms[K] == {"cash_per_share": 25.0, "stock_ratio": 0.5245, "acquirer_price": 41.62,
+                                 "acquirer_ticker": "ETP"}
+    assert (g.payouts[K], g.sources[K], g.flags, g.llm_cash, g.priced_by[K]) == (
+        25.0, "llm_election_package", {}, 0, "ticker")
+
+
+def _lined(terms, close, price, line):
+    return gate_payouts([K], {}, {}, {}, {K: terms}, {"ABC": close}, {}, lambda ticker, key: price, DEFAULT_TOL,
+                        line_price=lambda key: line)
+
+
+def test_the_acquirer_lines_price_settles_terms_whose_ticker_has_no_price():
+    # CAL 2010: no fails row under UAUA after the last trade; UAL's new CUSIP closed at $24.70 on the price date
+    g = _lined(_terms("stock", None, 1.05, "UAUA"), 24.53, None, ("UAL", 24.70))
+    assert g.merged_terms[K] == {"stock_ratio": 1.05, "acquirer_price": 24.70, "acquirer_ticker": "UAL"}
+    assert (g.flags, g.priced_by[K], g.emitted) == ({}, "line", 1)
+
+
+def test_the_acquirer_lines_price_settles_terms_with_no_ticker():
+    # GXP 2018: the LLM named Monarch Energy Holding but no ticker; Evergy's line closed at $54.25
+    g = _lined(_terms("stock", None, 0.5981, None), 31.99, None, ("EVRG", 54.25))
+    assert g.merged_terms[K] == {"stock_ratio": 0.5981, "acquirer_price": 54.25, "acquirer_ticker": "EVRG"}
+    assert g.dropped["no_acq_ticker"] == 0
+
+
+def test_the_lines_price_is_tried_after_the_tickers_fails():
+    # RTN 2020: UTX's close on the last trade day still held Carrier and Otis; RTX closed at $49.93 the day after
+    g = _lined(_terms("stock", None, 2.3348, "UTX"), 116.96, 86.01, ("RTX", 49.93))
+    assert (g.merged_terms[K]["acquirer_price"], g.priced_by[K], g.flags) == (49.93, "line", {})
+
+
+def test_a_ticker_price_that_reconciles_is_kept_over_the_lines():
+    # RDC 2019: Ensco's close before its 1-for-4 consolidation reconciles 2.215 per share; the new CUSIP would not
+    g = _lined(_terms("stock", None, 2.215, "ESV"), 8.80, 4.03, ("ESV", 16.37))
+    assert (g.merged_terms[K]["acquirer_price"], g.priced_by[K]) == (4.03, "ticker")
+
+
+def test_terms_that_fail_on_both_prices_still_fail():
+    # MRD 2016's stale $11.78 close: 0.375 Range at $39.37 is 25% away, whichever price
+    g = _lined(_terms("stock", None, 0.375, "RRC"), 11.78, 39.37, ("RRC", 39.37))
+    assert (g.flags[K], g.merged_terms) == (("terms_gate_failed:fail_sanity",), {})
+
+
+def test_an_election_tries_the_lines_price_too():
+    # no ticker price; the default package reconciles on the line's
+    g = _lined(_terms("election", 26.04, 0.3306, "ACT"), 97.46, None, ("ACT", 223.05))
+    assert (g.sources[K], g.priced_by[K], g.merged_terms[K]["acquirer_price"]) == (
+        "llm_election_package", "line", 223.05)
