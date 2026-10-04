@@ -23,7 +23,7 @@ from delist_detection.figi_resolution import us_candidates
 from delist_detection.lifecycle import Tables
 from delist_detection.openfigi import OpenFigiClient, resolve_api_key
 from delist_detection.truth import TruthFileError
-from delist_detection.truth_build import assemble, final_status, review_markdown
+from delist_detection.truth_build import UNSETTLED, assemble, final_status, review_markdown
 
 ROOT = Path(__file__).resolve().parents[1]
 DIAG = ROOT / "output" / "diagnose_unknown_report"
@@ -36,8 +36,12 @@ def _figi(no_figi: bool):
 
     def composite_of(cusip: str) -> str | None:
         ans = client.map([{"idType": "ID_CUSIP", "idValue": cusip, "includeUnlistedEquities": True}])[0]
+        if ans.get("error") and not ans.get("data"):
+            return UNSETTLED
         cands = us_candidates(ans.get("data") or [])
-        return cands[0].composite if len(cands) == 1 else None
+        if len(cands) > 1:
+            return UNSETTLED
+        return cands[0].composite if cands else None
     return composite_of
 
 
@@ -58,6 +62,13 @@ def main(argv: list[str] | None = None) -> int:
         with args.case_map.open(newline="") as fh:
             sub_plan = {r["case_id"]: r["sub_plan"] for r in csv.DictReader(fh)}
         tables = Tables.read(args.output_dir)
+        records = {}
+        for n in norms:
+            rec_path = args.records / f"{n['case_id']}.json"
+            try:
+                records[n["case_id"]] = json.loads(rec_path.read_text()) if rec_path.exists() else {}
+            except ValueError as exc:
+                raise ValueError(f"{rec_path}: {exc}") from exc
     except (OSError, ValueError) as exc:
         print(f"ABORTED: {exc}", file=sys.stderr)
         return 2
@@ -69,8 +80,7 @@ def main(argv: list[str] | None = None) -> int:
     composite_of = _figi(args.no_figi)
     rows, legs = [], []
     for n in norms:
-        rec_path = args.records / f"{n['case_id']}.json"
-        rec = json.loads(rec_path.read_text()) if rec_path.exists() else {}
+        rec = records[n["case_id"]]
         v = rec.get("verification")
         meta = {"ticker": rec.get("ticker", ""), "report": rec.get("report", ""),
                 "confidence": rec.get("confidence", ""),

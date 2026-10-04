@@ -15,9 +15,12 @@ from __future__ import annotations
 from collections import Counter
 from collections.abc import Callable, Collection, Mapping, Sequence
 
-from .diagnosis_truth import (COLUMNS, ENDING, KNOWN_WRONG, NOT_SCORED, PASS, RULING_PENDING, SCORED, CaseJudgement,
-                              field_key)
+from .diagnosis_truth import (COLUMNS, ENDING, ENDING_MOVED, KNOWN_WRONG, NO_ENDING, NOT_SCORED, PASS,
+                              RULING_PENDING, SCORED, CaseJudgement, field_key)
 
+# What `composite_of` returns for an OpenFIGI answer that cannot settle R2 (an error, or several US lines), as
+# against None (no US line: one security).
+UNSETTLED = "unsettled"
 SUB_PLANS = ("5a", "5b", "5c", "5d", "5e", "5f", "5g", "5h", "5i")
 RESIDUAL = "residual"
 CONTINUATION_BLANKS = ("drop_reason", "cash_per_share", "cash_currency", "stock_ratio", "price_sec_id",
@@ -38,9 +41,15 @@ def assemble(norm: Mapping, meta: Mapping[str, str], *, composite_of: Callable[[
     fields = norm.get("fields") or {}
     row.update({f: "" if fields.get(f) is None else str(fields.get(f, NOT_SCORED)) for f in SCORED})
     check = norm.get("identity_check") or {}
-    if check.get("new_cusip") and norm["sec_id"].startswith("BBG"):
+    if (check.get("new_cusip") and norm["sec_id"].startswith("BBG")
+            and norm["shape"] in (NO_ENDING, ENDING_MOVED)):
         comp = composite_of(check["new_cusip"])
-        if comp and comp != norm["sec_id"]:
+        if comp == UNSETTLED:
+            # Nothing is guessed: an OpenFIGI error or several US lines cannot say one security or two.
+            row["status"] = RULING_PENDING
+            _note(row, f"R2: OpenFIGI could not settle the new CUSIP {check['new_cusip']} "
+                       "(error or several US lines)")
+        elif comp and comp != norm["sec_id"]:
             row.update(shape=ENDING, exit_kind="exchange", continuation="true", value_rule="continuation",
                        successor_sec_id=comp if comp in securities else NOT_SCORED,
                        **dict.fromkeys(CONTINUATION_BLANKS, ""))

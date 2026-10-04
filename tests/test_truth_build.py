@@ -56,6 +56,27 @@ def test_the_same_figi_or_none_or_a_placeholder_keeps_one_security():
     assert _assemble(placeholder, composite="BBGB")[0]["shape"] == "no_ending"
 
 
+def test_an_unsettled_openfigi_answer_leaves_the_shape_and_makes_the_row_ruling_pending():
+    norm = _norm(shape="no_ending", fields=dict(FIELDS), identity_check={"old_cusip": "1", "new_cusip": "2"})
+    row, _ = _assemble(norm, composite=tb.UNSETTLED, securities={"BBGB"})
+    assert (row["shape"], row["continuation"], row["status"]) == ("no_ending", "", "ruling_pending")
+    assert "R2: OpenFIGI could not settle the new CUSIP 2 (error or several US lines)" in row["note"]
+
+
+def test_an_agent_written_ending_keeps_its_fields_despite_an_identity_check():
+    norm = _norm(identity_check={"old_cusip": "1", "new_cusip": "2"})
+    row, _ = _assemble(norm, composite="BBGB", securities={"BBGB"})
+    assert (row["shape"], row["exit_kind"], row["cash_per_share"], row["status"]) == ("ending", "merger", "10", "")
+    row, _ = _assemble(norm, composite=tb.UNSETTLED)
+    assert (row["shape"], row["status"]) == ("ending", "")
+
+
+def test_ending_moved_also_takes_the_r2_flip():
+    norm = _norm(shape="ending_moved", fields=dict(FIELDS), identity_check={"old_cusip": "1", "new_cusip": "2"})
+    row, _ = _assemble(norm, composite="BBGB", securities={"BBGB"})
+    assert (row["shape"], row["continuation"]) == ("ending", "true")
+
+
 def test_legs_come_out_as_leg_rows():
     _, legs = _assemble(_norm(legs=[{"leg": 1, "ratio": "1", "price_sec_id": "", "price_ticker": "LION",
                                      "price_date": ""}]))
