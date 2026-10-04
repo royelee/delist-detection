@@ -1145,3 +1145,47 @@ def test_a_shared_cusip_does_not_carry_a_class_onto_another_classes_ticker_pick(
                                           cusips={a.key: [], b.key: []}, handoffs=handoffs)
     assert (res[b.key].sec_id, res[b.key].source) == ("BBGCLASSB01", "ticker")
     assert res[a.key].sec_id == "CIK4-CLASS-A"
+
+
+def test_a_cusip_switch_does_not_reach_an_era_the_ticker_tier_picked():
+    """Must not change: only a shared CUSIP reaches a picked era. A switch link (`cusip_handoff`) from SPW to SPXC,
+    whose ticker pick stands on its own, leaves SPW on its issuer's placeholder."""
+    spw, spxc, figi, _ = _spw_spxc()
+    handoffs = [Handoff(spw.key, spxc.key, "cusip_handoff", "784635104", "784635999", "2015-09-29")]
+    res = FigiResolver(figi).resolve_many([spw, spxc], issuers=issuers_by_era({spw.key: 88205, spxc.key: 88205}),
+                                          cusips={spw.key: [], spxc.key: []}, handoffs=handoffs)
+    assert (res[spxc.key].sec_id, res[spxc.key].source) == ("BBG000BTGCV5", "ticker")
+    assert (res[spw.key].sec_id, res[spw.key].source) == ("CIK88205-COMMON", "placeholder")
+
+
+def test_a_shared_cusip_does_not_reach_a_ticker_pick_only_the_edgar_names_accepted():
+    """Must not change: a weak pick (accepted on the issuer's EDGAR names alone) is not a line a shared CUSIP
+    reaches. SPW also shares a CUSIP with CC, confirmed by CUSIP on BBGLINEB01; SPXC's weak pick on BBGLINEA01 is no
+    second composite for the chain to reach, so SPW still joins the confirmed line."""
+    spw = _era("SPW", ("2008-01-16", "SPX CORP"), ("2010-06-30", "SPX CORP"))
+    cc = _era("CC", ("2012-06-29", "SPX CORP"), ("2013-06-28", "SPX CORP"))
+    spxc = _era("SPXC", ("2015-12-31", "ZZZ HOLDINGS"))
+    figi = _Figi({("ID_CUSIP", "11111C101"): {"data": [_row("BBGLINEB01", "US", "CC", "SPX CORP")]},
+                  ("TICKER", "SPXC"): {"data": [_row("BBGLINEA01", "US", "SPXC", "SPX CORP")]}})
+    handoffs = [Handoff(spw.key, spxc.key, "shared_cusip", "784635104"),
+                Handoff(spw.key, cc.key, "shared_cusip", "784635104")]
+    res = FigiResolver(figi).resolve_many(
+        [spw, cc, spxc], issuers=issuers_by_era({spw.key: 88205, cc.key: 88205, spxc.key: 88205},
+                                                {88205: ("SPX CORP",)}),
+        cusips={spw.key: [], cc.key: ["11111C101"], spxc.key: []}, handoffs=handoffs)
+    assert res[cc.key].sec_id == "BBGLINEB01"
+    assert (res[spxc.key].sec_id, res[spxc.key].source) == ("BBGLINEA01", "ticker")
+    assert (res[spw.key].sec_id, res[spw.key].source) == ("BBGLINEB01", "handoff")
+
+
+def test_a_join_to_a_picked_composite_is_still_withdrawn_when_another_issuers_cusip_confirms_it():
+    """Must not change: `_contradicted` applies to a join through a picked era too. GG, another issuer's era, is
+    confirmed by CUSIP on SPXC's composite, so SPW does not take it."""
+    spw, spxc, figi, handoffs = _spw_spxc()
+    gg = _era("GG", ("2015-06-30", "OTHER CORP"))
+    figi.answers[("ID_CUSIP", "22222G101")] = {"data": [_row("BBG000BTGCV5", "US", "GG", "OTHER CORP")]}
+    res = FigiResolver(figi).resolve_many(
+        [spw, spxc, gg], issuers=issuers_by_era({spw.key: 88205, spxc.key: 88205, gg.key: 2}),
+        cusips={spw.key: [], spxc.key: [], gg.key: ["22222G101"]}, handoffs=handoffs)
+    assert res[spxc.key].sec_id == "BBG000BTGCV5"
+    assert (res[spw.key].sec_id, res[spw.key].source) == ("CIK88205-COMMON", "placeholder")
