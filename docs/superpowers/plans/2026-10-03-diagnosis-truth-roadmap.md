@@ -36,6 +36,9 @@ FIGI's added row as one rename). Also carried, for the sub-plan that first needs
 - update_truth's status flips must read payout legs before 5f;
 - a malformed record JSON should be retried, not abort the update;
 - a prepared `casesPath` must sit at `loop/<label>/round-<N>/cases.csv`.
+- for 5h: UAG 2009 (CIK1019849-COMMON, United Auto Group seen as UAG while it traded as PAG). 5a's U4 (a fails row
+  confirms a ticker only when its description can name the issuer) would place it on PAG's line, but it changed 13
+  other eras' guard (more than 10), so 5a dropped it.
 
 Before writing each plan: replay the cases the reader notes call "unconfirmed mechanism" (5b: XMSR, SOV, TXU, RHDC,
 IDARQ, LKSD; 5e: the gate false-fails NYX, SCS, EV, SUN, THE) on cached data and record what the code actually does.

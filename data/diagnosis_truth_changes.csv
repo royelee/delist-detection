@@ -292,3 +292,4 @@ CIK910073-COMMON_2024-07-12,price_sec_id,,*,operator ruling 2026-10-03 (5a pre-c
 CIK910073-COMMON_2024-07-12,price_ticker,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
 CIK910073-COMMON_2024-07-12,price_date,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
 CIK910073-COMMON_2024-07-12,recovery_ratio,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1019849-COMMON_2009-06-08,fixed_by,5a,5h,sub-plan 5a dropped U4: the stricter ticker confirmation changed 13 other eras (more than 10),
