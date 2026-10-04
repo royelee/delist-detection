@@ -850,3 +850,9 @@ reg|BBG00Y04KP80|delistings||added||exit_kind=exchange;drop_reason=;continuation
 reg|BBG00Y04KP80|security_history|ranges|changed|CRC:2014-12-02..:1609253|CRC:2014-12-02..2016-05-31:1609253,regression,BBG00Y04KP80,5a,2,pending,output/diagnose_unknown_report/loop/5a/round-2/reports/BBG00Y04KP80_5a-r2.md
 mis|BBG00Y04KP80_5a-r2|shape|no_ending|ending,mismatch,BBG00Y04KP80,5a,2,truth_right,output/diagnose_unknown_report/loop/5a/round-2/reports/BBG00Y04KP80_5a-r2.md
 mis|BBG000C9N6Q9_2011-03-15|price_sec_id|BBG000BGZ9V9|,mismatch,BBG000C9N6Q9,5a-accept,0,known,reports/BBG000C9N6Q9_2011-03-15.md
+mis|BBG000C070N2_2009-06-08|last_trade_date|2008-07-28|,mismatch,BBG000C070N2,5b-precheck,0,known,reports/BBG000C070N2_2009-06-08.md
+mis|BBG000C070N2_2009-06-08|price_date|2008-07-29|,mismatch,BBG000C070N2,5b-precheck,0,known,reports/BBG000C070N2_2009-06-08.md
+mis|BBG005DKMJ67_2025-04-29|exit_kind|dropped|merger,mismatch,BBG005DKMJ67,5b-precheck,0,known,reports/BBG005DKMJ67_2025-04-29.md
+mis|BBG005DKMJ67_2025-04-29|drop_reason|price|,mismatch,BBG005DKMJ67,5b-precheck,0,known,reports/BBG005DKMJ67_2025-04-29.md
+mis|BBG005DKMJ67_2025-04-29|value_rule|otc_print|cash,mismatch,BBG005DKMJ67,5b-precheck,0,known,reports/BBG005DKMJ67_2025-04-29.md
+mis|BBG005DKMJ67_2025-04-29|cash_per_share||0.256700,mismatch,BBG005DKMJ67,5b-precheck,0,known,reports/BBG005DKMJ67_2025-04-29.md
