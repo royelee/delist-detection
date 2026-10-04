@@ -126,17 +126,30 @@ def test_a_real_lines_next_step(sec_id, ftd):
         assert (decision.kind, decision.composite) == (decided, composite)
 
 
+NEW_CUSIP_OF = {"BBG00WYYC600": ("966387409", "BBG000PX3XC0"), "CIK1507934-CLASS-A": ("531229102", "BBG003P9ZSL3"),
+                "CIK1469372-CLASS-A": ("55825T103", "BBG007FG0C23")}
+
+
 @pytest.mark.parametrize("sec_id", NO_STEP, ids=lambda s: DATA["cases"][s]["note"].split(":")[0])
 def test_a_line_whose_next_cusip_is_another_securitys_takes_no_step(sec_id, ftd):
     """Must not change: WLL 2017 (its new CUSIP is BBG000PX3XC0's), new LMCA 2013 and new MSG 2015 (the ticker
     passed to another issuer, whose line of the run holds the new CUSIP)."""
     assert follow(sec_id, ftd) is None
+    # positive control: the fixture holds the rows a step would be built from, so the guard is what refuses
+    new_cusip, other = NEW_CUSIP_OF[sec_id]
+    case = DATA["cases"][sec_id]
+    rows = ftd.by_cusip(new_cusip)
+    spellings = {t + s for t in case["tickers"] for s in ("", "D", "ZZZZ")}
+    assert len(rows) >= lf.MIN_NEW_ROWS and {r.symbol for r in rows} & spellings
+    assert DATA["holders"][new_cusip] == [other] and sec_id not in DATA["holders"][new_cusip]
+    assert new_cusip not in case["cusips"]
 
 
 def test_sbgis_new_holding_company_is_never_its_line(ftd):
     """Must not change (SBGI 2023): the new holding company, another CIK, holds the new CUSIP's composite."""
     step, evidence, refused, decision = follow("BBG000F2XXP2", ftd)
-    assert (step.new_cusip, refused or decision.why) == ("829242106", refused or "other_issuer")
+    assert (step.new_cusip, refused) == ("829242106", "")
+    assert (decision.kind, decision.why) == (lf.REFUSED, "other_issuer")
 
 
 @pytest.mark.parametrize("sec_id,otc", [("BBG009NGKQ45", "VRMMQ"), ("BBG000BRWGG9", "RADCQ")])
