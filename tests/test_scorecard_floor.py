@@ -22,3 +22,4 @@ def test_the_committed_tables_keep_every_floored_number_and_every_golden_pass_ca
     card = build(Tables.read(ROOT / "output"), as_of=as_of, config=config)
     assert drops(card, config.floor) == []
     assert card["golden_failures"] == []
+    assert card["diagnosis_failures"] == []

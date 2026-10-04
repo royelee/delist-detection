@@ -7,6 +7,8 @@ to `output/scorecard.json` on every run.
 - R1.x/R2.x: the identity and delisting-return lines of the gap table.
 - G.x: the golden set (`data/golden_lifecycles.csv`), A.x: the accuracy audit
   (`data/accuracy_audit.csv`), both judged by `truth.judge`.
+- D.x: the diagnosis truth set (`data/diagnosis_truth.csv`, spec 2026-10-03-diagnosis-truth-fixes),
+  judged by `diagnosis_truth.judge_case` against contract/delistings.csv.
 
 `METRICS` gives each floored number its good direction. `drops` compares a
 scorecard to the floor in `data/scorecard.json` (a number that moved the bad
@@ -27,6 +29,9 @@ from .atomic_io import write_atomic
 from .lifecycle import (CLOSED_NO_EVENT, CONTINUED_FILINGS, ENDED_INCOMPLETE, EXCHANGE_PRINT_SOURCES,
                         HIGH, LEFT_VIEW, LOW, MEDIUM, NO_INTERVAL,
                         NO_MAPPED_SIGHTING, Lifecycle, LifecycleView, Tables, flag_names)
+from .diagnosis_truth import (KNOWN_WRONG as D_KNOWN_WRONG, MISMATCH_FIELDS, PASS as D_PASS, RULING_PENDING,
+                              DiagnosisCase, LibraryRows, field_key, judge_all as judge_diagnosis,
+                              load_diagnosis_truth)
 from .exit_kind import ending_fields, is_distress
 from .payout_rule import VALUE_RULES
 from .truth import KNOWN_WRONG, PASS, TruthCase, clopper_pearson_upper, judge_all, load_truth
@@ -55,6 +60,8 @@ METRICS: dict[str, str] = {
     "R2.5.distress_blank_dlret": DOWN, "R2.5.distress_no_last_trade_date": DOWN,
     "R2.6.distress_flagged": DOWN,
     "G.pass": UP,
+    "D.mismatches": DOWN, "D.cases_matching": UP,
+    **{f"D.mismatches.{f}": DOWN for f in MISMATCH_FIELDS},
     "A.random.upper95": DOWN,
     "V.uncertain_seeds": DOWN, "V.uncertain_securities": DOWN, "V.uncertain_endings": DOWN,
     "V.uncertain_endings_in_window": DOWN, "V.uncertain_distress": DOWN, "V.uncertain_input_tickers_share": DOWN,
@@ -82,11 +89,12 @@ class ScorecardConfig:
     floor: Mapping[str, float] = field(default_factory=dict)
     golden: Sequence[TruthCase] = ()
     audit: Sequence[TruthCase] = ()
+    diagnosis: Sequence[DiagnosisCase] = ()
 
 
 def load_config(path: str | Path) -> ScorecardConfig:
     """data/scorecard.json: {"window": {"start", "end"} | null, "floor": {metric: number},
-    "golden": file, "audit": file} (the two truth files relative to the config's
+    "golden": file, "audit": file, "diagnosis": file, "diagnosis_legs": file} (the truth files relative to the config's
     folder; a missing truth file means no cases). Raises ScorecardConfigError or
     truth.TruthFileError."""
     path = Path(path)
@@ -99,7 +107,7 @@ def load_config(path: str | Path) -> ScorecardConfig:
     for key in ("window", "floor"):
         if raw.get(key) is not None and not isinstance(raw[key], dict):
             raise ScorecardConfigError(f"{path}: {key} must be an object")
-    unknown = set(raw) - {"window", "floor", "golden", "audit"}
+    unknown = set(raw) - {"window", "floor", "golden", "audit", "diagnosis", "diagnosis_legs"}
     if unknown:
         raise ScorecardConfigError(f"{path}: unknown key(s) {sorted(unknown)}")
     window = None
@@ -123,7 +131,14 @@ def load_config(path: str | Path) -> ScorecardConfig:
             return []
         p = path.parent / name
         return load_truth(p, allow_pending=(key == "audit")) if p.exists() else []
-    return ScorecardConfig(window, dict(floor), cases("golden"), cases("audit"))
+
+    def diagnosis() -> list[DiagnosisCase]:
+        name = raw.get("diagnosis")
+        if not name or not (path.parent / name).exists():
+            return []
+        legs = raw.get("diagnosis_legs")
+        return load_diagnosis_truth(path.parent / name, path.parent / legs if legs else None)
+    return ScorecardConfig(window, dict(floor), cases("golden"), cases("audit"), diagnosis())
 
 
 def _share(n: int, d: int) -> float:
@@ -286,16 +301,41 @@ def _truth_lines(view: LifecycleView, config: ScorecardConfig, unc: _Uncertain |
     return out
 
 
-def build(tables: Tables, *, as_of: date, config: ScorecardConfig = ScorecardConfig()) -> dict:
-    """The scorecard of one run's tables: {"as_of", "window", "metrics", "golden_failures"}."""
+def _diagnosis_lines(tables: Tables, config: ScorecardConfig,
+                     legs_rows: Sequence[Mapping[str, str]] | None) -> tuple[dict[str, float], list[str]]:
+    """The D lines and the failing `pass` cases; none without a truth set or a contract with payout columns."""
+    if not config.diagnosis or tables.contract_delistings is None:
+        return {}, []
+    judged = judge_diagnosis(config.diagnosis, LibraryRows.of(tables, legs_rows))
+    counts = Counter(field_key(m.field) for j in judged for m in j.mismatches)
+    out: dict[str, float] = {
+        "D.cases": len(config.diagnosis),
+        "D.ruling_pending": sum(c.status == RULING_PENDING for c in config.diagnosis),
+        "D.known_wrong": sum(j.case.status == D_KNOWN_WRONG for j in judged),
+        "D.known_wrong_now_right": sum(j.ok for j in judged if j.case.status == D_KNOWN_WRONG),
+        "D.cases_matching": sum(j.ok for j in judged),
+        "D.mismatches": sum(counts.values()),
+        **{f"D.mismatches.{f}": counts.get(f, 0) for f in MISMATCH_FIELDS},
+    }
+    failures = [f"{j.case.case_id}: {'; '.join(map(str, j.mismatches))}" for j in judged
+                if j.case.status == D_PASS and not j.ok]
+    return out, failures
+
+
+def build(tables: Tables, *, as_of: date, config: ScorecardConfig = ScorecardConfig(),
+          legs_rows: Sequence[Mapping[str, str]] | None = None) -> dict:
+    """The scorecard of one run's tables: {"as_of", "window", "metrics", "golden_failures", "diagnosis_failures"}.
+    `legs_rows` are contract/payout_legs.csv's rows when the run has that table."""
     view = LifecycleView(tables)
     unc = None if tables.uncertain is None else _Uncertain.of(tables.uncertain)
+    diag, diag_failures = _diagnosis_lines(tables, config, legs_rows)
     metrics = {**_lifecycle_lines(view), **_identity_lines(tables), **_ending_lines(tables, config.window),
-               **_verdict_lines(tables, view, config.window, unc), **_truth_lines(view, config, unc)}
+               **_verdict_lines(tables, view, config.window, unc), **_truth_lines(view, config, unc), **diag}
     failures = [f"{j.case.case}: {'; '.join(j.mismatches)}" for j in judge_all(config.golden, view)
                 if j.case.status == PASS and not j.ok]
     window = None if config.window is None else {"start": config.window.start, "end": config.window.end}
-    return {"as_of": as_of.isoformat(), "window": window, "metrics": metrics, "golden_failures": failures}
+    return {"as_of": as_of.isoformat(), "window": window, "metrics": metrics, "golden_failures": failures,
+            "diagnosis_failures": diag_failures}
 
 
 def drops(card: Mapping, floor: Mapping[str, float]) -> list[str]:

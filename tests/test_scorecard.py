@@ -184,3 +184,44 @@ def test_build_counts_endings_by_value_rule_and_the_known_ones():
 def test_build_has_no_value_rule_lines_without_the_contract():
     m = sc.build(_tables(), as_of=AS_OF)["metrics"]
     assert not [k for k in m if k.startswith("R2.7.")]
+
+
+from delist_detection import diagnosis_truth as dt
+from tests.diagnosis_rows import truth_row
+from tests.lifecycle_tables import contract_row
+
+
+def test_diagnosis_lines_count_mismatches_by_field_and_list_failing_pass_cases():
+    cases = dt.parse_rows([
+        truth_row("A_2012-03-10", "A", exit_kind="merger", value_rule="cash", cash_per_share="10"),
+        truth_row("B_2010-05-10", "B", status="known_wrong", fixed_by="5a", shape="no_ending"),
+        truth_row("C_2011-01-01", "C", status="ruling_pending", exit_kind="merger"),
+    ])
+    t = tables(delistings=[ending("A", "2012-03-10", ltd="2012-03-01"),
+                           ending("B", "2010-05-10", "exchange_transfer")],
+               contract_delistings=[contract_row("A", exit_kind="merger", value_rule="cash",
+                                                 cash_per_share="9.000000"),
+                                    contract_row("B", exit_kind="exchange", value_rule="transfer")])
+    card = sc.build(t, as_of=AS_OF, config=ScorecardConfig(diagnosis=cases))
+    m = card["metrics"]
+    assert (m["D.cases"], m["D.ruling_pending"], m["D.known_wrong"], m["D.cases_matching"]) == (3, 1, 1, 0)
+    assert (m["D.mismatches"], m["D.mismatches.cash_per_share"], m["D.mismatches.shape"]) == (2, 1, 1)
+    assert m["D.mismatches.exit_kind"] == 0 and m["D.known_wrong_now_right"] == 0
+    assert card["diagnosis_failures"] == ["A_2012-03-10: cash_per_share 9.000000 != 10"]
+
+
+def test_no_diagnosis_lines_without_a_truth_set_or_a_contract():
+    assert not any(k.startswith("D.") for k in sc.build(_tables(), as_of=AS_OF)["metrics"])
+    cases = dt.parse_rows([truth_row("A_2012-03-10", "A", exit_kind="merger")])
+    card = sc.build(_tables(), as_of=AS_OF, config=ScorecardConfig(diagnosis=cases))
+    assert not any(k.startswith("D.") for k in card["metrics"]) and card["diagnosis_failures"] == []
+
+
+def test_load_config_reads_the_diagnosis_truth_and_its_legs(tmp_path):
+    dt.write_diagnosis_truth(tmp_path / "d.csv", [truth_row("A_2012-03-10", "A", value_rule="basket")])
+    dt.write_legs(tmp_path / "l.csv", [{"case_id": "A_2012-03-10", "leg": "1", "ratio": "1", "price_sec_id": "",
+                                        "price_ticker": "X", "price_date": ""}])
+    cfg = tmp_path / "scorecard.json"
+    cfg.write_text(json.dumps({"diagnosis": "d.csv", "diagnosis_legs": "l.csv"}))
+    [case] = sc.load_config(cfg).diagnosis
+    assert case.case_id == "A_2012-03-10" and case.legs[0].price_ticker == "X"

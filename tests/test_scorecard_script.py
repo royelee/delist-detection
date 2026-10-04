@@ -97,3 +97,17 @@ def test_draw_writes_a_pending_worksheet_once(tmp_path, out, capsys):
     cases = load_truth(sheet, allow_pending=True)
     assert {c.group for c in cases} == {"census:left_view", "random"} and all(c.pending for c in cases)
     assert draw_script.main(argv) == 2 and "exists" in capsys.readouterr().err
+
+
+from delist_detection import diagnosis_truth as dt
+from tests.diagnosis_rows import truth_row
+from tests.lifecycle_tables import contract_row
+
+
+def test_check_fails_on_a_failing_diagnosis_pass_case(tmp_path, out, capsys):
+    store.write_tables(out, {"contract_delistings": [contract_row("A", exit_kind="merger", value_rule="cash")]})
+    dt.write_diagnosis_truth(tmp_path / "d.csv", [truth_row("A_2012-03-10", "A", exit_kind="exchange")])
+    cfg = tmp_path / "scorecard.json"
+    cfg.write_text(json.dumps({"diagnosis": "d.csv", "floor": {}}))
+    assert scorecard_script.main(["--output-dir", str(out), "--config", str(cfg), "--check"]) == 1
+    assert "DIAGNOSIS FAILING A_2012-03-10: exit_kind merger != exchange" in capsys.readouterr().out
