@@ -28,7 +28,7 @@ editable install.
 
 ```bash
 pip install -e .                         # editable install (Python ≥3.10) — once per env
-pytest   # full suite (2052 passed, 246 xfailed: 10 known-wrong golden + the diagnosis truth set's known_wrong cases, all strict; offline, no network)
+pytest   # full suite (2168 passed, 245 xfailed: 10 known-wrong golden + the diagnosis truth set's known_wrong cases, all strict; offline, no network)
 pytest tests/test_payout_extractor.py -v  # one file
 pytest tests/test_payout_extractor.py::test_match_in_cash_family_altr -v   # one test
 
@@ -42,6 +42,7 @@ python scripts/scorecard.py --base REV --ledger PATH   # the ledger scorecard re
 # The loop: run the Workflow tool with scriptPath ".claude/workflows/diagnosis-truth-loop.js" and args {"label": "<sub-plan>", "base": "<commit>"} (prepared cases: add "casesPath", which makes the update a dry run; at most 3 rounds, 5 agents). Normalization: scriptPath ".claude/workflows/diagnosis-truth-normalize.js", args {"cases": [...], "batch": 10}. Workflows are run by path; name lookup does not find them.
 python scripts/draw_audit_sample.py --out data/accuracy_audit.csv   # offline: draw the decision-17 audit worksheet once (census + 100 random, seed 7)
 python scripts/build_line_fixtures.py    # offline: tests/fixtures/lines/ (the line follow's real cases) from the local caches; rerun only to add a case
+python scripts/build_form25_fixtures.py  # offline: tests/fixtures/form25_reach/ (sub-plan 5b's real Form 25 cases) from the local caches; rerun only to add a case
 python scripts/classify_universe.py --observations obs.csv   # → output/{securities,ticker_history,cusip_history,delistings,payouts,review,review_summary,observation_map,uncertain}.csv + contract/{security_history,delistings,seeds,price_requests,id_changes}.csv + scorecard.json (NETWORK; free when cached)
 python scripts/classify_universe.py --observations obs.csv --limit 20 --no-extract-payouts --no-midas --no-halts   # fast dev subset
 python scripts/classify_universe.py --observations obs.csv --sec-workers 1   # one SEC request at a time (default: 4 prefetch threads, max 8, one machine-wide 8 req/s limit)
@@ -87,7 +88,9 @@ that turns a list of observations into the nine output tables: a short
 `_resolve_securities`, `_security_cusips`, `_follow_lines` (stage 4b: each security's line followed past its
 observations across a CUSIP or ticker change, `line_follow.py`; the same security takes the new CUSIP and ticker,
 a placeholder folds into the FIGI line its new CUSIP names, a FIGI line with another composite records a line
-successor for stage 9; metered as "line follow"), `_find_delistings`,
+successor for stage 9; metered as "line follow"), `_other_issuers` (stage 4c: the one CIK other than a
+security's own that was its issuer in force on every sighting, `issuer_in_force.issuer_changes`; stage 5 reads its
+Form 25s too; metered as "other issuers in force"), `_find_delistings`,
 `_dead_before_sighting` (stage 5b: a security whose last real ending came before its
 first observation and that has no trading fails row died before the run's fails
 window began, so (eligibility decided first, then) rows for [end − 1095 d, end + 10 d] are loaded, it takes the
@@ -156,7 +159,9 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   history, `trading_rows` the rows not under a deleted symbol, `symbol_deleted`
   whether a CUSIP's last rows are all under one, `descriptions` a CUSIP's names;
   `FTD_START` (2004-01-01, the data's first day) and `close_age` (a fails
-  row's close age in trading days, for `ftd_close_prior:<n>`). `is_unassigned_symbol` (a new CUSIP's first-day
+  row's close age in trading days, for `ftd_close_prior:<n>`). `trades_after` (sub-plan 5b): whether a security's own CUSIPs, under any symbol it trades under
+  (`is_trading_symbol`: no deleted, unassigned or digit-bearing symbol), have at least 20 fails rows over at least
+  20 days at two or more prices after a day; the finder's test of whether it went on after a Form 25. `is_unassigned_symbol` (a new CUSIP's first-day
   `…ZZZZ` rows, no ticker) and `settled_last` (the row that opens a CUSIP's last one-price run: the fails still
   settling after its last trade).
 - `midas.py` — `MidasClient`: SEC MIDAS per-security exchange volume (2012+,
@@ -318,7 +323,15 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
 - `form25.py` — parses a Form 25's XML or text (exchange, `class_text`, rule),
   labels the exchange, reads `class_kind` (common/preferred/warrant/unit/…)
   from the class text, and `match_security()`s it to one observed security of
-  that kind/class letter.
+  that kind/class letter. Sub-plan 5b: `is_involuntary` (a removal under rule 12d2-2(b)); `Form25.solely` and
+  `other_class` (R3: a Form 25 that relates solely to a non-common class, or whose lettered tracking-stock segments
+  name no word of the security's name, is not its own; a "solely" text that names a common class (COMMON, ORDINARY,
+  SHARES) is the common's, generic descriptors such as SUBORDINATE, CONVERTIBLE, RESTRICTED, LIMITED,
+  PARTICIPATING, REDEEMABLE, EXCHANGEABLE or MULTIPLE are not another tracking group, and CAPITAL is a group word,
+  Liberty Capital); `notice_says_acquired` (R6b: the EX-99.25 notice says acquired or paid in cash, and nothing of
+  a reclassification, a holding company or a reorganization); `SecurityRef.letter_hint` and `letter_hint` (R2: a
+  letterless class takes the one letter its own CUSIP's fails descriptions name, only for a letter no sibling's
+  share class carries).
 - `listing_status.py` — `exchanges_around()`/`withdrawal_kind()`: reads the
   10-K cover page's exchange list before and after a Form 25 to tell a real
   delisting from the withdrawal of a secondary/regional listing while the
@@ -339,14 +352,26 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   when none exists. `SecurityContext.sibling_spans` keeps a Form 25 from being
   matched to a sibling security that wasn't alive on the filing date. `SecurityContext.cusip_switches`: a Form 25
   within `OWN_SWITCH_DAYS` (5) trading days of the security's own CUSIP switch, while it trades on, is no
-  delisting (QGEN 2026).
+  delisting (QGEN 2026). Sub-plan 5b: `_continued` (listed today; the issuer's own Form 25 (25 or 25/A, not
+  25-NSE, not under (b)) with its 8-A12B within `EIGHT_A_DAYS`, 10, R7; or, not under (b),
+  `SecurityContext.trades_after`; an observation alone never continues a security), `_judge` (one Form 25 against
+  the security), early reach (Form 25s up to `EARLY_REACH_DAYS`, 365, before the floor, for a security gone today,
+  the latest early group, flagged `observed_after_delisting`), late reach (`SecurityContext.cusip_rows_near`,
+  `LATE_ROW_DAYS` 30; takes only a Form 25 that names no class letter, or the security's own share-class letter or
+  its `letter_hint`), and the other CIK in force (`SecurityContext.other_cik`, R5; the delisting carries the filer
+  CIK). An `unknown` row of a continued group with the issuer's 8-A12B becomes 304 with the security as its own
+  successor.
 - `classifier.py` — the filing-trio fingerprint (**Form 25 + 8-K item codes +
   Form 15**), now anchored on the Form 25/fallback filing date rather than a
   vendor end date. `_classify_items()` maps an 8-K item set to a `DLSTCD`
   code; the surrounding logic handles asset-type short-circuits,
   exchange-transfer detection, and SEC-revocation. Rule order unchanged; the
   continued-filings rule now asks `end_of_era.resolve` instead of
-  deciding alone, and records the branch in `evidence["end_of_era"]`.
+  deciding alone, and records the branch in `evidence["end_of_era"]`. Sub-plan 5b: a revocation filed after a
+  matched Form 25 the security did not trade past never decides its row (R6a); the continued-filings default
+  (`continued_filings`) gives way to that Form 25's path when its notice says the class was acquired (R6b,
+  `_classify_filings`; any answer but a merger is 231, `evidence["end_of_era"] == "form25_notice"`);
+  `_confirms_bankruptcy` reads every Item 1.03 section (`evidence.item_sections`).
 - `end_of_era.py` — the end-of-era resolver's first step: where the registrant
   kept filing after the end. `signals()` reads the filings in the windows around
   the end date (8-K items, successor filings and Form 25s in [end − 30 d,
@@ -356,7 +381,9 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   `continued`, passed as `classify_event(..., trading_after=)`) → today's
   transfer; (2) a successor registration (8-K12B, 8-K12G3) → a transfer whose
   successor stage 9 finds; (3) a change in control (8-K 5.01) → merger; (4) a
-  completed acquisition (8-K 2.01) with a merger filing or a Form 25 → merger;
+  completed acquisition (8-K 2.01) with a merger filing or a Form 25 → merger,
+  unless a bankruptcy 8-K the classifier confirmed (`bankruptcy_filing`) came on
+  or before it → liquidation 470 (5g sub-rule 2, built in sub-plan 5b);
   (5) a 3.01 notice whose text cites a listing deficiency → compliance failure
   570; (6) else today's continued-filings transfer (304), its reason string
   unchanged (`lifecycle.CONTINUED_FILINGS` is its prefix). EDGAR evidence only.
@@ -743,6 +770,15 @@ conflate them.
   one continues (Apache/Chicago 2020) creates no row (`listing_status.py`). A
   security can have more than one delisting (an exchange transfer, later a
   merger).
+- **A Form 25 is reached, matched and owns its row (sub-plan 5b).** A security goes on after a Form 25 only when it
+  is listed today, when the issuer moved the class itself (its own Form 25 with an 8-A12B within 10 days), or, for
+  a Form 25 not under rule 12d2-2(b), when its own CUSIPs keep trading (`ftd.trades_after`): never on an
+  observation alone (a stale snapshot), never on the OTC tail after a removal under (b). A security gone today also
+  takes the latest Form 25 group of the year before its first sighting, and a Form 25 after its alive window when
+  its own CUSIP traded within 30 days before it; the one other CIK in force over its whole span is searched too. A
+  Form 25 solely about rights or about another tracking group is not the common's. The matched Form 25's notice
+  outranks the continued-filings default when it says the class was acquired, and a later SEC revocation never
+  decides its row.
 - **A line is followed past its observations (sub-plan 5a, rulings R1 and R2).** Stage 4b follows each security
   across a reverse split or a rename the fails rows show after the caller's last observation, before the Form 25
   search: so a later real ending is found instead of a guess anchored on the old ticker's last row. A step needs a
