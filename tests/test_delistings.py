@@ -867,3 +867,36 @@ def test_a_line_the_line_follow_moved_to_a_new_ticker_is_reviewed_under_it(fake_
     ctx = replace(_ctx(sec, last_seen="2026-05-29"), ticker_on=lambda d: "NVRI" if d >= "2023-06-21" else "HSC")
     events, review = DelistingFinder(fake_edgar, clf).find(ctx)
     assert events == [] and [(r.flag, r.ticker) for r in review] == [("ended_without_delisting", "NVRI")]
+
+
+# --- sub-plan 5a, U6: a Form 25 at the security's own CUSIP switch ---
+
+def _switch_case(fake_edgar):
+    fake_edgar.submissions_by_cik[1015820] = [EdgarSubmission("q1", "25-NSE", "2026-01-08", "", "", "p.xml")]
+    fake_edgar.raws["q1"] = NYSE_COMMON_RAW
+    clf = DelistClassifier(fake_edgar, TickerResolver(fake_edgar))
+    return DelistingFinder(fake_edgar, clf), _sec("BBG000GTYWL7", 1015820, "QGEN", "2010-01-01", "2026-06-30",
+                                                  "QIAGEN NV")
+
+
+def test_a_form25_at_the_securitys_own_cusip_switch_is_no_delisting_while_it_trades_on(fake_edgar):
+    """QGEN 2026: a capital repayment gave the same line a new CUSIP (N72482206 -> N72482156, first row
+    2026-01-07); the 25-NSE of 2026-01-08 removed the old CUSIP while QGEN went on trading."""
+    finder, sec = _switch_case(fake_edgar)
+    ctx = replace(_ctx(sec, listed=True, seen_after=True), cusip_switches=("2026-01-07",))
+    events, review = finder.find(ctx)
+    assert events == [] and review == []
+
+
+def test_a_form25_far_from_any_own_switch_still_counts(fake_edgar):
+    finder, sec = _switch_case(fake_edgar)
+    for switches in ((), ("2025-06-02",)):
+        events, _ = finder.find(replace(_ctx(sec, listed=True, seen_after=True), cusip_switches=switches))
+        assert [e.delist_date for e in events] == ["2026-01-18"]
+
+
+def test_a_form25_at_an_own_switch_of_a_security_that_stopped_trading_still_counts(fake_edgar):
+    """The switch only explains a Form 25 the security traded through (`continued`)."""
+    finder, sec = _switch_case(fake_edgar)
+    events, _ = finder.find(replace(_ctx(sec, listed=False, seen_after=False), cusip_switches=("2026-01-07",)))
+    assert [e.delist_date for e in events] == ["2026-01-18"]

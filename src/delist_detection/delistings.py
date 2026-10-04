@@ -26,7 +26,7 @@ from .nasdaq_halts import last_trade_from_halt
 from .review_triage import ReviewItem
 from .security_master import Security
 from .store import DelistingKey
-from .trading_calendar import previous_trading_day
+from .trading_calendar import add_trading_days, previous_trading_day
 
 FORM25_LOOKBACK_DAYS = 30           # how far before the security's first sighting to look for a Form 25
 SAME_EVENT_DAYS = 30                # Form 25s of this security this close together are one delisting
@@ -38,6 +38,7 @@ MIDAS_BEFORE_DAYS, MIDAS_AFTER_DAYS, MIDAS_STILL_TRADING_DAYS = 75, 10, 5
 EIGHTK_BEFORE_DAYS, EIGHTK_AFTER_DAYS = 60, 5      # single-filing 8-K window (fallback path)
 EIGHTK_GROUP_AFTER_DAYS = 15                       # group 8-K window: latest filed + this many days
 DEREG_FALLBACK_BEFORE_DAYS = 30     # a fallback revocation or Form 15 must be within
+OWN_SWITCH_DAYS = 5                 # trading days between a Form 25 and the security's own CUSIP switch it removed
 DEREG_FALLBACK_AFTER_DAYS = 120     # [last_seen - this, last_seen + this] to date the delisting
 
 # Buckets whose delisting ends the security's exchange life even when it is
@@ -117,6 +118,10 @@ class SecurityContext:
     # confirmations (MIDAS, Nasdaq halts): the ticker on a Form 25's date can be
     # the OTC symbol already (SAVE -> SAVEQ), which no exchange source knows.
     tickers_between: Callable[[str, str], list[str]] = lambda lo, hi: []
+    # The first fails row of each of the security's own CUSIPs after its first, ISO: a CUSIP switch on its own
+    # line (a reverse split, a redomicile that kept the composite). A Form 25 filed at one while the security
+    # trades on removed the old CUSIP, not the security (QGEN 2026, Acxiom/LiveRamp 2018).
+    cusip_switches: tuple[str, ...] = ()
 
 
 class DelistingFinder:
@@ -132,6 +137,15 @@ class DelistingFinder:
         lo = (date.fromisoformat(first) - timedelta(days=SIBLING_ALIVE_BEFORE_DAYS)).isoformat()
         hi = (date.fromisoformat(last) + timedelta(days=SIBLING_ALIVE_AFTER_DAYS)).isoformat()
         return lo <= filing_date <= hi
+
+    @staticmethod
+    def _at_own_switch(ctx: SecurityContext, filing_date: str) -> bool:
+        """Whether one of the security's own CUSIP switches (`SecurityContext.cusip_switches`) lies within
+        `OWN_SWITCH_DAYS` trading days of a Form 25's filing date."""
+        day = date.fromisoformat(filing_date)
+        lo = add_trading_days(day, -OWN_SWITCH_DAYS).isoformat()
+        hi = add_trading_days(day, OWN_SWITCH_DAYS).isoformat()
+        return any(lo <= d <= hi for d in ctx.cusip_switches)
 
     def _class_conflict(self, f25: Form25, ref: SecurityRef) -> bool:
         """True when the Form 25 names class letters and the matched sibling's
@@ -349,6 +363,8 @@ class DelistingFinder:
             continued = bool(ctx.listed_today) or ctx.seen_after(
                 (date.fromisoformat(eff) + timedelta(days=SEEN_AFTER_DAYS)).isoformat())
             if continued:
+                if self._at_own_switch(ctx, sub.filing_date):
+                    continue        # the old CUSIP left the exchange as the security went on under its new one
                 before, after = exchanges_around(self.edgar, cik, filings, date.fromisoformat(sub.filing_date))
                 if withdrawal_kind(f25.exchange, before, after) == "secondary":
                     continue

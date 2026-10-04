@@ -406,8 +406,18 @@ def _security_cusips(ctx: _RunContext, securities: dict[str, Security], resoluti
     return sec_cusips
 
 
+def _cusip_switches(s: Security, ftd: FtdIndex, cusips: Sequence[str]) -> tuple[str, ...]:
+    """The first sighting of each of the security's CUSIPs after its first (`history.cusip_sightings`): the days
+    its own line switched CUSIP."""
+    first: dict[str, str] = {}
+    for x in cusip_sightings(s, ftd, cusips):
+        first.setdefault(x.value, x.day)
+    return tuple(sorted(first.values())[1:])
+
+
 def _context_builder(securities: dict[str, Security], sightings: dict[str, list[Sighting]],
-                     answers: _IssuerAnswers) -> Callable[[Security, bool | None], SecurityContext]:
+                     answers: _IssuerAnswers, ftd: FtdIndex, sec_cusips: dict[str, list[str]]
+                     ) -> Callable[[Security, bool | None], SecurityContext]:
     """The finder's `SecurityContext` for a security of the run, given whether it
     is listed today."""
     siblings: dict[int, list[SecurityRef]] = defaultdict(list)
@@ -444,6 +454,7 @@ def _context_builder(securities: dict[str, Security], sightings: dict[str, list[
             ftd_seen_after=lambda day, sig=sig, own=s.own_tickers(): any(
                 x.day > day for x in sig if x.source == "ftd" and x.value in own),
             tickers_between=lambda lo, hi, sig=sig: list(dict.fromkeys(x.value for x in sig if lo <= x.day <= hi)),
+            cusip_switches=_cusip_switches(s, ftd, sec_cusips.get(s.sec_id, [])),
         )
 
     return security_context
@@ -470,7 +481,7 @@ def _find_delistings(ctx: _RunContext, securities: dict[str, Security], sec_cusi
     listed: dict[str, bool | None] = {}
     review: list[ReviewItem] = []
     sightings = {sid: ticker_sightings(s, ftd, sec_cusips[sid]) for sid, s in securities.items()}
-    security_context = _context_builder(securities, sightings, answers)
+    security_context = _context_builder(securities, sightings, answers, ftd, sec_cusips)
 
     ordered = sorted(securities.values(), key=lambda s: s.sec_id)
     # One batched OpenFIGI ask for every security's listing; a failed batch leaves
