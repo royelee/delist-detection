@@ -168,14 +168,16 @@ def write_cases(path: str | Path, rows: Sequence[Mapping[str, str]]) -> None:
 def rename_truth(rows: Sequence[Mapping[str, str]],
                  id_changes: Sequence[Mapping[str, str]]) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
     """Truth rows whose placeholder sec_id now holds a FIGI (contract/id_changes.csv) take the new sec_id; the
-    case_id stays. Returns the rows and one change-log entry per rename."""
+    case_id stays. A row that names a renamed placeholder as its price or successor security names the FIGI too
+    (identity follows the FIGI, R2). Returns the rows and one change-log entry per renamed cell."""
     new_id = {r["old_sec_id"]: r["new_sec_id"] for r in id_changes if r.get("new_sec_id")}
     out, changes = [], []
     for r in rows:
         r = dict(r)
-        if r["sec_id"] in new_id:
-            changes.append(dict(case_id=r["case_id"], field="sec_id", old=r["sec_id"], new=new_id[r["sec_id"]],
-                                reason="contract/id_changes.csv: the placeholder now holds a FIGI", report=""))
-            r["sec_id"] = new_id[r["sec_id"]]
+        for field in ("sec_id", "price_sec_id", "successor_sec_id"):
+            if r.get(field) in new_id:
+                changes.append(dict(case_id=r["case_id"], field=field, old=r[field], new=new_id[r[field]],
+                                    reason="contract/id_changes.csv: the placeholder now holds a FIGI", report=""))
+                r[field] = new_id[r[field]]
         out.append(r)
     return out, changes

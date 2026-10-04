@@ -79,6 +79,21 @@ def test_rename_truth_follows_id_changes():
         ("CIK9-COMMON_2010-01-04", "sec_id", "CIK9-COMMON", "BBGX")]
 
 
+def test_rename_truth_renames_a_placeholder_named_as_price_or_successor_security():
+    """Identity follows the FIGI (R2): a truth row that prices at, or continues into, a placeholder the run renamed
+    names the FIGI too (CWTR's otc_print at its own CIK1018005-COMMON line; ANN's ASNA leg at CIK1498301-COMMON)."""
+    rows = [truth_row("CIK9-COMMON_2010-01-04", "CIK9-COMMON", price_sec_id="CIK9-COMMON"),
+            truth_row("C_2011-01-04", "C", successor_sec_id="CIK9-COMMON", price_sec_id="*")]
+    ids = [{"old_sec_id": "CIK9-COMMON", "new_sec_id": "BBGX", "changed_on": "2026-10-04", "issuer_cik": "9",
+            "share_class": "COMMON"}]
+    renamed, changes = dl.rename_truth(rows, ids)
+    assert [(r["sec_id"], r["price_sec_id"], r["successor_sec_id"]) for r in renamed] == [
+        ("BBGX", "BBGX", "*"), ("C", "*", "BBGX")]
+    assert sorted((c["case_id"], c["field"]) for c in changes) == [
+        ("CIK9-COMMON_2010-01-04", "price_sec_id"), ("CIK9-COMMON_2010-01-04", "sec_id"),
+        ("C_2011-01-04", "successor_sec_id")]
+
+
 def test_two_truth_cases_of_one_security_get_distinct_case_ids():
     cases = dt.parse_rows([truth_row("A_2010-01-04", "A", exit_kind="merger"),
                            truth_row("A_2012-02-03", "A", exit_kind="merger")])
