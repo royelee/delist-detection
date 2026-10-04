@@ -111,3 +111,11 @@ def test_check_fails_on_a_failing_diagnosis_pass_case(tmp_path, out, capsys):
     cfg.write_text(json.dumps({"diagnosis": "d.csv", "floor": {}}))
     assert scorecard_script.main(["--output-dir", str(out), "--config", str(cfg), "--check"]) == 1
     assert "DIAGNOSIS FAILING A_2012-03-10: exit_kind merger != exchange" in capsys.readouterr().out
+
+
+def test_check_fails_while_a_regression_is_unexplained(tmp_path, out, capsys):
+    (out / "regression_report.csv").write_text("sec_id,table,field,kind,old,new\nZ,delistings,exit_kind,changed,"
+                                               "merger,exchange\n")
+    cfg = _config(tmp_path, {})
+    assert scorecard_script.main(["--output-dir", str(out), "--config", str(cfg), "--check"]) == 1
+    assert "D.unexplained_regressions" in capsys.readouterr().out

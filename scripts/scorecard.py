@@ -24,9 +24,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 from delist_detection.atomic_io import write_atomic
+from delist_detection.diagnosis_loop import LEDGER, read_csv, settled_keys
 from delist_detection.lifecycle import LifecycleView, Tables
 from delist_detection.manifest import MANIFEST_NAME
 from delist_detection.scorecard import (ScorecardConfigError, build, drops, load_config, raise_floor, write)
+from delist_detection.regression import unexplained
 from delist_detection.truth import TruthFileError
 
 LEGS_FILE = "contract/payout_legs.csv"
@@ -89,6 +91,10 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     card = build(tables, as_of=as_of, config=config, legs_rows=legs_rows(args.output_dir))
     card["drops"] = drops(card, config.floor)
+    report = args.output_dir / "regression_report.csv"
+    if report.exists():
+        left = unexplained(read_csv(report), config.diagnosis, settled_keys(read_csv(ROOT / LEDGER)))
+        card["metrics"]["D.unexplained_regressions"] = len({r["sec_id"] for r in left})
     for name, value in sorted(card["metrics"].items()):
         print(f"{name:48} {value}")
     for line in card["drops"]:
@@ -107,7 +113,8 @@ def main(argv: list[str] | None = None) -> int:
         raw["floor"] = raise_floor(card, config.floor)
         write_atomic(args.config, json.dumps(raw, indent=2) + "\n")
         print(f"raised the floor in {args.config}")
-    if args.check and (card["drops"] or card["golden_failures"] or card["diagnosis_failures"]):
+    if args.check and (card["drops"] or card["golden_failures"] or card["diagnosis_failures"]
+                       or card["metrics"].get("D.unexplained_regressions", 0) > 0):
         return 1
     return 0
 
