@@ -654,17 +654,32 @@ def test_form25_before_first_sighting_is_not_taken_for_another_class(fake_edgar)
 
 
 def test_form25_before_first_sighting_is_not_taken_when_ftd_shows_trading_after_it(fake_edgar):
-    # Fails-to-deliver rows under the security's own ticker after the early
+    # Fails-to-deliver rows of the security's own CUSIPs after the early
     # Form 25 show it kept trading: that filing ended something else (an old
-    # exchange move), so it is not revived.
+    # exchange move), so it is not taken (sub-plan 5b, E: `trades_after`).
     edgar = _stale_snapshot_edgar(fake_edgar)
     clf = DelistClassifier(edgar, TickerResolver(edgar))
     sec = _sec("BBG_AGE", 21000, "AGE", "2008-01-16", "2009-06-08", "EDWARDS AG INC")
     ctx = _ctx(sec, listed=False, last_seen="2009-06-08")
-    ctx.ftd_seen_after = lambda d: d < "2009-06-01"
+    ctx.trades_after = lambda d: d < "2009-06-01"
     events, review = DelistingFinder(edgar, clf).find(ctx)
     assert events == []
     assert [r.flag for r in review] == ["ended_without_delisting"]
+
+
+def test_a_form25_older_than_the_early_window_is_still_the_fallbacks(fake_edgar):
+    """The fallback still judges a Form 25 from before the early window (more than EARLY_REACH_DAYS before the
+    floor): the classifier picks it, `_early_group` matches it, and fails rows under the security's own tickers
+    after it refuse it."""
+    edgar = _stale_snapshot_edgar(fake_edgar)
+    clf = DelistClassifier(edgar, TickerResolver(edgar))
+    sec = _sec("BBG_AGE", 21000, "AGE", "2009-01-16", "2009-06-08", "EDWARDS AG INC")   # floor 2008-12-17
+    (ev,), review = DelistingFinder(edgar, clf).find(_ctx(sec, listed=False, last_seen="2009-06-08"))
+    assert ev.form25_sub.accession == "w2" and "observed_after_delisting" in ev.flags
+    ctx = _ctx(sec, listed=False, last_seen="2009-06-08")
+    ctx.ftd_seen_after = lambda d: d < "2009-06-01"
+    events, review = DelistingFinder(edgar, clf).find(ctx)
+    assert events == [] and [r.flag for r in review] == ["ended_without_delisting"]
 
 
 def test_form25_before_first_sighting_is_ignored_while_listed(fake_edgar):
@@ -1000,3 +1015,58 @@ def test_the_issuers_own_form25_in_a_group_with_the_exchanges_moves_the_class(fa
     fake_edgar.raws["kn"] = _f25_raw("The Nasdaq Stock Market LLC", form_tag="25-NSE")
     (ev,), _ = finder.find(_ctx(sec, listed=True, last_seen="2026-09-04"))
     assert (ev.record.crsp_code, ev.record.successor_sec_id) == (304, "BBG_KHC")
+
+
+# --- sub-plan 5b, E: early reach ---
+
+def _two_early_groups(fake_edgar):
+    """TXU 2007: an older Form 25 (January 2007, another event) and the merger's 25-NSE (2007-10-23), both in the
+    year before the floor of a security a stale snapshot first lists on 2008-01-16. The 8-K nearest the 25-NSE is
+    an earnings release (item 2.02) and the issuer kept filing for its debt, so the classifier's own pick drops it
+    (its frozen-tail rule) and the fallback reads a continued-filings transfer at the last sighting."""
+    fake_edgar.submissions_by_cik[30301] = [
+        EdgarSubmission("t1", "25-NSE", "2007-01-10", "", "", "p.xml"),
+        EdgarSubmission("t8", "8-K", "2007-10-11", "2007-10-11", "2.01,3.01,5.01,9.01", "k.htm"),
+        EdgarSubmission("t2", "25-NSE", "2007-10-23", "", "", "p.xml"),
+        EdgarSubmission("te", "8-K", "2007-10-23", "2007-10-23", "2.02,9.01", "e.htm"),
+        EdgarSubmission("tq", "10-Q", "2008-05-15", "2008-03-31", "", "q.htm"),
+        EdgarSubmission("tk", "10-K", "2010-03-01", "2009-12-31", "", "k10.htm")]
+    fake_edgar.raws["t1"] = NYSE_COMMON_RAW
+    fake_edgar.raws["t2"] = NYSE_COMMON_RAW
+    clf = DelistClassifier(fake_edgar, TickerResolver(fake_edgar))
+    sec = _sec("BBG_TXU", 30301, "TXU", "2008-01-16", "2009-06-08", "TXU CORP")
+    return DelistingFinder(fake_edgar, clf), sec
+
+
+def test_the_latest_early_group_is_the_delisting_of_a_security_gone_today(fake_edgar):
+    finder, sec = _two_early_groups(fake_edgar)
+    (ev,), review = finder.find(_ctx(sec, listed=False, last_seen="2009-06-08"))
+    assert (ev.delist_date, ev.form25_sub.accession, ev.record.bucket) == ("2007-11-02", "t2", CrspBucket.MERGER)
+    assert "observed_after_delisting" in ev.flags and review == []
+
+
+def test_early_reach_needs_the_security_gone_today(fake_edgar):
+    """Laureate (listed today; its 2008 observations are of the old Laureate): a Form 25 before the floor of a
+    security listed today, or whose listing is unknown, is never judged."""
+    finder, sec = _two_early_groups(fake_edgar)
+    assert finder.find(_ctx(sec, listed=True, last_seen="2009-06-08")) == ([], [])
+    events, review = finder.find(_ctx(sec, listed=None, last_seen="2009-06-08"))
+    assert events == [] and [r.flag for r in review] == ["listing_status_unknown"]
+
+
+def test_an_early_form25_waits_for_no_definitive_delisting_from_the_floor_on(fake_edgar):
+    finder, sec = _two_early_groups(fake_edgar)
+    fake_edgar.submissions_by_cik[30301].append(EdgarSubmission("t3", "25-NSE", "2009-06-01", "", "", "p.xml"))
+    fake_edgar.raws["t3"] = NYSE_COMMON_RAW
+    events, _ = finder.find(_ctx(sec, listed=False, last_seen="2009-06-08"))
+    assert [e.form25_sub.accession for e in events] == ["t3"]
+
+
+def test_an_early_form25_whose_text_cannot_be_read_raises_no_review_row(fake_edgar):
+    """Review Focus (E): about 300 early-window Form 25s are not cached; one that cannot be read is left to the
+    fallback, with no `form25_unreadable` row (the floor's own filings keep that row)."""
+    finder, sec = _two_early_groups(fake_edgar)
+    del fake_edgar.raws["t2"]
+    events, review = finder.find(_ctx(sec, listed=False, last_seen="2009-06-08"))
+    assert not any(r.flag == "form25_unreadable" for r in review)
+    assert all(e.form25_sub is None or e.form25_sub.accession != "t2" for e in events)
