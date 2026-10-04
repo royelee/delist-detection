@@ -233,7 +233,6 @@ ending,GOCO,CIK1808220-CLASS-A,2022-11-17,issuer_from_todays_ticker_map;resolved
 ending,CBSS,CIK18568-COMMON,2007-09-16,security_uncertain;no_last_trade_date,
 ending,PPP,CIK230463-COMMON,2008-02-07,security_uncertain;assumed_par_after_failed_gate,
 ending,ESV,CIK314808-COMMON,2012-05-22,continuation_by_timing_only,
-ending,AON,CIK315293-COMMON,2012-03-31,security_uncertain,
 ending,BMET,CIK351346-COMMON,2006-12-28,security_uncertain;resolved_from_continued_filings;no_last_trade_date,
 ending,FNP,CIK352363-COMMON,2014-02-25,resolved_from_continued_filings,
 ending,FST,CIK38079-COMMON,2015-01-25,resolved_from_continued_filings,
@@ -277,7 +276,6 @@ security,THE,BBG000L93Q69,2004-09-16,seeds_outside_history:1 from 2008-01-16,
 security,GOOG,BBG002W96FT9,2014-04-04,ticker_overlap:GOOG,BBG000BHSKN9
 security,LVNTA,BBG0038K9G41,2012-08-21,ticker_overlap:LVNTA,CIK1355096-COMMON
 security,GCI,BBG006XVD9G0,2015-07-01,ticker_overlap:GCI,BBG000BK5DP1
-security,AON,BBG00SSQFPK6,2020-04-01,ticker_overlap:AON,CIK315293-COMMON
 security,LLYVA,BBG01HMFL081,2023-08-04,ticker_overlap:LLYVA,BBG01YY256K1
 security,LLYVK,BBG01HMFLTN1,2023-08-04,ticker_overlap:LLYVK,BBG01YYX1Z14
 security,LLYVA,BBG01YY256K1,2025-12-17,ticker_overlap:LLYVA,BBG01HMFL081
@@ -295,7 +293,6 @@ security,QRTEA,CIK1355096-COMMON,2007-12-17,ticker_overlap:LVNTA,BBG0038K9G41
 security,,CIK1355096-SERIES-A,,seeds_outside_history:1 from 2012-06-29,
 security,CBSS,CIK18568-COMMON,2004-10-12,seeds_outside_history:1 from 2008-01-16,
 security,PPP,CIK230463-COMMON,2004-11-08,seeds_outside_history:1 from 2008-01-16,
-security,AON,CIK315293-COMMON,2007-12-21,ticker_overlap:AON,BBG00SSQFPK6
 security,BMET,CIK351346-COMMON,2004-04-02,seeds_outside_history:1 from 2008-01-16,
 security,HLT,CIK47580-COMMON,2004-11-01,seeds_outside_history:1 from 2008-01-16,
 security,HUB-B,CIK48898-CLASS-B,2008-01-16,placeholder_without_ticker_filing:CIK 48898,

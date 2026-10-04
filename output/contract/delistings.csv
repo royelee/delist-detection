@@ -831,7 +831,7 @@ CIK1808220-CLASS-A,,dropped,guidelines,false,,,,-0.550000,,uncertain,otc_print,,
 CIK18568-COMMON,,merger,,false,,,,,,uncertain,cash,71.820000,,,,,,,DEFM14A,,71.82 / last_close − 1
 CIK230463-COMMON,2007-11-06,merger,,false,,,,0.000000,59.370000,uncertain,cash_plus_stock,24.880000,,0.682010,,PXP,2007-11-07,,llm,failed,"(24.88 + 0.68201 × price(PXP, 2007-11-07)) / last_close − 1"
 CIK314808-COMMON,,exchange,,true,BBG000BJ2VQ6,,,,,uncertain,continuation,,,,,,,,,,
-CIK315293-COMMON,,exchange,,true,BBG000BC15S7,,,,,uncertain,continuation,,,,,,,,,,
+CIK315293-COMMON,,exchange,,true,BBG000BC15S7,,,,,confirmed,continuation,,,,,,,,,,
 CIK351346-COMMON,,dropped,guidelines,false,,,,,,uncertain,otc_print,,,,CIK351346-COMMON,BMET,,,,,"otc_print(BMET, from ?) / last_close − 1"
 CIK352363-COMMON,2014-02-25,merger,,false,,,,0.000000,31.460000,uncertain,unknown,,,,,,,,,,
 CIK38079-COMMON,2014-12-15,merger,,false,,,,0.000000,0.340000,uncertain,unknown,,,,,,,,,,

@@ -520,7 +520,6 @@ check,BBG000CHWP52,2022-04-18,DISCA,1437107,,,form25_unmatched,25-NSE 0001354457
 check,BBG000CKJ0P3,,IVGN,1073431,,,issuer_inferred,IVGN@2008-01-16 INVITROGEN CORP: issuer 1073431 by cusip_handoff: its CUSIP 46185R100 ended as LIFE@2012-06-29's 53217V109 began on 2008-11-25; the issuer was renamed from INVITROGEN CORP,,2009-06-08
 check,BBG000CLP0Y4,,NNN,751364,,,issuer_inferred,NNN@2012-06-29 NATIONAL RETAIL PROPERTIES REIT IN: issuer 751364 by shared_cusip: shares CUSIP 637417106 with NNN@2023-06-30,,2022-12-31
 check,BBG000CNWNL6,,OI,812074,,,issuer_inferred,OI@2012-06-29 O I GLASS INC: issuer 812074 by shared_cusip: shares CUSIP 690768403 with OI@2008-01-16,,2014-06-30
-check,BBG000CNZC55,,ODP,,,,ticker_shared,ODP 2007-12-26..2020-07-11 (BBG000CNZC55) overlaps ODP 2020-07-01..2025-12-11 (BBG00R24W7X2),,
 check,BBG000CS7CB8,,JNC,885708,,,ticker_unconfirmed,JNC@2008-01-16 NUVEEN INVESTMENTS INC: no fails-to-deliver row under JNC from 2007-12-17 to 2009-07-08,,2009-06-08
 check,BBG000CXD6X9,,HANS,865752,,,issuer_inferred,HANS@2008-01-16 HANSEN NAT CORP: issuer 865752 by cusip_handoff: its CUSIP 411310105 ended as MNST@2012-06-29's 611740101 began on 2012-01-09; the issuer was renamed from HANSEN NATURAL CORP,,2009-06-08
 check,BBG000CXYSZ6,,FFIV,1048695,,,issuer_inferred,FFIV@2008-01-16 F5 NETWORKS INC: issuer 1048695 by shared_cusip: shares CUSIP 315616102 with FFIV@2021-12-31,,2021-06-30
@@ -539,7 +538,6 @@ check,BBG000DQLV23,2021-01-14,BMY,14272,,,form25_unclassified,25-NSE 0000876661-
 check,BBG000DQLV23,2021-01-17,BMY,14272,,,form25_unclassified,25-NSE/A 0000876661-21-000027 ('Bristol-Myers Squibb Contingent Value Rights') has no recognized class,,
 check,BBG000DY6735,,WW,105319,,,ticker_unconfirmed,WW@2012-06-29 WW INTERNATIONAL INC: no fails-to-deliver row under WW from 2012-05-30 to 2014-01-30,,2013-12-31
 check,BBG000DY8ZS4,2020-04-27,WFT,1603923,,,form25_unmatched,25-NSE 0000876661-20-000340 ('Ordinary Shares'): ambiguous class,,
-check,BBG000F0KF42,,STX,,,,ticker_shared,STX 2007-12-17..2021-05-28 (BBG000F0KF42) overlaps STX 2021-05-19.. (BBG0113JGQF0),,
 check,BBG000F0KF42,2008-09-25,STX,1137789,,,form25_unclassified,25 0001193125-08-196052 (': P.O. Box 309 Ugland House Grand Cayman KY1-1104 Cayman Islands') has no recognized class,,
 check,BBG000F1ZSN5,,ROP,882835,,,issuer_inferred,ROP@2014-12-31 ROPER INDUSTRIES INC: issuer 882835 by shared_cusip: shares CUSIP 776696106 with ROP@2008-01-16,,2014-12-31
 check,BBG000F7GST7,,TFSL,1381668,,,issuer_inferred,TFSL@2008-01-16 TFS FINL CORP: issuer 1381668 by shared_cusip: shares CUSIP 87240R107 with TFSL@2012-06-29,,2009-06-08
@@ -612,7 +610,6 @@ check,BBG00LT2PDY4,,BPYU,1496048,,,ticker_unconfirmed,BPYU@2020-06-30 BROOKFIELD
 check,BBG00P5M4V07,2024-08-11,FERG,1832433,,,handoff_rebucketed,was merger (CRSP 231: M&A 2.01+3.01+5.01 (acquired by external acquirer)); BBG01NMRD768 continues it under FERG (8-K12B 0001193125-24-190512),,
 check,BBG00S1LR2C3,,PPLI,1800227,,,issuer_inferred,PPLI@2026-06-30 PEOPLE: issuer 1800227 by efts_frequency_renamed: the one 8-K frequency candidate whose names match its fails rows; EDGAR names it People Inc then,,2026-06-30
 check,BBG00TCBG714,2022-05-15,DKNG,1772757,,,handoff_rebucketed,was merger (CRSP 231: M&A 2.01+3.01+5.01 (acquired by external acquirer)); BBG0134WCM78 continues it under DKNG (8-K12B 0001104659-22-056134),,
-check,BBG00Y04KP80,,CRC,,,,ticker_shared,CRC 2014-12-02..2016-06-01 (BBG00Y04KP80) overlaps CRC 2016-06-01..2020-07-20 (BBG0060B3M63),,
 check,BBG01B6SGB59,,UHAL-B,4457,,,ticker_unconfirmed,UHAL-B@2022-12-31 U HAUL NON VOTING SERIES N: no fails-to-deliver row under UHAL-B from 2022-12-01 to 2023-01-30,,2022-12-31
 check,BBG01FND0CC1,2023-11-16,LIN,1707925,,,form25_unmatched,25 0001654954-23-013831 ('Ordinary Shares (€0.001 nominal value per share)'): ambiguous class,,
 check,BBG01HLMB6H5,2024-09-19,LSXMK,1560385,,,form25_unmatched,"25-NSE 0001354457-24-000664 ('Series A Liberty SiriusXM Common Stock (LSXMA), Series B Liberty SiriusXM Common Stock (LSXMB), and Series C Liberty SiriusXM Common Stock (LSXMK)'): ambiguous class",,
@@ -642,7 +639,6 @@ check,CIK1611983-COMMON,,LBKRV,1611983,,,ticker_unconfirmed,LBKRV@2014-12-31 LIB
 check,CIK1611983-COMMON,2015-01-19,LBKRV,1611983,,,form25_unmatched,25-NSE 0001354457-15-000004 ('Subscription Rights to Purchase Shares of Series C Common Stock'): ambiguous class,,
 check,CIK18568-COMMON,,CBSS,18568,,,ticker_unconfirmed,CBSS@2008-01-16 COMPASS BANCSHARES INC: no fails-to-deliver row under CBSS from 2007-12-17 to 2009-07-08,,2009-06-08
 check,CIK230463-COMMON,,PPP,230463,,,ticker_unconfirmed,PPP@2008-01-16 POGO PRODUCING CO: no fails-to-deliver row under PPP from 2007-12-17 to 2009-07-08,,2009-06-08
-check,CIK315293-COMMON,,AON,,,,ticker_shared,AON 2009-12-02.. (CIK315293-COMMON) overlaps AON 2020-04-01.. (BBG00SSQFPK6),,
 check,CIK315293-COMMON,2012-06-18,AON,315293,,,form25_unmatched,25-NSE 0000876661-12-000268 ('Common Stock'): ambiguous class,,
 check,CIK315293-COMMON,2020-04-11,AON,315293,,,form25_unmatched,25-NSE 0000876661-20-000277 ('Class A Ordinary Shares'): ambiguous class,,
 check,CIK351346-COMMON,,BMET,351346,,,ticker_unconfirmed,BMET@2008-01-16 BIOMET INC: no fails-to-deliver row under BMET from 2007-12-17 to 2009-07-08,,2009-06-08

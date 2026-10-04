@@ -1,13 +1,13 @@
 {
   "as_of": "2026-09-25",
   "cache_answers": {
-    "archives": 14399,
+    "archives": 14562,
     "company_tickers": 12,
-    "full_text_search": 934,
-    "submissions": 44379,
-    "submissions_page": 15471
+    "full_text_search": 1048,
+    "submissions": 44373,
+    "submissions_page": 15474
   },
-  "code_version": "4e7d0b9-dirty",
+  "code_version": "10514c6-dirty",
   "degraded_answers": {},
   "handoffs": {
     "conflicts": 11,
@@ -17,43 +17,20 @@
     "rows_added": 28,
     "takeovers": 8
   },
-  "latency_ms": {
-    "archives": {
-      "max": 1847.1,
-      "n": 159,
-      "p50": 111.3,
-      "p95": 608.9
-    },
-    "full_text_search": {
-      "max": 2670.2,
-      "n": 117,
-      "p50": 350.8,
-      "p95": 1705.3
-    },
-    "submissions": {
-      "max": 266.2,
-      "n": 2,
-      "p50": 78.5,
-      "p95": 266.2
-    }
-  },
+  "latency_ms": {},
   "not_covered": {},
   "rejected_queries": {},
   "resolution_degraded": 0,
   "review": {
     "accepted": 0,
-    "check": 562,
+    "check": 558,
     "cleared": 0,
     "fix": 105,
     "info_hidden": 560,
     "unmatched_decisions": 0
   },
   "schema_version": 2,
-  "sec_requests": {
-    "archives": 159,
-    "full_text_search": 117,
-    "submissions": 2
-  },
+  "sec_requests": {},
   "sec_workers": 4,
   "stages": {
     "dead before first sighting": {
@@ -61,7 +38,7 @@
       "sec_data_downloads": 0
     },
     "delisting search": {
-      "edgar_requests": 75,
+      "edgar_requests": 0,
       "sec_data_downloads": 0
     },
     "handoff notice dates": {
@@ -69,7 +46,7 @@
       "sec_data_downloads": 0
     },
     "handoff search": {
-      "edgar_requests": 3,
+      "edgar_requests": 0,
       "sec_data_downloads": 0
     },
     "issuer resolution": {
@@ -81,15 +58,15 @@
       "sec_data_downloads": 0
     },
     "line follow": {
-      "edgar_requests": 186,
+      "edgar_requests": 0,
       "sec_data_downloads": 0
     },
     "payouts": {
-      "edgar_requests": 12,
+      "edgar_requests": 0,
       "sec_data_downloads": 0
     },
     "successor search": {
-      "edgar_requests": 2,
+      "edgar_requests": 0,
       "sec_data_downloads": 0
     },
     "ticker evidence": {
@@ -97,8 +74,6 @@
       "sec_data_downloads": 0
     }
   },
-  "warm_degraded": {
-    "nasdaq_halt_feed": 1
-  },
+  "warm_degraded": {},
   "warm_failed": {}
 }
