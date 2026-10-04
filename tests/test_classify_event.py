@@ -145,3 +145,46 @@ def test_a_revocation_still_decides_when_it_came_first_or_no_form25_owns_the_row
     assert clf.classify_event(ticker="CNB", cik=30003, anchor_date="2009-08-17").crsp_code == 573
     assert clf.classify_event(ticker="CNB", cik=30003, anchor_date="2009-08-17", form25=sub,
                               trading_after=True).crsp_code == 573
+
+
+# --- sub-plan 5b, R6b: the matched Form 25's notice owns a continued-filings row ---
+
+def _notice_raw(text):
+    return ("<TYPE>25-NSE\n<notificationOfRemoval><exchange><entityName>New York Stock Exchange LLC</entityName>"
+            "</exchange>\n<descriptionClassSecurity>Common Stock</descriptionClassSecurity>\n"
+            "<ruleProvision>17 CFR 240.12d2-2(a)(3)</ruleProvision></notificationOfRemoval>\n"
+            f"<TYPE>EX-99.25\n<TEXT>\n{text}\n</TEXT>")
+
+
+def _continued_filer(fake_edgar, notice):
+    """NBTY-like: the 25-NSE of 2010-10-01 and a 10-Q seven months later (the issuer kept filing for its debt),
+    no 8-K near it: the continued-filings rule's default branch (304) unless the notice decides."""
+    fake_edgar.submissions_by_cik[30004] = [
+        EdgarSubmission("nt25", "25-NSE", "2010-10-01", "", "", "p.xml"),
+        EdgarSubmission("ntq", "10-Q", "2011-05-01", "2011-03-31", "", "q.htm")]
+    fake_edgar.raws["nt25"] = _notice_raw(notice)
+    return next(f for f in fake_edgar.recent_filings(30004) if f.form == "25-NSE")
+
+
+CASH_NOTICE = ("Pursuant to the merger, which became effective before the open on October 1, 2010, each outstanding "
+               "share of Common Stock was converted into the right to receive $55.00 in cash.")
+
+
+def test_a_notice_that_says_cash_turns_the_continued_filings_default_into_a_merger(fake_edgar):
+    sub = _continued_filer(fake_edgar, CASH_NOTICE)
+    rec = _clf(fake_edgar).classify_event(ticker="NTY", cik=30004, anchor_date="2010-09-30", form25=sub)
+    assert (rec.crsp_code, rec.bucket, rec.evidence["end_of_era"]) == (231, CrspBucket.MERGER, "form25_notice")
+    assert rec.reason == "Form 25 2010-10-01 notice: the class was acquired"
+    assert "no_evidence_default" not in rec.evidence["flags"]
+
+
+def test_a_reorganization_a_security_trading_on_or_no_notice_keeps_the_continued_filings_transfer(fake_edgar):
+    clf = _clf(fake_edgar)
+    for notice in ("Pursuant to the reclassification of the dual-class common stock, each share of Class B was "
+                   "converted into one (1) share of Common Stock.", ""):
+        sub = _continued_filer(fake_edgar, notice)
+        rec = clf.classify_event(ticker="NTY", cik=30004, anchor_date="2010-09-30", form25=sub)
+        assert (rec.crsp_code, rec.evidence["end_of_era"]) == (304, "continued_filings")
+    sub = _continued_filer(fake_edgar, CASH_NOTICE)
+    rec = clf.classify_event(ticker="NTY", cik=30004, anchor_date="2010-09-30", form25=sub, trading_after=True)
+    assert (rec.crsp_code, rec.evidence["end_of_era"]) == (304, "trading")

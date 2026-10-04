@@ -298,3 +298,24 @@ def test_a_letterless_sibling_no_class_names_is_not_tied():
             SecurityRef("UHALB", "SERIES N", "common", "U HAUL NON VOTING SERIES N")]
     assert match_securities(f, refs)[0] == ["UHALB"]
     assert tied_securities(f, refs) == set()
+
+
+# --- sub-plan 5b, R6b: a notice that says the class was acquired ---
+
+import pytest  # noqa: E402
+
+from delist_detection.form25 import notice_says_acquired  # noqa: E402
+from tests import form25_cases as fc  # noqa: E402
+
+
+@pytest.mark.parametrize("accession,acquired", [
+    ("0000876661-10-000366", True),    # NTY 2010: "converted into the right to receive $55.00 in cash"
+    ("0001354457-07-000287", True),    # BMET 2007: "Acquired by LVB Acquisition Inc"
+    ("0000876661-15-000665", False),   # HUB-B 2015: "the reclassification of ... dual-class common stock"
+    ("0000876661-23-000651", False),   # HHC 2023: "the formation of a holding company ... one share"
+    ("0001354457-21-000304", False),   # APA 2021: "APACHE CORPORATION REORGANIZED AS APA CORPORATION"
+    ("0001354457-15-000245", False),   # CMCSK 2015: no notice text
+], ids=["NTY", "BMET", "HUB-B", "HHC", "APA", "CMCSK"])
+def test_a_real_notice_says_the_class_was_acquired_only_without_a_reorganization(accession, acquired):
+    f = parse_form25(fc.EDGAR["raws"][accession], accession=accession, form="25-NSE", filing_date="2000-01-01")
+    assert notice_says_acquired(f) is acquired

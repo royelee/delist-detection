@@ -33,6 +33,7 @@ from .evidence import (
     says_listing_transfer,
     still_operating,
 )
+from .form25 import notice_says_acquired, parse_form25
 from .ticker_resolver import TickerResolution, TickerResolver
 
 
@@ -738,6 +739,21 @@ class DelistClassifier:
             items_code, _ = self._classify_items(set(era.item_filed))
             verdict = end_of_era.resolve(era, items_code)
             evidence["end_of_era"] = verdict.branch
+            if (owned and verdict.branch == "continued_filings"
+                    and self._notice_says_acquired(resolution.cik, delist_filing_override)):
+                # Sub-plan 5b, R6b: the matched Form 25's own notice says the class was acquired or paid in cash
+                # (NBTY 2010, Biomet 2007): its path decides, and any answer but a merger is 231.
+                evidence["end_of_era"] = "form25_notice"
+                rec = self._classify_filings(ticker, resolution, observed_delist_date, observed, filings,
+                                             delist_filing, dereg, evidence, flags)
+                if rec.bucket is CrspBucket.MERGER:
+                    return rec
+                return DelistRecord(ticker=ticker.upper(), cik=resolution.cik,
+                                    observed_delist_date=observed_delist_date, crsp_code=231,
+                                    bucket=CrspBucket.MERGER, confidence="medium",
+                                    reason=f"Form 25 {delist_filing.filing_date} notice: the class was acquired",
+                                    evidence={**rec.evidence, "flags": [f for f in flags
+                                                                         if f != "no_evidence_default"]})
             return DelistRecord(
                 ticker=ticker.upper(),
                 cik=resolution.cik,
@@ -748,7 +764,24 @@ class DelistClassifier:
                 reason=verdict.reason,
                 evidence=evidence,
             )
+        return self._classify_filings(ticker, resolution, observed_delist_date, observed, filings, delist_filing,
+                                      dereg, evidence, flags)
 
+    def _notice_says_acquired(self, cik: int, sub: EdgarSubmission) -> bool:
+        """Whether the matched Form 25's EX-99.25 notice says its class was acquired or converted into cash
+        (`form25.notice_says_acquired`); False when its text cannot be read."""
+        raw = self.edgar.fetch_filing_raw(cik, sub.accession)
+        if not raw:
+            return False
+        return notice_says_acquired(parse_form25(raw, accession=sub.accession, form=sub.form,
+                                                 filing_date=sub.filing_date))
+
+    def _classify_filings(self, ticker: str, resolution: TickerResolution, observed_delist_date: str | None,
+                          observed: date | None, filings: list[EdgarSubmission],
+                          delist_filing: EdgarSubmission | None, dereg: EdgarSubmission | None, evidence: dict,
+                          flags: list[str]) -> DelistRecord:
+        """The Form 25 and 8-K branches of `_classify_resolved`: no Form 25, an 8-K near the observed date; else
+        the 8-K near the Form 25 (or the backscan's), its items' code, the default without a fingerprint."""
         if delist_filing is None:
             # No Form 25 found. Use 8-K-only logic centered on observed date.
             if observed is None:

@@ -378,5 +378,22 @@ def _notice_day(t: str, involuntary: bool) -> tuple[date | None, str]:
     return None, ""
 
 
+# R6b: the EX-99.25 notice says holders were paid ("acquired by", "converted into the right to receive $55.00 in
+# cash"), and nothing of a reclassification, a holding company or a reorganization.
+_ACQUIRED = re.compile(r"\bacquired\s+by\b|converted\s+into\s+(?:the\s+right\s+to\s+receive\s+)?(?:[^.]{0,120}?)"
+                       r"(?:\$\s?[\d,.]+|\bcash\b)", re.I)
+_REORGANIZED = re.compile(r"reclassif|formation\s+of\s+a\s+holding\s+company|holding\s+company\s+reorgani"
+                          r"|reorganized\s+as|reorganization", re.I)
+
+
+def notice_says_acquired(f25: Form25) -> bool:
+    """Whether the exchange's EX-99.25 notice says the class was acquired or converted into cash (NTY 2010,
+    "converted into the right to receive $55.00 in cash"; BMET 2007, "Acquired by LVB"), and nothing of a
+    reclassification, a holding company's formation or a reorganization (HUB-B, HHC and APA 2021 stay
+    continuations)."""
+    t = re.sub(r"\s+", " ", f25.notice_text or "")
+    return bool(_ACQUIRED.search(t)) and not _REORGANIZED.search(t)
+
+
 def effective_date(filing_date: str) -> str:
     return (date.fromisoformat(filing_date) + timedelta(days=10)).isoformat()
