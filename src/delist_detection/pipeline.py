@@ -29,6 +29,7 @@ from .delistings import SUCCESSOR_UNKNOWN, Delisting, DelistingFinder, SecurityC
 from .evidence import edgar_names
 from .fatal import FATAL
 from .handoffs import (
+    TAKEOVER_DAYS,
     CONTINUATION_CODE, HandoffDecision, HandoffOutcome, apply_handoffs, continuation_filing, cusip_switch, decide_handoff,
     drop_resolved_shared, find_handoffs, issuer_carries_on, own_continuation_filing, predecessor_names,
 )
@@ -1438,7 +1439,7 @@ def _ends_the_security(e: Delisting, s: Security, sec_cusips: dict[str, list[str
     return not _continues_after(s, e.last_trade.day.isoformat(), sec_cusips, ftd, successor_starts)
 
 
-SUCCESSOR_TICKER_LOOKBACK_DAYS = 30   # a successor's first row under a ticker may precede the delisting's anchor (STX: 9 days)
+SUCCESSOR_TICKER_LOOKBACK_DAYS = 30   # with no confirmed last trade, a successor's first row may precede the delist date (STX: 9 days)
 
 
 def _successor_starts(delistings: Iterable[Delisting], securities: dict[str, Security],
@@ -1446,16 +1447,22 @@ def _successor_starts(delistings: Iterable[Delisting], securities: dict[str, Sec
                       added: Mapping[str, AddedSecurity]) -> dict[str, dict[str, str]]:
     """A successor's ticker is not its predecessor's: for each security S, the tickers a successor security X
     (a delisting's `successor_sec_id`, not S itself) took, and from which day: X's first sighting under the
-    ticker no earlier than `SUCCESSOR_TICKER_LOOKBACK_DAYS` before the delisting's anchor (its last trade day, else
-    its delist date). S's fails rows and sightings under the ticker from that day on are X's. One place, shared by
+    ticker on or after the delisting's confirmed last trade day (an unconfirmed or missing one: its delist date, less
+    `SUCCESSOR_TICKER_LOOKBACK_DAYS`) and within `TAKEOVER_DAYS` (the handoff window) after that anchor; a ticker
+    first seen later is a recycled one, no start. S's fails rows and sightings under the ticker from that day on are X's. One place, shared by
     the clip check (`_delisting_endings`) and the ranges (`_history_rows`)."""
     out: dict[str, dict[str, str]] = {}
     for e in delistings:
         x = e.record.successor_sec_id
         if not x or x == e.sec_id or e.sec_id not in securities:
             continue
-        lo = ((e.last_trade.day or date.fromisoformat(e.delist_date))
-              - timedelta(days=SUCCESSOR_TICKER_LOOKBACK_DAYS)).isoformat()
+        confirmed = e.last_trade.day is not None and "last_trade_date_unconfirmed" not in e.last_trade.flags
+        try:
+            anchor = e.last_trade.day if confirmed else date.fromisoformat(e.delist_date)
+        except ValueError:
+            continue
+        lo = (anchor if confirmed else anchor - timedelta(days=SUCCESSOR_TICKER_LOOKBACK_DAYS)).isoformat()
+        hi = (anchor + timedelta(days=TAKEOVER_DAYS)).isoformat()
         if x in securities:
             sig = filtered_ticker_sightings(sightings.get(x, []), sec_cusips.get(x, []), ftd)
         elif x in added:
@@ -1464,7 +1471,7 @@ def _successor_starts(delistings: Iterable[Delisting], securities: dict[str, Sec
             continue
         mine = out.setdefault(e.sec_id, {})
         for g in sorted(sig):
-            if g.day >= lo and g.day < mine.get(g.value, "~"):
+            if lo <= g.day <= hi and g.day < mine.get(g.value, "~"):
                 mine[g.value] = g.day
     return {sid: m for sid, m in out.items() if m}
 

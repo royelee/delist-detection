@@ -3024,12 +3024,12 @@ def _successor_case(bucket, last_trade_day, successor_first, fails, *, observed_
     return d, old, cusips, ftd, starts
 
 
-def _th(old, ftd, cusips, starts, end, extra_first="2012-04-03"):
+def _th(old, ftd, cusips, starts, end, listed=False):
     from delist_detection.history import Sighting, cusip_sightings, history_rows
     sig = [Sighting("2007-12-01", "TEST", "observation")] + [
         Sighting(r.date, r.symbol, "ftd") for r in ftd.trading_rows(cusips["BBGOLD"])]
     th, ch = history_rows(old, sig, cusip_sightings(old, ftd, cusips["BBGOLD"], starts.get("BBGOLD", {})),
-                          listed=False, end=end, end_exchange="NYSE", exchange_today=lambda t: None,
+                          listed=listed, end=end, end_exchange="NYSE", exchange_today=lambda t: None,
                           successor_starts=starts.get("BBGOLD", {}))
     return th, ch
 
@@ -3060,12 +3060,54 @@ def test_a_successors_ticker_is_not_the_predecessors_STX_shape():
             for d in ("2021-05-17", "2021-05-18", "2021-05-24", "2021-05-28")]
     d, old, cusips, ftd, starts = _successor_case(CrspBucket.EXCHANGE_TRANSFER, None, "2021-05-19", tail,
                                                   observed_successor=False)
+    d.delist_date = "2021-05-28"                 # the helper's own date is 2012: X is out of its window
+    assert starts == {}
+    from delist_detection.added_securities import AddedLineSuccessor
+    x = AddedLineSuccessor(Security("BBGNEW", 6, "COMMON", "T", "Common Stock", False, "cusip"), "TEST",
+                           "2021-05-19", [])
+    starts = pipeline._successor_starts([d], {"BBGOLD": old}, {}, cusips, ftd, {"BBGNEW": x})
     assert starts == {"BBGOLD": {"TEST": "2021-05-19"}}
     th, ch = _th(old, ftd, cusips, starts, None)
     assert [(r["ticker"], r["valid_to"]) for r in th] == [("TEST", "2021-05-18")]
     new_th = [{"sec_id": "BBGNEW", "ticker": "TEST", "exchange": None, "valid_from": "2021-05-19",
                "valid_to": None, "source": "ftd"}]
     assert ticker_range_review(th + new_th) == []
+
+
+def test_a_successor_sighting_before_a_confirmed_last_trade_sets_no_start():
+    """With a confirmed last trade day D, a successor's TEST sighting 10 days before D is not the start: F is X's
+    first sighting on or after D, so S's range still reaches D."""
+    fails = _continuing_fails("TEST", "11111T101", n=3, start=date(2012, 3, 1), step_days=10)
+    d, old, cusips, ftd, starts = _successor_case(CrspBucket.EXCHANGE_TRANSFER, date(2012, 3, 30), "2012-03-20",
+                                                  fails)
+    assert starts == {}
+    th, _ = _th(old, ftd, cusips, starts, "2012-03-30")
+    assert [(r["ticker"], r["valid_to"], r["exchange"]) for r in th] == [("TEST", "2012-03-30", "NYSE")]
+
+
+def test_a_successor_first_seen_long_after_the_anchor_sets_no_start():
+    """A ticker first seen under the successor 200 days after the confirmed last trade is a recycled one."""
+    fails = _continuing_fails("TEST", "11111T101", n=3, start=date(2012, 3, 1), step_days=10)
+    _, _, _, _, starts = _successor_case(CrspBucket.EXCHANGE_TRANSFER, date(2012, 3, 30), "2012-10-16", fails)
+    assert starts == {}
+
+
+def test_a_blank_delist_date_with_no_last_trade_sets_no_start_and_raises_nothing():
+    fails = _continuing_fails("TEST", "11111T101", n=3, start=date(2012, 3, 1), step_days=10)
+    from delist_detection.ftd import FtdIndex
+    d, old, cusips, ftd, _ = _successor_case(CrspBucket.EXCHANGE_TRANSFER, None, "2012-04-03", fails)
+    d.delist_date = ""
+    assert pipeline._successor_starts([d], {"BBGOLD": old}, {}, cusips, ftd, {}) == {}
+
+
+def test_a_listed_security_whose_ticker_a_successor_took_ends_its_open_range_the_day_before():
+    """No clip, listed today: the open TEST range ends the day before the successor's first day."""
+    fails = (_continuing_fails("TEST", "11111T101", n=3, start=date(2012, 3, 1), step_days=10)
+             + _continuing_fails("TEST", "11111T101", n=5, start=date(2012, 4, 3), step_days=4))
+    d, old, cusips, ftd, starts = _successor_case(CrspBucket.EXCHANGE_TRANSFER, date(2012, 3, 30), "2012-04-03",
+                                                  fails)
+    th, _ = _th(old, ftd, cusips, starts, None, listed=True)
+    assert [(r["ticker"], r["valid_to"]) for r in th] == [("TEST", "2012-04-02")]
 
 
 def test_a_successor_on_another_ticker_changes_nothing_MWV_shape():

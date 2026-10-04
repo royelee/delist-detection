@@ -774,7 +774,9 @@ conflate them.
   left unclipped, ending at its last real sighting.
   A successor's ticker is not its predecessor's (`pipeline._successor_starts`, one map shared by the clip check and
   the ranges): when a delisting's successor is another security X that holds ticker T from day F (X's first
-  sighting under T, no earlier than 30 days before the delisting's last trade day, else its delist date), the
+  sighting under T on or after the delisting's confirmed last trade day, or from 30 days before its delist date
+  when the day is unconfirmed or missing, and never more than 120 days after that anchor: a later one is a
+  recycled ticker, no F), the
   security's fails rows and sightings under T from F on are X's. They do not count as it continuing
   (`_continues_after`: AON 2012), and its T range (and old-CUSIP range) ends the day before F (`history_rows`:
   STX 2021, CRC 2016, ODP 2020).
