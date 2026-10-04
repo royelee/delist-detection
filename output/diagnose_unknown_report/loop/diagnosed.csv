@@ -915,3 +915,11 @@ mis|BBG000BMLYZ2_5b-r1|drop_reason|price|guidelines,mismatch,BBG000BMLYZ2,5b-acc
 mis|BBG0057K5Y79_5b-r1|price_ticker|EPEG|EPE,mismatch,BBG0057K5Y79,5b-accept,0,known,output/diagnose_unknown_report/loop/5b/round-1/reports/BBG0057K5Y79_5b-r1.md
 mis|BBG000CNNMD7_5b-r2|value_rule|cash_plus_stock|cash,mismatch,BBG000CNNMD7,5b-accept,0,known,output/diagnose_unknown_report/loop/5b/round-2/reports/BBG000CNNMD7_5b-r2.md
 mis|BBG000CNNMD7_5b-r2|stock_ratio|1.098|,mismatch,BBG000CNNMD7,5b-accept,0,known,output/diagnose_unknown_report/loop/5b/round-2/reports/BBG000CNNMD7_5b-r2.md
+mis|BBG001YMS0B8_2015-07-12|exit_kind|exchange|merger,mismatch,BBG001YMS0B8,5c-precheck,0,known,reports/BBG001YMS0B8_2015-07-12.md
+mis|BBG001YMS0B8_2015-07-12|continuation|true|false,mismatch,BBG001YMS0B8,5c-precheck,0,known,reports/BBG001YMS0B8_2015-07-12.md
+mis|BBG001YMS0B8_2015-07-12|successor_sec_id|BBG005CPNTQ2|,mismatch,BBG001YMS0B8,5c-precheck,0,known,reports/BBG001YMS0B8_2015-07-12.md
+mis|BBG001YMS0B8_2015-07-12|value_rule|continuation|cash_plus_stock,mismatch,BBG001YMS0B8,5c-precheck,0,known,reports/BBG001YMS0B8_2015-07-12.md
+mis|BBG001YMS0B8_2015-07-12|cash_per_share||16.500000,mismatch,BBG001YMS0B8,5c-precheck,0,known,reports/BBG001YMS0B8_2015-07-12.md
+mis|BBG001YMS0B8_2015-07-12|stock_ratio||1.000000,mismatch,BBG001YMS0B8,5c-precheck,0,known,reports/BBG001YMS0B8_2015-07-12.md
+mis|BBG001YMS0B8_2015-07-12|price_ticker||KHC,mismatch,BBG001YMS0B8,5c-precheck,0,known,reports/BBG001YMS0B8_2015-07-12.md
+mis|BBG001YMS0B8_2015-07-12|price_date||2015-07-06,mismatch,BBG001YMS0B8,5c-precheck,0,known,reports/BBG001YMS0B8_2015-07-12.md
