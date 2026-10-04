@@ -6,7 +6,8 @@ observations are split into eras: runs that belong to one security, because a
 recycled ticker (MON = Monsanto, later Monument Circle) must never be merged
 into one security. Eras are built in two stages:
 
-1. Here, from observations alone: a new era starts when a pin changes, when the
+1. Here, from observations alone (a when-issued ticker's observations join its
+   regular-way ticker's, `regular_way`): a new era starts when a pin changes, when the
    name stops agreeing, or when the share class letter in the name changes
    ("GOOGLE INC CLASS A" -> "GOOGLE INC CLASS C"; a name with no class counts as
    unknown and never splits). A gap alone does not split: index snapshots can
@@ -36,6 +37,18 @@ OBS_COLUMNS = ("ticker", "as_of", "name", "cusip", "cik", "sec_id")
 
 def normalize_ticker(raw: str) -> str:
     return re.sub(r"[./\s]+", "-", (raw or "").strip().upper()).strip("-")
+
+
+_WHEN_ISSUED = re.compile(r"-W-?I$")       # "EHAB WI", "EHAB.WI", "EHAB-WI", "EHAB/WI", "EHAB W/I"
+
+
+def regular_way(ticker: str) -> str:
+    """The regular-way line a when-issued ticker trades ahead of: "EHAB-WI" (or "EHAB WI", "EHAB.WI", "EHAB W/I")
+    is EHAB, which the shares trade under once they are issued (Enhabit's 2022 spin-off). Any other ticker,
+    normalized, is its own."""
+    t = normalize_ticker(ticker)
+    stripped = _WHEN_ISSUED.sub("", t)
+    return stripped or t
 
 
 @dataclass(frozen=True)
@@ -221,16 +234,20 @@ def split_eras(obs: list[Observation]) -> list[TickerEra]:
                 cur.last = o.as_of
                 era_class = cls or era_class
                 continue
-        eras.append(TickerEra(o.ticker, o.as_of, o.as_of, [o]))
+        eras.append(TickerEra(regular_way(o.ticker), o.as_of, o.as_of, [o]))
         era_class = cls
     return number_eras(eras)
 
 
 class ObservationIndex:
+    """The observations by ticker, split into eras (`split_eras`). A when-issued ticker's observations join its
+    regular-way ticker's (`regular_way`): they are one security, and the era carries the regular-way ticker while
+    each observation keeps the ticker the caller saw."""
+
     def __init__(self, observations: Iterable[Observation]) -> None:
         by: dict[str, list[Observation]] = defaultdict(list)
         for o in observations:
-            by[o.ticker].append(o)
+            by[regular_way(o.ticker)].append(o)
         self._by = {t: sorted(v, key=lambda o: o.as_of) for t, v in by.items()}
         self._eras = {t: split_eras(v) for t, v in self._by.items()}
 
@@ -238,7 +255,7 @@ class ObservationIndex:
         return [e for t in sorted(self._eras) for e in self._eras[t]]
 
     def era_for(self, ticker: str, day: str) -> TickerEra | None:
-        eras = self._eras.get(normalize_ticker(ticker), [])
+        eras = self._eras.get(regular_way(ticker), [])
         best, best_gap = None, None
         for e in eras:
             if e.first <= day <= e.last:
@@ -249,7 +266,7 @@ class ObservationIndex:
         return best
 
     def name_on(self, ticker: str, observed_date: str | None = None) -> str | None:
-        named = [o for o in self._by.get(normalize_ticker(ticker), []) if o.name]
+        named = [o for o in self._by.get(regular_way(ticker), []) if o.name]
         if not named:
             return None
         if observed_date is None:
@@ -259,7 +276,7 @@ class ObservationIndex:
 
     def cik_pin_on(self, ticker: str, observed_date: str | None = None) -> int | None:
         if observed_date is None:
-            eras = self._eras.get(normalize_ticker(ticker), [])
+            eras = self._eras.get(regular_way(ticker), [])
             return eras[-1].cik_pin if eras else None
         era = self.era_for(ticker, observed_date)
         return era.cik_pin if era else None

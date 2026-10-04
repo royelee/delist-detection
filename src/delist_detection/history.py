@@ -94,7 +94,8 @@ def ranges_from_sightings(sightings: Iterable[Sighting], *, end: str | None,
 
 def ticker_sightings(sec: Security, ftd: FtdIndex, cusips: Sequence[str]) -> list[Sighting]:
     """Dated `(day, ticker, source)` sightings of the security: its observations
-    and the FTD rows of its CUSIPs. A ticker spelled with or without separators
+    (under their era's ticker: a when-issued observation, EHAB-WI, is a sighting
+    of its regular-way ticker, EHAB) and the FTD rows of its CUSIPs. A ticker spelled with or without separators
     ("BF-B" / "BFB": snapshots write both, FTD keys rows by the separator form)
     is written one way per security: a spelling it was observed under, the one
     with a separator first. So Hubbell's merged class keeps "HUBB" while class
@@ -102,12 +103,12 @@ def ticker_sightings(sec: Security, ftd: FtdIndex, cusips: Sequence[str]) -> lis
     symbol ("ORLYXXXX") is a fail still settling after the delisting, not a
     sighting of trading: it opens and extends no range, and counts in no
     `seen_after`, `last_seen` or sibling span."""
-    out = [Sighting(o.as_of, o.ticker, "observation") for e in sec.eras for o in e.observations]
+    out = [Sighting(o.as_of, e.ticker, "observation") for e in sec.eras for o in e.observations]
     # SEC's 2007 fails files mask some symbols (**********): not a ticker
     out += [Sighting(r.date, r.symbol, "ftd") for r in ftd.trading_rows(cusips)
             if any(ch.isalpha() for ch in r.symbol)]
     label: dict[str, str] = {}
-    for t in sorted({o.ticker for e in sec.eras for o in e.observations}, key=lambda t: ("-" not in t, t)):
+    for t in sorted({e.ticker for e in sec.eras}, key=lambda t: ("-" not in t, t)):
         label.setdefault(t.replace("-", ""), t)
     return sorted({s._replace(value=label.get(s.value.replace("-", ""), s.value)) for s in out})
 
@@ -313,7 +314,9 @@ def observation_map_rows(eras: Iterable[TickerEra], sec_id_of: Mapping[str, str 
         ranges = ranges_by_sec.get(sec_id, []) if sec_id is not None else []
         cusips = sec_cusips.get(sec_id, []) if sec_id is not None else ()
         for o in era.observations:
-            status = _observation_status(o.as_of, o.ticker, sec_id, ends.get(sec_id) if sec_id else None,
+            # Status and coverage are read under the era's ticker (a when-issued observation's regular-way one);
+            # the row keeps the ticker the caller observed, its join key.
+            status = _observation_status(o.as_of, era.ticker, sec_id, ends.get(sec_id) if sec_id else None,
                                          bool(end_confirmed.get(sec_id)) if sec_id else False,
                                          listed.get(sec_id) if sec_id else None,
                                          (o.ticker, o.as_of) in conflict_set, cusips, ftd)
@@ -321,7 +324,7 @@ def observation_map_rows(eras: Iterable[TickerEra], sec_id_of: Mapping[str, str 
                 "ticker": o.ticker, "as_of": o.as_of, "name": o.name, "cusip": o.cusip, "pin_cik": o.cik,
                 "pin_sec_id": o.sec_id, "era": era.key, "sec_id": sec_id, "issuer_cik": issuer_cik,
                 "history_ticker": value_on(ranges, date.fromisoformat(o.as_of)) if ranges else None,
-                "in_ticker_history": _in_ticker_history(o.ticker, o.as_of, ranges),
+                "in_ticker_history": _in_ticker_history(era.ticker, o.as_of, ranges),
                 "status": status,
             })
     return out

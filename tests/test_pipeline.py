@@ -2950,3 +2950,26 @@ def test_a_notice_day_on_or_after_the_successors_first_sighting_keeps_the_sighti
         d = _continuation(b_first=b_first)
         assert pipeline._date_from_notices(_notice_ctx(_RawEdgar(raw)), [d], []) == 0
         assert (d.last_trade.day, d.last_trade.source) == (date(2026, 8, 25), "last_sighting")
+
+
+def test_a_when_issued_observation_joins_its_regular_way_security(fake_edgar, tmp_path):
+    """U8 (sub-plan 5a): EHAB-WI, seen once before the spin-off, is Enhabit's regular-way line: one security on
+    EHAB's FIGI, no placeholder, and the caller's EHAB-WI observation mapped onto it."""
+    fake_edgar.company_map["EHAB"] = {"cik_str": 1803737, "ticker": "EHAB", "title": "Enhabit, Inc."}
+    fake_edgar.submissions_by_cik[1803737] = []
+    fake_edgar.listings[1803737] = [("EHAB", "NYSE")]
+    obs = [Observation("EHAB-WI", "2022-06-30", "ENHABIT INC WHEN ISSUED"),
+           Observation("EHAB", "2022-12-31", "ENHABIT INC")]
+    rows = _ftd("EHAB", "29332G102", "ENHABIT INC", ["2022-07-06", "2022-08-01", "2022-09-01", "2022-12-01"])
+    index, clients = _index_clients(fake_edgar, obs, rows, {
+        ("ID_CUSIP", "29332G102"): _figi_answer("BBG014QJ5BV6", "EHAB", "ENHABIT INC"),
+        ("COMPOSITE_ID_BB_GLOBAL", "BBG014QJ5BV6"): {"data": [{"figi": "BBG014QJ5BV7", "compositeFIGI": "BBG014QJ5BV6",
+                                                               "exchCode": "UN", "ticker": "EHAB",
+                                                               "name": "ENHABIT INC"}]},
+    })
+    run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
+    assert [r["sec_id"] for r in read_table("securities", table_path(tmp_path, "securities"))] == ["BBG014QJ5BV6"]
+    wi = next(r for r in read_table("observation_map", table_path(tmp_path, "observation_map"))
+              if r["ticker"] == "EHAB-WI")
+    assert (wi["sec_id"], wi["history_ticker"], wi["in_ticker_history"], wi["status"]) == (
+        "BBG014QJ5BV6", "EHAB", "true", "mapped")
