@@ -586,3 +586,55 @@ CIK314808-CLASS-A_2019-04-11,status,known_wrong,pass,operator ruling 2026-10-04 
 CIK314808-CLASS-A_2019-04-11,fixed_by,5c,,operator ruling 2026-10-04 (5c pre-check): the re-shaped case now matches the run,
 CIK314808-COMMON_2010-01-08,status,known_wrong,pass,operator ruling 2026-10-04 (5c pre-check): the re-shaped case now matches the run,
 CIK314808-COMMON_2010-01-08,fixed_by,5c,,operator ruling 2026-10-04 (5c pre-check): the re-shaped case now matches the run,
+CIK1126294-COMMON_2010-12-03,sec_id,CIK1126294-COMMON,BBG000BDB3H1,contract/id_changes.csv: the placeholder now holds a FIGI,
+CIK1126294-COMMON_2010-12-03,shape,no_ending,ending_moved,operator pre-ruling 2026-10-04 (5c plan): the run follows the line to a real later ending (BBG000BDB3H1 2012-12-28); the old event is not it,docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+CIK1126294-COMMON_2010-12-03,exit_kind,,*,operator pre-ruling 2026-10-04 (5c plan): the run follows the line to a real later ending (BBG000BDB3H1 2012-12-28); the old event is not it,docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+CIK1126294-COMMON_2010-12-03,drop_reason,,*,operator pre-ruling 2026-10-04 (5c plan): the run follows the line to a real later ending (BBG000BDB3H1 2012-12-28); the old event is not it,docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+CIK1126294-COMMON_2010-12-03,continuation,,*,operator pre-ruling 2026-10-04 (5c plan): the run follows the line to a real later ending (BBG000BDB3H1 2012-12-28); the old event is not it,docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+CIK1126294-COMMON_2010-12-03,successor_sec_id,,*,operator pre-ruling 2026-10-04 (5c plan): the run follows the line to a real later ending (BBG000BDB3H1 2012-12-28); the old event is not it,docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+CIK1126294-COMMON_2010-12-03,last_trade_date,,*,operator pre-ruling 2026-10-04 (5c plan): the run follows the line to a real later ending (BBG000BDB3H1 2012-12-28); the old event is not it,docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+CIK1126294-COMMON_2010-12-03,value_rule,,*,operator pre-ruling 2026-10-04 (5c plan): the run follows the line to a real later ending (BBG000BDB3H1 2012-12-28); the old event is not it,docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+CIK1126294-COMMON_2010-12-03,cash_per_share,,*,operator pre-ruling 2026-10-04 (5c plan): the run follows the line to a real later ending (BBG000BDB3H1 2012-12-28); the old event is not it,docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+CIK1126294-COMMON_2010-12-03,cash_currency,,*,operator pre-ruling 2026-10-04 (5c plan): the run follows the line to a real later ending (BBG000BDB3H1 2012-12-28); the old event is not it,docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+CIK1126294-COMMON_2010-12-03,stock_ratio,,*,operator pre-ruling 2026-10-04 (5c plan): the run follows the line to a real later ending (BBG000BDB3H1 2012-12-28); the old event is not it,docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+CIK1126294-COMMON_2010-12-03,price_sec_id,,*,operator pre-ruling 2026-10-04 (5c plan): the run follows the line to a real later ending (BBG000BDB3H1 2012-12-28); the old event is not it,docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+CIK1126294-COMMON_2010-12-03,price_ticker,,*,operator pre-ruling 2026-10-04 (5c plan): the run follows the line to a real later ending (BBG000BDB3H1 2012-12-28); the old event is not it,docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+CIK1126294-COMMON_2010-12-03,price_date,,*,operator pre-ruling 2026-10-04 (5c plan): the run follows the line to a real later ending (BBG000BDB3H1 2012-12-28); the old event is not it,docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+CIK1126294-COMMON_2010-12-03,recovery_ratio,,*,operator pre-ruling 2026-10-04 (5c plan): the run follows the line to a real later ending (BBG000BDB3H1 2012-12-28); the old event is not it,docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+BBG000BCHG15_5c-r1,(row),,added (pass),5c loop round 1: regression,output/diagnose_unknown_report/loop/5c/round-1/reports/BBG000BCHG15_5c-r1.md
+BBG000BL9JQ1_5c-r1,(row),,added (pass),5c loop round 1: regression,output/diagnose_unknown_report/loop/5c/round-1/reports/BBG000BL9JQ1_5c-r1.md
+BBG008FCJZ83_5c-r1,(row),,added (pass),5c loop round 1: regression,output/diagnose_unknown_report/loop/5c/round-1/reports/BBG008FCJZ83_5c-r1.md
+BBG000BD4VG8_2017-07-15,status,known_wrong,pass,the library now matches,
+BBG000BFTJ91_2015-12-21,status,known_wrong,pass,the library now matches,
+BBG000BHBK84_2017-09-11,status,known_wrong,pass,the library now matches,
+BBG000BJXKD0_2018-06-16,status,known_wrong,pass,the library now matches,
+BBG000CGQ6M4_2018-11-10,status,known_wrong,pass,the library now matches,
+BBG000F2XXP2_2023-05-31,status,known_wrong,pass,the library now matches,
+BBG000G0PPW3_2016-12-11,status,known_wrong,pass,the library now matches,
+BBG000J453J8_2019-05-12,status,known_wrong,pass,the library now matches,
+BBG000MJRJJ2_2023-08-24,status,known_wrong,pass,the library now matches,
+BBG000VMWHH5_2022-04-18,status,known_wrong,pass,the library now matches,
+BBG001YMS0B8_2015-07-12,status,known_wrong,pass,the library now matches,
+BBG004P33PN3_2026-05-11,status,known_wrong,pass,the library now matches,
+CIK104207-COMMON_2015-01-09,status,known_wrong,pass,the library now matches,
+CIK1126294-COMMON_2010-12-03,status,known_wrong,pass,the library now matches,
+CIK48898-CLASS-B_2016-01-03,status,known_wrong,pass,the library now matches,
+CIK944868-COMMON_2009-11-29,status,known_wrong,pass,the library now matches,
+BBG000CHWP52_2022-04-18,status,known_wrong,pass,the library now matches,
+BBG000F5YH15_5c-r2,(row),,added (ruling_pending),5c loop round 2: regression,output/diagnose_unknown_report/loop/5c/round-2/reports/BBG000F5YH15_5c-r2.md
+BBG000F5YH15_5c-r2,exit_kind,*,exchange,"controller ruling 2026-10-04 (5c loop, delegated autonomy): one TKO Class A share per WWE share, no cash, into a new holdco: a continuation under R1, as DOW (DowDuPont) and WR (Evergy) mergers of equals are; round 2 verified it",output/diagnose_unknown_report/loop/5c/round-2/reports/BBG000F5YH15_5c-r2.md
+BBG000F5YH15_5c-r2,continuation,*,true,"controller ruling 2026-10-04 (5c loop, delegated autonomy): one TKO Class A share per WWE share, no cash, into a new holdco: a continuation under R1, as DOW (DowDuPont) and WR (Evergy) mergers of equals are; round 2 verified it",output/diagnose_unknown_report/loop/5c/round-2/reports/BBG000F5YH15_5c-r2.md
+BBG000F5YH15_5c-r2,successor_sec_id,*,BBG01G9JKWV5,"controller ruling 2026-10-04 (5c loop, delegated autonomy): one TKO Class A share per WWE share, no cash, into a new holdco: a continuation under R1, as DOW (DowDuPont) and WR (Evergy) mergers of equals are; round 2 verified it",output/diagnose_unknown_report/loop/5c/round-2/reports/BBG000F5YH15_5c-r2.md
+BBG000F5YH15_5c-r2,value_rule,*,continuation,"controller ruling 2026-10-04 (5c loop, delegated autonomy): one TKO Class A share per WWE share, no cash, into a new holdco: a continuation under R1, as DOW (DowDuPont) and WR (Evergy) mergers of equals are; round 2 verified it",output/diagnose_unknown_report/loop/5c/round-2/reports/BBG000F5YH15_5c-r2.md
+BBG000F5YH15_5c-r2,status,ruling_pending,pass,"controller ruling 2026-10-04 (5c loop, delegated autonomy): settled, judged",
+BBG000F5YH15_5c-r2,fixed_by,regression,,"controller ruling 2026-10-04 (5c loop, delegated autonomy): settled, judged",
+BBG000BJ9D07_2016-09-08,fixed_by,5c,5h,controller ruling 2026-10-04 (5c acceptance): what remains is the 8-K12B successor TiVo Corp needs its former name Titan Technologies for the name tie,
+BBG000BPQD31_2020-11-26,fixed_by,5c,5d,controller ruling 2026-10-04 (5c acceptance): what remains is the internal last trade date,
+BBG000BQHGR6_2026-09-28,fixed_by,5c,5h,"controller ruling 2026-10-04 (5c acceptance): what remains is the own-registration link needs OpenFIGI to give 30609A109 its own composite, which the run did not get",
+BBG000CNZC55_2020-07-11,fixed_by,5c,5d,controller ruling 2026-10-04 (5c acceptance): what remains is the internal last trade date,
+BBG01HMFL081_2025-12-25,fixed_by,5c,5d,controller ruling 2026-10-04 (5c acceptance): what remains is the last trade date,
+BBG01HMFLTN1_2025-12-25,fixed_by,5c,5d,controller ruling 2026-10-04 (5c acceptance): what remains is the last trade date,
+CIK1308161-CLASS-A_2013-06-28,fixed_by,5c,residual,controller ruling 2026-10-04 (5c acceptance): what remains is its line has no source for the new ticker; no general rule reaches it,
+CIK1308161-COMMON_2013-07-01,fixed_by,5c,residual,controller ruling 2026-10-04 (5c acceptance): what remains is its line has no source for the new ticker; no general rule reaches it,
+CIK1363851-COMMON_2012-07-24,fixed_by,5c,residual,controller ruling 2026-10-04 (5c acceptance): what remains is its line has no source for the new ticker; no general rule reaches it,
+CIK38079-COMMON_2015-01-25,fixed_by,5c,5g,controller ruling 2026-10-04 (5c acceptance): what remains is the OTC print ticker FSTO,

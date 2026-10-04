@@ -1,0 +1,104 @@
+{
+  "case_id": "BBG000BL9JQ1_5c-r1",
+  "sec_id": "BBG000BL9JQ1",
+  "ticker": "HFC",
+  "report": "reports/BBG000BL9JQ1_5c-r1.md",
+  "event_type": "reorganization",
+  "consideration": "stock",
+  "confidence": "verified",
+  "exit_kind": "exchange",
+  "drop_reason": "",
+  "continuation": true,
+  "successor_ticker": "DINO",
+  "last_trade_date": "2022-03-14",
+  "value_rule": "continuation",
+  "cash_per_share": null,
+  "cash_currency": "",
+  "stock_ratio": null,
+  "price_ticker": "",
+  "price_date": "",
+  "value_formula": "not an exit (continuation into HF Sinclair, 1 for 1)",
+  "status": {
+    "exit_kind": "agree",
+    "last_trade_date": "agree",
+    "successor": "agree",
+    "value_rule": "agree",
+    "terms": "agree",
+    "issuer": "agree",
+    "ticker_history": "agree"
+  },
+  "confidence_reasons": [],
+  "library_wrong": false,
+  "cause": "holdco_not_linked",
+  "golden_worthy": true,
+  "sec_evidence": 3,
+  "web_evidence": 0,
+  "open_checks": [],
+  "verdict": "HFC became a subsidiary of HF Sinclair with each share converted 1:1 into DINO, no cash; the new continuation row is right and the old merger/stock row was wrong.",
+  "mode": "regression",
+  "field_verdicts": [
+    {
+      "field": "exit_kind",
+      "right": "new",
+      "value": "exchange",
+      "missed_filing": ""
+    },
+    {
+      "field": "continuation",
+      "right": "new",
+      "value": "true",
+      "missed_filing": ""
+    },
+    {
+      "field": "successor_sec_id",
+      "right": "new",
+      "value": "BBG0135B2214",
+      "missed_filing": ""
+    },
+    {
+      "field": "value_rule",
+      "right": "new",
+      "value": "continuation",
+      "missed_filing": ""
+    },
+    {
+      "field": "stock_ratio",
+      "right": "new",
+      "value": "",
+      "missed_filing": ""
+    },
+    {
+      "field": "price_sec_id",
+      "right": "new",
+      "value": "",
+      "missed_filing": ""
+    },
+    {
+      "field": "price_ticker",
+      "right": "new",
+      "value": "",
+      "missed_filing": ""
+    },
+    {
+      "field": "price_date",
+      "right": "new",
+      "value": "",
+      "missed_filing": ""
+    }
+  ],
+  "verification": {
+    "upheld": true,
+    "fields_upheld": [
+      "exit_kind",
+      "continuation",
+      "successor_sec_id",
+      "value_rule",
+      "stock_ratio",
+      "price_sec_id",
+      "price_ticker",
+      "price_date"
+    ],
+    "fields_refuted": [],
+    "notes": "8-K12B 0001193125-22-074381 Items 2.01/3.03: one-for-one conversion, no cash; DINO trades from 2022-03-15. Continuation holds."
+  }
+}

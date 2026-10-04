@@ -1,0 +1,10 @@
+{"case_id": "BBG008FCJZ83_5c-r1", "sec_id": "BBG008FCJZ83", "ticker": "STE", "report": "reports/BBG008FCJZ83_5c-r1.md", "mode": "regression", "event_type": "redomiciliation_scheme", "consideration": "one STERIS Ireland ordinary share per STERIS UK share", "confidence": "verified", "exit_kind": "exchange", "drop_reason": "", "continuation": true, "successor_ticker": "STE", "last_trade_date": "2019-03-27", "value_rule": "continuation", "cash_per_share": null, "cash_currency": "", "stock_ratio": null, "price_ticker": "", "price_date": "", "value_formula": "none (continuation)", "status": {"exit_kind": "agree", "last_trade_date": "agree", "successor": "agree", "value_rule": "agree", "terms": "agree", "issuer": "agree", "ticker_history": "agree"}, "confidence_reasons": [], "library_wrong": false, "cause": "other:base run misread 1:1 redomiciliation as merger; fixed by 5c", "golden_worthy": true, "sec_evidence": 3, "web_evidence": 0, "open_checks": [], "verdict": "STERIS UK to STERIS Ireland 2019 scheme is a 1:1 continuation; the new row is right and the base merger/stock row was wrong.",
+ "field_verdicts": [
+  {"field": "exit_kind", "right": "new", "value": "exchange", "missed_filing": ""},
+  {"field": "continuation", "right": "new", "value": "true", "missed_filing": ""},
+  {"field": "successor_sec_id", "right": "new", "value": "BBG00MRHG523", "missed_filing": ""},
+  {"field": "value_rule", "right": "new", "value": "continuation", "missed_filing": ""},
+  {"field": "stock_ratio", "right": "new", "value": "", "missed_filing": ""},
+  {"field": "price_ticker", "right": "new", "value": "", "missed_filing": ""},
+  {"field": "price_date", "right": "new", "value": "", "missed_filing": ""}],
+ "verification": {"upheld": true, "fields_upheld": ["exit_kind","continuation","successor_sec_id","value_rule","stock_ratio","price_ticker","price_date"], "fields_refuted": [], "notes": "8-K 0001193125-19-089161 confirms one-for-one share swap, no cash, Rule 12g-3 successor, STE on NYSE from 2019-03-28; successor FIGI matches CIK 1757898."}}
