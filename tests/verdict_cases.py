@@ -1,0 +1,94 @@
+"""Sub-plan 5i's real cases (tests/fixtures/verdicts/, scripts/build_verdict_fixtures.py) and the harness that
+recomputes their verdicts offline: the committed run's rows for each case's securities, stage 9f's confirming
+filing read from the recorded EDGAR answers, then `verdict.decide`."""
+from __future__ import annotations
+
+import gzip
+import json
+from dataclasses import dataclass
+from datetime import date
+from pathlib import Path
+
+from delist_detection.continuation_evidence import confirming_filing, needs_filing
+from delist_detection.edgar import EdgarSubmission
+from delist_detection.lifecycle import Tables
+from delist_detection.verdict import Verdicts, decide
+
+AS_OF = date(2026, 9, 25)
+FIXTURES = Path(__file__).parent / "fixtures" / "verdicts"
+
+
+@dataclass(frozen=True)
+class Case:
+    name: str
+    sec_ids: tuple[str, ...]
+
+
+CASES = (
+    # a relabel the matched Form 25 settles (theme 1), and its guards
+    Case("PRE", ("BBG000BBBP59",)), Case("WMG", ("BBG000C7B169",)),
+    Case("MDRX", ("BBG000BLDXH5",)), Case("FCL", ("BBG000BM1RP0",)), Case("EQC", ("BBG000BLG1L7",)),
+    # a successor registration confirms a continuation (themes 2 and 6a), and its guards
+    Case("BHI", ("BBG000BD4VG8",)), Case("CHTR", ("BBG000PYZSR8",)), Case("GOOGL", ("BBG000BHSKN9",)),
+    # stage 9f: an 8-K item 3.03 that states the exchange one for one (theme 7), and its guards
+    Case("APA", ("BBG000BC2C10",)), Case("CMCSK", ("BBG000BFTJ91",)), Case("LSXMA", ("BBG00BFHD827",)),
+    Case("DVMT", ("BBG00DJ2LJF5",)),
+    # the matched Form 25's filer as issuer evidence (theme 3), and its guards
+    Case("EA", ("BBG000BP0KQ8",)), Case("BTU", ("BBG000FW00S1",)), Case("SPB", ("BBG000P4BQM9",)),
+    Case("CHK", ("BBG00Z6DX554",)), Case("CBL", ("BBG000B9YSK6",)),
+    # an unpriced gate (theme 4), and its guards
+    Case("GRUB", ("BBG001KWG293",)), Case("MDP", ("BBG000BNVNY4",)), Case("PNRA", ("BBG000G6BN50",)),
+    # stale seeds after a confirmed ending (theme 5), and its guard
+    Case("BOL", ("BBG000BDLLR9",)), Case("AT", ("CIK65873-COMMON",)), Case("CDWC", ("BBG000BHD665",)),
+    # no ending at all (the closed_no_event gap), and an added acquirer
+    Case("WW", ("BBG000DY6735",)), Case("NCRA", ("CIK1308161-CLASS-A",)), Case("AZN", ("BBG000BZ0DK8",)),
+)
+
+
+class FixtureEdgar:
+    """The recorded EDGAR answers stage 9f's reading takes (edgar.json.gz)."""
+
+    def __init__(self, data: dict) -> None:
+        self.data = data
+
+    def recent_filings(self, cik):
+        return [EdgarSubmission(**f) for f in self.data["filings"].get(str(int(cik)), [])]
+
+    def submissions(self, cik, **kw):
+        return self.data["submissions"].get(str(int(cik)))
+
+    def fetch_filing_text(self, cik, accession, primary_doc):
+        return self.data["texts"].get(accession, "")
+
+
+def load() -> tuple[dict, FixtureEdgar]:
+    cases = json.loads((FIXTURES / "cases.json").read_text())
+    with gzip.open(FIXTURES / "edgar.json.gz", "rt", encoding="utf-8") as fh:
+        return cases, FixtureEdgar(json.load(fh))
+
+
+def tables_of(case: dict) -> Tables:
+    return Tables(case["securities"], case["ticker_history"], case["delistings"], case["observation_map"],
+                  case["review"])
+
+
+def confirmations(case: dict, edgar) -> dict[tuple[str, str], str]:
+    """Stage 9f over the case's rows (pipeline._continuation_filings, from the table rows)."""
+    names = {r["sec_id"]: r["name"] for r in case["securities"]}
+    out = {}
+    for r in case["delistings"]:
+        if r["sec_id"] in names and needs_filing(r["reason"], r["sec_id"], r["successor_sec_id"]):
+            days = [date.fromisoformat(d) for d in (r["last_trade_date"], r["delist_date"]) if d]
+            if found := confirming_filing(edgar, int(r["cik"]), days, names[r["sec_id"]]):
+                out[(r["sec_id"], r["delist_date"])] = found
+    return out
+
+
+def verdicts(case: dict, edgar) -> Verdicts:
+    """The case's verdicts. A placeholder's ticker evidence is read back from the committed verdicts (one without
+    `placeholder_without_ticker_filing` had it)."""
+    no_ev = {r["sec_id"] for r in case["uncertain_before"]
+             if r["kind"] == "security" and "placeholder_without_ticker_filing" in r["reason"]}
+    evidence = {r["sec_id"]: "" if r["sec_id"] in no_ev else "tier:recorded" for r in case["securities"]
+                if r["figi_source"] == "placeholder"}
+    return decide(tables_of(case), evidence, confirmations(case, edgar))
