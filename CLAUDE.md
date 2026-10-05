@@ -28,7 +28,7 @@ editable install.
 
 ```bash
 pip install -e .                         # editable install (Python ≥3.10) — once per env
-pytest   # full suite (2792 passed, 159 xfailed: 8 known-wrong golden + the diagnosis truth set's 151 known_wrong cases, all strict; offline, no network)
+pytest   # full suite (2983 passed, 159 xfailed: 8 known-wrong golden + the diagnosis truth set's 151 known_wrong cases, all strict; offline, no network)
 pytest tests/test_payout_extractor.py -v  # one file
 pytest tests/test_payout_extractor.py::test_match_in_cash_family_altr -v   # one test
 
@@ -48,7 +48,7 @@ python scripts/build_last_trade_fixtures.py  # offline: tests/fixtures/last_trad
 python scripts/build_acquirer_gate_fixtures.py --repo <checkout with output/ and cache/>   # offline: tests/fixtures/acquirer_gate/ (sub-plan 5e's acquirer line and gate cases), read-only on the caches
 python scripts/build_distress_fixtures.py --repo <checkout with output/ and cache/>   # offline: tests/fixtures/distress/ (sub-plan 5g's drop and bankruptcy cases), read-only on the caches
 python scripts/build_identity_fixtures.py --repo <checkout with output/ and cache/>   # offline: tests/fixtures/identity/ (sub-plan 5h's identity cases), read-only on the caches
-python scripts/classify_universe.py --observations obs.csv   # → output/{securities,ticker_history,cusip_history,delistings,payouts,review,review_summary,observation_map,uncertain}.csv + contract/{security_history,delistings,seeds,price_requests,id_changes}.csv + scorecard.json (NETWORK; free when cached)
+python scripts/classify_universe.py --observations obs.csv   # → output/{securities,ticker_history,cusip_history,delistings,payouts,review,review_summary,observation_map,uncertain}.csv + contract/{security_history,delistings,seeds,price_requests,id_changes,payout_legs}.csv + scorecard.json (NETWORK; free when cached)
 python scripts/classify_universe.py --observations obs.csv --limit 20 --no-extract-payouts --no-midas --no-halts   # fast dev subset
 python scripts/classify_universe.py --observations obs.csv --sec-workers 1   # one SEC request at a time (default: 4 prefetch threads, max 8, one machine-wide 8 req/s limit)
 python scripts/classify_universe.py --observations obs.csv --as-of 2026-09-25   # pin the run date (default today; run_manifest.json records it) to reproduce an earlier run's tables from the same caches
@@ -62,7 +62,7 @@ python scripts/regen_payout_fixtures.py  # refetch golden 8-K fixtures from live
 python scripts/build_golden_fixtures.py  # rebuild the 31-case golden regression set (NETWORK); --efts-only / --llm-only / --only ID
 python scripts/accept_review.py --flag terms_gate_failed --note "sampled 5, all fine"   # bulk-accept every current review.csv row carrying that flag → appends to data/review_decisions.csv (offline); --bucket narrows, --dry-run previews, --yes required for a fix-severity flag
 # End-to-end pipeline (the canonical way to use the library) — classify a universe → output/delistings.csv (+ 8 more tables), then firm-month-correct a returns panel:
-python scripts/classify_universe.py --observations obs.csv --last-trade-closes lt.csv --merger-terms terms.csv --recoveries rec.csv   # → output/{securities,ticker_history,cusip_history,delistings,payouts,review,review_summary,observation_map,uncertain}.csv + contract/{security_history,delistings,seeds,price_requests,id_changes}.csv + scorecard.json
+python scripts/classify_universe.py --observations obs.csv --last-trade-closes lt.csv --merger-terms terms.csv --recoveries rec.csv   # → output/{securities,ticker_history,cusip_history,delistings,payouts,review,review_summary,observation_map,uncertain}.csv + contract/{security_history,delistings,seeds,price_requests,id_changes,payout_legs}.csv + scorecard.json
 python scripts/compute_corrected_returns.py --panel panel.csv --delistings output/delistings.csv --out corrected.parquet   # firm-month BMP correction, keyed on sec_id
 # override-CSV columns are keyed by sec_id[,delist_date] (a blank/absent delist_date applies to every delisting of that security): lt.csv=`sec_id,last_trade_close[,delist_date]` · terms.csv=`sec_id,cash_per_share,stock_ratio,acquirer_price,acquirer_ticker[,delist_date]` · rec.csv=`sec_id,recovery_ratio[,delist_date]`. A malformed file, or a row that matches no delisting, stops the run before anything is written (exit 2, one stderr line naming the file and line).
 # --review-decisions PATH (default data/review_decisions.csv) is read the same way: sec_id,delist_date,ticker,flag,decision,note. Missing at the default path means no decisions; missing at an explicit path, or a bad file, exits 2.
@@ -70,7 +70,7 @@ python scripts/compute_corrected_returns.py --panel panel.csv --delistings outpu
 # for a fast cached/offline subset; never write a subset into output/, the committed-output tests read it)
 # Auto-extract cash+stock merger terms with an LLM instead of hand-writing terms.csv (NETWORK: SEC + OpenAI; needs OPENAI_API_KEY + CHAT_MODEL in .env):
 python scripts/classify_universe.py --observations obs.csv --extract-merger-terms-llm   # → output/delistings.csv with cash_plus_stock/stock_only rows
-# LLM reads cash leg + stock ratio + acquirer ticker from EDGAR; acquirer_price is joined from SEC fails-to-deliver closes around the deal-completion date; a sanity gate (--merger-terms-sanity-tol, default 0.15) drops any term whose terminal value doesn't reconcile with last_trade_close. An explicit --merger-terms row always overrides the LLM. Calibrate the prompt with `python scripts/eval_merger_extractor.py` (10 labeled deals, live) before trusting a run.
+# LLM (prompt v3, sub-plan 5f) reads the package one share became from EDGAR: cash leg and its currency, stock ratio (or a dollar value), acquirer name/ticker/class, further legs of a basket; acquirer_price is joined from SEC fails-to-deliver closes around the deal-completion date; a sanity gate (--merger-terms-sanity-tol, default 0.15) drops any term whose terminal value doesn't reconcile with last_trade_close. An explicit --merger-terms row always overrides the LLM. Calibrate the prompt with `python scripts/eval_merger_extractor.py` (10 labeled deals, live; `--truth` replays the diagnosis truth rows) before trusting a run.
 
 # In this worktree the editable install still points at the main checkout, not this tree's src/ — prefix every script with PYTHONPATH=src, e.g.:
 PYTHONPATH=src ~/miniconda3/envs/rdagent4qlib/bin/python scripts/classify_universe.py --observations obs.csv
@@ -691,7 +691,7 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   (MRK 2008: old Merck & Co, CIK 64978). `issuer_changes` dates each change: it sorts sightings by day then CIK
   and records at most one change per day (a same-day sighting under another CIK changes nothing).
 - `payout_rule.py` — the payout rule of each contract ending (`value_fields`, the eleven columns after `verdict` in
-  `contract/delistings.csv`, schema version 2): `value_rule` (`VALUE_RULES`), `cash_per_share`, `stock_ratio`,
+  `contract/delistings.csv`: the columns came in schema 2, the contract is now schema 3 with `payout_legs.csv`): `value_rule` (`VALUE_RULES`), `cash_per_share`, `cash_currency`, `stock_ratio`,
   `price_sec_id`/`price_ticker`/`price_date` (the acquirer for a stock leg, the security itself for `otc_print`; the
   trading day after the last trade), `recovery_ratio`, `terms_source`, `terms_gate` and `value_formula`; the caller
   computes `dlret = payout / last close − 1` with its own prices. `merger_inputs` collects a merger's `--merger-terms`
@@ -705,7 +705,18 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   (`payout_gate`) reads a v3 answer as its package (`is_package`: basis final_prorated, default or fixed; a `none`
   answer keeps 5e's either-or reading): cash only in pass 1, with stock in pass 2; a regex cash never stands beside
   an election package with stock, a package no last close can check, or as the package's own cash leg (SUG, FWLT,
-  AWH, SHAW); `clean_ticker` blanks an LLM's "NULL" ticker (GRUB). The scorecard counts
+  AWH, SHAW); `clean_ticker` blanks an LLM's "NULL" ticker (GRUB). Review fixes (5f): an election whose v3 answer states no leg (WSC, THE) takes the
+  earlier prompt's cached either-or reading of the same filing (`LEGACY_VERSION`, cache only, never asked again; `no_default`,
+  flag `election_no_default`), as does a `final_prorated` answer that is only the electors' result (`electors_only`,
+  NMX: R4, the package is what non-electors received); `payout_rule._llm_published` publishes a non-package election only
+  as its all-cash alternative (TRH); `skip_reason` is checked for every answer shape (a dollar value, a further leg, CAD
+  cash, a basket stating no package), a stock leg with no ratio is `terms_gate_failed:no_ratio`; a bare "$" never overrides
+  the answer's non-USD code; a non-dict answer counts `degraded:llm_call`. `acquirer_ticker.py` (stage 8a'): a stock leg
+  with no ticker and no acquirer line takes it from the filing's defined terms, SEC's name index and the issuer's EDGAR
+  tickers, else the fails rows' description (SHAW's "CB&I" is CBI); a one-word name the filing does not define is no
+  name (Orange). A basket leg keeps its class (`payout_legs.share_class`, `payout_rule.leg_terms`: CAA's Lennar class B
+  is LEN-B, a preferred class has no ticker), and two legs never share a price request. `regression.py` diffs the
+  legs too. The scorecard counts
   `R2.7.value_rule.<rule>` and floors `R2.7.payout_rule_known`. A stock leg's `price_ticker` is the published
   acquirer security's symbol on the price date (`MergerInputs.price_ticker`, sub-plan 5e). `value_fields(...,
   distress=)` (sub-plan 5g): an `otc_print` row is priced under `DistressTerms.otc_symbol` (blank when stage 9e read
@@ -919,7 +930,7 @@ conflate them.
   R2.4 lines still count assumed par by `dlret_method`, not by exit kind and
   fill, because assumed par also falls on unknown and expiration endings.
 - **The contract is written beside today's tables for one release (decision 6).** Stage 10g writes
-  `output/contract/{security_history,delistings,seeds,price_requests,id_changes}.csv` from the tables about to be
+  `output/contract/{security_history,delistings,seeds,price_requests,id_changes,payout_legs}.csv` from the tables about to be
   written and the verdicts; the scorecard (10h) reads the issuer from `contract/security_history.csv`. Contract
   delistings hold one row per ended security, its last real ending; `last_trade_date` is published only from an
   exchange print no later than the Form 25 effective date; a continuation has no value; assumed par, Shumway marks
@@ -930,7 +941,7 @@ conflate them.
   written. Today's nine tables keep their columns.
 - **Every output is written only after the whole run succeeds.**
   `pipeline.run()` computes every table in memory first and writes all nine
-  and the five contract files (same group) only at the end (`store.write_tables`): each table is formatted and written
+  and the six contract files (same group) only at the end (`store.write_tables`): each table is formatted and written
   to its own temp file first, and only then are the temp files renamed over
   the old tables. So a refusal, a bad override CSV or any failure before the
   renames leaves every previous table as it was. The renames themselves run
@@ -1073,7 +1084,7 @@ conflate them.
   `--observations` (a CSV of `ticker, as_of[, name, cusip, cik, sec_id]`,
   built by `observations_from_snapshots.py` / `observations_from_instruments.py`
   or hand-supplied) and reads `--output-dir`/`--cache-dir` with repo-local
-  defaults; it writes nine tables to `output/` and the five contract files to
+  defaults; it writes nine tables to `output/` and the six contract files to
   `output/contract/` in the same group, all committed artifacts.
 
 ## Design/plan docs

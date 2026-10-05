@@ -93,7 +93,11 @@ def request_rows(contract_rows: Sequence[Mapping[str, Any]], endings: Mapping[st
                         "lookup_sec_id": c["sec_id"], "lookup_ticker": c.get("price_ticker") or r["ticker"],
                         "date": next_trading_day(date.fromisoformat(ltd)).isoformat()})
         leg = legs.get(DelistingKey(r["sec_id"], r["delist_date"]))
+        asked: set[str] = set()
         for ticker, sid in ([leg] if leg is not None else []) + [b for b in basket.get(c["sec_id"], ()) if b[0]]:
+            if ticker in asked:
+                continue         # two legs never share a request key: one answer would price both
+            asked.add(ticker)
             out.append({"sec_id": c["sec_id"], "last_trade_date": ltd, "kind": RECEIVED_CLOSE,
                         "lookup_sec_id": sid, "lookup_ticker": ticker,
                         "date": next_trading_day(date.fromisoformat(ltd)).isoformat()})

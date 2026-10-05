@@ -48,9 +48,10 @@ def _spellings(amount: float) -> list[str]:
     return list(dict.fromkeys(out))
 
 
-def stated_currency(text: str, amount: float | None) -> str:
+def stated_currency(text: str, amount: float | None, *, explicit_only: bool = False) -> str:
     """The currency `text` writes next to `amount` ("C$65.50", "$23.00", "€12.00", "USD 4.11"), "" when the text
-    does not state the amount with a currency. The first statement wins."""
+    does not state the amount with a currency. The first statement wins. `explicit_only`: a bare "$" (no letters
+    before it) states none ("CAD $65.50" says CAD in its words, which no "$" overrides)."""
     if not text or amount is None:
         return ""
     for spelled in _spellings(float(amount)):
@@ -59,6 +60,8 @@ def stated_currency(text: str, amount: float | None) -> str:
             while j > 0 and text[j - 1].isspace():
                 j -= 1
             if j > 0 and text[j - 1] == "$":
+                if explicit_only and _PREFIX.search(text[max(0, j - 6):j - 1]) is None:
+                    continue
                 return prefix_currency(text, j - 1)
             if j > 0 and text[j - 1] in _SIGNS:
                 return _SIGNS[text[j - 1]]

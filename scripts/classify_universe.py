@@ -6,7 +6,7 @@ Reads:  an observations CSV (ticker, as_of[, name, cusip, cik, sec_id]), and
 Writes: output/securities.csv, ticker_history.csv, cusip_history.csv,
         delistings.csv, payouts.csv, review.csv, review_summary.csv,
         observation_map.csv, uncertain.csv, contract/{security_history,delistings,seeds,
-        price_requests,id_changes}.csv, then scorecard.json (data/scorecard.json: the training window,
+        price_requests,id_changes,payout_legs}.csv, then scorecard.json (data/scorecard.json: the training window,
         the floor and the truth files)
 """
 from __future__ import annotations

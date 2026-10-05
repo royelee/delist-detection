@@ -36,6 +36,7 @@ from .evidence import (
 )
 from .figi_resolution import share_class_from_name
 from .form25 import Form25, notice_says_acquired, parse_form25
+from .names import names_agree
 from .ticker_resolver import TickerResolution, TickerResolver
 
 
@@ -525,7 +526,8 @@ class DelistClassifier:
                        f"Continuation (R1): each share became one share {r1.target[:80].strip()}, no cash")
         # Sub-plan 5f: a filer with no 8-K item that decides (a foreign private issuer files 6-Ks) reports the
         # completion in a 6-K or a press-release 8-K near the Form 25 (TAHO's and KING's 6-Ks, BPYU's 7.01 8-K)
-        done = self._completion_report(cik, filings, delist_filing) if delist_filing is not None else ""
+        done = self._completion_report(cik, filings, delist_filing, evidence.get("name")) \
+            if delist_filing is not None else ""
         if done:
             return rec(231, CrspBucket.MERGER, "medium",
                        f"Completed acquisition reported in {done}, near the Form 25 (no 8-K item code)")
@@ -534,7 +536,8 @@ class DelistClassifier:
                    "Delisted/deregistered without merger or distress evidence",
                    deregistered=bool(delist_filing or dereg))
 
-    def _completion_report(self, cik: int, filings: list[EdgarSubmission], form25: EdgarSubmission) -> str:
+    def _completion_report(self, cik: int, filings: list[EdgarSubmission], form25: EdgarSubmission,
+                           name: str | None = None) -> str:
         """Sub-plan 5f: the "<form> <date>" of the 6-K or 8-K filed in [F − COMPLETION_BEFORE_DAYS, F +
         COMPLETION_AFTER_DAYS] of the Form 25 day F (nearest first) whose text states a completed acquisition,
         merger, arrangement or amalgamation (`COMPLETION`: "completes acquisition of", "the completion of the
@@ -548,9 +551,27 @@ class DelistClassifier:
                 and lo <= d <= hi]
         near.sort(key=lambda f: (abs((_parse_date(f.filing_date) - day).days), f.filing_date, f.accession))
         for f in near:
-            if COMPLETION.search(self.edgar.fetch_filing_text(cik, f.accession, f.primary_doc) or ""):
+            text = self.edgar.fetch_filing_text(cik, f.accession, f.primary_doc) or ""
+            m = COMPLETION.search(text)
+            if m is not None and not self._completes_as_acquirer(cik, name, lo, text, m):
                 return f"{f.form} {f.filing_date}"
         return ""
+
+    def _completes_as_acquirer(self, cik: int, name: str | None, before: date, text: str, m: re.Match) -> bool:
+        """Whether the completed acquisition `m` states is one the registrant made, not one it underwent: the
+        registrant (its name, or "the Company") is the subject of "completed its acquisition of", or 5c rule 1's
+        role check finds its own shares not exchanged and another party's became its own
+        (`exchange_terms.acquires`, `distributes`). An acquirer's 8-K says it completed the deal as well; the
+        registrant that was acquired is named after the verb ("Pan American Silver completes acquisition of
+        Tahoe")."""
+        subs = getattr(self.edgar, "submissions", None)
+        sub = subs(cik) if subs is not None else None
+        names = exchange_terms.registrant_names(sub if isinstance(sub, dict) else None, before, name or "")
+        tail = text[max(0, m.start() - 60):m.start()]
+        if m.group(0).lower().startswith(("completed", "completes")) and (
+                re.search(r"(?i)\b(?:the\s+company|we)\s*$", tail.rstrip()) or any(names_agree(tail, n) for n in names)):
+            return True
+        return bool(exchange_terms.acquires([text], names=names) or exchange_terms.distributes([text], names=names))
 
     def _classify_items(self, items: set[str]) -> tuple[int | None, str]:
         """Map an 8-K item set to a CRSP DLSTCD-style code.

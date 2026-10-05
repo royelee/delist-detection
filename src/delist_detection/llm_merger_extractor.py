@@ -58,7 +58,7 @@ from __future__ import annotations
 import json
 import os
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -118,9 +118,18 @@ class MergerTerms:
     stock_value: float | None = None
     acquirer_share_class: str = ""
     extra_legs: tuple[StockLeg, ...] = ()
-    package_basis: str = ""   # 'final_prorated' | 'default' | 'fixed' | 'none' | '' (an answer before v3)
+    package_basis: str = ""   # 'final_prorated' | 'default' | 'fixed' | 'none' (v3 states no package) | '' (before v3)
     election_note: str = ""
     contingent_note: str = ""
+    # an election whose filing states no package for the holders who made no election: the v3 answer states no leg
+    # (WSC 2011, THE 2007), so the legs are the earlier prompt's cached either-or reading of the same filing
+    # (`LEGACY_VERSION`, which the gate reads as sub-plan 5e did), or the answer is a result only for the holders who
+    # elected (`electors_only`, NMX 2008). Either way the row is flagged `election_no_default`
+    no_default: bool = False
+    # the averaging period the filing names for a stock leg stated as a dollar value, as it words it (PCYC 2015: "ten
+    # consecutive trading days ending on and including the second trading day prior to the final expiration date of
+    # the offer"), read from the filing's own text; "" when it states none. `payout_rule` names it in `value_formula`
+    value_window: str = ""
 
     @property
     def is_basket(self) -> bool:
@@ -155,6 +164,9 @@ class MergerTerms:
 # --------------------------------------------------------------------------- #
 
 PROMPT_VERSION = "v3"
+# The prompt version whose cached answers read an election as its alternatives (cash OR stock): the either-or reading
+# the gate keeps for an election whose v3 answer states no package. Read from the cache only, never asked again.
+LEGACY_VERSION = "v2"
 
 SYSTEM_PROMPT = """\
 You are a precise M&A-filing extraction engine. You read excerpts of a filing \
@@ -328,6 +340,33 @@ _SHARE_COUNT = re.compile(r"(?i)\b(?:one|1|\d+\.\d+)\b(?:\s*\(\d+\))?[^.;]{0,60}
                           r"|one-for-one|equal number")
 
 
+_ELECTORS = re.compile(r"(?i)\bwho\s+(?:validly\s+)?elected\b|\belecting\s+(?:holders|stockholders|shareholders)\b")
+_NON_ELECTORS = re.compile(r"(?i)\bno\s+election\b|\bnot\s+(?:to\s+)?(?:make|made|elect)|\bfail(?:ed|s|ure)\s+to\b|"
+                           r"\bnon-?elect|\bdeemed\b|\bdefault\b")
+
+
+def electors_only(deal_type: object, basis: str, quote: str) -> bool:
+    """A `final_prorated` election answer whose quote gives the result of the holders who elected (NMX 2008: "stockholders
+    who elected to receive stock consideration ... will receive approximately $7.29 in cash and 0.2164 shares") and
+    says nothing of what a holder who made no election received. Ruling R4 (2026-10-04): the package is what the
+    non-electors received, which such a filing does not state, so the elector class's result stands, flagged
+    `election_no_default` (EP 2012's closing 8-K states the non-electors' mixed consideration, which is the package)."""
+    return (deal_type == "election" and basis == "final_prorated" and bool(_ELECTORS.search(quote or ""))
+            and not _NON_ELECTORS.search(quote or ""))
+
+
+_AVG_WINDOW = re.compile(r"(?i)\baverage\s+(?:sale\s+|trading\s+|closing\s+)?price[^.]{0,220}?\bfor\s+the\s+"
+                         r"((?:ten|\d+)\s+(?:consecutive\s+)?(?:trading\s+)?days?[^.;,(“”]{0,160})")
+
+
+def averaging_window(text: str) -> str:
+    """The averaging period a filing words for a share count that depends on an average price ("the volume weighted
+    average sale price per share of AbbVie common stock ... for the ten consecutive trading days ending on and
+    including the second trading day prior to the final expiration date of the offer"), "" when none is found."""
+    m = _AVG_WINDOW.search(re.sub(r"\s+", " ", text or ""))
+    return m.group(1).strip() if m else ""
+
+
 def unsupported_one_for_one(terms: MergerTerms) -> bool:
     """A one-for-one, no-cash answer the model is not sure of (confidence below high) whose quote states no number of
     shares (ATH 2022's "AHL became a direct subsidiary of AGM", read as 1 where holders got 1.149 AGM shares; CHTR
@@ -422,6 +461,7 @@ class LLMMergerTermsExtractor:
         candidates = self._candidates(filings, delist)
 
         tried = 0
+        legless: list[tuple[EdgarSubmission, MergerTerms]] = []
         for f in candidates:
             if tried >= self.max_filings:
                 break
@@ -445,8 +485,27 @@ class LLMMergerTermsExtractor:
             if terms is None or unsupported_one_for_one(terms):
                 continue
             if terms.cash_per_share is not None or terms.has_stock:
-                return terms
+                return replace(terms, value_window=averaging_window(text)) if terms.stock_value else terms
+            if terms.deal_type == "election" and terms.election_note:
+                legless.append((f, terms))      # an election whose alternatives it states in a note, with no leg
+        # No candidate gave a leg. An election with no stated default (v3 states no package, and the prompt's "null
+        # anything not supported" nulls both legs: WSC 2011, THE 2007) keeps the either-or reading the earlier
+        # prompt cached for that filing; the payout gate decides whether it reconciles.
+        for f, v3 in legless:
+            old = self._legacy_terms(f, record)
+            if old is not None and (old.cash_per_share is not None or old.has_stock):
+                return replace(old, election_note=v3.election_note, no_default=True)
         return None
+
+    def _legacy_terms(self, filing: EdgarSubmission, record: DelistRecord) -> MergerTerms | None:
+        """The `LEGACY_VERSION` answer cached for this filing (no ticker in its key), None when there is none."""
+        acc_key = filing.accession.replace("-", "")
+        path = self.cache_dir / f"{acc_key}_{_sanitize_model(self.model)}_{LEGACY_VERSION}.json"
+        try:
+            raw = json.loads(path.read_text()) if path.exists() else None
+        except (json.JSONDecodeError, OSError):
+            return None
+        return self._to_terms(raw, filing)
 
     def _candidates(self, filings, delist) -> list[EdgarSubmission]:
         """Ordered, de-duplicated (by accession) candidate filings, the latest completion documents first:
@@ -576,6 +635,10 @@ class LLMMergerTermsExtractor:
             if isinstance(raw, dict):
                 self.cache_dir.mkdir(parents=True, exist_ok=True)
                 write_atomic(cache_path, json.dumps(raw))
+            else:
+                # an answer that is no JSON object is never cached, so it is asked again on every run: it counts
+                # itself degraded, like a failed call, and the delisting's row carries `resolution_degraded`
+                SEC_STATS.degraded("llm_call")
 
         return self._to_terms(raw, filing)
 
@@ -603,7 +666,13 @@ class LLMMergerTermsExtractor:
             return None
         cash = _tolerant_float(raw.get("cash_per_share"))
         quote = raw.get("quote") or ""
-        currency = (stated_currency(quote, cash) or normalize_currency(raw.get("cash_currency"))) if cash else ""
+        currency = ""
+        if cash:
+            said = normalize_currency(raw.get("cash_currency"))
+            # a bare "$" in the quote never overrides the currency the answer states when that is not USD ("CAD $65.50",
+            # "Cdn. $65.50"); an explicit prefix ("C$", "US$", "€", "USD 4.11") does
+            currency = (stated_currency(quote, cash, explicit_only=bool(said) and said != "USD") or said)
+        basis = str(raw.get("package_basis") or "").strip().lower()
         legs = []
         for leg in raw.get("other_stock_legs") or ():
             if isinstance(leg, dict) and _tolerant_float(leg.get("ratio")):
@@ -622,7 +691,8 @@ class LLMMergerTermsExtractor:
             stock_value=_tolerant_float(raw.get("stock_value_per_share")),
             acquirer_share_class=_text(raw.get("acquirer_share_class")),
             extra_legs=tuple(legs),
-            package_basis=_text(raw.get("package_basis")),
+            package_basis=basis,
             election_note=_text(raw.get("election_note")),
             contingent_note=_text(raw.get("contingent_note")),
+            no_default=electors_only(raw.get("deal_type"), basis, quote),
         )

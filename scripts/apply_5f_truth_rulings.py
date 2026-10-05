@@ -21,7 +21,8 @@ CHANGES = ROOT / "data/diagnosis_truth_changes.csv"
 WHY = "5f ruling 2026-10-04"
 REPORT = "docs/superpowers/plans/research/2026-10-04-5f-terms.md"
 CARRIED = {"BBG000D3MB18_wave1-r1", "BBG000MRMY60_wave1-r1"}       # pass rows the brief carries to 5f
-LATER = [("status", "known_wrong"), ("fixed_by", "5f")]          # until output/ holds a run of 5f's code
+CONTROLLER = {"BBG000DST2V3_2012-06-04"}       # rows the controller's R4 ruling (2026-10-04) changes, whatever their fixed_by
+LATER = [("status", "known_wrong"), ("fixed_by", "5f")]        # until output/ holds a run of 5f's code
 
 # case -> (cells, its legs: None keeps them, a list replaces them, why)
 RULINGS = {
@@ -47,6 +48,13 @@ RULINGS = {
         "ruling R3 (the brief's VMED item): the closing 8-K 0001193125-13-256243 gives $17.50, 0.2582 Liberty Global "
         "class A and 0.1928 class C per share, a basket of two securities; the main row keeps the cash and no "
         "security, payout_legs.csv the legs (LBTYA on the wave 1 loop's line, the class C line not scored)"),
+    "BBG000DST2V3_2012-06-04": (        # EP
+        [("cash_per_share", "14.65"), ("stock_ratio", "0.4187")], None,
+        "controller ruling 2026-10-04 (R4: non-electors' package): the closing 8-K 0001193125-12-253764 states the "
+        "result for each election class and that \"Holders of approximately 14.9% of outstanding New El Paso shares "
+        "... made no election. These holders will receive the Mixed Consideration\" (0.4187 of a share of Kinder "
+        "Morgan Class P common stock, $14.65 in cash and 0.640 of a warrant); the stock electors' prorated 14.53 and "
+        "0.4231 is an elector class's result, not the package"),
     "BBG000MRMY60_wave1-r1": (          # MHS
         [*LATER, ("cash_currency", "USD")], None,
         "ruling R5: the filing states the $28.80 cash in dollars; the wave 1 loop's regression row kept the base "
@@ -72,7 +80,6 @@ _LEFT = {
                                "the last-trade reader does not read",
     "BBG000FJJW82_2008-12-06": "the published day is the notice's merger-effective day, which the truth calls worked "
                                "out (the notice reader's rule, 5d)",
-    "BBG000L93Q69_2007-07-22": "prompt v3 states no package for TODCO's equalized election; the published day as ABI's",
     "BBG000H89QJ6_2016-05-28": "0.48908178 New Charter shares is stated only in the Form 25 notice",
     "BBG000M34GG1_2022-07-31": "the 2022 closing 8-K is MIC Hawaii's (CIK 1845290), not the run's issuer's",
     "BBG000PYZSR8_2016-05-18": "only the worked-out last trade is left (no Form 25; the last sighting, 5d)",
@@ -89,13 +96,19 @@ _LEFT = {
                                   "stated package publishes the all-cash alternative",
 }
 
+# rows the review fixes (2026-10-04) bring back from the residual list: the either-or reading of the earlier prompt's
+# cached answer reaches THE's terms ($16.00 + 0.979 HERO), which v3 states no leg for
+RESTORED = {"BBG000L93Q69_2007-07-22": "the review fix keeps the earlier prompt's cached either-or reading when v3 states "
+                                       "no leg of an election with no stated default; the row's terms match again"}
+
+
 def main() -> int:
     rows = dl.read_csv(TRUTH)
     legs = dl.read_csv(LEGS)
     changes = []
     for r in rows:
         cid = r["case_id"]
-        if cid not in RULINGS or (r["fixed_by"] != "5f" and cid not in CARRIED):
+        if cid not in RULINGS or (r["fixed_by"] != "5f" and cid not in CARRIED and cid not in CONTROLLER):
             continue
         cells, new_legs, why = RULINGS[cid]
         if cid in CARRIED and r["fixed_by"] == "5f":
@@ -124,6 +137,13 @@ def main() -> int:
                                 reason=f"{WHY}: residual: {why}", report=REPORT))
             r["fixed_by"] = "residual"
             r["note"] = f"{r['note']}; {WHY}: residual: {why}"
+    for r in rows:
+        why = RESTORED.get(r["case_id"])
+        if why is not None and r["fixed_by"] == "residual":
+            changes.append(dict(case_id=r["case_id"], field="fixed_by", old="residual", new="5f",
+                                reason=f"{WHY}: restored from residual: {why}", report=REPORT))
+            r["fixed_by"] = "5f"
+            r["note"] = f"{r['note']}; {WHY}: restored from residual: {why}"
     if not changes:
         print("no change")
         return 0

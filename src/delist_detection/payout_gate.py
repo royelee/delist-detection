@@ -14,7 +14,8 @@ DEFAULT_TOL = 0.15
 GATE_FAILED = "payout_gate_failed:"
 LLM_GATE_FAILED = "llm_gate_failed"
 GATE_SKIPPED = "terms_gate_skipped:"   # terms the gate cannot check: a non-USD cash leg, a basket, a dollar-valued leg
-DROP_REASONS = ("csv_override", "no_acq_ticker", "no_acq_price", "no_last_close", "fail_sanity", "skipped")
+DROP_REASONS = ("csv_override", "no_acq_ticker", "no_acq_price", "no_last_close", "fail_sanity", "skipped", "no_ratio")
+NO_DEFAULT = "election_no_default"   # an election whose v3 answer states no package: the either-or reading of the earlier prompt
 PACKAGE = "llm_election_package"     # an election's default cash-and-stock package settled the row
 ELECTION_CASH = "llm_election_cash"
 BY_TICKER, BY_LINE = "ticker", "line"   # which acquirer price settled a stock leg (`GatedPayouts.priced_by`)
@@ -95,6 +96,14 @@ def reconcile(regex_value, last_close, llm_terms, acquirer_price, tol) -> Reconc
                                       else "llm", tuple(flags))
                 flags.append(LLM_GATE_FAILED)
             return Reconciled(None, None, None, "none", tuple(flags))
+        skip = skip_reason(llm_terms)
+        if skip and (llm_terms.deal_type == "election" or not llm_terms.has_stock):
+            # an answer that states no package keeps the either-or reading, but never against a close in another
+            # currency or a dollar-valued, basket leg the gate cannot price (ruling R5 and R3): a cash-only answer
+            # or an election is settled here, any other is skipped in pass 2 of gate_payouts, which flags it
+            return Reconciled(None, None, None, "none", tuple(flags) + (f"{GATE_SKIPPED}{skip}",))
+        if skip:
+            return Reconciled(None, None, None, "none", tuple(flags))
         if llm_terms.deal_type == "election":
             stock = ratio * acquirer_price if ratio is not None and acquirer_price is not None else None
             stock_fits, cash_fits = _fits(stock, last_close, tol), _fits(cash, last_close, tol)
@@ -117,8 +126,9 @@ def reconcile(regex_value, last_close, llm_terms, acquirer_price, tol) -> Reconc
             # close only then; an either-or election's legs together are twice it (sub-plan 5e).
             if stock is not None and cash is not None and _fits(cash + stock, last_close, tol):
                 return Reconciled(cash, ratio, acquirer_price, PACKAGE, settled_flags)
-        elif ratio is None and _fits(cash, last_close, tol):
-            # A cash deal, including the cash + CVR deals the LLM labels "other".
+        elif ratio is None and not llm_terms.has_stock and _fits(cash, last_close, tol):
+            # A cash deal, including the cash + CVR deals the LLM labels "other" (never one whose stock leg is
+            # a dollar value or a further security: its cash alone is not what a share became).
             return Reconciled(cash, None, None, "llm", tuple(flags))
         if llm_terms.deal_type == "election" or ratio is None:
             # Terms this function settles that did not reconcile: the row lands at
@@ -218,6 +228,8 @@ def gate_payouts(
             r = reconcile(regex, close, terms, acquirer_price(ticker, key) if ticker else None, tol)
         if r.flags:
             out.flags[key] = r.flags
+        if terms is not None and getattr(terms, "no_default", False):
+            out.flags[key] = out.flags.get(key, ()) + (NO_DEFAULT,)
         if r.cash is not None:
             out.payouts[key] = r.cash
         else:
@@ -244,12 +256,16 @@ def gate_payouts(
         if for_delisting(csv_terms, key) is not None:
             out.dropped["csv_override"] += 1
             continue
+        skip = skip_reason(terms)      # every answer shape, a package or not: a non-USD cash leg, a basket, a dollar value
+        if skip and not package:
+            out.dropped["skipped"] += 1
+            out.flags[key] = out.flags.get(key, ()) + (f"{GATE_SKIPPED}{skip}",)
+            continue
         if package:
             # Sub-plan 5f. A package that holds stock is what one share became (R4): a regex cash read beside it
             # read an election's cash alternative (SUG's $44.25) or one leg, so it never stands for an election,
             # nor when no last close can check the package (FWLT, AWH).
             last_close = for_delisting(last_closes, key)
-            skip = skip_reason(terms)
             regex = out.payouts.get(key)
             # a regex read equal to the package's cash leg read that leg alone (SHAW 2013's $41.00 of $41.00 and
             # 0.12883 CB&I shares): it never stands for the package, whatever the gate says of the stock leg
@@ -264,6 +280,10 @@ def gate_payouts(
                 out.dropped["no_last_close"] += 1
                 flag_terms_gate_drop(key, "no_last_close")
                 continue
+        if terms.stock_ratio is None:
+            out.dropped["no_ratio"] += 1       # a stock leg with no number of shares to price (no skip names it)
+            flag_terms_gate_drop(key, "no_ratio")
+            continue
         acq = clean_ticker(terms.acquirer_ticker)
         tried = prices(acq, key)
         if not acq and not tried:

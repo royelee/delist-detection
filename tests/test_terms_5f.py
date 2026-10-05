@@ -285,10 +285,10 @@ def test_a_basket_publishes_its_cash_and_its_legs_in_payout_legs():
     assert f["value_formula"] == ("(12.38 + 0.0913 × price(BAM, 2021-07-27) + 0.0657 × price(BPYPP, 2021-07-27)) "
                                   "/ last_close − 1")
     assert basket_legs(r, "2021-07-26", inputs) == [
-        {"sec_id": "BPYU", "leg": 1, "ratio": 0.0913, "price_sec_id": "BBG0BAM", "price_ticker": "BAM",
-         "price_date": "2021-07-27"},
-        {"sec_id": "BPYU", "leg": 2, "ratio": 0.0657, "price_sec_id": "BBG0BPY", "price_ticker": "BPYPP",
-         "price_date": "2021-07-27"}]
+        {"sec_id": "BPYU", "leg": 1, "ratio": 0.0913, "share_class": "", "price_sec_id": "BBG0BAM",
+         "price_ticker": "BAM", "price_date": "2021-07-27"},
+        {"sec_id": "BPYU", "leg": 2, "ratio": 0.0657, "share_class": "", "price_sec_id": "BBG0BPY",
+         "price_ticker": "BPYPP", "price_date": "2021-07-27"}]
     assert basket_legs(r, "2021-07-26", MergerInputs(llm=_v3("stock", None, 1.0, "X"))) == []
 
 

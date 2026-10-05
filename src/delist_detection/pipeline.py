@@ -21,6 +21,7 @@ from typing import Any
 import requests
 
 from . import acquirer_line
+from . import acquirer_ticker
 from . import exchange_terms
 from . import manifest as run_manifest
 from . import scorecard as run_scorecard
@@ -63,7 +64,7 @@ from .listing_status import edgar_lists, issuer_exchange, listed_today, listing_
 from .observations import (
     Observation, ObservationError, ObservationIndex, TickerEra, eras_by_key, normalize_ticker, observation_conflicts,
 )
-from .payout_gate import BY_LINE, BY_TICKER, DEFAULT_TOL, GATE_SKIPPED, GatedPayouts, gate_payouts
+from .payout_gate import BY_LINE, BY_TICKER, DEFAULT_TOL, GATE_SKIPPED, GatedPayouts, clean_ticker, gate_payouts
 from .trading_calendar import next_trading_day
 from .prefetch import Serialized, warm
 from .reconstruction import (
@@ -91,7 +92,7 @@ from .verdict_rules import Reading
 from .verdict import decide as decide_verdicts
 from .contract import delisting_rows as contract_delisting_rows
 from .contract import id_change_rows, last_endings, payout_leg_rows, security_history_rows, seed_rows
-from .payout_rule import merger_inputs
+from .payout_rule import leg_terms, merger_inputs
 from .issuer_in_force import Sighting as IssuerSighting
 from .issuer_in_force import issuer_changes
 from .price_requests import LAST_CLOSE, OTC_PRINT, RECEIVED_CLOSE, key_of, request_rows, stock_legs
@@ -1220,6 +1221,89 @@ def _acquirer_lines(ctx: _RunContext, mergers: list[Delisting], llm_terms: Mappi
     return out, review
 
 
+def _name_acquirer_tickers(ctx: _RunContext, mergers: list[Delisting], llm_terms: Mapping[DelistingKey, Any],
+                           lines: Mapping[DelistingKey, _AcquirerLine], overrides: Overrides
+                           ) -> tuple[dict[DelistingKey, Any], list[ReviewItem]]:
+    """8a'. The ticker of a stock leg whose acquirer the LLM names without one (SHAW 2013's "CB&I", HBI 2025's
+    "Gildan", CLP 2013's "MAA": prompt v3's honest null) and that stage 8a found no line of (`lines`): the filing's
+    own defined terms expand the name, SEC's name index names its issuer, and the issuer's EDGAR tickers, else the
+    symbol the fails rows name it under, are the ticker (`acquirer_ticker`). The terms keep every other field. A read
+    that rested on a failed request is a review item and the leg keeps no ticker; it is never remembered."""
+    out = dict(llm_terms)
+    review: list[ReviewItem] = []
+    todo = [e for e in mergers if e.key not in lines and e.last_trade.day is not None
+            and for_delisting(overrides.merger_terms, e.key) is None and (t := llm_terms.get(e.key)) is not None
+            and (t.stock_ratio or getattr(t, "stock_value", None)) and not clean_ticker(t.acquirer_ticker)
+            and t.acquirer_name]
+    if not todo:
+        return out, review
+    edgar, ftd_client = ctx.clients.edgar, ctx.clients.ftd_client
+    index_of = getattr(ctx.clients.resolver, "name_index", None)
+    index = index_of() if callable(index_of) else None
+    if index is None:
+        return out, review
+    subs_cache: dict[int, Any] = {}
+
+    failed: set[int] = set()           # a CIK whose read failed is not asked again in this stage (never cached)
+
+    def subs(cik: int):
+        if cik in failed:
+            return None
+        if cik not in subs_cache:
+            try:
+                subs_cache[cik] = edgar.submissions(cik)
+            except FATAL:
+                raise
+            except requests.RequestException:
+                failed.add(cik)
+                return None            # never remembered beyond this stage: a failed read is no answer
+        return subs_cache[cik]
+
+    ages = _IssuerAge(edgar)
+
+    def first_filed(cik: int) -> date | None:
+        if cik in failed:
+            return None
+        before = ages.failures
+        since = ages.since(cik)
+        if ages.failures > before:
+            failed.add(cik)
+        return date.fromisoformat(since[:10]) if since else None
+
+    for e in todo:
+        t, last = llm_terms[e.key], e.last_trade.day
+        watch = DegradedWatch()
+        try:
+            text = ""
+            accession = (t.source or "").split(":", 1)[-1]
+            doc = next((f.primary_doc for f in edgar.recent_filings(e.cik) if f.accession == accession), None)
+            if doc is not None:
+                text = edgar.fetch_filing_text(e.cik, accession, doc)
+
+            def rows():
+                day = next_trading_day(last)
+                try:
+                    for url in ftd_client.urls_for(day, day + timedelta(days=15)):
+                        yield from (r for r in ftd_client.rows(url) if day.isoformat() <= r.date <= (day + timedelta(days=15)).isoformat())
+                except FATAL:
+                    raise
+                except requests.RequestException:
+                    SEC_STATS.degraded("ftd_scan")
+
+            ticker = acquirer_ticker.acquirer_ticker(t.acquirer_name, text, index=index, subs=subs,
+                                                     first_filed=first_filed, rows=rows, last=last, target_cik=e.cik)
+        except FATAL:
+            raise
+        except requests.RequestException:
+            ticker = ""
+        watch.report_delisting(review, e, "the acquirer name lookup", own_row=False)
+        if ticker and not watch.tripped():
+            out[e.key] = replace(t, acquirer_ticker=ticker)
+    ctx.log(f"acquirer names: {sum(1 for k in out if out[k] is not llm_terms[k])} of {len(todo)} unnamed stock legs "
+            f"given a ticker")
+    return out, review
+
+
 def _gate(ctx: _RunContext, mergers: list[Delisting], trade_day: dict[DelistingKey, date | None],
           ftd: FtdIndex, raw: dict[DelistingKey, Any], llm_terms: dict[DelistingKey, Any],
           closes: dict[DelistingKey, float], overrides: Overrides, tol: float,
@@ -1457,6 +1541,7 @@ def _merger_payouts(ctx: _RunContext, delistings: list[Delisting], securities: d
     trade_day = {e.key: e.last_trade.day for e in delistings}
     lines, line_review = (_acquirer_lines(ctx, mergers, llm_terms, overrides, securities, sec_cusips, ftd, sightings,
                                           ftd_lo) if sightings is not None else ({}, []))
+    llm_terms, name_review = _name_acquirer_tickers(ctx, mergers, llm_terms, lines, overrides)
     found = _TickerSecurity(ctx, ftd, sec_cusips)
     wins = _line_wins(mergers, lines, llm_terms, overrides, securities, trade_day, found)
     # the first pass reads none of the caller's received closes: the acquirer and the request's ticker depend on
@@ -1472,16 +1557,19 @@ def _merger_payouts(ctx: _RunContext, delistings: list[Delisting], securities: d
         gated = _gate(ctx, mergers, trade_day, ftd, raw, llm_terms, closes, overrides, tol, lines, wins, answers)
     _flush_memo(ctx.clients)                  # the acquirer lookups resolved tickers
     ctx.meter.done("payouts", mark)
-    return _Payouts(raw, llm_terms, gated, acquirer_ids, added, extraction_review + line_review + acquirer_review,
-                    price_tickers, _leg_holders(mergers, llm_terms, securities, sightings, sec_cusips, ftd))
+    return _Payouts(raw, llm_terms, gated, acquirer_ids, added,
+                    extraction_review + line_review + name_review + acquirer_review, price_tickers,
+                    _leg_holders(mergers, llm_terms, securities, sightings, sec_cusips, ftd, price_tickers))
 
 
 def _leg_holders(mergers: list[Delisting], llm_terms: Mapping[DelistingKey, Any], securities: dict[str, Security],
                  sightings: Mapping[str, Sequence[Sighting]] | None, sec_cusips: dict[str, list[str]],
-                 ftd: FtdIndex) -> dict[DelistingKey, dict[str, str]]:
+                 ftd: FtdIndex, price_tickers: Mapping[DelistingKey, str] = {}
+                 ) -> dict[DelistingKey, dict[str, str]]:
     """Each basket's further legs (ruling R3, sub-plan 5f): the run's security that held the leg's ticker on the
-    price date (`acquirer_line.LineIndex.holder`, never the target itself); a leg no security of the run held has
-    none (LGFB's LION and STRZ)."""
+    price date (`acquirer_line.LineIndex.holder`, never the target itself), the leg's own class's ticker as
+    `payout_rule.leg_terms` gives it (CAA 2018's Lennar class B is LEN-B, not the class A's LEN); a leg no security
+    of the run held has none (LGFB's LION and STRZ)."""
     out: dict[DelistingKey, dict[str, str]] = {}
     baskets = [e for e in mergers if e.last_trade.day is not None and (t := llm_terms.get(e.key)) is not None
                and getattr(t, "is_basket", False)]
@@ -1491,11 +1579,9 @@ def _leg_holders(mergers: list[Delisting], llm_terms: Mapping[DelistingKey, Any]
     for e in baskets:
         last = e.last_trade.day
         held = {}
-        main = normalize_ticker(llm_terms[e.key].acquirer_ticker or "")
-        for leg in llm_terms[e.key].extra_legs:
-            ticker = normalize_ticker(leg.ticker or "")
-            if ticker == main:
-                continue          # another class under the main leg's ticker (CAA 2018's Lennar class B as LEN)
+        t = llm_terms[e.key]
+        main = price_tickers.get(e.key) or normalize_ticker(t.acquirer_ticker or "")
+        for _, ticker, _ in leg_terms(t, main)[1:]:
             sid = index.holder(ticker, last, next_trading_day(last), exclude=e.sec_id) if ticker else None
             if sid:
                 held[ticker] = sid

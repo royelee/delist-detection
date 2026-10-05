@@ -4,8 +4,9 @@ its successor chains.
 
 A security's contract/delistings.csv row is compared column by column. The verdict column and the columns
 derived from other columns and prices (`SKIPPED_COLUMNS`) are left out: the loop judges classification, and
-sub-plan 5i changes verdicts on purpose. Its contract/security_history.csv rows are compared as one list of ranges,
-and a new contract/id_changes.csv row (a placeholder that now holds a FIGI) is listed too. A report row is
+sub-plan 5i changes verdicts on purpose. Its contract/security_history.csv rows are compared as one list of ranges, a
+basket's legs (contract/payout_legs.csv, schema 3: one list of legs per security, a missing file is none) the same
+way, and a new contract/id_changes.csv row (a placeholder that now holds a FIGI) is listed too. A report row is
 explained when the ledger settled that exact change as right (`new_right`); a
 regressed row the loop added to the truth file as ruling_pending (fixed_by `regression`) stays unexplained until
 the operator settles it."""
@@ -43,12 +44,14 @@ class Snapshot:
     delistings: Sequence[Mapping[str, str]]
     security_history: Sequence[Mapping[str, str]]
     id_changes: Sequence[Mapping[str, str]] = field(default=())
+    legs: Sequence[Mapping[str, str]] = field(default=())     # contract/payout_legs.csv (schema 3; missing before)
 
 
 REQUIRED_COLUMNS = {
     "contract_delistings": ("sec_id", "successor_sec_id"),
     "security_history": ("sec_id", "ticker", "start_date", "end_date", "issuer_id"),
     "id_changes": ("old_sec_id", "new_sec_id"),
+    "payout_legs": ("sec_id", "leg", "ratio", "price_ticker"),
 }
 
 
@@ -70,7 +73,8 @@ def read_snapshot(out_dir: str | Path) -> Snapshot:
                 raise RegressionInputError(f"{path}: missing")
             return []
         return _rows(path.read_text(encoding="utf-8"), name, str(path))
-    return Snapshot(rows("contract_delistings"), rows("security_history"), rows("id_changes", required=False))
+    return Snapshot(rows("contract_delistings"), rows("security_history"), rows("id_changes", required=False),
+                    rows("payout_legs", required=False))
 
 
 def _at(repo: str | Path, rev: str, out_dir: str | Path, name: str, required: bool = True) -> list[dict[str, str]]:
@@ -95,7 +99,8 @@ def _at(repo: str | Path, rev: str, out_dir: str | Path, name: str, required: bo
 def snapshot_at(repo: str | Path, rev: str, out_dir: str | Path) -> Snapshot:
     """The contract files as commit `rev` of git repository `repo` holds them (`out_dir` lies inside `repo`)."""
     return Snapshot(_at(repo, rev, out_dir, "contract_delistings"), _at(repo, rev, out_dir, "security_history"),
-                    _at(repo, rev, out_dir, "id_changes", required=False))
+                    _at(repo, rev, out_dir, "id_changes", required=False),
+                    _at(repo, rev, out_dir, "payout_legs", required=False))
 
 
 def id_changes_since(repo: str | Path, rev: str, out_dir: str | Path,
@@ -175,6 +180,14 @@ def _ranges(rows: Sequence[Mapping[str, str]]) -> dict[str, str]:
     return {k: ";".join(sorted(v)) for k, v in by.items()}
 
 
+def _legs(rows: Sequence[Mapping[str, str]]) -> dict[str, str]:
+    """Each security's basket legs as one string, in leg order: the leg's ratio, price security and price ticker."""
+    by: dict[str, list[tuple[int, str]]] = defaultdict(list)
+    for r in rows:
+        by[r["sec_id"]].append((int(r["leg"]), f"{r['leg']}:{r['ratio']}:{r.get('price_sec_id', '')}:{r['price_ticker']}"))
+    return {k: ";".join(t for _, t in sorted(v)) for k, v in by.items()}
+
+
 def renamed_to(renames: Sequence[Mapping[str, str]]) -> dict[str, str]:
     """Each renamed placeholder's sec_id now (`renames`: id_changes rows), a chain of renames followed to its end
     (P renamed to M, M to F: P is F now)."""
@@ -202,7 +215,8 @@ def _rekeyed(base: Snapshot, moved: Mapping[str, str]) -> Snapshot:
             out.append({**r, "sec_id": new_id})
             taken.add(new_id)
     history = [{**r, "sec_id": moved.get(r["sec_id"], r["sec_id"])} for r in base.security_history]
-    return Snapshot(out, history, base.id_changes)
+    legs = [{**r, "sec_id": moved.get(r["sec_id"], r["sec_id"])} for r in base.legs]
+    return Snapshot(out, history, base.id_changes, legs)
 
 
 def diff_contract(base: Snapshot, new: Snapshot, exclude: Collection[str] = (),
@@ -234,6 +248,11 @@ def diff_contract(base: Snapshot, new: Snapshot, exclude: Collection[str] = (),
         if old_r.get(sec, "") != new_r.get(sec, ""):
             kind = ADDED if sec not in old_r else REMOVED if sec not in new_r else CHANGED
             out.append(_row(sec, "security_history", "ranges", kind, old_r.get(sec, ""), new_r.get(sec, "")))
+    old_l, new_l = _legs(base.legs), _legs(new.legs)
+    for sec in sorted((old_l.keys() | new_l.keys()) - skip):
+        if old_l.get(sec, "") != new_l.get(sec, ""):
+            kind = ADDED if sec not in old_l else REMOVED if sec not in new_l else CHANGED
+            out.append(_row(sec, "payout_legs", "legs", kind, old_l.get(sec, ""), new_l.get(sec, "")))
     seen = {(r["old_sec_id"], r["new_sec_id"]) for r in base.id_changes}
     for old, now in sorted(moved.items(), key=lambda kv: (kv[1], kv[0])):
         if (old, now) not in seen and old not in skip and now not in skip:

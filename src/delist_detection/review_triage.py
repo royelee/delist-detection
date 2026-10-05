@@ -117,8 +117,9 @@ CATALOG: dict[str, FlagInfo] = {
         f"{_accept_if('0% is right')}."),
     "terms_gate_failed": FlagInfo(
         "check", "LLM-read cash+stock merger terms were dropped: no acquirer ticker (no_acq_ticker), no "
-                 "acquirer price (no_acq_price), no last close (no_last_close), or cash plus stock at the "
-                 "acquirer's price is too far from the last close (fail_sanity).",
+                 "acquirer price (no_acq_price), no last close (no_last_close), no number of shares to price "
+                 "(no_ratio), or cash plus stock at the acquirer's price is too far from the last close "
+                 "(fail_sanity).",
         "Read the merger filing and supply cash_per_share, stock_ratio, acquirer_price and acquirer_ticker "
         "in --merger-terms."),
     "terms_gate_skipped": FlagInfo(
@@ -133,6 +134,13 @@ CATALOG: dict[str, FlagInfo] = {
                  "tolerance away from the last close, so it was not used.",
         f"Check the row's payout against the merger filing and supply the right terms in --merger-terms; "
         f"{_ACCEPT}."),
+    "election_no_default": FlagInfo(
+        "check", "An election whose filings state no default and no final package (sub-plan 5f fix: the v3 read "
+                 "gives no leg), so its terms are the earlier prompt's either-or reading of the same filing, which "
+                 "the gate checked against the last close. The package a holder who made no election received may "
+                 "be the all-cash alternative (WSC 2011: $385.00 in cash or 5.0611 BRK.B).",
+        "Read the closing filing for what a holder who made no election received and supply it in "
+        f"--merger-terms; {_ACCEPT}."),
     "llm_gate_failed": FlagInfo(
         "check", "The LLM's cash (or cash-or-stock election) terms did not reconcile with the last close, so "
                  "they were dropped.",
