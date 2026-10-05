@@ -107,7 +107,7 @@ def _add_flag(flags: list[str], flag: str) -> None:
 # carrying the tag — including a mis-tagged takeover — matches _BANKRUPTCY_TEXT on
 # the heading alone. Drop the heading, then require the wording in the body. Its number may be spaced out by the
 # HTML stripping ("ITEM 1 .0 3": CBL 2020, sub-plan 5g), as `evidence.item_sections` reads it.
-_ITEM_HEADING = re.compile(r"^item\s*\d\s*\.\s*\d\s*\d[\s.–—-]*", re.I)
+_ITEM_HEADING = re.compile(r"^item\s*\d(?:\.\d{2}|\s*\.\s*0\s*\d)[\s.–—-]*", re.I)
 # SEC's own caption for item 1.03, and the whole reason the heading confirms
 # itself. Punctuation after it is optional in real filings — SVB prints
 # "Item 1.03. Bankruptcy or Receivership On March 10, 2023, …" — and

@@ -254,3 +254,12 @@ def test_a_spaced_heading_ends_the_section_before_it():
 
 def test_another_items_number_or_a_page_number_is_not_the_item():
     assert item_sections("Item 1.031 refers elsewhere; Item 10.3 too; Item 7. 35 is a page.", "1.03") == []
+
+
+def test_a_10k_index_entry_page_number_ends_no_section():
+    """A 10-K's table-of-contents entry ("Item 8. 29") is no heading: only a sub-number that starts with 0 may be
+    spaced out (CBL's "Item 3 . 01", "Item 1 .0 3")."""
+    text = "Item 3.01 Notice of Delisting. " + "y" * 300 + " Item 8. 29 Kodak " + "z" * 300
+    assert "Item 8. 29 Kodak" in item_text(text, "3.01")
+    spaced = "Item 3.01 Notice. " + "y" * 300 + " ITEM 1 .0 3 Bankruptcy " + "z" * 300
+    assert "ITEM 1 .0 3" not in item_text(spaced, "3.01")

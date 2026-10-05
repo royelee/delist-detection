@@ -17,6 +17,10 @@
    "note": "APA 2021: a holding company's 12d2-2(a)(3) notice, no bankruptcy (unchanged)",
    "other_cik": null
   },
+  "BBG000BCTL84": {
+   "note": "PMI 2011: halted, suspended 38 days later; fails relabelled OTC prints, then PPMIQ",
+   "other_cik": null
+  },
   "BBG000BF2JS9": {
    "note": "CNB 2009: fails settling under CNB, no OTC symbol read (blank)",
    "other_cik": null
@@ -582,6 +586,72 @@
    "line_tickers": [],
    "listed": false,
    "name": "APACHE CORP",
+   "observed": true,
+   "security_type": "Common Stock",
+   "share_class": "COMMON"
+  },
+  "BBG000BCTL84": {
+   "cusips": [
+    "69344M101"
+   ],
+   "eras": {
+    "PMI@2008-01-16": [
+     [
+      "PMI",
+      "2008-01-16",
+      "PMI GROUP INC",
+      "",
+      ""
+     ],
+     [
+      "PMI",
+      "2008-05-31",
+      "PMI GROUP INC",
+      "",
+      ""
+     ],
+     [
+      "PMI",
+      "2008-07-25",
+      "PMI GROUP INC",
+      "",
+      ""
+     ],
+     [
+      "PMI",
+      "2008-11-18",
+      "PMI GROUP INC",
+      "",
+      ""
+     ],
+     [
+      "PMI",
+      "2009-01-23",
+      "PMI GROUP INC",
+      "",
+      ""
+     ],
+     [
+      "PMI",
+      "2009-03-20",
+      "PMI GROUP INC",
+      "",
+      ""
+     ],
+     [
+      "PMI",
+      "2009-06-08",
+      "PMI GROUP INC",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "issuer_cik": 935724,
+   "line_tickers": [],
+   "listed": false,
+   "name": "PMI GROUP INC",
    "observed": true,
    "security_type": "Common Stock",
    "share_class": "COMMON"

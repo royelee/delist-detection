@@ -109,6 +109,8 @@ CASES = {
 # CIKs whose filings are kept though no case reads them: Perrigo Company's (in force for PRGO until 2013), to show
 # what reading it would do
 EXTRA_CIKS = (820096,)
+# CUSIPs no case security holds whose fails rows are kept: a plan exchange's new line (WOLF's 97785W106, sub-plan 5g)
+EXTRA_CUSIPS: tuple[str, ...] = ()
 
 
 class LocalFtd:
@@ -194,8 +196,8 @@ def main(argv: list[str] | None = None) -> int:
 
     # fails rows: every row of a case's CUSIPs; a sibling's span and descriptions
     ftd = FtdIndex.load(LocalFtd(repo / "cache/sec_data/ftd"), *FTD_WINDOW,
-                        cusips={c for sid in needed for c in cusips.get(sid, [])})
-    rows = set()
+                        cusips={c for sid in needed for c in cusips.get(sid, [])} | set(EXTRA_CUSIPS))
+    rows = {r for c in EXTRA_CUSIPS for r in ftd.by_cusip(c)}
     for sid in needed:
         for c in cusips.get(sid, []):
             got = ftd.by_cusip(c)

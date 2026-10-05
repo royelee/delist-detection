@@ -115,7 +115,8 @@ ticker-settled terms (the only source of `AddedAcquirer`s) and else publishes th
 yet when the fails data ends before the day, OKE 2026), `_handoffs`, `_date_from_notices` (stage 9c: a handoff continuation row's last trade day from its own Form 25's confirmed EX-99.25 notice, when before the successor's first sighting and no later than the effective date; metered as "handoff notice dates"), `_successor_endings` (stage 9d: the Form 25 search, matches only, for the line and 8-K12B successors the run added; metered as "successor endings"), `_distress` (stage 9e,
 sub-plan 5g: for each liquidation, compliance-failure or unknown delisting with no successor, a bankruptcy plan's
 stock rule (R6), a price-only removal's code 552, and the OTC symbol of its first off-exchange print, anchored on the
-last trade day stage 5 dated; `distress.DistressTerms` for the contract; metered as "distress notices"), then the row
+last trade day stage 5 dated; `distress.DistressTerms` for the contract; metered as "distress notices"; then `_plan_values`: a
+plan's `received_close` answer times its ratio is that ending's value, an answered print for its dlret), then the row
 builders and `_triage`; the contract (stage 10g) takes sub-plan 5h's `_era_renames` too: each placeholder whose eras
 now hold one FIGI line is a `contract/id_changes.csv` rename, across a class label), each with explicit
 inputs and outputs and the run-wide `_RunContext` (clients, run date, log,
@@ -447,10 +448,12 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   last sighting. Sub-plan 5h: `SecurityContext.has_cusips`: a security with no CUSIP gets no continued-filings
   ending dated by its last sighting alone (`ended_without_delisting` instead: WW 2013, NCRA 2013).
 - `distress.py` — sub-plan 5g's pure readers for drop and bankruptcy endings: `otc_symbol_from_fails` (the
-  security's own CUSIPs' fails rows after the last trade: the exchange symbol when its rows before any other symbol
-  run past `OTC_SETTLE_DAYS` (10) at two or more prices, else the first other trading symbol within
-  `OTC_SYMBOL_DAYS` (30), else None), `otc_symbol_from_text` (a 3.01 sentence naming an OTC venue and "symbol X",
-  not about warrants or preferred only), `price_only` (price wording and no other listing standard: market
+  security's own CUSIPs' fails rows after the last trade: the exchange symbol when its rows before any other symbol,
+  leaving out those at the settled last close (the first own row's price), span more than `OTC_SETTLE_DAYS` (10) at
+  two or more prices, else the first other trading symbol within `OTC_SYMBOL_DAYS` (60: PMI 2011, PPMIQ 40 days
+  after the halt), else None), `otc_symbol_from_text` (a 3.01 sentence naming an OTC venue and "symbol X", the last
+  one the sentence names, not about warrants or preferred only), `new_cusips` (the CUSIPs a plan notice gives the
+  new shares: stage 7 never reads the old line's last close from their fails rows, WOLF 2025), `price_only` (price wording and no other listing standard: market
   capitalization, equity, back-door listing, filings), `substitutes_new_shares`/`plan_ratio` (R6: a 12d2-2(a)(3)
   notice naming new shares; the notice's stated ratio, else the plan 8-K's one old-share and one new-share count
   outside a condition), `liquidating` (a liquidating distribution, trust, or plan of liquidation or dissolution),
@@ -469,7 +472,8 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   before end-of-era branches 3 and 4) and `_one_for_one` (R1: a one-for-one, no-cash statement of the security's
   class before the no-evidence default gives 304 with `r1_continuation`). Sub-plan 5g: `evidence.item_sections`
   and the classifier's heading strip read an item number the HTML stripping spaced out ("ITEM 1 .0 3", CBL 2020); no
-  further digit may follow. `_liquidation_notice` reads end-of-era branch 5b's 3.01 8-K.
+  further digit may follow, and spaces only where the sub-number starts with 0 (a 10-K's index entry "Item 8. 29" is
+  no heading). `_liquidation_notice` reads end-of-era branch 5b's 3.01 8-K.
 - `end_of_era.py` — the end-of-era resolver's first step: where the registrant
   kept filing after the end. `signals()` reads the filings in the windows around
   the end date (8-K items, successor filings and Form 25s in [end − 30 d,

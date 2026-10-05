@@ -180,8 +180,9 @@ def still_operating(filings: list[EdgarSubmission], on: date, days: int = 15) ->
 
 
 # An item number's digits and point may come apart: the HTML stripping spaces some filers' headings out ("ITEM 1 .0 3
-# Bankruptcy or Receivership", "ITEM 3 . 01": CBL 2020, sub-plan 5g).
-_ITEM_HEAD = re.compile(r"item\s*\d\s*\.\s*\d\s*\d(?!\d)", re.I)
+# Bankruptcy or Receivership", "ITEM 3 . 01": CBL 2020, sub-plan 5g). Spaces only where the sub-number starts with 0, as
+# every 8-K item's does but 6.10: a 10-K's index entry ("Item 8. 29", a page number) is no heading.
+_ITEM_HEAD = re.compile(r"item\s*\d(?:\.\d{2}|\s*\.\s*0\s*\d)(?!\d)", re.I)
 ITEM_MIN_SECTION = 200   # shorter than this is an index entry or a cross-reference, not a section
 
 

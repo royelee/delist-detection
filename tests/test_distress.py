@@ -191,3 +191,42 @@ def test_a_liquidating_distribution_or_a_plan_of_dissolution_is_a_liquidation():
     assert not liquidating("The Company's last day of trading on NYSE will be April 21, 2025.")
     assert not liquidating("the liquidation preference of the Series A Preferred Stock")
     assert not liquidating("")
+
+
+# -- PMI 2011, Ambac 2010, WOLF's notice: the review's cases -----------------------------------------------------
+
+def test_a_settling_month_and_relabelled_otc_prints_do_not_make_the_exchange_symbol_its_own_otc_symbol():
+    # PMI 2011: halted 10-21; the fails settle at 0.31 to 11-25, two OTC prints (0.05, 0.04) still carry the NYSE
+    # symbol, PPMIQ from 11-30 (40 days after the last trade)
+    spec = [("2011-10-24", "PMI", 0.31)] + [(f"2011-11-{d:02d}", "PMI", 0.31) for d in (1, 2, 3, 4, 7, 8, 9, 10, 14, 25)]
+    spec += [("2011-11-28", "PMI", 0.05), ("2011-11-29", "PMI", 0.04), ("2011-11-30", "PPMIQ", 0.04),
+             ("2011-12-01", "PPMIQ", 0.03)]
+    assert otc_symbol_from_fails(rows(*spec), "PMI", date(2011, 10, 21)) == "PPMIQ"
+
+
+def test_an_exchange_symbol_that_trades_on_at_changing_prices_for_weeks_still_wins_over_a_later_other():
+    spec = [("2019-12-30", "LKSD", 0.10), ("2020-01-08", "LKSD", 0.09), ("2020-01-15", "LKSD", 0.08),
+            ("2020-01-22", "LKSD", 0.07), ("2020-02-20", "LKSDQ", 0.05)]
+    assert otc_symbol_from_fails(rows(*spec), "LKSD", date(2019, 12, 27)) == "LKSD"
+
+
+def test_a_sentence_naming_the_exchange_symbol_it_left_and_the_otc_symbol_gives_the_otc_one():
+    # Ambac 2010: ABK comes first, ABKFQ is the OTC symbol
+    text = ("On the OTC market, shares of the Company's common stock, which previously traded on the NYSE under the "
+            "symbol ABK, trade under the symbol ABKFQ.")
+    assert otc_symbol_from_text(text) == "ABKFQ"
+    # a venue name read as a symbol is skipped, not the end of the sentence
+    assert otc_symbol_from_text("Shares trade on the OTC under the symbol OTC and then under the symbol XYZQ.") == "XYZQ"
+    # one symbol: unchanged
+    assert otc_symbol_from_text("quoted on an over-the-counter market with its existing ticker symbol (MDRX).") == "MDRX"
+
+
+def test_the_new_cusip_a_plan_notice_names():
+    from delist_detection.distress import new_cusips
+    notice = ("the instruments representing the securities comprising the entire class of this security came to "
+              "evidence, by operation of law or otherwise, other securities in substitution therefore. Holders of "
+              'Common Stock of Wolfspeed, Inc. "Old", (CUSIP - 977852102) will receive shares of Common Stock of '
+              'the reorganized Wolfspeed, Inc. "New" (CUSIP - 97785W106).')
+    assert new_cusips(notice) == {"97785W106"}
+    # not a plan exchange: no new shares named
+    assert new_cusips('Holders of "New" (CUSIP - 97785W106) ...') == set()

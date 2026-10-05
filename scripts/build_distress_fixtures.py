@@ -62,8 +62,12 @@ CASES = {
     "BBG000BT0CM2": "SIVB 2023: fails settling under SIVB, no OTC symbol read (blank)",
     "BBG00ZSDS6T8": "TSP 2024: the issuer's own Form 25 (no price reason read)",
     "BBG000CPZ0F5": "PDLI 2020: the issuer's own Form 25; OTC under PDLI itself",
+    "BBG000BCTL84": "PMI 2011: halted, suspended 38 days later; fails relabelled OTC prints, then PPMIQ",
     "BBG00Z6DX554": "CHK 2020: no fails under its CUSIP; the 3.01 names CHKAQ",
 }
+
+# WOLF's new CUSIP, which shares its ticker: its rows must not price the old line's last close
+EXTRA_CUSIPS = ("97785W106",)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -71,7 +75,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--out", type=Path, default=ROOT / "tests" / "fixtures" / "distress")
     p.add_argument("--repo", type=Path, default=ROOT)
     args = p.parse_args(argv)
-    b5.CASES, b5.EXTRA_CIKS = CASES, ()
+    b5.CASES, b5.EXTRA_CIKS, b5.EXTRA_CUSIPS = CASES, (), EXTRA_CUSIPS
     return b5.main(["--out", str(args.out), "--repo", str(args.repo)])
 
 

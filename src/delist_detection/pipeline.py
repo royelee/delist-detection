@@ -32,7 +32,7 @@ from .delistings import (
 )
 from .distress import (
     BANKRUPTCY_WORDS, OTC_SYMBOL_DAYS, DistressTerms, otc_symbol_from_fails, otc_symbol_from_text, plan_ratio,
-    price_only, substitutes_new_shares,
+    new_cusips as plan_new_cusips, price_only, substitutes_new_shares,
 )
 from .evidence import edgar_names, item_sections
 from .fatal import FATAL
@@ -987,6 +987,8 @@ def _last_trade_closes(ctx: _RunContext, delistings: list[Delisting], securities
         key = e.key
         # by symbol, a row of a CUSIP another security holds is that security's close (WEN 2008, 5d rule 3)
         skip = held - set(sec_cusips.get(e.sec_id, []))
+        if e.form25 is not None:
+            skip |= plan_new_cusips(e.form25.notice_text)     # a plan exchange's new line is no price of the old one (WOLF)
         given = for_delisting(overrides.last_trade_closes, e.key)
         if given is not None:
             closes[key] = given
@@ -2039,6 +2041,18 @@ def _distress(ctx: _RunContext, delistings: list[Delisting], sec_cusips: Mapping
     return out
 
 
+def _plan_values(overrides: Overrides, distress: Mapping[DelistingKey, DistressTerms]) -> Overrides:
+    """9f. A bankruptcy plan's received close the caller answered (its ratio x the new line's close, the request
+    stage 10g asks) is that ending's value, as an answered print is a drop's: its dlret is value / last close - 1
+    instead of the Shumway fill. An answer for another ticker, or an ending with a value of its own, is left."""
+    given = dict(overrides.otc_prints)
+    for key, t in distress.items():
+        got = overrides.acquirer_prices.get(key)
+        if t.plan_ratio and got is not None and got[0] == t.plan_ticker and key not in given:
+            given[key] = float(t.plan_ratio) * got[1]
+    return replace(overrides, otc_prints=given)
+
+
 def _delisting_rows(delistings: list[Delisting], closes: dict[DelistingKey, float], payouts: _Payouts,
                     overrides: Overrides) -> tuple[list[dict], list[dict]]:
     """10a. The delistings.csv rows, and the review rows of those delistings that
@@ -2602,6 +2616,7 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
         closes.update(_last_trade_closes(ctx, ends.delistings, {**securities, **ends.securities},
                                          {**sec_cusips, **ends.cusips}, ftd, ftd_lo, overrides))
     distress = _distress(ctx, delistings, {**sec_cusips, **ends.cusips}, ftd, review)              # 9e
+    overrides = _plan_values(overrides, distress)
     _log_role_refusals(ctx, delistings)
     # The handoff stage creates continuation delistings (AON 2012) and sets successors: the clip and the ranges read
     # the starts and endings of the final delistings. (The first pass above only decides which stage-9 delistings

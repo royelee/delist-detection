@@ -10,7 +10,7 @@ around its last trade. Pure: texts and rows in, facts out.
 - `price_only`: the exchange's stated reason for the removal is a price deficiency and nothing else (CRSP 552, drop
   reason `price`). A market-capitalization, equity, distribution, back-door-listing or filing standard keeps
   `guidelines` (RHD, SPNV, FST, MDRX).
-- `substitutes_new_shares`, `plan_ratio`: a Form 25 filed because a bankruptcy plan put new shares in the class's
+- `substitutes_new_shares`, `plan_ratio`, `new_cusips`: a Form 25 filed because a bankruptcy plan put new shares in the class's
   place (ruling R6), and the plan's new shares per old share: the notice's stated ratio (SDRL's 0.0037345), else the
   plan 8-K's two counts, the old shares outstanding and the new shares the old holders received (WOLF's
   1,306,896 / 156,479,390).
@@ -25,8 +25,8 @@ from datetime import date, timedelta
 
 from .ftd import FtdRow, is_trading_symbol
 
-OTC_SYMBOL_DAYS = 30        # an other symbol counts this many days after the last trade (the census's latest: 19)
-OTC_SETTLE_DAYS = 10        # fails under the exchange symbol later than this, at changing prices: it kept trading
+OTC_SYMBOL_DAYS = 60        # an other symbol counts this many days after the last trade (the census's latest: PMI, 40)
+OTC_SETTLE_DAYS = 10        # fails under the exchange symbol over longer than this, at changing prices: it kept trading
 
 
 @dataclass(frozen=True)
@@ -47,17 +47,21 @@ def _letters(symbol: str) -> bool:
 
 def otc_symbol_from_fails(rows: Iterable[FtdRow], ticker: str, last_trade: date) -> str | None:
     """The symbol of the first off-exchange print, from the fails rows of the security's own CUSIPs (`rows`) dated
-    after its last trade: `ticker` (its exchange symbol on that day) when the rows under it before any other symbol
-    run past OTC_SETTLE_DAYS at two or more prices (it kept trading under it: LKSD, MDRX); else the first other
-    trading symbol within OTC_SYMBOL_DAYS (GPORQ, WFTIF before WFTIQ); else None: the rows say nothing (fails
-    settling at the last close for a few days: SIVB, CNB)."""
+    after its last trade: `ticker` (its exchange symbol on that day) when the rows under it before any other symbol,
+    leaving out the ones at the settled last close (the first own row's price: fails still settling), span more than
+    OTC_SETTLE_DAYS at two or more prices (it kept trading under it: LKSD, MDRX); else the first other trading
+    symbol within OTC_SYMBOL_DAYS (GPORQ, WFTIF before WFTIQ; PMI 2011: a month of settling fails and two OTC
+    prints filed under the old label come first, PPMIQ 40 days after the halt); else None: the rows say nothing
+    (fails settling at the last close for a few days: SIVB, CNB)."""
     lo, hi = last_trade.isoformat(), (last_trade + timedelta(days=OTC_SYMBOL_DAYS)).isoformat()
     later = sorted((r for r in rows if lo < r.date <= hi and is_trading_symbol(r.symbol) and _letters(r.symbol)),
                    key=lambda r: (r.date, r.symbol))
     other = next((r for r in later if r.symbol != ticker), None)
     own = [r for r in later if r.symbol == ticker and (other is None or r.date < other.date)]
-    settle = (last_trade + timedelta(days=OTC_SETTLE_DAYS)).isoformat()
-    if any(r.date > settle for r in own) and len({r.price for r in own if r.price is not None}) >= 2:
+    settled = own[0].price if own else None
+    live = [r for r in own if r.price is not None and r.price != settled]
+    if (live and (date.fromisoformat(live[-1].date) - date.fromisoformat(live[0].date)).days > OTC_SETTLE_DAYS
+            and len({r.price for r in live}) >= 2):
         return ticker
     return other.symbol if other is not None else None
 
@@ -73,15 +77,17 @@ _NOT_SYMBOLS = frozenset({"OTC", "OTCQB", "OTCQX", "OTCBB", "NYSE", "NASDAQ", "A
 
 def otc_symbol_from_text(text: str) -> str:
     """The symbol an 8-K item 3.01 notice says the common trades under off the exchange: the first sentence that
-    names an OTC venue and a symbol, and is not about another class only (WeWork's warrants), else ""."""
+    names an OTC venue and a symbol, and is not about another class only (WeWork's warrants), else "". A sentence
+    that names two symbols ("which previously traded on the NYSE under the symbol ABK, trade under the symbol
+    ABKFQ") gives the last: the exchange symbol the security left comes first."""
     for sentence in _SENTENCE.split(text or ""):
         if not _OTC_VENUE.search(sentence):
             continue
         if _OTHER_CLASS.search(sentence) and not _COMMON.search(sentence):
             continue
-        m = _SYMBOL.search(sentence)
-        if m and m.group(1) not in _NOT_SYMBOLS:
-            return m.group(1)
+        named = [m.group(1) for m in _SYMBOL.finditer(sentence) if m.group(1) not in _NOT_SYMBOLS]
+        if named:
+            return named[-1]
     return ""
 
 
@@ -114,6 +120,16 @@ def substitutes_new_shares(notice: str) -> bool:
     shares in its place ("New Common Stock", Wolfspeed's "New", Whiting's "(New)"); a holding company's one-for-one
     names none (APA 2021)."""
     return bool(_SUBSTITUTION.search(notice or "")) and bool(_NEW_SHARES.search(notice or ""))
+
+
+_NEW_CUSIP = re.compile(r"(?:[\"“(]New[\"”)]|\bNew\b)[^()]{0,20}\(\s*CUSIP\s*(?:No\.?|number|#)?\s*[-–:]?\s*([0-9A-Z]{9})\s*\)")
+
+
+def new_cusips(notice: str) -> set[str]:
+    """The CUSIPs a plan exchange's Form 25 notice gives the new shares ('... of the reorganized Wolfspeed, Inc.
+    "New" (CUSIP - 97785W106)'): the old line's last close is never read from their fails rows (WOLF 2025: the new
+    CUSIP shares the ticker and prices a day the old one has no row)."""
+    return set(_NEW_CUSIP.findall(notice or "")) if substitutes_new_shares(notice) else set()
 
 
 _RATIO = re.compile(r"ratio\s+of\s+(?:approximately\s+|about\s+)?(\d*\.\d+)\s+(?:shares?\s+of\s+)?(?:the\s+)?new\b",

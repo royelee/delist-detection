@@ -125,3 +125,86 @@ def test_eqc_voluntary_delisting_during_its_liquidation_is_a_liquidation():
     assert [(d.delist_date, d.record.bucket.value, d.record.crsp_code) for d in found] == [
         ("2025-04-21", "liquidation", 400)]
     assert found[0].record.evidence["end_of_era"] == "liquidation"
+
+
+# -- PMI 2011: a halt, the suspension 38 days later ---------------------------------------------------------------
+
+def test_pmi_otc_symbol_is_the_one_the_fails_show_40_days_after_the_halt():
+    """PMI 2011: the fails settle at 0.31 for a month, two OTC prints (0.05, 0.04) are still filed under PMI, and PPMIQ
+    follows 40 days after the last trade. A 3-letter exchange symbol that shows no trading of its own is no OTC
+    symbol."""
+    assert outcome("BBG000BCTL84")[LAST][4:6] == ("otc_print", "PPMIQ")
+
+
+# -- the R6 plan: its received close, and the old line's own last close ------------------------------------------
+
+def _wolf():
+    from datetime import date
+
+    from delist_detection.manifest import StageMeter
+    from delist_detection.pipeline import Overrides, _RunContext
+    from distress_cases import AS_OF, DATA, clients, world
+    found, terms, _ = after("BBG000BG14P4")
+    securities, cusips, ftd = world()
+    ctx = _RunContext(clients(), AS_OF, lambda *a: None, 1, StageMeter(lambda *a: None))
+    return found[LAST], terms, securities, cusips, ftd, date.fromisoformat(DATA["ftd_from"]), ctx, Overrides()
+
+
+def test_an_answered_plan_received_close_is_the_plans_value_not_the_shumway_fill():
+    """WOLF 2025: stage 10g asks the new line's received close; with the answer the ending's dlret is the ratio x
+    that close / the last close - 1 (a second run changes values only), never the bucket's Shumway -30%."""
+    from delist_detection.dlret import DlretMethod
+    from delist_detection.pipeline import Overrides, _plan_values
+    from delist_detection.reconstruction import build_delistings_table
+    d, terms, _, _, _, _, _, ov = _wolf()
+    ratio = float(terms[d.key].plan_ratio)
+    ov.acquirer_prices[d.key] = ("WOLF", 22.0)
+    ov = _plan_values(ov, terms)
+    rows = build_delistings_table([d.record], last_trade_closes={d.key: 1.85}, otc_prints=ov.otc_prints,
+                                  exchanges={d.key: d.exchange})
+    assert rows[0].dlret == pytest.approx(ratio * 22.0 / 1.85 - 1)
+    assert rows[0].dlret_method is DlretMethod.OTC_PRINT
+    # an answer for another ticker is not the plan's
+    assert _plan_values(Overrides(acquirer_prices={d.key: ("XXXX", 22.0)}), terms).otc_prints == {}
+
+
+def test_a_plan_endings_last_close_is_never_the_new_lines():
+    """WOLF 2025: the old CUSIP's last row is 9-26 (1.85); the new CUSIP (the notice names it) shares the ticker and
+    has a 9-30 row at 22.10. The close is the old line's, flagged as a prior one."""
+    from delist_detection.pipeline import _last_trade_closes
+    d, _, securities, cusips, ftd, ftd_lo, ctx, ov = _wolf()
+    assert d.last_trade.day.isoformat() == "2025-09-26"
+    closes = _last_trade_closes(ctx, [d], securities, cusips, ftd, ftd_lo, ov)
+    assert closes.get(d.key) != 22.1
+    assert closes[d.key] == pytest.approx(1.85)
+    assert any(f.startswith("ftd_close_prior") for f in d.flags)
+
+
+# -- stage 9e's degraded path ---------------------------------------------------------------------------------------
+
+def test_a_failed_read_in_stage_9e_gives_a_resolution_degraded_row():
+    """WOLF's plan 8-K read counts itself degraded (a failed request, a stale copy): the delisting's own row and a
+    review item carry resolution_degraded; the ratio read still stands (it is flagged, not dropped)."""
+    from delist_detection.sec_stats import SEC_STATS
+
+    class Degrading(FixtureEdgar):
+        def fetch_filing_text(self, cik, accession, primary_doc):
+            if accession == "0001193125-25-224251":
+                SEC_STATS.degraded("filing text")
+            return super().fetch_filing_text(cik, accession, primary_doc)
+
+    found, terms, review = after("BBG000BG14P4", edgar=Degrading())
+    assert "resolution_degraded" in found[LAST].flags
+    assert any(i.flag == "resolution_degraded" and i.sec_id == "BBG000BG14P4" for i in review)
+    assert terms[found[LAST].key].plan_ratio == "0.00835187"
+
+
+def test_a_refusal_in_stage_9e_stops_the_run():
+    from delist_detection.edgar import EdgarBlocked
+
+    class Blocked(FixtureEdgar):
+        def fetch_filing_text(self, cik, accession, primary_doc):
+            raise EdgarBlocked("403")
+
+    with pytest.raises(EdgarBlocked):
+        after("BBG000BG14P4", edgar=Blocked())
