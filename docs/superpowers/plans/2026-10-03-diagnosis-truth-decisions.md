@@ -98,3 +98,55 @@ Design note: `docs/superpowers/plans/research/2026-10-04-5d-last-trade.md`.
   offline replay of 5d's code gives D.mismatches 414.
 - **Fixed_by relabels.** 26 rows whose last trade fields match the replay but keep other mismatches now name 5e, 5f
   or 5g; the 12 rows that match the replay stay known_wrong until the loop flips them.
+
+## 5e, 5g and 5h
+
+Their decisions are in their design notes: `research/2026-10-04-5e-acquirer-gate.md`,
+`research/2026-10-04-5h-identity.md` and 5g's note (commit 266be6c). The integration commit d17b325 lists how each
+merge conflict was resolved.
+
+## Wave 1 integration and review (2026-10-04)
+
+Four Opus reviewers, one per sub-plan, found 1 Critical and 13 Important defects; one fix wave addresses them. The
+rulings I made on their findings:
+
+- **BTU 2008–2016 is BBG000FW00S1** (the 2015 split's line, R2), not today's Peabody line BBG00GBV88T6: the truth
+  row's `sec_id` and `price_sec_id` are renamed (integration). The audit row keeps its case id; the audit judge looks
+  rows up by ticker and date, and BTU passes.
+- **Golden JCI-2010's last trade moves from 2016-09-06 to 2016-09-02.** The 8-K, the notice, the fails rows and MIDAS
+  agree on 09-02; 09-06 is Johnson Controls plc's first day under JCI.
+  - Cost if wrong: one golden row a day early.
+- **RAD 2023's last trade is MIDAS's 2023-10-13, published** (truth re-ruled). MIDAS Q4 ends on 10-13, the fails rows
+  repeat the 10-13 close on 10-16 and 10-17, and the NYSE notice's "On October 16 ... should be suspended" reads as
+  10-13 under R8. The report's "fails rows only" misread the repeated close.
+- **Audit rows:** UAG 2008's chain lists PAG only (UAG then was UBS E-TRACS). WW's chain ended in the 2025 chapter 11
+  (dropped, last trade 2025-05-15), as its diagnosis truth row says, not `active`.
+- **5g's patch 4 rulings are applied after the network run** as my rulings: EPE's drop reason is price (both filings
+  cite only the 802.01D abnormally low price; it re-weighs filings the 5b report already cited), and WOLF's stock
+  ratio is 0.00835187 (1,306,896 / 156,479,390; the 871,287-share reserve is conditional).
+- **An answered price request settles the gate only through the request it answers** (Critical, 5e): answering
+  CAL's or GLIBA's `received_close` flipped the acquirer and the request key, so the second run exited 2. The
+  published acquirer and the request ticker no longer depend on the gate's verdict.
+- **The acquirer's symbol on the price date comes from the row that carries that day's close**, the first row after
+  it for a line whose CUSIP changed at the closing (JCI, CB, ABI to LIFE, PLD, FTO to HFC). ABI's truth row (IVGN) is
+  left for the loop: the filing that would settle it (Life Technologies' 8-K) is not cached, and a fetch returned 404.
+  - Cost if wrong: five stock legs priced under the post-closing symbol.
+- **A gate settled on the terms' ticker keeps stage 8a's line of the same issuer** (TWC to New Charter, VIA to
+  ViacomCBS class A, STRZA to LGFB). A `--merger-terms` acquirer ticker is published as the caller gave it.
+- **Last trade readings built in the fix wave:** a weekday before the date (TMA, IDARQ, LNT 2019); the no-Form-25
+  fallback reads 3.01 8-Ks to the last sighting + 5 days (VRM); R8's second word order, "On D, ... had been
+  suspended", without "immediately" or a completion word (CBL; Arch Coal 2016 gains the day MIDAS already gives). The
+  NYSE 12d2-2(b) notice template's "close of the trading session on D" is a press day, never a last trade. A last
+  trade on no session moves to the trading day before (CNDT 2019's Sunday typo).
+- **PMI's OTC symbol:** a 60-day window and a kept-trading test that ignores the settled last close. The reviewer's
+  simulation over all 80 distress endings changes PMI only.
+- **An R6 ending's last close is the old line's CUSIP's**, never the plan's new CUSIP's (WOLF); its `received_close`
+  answer feeds the plan's value.
+- **Rule D (5h) decides by the era's own fails rows when it has at least 3**, and uses the name in force only without
+  them (ERA 2013).
+- **Deferred:**
+  - EQC's stated $1.60 final distribution goes to 5f. Its liquidation keeps the Shumway fill, labelled as a fill.
+  - The verdict gap for a closed_no_event security (WW counted confirmed) goes to 5i.
+  - ASD/WCRX fixtures and abbreviated acquirer names (CB&I) are deferred.
+  - GOCO stays residual.
+  - CZR's truth (07-17) against MIDAS's 07-20, and QDEL/DKNG's closing days, go to the loop.

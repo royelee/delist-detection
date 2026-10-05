@@ -12,7 +12,7 @@ TIN,golden,TIN,2010-06-30,731939,,,,merger,2012-02-10,0.003764,,,pass,,spec Part
 BK,golden,BK,2010-06-30,1390777,BK,active,,,,,,,pass,,spec Part 2 (BK),,reverse merger: one security
 CB-2010,golden,CB,2010-06-30,20171,,,,merger,2016-01-15,0.019589,,,known_wrong,reset-4c,spec Part 2 (CB),dlret 0.011833: since the 2026-10-02 refresh the cached merger-terms answer names the acquirer by its post-merger ticker CB (109.38) instead of ACE (111.02),Chubb Corp acquired by ACE; ACE took the CB ticker (a takeover not a successor)
 CB-2020,golden,CB,2020-06-30,896159,ACE;CB,active,,,,,,,pass,,spec Part 2 (CB),,ACE renamed Chubb Ltd
-JCI-2010,golden,JCI,2010-06-30,53669,,,,merger,2016-09-06,,,,pass,,spec Part 2 (JCI),,value is assumed par after a failed payout gate (decision 4); not pinned
+JCI-2010,golden,JCI,2010-06-30,53669,,,,merger,2016-09-02,,,,pass,,spec Part 2 (JCI),,"value is assumed par after a failed payout gate (decision 4); not pinned; last trade 2016-09-02 (was 09-06, Johnson Controls plc's first day under JCI; the 8-K, the notice, the fails rows and MIDAS give 09-02), ruled 2026-10-04"
 JCI-2020,golden,JCI,2020-06-30,833444,TYC;JCI,active,,,,,,,pass,,spec Part 2 (JCI),,Tyco renamed Johnson Controls International
 PLD-2010,golden,PLD,2010-06-30,899881,,,,merger,2011-06-02,-0.000076,,,pass,,spec Part 2 (PLD),,old ProLogis merged into AMB
 PLD-2015,golden,PLD,2015-06-30,1045609,AMB;PLD,active,,,,,,,pass,,spec Part 2 (PLD),,AMB renamed Prologis
