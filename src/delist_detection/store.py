@@ -58,7 +58,7 @@ UNCERTAIN_COLUMNS: tuple[str, ...] = ("kind", "ticker", "sec_id", "date", "reaso
 
 # The contract (spec: Delist Library Reset, "The contract"; contract.py), written
 # under contract/ beside the tables above for one release (decision 6).
-CONTRACT_SCHEMA_VERSION = 2       # 2: contract/delistings.csv gains the payout-rule columns
+CONTRACT_SCHEMA_VERSION = 3       # 2: contract/delistings.csv gains the payout-rule columns; 3: payout_legs.csv
 SECURITY_HISTORY_COLUMNS: tuple[str, ...] = (
     "sec_id", "issuer_id", "start_date", "end_date", "ticker", "security_name", "share_class")
 CONTRACT_DELISTINGS_COLUMNS: tuple[str, ...] = (
@@ -70,7 +70,9 @@ CONTRACT_DELISTINGS_COLUMNS: tuple[str, ...] = (
 SEEDS_COLUMNS: tuple[str, ...] = ("ticker", "as_of", "name", "cusip", "pin_cik", "pin_sec_id", "sec_id", "verdict")
 PRICE_REQUEST_COLUMNS: tuple[str, ...] = ("sec_id", "last_trade_date", "kind", "lookup_sec_id", "lookup_ticker", "date")
 ID_CHANGES_COLUMNS: tuple[str, ...] = ("old_sec_id", "new_sec_id", "changed_on", "issuer_cik", "share_class")
-CONTRACT_TABLES = ("security_history", "contract_delistings", "seeds", "price_requests", "id_changes")
+# ruling R3 (schema 3): each security of a basket per share (payout_rule.basket_legs)
+PAYOUT_LEGS_COLUMNS: tuple[str, ...] = ("sec_id", "leg", "ratio", "price_sec_id", "price_ticker", "price_date")
+CONTRACT_TABLES = ("security_history", "contract_delistings", "seeds", "price_requests", "id_changes", "payout_legs")
 
 TABLES: dict[str, TableSpec] = {t.name: t for t in (
     TableSpec("securities",
@@ -106,6 +108,7 @@ TABLES: dict[str, TableSpec] = {t.name: t for t in (
     TableSpec("price_requests", PRICE_REQUEST_COLUMNS, ("sec_id", "kind", "date", "lookup_ticker"),
               file="contract/price_requests.csv"),
     TableSpec("id_changes", ID_CHANGES_COLUMNS, ("old_sec_id",), file="contract/id_changes.csv"),
+    TableSpec("payout_legs", PAYOUT_LEGS_COLUMNS, ("sec_id", "leg"), file="contract/payout_legs.csv"),
 )}
 
 

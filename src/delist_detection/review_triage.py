@@ -121,6 +121,13 @@ CATALOG: dict[str, FlagInfo] = {
                  "acquirer's price is too far from the last close (fail_sanity).",
         "Read the merger filing and supply cash_per_share, stock_ratio, acquirer_price and acquirer_ticker "
         "in --merger-terms."),
+    "terms_gate_skipped": FlagInfo(
+        "check", "Merger terms the payout gate cannot check against the USD last close (sub-plan 5f): a cash leg "
+                 "in another currency (CAD: ruling R5, the library has no FX source), a basket of two or more "
+                 "securities (basket: ruling R3), or a stock leg stated as a dollar value over an averaging price "
+                 "(stock_value). The contract publishes the terms as read; the DLRET is a fill.",
+        "Price the terms (contract/price_requests.csv; convert a foreign cash leg yourself) or supply them in "
+        "--merger-terms."),
     "payout_gate_failed": FlagInfo(
         "check", "The cash payout the regex read from the filing (the value after the colon) is more than the "
                  "tolerance away from the last close, so it was not used.",

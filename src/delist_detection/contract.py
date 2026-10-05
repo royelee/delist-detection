@@ -10,7 +10,9 @@ release.
 - seeds.csv (`seed_rows`): every input observation with its sec_id and verdict;
 - price_requests.csv: `price_requests.request_rows`;
 - id_changes.csv (`id_change_rows`): the baseline run's placeholders that now
-  hold a FIGI.
+  hold a FIGI;
+- payout_legs.csv (`payout_leg_rows`, schema 3, ruling R3): each security of a
+  basket ending per share.
 
 run_manifest.json carries store.CONTRACT_SCHEMA_VERSION. Pure."""
 from __future__ import annotations
@@ -22,7 +24,7 @@ from datetime import date, timedelta
 from .distress import DistressTerms
 from .exit_kind import ending_fields
 from .lifecycle import Tables
-from .payout_rule import MergerInputs, value_fields
+from .payout_rule import MergerInputs, basket_legs, value_fields
 from .store import DelistingKey
 from .verdict import Verdicts, published_last_trade_date, seed_key
 
@@ -63,6 +65,18 @@ def delisting_rows(tables: Tables, verdicts: Verdicts,
             **value_fields(r, ltd, inputs.get(key),
                            None if distress is None else distress.get(key, DistressTerms())),
         })
+    return rows
+
+
+def payout_leg_rows(tables: Tables, inputs: Mapping[DelistingKey, MergerInputs] | None = None
+                    ) -> list[dict[str, object]]:
+    """contract/payout_legs.csv (ruling R3, schema 3): each security one share of a basket ending (value rule
+    `basket`, contract/delistings.csv) became, in leg order, with the security, ticker and date its price is needed
+    on (`payout_rule.basket_legs`)."""
+    inputs = inputs or {}
+    rows: list[dict[str, object]] = []
+    for sid, r in last_endings(tables.delistings).items():
+        rows += basket_legs(r, published_last_trade_date(r), inputs.get(DelistingKey(sid, r["delist_date"])))
     return rows
 
 

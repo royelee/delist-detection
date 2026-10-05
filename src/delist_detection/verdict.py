@@ -47,7 +47,8 @@ from .exit_kind import ending_fields
 SEED, SECURITY, ENDING = "seed", "security", "ending"
 FORM25_EFFECTIVE_DAYS = 10               # a Form 25 takes effect 10 days after it is filed
 MEASURED_SOURCES = frozenset({"midas", "nasdaq_halt"})
-GATE_FAILED = frozenset({"payout_gate_failed", "llm_gate_failed", "terms_gate_failed"})   # decision 4's failed gates
+GATE_FAILED = frozenset({"payout_gate_failed", "llm_gate_failed", "terms_gate_failed",
+                         "terms_gate_skipped"})   # decision 4: a gate that did not pass (5f: or could not check)
 SECURITY_UNCERTAIN = "security_uncertain"
 CONFIRMED, UNCERTAIN = "confirmed", "uncertain"
 

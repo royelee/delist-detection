@@ -348,7 +348,8 @@ def apply_handoffs(decisions: Sequence[HandoffDecision], delistings: Sequence[De
     - with one, sets its successor to B, rewriting an `unknown` or a merger
       row to the continuation's values -- except a merger on timing evidence
       between two issuers (`timing:cusip`), or whose payout was reconciled
-      (`reconciled`, by delisting key) on timing evidence alone, which stands,
+      (`reconciled`, by delisting key) on timing evidence alone, or that spec 5c's rule 6 made (sub-plan 5f: its
+      own-share statement gives another ratio, `end_of_era` `successor_merger`), which stands,
       with a `handoff_conflict` item; a rewritten merger keeps its
       old bucket in a `handoff_rebucketed` item. A row that ended A in
       another way (a liquidation, a compliance failure, an expiration), or that
@@ -406,6 +407,11 @@ def apply_handoffs(decisions: Sequence[HandoffDecision], delistings: Sequence[De
                 conflict = "its merger row says holders were paid, and only timing across two issuers says otherwise"
             elif bucket is CrspBucket.MERGER and not decision.by_filing and d.key in reconciled:
                 conflict = "its merger row has a reconciled payout and only timing says otherwise"
+            elif bucket is CrspBucket.MERGER and (d.record.evidence or {}).get("end_of_era") == "successor_merger":
+                # spec 5c rule 6 (sub-plan 5f): the registrant's own filings say each share became another number of
+                # the successor's shares (CHTR 2016, 0.9042 New Charter): a merger, whatever files the successor's
+                # registration
+                conflict = "its own-share statement gives another ratio than one for one (rule 6)"
             elif bucket not in (CrspBucket.MERGER, CrspBucket.EXCHANGE_TRANSFER, CrspBucket.UNKNOWN):
                 conflict = f"its row is a {bucket.value}"
             if conflict is not None:

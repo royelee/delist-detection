@@ -276,5 +276,5 @@ def test_contract_tables_are_written_under_contract_and_read_back(tmp_path):
     assert read_table("security_history", path) == [row]
     assert {TABLES[t].file for t in CONTRACT_TABLES} == {
         "contract/security_history.csv", "contract/delistings.csv", "contract/seeds.csv",
-        "contract/price_requests.csv", "contract/id_changes.csv"}
+        "contract/price_requests.csv", "contract/id_changes.csv", "contract/payout_legs.csv"}
     assert table_path(tmp_path, "delistings") == tmp_path / "delistings.csv"

@@ -19,19 +19,38 @@ therefore emits ``cash_per_share`` / ``stock_ratio`` / ``acquirer_ticker``
 ``reconstruction.build_delistings_table`` consumes via ``--merger-terms``;
 ``acquirer_price`` is added downstream.
 
+Prompt v3 (sub-plan 5f)
+-----------------------
+The answer is the PACKAGE one share of the named target security became
+(ruling R4: the final prorated package when a filing states it, else the
+default, non-election package; never the sum of an election's alternatives),
+with the cash's currency as the filing states it (R5), the stock leg's issuer
+and class, a stock leg stated as a dollar value (PCYC), and every further
+security received (a basket, R3). The candidate filings put the latest
+completion documents first: the closing 8-K, an 8-K that reports the closing
+without Item 2.01, an amendment filed after the last merger proxy, then the
+proxy; a foreign private issuer's 6-K reports close to the delisting come
+last. A one-for-one answer the model is not sure of, whose quote states no
+number of shares, is passed over for the next candidate
+(`unsupported_one_for_one`).
+
 Miss → drop
 -----------
 ``extract`` returns ``None`` (a "miss") whenever no candidate filing yields a
-usable consideration (neither a cash leg nor a stock ratio). Downstream, a miss
+usable consideration (no cash leg and no stock leg). Downstream, a miss
 leaves the merger's DLRET to abstain/neutral-mark — never a silent zero return.
+A failed LLM call is a miss that counts itself degraded
+(``sec_stats.SEC_STATS.degraded("llm_call")``), so the pipeline flags the
+delisting ``resolution_degraded``; it is never cached.
 
 Caching
 -------
 Each LLM call is cached on disk keyed by
-``{accession}_{model}_{PROMPT_VERSION}.json``. ``PROMPT_VERSION`` is part of
+``{accession}_{model}_{PROMPT_VERSION}_{ticker}.json``. ``PROMPT_VERSION`` is part of
 the key, so editing ``SYSTEM_PROMPT`` / ``RESULT_SCHEMA`` (and bumping the
 version) cleanly invalidates stale cached extractions rather than silently
-reusing them.
+reusing them; the target's ticker is part of it because the user prompt names
+the target security (two classes of one issuer can get different terms).
 """
 
 from __future__ import annotations
@@ -40,6 +59,7 @@ import json
 import os
 import re
 from dataclasses import dataclass
+from datetime import date, timedelta
 from pathlib import Path
 
 import requests
@@ -47,6 +67,8 @@ import requests
 from .classifier import DelistRecord
 from .crsp_codes import CrspBucket
 from .atomic_io import clean_orphan_temps, write_atomic
+from .currency import normalize as normalize_currency, stated_currency
+from .fatal import FATAL
 from .filing_selection import (
     EdgarSubmission,
     announcement_8k,
@@ -54,6 +76,7 @@ from .filing_selection import (
     form_filings,
     parse_date,
 )
+from .sec_stats import SEC_STATS
 
 
 # --------------------------------------------------------------------------- #
@@ -61,12 +84,26 @@ from .filing_selection import (
 # --------------------------------------------------------------------------- #
 
 @dataclass(frozen=True)
-class MergerTerms:
-    """Structured per-share merger consideration extracted from one filing.
+class StockLeg:
+    """One further security received per target share (ruling R3: a basket's second and later legs)."""
+    ratio: float | None
+    issuer_name: str = ""
+    ticker: str = ""
+    share_class: str = ""
 
-    All legs are on a per-TARGET-share basis. ``cash_per_share`` is USD cash;
-    ``stock_ratio`` is the number of ACQUIRER shares exchanged per target share.
-    ``None`` means the filing did not state that leg (do not infer a zero).
+
+@dataclass(frozen=True)
+class MergerTerms:
+    """Structured per-share merger consideration extracted from one filing: the PACKAGE one target share became at
+    the closing (ruling R4: the final prorated package when the filing states it, else the default, non-election
+    package, never the sum of an election's alternatives).
+
+    All legs are on a per-TARGET-share basis. ``cash_per_share`` is the cash in ``cash_currency`` (ruling R5: as the
+    filing states it, "" when it does not; the library never converts); ``stock_ratio`` is the number of shares of
+    the stock leg's issuer (``acquirer_*``: the company whose shares the holders receive) per target share;
+    ``stock_value`` a stock leg stated as a dollar value over an averaging price instead of a number of shares
+    (PCYC); ``extra_legs`` every further security received (a basket, ruling R3). ``None`` means the filing did not
+    state that leg (do not infer a zero).
     """
 
     deal_type: str            # 'cash' | 'stock' | 'cash_and_stock' | 'election' | 'other'
@@ -77,6 +114,23 @@ class MergerTerms:
     confidence: str           # 'high' | 'medium' | 'low'
     source: str               # '{form}:{accession}'
     quote: str
+    cash_currency: str = ""
+    stock_value: float | None = None
+    acquirer_share_class: str = ""
+    extra_legs: tuple[StockLeg, ...] = ()
+    package_basis: str = ""   # 'final_prorated' | 'default' | 'fixed' | 'none' | '' (an answer before v3)
+    election_note: str = ""
+    contingent_note: str = ""
+
+    @property
+    def is_basket(self) -> bool:
+        """Two or more securities per target share (ruling R3)."""
+        return bool(self.extra_legs) and (self.stock_ratio is not None or self.stock_value is not None)
+
+    @property
+    def has_stock(self) -> bool:
+        """Whether the package holds any security (a ratio, a dollar-valued leg or a further leg)."""
+        return bool(self.stock_ratio) or bool(self.stock_value) or bool(self.extra_legs)
 
     def to_merger_terms_dict(self) -> dict:
         """Project to the dict shape ``build_delistings_table`` consumes.
@@ -100,42 +154,99 @@ class MergerTerms:
 # so the disk cache key changes and stale extractions are not silently reused.
 # --------------------------------------------------------------------------- #
 
-PROMPT_VERSION = "v2"
+PROMPT_VERSION = "v3"
 
 SYSTEM_PROMPT = """\
-You are a precise M&A-filing extraction engine. You read excerpts of a merger \
-filing for a TARGET company and return ONLY the per-share consideration that \
-target shareholders receive at closing, as a JSON object.
+You are a precise M&A-filing extraction engine. You read excerpts of a filing \
+about a merger, acquisition, exchange offer or separation of a TARGET company and \
+return, as a JSON object, what ONE share of the target security named in the \
+user message became at the closing: its PACKAGE.
 
-Report everything on a PER-TARGET-SHARE basis. Follow these rules exactly:
+Report everything per ONE share of that target security. Mind its class: two \
+classes of one company can receive different terms.
 
-- cash_per_share: the USD cash amount paid per target share. null if the deal \
-pays no cash.
-- stock_ratio: the exchange ratio — the number of ACQUIRER shares issued per \
-target share. null if the deal is all-cash.
-- acquirer_name: the name of the buyer (the acquiring company) exactly as \
-written in the filing. null if not stated.
-- acquirer_ticker: the buyer's primary US-exchange stock ticker symbol. Use the \
-ticker the filing states if present (e.g. "CVS Health Corporation (NYSE: CVS)" → \
-"CVS"); otherwise supply the well-known ticker for the named acquiring company \
-from your own knowledge (e.g. "CVS Health" → "CVS", "AbbVie Inc." → "ABBV", \
-"Salesforce" → "CRM"). Return null ONLY if the acquirer is unnamed or you do \
-not know its ticker. Give the parent/listed company's ticker, not a subsidiary's.
-- deal_type: classify the consideration as one of:
-    "cash"            all-cash,
-    "stock"           all-stock (exchange ratio only),
-    "cash_and_stock"  a fixed mix of cash AND stock per share,
-    "election"        shareholders ELECT cash OR stock (possibly with proration),
-    "other"           anything else / unclear.
-  For an "election" deal, report the stated standard or illustrative per-share \
-split if the filing gives one; otherwise leave both legs null.
-- confidence: your own assessment of the extraction — "high", "medium", or "low".
+Which package to report:
+- The consideration actually paid at the closing. In this order of preference: \
+the final per-share result the filing states after any proration; else, when \
+holders could elect, what a holder who made NO election received (the default, \
+"standard" or "mixed" consideration); else the fixed consideration of a deal \
+without elections.
+- Never add up the alternatives of an election (cash OR stock), and never report \
+one elected alternative when a default or a final package is stated.
+- If no default is fixed and no final result is stated, report the alternative \
+made only of cash and/or shares, with no contingent right; if several, the \
+all-cash one.
+- Use the latest figures: an amended agreement's terms replace the original's, \
+and a closing filing's figures replace a proxy's estimates or headlines.
+- Count the shares actually ISSUED or delivered per target share, not figures \
+"equivalent to" shares of another company. For American depositary shares, \
+report the number of ADSs; ADSs "representing 0.5260 of an ordinary share" (one \
+ADS per ordinary share) give 0.5260.
+- A special dividend the target pays apart from the merger consideration is NOT \
+part of the package. Cash paid at the closing for a security the target \
+distributed to its holders as a step of the same transaction IS: when each \
+target share was converted into $10.00 in cash and each share of a company the \
+target had just distributed to its holders was converted into $5.00 in cash, \
+report $15.00.
+
+Fields:
+- package_basis: "final_prorated" (the filing states one final per-share result \
+that every holder of the class received after proration, for example "each \
+share received $16.00 and 0.8998 shares"; the percentages of holders who \
+elected cash or stock are not such a result), "default" (what non-electing \
+holders received), "fixed" (no election), or "none" (no package can be stated).
+- cash_per_share: the cash per target share in the package; null if none.
+- cash_currency: the ISO 4217 code of that cash as the filing states it ("$" or \
+"US$" is "USD", "C$" is "CAD", "€" is "EUR", "£" is "GBP"); null if there is no \
+cash or the filing states no currency.
+- stock_ratio: the number of shares (or units, or ADSs) of ONE security received \
+per target share in the package; null if no fixed number is stated.
+- stock_value_per_share: when the package's shares are stated as a dollar VALUE \
+(for example "shares of X with a value of $109.00 based on X's average trading \
+price") instead of a fixed number, that value; else null.
+- acquirer_name, acquirer_ticker, acquirer_share_class: the issuer of the shares \
+in stock_ratio or stock_value_per_share, that is the company whose shares the \
+target's holders receive (the buyer, a new holding company, or a company \
+separated or spun off to the holders): its full name as the filing gives it \
+(not a defined term such as "New CCE" or "Parent" when the filing names the \
+company); its primary US-exchange ticker, else its home-exchange ticker (use the \
+ticker the filing states, e.g. "CVS Health Corporation (NYSE: CVS)" gives "CVS"; \
+otherwise supply the well-known ticker of that company from your own knowledge, \
+e.g. "AbbVie Inc." gives "ABBV", and for a new holding company the ticker it \
+began trading under; return null ONLY if the company is unnamed or you do not \
+know its ticker); and the class received ("A", \
+"B", "C", "Series C"; null if not stated). With no stock in the package: the \
+buyer's name and ticker, and a null class.
+- other_stock_legs: every FURTHER security received per target share in the \
+package beyond the one in stock_ratio (for example the second company's shares \
+in a separation into two companies), each with its ratio, issuer_name, ticker \
+and share_class. Empty when one security or none is received. Do not list \
+contingent value rights, warrants or cash for fractional shares here.
+- deal_type: "cash", "stock", "cash_and_stock" (a fixed mix), "election" \
+(holders could elect cash or stock, possibly prorated), or "other".
+- election_note: for an election deal, its alternatives in a few words (for \
+example "$44.25 cash or 1.00 ETE unit, prorated"); else "".
+- contingent_note: contingent value rights, warrants or other contingent \
+consideration in a few words; else "".
+- confidence: "high", "medium" or "low".
 - quote: a short verbatim snippet (under 200 characters) from the text that \
-supports the numbers you report.
+supports the package, including the cash amount with its currency sign.
 
 Null anything that is not explicitly supported by the text. Do NOT guess. \
 Return ONLY the JSON object.\
 """
+
+_LEG_SCHEMA: dict = {
+    "type": "object",
+    "properties": {
+        "ratio": {"type": ["number", "null"]},
+        "issuer_name": {"type": "string"},
+        "ticker": {"type": ["string", "null"]},
+        "share_class": {"type": ["string", "null"]},
+    },
+    "required": ["ratio", "issuer_name", "ticker", "share_class"],
+    "additionalProperties": False,
+}
 
 RESULT_SCHEMA: dict = {
     "type": "object",
@@ -144,16 +255,24 @@ RESULT_SCHEMA: dict = {
             "type": "string",
             "enum": ["cash", "stock", "cash_and_stock", "election", "other"],
         },
+        "package_basis": {"type": "string", "enum": ["final_prorated", "default", "fixed", "none"]},
         "cash_per_share": {"type": ["number", "null"]},
+        "cash_currency": {"type": ["string", "null"]},
         "stock_ratio": {"type": ["number", "null"]},
+        "stock_value_per_share": {"type": ["number", "null"]},
         "acquirer_name": {"type": ["string", "null"]},
         "acquirer_ticker": {"type": ["string", "null"]},
+        "acquirer_share_class": {"type": ["string", "null"]},
+        "other_stock_legs": {"type": "array", "items": _LEG_SCHEMA},
+        "election_note": {"type": "string"},
+        "contingent_note": {"type": "string"},
         "confidence": {"type": "string", "enum": ["high", "medium", "low"]},
         "quote": {"type": "string"},
     },
     "required": [
-        "deal_type", "cash_per_share", "stock_ratio",
-        "acquirer_name", "acquirer_ticker", "confidence", "quote",
+        "deal_type", "package_basis", "cash_per_share", "cash_currency", "stock_ratio", "stock_value_per_share",
+        "acquirer_name", "acquirer_ticker", "acquirer_share_class", "other_stock_legs", "election_note",
+        "contingent_note", "confidence", "quote",
     ],
     "additionalProperties": False,
 }
@@ -166,9 +285,18 @@ RESULT_SCHEMA: dict = {
 _EXCERPT_KEYWORDS = [
     "merger consideration", "right to receive", "exchange ratio",
     "shares of", "in cash", "per share", "election", "each share",
+    "prorat", "depositary", "non-electing",
 ]
 _EXCERPT_HALF_WINDOW = 1500
 _EXCERPT_BUDGET = 30000
+
+# the 8-K items that report a closing when Item 2.01 is absent (FWLT's 3.01 + 5.01), and the window around the
+# delisting they are read in
+_CLOSING_ITEMS = frozenset({"3.01", "3.03", "5.01"})
+_CLOSING_ITEMS_DAYS = 30
+# the merger documents an amendment 8-K must follow to be read before them (BOT's 8-K raising 0.35 to 0.375)
+_PROXY_FORMS = ("DEFM14A", "DEFM14C", "S-4", "S-4/A", "F-4", "F-4/A", "SC TO-T", "SC TO-I")
+_SIX_K_DAYS = (timedelta(days=120), timedelta(days=30))   # a foreign private issuer's 6-K reports around the delisting
 
 
 def _tolerant_float(x: object) -> float | None:
@@ -188,9 +316,38 @@ def _tolerant_float(x: object) -> float | None:
     return None
 
 
+def _text(x: object) -> str:
+    """An LLM string answer, "" for null or the word null."""
+    if not isinstance(x, str):
+        return ""
+    s = x.strip()
+    return "" if s.lower() in ("null", "none", "n/a", "n-a", "-") else s
+
+
+_SHARE_COUNT = re.compile(r"(?i)\b(?:one|1|\d+\.\d+)\b(?:\s*\(\d+\))?[^.;]{0,60}?\b(?:shares?|units?|ADSs?|stock)\b"
+                          r"|one-for-one|equal number")
+
+
+def unsupported_one_for_one(terms: MergerTerms) -> bool:
+    """A one-for-one, no-cash answer the model is not sure of (confidence below high) whose quote states no number of
+    shares (ATH 2022's "AHL became a direct subsidiary of AGM", read as 1 where holders got 1.149 AGM shares; CHTR
+    2016's "New Charter ... trades under CHTR", where they got 0.9042): one share is the guess a reorganization
+    invites, so the next candidate filing is read instead (the prompt's "null anything not supported")."""
+    return (terms.stock_ratio == 1.0 and not terms.cash_per_share and not terms.extra_legs
+            and terms.confidence != "high" and not _SHARE_COUNT.search(terms.quote or ""))
+
+
 def _sanitize_model(model: str) -> str:
     """Make a model name safe for a filename (``/`` and ``:`` → ``_``)."""
     return model.replace("/", "_").replace(":", "_")
+
+
+def _sanitize_key(s: str) -> str:
+    return re.sub(r"[^A-Za-z0-9.-]", "_", s)
+
+
+def _day(f: EdgarSubmission) -> date | None:
+    return parse_date(f.report_date) or parse_date(f.filing_date)
 
 
 # --------------------------------------------------------------------------- #
@@ -237,9 +394,10 @@ class LLMMergerTermsExtractor:
     # Public API
     # ------------------------------------------------------------------ #
 
-    def extract(self, record: DelistRecord) -> MergerTerms | None:
+    def extract(self, record: DelistRecord, security_name: str = "") -> MergerTerms | None:
         """Return the merger consideration for ``record``, or ``None`` on a miss.
 
+        ``security_name`` (the target security's name, its class with it) is named in the user prompt.
         Short-circuits to ``None`` for non-MERGER buckets or a missing CIK.
         A network error (``requests.RequestException``) degrades to a miss —
         same degrade-never-raise contract as ``PayoutExtractor.extract``.
@@ -247,7 +405,7 @@ class LLMMergerTermsExtractor:
         if record.bucket is not CrspBucket.MERGER or record.cik is None:
             return None
         try:
-            return self._extract(record)
+            return self._extract(record, security_name)
         except requests.RequestException:
             return None
 
@@ -255,7 +413,7 @@ class LLMMergerTermsExtractor:
     # Internals
     # ------------------------------------------------------------------ #
 
-    def _extract(self, record: DelistRecord) -> MergerTerms | None:
+    def _extract(self, record: DelistRecord, security_name: str = "") -> MergerTerms | None:
         filings = self.edgar.recent_filings(record.cik)
         if not filings:
             return None
@@ -273,30 +431,46 @@ class LLMMergerTermsExtractor:
             tried += 1
             excerpt = self._relevant_excerpts(text)
             try:
-                terms = self._llm_extract(excerpt, record, f)
+                terms = self._llm_extract(excerpt, record, f, security_name)
+            except FATAL:
+                raise
             except Exception:
                 # A single bad LLM call must not abort the whole extraction —
-                # fall through to the next candidate filing. (Network errors are
-                # caught one level up and degrade to a miss.)
+                # fall through to the next candidate filing. It is never cached,
+                # and it counts itself degraded: the delisting's terms rested on
+                # a failed read. (Network errors on EDGAR are caught one level up
+                # and degrade to a miss.)
+                SEC_STATS.degraded("llm_call")
                 continue
-            if terms is None:
+            if terms is None or unsupported_one_for_one(terms):
                 continue
-            if terms.cash_per_share is not None or terms.stock_ratio is not None:
+            if terms.cash_per_share is not None or terms.has_stock:
                 return terms
         return None
 
     def _candidates(self, filings, delist) -> list[EdgarSubmission]:
-        """Ordered, de-duplicated (by accession) candidate filings.
+        """Ordered, de-duplicated (by accession) candidate filings, the latest completion documents first:
 
-        Preference order: closing 8-K → DEFM14A → announcement 8-K → PREM14A.
+        closing 8-K (Item 2.01) → an 8-K reporting the closing without 2.01 (3.01, 3.03 or 5.01 within 30 days of
+        the delisting) → an announcement 8-K (1.01) filed after the last merger proxy or registration (an
+        amendment: its terms replace the proxy's) → DEFM14A → the other announcement 8-Ks → PREM14A → a 6-K
+        report around the delisting (a foreign private issuer files no 8-K).
         Later duplicates of an accession already seen are dropped, preserving
         the first (highest-preference) position.
         """
         ordered: list[EdgarSubmission] = []
         ordered += closing_8k(filings, delist)
+        ordered += self._closing_without_201(filings, delist)
+        announcements = announcement_8k(filings, delist)
+        proxies = [d for f in filings if f.form in _PROXY_FORMS and (d := parse_date(f.filing_date))
+                   and (delist is None or delist - timedelta(days=730) <= d <= delist)]
+        last_proxy = max(proxies, default=None)
+        if last_proxy is not None:
+            ordered += [f for f in announcements if (d := _day(f)) and d > last_proxy]
         ordered += form_filings(filings, "DEFM14A", delist)
-        ordered += announcement_8k(filings, delist)
+        ordered += announcements
         ordered += form_filings(filings, "PREM14A", delist)
+        ordered += self._six_k(filings, delist)
 
         seen: set[str] = set()
         out: list[EdgarSubmission] = []
@@ -305,6 +479,25 @@ class LLMMergerTermsExtractor:
                 continue
             seen.add(f.accession)
             out.append(f)
+        return out
+
+    @staticmethod
+    def _closing_without_201(filings, delist) -> list[EdgarSubmission]:
+        if delist is None:
+            return []
+        span = timedelta(days=_CLOSING_ITEMS_DAYS)
+        out = [f for f in filings if f.form == "8-K" and "2.01" not in f.item_set
+               and f.item_set & _CLOSING_ITEMS and (d := _day(f)) and delist - span <= d <= delist + span]
+        out.sort(key=lambda f: abs((_day(f) - delist).days))
+        return out
+
+    @staticmethod
+    def _six_k(filings, delist) -> list[EdgarSubmission]:
+        if delist is None:
+            return []
+        before, after = _SIX_K_DAYS
+        out = [f for f in filings if f.form == "6-K" and (d := _day(f)) and delist - before <= d <= delist + after]
+        out.sort(key=lambda f: abs((_day(f) - delist).days))
         return out
 
     def _relevant_excerpts(self, text: str) -> str:
@@ -351,21 +544,22 @@ class LLMMergerTermsExtractor:
                 break
         return "\n...\n".join(pieces)
 
+    def cache_path(self, filing: EdgarSubmission, record: DelistRecord) -> Path:
+        """Where the answer for this filing and this target security is cached."""
+        acc_key = filing.accession.replace("-", "")
+        return self.cache_dir / (f"{acc_key}_{_sanitize_model(self.model)}_{PROMPT_VERSION}_"
+                                 f"{_sanitize_key(record.ticker or 'none')}.json")
+
     def _llm_extract(
-        self, excerpt: str, record: DelistRecord, filing: EdgarSubmission
+        self, excerpt: str, record: DelistRecord, filing: EdgarSubmission, security_name: str = ""
     ) -> MergerTerms | None:
         """Run (or load a cached) LLM extraction for one filing.
 
-        Cache key: ``{accession_no_dashes}_{sanitized_model}_{PROMPT_VERSION}.json``.
-        On a cache hit the stored dict is reused (no LLM call); otherwise the LLM
+        Cache key: ``cache_path``. On a cache hit the stored dict is reused (no LLM call); otherwise the LLM
         is called and its dict is written to the cache. Returns ``None`` when the
         (cached or fresh) payload is not a usable dict.
         """
-        acc_key = filing.accession.replace("-", "")
-        cache_path = (
-            self.cache_dir
-            / f"{acc_key}_{_sanitize_model(self.model)}_{PROMPT_VERSION}.json"
-        )
+        cache_path = self.cache_path(filing, record)
 
         raw: object
         if cache_path.exists():
@@ -377,7 +571,7 @@ class LLMMergerTermsExtractor:
             raw = None
 
         if not isinstance(raw, dict):
-            user_prompt = self._user_prompt(excerpt, record)
+            user_prompt = self._user_prompt(excerpt, record, filing, security_name)
             raw = self.llm.extract(SYSTEM_PROMPT, user_prompt, RESULT_SCHEMA)
             if isinstance(raw, dict):
                 self.cache_dir.mkdir(parents=True, exist_ok=True)
@@ -386,11 +580,16 @@ class LLMMergerTermsExtractor:
         return self._to_terms(raw, filing)
 
     @staticmethod
-    def _user_prompt(excerpt: str, record: DelistRecord) -> str:
+    def _user_prompt(excerpt: str, record: DelistRecord, filing: EdgarSubmission | None = None,
+                     security_name: str = "") -> str:
+        target = f"{security_name} (ticker {record.ticker})" if security_name else f"ticker {record.ticker}"
+        filed = f"Filing: {filing.form} filed {filing.filing_date}\n" if filing is not None else ""
         return (
             f"Target company ticker: {record.ticker}\n"
-            f"Observed delist date: {record.observed_delist_date or 'unknown'}\n\n"
-            "Extract the per-target-share merger consideration from the filing "
+            f"Target security: {target}\n"
+            f"Observed delist date: {record.observed_delist_date or 'unknown'}\n"
+            f"{filed}\n"
+            "Extract the package one share of the target security received, from the filing "
             "excerpt below.\n\n"
             "----- FILING EXCERPT -----\n"
             f"{excerpt}"
@@ -398,16 +597,32 @@ class LLMMergerTermsExtractor:
 
     @staticmethod
     def _to_terms(raw: object, filing: EdgarSubmission) -> MergerTerms | None:
-        """Convert a raw LLM dict into a ``MergerTerms`` (None if unusable)."""
+        """Convert a raw LLM dict into a ``MergerTerms`` (None if unusable). A cash amount the quote writes with a
+        currency takes that currency (the quote is the filing's own text), else the answer's `cash_currency`."""
         if not isinstance(raw, dict):
             return None
+        cash = _tolerant_float(raw.get("cash_per_share"))
+        quote = raw.get("quote") or ""
+        currency = (stated_currency(quote, cash) or normalize_currency(raw.get("cash_currency"))) if cash else ""
+        legs = []
+        for leg in raw.get("other_stock_legs") or ():
+            if isinstance(leg, dict) and _tolerant_float(leg.get("ratio")):
+                legs.append(StockLeg(_tolerant_float(leg.get("ratio")), _text(leg.get("issuer_name")),
+                                     _text(leg.get("ticker")), _text(leg.get("share_class"))))
         return MergerTerms(
             deal_type=raw.get("deal_type") or "other",
-            cash_per_share=_tolerant_float(raw.get("cash_per_share")),
+            cash_per_share=cash,
             stock_ratio=_tolerant_float(raw.get("stock_ratio")),
             acquirer_name=raw.get("acquirer_name"),
-            acquirer_ticker=raw.get("acquirer_ticker"),
+            acquirer_ticker=_text(raw.get("acquirer_ticker")) or None,     # "NULL" is no ticker (GRUB 2021)
             confidence=raw.get("confidence") or "low",
             source=f"{filing.form}:{filing.accession}",
-            quote=raw.get("quote") or "",
+            quote=quote,
+            cash_currency=currency,
+            stock_value=_tolerant_float(raw.get("stock_value_per_share")),
+            acquirer_share_class=_text(raw.get("acquirer_share_class")),
+            extra_legs=tuple(legs),
+            package_basis=_text(raw.get("package_basis")),
+            election_note=_text(raw.get("election_note")),
+            contingent_note=_text(raw.get("contingent_note")),
         )

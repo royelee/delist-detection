@@ -9,6 +9,7 @@ tables are renamed into place one at a time at the very end; see
 from __future__ import annotations
 
 import copy
+import inspect
 import sys
 from collections import Counter, defaultdict
 from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
@@ -61,7 +62,7 @@ from .listing_status import edgar_lists, issuer_exchange, listed_today, listing_
 from .observations import (
     Observation, ObservationError, ObservationIndex, TickerEra, eras_by_key, normalize_ticker, observation_conflicts,
 )
-from .payout_gate import BY_LINE, BY_TICKER, DEFAULT_TOL, GatedPayouts, gate_payouts
+from .payout_gate import BY_LINE, BY_TICKER, DEFAULT_TOL, GATE_SKIPPED, GatedPayouts, gate_payouts
 from .trading_calendar import next_trading_day
 from .prefetch import Serialized, warm
 from .reconstruction import (
@@ -87,7 +88,7 @@ from .ticker_resolver import InferredIssuer, TickerResolution, TickerResolver
 from .verdict import Verdicts
 from .verdict import decide as decide_verdicts
 from .contract import delisting_rows as contract_delisting_rows
-from .contract import id_change_rows, last_endings, security_history_rows, seed_rows
+from .contract import id_change_rows, last_endings, payout_leg_rows, security_history_rows, seed_rows
 from .payout_rule import merger_inputs
 from .issuer_in_force import Sighting as IssuerSighting
 from .issuer_in_force import issuer_changes
@@ -119,6 +120,7 @@ class Overrides:
     price_answers: dict = field(default_factory=dict)      # price_requests.PriceKey -> price (--price-answers)
     acquirer_prices: dict = field(default_factory=dict)    # DelistingKey -> (acquirer ticker, price), from price_answers
     otc_prints: dict = field(default_factory=dict)         # DelistingKey -> OTC print, from price_answers
+    plan_values: dict = field(default_factory=dict)        # DelistingKey -> an R6 plan's answered value (stage 9f)
 
 
 @dataclass
@@ -1047,21 +1049,35 @@ class _Payouts:
     added: dict[str, AddedSecurity]
     review: list[ReviewItem]
     price_tickers: dict[DelistingKey, str] = field(default_factory=dict)   # each stock leg's symbol on its price date
+    # a basket's further legs (ruling R3): ticker -> the run's security that held it on the price date
+    leg_sec_ids: dict[DelistingKey, dict[str, str]] = field(default_factory=dict)
 
 
-def _extract_payouts(ctx: _RunContext, mergers: list[Delisting], closes: dict[DelistingKey, float]
+def _extract_payouts(ctx: _RunContext, mergers: list[Delisting], closes: dict[DelistingKey, float],
+                     names: Mapping[str, str] = {}
                      ) -> tuple[dict[DelistingKey, Any], dict[DelistingKey, Any], list[ReviewItem]]:
-    """The regex payout read and the LLM merger terms of each merger, and the
+    """The regex payout read and the LLM merger terms of each merger (the LLM is told the target security's
+    name, `names` by sec_id: its class decides its terms, PARA's class B), and the
     review items: a failed extraction's `error`, and a read that rested on a
-    degraded answer (which also flags the merger's own row)."""
+    degraded answer (a failed EDGAR read or LLM call; it also flags the merger's own row)."""
     clients, raw, llm_terms = ctx.clients, {}, {}
     review: list[ReviewItem] = []
+    named = clients.llm_extractor is not None and \
+        "security_name" in inspect.signature(clients.llm_extractor.extract).parameters
     if ctx.sec_workers > 1 and clients.payout_extractor is not None:
-        # The regex payout reader's EDGAR reads, warmed. The LLM extractor is not
-        # warmed: its calls are paid, and it has its own cache.
+        # The regex payout reader's EDGAR reads, warmed.
         extractor = clients.payout_extractor
         warm(mergers, lambda e: extractor.extract(e.record, last_close=closes.get(e.key)),
              workers=ctx.sec_workers, name="payouts")
+    if ctx.sec_workers > 1 and named:
+        # The LLM calls the sequential pass makes, filled ahead on the worker threads (sub-plan 5f: a new prompt
+        # version asks every merger again). Each call fills the cache entry the sequential pass then reads: the
+        # same candidates in the same order, and a failed call is never cached, so the tables do not depend on the
+        # worker count. A warm thread pays for a call the sequential pass skips only when an EDGAR text read
+        # fails on one thread and not the other.
+        llm = clients.llm_extractor
+        warm(mergers, lambda e: llm.extract(e.record, security_name=names.get(e.sec_id, "")),
+             workers=ctx.sec_workers, name="llm terms")
     for e in mergers:
         key = e.key
         watch = DegradedWatch()
@@ -1069,7 +1085,8 @@ def _extract_payouts(ctx: _RunContext, mergers: list[Delisting], closes: dict[De
             if clients.payout_extractor is not None:
                 raw[key] = clients.payout_extractor.extract(e.record, last_close=closes.get(key))
             if clients.llm_extractor is not None:
-                t = clients.llm_extractor.extract(e.record)
+                t = clients.llm_extractor.extract(e.record, security_name=names.get(e.sec_id, "")) if named \
+                    else clients.llm_extractor.extract(e.record)
                 if t is not None:
                     llm_terms[key] = t
         except FATAL:
@@ -1102,7 +1119,7 @@ def _leg_evidence(e: Delisting, llm_terms: Mapping[DelistingKey, Any], overrides
     if given is not None:
         return (normalize_ticker(given.get("acquirer_ticker") or ""), "", "") if given.get("stock_ratio") else None
     t = llm_terms.get(e.key)
-    if t is None or not t.stock_ratio:
+    if t is None or not (t.stock_ratio or getattr(t, "stock_value", None)):     # a dollar-valued leg too (PCYC)
         return None
     ticker = normalize_ticker(t.acquirer_ticker or "")
     return ("" if ticker.lower() in ("null", "none", "n-a") else ticker), t.acquirer_name or "", t.quote or ""
@@ -1157,7 +1174,9 @@ def _acquirer_lines(ctx: _RunContext, mergers: list[Delisting], llm_terms: Mappi
         try:
             if cik is None and ticker and resolver is not None:
                 cik = acquirer_line.issuer_by_ticker(resolver, subs, ticker, name, last, target_cik=e.cik)
-            elif cik is None and not ticker:
+            if cik is None:
+                # no ticker, or one that names no issuer on the last trade day (sub-plan 5f: prompt v3 gives
+                # today's ticker of a renamed acquirer, FDC 2019's FI for Fiserv's FISV): the run's issuer of the name
                 cik = acquirer_line.issuer_by_name(index.issuers(), subs, name, last, day, target_cik=e.cik)
         except FATAL:
             raise
@@ -1253,12 +1272,19 @@ def _gate(ctx: _RunContext, mergers: list[Delisting], trade_day: dict[DelistingK
         return got[0]
 
     regex = {k: pr for k, pr in raw.items() if pr is not None and pr.value is not None}
+    # ruling R5: a cash read the filing states in another currency than USD ("C$") cannot be checked against a USD
+    # close; the gate skips it with a flag (the contract publishes it with its currency)
+    foreign = {k: pr.currency for k, pr in regex.items() if getattr(pr, "currency", "") not in ("", "USD")}
+    regex = {k: pr for k, pr in regex.items() if k not in foreign}
     gated = gate_payouts(
         [e.key for e in mergers],
         {k: pr.value for k, pr in regex.items()}, {k: pr.source for k, pr in regex.items()},
         {k: pr.confidence for k, pr in regex.items()}, llm_terms, closes, overrides.merger_terms,
         acquirer_price, tol, line_price=line_price, line_first=line_first,
     )
+    for k, cur in foreign.items():
+        if k not in gated.payouts and not for_delisting(gated.merged_terms, k):
+            gated.flags[k] = gated.flags.get(k, ()) + (f"{GATE_SKIPPED}{cur}",)
     for e in mergers:
         # A lagged FTD close (no row on the next trading day) may carry an OTC or
         # stale price: flag the delisting when that price made it into its terms.
@@ -1424,7 +1450,8 @@ def _merger_payouts(ctx: _RunContext, delistings: list[Delisting], securities: d
     """8. Merger payouts, LLM terms, acquirer lines (8a), acquirer prices and acquirer securities."""
     mergers = [e for e in delistings if e.record.bucket is CrspBucket.MERGER]
     mark = ctx.meter.start()
-    raw, llm_terms, extraction_review = _extract_payouts(ctx, mergers, closes)
+    raw, llm_terms, extraction_review = _extract_payouts(ctx, mergers, closes,
+                                                         {sid: s.name or "" for sid, s in securities.items()})
     trade_day = {e.key: e.last_trade.day for e in delistings}
     lines, line_review = (_acquirer_lines(ctx, mergers, llm_terms, overrides, securities, sec_cusips, ftd, sightings,
                                           ftd_lo) if sightings is not None else ({}, []))
@@ -1444,7 +1471,31 @@ def _merger_payouts(ctx: _RunContext, delistings: list[Delisting], securities: d
     _flush_memo(ctx.clients)                  # the acquirer lookups resolved tickers
     ctx.meter.done("payouts", mark)
     return _Payouts(raw, llm_terms, gated, acquirer_ids, added, extraction_review + line_review + acquirer_review,
-                    price_tickers)
+                    price_tickers, _leg_holders(mergers, llm_terms, securities, sightings, sec_cusips, ftd))
+
+
+def _leg_holders(mergers: list[Delisting], llm_terms: Mapping[DelistingKey, Any], securities: dict[str, Security],
+                 sightings: Mapping[str, Sequence[Sighting]] | None, sec_cusips: dict[str, list[str]],
+                 ftd: FtdIndex) -> dict[DelistingKey, dict[str, str]]:
+    """Each basket's further legs (ruling R3, sub-plan 5f): the run's security that held the leg's ticker on the
+    price date (`acquirer_line.LineIndex.holder`, never the target itself); a leg no security of the run held has
+    none (LGFB's LION and STRZ)."""
+    out: dict[DelistingKey, dict[str, str]] = {}
+    baskets = [e for e in mergers if e.last_trade.day is not None and (t := llm_terms.get(e.key)) is not None
+               and getattr(t, "is_basket", False)]
+    if not baskets or sightings is None:
+        return out
+    index = acquirer_line.LineIndex(securities, sightings, sec_cusips, ftd)
+    for e in baskets:
+        last = e.last_trade.day
+        held = {}
+        for leg in llm_terms[e.key].extra_legs:
+            ticker = normalize_ticker(leg.ticker or "")
+            sid = index.holder(ticker, last, next_trading_day(last), exclude=e.sec_id) if ticker else None
+            if sid:
+                held[ticker] = sid
+        out[e.key] = held
+    return out
 
 
 R1_CONTINUATION, R1_REBUCKETED = "r1_continuation", "r1_rebucketed"
@@ -1862,8 +1913,8 @@ def _handoffs(ctx: _RunContext, delistings: list[Delisting], securities: dict[st
     as a takeover by a line or an issuer that existed before (`decide_handoff`:
     the issuer's first EDGAR filing dates it), then acted on (`apply_handoffs`): a continuation's
     missing row is added, a successor or a ticker successor set, and the review
-    items it resolves dropped. A merger whose payout the gate kept counts as
-    reconciled. Returns the outcome; the caller adds its rows."""
+    items it resolves dropped. A merger whose payout the gate kept counts as reconciled, unless it is one share per
+    share and no cash (R1, sub-plan 5f: SPB 2018). Returns the outcome; the caller adds its rows."""
     clients, edgar = ctx.clients, ctx.clients.edgar
     fts = getattr(edgar, "full_text_search", None)
     sightings = {sid: filtered_ticker_sightings(sig, sec_cusips.get(sid, []), ftd)
@@ -1924,8 +1975,16 @@ def _handoffs(ctx: _RunContext, delistings: list[Delisting], securities: dict[st
             decisions.append(decision)
     ctx.meter.done("handoff search", mark)
     gated = payouts.gated
-    reconciled = {e.key for e in delistings if for_delisting(gated.payouts, e.key) is not None
-                  or for_delisting(gated.merged_terms, e.key)}
+
+    def one_for_one(key: DelistingKey) -> bool:
+        # R1 (sub-plan 5f): one share per share and no cash reconciling with the close proves nothing against a
+        # continuation (SPB 2018: one HRG share, the old line's close under the ticker the successor took)
+        terms = for_delisting(gated.merged_terms, key) or {}
+        return terms.get("stock_ratio") == 1.0 and not terms.get("cash_per_share") \
+            and for_delisting(gated.payouts, key) is None
+    reconciled = {e.key for e in delistings if (for_delisting(gated.payouts, e.key) is not None
+                                                or for_delisting(gated.merged_terms, e.key))
+                  and not one_for_one(e.key)}
     outcome = apply_handoffs(decisions, delistings, securities, review, reconciled=reconciled)
     for d in outcome.added:
         d.exchange = issuer_exchange(edgar, d.cik, d.ticker) or ""
@@ -2154,13 +2213,15 @@ def _distress(ctx: _RunContext, delistings: list[Delisting], sec_cusips: Mapping
 def _plan_values(overrides: Overrides, distress: Mapping[DelistingKey, DistressTerms]) -> Overrides:
     """9f. A bankruptcy plan's received close the caller answered (its ratio x the new line's close, the request
     stage 10g asks) is that ending's value, as an answered print is a drop's: its dlret is value / last close - 1
-    instead of the Shumway fill. An answer for another ticker, or an ending with a value of its own, is left."""
-    given = dict(overrides.otc_prints)
+    instead of the Shumway fill, with a method of its own (`dlret.DlretMethod.PLAN_STOCK`, sub-plan 5f: it is no
+    OTC print). An answer for another ticker, or an ending with a value of its own, is left."""
+    given = dict(overrides.plan_values)
     for key, t in distress.items():
         got = overrides.acquirer_prices.get(key)
-        if t.plan_ratio and got is not None and got[0] == t.plan_ticker and key not in given:
+        if t.plan_ratio and got is not None and got[0] == t.plan_ticker and key not in given \
+                and key not in overrides.otc_prints:
             given[key] = float(t.plan_ratio) * got[1]
-    return replace(overrides, otc_prints=given)
+    return replace(overrides, plan_values=given)
 
 
 def _delisting_rows(delistings: list[Delisting], closes: dict[DelistingKey, float], payouts: _Payouts,
@@ -2172,6 +2233,7 @@ def _delisting_rows(delistings: list[Delisting], closes: dict[DelistingKey, floa
         [e.record for e in delistings], last_trade_closes=closes, payouts=gated.payouts,
         exchanges={e.key: e.exchange for e in delistings},
         merger_terms=gated.merged_terms, recovery_ratios=overrides.recoveries, otc_prints=overrides.otc_prints,
+        plan_values=overrides.plan_values,
         payout_sources=gated.sources, payout_confidences=gated.confidences, payout_flags=gated.flags,
     )
     delisting_by_key = {e.key: e for e in delistings}
@@ -2633,12 +2695,17 @@ def _contract(ctx: _RunContext, read: Tables, verdicts: Verdicts, payouts: _Payo
     issuers = _issuers_in_force(ctx, read.observation_map, rows_decided)
     endings = last_endings(read.delistings)
     inputs = merger_inputs(list(endings.values()), payouts.llm_terms, payouts.raw, overrides.merger_terms,
-                           payouts.acquirer_ids, payouts.price_tickers)
+                           payouts.acquirer_ids, payouts.price_tickers, payouts.leg_sec_ids)
     ended = contract_delisting_rows(read, verdicts, inputs, distress)
+    basket_rows = payout_leg_rows(read, inputs)
     legs = stock_legs(list(endings.values()), payouts.llm_terms, overrides.merger_terms, payouts.acquirer_ids,
                       payouts.price_tickers)
     legs.update({k: (t.plan_ticker, "") for k, t in (distress or {}).items() if t.plan_ratio and k not in legs})
-    requests = request_rows(ended, endings, legs)
+    basket: dict[str, list[tuple[str, str]]] = defaultdict(list)
+    for r in basket_rows:
+        if r["leg"] > 1:
+            basket[r["sec_id"]].append((r["price_ticker"], r["price_sec_id"]))
+    requests = request_rows(ended, endings, legs, basket)
     unrequested = sorted(set(overrides.price_answers) - {key_of(r) for r in requests})
     if unrequested:
         raise OverrideFileError("--price-answers rows that answer no request of this run: "
@@ -2650,14 +2717,17 @@ def _contract(ctx: _RunContext, read: Tables, verdicts: Verdicts, payouts: _Payo
         "seeds": seed_rows(read, verdicts),
         "price_requests": requests,
         "id_changes": id_change_rows(id_baseline, read.securities, ctx.as_of.isoformat(), renames),
+        "payout_legs": basket_rows,
     }
 
 
-def _scorecard(ctx: _RunContext, read: Tables, config: run_scorecard.ScorecardConfig, limit: int | None) -> dict:
-    """10h. The scorecard of the tables about to be written (`read`), with
+def _scorecard(ctx: _RunContext, read: Tables, config: run_scorecard.ScorecardConfig, limit: int | None,
+               legs_rows: Sequence[Mapping[str, str]] | None = None) -> dict:
+    """10h. The scorecard of the tables about to be written (`read`; `legs_rows`: contract/payout_legs.csv's rows,
+    which the diagnosis judge reads), with
     `drops`: the floored numbers that got worse. A --limit subset sees a
     fraction of the universe, so its numbers are never compared to the floor."""
-    card = run_scorecard.build(read, as_of=ctx.as_of, config=config)
+    card = run_scorecard.build(read, as_of=ctx.as_of, config=config, legs_rows=legs_rows)
     card["drops"] = run_scorecard.drops(card, config.floor) if limit is None else []
     for line in card["drops"]:
         ctx.log(f"scorecard drop: {line}")
@@ -2766,7 +2836,7 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
     tables.update(_contract(ctx, _as_read(tables), verdicts, payouts, successor_ids, overrides,
                             id_baseline, {**_era_renames(eras, resolutions, answers.issuers), **lines.renames},
                             rows_decided, distress=distress))                                       # 10g
-    card = _scorecard(ctx, _as_read(tables), scorecard, limit)                                     # 10h
+    card = _scorecard(ctx, _as_read(tables), scorecard, limit, formatted("payout_legs", tables["payout_legs"]))  # 10h
 
     # 11. write -- every table formatted and written to its temp file first, so
     # a failure in any leaves every previous table; then renamed into place one

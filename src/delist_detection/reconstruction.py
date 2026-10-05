@@ -91,11 +91,12 @@ def enrich(
     payout_confidence: str | None = None,
     extra_flags: Iterable[str] = (),
     otc_print: float | None = None,
+    plan_value: float | None = None,
 ) -> EnrichedDelistRecord:
     res = resolve_dlret(
         record.bucket, exchange, last_trade_close,
         payout_per_share, stock_ratio, acquirer_price, recovery_ratio,
-        otc_print=otc_print,
+        otc_print=otc_print, plan_value=plan_value,
     )
     # No empty DLRET in the table: a completed merger or a fund/non-equity closure
     # with a known last price but no computable consideration has terminal value
@@ -175,6 +176,7 @@ def build_delistings_table(
     recovery_ratios: Mapping | None = None,
     otc_prints: Mapping | None = None,
     payout_sources: Mapping | None = None,
+    plan_values: Mapping | None = None,
     payout_confidences: Mapping | None = None,
     payout_flags: Mapping | None = None,
 ) -> list[EnrichedDelistRecord]:
@@ -191,6 +193,7 @@ def build_delistings_table(
     merger_terms = merger_terms or {}
     recovery_ratios = recovery_ratios or {}
     otc_prints = otc_prints or {}
+    plan_values = plan_values or {}
     payout_sources = payout_sources or {}
     payout_confidences = payout_confidences or {}
     payout_flags = payout_flags or {}
@@ -210,6 +213,7 @@ def build_delistings_table(
             acquirer_ticker=terms.get("acquirer_ticker"),
             recovery_ratio=for_delisting(recovery_ratios, key),
             otc_print=for_delisting(otc_prints, key),
+            plan_value=for_delisting(plan_values, key),
             payout_source=for_delisting(payout_sources, key),
             payout_confidence=for_delisting(payout_confidences, key),
             extra_flags=for_delisting(payout_flags, key) or (),

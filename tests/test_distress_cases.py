@@ -152,7 +152,8 @@ def _wolf():
 
 def test_an_answered_plan_received_close_is_the_plans_value_not_the_shumway_fill():
     """WOLF 2025: stage 10g asks the new line's received close; with the answer the ending's dlret is the ratio x
-    that close / the last close - 1 (a second run changes values only), never the bucket's Shumway -30%."""
+    that close / the last close - 1 (a second run changes values only), never the bucket's Shumway -30%. Its method
+    is its own (sub-plan 5f): a plan's new shares are no OTC print."""
     from delist_detection.dlret import DlretMethod
     from delist_detection.pipeline import Overrides, _plan_values
     from delist_detection.reconstruction import build_delistings_table
@@ -160,12 +161,16 @@ def test_an_answered_plan_received_close_is_the_plans_value_not_the_shumway_fill
     ratio = float(terms[d.key].plan_ratio)
     ov.acquirer_prices[d.key] = ("WOLF", 22.0)
     ov = _plan_values(ov, terms)
+    assert ov.otc_prints == {}
     rows = build_delistings_table([d.record], last_trade_closes={d.key: 1.85}, otc_prints=ov.otc_prints,
-                                  exchanges={d.key: d.exchange})
+                                  plan_values=ov.plan_values, exchanges={d.key: d.exchange})
     assert rows[0].dlret == pytest.approx(ratio * 22.0 / 1.85 - 1)
-    assert rows[0].dlret_method is DlretMethod.OTC_PRINT
+    assert rows[0].dlret_method is DlretMethod.PLAN_STOCK
     # an answer for another ticker is not the plan's
-    assert _plan_values(Overrides(acquirer_prices={d.key: ("XXXX", 22.0)}), terms).otc_prints == {}
+    assert _plan_values(Overrides(acquirer_prices={d.key: ("XXXX", 22.0)}), terms).plan_values == {}
+    # an answered OTC print of the same ending wins: the plan value is not set
+    assert _plan_values(Overrides(acquirer_prices={d.key: ("WOLF", 22.0)}, otc_prints={d.key: 1.0}),
+                        terms).plan_values == {}
 
 
 def test_a_plan_endings_last_close_is_never_the_new_lines():

@@ -62,18 +62,22 @@ def stock_legs(endings: Sequence[Mapping[str, str]], llm_terms: Mapping[Delistin
         t = llm_terms.get(key)
         ticker = price_tickers.get(key) or (normalize_ticker(t.acquirer_ticker) if t is not None and
                                             t.acquirer_ticker else "")
-        if t is not None and t.stock_ratio and ticker:
+        # a stock leg stated as a dollar value (PCYC) asks the acquirer's close too (sub-plan 5f)
+        if t is not None and (t.stock_ratio or getattr(t, "stock_value", None)) and ticker:
             out[key] = (ticker, acquirer_ids.get(key, ""))
     return out
 
 
 def request_rows(contract_rows: Sequence[Mapping[str, Any]], endings: Mapping[str, Mapping[str, str]],
-                 legs: Mapping[DelistingKey, tuple[str, str]]) -> list[dict[str, str]]:
+                 legs: Mapping[DelistingKey, tuple[str, str]],
+                 basket: Mapping[str, Sequence[tuple[str, str]]] = {}) -> list[dict[str, str]]:
     """price_requests.csv: per contract ending (`endings`: each sec_id's last real
     delistings.csv row, contract.last_endings) with a last trade date and no
     continuation, its last close, the first OTC print of a drop or distress ending (under
-    its published OTC symbol), and the received close of its stock leg (`legs`: a merger's,
-    or a bankruptcy plan's new line)."""
+    its published OTC symbol), the received close of its stock leg (`legs`: a merger's,
+    or a bankruptcy plan's new line), and of each further leg of a basket (`basket`: sec_id ->
+    [(ticker, sec_id)] of legs 2 and on, contract/payout_legs.csv; ruling R3). A basket leg's
+    answer is accepted and not used: the library prices no basket."""
     out: list[dict[str, str]] = []
     for c in contract_rows:
         ltd = c["last_trade_date"]
@@ -89,9 +93,9 @@ def request_rows(contract_rows: Sequence[Mapping[str, Any]], endings: Mapping[st
                         "lookup_sec_id": c["sec_id"], "lookup_ticker": c.get("price_ticker") or r["ticker"],
                         "date": next_trading_day(date.fromisoformat(ltd)).isoformat()})
         leg = legs.get(DelistingKey(r["sec_id"], r["delist_date"]))
-        if leg is not None:
+        for ticker, sid in ([leg] if leg is not None else []) + [b for b in basket.get(c["sec_id"], ()) if b[0]]:
             out.append({"sec_id": c["sec_id"], "last_trade_date": ltd, "kind": RECEIVED_CLOSE,
-                        "lookup_sec_id": leg[1], "lookup_ticker": leg[0],
+                        "lookup_sec_id": sid, "lookup_ticker": ticker,
                         "date": next_trading_day(date.fromisoformat(ltd)).isoformat()})
     return out
 

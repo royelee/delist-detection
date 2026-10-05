@@ -30,6 +30,13 @@ from delist_detection.truth_update import apply_round, flip_statuses
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def _legs_rows(out_dir: Path):
+    """contract/payout_legs.csv's rows, or None for a run before schema 3: a status flip judges a basket's legs
+    too (sub-plan 5f)."""
+    path = out_dir / "contract" / "payout_legs.csv"
+    return dl.read_csv(path) if path.exists() else None
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--label", required=True)
@@ -68,7 +75,8 @@ def main(argv: list[str] | None = None) -> int:
     except ValueError as exc:
         print(f"ABORTED: {exc}", file=sys.stderr)
         return 2
-    judged = judge_all(parse_rows(res.truth_rows, "updated truth", legs), LibraryRows.of(tables))
+    judged = judge_all(parse_rows(res.truth_rows, "updated truth", legs),
+                       LibraryRows.of(tables, _legs_rows(args.output_dir)))
     res.changes += flip_statuses(res.truth_rows, {j.case.case_id for j in judged if j.ok})
     summary = {"label": args.label, "round": args.round, "cases": len(cases), "records": len(records),
                "truth_changes": len(res.changes), "ledger_rows": len(res.ledger_rows), "retry": res.pending,

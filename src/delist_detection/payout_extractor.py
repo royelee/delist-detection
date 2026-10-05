@@ -15,6 +15,7 @@ import requests
 
 from .classifier import DelistRecord
 from .crsp_codes import CrspBucket
+from .currency import prefix_currency
 from .filing_selection import (
     announcement_8k,
     closing_8k,
@@ -30,6 +31,8 @@ class PayoutResult:
     source: str                # '8K_2.01' | '8K_1.01' | 'DEFM14A' | 'PRE14A' | 'none'
     accession: str
     quote: str
+    currency: str = ""         # the cash's currency as the filing writes it before "$" (ruling R5): "USD" for a bare
+                               # "$", "CAD" for "C$"; "" with no value
 
     @classmethod
     def none(cls) -> "PayoutResult":
@@ -172,12 +175,14 @@ def _passes_sanity(value: float, last_close: float | None) -> bool:
 
 
 def _collect(
-    text: str, last_close: float | None, allow_weak: bool
+    text: str, last_close: float | None, allow_weak: bool, currencies: dict[float, str] | None = None
 ) -> tuple[dict[float, int], dict[float, int], dict[float, str]]:
     """Scan text for per-share cash figures. Return (counts, mixed, quotes).
 
     counts[val] = total clean matches; mixed[val] = how many of those co-occur
     with a stock leg ("and/plus <ratio> shares"); quotes[val] = a sample snippet.
+    `currencies`, when given, gets each value's currency from its first match
+    (`currency.prefix_currency`: "C$65.50" is CAD, a bare "$" USD).
     """
     counts: dict[float, int] = {}
     mixed: dict[float, int] = {}
@@ -216,6 +221,8 @@ def _collect(
             if val not in quotes:
                 lo = max(0, m.start() - 40)
                 quotes[val] = text[lo:m.end() + 40].strip()
+                if currencies is not None:
+                    currencies[val] = prefix_currency(text, text.rindex("$", m.start(), m.start(1)))
     return counts, mixed, quotes
 
 
@@ -294,7 +301,8 @@ class PayoutExtractor:
                 text = self.edgar.fetch_filing_text(record.cik, f.accession, f.primary_doc)
                 if not text:
                     continue
-                counts, mixed, quotes = _collect(text, last_close, allow_weak)
+                currencies: dict[float, str] = {}
+                counts, mixed, quotes = _collect(text, last_close, allow_weak, currencies)
                 val, mixed_deal = _select(counts, mixed)
                 # A filing that establishes a mixed cash+stock deal settles the
                 # ticker: abstain rather than fall through to a later filing that
@@ -303,5 +311,5 @@ class PayoutExtractor:
                 if mixed_deal:
                     return _NONE
                 if val is not None:
-                    return PayoutResult(val, conf, source, f.accession, quotes[val][:160])
+                    return PayoutResult(val, conf, source, f.accession, quotes[val][:160], currencies.get(val, ""))
         return _NONE

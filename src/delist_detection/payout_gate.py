@@ -13,9 +13,42 @@ from .reconstruction import for_delisting
 DEFAULT_TOL = 0.15
 GATE_FAILED = "payout_gate_failed:"
 LLM_GATE_FAILED = "llm_gate_failed"
-DROP_REASONS = ("csv_override", "no_acq_ticker", "no_acq_price", "no_last_close", "fail_sanity")
+GATE_SKIPPED = "terms_gate_skipped:"   # terms the gate cannot check: a non-USD cash leg, a basket, a dollar-valued leg
+DROP_REASONS = ("csv_override", "no_acq_ticker", "no_acq_price", "no_last_close", "fail_sanity", "skipped")
 PACKAGE = "llm_election_package"     # an election's default cash-and-stock package settled the row
+ELECTION_CASH = "llm_election_cash"
 BY_TICKER, BY_LINE = "ticker", "line"   # which acquirer price settled a stock leg (`GatedPayouts.priced_by`)
+
+
+NULL_TICKERS = frozenset({"", "null", "none", "n/a", "n-a", "-"})
+
+
+def clean_ticker(ticker: object) -> str:
+    """The terms' acquirer ticker, blank for an LLM's spelled-out null ("NULL", "None", "N/A", "-": GRUB 2021's
+    terms), so a stock leg with no ticker is reported as `no_acq_ticker`, never as a price missing for "NULL"."""
+    t = ticker.strip() if isinstance(ticker, str) else ""
+    return "" if t.lower() in NULL_TICKERS else t
+
+
+def is_package(terms) -> bool:
+    """Whether the LLM answer names its package (prompt v3, sub-plan 5f): its cash and stock legs are what one share
+    became (ruling R4), an election's included, never its alternatives. An earlier answer's election legs were the
+    alternatives, and keep sub-plan 5e's either-or reading."""
+    return bool(getattr(terms, "package_basis", ""))
+
+
+def skip_reason(terms) -> str:
+    """Why the gate cannot check these terms against a USD close (ruling R5 and R3), "" when it can: the cash
+    leg's currency when it is not USD (the library has no FX source), `basket` for two or more securities, and
+    `stock_value` for shares stated as a dollar value over an averaging price the library does not have."""
+    cur = getattr(terms, "cash_currency", "") or ""
+    if terms.cash_per_share and cur and cur != "USD":
+        return cur
+    if getattr(terms, "extra_legs", ()):
+        return "basket"
+    if getattr(terms, "stock_value", None) and not terms.stock_ratio:
+        return "stock_value"
+    return ""
 
 
 @dataclass(frozen=True)
@@ -46,6 +79,18 @@ def reconcile(regex_value, last_close, llm_terms, acquirer_price, tol) -> Reconc
         flags.append(f"{GATE_FAILED}{regex_value:g}")
     if llm_terms is not None:
         cash, ratio = llm_terms.cash_per_share, llm_terms.stock_ratio
+        if is_package(llm_terms):
+            # A v3 answer's legs are the package to publish (ruling R4): a cash-only package is checked here, one
+            # with stock in the cash+stock gate (pass 2 of gate_payouts), an election as any other deal.
+            if not llm_terms.has_stock:
+                skip = skip_reason(llm_terms)
+                if skip:
+                    return Reconciled(None, None, None, "none", tuple(flags) + (f"{GATE_SKIPPED}{skip}",))
+                if _fits(cash, last_close, tol):
+                    return Reconciled(cash, None, None, ELECTION_CASH if llm_terms.deal_type == "election"
+                                      else "llm", tuple(flags))
+                flags.append(LLM_GATE_FAILED)
+            return Reconciled(None, None, None, "none", tuple(flags))
         if llm_terms.deal_type == "election":
             stock = ratio * acquirer_price if ratio is not None and acquirer_price is not None else None
             stock_fits, cash_fits = _fits(stock, last_close, tol), _fits(cash, last_close, tol)
@@ -159,15 +204,14 @@ def gate_payouts(
         has_csv = for_delisting(csv_terms, key) is not None
         terms = None if has_csv else llm_terms.get(key)
         regex, close = out.payouts.get(key), for_delisting(last_closes, key)
-        if terms is not None and terms.deal_type == "election":
-            tried = [(how, t, reconcile(regex, close, terms, p, tol))
-                     for how, t, p in prices(terms.acquirer_ticker or "", key)]
+        ticker = clean_ticker(terms.acquirer_ticker) if terms is not None else ""
+        if terms is not None and terms.deal_type == "election" and not is_package(terms):
+            tried = [(how, t, reconcile(regex, close, terms, p, tol)) for how, t, p in prices(ticker, key)]
             how, used, r = next(((h, t, x) for h, t, x in tried if x.source.startswith("llm")), None) \
-                or (tried[0] if tried else (BY_TICKER, terms.acquirer_ticker, reconcile(regex, close, terms, None, tol)))
+                or (tried[0] if tried else (BY_TICKER, ticker or None, reconcile(regex, close, terms, None, tol)))
         else:
-            how, used = BY_TICKER, terms.acquirer_ticker if terms else None
-            r = reconcile(regex, close, terms,
-                          acquirer_price(terms.acquirer_ticker, key) if terms and terms.acquirer_ticker else None, tol)
+            how, used = BY_TICKER, (ticker or None) if terms else None
+            r = reconcile(regex, close, terms, acquirer_price(ticker, key) if ticker else None, tol)
         if r.flags:
             out.flags[key] = r.flags
         if r.cash is not None:
@@ -190,12 +234,33 @@ def gate_payouts(
         out.flags[key] = out.flags.get(key, ()) + (f"terms_gate_failed:{reason}",)
 
     for key, terms in llm_terms.items():
-        if terms.stock_ratio is None or terms.deal_type == "election":
+        package = is_package(terms)
+        if not terms.has_stock or (terms.deal_type == "election" and not package):
             continue   # settled in pass 1
         if for_delisting(csv_terms, key) is not None:
             out.dropped["csv_override"] += 1
             continue
-        acq = (terms.acquirer_ticker or "").strip()
+        if package:
+            # Sub-plan 5f. A package that holds stock is what one share became (R4): a regex cash read beside it
+            # read an election's cash alternative (SUG's $44.25) or one leg, so it never stands for an election,
+            # nor when no last close can check the package (FWLT, AWH).
+            last_close = for_delisting(last_closes, key)
+            skip = skip_reason(terms)
+            regex = out.payouts.get(key)
+            # a regex read equal to the package's cash leg read that leg alone (SHAW 2013's $41.00 of $41.00 and
+            # 0.12883 CB&I shares): it never stands for the package, whatever the gate says of the stock leg
+            one_leg = regex is not None and bool(terms.cash_per_share) and abs(regex / terms.cash_per_share - 1) <= 0.01
+            if terms.deal_type == "election" or skip or one_leg or last_close is None or last_close <= 0:
+                drop_payout(key)
+            if skip:
+                out.dropped["skipped"] += 1
+                out.flags[key] = out.flags.get(key, ()) + (f"{GATE_SKIPPED}{skip}",)
+                continue
+            if last_close is None or last_close <= 0:
+                out.dropped["no_last_close"] += 1
+                flag_terms_gate_drop(key, "no_last_close")
+                continue
+        acq = clean_ticker(terms.acquirer_ticker)
         tried = prices(acq, key)
         if not acq and not tried:
             out.dropped["no_acq_ticker"] += 1
@@ -232,6 +297,9 @@ def gate_payouts(
             drop_payout(key)
         out.merged_terms[key] = d
         out.emitted += 1
+        if package:
+            out.sources[key] = PACKAGE if terms.deal_type == "election" else "llm"
+            out.confidences[key] = terms.confidence or "medium"
         # A cash leg is not expected to reconcile alone; the full terms settle the row.
         kept = tuple(f for f in out.flags.get(key, ()) if not f.startswith(GATE_FAILED))
         if kept:

@@ -39,6 +39,7 @@ class DlretMethod(str, Enum):
     EXCHANGE_TRANSFER_ZERO = "exchange_transfer_zero"
     RECOVERY_RATIO = "recovery_ratio"
     OTC_PRINT = "otc_print"
+    PLAN_STOCK = "plan_stock"          # ruling R6: a bankruptcy plan's new shares, at the caller's answered close
     SHUMWAY_NYSE_AMEX = "shumway_nyse_amex"
     SHUMWAY_NASDAQ = "shumway_nasdaq"
     WORTHLESS = "worthless"            # reserved; not emitted in v1
@@ -120,6 +121,7 @@ def resolve_dlret(
     acquirer_price: float | None = None,
     recovery_ratio: float | None = None,
     otc_print: float | None = None,
+    plan_value: float | None = None,
 ) -> DlretResult:
     if bucket is CrspBucket.EXPIRATION:
         return DlretResult(float("nan"), DlretMethod.DROPPED_EXPIRATION, None)
@@ -142,6 +144,8 @@ def resolve_dlret(
                 recovery_ratio - 1.0, DlretMethod.RECOVERY_RATIO,
                 recovery_ratio * last_trade_close,
             )
+        if plan_value is not None and plan_value > 0:
+            return DlretResult(plan_value / last_trade_close - 1.0, DlretMethod.PLAN_STOCK, plan_value)
         if otc_print is not None and otc_print > 0:
             return DlretResult(otc_print / last_trade_close - 1.0, DlretMethod.OTC_PRINT, otc_print)
         return _shumway_result(exchange)

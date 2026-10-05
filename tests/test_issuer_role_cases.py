@@ -58,7 +58,7 @@ STAY = {
     'BBG000BT0093': [('2024-09-10', 'exchange_transfer', 304, 'BBG01KJQM3Y8', 'same_issuer')],   # SIRI 2024
     'BBG000BVW841': [('2007-11-02', 'merger', 231, '', '')],   # TXU 2007: an LBO, renamed after
     'BBG000K1T0M8': [('2025-05-17', 'merger', 231, '', '')],   # LGFA 2025: the target of New Lionsgate
-    'BBG000PYZSR8': [('2016-05-18', 'exchange_transfer', 304, 'BBG000VPGNR2', 'same_issuer')],   # CHTR 2016
+    'BBG000PYZSR8': [('2016-05-18', 'merger', 231, '', '')],   # CHTR 2016: 0.9042 New Charter, a merger (rule 6, 5f)
     'BBG003444577': [('2014-12-25', 'merger', 231, '', '')],   # BKW 2014: 0.99 QSR and $3.00
     'BBG0038K9G41': [('2018-03-19', 'merger', 200, '', '')],   # LVNTA 2018: GCI Liberty existed (8,442 days)
     'CIK1011006-COMMON': [('2017-06-12', 'exchange_transfer', 304, '', '')],   # AABA 2017: no statement, no link

@@ -58,6 +58,22 @@ M_A_ITEMS = {"2.01", "5.01", "3.03"}
 NOTICE_MISSING_MERGER_DAYS = 120   # merger-evidence window when the 3.01 notice is unreadable
 BANKRUPTCY_STALE_DAYS = 180        # older than this, a confirmed 1.03 can predate an acquisition
 MERGER_8K_WINDOW_DAYS = 30         # how near the delisting a change-in-control 8-K must sit
+# sub-plan 5f: a 6-K or press-release 8-K this near the Form 25 that states the completion makes a merger
+COMPLETION_BEFORE_DAYS, COMPLETION_AFTER_DAYS = 30, 10
+COMPLETION = re.compile(r"(?i)\bcomplet(?:ed|es|ion of)\s+(?:its\s+|the\s+|of\s+)?(?:previously\s+announced\s+)?"
+                        r"(?:acquisition|merger|arrangement|amalgamation|plan\s+of\s+arrangement)\b")
+# spec 5c rule 6 (sub-plan 5f): a successor registration whose own-share statement is a split factor (1/n or n
+# shares per share) keeps the security's stake: a consolidation into the successor, not a merger (SIRI 2024's 0.1)
+SPLIT_FACTOR_MAX = 100
+
+
+def _split_factor(ratio: float) -> bool:
+    """Whether `ratio` shares per share is a split or a consolidation (n or 1/n for a whole n up to
+    SPLIT_FACTOR_MAX, 1 included): the holders keep their stake (rule 6's guard, SIRI 2024)."""
+    if ratio <= 0:
+        return False
+    n = ratio if ratio >= 1 else 1 / ratio
+    return round(n) <= SPLIT_FACTOR_MAX and abs(n - round(n)) < 1e-6
 
 
 def _is_change_in_control(items: set[str]) -> bool:
@@ -507,10 +523,34 @@ class DelistClassifier:
             _add_flag(flags, "r1_continuation")
             return rec(304, CrspBucket.EXCHANGE_TRANSFER, "medium",
                        f"Continuation (R1): each share became one share {r1.target[:80].strip()}, no cash")
+        # Sub-plan 5f: a filer with no 8-K item that decides (a foreign private issuer files 6-Ks) reports the
+        # completion in a 6-K or a press-release 8-K near the Form 25 (TAHO's and KING's 6-Ks, BPYU's 7.01 8-K)
+        done = self._completion_report(cik, filings, delist_filing) if delist_filing is not None else ""
+        if done:
+            return rec(231, CrspBucket.MERGER, "medium",
+                       f"Completed acquisition reported in {done}, near the Form 25 (no 8-K item code)")
         flags.append("no_evidence_default")
         return rec(None, CrspBucket.UNKNOWN, "low",
                    "Delisted/deregistered without merger or distress evidence",
                    deregistered=bool(delist_filing or dereg))
+
+    def _completion_report(self, cik: int, filings: list[EdgarSubmission], form25: EdgarSubmission) -> str:
+        """Sub-plan 5f: the "<form> <date>" of the 6-K or 8-K filed in [F − COMPLETION_BEFORE_DAYS, F +
+        COMPLETION_AFTER_DAYS] of the Form 25 day F (nearest first) whose text states a completed acquisition,
+        merger, arrangement or amalgamation (`COMPLETION`: "completes acquisition of", "the completion of the
+        acquisition", "has completed its previously announced acquisition"); "" when none does. Read only where
+        nothing else decided (the no-evidence default)."""
+        day = _parse_date(form25.filing_date)
+        if day is None:
+            return ""
+        lo, hi = day - timedelta(days=COMPLETION_BEFORE_DAYS), day + timedelta(days=COMPLETION_AFTER_DAYS)
+        near = [f for f in filings if f.form in ("6-K", "8-K") and (d := _parse_date(f.filing_date))
+                and lo <= d <= hi]
+        near.sort(key=lambda f: (abs((_parse_date(f.filing_date) - day).days), f.filing_date, f.accession))
+        for f in near:
+            if COMPLETION.search(self.edgar.fetch_filing_text(cik, f.accession, f.primary_doc) or ""):
+                return f"{f.form} {f.filing_date}"
+        return ""
 
     def _classify_items(self, items: set[str]) -> tuple[int | None, str]:
         """Map an 8-K item set to a CRSP DLSTCD-style code.
@@ -766,6 +806,16 @@ class DelistClassifier:
                                                            era, delist_filing_override))
             items_code, _ = self._classify_items(set(era.item_filed))
             verdict = end_of_era.resolve(era, items_code)
+            if verdict.branch == "successor":
+                # spec 5c rule 6 (sub-plan 5f): a successor registration whose own-share statement gives another
+                # ratio, or cash, is a stock (or cash-plus-stock) merger priced on the successor line (CHTR 2016:
+                # 0.9042 New Charter); a split factor is a consolidation into it (SIRI 2024's 0.1 New Sirius)
+                own = self._own_terms(resolution.cik, resolution.name, filings, [observed], delist_filing_override)
+                if own is not None and not own.ambiguous and (own.cash or not _split_factor(own.ratio)):
+                    verdict = end_of_era.EraVerdict(
+                        "successor_merger", 231, CrspBucket.MERGER,
+                        f"{verdict.reason.split(':')[0]}: each share became {own.ratio:g} shares "
+                        f"{own.target[:60].strip()}{' and cash' if own.cash else ''}, a merger (rule 6)")
             if verdict.branch == "continued_filings":
                 # read only where nothing else decided (sub-plan 5g, branch 5b): a voluntary delisting while
                 # winding down (EQC 2025)
@@ -833,14 +883,20 @@ class DelistClassifier:
         """Sub-plan 5c, R1: the filings around `days` state each share of the security's own class became one
         share, with no cash (`exchange_terms.own_exchange`, the class read from the security's name); else
         None."""
+        own = self._own_terms(cik, name, filings, days, form25)
+        return own if own is not None and own.one_for_one else None
+
+    def _own_terms(self, cik: int, name: str | None, filings: list[EdgarSubmission], days: list[date],
+                   form25: EdgarSubmission | None) -> exchange_terms.OwnExchange | None:
+        """What the filings around `days` say each share of the security's own class became
+        (`exchange_terms.own_exchange`, the class read from the security's name); None without a statement."""
         days = [d for d in days if d]
         if not days:
             return None
         letter, words = exchange_terms.class_of(share_class_from_name(name), name)
         names = exchange_terms.registrant_names(self.edgar.submissions(cik), min(days), name or "")
         texts = exchange_terms.read_texts(self.edgar, cik, filings, days, self._matched_form25(cik, form25))
-        own = exchange_terms.own_exchange(texts, names=names, class_letter=letter, class_words=words)
-        return own if own is not None and own.one_for_one else None
+        return exchange_terms.own_exchange(texts, names=names, class_letter=letter, class_words=words)
 
     def _names_new_issuer(self, own: exchange_terms.OwnExchange, cik: int, day: date | None) -> bool:
         """R1's condition for a target that does not name the registrant by a pronoun: it carries a name the
