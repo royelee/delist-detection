@@ -425,6 +425,34 @@ def test_a_generic_class_descriptor_is_no_tracking_group(class_text):
     assert other_class(f, SecurityRef("S", "CLASS A", "common", "SOME CORP CLASS A"), ("Some Corp",)) == ""
 
 
+def test_a_class_expiry_outside_the_removal_window_is_no_last_trade():
+    """Roivant 2023: a Form 25 signed 2023-09-01 for "Warrant expiring 09/30/2026": no last trade."""
+    f = Form25("0001354457-23-000619", "25-NSE", "2023-09-01", "NASDAQ", "Warrant expiring 09/30/2026",
+               "17 CFR 240.12d2-2(a)(2)", "")
+    assert notice_last_trade(f) == (None, "")
+    early = Form25("a", "25-NSE", "2021-05-03", "NYSE", "Warrants expiring May 3, 2020", "", "")
+    assert notice_last_trade(early) == (None, "")
+
+
+NYSE_B_NOTICE = ("3. Pursuant to the above authorization, a press release was issued on {press} and an announcement "
+                 "was made on the 'ticker' of the Exchange at the close of the trading session on {press} of the "
+                 "suspension of trading in the Common Stock.{open}")
+
+
+def test_the_nyse_b_template_press_day_is_no_last_trade():
+    """TMA, IDARQ 2008: "an announcement was made on the 'ticker' of the Exchange at the close of the trading
+    session on D" gives the press day D, never a last trade; a stated opening ("before the opening of the trading
+    session on D2") is read, a bare template reads nothing."""
+    base = dict(accession="a", form="25-NSE", filing_date="2009-01-15", exchange="NYSE",
+                class_text="Common Stock", rule="17 CFR 240.12d2-2(b)(1)")
+    bare = Form25(**base, notice_text=NYSE_B_NOTICE.format(press="December 1, 2008", open=""))
+    assert notice_last_trade(bare) == (None, "")
+    opened = Form25(**base, notice_text=NYSE_B_NOTICE.format(
+        press="December 1, 2008", open=" Trading was suspended before the opening of the trading session on "
+                                       "December 5, 2008."))
+    assert notice_last_trade(opened) == (date(2008, 12, 4), "notice_b_unconfirmed")
+
+
 def test_a_rights_class_expiring_on_a_day_last_traded_that_day():
     """TMUSR 2020 (5d): Nasdaq's 25-NSE for "Subscription Rights Expiring 7/27/2020" carries an empty notice; the
     class text dates the expiry, the rights' last trading day (operator ruling of the 5b pre-check)."""

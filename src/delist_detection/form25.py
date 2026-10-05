@@ -436,9 +436,22 @@ def _class_expiry(f25: Form25) -> tuple[date | None, str]:
     m = _EXPIRING.search(f25.class_text or "")
     if not m:
         return None, ""
-    if m.group(4):
-        return _day(m.group(4)), "notice_expiry"
-    return date(int(m.group(3)), int(m.group(1)), int(m.group(2))), "notice_expiry"
+    day = _day(m.group(4)) if m.group(4) else date(int(m.group(3)), int(m.group(1)), int(m.group(2)))
+    # only an expiry that falls in [filing - 30 d, effective date]: a class "expiring 09/30/2026" on a 2023 Form 25
+    # is no last trade (Roivant)
+    try:
+        filed = date.fromisoformat(f25.filing_date)
+    except ValueError:
+        return None, ""
+    if not filed - timedelta(days=30) <= day <= filed + timedelta(days=10):
+        return None, ""
+    return day, "notice_expiry"
+
+
+# The NYSE 12d2-2(b) template's "an announcement was made on the 'ticker' of the Exchange ... at the close of the
+# trading session on D": D is the press day, never the last trade (TMA, IDARQ 2008).
+_PRESS_DAY = re.compile(r"announcement was made on the [^.]{0,80}?\bof the Exchange[^.]{0,60}?"
+                        r"(?:at|after) (?:the )?close of the trading session on", re.I)
 
 
 def _notice_day(t: str, involuntary: bool) -> tuple[date | None, str]:
@@ -446,12 +459,13 @@ def _notice_day(t: str, involuntary: bool) -> tuple[date | None, str]:
     if m and not involuntary:
         return previous_trading_day(_day(m.group(1))), "notice_a"
     # "at the close of the trading session on D", "after market close on D"
+    t_close = _PRESS_DAY.sub("PRESS", t)
     m = re.search(rf"(?:at|after) (?:the )?(?:market )?close(?: of (?:the )?(?:trading|market)(?: session)?)? on {_DATE}",
-                  t, re.I)
+                  t_close, re.I)
     if m:
         return _day(m.group(1)), "notice_close"
     # "before the opening of trading on D", "before market open on D", "prior to market open on D"
-    m = re.search(rf"(?:prior to|before) (?:the )?(?:market )?(?:open|opening)(?: of (?:the )?(?:trading|market))? "
+    m = re.search(rf"(?:prior to|before) (?:the )?(?:market )?(?:open|opening)(?: of (?:the )?(?:trading|market)(?: session| day)?)? "
                   rf"on {_DATE}", t, re.I)
     if m:
         return previous_trading_day(_day(m.group(1))), "notice_open"

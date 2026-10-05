@@ -20,6 +20,8 @@ from .trading_calendar import is_trading_day, previous_trading_day
 
 _MONTHS = ("January|February|March|April|May|June|July|August|September|October|November|December")
 _DATE = rf"((?:{_MONTHS})\s+\d{{1,2}},\s+\d{{4}})"
+# an optional weekday before the date ("on Friday, December 5, 2008": TMA, IDARQ 2008); same capture group
+_WDATE = r"(?:(?:Mon|Tues|Wednes|Thurs|Fri|Satur|Sun)day,?\s+)?" + _DATE
 # "on NASDAQ", "on the NYSE", "on The Nasdaq Global Select Market": the venue a timing phrase may name before its date
 _VENUE = r"(?: on (?:the )?[A-Z][\w.&]*(?: [A-Z][\w.&]*){0,4})?"
 _OPEN = (r"(?:(?:prior to|before|ahead of) (?:the )?(?:(?:market|NYSE|NASDAQ|Nasdaq|regular) )?"
@@ -33,6 +35,7 @@ _CLOSE = (r"(?:at|after|following|as of|effective as of|effective after|upon) (?
 # a sentence about the security's trading or listing stopping
 _STOP = re.compile(r"suspen|ceas|halt|delist|withdraw|no longer (?:be )?(?:listed|traded)|trading|traded|listed",
                    re.I)
+_BAD_MID = re.compile(r"\b(?:will|would|shall|may|could)\b|merger|consummat|complet|same day", re.I)
 _RECORD = re.compile(r"\brecord\b", re.I)
 _OBLIGATIONS = re.compile(r"obligation|reporting|duty to file|registration", re.I)
 _ABBREV = re.compile(r"\b(?:Inc|Corp|Co|Ltd|Inst|No|L\.P|N\.V|S\.A|U\.S|plc|p\.m|a\.m|St|Mr|Ms|Dr|Jr|Sr)\.$", re.I)
@@ -50,6 +53,11 @@ _RANK = {**{k: 0 for k in EXPLICIT_KINDS}, "8k_suspended": 1, "8k_suspended_unco
 OPEN_KINDS = frozenset({"8k_open", "8k_open_closing", "8k_open_effective"})
 
 CLOSING_DAY = "closing_day"         # last_trade_date_source of a worked-out closing day (never published)
+
+
+def _session_on_or_before(d: date) -> date:
+    """A stated last trade that falls on no session moves to the trading day before (CNDT 2019: Sunday)."""
+    return d if is_trading_day(d) else previous_trading_day(d)
 
 
 def _day(s: str) -> date:
@@ -128,37 +136,45 @@ def _read_sentence(s: str, flat: str) -> tuple[date | None, str]:
     def clear(m: re.Match) -> bool:      # not a record date ("holders of record as of the close of business on D")
         return not _RECORD.search(s[max(0, m.start() - 60):m.start()])
 
-    m = re.search(rf"{_OPEN}{_VENUE}(?: on)? {_DATE}", s, re.I)
+    m = re.search(rf"{_OPEN}{_VENUE}(?: on)? {_WDATE}", s, re.I)
     if m and clear(m):
         return previous_trading_day(_day(m.group(1))), "8k_open"
     if re.search(rf"{_OPEN}[^.]{{0,40}}?Closing Date", s, re.I) and (cd := _closing_date(flat)):
         return previous_trading_day(cd), "8k_open_closing"
-    m = re.search(rf"{_CLOSE}{_VENUE}(?: on)? {_DATE}", s, re.I)
+    m = re.search(rf"{_CLOSE}{_VENUE}(?: on)? {_WDATE}", s, re.I)
     if m and clear(m):
-        return _day(m.group(1)), "8k_close"
+        return _session_on_or_before(_day(m.group(1))), "8k_close"
     if re.search(rf"{_CLOSE}[^.]{{0,40}}?Closing Date", s, re.I) and (cd := _closing_date(flat)):
-        return cd, "8k_close_closing"
+        return _session_on_or_before(cd), "8k_close_closing"
     if re.search(r"(?:after|following) the Effective Time", s, re.I) and re.search(r"suspen|delist|ceas|halt", s, re.I):
         et = _effective_time(flat)
         days = [_day(d) for d in re.findall(_DATE, s)]
         if et is not None and (not days or et[0] in days):
             if et[1] >= CLOSE_MINUTES:
-                return et[0], "8k_close_effective"
+                return _session_on_or_before(et[0]), "8k_close_effective"
             if et[1] < OPEN_MINUTES:
                 return previous_trading_day(et[0]), "8k_open_effective"
     m = re.search(rf"last (?:day of trading|trading day|day (?:on which|that) [^.;]{{0,60}}? traded)[^.;]{{0,40}}?"
-                  rf"(?:was|will be|is|would be) {_DATE}", s, re.I) \
+                  rf"(?:was|will be|is|would be) {_WDATE}", s, re.I) \
         or re.search(rf"{_DATE},? (?:which|that) (?:was|will be|is|would be) the last (?:full )?(?:day|trading day)",
                      s, re.I) \
-        or re.search(rf"(?:continue to be|will be|remain) listed(?: and traded)?{_VENUE} through {_DATE}", s, re.I)
+        or re.search(rf"(?:continue to be|will be|remain) listed(?: and traded)?{_VENUE} through {_WDATE}", s, re.I)
     if m:
-        return _day(m.group(1)), "8k_last_day"
-    m = re.search(rf"suspended immediately on {_DATE}", s, re.I)
+        return _session_on_or_before(_day(m.group(1))), "8k_last_day"
+    m = re.search(rf"suspended immediately on {_WDATE}", s, re.I)
     if m:
         return _day(m.group(1)), "8k_suspended_unconfirmed"
     # Ruling R8: "suspended on D" with no timing word means the last trade was the trading day before D.
-    m = re.search(rf"suspended(?: (?:from )?trading)?(?: (?:of|in) [^.;]{{0,100}}?)?{_VENUE} on {_DATE}", s, re.I)
+    m = re.search(rf"suspended(?: (?:from )?trading)?(?: (?:of|in) [^.;]{{0,100}}?)?{_VENUE} on {_WDATE}", s, re.I)
     if m and not _OBLIGATIONS.search(s[max(0, m.start() - 80):m.start()]) and "immediately" not in m.group(0).lower():
+        return previous_trading_day(_day(m.group(1))), "8k_suspended"
+    # Ruling R8, date first: "On D, ... had been suspended from trading" (CBL 2020). Not with a modal, a completion
+    # word, another date or "immediate" between the date and the verb (BMC 2013: the merger closed and trading was
+    # suspended the same day; WeWork 2023: suspended immediately).
+    m = re.search(rf"\bOn {_WDATE},? (?P<mid>[^;]{{0,400}}?)\b(?:had been|has been|was|were) suspended(?: from trading)?\b",
+                  s)
+    if m and "immediate" not in s.lower() and not _OBLIGATIONS.search(s[max(0, m.end() - 80):m.end()]) \
+            and not _BAD_MID.search(m.group("mid")) and not re.search(_DATE, m.group("mid")):
         return previous_trading_day(_day(m.group(1))), "8k_suspended"
     return None, ""
 

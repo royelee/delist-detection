@@ -227,9 +227,11 @@ class DelistingFinder:
         got = closing_day(texts, lo, hi)
         return LastTrade(got[0], got[1], ("last_trade_date_unconfirmed",)) if got else None
 
-    def _eightk(self, cik: int, filings: list[EdgarSubmission], filed: date) -> tuple[date | None, str]:
+    def _eightk(self, cik: int, filings: list[EdgarSubmission], filed: date,
+                until: date | None = None) -> tuple[date | None, str]:
+        """The 3.01 8-Ks in [filed - EIGHTK_BEFORE_DAYS, `until` (default `filed`) + EIGHTK_AFTER_DAYS]."""
         return self._eightk_window(cik, filings, filed - timedelta(days=EIGHTK_BEFORE_DAYS),
-                                   filed + timedelta(days=EIGHTK_AFTER_DAYS), filed)
+                                   (until or filed) + timedelta(days=EIGHTK_AFTER_DAYS), filed)
 
     def _halt_feed_failures(self) -> tuple[date, ...]:
         """The halt feed's failed days so far on this thread (a halt client
@@ -251,7 +253,8 @@ class DelistingFinder:
         ticker (`SecurityContext.ticker_taken`): MIDAS is then read up to the
         day before (CCEP under CCE 2016, Johnson Controls plc under JCI 2016,
         JET's ADS under GRUB 2021), and such a halt is dropped. Without a text
-        day that disagrees, nothing is bounded (a successor's first fails rows
+        day that disagrees, nothing is bounded, and the bound is only tried when MIDAS's day under the ticker falls
+        before the still-trading cut (a successor's first fails rows
         can lag its first day: Sinclair Inc 2023, new TCF 2019)."""
         first_text = min(texts) if texts else None
 
@@ -304,9 +307,9 @@ class DelistingFinder:
         return list(dict.fromkeys([ticker, *others]))
 
     def _last_trade(self, cik: int, filings: list[EdgarSubmission], f25: Form25 | None, ticker: str,
-                    filed: date, ctx: SecurityContext | None = None) -> LastTrade:
+                    filed: date, ctx: SecurityContext | None = None, eightk_until: date | None = None) -> LastTrade:
         notice = notice_last_trade(f25) if f25 else (None, "")
-        eightk = self._eightk(cik, filings, filed)
+        eightk = self._eightk(cik, filings, filed, eightk_until)
         lo, hi = filed - timedelta(days=MIDAS_BEFORE_DAYS), filed + timedelta(days=MIDAS_AFTER_DAYS)
         confirmations = self._confirmations(
             self._tickers(ctx, ticker, lo, hi), filed, lo, hi, filed + timedelta(days=MIDAS_STILL_TRADING_DAYS),
@@ -673,8 +676,10 @@ class DelistingFinder:
                 rec.crsp_code, rec.bucket, rec.confidence = 304, CrspBucket.EXCHANGE_TRANSFER, "high"
                 rec.reason = f"Exchange transfer: the issuer's Form 25 {s.filing_date} with its 8-A12B {a.filing_date}"
                 rec.evidence["flags"] = [f for f in rec.evidence.get("flags", []) if f != "no_evidence_default"]
-        if lt.day is None and not continued and winner_sub.form not in ISSUER_FORM25_FORMS:
-            # Rule 4 (5d): the exchange filed the Form 25 at the closing; the closing day the 8-Ks give within
+        if lt.day is None and not continued and winner_sub.form not in ISSUER_FORM25_FORMS \
+                and not (winner_f25 and is_involuntary(winner_f25)):
+            # Rule 4 (5d): the exchange filed the Form 25 at the closing (never an involuntary (b) one: it follows the
+            # suspension by weeks, TMA 2008); the closing day the 8-Ks give within
             # CLOSING_BEFORE_DAYS of it, else the filing day itself, is the worked-out last trade. Taken after the
             # classification, which keeps its anchor (the filing day).
             filed = date.fromisoformat(min(s.filing_date for s, _ in group))
@@ -795,7 +800,10 @@ class DelistingFinder:
             # fails rows could show it stop: nothing says it ended there (WW 2013, a later name a snapshot
             # carried back; the line traded on to its 2025 bankruptcy). No ending; ended_without_delisting.
             return None
-        lt = self._last_trade(cik, filings, None, ticker, date.fromisoformat(ended_by), ctx)
+        # the 3.01 8-Ks are read up to the last sighting + EIGHTK_AFTER_DAYS: a suspension notice can follow the
+        # bankruptcy 8-K by weeks (VRM 2024); MIDAS stays anchored on the dating filing
+        lt = self._last_trade(cik, filings, None, ticker, date.fromisoformat(ended_by), ctx,
+                              eightk_until=max(date.fromisoformat(ended_by), date.fromisoformat(ctx.last_seen)))
         if lt.day is None and rec.bucket is CrspBucket.MERGER:
             # Rule 4 (5d): a merger with no Form 25 ends on the closing day its completion 8-K (the latest with
             # item 2.01 or 5.01 near the last sighting) states (FCL 2009, SGP 2009), never after the last sighting

@@ -1248,3 +1248,37 @@ def test_the_other_cik_in_forces_form25_of_another_class_letter_is_no_delisting_
     fake_edgar.raws["s25"] = _f25_raw("New York Stock Exchange LLC", class_text="Class B Common Stock")
     events, _ = finder.find(replace(_ctx(sec, listed=False, last_seen="2018-07-16"), other_cik=1487730))
     assert all(e.form25_sub is None for e in events)
+
+
+def test_the_fallback_reads_3_01_8ks_up_to_the_last_sighting_plus_five_days(fake_edgar):
+    """VRM 2024: the suspension 8-K (3.01) came 13 days after the bankruptcy 8-K that dates the fallback."""
+    fake_edgar.submissions_by_cik[11010] = [
+        EdgarSubmission("s1", "8-K", "2015-01-12", "2015-01-12", "1.03", "k.htm"),
+        EdgarSubmission("s2", "8-K", "2015-01-26", "2015-01-26", "3.01", "k2.htm"),
+    ]
+    fake_edgar.texts["s1"] = "Item 1.03 Bankruptcy or Receivership. The Company filed a chapter 11 petition. " + "x" * 300
+    fake_edgar.texts["s2"] = ("Item 3.01 Notice of Delisting. Trading in the common stock will be suspended at the "
+                              "opening of business on January 28, 2015. " + "x" * 300)
+    clf = DelistClassifier(fake_edgar, TickerResolver(fake_edgar))
+    sec = _sec("BBG_V", 11010, "VVV", "2010-01-01", "2015-01-28", "VVV CORP")
+    (ev,), _ = DelistingFinder(fake_edgar, clf).find(_ctx(sec, last_seen="2015-01-28"))
+    assert ev.record.delist_date == "2015-01-12"
+    assert (ev.last_trade.day, ev.last_trade.source) == (date(2015, 1, 27), "8k_301")
+
+
+def test_rule_4_never_dates_an_involuntary_form25_by_its_filing_day(fake_edgar):
+    """TMA 2008: a 12d2-2(b) Form 25 follows the suspension by weeks, so its filing day is no closing day; a
+    voluntary exchange Form 25 with nothing else still gets it."""
+    for cik, ticker, rule, expect in ((11020, "BBB", "17 CFR 240.12d2-2(b)(1)", None),
+                                      (11021, "CCC", "17 CFR 240.12d2-2(a)(3)", "closing_day")):
+        fake_edgar.submissions_by_cik[cik] = [EdgarSubmission(f"f{cik}", "25-NSE", "2012-09-14", "", "", "p.xml")]
+        fake_edgar.raws[f"f{cik}"] = _f25_raw("New York Stock Exchange LLC", rule=rule)
+        fake_edgar.company_map[ticker] = {"cik_str": cik, "ticker": ticker, "title": f"{ticker} CORP"}
+        clf = DelistClassifier(fake_edgar, TickerResolver(fake_edgar))
+        sec = _sec(f"BBG_{ticker}", cik, ticker, "2010-01-01", "2012-09-13", f"{ticker} CORP")
+        events, _ = DelistingFinder(fake_edgar, clf).find(_ctx(sec, last_seen="2012-09-13"))
+        (ev,) = events
+        if expect is None:
+            assert ev.last_trade.source != "closing_day"
+        else:
+            assert ev.last_trade.source == expect

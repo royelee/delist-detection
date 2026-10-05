@@ -33,6 +33,11 @@ CASES = {
     "BBG01HMFL081": "LLYVA 2025: delisted following the Effective Time, 4:05 p.m. (rule 1)",
     "BBG01HMFLTN1": "LLYVK 2025: delisted following the Effective Time, 4:05 p.m. (rule 1)",
     "BBG00VNLZL95": "TMUSR 2020: Subscription Rights Expiring 7/27/2020, the notice empty (rule 1)",
+    # review fixes: the weekday before the date, the fallback's 3.01 window, R8 with the date first
+    "BBG000BBG3P1": "TMA 2008: suspended prior to market opening on Friday, December 5 (weekday; a (b) notice)",
+    "BBG000PSSG77": "IDARQ 2008: suspended prior to the market opening on Friday, November 21 (weekday; a (b) notice)",
+    "BBG009NGKQ45": "VRM 2024: no Form 25; the 3.01 8-K came 13 days after the bankruptcy 8-K (fallback window)",
+    "BBG000B9YSK6": "CBL 2020: On November 2 ... had been suspended from trading: the 30th (R8, date first)",
     # rule 2: source order and R8
     "BBG003PGJHP5": "TMHC 2026: the 8-K's following the closing of trading beats the notice's bare date (rule 2)",
     "BBG002BHBHM1": "MNK 2020: suspended on October 12, no timing word: the 9th (R8, rule 2)",

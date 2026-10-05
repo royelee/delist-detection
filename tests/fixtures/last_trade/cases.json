@@ -1,6 +1,10 @@
 {
  "as_of": "2026-09-25",
  "cases": {
+  "BBG000B9YSK6": {
+   "note": "CBL 2020: On November 2 ... had been suspended from trading: the 30th (R8, date first)",
+   "terms": {}
+  },
   "BBG000BB5HV5": {
    "note": "ADCT 2010: effected the short-form merger on December 9 (rule 4)",
    "terms": {
@@ -10,6 +14,10 @@
      ""
     ]
    }
+  },
+  "BBG000BBG3P1": {
+   "note": "TMA 2008: suspended prior to market opening on Friday, December 5 (weekday; a (b) notice)",
+   "terms": {}
   },
   "BBG000BC2C10": {
    "note": "APA 2021: implemented the reorganization on March 1 (rule 4)",
@@ -307,6 +315,10 @@
     ]
    }
   },
+  "BBG000PSSG77": {
+   "note": "IDARQ 2008: suspended prior to the market opening on Friday, November 21 (weekday; a (b) notice)",
+   "terms": {}
+  },
   "BBG000PTXBV3": {
    "note": "HTS 2016: the 8-K's following the close of trading on July 12 beats the notice's bare date (rule 2, ruling)",
    "terms": {
@@ -357,6 +369,10 @@
   },
   "BBG005DKMJ67": {
    "note": "LTRPA 2023: MIDAS's October 27 stands (guard)",
+   "terms": {}
+  },
+  "BBG009NGKQ45": {
+   "note": "VRM 2024: no Form 25; the 3.01 8-K came 13 days after the bankruptcy 8-K (fallback window)",
    "terms": {}
   },
   "BBG00GBV88T6": {
@@ -425,6 +441,102 @@
   }
  },
  "securities": {
+  "BBG000B9YSK6": {
+   "cusips": [
+    "124830100"
+   ],
+   "eras": {
+    "CBL@2008-01-16": [
+     [
+      "CBL",
+      "2008-01-16",
+      "CBL & ASSOC PPTYS INC",
+      "",
+      ""
+     ],
+     [
+      "CBL",
+      "2008-05-31",
+      "CBL & ASSOC PPTYS INC",
+      "",
+      ""
+     ],
+     [
+      "CBL",
+      "2008-07-25",
+      "CBL & ASSOC PPTYS INC",
+      "",
+      ""
+     ],
+     [
+      "CBL",
+      "2008-11-18",
+      "CBL & ASSOC PPTYS INC",
+      "",
+      ""
+     ],
+     [
+      "CBL",
+      "2009-01-23",
+      "CBL & ASSOC PPTYS INC",
+      "",
+      ""
+     ],
+     [
+      "CBL",
+      "2009-03-20",
+      "CBL & ASSOC PPTYS INC",
+      "",
+      ""
+     ],
+     [
+      "CBL",
+      "2009-06-08",
+      "CBL & ASSOC PPTYS INC",
+      "",
+      ""
+     ]
+    ],
+    "CBL@2014-12-31": [
+     [
+      "CBL",
+      "2014-12-31",
+      "CBL & ASSOCIATES PROPERTIES INC.",
+      "",
+      ""
+     ],
+     [
+      "CBL",
+      "2015-06-30",
+      "CBL & ASSOCIATES PROPERTIES INC.",
+      "",
+      ""
+     ],
+     [
+      "CBL",
+      "2015-12-31",
+      "CBL & ASSOCIATES PROPERTIES INC.",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "history": [
+    [
+     "CBL",
+     "2008-01-03",
+     "2020-11-02"
+    ]
+   ],
+   "issuer_cik": 910612,
+   "line_tickers": [],
+   "listed": false,
+   "name": "CBL & ASSOCIATES PROPERTIES INC.",
+   "observed": true,
+   "security_type": "REIT",
+   "share_class": "COMMON"
+  },
   "BBG000BB5HV5": {
    "cusips": [
     "000886309"
@@ -494,6 +606,82 @@
    "line_tickers": [],
    "listed": false,
    "name": "ADC TELECOMMUNICATIONS",
+   "observed": true,
+   "security_type": "Common Stock",
+   "share_class": "COMMON"
+  },
+  "BBG000BBG3P1": {
+   "cusips": [
+    "885218107",
+    "885218800"
+   ],
+   "eras": {
+    "TMA@2008-01-16": [
+     [
+      "TMA",
+      "2008-01-16",
+      "THORNBURG MORTGAGE INC",
+      "",
+      ""
+     ],
+     [
+      "TMA",
+      "2008-05-31",
+      "THORNBURG MORTGAGE INC",
+      "",
+      ""
+     ],
+     [
+      "TMA",
+      "2008-07-25",
+      "THORNBURG MORTGAGE INC",
+      "",
+      ""
+     ]
+    ],
+    "TMA@2008-11-18": [
+     [
+      "TMA",
+      "2008-11-18",
+      "THORNBURG MORTGAGE INC",
+      "",
+      ""
+     ],
+     [
+      "TMA",
+      "2009-01-23",
+      "THORNBURG MORTGAGE INC",
+      "",
+      ""
+     ],
+     [
+      "TMA",
+      "2009-03-20",
+      "THORNBURG MORTGAGE INC",
+      "",
+      ""
+     ],
+     [
+      "TMA",
+      "2009-06-08",
+      "THORNBURG MORTGAGE INC",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "history": [
+    [
+     "TMA",
+     "2007-12-17",
+     "2008-12-01"
+    ]
+   ],
+   "issuer_cik": 892535,
+   "line_tickers": [],
+   "listed": false,
+   "name": "THORNBURG MORTGAGE INC",
    "observed": true,
    "security_type": "Common Stock",
    "share_class": "COMMON"
@@ -5301,6 +5489,79 @@
    "security_type": "Common Stock",
    "share_class": "COMMON"
   },
+  "BBG000PSSG77": {
+   "cusips": [
+    "451663108"
+   ],
+   "eras": {
+    "IAR@2008-01-16": [
+     [
+      "IAR",
+      "2008-01-16",
+      "IDEARC INC",
+      "",
+      ""
+     ],
+     [
+      "IAR",
+      "2008-05-31",
+      "IDEARC INC",
+      "",
+      ""
+     ],
+     [
+      "IAR",
+      "2008-07-25",
+      "IDEARC INC",
+      "",
+      ""
+     ],
+     [
+      "IAR",
+      "2008-11-18",
+      "IDEARC INC",
+      "",
+      ""
+     ],
+     [
+      "IAR",
+      "2009-01-23",
+      "IDEARC INC",
+      "",
+      ""
+     ],
+     [
+      "IAR",
+      "2009-03-20",
+      "IDEARC INC",
+      "",
+      ""
+     ],
+     [
+      "IAR",
+      "2009-06-08",
+      "IDEARC INC",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "history": [
+    [
+     "IAR",
+     "2007-12-17",
+     "2008-11-19"
+    ]
+   ],
+   "issuer_cik": 1367396,
+   "line_tickers": [],
+   "listed": false,
+   "name": "IDEARC INC",
+   "observed": true,
+   "security_type": "Common Stock",
+   "share_class": "COMMON"
+  },
   "BBG000PTXBV3": {
    "cusips": [
     "41902R103"
@@ -6003,6 +6264,52 @@
    "observed": true,
    "security_type": "Common Stock",
    "share_class": "SERIES C"
+  },
+  "BBG009NGKQ45": {
+   "cusips": [
+    "92918V109",
+    "92918V208"
+   ],
+   "eras": {
+    "VRM@2020-12-31": [
+     [
+      "VRM",
+      "2020-12-31",
+      "VROOM INC",
+      "",
+      ""
+     ],
+     [
+      "VRM",
+      "2021-06-30",
+      "VROOM INC",
+      "",
+      ""
+     ],
+     [
+      "VRM",
+      "2021-12-31",
+      "VROOM INC",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "history": [
+    [
+     "VRM",
+     "2020-06-11",
+     "2024-12-02"
+    ]
+   ],
+   "issuer_cik": 1580864,
+   "line_tickers": [],
+   "listed": false,
+   "name": "VROOM INC",
+   "observed": true,
+   "security_type": "Common Stock",
+   "share_class": "COMMON"
   },
   "BBG00BFHD827": {
    "cusips": [

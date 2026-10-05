@@ -31,7 +31,8 @@ MOVES = {
     # TMA 2008 (R6a; it moves once C stops its OTC tail from continuing it)
     'BBG000BBG3P1': ('C',
         ([('2009-01-25', 'compliance_failure', 573, '2008-12-01', False, '0000876661-09-000070', 892535)], []),
-        ([('2009-01-25', 'compliance_failure', 580, '2008-12-01', False, '0000876661-09-000070', 892535)], [])),
+        # last trade 12-04 (was the notice's press day 12-01: 5d's review fix reads the 8-K's "Friday, December 5")
+        ([('2009-01-25', 'compliance_failure', 580, '2008-12-04', False, '0000876661-09-000070', 892535)], [])),
     # IMB 2008 (likewise)
     'BBG000BLY636': ('C',
         ([('2008-08-17', 'compliance_failure', 573, '2008-07-14', False, '0000876661-08-000315', 773468)], []),
@@ -55,7 +56,8 @@ MOVES = {
     # IAR 2008
     'BBG000PSSG77': ('C',
         ([('2009-01-01', 'exchange_transfer', 304, '2008-11-19', True, '0000876661-08-000579', 1367396), ('2009-03-31', 'liquidation', 470, '2009-06-08', False, '', 1367396)], []),
-        ([('2009-01-01', 'compliance_failure', 570, '2008-11-19', False, '0000876661-08-000579', 1367396)], [])),
+        # last trade 11-20 (was the notice's press day 11-19: 5d's review fix reads the 8-K's "Friday, November 21")
+        ([('2009-01-01', 'compliance_failure', 570, '2008-11-20', False, '0000876661-08-000579', 1367396)], [])),
     # LTRPA 2023
     'BBG005DKMJ67': ('C',
         ([('2023-11-30', 'exchange_transfer', 304, '2023-10-27', True, '0001354457-23-000874', 1606745), ('2025-04-29', 'merger', 231, '2025-04-30', False, '', 1606745)], []),

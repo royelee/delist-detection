@@ -21,6 +21,14 @@ MOVES = {
         [('2010-12-19', 'merger', '2010-12-09', 'closing_day', True, 12.76)]),   # ADCT 2010: effected the short-form merger on December 9 (rule 4)
     'BBG000BC2C10': ('rule4', [('2021-03-14', 'exchange_transfer', '', '', False, None)],
         [('2021-03-14', 'exchange_transfer', '2021-03-01', 'closing_day', True, 19.52)]),   # APA 2021: implemented the reorganization on March 1 (rule 4)
+    'BBG000B9YSK6': ('rule1', [('2020-11-02', 'liquidation', '', '', True, 0.05)],
+        [('2020-11-02', 'liquidation', '2020-10-30', '8k_301', False, 0.15)]),   # CBL 2020: "On November 2 ... had been suspended from trading": the 30th (R8, date first)
+    'BBG000BBG3P1': ('rule1', [('2009-01-25', 'compliance_failure', '2008-12-01', 'ex99_notice', True, 0.38)],
+        [('2009-01-25', 'compliance_failure', '2008-12-04', '8k_301', False, 0.24)]),   # TMA 2008: "prior to market opening on Friday, December 5" (weekday); the (b) notice's 12-01 is the press day
+    'BBG000PSSG77': ('rule1', [('2009-01-01', 'compliance_failure', '2008-11-19', 'ex99_notice', True, 0.14)],
+        [('2009-01-01', 'compliance_failure', '2008-11-20', '8k_301', False, 0.02)]),   # IDARQ 2008: "prior to the market opening on Friday, November 21" (weekday)
+    'BBG009NGKQ45': ('rule1', [('2024-11-13', 'liquidation', '2024-12-02', '', True, 5.99)],
+        [('2024-11-13', 'liquidation', '2024-11-29', '8k_301', False, 5.0)]),   # VRM 2024: no Form 25; the 3.01 8-K came 13 days after the bankruptcy 8-K (the fallback's window)
     'BBG000BCTL84': ('rule2', [('2012-01-08', 'liquidation', '2011-11-23', 'ex99_notice', True, 0.31)],
         [('2012-01-08', 'liquidation', '2011-10-21', '8k_301', False, 0.31)]),   # PMI 2011: halted on October 21, the last day it traded (rule 2)
     'BBG000BF1R66': ('rule3', [('2016-01-24', 'merger', '2016-01-15', 'midas', False, 127.26)],

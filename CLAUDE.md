@@ -371,7 +371,9 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
 - `form25.py` — parses a Form 25's XML or text (exchange, `class_text`, rule),
   labels the exchange, reads `class_kind` (common/preferred/warrant/unit/…)
   from the class text, and `match_security()`s it to one observed security of
-  that kind/class letter. Sub-plan 5b: `is_involuntary` (a removal under rule 12d2-2(b)); `Form25.solely` and
+  that kind/class letter. Sub-plan 5b: `is_involuntary` (a removal under rule 12d2-2(b)); `notice_last_trade` never reads the NYSE (b) template's "an
+  announcement was made on the 'ticker' ... at the close of the trading session on D" press day, and `_class_expiry`
+  takes an expiry only within [filing - 30 d, filing + 10 d]; `Form25.solely` and
   `other_class` (R3: a Form 25 that relates solely to a non-common class, or whose lettered tracking-stock segments
   name no word of the security's name, is not its own; a "solely" text that names a common class (COMMON, ORDINARY,
   SHARES) is the common's, generic descriptors such as SUBORDINATE, CONVERTIBLE, RESTRICTED, LIMITED,
@@ -400,7 +402,10 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   trading/business/market [on <venue>] on D"; the Closing Date and an "after the Effective Time" at 4 p.m. or
   later resolve from the filing), the last day ("last day ... traded", "which was the last day", "continue to be
   listed through D"), a bare "suspended (trading ...) on D" (`8k_suspended`, the trading day before D: ruling R8)
-  and "suspended immediately on D" (D, unconfirmed); a stated timing ranks first (`reading_rank`). Source order:
+  and "suspended immediately on D" (D, unconfirmed), and, date first, "On D, ... had been/was suspended (from
+  trading)" (`8k_suspended` too: CBL 2020; no modal, completion word, other date or "immediate": BMC 2013, WeWork
+  2023); a weekday may precede any date ("on Friday, December 5, 2008": TMA, IDARQ); a stated close or last day
+  that falls on no session moves to the trading day before (CNDT 2019); a stated timing ranks first (`reading_rank`). Source order:
   MIDAS, then a halt (but the 8-K's day when it puts the halt at the open of the halt day, `OPEN_KINDS`: WM 2008,
   ruling R8), the notice's own timing, then an 8-K timing that disagrees with the notice's bare date
   (`BARE_NOTICE_KINDS`: TMHC 2026), then the notice, then the 8-K. `closing_day(texts, lo, hi)` (rule 4): when nothing states the last
@@ -436,7 +441,8 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   2008). Rule 4: a row still undated, not continued, under an exchange's Form 25
   (not the issuer's 25), takes `_closing_day` (the 8-Ks in [F − 10, F + 10] for [F − 10, F],
   `CLOSING_BEFORE_DAYS`/`CLOSING_TEXT_AFTER_DAYS`) else the Form 25 day F, source `closing_day`, flagged
-  `last_trade_date_unconfirmed`, after the classification (whose anchor stays F); a no-Form-25 merger fallback
+  `last_trade_date_unconfirmed`, after the classification (whose anchor stays F); a no-Form-25 fallback reads the 3.01 8-Ks up to its last sighting + `EIGHTK_AFTER_DAYS` (VRM 2024); rule 4 never
+  runs under an involuntary (b) Form 25 (it follows the suspension by weeks: TMA); a no-Form-25 merger fallback
   takes the closing day its latest 2.01/5.01 8-K near the last sighting states (FCL, SGP 2009), never after the
   last sighting. Sub-plan 5h: `SecurityContext.has_cusips`: a security with no CUSIP gets no continued-filings
   ending dated by its last sighting alone (`ended_without_delisting` instead: WW 2013, NCRA 2013).

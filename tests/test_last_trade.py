@@ -71,6 +71,53 @@ def test_eightk_suspension_before_the_open_in_other_words(sentence, last_day):
     assert eightk_last_trade(_k(sentence)) == (last_day, "8k_open")
 
 
+@pytest.mark.parametrize("sentence, last_day", [
+    ("trading in the Company's common stock would be suspended prior to the market opening on Friday, "
+     "November 21, 2008", date(2008, 11, 20)),                                                      # IDARQ 2008
+    ("the common stock would be suspended from trading prior to market opening on Friday, December 5, 2008",
+     date(2008, 12, 4)),                                                                            # TMA 2008
+])
+def test_a_weekday_may_come_before_the_date(sentence, last_day):
+    assert eightk_last_trade(_k(sentence)) == (last_day, "8k_open")
+    # a close: the day itself (LNT 2018)
+    assert eightk_last_trade(_k("Alliant's common stock will cease trading at market close on Friday, "
+                                "December 28, 2018")) == (date(2018, 12, 28), "8k_close")
+
+
+def test_a_stated_close_on_a_day_with_no_session_is_the_trading_day_before():
+    """CNDT 2019: "will end at market close on December 22, 2019" (a Sunday): Friday the 20th."""
+    got = eightk_last_trade(_k("listing and trading of the Common Stock on NYSE will end at market close on "
+                               "December 22, 2019, and that trading will begin on Nasdaq at market open on "
+                               "December 23, 2019"))
+    assert got == (date(2019, 12, 20), "8k_close")
+
+
+def test_r8_with_the_date_first_is_the_trading_day_before():
+    """CBL 2020: "On November 2, 2020, ... was notified by the NYSE ... that the REIT's common stock had been
+    suspended from trading": the last trade was Friday October 30."""
+    s = ("On November 2, 2020, CBL & Associates Properties, Inc. (the “REIT”) was notified by the New York Stock "
+         "Exchange (“NYSE”) that the REIT’s common stock, par value $.01 per share – ticker symbol CBL – had been "
+         "suspended from trading due to its “abnormally low” trading price levels.")
+    assert eightk_last_trade(_k(s)) == (date(2020, 10, 30), "8k_suspended")
+
+
+@pytest.mark.parametrize("sentence", [
+    # BMC 2013: the merger closed and, the same day, trading was suspended (the day itself traded)
+    "On September 10, 2013, the Company completed the Merger, and on the same day trading in the Common Stock was "
+    "suspended",
+    "On September 10, 2013, the NYSE announced that trading in the Common Stock would be suspended",
+    "On September 10, 2013, the NYSE notified the Company that on September 12, 2013 trading was suspended",
+])
+def test_r8_with_the_date_first_refuses_a_completion_a_modal_or_another_date(sentence):
+    assert eightk_last_trade(_k(sentence)) == (None, "")
+
+
+def test_r8_with_the_date_first_leaves_an_immediate_suspension_unconfirmed():
+    """WeWork 2023: "suspended immediately" keeps D itself, unconfirmed (5d's rule)."""
+    s = "On November 7, 2023, the NYSE notified the Company that trading in the Common Stock was suspended immediately"
+    assert eightk_last_trade(_k(s)) != (date(2023, 11, 6), "8k_suspended")
+
+
 def test_a_notice_received_on_a_day_is_not_a_suspension():
     assert eightk_last_trade(_k("On August 18, 2022, the Company received a notice from the Exchange")) == (None, "")
 
