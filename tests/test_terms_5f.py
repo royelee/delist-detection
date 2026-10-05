@@ -199,6 +199,15 @@ def test_a_fixed_mix_package_that_fails_keeps_a_regex_cash_that_fits():
     assert g.payouts[K] == 12.0 and K not in g.merged_terms
 
 
+def test_an_answer_that_states_no_package_keeps_the_either_or_reading():
+    """CBSS 2007: "$71.82 in cash or 2.8 BBVA ADSs, subject to proration", no default and no final result: the two
+    alternatives are never summed into a package; the one nearest the close settles the row, as before v3."""
+    t = _v3("election", 71.82, 2.8, "BBV", basis="none")
+    r = reconcile(None, 64.36, t, 30.0, DEFAULT_TOL)          # 2.8 x 30 is 30% off: the cash is nearer
+    assert (r.cash, r.stock_ratio, r.source) == (71.82, None, ELECTION_CASH)
+    assert _gate(t, close=64.36, price=30.0).merged_terms == {}
+
+
 def test_a_cash_only_election_package_is_the_election_cash():
     """CZR 2020: the no-election default was cash, $12.41."""
     r = reconcile(None, 12.37, _v3("election", 12.41, basis="default"), None, DEFAULT_TOL)

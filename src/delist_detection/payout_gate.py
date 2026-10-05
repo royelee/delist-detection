@@ -30,11 +30,15 @@ def clean_ticker(ticker: object) -> str:
     return "" if t.lower() in NULL_TICKERS else t
 
 
+PACKAGE_BASES = frozenset({"final_prorated", "default", "fixed"})
+
+
 def is_package(terms) -> bool:
     """Whether the LLM answer names its package (prompt v3, sub-plan 5f): its cash and stock legs are what one share
     became (ruling R4), an election's included, never its alternatives. An earlier answer's election legs were the
-    alternatives, and keep sub-plan 5e's either-or reading."""
-    return bool(getattr(terms, "package_basis", ""))
+    alternatives, and so are those of a v3 answer that states no package (basis `none`: CBSS 2007's $71.82 or 2.8
+    BBVA ADSs): both keep sub-plan 5e's either-or reading."""
+    return getattr(terms, "package_basis", "") in PACKAGE_BASES
 
 
 def skip_reason(terms) -> str:
