@@ -1,5 +1,5 @@
 """Build tests/fixtures/verdicts/ from the committed output/ and the local caches, once (sub-plan 5i): the real cases
-whose verdicts tests/test_verdict_cases.py recomputes offline (spec ruling 2.3, `verdict_rules`, and stage 9f's
+whose verdicts tests/test_verdict_cases.py recomputes offline (spec ruling 2.3, `verdict_rules`, and stage 9g's
 `continuation_evidence`).
 
   PYTHONPATH=src python scripts/build_verdict_fixtures.py        # -> tests/fixtures/verdicts/
@@ -9,7 +9,7 @@ Offline: every SEC request is refused (scripts/build_form25_fixtures.py's guard)
 - cases.json: for each case (tests/verdict_cases.py's CASES), the rows of output/'s securities, ticker_history,
   delistings, observation_map and review tables for the case's securities and the successors their endings name,
   and the uncertain.csv rows the committed run gave them (the verdicts before 5i);
-- edgar.json.gz: what stage 9f's reading of the cases' continuations asks of EDGAR (each CIK's filings and names, and
+- edgar.json.gz: what stage 9g's readings of the cases' continuations asks of EDGAR (each CIK's filings and names, and
   every filing text it reads), recorded through the cached client.
 """
 from __future__ import annotations
@@ -27,7 +27,7 @@ sys.path.insert(0, str(ROOT / "tests"))
 
 import build_form25_fixtures  # noqa: E402,F401  (refuses every SEC request on import)
 import verdict_cases as vc  # noqa: E402
-from delist_detection.continuation_evidence import confirming_filing, needs_filing  # noqa: E402
+from delist_detection.continuation_evidence import needs_doubt_check, needs_filing, read_continuation  # noqa: E402
 from delist_detection.edgar import EdgarClient  # noqa: E402
 from delist_detection.lifecycle import Tables  # noqa: E402
 
@@ -35,7 +35,7 @@ TABLES = ("securities", "ticker_history", "delistings", "observation_map", "revi
 
 
 class RecordingEdgar:
-    """The cached client, recording the answers stage 9f's reading takes."""
+    """The cached client, recording the answers stage 9g's readings take."""
 
     def __init__(self, inner: EdgarClient) -> None:
         self.inner = inner
@@ -73,9 +73,11 @@ def main() -> int:
         out[case.name]["uncertain_before"] = [r for r in t.uncertain if r["sec_id"] in ids]
         names = {r["sec_id"]: r["name"] for r in t.securities}
         for r in out[case.name]["delistings"]:
-            if r["sec_id"] in names and needs_filing(r["reason"], r["sec_id"], r["successor_sec_id"]):
+            if r["sec_id"] in names and (needs_filing(r["reason"], r["sec_id"], r["successor_sec_id"])
+                                         or needs_doubt_check(r["reason"], r["sec_id"], r["successor_sec_id"])):
                 days = [date.fromisoformat(d) for d in (r["last_trade_date"], r["delist_date"]) if d]
-                confirming_filing(edgar, int(r["cik"]), days, names[r["sec_id"]])
+                read_continuation(edgar, int(r["cik"]), days, names[r["sec_id"]], r["reason"], r["sec_id"],
+                                  r["successor_sec_id"], [names.get(r["successor_sec_id"], "")])
     target = ROOT / "tests/fixtures/verdicts"
     target.mkdir(parents=True, exist_ok=True)
     (target / "cases.json").write_text(json.dumps(out, indent=1, sort_keys=True) + "\n")

@@ -8,7 +8,8 @@ enforces"; decisions 1, 4 and 9).
   resolved to it falls inside its ticker history; and when no other security
   holds one of its tickers over an overlapping date range, unless an ending
   of one hands the ticker to the other. A seed past the history after a
-  settled last ending (`verdict_rules.stale_seed`) does not count, and an
+  settled last ending (`verdict_rules.stale_seed`: not one whose row carries a last-trade conflict or
+  one-for-one merger terms, and within a year of its last trade) does not count, and an
   observed security closed with no ending at all is uncertain
   (`verdict_rules.closed_without_ending`).
 - An ending (a delistings.csv row whose successor is not the security itself)
@@ -38,7 +39,10 @@ enforces"; decisions 1, 4 and 9).
 `uncertain_rows` is uncertain.csv: every uncertain security and ending, and
 every seed uncertain for a reason of its own; a seed whose only problem is
 its security is counted, not listed. Each reason is `code` or `code:detail`.
-Pure: reads the tables as store.read_table returns them.
+Pure: reads the tables as store.read_table returns them, plus what pipeline stage 9g read from the registrant's own
+filings for each continuation (`continuations`, recorded in run_manifest.json's `continuation_filings`): the one
+input that is not a table, so an offline recompute from committed outputs alone gives APA, CMCSK and HHC no
+confirmation and CHTR no ratio doubt.
 """
 from __future__ import annotations
 
@@ -50,14 +54,15 @@ from datetime import date, timedelta
 from .lifecycle import (CONTINUED_FILINGS, EXCHANGE_PRINT_SOURCES, RESOLVED_FROM_CONTINUED_FILINGS, Tables,
                         flag_names)
 from .exit_kind import ending_fields
-from .verdict_rules import (closed_without_ending, issuer_by_form25, settles_relabel, stale_seed,
+from .verdict_rules import (Reading, closed_without_ending, issuer_by_form25, settles_relabel, stale_seed,
                             successor_registration, unpriced_gate)
 
 SEED, SECURITY, ENDING = "seed", "security", "ending"
 FORM25_EFFECTIVE_DAYS = 10               # a Form 25 takes effect 10 days after it is filed
 MEASURED_SOURCES = frozenset({"midas", "nasdaq_halt"})
-GATE_FAILED = frozenset({"payout_gate_failed", "llm_gate_failed", "terms_gate_failed",
-                         "terms_gate_skipped"})   # decision 4: a gate that did not pass (5f: or could not check)
+# decision 4's gates that did not pass, or (5f) could not check: the one set (`verdict_rules.unpriced_gate` takes it
+# as an argument)
+GATE_FAILED = frozenset({"payout_gate_failed", "llm_gate_failed", "terms_gate_failed", "terms_gate_skipped"})
 SECURITY_UNCERTAIN = "security_uncertain"
 CONFIRMED, UNCERTAIN = "confirmed", "uncertain"
 
@@ -138,7 +143,7 @@ def _security_verdicts(tables: Tables, evidence: Mapping[str, str],
     outside: dict[str, list[str]] = defaultdict(list)       # introductions outside the security's history
     for r in tables.observation_map:
         if r["sec_id"] and is_introduction(r) and not _covered(intervals[r["sec_id"]], r["as_of"]) \
-                and not stale_seed(r["status"], *settled.get(r["sec_id"], (None, False))):
+                and not stale_seed(r["status"], *settled.get(r["sec_id"], (None, False)), r["as_of"]):
             outside[r["sec_id"]].append(r["as_of"])
     out: dict[str, Verdict] = {}
     for s in tables.securities:
@@ -154,24 +159,29 @@ def _security_verdicts(tables: Tables, evidence: Mapping[str, str],
     return out
 
 
-def _own_reasons(row: Mapping[str, str], issuer_cik: str = "", confirmed_by: str = "") -> list[str]:
-    """An ending's reasons, its security's set aside. `issuer_cik`: its security's issuer (securities.csv);
-    `confirmed_by`: the filing that confirms its continuation (`continuation_evidence.confirming_filing`), if any."""
+def _own_reasons(row: Mapping[str, str], issuer_cik: str = "", reading: Reading = Reading(),
+                 named: bool = False) -> list[str]:
+    """An ending's reasons, its security's set aside. `issuer_cik`: its security's issuer (securities.csv); `named`:
+    every seed of the security carries an observed name; `reading`: what stage 9g read for a continuation (the
+    filing that confirms it, `continuation_evidence.confirming_filing`, or the registrant's own ratio that
+    contradicts its successor registration)."""
     flags = flag_names(row)
-    confirmed = bool(confirmed_by) and _is_continuation(row)
+    confirmed = bool(reading.filing) and _is_continuation(row)
     reasons = []
-    if "resolved_by_current_ticker_map" in flags and not issuer_by_form25(row, issuer_cik):
+    if _is_continuation(row) and reading.doubt:
+        reasons.append(f"continuation_not_one_for_one:{reading.doubt}")
+    if "resolved_by_current_ticker_map" in flags and not issuer_by_form25(row, issuer_cik, named):
         reasons.append("issuer_from_todays_ticker_map")
     if row["reason"].startswith(CONTINUED_FILINGS) and not confirmed:
         reasons.append("continued_filings_rule")
     if RESOLVED_FROM_CONTINUED_FILINGS in row["reason"] and not settles_relabel(row) \
-            and not successor_registration(row):
+            and not successor_registration(row, reading):
         reasons.append("resolved_from_continued_filings")
-    if "no_evidence_default" in flags and not successor_registration(row) and not confirmed:
+    if "no_evidence_default" in flags and not successor_registration(row, reading) and not confirmed:
         reasons.append("no_evidence_default")
     if not ending_fields(row).exit_kind:
         reasons.append("unknown_exit_kind")
-    if row["dlret_method"] == "assumed_par" and flags & GATE_FAILED and not unpriced_gate(row):
+    if row["dlret_method"] == "assumed_par" and flags & GATE_FAILED and not unpriced_gate(row, GATE_FAILED):
         reasons.append("assumed_par_after_failed_gate")
     if _is_continuation(row):
         if "(timing:cik)" in row["reason"] and not confirmed:
@@ -260,22 +270,29 @@ def seed_key(r: Mapping[str, str]) -> tuple[str, str, str, str, str, str]:
 
 
 def decide(tables: Tables, evidence: Mapping[str, str],
-           continuations: Mapping[tuple[str, str], str] | None = None) -> Verdicts:
+           continuations: Mapping[tuple[str, str], Reading | str] | None = None) -> Verdicts:
     """Every verdict of one run's tables. `evidence` maps a placeholder's sec_id
     to what ties its ticker to its CIK (`ticker_evidence.evidence_for`); a
     placeholder missing from it, or mapped to "", has none. `continuations`
-    maps a continuation's (sec_id, delist_date) to the filing that confirms it
-    (`continuation_evidence.confirming_filing`, pipeline stage 9f); a key
-    missing from it has none."""
-    continuations = continuations or {}
+    maps a continuation's (sec_id, delist_date) to what stage 9g read for it
+    (`verdict_rules.Reading`: the filing that confirms it, or the doubt its
+    registrant's own filings raise; a bare string is the confirming filing); a
+    key missing from it has none."""
+    continuations = {k: v if isinstance(v, Reading) else Reading(filing=v) for k, v in (continuations or {}).items()}
     issuers = {s["sec_id"]: s["issuer_cik"] for s in tables.securities}
+    seeds_of: dict[str, list[Mapping[str, str]]] = defaultdict(list)
+    for r in tables.observation_map:
+        if r["sec_id"]:
+            seeds_of[r["sec_id"]].append(r)
+    named = {sid: all(r["name"].strip() for r in rows) for sid, rows in seeds_of.items()}
     real = [r for r in tables.delistings if r["successor_sec_id"] != r["sec_id"]]
     last_of: dict[str, str] = {}
     for r in real:
         last_of[r["sec_id"]] = max(last_of.get(r["sec_id"], ""), r["delist_date"])
     # each ending's own reasons first: a security's stale seeds count only while its last ending is unsettled
     own = {(r["sec_id"], r["delist_date"]): _own_reasons(r, issuers.get(r["sec_id"], ""),
-                                                          continuations.get((r["sec_id"], r["delist_date"]), ""))
+                                                          continuations.get((r["sec_id"], r["delist_date"]), Reading()),
+                                                          named.get(r["sec_id"], False))
            for r in real}
     settled = {r["sec_id"]: (r, not own[(r["sec_id"], r["delist_date"])]) for r in real
                if r["delist_date"] == last_of[r["sec_id"]]}

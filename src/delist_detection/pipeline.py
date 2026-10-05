@@ -27,7 +27,7 @@ from . import scorecard as run_scorecard
 from .acquirers import acquirer_cik, find_acquirer
 from .added_securities import AddedAcquirer, AddedLineSuccessor, AddedSecurity, AddedSuccessor
 from .crsp_codes import CrspBucket
-from .continuation_evidence import confirming_filing, needs_filing
+from .continuation_evidence import needs_doubt_check, needs_filing, read_continuation
 from .degraded import DegradedWatch, degraded_item, flag_degraded, report_halt_feed_failures
 from .delistings import (
     ISSUER_FORM25_FORMS, LATE_ROW_DAYS, SUCCESSOR_UNKNOWN, Delisting, DelistingFinder, SecurityContext,
@@ -87,6 +87,7 @@ from .successors import (
 )
 from .ticker_resolver import InferredIssuer, TickerResolution, TickerResolver
 from .verdict import Verdicts
+from .verdict_rules import Reading
 from .verdict import decide as decide_verdicts
 from .contract import delisting_rows as contract_delisting_rows
 from .contract import id_change_rows, last_endings, payout_leg_rows, security_history_rows, seed_rows
@@ -2548,27 +2549,39 @@ def _era_tier(answers: _IssuerAnswers, era_key: str) -> str:
 
 
 def _continuation_filings(ctx: _RunContext, delistings: list[Delisting], securities: Mapping[str, Security],
-                          review: list[ReviewItem]) -> dict[DelistingKey, str]:
-    """9f. Sub-plan 5i (spec ruling 2.3): the filing that confirms each continuation the continued-filings rule or the
-    handoff stage's timing linked (`continuation_evidence`), for its verdict (10f) only: an 8-K item 3.03 or an
-    8-K12B/8-K12G3 of its issuer whose texts state the security's own exchange one for one. No row changes. A read
-    that rested on a failed request or a stale copy gives no filing and a `resolution_degraded` review item (not a
-    flag on the row: the row itself does not rest on it); a refusal (`fatal.FATAL`) stops the run."""
+                          review: list[ReviewItem], added: Mapping[str, AddedSecurity] | None = None
+                          ) -> dict[DelistingKey, Reading]:
+    """9g. Sub-plan 5i (spec ruling 2.3): what the registrant's own filings say of each continuation, for its
+    verdict (10f) only (`continuation_evidence`): the filing that confirms a continuation the continued-filings
+    rule or the handoff stage's timing linked (an 8-K item 3.03 or an 8-K12B/8-K12G3 whose texts state the
+    security's own exchange one for one, its target the registrant or the successor), and the ratio or cash that
+    contradicts a successor registration. No row changes. A read that rested on a failed request or a stale copy
+    gives no reading and a `resolution_degraded` review item (not a flag on the row: the row itself does not rest
+    on it); a refusal (`fatal.FATAL`) stops the run. Each confirmation is logged and recorded in
+    run_manifest.json's `continuation_filings`."""
     mark = ctx.meter.start()
-    out: dict[DelistingKey, str] = {}
+    names = {sid: s.name or "" for sid, s in securities.items()}
+    names.update({sid: a.security.name or "" for sid, a in (added or {}).items()})
+    out: dict[DelistingKey, Reading] = {}
     for d in delistings:
         rec, sec = d.record, securities.get(d.sec_id)
-        if sec is None or not needs_filing(rec.reason or "", d.sec_id, rec.successor_sec_id):
+        reason = rec.reason or ""
+        if sec is None or not (needs_filing(reason, d.sec_id, rec.successor_sec_id)
+                               or needs_doubt_check(reason, d.sec_id, rec.successor_sec_id)):
             continue
         watch = DegradedWatch()
-        found = confirming_filing(ctx.clients.edgar, d.cik, [d.last_trade.day, date.fromisoformat(d.delist_date)],
-                                  sec.name or "")
+        found = read_continuation(ctx.clients.edgar, d.cik, [d.last_trade.day, date.fromisoformat(d.delist_date)],
+                                  sec.name or "", reason, d.sec_id, rec.successor_sec_id,
+                                  [names.get(rec.successor_sec_id or "", "")])
         if watch.tripped():
-            watch.report_delisting(review, d, "the continuation's confirming filing (stage 9f)", own_row=False)
-        elif found:
+            watch.report_delisting(review, d, "the continuation's confirming filing (stage 9g)", own_row=False)
+        elif found.filing or found.doubt:
             out[d.key] = found
-    ctx.log(f"continuation filings: {len(out)} confirmed")
-    ctx.meter.done("continuation filings", mark)
+            ctx.log(f"continuation reading: {d.sec_id} {d.delist_date} "
+                    f"{'confirmed by ' + found.filing if found.filing else 'doubted: ' + found.doubt}")
+    ctx.log(f"continuation readings: {sum(bool(r.filing) for r in out.values())} confirmed, "
+            f"{sum(bool(r.doubt) for r in out.values())} contradicted")
+    ctx.meter.done("continuation readings", mark)
     return out
 
 
@@ -2828,7 +2841,7 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
         closes.update(_last_trade_closes(ctx, ends.delistings, {**securities, **ends.securities},
                                          {**sec_cusips, **ends.cusips}, ftd, ftd_lo, overrides))
     distress = _distress(ctx, delistings, {**sec_cusips, **ends.cusips}, ftd, review)              # 9e
-    confirmations = _continuation_filings(ctx, delistings, securities, review)                     # 9f
+    confirmations = _continuation_filings(ctx, delistings, securities, review, added)             # 9g
     overrides = _plan_values(overrides, distress)
     _log_role_refusals(ctx, delistings)
     # The handoff stage creates continuation delistings (AON 2012) and sets successors: the clip and the ranges read
@@ -2877,7 +2890,11 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
     run_manifest.write(out_dir, run_manifest.build(as_of=ctx.as_of, sec_workers=sec_workers, counts=stat_counts,
                                                    timings=stat_timings, stages=ctx.meter.stages,
                                                    review_flags=dict(flags), review=triaged.counts,
-                                                   handoffs=handoffs.counts))
+                                                   handoffs=handoffs.counts,
+                                                   continuation_filings=[
+                                                       {"sec_id": k.sec_id, "delist_date": k.delist_date,
+                                                        "filing": r.filing} for k, r in sorted(confirmations.items())
+                                                       if r.filing]))
     return RunSummary(counts, dict(Counter(e.record.bucket.value for e in delistings)),
                       dict(Counter(s.figi_source for s in securities.values())), dict(flags), dict(triaged.counts),
                       scorecard_drops=card["drops"], golden_failures=card["golden_failures"],

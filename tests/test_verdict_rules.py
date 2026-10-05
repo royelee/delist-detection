@@ -4,8 +4,9 @@ import pytest
 from delist_detection import end_of_era
 from delist_detection.crsp_codes import CrspBucket
 from delist_detection.end_of_era import EraSignals
-from delist_detection.verdict import decide
-from delist_detection.verdict_rules import MERGER_RELABELS, STALE_CLOSE_DAYS, unpriced_gate
+from delist_detection.verdict import GATE_FAILED, decide
+from delist_detection.verdict_rules import (MERGER_RELABELS, STALE_CLOSE_DAYS, STALE_SEED_DAYS, Reading, ratio_doubt,
+                                            reverse_split, unpriced_gate)
 from tests.lifecycle_tables import ending, iv, obs, review, sec, tables
 
 KEPT = "; the registrant kept filing after it"
@@ -15,12 +16,16 @@ GOOD = dict(ltd="2015-03-02", dlret="0.01", **F25)
 
 def _verdicts(*endings, securities=None, history=None, observations=None, reviews=()):
     t = tables(securities or [sec("A")], history or [iv("A", "AAA", "2010-01-04", "2015-03-02")], list(endings),
-               observations if observations is not None else [obs("AAA", "2010-06-30", "A")], reviews)
+               observations if observations is not None else [obs("AAA", "2010-06-30", "A", name="ALPHA CORP")], reviews)
     return decide(t, {})
 
 
 def _reasons(row, **kw):
     return _verdicts(row, **kw).endings[(row["sec_id"], row["delist_date"])].reasons
+
+
+def _gate(row):
+    return unpriced_gate(row, GATE_FAILED)
 
 
 # -- a relabel the matched Form 25 settles (note A theme 1) -------------------------------------------------------
@@ -121,8 +126,9 @@ def test_a_handoff_row_built_on_an_unmatched_form25_is_no_issuer_evidence():
                                    f"ftd_close_prior:{STALE_CLOSE_DAYS + 1};payout_gate_failed:315;llm_gate_failed",
                                    f"ftd_close_prior:{STALE_CLOSE_DAYS + 2};terms_gate_failed:fail_sanity"])
 def test_a_gate_that_failed_only_on_the_price_side_is_unpriced(flags):
-    row = ending("A", "2021-06-25", **{**GOOD, "method": "assumed_par", "flags": flags})
-    assert unpriced_gate(row) and _reasons(row) == ()
+    row = ending("A", "2021-06-25", **{**GOOD, "method": "assumed_par", "flags": flags, "acquirer_ticker": "JET",
+                                       "last_trade_close": "300", "terminal_value": "310"})
+    assert _gate(row) and _reasons(row) == ()
 
 
 @pytest.mark.parametrize("flags", [
@@ -133,14 +139,14 @@ def test_a_gate_that_failed_only_on_the_price_side_is_unpriced(flags):
 ])
 def test_a_gate_that_failed_against_a_fresh_close_stays_a_doubt(flags):
     row = ending("A", "2021-06-25", **{**GOOD, "method": "assumed_par", "flags": flags})
-    assert not unpriced_gate(row) and "assumed_par_after_failed_gate" in _reasons(row)
+    assert not _gate(row) and "assumed_par_after_failed_gate" in _reasons(row)
 
 
 # -- stale seeds after a confirmed ending (note A theme 5) --------------------------------------------------------
 
-def _stale(status="after_delisting", **cells):
+def _stale(status="after_delisting", asof="2008-01-16", **cells):
     row = ending("A", "2007-11-05", **{**GOOD, "ltd": "2007-10-31", "delist_filing_date": "2007-10-26", **cells})
-    o = [obs("AAA", "2004-07-07", "A"), obs("AAA", "2008-01-16", "A", status)]
+    o = [obs("AAA", "2004-07-07", "A", name="ALPHA CORP"), obs("AAA", asof, "A", status, name="ALPHA CORP")]
     return _verdicts(row, history=[iv("A", "AAA", "2004-07-07", "2007-10-31")], observations=o)
 
 
@@ -192,3 +198,85 @@ def test_a_continuing_move_alone_is_no_ending():
     move = ending("A", "2012-05-01", "exchange_transfer", successor="A")
     v = _verdicts(move, history=[iv("A", "AAA", "2010-01-04", "2013-12-31")])
     assert v.securities["A"].reasons == ("closed_no_event:2013-12-31",)
+
+
+# -- the review's guards (5i fix patch) ---------------------------------------------------------------------------
+
+def test_rule_e_keeps_a_last_trade_conflict_and_a_one_for_one_merger_uncertain():
+    # FRK 2007: the halt day against the NYSE notice's; MEL 2007: one share per share and no cash is R1's continuation
+    assert not _stale(flags="last_trade_date_conflict").securities["A"].confirmed
+    assert not _stale(stock_ratio="1.000000", payout_per_share="").securities["A"].confirmed
+    assert _stale(stock_ratio="0.836").securities["A"].confirmed                 # another ratio is a merger
+    assert _stale(stock_ratio="1.0", payout_per_share="5.0").securities["A"].confirmed   # a cash leg too
+
+
+def test_rule_e_is_bound_in_time_after_the_ending():
+    assert _stale(asof="2008-10-30").securities["A"].confirmed                  # 365 days after 2007-10-31
+    late = _stale(asof="2013-01-02")                                           # a later era on a recycled ticker
+    assert late.securities["A"].reasons == ("seeds_outside_history:1 from 2013-01-02",)
+    assert STALE_SEED_DAYS == 365
+
+
+def test_rule_a_refuses_the_issuers_own_form25():
+    reason = f"Change in control (8-K item 5.01 filed 2015-02-20){KEPT}"
+    own = ending("A", "2015-03-13", **{**GOOD, "reason": reason, "delist_filing_form": "25"})
+    assert "resolved_from_continued_filings" in _reasons(own)
+    assert _reasons(ending("A", "2015-03-13", **{**GOOD, "reason": reason, "delist_filing_form": "25-NSE/A"})) == ()
+
+
+def test_rule_b_keeps_a_continuation_whose_own_filings_state_another_ratio():
+    row = ending("A", "2016-05-18", "exchange_transfer", successor="B", ltd="2016-05-18",
+                 reason=f"Successor registration 8-K12B 2016-05-20: the security continues under a successor{KEPT}; "
+                        "successor by new issuer")
+    t = tables(_chain()["securities"], _chain()["history"], [row], [obs("AAA", "2010-06-30", "A", name="ALPHA")])
+    r = decide(t, {}, {("A", "2016-05-18"): Reading(doubt="ratio:0.9042")}).endings[("A", "2016-05-18")].reasons
+    assert r == ("continuation_not_one_for_one:ratio:0.9042", "resolved_from_continued_filings")
+    assert decide(t, {}, {("A", "2016-05-18"): Reading()}).endings[("A", "2016-05-18")].reasons == ()
+
+
+def test_a_ratio_that_is_a_plain_split_or_one_is_no_doubt():
+    assert ratio_doubt(1.0, False) == "" and ratio_doubt(0.1, False) == "" and ratio_doubt(2.0, False) == ""
+    assert ratio_doubt(0.9042, False) == "ratio:0.9042" and ratio_doubt(1.0, True) == "cash"
+    assert reverse_split(0.05) and not reverse_split(0.9042) and not reverse_split(0.75) and not reverse_split(1.0)
+
+
+def test_a_skipped_gate_beside_a_price_side_token_stays_a_doubt():
+    # 5f adds terms_gate_skipped to verdict.GATE_FAILED: it can never be a price-side failure
+    gates = GATE_FAILED | {"terms_gate_skipped"}
+    for flags in ("terms_gate_skipped:CAD;llm_gate_failed:no_acq_price",
+                  f"ftd_close_prior:{STALE_CLOSE_DAYS + 2};terms_gate_skipped:basket;payout_gate_failed:44.25",
+                  f"ftd_close_prior:{STALE_CLOSE_DAYS + 2};terms_gate_skipped"):
+        row = ending("A", "2021-06-25", **{**GOOD, "method": "assumed_par", "flags": flags,
+                                           "last_trade_close": "44", "acquirer_ticker": "ACQ"})
+        assert not unpriced_gate(row, gates)
+
+
+@pytest.mark.parametrize("ticker", ["", "NULL", "null", "None", "N/A", "-", " NA "])
+def test_a_null_like_acquirer_ticker_is_a_missing_one(ticker):
+    # GRUB 2021: the gate said no_acq_price for a ticker of the word NULL
+    row = ending("A", "2021-06-25", **{**GOOD, "method": "assumed_par", "acquirer_ticker": ticker,
+                                       "flags": "terms_gate_failed:no_acq_price;merger_at_par"})
+    assert not _gate(row) and "assumed_par_after_failed_gate" in _reasons(row)
+    named = ending("A", "2021-06-25", **{**GOOD, "method": "assumed_par", "acquirer_ticker": "JET",
+                                         "flags": "terms_gate_failed:no_acq_price;merger_at_par"})
+    assert _gate(named)
+
+
+def test_a_stale_close_failure_counts_only_within_the_tolerance_its_age_widens():
+    base = {**GOOD, "method": "assumed_par", "last_trade_close": "71"}
+    age = STALE_CLOSE_DAYS + 1
+    small = ending("A", "2021-06-25", **{**base, "flags": f"ftd_close_prior:{age};payout_gate_failed:75.0"})
+    huge = ending("A", "2021-06-25", **{**base, "flags": f"ftd_close_prior:{age};payout_gate_failed:481.37"})   # AT
+    assert _gate(small) and not _gate(huge)
+    compared = ending("A", "2021-06-25", **{**base, "terminal_value": "480",
+                                            "flags": f"ftd_close_prior:{age};terms_gate_failed:fail_sanity"})
+    assert not _gate(compared)
+    no_close = ending("A", "2021-06-25", **{**GOOD, "method": "assumed_par",
+                                            "flags": f"ftd_close_prior:{age};payout_gate_failed:75.0"})
+    assert not _gate(no_close)
+
+
+def test_a_form25_filed_name_check_needs_an_observed_name():
+    # member_name_mismatch is raised against an observed name only: a nameless seed gets no name check at all
+    nameless = _verdicts(_mapped(), observations=[obs("AAA", "2010-06-30", "A")])
+    assert "issuer_from_todays_ticker_map" in nameless.endings[("A", "2026-08-14")].reasons
