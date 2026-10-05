@@ -99,6 +99,16 @@ Design note: `docs/superpowers/plans/research/2026-10-04-5d-last-trade.md`.
 - **Fixed_by relabels.** 26 rows whose last trade fields match the replay but keep other mismatches now name 5e, 5f
   or 5g; the 12 rows that match the replay stay known_wrong until the loop flips them.
 
+- **2026-10-04: 5f and 5i run in parallel (wave 2).**
+  - The roadmap lists 5i as depending on every other sub-plan. But 5i changes only verdicts (spec 2.3), and its
+    rules sit in verdict.py and the evidence code. 5f changes terms and the contract legs.
+  - 5f runs in the main worktree. 5i runs in a copy and returns patches. Then one review, fix wave, network run and
+    truth loop cover both.
+  - Alternative: 5f, then 5i.
+  - Cost if wrong: a 5i guard measured before 5f's terms change could need a second look in the combined loop.
+- **5f's new prompt version needs live LLM calls.** The spec's cost note says it invalidates `cache/llm/`. The 5f
+  agent runs the 10-deal calibration and up to two measurement runs, into its own folder, over warm SEC caches.
+
 ## 5e, 5g and 5h
 
 Their decisions are in their design notes: `research/2026-10-04-5e-acquirer-gate.md`,
