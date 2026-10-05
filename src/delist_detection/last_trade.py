@@ -226,12 +226,18 @@ _DEAL_WORDS = re.compile(rf"effective time|became effective|complet|consummat|{_
 
 
 def closing_day(texts: Iterable[str], lo: date, hi: date) -> tuple[date, str] | None:
+    got = closing_day_read(texts, lo, hi)
+    return got[:2] if got else None
+
+
+def closing_day_read(texts: Iterable[str], lo: date, hi: date) -> tuple[date, str, bool] | None:
     """The day a deal closed, read from its filings, and the last trade day that gives: (day, kind). The closing day
     C is the latest completion the texts state within [lo, hi] -- a defined "Closing Date", "On D, ... completed
     (the merger)", "the closing of the transactions on D", "the evening of D", an effective time stated with a
     clock time; the last trade is C, or the trading day before C when every clock time stated on C is before the
     open (Imclone 2008: 8:28 A.M. on November 24) or C is no session (PNFP 2026: January 1). None when no text states a completion in the window. A tender
-    offer's completion or a record date never counts."""
+    offer's completion or a record date never counts. `closing_day` is this without the last field, whether the day
+    is the one before C because a clock time on C is before the open (a text that dates the last trade exactly)."""
     found: list[tuple[date, int | None]] = []
     for text in texts:
         flat = re.sub(r"\s+", " ", text or "")
@@ -256,9 +262,10 @@ def closing_day(texts: Iterable[str], lo: date, hi: date) -> tuple[date, str] | 
         return None
     c = days[-1]
     clocks = [t for d, t in found if d == c and t is not None]
-    if (clocks and all(t < OPEN_MINUTES for t in clocks)) or not is_trading_day(c):
-        return previous_trading_day(c), CLOSING_DAY
-    return c, CLOSING_DAY
+    before_open = bool(clocks) and all(t < OPEN_MINUTES for t in clocks)
+    if before_open or not is_trading_day(c):
+        return previous_trading_day(c), CLOSING_DAY, before_open
+    return c, CLOSING_DAY, False
 
 
 @dataclass(frozen=True)

@@ -20,7 +20,7 @@ from .form25 import (
     REGIONAL_EXCHANGES, Form25, SecurityRef, class_kind, class_letters, effective_date, is_involuntary,
     list_form25, match_securities, notice_last_trade, other_class, parse_form25, tied_securities,
 )
-from .last_trade import CLOSING_DAY, LastTrade, closing_day, decide_last_trade, eightk_last_trade, reading_rank
+from .last_trade import CLOSING_DAY, LastTrade, closing_day_read, decide_last_trade, eightk_last_trade, reading_rank
 from .lifecycle import CONTINUED_FILINGS
 from .listing_status import exchanges_around, issuer_exchange, withdrawal_kind
 from .midas import MIDAS_START
@@ -142,6 +142,10 @@ class SecurityContext:
     # True when the security's own CUSIPs have a trading fails row in the LATE_ROW_DAYS up to the given ISO day:
     # a Form 25 filed long after the security's last sighting still reaches it (Monster Worldwide 2016, L).
     cusip_rows_near: Callable[[str], bool] = lambda day: False
+    # The last day the fails rows of the security's own CUSIPs show it trading, ISO (`pipeline._last_row_trade_day`:
+    # the trading day before the row that opens the last CUSIP's last one-price run), else None. Rule 4's closing
+    # day never comes before it (AVGO 2018, Z 2015).
+    rows_trade_until: Callable[[], str | None] = lambda: None
     # The one CIK other than `security.issuer_cik` that was the issuer in force over the security's whole span
     # (`pipeline._other_issuers`), whose Form 25s are read too (R5: the old Spectrum Brands, the old Match Group).
     other_cik: int | None = None
@@ -216,16 +220,21 @@ class DelistingFinder:
                     break
         return best
 
-    def _closing_day(self, cik: int, filings: list[EdgarSubmission], lo: date, hi: date) -> LastTrade | None:
+    def _closing_day(self, cik: int, filings: list[EdgarSubmission], lo: date, hi: date,
+                     shown: date | None = None) -> LastTrade | None:
         """Rule 4 (5d): nothing states the last trade, so the closing day the issuer's 8-Ks filed in [lo,
         hi + CLOSING_TEXT_AFTER_DAYS] give for [lo, hi] (`last_trade.closing_day`) is the worked-out day: source
         `closing_day`, flagged `last_trade_date_unconfirmed` (so the ranges always clip there and the contract
-        publishes nothing)."""
+        publishes nothing). `shown`, the last day the security's own fails rows show it trading: a closing day
+        before it, one the text did not step back from its stated day, becomes it (never after `hi`)."""
         texts = [self.edgar.fetch_filing_text(cik, f.accession, f.primary_doc) for f in filings
                  if f.form.startswith("8-K") and f.filing_date
                  and lo <= date.fromisoformat(f.filing_date) <= hi + timedelta(days=CLOSING_TEXT_AFTER_DAYS)]
-        got = closing_day(texts, lo, hi)
-        return LastTrade(got[0], got[1], ("last_trade_date_unconfirmed",)) if got else None
+        got = closing_day_read(texts, lo, hi)
+        if got is None:
+            return None
+        day = shown if shown is not None and not got[2] and got[0] < shown <= hi else got[0]
+        return LastTrade(day, got[1], ("last_trade_date_unconfirmed",))
 
     def _eightk(self, cik: int, filings: list[EdgarSubmission], filed: date,
                 until: date | None = None) -> tuple[date | None, str]:
@@ -683,7 +692,9 @@ class DelistingFinder:
             # CLOSING_BEFORE_DAYS of it, else the filing day itself, is the worked-out last trade. Taken after the
             # classification, which keeps its anchor (the filing day).
             filed = date.fromisoformat(min(s.filing_date for s, _ in group))
-            got = self._closing_day(cik, filings, filed - timedelta(days=CLOSING_BEFORE_DAYS), filed)
+            shown = ctx.rows_trade_until()
+            got = self._closing_day(cik, filings, filed - timedelta(days=CLOSING_BEFORE_DAYS), filed,
+                                    date.fromisoformat(shown) if shown else None)
             lt = replace(got or LastTrade(filed, CLOSING_DAY, ("last_trade_date_unconfirmed",)),
                          halt_feed_failed=lt.halt_feed_failed)
         return self._delisting(sec, cik, ticker, eff, rec, lt, winner_f25, winner_sub, continued, extra_flags)

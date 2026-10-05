@@ -44,7 +44,7 @@ from .handoffs import (
 from .figi_resolution import FigiCandidate, class_letter, is_placeholder, placeholder_id, share_class_from_name
 from .form25 import SecurityRef, letter_hint, notice_last_trade, parse_form25
 from .last_trade import decide_last_trade
-from .ftd import FTD_START, FtdIndex, FtdRow, close_age, is_trading_symbol, trades_after
+from .ftd import FTD_START, FtdIndex, FtdRow, close_age, is_trading_symbol, settled_last, trades_after
 from .trading_calendar import previous_trading_day
 from .history import (
     Sighting, backfill_cusips, clip_at_takeovers, cusip_sightings, filtered_ticker_sightings, history_rows, observation_map_rows, own_last_seen,
@@ -745,6 +745,18 @@ def _ticker_taken(ftd: FtdIndex, ticker: str, own: Collection[str], lo: str, hi:
     return previous_trading_day(date.fromisoformat(other)).isoformat() if other else None
 
 
+def _last_row_trade_day(rows: Sequence[FtdRow]) -> str | None:
+    """The last day the fails rows show the security trading: the trading day before the row that opens the
+    last one-price run (`ftd.settled_last`, fails still settling after the last trade) of the CUSIP it held
+    last, ISO (AVGO 2018: the run opens 04-05, so 04-04); None without rows."""
+    if not rows:
+        return None
+    last = max(r.date for r in rows)
+    own = sorted((r for r in rows if r.cusip == next(x.cusip for x in rows if x.date == last)),
+                 key=lambda r: r.date)
+    return previous_trading_day(date.fromisoformat(settled_last(own).date)).isoformat()
+
+
 PLACEHOLDER_PRICE = 0.01        # a fails row priced at or below this carries no close (a new CUSIP's placeholder)
 
 
@@ -791,6 +803,7 @@ def _context_builder(securities: dict[str, Security], sightings: dict[str, list[
             cusip_switches=_cusip_switches(s, ftd, sec_cusips.get(s.sec_id, [])),
             trades_after=lambda day, rows=rows: trades_after(rows, day),
             cusip_rows_near=lambda day, rows=rows: _rows_near(rows, day),
+            rows_trade_until=lambda rows=rows: _last_row_trade_day(rows),
             other_cik=other_ciks.get(s.sec_id),
             ticker_taken=lambda ticker, lo, hi, own=frozenset(sec_cusips.get(s.sec_id, [])): _ticker_taken(
                 ftd, ticker, own, lo, hi),

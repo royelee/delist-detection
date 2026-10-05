@@ -459,7 +459,11 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   2008). Rule 4: a row still undated, not continued, under an exchange's Form 25
   (not the issuer's 25), takes `_closing_day` (the 8-Ks in [F − 10, F + 10] for [F − 10, F],
   `CLOSING_BEFORE_DAYS`/`CLOSING_TEXT_AFTER_DAYS`) else the Form 25 day F, source `closing_day`, flagged
-  `last_trade_date_unconfirmed`, after the classification (whose anchor stays F); a no-Form-25 fallback reads the 3.01 8-Ks up to its last sighting + `EIGHTK_AFTER_DAYS` (VRM 2024); rule 4 never
+  `last_trade_date_unconfirmed`, after the classification (whose anchor stays F); the closing day takes no earlier day
+  than the last one the security's own fails rows show it trading (`SecurityContext.rows_trade_until`,
+  `pipeline._last_row_trade_day`: the trading day before `ftd.settled_last`'s row of the CUSIP it held last), when that
+  day is no later than F and the text did not date the closing before the open (`closing_day_read`'s third field:
+  Imclone 2008's 8:28 A.M. stands); AVGO 2018, Z 2015; a no-Form-25 fallback reads the 3.01 8-Ks up to its last sighting + `EIGHTK_AFTER_DAYS` (VRM 2024); rule 4 never
   runs under an involuntary (b) Form 25 (it follows the suspension by weeks: TMA); a no-Form-25 merger fallback
   takes the closing day its latest 2.01/5.01 8-K near the last sighting states (FCL, SGP 2009), never after the
   last sighting. Sub-plan 5h: `SecurityContext.has_cusips`: a security with no CUSIP gets no continued-filings

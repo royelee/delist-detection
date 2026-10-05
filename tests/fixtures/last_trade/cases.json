@@ -47,6 +47,10 @@
     ]
    }
   },
+  "BBG000BFMBQ6": {
+   "note": "CI 2018: the closing day December 20 stands; the fails rows show no later trade (rule 4, guard)",
+   "terms": {}
+  },
   "BBG000BGYDX9": {
    "note": "DBD 2023: MIDAS's May 26 stands; the same CUSIP went to DBDQQ (guard, ruling)",
    "terms": {}
@@ -193,6 +197,10 @@
     ]
    }
   },
+  "BBG000BYWTX7": {
+   "note": "MRVL 2021: the closing day April 20 stands (rule 4, guard)",
+   "terms": {}
+  },
   "BBG000C070N2": {
    "note": "XMSR 2008: the Nasdaq halt's July 28 (guard)",
    "terms": {
@@ -243,6 +251,10 @@
     ]
    }
   },
+  "BBG000C1XKF6": {
+   "note": "PNFP 2025: the closing day December 31 stands (rule 4, guard)",
+   "terms": {}
+  },
   "BBG000CB2ZY4": {
    "note": "KG 2011: continue to be listed through February 28 (rule 1)",
    "terms": {
@@ -276,6 +288,10 @@
      "FTI"
     ]
    }
+  },
+  "BBG000DFMXT3": {
+   "note": "AZPN 2022: the closing day May 16 stands (rule 4, guard)",
+   "terms": {}
   },
   "BBG000F2XXP2": {
    "note": "SBGI 2023: Sinclair Inc's first fails row lags its first day; no MIDAS bound (guard)",
@@ -371,8 +387,16 @@
    "note": "LTRPA 2023: MIDAS's October 27 stands (guard)",
    "terms": {}
   },
+  "BBG006G57XG0": {
+   "note": "VNOM 2025: the closing day August 18 stands (rule 4, guard)",
+   "terms": {}
+  },
   "BBG009NGKQ45": {
    "note": "VRM 2024: no Form 25; the 3.01 8-K came 13 days after the bankruptcy 8-K (fallback window)",
+   "terms": {}
+  },
+  "BBG009XV39D8": {
+   "note": "AVGO 2018: the scheme became effective after the close on April 4; the fails rows trade to it (rule 4, the fails rows)",
    "terms": {}
   },
   "BBG00GBV88T6": {
@@ -414,6 +438,10 @@
      ""
     ]
    }
+  },
+  "CIK1334814-CLASS-A": {
+   "note": "Z 2015: the 8-K12B halts trading at the close on February 17; the fails rows trade to it (rule 4, the fails rows)",
+   "terms": {}
   },
   "CIK351346-COMMON": {
    "note": "BMET 2007: withdrawn from listing as of the close of business on September 25 (rule 1)",
@@ -1177,6 +1205,170 @@
    "line_tickers": [],
    "listed": false,
    "name": "COCA-COLA ENTERPRISES INC",
+   "observed": true,
+   "security_type": "Common Stock",
+   "share_class": "COMMON"
+  },
+  "BBG000BFMBQ6": {
+   "cusips": [
+    "125509109"
+   ],
+   "eras": {
+    "CI@2008-01-16": [
+     [
+      "CI",
+      "2008-01-16",
+      "CIGNA CORP",
+      "",
+      "701221"
+     ],
+     [
+      "CI",
+      "2008-05-31",
+      "CIGNA CORP",
+      "",
+      "701221"
+     ],
+     [
+      "CI",
+      "2008-07-25",
+      "CIGNA CORP",
+      "",
+      "701221"
+     ],
+     [
+      "CI",
+      "2008-11-18",
+      "CIGNA CORP",
+      "",
+      "701221"
+     ],
+     [
+      "CI",
+      "2009-01-23",
+      "CIGNA CORP",
+      "",
+      "701221"
+     ],
+     [
+      "CI",
+      "2009-03-20",
+      "CIGNA CORP",
+      "",
+      "701221"
+     ],
+     [
+      "CI",
+      "2009-06-08",
+      "CIGNA CORP",
+      "",
+      "701221"
+     ],
+     [
+      "CI",
+      "2012-06-29",
+      "CIGNA CORP",
+      "",
+      "701221"
+     ],
+     [
+      "CI",
+      "2012-12-31",
+      "CIGNA CORP",
+      "",
+      "701221"
+     ],
+     [
+      "CI",
+      "2013-06-28",
+      "CIGNA CORP",
+      "",
+      "701221"
+     ],
+     [
+      "CI",
+      "2013-12-31",
+      "CIGNA CORP",
+      "",
+      "701221"
+     ],
+     [
+      "CI",
+      "2014-06-30",
+      "CIGNA CORP",
+      "",
+      "701221"
+     ],
+     [
+      "CI",
+      "2014-12-31",
+      "CIGNA CORP",
+      "",
+      "701221"
+     ],
+     [
+      "CI",
+      "2015-06-30",
+      "CIGNA CORP",
+      "",
+      "701221"
+     ],
+     [
+      "CI",
+      "2015-12-31",
+      "CIGNA CORP",
+      "",
+      "701221"
+     ],
+     [
+      "CI",
+      "2016-06-30",
+      "CIGNA CORP",
+      "",
+      "701221"
+     ],
+     [
+      "CI",
+      "2016-12-30",
+      "CIGNA CORP",
+      "",
+      "701221"
+     ],
+     [
+      "CI",
+      "2017-06-30",
+      "CIGNA CORP",
+      "",
+      "701221"
+     ],
+     [
+      "CI",
+      "2017-12-31",
+      "CIGNA CORP",
+      "",
+      "701221"
+     ],
+     [
+      "CI",
+      "2018-06-30",
+      "CIGNA CORP",
+      "",
+      "701221"
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "history": [
+    [
+     "CI",
+     "2007-12-18",
+     "2018-12-21"
+    ]
+   ],
+   "issuer_cik": 701221,
+   "line_tickers": [],
+   "listed": false,
+   "name": "CIGNA CORP",
    "observed": true,
    "security_type": "Common Stock",
    "share_class": "COMMON"
@@ -3710,6 +3902,205 @@
    "security_type": "Common Stock",
    "share_class": "COMMON"
   },
+  "BBG000BYWTX7": {
+   "cusips": [
+    "G5876H105"
+   ],
+   "eras": {
+    "MRVL@2008-01-16": [
+     [
+      "MRVL",
+      "2008-01-16",
+      "MARVELL TECHNOLOGY GROUP",
+      "",
+      "1058057"
+     ],
+     [
+      "MRVL",
+      "2008-05-31",
+      "MARVELL TECHNOLOGY GROUP",
+      "",
+      "1058057"
+     ],
+     [
+      "MRVL",
+      "2008-07-25",
+      "MARVELL TECHNOLOGY GROUP",
+      "",
+      "1058057"
+     ],
+     [
+      "MRVL",
+      "2008-11-18",
+      "MARVELL TECHNOLOGY GROUP",
+      "",
+      "1058057"
+     ],
+     [
+      "MRVL",
+      "2009-01-23",
+      "MARVELL TECHNOLOGY GROUP",
+      "",
+      "1058057"
+     ],
+     [
+      "MRVL",
+      "2009-03-20",
+      "MARVELL TECHNOLOGY GROUP",
+      "",
+      "1058057"
+     ],
+     [
+      "MRVL",
+      "2009-06-08",
+      "MARVELL TECHNOLOGY GROUP",
+      "",
+      "1058057"
+     ],
+     [
+      "MRVL",
+      "2012-06-29",
+      "MARVELL TECHNOLOGY LTD",
+      "",
+      "1058057"
+     ],
+     [
+      "MRVL",
+      "2012-12-31",
+      "MARVELL TECHNOLOGY LTD",
+      "",
+      "1058057"
+     ],
+     [
+      "MRVL",
+      "2013-06-28",
+      "MARVELL TECHNOLOGY LTD",
+      "",
+      "1058057"
+     ],
+     [
+      "MRVL",
+      "2013-12-31",
+      "MARVELL TECHNOLOGY LTD",
+      "",
+      "1058057"
+     ],
+     [
+      "MRVL",
+      "2014-06-30",
+      "MARVELL TECHNOLOGY LTD",
+      "",
+      "1058057"
+     ],
+     [
+      "MRVL",
+      "2014-12-31",
+      "MARVELL TECHNOLOGY GROUP LTD",
+      "",
+      "1058057"
+     ],
+     [
+      "MRVL",
+      "2015-06-30",
+      "MARVELL TECHNOLOGY GROUP LTD",
+      "",
+      "1058057"
+     ],
+     [
+      "MRVL",
+      "2015-12-31",
+      "MARVELL TECHNOLOGY GROUP LTD",
+      "",
+      "1058057"
+     ],
+     [
+      "MRVL",
+      "2016-06-30",
+      "MARVELL TECHNOLOGY GROUP LTD",
+      "",
+      "1058057"
+     ],
+     [
+      "MRVL",
+      "2016-12-30",
+      "MARVELL TECHNOLOGY GROUP LTD",
+      "",
+      "1058057"
+     ],
+     [
+      "MRVL",
+      "2017-06-30",
+      "MARVELL TECHNOLOGY GROUP LTD",
+      "",
+      "1058057"
+     ],
+     [
+      "MRVL",
+      "2017-12-31",
+      "MARVELL TECHNOLOGY GROUP LTD",
+      "",
+      "1058057"
+     ],
+     [
+      "MRVL",
+      "2018-06-30",
+      "MARVELL TECHNOLOGY GROUP LTD",
+      "",
+      "1058057"
+     ],
+     [
+      "MRVL",
+      "2018-12-31",
+      "MARVELL TECHNOLOGY GROUP LTD",
+      "",
+      "1058057"
+     ],
+     [
+      "MRVL",
+      "2019-06-30",
+      "MARVELL TECHNOLOGY GROUP LTD",
+      "",
+      "1058057"
+     ],
+     [
+      "MRVL",
+      "2019-12-31",
+      "MARVELL TECHNOLOGY GROUP LTD",
+      "",
+      "1058057"
+     ],
+     [
+      "MRVL",
+      "2020-06-30",
+      "MARVELL TECHNOLOGY GROUP LTD",
+      "",
+      "1058057"
+     ],
+     [
+      "MRVL",
+      "2020-12-31",
+      "MARVELL TECHNOLOGY GROUP LTD",
+      "",
+      "1058057"
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "history": [
+    [
+     "MRVL",
+     "2007-12-17",
+     "2021-04-21"
+    ]
+   ],
+   "issuer_cik": 1058057,
+   "line_tickers": [],
+   "listed": false,
+   "name": "MARVELL TECHNOLOGY GROUP LTD",
+   "observed": true,
+   "security_type": "Common Stock",
+   "share_class": "COMMON"
+  },
   "BBG000C070N2": {
    "cusips": [
     "983759101"
@@ -4185,6 +4576,156 @@
    "line_tickers": [],
    "listed": false,
    "name": "HARRAHS ENTMT INC",
+   "observed": true,
+   "security_type": "Common Stock",
+   "share_class": "COMMON"
+  },
+  "BBG000C1XKF6": {
+   "cusips": [
+    "72346Q104"
+   ],
+   "eras": {
+    "PNFP@2017-06-30": [
+     [
+      "PNFP",
+      "2017-06-30",
+      "PINNACLE FINANCIAL PARTNERS INC",
+      "",
+      "1115055"
+     ],
+     [
+      "PNFP",
+      "2017-12-31",
+      "PINNACLE FINANCIAL PARTNERS INC",
+      "",
+      "1115055"
+     ],
+     [
+      "PNFP",
+      "2018-06-30",
+      "PINNACLE FINANCIAL PARTNERS INC",
+      "",
+      "1115055"
+     ],
+     [
+      "PNFP",
+      "2018-12-31",
+      "PINNACLE FINANCIAL PARTNERS INC",
+      "",
+      "1115055"
+     ],
+     [
+      "PNFP",
+      "2019-06-30",
+      "PINNACLE FINANCIAL PARTNERS INC",
+      "",
+      "1115055"
+     ],
+     [
+      "PNFP",
+      "2019-12-31",
+      "PINNACLE FINANCIAL PARTNERS INC",
+      "",
+      "1115055"
+     ],
+     [
+      "PNFP",
+      "2020-06-30",
+      "PINNACLE FINANCIAL PARTNERS INC",
+      "",
+      "1115055"
+     ],
+     [
+      "PNFP",
+      "2020-12-31",
+      "PINNACLE FINANCIAL PARTNERS INC",
+      "",
+      "1115055"
+     ],
+     [
+      "PNFP",
+      "2021-06-30",
+      "PINNACLE FINANCIAL PARTNERS INC",
+      "",
+      "1115055"
+     ],
+     [
+      "PNFP",
+      "2021-12-31",
+      "PINNACLE FINANCIAL PARTNERS INC",
+      "",
+      "1115055"
+     ],
+     [
+      "PNFP",
+      "2022-06-30",
+      "PINNACLE FINANCIAL PARTNERS INC",
+      "",
+      "1115055"
+     ],
+     [
+      "PNFP",
+      "2022-12-31",
+      "PINNACLE FINANCIAL PARTNERS INC",
+      "",
+      "1115055"
+     ],
+     [
+      "PNFP",
+      "2023-06-30",
+      "PINNACLE FINANCIAL PARTNERS INC",
+      "",
+      "1115055"
+     ],
+     [
+      "PNFP",
+      "2023-12-31",
+      "PINNACLE FINANCIAL PARTNERS INC",
+      "",
+      "1115055"
+     ],
+     [
+      "PNFP",
+      "2024-06-30",
+      "PINNACLE FINANCIAL PARTNERS INC",
+      "",
+      "1115055"
+     ],
+     [
+      "PNFP",
+      "2024-12-31",
+      "PINNACLE FINANCIAL PARTNERS INC",
+      "",
+      "1115055"
+     ],
+     [
+      "PNFP",
+      "2025-06-30",
+      "PINNACLE FINANCIAL PARTNERS INC",
+      "",
+      "1115055"
+     ],
+     [
+      "PNFP",
+      "2025-12-31",
+      "PINNACLE FINANCIAL PARTNERS INC",
+      "",
+      "1115055"
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "history": [
+    [
+     "PNFP",
+     "2007-12-21",
+     "2026-01-02"
+    ]
+   ],
+   "issuer_cik": 1115055,
+   "line_tickers": [],
+   "listed": false,
+   "name": "PINNACLE FINANCIAL PARTNERS INC",
    "observed": true,
    "security_type": "Common Stock",
    "share_class": "COMMON"
@@ -4812,6 +5353,86 @@
    "line_tickers": [],
    "listed": true,
    "name": "WENDYS",
+   "observed": true,
+   "security_type": "Common Stock",
+   "share_class": "COMMON"
+  },
+  "BBG000DFMXT3": {
+   "cusips": [
+    "045327103"
+   ],
+   "eras": {
+    "AZPN@2018-06-30": [
+     [
+      "AZPN",
+      "2018-06-30",
+      "ASPEN TECHNOLOGY INC",
+      "",
+      ""
+     ],
+     [
+      "AZPN",
+      "2018-12-31",
+      "ASPEN TECHNOLOGY INC",
+      "",
+      ""
+     ],
+     [
+      "AZPN",
+      "2019-06-30",
+      "ASPEN TECHNOLOGY INC",
+      "",
+      ""
+     ],
+     [
+      "AZPN",
+      "2019-12-31",
+      "ASPEN TECHNOLOGY INC",
+      "",
+      ""
+     ],
+     [
+      "AZPN",
+      "2020-06-30",
+      "ASPEN TECHNOLOGY INC",
+      "",
+      ""
+     ],
+     [
+      "AZPN",
+      "2020-12-31",
+      "ASPEN TECHNOLOGY INC",
+      "",
+      ""
+     ],
+     [
+      "AZPN",
+      "2021-06-30",
+      "ASPEN TECHNOLOGY INC",
+      "",
+      ""
+     ],
+     [
+      "AZPN",
+      "2021-12-31",
+      "ASPEN TECHNOLOGY INC",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "history": [
+    [
+     "AZPN",
+     "2008-01-24",
+     "2022-05-17"
+    ]
+   ],
+   "issuer_cik": 929940,
+   "line_tickers": [],
+   "listed": false,
+   "name": "ASPEN TECHNOLOGY INC",
    "observed": true,
    "security_type": "Common Stock",
    "share_class": "COMMON"
@@ -6265,6 +6886,51 @@
    "security_type": "Common Stock",
    "share_class": "SERIES C"
   },
+  "BBG006G57XG0": {
+   "cusips": [
+    "927959106"
+   ],
+   "eras": {
+    "VNOM@2024-06-30": [
+     [
+      "VNOM",
+      "2024-06-30",
+      "VIPER ENERGY INC CLASS A",
+      "",
+      "1602065"
+     ],
+     [
+      "VNOM",
+      "2024-12-31",
+      "VIPER ENERGY INC CLASS A",
+      "",
+      "1602065"
+     ],
+     [
+      "VNOM",
+      "2025-06-30",
+      "VIPER ENERGY INC CLASS A",
+      "",
+      "1602065"
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "history": [
+    [
+     "VNOM",
+     "2023-11-14",
+     "2025-08-19"
+    ]
+   ],
+   "issuer_cik": 1602065,
+   "line_tickers": [],
+   "listed": false,
+   "name": "VIPER ENERGY INC CLASS A",
+   "observed": true,
+   "security_type": "Common Stock",
+   "share_class": "CLASS A"
+  },
   "BBG009NGKQ45": {
    "cusips": [
     "92918V109",
@@ -6307,6 +6973,58 @@
    "line_tickers": [],
    "listed": false,
    "name": "VROOM INC",
+   "observed": true,
+   "security_type": "Common Stock",
+   "share_class": "COMMON"
+  },
+  "BBG009XV39D8": {
+   "cusips": [
+    "Y09827109"
+   ],
+   "eras": {
+    "AVGO@2016-06-30": [
+     [
+      "AVGO",
+      "2016-06-30",
+      "BROADCOM LTD",
+      "",
+      "1649338"
+     ],
+     [
+      "AVGO",
+      "2016-12-30",
+      "BROADCOM LTD",
+      "",
+      "1649338"
+     ],
+     [
+      "AVGO",
+      "2017-06-30",
+      "BROADCOM LTD",
+      "",
+      "1649338"
+     ],
+     [
+      "AVGO",
+      "2017-12-31",
+      "BROADCOM LTD",
+      "",
+      "1649338"
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "history": [
+    [
+     "AVGO",
+     "2016-02-01",
+     "2018-04-05"
+    ]
+   ],
+   "issuer_cik": 1649338,
+   "line_tickers": [],
+   "listed": false,
+   "name": "BROADCOM LTD",
    "observed": true,
    "security_type": "Common Stock",
    "share_class": "COMMON"
@@ -8066,6 +8784,44 @@
    "observed": true,
    "security_type": "",
    "share_class": "COMMON"
+  },
+  "CIK1334814-CLASS-A": {
+   "cusips": [
+    "98954A107"
+   ],
+   "eras": {
+    "Z@2014-06-30": [
+     [
+      "Z",
+      "2014-06-30",
+      "ZILLOW INC CLASS A",
+      "",
+      ""
+     ],
+     [
+      "Z",
+      "2014-12-31",
+      "ZILLOW INC CLASS A",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "placeholder",
+   "history": [
+    [
+     "Z",
+     "2011-07-25",
+     "2015-02-18"
+    ]
+   ],
+   "issuer_cik": 1334814,
+   "line_tickers": [],
+   "listed": false,
+   "name": "ZILLOW INC CLASS A",
+   "observed": true,
+   "security_type": "",
+   "share_class": "CLASS A"
   },
   "CIK1363851-COMMON": {
    "cusips": [

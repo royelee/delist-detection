@@ -71,6 +71,13 @@ CASES = {
     "BBG000BJ3QD0": "DADE 2007: the Form 25 day (rule 4; the truth's November 5 is residual)",
     "BBG000BJXXX0": "IFIN 2007: the Form 25 day (rule 4; the truth's June 29 is residual)",
     "BBG000BKKXG0": "PHLY 2008: the code-D halt at 08:50 on the Form 25 day, December 1: November 28 (rule 2, ruling)",
+    "BBG009XV39D8": "AVGO 2018: the scheme became effective after the close on April 4; the fails rows trade to it (rule 4, the fails rows)",
+    "CIK1334814-CLASS-A": "Z 2015: the 8-K12B halts trading at the close on February 17; the fails rows trade to it (rule 4, the fails rows)",
+    "BBG000BFMBQ6": "CI 2018: the closing day December 20 stands; the fails rows show no later trade (rule 4, guard)",
+    "BBG000BYWTX7": "MRVL 2021: the closing day April 20 stands (rule 4, guard)",
+    "BBG000DFMXT3": "AZPN 2022: the closing day May 16 stands (rule 4, guard)",
+    "BBG006G57XG0": "VNOM 2025: the closing day August 18 stands (rule 4, guard)",
+    "BBG000C1XKF6": "PNFP 2025: the closing day December 31 stands (rule 4, guard)",
     # guards
     "BBG000BGYDX9": "DBD 2023: MIDAS's May 26 stands; the same CUSIP went to DBDQQ (guard, ruling)",
     "BBG00GBV88T6": "BTU 2016: no own row under BTU in the window, so no tenure bound (guard)",

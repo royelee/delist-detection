@@ -111,6 +111,20 @@ MOVES = {
         [('2010-02-05', 'merger', '2010-01-26', 'closing_day', True, None)]),   # SUNW 2010: suspended on completion, January 26 (rule 4)
     'CIK867773-COMMON': ('rule4', [('2011-11-26', 'exchange_transfer', '', '', False, None)],
         [('2011-11-26', 'exchange_transfer', '2011-11-16', 'closing_day', True, 7.22)]),   # SPWRA 2011: the Form 25 day, November 16 (rule 4)
+    'BBG009XV39D8': ('rule4', [('2018-04-14', 'merger', '', '', False, None)],
+        [('2018-04-14', 'merger', '2018-04-04', 'closing_day', True, 236.99)]),   # AVGO 2018: the scheme effective after the close on April 4; the fails rows trade to it (rule 4, the fails rows)
+    'CIK1334814-CLASS-A': ('rule4', [('2015-02-27', 'merger', '', '', False, None)],
+        [('2015-02-27', 'merger', '2015-02-17', 'closing_day', True, 109.14)]),   # Z 2015: the 8-K12B halts trading at the close on February 17; the fails rows trade to it (rule 4, the fails rows)
+    'BBG000BFMBQ6': ('rule4', [('2018-12-31', 'merger', '', '', False, None)],
+        [('2018-12-31', 'merger', '2018-12-20', 'closing_day', True, 179.8)]),   # CI 2018: the closing day December 20 stands (rule 4, guard)
+    'BBG000BYWTX7': ('rule4', [('2021-04-20', 'merger', '', '', False, None)],
+        [('2021-04-20', 'merger', '2021-04-20', 'closing_day', True, 45.84)]),   # MRVL 2021: the closing day April 20 stands (rule 4, guard)
+    'BBG000DFMXT3': ('rule4', [('2022-05-26', 'merger', '', '', False, None)],
+        [('2022-05-26', 'merger', '2022-05-16', 'closing_day', True, 166.3)]),   # AZPN 2022: the closing day May 16 stands (rule 4, guard)
+    'BBG006G57XG0': ('rule4', [('2025-08-19', 'merger', '', '', False, None)],
+        [('2025-08-19', 'merger', '2025-08-18', 'closing_day', True, 37.24)]),   # VNOM 2025: the closing day August 18 stands (rule 4, guard)
+    'BBG000C1XKF6': ('rule4', [('2026-01-12', 'merger', '', '', False, None)],
+        [('2026-01-12', 'merger', '2025-12-31', 'closing_day', True, 95.41)]),   # PNFP 2025: the closing day December 31 stands (rule 4, guard)
 }
 
 # the guards: securities whose outcome no rule of 5d changes
