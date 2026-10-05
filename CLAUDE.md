@@ -348,7 +348,8 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   before), `apply_handoffs` (a continuation's missing `exchange_transfer` row
   or its successor, `handoff_continuation`/`handoff_rebucketed`/
   `handoff_conflict`; a takeover's `ticker_successor_sec_id` or
-  `handoff_takeover_no_delisting`), `drop_resolved_shared`. Run by
+  `handoff_takeover_no_delisting`; a rule-6 merger, sub-plan 5f, stands as a `handoff_conflict`),
+  `drop_resolved_shared`. Run by
   `pipeline._handoffs` after the successor search, before the history rows.
 - `line_follow.py` — sub-plan 5a, pure: a security's line across a CUSIP or ticker change. `candidate_steps` (the
   next step in the fails rows within ±`LINE_DAYS` (10) trading days of the old CUSIP's settled last row: a new
@@ -494,7 +495,12 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   class before the no-evidence default gives 304 with `r1_continuation`). Sub-plan 5g: `evidence.item_sections`
   and the classifier's heading strip read an item number the HTML stripping spaced out ("ITEM 1 .0 3", CBL 2020); no
   further digit may follow, and spaces only where the sub-number starts with 0 (a 10-K's index entry "Item 8. 29" is
-  no heading). `_liquidation_notice` reads end-of-era branch 5b's 3.01 8-K.
+  no heading). `_liquidation_notice` reads end-of-era branch 5b's 3.01 8-K. Sub-plan 5f: spec 5c's rule 6 on the
+  successor branch (an unambiguous own-share statement with another ratio than one, or cash, is a merger 231,
+  `end_of_era` `successor_merger`, CHTR 2016's 0.9042; a split factor n or 1/n is not, `_split_factor`, SIRI 2024's
+  0.1); and before the no-evidence default, a 6-K or 8-K in [F − 30, F + 10] of the Form 25 day that states a
+  completed acquisition, merger or arrangement (`_completion_report`, `COMPLETION`) is a merger 231 (TAHO, KING,
+  BPYU).
 - `end_of_era.py` — the end-of-era resolver's first step: where the registrant
   kept filing after the end. `signals()` reads the filings in the windows around
   the end date (8-K items, successor filings and Form 25s in [end − 30 d,
@@ -520,7 +526,11 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   `5xx→compliance_failure`, `6xx→expiration`). **The bucket — not the exact code
   — drives all downstream handling.**
 - `payout_extractor.py` — bridges the layers: extracts the per-share **cash**
-  merger consideration from EDGAR filing text (network, regex) for the `merger` bucket.
+  merger consideration from EDGAR filing text (network, regex) for the `merger` bucket. Each read carries its
+  currency (`PayoutResult.currency`, sub-plan 5f, ruling R5: the letters before its "$", `currency.prefix_currency`).
+- `currency.py` — sub-plan 5f, ruling R5, pure: the currency a filing states for a cash amount ("$"/"US$" USD,
+  "C$"/"Cdn$" CAD, a sign or an ISO code next to the amount: `prefix_currency`, `stated_currency`; an LLM answer as
+  a code, `normalize`). Never converted, never inferred from where a company is based: blank when not stated.
 - `exchange_terms.py` — what a filing says the registrant's own shares became (sub-plan 5c, R1): `statements`
   reads each "each share of S ... converted into N shares of T" (and "received N shares of T for each share",
   "on a one-for-one basis", a cash one); `own_exchange` keeps those whose subject is the registrant's (its EDGAR
@@ -537,7 +547,20 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   `llm_client.py` (injectable OpenAI JSON client) and `filing_selection.py`
   (filing-tier picker shared with `payout_extractor.py`); responses cached under
   `cache/llm/`. Disabled by default — enabled by `--extract-merger-terms-llm`;
-  `acquirer_price` and `last_trade_close` come from `ftd.py`, not a filing.
+  `acquirer_price` and `last_trade_close` come from `ftd.py`, not a filing. Prompt v3 (sub-plan 5f): the answer is
+  the PACKAGE one share of the named target security became (ruling R4: the final prorated per-share result when
+  stated, else what non-electors got, else the fixed terms, never the sum of an election's alternatives), with
+  `cash_currency` (R5; the quote's own sign wins), `stock_value` (a dollar-valued leg, PCYC), the stock leg's issuer
+  and class (`acquirer_*`: whose shares are received, New CCE not KO), `extra_legs` (a basket, R3), `package_basis`
+  and notes. The user prompt names the target security and the filing; the cache key is
+  `{accession}_{model}_v3_{ticker}`. Candidates, latest completion documents first: the closing 8-K, an 8-K reporting
+  the closing without 2.01 (3.01/3.03/5.01 within 30 days), an announcement 8-K filed after the last merger proxy (an
+  amendment, BOT), DEFM14A, the other announcement 8-Ks, PREM14A, a 6-K near the delisting; an unsure one-for-one
+  answer whose quote states no share count is passed over (`unsupported_one_for_one`: ATH, CHTR); a spelled-out null
+  ticker ("NULL") is none. A failed LLM call is a
+  degraded miss (`SEC_STATS.degraded("llm_call")`: the delisting is `resolution_degraded`), never cached; with
+  `--sec-workers` > 1 the calls are filled ahead on the worker threads. Calibrate with
+  `scripts/eval_merger_extractor.py --truth` (the 10 deals and the truth set's terms cases).
 - `store.py` — every output table's column order, key and sort order
   (`TABLES`), `DelistingKey` (a delisting's `(sec_id, delist_date)` key, here so
   the classification layer — the finder — and the handling layer can both use
@@ -546,7 +569,7 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   file first, then renamed into place one by one,
   `atomic_io.replace_all_on_success`), and `read_delistings_frame`
   (delistings.csv as a typed pandas DataFrame: `qlib_adapter.load_delistings`
-  reads through it). Every table read — `qlib_adapter`, `accept_review.py`,
+  reads through it). `CONTRACT_SCHEMA_VERSION` 3 adds `contract/payout_legs.csv` (sub-plan 5f). Every table read — `qlib_adapter`, `accept_review.py`,
   `verify_against_web.py` — goes through this module, so a later move to
   DuckDB changes only this module.
 - `review_triage.py` — pure (no network): `CATALOG` maps every review flag to
@@ -582,7 +605,7 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
 - `bmp_correction.py` + `exchanges.py` — firm-month BMP 2007 correction:
   `R_month = (1+R_partial)(1+DLRET)−1`, synthesizing `DLRET` per bucket with
   exchange-specific Shumway constants when no realized delist return is observed.
-- `dlret.py` — DLRET hub: `resolve_dlret`/`DlretResult`/`compute_dlret` (self-explaining delisting return; `otc_print=` gives `DlretMethod.OTC_PRINT` on a liquidation or compliance_failure, a `--recoveries` ratio winning, a merger ignoring it). `bmp_correction.py` re-exports for backward compatibility.
+- `dlret.py` — DLRET hub: `resolve_dlret`/`DlretResult`/`compute_dlret` (self-explaining delisting return; `otc_print=` gives `DlretMethod.OTC_PRINT` on a liquidation or compliance_failure, a `--recoveries` ratio winning, a merger ignoring it; `plan_value=` gives `PLAN_STOCK`, an answered R6 plan value, sub-plan 5f). `bmp_correction.py` re-exports for backward compatibility.
 - `reconstruction.py` — `EnrichedDelistRecord`, `enrich`, `build_delistings_table`,
   `delisting_row`. `output/delistings.csv` is the **primary output**, keyed by
   `(sec_id, delist_date)` (`store.DelistingKey`; `for_delisting` looks a delisting up
@@ -650,7 +673,7 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   EDGAR full-text search of the CIK's own filings (`full_text_search(...,
   ciks=)`), cached like every search.
 - `exit_kind.py` — one delistings.csv row in the contract's terms: `ending_fields` (exit kind, drop reason,
-  continuation, `dlret` and `dlret_fill`; `MEASURED_METHODS` includes `otc_print`, so an answered OTC print is a value, not a fill) and `is_distress`. Today's bucket and CRSP code map to the exit kind
+  continuation, `dlret` and `dlret_fill`; `MEASURED_METHODS` includes `otc_print` and `plan_stock`, so an answered OTC print or plan value is a value, not a fill) and `is_distress`. Today's bucket and CRSP code map to the exit kind
   (a code-470 bankruptcy is `dropped` for `bankruptcy`; `unknown` asserts none; a compliance failure the exchange
   removed for a price deficiency only, its Form 25 notice, else its 3.01 items, carries CRSP 552, drop reason
   `price`, from stage 9e, and an issuer's own Form 25 changes nothing: sub-plan 5g). The contract, the golden judge
@@ -660,8 +683,9 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   the issuer in force changes), `delisting_rows` (one per ended security, its last), `seed_rows` (the seed
   echo), `id_change_rows` (baseline placeholders that now hold a FIGI; stage 4b's folds by name, `renames`; and a baseline
   FIGI the run no longer holds that `renames` maps to a FIGI of this run, rule F: BTU, CRC; `regression.renamed_to`
-  and `diagnosis_loop.rename_truth` read every row alike, placeholder or not). `run_manifest.json` carries
-  `schema_version` (`store.CONTRACT_SCHEMA_VERSION`).
+  and `diagnosis_loop.rename_truth` read every row alike, placeholder or not), `payout_leg_rows` (schema 3, R3: each
+  security of a basket ending per share, `contract/payout_legs.csv`). `run_manifest.json` carries
+  `schema_version` (`store.CONTRACT_SCHEMA_VERSION`, 3).
 - `issuer_in_force.py` — the issuer CIK on each sighting's date: the era's CIK when its EDGAR name that day agrees
   with the observed name, else the one other CIK SEC's name index lists under that name whose name agreed then
   (MRK 2008: old Merck & Co, CIK 64978). `issuer_changes` dates each change: it sorts sightings by day then CIK
@@ -672,7 +696,16 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   trading day after the last trade), `recovery_ratio`, `terms_source`, `terms_gate` and `value_formula`; the caller
   computes `dlret = payout / last close − 1` with its own prices. `merger_inputs` collects a merger's `--merger-terms`
   row, LLM terms and regex read from before the payout gate: terms the gate dropped are still published,
-  `terms_gate=failed` (a failed election publishes both legs as read). `cash_currency` is always blank. The scorecard counts
+  `terms_gate=failed` (a failed election publishes both legs as read), `skipped` when the gate could not check them
+  (`terms_gate_skipped:<why>`: a non-USD cash leg, a basket, a dollar-valued leg), blank with no last close.
+  `cash_currency` (sub-plan 5f, R5) is the currency of the read that supplied the cash (the LLM's, the regex's;
+  blank for a `--merger-terms` row). A package of two or more securities is `basket` (R3): the main row keeps the
+  cash, `basket_legs` gives `contract/payout_legs.csv`'s rows; one security plus cash stays `cash_plus_stock`. A
+  dollar-valued stock leg is carried in `value_formula` over `avg_price(<ticker>)`, no ratio. The payout gate
+  (`payout_gate`) reads a v3 answer as its package (`is_package`: basis final_prorated, default or fixed; a `none`
+  answer keeps 5e's either-or reading): cash only in pass 1, with stock in pass 2; a regex cash never stands beside
+  an election package with stock, a package no last close can check, or as the package's own cash leg (SUG, FWLT,
+  AWH, SHAW); `clean_ticker` blanks an LLM's "NULL" ticker (GRUB). The scorecard counts
   `R2.7.value_rule.<rule>` and floors `R2.7.payout_rule_known`. A stock leg's `price_ticker` is the published
   acquirer security's symbol on the price date (`MergerInputs.price_ticker`, sub-plan 5e). `value_fields(...,
   distress=)` (sub-plan 5g): an `otc_print` row is priced under `DistressTerms.otc_symbol` (blank when stage 9e read
@@ -683,7 +716,9 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   which refuses a price that is not a finite positive number. `stock_legs` asks by the acquirer security's symbol on
   the price date (`price_tickers`, sub-plan 5e), and asks for a leg with no LLM ticker once the line is known. The
   `otc_print` request asks under the published OTC symbol (the exchange ticker when blank); a plan's `stock` row asks
-  no OTC print but a `received_close` of the new line (sub-plan 5g).
+  no OTC print but a `received_close` of the new line (sub-plan 5g). Sub-plan 5f: a dollar-valued stock leg asks its
+  acquirer's received close, and each further leg of a basket one of its own (`request_rows(..., basket=)`; the
+  answers are accepted, not used: the library prices no basket).
 
 There are **two return-correction APIs** for different research conventions:
 event-level (`handling.py`) vs CRSP-style firm-month (`bmp_correction.py`). Don't
