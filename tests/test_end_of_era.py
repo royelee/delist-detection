@@ -139,6 +139,28 @@ def test_a_survivor_that_filed_chapter_11_before_the_sale_is_still_a_bankruptcy(
     assert (v.branch, v.crsp_code, v.bucket) == ("bankruptcy", 470, CrspBucket.LIQUIDATION)
 
 
+def test_a_liquidation_notice_is_a_liquidation_after_every_other_branch():
+    """Sub-plan 5g (EQC 2025, operator pre-ruling): a registrant that delisted while winding down under a plan of
+    liquidation (its 3.01 8-K announces a liquidating distribution or trust) kept filing to wind down; that is a
+    liquidation (CRSP 400), not a transfer. A deficiency notice, a merger or a successor still decides first."""
+    v = resolve(_s(item_filed={"3.01": "2025-04-01"}, liquidation_notice="8-K 2025-04-01"), None)
+    assert (v.branch, v.crsp_code, v.bucket) == ("liquidation", 400, CrspBucket.LIQUIDATION)
+    assert v.reason.startswith("Liquidation: delisted while winding down (8-K 2025-04-01")
+    assert RESOLVED_FROM_CONTINUED_FILINGS in v.reason
+    assert resolve(_s(item_filed={"3.01": "2025-04-01"}, deficiency_notice="8-K 2025-04-01",
+                      liquidation_notice="8-K 2025-04-01"), None).branch == "delisting_notice"
+    assert resolve(_s(successor_filing="8-K12B 2025-04-02", liquidation_notice="8-K 2025-04-01"), None).branch == \
+        "successor"
+    assert resolve(_s(item_filed={"5.01": "2025-04-01"}, liquidation_notice="8-K 2025-04-01"), None).branch == \
+        "change_in_control"
+
+
+def test_the_liquidation_notice_is_the_classifiers_answer_carried_on_the_signals():
+    s = signals([_f("8-K", "2020-11-02", "3.01")], END, trading_after=False, liquidation_notice="8-K 2020-11-02")
+    assert s.liquidation_notice == "8-K 2020-11-02"
+    assert signals([], END, trading_after=False).liquidation_notice == ""
+
+
 def test_merges_says_when_branch_3_or_4_would_decide():
     assert merges(_s(item_filed={"5.01": "2020-11-02"}))
     assert merges(_s(item_filed={"2.01": "2020-11-02"}, delist_filing="25-NSE 2020-11-03"))

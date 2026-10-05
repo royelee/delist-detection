@@ -18,6 +18,9 @@ around the end first, in the spec's order:
    or distributed another company's shares to its holders): the resolution goes on to 5;
 5. a delisting notice (8-K item 3.01) whose text cites a listing deficiency: a
    compliance failure;
+   5b. a delisting notice (8-K item 3.01) whose 8-K announces a liquidating distribution,
+   a liquidating trust or a plan of liquidation or dissolution: a liquidation (400;
+   sub-plan 5g, EQC 2025: the registrant kept filing to wind down);
 6. otherwise the continued filings stand: today's transfer, reason unchanged.
 
 Measured on the audit's 117 left-view truths (2026-10-02), today's rule is right on
@@ -53,12 +56,13 @@ class EraSignals:
     deficiency_notice: str = ""       # "8-K <date>" of the first 3.01 notice citing a listing deficiency
     bankruptcy_filing: str = ""       # "8-K <date>" of the first 8-K in the window whose item 1.03 text confirms
     survived: str = ""                # the sentence that says the registrant acquired or distributed (rule 1, 5c)
+    liquidation_notice: str = ""      # "8-K <date>" of the first 3.01 8-K announcing a liquidation (branch 5b, 5g)
 
 
 @dataclass(frozen=True)
 class EraVerdict:
     branch: str                       # trading, successor, change_in_control, bankruptcy, completed_merger, delisting_notice,
-    crsp_code: int                    # or continued_filings
+    crsp_code: int                    # liquidation or continued_filings
     bucket: CrspBucket
     reason: str
 
@@ -71,13 +75,13 @@ def _day(s: str) -> date | None:
 
 
 def signals(filings: Iterable[EdgarSubmission], on: date, *, trading_after: bool,
-            deficiency_notice: str = "", bankruptcy_filing: str = "") -> EraSignals:
+            deficiency_notice: str = "", bankruptcy_filing: str = "", liquidation_notice: str = "") -> EraSignals:
     """The evidence around a security's end date `on`: the items of every 8-K (not
     an 8-K12B/8-K12G3) filed in [on − ITEMS_BEFORE_DAYS, on + ITEMS_AFTER_DAYS], the
     first successor registration and Form 25 in that window, and the latest merger
     filing in [on − MERGER_FILING_BEFORE_DAYS, on + MERGER_FILING_AFTER_DAYS]. The
-    classifier supplies the text checks: the deficiency notice, and the confirmed
-    bankruptcy 8-K in the item window."""
+    classifier supplies the text checks: the deficiency notice, the confirmed
+    bankruptcy 8-K and the liquidation notice in the item window."""
     lo, hi = on - timedelta(days=ITEMS_BEFORE_DAYS), on + timedelta(days=ITEMS_AFTER_DAYS)
     mlo, mhi = on - timedelta(days=MERGER_FILING_BEFORE_DAYS), on + timedelta(days=MERGER_FILING_AFTER_DAYS)
     item_filed: dict[str, str] = {}
@@ -96,7 +100,8 @@ def signals(filings: Iterable[EdgarSubmission], on: date, *, trading_after: bool
                 delist = delist or f"{f.form} {f.filing_date}"
         if mlo <= d <= mhi and f.form in MERGER_FILING_FORMS:
             merger = f"{f.form} {f.filing_date}"
-    return EraSignals(trading_after, item_filed, successor, merger, delist, deficiency_notice, bankruptcy_filing)
+    return EraSignals(trading_after, item_filed, successor, merger, delist, deficiency_notice, bankruptcy_filing,
+                      liquidation_notice=liquidation_notice)
 
 
 def merges(s: EraSignals) -> bool:
@@ -134,4 +139,8 @@ def resolve(s: EraSignals, items_code: int | None) -> EraVerdict:
     if "3.01" in s.item_filed and s.deficiency_notice:
         return EraVerdict("delisting_notice", 570, CrspBucket.COMPLIANCE_FAILURE,
                           f"Listing deficiency notice ({s.deficiency_notice}), no merger evidence{kept}")
+    if s.liquidation_notice:
+        return EraVerdict("liquidation", 400, CrspBucket.LIQUIDATION,
+                          f"Liquidation: delisted while winding down ({s.liquidation_notice} announces a liquidating "
+                          f"distribution, trust or plan){kept}")
     return EraVerdict("continued_filings", 304, CrspBucket.EXCHANGE_TRANSFER, CONTINUED)

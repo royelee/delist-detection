@@ -230,3 +230,27 @@ def test_each_new_wording_cites_a_listing_deficiency(text):
 ])
 def test_a_merger_notice_cites_no_listing_deficiency(text):
     assert not cites_listing_deficiency(text)
+
+
+# --- sub-plan 5g: an item number the HTML stripping spaced out ---
+
+# CBL's 2020 bankruptcy 8-K as the text cache holds it, shortened: "ITEM 1 .0 3", and its 3.01 8-K's "ITEM 3 . 01"
+SPACED_103 = ("ITEM 1 .0 3 Bankruptcy or Receivership On November 1, 2020, CBL & Associates Properties, Inc. and "
+              "certain of its subsidiaries filed voluntary petitions under chapter 11 of title 11 of the United States "
+              "Code in the United States Bankruptcy Court for the Southern District of Texas. " + "x" * 300
+              + " ITEM 2.04 Triggering Events that Accelerate a Direct Financial Obligation")
+
+
+def test_an_item_number_with_spaces_inside_is_the_item():
+    (section,) = item_sections(SPACED_103, "1.03")
+    assert section.startswith("ITEM 1 .0 3 Bankruptcy") and "chapter 11" in section and "ITEM 2.04" not in section
+    assert item_text("ITEM 3 . 01 Notice of Delisting. The NYSE suspended trading.", "3.01").startswith("ITEM 3 . 01")
+
+
+def test_a_spaced_heading_ends_the_section_before_it():
+    text = "Item 3.01 Notice of Delisting. " + "y" * 300 + " ITEM 7 .0 1 Regulation FD Disclosure. Other words."
+    assert item_text(text, "3.01").rstrip().endswith("y")
+
+
+def test_another_items_number_or_a_page_number_is_not_the_item():
+    assert item_sections("Item 1.031 refers elsewhere; Item 10.3 too; Item 7. 35 is a page.", "1.03") == []

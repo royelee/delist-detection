@@ -18,6 +18,7 @@ from typing import Iterable
 
 from . import end_of_era, exchange_terms
 from .crsp_codes import CrspBucket, bucket_for_code
+from .distress import liquidating
 from .edgar import STALE_KEY, EdgarClient, EdgarSubmission, submissions_fresh_after
 from .evidence import (
     MERGER_EVIDENCE_DAYS,
@@ -104,8 +105,9 @@ def _add_flag(flags: list[str], flag: str) -> None:
 
 # The Item 1.03 heading itself reads "Bankruptcy or Receivership", so every 8-K
 # carrying the tag — including a mis-tagged takeover — matches _BANKRUPTCY_TEXT on
-# the heading alone. Drop the heading, then require the wording in the body.
-_ITEM_HEADING = re.compile(r"^item\s*\d\.\d{2}[\s.–—-]*", re.I)
+# the heading alone. Drop the heading, then require the wording in the body. Its number may be spaced out by the
+# HTML stripping ("ITEM 1 .0 3": CBL 2020, sub-plan 5g), as `evidence.item_sections` reads it.
+_ITEM_HEADING = re.compile(r"^item\s*\d\s*\.\s*\d\s*\d[\s.–—-]*", re.I)
 # SEC's own caption for item 1.03, and the whole reason the heading confirms
 # itself. Punctuation after it is optional in real filings — SVB prints
 # "Item 1.03. Bankruptcy or Receivership On March 10, 2023, …" — and
@@ -224,6 +226,21 @@ class DelistClassifier:
                 continue
             text = self.edgar.fetch_filing_text(cik, f.accession, f.primary_doc)
             if cites_listing_deficiency(item_text(text, "3.01")):
+                return f"8-K {f.filing_date}"
+        return ""
+
+    def _liquidation_notice(self, cik: int, filings: list[EdgarSubmission], on: date) -> str:
+        """`"8-K <date>"` of the first 8-K with item 3.01 in the resolver's window around `on` that announces a
+        liquidating distribution, a liquidating trust or a plan of liquidation or dissolution anywhere in its text
+        (`distress.liquidating`: EQC 2025's final liquidating distribution, in its items 7.01 and 8.01), else ""
+        (end-of-era branch 5b, sub-plan 5g)."""
+        lo = on - timedelta(days=end_of_era.ITEMS_BEFORE_DAYS)
+        hi = on + timedelta(days=end_of_era.ITEMS_AFTER_DAYS)
+        for f in sorted(filings, key=lambda f: f.filing_date):
+            d = _parse_date(f.filing_date)
+            if not f.form.startswith("8-K") or "3.01" not in f.item_set or d is None or not lo <= d <= hi:
+                continue
+            if liquidating(self.edgar.fetch_filing_text(cik, f.accession, f.primary_doc)):
                 return f"8-K {f.filing_date}"
         return ""
 
@@ -749,6 +766,13 @@ class DelistClassifier:
                                                            era, delist_filing_override))
             items_code, _ = self._classify_items(set(era.item_filed))
             verdict = end_of_era.resolve(era, items_code)
+            if verdict.branch == "continued_filings":
+                # read only where nothing else decided (sub-plan 5g, branch 5b): a voluntary delisting while
+                # winding down (EQC 2025)
+                notice = self._liquidation_notice(resolution.cik, filings, observed)
+                if notice:
+                    era = replace(era, liquidation_notice=notice)
+                    verdict = end_of_era.resolve(era, items_code)
             evidence["end_of_era"] = verdict.branch
             if era.survived:
                 evidence["survived"] = era.survived

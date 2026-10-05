@@ -704,6 +704,20 @@ def test_an_unpunctuated_standard_caption_still_comes_off():
     assert _confirms_bankruptcy(t) is False
 
 
+def test_a_spaced_out_item_heading_and_its_caption_come_off_too():
+    """Sub-plan 5g: CBL's text cache reads "ITEM 1 .0 3 Bankruptcy or Receivership". The section is found
+    (evidence.item_sections), and its heading and caption come off, so a mis-tagged merger 8-K worded so is
+    still not a bankruptcy, while CBL's own body (chapter 11 petitions) confirms."""
+    merger = ("ITEM 1 .0 3 Bankruptcy or Receivership On November 27, 2024 the merger was completed and each share "
+              "was converted into the right to receive $25.75 in cash. ITEM 2 .0 1 Completion of Acquisition.")
+    assert "Bankruptcy" not in _drop_heading(item_text(merger, "1.03"))
+    assert _confirms_bankruptcy(merger) is False
+    cbl = ("ITEM 1 .0 3 Bankruptcy or Receivership On November 1, 2020, CBL & Associates Properties, Inc. and "
+           "certain of its subsidiaries filed voluntary petitions under chapter 11 of title 11 of the United States "
+           "Code. ITEM 2.04 Triggering Events.")
+    assert _confirms_bankruptcy(cbl) is True
+
+
 def test_a_punctuated_standard_caption_still_comes_off():
     t = ("Item 1.03 Bankruptcy or Receivership. On November 27, 2024 the merger was completed "
          "and each share was converted into the right to receive $25.75 in cash. "
