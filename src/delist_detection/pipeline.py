@@ -1489,8 +1489,11 @@ def _leg_holders(mergers: list[Delisting], llm_terms: Mapping[DelistingKey, Any]
     for e in baskets:
         last = e.last_trade.day
         held = {}
+        main = normalize_ticker(llm_terms[e.key].acquirer_ticker or "")
         for leg in llm_terms[e.key].extra_legs:
             ticker = normalize_ticker(leg.ticker or "")
+            if ticker == main:
+                continue          # another class under the main leg's ticker (CAA 2018's Lennar class B as LEN)
             sid = index.holder(ticker, last, next_trading_day(last), exclude=e.sec_id) if ticker else None
             if sid:
                 held[ticker] = sid
