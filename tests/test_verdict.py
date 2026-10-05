@@ -33,9 +33,12 @@ def test_a_placeholder_needs_ticker_evidence():
 
 
 def test_an_introduction_outside_the_history_makes_the_security_uncertain():
-    v = _one(ending("A", "2015-03-10", **GOOD), observations=[obs("AAA", "2016-06-30", "A", "after_delisting")])
+    # an after_delisting seed past a settled ending is the caller's stale snapshot (verdict_rules.stale_seed); one the
+    # ending cannot settle, here a worked-out last trade, still counts
+    v = _one(ending("A", "2015-03-10", **{**GOOD, "source": "closing_day", "flags": "last_trade_date_unconfirmed"}),
+             observations=[obs("AAA", "2016-06-30", "A", "after_unconfirmed_delisting")])
     assert v.securities["A"].reasons == ("seeds_outside_history:1 from 2016-06-30",)
-    assert v.endings[("A", "2015-03-10")].reasons == ("security_uncertain",)
+    assert v.endings[("A", "2015-03-10")].reasons[0] == "security_uncertain"
 
 
 def test_a_later_sighting_outside_the_history_is_an_uncertain_seed_only():
@@ -73,8 +76,8 @@ def test_two_securities_holding_one_ticker_at_once_are_both_uncertain_unless_an_
     (dict(bucket="unknown"), "unknown_exit_kind"),
     (dict(flags="resolved_by_current_ticker_map"), "issuer_from_todays_ticker_map"),
     (dict(method="assumed_par", flags="payout_gate_failed:34.88"), "assumed_par_after_failed_gate"),
-    (dict(method="assumed_par", flags="llm_gate_failed:no_acq_price"), "assumed_par_after_failed_gate"),
-    (dict(method="assumed_par", flags="terms_gate_failed:no_acq_price"), "assumed_par_after_failed_gate"),
+    (dict(method="assumed_par", flags="llm_gate_failed"), "assumed_par_after_failed_gate"),
+    (dict(method="assumed_par", flags="terms_gate_failed:no_acq_ticker"), "assumed_par_after_failed_gate"),
 ])
 def test_each_ending_rule(cells, reason):
     row = ending("A", "2015-03-10", **{**GOOD, **cells})
@@ -135,7 +138,7 @@ def test_merged_reasons_are_deduplicated_by_whole_value_not_substring():
 
 def test_one_security_seen_under_two_names_on_a_day_is_one_uncertain_row():
     o = [obs("AAA", "2010-06-30", "A", "conflict", name="ALPHA"), obs("AAA", "2010-06-30", "A", "conflict", name="ALFA")]
-    rows = _one(observations=o).uncertain_rows()
+    rows = _one(history=[iv("A", "AAA", "2010-01-04")], observations=o).uncertain_rows()
     assert [(r["kind"], r["ticker"], r["date"], r["reason"]) for r in rows] == [
         ("seed", "AAA", "2010-06-30", "seen_under_two_names")]
 

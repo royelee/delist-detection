@@ -27,6 +27,7 @@ from . import scorecard as run_scorecard
 from .acquirers import acquirer_cik, find_acquirer
 from .added_securities import AddedAcquirer, AddedLineSuccessor, AddedSecurity, AddedSuccessor
 from .crsp_codes import CrspBucket
+from .continuation_evidence import confirming_filing, needs_filing
 from .degraded import DegradedWatch, degraded_item, flag_degraded, report_halt_feed_failures
 from .delistings import (
     ISSUER_FORM25_FORMS, LATE_ROW_DAYS, SUCCESSOR_UNKNOWN, Delisting, DelistingFinder, SecurityContext,
@@ -2546,6 +2547,31 @@ def _era_tier(answers: _IssuerAnswers, era_key: str) -> str:
     return ""
 
 
+def _continuation_filings(ctx: _RunContext, delistings: list[Delisting], securities: Mapping[str, Security],
+                          review: list[ReviewItem]) -> dict[DelistingKey, str]:
+    """9f. Sub-plan 5i (spec ruling 2.3): the filing that confirms each continuation the continued-filings rule or the
+    handoff stage's timing linked (`continuation_evidence`), for its verdict (10f) only: an 8-K item 3.03 or an
+    8-K12B/8-K12G3 of its issuer whose texts state the security's own exchange one for one. No row changes. A read
+    that rested on a failed request or a stale copy gives no filing and a `resolution_degraded` review item (not a
+    flag on the row: the row itself does not rest on it); a refusal (`fatal.FATAL`) stops the run."""
+    mark = ctx.meter.start()
+    out: dict[DelistingKey, str] = {}
+    for d in delistings:
+        rec, sec = d.record, securities.get(d.sec_id)
+        if sec is None or not needs_filing(rec.reason or "", d.sec_id, rec.successor_sec_id):
+            continue
+        watch = DegradedWatch()
+        found = confirming_filing(ctx.clients.edgar, d.cik, [d.last_trade.day, date.fromisoformat(d.delist_date)],
+                                  sec.name or "")
+        if watch.tripped():
+            watch.report_delisting(review, d, "the continuation's confirming filing (stage 9f)", own_row=False)
+        elif found:
+            out[d.key] = found
+    ctx.log(f"continuation filings: {len(out)} confirmed")
+    ctx.meter.done("continuation filings", mark)
+    return out
+
+
 def _ticker_evidence(ctx: _RunContext, securities: dict[str, Security], answers: _IssuerAnswers) -> dict[str, str]:
     """10e. What ties each placeholder's ticker to its CIK (decision 1;
     ticker_evidence.evidence_for): a resolver tier that names the ticker, else
@@ -2802,6 +2828,7 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
         closes.update(_last_trade_closes(ctx, ends.delistings, {**securities, **ends.securities},
                                          {**sec_cusips, **ends.cusips}, ftd, ftd_lo, overrides))
     distress = _distress(ctx, delistings, {**sec_cusips, **ends.cusips}, ftd, review)              # 9e
+    confirmations = _continuation_filings(ctx, delistings, securities, review)                     # 9f
     overrides = _plan_values(overrides, distress)
     _log_role_refusals(ctx, delistings)
     # The handoff stage creates continuation delistings (AON 2012) and sets successors: the clip and the ranges read
@@ -2832,7 +2859,7 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
         "observation_map": map_rows,
     }
     evidence = _ticker_evidence(ctx, securities, answers)                                          # 10e
-    verdicts = decide_verdicts(_as_read(tables), evidence)                                         # 10f
+    verdicts = decide_verdicts(_as_read(tables), evidence, confirmations)                          # 10f
     tables["uncertain"] = verdicts.uncertain_rows()
     # an acquirer the run added that R1 made a merger row's successor is in the contract's history (Sinclair Inc)
     successor_ids = set(successors.added) | set(r1.added) | {sid for sid, _ in r1.links.values()}

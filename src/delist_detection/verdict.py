@@ -7,20 +7,27 @@ enforces"; decisions 1, 4 and 9).
   ticker to that CIK (decision 1; `ticker_evidence`); when every seed
   resolved to it falls inside its ticker history; and when no other security
   holds one of its tickers over an overlapping date range, unless an ending
-  of one hands the ticker to the other.
+  of one hands the ticker to the other. A seed past the history after a
+  settled last ending (`verdict_rules.stale_seed`) does not count, and an
+  observed security closed with no ending at all is uncertain
+  (`verdict_rules.closed_without_ending`).
 - An ending (a delistings.csv row whose successor is not the security itself)
   is confirmed when its security is confirmed, its issuer CIK did not come
   from today's ticker map, and its exit kind rests on a filing: not the
   continued-filings rule, not the no-evidence default, not unknown. An
   ending the end-of-era resolver relabelled from the continued-filings rule
-  stays uncertain until its security-level checks exist. A
+  stays uncertain unless its own Form 25 settles a merger or its successor
+  registration a continuation; today's ticker map stays a doubt unless the
+  row's own Form 25 came from that CIK (the rulings of the diagnosis-truth
+  spec's 2.3, `verdict_rules`). A
   continuation (a successor other than itself) must rest on a successor
   filing or a CUSIP switch, not on timing alone. Any other ending needs a
   last trade date from an exchange print (MIDAS, a Nasdaq halt, the
   exchange's notice, 8-K item 3.01) that is confirmed, that no other text
   source contradicts unless MIDAS or a halt measured it, and that falls no
   later than the Form 25's effective date. The value never decides the
-  verdict, except assumed par after a failed payout, LLM or terms gate (decision 4).
+  verdict, except assumed par after a failed payout, LLM or terms gate (decision 4)
+  that did not fail on the price side alone (`verdict_rules.unpriced_gate`).
   An ending that is not its security's last (one that ended, returned and
   ended again) is uncertain, `earlier_ending:<the last one's delist_date>`: the
   contract keeps one ending per security (decision 12).
@@ -43,6 +50,8 @@ from datetime import date, timedelta
 from .lifecycle import (CONTINUED_FILINGS, EXCHANGE_PRINT_SOURCES, RESOLVED_FROM_CONTINUED_FILINGS, Tables,
                         flag_names)
 from .exit_kind import ending_fields
+from .verdict_rules import (closed_without_ending, issuer_by_form25, settles_relabel, stale_seed,
+                            successor_registration, unpriced_gate)
 
 SEED, SECURITY, ENDING = "seed", "security", "ending"
 FORM25_EFFECTIVE_DAYS = 10               # a Form 25 takes effect 10 days after it is filed
@@ -101,10 +110,17 @@ def published_last_trade_date(row: Mapping[str, str]) -> str:
     return "" if effective is not None and date.fromisoformat(ltd) > effective else ltd
 
 
-def _security_verdicts(tables: Tables, evidence: Mapping[str, str]) -> dict[str, Verdict]:
+def _security_verdicts(tables: Tables, evidence: Mapping[str, str],
+                       settled: Mapping[str, tuple[Mapping[str, str], bool]] | None = None) -> dict[str, Verdict]:
+    """`settled`: each security's last real ending and whether that ending's own reasons are none (`decide`), for
+    `verdict_rules.stale_seed`."""
+    settled = settled or {}
     intervals: dict[str, list[Mapping[str, str]]] = defaultdict(list)
     for r in tables.ticker_history:
         intervals[r["sec_id"]].append(r)
+    endings: dict[str, list[Mapping[str, str]]] = defaultdict(list)
+    for r in tables.delistings:
+        endings[r["sec_id"]].append(r)
     linked = {frozenset((r["sec_id"], other)) for r in tables.delistings
               for other in (r["successor_sec_id"], r["ticker_successor_sec_id"]) if other and other != r["sec_id"]}
     overlaps: dict[str, dict[str, str]] = defaultdict(dict)          # sec_id -> {other sec_id: ticker}
@@ -121,7 +137,8 @@ def _security_verdicts(tables: Tables, evidence: Mapping[str, str]) -> dict[str,
                     overlaps[b["sec_id"]][a["sec_id"]] = ticker
     outside: dict[str, list[str]] = defaultdict(list)       # introductions outside the security's history
     for r in tables.observation_map:
-        if r["sec_id"] and is_introduction(r) and not _covered(intervals[r["sec_id"]], r["as_of"]):
+        if r["sec_id"] and is_introduction(r) and not _covered(intervals[r["sec_id"]], r["as_of"]) \
+                and not stale_seed(r["status"], *settled.get(r["sec_id"], (None, False))):
             outside[r["sec_id"]].append(r["as_of"])
     out: dict[str, Verdict] = {}
     for s in tables.securities:
@@ -131,29 +148,33 @@ def _security_verdicts(tables: Tables, evidence: Mapping[str, str]) -> dict[str,
         if outside[sid]:
             reasons.append(f"seeds_outside_history:{len(outside[sid])} from {min(outside[sid])}")
         reasons += [f"ticker_overlap:{ticker}" for ticker in sorted(set(overlaps[sid].values()))]
+        if closed := closed_without_ending(s, intervals[sid], endings[sid]):
+            reasons.append(closed)
         out[sid] = Verdict(tuple(reasons), tuple(sorted(overlaps[sid])))
     return out
 
 
-def _ending_reasons(row: Mapping[str, str], security: Verdict | None) -> list[str]:
+def _own_reasons(row: Mapping[str, str], issuer_cik: str = "", confirmed_by: str = "") -> list[str]:
+    """An ending's reasons, its security's set aside. `issuer_cik`: its security's issuer (securities.csv);
+    `confirmed_by`: the filing that confirms its continuation (`continuation_evidence.confirming_filing`), if any."""
     flags = flag_names(row)
+    confirmed = bool(confirmed_by) and _is_continuation(row)
     reasons = []
-    if security is None or not security.confirmed:
-        reasons.append(SECURITY_UNCERTAIN)
-    if "resolved_by_current_ticker_map" in flags:
+    if "resolved_by_current_ticker_map" in flags and not issuer_by_form25(row, issuer_cik):
         reasons.append("issuer_from_todays_ticker_map")
-    if row["reason"].startswith(CONTINUED_FILINGS):
+    if row["reason"].startswith(CONTINUED_FILINGS) and not confirmed:
         reasons.append("continued_filings_rule")
-    if RESOLVED_FROM_CONTINUED_FILINGS in row["reason"]:
+    if RESOLVED_FROM_CONTINUED_FILINGS in row["reason"] and not settles_relabel(row) \
+            and not successor_registration(row):
         reasons.append("resolved_from_continued_filings")
-    if "no_evidence_default" in flags:
+    if "no_evidence_default" in flags and not successor_registration(row) and not confirmed:
         reasons.append("no_evidence_default")
     if not ending_fields(row).exit_kind:
         reasons.append("unknown_exit_kind")
-    if row["dlret_method"] == "assumed_par" and flags & GATE_FAILED:
+    if row["dlret_method"] == "assumed_par" and flags & GATE_FAILED and not unpriced_gate(row):
         reasons.append("assumed_par_after_failed_gate")
     if _is_continuation(row):
-        if "(timing:cik)" in row["reason"]:
+        if "(timing:cik)" in row["reason"] and not confirmed:
             reasons.append("continuation_by_timing_only")
         return reasons
     ltd, source = row["last_trade_date"], row["last_trade_date_source"]
@@ -238,18 +259,32 @@ def seed_key(r: Mapping[str, str]) -> tuple[str, str, str, str, str, str]:
     return (r["ticker"], r["as_of"], r["name"], r["cusip"], r["pin_cik"], r["pin_sec_id"])
 
 
-def decide(tables: Tables, evidence: Mapping[str, str]) -> Verdicts:
+def decide(tables: Tables, evidence: Mapping[str, str],
+           continuations: Mapping[tuple[str, str], str] | None = None) -> Verdicts:
     """Every verdict of one run's tables. `evidence` maps a placeholder's sec_id
     to what ties its ticker to its CIK (`ticker_evidence.evidence_for`); a
-    placeholder missing from it, or mapped to "", has none."""
-    securities = _security_verdicts(tables, evidence)
+    placeholder missing from it, or mapped to "", has none. `continuations`
+    maps a continuation's (sec_id, delist_date) to the filing that confirms it
+    (`continuation_evidence.confirming_filing`, pipeline stage 9f); a key
+    missing from it has none."""
+    continuations = continuations or {}
+    issuers = {s["sec_id"]: s["issuer_cik"] for s in tables.securities}
     real = [r for r in tables.delistings if r["successor_sec_id"] != r["sec_id"]]
     last_of: dict[str, str] = {}
     for r in real:
         last_of[r["sec_id"]] = max(last_of.get(r["sec_id"], ""), r["delist_date"])
+    # each ending's own reasons first: a security's stale seeds count only while its last ending is unsettled
+    own = {(r["sec_id"], r["delist_date"]): _own_reasons(r, issuers.get(r["sec_id"], ""),
+                                                          continuations.get((r["sec_id"], r["delist_date"]), ""))
+           for r in real}
+    settled = {r["sec_id"]: (r, not own[(r["sec_id"], r["delist_date"])]) for r in real
+               if r["delist_date"] == last_of[r["sec_id"]]}
+    securities = _security_verdicts(tables, evidence, settled)
     endings = {}
     for r in real:
-        reasons = _ending_reasons(r, securities.get(r["sec_id"]))
+        security = securities.get(r["sec_id"])
+        reasons = ([SECURITY_UNCERTAIN] if security is None or not security.confirmed else []) \
+            + own[(r["sec_id"], r["delist_date"])]
         if r["delist_date"] != last_of[r["sec_id"]]:
             reasons.append(f"earlier_ending:{last_of[r['sec_id']]}")
         endings[(r["sec_id"], r["delist_date"])] = Verdict(tuple(reasons))
