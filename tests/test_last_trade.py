@@ -3,7 +3,7 @@ from datetime import date
 import pytest
 
 from delist_detection.last_trade import (CLOSING_DAY, LastTrade, closing_day, decide_last_trade,
-                                         eightk_last_trade)
+                                         eightk_last_trade, sections_3_01)
 
 
 def _k(item301: str, extra: str = "") -> str:
@@ -148,6 +148,16 @@ def test_a_3_01_section_runs_past_a_cross_reference():
             "business on April 27, 2011, the Company’s common stock ceased trading on NASDAQ. " + "x " * 120
             + "Item 3.03 Material Modification. At the effective time of the merger on April 27, 2011 ...")
     assert eightk_last_trade(text) == (date(2011, 4, 27), "8k_close")
+
+
+def test_a_3_01_heading_spaced_out_by_the_html_stripping_is_its_section():
+    """Wave 1 (5d's reader under 5g's spaced item numbers, CBL 2020's "ITEM 3 . 01"): the spaced heading opens the
+    3.01 section and a spaced "ITEM 5 . 01" heading ends it, so another item's later sentence is not read."""
+    text = ("ITEM 3 . 01 Notice of Delisting. The NYSE will suspend trading in the shares prior to the open of trading "
+            "on November 2, 2020. " + "x " * 120 + "ITEM 5 . 01 Changes in Control. The shares will cease trading "
+            "at the close of trading on November 5, 2020.")
+    assert sections_3_01(text)[0].startswith("ITEM 3 . 01") and "November 5" not in sections_3_01(text)[0]
+    assert eightk_last_trade(text) == (date(2020, 10, 30), "8k_open")
 
 
 def test_a_stated_timing_beats_a_bare_suspension_in_one_filing():

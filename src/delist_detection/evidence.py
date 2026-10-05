@@ -185,8 +185,9 @@ _ITEM_HEAD = re.compile(r"item\s*\d\s*\.\s*\d\s*\d(?!\d)", re.I)
 ITEM_MIN_SECTION = 200   # shorter than this is an index entry or a cross-reference, not a section
 
 
-def _item_mention(item: str) -> re.Pattern:
-    """`Item {item}` in any case, spaces allowed inside its number, and no further digit after it."""
+def item_mention(item: str) -> re.Pattern:
+    """`Item {item}` in any case, spaces allowed inside its number, and no further digit after it (also
+    `last_trade.sections_3_01`'s mention)."""
     return re.compile(r"item\s*" + r"\s*".join(re.escape(ch) for ch in item.replace(" ", "")) + r"(?!\d)", re.I)
 
 
@@ -205,7 +206,7 @@ def item_sections(text: str, item: str, width: int = 1500) -> list[str]:
     for wording reads every section, not only the first.
     """
     text = text or ""
-    matches = list(_item_mention(item).finditer(text))
+    matches = list(item_mention(item).finditer(text))
     if not matches:
         return []
     out = []

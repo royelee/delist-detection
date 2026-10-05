@@ -15,7 +15,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import date, datetime
 
-from .evidence import ITEM_MIN_SECTION
+from .evidence import ITEM_MIN_SECTION, item_mention
 from .trading_calendar import is_trading_day, previous_trading_day
 
 _MONTHS = ("January|February|March|April|May|June|July|August|September|October|November|December")
@@ -36,7 +36,9 @@ _STOP = re.compile(r"suspen|ceas|halt|delist|withdraw|no longer (?:be )?(?:liste
 _RECORD = re.compile(r"\brecord\b", re.I)
 _OBLIGATIONS = re.compile(r"obligation|reporting|duty to file|registration", re.I)
 _ABBREV = re.compile(r"\b(?:Inc|Corp|Co|Ltd|Inst|No|L\.P|N\.V|S\.A|U\.S|plc|p\.m|a\.m|St|Mr|Ms|Dr|Jr|Sr)\.$", re.I)
-_ITEM_HEADING = re.compile(r"item\s*\d\.\d{2}\b\.?:?\s*[–—-]?\s*(?=[A-Z])", re.I)
+# an item heading; its number may be spaced out by the HTML stripping ("ITEM 3 . 01": CBL 2020), as
+# `evidence.item_sections` reads it (sub-plan 5g)
+_ITEM_HEADING = re.compile(r"item\s*\d\s*\.\s*\d\s*\d\b\.?:?\s*[–—-]?\s*(?=[A-Z])", re.I)
 _CROSS_REF = re.compile(r"(?:\b(?:in|under|see|to|and|of|with|per|into|by)\s+)$", re.I)
 SECTION_WIDTH = 4000
 
@@ -89,12 +91,13 @@ def _effective_time(text: str) -> tuple[date, int] | None:
 
 def sections_3_01(text: str, width: int = SECTION_WIDTH) -> list[str]:
     """Every Item 3.01 section of an 8-K (`evidence.item_sections`' rule: a mention shorter than ITEM_MIN_SECTION
-    is an index entry; all short, the first mention), each running to the next item heading -- an "Item N.NN"
-    followed by its capitalized title -- rather than to a cross-reference ("described in Item 1.01 above", "under
-    Item 1.03 of this Current Report": NOVL 2011, WM 2008), or `width` characters."""
+    is an index entry; all short, the first mention; the number read with spaces inside it, `evidence.item_mention`),
+    each running to the next item heading -- an "Item N.NN" followed by its capitalized title -- rather than to a
+    cross-reference ("described in Item 1.01 above", "under Item 1.03 of this Current Report": NOVL 2011, WM 2008),
+    or `width` characters."""
     text = text or ""
     out = []
-    for m in re.finditer(r"item\s*3\.01", text, re.I):
+    for m in item_mention("3.01").finditer(text):
         chunk = text[m.start(): m.start() + width]
         end = len(chunk)
         for h in _ITEM_HEADING.finditer(chunk, m.end() - m.start()):
