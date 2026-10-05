@@ -448,3 +448,44 @@ def test_the_averaging_window_of_a_dollar_valued_leg_is_named_in_the_formula(tmp
     f = value_fields(r, "2015-05-22", MergerInputs(llm=t))
     assert f["value_formula"] == (f"(152.25 + 109.00 × price(ABBV, 2015-05-26) / avg_price(ABBV: {window})) "
                                   "/ last_close − 1")
+
+
+# --- an election whose filing states no package for the holders who made no election keeps the base reading -----------
+
+V2_TRH = {"deal_type": "election", "cash_per_share": 14.22, "stock_ratio": 0.145, "acquirer_name": "Alleghany",
+          "acquirer_ticker": "Y", "confidence": "high", "quote": "the sum of (i) 0.145 shares ... and (ii) $14.22"}
+V3_TRH = {**V3_JCI, "deal_type": "election", "package_basis": "none", "cash_per_share": None, "stock_ratio": None,
+          "stock_value_per_share": 61.14, "acquirer_ticker": "Y", "cash_currency": None, "election_note": "shares or cash"}
+NMX_QUOTE = ("NYMEX Holdings stockholders who elected to receive stock consideration ... will receive approximately "
+             "$7.29 in cash and 0.2164 shares")
+V3_NMX = {**V3_JCI, "deal_type": "election", "package_basis": "final_prorated", "cash_per_share": 7.29,
+          "stock_ratio": 0.2164, "acquirer_ticker": "CME", "quote": NMX_QUOTE}
+V2_NMX = {"deal_type": "election", "cash_per_share": 81.16, "stock_ratio": 0.2378, "acquirer_name": "CME",
+          "acquirer_ticker": "CME", "confidence": "high", "quote": "$81.16 ... 0.2378 shares"}
+
+
+def _extract(tmp_path, v3, v2):
+    (tmp_path / f"C1_m_{PROMPT_VERSION}_X.json").write_text(json.dumps(v3))
+    if v2:
+        (tmp_path / f"C1_m_{LEGACY_VERSION}.json").write_text(json.dumps(v2))
+    return LLMMergerTermsExtractor(_Edgar([_f("C1", items="2.01,3.01", filed="2012-03-05")], {"C1": "text"}),
+                                   _Llm(v3), model="m", cache_dir=tmp_path).extract(_rec("X", "2012-03-05"))
+
+
+def test_trh_a_value_with_no_package_keeps_the_earlier_prompts_two_legs_published_as_read(tmp_path):
+    t = _extract(tmp_path, V3_TRH, V2_TRH)
+    assert (t.cash_per_share, t.stock_ratio, t.acquirer_ticker, t.no_default) == (14.22, 0.145, "Y", True)
+    r = ending("TRH", "2012-03-16", method="assumed_par", last_trade_close="")
+    f = value_fields(r, "2012-03-05", MergerInputs(llm=t))
+    assert (f["value_rule"], f["cash_per_share"], f["stock_ratio"]) == ("cash_plus_stock", 14.22, 0.145)
+
+
+def test_nmx_the_stock_electors_result_is_never_the_package_the_gate_reads_the_base_reading(tmp_path):
+    t = _extract(tmp_path, V3_NMX, V2_NMX)
+    assert (t.cash_per_share, t.stock_ratio, t.no_default) == (81.16, 0.2378, True)
+    g = gate_payouts([K], {}, {}, {}, {K: t}, {"ABC": 80.14}, {}, lambda ticker, key: 342.11, DEFAULT_TOL)
+    assert g.payouts[K] == 81.16 and K not in g.merged_terms and NO_DEFAULT in g.flags[K]
+
+
+def test_an_electors_result_with_no_cached_earlier_answer_is_a_miss_not_the_package(tmp_path):
+    assert _extract(tmp_path, V3_NMX, None) is None

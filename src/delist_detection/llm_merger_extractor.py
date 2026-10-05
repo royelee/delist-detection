@@ -355,6 +355,26 @@ def electors_only(deal_type: object, basis: str, quote: str) -> bool:
             and not _NON_ELECTORS.search(quote or ""))
 
 
+def states_no_package(terms: MergerTerms) -> bool:
+    """An election answer that states no package for the holders who made no election: prompt v3's basis `none`
+    (TRH 2012: shares or cash "with a value equal to $61.14": no cash leg, no ratio, only a value), or one election
+    class's result (`electors_only`, NMX 2008). A basis-`none` answer that does state a cash leg or a ratio keeps it
+    (CYN 2015's $90.057 cash)."""
+    return terms.deal_type == "election" and (terms.no_default or (
+        terms.package_basis == "none" and terms.cash_per_share is None and terms.stock_ratio is None
+        and not terms.extra_legs))
+
+
+def base_reading(terms: MergerTerms, old: MergerTerms | None) -> MergerTerms | None:
+    """R4 (controller ruling 2026-10-04): when the answer states no package for non-electors, the base reading stands,
+    the earlier prompt's cached answer for the same filing (`old`), flagged `election_no_default`: TRH's 14.22 and
+    0.145 Y, NMX's all-cash 81.16 (the gate's either-or reading). Never one election class's result. None when
+    `old` states no leg."""
+    if old is None or (old.cash_per_share is None and not old.has_stock):
+        return None
+    return replace(old, election_note=terms.election_note, no_default=True)
+
+
 _AVG_WINDOW = re.compile(r"(?i)\baverage\s+(?:sale\s+|trading\s+|closing\s+)?price[^.]{0,220}?\bfor\s+the\s+"
                          r"((?:ten|\d+)\s+(?:consecutive\s+)?(?:trading\s+)?days?[^.;,(“”]{0,160})")
 
@@ -462,6 +482,7 @@ class LLMMergerTermsExtractor:
 
         tried = 0
         legless: list[tuple[EdgarSubmission, MergerTerms]] = []
+        held: list[MergerTerms] = []      # the base readings of answers that state no package for non-electors
         for f in candidates:
             if tried >= self.max_filings:
                 break
@@ -484,10 +505,19 @@ class LLMMergerTermsExtractor:
                 continue
             if terms is None or unsupported_one_for_one(terms):
                 continue
+            if states_no_package(terms):
+                kept = base_reading(terms, self._legacy_terms(f, record))
+                if kept is not None:
+                    held.append(kept)       # a later candidate that states a package still beats it
+                    continue
+                if terms.no_default:
+                    continue        # one election class's result is never the package: the regex read stands
             if terms.cash_per_share is not None or terms.has_stock:
                 return replace(terms, value_window=averaging_window(text)) if terms.stock_value else terms
             if terms.deal_type == "election" and terms.election_note:
                 legless.append((f, terms))      # an election whose alternatives it states in a note, with no leg
+        if held:
+            return held[0]
         # No candidate gave a leg. An election with no stated default (v3 states no package, and the prompt's "null
         # anything not supported" nulls both legs: WSC 2011, THE 2007) keeps the either-or reading the earlier
         # prompt cached for that filing; the payout gate decides whether it reconciles.

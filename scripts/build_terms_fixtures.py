@@ -47,9 +47,17 @@ CASES = {
     "BBG0017T9998_2020-07-30": "CZR (guard): the no-election cash default, 12.41",
     "BBG0077VS2C0_2026-07-11": "BLD (guard): the prorated aggregate 249.67 + 10.212 QXO, never 505 or 20.2 summed",
     "BBG00LT2PDY4_2021-08-05": "BPYU: $12.38 + 0.0913 BAM + 0.0657 BPY preferred, a basket (R3)",
+    "BBG000C4FB79_wave2-r1": "TRH 2012: an election with no stated default keeps the base's 14.22 + 0.145 Y (R4)",
+    "BBG000BF6F94_wave2-r1": "NMX 2008: no stated default, never the stock electors' result: the base's cash 81.16 (R4)",
     "BBG00FFJY867_2025-05-17": "LGFB: 1 LION + 1 STRZ, a basket (R3; the truth's 1/15 is Starz's later consolidation)",
 }
 VALUE_FIELDS = ("value_rule", "cash_per_share", "cash_currency", "stock_ratio", "price_ticker")
+
+
+def _legacy_raw(llm, filing) -> dict | None:
+    """The earlier prompt's cached answer for the filing, as cached (None when there is none)."""
+    path = llm.cache_dir / f"{filing.accession.replace('-', '')}_{llm.model.replace('/', '_')}_v2.json"
+    return json.loads(path.read_text()) if path.exists() else None
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -82,12 +90,13 @@ def main(argv: list[str] | None = None) -> int:
         anchor = r["last_trade_date"] or r["delist_filing_date"] or r["delist_date"]
         rec = DelistRecord(ticker=r["ticker"], cik=int(r["cik"]), observed_delist_date=anchor, crsp_code=231,
                            bucket=CrspBucket.MERGER, confidence="high", reason="", evidence={})
-        answer, filing = None, None
+        answer, filing, legacy = None, None, None
         for f in llm._candidates(edgar.recent_filings(rec.cik), date.fromisoformat(anchor))[:6]:
             path = llm.cache_path(f, rec)
             if path.exists():
                 answer, filing = json.loads(path.read_text()), {"form": f.form, "accession": f.accession}
                 terms = llm._to_terms(answer, f)
+                legacy = _legacy_raw(llm, f)          # the earlier prompt's cached answer, the base reading
                 if terms is not None and (terms.cash_per_share is not None or terms.has_stock):
                     break
         close = float(r["last_trade_close"]) if r["last_trade_close"] else None
@@ -99,7 +108,7 @@ def main(argv: list[str] | None = None) -> int:
             "last_close": close, "name": names.get(t["sec_id"], ""),
             "acquirer_price": float(r["acquirer_price"]) if r["acquirer_price"] else None,
             "acquirer_sec_id": r["acquirer_sec_id"], "price_ticker": c.get("price_ticker", ""),
-            "llm": answer, "filing": filing,
+            "llm": answer, "legacy": legacy, "filing": filing,
             "regex": None if read.value is None else {"value": read.value, "source": read.source,
                                                       "confidence": read.confidence, "currency": read.currency},
             "truth": {k: t[k] for k in VALUE_FIELDS}, "truth_legs": truth_legs.get(cid, []),

@@ -108,7 +108,8 @@ def _llm_published(row: Mapping[str, str], inputs: MergerInputs):
     llm = inputs.llm
     if inputs.override or row["payout_per_share"] or row["stock_ratio"]:
         return None
-    if llm is not None and llm.deal_type == "election" and not is_package(llm):
+    if llm is not None and llm.deal_type == "election" and not is_package(llm) \
+            and not getattr(llm, "no_default", False):
         cash_only = dict(stock_ratio=None, stock_value=None, extra_legs=())
         llm = (replace(llm, **cash_only) if is_dataclass(llm) else SimpleNamespace(**{**vars(llm), **cash_only})) \
             if llm.cash_per_share else None

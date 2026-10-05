@@ -9,7 +9,7 @@ import json
 from pathlib import Path
 
 from delist_detection.edgar import EdgarSubmission
-from delist_detection.llm_merger_extractor import LLMMergerTermsExtractor
+from delist_detection.llm_merger_extractor import LLMMergerTermsExtractor, base_reading, states_no_package
 from delist_detection.payout_gate import DEFAULT_TOL, gate_payouts
 from delist_detection.payout_rule import MergerInputs, basket_legs, value_fields
 from delist_detection.reconstruction import for_delisting
@@ -27,7 +27,10 @@ def terms(case_id: str):
         return None
     f = EdgarSubmission(accession=c["filing"]["accession"], form=c["filing"]["form"], filing_date="",
                         report_date="", items="", primary_doc="")
-    return LLMMergerTermsExtractor._to_terms(c["llm"], f)
+    t = LLMMergerTermsExtractor._to_terms(c["llm"], f)
+    if t is not None and states_no_package(t):         # as the extractor does: the earlier prompt's reading stands
+        t = base_reading(t, LLMMergerTermsExtractor._to_terms(c.get("legacy"), f)) or t
+    return t
 
 
 def outcome(case_id: str) -> dict[str, str]:

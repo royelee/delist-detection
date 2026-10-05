@@ -3,14 +3,16 @@ rule over each case's own prompt-v3 answer, regex read, last close and acquirer 
 fields of its diagnosis truth row (a number to 6 significant figures; `*` not scored), and its basket's legs.
 FWLT's price ticker (AMFW: the LLM names Amec Foster Wheeler without one, and the run holds no line of it) and
 LGFB's second leg (the truth's 1/15 is Starz's consolidation after the closing) are the two known misses (both
-residual)."""
+residual). TRH's truth row leaves cash_currency blank where the Form 25-NSE notice's $14.22 is USD (the controller's
+truth file, not the library's: the third known miss)."""
 from __future__ import annotations
 
 import pytest
 
 import terms_cases as tc
 
-MISSES = {("BBG000BK1FD3_2014-12-04", "price_ticker"), ("BBG00FFJY867_2025-05-17", "leg2.ratio")}
+MISSES = {("BBG000BK1FD3_2014-12-04", "price_ticker"), ("BBG00FFJY867_2025-05-17", "leg2.ratio"),
+          ("BBG000C4FB79_wave2-r1", "cash_currency")}
 
 
 def _same(truth: str, got: str) -> bool:
