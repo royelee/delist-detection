@@ -1331,10 +1331,14 @@ class TickerResolver:
         """A name-search answer (`answers[k].source` "name_search") replaced by another CIK that SEC's name index
         lists under exactly the era's observed name, never saved (the memo keeps the first pass's answer):
 
+        An era with at least `ERA_MIN_ROWS` fails rows of its own is decided by them alone (`ticker_rows`: an
+        observed name the rows refute is no evidence of who held the name over the era, and the answer must not
+        depend on which holder the first pass named); an era with fewer takes `name_in_force`:
+
         - `name_in_force`: the answer's CIK carried no name agreeing with the observed one from the era's first
           sighting to its last (`last_seen`), and exactly one other such CIK, filing by the first sighting, did
           (ABBI 2008-2009: APP Pharmaceuticals dropped "Abraxis BioScience" in 2007; the new Abraxis carried it);
-        - `ticker_rows`: else, the era's own fails rows (`security_master.era_rows`, at least `ERA_MIN_ROWS`)
+        - `ticker_rows`: the era's own fails rows (`security_master.era_rows`, at least `ERA_MIN_ROWS`)
           are not the answer's (guard G's `_fits_rows`) and exactly one other such CIK's they are (ERA 2013: the
           rows under ERA say ERA GROUP INC, the company later renamed Bristow Group Inc; the old Bristow Group
           traded as BRS).
@@ -1353,9 +1357,11 @@ class TickerResolver:
             if not holders:
                 continue
             self._transient = False
-            got = self._name_in_force(e, res.cik, holders, last_seen[e.key])
-            if got is None:
-                got = self._ticker_rows_tie(e, res.cik, holders, era_rows(e, ftd, last_seen[e.key]))
+            rows = era_rows(e, ftd, last_seen[e.key])
+            if len(rows) >= self.ERA_MIN_ROWS:      # the era's own rows decide, whichever holder the pass named
+                got = self._ticker_rows_tie(e, res.cik, holders, rows)
+            else:
+                got = self._name_in_force(e, res.cik, holders, last_seen[e.key])
             if got is not None:
                 out[e.key] = got
             self._mark_inferred(e, last_seen[e.key])

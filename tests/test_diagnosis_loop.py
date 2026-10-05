@@ -79,6 +79,15 @@ def test_rename_truth_follows_id_changes():
         ("CIK9-COMMON_2010-01-04", "sec_id", "CIK9-COMMON", "BBGX")]
 
 
+def test_rename_truth_follows_a_figi_renamed_to_another_figi():
+    """Sub-plan 5h, rule F: id_changes also holds FIGI-to-FIGI rows (CRC BBG00Y04KP80 to BBG0060B3M63)."""
+    rows = [truth_row("BBG00Y04KP80_2016-06-01", "BBG00Y04KP80")]
+    ids = [{"old_sec_id": "BBG00Y04KP80", "new_sec_id": "BBG0060B3M63", "changed_on": "2026-10-04",
+            "issuer_cik": "1609253", "share_class": "COMMON"}]
+    renamed, changes = dl.rename_truth(rows, ids)
+    assert renamed[0]["sec_id"] == "BBG0060B3M63" and len(changes) == 1
+
+
 def test_rename_truth_renames_a_placeholder_named_as_price_or_successor_security():
     """Identity follows the FIGI (R2): a truth row that prices at, or continues into, a placeholder the run renamed
     names the FIGI too (CWTR's otc_print at its own CIK1018005-COMMON line; ANN's ASNA leg at CIK1498301-COMMON)."""

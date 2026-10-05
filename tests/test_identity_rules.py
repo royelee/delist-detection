@@ -56,7 +56,7 @@ def test_an_era_its_tickers_rows_decided_keeps_its_cik_in_force():
 
 # --- rule E, OKE 2026: a holding company's new CUSIP the notice names, after the fails data's last day ----------
 
-def _oke(ftd_rows):
+def _oke(ftd_rows, day=date(2026, 9, 9)):
     """ONEOK 2026: the 8-K12B of 2026-09-10 in the registrant's own list, the Form 25 notice naming "ONEOK, Inc.
     (New, CUSIP: 30609A109)", OpenFIGI's own composite for it (BBG024TZWVN1), the old CUSIP's last fails row
     2026-08-28 (the cached data's end)."""
@@ -69,11 +69,11 @@ def _oke(ftd_rows):
     era = split_eras([Observation("OKE", "2008-01-16", "ONEOK INC"), Observation("OKE", "2026-06-30", "ONEOK INC")])
     sec = Security("BBG000BQHGR6", 1039684, "COMMON", "ONEOK INC", "Common Stock", True, "cusip", "common", era)
     rec = DelistRecord("OKE", 1039684, "2026-09-28", 304, CrspBucket.EXCHANGE_TRANSFER, "medium", "", {})
-    e = Delisting("BBG000BQHGR6", 1039684, "OKE", "2026-09-28", rec, LastTrade(date(2026, 9, 9), "ex99_notice", ()),
+    e = Delisting("BBG000BQHGR6", 1039684, "OKE", "2026-09-28", rec, LastTrade(day, "ex99_notice", ()),
                   None, None, "NYSE")
     texts = ["ONEOK, Inc. (New, CUSIP: 30609A109) common stock, par value $0.01 per share"]
     found = pipeline._Successors()
-    link = pipeline._own_registration_link(ctx, e, texts, date(2026, 9, 9), {sec.sec_id: sec},
+    link = pipeline._own_registration_link(ctx, e, texts, day, {sec.sec_id: sec},
                                            {sec.sec_id: ["682680103"]}, FtdIndex(ftd_rows), set(), found)
     return link, found
 
@@ -86,6 +86,34 @@ def test_a_named_new_cusip_after_the_fails_datas_end_is_the_successor():
     assert link == ("BBG024TZWVN1", pipeline.BY_OWN_REGISTRATION)
     added = found.added["BBG024TZWVN1"]
     assert (added.ticker, added.span()) == ("OKE", ("2026-09-10", "2026-09-10"))
+
+
+def test_a_line_successors_first_day_is_a_trading_day():
+    """A Friday last trade starts the added successor on Monday, never on the Saturday."""
+    link, found = _oke(OLD_ROWS, day=date(2026, 9, 11))
+    assert found.added["BBG024TZWVN1"].span()[0] == "2026-09-14"
+
+
+def test_the_predecessors_own_form_25_raises_no_unmatched_row_for_the_added_successor(monkeypatch):
+    """Stage 9d searches the successor's Form 25s under the shared CIK: Legacy ONEOK's 25-NSE already owns the
+    predecessor's ending, so its `form25_unmatched` item is not repeated for the successor."""
+    from delist_detection.added_securities import AddedLineSuccessor
+    from delist_detection.review_triage import ReviewItem
+    link, found = _oke(OLD_ROWS)
+    added = found.added["BBG024TZWVN1"]
+    item = ReviewItem("BBG024TZWVN1", "OKE", 1039684, "form25_unmatched",
+                      "25-NSE 0000876661-26-000770 ('COMMON'): ambiguous class")
+    other = ReviewItem("BBG024TZWVN1", "OKE", 1039684, "form25_unmatched",
+                       "25-NSE 0000876661-26-000999 ('COMMON'): ambiguous class")
+    finder = SimpleNamespace(find=lambda ctx, fallback: ([], [item, other]))
+    monkeypatch.setattr(pipeline, "listed_today", lambda *a, **k: False)
+    monkeypatch.setattr(pipeline, "_context_builder", lambda *a, **k: (lambda s, listed: None))
+    ctx = SimpleNamespace(clients=SimpleNamespace(figi=None, edgar=None), as_of=date(2026, 9, 25),
+                          meter=StageMeter(lambda *a: None), log=lambda m: None)
+    owner = SimpleNamespace(form25_sub=SimpleNamespace(accession="0000876661-26-000770"))
+    out = pipeline._successor_endings(ctx, finder, {added.security.sec_id: added}, {}, {}, FtdIndex([]), None,
+                                      [owner])
+    assert out.review == [other]
 
 
 def test_a_new_cusip_the_fails_data_reaches_must_show_its_rows():

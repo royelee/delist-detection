@@ -203,3 +203,11 @@ def test_snapshot_at_refuses_an_output_folder_outside_the_repo(tmp_path):
     repo, _ = _repo(tmp_path)
     with pytest.raises(rg.RegressionInputError, match="not inside"):
         rg.snapshot_at(repo, "HEAD", tmp_path / "elsewhere")
+
+
+def test_a_figi_renamed_to_another_figi_is_one_renamed_row_under_the_new_figi():
+    """Sub-plan 5h, rule F (BTU BBG00GBV88T6 to BBG000FW00S1): the id_changes row is not restricted to placeholders."""
+    base = _snap([contract_row("BBGOLD", exit_kind="merger", last_trade_date="2016-05-14")])
+    new = _snap([contract_row("BBGNEW", exit_kind="merger", last_trade_date="2016-05-14")])
+    assert rg.renamed_to([_rename("BBGOLD", "BBGNEW")]) == {"BBGOLD": "BBGNEW"}
+    assert [r["kind"] for r in rg.diff_contract(base, new, renames=[_rename("BBGOLD", "BBGNEW")])] == ["renamed"]

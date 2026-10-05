@@ -11,7 +11,8 @@ It writes:
 
 - cases.json: the observations of the cases' tickers, each era's committed issuer, and the name-index entries the
   checks read;
-- ftd_rows.csv.gz: every fails row stage 1 loads for those tickers;
+- ftd_rows.csv.gz: every fails row stage 1 loads for those tickers, and every row of `HISTORY_CUSIPS` (the MSG
+  history case: the old line's MSGZZZZ settle rows);
 - edgar.json.gz: each CIK's EDGAR names, tickers and first filing, as the code read them;
 - figi.json: every OpenFIGI mapping job and filter query stage 3 sends, with the cached answer (an uncached one is
   an error answer).
@@ -24,6 +25,7 @@ import gzip
 import io
 import json
 import sys
+from datetime import date
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -178,6 +180,10 @@ def main(argv: list[str] | None = None) -> int:
     cases = ic.Cases(backend)
     cases.stage3()
     cases.name_checks()
+    for cusip, lo, hi in ic.HISTORY_CUSIPS:      # the history cases: every row of a CUSIP in its window
+        for url in ftd.urls_for(date.fromisoformat(lo), date.fromisoformat(hi)):
+            for _ in ftd.rows(url, cusips={cusip}):
+                pass
     for _, (_, cik) in ic.NAME_CASES.items():
         edgar.submissions(cik)
 

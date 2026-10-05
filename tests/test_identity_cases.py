@@ -101,3 +101,42 @@ def test_a_name_search_answer_is_checked_against_the_eras_span_and_its_tickers_r
     found, _ = cases.name_checks()
     assert {k: (v.cik, v.source) for k, v in found.items()} == {
         "ABBI@2008-01-16": (1409012, "name_in_force"), "ERA@2013-06-28": (1525221, "ticker_rows")}
+
+
+def test_an_answer_the_eras_own_rows_fit_is_kept_whichever_holder_the_first_pass_named(cases):
+    """Rule D decides by the era's own fails rows when it has enough: ERA 2013's rows say ERA GROUP INC, so a first
+    pass that already answered 1525221 gets no replacement by 73887, which `name_in_force` alone would give (the
+    snapshot's later name, Bristow Group Inc, was 73887's over 2013-2014)."""
+    found, _ = cases.name_checks({"ERA@2013-06-28": 1525221})
+    assert "ERA@2013-06-28" not in found
+    assert found["ABBI@2008-01-16"].cik == 1409012      # ABBI has no rows of its own: the name period decides
+
+
+def test_a_joined_lines_cusip_ranges_ignore_the_old_cusips_settling_rows(cases):
+    """MSG 2015: the old class A CUSIP's MSGZZZZ rows settle to 10-07, after MSG Networks' CUSIP began on 10-06;
+    they are no sighting of it, so the new CUSIP's range starts on its first row."""
+    from types import SimpleNamespace
+
+    from delist_detection.history import cusip_sightings, ranges_from_sightings
+    _, ftd = cases.refine({"MSG", "MSGN"})
+    sig = cusip_sightings(SimpleNamespace(eras=[]), ftd, ["55826P100", "553573106"])
+    got = {r.value: (r.valid_from, r.valid_to)
+           for r in ranges_from_sightings([s for s in sig if "2015-09-01" <= s.day <= "2015-10-31"], end=None,
+                                          open_ended=False)}
+    assert got["553573106"][0] == "2015-10-06"
+    assert got["55826P100"][1] == "2015-10-05"
+
+
+def test_a_ticker_range_carried_to_the_next_ticker_stops_before_another_securitys_first_day():
+    from delist_detection.history import Sighting, clip_at_takeovers
+    old = {"sec_id": "OLD", "ticker": "MSG", "exchange": None, "valid_from": "2010-02-16",
+           "valid_to": "2015-10-05", "source": "ftd"}
+    new = {"sec_id": "NEW", "ticker": "MSG", "exchange": None, "valid_from": "2015-10-05", "valid_to": None,
+           "source": "ftd"}
+    sight = {"OLD": [Sighting("2015-10-02", "MSG", "ftd"), Sighting("2015-10-06", "MSGN", "ftd")]}
+    got = clip_at_takeovers([old, new], sight, {"OLD": None, "NEW": None})
+    assert [(r["sec_id"], r["valid_to"]) for r in got] == [("OLD", "2015-10-04"), ("NEW", None)]
+    # a security still sighted under the ticker, or ended by its own ending, is left to ticker_shared
+    still = {"OLD": [Sighting("2015-10-05", "MSG", "ftd")]}
+    assert clip_at_takeovers([old, new], still, {})[0]["valid_to"] == "2015-10-05"
+    assert clip_at_takeovers([old, new], sight, {"OLD": "2015-10-05"})[0]["valid_to"] == "2015-10-05"

@@ -390,3 +390,26 @@ def test_an_otc_symbol_counts_and_a_deleted_unassigned_or_pair_off_symbol_does_n
         assert is_trading_symbol(symbol) and trades_after(_tail_rows(symbol, JANUARY), "2020-01-01")
     for symbol in ("RHDXXXX", "RHDZZZZ", "F104PAIROFF", ""):
         assert not is_trading_symbol(symbol) and not trades_after(_tail_rows(symbol, JANUARY), "2020-01-01")
+
+
+def test_a_base_symbol_row_is_a_class_tickers_only_before_the_bases_own_first_observation():
+    """Rule A's bound: Under Armour's class C was FTD's "UAC" in 2016 and "UA", the base symbol of its own line, from
+    2016-12-08. A run that spells class C "UA-C" and observes UA from 2016-12-30 takes the 2016 rows by the
+    description, not the 2017 "UA ... CL C" rows."""
+    rows = [FtdRow("2016-06-15", "904311206", "UA", "UNDER ARMOUR INC CL C", 20.0),
+            FtdRow("2017-03-01", "904311206", "UA", "UNDER ARMOUR INC CL C", 30.0)]
+
+    class _Client:
+        def urls_for(self, lo, hi):
+            return ["mem"]
+
+        def rows(self, url, *, symbols=None, cusips=None):
+            yield from (r for r in rows if symbols and r.symbol in symbols)
+
+    names = {"UA-C": ["UNDER ARMOUR INC CLASS C"]}
+    bound = FtdIndex.load(_Client(), date(2016, 6, 1), date(2017, 3, 31), symbols={"UA-C"}, names=names,
+                          first_seen={"UA-C": "2016-06-30", "UA": "2016-12-30"})
+    assert [r.date for r in bound.by_symbol("UA-C")] == ["2016-06-15"]
+    assert [r.date for r in bound.by_symbol("UA")] == ["2017-03-01"]
+    unbound = FtdIndex.load(_Client(), date(2016, 6, 1), date(2017, 3, 31), symbols={"UA-C"}, names=names)
+    assert [r.date for r in unbound.by_symbol("UA-C")] == ["2016-06-15", "2017-03-01"]

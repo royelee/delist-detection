@@ -118,7 +118,7 @@ request's ticker come from it, and a second gate pass takes each answer only thr
 and `price_requests.stock_legs`),
 `_r1_continuations` (stage 8b: a merger whose published terms are one share and no cash, whose registrant's filings say the same of its own shares (`exchange_terms.own_exchange`), into a new issuer at most `NEW_ISSUER_DAYS` old or the same issuer (`successors.successor_by_terms`, else the new issuer's 8-K12B), is an exchange transfer to that successor, flagged `r1_continuation`, its payout reads dropped; the LLM's final terms must agree; the new issuer is named by the R1 statement's target (the name tie, below), its 8-K12B candidate included; a degraded read keeps the merger and flags the row; the run logs `role refusal: N rows (...)`, the delistings whose end-of-era reading refused a merger on the registrant's role; metered as "R1 continuations"),
 `_find_successors` (stage 9, with sub-plan 5c's `_terms_links` before the 8-K12B search: the same issuer's class, a new issuer, or the security's own same-CIK 8-K12B line via OpenFIGI and R2; a name tie for any 8-K12B link; sub-plan 5h: `_own_registration_link` takes a text-named CUSIP with no fails row
-yet when the fails data ends before the day, OKE 2026), `_handoffs`, `_date_from_notices` (stage 9c: a handoff continuation row's last trade day from its own Form 25's confirmed EX-99.25 notice, when before the successor's first sighting and no later than the effective date; metered as "handoff notice dates"), `_successor_endings` (stage 9d: the Form 25 search, matches only, for the line and 8-K12B successors the run added; metered as "successor endings"), `_distress` (stage 9e,
+yet when the fails data ends before the day, OKE 2026: the added successor starts on the next trading day, and a Form 25 that already owns a delisting of the run raises no unmatched row in stage 9d), `_handoffs`, `_date_from_notices` (stage 9c: a handoff continuation row's last trade day from its own Form 25's confirmed EX-99.25 notice, when before the successor's first sighting and no later than the effective date; metered as "handoff notice dates"), `_successor_endings` (stage 9d: the Form 25 search, matches only, for the line and 8-K12B successors the run added; metered as "successor endings"), `_distress` (stage 9e,
 sub-plan 5g: for each liquidation, compliance-failure or unknown delisting with no successor, a bankruptcy plan's
 stock rule (R6), a price-only removal's code 552, and the OTC symbol of its first off-exchange print, anchored on the
 last trade day stage 5 dated; `distress.DistressTerms` for the contract; metered as "distress notices"; then `_plan_values`: a
@@ -194,7 +194,9 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   settling after its last trade). Sub-plan 5h: a one-letter class ticker whose suffix FTD writes onto a whole symbol
   (a snapshot's `UAC-C` for Under Armour's class C, FTD's `UAC`) also loads that base spelling; a base row is keyed
   by the class ticker only when the ticker's observed names agree with its description and the description names
-  the class letter (`_relabel_base`); `by_symbol(base)` keeps only the rows left under it (HEI beside HEI-A).
+  the class letter and is dated before the base symbol's own first observation when the run observes the base as a
+  ticker (`FtdIndex.load(..., first_seen=)`: a class C spelled UA-C, whose base UA became its own line's symbol on
+  2016-12-08) (`_relabel_base`); `by_symbol(base)` keeps only the rows left under it (HEI beside HEI-A).
 - `midas.py` — `MidasClient`: SEC MIDAS per-security exchange volume (2012+,
   ticker-keyed); `last_trade_day()` confirms the last day with lit+hidden
   exchange volume, suppressed to `None` when the window runs past MIDAS's
@@ -258,8 +260,10 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   where the CUSIP evidence points elsewhere, the first pass's answer stands
   and the check flag `issuer_cusip_disagrees` names both CIKs. Sub-plan 5h: `name_period_checks` (stage 2b, never
   saved): a first-pass name-search answer is replaced by the one other CIK SEC's name index lists under exactly the
-  observed name that carried it over the era's span (`name_in_force`: ABBI 2008) or, else, whose name the era's own
-  fails rows carry and the answer's do not (guard G's `_fits_rows`, `ticker_rows`: ERA 2013 is Era Group's);
+  observed name that carried it over the era's span (`name_in_force`: ABBI 2008, an era with fewer than
+  `ERA_MIN_ROWS` fails rows of its own) or, for an era with at least that many, whose name the era's own fails rows
+  carry and the answer's do not (guard G's `_fits_rows`, `ticker_rows`: ERA 2013 is Era Group's; the rows alone
+  decide, so the result never depends on which holder the first pass named);
   reported as `issuer_inferred`. A `ticker_rows` era keeps its CIK in force in stage 4c and the contract's issuer
   timeline.
 - `security_master.py` — `FigiResolver.resolve_many()` (a `sec_id` pin wins;
@@ -317,7 +321,11 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   here: they read `Delisting` records) decide which delisting actually clips a
   security's ranges — skipping one whose successor is the security itself, or
   one after which its own CUSIP keeps trading under its own ticker. A first-day `…ZZZZ` row is no ticker sighting;
-  an observation is a sighting of its era's ticker.
+  an observation is a sighting of its era's ticker. Sub-plan 5h: `cusip_sightings` drops an old CUSIP's `…ZZZZ`
+  settle rows dated once another CUSIP of the security, begun after it, has begun (MSG 2015: the new CUSIP's range
+  starts on its first row), and `clip_at_takeovers` (run by `_history_rows` over the observed securities' rows) ends
+  a ticker range the day before another security's first day under it when the range only ran on to the security's
+  next ticker (its own last sighting under it is earlier; the range is not its security's end).
 - `added_securities.py` — `AddedAcquirer`/`AddedSuccessor`/`AddedLineSuccessor` (`AddedSecurity`; the last a FIGI
   line's successor stage 4b found, linked in stage 9 and added only for an ending that takes it): a
   security the run adds that no observation names, with its one
@@ -646,7 +654,9 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
 - `contract.py` — the contract's rows (spec "The contract", decisions 6, 7, 9, 10, 12), written under
   `output/contract/` beside today's tables for one release: `security_history_rows` (ticker ranges split where
   the issuer in force changes), `delisting_rows` (one per ended security, its last), `seed_rows` (the seed
-  echo), `id_change_rows` (baseline placeholders that now hold a FIGI; stage 4b's folds by name, `renames`). `run_manifest.json` carries
+  echo), `id_change_rows` (baseline placeholders that now hold a FIGI; stage 4b's folds by name, `renames`; and a baseline
+  FIGI the run no longer holds that `renames` maps to a FIGI of this run, rule F: BTU, CRC; `regression.renamed_to`
+  and `diagnosis_loop.rename_truth` read every row alike, placeholder or not). `run_manifest.json` carries
   `schema_version` (`store.CONTRACT_SCHEMA_VERSION`).
 - `issuer_in_force.py` — the issuer CIK on each sighting's date: the era's CIK when its EDGAR name that day agrees
   with the observed name, else the one other CIK SEC's name index lists under that name whose name agreed then

@@ -131,3 +131,16 @@ def test_id_changes_name_the_figi_a_line_follow_folded_a_placeholder_into():
         {"old_sec_id": "CIK20520-COMMON", "new_sec_id": "BBGFTR00001", "changed_on": "2026-09-25",
          "issuer_cik": "20520", "share_class": "COMMON"}]
     assert id_change_rows(baseline, now, "2026-09-25", {"CIK20520-COMMON": "BBGGONE0001"}) == []
+
+
+def test_id_changes_name_the_figi_a_rule_f_line_moved_a_baseline_figi_to():
+    """Sub-plan 5h, rule F: Peabody's 2008-2016 line was BBG00GBV88T6 (the ticker tier's composite, the line that
+    took BTU over later) and is BBG000FW00S1 now; a baseline FIGI the run no longer holds takes a row only by the
+    line renames, and a FIGI the run still holds never does."""
+    baseline = [_sec_row("BBG00GBV88T6", "1064728", "ticker"), _sec_row("BBG0KEEP0001", "9", "cusip")]
+    now = [_sec_row("BBG000FW00S1", "1064728", "handoff"), _sec_row("BBG0KEEP0001", "9", "cusip")]
+    renames = {"BBG00GBV88T6": "BBG000FW00S1", "BBG0KEEP0001": "BBG000FW00S1"}
+    assert id_change_rows(baseline, now, "2026-10-04") == []
+    assert id_change_rows(baseline, now, "2026-10-04", renames) == [
+        {"old_sec_id": "BBG00GBV88T6", "new_sec_id": "BBG000FW00S1", "changed_on": "2026-10-04",
+         "issuer_cik": "1064728", "share_class": "COMMON"}]

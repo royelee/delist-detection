@@ -120,8 +120,18 @@ def cusip_sightings(sec: Security, ftd: FtdIndex, cusips: Sequence[str],
     rows of each CUSIP that resolved to it (not those under a deleted symbol,
     nor under a ticker a successor security took from `successor_starts`' day on),
     and the CUSIPs its observations carry."""
-    out = [Sighting(r.date, r.cusip, "ftd") for r in ftd.trading_rows(cusips)
-           if r.date < successor_starts.get(r.symbol, "~")]
+    rows = ftd.trading_rows(cusips)
+    began = {c: min(r.date for r in rows if r.cusip == c) for c in {r.cusip for r in rows}}
+
+    def _settling(r) -> bool:
+        """An unassigned-symbol (`…ZZZZ`) row of a CUSIP dated once another CUSIP of the security, begun after it,
+        has begun: the old line's fails still settling after the switch (MSG 2015: MSGZZZZ to 10-07, MSGN's CUSIP
+        began 10-06), no sighting of the CUSIP."""
+        return is_unassigned_symbol(r.symbol) and any(
+            began[r.cusip] < b <= r.date for c, b in began.items() if c != r.cusip)
+
+    out = [Sighting(r.date, r.cusip, "ftd") for r in rows
+           if r.date < successor_starts.get(r.symbol, "~") and not _settling(r)]
     out += [Sighting(o.as_of, o.cusip, "observation") for e in sec.eras for o in e.observations if o.cusip]
     return sorted(set(out))
 
@@ -187,6 +197,27 @@ def history_rows(sec: Security, sightings: Sequence[Sighting], cusip_sightings: 
         ch_rows.append({"sec_id": sec.sec_id, "cusip": rg.value, "valid_from": rg.valid_from,
                         "valid_to": rg.valid_to, "source": rg.source})
     return th_rows, ch_rows
+
+
+def clip_at_takeovers(th_rows: list[dict], sightings: Mapping[str, Sequence[Sighting]],
+                      ends: Mapping[str, str | None]) -> list[dict]:
+    """`th_rows` with a range that runs into another security's first day under its ticker ended the day before it,
+    when its own security was last sighted under the ticker before that day and the range does not end at its
+    security's end: the range was only carried forward to the security's next ticker (MSG 2015: the old line's MSG
+    ran to the day before MSGN's first row, one day into the new MSG's). A ticker a security keeps sighting is never
+    clipped (a shared ticker stays `ticker_shared`'s to flag)."""
+    first: dict[str, list[tuple[str, str]]] = defaultdict(list)      # ticker -> [(valid_from, sec_id)]
+    for r in th_rows:
+        first[r["ticker"]].append((r["valid_from"], r["sec_id"]))
+    out = []
+    for r in th_rows:
+        to = r["valid_to"]
+        if to is not None and to != ends.get(r["sec_id"]):
+            later = sorted(f for f, sid in first[r["ticker"]] if sid != r["sec_id"] and r["valid_from"] < f <= to)
+            if later and not any(g.value == r["ticker"] and g.day >= later[0] for g in sightings.get(r["sec_id"], ())):
+                r = {**r, "valid_to": (date.fromisoformat(later[0]) - timedelta(days=1)).isoformat()}
+        out.append(r)
+    return out
 
 
 def _overlaps(a: dict, b: dict) -> bool:

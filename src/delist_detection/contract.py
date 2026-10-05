@@ -118,8 +118,10 @@ def id_change_rows(baseline: Sequence[Mapping[str, str]], securities: Sequence[M
     (its securities.csv rows) that this run no longer has and that a line
     follow folded into a FIGI security of this run (`renames`: old sec_id -> new,
     pipeline stage 4b; FTR's CIK holds a later FIGI line too), else whose issuer
-    and class exactly one FIGI security of this run holds. Not cumulative: git
-    keeps the earlier files."""
+    and class exactly one FIGI security of this run holds; and each baseline FIGI this run no longer holds that
+    `renames` maps to a FIGI of this run (sub-plan 5h, rule F: the ticker tier's composite was the line that took
+    the ticker over later, BTU BBG00GBV88T6 to BBG000FW00S1, CRC BBG00Y04KP80 to BBG0060B3M63), so a panel keyed
+    on the old FIGI can follow it. Not cumulative: git keeps the earlier files."""
     now = {s["sec_id"] for s in securities}
     figis: dict[tuple[str, str], set[str]] = defaultdict(set)
     for s in securities:
@@ -127,7 +129,8 @@ def id_change_rows(baseline: Sequence[Mapping[str, str]], securities: Sequence[M
             figis[(s["issuer_cik"], s["share_class"])].add(s["sec_id"])
     rows = []
     for b in baseline:
-        if b["figi_source"] != "placeholder" or b["sec_id"] in now:
+        renamed = renames.get(b["sec_id"]) in now
+        if b["sec_id"] in now or (b["figi_source"] != "placeholder" and not renamed):
             continue
         found = {renames[b["sec_id"]]} if renames.get(b["sec_id"]) in now else \
             figis.get((b["issuer_cik"], b["share_class"]), set())

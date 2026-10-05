@@ -229,10 +229,14 @@ class FtdIndex:
         # The class ticker whose one-letter suffix sits on a symbol FTD spells whole ("UAC" -> ("UAC-C", "C"));
         # None marks a base two requested class tickers share.
         self._bases: dict[str, tuple[str, str] | None] = {}
+        # The first day each requested ticker was observed: a base-symbol row dated from the base's own first
+        # observation is the base's, not the class ticker's (rule A's date bound).
+        self._own_from: dict[str, str] = {}
         for r in rows:
             self.add(r)
 
-    def _learn(self, symbols: set[str], names: Mapping[str, Iterable[str]] | None = None) -> set[str]:
+    def _learn(self, symbols: set[str], names: Mapping[str, Iterable[str]] | None = None,
+               first_seen: Mapping[str, str] | None = None) -> set[str]:
         """Remember the separator spellings among `symbols` (and the observed
         names of any of them); returns the file filter: each symbol plus its
         separator-free spelling, and a one-letter class ticker's base ("UAC" of
@@ -240,6 +244,9 @@ class FtdIndex:
         for t, ns in (names or {}).items():
             t = normalize_ticker(t)
             self._names[t] = list(dict.fromkeys([*self._names.get(t, []), *(n for n in ns if n)]))
+        for t, day in (first_seen or {}).items():
+            t = normalize_ticker(t)
+            self._own_from[t] = min(day, self._own_from.get(t, day))
         out = set(symbols)
         for s in symbols:
             bare = s.replace("-", "")
@@ -266,7 +273,9 @@ class FtdIndex:
         description agrees with one of them and names the ticker's class letter
         ("UNDER ARMOUR INC CL C"): the base is usually another security's own
         symbol (HEICO's common HEI beside HEI-A, Lennar's class A LEN beside
-        LEN-B, Viacom's class A VIA beside VIA-B)."""
+        LEN-B, Viacom's class A VIA beside VIA-B), and it is dated before the base symbol's own first observation,
+        when the run observes the base as a ticker (a class C spelled "UA-C" whose base "UA" became its own line's
+        symbol on 2016-12-08 and was observed from then on)."""
         canon = self._aliases.get(r.symbol)
         if not canon:
             return self._relabel_base(r)
@@ -284,6 +293,8 @@ class FtdIndex:
         m = _DESC_CLASS.search(r.description.upper())
         if not names or m is None or m.group(1) != letter or not any(names_agree(r.description, n) for n in names):
             return r
+        if r.date >= self._own_from.get(r.symbol, "~"):
+            return r
         return replace(r, symbol=canon)
 
     def add(self, r: FtdRow) -> None:
@@ -299,10 +310,12 @@ class FtdIndex:
     @classmethod
     def load(cls, client: FtdClient, lo: date, hi: date, *, symbols: Iterable[str] | None = None,
              cusips: Iterable[str] | None = None,
-             names: Mapping[str, Iterable[str]] | None = None) -> "FtdIndex":
-        """`names`: observed names per class ticker, for the bare-spelling check."""
+             names: Mapping[str, Iterable[str]] | None = None,
+             first_seen: Mapping[str, str] | None = None) -> "FtdIndex":
+        """`names`: observed names per class ticker, for the bare-spelling check; `first_seen`: the first day each
+        observed ticker was seen, which bounds the base-symbol relabel."""
         idx = cls()
-        idx._learn(set(), names)
+        idx._learn(set(), names, first_seen)
         idx._scan(client, lo, hi,
                   None if symbols is None else {normalize_ticker(s) for s in symbols},
                   None if cusips is None else {c.upper() for c in cusips})

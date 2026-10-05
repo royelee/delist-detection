@@ -48,6 +48,11 @@ NAME_CASES = {
 }
 
 
+# History cases (the CUSIP ranges of a joined line): (cusip, window lo, window hi) whose fails rows the fixture holds
+# whole: MSG's old class A (55826P100: MSGZZZZ rows settle after the switch) and MSG Networks' (553573106)
+HISTORY_CUSIPS = (("55826P100", "2015-09-01", "2015-11-30"), ("553573106", "2015-09-01", "2015-11-30"))
+
+
 def job_key(job: dict) -> str:
     return json.dumps(job, sort_keys=True)
 
@@ -162,12 +167,13 @@ class Cases:
     def resolver(self) -> TickerResolver:
         return TickerResolver(self.backend.edgar, today=AS_OF, name_index=self.backend.index)
 
-    def name_checks(self):
-        """Stage 2b over the NAME_CASES eras, each with its committed first-pass answer: (era key -> the answer
-        that replaced it, the eras)."""
+    def name_checks(self, first_pass: dict[str, int] | None = None):
+        """Stage 2b over the NAME_CASES eras, each with its committed first-pass answer (or `first_pass`'s, by era
+        key): (era key -> the answer that replaced it, the eras)."""
         eras, ftd = self.refine({k.split("@")[0] for k in NAME_CASES})
         last_seen = {e.key: era_last_seen(e, ftd) for e in eras}
-        answers = {k: TickerResolution(k.split("@")[0], c, None, "name_search") for k, (_, c) in NAME_CASES.items()}
+        answers = {k: TickerResolution(k.split("@")[0], (first_pass or {}).get(k, c), None, "name_search")
+                   for k, (_, c) in NAME_CASES.items()}
         return self.resolver().name_period_checks(eras, ftd, last_seen, answers), eras
 
 

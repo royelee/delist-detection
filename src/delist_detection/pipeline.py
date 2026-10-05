@@ -47,7 +47,7 @@ from .last_trade import decide_last_trade
 from .ftd import FTD_START, FtdIndex, FtdRow, close_age, is_trading_symbol, trades_after
 from .trading_calendar import previous_trading_day
 from .history import (
-    Sighting, backfill_cusips, cusip_sightings, filtered_ticker_sightings, history_rows, observation_map_rows, own_last_seen,
+    Sighting, backfill_cusips, clip_at_takeovers, cusip_sightings, filtered_ticker_sightings, history_rows, observation_map_rows, own_last_seen,
     ranges_from_sightings, ticker_on, ticker_range_review, ticker_sightings, value_on,
 )
 from .line_follow import Decision as LineDecision
@@ -286,11 +286,13 @@ def _refine(ctx: _RunContext, index: ObservationIndex,
     lo = max(FTD_START, min(date.fromisoformat(e.first) for e in eras) - timedelta(days=30))
     hi = min(ctx.as_of, max(date.fromisoformat(e.last) for e in eras) + timedelta(days=400))
     class_names: dict[str, list[str]] = defaultdict(list)     # BF-B's names: checks FTD's "BFB" rows
+    first_seen: dict[str, str] = {}                            # each ticker's first day (rule A's base-symbol bound)
     for e in eras:
+        first_seen[e.ticker] = min(e.first, first_seen.get(e.ticker, e.first))
         if "-" in e.ticker:
             class_names[e.ticker] += e.names
     ftd = FtdIndex.load(ctx.clients.ftd_client, lo, hi, symbols={e.ticker for e in eras},
-                        cusips={c for e in eras for c in e.cusips}, names=class_names)
+                        cusips={c for e in eras for c in e.cusips}, names=class_names, first_seen=first_seen)
     eras = refine_eras(eras, ftd)
     era_by_key = eras_by_key(eras)               # raises on a duplicate key: an era is never dropped
     ctx.log(f"{len(eras)} eras after the FTD split")
@@ -1702,7 +1704,7 @@ def _own_registration_link(ctx: _RunContext, e: Delisting, texts: list[str], day
         return None      # (5h) a CUSIP the texts name, after the fails data's last day, has no row to show yet: OKE 2026
     if x.composite not in securities and x.composite not in taken and x.composite not in found.added:
         symbol, first = (new_rows[0].symbol, new_rows[0].date) if new_rows else \
-            (e.ticker, (day + timedelta(days=1)).isoformat())
+            (e.ticker, next_trading_day(day).isoformat())
         found.added[x.composite] = AddedLineSuccessor(
             Security(x.composite, e.cik, share_class_from_name(x.name), x.name, x.security_type, False, "cusip"),
             symbol, first, new_rows)
@@ -1934,14 +1936,17 @@ class _SuccessorEndings:
 
 def _successor_endings(ctx: _RunContext, finder: DelistingFinder, added: Mapping[str, AddedSecurity],
                        securities: dict[str, Security], sec_cusips: dict[str, list[str]], ftd: FtdIndex,
-                       answers: _IssuerAnswers) -> _SuccessorEndings:
+                       answers: _IssuerAnswers, delistings: Iterable[Delisting] = ()) -> _SuccessorEndings:
     """9d. The Form 25 search (`DelistingFinder.find`, Form 25 matches only: no fallback ending for a security no
     observation names) for each successor the run added: a line successor (`AddedLineSuccessor`, seen over its new
     CUSIP's fails rows: California Resources' 2016 line, Dynegy's 2010 line, ODP Corp) and an 8-K12B successor
     (`AddedSuccessor`, alive from its 8-K12B until its issuer's own Form 25: TiVo Corp, Rovi's successor). Each is
     searched as a security with one era over that span, beside the run's securities of its issuer; a successor
-    listed today keeps no ending. An 8-K12B successor's span then runs to the ending's last trade."""
+    listed today keeps no ending. An 8-K12B successor's span then runs to the ending's last trade. A Form 25 that
+    already owns one of the run's delistings (the predecessor's own, filed under the shared CIK: OKE 2026) raises no
+    unmatched review item here."""
     clients, out = ctx.clients, _SuccessorEndings()
+    owned = {d.form25_sub.accession for d in delistings if d.form25_sub is not None}
     mark = ctx.meter.start()
     for sid, a in sorted(added.items()):
         cik = a.security.issuer_cik
@@ -1974,7 +1979,7 @@ def _successor_endings(ctx: _RunContext, finder: DelistingFinder, added: Mapping
         watch.report(out.review, degraded_item(sid, a.ticker, cik, "the successor ending search",
                                                "; run again once SEC answers"), endings)
         report_halt_feed_failures(out.review, endings)
-        out.review += found_review
+        out.review += [r for r in found_review if not owned.intersection(r.reason.split())]
         if not endings:
             continue
         out.delistings += endings
@@ -2345,6 +2350,7 @@ def _history_rows(ctx: _RunContext, securities: dict[str, Security], search: _De
     ends: dict[str, str | None] = {}
     end_confirmed: dict[str, bool] = {}
     final: dict[str, Delisting] = {}
+    own_of: dict[str, list[Sighting]] = {}
     for e in sorted(search.delistings, key=lambda e: e.delist_date):
         if endings.get(e.key):
             final[e.sec_id] = e
@@ -2369,6 +2375,7 @@ def _history_rows(ctx: _RunContext, securities: dict[str, Security], search: _De
         # (this security's own ticker_history ranges) -- the delisting search's
         # own sightings (`search.sightings`, built once in stage 5) are untouched.
         own_sightings = filtered_ticker_sightings(search.sightings.get(sid, []), sec_cusips.get(sid, []), ftd)
+        own_of[sid] = own_sightings
         starts_of = successor_starts.get(sid, {})
         th, ch = history_rows(
             s, own_sightings, cusip_sightings(s, ftd, sec_cusips.get(sid, []), starts_of),
@@ -2379,6 +2386,7 @@ def _history_rows(ctx: _RunContext, securities: dict[str, Security], search: _De
             successor_starts=starts_of)
         th_rows += th
         ch_rows += ch
+    th_rows = clip_at_takeovers(th_rows, own_of, ends)
     for sid, a in added.items():
         is_listed = bool(listed_today(clients.figi, sid, edgar=clients.edgar, cik=a.security.issuer_cik,
                                       tickers=[a.ticker]))
@@ -2700,7 +2708,7 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
         delistings += handoffs.added
         overrides = _apply_price_answers(given, delistings)   # the added delistings take their answers too
         closes.update(_last_trade_closes(ctx, handoffs.added, securities, sec_cusips, ftd, ftd_lo, overrides))
-    ends = _successor_endings(ctx, search.finder, added, securities, sec_cusips, ftd, answers)      # 9d
+    ends = _successor_endings(ctx, search.finder, added, securities, sec_cusips, ftd, answers, delistings)   # 9d
     review += ends.review
     if ends.delistings:
         delistings += ends.delistings

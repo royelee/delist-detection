@@ -64,14 +64,17 @@ def main() -> int:
     for r in rows:
         if r["case_id"] not in rulings:
             continue
-        assert r["fixed_by"] == "5h", r["case_id"]
         cells, why = rulings[r["case_id"]]
+        assert r["fixed_by"] == "5h" or ("fixed_by", r["fixed_by"]) in cells, r["case_id"]   # or already ruled
+        changed = False
         for f, v in cells:
             if r[f] != v:
+                changed = True
                 changes.append(dict(case_id=r["case_id"], field=f, old=r[f], new=v, reason=f"{WHY}: {why}",
                                     report=REPORT))
                 r[f] = v
-        r["note"] = f"{r['note']}; {WHY}: {why}"
+        if changed:                 # idempotent: a second run, in either mode, adds neither a change nor the note
+            r["note"] = f"{r['note']}; {WHY}: {why}"
     parse_rows(rows, str(TRUTH), load_legs(LEGS))
     dl.write_together([(TRUTH, COLUMNS, rows), (CHANGES, dl.CHANGE_COLUMNS, dl.read_csv(CHANGES) + changes)])
     print(len(changes), "truth change rows")
