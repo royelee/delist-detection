@@ -1,0 +1,13 @@
+{"case_id": "BBG00BFHDFR4_2023-08-13_wave2-r1", "sec_id": "BBG00BFHDFR4", "ticker": "FWONK", "report": "reports/BBG00BFHDFR4_2023-08-13_wave2-r1.md",
+ "event_type": "reclassification of tracking stocks", "consideration": "stock", "confidence": "inferred",
+ "exit_kind": "merger", "drop_reason": "", "continuation": false, "successor_ticker": "FWONK",
+ "last_trade_date": "2023-08-03",
+ "value_rule": "basket", "cash_per_share": null, "cash_currency": "", "stock_ratio": null, "price_ticker": "FWONK;LLYVK", "price_date": "2023-08-04",
+ "value_formula": "(1 x price(FWONK, 2023-08-04) + 0.0428 x price(LLYVK, 2023-08-04)) / last_close - 1",
+ "status": {"exit_kind": "wrong", "last_trade_date": "wrong", "successor": "wrong", "value_rule": "wrong", "terms": "wrong", "issuer": "agree", "ticker_history": "unknown"},
+ "confidence_reasons": ["last_trade_date: worked out from the 8-K effective time and stated first trading day, no exchange print"],
+ "library_wrong": true, "cause": "other:handoff_continuation_ignores_second_leg",
+ "golden_worthy": true, "sec_evidence": 2, "web_evidence": 0, "open_checks": ["exchange print for the old line's last day 2023-08-03"], "verdict": "Truth's two legs (1 FWONK + 0.0428 LLYVK) are right; the library's continuation with 0 legs is wrong.",
+ "mode": "mismatch",
+ "field_verdicts": [{"field": "legs", "right": "truth", "value": "2 legs: 1 x FWONK (BBG01HLMBCG3), 0.0428 x LLYVK", "missed_filing": ""}],
+ "verification": {"upheld": true, "fields_upheld": ["legs"], "fields_refuted": [], "notes": "8-K 0001104659-23-087380 Item 3.03 confirms 1 new FWONK + 0.0428 LLYVK per old Series C share, cash only for fractions; basket under R3."}}

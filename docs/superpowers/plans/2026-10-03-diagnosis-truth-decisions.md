@@ -109,6 +109,58 @@ Design note: `docs/superpowers/plans/research/2026-10-04-5d-last-trade.md`.
 - **5f's new prompt version needs live LLM calls.** The spec's cost note says it invalidates `cache/llm/`. The 5f
   agent runs the 10-deal calibration and up to two measurement runs, into its own folder, over warm SEC caches.
 
+## Wave 2 review (2026-10-04)
+
+- **5i review:** 0 Critical, 4 Important, 9 Minor, all fixed in its fourth patch.
+  - Rule E stopped confirming MEL and FRK, and rule B now reads an 8-K12B's ratio (CHTR stays uncertain; SIRI's 0.1
+    reverse split is no doubt).
+  - There is one gate-failed set, and GRUB's "NULL" ticker counts as missing.
+- **R8 applies to THE, ABI, LEG and OKE too.** Their own NYSE notices say "suspended from trading on D" (THE
+  2007-07-11, ABI 2008-11-21, LEG 2026-08-26, OKE 2026-09-09; price dates the session after). LEG and OKE now pass.
+- **The Liberty 2023 rows' truth last trade, 08-03, stands.** The reclassification was effective at 5 p.m. on
+  08-03. The library's 08-04 is the handoff's last-sighting day, the 5a carry. It is left as a note, and those rows
+  stay with 5f.
+- **5f review:** 0 Critical, 5 Important, 6 Minor.
+  - On a sample of 41 changed mergers outside the truth set, 7 published terms were wrong and 2 unclear, all among
+    the 18 whose values changed.
+  - Every one of the 512 published cash amounts is in dollars in its filing, except THI's C$65.50.
+- **R4 when a completion filing states a result for each election class:** the package is what non-electors
+  received, the holder who did nothing. It applies to NMX and EP alike.
+  - Alternative: the stock electors' package (EP's truth row before this).
+  - Cost if wrong: a few election deals valued on the default rather than one elected class.
+- **The 5f fix wave keeps prompt v3 and its cached answers.** Every fix works on the answers already cached, so no
+  second cache invalidation.
+- **Wave 2 loop, round 1: 419 regression keys over 380 securities are settled `new_right` by kind.** They are the 370
+  blank-to-USD currency fills (the review checked all 512 cash amounts) and the value changes the review found right:
+  HTV, CYN, PXP, AYE, NSM, TMX, BKW and EVHC. PARAA's PSKY and CAA's LEN-B leg were fixed by the fix wave. TRH, NMX,
+  PAS and the 11 new mismatches went through the loop.
+- **TRH 2012 and NMX 2008 need a library fix.** The loop found the base's terms right, verified and upheld: TRH's
+  14.22 + 0.145 Y is the formula the Form 25 notice states, and NMX's non-electors got all cash, $81.16. The fix
+  wave's no-default rule published `unknown` and the stock electors' result. Rule: when v3 states no package for
+  non-electors, publish the base reading that passed the gate, never one election class's result.
+- **PAS's new stock reading is right** (non-electors defaulted to 0.5022 PEP). Its placeholder row is now a scored
+  pass row.
+- **FRK 2007's truth becomes stock 0.63 VMC under R4.** Non-electors received all Vulcan stock. The old 46.90 +
+  0.189 aggregate and the library's cash 67.00 are both wrong.
+- **The truth stands, and the library owes the value:** PARA 2025 (a merger with a cash election), the Liberty 2016
+  and 2023 baskets, IAC's 2020 separation legs, LGFB's 1/15 STRZ leg, and VSTO's GEAR (the library's NSTYY is named
+  in no filing).
+
+- **TRH and NMX took two fixes.**
+  - 0624495 publishes the base reading for an election with no stated non-electors' package.
+  - 1244bc7 stops at the first candidate filing. The live run showed that moving on to later filings read another
+    deal's filing for TRH (Allied World's terminated 2011 deal, 0.88 AWH) and the headline terms for NMX.
+  - Lesson: an offline replay that refuses uncached LLM calls can hide a path that only a live run takes.
+- **Every known_wrong row left is residual.** 5i was the roadmap's last sub-plan. The four Liberty 2023 rows (fixed_by
+  5f) moved to residual, each change-log row naming what it still lacks; 37 cases remain.
+- **Floors lowered by hand (wave 2), each traced in the acceptance commit:**
+  - L2.high_share: v3's medium confidence on six election deals, CAA's basket and two continuations relabelled
+    `r1_continuation`. Dates and values are unchanged.
+  - R2.3.blank_no_value_in_window: FWLT and AWH moved from one blank bucket to another.
+  - V.uncertain_securities: 5i's closed_no_event rule.
+- **The floor test reads `contract/payout_legs.csv`,** as `scripts/scorecard.py` does. Without it, basket cases were
+  judged with no legs.
+
 ## 5e, 5g and 5h
 
 Their decisions are in their design notes: `research/2026-10-04-5e-acquirer-gate.md`,

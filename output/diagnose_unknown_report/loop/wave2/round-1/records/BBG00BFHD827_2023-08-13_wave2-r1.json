@@ -1,0 +1,40 @@
+{
+  "case_id": "BBG00BFHD827_2023-08-13_wave2-r1",
+  "sec_id": "BBG00BFHD827",
+  "mode": "mismatch",
+  "field_verdicts": [
+    {
+      "field": "legs",
+      "right": "truth",
+      "value": "2 legs: 1.0 BBG01HLM8W28 LSXMA; 0.25 * LLYVA",
+      "missed_filing": ""
+    }
+  ],
+  "confidence": "verified",
+  "confidence_reasons": [],
+  "sec_evidence": 1,
+  "web_evidence": 0,
+  "verdict": "Truth's 2 legs (1 new LSXMA + 0.25 LLYVA) are right per 8-K 0001104659-23-087380; the library publishes none.",
+  "ticker": "LSXMA",
+  "status": {
+    "exit_kind": "wrong",
+    "last_trade_date": "wrong",
+    "successor": "agree",
+    "value_rule": "wrong",
+    "terms": "missing",
+    "issuer": "agree",
+    "ticker_history": "agree"
+  },
+  "verification": {
+    "case_id": "BBG00BFHD827_2023-08-13_wave2-r1",
+    "upheld": false,
+    "fields_upheld": [],
+    "fields_refuted": [
+      {
+        "field": "legs",
+        "why": "Not verifiable: the report and record for this case do not exist under output/diagnose_unknown_report/loop/wave2/round-1/ (reports/ and records/ hold no BBG00BFHD827_2023-08-13_wave2-r1 file; only the BBG00BFHD827_2023-08-13 files from the earlier uncertain-mode run exist). There is no cited filing to re-open, so the claimed truth value has no evidence behind it."
+      }
+    ],
+    "notes": "The case row is in cases.csv (mismatch on legs: truth '2 legs', library '0 legs', exchange_transfer 304 handoff_continuation, Form 25-NSE 0001354457-23-000564). The diagnosis agent apparently never wrote its report or record. The workflow should rerun the diagnosis for this case before a skeptic pass."
+  }
+}

@@ -1,16 +1,43 @@
 {
   "as_of": "2026-09-25",
   "cache_answers": {
-    "archives": 8665,
-    "company_tickers": 9,
+    "archives": 8900,
+    "company_tickers": 10,
     "full_text_search": 625,
-    "submissions": 34156,
-    "submissions_page": 8886
+    "submissions": 34366,
+    "submissions_page": 8990
   },
-  "code_version": "34737db-dirty",
+  "code_version": "1244bc7-dirty",
+  "continuation_filings": [
+    {
+      "delist_date": "2021-03-14",
+      "filing": "8-K 0001193125-21-063792",
+      "sec_id": "BBG000BC2C10"
+    },
+    {
+      "delist_date": "2015-12-21",
+      "filing": "8-K 0000950103-15-009516",
+      "sec_id": "BBG000BFTJ91"
+    },
+    {
+      "delist_date": "2023-08-24",
+      "filing": "8-K 0001104659-23-090461",
+      "sec_id": "BBG000MJRJJ2"
+    },
+    {
+      "delist_date": "2018-07-26",
+      "filing": "8-K 0001193125-18-217952",
+      "sec_id": "BBG000P4BQM9"
+    },
+    {
+      "delist_date": "2016-01-03",
+      "filing": "8-K 0001193125-15-412174",
+      "sec_id": "CIK48898-CLASS-B"
+    }
+  ],
   "degraded_answers": {},
   "handoffs": {
-    "conflicts": 6,
+    "conflicts": 7,
     "continuations_by_filing": 47,
     "continuations_by_timing": 26,
     "handoffs": 81,
@@ -26,14 +53,18 @@
     "check": 535,
     "cleared": 0,
     "fix": 56,
-    "info_hidden": 592,
+    "info_hidden": 602,
     "unmatched_decisions": 0
   },
-  "schema_version": 2,
+  "schema_version": 3,
   "sec_requests": {},
   "sec_workers": 1,
   "stages": {
     "R1 continuations": {
+      "edgar_requests": 0,
+      "sec_data_downloads": 0
+    },
+    "continuation readings": {
       "edgar_requests": 0,
       "sec_data_downloads": 0
     },

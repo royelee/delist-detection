@@ -1,0 +1,58 @@
+{
+  "case_id": "BBG003P9ZSL3_2016-04-28_wave2-r1",
+  "sec_id": "BBG003P9ZSL3",
+  "ticker": "LMCA",
+  "report": "reports/BBG003P9ZSL3_2016-04-28_wave2-r1.md",
+  "event_type": "reclassification",
+  "consideration": "stock",
+  "confidence": "verified",
+  "exit_kind": "exchange",
+  "drop_reason": "",
+  "continuation": false,
+  "successor_ticker": "",
+  "last_trade_date": "2016-04-15",
+  "value_rule": "basket",
+  "cash_per_share": null,
+  "cash_currency": "",
+  "stock_ratio": null,
+  "price_ticker": "LSXMA",
+  "price_date": "2016-04-18",
+  "value_formula": "(1 x price(LSXMA) + 0.1 x price(BATRA) + 0.25 x price(LMCA), 2016-04-18) / last_close - 1",
+  "status": {
+    "exit_kind": "agree",
+    "last_trade_date": "unknown",
+    "successor": "wrong",
+    "value_rule": "wrong",
+    "terms": "missing",
+    "issuer": "agree",
+    "ticker_history": "unknown"
+  },
+  "confidence_reasons": [],
+  "library_wrong": true,
+  "cause": "other:handoff_timing_continuation_no_exchange_terms",
+  "golden_worthy": true,
+  "sec_evidence": 2,
+  "web_evidence": 0,
+  "open_checks": [
+    "BATRA sec_id not in run"
+  ],
+  "verdict": "Truth's three legs (1.0 LSXMA, 0.1 BATRA, 0.25 LMCA) are right; the library publishes a timing continuation with no legs.",
+  "mode": "mismatch",
+  "field_verdicts": [
+    {
+      "field": "legs",
+      "right": "truth",
+      "value": "1: 1.0 LSXMA; 2: 0.1 BATRA; 3: 0.25 LMCA",
+      "missed_filing": ""
+    }
+  ],
+  "verification": {
+    "case_id": "BBG003P9ZSL3_2016-04-28_wave2-r1",
+    "upheld": true,
+    "fields_upheld": [
+      "legs"
+    ],
+    "fields_refuted": [],
+    "notes": "8-K 0001560385-16-000077 Item 2.03 states each Series A share became a basket of 1 Series A Liberty SiriusXM, 0.1 Series A Liberty Braves and 0.25 Series A Liberty Media, with no cash. This matches the truth's three legs and the security's class (old Series A LMCA). The library publishes 0 legs. No missed_filing is claimed, which is correct for a truth verdict."
+  }
+}
