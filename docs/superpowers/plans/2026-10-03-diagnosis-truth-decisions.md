@@ -144,6 +144,15 @@ rulings I made on their findings:
   answer feeds the plan's value.
 - **Rule D (5h) decides by the era's own fails rows when it has at least 3**, and uses the name in force only without
   them (ERA 2013).
+- **Rule A (5h) relabels a base-symbol fails row only before the base symbol's own first observed day.** The
+  reviewer's ±30-day bound around the class's dates split UAC-C (observed once, 2016-06-30) into three ranges.
+  - Alternative: the reviewer's span bound.
+  - Cost if wrong: a run that spells a class with a suffix (UA-C) still takes base-symbol rows dated before the base
+    symbol's own first sighting.
+- **A ticker range carried on to the next ticker ends the day before another security's first day under it**
+  (`history.clip_at_takeovers`, 5h fix). It moved MSG, GOOG 2014, GCI 2015 and IAC's IACI range, and removed their
+  `ticker_shared` rows.
+  - Cost if wrong: a thin-evidence range ends early where two securities really shared a ticker.
 - **Deferred:**
   - EQC's stated $1.60 final distribution goes to 5f. Its liquidation keeps the Shumway fill, labelled as a fill.
   - The verdict gap for a closed_no_event security (WW counted confirmed) goes to 5i.
