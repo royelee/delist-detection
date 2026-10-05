@@ -709,7 +709,7 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   earlier prompt's cached either-or reading of the same filing (`LEGACY_VERSION`, cache only, never asked again; `no_default`,
   flag `election_no_default`), as does any election answer that states no package for non-electors (basis `none` with no cash or ratio stated, TRH; a basis `none` answer that states a leg, CYN, keeps it; or a
   `final_prorated` answer that is only one election class's result, `electors_only`, NMX: R4, the package is what
-  non-electors received, `llm_merger_extractor.base_reading`; a later candidate stating a package still wins; with no cached
+  non-electors received, `llm_merger_extractor.base_reading`; the first candidate that answers decides, a later candidate is never read (TRH, NMX); with no cached
   earlier answer the electors' result is a miss and the regex read stands); `payout_rule._llm_published` publishes any other
   non-package election only as its all-cash alternative, but a `no_default` reading as read (TRH's 14.22 + 0.145 Y); `skip_reason` is checked for every answer shape (a dollar value, a further leg, CAD
   cash, a basket stating no package), a stock leg with no ratio is `terms_gate_failed:no_ratio`; a bare "$" never overrides

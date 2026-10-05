@@ -482,7 +482,6 @@ class LLMMergerTermsExtractor:
 
         tried = 0
         legless: list[tuple[EdgarSubmission, MergerTerms]] = []
-        held: list[MergerTerms] = []      # the base readings of answers that state no package for non-electors
         for f in candidates:
             if tried >= self.max_filings:
                 break
@@ -508,16 +507,13 @@ class LLMMergerTermsExtractor:
             if states_no_package(terms):
                 kept = base_reading(terms, self._legacy_terms(f, record))
                 if kept is not None:
-                    held.append(kept)       # a later candidate that states a package still beats it
-                    continue
+                    return kept     # the completion filing states no default: a later filing never answers better (TRH)
                 if terms.no_default:
                     continue        # one election class's result is never the package: the regex read stands
             if terms.cash_per_share is not None or terms.has_stock:
                 return replace(terms, value_window=averaging_window(text)) if terms.stock_value else terms
             if terms.deal_type == "election" and terms.election_note:
                 legless.append((f, terms))      # an election whose alternatives it states in a note, with no leg
-        if held:
-            return held[0]
         # No candidate gave a leg. An election with no stated default (v3 states no package, and the prompt's "null
         # anything not supported" nulls both legs: WSC 2011, THE 2007) keeps the either-or reading the earlier
         # prompt cached for that filing; the payout gate decides whether it reconciles.

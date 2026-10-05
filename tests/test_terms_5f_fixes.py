@@ -62,8 +62,9 @@ def test_a_v3_election_with_no_legs_and_no_cached_earlier_answer_is_a_miss(tmp_p
     assert _wsc(tmp_path, v2=False).extract(_rec("WSC", "2011-07-07")) is None
 
 
-def test_a_later_candidate_with_legs_beats_the_earlier_prompts_reading(tmp_path):
-    """The either-or reading is the last resort: a candidate filing that states legs is used first."""
+def test_a_later_candidate_with_legs_never_beats_the_completion_filings_no_default(tmp_path):
+    """The completion filing states no default: its base reading is published and later candidates are not read (the
+    live run: TRH's later filing was another deal's 0.88 AWH, NMX's the headline 36.00 + 0.1323 CME)."""
     (tmp_path / f"C1_m_{PROMPT_VERSION}_WSC.json").write_text(json.dumps(V3_WSC))
     (tmp_path / f"C1_m_{LEGACY_VERSION}.json").write_text(json.dumps(V2_WSC))
     (tmp_path / f"P_m_{PROMPT_VERSION}_WSC.json").write_text(json.dumps(
@@ -71,7 +72,7 @@ def test_a_later_candidate_with_legs_beats_the_earlier_prompts_reading(tmp_path)
     filings = [_f("C1", items="2.01", filed="2011-07-07"), _f("P", "DEFM14A", "2011-05-01")]
     t = LLMMergerTermsExtractor(_Edgar(filings, {"C1": "t", "P": "t"}), _Llm(), model="m",
                                 cache_dir=tmp_path).extract(_rec("WSC", "2011-07-07"))
-    assert (t.cash_per_share, t.stock_ratio, t.no_default, t.source) == (385.0, None, False, "DEFM14A:P")
+    assert (t.cash_per_share, t.stock_ratio, t.no_default) == (385.0, 5.0611, True)
 
 
 def test_a_cash_or_stock_election_with_no_default_is_gated_as_the_default_package_when_the_sum_fits():
@@ -489,3 +490,22 @@ def test_nmx_the_stock_electors_result_is_never_the_package_the_gate_reads_the_b
 
 def test_an_electors_result_with_no_cached_earlier_answer_is_a_miss_not_the_package(tmp_path):
     assert _extract(tmp_path, V3_NMX, None) is None
+
+
+V3_TRH_OTHER_DEAL = {**V3_JCI, "deal_type": "stock", "package_basis": "fixed", "cash_per_share": None,
+                     "stock_ratio": 0.88, "acquirer_ticker": "AWH", "quote": "0.88 Allied World shares"}
+V3_NMX_HEADLINE = {**V3_JCI, "deal_type": "cash_and_stock", "package_basis": "fixed", "cash_per_share": 36.0,
+                   "stock_ratio": 0.1323, "acquirer_ticker": "CME", "quote": "the exchange ratio ... unchanged"}
+
+
+@pytest.mark.parametrize("v3, v2, later, want", [
+    (V3_TRH, V2_TRH, V3_TRH_OTHER_DEAL, (14.22, 0.145, "Y")),
+    (V3_NMX, V2_NMX, V3_NMX_HEADLINE, (81.16, 0.2378, "CME"))])
+def test_trh_and_nmx_later_candidates_answers_are_never_read(tmp_path, v3, v2, later, want):
+    (tmp_path / f"C1_m_{PROMPT_VERSION}_X.json").write_text(json.dumps(v3))
+    (tmp_path / f"C1_m_{LEGACY_VERSION}.json").write_text(json.dumps(v2))
+    (tmp_path / f"P_m_{PROMPT_VERSION}_X.json").write_text(json.dumps(later))
+    filings = [_f("C1", items="2.01,3.01", filed="2012-03-05"), _f("P", "DEFM14A", "2011-05-01")]
+    t = LLMMergerTermsExtractor(_Edgar(filings, {"C1": "t", "P": "t"}), _Llm(), model="m",
+                                cache_dir=tmp_path).extract(_rec("X", "2012-03-05"))
+    assert (t.cash_per_share, t.stock_ratio, t.acquirer_ticker, t.no_default) == (*want[:2], want[2], True)
