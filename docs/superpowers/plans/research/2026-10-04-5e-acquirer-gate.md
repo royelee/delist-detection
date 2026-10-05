@@ -79,8 +79,10 @@ or not.
      (`is_placeholder_row`: ≤ $0.01, a non-trading symbol, or a $1.00 row whose next row is more than twice or
      less than half of it). The old CUSIP's stale repeats are never read.
    - Any other line is priced at its close on the last trade day, as before.
-   - The symbol on the price date comes from the row dated that day (the closing CUSIP first: RTX over UTX), else
-     the first row in the next 3 trading days.
+   - The symbol on the price date comes from the row that carries the price date's close (review fix: a fails row
+     dated D carries D-1's close, and a new CUSIP moves positions on its own day, often P+1: JCI 2016's row dated P
+     is TYC): for a line with a closing CUSIP the first non-placeholder row from the next trading day (ABI is LIFE,
+     not IVGN); for any other line the row dated that day, else the first row in the next 3 trading days.
    - For a merger before the run's fails window (PPP 2007), the candidate lines' rows are read into a private
      index. The run's index is not extended.
 4. **Gate** (`payout_gate.gate_payouts(..., line_price=)`).
@@ -242,3 +244,15 @@ The replay: `/tmp/claude/delist_detection/5e/replay_5e.py`, offline over the who
   (`MergerInputs.price_ticker`) and `price_requests.stock_legs`.
 - `payout_gate`: an election whose cash and stock legs together reconcile, when neither does alone, is its default
   package (`llm_election_package`).
+
+## Review fixes (wave 1 fix wave)
+
+- An answered `received_close` settles the gate only through the request it answers. The run's first gate pass reads
+  no answer; the published acquirer and the request's `lookup_ticker` come from it, and a second pass takes each
+  answer on the path the first settled on (CAL, GLIBA: the second run no longer changes the acquirer or the key).
+  tests/test_acquirer_gate_cases.py runs the round trip over every fixture case.
+- A ticker-settled leg whose terms' ticker belongs to another line of the same issuer than stage 8a's (TWC, VIA,
+  STRZA) publishes and prices 8a's line; another issuer's ticker security (IPHI) still wins. The class letter is read
+  only from a quote about the target's own class (VIA-B).
+- A `--merger-terms` row's acquirer ticker is published as given. ASD, WCRX and abbreviated acquirer names (CB&I)
+  are deferred.

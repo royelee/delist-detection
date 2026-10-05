@@ -5,7 +5,7 @@ close is a misread (VRTV $1.00 vs $169.99, TWO $25 vs $12.18) or a stale
 vendor price (CAB $0.03). Either way the number must not become a return."""
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Collection, Iterable, Mapping
 from dataclasses import dataclass, field
 
 from .reconstruction import for_delisting
@@ -113,6 +113,7 @@ def gate_payouts(
     acquirer_price: Callable[[str, tuple[str, str | None]], float | None],
     tol: float,
     line_price: Callable[[tuple[str, str | None]], tuple[str, float] | None] | None = None,
+    line_first: Collection = (),
 ) -> GatedPayouts:
     """Route every merger payout through the last-close check. Inputs are not mutated.
 
@@ -125,7 +126,9 @@ def gate_payouts(
     can share a delist date and each must be priced on its own last-trade day.
     line_price(key): the (ticker, price) of the acquirer's line (`acquirer_line`, sub-plan 5e), tried when the
     terms' ticker gives no price or its price does not reconcile; `priced_by` records which one settled a stock
-    leg. A ticker price that reconciles is never replaced.
+    leg. A ticker price that reconciles is never replaced, except for a key in `line_first` (its terms' ticker's
+    rows are those of another line of the issuer: Charter before the closing for Time Warner Cable's New Charter,
+    CBS class B for Viacom class A), whose line price is tried first.
 
     Pass 1 reconciles each key's regex value (and its cash or election LLM terms).
     Pass 2 is the cash+stock gate for the other LLM terms that carry a stock ratio:
@@ -145,8 +148,11 @@ def gate_payouts(
             if p is not None:
                 got.append((BY_TICKER, ticker, p))
         line = line_price(key) if line_price is not None else None
-        if line is not None and line[1] is not None and all(abs(line[1] - p) > 1e-9 for _, _, p in got):
-            got.append((BY_LINE, line[0], line[1]))
+        if line is not None and line[1] is not None:
+            if key in line_first:
+                got = [(BY_LINE, line[0], line[1])] + [g for g in got if abs(g[2] - line[1]) > 1e-9]
+            elif all(abs(line[1] - p) > 1e-9 for _, _, p in got):
+                got.append((BY_LINE, line[0], line[1]))
         return got
 
     for key in keys:

@@ -659,6 +659,9 @@
    }
   ]
  },
+ "124857202": {
+  "data": []
+ },
  "128195104": {
   "data": [
    {
@@ -936,6 +939,542 @@
     "securityType2": "Common Stock",
     "shareClassFIGI": "BBG001S5W8X6",
     "ticker": "CAA"
+   }
+  ]
+ },
+ "16117M305": {
+  "data": [
+   {
+    "compositeFIGI": "BBG000PYZSR8",
+    "exchCode": "US",
+    "figi": "BBG000PYZSR8",
+    "marketSector": "Equity",
+    "name": "FORMER CHARTER COMMUNICATION",
+    "securityDescription": "9876540D",
+    "securityType": "Common Stock",
+    "securityType2": "Common Stock",
+    "shareClassFIGI": "BBG001T650F0",
+    "ticker": "9876540D"
+   },
+   {
+    "compositeFIGI": "BBG000PYZSR8",
+    "exchCode": "UA",
+    "figi": "BBG000PYZTN0",
+    "marketSector": "Equity",
+    "name": "FORMER CHARTER COMMUNICATION",
+    "securityDescription": "9876540D",
+    "securityType": "Common Stock",
+    "securityType2": "Common Stock",
+    "shareClassFIGI": "BBG001T650F0",
+    "ticker": "9876540D"
+   },
+   {
+    "compositeFIGI": "BBG000PYZSR8",
+    "exchCode": "UC",
+    "figi": "BBG000PYZX24",
+    "marketSector": "Equity",
+    "name": "FORMER CHARTER COMMUNICATION",
+    "securityDescription": "9876540D",
+    "securityType": "Common Stock",
+    "securityType2": "Common Stock",
+    "shareClassFIGI": "BBG001T650F0",
+    "ticker": "9876540D"
+   },
+   {
+    "compositeFIGI": "BBG000PYZSR8",
+    "exchCode": "UI",
+    "figi": "BBG000PYZX42",
+    "marketSector": "Equity",
+    "name": "FORMER CHARTER COMMUNICATION",
+    "securityDescription": "9876540D",
+    "securityType": "Common Stock",
+    "securityType2": "Common Stock",
+    "shareClassFIGI": "BBG001T650F0",
+    "ticker": "9876540D"
+   },
+   {
+    "compositeFIGI": "BBG000PYZSR8",
+    "exchCode": "UN",
+    "figi": "BBG000PYZX60",
+    "marketSector": "Equity",
+    "name": "FORMER CHARTER COMMUNICATION",
+    "securityDescription": "9876540D",
+    "securityType": "Common Stock",
+    "securityType2": "Common Stock",
+    "shareClassFIGI": "BBG001T650F0",
+    "ticker": "9876540D"
+   },
+   {
+    "compositeFIGI": "BBG000PYZSR8",
+    "exchCode": "UP",
+    "figi": "BBG000PYZY04",
+    "marketSector": "Equity",
+    "name": "FORMER CHARTER COMMUNICATION",
+    "securityDescription": "9876540D",
+    "securityType": "Common Stock",
+    "securityType2": "Common Stock",
+    "shareClassFIGI": "BBG001T650F0",
+    "ticker": "9876540D"
+   },
+   {
+    "compositeFIGI": "BBG000PYZSR8",
+    "exchCode": "UQ",
+    "figi": "BBG000PYZYG7",
+    "marketSector": "Equity",
+    "name": "FORMER CHARTER COMMUNICATION",
+    "securityDescription": "9876540D",
+    "securityType": "Common Stock",
+    "securityType2": "Common Stock",
+    "shareClassFIGI": "BBG001T650F0",
+    "ticker": "9876540D"
+   },
+   {
+    "compositeFIGI": "BBG000PYZSR8",
+    "exchCode": "UB",
+    "figi": "BBG000PYZZ29",
+    "marketSector": "Equity",
+    "name": "FORMER CHARTER COMMUNICATION",
+    "securityDescription": "9876540D",
+    "securityType": "Common Stock",
+    "securityType2": "Common Stock",
+    "shareClassFIGI": "BBG001T650F0",
+    "ticker": "9876540D"
+   },
+   {
+    "compositeFIGI": "BBG000PYZSR8",
+    "exchCode": "UT",
+    "figi": "BBG000PYZZJ1",
+    "marketSector": "Equity",
+    "name": "FORMER CHARTER COMMUNICATION",
+    "securityDescription": "9876540D",
+    "securityType": "Common Stock",
+    "securityType2": "Common Stock",
+    "shareClassFIGI": "BBG001T650F0",
+    "ticker": "9876540D"
+   },
+   {
+    "compositeFIGI": "BBG000PYZSR8",
+    "exchCode": "UM",
+    "figi": "BBG000PZ0003",
+    "marketSector": "Equity",
+    "name": "FORMER CHARTER COMMUNICATION",
+    "securityDescription": "9876540D",
+    "securityType": "Common Stock",
+    "securityType2": "Common Stock",
+    "shareClassFIGI": "BBG001T650F0",
+    "ticker": "9876540D"
+   },
+   {
+    "compositeFIGI": "BBG000PYZSR8",
+    "exchCode": "UX",
+    "figi": "BBG000PZ0076",
+    "marketSector": "Equity",
+    "name": "FORMER CHARTER COMMUNICATION",
+    "securityDescription": "9876540D",
+    "securityType": "Common Stock",
+    "securityType2": "Common Stock",
+    "shareClassFIGI": "BBG001T650F0",
+    "ticker": "9876540D"
+   },
+   {
+    "compositeFIGI": "BBG000PYZSR8",
+    "exchCode": "UR",
+    "figi": "BBG000PZ0110",
+    "marketSector": "Equity",
+    "name": "FORMER CHARTER COMMUNICATION",
+    "securityDescription": "9876540D",
+    "securityType": "Common Stock",
+    "securityType2": "Common Stock",
+    "shareClassFIGI": "BBG001T650F0",
+    "ticker": "9876540D"
+   },
+   {
+    "compositeFIGI": "BBG000PYZSR8",
+    "exchCode": "UU",
+    "figi": "BBG000PZ01B9",
+    "marketSector": "Equity",
+    "name": "FORMER CHARTER COMMUNICATION",
+    "securityDescription": "9876540D",
+    "securityType": "Common Stock",
+    "securityType2": "Common Stock",
+    "shareClassFIGI": "BBG001T650F0",
+    "ticker": "9876540D"
+   },
+   {
+    "compositeFIGI": "BBG000PYZSR8",
+    "exchCode": "PQ",
+    "figi": "BBG000PZ02M5",
+    "marketSector": "Equity",
+    "name": "FORMER CHARTER COMMUNICATION",
+    "securityDescription": "9876540D",
+    "securityType": "Common Stock",
+    "securityType2": "Common Stock",
+    "shareClassFIGI": "BBG001T650F0",
+    "ticker": "9876540D"
+   },
+   {
+    "compositeFIGI": "BBG000PYZSR8",
+    "exchCode": "UO",
+    "figi": "BBG000PZ02W4",
+    "marketSector": "Equity",
+    "name": "FORMER CHARTER COMMUNICATION",
+    "securityDescription": "9876540D",
+    "securityType": "Common Stock",
+    "securityType2": "Common Stock",
+    "shareClassFIGI": "BBG001T650F0",
+    "ticker": "9876540D"
+   },
+   {
+    "compositeFIGI": "BBG000PYZSR8",
+    "exchCode": "UV",
+    "figi": "BBG000PZ03V3",
+    "marketSector": "Equity",
+    "name": "FORMER CHARTER COMMUNICATION",
+    "securityDescription": "9876540D",
+    "securityType": "Common Stock",
+    "securityType2": "Common Stock",
+    "shareClassFIGI": "BBG001T650F0",
+    "ticker": "9876540D"
+   },
+   {
+    "compositeFIGI": "BBG000PYZSR8",
+    "exchCode": "UD",
+    "figi": "BBG000PZ03Z9",
+    "marketSector": "Equity",
+    "name": "FORMER CHARTER COMMUNICATION",
+    "securityDescription": "9876540D",
+    "securityType": "Common Stock",
+    "securityType2": "Common Stock",
+    "shareClassFIGI": "BBG001T650F0",
+    "ticker": "9876540D"
+   },
+   {
+    "compositeFIGI": "BBG000PYZSR8",
+    "exchCode": "UL",
+    "figi": "BBG000PZ0450",
+    "marketSector": "Equity",
+    "name": "FORMER CHARTER COMMUNICATION",
+    "securityDescription": "9876540D",
+    "securityType": "Common Stock",
+    "securityType2": "Common Stock",
+    "shareClassFIGI": "BBG001T650F0",
+    "ticker": "9876540D"
+   },
+   {
+    "compositeFIGI": "BBG000PYZSR8",
+    "exchCode": "UW",
+    "figi": "BBG000PZ04Z7",
+    "marketSector": "Equity",
+    "name": "FORMER CHARTER COMMUNICATION",
+    "securityDescription": "9876540D",
+    "securityType": "Common Stock",
+    "securityType2": "Common Stock",
+    "shareClassFIGI": "BBG001T650F0",
+    "ticker": "9876540D"
+   },
+   {
+    "compositeFIGI": "BBG000PYZSR8",
+    "exchCode": "UF",
+    "figi": "BBG000PZ05B0",
+    "marketSector": "Equity",
+    "name": "FORMER CHARTER COMMUNICATION",
+    "securityDescription": "9876540D",
+    "securityType": "Common Stock",
+    "securityType2": "Common Stock",
+    "shareClassFIGI": "BBG001T650F0",
+    "ticker": "9876540D"
+   },
+   {
+    "compositeFIGI": "BBG000PYZSR8",
+    "exchCode": "VY",
+    "figi": "BBG000PZ05Y5",
+    "marketSector": "Equity",
+    "name": "FORMER CHARTER COMMUNICATION",
+    "securityDescription": "9876540D",
+    "securityType": "Common Stock",
+    "securityType2": "Common Stock",
+    "shareClassFIGI": "BBG001T650F0",
+    "ticker": "9876540D"
+   },
+   {
+    "compositeFIGI": "BBG000PYZSR8",
+    "exchCode": "VJ",
+    "figi": "BBG000PZ0664",
+    "marketSector": "Equity",
+    "name": "FORMER CHARTER COMMUNICATION",
+    "securityDescription": "9876540D",
+    "securityType": "Common Stock",
+    "securityType2": "Common Stock",
+    "shareClassFIGI": "BBG001T650F0",
+    "ticker": "9876540D"
+   },
+   {
+    "compositeFIGI": "BBG000PYZSR8",
+    "exchCode": "VK",
+    "figi": "BBG000PZ06P3",
+    "marketSector": "Equity",
+    "name": "FORMER CHARTER COMMUNICATION",
+    "securityDescription": "9876540D",
+    "securityType": "Common Stock",
+    "securityType2": "Common Stock",
+    "shareClassFIGI": "BBG001T650F0",
+    "ticker": "9876540D"
+   }
+  ]
+ },
+ "16119P108": {
+  "data": [
+   {
+    "compositeFIGI": "BBG000VPGNR2",
+    "exchCode": "US",
+    "figi": "BBG000VPGNR2",
+    "marketSector": "Equity",
+    "name": "CHARTER COMMUNICATIONS INC-A",
+    "securityDescription": "CHTR",
+    "securityType": "Common Stock",
+    "securityType2": "Common Stock",
+    "shareClassFIGI": "BBG001T3TDG2",
+    "ticker": "CHTR"
+   },
+   {
+    "compositeFIGI": "BBG000VPGNR2",
+    "exchCode": "UA",
+    "figi": "BBG00B550N52",
+    "marketSector": "Equity",
+    "name": "CHARTER COMMUNICATIONS INC-A",
+    "securityDescription": "CHTR",
+    "securityType": "Common Stock",
+    "securityType2": "Common Stock",
+    "shareClassFIGI": "BBG001T3TDG2",
+    "ticker": "CHTR"
+   },
+   {
+    "compositeFIGI": "BBG000VPGNR2",
+    "exchCode": "UC",
+    "figi": "BBG00B550N61",
+    "marketSector": "Equity",
+    "name": "CHARTER COMMUNICATIONS INC-A",
+    "securityDescription": "CHTR",
+    "securityType": "Common Stock",
+    "securityType2": "Common Stock",
+    "shareClassFIGI": "BBG001T3TDG2",
+    "ticker": "CHTR"
+   },
+   {
+    "compositeFIGI": "BBG000VPGNR2",
+    "exchCode": "UI",
+    "figi": "BBG00B550N70",
+    "marketSector": "Equity",
+    "name": "CHARTER COMMUNICATIONS INC-A",
+    "securityDescription": "CHTR",
+    "securityType": "Common Stock",
+    "securityType2": "Common Stock",
+    "shareClassFIGI": "BBG001T3TDG2",
+    "ticker": "CHTR"
+   },
+   {
+    "compositeFIGI": "BBG000VPGNR2",
+    "exchCode": "UN",
+    "figi": "BBG00B550N89",
+    "marketSector": "Equity",
+    "name": "CHARTER COMMUNICATIONS INC-A",
+    "securityDescription": "CHTR",
+    "securityType": "Common Stock",
+    "securityType2": "Common Stock",
+    "shareClassFIGI": "BBG001T3TDG2",
+    "ticker": "CHTR"
+   },
+   {
+    "compositeFIGI": "BBG000VPGNR2",
+    "exchCode": "UP",
+    "figi": "BBG00B550N98",
+    "marketSector": "Equity",
+    "name": "CHARTER COMMUNICATIONS INC-A",
+    "securityDescription": "CHTR",
+    "securityType": "Common Stock",
+    "securityType2": "Common Stock",
+    "shareClassFIGI": "BBG001T3TDG2",
+    "ticker": "CHTR"
+   },
+   {
+    "compositeFIGI": "BBG000VPGNR2",
+    "exchCode": "UQ",
+    "figi": "BBG00B550NB5",
+    "marketSector": "Equity",
+    "name": "CHARTER COMMUNICATIONS INC-A",
+    "securityDescription": "CHTR",
+    "securityType": "Common Stock",
+    "securityType2": "Common Stock",
+    "shareClassFIGI": "BBG001T3TDG2",
+    "ticker": "CHTR"
+   },
+   {
+    "compositeFIGI": "BBG000VPGNR2",
+    "exchCode": "UB",
+    "figi": "BBG00B550NC4",
+    "marketSector": "Equity",
+    "name": "CHARTER COMMUNICATIONS INC-A",
+    "securityDescription": "CHTR",
+    "securityType": "Common Stock",
+    "securityType2": "Common Stock",
+    "shareClassFIGI": "BBG001T3TDG2",
+    "ticker": "CHTR"
+   },
+   {
+    "compositeFIGI": "BBG000VPGNR2",
+    "exchCode": "UT",
+    "figi": "BBG00B550ND3",
+    "marketSector": "Equity",
+    "name": "CHARTER COMMUNICATIONS INC-A",
+    "securityDescription": "CHTR",
+    "securityType": "Common Stock",
+    "securityType2": "Common Stock",
+    "shareClassFIGI": "BBG001T3TDG2",
+    "ticker": "CHTR"
+   },
+   {
+    "compositeFIGI": "BBG000VPGNR2",
+    "exchCode": "UM",
+    "figi": "BBG00B550NF1",
+    "marketSector": "Equity",
+    "name": "CHARTER COMMUNICATIONS INC-A",
+    "securityDescription": "CHTR",
+    "securityType": "Common Stock",
+    "securityType2": "Common Stock",
+    "shareClassFIGI": "BBG001T3TDG2",
+    "ticker": "CHTR"
+   },
+   {
+    "compositeFIGI": "BBG000VPGNR2",
+    "exchCode": "UX",
+    "figi": "BBG00B550NG0",
+    "marketSector": "Equity",
+    "name": "CHARTER COMMUNICATIONS INC-A",
+    "securityDescription": "CHTR",
+    "securityType": "Common Stock",
+    "securityType2": "Common Stock",
+    "shareClassFIGI": "BBG001T3TDG2",
+    "ticker": "CHTR"
+   },
+   {
+    "compositeFIGI": "BBG000VPGNR2",
+    "exchCode": "UR",
+    "figi": "BBG00B550NH9",
+    "marketSector": "Equity",
+    "name": "CHARTER COMMUNICATIONS INC-A",
+    "securityDescription": "CHTR",
+    "securityType": "Common Stock",
+    "securityType2": "Common Stock",
+    "shareClassFIGI": "BBG001T3TDG2",
+    "ticker": "CHTR"
+   },
+   {
+    "compositeFIGI": "BBG000VPGNR2",
+    "exchCode": "UU",
+    "figi": "BBG00B550NJ7",
+    "marketSector": "Equity",
+    "name": "CHARTER COMMUNICATIONS INC-A",
+    "securityDescription": "CHTR",
+    "securityType": "Common Stock",
+    "securityType2": "Common Stock",
+    "shareClassFIGI": "BBG001T3TDG2",
+    "ticker": "CHTR"
+   },
+   {
+    "compositeFIGI": "BBG000VPGNR2",
+    "exchCode": "PQ",
+    "figi": "BBG00B550NK5",
+    "marketSector": "Equity",
+    "name": "CHARTER COMMUNICATIONS INC-A",
+    "securityDescription": "CHTR",
+    "securityType": "Common Stock",
+    "securityType2": "Common Stock",
+    "shareClassFIGI": "BBG001T3TDG2",
+    "ticker": "CHTR"
+   },
+   {
+    "compositeFIGI": "BBG000VPGNR2",
+    "exchCode": "UV",
+    "figi": "BBG00B550NL4",
+    "marketSector": "Equity",
+    "name": "CHARTER COMMUNICATIONS INC-A",
+    "securityDescription": "CHTR",
+    "securityType": "Common Stock",
+    "securityType2": "Common Stock",
+    "shareClassFIGI": "BBG001T3TDG2",
+    "ticker": "CHTR"
+   },
+   {
+    "compositeFIGI": "BBG000VPGNR2",
+    "exchCode": "UD",
+    "figi": "BBG00B550NM3",
+    "marketSector": "Equity",
+    "name": "CHARTER COMMUNICATIONS INC-A",
+    "securityDescription": "CHTR",
+    "securityType": "Common Stock",
+    "securityType2": "Common Stock",
+    "shareClassFIGI": "BBG001T3TDG2",
+    "ticker": "CHTR"
+   },
+   {
+    "compositeFIGI": "BBG000VPGNR2",
+    "exchCode": "UW",
+    "figi": "BBG00B550NP0",
+    "marketSector": "Equity",
+    "name": "CHARTER COMMUNICATIONS INC-A",
+    "securityDescription": "CHTR",
+    "securityType": "Common Stock",
+    "securityType2": "Common Stock",
+    "shareClassFIGI": "BBG001T3TDG2",
+    "ticker": "CHTR"
+   },
+   {
+    "compositeFIGI": "BBG000VPGNR2",
+    "exchCode": "UF",
+    "figi": "BBG00B550NQ9",
+    "marketSector": "Equity",
+    "name": "CHARTER COMMUNICATIONS INC-A",
+    "securityDescription": "CHTR",
+    "securityType": "Common Stock",
+    "securityType2": "Common Stock",
+    "shareClassFIGI": "BBG001T3TDG2",
+    "ticker": "CHTR"
+   },
+   {
+    "compositeFIGI": "BBG000VPGNR2",
+    "exchCode": "VY",
+    "figi": "BBG00B550NR8",
+    "marketSector": "Equity",
+    "name": "CHARTER COMMUNICATIONS INC-A",
+    "securityDescription": "CHTR",
+    "securityType": "Common Stock",
+    "securityType2": "Common Stock",
+    "shareClassFIGI": "BBG001T3TDG2",
+    "ticker": "CHTR"
+   },
+   {
+    "compositeFIGI": "BBG000VPGNR2",
+    "exchCode": "VJ",
+    "figi": "BBG00B550NS7",
+    "marketSector": "Equity",
+    "name": "CHARTER COMMUNICATIONS INC-A",
+    "securityDescription": "CHTR",
+    "securityType": "Common Stock",
+    "securityType2": "Common Stock",
+    "shareClassFIGI": "BBG001T3TDG2",
+    "ticker": "CHTR"
+   },
+   {
+    "compositeFIGI": "BBG000VPGNR2",
+    "exchCode": "VK",
+    "figi": "BBG00B550NT6",
+    "marketSector": "Equity",
+    "name": "CHARTER COMMUNICATIONS INC-A",
+    "securityDescription": "CHTR",
+    "securityType": "Common Stock",
+    "securityType2": "Common Stock",
+    "shareClassFIGI": "BBG001T3TDG2",
+    "ticker": "CHTR"
    }
   ]
  },
@@ -2862,6 +3401,9 @@
     "ticker": "LBRDK"
    }
   ]
+ },
+ "535919203": {
+  "data": []
  },
  "573874104": {
   "data": [

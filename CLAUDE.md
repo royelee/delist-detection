@@ -106,10 +106,16 @@ or issuer changes),
 `_check_overrides`, `_last_trade_closes`, `_merger_payouts` (stage 8, with sub-plan 5e's stage 8a `_acquirer_lines`
 before the gate for every stock leg, passed or not, `acquirer_line.py`; a merger before the run's fails window reads
 its lines' rows into a private index. `_gate` tries the terms' ticker price, then the line's
-(`payout_gate.gate_payouts(line_price=)`, `GatedPayouts.priced_by`); `_add_acquirers` keeps the fails-row acquirer for
-ticker-settled terms (the only source of `AddedAcquirer`s) and else publishes the line or holder;
+(`payout_gate.gate_payouts(line_price=)`, `GatedPayouts.priced_by`; the line's first for a `line_first` leg,
+`_line_wins`: the terms' ticker's rows are another line of the issuer's, TWC, VIA, STRZA); `_add_acquirers` keeps
+the fails-row acquirer for ticker-settled terms (the only source of `AddedAcquirer`s) and else publishes the line or
+holder, but a `line_first` leg publishes stage 8a's line (another issuer's ticker security, IPHI, still wins).
+The run's first gate pass reads none of the caller's `--price-answers` received closes: the acquirer and the
+request's ticker come from it, and a second gate pass takes each answer only through the request it answers
+(`_answered_paths`: the path the first pass settled on), so a second run changes values only;
 `_Payouts.price_tickers` carries the published security's symbol on the price date to `payout_rule`
-(`MergerInputs.price_ticker`) and `price_requests.stock_legs`),
+(`MergerInputs.price_ticker`; a `--merger-terms` row's acquirer ticker is the caller's and is published as given)
+and `price_requests.stock_legs`),
 `_r1_continuations` (stage 8b: a merger whose published terms are one share and no cash, whose registrant's filings say the same of its own shares (`exchange_terms.own_exchange`), into a new issuer at most `NEW_ISSUER_DAYS` old or the same issuer (`successors.successor_by_terms`, else the new issuer's 8-K12B), is an exchange transfer to that successor, flagged `r1_continuation`, its payout reads dropped; the LLM's final terms must agree; the new issuer is named by the R1 statement's target (the name tie, below), its 8-K12B candidate included; a degraded read keeps the merger and flags the row; the run logs `role refusal: N rows (...)`, the delistings whose end-of-era reading refused a merger on the registrant's role; metered as "R1 continuations"),
 `_find_successors` (stage 9, with sub-plan 5c's `_terms_links` before the 8-K12B search: the same issuer's class, a new issuer, or the security's own same-CIK 8-K12B line via OpenFIGI and R2; a name tie for any 8-K12B link; sub-plan 5h: `_own_registration_link` takes a text-named CUSIP with no fails row
 yet when the fails data ends before the day, OKE 2026), `_handoffs`, `_date_from_notices` (stage 9c: a handoff continuation row's last trade day from its own Form 25's confirmed EX-99.25 notice, when before the successor's first sighting and no later than the effective date; metered as "handoff notice dates"), `_successor_endings` (stage 9d: the Form 25 search, matches only, for the line and 8-K12B successors the run added; metered as "successor endings"), `_distress` (stage 9e,
@@ -364,9 +370,12 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   (`issuer_fits`); else the resolver's issuer of the ticker on that day, asked with the name (`issuer_by_ticker`);
   else the run's issuer that carried the name around the closing, best by shared words (`issuer_by_name`).
   `choose_line` picks the issuer's line: the class the quote names, else the CUSIP that began at the closing, else
-  the holder. `LineIndex.price` prices a closing CUSIP at its close on the price date, past the $0.01 and $1.00
-  placeholder rows (`is_placeholder_row`), and any other line at the last trade day's close. `symbol_on` gives the
-  line's symbol on the price date.
+  the holder; the class letter is read only from a quote about the target's own class (`named_class(quote,
+  own_class)`: Viacom class B shares class A's read). `LineIndex.price` prices a closing CUSIP at its close on the
+  price date, past the $0.01 and $1.00 placeholder rows (`is_placeholder_row`), and any other line at the last trade
+  day's close. `symbol_on` gives the line's symbol from the row that carries that close: for a closing CUSIP the
+  first non-placeholder row from the next trading day (JCI 2016, ABI's LIFE: the row dated the price date is still
+  the old CUSIP), for any other line the row dated the price date.
 - `html_text.py` — `strip_html()`: filing HTML as plain text, for the EDGAR
   client's text cache and Form 25 parsing.
 - `form25.py` — parses a Form 25's XML or text (exchange, `class_text`, rule),

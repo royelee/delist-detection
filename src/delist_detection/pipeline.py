@@ -61,7 +61,7 @@ from .listing_status import edgar_lists, issuer_exchange, listed_today, listing_
 from .observations import (
     Observation, ObservationError, ObservationIndex, TickerEra, eras_by_key, normalize_ticker, observation_conflicts,
 )
-from .payout_gate import BY_LINE, DEFAULT_TOL, GatedPayouts, gate_payouts
+from .payout_gate import BY_LINE, BY_TICKER, DEFAULT_TOL, GatedPayouts, gate_payouts
 from .trading_calendar import next_trading_day
 from .prefetch import Serialized, warm
 from .reconstruction import (
@@ -1170,8 +1170,10 @@ def _acquirer_lines(ctx: _RunContext, mergers: list[Delisting], llm_terms: Mappi
         last = e.last_trade.day
         day = next_trading_day(last)
         idx = view if ftd_lo and last < ftd_lo + timedelta(days=acquirer_line.EARLY_DAYS) else index
-        line = acquirer_line.choose_line(idx, cik, holder=holder, letter=acquirer_line.named_class(quote), last=last,
-                                         price_day=day, exclude=e.sec_id) if cik else None
+        own = securities.get(e.sec_id)
+        letter = acquirer_line.named_class(quote, class_letter(own.share_class) if own else None)
+        line = acquirer_line.choose_line(idx, cik, holder=holder, letter=letter, last=last, price_day=day,
+                                         exclude=e.sec_id) if cik else None
         if holder is None and line is None:
             continue
         shown = line or holder
@@ -1185,11 +1187,17 @@ def _acquirer_lines(ctx: _RunContext, mergers: list[Delisting], llm_terms: Mappi
 def _gate(ctx: _RunContext, mergers: list[Delisting], trade_day: dict[DelistingKey, date | None],
           ftd: FtdIndex, raw: dict[DelistingKey, Any], llm_terms: dict[DelistingKey, Any],
           closes: dict[DelistingKey, float], overrides: Overrides, tol: float,
-          lines: Mapping[DelistingKey, _AcquirerLine] = {}) -> GatedPayouts:
+          lines: Mapping[DelistingKey, _AcquirerLine] = {}, line_first: Collection[DelistingKey] = (),
+          answers: Mapping[DelistingKey, tuple[str, float]] = {}, flag: bool = True) -> GatedPayouts:
     """Every merger payout through the last-close check (`payout_gate`), the
     acquirer's price read from its FTD rows around that merger's own last trade
-    day (`trade_day`), else from its acquirer line (`lines`, stage 8a). A merger
-    whose terms took a lagged acquirer close is flagged."""
+    day (`trade_day`), else from its acquirer line (`lines`, stage 8a; first for
+    `line_first`, whose terms' ticker is another line's). `answers` are the
+    caller's received closes, each as `(path, price)`: the price of the path
+    (BY_TICKER or BY_LINE) the answered request belongs to, so an answer settles
+    the gate only through the request it answers (`_merger_payouts` works the path
+    out from a first pass that reads no answer). A merger whose terms took a
+    lagged acquirer close is flagged (`flag`: not in that first pass)."""
     acq_symbols = {normalize_ticker(t.acquirer_ticker) for t in llm_terms.values() if t.acquirer_ticker}
     acq_symbols |= {normalize_ticker(v["acquirer_ticker"]) for v in overrides.merger_terms.values()
                     if v.get("acquirer_ticker")}
@@ -1201,26 +1209,22 @@ def _gate(ctx: _RunContext, mergers: list[Delisting], trade_day: dict[DelistingK
 
     lagged_acquirer: set[DelistingKey] = set()
 
-    def answered(ticker: str, key: DelistingKey) -> float | None:
-        """The caller's received close for this merger, when it answered the request for `ticker` (the terms' or
-        the acquirer line's)."""
-        got = overrides.acquirer_prices.get(key)
-        line = lines.get(key)
-        if got is not None and got[0] in {normalize_ticker(ticker or ""), line.ticker if line else ""} - {""}:
-            return got[1]
-        return None
+    def answered(path: str, key: DelistingKey) -> float | None:
+        """The caller's received close for this merger, when its request is the one of this price path."""
+        got = answers.get(key)
+        return got[1] if got is not None and got[0] == path else None
 
     def line_price(key: DelistingKey) -> tuple[str, float] | None:
         line = lines.get(key)
         if line is None or not line.ticker:
             return None
-        given = answered(line.ticker, key)
+        given = answered(BY_LINE, key)
         if given is not None:
             return line.ticker, given
         return (line.ticker, line.price[0]) if line.price else None
 
     def acquirer_price(ticker: str, key: DelistingKey) -> float | None:
-        given = answered(ticker, key)
+        given = answered(BY_TICKER, key)
         if given is not None:
             return given
         # Priced on THAT merger's own last-trade day: many mergers can share a
@@ -1238,7 +1242,7 @@ def _gate(ctx: _RunContext, mergers: list[Delisting], trade_day: dict[DelistingK
         [e.key for e in mergers],
         {k: pr.value for k, pr in regex.items()}, {k: pr.source for k, pr in regex.items()},
         {k: pr.confidence for k, pr in regex.items()}, llm_terms, closes, overrides.merger_terms,
-        acquirer_price, tol, line_price=line_price,
+        acquirer_price, tol, line_price=line_price, line_first=line_first,
     )
     for e in mergers:
         # A lagged FTD close (no row on the next trading day) may carry an OTC or
@@ -1246,39 +1250,95 @@ def _gate(ctx: _RunContext, mergers: list[Delisting], trade_day: dict[DelistingK
         terms = for_delisting(gated.merged_terms, e.key)
         line = lines.get(e.key)
         if gated.priced_by.get(e.key) == BY_LINE:
-            lagged = bool(line and line.price and line.price[2] and answered(line.ticker, e.key) is None)
+            lagged = bool(line and line.price and line.price[2] and answered(BY_LINE, e.key) is None)
         else:
             lagged = e.key in lagged_acquirer
-        if lagged and terms and terms.get("acquirer_price") is not None:
+        if flag and lagged and terms and terms.get("acquirer_price") is not None:
             e.add_flag("acquirer_close_lagged")
     return gated
 
 
+class _TickerSecurity:
+    """The security of the fails rows under a stock leg's terms' ticker (`acquirers.find_acquirer`), asked once
+    for each (ticker, last trade day, target)."""
+
+    def __init__(self, ctx: _RunContext, ftd: FtdIndex, sec_cusips: dict[str, list[str]]) -> None:
+        self.ctx, self.ftd, self.sec_cusips = ctx, ftd, sec_cusips
+        self._memo: dict[tuple, Any] = {}
+
+    def __call__(self, e: Delisting, ticker: str, day: date | None):
+        if not ticker or day is None:
+            return None
+        k = (ticker, day, e.sec_id)
+        if k not in self._memo:
+            self._memo[k] = find_acquirer(self.ctx.clients.figi, self.ftd, ticker, day,
+                                          set(self.sec_cusips.get(e.sec_id, [])))
+        return self._memo[k]
+
+
+def _stock_ticker(e: Delisting, llm_terms: Mapping[DelistingKey, Any], overrides: Overrides) -> str:
+    """The terms' acquirer ticker of a stock leg, as the gate's merged terms carry it: its --merger-terms row's, else
+    the LLM's (a leg the line alone priced carries the line's, which no ticker lookup reads)."""
+    given = for_delisting(overrides.merger_terms, e.key)
+    if given is not None:
+        return normalize_ticker(given.get("acquirer_ticker") or "")
+    t = llm_terms.get(e.key)
+    return normalize_ticker(t.acquirer_ticker or "") if t is not None and t.stock_ratio else ""
+
+
+def _line_wins(mergers: list[Delisting], lines: Mapping[DelistingKey, _AcquirerLine], llm_terms: Mapping[DelistingKey, Any],
+               overrides: Overrides, securities: dict[str, Security], trade_day: dict[DelistingKey, date | None],
+               found: _TickerSecurity) -> set[DelistingKey]:
+    """The stock legs whose terms' ticker belongs to another line of the acquirer's issuer than the one stage 8a
+    chose (sub-plan 5e fix): the ticker's rows are the pre-closing line's (Charter's for New Charter, TWC 2016), the
+    class's other line (CBS class B for Viacom class A, VIA 2019) or a placeholder's (Lions Gate's for its class B on
+    a new CUSIP, STRZA 2016), and the acquirer's line of that issuer is published and priced instead. Not for a
+    ticker whose security is another issuer's (IPHI's new Marvell, an acquirer the run adds) or the line itself, nor
+    for a --merger-terms row, whose ticker is the caller's."""
+    out: set[DelistingKey] = set()
+    for e in mergers:
+        line = lines.get(e.key)
+        if (line is None or not line.line or not line.holder or line.line == line.holder
+                or for_delisting(overrides.merger_terms, e.key) is not None):
+            continue                       # no other line of the issuer holds the ticker: nothing to settle
+        got = found(e, _stock_ticker(e, llm_terms, overrides), trade_day.get(e.key))
+        if got is None:
+            out.add(e.key)
+        elif got[0].composite not in (line.line, e.sec_id):
+            other = securities.get(got[0].composite)
+            mine = securities.get(line.line)
+            if other is not None and mine is not None and other.issuer_cik and other.issuer_cik == mine.issuer_cik:
+                out.add(e.key)
+    return out
+
+
 def _add_acquirers(ctx: _RunContext, mergers: list[Delisting], trade_day: dict[DelistingKey, date | None],
                    gated: GatedPayouts, securities: dict[str, Security], sec_cusips: dict[str, list[str]],
-                   ftd: FtdIndex, lines: Mapping[DelistingKey, _AcquirerLine] = {}
+                   ftd: FtdIndex, lines: Mapping[DelistingKey, _AcquirerLine] = {},
+                   line_first: Collection[DelistingKey] = (), found: _TickerSecurity | None = None
                    ) -> tuple[dict[DelistingKey, str], dict[str, AddedSecurity], list[ReviewItem]]:
     """Each merger's acquirer security: for terms the payout gate settled on the terms' own ticker, the security
     of the fails rows under it (`acquirers.find_acquirer`), else that ticker's holder; for terms the acquirer line's
-    price settled, that line; for every other stock leg, failed or never gated (sub-plan 5e), its acquirer line,
-    else the ticker's holder (`lines`, stage 8a). The acquirers the run adds as securities of their own
-    (`AddedAcquirer`, their issuer CIK from `acquirers.acquirer_cik`) come from the first kind only, as before; and
-    a review item for each acquirer-CIK lookup that rested on a degraded answer."""
+    price settled, that line, and for a `line_first` leg (`_line_wins`: the ticker's rows are another line of the
+    issuer's) the line whichever price settled it; for every other stock leg, failed or never gated (sub-plan 5e),
+    its acquirer line, else the ticker's holder (`lines`, stage 8a). The acquirers the run adds as securities of
+    their own (`AddedAcquirer`, their issuer CIK from `acquirers.acquirer_cik`) come from the first kind only, as
+    before; and a review item for each acquirer-CIK lookup that rested on a degraded answer."""
     acquirer_ids: dict[DelistingKey, str] = {}
     added: dict[str, AddedSecurity] = {}
     review: list[ReviewItem] = []
+    found = found or _TickerSecurity(ctx, ftd, sec_cusips)
     for e in mergers:
         key = e.key
         terms = for_delisting(gated.merged_terms, e.key)
         line = lines.get(key)
-        by_line = gated.priced_by.get(key) == BY_LINE
+        by_line = gated.priced_by.get(key) == BY_LINE or key in line_first
         if terms and not by_line:
             acq = normalize_ticker(terms.get("acquirer_ticker") or "")
             day = trade_day.get(key)
-            found = find_acquirer(ctx.clients.figi, ftd, acq, day, set(sec_cusips.get(e.sec_id, []))) \
-                if acq and day is not None else None
-            if found is not None and found[0].composite != e.sec_id:
-                cand, rows = found
+            got = found(e, acq, day)
+            if got is not None and got[0].composite != e.sec_id:
+                cand, rows = got
                 acquirer_ids[key] = cand.composite
                 if cand.composite not in securities:
                     if cand.composite not in added:
@@ -1293,7 +1353,7 @@ def _add_acquirers(ctx: _RunContext, mergers: list[Delisting], trade_day: dict[D
                     # all of them, not just the first one processed.
                     added[cand.composite].rows += rows
                 continue
-            if found is not None:
+            if got is not None:
                 continue
         if line is None:
             continue
@@ -1319,6 +1379,29 @@ def _price_tickers(acquirer_ids: Mapping[DelistingKey, str], lines: Mapping[Deli
     return out
 
 
+def _answered_paths(mergers: list[Delisting], overrides: Overrides, llm_terms: Mapping[DelistingKey, Any],
+                    lines: Mapping[DelistingKey, _AcquirerLine], first: GatedPayouts,
+                    price_tickers: Mapping[DelistingKey, str]) -> dict[DelistingKey, tuple[str, float]]:
+    """The caller's received closes (`overrides.acquirer_prices`: the answered request's lookup_ticker and the
+    price) that answer a request this run makes, each with the price path its request belongs to: the path the first
+    pass (no answers) settled the gate on, else the acquirer line's when the request is for the line's symbol and
+    not the terms' ticker, else the ticker's. The request is for the leg's price ticker, else the terms' ticker
+    (`price_requests.stock_legs`); an answer to any other ticker answers no request here."""
+    out: dict[DelistingKey, tuple[str, float]] = {}
+    for e in mergers:
+        got = overrides.acquirer_prices.get(e.key)
+        t = llm_terms.get(e.key)
+        asked = price_tickers.get(e.key) or normalize_ticker(t.acquirer_ticker or "" if t is not None else "")
+        if got is None or got[0] != asked:
+            continue
+        line = lines.get(e.key)
+        path = first.priced_by.get(e.key) or (
+            BY_LINE if line is not None and line.ticker == asked and asked != _stock_ticker(e, llm_terms, overrides)
+            else BY_TICKER)
+        out[e.key] = (path, got[1])
+    return out
+
+
 def _merger_payouts(ctx: _RunContext, delistings: list[Delisting], securities: dict[str, Security],
                     sec_cusips: dict[str, list[str]], ftd: FtdIndex, closes: dict[DelistingKey, float],
                     overrides: Overrides, tol: float, sightings: Mapping[str, Sequence[Sighting]] | None = None,
@@ -1330,14 +1413,23 @@ def _merger_payouts(ctx: _RunContext, delistings: list[Delisting], securities: d
     trade_day = {e.key: e.last_trade.day for e in delistings}
     lines, line_review = (_acquirer_lines(ctx, mergers, llm_terms, overrides, securities, sec_cusips, ftd, sightings,
                                           ftd_lo) if sightings is not None else ({}, []))
-    gated = _gate(ctx, mergers, trade_day, ftd, raw, llm_terms, closes, overrides, tol, lines)
+    found = _TickerSecurity(ctx, ftd, sec_cusips)
+    wins = _line_wins(mergers, lines, llm_terms, overrides, securities, trade_day, found)
+    # the first pass reads none of the caller's received closes: the acquirer and the request's ticker depend on
+    # what the run reads alone, so a second run with the requests answered keeps both (`--price-answers`)
+    gated = _gate(ctx, mergers, trade_day, ftd, raw, llm_terms, closes, overrides, tol, lines, wins,
+                  flag=not overrides.acquirer_prices)
     acquirer_ids, added, acquirer_review = _add_acquirers(ctx, mergers, trade_day, gated, securities, sec_cusips,
-                                                          ftd, lines)
+                                                          ftd, lines, wins, found)
     index = acquirer_line.LineIndex(securities, sightings, sec_cusips, ftd) if lines else None
+    price_tickers = _price_tickers(acquirer_ids, lines, index)
+    if overrides.acquirer_prices:
+        answers = _answered_paths(mergers, overrides, llm_terms, lines, gated, price_tickers)
+        gated = _gate(ctx, mergers, trade_day, ftd, raw, llm_terms, closes, overrides, tol, lines, wins, answers)
     _flush_memo(ctx.clients)                  # the acquirer lookups resolved tickers
     ctx.meter.done("payouts", mark)
     return _Payouts(raw, llm_terms, gated, acquirer_ids, added, extraction_review + line_review + acquirer_review,
-                    _price_tickers(acquirer_ids, lines, index))
+                    price_tickers)
 
 
 R1_CONTINUATION, R1_REBUCKETED = "r1_continuation", "r1_rebucketed"

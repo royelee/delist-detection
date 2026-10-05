@@ -96,7 +96,10 @@ def _merger(row: Mapping[str, str], last_trade_date: str, inputs: MergerInputs) 
         source, gate = inputs.raw_source or "regex", FAILED
     else:
         return out
-    ticker = inputs.price_ticker or (normalize_ticker(ticker) if ticker else "")
+    # a --merger-terms row's acquirer ticker is the caller's, published as given; else the acquirer security's
+    # symbol on the price date (the request's ticker), over the terms'
+    ticker = (normalize_ticker(ticker) if ticker else "") if override else (
+        inputs.price_ticker or (normalize_ticker(ticker) if ticker else ""))
     price_date = _day_after(last_trade_date)
     leg = ""
     if ratio:

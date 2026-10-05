@@ -140,12 +140,35 @@ def test_without_a_closing_cusip_the_price_is_the_close_of_the_last_trade_day():
     assert idx.symbol_on("BBG000BNHSP9", day) == "LUK"
 
 
-def test_the_symbol_on_the_price_date_prefers_that_days_row():
-    """ABI 2008: Invitrogen renamed Life Technologies at the closing; on the price date its old CUSIP still trades
-    as IVGN, and the new CUSIP's first row (under LIFE) is a day later."""
-    rows = _rows(("2008-11-24", "46185R100", "IVGN", 22.23), ("2008-11-25", "53217V109", "LIFE", 23.89))
+def test_the_symbol_is_that_of_the_row_the_price_is_read_from():
+    """A fails row dated D carries D-1's close, and a CUSIP that began at the closing moves positions on its own day:
+    ABI 2008 (Invitrogen renamed Life Technologies): the row dated the price date is the old CUSIP under IVGN, the
+    row its price is read from, a day later, the new CUSIP under LIFE. JCI 2016: Tyco's old CUSIP under TYC on the
+    price date, the new one under JCI from the next day (its first row under JCIZZZZ is no ticker)."""
+    last, day = date(2008, 11, 21), date(2008, 11, 24)
+    rows = _rows(("2008-11-20", "46185R100", "IVGN", 21.50), ("2008-11-24", "46185R100", "IVGN", 22.23),
+                 ("2008-11-25", "53217V109", "LIFE", 23.89))
     idx = _index([_sec("BBG000CKJ0P3", 1073431)], {}, {"BBG000CKJ0P3": ["46185R100", "53217V109"]}, rows)
-    assert idx.symbol_on("BBG000CKJ0P3", date(2008, 11, 24)) == "IVGN"
+    assert idx.closing_cusip("BBG000CKJ0P3", last, day) == "53217V109"
+    assert idx.symbol_on("BBG000CKJ0P3", day, last=last) == "LIFE"
+    assert idx.price("BBG000CKJ0P3", last, day) == (23.89, "2008-11-25", False)
+    last, day = date(2016, 9, 2), date(2016, 9, 6)
+    rows = _rows(("2016-08-02", "G91442106", "TYC", 44.00), ("2016-09-02", "G91442106", "TYC", 45.00), ("2016-09-06", "G91442106", "TYC", 45.59),
+                 ("2016-09-06", "G51502105", "JCIZZZZ", 47.74), ("2016-09-07", "G51502105", "JCI", 48.90))
+    idx = _index([_sec("BBG000BKJCI0", 833444)], {}, {"BBG000BKJCI0": ["G91442106", "G51502105"]}, rows)
+    assert idx.symbol_on("BBG000BKJCI0", day, last=last) == "JCI"
+    assert idx.price("BBG000BKJCI0", last, day) == (48.90, "2016-09-07", False)
+
+
+def test_a_line_without_a_closing_cusip_keeps_the_symbol_of_the_row_dated_the_price_date():
+    """AVB 2026: the same CUSIP is renamed (Vivmark) only from 08-19, a day after the price date's row."""
+    last, day = date(2026, 8, 14), date(2026, 8, 17)
+    rows = _rows(("2026-08-03", "26884U109", "EQR", 69.0), ("2026-08-14", "26884U109", "EQR", 70.0), ("2026-08-17", "26884U109", "EQR", 70.5),
+                 ("2026-08-18", "26884U109", "EQR", 70.6), ("2026-08-19", "26884U109", "VMRK", 70.7))
+    idx = _index([_sec("BBG000BG8M31", 906107)], {}, {"BBG000BG8M31": ["26884U109"]}, rows)
+    assert idx.closing_cusip("BBG000BG8M31", last, day) is None
+    assert idx.symbol_on("BBG000BG8M31", day, last=last) == "EQR"
+    assert idx.symbol_on("BBG000BG8M31", day) == "EQR"
 
 
 def test_the_class_the_terms_name_picks_among_an_issuers_lines():
@@ -154,6 +177,10 @@ def test_the_class_the_terms_name_picks_among_an_issuers_lines():
     assert named_class(q) == "C"
     assert named_class("Continental stockholders will receive 1.05 shares of UAL common stock for each share of "
                        "Continental Class B common stock") is None
+    # the quote must be about the target's own class: Viacom class B shares the class A read (VIA-B 2019)
+    via = ("each share of Class A common stock of Viacom was converted automatically into 0.59625 shares of "
+           "ViacomCBS Class A Common Stock")
+    assert named_class(via) == "A" and named_class(via, "A") == "A" and named_class(via, "B") is None
     secs = [_sec("BBG006GNRZ83", 1611983, "SERIES A"), _sec("BBG006GNSZW5", 1611983, "SERIES C")]
     rows = _rows(("2020-12-21", "530307107", "LBRDA", 157.10), ("2020-12-21", "530307305", "LBRDK", 157.88),
                  ("2020-12-22", "530307305", "LBRDK", 159.01))

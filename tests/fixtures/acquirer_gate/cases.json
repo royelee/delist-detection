@@ -479,6 +479,62 @@
    ],
    "ticker": "EV"
   },
+  "BBG000DHM3H8": {
+   "cik": 1339947,
+   "committed": {
+    "price_sec_id": "",
+    "price_ticker": "CBS",
+    "terms_gate": "passed"
+   },
+   "delist_date": "2019-12-14",
+   "last_trade_close": 25.87,
+   "last_trade_date": "2019-12-04",
+   "last_trade_source": "midas",
+   "note": "VIA 2019: the quote names ViacomCBS Class A; CBS's Class B is another line of the issuer",
+   "raw": null,
+   "resolved": {
+    "CBS|2019-12-04": 813828
+   },
+   "terms": [
+    "stock",
+    null,
+    0.59625,
+    "CBS Corporation",
+    "CBS",
+    "high",
+    "8-K:0001193125-19-306335",
+    "each share of Class A common stock... of Viacom... was converted automatically into 0.59625 shares of ViacomCBS Class A Common Stock"
+   ],
+   "ticker": "VIA"
+  },
+  "BBG000DHSPT0": {
+   "cik": 1339947,
+   "committed": {
+    "price_sec_id": "",
+    "price_ticker": "CBS",
+    "terms_gate": "passed"
+   },
+   "delist_date": "2019-12-14",
+   "last_trade_close": 24.22,
+   "last_trade_date": "2019-12-04",
+   "last_trade_source": "8k_301",
+   "note": "VIA-B 2019: the same quote, the target's own class B: ViacomCBS Class B",
+   "raw": null,
+   "resolved": {
+    "CBS|2019-12-04": 813828
+   },
+   "terms": [
+    "stock",
+    null,
+    0.59625,
+    "CBS Corporation",
+    "CBS",
+    "high",
+    "8-K:0001193125-19-306335",
+    "each share of Class A common stock... of Viacom... was converted automatically into 0.59625 shares of ViacomCBS Class A Common Stock"
+   ],
+   "ticker": "VIA-B"
+  },
   "BBG000DQV8M1": {
    "cik": 1010775,
    "committed": {
@@ -563,6 +619,34 @@
    ],
    "ticker": "IHS"
   },
+  "BBG000H89QJ6": {
+   "cik": 1377013,
+   "committed": {
+    "price_sec_id": "",
+    "price_ticker": "CHTR",
+    "terms_gate": "failed"
+   },
+   "delist_date": "2016-05-28",
+   "last_trade_close": 216.12,
+   "last_trade_date": "2016-05-17",
+   "last_trade_source": "midas",
+   "note": "TWC 2016: CHTR's rows are old Charter's; stage 8a's New Charter (closing CUSIP) stands",
+   "raw": null,
+   "resolved": {
+    "CHTR|2016-05-17": 1091667
+   },
+   "terms": [
+    "election",
+    100.0,
+    0.5409,
+    "Charter",
+    "CHTR",
+    "high",
+    "8-K:0000950142-16-003754",
+    "receive either $100.00 in cash and shares of New Charter Class A common stock equivalent to 0.5409 shares of Charter Class A common stock"
+   ],
+   "ticker": "TWC"
+  },
   "BBG000JXRXK2": {
    "cik": 811830,
    "committed": {
@@ -620,6 +704,34 @@
     "for each share of Great Plains Energy common stock held, Great Plains Energy shareholders will receive 0.5981 ... shares of common stock ... of Monarch Energy"
    ],
    "ticker": "GXP"
+  },
+  "BBG000PCNTM2": {
+   "cik": 1507934,
+   "committed": {
+    "price_sec_id": "",
+    "price_ticker": "LGF",
+    "terms_gate": "passed"
+   },
+   "delist_date": "2016-12-18",
+   "last_trade_close": 35.52,
+   "last_trade_date": "2016-12-08",
+   "last_trade_source": "midas",
+   "note": "STRZA 2016: Lions Gate's class B non-voting (LGFB) on a new CUSIP, not the holder's placeholder",
+   "raw": null,
+   "resolved": {
+    "LGF|2016-12-08": null
+   },
+   "terms": [
+    "cash_and_stock",
+    18.0,
+    0.6784,
+    "Lions Gate",
+    "LGF",
+    "medium",
+    "8-K:0001571049-16-020447",
+    "each share of the Company\u2019s Series A common stock... was converted into the right to receive (a) $18.00 in cash and (b) 0.6784 of a share of Lions Gate\u2019s Class B non-voting shares"
+   ],
+   "ticker": "STRZA"
   },
   "BBG000PTXBV3": {
    "cik": 1419521,
@@ -4537,6 +4649,101 @@
    "security_type": "Common Stock",
    "share_class": "COMMON"
   },
+  "BBG000BWDFD4": {
+   "cusips": [
+    "92556H107"
+   ],
+   "eras": {
+    "PARAA@2022-06-30": [
+     [
+      "PARAA",
+      "2022-06-30",
+      "PARAMOUNT GLOBAL CLASS A",
+      "",
+      ""
+     ],
+     [
+      "PARAA",
+      "2022-12-31",
+      "PARAMOUNT GLOBAL CLASS A",
+      "",
+      ""
+     ],
+     [
+      "PARAA",
+      "2023-06-30",
+      "PARAMOUNT GLOBAL CLASS A",
+      "",
+      ""
+     ],
+     [
+      "PARAA",
+      "2023-12-31",
+      "PARAMOUNT GLOBAL CLASS A",
+      "",
+      ""
+     ],
+     [
+      "PARAA",
+      "2024-06-30",
+      "PARAMOUNT GLOBAL CLASS A",
+      "",
+      ""
+     ],
+     [
+      "PARAA",
+      "2024-12-31",
+      "PARAMOUNT GLOBAL CLASS A",
+      "",
+      ""
+     ],
+     [
+      "PARAA",
+      "2025-06-30",
+      "PARAMOUNT GLOBAL CLASS A",
+      "",
+      ""
+     ]
+    ],
+    "VIACA@2019-12-31": [
+     [
+      "VIACA",
+      "2019-12-31",
+      "VIACOMCBS INC CLASS A",
+      "",
+      ""
+     ],
+     [
+      "VIACA",
+      "2020-06-30",
+      "VIACOMCBS INC CLASS A",
+      "",
+      ""
+     ],
+     [
+      "VIACA",
+      "2020-12-31",
+      "VIACOMCBS INC CLASS A",
+      "",
+      ""
+     ],
+     [
+      "VIACA",
+      "2021-12-31",
+      "VIACOMCBS INC CLASS A",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "issuer_cik": "813828",
+   "name": "PARAMOUNT GLOBAL CLASS A",
+   "observed": "true",
+   "sec_id": "BBG000BWDFD4",
+   "security_type": "Common Stock",
+   "share_class": "CLASS A"
+  },
   "BBG000BWMX63": {
    "cusips": [
     "947890109"
@@ -5614,6 +5821,265 @@
    "security_type": "Common Stock",
    "share_class": "COMMON"
   },
+  "BBG000C496P7": {
+   "cusips": [
+    "124857202",
+    "92556H206"
+   ],
+   "eras": {
+    "CBS@2008-01-16": [
+     [
+      "CBS",
+      "2008-01-16",
+      "CBS CORPORATION",
+      "",
+      "813828"
+     ],
+     [
+      "CBS",
+      "2008-05-31",
+      "CBS CORPORATION",
+      "",
+      "813828"
+     ],
+     [
+      "CBS",
+      "2008-07-25",
+      "CBS CORPORATION",
+      "",
+      "813828"
+     ],
+     [
+      "CBS",
+      "2008-11-18",
+      "CBS CORPORATION",
+      "",
+      "813828"
+     ],
+     [
+      "CBS",
+      "2009-01-23",
+      "CBS CORPORATION",
+      "",
+      "813828"
+     ],
+     [
+      "CBS",
+      "2009-03-20",
+      "CBS CORPORATION",
+      "",
+      "813828"
+     ],
+     [
+      "CBS",
+      "2009-06-08",
+      "CBS CORPORATION",
+      "",
+      "813828"
+     ],
+     [
+      "CBS",
+      "2012-06-29",
+      "CBS CORP CLASS B",
+      "",
+      "813828"
+     ],
+     [
+      "CBS",
+      "2012-12-31",
+      "CBS CORP CLASS B",
+      "",
+      "813828"
+     ],
+     [
+      "CBS",
+      "2013-06-28",
+      "CBS CORP CLASS B",
+      "",
+      "813828"
+     ],
+     [
+      "CBS",
+      "2013-12-31",
+      "CBS CORP CLASS B",
+      "",
+      "813828"
+     ],
+     [
+      "CBS",
+      "2014-06-30",
+      "CBS CORP CLASS B",
+      "",
+      "813828"
+     ],
+     [
+      "CBS",
+      "2014-12-31",
+      "CBS CORP- CLASS B",
+      "",
+      "813828"
+     ],
+     [
+      "CBS",
+      "2015-06-30",
+      "CBS CORP- CLASS B",
+      "",
+      "813828"
+     ],
+     [
+      "CBS",
+      "2015-12-31",
+      "CBS CORP- CLASS B",
+      "",
+      "813828"
+     ],
+     [
+      "CBS",
+      "2016-06-30",
+      "CBS CORP- CLASS B",
+      "",
+      "813828"
+     ],
+     [
+      "CBS",
+      "2016-12-30",
+      "CBS CORP- CLASS B",
+      "",
+      "813828"
+     ],
+     [
+      "CBS",
+      "2017-06-30",
+      "CBS CORP CLASS B",
+      "",
+      "813828"
+     ],
+     [
+      "CBS",
+      "2017-12-31",
+      "CBS CORP CLASS B",
+      "",
+      "813828"
+     ],
+     [
+      "CBS",
+      "2018-06-30",
+      "CBS CORP CLASS B",
+      "",
+      "813828"
+     ],
+     [
+      "CBS",
+      "2018-12-31",
+      "CBS CORP CLASS B",
+      "",
+      "813828"
+     ],
+     [
+      "CBS",
+      "2019-06-30",
+      "CBS CORP CLASS B",
+      "",
+      "813828"
+     ]
+    ],
+    "PARA@2022-06-30": [
+     [
+      "PARA",
+      "2022-06-30",
+      "PARAMOUNT GLOBAL CLASS B",
+      "",
+      ""
+     ],
+     [
+      "PARA",
+      "2022-12-31",
+      "PARAMOUNT GLOBAL CLASS B",
+      "",
+      ""
+     ],
+     [
+      "PARA",
+      "2023-06-30",
+      "PARAMOUNT GLOBAL CLASS B",
+      "",
+      ""
+     ],
+     [
+      "PARA",
+      "2023-12-31",
+      "PARAMOUNT GLOBAL CLASS B",
+      "",
+      ""
+     ],
+     [
+      "PARA",
+      "2024-06-30",
+      "PARAMOUNT GLOBAL CLASS B",
+      "",
+      ""
+     ],
+     [
+      "PARA",
+      "2024-12-31",
+      "PARAMOUNT GLOBAL CLASS B",
+      "",
+      ""
+     ],
+     [
+      "PARA",
+      "2025-06-30",
+      "PARAMOUNT GLOBAL CLASS B",
+      "",
+      ""
+     ]
+    ],
+    "VIAC@2019-12-31": [
+     [
+      "VIAC",
+      "2019-12-31",
+      "VIACOMCBS INC CLASS B",
+      "",
+      ""
+     ],
+     [
+      "VIAC",
+      "2020-06-30",
+      "VIACOMCBS INC CLASS B",
+      "",
+      ""
+     ],
+     [
+      "VIAC",
+      "2020-12-31",
+      "VIACOMCBS INC CLASS B",
+      "",
+      ""
+     ],
+     [
+      "VIAC",
+      "2021-06-30",
+      "VIACOMCBS INC CLASS B",
+      "",
+      ""
+     ],
+     [
+      "VIAC",
+      "2021-12-31",
+      "VIACOMCBS INC CLASS B",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "issuer_cik": "813828",
+   "name": "PARAMOUNT GLOBAL CLASS B",
+   "observed": "true",
+   "sec_id": "BBG000C496P7",
+   "security_type": "Common Stock",
+   "share_class": "CLASS B"
+  },
   "BBG000CKJ0P3": {
    "cusips": [
     "46185R100",
@@ -5900,6 +6366,257 @@
    "sec_id": "BBG000DBVBY4",
    "security_type": "Common Stock",
    "share_class": "COMMON"
+  },
+  "BBG000DHM3H8": {
+   "cusips": [
+    "92553P102"
+   ],
+   "eras": {
+    "VIA@2015-06-30": [
+     [
+      "VIA",
+      "2015-06-30",
+      "VIACOM INC. CL A",
+      "",
+      "1339947"
+     ],
+     [
+      "VIA",
+      "2015-12-31",
+      "VIACOM INC. CL A",
+      "",
+      "1339947"
+     ],
+     [
+      "VIA",
+      "2016-06-30",
+      "VIACOM INC. CL A",
+      "",
+      "1339947"
+     ],
+     [
+      "VIA",
+      "2016-12-30",
+      "VIACOM INC. CL A",
+      "",
+      "1339947"
+     ],
+     [
+      "VIA",
+      "2017-06-30",
+      "VIACOM INC CLASS A",
+      "",
+      "1339947"
+     ],
+     [
+      "VIA",
+      "2017-12-31",
+      "VIACOM INC CLASS A",
+      "",
+      "1339947"
+     ],
+     [
+      "VIA",
+      "2018-06-30",
+      "VIACOM INC CLASS A",
+      "",
+      "1339947"
+     ],
+     [
+      "VIA",
+      "2018-12-31",
+      "VIACOM INC CLASS A",
+      "",
+      "1339947"
+     ],
+     [
+      "VIA",
+      "2019-06-30",
+      "VIACOM INC CLASS A",
+      "",
+      "1339947"
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "issuer_cik": "1339947",
+   "name": "VIACOM INC CLASS A",
+   "observed": "true",
+   "sec_id": "BBG000DHM3H8",
+   "security_type": "Common Stock",
+   "share_class": "CLASS A"
+  },
+  "BBG000DHSPT0": {
+   "cusips": [
+    "92553P201"
+   ],
+   "eras": {
+    "VIA-B@2008-01-16": [
+     [
+      "VIA-B",
+      "2008-01-16",
+      "VIACOM INC",
+      "",
+      "1339947"
+     ],
+     [
+      "VIA-B",
+      "2008-05-31",
+      "VIACOM INC",
+      "",
+      "1339947"
+     ],
+     [
+      "VIA-B",
+      "2008-07-25",
+      "VIACOM INC",
+      "",
+      "1339947"
+     ],
+     [
+      "VIA-B",
+      "2008-11-18",
+      "VIACOM INC",
+      "",
+      "1339947"
+     ],
+     [
+      "VIA-B",
+      "2009-01-23",
+      "VIACOM INC",
+      "",
+      "1339947"
+     ],
+     [
+      "VIA-B",
+      "2009-03-20",
+      "VIACOM INC",
+      "",
+      "1339947"
+     ],
+     [
+      "VIA-B",
+      "2009-06-08",
+      "VIACOM INC",
+      "",
+      "1339947"
+     ]
+    ],
+    "VIAB@2012-06-29": [
+     [
+      "VIAB",
+      "2012-06-29",
+      "VIACOM INC CLASS B",
+      "",
+      "1339947"
+     ],
+     [
+      "VIAB",
+      "2012-12-31",
+      "VIACOM INC CLASS B",
+      "",
+      "1339947"
+     ],
+     [
+      "VIAB",
+      "2013-06-28",
+      "VIACOM INC CLASS B",
+      "",
+      "1339947"
+     ],
+     [
+      "VIAB",
+      "2013-12-31",
+      "VIACOM INC CLASS B",
+      "",
+      "1339947"
+     ],
+     [
+      "VIAB",
+      "2014-06-30",
+      "VIACOM INC CLASS B",
+      "",
+      "1339947"
+     ],
+     [
+      "VIAB",
+      "2014-12-31",
+      "VIACOM INC CLASS B",
+      "",
+      "1339947"
+     ],
+     [
+      "VIAB",
+      "2015-06-30",
+      "VIACOM INC CLASS B",
+      "",
+      "1339947"
+     ],
+     [
+      "VIAB",
+      "2015-12-31",
+      "VIACOM INC CLASS B",
+      "",
+      "1339947"
+     ],
+     [
+      "VIAB",
+      "2016-06-30",
+      "VIACOM INC CLASS B",
+      "",
+      "1339947"
+     ],
+     [
+      "VIAB",
+      "2016-12-30",
+      "VIACOM INC CLASS B",
+      "",
+      "1339947"
+     ],
+     [
+      "VIAB",
+      "2017-06-30",
+      "VIACOM INC CLASS B",
+      "",
+      "1339947"
+     ],
+     [
+      "VIAB",
+      "2017-12-31",
+      "VIACOM INC CLASS B",
+      "",
+      "1339947"
+     ],
+     [
+      "VIAB",
+      "2018-06-30",
+      "VIACOM INC CLASS B",
+      "",
+      "1339947"
+     ],
+     [
+      "VIAB",
+      "2018-12-31",
+      "VIACOM INC CLASS B",
+      "",
+      "1339947"
+     ],
+     [
+      "VIAB",
+      "2019-06-30",
+      "VIACOM INC CLASS B",
+      "",
+      "1339947"
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "issuer_cik": "1339947",
+   "name": "VIACOM INC CLASS B",
+   "observed": "true",
+   "sec_id": "BBG000DHSPT0",
+   "security_type": "Common Stock",
+   "share_class": "CLASS B"
   },
   "BBG000DQV8M1": {
    "cusips": [
@@ -6670,6 +7387,102 @@
    "security_type": "Common Stock",
    "share_class": "COMMON"
   },
+  "BBG000H89QJ6": {
+   "cusips": [
+    "88732J108",
+    "88732J207"
+   ],
+   "eras": {
+    "TWC@2008-01-16": [
+     [
+      "TWC",
+      "2008-01-16",
+      "TIME WARNER CABLE INC",
+      "",
+      ""
+     ],
+     [
+      "TWC",
+      "2008-05-31",
+      "TIME WARNER CABLE INC",
+      "",
+      ""
+     ],
+     [
+      "TWC",
+      "2008-07-25",
+      "TIME WARNER CABLE INC",
+      "",
+      ""
+     ],
+     [
+      "TWC",
+      "2008-11-18",
+      "TIME WARNER CABLE INC",
+      "",
+      ""
+     ],
+     [
+      "TWC",
+      "2009-01-23",
+      "TIME WARNER CABLE INC",
+      "",
+      ""
+     ]
+    ],
+    "TWC@2009-03-20": [
+     [
+      "TWC",
+      "2009-03-20",
+      "TIME WARNER CABLE INC",
+      "",
+      ""
+     ],
+     [
+      "TWC",
+      "2009-06-08",
+      "TIME WARNER CABLE INC",
+      "",
+      ""
+     ],
+     [
+      "TWC",
+      "2014-06-30",
+      "TIME WARNER CABLE INC",
+      "",
+      ""
+     ],
+     [
+      "TWC",
+      "2014-12-31",
+      "TIME WARNER CABLE INC",
+      "",
+      ""
+     ],
+     [
+      "TWC",
+      "2015-06-30",
+      "TIME WARNER CABLE INC",
+      "",
+      ""
+     ],
+     [
+      "TWC",
+      "2015-12-31",
+      "TIME WARNER CABLE INC",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "issuer_cik": "1377013",
+   "name": "TIME WARNER CABLE INC",
+   "observed": "true",
+   "sec_id": "BBG000H89QJ6",
+   "security_type": "Common Stock",
+   "share_class": "COMMON"
+  },
   "BBG000JXRXK2": {
    "cusips": [
     "845905108"
@@ -6732,6 +7545,85 @@
    "name": "SOVEREIGN BANCORP INC",
    "observed": "true",
    "sec_id": "BBG000JXRXK2",
+   "security_type": "Common Stock",
+   "share_class": "COMMON"
+  },
+  "BBG000K1T0M8": {
+   "cusips": [
+    "535919401"
+   ],
+   "eras": {
+    "LGFA@2016-12-30": [
+     [
+      "LGFA",
+      "2016-12-30",
+      "LIONS GATE ENTERTAINMENT VOTING CO",
+      "",
+      ""
+     ],
+     [
+      "LGFA",
+      "2017-06-30",
+      "LIONS GATE ENTERTAINMENT VOTING CO",
+      "",
+      ""
+     ],
+     [
+      "LGFA",
+      "2017-12-31",
+      "LIONS GATE ENTERTAINMENT VOTING CO",
+      "",
+      ""
+     ],
+     [
+      "LGFA",
+      "2018-06-30",
+      "LIONS GATE ENTERTAINMENT VOTING CO",
+      "",
+      ""
+     ],
+     [
+      "LGFA",
+      "2018-12-31",
+      "LIONS GATE ENTERTAINMENT VOTING CO",
+      "",
+      ""
+     ],
+     [
+      "LGFA",
+      "2019-06-30",
+      "LIONS GATE ENTERTAINMENT VOTING CO",
+      "",
+      ""
+     ],
+     [
+      "LGFA",
+      "2019-12-31",
+      "LIONS GATE ENTERTAINMENT VOTING CO",
+      "",
+      ""
+     ],
+     [
+      "LGFA",
+      "2020-06-30",
+      "LIONS GATE ENTERTAINMENT VOTING CO",
+      "",
+      ""
+     ],
+     [
+      "LGFA",
+      "2020-12-31",
+      "LIONS GATE ENTERTAINMENT VOTING CO",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "issuer_cik": "929351",
+   "name": "LIONS GATE ENTERTAINMENT VOTING CO",
+   "observed": "true",
+   "sec_id": "BBG000K1T0M8",
    "security_type": "Common Stock",
    "share_class": "COMMON"
   },
@@ -7186,6 +8078,71 @@
    "security_type": "Common Stock",
    "share_class": "COMMON"
   },
+  "BBG000PCNTM2": {
+   "cusips": [
+    "85571Q102"
+   ],
+   "eras": {
+    "STRZA@2013-06-28": [
+     [
+      "STRZA",
+      "2013-06-28",
+      "STARZ",
+      "",
+      ""
+     ],
+     [
+      "STRZA",
+      "2013-12-31",
+      "STARZ",
+      "",
+      ""
+     ],
+     [
+      "STRZA",
+      "2014-06-30",
+      "STARZ",
+      "",
+      ""
+     ],
+     [
+      "STRZA",
+      "2014-12-31",
+      "STARZ",
+      "",
+      ""
+     ],
+     [
+      "STRZA",
+      "2015-06-30",
+      "STARZ",
+      "",
+      ""
+     ],
+     [
+      "STRZA",
+      "2015-12-31",
+      "STARZ",
+      "",
+      ""
+     ],
+     [
+      "STRZA",
+      "2016-06-30",
+      "STARZ",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "issuer_cik": "1507934",
+   "name": "STARZ",
+   "observed": "true",
+   "sec_id": "BBG000PCNTM2",
+   "security_type": "Common Stock",
+   "share_class": "COMMON"
+  },
   "BBG000PTXBV3": {
    "cusips": [
     "41902R103"
@@ -7451,6 +8408,78 @@
    "security_type": "Common Stock",
    "share_class": "COMMON"
   },
+  "BBG000PYZSR8": {
+   "cusips": [
+    "16117M305"
+   ],
+   "eras": {
+    "CHTR@2012-06-29": [
+     [
+      "CHTR",
+      "2012-06-29",
+      "CHARTER COMMUNICATIONS INC CLASS A",
+      "",
+      ""
+     ],
+     [
+      "CHTR",
+      "2012-12-31",
+      "CHARTER COMMUNICATIONS INC CLASS A",
+      "",
+      ""
+     ],
+     [
+      "CHTR",
+      "2013-06-28",
+      "CHARTER COMMUNICATIONS INC CLASS A",
+      "",
+      ""
+     ],
+     [
+      "CHTR",
+      "2013-12-31",
+      "CHARTER COMMUNICATIONS INC CLASS A",
+      "",
+      ""
+     ],
+     [
+      "CHTR",
+      "2014-06-30",
+      "CHARTER COMMUNICATIONS INC CLASS A",
+      "",
+      ""
+     ],
+     [
+      "CHTR",
+      "2014-12-31",
+      "CHARTER COMMUNICATIONS INC CLASS A",
+      "",
+      ""
+     ],
+     [
+      "CHTR",
+      "2015-06-30",
+      "CHARTER COMMUNICATIONS INC CLASS A",
+      "",
+      ""
+     ],
+     [
+      "CHTR",
+      "2015-12-31",
+      "CHARTER COMMUNICATIONS INC CLASS A",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "issuer_cik": "1091667",
+   "name": "CHARTER COMMUNICATIONS INC CLASS A",
+   "observed": "true",
+   "sec_id": "BBG000PYZSR8",
+   "security_type": "Common Stock",
+   "share_class": "CLASS A"
+  },
   "BBG000R23VW8": {
    "cusips": [
     "45772F107"
@@ -7480,6 +8509,169 @@
    "sec_id": "BBG000R23VW8",
    "security_type": "Common Stock",
    "share_class": "COMMON"
+  },
+  "BBG000VPGNR2": {
+   "cusips": [
+    "16119P108"
+   ],
+   "eras": {
+    "CHTR@2016-06-30": [
+     [
+      "CHTR",
+      "2016-06-30",
+      "CHARTER COMMUNICATIONS INC CLASS A",
+      "",
+      ""
+     ],
+     [
+      "CHTR",
+      "2016-12-30",
+      "CHARTER COMMUNICATIONS INC CLASS A",
+      "",
+      ""
+     ],
+     [
+      "CHTR",
+      "2017-06-30",
+      "CHARTER COMMUNICATIONS INC CLASS A",
+      "",
+      ""
+     ],
+     [
+      "CHTR",
+      "2017-12-31",
+      "CHARTER COMMUNICATIONS INC CLASS A",
+      "",
+      ""
+     ],
+     [
+      "CHTR",
+      "2018-06-30",
+      "CHARTER COMMUNICATIONS INC CLASS A",
+      "",
+      ""
+     ],
+     [
+      "CHTR",
+      "2018-12-31",
+      "CHARTER COMMUNICATIONS INC CLASS A",
+      "",
+      ""
+     ],
+     [
+      "CHTR",
+      "2019-06-30",
+      "CHARTER COMMUNICATIONS INC CLASS A",
+      "",
+      ""
+     ],
+     [
+      "CHTR",
+      "2019-12-31",
+      "CHARTER COMMUNICATIONS INC CLASS A",
+      "",
+      ""
+     ],
+     [
+      "CHTR",
+      "2020-06-30",
+      "CHARTER COMMUNICATIONS INC CLASS A",
+      "",
+      ""
+     ],
+     [
+      "CHTR",
+      "2020-12-31",
+      "CHARTER COMMUNICATIONS INC CLASS A",
+      "",
+      ""
+     ],
+     [
+      "CHTR",
+      "2021-06-30",
+      "CHARTER COMMUNICATIONS INC CLASS A",
+      "",
+      ""
+     ],
+     [
+      "CHTR",
+      "2021-12-31",
+      "CHARTER COMMUNICATIONS INC CLASS A",
+      "",
+      ""
+     ],
+     [
+      "CHTR",
+      "2022-06-30",
+      "CHARTER COMMUNICATIONS INC CLASS A",
+      "",
+      ""
+     ],
+     [
+      "CHTR",
+      "2022-12-31",
+      "CHARTER COMMUNICATIONS INC CLASS A",
+      "",
+      ""
+     ],
+     [
+      "CHTR",
+      "2023-06-30",
+      "CHARTER COMMUNICATIONS INC CLASS A",
+      "",
+      ""
+     ],
+     [
+      "CHTR",
+      "2023-12-31",
+      "CHARTER COMMUNICATIONS INC CLASS A",
+      "",
+      ""
+     ],
+     [
+      "CHTR",
+      "2024-06-30",
+      "CHARTER COMMUNICATIONS INC CLASS A",
+      "",
+      ""
+     ],
+     [
+      "CHTR",
+      "2024-12-31",
+      "CHARTER COMMUNICATIONS INC CLASS A",
+      "",
+      ""
+     ],
+     [
+      "CHTR",
+      "2025-06-30",
+      "CHARTER COMMUNICATIONS INC CLASS A",
+      "",
+      ""
+     ],
+     [
+      "CHTR",
+      "2025-12-31",
+      "CHARTER COMMUNICATIONS INC CLASS A",
+      "",
+      ""
+     ],
+     [
+      "CHTR",
+      "2026-06-30",
+      "CHARTER COMMUNICATIONS INC CLASS A",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "issuer_cik": "1091667",
+   "name": "CHARTER COMMUNICATIONS INC CLASS A",
+   "observed": "true",
+   "sec_id": "BBG000VPGNR2",
+   "security_type": "Common Stock",
+   "share_class": "CLASS A"
   },
   "BBG0057K5Y79": {
    "cusips": [
@@ -8131,6 +9323,85 @@
    "sec_id": "BBG0077VS2C0",
    "security_type": "Common Stock",
    "share_class": "COMMON"
+  },
+  "BBG00FFJY867": {
+   "cusips": [
+    "535919500"
+   ],
+   "eras": {
+    "LGFB@2016-12-30": [
+     [
+      "LGFB",
+      "2016-12-30",
+      "LIONS GATE ENTERTAINMENT NON VOTIN",
+      "",
+      ""
+     ],
+     [
+      "LGFB",
+      "2017-06-30",
+      "LIONS GATE ENTERTAINMENT NON VOTIN",
+      "",
+      ""
+     ],
+     [
+      "LGFB",
+      "2017-12-31",
+      "LIONS GATE ENTERTAINMENT NON VOTIN",
+      "",
+      ""
+     ],
+     [
+      "LGFB",
+      "2018-06-30",
+      "LIONS GATE ENTERTAINMENT NON VOTIN",
+      "",
+      ""
+     ],
+     [
+      "LGFB",
+      "2018-12-31",
+      "LIONS GATE ENTERTAINMENT NON VOTIN",
+      "",
+      ""
+     ],
+     [
+      "LGFB",
+      "2019-06-30",
+      "LIONS GATE ENTERTAINMENT NON VOTIN",
+      "",
+      ""
+     ],
+     [
+      "LGFB",
+      "2019-12-31",
+      "LIONS GATE ENTERTAINMENT NON VOTIN",
+      "",
+      ""
+     ],
+     [
+      "LGFB",
+      "2020-06-30",
+      "LIONS GATE ENTERTAINMENT NON VOTIN",
+      "",
+      ""
+     ],
+     [
+      "LGFB",
+      "2020-12-31",
+      "LIONS GATE ENTERTAINMENT NON VOTIN",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "issuer_cik": "929351",
+   "name": "LIONS GATE ENTERTAINMENT NON VOTIN",
+   "observed": "true",
+   "sec_id": "BBG00FFJY867",
+   "security_type": "Common Stock",
+   "share_class": "CLASS B"
   },
   "BBG00GSNPM07": {
    "cusips": [
@@ -8974,6 +10245,64 @@
    "name": "ACTAVIS INC.",
    "observed": "true",
    "sec_id": "CIK884629-COMMON",
+   "security_type": "",
+   "share_class": "COMMON"
+  },
+  "CIK929351-COMMON": {
+   "cusips": [
+    "535919203"
+   ],
+   "eras": {
+    "LGF@2013-12-31": [
+     [
+      "LGF",
+      "2013-12-31",
+      "LIONS GATE ENTERTAINMENT CORP",
+      "",
+      ""
+     ],
+     [
+      "LGF",
+      "2014-06-30",
+      "LIONS GATE ENTERTAINMENT CORP",
+      "",
+      ""
+     ],
+     [
+      "LGF",
+      "2014-12-31",
+      "LIONS GATE ENTERTAINMENT CORP",
+      "",
+      ""
+     ],
+     [
+      "LGF",
+      "2015-06-30",
+      "LIONS GATE ENTERTAINMENT CORP",
+      "",
+      ""
+     ],
+     [
+      "LGF",
+      "2015-12-31",
+      "LIONS GATE ENTERTAINMENT CORP",
+      "",
+      ""
+     ],
+     [
+      "LGF",
+      "2016-06-30",
+      "LIONS GATE ENTERTAINMENT CORP",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "placeholder",
+   "issuer_cik": "929351",
+   "name": "LIONS GATE ENTERTAINMENT CORP",
+   "observed": "true",
+   "sec_id": "CIK929351-COMMON",
    "security_type": "",
    "share_class": "COMMON"
   }

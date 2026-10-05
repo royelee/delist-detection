@@ -30,7 +30,7 @@ EXPECTED = {
     "BBG000C3HNW5": ("BBG000F61RJ8", "ACM", "passed", "ticker"),      # URS
     "BBG000PTXBV3": ("BBG000BJFJ98", "NLY", "passed", "ticker"),      # HTS
     "CIK230463-COMMON": ("BBG000NDZ417", "PXP", "passed", "ticker"),  # PPP, before the run's fails window
-    "BBG000FJJW82": ("BBG000CKJ0P3", "IVGN", "passed", "ticker"),     # ABI: still IVGN on the price date
+    "BBG000FJJW82": ("BBG000CKJ0P3", "LIFE", "passed", "ticker"),     # ABI: the row the price is read from is LIFE's
     "BBG000BTN971": ("", "ETP", "passed", "ticker"),                  # SUN: no line of ETP's issuer in the run
     # the price ticker is the line's symbol on the price date
     "BBG000BLPBL5": ("BBG000BG8M31", "EQR", "passed", "ticker"),      # AVB: Vivmark only from 2026-08-19
@@ -44,6 +44,11 @@ EXPECTED = {
     "BBG000R23VW8": ("BBG00ZXBJ153", "MRVL", "passed", "ticker"),     # IPHI: new Marvell, not old Marvell's holder
     "BBG000JXRXK2": ("", "SAN", "failed", ""),                        # SOV: SAN was Santander Chile's in 2009
     "BBG000BJ27C4": ("BBG000BHGDH5", "DUK", "passed", "ticker"),      # PGN
+    # the ticker's rows are another line of the same issuer: stage 8a's line stands (the review's TWC, VIA, STRZA)
+    "BBG000H89QJ6": ("BBG000VPGNR2", "CHTR", "passed", "line"),       # TWC: New Charter, not old Charter's rows
+    "BBG000DHM3H8": ("BBG000BWDFD4", "VIACA", "passed", "line"),      # VIA: the quote's Class A, priced on class A
+    "BBG000DHSPT0": ("BBG000C496P7", "VIAC", "passed", "ticker"),     # VIA-B: the target's own class B
+    "BBG000PCNTM2": ("BBG00FFJY867", "LGFB", "passed", "line"),       # STRZA: Lions Gate's class B on a new CUSIP
 }
 
 
@@ -84,3 +89,15 @@ def test_a_line_priced_late_flags_the_acquirer_close_lagged():
     got = outcome("BBG000BLPBL5")
     assert "acquirer_close_lagged" in got.flags                    # VMRK's first row is 2026-08-19 (unchanged)
     assert "acquirer_close_lagged" not in outcome("BBG000BDXVW8").flags
+
+
+@pytest.mark.parametrize("sec_id", sorted(EXPECTED))
+def test_an_answered_received_close_changes_no_acquirer_and_no_request(sec_id):
+    """`--price-answers`: a second run with the received_close answered (at the run's own price, or any price) changes
+    values only. The published acquirer and the request's lookup_ticker are those of the first run, so the answer
+    still matches its request (CAL, GLIBA) and stage 10g does not refuse it."""
+    first = outcome(sec_id)
+    for price in (first.acquirer_price or 50.0, 50.0):
+        second = outcome(sec_id, answer=(first.price_ticker, price))
+        assert (second.price_sec_id, second.price_ticker) == (first.price_sec_id, first.price_ticker), \
+            DATA["cases"][sec_id]["note"]

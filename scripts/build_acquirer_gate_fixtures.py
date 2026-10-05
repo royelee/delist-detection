@@ -97,6 +97,10 @@ CASES = {
     "BBG000R23VW8": "IPHI 2021: new Marvell from the fails rows, not old Marvell's holder (guard)",
     "BBG000JXRXK2": "SOV 2009: SAN was Santander Chile's ticker in 2009; no line, the gate still fails (guard)",
     "BBG000BJ27C4": "PGN 2012: DUK passes and its acquirer stands (guard)",
+    "BBG000H89QJ6": "TWC 2016: CHTR's rows are old Charter's; stage 8a's New Charter (closing CUSIP) stands",
+    "BBG000DHM3H8": "VIA 2019: the quote names ViacomCBS Class A; CBS's Class B is another line of the issuer",
+    "BBG000DHSPT0": "VIA-B 2019: the same quote, the target's own class B: ViacomCBS Class B",
+    "BBG000PCNTM2": "STRZA 2016: Lions Gate's class B non-voting (LGFB) on a new CUSIP, not the holder's placeholder",
 }
 
 

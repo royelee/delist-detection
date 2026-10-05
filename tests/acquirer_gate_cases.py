@@ -140,7 +140,10 @@ class Outcome(NamedTuple):
     flags: tuple[str, ...]
 
 
-def payouts(sec_id: str, *, ftd_lo: date = date(2007, 12, 17)) -> tuple[pipeline._Payouts, Delisting, FixtureResolver]:
+def payouts(sec_id: str, *, ftd_lo: date = date(2007, 12, 17), answer: tuple[str, float] | None = None
+            ) -> tuple[pipeline._Payouts, Delisting, FixtureResolver]:
+    """The run's stage 8 over the case; `answer` is the caller's received_close answer (the request's lookup_ticker
+    and the price), as `--price-answers` applies it."""
     securities, cusips, rows = world()
     resolver = FixtureResolver()
     clients = pipeline.Clients(edgar=FixtureEdgar(), resolver=resolver, classifier=None, figi=FixtureFigi(),
@@ -152,13 +155,15 @@ def payouts(sec_id: str, *, ftd_lo: date = date(2007, 12, 17)) -> tuple[pipeline
     e = delisting(sec_id)
     close = DATA["cases"][sec_id]["last_trade_close"]
     closes = {} if close is None else {e.key: close}
-    got = pipeline._merger_payouts(ctx, [e], securities, cusips, ftd, closes, pipeline.Overrides(), 0.15,
-                                   sightings, ftd_lo)
+    overrides = pipeline.Overrides()
+    if answer is not None:
+        overrides.acquirer_prices[e.key] = answer
+    got = pipeline._merger_payouts(ctx, [e], securities, cusips, ftd, closes, overrides, 0.15, sightings, ftd_lo)
     return got, e, resolver
 
 
-def outcome(sec_id: str) -> Outcome:
-    got, e, _ = payouts(sec_id)
+def outcome(sec_id: str, answer: tuple[str, float] | None = None) -> Outcome:
+    got, e, _ = payouts(sec_id, answer=answer)
     key = DelistingKey(e.sec_id, e.delist_date)
     terms = got.gated.merged_terms.get(key) or {}
     t = DATA["cases"][sec_id]["terms"]

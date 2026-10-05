@@ -327,3 +327,13 @@ def test_an_election_tries_the_lines_price_too():
     g = _lined(_terms("election", 26.04, 0.3306, "ACT"), 97.46, None, ("ACT", 223.05))
     assert (g.sources[K], g.priced_by[K], g.merged_terms[K]["acquirer_price"]) == (
         "llm_election_package", "line", 223.05)
+
+
+def test_a_line_first_leg_is_priced_by_its_line_even_when_the_tickers_price_reconciles():
+    """TWC 2016, VIA 2019: the terms' ticker's close is another line's (old Charter's, CBS class B's) and also fits;
+    the acquirer's own line is priced first and settles the gate."""
+    terms = _terms("stock", None, 0.5, "XYZ")
+    for first, how, price in ((set(), "ticker", 20.0), ({K}, "line", 21.0)):
+        g = gate_payouts([K], {}, {}, {}, {K: terms}, {"ABC": 10.5}, {}, lambda ticker, key: 20.0, DEFAULT_TOL,
+                         line_price=lambda key: ("XYZA", 21.0), line_first=first)
+        assert (g.priced_by[K], g.merged_terms[K]["acquirer_price"]) == (how, price)

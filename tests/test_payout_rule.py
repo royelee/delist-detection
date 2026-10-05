@@ -90,6 +90,10 @@ def test_a_merger_terms_override_wins_and_carries_no_gate():
     f = value_fields(r, LTD, inputs)
     assert (f["cash_per_share"], f["stock_ratio"], f["price_ticker"]) == (3.0, 0.5, "QSR")
     assert (f["terms_source"], f["terms_gate"]) == ("--merger-terms", "")
+    # the caller's acquirer ticker is published as given, never replaced by the run's line symbol
+    f = value_fields(r, LTD, MergerInputs(override=inputs.override, llm=inputs.llm, acquirer_sec_id="BBG0UAL",
+                                          price_ticker="UAL"))
+    assert (f["price_ticker"], f["price_sec_id"]) == ("QSR", "BBG0UAL")
 
 
 def test_row_terms_with_no_last_close_have_no_gate_verdict():

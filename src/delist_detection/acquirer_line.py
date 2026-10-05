@@ -67,12 +67,20 @@ _CONSIDERATION = re.compile(r"\b(?:receive|into)\b(.*?)(?:\bfor each\b|\bper\b|$
 _CLASS = re.compile(r"\b(?:Series|Class)\s+([A-Z])\b")
 
 
-def named_class(quote: str | None) -> str | None:
+def named_class(quote: str | None, own_class: str | None = None) -> str | None:
     """The class letter the terms' quote names for the shares the holders receive: the first "Series X" or
     "Class X" after "receive" or "into" and before "for each" or "per" (GLIBA: "0.580 of a share of Liberty
-    Broadband Series C common stock"); None when the consideration names no class."""
+    Broadband Series C common stock"); None when the consideration names no class. The quote must be about the
+    target's own class: when the shares converted ("each share of Class A common stock of Viacom ... into 0.59625
+    shares of ViacomCBS Class A") name a class and the target's own (`own_class`, its class letter) is another,
+    the quote is another class's and names none (Viacom class B shares the class A read, VIA-B 2019)."""
     m = _CONSIDERATION.search(quote or "")
-    k = _CLASS.search(m.group(1)) if m else None
+    if m is None:
+        return None
+    subject = _CLASS.search((quote or "")[:m.start()])
+    if subject is not None and own_class and subject.group(1) != own_class:
+        return None
+    k = _CLASS.search(m.group(1))
     return k.group(1) if k else None
 
 
@@ -137,19 +145,27 @@ class LineIndex:
         return any(is_trading_symbol(r.symbol) for c in self.cusips.get(sid, []) for r in self._rows(c, day, hi))
 
     def symbol_on(self, sid: str, day: date, *, last: date | None = None) -> str | None:
-        """The line's symbol on `day`: that of its CUSIPs' row dated `day` (the CUSIP that began at the closing
-        first, when two trade that day: RTX over UTC's old CUSIP), else of its first row in the CLOSING_DAYS trading
-        days after (ICE Group's first row on 2013-11-14); None when no row names one."""
+        """The line's symbol on the price date `day`, from the row that carries that day's close. A fails row dated D
+        carries D-1's close, and a CUSIP that began at the closing moves its positions on its own day, often the
+        day after the price date (JCI 2016: the old CUSIP under TYC on the price date, JCI from the next day), so
+        for a line with a closing CUSIP (needs `last`) it is the symbol of the row `close_after` prices: its first
+        row past the placeholders from the next trading day on (ABI's LIFE; RTX, UAL, ICE Group). Any other line,
+        or one with no such row: the symbol of its CUSIPs' row dated `day`, else of its first row in the
+        CLOSING_DAYS trading days after (a same-CUSIP rename a day after the price date, AVB's VMRK, is not
+        read); None when no row names one."""
         closing = self.closing_cusip(sid, last, day) if last else None
+        if closing:
+            row = self._price_row(closing, day)
+            if row is not None:
+                return row.symbol
         hi = add_trading_days(day, CLOSING_DAYS)
         rows = sorted((r for c in self.cusips.get(sid, []) for r in self._rows(c, day, hi) if is_trading_symbol(r.symbol)),
                       key=lambda r: (r.date, r.cusip != closing, r.cusip))
         return rows[0].symbol if rows else None
 
-    def close_after(self, cusip: str, day: date) -> tuple[float, str, bool] | None:
-        """The close of `day` from `cusip`'s fails rows: the first row past the placeholders dated from the next
-        trading day to PRICE_LAG trading days later (lagged when it is not the next trading day's): `(price,
-        row_date, lagged)`."""
+    def _price_row(self, cusip: str, day: date) -> FtdRow | None:
+        """The row `close_after` reads `day`'s close from: the first past the placeholders dated from the next
+        trading day to PRICE_LAG trading days later."""
         first = next_trading_day(day)
         rows = self._rows(cusip, first, add_trading_days(first, PRICE_LAG + 3))
         last = add_trading_days(first, PRICE_LAG).isoformat()
@@ -157,8 +173,15 @@ class LineIndex:
             if r.date > last:
                 break
             if not is_placeholder_row(rows, i):
-                return r.price, r.date, r.date != first.isoformat()
+                return r
         return None
+
+    def close_after(self, cusip: str, day: date) -> tuple[float, str, bool] | None:
+        """The close of `day` from `cusip`'s fails rows: the first row past the placeholders dated from the next
+        trading day to PRICE_LAG trading days later (lagged when it is not the next trading day's): `(price,
+        row_date, lagged)`."""
+        r = self._price_row(cusip, day)
+        return None if r is None else (r.price, r.date, r.date != next_trading_day(day).isoformat())
 
     def cusip_on(self, sid: str, day: date) -> str | None:
         """The CUSIP of the line's first row under a trading symbol from `day` on, within CLOSING_DAYS trading
