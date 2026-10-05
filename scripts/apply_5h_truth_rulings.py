@@ -65,7 +65,8 @@ def main() -> int:
         if r["case_id"] not in rulings:
             continue
         cells, why = rulings[r["case_id"]]
-        assert r["fixed_by"] == "5h" or ("fixed_by", r["fixed_by"]) in cells, r["case_id"]   # or already ruled
+        if r["fixed_by"] != "5h" and ("fixed_by", r["fixed_by"]) not in cells:
+            continue                # a later ruling moved the row on (wave 1 relabelled OKE to residual): leave it
         changed = False
         for f, v in cells:
             if r[f] != v:

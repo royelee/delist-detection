@@ -686,3 +686,109 @@ BBG00GBV88T6_2016-05-14,sec_id,BBG00GBV88T6,BBG000FW00S1,"wave 1 integration rul
 BBG000BRWGG9_2019-04-22,last_trade_date,,2023-10-13,"wave 1 review ruling 2026-10-04 (5d review): MIDAS 2023 Q4 shows RAD's last day 2023-10-13; the fails row dated 10-17 repeats the 10-13 close $0.65 (no new close on 10-16); the NYSE notice 0001143313-23-000135 'On October 16, 2023 ... should be suspended' reads as 10-13 under R8; RADCQ from 10-18; the report's 'fails rows only' misread the repeated close",docs/superpowers/plans/2026-10-03-diagnosis-truth-decisions.md
 BBG000BRWGG9_2019-04-22,price_date,,2023-10-16,"wave 1 review ruling 2026-10-04 (5d review): MIDAS 2023 Q4 shows RAD's last day 2023-10-13; the fails row dated 10-17 repeats the 10-13 close $0.65 (no new close on 10-16); the NYSE notice 0001143313-23-000135 'On October 16, 2023 ... should be suspended' reads as 10-13 under R8; RADCQ from 10-18; the report's 'fails rows only' misread the repeated close",docs/superpowers/plans/2026-10-03-diagnosis-truth-decisions.md
 BBG000BRWGG9_2019-04-22,internal_last_trade_date,2023-10-16,2023-10-13,"wave 1 review ruling 2026-10-04 (5d review): MIDAS 2023 Q4 shows RAD's last day 2023-10-13; the fails row dated 10-17 repeats the 10-13 close $0.65 (no new close on 10-16); the NYSE notice 0001143313-23-000135 'On October 16, 2023 ... should be suspended' reads as 10-13 under R8; RADCQ from 10-18; the report's 'fails rows only' misread the repeated close",docs/superpowers/plans/2026-10-03-diagnosis-truth-decisions.md
+BBG000BG14P4_2025-10-09,stock_ratio,0.008352,0.00835187,"sub-plan 5g ruling 2026-10-04: the exact quotient 1,306,896 / 156,479,390 (plan 8-K 0001193125-25-224251) at six significant figures; the report rounded it to four",docs/superpowers/plans/research/2026-10-04-5g-distress.md
+BBG0057K5Y79_5b-r1,drop_reason,guidelines,price,"sub-plan 5g ruling 2026-10-04: the NYSE notice and the 8-K 3.01 cite an abnormally low price only (802.01D), as for WFT and KWK; the 5b regression diagnosis did not weigh price against guidelines",docs/superpowers/plans/research/2026-10-04-5g-distress.md
+CIK1141399-COMMON_2008-09-20,sec_id,CIK1141399-COMMON,CIK1409012-COMMON,"5h ruling 2026-10-04 (identity follows the issuer and FIGI, R2): the observed security is the new Abraxis BioScience's (CIK 1409012), as the report finds; stage 2b's name_in_force check gives the era that issuer",docs/superpowers/plans/research/2026-10-04-5h-identity.md
+CIK73887-COMMON_2013-06-28,sec_id,CIK73887-COMMON,BBG001YH8PR9,"5h ruling 2026-10-04 (identity follows the issuer and FIGI, R2): the observation belongs to Era Group (CIK 1525221), as the report finds; stage 2b's ticker_rows check gives the era that issuer (the fails rows under ERA say ERA GROUP INC)",docs/superpowers/plans/research/2026-10-04-5h-identity.md
+BBG00Y04KP80_5a-r2,sec_id,BBG00Y04KP80,BBG0060B3M63,"5h ruling 2026-10-04 (identity follows the issuer and FIGI, R2): controller ruling 2026-10-04 (5a acceptance): the 2014-2020 line is BBG0060B3M63 (the 2016 split's CUSIP 13057Q206; BBG00Y04KP80 is the post-2020 line). On it the 2016 event is no ending and the line ends later (the 2020 bankruptcy, not scored here)",docs/superpowers/plans/research/2026-10-04-5h-identity.md
+BBG00Y04KP80_5a-r2,shape,no_ending,ending_moved,"5h ruling 2026-10-04 (identity follows the issuer and FIGI, R2): controller ruling 2026-10-04 (5a acceptance): the 2014-2020 line is BBG0060B3M63 (the 2016 split's CUSIP 13057Q206; BBG00Y04KP80 is the post-2020 line). On it the 2016 event is no ending and the line ends later (the 2020 bankruptcy, not scored here)",docs/superpowers/plans/research/2026-10-04-5h-identity.md
+CIK1019849-COMMON_2009-06-08,sec_id,CIK1019849-COMMON,BBG000H6K1B0,contract/id_changes.csv: the placeholder now holds a FIGI,
+CIK1336917-CLASS-C_2016-06-30,sec_id,CIK1336917-CLASS-C,BBG009DTD8H2,contract/id_changes.csv: the placeholder now holds a FIGI,
+CIK1469372-CLASS-A_2015-10-02,sec_id,CIK1469372-CLASS-A,BBG000NS03H7,contract/id_changes.csv: the placeholder now holds a FIGI,
+CIK1507934-CLASS-A_2013-01-16,sec_id,CIK1507934-CLASS-A,BBG000PCNTM2,contract/id_changes.csv: the placeholder now holds a FIGI,
+BBG000D3MB18_wave1-r1,(row),,added (ruling_pending),wave1 loop round 1: regression,output/diagnose_unknown_report/loop/wave1/round-1/reports/BBG000D3MB18_wave1-r1.md
+BBG000MRMY60_wave1-r1,(row),,added (pass),wave1 loop round 1: regression,output/diagnose_unknown_report/loop/wave1/round-1/reports/BBG000MRMY60_wave1-r1.md
+BBG000B9YSK6_2020-11-04,status,known_wrong,pass,the library now matches,
+BBG000BBG3P1_2009-01-25,status,known_wrong,pass,the library now matches,
+BBG000BC2C10_2021-03-14,status,known_wrong,pass,the library now matches,
+BBG000BCTL84_2012-01-08,status,known_wrong,pass,the library now matches,
+BBG000BDXVW8_2010-10-14,status,known_wrong,pass,the library now matches,
+BBG000BG09F5_2021-02-12,status,known_wrong,pass,the library now matches,
+BBG000BG14P4_2025-10-09,status,known_wrong,pass,the library now matches,
+BBG000BGYDX9_2023-06-30,status,known_wrong,pass,the library now matches,
+BBG000BJCFP1_2013-03-11,status,known_wrong,pass,the library now matches,
+BBG000BKQ3V3_2018-07-13,status,known_wrong,pass,the library now matches,
+BBG000BLPBL5_2026-08-27,status,known_wrong,pass,the library now matches,
+BBG000BLY636_2008-08-17,status,known_wrong,pass,the library now matches,
+BBG000BM1RP0_2009-08-14,status,known_wrong,pass,the library now matches,
+BBG000BPQD31_2020-11-26,status,known_wrong,pass,the library now matches,
+BBG000BRF6B5_2009-05-29,status,known_wrong,pass,the library now matches,
+BBG000BRWGG9_2019-04-22,status,known_wrong,pass,the library now matches,
+BBG000BSD7C2_2020-04-13,status,known_wrong,pass,the library now matches,
+BBG000BSGQN5_2015-10-11,status,known_wrong,pass,the library now matches,
+BBG000BWPN99_2008-10-11,status,known_wrong,pass,the library now matches,
+BBG000BYD720_2017-06-09,status,known_wrong,pass,the library now matches,
+BBG000C070N2_2009-06-08,status,known_wrong,pass,the library now matches,
+BBG000C0NY96_2019-08-11,status,known_wrong,pass,the library now matches,
+BBG000C1R174_2009-11-02,status,known_wrong,pass,the library now matches,
+BBG000CNZC55_2020-07-11,status,known_wrong,pass,the library now matches,
+BBG000DQV8M1_2010-12-17,status,known_wrong,pass,the library now matches,
+BBG000DY8ZS4_2019-05-15,status,known_wrong,pass,the library now matches,
+BBG000FVQ434_2016-07-23,status,known_wrong,pass,the library now matches,
+BBG000FXYZF9_2008-11-10,status,known_wrong,pass,the library now matches,
+BBG000K3T8L8_2018-06-16,status,known_wrong,pass,the library now matches,
+BBG000PSSG77_2009-03-31,status,known_wrong,pass,the library now matches,
+BBG001KWG293_2021-06-25,status,known_wrong,pass,the library now matches,
+BBG002BHBHM1_2020-10-23,status,known_wrong,pass,the library now matches,
+BBG005DKMJ67_2025-04-29,status,known_wrong,pass,the library now matches,
+BBG0069FL5L5_2016-09-26,status,known_wrong,pass,the library now matches,
+BBG009NGKQ45_2024-02-13,status,known_wrong,pass,the library now matches,
+BBG00D1WHZD9_2020-11-09,status,known_wrong,pass,the library now matches,
+BBG00GBV88T6_2016-05-14,status,known_wrong,pass,the library now matches,
+BBG00HY28P97_2020-10-18,status,known_wrong,pass,the library now matches,
+BBG00K7K2XZ0_2020-12-31,status,known_wrong,pass,the library now matches,
+BBG00VNLZL95_2020-08-06,status,known_wrong,pass,the library now matches,
+BBG00Z6DX554_2020-07-30,status,known_wrong,pass,the library now matches,
+BBG01HLM8W28_2024-09-19,status,known_wrong,pass,the library now matches,
+BBG01HMFL081_2025-12-25,status,known_wrong,pass,the library now matches,
+BBG01HMFLTN1_2025-12-25,status,known_wrong,pass,the library now matches,
+CIK1018005-COMMON_2012-10-01,status,known_wrong,pass,the library now matches,
+CIK1019849-COMMON_2009-06-08,status,known_wrong,pass,the library now matches,
+CIK1056087-COMMON_2016-05-25,status,known_wrong,pass,the library now matches,
+CIK1308161-CLASS-A_2013-06-28,status,known_wrong,pass,the library now matches,
+CIK1336917-CLASS-C_2016-06-30,status,known_wrong,pass,the library now matches,
+CIK1469372-CLASS-A_2015-10-02,status,known_wrong,pass,the library now matches,
+CIK1498301-COMMON_2020-08-21,status,known_wrong,pass,the library now matches,
+CIK1507934-CLASS-A_2013-01-16,status,known_wrong,pass,the library now matches,
+CIK20520-COMMON_2017-07-10,status,known_wrong,pass,the library now matches,
+CIK38079-COMMON_2015-01-25,status,known_wrong,pass,the library now matches,
+CIK73887-COMMON_2013-06-28,status,known_wrong,pass,the library now matches,
+CIK867773-COMMON_2009-06-08,status,known_wrong,pass,the library now matches,
+CIK886835-COMMON_2020-10-12,status,known_wrong,pass,the library now matches,
+CIK931336-COMMON_2013-08-26,status,known_wrong,pass,the library now matches,
+CIK944868-COMMON_2009-11-29,status,known_wrong,pass,the library now matches,
+BBG00Y04KP80_5a-r2,status,known_wrong,pass,the library now matches,
+BBG000BLG1L7_2025-04-21,status,known_wrong,pass,the library now matches,
+BBG000BMLYZ2_5b-r1,status,known_wrong,pass,the library now matches,
+BBG0057K5Y79_5b-r1,status,known_wrong,pass,the library now matches,
+BBG000CNNMD7_5b-r2,status,known_wrong,pass,the library now matches,
+BBG000BT0CM2_wave1-r2,(row),,added (ruling_pending),wave1 loop round 2: regression,output/diagnose_unknown_report/loop/wave1/round-2/reports/BBG000BT0CM2_wave1-r2.md
+BBG000DY6735_2013-12-31,fixed_by,5h,residual,"wave 1 loop ruling 2026-10-04: 5h removed the false 2013 ending; the 2025 chapter 11 ending needs a CUSIP the security does not hold (its 2012 era is a backfilled ticker), which no remaining sub-plan builds",docs/superpowers/plans/2026-10-03-diagnosis-truth-decisions.md
+BBG000FJJW82_2008-12-06,price_ticker,IVGN,LIFE,"wave 1 loop ruling 2026-10-04: Invitrogen was renamed Life Technologies on 2008-11-21 (8-K 0001193125-08-244797, missed by the report; same FIGI BBG000CKJ0P3), and the fails row carrying the 2008-11-24 close is under LIFE",docs/superpowers/plans/2026-10-03-diagnosis-truth-decisions.md
+BBG0017T9998_2020-07-30,last_trade_date,2020-07-17,2020-07-20,"wave 1 loop ruling 2026-10-04, overriding the 2026-10-03 R8 reading on exchange evidence: MIDAS 2020 Q3 shows CZR volume on 2020-07-20 while Eldorado still traded as ERI that day (ERI's last MIDAS day; new Caesars took CZR on 07-21), so old Caesars traded on the closing date",docs/superpowers/plans/2026-10-03-diagnosis-truth-decisions.md
+BBG0017T9998_2020-07-30,internal_last_trade_date,2020-07-17,2020-07-20,wave 1 loop ruling 2026-10-04: as last_trade_date (MIDAS 2020-07-20),docs/superpowers/plans/2026-10-03-diagnosis-truth-decisions.md
+CIK1141399-COMMON_2008-09-20,fixed_by,5h,residual,"wave 1 loop ruling 2026-10-04: 5h gives the era its issuer (CIK 1409012); the 2010 Celgene ending needs a CUSIP the security does not hold and a Form 25 beyond its reach, which no remaining sub-plan builds",docs/superpowers/plans/2026-10-03-diagnosis-truth-decisions.md
+BBG000D3MB18_wave1-r1,status,ruling_pending,pass,"wave 1 controller ruling 2026-10-04: the loop's diagnosis (inferred, upheld) finds the new price_sec_id BBG01K9HZH92 (LBTYA) right; scored from now on",docs/superpowers/plans/2026-10-03-diagnosis-truth-decisions.md
+BBG000D3MB18_wave1-r1,price_sec_id,*,BBG01K9HZH92,wave 1 controller ruling 2026-10-04: as status,docs/superpowers/plans/2026-10-03-diagnosis-truth-decisions.md
+BBG000BT0CM2_wave1-r2,row,ruling_pending,(removed),"wave 1 controller ruling 2026-10-04: the blank OTC symbol beats the old exchange ticker (settled new_right in the ledger), but a scored blank would say no OTC symbol exists; SIVBQ is likely and has no cited filing, so no truth row",docs/superpowers/plans/2026-10-03-diagnosis-truth-decisions.md
+BBG000BF5RY1_2016-06-10,fixed_by,5e,5f,"wave 1 ruling 2026-10-04: 5e is done; what is left (cash_currency, price_ticker) is 5f's",docs/superpowers/plans/2026-10-03-diagnosis-truth-decisions.md
+BBG000BGFLL5_2013-11-23,fixed_by,5e,5f,wave 1 ruling 2026-10-04: 5e is done; what is left (cash_currency) is 5f's,docs/superpowers/plans/2026-10-03-diagnosis-truth-decisions.md
+BBG000BJ9D07_2016-09-08,fixed_by,5h,5f,"wave 1 ruling 2026-10-04: 5h is done; what is left (continuation, exit_kind, price_date, price_ticker, stock_ratio, value_rule) is 5f's",docs/superpowers/plans/2026-10-03-diagnosis-truth-decisions.md
+BBG000BJVZF7_2014-07-12,fixed_by,5e,5f,wave 1 ruling 2026-10-04: 5e is done; what is left (cash_currency) is 5f's,docs/superpowers/plans/2026-10-03-diagnosis-truth-decisions.md
+BBG000BLBGS2_2025-12-20,fixed_by,5e,5f,"wave 1 ruling 2026-10-04: 5e is done; what is left (cash_currency, last_trade_date, price_date) is 5f's",docs/superpowers/plans/2026-10-03-diagnosis-truth-decisions.md
+BBG000BMDV41_2016-09-16,fixed_by,5e,5f,"wave 1 ruling 2026-10-04: 5e is done; what is left (cash_currency, cash_per_share, value_rule) is 5f's",docs/superpowers/plans/2026-10-03-diagnosis-truth-decisions.md
+BBG000BN53G7_2026-09-06,fixed_by,5e,residual,"wave 1 ruling 2026-10-04: 5e is done; what is left (last_trade_date, price_date) is residual's (no remaining sub-plan builds it)",docs/superpowers/plans/2026-10-03-diagnosis-truth-decisions.md
+BBG000BQHGR6_2026-09-28,fixed_by,5d,residual,wave 1 ruling 2026-10-04: 5d is done; what is left (last_trade_date) is residual's (no remaining sub-plan builds it),docs/superpowers/plans/2026-10-03-diagnosis-truth-decisions.md
+BBG000BSVZM9_2009-11-04,fixed_by,5e,5f,wave 1 ruling 2026-10-04: 5e is done; what is left (cash_currency) is 5f's,docs/superpowers/plans/2026-10-03-diagnosis-truth-decisions.md
+BBG000C3HNW5_2014-10-30,fixed_by,5e,5f,wave 1 ruling 2026-10-04: 5e is done; what is left (cash_currency) is 5f's,docs/superpowers/plans/2026-10-03-diagnosis-truth-decisions.md
+BBG000DBVBY4_2021-03-11,fixed_by,5e,5f,wave 1 ruling 2026-10-04: 5e is done; what is left (cash_currency) is 5f's,docs/superpowers/plans/2026-10-03-diagnosis-truth-decisions.md
+BBG000FJJW82_2008-12-06,fixed_by,5e,5f,"wave 1 ruling 2026-10-04: 5e is done; what is left (cash_currency, last_trade_date, price_date) is 5f's",docs/superpowers/plans/2026-10-03-diagnosis-truth-decisions.md
+BBG000JXRXK2_2009-06-08,fixed_by,5e,residual,wave 1 ruling 2026-10-04: 5e is done; what is left (price_ticker) is residual's (no remaining sub-plan builds it),docs/superpowers/plans/2026-10-03-diagnosis-truth-decisions.md
+BBG000L93Q69_2007-07-22,fixed_by,5e,5f,"wave 1 ruling 2026-10-04: 5e is done; what is left (cash_currency, last_trade_date, price_date) is 5f's",docs/superpowers/plans/2026-10-03-diagnosis-truth-decisions.md
+BBG000PTXBV3_2016-07-22,fixed_by,5e,5f,wave 1 ruling 2026-10-04: 5e is done; what is left (cash_currency) is 5f's,docs/superpowers/plans/2026-10-03-diagnosis-truth-decisions.md
+BBG002B67HB2_2025-08-01,fixed_by,5e,residual,wave 1 ruling 2026-10-04: 5e is done; what is left (price_ticker) is residual's (no remaining sub-plan builds it),docs/superpowers/plans/2026-10-03-diagnosis-truth-decisions.md
+BBG006KY8KV2_2017-10-17,fixed_by,5e,residual,"wave 1 ruling 2026-10-04: 5e is done; what is left (price_sec_id, price_ticker) is residual's (no remaining sub-plan builds it)",docs/superpowers/plans/2026-10-03-diagnosis-truth-decisions.md
+BBG006XVD9G0_2019-11-30,fixed_by,5e,5f,"wave 1 ruling 2026-10-04: 5e is done; what is left (cash_currency, price_ticker) is 5f's",docs/superpowers/plans/2026-10-03-diagnosis-truth-decisions.md
+BBG0077VS2C0_2026-07-11,fixed_by,5e,5f,wave 1 ruling 2026-10-04: 5e is done; what is left (cash_currency) is 5f's,docs/superpowers/plans/2026-10-03-diagnosis-truth-decisions.md
+CIK230463-COMMON_2008-02-07,fixed_by,5e,5f,wave 1 ruling 2026-10-04: 5e is done; what is left (cash_currency) is 5f's,docs/superpowers/plans/2026-10-03-diagnosis-truth-decisions.md
+CIK891103-COMMON_2014-06-30,fixed_by,5h,5f,"wave 1 ruling 2026-10-04: 5h is done; what is left (exit_kind, internal_last_trade_date, last_trade_date, legs, shape, value_rule) is 5f's",docs/superpowers/plans/2026-10-03-diagnosis-truth-decisions.md

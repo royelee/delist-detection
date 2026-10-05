@@ -1,56 +1,40 @@
 {
   "as_of": "2026-09-25",
   "cache_answers": {
-    "archives": 15397,
-    "company_tickers": 12,
-    "full_text_search": 1033,
-    "submissions": 50956,
-    "submissions_page": 15577
+    "archives": 8665,
+    "company_tickers": 9,
+    "full_text_search": 625,
+    "submissions": 34156,
+    "submissions_page": 8886
   },
-  "code_version": "48b2183-dirty",
+  "code_version": "34737db-dirty",
   "degraded_answers": {},
   "handoffs": {
     "conflicts": 6,
     "continuations_by_filing": 47,
     "continuations_by_timing": 26,
     "handoffs": 81,
-    "rows_added": 27,
+    "rows_added": 26,
     "takeovers": 8
   },
-  "latency_ms": {
-    "archives": {
-      "max": 334.5,
-      "n": 130,
-      "p50": 124.9,
-      "p95": 248.8
-    },
-    "full_text_search": {
-      "max": 2180.1,
-      "n": 9,
-      "p50": 1265.3,
-      "p95": 2180.1
-    }
-  },
+  "latency_ms": {},
   "not_covered": {},
   "rejected_queries": {},
   "resolution_degraded": 0,
   "review": {
     "accepted": 0,
-    "check": 555,
+    "check": 535,
     "cleared": 0,
-    "fix": 79,
-    "info_hidden": 582,
+    "fix": 56,
+    "info_hidden": 592,
     "unmatched_decisions": 0
   },
   "schema_version": 2,
-  "sec_requests": {
-    "archives": 130,
-    "full_text_search": 9
-  },
-  "sec_workers": 4,
+  "sec_requests": {},
+  "sec_workers": 1,
   "stages": {
     "R1 continuations": {
-      "edgar_requests": 26,
+      "edgar_requests": 0,
       "sec_data_downloads": 0
     },
     "dead before first sighting": {
@@ -58,7 +42,11 @@
       "sec_data_downloads": 0
     },
     "delisting search": {
-      "edgar_requests": 87,
+      "edgar_requests": 0,
+      "sec_data_downloads": 0
+    },
+    "distress notices": {
+      "edgar_requests": 0,
       "sec_data_downloads": 0
     },
     "handoff notice dates": {
@@ -78,7 +66,7 @@
       "sec_data_downloads": 0
     },
     "line follow": {
-      "edgar_requests": 1,
+      "edgar_requests": 0,
       "sec_data_downloads": 0
     },
     "other issuers in force": {
@@ -86,15 +74,15 @@
       "sec_data_downloads": 0
     },
     "payouts": {
-      "edgar_requests": 2,
+      "edgar_requests": 0,
       "sec_data_downloads": 0
     },
     "successor endings": {
-      "edgar_requests": 3,
+      "edgar_requests": 0,
       "sec_data_downloads": 0
     },
     "successor search": {
-      "edgar_requests": 20,
+      "edgar_requests": 0,
       "sec_data_downloads": 0
     },
     "ticker evidence": {

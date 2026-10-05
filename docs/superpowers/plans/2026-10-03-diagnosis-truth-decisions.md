@@ -149,6 +149,42 @@ rulings I made on their findings:
   - Alternative: the reviewer's span bound.
   - Cost if wrong: a run that spells a class with a suffix (UA-C) still takes base-symbol rows dated before the base
     symbol's own first sighting.
+- **Round 1 of the wave 1 loop: 87 regression keys over 72 securities are settled `new_right` by kind** (ledger
+  report: this file).
+  - The settled kinds, each covered by one of the four reviews' samples:
+    - 31 acquirer FIGIs filled where the base had none (5e);
+    - 30 OTC symbols on bankruptcy endings (5g);
+    - 7 ticker ranges that now end one to five days earlier, at the closing day (5d rule 4: CI, MRVL, AZPN, VNOM and
+      others);
+    - 5 acquirer lines (PLD, VIA, VIA-B, FTO, SNI);
+    - CB's, FTI's and WCN's last trades (5d);
+    - ABBI's and ERA's old placeholders, whose truth rows were renamed (5h).
+  - Left for the loop's diagnosis, with the 10 mismatches:
+    - VMED, whose acquirer is a 2023-or-later FIGI on a 2013 leg;
+    - MHS's acquirer line;
+    - SIVB's blank OTC symbol;
+    - AVGO's, Z's and PNFP's range ends, which disagree with those closings as I know them.
+  - Alternative: one diagnosis and one skeptic per case, about 176 agents.
+  - Cost if wrong: a wrong fill in a settled kind is not in the truth file and would not be caught by a later
+    regression check. Its value is still published, and its flags are unchanged.
+- **The loop's pending rows, settled.**
+  - `truth_right`, so the library still owes these values:
+    - DADE's and IFIN's worked-out last trades (no filing states either day);
+    - MEL's blank price security (its truth is a continuation, 5i);
+    - WW's 2025 and ABBI's 2010 endings.
+  - `library_right`:
+    - ABI's price ticker is LIFE: Invitrogen was renamed Life Technologies on 2008-11-21 (8-K 0001193125-08-244797,
+      missed by the report).
+    - CZR 2020's last trade is 2020-07-20. This **overrides the operator's R8 ruling of 2026-10-03**: MIDAS shows CZR
+      volume on 07-20 while Eldorado still traded as ERI that day, so old Caesars traded on the closing date. The
+      library publishes no day, so the published field is still owed.
+  - `new_right`: VMED's acquirer LBTYA, PNFP's range end 2025-12-31, and SIVB's blank OTC symbol. The blank beats the
+    old exchange ticker; SIVBQ has no cited filing.
+  - WW and ABBI move from fixed_by 5h to residual. Each needs a CUSIP its security does not hold, and no remaining
+    sub-plan finds one.
+- **Rule 4's closing day is never before the fails rows' last trading day** (the trading day before `settled_last`'s
+  row). AVGO 2018 and Z 2015 were given 04-02 and 02-13, against 04-04 and 02-17 (the loop's verified diagnoses).
+  Without the fix their regressions would stay unexplained.
 - **A ticker range carried on to the next ticker ends the day before another security's first day under it**
   (`history.clip_at_takeovers`, 5h fix). It moved MSG, GOOG 2014, GCI 2015 and IAC's IACI range, and removed their
   `ticker_shared` rows.
