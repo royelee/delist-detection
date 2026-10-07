@@ -26,7 +26,7 @@ A deepening moves behaviour behind a smaller interface. It changes nothing the l
 
 | # | Candidate | Defect fixed | Status |
 |---|---|---|---|
-| 1 | Stage 8 as one merger value module, with the price request round trip (review 1, 2) | | |
+| 1 | Stage 8 as one merger value module, with the price request round trip (review 1, 2) | | done |
 | 2 | One issuer record over EDGAR with the failed-read policy (review 4) | the handoff stage's uncaught read | |
 | 3 | One owner for rewriting an ending (review 3) | AZPN's stale flags | |
 | 4 | The last trade date as one module (review 5) | CNB, IMB, SPNV | |
@@ -50,3 +50,71 @@ layout (16) comes last, once steps 8 and 13 have made the pure leaf modules.
 
 - **2026-10-07:** the work goes on its own branch, so PR #7 (the diagnosis-truth roadmap) stays reviewable as it is.
   This branch stacks on it.
+
+### Step 1: stage 8 as one merger value module, with the price round trip
+
+- **Order inside the step: `MergerTerms` first, then the module and the round trip in one commit.** The answer type
+  had to answer for its own package before the module could ask it. The round trip went with the module, because
+  stage 8's answer routing (`_answered_paths`) moved with the stage.
+  - Alternative: the round trip as a commit of its own, before the module.
+  - Cost if wrong: `_answered_paths` would have been rewritten twice. Nothing was lost by the order chosen.
+- **"No ticker" is cleaned once, when a `MergerTerms` is built** (`__post_init__`, `NULL_TICKERS`). Before, three
+  null lists were applied by the gate, stage 8a and the extractor.
+  - Alternative: one shared `clean_ticker` called at every read.
+  - Cost if wrong: an answer built by hand with "NULL" now reads as no ticker. The extractor already cleaned
+    every answer it built, so no production answer changes.
+- **"Holds stock" stays three named predicates, not one.** They are `has_stock` (any security: the gate and the
+  rule), `stock_leg` (a ratio or a dollar value: what asks a received close and what stage 8a looks up) and
+  `stock_ratio` (the gate's merged terms, `_stock_ticker`).
+  - Alternative: one predicate.
+  - Cost if wrong: none to output. Unifying them would change which legs ask a close or take a line (PCYC's
+    dollar-valued leg), which is a behaviour change no step has declared.
+- **The module is `merger_value.py`.** Its interface is `value_mergers(...) -> MergerValues`: one `MergerValue` per
+  merger ending, plus one method per later reader (8b `read_terms` and `drop`, 9b `reconciled`, 10a
+  `table_inputs`, 10c `payout_rows`, 10g `contract_inputs` and `requests`).
+  - Alternative: hand the stages the records and let each one read its fields.
+  - Cost if wrong: the class has eight methods. The rejected design is how the gate, the contract and the requests
+    came to disagree. `table_inputs` still feeds `build_delistings_table`'s maps; step 10 (dlret decides the value
+    rule once) can replace it.
+- **`acquirer_line`, `acquirer_ticker`, `acquirers` and `payout_gate` stay collaborators, not internals.** Each is
+  a rule module with its own interface and real-case tests (`test_payout_gate`, `terms_cases`,
+  `test_acquirer_line`, the Ashland and TVTY unit tests). `merger_value` is now their only stage caller, and it owns
+  the order and the failed-read policy.
+  - Alternative: fold them into `merger_value`.
+  - Cost if wrong: four public interfaces remain, and a second caller could grow. Folding them would have put
+    2,400 lines in one file and pushed their rule tests through the whole stage. `acquirers` still imports
+    `delistings.Delisting`; that is left for the layout step (16).
+- **No lookups adapter seam yet.** The module takes the run's clients as they are. Its two EDGAR memo readers are
+  one private class, `_IssuerReads`, which keeps both failure policies: 8a asks a failed CIK again, 8a' does not.
+  - Alternative: an adapter over the fails index, OpenFIGI and EDGAR, now.
+  - Cost if wrong: with one production adapter the seam would be hypothetical. Step 2 (the issuer record) replaces
+    `_IssuerReads` and pipeline's `_IssuerAge` with the run's issuer reader.
+- **`LineIndex.fresh()` replaces the four `LineIndex(...)` builds.** It shares the sighting ranges and starts a new
+  first-row memo, because the gate extends the fails index between the builds.
+  - Alternative: one shared index.
+  - Cost if wrong: none. A shared index could remember a CUSIP's first row from before the extension and change
+    `closing_cusip`.
+- **A price answer is matched on the request's own key.** The key is the security, its last trade day and the kind,
+  and for a received close also its ticker (`price_requests._input_key`). Before, `_apply_price_answers` gave a last
+  close or an OTC print only to the delisting listed last with that security and day.
+  - Alternative: keep the "listed last" binding inside `PriceAnswers`.
+  - Cost if wrong: in a run with answers, a security with two delistings on one last trade day gives both rows the
+    answered close. HNZ 2013 is the one case: its 25-NSE and 25-NSE/A rows share 2013-06-07. Before, the earlier
+    row kept the fails close. Both rows already shared that fails close, so the answer now reaches both alike. The
+    replay answers no request, so no reference row changes.
+- **A received close is read per leg**, by the ticker its request names. Before, one slot per delisting let a
+  basket's second-leg answer overwrite the main leg's.
+  - Alternative: none worth keeping.
+  - Cost if wrong: none. The gate prices no basket, so the old overwrite never reached a value.
+- **A last close given both ways stops the run inside stage 7** (`PriceAnswers.last_closes`), naming the delistings
+  in run order. It used to stop at stage 6b, in the answers file's order.
+  - Alternative: keep the file's order.
+  - Cost if wrong: only the order of a several-item message changes. The exit (2) and the point it stops at,
+    before stage 7 reads any fails rows, are the same.
+- **Readings kept as they were, and left for later steps.**
+  - R1's `read_terms` reads both legs of an election that states no package, where the contract publishes only its
+    all-cash alternative. Step 7 gives one R1 reading per ending.
+  - An empty `--merger-terms` row (`{}`) counts as given for the gate and stage 8a, and as absent for R1 and the
+    request. Each site keeps its own test.
+  - The first gate pass now never flags and the last pass's lagged closes are flagged once. This is the same as the
+    old `flag=not acquirer_prices`, because a pass with no answer for a merger repeats the first pass for it.
