@@ -108,7 +108,7 @@ delisting's `last_close` request, `price_requests.PriceAnswers`, else the fails 
 one call into `merger_value.value_mergers`, which answers one `MergerValue` per merger ending; the module map has
 its steps), `_r1_continuations` (stage 8b: a merger whose published terms are one share and no cash, whose registrant's filings say the same of its own shares (`exchange_terms.own_exchange`), into a new issuer at most `NEW_ISSUER_DAYS` old or the same issuer (`successors.successor_by_terms`, else the new issuer's 8-K12B), is an exchange transfer to that successor, flagged `r1_continuation`, its payout reads dropped (`rewrites.continuation`, `Rule.R1`, with the run's merger values); the LLM's final terms must agree; the new issuer is named by the R1 statement's target (the name tie, below), its 8-K12B candidate included; a degraded read keeps the merger and flags the row; the run logs `role refusal: N rows (...)`, the delistings whose end-of-era reading refused a merger on the registrant's role; metered as "R1 continuations"),
 `_find_successors` (stage 9, with sub-plan 5c's `_terms_links` before the 8-K12B search: the same issuer's class, a new issuer, or the security's own same-CIK 8-K12B line via OpenFIGI and R2; a name tie for any 8-K12B link; sub-plan 5h: `_own_registration_link` takes a text-named CUSIP with no fails row
-yet when the fails data ends before the day, OKE 2026: the added successor starts on the next trading day, and a Form 25 that already owns a delisting of the run raises no unmatched row in stage 9d; the stage ends by recording its links as rewrites, `_link_successors`), `_handoffs` (stage 9b: first `rewrites.mark_going_on`, the clip check's merger or transfer that does not end its security goes on as itself, here and only here, so the handoffs see it; then the handoffs), `_date_from_notices` (stage 9c: a handoff continuation row's last trade day from its own Form 25's confirmed EX-99.25 notice, when before the successor's first sighting, the handoff rewrite's typed `successor_from`, and no later than the effective date; metered as "handoff notice dates"), `_successor_endings` (stage 9d: the Form 25 search, matches only, for the line and 8-K12B successors the run added; the finder's items about a Form 25 that already owns a delisting are dropped by their typed `ReviewItem.filing`; metered as "successor endings"), `_distress` (stage 9e,
+yet when the fails data ends before the day, OKE 2026: the added successor starts on the next trading day, as every successor the run adds does (`last_trade.first_day_after`), and a Form 25 that already owns a delisting of the run raises no unmatched row in stage 9d; the stage ends by recording its links as rewrites, `_link_successors`), `_handoffs` (stage 9b: first `rewrites.mark_going_on`, the clip check's merger or transfer that does not end its security goes on as itself, here and only here, so the handoffs see it; then the handoffs), `_date_from_notices` (stage 9c: `last_trade.Dating.from_notice`, a handoff continuation row's last trade day from its own Form 25's confirmed EX-99.25 notice, when before the successor's first sighting, the handoff rewrite's typed `successor_from`, and no later than the effective date; the stage keeps the failed-read watch; metered as "handoff notice dates"), `_successor_endings` (stage 9d: the Form 25 search, matches only, for the line and 8-K12B successors the run added; the finder's items about a Form 25 that already owns a delisting are dropped by their typed `ReviewItem.filing`; metered as "successor endings"), `_distress` (stage 9e,
 sub-plan 5g: for each liquidation, compliance-failure or unknown delisting with no successor, a bankruptcy plan's
 stock rule (R6), a price-only removal's code 552, and the OTC symbol of its first off-exchange print, anchored on the
 last trade day stage 5 dated; `distress.DistressTerms` for the contract; metered as "distress notices"; at stage 10a a
@@ -202,7 +202,7 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   halts); a timeout, connection error, 429/5xx after the retry, other status
   or unparseable body is a failure: never cached, counted as
   `degraded:nasdaq_halt_feed`, listed by `failed_days()` on the reading
-  thread, carried on `LastTrade.halt_feed_failed` by the finder, and turned
+  thread, carried on `LastTrade.halt_feed_failed` by the last trade module, and turned
   into `resolution_degraded` on that delisting by the pipeline.
 - `openfigi.py` — `OpenFigiClient`: OpenFIGI `/v3/mapping` and `/v3/filter`,
   cached on disk (`atomic_io.write_atomic`: a run that dies mid-write leaves no
@@ -347,7 +347,8 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   (`successor_search_args`, `successor_query`, `successor_from_8k12b`,
   `successor_search_name`). Sub-plan 5c: `successor_by_terms` (the security an R1 statement names: the same
   issuer's class the target names, or a new issuer's line, at most `NEW_ISSUER_DAYS` (1095) old, first sighted in
-  the window and named by the target) and `successor_anchor` (last trade, Form 25, anchor 8-K, delisting date).
+  the window and named by the target); a successor is looked for around the ending's anchor (`Delisting.anchor`,
+  `last_trade.anchor_day`).
 - `handoffs.py` — ticker handoffs (CONTEXT.md: one security stops under a
   ticker, another of the run starts under it within days): `find_handoffs`
   (candidate pairs, [-10, 120] days), `decide_handoff` (continuation by the
@@ -439,32 +440,71 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   delisting from the withdrawal of a secondary/regional listing while the
   main one continues; `listed_today()` for the completeness check;
   `issuer_exchange()` the exchange EDGAR's submissions JSON lists for a ticker.
-- `last_trade.py` — `eightk_last_trade()` (Item 3.01 text) and
-  `decide_last_trade()`, which picks among the Form 25 notice, the 8-K text,
-  MIDAS and the Nasdaq halt (MIDAS beats a halt beats text; a text/measured
-  disagreement is flagged `last_trade_date_conflict`). The text's `_OPEN`
-  wordings (suspended/halted "before the open", "prior to the market opening",
-  "before market open", "prior to the commencement of trading", "as of the open
-  of business", "at the opening of business", a halt "at the NYSE market open" on D) date the last trade on the
-  trading day before D (source `8k_301`, kind `8k_open`). Sub-plan 5d: the reader reads every 3.01 section
-  (`sections_3_01`: to the next item heading, not a cross-reference; the heading's number read with spaces inside
-  it, `evidence.item_mention`, as sub-plan 5g's `item_sections` reads it: CBL 2020's "ITEM 3 . 01") sentence by
-  sentence (`_read_sentence`, a
-  stop word in the sentence, never a record date): `_CLOSE` ("at/after/following/as of the close/closing of
-  trading/business/market [on <venue>] on D"; the Closing Date and an "after the Effective Time" at 4 p.m. or
-  later resolve from the filing), the last day ("last day ... traded", "which was the last day", "continue to be
-  listed through D"), a bare "suspended (trading ...) on D" (`8k_suspended`, the trading day before D: ruling R8)
-  and "suspended immediately on D" (D, unconfirmed), and, date first, "On D, ... had been/was suspended (from
-  trading)" (`8k_suspended` too: CBL 2020; no modal, completion word, other date or "immediate": BMC 2013, WeWork
-  2023); a weekday may precede any date ("on Friday, December 5, 2008": TMA, IDARQ); a stated close or last day
-  that falls on no session moves to the trading day before (CNDT 2019); a stated timing ranks first (`reading_rank`). Source order:
-  MIDAS, then a halt (but the 8-K's day when it puts the halt at the open of the halt day, `OPEN_KINDS`: WM 2008,
-  ruling R8), the notice's own timing, then an 8-K timing that disagrees with the notice's bare date
-  (`BARE_NOTICE_KINDS`: TMHC 2026), then the notice, then the 8-K. `closing_day(texts, lo, hi)` (rule 4): when nothing states the last
-  trade, the latest completion the 8-Ks state in the window (a defined Closing Date, "On D, ... completed its
-  acquisition", "Merger Sub merged with and into", "the closing of the transactions on D", "the evening of D", an
-  effective time with a clock time; the trading day before when every clock time that day is before 9:30 a.m.):
-  source `closing_day` (`CLOSING_DAY`), never published.
+- `last_trade.py` — architecture step 4: the last trade date as one module. The finder (stage 5 and 9d), the handoff
+  stage (9b), stage 9c, the clip and the contract ask it; no other module decides or edits a last trade.
+  `Dating(edgar, midas=, halts=)` dates an ending: `of_group` (a Form 25 group: the first notice that states a day,
+  an exchange's 25-NSE first; the best 3.01 8-K reading filed in [earliest − 60 d, latest + 15 d]; MIDAS over
+  [earliest − 75 d, latest effective + 10 d] under every ticker the security carried then, `OwnTrading.tickers`:
+  SAVE and its OTC SAVEQ; the halt feed around the text days, else the Form 25 day, PHLY 2008), `of_fallback` (no
+  Form 25: the 3.01 8-Ks up to the last sighting + 5 d, VRM 2024, MIDAS anchored on the dating filing; a merger
+  left undated ends on the closing day its latest 2.01/5.01 8-K near the last sighting states, FCL, SGP 2009, never
+  after the last sighting; else the last sighting, unsourced and unconfirmed) and `from_notice` (stage 9c: a
+  handoff row dated by its last sighting takes its own Form 25 notice's confirmed day, before the successor's first
+  sighting and no later than the effective date). MIDAS and the Nasdaq halt feed are its two adapters
+  (`last_trade_day`; `deletion_halt`, `failed_days`), each a real client or a fixture-backed double; a halt-feed
+  day it could not read rides on `LastTrade.halt_feed_failed`. Rule 3, the ticker's tenure (`ticker_taken`,
+  `OwnTrading.taken`: the trading day before another CUSIP's first priced fails row under the ticker, on or after
+  the security's own last one there; none without an own row; a $0.01 row is no trade): a MIDAS or halt day after a
+  text day, from that day on, is the other security's: MIDAS is read up to the day before, the halt dropped (CCE,
+  JCI 2016, GRUB 2021); without a disagreeing text day nothing is bounded (a successor's first fails rows can lag
+  its first day: Sinclair Inc 2023, new TCF 2019). Rule 4, inside `of_group`: a group left undated, not continued,
+  whose winner is an exchange's Form 25 (not the issuer's 25 or 25/A, not under (b): it follows the suspension by
+  weeks, TMA) takes the closing day (`closing_day_read`: the 8-Ks in [F − 10, F + 10] for [F − 10, F]), else F,
+  source `closing_day`, flagged unconfirmed (`LastTrade.worked_out`: the classification keeps F as its anchor); the
+  closing day never comes before the last day its own fails rows show it trading (`OwnTrading.trades_until`,
+  `last_row_trade_day`: the trading day before `ftd.settled_last`'s row of the CUSIP it held last; AVGO 2018, Z
+  2015) unless the text dated the closing before the open (Imclone 2008's 8:28 A.M.). `at_handoff` (stage 9b): a row
+  the handoff writes, or a kept row with no day, takes A's last sighting before B's first (`handoff_day`, source
+  `last_sighting`); a worked-out closing day never reaches B's first sighting. The derived facts, one definition
+  each: `LastTrade.confirmed` (dated and not flagged `last_trade_date_unconfirmed`: what the clip, the successor
+  starts and 9c test), `LastTrade.publishable(effective)` (confirmed, from an exchange print, `EXCHANGE_PRINTS`, and
+  no later than the Form 25 effective date; over a delistings.csv row, `of_row`, `effective_of` and `published`,
+  which the contract, the verdict's reasons and the scorecard read), `anchor_day` (the day an ending is read
+  around: its last trade, else its Form 25's filing date, else the anchor 8-K's, else its delisting date;
+  `Delisting.anchor`: the successor searches and links, the R1 reading, the handoff pairs, stage 5b), `end_day` (the
+  day it ended its security's listing: its last trade, else its delisting date, the Form 25's effective date; the
+  clip and stage 9e) and `first_day_after` (an added successor's first day after a last trade: the next trading
+  day, at all three sites that add one). The sources (`SOURCES`: `midas`, `nasdaq_halt`, `ex99_notice`, `8k_301`,
+  `closing_day`, `last_sighting`, and `UNSOURCED` "") and the flags it writes (`UNCONFIRMED`, `CONFLICT`, `NO_DAY`)
+  are defined here once. Its interface is tested in `tests/test_last_trade.py`, through fake MIDAS and halt
+  adapters.
+
+  The readers: `eightk_last_trade()` (Item 3.01 text) and `decide_last_trade()`, which picks among the Form 25
+  notice, the 8-K text, MIDAS and the Nasdaq halt (MIDAS beats a halt beats text; a text/measured disagreement is
+  flagged `last_trade_date_conflict`). The text's `_OPEN` wordings (suspended/halted "before the open", "prior to
+  the market opening", "before market open", "prior to the commencement of trading", "as of the open of business",
+  "at the opening of business", a halt "at the NYSE market open" on D) date the last trade on the trading day before
+  D (source `8k_301`, kind `8k_open`). Sub-plan 5d: the reader reads every 3.01 section (`sections_3_01`: to the next
+  item heading, not a cross-reference; the heading's number read with spaces inside it, `evidence.item_mention`, as
+  sub-plan 5g's `item_sections` reads it: CBL 2020's "ITEM 3 . 01") sentence by sentence (`_read_sentence`, a stop
+  word in the sentence, never a record date): `_CLOSE` ("at/after/following/as of the close/closing of
+  trading/business/market [on <venue>] on D"; the Closing Date and an "after the Effective Time" at 4 p.m. or later
+  resolve from the filing), a suspension at a stated clock time (architecture step 4, SPNV 2020: "suspended
+  effective as of approximately 4:00 p.m. Eastern Time on September 17, 2020": at or after the close D,
+  `8k_close_clock`; before the 9:30 open the trading day before, `8k_open_clock`; during the session nothing), the
+  last day ("last day ... traded", "which was the last day", "continue to be listed through D"), a bare "suspended
+  (trading ...) on D" (`8k_suspended`, the trading day before D: ruling R8) and "suspended immediately on D" (D,
+  unconfirmed), and, date first, "On D, ... had been/was suspended (from trading)" (`8k_suspended` too: CBL 2020; no
+  modal, completion word, other date or "immediate": BMC 2013, WeWork 2023); a weekday may precede any date ("on
+  Friday, December 5, 2008": TMA, IDARQ); a stated close or last day that falls on no session moves to the trading
+  day before (CNDT 2019); a stated timing ranks first (`reading_rank`). Source order: MIDAS, then a halt (but the
+  8-K's day when it puts the halt at the open of the halt day, `OPEN_KINDS`: WM 2008, ruling R8), the notice's own
+  timing, then an 8-K timing that disagrees with the notice's bare date (`BARE_NOTICE_KINDS`: TMHC 2026), then the
+  notice, then the 8-K. `closing_day(texts, lo, hi)` (rule 4): when nothing states the last trade, the latest
+  completion the 8-Ks state in the window (a defined Closing Date, "On D, ... completed its acquisition", "Merger Sub
+  merged with and into", "the closing of the transactions on D", "the evening of D", an effective time with a clock
+  time; the trading day before when every clock time that day is before 9:30 a.m.): source `closing_day`
+  (`CLOSING_DAY`), never published.
 - `rewrites.py` — architecture step 3: the one owner of a delisting's kind and successor after its record is built.
   Every rewrite names its rule (`Rule`, a closed set: `ISSUER_MOVE` the finder's R7, `CONTINUED` the finder's continued
   transfer, `TRADES_ON` the clip check at stage 9b's start, `R1` stage 8b, `LINE_FOLLOW` and `SUCCESSOR_LINK` stage 9,
@@ -500,24 +540,12 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   no class letter, or the security's own share-class letter or its `letter_hint`, `_names_other_letter`), and the
   other CIK in force (`SecurityContext.other_cik`, R5; the delisting carries the filer
   CIK; stage 4c gives a security whose submissions read failed a `resolution_degraded` row). An `unknown` row of a continued group with the issuer's 8-A12B becomes 304 with the security as its own
-  successor. Sub-plan 5d (last trade date): `_eightk_window` keeps the best-ranked 3.01 reading of the window
-  (stops at a stated timing); `_confirmations` (rule 3): a MIDAS or halt day after a text day, under a ticker
-  another CUSIP began trading under by then (`SecurityContext.ticker_taken`, `pipeline._ticker_taken`: the trading
-  day before that CUSIP's first priced fails row, on or after the security's own last one under the ticker; none
-  without an own row), is the other's: MIDAS is read up to the day before, the halt dropped (CCE, JCI 2016, GRUB
-  2021); without a disagreeing text day nothing is bounded (a successor's first fails rows can lag its first day:
-  Sinclair Inc 2023, new TCF 2019). With no text day the halt feed is asked around the Form 25 day too (PHLY
-  2008). Rule 4: a row still undated, not continued, under an exchange's Form 25
-  (not the issuer's 25), takes `_closing_day` (the 8-Ks in [F − 10, F + 10] for [F − 10, F],
-  `CLOSING_BEFORE_DAYS`/`CLOSING_TEXT_AFTER_DAYS`) else the Form 25 day F, source `closing_day`, flagged
-  `last_trade_date_unconfirmed`, after the classification (whose anchor stays F); the closing day takes no earlier day
-  than the last one the security's own fails rows show it trading (`SecurityContext.rows_trade_until`,
-  `pipeline._last_row_trade_day`: the trading day before `ftd.settled_last`'s row of the CUSIP it held last), when that
-  day is no later than F and the text did not date the closing before the open (`closing_day_read`'s third field:
-  Imclone 2008's 8:28 A.M. stands); AVGO 2018, Z 2015; a no-Form-25 fallback reads the 3.01 8-Ks up to its last sighting + `EIGHTK_AFTER_DAYS` (VRM 2024); rule 4 never
-  runs under an involuntary (b) Form 25 (it follows the suspension by weeks: TMA); a no-Form-25 merger fallback
-  takes the closing day its latest 2.01/5.01 8-K near the last sighting states (FCL, SGP 2009), never after the
-  last sighting. Sub-plan 5h: `SecurityContext.has_cusips`: a security with no CUSIP gets no continued-filings
+  successor. Each delisting is dated by the last trade module (`last_trade.Dating`, `self.dating`, built over the
+  `midas` and `halts` adapters the finder is given: `of_group` for a Form 25 group, rules 3 and 4 inside;
+  `of_fallback` for the no-Form-25 path), reading the security's own trading from `SecurityContext.trading`
+  (`last_trade.OwnTrading`: its sightings, own CUSIPs, their trading fails rows and the fails index); a worked-out
+  closing day (`LastTrade.worked_out`) is not the classification's anchor or the delisting's ticker day, which stay
+  the Form 25's. Sub-plan 5h: `SecurityContext.has_cusips`: a security with no CUSIP gets no continued-filings
   ending dated by its last sighting alone (`ended_without_delisting` instead: WW 2013, NCRA 2013). The finder's R7 and
   its continued transfer's successor are rewrites (`rewrites.continuation`, `security_goes_on`); each `form25_*` review
   item carries the Form 25 typed (`review_triage.FilingRef`, `ReviewItem.filing`): the handoff stage and stage 9d read
@@ -1016,8 +1044,10 @@ conflate them.
 - **The contract is written beside today's tables for one release (decision 6).** Stage 10g writes
   `output/contract/{security_history,delistings,seeds,price_requests,id_changes,payout_legs}.csv` from the tables about to be
   written and the verdicts; the scorecard (10h) reads the issuer from `contract/security_history.csv`. Contract
-  delistings hold one row per ended security, its last real ending; `last_trade_date` is published only from an
-  exchange print no later than the Form 25 effective date; a continuation has no value; assumed par, Shumway marks
+  delistings hold one row per ended security, its last real ending; `last_trade_date` is published only when it
+  is publishable (`last_trade.LastTrade.publishable`, read over the row by `last_trade.published`: confirmed, from an
+  exchange print, no later than the Form 25 effective date; architecture step 4's ruling), and the price date and
+  the price requests follow the published date; a continuation has no value; assumed par, Shumway marks
   and a transfer's 0.0 are `dlret_fill`. `--price-answers` (the requests plus a `price` column) feeds the closes and
   acquirer prices, so a second run changes values only: each stage reads the answer to its own request
   (`price_requests.PriceAnswers`; stage 7 a last close, stage 8 a stock leg's received close, stage 10a an OTC print
@@ -1092,8 +1122,8 @@ conflate them.
 - **`ticker_history` is clipped only at the delisting that actually ends the
   security.** One whose successor is the security itself (a continuing
   exchange transfer) never clips it. Otherwise, only a `merger` or
-  `exchange_transfer` delisting with a *confirmed* last-trade day (not
-  `last_trade_date_unconfirmed`, and not blank) can be second-guessed: it
+  `exchange_transfer` delisting with a *confirmed* last-trade day
+  (`last_trade.LastTrade.confirmed`: dated, not flagged unconfirmed) can be second-guessed: it
   doesn't clip either when the security's own CUSIP keeps trading under its
   own ticker afterward — at least 20 live fails rows over at least 60 days
   with 2 or more distinct prices, so fails still settling at the last close

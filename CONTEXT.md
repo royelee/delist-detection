@@ -30,6 +30,10 @@ _Avoid_: termination, delist event
 **End of era**:
 The last date a security's history is known, and what happened next: it kept trading, moved to a new exchange, took a new ticker or CUSIP, was merged away, was liquidated, or nobody can tell. The end-of-era resolver (`end_of_era.py`) reads EDGAR for what the registrant did after that date, in a fixed branch order.
 
+**Last trade date**:
+The last day a security traded on its exchange before a delisting: measured by SEC MIDAS volume or a Nasdaq halt, else stated by the exchange's Form 25 notice or the issuer's 8-K, else worked out from the deal's closing or the last sighting. It is confirmed when a measurement or a stated timing gives it, and published in the contract only when confirmed, from an exchange print and no later than the Form 25's effective date (`last_trade.py`). An ending's anchor day, the day it is read around, is its last trade date, else its Form 25's filing date (then the 8-K it was classified on, then its delisting date); its end day, the day its listing ended, is its last trade date, else its delisting date.
+_Avoid_: delist date (the Form 25's effective date), exit date
+
 **Bucket**:
 The handling class a delisting's CRSP code maps to: `merger`, `exchange_transfer`, `liquidation`, `compliance_failure`, `expiration`, or `active` when no delisting occurred. The bucket, not the exact code, decides the training label and the backtest exit.
 _Avoid_: category

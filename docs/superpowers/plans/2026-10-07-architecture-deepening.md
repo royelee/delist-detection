@@ -29,7 +29,7 @@ A deepening moves behaviour behind a smaller interface. It changes nothing the l
 | 1 | Stage 8 as one merger value module, with the price request round trip (review 1, 2) | | done |
 | 2 | One issuer record over EDGAR with the failed-read policy (review 4) | the handoff stage's uncaught read | done |
 | 3 | One owner for rewriting an ending (review 3) | AZPN's stale flags | done |
-| 4 | The last trade date as one module (review 5) | CNB, IMB, SPNV | |
+| 4 | The last trade date as one module (review 5) | CNB, IMB, SPNV | done |
 | 5 | history owns where a security's history ends (review 6) | | |
 | 6 | A security's identity behind security_master (review 7) | | |
 | 7 | The line follow owns its rounds; one R1 reading per ending (review 8) | | |
@@ -358,3 +358,123 @@ Controller rulings, made before the step was dispatched:
   scored.
   - Alternative: keep scoring 2009-08-17 and count CNB as a new mismatch.
   - Cost if wrong: if CNB did trade on 2009-08-17, the truth set no longer checks the contract's date for it.
+
+Decisions made in the step:
+
+- **The module is last_trade.py, grown, not a new file.** It keeps the readers and the source order and gains
+  `Dating` (the windows, the confirmations, rules 3 and 4, the fallback, 9c's re-dating), the handoff rule
+  (`at_handoff`), the security's trading as data (`OwnTrading`), the derived facts and their row reading, and the
+  sources and flags. The interface: `Dating(edgar, midas=, halts=)` with `of_group`, `of_fallback` and
+  `from_notice`; `at_handoff`; `LastTrade.confirmed`, `worked_out`, `publishable`; `of_row`, `effective_of`,
+  `published`; `anchor_day`, `first_day_after`; `ticker_taken` and `last_row_trade_day` (rule 3 and rule 4's
+  floor, public for their unit tests); `SOURCES`, `EXCHANGE_PRINTS`, `MEASURED`, `UNCONFIRMED`, `CONFLICT`,
+  `NO_DAY`.
+  - Alternative: a new `dating.py` beside the readers.
+  - Cost if wrong: one file of about 750 lines. The readers are only reached through `Dating` in production; their
+    tests stay at the reader level, which is where their bugs were (TMA, IDARQ, CBL, CNDT).
+- **MIDAS and the halt feed are `Dating`'s adapters, passed through the finder's existing `midas=`/`halts=`
+  keywords.** The finder holds only `self.dating`; the 11 window constants and the nine dating methods left it.
+  - Alternative: inject a `Dating` (`DelistingFinder(edgar, classifier, dating=...)`).
+  - Cost if wrong: the finder's constructor names two adapters it never calls. Keeping it spares about 70 test
+    constructions and the pipeline tests' `_Recorder` doubles; step 11 (the Clients seam) can make it one argument.
+- **Rule 4 runs inside `of_group`.** The classification still anchors on the day the sources state (or the
+  winner's filing date), read as `None if lt.worked_out else lt.day`: a `closing_day` source exists only after rule
+  4, so this is the old pre-rule-4 day exactly.
+  - Alternative: two calls, the reading then rule 4 after the classification.
+  - Cost if wrong: a future worked-out source must be named in `LastTrade.worked_out`.
+- **The security's trading reaches the module as data.** `SecurityContext.trading` (`OwnTrading`: sightings, own
+  CUSIPs, their trading rows, the fails index) replaces three closures (`tickers_between`, `ticker_taken`,
+  `rows_trade_until`); `pipeline._ticker_taken`, `_last_row_trade_day` and `PLACEHOLDER_PRICE` moved into the module.
+  - Alternative: keep the closures, each calling the module.
+  - Cost if wrong: step 14 (the finder's trading record) builds on `OwnTrading` or folds it in.
+- **`from_notice` reads the Form 25 through the run's EDGAR client; stage 9c keeps the watch.** The stage wraps the
+  call in a `DegradedWatch` and reports a tripped read, as stage 5 does around the finder. The module returns the
+  row's own `LastTrade` unchanged when nothing re-dates it, so the stage tests identity.
+  - Alternative: 9c reads and parses, the module decides on a parsed `Form25`.
+  - Cost if wrong: none to output; the read sits behind the module like the finder's 8-K reads.
+- **"Confirmed" is `LastTrade.confirmed`: dated and not flagged unconfirmed.** The clip check, the history end,
+  the successor starts and 9c read it. A handoff's last sighting is confirmed, as it was (it never carried the flag).
+- **"Publishable" is `LastTrade.publishable(effective)`, and the row side asks the same over a row read back
+  (`of_row`, `effective_of`, `published`).** contract.py calls `published`; verdict's ending reasons are the parts
+  of it that fail, from the same reading; scorecard counts `EXCHANGE_PRINTS`. `verdict.published_last_trade_date`,
+  `form25_effective`, `FORM25_EFFECTIVE_DAYS`, `MEASURED_SOURCES` and `lifecycle.EXCHANGE_PRINT_SOURCES` are gone
+  (the effective date is `form25.effective_date`, the same 10 days).
+  - Alternative: keep verdict's reading and add the flag to it.
+  - Cost if wrong: none; one definition, two readers (in memory and over a row).
+- **Sources and flags are module constants, not an Enum.** The published strings stay byte-identical; the
+  fallback's last sighting keeps its blank source as `UNSOURCED`.
+  - Alternative: a `str` Enum.
+  - Cost if wrong: a misspelled new source is not caught by a type; `SOURCES` lists them for tests.
+- **`ISSUER_FORM25_FORMS` moved to form25.py** (rule 4 and the finder both read it; last_trade cannot import the
+  finder).
+- **The clock-time reading's kinds are `8k_close_clock` and `8k_open_clock`** (stated timings, rank 0; the open one
+  is in `OPEN_KINDS`, as a suspension before the open is for the halt rule). A time at 9:30 is not before the open
+  (`< OPEN_MINUTES`, as the effective-time and closing-day readers count); a time during the session reads nothing.
+  - Alternative: reuse `8k_close`/`8k_open`; read 9:30 as before the open; read an intraday time as D.
+  - Cost if wrong: AmTrust's "9:30 am EST on November 29, 2018" (0001193125-18-337455) and Apollo Education's
+    "11:00 am EST on February 1, 2017" (0001193125-17-026959) give no reading, as before; their rows keep their
+    other sources.
+- **The harness (tests/last_trade_cases.py) stays on the finder and `pipeline._context_builder`.** It reaches the
+  module through its one Form 25 caller, reads the flag by the module's constant, and its outcomes are unchanged.
+  The context builder is step 14's; stage 7's fails close is not dating.
+- **One anchor rule, `anchor_day` (`Delisting.anchor`): the last trade, else the Form 25's filing date, else the
+  anchor 8-K's, else the delisting date.** Before, four orders over eight sites. Measured with two whole replays
+  (every site on the one rule, and every site kept):
+  - unified, no row moved: `successors.successor_in_run` and `_line_successor_links` (last trade, Form 25, delisting
+    date: an undated row always has a Form 25, so the anchor 8-K is never reached), `successor_anchor` (removed: the
+    R1 reading and the terms links read `Delisting.anchor`), `successor_search_args`, `handoffs._day_of`, stage 5b's
+    end and the 8-K12B successor's first day (these four were the last trade, else the delisting date);
+  - kept, as a named second fact, `end_day` (the last trade, else the delisting date, the Form 25's effective date):
+    the history end (the clip) and stage 9e. On the anchor rule FWLT 2014, AWH 2017, WPG 2021 and ARD 2021 (undated,
+    their issuers' own Form 25s) clip ten days early in ticker_history, cusip_history and security_history, and 9e
+    reads WPG's OTC symbol as WPG instead of WPGGQ. The security stayed listed until the Form 25 took effect, so the
+    end day is the right reading there, not a leftover order.
+  - kept: the successor starts' window (the confirmed last trade, else the delisting date less 30 days). It bounds
+    a successor's first day on a *confirmed* day, which is `LastTrade.confirmed`, not an anchor.
+  - left for step 8 (one reading of a delistings row): the row side's `last_trade_date or delist_date` in
+    `lifecycle.end_of` and `verdict_rules._within_days` (the end day over a row).
+  - Alternative: every site on one order.
+  - Cost if wrong: two named days instead of one; each says where it is used and why.
+- **An added successor's first day is `first_day_after`, the next trading day, at all three sites** (the R1 8-K12B
+  candidate, the own registration, the 8-K12B search). The replay changes no row (the two calendar-day sites take
+  `max(filed, not_before)` with the 8-K12B's filing date, so a weekend day + 1 matters only when that filing came
+  earlier).
+- **The declared rows, all three classes checked** (the replay against `accepted_out`):
+  - published only when confirmed: CNB 2009 (BBG000BF2JS9) and IMB 2008 (BBG000BLY636) lose their contract
+    `last_trade_date`; their delistings.csv day, source `ex99_notice` and flag stay. Cascades: their contract
+    `price_date` and `value_formula` follow the published date ("otc_print(?, from ?)"), and their four price
+    requests (`last_close` and `otc_print`) go, since the requests are made only for a published date.
+  - the clock-time reading: SPNV 2020 (CIK886835-COMMON) is dated 2020-09-17 from `8k_301`, its notice's
+    unconfirmed day agreeing, and loses `last_trade_date_unconfirmed` in delistings.csv, review.csv and uncertain.csv
+    (its ending stays uncertain on `resolved_from_continued_filings`); review_summary's
+    `last_trade_date_unconfirmed` row 54 to 53 rows, 33 to 32 in review. Its contract row is unchanged (it was
+    published already). Across the cache the new reading changes three texts (the old and new reader compared on
+    1,556 cached texts that mention a suspension): SPNV's; Panera 2017's "9:00 am EST on July 18, 2017" (July 17) and
+    General Cable 2018's "9:00 a.m. EST on June 6, 2018" (June 5), both before the open and both rows already dated
+    by MIDAS: no row moves.
+  - the trading-day first day: no row.
+  - scorecard.json: R2.6.distress_date_flagged 43 to 42 (SPNV), and D.mismatches 121 to 122, D.cases_matching 284 to
+    283, D.mismatches.price_date 7 to 8: CNB's truth row still scores `price_date` 2009-08-18.
+- **CNB's price date goes blank with its published date, and the truth row needs the second cell of the IMB
+  ruling.** Under the ruling, publishing the day after an unconfirmed day publishes that day. IMB's truth row, made
+  under the operator's 2026-10-03 ruling, already reads `*` for both `last_trade_date` and `price_date`; the step 4
+  ruling applied it to CNB's `last_trade_date` only. Every other contract row without a published date has a blank
+  price date, so the price date follows the published date, as before.
+  - Alternative: price the value from the exchange-print day even when unconfirmed (the old publish rule kept as a
+    second predicate for the price date and the requests). CNB's D value would not move.
+  - Cost if wrong: the two predicates this step removed would come back, and price_requests.csv would carry a last
+    trade date the contract does not publish. With CNB's `price_date` set to `*` (a data change for the controller,
+    with a change-log row, as 37e50dc), every D value equals the reference's.
+- **CONTEXT.md gains "Last trade date"**, the concept the module is named after: where the day comes from, when it
+  is confirmed and published, and the anchor and end days.
+- **Tests.** tests/test_last_trade.py tests the module at its interface: 32 tests added (the clock-time reader, the
+  derived facts and their row reading, the anchor and end days, the first day, the handoff rule, 9c's re-dating,
+  the group's windows, the MIDAS and halt confirmations through fake adapters, rule 3's MIDAS bound and halt drop,
+  rule 4's closing day, floor and refusals, the fallback, the tenure bound and the rows' last day). 18 deleted once
+  covered: stage 9c's six private-name tests (test_pipeline.py), seven finder dating tests (test_delistings.py: the
+  MIDAS window, the unconfirmed involuntary notice, every ticker of the window, the two halt-feed failures, the
+  fallback's 8-K window, rule 4 under (b)), test_ticker_taken.py's four (moved, not missing: the tenure bound
+  already had these unit tests of `pipeline._ticker_taken`; they now test `last_trade.ticker_taken` and
+  `OwnTrading.taken`, and two new tests reach the bound through `Dating`, MIDAS's and a halt's), verdict's
+  published-date test; the successor-anchor test now tests `Delisting.anchor`. The stage-5b double gained an
+  `anchor`. Suite: 3165 passed, 45 xfailed (step 3: 3147).
