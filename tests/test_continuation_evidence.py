@@ -1,5 +1,6 @@
 """Sub-plan 5i, stage 9g: the filing that confirms a continuation linked by the continued-filings rule or by timing,
-and the ratio that contradicts a successor registration (`continuation_evidence`, `pipeline._continuation_filings`), on a small EDGAR double."""
+and the ratio that contradicts a successor registration (`continuation_evidence` over the ending's own-share
+reading, `pipeline._continuation_filings`), on a small EDGAR double."""
 from datetime import date
 from types import SimpleNamespace
 
@@ -12,8 +13,11 @@ from delist_detection.continuation_evidence import (confirming_filing, needs_dou
 from delist_detection.crsp_codes import CrspBucket
 from delist_detection.delistings import Delisting
 from delist_detection.edgar import EdgarSubmission
+from delist_detection.figi_resolution import share_class_from_name
+from delist_detection.issuer_record import IssuerRecord
 from delist_detection.last_trade import LastTrade
 from delist_detection.manifest import StageMeter
+from delist_detection.own_shares import Reader
 from delist_detection.sec_stats import SEC_STATS
 from delist_detection.verdict_rules import Reading
 
@@ -44,24 +48,41 @@ def _8k(acc, filed, items="3.03,9.01", form="8-K"):
     return EdgarSubmission(acc, form, filed, "", items, "d.htm")
 
 
-DAYS = [date(2021, 3, 1), date(2021, 3, 14)]
+DAY = date(2021, 3, 1)       # the ending's anchor: its last trade
+
+
+def _own(edgar, name="ACME CORP", day=DAY):
+    """The ending's own-share reading over the double (the security's class as its name gives it)."""
+    return Reader(edgar, IssuerRecord(edgar)).ending(6769, share_class=share_class_from_name(name), name=name, day=day)
 
 
 def test_a_3_03_8k_stating_one_for_one_confirms():
     e = Edgar([_8k("0001-21-1", "2021-03-01")], {"0001-21-1": ONE})
-    assert confirming_filing(e, 6769, DAYS, "ACME CORP") == "8-K 0001-21-1"
+    assert confirming_filing(_own(e)) == "8-K 0001-21-1"
 
 
 def test_an_8k12b_is_a_confirming_form_too():
     e = Edgar([_8k("0001-21-2", "2021-03-02", items="", form="8-K12B")], {"0001-21-2": ONE})
-    assert confirming_filing(e, 6769, DAYS, "ACME CORP") == "8-K12B 0001-21-2"
+    assert confirming_filing(_own(e)) == "8-K12B 0001-21-2"
 
 
 def test_a_second_leg_no_3_03_or_a_filing_outside_the_window_confirms_nothing():
-    assert confirming_filing(Edgar([_8k("a", "2021-03-01")], {"a": TWO}), 6769, DAYS, "ACME CORP SERIES A") == ""
-    assert confirming_filing(Edgar([_8k("b", "2021-03-01", items="8.01")], {"b": ONE}), 6769, DAYS, "ACME CORP") == ""
-    assert confirming_filing(Edgar([_8k("c", "2021-01-04")], {"c": ONE}), 6769, DAYS, "ACME CORP") == ""
-    assert confirming_filing(Edgar([], {}), 6769, [None], "ACME CORP") == ""
+    assert confirming_filing(_own(Edgar([_8k("a", "2021-03-01")], {"a": TWO}), "ACME CORP SERIES A")) == ""
+    assert confirming_filing(_own(Edgar([_8k("b", "2021-03-01", items="8.01")], {"b": ONE}))) == ""
+    assert confirming_filing(_own(Edgar([_8k("c", "2021-01-04")], {"c": ONE}))) == ""
+    assert confirming_filing(_own(Edgar([], {}))) == ""
+
+
+def test_no_text_is_read_without_a_confirming_form_around_the_day():
+    class Counting(Edgar):
+        read: list = []
+
+        def fetch_filing_text(self, cik, accession, primary_doc):
+            self.read.append(accession)
+            return super().fetch_filing_text(cik, accession, primary_doc)
+
+    e = Counting([_8k("b", "2021-03-01", items="8.01")], {"b": ONE})
+    assert confirming_filing(_own(e)) == "" and e.read == []
 
 
 def test_only_a_continuation_linked_by_continued_filings_or_timing_is_read():
@@ -74,16 +95,18 @@ def test_only_a_continuation_linked_by_continued_filings_or_timing_is_read():
     assert not needs_filing("Continued 10-K/Q filings >180d after delist (moved to OTC or spun off)", "A", "A")
 
 
-def _stage(edgar, reason=None, names=None):
+def _stage(edgar, reason=None, names=None, carried=None):
     rec = DelistRecord("AAA", 6769, "2021-03-01", 304, CrspBucket.EXCHANGE_TRANSFER, "medium",
                        reason or "Continued 10-K/Q filings >180d after delist (moved to OTC or spun off); successor "
                                  "by same issuer", {"flags": []}, sec_id="A", delist_date="2021-03-14",
                        successor_sec_id="B")
     d = Delisting("A", 6769, "AAA", "2021-03-14", rec, LastTrade(date(2021, 3, 1), "closing_day", ()), None, None, "")
+    d.own_shares = carried
     ctx = pipeline._RunContext(pipeline.Clients(edgar, None, None, None, None), date(2026, 9, 25),
                                lambda *a: None, 1, StageMeter(lambda *a: None))
     review: list = []
-    securities = {"A": SimpleNamespace(name="ACME CORP"), "B": SimpleNamespace(name=names or "ACME HOLDINGS INC")}
+    securities = {"A": SimpleNamespace(name="ACME CORP", share_class="COMMON"),
+                  "B": SimpleNamespace(name=names or "ACME HOLDINGS INC", share_class="COMMON")}
     found = pipeline._continuation_filings(ctx, [d], securities, review)
     return found, review, d
 
@@ -91,6 +114,7 @@ def _stage(edgar, reason=None, names=None):
 def test_stage_9g_maps_the_delisting_to_its_confirming_filing_and_changes_no_row():
     found, review, d = _stage(Edgar([_8k("0001-21-1", "2021-03-01")], {"0001-21-1": ONE}))
     assert found == {d.key: Reading(filing="8-K 0001-21-1")} and review == [] and d.flags == []
+    assert d.own_shares is not None and d.own_shares.day == DAY        # made at the anchor, kept on the delisting
 
 
 def test_stage_9g_reports_a_failed_read_without_flagging_the_row():
@@ -102,15 +126,15 @@ def test_the_reading_names_the_filing_whose_text_states_the_exchange():
     # an earlier 3.03 of the window (a charter amendment) is not the filing that holds the sentence
     e = Edgar([_8k("0001-21-0", "2021-02-27"), _8k("0001-21-1", "2021-03-01")],
               {"0001-21-0": "The Board amended the bylaws.", "0001-21-1": ONE})
-    assert confirming_filing(e, 6769, DAYS, "ACME CORP") == "8-K 0001-21-1"
+    assert confirming_filing(_own(e)) == "8-K 0001-21-1"
 
 
 def test_a_target_that_is_neither_the_registrant_nor_the_successor_confirms_nothing():
     other = ("At the effective time, each share of common stock of Acme Corp issued and outstanding was converted "
              "into one share of common stock, par value $0.01 per share, of Zenith Industries, having the same rights.")
     e = Edgar([_8k("0001-21-1", "2021-03-01")], {"0001-21-1": other})
-    assert confirming_filing(e, 6769, DAYS, "ACME CORP", ["ACME HOLDINGS INC"]) == ""
-    assert confirming_filing(e, 6769, DAYS, "ACME CORP", ["ZENITH INDUSTRIES INC"]) == "8-K 0001-21-1"
+    assert confirming_filing(_own(e), ["ACME HOLDINGS INC"]) == ""
+    assert confirming_filing(_own(e), ["ZENITH INDUSTRIES INC"]) == "8-K 0001-21-1"
     found, _, d = _stage(Edgar([_8k("0001-21-1", "2021-03-01")], {"0001-21-1": other}))
     assert found == {}
 
@@ -134,22 +158,46 @@ def test_only_a_continuation_that_names_its_successor_registration_is_checked_fo
 
 def test_a_stated_ratio_other_than_one_or_a_plain_split_contradicts_the_registration():
     e = Edgar([_8k("r", "2021-03-02", items="", form="8-K12B")], {"r": RATIO})
-    assert successor_doubt(e, 6769, DAYS, "ACME CORP") == "ratio:0.9042"
+    assert successor_doubt(_own(e)) == "ratio:0.9042"
     found, _, d = _stage(e, REASON)
     assert found == {d.key: Reading(doubt="ratio:0.9042")}
     split = Edgar([_8k("r", "2021-03-02", items="", form="8-K12B")], {"r": SPLIT})
-    assert successor_doubt(split, 6769, DAYS, "ACME CORP") == ""             # SIRI: a reverse split of the same class
+    assert successor_doubt(_own(split)) == ""                      # SIRI: a reverse split of the same class
     assert _stage(split, REASON)[0] == {}
 
 
+def test_stage_9g_reads_the_reading_the_delisting_carries():
+    """CHTR 2016: the reading the classifier's rule 6 read is the one 9g reads; the texts are not read again."""
+    carried = _own(Edgar([_8k("r", "2021-03-02", items="", form="8-K12B")], {"r": RATIO}))
+    assert carried.statement.ratio == 0.9042
+    found, _, d = _stage(Edgar([], {}), REASON, carried=carried)
+    assert found == {d.key: Reading(doubt="ratio:0.9042")} and d.own_shares is carried
+
+
+def test_the_exchanges_notice_is_not_the_registrants_own_filing():
+    """Actavis 2013: the Form 25 notice reads Warner Chilcott's 0.160 as the registrant's; the 9g reading leaves the
+    notice out, so it raises no doubt."""
+    notice = SimpleNamespace(notice_text=RATIO)
+    own = Reader(Edgar([], {}), IssuerRecord(Edgar([], {}))).ending(6769, share_class="COMMON", name="ACME CORP",
+                                                                     day=DAY, form25=notice)
+    assert own.statement.ratio == 0.9042 and own.registrant_statement is None and successor_doubt(own) == ""
+
+
 def test_a_missing_reading_vetoes_nothing_and_a_one_for_one_one_confirms_nothing_here():
-    assert successor_doubt(Edgar([], {}), 6769, DAYS, "ACME CORP") == ""
+    assert successor_doubt(_own(Edgar([], {}))) == ""
     one = Edgar([_8k("r", "2021-03-02", items="", form="8-K12B")], {"r": ONE})
-    assert read_continuation(one, 6769, DAYS, "ACME CORP", REASON, "A", "B") == Reading()
+    assert read_continuation(_own(one), REASON, "A", "B") == Reading()
 
 
 def test_the_reading_of_a_failed_fetch_gives_no_veto_and_a_degraded_row():
     found, review, _ = _stage(Edgar([_8k("r", "2021-03-02", items="", form="8-K12B")], {}, fail=True), REASON)
+    assert found == {} and [r.flag for r in review] == ["resolution_degraded"]
+
+
+def test_a_carried_reading_that_rested_on_a_failed_read_is_reported_too():
+    carried = _own(Edgar([_8k("r", "2021-03-02", items="", form="8-K12B")], {}, fail=True))
+    assert carried.statement is None and carried.degraded
+    found, review, _ = _stage(Edgar([], {}), REASON, carried=carried)
     assert found == {} and [r.flag for r in review] == ["resolution_degraded"]
 
 
@@ -169,9 +217,7 @@ def test_a_refusal_stops_the_stage_and_an_added_securitys_delisting_is_skipped()
 
 
 def test_the_successor_registration_forms_are_all_read():
-    from delist_detection.verdict_rules import successor_filing_date, successor_filing_reason
+    from delist_detection.verdict_rules import successor_filing_reason
     for form in ("8-K12B", "8-K12B/A", "8-K12G3", "8-K12G3/A"):
         assert successor_filing_reason(f"Successor registration {form} 2021-03-02: x")
         assert successor_filing_reason(f"Continuation ({form} 0001-1): x")
-    assert successor_filing_date("Successor registration 8-K12G3/A 2021-03-02: x") == date(2021, 3, 2)
-    assert successor_filing_date("Continuation (8-K12B 0001-1): x") is None

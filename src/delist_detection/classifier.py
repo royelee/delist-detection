@@ -16,10 +16,11 @@ from dataclasses import asdict, dataclass, field, replace
 from datetime import date, datetime, timedelta
 from typing import Iterable
 
-from . import end_of_era, exchange_terms
+from . import end_of_era
 from .crsp_codes import CONTINUATION_CODE, CrspBucket, bucket_for_code
 from .distress import liquidating
 from .edgar import EdgarClient, EdgarSubmission
+from .end_of_era import Filed
 from .evidence import (
     MERGER_EVIDENCE_DAYS,
     bankruptcy_8ks,
@@ -35,9 +36,10 @@ from .evidence import (
     still_operating,
 )
 from .figi_resolution import share_class_from_name
-from .form25 import Form25, notice_says_acquired, parse_form25
+from .form25 import notice_says_acquired, parse_form25
 from .issuer_record import IssuerRecord
 from .names import names_agree
+from .own_shares import OwnShares, Reader, other_role, registrant_names
 from .rewrites import R1_CONTINUATION
 from .ticker_resolver import TickerResolution, TickerResolver
 
@@ -65,20 +67,6 @@ MERGER_8K_WINDOW_DAYS = 30         # how near the delisting a change-in-control 
 COMPLETION_BEFORE_DAYS, COMPLETION_AFTER_DAYS = 30, 10
 COMPLETION = re.compile(r"(?i)\bcomplet(?:ed|es|ion of)\s+(?:its\s+|the\s+|of\s+)?(?:previously\s+announced\s+)?"
                         r"(?:acquisition|merger|arrangement|amalgamation|plan\s+of\s+arrangement)\b")
-# spec 5c rule 6 (sub-plan 5f): a successor registration whose own-share statement is a split factor (1/n or n
-# shares per share) keeps the security's stake: a consolidation into the successor, not a merger (SIRI 2024's 0.1)
-SPLIT_FACTOR_MAX = 100
-
-
-def _split_factor(ratio: float) -> bool:
-    """Whether `ratio` shares per share is a split or a consolidation (n or 1/n for a whole n up to
-    SPLIT_FACTOR_MAX, 1 included): the holders keep their stake (rule 6's guard, SIRI 2024)."""
-    if ratio <= 0:
-        return False
-    n = ratio if ratio >= 1 else 1 / ratio
-    return round(n) <= SPLIT_FACTOR_MAX and abs(n - round(n)) < 1e-6
-
-
 def _is_change_in_control(items: set[str]) -> bool:
     """The registrant was acquired: item 5.01, or 2.01 together with 3.01 or 3.03.
 
@@ -239,9 +227,14 @@ class DelistClassifier:
                 return True
         return False
 
-    def _deficiency_notice(self, cik: int, filings: list[EdgarSubmission], on: date) -> str:
-        """`"8-K <date>"` of the first 8-K with item 3.01 in the resolver's window
-        around `on` whose 3.01 text cites a listing deficiency, else ""."""
+    @property
+    def reader(self) -> Reader:
+        """The own-share reader over this classifier's EDGAR client and issuer record (a warm copy's shadow record)."""
+        return Reader(self.edgar, self.issuers)
+
+    def _deficiency_notice(self, cik: int, filings: list[EdgarSubmission], on: date) -> Filed | None:
+        """The first 8-K with item 3.01 in the resolver's window around `on` whose 3.01 text cites a listing
+        deficiency (an "8-K", its filing day), else None."""
         lo = on - timedelta(days=end_of_era.ITEMS_BEFORE_DAYS)
         hi = on + timedelta(days=end_of_era.ITEMS_AFTER_DAYS)
         for f in sorted(filings, key=lambda f: f.filing_date):
@@ -252,13 +245,13 @@ class DelistClassifier:
                 continue
             text = self.edgar.fetch_filing_text(cik, f.accession, f.primary_doc)
             if cites_listing_deficiency(item_text(text, "3.01")):
-                return f"8-K {f.filing_date}"
-        return ""
+                return Filed("8-K", d)
+        return None
 
-    def _liquidation_notice(self, cik: int, filings: list[EdgarSubmission], on: date) -> str:
-        """`"8-K <date>"` of the first 8-K with item 3.01 in the resolver's window around `on` that announces a
-        liquidating distribution, a liquidating trust or a plan of liquidation or dissolution anywhere in its text
-        (`distress.liquidating`: EQC 2025's final liquidating distribution, in its items 7.01 and 8.01), else ""
+    def _liquidation_notice(self, cik: int, filings: list[EdgarSubmission], on: date) -> Filed | None:
+        """The first 8-K with item 3.01 in the resolver's window around `on` that announces a liquidating
+        distribution, a liquidating trust or a plan of liquidation or dissolution anywhere in its text
+        (`distress.liquidating`: EQC 2025's final liquidating distribution, in its items 7.01 and 8.01), else None
         (end-of-era branch 5b, sub-plan 5g)."""
         lo = on - timedelta(days=end_of_era.ITEMS_BEFORE_DAYS)
         hi = on + timedelta(days=end_of_era.ITEMS_AFTER_DAYS)
@@ -267,8 +260,8 @@ class DelistClassifier:
             if not f.form.startswith("8-K") or "3.01" not in f.item_set or d is None or not lo <= d <= hi:
                 continue
             if liquidating(self.edgar.fetch_filing_text(cik, f.accession, f.primary_doc)):
-                return f"8-K {f.filing_date}"
-        return ""
+                return Filed("8-K", d)
+        return None
 
     def _pick_delist_filing(
         self,
@@ -391,12 +384,14 @@ class DelistClassifier:
                 return f
         return None
 
-    def _bankruptcy_in_window(self, cik: int, filings: list[EdgarSubmission], on: date, flags: list[str]) -> str:
-        """`"8-K <date>"` of the first 8-K in the end-of-era resolver's item window around `on` whose Item 1.03
-        text confirms a bankruptcy (`_confirmed_bankruptcy`), else "" (5g sub-rule 2)."""
+    def _bankruptcy_in_window(self, cik: int, filings: list[EdgarSubmission], on: date,
+                              flags: list[str]) -> Filed | None:
+        """The first 8-K in the end-of-era resolver's item window around `on` whose Item 1.03 text confirms a
+        bankruptcy (`_confirmed_bankruptcy`; an "8-K", its filing day), else None (5g sub-rule 2)."""
         bk = self._confirmed_bankruptcy(cik, filings, on, flags, before=end_of_era.ITEMS_BEFORE_DAYS,
                                         after=end_of_era.ITEMS_AFTER_DAYS)
-        return f"8-K {bk.filing_date}" if bk is not None else ""
+        day = _parse_date(bk.filing_date) if bk is not None else None
+        return Filed("8-K", day) if day is not None else None
 
     def _emerged_before_merger(self, cik, filings, observed, flags) -> bool:
         """The confirmed bankruptcy predates an acquisition the company was still
@@ -473,7 +468,8 @@ class DelistClassifier:
         return items
 
     def _default_without_fingerprint(self, ticker, cik, observed_delist_date, observed,
-                                     filings, eightk, dereg, delist_filing, evidence, flags):
+                                     filings, eightk, dereg, delist_filing, evidence, flags,
+                                     own: OwnShares | None = None):
         """The record for a delisting with no conclusive 8-K fingerprint (or a
         3.01 alone). A distress bucket needs positive evidence, so in order:
         2.01 + Form 15 → merger; a SPAC → 600 expiration (NYSE's trust-liquidation
@@ -526,13 +522,13 @@ class DelistClassifier:
         if delinquent:
             return rec(580, CrspBucket.COMPLIANCE_FAILURE, "medium",
                        "Delinquent filer (NT 10-K/Q in the prior year), no merger evidence")
-        # Sub-plan 5c, R1: no 8-K item code, but the filings state each share became one share, with no cash (a
-        # reclassification into another class, Clearway 2026; a holding company's formation, ONEOK 2026)
-        r1 = self._one_for_one(cik, evidence.get("name"), filings, [observed, anchor], delist_filing)
-        if r1 is not None and (r1.target_own or self._names_new_issuer(r1, cik, anchor)):
+        # Sub-plan 5c, R1: no 8-K item code, but the filings state each share became one share, with no cash, of the
+        # same issuer or a new one (`OwnShares.target_issuer`: a reclassification into another class, Clearway 2026;
+        # a holding company's formation, ONEOK 2026)
+        if own is not None and own.one_for_one and own.target_issuer():
             _add_flag(flags, R1_CONTINUATION)
             return rec(CONTINUATION_CODE, CrspBucket.EXCHANGE_TRANSFER, "medium",
-                       f"Continuation (R1): each share became one share {r1.target[:80].strip()}, no cash")
+                       f"Continuation (R1): each share became one share {own.statement.target[:80].strip()}, no cash")
         # Sub-plan 5f: a filer with no 8-K item that decides (a foreign private issuer files 6-Ks) reports the
         # completion in a 6-K or a press-release 8-K near the Form 25 (TAHO's and KING's 6-Ks, BPYU's 7.01 8-K)
         done = self._completion_report(cik, filings, delist_filing, evidence.get("name")) \
@@ -569,18 +565,18 @@ class DelistClassifier:
     def _completes_as_acquirer(self, cik: int, name: str | None, before: date, text: str, m: re.Match) -> bool:
         """Whether the completed acquisition `m` states is one the registrant made, not one it underwent: the
         registrant (its name, or "the Company") is the subject of "completed its acquisition of", or 5c rule 1's
-        role check finds its own shares not exchanged and another party's became its own
-        (`exchange_terms.acquires`, `distributes`). An acquirer's 8-K says it completed the deal as well; the
+        role check finds another role (`own_shares.other_role`: another party's shares became its own, or it
+        distributed another company's). An acquirer's 8-K says it completed the deal as well; the
         registrant that was acquired is named after the verb ("Pan American Silver completes acquisition of
         Tahoe")."""
         subs = getattr(self.edgar, "submissions", None)
         sub = subs(cik) if subs is not None else None
-        names = exchange_terms.registrant_names(sub if isinstance(sub, dict) else None, before, name or "")
+        names = registrant_names(sub if isinstance(sub, dict) else None, before, name or "")
         tail = text[max(0, m.start() - 60):m.start()]
         if m.group(0).lower().startswith(("completed", "completes")) and (
                 re.search(r"(?i)\b(?:the\s+company|we)\s*$", tail.rstrip()) or any(names_agree(tail, n) for n in names)):
             return True
-        return bool(exchange_terms.acquires([text], names=names) or exchange_terms.distributes([text], names=names))
+        return bool(other_role([text], names))
 
     def _classify_items(self, items: set[str]) -> tuple[int | None, str]:
         """Map an 8-K item set to a CRSP DLSTCD-style code.
@@ -685,7 +681,11 @@ class DelistClassifier:
         expected_name: str | None,
         delist_filing_override: EdgarSubmission | None = None,
         trading_after: bool = False,
+        own_shares: OwnShares | None = None,
     ) -> DelistRecord:
+        """`own_shares`: the ending's own-share reading the delisting finder made (rules 1 and 6 and R1 read it);
+        without one, a reading at the observed date (else the Form 25's filing date) of the security whose class its
+        name gives, with the notice of the Form 25 the classification is anchored on."""
         observed = _parse_date(observed_delist_date) if observed_delist_date else None
 
         flags: list[str] = []
@@ -756,6 +756,11 @@ class DelistClassifier:
             "anchor_gap_days": gap,
             "flags": flags,
         }
+        own = own_shares
+        if own is None:
+            day = observed or (_parse_date(delist_filing.filing_date) if delist_filing is not None else None)
+            own = self.reader.ending(resolution.cik, share_class=share_class_from_name(resolution.name),
+                                     name=resolution.name, day=day, form25=delist_filing) if day else None
 
         # SEC-revoked: explicit Order of Suspension/Revocation by the SEC.
         # The submissions JSON marks these with form code 'REVOKED'. A matched
@@ -835,21 +840,15 @@ class DelistClassifier:
                                      deficiency_notice=self._deficiency_notice(resolution.cik, filings, observed),
                                      bankruptcy_filing=self._bankruptcy_in_window(resolution.cik, filings, observed,
                                                                                   flags))
-            if end_of_era.merges(era):
-                era = replace(era, survived=self._survived(resolution.cik, resolution.name, filings, observed,
-                                                           era, delist_filing_override))
+            if end_of_era.merges(era) and own is not None:
+                # rule 1 (5c): a registrant that acquired or distributed survived the deal its 8-K items report
+                era = replace(era, survived=own.survived(d for item in ("5.01", "2.01")
+                                                         if (d := era.item_filed.get(item)) is not None))
+            if end_of_era.registers_successor(era) and own is not None:
+                # spec 5c rule 6 (sub-plan 5f): the resolver reads what the registrant's own shares became
+                era = replace(era, successor_terms=own.statement)
             items_code, _ = self._classify_items(set(era.item_filed))
             verdict = end_of_era.resolve(era, items_code)
-            if verdict.branch == "successor":
-                # spec 5c rule 6 (sub-plan 5f): a successor registration whose own-share statement gives another
-                # ratio, or cash, is a stock (or cash-plus-stock) merger priced on the successor line (CHTR 2016:
-                # 0.9042 New Charter); a split factor is a consolidation into it (SIRI 2024's 0.1 New Sirius)
-                own = self._own_terms(resolution.cik, resolution.name, filings, [observed], delist_filing_override)
-                if own is not None and not own.ambiguous and (own.cash or not _split_factor(own.ratio)):
-                    verdict = end_of_era.EraVerdict(
-                        "successor_merger", 231, CrspBucket.MERGER,
-                        f"{verdict.reason.split(':')[0]}: each share became {own.ratio:g} shares "
-                        f"{own.target[:60].strip()}{' and cash' if own.cash else ''}, a merger (rule 6)")
             if verdict.branch == "continued_filings":
                 # read only where nothing else decided (sub-plan 5g, branch 5b): a voluntary delisting while
                 # winding down (EQC 2025)
@@ -866,7 +865,7 @@ class DelistClassifier:
                 # (NBTY 2010, Biomet 2007): its path decides, and any answer but a merger is 231.
                 evidence["end_of_era"] = "form25_notice"
                 rec = self._classify_filings(ticker, resolution, observed_delist_date, observed, filings,
-                                             delist_filing, dereg, evidence, flags)
+                                             delist_filing, dereg, evidence, flags, own)
                 if rec.bucket is CrspBucket.MERGER:
                     return rec
                 return DelistRecord(ticker=ticker.upper(), cik=resolution.cik,
@@ -886,76 +885,7 @@ class DelistClassifier:
                 evidence=evidence,
             )
         return self._classify_filings(ticker, resolution, observed_delist_date, observed, filings, delist_filing,
-                                      dereg, evidence, flags)
-
-    def _matched_form25(self, cik: int, sub: EdgarSubmission | None) -> Form25 | None:
-        """The parsed Form 25 the delisting finder matched (`sub`), for its EX-99.25 notice; None without one or
-        when its text cannot be read."""
-        fetch = getattr(self.edgar, "fetch_filing_raw", None)
-        raw = fetch(cik, sub.accession) if sub is not None and fetch is not None else ""
-        return parse_form25(raw, accession=sub.accession, form=sub.form, filing_date=sub.filing_date) if raw else None
-
-    def _survived(self, cik: int, name: str | None, filings: list[EdgarSubmission], observed: date,
-                  era: end_of_era.EraSignals, form25: EdgarSubmission | None) -> str:
-        """Sub-plan 5c, rule 1: the sentence that says the registrant survived the transaction its 8-K items
-        call a merger -- its own shares were not exchanged (`exchange_terms.own_exchange` finds no statement
-        about them), and another party's shares became its own or it issued its shares to the other party
-        (`acquires`: RRI Energy acquiring Mirant, SXC acquiring Catalyst, Forest Oil issuing shares to Sabine), or
-        its holders received another company's shares and kept theirs (`distributes`: News Corp's 2013
-        separation) -- else "". Read in the 8-Ks around the end and around the 5.01 and 2.01 8-Ks, and the
-        matched Form 25's notice; names in force before the earliest of those days. Never rename or separation
-        words alone (BNI, CAL, TXU, LGFA were targets renamed after closing)."""
-        days = [observed] + [d for item in ("5.01", "2.01") if (d := _parse_date(era.item_filed.get(item, "")))]
-        names = exchange_terms.registrant_names(self.edgar.submissions(cik), min(days), name or "")
-        texts = exchange_terms.read_texts(self.edgar, cik, filings, days, self._matched_form25(cik, form25))
-        if exchange_terms.own_exchange(texts, names=names, class_letter=None) is not None:
-            return ""
-        return exchange_terms.acquires(texts, names=names) or exchange_terms.distributes(texts, names=names)
-
-    def _one_for_one(self, cik: int, name: str | None, filings: list[EdgarSubmission], days: list[date],
-                     form25: EdgarSubmission | None) -> exchange_terms.OwnExchange | None:
-        """Sub-plan 5c, R1: the filings around `days` state each share of the security's own class became one
-        share, with no cash (`exchange_terms.own_exchange`, the class read from the security's name); else
-        None."""
-        own = self._own_terms(cik, name, filings, days, form25)
-        return own if own is not None and own.one_for_one else None
-
-    def _own_terms(self, cik: int, name: str | None, filings: list[EdgarSubmission], days: list[date],
-                   form25: EdgarSubmission | None) -> exchange_terms.OwnExchange | None:
-        """What the filings around `days` say each share of the security's own class became
-        (`exchange_terms.own_exchange`, the class read from the security's name); None without a statement."""
-        days = [d for d in days if d]
-        if not days:
-            return None
-        letter, words = exchange_terms.class_of(share_class_from_name(name), name)
-        names = exchange_terms.registrant_names(self.edgar.submissions(cik), min(days), name or "")
-        texts = exchange_terms.read_texts(self.edgar, cik, filings, days, self._matched_form25(cik, form25))
-        return exchange_terms.own_exchange(texts, names=names, class_letter=letter, class_words=words)
-
-    def _names_new_issuer(self, own: exchange_terms.OwnExchange, cik: int, day: date | None) -> bool:
-        """R1's condition for a target that does not name the registrant by a pronoun: it carries a name the
-        registrant itself carried (the same CIK: ONEOK's 2026 holding company, "Legacy ONEOK" into "ONEOK"), or it
-        names a registrant of another CIK (EDGAR's ticker file) whose first filing is at most
-        `successors.NEW_ISSUER_DAYS` before `day` -- never an existing acquirer (LVNTA into GCI Liberty). False
-        when neither is found."""
-        from .names import names_agree
-        from .successors import NEW_ISSUER_DAYS
-        if day is None or not own.target_names:
-            return False
-        sub = self.edgar.submissions(cik)
-        if any(names_agree(t, n) for t in own.target_names
-               for n in exchange_terms.registrant_names(sub, day) if n):
-            return True
-        company_tickers = getattr(self.edgar, "company_tickers", None)
-        for entry in (company_tickers().values() if company_tickers is not None else ()):
-            other = entry.get("cik_str")
-            if other is None or int(other) == cik or not any(names_agree(t, entry.get("title", ""))
-                                                             for t in own.target_names):
-                continue
-            filed = [f.filing_date for f in self.edgar.recent_filings(int(other)) if f.filing_date]
-            if filed and (day - date.fromisoformat(min(filed)[:10])).days <= NEW_ISSUER_DAYS:
-                return True
-        return False
+                                      dereg, evidence, flags, own)
 
     def _notice_says_acquired(self, cik: int, sub: EdgarSubmission) -> bool:
         """Whether the matched Form 25's EX-99.25 notice says its class was acquired or converted into cash
@@ -969,7 +899,7 @@ class DelistClassifier:
     def _classify_filings(self, ticker: str, resolution: TickerResolution, observed_delist_date: str | None,
                           observed: date | None, filings: list[EdgarSubmission],
                           delist_filing: EdgarSubmission | None, dereg: EdgarSubmission | None, evidence: dict,
-                          flags: list[str]) -> DelistRecord:
+                          flags: list[str], own: OwnShares | None = None) -> DelistRecord:
         """The Form 25 and 8-K branches of `_classify_resolved`: no Form 25, an 8-K near the observed date; else
         the 8-K near the Form 25 (or the backscan's), its items' code, the default without a fingerprint."""
         if delist_filing is None:
@@ -1002,7 +932,7 @@ class DelistClassifier:
             if code == 570 or (code is None and dereg is not None):
                 return self._default_without_fingerprint(
                     ticker, resolution.cik, observed_delist_date, observed,
-                    filings, eightk, dereg, delist_filing, evidence, flags)
+                    filings, eightk, dereg, delist_filing, evidence, flags, own)
             if code is None:
                 return DelistRecord(
                     ticker=ticker.upper(),
@@ -1044,7 +974,7 @@ class DelistClassifier:
         if code is None or code == 570:
             return self._default_without_fingerprint(
                 ticker, resolution.cik, observed_delist_date, observed,
-                filings, eightk, dereg, delist_filing, evidence, flags)
+                filings, eightk, dereg, delist_filing, evidence, flags, own)
 
         conf = "high" if dereg is not None else "medium"
         return DelistRecord(
@@ -1070,6 +1000,7 @@ class DelistClassifier:
         form25: EdgarSubmission | None = None,
         resolution_source: str = "security_master",
         trading_after: bool = False,
+        own_shares: OwnShares | None = None,
     ) -> DelistRecord:
         """Classify one delisting of a security whose issuer is already known.
 
@@ -1084,6 +1015,8 @@ class DelistClassifier:
         security master's own resolution defaults to "security_master".
         `trading_after`: the security still traded after the end (the delisting
         finder's `continued`); the end-of-era resolver then keeps today's transfer.
+        `own_shares`: the ending's own-share reading (`own_shares.Reader.ending`),
+        which rules 1 and 6 and R1 read; the finder keeps it on the delisting.
         """
         if kind in NON_EQUITY_KINDS:
             return DelistRecord(
@@ -1094,7 +1027,8 @@ class DelistClassifier:
             )
         resolution = TickerResolution(ticker.upper(), int(cik), name, resolution_source)
         return self._classify_resolved(ticker, resolution, anchor_date, expected_name=expected_name,
-                                       delist_filing_override=form25, trading_after=trading_after)
+                                       delist_filing_override=form25, trading_after=trading_after,
+                                       own_shares=own_shares)
 
     def classify_many(
         self, items: Iterable[tuple[str, str | None]]

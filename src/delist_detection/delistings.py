@@ -24,6 +24,7 @@ from .form25 import (
 from .history import Ending
 from .last_trade import Dating, LastTrade, OwnTrading, anchor_day
 from .listing_status import exchanges_around, issuer_exchange, withdrawal_kind
+from .own_shares import OwnShares
 from .review_triage import FilingRef, ReviewItem
 from .rewrites import SUCCESSOR_UNKNOWN, Rewrite, Rule, continuation, security_goes_on
 from .security_master import Security
@@ -60,7 +61,9 @@ class Delisting:
     """One delisting of one security (CONTEXT.md): the Form 25 group (or the
     fallback filing) that ended its listing, dated and classified (`record`).
     Its kind and successor change after the finder built it only through
-    `rewrites.py`, which records each change in `rewrites` (typed provenance)."""
+    `rewrites.py`, which records each change in `rewrites` (typed provenance).
+    `own_shares`: what the registrant said each share became (`own_shares.OwnShares`), once read: the
+    classifier's reading when its rules read it, else the first later stage's (`own_shares.of`)."""
     sec_id: str
     cik: int
     ticker: str
@@ -71,6 +74,7 @@ class Delisting:
     form25_sub: EdgarSubmission | None
     exchange: str
     rewrites: list[Rewrite] = field(default_factory=list)
+    own_shares: OwnShares | None = field(default=None, compare=False, repr=False)
 
     @property
     def key(self) -> DelistingKey:
@@ -519,15 +523,19 @@ class DelistingFinder:
         day = None if lt.worked_out else lt.day
         ticker = (day and ctx.ticker_on(day.isoformat())) or filing_ticker
         anchor = day.isoformat() if day else winner_sub.filing_date
+        # the ending's own-share reading, at its anchor (a worked-out last trade included: `Delisting.anchor`)
+        own = self.classifier.reader.ending(cik, share_class=sec.share_class, name=sec.name,
+                                            day=anchor_day(lt, eff, filed=winner_sub.filing_date), form25=winner_f25)
         rec = self.classifier.classify_event(ticker=ticker, cik=cik, anchor_date=anchor, name=sec.name,
                                              expected_name=ctx.expected_name, kind=sec.kind, form25=winner_sub,
                                              resolution_source=ctx.resolution_source,
-                                             trading_after=continued)
+                                             trading_after=continued, own_shares=own)
         moved = None
         if continued and rec.bucket is CrspBucket.UNKNOWN:
             moved = next(((s, a) for s, f in sorted(group, key=lambda i: i[0].filing_date)
                           if (a := self._eight_a(s, f, filings)) is not None), None)
         delisting = self._delisting(sec, cik, ticker, eff, rec, lt, winner_f25, winner_sub, continued, extra_flags)
+        delisting.own_shares = own if own.stated else None
         if moved is not None:              # R7: the issuer moved the class (Kraft Heinz 2026, Nasdaq to NYSE)
             s, a = moved
             continuation(delisting, sec.sec_id, Rule.ISSUER_MOVE,
@@ -614,9 +622,11 @@ class DelistingFinder:
     def _fallback(self, ctx: SecurityContext, cik: int, filings: list[EdgarSubmission],
                   ticker: str, early: list[EdgarSubmission] | None = None) -> Delisting | None:
         sec = ctx.security
+        own = self.classifier.reader.ending(cik, share_class=sec.share_class, name=sec.name,
+                                            day=date.fromisoformat(ctx.last_seen)) if ctx.last_seen else None
         rec = self.classifier.classify_event(ticker=ticker, cik=cik, anchor_date=ctx.last_seen, name=sec.name,
                                              expected_name=ctx.expected_name, kind=sec.kind, form25=None,
-                                             resolution_source=ctx.resolution_source)
+                                             resolution_source=ctx.resolution_source, own_shares=own)
         evidence = rec.evidence or {}
         if evidence.get("delist_filing"):
             # The classifier picked a Form 25 on its own, ignoring class. The
@@ -655,5 +665,7 @@ class DelistingFinder:
         # ticker (spec D22) rather than leaving it blank -- which otherwise
         # maps to Exchange.OTHER and applies the wrong Shumway constant.
         exch = issuer_exchange(self.edgar, cik, ticker) or ""
-        return self._delisting(sec, cik, ticker, ended_by, rec, lt, None, None, False, ("no_form25", *extra_flags),
-                           exchange=exch)
+        delisting = self._delisting(sec, cik, ticker, ended_by, rec, lt, None, None, False,
+                                    ("no_form25", *extra_flags), exchange=exch)
+        delisting.own_shares = own if own is not None and own.stated else None
+        return delisting

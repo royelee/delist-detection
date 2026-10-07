@@ -1,8 +1,7 @@
-"""exchange_terms: what a filing says the registrant's own shares became (sub-plan 5c, ruling R1). The real cases
-read their texts from tests/fixtures/issuer_role/ (built once from the local caches)."""
+"""exchange_terms: what a filing says the registrant's own shares became (sub-plan 5c, ruling R1), the pure statement
+reader (the texts, names and class one ending's statement is read in: tests/test_own_shares.py). The real cases read
+their texts from tests/fixtures/issuer_role/ (built once from the local caches)."""
 from __future__ import annotations
-
-from datetime import date
 
 import pytest
 
@@ -148,25 +147,6 @@ def test_cash_paid_only_for_another_class_is_not_the_securitys():
     hub = [_text("0001193125-15-412174")]
     assert X.own_exchange(hub, names=["HUBBELL INC"], class_letter="B").cash is False
     assert X.own_exchange(hub, names=["HUBBELL INC"], class_letter="A").cash is True
-
-
-def test_the_registrants_names_are_read_from_before_the_event():
-    """Schering-Plough became "Merck & Co." the day of the merger: before it, it is read by its old name."""
-    sub = {"name": "MERCK & CO., INC.", "formerNames": [{"name": "SCHERING PLOUGH CORP", "from": "1994-01-01",
-                                                          "to": "2009-11-03"}]}
-    assert X.registrant_names(sub, date(2009, 11, 4), "SCHERING PLOUGH CORP") == ["SCHERING PLOUGH CORP",
-                                                                                  "SCHERING PLOUGH CORP"]
-    assert X.class_of("CLASS A", "COMCAST SPECIAL CORP CLASS A") == ("A", ("SPECIAL",))
-    assert X.class_of("COMMON", "ONEOK INC") == ("", ())
-
-
-def test_read_texts_reads_the_8ks_around_each_day_and_the_notice():
-    edgar = ic.FixtureEdgar()
-    filings = edgar.recent_filings(1039684)
-    raw = ic.EDGAR["raws"]["0000876661-26-000770"]
-    f25 = parse_form25(raw, accession="0000876661-26-000770", form="25-NSE", filing_date="2026-09-18")
-    texts = X.read_texts(edgar, 1039684, filings, [date(2026, 9, 9)], f25)
-    assert "0001193125-26-387972" in edgar.texts_read and texts[-1] == f25.notice_text
 
 
 def test_a_cash_take_private_whose_insiders_rolled_over_is_a_target_not_an_acquirer():

@@ -1,36 +1,31 @@
 """What a filing says the registrant's own shares became (sub-plan 5c; spec 2026-10-03-diagnosis-truth-fixes, ruling
-R1: a continuation is one new share per old share and no cash in the exchange).
+R1: a continuation is one new share per old share and no cash in the exchange). Pure: the statement reader.
 
 An 8-K that reports a merger, a holding-company reorganization, a reclassification or a split-off states the
 conversion: "each outstanding share of Baker Hughes common stock was converted into the right to receive one share
 of BHGE's Class A common stock", "each share of SBG's Class A common stock ... was exchanged on a one-for-one basis
 for an equivalent share of New Sinclair's Class A common stock", "the holders of outstanding shares of DIRECTV Group
 common stock received one share of DIRECTV Class A common stock for each share". `statements` reads every such
-statement of one filing (pure); `own_exchange` keeps those about the security's own shares -- the subject's first
-party is the registrant (an EDGAR name it carried before the event, a defined term that stands for one, "Old"/
-"Legacy" before it, "the Company", "its", "our") and the class is the security's -- and says what they became: the
-ratio, whether cash was paid in the exchange (par values, cash in lieu of fractional shares and a special dividend
-are not consideration: operator ruling 2026-10-04), the target clause, the names it carries and the class letter it
-names. A distribution (the holders kept their shares: a record date, "for every four shares") is no exchange.
+statement of one filing; `own_exchange` keeps those about the security's own shares -- the subject's first party is
+the registrant (an EDGAR name it carried before the event, a defined term that stands for one, "Old"/"Legacy" before
+it, "the Company", "its", "our") and the class is the security's -- and says what they became: the ratio, whether
+cash was paid in the exchange (par values, cash in lieu of fractional shares and a special dividend are not
+consideration: operator ruling 2026-10-04), the target clause, the names it carries and the class letter it names. A
+distribution (the holders kept their shares: a record date, "for every four shares") is no exchange. What a statement
+means for its holders is its own: one for one (R1's shape, `one_share_no_cash`), a split factor (`split_factor`),
+a changed stake (rule 6).
 
 Two other roles a registrant can have in such a filing, for the end-of-era resolver's rule 1: `acquires` (another
 party's shares became the registrant's -- Mirant into RRI Energy, Catalyst into SXC -- or the registrant issued its
 shares to the other party under the merger agreement: Forest Oil to Sabine) and `distributes` (its holders received
-another company's shares and kept theirs: News Corp's 2013 separation). `read_texts` gathers the filings one ending's
-reading uses; `registrant_names` and `class_of` give the names and the class it is read against.
+another company's shares and kept theirs: News Corp's 2013 separation). Which texts, names and class one ending's
+statement is read in and against is `own_shares`' choice (the own-share reading).
 """
 from __future__ import annotations
 
 import re
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
-from datetime import date, timedelta
-
-from .evidence import names_between
-from .figi_resolution import class_letter
-
-TEXT_BEFORE_DAYS, TEXT_AFTER_DAYS = 3, 10       # the registrant's 8-Ks filed this close to the ending's anchor
-NAMES_BEFORE_DAYS = 365                          # the registrant's EDGAR names in force this long before the anchor
 
 _QUOTES = str.maketrans({"“": '"', "”": '"', "’": "'", "‘": "'", " ": " "})
 _NUMBER_WORDS = {"one": 1.0, "two": 2.0, "three": 3.0, "four": 4.0, "five": 5.0}
@@ -128,7 +123,8 @@ _OWN_PRONOUN = re.compile(r"\b(?:the\s+Company|Company's|our|its|we)\b", re.I)
 _OWN_SKIP = {"THE", "NEW", "OLD", "INC", "CORP", "CO", "COMPANY", "HOLDINGS", "GROUP", "LTD", "PLC", "NV", "LLC",
              "SA", "AG", "SE", "LP", "TRUST", "INTERNATIONAL", "AMERICAN", "UNITED", "NATIONAL", "FIRST", "GENERAL",
              "ENERGY", "FINANCIAL", "CLASS", "COMMON", "SERIES", "STOCK"}
-_CLASS_MODIFIERS = ("SPECIAL", "NON-VOTING", "LIMITED VOTING")
+# the words that set a class apart in its name ("COMCAST SPECIAL CORP CLASS A")
+CLASS_MODIFIERS = ("SPECIAL", "NON-VOTING", "LIMITED VOTING")
 
 
 @dataclass(frozen=True)
@@ -167,7 +163,37 @@ class OwnExchange:
     def one_for_one(self) -> bool:
         """One share per share, no cash, one reading, and no second leg of shares, rights, warrants, units or CVRs
         (R1: only one security comes back)."""
-        return self.ratio == 1.0 and not self.cash and not self.ambiguous and not self.extra_leg
+        return one_share_no_cash(self.ratio, self.cash) and not self.ambiguous and not self.extra_leg
+
+    @property
+    def split(self) -> bool:
+        """The ratio is a split factor (`split_factor`): the holders keep their stake in more or fewer shares."""
+        return split_factor(self.ratio)
+
+    @property
+    def stake_changed(self) -> bool:
+        """One reading whose holders got another ratio than one or a split factor, or cash: a merger, whatever
+        registers the successor (spec 5c rule 6, sub-plan 5f: CHTR 2016's 0.9042 New Charter; SIRI 2024's 0.1 New
+        Sirius is a consolidation)."""
+        return not self.ambiguous and (self.cash or not self.split)
+
+
+SPLIT_FACTOR_MAX = 100     # a split or consolidation factor n (or 1/n) is a whole number up to this
+
+
+def one_share_no_cash(ratio: float | None, cash) -> bool:
+    """R1's shape: one share per share and no cash (`cash` a flag or an amount; a ratio within 1e-9 of one)."""
+    return ratio is not None and abs(ratio - 1.0) <= 1e-9 and not cash
+
+
+def split_factor(ratio: float) -> bool:
+    """Whether `ratio` shares per share is a split or a consolidation: n or 1/n for a whole n up to
+    SPLIT_FACTOR_MAX, 1 included. The holders keep their stake (rule 6's guard, SIRI 2024's 0.1; the verdict's
+    ratio doubt, `verdict_rules.ratio_doubt`)."""
+    if ratio <= 0:
+        return False
+    n = ratio if ratio >= 1 else 1 / ratio
+    return round(n) <= SPLIT_FACTOR_MAX and abs(n - round(n)) < 1e-6
 
 
 def normalize(text: str) -> str:
@@ -336,7 +362,7 @@ def _class_ok(st: Statement, letter: str | None, class_words: Sequence[str]) -> 
         return False
     head = st.subject[:120].upper()
     mods = {w.upper() for w in class_words}
-    return all((w in head) == (w in mods) for w in _CLASS_MODIFIERS)
+    return all((w in head) == (w in mods) for w in CLASS_MODIFIERS)
 
 
 def _terms_and_own(texts: Sequence[str], names: Sequence[str]) -> tuple[dict[str, str], set[str]]:
@@ -389,8 +415,8 @@ def _cash_for_class(texts: Iterable[str], own: set[str], letter: str | None) -> 
 def own_exchange(texts: Iterable[str], *, names: Sequence[str], class_letter: str | None = "",
                  class_words: Sequence[str] = ()) -> OwnExchange | None:
     """What the security's own shares became (module docstring): `names` the registrant's names before the event
-    (`registrant_names`), `class_letter` its class letter ("" for a plain common, None for any class),
-    `class_words` the words that set its class apart (`class_of`). None when no filing states it."""
+    (`own_shares.registrant_names`), `class_letter` its class letter ("" for a plain common, None for any class),
+    `class_words` the words that set its class apart (`own_shares.class_of`). None when no filing states it."""
     texts = [normalize(t) for t in texts if t]
     found = own_statements(texts, names=names, class_letter=class_letter, class_words=class_words)
     if not found:
@@ -452,41 +478,3 @@ def distributes(texts: Iterable[str], *, names: Sequence[str]) -> str:
             if _first_party_own(subj, own):
                 return t[max(0, m.start() - 200):m.end()][:300]
     return ""
-
-
-def registrant_names(sub: dict | None, before: date, security_name: str = "") -> list[str]:
-    """The registrant's names before the event: the EDGAR names it carried in the NAMES_BEFORE_DAYS up to two days
-    before `before` (the earliest day the reading looks at: a registrant renamed at the closing, Schering-Plough
-    as "Merck", Foundation Coal as "Alpha Natural Resources", is read by its old name), else its current one, then
-    the security's own name."""
-    names = names_between(sub, before - timedelta(days=NAMES_BEFORE_DAYS), before - timedelta(days=2)) \
-        if isinstance(sub, dict) else []
-    if not names and isinstance(sub, dict) and sub.get("name"):
-        names = [sub["name"]]
-    return [*names, security_name] if security_name else names
-
-
-def class_of(share_class: str | None, name: str | None) -> tuple[str, tuple[str, ...]]:
-    """The class letter a security's statements must name ("" for a plain common) and the words that set its class
-    apart in its name ("COMCAST SPECIAL CORP CLASS A": ("SPECIAL",))."""
-    up = (name or "").upper()
-    return class_letter(share_class) or "", tuple(w for w in _CLASS_MODIFIERS if w in up)
-
-
-def read_texts(edgar, cik: int, filings: Sequence, days: Iterable[date], form25=None) -> list[str]:
-    """The texts one ending's reading uses: the registrant's 8-Ks (8-K12B and 8-K12G3 included) filed in
-    [day - TEXT_BEFORE_DAYS, day + TEXT_AFTER_DAYS] of any of `days` (the ending's anchor, and the 8-K that decided
-    it), in filing order, then the EX-99.25 notice of its matched Form 25 (`form25`, a `form25.Form25`). An
-    unreadable text reads as ""."""
-    windows = [(d - timedelta(days=TEXT_BEFORE_DAYS), d + timedelta(days=TEXT_AFTER_DAYS)) for d in days if d]
-    out: list[str] = []
-    for f in sorted(filings, key=lambda f: (f.filing_date, f.accession)):
-        try:
-            day = date.fromisoformat(f.filing_date[:10])
-        except ValueError:
-            continue
-        if f.form.startswith("8-K") and any(lo <= day <= hi for lo, hi in windows):
-            out.append(edgar.fetch_filing_text(cik, f.accession, f.primary_doc) or "")
-    if form25 is not None and getattr(form25, "notice_text", ""):
-        out.append(form25.notice_text)
-    return out

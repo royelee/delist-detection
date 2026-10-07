@@ -15,9 +15,9 @@ note A. They settle a doubt `verdict` would otherwise raise; none changes a tabl
   than itself): a successor registration whose successor was never found keeps its doubt, and so does one whose
   registrant's own filings state another ratio or cash (`Reading.doubt`, stage 9g: CHTR 2016's 0.9042 is a stock
   merger, reason `continuation_not_one_for_one:ratio:0.9042`; SIRI 2024's 0.1 is a reverse split of the same class
-  and no doubt, `ratio_doubt`; a missing reading vetoes nothing). A continuation linked by timing alone
-  ("timing:cik", the Liberty tracking-stock reclassifications) is untouched. (A continuation never carries the
-  no-evidence default: `rewrites.continuation` drops it.)
+  and no doubt, `ratio_doubt`, by the one split factor rule; a missing reading vetoes nothing). A continuation linked
+  by timing alone ("timing:cik", the Liberty tracking-stock reclassifications) is untouched. (A continuation never
+  carries the no-evidence default: `rewrites.continuation` drops it.)
 - **The matched Form 25's filer is issuer evidence** (`issuer_by_form25`, note A theme 3). An issuer found in
   today's company_tickers.json is confirmed when the row's own Form 25 (not the unmatched one a handoff row
   borrows) was read from that same CIK and the observed name agreed with it on the date (no
@@ -57,6 +57,7 @@ from dataclasses import dataclass
 from datetime import date
 
 from .end_of_era import RESOLVED_FROM_CONTINUED_FILINGS
+from .exchange_terms import split_factor
 from .exit_kind import is_continuation, is_real_ending
 from .lifecycle import flag_names
 
@@ -66,7 +67,6 @@ MERGER_RELABELS = ("Change in control (8-K item 5.01", "Completed acquisition (8
 STALE_SEED_DAYS = 365                     # a seed counts as stale only this soon after the ending's last trade
 STALE_TOL_BASE, STALE_TOL_PER_DAY = 0.15, 0.05   # the gate's own tolerance, widened per trading day of close age
 _SUCCESSOR_FILING = re.compile(r"^(?:Successor registration |Continuation \()(?:8-K12B|8-K12G3)(?:/A)? ")
-_FILING_DATE = re.compile(r"^Successor registration 8-K12(?:B|G3)(?:/A)? (\d{4}-\d{2}-\d{2})")
 _COMPARED = frozenset({"", "fail_sanity"})   # a gate token's detail when it compared the terms with the last close
 SKIPPED_GATE = "terms_gate_skipped"       # a gate that could not check (sub-plan 5f): never a price-side failure
 _NO_TICKER = frozenset({"", "NULL", "NONE", "N/A", "NA", "-", "--", "NAN"})   # an acquirer ticker in name only
@@ -108,27 +108,13 @@ def successor_filing_reason(reason: str) -> bool:
     return bool(_SUCCESSOR_FILING.match(reason))
 
 
-def successor_filing_date(reason: str) -> date | None:
-    """The filing date a resolver's successor-registration reason names, else None."""
-    m = _FILING_DATE.match(reason)
-    return date.fromisoformat(m.group(1)) if m else None
-
-
-def reverse_split(ratio: float) -> bool:
-    """A share becomes 1/N of a share (SIRI 2024's 0.1) or N shares: the same holding in fewer or more shares, not a
-    new security's exchange ratio (CHTR 2016's 0.9042)."""
-    if ratio <= 0 or ratio == 1.0:
-        return False
-    x = 1 / ratio if ratio < 1 else ratio
-    return round(x) >= 2 and abs(x - round(x)) < 1e-6
-
-
 def ratio_doubt(ratio: float, cash: bool) -> str:
     """Why a registrant's own reading contradicts a continuation: cash in the exchange, or a ratio that is neither
-    one nor a plain split (`reverse_split`); "" when it does not."""
+    one nor a split factor (`exchange_terms.split_factor`: SIRI 2024's 0.1 holds the same stake in fewer shares,
+    CHTR 2016's 0.9042 is a new security's exchange ratio); "" when it does not."""
     if cash:
         return "cash"
-    return "" if ratio == 1.0 or reverse_split(ratio) else f"ratio:{ratio:g}"
+    return "" if split_factor(ratio) else f"ratio:{ratio:g}"
 
 
 def successor_registration(row: Mapping[str, str], reading: Reading = Reading()) -> bool:

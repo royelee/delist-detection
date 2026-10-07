@@ -1,6 +1,7 @@
 """Sub-plan 5i's real cases (tests/fixtures/verdicts/, scripts/build_verdict_fixtures.py) and the harness that
 recomputes their verdicts offline: the committed run's rows for each case's securities, stage 9g's readings
-(the confirming filing, the contradicting ratio) read from the recorded EDGAR answers, then `verdict.decide`."""
+(the confirming filing, the contradicting ratio, over each continuation's own-share reading at its anchor) read from
+the recorded EDGAR answers, then `verdict.decide`."""
 from __future__ import annotations
 
 import gzip
@@ -11,7 +12,10 @@ from pathlib import Path
 
 from delist_detection.continuation_evidence import needs_doubt_check, needs_filing, read_continuation
 from delist_detection.edgar import EdgarSubmission
+from delist_detection.issuer_record import IssuerRecord
+from delist_detection.last_trade import anchor_day, of_row
 from delist_detection.lifecycle import Tables
+from delist_detection.own_shares import Reader
 from delist_detection.verdict import Verdicts, decide
 from delist_detection.verdict_rules import Reading
 
@@ -75,15 +79,24 @@ def tables_of(case: dict) -> Tables:
                   case["review"])
 
 
+def reading(r: dict, security: dict, reader: Reader):
+    """A delistings row's own-share reading, as stage 9g makes it (`own_shares.of`): at the row's anchor (its last
+    trade, else its Form 25's filing date, else its delisting date: `last_trade.anchor_day`), of the security's
+    class."""
+    day = anchor_day(of_row(r), r["delist_date"], filed=r["delist_filing_date"] or None)
+    return reader.ending(int(r["cik"]), share_class=security["share_class"], name=security["name"], day=day)
+
+
 def readings(case: dict, edgar) -> dict[tuple[str, str], Reading]:
     """Stage 9g over the case's rows (pipeline._continuation_filings, from the table rows)."""
-    names = {r["sec_id"]: r["name"] for r in case["securities"]}
+    secs = {r["sec_id"]: r for r in case["securities"]}
+    names = {sid: r["name"] for sid, r in secs.items()}
+    reader = Reader(edgar, IssuerRecord(edgar, today=AS_OF))
     out = {}
     for r in case["delistings"]:
         if r["sec_id"] in names and (needs_filing(r["reason"], r["sec_id"], r["successor_sec_id"])
                                      or needs_doubt_check(r["reason"], r["sec_id"], r["successor_sec_id"])):
-            days = [date.fromisoformat(d) for d in (r["last_trade_date"], r["delist_date"]) if d]
-            found = read_continuation(edgar, int(r["cik"]), days, names[r["sec_id"]], r["reason"], r["sec_id"],
+            found = read_continuation(reading(r, secs[r["sec_id"]], reader), r["reason"], r["sec_id"],
                                       r["successor_sec_id"], [names.get(r["successor_sec_id"], "")])
             if found.filing or found.doubt:
                 out[(r["sec_id"], r["delist_date"])] = found

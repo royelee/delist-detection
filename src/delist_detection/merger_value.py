@@ -45,6 +45,7 @@ from .added_securities import AddedAcquirer, AddedSecurity
 from .crsp_codes import CrspBucket
 from .degraded import DegradedWatch, degraded_item
 from .delistings import Delisting
+from .exchange_terms import one_share_no_cash
 from .fatal import FATAL
 from .figi_resolution import class_letter, share_class_from_name
 from .ftd import FtdIndex
@@ -139,14 +140,14 @@ class MergerValues:
 
     def reconciled(self, key: DelistingKey) -> bool:
         """Whether the delisting's value reconciled with its last close (stage 9b): a payout the gate kept or terms
-        (the caller's or the gate's), unless they are one share per share and no cash, which proves nothing against
-        a continuation (R1, sub-plan 5f: SPB 2018, one HRG share, the old line's close under the ticker the successor
-        took)."""
+        (the caller's or the gate's), unless they are one share per share and no cash (R1's shape,
+        `exchange_terms.one_share_no_cash`), which proves nothing against a continuation (sub-plan 5f: SPB 2018, one
+        HRG share, the old line's close under the ticker the successor took)."""
         terms, payout = self._terms(key), self._payout(key)
         if payout is None and not terms:
             return False
         t = terms or {}
-        return not (t.get("stock_ratio") == 1.0 and not t.get("cash_per_share") and payout is None)
+        return not (one_share_no_cash(t.get("stock_ratio"), t.get("cash_per_share")) and payout is None)
 
     def table_inputs(self) -> dict[str, Mapping]:
         """`reconstruction.build_delistings_table`'s merger inputs, keyed as it reads them: the caller's rows by

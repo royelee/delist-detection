@@ -18,7 +18,6 @@ import gzip
 import json
 import sys
 from dataclasses import asdict
-from datetime import date
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -29,7 +28,9 @@ import build_form25_fixtures  # noqa: E402,F401  (refuses every SEC request on i
 import verdict_cases as vc  # noqa: E402
 from delist_detection.continuation_evidence import needs_doubt_check, needs_filing, read_continuation  # noqa: E402
 from delist_detection.edgar import EdgarClient  # noqa: E402
+from delist_detection.issuer_record import IssuerRecord  # noqa: E402
 from delist_detection.lifecycle import Tables  # noqa: E402
+from delist_detection.own_shares import Reader  # noqa: E402
 
 TABLES = ("securities", "ticker_history", "delistings", "observation_map", "review")
 
@@ -71,12 +72,13 @@ def main() -> int:
         ids |= {r["successor_sec_id"] for r in t.delistings if r["sec_id"] in ids and r["successor_sec_id"]}
         out[case.name] = {name: [r for r in rows[name] if r["sec_id"] in ids] for name in TABLES}
         out[case.name]["uncertain_before"] = [r for r in t.uncertain if r["sec_id"] in ids]
-        names = {r["sec_id"]: r["name"] for r in t.securities}
+        secs = {r["sec_id"]: r for r in t.securities}
+        names = {sid: r["name"] for sid, r in secs.items()}
+        reader = Reader(edgar, IssuerRecord(edgar, today=vc.AS_OF))
         for r in out[case.name]["delistings"]:
             if r["sec_id"] in names and (needs_filing(r["reason"], r["sec_id"], r["successor_sec_id"])
                                          or needs_doubt_check(r["reason"], r["sec_id"], r["successor_sec_id"])):
-                days = [date.fromisoformat(d) for d in (r["last_trade_date"], r["delist_date"]) if d]
-                read_continuation(edgar, int(r["cik"]), days, names[r["sec_id"]], r["reason"], r["sec_id"],
+                read_continuation(vc.reading(r, secs[r["sec_id"]], reader), r["reason"], r["sec_id"],
                                   r["successor_sec_id"], [names.get(r["successor_sec_id"], "")])
     target = ROOT / "tests/fixtures/verdicts"
     target.mkdir(parents=True, exist_ok=True)

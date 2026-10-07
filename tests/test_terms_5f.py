@@ -11,9 +11,10 @@ from types import SimpleNamespace
 import pytest
 
 from delist_detection import currency
-from delist_detection.classifier import COMPLETION, DelistClassifier, _split_factor
+from delist_detection.classifier import COMPLETION, DelistClassifier
 from delist_detection.contract import payout_leg_rows
 from delist_detection.edgar import EdgarSubmission
+from delist_detection.exchange_terms import OwnExchange, split_factor
 from delist_detection.llm_merger_extractor import (PROMPT_VERSION, LLMMergerTermsExtractor, MergerTerms,
                                                     StockLeg)
 from delist_detection.payout_extractor import _collect
@@ -330,9 +331,16 @@ def test_a_baskets_further_legs_ask_their_received_close():
 # --- rule 6 and a completion reported in a 6-K -------------------------------------------------------------------
 
 def test_a_split_factor_keeps_the_stake_and_another_ratio_does_not():
-    """SIRI 2024's 0.1 New Sirius (a one-for-ten consolidation) is no merger; CHTR 2016's 0.9042 is."""
-    assert _split_factor(0.1) and _split_factor(1.0) and _split_factor(2.0) and _split_factor(0.25)
-    assert not _split_factor(0.9042) and not _split_factor(0.6029) and not _split_factor(1.5)
+    """SIRI 2024's 0.1 New Sirius (a one-for-ten consolidation) is no merger; CHTR 2016's 0.9042 is (the one split
+    factor rule, `exchange_terms.split_factor`, which the verdict's ratio doubt reads too)."""
+    assert split_factor(0.1) and split_factor(1.0) and split_factor(2.0) and split_factor(0.25)
+    assert not split_factor(0.9042) and not split_factor(0.6029) and not split_factor(1.5)
+    assert split_factor(0.01) and not split_factor(1 / 150) and not split_factor(0.0)       # n up to SPLIT_FACTOR_MAX
+
+    def own(ratio, cash=False, ambiguous=False):
+        return OwnExchange(ratio, cash, "of New Charter", ("New Charter",), "", False, "s", ambiguous=ambiguous)
+    assert own(0.9042).stake_changed and own(1.0, cash=True).stake_changed               # rule 6: a merger
+    assert not own(0.1).stake_changed and not own(1.0).stake_changed and not own(0.9042, ambiguous=True).stake_changed
 
 
 @pytest.mark.parametrize("text", [

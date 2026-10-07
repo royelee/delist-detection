@@ -18,7 +18,6 @@ from pathlib import Path
 from typing import Any
 
 from . import acquirer_line
-from . import exchange_terms
 from . import manifest as run_manifest
 from . import scorecard as run_scorecard
 from .added_securities import AddedAcquirer, AddedLineSuccessor, AddedSecurity, AddedSuccessor
@@ -49,6 +48,9 @@ from .line_follow import LineSuccessor, composites, follow_lines, is_line_symbol
 from .identity import Identity, identify
 from .listing_status import issuer_exchange, listed_today, listing_answers
 from .observations import Observation, ObservationIndex, TickerEra, observation_conflicts
+from .exchange_terms import one_share_no_cash
+from .own_shares import OwnShares, Reader, new_issuer
+from .own_shares import of as own_shares_of
 from .merger_value import MergerValues, value_mergers
 from .payout_gate import DEFAULT_TOL
 from .prefetch import Serialized, warm
@@ -68,8 +70,8 @@ from .ticker_evidence import EraEvidence, evidence_for
 from .store import DelistingKey, formatted, write_tables
 from .filing_search import successor_query
 from .successors import (
-    NEW_ISSUER_DAYS, SUCCESSOR_AFTER_DAYS, SUCCESSOR_BEFORE_DAYS, SecurityStart, successor_by_terms,
-    _named as successor_named, successor_from_8k12b, successor_in_run, successor_search_args, successor_search_name,
+    SUCCESSOR_AFTER_DAYS, SUCCESSOR_BEFORE_DAYS, SecurityStart, successor_by_terms,
+    successor_from_8k12b, successor_in_run, successor_search_args, successor_search_name,
 )
 from .verdict import Verdicts
 from .verdict_rules import Reading
@@ -535,20 +537,9 @@ def _starts(securities: dict[str, Security], sightings: dict[str, list[Sighting]
     return starts
 
 
-def _own_exchange(clients: Clients, e: Delisting, sec: Security
-                  ) -> tuple[exchange_terms.OwnExchange | None, list[str], date]:
-    """What `e`'s security's own shares became (`exchange_terms.own_exchange`), the texts it was read in and the
-    day it was read around (`Delisting.anchor`; the 8-K the classifier anchored on is read too). The
-    registrant's filing list and names come from the run's issuer record (none when they cannot be read)."""
-    day = e.anchor
-    days = [day]
-    filed = ((e.record.evidence or {}).get("anchor_8k") or {}).get("filing_date")
-    if filed:
-        days.append(date.fromisoformat(filed))
-    texts = exchange_terms.read_texts(clients.edgar, e.cik, clients.issuers.filings(e.cik), days, e.form25)
-    letter, words = exchange_terms.class_of(sec.share_class, sec.name)
-    names = exchange_terms.registrant_names(clients.issuers.profile(e.cik), min(days), sec.name)
-    return exchange_terms.own_exchange(texts, names=names, class_letter=letter, class_words=words), texts, day
+def _reader(clients: Clients) -> Reader:
+    """The own-share reader over the run's EDGAR client and issuer record (`own_shares.Reader`)."""
+    return Reader(clients.edgar, clients.issuers)
 
 
 @dataclass
@@ -560,17 +551,18 @@ class _R1:
     review: list[ReviewItem] = field(default_factory=list)
 
 
-def _r1_successor(ctx: _RunContext, e: Delisting, sec: Security, own: exchange_terms.OwnExchange, day: date,
+def _r1_successor(ctx: _RunContext, e: Delisting, sec: Security, own: OwnShares, day: date,
                   starts: dict[str, SecurityStart], securities: dict[str, Security],
                   added: Mapping[str, AddedSecurity], out: _R1,
                   pending: dict[str, AddedSecurity]) -> tuple[str, str] | None:
     """The successor of a merger row R1 rewrites: a security of the run (`successors.successor_by_terms`), else
-    the new issuer whose 8-K12B names the registrant (`successors.successor_from_8k12b`, its filer at most
-    NEW_ISSUER_DAYS old and named by the R1 statement's target, the stage-9 name tie), to be added as a security of
-    its own (`AddedSuccessor`, seen from the day after `day`) in `pending`: the caller adds it once the reading is
-    known not to be degraded. Issuers' first filings and names come from the run's issuer record."""
+    the new issuer whose 8-K12B names the registrant (`successors.successor_from_8k12b`, its filer a new issuer,
+    `own_shares.new_issuer`, and named by the R1 statement's target, the name tie `OwnShares.names_target`), to be
+    added as a security of its own (`AddedSuccessor`, seen from the day after `day`) in `pending`: the caller adds it
+    once the reading is known not to be degraded. Issuers' first filings and names come from the run's issuer
+    record."""
     issuers = ctx.clients.issuers
-    link = successor_by_terms(e, own, day, starts, issuers=issuers)
+    link = successor_by_terms(e, own.statement, day, starts, issuers=issuers)
     search = getattr(ctx.clients.edgar, "full_text_search", None)
     if link is not None or search is None:
         return link
@@ -580,10 +572,9 @@ def _r1_successor(ctx: _RunContext, e: Delisting, sec: Security, own: exchange_t
     if hit is None:
         return None
     s_cik, cand, filed = hit
-    since = issuers.first_filed(s_cik)
-    if since is None or (day - since).days > NEW_ISSUER_DAYS:
+    if not new_issuer(issuers.first_filed(s_cik), day):
         return None
-    if not successor_named(own, {cand.ticker}, issuers.names(s_cik)):
+    if not own.names_target(issuers.names(s_cik), {cand.ticker}):
         return None
     if cand.composite not in securities and cand.composite not in added:
         not_before = first_day_after(day).isoformat()
@@ -596,16 +587,18 @@ def _r1_successor(ctx: _RunContext, e: Delisting, sec: Security, own: exchange_t
 def _r1_continuations(ctx: _RunContext, delistings: list[Delisting], securities: dict[str, Security],
                       sightings: dict[str, list[Sighting]], values: MergerValues) -> _R1:
     """8b. A merger that ruling R1 makes a continuation (sub-plan 5c): its published terms are one share and no
-    cash (a special dividend is no cash: operator ruling 2026-10-04), no --merger-terms row decides it, the
-    registrant's own filings say the same of its own shares (`exchange_terms.own_exchange`, one reading: a
-    multi-step deal's intermediate one-for-one, Jefferies 2013, has the LLM's 0.81 against it), and the holders'
-    new shares are a new issuer's or the same issuer's (`_r1_successor`). The row becomes an exchange transfer
-    (304) to that successor, flagged `r1_continuation`, its payout reads dropped (a continuation has no value):
+    cash (a special dividend is no cash: operator ruling 2026-10-04, `OwnShares.consideration`), no --merger-terms
+    row decides it, the registrant's own filings say the same of its own shares (the ending's own-share reading,
+    `own_shares.of`: a multi-step deal's intermediate one-for-one, Jefferies 2013, has the LLM's 0.81 against it),
+    and the holders' new shares are a new issuer's or the same issuer's (`_r1_successor`). The row becomes an
+    exchange transfer (304) to that successor, flagged `r1_continuation`, its payout reads dropped (a continuation
+    has no value):
     `rewrites.continuation`, `Rule.R1`, with the run's merger values; an `r1_rebucketed` review item keeps its old
     bucket. An existing acquirer is never a continuation (LVNTA
     into GCI Liberty, Towers Watson into Willis, Waste Connections into Progressive Waste). The terms are stage 8's
     reading (`MergerValues.read_terms`: none for a merger the caller gave terms for). A reading that rested on a
-    failed or stale read (the issuer record's, or any other SEC read's) keeps the merger, flagged degraded."""
+    failed or stale read (the issuer record's, or any other SEC read's, now or when the reading was made) keeps the
+    merger, flagged degraded."""
     out = _R1()
     mark = ctx.meter.start()
     starts = _starts(securities, sightings, values.added)
@@ -613,17 +606,15 @@ def _r1_continuations(ctx: _RunContext, delistings: list[Delisting], securities:
         if e.record.bucket is not CrspBucket.MERGER or e.sec_id not in securities:
             continue
         terms = values.read_terms(e.key)
-        if terms is None or terms[1] is None or abs(terms[1] - 1.0) > 1e-9:
+        if terms is None or not one_share_no_cash(terms[1], None):
             continue
         watch = ctx.clients.issuers.watch()
         sec = securities[e.sec_id]
-        own, _, day = _own_exchange(ctx.clients, e, sec)
-        cash = terms[0]
+        own = own_shares_of(e, _reader(ctx.clients), sec)
         link, pending = None, {}
-        if own is not None and own.one_for_one and (
-                not cash or any(abs(cash - d) < 0.005 for d in own.special_dividends)):
-            link = _r1_successor(ctx, e, sec, own, day, starts, securities, values.added, out, pending)
-        if watch.tripped():
+        if own.one_for_one and one_share_no_cash(terms[1], own.consideration(terms[0])):
+            link = _r1_successor(ctx, e, sec, own, e.anchor, starts, securities, values.added, out, pending)
+        if watch.tripped() or own.degraded:
             watch_item = degraded_item(e.sec_id, e.ticker, e.cik, "the R1 reading", delist_date=e.delist_date)
             out.review.append(watch_item)
             flag_degraded(e)
@@ -634,9 +625,9 @@ def _r1_continuations(ctx: _RunContext, delistings: list[Delisting], securities:
         sid, how = link
         old = (e.record.bucket.value, e.record.crsp_code, e.record.reason)
         continuation(e, sid, Rule.R1, confidence="medium", flag=R1_CONTINUATION, how=how,
-                     evidence=own.sentence[:300], payouts=values,
-                     reason=f"Continuation (R1): each share became one {own.target[:80].strip(' ,')}, no cash"
-                            + successor_note(how))
+                     evidence=own.statement.sentence[:300], payouts=values,
+                     reason=f"Continuation (R1): each share became one {own.statement.target[:80].strip(' ,')}, "
+                            "no cash" + successor_note(how))
         out.links[e.key] = link
         out.review.append(ReviewItem(e.sec_id, e.ticker, e.cik, R1_REBUCKETED,
                                      f"was {old[0]} (CRSP {old[1]}: {old[2]}); R1 makes it a continuation into {sid}",
@@ -697,13 +688,14 @@ def _line_successor_links(delistings: list[Delisting], securities: dict[str, Sec
                 ls.step.symbol, ls.step.first, rows)
 
 
-def _own_registration_link(ctx: _RunContext, e: Delisting, texts: list[str], day: date, securities: dict[str, Security],
-                           sec_cusips: dict[str, list[str]], ftd: FtdIndex, taken: Collection[str],
-                           found: _Successors) -> tuple[str, str] | None:
+def _own_registration_link(ctx: _RunContext, e: Delisting, texts: Sequence[str], day: date,
+                           securities: dict[str, Security], sec_cusips: dict[str, list[str]], ftd: FtdIndex,
+                           taken: Collection[str], found: _Successors) -> tuple[str, str] | None:
     """Sub-plan 5c, rule 4 under the same CIK: the registrant's own successor registration (8-K12B/8-K12G3 in its
     filing list, `handoffs.own_continuation_filing`) moved the holders, one for one, to a new CUSIP -- the one the
-    texts name that is not the security's own (ONEOK 2026's notice: "ONEOK, Inc. (New, CUSIP: 30609A109)"), else
-    the first fails row's under one of its tickers in [day, day + SUCCESSOR_AFTER_DAYS] (Clear Channel Outdoor
+    texts name (the ending's own-share reading's, `OwnShares.texts`) that is not the security's own (ONEOK 2026's
+    notice: "ONEOK, Inc. (New, CUSIP: 30609A109)"), else the first fails row's under one of its tickers in [day, day
+    + SUCCESSOR_AFTER_DAYS] (Clear Channel Outdoor
     2019's 18453H106). R2 on that CUSIP's one US composite: the security's own is the security going on (it is its
     own successor); another is its successor, added as a security of its own (`AddedLineSuccessor`) when the run
     has none. Several composites or an OpenFIGI error: no link."""
@@ -741,8 +733,8 @@ def _terms_links(ctx: _RunContext, delistings: list[Delisting], securities: dict
                  starts: dict[str, SecurityStart], sec_cusips: dict[str, list[str]], ftd: FtdIndex,
                  taken: Collection[str], found: _Successors) -> None:
     """Sub-plan 5c, rules 3 and 4: an exchange transfer still without a successor whose registrant's filings
-    state each share of its class became one share, with no cash (R1, `exchange_terms.own_exchange` around
-    `Delisting.anchor`), takes the security of the run that statement names
+    state each share of its class became one share, with no cash (R1: the ending's own-share reading,
+    `own_shares.of`), takes the security of the run that statement names
     (`successors.successor_by_terms`: the same issuer's other class, CMCSK into CMCSA, HUB-B into HUBB, CWENA
     into CWEN; a new issuer's, BHI into BHGE, HHC into HHH), else the line its own successor registration moved
     the holders to (`_own_registration_link`: CCO 2019, OKE 2026). The link's `how` is "terms" or
@@ -752,13 +744,15 @@ def _terms_links(ctx: _RunContext, delistings: list[Delisting], securities: dict
             continue
         issuers = ctx.clients.issuers
         watch = issuers.watch()
-        own, texts, day = _own_exchange(ctx.clients, e, securities[e.sec_id])
+        own = own_shares_of(e, _reader(ctx.clients), securities[e.sec_id])
         link = None
-        if own is not None and own.one_for_one:
-            link = successor_by_terms(e, own, day, starts, issuers=issuers)
+        if own.one_for_one:
+            day = e.anchor
+            link = successor_by_terms(e, own.statement, day, starts, issuers=issuers)
             if link is None:
-                link = _own_registration_link(ctx, e, texts, day, securities, sec_cusips, ftd, taken, found)
-        if watch.tripped():
+                link = _own_registration_link(ctx, e, own.texts, day, securities, sec_cusips, ftd, taken,
+                                              found)
+        if watch.tripped() or own.degraded:
             found.review.append(degraded_item(e.sec_id, e.ticker, e.cik, "the successor terms reading",
                                               delist_date=e.delist_date))
             found.degraded.append(e.key)
@@ -1283,13 +1277,14 @@ def _continuation_filings(ctx: _RunContext, delistings: list[Delisting], securit
                           review: list[ReviewItem], added: Mapping[str, AddedSecurity] | None = None
                           ) -> dict[DelistingKey, Reading]:
     """9g. Sub-plan 5i (spec ruling 2.3): what the registrant's own filings say of each continuation, for its
-    verdict (10f) only (`continuation_evidence`): the filing that confirms a continuation the continued-filings
-    rule or the handoff stage's timing linked (an 8-K item 3.03 or an 8-K12B/8-K12G3 whose texts state the
-    security's own exchange one for one, its target the registrant or the successor), and the ratio or cash that
-    contradicts a successor registration. No row changes. A read that rested on a failed request or a stale copy
-    gives no reading and a `resolution_degraded` review item (not a flag on the row: the row itself does not rest
-    on it); a refusal (`fatal.FATAL`) stops the run. Each confirmation is logged and recorded in
-    run_manifest.json's `continuation_filings`."""
+    verdict (10f) only (`continuation_evidence`, over the ending's own-share reading: the one the delisting carries
+    when an earlier rule read it, CHTR 2016's and SIRI 2024's rule 6, else one made at its anchor, `own_shares.of`):
+    the filing that confirms a continuation the continued-filings rule or the handoff stage's timing linked (an 8-K
+    item 3.03 or an 8-K12B/8-K12G3 whose texts state the security's own exchange one for one, its target the
+    registrant or the successor), and the ratio or cash that contradicts a successor registration. No row changes.
+    A reading that rested on a failed request or a stale copy gives no reading and a `resolution_degraded` review
+    item (not a flag on the row: the row itself does not rest on it); a refusal (`fatal.FATAL`) stops the run. Each
+    confirmation is logged and recorded in run_manifest.json's `continuation_filings`."""
     mark = ctx.meter.start()
     names = {sid: s.name or "" for sid, s in securities.items()}
     names.update({sid: a.security.name or "" for sid, a in (added or {}).items()})
@@ -1301,11 +1296,12 @@ def _continuation_filings(ctx: _RunContext, delistings: list[Delisting], securit
                                or needs_doubt_check(reason, d.sec_id, rec.successor_sec_id)):
             continue
         watch = DegradedWatch()
-        found = read_continuation(ctx.clients.edgar, d.cik, [d.last_trade.day, date.fromisoformat(d.delist_date)],
-                                  sec.name or "", reason, d.sec_id, rec.successor_sec_id,
+        own = own_shares_of(d, _reader(ctx.clients), sec)
+        found = read_continuation(own, reason, d.sec_id, rec.successor_sec_id,
                                   [names.get(rec.successor_sec_id or "", "")])
-        if watch.tripped():
-            watch.report_delisting(review, d, "the continuation's confirming filing (stage 9g)", own_row=False)
+        if watch.tripped() or own.degraded:
+            review.append(degraded_item(d.sec_id, d.ticker, d.cik, "the continuation's confirming filing (stage 9g)",
+                                        delist_date=d.delist_date))
         elif found.filing or found.doubt:
             out[d.key] = found
             ctx.log(f"continuation reading: {d.sec_id} {d.delist_date} "

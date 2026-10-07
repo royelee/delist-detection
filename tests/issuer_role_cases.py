@@ -2,9 +2,10 @@
 scripts/build_issuer_role_fixtures.py) holds each case's security, the securities a successor link may name and the
 other securities of their issuers, their fails rows, and the EDGAR, OpenFIGI, MIDAS and Nasdaq-halt answers.
 `outcome(sec_id)` runs the run's own code over them: stage 5 (`pipeline._context_builder`,
-`delistings.DelistingFinder`), stage 8b (`pipeline._r1_continuations`, the terms the committed contract published
-standing in for the LLM's), and stage 9 (`pipeline._find_successors`, which records its links as rewrites; no
-full-text search: the fixture has none). How each successor was found is the rewrite's typed provenance
+`delistings.DelistingFinder`, which makes each ending's own-share reading and keeps the one its classifier read),
+stage 8b (`pipeline._r1_continuations`, the terms the committed contract published standing in for the LLM's), and
+stage 9 (`pipeline._find_successors`, which records its links as rewrites; no full-text search: the fixture has
+none); `later` runs 8b and 9 over delistings `find` gave. How each successor was found is the rewrite's typed provenance
 (`rewrites.successor_by`)."""
 from __future__ import annotations
 
@@ -177,6 +178,12 @@ def after(sec_id: str, *, edgar: FixtureEdgar | None = None) -> list[Delisting]:
     """The case's delistings after stage 9: stage 5's, rewritten by stage 8b and linked by stage 9."""
     c = clients(edgar)
     found, _ = find(sec_id, c)
+    return later(sec_id, found, c)
+
+
+def later(sec_id: str, found: list[Delisting], c: pipeline.Clients) -> list[Delisting]:
+    """Stages 8b and 9 over the case's stage-5 delistings (`find`), in place: each reads the own-share reading its
+    delisting carries, else makes one (`own_shares.of`)."""
     securities, _, cusips, ftd = world()
     sightings = {sid: ticker_sightings(s, ftd, cusips[sid]) for sid, s in securities.items()}
     ctx = pipeline._RunContext(c, AS_OF, lambda *a: None, 1, StageMeter(lambda *a: None))

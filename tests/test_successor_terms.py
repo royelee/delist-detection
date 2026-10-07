@@ -15,8 +15,8 @@ from delist_detection.edgar import EdgarSubmission
 from delist_detection.exchange_terms import OwnExchange
 from delist_detection.issuer_record import IssuerRecord
 from delist_detection.last_trade import LastTrade
-from delist_detection.successors import (NEW_ISSUER, NEW_ISSUER_DAYS, SAME_ISSUER_CLASS, SecurityStart,
-                                         successor_by_terms)
+from delist_detection.own_shares import NEW_ISSUER_DAYS
+from delist_detection.successors import NEW_ISSUER, SAME_ISSUER_CLASS, SecurityStart, successor_by_terms
 from tests import issuer_role_cases as ic
 
 DAY = date(2020, 6, 30)
@@ -169,37 +169,56 @@ from types import SimpleNamespace as _NS  # noqa: E402
 
 import requests  # noqa: E402
 
+from delist_detection.llm_merger_extractor import MergerTerms  # noqa: E402
+from delist_detection.merger_value import MergerValue, MergerValues  # noqa: E402
+from delist_detection.security_master import Security  # noqa: E402
 
-def _r1_ctx(monkeypatch, cand):
-    """Stage 8b's 8-K12B path, the search scripted to find `cand` filed by CIK 999: a new issuer (first filing
-    2016-06-01) named TITAN TECHNOLOGIES CORP in the run's issuer record."""
+_ROVI_8K = EdgarSubmission("0001-16-1", "8-K", "2016-09-07", "", "2.01,3.01,5.01", "d.htm")
+
+
+class _RoviBooks(_Books):
+    """Rovi (CIK 1) and its 8-K stating what each share became; TITAN TECHNOLOGIES CORP (CIK 999), a new issuer."""
+
+    def __init__(self, target):
+        super().__init__({999: "2016-06-01"}, {999: ("TITAN TECHNOLOGIES CORP",), 1: ("ROVI CORP",)})
+        self.text = (f"At the effective time, each share of the Company's common stock was converted into one share "
+                     f"of {target} common stock.")
+        self.full_text_search = lambda *a, **k: []
+
+    def recent_filings(self, cik):
+        return [_ROVI_8K] if int(cik) == 1 else super().recent_filings(cik)
+
+    def fetch_filing_text(self, cik, accession, primary_doc):
+        return self.text if accession == _ROVI_8K.accession else ""
+
+
+def _rovi_stage(monkeypatch, target):
+    """Stage 8b over a ROVI-shaped merger row (its terms one share and no cash), the 8-K12B search scripted to find
+    TITAN TECHNOLOGIES CORP: the row and the stage's answer."""
+    cand = _NS(composite="BBGTITAN", ticker="TTEC", name="TITAN TECHNOLOGIES CORP", security_type="Common Stock")
     monkeypatch.setattr(pipeline, "successor_search_name", lambda *a: "Rovi Corp")
-    monkeypatch.setattr(pipeline, "successor_from_8k12b", lambda *a, **k: (999, cand, "2016-07-20"))
-    edgar = _NS(full_text_search=lambda *a, **k: [])
-    books = _Books({999: "2016-06-01"}, {999: ("TITAN TECHNOLOGIES CORP",)})
-    clients = _NS(edgar=edgar, figi=None, issuers=IssuerRecord(books))
-    return pipeline._RunContext(clients, date(2026, 9, 25), lambda *a: None, 1,
-                                pipeline.run_manifest.StageMeter(lambda *a: None))
-
-
-def _r1_call(ctx, target):
-    own = OwnExchange(1.0, False, "of Titan Technologies Corporation common stock", (target,), "", False, "s")
-    e = _NS(cik=1, ticker="ROVI", sec_id="R", delist_date="2016-07-20", last_trade=_NS(day=None))
-    sec = _NS(share_class="COMMON", name="ROVI CORP", own_tickers=lambda: {"ROVI"})
-    out = pipeline._R1()
-    pending: dict = {}
-    link = pipeline._r1_successor(ctx, e, sec, own, date(2016, 7, 20), {}, {}, {}, out, pending)
-    return link, pending
+    monkeypatch.setattr(pipeline, "successor_from_8k12b", lambda *a, **k: (999, cand, "2016-09-08"))
+    books = _RoviBooks(target)
+    clients = _NS(edgar=books, figi=None, issuers=IssuerRecord(books))
+    ctx = pipeline._RunContext(clients, date(2026, 9, 25), lambda *a: None, 1,
+                               pipeline.run_manifest.StageMeter(lambda *a: None))
+    rec = DelistRecord("ROVI", 1, "2016-09-07", 231, CrspBucket.MERGER, "medium", "merger", {"flags": []},
+                       sec_id="R", delist_date="2016-09-08")
+    d = Delisting("R", 1, "ROVI", "2016-09-08", rec, LastTrade(date(2016, 9, 7), "midas", ()), None, None, "NASDAQ")
+    sec = Security("R", 1, "COMMON", "ROVI CORP", "Common Stock", True, "cusip")
+    values = MergerValues({d.key: MergerValue(d.key, llm=MergerTerms("stock", None, 1.0, None, "TTEC", "high", "x",
+                                                                       ""))})
+    return d, pipeline._r1_continuations(ctx, [d], {"R": sec}, {}, values)
 
 
 def test_an_8k12b_successor_needs_the_name_tie(monkeypatch):
-    """ROVI-shaped: a candidate the R1 statement does not name is refused; the one it names is taken."""
-    cand = _NS(composite="BBGTITAN", ticker="TTEC", name="TITAN TECHNOLOGIES CORP", security_type="Common Stock")
-    ctx = _r1_ctx(monkeypatch, cand)
-    link, pending = _r1_call(ctx, "Titan Technologies Corporation")
-    assert link == ("BBGTITAN", pipeline.BY_TERMS) and list(pending) == ["BBGTITAN"]
-    link, pending = _r1_call(ctx, "Some Other Holdings")
-    assert link is None and pending == {}
+    """ROVI-shaped: the candidate the R1 statement names is taken and added; one it does not name is refused."""
+    d, r1 = _rovi_stage(monkeypatch, "Titan Technologies Corporation")
+    assert (d.record.bucket, d.record.successor_sec_id) == (CrspBucket.EXCHANGE_TRANSFER, "BBGTITAN")
+    assert list(r1.added) == ["BBGTITAN"] and r1.links[d.key] == ("BBGTITAN", pipeline.BY_TERMS)
+    assert d.own_shares is not None and d.own_shares.statement.target_names == ("Titan Technologies Corporation",)
+    d, r1 = _rovi_stage(monkeypatch, "Some Other Holdings")
+    assert d.record.bucket is CrspBucket.MERGER and r1.added == {} and r1.links == {}
 
 
 def test_a_failed_issuer_age_read_makes_the_rewritten_row_resolution_degraded():

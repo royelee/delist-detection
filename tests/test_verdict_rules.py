@@ -1,12 +1,14 @@
 """Sub-plan 5i: the verdict-only rulings of spec 2.3 (`verdict_rules`), each with its guard, on small tables."""
 import pytest
 
+from datetime import date
+
 from delist_detection import end_of_era
 from delist_detection.crsp_codes import CrspBucket
-from delist_detection.end_of_era import EraSignals
+from delist_detection.end_of_era import EraSignals, Filed
 from delist_detection.verdict import GATE_FAILED, decide
 from delist_detection.verdict_rules import (MERGER_RELABELS, STALE_CLOSE_DAYS, STALE_SEED_DAYS, Reading, ratio_doubt,
-                                            reverse_split, unpriced_gate)
+                                            unpriced_gate)
 from tests.lifecycle_tables import ending, iv, obs, review, sec, tables
 
 KEPT = "; the registrant kept filing after it"
@@ -51,9 +53,9 @@ def test_other_relabels_and_a_merger_without_a_form25_keep_the_doubt(cells):
 
 
 def test_the_relabel_prefixes_are_the_resolvers_own_wording():
-    era = EraSignals(False, item_filed={"5.01": "2015-02-20"})
+    era = EraSignals(False, item_filed={"5.01": date(2015, 2, 20)})
     assert end_of_era.resolve(era, None).reason.startswith(MERGER_RELABELS[0])
-    era = EraSignals(False, item_filed={"2.01": "2015-02-27"}, merger_filing="DEFM14A 2014-12-01")
+    era = EraSignals(False, item_filed={"2.01": date(2015, 2, 27)}, merger_filing=Filed("DEFM14A", date(2014, 12, 1)))
     v = end_of_era.resolve(era, None)
     assert v.bucket is CrspBucket.MERGER and v.reason.startswith(MERGER_RELABELS[1])
 
@@ -239,7 +241,8 @@ def test_rule_b_keeps_a_continuation_whose_own_filings_state_another_ratio():
 def test_a_ratio_that_is_a_plain_split_or_one_is_no_doubt():
     assert ratio_doubt(1.0, False) == "" and ratio_doubt(0.1, False) == "" and ratio_doubt(2.0, False) == ""
     assert ratio_doubt(0.9042, False) == "ratio:0.9042" and ratio_doubt(1.0, True) == "cash"
-    assert reverse_split(0.05) and not reverse_split(0.9042) and not reverse_split(0.75) and not reverse_split(1.0)
+    assert ratio_doubt(0.05, False) == "" and ratio_doubt(20.0, False) == ""                    # 1-for-20, 20-for-1
+    assert ratio_doubt(0.75, False) == "ratio:0.75" and ratio_doubt(1.5, False) == "ratio:1.5"
 
 
 def test_a_skipped_gate_beside_a_price_side_token_stays_a_doubt():
