@@ -9,11 +9,12 @@ import requests
 
 import delist_detection.pipeline as pipeline
 from delist_detection.edgar import EdgarBlocked
+from delist_detection.issuer_record import IssuerRecord
 from delist_detection.line_follow import MAX_ROUNDS, SWITCH, LineStep
 from delist_detection.manifest import StageMeter
 from delist_detection.observations import TickerEra
 from delist_detection.openfigi import OpenFigiUnavailable
-from delist_detection.pipeline import Clients, _IssuerReads, _RunContext
+from delist_detection.pipeline import Clients, _RunContext
 from delist_detection.sec_stats import SEC_STATS
 from delist_detection.security_master import EraResolution, Issuer, build_securities
 
@@ -169,21 +170,6 @@ def test_a_degraded_submissions_read_gives_the_security_a_resolution_degraded_ro
     assert sorted(_flags(lines)) == [("BBGA", "line_followed"), ("BBGA", "resolution_degraded")]
 
 
-def test_a_failed_read_is_not_cached_and_marks_its_issuer_degraded():
-    answers = iter([requests.ConnectionError("down"), {"name": "RS CO"}])
-
-    def sub(cik):
-        a = next(answers)
-        if isinstance(a, Exception):
-            raise a
-        return a
-
-    reads = _IssuerReads(_Edgar(sub))
-    assert reads.sub(7) is None and reads.degraded == {7}
-    assert reads.sub(7) == {"name": "RS CO"}          # asked again, not remembered as a failure
-    assert reads.sub(7) == {"name": "RS CO"} and reads.edgar.calls == 2
-
-
 def test_a_failed_read_inside_the_stage_gives_a_resolution_degraded_row(monkeypatch):
     def down(cik):
         raise requests.ConnectionError("down")
@@ -245,6 +231,6 @@ def test_the_text_sources_filter_the_8ks_before_the_cap():
             return "the CUSIP number changed to 316645100"
 
     securities, *_ = _world([("BBGA", 1, "AA", ["A1"])])
-    symbols, cusips = pipeline._text_sources(_IssuerReads(Many()), securities["BBGA"],
+    symbols, cusips = pipeline._text_sources(IssuerRecord(Many()), securities["BBGA"],
                                              LineEnd("A1", "2012-01-01", "2012-01-01"))
     assert read == ["c1"] and cusips == {"316645100"}

@@ -15,6 +15,7 @@ from delist_detection.classifier import DelistRecord
 from delist_detection.crsp_codes import CrspBucket
 from delist_detection.delistings import Delisting
 from delist_detection.ftd import FtdIndex
+from delist_detection.issuer_record import IssuerRecord
 from delist_detection.last_trade import LastTrade
 from delist_detection.llm_merger_extractor import MergerTerms
 from delist_detection.merger_value import MergerValue, MergerValues, value_mergers
@@ -53,10 +54,10 @@ class _Terms:
         return self.answers.get(record.ticker)
 
 
-def _value(delistings, *, llm=None, payout=None, edgar=None, resolver=None, ftd_client=None, securities=None,
-           closes=None, caller_terms=None, answers=None, workers=1, log=None) -> MergerValues:
-    clients = SimpleNamespace(edgar=edgar, resolver=resolver, figi=None, ftd_client=ftd_client or _NoFtd(),
-                              payout_extractor=payout, llm_extractor=llm)
+def _value(delistings, *, llm=None, payout=None, edgar=None, resolver=None, name_index=None, ftd_client=None,
+           securities=None, closes=None, caller_terms=None, answers=None, workers=1, log=None) -> MergerValues:
+    clients = SimpleNamespace(edgar=edgar, resolver=resolver, issuers=IssuerRecord(edgar, name_index=name_index),
+                              figi=None, ftd_client=ftd_client or _NoFtd(), payout_extractor=payout, llm_extractor=llm)
     index = LineIndex(securities or {}, {}, {}, FtdIndex())
     return value_mergers(delistings, index, clients=clients, closes=closes or {}, caller_terms=caller_terms or {},
                          answers=answers or PriceAnswers(), tol=0.15, workers=workers, log=log or (lambda *a: None))
@@ -112,8 +113,8 @@ def test_an_unnamed_stock_leg_takes_its_ticker_and_keeps_its_other_terms():
     `no_acq_ticker`), and asks CBI's received close."""
     e, answers = _shaw(MergerTerms("cash_and_stock", 41.0, 0.12883, "CB&I", None, "high", "8-K:0001193125-13-054117",
                                    "", package_basis="fixed"))
-    values = _value([e], llm=_Terms(answers), edgar=_EdgarShaw(),
-                    resolver=SimpleNamespace(name_index=lambda: INDEX, resolve=None), ftd_client=_Ftd())
+    values = _value([e], llm=_Terms(answers), edgar=_EdgarShaw(), resolver=SimpleNamespace(resolve=None),
+                    name_index=lambda: INDEX, ftd_client=_Ftd())
     v = values.get(e.key)
     assert (v.llm.acquirer_ticker, v.llm.cash_per_share, v.llm.stock_ratio) == ("CBI", 41.0, 0.12883)
     assert v.request == ("CBI", "") and not values.review
@@ -125,16 +126,16 @@ def test_a_stock_leg_with_its_own_ticker_is_never_named_again():
         raise AssertionError("the name index is asked only for a leg with no ticker")
 
     e, answers = _shaw(MergerTerms("cash_and_stock", 41.0, 0.12883, "CB&I", "XYZ", "high", "8-K:1", ""))
-    values = _value([e], llm=_Terms(answers), edgar=_EdgarShaw(),
-                    resolver=SimpleNamespace(name_index=never, resolve=lambda *a, **k: SimpleNamespace(cik=None)))
+    values = _value([e], llm=_Terms(answers), edgar=_EdgarShaw(), name_index=never,
+                    resolver=SimpleNamespace(resolve=lambda *a, **k: SimpleNamespace(cik=None)))
     assert values.get(e.key).llm.acquirer_ticker == "XYZ"
 
 
 def test_a_failed_name_read_gives_no_ticker_and_a_degraded_review_item():
     e, answers = _shaw(MergerTerms("cash_and_stock", 41.0, 0.12883, "CB&I", None, "high", "8-K:0001193125-13-054117",
                                    ""))
-    values = _value([e], llm=_Terms(answers), edgar=_EdgarShaw(fail=True),
-                    resolver=SimpleNamespace(name_index=lambda: INDEX), ftd_client=_Ftd())
+    values = _value([e], llm=_Terms(answers), edgar=_EdgarShaw(fail=True), resolver=SimpleNamespace(),
+                    name_index=lambda: INDEX, ftd_client=_Ftd())
     assert values.get(e.key).llm.acquirer_ticker is None and values.get(e.key).request is None
     assert [r.flag for r in values.review] == ["resolution_degraded"]
 

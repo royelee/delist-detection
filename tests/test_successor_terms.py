@@ -11,7 +11,9 @@ from delist_detection import pipeline
 from delist_detection.classifier import DelistRecord
 from delist_detection.crsp_codes import CrspBucket
 from delist_detection.delistings import SUCCESSOR_UNKNOWN, Delisting
+from delist_detection.edgar import EdgarSubmission
 from delist_detection.exchange_terms import OwnExchange
+from delist_detection.issuer_record import IssuerRecord
 from delist_detection.last_trade import LastTrade
 from delist_detection.successors import (NEW_ISSUER, NEW_ISSUER_DAYS, SAME_ISSUER_CLASS, SecurityStart,
                                          successor_anchor, successor_by_terms)
@@ -30,11 +32,24 @@ def _own(names=("Newco",), letter="", own=False, ratio=1.0, cash=False):
     return OwnExchange(ratio, cash, "of Newco common stock", tuple(names), letter, own, "s")
 
 
+class _Books:
+    """An EDGAR double for the issuer record: each CIK's first filing (`since`, ISO) and its EDGAR names (current
+    first)."""
+
+    def __init__(self, since=None, names=None):
+        self.since, self.names = since or {}, names or {}
+
+    def recent_filings(self, cik):
+        day = self.since.get(int(cik))
+        return [EdgarSubmission("0000000000-00-000001", "10-K", day, "", "", "k.htm")] if day else []
+
+    def submissions(self, cik):
+        current, *former = self.names.get(int(cik), ("",))
+        return {"name": current, "formerNames": [{"name": n} for n in former]}
+
+
 def _ask(starts, own, *, since=None, names=None):
-    since = since or {}
-    names = names or {}
-    return successor_by_terms(_delisting(), own, DAY, starts, issuer_since=lambda c: since.get(c),
-                              issuer_names=lambda c: names.get(c, ()))
+    return successor_by_terms(_delisting(), own, DAY, starts, issuers=IssuerRecord(_Books(since, names)))
 
 
 def test_a_new_issuers_security_named_by_the_target_is_the_successor():
@@ -154,33 +169,25 @@ from types import SimpleNamespace as _NS  # noqa: E402
 import requests  # noqa: E402
 
 
-class _Ages:
-    def __init__(self, since="2016-06-01", names=("TITAN TECHNOLOGIES CORP",)):
-        self._since, self._names = since, names
-
-    def since(self, cik):
-        return self._since
-
-    def names(self, cik):
-        return self._names
-
-
 def _r1_ctx(monkeypatch, cand):
+    """Stage 8b's 8-K12B path, the search scripted to find `cand` filed by CIK 999: a new issuer (first filing
+    2016-06-01) named TITAN TECHNOLOGIES CORP in the run's issuer record."""
     monkeypatch.setattr(pipeline, "successor_search_name", lambda *a: "Rovi Corp")
     monkeypatch.setattr(pipeline, "successor_from_8k12b", lambda *a, **k: (999, cand, "2016-07-20"))
     edgar = _NS(full_text_search=lambda *a, **k: [])
-    clients = _NS(edgar=edgar, figi=None)
+    books = _Books({999: "2016-06-01"}, {999: ("TITAN TECHNOLOGIES CORP",)})
+    clients = _NS(edgar=edgar, figi=None, issuers=IssuerRecord(books))
     return pipeline._RunContext(clients, date(2026, 9, 25), lambda *a: None, 1,
                                 pipeline.run_manifest.StageMeter(lambda *a: None))
 
 
-def _r1_call(ctx, target, ages):
+def _r1_call(ctx, target):
     own = OwnExchange(1.0, False, "of Titan Technologies Corporation common stock", (target,), "", False, "s")
     e = _NS(cik=1, ticker="ROVI", sec_id="R", delist_date="2016-07-20", last_trade=_NS(day=None))
     sec = _NS(share_class="COMMON", name="ROVI CORP", own_tickers=lambda: {"ROVI"})
     out = pipeline._R1()
     pending: dict = {}
-    link = pipeline._r1_successor(ctx, e, sec, own, date(2016, 7, 20), {}, ages, {}, {}, out, pending)
+    link = pipeline._r1_successor(ctx, e, sec, own, date(2016, 7, 20), {}, {}, {}, out, pending)
     return link, pending
 
 
@@ -188,31 +195,10 @@ def test_an_8k12b_successor_needs_the_name_tie(monkeypatch):
     """ROVI-shaped: a candidate the R1 statement does not name is refused; the one it names is taken."""
     cand = _NS(composite="BBGTITAN", ticker="TTEC", name="TITAN TECHNOLOGIES CORP", security_type="Common Stock")
     ctx = _r1_ctx(monkeypatch, cand)
-    link, pending = _r1_call(ctx, "Titan Technologies Corporation", _Ages())
+    link, pending = _r1_call(ctx, "Titan Technologies Corporation")
     assert link == ("BBGTITAN", pipeline.BY_TERMS) and list(pending) == ["BBGTITAN"]
-    link, pending = _r1_call(ctx, "Some Other Holdings", _Ages())
+    link, pending = _r1_call(ctx, "Some Other Holdings")
     assert link is None and pending == {}
-
-
-def test_the_issuer_age_reads_survive_a_request_failure_and_count_it():
-    from delist_detection.fatal import FATAL
-
-    class _Edgar:
-        def recent_filings(self, cik):
-            raise requests.ConnectionError("down")
-
-        def submissions(self, cik):
-            raise requests.Timeout("slow")
-
-    ages = pipeline._IssuerAge(_Edgar())
-    assert ages.since(5) is None and ages.names(5) == () and ages.failures == 2
-
-    class _Blocked(_Edgar):
-        def recent_filings(self, cik):
-            raise FATAL[0]("blocked")
-
-    with pytest.raises(FATAL):
-        pipeline._IssuerAge(_Blocked()).since(5)
 
 
 def test_a_failed_issuer_age_read_makes_the_rewritten_row_resolution_degraded():

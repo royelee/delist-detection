@@ -19,10 +19,11 @@ from typing import Iterable
 import requests
 
 from .atomic_io import clean_orphan_temps, write_atomic
-from .edgar import STALE_KEY, EdgarClient, submissions_fresh_after
-from .evidence import edgar_names, first_filing, names_between, names_near, names_until, parse_day, renamed_near
+from .edgar import STALE_KEY, EdgarClient
+from .evidence import names_between, parse_day, renamed_near
 from .fatal import FATAL
 from .cik_lookup import CikNameIndex, normalize_name
+from .issuer_record import IssuerRecord
 from .figi_resolution import class_letter, share_class_from_name
 from .ftd import FtdIndex, FtdRow
 from .names import description_matches, description_names, name_tokens, names_agree, names_an_issuer
@@ -117,6 +118,7 @@ class TickerResolver:
         batch_writes: bool = False,
         retire_old_name_search: bool | None = None,
         name_index: "CikNameIndex | callable[[], CikNameIndex] | None" = None,
+        issuers: IssuerRecord | None = None,
     ) -> None:
         """`today`: the run date bounding submissions freshness (None: the clock).
         `batch_writes`: keep new answers in memory until `flush()` (the pipeline
@@ -126,10 +128,14 @@ class TickerResolver:
         module's `RETIRE_OLD_NAME_SEARCH`). `name_index`: SEC's
         cik-lookup-data.txt as a `cik_lookup.CikNameIndex`, or a callable that
         loads one on first use; the name tier then finds its candidates there
-        instead of in the live company search (`_name_search`)."""
+        instead of in the live company search (`_name_search`). `issuers`: the
+        run's issuer record, which every read of an issuer's EDGAR record goes
+        through (None: one over `edgar`, dated `today`, holding `name_index`);
+        the classifier and the pipeline's stages read through the same one."""
         self.retire_old_name_search = (RETIRE_OLD_NAME_SEARCH if retire_old_name_search is None
                                        else retire_old_name_search)
         self.edgar = edgar
+        self.issuers = issuers if issuers is not None else IssuerRecord(edgar, today=today, name_index=name_index)
         self.rename_map = {k.upper(): v.upper() for k, v in (rename_map or {}).items()}
         self.manual_overrides = {k.upper(): int(v) for k, v in (manual_overrides or {}).items()}
         self.cache_path = Path(cache_path) if cache_path else None
@@ -138,16 +144,13 @@ class TickerResolver:
         self.cik_pins = cik_pins or (lambda *a, **kw: None)  # (ticker, date) -> CIK from the caller's universe
         self.today = today
         self.batch_writes = batch_writes
-        self._name_index_source = name_index
-        self._name_index: CikNameIndex | None = name_index if isinstance(name_index, CikNameIndex) else None
-        self._name_index_failed = False
         self._memo: dict[str, TickerResolution] = {}
         self._memo_observed: dict[str, str | None] = {}   # key -> observed name the answer was checked with
         self._volatile: set[str] = set()   # misses and transient-error answers: this run only
         self._degraded: set[str] = set()   # keys whose answer rests on a failed request or a stale copy
         self._dirty = False                # an answer was added since the memo file was last written
-        self._transient = False            # a check in the current resolve() hit a transient error
-        self._first_filings: dict[int, date | None] = {}   # CIK -> its first filing (`_first_filed`)
+        self._transient = False            # a search in the current resolve() hit a transient error
+        self._reads = self.issuers.watch()   # the issuer reads of the current resolve() (`_reset`)
         if self.cache_path:
             clean_orphan_temps(self.cache_path.parent)
         if self.cache_path and self.cache_path.exists():
@@ -192,7 +195,7 @@ class TickerResolver:
             return self.observed_names(t, observed_date) or None
         return name or None
 
-    def _expected_name(self, t: str, observed_date: str | None, name: str | None | object = _LOOK_UP_NAME
+    def expected_name(self, t: str, observed_date: str | None, name: str | None | object = _LOOK_UP_NAME
                        ) -> str | None:
         """The observed name (`_observed_name`), else the AV name: the first
         with a usable word.
@@ -209,45 +212,37 @@ class TickerResolver:
         """The memo key: an answer holds for one ticker, date and observed name."""
         return f"{ticker.upper().strip()}|{observed_date or ''}|{observed_name or ''}"
 
-    def _submissions(self, cik: int, observed_date: str | None) -> dict:
-        """The company's submissions, fetched again when the cached copy predates
-        the event window (the same freshness the classifier asks for). An older
-        copy served because that refetch failed is used, but marks this resolve
-        transient: what it leads to is not saved."""
-        on = parse_day(observed_date)
-        if on is None:
-            sub = self.edgar.submissions(cik)
-        else:
-            sub = self.edgar.submissions(cik, fresh_after=submissions_fresh_after(on, self.today))
-        if isinstance(sub, dict) and sub.get(STALE_KEY):
-            self._transient = True
-        return sub
+    # Every read of an issuer's EDGAR record goes through the run's issuer record
+    # (`self.issuers`), current for the event on the date asked about. A read that
+    # fails is no answer, and one that failed or was served from a stale copy marks
+    # this resolve transient (`_rested_on_failure`): what it leads to is not saved.
 
-    def _filings(self, cik: int, observed_date: str | None) -> list:
-        """recent_filings, read after a fresh submissions read so both see one copy."""
-        self._submissions(cik, observed_date)
-        return self.edgar.recent_filings(cik)
+    def _reset(self, transient: bool = False) -> None:
+        """Start a resolve (or a second-pass era): no search has failed yet, and its
+        issuer reads are watched from here."""
+        self._transient = transient
+        self._reads = self.issuers.watch()
+
+    def _rested_on_failure(self) -> bool:
+        """Whether the current resolve's answer rests on a failed request or a stale
+        copy: a search's (`_transient`) or an issuer read's."""
+        return self._transient or bool(self._reads.ciks)
 
     def _fits_date(self, cik: int, observed_date: str | None, expected: str | None) -> tuple[bool, bool]:
         """(existed on the date, a name it carried within ±30 days agrees with `expected`).
 
         A CIK first seen after the delist date is today's holder of a recycled
-        ticker (CPWR -> Ocean Thermal, SPWR -> Complete Solaria/SunPower Inc.)."""
+        ticker (CPWR -> Ocean Thermal, SPWR -> Complete Solaria/SunPower Inc.).
+        (False, False) when its submissions cannot be read."""
         on = parse_day(observed_date)
         if on is None:
             return True, True
-        try:
-            sub = self._submissions(cik, observed_date)
-            filings = self.edgar.recent_filings(cik)
-        except FATAL:
-            raise
-        except Exception as e:
-            self._note_transient(e)
+        if self.issuers.submissions(cik, about=on) is None:
             return False, False
-        first = first_filing(filings)
+        first = self.issuers.first_filed(cik)
         existed = first is not None and first <= on
-        agrees = expected is None or (isinstance(sub, dict) and
-                                      any(names_agree(n, expected) for n in names_near(sub, on)))
+        # the names of the copy just read (no second read about the date)
+        agrees = expected is None or any(names_agree(n, expected) for n in self.issuers.names_near(cik, on))
         return existed, agrees
 
     def _accept_observed_name_candidate(self, cik: int, observed_date: str | None, expected: str) -> bool:
@@ -265,7 +260,7 @@ class TickerResolver:
         if not (existed and agrees):
             return False
         on = parse_day(observed_date)
-        for f in self._filings(cik, observed_date):
+        for f in self.issuers.filings(cik, about=observed_date):
             d = parse_day(f.filing_date)
             if d is None:
                 continue
@@ -282,7 +277,7 @@ class TickerResolver:
         return self._companies
 
     def _note_transient(self, exc: Exception) -> None:
-        """A failed request is not evidence against a candidate: the answer this
+        """A failed search is not evidence against a candidate: the answer this
         resolve() reaches is used for the run but not saved."""
         if isinstance(exc, requests.RequestException):
             self._transient = True
@@ -292,14 +287,15 @@ class TickerResolver:
         # it enters the memo, and a mark is cleared only after a saveable answer
         # has replaced the entry: an interrupt between these lines leaves nothing
         # that the flush on the way out of the run would save wrongly.
-        volatile = res.cik is None or self._transient   # retried next run, never persisted
-        if self._transient:
+        transient = self._rested_on_failure()
+        volatile = res.cik is None or transient   # retried next run, never persisted
+        if transient:
             self._degraded.add(key)
         if volatile:
             self._volatile.add(key)
         self._memo[key] = res
         self._memo_observed[key] = observed_name
-        if not self._transient:
+        if not transient:
             self._degraded.discard(key)
         if volatile:
             return
@@ -462,23 +458,10 @@ class TickerResolver:
     NAME_SEARCH_CANDIDATES = 5       # distinct CIKs the name search ranks and checks
 
     def _index(self) -> CikNameIndex | None:
-        """The name index, loaded on first use; None without one, or when it
-        cannot be loaded (logged once; the live company search stands in for
-        it). A refusal (`fatal.FATAL`) stops the run."""
-        if self._name_index is None and self._name_index_source is not None and not self._name_index_failed:
-            try:
-                self._name_index = self._name_index_source()
-            except FATAL:
-                raise
-            except requests.RequestException as e:
-                log.warning("SEC's cik-lookup-data.txt could not be loaded (%s); using the live company search", e)
-                self._name_index_failed = True
-        return self._name_index
-
-    def name_index(self) -> CikNameIndex | None:
-        """SEC's name index (cik-lookup-data.txt), loaded on first use; None without
-        one or when it cannot be loaded. A refusal (`fatal.FATAL`) stops the run."""
-        return self._index()
+        """SEC's name index (the issuer record's `name_index`: loaded on first use;
+        None without one, or when it cannot be loaded, and the live company search
+        then stands in for it)."""
+        return self.issuers.name_index()
 
     INDEX_PROBE = 10                             # index matches per spelling whose filings are read
     NAME_SEARCH_FORMS = ("25-NSE", "25", "15-12G")  # the live search's form filters, in its order
@@ -489,16 +472,7 @@ class TickerResolver:
         """The dates of the CIK's filings whose form starts with `form`, from its
         submissions JSON's recent filings (a delisted company's Form 25 or 15 is
         among its last)."""
-        try:
-            sub = self._submissions(cik, observed_date)
-        except FATAL:
-            raise
-        except Exception as e:
-            self._note_transient(e)
-            return []
-        recent = (sub.get("filings") or {}).get("recent") or {} if isinstance(sub, dict) else {}
-        return [d for f, fd in zip(recent.get("form") or [], recent.get("filingDate") or [])
-                if f.startswith(form) and (d := parse_day(fd)) is not None]
+        return self.issuers.recent_form_dates(cik, form, about=observed_date)
 
     def _index_candidates(self, index: CikNameIndex, nm: str,
                           observed_date: str | None) -> dict[int, tuple[str, int]]:
@@ -589,13 +563,7 @@ class TickerResolver:
         company page the live search opens lists them (1000: unknown)."""
         if on is None:
             return 1000
-        try:
-            days = [d for f in self.edgar.recent_filings(cik) if (d := parse_day(f.filing_date))]
-        except FATAL:
-            raise
-        except Exception as e:
-            self._note_transient(e)
-            return 1000
+        days = [d for f in self.issuers.filings(cik) if (d := parse_day(f.filing_date))]
         return min((abs((d - on).days) for d in days), default=1000)
 
     def _one_filer(self, filers: list[int], exact, want: set[str], spelling: str,
@@ -629,20 +597,14 @@ class TickerResolver:
         none before its first filing."""
         if on is None:
             return []
-        try:
-            sub = self._submissions(cik, on.isoformat())
-        except FATAL:
-            raise
-        except Exception as e:
-            self._note_transient(e)
+        sub = self.issuers.submissions(cik, about=on)
+        if sub is None or sub.get("__not_found__"):
             return []
-        if not isinstance(sub, dict) or sub.get("__not_found__"):
-            return []
-        if not self._existed_by(cik, (on + timedelta(days=30)).isoformat()):
+        if not self.issuers.existed_by(cik, (on + timedelta(days=30)).isoformat()):
             return []            # a name with no start date is no name before the CIK filed (Motorola SpinCo, 2010)
-        if near:
-            return names_near(sub, on)
-        return names_between(sub, on - timedelta(days=365 * self.CARRIED_YEARS), on + timedelta(days=30))
+        if near:                 # the names of the copy just read
+            return self.issuers.names_near(cik, on)
+        return self.issuers.names_between(cik, on - timedelta(days=365 * self.CARRIED_YEARS), on + timedelta(days=30))
 
     def _carried_on(self, cik: int, spelling: str, on: date | None, near: bool = False) -> bool:
         """Whether the CIK carried a name starting with `spelling` (as the index
@@ -719,16 +681,7 @@ class TickerResolver:
         the number of `names.name_tokens` words they share with it, and whether
         one of them `names_agree`s with it. (0, False) when EDGAR cannot answer
         (the resolve is then marked transient)."""
-        try:
-            sub = self._submissions(cik, observed_date)
-        except FATAL:
-            raise
-        except Exception as e:
-            self._note_transient(e)
-            return 0, False
-        if not isinstance(sub, dict):
-            return 0, False
-        names = edgar_names(sub)
+        names = self.issuers.names(cik, about=observed_date)
         candidate_tokens: set[str] = set()
         for n in names:
             candidate_tokens |= name_tokens(n)
@@ -757,13 +710,7 @@ class TickerResolver:
             d = datetime.strptime(observed_date, "%Y-%m-%d").date()
         except ValueError:
             return True
-        try:
-            subs = self._filings(cik, observed_date)
-        except FATAL:
-            raise
-        except Exception as e:
-            self._note_transient(e)
-            return False
+        subs = self.issuers.filings(cik, about=observed_date)
 
         has_delist_form = False
         no_post_cutoff = d + timedelta(days=90)
@@ -879,7 +826,7 @@ class TickerResolver:
         t = ticker.upper().strip()
         observed_name = self._observed_name(t, observed_date, name)
         cache_key = self._key(t, observed_date, observed_name)
-        self._transient = False
+        self._reset()
 
         pinned = self.cik_pins(t, observed_date) if pin is _LOOK_UP_PIN else pin
         if pinned:
@@ -901,20 +848,20 @@ class TickerResolver:
 
         memo = self._memo.get(cache_key)
         if memo is not None and self._memo_observed.get(cache_key) == observed_name and \
-                (memo.cik is None or memo.source in _GIVEN_SOURCES or self._existed_by(memo.cik, since)):
+                (memo.cik is None or memo.source in _GIVEN_SOURCES or self.issuers.existed_by(memo.cik, since)):
             # A rename built on this answer inherits whether it rests on a failed request.
-            self._transient = cache_key in self._degraded
+            self._reset(cache_key in self._degraded)
             return memo
-        self._transient = False
+        self._reset()
 
         renamed = self.rename_map.get(t)
         if renamed and renamed != t:
-            inner = self.resolve(renamed, observed_date)   # leaves self._transient set for this answer
+            inner = self.resolve(renamed, observed_date)   # leaves its transient state for this answer
             res = TickerResolution(ticker=t, cik=inner.cik, name=inner.name, source="rename")
             self._remember(cache_key, res, observed_name)
             return res
 
-        expected = self._expected_name(t, observed_date, observed_name)
+        expected = self.expected_name(t, observed_date, observed_name)
         companies = self._ensure_companies()
         if t in companies:
             # SEC's map lists today's holder of the ticker: accept it only if
@@ -922,7 +869,7 @@ class TickerResolver:
             # the era's first sighting.
             row = companies[t]
             c = int(row["cik_str"])
-            if self._fits_date(c, observed_date, expected) == (True, True) and self._existed_by(c, since):
+            if self._fits_date(c, observed_date, expected) == (True, True) and self.issuers.existed_by(c, since):
                 res = TickerResolution(
                     ticker=t,
                     cik=c,
@@ -948,7 +895,7 @@ class TickerResolver:
         if c0 is not None:
             if not observed_date or self._validate_cik(c0, observed_date, strict=False):
                 existed, agrees = self._fits_date(c0, observed_date, expected)
-                existed = existed and self._existed_by(c0, since)
+                existed = existed and self.issuers.existed_by(c0, since)
                 if existed and weak:
                     fallback = (c0, n0)
                 elif existed:
@@ -959,7 +906,8 @@ class TickerResolver:
         # checked best first, each one that existed by the era's first sighting.
         if cik is None:
             # A generator: a candidate below the one accepted is never read.
-            ranked = ((c, n) for c, n in self._name_search(t, observed_date, expected) if self._existed_by(c, since))
+            ranked = ((c, n) for c, n in self._name_search(t, observed_date, expected)
+                      if self.issuers.existed_by(c, since))
             if fallback is not None:
                 # The observed name is a check, never a substitute: it replaces
                 # the company EFTS found only with its own Form 25/15 near the
@@ -993,7 +941,8 @@ class TickerResolver:
             ranked = self._efts_pre_delist_frequency_ranked(t, observed_date)
             best: tuple[int, int, int, str] | None = None
             for rank, (cand_cik, cand_name) in enumerate(ranked):
-                if not self._existed_by(cand_cik, since) or not self._validate_cik(cand_cik, observed_date, strict=True):
+                if not self.issuers.existed_by(cand_cik, since) \
+                        or not self._validate_cik(cand_cik, observed_date, strict=True):
                     continue
                 score = self._name_match_score(cand_cik, expected, observed_date) if expected else 0
                 inv_rank = -rank
@@ -1059,7 +1008,7 @@ class TickerResolver:
                 and len(rows[e.key]) >= self.ERA_MIN_ROWS]
         out: dict[str, InferredIssuer] = {}
         for e in todo:
-            self._transient = False
+            self._reset()
             got = self._named(e, self._frequency_renamed(e, rows[e.key], last_seen[e.key]), last_seen[e.key])
             if got is not None:
                 out[e.key] = got
@@ -1085,7 +1034,7 @@ class TickerResolver:
             for e in todo:
                 if e.key in out:
                     continue
-                self._transient = False
+                self._reset()
                 got = self._named(e, self._handoff(rows[e.key], links[e.key], known, ftd, issuer_cusips,
                                                    _class_letter(e)), last_seen[e.key])
                 if got is not None:
@@ -1102,7 +1051,7 @@ class TickerResolver:
             known, issuer_cusips = issuers_now()
             dropped = []
             for key, got in out.items():
-                self._transient = False
+                self._reset()
                 found = self._linked_issuers(links[key], known, ftd, issuer_cusips, _class_letter(by_key[key]))
                 candidates = [*found, *([got.cik] if got.source == "efts_frequency_renamed" else [])]
                 if self._guard(candidates, rows[key]) != got.cik:
@@ -1117,7 +1066,7 @@ class TickerResolver:
             first = first_pass.get(e.key)
             if first is None or e.cik_pin is not None or e.sec_id_pin or len(rows[e.key]) < self.ERA_MIN_ROWS:
                 continue
-            self._transient = False
+            self._reset()
             got = self._named(e, self._handoff(rows[e.key], links[e.key], known, ftd, issuer_cusips,
                                                _class_letter(e)), last_seen[e.key])
             if got is not None and got.cik != first:
@@ -1132,20 +1081,13 @@ class TickerResolver:
         TRI@2008, Triad Hospitals, shares Thomson Reuters' CUSIP."""
         if got is None or not era.names:
             return got
-        try:
-            sub = self._submissions(got.cik, last_seen)
-        except FATAL:
-            raise
-        except Exception as e:
-            self._note_transient(e)
-            return None
-        names = edgar_names(sub) if isinstance(sub, dict) else ()
+        names = self.issuers.names(got.cik, about=last_seen)
         return got if any(description_matches(n, names) for n in era.names) else None
 
     def _mark_inferred(self, era: TickerEra, last_seen: str) -> None:
         """A second-pass read that hit a failed request or a stale copy degrades
         the era's answer, as a first-pass one does (`is_degraded`)."""
-        if self._transient:
+        if self._rested_on_failure():
             self._degraded.add(self._key(era.ticker, last_seen, era.name))
 
     def _guard(self, candidates: Iterable[int], rows: list[FtdRow]) -> int | None:
@@ -1166,22 +1108,17 @@ class TickerResolver:
         company founded later (LMCA's 2013 spin-off for 2012 rows), never so
         named (Penske Automotive for an ETN's rows under UAG), or so named only
         later, is not the rows' issuer."""
-        try:
-            sub = self._submissions(cik, rows[-1].date)
-        except FATAL:
-            raise
-        except Exception as e:
-            self._note_transient(e)
-            return False
-        first = self._first_filed(cik)
-        if first is None or first > parse_day(rows[0].date) or not isinstance(sub, dict):
+        sub = self.issuers.submissions(cik, about=rows[-1].date)
+        first = self.issuers.first_filed(cik)
+        if first is None or first > parse_day(rows[0].date) or sub is None:
             return False
         since: dict[str, str] = {}                  # description -> its first row's date (names only accumulate)
         for r in rows:
             if names_an_issuer(r.description):
                 since.setdefault(r.description, r.date)
-        return bool(since) and all(
-            description_matches(d, names_until(sub, parse_day(day) + timedelta(days=self.GUARD_NAME_DAYS)), empty=False)
+        return bool(since) and all(     # the names of the copy just read
+            description_matches(d, self.issuers.names_until(cik, parse_day(day) + timedelta(days=self.GUARD_NAME_DAYS)),
+                                empty=False)
             for d, day in since.items())
 
     def _frequency_renamed(self, era: TickerEra, rows: list[FtdRow], last_seen: str) -> InferredIssuer | None:
@@ -1195,17 +1132,9 @@ class TickerResolver:
         on = parse_day(last_seen)
         if cik is None or on is None:
             return None
-        try:
-            sub = self._submissions(cik, last_seen)
-            filings = self.edgar.recent_filings(cik)
-        except FATAL:
-            raise
-        except Exception as e:
-            self._note_transient(e)
-            return None
-        named = [n for n in names_near(sub, on) if names_agree(n, era.name)] if isinstance(sub, dict) else []
+        named = [n for n in self.issuers.names_near(cik, on, about=last_seen) if names_agree(n, era.name)]
         alive = any(abs((d - on).days) <= self.OBSERVED_ALIVE_DAYS
-                    for f in filings if (d := parse_day(f.filing_date)))
+                    for f in self.issuers.filings(cik) if (d := parse_day(f.filing_date)))
         if not named or not alive:
             return None
         return InferredIssuer(cik, "efts_frequency_renamed",
@@ -1260,7 +1189,7 @@ class TickerResolver:
         SXC Health Solutions for Catalyst Health Solutions). A CUSIP of another
         share class than the era's (`era_class`; Discovery's series C for series
         A) does not count, nor does one born at the switch."""
-        first = self._first_filed(cik)
+        first = self.issuers.first_filed(cik)
         if first is None or first > parse_day(h.since):
             return None
         others = {c for c, letters in issuer_cusips.get(cik, {}).items()
@@ -1268,26 +1197,6 @@ class TickerResolver:
         if trades_at_switch(ftd, h, others):
             return None
         return self._renamed_from(cik, h)
-
-    def _existed_by(self, cik: int, since: str | None) -> bool:
-        """Whether the CIK had filed by `since` (True when `since` is None)."""
-        if since is None:
-            return True
-        first, on = self._first_filed(cik), parse_day(since)
-        return first is not None and on is not None and first <= on
-
-    def _first_filed(self, cik: int) -> date | None:
-        """The CIK's first EDGAR filing (None: none, or EDGAR could not answer;
-        the resolve is then marked transient), read once per resolver."""
-        if cik not in self._first_filings:
-            try:
-                self._first_filings[cik] = first_filing(self.edgar.recent_filings(cik))
-            except FATAL:
-                raise
-            except Exception as e:
-                self._note_transient(e)
-                return None
-        return self._first_filings[cik]
 
     def _renamed_from(self, cik: int, h: Handoff) -> str | None:
         """The CIK's former name that ended within `RENAME_NEAR_DAYS` of the
@@ -1305,14 +1214,8 @@ class TickerResolver:
         Holdings CUSIP switched to Matson's and to its own. A spin-off starting
         as its parent's CUSIP ends carries no such name."""
         day = parse_day(h.day)
-        try:
-            sub = self._submissions(cik, h.day)
-        except FATAL:
-            raise
-        except Exception as e:
-            self._note_transient(e)
-            return None
-        former = renamed_near(sub, day, self.RENAME_NEAR_DAYS) if isinstance(sub, dict) and day else None
+        sub = self.issuers.submissions(cik, about=h.day)
+        former = renamed_near(sub, day, self.RENAME_NEAR_DAYS) if sub is not None and day else None
         named = [(d, parse_day(since)) for d, since in h.descriptions if names_an_issuer(d)]
         if former and named and all(
                 any(description_names(d, n)
@@ -1356,7 +1259,7 @@ class TickerResolver:
             holders = sorted({h.cik for h in index.split_search(e.name)[0]} - {res.cik} - self.EXCHANGE_CIKS)
             if not holders:
                 continue
-            self._transient = False
+            self._reset()
             rows = era_rows(e, ftd, last_seen[e.key])
             if len(rows) >= self.ERA_MIN_ROWS:      # the era's own rows decide, whichever holder the pass named
                 got = self._ticker_rows_tie(e, res.cik, holders, rows)
@@ -1369,20 +1272,14 @@ class TickerResolver:
 
     def _carried_over(self, cik: int, name: str, lo: date, hi: date) -> bool:
         """Whether the CIK carried a name agreeing with `name` at some point in [lo, hi] (its submissions JSON)."""
-        try:
-            sub = self._submissions(cik, hi.isoformat())
-        except FATAL:
-            raise
-        except Exception as e:
-            self._note_transient(e)
-            return False
-        return isinstance(sub, dict) and any(names_agree(n, name) for n in names_between(sub, lo, hi))
+        return any(names_agree(n, name) for n in self.issuers.names_between(cik, lo, hi, about=hi))
 
     def _name_in_force(self, era: TickerEra, first: int, holders: list[int], last: str) -> InferredIssuer | None:
         lo, hi = parse_day(era.first), parse_day(last)
         if lo is None or hi is None or self._carried_over(first, era.name, lo, hi):
             return None
-        found = [c for c in holders if self._existed_by(c, era.first) and self._carried_over(c, era.name, lo, hi)]
+        found = [c for c in holders
+                 if self.issuers.existed_by(c, era.first) and self._carried_over(c, era.name, lo, hi)]
         if len(found) != 1:
             return None
         return InferredIssuer(found[0], self.NAME_IN_FORCE,
@@ -1392,7 +1289,7 @@ class TickerResolver:
                          rows: list[FtdRow]) -> InferredIssuer | None:
         if len(rows) < self.ERA_MIN_ROWS or self._fits_rows(first, rows):
             return None
-        found = [c for c in holders if self._existed_by(c, era.first) and self._fits_rows(c, rows)]
+        found = [c for c in holders if self.issuers.existed_by(c, era.first) and self._fits_rows(c, rows)]
         if len(found) != 1:
             return None
         return InferredIssuer(found[0], self.TICKER_ROWS,
@@ -1415,8 +1312,7 @@ class TickerResolver:
         would."""
         s = TickerResolver(self.edgar, rename_map=self.rename_map, manual_overrides=self.manual_overrides,
                            name_lookup=self.name_lookup, observed_names=self.observed_names, cik_pins=self.cik_pins,
-                           today=self.today, name_index=self._name_index or self._name_index_source)
-        s._name_index_failed = self._name_index_failed
+                           today=self.today, issuers=self.issuers.shadow())
         s._memo, s._memo_observed = dict(self._memo), dict(self._memo_observed)
         s._volatile, s._degraded = set(self._volatile), set(self._degraded)
         s._companies = self._companies

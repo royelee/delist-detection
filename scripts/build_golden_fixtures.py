@@ -123,7 +123,7 @@ def _resolver(edgar, row) -> TickerResolver:
 def _capture_efts(resolver: TickerResolver, t: str, d: str) -> tuple[dict, list, list]:
     """Issue both EFTS queries for (t, d): (efts_raw, efts_lookup, efts_frequency)."""
     _efts_raw.clear()
-    lookup = list(resolver._efts_lookup(t, d, expected_name=resolver._expected_name(t, d)))
+    lookup = list(resolver._efts_lookup(t, d, expected_name=resolver.expected_name(t, d)))
     frequency = [list(x) for x in resolver._efts_pre_delist_frequency_ranked(t, d)]
     return dict(_efts_raw), lookup, frequency
 

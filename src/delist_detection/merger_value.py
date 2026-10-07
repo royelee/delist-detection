@@ -16,8 +16,9 @@ run adds as securities of their own. Inside, in order:
 4. a basket's further legs' holders (ruling R3).
 
 A read that rests on a failed request or a stale copy is a `resolution_degraded` review item (and, for the reads of
-step 1, a flag on the merger's own row); a refusal (`fatal.FATAL`) stops the run; a failed EDGAR read is never
-remembered as an answer.
+step 1, a flag on the merger's own row); a refusal (`fatal.FATAL`) stops the run. Issuers' submissions, filing lists,
+first filings and SEC's name index are read through the run's issuer record (`issuer_record.IssuerRecord`), whose
+failure policy is the stage's: a failed read is unknown and never remembered.
 
 The later stages ask `MergerValues`, never a parallel map: stage 8b the terms R1 reads (`read_terms`) and the rows it
 rewrites (`drop`), stage 9b whether a merger reconciled (`reconciled`), stage 10a the delistings.csv inputs
@@ -42,7 +43,7 @@ from . import acquirer_ticker
 from .acquirers import acquirer_cik, find_acquirer
 from .added_securities import AddedAcquirer, AddedSecurity
 from .crsp_codes import CrspBucket
-from .degraded import DegradedWatch
+from .degraded import DegradedWatch, degraded_item
 from .delistings import Delisting
 from .fatal import FATAL
 from .figi_resolution import class_letter, share_class_from_name
@@ -210,9 +211,9 @@ def _quiet(*_: object) -> None:
 
 @dataclass
 class _Stage:
-    """What every step of the stage shares: the run's clients (edgar, resolver, figi, ftd_client, payout_extractor,
-    llm_extractor), the run's securities as acquirer lines, the first day the run loaded fails rows from, the
-    prefetch worker count and the log."""
+    """What every step of the stage shares: the run's clients (edgar, resolver, issuers, figi, ftd_client,
+    payout_extractor, llm_extractor), the run's securities as acquirer lines, the first day the run loaded fails rows
+    from, the prefetch worker count and the log."""
     clients: Any
     index: acquirer_line.LineIndex
     ftd_lo: date | None
@@ -237,7 +238,8 @@ def value_mergers(delistings: Sequence[Delisting], index: acquirer_line.LineInde
                   ftd_lo: date | None = None, workers: int = 1, log: Callable = _quiet) -> MergerValues:
     """Stage 8 (see the module docstring): every merger-bucket delisting of `delistings`, valued. `index` holds the
     run's securities, their ticker sightings, CUSIPs and the fails index (extended here with the acquirers' rows);
-    `clients` the run's edgar, resolver, figi, ftd_client, payout_extractor and llm_extractor."""
+    `clients` the run's edgar, resolver, issuers (the issuer record), figi, ftd_client, payout_extractor and
+    llm_extractor."""
     st = _Stage(clients, index, ftd_lo, workers, log)
     mergers = [e for e in delistings if e.record.bucket is CrspBucket.MERGER]
     raw, llm_terms, review = _read_terms(st, mergers, closes, {sid: s.name or "" for sid, s in st.securities.items()})
@@ -327,47 +329,6 @@ def _read_terms(st: _Stage, mergers: list[Delisting], closes: Mapping[DelistingK
 
 # --- 2. the acquirer line and an unnamed leg's ticker --------------------------------------------------------------
 
-class _IssuerReads:
-    """Each issuer's submissions and first EDGAR filing, read once for one step of the stage. A failed read is no
-    answer and is never remembered; with `remember_failures` the step does not ask a CIK whose read failed again."""
-
-    def __init__(self, edgar, *, remember_failures: bool = False) -> None:
-        self.edgar, self.remember = edgar, remember_failures
-        self._subs: dict[int, Any] = {}
-        self._since: dict[int, str | None] = {}
-        self.failed: set[int] = set()
-
-    def submissions(self, cik: int):
-        if self.remember and cik in self.failed:
-            return None
-        if cik not in self._subs:
-            try:
-                self._subs[cik] = self.edgar.submissions(cik)
-            except FATAL:
-                raise
-            except requests.RequestException:
-                if self.remember:
-                    self.failed.add(cik)
-                return None            # never remembered as an answer: a failed read is no answer
-        return self._subs[cik]
-
-    def first_filed(self, cik: int) -> date | None:
-        if self.remember and cik in self.failed:
-            return None
-        if cik not in self._since:
-            try:
-                dates = [f.filing_date for f in self.edgar.recent_filings(cik) if f.filing_date]
-            except FATAL:
-                raise
-            except requests.RequestException:
-                if self.remember:
-                    self.failed.add(cik)
-                return None
-            self._since[cik] = min(dates) if dates else None
-        since = self._since[cik]
-        return date.fromisoformat(since[:10]) if since else None
-
-
 @dataclass(frozen=True)
 class _AcquirerLine:
     """Stage 8a's acquirer line of one merger's stock leg (`acquirer_line`, sub-plan 5e): the security of the run
@@ -410,13 +371,12 @@ def _acquirer_lines(st: _Stage, mergers: list[Delisting], llm_terms: Mapping[Del
     if not legs:
         return out, review
     index, securities, ftd_lo = st.index, st.securities, st.ftd_lo
-    resolver = st.clients.resolver
-    reads = _IssuerReads(st.clients.edgar)
+    resolver, reads = st.clients.resolver, st.clients.issuers
     issuers: dict[DelistingKey, tuple[str | None, int | None]] = {}
     for key, (e, (ticker, name, _)) in sorted(legs.items()):
         last = e.last_trade.day
         day = next_trading_day(last)
-        watch = DegradedWatch()
+        watch = reads.watch()
         holder = index.holder(ticker, last, day, exclude=e.sec_id) if ticker else None
         cik = securities[holder].issuer_cik if holder else None
         if cik is not None and not acquirer_line.issuer_fits(reads.submissions, reads.first_filed, int(cik), name,
@@ -435,7 +395,9 @@ def _acquirer_lines(st: _Stage, mergers: list[Delisting], llm_terms: Mapping[Del
             raise
         except requests.RequestException:
             cik = None
-        watch.report_delisting(review, e, "the acquirer issuer lookup", own_row=False)
+        if watch.tripped():
+            review.append(degraded_item(e.sec_id, e.ticker, e.cik, "the acquirer issuer lookup",
+                                        delist_date=e.delist_date))
         issuers[key] = (holder, int(cik) if cik else None)
 
     view = index
@@ -486,22 +448,18 @@ def _name_acquirer_tickers(st: _Stage, mergers: list[Delisting], llm_terms: Mapp
             and t.stock_leg and not t.acquirer_ticker and t.acquirer_name]
     if not todo:
         return out, review
-    edgar, ftd_client = st.clients.edgar, st.clients.ftd_client
-    index_of = getattr(st.clients.resolver, "name_index", None)
-    index = index_of() if callable(index_of) else None
+    ftd_client, reads = st.clients.ftd_client, st.clients.issuers
+    index = reads.name_index()
     if index is None:
         return out, review
-    reads = _IssuerReads(edgar, remember_failures=True)   # a CIK whose read failed is not asked again in this step
 
     for e in todo:
         t, last = llm_terms[e.key], e.last_trade.day
-        watch = DegradedWatch()
+        watch = reads.watch()
         try:
-            text = ""
             accession = (t.source or "").split(":", 1)[-1]
-            doc = next((f.primary_doc for f in edgar.recent_filings(e.cik) if f.accession == accession), None)
-            if doc is not None:
-                text = edgar.fetch_filing_text(e.cik, accession, doc)
+            filing = next((f for f in reads.filings(e.cik) if f.accession == accession), None)
+            text = reads.text(e.cik, filing) if filing is not None else ""
 
             def rows():
                 day = next_trading_day(last)
@@ -521,8 +479,10 @@ def _name_acquirer_tickers(st: _Stage, mergers: list[Delisting], llm_terms: Mapp
             raise
         except requests.RequestException:
             ticker = ""
-        watch.report_delisting(review, e, "the acquirer name lookup", own_row=False)
-        if ticker and not watch.tripped():
+        if watch.tripped():
+            review.append(degraded_item(e.sec_id, e.ticker, e.cik, "the acquirer name lookup",
+                                        delist_date=e.delist_date))
+        elif ticker:
             out[e.key] = replace(t, acquirer_ticker=ticker)
     st.log(f"acquirer names: {sum(1 for k in out if out[k] is not llm_terms[k])} of {len(todo)} unnamed stock legs "
            f"given a ticker")

@@ -5,13 +5,14 @@ or OpenFIGI down after its retries (`OpenFigiUnavailable`) says nothing about
 one security: every later request would fail the same way. Every catch site
 that turns a failure into a row, a miss or a transient answer re-raises
 `FATAL` first:
-- the pipeline's delisting search (`_find_delistings`) and payout extraction
-  (`_extract_payouts`); its issuer-names read (`_issuer_names`) catches only
-  `requests.RequestException`, so `FATAL` passes through it untouched;
+- the issuer record's reads (`issuer_record.IssuerRecord`: every read of an
+  issuer's EDGAR record by the resolver, the classifier's name check and the
+  pipeline's stages, and SEC's name index); a failed read there is unknown;
+- the pipeline's delisting search (`_find_delistings`) and stage 8's payout
+  extraction (`merger_value`);
 - `listing_status.listing_answers`;
 - the prefetch pool (`prefetch.warm`);
-- the ticker resolver's four EDGAR checks (`TickerResolver._fits_date`,
-  `_name_search`, `_name_match_score`, `_validate_cik`).
+- the ticker resolver's company search (`TickerResolver._name_search`).
 The CLI (`classify_universe.entry`) turns it into its exit code: 2 for a
 refusal, 4 for an OpenFIGI outage. A new fatal exception is added here only.
 """

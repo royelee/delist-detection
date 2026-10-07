@@ -162,7 +162,7 @@ def test_a_member_name_without_usable_words_is_no_expected_name():
     att = (732717, ("AT&T INC.", [], [_f("T0", "10-K", "2020-02-19"), _f("T1", "10-Q", "2023-11-01")]))
     e = _Edgar(dict([att]), {}, tickers={"T": {"cik_str": 732717, "ticker": "T", "title": "AT&T INC."}})
     r = TickerResolver(e, observed_names=lambda t, d=None: "AT&T INC.")
-    assert r._expected_name("T", "2024-01-02") is None
+    assert r.expected_name("T", "2024-01-02") is None
     res = r.resolve("T", "2024-01-02")
     assert (res.cik, res.source) == (732717, "company_tickers")
     rec = DelistClassifier(e, r).classify_ticker("T", "2024-01-02")

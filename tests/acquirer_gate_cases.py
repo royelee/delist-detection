@@ -23,6 +23,7 @@ from delist_detection.delistings import Delisting
 from delist_detection.figi_resolution import security_kind
 from delist_detection.ftd import FtdIndex, FtdRow
 from delist_detection.history import ticker_sightings
+from delist_detection.issuer_record import IssuerRecord
 from delist_detection.last_trade import LastTrade
 from delist_detection.llm_merger_extractor import MergerTerms
 from delist_detection.merger_value import MergerValues, value_mergers
@@ -144,13 +145,17 @@ class Outcome(NamedTuple):
 
 
 def payouts(sec_id: str, *, ftd_lo: date = date(2007, 12, 17), answer: tuple[str, float] | None = None,
-            resolver: FixtureResolver | None = None) -> tuple[MergerValues, Delisting, FixtureResolver]:
+            resolver: FixtureResolver | None = None, name_index=None
+            ) -> tuple[MergerValues, Delisting, FixtureResolver]:
     """The run's stage 8 over the case; `answer` is the caller's answer to the case's received_close request (its
-    lookup_ticker and the price), as `--price-answers` gives it."""
+    lookup_ticker and the price), as `--price-answers` gives it. The run's issuer record reads the fixture's EDGAR
+    answers and holds `name_index` (a loader; none by default)."""
     securities, cusips, rows = world()
     resolver = resolver or FixtureResolver()
-    clients = SimpleNamespace(edgar=FixtureEdgar(), resolver=resolver, figi=FixtureFigi(), ftd_client=NoFtd(),
-                              payout_extractor=CaseExtractor("raw"), llm_extractor=CaseExtractor("terms"))
+    edgar = FixtureEdgar()
+    clients = SimpleNamespace(edgar=edgar, resolver=resolver, issuers=IssuerRecord(edgar, name_index=name_index),
+                              figi=FixtureFigi(), ftd_client=NoFtd(), payout_extractor=CaseExtractor("raw"),
+                              llm_extractor=CaseExtractor("terms"))
     ftd = FtdIndex(rows)
     sightings = {sid: ticker_sightings(s, ftd, cusips.get(sid, [])) for sid, s in securities.items()}
     e = delisting(sec_id)

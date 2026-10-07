@@ -1,6 +1,7 @@
 """The run's issuer record (`issuer_record.IssuerRecord`, architecture step 2) at its interface: each issuer read
 once per run, the answers it gives (names over time, first filing, forms), and its one failure policy -- a failed
-read is unknown and never remembered, a refusal stops the run, a degraded read is recorded."""
+read is unknown and never remembered, a refusal stops the run, a degraded read is recorded. Then the declared defect
+it fixes: the handoff stage's read of the successor issuer's filings no longer stops a run (exit 1)."""
 from __future__ import annotations
 
 import threading
@@ -257,3 +258,44 @@ def test_a_shadow_starts_from_what_is_remembered_and_keeps_its_own_reads():
     s.names(2)
     r.names(2)
     assert _reads(e, "submissions", 2) == 2                                 # the shadow's read stayed its own
+
+
+# --- the declared defect: the handoff stage's failed issuer read -----------------------------------------------------
+
+def test_a_failed_read_of_the_successor_issuers_filings_in_the_handoff_stage_is_degraded_not_an_abort(
+        fake_edgar, tmp_path):
+    """Before the issuer record, `_handoffs` read the successor issuer's filing list (its own 8-K12B, then its first
+    filing for `issuer_since`) straight from EDGAR with no catch: a failed read with no cached copy stopped the run
+    (exit 1). HOLDCO NEW INC (CIK 998) took HC from HOLDCO INC (CIK 999) and its filings cannot be read: the run
+    completes, and the handoff decided without them carries a `resolution_degraded` review row."""
+    from delist_detection.observations import Observation
+    from delist_detection.pipeline import Overrides, run
+    from delist_detection.store import read_table, table_path
+    from tests.test_pipeline import _figi_answer, _ftd, _index_clients
+
+    fake_edgar.company_map["HC"] = {"cik_str": 999, "ticker": "HC", "title": "HOLDCO INC"}
+    fake_edgar.company_map["HCN"] = {"cik_str": 998, "ticker": "HCN", "title": "HOLDCO NEW INC"}
+    fake_edgar.submissions_by_cik[999] = []
+    real = fake_edgar.recent_filings
+
+    def recent_filings(cik):
+        if int(cik) == 998:
+            SEC_STATS.degraded("failed_request")        # what EdgarClient records before it raises
+            raise requests.ConnectionError("no route to host")
+        return real(cik)
+
+    fake_edgar.recent_filings = recent_filings
+    obs = ([Observation("HC", d, "HOLDCO INC", cik=999) for d in ("2014-06-30", "2014-12-31")]
+           + [Observation("HC", d, "HOLDCO NEW INC", cik=998) for d in ("2015-12-31", "2016-06-30")])
+    rows = (_ftd("HC", "111111101", "HOLDCO INC", ["2014-06-02", "2014-10-01", "2015-01-02", "2015-04-01",
+                                                   "2015-06-12"])
+            + _ftd("HC", "222222202", "HOLDCO NEW INC", ["2015-06-15", "2015-09-01", "2016-01-04", "2016-06-01"]))
+    index, clients = _index_clients(fake_edgar, obs, rows, {
+        ("ID_CUSIP", "111111101"): _figi_answer("BBGHCOLD001", "HC", "HOLDCO INC"),
+        ("ID_CUSIP", "222222202"): _figi_answer("BBGHCNEW001", "HC", "HOLDCO NEW INC"),
+    })
+    run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
+    review = read_table("review", table_path(tmp_path, "review"))
+    handoff = [r for r in review if r["review_flags"] == "resolution_degraded" and "handoff search" in r["reason"]]
+    assert [(r["sec_id"], r["ticker"]) for r in handoff] == [("BBGHCOLD001", "HC")]
+    assert "the handoff search (HC to BBGHCNEW001) rested on a failed EDGAR request" in handoff[0]["reason"]

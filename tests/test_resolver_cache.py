@@ -250,7 +250,7 @@ def test_an_answer_read_from_a_stale_copy_is_not_persisted(tmp_path, fake_edgar)
     cache = tmp_path / "res.json"
     r = TickerResolver(_StaleEdgar(fake_edgar), cache_path=cache)
     assert r.resolve("ALTR", "2025-03-26").cik == 1701732        # used for this run
-    assert r._transient is True
+    assert r.is_degraded("ALTR", "2025-03-26")                  # it rested on a stale copy
     assert not cache.exists() or KEY not in cache.read_text()   # but not saved
 
 

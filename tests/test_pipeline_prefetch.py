@@ -21,6 +21,7 @@ from delist_detection.classifier import DelistClassifier, DelistRecord
 from delist_detection.crsp_codes import CrspBucket
 from delist_detection.delistings import Delisting
 from delist_detection.edgar import EFTS_KEY, EFTS_SCHEMA, FETCHED_KEY, EdgarBlocked, EdgarClient
+from delist_detection.issuer_record import IssuerRecord
 from delist_detection.last_trade import LastTrade
 from delist_detection.midas import MIDAS_INDEX_URL, MidasClient
 from delist_detection.observations import Observation, ObservationIndex
@@ -137,10 +138,12 @@ def test_default_clients_share_one_run_date_and_a_machine_wide_limit(tmp_path, m
     assert c.as_of == c.edgar.today == c.resolver.today == c.classifier.today == c.halts.today == date(2026, 9, 23)
     assert c.resolver.batch_writes is True
     assert sec_limiter.SEC_LIMITER.gate is not None and sec_limiter.SEC_LIMITER.gate.path == tmp_path / "sec_rate.lock"
-    # the resolver's name tier reads SEC's cik-lookup-data.txt under the cache, loaded on first use
-    loader = c.resolver._name_index_source
+    # one issuer record, dated the run date, read by the resolver, the classifier and the stages
+    assert c.issuers is c.resolver.issuers is c.classifier.issuers and c.issuers.today == date(2026, 9, 23)
+    # the name tier reads SEC's cik-lookup-data.txt under the cache, loaded on first use
+    loader = c.issuers._index_source
     assert loader.__self__.path == tmp_path / "cache" / "sec_data" / "cik_lookup" / "cik-lookup-data.txt"
-    assert c.resolver._name_index is None
+    assert c.issuers._index is None
 
 
 class _Midas:
@@ -173,9 +176,9 @@ def test_the_warm_finders_are_the_sequential_finders_twins(fake_edgar, tmp_path,
         assert isinstance(midas, Serialized) and midas._obj is clients.midas
         assert isinstance(halts, Serialized) and halts._obj is clients.halts
         assert classifier is not clients.classifier                     # a copy of the run's classifier
-        assert classifier.resolver is not clients.resolver and isinstance(classifier.resolver, TickerResolver)
+        assert classifier.issuers is not clients.issuers and isinstance(classifier.issuers, IssuerRecord)
     assert len({id(m) for m, _, _ in warm_built}) == 1                 # one lock shared by every warm finder
-    assert clients.classifier.resolver is clients.resolver             # the run's own classifier is untouched
+    assert clients.classifier.issuers is clients.issuers               # the run's own classifier is untouched
 
 
 def test_prefetch_reads_edgar_on_worker_threads_before_the_sequential_pass(fake_edgar, tmp_path):

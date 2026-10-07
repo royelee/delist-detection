@@ -3473,13 +3473,14 @@ def test_a_letterless_security_takes_the_letter_of_its_own_cusips_fails_descript
 # --- sub-plan 5b, R5: the one other CIK in force over a security's whole span ---
 
 def _in_force_run(subs, exact):
-    """A run context whose EDGAR answers `subs` (CIK -> submissions JSON) and whose resolver's name index lists
-    `exact` (name -> CIKs)."""
+    """A run context whose EDGAR answers `subs` (CIK -> submissions JSON) and whose issuer record's name index
+    lists `exact` (name -> CIKs)."""
     from types import SimpleNamespace
     from delist_detection import manifest as run_manifest
+    from delist_detection.issuer_record import IssuerRecord
     index = SimpleNamespace(split_search=lambda name: ([SimpleNamespace(cik=c) for c in exact.get(name, [])], []))
-    clients = SimpleNamespace(edgar=SimpleNamespace(submissions=lambda cik: subs.get(cik)),
-                              resolver=SimpleNamespace(name_index=lambda: index))
+    edgar = SimpleNamespace(submissions=lambda cik: subs.get(cik))
+    clients = SimpleNamespace(edgar=edgar, issuers=IssuerRecord(edgar, name_index=index))
     return pipeline._RunContext(clients, date(2026, 9, 25), lambda *_: None, 1, run_manifest.StageMeter(lambda *_: None))
 
 

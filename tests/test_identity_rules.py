@@ -22,6 +22,7 @@ from delist_detection.manifest import StageMeter
 from delist_detection.observations import Observation, split_eras
 from delist_detection.security_master import EraResolution, Security, line_class_letter
 from delist_detection.classifier import DelistRecord
+from delist_detection.issuer_record import IssuerRecord
 from delist_detection.ticker_resolver import TickerResolver
 
 
@@ -38,8 +39,8 @@ ERA_SUBS = {    # the cached submissions' names
 def _in_force_ctx():
     index = CikNameIndex([(normalize_name("BRISTOW GROUP INC"), 73887, "BRISTOW GROUP INC"),
                           (normalize_name("BRISTOW GROUP INC."), 1525221, "BRISTOW GROUP INC.")])
-    clients = SimpleNamespace(edgar=SimpleNamespace(submissions=lambda cik: ERA_SUBS[int(cik)]),
-                              resolver=SimpleNamespace(name_index=lambda: index))
+    edgar = SimpleNamespace(submissions=lambda cik: ERA_SUBS[int(cik)])
+    clients = SimpleNamespace(edgar=edgar, issuers=IssuerRecord(edgar, name_index=index))
     return SimpleNamespace(clients=clients, meter=StageMeter(lambda *a: None))
 
 
@@ -64,8 +65,8 @@ def _oke(ftd_rows, day=date(2026, 9, 9)):
     figi = SimpleNamespace(map=lambda jobs: [{"data": [{"compositeFIGI": "BBG024TZWVN1", "ticker": "OKE",
                                                         "name": "ONEOK INC", "exchCode": "US",
                                                         "securityType": "Common Stock"}]} for _ in jobs])
-    ctx = SimpleNamespace(clients=SimpleNamespace(edgar=SimpleNamespace(recent_filings=lambda cik: filings),
-                                                  figi=figi))
+    edgar = SimpleNamespace(recent_filings=lambda cik: filings)
+    ctx = SimpleNamespace(clients=SimpleNamespace(edgar=edgar, issuers=IssuerRecord(edgar), figi=figi))
     era = split_eras([Observation("OKE", "2008-01-16", "ONEOK INC"), Observation("OKE", "2026-06-30", "ONEOK INC")])
     sec = Security("BBG000BQHGR6", 1039684, "COMMON", "ONEOK INC", "Common Stock", True, "cusip", "common", era)
     rec = DelistRecord("OKE", 1039684, "2026-09-28", 304, CrspBucket.EXCHANGE_TRANSFER, "medium", "", {})

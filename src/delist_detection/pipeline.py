@@ -17,8 +17,6 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 
-import requests
-
 from . import acquirer_line
 from . import exchange_terms
 from . import manifest as run_manifest
@@ -34,7 +32,7 @@ from .distress import (
     BANKRUPTCY_WORDS, OTC_SYMBOL_DAYS, DistressTerms, otc_symbol_from_fails, otc_symbol_from_text, plan_ratio,
     new_cusips as plan_new_cusips, price_only, substitutes_new_shares,
 )
-from .evidence import edgar_names, item_sections
+from .evidence import item_sections
 from .fatal import FATAL
 from .handoffs import (
     TAKEOVER_DAYS,
@@ -43,6 +41,7 @@ from .handoffs import (
 )
 from .figi_resolution import FigiCandidate, class_letter, is_placeholder, placeholder_id, share_class_from_name
 from .form25 import SecurityRef, letter_hint, notice_last_trade, parse_form25
+from .issuer_record import IssuerRecord, ReadWatch
 from .last_trade import decide_last_trade
 from .ftd import FTD_START, FtdIndex, FtdRow, close_age, is_trading_symbol, settled_last, trades_after
 from .trading_calendar import previous_trading_day
@@ -110,6 +109,16 @@ class Clients:
     payout_extractor: Any = None
     llm_extractor: Any = None
     as_of: date | None = None       # the run date every client uses (default_clients sets it)
+    issuers: IssuerRecord | None = None     # the run's issuer record (None: the resolver's or classifier's)
+
+    def __post_init__(self) -> None:
+        """The run's issuer record: the one the resolver and the classifier read through, so a run reads each
+        issuer once and reports every failed read one way; a new one over `edgar` when neither holds one (a test
+        double)."""
+        if self.issuers is None:
+            held = (getattr(self.resolver, "issuers", None), getattr(self.classifier, "issuers", None))
+            self.issuers = next((r for r in held if isinstance(r, IssuerRecord)), None) \
+                or IssuerRecord(self.edgar, today=self.as_of)
 
 
 @dataclass
@@ -138,28 +147,6 @@ def _stderr(*parts) -> None:
     print(*parts, file=sys.stderr, flush=True)
 
 
-def _issuer_names(edgar, ciks: Iterable[int]) -> tuple[dict[int, tuple[str, ...]], set[int]]:
-    """Every name EDGAR records for each issuer (`evidence.edgar_names` of the
-    submissions JSON the resolver already read), and the CIKs whose read rested
-    on a failed EDGAR request or a stale copy. A read that fails outright
-    leaves that issuer with no EDGAR names -- its eras are checked against
-    their observed names only -- instead of stopping the run; a refusal
-    (EdgarBlocked) still stops it."""
-    names: dict[int, tuple[str, ...]] = {}
-    degraded: set[int] = set()
-    for cik in ciks:
-        watch = DegradedWatch()
-        try:
-            sub = edgar.submissions(cik)
-        except requests.RequestException:
-            sub = None
-            degraded.add(cik)
-        names[cik] = edgar_names(sub) if isinstance(sub, dict) else ()
-        if watch.tripped():
-            degraded.add(cik)
-    return names, degraded
-
-
 def _resolution_source(sec: Security, issuers: dict[str, Issuer], resolutions: dict[str, TickerResolution]) -> str:
     """The resolver tier ("cik_map", "manual", "company_tickers", ...) that
     found the security's issuer CIK: that of its latest era whose issuer is
@@ -183,19 +170,20 @@ def _warm_delisting_search(clients: Clients, ordered: list[Security], listing: d
                            retired: frozenset[str] = frozenset()) -> None:
     """Fill the SEC caches for the Form 25 search: each security's own finder work
     on `workers` threads, fill-only, its answers thrown away. A warm finder is the
-    sequential finder's twin: a copy of the run's classifier holding a shadow
-    resolver, and the run's own MIDAS and Nasdaq-halt clients, each behind one lock
-    shared by every warm finder. It therefore takes the same last-trade anchors
-    and asks for what the sequential pass will. A security whose batched OpenFIGI
-    answer is missing is skipped: the sequential pass asks OpenFIGI for it alone,
-    and its listing status decides what the finder reads."""
+    sequential finder's twin: a copy of the run's classifier reading issuers through
+    a shadow of its issuer record (`IssuerRecord.shadow`), and the run's own MIDAS
+    and Nasdaq-halt clients, each behind one lock shared by every warm finder. It
+    therefore takes the same last-trade anchors and asks for what the sequential
+    pass will. A security whose batched OpenFIGI answer is missing is skipped: the
+    sequential pass asks OpenFIGI for it alone, and its listing status decides what
+    the finder reads."""
     midas = Serialized(clients.midas) if clients.midas is not None else None
     halts = Serialized(clients.halts) if clients.halts is not None else None
 
     def make_finder() -> DelistingFinder:
         classifier = copy.copy(clients.classifier)
-        if getattr(classifier, "resolver", None) is not None:
-            classifier.resolver = clients.resolver.shadow()
+        if isinstance(getattr(classifier, "issuers", None), IssuerRecord):
+            classifier.issuers = classifier.issuers.shadow()
         return DelistingFinder(clients.edgar, classifier, midas=midas, halts=halts)
 
     def task(finder: DelistingFinder, s: Security) -> None:
@@ -334,8 +322,10 @@ def _resolve_issuers(ctx: _RunContext, eras: list[TickerEra], ftd: FtdIndex) -> 
     (cik_map, manual, company_tickers, ...) is kept for the delisting rows'
     resolution_source. Then the resolver's second pass (`infer_issuers`, never
     saved) for the eras left with no CIK and no pin: a renamed issuer found by
-    its 8-K frequency or by a CUSIP handoff. Then each issuer's EDGAR names,
-    which stage 3 checks CUSIPs and FIGI names against."""
+    its 8-K frequency or by a CUSIP handoff. Then each issuer's EDGAR names
+    (`IssuerRecord.names`), which stage 3 checks CUSIPs and FIGI names against:
+    an issuer whose read failed has none (its eras are checked against their
+    observed names only) and is reported degraded."""
     clients, workers = ctx.clients, ctx.sec_workers
     last_seen = {e.key: era_last_seen(e, ftd) for e in eras}
     mark = ctx.meter.start()
@@ -366,7 +356,9 @@ def _resolve_issuers(ctx: _RunContext, eras: list[TickerEra], ftd: FtdIndex) -> 
     issuer_ciks = [cik for cik in dict.fromkeys(ciks.values()) if cik]
     if workers > 1:
         warm(issuer_ciks, clients.edgar.submissions, workers=workers, name="issuer names")
-    issuer_names, names_degraded = _issuer_names(clients.edgar, issuer_ciks)
+    reads = clients.issuers.watch()
+    issuer_names = {cik: clients.issuers.names(cik) for cik in issuer_ciks}
+    names_degraded = set(reads.ciks)
     ctx.meter.done("issuer resolution", mark)
     # stage 2b's answers are reported as issuer_inferred, as the second pass's are
     return _IssuerAnswers(cik_res, issuers_by_era(ciks, issuer_names), last_seen, names_degraded,
@@ -466,51 +458,6 @@ class _Lines:
     review: list[ReviewItem] = field(default_factory=list)
 
 
-class _IssuerReads:
-    """The EDGAR reads the line follow makes, each issuer's once: its submissions JSON, its filing list and an
-    8-K's text. A read that fails is no answer (None, [], "") for the step that asked and is never stored, so a
-    later step asks again; a refusal (`fatal.FATAL`) stops the run. `degraded` holds every CIK one of whose reads
-    failed or counted itself degraded (a stale copy, a retried failure): each of its steps gets a
-    `resolution_degraded` item."""
-
-    def __init__(self, edgar) -> None:
-        self.edgar, self._subs, self._filings = edgar, {}, {}
-        self.degraded: set[int] = set()
-
-    def _read(self, cik: int, fn, *args, default):
-        """`(answer, ok)`: `fn(*args)`, or `default` when the request failed."""
-        watch = DegradedWatch()
-        try:
-            answer = fn(*args)
-        except FATAL:
-            raise
-        except requests.RequestException:
-            self.degraded.add(cik)
-            return default, False
-        if watch.tripped():
-            self.degraded.add(cik)
-        return answer, True
-
-    def sub(self, cik: int):
-        if cik not in self._subs:
-            answer, ok = self._read(cik, self.edgar.submissions, cik, default=None)
-            if not ok:
-                return None
-            self._subs[cik] = answer
-        return self._subs[cik]
-
-    def filings(self, cik: int) -> list:
-        if cik not in self._filings:
-            answer, ok = self._read(cik, self.edgar.recent_filings, cik, default=[])
-            if not ok:
-                return []
-            self._filings[cik] = answer
-        return self._filings[cik]
-
-    def text(self, cik: int, f) -> str:
-        return self._read(cik, self.edgar.fetch_filing_text, cik, f.accession, f.primary_doc, default="")[0] or ""
-
-
 def _cusip_holders(sec_cusips: Mapping[str, Sequence[str]]) -> dict[str, set[str]]:
     holders: dict[str, set[str]] = defaultdict(set)
     for sid, cusips in sec_cusips.items():
@@ -519,23 +466,23 @@ def _cusip_holders(sec_cusips: Mapping[str, Sequence[str]]) -> dict[str, set[str
     return holders
 
 
-def _text_sources(reads: _IssuerReads, s: Security, end: LineEnd) -> tuple[set[str], set[str]]:
+def _text_sources(issuers: IssuerRecord, s: Security, end: LineEnd) -> tuple[set[str], set[str]]:
     """The tickers and CUSIPs the issuer's own 8-Ks around a line's end name as the stock's new ones (APY's
     ChampionX "CHX", Liz Claiborne's "316645100" and "FNP"): read only when one of them is an 8-K item 5.03 or
     3.03 or an 8-K12B/8-K12G3, within `line_follow.FILING_DAYS` of the line's settled last row."""
     day = date.fromisoformat(end.settled)
-    near = eightks_near(reads.filings(s.issuer_cik), day,
+    near = eightks_near(issuers.filings(s.issuer_cik), day,
                         lambda f: f.form in SUCCESSOR_FORMS or bool({"5.03", "3.03"} & f.item_set))
-    texts = [reads.text(s.issuer_cik, f) for f in near]
+    texts = [issuers.text(s.issuer_cik, f) for f in near]
     return {t for t in text_symbols(texts) if is_line_symbol(t)} - s.own_tickers(), text_cusips(texts)
 
 
-def _other_registrant(reads: _IssuerReads, search, edgar, cik: int, name: str, day: date,
+def _other_registrant(failed: set[int], search, edgar, cik: int, name: str, day: date,
                       own_tickers: set[str]) -> int | None:
-    """`line_follow.other_registrant`; a failed read marks `cik` degraded (the step is refused `read_failed`)."""
+    """`line_follow.other_registrant`; a failed read adds `cik` to `failed` (the step is refused `read_failed`)."""
     other = other_registrant(search, edgar, name=name, day=day, cik=cik, own_tickers=own_tickers)
     if other == READ_FAILED:
-        reads.degraded.add(cik)
+        failed.add(cik)
     return other
 
 
@@ -586,10 +533,17 @@ def _follow_lines(ctx: _RunContext, securities: dict[str, Security], resolutions
     whose new CUSIP has its own composite keeps its CUSIPs and records that composite as its line successor for
     stage 9. A line that moved is followed again in the next round, up to `MAX_ROUNDS` (WIN's two reverse
     splits). Every step followed or refused is an info review item (`line_followed`, `line_follow_refused:<why>`);
-    a read that rested on a failed request or a stale copy, a `resolution_degraded` one."""
-    clients, edgar = ctx.clients, ctx.clients.edgar
+    a read that rested on a failed request or a stale copy, a `resolution_degraded` one. The issuers' submissions,
+    filing lists and 8-K texts are read through the run's issuer record; a CIK one of whose reads in this stage
+    failed or was stale (`reads.ciks`), or whose other-registrant search failed, is degraded."""
+    clients, edgar, issuers = ctx.clients, ctx.clients.edgar, ctx.clients.issuers
     search = getattr(edgar, "full_text_search", None)
-    reads = _IssuerReads(edgar)
+    reads = issuers.watch()                 # this stage's issuer reads
+    search_failed: set[int] = set()         # the CIKs whose other-registrant search failed
+
+    def degraded() -> frozenset[int]:
+        return reads.ciks | search_failed
+
     mark = ctx.meter.start()
     out = _Lines(dict(securities), dict(resolutions), {k: list(v) for k, v in sec_cusips.items()})
     tickers: dict[str, set[str]] = {sid: set(s.line_tickers) for sid, s in securities.items()}
@@ -600,7 +554,7 @@ def _follow_lines(ctx: _RunContext, securities: dict[str, Security], resolutions
     todo = sorted(sid for sid, s in out.securities.items() if s.issuer_cik is not None)
     extra: dict[str, set[str]] = {}
     for sid in todo:
-        sub = reads.sub(out.securities[sid].issuer_cik)
+        sub = issuers.submissions(out.securities[sid].issuer_cik)
         listed = [normalize_ticker(t) for t in (sub.get("tickers") or [])] if isinstance(sub, dict) else []
         extra[sid] = {t for t in listed if is_line_symbol(t)} - own(sid)
     # every line's tickers, their first-day ZZZZ and post-split D spellings and the issuers' other tickers, to the
@@ -625,7 +579,7 @@ def _follow_lines(ctx: _RunContext, securities: dict[str, Security], resolutions
                 end = line_end(out.sec_cusips.get(sid, []), own(sid), ftd)
                 if steps[sid] or end is None or end.last >= (ctx.as_of - timedelta(days=30)).isoformat():
                     continue
-                symbols, cusips = _text_sources(reads, out.securities[sid], end)
+                symbols, cusips = _text_sources(issuers, out.securities[sid], end)
                 extra[sid] |= symbols
                 named[sid] |= cusips
                 new_symbols |= symbols
@@ -647,10 +601,11 @@ def _follow_lines(ctx: _RunContext, securities: dict[str, Security], resolutions
             watch = DegradedWatch()
             first = date.fromisoformat(step.first)
             evidence, refused = corroborate(
-                step, filings=reads.filings(cik), sub=reads.sub(cik), share_class=s.share_class,
-                text_of=lambda f, cik=cik: reads.text(cik, f), as_of=ctx.as_of,
+                step, filings=issuers.filings(cik), sub=issuers.submissions(cik), share_class=s.share_class,
+                text_of=lambda f, cik=cik: issuers.text(cik, f), as_of=ctx.as_of,
                 listed_now=lambda: edgar_lists(edgar, cik, sorted(own(sid) | {step.symbol})),
-                other_registrant=lambda: _other_registrant(reads, search, edgar, cik, name_on(reads.sub(cik), first, s.name),
+                other_registrant=lambda: _other_registrant(search_failed, search, edgar, cik,
+                                                           name_on(issuers.submissions(cik), first, s.name),
                                                            first, own(sid)))
             what = f"{step.old_cusip} -> {step.new_cusip} under {step.symbol} from {step.first}"
             decision = None if refused else decide(
@@ -664,7 +619,7 @@ def _follow_lines(ctx: _RunContext, securities: dict[str, Security], resolutions
             elif decision is not None and decision.kind == SUCCESSOR \
                     and taken.setdefault(decision.composite, sid) != sid:
                 refused = "taken"     # ... or this successor composite
-            if watch.tripped() or cik in reads.degraded:
+            if watch.tripped() or cik in degraded():
                 flagged.add(sid)
                 out.review.append(degraded_item(sid, step.symbol, cik, f"the line follow ({what})",
                                                 "; run again once SEC answers", last_seen=step.old_last))
@@ -697,7 +652,7 @@ def _follow_lines(ctx: _RunContext, securities: dict[str, Security], resolutions
         if not todo:
             break
     for sid, s in sorted(out.securities.items()):       # a failed read that left no step: its answer still rested on it
-        if s.issuer_cik in reads.degraded and sid not in flagged:
+        if s.issuer_cik in degraded() and sid not in flagged:
             out.review.append(degraded_item(sid, min(own(sid), default=""), s.issuer_cik, "the line follow",
                                             "; run again once SEC answers"))
     ctx.log(f"line follow: {dict(sorted(counts.items()))}; {len(out.renames)} placeholders folded, "
@@ -1041,51 +996,19 @@ def _starts(securities: dict[str, Security], sightings: dict[str, list[Sighting]
     return starts
 
 
-class _IssuerAge:
-    """Each issuer's first EDGAR filing and its EDGAR names, read once (the finder already read most of them)."""
-
-    def __init__(self, edgar) -> None:
-        self.edgar = edgar
-        self._since: dict[int, str | None] = {}
-        self._names: dict[int, tuple[str, ...]] = {}
-        self.failures = 0           # reads that failed after the client's retries: the answer is "unknown"
-
-    def since(self, cik: int) -> str | None:
-        if cik not in self._since:
-            try:
-                dates = [f.filing_date for f in self.edgar.recent_filings(cik) if f.filing_date]
-            except FATAL:
-                raise
-            except requests.RequestException:
-                self.failures += 1
-                return None
-            self._since[cik] = min(dates) if dates else None
-        return self._since[cik]
-
-    def names(self, cik: int) -> tuple[str, ...]:
-        if cik not in self._names:
-            try:
-                sub = self.edgar.submissions(cik)
-            except FATAL:
-                raise
-            except requests.RequestException:
-                self.failures += 1
-                return ()
-            self._names[cik] = edgar_names(sub) if isinstance(sub, dict) else ()
-        return self._names[cik]
-
-
-def _own_exchange(edgar, e: Delisting, sec: Security) -> tuple[exchange_terms.OwnExchange | None, list[str], date]:
+def _own_exchange(clients: Clients, e: Delisting, sec: Security
+                  ) -> tuple[exchange_terms.OwnExchange | None, list[str], date]:
     """What `e`'s security's own shares became (`exchange_terms.own_exchange`), the texts it was read in and the
-    day it was read around (`successors.successor_anchor`; the 8-K the classifier anchored on is read too)."""
+    day it was read around (`successors.successor_anchor`; the 8-K the classifier anchored on is read too). The
+    registrant's filing list and names come from the run's issuer record (none when they cannot be read)."""
     day = successor_anchor(e)
     days = [day]
     filed = ((e.record.evidence or {}).get("anchor_8k") or {}).get("filing_date")
     if filed:
         days.append(date.fromisoformat(filed))
-    texts = exchange_terms.read_texts(edgar, e.cik, edgar.recent_filings(e.cik), days, e.form25)
+    texts = exchange_terms.read_texts(clients.edgar, e.cik, clients.issuers.filings(e.cik), days, e.form25)
     letter, words = exchange_terms.class_of(sec.share_class, sec.name)
-    names = exchange_terms.registrant_names(edgar.submissions(e.cik), min(days), sec.name)
+    names = exchange_terms.registrant_names(clients.issuers.submissions(e.cik), min(days), sec.name)
     return exchange_terms.own_exchange(texts, names=names, class_letter=letter, class_words=words), texts, day
 
 
@@ -1099,15 +1022,16 @@ class _R1:
 
 
 def _r1_successor(ctx: _RunContext, e: Delisting, sec: Security, own: exchange_terms.OwnExchange, day: date,
-                  starts: dict[str, SecurityStart], ages: _IssuerAge, securities: dict[str, Security],
+                  starts: dict[str, SecurityStart], securities: dict[str, Security],
                   added: Mapping[str, AddedSecurity], out: _R1,
                   pending: dict[str, AddedSecurity]) -> tuple[str, str] | None:
     """The successor of a merger row R1 rewrites: a security of the run (`successors.successor_by_terms`), else
     the new issuer whose 8-K12B names the registrant (`successors.successor_from_8k12b`, its filer at most
     NEW_ISSUER_DAYS old and named by the R1 statement's target, the stage-9 name tie), to be added as a security of
     its own (`AddedSuccessor`, seen from the day after `day`) in `pending`: the caller adds it once the reading is
-    known not to be degraded."""
-    link = successor_by_terms(e, own, day, starts, issuer_since=ages.since, issuer_names=ages.names)
+    known not to be degraded. Issuers' first filings and names come from the run's issuer record."""
+    issuers = ctx.clients.issuers
+    link = successor_by_terms(e, own, day, starts, issuers=issuers)
     search = getattr(ctx.clients.edgar, "full_text_search", None)
     if link is not None or search is None:
         return link
@@ -1117,10 +1041,10 @@ def _r1_successor(ctx: _RunContext, e: Delisting, sec: Security, own: exchange_t
     if hit is None:
         return None
     s_cik, cand, filed = hit
-    since = ages.since(s_cik)
-    if since is None or (day - date.fromisoformat(since[:10])).days > NEW_ISSUER_DAYS:
+    since = issuers.first_filed(s_cik)
+    if since is None or (day - since).days > NEW_ISSUER_DAYS:
         return None
-    if not successor_named(own, {cand.ticker}, ages.names(s_cik)):
+    if not successor_named(own, {cand.ticker}, issuers.names(s_cik)):
         return None
     if cand.composite not in securities and cand.composite not in added:
         not_before = (day + timedelta(days=1)).isoformat()
@@ -1140,10 +1064,10 @@ def _r1_continuations(ctx: _RunContext, delistings: list[Delisting], securities:
     (304) to that successor, flagged `r1_continuation`, its payout reads dropped (a continuation has no value),
     and an `r1_rebucketed` review item keeps its old bucket. An existing acquirer is never a continuation (LVNTA
     into GCI Liberty, Towers Watson into Willis, Waste Connections into Progressive Waste). The terms are stage 8's
-    reading (`MergerValues.read_terms`: none for a merger the caller gave terms for)."""
-    edgar, out = ctx.clients.edgar, _R1()
+    reading (`MergerValues.read_terms`: none for a merger the caller gave terms for). A reading that rested on a
+    failed or stale read (the issuer record's, or any other SEC read's) keeps the merger, flagged degraded."""
+    out = _R1()
     mark = ctx.meter.start()
-    ages = _IssuerAge(edgar)
     starts = _starts(securities, sightings, values.added)
     for e in delistings:
         if e.record.bucket is not CrspBucket.MERGER or e.sec_id not in securities:
@@ -1151,15 +1075,15 @@ def _r1_continuations(ctx: _RunContext, delistings: list[Delisting], securities:
         terms = values.read_terms(e.key)
         if terms is None or terms[1] is None or abs(terms[1] - 1.0) > 1e-9:
             continue
-        watch, failed = DegradedWatch(), ages.failures
+        watch = ctx.clients.issuers.watch()
         sec = securities[e.sec_id]
-        own, _, day = _own_exchange(edgar, e, sec)
+        own, _, day = _own_exchange(ctx.clients, e, sec)
         cash = terms[0]
         link, pending = None, {}
         if own is not None and own.one_for_one and (
                 not cash or any(abs(cash - d) < 0.005 for d in own.special_dividends)):
-            link = _r1_successor(ctx, e, sec, own, day, starts, ages, securities, values.added, out, pending)
-        if watch.tripped() or ages.failures > failed:
+            link = _r1_successor(ctx, e, sec, own, day, starts, securities, values.added, out, pending)
+        if watch.tripped():
             watch_item = degraded_item(e.sec_id, e.ticker, e.cik, "the R1 reading", delist_date=e.delist_date)
             out.review.append(watch_item)
             flag_degraded(e)
@@ -1249,7 +1173,7 @@ def _own_registration_link(ctx: _RunContext, e: Delisting, texts: list[str], day
     2019's 18453H106). R2 on that CUSIP's one US composite: the security's own is the security going on (it is its
     own successor); another is its successor, added as a security of its own (`AddedLineSuccessor`) when the run
     has none. Several composites or an OpenFIGI error: no link."""
-    if own_continuation_filing(ctx.clients.edgar.recent_filings(e.cik), day) is None:
+    if own_continuation_filing(ctx.clients.issuers.filings(e.cik), day) is None:
         return None
     mine = set(sec_cusips.get(e.sec_id, []))
     named = sorted(text_cusips(texts) - mine)
@@ -1288,20 +1212,19 @@ def _terms_links(ctx: _RunContext, delistings: list[Delisting], securities: dict
     (`successors.successor_by_terms`: the same issuer's other class, CMCSK into CMCSA, HUB-B into HUBB, CWENA
     into CWEN; a new issuer's, BHI into BHGE, HHC into HHH), else the line its own successor registration moved
     the holders to (`_own_registration_link`: CCO 2019, OKE 2026). The link's `how` is "terms" or
-    "own_registration"."""
-    edgar = ctx.clients.edgar
-    ages = _IssuerAge(edgar)
+    "own_registration". A reading that rested on a failed or stale read is flagged degraded."""
     for e in delistings:
         if e.key in found.links or SUCCESSOR_UNKNOWN not in e.flags or e.sec_id not in securities:
             continue
-        watch, failed = DegradedWatch(), ages.failures
-        own, texts, day = _own_exchange(edgar, e, securities[e.sec_id])
+        issuers = ctx.clients.issuers
+        watch = issuers.watch()
+        own, texts, day = _own_exchange(ctx.clients, e, securities[e.sec_id])
         link = None
         if own is not None and own.one_for_one:
-            link = successor_by_terms(e, own, day, starts, issuer_since=ages.since, issuer_names=ages.names)
+            link = successor_by_terms(e, own, day, starts, issuers=issuers)
             if link is None:
                 link = _own_registration_link(ctx, e, texts, day, securities, sec_cusips, ftd, taken, found)
-        if watch.tripped() or ages.failures > failed:
+        if watch.tripped():
             found.review.append(degraded_item(e.sec_id, e.ticker, e.cik, "the successor terms reading",
                                               delist_date=e.delist_date))
             found.degraded.append(e.key)
@@ -1418,23 +1341,26 @@ def _handoffs(ctx: _RunContext, delistings: list[Delisting], securities: dict[st
     the issuer's first EDGAR filing dates it), then acted on (`apply_handoffs`): a continuation's
     missing row is added, a successor or a ticker successor set, and the review
     items it resolves dropped. A merger whose value reconciled counts as reconciled (`MergerValues.reconciled`:
-    not one share per share and no cash, R1, sub-plan 5f: SPB 2018). Returns the outcome; the caller adds its rows."""
-    clients, edgar = ctx.clients, ctx.clients.edgar
+    not one share per share and no cash, R1, sub-plan 5f: SPB 2018). The issuers' names, filing lists and first
+    filings come from the run's issuer record: a pair whose search or decision rested on a failed or stale read
+    (the issuer's first filing included) is decided without what could not be read and gets a
+    `resolution_degraded` item. Returns the outcome; the caller adds its rows."""
+    clients, edgar, issuers = ctx.clients, ctx.clients.edgar, ctx.clients.issuers
     fts = getattr(edgar, "full_text_search", None)
     sightings = {sid: filtered_ticker_sightings(sig, sec_cusips.get(sid, []), ftd)
                  for sid, sig in search.sightings.items()}
     pairs = find_handoffs(sightings)
     mark = ctx.meter.start()
 
-    def filing_args(p) -> tuple[list[str], date, int] | None:
+    def filing_args(p, record: IssuerRecord) -> tuple[list[str], date, int] | None:
         a, b = securities[p.a], securities[p.b]
         if fts is None or b.issuer_cik is None:
             return None
-        sub = edgar.submissions(a.issuer_cik) if a.issuer_cik is not None else None
+        sub = record.submissions(a.issuer_cik) if a.issuer_cik is not None else None
         return predecessor_names(sub, p.a_last, a.name), date.fromisoformat(p.b_first), b.issuer_cik
 
     def find_filing(p):
-        args = filing_args(p)
+        args = filing_args(p, issuers)
         if args is not None:
             names, day, cik = args
             hit = next((f for n in names if (f := continuation_filing(fts, name=n, day=day, successor_cik=cik))),
@@ -1444,37 +1370,32 @@ def _handoffs(ctx: _RunContext, delistings: list[Delisting], securities: dict[st
         b_cik = securities[p.b].issuer_cik
         if b_cik is None or issuer_carries_on(p, securities, first_seen):
             return None     # the filing names no predecessor: not for an A whose issuer went on in another line
-        return own_continuation_filing(edgar.recent_filings(b_cik), date.fromisoformat(p.b_first))
+        return own_continuation_filing(issuers.filings(b_cik), date.fromisoformat(p.b_first))
 
     if fts is not None and ctx.sec_workers > 1:
-        def warm_search(p) -> None:
-            args = filing_args(p)
+        def warm_search(record: IssuerRecord, p) -> None:
+            args = filing_args(p, record)
             if args is not None:
                 for n in args[0]:
                     fts(*successor_query(n, args[1]))
-        warm(pairs, warm_search, workers=ctx.sec_workers, name="handoff search")
+        warm(pairs, warm_search, workers=ctx.sec_workers, state=issuers.shadow, name="handoff search")
     first_seen = {sid: sig[0].day for sid, sig in sightings.items() if sig}
-
-    def issuer_since(cik: int | None) -> str | None:
-        """The issuer's first EDGAR filing (the finder already read its filings)."""
-        dates = [f.filing_date for f in edgar.recent_filings(cik) if f.filing_date] if cik is not None else []
-        return min(dates) if dates else None
 
     decisions: list[HandoffDecision] = []
     degraded: list[ReviewItem] = []
     for p in pairs:
-        watch = DegradedWatch()
+        watch = issuers.watch()
         filing = find_filing(p)
-        if watch.tripped():
-            a = securities[p.a]
-            degraded.append(degraded_item(p.a, p.ticker, a.issuer_cik, f"the handoff search ({p.ticker} to {p.b})",
-                                          last_seen=p.a_last))
         a_cik, b_cik = securities[p.a].issuer_cik, securities[p.b].issuer_cik
         same = a_cik is not None and a_cik == b_cik
+        since = None if same or b_cik is None else issuers.first_filed(b_cik)
+        if watch.tripped():
+            degraded.append(degraded_item(p.a, p.ticker, a_cik, f"the handoff search ({p.ticker} to {p.b})",
+                                          last_seen=p.a_last))
         decision = decide_handoff(p, filing=filing, same_issuer=same,
                                   cusip_switch=cusip_switch(ftd, p, sec_cusips.get(p.a, []), sec_cusips.get(p.b, [])),
                                   issuer_carries_on=issuer_carries_on(p, securities, first_seen),
-                                  b_issuer_since=None if same else issuer_since(b_cik))
+                                  b_issuer_since=since.isoformat() if since else None)
         if decision is not None:
             decisions.append(decision)
     ctx.meter.done("handoff search", mark)
@@ -2074,36 +1995,16 @@ def _as_read(tables: dict[str, list[dict]]) -> Tables:
                   rows("contract_delistings") if "contract_delistings" in tables else None)
 
 
-def _in_force_reads(ctx: _RunContext, failed: set[int] | None = None
-                    ) -> tuple[Callable[[int], Any], Callable[[str], list[int]]]:
-    """The two EDGAR reads `issuer_in_force` takes: a CIK's submissions (memoized; a read that fails is None, a
-    refusal (`fatal.FATAL`) stops the run; `failed` collects each CIK whose answer failed or rested on a stale
-    copy) and the CIKs SEC's name index lists under exactly a name (none without an index: a test double's
-    resolver)."""
-    edgar, memo = ctx.clients.edgar, {}
+def _in_force_reads(issuers: IssuerRecord) -> tuple[Callable[[int], dict | None], ReadWatch]:
+    """The submissions read `issuer_in_force` takes, from the run's issuer record (None when it cannot be read; a
+    CIK whose read failed in this stage is not asked again in it, as the stage reads one per sighting), and the
+    watch over the stage's reads (`ciks`: each CIK whose answer failed or rested on a stale copy)."""
+    reads = issuers.watch()
 
-    def submissions(cik: int):
-        if cik not in memo:
-            watch = DegradedWatch()
-            try:
-                memo[cik] = edgar.submissions(cik)
-            except FATAL:
-                raise
-            except requests.RequestException:
-                memo[cik] = None
-                if failed is not None:
-                    failed.add(cik)
-            if watch.tripped() and failed is not None:
-                failed.add(cik)
-        return memo[cik]
+    def submissions(cik: int) -> dict | None:
+        return None if cik in reads.failed else issuers.submissions(cik)
 
-    index_of = getattr(ctx.clients.resolver, "name_index", None)
-    index = index_of() if callable(index_of) else None
-
-    def exact_names(name: str) -> list[int]:
-        return [h.cik for h in index.split_search(name)[0]] if index is not None else []
-
-    return submissions, exact_names
+    return submissions, reads
 
 
 def _other_issuers(ctx: _RunContext, eras: list[TickerEra], resolutions: dict[str, EraResolution],
@@ -2116,8 +2017,8 @@ def _other_issuers(ctx: _RunContext, eras: list[TickerEra], resolutions: dict[st
     security whose issuer changed in its span has none (Perrigo: CIK 820096 until 2013, then its own). A security
     for whose answer a submissions read failed or was stale gets a `resolution_degraded` row in `review`: the
     other CIK's Form 25s it may have lost are not read until a rerun."""
-    failed: set[int] = set()
-    read, exact_names = _in_force_reads(ctx, failed)
+    read, reads = _in_force_reads(ctx.clients.issuers)
+    exact_names = ctx.clients.issuers.exact_holders
     touched: set[int] = set()
 
     def submissions(cik: int):
@@ -2139,7 +2040,7 @@ def _other_issuers(ctx: _RunContext, eras: list[TickerEra], resolutions: dict[st
         touched.clear()
         timeline = issuer_changes(rows, submissions, exact_names).get(sid, [])
         s = securities.get(sid)
-        if s is not None and review is not None and touched & failed:
+        if s is not None and review is not None and touched & reads.ciks:
             review.append(degraded_item(sid, s.eras[-1].ticker, s.issuer_cik, "the other issuer in force",
                                         "; run again once SEC answers"))
         if s is not None and s.issuer_cik is not None and len(timeline) == 1 and timeline[0][1] != str(s.issuer_cik):
@@ -2155,17 +2056,17 @@ def _issuers_in_force(ctx: _RunContext, observation_map: Sequence[Mapping[str, s
     """Each security's issuer timeline (issuer_in_force.issuer_changes) from its
     sightings: every observation_map row with a sec_id, except a conflict (two
     names that day). A submissions read that fails keeps the era's CIK; a refusal
-    (`fatal.FATAL`) stops the run. Without a name index (a test double's
-    resolver), every sighting keeps its era's CIK. A sighting of an era whose
+    (`fatal.FATAL`) stops the run. Without a name index (the run's issuer record
+    holds none), every sighting keeps its era's CIK. A sighting of an era whose
     issuer its ticker's fails rows decided (`rows_decided`, stage 2b's
     `ticker_rows`) keeps its era's CIK too: its observed name is the one those
     rows refuted (ERA 2013's BRISTOW GROUP INC)."""
-    submissions, exact_names = _in_force_reads(ctx)
+    submissions, _ = _in_force_reads(ctx.clients.issuers)
     mark = ctx.meter.start()
     out = issuer_changes((IssuerSighting(r["sec_id"], r["as_of"], "" if r["era"] in rows_decided else r["name"],
                                          r["issuer_cik"])
                           for r in observation_map if r["sec_id"] and r["status"] != "conflict"),
-                         submissions, exact_names)
+                         submissions, ctx.clients.issuers.exact_holders)
     ctx.meter.done("issuers in force", mark)
     return out
 
@@ -2240,6 +2141,7 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
     """The run's stages in order (each function's docstring says what it does);
     `run` wraps it with the resolver memo's final flush."""
     ctx = _RunContext(clients, clients.as_of or date.today(), log, sec_workers, run_manifest.StageMeter(log))
+    clients.issuers.forget()                  # one issuer record per run: each issuer is read afresh, once
     run_mark = SEC_STATS.snapshot()           # the manifest reports the traffic since here
     eras, era_by_key, ftd, ftd_lo = _refine(ctx, index, limit)                                      # 1
     answers = _resolve_issuers(ctx, eras, ftd)                                                      # 2

@@ -190,16 +190,6 @@ def test_several_issuers_of_the_name_or_none_give_no_ticker():
                               last=date(2016, 6, 10), target_cik=1) == ""
 
 
-class _Ctx:
-    def __init__(self, edgar, index, ftd_client=None):
-        self.clients = SimpleNamespace(edgar=edgar, resolver=SimpleNamespace(name_index=lambda: index),
-                                       ftd_client=ftd_client)
-        self.logged = []
-
-    def log(self, msg):
-        self.logged.append(msg)
-
-
 class _EdgarShaw:
     def __init__(self, fail=False):
         self.fail = fail

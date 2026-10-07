@@ -19,7 +19,7 @@ from typing import Iterable
 from . import end_of_era, exchange_terms
 from .crsp_codes import CrspBucket, bucket_for_code
 from .distress import liquidating
-from .edgar import STALE_KEY, EdgarClient, EdgarSubmission, submissions_fresh_after
+from .edgar import EdgarClient, EdgarSubmission
 from .evidence import (
     MERGER_EVIDENCE_DAYS,
     bankruptcy_8ks,
@@ -36,6 +36,7 @@ from .evidence import (
 )
 from .figi_resolution import share_class_from_name
 from .form25 import Form25, notice_says_acquired, parse_form25
+from .issuer_record import IssuerRecord
 from .names import names_agree
 from .ticker_resolver import TickerResolution, TickerResolver
 
@@ -188,12 +189,19 @@ class DelistClassifier:
         name_hint_lookup: "callable[..., str | None] | None" = None,
         *,
         today: date | None = None,
+        issuers: IssuerRecord | None = None,
     ) -> None:
+        """`issuers`: the run's issuer record, which the up-front submissions read
+        and the name check go through (None: the resolver's, else one over `edgar`
+        dated `today`)."""
         self.edgar = edgar
         self.resolver = resolver
         self.asset_type_lookup = asset_type_lookup or (lambda *a, **kw: None)
         self.name_hint_lookup = name_hint_lookup or (lambda *a, **kw: None)
-        self.today = today    # the run date bounding submissions freshness (None: the clock)
+        self.today = today    # the run date (None: the clock)
+        if issuers is None:
+            issuers = resolver.issuers if isinstance(resolver, TickerResolver) else IssuerRecord(edgar, today=today)
+        self.issuers = issuers
 
     def _detect_continued_filings(
         self, filings: list[EdgarSubmission], delist_date: date
@@ -664,7 +672,7 @@ class DelistClassifier:
 
         return self._classify_resolved(
             ticker, resolution, observed_delist_date,
-            expected_name=self.resolver._expected_name(ticker.upper(), observed_delist_date),
+            expected_name=self.resolver.expected_name(ticker.upper(), observed_delist_date),
         )
 
     def _classify_resolved(
@@ -681,12 +689,13 @@ class DelistClassifier:
 
         flags: list[str] = []
         if observed:
-            # Once, up front: a cached copy fetched before the event window is
-            # fetched again, and every later read below hits the fresh copy. A
-            # failed refetch serves the cached copy marked STALE_KEY, so the row
-            # is reviewable rather than an error.
-            sub = self.edgar.submissions(resolution.cik, fresh_after=submissions_fresh_after(observed, self.today))
-            if isinstance(sub, dict) and sub.get(STALE_KEY):
+            # Once, up front, through the run's issuer record: a cached copy
+            # fetched before the event window is fetched again, and every later
+            # read below hits the fresh copy. A failed refetch serves the cached
+            # copy (or nothing), so the row is reviewable rather than an error.
+            watch = self.issuers.watch()
+            self.issuers.submissions(resolution.cik, about=observed)
+            if watch.ciks:
                 flags.append("submissions_stale")
 
         if resolution.source == "company_tickers":
@@ -696,7 +705,10 @@ class DelistClassifier:
         # and it is how the consumer catches an impostor series.
         expected = expected_name
         if expected and observed:
-            _, agrees = self.resolver._fits_date(resolution.cik, observed_delist_date, expected)
+            # a name the issuer carried within 30 days of the date (none when its
+            # submissions cannot be read: the mismatch is flagged then too)
+            agrees = any(names_agree(n, expected)
+                         for n in self.issuers.names_near(resolution.cik, observed, about=observed))
             if not agrees:
                 flags.append("member_name_mismatch")
                 # Only ever beside the mismatch, which it qualifies: the two flags

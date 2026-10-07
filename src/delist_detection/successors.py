@@ -18,6 +18,7 @@ from typing import NamedTuple
 from .delistings import SUCCESSOR_UNKNOWN, Delisting
 from .exchange_terms import OwnExchange
 from .figi_resolution import FigiCandidate, class_letter, share_class_from_name, us_candidates
+from .issuer_record import IssuerRecord
 from .listing_status import edgar_lists
 from .names import names_agree
 from .observations import normalize_ticker
@@ -202,8 +203,7 @@ def _named(exchange: OwnExchange, tickers: set[str], names: Sequence[str]) -> bo
 
 
 def successor_by_terms(e: Delisting, exchange: OwnExchange, day: date, starts: Mapping[str, SecurityStart], *,
-                       issuer_since: Callable[[int], str | None],
-                       issuer_names: Callable[[int], Sequence[str]]) -> tuple[str, str] | None:
+                       issuers: IssuerRecord) -> tuple[str, str] | None:
     """The security the R1 statement says the holders' shares became, one for one with no cash
     (`exchange.one_for_one`), among the run's (`starts`):
 
@@ -212,10 +212,10 @@ def successor_by_terms(e: Delisting, exchange: OwnExchange, day: date, starts: M
       `day` + SUCCESSOR_AFTER_DAYS and not gone before `day`, the target naming the registrant or the security;
     - of a new issuer (NEW_ISSUER: a holding company, BHGE, Howard Hughes Holdings, Viatris): first sighted within
       [day - SUCCESSOR_BEFORE_DAYS, day + SUCCESSOR_AFTER_DAYS], its issuer's first EDGAR filing
-      (`issuer_since`) at most NEW_ISSUER_DAYS before `day`, the target naming it (`_named`: a ticker or an EDGAR
-      name, `issuer_names`). An existing company is never a continuation (LVNTA into GCI Liberty, WCN into
-      Progressive Waste), and without the name tie a new registrant sighted in the window is not one either
-      (AABA and BHGE, MSG and Alphabet).
+      (`issuers.first_filed`, the run's issuer record) at most NEW_ISSUER_DAYS before `day`, the target naming it
+      (`_named`: a ticker or an EDGAR name, `issuers.names`). An existing company is never a continuation (LVNTA
+      into GCI Liberty, WCN into Progressive Waste), and without the name tie a new registrant sighted in the window
+      is not one either (AABA and BHGE, MSG and Alphabet).
 
     Several: the one of the class letter the target names. Returns (sec_id, how); None for none or a tie."""
     if not exchange.one_for_one:
@@ -229,13 +229,13 @@ def successor_by_terms(e: Delisting, exchange: OwnExchange, day: date, starts: M
         if st.issuer_cik == e.cik:
             alive = not st.last_seen or st.last_seen >= day.isoformat()
             if (st.first_seen <= hi and alive and (class_letter(st.share_class) or "") == exchange.target_letter
-                    and (exchange.target_own or _named(exchange, st.tickers, issuer_names(st.issuer_cik)))):
+                    and (exchange.target_own or _named(exchange, st.tickers, issuers.names(st.issuer_cik)))):
                 found[sid] = SAME_ISSUER_CLASS
         elif lo <= st.first_seen <= hi:
-            since = issuer_since(st.issuer_cik)
-            if since is None or (day - date.fromisoformat(since[:10])).days > NEW_ISSUER_DAYS:
+            since = issuers.first_filed(st.issuer_cik)
+            if since is None or (day - since).days > NEW_ISSUER_DAYS:
                 continue
-            if _named(exchange, st.tickers, issuer_names(st.issuer_cik)):
+            if _named(exchange, st.tickers, issuers.names(st.issuer_cik)):
                 found[sid] = NEW_ISSUER
     if len(found) > 1:
         found = {sid: how for sid, how in found.items()
