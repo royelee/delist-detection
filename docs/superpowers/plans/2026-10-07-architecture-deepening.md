@@ -128,24 +128,33 @@ layout (16) comes last, once steps 8 and 13 have made the pure leaf modules.
   - Cost if wrong: none to output. The replay script and the tests build `TickerResolver`, `DelistClassifier` and
     `Clients` without a record, so the record must come from what they already pass. A caller who builds the
     resolver and the classifier over two records gets two memos; both keep the one policy.
-- **The interface is the reads and what they answer.** The reads are `submissions`, `filings` and `text`. The
-  answers are `names`, `names_near`/`names_between`/`names_until`, `first_filed`, `existed_by`,
-  `recent_form_dates` and `exact_holders` (SEC's name index, which moved from the resolver). `about=` asks for a copy
-  current for an event (`edgar.submissions_fresh_after`).
+- **The interface is the reads and what they answer.** The reads are `profile` (the submissions JSON without its
+  filings block: name, former names, tickers, exchanges), `filings` and `text`. The answers are `names`,
+  `names_near`/`names_between`/`names_until`, `first_filed`, `existed_by`, `recent_form_dates` and `exact_holders`
+  (SEC's name index, which moved from the resolver). `about=` asks for a copy current for an event
+  (`edgar.submissions_fresh_after`).
   - Alternative: answers only, no raw reads.
-  - Cost if wrong: the line follow's `corroborate`, the handoffs' `predecessor_names` and the R1 reading take the
-    raw JSON or filing list. Hiding them would mean rewriting those rule modules in this step.
-- **What it remembers.** It keeps only current copies: at most `MEMO_SIZE` (512) submissions copies and as many
-  filing lists, the least recently asked dropped first, and every issuer's first filing.
+  - Cost if wrong: the line follow's `corroborate`, the handoffs' `predecessor_names`, the R1 reading, the acquirer
+    lookups and the issuer in force take the profile or the filing list. Hiding them would mean rewriting those rule
+    modules in this step. None of them reads the filings block, so `profile` leaves it out.
+- **What it remembers: every issuer's profile and first filing, and at most `MEMO_SIZE` (512) filing lists**, the
+  least recently asked dropped first. Only current copies are remembered.
   - Every refresh of the run goes through it: the resolver's reads and the classifier's up-front read. So a held
-    copy is the client's cached copy.
-  - A copy that does not carry its fetch day is read again for an event.
+    profile is the client's cached copy's.
+  - A copy that does not carry its fetch day is read again for an event. 1,046 of the 5,987 cached copies carry
+    none; the client stamps every copy it fetches, so such a copy is the cached one, and it keeps the filing list.
   - A refreshed copy drops the filing list and the first filing it held from the old copy.
-  - Measured: the replay reads 2,529 issuers' submissions 32,946 times. The cache holds 5,987 copies, 496 MB on
-    disk.
-  - Alternative: hold every issuer's copy for the run.
-  - Cost if wrong: an issuer asked again after 512 others is read again from the disk cache. That costs time only.
-    Holding all 2,529 parsed copies would have added gigabytes to a run that already peaks at 6.5 GB.
+  - `recent_form_dates` reads the client's copy each time, as the resolver's `_form_dates` did. The recent block is
+    the bulk of a copy and only the name tier asks for it.
+  - Measured on the replay: the base reads 2,529 issuers' submissions 32,946 times, and its peak memory is 6.46 GB.
+    The cache holds 5,987 copies, 496 MB on disk.
+  - The first build held at most 512 whole copies. Stage 8a's name lookup (`acquirer_line.issuer_by_name`) reads
+    every issuer of the run's names for each of 331 stock legs, so that bound made it read 91,901 copies (118,721
+    in all). Profiles are a few kilobytes each, so all of them are kept.
+  - Measured with profiles kept: 19,262 submissions reads (base 32,946) and a peak of 5.47 GB (base 6.46 GB).
+  - Alternative: hold every issuer's whole copy for the run.
+  - Cost if wrong: a filing list asked again after 512 others is read again from the disk cache. That costs time
+    only. Holding all 2,529 parsed copies would have added gigabytes to a run that already peaks near 6.5 GB.
 - **The failure policy.**
   - A `requests.RequestException` is unknown and never remembered.
   - `fatal.FATAL` stops the run.
@@ -194,7 +203,7 @@ layout (16) comes last, once steps 8 and 13 have made the pure leaf modules.
     - `listing_status` (`issuer_exchange` in 9b and 10b can still stop a run);
     - `successors.successor_search_name`, stage 9e's 8-K list (`_eightks`) and stage 9g's `continuation_evidence`;
     - the finder's own reads (its per-security try turns a failure into an `error` row).
-- **The classifier asks its issuer record, not the resolver's privates.** It reads `submissions(cik, about=)` for
+- **The classifier asks its issuer record, not the resolver's privates.** It reads `profile(cik, about=)` for
   the up-front refresh (`submissions_stale` from the watch) and `names_near(cik, day, about=day)` for the name check.
   `TickerResolver.expected_name` is now public. The warm finder's classifier copy holds a shadow record instead of a
   shadow resolver.

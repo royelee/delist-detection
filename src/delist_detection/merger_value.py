@@ -379,17 +379,17 @@ def _acquirer_lines(st: _Stage, mergers: list[Delisting], llm_terms: Mapping[Del
         watch = reads.watch()
         holder = index.holder(ticker, last, day, exclude=e.sec_id) if ticker else None
         cik = securities[holder].issuer_cik if holder else None
-        if cik is not None and not acquirer_line.issuer_fits(reads.submissions, reads.first_filed, int(cik), name,
+        if cik is not None and not acquirer_line.issuer_fits(reads.profile, reads.first_filed, int(cik), name,
                                                              last):
             holder, cik = None, None
         try:
             if cik is None and ticker and resolver is not None:
-                cik = acquirer_line.issuer_by_ticker(resolver, reads.submissions, ticker, name, last,
+                cik = acquirer_line.issuer_by_ticker(resolver, reads.profile, ticker, name, last,
                                                      target_cik=e.cik)
             if cik is None:
                 # no ticker, or one that names no issuer on the last trade day (sub-plan 5f: prompt v3 gives
                 # today's ticker of a renamed acquirer, FDC 2019's FI for Fiserv's FISV): the run's issuer of the name
-                cik = acquirer_line.issuer_by_name(index.issuers(), reads.submissions, name, last, day,
+                cik = acquirer_line.issuer_by_name(index.issuers(), reads.profile, name, last, day,
                                                    target_cik=e.cik)
         except FATAL:
             raise
@@ -472,7 +472,7 @@ def _name_acquirer_tickers(st: _Stage, mergers: list[Delisting], llm_terms: Mapp
                 except requests.RequestException:
                     SEC_STATS.degraded("ftd_scan")
 
-            ticker = acquirer_ticker.acquirer_ticker(t.acquirer_name, text, index=index, subs=reads.submissions,
+            ticker = acquirer_ticker.acquirer_ticker(t.acquirer_name, text, index=index, subs=reads.profile,
                                                      first_filed=reads.first_filed, rows=rows, last=last,
                                                      target_cik=e.cik)
         except FATAL:

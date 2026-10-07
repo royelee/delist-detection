@@ -5,13 +5,14 @@ An issuer's EDGAR record is its submissions JSON (its names over time, its ticke
 filing list (every filing, the paginated history included). The ticker resolver, the classifier's name check and the
 pipeline's stages all read issuers through one `IssuerRecord`, and ask it what those answer:
 
+- `profile(cik)`: the submissions JSON without its filings block (name, former names, tickers, exchanges);
 - `names(cik)`: every name EDGAR records for the issuer, current then former;
 - `names_near(cik, day)`, `names_between(cik, lo, hi)`, `names_until(cik, day)`: the names it carried within 30
   days of a day, at some point in a window, and on or before a day (`evidence.names_near`, `names_between`,
   `names_until`);
 - `first_filed(cik)` and `existed_by(cik, day)`: its first filing, and whether it had filed by a day;
 - `recent_form_dates(cik, form)`: the days of its latest filings (the submissions JSON's recent block) of a form;
-- `submissions(cik)`, `filings(cik)` and `text(cik, filing)`: the raw reads, for the readers that need more;
+- `filings(cik)` and `text(cik, filing)`: the issuer's filings and a filing's text;
 - `exact_holders(name)`: the CIKs SEC's name index (cik-lookup-data.txt) lists under exactly a name.
 
 The failure policy, the same for every reader:
@@ -27,13 +28,15 @@ The failure policy, the same for every reader:
 
 Freshness: `about` (the day of the event a reader asks about) asks for a copy fetched by
 `edgar.submissions_fresh_after(about, today)`, as the resolver and the classifier read an issuer around an event. A
-remembered copy fetched by then answers without a read; an older one is read again, and the client refreshes it.
-Without `about`, any copy answers. Only a current copy is remembered (a stale or degraded one is used and read again
-next time), and every refresh the run makes goes through here, so a remembered copy is the client's cached one.
+remembered profile from a copy fetched by then answers without a read; an older one is read again, and the client
+refreshes it. Without `about`, any copy answers. Only a current copy's profile is remembered (a stale or degraded
+one is used and read again next time), and every refresh the run makes goes through here, so a remembered profile is
+the client's cached copy's.
 
-Memory: at most `MEMO_SIZE` submissions copies and as many filing lists are remembered, the least recently asked
-dropped first (asked again, they are read from the client's disk cache); every issuer's first filing is kept. The
-record forgets everything when a run starts (`forget`).
+Memory: every issuer's profile and first filing are kept (a few kilobytes each); the submissions JSON's filings
+block is not kept (the recent block is read again for `recent_form_dates`, as before); at most `MEMO_SIZE` filing
+lists are kept, the least recently asked dropped first (asked again, they are read from the client's disk cache).
+The record forgets everything when a run starts (`forget`).
 
 Threads: the run's record serves the sequential pass on one thread. A warm pass reads through a `shadow()`, which
 starts from a snapshot of what is remembered and keeps what it reads to itself; the degraded log is per thread."""
@@ -58,7 +61,7 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 
-MEMO_SIZE = 512        # submissions copies (and filing lists) remembered at once
+MEMO_SIZE = 512        # filing lists remembered at once
 
 
 class _Log(threading.local):
@@ -103,7 +106,7 @@ class IssuerRecord:
         self._index: CikNameIndex | None = None if callable(name_index) else name_index
         self._index_failed = False
         self._log = _Log()
-        self._subs: OrderedDict[int, dict] = OrderedDict()
+        self._profiles: dict[int, dict] = {}
         self._filings: OrderedDict[int, list[EdgarSubmission]] = OrderedDict()
         self._first: dict[int, date | None] = {}
         self._stamps: dict[int, Any] = {}     # CIK -> the fetch day of the copy its remembered answers came from
@@ -132,44 +135,51 @@ class IssuerRecord:
 
     # --- the reads ------------------------------------------------------------------------------------------------
 
-    def submissions(self, cik: int, *, about: date | str | None = None) -> dict | None:
-        """The issuer's submissions JSON, None when it cannot be read. With `about`, a copy fetched by
-        `edgar.submissions_fresh_after(about, today)` (see the module docstring)."""
+    def profile(self, cik: int, *, about: date | str | None = None) -> dict | None:
+        """The issuer's submissions JSON without its filings block (`_profile_of`), None when it cannot be read. With
+        `about`, from a copy fetched by `edgar.submissions_fresh_after(about, today)` (see the module docstring)."""
         cik = int(cik)
-        on = about if isinstance(about, date) else parse_day(about)
-        fresh = submissions_fresh_after(on, self.today) if on is not None else None
-        held = self._subs.get(cik)
+        fresh = self._fresh(about)
+        held = self._profiles.get(cik)
         if held is not None and (fresh is None or _fetched(held, fresh)):
-            self._subs.move_to_end(cik)
             return held
+        return _profile_of(self._copy(cik, fresh))
+
+    def _fresh(self, about: date | str | None) -> date | None:
+        on = about if isinstance(about, date) else parse_day(about)
+        return submissions_fresh_after(on, self.today) if on is not None else None
+
+    def _copy(self, cik: int, fresh: date | None) -> dict | None:
+        """The client's whole submissions JSON (fresh by `fresh`), None when it cannot be read; a current one's
+        profile is remembered."""
         if fresh is None:
             sub, current = self._read(cik, self.edgar.submissions, cik)
         else:
             sub, current = self._read(cik, self.edgar.submissions, cik, fresh_after=fresh)
-        if current and isinstance(sub, dict):
+        if not isinstance(sub, dict):
+            return None
+        if current:
             self._remember(cik, sub, refreshed=fresh is not None)
-        return sub if isinstance(sub, dict) else None
+        return sub
 
     def _remember(self, cik: int, sub: dict, *, refreshed: bool) -> None:
-        """Keep a current copy. A copy a refreshing read returned may be newer than the one the issuer's filing
-        list and first filing came from: those are read again when they come from another copy, or from one whose
-        fetch day is not known."""
+        """Keep a current copy's profile. A copy a refreshing read returned may be newer than the one the issuer's
+        filing list and first filing came from: those are read again when its fetch day differs from the last
+        copy's. (A copy the client fetches always carries its fetch day, so one without it is the cached copy,
+        unchanged.)"""
         stamp = sub.get(FETCHED_KEY)
-        if refreshed and (stamp is None or self._stamps.get(cik) != stamp):
+        if refreshed and self._stamps.get(cik) != stamp:
             self._filings.pop(cik, None)
             self._first.pop(cik, None)
         self._stamps[cik] = stamp
-        self._subs[cik] = sub
-        self._subs.move_to_end(cik)
-        while len(self._subs) > MEMO_SIZE:
-            self._subs.popitem(last=False)
+        self._profiles[cik] = _profile_of(sub)
 
     def filings(self, cik: int, *, about: date | str | None = None) -> list[EdgarSubmission]:
         """Every filing of the issuer (`EdgarClient.recent_filings`), [] when they cannot be read. With `about`, the
-        submissions copy is made current for that day first, so both are read from one copy."""
+        submissions JSON is made current for that day first, so both are read from one copy."""
         cik = int(cik)
         if about is not None:
-            self.submissions(cik, about=about)
+            self.profile(cik, about=about)
         held = self._filings.get(cik)
         if held is not None:
             self._filings.move_to_end(cik)
@@ -194,22 +204,22 @@ class IssuerRecord:
 
     def names(self, cik: int, *, about: date | str | None = None) -> tuple[str, ...]:
         """Every name EDGAR records for the issuer, current then former (`evidence.edgar_names`); () when unknown."""
-        sub = self.submissions(cik, about=about)
+        sub = self.profile(cik, about=about)
         return edgar_names(sub) if sub is not None else ()
 
     def names_near(self, cik: int, day: date, *, about: date | str | None = None, days: int = 30) -> list[str]:
         """The names the issuer carried within `days` of `day`, former names first; [] when unknown."""
-        sub = self.submissions(cik, about=about)
+        sub = self.profile(cik, about=about)
         return names_near(sub, day, days) if sub is not None else []
 
     def names_between(self, cik: int, lo: date, hi: date, *, about: date | str | None = None) -> list[str]:
         """The names the issuer carried at some point in [lo, hi], former names first; [] when unknown."""
-        sub = self.submissions(cik, about=about)
+        sub = self.profile(cik, about=about)
         return names_between(sub, lo, hi) if sub is not None else []
 
     def names_until(self, cik: int, day: date, *, about: date | str | None = None) -> list[str]:
         """The names the issuer carried on or before `day`, former names first; [] when unknown."""
-        sub = self.submissions(cik, about=about)
+        sub = self.profile(cik, about=about)
         return names_until(sub, day) if sub is not None else []
 
     def first_filed(self, cik: int) -> date | None:
@@ -233,8 +243,9 @@ class IssuerRecord:
 
     def recent_form_dates(self, cik: int, form: str, *, about: date | str | None = None) -> list[date]:
         """The days of the issuer's latest filings (its submissions JSON's recent block: a delisted company's Form 25
-        or 15 is among its last) whose form starts with `form`; [] when unknown."""
-        sub = self.submissions(cik, about=about)
+        or 15 is among its last) whose form starts with `form`; [] when unknown. The client's copy is read for it
+        each time (the recent block is not kept)."""
+        sub = self._copy(int(cik), self._fresh(about))
         recent = ((sub.get("filings") or {}).get("recent") or {}) if sub is not None else {}
         return [d for f, fd in zip(recent.get("form") or [], recent.get("filingDate") or [])
                 if f.startswith(form) and (d := parse_day(fd)) is not None]
@@ -263,7 +274,7 @@ class IssuerRecord:
 
     def forget(self) -> None:
         """Drop everything remembered (a run starts here): the next ask of each issuer reads the client again."""
-        self._subs.clear()
+        self._profiles.clear()
         self._filings.clear()
         self._first.clear()
         self._stamps.clear()
@@ -274,9 +285,14 @@ class IssuerRecord:
         record is idle (`prefetch.warm` calls its state factory there)."""
         s = IssuerRecord(self.edgar, today=self.today, name_index=self._index or self._index_source)
         s._index_failed = self._index_failed
-        s._subs, s._filings = OrderedDict(self._subs), OrderedDict(self._filings)
+        s._profiles, s._filings = dict(self._profiles), OrderedDict(self._filings)
         s._first, s._stamps = dict(self._first), dict(self._stamps)
         return s
+
+
+def _profile_of(sub: dict | None) -> dict | None:
+    """The submissions JSON without its filings block: what the profile keeps."""
+    return {k: v for k, v in sub.items() if k != "filings"} if isinstance(sub, dict) else None
 
 
 def _fetched(sub: dict, fresh: date) -> bool:

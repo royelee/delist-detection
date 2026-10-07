@@ -694,7 +694,7 @@ class DelistClassifier:
             # read below hits the fresh copy. A failed refetch serves the cached
             # copy (or nothing), so the row is reviewable rather than an error.
             watch = self.issuers.watch()
-            self.issuers.submissions(resolution.cik, about=observed)
+            self.issuers.profile(resolution.cik, about=observed)
             if watch.ciks:
                 flags.append("submissions_stale")
 

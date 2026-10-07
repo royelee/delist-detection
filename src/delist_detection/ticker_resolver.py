@@ -237,7 +237,7 @@ class TickerResolver:
         on = parse_day(observed_date)
         if on is None:
             return True, True
-        if self.issuers.submissions(cik, about=on) is None:
+        if self.issuers.profile(cik, about=on) is None:
             return False, False
         first = self.issuers.first_filed(cik)
         existed = first is not None and first <= on
@@ -597,7 +597,7 @@ class TickerResolver:
         none before its first filing."""
         if on is None:
             return []
-        sub = self.issuers.submissions(cik, about=on)
+        sub = self.issuers.profile(cik, about=on)
         if sub is None or sub.get("__not_found__"):
             return []
         if not self.issuers.existed_by(cik, (on + timedelta(days=30)).isoformat()):
@@ -1108,7 +1108,7 @@ class TickerResolver:
         company founded later (LMCA's 2013 spin-off for 2012 rows), never so
         named (Penske Automotive for an ETN's rows under UAG), or so named only
         later, is not the rows' issuer."""
-        sub = self.issuers.submissions(cik, about=rows[-1].date)
+        sub = self.issuers.profile(cik, about=rows[-1].date)
         first = self.issuers.first_filed(cik)
         if first is None or first > parse_day(rows[0].date) or sub is None:
             return False
@@ -1214,7 +1214,7 @@ class TickerResolver:
         Holdings CUSIP switched to Matson's and to its own. A spin-off starting
         as its parent's CUSIP ends carries no such name."""
         day = parse_day(h.day)
-        sub = self.issuers.submissions(cik, about=h.day)
+        sub = self.issuers.profile(cik, about=h.day)
         former = renamed_near(sub, day, self.RENAME_NEAR_DAYS) if sub is not None and day else None
         named = [(d, parse_day(since)) for d, since in h.descriptions if names_an_issuer(d)]
         if former and named and all(

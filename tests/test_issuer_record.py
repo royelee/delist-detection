@@ -80,14 +80,15 @@ def test_each_issuer_is_read_once_and_answers_from_that_read():
     assert r.names_near(7, date(2018, 6, 29)) == ["HALYARD HEALTH INC", "AVANOS MEDICAL, INC."]
     assert r.names_until(7, date(2016, 1, 1)) == ["HALYARD HEALTH INC"]
     assert r.names_between(7, date(2015, 1, 1), date(2016, 1, 1)) == ["HALYARD HEALTH INC"]
-    assert r.recent_form_dates(7, "25") == [date(2018, 6, 29)]
-    assert r.submissions(7)["tickers"] == ["AVNS"]
+    profile = r.profile(7)
+    assert profile["tickers"] == ["AVNS"] and "filings" not in profile        # the filings block is not kept
     assert _reads(e, "submissions") == 1
+    assert r.recent_form_dates(7, "25") == [date(2018, 6, 29)] and _reads(e, "submissions") == 2   # read for it
     assert r.first_filed(7) == date(2014, 6, 2) and [f.accession for f in r.filings(7)] == ["a3", "a2", "a1"]
     assert r.existed_by(7, "2014-06-02") and not r.existed_by(7, date(2014, 6, 1)) and r.existed_by(7, None)
     assert _reads(e, "recent_filings") == 1
     r.forget()                                          # a new run reads afresh
-    assert r.names(7) and r.first_filed(7) and _reads(e, "submissions") == 2 and _reads(e, "recent_filings") == 2
+    assert r.names(7) and r.first_filed(7) and _reads(e, "submissions") == 3 and _reads(e, "recent_filings") == 2
 
 
 def test_a_filing_list_handed_out_is_the_callers_own():
@@ -97,15 +98,19 @@ def test_a_filing_list_handed_out_is_the_callers_own():
     assert len(r.filings(7)) == 3 and _reads(e, "recent_filings") == 1
 
 
-def test_the_least_recently_asked_copy_is_dropped_past_the_memo_size(monkeypatch):
+def test_every_profile_is_kept_and_the_least_recently_asked_filing_list_is_dropped_past_the_memo_size(monkeypatch):
+    """Stage 8a reads every issuer of the run's names for each stock leg: no profile is ever read twice."""
     monkeypatch.setattr(issuer_record, "MEMO_SIZE", 2)
-    e = _Edgar({1: {"name": "A"}, 2: {"name": "B"}, 3: {"name": "C"}})
+    e = _Edgar({c: {"name": n} for c, n in ((1, "A"), (2, "B"), (3, "C"))}, {1: FILINGS, 2: FILINGS, 3: FILINGS})
     r = IssuerRecord(e)
-    for cik in (1, 2, 1, 3):                            # 2 is the least recently asked when 3 comes in
+    for cik in (1, 2, 3, 1, 2, 3):
         r.names(cik)
-    r.names(1)
-    r.names(2)
-    assert [c for w, c in e.calls] == [1, 2, 3, 2]
+    assert [c for w, c in e.calls] == [1, 2, 3]
+    for cik in (1, 2, 1, 3):                            # 2 is the least recently asked when 3 comes in
+        r.filings(cik)
+    r.filings(1)
+    r.filings(2)
+    assert [c for w, c in e.calls if w == "recent_filings"] == [1, 2, 3, 2]
 
 
 # --- freshness: a read about an event -------------------------------------------------------------------------------
@@ -115,10 +120,10 @@ def test_a_read_about_an_event_asks_for_a_copy_that_fresh_and_a_held_copy_fetche
     new = {"name": "X CO", FETCHED_KEY: "2023-06-01"}
     e = _Edgar({7: _Seq([old, new])})
     r = IssuerRecord(e, today=date(2023, 6, 1))
-    assert r.submissions(7) is old and e.fresh == [None]               # without `about`, any copy
-    assert r.submissions(7, about="2023-05-10") is new                  # held 2023-01-10 < 2023-06-01: read again
-    assert e.fresh == [None, date(2023, 6, 1)]                          # min(2023-06-24, the run date)
-    assert r.submissions(7, about=date(2023, 5, 10)) is new and r.submissions(7) is new
+    assert r.profile(7) == old and e.fresh == [None]                # without `about`, any copy
+    assert r.profile(7, about="2023-05-10") == new                  # held 2023-01-10 < 2023-06-01: read again
+    assert e.fresh == [None, date(2023, 6, 1)]                      # min(2023-06-24, the run date)
+    assert r.profile(7, about=date(2023, 5, 10)) == new and r.profile(7) == new
     assert len(e.fresh) == 2
 
 
@@ -127,19 +132,23 @@ def test_a_refreshed_copy_drops_the_filing_list_and_first_filing_of_the_old_one(
     new = {"name": "X CO", FETCHED_KEY: "2023-06-01"}
     e = _Edgar({7: _Seq([old, new])}, {7: _Seq([[FILINGS[1]], FILINGS])})
     r = IssuerRecord(e, today=date(2023, 6, 1))
-    assert r.submissions(7) is old and r.first_filed(7) == date(2018, 2, 23)
+    assert r.profile(7) == old and r.first_filed(7) == date(2018, 2, 23)
     assert r.first_filed(7) == date(2018, 2, 23) and _reads(e, "recent_filings") == 1
-    r.submissions(7, about="2023-05-10")                                # the client refreshed the copy
+    r.profile(7, about="2023-05-10")                                # the client refreshed the copy
     assert r.first_filed(7) == date(2014, 6, 2) and _reads(e, "recent_filings") == 2
 
 
-def test_a_copy_that_does_not_say_when_it_was_fetched_is_read_again_for_an_event():
-    e = _Edgar({7: {"name": "X CO"}})
+def test_a_copy_that_does_not_say_when_it_was_fetched_is_read_again_for_an_event_and_is_the_same_copy():
+    """The client stamps every copy it fetches, so a copy without its fetch day is the cached one, unchanged: its
+    filing list and first filing are kept."""
+    e = _Edgar({7: {"name": "X CO"}}, {7: FILINGS})
     r = IssuerRecord(e, today=date(2023, 6, 1))
-    r.submissions(7, about="2023-05-10")
-    r.submissions(7, about="2023-05-10")
-    r.submissions(7)
+    assert r.first_filed(7) == date(2014, 6, 2)
+    r.profile(7, about="2023-05-10")
+    r.profile(7, about="2023-05-10")
+    r.profile(7)
     assert _reads(e, "submissions") == 2
+    assert r.first_filed(7) == date(2014, 6, 2) and _reads(e, "recent_filings") == 1
 
 
 # --- the failure policy ---------------------------------------------------------------------------------------------
@@ -148,9 +157,9 @@ def test_a_failed_read_is_unknown_never_remembered_and_marks_its_issuer_degraded
     e = _Edgar({7: _Seq([requests.ConnectionError("down"), {"name": "RS CO"}])})
     r = IssuerRecord(e)
     watch = r.watch()
-    assert r.submissions(7) is None and watch.ciks == {7} and watch.failed == {7} and watch.tripped()
-    assert r.submissions(7) == {"name": "RS CO"}        # asked again, not remembered as a failure
-    assert r.submissions(7) == {"name": "RS CO"} and _reads(e, "submissions") == 2
+    assert r.profile(7) is None and watch.ciks == {7} and watch.failed == {7} and watch.tripped()
+    assert r.profile(7) == {"name": "RS CO"}        # asked again, not remembered as a failure
+    assert r.profile(7) == {"name": "RS CO"} and _reads(e, "submissions") == 2
     assert r.watch().ciks == frozenset()                # a new watch sees only what comes after it
 
 
@@ -170,7 +179,7 @@ def test_a_refusal_stops_the_run_and_any_other_exception_propagates():
     for exc in (EdgarBlocked("403"), ValueError("a bug")):
         e = _Edgar({7: exc}, {7: exc})
         r = IssuerRecord(e)
-        for ask in (lambda: r.submissions(7), lambda: r.filings(7), lambda: r.first_filed(7), lambda: r.names(7)):
+        for ask in (lambda: r.profile(7), lambda: r.filings(7), lambda: r.first_filed(7), lambda: r.names(7)):
             with pytest.raises(type(exc)):
                 ask()
 
@@ -204,7 +213,7 @@ def test_the_degraded_log_is_per_thread():
     e = _Edgar({7: requests.ConnectionError("down")})
     r = IssuerRecord(e)
     watch = r.watch()
-    t = threading.Thread(target=lambda: r.submissions(7))
+    t = threading.Thread(target=lambda: r.profile(7))
     t.start()
     t.join()
     assert not watch.tripped()

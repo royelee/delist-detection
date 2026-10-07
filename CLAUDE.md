@@ -215,12 +215,13 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   nothing is confirmed.
 - `issuer_record.py` — `IssuerRecord`, the run's issuer record (architecture step 2): one per run
   (`Clients.issuers`, the resolver's and the classifier's; `forget` when a run starts), over the EDGAR client. It
-  reads each issuer's submissions JSON and filing list once (at most `MEMO_SIZE` copies held, least recently asked
-  dropped; first filings kept) and answers `names`, `names_near`/`names_between`/`names_until`, `first_filed`,
-  `existed_by`, `recent_form_dates`, the raw `submissions`/`filings`/`text`, and `exact_holders` (SEC's name index,
-  `name_index`, loaded on first use). `about=` (an event day) asks for a copy fetched by
-  `edgar.submissions_fresh_after(about, today)`; every refresh of the run goes through it (the resolver's reads and
-  the classifier's up-front read), so a held copy is the client's cached one. The failure policy, once: a
+  reads each issuer's submissions JSON and filing list once (every issuer's `profile`, the JSON without its filings
+  block, and first filing kept; at most `MEMO_SIZE` filing lists, least recently asked dropped) and answers `names`,
+  `names_near`/`names_between`/`names_until`, `first_filed`, `existed_by`, `recent_form_dates` (read from the
+  client each time), `profile`, `filings`, `text`, and `exact_holders` (SEC's name index, `name_index`, loaded on
+  first use). `about=` (an event day) asks for a copy fetched by `edgar.submissions_fresh_after(about, today)`;
+  every refresh of the run goes through it (the resolver's reads and the classifier's up-front read), so a held
+  profile is the client's cached copy's. The failure policy, once: a
   `requests.RequestException` is unknown (None, [], (), "", False) and never remembered, `fatal.FATAL` stops the
   run, any other exception propagates, and a failed, stale (`STALE_KEY`) or self-counted degraded read logs its
   CIK on the reading thread; `watch()` gives a `ReadWatch` (`ciks`, `failed`, and `tripped()`, which also sees any

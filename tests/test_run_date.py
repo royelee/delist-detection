@@ -62,7 +62,7 @@ def test_the_resolver_reads_submissions_fresh_as_of_its_run_date(fake_edgar):
     """The resolver's issuer record is dated its run date: a read about an event asks for a copy that fresh."""
     e = _Recording(fake_edgar)
     r = TickerResolver(e, today=date(2023, 6, 1))
-    r.issuers.submissions(999001, about="2023-05-10")
+    r.issuers.profile(999001, about="2023-05-10")
     assert e.fresh == [date(2023, 6, 1)]              # min(2023-06-24, the run date)
 
 

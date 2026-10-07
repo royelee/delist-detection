@@ -554,7 +554,7 @@ def _follow_lines(ctx: _RunContext, securities: dict[str, Security], resolutions
     todo = sorted(sid for sid, s in out.securities.items() if s.issuer_cik is not None)
     extra: dict[str, set[str]] = {}
     for sid in todo:
-        sub = issuers.submissions(out.securities[sid].issuer_cik)
+        sub = issuers.profile(out.securities[sid].issuer_cik)
         listed = [normalize_ticker(t) for t in (sub.get("tickers") or [])] if isinstance(sub, dict) else []
         extra[sid] = {t for t in listed if is_line_symbol(t)} - own(sid)
     # every line's tickers, their first-day ZZZZ and post-split D spellings and the issuers' other tickers, to the
@@ -601,11 +601,11 @@ def _follow_lines(ctx: _RunContext, securities: dict[str, Security], resolutions
             watch = DegradedWatch()
             first = date.fromisoformat(step.first)
             evidence, refused = corroborate(
-                step, filings=issuers.filings(cik), sub=issuers.submissions(cik), share_class=s.share_class,
+                step, filings=issuers.filings(cik), sub=issuers.profile(cik), share_class=s.share_class,
                 text_of=lambda f, cik=cik: issuers.text(cik, f), as_of=ctx.as_of,
                 listed_now=lambda: edgar_lists(edgar, cik, sorted(own(sid) | {step.symbol})),
                 other_registrant=lambda: _other_registrant(search_failed, search, edgar, cik,
-                                                           name_on(issuers.submissions(cik), first, s.name),
+                                                           name_on(issuers.profile(cik), first, s.name),
                                                            first, own(sid)))
             what = f"{step.old_cusip} -> {step.new_cusip} under {step.symbol} from {step.first}"
             decision = None if refused else decide(
@@ -1008,7 +1008,7 @@ def _own_exchange(clients: Clients, e: Delisting, sec: Security
         days.append(date.fromisoformat(filed))
     texts = exchange_terms.read_texts(clients.edgar, e.cik, clients.issuers.filings(e.cik), days, e.form25)
     letter, words = exchange_terms.class_of(sec.share_class, sec.name)
-    names = exchange_terms.registrant_names(clients.issuers.submissions(e.cik), min(days), sec.name)
+    names = exchange_terms.registrant_names(clients.issuers.profile(e.cik), min(days), sec.name)
     return exchange_terms.own_exchange(texts, names=names, class_letter=letter, class_words=words), texts, day
 
 
@@ -1356,7 +1356,7 @@ def _handoffs(ctx: _RunContext, delistings: list[Delisting], securities: dict[st
         a, b = securities[p.a], securities[p.b]
         if fts is None or b.issuer_cik is None:
             return None
-        sub = record.submissions(a.issuer_cik) if a.issuer_cik is not None else None
+        sub = record.profile(a.issuer_cik) if a.issuer_cik is not None else None
         return predecessor_names(sub, p.a_last, a.name), date.fromisoformat(p.b_first), b.issuer_cik
 
     def find_filing(p):
@@ -1996,13 +1996,14 @@ def _as_read(tables: dict[str, list[dict]]) -> Tables:
 
 
 def _in_force_reads(issuers: IssuerRecord) -> tuple[Callable[[int], dict | None], ReadWatch]:
-    """The submissions read `issuer_in_force` takes, from the run's issuer record (None when it cannot be read; a
-    CIK whose read failed in this stage is not asked again in it, as the stage reads one per sighting), and the
-    watch over the stage's reads (`ciks`: each CIK whose answer failed or rested on a stale copy)."""
+    """The submissions read `issuer_in_force` takes: the issuer's profile in the run's issuer record (None when it
+    cannot be read; a CIK whose read failed in this stage is not asked again in it, as the stage reads one per
+    sighting), and the watch over the stage's reads (`ciks`: each CIK whose answer failed or rested on a stale
+    copy)."""
     reads = issuers.watch()
 
     def submissions(cik: int) -> dict | None:
-        return None if cik in reads.failed else issuers.submissions(cik)
+        return None if cik in reads.failed else issuers.profile(cik)
 
     return submissions, reads
 
