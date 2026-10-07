@@ -333,3 +333,28 @@ layout (16) comes last, once steps 8 and 13 have made the pure leaf modules.
     the rule runs only on a rewrite into a continuation.
 - **The replay reference moves.** From step 4 on, the gate compares against step 3's accepted output
   (`/tmp/claude/delist_detection/arch/accepted_out`). Otherwise every later step would show these 20 rows.
+
+### Step 4: the last trade date as one module
+
+Controller rulings, made before the step was dispatched:
+
+- **Which side is right for CNB, IMB and SPNV: the flag.** The last trade module gives one answer, and a date is
+  published only when it is confirmed. Decision 12 publishes only an exchange print. Spec 8.8 says an involuntary
+  notice's date is the exchange's decision day, a print only when MIDAS or a halt confirms it.
+  - Alternative: the source list wins, and the flag is cleared when the notice and an 8-K agree.
+  - Cost if wrong: a few distress endings dated by an unconfirmed notice or "suspended immediately" lose their
+    published date. Their internal date in delistings.csv stays.
+- **SPNV 2020's date is confirmed by its own 8-K, which the reader missed.** The 8-K (0001193125-20-248926) says
+  "Trading of the Company's common stock was suspended effective as of approximately 4:00 p.m. Eastern Time on
+  September 17, 2020". The reader returns nothing for it. Step 4 teaches the reader a suspension at a stated clock
+  time, so SPNV is dated 2020-09-17 from source `8k_301`, confirmed and published, as the verified truth case has it.
+  - Alternative: leave the reader alone and let SPNV's date go unpublished.
+  - Cost if wrong: other 8-Ks with this wording change too. Each must be checked against its own text.
+- **CNB 2009's truth row stops scoring its contract last trade date.** CNB's 8-K says only that NYSE "determined
+  that the Company's common stock ... should be suspended immediately" (announced 2009-08-17). The operator's
+  2026-10-03 ruling for IMB 2008 ("suspended immediately on D: the last trade date is not scored") and the 5d
+  decision ("stays D, unconfirmed") cover the same wording. The decision-17 audit leaves CNB's date blank too. So the
+  row's `last_trade_date` becomes `*`, with a change-log row. Its `internal_last_trade_date` 2009-08-17 is still
+  scored.
+  - Alternative: keep scoring 2009-08-17 and count CNB as a new mismatch.
+  - Cost if wrong: if CNB did trade on 2009-08-17, the truth set no longer checks the contract's date for it.
