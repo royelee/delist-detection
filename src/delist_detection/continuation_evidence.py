@@ -34,7 +34,7 @@ from datetime import date, timedelta
 from . import exchange_terms
 from .exchange_terms import TEXT_AFTER_DAYS, TEXT_BEFORE_DAYS
 from .figi_resolution import share_class_from_name
-from .lifecycle import CONTINUED_FILINGS
+from .end_of_era import CONTINUED_FILINGS
 from .names import names_agree
 from .verdict_rules import Reading, ratio_doubt, successor_filing_date, successor_filing_reason
 

@@ -26,7 +26,7 @@ from .crsp_codes import CrspBucket
 from .continuation_evidence import needs_doubt_check, needs_filing, read_continuation
 from .degraded import DegradedWatch, degraded_item, flag_degraded, report_halt_feed_failures
 from .delistings import (
-    ISSUER_FORM25_FORMS, LATE_ROW_DAYS, SUCCESSOR_UNKNOWN, Delisting, DelistingFinder, SecurityContext,
+    ISSUER_FORM25_FORMS, LATE_ROW_DAYS, Delisting, DelistingFinder, SecurityContext,
 )
 from .distress import (
     BANKRUPTCY_WORDS, OTC_SYMBOL_DAYS, DistressTerms, otc_symbol_from_fails, otc_symbol_from_text, plan_ratio,
@@ -36,7 +36,7 @@ from .evidence import item_sections
 from .fatal import FATAL
 from .handoffs import (
     TAKEOVER_DAYS,
-    CONTINUATION_CODE, HandoffDecision, HandoffOutcome, apply_handoffs, continuation_filing, cusip_switch, decide_handoff,
+    HandoffDecision, HandoffOutcome, apply_handoffs, continuation_filing, cusip_switch, decide_handoff,
     drop_resolved_shared, find_handoffs, issuer_carries_on, own_continuation_filing, predecessor_names,
 )
 from .figi_resolution import FigiCandidate, class_letter, is_placeholder, placeholder_id, share_class_from_name
@@ -69,6 +69,10 @@ from .reconstruction import (
     unmatched_override_keys,
 )
 from .review_triage import Decision, ReviewItem, Triage, flag_name, is_blank, merge_review_rows, triage
+from .rewrites import (
+    LINE_CONTINUATION, R1_CONTINUATION, Rule, awaits_successor, continuation, is_real_ending, mark_going_on, reclassify,
+    rewrite_by, successor_note,
+)
 from .sec_stats import SEC_STATS
 from .security_master import (
     EraResolution, FigiResolver, Issuer, Security, build_securities, candidate_cusips, cik_of, cusip_handoffs,
@@ -857,7 +861,7 @@ def _dead_before_sighting(ctx: _RunContext, securities: dict[str, Security], del
     mark = ctx.meter.start()
     ends: dict[str, str] = {}
     for e in delistings:
-        if e.record.successor_sec_id == e.sec_id:
+        if not is_real_ending(e):
             continue
         day = e.last_trade.day.isoformat() if e.last_trade.day else e.delist_date
         ends[e.sec_id] = max(ends.get(e.sec_id, day), day)
@@ -976,11 +980,8 @@ def _merger_values(ctx: _RunContext, delistings: list[Delisting], securities: di
     return values
 
 
-R1_CONTINUATION, R1_REBUCKETED = "r1_continuation", "r1_rebucketed"
+R1_REBUCKETED = "r1_rebucketed"
 BY_TERMS, BY_OWN_REGISTRATION = "terms", "own_registration"
-# the payout flags a merger row carries that a continuation does not
-_PAYOUT_FLAGS = frozenset({"terms_gate_failed", "payout_gate_failed", "llm_gate_failed", "merger_at_par",
-                           "acquirer_close_lagged"})
 
 
 def _starts(securities: dict[str, Security], sightings: dict[str, list[Sighting]],
@@ -1061,8 +1062,9 @@ def _r1_continuations(ctx: _RunContext, delistings: list[Delisting], securities:
     registrant's own filings say the same of its own shares (`exchange_terms.own_exchange`, one reading: a
     multi-step deal's intermediate one-for-one, Jefferies 2013, has the LLM's 0.81 against it), and the holders'
     new shares are a new issuer's or the same issuer's (`_r1_successor`). The row becomes an exchange transfer
-    (304) to that successor, flagged `r1_continuation`, its payout reads dropped (a continuation has no value),
-    and an `r1_rebucketed` review item keeps its old bucket. An existing acquirer is never a continuation (LVNTA
+    (304) to that successor, flagged `r1_continuation`, its payout reads dropped (a continuation has no value):
+    `rewrites.continuation`, `Rule.R1`, with the run's merger values; an `r1_rebucketed` review item keeps its old
+    bucket. An existing acquirer is never a continuation (LVNTA
     into GCI Liberty, Towers Watson into Willis, Waste Connections into Progressive Waste). The terms are stage 8's
     reading (`MergerValues.read_terms`: none for a merger the caller gave terms for). A reading that rested on a
     failed or stale read (the issuer record's, or any other SEC read's) keeps the merger, flagged degraded."""
@@ -1093,15 +1095,10 @@ def _r1_continuations(ctx: _RunContext, delistings: list[Delisting], securities:
         out.added.update(pending)
         sid, how = link
         old = (e.record.bucket.value, e.record.crsp_code, e.record.reason)
-        e.record.bucket, e.record.crsp_code = CrspBucket.EXCHANGE_TRANSFER, CONTINUATION_CODE
-        e.record.confidence = "medium"
-        e.record.reason = (f"Continuation (R1): each share became one {own.target[:80].strip(' ,')}, no cash; "
-                           f"successor by {how.replace('_', ' ')}")
-        e.record.evidence["flags"] = [f for f in e.flags if flag_name(f) not in _PAYOUT_FLAGS] + [R1_CONTINUATION]
-        e.record.evidence["r1"] = {"sentence": own.sentence[:300], "was": f"{old[0]} {old[1]}"}
-        e.record.evidence["successor_by"] = how
-        values.drop(e.key)
-        e.set_successor(sid)
+        continuation(e, sid, Rule.R1, confidence="medium", flag=R1_CONTINUATION, how=how,
+                     evidence=own.sentence[:300], payouts=values,
+                     reason=f"Continuation (R1): each share became one {own.target[:80].strip(' ,')}, no cash"
+                            + successor_note(how))
         out.links[e.key] = link
         out.review.append(ReviewItem(e.sec_id, e.ticker, e.cik, R1_REBUCKETED,
                                      f"was {old[0]} (CRSP {old[1]}: {old[2]}); R1 makes it a continuation into {sid}",
@@ -1111,7 +1108,7 @@ def _r1_continuations(ctx: _RunContext, delistings: list[Delisting], securities:
     return out
 
 
-LINE_FOLLOW, LINE_CONTINUATION = "line_follow", "line_continuation"
+LINE_FOLLOW = "line_follow"
 
 
 @dataclass
@@ -1141,7 +1138,7 @@ def _line_successor_links(delistings: list[Delisting], securities: dict[str, Sec
     has none, and only for a delisting that takes it."""
     for e in delistings:
         ls = line_successors.get(e.sec_id)
-        if ls is None or not (SUCCESSOR_UNKNOWN in e.flags or e.record.bucket is CrspBucket.UNKNOWN):
+        if ls is None or not (awaits_successor(e) or e.record.bucket is CrspBucket.UNKNOWN):
             continue
         day = e.last_trade.day or (date.fromisoformat(e.form25_sub.filing_date) if e.form25_sub is not None
                                    else date.fromisoformat(e.delist_date))
@@ -1214,7 +1211,7 @@ def _terms_links(ctx: _RunContext, delistings: list[Delisting], securities: dict
     the holders to (`_own_registration_link`: CCO 2019, OKE 2026). The link's `how` is "terms" or
     "own_registration". A reading that rested on a failed or stale read is flagged degraded."""
     for e in delistings:
-        if e.key in found.links or SUCCESSOR_UNKNOWN not in e.flags or e.sec_id not in securities:
+        if e.key in found.links or not awaits_successor(e) or e.sec_id not in securities:
             continue
         issuers = ctx.clients.issuers
         watch = issuers.watch()
@@ -1243,8 +1240,8 @@ def _find_successors(ctx: _RunContext, delistings: list[Delisting], securities: 
     FIGI), then the successor issuer's 8-K12B (search: EDGAR full-text search,
     wired in default_clients). Before the 8-K12B search, sub-plan 5c's links
     (`_terms_links`): the security or the line the registrant's own filings say
-    the shares became, one for one. `_link_successors` records the answer on the
-    delistings."""
+    the shares became, one for one. Then the answer is recorded on the
+    delistings (`_link_successors`): stage 9 is this one call."""
     clients, found = ctx.clients, _Successors()
     successor_search = getattr(clients.edgar, "full_text_search", None)
     mark = ctx.meter.start()
@@ -1255,7 +1252,7 @@ def _find_successors(ctx: _RunContext, delistings: list[Delisting], securities: 
     for e in delistings:                       # a security of this run
         if e.key in linked:
             continue
-        in_run = successor_in_run(e, starts) if SUCCESSOR_UNKNOWN in e.flags else None
+        in_run = successor_in_run(e, starts) if awaits_successor(e) else None
         if in_run is not None:
             found.links[e.key] = in_run
     # what the registrant's filings say the shares became, one for one (sub-plan 5c, rules 3 and 4)
@@ -1304,35 +1301,40 @@ def _find_successors(ctx: _RunContext, delistings: list[Delisting], securities: 
                     Security(cand.composite, s_cik, share_class_from_name(cand.name), cand.name,
                              cand.security_type, False, "ticker"), cand.ticker, max(fd, not_before))
     ctx.meter.done("successor search", mark)
+    _link_successors(delistings, found)
     return found
 
 
 def _link_successors(delistings: list[Delisting], successors: _Successors) -> None:
-    """Record stage 9's answer on the delistings: each one's successor (a
-    security of the run also says how it was found, in the evidence and the
-    reason), and `resolution_degraded` on the rows whose search was degraded."""
+    """Record stage 9's answer on the delistings, each link one rewrite (`rewrites.continuation`: `Rule.LINE_FOLLOW`
+    for stage 4b's line successor, `Rule.SUCCESSOR_LINK` for the others): its successor (a security of the run also
+    says how it was found, in the reason), an `unknown` row at the line's switch made the continuation
+    (`line_continuation`, medium confidence as a handoff continuation without a successor filing); then
+    `resolution_degraded` on the rows whose search was degraded."""
     for d in delistings:
         link = successors.links.get(d.key)
         if link is not None:
             sid, how = link
+            rule = Rule.LINE_FOLLOW if how == LINE_FOLLOW else Rule.SUCCESSOR_LINK
+            note = successor_note(how) if how is not None else ""
             reason = successors.rebucketed.get(d.key)
             if reason is not None:                  # an `unknown` row at the line's switch: the continuation
-                d.record.bucket, d.record.crsp_code, d.record.reason = (CrspBucket.EXCHANGE_TRANSFER,
-                                                                        CONTINUATION_CODE, reason)
-                d.record.confidence = "medium"     # as a handoff continuation without a successor filing
-                d.record.evidence["flags"] = [f for f in d.flags if f != "no_evidence_default"] + [LINE_CONTINUATION]
-            d.set_successor(sid)
-            if how is not None:
-                d.record.evidence["successor_by"] = how
-                d.record.reason = f"{d.record.reason}; successor by {how.replace('_', ' ')}"
+                continuation(d, sid, rule, reason=reason + note, confidence="medium", flag=LINE_CONTINUATION,
+                             how=how or "")
+            else:
+                continuation(d, sid, rule, reason=d.record.reason + note if note else None, how=how or "")
         if d.key in successors.degraded:
             flag_degraded(d)
 
 
 def _handoffs(ctx: _RunContext, delistings: list[Delisting], securities: dict[str, Security],
               search: _DelistingSearch, sec_cusips: dict[str, list[str]], ftd: FtdIndex, values: MergerValues,
-              review: list[ReviewItem]) -> HandoffOutcome:
-    """9b. Ticker handoffs (`handoffs.py`): every pair of securities of the run
+              review: list[ReviewItem], added: Mapping[str, AddedSecurity]) -> HandoffOutcome:
+    """9b. First, each merger or exchange transfer the clip check says does not end its security (`_delisting_endings`
+    over stage 9's delistings and successors, `added` the securities the run adds) goes on as itself
+    (`rewrites.mark_going_on`: the DIS 2019, WRK 2018 holding-company reorganizations): here, once, so the handoffs
+    see those rows as their own successors; the clip reads the final delistings again before the ranges.
+    Then ticker handoffs (`handoffs.py`): every pair of securities of the run
     where one stops trading under a ticker and the other starts under it within
     days (`find_handoffs`, over the sightings `ticker_history` is built from:
     backfilled observations dropped), decided on the successor issuer's
@@ -1341,7 +1343,8 @@ def _handoffs(ctx: _RunContext, delistings: list[Delisting], securities: dict[st
     the issuer's first EDGAR filing dates it), then acted on (`apply_handoffs`): a continuation's
     missing row is added, a successor or a ticker successor set, and the review
     items it resolves dropped. A merger whose value reconciled counts as reconciled (`MergerValues.reconciled`:
-    not one share per share and no cash, R1, sub-plan 5f: SPB 2018). The issuers' names, filing lists and first
+    not one share per share and no cash, R1, sub-plan 5f: SPB 2018); a merger the stage makes a continuation drops
+    its value (`values`, through `rewrites.continuation`). The issuers' names, filing lists and first
     filings come from the run's issuer record: a pair whose search or decision rested on a failed or stale read
     (the issuer's first filing included) is decided without what could not be read and gets a
     `resolution_degraded` item. Returns the outcome; the caller adds its rows."""
@@ -1399,8 +1402,10 @@ def _handoffs(ctx: _RunContext, delistings: list[Delisting], securities: dict[st
         if decision is not None:
             decisions.append(decision)
     ctx.meter.done("handoff search", mark)
+    starts = _successor_starts(delistings, securities, search.sightings, sec_cusips, ftd, added)
+    mark_going_on(delistings, _delisting_endings(delistings, securities, sec_cusips, ftd, starts))
     reconciled = {e.key for e in delistings if values.reconciled(e.key)}
-    outcome = apply_handoffs(decisions, delistings, securities, review, reconciled=reconciled)
+    outcome = apply_handoffs(decisions, delistings, securities, review, reconciled=reconciled, payouts=values)
     for d in outcome.added:
         d.exchange = issuer_exchange(edgar, d.cik, d.ticker) or ""
     outcome.review += degraded
@@ -1461,12 +1466,12 @@ def _successor_endings(ctx: _RunContext, finder: DelistingFinder, added: Mapping
             continue
         # a Form 25 filed within PREDECESSOR_FORM25_DAYS of the successor's first day removed its predecessor
         start = (date.fromisoformat(first) + timedelta(days=PREDECESSOR_FORM25_DAYS)).isoformat()
-        endings = [d for d in found if d.record.successor_sec_id != sid
+        endings = [d for d in found if is_real_ending(d)
                    and not (d.form25_sub is not None and d.form25_sub.filing_date <= start)]
         watch.report(out.review, degraded_item(sid, a.ticker, cik, "the successor ending search",
                                                "; run again once SEC answers"), endings)
         report_halt_feed_failures(out.review, endings)
-        out.review += [r for r in found_review if not owned.intersection(r.reason.split())]
+        out.review += [r for r in found_review if r.filing is None or r.filing.accession not in owned]
         if not endings:
             continue
         out.delistings += endings
@@ -1494,7 +1499,7 @@ def _date_from_notices(ctx: _RunContext, added: list[Delisting], review: list[Re
     states a confirmed last day of trading (`form25.notice_last_trade`,
     `last_trade.decide_last_trade`), the row takes it (source `ex99_notice`),
     provided the day is before the successor's first sighting
-    (`evidence["handoff"]["b_first"]`; the cap is skipped when absent) and no
+    (the handoff rewrite's `successor_from`; the cap is skipped when absent) and no
     later than the Form 25 effective date (`delist_date`); otherwise the
     sighting stays. A read that rested on a failed request or a stale copy keeps
     the sighting and is reported as `resolution_degraded` (row and review item);
@@ -1516,7 +1521,8 @@ def _date_from_notices(ctx: _RunContext, added: list[Delisting], review: list[Re
         lt = decide_last_trade(notice=notice_last_trade(f25), eightk=(None, ""), midas=None, halt=None)
         if lt.day is None or "last_trade_date_unconfirmed" in lt.flags:
             continue
-        b_first = (d.record.evidence.get("handoff") or {}).get("b_first")
+        handoff = rewrite_by(d, Rule.HANDOFF)
+        b_first = handoff.successor_from if handoff is not None else ""
         if (b_first and lt.day >= date.fromisoformat(b_first)) or lt.day > date.fromisoformat(d.delist_date):
             continue
         d.last_trade = lt
@@ -1548,13 +1554,15 @@ def _distress(ctx: _RunContext, delistings: list[Delisting], sec_cusips: Mapping
     (else its delisting date) anchors every read.
 
     1. A bankruptcy plan exchange (ruling R6): the matched Form 25's notice says the class came to evidence new
-       shares, the ending is a bankruptcy (code 470, or the notice says so: an unknown ending then becomes 470), and
+       shares, the ending is a bankruptcy (code 470, or the notice says so: an unknown ending then becomes 470,
+       `rewrites.reclassify`, `Rule.PLAN_BANKRUPTCY`), and
        the old line never traded off the exchange (`otc_symbol_from_fails` reads nothing). Its ratio, from the notice
        or the plan's 8-Ks (item 1.03 or 3.03, PLAN_BEFORE_DAYS/PLAN_AFTER_DAYS around the Form 25), makes the stock
        rule on the new line under the same ticker.
     2. The drop reason: a compliance failure (570, 580) whose removal the exchange stated for a price deficiency
        only (`price_only` on the exchange's Form 25 notice, else, without a Form 25, on the 3.01 items in
-       [last trade - NOTICE_BEFORE_DAYS, last trade + REASON_AFTER_DAYS]) is CRSP 552. An issuer's own Form 25 (a
+       [last trade - NOTICE_BEFORE_DAYS, last trade + REASON_AFTER_DAYS]) is CRSP 552 (`Rule.PRICE_DEFICIENCY`).
+       An issuer's own Form 25 (a
        voluntary removal) states no exchange reason: unchanged.
     3. The OTC symbol of a liquidation or a compliance failure: the security's own CUSIPs' fails rows after the
        last trade (stage 4 loaded them to the run date), else the first 3.01 8-K in [last trade -
@@ -1588,10 +1596,9 @@ def _distress(ctx: _RunContext, delistings: list[Delisting], sec_cusips: Mapping
                     edgar, d.cik, filed - timedelta(days=PLAN_BEFORE_DAYS), filed + timedelta(days=PLAN_AFTER_DAYS),
                     PLAN_ITEMS)])
             if rec.bucket is CrspBucket.UNKNOWN and bankrupt_notice:
-                rec.crsp_code, rec.bucket, rec.confidence = 470, CrspBucket.LIQUIDATION, "medium"
-                rec.reason = (f"Bankruptcy plan exchange (Form 25 {d.form25.filing_date} notice: the class came to "
-                              f"evidence new shares)")
-                rec.evidence["flags"] = [f for f in d.flags if f != "no_evidence_default"]
+                reclassify(d, 470, Rule.PLAN_BANKRUPTCY, confidence="medium",
+                           reason=f"Bankruptcy plan exchange (Form 25 {d.form25.filing_date} notice: the class came "
+                                  f"to evidence new shares)")
                 counts["plan bankruptcy"] += 1
             if plan is not None and rec.bucket is CrspBucket.LIQUIDATION:
                 terms = DistressTerms(plan_ratio=plan[0], plan_ticker=d.ticker, plan_source=plan[1])
@@ -1604,8 +1611,8 @@ def _distress(ctx: _RunContext, delistings: list[Delisting], sec_cusips: Mapping
             else:
                 stated = "" if d.form25.form in ISSUER_FORM25_FORMS else notice
             if price_only(stated):
-                rec.crsp_code = PRICE_CODE
-                rec.reason += " (its stated reason: a price deficiency)"
+                reclassify(d, PRICE_CODE, Rule.PRICE_DEFICIENCY,
+                           reason=rec.reason + " (its stated reason: a price deficiency)")
                 counts["price"] += 1
         if not terms.plan_ratio and rec.bucket is not CrspBucket.UNKNOWN:
             symbol = fails_symbol
@@ -1731,7 +1738,7 @@ def _ends_the_security(e: Delisting, s: Security, sec_cusips: dict[str, list[str
     trading, confirmed by a real EX-99.25 notice/8-K/MIDAS/halt day). A
     liquidation, compliance_failure, expiration or unknown delisting always
     ends the security, whatever fails rows follow."""
-    if e.record.successor_sec_id == e.sec_id:
+    if not is_real_ending(e):
         return False
     if (e.record.bucket not in CONTINUATION_BUCKETS or e.last_trade.day is None
             or "last_trade_date_unconfirmed" in e.last_trade.flags):
@@ -1780,8 +1787,8 @@ def _delisting_endings(delistings: Iterable[Delisting], securities: dict[str, Se
                        sec_cusips: dict[str, list[str]], ftd: FtdIndex,
                        successor_starts: Mapping[str, Mapping[str, str]] = {}) -> dict[DelistingKey, bool]:
     """Whether each delisting actually ends its security (`_ends_the_security`),
-    computed once and shared by the ticker_history clip (`_history_rows`) and
-    the continuing-delisting successor link (`_mark_continuing_delistings`) --
+    the one check behind the ticker_history clip (`_history_rows`) and the
+    continuing-delisting successor link (stage 9b's `rewrites.mark_going_on`) --
     so the two tables can never disagree on which delistings are real exits.
     A delisting whose security is not in `securities` (no security object to
     test continuation against) has no entry."""
@@ -1793,32 +1800,14 @@ def _delisting_endings(delistings: Iterable[Delisting], securities: dict[str, Se
     return out
 
 
-def _mark_continuing_delistings(delistings: Iterable[Delisting], endings: dict[DelistingKey, bool]) -> None:
-    """A merger or exchange_transfer that `endings` says does not end its
-    security (the DIS 2019 holding-company reorg, WRK's 2018 one) gets
-    `successor_sec_id` set to its own `sec_id`, via `Delisting.set_successor`
-    -- the same treatment `delistings.py` already gives a classification-time
-    `continued` exchange_transfer, now also covering a merger and any
-    exchange_transfer the *stronger*, FTD-confirmed check (not the weaker
-    `listed_today`/`seen_after` one) catches. `handling.py`/`qlib_adapter.py`
-    already skip a row whose successor is itself, so this is never a real
-    universe exit. Only ever fills a blank successor: a real, different
-    successor a search already found (MWV -> WRK) is never overwritten, and a
-    liquidation/compliance_failure/expiration/unknown delisting is untouched
-    (`endings` is never False for one)."""
-    for e in delistings:
-        if not e.record.successor_sec_id and endings.get(e.key) is False:
-            e.set_successor(e.sec_id)
-
-
 def _history_rows(ctx: _RunContext, securities: dict[str, Security], search: _DelistingSearch,
                   sec_cusips: dict[str, list[str]], ftd: FtdIndex, added: dict[str, AddedSecurity],
                   endings: dict[DelistingKey, bool], successor_starts: Mapping[str, Mapping[str, str]] = {}
                   ) -> tuple[list[dict], list[dict], dict[str, str | None], dict[str, bool], dict[str, bool | None]]:
     """10b. The ticker_history and cusip_history rows (`history.history_rows`):
     each observed security's ranges end at the last delisting that actually
-    ends it (`endings`, `_delisting_endings`/`_ends_the_security`, computed
-    once and shared with `_mark_continuing_delistings` so the two tables never
+    ends it (`endings`, `_delisting_endings`/`_ends_the_security`, the check
+    stage 9b's `rewrites.mark_going_on` reads too, so the two tables never
     disagree) -- its last trade day, or its delist_date when the last trade
     day is unconfirmed -- unless it is listed today or no delisting ends it.
     An added (acquirer/successor) security gets one ticker row, built
@@ -2170,19 +2159,9 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
     review += r1.review
     successors = _find_successors(ctx, delistings, securities, search.sightings, {**values.added, **r1.added},
                                   lines.successors, ftd, sec_cusips)                                # 9
-    _link_successors(delistings, successors)
     review += successors.review
     added = {**values.added, **r1.added, **successors.added}     # the acquirers and successors the run adds
-
-    # Computed once, shared by the delistings.csv successor link and the
-    # ticker_history clip below, so the two tables never disagree on which
-    # delistings are real exits (a WRK/DIS-like continuing merger or
-    # exchange_transfer gets successor_sec_id = itself).
-    starts = _successor_starts(delistings, securities, search.sightings, sec_cusips, ftd, added)
-    endings = _delisting_endings(delistings, securities, sec_cusips, ftd, starts)
-    _mark_continuing_delistings(delistings, endings)
-
-    handoffs = _handoffs(ctx, delistings, securities, search, sec_cusips, ftd, values, review)       # 9b
+    handoffs = _handoffs(ctx, delistings, securities, search, sec_cusips, ftd, values, review, added)   # 9b
     review = handoffs.review
     _date_from_notices(ctx, handoffs.added, review)       # 9c: before the added rows' closes are read
     if handoffs.added:
@@ -2199,8 +2178,8 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
     confirmations = _continuation_filings(ctx, delistings, securities, review, added)             # 9g
     _log_role_refusals(ctx, delistings)
     # The handoff stage creates continuation delistings (AON 2012) and sets successors: the clip and the ranges read
-    # the starts and endings of the final delistings. (The first pass above only decides which stage-9 delistings
-    # are self-successor continuations, before the handoff stage.)
+    # the starts and endings of the final delistings. (Stage 9b's first step read them over stage 9's delistings,
+    # only to mark the ones that go on as themselves, before its handoffs.)
     starts = _successor_starts(delistings, securities, search.sightings, sec_cusips, ftd, added)
     endings = _delisting_endings(delistings, securities, sec_cusips, ftd, starts)
 

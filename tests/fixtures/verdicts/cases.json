@@ -6114,7 +6114,7 @@
     "recovery_ratio": "",
     "resolution_source": "efts",
     "resolved_name": "GOOGLE INC CLASS A",
-    "review_flags": "no_evidence_default;handoff_continuation",
+    "review_flags": "handoff_continuation",
     "sec_id": "BBG000BHSKN9",
     "stock_ratio": "",
     "successor_sec_id": "BBG009S39JX6",
@@ -6573,21 +6573,7 @@
     "ticker": "GOOGL"
    }
   ],
-  "review": [
-   {
-    "anchor_8k": "1.01,3.01,3.03,5.02,5.03,9.01",
-    "bucket": "exchange_transfer",
-    "cik": "1288776",
-    "delist_date": "2015-10-12",
-    "dlret": "0.000000",
-    "last_seen": "",
-    "reason": "Continuation (8-K12B 0001193125-15-336577): BBG000BHSKN9 last traded as GOOGL on 2015-10-05 and BBG009S39JX6 took the ticker from 2015-10-06; holders' shares became BBG009S39JX6's",
-    "review_flags": "no_evidence_default;handoff_continuation",
-    "sec_id": "BBG000BHSKN9",
-    "severity": "check",
-    "ticker": "GOOGL"
-   }
-  ],
+  "review": [],
   "securities": [
    {
     "figi_source": "cusip",

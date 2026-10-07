@@ -45,9 +45,16 @@ class EndingFields:
     dlret_fill: str          # the fill as delistings.csv writes it, or ""
 
 
+def is_real_ending(row: Mapping[str, str]) -> bool:
+    """A delistings.csv row that ended its security: its successor is not the security itself (a security that went
+    on, a continuing exchange move, has no real ending there). The one definition every reader of the tables asks."""
+    return row["successor_sec_id"] != row["sec_id"]
+
+
 def is_continuation(row: Mapping[str, str]) -> bool:
-    """A successor other than the security itself: the same holders own it now."""
-    return bool(row["successor_sec_id"]) and row["successor_sec_id"] != row["sec_id"]
+    """A successor other than the security itself: the same holders own it now. The one definition every reader of
+    the tables asks."""
+    return bool(row["successor_sec_id"]) and is_real_ending(row)
 
 
 def _kind(row: Mapping[str, str]) -> tuple[str, str]:

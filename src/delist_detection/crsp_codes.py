@@ -27,6 +27,10 @@ class CrspBucket(str, Enum):
     UNKNOWN = "unknown"
 
 
+# The code of every exchange transfer the library writes: a continuation into another security or the security itself
+# (the classifier's transfer, the end-of-era resolver's, and every rewrite into a continuation: `rewrites.py`).
+CONTINUATION_CODE = 304
+
 DLST_CODE_TO_BUCKET: dict[int, CrspBucket] = {
     100: CrspBucket.ACTIVE,
     200: CrspBucket.MERGER, 231: CrspBucket.MERGER, 233: CrspBucket.MERGER,
@@ -34,7 +38,7 @@ DLST_CODE_TO_BUCKET: dict[int, CrspBucket] = {
     261: CrspBucket.MERGER, 262: CrspBucket.MERGER,
     300: CrspBucket.EXCHANGE_TRANSFER, 301: CrspBucket.EXCHANGE_TRANSFER,
     302: CrspBucket.EXCHANGE_TRANSFER, 303: CrspBucket.EXCHANGE_TRANSFER,
-    304: CrspBucket.EXCHANGE_TRANSFER,
+    CONTINUATION_CODE: CrspBucket.EXCHANGE_TRANSFER,
     400: CrspBucket.LIQUIDATION, 470: CrspBucket.LIQUIDATION,
     500: CrspBucket.COMPLIANCE_FAILURE, 520: CrspBucket.COMPLIANCE_FAILURE,
     535: CrspBucket.COMPLIANCE_FAILURE, 550: CrspBucket.COMPLIANCE_FAILURE,

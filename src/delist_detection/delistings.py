@@ -14,6 +14,7 @@ from datetime import date, timedelta
 from .classifier import DelistClassifier, DelistRecord
 from .crsp_codes import CrspBucket
 from .edgar import EdgarSubmission
+from .end_of_era import CONTINUED_FILINGS
 from .evidence import edgar_names
 from .figi_resolution import class_letter
 from .form25 import (
@@ -21,11 +22,11 @@ from .form25 import (
     list_form25, match_securities, notice_last_trade, other_class, parse_form25, tied_securities,
 )
 from .last_trade import CLOSING_DAY, LastTrade, closing_day_read, decide_last_trade, eightk_last_trade, reading_rank
-from .lifecycle import CONTINUED_FILINGS
 from .listing_status import exchanges_around, issuer_exchange, withdrawal_kind
 from .midas import MIDAS_START
 from .nasdaq_halts import last_trade_from_halt
-from .review_triage import ReviewItem
+from .review_triage import FilingRef, ReviewItem
+from .rewrites import SUCCESSOR_UNKNOWN, Rewrite, Rule, continuation, security_goes_on
 from .security_master import Security
 from .store import DelistingKey
 from .trading_calendar import add_trading_days, previous_trading_day
@@ -59,10 +60,6 @@ LATE_ROW_DAYS = 30                  # no sibling alive: the security's own CUSIP
 ENDING_BUCKETS = frozenset({CrspBucket.MERGER, CrspBucket.LIQUIDATION, CrspBucket.COMPLIANCE_FAILURE,
                             CrspBucket.EXPIRATION})
 
-# The review flag of an exchange transfer whose successor is not known yet; it
-# comes off the delisting once a successor is found (`Delisting.set_successor`).
-SUCCESSOR_UNKNOWN = "successor_unknown"
-
 # Preferred exchange for a multi-exchange delisting group: the filing on the
 # most-senior exchange supplies the delisting's `exchange` and `form25`/`form25_sub`.
 EXCHANGE_PREFERENCE = ("NYSE", "NASDAQ", "NYSE AMERICAN", "CBOE BZX", "NYSE ARCA")
@@ -71,7 +68,9 @@ EXCHANGE_PREFERENCE = ("NYSE", "NASDAQ", "NYSE AMERICAN", "CBOE BZX", "NYSE ARCA
 @dataclass
 class Delisting:
     """One delisting of one security (CONTEXT.md): the Form 25 group (or the
-    fallback filing) that ended its listing, dated and classified (`record`)."""
+    fallback filing) that ended its listing, dated and classified (`record`).
+    Its kind and successor change after the finder built it only through
+    `rewrites.py`, which records each change in `rewrites` (typed provenance)."""
     sec_id: str
     cik: int
     ticker: str
@@ -81,6 +80,7 @@ class Delisting:
     form25: Form25 | None
     form25_sub: EdgarSubmission | None
     exchange: str
+    rewrites: list[Rewrite] = field(default_factory=list)
 
     @property
     def key(self) -> DelistingKey:
@@ -97,11 +97,6 @@ class Delisting:
 
     def add_flag(self, flag: str) -> None:
         self.flags.append(flag)
-
-    def set_successor(self, sec_id: str) -> None:
-        """Record `sec_id` as the successor: the row no longer says `successor_unknown`."""
-        self.record.successor_sec_id = sec_id
-        self.record.evidence["flags"] = [f for f in self.flags if f != SUCCESSOR_UNKNOWN]
 
 
 @dataclass
@@ -385,8 +380,8 @@ class DelistingFinder:
         if key in seen:
             return
         seen.add(key)
-        review.append(ReviewItem(sec.sec_id, ticker, cik, flag, reason,
-                                 delist_date=effective_date(sub.filing_date)))
+        review.append(ReviewItem(sec.sec_id, ticker, cik, flag, reason, delist_date=effective_date(sub.filing_date),
+                                 filing=FilingRef(sub.form, sub.accession, sub.filing_date)))
 
     # -- whether the security went on after a Form 25 ------------------------
     @staticmethod
@@ -677,14 +672,10 @@ class DelistingFinder:
                                              expected_name=ctx.expected_name, kind=sec.kind, form25=winner_sub,
                                              resolution_source=ctx.resolution_source,
                                              trading_after=continued)
+        moved = None
         if continued and rec.bucket is CrspBucket.UNKNOWN:
             moved = next(((s, a) for s, f in sorted(group, key=lambda i: i[0].filing_date)
                           if (a := self._eight_a(s, f, filings)) is not None), None)
-            if moved is not None:          # R7: the issuer moved the class (Kraft Heinz 2026, Nasdaq to NYSE)
-                s, a = moved
-                rec.crsp_code, rec.bucket, rec.confidence = 304, CrspBucket.EXCHANGE_TRANSFER, "high"
-                rec.reason = f"Exchange transfer: the issuer's Form 25 {s.filing_date} with its 8-A12B {a.filing_date}"
-                rec.evidence["flags"] = [f for f in rec.evidence.get("flags", []) if f != "no_evidence_default"]
         if lt.day is None and not continued and winner_sub.form not in ISSUER_FORM25_FORMS \
                 and not (winner_f25 and is_involuntary(winner_f25)):
             # Rule 4 (5d): the exchange filed the Form 25 at the closing (never an involuntary (b) one: it follows the
@@ -697,7 +688,13 @@ class DelistingFinder:
                                     date.fromisoformat(shown) if shown else None)
             lt = replace(got or LastTrade(filed, CLOSING_DAY, ("last_trade_date_unconfirmed",)),
                          halt_feed_failed=lt.halt_feed_failed)
-        return self._delisting(sec, cik, ticker, eff, rec, lt, winner_f25, winner_sub, continued, extra_flags)
+        delisting = self._delisting(sec, cik, ticker, eff, rec, lt, winner_f25, winner_sub, continued, extra_flags)
+        if moved is not None:              # R7: the issuer moved the class (Kraft Heinz 2026, Nasdaq to NYSE)
+            s, a = moved
+            continuation(delisting, sec.sec_id, Rule.ISSUER_MOVE,
+                         reason=f"Exchange transfer: the issuer's Form 25 {s.filing_date} with its 8-A12B {a.filing_date}",
+                         confidence="high", evidence=f"{s.form} {s.accession}; {a.form} {a.accession}")
+        return delisting
 
     def _delisting(self, sec: Security, cik: int, ticker: str, delist_date: str, rec: DelistRecord, lt: LastTrade,
                f25: Form25 | None, sub: EdgarSubmission | None, continued: bool,
@@ -705,16 +702,16 @@ class DelistingFinder:
         rec.sec_id = sec.sec_id
         rec.delist_date = delist_date
         flags = list(lt.flags) + list(extra_flags)
-        if rec.bucket is CrspBucket.EXCHANGE_TRANSFER:
-            if continued:
-                rec.successor_sec_id = sec.sec_id
-            else:
-                flags.append(SUCCESSOR_UNKNOWN)
+        transfer = rec.bucket is CrspBucket.EXCHANGE_TRANSFER
+        if transfer and not continued:
+            flags.append(SUCCESSOR_UNKNOWN)        # stage 9 looks for its successor (`rewrites.awaits_successor`)
         delisting = Delisting(sec.sec_id, cik, ticker, delist_date, rec, lt, f25, sub,
                               f25.exchange if f25 else exchange)
         for f in flags:
             if f not in delisting.flags:
                 delisting.add_flag(f)
+        if transfer and continued:                # a transfer the security traded through: it goes on as itself
+            security_goes_on(delisting, Rule.CONTINUED)
         return delisting
 
     # -- no-Form-25 fallback ----------------------------------------------

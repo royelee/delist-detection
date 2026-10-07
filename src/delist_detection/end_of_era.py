@@ -31,10 +31,12 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from datetime import date, timedelta
+from typing import TYPE_CHECKING
 
-from .crsp_codes import CrspBucket
-from .edgar import EdgarSubmission
-from .lifecycle import RESOLVED_FROM_CONTINUED_FILINGS
+from .crsp_codes import CONTINUATION_CODE, CrspBucket
+
+if TYPE_CHECKING:
+    from .edgar import EdgarSubmission
 
 ITEMS_BEFORE_DAYS, ITEMS_AFTER_DAYS = 30, 120          # 8-K items, successor filings, Form 25s around the end
 MERGER_FILING_BEFORE_DAYS, MERGER_FILING_AFTER_DAYS = 540, 30
@@ -43,7 +45,13 @@ MERGER_FILING_FORMS = frozenset({"DEFM14A", "DEFM14C", "PREM14A", "SC 14D9", "SC
                                  "425", "S-4"})
 DELIST_FORMS = frozenset({"25-NSE", "25"})
 MERGER_CODES = frozenset({200, 231, 233})
-CONTINUED = "Continued 10-K/Q filings >180d after delist (moved to OTC or spun off)"
+# The reason protocol the published `reason` column carries, defined once here (its writer) and read from here by
+# the finder, stage 9g, the verdict and the scorecard: the continued-filings rule's reason starts with
+# CONTINUED_FILINGS; a branch that relabelled a continued-filings ending ends its reason with
+# RESOLVED_FROM_CONTINUED_FILINGS.
+CONTINUED_FILINGS = "Continued 10-K/Q filings"
+CONTINUED = f"{CONTINUED_FILINGS} >180d after delist (moved to OTC or spun off)"
+RESOLVED_FROM_CONTINUED_FILINGS = "; the registrant kept filing after it"
 
 
 @dataclass(frozen=True)
@@ -120,9 +128,9 @@ def resolve(s: EraSignals, items_code: int | None) -> EraVerdict:
     merger_code = items_code if items_code in MERGER_CODES else 231
     kept = RESOLVED_FROM_CONTINUED_FILINGS
     if s.trading_after:
-        return EraVerdict("trading", 304, CrspBucket.EXCHANGE_TRANSFER, CONTINUED)
+        return EraVerdict("trading", CONTINUATION_CODE, CrspBucket.EXCHANGE_TRANSFER, CONTINUED)
     if s.successor_filing:
-        return EraVerdict("successor", 304, CrspBucket.EXCHANGE_TRANSFER,
+        return EraVerdict("successor", CONTINUATION_CODE, CrspBucket.EXCHANGE_TRANSFER,
                           f"Successor registration {s.successor_filing}: the security continues under a successor{kept}")
     if "5.01" in s.item_filed and not s.survived:
         return EraVerdict("change_in_control", merger_code, CrspBucket.MERGER,
@@ -143,4 +151,4 @@ def resolve(s: EraSignals, items_code: int | None) -> EraVerdict:
         return EraVerdict("liquidation", 400, CrspBucket.LIQUIDATION,
                           f"Liquidation: delisted while winding down ({s.liquidation_notice} announces a liquidating "
                           f"distribution, trust or plan){kept}")
-    return EraVerdict("continued_filings", 304, CrspBucket.EXCHANGE_TRANSFER, CONTINUED)
+    return EraVerdict("continued_filings", CONTINUATION_CODE, CrspBucket.EXCHANGE_TRANSFER, CONTINUED)

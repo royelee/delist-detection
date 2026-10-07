@@ -22,7 +22,7 @@ from collections.abc import Collection, Mapping, Sequence
 from datetime import date, timedelta
 
 from .distress import DistressTerms
-from .exit_kind import ending_fields
+from .exit_kind import ending_fields, is_real_ending
 from .lifecycle import Tables
 from .payout_rule import MergerInputs, basket_legs, value_fields
 from .store import DelistingKey
@@ -35,7 +35,7 @@ def last_endings(delistings: Sequence[Mapping[str, str]]) -> dict[str, Mapping[s
     """Each security's last real ending (its successor is not itself), by delist
     date: the one contract/delistings.csv keeps (decision 12)."""
     out: dict[str, Mapping[str, str]] = {}
-    for r in sorted((r for r in delistings if r["successor_sec_id"] != r["sec_id"]), key=lambda r: r["delist_date"]):
+    for r in sorted((r for r in delistings if is_real_ending(r)), key=lambda r: r["delist_date"]):
         out[r["sec_id"]] = r
     return out
 

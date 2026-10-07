@@ -26,13 +26,14 @@ from datetime import date
 from pathlib import Path
 
 from .atomic_io import write_atomic
-from .lifecycle import (CLOSED_NO_EVENT, CONTINUED_FILINGS, ENDED_INCOMPLETE, EXCHANGE_PRINT_SOURCES,
+from .end_of_era import CONTINUED_FILINGS
+from .lifecycle import (CLOSED_NO_EVENT, ENDED_INCOMPLETE, EXCHANGE_PRINT_SOURCES,
                         HIGH, LEFT_VIEW, LOW, MEDIUM, NO_INTERVAL,
                         NO_MAPPED_SIGHTING, Lifecycle, LifecycleView, Tables, flag_names)
 from .diagnosis_truth import (KNOWN_WRONG as D_KNOWN_WRONG, MISMATCH_FIELDS, PASS as D_PASS, RULING_PENDING,
                               DiagnosisCase, LibraryRows, field_key, judge_all as judge_diagnosis,
                               load_diagnosis_truth)
-from .exit_kind import ending_fields, is_distress
+from .exit_kind import ending_fields, is_distress, is_real_ending
 from .payout_rule import VALUE_RULES
 from .truth import KNOWN_WRONG, PASS, TruthCase, clopper_pearson_upper, judge_all, load_truth
 from .verdict import ENDING, SECURITY, SEED
@@ -187,7 +188,7 @@ def _identity_lines(tables: Tables) -> dict[str, float]:
 
 
 def _ending_lines(tables: Tables, window: Window | None) -> dict[str, float]:
-    real = [r for r in tables.delistings if r["successor_sec_id"] != r["sec_id"]]
+    real = [r for r in tables.delistings if is_real_ending(r)]
     inw = (lambda r: window.contains(r["delist_date"])) if window else None
     fields = {id(r): ending_fields(r) for r in real}
     xfer = [r for r in real if fields[id(r)].exit_kind == "exchange" and not fields[id(r)].continuation]

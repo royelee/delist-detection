@@ -78,20 +78,22 @@ def test_a_successor_registration_with_no_successor_found_keeps_the_doubt():
     assert "resolved_from_continued_filings" in _reasons(row)
 
 
-def test_a_handoff_by_8k12b_drops_the_rewritten_rows_no_evidence_default():
+def test_a_handoff_by_8k12b_is_confirmed():
+    """GOOGL 2015: the handoff made the `unknown` Form 25 row a continuation, dropping its no-evidence default
+    (`rewrites.continuation`); the 8-K12B in its reason confirms it."""
     row = ending("A", "2015-10-12", "exchange_transfer", successor="B", ltd="2015-10-02",
-                 flags="no_evidence_default;handoff_continuation",
+                 flags="handoff_continuation",
                  reason="Continuation (8-K12B 0001193125-15-336577): A last traded as AAA on 2015-10-05 and B took "
                         "the ticker from 2015-10-06; holders' shares became B's")
     assert _reasons(row, **_chain()) == ()
 
 
-def test_a_handoff_by_timing_keeps_both_doubts():
+def test_a_handoff_by_timing_keeps_its_doubt():
     row = ending("A", "2023-08-13", "exchange_transfer", successor="B", ltd="2023-08-04",
-                 flags="no_evidence_default;handoff_continuation",
+                 flags="handoff_continuation",
                  reason="Continuation (timing:cik): A last traded as AAA on 2023-08-04 and B took the ticker from "
                         "2023-08-07; holders' shares became B's")
-    assert _reasons(row, **_chain()) == ("no_evidence_default", "continuation_by_timing_only")
+    assert _reasons(row, **_chain()) == ("continuation_by_timing_only",)
 
 
 # -- the matched Form 25's filer is issuer evidence (note A theme 3) ----------------------------------------------

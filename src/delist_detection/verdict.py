@@ -51,9 +51,9 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import date, timedelta
 
-from .lifecycle import (CONTINUED_FILINGS, EXCHANGE_PRINT_SOURCES, RESOLVED_FROM_CONTINUED_FILINGS, Tables,
-                        flag_names)
-from .exit_kind import ending_fields
+from .end_of_era import CONTINUED_FILINGS, RESOLVED_FROM_CONTINUED_FILINGS
+from .exit_kind import ending_fields, is_continuation, is_real_ending
+from .lifecycle import EXCHANGE_PRINT_SOURCES, Tables, flag_names
 from .verdict_rules import (Reading, closed_without_ending, issuer_by_form25, settles_relabel, stale_seed,
                             successor_registration, unpriced_gate)
 
@@ -80,10 +80,6 @@ class Verdict:
     def word(self) -> str:
         """The contract's verdict column."""
         return CONFIRMED if self.confirmed else UNCERTAIN
-
-
-def _is_continuation(row: Mapping[str, str]) -> bool:
-    return bool(row["successor_sec_id"]) and row["successor_sec_id"] != row["sec_id"]
 
 
 def is_introduction(row: Mapping[str, str]) -> bool:
@@ -166,9 +162,9 @@ def _own_reasons(row: Mapping[str, str], issuer_cik: str = "", reading: Reading 
     filing that confirms it, `continuation_evidence.confirming_filing`, or the registrant's own ratio that
     contradicts its successor registration)."""
     flags = flag_names(row)
-    confirmed = bool(reading.filing) and _is_continuation(row)
+    confirmed = bool(reading.filing) and is_continuation(row)
     reasons = []
-    if _is_continuation(row) and reading.doubt:
+    if is_continuation(row) and reading.doubt:
         reasons.append(f"continuation_not_one_for_one:{reading.doubt}")
     if "resolved_by_current_ticker_map" in flags and not issuer_by_form25(row, issuer_cik, named):
         reasons.append("issuer_from_todays_ticker_map")
@@ -177,13 +173,13 @@ def _own_reasons(row: Mapping[str, str], issuer_cik: str = "", reading: Reading 
     if RESOLVED_FROM_CONTINUED_FILINGS in row["reason"] and not settles_relabel(row) \
             and not successor_registration(row, reading):
         reasons.append("resolved_from_continued_filings")
-    if "no_evidence_default" in flags and not successor_registration(row, reading) and not confirmed:
+    if "no_evidence_default" in flags:          # no continuation carries it (`rewrites.continuation` drops it)
         reasons.append("no_evidence_default")
     if not ending_fields(row).exit_kind:
         reasons.append("unknown_exit_kind")
     if row["dlret_method"] == "assumed_par" and flags & GATE_FAILED and not unpriced_gate(row, GATE_FAILED):
         reasons.append("assumed_par_after_failed_gate")
-    if _is_continuation(row):
+    if is_continuation(row):
         if "(timing:cik)" in row["reason"] and not confirmed:
             reasons.append("continuation_by_timing_only")
         return reasons
@@ -285,7 +281,7 @@ def decide(tables: Tables, evidence: Mapping[str, str],
         if r["sec_id"]:
             seeds_of[r["sec_id"]].append(r)
     named = {sid: all(r["name"].strip() for r in rows) for sid, rows in seeds_of.items()}
-    real = [r for r in tables.delistings if r["successor_sec_id"] != r["sec_id"]]
+    real = [r for r in tables.delistings if is_real_ending(r)]
     last_of: dict[str, str] = {}
     for r in real:
         last_of[r["sec_id"]] = max(last_of.get(r["sec_id"], ""), r["delist_date"])

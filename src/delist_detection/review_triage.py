@@ -437,10 +437,20 @@ def _inject_no_dlret(row: Mapping) -> dict:
 
 
 @dataclass(frozen=True)
+class FilingRef:
+    """The filing a review item is about (the finder's Form 25 it could not place), typed: in-run readers take its
+    form and accession from here, never from the item's reason."""
+    form: str
+    accession: str
+    filing_date: str
+
+
+@dataclass(frozen=True)
 class ReviewItem:
     """One flag the run raised outside a delisting's own row -- on a security
-    or era (`last_seen`), a Form 25 (`delist_date`), or a stage that failed --
-    with why. `row()` is its review.csv row before triage."""
+    or era (`last_seen`), a Form 25 (`delist_date`, and the filing itself:
+    `filing`), or a stage that failed -- with why. `row()` is its review.csv
+    row before triage; `filing` is never written."""
     sec_id: str
     ticker: str
     cik: int | None
@@ -448,6 +458,7 @@ class ReviewItem:
     reason: str
     delist_date: str = ""
     last_seen: str = ""
+    filing: FilingRef | None = None
 
     def row(self) -> dict:
         return {"sec_id": self.sec_id, "delist_date": self.delist_date, "ticker": self.ticker, "cik": self.cik,

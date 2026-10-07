@@ -17,7 +17,7 @@ from datetime import date, datetime, timedelta
 from typing import Iterable
 
 from . import end_of_era, exchange_terms
-from .crsp_codes import CrspBucket, bucket_for_code
+from .crsp_codes import CONTINUATION_CODE, CrspBucket, bucket_for_code
 from .distress import liquidating
 from .edgar import EdgarClient, EdgarSubmission
 from .evidence import (
@@ -38,6 +38,7 @@ from .figi_resolution import share_class_from_name
 from .form25 import Form25, notice_says_acquired, parse_form25
 from .issuer_record import IssuerRecord
 from .names import names_agree
+from .rewrites import R1_CONTINUATION
 from .ticker_resolver import TickerResolution, TickerResolver
 
 
@@ -529,8 +530,8 @@ class DelistClassifier:
         # reclassification into another class, Clearway 2026; a holding company's formation, ONEOK 2026)
         r1 = self._one_for_one(cik, evidence.get("name"), filings, [observed, anchor], delist_filing)
         if r1 is not None and (r1.target_own or self._names_new_issuer(r1, cik, anchor)):
-            _add_flag(flags, "r1_continuation")
-            return rec(304, CrspBucket.EXCHANGE_TRANSFER, "medium",
+            _add_flag(flags, R1_CONTINUATION)
+            return rec(CONTINUATION_CODE, CrspBucket.EXCHANGE_TRANSFER, "medium",
                        f"Continuation (R1): each share became one share {r1.target[:80].strip()}, no cash")
         # Sub-plan 5f: a filer with no 8-K item that decides (a foreign private issuer files 6-Ks) reports the
         # completion in a 6-K or a press-release 8-K near the Form 25 (TAHO's and KING's 6-Ks, BPYU's 7.01 8-K)
@@ -802,7 +803,7 @@ class DelistClassifier:
             if why:
                 return DelistRecord(
                     ticker=ticker.upper(), cik=resolution.cik,
-                    observed_delist_date=observed_delist_date, crsp_code=304,
+                    observed_delist_date=observed_delist_date, crsp_code=CONTINUATION_CODE,
                     bucket=CrspBucket.EXCHANGE_TRANSFER, confidence="high",
                     reason=why, evidence=evidence,
                 )

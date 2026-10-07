@@ -1,7 +1,8 @@
 import pytest
 
 from delist_detection.crsp_codes import DLST_CODE_TO_BUCKET
-from delist_detection.exit_kind import DROP_REASONS, EXIT_KINDS, ending_fields, is_distress
+from delist_detection.exit_kind import (DROP_REASONS, EXIT_KINDS, ending_fields, is_continuation, is_distress,
+                                        is_real_ending)
 from lifecycle_tables import ending
 
 
@@ -70,3 +71,14 @@ def test_an_otc_print_value_is_a_measured_dlret_not_a_fill():
     f = ending_fields(ending("S", "2012-05-01", "compliance_failure", dlret="-0.750000", method="otc_print",
                              crsp_code="500"))
     assert (f.dlret, f.dlret_fill) == ("-0.750000", "")
+
+
+def test_a_real_ending_and_a_continuation_are_read_from_the_successor_once():
+    """The one definition every reader of delistings.csv asks: a security that went on (its own successor) has no
+    real ending; a successor other than itself is a continuation; a blank successor is a real ending, no
+    continuation."""
+    went_on = ending("S", "2019-03-30", "merger", successor="S")
+    moved = ending("S", "2015-10-12", "exchange_transfer", successor="T")
+    ended = ending("S", "2018-11-29", "merger")
+    assert [is_real_ending(r) for r in (went_on, moved, ended)] == [False, True, True]
+    assert [is_continuation(r) for r in (went_on, moved, ended)] == [False, True, False]

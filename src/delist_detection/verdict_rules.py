@@ -11,13 +11,13 @@ note A. They settle a doubt `verdict` would otherwise raise; none changes a tabl
 - **A successor registration confirms a continuation** (`successor_registration`, note A themes 2 and 6). The
   resolver's successor branch ("Successor registration 8-K12B <date>") or the handoff stage's continuation by an
   8-K12B/8-K12G3 ("Continuation (8-K12B <accession>)") names the filing that carries the security to its
-  successor: neither the continued-filings relabel nor the no-evidence default the row carried before the handoff
-  rewrote it is a doubt then (BHI, BKFS, GOOGL). Only on a continuation (a successor other than itself): a
-  successor registration whose successor was never found keeps its doubt, and so does one whose registrant's own
-  filings state another ratio or cash (`Reading.doubt`, stage 9g: CHTR 2016's 0.9042 is a stock merger, reason
-  `continuation_not_one_for_one:ratio:0.9042`; SIRI 2024's 0.1 is a reverse split of the same class and no doubt,
-  `ratio_doubt`; a missing reading vetoes nothing). A continuation linked by timing alone ("timing:cik", the Liberty
-  tracking-stock reclassifications) is untouched.
+  successor: the continued-filings relabel is no doubt then (BHI, BKFS). Only on a continuation (a successor other
+  than itself): a successor registration whose successor was never found keeps its doubt, and so does one whose
+  registrant's own filings state another ratio or cash (`Reading.doubt`, stage 9g: CHTR 2016's 0.9042 is a stock
+  merger, reason `continuation_not_one_for_one:ratio:0.9042`; SIRI 2024's 0.1 is a reverse split of the same class
+  and no doubt, `ratio_doubt`; a missing reading vetoes nothing). A continuation linked by timing alone
+  ("timing:cik", the Liberty tracking-stock reclassifications) is untouched. (A continuation never carries the
+  no-evidence default: `rewrites.continuation` drops it.)
 - **The matched Form 25's filer is issuer evidence** (`issuer_by_form25`, note A theme 3). An issuer found in
   today's company_tickers.json is confirmed when the row's own Form 25 (not the unmatched one a handoff row
   borrows) was read from that same CIK and the observed name agreed with it on the date (no
@@ -56,7 +56,9 @@ from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date
 
-from .lifecycle import RESOLVED_FROM_CONTINUED_FILINGS, flag_names
+from .end_of_era import RESOLVED_FROM_CONTINUED_FILINGS
+from .exit_kind import is_continuation, is_real_ending
+from .lifecycle import flag_names
 
 STALE_CLOSE_DAYS = 3                      # a last close older than this many trading days cannot test the terms
 # end_of_era.resolve's merger branches (a change in control, a completed acquisition)
@@ -82,10 +84,6 @@ class Reading:
 def tokens(row: Mapping[str, str]) -> list[str]:
     """The review flag tokens on a delistings.csv row, whole (`payout_gate_failed:34.88`)."""
     return [f for f in row.get("review_flags", "").split(";") if f]
-
-
-def is_continuation(row: Mapping[str, str]) -> bool:
-    return bool(row["successor_sec_id"]) and row["successor_sec_id"] != row["sec_id"]
 
 
 def own_form25(row: Mapping[str, str]) -> bool:
@@ -232,6 +230,6 @@ def closed_without_ending(security: Mapping[str, str], intervals: Sequence[Mappi
     real ending (module docstring), else ""."""
     if security.get("observed") != "true" or not intervals or any(not r["valid_to"] for r in intervals):
         return ""
-    if any(r["successor_sec_id"] != r["sec_id"] for r in endings):
+    if any(is_real_ending(r) for r in endings):
         return ""
     return f"closed_no_event:{max(r['valid_to'] for r in intervals)}"

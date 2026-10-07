@@ -97,15 +97,18 @@ def test_a_line_successors_first_day_is_a_trading_day():
 
 def test_the_predecessors_own_form_25_raises_no_unmatched_row_for_the_added_successor(monkeypatch):
     """Stage 9d searches the successor's Form 25s under the shared CIK: Legacy ONEOK's 25-NSE already owns the
-    predecessor's ending, so its `form25_unmatched` item is not repeated for the successor."""
+    predecessor's ending, so its `form25_unmatched` item is not repeated for the successor (read from the item's
+    typed filing, never its reason)."""
     from delist_detection.added_securities import AddedLineSuccessor
-    from delist_detection.review_triage import ReviewItem
+    from delist_detection.review_triage import FilingRef, ReviewItem
     link, found = _oke(OLD_ROWS)
     added = found.added["BBG024TZWVN1"]
     item = ReviewItem("BBG024TZWVN1", "OKE", 1039684, "form25_unmatched",
-                      "25-NSE 0000876661-26-000770 ('COMMON'): ambiguous class")
+                      "25-NSE 0000876661-26-000770 ('COMMON'): ambiguous class",
+                      filing=FilingRef("25-NSE", "0000876661-26-000770", "2026-09-18"))
     other = ReviewItem("BBG024TZWVN1", "OKE", 1039684, "form25_unmatched",
-                       "25-NSE 0000876661-26-000999 ('COMMON'): ambiguous class")
+                       "25-NSE 0000876661-26-000999 ('COMMON'): ambiguous class",
+                       filing=FilingRef("25-NSE", "0000876661-26-000999", "2026-09-18"))
     finder = SimpleNamespace(find=lambda ctx, fallback: ([], [item, other]))
     monkeypatch.setattr(pipeline, "listed_today", lambda *a, **k: False)
     monkeypatch.setattr(pipeline, "_context_builder", lambda *a, **k: (lambda s, listed: None))

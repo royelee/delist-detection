@@ -33,7 +33,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from . import store
-from .exit_kind import ending_fields
+from .exit_kind import ending_fields, is_real_ending
 
 ACTIVE, ENDED = "active", "ended"
 ENDED_INCOMPLETE, LEFT_VIEW = "ended_incomplete", "left_view"
@@ -47,8 +47,6 @@ _RANK = {HIGH: 0, MEDIUM: 1, LOW: 2}
 LOW_FLAGS = frozenset({"last_trade_date_conflict", "resolved_by_current_ticker_map"})
 
 EXCHANGE_PRINT_SOURCES = ("midas", "ex99_notice", "8k_301", "nasdaq_halt")  # last trade dates from an exchange print
-CONTINUED_FILINGS = "Continued 10-K/Q filings"                           # the continued-filings rule's reason
-RESOLVED_FROM_CONTINUED_FILINGS = "; the registrant kept filing after it"   # end_of_era's relabelled endings
 
 
 def flag_names(row: Mapping[str, str]) -> set[str]:
@@ -210,7 +208,7 @@ class LifecycleView:
         intervals = self._intervals.get(s, [])
         if not intervals:
             return NO_INTERVAL, chain, []
-        real = [e for e in self._endings.get(s, []) if e["successor_sec_id"] != s]
+        real = [e for e in self._endings.get(s, []) if is_real_ending(e)]
         open_ = [r for r in intervals if not r["valid_to"]]
         if not real:
             return (ACTIVE if open_ else CLOSED_NO_EVENT), chain, []
