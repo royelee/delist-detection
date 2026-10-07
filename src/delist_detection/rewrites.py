@@ -24,7 +24,7 @@ The interface: `continuation`, `security_goes_on`, `mark_going_on`, `reclassify`
 delisting (`delistings.Delisting`); the published tables keep their columns and their text."""
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Collection, Iterable
 from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING, Protocol
@@ -134,14 +134,14 @@ def security_goes_on(d: Delisting, rule: Rule) -> Rewrite:
     return rw
 
 
-def mark_going_on(delistings: Iterable[Delisting], endings: Mapping[DelistingKey, bool]) -> int:
-    """The clip check's answer on the delistings (`Rule.TRADES_ON`): each merger or exchange transfer that `endings`
-    says does not end its security (`pipeline._delisting_endings`: the DIS 2019 holding-company reorganization, WRK
-    2018) goes on as itself. Only a blank successor is filled: one a search already found (MWV to WRK) stands, and a
-    delisting `endings` says ends its security, or has no answer for, is untouched. Returns how many it marked."""
+def mark_going_on(delistings: Iterable[Delisting], going_on: Collection[DelistingKey]) -> int:
+    """The clip check's answer on the delistings (`Rule.TRADES_ON`): each merger or exchange transfer in `going_on`,
+    the endings that do not end their security (`history.Histories.going_on`: the DIS 2019 holding-company
+    reorganization, WRK 2018), goes on as itself. Only a blank successor is filled: one a search already found (MWV to
+    WRK) stands, and any other delisting is untouched. Returns how many it marked."""
     marked = 0
     for d in delistings:
-        if not d.record.successor_sec_id and endings.get(d.key) is False:
+        if not d.record.successor_sec_id and d.key in going_on:
             security_goes_on(d, Rule.TRADES_ON)
             marked += 1
     return marked

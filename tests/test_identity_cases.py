@@ -128,15 +128,30 @@ def test_a_joined_lines_cusip_ranges_ignore_the_old_cusips_settling_rows(cases):
 
 
 def test_a_ticker_range_carried_to_the_next_ticker_stops_before_another_securitys_first_day():
-    from delist_detection.history import Sighting, clip_at_takeovers
-    old = {"sec_id": "OLD", "ticker": "MSG", "exchange": None, "valid_from": "2010-02-16",
-           "valid_to": "2015-10-05", "source": "ftd"}
-    new = {"sec_id": "NEW", "ticker": "MSG", "exchange": None, "valid_from": "2015-10-05", "valid_to": None,
-           "source": "ftd"}
-    sight = {"OLD": [Sighting("2015-10-02", "MSG", "ftd"), Sighting("2015-10-06", "MSGN", "ftd")]}
-    got = clip_at_takeovers([old, new], sight, {"OLD": None, "NEW": None})
-    assert [(r["sec_id"], r["valid_to"]) for r in got] == [("OLD", "2015-10-04"), ("NEW", None)]
+    """MSG 2015: the old line's MSG range runs to the day before its MSGN first row, one day into the new MSG's: it
+    stops the day before the new security's first day under MSG (`history.Histories`)."""
+    from datetime import date
+
+    from delist_detection.crsp_codes import CrspBucket
+    from delist_detection.ftd import FtdIndex
+    from delist_detection.history import Ending, Histories, Sighting
+    from delist_detection.last_trade import LastTrade
+    from delist_detection.security_master import Security
+    from delist_detection.store import DelistingKey
+
+    secs = {sid: Security(sid, 1, "COMMON", sid, "Common Stock", True, "cusip") for sid in ("OLD", "NEW")}
+    new = [Sighting("2015-10-05", "MSG", "ftd"), Sighting("2015-10-06", "MSG", "ftd")]
+
+    def msg_ranges(old_msg, endings=(), listed=True):
+        old = [Sighting(d, "MSG", "ftd") for d in ("2010-02-16", *old_msg)] + [
+            Sighting("2015-10-06", "MSGN", "ftd"), Sighting("2015-10-07", "MSGN", "ftd")]
+        history = Histories(secs, {"OLD": old, "NEW": new}, {}, FtdIndex(), endings,
+                            listed={"OLD": listed, "NEW": True})
+        return sorted((r["sec_id"], r["valid_to"] or "") for r in history.ticker_rows if r["ticker"] == "MSG")
+
+    assert msg_ranges(["2015-10-02"]) == [("NEW", ""), ("OLD", "2015-10-04")]
     # a security still sighted under the ticker, or ended by its own ending, is left to ticker_shared
-    still = {"OLD": [Sighting("2015-10-05", "MSG", "ftd")]}
-    assert clip_at_takeovers([old, new], still, {})[0]["valid_to"] == "2015-10-05"
-    assert clip_at_takeovers([old, new], sight, {"OLD": "2015-10-05"})[0]["valid_to"] == "2015-10-05"
+    assert msg_ranges(["2015-10-02", "2015-10-05"]) == [("NEW", ""), ("OLD", "2015-10-05")]
+    ended = Ending(DelistingKey("OLD", "2015-10-15"), LastTrade(date(2015, 10, 5), "midas", ()),
+                   CrspBucket.LIQUIDATION, None, "NASDAQ")
+    assert msg_ranges(["2015-10-02"], [ended], listed=False) == [("NEW", ""), ("OLD", "2015-10-05")]

@@ -31,7 +31,7 @@ from .delistings import Delisting
 from .edgar import EdgarSubmission
 from .evidence import names_near
 from .ftd import FtdIndex
-from .history import Sighting
+from .history import TAKEOVER_DAYS, Sighting
 from .last_trade import NO_DAY, at_handoff
 from .review_triage import ReviewItem
 from .rewrites import HANDOFF_CONTINUATION, Payouts, Rule, continuation, successor_note
@@ -41,7 +41,7 @@ from .successors import successor_query
 
 OVERLAP_DAYS = 10         # B's first sighting under the ticker may precede A's last by this much (CZR: 8)
 CONTINUATION_DAYS = 10    # a continuation by timing: A's last and B's first sighting this close
-TAKEOVER_DAYS = 120       # B's first sighting at most this long after A's last (COHR: 74)
+# TAKEOVER_DAYS (history.py: a successor's ticker window too): B's first sighting at most this long after A's last
 ISSUER_AGE_DAYS = 365     # B's issuer filing with EDGAR this long before the handoff: a company that existed
 
 

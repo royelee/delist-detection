@@ -21,6 +21,7 @@ from .form25 import (
     ISSUER_FORM25_FORMS, REGIONAL_EXCHANGES, Form25, SecurityRef, class_kind, class_letters, effective_date,
     is_involuntary, list_form25, match_securities, other_class, parse_form25, tied_securities,
 )
+from .history import Ending
 from .last_trade import Dating, LastTrade, OwnTrading, anchor_day
 from .listing_status import exchanges_around, issuer_exchange, withdrawal_kind
 from .review_triage import FilingRef, ReviewItem
@@ -94,6 +95,12 @@ class Delisting:
         filed = self.form25_sub.filing_date if self.form25_sub is not None else None
         anchor_8k = ((self.record.evidence or {}).get("anchor_8k") or {}).get("filing_date")
         return anchor_day(self.last_trade, self.delist_date, filed=filed, anchor_8k=anchor_8k)
+
+    @property
+    def ending(self) -> Ending:
+        """What the security's history reads of this delisting (`history.Ending`): its key, last trade, bucket,
+        successor and exchange, as they stand now."""
+        return Ending(self.key, self.last_trade, self.record.bucket, self.record.successor_sec_id, self.exchange)
 
 
 @dataclass

@@ -720,7 +720,7 @@ def anchor_day(lt: LastTrade, delist_date: str, *, filed: str | None = None, anc
 
 def end_day(lt: LastTrade, delist_date: str) -> date:
     """The day an ending ends its security's listing: its last trade, else its delisting date (a Form 25's effective
-    date). The clip (`pipeline._history_rows`) and stage 9e's off-exchange reads take it, not `anchor_day`: an
+    date). The clip (`history.Histories`) and stage 9e's off-exchange reads take it, not `anchor_day`: an
     undated security stayed listed until its Form 25 took effect (the anchor's filing date would clip FWLT 2014, AWH
     2017, WPG 2021 and ARD 2021 ten days early and read WPG's OTC symbol from before its removal)."""
     return lt.day if lt.day is not None else date.fromisoformat(delist_date)

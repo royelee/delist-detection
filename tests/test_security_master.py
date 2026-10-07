@@ -838,24 +838,6 @@ def test_ranges_from_sightings_takes_named_sightings():
                                                                  ("AAB", "2020-06-30", None)]
 
 
-def test_history_rows_end_at_the_last_delisting_or_stay_open_while_listed():
-    from delist_detection.history import history_rows
-    sec = Security("BBGX", 1, "COMMON", "X CO", "Common Stock", True, "cusip")
-    sig = [Sighting("2020-01-02", "X", "observation"), Sighting("2020-06-30", "XX", "observation"),
-           Sighting("2021-01-04", "XX", "observation")]
-    cus = [Sighting("2020-01-02", "111111111", "observation"), Sighting("2021-01-04", "111111111", "observation")]
-    asked = []
-    th, ch = history_rows(sec, sig, cus, listed=False, end="2020-12-31", end_exchange="NYSE",
-                          exchange_today=lambda t: asked.append(t) or "NASDAQ")
-    assert [(r["ticker"], r["valid_from"], r["valid_to"], r["exchange"]) for r in th] == [
-        ("X", "2020-01-02", "2020-06-29", None), ("XX", "2020-06-30", "2020-12-31", "NYSE")]
-    assert [(r["cusip"], r["valid_to"]) for r in ch] == [("111111111", "2020-12-31")]
-    assert asked == []
-    th, _ = history_rows(sec, sig, cus, listed=True, end=None, end_exchange=None,
-                         exchange_today=lambda t: asked.append(t) or "NASDAQ")
-    assert (th[-1]["valid_to"], th[-1]["exchange"], asked) == (None, "NASDAQ", ["XX"])
-
-
 def test_find_acquirer_counts_only_cusips_that_are_not_the_targets():
     from datetime import date
 

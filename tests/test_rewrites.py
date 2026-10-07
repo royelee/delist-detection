@@ -140,12 +140,12 @@ def test_a_security_that_goes_on_keeps_its_kind_and_its_value():
 
 
 def test_mark_going_on_fills_only_a_blank_successor_the_clip_check_marks():
-    """The clip check's answer (`pipeline._delisting_endings`) at stage 9b's start: a delisting that does not end its
+    """The clip check's answer (`history.Histories.going_on`) at stage 9b's start: a delisting that does not end its
     security goes on as itself; one that ends it, one with a successor a search already found (MWV to WRK) and one
-    the check has no answer for are untouched."""
+    the check has no answer for (neither is in the answer) are untouched."""
     goes_on, ends = _row("DIS", delist_date="2019-03-30"), _row("AGN", delist_date="2015-03-27")
     found, unknown = _row("MWV", successor="WRK"), _row("ZZZ")
-    marked = mark_going_on([goes_on, ends, found, unknown], {goes_on.key: False, ends.key: True, found.key: False})
+    marked = mark_going_on([goes_on, ends, found, unknown], frozenset({goes_on.key, found.key}))
     assert marked == 1
     assert [d.record.successor_sec_id for d in (goes_on, ends, found, unknown)] == ["DIS", None, "WRK", None]
     assert rewrite_by(goes_on, Rule.TRADES_ON) is not None and found.rewrites == ends.rewrites == []

@@ -33,7 +33,6 @@ from .distress import (
 from .evidence import item_sections
 from .fatal import FATAL
 from .handoffs import (
-    TAKEOVER_DAYS,
     HandoffDecision, HandoffOutcome, apply_handoffs, continuation_filing, cusip_switch, decide_handoff,
     drop_resolved_shared, find_handoffs, issuer_carries_on, own_continuation_filing, predecessor_names,
 )
@@ -43,8 +42,8 @@ from .issuer_record import IssuerRecord, ReadWatch
 from .last_trade import Dating, OwnTrading, end_day, first_day_after
 from .ftd import FTD_START, FtdIndex, FtdRow, close_age, is_trading_symbol, trades_after
 from .history import (
-    Sighting, backfill_cusips, clip_at_takeovers, cusip_sightings, filtered_ticker_sightings, history_rows, observation_map_rows, own_last_seen,
-    ranges_from_sightings, ticker_on, ticker_range_review, ticker_sightings, value_on,
+    Histories, Sighting, backfill_cusips, cusip_sightings, filtered_ticker_sightings, observation_map_rows,
+    own_last_seen, ranges_from_sightings, ticker_on, ticker_range_review, ticker_sightings, value_on,
 )
 from .line_follow import Decision as LineDecision
 from .line_follow import (
@@ -1291,10 +1290,10 @@ def _link_successors(delistings: list[Delisting], successors: _Successors) -> No
 def _handoffs(ctx: _RunContext, delistings: list[Delisting], securities: dict[str, Security],
               search: _DelistingSearch, sec_cusips: dict[str, list[str]], ftd: FtdIndex, values: MergerValues,
               review: list[ReviewItem], added: Mapping[str, AddedSecurity]) -> HandoffOutcome:
-    """9b. First, each merger or exchange transfer the clip check says does not end its security (`_delisting_endings`
-    over stage 9's delistings and successors, `added` the securities the run adds) goes on as itself
-    (`rewrites.mark_going_on`: the DIS 2019, WRK 2018 holding-company reorganizations): here, once, so the handoffs
-    see those rows as their own successors; the clip reads the final delistings again before the ranges.
+    """9b. First, each merger or exchange transfer that does not end its security (`Histories.going_on` over stage 9's
+    delistings and successors, `added` the securities the run adds) goes on as itself (`rewrites.mark_going_on`: the
+    DIS 2019, WRK 2018 holding-company reorganizations): here, once, so the handoffs see those rows as their own
+    successors; the history is read again over the final delistings before the ranges.
     Then ticker handoffs (`handoffs.py`): every pair of securities of the run
     where one stops trading under a ticker and the other starts under it within
     days (`find_handoffs`, over the sightings `ticker_history` is built from:
@@ -1363,8 +1362,7 @@ def _handoffs(ctx: _RunContext, delistings: list[Delisting], securities: dict[st
         if decision is not None:
             decisions.append(decision)
     ctx.meter.done("handoff search", mark)
-    starts = _successor_starts(delistings, securities, search.sightings, sec_cusips, ftd, added)
-    mark_going_on(delistings, _delisting_endings(delistings, securities, sec_cusips, ftd, starts))
+    mark_going_on(delistings, _histories(ctx, delistings, securities, search, sec_cusips, ftd, added).going_on)
     reconciled = {e.key for e in delistings if values.reconciled(e.key)}
     outcome = apply_handoffs(decisions, delistings, securities, review, reconciled=reconciled, payouts=values)
     for d in outcome.added:
@@ -1633,204 +1631,48 @@ def _delisting_rows(delistings: list[Delisting], closes: dict[DelistingKey, floa
     return delisting_rows, review_rows
 
 
-CONTINUATION_MIN_ROWS = 20    # a WRK-like delisting record's own CUSIP must show at least this many live fails rows...
-CONTINUATION_MIN_DAYS = 60    # ...spanning at least this many days...
-CONTINUATION_MIN_PRICES = 2   # ...at 2 or more distinct prices, so fails still settling at the last close don't count
-# The continues-trading exception only ever questions a delisting whose bucket
-# is a reorganization that can plausibly leave the listing itself running (a
-# holdco merger, an exchange transfer) -- never a liquidation, compliance
-# failure or expiration, whose whole premise is that the exchange listing
-# ended: ticker_history records exchange listings (CONTEXT.md "Listing"), and
-# OTC pink-sheet fails after a real bankruptcy delisting are not that listing
-# continuing (RHD, Smurfit-Stone, Idearc, GGP, SunPower, Endo: real, varied-
-# price OTC trading for years, but the exchange listing itself is long gone).
-CONTINUATION_BUCKETS = frozenset({CrspBucket.MERGER, CrspBucket.EXCHANGE_TRANSFER})
+def _histories(ctx: _RunContext, delistings: Iterable[Delisting], securities: dict[str, Security],
+               search: _DelistingSearch, sec_cusips: dict[str, list[str]], ftd: FtdIndex,
+               added: Mapping[str, AddedSecurity]) -> Histories:
+    """The observed securities' histories over these delistings (`history.Histories`, over each delisting's
+    `Delisting.ending`): the stage 5 sightings and listed-today answers, the securities the run adds, and the
+    exchange EDGAR lists today for an open range's ticker (the issuer's submissions JSON, already cached by the
+    finder)."""
+    edgar = ctx.clients.edgar
+    return Histories(securities, search.sightings, sec_cusips, ftd, [d.ending for d in delistings],
+                     listed=search.listed, added=added,
+                     exchange_today=lambda s, ticker: issuer_exchange(edgar, s.issuer_cik, ticker))
 
 
-def _continues_after(s: Security, after: str, sec_cusips: dict[str, list[str]], ftd: FtdIndex,
-                     successor_starts: Mapping[str, str] = {}) -> bool:
-    """Whether security `s`'s own CUSIP keeps trading under its own ticker(s)
-    strictly after the ISO date `after` (Phase 4's clip rule): at least
-    `CONTINUATION_MIN_ROWS` live fails rows (never a deleted symbol; a fail
-    still settling after the real end) over at least `CONTINUATION_MIN_DAYS`
-    days, with `CONTINUATION_MIN_PRICES` or more distinct prices -- so a
-    compliance failure's OTC tail settling at one price is not mistaken for
-    continued trading (WRK stops being clipped; ARD and compliance failures
-    stay clipped). Rows under a ticker a successor security took (`successor_starts`, `_successor_starts`) from
-    that day on are the successor's, not `s`'s continuing (AON 2012: Aon plc's AON, the old CUSIP's lingering
-    fails)."""
-    own = s.own_tickers()
-    rows = [r for r in ftd.trading_rows(sec_cusips.get(s.sec_id, []))
-            if r.symbol in own and r.date > after and r.date < successor_starts.get(r.symbol, "~")]
-    if len(rows) < CONTINUATION_MIN_ROWS:
-        return False
-    dates = [r.date for r in rows]
-    if (date.fromisoformat(max(dates)) - date.fromisoformat(min(dates))).days < CONTINUATION_MIN_DAYS:
-        return False
-    return len({r.price for r in rows if r.price is not None}) >= CONTINUATION_MIN_PRICES
-
-
-def _ends_the_security(e: Delisting, s: Security, sec_cusips: dict[str, list[str]], ftd: FtdIndex,
-                       successor_starts: Mapping[str, str] = {}) -> bool:
-    """Whether delisting `e` is the kind that actually ends security `s`
-    (Phase 4): not one whose successor is the security itself (a continuing
-    exchange transfer, D18); and, for a merger or exchange_transfer whose
-    last-trade day is *confirmed* (`last_trade.LastTrade.confirmed`, the one
-    definition) -- an unconfirmed day is a guess (the
-    no-Form-25 "continued 10-K/Q filings" fallback substitutes the security's
-    own last sighting when it has no last-trade evidence at all, e.g. Monster
-    Worldwide's and SunPower's 2008-09 fallback rows; Bank of Ozarks has no
-    day at all) and too weak a signal to second-guess against fails evidence
-    -- there is no established day to test continuation from -- not one
-    after which `s`'s own CUSIP keeps trading under its own ticker
-    (`_continues_after`: a WRK-like delisting record that did not really end
-    trading, confirmed by a real EX-99.25 notice/8-K/MIDAS/halt day). A
-    liquidation, compliance_failure, expiration or unknown delisting always
-    ends the security, whatever fails rows follow."""
-    if not is_real_ending(e):
-        return False
-    if e.record.bucket not in CONTINUATION_BUCKETS or not e.last_trade.confirmed:
-        return True
-    return not _continues_after(s, e.last_trade.day.isoformat(), sec_cusips, ftd, successor_starts)
-
-
-SUCCESSOR_TICKER_LOOKBACK_DAYS = 30   # with no confirmed last trade, a successor's first row may precede the delist date (STX: 9 days)
-
-
-def _successor_starts(delistings: Iterable[Delisting], securities: dict[str, Security],
-                      sightings: dict[str, list[Sighting]], sec_cusips: dict[str, list[str]], ftd: FtdIndex,
-                      added: Mapping[str, AddedSecurity]) -> dict[str, dict[str, str]]:
-    """A successor's ticker is not its predecessor's: for each security S, the tickers a successor security X
-    (a delisting's `successor_sec_id`, not S itself) took, and from which day: X's first sighting under the
-    ticker on or after the delisting's confirmed last trade day (`LastTrade.confirmed`; an unconfirmed or missing
-    one: its delist date, less `SUCCESSOR_TICKER_LOOKBACK_DAYS`) and within `TAKEOVER_DAYS` (the handoff window) after that anchor; a ticker
-    first seen later is a recycled one, no start. S's fails rows and sightings under the ticker from that day on are X's. One place, shared by
-    the clip check (`_delisting_endings`) and the ranges (`_history_rows`)."""
-    out: dict[str, dict[str, str]] = {}
-    for e in delistings:
-        x = e.record.successor_sec_id
-        if not x or x == e.sec_id or e.sec_id not in securities:
-            continue
-        confirmed = e.last_trade.confirmed
-        try:
-            anchor = e.last_trade.day if confirmed else date.fromisoformat(e.delist_date)
-        except ValueError:
-            continue
-        lo = (anchor if confirmed else anchor - timedelta(days=SUCCESSOR_TICKER_LOOKBACK_DAYS)).isoformat()
-        hi = (anchor + timedelta(days=TAKEOVER_DAYS)).isoformat()
-        if x in securities:
-            sig = filtered_ticker_sightings(sightings.get(x, []), sec_cusips.get(x, []), ftd)
-        elif x in added:
-            sig = [Sighting(added[x].span()[0], added[x].ticker, "ftd")]
-        else:
-            continue
-        mine = out.setdefault(e.sec_id, {})
-        for g in sorted(sig):
-            if lo <= g.day <= hi and g.day < mine.get(g.value, "~"):
-                mine[g.value] = g.day
-    return {sid: m for sid, m in out.items() if m}
-
-
-def _delisting_endings(delistings: Iterable[Delisting], securities: dict[str, Security],
-                       sec_cusips: dict[str, list[str]], ftd: FtdIndex,
-                       successor_starts: Mapping[str, Mapping[str, str]] = {}) -> dict[DelistingKey, bool]:
-    """Whether each delisting actually ends its security (`_ends_the_security`),
-    the one check behind the ticker_history clip (`_history_rows`) and the
-    continuing-delisting successor link (stage 9b's `rewrites.mark_going_on`) --
-    so the two tables can never disagree on which delistings are real exits.
-    A delisting whose security is not in `securities` (no security object to
-    test continuation against) has no entry."""
-    out: dict[DelistingKey, bool] = {}
-    for e in delistings:
-        s = securities.get(e.sec_id)
-        if s is not None:
-            out[e.key] = _ends_the_security(e, s, sec_cusips, ftd, successor_starts.get(e.sec_id, {}))
-    return out
-
-
-def _history_rows(ctx: _RunContext, securities: dict[str, Security], search: _DelistingSearch,
-                  sec_cusips: dict[str, list[str]], ftd: FtdIndex, added: dict[str, AddedSecurity],
-                  endings: dict[DelistingKey, bool], successor_starts: Mapping[str, Mapping[str, str]] = {}
-                  ) -> tuple[list[dict], list[dict], dict[str, str | None], dict[str, bool], dict[str, bool | None]]:
-    """10b. The ticker_history and cusip_history rows (`history.history_rows`):
-    each observed security's ranges end at the last delisting that actually
-    ends it (`endings`, `_delisting_endings`/`_ends_the_security`, the check
-    stage 9b's `rewrites.mark_going_on` reads too, so the two tables never
-    disagree) -- its last trade day, confirmed or not, else its delist_date
-    (`last_trade.end_day`) -- unless it is listed today or no delisting ends it.
-    An added (acquirer/successor) security gets one ticker row, built
-    directly: `ranges_from_sightings`' filter that drops single-value FTD
-    sightings would otherwise silently drop a successor's lone 8-K12B-dated
-    sighting. Also returns each observed security's end date (or None) and
-    whether that end came from a confirmed last-trade day, so
-    `observation_map_rows` can flag `after_delisting`/`after_unconfirmed_delisting`
-    without recomputing either. A security that has an ending and whose ticker a successor security took
-    (`successor_starts`) is not listed today, whatever its issuer's EDGAR listing says: the issuer's listing is
-    the successor's (AON 2012: the same CIK lists AON today). Also returns the listed answers as used."""
+def _history_rows(ctx: _RunContext, history: Histories,
+                  added: dict[str, AddedSecurity]) -> tuple[list[dict], list[dict]]:
+    """10b. The ticker_history and cusip_history rows: each observed security's ranges as its history answers them
+    (`Histories.ticker_rows`/`cusip_rows`: up to the end day of the last delisting that ends it, unless it is listed
+    today), then one ticker row for each security the run adds, built directly (`AddedSecurity.history_row`:
+    `ranges_from_sightings`' filter that drops single-value FTD sightings would otherwise drop a successor's lone
+    8-K12B-dated sighting), open while OpenFIGI and EDGAR list it today."""
     clients = ctx.clients
-    th_rows, ch_rows = [], []
-    listed: dict[str, bool | None] = dict(search.listed)
-    ends: dict[str, str | None] = {}
-    end_confirmed: dict[str, bool] = {}
-    final: dict[str, Delisting] = {}
-    own_of: dict[str, list[Sighting]] = {}
-    for e in sorted(search.delistings, key=lambda e: e.delist_date):
-        if endings.get(e.key):
-            final[e.sec_id] = e
-    for sid, s in securities.items():
-        last_delisting = final.get(sid)
-        is_listed = bool(search.listed.get(sid))
-        if is_listed and last_delisting is not None and sid in successor_starts:
-            is_listed = listed[sid] = False
-        end = None
-        confirmed = False
-        if last_delisting is not None and not is_listed:
-            # A last-trade day we couldn't confirm still clips the ranges at the
-            # delisting date -- an unclipped range would otherwise run past a
-            # security's real end.
-            confirmed = last_delisting.last_trade.confirmed
-            end = end_day(last_delisting.last_trade, last_delisting.delist_date).isoformat()
-        ends[sid] = end
-        end_confirmed[sid] = confirmed
-        # Phase 4 rule 2: a backfilled observation is not a ticker sighting here
-        # (this security's own ticker_history ranges) -- the delisting search's
-        # own sightings (`search.sightings`, built once in stage 5) are untouched.
-        own_sightings = filtered_ticker_sightings(search.sightings.get(sid, []), sec_cusips.get(sid, []), ftd)
-        own_of[sid] = own_sightings
-        starts_of = successor_starts.get(sid, {})
-        th, ch = history_rows(
-            s, own_sightings, cusip_sightings(s, ftd, sec_cusips.get(sid, []), starts_of),
-            listed=is_listed, end=end, end_exchange=last_delisting.exchange if last_delisting else None,
-            # An open (listed-today) row: the exchange from the issuer's own EDGAR
-            # submissions JSON (already cached by the finder).
-            exchange_today=lambda ticker, s=s: issuer_exchange(clients.edgar, s.issuer_cik, ticker),
-            successor_starts=starts_of)
-        th_rows += th
-        ch_rows += ch
-    th_rows = clip_at_takeovers(th_rows, own_of, ends)
+    th_rows = list(history.ticker_rows)
     for sid, a in added.items():
         is_listed = bool(listed_today(clients.figi, sid, edgar=clients.edgar, cik=a.security.issuer_cik,
                                       tickers=[a.ticker]))
         exch = issuer_exchange(clients.edgar, a.security.issuer_cik, a.ticker) if is_listed else None
         th_rows.append(a.history_row(listed=is_listed, exchange=exch))
-    return th_rows, ch_rows, ends, end_confirmed, listed
+    return th_rows, list(history.cusip_rows)
 
 
 def _observation_map(ctx: _RunContext, index: ObservationIndex, eras: list[TickerEra],
                      resolutions: dict[str, EraResolution], issuers: dict[str, Issuer],
-                     sec_cusips: dict[str, list[str]], ftd: FtdIndex, ends: dict[str, str | None],
-                     end_confirmed: dict[str, bool], listed: dict[str, bool | None],
-                     th_rows: list[dict]) -> list[dict]:
+                     history: Histories) -> list[dict]:
     """10c2. observation_map.csv's rows (`history.observation_map_rows`): every
     observation of the run's eras (`--limit` already trims which ones), its
     era, sec_id, issuer CIK, `ticker_history` spelling/coverage on its date,
-    and status. The log names how many of the input's observations that is,
+    and status, read from the history's own answer. The log names how many of the input's observations that is,
     so a `--limit` subset's smaller count is not mistaken for a bug."""
     sec_id_of = {k: r.sec_id for k, r in resolutions.items()}
     issuer_cik_of = {k: cik_of(issuers, k) for k in resolutions}
     conflicts = [(t, d) for t, d, _ in observation_conflicts(o for e in eras for o in e.observations)]
-    rows = observation_map_rows(eras, sec_id_of, issuer_cik_of, sec_cusips, ftd, ends, end_confirmed, listed,
-                                th_rows, conflicts)
+    rows = observation_map_rows(eras, sec_id_of, issuer_cik_of, history, conflicts)
     total = sum(len(e.observations) for e in index.eras())
     ctx.log(f"observation_map: {len(rows)} of {total} observations mapped")
     return rows
@@ -2123,21 +1965,18 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
     distress = _distress(ctx, delistings, {**sec_cusips, **ends.cusips}, ftd, review)              # 9e
     confirmations = _continuation_filings(ctx, delistings, securities, review, added)             # 9g
     _log_role_refusals(ctx, delistings)
-    # The handoff stage creates continuation delistings (AON 2012) and sets successors: the clip and the ranges read
-    # the starts and endings of the final delistings. (Stage 9b's first step read them over stage 9's delistings,
-    # only to mark the ones that go on as themselves, before its handoffs.)
-    starts = _successor_starts(delistings, securities, search.sightings, sec_cusips, ftd, added)
-    endings = _delisting_endings(delistings, securities, sec_cusips, ftd, starts)
+    # The history is read twice, one interface: stage 9b read it over stage 9's delistings, only to mark the ones that
+    # go on as themselves before its handoffs; the handoff stage then creates continuations (AON 2012) and sets
+    # successors, and 9c to 9e re-date, add and reclassify endings, so the ranges read it over the final delistings.
+    history = _histories(ctx, delistings, securities, search, sec_cusips, ftd, added)
 
     # 10. rows
     delisting_rows, review_rows = _delisting_rows(delistings, closes, values, overrides, prices, distress)
     review_rows += [item.row() for item in review]
-    th_rows, ch_rows, ends, end_confirmed, listed = _history_rows(ctx, securities, search, sec_cusips, ftd, added,
-                                                                  endings, starts)
+    th_rows, ch_rows = _history_rows(ctx, history, added)
     review_rows += [item.row() for item in drop_resolved_shared(ticker_range_review(th_rows), handoffs.resolved_pairs)]
     # 10c2. observation_map rows (the payout rows, 10c, are built with the tables below)
-    map_rows = _observation_map(ctx, index, eras, resolutions, answers.issuers, sec_cusips, ftd, ends,
-                                end_confirmed, listed, th_rows)
+    map_rows = _observation_map(ctx, index, eras, resolutions, answers.issuers, history)
     flags, triaged = _triage(ctx, review_rows, review_decisions, limit)
 
     tables = {

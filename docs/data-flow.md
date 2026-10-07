@@ -902,11 +902,10 @@ than from FTD sightings; an added acquirer security's range still comes from
 `ftd`.
 
 A security's ranges are clipped at the last delisting that actually ends it
-(`pipeline._ends_the_security`), not simply its last delisting: one whose
+(`history.Histories`), not simply its last delisting: one whose
 successor is the security itself (a continuing exchange transfer, D18) is
 skipped. Beyond that, only a `merger` or `exchange_transfer` delisting with a
-*confirmed* last-trade day (`e.last_trade.day` set and not flagged
-`last_trade_date_unconfirmed`) is second-guessed at all: it is also skipped
+*confirmed* last-trade day (`LastTrade.confirmed`) is second-guessed at all: it is also skipped
 when the security's own CUSIP keeps trading under its own ticker afterward —
 at least 20 live fails rows over at least 60 days with 2 or more distinct
 prices, so fails still settling at the last close don't count as continued
