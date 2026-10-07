@@ -20,40 +20,7 @@ PACKAGE = "llm_election_package"     # an election's default cash-and-stock pack
 ELECTION_CASH = "llm_election_cash"
 BY_TICKER, BY_LINE = "ticker", "line"   # which acquirer price settled a stock leg (`GatedPayouts.priced_by`)
 
-
-NULL_TICKERS = frozenset({"", "null", "none", "n/a", "n-a", "-"})
-
-
-def clean_ticker(ticker: object) -> str:
-    """The terms' acquirer ticker, blank for an LLM's spelled-out null ("NULL", "None", "N/A", "-": GRUB 2021's
-    terms), so a stock leg with no ticker is reported as `no_acq_ticker`, never as a price missing for "NULL"."""
-    t = ticker.strip() if isinstance(ticker, str) else ""
-    return "" if t.lower() in NULL_TICKERS else t
-
-
-PACKAGE_BASES = frozenset({"final_prorated", "default", "fixed"})
-
-
-def is_package(terms) -> bool:
-    """Whether the LLM answer names its package (prompt v3, sub-plan 5f): its cash and stock legs are what one share
-    became (ruling R4), an election's included, never its alternatives. An earlier answer's election legs were the
-    alternatives, and so are those of a v3 answer that states no package (basis `none`: CBSS 2007's $71.82 or 2.8
-    BBVA ADSs): both keep sub-plan 5e's either-or reading."""
-    return getattr(terms, "package_basis", "") in PACKAGE_BASES
-
-
-def skip_reason(terms) -> str:
-    """Why the gate cannot check these terms against a USD close (ruling R5 and R3), "" when it can: the cash
-    leg's currency when it is not USD (the library has no FX source), `basket` for two or more securities, and
-    `stock_value` for shares stated as a dollar value over an averaging price the library does not have."""
-    cur = getattr(terms, "cash_currency", "") or ""
-    if terms.cash_per_share and cur and cur != "USD":
-        return cur
-    if getattr(terms, "extra_legs", ()):
-        return "basket"
-    if getattr(terms, "stock_value", None) and not terms.stock_ratio:
-        return "stock_value"
-    return ""
+# An answer's package, its skip reason and its ticker are the answer's own (`llm_merger_extractor.MergerTerms`).
 
 
 @dataclass(frozen=True)
@@ -84,11 +51,11 @@ def reconcile(regex_value, last_close, llm_terms, acquirer_price, tol) -> Reconc
         flags.append(f"{GATE_FAILED}{regex_value:g}")
     if llm_terms is not None:
         cash, ratio = llm_terms.cash_per_share, llm_terms.stock_ratio
-        if is_package(llm_terms):
+        if llm_terms.is_package:
             # A v3 answer's legs are the package to publish (ruling R4): a cash-only package is checked here, one
             # with stock in the cash+stock gate (pass 2 of gate_payouts), an election as any other deal.
             if not llm_terms.has_stock:
-                skip = skip_reason(llm_terms)
+                skip = llm_terms.skip_reason
                 if skip:
                     return Reconciled(None, None, None, "none", tuple(flags) + (f"{GATE_SKIPPED}{skip}",))
                 if _fits(cash, last_close, tol):
@@ -96,7 +63,7 @@ def reconcile(regex_value, last_close, llm_terms, acquirer_price, tol) -> Reconc
                                       else "llm", tuple(flags))
                 flags.append(LLM_GATE_FAILED)
             return Reconciled(None, None, None, "none", tuple(flags))
-        skip = skip_reason(llm_terms)
+        skip = llm_terms.skip_reason
         if skip and (llm_terms.deal_type == "election" or not llm_terms.has_stock):
             # an answer that states no package keeps the either-or reading, but never against a close in another
             # currency or a dollar-valued, basket leg the gate cannot price (ruling R5 and R3): a cash-only answer
@@ -218,8 +185,8 @@ def gate_payouts(
         has_csv = for_delisting(csv_terms, key) is not None
         terms = None if has_csv else llm_terms.get(key)
         regex, close = out.payouts.get(key), for_delisting(last_closes, key)
-        ticker = clean_ticker(terms.acquirer_ticker) if terms is not None else ""
-        if terms is not None and terms.deal_type == "election" and not is_package(terms):
+        ticker = (terms.acquirer_ticker or "") if terms is not None else ""
+        if terms is not None and terms.deal_type == "election" and not terms.is_package:
             tried = [(how, t, reconcile(regex, close, terms, p, tol)) for how, t, p in prices(ticker, key)]
             how, used, r = next(((h, t, x) for h, t, x in tried if x.source.startswith("llm")), None) \
                 or (tried[0] if tried else (BY_TICKER, ticker or None, reconcile(regex, close, terms, None, tol)))
@@ -228,7 +195,7 @@ def gate_payouts(
             r = reconcile(regex, close, terms, acquirer_price(ticker, key) if ticker else None, tol)
         if r.flags:
             out.flags[key] = r.flags
-        if terms is not None and getattr(terms, "no_default", False):
+        if terms is not None and terms.no_default:
             out.flags[key] = out.flags.get(key, ()) + (NO_DEFAULT,)
         if r.cash is not None:
             out.payouts[key] = r.cash
@@ -250,13 +217,13 @@ def gate_payouts(
         out.flags[key] = out.flags.get(key, ()) + (f"terms_gate_failed:{reason}",)
 
     for key, terms in llm_terms.items():
-        package = is_package(terms)
+        package = terms.is_package
         if not terms.has_stock or (terms.deal_type == "election" and not package):
             continue   # settled in pass 1
         if for_delisting(csv_terms, key) is not None:
             out.dropped["csv_override"] += 1
             continue
-        skip = skip_reason(terms)      # every answer shape, a package or not: a non-USD cash leg, a basket, a dollar value
+        skip = terms.skip_reason       # every answer shape, a package or not: a non-USD cash leg, a basket, a dollar value
         if skip and not package:
             out.dropped["skipped"] += 1
             out.flags[key] = out.flags.get(key, ()) + (f"{GATE_SKIPPED}{skip}",)
@@ -284,7 +251,7 @@ def gate_payouts(
             out.dropped["no_ratio"] += 1       # a stock leg with no number of shares to price (no skip names it)
             flag_terms_gate_drop(key, "no_ratio")
             continue
-        acq = clean_ticker(terms.acquirer_ticker)
+        acq = terms.acquirer_ticker or ""
         tried = prices(acq, key)
         if not acq and not tried:
             out.dropped["no_acq_ticker"] += 1

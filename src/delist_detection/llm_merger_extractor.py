@@ -76,12 +76,26 @@ from .filing_selection import (
     form_filings,
     parse_date,
 )
+from .observations import normalize_ticker
 from .sec_stats import SEC_STATS
 
 
 # --------------------------------------------------------------------------- #
 # Result type
 # --------------------------------------------------------------------------- #
+
+# What an answer spells out for "no ticker" ("NULL", "None", "N/A", "-": GRUB 2021's terms): no ticker, so a stock leg
+# with none is reported as `no_acq_ticker`, never as a price missing for "NULL".
+NULL_TICKERS = frozenset({"", "null", "none", "n/a", "n-a", "-"})
+# The package bases of a prompt-v3 answer that names its package (sub-plan 5f, ruling R4); `none` states none.
+PACKAGE_BASES = frozenset({"final_prorated", "default", "fixed"})
+
+
+def clean_ticker(ticker: object) -> str:
+    """A ticker as an answer gives it, stripped, "" for none (`NULL_TICKERS`)."""
+    t = ticker.strip() if isinstance(ticker, str) else ""
+    return "" if t.lower() in NULL_TICKERS else t
+
 
 @dataclass(frozen=True)
 class StockLeg:
@@ -90,6 +104,16 @@ class StockLeg:
     issuer_name: str = ""
     ticker: str = ""
     share_class: str = ""
+
+
+_LETTER = re.compile(r"(?i)\s*(?:(?:class|series)\s+)?([A-Z0-9])(?:\s+(?:common|ordinary)\b.*)?\s*")
+
+
+def leg_class_letter(text: str) -> str:
+    """The letter of a share class an answer names ("B", "Class B", "Series C common"), "" for any other text
+    ("preferred unit", "common")."""
+    m = _LETTER.fullmatch(text or "")
+    return m.group(1).upper() if m else ""
 
 
 @dataclass(frozen=True)
@@ -131,6 +155,26 @@ class MergerTerms:
     # the offer"), read from the filing's own text; "" when it states none. `payout_rule` names it in `value_formula`
     value_window: str = ""
 
+    def __post_init__(self) -> None:
+        # "No ticker" is one rule: a spelled-out null (`NULL_TICKERS`) is no ticker, whoever built the answer
+        object.__setattr__(self, "acquirer_ticker", clean_ticker(self.acquirer_ticker) or None)
+
+    # What the answer means, asked of the answer itself (the gate, the payout rule, the price requests and stage 8
+    # read these, never the raw fields' shape).
+
+    @property
+    def ticker(self) -> str:
+        """The stock leg's acquirer ticker as a symbol to look up (normalized), "" for none."""
+        return normalize_ticker(self.acquirer_ticker or "")
+
+    @property
+    def is_package(self) -> bool:
+        """Whether the answer names its package (prompt v3, sub-plan 5f): its cash and stock legs are what one share
+        became (ruling R4), an election's included, never its alternatives. An earlier answer's election legs were
+        the alternatives, and so are those of a v3 answer that states no package (basis `none`: CBSS 2007's $71.82
+        or 2.8 BBVA ADSs): both keep sub-plan 5e's either-or reading."""
+        return self.package_basis in PACKAGE_BASES
+
     @property
     def is_basket(self) -> bool:
         """Two or more securities per target share (ruling R3)."""
@@ -138,8 +182,64 @@ class MergerTerms:
 
     @property
     def has_stock(self) -> bool:
-        """Whether the package holds any security (a ratio, a dollar-valued leg or a further leg)."""
+        """Whether the package holds any security (a ratio, a dollar-valued leg or a further leg): what the gate and
+        the payout rule ask."""
         return bool(self.stock_ratio) or bool(self.stock_value) or bool(self.extra_legs)
+
+    @property
+    def stock_leg(self) -> bool:
+        """Whether the answer holds a stock leg of its acquirer that the acquirer's close prices: a number of its
+        shares or a dollar value of them (PCYC). What stage 8 looks the acquirer up for and what asks a received
+        close; a further leg alone (`has_stock`) does not."""
+        return bool(self.stock_ratio) or bool(self.stock_value)
+
+    @property
+    def skip_reason(self) -> str:
+        """Why the payout gate cannot check the answer against a USD close (ruling R5 and R3), "" when it can: the
+        cash leg's currency when it is not USD (the library has no FX source), `basket` for two or more securities,
+        and `stock_value` for shares stated as a dollar value over an averaging price the library does not have."""
+        cur = self.cash_currency or ""
+        if self.cash_per_share and cur and cur != "USD":
+            return cur
+        if self.extra_legs:
+            return "basket"
+        if self.stock_value and not self.stock_ratio:
+            return "stock_value"
+        return ""
+
+    @property
+    def published(self) -> MergerTerms | None:
+        """The legs the contract publishes for this answer as read (the gate did not keep it): its package. An
+        answer that states no package (prompt v3 basis `none`, or an earlier prompt's) holds an election's
+        alternatives, never the package: only its all-cash alternative is published, else nothing (TRH 2012: the
+        stock alternative is no package). None when nothing is left to publish."""
+        terms: MergerTerms | None = self
+        if self.deal_type == "election" and not self.is_package and not self.no_default:
+            terms = replace(self, stock_ratio=None, stock_value=None, extra_legs=()) if self.cash_per_share else None
+        return terms if terms is not None and (terms.cash_per_share or terms.has_stock) else None
+
+    def legs(self, main_ticker: str) -> list[tuple[float | None, str, str]]:
+        """(ratio, ticker, share class) of each security of the package, the main one first (its ticker as the main
+        row would publish it, `main_ticker`). A further leg's ticker is the one its own class trades under: a leg
+        that repeats an earlier leg's ticker with another class letter takes the class ticker (CAA 2018's Lennar class
+        B under the class A's LEN is LEN-B, as the fails rows spell it), a repeat with no class letter and a preferred
+        class (BPYU 2021's "BPY preferred unit", not the common units' BPY) have none, so no price is asked of the
+        wrong security."""
+        out = [(self.stock_ratio, main_ticker, self.acquirer_share_class or "")]
+        letters: dict[str, set[str]] = {main_ticker: {leg_class_letter(self.acquirer_share_class or "")}} \
+            if main_ticker else {}
+        for leg in self.extra_legs:
+            ticker = normalize_ticker(leg.ticker) if leg.ticker else ""
+            letter = leg_class_letter(leg.share_class)
+            if ticker and "PREFER" in (leg.share_class or "").upper():
+                ticker = ""
+            elif ticker in letters:
+                base = re.sub(r"-[A-Z]$", "", ticker)
+                ticker = f"{base}-{letter}" if letter and letter not in letters[ticker] else ""
+            if ticker:
+                letters.setdefault(ticker, set()).add(letter)
+            out.append((leg.ratio, ticker, leg.share_class or ""))
+        return out
 
     def to_merger_terms_dict(self) -> dict:
         """Project to the dict shape ``build_delistings_table`` consumes.

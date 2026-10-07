@@ -64,7 +64,7 @@ from .listing_status import edgar_lists, issuer_exchange, listed_today, listing_
 from .observations import (
     Observation, ObservationError, ObservationIndex, TickerEra, eras_by_key, normalize_ticker, observation_conflicts,
 )
-from .payout_gate import BY_LINE, BY_TICKER, DEFAULT_TOL, GATE_SKIPPED, GatedPayouts, clean_ticker, gate_payouts
+from .payout_gate import BY_LINE, BY_TICKER, DEFAULT_TOL, GATE_SKIPPED, GatedPayouts, gate_payouts
 from .trading_calendar import next_trading_day
 from .prefetch import Serialized, warm
 from .reconstruction import (
@@ -92,7 +92,7 @@ from .verdict_rules import Reading
 from .verdict import decide as decide_verdicts
 from .contract import delisting_rows as contract_delisting_rows
 from .contract import id_change_rows, last_endings, payout_leg_rows, security_history_rows, seed_rows
-from .payout_rule import leg_terms, merger_inputs
+from .payout_rule import merger_inputs
 from .issuer_in_force import Sighting as IssuerSighting
 from .issuer_in_force import issuer_changes
 from .price_requests import LAST_CLOSE, OTC_PRINT, RECEIVED_CLOSE, key_of, request_rows, stock_legs
@@ -1116,16 +1116,15 @@ class _AcquirerLine:
 
 
 def _leg_evidence(e: Delisting, llm_terms: Mapping[DelistingKey, Any], overrides: Overrides) -> tuple[str, str, str] | None:
-    """(ticker, acquirer name, quote) of a merger's stock leg: its --merger-terms row's, else the LLM's; None when
-    it has none. An LLM ticker of "null" is none."""
+    """(ticker, acquirer name, quote) of a merger's stock leg: its --merger-terms row's, else the LLM's
+    (`MergerTerms.stock_leg`: a dollar-valued leg too, PCYC); None when it has none."""
     given = for_delisting(overrides.merger_terms, e.key)
     if given is not None:
         return (normalize_ticker(given.get("acquirer_ticker") or ""), "", "") if given.get("stock_ratio") else None
     t = llm_terms.get(e.key)
-    if t is None or not (t.stock_ratio or getattr(t, "stock_value", None)):     # a dollar-valued leg too (PCYC)
+    if t is None or not t.stock_leg:
         return None
-    ticker = normalize_ticker(t.acquirer_ticker or "")
-    return ("" if ticker.lower() in ("null", "none", "n-a") else ticker), t.acquirer_name or "", t.quote or ""
+    return t.ticker, t.acquirer_name or "", t.quote or ""
 
 
 def _acquirer_lines(ctx: _RunContext, mergers: list[Delisting], llm_terms: Mapping[DelistingKey, Any],
@@ -1233,8 +1232,7 @@ def _name_acquirer_tickers(ctx: _RunContext, mergers: list[Delisting], llm_terms
     review: list[ReviewItem] = []
     todo = [e for e in mergers if e.key not in lines and e.last_trade.day is not None
             and for_delisting(overrides.merger_terms, e.key) is None and (t := llm_terms.get(e.key)) is not None
-            and (t.stock_ratio or getattr(t, "stock_value", None)) and not clean_ticker(t.acquirer_ticker)
-            and t.acquirer_name]
+            and t.stock_leg and not t.acquirer_ticker and t.acquirer_name]
     if not todo:
         return out, review
     edgar, ftd_client = ctx.clients.edgar, ctx.clients.ftd_client
@@ -1318,7 +1316,7 @@ def _gate(ctx: _RunContext, mergers: list[Delisting], trade_day: dict[DelistingK
     the gate only through the request it answers (`_merger_payouts` works the path
     out from a first pass that reads no answer). A merger whose terms took a
     lagged acquirer close is flagged (`flag`: not in that first pass)."""
-    acq_symbols = {normalize_ticker(t.acquirer_ticker) for t in llm_terms.values() if t.acquirer_ticker}
+    acq_symbols = {t.ticker for t in llm_terms.values() if t.acquirer_ticker}
     acq_symbols |= {normalize_ticker(v["acquirer_ticker"]) for v in overrides.merger_terms.values()
                     if v.get("acquirer_ticker")}
     if acq_symbols:
@@ -1410,7 +1408,7 @@ def _stock_ticker(e: Delisting, llm_terms: Mapping[DelistingKey, Any], overrides
     if given is not None:
         return normalize_ticker(given.get("acquirer_ticker") or "")
     t = llm_terms.get(e.key)
-    return normalize_ticker(t.acquirer_ticker or "") if t is not None and t.stock_ratio else ""
+    return t.ticker if t is not None and t.stock_ratio else ""
 
 
 def _line_wins(mergers: list[Delisting], lines: Mapping[DelistingKey, _AcquirerLine], llm_terms: Mapping[DelistingKey, Any],
@@ -1518,7 +1516,7 @@ def _answered_paths(mergers: list[Delisting], overrides: Overrides, llm_terms: M
     for e in mergers:
         got = overrides.acquirer_prices.get(e.key)
         t = llm_terms.get(e.key)
-        asked = price_tickers.get(e.key) or normalize_ticker(t.acquirer_ticker or "" if t is not None else "")
+        asked = price_tickers.get(e.key) or (t.ticker if t is not None else "")
         if got is None or got[0] != asked:
             continue
         line = lines.get(e.key)
@@ -1568,11 +1566,11 @@ def _leg_holders(mergers: list[Delisting], llm_terms: Mapping[DelistingKey, Any]
                  ) -> dict[DelistingKey, dict[str, str]]:
     """Each basket's further legs (ruling R3, sub-plan 5f): the run's security that held the leg's ticker on the
     price date (`acquirer_line.LineIndex.holder`, never the target itself), the leg's own class's ticker as
-    `payout_rule.leg_terms` gives it (CAA 2018's Lennar class B is LEN-B, not the class A's LEN); a leg no security
+    `MergerTerms.legs` gives it (CAA 2018's Lennar class B is LEN-B, not the class A's LEN); a leg no security
     of the run held has none (LGFB's LION and STRZ)."""
     out: dict[DelistingKey, dict[str, str]] = {}
     baskets = [e for e in mergers if e.last_trade.day is not None and (t := llm_terms.get(e.key)) is not None
-               and getattr(t, "is_basket", False)]
+               and t.is_basket]
     if not baskets or sightings is None:
         return out
     index = acquirer_line.LineIndex(securities, sightings, sec_cusips, ftd)
@@ -1580,8 +1578,8 @@ def _leg_holders(mergers: list[Delisting], llm_terms: Mapping[DelistingKey, Any]
         last = e.last_trade.day
         held = {}
         t = llm_terms[e.key]
-        main = price_tickers.get(e.key) or normalize_ticker(t.acquirer_ticker or "")
-        for _, ticker, _ in leg_terms(t, main)[1:]:
+        main = price_tickers.get(e.key) or t.ticker
+        for _, ticker, _ in t.legs(main)[1:]:
             sid = index.holder(ticker, last, next_trading_day(last), exclude=e.sec_id) if ticker else None
             if sid:
                 held[ticker] = sid

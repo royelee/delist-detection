@@ -1,5 +1,6 @@
-from types import SimpleNamespace
+from dataclasses import replace
 
+from delist_detection.llm_merger_extractor import MergerTerms
 from delist_detection.payout_rule import VALUE_RULES, MergerInputs, value_fields
 from lifecycle_tables import ending
 
@@ -7,8 +8,7 @@ LTD = "2014-12-12"       # a Friday: price_date is Monday the 15th
 
 
 def _terms(deal_type="cash_and_stock", cash=None, ratio=None, ticker=None, basis=""):
-    return SimpleNamespace(deal_type=deal_type, cash_per_share=cash, stock_ratio=ratio, acquirer_ticker=ticker,
-                           source="8-K:0001", package_basis=basis)
+    return MergerTerms(deal_type, cash, ratio, None, ticker, "high", "8-K:0001", "", package_basis=basis)
 
 
 def test_a_cash_merger_publishes_its_cash_and_source():
@@ -90,7 +90,7 @@ def test_an_election_that_states_no_package_publishes_only_its_all_cash_alternat
     f = value_fields(r, LTD, MergerInputs(llm=_terms("election", cash=385.0, ratio=5.0611, ticker="BRK-B")))
     assert (f["value_rule"], f["cash_per_share"], f["stock_ratio"], f["price_ticker"]) == ("cash", 385.0, None, "")
     assert f["terms_gate"] == "failed"
-    stock_only = SimpleNamespace(**{**vars(_terms("election", ratio=0.145, ticker="Y")), "stock_value": 61.14})
+    stock_only = replace(_terms("election", ratio=0.145, ticker="Y"), stock_value=61.14)
     f = value_fields(r, LTD, MergerInputs(llm=stock_only))
     assert (f["value_rule"], f["cash_per_share"], f["stock_ratio"], f["price_ticker"]) == ("unknown", None, None, "")
 

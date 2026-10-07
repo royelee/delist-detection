@@ -6,6 +6,7 @@ tests/test_terms_cases.py. Offline."""
 from __future__ import annotations
 
 import json
+from dataclasses import fields, replace
 from datetime import date
 from types import SimpleNamespace
 
@@ -19,9 +20,9 @@ from delist_detection.cik_lookup import CikNameIndex
 from delist_detection.ftd import FtdRow
 from delist_detection.llm_merger_extractor import (LEGACY_VERSION, PROMPT_VERSION, LLMMergerTermsExtractor, MergerTerms,
                                                     StockLeg, electors_only)
-from delist_detection.payout_gate import (DEFAULT_TOL, GATE_SKIPPED, NO_DEFAULT, PACKAGE, gate_payouts, is_package,
+from delist_detection.payout_gate import (DEFAULT_TOL, GATE_SKIPPED, NO_DEFAULT, PACKAGE, gate_payouts,
                                           reconcile)
-from delist_detection.payout_rule import MergerInputs, basket_legs, leg_terms, value_fields
+from delist_detection.payout_rule import MergerInputs, basket_legs, value_fields
 from delist_detection.price_requests import RECEIVED_CLOSE, request_rows
 from delist_detection.sec_stats import SEC_STATS
 from delist_detection.store import DelistingKey
@@ -52,7 +53,7 @@ def _wsc(tmp_path, *, v2=True):
 def test_an_election_that_states_no_default_keeps_the_either_or_reading_of_the_earlier_prompt(tmp_path):
     t = _wsc(tmp_path).extract(_rec("WSC", "2011-07-07"))
     assert (t.cash_per_share, t.stock_ratio, t.acquirer_ticker, t.no_default) == (385.0, 5.0611, "BRK.B", True)
-    assert not is_package(t) and t.election_note.startswith("$385.00 in cash")
+    assert not t.is_package and t.election_note.startswith("$385.00 in cash")
     # the gate reads it as sub-plan 5e did: the stock alternative (a tie goes to stock) settles the row, flagged
     g = gate_payouts([K], {}, {}, {}, {K: t}, {"ABC": 390.0}, {}, lambda ticker, key: 76.5, DEFAULT_TOL)
     assert g.merged_terms[K]["stock_ratio"] == 5.0611 and NO_DEFAULT in g.flags[K]
@@ -98,7 +99,7 @@ def test_a_result_for_the_holders_who_elected_is_flagged_not_the_package():
     assert not electors_only("election", "final_prorated", "became entitled to receive $5.7293 and 0.8357 shares")
     raw = {**V3_JCI, "package_basis": "final_prorated", "quote": nmx, "cash_per_share": 7.29, "stock_ratio": 0.2164}
     t = LLMMergerTermsExtractor._to_terms(raw, _f("C1"))
-    assert is_package(t) and t.no_default and (t.cash_per_share, t.stock_ratio) == (7.29, 0.2164)
+    assert t.is_package and t.no_default and (t.cash_per_share, t.stock_ratio) == (7.29, 0.2164)
 
 
 def test_an_election_alternative_is_never_the_published_package():
@@ -288,17 +289,16 @@ def test_cad_cash_that_states_no_package_is_skipped_against_the_usd_close():
 
 def test_a_stock_leg_with_no_ratio_that_names_no_skip_is_dropped_with_a_flag():
     """The guard behind every shape: a stock leg that reaches the cash+stock check with no number of shares."""
-    t = _v3("stock", None, None, "X", basis="fixed")
+    class _NoSkip(MergerTerms):             # ...an answer whose shape names no skip reason
+        @property
+        def skip_reason(self) -> str:
+            return ""
+
+    t = replace(_v3("stock", None, None, "X", basis="fixed"), cash_currency="")
+    t = _NoSkip(**{f.name: getattr(t, f.name) for f in fields(t)})
     object.__setattr__(t, "stock_value", 1.0)       # has_stock, but a ratio-less leg that skip_reason would name...
-    object.__setattr__(t, "cash_currency", "")
     object.__setattr__(t, "stock_ratio", None)
-    from delist_detection import payout_gate
-    real = payout_gate.skip_reason
-    payout_gate.skip_reason = lambda terms: ""
-    try:
-        g = _g(t)
-    finally:
-        payout_gate.skip_reason = real
+    g = _g(t)
     assert g.flags[K] == ("terms_gate_failed:no_ratio",) and g.dropped["no_ratio"] == 1
 
 
@@ -314,7 +314,7 @@ def test_a_second_class_under_the_main_legs_ticker_takes_its_class_ticker():
     fails rows spell it; the class A's price request is not asked twice."""
     t = MergerTerms("stock", None, 0.885, "Lennar", "LEN", "high", "8-K:x", "", acquirer_share_class="A",
                     extra_legs=(StockLeg(0.0177, "Lennar", "LEN", "B"),), package_basis="fixed")
-    assert leg_terms(t, "LEN") == [(0.885, "LEN", "A"), (0.0177, "LEN-B", "B")]
+    assert t.legs("LEN") == [(0.885, "LEN", "A"), (0.0177, "LEN-B", "B")]
     r = ending("CAA", "2018-02-20", ltd="2018-02-09", method="assumed_par", last_trade_close="40")
     rows = basket_legs(r, "2018-02-09", MergerInputs(llm=t, acquirer_sec_id="BBG0LEN", leg_sec_ids={"LEN-B": "BBG0LENB"}))
     assert [(x["leg"], x["share_class"], x["price_ticker"], x["price_sec_id"]) for x in rows] == [
@@ -328,7 +328,7 @@ def test_a_preferred_unit_leg_is_not_priced_as_the_common_units():
     t = MergerTerms("cash_and_stock", 12.38, 0.0913, "Brookfield Asset Management", "BAM", "high", "8-K:x", "",
                     acquirer_share_class="A", package_basis="fixed",
                     extra_legs=(StockLeg(0.0657, "Brookfield Property Partners L.P.", "BPY", "preferred unit"),))
-    assert [x[1] for x in leg_terms(t, "BAM")] == ["BAM", ""]
+    assert [x[1] for x in t.legs("BAM")] == ["BAM", ""]
 
 
 def test_two_legs_never_share_a_price_request_key():
@@ -391,7 +391,7 @@ def test_an_answer_that_is_no_json_object_counts_degraded_and_is_not_cached(tmp_
 
 def test_package_basis_none_is_kept_as_none():
     t = LLMMergerTermsExtractor._to_terms({**V3_JCI, "package_basis": "none"}, _f("C1"))
-    assert t.package_basis == "none" and not is_package(t)
+    assert t.package_basis == "none" and not t.is_package
 
 
 # --- the completion rule's role check ----------------------------------------------------------------------------

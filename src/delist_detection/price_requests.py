@@ -22,7 +22,6 @@ from datetime import date
 from pathlib import Path
 from typing import Any, NamedTuple
 
-from .observations import normalize_ticker
 from .reconstruction import OverrideFileError, for_delisting
 from .store import PRICE_REQUEST_COLUMNS, DelistingKey
 from .trading_calendar import next_trading_day
@@ -60,10 +59,9 @@ def stock_legs(endings: Sequence[Mapping[str, str]], llm_terms: Mapping[Delistin
         if for_delisting(merger_terms, key):
             continue
         t = llm_terms.get(key)
-        ticker = price_tickers.get(key) or (normalize_ticker(t.acquirer_ticker) if t is not None and
-                                            t.acquirer_ticker else "")
+        ticker = price_tickers.get(key) or (t.ticker if t is not None else "")
         # a stock leg stated as a dollar value (PCYC) asks the acquirer's close too (sub-plan 5f)
-        if t is not None and (t.stock_ratio or getattr(t, "stock_value", None)) and ticker:
+        if t is not None and t.stock_leg and ticker:
             out[key] = (ticker, acquirer_ids.get(key, ""))
     return out
 

@@ -18,7 +18,7 @@ from delist_detection.llm_merger_extractor import (PROMPT_VERSION, LLMMergerTerm
                                                     StockLeg)
 from delist_detection.payout_extractor import _collect
 from delist_detection.payout_gate import (DEFAULT_TOL, ELECTION_CASH, GATE_SKIPPED, PACKAGE, gate_payouts,
-                                          reconcile, skip_reason)
+                                          reconcile)
 from delist_detection.payout_rule import MergerInputs, basket_legs, value_fields
 from delist_detection.price_requests import RECEIVED_CLOSE, request_rows, stock_legs
 from delist_detection.sec_stats import SEC_STATS
@@ -227,7 +227,7 @@ def test_without_a_last_close_a_package_of_stock_replaces_the_regex_cash():
 def test_a_non_usd_cash_leg_is_skipped_by_the_gate_with_a_flag():
     """THI 2014: C$65.50 + 0.8025 QSR against a USD close; the library has no FX source (R5)."""
     t = _v3("election", 65.5, 0.8025, "QSR", basis="default", currency_code="CAD")
-    assert skip_reason(t) == "CAD"
+    assert t.skip_reason == "CAD"
     g = _gate(t, close=85.92, price=35.46)
     assert K not in g.merged_terms and g.flags[K] == (f"{GATE_SKIPPED}CAD",) and g.dropped["skipped"] == 1
     r = reconcile(None, 85.92, _v3("cash", 65.5, currency_code="CAD"), None, DEFAULT_TOL)
@@ -438,12 +438,13 @@ def test_an_unsure_one_for_one_answer_with_no_share_count_is_passed_over(tmp_pat
 def test_a_spelled_out_null_ticker_is_no_ticker(spelled):
     """GRUB 2021: the terms' acquirer ticker "NULL" is no ticker: the gate reports `no_acq_ticker`, never a price
     missing for a symbol called NULL, and the extractor reads it as none."""
-    from delist_detection.payout_gate import clean_ticker
+    from delist_detection.llm_merger_extractor import clean_ticker
     asked = []
     t = MergerTerms("stock", None, 0.35, "Just Eat Takeaway.com", spelled, "high", "8-K:x", "")
     g = gate_payouts([K], {}, {}, {}, {K: t}, {"ABC": 10.0}, {}, lambda ticker, key: asked.append(ticker),
                      DEFAULT_TOL)
     assert g.flags[K] == ("terms_gate_failed:no_acq_ticker",) and asked == [] and clean_ticker(spelled) == ""
+    assert t.acquirer_ticker is None and t.ticker == ""          # the answer itself holds no ticker
     assert LLMMergerTermsExtractor._to_terms({**V3_JCI, "acquirer_ticker": spelled}, _f("C1")).acquirer_ticker is None
     assert clean_ticker(" JET ") == "JET"
 
