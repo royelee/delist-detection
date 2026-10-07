@@ -28,7 +28,7 @@ A deepening moves behaviour behind a smaller interface. It changes nothing the l
 |---|---|---|---|
 | 1 | Stage 8 as one merger value module, with the price request round trip (review 1, 2) | | done |
 | 2 | One issuer record over EDGAR with the failed-read policy (review 4) | the handoff stage's uncaught read | done |
-| 3 | One owner for rewriting an ending (review 3) | AZPN's stale flags | |
+| 3 | One owner for rewriting an ending (review 3) | AZPN's stale flags | done |
 | 4 | The last trade date as one module (review 5) | CNB, IMB, SPNV | |
 | 5 | history owns where a security's history ends (review 6) | | |
 | 6 | A security's identity behind security_master (review 7) | | |
@@ -223,3 +223,102 @@ layout (16) comes last, once steps 8 and 13 have made the pure leaf modules.
   - `tests/test_issuer_record.py` proves it with a FakeEdgar whose read of the successor issuer's filings fails.
     The run completes. The same scenario on the base code stops with `ConnectionError`.
   - The replay refuses no request, so it changes no row.
+
+### Step 3: one owner for rewriting an ending
+
+- **The module is `rewrites.py`: functions over the in-memory `Delisting`, not methods on it and not a run object.**
+  The interface is `continuation`, `security_goes_on`, `mark_going_on` and `reclassify`, plus the readings
+  `awaits_successor`, `is_real_ending`, `rewrite_by`, `successor_by` and `successor_note`. `Delisting.set_successor` is
+  gone. The finder, stages 8b, 9, 9b and 9e and the clip check call it; no stage edits `crsp_code`, `bucket`,
+  `successor_sec_id` or a continuation's flags itself.
+  - Alternative: methods on `Delisting` in delistings.py, or a per-run `Rewriter` holding the merger values.
+  - Cost if wrong: callers pass the merger values themselves (`payouts=`). A merger made a continuation without them
+    raises, so a forgotten drop fails loudly instead of leaving stale reads. delistings.py stays the finder.
+- **The rules are a closed set of nine (`Rule`).** `ISSUER_MOVE` (finder R7), `CONTINUED` (the finder's continued
+  transfer), `TRADES_ON` (the clip check), `R1` (8b), `LINE_FOLLOW` and `SUCCESSOR_LINK` (9), `HANDOFF` (9b),
+  `PLAN_BANKRUPTCY` and `PRICE_DEFICIENCY` (9e). `SUCCESSOR_LINK` covers the in-run, terms, own-registration and
+  8-K12B links; the rewrite's `how` names which.
+  - Alternative: one rule per link source.
+  - Cost if wrong: the rule is coarser than the link; `how` carries the rest, as the reason always did.
+- **One rule for every continuation, R1's: no no-evidence default, no `successor_unknown`, no payout or terms-gate
+  flag (`PAYOUT_FLAGS`, matched by name) and no payout read (one `MergerValues.drop`).** Any kind leaving `unknown`
+  drops the no-evidence default. A security that goes on keeps its kind and value (WRK, DIS mergers stay mergers).
+  - The payout reads are the whole merger value: a continuation the handoff stage makes from a merger loses
+    delistings.csv's `acquirer_sec_id`, `acquirer_ticker`, `stock_ratio`, `acquirer_price`, `payout_source` and raw
+    payout columns, and its payouts.csv row. That is 18 rows, not the 5 the review counted by flag: 13 of them
+    carried the one-for-one LLM terms and raw reads but no stale flag.
+  - Alternative: drop the flags only, or the reads only on rows that also had a stale flag.
+  - Cost if wrong: a reader of a continuation's payout columns finds them blank. Its DLRET is 0 whatever they say
+    (`dlret`, `handling`, `bmp_correction` ignore them for a transfer), and the contract published no value for it
+    already. Keeping them would leave R1 and the handoff with two rules again.
+- **`PAYOUT_FLAGS` names every flag stage 8 raises**, three more than 8b's old set (`terms_gate_skipped`,
+  `llm_election_package`, `election_no_default`). They live on the merger value, dropped with it, so the wider set
+  changes no row. `acquirer_close_lagged` is the one stage 8 writes onto the delisting's own flags.
+- **Typed provenance is `Delisting.rewrites: list[Rewrite]`** (rule, kind before, successor, how, evidence, a
+  handoff's `successor_from`). It replaces `evidence["successor_by"]`, `evidence["r1"]` and `evidence["handoff"]`.
+  Stage 9c's cap reads `successor_from`; the issuer-role harness reads `successor_by`. Never a column.
+  - Alternative: typed fields on `DelistRecord`.
+  - Cost if wrong: none to output. `DelistRecord` is the published record the handling side shares; provenance on it
+    would invite a column.
+- **The finder's `form25_*` review items carry the Form 25 typed (`review_triage.FilingRef`, `ReviewItem.filing`).**
+  The handoff stage takes the ambiguous Form 25's form, accession and filing date from it (its regex over the reason
+  is gone, and so is its "delist date less 10 days"), and stage 9d drops an owned Form 25's items by
+  `filing.accession` (the OKE fix's reason split is gone).
+  - Alternative: keep parsing the reason.
+  - Cost if wrong: an item built by hand without `filing` is invisible to both readers; the tests' items carry one.
+- **The order is enforced by structure: the clip check's marking is stage 9b's first step (`_handoffs` calls
+  `mark_going_on` before `apply_handoffs`), its only call site.** `_run` no longer computes the first starts and
+  endings; `_handoffs` takes `added` and computes them. Stage 9 now records its own links (`_find_successors` ends
+  with `_link_successors`), so `_run` calls it once.
+  - Alternative: a token from the marking that `apply_handoffs` requires, or a state flag.
+  - Cost if wrong: a future stage between 9 and 9b that sets successors must run before `_handoffs`. The marking moved
+    after the pair search inside 9b; the search reads no successor, and the replay shows no row moved by it.
+- **The handoff stage's new row is built with no kind and made a continuation by the same rewrite** (`_continue`), so
+  every continuation the stage makes has one path. Its `Rewrite.was_bucket` reads `unknown`.
+  - Alternative: a row constructor in `rewrites.py`.
+  - Cost if wrong: provenance only; a written row says it was `unknown`.
+- **Constants defined once.**
+  - `crsp_codes.CONTINUATION_CODE` (304) replaces the literals in classifier, end_of_era and the finder and
+    `handoffs.CONTINUATION_CODE`. It lives in the code table: the classifier and the resolver are not rewrites.
+  - The reason protocol lives with its writer, end_of_era: `CONTINUED_FILINGS`, `CONTINUED` built from it, and
+    `RESOLVED_FROM_CONTINUED_FILINGS`. lifecycle's copies are gone, and end_of_era's EdgarSubmission import is
+    type-only, so the finder, 9g, verdict, verdict_rules and scorecard import a pure leaf. This removes the
+    classification-to-measurement import for these two.
+  - The flags a continuation rule leaves (`r1_continuation`, `line_continuation`, `handoff_continuation`) and
+    `successor_unknown` live in rewrites; the classifier's own R1 flag reads the same constant.
+  - The "; successor by X" note is `successor_note`, used by 8b, 9 and 9b.
+  - Cost if wrong: none to output; the published strings are byte-identical.
+- **The table predicates have one definition, in exit_kind: `is_real_ending(row)` and `is_continuation(row)`.**
+  contract, lifecycle, verdict, verdict_rules, scorecard and audit read them. The in-memory reading is
+  `rewrites.is_real_ending(d)` (5b, 9d, the clip check).
+  - Left: `continuation_evidence.needs_filing`/`needs_doubt_check` keep their scalar tests and their reading of the
+    reason (stage 9g reads the same strings as the verdict; step 7 owns the R1 reading).
+- **verdict.py's by-name workaround is removed** (`not successor_registration` on the `no_evidence_default` line), and
+  verdict_rules' docstring no longer names GOOGL. GOOGL's and GOOG's verdicts stay confirmed in the replay.
+  - The verdict real-case fixture's GOOGL row is the fixed one now (its `no_evidence_default` and its review row
+    removed). The two verdict_rules tests of the workaround became tests of the rows as the library now writes them.
+  - Cost if wrong: an offline recompute over an output written before this fix raises `no_evidence_default` on
+    GOOGL and GOOG. The scorecard reads `uncertain.csv` as written, so the committed output's floor test is untouched.
+- **Left as they were.** The ticker takeover's `ticker_successor_sec_id` (not a kind or successor change) and the
+  handoff's last-trade edits (step 4) stay in handoffs. The classifier's own edits of the end-of-era verdict (rule 6,
+  branch 5b, R6b) are not rewrites.
+- **Tests.** `tests/test_rewrites.py` holds 14 tests at the interface, one per rule and each declared change. Of the 21
+  whole-run tests that swap `pipeline.DelistingFinder`, none checks only a rewrite rule (they test the clip, stage 8,
+  the successor search, the finder's context, triage, prefetch and provenance), so all stay. The four
+  `_mark_continuing_delistings` tests: three now test the clip check (`_delisting_endings`) alone, and the
+  "never overwrites" one moved to test_rewrites. The issuer-role harness calls stage 8b and stage 9 directly, reads
+  `rewrites.successor_by`, and lost its `inspect.signature` and `getattr` workarounds.
+- **The declared defect: a continuation carries no stale flag and no payout read.** The replay changes exactly these
+  rows, all from the handoff stage's continuations (`Rule.HANDOFF`):
+  - payout and terms-gate flags and payout reads: AZPN 2022;
+  - `acquirer_close_lagged` and payout reads: AVGO 2016, ENDP 2014, NE 2009, ACT 2013;
+  - payout reads only (the one rule's "no payout reads"): CI 2018, FCE-A 2016, ARRS 2016, MRVL 2021, QDEL 2022,
+    BG 2023, SPB 2018, APO 2022, AVGO 2018, NCNO 2022, FERG 2024, DKNG 2022, ICE 2013;
+  - `no_evidence_default`: GOOGL 2015, GOOG 2015.
+  - Cascades: payouts.csv loses the 18 merger rows; review.csv loses AZPN's, GOOGL's and GOOG's `check` rows (their
+    other flags are info); review_summary.csv's counts follow (no_evidence_default's row goes; payout_gate_failed
+    10 to 9, terms_gate_failed 20 to 19, acquirer_close_lagged 46 to 42, handoff_continuation in review 7 to 4,
+    last_trade_date_unconfirmed in review 34 to 33); the manifest's review counts (check 536 to 533, info hidden 601
+    to 604); scorecard.json's R1.4.review_rows 592 to 589 and R1.4.review_securities 411 to 409 (so the
+    R1.4.review_rows drop against the floor of 591 clears). uncertain.csv and the contract are unchanged; no `D.*`
+    value moves.

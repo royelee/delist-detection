@@ -44,6 +44,10 @@ _Avoid_: ticker reuse (a reuse years later is no handoff)
 **Continuation**:
 A handoff in which the holders' shares became the new security's one for one: a holding-company reorganization, a redomicile, a rename or a share reclassification (AON 2020, Liberty's 2023 reclassification). The old security gets an `exchange_transfer` delisting with a zero return, and the new one is its successor.
 
+**Rewrite**:
+A later rule's change of a delisting's kind or successor after the delisting finder classified it, named by the rule that decided it: the issuer moving the class, the security going on, R1, the line follow, a successor link, a handoff, a bankruptcy plan, a price deficiency (`rewrites.py`). A rewrite into a continuation drops what a continuation cannot carry: the no-evidence default, the open successor, and the merger's payout reads and gate flags. A security that goes on is its own successor and keeps its kind.
+_Avoid_: override, relabel (the end-of-era resolver's relabel happens before the delisting is built)
+
 **Ticker takeover**:
 A handoff in which another, already trading security takes the ticker over, typically an acquirer that renames itself after its target (II-VI as Coherent Corp on COHR, Eldorado as Caesars on CZR). The target keeps its own delisting (a merger); the taker is recorded as `ticker_successor_sec_id`, never as a successor, since the ticker's price series before the handoff is the target's, not the taker's.
 

@@ -106,9 +106,9 @@ or issuer changes),
 `_check_overrides`, `_last_trade_closes` (stage 7: a `--last-trade-closes` row, else the caller's answer to the
 delisting's `last_close` request, `price_requests.PriceAnswers`, else the fails close), `_merger_values` (stage 8:
 one call into `merger_value.value_mergers`, which answers one `MergerValue` per merger ending; the module map has
-its steps), `_r1_continuations` (stage 8b: a merger whose published terms are one share and no cash, whose registrant's filings say the same of its own shares (`exchange_terms.own_exchange`), into a new issuer at most `NEW_ISSUER_DAYS` old or the same issuer (`successors.successor_by_terms`, else the new issuer's 8-K12B), is an exchange transfer to that successor, flagged `r1_continuation`, its payout reads dropped; the LLM's final terms must agree; the new issuer is named by the R1 statement's target (the name tie, below), its 8-K12B candidate included; a degraded read keeps the merger and flags the row; the run logs `role refusal: N rows (...)`, the delistings whose end-of-era reading refused a merger on the registrant's role; metered as "R1 continuations"),
+its steps), `_r1_continuations` (stage 8b: a merger whose published terms are one share and no cash, whose registrant's filings say the same of its own shares (`exchange_terms.own_exchange`), into a new issuer at most `NEW_ISSUER_DAYS` old or the same issuer (`successors.successor_by_terms`, else the new issuer's 8-K12B), is an exchange transfer to that successor, flagged `r1_continuation`, its payout reads dropped (`rewrites.continuation`, `Rule.R1`, with the run's merger values); the LLM's final terms must agree; the new issuer is named by the R1 statement's target (the name tie, below), its 8-K12B candidate included; a degraded read keeps the merger and flags the row; the run logs `role refusal: N rows (...)`, the delistings whose end-of-era reading refused a merger on the registrant's role; metered as "R1 continuations"),
 `_find_successors` (stage 9, with sub-plan 5c's `_terms_links` before the 8-K12B search: the same issuer's class, a new issuer, or the security's own same-CIK 8-K12B line via OpenFIGI and R2; a name tie for any 8-K12B link; sub-plan 5h: `_own_registration_link` takes a text-named CUSIP with no fails row
-yet when the fails data ends before the day, OKE 2026: the added successor starts on the next trading day, and a Form 25 that already owns a delisting of the run raises no unmatched row in stage 9d), `_handoffs`, `_date_from_notices` (stage 9c: a handoff continuation row's last trade day from its own Form 25's confirmed EX-99.25 notice, when before the successor's first sighting and no later than the effective date; metered as "handoff notice dates"), `_successor_endings` (stage 9d: the Form 25 search, matches only, for the line and 8-K12B successors the run added; metered as "successor endings"), `_distress` (stage 9e,
+yet when the fails data ends before the day, OKE 2026: the added successor starts on the next trading day, and a Form 25 that already owns a delisting of the run raises no unmatched row in stage 9d; the stage ends by recording its links as rewrites, `_link_successors`), `_handoffs` (stage 9b: first `rewrites.mark_going_on`, the clip check's merger or transfer that does not end its security goes on as itself, here and only here, so the handoffs see it; then the handoffs), `_date_from_notices` (stage 9c: a handoff continuation row's last trade day from its own Form 25's confirmed EX-99.25 notice, when before the successor's first sighting, the handoff rewrite's typed `successor_from`, and no later than the effective date; metered as "handoff notice dates"), `_successor_endings` (stage 9d: the Form 25 search, matches only, for the line and 8-K12B successors the run added; the finder's items about a Form 25 that already owns a delisting are dropped by their typed `ReviewItem.filing`; metered as "successor endings"), `_distress` (stage 9e,
 sub-plan 5g: for each liquidation, compliance-failure or unknown delisting with no successor, a bankruptcy plan's
 stock rule (R6), a price-only removal's code 552, and the OTC symbol of its first off-exchange print, anchored on the
 last trade day stage 5 dated; `distress.DistressTerms` for the contract; metered as "distress notices"; at stage 10a a
@@ -118,10 +118,11 @@ through its own request, `PriceAnswers.ending_values`), then the row builders (s
 now hold one FIGI line is a `contract/id_changes.csv` rename, across a class label), each with explicit
 inputs and outputs and the run-wide `_RunContext` (clients, run date, log,
 workers, SEC meter `manifest.StageMeter`). Each stage returns what it produces
-(`_Successors` for stage 9, for instance) and `_run` combines the answers
-(`_link_successors` records the successors on the delistings). Helpers that
+(`_Successors` for stage 9, for instance) and `_run` combines the answers. Every change of an ending's kind or
+successor after the finder built it is a rewrite (`rewrites.py`), never a stage's own field edit. Helpers that
 belong to one kind of data live with it, not in `pipeline.py`:
 `issuer_record.py` (every stage's reads of an issuer's EDGAR record, `Clients.issuers`, and their failure policy),
+`rewrites.py` (an ending's kind, successor, flags and provenance after it is built),
 `degraded.py` (the `resolution_degraded` rows and flags), `ftd.close_age`,
 `review_triage.merge_review_rows`, the era review rows in `security_master`.
 See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
@@ -357,7 +358,9 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   before), `apply_handoffs` (a continuation's missing `exchange_transfer` row
   or its successor, `handoff_continuation`/`handoff_rebucketed`/
   `handoff_conflict`; a takeover's `ticker_successor_sec_id` or
-  `handoff_takeover_no_delisting`; a rule-6 merger, sub-plan 5f, stands as a `handoff_conflict`),
+  `handoff_takeover_no_delisting`; a rule-6 merger, sub-plan 5f, stands as a `handoff_conflict`; every continuation,
+  the row it writes included, is `rewrites.continuation` with `Rule.HANDOFF`, a rewritten merger's value dropped from
+  `payouts=`; the ambiguous Form 25 is the finder's item's typed `filing`),
   `drop_resolved_shared`. Run by
   `pipeline._handoffs` after the successor search, before the history rows.
 - `line_follow.py` — sub-plan 5a, pure: a security's line across a CUSIP or ticker change. `candidate_steps` (the
@@ -462,6 +465,23 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   acquisition", "Merger Sub merged with and into", "the closing of the transactions on D", "the evening of D", an
   effective time with a clock time; the trading day before when every clock time that day is before 9:30 a.m.):
   source `closing_day` (`CLOSING_DAY`), never published.
+- `rewrites.py` — architecture step 3: the one owner of a delisting's kind and successor after its record is built.
+  Every rewrite names its rule (`Rule`, a closed set: `ISSUER_MOVE` the finder's R7, `CONTINUED` the finder's continued
+  transfer, `TRADES_ON` the clip check at stage 9b's start, `R1` stage 8b, `LINE_FOLLOW` and `SUCCESSOR_LINK` stage 9,
+  `HANDOFF` stage 9b, `PLAN_BANKRUPTCY` and `PRICE_DEFICIENCY` stage 9e) and is recorded as typed provenance on the
+  delisting (`Delisting.rewrites`, one `Rewrite` each: the kind before, the successor, how it was found, the evidence,
+  a handoff's `successor_from`). `continuation(d, successor, rule, ...)` sets CRSP `crsp_codes.CONTINUATION_CODE` (304)
+  and the bucket together and drops what a continuation cannot carry, one rule for all: `no_evidence_default`,
+  `successor_unknown` (`SUCCESSOR_UNKNOWN`), every payout or terms-gate flag (`PAYOUT_FLAGS`: `payout_gate_failed:*`,
+  `terms_gate_*`, `acquirer_close_lagged`, ...) and the merger's value (one `MergerValues.drop` call through
+  `payouts=`; a merger made a continuation without it raises). `security_goes_on(d, rule)` makes the security its
+  own successor and keeps the kind and value (WRK, DIS); `mark_going_on(delistings, endings)` is the clip check's,
+  filling only a blank successor; `reclassify(d, code, rule, ...)` any other kind (470, 552), a kind leaving
+  `unknown` dropping the no-evidence default. Readings: `awaits_successor`, `is_real_ending` (in memory; the tables'
+  is `exit_kind.is_real_ending`), `rewrite_by`, `successor_by`; `successor_note` is the reason's one wording of how a
+  successor was found ("; successor by same ticker"). The classifier's own edits of the end-of-era verdict before it
+  builds the record (rule 6, branch 5b, R6b) are no rewrites. Its rules are tested at its interface
+  (`tests/test_rewrites.py`).
 - `delistings.py` — `DelistingFinder.find()`: lists an issuer's Form 25s,
   matches and groups them into one delisting per removal (chained within
   `SAME_EVENT_DAYS` of the group's earliest filing, across exchanges), dates
@@ -498,7 +518,10 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   runs under an involuntary (b) Form 25 (it follows the suspension by weeks: TMA); a no-Form-25 merger fallback
   takes the closing day its latest 2.01/5.01 8-K near the last sighting states (FCL, SGP 2009), never after the
   last sighting. Sub-plan 5h: `SecurityContext.has_cusips`: a security with no CUSIP gets no continued-filings
-  ending dated by its last sighting alone (`ended_without_delisting` instead: WW 2013, NCRA 2013).
+  ending dated by its last sighting alone (`ended_without_delisting` instead: WW 2013, NCRA 2013). The finder's R7 and
+  its continued transfer's successor are rewrites (`rewrites.continuation`, `security_goes_on`); each `form25_*` review
+  item carries the Form 25 typed (`review_triage.FilingRef`, `ReviewItem.filing`): the handoff stage and stage 9d read
+  its form and accession there, never from the reason.
 - `distress.py` — sub-plan 5g's pure readers for drop and bankruptcy endings: `otc_symbol_from_fails` (the
   security's own CUSIPs' fails rows after the last trade: the exchange symbol when its rows before any other symbol,
   leaving out those at the settled last close (the first own row's price), span more than `OTC_SETTLE_DAYS` (10) at
@@ -547,14 +570,16 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   570; (5b, sub-plan 5g) a 3.01 8-K announcing a liquidating distribution, trust or plan of liquidation or
   dissolution → liquidation 400 (EQC 2025), read by `classifier._liquidation_notice` only when branch 6 would
   decide; (6) else today's continued-filings transfer (304), its reason string
-  unchanged (`lifecycle.CONTINUED_FILINGS` is its prefix). EDGAR evidence only.
+  unchanged. The reason protocol the published column carries is defined here once and read from here
+  (`CONTINUED_FILINGS`, the prefix of `CONTINUED`; `RESOLVED_FROM_CONTINUED_FILINGS`, a relabel's suffix: the finder,
+  stage 9g, the verdict and the scorecard). EDGAR evidence only.
   Tried only where the continued-filings rule fires. Sub-plan 5c, rule 1: branches 3 and 4 never fire when
   `EraSignals.survived` holds (the classifier found no exchange of the registrant's own shares, and an acquirer's
   or a distributor's statement); `merges` says when they would.
 - `crsp_codes.py` — the truth table: `DLST_CODE_TO_BUCKET` plus a leading-digit
   range fallthrough (`2xx→merger`, `3xx→exchange_transfer`, `4xx→liquidation`,
   `5xx→compliance_failure`, `6xx→expiration`). **The bucket — not the exact code
-  — drives all downstream handling.**
+  — drives all downstream handling.** `CONTINUATION_CODE` (304) is every exchange transfer's code, one constant.
 - `payout_extractor.py` — bridges the layers: extracts the per-share **cash**
   merger consideration from EDGAR filing text (network, regex) for the `merger` bucket. Each read carries its
   currency (`PayoutResult.currency`, sub-plan 5f, ruling R5: the letters before its "$", `currency.prefix_currency`).
@@ -616,7 +641,9 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   `ReviewDecisionError` read `data/review_decisions.csv`; `accept_by_flag`/
   `append_decisions` back `scripts/accept_review.py`'s bulk accept.
   `ReviewItem` is a flag raised outside a delisting's own row (the finder's,
-  the security master's and the pipeline's), `.row()` its review row;
+  the security master's and the pipeline's), `.row()` its review row; a finder's
+  item about a Form 25 carries it typed (`filing`, a `FilingRef`: form, accession,
+  filing date), never written;
   `merge_review_rows` joins rows that share a key. Called by `pipeline.run()`
   just before the write; never touches `delistings.csv`.
 - `degraded.py` — answers that rested on a failed request or a stale copy:
@@ -714,7 +741,9 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   (a code-470 bankruptcy is `dropped` for `bankruptcy`; `unknown` asserts none; a compliance failure the exchange
   removed for a price deficiency only, its Form 25 notice, else its 3.01 items, carries CRSP 552, drop reason
   `price`, from stage 9e, and an issuer's own Form 25 changes nothing: sub-plan 5g). The contract, the golden judge
-  and the scorecard all read through it.
+  and the scorecard all read through it. The one definition of the row predicates every table reader asks:
+  `is_real_ending` (the successor is not the security itself) and `is_continuation` (a successor other than itself):
+  contract, lifecycle, verdict, verdict_rules, scorecard and audit.
 - `contract.py` — the contract's rows (spec "The contract", decisions 6, 7, 9, 10, 12), written under
   `output/contract/` beside today's tables for one release: `security_history_rows` (ticker ranges split where
   the issuer in force changes), `delisting_rows` (one per ended security, its last), `seed_rows` (the seed
@@ -1029,6 +1058,12 @@ conflate them.
   Form 25 solely about rights or about another tracking group is not the common's. The matched Form 25's notice
   outranks the continued-filings default when it says the class was acquired, and a later SEC revocation never
   decides its row.
+- **An ending's kind and successor change after the finder built it only by a rewrite (`rewrites.py`).** Each names
+  its rule and is recorded typed on the delisting (`Delisting.rewrites`; never a column). A continuation carries no
+  `no_evidence_default`, no `successor_unknown`, no payout or terms-gate flag and no payout read: a merger the handoff
+  stage or R1 makes a continuation loses its merger value (`MergerValues.drop`: delistings.csv's payout, acquirer and
+  raw payout columns go blank and payouts.csv has no row for it). A security that goes on (its own successor) keeps
+  its kind and value. The clip check's marking (`rewrites.mark_going_on`) runs once, as stage 9b's first step.
 - **An ending's kind follows the registrant's role and R1 (sub-plan 5c).** A registrant whose filings state no
   exchange of its own shares, and that acquired another party or distributed another company's shares, gets no
   merger from end-of-era branches 3 and 4. A one-for-one exchange with no cash (a special dividend is no cash) is a
