@@ -55,7 +55,7 @@ one observation per row per file).
               │  order, strict-validated   │   5. era name → EDGAR company search
               │                            │   6. EFTS 8-K frequency rank
               │  second pass, never saved  │   the rest: 8-K frequency through guard G,
-              │  (infer_issuers)           │   else a shared CUSIP or a CUSIP handoff
+              │  (identity.EraIssuers)     │   else a shared CUSIP or a CUSIP handoff
               └─────────────┬──────────────┘
                              │ FigiResolver.resolve_many (OpenFIGI, per era)
                              ▼
@@ -477,11 +477,11 @@ target rather than an acquirer.
    in strict mode (must have Form 25/15 in window AND no 10-K/Q in the
    five years after `delist + 90d` — the latter rejects the acquirer).
 
-**The second pass** (`TickerResolver.infer_issuers`, after the memo is
+**The second pass** (`identity.EraIssuers.infer`, after the memo is
 flushed). A renamed issuer files no Form 25 and keeps filing 10-Ks, so tier 6
 rejects it, and the company search sees only today's name. The eras left with
 no CIK and no pin, with at least 3 fails rows of their own
-(`security_master.era_rows`, `era_last_seen`'s row choice from the first
+(`identity.era_rows`, `era_last_seen`'s row choice from the first
 observation to the last sighting), are answered in era-key order, and the
 answers are never saved (they depend on the run's other eras). A candidate CIK
 must pass **guard G**: it existed by the era's first fails row, every row's

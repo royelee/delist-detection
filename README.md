@@ -987,8 +987,9 @@ src/delist_detection/
     nasdaq_halts.py        Nasdaq code-D halt feed: last-trade confirmation
     openfigi.py            OpenFIGI /v3/mapping and /v3/filter client
     figi_resolution.py     Pure rules: OpenFIGI answer → one US composite FIGI or placeholder
+    identity.py            Stages 1-4: era splits, issuer passes, FIGI resolution, securities
     ticker_resolver.py     6-tier ticker→CIK resolver with strict/loose validation
-    security_master.py     Era splits, FigiResolver, build_securities, era review rows
+    security_master.py     FigiResolver and its guards, build_securities, era review rows
     history.py             Sightings, ticker_history / cusip_history ranges and rows, range review
     added_securities.py    AddedAcquirer / AddedSuccessor: securities the run adds, with their one history row
     form25.py               Form 25 parsing, exchange/class labeling, security matching
@@ -1119,7 +1120,7 @@ Tiers 3–6 take only a company that had filed by the era's first sighting,
 also when the answer comes from the resolver cache.
 
 A renamed issuer files no Form 25 and keeps filing 10-Ks, so tier 6 rejects
-it. A **second pass** (`TickerResolver.infer_issuers`) answers the eras left
+it. A **second pass** (`identity.EraIssuers.infer`) answers the eras left
 with no CIK and no pin, from the run's own evidence, and never saves its
 answers: the 8-K frequency candidate that alone passes guard G and carried
 the era's name at its last sighting (`efts_frequency_renamed`: KORS@2014 →

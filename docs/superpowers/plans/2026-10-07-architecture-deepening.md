@@ -31,7 +31,7 @@ A deepening moves behaviour behind a smaller interface. It changes nothing the l
 | 3 | One owner for rewriting an ending (review 3) | AZPN's stale flags | done |
 | 4 | The last trade date as one module (review 5) | CNB, IMB, SPNV | done |
 | 5 | history owns where a security's history ends (review 6) | | done |
-| 6 | A security's identity behind security_master (review 7) | | |
+| 6 | A security's identity behind one interface, `identity.py` (review 7) | | done |
 | 7 | The line follow owns its rounds; one R1 reading per ending (review 8) | | |
 | 8 | One run snapshot; one reading of a delistings row (review 9) | | |
 | 9 | The truth set and the loop round as two modules (review 10) | | |
@@ -576,3 +576,100 @@ Decisions made in the step:
   ranges, so a change to the AON rule (or anything else that decides a security is listed today) shows in no replay
   row. The interface tests and the AON handoff run are the only guard. Step 8 (one run snapshot) or a later replay
   could record stage 5's raw listed answers instead.
+
+### Step 6: a security's identity (stages 1 to 4) behind one interface
+
+- **The module is a new `identity.py`, not a grown security_master.py.** Its interface is `identify(index, clients,
+  *, as_of, limit, log, workers, meter) -> Identity`. The era helpers moved into it from security_master
+  (`refine_eras` and its split helpers, `era_cusips`, `candidate_cusips`, `era_last_seen`, `era_rows`), so a ticker
+  era is built in two places only, `observations.split_eras` and `identity.refine_eras`, both run by `identify`.
+  security_master keeps `Security`, `EraResolution`, `Issuer`, `FigiResolver` with its guards, `build_securities`, the
+  CUSIP links (`Handoff`, `cusip_handoffs`, `trades_at_switch`) and the review-row builders. Sizes: identity.py 939
+  lines, security_master.py 985 to 793, ticker_resolver.py 1319 to 960, pipeline.py 2065 to 1843.
+  - Alternative: grow security_master (past 1,400 lines), or put the era helpers in their own `eras.py`.
+  - Cost if wrong: one more module. The CUSIP links stay in security_master because `FigiResolver`'s joins read
+    them; identity imports them, never the reverse, so there is no cycle.
+- **`identify` covers stage 4 too** (each security's CUSIPs over its whole life, their fails rows loaded to the run
+  date: `Identity.cusips`). The prompt named `_security_cusips` among the functions to move; it is the last read of
+  who a security is before the line follow.
+  - Alternative: stop at stage 3 and leave stage 4 in pipeline.
+  - Cost if wrong: none to output. `Identity.ftd` is the extended index, so a test that wants stage 1's index alone
+    cannot get it through the interface (the MSG ranges case now reads the extended one and still holds).
+- **The answer is one dataclass with the facts as typed fields and methods.** Fields: `eras`, `era_by_key`, `ftd`,
+  `ftd_lo`, `issuers`, `resolutions`, `securities`, `cusips`, `review`, `tiers`, `rows_decided`. Methods: `tier(era
+  key)`, `resolution_source(security)`, `securities_of(resolutions)` and `renames(resolutions)`. pipeline's
+  `_resolution_source`, `_era_tier`, `_era_renames`, `_IssuerAnswers` and the `TICKER_ROWS` token check are gone.
+  Stage 5's context builder, stage 5 and stage 9d take a `resolution_source` callable, and 10e takes `tier`. Stage 4b
+  takes the `Identity` and rebuilds through `securities_of`; 4c, 5b, 10c2 and 10g read `issuers` and `rows_decided`.
+  - Alternative: pass the whole `Identity` to every later stage.
+  - Cost if wrong: one callable per stage instead of one object. The four real-case harnesses that build a finder
+    context (form25, distress, last trade, issuer role) now pass nothing for it; they used to pass an empty
+    `_IssuerAnswers`, which gave the same default, "security_master".
+- **The era-level passes are `identity.EraIssuers`, public, with their own state.** `check_names` is stage 2b and
+  `infer` the second pass. They were moved word for word from `TickerResolver`, with their constants
+  (`ERA_MIN_ROWS`, `GUARD_NAME_DAYS`, `RENAME_NEAR_DAYS`, `NAME_IN_FORCE`, `TICKER_ROWS`) and types (`InferredIssuer`,
+  `SecondPass`). They read issuers through the run's issuer record. Their state is a per-era failed flag, a per-era
+  `ReadWatch` and `degraded`, a set of era keys. The 21 second-pass rule tests and the two `_renamed_from` tests of
+  `test_resolver_renamed.py` test the class, as
+  step 4's `ticker_taken` stayed public for its unit tests.
+  - Alternative: private passes tested only through `identify`. Rejected: the tests hand each case its first-pass
+    answers and strip pins era by era, and a whole identity run would refine the eras again over a different fails
+    load.
+  - Cost if wrong: identity has two public classes besides its era helpers.
+- **TickerResolver keeps only the memoized lookup, and imports no security_master, observations or ftd.** Its
+  interface, as identity asks it, is `identity.IssuerLookup`: `resolve`, `is_degraded`, `frequency_candidates`,
+  `shadow` and `flush`. The new `frequency_candidates(ticker, day) -> (ranked, failed)` gives the second pass's rule B
+  the 8-K frequency tier and whether its search failed. It leaves the resolver's own `_transient` as it was, and it
+  still goes through `_efts_pre_delist_frequency_ranked`, the patch point of conftest and the tests.
+  - Alternative: the passes own the EFTS query.
+  - Cost if wrong: one method that saves and restores a flag. Two copies of the query would drift.
+- **No capability is probed.** `_name_period_checks`'s `getattr` is gone, so 2b runs for any lookup. `identify` calls
+  `resolver.flush()` directly after the first pass. `tests/identity_cases.CommittedLookup` is a second adapter (it
+  answers by era from the committed run), so the seam is real. `run()`'s own `_flush_memo` on the way out keeps its
+  `getattr`; that is step 11's Clients seam.
+  - Cost if wrong: a lookup double must implement five methods.
+- **A degraded mark of the era-level passes is the era's, not a memo key's.** Before, `_mark_inferred` put the era's
+  memo key (ticker, last sighting, observed name) into the resolver's `_degraded`. That had two side effects.
+  - Two eras that shared the key were both flagged.
+  - A later lookup that hit that memo entry was treated as resting on a failure. Only the memo persistence of a
+    rename built on it could change, and stage 3 is the only reader of `is_degraded`.
+  - Now stage 3 flags an era when the lookup's `is_degraded` says so, or when the era is in `EraIssuers.degraded`.
+  - Alternative: keep marking memo keys.
+  - Cost if wrong: an era that shares another era's memo key, and whose own reads did not fail, is no longer
+    flagged. The replay refuses no request and changes no row.
+- **The wiring is decided inside, once.**
+  - `cusip_handoffs(eras, ftd)` is computed once in `identify` and passed to both `EraIssuers.infer(..., handoffs)`
+    and stage 3. Before, the second pass computed it again. The fails index is not extended between the two, so the
+    links are the same. `infer` still computes the links when no caller gives them (the rule tests).
+  - `foreign_ticker_eras` is given once, to `FigiResolver(foreign=)`. `resolve_many` now guards a foreign era as an
+    unconfirmed one itself; before, the caller also had to union it into `unconfirmed=`.
+  - Alternative: keep both in the caller.
+  - Cost if wrong: a `FigiResolver` caller can no longer give `foreign` without guarding those eras. No caller did.
+- **The three era review-row builders stay in security_master** (`detached_review`, `ticker_unconfirmed_review`,
+  `observation_conflict_review`). `identify` assembles every identity item in the old order.
+  - Alternative: move them into identity.
+  - Cost if wrong: `ticker_unconfirmed_review` reads security_master's private confirm window, so moving it would
+    have made that window public.
+- **CONTEXT.md gains "Identity"**, the concept the module is named after: which security an observation is.
+- **Tests.**
+  - Added: tests/test_identity.py, 9 tests at the interface, one of them moved from test_pipeline (the resolution
+    source). They cover an empty run, a placeholder era's issuer, tier and review items, a degraded lookup answer, an
+    unreadable issuer's names, an unresolved era, a tier for an era never asked, `securities_of` after a fold, and
+    `renames` with its two guards. Also added: test_resolver_renamed's second-pass failed read (the era's own
+    `resolution_degraded`, with a healthy control), and test_resolver_efts's `frequency_candidates`.
+  - Moved to `identify`: test_resolver_renamed's four tests of pipeline privates (each era's own name; the second
+    pass used, flagged and not saved; the CUSIP-handoff wiring, now `test_the_identity_stage_wires_cusip_handoffs_
+    into_the_figi_stage`; the disagreement row).
+  - The disagreement test now asserts both eras' rows. Run whole, rule C also flags LSTR@2012; before, the test
+    built LSTR@2008's disagreement by hand.
+  - The identity harness (tests/identity_cases.py) runs `identify` with `CommittedLookup` in place of the
+    SimpleNamespace resolver fake. `stage3` and `name_checks` keep their names, which the fixture builder calls,
+    and name checks also assert `rows_decided`.
+  - The 21 second-pass rule tests call `EraIssuers.infer`. One passes its links as `handoffs=` instead of
+    monkeypatching `ticker_resolver.cusip_handoffs`.
+  - Gone from the tests, counted at 08259f8: 12 `_IssuerAnswers` builds, 4 `_resolve_securities`, 2
+    `_resolve_issuers` and 1 `_refine` calls, and the `_era_renames` and `_resolution_source` calls. Stage 4b's
+    tests build an `Identity`.
+  - Suite: 3171 passed, 45 xfailed (step 5: 3161).
+- **The gate:** the replay is SAME against `accepted4_out` and refuses no request; its log equals the reference's line for
+  line, apart from the SEC meters (the name checks, the second pass's 76 answers, every FIGI handoff and withdrawal).

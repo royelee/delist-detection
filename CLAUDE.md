@@ -89,8 +89,9 @@ continuation only) and `ticker_successor_sec_id` (a ticker takeover) —
 optional fields the new pipeline (`delistings.py`/`pipeline.py`) fills in
 alongside the original ones. `pipeline.py`'s `run()` is the orchestration
 that turns a list of observations into the nine output tables: a short
-`_run` calls one function per numbered stage (`_refine`, `_resolve_issuers`,
-`_resolve_securities`, `_security_cusips`, `_follow_lines` (stage 4b: each security's line followed past its
+`_run` calls one function per numbered stage (`identity.identify` for stages 1 to 4: the eras, each era's issuer
+and FIGI, the securities and their CUSIPs, one `identity.Identity` whose facts the later stages read;
+`_follow_lines` (stage 4b, over the `Identity`: each security's line followed past its
 observations across a CUSIP or ticker change, `line_follow.py`; the same security takes the new CUSIP and ticker,
 a placeholder folds into the FIGI line its new CUSIP names, a FIGI line with another composite records a line
 successor for stage 9; metered as "line follow"; sub-plan 5h's `_today_holder_fold`: a ticker-tier line whose
@@ -114,7 +115,7 @@ stock rule (R6), a price-only removal's code 552, and the OTC symbol of its firs
 last trade day stage 5 dated; `distress.DistressTerms` for the contract; metered as "distress notices"; at stage 10a a
 plan's `received_close` answer times its ratio is that ending's value and an answered OTC print a drop's, each read
 through its own request, `PriceAnswers.ending_values`), then the row builders (stage 8's records feed 10a, 10c and
-10g: `MergerValues.table_inputs`, `payout_rows`, `contract_inputs` and `requests`) and `_triage`; the contract (stage 10g) takes sub-plan 5h's `_era_renames` too: each placeholder whose eras
+10g: `MergerValues.table_inputs`, `payout_rows`, `contract_inputs` and `requests`) and `_triage`; the contract (stage 10g) takes sub-plan 5h's `Identity.renames` too: each placeholder whose eras
 now hold one FIGI line is a `contract/id_changes.csv` rename, across a class label), each with explicit
 inputs and outputs and the run-wide `_RunContext` (clients, run date, log,
 workers, SEC meter `manifest.StageMeter`). Each stage returns what it produces
@@ -134,7 +135,8 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   splitting on a name mismatch, a pin change, or a gap over `ERA_GAP_DAYS`
   that neither side's name confirms as continuous. `regular_way` maps a when-issued ticker to its regular-way one
   (EHAB-WI is EHAB): `ObservationIndex` groups by it and each era carries it, while each observation keeps the
-  caller's ticker.
+  caller's ticker. The second split, on the fails rows, is `identity.refine_eras`; `identity.identify` is the one
+  place both run.
 - `edgar.py` — throttled, on-disk-cached SEC client. `submissions()`,
   `recent_filings()`, `fetch_filing_text()`/`fetch_filing_raw()` (HTML-stripped
   and raw text caches). Owns `EdgarBlocked`, `resolve_user_agent()`, and
@@ -227,7 +229,10 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   run, any other exception propagates, and a failed, stale (`STALE_KEY`) or self-counted degraded read logs its
   CIK on the reading thread; `watch()` gives a `ReadWatch` (`ciks`, `failed`, and `tripped()`, which also sees any
   other degraded SEC read on the thread) for the `resolution_degraded` rows. A warm pass reads through `shadow()`.
-- `ticker_resolver.py` — `(ticker, as_of_date) → CIK`, 6 strategies in order of
+- `ticker_resolver.py` — the memoized (ticker, date, observed name) → CIK lookup the identity stage asks
+  (`identity.IssuerLookup`: `resolve`, `is_degraded`, `frequency_candidates` (its 8-K frequency tier's candidates
+  and whether the search failed, for the second pass's rule B; its own state left as it was), `shadow`, `flush`);
+  it imports no `security_master`. 6 strategies in order of
   precision (caller's `cik` pin → manual override → `company_tickers.json` →
   EFTS Form-25/15 → observation-name company search → 8-K frequency rank),
   each strict-validated. Every read of an issuer's EDGAR record (names over time, first filing, filings, forms)
@@ -253,11 +258,33 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   one, takes only a company that had filed by then. The
   name search drops EDGAR's nameless multi-company hits and ranks up to 5
   candidates by the words the name shares with their EDGAR names (current
-  and former). `infer_issuers` is a second pass, never cached, for eras left
+  and former). The era-level passes, which read the run's other eras and its fails rows and are never saved,
+  are `identity.EraIssuers`.
+- `identity.py` — architecture step 6: a security's identity, stages 1 to 4 behind one interface.
+  `identify(index, clients, as_of=, limit=, log=, workers=, meter=)` gives `Identity`: the refined eras
+  (`refine_eras`, the second split after `observations.split_eras`: a CUSIP switch under the ticker, or a gap over
+  `ERA_GAP_DAYS` no fails row bridges) and the fails index stage 1 loads (`ftd`, from `ftd_lo`; later stages extend
+  it), each era's issuer (`issuers`, by era key, the one source of an era's CIK: asked at its last sighting,
+  `era_last_seen`, with its own pin, name and first sighting), each era's FIGI resolution, the securities, each
+  security's CUSIPs over its whole life (`cusips`, rows loaded to the run date), the identity review items, and the
+  facts later stages read: `tier`/`resolution_source` (the lookup tier that found an era's or a security's issuer;
+  "security_master" for none), `rows_decided` (stage 2b's `ticker_rows` eras: stages 4c and 10g keep their CIK in
+  force), `securities_of(resolutions)` (stage 4b's rebuild after a fold, `build_securities`) and
+  `renames(resolutions)` (contract/id_changes.csv: a placeholder one FIGI now holds, across a class label). Its
+  adapters: the issuer lookup (`IssuerLookup`: `TickerResolver`, or a double with the same five methods; no
+  capability is probed), the run's issuer record, OpenFIGI and the fails client. The CUSIP links between eras
+  (`security_master.cusip_handoffs`) are computed once, for the second pass and stage 3; a foreign era
+  (`foreign_ticker_eras`) is given once, to `FigiResolver(foreign=)`, which guards it as an unconfirmed one. The era
+  helpers live here: `era_cusips`/`candidate_cusips` (an era takes an FTD CUSIP only when a fails row's description
+  names its issuer, `names.description_matches` against the observed and EDGAR names — spec D21), `era_last_seen`
+  (the true last sighting), `era_rows`. `EraIssuers` is the era-level issuer passes, over the issuer record and the
+  lookup's frequency candidates, with their own state (`degraded`, by era key: a failed search, or an issuer read
+  that failed or was stale since the era began, reported `resolution_degraded` beside the lookup's own
+  `is_degraded`). `infer` is the second pass, never cached, for eras left
   with no CIK and no pin (a renamed issuer files no Form 25 and keeps filing
   10-Ks): an 8-K frequency candidate (`efts_frequency_renamed`), or the issuer
   of an era linked by a shared CUSIP or a CUSIP switch after a rename
-  (`shared_cusip`/`cusip_handoff`, `security_master.cusip_handoffs`), each
+  (`shared_cusip`/`cusip_handoff`), each
   through guard G (existed by the era's first fails row, every row's
   description matches a name it carried by 30 days after the row, the only
   candidate that did) and matching one of the era's own names; a switch's
@@ -268,22 +295,19 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   trading at it). Answers are checked again at the fixed point; each carries
   the check flag `issuer_inferred`. Rule C also runs over first-pass answers:
   where the CUSIP evidence points elsewhere, the first pass's answer stands
-  and the check flag `issuer_cusip_disagrees` names both CIKs. Sub-plan 5h: `name_period_checks` (stage 2b, never
+  and the check flag `issuer_cusip_disagrees` names both CIKs. Sub-plan 5h: `check_names` (stage 2b, never
   saved): a first-pass name-search answer is replaced by the one other CIK SEC's name index lists under exactly the
   observed name that carried it over the era's span (`name_in_force`: ABBI 2008, an era with fewer than
   `ERA_MIN_ROWS` fails rows of its own) or, for an era with at least that many, whose name the era's own fails rows
   carry and the answer's do not (guard G's `_fits_rows`, `ticker_rows`: ERA 2013 is Era Group's; the rows alone
   decide, so the result never depends on which holder the first pass named);
   reported as `issuer_inferred`. A `ticker_rows` era keeps its CIK in force in stage 4c and the contract's issuer
-  timeline.
+  timeline (`Identity.rows_decided`).
 - `security_master.py` — `FigiResolver.resolve_many()` (a `sec_id` pin wins;
   else CUSIP jobs, then the ticker, then a name filter — see the spec's
   Implementation notes), `build_securities()` (merges eras sharing a
-  `sec_id`), `candidate_cusips`/`era_cusips`/`era_last_seen` (FTD-confirmed
-  CUSIPs and true last sighting; an era takes an FTD CUSIP only when a fails
-  row's description names its issuer, `names.description_matches` against the
-  observed and EDGAR names — spec D21). `Issuer` (a CIK and its EDGAR names;
-  `issuers_by_era` builds the era key -> `Issuer` map that `candidate_cusips`,
+  `sec_id`); `identity.identify` is the one stage that calls them. `Issuer` (a CIK and its EDGAR names;
+  `issuers_by_era` builds the era key -> `Issuer` map that `identity.candidate_cusips`,
   `resolve_many` and `build_securities` take, the one source of an era's CIK,
   read with `cik_of`) is its type. The identity guard: an era the fails
   data covers but never shows under its ticker (`guarded_eras`), when the one
@@ -1198,7 +1222,7 @@ conflate them.
   `{"__version__": 4, ...}`, each answer keyed `TICKER|date|observed name`
   (versions 2 and 3, keyed `TICKER|date`, load re-keyed from their stored
   `member_name`; an older file is ignored, not trusted, and replaced on the
-  next save) and never holds a miss, a second-pass (`infer_issuers`) answer, or
+  next save) and never holds a miss, a second-pass or 2b (`identity.EraIssuers`) answer, or
   an answer that rested on a failed request or a stale copy. The pipeline
   writes it after each resolving stage and on the way out of a run.
 - **`payouts.csv` is gated; `delistings.csv` carries the raw extraction
