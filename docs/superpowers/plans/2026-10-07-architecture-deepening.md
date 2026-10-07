@@ -30,7 +30,7 @@ A deepening moves behaviour behind a smaller interface. It changes nothing the l
 | 2 | One issuer record over EDGAR with the failed-read policy (review 4) | the handoff stage's uncaught read | done |
 | 3 | One owner for rewriting an ending (review 3) | AZPN's stale flags | done |
 | 4 | The last trade date as one module (review 5) | CNB, IMB, SPNV | done |
-| 5 | history owns where a security's history ends (review 6) | | |
+| 5 | history owns where a security's history ends (review 6) | | done |
 | 6 | A security's identity behind security_master (review 7) | | |
 | 7 | The line follow owns its rounds; one R1 reading per ending (review 8) | | |
 | 8 | One run snapshot; one reading of a delistings row (review 9) | | |
@@ -486,3 +486,93 @@ Decisions made in the step:
   - Alternative: publish a price date for an unconfirmed last trade, which brings back the second predicate.
   - Cost if wrong: the truth set no longer checks CNB's price date. CNB and IMB also lose their `last_close` and
     `otc_print` price requests, so a caller cannot answer an OTC print for them; their dlret stays the Shumway fill.
+
+### Step 5: history owns where a security's history ends
+
+- **The module is history.py, grown; its interface is one class, `Histories`, plus `observation_map_rows`.** The
+  caller passes the observed securities, their sightings, their CUSIPs, the fails index, one `Ending` per delisting,
+  the listed-today answers, the securities the run adds and an `exchange_today(security, ticker)` adapter. It
+  answers `going_on`, `end(sec_id)` (a `SecurityEnd`: the day, whether it is a confirmed last trade, whether the
+  security is listed today), `ticker_rows` and `cusip_rows`. `observation_map_rows(eras, sec_id_of, issuer_cik_of,
+  history, conflicts)` reads the history itself, not the 5-tuple spread over ten parameters.
+  - Alternative: a free function returning a frozen answer, or a new module beside history.py.
+  - Cost if wrong: one class with four answers. A function would have to build the ranges on stage 9b's call too,
+    where only `going_on` is read.
+- **The ending summary is `history.Ending`, built by `Delisting.ending`, next to `Delisting`.** It carries the key,
+  the `LastTrade` itself, the bucket, the successor and the exchange. So "confirmed" is `LastTrade.confirmed` and the
+  end is `last_trade.end_day`, step 4's definitions, read in one place; no flag token is tested. history imports no
+  `Delisting` and no pipeline helper; delistings.py imports `Ending` from history.
+  - Alternative: a summary of precomputed scalars (the end day, a confirmed bool).
+  - Cost if wrong: history imports last_trade, a pure reader module. Scalars would copy step 4's definitions into
+    the builder, where they could drift.
+- **The AON 2012 rule needs nothing more than the summaries.** "A security with an ending that ends it whose ticker
+  a successor took is not listed today" reads the final ending and the successor starts, both computed inside.
+- **Two calls of the one interface, with the reason in one comment in `_run`.** Stage 9b's first step reads
+  `going_on` over stage 9's delistings, because `mark_going_on` must run before `apply_handoffs`. The handoff stage
+  then creates continuations (AON 2012) and sets successors, and 9c to 9e re-date, add and reclassify endings, so 10b
+  and 10c2 read a second history over the final delistings. `pipeline._histories` builds both.
+  - Alternative: one history after the handoffs, or 9b's history reused.
+  - Cost if wrong: none to output. The first is impossible (the handoffs must see the marked rows); the second
+    would clip AON 2012 and the handoffs' new continuations wrongly.
+- **The ranges are built lazily (`cached_property`)**, so stage 9b's call builds none and asks EDGAR for no
+  exchange. The adapter is a constructor argument for the same reason.
+  - Alternative: a `rows(exchange_today)` method.
+  - Cost if wrong: none; the observation map would then need the rows passed back in beside the history.
+- **The ticker-takeover rule keeps its two conditions, both private behind the interface** (`_successor_starts`
+  and `_clip_at_takeovers`).
+  - They select different pairs. The successor starts need an ending of S whose successor X is first sighted under
+    the ticker in the window, and they bound S's own sightings, CUSIP rows, continued trading and listing: AON 2012's
+    old CUSIP keeps being sighted under AON after Aon plc took it. The 5h clip needs no ending: any security's first
+    day inside S's built range, S last sighted under the ticker before it, and the range not S's end: MSG 2015's
+    new MSG is no successor of the old line.
+  - Neither can replace the other without changing rows. Measured with two whole replays and the suite, each with
+    one condition switched off:
+    - the 5h clip alone (no successor starts): the replay is SAME, but five tests fail, among them the whole-run
+      AON 2012 handoff run (`test_a_handoff_continuation_clips_the_old_line_whose_ticker_the_issuer_still_lists`:
+      the old line stays listed, open, and shares HC with the new one). The replay cannot see this rule: its
+      listed-today answers are the committed run's open ranges (replay_wave1.py), which already carry the AON rule's
+      answer. A live run reads OpenFIGI and EDGAR, where the old line's issuer still lists the ticker.
+    - the successor starts alone (no 5h clip): the replay changes four ticker ranges, GOOG 2014 (BBG000BHSKN9),
+      GCI 2015 (BBG000BK5DP1), MSG 2015 (BBG000NS03H7) and IACI 2008 (CIK891103-COMMON, to 2012-06-28), each
+      overlapping the next holder: four `ticker_shared` rows, their contract history rows, and eleven more uncertain
+      verdicts. The MSG 2015 identity test fails too.
+  - Alternative: one mechanism, the 5h clip's takeovers fed back as successor starts. That needs the ranges built
+    twice (the clip reads the other securities' built ranges), and would bring the AON listed-today rule to MSG-like
+    cases: a listed security with a clipped earlier range and an ending would stop being listed.
+  - Cost if wrong: two functions in one module, one docstring that says why.
+- **The rows of the securities the run adds stay in pipeline (`_history_rows`)**, appended after the takeover clip as
+  before. Their listed-today answer is a live OpenFIGI read; history reads only an added successor's first day and
+  ticker (`AddedSecurity.span`, `ticker`). The observation map reads the observed securities' rows only, which is
+  the same output: every add checks that the security is not an observed one, so an added row maps no observation.
+  - Alternative: history takes a second adapter for the added securities' listing.
+  - Cost if wrong: `ticker_history.csv` is assembled in two places (the observed ranges, then the added rows).
+- **`rewrites.mark_going_on` takes a collection of keys** (`going_on`), not a key-to-bool map: "not in it" covers
+  both "ends its security" and "no answer". A key two endings share keeps the old reading (the last one decides),
+  because the answer is built as a map first.
+  - Alternative: keep the map and have the history answer one.
+  - Cost if wrong: none; the step 3 test moved with it.
+- **Constants moved with their rule:** `CONTINUATION_MIN_ROWS`/`_DAYS`/`_PRICES`, `CONTINUATION_BUCKETS`,
+  `SUCCESSOR_TICKER_LOOKBACK_DAYS`, and `TAKEOVER_DAYS`, the handoff window the successor starts share. It lives in
+  history now and handoffs imports it, since handoffs already imports history; the reverse import would be a cycle.
+- **`history_rows` and `clip_at_takeovers` became private** (`_security_rows`, `_clip_at_takeovers`); their tests
+  moved to the interface. `cusip_sightings` and `filtered_ticker_sightings` stay public: stage 5b, the CUSIP switch
+  days and the handoff pair search read them.
+- **`SecurityEnd.listed` is a bool.** An unknown listed answer (None) was read as not listed by both its readers.
+- **Tests.** tests/test_history.py gains 15 tests at the interface: the WRK/DIS continuation, a cash merger, a
+  liquidation's OTC tail, the three unconfirmed endings, a security that is its own successor, the line tickers, the
+  last ending that ends the security, AON 2012's and STX 2021's shapes, a sighting before a confirmed last trade,
+  the listed-today rule with its window, a listed security that goes on, MWV's other ticker, WRK's own successor,
+  and the ranges' exchanges. The 12 observation_map tests, the MSG 2015 clip test (test_identity_cases.py) and the
+  `mark_going_on` test (test_rewrites.py) were rewritten at the new interfaces, assertions kept; the one listed
+  security with a stale end now gets its listing from the history itself, since the history never answers both.
+  19 deleted once covered: the 12 tests of `pipeline._delisting_endings`, `_ends_the_security` and
+  `_successor_starts`; 6 whole-run tests that swapped `pipeline.DelistingFinder` only to read ticker_history back
+  (the unconfirmed clip, the own-successor transfer, WRK, the bankruptcy tail, no last trade, the unconfirmed
+  guess); and test_security_master's `history_rows` test. Kept: the three canned-finder tests that check stage 8's
+  acquirer row and stage 9's 8-K12B successor and its first day, and the two AON handoff runs (the handoff stage).
+  Suite: 3161 passed, 45 xfailed (step 4: 3165).
+- **The gate:** the replay is SAME against `accepted4_out` and refuses no request. pipeline.py: 2226 lines to 2065.
+- **Left open: the replay is blind to the listed-today rule.** It takes listed today from the committed run's open
+  ranges, so a change to the AON rule (or anything else that decides a security is listed today) shows in no replay
+  row. The interface tests and the AON handoff run are the only guard. Step 8 (one run snapshot) or a later replay
+  could record stage 5's raw listed answers instead.

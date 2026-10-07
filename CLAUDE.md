@@ -108,7 +108,7 @@ delisting's `last_close` request, `price_requests.PriceAnswers`, else the fails 
 one call into `merger_value.value_mergers`, which answers one `MergerValue` per merger ending; the module map has
 its steps), `_r1_continuations` (stage 8b: a merger whose published terms are one share and no cash, whose registrant's filings say the same of its own shares (`exchange_terms.own_exchange`), into a new issuer at most `NEW_ISSUER_DAYS` old or the same issuer (`successors.successor_by_terms`, else the new issuer's 8-K12B), is an exchange transfer to that successor, flagged `r1_continuation`, its payout reads dropped (`rewrites.continuation`, `Rule.R1`, with the run's merger values); the LLM's final terms must agree; the new issuer is named by the R1 statement's target (the name tie, below), its 8-K12B candidate included; a degraded read keeps the merger and flags the row; the run logs `role refusal: N rows (...)`, the delistings whose end-of-era reading refused a merger on the registrant's role; metered as "R1 continuations"),
 `_find_successors` (stage 9, with sub-plan 5c's `_terms_links` before the 8-K12B search: the same issuer's class, a new issuer, or the security's own same-CIK 8-K12B line via OpenFIGI and R2; a name tie for any 8-K12B link; sub-plan 5h: `_own_registration_link` takes a text-named CUSIP with no fails row
-yet when the fails data ends before the day, OKE 2026: the added successor starts on the next trading day, as every successor the run adds does (`last_trade.first_day_after`), and a Form 25 that already owns a delisting of the run raises no unmatched row in stage 9d; the stage ends by recording its links as rewrites, `_link_successors`), `_handoffs` (stage 9b: first `rewrites.mark_going_on`, the clip check's merger or transfer that does not end its security goes on as itself, here and only here, so the handoffs see it; then the handoffs), `_date_from_notices` (stage 9c: `last_trade.Dating.from_notice`, a handoff continuation row's last trade day from its own Form 25's confirmed EX-99.25 notice, when before the successor's first sighting, the handoff rewrite's typed `successor_from`, and no later than the effective date; the stage keeps the failed-read watch; metered as "handoff notice dates"), `_successor_endings` (stage 9d: the Form 25 search, matches only, for the line and 8-K12B successors the run added; the finder's items about a Form 25 that already owns a delisting are dropped by their typed `ReviewItem.filing`; metered as "successor endings"), `_distress` (stage 9e,
+yet when the fails data ends before the day, OKE 2026: the added successor starts on the next trading day, as every successor the run adds does (`last_trade.first_day_after`), and a Form 25 that already owns a delisting of the run raises no unmatched row in stage 9d; the stage ends by recording its links as rewrites, `_link_successors`), `_handoffs` (stage 9b: first `rewrites.mark_going_on` over `history.Histories.going_on`, the clip check's merger or transfer that does not end its security goes on as itself, here and only here, so the handoffs see it; then the handoffs), `_date_from_notices` (stage 9c: `last_trade.Dating.from_notice`, a handoff continuation row's last trade day from its own Form 25's confirmed EX-99.25 notice, when before the successor's first sighting, the handoff rewrite's typed `successor_from`, and no later than the effective date; the stage keeps the failed-read watch; metered as "handoff notice dates"), `_successor_endings` (stage 9d: the Form 25 search, matches only, for the line and 8-K12B successors the run added; the finder's items about a Form 25 that already owns a delisting are dropped by their typed `ReviewItem.filing`; metered as "successor endings"), `_distress` (stage 9e,
 sub-plan 5g: for each liquidation, compliance-failure or unknown delisting with no successor, a bankruptcy plan's
 stock rule (R6), a price-only removal's code 552, and the OTC symbol of its first off-exchange print, anchored on the
 last trade day stage 5 dated; `distress.DistressTerms` for the contract; metered as "distress notices"; at stage 10a a
@@ -313,13 +313,14 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   `ranges_from_sightings()` (dated `Sighting`s into `ticker_history`/
   `cusip_history` ranges; `value_on` reads one), `backfill_cusips()` (the
   CUSIPs of fails rows under a dead security's tickers in the 120 days before its
-  end, not under a deleted symbol, whose description names its issuer), its rows
-  (`history_rows`), and the range review (`ticker_range_review`: `ticker_range_overlap`/`ticker_shared`).
+  end, not under a deleted symbol, whose description names its issuer), and the range review
+  (`ticker_range_review`: `ticker_range_overlap`/`ticker_shared`).
   `filtered_ticker_sightings()` drops a backfilled observation
   (`is_backfilled`: no fails-to-deliver row of the security's CUSIPs under the
   observed ticker within 30 days, but at least one under another symbol) from
   the ticker_history-building sightings only — the delisting search's own
-  copy is untouched. `observation_map_rows()` builds `observation_map.csv`:
+  copy is untouched. `observation_map_rows(eras, sec_id_of, issuer_cik_of, history, conflicts)` builds
+  `observation_map.csv` from the history's own answer (`Histories`):
   one row per observation, its era, `sec_id`, issuer CIK, `ticker_history`
   spelling/coverage on its date, and a status (`unresolved`,
   `after_unconfirmed_delisting` — past the clip, but the delisting that set it
@@ -327,15 +328,30 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   rather than dropping it — `after_delisting`, `conflict`, `backfilled_ticker`,
   `mapped`) — the caller's join surface:
   membership from this table, ticker look-ups through `ticker_history` by
-  `history_ticker`. `pipeline._ends_the_security`/`_continues_after` (not
-  here: they read `Delisting` records) decide which delisting actually clips a
-  security's ranges — skipping one whose successor is the security itself, or
-  one after which its own CUSIP keeps trading under its own ticker. A first-day `…ZZZZ` row is no ticker sighting;
+  `history_ticker`. A first-day `…ZZZZ` row is no ticker sighting;
   an observation is a sighting of its era's ticker. Sub-plan 5h: `cusip_sightings` drops an old CUSIP's `…ZZZZ`
   settle rows dated once another CUSIP of the security, begun after it, has begun (MSG 2015: the new CUSIP's range
-  starts on its first row), and `clip_at_takeovers` (run by `_history_rows` over the observed securities' rows) ends
-  a ticker range the day before another security's first day under it when the range only ran on to the security's
-  next ticker (its own last sighting under it is earlier; the range is not its security's end).
+  starts on its first row).
+  Where a security's history ends is one module, `Histories` (architecture step 5): the caller passes the observed
+  securities, their sightings, their CUSIPs, the fails index, a summary of every ending (`Ending`: key, `LastTrade`,
+  bucket, successor, exchange; built by `delistings.Delisting.ending`, so history imports no `Delisting`), the
+  listed-today answers, the securities the run adds, and an `exchange_today(security, ticker)` adapter for an open
+  range's exchange (asked only when the rows are read). It answers `going_on` (the endings that do not end their
+  security: `rewrites.mark_going_on`'s input), `end(sec_id)` (`SecurityEnd`: the day, whether it is a confirmed last
+  trade, read from `LastTrade.confirmed`, and whether the security is listed today), and `ticker_rows`/`cusip_rows`.
+  Its three rules: an ending ends its security unless its successor is the security itself, or it is a merger or
+  exchange transfer (`CONTINUATION_BUCKETS`) with a confirmed last trade after which its own CUSIPs keep trading
+  under its own tickers (`_continues_after`: `CONTINUATION_MIN_ROWS` 20 rows over `CONTINUATION_MIN_DAYS` 60 days
+  at `CONTINUATION_MIN_PRICES` 2 prices; WRK, DIS); the history ends at the end day (`last_trade.end_day`) of the
+  last ending that ends it, unless it is listed today. A successor's ticker is not its predecessor's
+  (`_successor_starts`, over the endings: the successor's first sighting under the ticker within `TAKEOVER_DAYS`,
+  120, the handoff window, defined here, after the confirmed last trade, else from the delist date less
+  `SUCCESSOR_TICKER_LOOKBACK_DAYS`, 30), and a range carried only to the security's next ticker stops the day before
+  another security's first day under it (`_clip_at_takeovers`, over the built ranges: its own last sighting under it
+  is earlier, the range is not its security's end; MSG 2015): two conditions, kept apart (the plan's step 5 log says
+  why). A security with an ending that ends it whose ticker a successor took is not listed today (AON 2012). Pipeline
+  builds it twice (`pipeline._histories`): stage 9b's first step reads `going_on`, and 10b and 10c2 read the
+  history over the final delistings.
 - `added_securities.py` — `AddedAcquirer`/`AddedSuccessor`/`AddedLineSuccessor` (`AddedSecurity`; the last a FIGI
   line's successor stage 4b found, linked in stage 9 and added only for an ending that takes it): a
   security the run adds that no observation names, with its one
@@ -515,8 +531,8 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   `successor_unknown` (`SUCCESSOR_UNKNOWN`), every payout or terms-gate flag (`PAYOUT_FLAGS`: `payout_gate_failed:*`,
   `terms_gate_*`, `acquirer_close_lagged`, ...) and the merger's value (one `MergerValues.drop` call through
   `payouts=`; a merger made a continuation without it raises). `security_goes_on(d, rule)` makes the security its
-  own successor and keeps the kind and value (WRK, DIS); `mark_going_on(delistings, endings)` is the clip check's,
-  filling only a blank successor; `reclassify(d, code, rule, ...)` any other kind (470, 552), a kind leaving
+  own successor and keeps the kind and value (WRK, DIS); `mark_going_on(delistings, going_on)` is the clip check's
+  (`history.Histories.going_on`), filling only a blank successor; `reclassify(d, code, rule, ...)` any other kind (470, 552), a kind leaving
   `unknown` dropping the no-evidence default. Readings: `awaits_successor`, `is_real_ending` (in memory; the tables'
   is `exit_kind.is_real_ending`), `rewrite_by`, `successor_by`; `successor_note` is the reason's one wording of how a
   successor was found ("; successor by same ticker"). The classifier's own edits of the end-of-era verdict before it
@@ -1120,7 +1136,8 @@ conflate them.
   names it); another composite is a line successor, linked by stage 9 as a continuation (an `unknown` row at the
   switch is rewritten, `line_continuation`: it drops `no_evidence_default` and gets medium confidence).
 - **`ticker_history` is clipped only at the delisting that actually ends the
-  security.** One whose successor is the security itself (a continuing
+  security** (`history.Histories`, the one module for where a history ends). One whose successor is the security
+  itself (a continuing
   exchange transfer) never clips it. Otherwise, only a `merger` or
   `exchange_transfer` delisting with a *confirmed* last-trade day
   (`last_trade.LastTrade.confirmed`: dated, not flagged unconfirmed) can be second-guessed: it
@@ -1142,16 +1159,16 @@ conflate them.
   never second-guessed nor published. A security
   none of whose delistings ends it, and that isn't listed today either, is
   left unclipped, ending at its last real sighting.
-  A successor's ticker is not its predecessor's (`pipeline._successor_starts`, one map shared by the clip check and
-  the ranges): when a delisting's successor is another security X that holds ticker T from day F (X's first
+  A successor's ticker is not its predecessor's (`Histories._successor_starts`, one map shared by the clip check,
+  the ranges and the listed answer): when a delisting's successor is another security X that holds ticker T from day F (X's first
   sighting under T on or after the delisting's confirmed last trade day, or from 30 days before its delist date
   when the day is unconfirmed or missing, and never more than 120 days after that anchor: a later one is a
   recycled ticker, no F; computed again from the final delistings after the handoff stage, which creates
   continuation rows, and a security with an ending whose ticker a successor took is not listed today, whatever its
   issuer's EDGAR listing says: AON 2012), the
   security's fails rows and sightings under T from F on are X's. They do not count as it continuing
-  (`_continues_after`: AON 2012), and its T range (and old-CUSIP range) ends the day before F (`history_rows`:
-  STX 2021, CRC 2016, ODP 2020).
+  (`Histories._continues_after`: AON 2012), and its T range (and old-CUSIP range) ends the day before F (STX 2021,
+  CRC 2016, ODP 2020).
 - **`observation_map.csv` is the caller's join surface, not a review table.**
   Every distinct input observation gets one row: its era, its `sec_id` (blank
   when unresolved), the era's issuer CIK, the security's `ticker_history`
