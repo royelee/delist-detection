@@ -141,11 +141,10 @@ def successor_in_run(e: Delisting, starts: dict[str, SecurityStart]) -> tuple[st
     [last trade - SUCCESSOR_BEFORE_DAYS, last trade + SUCCESSOR_AFTER_DAYS] and
     that shares the delisted security's issuer CIK or its ticker: the new line
     of a holding-company reorganization or a rename. With no last trade date
-    the Form 25's filing date stands in for it (the delisting date is ten days
-    later), else the delisting date. Returns (sec_id, "same_issuer" |
-    "same_ticker"); None for zero or several candidates."""
-    day = e.last_trade.day or (date.fromisoformat(e.form25_sub.filing_date) if e.form25_sub is not None
-                               else date.fromisoformat(e.delist_date))
+    the ending's anchor stands in for it (`Delisting.anchor`: the Form 25's
+    filing date, the delisting date being ten days later). Returns (sec_id,
+    "same_issuer" | "same_ticker"); None for zero or several candidates."""
+    day = e.anchor
     lo = (day - timedelta(days=SUCCESSOR_BEFORE_DAYS)).isoformat()
     hi = (day + timedelta(days=SUCCESSOR_AFTER_DAYS)).isoformat()
     # the delisting's ticker can be a deleted-symbol spelling ("APAXXXX"): match
@@ -173,24 +172,13 @@ def successor_search_args(edgar, e: Delisting, starts: dict[str, SecurityStart],
     if not awaits_successor(e) or successor_in_run(e, starts) is not None:
         return None
     return (successor_search_name(edgar, e.cik, securities[e.sec_id].name),
-            e.last_trade.day or date.fromisoformat(e.delist_date))
+            e.anchor)
 
 
 NEW_ISSUER_DAYS = 1095    # R1 (operator, 2026-10-04): an issuer that first filed with EDGAR at most this long before
 #                           the event is a new one (new holding companies measured 0-548 days: DowDuPont 548, Linde
 #                           517, Viatris 388; existing acquirers 4,125-8,442)
 SAME_ISSUER_CLASS, NEW_ISSUER = "same_issuer_class", "new_issuer"
-
-
-def successor_anchor(e: Delisting) -> date:
-    """The day a successor of `e` is looked for around: its last trade, else its Form 25's filing date, else the
-    8-K the classifier anchored on, else (approximate) its delisting date."""
-    if e.last_trade.day is not None:
-        return e.last_trade.day
-    if e.form25_sub is not None:
-        return date.fromisoformat(e.form25_sub.filing_date)
-    filed = ((e.record.evidence or {}).get("anchor_8k") or {}).get("filing_date")
-    return date.fromisoformat(filed) if filed else date.fromisoformat(e.delist_date)
 
 
 def _named(exchange: OwnExchange, tickers: set[str], names: Sequence[str]) -> bool:

@@ -1,8 +1,7 @@
 import pytest
 
 from delist_detection import store
-from delist_detection.verdict import (ENDING, SECURITY, SEED, Verdict, Verdicts, decide, is_introduction,
-                                      published_last_trade_date, seed_key)
+from delist_detection.verdict import ENDING, SECURITY, SEED, Verdict, Verdicts, decide, is_introduction, seed_key
 from tests.lifecycle_tables import ending, iv, obs, sec, tables
 
 GOOD = dict(ltd="2015-03-02", dlret="0.01", reason="M&A 2.01+3.01+5.01", delist_filing_form="25-NSE",
@@ -152,16 +151,6 @@ def test_an_earlier_ending_is_uncertain_and_names_the_last_one():
     v = decide(t, {})
     assert "earlier_ending:2012-03-31" in v.endings[("S", "2009-12-01")].reasons
     assert v.endings[("S", "2012-03-31")].confirmed
-
-
-def test_the_published_last_trade_date_needs_an_exchange_print_before_the_form25_takes_effect():
-    ok = ending("S", "2018-12-10", ltd="2018-11-28", delist_filing_form="25-NSE", delist_filing_date="2018-11-29")
-    late = ending("S", "2018-12-10", ltd="2018-12-20", delist_filing_form="25-NSE", delist_filing_date="2018-11-29")
-    seen = ending("S", "2018-12-10", ltd="2018-11-28", source="last_sighting")
-    assert published_last_trade_date(ok) == "2018-11-28"
-    assert published_last_trade_date(late) == ""
-    assert published_last_trade_date(seen) == ""
-    assert published_last_trade_date(ending("S", "2018-12-10")) == ""
 
 
 def test_a_verdict_reads_confirmed_or_uncertain():

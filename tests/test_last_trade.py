@@ -1,9 +1,24 @@
+"""The last trade module (architecture step 4), at its interface: the readers (`eightk_last_trade`,
+`closing_day`), the source order (`decide_last_trade`), the derived facts (`LastTrade.confirmed`, `publishable`,
+`published` over a row, `anchor_day`, `first_day_after`), the handoff rule (`at_handoff`), and `Dating`: a Form 25
+group's windows, the MIDAS and halt confirmations through fake adapters, rule 3's tenure (`ticker_taken`,
+`OwnTrading`), rule 4's closing day, the no-Form-25 fallback and stage 9c's re-dating from a notice."""
 from datetime import date
+from pathlib import Path
 
 import pytest
 
-from delist_detection.last_trade import (CLOSING_DAY, LastTrade, closing_day, decide_last_trade,
-                                         eightk_last_trade, sections_3_01)
+from delist_detection.edgar import EdgarSubmission
+from delist_detection.form25 import parse_form25
+from delist_detection.ftd import FtdIndex, FtdRow
+from delist_detection.history import Sighting
+from delist_detection.last_trade import (
+    CLOSING_DAY, CONFLICT, EIGHTK_301, EX99_NOTICE, EXCHANGE_PRINTS, LAST_SIGHTING, MIDAS, NASDAQ_HALT, NO_DAY,
+    SOURCES, UNCONFIRMED, UNSOURCED, Dating, LastTrade, OwnTrading, anchor_day, at_handoff, closing_day,
+    decide_last_trade, effective_of, eightk_last_trade, end_day, first_day_after, handoff_day, last_row_trade_day, of_row,
+    published, sections_3_01, ticker_taken,
+)
+from delist_detection.nasdaq_halts import Halt
 
 
 def _k(item301: str, extra: str = "") -> str:
@@ -298,3 +313,448 @@ def test_a_closing_on_a_holiday_last_traded_the_trading_day_before():
 ])
 def test_closing_day_reads_nothing_from_these(text):
     assert closing_day([text], date(2008, 5, 4), date(2008, 5, 14)) is None
+
+
+# -- a suspension at a stated clock time (architecture step 4) ---------------------------------------------------
+def test_a_suspension_at_or_after_the_close_is_that_day_confirmed():
+    """SPNV 2020 (8-K 0001193125-20-248926): suspended at 4:00 p.m. on September 17: the 17th traded."""
+    s = ("Trading of the Company’s common stock was suspended effective as of approximately 4:00 p.m. Eastern Time "
+         "on September 17, 2020.")
+    assert eightk_last_trade(_k(s)) == (date(2020, 9, 17), "8k_close_clock")
+    lt = decide_last_trade(notice=(date(2020, 9, 17), "notice_b_unconfirmed"), eightk=eightk_last_trade(_k(s)),
+                           midas=None, halt=None)
+    assert lt == LastTrade(date(2020, 9, 17), "8k_301", ()) and lt.confirmed
+
+
+@pytest.mark.parametrize("sentence, last_day", [
+    # Panera 2017, General Cable 2018: suspended at 9:00 a.m., before the open
+    ("Trading of Class A Common Stock on the NASDAQ was suspended as of approximately 9:00 am EST on July 18, 2017.",
+     date(2017, 7, 17)),
+    ("Trading of the Shares on the NYSE was suspended as of approximately 9:00 a.m. EST on June 6, 2018.",
+     date(2018, 6, 5)),
+])
+def test_a_suspension_before_the_open_is_the_trading_day_before(sentence, last_day):
+    assert eightk_last_trade(_k(sentence)) == (last_day, "8k_open_clock")
+
+
+@pytest.mark.parametrize("sentence", [
+    "Trading of Class A Shares on the NASDAQ was suspended as of approximately 11:00 am EST on February 1, 2017.",
+    # at the open itself is not before it (`OPEN_MINUTES`, as the effective-time and closing-day readers count)
+    "Trading of the Common Stock on the Nasdaq was suspended as of approximately 9:30 am EST on November 29, 2018.",
+])
+def test_a_suspension_during_the_session_reads_no_day(sentence):
+    assert eightk_last_trade(_k(sentence)) == (None, "")
+
+
+# -- the derived facts: confirmed, worked out, publishable ---------------------------------------------------------
+def test_confirmed_is_a_day_nothing_flags_unconfirmed():
+    assert LastTrade(date(2020, 1, 2), MIDAS, ()).confirmed
+    assert LastTrade(date(2020, 1, 2), MIDAS, (CONFLICT,)).confirmed
+    assert not LastTrade(date(2020, 1, 2), EX99_NOTICE, (UNCONFIRMED,)).confirmed
+    assert not LastTrade(None, UNSOURCED, (NO_DAY,)).confirmed
+    assert LastTrade(date(2020, 1, 2), CLOSING_DAY, (UNCONFIRMED,)).worked_out
+    assert not LastTrade(date(2020, 1, 2), LAST_SIGHTING, ()).worked_out
+
+
+def test_publishable_is_confirmed_an_exchange_print_and_no_later_than_the_form25_effective_date():
+    eff = date(2018, 12, 9)
+    assert LastTrade(date(2018, 11, 28), EX99_NOTICE, ()).publishable(eff)
+    assert LastTrade(date(2018, 12, 9), MIDAS, ()).publishable(eff)
+    assert LastTrade(date(2018, 11, 28), MIDAS, ()).publishable(None)
+    assert not LastTrade(date(2018, 12, 10), MIDAS, ()).publishable(eff)                 # after it takes effect
+    assert not LastTrade(date(2018, 11, 28), LAST_SIGHTING, ()).publishable(eff)         # no exchange print
+    assert not LastTrade(date(2018, 11, 28), CLOSING_DAY, (UNCONFIRMED,)).publishable(eff)
+    # CNB 2009, IMB 2008: an involuntary notice's decision day, "suspended immediately": not confirmed
+    assert not LastTrade(date(2009, 8, 17), EX99_NOTICE, (UNCONFIRMED,)).publishable(date(2009, 9, 18))
+    assert SOURCES[-1] == UNSOURCED and EXCHANGE_PRINTS < set(SOURCES)
+
+
+def _row(ltd="2018-11-28", source=EX99_NOTICE, flags="", form="25-NSE", filed="2018-11-29"):
+    return {"last_trade_date": ltd, "last_trade_date_source": source, "review_flags": flags,
+            "delist_filing_form": form, "delist_filing_date": filed}
+
+
+def test_a_rows_published_day_reads_the_one_definition():
+    """contract/delistings.csv's last_trade_date over a delistings.csv row: the row read back (`of_row`) is
+    publishable against its Form 25's effective date (filed + 10 days)."""
+    assert published(_row()) == "2018-11-28"
+    assert published(_row(ltd="2018-12-10")) == ""                                   # past 2018-12-09
+    assert published(_row(ltd="2018-12-10", form="8-K")) == "2018-12-10"             # no Form 25: no cap
+    assert published(_row(source=LAST_SIGHTING)) == ""
+    assert published(_row(flags=f"ftd_close_lagged;{UNCONFIRMED}")) == ""
+    assert published(_row(flags=f"{CONFLICT}")) == "2018-11-28"
+    assert published(_row(ltd="", source="")) == ""
+    assert of_row(_row(flags=f"x;{CONFLICT};payout_gate_failed:4.5")).flags == (CONFLICT,)
+    assert effective_of(_row()) == date(2018, 12, 9) and effective_of(_row(form="", filed="")) is None
+
+
+# -- the anchor day and the first day after ------------------------------------------------------------------------
+def test_the_anchor_is_the_last_trade_then_the_form25_then_the_anchor_8k_then_the_delisting_date():
+    day = LastTrade(date(2020, 7, 1), MIDAS, ())
+    none = LastTrade(None, UNSOURCED, (NO_DAY,))
+    assert anchor_day(day, "2020-07-20", filed="2020-07-10", anchor_8k="2020-07-02") == date(2020, 7, 1)
+    assert anchor_day(none, "2020-07-20", filed="2020-07-10", anchor_8k="2020-07-02") == date(2020, 7, 10)
+    assert anchor_day(none, "2020-07-20", anchor_8k="2020-07-02") == date(2020, 7, 2)
+    assert anchor_day(none, "2020-07-20") == date(2020, 7, 20)
+
+
+def test_the_end_day_is_the_last_trade_else_the_delisting_date_never_the_form25_filing_day():
+    """FWLT 2014: no day, the issuer's own Form 25 filed 2014-11-24, effective 2014-12-04: listed until then."""
+    assert end_day(LastTrade(None, UNSOURCED, (NO_DAY,)), "2014-12-04") == date(2014, 12, 4)
+    assert end_day(LastTrade(date(2014, 11, 21), MIDAS, ()), "2014-12-04") == date(2014, 11, 21)
+
+
+def test_an_added_successors_first_day_is_the_next_trading_day():
+    assert first_day_after(date(2026, 9, 25)) == date(2026, 9, 28)       # Friday -> Monday
+    assert first_day_after(date(2025, 12, 31)) == date(2026, 1, 2)       # New Year's Day is no session
+    assert first_day_after(date(2026, 9, 23)) == date(2026, 9, 24)
+
+
+# -- the handoff stage ---------------------------------------------------------------------------------------------
+def test_a_handoff_rows_day_is_the_last_sighting_before_the_successors_first():
+    assert at_handoff(None, "2026-08-25", "2026-08-27") == LastTrade(date(2026, 8, 25), LAST_SIGHTING, ())
+    # ST 2018: the fails rows meet (B's first row carries A's last close): the day before B's first
+    assert at_handoff(None, "2018-03-02", "2018-03-02").day == date(2018, 3, 1)
+    assert handoff_day("2018-03-02", "2018-03-02") == date(2018, 3, 1)
+
+
+def test_a_kept_rows_day_at_a_handoff():
+    """PNFP 2026: a row with no day takes the handoff's; a worked-out closing day past B's first sighting is capped
+    (still unconfirmed); any other day stands."""
+    none = LastTrade(None, UNSOURCED, (NO_DAY,), (date(2026, 1, 2),))
+    assert at_handoff(none, "2026-01-02", "2026-01-05") == LastTrade(date(2026, 1, 2), LAST_SIGHTING, (),
+                                                                     (date(2026, 1, 2),))
+    late = LastTrade(date(2026, 1, 6), CLOSING_DAY, (UNCONFIRMED,))
+    assert at_handoff(late, "2026-01-02", "2026-01-05") == LastTrade(date(2026, 1, 2), LAST_SIGHTING, (UNCONFIRMED,))
+    early = LastTrade(date(2026, 1, 2), CLOSING_DAY, (UNCONFIRMED,))
+    assert at_handoff(early, "2026-01-02", "2026-01-05") is early
+    measured = LastTrade(date(2026, 1, 6), MIDAS, ())
+    assert at_handoff(measured, "2026-01-02", "2026-01-05") is measured
+
+
+# -- stage 9c: the re-dating from a notice ------------------------------------------------------------------------
+_FORM25 = Path(__file__).parent / "fixtures" / "form25"
+_LEG = {"form": "25-NSE", "filing_date": "2026-08-27", "accession": "0000876661-26-000712"}
+
+
+class _Raws:
+    def __init__(self, raw):
+        self.raw, self.asked = raw, []
+
+    def fetch_filing_raw(self, cik, accession):
+        self.asked.append((cik, accession))
+        return self.raw
+
+
+def _sighted():
+    return LastTrade(date(2026, 8, 25), LAST_SIGHTING, ())
+
+
+def _notice(name):
+    return (_FORM25 / name).read_text(encoding="utf-8", errors="replace")
+
+
+def test_a_handoff_row_takes_its_form25_notices_confirmed_day():
+    got = Dating(_Raws(_notice("leg_25nse_before_market_open.txt"))).from_notice(
+        58492, _LEG, _sighted(), before="2026-08-27", effective="2026-09-06")
+    assert (got.day, got.source) == (date(2026, 8, 26), EX99_NOTICE) and got.confirmed
+
+
+def test_a_handoff_row_keeps_its_sighting_without_a_confirmed_notice_day_before_the_successor():
+    lt = _sighted()
+    for raw in ("<TYPE>25-NSE no notice here", _notice("rsh_25nse.txt"), ""):     # none, unconfirmed, unreadable
+        assert Dating(_Raws(raw)).from_notice(58492, _LEG, lt, before="2026-08-27", effective="2026-09-06") is lt
+    leg = _notice("leg_25nse_before_market_open.txt")
+    for before in ("2026-08-26", "2026-08-20"):                                     # on or after B's first sighting
+        assert Dating(_Raws(leg)).from_notice(58492, _LEG, lt, before=before, effective="2026-09-06") is lt
+    assert Dating(_Raws(leg)).from_notice(58492, _LEG, lt, before="", effective="2026-08-25") is lt   # past effect
+
+
+def test_a_row_dated_another_way_or_without_a_form25_is_never_read():
+    edgar = _Raws(_notice("leg_25nse_before_market_open.txt"))
+    measured = LastTrade(date(2026, 8, 25), MIDAS, ())
+    assert Dating(edgar).from_notice(58492, _LEG, measured, before="", effective="2026-09-06") is measured
+    assert Dating(edgar).from_notice(58492, None, _sighted(), before="", effective="2026-09-06").source == LAST_SIGHTING
+    assert edgar.asked == []
+
+
+def test_a_failed_notice_read_keeps_the_sighting_and_trips_the_stages_watch():
+    from delist_detection.degraded import DegradedWatch
+    from delist_detection.sec_stats import SEC_STATS
+
+    class Failing(_Raws):
+        def fetch_filing_raw(self, cik, accession):
+            SEC_STATS.degraded("failed_request")
+            return ""
+
+    lt, watch = _sighted(), DegradedWatch()
+    assert Dating(Failing("")).from_notice(58492, _LEG, lt, before="", effective="2026-09-06") is lt
+    assert watch.tripped()
+
+
+# -- dating a Form 25 group: the windows, the confirmations (fake MIDAS and halt adapters), rules 3 and 4 ---------
+class _Midas:
+    """MIDAS's adapter double: a last day with exchange volume per ticker (`days`), else one for every ticker."""
+
+    def __init__(self, day=None, days=None):
+        self.day, self.days, self.calls = day, days or {}, []
+
+    def last_trade_day(self, ticker, lo, hi):
+        self.calls.append((ticker, lo, hi))
+        day = self.days.get(ticker, self.day)
+        return day if day is not None and lo <= day <= hi else None
+
+
+class _Halts:
+    """The Nasdaq halt feed's adapter double: code-D halts by ticker, and the days it failed to read."""
+
+    def __init__(self, halts=None, fail=False):
+        self.halts, self.fail, self.failed, self.asked = halts or {}, fail, [], []
+
+    def deletion_halt(self, symbol, lo, hi, max_days=7):
+        self.asked.append((symbol, lo, hi))
+        if self.fail:
+            self.failed.append(lo)
+            return None
+        h = self.halts.get(symbol)
+        return h if h is not None and lo <= h.halt_date <= hi else None
+
+    def failed_days(self):
+        return tuple(self.failed)
+
+
+def _halt(symbol, day, at="09:30:06"):
+    return Halt(symbol, "", "NASDAQ", "D", day, at, None)
+
+
+AET_RAW = _notice("aet_25nse.txt")
+
+
+def _f25(raw, accession="n1", form="25-NSE", filed="2018-11-29"):
+    return EdgarSubmission(accession, form, filed, "", "", "p.xml"), parse_form25(raw, accession=accession,
+                                                                                 form=form, filing_date=filed)
+
+
+def _exchange_raw(rule="17 CFR 240.12d2-2(a)(3)", notice=""):
+    text = (f"\n<TYPE>EX-99.25\n<TEXT>\n{notice}\n</TEXT>" if notice else "")
+    return ("<TYPE>25-NSE\n<notificationOfRemoval><exchange><entityName>New York Stock Exchange LLC</entityName>"
+            "</exchange>\n<descriptionClassSecurity>Common Stock</descriptionClassSecurity>\n"
+            f"<ruleProvision>{rule}</ruleProvision></notificationOfRemoval>{text}")
+
+
+def _group(dating, group, *, ticker="AET", trading=OwnTrading(), continued=False, filings=()):
+    return dating.of_group(1, list(filings), group, group[0], ticker=ticker, trading=trading, continued=continued)
+
+
+def test_midas_volume_from_the_still_trading_cut_on_is_not_the_last_trade(fake_edgar):
+    """AET 2018: the group's MIDAS window is [filed - 75 d, effective + 10 d]; a day on or after effective + 5 d
+    (2018-12-14) is the security still trading somewhere, so the notice's day stands; the 13th is taken."""
+    group = [_f25(AET_RAW)]
+    late = _group(Dating(fake_edgar, midas=_Midas(date(2018, 12, 14))), group)
+    assert (late.day, late.source) == (date(2018, 11, 28), EX99_NOTICE)
+    used = _group(Dating(fake_edgar, midas=_Midas(date(2018, 12, 13))), group)
+    assert (used.day, used.source) == (date(2018, 12, 13), MIDAS)
+    midas = _Midas(date(2018, 11, 28))
+    _group(Dating(fake_edgar, midas=midas), group)
+    assert midas.calls == [("AET", date(2018, 9, 15), date(2018, 12, 19))]
+
+
+def test_an_involuntary_notices_day_nothing_confirms_is_unconfirmed_until_midas_measures_it(fake_edgar):
+    """Spec 8.8, RadioShack 2015: an involuntary notice's day is the exchange's decision day."""
+    group = [_f25(_notice("rsh_25nse.txt"), filed="2015-03-20")]
+    lt = _group(Dating(fake_edgar), group, ticker="RSH")
+    assert (lt.day, lt.source, lt.confirmed) == (date(2015, 2, 2), EX99_NOTICE, False)
+    lt = _group(Dating(fake_edgar, midas=_Midas(date(2015, 2, 2))), group, ticker="RSH")
+    assert (lt.source, lt.flags, lt.confirmed) == (MIDAS, (), True)
+
+
+def test_the_confirmations_ask_every_ticker_the_security_carried_in_the_window(fake_edgar):
+    """Spirit Airlines 2024: by its Form 25 the shares traded OTC as SAVEQ; MIDAS knows SAVE only."""
+    group = [_f25(_notice("save_25nse.txt"), filed="2024-12-05")]
+    trading = OwnTrading([Sighting("2024-11-15", "SAVE", "ftd"), Sighting("2024-11-20", "SAVEQ", "ftd")])
+    midas = _Midas(days={"SAVE": date(2024, 11, 15)})
+    lt = _group(Dating(fake_edgar, midas=midas), group, ticker="SAVEQ", trading=trading)
+    assert (lt.day, lt.source) == (date(2024, 11, 15), MIDAS)
+    assert {t for t, _, _ in midas.calls} == {"SAVE", "SAVEQ"}
+
+
+def test_a_halt_answers_when_midas_has_nothing_and_a_failed_feed_day_is_carried(fake_edgar):
+    group = [_f25(AET_RAW)]
+    lt = _group(Dating(fake_edgar, halts=_Halts({"AET": _halt("AET", date(2018, 11, 29), "16:30:00")})), group)
+    assert (lt.day, lt.source) == (date(2018, 11, 29), NASDAQ_HALT)
+    halts = _Halts(fail=True)
+    lt = _group(Dating(fake_edgar, halts=halts), group)
+    assert lt.halt_feed_failed == tuple(halts.failed) != () and lt.source == EX99_NOTICE
+    assert _group(Dating(fake_edgar, halts=_Halts()), group).halt_feed_failed == ()
+    assert _group(Dating(fake_edgar), group).halt_feed_failed == ()
+
+
+def _tenure_rows():
+    """The security's own CUSIP traded under JJJ to 2016-09-02's close; another CUSIP's first priced row under JJJ
+    is 2016-09-07, so the ticker was taken from the 6th."""
+    return [FtdRow("2016-08-31", "OWNCUSIP1", "JJJ", "OLD CO", 45.0), FtdRow("2016-09-06", "OWNCUSIP1", "JJJ", "OLD CO",
+                                                                            45.04),
+            FtdRow("2016-09-07", "NEWCUSIP1", "JJJ", "NEW PLC", 48.9)]
+
+
+def test_rule_3_bounds_a_read_by_ticker_at_the_day_another_cusip_took_it(fake_edgar):
+    """JCI 2016: MIDAS's September 6 under JCI is Johnson Controls plc's; the old JCI's 8-K says before the open on
+    the 6th, so MIDAS is read up to the 2nd (the trading day before the 6th is the 2nd: Labor Day)."""
+    fake_edgar.texts["k1"] = ("Item 3.01 Notice of Delisting. Prior to the open of trading on the NYSE on September 6, "
+                              "2016, trading in Company common stock was suspended. " + "x" * 300)
+    filings = [EdgarSubmission("k1", "8-K", "2016-09-06", "2016-09-06", "3.01", "k.htm")]
+    group = [_f25(_exchange_raw(), filed="2016-09-06")]
+    trading = OwnTrading((), frozenset({"OWNCUSIP1"}), (), FtdIndex(_tenure_rows()))
+    midas = _Midas(days={"JJJ": date(2016, 9, 6)})
+    unbounded = _group(Dating(fake_edgar, midas=midas), group, ticker="JJJ", filings=filings)
+    assert unbounded.day == date(2016, 9, 6)
+    midas = _Midas(days={"JJJ": date(2016, 9, 6)})
+    midas.last_trade_day = lambda t, lo, hi: date(2016, 9, 6) if hi >= date(2016, 9, 6) else date(2016, 9, 2)
+    bounded = _group(Dating(fake_edgar, midas=midas), group, ticker="JJJ", trading=trading, filings=filings)
+    assert (bounded.day, bounded.source) == (date(2016, 9, 2), MIDAS)
+
+
+def test_rule_3_drops_a_halt_under_a_ticker_another_cusip_took(fake_edgar):
+    """A halt after the 8-K's day, from the day another CUSIP traded under the ticker, is the other security's: the
+    8-K's day stands. Without the tenure, the halt is taken."""
+    fake_edgar.texts["k1"] = ("Item 3.01 Notice of Delisting. Trading in the common stock was suspended after the "
+                              "close of trading on September 1, 2016. " + "x" * 300)
+    filings = [EdgarSubmission("k1", "8-K", "2016-09-02", "2016-09-02", "3.01", "k.htm")]
+    group = [_f25(_exchange_raw(), filed="2016-09-02")]
+    rows = [FtdRow("2016-08-30", "OWNCUSIP1", "JJJ", "OLD CO", 45.0),
+            FtdRow("2016-09-01", "OWNCUSIP1", "JJJ", "OLD CO", 45.04),
+            FtdRow("2016-09-02", "NEWCUSIP1", "JJJ", "NEW PLC", 48.9)]
+    trading = OwnTrading((), frozenset({"OWNCUSIP1"}), (), FtdIndex(rows))
+    halts = _Halts({"JJJ": _halt("JJJ", date(2016, 9, 2), "16:30:00")})
+    lt = _group(Dating(fake_edgar, halts=halts), group, ticker="JJJ", trading=trading, filings=filings)
+    assert (lt.day, lt.source) == (date(2016, 9, 1), EIGHTK_301)
+    lt = _group(Dating(fake_edgar, halts=halts), group, ticker="JJJ", filings=filings)
+    assert (lt.day, lt.source) == (date(2016, 9, 2), NASDAQ_HALT)
+
+
+def test_rule_4_an_undated_exchange_removal_takes_the_closing_day(fake_edgar):
+    """The 8-Ks in [F - 10, F + 10] give the closing day for [F - 10, F]; with none, the Form 25 day F itself; source
+    `closing_day`, unconfirmed, the halt feed's failed days kept."""
+    fake_edgar.texts["c1"] = "On March 1, 2021, Apache Corporation implemented a holding company reorganization."
+    filings = [EdgarSubmission("c1", "8-K", "2021-03-01", "2021-03-01", "2.01", "k.htm")]
+    group = [_f25(_exchange_raw(), filed="2021-03-04")]
+    lt = _group(Dating(fake_edgar, halts=_Halts(fail=True)), group, filings=filings)
+    assert (lt.day, lt.source, lt.flags) == (date(2021, 3, 1), CLOSING_DAY, (UNCONFIRMED,)) and lt.worked_out
+    assert lt.halt_feed_failed != ()
+    bare = _group(Dating(fake_edgar), group)
+    assert (bare.day, bare.source) == (date(2021, 3, 4), CLOSING_DAY)
+
+
+def test_rule_4_never_dates_an_involuntary_removal_an_issuers_own_form25_or_a_continued_group(fake_edgar):
+    """TMA 2008: a (b) Form 25 follows the suspension by weeks; the issuer's own Form 25 and a group the security
+    went on after are no closing either."""
+    involuntary = [_f25(_exchange_raw(rule="17 CFR 240.12d2-2(b)(1)"), filed="2012-09-14")]
+    assert _group(Dating(fake_edgar), involuntary).day is None
+    own = [_f25(_exchange_raw().replace("25-NSE", "25"), form="25", filed="2012-09-14")]
+    assert _group(Dating(fake_edgar), own).day is None
+    voluntary = [_f25(_exchange_raw(), filed="2012-09-14")]
+    assert _group(Dating(fake_edgar), voluntary, continued=True).day is None
+    assert _group(Dating(fake_edgar), voluntary).source == CLOSING_DAY
+
+
+def test_rule_4s_closing_day_never_comes_before_the_last_day_the_own_rows_show_trading(fake_edgar):
+    """AVGO 2018, Z 2015: the text says March 1; the own CUSIP's rows show it trading to March 3 (the trading day
+    before the row that opens its last one-price run), no later than the Form 25 day, so March 3 stands."""
+    fake_edgar.texts["c1"] = "On March 1, 2021, Apache Corporation implemented a holding company reorganization."
+    filings = [EdgarSubmission("c1", "8-K", "2021-03-01", "2021-03-01", "2.01", "k.htm")]
+    rows = [FtdRow("2021-03-02", "OWNCUSIP1", "APA", "APACHE", 19.0), FtdRow("2021-03-04", "OWNCUSIP1", "APA",
+                                                                          "APACHE", 19.52),
+            FtdRow("2021-03-05", "OWNCUSIP1", "APA", "APACHE", 19.52)]
+    trading = OwnTrading((), frozenset({"OWNCUSIP1"}), rows, None)
+    lt = _group(Dating(fake_edgar), [_f25(_exchange_raw(), filed="2021-03-04")], trading=trading, filings=filings)
+    assert (lt.day, lt.source) == (date(2021, 3, 3), CLOSING_DAY)
+
+
+# -- dating the no-Form-25 fallback --------------------------------------------------------------------------------
+def test_the_fallback_reads_3_01_8ks_up_to_the_last_sighting_plus_five_days(fake_edgar):
+    """VRM 2024: the suspension 8-K came 13 days after the bankruptcy 8-K that dates the fallback."""
+    fake_edgar.texts["s2"] = ("Item 3.01 Notice of Delisting. Trading in the common stock will be suspended at the "
+                              "opening of business on January 28, 2015. " + "x" * 300)
+    filings = [EdgarSubmission("s2", "8-K", "2015-01-26", "2015-01-26", "3.01", "k2.htm")]
+    lt = Dating(fake_edgar).of_fallback(1, filings, ticker="VVV", ended_by=date(2015, 1, 12),
+                                        last_seen=date(2015, 1, 28), trading=OwnTrading(), merger=False)
+    assert (lt.day, lt.source, lt.confirmed) == (date(2015, 1, 27), EIGHTK_301, True)
+    early = Dating(fake_edgar).of_fallback(1, filings, ticker="VVV", ended_by=date(2015, 1, 12),
+                                           last_seen=date(2015, 1, 12), trading=OwnTrading(), merger=False)
+    assert early.source == UNSOURCED                  # the 8-K came past the last sighting + 5 days
+
+
+def test_the_fallback_ends_on_its_last_sighting_unconfirmed_keeping_the_failed_halt_days(fake_edgar):
+    halts = _Halts(fail=True)
+    lt = Dating(fake_edgar, halts=halts).of_fallback(1, [], ticker="VVV", ended_by=date(2015, 1, 10),
+                                                     last_seen=date(2015, 1, 10), trading=OwnTrading(), merger=False)
+    assert (lt.day, lt.source, lt.flags) == (date(2015, 1, 10), UNSOURCED, (UNCONFIRMED,))
+    assert lt.halt_feed_failed == tuple(halts.failed) != ()
+
+
+def test_a_fallback_merger_ends_on_the_closing_day_its_completion_8k_states(fake_edgar):
+    """FCL 2009: merged on July 31, last sighted August 14; never after the last sighting."""
+    fake_edgar.texts["m1"] = "On July 31, 2009, the Company completed its merger with Alpha Natural Resources."
+    filings = [EdgarSubmission("m1", "8-K", "2009-07-31", "2009-07-31", "2.01,5.01", "k.htm")]
+    lt = Dating(fake_edgar).of_fallback(1, filings, ticker="FCL", ended_by=date(2009, 8, 14),
+                                        last_seen=date(2009, 8, 14), trading=OwnTrading(), merger=True)
+    assert (lt.day, lt.source) == (date(2009, 7, 31), CLOSING_DAY) and not lt.confirmed
+    plain = Dating(fake_edgar).of_fallback(1, filings, ticker="FCL", ended_by=date(2009, 8, 14),
+                                           last_seen=date(2009, 8, 14), trading=OwnTrading(), merger=False)
+    assert plain.source == UNSOURCED
+    before = Dating(fake_edgar).of_fallback(1, filings, ticker="FCL", ended_by=date(2009, 7, 30),
+                                            last_seen=date(2009, 7, 30), trading=OwnTrading(), merger=True)
+    assert before.day == date(2009, 7, 30) and before.source == UNSOURCED
+
+
+# -- the security's own trading: rule 3's tenure and the rows' last day ---------------------------------------------
+OWN = {"OWNCUSIP1"}
+
+
+def _ftd(day, cusip, price, symbol="TKR"):
+    return FtdRow(day, cusip, symbol, "SOME CORP", price)
+
+
+def _taken(rows):
+    return ticker_taken(FtdIndex(rows), "TKR", OWN, "2019-03-01", "2019-04-30")
+
+
+def test_the_ticker_is_taken_the_day_before_another_cusips_first_priced_row_after_the_own_last_row():
+    rows = [_ftd("2019-03-04", "OWNCUSIP1", 10.0), _ftd("2019-03-05", "OWNCUSIP1", 10.5),
+            _ftd("2019-03-07", "OTHERCUSP", 48.9)]
+    assert _taken(rows) == "2019-03-06"          # a row carries the close of the trading day before it
+    trading = OwnTrading((), frozenset(OWN), (), FtdIndex(rows))
+    assert trading.taken("TKR", "2019-03-01", "2019-04-30") == "2019-03-06"
+    assert OwnTrading().taken("TKR", "2019-03-01", "2019-04-30") is None      # no fails index: no bound
+
+
+def test_another_cusips_row_between_the_own_rows_takes_nothing():
+    rows = [_ftd("2019-03-04", "OWNCUSIP1", 10.0), _ftd("2019-03-06", "OTHERCUSP", 48.9),
+            _ftd("2019-03-08", "OWNCUSIP1", 10.5), _ftd("2019-03-12", "OTHERCUSP", 49.0)]
+    assert _taken(rows) == "2019-03-11"
+
+
+def test_a_row_at_or_below_a_cent_is_no_trade():
+    """APA 2021: the new CUSIP's $0.01 first row beside the own row carrying the last close."""
+    assert _taken([_ftd("2019-03-04", "OWNCUSIP1", 10.0), _ftd("2019-03-05", "OTHERCUSP", 0.01)]) is None
+
+
+def test_no_own_row_under_the_ticker_gives_no_bound():
+    """BTU 2016, CHK 2020: the own CUSIPs have no row under the ticker in the window."""
+    assert _taken([_ftd("2019-03-05", "OTHERCUSP", 48.9)]) is None
+
+
+def test_the_rows_last_trading_day_is_the_day_before_the_last_one_price_run_of_the_last_cusip():
+    """AVGO 2018: the last CUSIP's fails settle at one price from 04-05, so it last traded on 04-04."""
+    rows = [_ftd("2018-03-29", "OLDCUSIP1", 250.0), _ftd("2018-04-02", "OWNCUSIP1", 251.0),
+            _ftd("2018-04-05", "OWNCUSIP1", 252.5), _ftd("2018-04-09", "OWNCUSIP1", 252.5)]
+    assert last_row_trade_day(rows) == "2018-04-04"
+    assert OwnTrading(rows=rows).trades_until() == "2018-04-04"
+    assert last_row_trade_day([]) is None
+
+
+def test_the_tickers_of_a_window_are_every_ticker_sighted_in_it_in_order():
+    trading = OwnTrading([Sighting("2018-06-01", "AET", "obs"), Sighting("2018-11-28", "AET", "ftd"),
+                          Sighting("2019-06-01", "AETQ", "ftd")])
+    assert trading.tickers("2018-06-01", "2019-12-31") == ["AET", "AETQ"]
+    assert trading.tickers("2019-01-01", "2019-12-31") == ["AETQ"]

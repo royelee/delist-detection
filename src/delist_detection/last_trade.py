@@ -1,22 +1,67 @@
-"""The last day a security traded on its exchange.
+"""The last trade date as one module (architecture step 4): the last day a security traded on its exchange, how
+an ending is dated, and what that day means.
 
-No rule requires an issuer to state it, so it is read from several places and
-cross-checked: the exchange's Form 25 notice (form25.notice_last_trade), the
-closing 8-K's Item 3.01 text (here), SEC MIDAS exchange volume and Nasdaq's
-code-D halts. Measured volume beats wording, and wording that disagrees with it
-is flagged. When nothing states the day, the closing day the filings give
-(`closing_day`) is the worked-out day: kept in delistings.csv, never published
-(decision 12; sub-plan 5d rule 4).
+No rule requires an issuer to state the day, so it is read from several places and cross-checked:
+
+- the exchange's Form 25 notice (`form25.notice_last_trade`);
+- the 3.01 8-Ks' text (`eightk_last_trade`), read in windows around the Form 25 group or the fallback's dating
+  filing;
+- SEC MIDAS exchange volume and Nasdaq's code-D halts, the two confirmations. Each is an adapter of `Dating`: a real
+  client (`midas.MidasClient`, `nasdaq_halts.NasdaqHaltClient`) or a fixture-backed double;
+- the ticker's tenure (rule 3): a read by ticker from the day another CUSIP took it is that security's
+  (`OwnTrading.taken`, `ticker_taken`);
+- when nothing states the day, the closing day the filings give (rule 4, `closing_day_read`) is the worked-out day,
+  kept in delistings.csv and never published (decision 12).
+
+Measured volume beats wording, and wording that disagrees with it is flagged (`decide_last_trade`).
+
+The interface:
+- `Dating` dates an ending: a Form 25 group (`of_group`, rule 4 inside), the no-Form-25 fallback (`of_fallback`),
+  and stage 9c's re-dating of a handoff row from its own Form 25 notice (`from_notice`);
+- `at_handoff`: the handoff stage's day for a continuation row and its cap on a worked-out day;
+- `LastTrade` and its derived facts, one definition each: `confirmed`, `worked_out`, `publishable`; over a
+  delistings.csv row, `of_row`, `effective_of` and `published`; the ending's anchor day (`anchor_day`: the day it is
+  read around), the day it ended its security's listing (`end_day`: the clip and stage 9e) and an added successor's
+  first day after it (`first_day_after`);
+- the sources (`SOURCES`, `EXCHANGE_PRINTS`) and the flags (`UNCONFIRMED`, `CONFLICT`, `NO_DAY`) the module writes.
 """
 from __future__ import annotations
 
 import re
-from collections.abc import Iterable
-from dataclasses import dataclass
-from datetime import date, datetime
+from collections.abc import Collection, Iterable, Mapping, Sequence
+from dataclasses import dataclass, replace
+from datetime import date, datetime, timedelta
+from typing import TYPE_CHECKING
 
 from .evidence import ITEM_MIN_SECTION, item_mention
-from .trading_calendar import is_trading_day, previous_trading_day
+from .form25 import (ISSUER_FORM25_FORMS, Form25, effective_date, is_involuntary, notice_last_trade,
+                     parse_form25)
+from .ftd import FtdIndex, FtdRow, settled_last
+from .midas import MIDAS_START
+from .nasdaq_halts import last_trade_from_halt
+from .trading_calendar import is_trading_day, next_trading_day, previous_trading_day
+
+if TYPE_CHECKING:
+    from .edgar import EdgarSubmission
+    from .history import Sighting
+
+# -- sources and flags: one definition ----------------------------------------
+# last_trade_date_source: where the day came from
+MIDAS = "midas"                     # SEC MIDAS: the last day with exchange volume
+NASDAQ_HALT = "nasdaq_halt"         # a Nasdaq code-D ("security deletion") halt
+EX99_NOTICE = "ex99_notice"         # the exchange's Form 25 notice (EX-99.25)
+EIGHTK_301 = "8k_301"               # an 8-K's Item 3.01 text
+CLOSING_DAY = "closing_day"         # rule 4: a worked-out closing day (never published)
+LAST_SIGHTING = "last_sighting"     # the handoff stage: A's last sighting under the ticker, before B's first
+UNSOURCED = ""                      # no source: no day, or the fallback's last sighting with nothing to date it
+SOURCES = (MIDAS, NASDAQ_HALT, EX99_NOTICE, EIGHTK_301, CLOSING_DAY, LAST_SIGHTING, UNSOURCED)
+EXCHANGE_PRINTS = frozenset({MIDAS, NASDAQ_HALT, EX99_NOTICE, EIGHTK_301})   # an exchange print gave the day
+MEASURED = frozenset({MIDAS, NASDAQ_HALT})                                   # measured, not worded
+# the review flags a dating writes onto its delisting
+UNCONFIRMED = "last_trade_date_unconfirmed"     # nothing confirms the day: never published
+CONFLICT = "last_trade_date_conflict"           # the text sources state another day than the one taken
+NO_DAY = "no_last_trade_date"
+FLAGS = frozenset({UNCONFIRMED, CONFLICT, NO_DAY})
 
 _MONTHS = ("January|February|March|April|May|June|July|August|September|October|November|December")
 _DATE = rf"((?:{_MONTHS})\s+\d{{1,2}},\s+\d{{4}})"
@@ -45,14 +90,12 @@ _ITEM_HEADING = re.compile(r"item\s*\d\s*\.\s*\d\s*\d\b\.?:?\s*[–—-]?\s*(?=[
 _CROSS_REF = re.compile(r"(?:\b(?:in|under|see|to|and|of|with|per|into|by)\s+)$", re.I)
 SECTION_WIDTH = 4000
 
-# Readings, best first: a stated timing (before the open, after the close, the last day), then a bare suspension
-# date (ruling R8: the trading day before D), then a suspension "immediately on D" (D, unconfirmed).
+# Readings, best first: a stated timing (before the open, after the close, a clock time, the last day), then a bare
+# suspension date (ruling R8: the trading day before D), then a suspension "immediately on D" (D, unconfirmed).
 EXPLICIT_KINDS = frozenset({"8k_open", "8k_open_closing", "8k_close", "8k_close_closing", "8k_close_effective",
-                            "8k_open_effective", "8k_last_day"})
+                            "8k_open_effective", "8k_close_clock", "8k_open_clock", "8k_last_day"})
 _RANK = {**{k: 0 for k in EXPLICIT_KINDS}, "8k_suspended": 1, "8k_suspended_unconfirmed": 2}
-OPEN_KINDS = frozenset({"8k_open", "8k_open_closing", "8k_open_effective"})
-
-CLOSING_DAY = "closing_day"         # last_trade_date_source of a worked-out closing day (never published)
+OPEN_KINDS = frozenset({"8k_open", "8k_open_closing", "8k_open_effective", "8k_open_clock"})
 
 
 def _session_on_or_before(d: date) -> date:
@@ -80,6 +123,10 @@ def _minutes(hour: str, minute: str, half: str) -> int:
 
 
 OPEN_MINUTES, CLOSE_MINUTES = 9 * 60 + 30, 16 * 60
+# a suspension at a stated clock time ("Trading of the Company's common stock was suspended effective as of
+# approximately 4:00 p.m. Eastern Time on September 17, 2020": SPNV 2020); groups: the clock's three, the date
+_SUSPENDED_AT = re.compile(rf"suspended (?:effective )?(?:as of|at) (?:approximately |about )?{_CLOCK}[^.;]{{0,40}}?"
+                           rf" on {_WDATE}", re.I)
 
 
 def _effective_time(text: str) -> tuple[date, int] | None:
@@ -154,6 +201,15 @@ def _read_sentence(s: str, flat: str) -> tuple[date | None, str]:
                 return _session_on_or_before(et[0]), "8k_close_effective"
             if et[1] < OPEN_MINUTES:
                 return previous_trading_day(et[0]), "8k_open_effective"
+    # a suspension at a stated clock time on D: at or after the close, D (SPNV 2020's 4:00 p.m.); before the open,
+    # the trading day before; during the session, no reading (the time says nothing of a last print)
+    m = _SUSPENDED_AT.search(s)
+    if m and clear(m) and not _OBLIGATIONS.search(s[max(0, m.start() - 80):m.start()]):
+        minute, day = _minutes(*m.group(1, 2, 3)), _day(m.group(4))
+        if minute >= CLOSE_MINUTES:
+            return _session_on_or_before(day), "8k_close_clock"
+        if minute < OPEN_MINUTES:
+            return previous_trading_day(day), "8k_open_clock"
     m = re.search(rf"last (?:day of trading|trading day|day (?:on which|that) [^.;]{{0,60}}? traded)[^.;]{{0,40}}?"
                   rf"(?:was|will be|is|would be) {_WDATE}", s, re.I) \
         or re.search(rf"{_DATE},? (?:which|that) (?:was|will be|is|would be) the last (?:full )?(?:day|trading day)",
@@ -268,14 +324,35 @@ def closing_day_read(texts: Iterable[str], lo: date, hi: date) -> tuple[date, st
     return c, CLOSING_DAY, False
 
 
+# -- the last trade and what it means ---------------------------------------------
 @dataclass(frozen=True)
 class LastTrade:
+    """One ending's last trade: the day (None: no source dates it), where it came from (one of `SOURCES`), the
+    review flags the dating raised (`FLAGS`), and the Nasdaq halt-feed days the decision asked for and could not
+    read (`nasdaq_halts`: a failure, not "no halts"; the decision rests on them)."""
     day: date | None
     source: str
     flags: tuple[str, ...]
-    # Days of the Nasdaq halt feed this decision asked for and could not read
-    # (nasdaq_halts: a failure, not "no halts"): the decision rests on them.
     halt_feed_failed: tuple[date, ...] = ()
+
+    @property
+    def confirmed(self) -> bool:
+        """A day that something confirms: dated, and not flagged `UNCONFIRMED` (an involuntary notice's decision day,
+        a suspension "immediately on D", a worked-out closing day, the fallback's last sighting). Only a confirmed
+        day is tested against fails rows (the clip) or bounds a successor's start."""
+        return self.day is not None and UNCONFIRMED not in self.flags
+
+    @property
+    def worked_out(self) -> bool:
+        """A day no source states, worked out from the closing (rule 4): the classification never anchors on it."""
+        return self.source == CLOSING_DAY
+
+    def publishable(self, effective: date | None) -> bool:
+        """Whether the contract publishes the day (decision 12, controller ruling of architecture step 4): confirmed,
+        from an exchange print (`EXCHANGE_PRINTS`), and no later than the Form 25's effective date `effective` (None:
+        no Form 25)."""
+        return (self.confirmed and self.source in EXCHANGE_PRINTS
+                and (effective is None or self.day <= effective))
 
 
 def _confirmed(kind: str) -> bool:
@@ -290,29 +367,390 @@ BARE_NOTICE_KINDS = frozenset({"notice_a", "notice_nasdaq"})
 
 def decide_last_trade(*, notice: tuple[date | None, str], eightk: tuple[date | None, str],
                       midas: date | None, halt: date | None) -> LastTrade:
+    """The source order over the readings: MIDAS, then a halt (but the 8-K's day when it puts the halt at the open of
+    the halt day, ruling R8), the notice's own timing, an 8-K timing that disagrees with the notice's bare date, the
+    notice, then the 8-K; a text day that disagrees with the one taken flags `CONFLICT`, an unconfirmed reading
+    `UNCONFIRMED`, and nothing at all `NO_DAY`."""
     texts = [d for d, _ in (notice, eightk) if d is not None]
 
     def pick(day: date, source: str, extra: tuple[str, ...] = ()) -> LastTrade:
-        conflict = ("last_trade_date_conflict",) if any(d != day for d in texts) else ()
+        conflict = (CONFLICT,) if any(d != day for d in texts) else ()
         return LastTrade(day, source, extra + conflict)
 
     (n_day, n_kind), (e_day, e_kind) = notice, eightk
     if midas is not None:
-        return pick(midas, "midas")
+        return pick(midas, MIDAS)
     if halt is not None:
         if e_day is not None and e_kind in OPEN_KINDS and e_day == previous_trading_day(halt):
             # the 8-K says the halt came at the open of the halt day (ruling R8: WM 2008, the regulatory halt "at
             # the NYSE market open on September 26", which the feed stamps 09:30:06): the day before
-            return pick(e_day, "8k_301")
-        return pick(halt, "nasdaq_halt")
+            return pick(e_day, EIGHTK_301)
+        return pick(halt, NASDAQ_HALT)
     if n_day and _confirmed(n_kind):
         if n_kind in BARE_NOTICE_KINDS and e_day and e_kind in EXPLICIT_KINDS and e_day != n_day:
-            return pick(e_day, "8k_301")
-        return pick(n_day, "ex99_notice")
+            return pick(e_day, EIGHTK_301)
+        return pick(n_day, EX99_NOTICE)
     if e_day and _confirmed(e_kind):
-        return pick(e_day, "8k_301")
+        return pick(e_day, EIGHTK_301)
     if n_day:
-        return pick(n_day, "ex99_notice", ("last_trade_date_unconfirmed",))
+        return pick(n_day, EX99_NOTICE, (UNCONFIRMED,))
     if e_day:
-        return pick(e_day, "8k_301", ("last_trade_date_unconfirmed",))
-    return LastTrade(None, "", ("no_last_trade_date",))
+        return pick(e_day, EIGHTK_301, (UNCONFIRMED,))
+    return LastTrade(None, UNSOURCED, (NO_DAY,))
+
+
+# -- the security's own trading: what a dating reads of it ------------------------
+PLACEHOLDER_PRICE = 0.01        # a fails row priced at or below this carries no close (a new CUSIP's placeholder)
+
+
+def ticker_taken(fails: FtdIndex, ticker: str, own: Collection[str], lo: str, hi: str) -> str | None:
+    """Rule 3 (5d), the ticker's tenure: the first day another CUSIP traded under `ticker` within the ISO window
+    [lo, hi] once the security's own CUSIPs (`own`) stopped: the trading day before that CUSIP's first priced fails
+    row there (a row carries the close of the trading day before it), when that row comes on or after the own
+    CUSIPs' last row under the ticker -- else None. None too when the own CUSIPs have no row under the ticker in the
+    window (the tenure there is not known: Peabody's, Chesapeake's own new CUSIPs). A $0.01 placeholder row is no
+    trade (APA Corp's first row, 2021-03-02, beside Apache's own row carrying its March 1 close). CCEP's shares
+    under CCE from 2016-05-31, Johnson Controls plc's under JCI from 2016-09-06."""
+    rows = [r for r in fails.by_symbol(ticker, lo, hi) if r.price is not None and r.price > PLACEHOLDER_PRICE]
+    mine = [r.date for r in rows if r.cusip in own]
+    if not mine:
+        return None
+    other = next((r.date for r in rows if r.cusip not in own and r.date > mine[0] and r.date >= mine[-1]), None)
+    return previous_trading_day(date.fromisoformat(other)).isoformat() if other else None
+
+
+def last_row_trade_day(rows: Sequence[FtdRow]) -> str | None:
+    """The last day the fails rows show the security trading: the trading day before the row that opens the
+    last one-price run (`ftd.settled_last`, fails still settling after the last trade) of the CUSIP it held
+    last, ISO (AVGO 2018: the run opens 04-05, so 04-04); None without rows."""
+    if not rows:
+        return None
+    last = max(r.date for r in rows)
+    own = sorted((r for r in rows if r.cusip == next(x.cusip for x in rows if x.date == last)),
+                 key=lambda r: r.date)
+    return previous_trading_day(date.fromisoformat(settled_last(own).date)).isoformat()
+
+
+@dataclass(frozen=True)
+class OwnTrading:
+    """What a dating reads of the security's own trading: its sightings (`history.Sighting`, by day; the OTC symbol
+    it moved to included), its own CUSIPs, their trading fails rows, and the fails index another CUSIP's rows under
+    its ticker come from. The default (nothing known): no other ticker, no tenure bound, no rows."""
+    sightings: Sequence[Sighting] = ()
+    cusips: frozenset[str] = frozenset()
+    rows: Sequence[FtdRow] = ()
+    fails: FtdIndex | None = None
+
+    def tickers(self, lo: str, hi: str) -> list[str]:
+        """Every ticker the security was sighted under between two ISO days, in sighting order: the ticker on a Form
+        25's date can be the OTC symbol already (SAVE -> SAVEQ), which no exchange source knows."""
+        return list(dict.fromkeys(x.value for x in self.sightings if lo <= x.day <= hi))
+
+    def taken(self, ticker: str, lo: str, hi: str) -> str | None:
+        """Rule 3 over the security's own CUSIPs (`ticker_taken`); None without a fails index."""
+        return ticker_taken(self.fails, ticker, self.cusips, lo, hi) if self.fails is not None else None
+
+    def trades_until(self) -> str | None:
+        """The last day the security's own fails rows show it trading (`last_row_trade_day`)."""
+        return last_row_trade_day(self.rows)
+
+
+# -- dating an ending -------------------------------------------------------------
+MIDAS_BEFORE_DAYS, MIDAS_AFTER_DAYS, MIDAS_STILL_TRADING_DAYS = 75, 10, 5
+EIGHTK_BEFORE_DAYS, EIGHTK_AFTER_DAYS = 60, 5      # single-filing 8-K window (fallback path)
+EIGHTK_GROUP_AFTER_DAYS = 15                       # group 8-K window: latest filed + this many days
+CLOSING_BEFORE_DAYS = 10            # rule 4 (5d): a closing day stated this long before the Form 25 still counts
+CLOSING_TEXT_AFTER_DAYS = 10        # ... read from the 8-Ks filed up to this long after it (CDWC, MYL, IMCL)
+CLOSING_FALLBACK_AFTER_DAYS = 3     # no Form 25: a closing day up to this long after the completion 8-K
+FALLBACK_COMPLETION_DAYS = 30       # ... the latest 2.01/5.01 8-K filed this long before the last sighting
+TAKEN_AFTER_DAYS = 5                # rule 3 (5d): another CUSIP's fails rows this long past a read window
+
+
+class Dating:
+    """Dates one ending (the module docstring's interface). It reads the issuer's 8-K texts and Form 25s through the
+    run's EDGAR client, and the two confirmations through their adapters: `midas` (`last_trade_day(ticker, lo, hi)`)
+    and `halts` (`deletion_halt(ticker, lo, hi, max_days=)`, `failed_days()`). Either may be None: not asked."""
+
+    def __init__(self, edgar, *, midas=None, halts=None) -> None:
+        self.edgar, self.midas, self.halts = edgar, midas, halts
+
+    # -- the entry points -----------------------------------------------------------
+    def of_group(self, cik: int, filings: Sequence[EdgarSubmission], group: Sequence[tuple[EdgarSubmission, Form25]],
+                 winner: tuple[EdgarSubmission, Form25], *, ticker: str, trading: OwnTrading,
+                 continued: bool) -> LastTrade:
+        """The last trade of a delisting made of the Form 25 `group` of CIK `cik` (`filings`: its filing list), whose
+        `winner` supplies the delisting's exchange and which the security went on after when `continued`.
+
+        The readings: the first notice that states a day (an exchange's 25-NSE first); the best 3.01 8-K reading
+        filed in [earliest filing - EIGHTK_BEFORE_DAYS, latest + EIGHTK_GROUP_AFTER_DAYS]; MIDAS over [earliest -
+        MIDAS_BEFORE_DAYS, latest effective + MIDAS_AFTER_DAYS] under `ticker` and every ticker the security carried
+        then; the halt feed around the text days (else the Form 25 day). Then `decide_last_trade`.
+
+        Rule 4 (5d): a group left undated, not continued, whose winner is an exchange's Form 25 (not the issuer's own,
+        not an involuntary (b) removal: it follows the suspension by weeks, TMA 2008) takes the closing day the 8-Ks
+        give within CLOSING_BEFORE_DAYS of its earliest filing day F (read from those filed up to
+        CLOSING_TEXT_AFTER_DAYS after it), else F itself: source `closing_day`, flagged `UNCONFIRMED` (`worked_out`).
+        The closing day never comes before the last day the security's own fails rows show it trading
+        (`OwnTrading.trades_until`) when that day is no later than F and the text did not date the closing before
+        the open (AVGO 2018, Z 2015; Imclone 2008's 8:28 A.M. stands)."""
+        lt = self._group_reading(cik, filings, group, ticker, trading)
+        sub, f25 = winner
+        if lt.day is not None or continued or sub.form in ISSUER_FORM25_FORMS or is_involuntary(f25):
+            return lt
+        filed = date.fromisoformat(min(s.filing_date for s, _ in group))
+        shown = trading.trades_until()
+        got = self._closing_day(cik, filings, filed - timedelta(days=CLOSING_BEFORE_DAYS), filed,
+                                date.fromisoformat(shown) if shown else None)
+        return replace(got or LastTrade(filed, CLOSING_DAY, (UNCONFIRMED,)), halt_feed_failed=lt.halt_feed_failed)
+
+    def of_fallback(self, cik: int, filings: Sequence[EdgarSubmission], *, ticker: str, ended_by: date,
+                    last_seen: date, trading: OwnTrading, merger: bool) -> LastTrade:
+        """The last trade of a delisting with no Form 25, dated by the filing `ended_by` (the fallback's dating
+        filing) for a security last sighted on `last_seen`.
+
+        The 3.01 8-Ks are read in [ended_by - EIGHTK_BEFORE_DAYS, max(ended_by, last_seen) + EIGHTK_AFTER_DAYS]: a
+        suspension notice can follow the bankruptcy 8-K by weeks (VRM 2024); MIDAS stays anchored on `ended_by`. A
+        `merger` left undated ends on the closing day its completion 8-K (the latest with item 2.01 or 5.01 filed in
+        [last_seen - FALLBACK_COMPLETION_DAYS, last_seen + CLOSING_FALLBACK_AFTER_DAYS]) states (rule 4: FCL 2009,
+        SGP 2009), never after the last sighting. Else the last sighting itself, unsourced and `UNCONFIRMED`."""
+        lt = self._single_reading(cik, filings, ticker, ended_by, trading, max(ended_by, last_seen))
+        if lt.day is None and merger:
+            done = [date.fromisoformat(f.filing_date) for f in filings if f.form.startswith("8-K") and f.filing_date
+                    and {"2.01", "5.01"} & f.item_set
+                    and last_seen - timedelta(days=FALLBACK_COMPLETION_DAYS) <= date.fromisoformat(f.filing_date)
+                    <= last_seen + timedelta(days=CLOSING_FALLBACK_AFTER_DAYS)]
+            got = self._closing_day(cik, filings, max(done) - timedelta(days=CLOSING_BEFORE_DAYS),
+                                    max(done) + timedelta(days=CLOSING_FALLBACK_AFTER_DAYS)) if done else None
+            if got is not None and got.day <= last_seen:
+                lt = replace(got, halt_feed_failed=lt.halt_feed_failed)
+        if lt.day is None:
+            lt = LastTrade(last_seen, UNSOURCED, (UNCONFIRMED,), lt.halt_feed_failed)
+        return lt
+
+    def from_notice(self, cik: int, filing: Mapping[str, str] | None, lt: LastTrade, *, before: str,
+                    effective: str) -> LastTrade:
+        """Stage 9c: a handoff continuation row dated by its last sighting (`LAST_SIGHTING`) whose Form 25 (`filing`:
+        form, filing_date, accession) has a notice stating a confirmed last day of trading takes that day (source
+        `ex99_notice`), provided it is before the successor's first sighting `before` (ISO; blank: no cap) and no
+        later than the Form 25's effective date `effective`. Else `lt` itself, unchanged: a row dated another way is
+        never read, and neither is a row without a Form 25; an unreadable notice reads as none."""
+        if not filing or lt.source != LAST_SIGHTING:
+            return lt
+        raw = self.edgar.fetch_filing_raw(cik, filing["accession"])
+        if not raw:
+            return lt
+        f25 = parse_form25(raw, accession=filing["accession"], form=filing["form"], filing_date=filing["filing_date"])
+        got = decide_last_trade(notice=notice_last_trade(f25), eightk=(None, ""), midas=None, halt=None)
+        if not got.confirmed:
+            return lt
+        if (before and got.day >= date.fromisoformat(before)) or got.day > date.fromisoformat(effective):
+            return lt
+        return got
+
+    # -- the readings ---------------------------------------------------------------
+    def _group_reading(self, cik: int, filings: Sequence[EdgarSubmission],
+                       group: Sequence[tuple[EdgarSubmission, Form25]], ticker: str, trading: OwnTrading) -> LastTrade:
+        subs = [s for s, _ in group]
+        earliest_filed = date.fromisoformat(min(s.filing_date for s in subs))
+        latest_filed = date.fromisoformat(max(s.filing_date for s in subs))
+        latest_eff = date.fromisoformat(max(effective_date(s.filing_date) for s in subs))
+        notice: tuple[date | None, str] = (None, "")
+        for _, f25 in sorted(group, key=lambda item: (item[0].form != "25-NSE", item[0].filing_date)):
+            n = notice_last_trade(f25)
+            if n[0] is not None:
+                notice = n
+                break
+        eightk = self._eightk_window(cik, filings, earliest_filed - timedelta(days=EIGHTK_BEFORE_DAYS),
+                                     latest_filed + timedelta(days=EIGHTK_GROUP_AFTER_DAYS), earliest_filed)
+        lo = earliest_filed - timedelta(days=MIDAS_BEFORE_DAYS)
+        hi = latest_eff + timedelta(days=MIDAS_AFTER_DAYS)
+        texts = [d for d, _ in (notice, eightk) if d]
+        confirmations = self._confirmations(
+            self._tickers(trading, ticker, lo, hi), earliest_filed, lo, hi,
+            latest_eff + timedelta(days=MIDAS_STILL_TRADING_DAYS),
+            texts or [previous_trading_day(latest_filed), latest_filed], trading, texts)
+        return self._decide(notice, eightk, confirmations)
+
+    def _single_reading(self, cik: int, filings: Sequence[EdgarSubmission], ticker: str, filed: date,
+                        trading: OwnTrading, eightk_until: date) -> LastTrade:
+        """No Form 25: the 3.01 8-Ks in [filed - EIGHTK_BEFORE_DAYS, `eightk_until` + EIGHTK_AFTER_DAYS], MIDAS
+        around `filed`, the halt feed around the 8-K's day (else the trading day before `filed`)."""
+        notice: tuple[date | None, str] = (None, "")
+        eightk = self._eightk_window(cik, filings, filed - timedelta(days=EIGHTK_BEFORE_DAYS),
+                                     eightk_until + timedelta(days=EIGHTK_AFTER_DAYS), filed)
+        lo, hi = filed - timedelta(days=MIDAS_BEFORE_DAYS), filed + timedelta(days=MIDAS_AFTER_DAYS)
+        texts = [d for d, _ in (notice, eightk) if d]
+        confirmations = self._confirmations(
+            self._tickers(trading, ticker, lo, hi), filed, lo, hi, filed + timedelta(days=MIDAS_STILL_TRADING_DAYS),
+            texts or [previous_trading_day(filed)], trading, texts)
+        return self._decide(notice, eightk, confirmations)
+
+    def _eightk_window(self, cik: int, filings: Sequence[EdgarSubmission], lo: date, hi: date,
+                       anchor: date) -> tuple[date | None, str]:
+        """The best last-trade reading (`reading_rank`) of the 3.01 8-Ks filed in [lo, hi], nearest `anchor` first
+        among equals; the search stops at the first stated timing."""
+        cands = [f for f in filings if f.form.startswith("8-K") and "3.01" in f.item_set
+                 and f.filing_date and lo <= date.fromisoformat(f.filing_date) <= hi]
+        best: tuple[date | None, str] = (None, "")
+        for f in sorted(cands, key=lambda f: abs((date.fromisoformat(f.filing_date) - anchor).days)):
+            got = eightk_last_trade(self.edgar.fetch_filing_text(cik, f.accession, f.primary_doc))
+            if got[0] is not None and (best[0] is None or reading_rank(got[1]) < reading_rank(best[1])):
+                best = got
+                if reading_rank(got[1]) == 0:
+                    break
+        return best
+
+    def _closing_day(self, cik: int, filings: Sequence[EdgarSubmission], lo: date, hi: date,
+                     shown: date | None = None) -> LastTrade | None:
+        """Rule 4's reading: the closing day the issuer's 8-Ks filed in [lo, hi + CLOSING_TEXT_AFTER_DAYS] give for
+        [lo, hi] (`closing_day_read`), source `closing_day`, flagged `UNCONFIRMED` (so the ranges always clip there
+        and the contract publishes nothing). `shown`, the last day the security's own fails rows show it trading: a
+        closing day before it, one the text did not step back from its stated day, becomes it (never after `hi`)."""
+        texts = [self.edgar.fetch_filing_text(cik, f.accession, f.primary_doc) for f in filings
+                 if f.form.startswith("8-K") and f.filing_date
+                 and lo <= date.fromisoformat(f.filing_date) <= hi + timedelta(days=CLOSING_TEXT_AFTER_DAYS)]
+        got = closing_day_read(texts, lo, hi)
+        if got is None:
+            return None
+        day = shown if shown is not None and not got[2] and got[0] < shown <= hi else got[0]
+        return LastTrade(day, got[1], (UNCONFIRMED,))
+
+    def _halt_feed_failures(self) -> tuple[date, ...]:
+        """The halt feed's failed days so far on this thread (an adapter without `failed_days` never fails)."""
+        failed_days = getattr(self.halts, "failed_days", None)
+        return tuple(failed_days()) if failed_days is not None else ()
+
+    def _confirmations(self, tickers: list[str], filed: date, lo: date, hi: date, still_trading: date,
+                       guesses: list[date], trading: OwnTrading, texts: Sequence[date] = ()
+                       ) -> tuple[date | None, date | None, tuple[date, ...]]:
+        """(MIDAS last day with exchange volume, Nasdaq code-D halt day, halt feed days that failed to read) over
+        every ticker in `tickers`: MIDAS (asked when `filed` is in its coverage) takes the latest day in `[lo, hi]`
+        before `still_trading` under any of them; the halt feed is asked only when MIDAS has nothing, around the
+        text sources' `guesses`.
+
+        Rule 3: a MIDAS or halt day after a text day (`texts`) is the security's own only before another CUSIP began
+        trading under that ticker (`OwnTrading.taken`): MIDAS is then read up to the day before (CCEP under CCE
+        2016, Johnson Controls plc under JCI 2016, JET's ADS under GRUB 2021), and such a halt is dropped. Without a
+        text day that disagrees, nothing is bounded, and the bound is only tried when MIDAS's day under the ticker
+        falls before the still-trading cut (a successor's first fails rows can lag its first day: Sinclair Inc 2023,
+        new TCF 2019)."""
+        first_text = min(texts) if texts else None
+
+        def taken(t: str) -> date | None:
+            got = trading.taken(t, lo.isoformat(), (hi + timedelta(days=TAKEN_AFTER_DAYS)).isoformat())
+            return date.fromisoformat(got) if got else None
+
+        def read(t: str, until: date) -> date | None:
+            m = self.midas.last_trade_day(t, lo, until) if until >= lo else None
+            return m if m is not None and m < still_trading else None
+
+        midas = None
+        if self.midas is not None and filed >= MIDAS_START:
+            days = {t: m for t in tickers if (m := read(t, hi)) is not None}
+            for t, m in list(days.items()):
+                if first_text is not None and first_text < m and (b := taken(t)) is not None and b <= m:
+                    days[t] = read(t, min(hi, previous_trading_day(b)))
+            found = [m for m in days.values() if m is not None]
+            midas = max(found) if found else None
+        halt, failed = None, ()
+        if midas is None and self.halts is not None:
+            before = len(self._halt_feed_failures())
+            for t in tickers:
+                h = self.halts.deletion_halt(t, min(guesses) - timedelta(days=2),
+                                             max(guesses) + timedelta(days=2), max_days=5)
+                if not h:
+                    continue
+                day = last_trade_from_halt(h)
+                if first_text is not None and first_text < day and (b := taken(t)) is not None and b <= day:
+                    continue
+                halt = day
+                break
+            failed = self._halt_feed_failures()[before:]
+        return midas, halt, failed
+
+    @staticmethod
+    def _decide(notice: tuple[date | None, str], eightk: tuple[date | None, str],
+                confirmations: tuple[date | None, date | None, tuple[date, ...]]) -> LastTrade:
+        """`decide_last_trade` over the text sources and the confirmations, carrying the halt feed days that failed
+        to read."""
+        midas, halt, failed = confirmations
+        lt = decide_last_trade(notice=notice, eightk=eightk, midas=midas, halt=halt)
+        return replace(lt, halt_feed_failed=failed) if failed else lt
+
+    @staticmethod
+    def _tickers(trading: OwnTrading, ticker: str, lo: date, hi: date) -> list[str]:
+        """`ticker` first, then every other ticker the security carried in `[lo, hi]`."""
+        return list(dict.fromkeys([ticker, *trading.tickers(lo.isoformat(), hi.isoformat())]))
+
+
+# -- the handoff stage ------------------------------------------------------------
+def handoff_day(a_last: str, b_first: str) -> date:
+    """A's last trading day in a continuation (A hands its ticker to B): its last sighting under the ticker, but
+    never on or after B's first (a fails row is dated the day after the close it carries, so the two can meet: ST
+    2018, AON 2020)."""
+    return min(date.fromisoformat(a_last), date.fromisoformat(b_first) - timedelta(days=1))
+
+
+def at_handoff(lt: LastTrade | None, a_last: str, b_first: str) -> LastTrade:
+    """The last trade of A's row in a continuation: a row the handoff stage writes (`lt` None) or a kept row with no
+    day takes `handoff_day`, source `last_sighting`, so A's range ends before B's begins (PNFP 2026); a worked-out
+    closing day (rule 4) never reaches B's first sighting under the ticker: past `handoff_day`, it becomes that day,
+    source `last_sighting`, still unconfirmed. Any other day stands."""
+    day = handoff_day(a_last, b_first)
+    if lt is None:
+        return LastTrade(day, LAST_SIGHTING, ())
+    if lt.day is None:
+        return replace(lt, day=day, source=LAST_SIGHTING, flags=tuple(f for f in lt.flags if f != NO_DAY))
+    if lt.worked_out and lt.day > day:
+        return replace(lt, day=day, source=LAST_SIGHTING)
+    return lt
+
+
+# -- the ending's anchor day ----------------------------------------------------------
+def anchor_day(lt: LastTrade, delist_date: str, *, filed: str | None = None, anchor_8k: str | None = None) -> date:
+    """The day an ending is read around (its anchor): its last trade; else its Form 25's filing date `filed`; else
+    the filing date of the 8-K the classifier anchored on `anchor_8k`; else (approximate) its delisting date."""
+    if lt.day is not None:
+        return lt.day
+    for day in (filed, anchor_8k):
+        if day:
+            return date.fromisoformat(day)
+    return date.fromisoformat(delist_date)
+
+
+def end_day(lt: LastTrade, delist_date: str) -> date:
+    """The day an ending ends its security's listing: its last trade, else its delisting date (a Form 25's effective
+    date). The clip (`pipeline._history_rows`) and stage 9e's off-exchange reads take it, not `anchor_day`: an
+    undated security stayed listed until its Form 25 took effect (the anchor's filing date would clip FWLT 2014, AWH
+    2017, WPG 2021 and ARD 2021 ten days early and read WPG's OTC symbol from before its removal)."""
+    return lt.day if lt.day is not None else date.fromisoformat(delist_date)
+
+
+def first_day_after(day: date) -> date:
+    """The first day a successor the run adds is seen after its predecessor's last trade (or anchor) `day`: the next
+    trading day (the 5h OKE fix)."""
+    return next_trading_day(day)
+
+
+# -- over a delistings.csv row --------------------------------------------------------
+def effective_of(row: Mapping[str, str]) -> date | None:
+    """The day a delistings.csv row's Form 25 takes effect (`form25.effective_date`), or None when the row cites no
+    Form 25."""
+    if row["delist_filing_date"] and row["delist_filing_form"].startswith("25"):
+        return date.fromisoformat(effective_date(row["delist_filing_date"]))
+    return None
+
+
+def of_row(row: Mapping[str, str]) -> LastTrade:
+    """A delistings.csv row's last trade, read back from its published columns: `last_trade_date`,
+    `last_trade_date_source` and the dating's flags among `review_flags`."""
+    day = date.fromisoformat(row["last_trade_date"]) if row["last_trade_date"] else None
+    flags = tuple(f for f in (row.get("review_flags") or "").split(";") if f.split(":")[0] in FLAGS)
+    return LastTrade(day, row["last_trade_date_source"], flags)
+
+
+def published(row: Mapping[str, str]) -> str:
+    """contract/delistings.csv's last_trade_date (decision 12): the row's day when it is publishable
+    (`LastTrade.publishable` against the row's Form 25 effective date), else blank."""
+    lt = of_row(row)
+    return lt.day.isoformat() if lt.publishable(effective_of(row)) else ""

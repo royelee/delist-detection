@@ -21,6 +21,7 @@ from .trading_calendar import previous_trading_day
 FORM25_FORMS = frozenset({"25", "25-NSE", "25/A", "25-NSE/A"})
 MAJOR_EXCHANGES = frozenset({"NYSE", "NYSE AMERICAN", "NASDAQ", "NYSE ARCA", "CBOE BZX"})
 REGIONAL_EXCHANGES = frozenset({"CHICAGO", "NSX", "PACIFIC", "BOSTON", "PHLX"})
+ISSUER_FORM25_FORMS = frozenset({"25", "25/A"})      # filed by the issuer, not by the exchange (25-NSE)
 
 # Order matters: the specific names before the bare NYSE / NASDAQ patterns.
 _EXCHANGES: list[tuple[str, str]] = [

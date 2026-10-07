@@ -27,7 +27,8 @@ from pathlib import Path
 
 from .atomic_io import write_atomic
 from .end_of_era import CONTINUED_FILINGS
-from .lifecycle import (CLOSED_NO_EVENT, ENDED_INCOMPLETE, EXCHANGE_PRINT_SOURCES,
+from .last_trade import CONFLICT, EXCHANGE_PRINTS, UNCONFIRMED
+from .lifecycle import (CLOSED_NO_EVENT, ENDED_INCOMPLETE,
                         HIGH, LEFT_VIEW, LOW, MEDIUM, NO_INTERVAL,
                         NO_MAPPED_SIGHTING, Lifecycle, LifecycleView, Tables, flag_names)
 from .diagnosis_truth import (KNOWN_WRONG as D_KNOWN_WRONG, MISMATCH_FIELDS, PASS as D_PASS, RULING_PENDING,
@@ -201,7 +202,7 @@ def _ending_lines(tables: Tables, window: Window | None) -> dict[str, float]:
         "R2.endings": len(real),
         "R2.1.with_last_trade_date": len(real) - len(missing_ltd),
         "R2.1.missing_last_trade_date": len(missing_ltd),
-        "R2.1.exchange_print_source": sum(r["last_trade_date_source"] in EXCHANGE_PRINT_SOURCES for r in real),
+        "R2.1.exchange_print_source": sum(r["last_trade_date_source"] in EXCHANGE_PRINTS for r in real),
         "R2.2.unknown_reason": sum(not fields[id(r)].exit_kind for r in real),
         "R2.2.continued_filings_rule": sum(r["reason"].startswith(CONTINUED_FILINGS) for r in real),
         "R2.4.assumed_par": sum(r["dlret_method"] == "assumed_par" for r in real),
@@ -209,8 +210,7 @@ def _ending_lines(tables: Tables, window: Window | None) -> dict[str, float]:
         "R2.5.distress_blank_dlret": sum(not r["dlret"] for r in distress),
         "R2.5.distress_no_last_trade_date": sum(not r["last_trade_date"] for r in distress),
         "R2.6.distress_flagged": sum(bool(flag_names(r)) for r in distress),
-        "R2.6.distress_date_flagged": sum(bool(flag_names(r) & {"last_trade_date_conflict",
-                                                                  "last_trade_date_unconfirmed"}) for r in distress),
+        "R2.6.distress_date_flagged": sum(bool(flag_names(r) & {CONFLICT, UNCONFIRMED}) for r in distress),
         "R2.6.distress_ticker_map": sum("resolved_by_current_ticker_map" in flag_names(r) for r in distress),
         "R2.6.distress_normal_price": sum("distress_at_normal_price" in flag_names(r) for r in distress),
     }

@@ -84,25 +84,6 @@ def test_aet_merger_delisting(fake_edgar):
     assert midas.calls[0][0] == "AET"
 
 
-def test_midas_volume_past_the_window_is_ignored(fake_edgar):
-    # The AET Form 25 group is a single filing (2018-11-29), so the finder's
-    # MIDAS window is [earliest filed - 75d, latest effective + 10d] =
-    # [2018-09-15, 2018-12-19], and effective = 2018-12-09. MIDAS is ignored
-    # only once its last volume day is on or after effective + SEEN_AFTER_DAYS
-    # (5) = 2018-12-14. Two boundary probes, both inside the requested window:
-    #   2018-12-14 (== effective + 5d): ignored, falls back to the ex99 notice
-    #   2018-12-13 (== effective + 4d): used as the last trade day
-    edgar = _aet_edgar(fake_edgar)
-    clf = DelistClassifier(edgar, TickerResolver(edgar))
-    sec = _sec("BBG000FJLFX8", 1122304, "AET", "2017-06-30", "2018-06-29", "AETNA INC")
-
-    (ev_ignored,), _ = DelistingFinder(edgar, clf, midas=_Midas(date(2018, 12, 14))).find(_ctx(sec))
-    assert ev_ignored.last_trade.source == "ex99_notice" and ev_ignored.last_trade.day == date(2018, 11, 28)
-
-    (ev_used,), _ = DelistingFinder(edgar, clf, midas=_Midas(date(2018, 12, 13))).find(_ctx(sec))
-    assert ev_used.last_trade.source == "midas" and ev_used.last_trade.day == date(2018, 12, 13)
-
-
 def test_secondary_regional_withdrawal_is_skipped(fake_edgar):
     fake_edgar.submissions_by_cik[6769] = [EdgarSubmission("c1", "25", "2020-06-08", "", "", "p.xml")]
     fake_edgar.raws["c1"] = CHICAGO_RAW
@@ -150,31 +131,6 @@ def test_listed_today_without_form25_is_quiet(fake_edgar):
     clf = DelistClassifier(fake_edgar, TickerResolver(fake_edgar))
     sec = _sec("BBG_L", 556, "LIVE", "2020-06-30", "2026-06-30", "LIVE CO")
     assert DelistingFinder(fake_edgar, clf).find(_ctx(sec, listed=True)) == ([], [])
-
-
-RSH_RAW = (FIX / "rsh_25nse.txt").read_text(encoding="utf-8", errors="replace")
-
-
-def test_an_involuntary_notice_date_that_nothing_confirms_is_flagged_unconfirmed(fake_edgar):
-    """Spec 8.8: on an involuntary (rule 12d2-2(b)) notice the date is the
-    Exchange's decision day, to be confirmed by MIDAS or a Nasdaq halt. NYSE's
-    RadioShack notice announces the suspension "at the close of the trading
-    session on February 2, 2015"; with no MIDAS or halt to confirm it (MIDAS
-    starts in 2012, so every earlier (b) notice is in this case) the date is
-    kept but flagged last_trade_date_unconfirmed."""
-    fake_edgar.submissions_by_cik[96289] = [
-        EdgarSubmission("0000876661-15-000132", "25-NSE", "2015-03-20", "", "", "primary_doc.xml")]
-    fake_edgar.raws["0000876661-15-000132"] = RSH_RAW
-    clf = DelistClassifier(fake_edgar, TickerResolver(fake_edgar))
-    sec = _sec("BBG000BRSH01", 96289, "RSH", "2014-06-30", "2014-12-31", "RADIOSHACK CORP")
-    (ev,), _ = DelistingFinder(fake_edgar, clf).find(_ctx(sec, last_seen="2015-02-02"))
-    assert (ev.last_trade.day, ev.last_trade.source) == (date(2015, 2, 2), "ex99_notice")
-    assert "last_trade_date_unconfirmed" in ev.last_trade.flags
-    assert "last_trade_date_unconfirmed" in ev.record.evidence["flags"]
-    # confirmed by MIDAS on the same day: no flag
-    (ev,), _ = DelistingFinder(fake_edgar, clf, midas=_Midas(date(2015, 2, 2))).find(
-        _ctx(sec, last_seen="2015-02-02"))
-    assert ev.last_trade.source == "midas" and ev.last_trade.flags == ()
 
 
 
@@ -721,43 +677,6 @@ def test_a_merger_ends_the_security_even_when_sightings_follow_it(fake_edgar):
     assert review == []
 
 
-class _TickerMidas:
-    def __init__(self, days):
-        self.days, self.calls = days, []
-
-    def last_trade_day(self, ticker, lo, hi):
-        self.calls.append(ticker)
-        return self.days.get(ticker)
-
-
-def test_last_trade_confirmation_asks_for_every_ticker_of_the_window(fake_edgar):
-    """Spirit Airlines: NYSE suspended SAVE before the open on 2024-11-18 and
-    filed its Form 25 on 2024-12-05, by when the shares traded OTC as SAVEQ
-    (fails rows under SAVEQ). MIDAS, exchange trades only, knows SAVE, not
-    SAVEQ: the confirmation must ask for every ticker the security carried in
-    the window, not only the one on the Form 25's date."""
-    notice = ("<TYPE>25-NSE\n<notificationOfRemoval><exchange><entityName>New York Stock Exchange LLC"
-              "</entityName></exchange>\n<descriptionClassSecurity>Common Stock</descriptionClassSecurity>\n"
-              "<ruleProvision>17 CFR 240.12d2-2(b)</ruleProvision></notificationOfRemoval>\n"
-              "<TYPE>EX-99.25\n<TEXT>\nOn November 18, 2024, the Exchange determined that the common stock "
-              "of Spirit Airlines, Inc. should be suspended immediately.\n</TEXT>")
-    fake_edgar.submissions_by_cik[1498710] = [
-        EdgarSubmission("sv1", "8-K", "2024-11-18", "2024-11-18", "1.03,7.01,9.01", "k.htm"),
-        EdgarSubmission("sv2", "25-NSE", "2024-12-05", "", "", "p.xml"),
-    ]
-    fake_edgar.raws["sv2"] = notice
-    fake_edgar.texts["sv1"] = "Item 1.03 Bankruptcy or Receivership. filed voluntary petitions under chapter 11. " + "x" * 300
-    clf = DelistClassifier(fake_edgar, TickerResolver(fake_edgar))
-    sec = _sec("BBG000BF6RQ9", 1498710, "SAVE", "2023-06-30", "2024-06-28", "SPIRIT AIRLINES INC")
-    ctx = _ctx(sec, last_seen="2024-11-18")
-    ctx.ticker_on = lambda d: "SAVE" if d < "2024-11-19" else "SAVEQ"
-    ctx.tickers_between = lambda lo, hi: ["SAVE", "SAVEQ"]
-    midas = _TickerMidas({"SAVE": date(2024, 11, 15)})
-    (ev,), _ = DelistingFinder(fake_edgar, clf, midas=midas).find(ctx)
-    assert ev.last_trade.day == date(2024, 11, 15) and ev.last_trade.source == "midas"
-    assert set(midas.calls) == {"SAVE", "SAVEQ"}
-
-
 def test_cik_none_listing_status_unknown(fake_edgar):
     sec = _sec("BBG_NOCIK3", None, "NOC3", "2018-01-01", "2020-01-01", "NOCIK CO")
     clf = DelistClassifier(fake_edgar, TickerResolver(fake_edgar))
@@ -829,53 +748,6 @@ def test_a_delistings_flags_are_its_records_evidence_flags():
     continuation(ev, "BBG009S39JX6", Rule.SUCCESSOR_LINK)
     assert rec.successor_sec_id == "BBG009S39JX6"
     assert rec.evidence["flags"] == ev.flags == ["ftd_close_lagged"]
-
-
-class _FailingHalts:
-    """A halt feed that fails every day it is asked for (a timeout), like
-    NasdaqHaltClient: no halts, and the day listed by failed_days()."""
-
-    def __init__(self):
-        self.failed = []
-
-    def deletion_halt(self, symbol, lo, hi, max_days=7):
-        self.failed.append(lo)
-        return None
-
-    def failed_days(self):
-        return tuple(self.failed)
-
-
-class _AnsweringHalts(_FailingHalts):
-    def deletion_halt(self, symbol, lo, hi, max_days=7):
-        return None
-
-
-def test_a_last_trade_decision_that_asked_a_failed_halt_feed_day_says_so(fake_edgar):
-    """With no MIDAS day the finder asks the Nasdaq halt feed; a day it could not
-    read is carried on the delisting's LastTrade, so the pipeline can flag it."""
-    edgar = _aet_edgar(fake_edgar)
-    clf = DelistClassifier(edgar, TickerResolver(edgar))
-    sec = _sec("BBG000FJLFX8", 1122304, "AET", "2017-06-30", "2018-06-29", "AETNA INC")
-    halts = _FailingHalts()
-    (ev,), _ = DelistingFinder(edgar, clf, halts=halts).find(_ctx(sec))
-    assert ev.last_trade.halt_feed_failed == tuple(halts.failed) != ()
-    (ok,), _ = DelistingFinder(edgar, clf, halts=_AnsweringHalts()).find(_ctx(sec))
-    assert ok.last_trade.halt_feed_failed == ()
-    (no_feed,), _ = DelistingFinder(edgar, clf).find(_ctx(sec))
-    assert no_feed.last_trade.halt_feed_failed == ()
-
-
-def test_a_fallback_last_trade_keeps_the_failed_halt_feed_days(fake_edgar):
-    """The no-Form-25 fallback replaces an undated last trade by the last
-    sighting; the halt-feed days its decision failed to read stay with it."""
-    fake_edgar.submissions_by_cik[13000] = [EdgarSubmission("v1", "REVOKED", "2018-01-15", "", "", "")]
-    clf = DelistClassifier(fake_edgar, TickerResolver(fake_edgar))
-    sec = _sec("BBG_V", 13000, "VVV", "2010-01-01", "2015-01-10", "VVV CORP")
-    halts = _FailingHalts()
-    (ev,), _ = DelistingFinder(fake_edgar, clf, halts=halts).find(_ctx(sec, last_seen="2015-01-10"))
-    assert ev.last_trade.day == date(2015, 1, 10) and "last_trade_date_unconfirmed" in ev.last_trade.flags
-    assert ev.last_trade.halt_feed_failed == tuple(halts.failed) != ()
 
 
 def test_a_line_the_line_follow_moved_to_a_new_ticker_is_reviewed_under_it(fake_edgar):
@@ -1253,37 +1125,3 @@ def test_the_other_cik_in_forces_form25_of_another_class_letter_is_no_delisting_
     fake_edgar.raws["s25"] = _f25_raw("New York Stock Exchange LLC", class_text="Class B Common Stock")
     events, _ = finder.find(replace(_ctx(sec, listed=False, last_seen="2018-07-16"), other_cik=1487730))
     assert all(e.form25_sub is None for e in events)
-
-
-def test_the_fallback_reads_3_01_8ks_up_to_the_last_sighting_plus_five_days(fake_edgar):
-    """VRM 2024: the suspension 8-K (3.01) came 13 days after the bankruptcy 8-K that dates the fallback."""
-    fake_edgar.submissions_by_cik[11010] = [
-        EdgarSubmission("s1", "8-K", "2015-01-12", "2015-01-12", "1.03", "k.htm"),
-        EdgarSubmission("s2", "8-K", "2015-01-26", "2015-01-26", "3.01", "k2.htm"),
-    ]
-    fake_edgar.texts["s1"] = "Item 1.03 Bankruptcy or Receivership. The Company filed a chapter 11 petition. " + "x" * 300
-    fake_edgar.texts["s2"] = ("Item 3.01 Notice of Delisting. Trading in the common stock will be suspended at the "
-                              "opening of business on January 28, 2015. " + "x" * 300)
-    clf = DelistClassifier(fake_edgar, TickerResolver(fake_edgar))
-    sec = _sec("BBG_V", 11010, "VVV", "2010-01-01", "2015-01-28", "VVV CORP")
-    (ev,), _ = DelistingFinder(fake_edgar, clf).find(_ctx(sec, last_seen="2015-01-28"))
-    assert ev.record.delist_date == "2015-01-12"
-    assert (ev.last_trade.day, ev.last_trade.source) == (date(2015, 1, 27), "8k_301")
-
-
-def test_rule_4_never_dates_an_involuntary_form25_by_its_filing_day(fake_edgar):
-    """TMA 2008: a 12d2-2(b) Form 25 follows the suspension by weeks, so its filing day is no closing day; a
-    voluntary exchange Form 25 with nothing else still gets it."""
-    for cik, ticker, rule, expect in ((11020, "BBB", "17 CFR 240.12d2-2(b)(1)", None),
-                                      (11021, "CCC", "17 CFR 240.12d2-2(a)(3)", "closing_day")):
-        fake_edgar.submissions_by_cik[cik] = [EdgarSubmission(f"f{cik}", "25-NSE", "2012-09-14", "", "", "p.xml")]
-        fake_edgar.raws[f"f{cik}"] = _f25_raw("New York Stock Exchange LLC", rule=rule)
-        fake_edgar.company_map[ticker] = {"cik_str": cik, "ticker": ticker, "title": f"{ticker} CORP"}
-        clf = DelistClassifier(fake_edgar, TickerResolver(fake_edgar))
-        sec = _sec(f"BBG_{ticker}", cik, ticker, "2010-01-01", "2012-09-13", f"{ticker} CORP")
-        events, _ = DelistingFinder(fake_edgar, clf).find(_ctx(sec, last_seen="2012-09-13"))
-        (ev,) = events
-        if expect is None:
-            assert ev.last_trade.source != "closing_day"
-        else:
-            assert ev.last_trade.source == expect

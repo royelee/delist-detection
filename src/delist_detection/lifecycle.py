@@ -46,8 +46,6 @@ HIGH, MEDIUM, LOW = "high", "medium", "low"
 _RANK = {HIGH: 0, MEDIUM: 1, LOW: 2}
 LOW_FLAGS = frozenset({"last_trade_date_conflict", "resolved_by_current_ticker_map"})
 
-EXCHANGE_PRINT_SOURCES = ("midas", "ex99_notice", "8k_301", "nasdaq_halt")  # last trade dates from an exchange print
-
 
 def flag_names(row: Mapping[str, str]) -> set[str]:
     """The flag names on a delistings.csv row (the part of each token before `:`)."""

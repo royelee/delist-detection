@@ -16,7 +16,7 @@ from delist_detection.exchange_terms import OwnExchange
 from delist_detection.issuer_record import IssuerRecord
 from delist_detection.last_trade import LastTrade
 from delist_detection.successors import (NEW_ISSUER, NEW_ISSUER_DAYS, SAME_ISSUER_CLASS, SecurityStart,
-                                         successor_anchor, successor_by_terms)
+                                         successor_by_terms)
 from tests import issuer_role_cases as ic
 
 DAY = date(2020, 6, 30)
@@ -108,14 +108,15 @@ def test_no_link_for_another_ratio_cash_or_two_readings():
         assert _ask(starts, own, since=since, names=names) is None
 
 
-def test_the_anchor_is_the_last_trade_then_the_form25_then_the_anchor_8k():
+def test_a_delistings_anchor_reads_its_form25_and_its_anchor_8k():
+    """`Delisting.anchor` hands the last trade module (`last_trade.anchor_day`) its Form 25 and its anchor 8-K."""
     d = _delisting()
-    assert successor_anchor(d) == DAY
+    assert d.anchor == DAY
     d.last_trade = LastTrade(None, "", ())
     d.record.evidence["anchor_8k"] = {"filing_date": "2020-07-02"}
-    assert successor_anchor(d) == date(2020, 7, 2)
+    assert d.anchor == date(2020, 7, 2)
     d.record.evidence = {}
-    assert successor_anchor(d) == date(2020, 7, 10)
+    assert d.anchor == date(2020, 7, 10)
 
 
 # --- stage 8b on the real cases (tests/fixtures/issuer_role/) ---

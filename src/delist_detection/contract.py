@@ -23,10 +23,11 @@ from datetime import date, timedelta
 
 from .distress import DistressTerms
 from .exit_kind import ending_fields, is_real_ending
+from .last_trade import published
 from .lifecycle import Tables
 from .payout_rule import MergerInputs, basket_legs, value_fields
 from .store import DelistingKey
-from .verdict import Verdicts, published_last_trade_date, seed_key
+from .verdict import Verdicts, seed_key
 
 ECHOED = ("ticker", "as_of", "name", "cusip", "pin_cik", "pin_sec_id", "sec_id")
 
@@ -44,7 +45,7 @@ def delisting_rows(tables: Tables, verdicts: Verdicts,
                    inputs: Mapping[DelistingKey, MergerInputs] | None = None,
                    distress: Mapping[DelistingKey, DistressTerms] | None = None) -> list[dict[str, object]]:
     """contract/delistings.csv: one row per ended security (`exit_kind.ending_fields`,
-    `verdict.published_last_trade_date`, its ending's verdict, and the payout rule
+    `last_trade.published`, its ending's verdict, and the payout rule
     `payout_rule.value_fields`; `inputs` are the mergers' pre-gate reads, `distress` the drops'
     and bankruptcies' OTC symbols and plan ratios, pipeline stage 9e). A continuation
     carries no terminal value."""
@@ -52,7 +53,7 @@ def delisting_rows(tables: Tables, verdicts: Verdicts,
     inputs = inputs or {}
     for sid, r in last_endings(tables.delistings).items():
         f = ending_fields(r)
-        ltd = published_last_trade_date(r)
+        ltd = published(r)
         key = DelistingKey(sid, r["delist_date"])
         rows.append({
             "sec_id": sid, "last_trade_date": ltd, "exit_kind": f.exit_kind,
@@ -76,7 +77,7 @@ def payout_leg_rows(tables: Tables, inputs: Mapping[DelistingKey, MergerInputs] 
     inputs = inputs or {}
     rows: list[dict[str, object]] = []
     for sid, r in last_endings(tables.delistings).items():
-        rows += basket_legs(r, published_last_trade_date(r), inputs.get(DelistingKey(sid, r["delist_date"])))
+        rows += basket_legs(r, published(r), inputs.get(DelistingKey(sid, r["delist_date"])))
     return rows
 
 

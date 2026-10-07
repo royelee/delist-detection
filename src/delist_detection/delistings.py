@@ -7,8 +7,8 @@ all is reported for review instead of being dropped.
 """
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
-from dataclasses import dataclass, field, replace
+from collections.abc import Callable
+from dataclasses import dataclass, field
 from datetime import date, timedelta
 
 from .classifier import DelistClassifier, DelistRecord
@@ -18,18 +18,16 @@ from .end_of_era import CONTINUED_FILINGS
 from .evidence import edgar_names
 from .figi_resolution import class_letter
 from .form25 import (
-    REGIONAL_EXCHANGES, Form25, SecurityRef, class_kind, class_letters, effective_date, is_involuntary,
-    list_form25, match_securities, notice_last_trade, other_class, parse_form25, tied_securities,
+    ISSUER_FORM25_FORMS, REGIONAL_EXCHANGES, Form25, SecurityRef, class_kind, class_letters, effective_date,
+    is_involuntary, list_form25, match_securities, other_class, parse_form25, tied_securities,
 )
-from .last_trade import CLOSING_DAY, LastTrade, closing_day_read, decide_last_trade, eightk_last_trade, reading_rank
+from .last_trade import Dating, LastTrade, OwnTrading, anchor_day
 from .listing_status import exchanges_around, issuer_exchange, withdrawal_kind
-from .midas import MIDAS_START
-from .nasdaq_halts import last_trade_from_halt
 from .review_triage import FilingRef, ReviewItem
 from .rewrites import SUCCESSOR_UNKNOWN, Rewrite, Rule, continuation, security_goes_on
 from .security_master import Security
 from .store import DelistingKey
-from .trading_calendar import add_trading_days, previous_trading_day
+from .trading_calendar import add_trading_days
 
 FORM25_LOOKBACK_DAYS = 30           # how far before the security's first sighting to look for a Form 25
 SAME_EVENT_DAYS = 30                # Form 25s of this security this close together are one delisting
@@ -37,20 +35,11 @@ IGNORE_AFTER_DEFINITIVE_DAYS = 30   # once truly delisted, a later Form 25 past 
 SEEN_AFTER_DAYS = 5                 # sighted this long past the effective date: the security kept trading
 SIBLING_ALIVE_BEFORE_DAYS = 30      # a sibling's own first sighting, minus this: still alive
 SIBLING_ALIVE_AFTER_DAYS = 400      # a sibling's own last sighting, plus this: still alive
-MIDAS_BEFORE_DAYS, MIDAS_AFTER_DAYS, MIDAS_STILL_TRADING_DAYS = 75, 10, 5
-EIGHTK_BEFORE_DAYS, EIGHTK_AFTER_DAYS = 60, 5      # single-filing 8-K window (fallback path)
-EIGHTK_GROUP_AFTER_DAYS = 15                       # group 8-K window: latest filed + this many days
-CLOSING_BEFORE_DAYS = 10            # rule 4 (5d): a closing day stated this long before the Form 25 still counts
-CLOSING_TEXT_AFTER_DAYS = 10        # ... read from the 8-Ks filed up to this long after it (CDWC, MYL, IMCL)
-CLOSING_FALLBACK_AFTER_DAYS = 3     # no Form 25: a closing day up to this long after the completion 8-K
-FALLBACK_COMPLETION_DAYS = 30       # ... the latest 2.01/5.01 8-K filed this long before the last sighting
-TAKEN_AFTER_DAYS = 5                # rule 3 (5d): another CUSIP's fails rows this long past a read window
 DEREG_FALLBACK_BEFORE_DAYS = 30     # a fallback revocation or Form 15 must be within
 OWN_SWITCH_DAYS = 5                 # trading days between a Form 25 and the security's own CUSIP switch it removed
 DEREG_FALLBACK_AFTER_DAYS = 120     # [last_seen - this, last_seen + this] to date the delisting
 EIGHT_A_DAYS = 10                   # the issuer's own Form 25 and its 8-A12B this close together: an exchange move
 EIGHT_A_FORMS = frozenset({"8-A12B"})      # not 8-A12B/A: a rights-plan amendment registers no class (Biomet 2006)
-ISSUER_FORM25_FORMS = frozenset({"25", "25/A"})      # filed by the issuer, not by the exchange (25-NSE)
 EARLY_REACH_DAYS = 365              # gone today: Form 25s this far before the floor are judged in the main scan
 LATE_ROW_DAYS = 30                  # no sibling alive: the security's own CUSIP traded this close before the Form 25
 
@@ -98,6 +87,14 @@ class Delisting:
     def add_flag(self, flag: str) -> None:
         self.flags.append(flag)
 
+    @property
+    def anchor(self) -> date:
+        """The day this ending is read around (`last_trade.anchor_day`): its last trade, else its Form 25's filing
+        date, else the 8-K the classifier anchored on, else its delisting date."""
+        filed = self.form25_sub.filing_date if self.form25_sub is not None else None
+        anchor_8k = ((self.record.evidence or {}).get("anchor_8k") or {}).get("filing_date")
+        return anchor_day(self.last_trade, self.delist_date, filed=filed, anchor_8k=anchor_8k)
+
 
 @dataclass
 class SecurityContext:
@@ -120,11 +117,11 @@ class SecurityContext:
     # observation alone does not give (a stale snapshot can list a security
     # long after it was acquired). Unknown (the default) counts as none.
     ftd_seen_after: Callable[[str], bool] = lambda day: False
-    # Every ticker the security was sighted under between two ISO days (its own
-    # and, from fails rows, an OTC symbol it moved to), for the exchange-trade
-    # confirmations (MIDAS, Nasdaq halts): the ticker on a Form 25's date can be
-    # the OTC symbol already (SAVE -> SAVEQ), which no exchange source knows.
-    tickers_between: Callable[[str, str], list[str]] = lambda lo, hi: []
+    # What the last trade module reads of the security's own trading (`last_trade.OwnTrading`): every ticker it
+    # was sighted under by day (the OTC symbol it moved to included: SAVE -> SAVEQ), its own CUSIPs and their
+    # trading fails rows (rule 4's floor, `OwnTrading.trades_until`), and the fails index the ticker's tenure is read
+    # from (rule 3, `OwnTrading.taken`: CCEP under CCE 2016). Unknown (the default): no other ticker, no bound.
+    trading: OwnTrading = field(default_factory=OwnTrading)
     # The first fails row of each of the security's own CUSIPs after its first, ISO: a CUSIP switch on its own
     # line (a reverse split, a redomicile that kept the composite). A Form 25 filed at one while the security
     # trades on removed the old CUSIP, not the security (QGEN 2026, Acxiom/LiveRamp 2018).
@@ -137,18 +134,9 @@ class SecurityContext:
     # True when the security's own CUSIPs have a trading fails row in the LATE_ROW_DAYS up to the given ISO day:
     # a Form 25 filed long after the security's last sighting still reaches it (Monster Worldwide 2016, L).
     cusip_rows_near: Callable[[str], bool] = lambda day: False
-    # The last day the fails rows of the security's own CUSIPs show it trading, ISO (`pipeline._last_row_trade_day`:
-    # the trading day before the row that opens the last CUSIP's last one-price run), else None. Rule 4's closing
-    # day never comes before it (AVGO 2018, Z 2015).
-    rows_trade_until: Callable[[], str | None] = lambda: None
     # The one CIK other than `security.issuer_cik` that was the issuer in force over the security's whole span
     # (`pipeline._other_issuers`), whose Form 25s are read too (R5: the old Spectrum Brands, the old Match Group).
     other_cik: int | None = None
-    # (ticker, lo, hi) -> the first day in [lo, hi] another CUSIP traded under the ticker after the security's own
-    # rows under it (`pipeline._ticker_taken`), ISO, else None: the security's tenure of the ticker ends the day
-    # before, so a read by ticker (MIDAS, a Nasdaq halt) from that day on is the other security's (5d rule 3:
-    # CCEP under CCE 2016, Johnson Controls plc under JCI 2016). Unknown (the default): no bound.
-    ticker_taken: Callable[[str, str, str], str | None] = lambda ticker, lo, hi: None
     # Whether the security has a CUSIP of its own (fails rows that could show it stop); None: unknown. A security
     # with none gets no continued-filings ending dated by its last sighting alone (sub-plan 5h, `_fallback`).
     has_cusips: bool | None = None
@@ -168,8 +156,12 @@ class _Scan:
 
 
 class DelistingFinder:
+    """Finds, matches, groups and classifies a security's delistings; the last trade module dates each one
+    (`last_trade.Dating`, over the run's EDGAR client and the `midas` and `halts` adapters it is given)."""
+
     def __init__(self, edgar, classifier: DelistClassifier, *, midas=None, halts=None) -> None:
-        self.edgar, self.classifier, self.midas, self.halts = edgar, classifier, midas, halts
+        self.edgar, self.classifier = edgar, classifier
+        self.dating = Dating(edgar, midas=midas, halts=halts)
 
     # -- sibling / class matching -----------------------------------------
     def _alive_at(self, ctx: SecurityContext, sec_id: str, filing_date: str) -> bool:
@@ -198,157 +190,6 @@ class DelistingFinder:
         f_letters = class_letters(f25.class_text)
         r_letter = class_letter(ref.share_class)
         return bool(f_letters and r_letter and r_letter not in f_letters)
-
-    # -- last trade (single filing; used by the no-Form-25 fallback) -----
-    def _eightk_window(self, cik: int, filings: list[EdgarSubmission], lo: date, hi: date,
-                       anchor: date) -> tuple[date | None, str]:
-        """The best last-trade reading (`last_trade.reading_rank`) of the 3.01 8-Ks filed in [lo, hi], nearest
-        `anchor` first among equals; the search stops at the first stated timing."""
-        cands = [f for f in filings if f.form.startswith("8-K") and "3.01" in f.item_set
-                 and f.filing_date and lo <= date.fromisoformat(f.filing_date) <= hi]
-        best: tuple[date | None, str] = (None, "")
-        for f in sorted(cands, key=lambda f: abs((date.fromisoformat(f.filing_date) - anchor).days)):
-            got = eightk_last_trade(self.edgar.fetch_filing_text(cik, f.accession, f.primary_doc))
-            if got[0] is not None and (best[0] is None or reading_rank(got[1]) < reading_rank(best[1])):
-                best = got
-                if reading_rank(got[1]) == 0:
-                    break
-        return best
-
-    def _closing_day(self, cik: int, filings: list[EdgarSubmission], lo: date, hi: date,
-                     shown: date | None = None) -> LastTrade | None:
-        """Rule 4 (5d): nothing states the last trade, so the closing day the issuer's 8-Ks filed in [lo,
-        hi + CLOSING_TEXT_AFTER_DAYS] give for [lo, hi] (`last_trade.closing_day`) is the worked-out day: source
-        `closing_day`, flagged `last_trade_date_unconfirmed` (so the ranges always clip there and the contract
-        publishes nothing). `shown`, the last day the security's own fails rows show it trading: a closing day
-        before it, one the text did not step back from its stated day, becomes it (never after `hi`)."""
-        texts = [self.edgar.fetch_filing_text(cik, f.accession, f.primary_doc) for f in filings
-                 if f.form.startswith("8-K") and f.filing_date
-                 and lo <= date.fromisoformat(f.filing_date) <= hi + timedelta(days=CLOSING_TEXT_AFTER_DAYS)]
-        got = closing_day_read(texts, lo, hi)
-        if got is None:
-            return None
-        day = shown if shown is not None and not got[2] and got[0] < shown <= hi else got[0]
-        return LastTrade(day, got[1], ("last_trade_date_unconfirmed",))
-
-    def _eightk(self, cik: int, filings: list[EdgarSubmission], filed: date,
-                until: date | None = None) -> tuple[date | None, str]:
-        """The 3.01 8-Ks in [filed - EIGHTK_BEFORE_DAYS, `until` (default `filed`) + EIGHTK_AFTER_DAYS]."""
-        return self._eightk_window(cik, filings, filed - timedelta(days=EIGHTK_BEFORE_DAYS),
-                                   (until or filed) + timedelta(days=EIGHTK_AFTER_DAYS), filed)
-
-    def _halt_feed_failures(self) -> tuple[date, ...]:
-        """The halt feed's failed days so far on this thread (a halt client
-        without `failed_days` never fails)."""
-        failed_days = getattr(self.halts, "failed_days", None)
-        return tuple(failed_days()) if failed_days is not None else ()
-
-    def _confirmations(self, tickers: list[str], filed: date, lo: date, hi: date, still_trading: date,
-                       guesses: list[date], ctx: SecurityContext | None = None, texts: Sequence[date] = ()
-                       ) -> tuple[date | None, date | None, tuple[date, ...]]:
-        """(MIDAS last day with exchange volume, Nasdaq code-D halt day, halt
-        feed days that failed to read) over every ticker in `tickers`: MIDAS
-        (asked when `filed` is in its coverage) takes the latest day in `[lo,
-        hi]` before `still_trading` under any of them; the halt feed is asked
-        only when MIDAS has nothing, around the text sources' `guesses`.
-
-        5d rule 3: a MIDAS or halt day after a text day (`texts`) is the
-        security's own only before another CUSIP began trading under that
-        ticker (`SecurityContext.ticker_taken`): MIDAS is then read up to the
-        day before (CCEP under CCE 2016, Johnson Controls plc under JCI 2016,
-        JET's ADS under GRUB 2021), and such a halt is dropped. Without a text
-        day that disagrees, nothing is bounded, and the bound is only tried when MIDAS's day under the ticker falls
-        before the still-trading cut (a successor's first fails rows
-        can lag its first day: Sinclair Inc 2023, new TCF 2019)."""
-        first_text = min(texts) if texts else None
-
-        def taken(t: str) -> date | None:
-            got = ctx.ticker_taken(t, lo.isoformat(), (hi + timedelta(days=TAKEN_AFTER_DAYS)).isoformat()) \
-                if ctx is not None else None
-            return date.fromisoformat(got) if got else None
-
-        def read(t: str, until: date) -> date | None:
-            m = self.midas.last_trade_day(t, lo, until) if until >= lo else None
-            return m if m is not None and m < still_trading else None
-
-        midas = None
-        if self.midas is not None and filed >= MIDAS_START:
-            days = {t: m for t in tickers if (m := read(t, hi)) is not None}
-            for t, m in list(days.items()):
-                if first_text is not None and first_text < m and (b := taken(t)) is not None and b <= m:
-                    days[t] = read(t, min(hi, previous_trading_day(b)))
-            found = [m for m in days.values() if m is not None]
-            midas = max(found) if found else None
-        halt, failed = None, ()
-        if midas is None and self.halts is not None:
-            before = len(self._halt_feed_failures())
-            for t in tickers:
-                h = self.halts.deletion_halt(t, min(guesses) - timedelta(days=2),
-                                             max(guesses) + timedelta(days=2), max_days=5)
-                if not h:
-                    continue
-                day = last_trade_from_halt(h)
-                if first_text is not None and first_text < day and (b := taken(t)) is not None and b <= day:
-                    continue
-                halt = day
-                break
-            failed = self._halt_feed_failures()[before:]
-        return midas, halt, failed
-
-    @staticmethod
-    def _decide(notice: tuple[date | None, str], eightk: tuple[date | None, str],
-                confirmations: tuple[date | None, date | None, tuple[date, ...]]) -> LastTrade:
-        """`decide_last_trade` over the text sources and the confirmations,
-        carrying the halt feed days that failed to read."""
-        midas, halt, failed = confirmations
-        lt = decide_last_trade(notice=notice, eightk=eightk, midas=midas, halt=halt)
-        return replace(lt, halt_feed_failed=failed) if failed else lt
-
-    @staticmethod
-    def _tickers(ctx: SecurityContext | None, ticker: str, lo: date, hi: date) -> list[str]:
-        """`ticker` first, then every other ticker the security carried in `[lo, hi]`."""
-        others = ctx.tickers_between(lo.isoformat(), hi.isoformat()) if ctx is not None else []
-        return list(dict.fromkeys([ticker, *others]))
-
-    def _last_trade(self, cik: int, filings: list[EdgarSubmission], f25: Form25 | None, ticker: str,
-                    filed: date, ctx: SecurityContext | None = None, eightk_until: date | None = None) -> LastTrade:
-        notice = notice_last_trade(f25) if f25 else (None, "")
-        eightk = self._eightk(cik, filings, filed, eightk_until)
-        lo, hi = filed - timedelta(days=MIDAS_BEFORE_DAYS), filed + timedelta(days=MIDAS_AFTER_DAYS)
-        confirmations = self._confirmations(
-            self._tickers(ctx, ticker, lo, hi), filed, lo, hi, filed + timedelta(days=MIDAS_STILL_TRADING_DAYS),
-            [d for d, _ in (notice, eightk) if d] or [previous_trading_day(filed)], ctx,
-            [d for d, _ in (notice, eightk) if d])
-        return self._decide(notice, eightk, confirmations)
-
-    # -- last trade for a group of Form 25s of one delisting --------------
-    def _last_trade_group(self, cik: int, filings: list[EdgarSubmission],
-                          group: list[tuple[EdgarSubmission, Form25]], ticker: str,
-                          ctx: SecurityContext | None = None) -> LastTrade:
-        subs = [s for s, _ in group]
-        earliest_filed = date.fromisoformat(min(s.filing_date for s in subs))
-        latest_filed = date.fromisoformat(max(s.filing_date for s in subs))
-        latest_eff = date.fromisoformat(max(effective_date(s.filing_date) for s in subs))
-
-        ordered = sorted(group, key=lambda item: (item[0].form != "25-NSE", item[0].filing_date))
-        notice: tuple[date | None, str] = (None, "")
-        for _, f25 in ordered:
-            n = notice_last_trade(f25)
-            if n[0] is not None:
-                notice = n
-                break
-
-        eightk = self._eightk_window(cik, filings, earliest_filed - timedelta(days=EIGHTK_BEFORE_DAYS),
-                                     latest_filed + timedelta(days=EIGHTK_GROUP_AFTER_DAYS), earliest_filed)
-
-        lo = earliest_filed - timedelta(days=MIDAS_BEFORE_DAYS)
-        hi = latest_eff + timedelta(days=MIDAS_AFTER_DAYS)
-        confirmations = self._confirmations(
-            self._tickers(ctx, ticker, lo, hi), earliest_filed, lo, hi,
-            latest_eff + timedelta(days=MIDAS_STILL_TRADING_DAYS),
-            [d for d, _ in (notice, eightk) if d] or [previous_trading_day(latest_filed), latest_filed], ctx,
-            [d for d, _ in (notice, eightk) if d])
-        return self._decide(notice, eightk, confirmations)
 
     # -- grouping -----------------------------------------------------------
     def _group(self, candidates: list[tuple[EdgarSubmission, Form25]]
@@ -662,12 +503,15 @@ class DelistingFinder:
         sec = ctx.security
         winner_sub, winner_f25 = min(group, key=self._exchange_rank)
         filing_ticker = ctx.ticker_on(winner_sub.filing_date) or sec.eras[-1].ticker
-        lt = self._last_trade_group(cik, filings, group, filing_ticker, ctx)
+        lt = self.dating.of_group(cik, filings, group, (winner_sub, winner_f25), ticker=filing_ticker,
+                                  trading=ctx.trading, continued=continued)
         # spec 7.4: the delisting's ticker is the ticker on the last trade
         # date, not on the Form 25 filing date -- only fall back to the
-        # filing-date ticker when the last trade date itself is unknown.
-        ticker = (lt.day and ctx.ticker_on(lt.day.isoformat())) or filing_ticker
-        anchor = lt.day.isoformat() if lt.day else winner_sub.filing_date
+        # filing-date ticker when the last trade date itself is unknown. A worked-out closing day (rule 4) is not
+        # one: the classification keeps the filing day as its anchor.
+        day = None if lt.worked_out else lt.day
+        ticker = (day and ctx.ticker_on(day.isoformat())) or filing_ticker
+        anchor = day.isoformat() if day else winner_sub.filing_date
         rec = self.classifier.classify_event(ticker=ticker, cik=cik, anchor_date=anchor, name=sec.name,
                                              expected_name=ctx.expected_name, kind=sec.kind, form25=winner_sub,
                                              resolution_source=ctx.resolution_source,
@@ -676,18 +520,6 @@ class DelistingFinder:
         if continued and rec.bucket is CrspBucket.UNKNOWN:
             moved = next(((s, a) for s, f in sorted(group, key=lambda i: i[0].filing_date)
                           if (a := self._eight_a(s, f, filings)) is not None), None)
-        if lt.day is None and not continued and winner_sub.form not in ISSUER_FORM25_FORMS \
-                and not (winner_f25 and is_involuntary(winner_f25)):
-            # Rule 4 (5d): the exchange filed the Form 25 at the closing (never an involuntary (b) one: it follows the
-            # suspension by weeks, TMA 2008); the closing day the 8-Ks give within
-            # CLOSING_BEFORE_DAYS of it, else the filing day itself, is the worked-out last trade. Taken after the
-            # classification, which keeps its anchor (the filing day).
-            filed = date.fromisoformat(min(s.filing_date for s, _ in group))
-            shown = ctx.rows_trade_until()
-            got = self._closing_day(cik, filings, filed - timedelta(days=CLOSING_BEFORE_DAYS), filed,
-                                    date.fromisoformat(shown) if shown else None)
-            lt = replace(got or LastTrade(filed, CLOSING_DAY, ("last_trade_date_unconfirmed",)),
-                         halt_feed_failed=lt.halt_feed_failed)
         delisting = self._delisting(sec, cik, ticker, eff, rec, lt, winner_f25, winner_sub, continued, extra_flags)
         if moved is not None:              # R7: the issuer moved the class (Kraft Heinz 2026, Nasdaq to NYSE)
             s, a = moved
@@ -808,24 +640,9 @@ class DelistingFinder:
             # fails rows could show it stop: nothing says it ended there (WW 2013, a later name a snapshot
             # carried back; the line traded on to its 2025 bankruptcy). No ending; ended_without_delisting.
             return None
-        # the 3.01 8-Ks are read up to the last sighting + EIGHTK_AFTER_DAYS: a suspension notice can follow the
-        # bankruptcy 8-K by weeks (VRM 2024); MIDAS stays anchored on the dating filing
-        lt = self._last_trade(cik, filings, None, ticker, date.fromisoformat(ended_by), ctx,
-                              eightk_until=max(date.fromisoformat(ended_by), date.fromisoformat(ctx.last_seen)))
-        if lt.day is None and rec.bucket is CrspBucket.MERGER:
-            # Rule 4 (5d): a merger with no Form 25 ends on the closing day its completion 8-K (the latest with
-            # item 2.01 or 5.01 near the last sighting) states (FCL 2009, SGP 2009), never after the last sighting
-            seen = date.fromisoformat(ctx.last_seen)
-            done = [date.fromisoformat(f.filing_date) for f in filings if f.form.startswith("8-K") and f.filing_date
-                    and {"2.01", "5.01"} & f.item_set
-                    and seen - timedelta(days=FALLBACK_COMPLETION_DAYS) <= date.fromisoformat(f.filing_date)
-                    <= seen + timedelta(days=CLOSING_FALLBACK_AFTER_DAYS)]
-            got = self._closing_day(cik, filings, max(done) - timedelta(days=CLOSING_BEFORE_DAYS),
-                                    max(done) + timedelta(days=CLOSING_FALLBACK_AFTER_DAYS)) if done else None
-            if got is not None and got.day <= seen:
-                lt = replace(got, halt_feed_failed=lt.halt_feed_failed)
-        if lt.day is None:
-            lt = LastTrade(date.fromisoformat(ctx.last_seen), "", ("last_trade_date_unconfirmed",), lt.halt_feed_failed)
+        lt = self.dating.of_fallback(cik, filings, ticker=ticker, ended_by=date.fromisoformat(ended_by),
+                                     last_seen=date.fromisoformat(ctx.last_seen), trading=ctx.trading,
+                                     merger=rec.bucket is CrspBucket.MERGER)
         # No Form 25 means no exchange evidence from a filing; fall back to
         # whatever exchange EDGAR's own submissions JSON records for this
         # ticker (spec D22) rather than leaving it blank -- which otherwise

@@ -22,7 +22,7 @@ from __future__ import annotations
 import re
 from collections import defaultdict
 from collections.abc import Callable, Collection, Mapping, Sequence
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from datetime import date, timedelta
 
 from .classifier import DelistRecord
@@ -32,7 +32,7 @@ from .edgar import EdgarSubmission
 from .evidence import names_near
 from .ftd import FtdIndex
 from .history import Sighting
-from .last_trade import CLOSING_DAY, LastTrade
+from .last_trade import NO_DAY, at_handoff
 from .review_triage import ReviewItem
 from .rewrites import HANDOFF_CONTINUATION, Payouts, Rule, continuation, successor_note
 from .security_master import Security
@@ -256,7 +256,7 @@ class HandoffOutcome:
 
 
 def _day_of(d: Delisting) -> date:
-    return d.last_trade.day or date.fromisoformat(d.delist_date)
+    return d.anchor
 
 
 def _near(delistings: Sequence[Delisting], pair: HandoffPair, sec_id: str, days: int) -> Delisting | None:
@@ -283,13 +283,6 @@ def _unmatched_form25(review: Sequence[ReviewItem], pair: HandoffPair) -> Review
     items = [r for r in review if r.sec_id == pair.a and r.flag == UNMATCHED_FORM25 and r.delist_date
              and r.filing is not None and a <= date.fromisoformat(r.delist_date) <= hi]
     return min(items, key=lambda r: (r.delist_date, r.reason), default=None)
-
-
-def _last_day(pair: HandoffPair) -> date:
-    """A's last trading day in a continuation: its last sighting under the
-    ticker, but never on or after B's first (a fails row is dated the day after
-    the close it carries, so the two can meet: ST 2018, AON 2020)."""
-    return min(date.fromisoformat(pair.a_last), date.fromisoformat(pair.b_first) - timedelta(days=1))
 
 
 def _continuation_reason(decision: HandoffDecision) -> str:
@@ -321,11 +314,10 @@ def _continuation_row(decision: HandoffDecision, sec: Security, form25: ReviewIt
                                      "accession": form25.filing.accession}
     else:
         delist_date = (date.fromisoformat(p.a_last) + timedelta(days=1)).isoformat()
-    last = _last_day(p)
-    rec = DelistRecord(p.ticker, sec.issuer_cik, last.isoformat(), None, CrspBucket.UNKNOWN, "", "", evidence,
+    last = at_handoff(None, p.a_last, p.b_first)
+    rec = DelistRecord(p.ticker, sec.issuer_cik, last.day.isoformat(), None, CrspBucket.UNKNOWN, "", "", evidence,
                        sec_id=sec.sec_id, delist_date=delist_date)
-    d = Delisting(sec.sec_id, sec.issuer_cik, p.ticker, delist_date, rec, LastTrade(last, "last_sighting", ()),
-                  None, None, "")
+    d = Delisting(sec.sec_id, sec.issuer_cik, p.ticker, delist_date, rec, last, None, None, "")
     _continue(d, decision, None)
     return d
 
@@ -341,7 +333,7 @@ def apply_handoffs(decisions: Sequence[HandoffDecision], delistings: Sequence[De
       A's last sighting and within `FORM25_NEAR_DAYS` of the handoff
       (`_unmatched_form25`; its effective date, as every Form 25 row), else the
       day after that sighting; last trade on A's last
-      sighting, but before B's first (`_last_day`); an `exchange_transfer` (code 304, so a zero return) whose
+      sighting, but before B's first (`last_trade.at_handoff`); an `exchange_transfer` (code 304, so a zero return) whose
       successor is B; confidence high on a filing, medium on timing; flagged
       `handoff_continuation`, the evidence in its reason;
     - with one, sets its successor to B, rewriting an `unknown` or a merger
@@ -356,8 +348,9 @@ def apply_handoffs(decisions: Sequence[HandoffDecision], delistings: Sequence[De
       `handoff_conflict` item.
     Every continuation goes through `rewrites.continuation` (`Rule.HANDOFF`): a rewritten merger's value is dropped
     from `payouts` (stage 8's merger values; required when a merger is rewritten).
-    A kept row with no last-trade day takes `_last_day`, so A's range ends
-    before B's begins. A continuation that wrote or kept a row resolves A's `ended_without_delisting`
+    A kept row's last trade is the last trade module's (`last_trade.at_handoff`): with no day it takes A's last
+    sighting before B's first, so A's range ends before B's begins, and a worked-out closing day never reaches B's
+    first sighting. A continuation that wrote or kept a row resolves A's `ended_without_delisting`
     item, the ambiguous-class Form 25 items of A and B it rests on, and the
     pair's `ticker_shared` rows (`resolved_pairs`).
 
@@ -434,11 +427,8 @@ def apply_handoffs(decisions: Sequence[HandoffDecision], delistings: Sequence[De
                              flag=CONTINUATION_FLAG, how="handoff", evidence=decision.evidence,
                              successor_from=p.b_first)
             if d.last_trade.day is None:            # A's range ends where B's begins (PNFP 2026)
-                d.last_trade = replace(d.last_trade, day=_last_day(p), source="last_sighting")
-                d.record.evidence["flags"] = [f for f in d.flags if f != "no_last_trade_date"]
-            elif d.last_trade.source == CLOSING_DAY and d.last_trade.day > _last_day(p):
-                # a worked-out closing day (5d rule 4) never reaches the day B was first sighted under the ticker
-                d.last_trade = replace(d.last_trade, day=_last_day(p), source="last_sighting")
+                d.record.evidence["flags"] = [f for f in d.flags if f != NO_DAY]
+            d.last_trade = at_handoff(d.last_trade, p.a_last, p.b_first)
         resolved.add((_bare(p.ticker), p.a, p.b))
         accession = form25.filing.accession if form25 is not None else None
         for i, r in enumerate(review):

@@ -2,8 +2,9 @@
 scripts/build_last_trade_fixtures.py, 5c's builder over 5d's cases) holds each case's security, the securities whose
 CUSIPs bound its ticker, the other securities of their issuers, their fails rows, and the EDGAR, MIDAS and Nasdaq-halt
 answers. `outcome(sec_id)` runs the run's own code over them: stage 5 (`pipeline._context_builder`,
-`delistings.DelistingFinder`) and stage 7's fails close (`pipeline._last_trade_closes`). The doubles are 5c's
-(tests/issuer_role_cases.py), reading this fixture."""
+`delistings.DelistingFinder`, which dates each delisting through the last trade module, `last_trade.Dating`, over
+the fixture's MIDAS and halt adapters) and stage 7's fails close (`pipeline._last_trade_closes`). The doubles are
+5c's (tests/issuer_role_cases.py), reading this fixture."""
 from __future__ import annotations
 
 import csv
@@ -21,6 +22,7 @@ from delist_detection.edgar import EdgarSubmission
 from delist_detection.figi_resolution import security_kind
 from delist_detection.ftd import FtdIndex, FtdRow
 from delist_detection.history import ticker_sightings
+from delist_detection.last_trade import UNCONFIRMED
 from delist_detection.manifest import StageMeter
 from delist_detection.midas import MidasClient
 from delist_detection.nasdaq_halts import Halt, NasdaqHaltClient
@@ -132,5 +134,5 @@ def outcome(sec_id: str) -> list[tuple]:
     ctx = pipeline._RunContext(c, AS_OF, lambda *a: None, 1, StageMeter(lambda *a: None))
     closes = pipeline._last_trade_closes(ctx, found, securities, cusips, ftd, date(1990, 1, 1), pipeline.Overrides())
     return [(d.delist_date, d.record.bucket.value, d.last_trade.day.isoformat() if d.last_trade.day else "",
-             d.last_trade.source, "last_trade_date_unconfirmed" in d.last_trade.flags, closes.get(d.key))
+             d.last_trade.source, UNCONFIRMED in d.last_trade.flags, closes.get(d.key))
             for d in found]

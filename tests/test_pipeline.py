@@ -293,7 +293,7 @@ def _stage_5b(rows, specs, endings, sec_cusips=None, loaded=()):
         era = TickerEra(ticker, first, first, [Observation(ticker, first, "AETNA INC")])
         securities[sid] = Security(sid, 1, "", "AETNA INC", "Common Stock", True, "ticker", eras=[era])
     delistings = [SimpleNamespace(sec_id=sid, delist_date=day, last_trade=SimpleNamespace(day=date.fromisoformat(day)),
-                                  record=SimpleNamespace(successor_sec_id=succ))
+                                  anchor=date.fromisoformat(day), record=SimpleNamespace(successor_sec_id=succ))
                   for sid, day, succ in endings]
     client = _RecordingFtdClient(rows)
     ctx = SimpleNamespace(clients=SimpleNamespace(ftd_client=client), log=lambda *_: None,
@@ -910,9 +910,10 @@ def test_run_builds_last_seen_and_seen_after_from_the_right_sightings(fake_edgar
     assert ctx.ftd_seen_after("2018-11-28") is True
     assert ctx.ftd_seen_after("2018-11-29") is False
     assert ctx.ftd_seen_after("2017-01-01") is True
-    # tickers_between: every ticker sighted in the window, the OTC tail's included
-    assert ctx.tickers_between("2018-06-01", "2019-12-31") == ["AET", "AETQ"]
-    assert ctx.tickers_between("2019-01-01", "2019-12-31") == ["AETQ"]
+    # the last trade module's view of its trading: every ticker sighted in the window, the OTC tail's included
+    assert ctx.trading.tickers("2018-06-01", "2019-12-31") == ["AET", "AETQ"]
+    assert ctx.trading.tickers("2019-01-01", "2019-12-31") == ["AETQ"]
+    assert ctx.trading.cusips == frozenset({"00817Y108"}) and ctx.trading.trades_until() is not None
 
 
 def test_run_builds_sibling_spans_for_every_security_of_the_issuer(fake_edgar, tmp_path, monkeypatch):
@@ -2876,85 +2877,6 @@ def test_a_last_close_given_twice_stops_the_run(fake_edgar, tmp_path):
     with pytest.raises(OverrideFileError, match="both give the last close"):
         run(index, clients, Overrides(last_trade_closes={"BBG000FJLFX8": 190.0}, price_answers={key_of(ask): 191.32}),
             out_dir=tmp_path / "second", log=lambda *_: None)
-
-
-class _RawEdgar:
-    def __init__(self, raw):
-        self.raw, self.asked = raw, []
-
-    def fetch_filing_raw(self, cik, accession):
-        self.asked.append((cik, accession))
-        return self.raw
-
-
-def _continuation(source="last_sighting", b_first="2026-08-27"):
-    from delist_detection.rewrites import Rewrite, Rule
-    evidence = {"flags": ["handoff_continuation"],
-                "delist_filing": {"form": "25-NSE", "filing_date": "2026-08-27", "accession": "0000876661-26-000712"}}
-    rec = DelistRecord("LEG", 58492, "2026-08-25", 304, CrspBucket.EXCHANGE_TRANSFER, "high", "Continuation", evidence,
-                       sec_id="OLD", delist_date="2026-09-06", successor_sec_id="NEW")
-    handoff = Rewrite(Rule.HANDOFF, CrspBucket.UNKNOWN, None, "NEW", "handoff", "timing:cik", b_first)
-    return Delisting("OLD", 58492, "LEG", "2026-09-06", rec, LastTrade(date(2026, 8, 25), source, ()), None, None, "",
-                     [handoff])
-
-
-def _notice_ctx(edgar):
-    from types import SimpleNamespace
-
-    from delist_detection.manifest import StageMeter
-    return pipeline._RunContext(SimpleNamespace(edgar=edgar), date(2026, 9, 25), lambda *_: None, 1,
-                                StageMeter(lambda *_: None))
-
-
-def test_a_handoff_continuation_takes_its_form25_notice_day():
-    raw = (Path(__file__).parent / "fixtures" / "form25" / "leg_25nse_before_market_open.txt").read_text(
-        encoding="utf-8", errors="replace")
-    d = _continuation()
-    assert pipeline._date_from_notices(_notice_ctx(_RawEdgar(raw)), [d], []) == 1
-    assert (d.last_trade.day, d.last_trade.source) == (date(2026, 8, 26), "ex99_notice")
-    assert d.record.observed_delist_date == "2026-08-26"
-
-
-def test_a_handoff_continuation_without_a_dated_notice_keeps_its_sighting():
-    d, edgar = _continuation(), _RawEdgar("<TYPE>25-NSE no notice here")
-    assert pipeline._date_from_notices(_notice_ctx(edgar), [d], []) == 0
-    assert (d.last_trade.day, d.last_trade.source) == (date(2026, 8, 25), "last_sighting")
-    other = _continuation(source="midas")
-    pipeline._date_from_notices(_notice_ctx(edgar), [other], [])
-    assert edgar.asked == [(58492, "0000876661-26-000712")]    # a row dated another way is never re-read
-
-
-def _form25_text(name):
-    return (Path(__file__).parent / "fixtures" / "form25" / name).read_text(encoding="utf-8", errors="replace")
-
-
-def test_a_dated_but_unconfirmed_notice_keeps_the_sighting():
-    d = _continuation()
-    assert pipeline._date_from_notices(_notice_ctx(_RawEdgar(_form25_text("rsh_25nse.txt"))), [d], []) == 0
-    assert (d.last_trade.day, d.last_trade.source) == (date(2026, 8, 25), "last_sighting")
-
-
-def test_a_failed_notice_read_is_reported_and_keeps_the_sighting():
-    from delist_detection.sec_stats import SEC_STATS
-
-    class Failing(_RawEdgar):
-        def fetch_filing_raw(self, cik, accession):
-            SEC_STATS.degraded("failed_request")
-            return ""
-
-    d, review = _continuation(), []
-    assert pipeline._date_from_notices(_notice_ctx(Failing("")), [d], review) == 0
-    assert d.last_trade.source == "last_sighting"
-    assert "resolution_degraded" in d.flags
-    assert [r.flag for r in review] == ["resolution_degraded"]
-
-
-def test_a_notice_day_on_or_after_the_successors_first_sighting_keeps_the_sighting():
-    raw = _form25_text("leg_25nse_before_market_open.txt")
-    for b_first in ("2026-08-26", "2026-08-20"):
-        d = _continuation(b_first=b_first)
-        assert pipeline._date_from_notices(_notice_ctx(_RawEdgar(raw)), [d], []) == 0
-        assert (d.last_trade.day, d.last_trade.source) == (date(2026, 8, 25), "last_sighting")
 
 
 def test_a_when_issued_observation_joins_its_regular_way_security(fake_edgar, tmp_path):

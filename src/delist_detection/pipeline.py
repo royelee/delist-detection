@@ -25,9 +25,7 @@ from .added_securities import AddedAcquirer, AddedLineSuccessor, AddedSecurity, 
 from .crsp_codes import CrspBucket
 from .continuation_evidence import needs_doubt_check, needs_filing, read_continuation
 from .degraded import DegradedWatch, degraded_item, flag_degraded, report_halt_feed_failures
-from .delistings import (
-    ISSUER_FORM25_FORMS, LATE_ROW_DAYS, Delisting, DelistingFinder, SecurityContext,
-)
+from .delistings import LATE_ROW_DAYS, Delisting, DelistingFinder, SecurityContext
 from .distress import (
     BANKRUPTCY_WORDS, OTC_SYMBOL_DAYS, DistressTerms, otc_symbol_from_fails, otc_symbol_from_text, plan_ratio,
     new_cusips as plan_new_cusips, price_only, substitutes_new_shares,
@@ -40,11 +38,10 @@ from .handoffs import (
     drop_resolved_shared, find_handoffs, issuer_carries_on, own_continuation_filing, predecessor_names,
 )
 from .figi_resolution import FigiCandidate, class_letter, is_placeholder, placeholder_id, share_class_from_name
-from .form25 import SecurityRef, letter_hint, notice_last_trade, parse_form25
+from .form25 import ISSUER_FORM25_FORMS, SecurityRef, letter_hint
 from .issuer_record import IssuerRecord, ReadWatch
-from .last_trade import decide_last_trade
-from .ftd import FTD_START, FtdIndex, FtdRow, close_age, is_trading_symbol, settled_last, trades_after
-from .trading_calendar import previous_trading_day
+from .last_trade import Dating, OwnTrading, end_day, first_day_after
+from .ftd import FTD_START, FtdIndex, FtdRow, close_age, is_trading_symbol, trades_after
 from .history import (
     Sighting, backfill_cusips, clip_at_takeovers, cusip_sightings, filtered_ticker_sightings, history_rows, observation_map_rows, own_last_seen,
     ranges_from_sightings, ticker_on, ticker_range_review, ticker_sightings, value_on,
@@ -62,7 +59,6 @@ from .observations import (
 )
 from .merger_value import MergerValues, value_mergers
 from .payout_gate import DEFAULT_TOL
-from .trading_calendar import next_trading_day
 from .prefetch import Serialized, warm
 from .reconstruction import (
     OverrideFileError, build_delistings_table, delisting_row, for_delisting, override_row_name,
@@ -84,7 +80,7 @@ from .lifecycle import Tables
 from .ticker_evidence import EraEvidence, evidence_for
 from .store import DelistingKey, formatted, write_tables
 from .successors import (
-    NEW_ISSUER_DAYS, SUCCESSOR_AFTER_DAYS, SUCCESSOR_BEFORE_DAYS, SecurityStart, successor_anchor, successor_by_terms,
+    NEW_ISSUER_DAYS, SUCCESSOR_AFTER_DAYS, SUCCESSOR_BEFORE_DAYS, SecurityStart, successor_by_terms,
     _named as successor_named, successor_from_8k12b, successor_in_run, successor_query, successor_search_args, successor_search_name,
 )
 from .ticker_resolver import InferredIssuer, TickerResolution, TickerResolver
@@ -689,37 +685,6 @@ def _rows_near(rows: Sequence[FtdRow], day: str) -> bool:
     return any(lo <= r.date <= day and is_trading_symbol(r.symbol) for r in rows)
 
 
-def _ticker_taken(ftd: FtdIndex, ticker: str, own: Collection[str], lo: str, hi: str) -> str | None:
-    """The first day another CUSIP traded under `ticker` within the ISO window [lo, hi] once the security's own
-    CUSIPs (`own`) stopped: the trading day before that CUSIP's first priced fails row there (a row carries the
-    close of the trading day before it), when that row comes on or after the own CUSIPs' last row under the ticker
-    -- else None. None too when the own CUSIPs have no row under the ticker in the window (the tenure there is not
-    known: Peabody's, Chesapeake's own new CUSIPs). A $0.01 placeholder row is no trade (APA Corp's first row,
-    2021-03-02, beside Apache's own row carrying its March 1 close). 5d rule 3: CCEP's shares under CCE from
-    2016-05-31, Johnson Controls plc's under JCI from 2016-09-06."""
-    rows = [r for r in ftd.by_symbol(ticker, lo, hi) if r.price is not None and r.price > PLACEHOLDER_PRICE]
-    mine = [r.date for r in rows if r.cusip in own]
-    if not mine:
-        return None
-    other = next((r.date for r in rows if r.cusip not in own and r.date > mine[0] and r.date >= mine[-1]), None)
-    return previous_trading_day(date.fromisoformat(other)).isoformat() if other else None
-
-
-def _last_row_trade_day(rows: Sequence[FtdRow]) -> str | None:
-    """The last day the fails rows show the security trading: the trading day before the row that opens the
-    last one-price run (`ftd.settled_last`, fails still settling after the last trade) of the CUSIP it held
-    last, ISO (AVGO 2018: the run opens 04-05, so 04-04); None without rows."""
-    if not rows:
-        return None
-    last = max(r.date for r in rows)
-    own = sorted((r for r in rows if r.cusip == next(x.cusip for x in rows if x.date == last)),
-                 key=lambda r: r.date)
-    return previous_trading_day(date.fromisoformat(settled_last(own).date)).isoformat()
-
-
-PLACEHOLDER_PRICE = 0.01        # a fails row priced at or below this carries no close (a new CUSIP's placeholder)
-
-
 def _context_builder(securities: dict[str, Security], sightings: dict[str, list[Sighting]],
                      answers: _IssuerAnswers, ftd: FtdIndex, sec_cusips: dict[str, list[str]],
                      other_ciks: Mapping[str, int] = {}) -> Callable[[Security, bool | None], SecurityContext]:
@@ -759,14 +724,11 @@ def _context_builder(securities: dict[str, Security], sightings: dict[str, list[
             resolution_source=_resolution_source(s, answers.issuers, answers.resolutions),
             ftd_seen_after=lambda day, sig=sig, own=s.own_tickers(): any(
                 x.day > day for x in sig if x.source == "ftd" and x.value in own),
-            tickers_between=lambda lo, hi, sig=sig: list(dict.fromkeys(x.value for x in sig if lo <= x.day <= hi)),
+            trading=OwnTrading(sig, frozenset(sec_cusips.get(s.sec_id, [])), rows, ftd),
             cusip_switches=_cusip_switches(s, ftd, sec_cusips.get(s.sec_id, [])),
             trades_after=lambda day, rows=rows: trades_after(rows, day),
             cusip_rows_near=lambda day, rows=rows: _rows_near(rows, day),
-            rows_trade_until=lambda rows=rows: _last_row_trade_day(rows),
             other_cik=other_ciks.get(s.sec_id),
-            ticker_taken=lambda ticker, lo, hi, own=frozenset(sec_cusips.get(s.sec_id, [])): _ticker_taken(
-                ftd, ticker, own, lo, hi),
             has_cusips=bool(sec_cusips.get(s.sec_id)),
         )
 
@@ -863,7 +825,7 @@ def _dead_before_sighting(ctx: _RunContext, securities: dict[str, Security], del
     for e in delistings:
         if not is_real_ending(e):
             continue
-        day = e.last_trade.day.isoformat() if e.last_trade.day else e.delist_date
+        day = e.anchor.isoformat()
         ends[e.sec_id] = max(ends.get(e.sec_id, day), day)
     eligible: list[tuple[str, str]] = []
     for sid, end in sorted(ends.items()):
@@ -875,8 +837,8 @@ def _dead_before_sighting(ctx: _RunContext, securities: dict[str, Security], del
     fixed: list[str] = []
     for sid, end in eligible:
         s = securities[sid]
-        end_day = date.fromisoformat(end)
-        lo, hi = end_day - timedelta(days=BACKFILL_DAYS), end_day + timedelta(days=10)
+        end_on = date.fromisoformat(end)
+        lo, hi = end_on - timedelta(days=BACKFILL_DAYS), end_on + timedelta(days=10)
         tickers = sorted(s.own_tickers())
         ftd.extend(ctx.clients.ftd_client, lo, hi, symbols=tickers)
         names = [n for era in s.eras for n in (era.name, *(issuers[era.key].names if era.key in issuers else ())) if n]
@@ -1000,9 +962,9 @@ def _starts(securities: dict[str, Security], sightings: dict[str, list[Sighting]
 def _own_exchange(clients: Clients, e: Delisting, sec: Security
                   ) -> tuple[exchange_terms.OwnExchange | None, list[str], date]:
     """What `e`'s security's own shares became (`exchange_terms.own_exchange`), the texts it was read in and the
-    day it was read around (`successors.successor_anchor`; the 8-K the classifier anchored on is read too). The
+    day it was read around (`Delisting.anchor`; the 8-K the classifier anchored on is read too). The
     registrant's filing list and names come from the run's issuer record (none when they cannot be read)."""
-    day = successor_anchor(e)
+    day = e.anchor
     days = [day]
     filed = ((e.record.evidence or {}).get("anchor_8k") or {}).get("filing_date")
     if filed:
@@ -1048,7 +1010,7 @@ def _r1_successor(ctx: _RunContext, e: Delisting, sec: Security, own: exchange_t
     if not successor_named(own, {cand.ticker}, issuers.names(s_cik)):
         return None
     if cand.composite not in securities and cand.composite not in added:
-        not_before = (day + timedelta(days=1)).isoformat()
+        not_before = first_day_after(day).isoformat()
         pending.setdefault(cand.composite, AddedSuccessor(
             Security(cand.composite, s_cik, share_class_from_name(cand.name), cand.name, cand.security_type, False,
                      "ticker"), cand.ticker, max(filed or not_before, not_before)))
@@ -1132,7 +1094,7 @@ def _line_successor_links(delistings: list[Delisting], securities: dict[str, Sec
                           ftd: FtdIndex, found: _Successors) -> None:
     """A FIGI line another composite continues (stage 4b's `line_successors`, R2): each of its delistings that
     still needs a successor (`successor_unknown`) or a kind (`unknown`: GTES 2026's Form 25 at its redomicile),
-    whose last trade (else Form 25 filing date, else delisting date) lies within [-SUCCESSOR_BEFORE_DAYS,
+    whose anchor (`Delisting.anchor`: its last trade, else its Form 25 filing date) lies within [-SUCCESSOR_BEFORE_DAYS,
     +SUCCESSOR_AFTER_DAYS] days of the step's first row, takes that composite as its successor; an `unknown` row
     becomes the continuation. The composite is added as a security of its own (`AddedLineSuccessor`) when the run
     has none, and only for a delisting that takes it."""
@@ -1140,8 +1102,7 @@ def _line_successor_links(delistings: list[Delisting], securities: dict[str, Sec
         ls = line_successors.get(e.sec_id)
         if ls is None or not (awaits_successor(e) or e.record.bucket is CrspBucket.UNKNOWN):
             continue
-        day = e.last_trade.day or (date.fromisoformat(e.form25_sub.filing_date) if e.form25_sub is not None
-                                   else date.fromisoformat(e.delist_date))
+        day = e.anchor
         lo = (day - timedelta(days=SUCCESSOR_BEFORE_DAYS)).isoformat()
         hi = (day + timedelta(days=SUCCESSOR_AFTER_DAYS)).isoformat()
         if not lo <= ls.step.first <= hi:
@@ -1193,7 +1154,7 @@ def _own_registration_link(ctx: _RunContext, e: Delisting, texts: list[str], day
         return None      # (5h) a CUSIP the texts name, after the fails data's last day, has no row to show yet: OKE 2026
     if x.composite not in securities and x.composite not in taken and x.composite not in found.added:
         symbol, first = (new_rows[0].symbol, new_rows[0].date) if new_rows else \
-            (e.ticker, next_trading_day(day).isoformat())
+            (e.ticker, first_day_after(day).isoformat())
         found.added[x.composite] = AddedLineSuccessor(
             Security(x.composite, e.cik, share_class_from_name(x.name), x.name, x.security_type, False, "cusip"),
             symbol, first, new_rows)
@@ -1205,7 +1166,7 @@ def _terms_links(ctx: _RunContext, delistings: list[Delisting], securities: dict
                  taken: Collection[str], found: _Successors) -> None:
     """Sub-plan 5c, rules 3 and 4: an exchange transfer still without a successor whose registrant's filings
     state each share of its class became one share, with no cash (R1, `exchange_terms.own_exchange` around
-    `successors.successor_anchor`), takes the security of the run that statement names
+    `Delisting.anchor`), takes the security of the run that statement names
     (`successors.successor_by_terms`: the same issuer's other class, CMCSK into CMCSA, HUB-B into HUBB, CWENA
     into CWEN; a new issuer's, BHI into BHGE, HHC into HHH), else the line its own successor registration moved
     the holders to (`_own_registration_link`: CCO 2019, OKE 2026). The link's `how` is "terms" or
@@ -1293,9 +1254,9 @@ def _find_successors(ctx: _RunContext, delistings: list[Delisting], securities: 
                 # A same-ticker successor (a holding-company reorg) must not overlap
                 # the predecessor's own ticker_history row, even when its 8-K12B was
                 # filed before the predecessor's actual last trade: clamp valid_from
-                # to no earlier than the day after that last trade (or delist_date
-                # when the last trade day is unknown).
-                not_before = ((e.last_trade.day or date.fromisoformat(e.delist_date)) + timedelta(days=1)).isoformat()
+                # to no earlier than the trading day after the ending's anchor (its last
+                # trade, else its Form 25 filing date: `Delisting.anchor`).
+                not_before = first_day_after(e.anchor).isoformat()
                 fd = filing_date or day.isoformat()
                 found.added[cand.composite] = AddedSuccessor(
                     Security(cand.composite, s_cik, share_class_from_name(cand.name), cand.name,
@@ -1494,36 +1455,24 @@ def _log_role_refusals(ctx: _RunContext, delistings: Sequence[Delisting]) -> Non
 
 
 def _date_from_notices(ctx: _RunContext, added: list[Delisting], review: list[ReviewItem]) -> int:
-    """9c. A continuation row the handoff stage built from an unmatched Form 25
-    carries its last sighting as its last trade day; when that Form 25's notice
-    states a confirmed last day of trading (`form25.notice_last_trade`,
-    `last_trade.decide_last_trade`), the row takes it (source `ex99_notice`),
-    provided the day is before the successor's first sighting
-    (the handoff rewrite's `successor_from`; the cap is skipped when absent) and no
-    later than the Form 25 effective date (`delist_date`); otherwise the
-    sighting stays. A read that rested on a failed request or a stale copy keeps
-    the sighting and is reported as `resolution_degraded` (row and review item);
-    a refusal (`fatal.FATAL`) stops the run."""
+    """9c. A continuation row the handoff stage built from an unmatched Form 25 carries its last sighting as its last
+    trade day; the last trade module re-dates it from that Form 25's notice (`last_trade.Dating.from_notice`: a
+    confirmed day before the successor's first sighting, the handoff rewrite's `successor_from`, and no later than
+    the Form 25 effective date, `delist_date`). A read that rested on a failed request or a stale copy keeps the
+    sighting and is reported as `resolution_degraded` (row and review item); a refusal (`fatal.FATAL`) stops the
+    run."""
     mark = ctx.meter.start()
+    dating = Dating(ctx.clients.edgar)
     redated = 0
     for d in added:
-        filing = (d.record.evidence or {}).get("delist_filing")
-        if not filing or d.last_trade.source != "last_sighting":
-            continue
+        handoff = rewrite_by(d, Rule.HANDOFF)
         watch = DegradedWatch()
-        raw = ctx.clients.edgar.fetch_filing_raw(d.cik, filing["accession"])
+        lt = dating.from_notice(d.cik, (d.record.evidence or {}).get("delist_filing"), d.last_trade,
+                                before=handoff.successor_from if handoff is not None else "", effective=d.delist_date)
         if watch.tripped():
             watch.report_delisting(review, d, "the handoff row's Form 25 notice")
             continue
-        if not raw:
-            continue
-        f25 = parse_form25(raw, accession=filing["accession"], form=filing["form"], filing_date=filing["filing_date"])
-        lt = decide_last_trade(notice=notice_last_trade(f25), eightk=(None, ""), midas=None, halt=None)
-        if lt.day is None or "last_trade_date_unconfirmed" in lt.flags:
-            continue
-        handoff = rewrite_by(d, Rule.HANDOFF)
-        b_first = handoff.successor_from if handoff is not None else ""
-        if (b_first and lt.day >= date.fromisoformat(b_first)) or lt.day > date.fromisoformat(d.delist_date):
+        if lt is d.last_trade:
             continue
         d.last_trade = lt
         d.record.observed_delist_date = lt.day.isoformat()   # handoffs.py dates the record the same as the row
@@ -1580,7 +1529,7 @@ def _distress(ctx: _RunContext, delistings: list[Delisting], sec_cusips: Mapping
         rec = d.record
         if rec.bucket not in DISTRESS_BUCKETS or rec.successor_sec_id:
             continue
-        last = d.last_trade.day or date.fromisoformat(d.delist_date)
+        last = end_day(d.last_trade, d.delist_date)
         rows = [r for c in sec_cusips.get(d.sec_id, ())
                 for r in ftd.by_cusip(c, last.isoformat(), (last + timedelta(days=OTC_SYMBOL_DAYS)).isoformat())]
         fails_symbol = otc_symbol_from_fails(rows, d.ticker, last)
@@ -1726,8 +1675,8 @@ def _ends_the_security(e: Delisting, s: Security, sec_cusips: dict[str, list[str
     """Whether delisting `e` is the kind that actually ends security `s`
     (Phase 4): not one whose successor is the security itself (a continuing
     exchange transfer, D18); and, for a merger or exchange_transfer whose
-    last-trade day is *confirmed* (`e.last_trade.day` set and not flagged
-    `last_trade_date_unconfirmed`) -- an unconfirmed day is a guess (the
+    last-trade day is *confirmed* (`last_trade.LastTrade.confirmed`, the one
+    definition) -- an unconfirmed day is a guess (the
     no-Form-25 "continued 10-K/Q filings" fallback substitutes the security's
     own last sighting when it has no last-trade evidence at all, e.g. Monster
     Worldwide's and SunPower's 2008-09 fallback rows; Bank of Ozarks has no
@@ -1740,8 +1689,7 @@ def _ends_the_security(e: Delisting, s: Security, sec_cusips: dict[str, list[str
     ends the security, whatever fails rows follow."""
     if not is_real_ending(e):
         return False
-    if (e.record.bucket not in CONTINUATION_BUCKETS or e.last_trade.day is None
-            or "last_trade_date_unconfirmed" in e.last_trade.flags):
+    if e.record.bucket not in CONTINUATION_BUCKETS or not e.last_trade.confirmed:
         return True
     return not _continues_after(s, e.last_trade.day.isoformat(), sec_cusips, ftd, successor_starts)
 
@@ -1754,8 +1702,8 @@ def _successor_starts(delistings: Iterable[Delisting], securities: dict[str, Sec
                       added: Mapping[str, AddedSecurity]) -> dict[str, dict[str, str]]:
     """A successor's ticker is not its predecessor's: for each security S, the tickers a successor security X
     (a delisting's `successor_sec_id`, not S itself) took, and from which day: X's first sighting under the
-    ticker on or after the delisting's confirmed last trade day (an unconfirmed or missing one: its delist date, less
-    `SUCCESSOR_TICKER_LOOKBACK_DAYS`) and within `TAKEOVER_DAYS` (the handoff window) after that anchor; a ticker
+    ticker on or after the delisting's confirmed last trade day (`LastTrade.confirmed`; an unconfirmed or missing
+    one: its delist date, less `SUCCESSOR_TICKER_LOOKBACK_DAYS`) and within `TAKEOVER_DAYS` (the handoff window) after that anchor; a ticker
     first seen later is a recycled one, no start. S's fails rows and sightings under the ticker from that day on are X's. One place, shared by
     the clip check (`_delisting_endings`) and the ranges (`_history_rows`)."""
     out: dict[str, dict[str, str]] = {}
@@ -1763,7 +1711,7 @@ def _successor_starts(delistings: Iterable[Delisting], securities: dict[str, Sec
         x = e.record.successor_sec_id
         if not x or x == e.sec_id or e.sec_id not in securities:
             continue
-        confirmed = e.last_trade.day is not None and "last_trade_date_unconfirmed" not in e.last_trade.flags
+        confirmed = e.last_trade.confirmed
         try:
             anchor = e.last_trade.day if confirmed else date.fromisoformat(e.delist_date)
         except ValueError:
@@ -1808,8 +1756,8 @@ def _history_rows(ctx: _RunContext, securities: dict[str, Security], search: _De
     each observed security's ranges end at the last delisting that actually
     ends it (`endings`, `_delisting_endings`/`_ends_the_security`, the check
     stage 9b's `rewrites.mark_going_on` reads too, so the two tables never
-    disagree) -- its last trade day, or its delist_date when the last trade
-    day is unconfirmed -- unless it is listed today or no delisting ends it.
+    disagree) -- its last trade day, confirmed or not, else its delist_date
+    (`last_trade.end_day`) -- unless it is listed today or no delisting ends it.
     An added (acquirer/successor) security gets one ticker row, built
     directly: `ranges_from_sightings`' filter that drops single-value FTD
     sightings would otherwise silently drop a successor's lone 8-K12B-dated
@@ -1840,10 +1788,8 @@ def _history_rows(ctx: _RunContext, securities: dict[str, Security], search: _De
             # A last-trade day we couldn't confirm still clips the ranges at the
             # delisting date -- an unclipped range would otherwise run past a
             # security's real end.
-            confirmed = (last_delisting.last_trade.day is not None
-                        and "last_trade_date_unconfirmed" not in last_delisting.last_trade.flags)
-            end = (last_delisting.last_trade.day.isoformat() if last_delisting.last_trade.day is not None
-                   else last_delisting.delist_date)
+            confirmed = last_delisting.last_trade.confirmed
+            end = end_day(last_delisting.last_trade, last_delisting.delist_date).isoformat()
         ends[sid] = end
         end_confirmed[sid] = confirmed
         # Phase 4 rule 2: a backfilled observation is not a ticker sighting here

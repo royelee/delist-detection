@@ -49,17 +49,15 @@ from __future__ import annotations
 from collections import defaultdict
 from collections.abc import Mapping
 from dataclasses import dataclass
-from datetime import date, timedelta
 
 from .end_of_era import CONTINUED_FILINGS, RESOLVED_FROM_CONTINUED_FILINGS
 from .exit_kind import ending_fields, is_continuation, is_real_ending
-from .lifecycle import EXCHANGE_PRINT_SOURCES, Tables, flag_names
+from .last_trade import CONFLICT, EXCHANGE_PRINTS, MEASURED, effective_of, of_row
+from .lifecycle import Tables, flag_names
 from .verdict_rules import (Reading, closed_without_ending, issuer_by_form25, settles_relabel, stale_seed,
                             successor_registration, unpriced_gate)
 
 SEED, SECURITY, ENDING = "seed", "security", "ending"
-FORM25_EFFECTIVE_DAYS = 10               # a Form 25 takes effect 10 days after it is filed
-MEASURED_SOURCES = frozenset({"midas", "nasdaq_halt"})
 # decision 4's gates that did not pass, or (5f) could not check: the one set (`verdict_rules.unpriced_gate` takes it
 # as an argument)
 GATE_FAILED = frozenset({"payout_gate_failed", "llm_gate_failed", "terms_gate_failed", "terms_gate_skipped"})
@@ -90,25 +88,6 @@ def is_introduction(row: Mapping[str, str]) -> bool:
 
 def _covered(intervals: list[Mapping[str, str]], day: str) -> bool:
     return any(r["valid_from"] <= day and (not r["valid_to"] or day <= r["valid_to"]) for r in intervals)
-
-
-def form25_effective(row: Mapping[str, str]) -> date | None:
-    """The day a row's Form 25 takes effect (FORM25_EFFECTIVE_DAYS after it was
-    filed), or None when the row cites no Form 25."""
-    if row["delist_filing_date"] and row["delist_filing_form"].startswith("25"):
-        return date.fromisoformat(row["delist_filing_date"]) + timedelta(days=FORM25_EFFECTIVE_DAYS)
-    return None
-
-
-def published_last_trade_date(row: Mapping[str, str]) -> str:
-    """contract/delistings.csv's last_trade_date (decision 12): the row's date when
-    an exchange print gave it and it is no later than the Form 25's effective
-    date, else blank."""
-    ltd = row["last_trade_date"]
-    if not ltd or row["last_trade_date_source"] not in EXCHANGE_PRINT_SOURCES:
-        return ""
-    effective = form25_effective(row)
-    return "" if effective is not None and date.fromisoformat(ltd) > effective else ltd
 
 
 def _security_verdicts(tables: Tables, evidence: Mapping[str, str],
@@ -183,18 +162,20 @@ def _own_reasons(row: Mapping[str, str], issuer_cik: str = "", reading: Reading 
         if "(timing:cik)" in row["reason"] and not confirmed:
             reasons.append("continuation_by_timing_only")
         return reasons
-    ltd, source = row["last_trade_date"], row["last_trade_date_source"]
-    if not ltd:
+    # the last trade module's reading of the row (`last_trade.of_row`): each part of `LastTrade.publishable` that
+    # fails is a reason of its own
+    lt = of_row(row)
+    if lt.day is None:
         reasons.append("no_last_trade_date")
         return reasons
-    if source not in EXCHANGE_PRINT_SOURCES:
-        reasons.append(f"last_trade_not_exchange_print:{source or 'none'}")
-    if "last_trade_date_unconfirmed" in flags:
+    if lt.source not in EXCHANGE_PRINTS:
+        reasons.append(f"last_trade_not_exchange_print:{lt.source or 'none'}")
+    if not lt.confirmed:
         reasons.append("last_trade_date_unconfirmed")
-    if "last_trade_date_conflict" in flags and source not in MEASURED_SOURCES:
+    if CONFLICT in flags and lt.source not in MEASURED:
         reasons.append("last_trade_date_text_conflict")
-    effective = form25_effective(row)
-    if effective is not None and date.fromisoformat(ltd) > effective:
+    effective = effective_of(row)
+    if effective is not None and lt.day > effective:
         reasons.append(f"last_trade_after_form25_effective:{effective.isoformat()}")
     return reasons
 
