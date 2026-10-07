@@ -121,6 +121,7 @@ workers, SEC meter `manifest.StageMeter`). Each stage returns what it produces
 (`_Successors` for stage 9, for instance) and `_run` combines the answers
 (`_link_successors` records the successors on the delistings). Helpers that
 belong to one kind of data live with it, not in `pipeline.py`:
+`issuer_record.py` (every stage's reads of an issuer's EDGAR record, `Clients.issuers`, and their failure policy),
 `degraded.py` (the `resolution_degraded` rows and flags), `ftd.close_age`,
 `review_triage.merge_review_rows`, the era review rows in `security_master`.
 See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
@@ -212,10 +213,26 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   gets renamed to its acquirer) — a CUSIP hit needs no name check, a
   ticker/name hit does; `placeholder_id()` builds `CIK<cik>-<CLASS>` when
   nothing is confirmed.
+- `issuer_record.py` — `IssuerRecord`, the run's issuer record (architecture step 2): one per run
+  (`Clients.issuers`, the resolver's and the classifier's; `forget` when a run starts), over the EDGAR client. It
+  reads each issuer's submissions JSON and filing list once (at most `MEMO_SIZE` copies held, least recently asked
+  dropped; first filings kept) and answers `names`, `names_near`/`names_between`/`names_until`, `first_filed`,
+  `existed_by`, `recent_form_dates`, the raw `submissions`/`filings`/`text`, and `exact_holders` (SEC's name index,
+  `name_index`, loaded on first use). `about=` (an event day) asks for a copy fetched by
+  `edgar.submissions_fresh_after(about, today)`; every refresh of the run goes through it (the resolver's reads and
+  the classifier's up-front read), so a held copy is the client's cached one. The failure policy, once: a
+  `requests.RequestException` is unknown (None, [], (), "", False) and never remembered, `fatal.FATAL` stops the
+  run, any other exception propagates, and a failed, stale (`STALE_KEY`) or self-counted degraded read logs its
+  CIK on the reading thread; `watch()` gives a `ReadWatch` (`ciks`, `failed`, and `tripped()`, which also sees any
+  other degraded SEC read on the thread) for the `resolution_degraded` rows. A warm pass reads through `shadow()`.
 - `ticker_resolver.py` — `(ticker, as_of_date) → CIK`, 6 strategies in order of
   precision (caller's `cik` pin → manual override → `company_tickers.json` →
   EFTS Form-25/15 → observation-name company search → 8-K frequency rank),
-  each strict-validated. The name tier finds its candidates in SEC's
+  each strict-validated. Every read of an issuer's EDGAR record (names over time, first filing, filings, forms)
+  and the name index go through its issuer record (`issuers`, built over its client, run date and `name_index=`
+  unless given); a read that failed or was stale in a resolve (`_reset`/`_rested_on_failure`, the record's watch)
+  marks its answer transient, as a failed search does. `expected_name` is the name an answer is checked with (the
+  observed name, else the AV name). The name tier finds its candidates in SEC's
   `cik-lookup-data.txt` (`cik_lookup.py`: `CikLookupClient`, cached 30 days
   under `cache/sec_data/cik_lookup/`, and `CikNameIndex`, exact then
   character-prefix matches, read through their submissions JSON as the live
@@ -602,7 +619,8 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   `merge_review_rows` joins rows that share a key. Called by `pipeline.run()`
   just before the write; never touches `delistings.csv`.
 - `degraded.py` — answers that rested on a failed request or a stale copy:
-  `DegradedWatch` (an SEC read on this thread counted itself degraded),
+  `DegradedWatch` (an SEC read on this thread counted itself degraded; a stage whose reads include an issuer's
+  record asks `IssuerRecord.watch()` instead, which also sees an issuer read that failed without counting itself),
   `degraded_item`/`flag_degraded` (the `resolution_degraded` review row and
   the flag on a delisting's own row), `report_halt_feed_failures` (a
   last-trade decision that asked a Nasdaq halt-feed day that failed).
@@ -816,10 +834,10 @@ conflate them.
   alongside `EdgarBlocked` and exits 2. Every exception that stops a run is
   listed once, in `fatal.FATAL`, and every catch site re-raises that tuple
   before turning a failure into a row, a miss or a transient answer: the
-  pipeline's issuer-names read, delisting search and payout extraction,
+  issuer record's reads (`IssuerRecord._read` and `name_index`: every issuer read of the resolver, the
+  classifier's name check and the stages), the pipeline's delisting search and payout extraction,
   `listing_status.listing_answers`, the prefetch pool, the ticker resolver's
-  four EDGAR checks (`_fits_date`, `_name_search`, `_name_match_score`,
-  `_validate_cik`), and the CLI, which turns it into the exit code; a new one
+  company search (`_name_search`), and the CLI, which turns it into the exit code; a new one
   is added in `fatal.py` only. A 429 is waited out on the
   `ratelimit-*`/`retry-after` headers, never cached as an answer. Timeouts,
   connection errors or 5xx answers that outlast the client's retries raise
@@ -838,6 +856,15 @@ conflate them.
   info-only rows — an `error`/`resolution_degraded` row always trips exit 3,
   whether or not a decision also exists for it (it can't: both flags are
   `acceptable=False`).
+- **An issuer is read through the run's issuer record, once.** The resolver, the classifier's up-front refresh and
+  name check, and the stages' reads of an issuer's names, filings and first filing (2's names, 4b, 4c/10g, 8a/8a',
+  8b, 9's terms links, 9b) ask `Clients.issuers` (`issuer_record.IssuerRecord`). A read that fails after the
+  client's retries is unknown and never remembered, a refusal stops the run, and the answer that rested on a failed
+  or stale read gets `resolution_degraded` (`IssuerRecord.watch`): the handoff stage's read of the successor
+  issuer's filings no longer stops a run that has no cached copy (exit 1). Reads still made straight from the
+  client, left for later steps: the finder's (its per-security try makes a failure an `error` row),
+  `listing_status`'s, `successors.successor_search_name`, stage 9e's 8-K list and stage 9g's
+  `continuation_evidence`, and filing texts and notices outside the record.
 - **`review.csv` is triaged, not raw; `review_summary.csv` groups it by
   cause.** `review_triage.triage()` gives every row a `severity` — `fix`
   (`no_dlret`, `observation_unresolved`, `ended_without_delisting`, or the

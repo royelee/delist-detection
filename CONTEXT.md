@@ -93,5 +93,8 @@ A value the library assumes rather than measures: a Shumway mark, assumed par, a
 **Merger value**:
 What one share of a security became in its merger, as the library reads it: the terms (cash, shares of the acquirer, further securities), whether they reconcile with the last close, the acquirer security whose price values the shares, and the price request that price needs. There is one per merger ending (`merger_value.MergerValue`). A caller's `--merger-terms` row replaces the terms the library read.
 
+**Issuer record**:
+What EDGAR records of one issuer, as a run reads it: its names over time, its first filing and its filings. A run reads each issuer once, through one `issuer_record.IssuerRecord`; a read that failed is unknown, never a fact, and the answers that rested on it are reported `resolution_degraded`.
+
 **Issuer in force**:
 The CIK that carried a security's name on a given day; it can change while the security continues (a reverse merger, a holding-company reorganization).
