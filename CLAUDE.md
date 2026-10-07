@@ -108,8 +108,8 @@ or issuer changes),
 `_check_overrides`, `_last_trade_closes` (stage 7: a `--last-trade-closes` row, else the caller's answer to the
 delisting's `last_close` request, `price_requests.PriceAnswers`, else the fails close), `_merger_values` (stage 8:
 one call into `merger_value.value_mergers`, which answers one `MergerValue` per merger ending; the module map has
-its steps), `_r1_continuations` (stage 8b: a merger whose published terms are one share and no cash, whose registrant's filings say the same of its own shares (`exchange_terms.own_exchange`), into a new issuer at most `NEW_ISSUER_DAYS` old or the same issuer (`successors.successor_by_terms`, else the new issuer's 8-K12B), is an exchange transfer to that successor, flagged `r1_continuation`, its payout reads dropped (`rewrites.continuation`, `Rule.R1`, with the run's merger values); the LLM's final terms must agree; the new issuer is named by the R1 statement's target (the name tie, below), its 8-K12B candidate included; a degraded read keeps the merger and flags the row; the run logs `role refusal: N rows (...)`, the delistings whose end-of-era reading refused a merger on the registrant's role; metered as "R1 continuations"),
-`_find_successors` (stage 9, with sub-plan 5c's `_terms_links` before the 8-K12B search: the same issuer's class, a new issuer, or the security's own same-CIK 8-K12B line via OpenFIGI and R2; a name tie for any 8-K12B link; sub-plan 5h: `_own_registration_link` takes a text-named CUSIP with no fails row
+its steps), `_r1_continuations` (stage 8b: a merger whose published terms are one share and no cash (`exchange_terms.one_share_no_cash`, a special dividend set aside: `OwnShares.consideration`), whose registrant's filings say the same of its own shares (the ending's own-share reading, `own_shares.of`: the one the delisting carries, else one made at its anchor), into a new issuer (`own_shares.new_issuer`, `NEW_ISSUER_DAYS`) or the same issuer (`successors.successor_by_terms` over the reading's statement, else the new issuer's 8-K12B), is an exchange transfer to that successor, flagged `r1_continuation`, its payout reads dropped (`rewrites.continuation`, `Rule.R1`, with the run's merger values); the LLM's final terms must agree; the new issuer is named by the R1 statement's target (the name tie, `own_shares.names_target`), its 8-K12B candidate included; a degraded read, now or when the carried reading was made (`OwnShares.degraded`), keeps the merger and flags the row; the run logs `role refusal: N rows (...)`, the delistings whose end-of-era reading refused a merger on the registrant's role; metered as "R1 continuations"),
+`_find_successors` (stage 9, with sub-plan 5c's `_terms_links` before the 8-K12B search, over the ending's own-share reading (`own_shares.of`): the same issuer's class, a new issuer, or the security's own same-CIK 8-K12B line via OpenFIGI and R2 (the CUSIP the reading's texts name); a name tie for any 8-K12B link; sub-plan 5h: `_own_registration_link` takes a text-named CUSIP with no fails row
 yet when the fails data ends before the day, OKE 2026: the added successor starts on the next trading day, as every successor the run adds does (`last_trade.first_day_after`), and a Form 25 that already owns a delisting of the run raises no unmatched row in stage 9d; the stage ends by recording its links as rewrites, `_link_successors`), `_handoffs` (stage 9b: first `rewrites.mark_going_on` over `history.Histories.going_on`, the clip check's merger or transfer that does not end its security goes on as itself, here and only here, so the handoffs see it; then the handoffs), `_date_from_notices` (stage 9c: `last_trade.Dating.from_notice`, a handoff continuation row's last trade day from its own Form 25's confirmed EX-99.25 notice, when before the successor's first sighting, the handoff rewrite's typed `successor_from`, and no later than the effective date; the stage keeps the failed-read watch; metered as "handoff notice dates"), `_successor_endings` (stage 9d: the Form 25 search, matches only, for the line and 8-K12B successors the run added; the finder's items about a Form 25 that already owns a delisting are dropped by their typed `ReviewItem.filing`; metered as "successor endings"), `_distress` (stage 9e,
 sub-plan 5g: for each liquidation, compliance-failure or unknown delisting with no successor, a bankruptcy plan's
 stock rule (R6), a price-only removal's code 552, and the OTC symbol of its first off-exchange print, anchored on the
@@ -386,10 +386,11 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   that starts right after the last trade (`successor_in_run`, `SecurityStart`),
   else the successor issuer's 8-K12B found by full-text search
   (`successor_search_args`, `filing_search.successor_query`, `successor_from_8k12b`,
-  `successor_search_name`). Sub-plan 5c: `successor_by_terms` (the security an R1 statement names: the same
-  issuer's class the target names, or a new issuer's line, at most `NEW_ISSUER_DAYS` (1095) old, first sighted in
-  the window and named by the target); a successor is looked for around the ending's anchor (`Delisting.anchor`,
-  `last_trade.anchor_day`).
+  `successor_search_name`). Sub-plan 5c: `successor_by_terms` (the security an R1 statement names, the statement
+  of the ending's own-share reading: the same issuer's class the target names, or a new issuer's line,
+  `own_shares.new_issuer`, first sighted in the window and named by the target, `own_shares.names_target`); a
+  successor is looked for around the ending's anchor (`Delisting.anchor`, `last_trade.anchor_day`). It imports
+  `delistings`; the classifier no longer imports it (step 7b: no classifier, successors, delistings cycle).
 - `handoffs.py` — ticker handoffs (CONTEXT.md: one security stops under a
   ticker, another of the run starts under it within days): `find_handoffs`
   (candidate pairs, [-10, 120] days), `decide_handoff` (continuation by the
@@ -632,17 +633,20 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   matched Form 25 the security did not trade past never decides its row (R6a); the continued-filings default
   (`continued_filings`) gives way to that Form 25's path when its notice says the class was acquired (R6b,
   `_classify_filings`; any answer but a merger is 231, `evidence["end_of_era"] == "form25_notice"`);
-  `_confirms_bankruptcy` reads every Item 1.03 section (`evidence.item_sections`). Sub-plan 5c: `_survived` (rule 1,
-  before end-of-era branches 3 and 4) and `_one_for_one` (R1: a one-for-one, no-cash statement of the security's
-  class before the no-evidence default gives 304 with `r1_continuation`). Sub-plan 5g: `evidence.item_sections`
+  `_confirms_bankruptcy` reads every Item 1.03 section (`evidence.item_sections`). Sub-plan 5c: rule 1 (before
+  end-of-era branches 3 and 4: `OwnShares.survived`) and R1 (a one-for-one, no-cash statement of the security's class
+  into the same issuer or a new one, `OwnShares.target_issuer`, before the no-evidence default gives 304 with
+  `r1_continuation`), both of the ending's own-share reading the finder hands `classify_event(..., own_shares=)`
+  (`own_shares.Reader.ending`; without one, a reading at the observed date of the class its name gives, with the
+  notice of the Form 25 it is anchored on). Its text answers to the resolver are typed (`end_of_era.Filed`: the
+  deficiency, bankruptcy and liquidation 8-Ks). Sub-plan 5g: `evidence.item_sections`
   and the classifier's heading strip read an item number the HTML stripping spaced out ("ITEM 1 .0 3", CBL 2020); no
   further digit may follow, and spaces only where the sub-number starts with 0 (a 10-K's index entry "Item 8. 29" is
-  no heading). `_liquidation_notice` reads end-of-era branch 5b's 3.01 8-K. Sub-plan 5f: spec 5c's rule 6 on the
-  successor branch (an unambiguous own-share statement with another ratio than one, or cash, is a merger 231,
-  `end_of_era` `successor_merger`, CHTR 2016's 0.9042; a split factor n or 1/n is not, `_split_factor`, SIRI 2024's
-  0.1); and before the no-evidence default, a 6-K or 8-K in [F − 30, F + 10] of the Form 25 day that states a
-  completed acquisition, merger or arrangement (`_completion_report`, `COMPLETION`) is a merger 231 (TAHO, KING,
-  BPYU).
+  no heading). `_liquidation_notice` reads end-of-era branch 5b's 3.01 8-K. Sub-plan 5f: spec 5c's rule 6 is the
+  resolver's (branch 2, `EraSignals.successor_terms`: the reading's statement, read only where branch 2 decides,
+  `end_of_era.registers_successor`); and before the no-evidence default, a 6-K or 8-K in [F − 30, F + 10] of the
+  Form 25 day that states a completed acquisition, merger or arrangement (`_completion_report`, `COMPLETION`) is a
+  merger 231 (TAHO, KING, BPYU), unless the registrant made it (its role, `own_shares.other_role`).
 - `end_of_era.py` — the end-of-era resolver's first step: where the registrant
   kept filing after the end. `signals()` reads the filings in the windows around
   the end date (8-K items, successor filings and Form 25s in [end − 30 d,
@@ -651,7 +655,10 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   the first branch that fits: (1) still trading after the end (the finder's
   `continued`, passed as `classify_event(..., trading_after=)`) → today's
   transfer; (2) a successor registration (8-K12B, 8-K12G3) → a transfer whose
-  successor stage 9 finds; (3) a change in control (8-K 5.01) → merger; (4) a
+  successor stage 9 finds, or a merger 231 (`successor_merger`, spec 5c rule 6, sub-plan 5f) when the registrant's
+  own-share statement (`successor_terms`) changed the holders' stake (`OwnExchange.stake_changed`: another ratio
+  than one or a split factor, or cash: CHTR 2016's 0.9042; SIRI 2024's 0.1 is a consolidation); (3) a change in
+  control (8-K 5.01) → merger; (4) a
   completed acquisition (8-K 2.01) with a merger filing or a Form 25 → merger,
   unless a bankruptcy 8-K the classifier confirmed (`bankruptcy_filing`) came on
   or before it → liquidation 470 (5g sub-rule 2, built in sub-plan 5b);
@@ -664,7 +671,10 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   stage 9g, the verdict and the scorecard). EDGAR evidence only.
   Tried only where the continued-filings rule fires. Sub-plan 5c, rule 1: branches 3 and 4 never fire when
   `EraSignals.survived` holds (the classifier found no exchange of the registrant's own shares, and an acquirer's
-  or a distributor's statement); `merges` says when they would.
+  or a distributor's statement); `merges` says when they would, `registers_successor` when branch 2 would. The
+  classifier's answers arrive typed (step 7b): a filing is a `Filed` (form and day; a reason prints it as
+  "8-K 2020-11-09", the resolver compares its day), an 8-K item's first filing a date, a statement an
+  `exchange_terms.OwnExchange`.
 - `crsp_codes.py` — the truth table: `DLST_CODE_TO_BUCKET` plus a leading-digit
   range fallthrough (`2xx→merger`, `3xx→exchange_transfer`, `4xx→liquidation`,
   `5xx→compliance_failure`, `6xx→expiration`). **The bucket — not the exact code
@@ -683,8 +693,33 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   a special dividend is never consideration; rollover shares and cash conversions are read), the target clause and
   its names (defined terms expanded), the target's class letter, and whether readings disagree (`ambiguous`);
   `acquires` (another party's shares became the registrant's, or it issued shares under the merger agreement) and
-  `distributes` ("for every four shares", kept) are the registrant's other roles; `read_texts` reads the 8-Ks
-  around an ending's days and its Form 25 notice. Pure apart from `read_texts`.
+  `distributes` ("for every four shares", kept) are the registrant's other roles. What a statement means for its
+  holders is its own: `OwnExchange.one_for_one` (R1's shape, `one_share_no_cash`, which 8b reads over the terms and
+  9b's `MergerValues.reconciled` over the gated terms), `split` (`split_factor`: n or 1/n for a whole n up to
+  `SPLIT_FACTOR_MAX`, 100, 1 included; the one split rule, rule 6's and the verdict's `ratio_doubt`) and
+  `stake_changed` (rule 6). Pure: which texts, names and class an ending's statement is read in is `own_shares`'.
+- `own_shares.py` — the own-share reading (CONTEXT.md, step 7b): what the registrant said each of a security's shares
+  became at one ending, read once per ending. `Reader(edgar, issuers).ending(cik, share_class=, name=, day=,
+  form25=)` gives a lazy `OwnShares` (nothing read until asked): the registrant's 8-Ks in [day − 3, day + 10] of the
+  ending's anchor day (`filings`, then their `texts`) and its matched Form 25's notice (a parsed `Form25`, or the
+  filing, read when the notice is asked), its EDGAR names in the year up to two days before the day
+  (`registrant_names`, then the security's name), and the security's own share class (`class_of`: the FIGI's, never
+  the name's). It answers `statement` (8-Ks and notice), `registrant_statement` (the 8-Ks alone: stage 9g; Actavis
+  2013's notice reads another company's 0.160), `one_for_one`, `consideration` (a special dividend is no cash),
+  `names_target` (the one name tie: a ticker of two letters or more as a word of a target name, or `names_agree`),
+  `target_issuer` (stage 5's R1: `SAME_ISSUER` or `NEW_ISSUER` by EDGAR's ticker file and `new_issuer`,
+  `NEW_ISSUER_DAYS` 1095), `survived(deal_days)` (rule 1, the deal's 5.01/2.01 8-Ks read too; `other_role`) and
+  `degraded` (it rested on a failed or stale read). The finder makes one per ending at its anchor (the last trade,
+  worked out or not, else the Form 25's filing date; the last sighting with no Form 25) and keeps the one the
+  classifier read (`stated`) on `Delisting.own_shares`; `of(d, reader, security)` gives a later stage that one, else
+  makes one at `Delisting.anchor`. Stages 8b, 9 and 9g read it, never the texts again. Reads go through the issuer
+  record (filing list, names) and the EDGAR client (texts); a warm finder's copy reads through its shadow record.
+- `continuation_evidence.py` — stage 9g (sub-plan 5i), for the verdict only, over the ending's own-share reading's
+  `registrant_statement`: `confirming_filing` (a 3.03 8-K or successor registration among the reading's 8-Ks whose
+  own text holds a one-for-one statement whose target names the registrant or the successor; no text read without
+  one) and `successor_doubt` (`verdict_rules.ratio_doubt`: a ratio that is neither one nor a split factor, or cash).
+  Which continuations are read is decided on the row's reason (`needs_filing`, `needs_doubt_check`), as the verdict
+  reads the same row.
 - `llm_merger_extractor.py` — the **cash+stock** counterpart: an LLM reads a
   filing and returns full structured terms (`cash_per_share`, `stock_ratio`,
   `acquirer_ticker`) the regex extractor can't generalize over. Uses
@@ -982,8 +1017,8 @@ conflate them.
   or stale read gets `resolution_degraded` (`IssuerRecord.watch`): the handoff stage's read of the successor
   issuer's filings no longer stops a run that has no cached copy (exit 1). Reads still made straight from the
   client, left for later steps: the finder's (its per-security try makes a failure an `error` row),
-  `listing_status`'s, `successors.successor_search_name`, stage 9e's 8-K list and stage 9g's
-  `continuation_evidence`, and filing texts and notices outside the record.
+  `listing_status`'s, `successors.successor_search_name` and stage 9e's 8-K list, and filing texts and notices
+  outside the record (the own-share reading reads its filing list and names through the record since step 7b).
 - **`review.csv` is triaged, not raw; `review_summary.csv` groups it by
   cause.** `review_triage.triage()` gives every row a `severity` — `fix`
   (`no_dlret`, `observation_unresolved`, `ended_without_delisting`, or the
@@ -1165,12 +1200,13 @@ conflate them.
   Nasdaq halt-feed read there is `resolution_degraded` too, and a line successor's span ends at its own last
   trade). A text never decides a merger row alone: the LLM's terms must agree. The name tie (a new issuer is a
   successor only when the R1 statement's target names it: one of its tickers of two letters or more is a word of a
-  target name, or a target name agrees, `names.names_agree`, with one of its EDGAR names) is carried by
-  `successors.successor_by_terms` (stage 9's terms link and 8b's in-run link), by 8b's 8-K12B candidate
-  (`_r1_successor`) and, as a registrant of that name first filed at most 1,095 days before or the registrant's own
-  name, by stage 5's R1 (`classifier._names_new_issuer`); the same-CIK own-registration link and the same-issuer
-  class link need none. A second leg after the first share (more shares, rights, warrants, units or a CVR) is no
-  one-for-one.
+  target name, or a target name agrees, `names.names_agree`, with one of its EDGAR names) is one function,
+  `own_shares.names_target`, read by `successors.successor_by_terms` (stage 9's terms link and 8b's in-run link), by
+  8b's 8-K12B candidate (`_r1_successor`), by stage 9g's confirming filing and, as a registrant of that name first
+  filed at most 1,095 days before or the registrant's own name, by stage 5's R1 (`OwnShares.target_issuer`); the
+  same-CIK own-registration link and the same-issuer class link need none. Every one of these reads the ending's one
+  own-share reading (`own_shares`), of the security's FIGI share class, at the ending's anchor. A second leg after
+  the first share (more shares, rights, warrants, units or a CVR) is no one-for-one.
 - **A line is followed past its observations (sub-plan 5a, rulings R1 and R2).** Stage 4b follows each security
   across a reverse split or a rename the fails rows show after the caller's last observation, before the Form 25
   search: so a later real ending is found instead of a guess anchored on the old ticker's last row. A step needs a

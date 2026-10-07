@@ -32,7 +32,7 @@ A deepening moves behaviour behind a smaller interface. It changes nothing the l
 | 4 | The last trade date as one module (review 5) | CNB, IMB, SPNV | done |
 | 5 | history owns where a security's history ends (review 6) | | done |
 | 6 | A security's identity behind one interface, `identity.py` (review 7) | | done |
-| 7 | The line follow owns its rounds; one R1 reading per ending (review 8) | | 7a done |
+| 7 | The line follow owns its rounds; one R1 reading per ending (review 8) | | done |
 | 8 | One run snapshot; one reading of a delistings row (review 9) | | |
 | 9 | The truth set and the loop round as two modules (review 10) | | |
 | 10 | dlret decides the value rule once (small) | plan_stock's confidence | |
@@ -784,3 +784,124 @@ Decisions made in the step:
     as it was; no defect is declared.
   - `follow_lines` probes `getattr(edgar, "full_text_search", None)` for the search, as `_follow_lines` did. That
     is step 11's capability seam.
+
+### Step 7b: one own-share reading per ending (R1)
+
+- **The module is `own_shares.py`, beside `exchange_terms`.** `exchange_terms` stays the pure statement reader: it
+  lost `read_texts`, `registrant_names` and `class_of` (the reading's choices, now `own_shares`') and gained the
+  statement's own judgments: `one_share_no_cash` (R1's shape), `split_factor`, `OwnExchange.split` and
+  `OwnExchange.stake_changed` (rule 6). Its import closure lost `evidence` and `edgar`, so the verdict reads its split
+  rule from a light leaf.
+  - Alternative: the reading inside `exchange_terms`.
+  - Cost if wrong: two modules for one concept. The statement reader is 480 lines of regex with its own real-case
+    tests; the reading is 300 lines of choices and reads with theirs.
+- **The interface.** `Reader(edgar, issuers).ending(cik, share_class=, name=, day=, form25=)` gives an `OwnShares`,
+  lazy: nothing is read until a caller asks, and every answer is kept. It answers `statement`,
+  `registrant_statement`, `one_for_one`, `consideration`, `names_target`, `target_issuer`, `survived(deal_days)`,
+  `texts`, `filings`, `text_of` and `degraded`. `of(d, reader, security)` gives a stage the delisting's reading. The
+  pure functions are the name tie (`names_target`), the new-issuer rule (`new_issuer`, `NEW_ISSUER_DAYS`), the roles
+  (`other_role`), `registrant_names` and `class_of`. A new CONTEXT.md term, **Own-share reading**, names it.
+- **Measured before choosing: one instrumented replay logged every reading at the six sites**, with its inputs and
+  answer: rule 6 (11), stage 5's R1 (10), rule 1 (71), 8b (63), 9 (16) and 9g (58), on 179 endings. 46 endings were
+  read by two or more sites, and for 19 the classification's anchor and the delisting's anchor differ. Each reading
+  was then read again under candidate inputs, and each site's decision compared (scratchpad `s7b_analyze.py`).
+  - **The class: one choice gives each caller the same answer.** The security's share class (its FIGI's) gives all
+    229 answers. The name's class, which the classifier and 9g used, changes 4 of 8b's (SBGI, WWE: truncated names
+    lose "CLASS A"). 58 securities of the run have a share class their name does not give.
+  - **The days: one choice gives each caller the same answer.** The ending's anchor alone (`Delisting.anchor`: the
+    last trade, worked out or not, else the Form 25's filing date) gives all 229. Adding the anchor 8-K's day (8b and
+    9 read it) or the Form 25's filing day (stage 5's R1 read it) changes no answer. The Form 25 day and the
+    classification's anchor need texts never read (stage 9's Yahoo 2017; three rule-1 readings): new requests in a
+    live run, so they are not the choice.
+  - **Rule 1 keeps its deal days.** Without the 5.01 and 2.01 8-Ks' windows one of its 71 answers changes; reading
+    them for every site changes 5 of 9g's answers and needs 4 new texts. So `survived(deal_days)` reads them on top
+    of the reading's own 8-Ks, and is not the statement the finder carries.
+  - **The notice: no one choice keeps every answer.** Reading the Form 25 notice everywhere gives 9g a doubt for
+    Actavis 2013 (`ratio:0.16`, the notice's sentence about Warner Chilcott's shares): its verdict would turn
+    uncertain. Leaving it out everywhere changes 7 of 8b's answers. So one read keeps two statements: `statement`
+    (the 8-Ks and the notice) and `registrant_statement` (the 8-Ks alone), which 9g asks, as its reading is "what the
+    registrant's own filings say".
+  - Alternative: keep each caller's days and class behind the interface.
+  - Cost if wrong: an R1 statement only an anchor 8-K far from the anchor holds is missed (none in the run), and
+    stage 5 and 9g now read the FIGI class. Each is a reviewable row, not a silent value.
+- **Once per ending, carried on the delisting.** The finder makes the reading (at the ending's anchor; at the last
+  sighting for an ending with no Form 25, whose last trade is dated after classification) and hands it to the
+  classifier (`classify_event(..., own_shares=)`). The delisting keeps it when its statement was read (`stated`:
+  rule 6 or R1), so the ratio the classification decided on is the one 9g and the verdict read (CHTR 2016). A stage
+  that asks first makes it at the delisting's anchor (`of`). Without a reading handed in (`classify_ticker`, tests),
+  the classifier makes one at its observed date, of the class its name gives, with the notice of the Form 25 it is
+  anchored on.
+  - Alternatives: the reading on `DelistRecord` (rejected: step 3 kept provenance off the published record); a
+    reader memo keyed by delisting (rejected: the warm finder's classifier copies would share it, and a reading a
+    warm thread made over a failed read would be reused by the sequential pass, so output would depend on the worker
+    count); always carrying the finder's reading (rejected: a fallback's last-sighting anchor would make stage 9 read
+    Yahoo 2017's at the wrong day and fetch a new text).
+  - Cost if wrong: a fallback ending the classifier read keeps a reading at its last sighting. Six endings of the
+    run are such (rule 6: SIRI 2024, CHTR 2016, NRF 2014 and three more); on each, the measured answers of 9g and
+    stage 9 at the last sighting equal those at the delisting's later anchor.
+- **A carried reading carries its failures (`OwnShares.degraded`).** 8b and 9 flag and 9g reports a reading that
+  rested on a failed or stale read, now or when it was made. Before, each stage read again under its own watch.
+  - Cost if wrong: none in the replay. In an outage, stage 5's failed read reaches 8b as degraded (the merger is
+    kept, flagged) instead of being read again.
+- **Rule 6 moved into the resolver.** Branch 2 reads `EraSignals.successor_terms` (the reading's statement, read only
+  where branch 2 decides: `end_of_era.registers_successor`) and answers `successor_merger` when its stake changed.
+  The classifier no longer builds an `EraVerdict` by hand. The reason is byte-identical: "Successor registration
+  <form> <day>: each share became ...".
+- **The resolver's text answers are typed.** `end_of_era.Filed(form, day)` replaces the "8-K <date>" strings (the
+  deficiency, bankruptcy and liquidation 8-Ks, and the successor, merger and Form 25 filings). An 8-K item's first
+  filing is a date. `str(Filed)` prints the old text, and the bankruptcy-before-sale test compares days, not a slice.
+- **One split factor rule: `exchange_terms.split_factor`, n or 1/n for a whole n up to `SPLIT_FACTOR_MAX` (100), 1
+  included.** Rule 6 and the verdict's `ratio_doubt` read it. `verdict_rules.reverse_split` (no upper bound) is gone.
+  - The rows a bound changes: none. The run's readings state 0, 0.1, 0.16, 0.9042, 1 and 2. A 1/150 consolidation
+    is now a doubt for the verdict, as it already was a merger for rule 6.
+- **One R1 shape: `one_share_no_cash(ratio, cash)`** (a ratio within 1e-9 of one, no cash). The statement's
+  `one_for_one`, 8b's terms check and 9b's `MergerValues.reconciled` read it. The latter two compared `== 1.0`. 8b
+  sets a special dividend aside first (`OwnShares.consideration`).
+- **One name tie, one new-issuer rule.** `own_shares.names_target` replaces `successors._named` (which pipeline
+  imported by its private name), the classifier's own scan and `continuation_evidence._target_is_known`.
+  `new_issuer(first_filed, day)` replaces the three `NEW_ISSUER_DAYS` checks. `OwnShares.target_issuer` is stage 5's
+  R1 condition (`classifier._names_new_issuer`). It reads EDGAR's ticker file's candidates by title only, as before
+  (its tickers are not passed: that would widen the tie), and their first filing through the issuer record, not the
+  client.
+- **The import cycle is gone.** The classifier imports `own_shares`, which imports no stage module. `successors`
+  imports `own_shares` and `delistings`, and nothing imports `successors` from the classification side. Importing the
+  classifier no longer loads `successors` or `delistings`.
+- **Stage 9g's selection stays on the row's reason** (`needs_filing`, `needs_doubt_check`: step 3's leftover).
+  - The verdict selects the same continuations from the same row text. A typed selection in 9g would make them two
+    readings of one fact.
+  - The reason prefixes are end_of_era's protocol (step 3), so the strings have one writer.
+  - 9g no longer parses the successor registration's date out of the reason: its reading is at the anchor. Measured
+    on 58 readings, no answer changes. `verdict_rules.successor_filing_date` is gone.
+  - Alternative: a typed selection from `Delisting.rewrites` and the classifier's branch.
+  - Cost if wrong: a rewrite that replaced a continuation's reason would hide it from 9g. No rule replaces a
+    transfer's reason.
+- **Stage 9b's rule-6 conflict stays on the classifier's recorded branch** (`evidence["end_of_era"] ==
+  "successor_merger"`). The carried reading's `stake_changed` also holds for mergers other rules decided (8b reads
+  every merger with one-share terms), so asking it there would add conflicts.
+- **Step 1's leftover: 8b's `read_terms` still reads both legs of an election that states no package.** An election
+  whose legs are one share and cash is no R1 continuation either way (its cash is cash), and one with no cash leg is
+  no election. No row changes either way, so the reading the gate never published stays 8b's.
+- **The classifier's reading reads the filing list and names through its issuer record**, as the pipeline's did.
+  It is the same copy. A failed read is unknown, not an exception: that changes only an outage, and the finder's
+  watch still flags the row.
+- **Stage 9's own-registration link keeps its `texts` parameter** (the reading's `texts`), so sub-plan 5h's OKE tests
+  call it as they did. `_r1_successor` takes the reading; `successor_by_terms` takes its statement, so its tests build
+  statements, not readings.
+- **Tests.**
+  - Added: tests/test_own_shares.py, 25 at the interface (the texts and their order, laziness, the names, the
+    class, SBGI's truncated name, the notice left out of the registrant's statement, a failed read, the name tie, the
+    new issuer, whom the target names, a special dividend, rule 1's deal 8-Ks, carrying, and the issuer-role cases
+    CHTR, SIRI, TW and OKE through the finder and stages 8b and 9); 3 in test_end_of_era (rule 6 in branch 2); 4 in
+    test_continuation_evidence (no text read without a confirming form, a carried reading, the notice, a carried
+    degraded reading).
+  - Moved: the classifier's `_names_new_issuer` test (now `test_whom_the_target_names`), and exchange_terms'
+    `registrant_names`, `class_of` and `read_texts` tests (now the reading's).
+  - Rewritten at the interface: 8b's private `_r1_successor` test (now a stage test over a real reading); the 5f
+    `_split_factor` test (now `split_factor` and `stake_changed`); verdict_rules' `reverse_split` assertion (now
+    `ratio_doubt`); test_continuation_evidence and the 5i verdict harness (tests/verdict_cases.py and its builder)
+    over the reading at the row's anchor (`last_trade.anchor_day`, `of_row`); test_end_of_era's signals typed. The
+    issuer-role harness gained `later` (stages 8b and 9 over given delistings).
+  - Suite: 3222 passed, 45 xfailed (step 7a: 3193).
+- **The gate:** the replay is SAME against `accepted4_out`; it refuses no request and reads no uncached text, and its
+  log equals step 7a's line for line.
+- **pipeline.py: 1617 lines to 1613; classifier.py: 1102 to 1036.** own_shares.py is 303 lines.

@@ -105,6 +105,10 @@ A value the library assumes rather than measures: a Shumway mark, assumed par, a
 **Merger value**:
 What one share of a security became in its merger, as the library reads it: the terms (cash, shares of the acquirer, further securities), whether they reconcile with the last close, the acquirer security whose price values the shares, and the price request that price needs. There is one per merger ending (`merger_value.MergerValue`). A caller's `--merger-terms` row replaces the terms the library read.
 
+**Own-share reading**:
+What the registrant said each of a security's shares became at one ending: the statement (so many shares of a target, and any cash), whom the target names (the registrant itself, another class of it, a new issuer, another company), and the registrant's other roles (it acquired another party, or distributed another company's shares). It is read once per ending, from the registrant's 8-Ks around the ending's anchor day and the exchange's Form 25 notice, against the security's own share class (`own_shares.OwnShares`). One share per share and no cash, into the same issuer or a new one, is a continuation (R1); another ratio than one or a split, or cash, is a merger.
+_Avoid_: exchange terms (the merger value's terms), R1 reading
+
 **Issuer record**:
 What EDGAR records of one issuer, as a run reads it: its names over time, its first filing and its filings. A run reads each issuer once, through one `issuer_record.IssuerRecord`; a read that failed is unknown, never a fact, and the answers that rested on it are reported `resolution_degraded`.
 
