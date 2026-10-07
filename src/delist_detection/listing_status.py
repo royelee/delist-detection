@@ -64,7 +64,12 @@ def withdrawal_kind(exchange: str, before: set[str] | None, after: set[str] | No
 def edgar_lists(edgar, cik: int, tickers: Iterable[str] | None) -> bool:
     """True when the issuer's EDGAR submissions JSON lists one of `tickers` on a
     major exchange (any of its tickers when `tickers` is None)."""
-    sub = edgar.submissions(cik)
+    return lists_on_major_exchange(edgar.submissions(cik), tickers)
+
+
+def lists_on_major_exchange(sub, tickers: Iterable[str] | None) -> bool:
+    """`edgar_lists` over a submissions JSON (or its profile, `IssuerRecord.profile`) already read: True when it
+    lists one of `tickers` on a major exchange (any of its tickers when `tickers` is None); False for no copy."""
     if not isinstance(sub, dict):
         return False
     want = None if tickers is None else {normalize_ticker(t) for t in tickers if t}

@@ -21,6 +21,7 @@ from delist_detection.classifier import DelistClassifier, DelistRecord
 from delist_detection.crsp_codes import CrspBucket
 from delist_detection.delistings import Delisting
 from delist_detection.edgar import EFTS_KEY, EFTS_SCHEMA, FETCHED_KEY, EdgarBlocked, EdgarClient
+from delist_detection.filing_search import successor_query
 from delist_detection.issuer_record import IssuerRecord
 from delist_detection.last_trade import LastTrade
 from delist_detection.midas import MIDAS_INDEX_URL, MidasClient
@@ -28,7 +29,6 @@ from delist_detection.observations import Observation, ObservationIndex
 from delist_detection.openfigi import OpenFigiBlocked
 from delist_detection.payout_extractor import PayoutExtractor, PayoutResult
 from delist_detection.pipeline import Clients, Overrides, run
-from delist_detection.successors import successor_query
 from delist_detection.prefetch import Serialized
 from delist_detection.store import read_table, table_path
 from delist_detection.ticker_resolver import TickerResolver

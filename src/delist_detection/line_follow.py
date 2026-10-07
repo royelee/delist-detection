@@ -1,12 +1,33 @@
-"""Follow a security's line across a CUSIP or ticker change (sub-plan 5a, spec 2026-10-03-diagnosis-truth-fixes,
-section 3 "5a", rulings R1 and R2).
+"""Follow a security's line across a CUSIP or ticker change: stage 4b (sub-plan 5a, spec
+2026-10-03-diagnosis-truth-fixes, section 3 "5a", rulings R1 and R2).
 
 The caller's observations of a security can stop years before its line ends: the issuer reverse-split (a new CUSIP
 under the same ticker), renamed itself (the same CUSIP under a new ticker), or did both. The fails-to-deliver rows
-show the line going on. `candidate_steps` finds, for one security, the next step of its line in those rows (pure);
-`corroborate` checks the step against the issuer's EDGAR record (pure, over what the caller read); `decide` applies
-R2 (the new CUSIP's OpenFIGI composite) to the step. The pipeline's stage 4b (`pipeline._follow_lines`) runs them,
-up to `MAX_ROUNDS` steps a line, before the Form 25 search.
+show the line going on. The stage follows each security past its observations, before the Form 25 search reads its
+sightings, so a later real ending is found instead of a guess anchored on the old ticker's last row.
+
+The interface is `follow_lines(identity, clients, *, as_of, log, meter) -> Lines`. A caller passes the identity
+stage's answer (`identity.Identity`: the securities, each era's resolution, each security's CUSIPs, the fails index)
+and the run's clients (`LineSources`: the issuer record, EDGAR's full-text search, OpenFIGI and the fails files). It
+gets the securities, resolutions and CUSIPs after the follow, the placeholders folded into a FIGI line (`renames`),
+the FIGI lines another composite continues (`successors`, which stage 9 links) and the review items of stages 1 to
+4b. Behind it:
+
+- the rounds: up to `MAX_ROUNDS` steps a line (WIN's two reverse splits), each round's new CUSIPs loaded into the
+  fails index to the run date and asked of OpenFIGI in one batch;
+- the holders: a new CUSIP, or a successor composite, one security took is held for the rest of the round;
+- the reads: every issuer read goes through the run's issuer record and its one failure policy (`_Reads`). A failed
+  read is never remembered, a refusal (`fatal.FATAL`) or an OpenFIGI outage stops the run, and a degraded read of a
+  CIK gives each of that CIK's steps a `resolution_degraded` item, as it does a security with no step;
+- the folds: a placeholder folds into the FIGI line its new CUSIP names, and a ticker-tier line into its next CUSIP's
+  composite when the ticker answered with today's holder (`_today_holder_fold`, sub-plan 5h).
+
+The rules are functions over what was read. `candidate_steps` finds a line's next step in the fails rows (pure).
+`corroborate` checks the step against the issuer's EDGAR record (R1, pure over what the stage read). `decide` applies
+R2 (the new CUSIP's OpenFIGI composite) to it. Only `follow_lines` calls them in a run; they stay importable as the
+surface of their own tests (tests/test_line_follow.py, and the real-case harness tests/test_line_follow_cases.py).
+Stage 9's own-registration link reads `is_line_symbol`, `text_cusips` and `composites` too, since it applies the
+same R2 reading to the new CUSIP of a same-CIK 8-K12B.
 
 A step is followed only when the old registrant carries on (R1): it files a periodic report after the step, or the
 step is its own successor registration (8-K12B/8-K12G3), and no other registrant's 8-K12B/8-K12G3 names it then.
@@ -14,23 +35,32 @@ step is its own successor registration (8-K12B/8-K12G3), and no other registrant
 from __future__ import annotations
 
 import re
+from collections import Counter, defaultdict
 from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field, replace
 from datetime import date, timedelta
+from typing import TYPE_CHECKING, Any, Protocol
 
 import requests
 
+from .degraded import degraded_item
 from .edgar import EdgarSubmission
 from .evidence import name_at, names_between
 from .fatal import FATAL
 from .figi_resolution import FigiCandidate, class_letter, is_placeholder, share_class_from_name, us_candidates
+from .filing_search import successor_query
 from .ftd import FtdIndex, FtdRow, is_deleted_symbol, is_unassigned_symbol, settled_last
-from .listing_status import edgar_lists
+from .issuer_record import IssuerRecord
+from .listing_status import edgar_lists, lists_on_major_exchange
+from .manifest import StageMeter
 from .names import description_names, names_agree
 from .observations import normalize_ticker
-from .security_master import SWITCH_DAYS, SWITCH_TAIL_DAYS, Security
-from .successors import successor_query
+from .review_triage import ReviewItem
+from .security_master import SWITCH_DAYS, SWITCH_TAIL_DAYS, EraResolution, Security, cusip_job
 from .trading_calendar import add_trading_days
+
+if TYPE_CHECKING:
+    from .identity import Identity
 
 SWITCH, NEW_SYMBOL = "cusip_switch", "new_symbol"
 ATTACH, FOLD, SUCCESSOR, REFUSED = "attach", "fold", "successor", "refused"
@@ -41,6 +71,7 @@ RENAME_DAYS = 90              # an EDGAR rename this close to the first new row 
 BANKRUPTCY_BEFORE_DAYS, BANKRUPTCY_AFTER_DAYS = 180, 30    # an 8-K item 1.03 in this window refuses the step
 NAME_DAYS = 30                # the new rows' descriptions must name a name in force this long from the first row
 RECENT_DAYS = 120             # a step this close to the run date may have no periodic report after it yet
+TEXT_SOURCE_DAYS = 30         # a line whose last row is this close to the run date has not been seen to stop
 READ_FAILED = -1              # `other_registrant`: the read failed, nothing is known of another registrant
 MAX_ROUNDS = 3                # steps followed per line (WIN's two reverse splits, LPI's switch then rename)
 MAX_TEXTS = 5                 # 8-K texts read per step for a reverse split or the new CUSIP
@@ -363,7 +394,7 @@ def name_on(sub: Mapping | None, day: date, fallback: str = "") -> str:
 def other_registrant(search: Callable | None, edgar, *, name: str, day: date, cik: int,
                      own_tickers: Collection[str]) -> int | None:
     """Another CIK whose 8-K12B/8-K12G3 names `name` in the successor search's window around `day`
-    (`successors.successor_query`): a new registrant took the old one's place (R1). A filer that is another
+    (`filing_search.successor_query`): a new registrant took the old one's place (R1). A filer that is another
     issuer's own, still-listed stock is skipped, as `successors.successor_from_8k12b` skips it: its EDGAR name
     does not agree with `name`, none of its tickers is one of `own_tickers`, and EDGAR lists one of them on a major
     exchange today (iHeartMedia's 8-K12G3 names its subsidiary Clear Channel Outdoor). None without a search;
@@ -422,3 +453,261 @@ def decide(step: LineStep, sec: Security, cands: list[FigiCandidate] | None,
     if holder is not None and holder.share_class != sec.share_class:
         return Decision(REFUSED, x.composite, "class", x)
     return Decision(FOLD if is_placeholder(sec.sec_id) else SUCCESSOR, x.composite, candidate=x)
+
+
+# --- the stage: `follow_lines` -----------------------------------------------------------------------------------
+
+LINE_FOLLOWED, LINE_REFUSED = "line_followed", "line_follow_refused"
+
+
+class LineSources(Protocol):
+    """What `follow_lines` reads through (`pipeline.Clients` has it all)."""
+    issuers: IssuerRecord     # the run's issuer record: every issuer's submissions, filing list and 8-K texts
+    edgar: Any                # the EDGAR client: its full-text search, and a successor filer's listing
+    figi: Any                 # OpenFIGI: `map(jobs)`, the new CUSIPs' composites
+    ftd_client: Any           # SEC's fails-to-deliver files (`ftd.FtdClient`) the fails index is extended from
+
+
+@dataclass
+class Lines:
+    """`follow_lines`' answer: the securities, each era's resolution and each security's CUSIPs after the line
+    follow; the placeholders folded into a FIGI line (old sec_id -> the FIGI; a fold of a fold points at the last
+    FIGI); the FIGI lines another composite continues (sec_id -> `LineSuccessor`, linked by stage 9); and the review
+    items of stages 1 to 4b, the identity stage's first, a folded placeholder's moved to its FIGI line (its `no_figi`
+    item dropped: it holds a FIGI after all)."""
+    securities: dict[str, Security]
+    resolutions: dict[str, EraResolution]
+    cusips: dict[str, list[str]]
+    renames: dict[str, str] = field(default_factory=dict)
+    successors: dict[str, LineSuccessor] = field(default_factory=dict)
+    review: list[ReviewItem] = field(default_factory=list)
+
+
+class _Reads:
+    """The stage's EDGAR reads, in one place. The issuers' submissions, filing lists and 8-K texts go through the
+    run's issuer record and its failure policy: a failed read is unknown ([], None, "") and never remembered, and a
+    refusal stops the run. The other-registrant search and its filer's listing (`other_registrant`) answer
+    `READ_FAILED` for a failed read. A CIK is degraded when one of its issuer reads in the stage failed or was
+    stale, or when its other-registrant search failed."""
+
+    def __init__(self, clients: LineSources) -> None:
+        self.issuers, self._edgar = clients.issuers, clients.edgar
+        self._search = getattr(clients.edgar, "full_text_search", None)
+        self._stage = self.issuers.watch()          # every issuer read of the stage
+        self._search_failed: set[int] = set()       # the CIKs whose other-registrant search failed
+
+    def degraded(self, cik: int | None) -> bool:
+        return cik in self._stage.ciks or cik in self._search_failed
+
+    def listed_symbols(self, cik: int) -> set[str]:
+        """The line symbols among the tickers EDGAR lists for the issuer today."""
+        sub = self.issuers.profile(cik)
+        listed = [normalize_ticker(t) for t in (sub.get("tickers") or [])] if isinstance(sub, dict) else []
+        return {t for t in listed if is_line_symbol(t)}
+
+    def text_sources(self, s: Security, end: LineEnd) -> tuple[set[str], set[str]]:
+        """The tickers and CUSIPs the issuer's own 8-Ks around a line's end name as the stock's new ones (APY's
+        ChampionX "CHX", Liz Claiborne's "316645100" and "FNP"): read only when one of them is an 8-K item 5.03
+        or 3.03 or an 8-K12B/8-K12G3, within `FILING_DAYS` of the line's settled last row (the filter before the
+        `MAX_TEXTS` cap: a busy issuer's coded 8-K is read)."""
+        near = eightks_near(self.issuers.filings(s.issuer_cik), date.fromisoformat(end.settled),
+                            lambda f: f.form in SUCCESSOR_FORMS or bool({"5.03", "3.03"} & f.item_set))
+        texts = [self.issuers.text(s.issuer_cik, f) for f in near]
+        return {t for t in text_symbols(texts) if is_line_symbol(t)} - s.own_tickers(), text_cusips(texts)
+
+    def corroborate(self, step: LineStep, s: Security, tickers: set[str], as_of: date) -> tuple[str, str]:
+        """`corroborate` for a step of security `s` (its line's `tickers`), from the issuer's record."""
+        cik, first = s.issuer_cik, date.fromisoformat(step.first)
+        return corroborate(
+            step, filings=self.issuers.filings(cik), sub=self.issuers.profile(cik), share_class=s.share_class,
+            text_of=lambda f: self.issuers.text(cik, f), as_of=as_of,
+            listed_now=lambda: lists_on_major_exchange(self.issuers.profile(cik), sorted(tickers | {step.symbol})),
+            other_registrant=lambda: self._other_registrant(cik, name_on(self.issuers.profile(cik), first, s.name),
+                                                            first, tickers))
+
+    def _other_registrant(self, cik: int, name: str, day: date, tickers: set[str]) -> int | None:
+        other = other_registrant(self._search, self._edgar, name=name, day=day, cik=cik, own_tickers=tickers)
+        if other == READ_FAILED:
+            self._search_failed.add(cik)
+        return other
+
+
+def _cusip_holders(cusips: Mapping[str, Sequence[str]]) -> dict[str, set[str]]:
+    holders: dict[str, set[str]] = defaultdict(set)
+    for sid, held in cusips.items():
+        for c in held:
+            holders[c].add(sid)
+    return holders
+
+
+def _fold(out: Lines, p: str, x: str, cand: FigiCandidate, step: LineStep, tickers: dict[str, set[str]]) -> None:
+    """Fold `p` into the FIGI line `x` its new CUSIP's composite names: its eras resolve to `x` (source `handoff`,
+    as a CUSIP handoff joins a line in stage 3), its CUSIPs and line tickers join `x`'s, and every earlier rename to
+    `p` now points at `x`."""
+    for e in out.securities[p].eras:
+        out.resolutions[e.key] = replace(out.resolutions[e.key], sec_id=x, source="handoff", candidate=cand, flags=())
+    out.cusips[x] = list(dict.fromkeys([*out.cusips.get(x, []), *out.cusips.pop(p, []), step.new_cusip]))
+    tickers[x] = tickers.get(x, set()) | tickers.pop(p, set()) | {step.symbol}
+    for old, now in list(out.renames.items()):
+        if now == p:
+            out.renames[old] = x
+    out.renames[p] = x
+
+
+def _today_holder_fold(decision: Decision | None, s: Security, resolutions: Mapping[str, EraResolution],
+                       tickers: Collection[str]) -> Decision | None:
+    """A SUCCESSOR decision made a FOLD (sub-plan 5h, R2): the line's composite came from the ticker tier alone
+    (its CUSIPs have none of their own), that candidate is today's holder of one of the line's tickers, and the
+    step's new composite has left them (its ticker today is another): the ticker answered with the line that took
+    the ticker over later, and the line's own next CUSIP names its real composite. California Resources' 2014 era
+    took CRC's post-2020 line BBG00Y04KP80 by ticker, while its 2016 reverse split's CUSIP is BBG0060B3M63 (CRCQQ
+    after the 2020 bankruptcy); Peabody's took BTU's post-2017 line, its 2015 split's being BTUUQ's. A line whose
+    ticker candidate left the ticker (an old line OpenFIGI still lists under it) keeps its successor."""
+    if decision is None or decision.kind != SUCCESSOR or decision.candidate is None or s.figi_source != "ticker":
+        return decision
+    picks = [r.candidate for e in s.eras if (r := resolutions.get(e.key)) is not None and r.source == "ticker"
+             and r.candidate is not None]
+    own = {normalize_ticker(t) for t in tickers}
+    if not picks or any(normalize_ticker(c.ticker) not in own for c in picks) \
+            or normalize_ticker(decision.candidate.ticker) in own:
+        return decision
+    return Decision(FOLD, decision.composite, candidate=decision.candidate)
+
+
+def _quiet(*_: Any) -> None:
+    return None
+
+
+def follow_lines(identity: "Identity", clients: LineSources, *, as_of: date,
+                 log: Callable[[str], None] = _quiet, meter: StageMeter | None = None) -> Lines:
+    """Stage 4b: each security of `identity` followed past its observations (module docstring), every window ending
+    on the run date `as_of`; `log` takes the stage's tally, `meter` its SEC traffic ("line follow").
+
+    A round finds each line's next step in the fails rows (`candidate_steps`: a new CUSIP under the line's ticker,
+    or a ticker of the issuer EDGAR lists today or its 8-K text names (`_Reads.text_sources`, read in the first
+    round for a line with no step that stopped more than `TEXT_SOURCE_DAYS` before the run date); or the same CUSIP
+    under a new ticker), loads the new CUSIPs' rows to the run date, asks OpenFIGI for their composites in one
+    batch, checks each step against the issuer's filings (`corroborate`) and applies R2 (`decide`, then
+    `_today_holder_fold`): the same security takes the new CUSIP and ticker; a placeholder folds into the FIGI line
+    its new CUSIP names (the securities are rebuilt, `Identity.securities_of`); a FIGI line whose new CUSIP has its
+    own composite keeps its CUSIPs and records that composite as its line successor. A new CUSIP one security
+    attached or folded into, or a successor composite one took, is refused `taken` to the next in the round (sec_id
+    order). A line that moved is followed again in the next round, up to `MAX_ROUNDS`. Every step followed or
+    refused is an info review item (`line_followed`, `line_follow_refused:<why>`); a step whose reads rested on a
+    failed request or a stale copy, or of a CIK one of whose reads in the stage did, gets a `resolution_degraded`
+    one, and so does a security with no such step whose CIK's read did. A refusal (`fatal.FATAL`) or an OpenFIGI
+    outage stops it."""
+    meter = meter if meter is not None else StageMeter(log)
+    mark = meter.start()
+    reads = _Reads(clients)
+    ftd, ftd_lo = identity.ftd, identity.ftd_lo
+    out = Lines(dict(identity.securities), dict(identity.resolutions),
+                {k: list(v) for k, v in identity.cusips.items()})
+    items: list[ReviewItem] = []
+    tickers: dict[str, set[str]] = {sid: set(s.line_tickers) for sid, s in identity.securities.items()}
+
+    def own(sid: str) -> set[str]:
+        return out.securities[sid].own_tickers() | tickers.get(sid, set())
+
+    todo = sorted(sid for sid, s in out.securities.items() if s.issuer_cik is not None)
+    extra: dict[str, set[str]] = {sid: reads.listed_symbols(out.securities[sid].issuer_cik) - own(sid)
+                                  for sid in todo}
+    # every line's tickers, their first-day ZZZZ and post-split D spellings and the issuers' other tickers, to the
+    # run date (stage 1 loaded the eras' tickers only to 400 days past their last observation)
+    spellings = {t.replace("-", "") + suffix for sid in todo for t in own(sid) for suffix in ("", "ZZZZ", "D")}
+    ftd.extend(clients.ftd_client, ftd_lo, as_of, symbols=spellings | {t for v in extra.values() for t in v})
+    named: dict[str, set[str]] = defaultdict(set)
+    counts: Counter[str] = Counter()
+    flagged: set[str] = set()            # securities whose step already got a resolution_degraded item
+    for round_no in range(1, MAX_ROUNDS + 1):
+        holders = _cusip_holders(out.cusips)
+
+        def steps_of(sid: str) -> list[LineStep]:
+            return candidate_steps(sid, out.cusips.get(sid, []), own(sid), ftd, holders=holders,
+                                   extra_symbols=extra.get(sid, ()), extra_cusips=named.get(sid, ()),
+                                   data_end=ftd.last_date())
+
+        steps = {sid: steps_of(sid) for sid in todo}
+        new_symbols: set[str] = set()
+        if round_no == 1:
+            stopped = (as_of - timedelta(days=TEXT_SOURCE_DAYS)).isoformat()
+            for sid in todo:
+                end = line_end(out.cusips.get(sid, []), own(sid), ftd)
+                if steps[sid] or end is None or end.last >= stopped:
+                    continue
+                symbols, cusips = reads.text_sources(out.securities[sid], end)
+                extra[sid] |= symbols
+                named[sid] |= cusips
+                new_symbols |= symbols
+        new_cusips = {st.new_cusip for v in steps.values() for st in v if st.kind == SWITCH}
+        new_cusips |= {c for v in named.values() for c in v}
+        if new_cusips or new_symbols:
+            ftd.extend(clients.ftd_client, ftd_lo, as_of, cusips=new_cusips, symbols=new_symbols)
+            steps = {sid: steps_of(sid) for sid in todo}
+        switch_cusips = sorted({v[0].new_cusip for v in steps.values() if v and v[0].kind == SWITCH})
+        figi_answers = dict(zip(switch_cusips, clients.figi.map([cusip_job(c) for c in switch_cusips]))) \
+            if switch_cusips else {}
+        moved: set[str] = set()
+        taken: dict[str, str] = {}       # a new CUSIP or successor composite a security took this round: its holder
+        for sid in todo:
+            if not steps[sid] or sid not in out.securities:
+                continue
+            step, s = steps[sid][0], out.securities[sid]
+            cik = s.issuer_cik
+            watch = reads.issuers.watch()          # this step's reads
+            evidence, refused = reads.corroborate(step, s, own(sid), as_of)
+            what = f"{step.old_cusip} -> {step.new_cusip} under {step.symbol} from {step.first}"
+            decision = None if refused else decide(
+                step, s, composites(figi_answers[step.new_cusip]) if step.kind == SWITCH else None, out.securities)
+            decision = _today_holder_fold(decision, s, out.resolutions, own(sid))
+            if decision is not None and decision.kind == REFUSED:
+                refused = decision.why
+            elif decision is not None and decision.kind in (ATTACH, FOLD) and step.kind == SWITCH \
+                    and taken.setdefault(step.new_cusip, decision.composite or sid) != (decision.composite or sid):
+                refused = "taken"     # another security of the run took this CUSIP earlier in the round
+            elif decision is not None and decision.kind == SUCCESSOR \
+                    and taken.setdefault(decision.composite, sid) != sid:
+                refused = "taken"     # ... or this successor composite
+            if watch.tripped() or reads.degraded(cik):
+                flagged.add(sid)
+                items.append(degraded_item(sid, step.symbol, cik, f"the line follow ({what})",
+                                           "; run again once SEC answers", last_seen=step.old_last))
+            if refused:
+                counts[f"refused:{refused}"] += 1
+                items.append(ReviewItem(sid, step.symbol, cik, f"{LINE_REFUSED}:{refused}",
+                                        f"{what}: not followed ({refused})", last_seen=step.old_last))
+                continue
+            counts[decision.kind] += 1
+            if decision.kind == ATTACH:
+                if step.kind == SWITCH:
+                    out.cusips.setdefault(sid, []).append(step.new_cusip)
+                tickers.setdefault(sid, set()).add(step.symbol)
+                moved.add(sid)
+                result = "the same security"
+            elif decision.kind == FOLD:
+                _fold(out, sid, decision.composite, decision.candidate, step, tickers)
+                moved.add(decision.composite)
+                result = f"folded into {decision.composite}"
+            else:
+                out.successors[sid] = LineSuccessor(sid, decision.composite, decision.candidate, step, evidence)
+                result = f"continued by {decision.composite}"
+            items.append(ReviewItem(sid, step.symbol, cik, LINE_FOLLOWED, f"{what} ({evidence}): {result}",
+                                    last_seen=step.old_last))
+        if any(sid in out.renames for sid in out.securities):
+            out.securities = identity.securities_of(out.resolutions)
+        for sid, s in out.securities.items():
+            s.line_tickers = frozenset(tickers.get(sid, set()) - {e.ticker for e in s.eras})
+        todo = sorted(sid for sid in moved if sid in out.securities)
+        if not todo:
+            break
+    for sid, s in sorted(out.securities.items()):       # a failed read that left no step: its answer still rested on it
+        if reads.degraded(s.issuer_cik) and sid not in flagged:
+            items.append(degraded_item(sid, min(own(sid), default=""), s.issuer_cik, "the line follow",
+                                       "; run again once SEC answers"))
+    # a folded placeholder's review items follow it to its FIGI line, where it holds a FIGI after all
+    out.review = [replace(r, sec_id=out.renames.get(r.sec_id, r.sec_id)) for r in [*identity.review, *items]
+                  if not (r.flag == "no_figi" and r.sec_id in out.renames)]
+    log(f"line follow: {dict(sorted(counts.items()))}; {len(out.renames)} placeholders folded, "
+        f"{len(out.successors)} line successors")
+    meter.done("line follow", mark)
+    return out

@@ -49,7 +49,7 @@ from delist_detection.line_follow import (  # noqa: E402
 )
 from delist_detection.observations import normalize_ticker  # noqa: E402
 from delist_detection.security_master import cusip_job  # noqa: E402
-from delist_detection.successors import successor_query  # noqa: E402
+from delist_detection.filing_search import successor_query  # noqa: E402
 
 AS_OF = date(2026, 9, 25)                 # the committed run's date
 FTD_WINDOW = (date(2007, 12, 17), AS_OF)  # the committed run's fails window
@@ -142,7 +142,7 @@ def main(argv: list[str] | None = None) -> int:
                         cusips={c for sid in CASES for c in cusips[sid]})
     named: dict[str, set[str]] = defaultdict(set)
     filings = {sid: _cached(edgar.recent_filings, int(secs[sid]["issuer_cik"]), default=[]) for sid in CASES}
-    for sid in CASES:                       # the 8-K text sources, as pipeline._text_sources reads them
+    for sid in CASES:                       # the 8-K text sources, as the stage reads them (line_follow)
         end = line_end(cusips[sid], tickers[sid], ftd)
         if end is None or candidate_steps(sid, cusips[sid], tickers[sid], ftd, holders=holders,
                                           extra_symbols=extra[sid]):

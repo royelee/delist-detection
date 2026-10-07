@@ -1,21 +1,25 @@
 """line_follow over real cases (sub-plan 5a): the cached fails rows, EDGAR answers and OpenFIGI answers of the
-committed run's securities in tests/fixtures/lines/ (built once, offline, by scripts/build_line_fixtures.py), each
-case's first step found, checked and decided as the pipeline's stage 4b does, and, for a two-step case, the next."""
+committed run's securities in tests/fixtures/lines/ (built once, offline, by scripts/build_line_fixtures.py). Each
+case's first step is found, checked and decided by the rule functions, and, for a two-step case, the next; then every
+case runs through the stage's interface, `follow_lines`, whose first answer for it must be the same."""
 from __future__ import annotations
 
 import csv
 import json
 from datetime import date
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
 from delist_detection import line_follow as lf
 from delist_detection.edgar import EdgarSubmission
 from delist_detection.ftd import FtdIndex, FtdRow
+from delist_detection.identity import Identity
+from delist_detection.issuer_record import IssuerRecord
 from delist_detection.listing_status import edgar_lists
-from delist_detection.observations import TickerEra
-from delist_detection.security_master import Security
+from delist_detection.observations import Observation, TickerEra
+from delist_detection.security_master import EraResolution, Issuer, Security, build_securities
 
 FIX = Path(__file__).parent / "fixtures" / "lines"
 DATA = json.loads((FIX / "cases.json").read_text())
@@ -25,17 +29,23 @@ SEARCHES = json.loads((FIX / "searches.json").read_text())
 AS_OF = date.fromisoformat(DATA["as_of"])
 
 
-@pytest.fixture(scope="module")
-def ftd():
+def _load_ftd() -> FtdIndex:
     with (FIX / "ftd_rows.csv").open(newline="") as fh:
         return FtdIndex(FtdRow(r["date"], r["cusip"], r["symbol"], r["description"],
                                float(r["price"]) if r["price"] else None) for r in csv.DictReader(fh))
 
 
-class _Edgar:
-    """The issuers' EDGAR answers as the fixture recorded them."""
+@pytest.fixture(scope="module")
+def ftd():
+    return _load_ftd()
 
-    def submissions(self, cik):
+
+class _Edgar:
+    """The issuers' EDGAR answers as the fixture recorded them, read directly (`submissions`, `filings`) or through
+    the stage's issuer record (`recent_filings`, `fetch_filing_text`); the full-text search answers the cached
+    successor searches, and finds nothing for any other query."""
+
+    def submissions(self, cik, fresh_after=None):
         d = EDGAR["issuers"].get(str(int(cik)), {})
         return {"name": d.get("name", ""), "formerNames": d.get("formerNames", []), "tickers": d.get("tickers", []),
                 "exchanges": d.get("exchanges", [])}
@@ -43,6 +53,16 @@ class _Edgar:
     def filings(self, cik):
         return [EdgarSubmission(a, form, fd, rd, items, doc)
                 for a, form, fd, rd, items, doc in EDGAR["issuers"].get(str(int(cik)), {}).get("filings", [])]
+
+    def recent_filings(self, cik):
+        return self.filings(cik)
+
+    def fetch_filing_text(self, cik, accession, primary_doc):
+        return EDGAR["texts"].get(accession, "")
+
+    def full_text_search(self, q, forms, lo, hi):
+        asked = [q, forms, lo.isoformat(), hi.isoformat()]
+        return next((saved["hits"] for saved in SEARCHES.values() if saved["query"] == asked), [])
 
 
 EDGAR_FIX = _Edgar()
@@ -173,3 +193,81 @@ def test_after_a_reverse_split_the_bankrupt_lines_otc_tail_and_relist_are_no_ste
     case = DATA["cases"][sec_id]
     assert follow(sec_id, ftd, cusips=[*case["cusips"], step.new_cusip], tickers={*case["tickers"]}) is None
     assert otc in {r.symbol for r in ftd.by_cusip(step.new_cusip)}
+
+
+# --- the same cases through the stage's interface, `follow_lines` ------------------------------------------------
+
+class _Figi:
+    """The fixture's OpenFIGI answers; a CUSIP it does not hold reads as an error answer (nothing settled)."""
+
+    def map(self, jobs, use_cache=True):
+        return [FIGI.get(j["idValue"], {"error": "not in the fixture"}) for j in jobs]
+
+
+class _NoFiles:
+    """The fails files: the fixture's index already holds every row the cases read."""
+
+    def urls_for(self, lo, hi):
+        return []
+
+
+# the run's other securities that hold a CUSIP the cases meet (WLL's, LMCA's and MSG's next ones); with no issuer
+# known here they are not followed themselves
+HOLDERS = sorted({h for held in DATA["holders"].values() for h in held} - set(DATA["cases"]))
+
+
+def _identity() -> Identity:
+    """The identity stage's answer over the cases: one era per ticker, under the case's observed name."""
+    eras, res, issuers, cusips = {}, {}, {}, {}
+    for sid, case in DATA["cases"].items():
+        for t in case["tickers"]:
+            era = TickerEra(t, "2008-01-16", "2008-01-16", [Observation(t, "2008-01-16", case["name"])])
+            eras[era.key] = era
+            res[era.key] = EraResolution(era.key, sid, case["figi_source"], None, (), tuple(case["cusips"]))
+            issuers[era.key] = Issuer(case["issuer_cik"])
+        cusips[sid] = list(case["cusips"])
+    for i, sid in enumerate(HOLDERS):
+        era = TickerEra(f"HOLD{i}", "2008-01-16", "2008-01-16", [Observation(f"HOLD{i}", "2008-01-16", RUN[sid].name)])
+        eras[era.key] = era
+        cusips[sid] = sorted(c for c, held in DATA["holders"].items() if sid in held)
+        res[era.key] = EraResolution(era.key, sid, "cusip", None, (), tuple(cusips[sid]))
+    return Identity(list(eras.values()), eras, _load_ftd(), date(2004, 1, 1), issuers, res,
+                    build_securities(res, eras, issuers), cusips)
+
+
+@pytest.fixture(scope="module")
+def staged():
+    edgar = _Edgar()
+    clients = SimpleNamespace(edgar=edgar, issuers=IssuerRecord(edgar), figi=_Figi(), ftd_client=_NoFiles())
+    return lf.follow_lines(_identity(), clients, as_of=AS_OF)
+
+
+def _first_item(lines, sec_id):
+    """The stage's first line follow item for the case (under the FIGI line a fold moved it to); None for none."""
+    holder = lines.renames.get(sec_id, sec_id)
+    return next((r for r in lines.review if r.sec_id == holder and r.flag.startswith("line_follow")), None)
+
+
+@pytest.mark.parametrize("sec_id", sorted(EXPECTED), ids=lambda s: DATA["cases"][s]["note"].split(":")[0])
+def test_a_real_lines_first_step_through_the_stage(sec_id, staged):
+    """The stage takes each case's first step as the rules do: the same step, refusal and decision. A new CUSIP whose
+    OpenFIGI answer the fixture lacks (DHC) is an error answer there, so the stage refuses it `unsettled`."""
+    kind, new_cusip, symbol, first, why, decided, composite = EXPECTED[sec_id]
+    item = _first_item(staged, sec_id)
+    assert f" -> {new_cusip} under {symbol} from {first}" in item.reason
+    if why or decided is None:
+        assert item.flag == f"{lf.LINE_REFUSED}:{why or 'unsettled'}"
+    elif decided == lf.ATTACH:
+        assert item.flag == lf.LINE_FOLLOWED and item.reason.endswith(": the same security")
+        assert kind == lf.NEW_SYMBOL or new_cusip in staged.cusips[sec_id]
+    elif decided == lf.FOLD:
+        assert item.reason.endswith(f": folded into {composite}") and staged.renames[sec_id] == composite
+        assert new_cusip in staged.cusips[composite]
+    else:
+        assert item.reason.endswith(f": continued by {composite}") and staged.successors[sec_id].composite == composite
+
+
+@pytest.mark.parametrize("sec_id", NO_STEP, ids=lambda s: DATA["cases"][s]["note"].split(":")[0])
+def test_a_line_whose_next_cusip_is_another_securitys_takes_no_step_in_the_stage(sec_id, staged):
+    assert _first_item(staged, sec_id) is None
+    assert NEW_CUSIP_OF[sec_id][0] not in staged.cusips[sec_id]

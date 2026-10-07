@@ -6,10 +6,13 @@ carried on the delisting's last-trade decision (`LastTrade.halt_feed_failed`).""
 from __future__ import annotations
 
 from collections.abc import Sequence
+from typing import TYPE_CHECKING
 
-from .delistings import Delisting
 from .review_triage import ReviewItem
 from .sec_stats import SEC_STATS
+
+if TYPE_CHECKING:          # annotations only: the line follow (stage 4b) reads this module without loading stage 5
+    from .delistings import Delisting
 
 DEGRADED_FLAG = "resolution_degraded"
 

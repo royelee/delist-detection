@@ -5,7 +5,7 @@ Two sources, tried in order by the pipeline's successor stage: a security of
 this run that starts right after the last trade under the same issuer or
 ticker (`successor_in_run`: a holding company's new line, a rename's new
 FIGI), then the successor issuer's own 8-K12B/8-K12G3 found by EDGAR
-full-text search (`successor_search_args`, `successor_query`,
+full-text search (`successor_search_args`, `filing_search.successor_query`,
 `successor_from_8k12b`).
 """
 from __future__ import annotations
@@ -18,21 +18,13 @@ from typing import NamedTuple
 from .delistings import Delisting
 from .exchange_terms import OwnExchange
 from .figi_resolution import FigiCandidate, class_letter, share_class_from_name, us_candidates
+from .filing_search import successor_query
 from .issuer_record import IssuerRecord
 from .listing_status import edgar_lists
 from .names import names_agree
 from .observations import normalize_ticker
 from .rewrites import awaits_successor
 from .security_master import Security
-
-
-SUCCESSOR_FORMS = "8-K12B,8-K12G3"
-
-
-def successor_query(name: str, day: date) -> tuple[str, str, date, date]:
-    """The full-text search successor_from_8k12b sends for `name` around `day`.
-    The prefetch sends the same one, so the sequential pass reads it from cache."""
-    return f'"{name}"', SUCCESSOR_FORMS, day - timedelta(days=30), day + timedelta(days=60)
 
 
 def successor_from_8k12b(search: Callable, figi, *, name: str, day: date, exclude_cik: int,

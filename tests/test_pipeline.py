@@ -2632,7 +2632,7 @@ def test_a_when_issued_observation_joins_its_regular_way_security(fake_edgar, tm
         "BBG014QJ5BV6", "EHAB", "true", "mapped")
 
 
-# --- sub-plan 5a, stage 4b: a line followed past the observations (pipeline._follow_lines) ---
+# --- sub-plan 5a, stage 4b: a line followed past the observations (line_follow.follow_lines, in a whole run) ---
 
 LINE_F25 = ("<TYPE>25-NSE\n<notificationOfRemoval><exchange><entityName>New York Stock Exchange LLC</entityName>"
             "</exchange>\n<descriptionClassSecurity>Common Stock</descriptionClassSecurity>\n"

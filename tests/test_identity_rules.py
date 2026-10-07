@@ -1,7 +1,8 @@
 """Sub-plan 5h's rules on small doubles built from their real cases' answers (the cached EDGAR, OpenFIGI and fails
 data the run read): the issuer in force kept for an era its ticker's rows decided (ERA 2013), ONEOK's 2026 holding
-company past the fails data's last day, the ticker tier's post-bankruptcy holder (CRC, BTU), and no
-continued-filings guess at the last sighting of a security with no CUSIP (WW 2013)."""
+company past the fails data's last day, and no continued-filings guess at the last sighting of a security with no
+CUSIP (WW 2013). Rule F, the ticker tier's post-bankruptcy holder (CRC, BTU), is the line follow's: its cases run
+through `line_follow.follow_lines` in tests/test_line_stage.py."""
 from __future__ import annotations
 
 from datetime import date
@@ -13,14 +14,12 @@ from delist_detection.classifier import DelistClassifier
 from delist_detection.crsp_codes import CrspBucket
 from delist_detection.delistings import Delisting, DelistingFinder, SecurityContext
 from delist_detection.edgar import EdgarSubmission
-from delist_detection.figi_resolution import FigiCandidate
 from delist_detection.form25 import SecurityRef
 from delist_detection.ftd import FtdIndex, FtdRow
 from delist_detection.last_trade import LastTrade
-from delist_detection.line_follow import FOLD, SUCCESSOR, Decision
 from delist_detection.manifest import StageMeter
 from delist_detection.observations import Observation, split_eras
-from delist_detection.security_master import EraResolution, Security, line_class_letter
+from delist_detection.security_master import Security, line_class_letter
 from delist_detection.classifier import DelistRecord
 from delist_detection.issuer_record import IssuerRecord
 from delist_detection.ticker_resolver import TickerResolver
@@ -125,41 +124,6 @@ def test_a_new_cusip_the_fails_data_reaches_must_show_its_rows():
     (as before 5h: the rows are the evidence the holders' shares went on there)."""
     link, found = _oke(OLD_ROWS + [FtdRow("2026-09-15", "999999999", "XYZ", "SOMETHING ELSE", 1.0)])
     assert link is None and not found.added
-
-
-# --- rule F, CRC and BTU: the ticker tier's composite is the line that took the ticker over later --------------
-
-def _cand(composite, ticker, name):
-    return FigiCandidate(composite, name, ticker, "Common Stock", ())
-
-
-def _ticker_line(sec_id, ticker, cand_ticker, name):
-    era = split_eras([Observation(ticker, "2014-12-31", name), Observation(ticker, "2015-12-31", name)])
-    sec = Security(sec_id, 1609253, "COMMON", name, "Common Stock", True, "ticker", "common", era)
-    res = {era[0].key: EraResolution(era[0].key, sec_id, "ticker", _cand(sec_id, cand_ticker, name), (), ())}
-    return sec, res
-
-
-def test_a_ticker_pick_today_holding_the_ticker_folds_into_the_lines_next_composite():
-    """CRC 2014-2016: the ticker gave BBG00Y04KP80 (CRC today, the post-2020 line); the 2016 reverse split's CUSIP
-    13057Q206 is BBG0060B3M63, whose ticker is now CRCQQ (it went bankrupt in 2020): one security, BBG0060B3M63."""
-    sec, res = _ticker_line("BBG00Y04KP80", "CRC", "CRC", "CALIFORNIA RESOURCES CORP")
-    succ = Decision(SUCCESSOR, "BBG0060B3M63", candidate=_cand("BBG0060B3M63", "CRCQQ", "CALIFORNIA RESOURCES CORP"))
-    assert pipeline._today_holder_fold(succ, sec, res, {"CRC"}) == Decision(FOLD, "BBG0060B3M63",
-                                                                            candidate=succ.candidate)
-
-
-def test_a_line_successor_that_kept_the_ticker_or_a_cusip_line_stays_a_successor():
-    """Guards: the new composite holds the ticker today (a holding company's new line: the old one ended); the
-    ticker pick names another ticker (an old line OpenFIGI still lists); a line confirmed by its CUSIP."""
-    sec, res = _ticker_line("BBG00Y04KP80", "CRC", "CRC", "CALIFORNIA RESOURCES CORP")
-    keeps = Decision(SUCCESSOR, "BBG0060B3M63", candidate=_cand("BBG0060B3M63", "CRC", "CALIFORNIA RESOURCES CORP"))
-    assert pipeline._today_holder_fold(keeps, sec, res, {"CRC"}) == keeps
-    sec2, res2 = _ticker_line("BBG00Y04KP80", "CRC", "CRCX", "CALIFORNIA RESOURCES CORP")
-    moved = Decision(SUCCESSOR, "BBG0060B3M63", candidate=_cand("BBG0060B3M63", "CRCQQ", "CALIFORNIA RESOURCES CORP"))
-    assert pipeline._today_holder_fold(moved, sec2, res2, {"CRC"}) == moved
-    sec3 = Security(sec.sec_id, 1609253, "COMMON", sec.name, "Common Stock", True, "cusip", "common", sec.eras)
-    assert pipeline._today_holder_fold(moved, sec3, res, {"CRC"}) == moved
 
 
 # --- rule G, WW 2013: no continued-filings ending at the last sighting of a security with no CUSIP --------------

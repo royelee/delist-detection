@@ -30,6 +30,7 @@ from .crsp_codes import CrspBucket
 from .delistings import Delisting
 from .edgar import EdgarSubmission
 from .evidence import names_near
+from .filing_search import successor_query
 from .ftd import FtdIndex
 from .history import TAKEOVER_DAYS, Sighting
 from .last_trade import NO_DAY, at_handoff
@@ -37,7 +38,6 @@ from .review_triage import ReviewItem
 from .rewrites import HANDOFF_CONTINUATION, Payouts, Rule, continuation, successor_note
 from .security_master import Security
 from .store import DelistingKey
-from .successors import successor_query
 
 OVERLAP_DAYS = 10         # B's first sighting under the ticker may precede A's last by this much (CZR: 8)
 CONTINUATION_DAYS = 10    # a continuation by timing: A's last and B's first sighting this close
@@ -121,7 +121,7 @@ def continuation_filing(search: Callable, *, name: str, day: date,
                         successor_cik: int) -> tuple[str, str, str] | None:
     """The successor-issuer filing (8-K12B / 8-K12G3, Rule 12g-3) that
     `successor_cik` filed naming the predecessor's issuer `name` around `day`
-    (EDGAR full-text search, `successors.successor_query`: 30 days before to 60
+    (EDGAR full-text search, `filing_search.successor_query`: 30 days before to 60
     after), as (form, accession, filing date); None without one. The filer may
     keep the predecessor's CIK (Aon plc's 2020 move from the UK to Ireland)."""
     for h in search(*successor_query(name, day)):
