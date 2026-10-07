@@ -478,3 +478,11 @@ Decisions made in the step:
   `OwnTrading.taken`, and two new tests reach the bound through `Dating`, MIDAS's and a halt's), verdict's
   published-date test; the successor-anchor test now tests `Delisting.anchor`. The stage-5b double gained an
   `anchor`. Suite: 3165 passed, 45 xfailed (step 3: 3147).
+- **Controller ruling after the step: CNB 2009's truth `price_date` is not scored either.** The contract's price date
+  is the session after the published last trade, so it goes blank with it. The truth row still scored 2009-08-18,
+  which made `D.mismatches` 121 to 122. IMB 2008's row, under the same ruling, has `*` for both dates. CNB's
+  `price_date` becomes `*`, with a change-log row. Recomputed on step 4's replay, every `D` value equals the reference
+  (121 mismatches, 284 cases matching).
+  - Alternative: publish a price date for an unconfirmed last trade, which brings back the second predicate.
+  - Cost if wrong: the truth set no longer checks CNB's price date. CNB and IMB also lose their `last_close` and
+    `otc_print` price requests, so a caller cannot answer an OTC print for them; their dlret stays the Shumway fill.
