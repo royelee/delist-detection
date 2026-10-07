@@ -322,3 +322,14 @@ layout (16) comes last, once steps 8 and 13 have made the pure leaf modules.
     to 604); scorecard.json's R1.4.review_rows 592 to 589 and R1.4.review_securities 411 to 409 (so the
     R1.4.review_rows drop against the floor of 591 clears). uncertain.csv and the contract are unchanged; no `D.*`
     value moves.
+- **Controller ruling: the 13 rows with payout reads only are accepted.** The prompt listed rows by stale flag; these
+  13 follow from the same one rule. Each was checked: an `exchange_transfer` to another security, dlret 0.0 before
+  and after, only payout-read columns changed, no flag added. All 13 are holding-company reorganizations or
+  redomiciles (CI, ICE, AVGO 2018, FERG, BG and the rest), where a merger's payout read describes a deal the row no
+  longer is.
+  - Alternative: keep payout reads on a continuation and drop only the flags.
+  - Cost if wrong: a caller reading payouts.csv or the raw payout columns for these 18 rows finds them blank. No
+    DLRET, contract value or truth field changes. A row later turned back into a merger gets its reads back, because
+    the rule runs only on a rewrite into a continuation.
+- **The replay reference moves.** From step 4 on, the gate compares against step 3's accepted output
+  (`/tmp/claude/delist_detection/arch/accepted_out`). Otherwise every later step would show these 20 rows.
