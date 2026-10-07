@@ -111,20 +111,20 @@ def _stage8b(sec_id, terms=None):
     securities, _, cusips, ftd = ic.world()
     sightings = {sid: pipeline.ticker_sightings(s, ftd, cusips[sid]) for sid, s in securities.items()}
     ctx = pipeline._RunContext(c, ic.AS_OF, lambda *a: None, 1, pipeline.run_manifest.StageMeter(lambda *a: None))
-    payouts = ic._payouts(sec_id, found)
+    values = ic._payouts(sec_id, found)
     if terms is not None:
-        payouts.llm_terms = {k: replace(t, cash_per_share=terms[0], stock_ratio=terms[1])
-                             for k, t in payouts.llm_terms.items()}
-    r1 = pipeline._r1_continuations(ctx, found, securities, sightings, payouts, pipeline.Overrides())
-    return found, payouts, r1
+        values.records = {k: replace(v, llm=replace(v.llm, cash_per_share=terms[0], stock_ratio=terms[1]))
+                          for k, v in values.records.items()}
+    r1 = pipeline._r1_continuations(ctx, found, securities, sightings, values)
+    return found, values, r1
 
 
 def test_a_rewritten_merger_drops_its_payout_reads_and_keeps_its_old_bucket_in_review():
-    found, payouts, r1 = _stage8b("BBG000BHBK84")                                         # DOW 2017
+    found, values, r1 = _stage8b("BBG000BHBK84")                                          # DOW 2017
     d = found[0]
     assert (d.record.bucket, d.record.crsp_code, d.record.successor_sec_id) == (
         CrspBucket.EXCHANGE_TRANSFER, 304, "BBG00BN961G4")
-    assert pipeline.R1_CONTINUATION in d.flags and d.key not in payouts.llm_terms
+    assert pipeline.R1_CONTINUATION in d.flags and values.get(d.key) is None
     assert [i.flag for i in r1.review] == [pipeline.R1_REBUCKETED] and "was merger (CRSP 231" in r1.review[0].reason
 
 
@@ -142,8 +142,9 @@ def test_a_merger_terms_override_decides_the_row():
     securities, _, cusips, ftd = ic.world()
     sightings = {sid: pipeline.ticker_sightings(s, ftd, cusips[sid]) for sid, s in securities.items()}
     ctx = pipeline._RunContext(c, ic.AS_OF, lambda *a: None, 1, pipeline.run_manifest.StageMeter(lambda *a: None))
-    over = pipeline.Overrides(merger_terms={"BBG000BHBK84": {"stock_ratio": 1.0}})
-    pipeline._r1_continuations(ctx, found, securities, sightings, ic._payouts("BBG000BHBK84", found), over)
+    values = ic._payouts("BBG000BHBK84", found)
+    values.caller_terms = {"BBG000BHBK84": {"stock_ratio": 1.0}}
+    pipeline._r1_continuations(ctx, found, securities, sightings, values)
     assert found[0].record.bucket is CrspBucket.MERGER
 
 
@@ -232,8 +233,7 @@ def test_a_failed_issuer_age_read_makes_the_rewritten_row_resolution_degraded():
     securities, _, cusips, ftd = ic.world()
     sightings = {sid: pipeline.ticker_sightings(s, ftd, cusips[sid]) for sid, s in securities.items()}
     ctx = pipeline._RunContext(c, ic.AS_OF, lambda *a: None, 1, pipeline.run_manifest.StageMeter(lambda *a: None))
-    r1 = pipeline._r1_continuations(ctx, found, securities, sightings, ic._payouts("BBG000BHBK84", found),
-                                    pipeline.Overrides())
+    r1 = pipeline._r1_continuations(ctx, found, securities, sightings, ic._payouts("BBG000BHBK84", found))
     assert found[0].record.bucket is CrspBucket.MERGER and r1.added == {}
     assert "resolution_degraded" in found[0].flags
     assert [i.flag for i in r1.review] == ["resolution_degraded"]

@@ -1,6 +1,6 @@
 """Build tests/fixtures/acquirer_gate/ from the local caches, once (sub-plan 5e): the real merger endings whose
 acquirer line (pipeline stage 8a), payout gate and acquirer security tests/test_acquirer_gate_cases.py replays offline
-through the run's own stage 8 (`pipeline._merger_payouts`, tests/acquirer_gate_cases.py).
+through the run's own stage 8 (`merger_value.value_mergers`, tests/acquirer_gate_cases.py).
 
   PYTHONPATH=src python scripts/build_acquirer_gate_fixtures.py          # -> tests/fixtures/acquirer_gate/
 

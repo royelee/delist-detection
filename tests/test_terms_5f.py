@@ -20,7 +20,7 @@ from delist_detection.payout_extractor import _collect
 from delist_detection.payout_gate import (DEFAULT_TOL, ELECTION_CASH, GATE_SKIPPED, PACKAGE, gate_payouts,
                                           reconcile)
 from delist_detection.payout_rule import MergerInputs, basket_legs, value_fields
-from delist_detection.price_requests import RECEIVED_CLOSE, request_rows, stock_legs
+from delist_detection.price_requests import RECEIVED_CLOSE, request_rows
 from delist_detection.sec_stats import SEC_STATS
 from delist_detection.store import DelistingKey
 from lifecycle_tables import ending, tables
@@ -302,7 +302,7 @@ def test_payout_leg_rows_are_the_last_endings_baskets():
 
 def test_a_dollar_valued_stock_leg_is_carried_in_the_formula_with_a_price_request():
     """PCYC 2015: $152.25 + $109.00 of AbbVie at its averaging price: no ratio, the acquirer priced the day after
-    the last trade, and a received close asked for it."""
+    the last trade (its received close is asked: tests/test_merger_value.py)."""
     t = _v3("election", 152.25, None, "ABBV", value=109.0, basis="default")
     r = ending("PCYC", "2015-06-05", ltd="2015-05-22", method="assumed_par", last_trade_close="0.01",
                flags="terms_gate_skipped:stock_value")
@@ -311,8 +311,10 @@ def test_a_dollar_valued_stock_leg_is_carried_in_the_formula_with_a_price_reques
             f["price_date"]) == ("cash_plus_stock", 152.25, None, "BBG0025Y4RY4", "ABBV", "2015-05-26")
     assert f["value_formula"] == ("(152.25 + 109.00 × price(ABBV, 2015-05-26) / avg_price(ABBV)) "
                                   "/ last_close − 1")
-    key = DelistingKey("PCYC", "2015-06-05")
-    assert stock_legs([r], {key: t}, {}, {key: "BBG0025Y4RY4"}) == {key: ("ABBV", "BBG0025Y4RY4")}
+
+
+def _leg(sec_id, n, ticker, price_sec_id):
+    return {"sec_id": sec_id, "leg": n, "price_ticker": ticker, "price_sec_id": price_sec_id}
 
 
 def test_a_baskets_further_legs_ask_their_received_close():
@@ -320,7 +322,7 @@ def test_a_baskets_further_legs_ask_their_received_close():
                  "value_rule": "basket"}]
     endings = {"LGFB": ending("LGFB", "2025-05-17", ltd="2025-05-06")}
     rows = request_rows(contract, endings, {DelistingKey("LGFB", "2025-05-17"): ("LION", "")},
-                        {"LGFB": [("STRZ", ""), ("", "")]})
+                        leg_rows=[_leg("LGFB", 2, "STRZ", ""), _leg("LGFB", 3, "", "")])
     assert [(r["kind"], r["lookup_ticker"], r["date"]) for r in rows if r["kind"] == RECEIVED_CLOSE] == [
         (RECEIVED_CLOSE, "LION", "2025-05-07"), (RECEIVED_CLOSE, "STRZ", "2025-05-07")]
 
@@ -366,49 +368,6 @@ def test_a_6k_near_the_form_25_that_reports_the_completion_is_found():
     cls = DelistClassifier(_ClsEdgar(filings, texts), None)
     assert cls._completion_report(1580732, filings, f25) == "6-K 2016-02-23"
     assert cls._completion_report(1580732, [f25, filings[2], filings[3]], f25) == ""
-
-
-def test_the_pipeline_tells_the_llm_the_target_security():
-    """The LLM extractor is asked with the security's name (its class) when it takes one."""
-    from delist_detection import pipeline
-    seen = []
-
-    class Ext:
-        def extract(self, record, security_name=""):
-            seen.append((record.ticker, security_name))
-            return None
-
-    rec = _rec("PARA")
-    e = SimpleNamespace(record=rec, key=K, sec_id="BBG000C496P7", ticker="PARA", cik=813828, delist_date=K[1])
-    ctx = SimpleNamespace(clients=SimpleNamespace(payout_extractor=None, llm_extractor=Ext()), sec_workers=1,
-                          log=lambda *a: None)
-    pipeline._extract_payouts(ctx, [e], {}, {"BBG000C496P7": "PARAMOUNT GLOBAL CLASS B"})
-    assert seen == [("PARA", "PARAMOUNT GLOBAL CLASS B")]
-
-
-def test_the_llm_calls_are_filled_ahead_on_worker_threads_with_the_same_answers():
-    """With --sec-workers > 1 the LLM extractor runs on the worker threads first (a new prompt version asks every
-    merger again); the sequential pass then reads what they cached, so its terms are the one-worker run's."""
-    from delist_detection import pipeline
-    calls, cache = [], {}
-
-    class Ext:                          # caches its answer per target, as LLMMergerTermsExtractor does on disk
-        def extract(self, record, security_name=""):
-            calls.append(record.ticker)
-            return cache.setdefault(record.ticker, _v3("cash", 10.0 + len(cache)))
-
-    es = [SimpleNamespace(record=_rec(t), key=DelistingKey(t, "2016-09-16"), sec_id=t, ticker=t, cik=1,
-                          delist_date="2016-09-16") for t in ("AAA", "BBB", "CCC")]
-
-    def run(workers):
-        ctx = SimpleNamespace(clients=SimpleNamespace(payout_extractor=None, llm_extractor=Ext()),
-                              sec_workers=workers, log=lambda *a: None)
-        return pipeline._extract_payouts(ctx, es, {}, {})[1]
-
-    one = run(1)
-    assert calls == ["AAA", "BBB", "CCC"]
-    calls.clear()
-    assert run(4) == one and sorted(calls) == ["AAA", "AAA", "BBB", "BBB", "CCC", "CCC"]
 
 
 def test_an_unsure_one_for_one_answer_with_no_share_count_is_passed_over(tmp_path):

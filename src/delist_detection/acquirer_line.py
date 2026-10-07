@@ -101,6 +101,14 @@ class LineIndex:
                 self._by_cik[int(s.issuer_cik)].append(sid)
         self._first: dict[str, str | None] = {}
 
+    def fresh(self, ftd: FtdIndex | None = None) -> LineIndex:
+        """The same lines over `ftd` (default: this index's), read afresh: a fails index extended since this one
+        first read a CUSIP's rows (the payout gate adds the acquirers' rows) is read again, not remembered."""
+        out = object.__new__(LineIndex)
+        out.securities, out.cusips, out.ftd = self.securities, self.cusips, self.ftd if ftd is None else ftd
+        out._held, out._by_cik, out._first = self._held, self._by_cik, {}
+        return out
+
     def issuers(self) -> list[int]:
         return sorted(self._by_cik)
 

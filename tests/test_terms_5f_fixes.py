@@ -224,34 +224,8 @@ class _Ftd:
     def urls_for(self, lo, hi):
         return ["u"]
 
-    def rows(self, url):
+    def rows(self, url, **kw):
         yield FtdRow("2013-02-25", "167250109", "CBI", "CHICAGO BRIDGE & IRON CO N V", 49.0)
-
-
-def test_the_pipeline_gives_an_unnamed_stock_leg_its_ticker_and_keeps_the_other_terms():
-    """Stage 8a': SHAW 2013's $41.00 + 0.12883 CB&I with no ticker takes CBI (price_ticker blank before: the leg
-    failed the gate `no_acq_ticker`); a leg that already has a ticker or an acquirer line is left alone."""
-    from delist_detection import pipeline
-    e = SimpleNamespace(key=K, sec_id="SHAW", ticker="SHAW", cik=820280, delist_date=K[1],
-                        last_trade=SimpleNamespace(day=date(2013, 2, 22)))
-    t = MergerTerms("cash_and_stock", 41.0, 0.12883, "CB&I", None, "high", "8-K:0001193125-13-054117", "",
-                    package_basis="fixed")
-    out, review = pipeline._name_acquirer_tickers(_Ctx(_EdgarShaw(), INDEX, _Ftd()), [e], {K: t}, {},
-                                                  SimpleNamespace(merger_terms={}))
-    assert (out[K].acquirer_ticker, out[K].cash_per_share, out[K].stock_ratio) == ("CBI", 41.0, 0.12883) and not review
-    kept, _ = pipeline._name_acquirer_tickers(_Ctx(_EdgarShaw(), INDEX, _Ftd()), [e], {K: t}, {K: object()},
-                                              SimpleNamespace(merger_terms={}))
-    assert kept[K].acquirer_ticker is None
-
-
-def test_a_failed_read_gives_no_ticker_and_a_degraded_review_item():
-    from delist_detection import pipeline
-    e = SimpleNamespace(key=K, sec_id="SHAW", ticker="SHAW", cik=820280, delist_date=K[1],
-                        last_trade=SimpleNamespace(day=date(2013, 2, 22)))
-    t = MergerTerms("cash_and_stock", 41.0, 0.12883, "CB&I", None, "high", "8-K:0001193125-13-054117", "")
-    out, review = pipeline._name_acquirer_tickers(_Ctx(_EdgarShaw(fail=True), INDEX, _Ftd()), [e], {K: t}, {},
-                                                  SimpleNamespace(merger_terms={}))
-    assert out[K].acquirer_ticker is None and [r.flag for r in review] == ["resolution_degraded"]
 
 
 # --- the gate's answer shapes -----------------------------------------------------------------------------------
@@ -336,7 +310,8 @@ def test_two_legs_never_share_a_price_request_key():
                  "value_rule": "basket"}]
     endings = {"CAA": ending("CAA", "2018-02-20", ltd="2018-02-09")}
     rows = request_rows(contract, endings, {DelistingKey("CAA", "2018-02-20"): ("LEN", "BBG0LEN")},
-                        {"CAA": [("LEN", "BBG0LEN"), ("LEN-B", "")]})
+                        leg_rows=[{"sec_id": "CAA", "leg": 2, "price_ticker": "LEN", "price_sec_id": "BBG0LEN"},
+                                  {"sec_id": "CAA", "leg": 3, "price_ticker": "LEN-B", "price_sec_id": ""}])
     asked = [(r["lookup_ticker"]) for r in rows if r["kind"] == RECEIVED_CLOSE]
     assert asked == ["LEN", "LEN-B"]
     assert len({(r["sec_id"], r["last_trade_date"], r["kind"], r["lookup_ticker"], r["date"]) for r in rows}) == len(rows)

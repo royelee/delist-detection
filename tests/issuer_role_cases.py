@@ -27,10 +27,10 @@ from delist_detection.ftd import FtdIndex, FtdRow
 from delist_detection.history import ticker_sightings
 from delist_detection.llm_merger_extractor import MergerTerms
 from delist_detection.manifest import StageMeter
+from delist_detection.merger_value import MergerValue, MergerValues
 from delist_detection.midas import MidasClient
 from delist_detection.nasdaq_halts import Halt, NasdaqHaltClient
 from delist_detection.observations import Observation, TickerEra
-from delist_detection.payout_gate import GatedPayouts
 from delist_detection.review_triage import ReviewItem
 from delist_detection.security_master import Security
 from delist_detection.ticker_resolver import TickerResolver
@@ -156,19 +156,20 @@ def find(sec_id: str, c: pipeline.Clients) -> tuple[list[Delisting], list[Review
     return finder.find(build(securities[sec_id], DATA["securities"][sec_id]["listed"]))
 
 
-def _payouts(sec_id: str, found: list[Delisting]) -> pipeline._Payouts:
+def _payouts(sec_id: str, found: list[Delisting]) -> MergerValues:
     """Stage 8's answer for the case, the terms the committed contract published for its merger rows standing in
     for the LLM's (none passed the gate: the gate is not replayed)."""
     terms = DATA["cases"][sec_id]["terms"]
-    llm = {}
+    records = {}
     for d in found:
         t = terms.get(d.delist_date)
         if d.record.bucket is CrspBucket.MERGER and t is not None:
             cash, ratio, ticker = (float(t[0]) if t[0] else None), (float(t[1]) if t[1] else None), t[2] or None
-            llm[d.key] = MergerTerms("cash_and_stock" if cash and ratio else "stock" if ratio else "cash", cash,
-                                     ratio, None, ticker, "high", "fixture", "")
+            records[d.key] = MergerValue(d.key, llm=MergerTerms(
+                "cash_and_stock" if cash and ratio else "stock" if ratio else "cash", cash, ratio, None, ticker,
+                "high", "fixture", ""))
     _, added, _, _ = world()
-    return pipeline._Payouts({}, llm, GatedPayouts({}, {}, {}, {}, {}), {}, dict(added), [])
+    return MergerValues(records, added=dict(added))
 
 
 def after(sec_id: str, *, edgar: FixtureEdgar | None = None) -> list[Delisting]:
@@ -182,7 +183,7 @@ def after(sec_id: str, *, edgar: FixtureEdgar | None = None) -> list[Delisting]:
     acquirers = dict(payouts.added)
     r1 = getattr(pipeline, "_r1_continuations", None)
     if r1 is not None:
-        acquirers |= r1(ctx, found, securities, sightings, payouts, pipeline.Overrides()).added
+        acquirers |= r1(ctx, found, securities, sightings, payouts).added
     kw = {"sec_cusips": cusips} if "sec_cusips" in inspect.signature(pipeline._find_successors).parameters else {}
     pipeline._link_successors(found, pipeline._find_successors(ctx, found, securities, sightings, acquirers, {}, ftd,
                                                                **kw))

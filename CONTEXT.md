@@ -90,5 +90,8 @@ The contract's kind of ending: merger, exchange, liquidation, dropped (with a dr
 **Fill** (`dlret_fill`):
 A value the library assumes rather than measures: a Shumway mark, assumed par, a transfer's 0.0. Never in `dlret`.
 
+**Merger value**:
+What one share of a security became in its merger, as the library reads it: the terms (cash, shares of the acquirer, further securities), whether they reconcile with the last close, the acquirer security whose price values the shares, and the price request that price needs. There is one per merger ending (`merger_value.MergerValue`). A caller's `--merger-terms` row replaces the terms the library read.
+
 **Issuer in force**:
 The CIK that carried a security's name on a given day; it can change while the security continues (a reverse merger, a holding-company reorganization).

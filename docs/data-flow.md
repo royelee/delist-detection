@@ -342,13 +342,13 @@ count exactly what `uncertain.csv` lists.
 submissions read per issuer CIK, and SEC's name index for a sighting whose era
 CIK did not carry its name that day), then `contract.py`'s rows and
 `price_requests.request_rows`. A price answer to no request stops the run here. An `otc_print` answer
-becomes `Overrides.otc_prints`, applied at stage 6b and again after the handoff
-stage; `dlret.resolve_dlret(..., otc_print=)` then values a liquidation or
+is read at stage 10a through the request it answers (`price_requests.PriceAnswers.ending_values`);
+`dlret.resolve_dlret(..., otc_print=)` then values a liquidation or
 compliance-failure ending as `print / last_close − 1` (`dlret_method` `otc_print`).
 A blank `exit_kind` in the contract means no kind is asserted; such a row's
 verdict is always `uncertain`, so a reader must not filter it away as "no ending".
-`contract/delistings.csv` also carries each ending's payout rule (`payout_rule.value_fields`; `merger_inputs`
-hands it the `--merger-terms` row, the LLM terms and regex read from before the payout gate, and the acquirer's
+`contract/delistings.csv` also carries each ending's payout rule (`payout_rule.value_fields`; stage 8's
+`merger_value.MergerValues.contract_inputs` hands it the `--merger-terms` row, the LLM terms and regex read from before the payout gate, and the acquirer's
 sec_id): a merger's terms come from the override, else the delistings.csv row (`terms_gate` passed, or blank
 when no last close existed), else the pre-gate read (`terms_gate=failed`; a failed election publishes both legs as read).
 The scorecard counts endings by `R2.7.value_rule.<rule>` and `R2.7.payout_rule_known`.

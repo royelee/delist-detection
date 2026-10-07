@@ -103,27 +103,18 @@ first observation and that has no trading fails row died before the run's fails
 window began, so (eligibility decided first, then) rows for [end − 1095 d, end + 10 d] are loaded, it takes the
 CUSIPs `history.backfill_cusips` finds that no other security holds and its sightings are rebuilt; no `sec_id`
 or issuer changes),
-`_check_overrides`, `_last_trade_closes`, `_merger_payouts` (stage 8, with sub-plan 5e's stage 8a `_acquirer_lines`
-before the gate for every stock leg, passed or not, `acquirer_line.py`; a merger before the run's fails window reads
-its lines' rows into a private index. `_gate` tries the terms' ticker price, then the line's
-(`payout_gate.gate_payouts(line_price=)`, `GatedPayouts.priced_by`; the line's first for a `line_first` leg,
-`_line_wins`: the terms' ticker's rows are another line of the issuer's, TWC, VIA, STRZA); `_add_acquirers` keeps
-the fails-row acquirer for ticker-settled terms (the only source of `AddedAcquirer`s) and else publishes the line or
-holder, but a `line_first` leg publishes stage 8a's line (another issuer's ticker security, IPHI, still wins).
-The run's first gate pass reads none of the caller's `--price-answers` received closes: the acquirer and the
-request's ticker come from it, and a second gate pass takes each answer only through the request it answers
-(`_answered_paths`: the path the first pass settled on), so a second run changes values only;
-`_Payouts.price_tickers` carries the published security's symbol on the price date to `payout_rule`
-(`MergerInputs.price_ticker`; a `--merger-terms` row's acquirer ticker is the caller's and is published as given)
-and `price_requests.stock_legs`),
-`_r1_continuations` (stage 8b: a merger whose published terms are one share and no cash, whose registrant's filings say the same of its own shares (`exchange_terms.own_exchange`), into a new issuer at most `NEW_ISSUER_DAYS` old or the same issuer (`successors.successor_by_terms`, else the new issuer's 8-K12B), is an exchange transfer to that successor, flagged `r1_continuation`, its payout reads dropped; the LLM's final terms must agree; the new issuer is named by the R1 statement's target (the name tie, below), its 8-K12B candidate included; a degraded read keeps the merger and flags the row; the run logs `role refusal: N rows (...)`, the delistings whose end-of-era reading refused a merger on the registrant's role; metered as "R1 continuations"),
+`_check_overrides`, `_last_trade_closes` (stage 7: a `--last-trade-closes` row, else the caller's answer to the
+delisting's `last_close` request, `price_requests.PriceAnswers`, else the fails close), `_merger_values` (stage 8:
+one call into `merger_value.value_mergers`, which answers one `MergerValue` per merger ending; the module map has
+its steps), `_r1_continuations` (stage 8b: a merger whose published terms are one share and no cash, whose registrant's filings say the same of its own shares (`exchange_terms.own_exchange`), into a new issuer at most `NEW_ISSUER_DAYS` old or the same issuer (`successors.successor_by_terms`, else the new issuer's 8-K12B), is an exchange transfer to that successor, flagged `r1_continuation`, its payout reads dropped; the LLM's final terms must agree; the new issuer is named by the R1 statement's target (the name tie, below), its 8-K12B candidate included; a degraded read keeps the merger and flags the row; the run logs `role refusal: N rows (...)`, the delistings whose end-of-era reading refused a merger on the registrant's role; metered as "R1 continuations"),
 `_find_successors` (stage 9, with sub-plan 5c's `_terms_links` before the 8-K12B search: the same issuer's class, a new issuer, or the security's own same-CIK 8-K12B line via OpenFIGI and R2; a name tie for any 8-K12B link; sub-plan 5h: `_own_registration_link` takes a text-named CUSIP with no fails row
 yet when the fails data ends before the day, OKE 2026: the added successor starts on the next trading day, and a Form 25 that already owns a delisting of the run raises no unmatched row in stage 9d), `_handoffs`, `_date_from_notices` (stage 9c: a handoff continuation row's last trade day from its own Form 25's confirmed EX-99.25 notice, when before the successor's first sighting and no later than the effective date; metered as "handoff notice dates"), `_successor_endings` (stage 9d: the Form 25 search, matches only, for the line and 8-K12B successors the run added; metered as "successor endings"), `_distress` (stage 9e,
 sub-plan 5g: for each liquidation, compliance-failure or unknown delisting with no successor, a bankruptcy plan's
 stock rule (R6), a price-only removal's code 552, and the OTC symbol of its first off-exchange print, anchored on the
-last trade day stage 5 dated; `distress.DistressTerms` for the contract; metered as "distress notices"; then `_plan_values`: a
-plan's `received_close` answer times its ratio is that ending's value, an answered print for its dlret), then the row
-builders and `_triage`; the contract (stage 10g) takes sub-plan 5h's `_era_renames` too: each placeholder whose eras
+last trade day stage 5 dated; `distress.DistressTerms` for the contract; metered as "distress notices"; at stage 10a a
+plan's `received_close` answer times its ratio is that ending's value and an answered OTC print a drop's, each read
+through its own request, `PriceAnswers.ending_values`), then the row builders (stage 8's records feed 10a, 10c and
+10g: `MergerValues.table_inputs`, `payout_rows`, `contract_inputs` and `requests`) and `_triage`; the contract (stage 10g) takes sub-plan 5h's `_era_renames` too: each placeholder whose eras
 now hold one FIGI line is a `contract/id_changes.csv` rename, across a class label), each with explicit
 inputs and outputs and the run-wide `_RunContext` (clients, run date, log,
 workers, SEC meter `manifest.StageMeter`). Each stage returns what it produces
@@ -369,10 +360,31 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   is not listed today (stage 5's `retired`). A failed EDGAR read is never cached, and any degraded read of a CIK gives each
   of that CIK's steps a `resolution_degraded` row, and so does a security with no step when a read of its CIK failed. Review flags `line_followed`, `line_follow_refused:<why>`
   (info). Its real cases replay offline from `tests/fixtures/lines/` (`scripts/build_line_fixtures.py`).
-- `acquirers.py` — a merger's acquirer as a security: `find_acquirer` (its
+- `merger_value.py` — stage 8, one module (architecture step 1): `value_mergers(delistings, index, *, clients,
+  closes, caller_terms, answers, tol, ftd_lo, workers, log)` gives `MergerValues`, one `MergerValue` per merger
+  ending: the regex read and the LLM terms (`read`/`raw`, `llm`), the gate's verdict (`payout`, `source`,
+  `confidence`, the priced stock leg `terms`, `flags`, `priced_by`), the acquirer security, its `price_ticker`, a
+  basket's `leg_sec_ids`, and the received close its stock leg asks (`request`), plus the acquirers the run adds and
+  the review items. Its steps: the reads (the LLM told the target's name; both filled ahead on the worker threads,
+  the sequential pass then reading what they cached), sub-plan 5e's stage 8a acquirer line of every stock leg before
+  the gate, passed or not (`acquirer_line`; a merger before the run's fails window reads its lines' rows into a
+  private index, `LineIndex.fresh`), stage 8a' (`acquirer_ticker`: a leg with no ticker and no line), the gate
+  (`payout_gate`: the terms' ticker price, then the line's, the line's first for a `line_first` leg whose ticker's
+  rows are another line of the issuer's, TWC, VIA, STRZA), the acquirer (`acquirers`: the fails-row acquirer for
+  ticker-settled terms, the only source of `AddedAcquirer`s, else the line or holder; a `line_first` leg publishes
+  the line, another issuer's ticker security, IPHI, still wins) and its symbol on the price date. The first gate pass
+  reads none of the caller's `--price-answers`: the acquirer and each leg's request come from it, and a second pass
+  takes an answer only through the request it answers (the path the first pass settled on), so a second run changes
+  values only. A `--merger-terms` row (`caller_terms`) wins for every delisting of its security and asks nothing; its
+  acquirer ticker is published as given. The later stages read the records: `read_terms` and `drop` (8b),
+  `reconciled` (9b), `table_inputs` (10a), `payout_rows` (10c), `contract_inputs` and `requests` (10g). The four rule
+  modules are its collaborators, each with its own interface and real-case tests. Its real cases replay offline from
+  `tests/fixtures/acquirer_gate/` (`tests/acquirer_gate_cases.py`, through `value_mergers`).
+- `acquirers.py` — a merger's acquirer as a security (a collaborator of `merger_value`): `find_acquirer` (its
   composite FIGI from the fails rows under the acquirer ticker) and
   `acquirer_cik` (its issuer CIK, never the target's).
-- `acquirer_line.py` — a merger's acquirer as a line of the run (sub-plan 5e). The terms' ticker and acquirer name
+- `acquirer_line.py` — a merger's acquirer as a line of the run (sub-plan 5e; a collaborator of `merger_value`;
+  `LineIndex.fresh` reads the same lines again over a fails index extended since). The terms' ticker and acquirer name
   are only evidence of the issuer. The issuer is the security that held the ticker on the last trade day
   (`LineIndex.holder`; a ticker beginning at the closing counts from the price date, and a hold that ends before the
   price date was handed over to the new holder), its issuer only when it filed by then and carries an agreeing name
@@ -547,7 +559,13 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   `llm_client.py` (injectable OpenAI JSON client) and `filing_selection.py`
   (filing-tier picker shared with `payout_extractor.py`); responses cached under
   `cache/llm/`. Disabled by default — enabled by `--extract-merger-terms-llm`;
-  `acquirer_price` and `last_trade_close` come from `ftd.py`, not a filing. Prompt v3 (sub-plan 5f): the answer is
+  `acquirer_price` and `last_trade_close` come from `ftd.py`, not a filing. `MergerTerms` answers for its own
+  package, so the gate, the payout rule, the requests and stage 8 ask it instead of reading its fields: `ticker`
+  (normalized; a spelled-out null, `NULL_TICKERS`, is cleaned when the answer is built, `clean_ticker`),
+  `is_package`, `has_stock` (any security), `stock_leg` (a ratio or a dollar value: what asks a received close),
+  `skip_reason` (why the gate cannot check it), `published` (the contract's legs: a non-package election only its
+  all-cash alternative) and `legs(main_ticker)` (each security with its class and the ticker its class trades
+  under). Prompt v3 (sub-plan 5f): the answer is
   the PACKAGE one share of the named target security became (ruling R4: the final prorated per-share result when
   stated, else what non-electors got, else the fixed terms, never the sum of an election's alternatives), with
   `cash_currency` (R5; the quote's own sign wins), `stock_value` (a dollar-valued leg, PCYC), the stock leg's issuer
@@ -694,29 +712,30 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   `contract/delistings.csv`: the columns came in schema 2, the contract is now schema 3 with `payout_legs.csv`): `value_rule` (`VALUE_RULES`), `cash_per_share`, `cash_currency`, `stock_ratio`,
   `price_sec_id`/`price_ticker`/`price_date` (the acquirer for a stock leg, the security itself for `otc_print`; the
   trading day after the last trade), `recovery_ratio`, `terms_source`, `terms_gate` and `value_formula`; the caller
-  computes `dlret = payout / last close − 1` with its own prices. `merger_inputs` collects a merger's `--merger-terms`
-  row, LLM terms and regex read from before the payout gate: terms the gate dropped are still published,
+  computes `dlret = payout / last close − 1` with its own prices. `MergerInputs` (stage 8's
+  `MergerValues.contract_inputs`) holds a merger's `--merger-terms` row, LLM terms and regex read from before the
+  payout gate: terms the gate dropped are still published,
   `terms_gate=failed` (a failed election publishes both legs as read), `skipped` when the gate could not check them
   (`terms_gate_skipped:<why>`: a non-USD cash leg, a basket, a dollar-valued leg), blank with no last close.
   `cash_currency` (sub-plan 5f, R5) is the currency of the read that supplied the cash (the LLM's, the regex's;
   blank for a `--merger-terms` row). A package of two or more securities is `basket` (R3): the main row keeps the
   cash, `basket_legs` gives `contract/payout_legs.csv`'s rows; one security plus cash stays `cash_plus_stock`. A
   dollar-valued stock leg is carried in `value_formula` over `avg_price(<ticker>)`, no ratio. The payout gate
-  (`payout_gate`) reads a v3 answer as its package (`is_package`: basis final_prorated, default or fixed; a `none`
+  (`payout_gate`) reads a v3 answer as its package (`MergerTerms.is_package`: basis final_prorated, default or fixed; a `none`
   answer keeps 5e's either-or reading): cash only in pass 1, with stock in pass 2; a regex cash never stands beside
   an election package with stock, a package no last close can check, or as the package's own cash leg (SUG, FWLT,
-  AWH, SHAW); `clean_ticker` blanks an LLM's "NULL" ticker (GRUB). Review fixes (5f): an election whose v3 answer states no leg (WSC, THE) takes the
+  AWH, SHAW); an LLM's "NULL" ticker is no ticker (GRUB, `MergerTerms` cleans it). Review fixes (5f): an election whose v3 answer states no leg (WSC, THE) takes the
   earlier prompt's cached either-or reading of the same filing (`LEGACY_VERSION`, cache only, never asked again; `no_default`,
   flag `election_no_default`), as does any election answer that states no package for non-electors (basis `none` with no cash or ratio stated, TRH; a basis `none` answer that states a leg, CYN, keeps it; or a
   `final_prorated` answer that is only one election class's result, `electors_only`, NMX: R4, the package is what
   non-electors received, `llm_merger_extractor.base_reading`; the first candidate that answers decides, a later candidate is never read (TRH, NMX); with no cached
-  earlier answer the electors' result is a miss and the regex read stands); `payout_rule._llm_published` publishes any other
-  non-package election only as its all-cash alternative, but a `no_default` reading as read (TRH's 14.22 + 0.145 Y); `skip_reason` is checked for every answer shape (a dollar value, a further leg, CAD
+  earlier answer the electors' result is a miss and the regex read stands); `MergerTerms.published` publishes any other
+  non-package election only as its all-cash alternative, but a `no_default` reading as read (TRH's 14.22 + 0.145 Y); `MergerTerms.skip_reason` is checked for every answer shape (a dollar value, a further leg, CAD
   cash, a basket stating no package), a stock leg with no ratio is `terms_gate_failed:no_ratio`; a bare "$" never overrides
   the answer's non-USD code; a non-dict answer counts `degraded:llm_call`. `acquirer_ticker.py` (stage 8a'): a stock leg
   with no ticker and no acquirer line takes it from the filing's defined terms, SEC's name index and the issuer's EDGAR
   tickers, else the fails rows' description (SHAW's "CB&I" is CBI); a one-word name the filing does not define is no
-  name (Orange). A basket leg keeps its class (`payout_legs.share_class`, `payout_rule.leg_terms`: CAA's Lennar class B
+  name (Orange). A basket leg keeps its class (`payout_legs.share_class`, `MergerTerms.legs`: CAA's Lennar class B
   is LEN-B, a preferred class has no ticker), and two legs never share a price request. `regression.py` diffs the
   legs too. The scorecard counts
   `R2.7.value_rule.<rule>` and floors `R2.7.payout_rule_known`. A stock leg's `price_ticker` is the published
@@ -724,14 +743,20 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   distress=)` (sub-plan 5g): an `otc_print` row is priced under `DistressTerms.otc_symbol` (blank when stage 9e read
   none; the exchange ticker only for a caller that passes no terms); a bankruptcy plan with a read ratio is `stock`
   on the new line (`stock_ratio` as read, a string; no `price_sec_id`; `terms_source` `form25_notice` or `plan_8k`).
-- `price_requests.py` — `contract/price_requests.csv` (`last_close` per ending with a published date,
-  `received_close` per LLM-read stock leg, `otc_print` per `dropped`/`liquidation` ending that is not a continuation, dated the session after the last trade) and `load_answers` for `--price-answers`,
-  which refuses a price that is not a finite positive number. `stock_legs` asks by the acquirer security's symbol on
-  the price date (`price_tickers`, sub-plan 5e), and asks for a leg with no LLM ticker once the line is known. The
-  `otc_print` request asks under the published OTC symbol (the exchange ticker when blank); a plan's `stock` row asks
-  no OTC print but a `received_close` of the new line (sub-plan 5g). Sub-plan 5f: a dollar-valued stock leg asks its
-  acquirer's received close, and each further leg of a basket one of its own (`request_rows(..., basket=)`; the
-  answers are accepted, not used: the library prices no basket).
+- `price_requests.py` — both directions of the price round trip, matched on one key derivation: the requests
+  (`request_rows`: `last_close` per ending with a published date, `received_close` per stock leg as stage 8 asked it
+  (`MergerValue.request`: the acquirer security's symbol on the price date, sub-plan 5e, a leg with no LLM ticker
+  asking once the line is known, a dollar-valued leg too, 5f), of a plan's new line (`plans=`, 5g) and of each
+  further leg of a basket (`leg_rows=`; accepted, not used: the library prices no basket), `otc_print` per
+  `dropped`/`liquidation` ending that is not a continuation, under the published OTC symbol (the exchange ticker
+  when blank), dated the session after the last trade; a plan's `stock` row asks no OTC print) and the answers
+  (`load_answers` for `--price-answers`, which refuses a price that is not a finite positive number, and
+  `PriceAnswers`). Each request fills one value input, and a stage reads its answer only through the request it
+  makes: `last_closes` (stage 7; one also given by `--last-trade-closes` stops the run), `received_close` (stage 8's
+  stock leg, by its ticker), `ending_values` (stage 10a: an OTC print, else a plan's ratio times its new line's
+  close) and `refuse_unrequested` (stage 10g: an answer whose `PriceKey` matches no request stops the run). A last
+  close or an OTC print is matched on the security, its last trade day and the kind (the ticker and date are a
+  hint), a received close on its ticker too.
 
 There are **two return-correction APIs** for different research conventions:
 event-level (`handling.py`) vs CRSP-style firm-month (`bmp_correction.py`). Don't
@@ -937,8 +962,9 @@ conflate them.
   delistings hold one row per ended security, its last real ending; `last_trade_date` is published only from an
   exchange print no later than the Form 25 effective date; a continuation has no value; assumed par, Shumway marks
   and a transfer's 0.0 are `dlret_fill`. `--price-answers` (the requests plus a `price` column) feeds the closes and
-  acquirer prices, so a second run changes values only; the answers are applied at stage 6b and again after the
-  handoff stage adds delistings, always from the caller's own overrides. A price that is not a finite positive
+  acquirer prices, so a second run changes values only: each stage reads the answer to its own request
+  (`price_requests.PriceAnswers`; stage 7 a last close, stage 8 a stock leg's received close, stage 10a an OTC print
+  or a plan's new-line close), and `pipeline.Overrides` holds only the caller's own files. A price that is not a finite positive
   number, an answer to no request, or a last close also given by `--last-trade-closes`, exits 2 before anything is
   written. Today's nine tables keep their columns.
 - **Every output is written only after the whole run succeeds.**

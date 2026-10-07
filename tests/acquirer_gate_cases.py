@@ -1,9 +1,9 @@
 """Sub-plan 5e's real cases, replayed offline: tests/fixtures/acquirer_gate/ (built once from the local caches by
 scripts/build_acquirer_gate_fixtures.py) holds each case's merger row, the LLM terms the run read, the securities an
 acquirer lookup may name with their observations, CUSIPs and fails rows, and the EDGAR, resolver and OpenFIGI answers.
-`outcome(sec_id)` runs the run's own stage 8 over them (`pipeline._merger_payouts`: the acquirer lines, the payout
-gate, the acquirer securities and the price tickers), the case's own regex read and LLM terms standing in for the
-extractors."""
+`outcome(sec_id)` runs the run's own stage 8 over them (`merger_value.value_mergers`: the acquirer lines, the payout
+gate, the acquirer securities and the stock legs' price requests), the case's own regex read and LLM terms standing in
+for the extractors."""
 from __future__ import annotations
 
 import csv
@@ -13,9 +13,10 @@ import json
 from datetime import date
 from functools import lru_cache
 from pathlib import Path
+from types import SimpleNamespace
 from typing import NamedTuple
 
-from delist_detection import pipeline
+from delist_detection.acquirer_line import LineIndex
 from delist_detection.classifier import DelistRecord
 from delist_detection.crsp_codes import CrspBucket
 from delist_detection.delistings import Delisting
@@ -24,12 +25,14 @@ from delist_detection.ftd import FtdIndex, FtdRow
 from delist_detection.history import ticker_sightings
 from delist_detection.last_trade import LastTrade
 from delist_detection.llm_merger_extractor import MergerTerms
-from delist_detection.manifest import StageMeter
+from delist_detection.merger_value import MergerValues, value_mergers
 from delist_detection.observations import Observation, TickerEra
 from delist_detection.payout_extractor import PayoutResult
+from delist_detection.price_requests import RECEIVED_CLOSE, PriceAnswers, PriceKey
 from delist_detection.security_master import Security
 from delist_detection.store import DelistingKey
 from delist_detection.ticker_resolver import TickerResolution
+from delist_detection.trading_calendar import next_trading_day
 
 FIX = Path(__file__).parent / "fixtures" / "acquirer_gate"
 DATA = json.loads((FIX / "cases.json").read_text())
@@ -140,33 +143,36 @@ class Outcome(NamedTuple):
     flags: tuple[str, ...]
 
 
-def payouts(sec_id: str, *, ftd_lo: date = date(2007, 12, 17), answer: tuple[str, float] | None = None
-            ) -> tuple[pipeline._Payouts, Delisting, FixtureResolver]:
-    """The run's stage 8 over the case; `answer` is the caller's received_close answer (the request's lookup_ticker
-    and the price), as `--price-answers` applies it."""
+def payouts(sec_id: str, *, ftd_lo: date = date(2007, 12, 17), answer: tuple[str, float] | None = None,
+            resolver: FixtureResolver | None = None) -> tuple[MergerValues, Delisting, FixtureResolver]:
+    """The run's stage 8 over the case; `answer` is the caller's answer to the case's received_close request (its
+    lookup_ticker and the price), as `--price-answers` gives it."""
     securities, cusips, rows = world()
-    resolver = FixtureResolver()
-    clients = pipeline.Clients(edgar=FixtureEdgar(), resolver=resolver, classifier=None, figi=FixtureFigi(),
-                               ftd_client=NoFtd(), payout_extractor=CaseExtractor("raw"),
-                               llm_extractor=CaseExtractor("terms"), as_of=AS_OF)
-    ctx = pipeline._RunContext(clients, AS_OF, lambda *a: None, 1, StageMeter(lambda *a: None))
+    resolver = resolver or FixtureResolver()
+    clients = SimpleNamespace(edgar=FixtureEdgar(), resolver=resolver, figi=FixtureFigi(), ftd_client=NoFtd(),
+                              payout_extractor=CaseExtractor("raw"), llm_extractor=CaseExtractor("terms"))
     ftd = FtdIndex(rows)
     sightings = {sid: ticker_sightings(s, ftd, cusips.get(sid, [])) for sid, s in securities.items()}
     e = delisting(sec_id)
     close = DATA["cases"][sec_id]["last_trade_close"]
     closes = {} if close is None else {e.key: close}
-    overrides = pipeline.Overrides()
+    answers = {}
     if answer is not None:
-        overrides.acquirer_prices[e.key] = answer
-    got = pipeline._merger_payouts(ctx, [e], securities, cusips, ftd, closes, overrides, 0.15, sightings, ftd_lo)
+        day = e.last_trade.day
+        answers[PriceKey(e.sec_id, day.isoformat(), RECEIVED_CLOSE, answer[0], next_trading_day(day).isoformat())] \
+            = answer[1]
+    got = value_mergers([e], LineIndex(securities, sightings, cusips, ftd), clients=clients, closes=closes,
+                        caller_terms={}, answers=PriceAnswers(answers), tol=0.15, ftd_lo=ftd_lo)
     return got, e, resolver
 
 
 def outcome(sec_id: str, answer: tuple[str, float] | None = None) -> Outcome:
+    """The case's acquirer security, the ticker its received close is asked under (the request's lookup_ticker:
+    the acquirer's symbol on the price date, else the terms' ticker), the gate's verdict and the price that settled
+    it."""
     got, e, _ = payouts(sec_id, answer=answer)
-    key = DelistingKey(e.sec_id, e.delist_date)
-    terms = got.gated.merged_terms.get(key) or {}
-    t = DATA["cases"][sec_id]["terms"]
-    ticker = got.price_tickers.get(key) or (terms.get("acquirer_ticker") or (t[4] if t else "") or "").upper()
-    return Outcome(got.acquirer_ids.get(key, ""), ticker, "passed" if terms or key in got.gated.payouts else "failed",
-                   got.gated.priced_by.get(key, ""), terms.get("acquirer_price"), tuple(e.flags))
+    v = got.get(DelistingKey(e.sec_id, e.delist_date))
+    terms = v.terms or {}
+    return Outcome(v.acquirer_sec_id, v.request[0] if v.request else "",
+                   "passed" if terms or v.payout is not None else "failed", v.priced_by, terms.get("acquirer_price"),
+                   tuple(e.flags))

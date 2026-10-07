@@ -1241,33 +1241,6 @@ def test_an_answered_received_close_is_the_acquirer_price(fake_edgar, tmp_path, 
     assert d["BBGSEC002"]["acquirer_price"] == "150.000000"
 
 
-def test_apply_price_answers_resolves_each_answer_to_its_delisting():
-    from delist_detection.price_requests import PriceKey
-    def stand_in(sec_id, day):
-        return type("D", (), {"sec_id": sec_id, "key": (sec_id, "2020-06-15"),
-                              "last_trade": type("L", (), {"day": day})()})()
-    a, b = stand_in("A", date(2020, 6, 1)), stand_in("B", date(2020, 6, 5))
-    answers = {PriceKey("A", "2020-06-01", "last_close", "A", "2020-06-01"): 11.0,
-               PriceKey("B", "2020-06-05", "received_close", "ACQ", "2020-06-05"): 22.0,
-               PriceKey("B", "2020-01-01", "last_close", "B", "2020-01-01"): 33.0}
-    got = pipeline._apply_price_answers(Overrides(price_answers=answers), [a, b])
-    assert got.last_trade_closes == {("A", "2020-06-15"): 11.0}
-    assert got.acquirer_prices == {("B", "2020-06-15"): ("ACQ", 22.0)}
-    unmatched = Overrides(price_answers={PriceKey("Z", "2020-06-01", "last_close", "Z", "2020-06-01"): 1.0})
-    again = pipeline._apply_price_answers(unmatched, [a, b])
-    assert again.last_trade_closes == {} and again.acquirer_prices == {}
-
-
-def test_apply_price_answers_reads_an_otc_print_without_touching_the_other_maps():
-    from delist_detection.price_requests import PriceKey
-    d = type("D", (), {"sec_id": "A", "key": ("A", "2020-06-15"),
-                       "last_trade": type("L", (), {"day": date(2020, 6, 1)})()})()
-    answers = {PriceKey("A", "2020-06-01", "otc_print", "A", "2020-06-02"): 0.4}
-    got = pipeline._apply_price_answers(Overrides(price_answers=answers), [d])
-    assert got.otc_prints == {("A", "2020-06-15"): 0.4}
-    assert got.last_trade_closes == {} and got.acquirer_prices == {}
-
-
 # --- a same-ticker successor does not overlap its predecessor ---
 
 def test_same_ticker_successor_does_not_overlap_its_predecessor(fake_edgar, tmp_path, monkeypatch):

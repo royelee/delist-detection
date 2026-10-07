@@ -24,7 +24,7 @@ old holders new shares is the stock rule on the new line (ruling R6), from what 
 (`distress.DistressTerms`, sub-plan 5g). Pure, on string rows as store.read_table returns them."""
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import date
 from typing import Any
@@ -33,8 +33,6 @@ from .distress import DistressTerms
 from .exit_kind import ending_fields
 from .llm_merger_extractor import MergerTerms
 from .observations import normalize_ticker
-from .reconstruction import for_delisting
-from .store import DelistingKey
 from .trading_calendar import next_trading_day
 
 VALUE_RULES = frozenset({"cash", "stock", "cash_plus_stock", "basket", "otc_print", "recovery", "worthless",
@@ -46,7 +44,8 @@ SKIPPED_FLAG = "terms_gate_skipped"
 
 @dataclass(frozen=True)
 class MergerInputs:
-    """What the pipeline holds about one merger ending beyond its delistings.csv row."""
+    """What stage 8 holds about one merger ending beyond its delistings.csv row (`merger_value.MergerValues.
+    contract_inputs`)."""
     override: Mapping[str, Any] | None = None     # the --merger-terms row (cash_per_share, stock_ratio, acquirer_*)
     llm: MergerTerms | None = None                # the LLM's answer, before the payout gate
     raw_value: float | None = None                # the regex payout read, before the gate
@@ -55,23 +54,6 @@ class MergerInputs:
     price_ticker: str = ""        # the acquirer security's symbol on the price date (sub-plan 5e), over the terms'
     raw_currency: str = ""        # the regex read's currency (ruling R5)
     leg_sec_ids: Mapping[str, str] = field(default_factory=dict)   # a basket's further legs: ticker -> sec_id
-
-
-def merger_inputs(endings: Sequence[Mapping[str, str]], llm_terms: Mapping, raw: Mapping, merger_terms: Mapping,
-                  acquirer_ids: Mapping, price_tickers: Mapping = {},
-                  leg_sec_ids: Mapping = {}) -> dict[DelistingKey, MergerInputs]:
-    """The inputs of each merger-bucket ending (`endings`: delistings.csv rows)."""
-    out: dict[DelistingKey, MergerInputs] = {}
-    for r in endings:
-        if r["bucket"] != "merger":
-            continue
-        key = DelistingKey(r["sec_id"], r["delist_date"])
-        pr = raw.get(key)
-        out[key] = MergerInputs(for_delisting(merger_terms, key), llm_terms.get(key),
-                                getattr(pr, "value", None), getattr(pr, "source", "") or "",
-                                acquirer_ids.get(key, "") or r["acquirer_sec_id"], price_tickers.get(key, ""),
-                                getattr(pr, "currency", "") or "", leg_sec_ids.get(key, {}))
-    return out
 
 
 def _num(cell: str) -> float | None:

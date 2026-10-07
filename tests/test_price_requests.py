@@ -1,8 +1,11 @@
+from datetime import date
+from types import SimpleNamespace
+
 import pytest
 
-from delist_detection.price_requests import (LAST_CLOSE, RECEIVED_CLOSE, PriceKey, key_of, load_answers,
-                                             request_rows, stock_legs)
-from delist_detection.llm_merger_extractor import MergerTerms
+from delist_detection.distress import DistressTerms
+from delist_detection.price_requests import (LAST_CLOSE, OTC_PRINT, RECEIVED_CLOSE, PriceAnswers, PriceKey, key_of,
+                                             load_answers, request_rows)
 from delist_detection.reconstruction import OverrideFileError
 from delist_detection.store import DelistingKey
 from lifecycle_tables import ending
@@ -36,28 +39,53 @@ def test_a_drop_or_distress_ending_asks_for_the_first_otc_print():
                       "lookup_ticker": "TD", "date": "2015-03-09"}
 
 
-def _stock(ratio, ticker):
-    return MergerTerms("stock", None, ratio, None, ticker, "high", "8-K:1", "")
+# --- the answers, read through the request each value input makes ---
+
+def _ending(sec_id, day, delist="2020-06-15"):
+    return SimpleNamespace(sec_id=sec_id, key=DelistingKey(sec_id, delist), last_trade=SimpleNamespace(day=day))
 
 
-def test_a_stock_leg_comes_from_the_llm_terms_unless_the_caller_gave_terms():
-    a, b = ending("A", "2018-12-10"), ending("B", "2019-01-10")
-    llm = {DelistingKey("A", "2018-12-10"): _stock(0.8378, "cvs"), DelistingKey("B", "2019-01-10"): _stock(0.5, "XYZ")}
-    given = {"B": {"cash_per_share": 10.0, "stock_ratio": 0.5, "acquirer_price": 20.0, "acquirer_ticker": "XYZ"}}
-    assert stock_legs([a, b], llm, given, {DelistingKey("A", "2018-12-10"): "BBG000BGRY34"}) == {
-        DelistingKey("A", "2018-12-10"): ("CVS", "BBG000BGRY34")}
+def test_a_last_close_answer_is_the_close_of_each_delisting_of_its_security_and_day():
+    a, b = _ending("A", date(2020, 6, 1)), _ending("B", date(2020, 6, 5))
+    answers = PriceAnswers({PriceKey("A", "2020-06-01", LAST_CLOSE, "A", "2020-06-01"): 11.0,
+                            PriceKey("B", "2020-06-05", RECEIVED_CLOSE, "ACQ", "2020-06-08"): 22.0,
+                            PriceKey("B", "2020-01-01", LAST_CLOSE, "B", "2020-01-01"): 33.0})
+    assert answers.last_closes([a, b], {}) == {("A", "2020-06-15"): 11.0}
+    assert answers.received_close("B", date(2020, 6, 5), "ACQ") == 22.0
+    assert answers.received_close("B", date(2020, 6, 5), "XYZ") is None          # another leg's request
+    assert answers.received_close("B", None, "ACQ") is None                      # no last trade day: no request
+    unmatched = PriceAnswers({PriceKey("Z", "2020-06-01", LAST_CLOSE, "Z", "2020-06-01"): 1.0})
+    assert unmatched.last_closes([a, b], {}) == {}
 
 
-def test_a_stock_leg_asks_for_its_acquirers_symbol_on_the_price_date():
-    """Sub-plan 5e: the request names the acquirer security's ticker on the price date (CAL 2010: UAL, not the
-    terms' UAUA), and a leg whose terms named no ticker asks too once its acquirer line is known (GXP 2018)."""
-    a, b = ending("A", "2010-10-14"), ending("B", "2018-06-16")
-    llm = {DelistingKey("A", "2010-10-14"): _stock(1.05, "UAUA"), DelistingKey("B", "2018-06-16"): _stock(0.5981, None)}
-    ids = {DelistingKey("A", "2010-10-14"): "BBG000M65M61", DelistingKey("B", "2018-06-16"): "BBG00H433CR2"}
-    tickers = {DelistingKey("A", "2010-10-14"): "UAL", DelistingKey("B", "2018-06-16"): "EVRG"}
-    assert stock_legs([a, b], llm, {}, ids, tickers) == {
-        DelistingKey("A", "2010-10-14"): ("UAL", "BBG000M65M61"),
-        DelistingKey("B", "2018-06-16"): ("EVRG", "BBG00H433CR2")}
+def test_a_last_close_given_both_ways_stops_the_run():
+    a = _ending("A", date(2020, 6, 1))
+    answers = PriceAnswers({PriceKey("A", "2020-06-01", LAST_CLOSE, "A", "2020-06-01"): 11.0})
+    with pytest.raises(OverrideFileError, match="both give the last close of: A 2020-06-01"):
+        answers.last_closes([a], {"A": 10.0})
+
+
+def test_an_otc_print_answer_values_the_drop_and_wins_over_a_plans_close():
+    """An answered OTC print is the drop's value; a bankruptcy plan's value is its ratio times the answered close of
+    its new line (ruling R6), unless an OTC print of the same ending is answered."""
+    day, plan = date(2020, 6, 1), DistressTerms(plan_ratio="0.5", plan_ticker="NEW", plan_source="25")
+    otc = PriceKey("A", "2020-06-01", OTC_PRINT, "A", "2020-06-02")
+    close = PriceKey("A", "2020-06-01", RECEIVED_CLOSE, "NEW", "2020-06-02")
+    assert PriceAnswers({otc: 0.4}).ending_values("A", day, None) == (0.4, None)
+    assert PriceAnswers({close: 22.0}).ending_values("A", day, plan) == (None, 11.0)
+    assert PriceAnswers({otc: 0.4, close: 22.0}).ending_values("A", day, plan) == (0.4, None)
+    assert PriceAnswers({close: 22.0}).ending_values("A", day, DistressTerms()) == (None, None)
+    assert PriceAnswers().ending_values("A", day, plan) == (None, None)
+
+
+def test_an_answer_to_no_request_stops_the_run():
+    asked = {"sec_id": "A", "last_trade_date": "2020-06-01", "kind": LAST_CLOSE, "lookup_sec_id": "A",
+             "lookup_ticker": "A", "date": "2020-06-01"}
+    answers = PriceAnswers({key_of(asked): 11.0})
+    answers.refuse_unrequested([asked])
+    stray = PriceAnswers({key_of(asked): 11.0, PriceKey("A", "2020-06-01", LAST_CLOSE, "AX", "2020-06-01"): 11.0})
+    with pytest.raises(OverrideFileError, match="answer no request of this run: A 2020-06-01 last_close AX"):
+        stray.refuse_unrequested([asked])
 
 
 def _answers(tmp_path, *rows, header="sec_id,last_trade_date,kind,lookup_sec_id,lookup_ticker,date,price"):
@@ -99,8 +127,9 @@ def test_the_otc_print_is_asked_under_the_published_otc_symbol_and_a_plan_asks_n
     row = lambda k, rule, ticker: {"sec_id": k, "last_trade_date": "2015-03-06", "continuation": False,
                                    "exit_kind": "dropped", "value_rule": rule, "price_ticker": ticker}
     contract = [row("D", "otc_print", "TDQ"), row("U", "otc_print", ""), row("P", "stock", "TP")]
-    legs = {DelistingKey("P", "2015-03-10"): ("TP", "")}
-    got = request_rows(contract, endings, legs)
+    plans = {DelistingKey("P", "2015-03-10"): DistressTerms(plan_ratio="0.5", plan_ticker="TP", plan_source="25"),
+             DelistingKey("U", "2015-03-10"): DistressTerms(otc_symbol="")}
+    got = request_rows(contract, endings, {}, plans=plans)
     assert [(r["sec_id"], r["kind"], r["lookup_ticker"]) for r in got] == [
         ("D", LAST_CLOSE, "TD"), ("D", "otc_print", "TDQ"), ("U", LAST_CLOSE, "TU"), ("U", "otc_print", "TU"),
         ("P", LAST_CLOSE, "TP"), ("P", RECEIVED_CLOSE, "TP")]

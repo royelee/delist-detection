@@ -101,3 +101,19 @@ def test_an_answered_received_close_changes_no_acquirer_and_no_request(sec_id):
         second = outcome(sec_id, answer=(first.price_ticker, price))
         assert (second.price_sec_id, second.price_ticker) == (first.price_sec_id, first.price_ticker), \
             DATA["cases"][sec_id]["note"]
+
+
+def test_a_leg_whose_acquirer_line_was_found_is_never_named_again():
+    """Stage 8a' names only a stock leg with no ticker that stage 8a found no acquirer line of: LEG's Somnigroup,
+    GXP's Monarch Energy Holding and LSXMA's New Sirius name no ticker, and their lines settle them without the name
+    index being asked."""
+    from acquirer_gate_cases import FixtureResolver
+
+    class Strict(FixtureResolver):
+        def name_index(self):
+            raise AssertionError("the name index is asked only for a leg with no line")
+
+    for sid in ("BBG000BN53G7", "BBG000K3T8L8", "BBG01HLM8W28"):
+        assert not DATA["cases"][sid]["terms"][4]                    # the terms name no ticker
+        got, e, _ = payouts(sid, resolver=Strict())
+        assert got.get(e.key).llm.acquirer_ticker is None and got.get(e.key).priced_by == "line"
