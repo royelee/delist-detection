@@ -1,12 +1,11 @@
 """Sub-plan 5h's real cases: each era's FIGI (stage 3) and each name-search answer's check (stage 2b) over
 tests/fixtures/identity/ (built once, offline, from the local caches by scripts/build_identity_fixtures.py),
-through the run's own stage-1, stage-2b and stage-3 code (tests/identity_cases.py). A case the sub-plan moves
+through the run's own identity stage (`identity.identify`, tests/identity_cases.py). A case the sub-plan moves
 (MOVES) has its new resolution; a guard (STAY) keeps the one the committed run gave it."""
 from __future__ import annotations
 
 import pytest
 
-from delist_detection import pipeline
 from delist_detection.contract import id_change_rows
 from tests import identity_cases as ic
 
@@ -56,20 +55,20 @@ STAY = {
 
 @pytest.mark.parametrize("key", sorted(MOVES))
 def test_a_case_takes_its_line(stage3, key):
-    res, _, _ = stage3
+    res = stage3.resolutions
     assert (res[key].sec_id, res[key].source) == MOVES[key]
 
 
 @pytest.mark.parametrize("key", sorted(STAY))
 def test_a_guard_keeps_its_resolution(stage3, key):
-    res, _, _ = stage3
+    res = stage3.resolutions
     assert (res[key].sec_id, res[key].source) == STAY[key]
 
 
 def test_a_class_tickers_base_rows_are_its_own_only_when_they_name_its_class(stage3):
     """Rule A: FTD lists Under Armour's class C as "UAC" (UNDER ARMOUR INC CL C), the snapshot as "UAC-C". The base
     of HEI-A, LEN-B and VIA-B is another line's own symbol (HEICO CORP, LENNAR CORP CL A, VIACOM INC CL A)."""
-    _, _, ftd = stage3
+    ftd = stage3.ftd
     assert {r.cusip for r in ftd.by_symbol("UAC-C", "2016-04-01", "2016-12-31")} == {"904311206"}
     for ticker, base_cusips in (("HEI-A", {"422806109"}), ("LEN-B", {"526057104"}),
                                 ("VIA-B", {"92553P102", "925524100"})):
@@ -77,12 +76,10 @@ def test_a_class_tickers_base_rows_are_its_own_only_when_they_name_its_class(sta
     assert {r.cusip for r in ftd.by_symbol("HEI")} == {"422806109"}
 
 
-def test_the_placeholders_joined_across_a_class_label_are_renames(stage3, cases):
+def test_the_placeholders_joined_across_a_class_label_are_renames(stage3):
     """Rule B's id_changes: a placeholder whose eras now hold one FIGI line is renamed to it, across a class label
     (CLASS-A onto MSG Networks' plain-named line); the guards' placeholders are not."""
-    res, eras, _ = stage3
-    issuers = cases.issuers(eras)
-    renames = pipeline._era_renames(eras, res, issuers)
+    renames = stage3.renames(stage3.resolutions)
     assert renames["CIK1469372-CLASS-A"] == "BBG000NS03H7"
     assert renames["CIK1507934-CLASS-A"] == "BBG000PCNTM2"
     assert renames["CIK1336917-CLASS-C"] == "BBG009DTD8H2"
@@ -98,9 +95,9 @@ def test_a_name_search_answer_is_checked_against_the_eras_span_and_its_tickers_r
     """Rule D (stage 2b): ABBI 2008-09's name was the new Abraxis's (APP Pharmaceuticals dropped it in 2007); the
     rows under ERA in 2013 are Era Group's (later renamed Bristow Group Inc). TCF, Gannett and News Corp carried
     their names over their eras: the later holders of the name do not take them."""
-    found, _ = cases.name_checks()
-    assert {k: (v.cik, v.source) for k, v in found.items()} == {
-        "ABBI@2008-01-16": (1409012, "name_in_force"), "ERA@2013-06-28": (1525221, "ticker_rows")}
+    found, identity = cases.name_checks()
+    assert found == {"ABBI@2008-01-16": (1409012, "name_in_force"), "ERA@2013-06-28": (1525221, "ticker_rows")}
+    assert identity.rows_decided == {"ERA@2013-06-28"}      # stages 4c and 10g keep ERA's CIK in force
 
 
 def test_an_answer_the_eras_own_rows_fit_is_kept_whichever_holder_the_first_pass_named(cases):
@@ -109,7 +106,7 @@ def test_an_answer_the_eras_own_rows_fit_is_kept_whichever_holder_the_first_pass
     snapshot's later name, Bristow Group Inc, was 73887's over 2013-2014)."""
     found, _ = cases.name_checks({"ERA@2013-06-28": 1525221})
     assert "ERA@2013-06-28" not in found
-    assert found["ABBI@2008-01-16"].cik == 1409012      # ABBI has no rows of its own: the name period decides
+    assert found["ABBI@2008-01-16"][0] == 1409012       # ABBI has no rows of its own: the name period decides
 
 
 def test_a_joined_lines_cusip_ranges_ignore_the_old_cusips_settling_rows(cases):
@@ -118,7 +115,7 @@ def test_a_joined_lines_cusip_ranges_ignore_the_old_cusips_settling_rows(cases):
     from types import SimpleNamespace
 
     from delist_detection.history import cusip_sightings, ranges_from_sightings
-    _, ftd = cases.refine({"MSG", "MSGN"})
+    ftd = cases.stage3({"MSG", "MSGN"}).ftd
     sig = cusip_sightings(SimpleNamespace(eras=[]), ftd, ["55826P100", "553573106"])
     got = {r.value: (r.valid_from, r.valid_to)
            for r in ranges_from_sightings([s for s in sig if "2015-09-01" <= s.day <= "2015-10-31"], end=None,

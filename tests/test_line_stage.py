@@ -9,6 +9,7 @@ import requests
 
 import delist_detection.pipeline as pipeline
 from delist_detection.edgar import EdgarBlocked
+from delist_detection.identity import Identity
 from delist_detection.issuer_record import IssuerRecord
 from delist_detection.line_follow import MAX_ROUNDS, SWITCH, LineStep
 from delist_detection.manifest import StageMeter
@@ -59,7 +60,7 @@ class _Ftd:
 
 
 def _world(specs):
-    """specs: (sec_id, cik, ticker, [cusips]) -> (securities, resolutions, era_by_key, sec_cusips, answers)."""
+    """specs: (sec_id, cik, ticker, [cusips]) -> the identity stage's answer over them (`identity.Identity`)."""
     eras, res, issuers, cusips = {}, {}, {}, {}
     for sid, cik, ticker, cs in specs:
         era = TickerEra(ticker, "2008-01-01", "2009-01-01")
@@ -68,7 +69,8 @@ def _world(specs):
                                      tuple(cs))
         issuers[era.key] = Issuer(cik)
         cusips[sid] = list(cs)
-    return build_securities(res, eras, issuers), res, eras, cusips, SimpleNamespace(issuers=issuers)
+    return Identity(list(eras.values()), eras, _Ftd(), date(2004, 1, 1), issuers, res,
+                    build_securities(res, eras, issuers), cusips)
 
 
 def _stage(monkeypatch, specs, nxt, *, figi=None, edgar=None, line_end=None):
@@ -84,8 +86,7 @@ def _stage(monkeypatch, specs, nxt, *, figi=None, edgar=None, line_end=None):
     log = lambda *a: None
     ctx = _RunContext(Clients(edgar=edgar or _Edgar(), resolver=None, classifier=None, figi=figi or _Figi(),
                               ftd_client=None), date(2026, 9, 25), log, 1, StageMeter(log))
-    securities, res, eras, cusips, answers = _world(specs)
-    return pipeline._follow_lines(ctx, securities, res, eras, cusips, _Ftd(), date(2004, 1, 1), answers)
+    return pipeline._follow_lines(ctx, _world(specs))
 
 
 def _flags(lines):
@@ -104,8 +105,8 @@ def test_a_chain_of_switches_is_followed_up_to_max_rounds_and_no_further(monkeyp
 
 
 def test_a_fold_chain_collapses_to_the_final_figi():
-    securities, res, eras, cusips, _ = _world([("CIK1-COMMON", 1, "AA", ["C1"]), ("CIK2-COMMON", 2, "BB", ["D1"])])
-    out = pipeline._Lines(securities, res, cusips, renames={"CIK1-COMMON": "CIK2-COMMON"})
+    world = _world([("CIK1-COMMON", 1, "AA", ["C1"]), ("CIK2-COMMON", 2, "BB", ["D1"])])
+    out = pipeline._Lines(world.securities, world.resolutions, world.cusips, renames={"CIK1-COMMON": "CIK2-COMMON"})
     cand = SimpleNamespace(composite="BBGX1")
     pipeline._fold(out, "CIK2-COMMON", "BBGX1", cand, LineStep("CIK2-COMMON", SWITCH, "D1", "D2", "BB", "x", "y"), {})
     assert out.renames == {"CIK1-COMMON": "BBGX1", "CIK2-COMMON": "BBGX1"}
@@ -230,7 +231,7 @@ def test_the_text_sources_filter_the_8ks_before_the_cap():
             read.append(accession)
             return "the CUSIP number changed to 316645100"
 
-    securities, *_ = _world([("BBGA", 1, "AA", ["A1"])])
+    securities = _world([("BBGA", 1, "AA", ["A1"])]).securities
     symbols, cusips = pipeline._text_sources(IssuerRecord(Many()), securities["BBGA"],
                                              LineEnd("A1", "2012-01-01", "2012-01-01"))
     assert read == ["c1"] and cusips == {"316645100"}

@@ -3,10 +3,11 @@ scripts/build_identity_fixtures.py) holds the observations of each case's ticker
 tickers), their fails rows, the EDGAR answers (names, former names, filings) and OpenFIGI answers the run's own code
 asks for, and SEC's name-index entries of the observed names.
 
-`Cases(backend)` runs the run's code over them: stage 1 (`pipeline._refine`, the eras refined on their fails rows),
-stage 2b (`TickerResolver.name_period_checks` over the committed run's first-pass answers) and stage 3
-(`pipeline._resolve_securities`, each era's FIGI, with the committed run's issuer of each era). The builder runs the
-same code over the local caches with recording doubles, so a fixture holds what the code reads."""
+`Cases(backend)` runs the run's identity stage over them (`identity.identify`: the eras refined on their fails rows,
+each era's issuer, stage 2b's check, each era's FIGI), its issuer lookup answering each era with the committed run's
+first-pass answer (`CommittedLookup`): stage 2b's cases with their name-search answer, every other era with its
+committed issuer. The builder runs the same code over the local caches with recording doubles, so a fixture holds
+what the code reads."""
 from __future__ import annotations
 
 import csv
@@ -17,15 +18,13 @@ from datetime import date
 from pathlib import Path
 from types import SimpleNamespace
 
-from delist_detection import pipeline
 from delist_detection.cik_lookup import CikNameIndex, normalize_name
 from delist_detection.edgar import EdgarSubmission
-from delist_detection.evidence import edgar_names
-from delist_detection.ftd import FtdIndex, FtdRow
-from delist_detection.manifest import StageMeter
-from delist_detection.observations import Observation, ObservationIndex, TickerEra
-from delist_detection.security_master import Issuer, era_last_seen, issuers_by_era
-from delist_detection.ticker_resolver import TickerResolution, TickerResolver
+from delist_detection.ftd import FtdRow
+from delist_detection.identity import Identity, identify
+from delist_detection.issuer_record import IssuerRecord
+from delist_detection.observations import Observation, ObservationIndex
+from delist_detection.ticker_resolver import TickerResolution
 
 FIX = Path(__file__).parent / "fixtures" / "identity"
 AS_OF = date(2026, 9, 25)                    # the committed run's date
@@ -130,51 +129,59 @@ def load_backend() -> Backend:
                    FixtureEdgar(edgar), FixtureFigi(figi), index)
 
 
+class CommittedLookup:
+    """The issuer lookup (`identity.IssuerLookup`) as the committed run answered: each era, known by its ticker and
+    first sighting (`since`), gets its answer from `answers` (era key -> (CIK, tier)); no 8-K frequency candidates;
+    nothing degraded, nothing saved."""
+
+    def __init__(self, answers: dict[str, tuple[int | None, str]]) -> None:
+        self.answers = answers
+
+    def resolve(self, ticker, observed_date=None, *, pin=None, name=None, since=None) -> TickerResolution:
+        cik, tier = self.answers.get(f"{ticker}@{since}", (None, "none"))
+        return TickerResolution(ticker, cik, None, tier if cik else "none")
+
+    def is_degraded(self, ticker, observed_date=None, *, name=None) -> bool:
+        return False
+
+    def frequency_candidates(self, ticker, day):
+        return [], False
+
+    def shadow(self):
+        return self
+
+    def flush(self) -> None:
+        pass
+
+
 @dataclass
 class Cases:
     backend: Backend
     log: list[str] = field(default_factory=list)
 
-    def _ctx(self):
-        clients = SimpleNamespace(ftd_client=self.backend.ftd_client, figi=self.backend.figi,
-                                  resolver=SimpleNamespace(is_degraded=lambda *a, **k: False),
-                                  edgar=self.backend.edgar)
-        return SimpleNamespace(clients=clients, as_of=AS_OF, log=self.log.append, sec_workers=1,
-                               meter=StageMeter(lambda *a: None))
-
-    def refine(self, tickers) -> tuple[list[TickerEra], FtdIndex]:
-        """Stage 1 over the observations of `tickers`."""
+    def identify(self, tickers, answers: dict[str, tuple[int | None, str]]) -> Identity:
+        """The identity stage over the observations of `tickers`, the lookup answering `answers`."""
         want = set(tickers)
         index = ObservationIndex([o for o in self.backend.observations if o.ticker in want])
-        eras, _, ftd, _ = pipeline._refine(self._ctx(), index, None)
-        return eras, ftd
+        clients = SimpleNamespace(resolver=CommittedLookup(answers), figi=self.backend.figi,
+                                  ftd_client=self.backend.ftd_client, edgar=self.backend.edgar,
+                                  issuers=IssuerRecord(self.backend.edgar, today=AS_OF, name_index=self.backend.index))
+        return identify(index, clients, as_of=AS_OF, log=self.log.append)
 
-    def issuers(self, eras: list[TickerEra]) -> dict[str, Issuer]:
-        ciks = {e.key: self.backend.eras_issuer.get(e.key) for e in eras}
-        names = {c: edgar_names(self.backend.edgar.submissions(c)) for c in set(ciks.values()) if c}
-        return issuers_by_era(ciks, names)
+    def stage3(self, tickers=None) -> Identity:
+        """The identity of the eras of `tickers` (default: every stage-3 era), each era's issuer the committed run's."""
+        return self.identify(tickers if tickers is not None else stage3_tickers(self.backend),
+                             {k: (c, "committed") for k, c in self.backend.eras_issuer.items()})
 
-    def stage3(self, tickers=None):
-        """Stage 3 over the eras of `tickers` (default: every stage-3 era): (era key -> its resolution, the eras,
-        the fails index)."""
-        eras, ftd = self.refine(tickers if tickers is not None else stage3_tickers(self.backend))
-        era_by_key = {e.key: e for e in eras}
-        answers = pipeline._IssuerAnswers({}, self.issuers(eras), {e.key: era_last_seen(e, ftd) for e in eras},
-                                          set())
-        resolutions, _, _ = pipeline._resolve_securities(self._ctx(), eras, era_by_key, ftd, answers)
-        return resolutions, eras, ftd
-
-    def resolver(self) -> TickerResolver:
-        return TickerResolver(self.backend.edgar, today=AS_OF, name_index=self.backend.index)
-
-    def name_checks(self, first_pass: dict[str, int] | None = None):
-        """Stage 2b over the NAME_CASES eras, each with its committed first-pass answer (or `first_pass`'s, by era
-        key): (era key -> the answer that replaced it, the eras)."""
-        eras, ftd = self.refine({k.split("@")[0] for k in NAME_CASES})
-        last_seen = {e.key: era_last_seen(e, ftd) for e in eras}
-        answers = {k: TickerResolution(k.split("@")[0], (first_pass or {}).get(k, c), None, "name_search")
-                   for k, (_, c) in NAME_CASES.items()}
-        return self.resolver().name_period_checks(eras, ftd, last_seen, answers), eras
+    def name_checks(self, first_pass: dict[str, int] | None = None) -> tuple[dict[str, tuple[int, str]], Identity]:
+        """Stage 2b over the NAME_CASES eras, each with its committed first-pass name-search answer (or
+        `first_pass`'s, by era key), every other era with its committed issuer: (era key -> (the CIK, the 2b rule)
+        that replaced its answer, the identity)."""
+        answers = {k: (c, "committed") for k, c in self.backend.eras_issuer.items()}
+        answers |= {k: ((first_pass or {}).get(k, c), "name_search") for k, (_, c) in NAME_CASES.items()}
+        found = self.identify({k.split("@")[0] for k in NAME_CASES}, answers)
+        return ({k: (found.issuers[k].cik, found.tier(k)) for k in NAME_CASES
+                 if k in found.issuers and found.tier(k) != "name_search"}, found)
 
 
 def stage3_tickers(backend: Backend) -> list[str]:

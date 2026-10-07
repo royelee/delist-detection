@@ -45,8 +45,7 @@ def _ends(fake_edgar, monkeypatch, added, *, listed=False, form25=True):
     ctx = pipeline._RunContext(clients, date(2026, 9, 25), lambda *a: None, 1, StageMeter(lambda *a: None))
     rows = [r for a in added.values() for r in getattr(a, "rows", [])]
     finder = DelistingFinder(edgar, clients.classifier)
-    return pipeline._successor_endings(ctx, finder, added, {}, {}, FtdIndex(rows),
-                                       pipeline._IssuerAnswers({}, {}, {}, set()))
+    return pipeline._successor_endings(ctx, finder, added, {}, {}, FtdIndex(rows), None)
 
 
 def _security():
@@ -117,8 +116,7 @@ def test_a_failed_halt_feed_read_makes_the_ending_resolution_degraded(fake_edgar
     clients, ctx = _ctx(edgar, monkeypatch)
     finder = DelistingFinder(edgar, clients.classifier, halts=_FailingHalts())
     a = AddedSuccessor(_security(), "NEWC", "2016-09-08")
-    ends = pipeline._successor_endings(ctx, finder, {SID: a}, {}, {}, FtdIndex([]),
-                                       pipeline._IssuerAnswers({}, {}, {}, set()))
+    ends = pipeline._successor_endings(ctx, finder, {SID: a}, {}, {}, FtdIndex([]), None)
     assert [d.delist_date for d in ends.delistings] == ["2020-06-11"]
     assert "resolution_degraded" in ends.delistings[0].flags
     degraded = [r for r in ends.review if r.flag == "resolution_degraded"]
@@ -136,7 +134,7 @@ def test_the_finders_review_rows_are_kept(fake_edgar, monkeypatch):
             return [], [item]
 
     ends = pipeline._successor_endings(ctx, _Finder(), {SID: AddedSuccessor(_security(), "NEWC", "2016-09-08")},
-                                       {}, {}, FtdIndex([]), pipeline._IssuerAnswers({}, {}, {}, set()))
+                                       {}, {}, FtdIndex([]), None)
     assert ends.review == [item]
 
 

@@ -22,9 +22,8 @@ import pytest
 from delist_detection.evidence import edgar_names
 from delist_detection.ftd import FtdIndex, FtdRow
 from delist_detection.observations import ObservationIndex, load_observations
-from delist_detection.security_master import (
-    FigiResolver, candidate_cusips, cusip_handoffs, issuers_by_era, refine_eras,
-)
+from delist_detection.identity import candidate_cusips, refine_eras
+from delist_detection.security_master import FigiResolver, cusip_handoffs, issuers_by_era
 
 FIX = Path(__file__).parent / "fixtures" / "eras"
 EDGAR = json.loads((FIX / "renamed_edgar.json").read_text())

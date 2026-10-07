@@ -3,6 +3,13 @@
 SEC's company_tickers.json only lists *currently* registered tickers, so it
 misses anything already deregistered. For those we fall back to EDGAR's
 full-text search (efts.sec.gov), which indexes historical filings.
+
+`TickerResolver` is the memoized (ticker, date, observed name) -> CIK lookup the
+identity stage asks (`identity.IssuerLookup`): its first pass, whether an answer
+rested on a failed read (`is_degraded`), its 8-K frequency tier's candidates
+(`frequency_candidates`), a shadow for a warm pass and its memo's flush. The
+era-level passes that read the run's other eras and its fails rows (stage 2b and
+the second pass) are `identity.EraIssuers`, never this memo.
 """
 
 from __future__ import annotations
@@ -10,7 +17,6 @@ from __future__ import annotations
 import json
 import logging
 import re
-from collections import defaultdict
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -20,15 +26,11 @@ import requests
 
 from .atomic_io import clean_orphan_temps, write_atomic
 from .edgar import STALE_KEY, EdgarClient
-from .evidence import names_between, parse_day, renamed_near
+from .evidence import parse_day
 from .fatal import FATAL
 from .cik_lookup import CikNameIndex, normalize_name
 from .issuer_record import IssuerRecord
-from .figi_resolution import class_letter, share_class_from_name
-from .ftd import FtdIndex, FtdRow
-from .names import description_matches, description_names, name_tokens, names_agree, names_an_issuer
-from .observations import TickerEra
-from .security_master import Handoff, cusip_handoffs, era_rows, trades_at_switch
+from .names import name_tokens, names_agree
 
 log = logging.getLogger(__name__)
 _LOOK_UP_PIN = object()     # resolve(pin=...) default: look the pin up with cik_pins
@@ -62,45 +64,10 @@ class TickerResolution:
     name: str | None
     # 'cik_map' | 'manual' | 'rename' | 'company_tickers' | 'efts' | 'efts_name_mismatch'
     # | 'name_search' | 'efts_frequency' | 'efts_frequency_name_mismatch'
-    # | 'rejected_validation' | 'none'; the second pass (`TickerResolver.infer_issuers`):
-    # 'efts_frequency_renamed' | 'shared_cusip' | 'cusip_handoff'
+    # | 'rejected_validation' | 'none'; the era-level passes (`identity.EraIssuers`), whose answers the
+    # identity stage records the same way: 'name_in_force' | 'ticker_rows' | 'efts_frequency_renamed'
+    # | 'shared_cusip' | 'cusip_handoff'
     source: str
-
-
-@dataclass(frozen=True)
-class InferredIssuer:
-    """A second-pass answer for an era (`TickerResolver.infer_issuers`): its
-    issuer CIK, the rule that found it (`source`), and what linked them (`via`,
-    for the review item)."""
-    cik: int
-    source: str
-    via: str
-
-
-# The CUSIPs of the eras known to be each issuer's, with the class letter each
-# such era's name states (None: none): issuer CIK -> CUSIP -> letters.
-IssuerLines = dict[int, dict[str, set[str | None]]]
-
-
-def _class_letter(era: TickerEra) -> str | None:
-    """The share class letter the era's name states ("...CLASS B" -> "B"), or None."""
-    return class_letter(share_class_from_name(era.name))
-
-
-def _other_class(letters: set[str | None], era_class: str | None) -> bool:
-    """Whether a CUSIP whose eras state `letters` is of another share class than
-    an era of class `era_class`: both known, and every one of them differs."""
-    return era_class is not None and bool(letters) and all(x is not None and x != era_class for x in letters)
-
-
-@dataclass(frozen=True)
-class SecondPass:
-    """`TickerResolver.infer_issuers`' answers, by era key: `inferred`, for the
-    eras the first pass left with no CIK; `disagreements`, for the eras whose
-    first-pass CIK their CUSIP evidence (rule C) contradicts -- the first pass's
-    answer stands, and the pipeline flags `issuer_cusip_disagrees`."""
-    inferred: dict[str, InferredIssuer]
-    disagreements: dict[str, InferredIssuer]
 
 
 class TickerResolver:
@@ -218,7 +185,7 @@ class TickerResolver:
     # this resolve transient (`_rested_on_failure`): what it leads to is not saved.
 
     def _reset(self, transient: bool = False) -> None:
-        """Start a resolve (or a second-pass era): no search has failed yet, and its
+        """Start a resolve: no search has failed yet, and its
         issuer reads are watched from here."""
         self._transient = transient
         self._reads = self.issuers.watch()
@@ -960,341 +927,15 @@ class TickerResolver:
         self._remember(cache_key, res, observed_name)
         return res
 
-    # --- The second pass: eras the first could not resolve -------------------------
-
-    ERA_MIN_ROWS = 3             # an era with fewer fails rows of its own gets no second-pass answer
-    GUARD_NAME_DAYS = 30         # a name the candidate took up to this long after a row's date can describe it
-
-    def infer_issuers(self, eras: list[TickerEra], ftd: FtdIndex, last_seen: dict[str, str],
-                      ciks: dict[str, int | None]) -> SecondPass:
-        """The second pass: an issuer for each era the first pass left with no
-        CIK and that has no pin, in era-key order. A renamed issuer files no
-        Form 25 and keeps filing 10-Ks, so the first pass's 8-K frequency tier
-        rejects it and its company search sees only today's name. The answers
-        depend on the run's other eras and on its fails rows, so they are never
-        saved (the memo keeps only the first pass's).
-
-        Each era is judged on its own fails rows (`security_master.era_rows`,
-        from its first observation to its last sighting `last_seen`); one with
-        fewer than `ERA_MIN_ROWS` gets no answer. A candidate CIK must pass the
-        guard (`_guard`): it existed by the era's first row, every row's
-        description matches a name it carried by `GUARD_NAME_DAYS` after the
-        row's date (`_fits_rows`), and it is the only candidate that did. Every
-        answer also needs one of the era's observed names to match an EDGAR
-        name of its issuer (`_named`).
-
-        B (`efts_frequency_renamed`): the first pass's 8-K frequency candidates,
-        through the guard, and the one left also carried the era's name at its
-        last sighting and filed within `OBSERVED_ALIVE_DAYS` of it (Capri
-        Holdings for KORS@2014).
-
-        C (`shared_cusip`, `cusip_handoff`), after B: the issuers of the eras
-        linked to this one by a CUSIP (`security_master.cusip_handoffs`: the
-        same CUSIP, or a switch from this era's CUSIP to theirs, whose issuer
-        must be the old CUSIP's, renamed: `_switch_issuer`), through the guard. Every
-        era is judged against the answers known when the sweep began, and
-        sweeps repeat until none adds an answer, so a chain of links resolves
-        whatever the key order (MHP shares its CUSIP with MHFI, whose CUSIP
-        switched to SPGI's). At the fixed point every answer is checked again.
-
-        Rule C also runs over the eras the first pass answered (unpinned, with
-        enough rows): where it gives another issuer, the first pass's answer
-        stands and the disagreement is returned for review (LSTR@2008's name
-        search took LandStar Inc; the CUSIP it shares with LSTR@2012 is Landstar
-        System's)."""
-        rows = {e.key: era_rows(e, ftd, last_seen[e.key]) for e in eras}
-        todo = [e for e in sorted(eras, key=lambda e: e.key)
-                if ciks.get(e.key) is None and e.cik_pin is None and not e.sec_id_pin
-                and len(rows[e.key]) >= self.ERA_MIN_ROWS]
-        out: dict[str, InferredIssuer] = {}
-        for e in todo:
-            self._reset()
-            got = self._named(e, self._frequency_renamed(e, rows[e.key], last_seen[e.key]), last_seen[e.key])
-            if got is not None:
-                out[e.key] = got
-            self._mark_inferred(e, last_seen[e.key])
-        links: dict[str, list[Handoff]] = defaultdict(list)
-        for h in cusip_handoffs(eras, ftd):
-            links[h.era_key].append(h)
-        first_pass = {k: c for k, c in ciks.items() if c is not None}
-        by_key = {e.key: e for e in eras}
-
-        def issuers_now() -> tuple[dict[str, int], dict[int, set[str]]]:
-            """Every era's known issuer, and each issuer's CUSIPs (of its eras)."""
-            known = first_pass | {k: v.cik for k, v in out.items()}
-            issuer_cusips: dict[int, dict[str, set[str | None]]] = defaultdict(lambda: defaultdict(set))
-            for k, c in known.items():
-                for cusip in {*by_key[k].ftd_cusips, *by_key[k].cusips}:
-                    issuer_cusips[c][cusip].add(_class_letter(by_key[k]))
-            return known, issuer_cusips
-
-        while True:
-            known, issuer_cusips = issuers_now()
-            new: dict[str, InferredIssuer] = {}
-            for e in todo:
-                if e.key in out:
-                    continue
-                self._reset()
-                got = self._named(e, self._handoff(rows[e.key], links[e.key], known, ftd, issuer_cusips,
-                                                   _class_letter(e)), last_seen[e.key])
-                if got is not None:
-                    new[e.key] = got
-                self._mark_inferred(e, last_seen[e.key])
-            if not new:
-                break
-            out |= new
-        # At the fixed point every answer is checked again against all it links
-        # to now: one answered before a linked era was, from another issuer, can
-        # have become ambiguous. Such answers are dropped, and the check repeats
-        # without them until none is dropped.
-        while True:
-            known, issuer_cusips = issuers_now()
-            dropped = []
-            for key, got in out.items():
-                self._reset()
-                found = self._linked_issuers(links[key], known, ftd, issuer_cusips, _class_letter(by_key[key]))
-                candidates = [*found, *([got.cik] if got.source == "efts_frequency_renamed" else [])]
-                if self._guard(candidates, rows[key]) != got.cik:
-                    dropped.append(key)
-                self._mark_inferred(by_key[key], last_seen[key])
-            if not dropped:
-                break
-            for key in dropped:
-                del out[key]
-        disagreements: dict[str, InferredIssuer] = {}
-        for e in sorted(eras, key=lambda e: e.key):
-            first = first_pass.get(e.key)
-            if first is None or e.cik_pin is not None or e.sec_id_pin or len(rows[e.key]) < self.ERA_MIN_ROWS:
-                continue
-            self._reset()
-            got = self._named(e, self._handoff(rows[e.key], links[e.key], known, ftd, issuer_cusips,
-                                               _class_letter(e)), last_seen[e.key])
-            if got is not None and got.cik != first:
-                disagreements[e.key] = got
-        return SecondPass(out, disagreements)
-
-    def _named(self, era: TickerEra, got: InferredIssuer | None, last_seen: str) -> InferredIssuer | None:
-        """`got`, when one of the era's observed names `names.description_matches`
-        some EDGAR name of its issuer, current or former (an era with no name,
-        or none with a word to compare, is not refuted); else None. The fails
-        rows under a stale snapshot's ticker can be the ticker's later holder's:
-        TRI@2008, Triad Hospitals, shares Thomson Reuters' CUSIP."""
-        if got is None or not era.names:
-            return got
-        names = self.issuers.names(got.cik, about=last_seen)
-        return got if any(description_matches(n, names) for n in era.names) else None
-
-    def _mark_inferred(self, era: TickerEra, last_seen: str) -> None:
-        """A second-pass read that hit a failed request or a stale copy degrades
-        the era's answer, as a first-pass one does (`is_degraded`)."""
-        if self._rested_on_failure():
-            self._degraded.add(self._key(era.ticker, last_seen, era.name))
-
-    def _guard(self, candidates: Iterable[int], rows: list[FtdRow]) -> int | None:
-        """Guard G: the one candidate (`_fits_rows`) that could be the issuer of
-        `rows`; None when none or several are. The fails descriptions are loose
-        (one shared word matches), so a second match means the rows cannot tell."""
-        passing = [c for c in dict.fromkeys(candidates) if self._fits_rows(c, rows)]
-        return passing[0] if len(passing) == 1 else None
-
-    def _fits_rows(self, cik: int, rows: list[FtdRow]) -> bool:
-        """Whether the CIK existed by the first of `rows`, and each row's
-        description that names an issuer (`names.names_an_issuer`; one that
-        leaves no word to compare, F5,INC. COMMON STOCK, says nothing either way,
-        and at least one must name it) `names.description_matches` a name it
-        carried by `GUARD_NAME_DAYS` after the row's date. An earlier name
-        counts: SEC updates a description slowly (HCP INC COM STK until the ticker
-        changed on 2019-11-05, EDGAR ending the name HCP, INC. on 2019-10-01). A
-        company founded later (LMCA's 2013 spin-off for 2012 rows), never so
-        named (Penske Automotive for an ETN's rows under UAG), or so named only
-        later, is not the rows' issuer."""
-        sub = self.issuers.profile(cik, about=rows[-1].date)
-        first = self.issuers.first_filed(cik)
-        if first is None or first > parse_day(rows[0].date) or sub is None:
-            return False
-        since: dict[str, str] = {}                  # description -> its first row's date (names only accumulate)
-        for r in rows:
-            if names_an_issuer(r.description):
-                since.setdefault(r.description, r.date)
-        return bool(since) and all(     # the names of the copy just read
-            description_matches(d, self.issuers.names_until(cik, parse_day(day) + timedelta(days=self.GUARD_NAME_DAYS)),
-                                empty=False)
-            for d, day in since.items())
-
-    def _frequency_renamed(self, era: TickerEra, rows: list[FtdRow], last_seen: str) -> InferredIssuer | None:
-        """Fix B: the 8-K frequency candidate that passes the guard, carried the
-        era's name at its last sighting, and filed within `OBSERVED_ALIVE_DAYS`
-        of it."""
-        if not era.name:
-            return None
-        ranked = self._efts_pre_delist_frequency_ranked(era.ticker, last_seen)
-        cik = self._guard([c for c, _ in ranked], rows)
-        on = parse_day(last_seen)
-        if cik is None or on is None:
-            return None
-        named = [n for n in self.issuers.names_near(cik, on, about=last_seen) if names_agree(n, era.name)]
-        alive = any(abs((d - on).days) <= self.OBSERVED_ALIVE_DAYS
-                    for f in self.issuers.filings(cik) if (d := parse_day(f.filing_date)))
-        if not named or not alive:
-            return None
-        return InferredIssuer(cik, "efts_frequency_renamed",
-                              f"the one 8-K frequency candidate whose names match its fails rows; "
-                              f"EDGAR names it {named[0]} then")
-
-    RENAME_NEAR_DAYS = 90        # a switch's issuer was renamed this close to it
-
-    def _handoff(self, rows: list[FtdRow], links: list[Handoff], known: dict[str, int], ftd: FtdIndex,
-                 issuer_cusips: IssuerLines, era_class: str | None) -> InferredIssuer | None:
-        """Fix C: the issuer, through the guard, of the eras `links` leads to
-        (`known`: era key -> CIK). A switch counts only when that issuer is the
-        old CUSIP's, renamed (`_switch_issuer`). A shared CUSIP is read first, so
-        it names the answer's source when both lead to the same issuer."""
-        found = self._linked_issuers(links, known, ftd, issuer_cusips, era_class)
-        cik = self._guard(found, rows)
-        if cik is None:
-            return None
-        h, former = found[cik]
-        if h.kind == "shared_cusip":
-            return InferredIssuer(cik, h.kind, f"shares CUSIP {h.cusip} with {h.to_key}")
-        return InferredIssuer(cik, h.kind, f"its CUSIP {h.cusip} ended as {h.to_key}'s {h.new_cusip} began on "
-                                           f"{h.day}; the issuer was renamed from {former}")
-
-    def _linked_issuers(self, links: list[Handoff], known: dict[str, int], ftd: FtdIndex,
-                        issuer_cusips: IssuerLines, era_class: str | None
-                        ) -> dict[int, tuple[Handoff, str | None]]:
-        """The issuers `links` lead to (`known`: era key -> CIK), each with the
-        link that found it first (a shared CUSIP before a switch) and, for a
-        switch, the former name it was renamed from."""
-        found: dict[int, tuple[Handoff, str | None]] = {}
-        for h in sorted(links, key=lambda h: (h.kind != "shared_cusip", h.to_key)):
-            cik = known.get(h.to_key)
-            if cik is None or cik in found:
-                continue
-            former = (self._switch_issuer(cik, h, ftd, issuer_cusips, era_class) if h.kind == "cusip_handoff"
-                      else None)
-            if h.kind == "cusip_handoff" and former is None:
-                continue
-            found[cik] = (h, former)
-        return found
-
-    def _switch_issuer(self, cik: int, h: Handoff, ftd: FtdIndex, issuer_cusips: IssuerLines,
-                       era_class: str | None) -> str | None:
-        """Whether the new CUSIP's issuer `cik` is the switch `h`'s old CUSIP's,
-        renamed: the former name it was renamed from (`_renamed_from`), or None.
-        It must have existed when the old CUSIP began failing (Actavis plc,
-        formed in 2013, is not Actavis Inc's issuer), and have no other CUSIP of
-        its own (`issuer_cusips`: the CUSIPs of the eras known to be its) trading
-        at the switch (`security_master.trades_at_switch`: an acquirer that
-        renamed itself at the merger, as Wisconsin Energy did for Integrys and
-        SXC Health Solutions for Catalyst Health Solutions). A CUSIP of another
-        share class than the era's (`era_class`; Discovery's series C for series
-        A) does not count, nor does one born at the switch."""
-        first = self.issuers.first_filed(cik)
-        if first is None or first > parse_day(h.since):
-            return None
-        others = {c for c, letters in issuer_cusips.get(cik, {}).items()
-                  if c not in (h.cusip, h.new_cusip) and not _other_class(letters, era_class)}
-        if trades_at_switch(ftd, h, others):
-            return None
-        return self._renamed_from(cik, h)
-
-    def _renamed_from(self, cik: int, h: Handoff) -> str | None:
-        """The CIK's former name that ended within `RENAME_NEAR_DAYS` of the
-        switch `h` (`evidence.renamed_near`: it was renamed there), when every
-        description of the old CUSIP's rows that names a company (one at least)
-        names, word by word (`names.description_names`: CITIZENS COMMUNICATIONS
-        is not CLEAR CHANNEL COMMUNICTNS), a name the CIK carried in the
-        `GUARD_NAME_DAYS` up to that description's first row (QUINTILES
-        TRANSNATIONAL HLDGS, before Quintiles IMS Holdings) or that former name
-        (EDGAR records ACE Ltd's names only from 2009, after its rows began);
-        None otherwise. A name dropped years before is no evidence (CBS Corp's
-        CIK was named VIACOM INC until 2005, TeraWulf's CHROMALINE until 2002),
-        nor is one taken after the rows began: A & B II, spun off by Alexander &
-        Baldwin Holdings in 2012, took the name Alexander & Baldwin as the
-        Holdings CUSIP switched to Matson's and to its own. A spin-off starting
-        as its parent's CUSIP ends carries no such name."""
-        day = parse_day(h.day)
-        sub = self.issuers.profile(cik, about=h.day)
-        former = renamed_near(sub, day, self.RENAME_NEAR_DAYS) if sub is not None and day else None
-        named = [(d, parse_day(since)) for d, since in h.descriptions if names_an_issuer(d)]
-        if former and named and all(
-                any(description_names(d, n)
-                    for n in [*names_between(sub, on - timedelta(days=self.GUARD_NAME_DAYS), on), former])
-                for d, on in named):
-            return former
-        return None
-
-    # --- Stage 2b: a name-search answer checked against the era's span and its ticker's rows (sub-plan 5h) -----
-
-    NAME_IN_FORCE = "name_in_force"     # source: the one other holder of the name that carried it over the era
-    TICKER_ROWS = "ticker_rows"         # source: the one other holder of the name its ticker's fails rows describe
-
-    def name_period_checks(self, eras: list[TickerEra], ftd: FtdIndex, last_seen: dict[str, str],
-                           answers: dict[str, TickerResolution]) -> dict[str, InferredIssuer]:
-        """A name-search answer (`answers[k].source` "name_search") replaced by another CIK that SEC's name index
-        lists under exactly the era's observed name, never saved (the memo keeps the first pass's answer):
-
-        An era with at least `ERA_MIN_ROWS` fails rows of its own is decided by them alone (`ticker_rows`: an
-        observed name the rows refute is no evidence of who held the name over the era, and the answer must not
-        depend on which holder the first pass named); an era with fewer takes `name_in_force`:
-
-        - `name_in_force`: the answer's CIK carried no name agreeing with the observed one from the era's first
-          sighting to its last (`last_seen`), and exactly one other such CIK, filing by the first sighting, did
-          (ABBI 2008-2009: APP Pharmaceuticals dropped "Abraxis BioScience" in 2007; the new Abraxis carried it);
-        - `ticker_rows`: the era's own fails rows (`security_master.era_rows`, at least `ERA_MIN_ROWS`)
-          are not the answer's (guard G's `_fits_rows`) and exactly one other such CIK's they are (ERA 2013: the
-          rows under ERA say ERA GROUP INC, the company later renamed Bristow Group Inc; the old Bristow Group
-          traded as BRS).
-
-        A pinned era, one with no name or no name index, keeps its answer. Answers keyed by era."""
-        index = self._index()
-        out: dict[str, InferredIssuer] = {}
-        if index is None:
-            return out
-        for e in sorted(eras, key=lambda e: e.key):
-            res = answers.get(e.key)
-            if res is None or res.cik is None or res.source != "name_search" or e.cik_pin is not None \
-                    or e.sec_id_pin or not e.name:
-                continue
-            holders = sorted({h.cik for h in index.split_search(e.name)[0]} - {res.cik} - self.EXCHANGE_CIKS)
-            if not holders:
-                continue
-            self._reset()
-            rows = era_rows(e, ftd, last_seen[e.key])
-            if len(rows) >= self.ERA_MIN_ROWS:      # the era's own rows decide, whichever holder the pass named
-                got = self._ticker_rows_tie(e, res.cik, holders, rows)
-            else:
-                got = self._name_in_force(e, res.cik, holders, last_seen[e.key])
-            if got is not None:
-                out[e.key] = got
-            self._mark_inferred(e, last_seen[e.key])
-        return out
-
-    def _carried_over(self, cik: int, name: str, lo: date, hi: date) -> bool:
-        """Whether the CIK carried a name agreeing with `name` at some point in [lo, hi] (its submissions JSON)."""
-        return any(names_agree(n, name) for n in self.issuers.names_between(cik, lo, hi, about=hi))
-
-    def _name_in_force(self, era: TickerEra, first: int, holders: list[int], last: str) -> InferredIssuer | None:
-        lo, hi = parse_day(era.first), parse_day(last)
-        if lo is None or hi is None or self._carried_over(first, era.name, lo, hi):
-            return None
-        found = [c for c in holders
-                 if self.issuers.existed_by(c, era.first) and self._carried_over(c, era.name, lo, hi)]
-        if len(found) != 1:
-            return None
-        return InferredIssuer(found[0], self.NAME_IN_FORCE,
-                              f"{first} did not carry the name from {era.first} to {last}; {found[0]} did")
-
-    def _ticker_rows_tie(self, era: TickerEra, first: int, holders: list[int],
-                         rows: list[FtdRow]) -> InferredIssuer | None:
-        if len(rows) < self.ERA_MIN_ROWS or self._fits_rows(first, rows):
-            return None
-        found = [c for c in holders if self.issuers.existed_by(c, era.first) and self._fits_rows(c, rows)]
-        if len(found) != 1:
-            return None
-        return InferredIssuer(found[0], self.TICKER_ROWS,
-                              f"its fails rows under {era.ticker} ({rows[0].description}) are {found[0]}'s, "
-                              f"not {first}'s")
+    def frequency_candidates(self, ticker: str, day: str) -> tuple[list[tuple[int, str]], bool]:
+        """The 8-K frequency tier's candidates for `ticker` before `day` (CIK, name; best first) and whether the
+        search failed (then none: what rests on them is degraded). The era-level second pass reads them
+        (`identity.EraIssuers`, rule B); this resolver's own state is left as it was."""
+        transient, self._transient = self._transient, False
+        try:
+            return self._efts_pre_delist_frequency_ranked(ticker, day), self._transient
+        finally:
+            self._transient = transient
 
     def resolve_many(
         self, items: Iterable[tuple[str, str | None]]

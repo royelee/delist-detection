@@ -1599,21 +1599,6 @@ def test_the_resolver_tier_reaches_the_delisting_row(fake_edgar, tmp_path, pinne
     assert d["sec_id"] == "BBG000FJLFX8" and d["resolution_source"] == source
 
 
-def test_resolution_source_comes_from_the_latest_era_that_has_a_cik():
-    from delist_detection.observations import TickerEra
-    from delist_detection.ticker_resolver import TickerResolution
-    old, new = TickerEra("X", "2010-01-04", "2012-06-29", []), TickerEra("X", "2014-06-30", "2016-06-30", [])
-    sec = Security("BBGX", 5, "COMMON", "X CO", "Common Stock", True, "cusip", eras=[old, new])
-    from delist_detection.security_master import Issuer
-    res = {old.key: TickerResolution("X", 5, None, "manual"), new.key: TickerResolution("X", None, None, "none")}
-    issuers = {old.key: Issuer(5)}
-    assert pipeline._resolution_source(sec, issuers, res) == "manual"          # the era issuer_cik came from
-    res[new.key] = TickerResolution("X", 5, None, "company_tickers")
-    issuers[new.key] = Issuer(5)
-    assert pipeline._resolution_source(sec, issuers, res) == "company_tickers"
-    assert pipeline._resolution_source(sec, {}, res) == "security_master"
-
-
 def test_an_era_whose_ticker_the_sec_data_never_shows_is_reviewed(fake_edgar, tmp_path):
     """APTV as the snapshots record it: "APTIV PLC" under APTV in 2012-2013 (a
     backfilled ticker: Delphi traded as DLPH then) and again from 2017-12-31.
@@ -2577,11 +2562,8 @@ def test_ticker_evidence_asks_the_search_only_for_a_placeholder_without_a_ticker
         "BBGFIGI": Security("BBGFIGI", 888, "COMMON", "FIGI CO", "", True, "cusip",
                             eras=[TickerEra("FIG", "2015-06-30", "2016-06-30")]),
     }
-    answers = pipeline._IssuerAnswers(
-        resolutions={"PHX@2015-06-30": TickerResolution("PHX", 555, None, "name_search"),
-                     "PIN@2015-06-30": TickerResolution("PIN", 777, None, "cik_map")},
-        issuers={}, last_seen={}, names_degraded=set())
-    assert pipeline._ticker_evidence(ctx, securities, answers) == {
+    tiers = {"PHX@2015-06-30": "name_search", "PIN@2015-06-30": "cik_map"}
+    assert pipeline._ticker_evidence(ctx, securities, lambda key: tiers.get(key, "")) == {
         "CIK555-COMMON": "filing:0000000555-16-000001", "CIK777-COMMON": "tier:cik_map"}
     assert edgar.calls == [('"PHX"', (555,))]
 
@@ -2926,7 +2908,7 @@ def _one_security_context(rows, cusip="74955W307"):
     ftd = FtdIndex(rows)
     cusips = {s.sec_id: [cusip]}
     build = pipeline._context_builder({s.sec_id: s}, {s.sec_id: ticker_sightings(s, ftd, cusips[s.sec_id])},
-                                      pipeline._IssuerAnswers({}, {}, {}, set()), ftd, cusips)
+                                      ftd, cusips)
     return build(s, False)
 
 

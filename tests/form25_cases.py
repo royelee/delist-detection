@@ -129,8 +129,7 @@ def context(sec_id: str, *, other_cik: int | None | str = "fixture"):
     securities, cusips, ftd = world()
     sightings = {sid: ticker_sightings(s, ftd, cusips[sid]) for sid, s in securities.items()}
     other = DATA["cases"][sec_id]["other_cik"] if other_cik == "fixture" else other_cik
-    build = pipeline._context_builder(securities, sightings, pipeline._IssuerAnswers({}, {}, {}, set()), ftd, cusips,
-                                      {sec_id: other} if other else {})
+    build = pipeline._context_builder(securities, sightings, ftd, cusips, {sec_id: other} if other else {})
     return build(securities[sec_id], DATA["securities"][sec_id]["listed"])
 
 

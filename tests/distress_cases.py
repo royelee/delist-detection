@@ -133,8 +133,7 @@ def find(sec_id: str, c: pipeline.Clients) -> tuple[list[Delisting], list[Review
     securities, cusips, ftd = world()
     sightings = {sid: ticker_sightings(s, ftd, cusips[sid]) for sid, s in securities.items()}
     other = DATA["cases"][sec_id]["other_cik"]
-    build = pipeline._context_builder(securities, sightings, pipeline._IssuerAnswers({}, {}, {}, set()), ftd, cusips,
-                                      {sec_id: other} if other else {})
+    build = pipeline._context_builder(securities, sightings, ftd, cusips, {sec_id: other} if other else {})
     finder = DelistingFinder(c.edgar, c.classifier, midas=c.midas, halts=c.halts)
     return finder.find(build(securities[sec_id], DATA["securities"][sec_id]["listed"]))
 

@@ -6,7 +6,9 @@ Offline, over real data: tests/fixtures/eras/renamed_observations.csv (the
 observations of the tickers involved), renamed_ftd_rows.csv (their SEC
 fails-to-deliver rows, thinned), and renamed_edgar.json (each CIK's EDGAR names
 and a thinned filing list, the 8-K frequency rank EDGAR full-text search gave at
-each era's last sighting, and EDGAR company-search answers)."""
+each era's last sighting, and EDGAR company-search answers). The era-level passes
+(stage 2b and the second pass) are `identity.EraIssuers`; the stage's wiring is
+tested through `identity.identify`."""
 from __future__ import annotations
 
 import csv
@@ -16,16 +18,16 @@ from datetime import date
 from pathlib import Path
 
 import pytest
+import requests
 
-from delist_detection import manifest as run_manifest
-from delist_detection import pipeline
 from delist_detection.edgar import EdgarSubmission
-from delist_detection.evidence import edgar_names
 from delist_detection.ftd import FtdIndex, FtdRow
+from delist_detection.identity import EraIssuers, InferredIssuer, era_last_seen, identify, refine_eras
 from delist_detection.observations import ObservationIndex, load_observations
-from delist_detection.pipeline import Clients, _RunContext
-from delist_detection.security_master import Handoff, cusip_handoffs, era_last_seen, issuers_by_era, refine_eras
-from delist_detection.ticker_resolver import InferredIssuer, TickerResolution, TickerResolver
+from delist_detection.pipeline import Clients
+from delist_detection.security_master import Handoff, cusip_handoffs
+from delist_detection.ticker_resolver import TickerResolver
+from tests.identity_cases import CommittedLookup
 
 FIX = Path(__file__).parent / "fixtures" / "eras"
 DATA = json.loads((FIX / "renamed_edgar.json").read_text())
@@ -113,18 +115,26 @@ def _pinned(era, cik):
     return replace(era, observations=[replace(o, cik=cik) for o in era.observations])
 
 
-def _second_pass(eras, ftd, keys, resolved=None, edgar=None, unpin=()):
+def _passes(edgar=None) -> EraIssuers:
+    """The era-level passes over the fixture's EDGAR, rule B's candidates the 8-K frequency tier's (the resolver's,
+    which the `frequency` fixtures script)."""
+    resolver = TickerResolver(edgar or _Edgar())
+    return EraIssuers(resolver.issuers, resolver.frequency_candidates)
+
+
+def _second_pass(eras, ftd, keys, resolved=None, edgar=None, unpin=(), handoffs=None):
     """The second pass over the eras `keys`, their first-pass CIKs given in
-    `resolved` (a cik pin otherwise), the eras `unpin` stripped of their pin."""
+    `resolved` (a cik pin otherwise), the eras `unpin` stripped of their pin
+    (`handoffs`: the CUSIP links between them, else `cusip_handoffs`')."""
     chosen = [_unpinned(eras[k]) if k in unpin else eras[k] for k in keys]
     last_seen = {e.key: era_last_seen(e, ftd) for e in chosen}
     ciks = {e.key: (resolved or {}).get(e.key, e.cik_pin) for e in chosen}     # the first pass answers a pin
-    return TickerResolver(edgar or _Edgar()).infer_issuers(chosen, ftd, last_seen, ciks)
+    return _passes(edgar).infer(chosen, ftd, last_seen, ciks, handoffs)
 
 
-def _infer(eras, ftd, keys, resolved=None, edgar=None, unpin=()):
+def _infer(eras, ftd, keys, resolved=None, edgar=None, unpin=(), handoffs=None):
     """`_second_pass`'s answers: {era key: (CIK, source)} for each era it answered."""
-    got = _second_pass(eras, ftd, keys, resolved, edgar, unpin).inferred
+    got = _second_pass(eras, ftd, keys, resolved, edgar, unpin, handoffs).inferred
     return {k: (v.cik, v.source) for k, v in got.items()}
 
 
@@ -138,13 +148,16 @@ def test_the_fixture_eras_and_last_sightings_are_the_real_ones(eras, ftd):
 
 # --- 1a: each era is looked up under its own name --------------------------------
 
-def _ctx(resolver, edgar=None):
-    clients = Clients(edgar=edgar or _Edgar(), resolver=resolver, classifier=None, figi=None, ftd_client=None,
-                      as_of=FTD_WINDOW[1])
-    return _RunContext(clients, FTD_WINDOW[1], lambda *a: None, 1, run_manifest.StageMeter(lambda *a: None))
+def _identify(tickers, resolver, *, edgar=None, figi=None):
+    """The identity stage (`identity.identify`) over the fixture's observations of `tickers` and its fails rows,
+    the issuer lookup `resolver`, OpenFIGI `figi` (default: no US line for anything)."""
+    clients = Clients(edgar=edgar or _Edgar(), resolver=resolver, classifier=None, figi=figi or _NoFigi(),
+                      ftd_client=_RowsClient(_rows()), as_of=FTD_WINDOW[1])
+    index = ObservationIndex([o for o in load_observations(FIX / "renamed_observations.csv") if o.ticker in tickers])
+    return identify(index, clients, as_of=FTD_WINDOW[1])
 
 
-def test_each_era_is_looked_up_under_its_own_name(index, eras, ftd):
+def test_each_era_is_looked_up_under_its_own_name(index):
     """KORS@2012's FTD rows (its CUSIP's, shared with KORS@2014) run to
     2015-08-03, past its last observation and after KORS@2014's first: the
     observation lookup would give it KORS@2014's name."""
@@ -156,7 +169,7 @@ def test_each_era_is_looked_up_under_its_own_name(index, eras, ftd):
             return super().resolve(ticker, observed_date, **kw)
 
     spy = Spy(_Edgar(), observed_names=index.name_on)
-    pipeline._resolve_issuers(_ctx(spy), [eras["KORS@2012-06-29"], eras["KORS@2014-12-31"]], ftd)
+    _identify({"KORS"}, spy)
     assert index.name_on("KORS", "2015-08-03") == "MICHAEL KORS HOLDINGS LTD"
     assert calls == [("KORS", "2015-08-03", "CAPRI HOLDINGS LTD", "2012-06-29"),
                      ("KORS", "2019-01-03", "MICHAEL KORS HOLDINGS LTD", "2014-12-31")]
@@ -458,7 +471,7 @@ def test_the_name_renamed_from_names_rows_edgar_keeps_no_earlier_name_for(eras, 
     row against the names EDGAR records by then, and has none for 2008.)"""
     [h] = [h for h in cusip_handoffs(list(eras.values()), ftd)
            if h.era_key == "ACE@2008-07-25" and h.to_key == "CB@2016-06-30"]
-    assert (h.kind, TickerResolver(_Edgar())._renamed_from(896159, h)) == ("cusip_handoff", "ACE LTD")
+    assert (h.kind, _passes()._renamed_from(896159, h)) == ("cusip_handoff", "ACE LTD")
 
 
 def test_a_name_the_issuer_took_after_the_old_rows_began_names_none_of_them(eras, ftd):
@@ -470,7 +483,7 @@ def test_a_name_the_issuer_took_after_the_old_rows_began_names_none_of_them(eras
     name them, and the switch to its CUSIP does not make it their issuer."""
     hs = {h.to_key: h for h in cusip_handoffs(list(eras.values()), ftd)
           if h.era_key == "ALEX@2012-06-29" and h.kind == "cusip_handoff"}
-    r = TickerResolver(_Edgar())
+    r = _passes()
     assert (r._renamed_from(1545654, hs["ALEX@2012-12-31"]), r._renamed_from(3453, hs["MATX@2012-12-31"])) == (
         None, "ALEXANDER & BALDWIN INC")
 
@@ -559,29 +572,45 @@ class _NoFigi:
         return []
 
 
-def test_the_second_pass_answer_is_used_flagged_and_never_saved(eras, ftd, tmp_path):
+def test_the_second_pass_answer_is_used_flagged_and_never_saved(tmp_path):
     """KORS@2012 under its own name finds nothing (Capri Holdings was Michael Kors
     Holdings then); the second pass gives it KORS@2014's issuer through their
     shared CUSIP. The answer depends on the run's other eras, so the memo file
     holds only first-pass answers, and the era carries the info flag
     issuer_inferred, which says how."""
-    kors = [eras["KORS@2012-06-29"], eras["KORS@2014-12-31"], eras["CPRI@2018-12-31"]]
     edgar = _Edgar(tickers={"CPRI": {"cik_str": 1530721, "ticker": "CPRI", "title": "Capri Holdings Ltd"}})
     resolver = TickerResolver(edgar, cache_path=tmp_path / "res.json", batch_writes=True)
-    ctx = _ctx(resolver, edgar)
-    answers = pipeline._resolve_issuers(ctx, kors, ftd)
-    res = answers.resolutions
-    assert {k: (r.cik, r.source) for k, r in res.items()} == {
+    identity = _identify({"KORS", "CPRI"}, resolver, edgar=edgar)
+    assert {e.key: (identity.issuers[e.key].cik, identity.tier(e.key)) for e in identity.eras} == {
         "KORS@2012-06-29": (1530721, "shared_cusip"), "KORS@2014-12-31": (1530721, "name_search"),
         "CPRI@2018-12-31": (1530721, "company_tickers")}
-    assert answers.issuers["KORS@2012-06-29"].cik == 1530721
     saved = json.loads((tmp_path / "res.json").read_text())["entries"]
     assert sorted(saved) == ["CPRI|2026-02-04|CAPRI HOLDINGS LTD", "KORS|2019-01-03|MICHAEL KORS HOLDINGS LTD"]
-    ctx.clients.figi = _NoFigi()
-    _, _, review = pipeline._resolve_securities(ctx, kors, {e.key: e for e in kors}, ftd, answers)
-    inferred = [(i.ticker, i.cik, i.reason) for i in review if i.flag == "issuer_inferred"]
+    inferred = [(i.ticker, i.cik, i.reason) for i in identity.review if i.flag == "issuer_inferred"]
     assert inferred == [("KORS", 1530721, "KORS@2012-06-29 CAPRI HOLDINGS LTD: issuer 1530721 by shared_cusip: "
                                           "shares CUSIP G60754101 with KORS@2014-12-31")]
+
+
+def test_a_second_pass_read_that_failed_degrades_the_era_it_was_read_for():
+    """KORS@2012 (no first-pass answer) reaches Capri Holdings through the CUSIP it shares with KORS@2014, but
+    Capri's filing list cannot be read, so guard G cannot place it there: the era stays unanswered, and its
+    `resolution_degraded` item comes from the second pass's own state (the lookup's answers rested on nothing)."""
+    class _Down(_Edgar):
+        def recent_filings(self, cik):
+            if int(cik) == 1530721:
+                raise requests.ConnectionError("down")
+            return super().recent_filings(cik)
+
+    lookup = CommittedLookup({"KORS@2014-12-31": (1530721, "name_search"), "CPRI@2018-12-31": (1530721, "cik_map")})
+    identity = _identify({"KORS", "CPRI"}, lookup, edgar=_Down())
+    assert "KORS@2012-06-29" not in identity.issuers
+    degraded = [r for r in identity.review if r.flag == "resolution_degraded"]
+    assert [r.reason for r in degraded] == [
+        "KORS@2012-06-29 CAPRI HOLDINGS LTD: issuer resolution rested on a failed EDGAR request or a stale copy; "
+        "its answer was used for this run but not saved"]
+    healthy = _identify({"KORS", "CPRI"}, lookup)
+    assert healthy.issuers["KORS@2012-06-29"].cik == 1530721
+    assert not [r for r in healthy.review if r.flag == "resolution_degraded"]
 
 
 class _KorsCpriFigi:
@@ -597,22 +626,18 @@ class _KorsCpriFigi:
         return []
 
 
-def test_the_pipeline_wires_cusip_handoffs_into_the_figi_stage(eras, ftd):
-    """Spec §17: stage 3 (`pipeline._resolve_securities`) must compute the run's
-    CUSIP handoffs itself and pass them to `FigiResolver.resolve_many` -- not
-    only a caller who builds the links by hand. Given the real KORS/CPRI eras
-    and fails rows, the wiring alone lands the KORS chain on CPRI's composite."""
-    kors = [eras["KORS@2012-06-29"], eras["KORS@2014-12-31"], eras["CPRI@2018-12-31"]]
-    names = {1530721: edgar_names(DATA["issuers"]["1530721"])}
-    issuers = issuers_by_era({e.key: 1530721 for e in kors}, names)
-    answers = pipeline._IssuerAnswers({}, issuers, {e.key: era_last_seen(e, ftd) for e in kors}, set())
-    ctx = _ctx(TickerResolver(_Edgar()))
-    ctx.clients.figi = _KorsCpriFigi()
-    resolutions, securities, review = pipeline._resolve_securities(ctx, kors, {e.key: e for e in kors}, ftd, answers)
-    assert {k: (r.sec_id, r.source) for k, r in resolutions.items()} == {
+def test_the_identity_stage_wires_cusip_handoffs_into_the_figi_stage():
+    """Spec §17: the identity stage (`identity.identify`) computes the run's
+    CUSIP handoffs itself and passes them to `FigiResolver.resolve_many` -- not
+    only a caller who builds the links by hand. Given the real KORS/CPRI
+    observations and fails rows, each era's issuer Capri Holdings (a manual
+    override), the wiring alone lands the KORS chain on CPRI's composite."""
+    resolver = TickerResolver(_Edgar(), manual_overrides={"KORS": 1530721, "CPRI": 1530721})
+    identity = _identify({"KORS", "CPRI"}, resolver, figi=_KorsCpriFigi())
+    assert {k: (r.sec_id, r.source) for k, r in identity.resolutions.items()} == {
         "KORS@2012-06-29": ("BBG0029SNR63", "handoff"), "KORS@2014-12-31": ("BBG0029SNR63", "handoff"),
         "CPRI@2018-12-31": ("BBG0029SNR63", "cusip")}
-    assert set(securities) == {"BBG0029SNR63"}
+    assert set(identity.securities) == {"BBG0029SNR63"}
 
 
 def test_fails_rows_with_no_word_to_compare_confirm_no_issuer(eras, ftd, frequency):
@@ -649,37 +674,34 @@ def test_cusip_evidence_that_contradicts_a_first_pass_answer_is_reported(eras, f
     assert "LSTR@2008-01-16" not in _second_pass(pinned, ftd, lstr, {"LSTR@2012-06-29": 853816}).disagreements
 
 
-def test_a_cusip_disagreement_is_flagged_for_review_with_both_issuers(eras, ftd):
-    lstr = [eras["LSTR@2008-01-16"], eras["LSTR@2012-06-29"]]
-    first = {"LSTR@2008-01-16": TickerResolution("LSTR", 1068689, None, "name_search"),
-             "LSTR@2012-06-29": TickerResolution("LSTR", 853816, None, "company_tickers")}
-    answers = pipeline._IssuerAnswers(
-        first, issuers_by_era({k: r.cik for k, r in first.items()}), {e.key: era_last_seen(e, ftd) for e in lstr},
-        set(), disagreements={"LSTR@2008-01-16": InferredIssuer(
-            853816, "shared_cusip", "shares CUSIP 515098101 with LSTR@2012-06-29")})
-    ctx = _ctx(TickerResolver(_Edgar()))
-    ctx.clients.figi = _NoFigi()
-    _, _, review = pipeline._resolve_securities(ctx, lstr, {e.key: e for e in lstr}, ftd, answers)
-    assert [(i.ticker, i.cik, i.reason) for i in review if i.flag == "issuer_cusip_disagrees"] == [
+def test_a_cusip_disagreement_is_flagged_for_review_with_both_issuers():
+    """The identity stage keeps each first-pass answer and flags the issuer its CUSIP evidence gives, with both. The
+    shared CUSIP runs both ways: LSTR@2012's evidence is LSTR@2008's answer, LandStar Inc."""
+    first = CommittedLookup({"LSTR@2008-01-16": (1068689, "name_search"),
+                             "LSTR@2012-06-29": (853816, "company_tickers")})
+    identity = _identify({"LSTR"}, first)
+    assert (identity.issuers["LSTR@2008-01-16"].cik, identity.issuers["LSTR@2012-06-29"].cik) == (1068689, 853816)
+    assert [(i.ticker, i.cik, i.reason) for i in identity.review if i.flag == "issuer_cusip_disagrees"] == [
         ("LSTR", 1068689, "LSTR@2008-01-16 LANDSTAR SYSTEMS INC: the resolver gave issuer 1068689 "
                           "(name_search); its CUSIP evidence gives 853816 by shared_cusip: shares CUSIP 515098101 "
-                          "with LSTR@2012-06-29")]
+                          "with LSTR@2012-06-29"),
+        ("LSTR", 853816, "LSTR@2012-06-29 LANDSTAR SYSTEM INC: the resolver gave issuer 853816 "
+                         "(company_tickers); its CUSIP evidence gives 1068689 by shared_cusip: shares CUSIP 515098101 "
+                         "with LSTR@2008-01-16")]
 
 
-def test_an_answer_that_turns_ambiguous_once_the_links_settle_is_dropped(eras, ftd, no_frequency, monkeypatch):
+def test_an_answer_that_turns_ambiguous_once_the_links_settle_is_dropped(eras, ftd, no_frequency):
     """KORS@2012 links to an era of Capri Holdings (1530721), KORS@2014 to an era
     of a second issuer passing the guard (999999, Capri's EDGAR record), and the
     two KORS eras share a CUSIP. Each is answered in the same sweep, before the
     other's answer is known; at the fixed point each links to both issuers."""
-    from delist_detection import ticker_resolver
     links = [Handoff("KORS@2012-06-29", "CPRI@2018-12-31", "shared_cusip", "X1"),
              Handoff("KORS@2014-12-31", "NU@2023-06-30", "shared_cusip", "X2"),
              Handoff("KORS@2012-06-29", "KORS@2014-12-31", "shared_cusip", "G60754101"),
              Handoff("KORS@2014-12-31", "KORS@2012-06-29", "shared_cusip", "G60754101")]
-    monkeypatch.setattr(ticker_resolver, "cusip_handoffs", lambda eras, ftd: links)
     issuers = {**DATA["issuers"], "999999": DATA["issuers"]["1530721"]}
     got = _infer(eras, ftd, list(eras), {"CPRI@2018-12-31": 1530721, "NU@2023-06-30": 999999},
-                 edgar=_Edgar(issuers))
+                 edgar=_Edgar(issuers), handoffs=links)
     assert (got.get("KORS@2012-06-29"), got.get("KORS@2014-12-31")) == (None, None)
 
 

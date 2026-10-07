@@ -12,7 +12,7 @@ into one security. Eras are built in two stages:
    ("GOOGLE INC CLASS A" -> "GOOGLE INC CLASS C"; a name with no class counts as
    unknown and never splits). A gap alone does not split: index snapshots can
    be years apart (2009-06-08 -> 2012-06-29) while the security kept trading.
-2. `security_master.refine_eras`, once SEC fails-to-deliver rows are loaded,
+2. `identity.refine_eras`, once SEC fails-to-deliver rows are loaded,
    splits each era further on a CUSIP switch under the ticker and on a gap of
    more than `ERA_GAP_DAYS` that no observation or FTD row of the era's CUSIP
    bridges (DELL: Dell Inc. to 2013, Dell Technologies from 2018).
@@ -127,7 +127,7 @@ class TickerEra:
     first: str
     last: str
     observations: list[Observation] = field(default_factory=list)
-    # Set by security_master.refine_eras: the CUSIPs of the FTD rows (runs of
+    # Set by identity.refine_eras: the CUSIPs of the FTD rows (runs of
     # at least 3) under this ticker inside this era's part of the timeline.
     # Empty when not refined or when no such rows exist.
     ftd_cusips: tuple[str, ...] = ()

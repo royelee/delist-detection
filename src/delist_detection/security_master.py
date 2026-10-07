@@ -3,31 +3,31 @@ merged into securities (their dated ticker and CUSIP ranges are `history.py`'s).
 
 A security is one share class traded in the US (CONTEXT.md). Eras of different
 tickers that resolve to the same FIGI (FB, later META) are one security, and so
-are two eras of one ticker that `refine_eras` split apart but that resolve to
+are two eras of one ticker that `identity.refine_eras` split apart but that resolve to
 the same FIGI (a reverse split's new CUSIP, a gap no FTD row bridged).
+
+`identity.identify` is the one stage that resolves eras here: it builds the eras, their issuers and their CUSIPs,
+and asks `FigiResolver` (with `resolve_with_identity_guard`, the CUSIP links `cusip_handoffs` and the guards
+`guarded_eras` and `foreign_ticker_eras`), `build_securities` and the review rows below.
 """
 from __future__ import annotations
 
 import re
 from bisect import bisect_left, bisect_right
-from collections import Counter, defaultdict
+from collections import defaultdict
 from collections.abc import Callable, Collection, Mapping, Sequence
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from datetime import date, timedelta
 
 from .figi_resolution import (
     FigiCandidate, accept, bloomberg_ticker, class_letter, filter_query, is_placeholder, placeholder_id,
     security_kind, share_class_from_name, us_candidates,
 )
-from .ftd import FTD_START, FtdIndex, FtdRow, is_deleted_symbol, settled_last
+from .ftd import FTD_START, FtdIndex, is_deleted_symbol, settled_last
 from .trading_calendar import add_trading_days
-from .names import description_matches, names_agree
-from .observations import (
-    ERA_GAP_DAYS, Observation, TickerEra, eras_by_key, number_eras, observation_conflicts,
-)
+from .names import description_matches
+from .observations import TickerEra, eras_by_key, observation_conflicts
 from .review_triage import ReviewItem
-
-ERA_MIN_RUN = 3          # an FTD CUSIP run shorter than this is noise, not a CUSIP switch
 
 
 @dataclass
@@ -89,200 +89,6 @@ def cik_of(issuers: Mapping[str, Issuer], era_key: str) -> int | None:
     """The issuer CIK of the era `era_key`, None when its issuer is unknown."""
     issuer = issuers.get(era_key)
     return issuer.cik if issuer is not None else None
-
-
-def _cusip_runs(rows: Sequence[FtdRow]) -> list[tuple[str, list[FtdRow]]]:
-    """Date-sorted `rows` grouped into consecutive runs of one CUSIP."""
-    runs: list[tuple[str, list[FtdRow]]] = []
-    for r in rows:
-        if runs and runs[-1][0] == r.cusip:
-            runs[-1][1].append(r)
-        else:
-            runs.append((r.cusip, [r]))
-    return runs
-
-
-def _cut(obs: Sequence[Observation], rows: Sequence[FtdRow],
-         cuts: Sequence[str]) -> list[tuple[list[Observation], list[FtdRow]]]:
-    """Observations and rows split at each cut date: a cut date starts the next part."""
-    bounds = [None, *sorted(set(cuts)), None]
-    return [([o for o in obs if (lo is None or o.as_of >= lo) and (hi is None or o.as_of < hi)],
-             [r for r in rows if (lo is None or r.date >= lo) and (hi is None or r.date < hi)])
-            for lo, hi in zip(bounds, bounds[1:])]
-
-
-def _kept_cusips(rows: Sequence[FtdRow]) -> tuple[str, ...]:
-    """CUSIPs with at least one run of `ERA_MIN_RUN` rows, most rows first."""
-    kept = {c for c, run in _cusip_runs(rows) if len(run) >= ERA_MIN_RUN}
-    return tuple(c for c, _ in Counter(r.cusip for r in rows).most_common() if c in kept)
-
-
-def _gap_cuts(obs: Sequence[Observation], rows: Sequence[FtdRow]) -> list[str]:
-    kept = set(_kept_cusips(rows))
-    dates = sorted({o.as_of for o in obs} | {r.date for r in rows if r.cusip in kept})
-    return [b for a, b in zip(dates, dates[1:])
-            if (date.fromisoformat(b) - date.fromisoformat(a)).days > ERA_GAP_DAYS]
-
-
-def _switch_cuts(rows: Sequence[FtdRow]) -> list[str]:
-    kept = [(c, run) for c, run in _cusip_runs(rows) if len(run) >= ERA_MIN_RUN]
-    return [run[0].date for (a, _), (b, run) in zip(kept, kept[1:]) if a != b]
-
-
-def _described(cusip: str, rows: Sequence[FtdRow], names: Sequence[str]) -> bool:
-    """True when some FTD row of `cusip` has a description agreeing with a name."""
-    return any(names_agree(r.description, n) for r in rows if r.cusip == cusip for n in names)
-
-
-def _split_era(era: TickerEra, rows: list[FtdRow], *, contested: bool) -> list[TickerEra]:
-    out: list[TickerEra] = []
-    for g_obs, g_rows in _cut(era.observations, rows, _gap_cuts(era.observations, rows)):
-        for obs, part_rows in _cut(g_obs, g_rows, _switch_cuts(g_rows)):
-            if not obs:
-                continue                  # an FTD-only side (another holder of the ticker, a tail) is no era
-            kept = _kept_cusips(part_rows)
-            names = [o.name for o in obs if o.name]
-            if contested and names:
-                # Another era of this ticker has observations on the same dates
-                # (a backfilled name): the ticker's rows are only this era's when
-                # their description agrees with its names.
-                kept = tuple(c for c in kept if _described(c, part_rows, names))
-            out.append(replace(era, first=obs[0].as_of, last=obs[-1].as_of, observations=list(obs),
-                               ftd_cusips=kept))
-    return out
-
-
-def refine_eras(eras: Sequence[TickerEra], ftd: FtdIndex) -> list[TickerEra]:
-    """Stage 2 of era building (stage 1 is `observations.split_eras`): split each
-    observation era further on SEC fails-to-deliver evidence under its ticker.
-
-    Each observation era sees the ticker's FTD rows after the previous era's
-    last observation and before the next era's first observation (so rows
-    between two eras — one security's tail, the next one's head — are seen by
-    both, and each drops the side that is not its own). Within that window:
-
-    - Gap: the era's observation dates merged with the dates of its FTD rows of
-      the CUSIPs that have a run of at least `ERA_MIN_RUN` rows split where two
-      consecutive dates are more than `ERA_GAP_DAYS` apart. FTD rows bridge a
-      snapshot gap for a security that kept trading (2009-06-08 -> 2012-06-29);
-      nothing bridges DELL's 2013 -> 2018 gap.
-    - CUSIP switch: within each gap part, the FTD rows grouped into runs of one
-      CUSIP (runs shorter than `ERA_MIN_RUN` ignored as noise); where two kept
-      runs have different CUSIPs, split at the first date of the later run
-      (FOXA 90130A101 -> 35137L105, GOOG 38259P508 -> 38259P706).
-
-    The gap is applied first so that an observation of the new security dated
-    before its CUSIP's first FTD row (DELL Technologies seen 2018-12-31, first
-    fails row 2019-01-02) stays with the new security instead of being cut off
-    alone. Observations before a cut date stay in the earlier era; a part with
-    no observations is not an era, and its rows are dropped (a neighbouring era
-    of the same CUSIP already has that CUSIP). Each resulting era records the
-    CUSIPs of its own kept runs in `ftd_cusips`.
-
-    Two eras of one ticker with observations on the same date (a snapshot
-    source backfilled today's ticker: CB is both "ACE LTD" and "CHUBB CORP" in
-    2012-2014) both see the same rows; for them a CUSIP counts only when its
-    FTD description agrees with the era's names, so the backfilled name does
-    not take the other security's CUSIP and resolves on its own.
-
-    Every era is kept, under a unique key (`observations.number_eras`).
-    Over-splitting is cheap: `build_securities` merges eras that resolve to the
-    same FIGI.
-    """
-    spans: dict[str, list[tuple[str, str]]] = defaultdict(list)
-    seen_on: Counter[tuple[str, str]] = Counter()
-    for e in eras:
-        spans[e.ticker].append((e.first, e.last))
-        seen_on.update({(e.ticker, o.as_of) for o in e.observations})
-    out: list[TickerEra] = []
-    for e in eras:
-        prev = max((last for first, last in spans[e.ticker] if first < e.first), default=None)
-        nxt = min((first for first, _ in spans[e.ticker] if first > e.first), default=None)
-        lo = (date.fromisoformat(prev) + timedelta(days=1)).isoformat() if prev else None
-        hi = (date.fromisoformat(nxt) - timedelta(days=1)).isoformat() if nxt else None
-        contested = any(seen_on[(e.ticker, o.as_of)] > 1 for o in e.observations)
-        out += _split_era(e, ftd.by_symbol(e.ticker, lo, hi), contested=contested)
-    return number_eras(out)
-
-
-def era_cusips(era: TickerEra, ftd: FtdIndex, issuer_names: Sequence[str] = (),
-               taken_by_known_issuers: Collection[str] = ()) -> list[str]:
-    """Candidate CUSIPs for an era: the observed ones, then the FTD ones.
-
-    A refined era takes those of its own FTD CUSIPs whose fails rows describe its
-    issuer (spec D21): some row of the CUSIP has a description that
-    `names.description_matches` the era's observed names or `issuer_names` (the
-    issuer's EDGAR names, current and former, which cover a description that
-    lags a rename or a snapshot that backfilled a later name). A CUSIP whose rows
-    all name another issuer is not taken, however it came to be the era's: a
-    snapshot that kept listing Clear Channel under CCU after it went private in
-    2008 sees only Cervecerias Unidas' rows there. With none left the era has no
-    FTD CUSIP (and resolves by ticker or name, or to its placeholder).
-    `taken_by_known_issuers`: CUSIPs that eras with a known issuer took, taken
-    without that check by an era whose issuer is unknown (see `candidate_cusips`).
-
-    An era with no FTD CUSIPs of its own takes the FTD rows under the ticker
-    around it whose description agrees with an era name, most rows first."""
-    if era.ftd_cusips:
-        names = [*era.names, *issuer_names]
-        own = [c for c in era.ftd_cusips if c in taken_by_known_issuers
-               or any(description_matches(d, names) for d in ftd.descriptions(c))]
-        return list(era.cusips) + [c for c in own if c not in era.cusips]
-    lo = (date.fromisoformat(era.first) - timedelta(days=10)).isoformat()
-    hi = (date.fromisoformat(era.last) + timedelta(days=10)).isoformat()
-    counts: Counter[str] = Counter()
-    for r in ftd.by_symbol(era.ticker, lo, hi):
-        if era.names and not any(names_agree(r.description, n) for n in era.names):
-            continue
-        counts[r.cusip] += 1
-    return list(era.cusips) + [c for c, _ in counts.most_common() if c not in era.cusips]
-
-
-def candidate_cusips(eras: Sequence[TickerEra], ftd: FtdIndex,
-                     issuers: Mapping[str, Issuer]) -> dict[str, list[str]]:
-    """`era_cusips` for every era (by key), each checked against its issuer's
-    EDGAR names (`issuers`, by era key: the eras whose issuer is known).
-
-    An era whose issuer is unknown (no CIK) has only its observed names, which a
-    stale snapshot can leave behind a rename (CME Group is still "CHICAGO
-    MERCANTILE HLDGS" in the 2008 snapshots, and no CIK resolves for that name
-    then). It also takes a CUSIP that an era with a known issuer took as that
-    issuer's: the fails rows tie the CUSIP to that issuer, the ticker and the
-    dates tie it to this era. An era with a known issuer is held to its own
-    issuer's names, so a stale era (Triad Hospitals on TRI in 2008) never takes
-    the CUSIP of the issuer that later holds its ticker (Thomson Reuters)."""
-    out = {e.key: era_cusips(e, ftd, issuers[e.key].names) for e in eras if e.key in issuers}
-    taken_by_known_issuers = {c for taken in out.values() for c in taken}
-    for e in eras:
-        if e.key not in issuers:
-            out[e.key] = era_cusips(e, ftd, (), taken_by_known_issuers)
-    return out
-
-
-def _own_rows(era: TickerEra, rows: Sequence[FtdRow]) -> list[FtdRow]:
-    """Those of `rows` (under the era's ticker) that are the era's own: of its
-    own FTD CUSIPs when it has them (a name check is too weak: "FOX CORP" agrees
-    with "TWENTY FIRST CENTURY FOX"), else with a description that agrees with
-    an era name (every row, for an era with neither)."""
-    if era.ftd_cusips:
-        return [r for r in rows if r.cusip in era.ftd_cusips]
-    if era.names:
-        return [r for r in rows if any(names_agree(r.description, n) for n in era.names)]
-    return list(rows)
-
-
-def era_last_seen(era: TickerEra, ftd: FtdIndex, horizon_days: int = 400) -> str:
-    """The era's last sighting: its last observation, or a later FTD row of its
-    own (`_own_rows`) under its ticker within `horizon_days`."""
-    lo = (date.fromisoformat(era.last) + timedelta(days=1)).isoformat()
-    hi = (date.fromisoformat(era.last) + timedelta(days=horizon_days)).isoformat()
-    return max([era.last, *(r.date for r in _own_rows(era, ftd.by_symbol(era.ticker, lo, hi)))])
-
-
-def era_rows(era: TickerEra, ftd: FtdIndex, last_seen: str) -> list[FtdRow]:
-    """The era's own FTD rows (`era_last_seen`'s choice, `_own_rows`) from its
-    first observation to its last sighting `last_seen`, by date."""
-    return _own_rows(era, ftd.by_symbol(era.ticker, era.first, last_seen))
 
 
 SWITCH_DAYS = 5               # trading days between an old CUSIP's last row and a new one's first
@@ -533,9 +339,10 @@ class FigiResolver:
     def __init__(self, figi, log: Callable[[str], None] | None = None,
                  cusip_span: Callable[[str], tuple[str, str] | None] | None = None,
                  foreign: Collection[str] = ()) -> None:
-        """`cusip_span`: a CUSIP's first and last trading fails row (ISO days; None when it has none), for
-        `resolve_many`'s backfill of the `foreign` eras (`foreign_ticker_eras`): the dates a confirmed era's line
-        traded over."""
+        """`foreign`: the eras whose ticker's fails rows are all another security's (`foreign_ticker_eras`). Each is
+        guarded as an `unconfirmed` era is (`resolve_many`), and its backfill may also take the line whose
+        confirming CUSIP traded over its dates (`cusip_span`: a CUSIP's first and last trading fails row, ISO days;
+        None when it has none)."""
         self.figi = figi
         self.log = log or (lambda msg: None)
         self.cusip_span = cusip_span
@@ -574,6 +381,7 @@ class FigiResolver:
         company (Dow Jones in 2008) finds its own line there, and a later
         holder's pick is caught by `crossing_weak_eras`."""
         eras_by_key(eras)                                # every era is keyed by era.key below: refuse duplicates
+        unconfirmed = frozenset(unconfirmed) | self.foreign     # a foreign era is guarded as an unconfirmed one
         out: dict[str, EraResolution] = {}
         jobs: list[dict] = []
         plan: dict[str, tuple[list[str], list[int], int]] = {}
@@ -934,7 +742,7 @@ def foreign_ticker_eras(eras: Sequence[TickerEra], ftd: FtdIndex, issuers: Mappi
     against the era's observed names and its issuer's EDGAR names): another security's rows (sub-plan 5h, UAG in
     2008-2009: UBS's E-TRACS notes under UAG while United Auto Group traded as PAG). Like a `guarded_eras` era,
     such an era is placed on the line its issuer and class traded on then, when there is exactly one
-    (`FigiResolver.resolve_many`'s `unconfirmed`); else it keeps the ticker and name tiers."""
+    (`FigiResolver`'s `foreign`, guarded as its `unconfirmed` eras are); else it keeps the ticker and name tiers."""
     out: set[str] = set()
     for e in eras:
         if e.key not in issuers or date.fromisoformat(e.last) < FTD_START:
