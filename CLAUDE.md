@@ -91,10 +91,11 @@ alongside the original ones. `pipeline.py`'s `run()` is the orchestration
 that turns a list of observations into the nine output tables: a short
 `_run` calls one function per numbered stage (`identity.identify` for stages 1 to 4: the eras, each era's issuer
 and FIGI, the securities and their CUSIPs, one `identity.Identity` whose facts the later stages read;
-`_follow_lines` (stage 4b, over the `Identity`: each security's line followed past its
-observations across a CUSIP or ticker change, `line_follow.py`; the same security takes the new CUSIP and ticker,
+`line_follow.follow_lines` (stage 4b, one call over the `Identity`: each security's line followed past its
+observations across a CUSIP or ticker change; the same security takes the new CUSIP and ticker,
 a placeholder folds into the FIGI line its new CUSIP names, a FIGI line with another composite records a line
-successor for stage 9; metered as "line follow"; sub-plan 5h's `_today_holder_fold`: a ticker-tier line whose
+successor for stage 9; its `Lines` answer carries the review items of stages 1 to 4b; metered as "line follow"; sub-plan
+5h's today-holder fold: a ticker-tier line whose
 candidate holds the ticker today folds into its next CUSIP's composite when that composite left the ticker, CRC and
 BTU, whose post-bankruptcy lines took the ticker), `_other_issuers` (stage 4c: the one CIK other than a
 security's own that was its issuer in force on every sighting, `issuer_in_force.issuer_changes`; stage 5 reads its
@@ -384,7 +385,7 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
 - `successors.py` — the successor after a FIGI change: a security of the run
   that starts right after the last trade (`successor_in_run`, `SecurityStart`),
   else the successor issuer's 8-K12B found by full-text search
-  (`successor_search_args`, `successor_query`, `successor_from_8k12b`,
+  (`successor_search_args`, `filing_search.successor_query`, `successor_from_8k12b`,
   `successor_search_name`). Sub-plan 5c: `successor_by_terms` (the security an R1 statement names: the same
   issuer's class the target names, or a new issuer's line, at most `NEW_ISSUER_DAYS` (1095) old, first sighted in
   the window and named by the target); a successor is looked for around the ending's anchor (`Delisting.anchor`,
@@ -404,7 +405,22 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   `payouts=`; the ambiguous Form 25 is the finder's item's typed `filing`),
   `drop_resolved_shared`. Run by
   `pipeline._handoffs` after the successor search, before the history rows.
-- `line_follow.py` — sub-plan 5a, pure: a security's line across a CUSIP or ticker change. `candidate_steps` (the
+- `filing_search.py` — the EDGAR full-text searches several stages send, built in one place so a warm pass and the
+  sequential pass read one cache entry: `successor_query(name, day)` (a successor registration, 8-K12B/8-K12G3,
+  naming the issuer in [day − 30, day + 60] d), which stage 4b's other-registrant check, stage 9's 8-K12B successor
+  and the handoffs' continuation filing send. It imports nothing of the package.
+- `line_follow.py` — sub-plan 5a, stage 4b as one module (architecture step 7a): a security's line across a CUSIP or
+  ticker change. Its interface is `follow_lines(identity, clients, *, as_of, log, meter) -> Lines`: the caller passes
+  the identity stage's answer and the run's clients (`LineSources`: the issuer record, EDGAR's full-text search,
+  OpenFIGI, the fails files) and gets the securities, era resolutions and CUSIPs after the follow, the folds
+  (`renames`), the line successors (`successors`, sec_id -> `LineSuccessor`) and the review items of stages 1 to 4b
+  (a folded placeholder's moved to its FIGI line, its `no_figi` dropped). Behind it: the rounds, the holders, the
+  8-K text sources (`_Reads.text_sources`, the filter before the `MAX_TEXTS` cap), the fold (`_fold`: a fold of a fold
+  points at the last FIGI) and sub-plan 5h's `_today_holder_fold`, and every EDGAR read in one place (`_Reads`: the
+  issuers' submissions, filing lists and 8-K texts through the run's issuer record, listed-today from the issuer's
+  profile, `listing_status.lists_on_major_exchange`; the other-registrant search and its filer's listing through
+  `other_registrant`, a failure there `read_failed`). Its rules stay importable for their own tests and only
+  `follow_lines` calls them in a run: `candidate_steps` (the
   next step in the fails rows within ±`LINE_DAYS` (10) trading days of the old CUSIP's settled last row: a new
   CUSIP under the line's ticker, its `…ZZZZ`/`…D` spellings, a ticker of the issuer EDGAR lists or its 8-K text
   names (`text_symbols`, which also reads "symbol ... changed from X to Y" as Y, curly quotes included: sub-plan 5c, RRI to GEN; `text_cusips`), or the same CUSIP under a new non-OTC ticker; never a CUSIP another
@@ -417,11 +433,16 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   registrant that merged out or that another CIK's 8-K12B/12G3 replaces (`other_registrant`), no filing stating
   the change, or a failed `other_registrant` read (`read_failed`); the registrant carries on by a periodic report in `PERIODIC_FORMS`, which includes the small-business
   forms 10-K405, 10-KSB, 10-KSB40 and 10-QSB); `decide` (R2: attach, fold a placeholder, a line successor, or
-  refused: `unsettled`, `type` for an OpenFIGI preferred/warrant/right/unit, `other_issuer`, `class`). Run by `pipeline._follow_lines` (stage 4b), up to `MAX_ROUNDS` steps a line; a CUSIP, or a successor composite, one
+  refused: `unsettled`, `type` for an OpenFIGI preferred/warrant/right/unit, `other_issuer`, `class`). Up to
+  `MAX_ROUNDS` steps a line; a CUSIP, or a successor composite, one
   security took is held for the rest of the round (a second is refused `taken`). A FIGI line with a line successor
   is not listed today (stage 5's `retired`). A failed EDGAR read is never cached, and any degraded read of a CIK gives each
-  of that CIK's steps a `resolution_degraded` row, and so does a security with no step when a read of its CIK failed. Review flags `line_followed`, `line_follow_refused:<why>`
-  (info). Its real cases replay offline from `tests/fixtures/lines/` (`scripts/build_line_fixtures.py`).
+  of that CIK's steps a `resolution_degraded` row, as does any other SEC read of the step that counted itself
+  degraded, and so does a security with no step when a read of its CIK failed. Review flags `line_followed`,
+  `line_follow_refused:<why>` (info). Stage 9's own-registration link reads `is_line_symbol`, `text_cusips` and
+  `composites` too (the same R2 reading of a same-CIK 8-K12B's new CUSIP). Its real cases replay offline from
+  `tests/fixtures/lines/` (`scripts/build_line_fixtures.py`), through the rules and through `follow_lines`; the
+  stage's own rules are tested at `follow_lines` with doubles (tests/test_line_stage.py).
 - `merger_value.py` — stage 8, one module (architecture step 1): `value_mergers(delistings, index, *, clients,
   closes, caller_terms, answers, tol, ftd_lo, workers, log)` gives `MergerValues`, one `MergerValue` per merger
   ending: the regex read and the LLM terms (`read`/`raw`, `llm`), the gate's verdict (`payout`, `source`,

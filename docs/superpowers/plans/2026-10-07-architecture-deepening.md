@@ -32,7 +32,7 @@ A deepening moves behaviour behind a smaller interface. It changes nothing the l
 | 4 | The last trade date as one module (review 5) | CNB, IMB, SPNV | done |
 | 5 | history owns where a security's history ends (review 6) | | done |
 | 6 | A security's identity behind one interface, `identity.py` (review 7) | | done |
-| 7 | The line follow owns its rounds; one R1 reading per ending (review 8) | | |
+| 7 | The line follow owns its rounds; one R1 reading per ending (review 8) | | 7a done |
 | 8 | One run snapshot; one reading of a delistings row (review 9) | | |
 | 9 | The truth set and the loop round as two modules (review 10) | | |
 | 10 | dlret decides the value rule once (small) | plan_stock's confidence | |
@@ -673,3 +673,114 @@ Decisions made in the step:
   - Suite: 3171 passed, 45 xfailed (step 5: 3161).
 - **The gate:** the replay is SAME against `accepted4_out` and refuses no request; its log equals the reference's line for
   line, apart from the SEC meters (the name checks, the second pass's 76 answers, every FIGI handoff and withdrawal).
+
+### Step 7a: the line follow owns its rounds
+
+- **The interface is one entry, `line_follow.follow_lines(identity, clients, *, as_of, log, meter) -> Lines`.** It
+  takes the whole `Identity`, as `identify` takes the observations, and the run's clients through `LineSources`
+  (the issuer record, the EDGAR client for its full-text search, OpenFIGI, the fails files). `Lines` holds the
+  securities, resolutions and CUSIPs after the follow, `renames`, `successors` and `review`. Stage 4b in `_run` is
+  one call. `Identity` is imported for annotations only, so line_follow loads no identity or resolver module.
+  - Alternative: pass the seven facts the stage reads (securities, resolutions, CUSIPs, fails index, its first day,
+    review items, the rebuild after a fold) one by one.
+  - Cost if wrong: a caller with no `Identity` must build one. The stage's tests already did since step 6.
+- **`Lines.review` holds the review items of stages 1 to 4b**, the identity's first, a folded placeholder's moved to
+  its FIGI line and its `no_figi` dropped. That rule is a consequence of the fold, so it moved from `_run` into the
+  stage. `_run` reads `list(lines.review)`.
+  - Alternative: the stage's own items only, merged in `_run` as before.
+  - Cost if wrong: `review` is more than the stage's own items. The field's docstring says so, and the order is the
+    one `_run` built.
+- **`Lines.cusips`, not `sec_cusips`**, as `Identity.cusips` names the same fact.
+- **The rule functions stay public; only `follow_lines` calls them in a run.** They are `candidate_steps`,
+  `corroborate`, `decide`, `line_end`, `other_registrant`, `name_on`, `text_symbols` and `eightks_near`. Their tests
+  are 453 lines of synthetic rows (test_line_follow.py), the real-case harness and the fixture builder. The
+  precedent is step 6's `EraIssuers` and step 4's `ticker_taken`. The stage's own rules are private: `_Reads`,
+  `_fold`, `_today_holder_fold`, `_cusip_holders`.
+  - pipeline imports 5 names from line_follow (it imported 23): `follow_lines`, `LineSuccessor` (stage 9's links)
+    and three readers.
+  - Alternative: underscore the rules and test them only through the entry.
+  - Cost if wrong: a second caller could call a rule outside the stage. None does.
+- **Stage 9 keeps reading `is_line_symbol`, `text_cusips` and `composites` from line_follow.**
+  `_own_registration_link` applies the same R2 reading to the new CUSIP of a same-CIK 8-K12B. Moving the readers
+  would split the line follow's reading of a new CUSIP from its rule.
+  - Alternative: `composites` to figi_resolution, `is_line_symbol` to ftd, `text_cusips` to evidence.
+  - Cost if wrong: stage 9 imports stage 4b's module for three readers. Step 13 (one leaf module for ticker
+    spelling) can take `is_line_symbol`.
+- **Every EDGAR read of the stage goes through `_Reads`, one private class.**
+  - The issuers' submissions, filing lists and 8-K texts go through the run's issuer record, as step 2 left them.
+  - The stage-wide watch is the record's `ReadWatch`. The per-step watch is now one too (`issuers.watch()`), not a
+    `DegradedWatch`. It trips on every SEC read of the thread that a `DegradedWatch` saw, and on the step's issuer
+    reads, which `degraded(cik)` already reported. So no row changes.
+  - **Listed today reads the issuer's profile** (`listing_status.lists_on_major_exchange`, split out of
+    `edgar_lists`), not `edgar_lists(edgar, cik)` on the client. It is the same copy: a remembered profile is the
+    client's cached copy's (step 2), and corroborate had just read it. It was the stage's one EDGAR read with no
+    failure policy: with no cached copy and the network down, it stopped the run with a `ConnectionError`. That
+    needs a step within `RECENT_DAYS` of the run date with no periodic report and no own successor registration.
+    Now the read is unknown, the CIK is degraded, and the step is refused `merged_out` with a `resolution_degraded`
+    row.
+  - **The other-registrant search and its filer's listing stay on the EDGAR client**, inside `other_registrant`. A
+    failure there is `READ_FAILED`: the step is refused `read_failed` and the security's CIK is degraded. Routing
+    the filer's listing through the record would log the filer's CIK, not the security's. In an outage it would
+    then refuse the step `other_registrant`, not `read_failed`.
+  - Alternative: keep `edgar_lists` on the client for listed today.
+  - Cost if wrong: none in the replay. In an outage, a run that stopped now completes with the row flagged.
+- **`successor_query` moved to a new module, `filing_search.py`**, which imports nothing of the package.
+  `successors`, `handoffs`, `line_follow`, pipeline, the prefetch test and the fixture builder import it there.
+  The successors string `SUCCESSOR_FORMS` moved with it. Its window constants are named `SEARCH_BEFORE_DAYS` and
+  `SEARCH_AFTER_DAYS`, since successors already names another window `SUCCESSOR_BEFORE_DAYS`.
+  - The other spellings of the successor forms are left as they are, for step 13. They are line_follow's and
+    end_of_era's frozensets, and the tuples of handoffs and continuation_evidence, which those modules match with
+    `startswith`.
+  - Alternative: edgar.py's search arguments.
+  - Cost if wrong: one 20-line module. edgar.py is the client; what a stage asks of it is not its concern.
+- **degraded.py imports `Delisting` for annotations only.** line_follow builds its `resolution_degraded` items with
+  `degraded_item`, and degraded.py imported delistings, which imports the classifier. line_follow's import closure is
+  now 25 modules, none of them a stage module: no successors, delistings, classifier, history or rewrites. Before,
+  it loaded successors and the 37 modules behind it.
+  - Alternative: build the item in line_follow by hand.
+  - Cost if wrong: none. degraded's functions read a delisting's attributes only.
+- **The tally line and the meter move with the stage**, as `identify` logs and meters its own. The run log is the
+  reference's, line for line. The text sources' 30 days became a named constant, `TEXT_SOURCE_DAYS`.
+- **The real-case harness is kept on the rules and pointed at the entry too.**
+  - The rule-level cases stay. They express what the entry cannot: a case whose OpenFIGI answer the fixture lacks
+    stops at corroborate, and the two-step cases and SBGI's search hit are handed explicit inputs.
+  - Added: every case runs through `follow_lines` over an identity built from the fixture. The holders of the
+    cases' next CUSIPs are in it but not followed, since their issuer is unknown there. The test asserts each case's
+    first answer: the same step, refusal and decision, with DHC's unanswered CUSIP refused `unsettled`. The three
+    no-step cases take no step.
+  - Alternative: only one of the two.
+  - Cost if wrong: the fixture is replayed twice, about a second.
+- **Tests.**
+  - tests/test_line_stage.py was rewritten at the entry. Every line's steps come from fails rows built there, its
+    filings from an EDGAR double and its composites from an OpenFIGI double. No `pipeline.candidate_steps`,
+    `pipeline.line_end` or `pipeline.corroborate` monkeypatching is left.
+  - Kept, with every assertion: the 13 tests, including those of 8a3ffd9 and e80be70. They cover the rounds, any
+    input order, the CUSIP and the composite held per round, the other-issuer refusal, the OpenFIGI and EDGAR
+    refusals, the stale and failed reads, the no-step degraded rows, the text sources' filter before the cap, and the
+    fold chain.
+  - The fold chain is now reached through the stage: a placeholder folds into a ticker-tier FIGI line in round 1,
+    and that line today-holder-folds in round 2. Both renames point at the last FIGI. Its CUSIP assertion is now
+    the whole line's (the last FIGI holds every CUSIP). The hand-built state's leftover entry for the first
+    placeholder cannot arise through the stage.
+  - test_identity_rules' two private `_today_holder_fold` tests (4 assertions) became the CRC fold and its three
+    guards at the entry.
+  - Added: a folded placeholder's items moving, a failed other-registrant search (`read_failed`, degraded), and a
+    step whose search answered from a stale copy. The last one is the only test that fails when the per-step watch
+    is removed; before it, a mutation run found that gap.
+  - Mutation runs (each rule switched off in a copy of the source) fail at least one stage test each: the two
+    holders, the cap order, the today-holder fold, the rename chain, the no-step degraded rows, the review move,
+    the per-step watch, the search-failure set, `MAX_ROUNDS`, and the rebuild after a fold.
+  - Deleted: the 13 monkeypatched or private-name tests of test_line_stage and the 2 of test_identity_rules.
+  - Suite: 3193 passed, 45 xfailed (step 6: 3171). The new tests are 20 in test_line_stage (7 more than before)
+    and 17 in the harness, less the 2 removed.
+- **The gate:** the replay is SAME against `accepted4_out` and refuses no request. Its log equals step 6's line for
+  line, the line follow's tally and meter included.
+- **pipeline.py: 1843 lines to 1617.** line_follow.py: 424 to 713.
+- **Left open.**
+  - A fold of a fold in one round, in the other order, is not collapsed. A FIGI line that today-holder-folds into
+    X earlier in a round than a placeholder that folds into that FIGI line leaves `{line: X, placeholder: line}`.
+    The rename loop only follows renames made before the fold. It needs a placeholder whose new CUSIP names a
+    ticker-tier line of its issuer that itself steps in the same round, and no case of the run does. It was moved
+    as it was; no defect is declared.
+  - `follow_lines` probes `getattr(edgar, "full_text_search", None)` for the search, as `_follow_lines` did. That
+    is step 11's capability seam.
