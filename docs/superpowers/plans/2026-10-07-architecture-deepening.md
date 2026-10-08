@@ -33,7 +33,7 @@ A deepening moves behaviour behind a smaller interface. It changes nothing the l
 | 5 | history owns where a security's history ends (review 6) | | done |
 | 6 | A security's identity behind one interface, `identity.py` (review 7) | | done |
 | 7 | The line follow owns its rounds; one R1 reading per ending (review 8) | | done |
-| 8 | One run snapshot; one reading of a delistings row (review 9) | | |
+| 8 | One run snapshot; one reading of a delistings row (review 9) | | 8a done |
 | 9 | The truth set and the loop round as two modules (review 10) | | |
 | 10 | dlret decides the value rule once (small) | plan_stock's confidence | |
 | 11 | The Clients seam declares capabilities (small) | | |
@@ -905,3 +905,144 @@ Decisions made in the step:
 - **The gate:** the replay is SAME against `accepted4_out`; it refuses no request and reads no uncached text, and its
   log equals step 7a's line for line.
 - **pipeline.py: 1617 lines to 1613; classifier.py: 1102 to 1036.** own_shares.py is 303 lines.
+
+### Step 8a: one reading of a delistings.csv row, below both layers
+
+- **The module is `exit_kind.py`, grown into the row vocabulary, not a new file.** It imports nothing of the package.
+  It holds seven sections: the contract's view (`ending_fields`, `is_distress`), real endings (`is_real_ending`,
+  `is_continuation`, `last_endings`), flags, the evidence a reason names, `VALUE_RULES`, the last trade's facts, and
+  stage 9g's answer. Producers write through it: end_of_era, handoffs, the finder, rewrites, the payout gate,
+  last_trade, stage 9g, and the classifier's and stages 8b/9's continuation reasons. Readers read through it: the
+  verdict, scorecard, contract, payout_rule, lifecycle, audit, truth, diagnosis_truth, regression, diagnosis_loop
+  and review_triage.
+  - Alternative: a new `rows.py`, with exit_kind kept as the contract's view only.
+  - Cost if wrong: the module is named after its first section, not the whole. Step 16 (the layout) can rename it.
+    Nothing outside the package imports it by name.
+- **Each security's last ending: one definition, `last_endings`, the contract's sort.** Before the move I compared
+  the three readings (scratchpad `s8a/last_agree.py`): the contract's sort, the verdict's `max` with its `settled`
+  pick, and the lifecycle's `real[-1]` over its sorted list. They agreed on `accepted4_out`'s 998 rows and on 20,000
+  random tables with ties and went-on rows: 0 disagreements. Of two endings on one day, all three keep the later
+  row.
+  - The verdict's `earlier_ending` and `settled` now read it.
+  - The lifecycle walk follows it; its `_endings` map is gone.
+  - The diagnosis judge and the loop's context read it from exit_kind, not contract.
+- **Flags: one parse.** `flag_tokens`, `flag_name`, `flag_detail` and `flag_names` replace seven parses: lifecycle's
+  `flag_names`, verdict_rules' `tokens` and its `partition`s, review_triage's `_tokens` and `flag_name`,
+  payout_rule's `startswith`, rewrites' `_flag_name`, `last_trade.of_row`'s split and `pipeline._triage`'s. A blank,
+  None or missing cell has no tokens.
+  - payout_rule's `startswith("terms_gate_skipped")` became a name test. It answers the same on every token the
+    library writes: no catalog flag has a longer name with that prefix.
+- **The gate set is defined once, `GATE_FLAGS`.** It holds `PAYOUT_GATE_FAILED`, `LLM_GATE_FAILED`,
+  `TERMS_GATE_FAILED` and `TERMS_GATE_SKIPPED`.
+  - The payout gate builds its prefixes from them, and its `terms_gate_failed:` f-string too.
+  - `rewrites.PAYOUT_FLAGS` is `GATE_FLAGS` and the other four value flags.
+  - The verdict's ruling D reads it. `verdict.GATE_FAILED`, the `gates` argument and `verdict_rules.SKIPPED_GATE`
+    are gone. This was the 5f review's Important 3: a second copy of the set.
+  - The other flag names stay literals with their writers: "resolved_by_current_ticker_map", "no_evidence_default",
+    "handoff_continuation" and "member_name_mismatch" in the verdict.
+  - Alternative: every catalog flag as a constant here.
+  - Cost if wrong: a renamed flag the verdict reads by literal goes unread. Its own tests would show it.
+- **The evidence a reason names: each writer sits beside its reader, and the published text is byte-identical.**
+  - The continued-filings rule: `CONTINUED`, read by `rests_on_continued_filings`.
+  - A relabel: `relabel`, the suffix, read by `resolved_from_continued_filings`.
+  - A merger relabel: `change_in_control_reason` and `completed_acquisition_reason`, read by `merger_relabel`.
+    `MERGER_RELABELS` is gone, and so is the test that tied its copy of the prefixes to end_of_era's f-strings.
+  - A successor registration: `successor_registration_reason` and `continuation_reason`, read by
+    `names_successor_registration`. The regex is built from `SUCCESSOR_REGISTRATION`, `CONTINUATION` and
+    `SUCCESSOR_FORMS`.
+  - A link's note: `successor_note`, moved from rewrites.
+  - A timing link: `TIMING_CIK`, written inside `continuation_reason` or `successor_note`, read by
+    `linked_by_timing`. The handoff stage's evidence strings (`TIMING_CIK`, `TIMING_CUSIP`) are the vocabulary's
+    too, and its `timing:cusip` conflict test reads the constant.
+  - Who writes through them: end_of_era (all eight branch reasons), handoffs (the continuation reason and the note),
+    the classifier's and 8b's R1 reasons, and the line follow's (all "Continuation (...)").
+  - Readers: the finder (5h's no-CUSIP guard), stage 9g's selection, the verdict and the scorecard.
+  - `SUCCESSOR_FORMS` is defined once for end_of_era's window, handoffs' own-continuation filter
+    (`SUCCESSOR_FORMS_12G3` is gone), 9g's confirming forms and the reader. line_follow's set and filing_search's
+    query string are left alone: neither is reason text.
+  - Alternative: keep the constants in end_of_era (step 3) and only move the readers.
+  - Cost if wrong: none to output. The tests pin the exact old strings, and the replay is SAME.
+- **Stage 9g's answer is `exit_kind.ContinuationReading` (was `verdict_rules.Reading`).** It is the verdict's one
+  input beside the tables. run_manifest.json records it, and step 8b's snapshot will carry it.
+  - Alternative: keep it with its producer, continuation_evidence. Rejected: the verdict would import own_shares,
+    which loads edgar.
+  - Alternative: the verdict owns it, as payout_rule owns `MergerInputs`, and 9g returns plain values. Rejected:
+    two types for one answer.
+  - Renamed, because a bare `Reading` beside `of_row` reads as a row reading.
+- **`ratio_doubt` moved to continuation_evidence, and `successor_filing_reason` became
+  `exit_kind.names_successor_registration`.** `ratio_doubt` writes the doubt text the verdict publishes verbatim,
+  and 9g is its one caller. continuation_evidence now imports no measurement module, and neither does the pipeline
+  through it.
+- **verdict_rules is folded into verdict.**
+  - It had one real caller, the verdict.
+  - Its docstring and the verdict's described the same reasons.
+  - The gate set had to be passed across it as an argument: the split was by sub-plan (5i), not by concept.
+  - The rulings are private helpers, lettered A to F in the verdict's docstring. verdict.py went from 301 to 473
+    lines.
+  - tests/test_verdict_rules.py became tests/test_verdict_rulings.py, through `decide`. Its five tests that called
+    `unpriced_gate` now read decide's `assumed_par_after_failed_gate`, through a helper that first asserts the row is
+    assumed par with a gate flag. Given that, the reason is raised exactly when the gate is not unpriced, so no
+    assertion weakened.
+  - Alternative: keep verdict_rules as "the 5i rulings".
+  - Cost if wrong: a 470-line module. It still has one interface, `decide`.
+- **The last trade's facts moved to exit_kind; last_trade imports them.** They are `LastTrade` (with `confirmed`,
+  `worked_out` and `publishable`), the sources and flags, `end_day`, `effective_date` (from form25, as
+  `FORM25_EFFECTIVE_DAYS`), `cites_form25`, and the row reading (`of_row`, `effective_of`, `published`).
+  - New: `end_day_of(row)`, step 4's leftover. `lifecycle.end_of` and the verdict's stale-seed window
+    (`_within_days`) both read the row's end day through it.
+  - `cites_form25` is the one test of "the row cites a Form 25", for `effective_of` and the verdict's
+    `_own_form25`.
+  - The classification callers keep importing `LastTrade` and the constants from last_trade, which binds them for
+    its own use. history and the pipeline import `end_day` from exit_kind.
+  - The contract imports `published` from exit_kind, and never from the verdict.
+  - Alternative: keep `LastTrade` in last_trade and give exit_kind a row-side type of its own. Rejected: two types
+    and two `publishable`s for one fact.
+  - Cost if wrong: the row vocabulary carries `halt_feed_failed`, an in-memory field that no row has.
+- **`VALUE_RULES` moved to exit_kind.** The diagnosis judge and the scorecard no longer import payout_rule.
+- **The contract loads no client, so the regression report keeps `contract.id_change_rows`.**
+  - `DistressTerms` moved from distress.py to payout_rule, beside `MergerInputs`. Both are the payout rule's inputs
+    beyond the row: stage 9e builds one, stage 8 the other.
+  - payout_rule's `MergerTerms` import is type-only.
+  - Before, contract imported distress, which loads ftd, sec_http and edgar.
+  - Alternative: move `id_change_rows` to a new module, and leave the contract loading the clients.
+  - Cost if wrong: stage 9e builds a payout_rule type. Three tests and price_requests changed one import path.
+- **The import pin: tests/test_import_closure.py.**
+  - Each measurement module (lifecycle, verdict, scorecard, truth, truth_build, diagnosis_truth, regression,
+    diagnosis_loop, truth_update, audit), the contract modules (contract, payout_rule) and exit_kind are imported in
+    a fresh interpreter, which must load none of the eight network clients.
+  - exit_kind loads no other package module.
+  - Ten classification modules load no measurement module.
+  - Measured before and after (package modules loaded, the root left out): scorecard 43 to 8, diagnosis_truth 42 to
+    6, regression 43 to 13, diagnosis_loop 44 to 14, truth_update 45 to 15, audit 44 to 9, contract 40 to 10,
+    payout_rule 32 to 5, verdict 26 to 5. continuation_evidence no longer loads lifecycle or verdict_rules.
+  - **The one known exception is the package root**, step 16's lazy root. `__init__.py` imports edgar,
+    ticker_resolver and the classifier eagerly, so every import through it loads the clients. The test leaves the
+    root's own imports out (a bare package module). A strict xfail (`test_the_package_root_loads_no_client`) flips
+    when step 16 lands.
+  - No listed module waits on an 8b move.
+- **Left as they were.**
+  - The verdict's `_doubted_ending` reads R1's shape at 1e-6 over the row's ratio string, not
+    `exchange_terms.one_share_no_cash` (1e-9). Step 7b's sites did not include it. Changing the bound is a behaviour
+    question, not a vocabulary one.
+  - The audit's import of scorecard (`CENSUS_GROUPS`, `Window`) and the scorecard's of verdict (the uncertain.csv
+    kinds) are inside measurement and load no client. They belong to steps 8b and 9.
+- **Tests.**
+  - Added: 12 in tests/test_exit_kind.py. Each tests the vocabulary at its interface: the last ending and its tie;
+    the verdict, the lifecycle and the contract reading the same last ending; flag tokens; the gate flags the payout
+    gate writes; a round trip for each piece of reason text; end_of_era.resolve's and apply_handoffs' own reasons
+    read back; the value rules value_fields writes; the effective date and `end_day_of`.
+  - Added: tests/test_import_closure.py, 24 cases and one strict xfail.
+  - Added: one in test_continuation_evidence, 9g's selection over the vocabulary's text.
+  - Moved: the four `LastTrade` facts and row-reading tests, from test_last_trade to test_exit_kind; `ratio_doubt`,
+    from the rulings to test_continuation_evidence; the effective-date assertion, from test_form25.
+  - Deleted once covered: the MERGER_RELABELS tie test; test_rewrites' `successor_note` test (its assertions are in
+    exit_kind's timing round trip); test_continuation_evidence's `successor_filing_reason` test (now the selection
+    test and exit_kind's successor-registration round trip).
+  - Rewritten through `decide`: five rulings tests.
+  - The real-case harness (tests/verdict_cases.py and its fixtures) is unchanged apart from the type's name and
+    `of_row`'s module.
+  - Suite: 3256 passed, 46 xfailed (step 7b: 3222 passed, 45 xfailed; the new xfail is the package root's).
+- **The gate:** the replay of ac5ffbf is SAME against `accepted4_out`. It refuses no request and reads no uncached text,
+  and its log equals step 7b's line for line.
+- **pipeline.py: 1613 lines to 1617.** The three continuation reasons now go through `continuation_reason`, and
+  there are two import lines. exit_kind.py went from 90 to 358 lines, last_trade.py from 756 to 681.

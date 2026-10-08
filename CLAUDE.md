@@ -113,7 +113,7 @@ its steps), `_r1_continuations` (stage 8b: a merger whose published terms are on
 yet when the fails data ends before the day, OKE 2026: the added successor starts on the next trading day, as every successor the run adds does (`last_trade.first_day_after`), and a Form 25 that already owns a delisting of the run raises no unmatched row in stage 9d; the stage ends by recording its links as rewrites, `_link_successors`), `_handoffs` (stage 9b: first `rewrites.mark_going_on` over `history.Histories.going_on`, the clip check's merger or transfer that does not end its security goes on as itself, here and only here, so the handoffs see it; then the handoffs), `_date_from_notices` (stage 9c: `last_trade.Dating.from_notice`, a handoff continuation row's last trade day from its own Form 25's confirmed EX-99.25 notice, when before the successor's first sighting, the handoff rewrite's typed `successor_from`, and no later than the effective date; the stage keeps the failed-read watch; metered as "handoff notice dates"), `_successor_endings` (stage 9d: the Form 25 search, matches only, for the line and 8-K12B successors the run added; the finder's items about a Form 25 that already owns a delisting are dropped by their typed `ReviewItem.filing`; metered as "successor endings"), `_distress` (stage 9e,
 sub-plan 5g: for each liquidation, compliance-failure or unknown delisting with no successor, a bankruptcy plan's
 stock rule (R6), a price-only removal's code 552, and the OTC symbol of its first off-exchange print, anchored on the
-last trade day stage 5 dated; `distress.DistressTerms` for the contract; metered as "distress notices"; at stage 10a a
+last trade day stage 5 dated; `payout_rule.DistressTerms` for the contract; metered as "distress notices"; at stage 10a a
 plan's `received_close` answer times its ratio is that ending's value and an answered OTC print a drop's, each read
 through its own request, `PriceAnswers.ending_values`), then the row builders (stage 8's records feed 10a, 10c and
 10g: `MergerValues.table_inputs`, `payout_rows`, `contract_inputs` and `requests`) and `_triage`; the contract (stage 10g) takes sub-plan 5h's `Identity.renames` too: each placeholder whose eras
@@ -367,7 +367,7 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   Its three rules: an ending ends its security unless its successor is the security itself, or it is a merger or
   exchange transfer (`CONTINUATION_BUCKETS`) with a confirmed last trade after which its own CUSIPs keep trading
   under its own tickers (`_continues_after`: `CONTINUATION_MIN_ROWS` 20 rows over `CONTINUATION_MIN_DAYS` 60 days
-  at `CONTINUATION_MIN_PRICES` 2 prices; WRK, DIS); the history ends at the end day (`last_trade.end_day`) of the
+  at `CONTINUATION_MIN_PRICES` 2 prices; WRK, DIS); the history ends at the end day (`exit_kind.end_day`) of the
   last ending that ends it, unless it is listed today. A successor's ticker is not its predecessor's
   (`_successor_starts`, over the endings: the successor's first sighting under the ticker within `TAKEOVER_DAYS`,
   120, the handoff window, defined here, after the confirmed last trade, else from the delist date less
@@ -527,19 +527,21 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   `last_row_trade_day`: the trading day before `ftd.settled_last`'s row of the CUSIP it held last; AVGO 2018, Z
   2015) unless the text dated the closing before the open (Imclone 2008's 8:28 A.M.). `at_handoff` (stage 9b): a row
   the handoff writes, or a kept row with no day, takes A's last sighting before B's first (`handoff_day`, source
-  `last_sighting`); a worked-out closing day never reaches B's first sighting. The derived facts, one definition
-  each: `LastTrade.confirmed` (dated and not flagged `last_trade_date_unconfirmed`: what the clip, the successor
-  starts and 9c test), `LastTrade.publishable(effective)` (confirmed, from an exchange print, `EXCHANGE_PRINTS`, and
-  no later than the Form 25 effective date; over a delistings.csv row, `of_row`, `effective_of` and `published`,
-  which the contract, the verdict's reasons and the scorecard read), `anchor_day` (the day an ending is read
-  around: its last trade, else its Form 25's filing date, else the anchor 8-K's, else its delisting date;
-  `Delisting.anchor`: the successor searches and links, the R1 reading, the handoff pairs, stage 5b), `end_day` (the
+  `last_sighting`); a worked-out closing day never reaches B's first sighting. `anchor_day` (the day an ending is
+  read around: its last trade, else its Form 25's filing date, else the anchor 8-K's, else its delisting date;
+  `Delisting.anchor`: the successor searches and links, the R1 reading, the handoff pairs, stage 5b) and
+  `first_day_after` (an added successor's first day after a last trade: the next trading day, at all three sites
+  that add one). Its answer type and the derived facts are defined once in `exit_kind` (the row vocabulary,
+  architecture step 8a), which this module imports and the measurement side reads without its clients:
+  `LastTrade.confirmed` (dated and not flagged `last_trade_date_unconfirmed`: what the clip, the successor starts
+  and 9c test), `LastTrade.publishable(effective)` (confirmed, from an exchange print, `EXCHANGE_PRINTS`, and no
+  later than the Form 25 effective date, `exit_kind.effective_date`; over a delistings.csv row, `of_row`,
+  `effective_of` and `published`, which the contract, the verdict's reasons and the scorecard read), `end_day` (the
   day it ended its security's listing: its last trade, else its delisting date, the Form 25's effective date; the
-  clip and stage 9e) and `first_day_after` (an added successor's first day after a last trade: the next trading
-  day, at all three sites that add one). The sources (`SOURCES`: `midas`, `nasdaq_halt`, `ex99_notice`, `8k_301`,
-  `closing_day`, `last_sighting`, and `UNSOURCED` "") and the flags it writes (`UNCONFIRMED`, `CONFLICT`, `NO_DAY`)
-  are defined here once. Its interface is tested in `tests/test_last_trade.py`, through fake MIDAS and halt
-  adapters.
+  clip and stage 9e; over a row `end_day_of`), the sources (`SOURCES`: `midas`, `nasdaq_halt`, `ex99_notice`,
+  `8k_301`, `closing_day`, `last_sighting`, and `UNSOURCED` "") and the flags it writes (`UNCONFIRMED`, `CONFLICT`,
+  `NO_DAY`). Its interface is tested in `tests/test_last_trade.py`, through fake MIDAS and halt adapters; the facts
+  in `tests/test_exit_kind.py`.
 
   The readers: `eightk_last_trade()` (Item 3.01 text) and `decide_last_trade()`, which picks among the Form 25
   notice, the 8-K text, MIDAS and the Nasdaq halt (MIDAS beats a halt beats text; a text/measured disagreement is
@@ -580,8 +582,9 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   own successor and keeps the kind and value (WRK, DIS); `mark_going_on(delistings, going_on)` is the clip check's
   (`history.Histories.going_on`), filling only a blank successor; `reclassify(d, code, rule, ...)` any other kind (470, 552), a kind leaving
   `unknown` dropping the no-evidence default. Readings: `awaits_successor`, `is_real_ending` (in memory; the tables'
-  is `exit_kind.is_real_ending`), `rewrite_by`, `successor_by`; `successor_note` is the reason's one wording of how a
-  successor was found ("; successor by same ticker"). The classifier's own edits of the end-of-era verdict before it
+  is `exit_kind.is_real_ending`), `rewrite_by`, `successor_by`; a link's reason note is `exit_kind.successor_note`,
+  the reason's one wording of how a successor was found ("; successor by same ticker"), and the payout flags a
+  continuation drops include `exit_kind.GATE_FLAGS`. The classifier's own edits of the end-of-era verdict before it
   builds the record (rule 6, branch 5b, R6b) are no rewrites. Its rules are tested at its interface
   (`tests/test_rewrites.py`).
 - `delistings.py` — `DelistingFinder.find()`: lists an issuer's Form 25s,
@@ -621,8 +624,8 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   new shares: stage 7 never reads the old line's last close from their fails rows, WOLF 2025), `price_only` (price wording and no other listing standard: market
   capitalization, equity, back-door listing, filings), `substitutes_new_shares`/`plan_ratio` (R6: a 12d2-2(a)(3)
   notice naming new shares; the notice's stated ratio, else the plan 8-K's one old-share and one new-share count
-  outside a condition), `liquidating` (a liquidating distribution, trust, or plan of liquidation or dissolution),
-  and `DistressTerms` (what stage 9e hands the contract).
+  outside a condition), and `liquidating` (a liquidating distribution, trust, or plan of liquidation or
+  dissolution). What stage 9e hands the contract from them is `payout_rule.DistressTerms`.
 - `classifier.py` — the filing-trio fingerprint (**Form 25 + 8-K item codes +
   Form 15**), now anchored on the Form 25/fallback filing date rather than a
   vendor end date. `_classify_items()` maps an 8-K item set to a `DLSTCD`
@@ -666,9 +669,9 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   570; (5b, sub-plan 5g) a 3.01 8-K announcing a liquidating distribution, trust or plan of liquidation or
   dissolution → liquidation 400 (EQC 2025), read by `classifier._liquidation_notice` only when branch 6 would
   decide; (6) else today's continued-filings transfer (304), its reason string
-  unchanged. The reason protocol the published column carries is defined here once and read from here
-  (`CONTINUED_FILINGS`, the prefix of `CONTINUED`; `RESOLVED_FROM_CONTINUED_FILINGS`, a relabel's suffix: the finder,
-  stage 9g, the verdict and the scorecard). EDGAR evidence only.
+  unchanged. Its reasons are written through the row vocabulary (`exit_kind`: `CONTINUED`, `relabel` and its
+  suffix, `change_in_control_reason`, `completed_acquisition_reason`, `successor_registration_reason`), whose
+  readers the finder, stage 9g, the verdict and the scorecard ask. EDGAR evidence only.
   Tried only where the continued-filings rule fires. Sub-plan 5c, rule 1: branches 3 and 4 never fire when
   `EraSignals.survived` holds (the classifier found no exchange of the registrant's own shares, and an acquirer's
   or a distributor's statement); `merges` says when they would, `registers_successor` when branch 2 would. The
@@ -717,9 +720,11 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
 - `continuation_evidence.py` — stage 9g (sub-plan 5i), for the verdict only, over the ending's own-share reading's
   `registrant_statement`: `confirming_filing` (a 3.03 8-K or successor registration among the reading's 8-Ks whose
   own text holds a one-for-one statement whose target names the registrant or the successor; no text read without
-  one) and `successor_doubt` (`verdict_rules.ratio_doubt`: a ratio that is neither one nor a split factor, or cash).
-  Which continuations are read is decided on the row's reason (`needs_filing`, `needs_doubt_check`), as the verdict
-  reads the same row.
+  one) and `successor_doubt` (`ratio_doubt`: a ratio that is neither one nor a split factor, or cash). Which
+  continuations are read is decided on the row's reason (`needs_filing`, `needs_doubt_check`, through the row
+  vocabulary's readers: `exit_kind.rests_on_continued_filings`, `linked_by_timing`, `names_successor_registration`),
+  as the verdict reads the same row. Its answer is `exit_kind.ContinuationReading`; it imports no measurement
+  module.
 - `llm_merger_extractor.py` — the **cash+stock** counterpart: an LLM reads a
   filing and returns full structured terms (`cash_per_share`, `stock_ratio`,
   `acquirer_ticker`) the regex extractor can't generalize over. Uses
@@ -814,8 +819,9 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   `no_interval`, `loop`; `active`/`ended` are covered), quality (the weakest
   `event_grade` on a covered chain, `medium` for a ticker-only FIGI), and the
   look-ups a truth case needs (`security_on`, `issuer_of`, `tickers_of`,
-  `end_of`). `EXIT_KIND_OF_BUCKET` maps today's bucket to the contract's
-  `exit_kind` until reset-3 publishes that column.
+  `end_of`: the final ending's `exit_kind.end_day_of`). The walk follows each
+  security's last real ending (`exit_kind.last_endings`) and reads its kind and
+  flags through the row vocabulary.
 - `truth.py` — truth cases, checked by hand at a cited source: the golden set
   (`data/golden_lifecycles.csv`, `pass` or `known_wrong` + `fixed_by`) and the
   decision-17 audit (`data/accuracy_audit.csv`, `census:<group>` or `random`;
@@ -852,40 +858,71 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   ending (a delistings.csv row whose successor is not itself): `decide`
   returns `Verdicts`; `uncertain_rows()` is `uncertain.csv`. The rules are the
   spec's invariants, read from the tables (FIGI source, intervals, each
-  ending's reason, flags, last-trade source and Form 25 date) plus each
-  placeholder's ticker evidence. A seed is an era's first sighting for the
+  ending's reason, flags, last-trade source and Form 25 date) through the row
+  vocabulary (`exit_kind`), plus each placeholder's ticker evidence and stage
+  9g's `exit_kind.ContinuationReading`s. The diagnosis-truth spec's 2.3 rulings
+  (sub-plan 5i: a relabel its own Form 25 settles, a successor registration, the
+  Form 25's filer as issuer evidence, an unpriced gate, a stale seed, no ending
+  at all; A to F in its docstring) are its own private rules (architecture step
+  8a folded `verdict_rules` in), tested through `decide`
+  (`tests/test_verdict_rulings.py`). A seed is an era's first sighting for the
   security's coverage rule; later sightings outside the history are listed
   seeds only.
 - `ticker_evidence.py` — decision 1: what ties a placeholder's ticker to its
   CIK. A resolver tier that names the ticker (`TICKER_TIERS`), else one
   EDGAR full-text search of the CIK's own filings (`full_text_search(...,
   ciks=)`), cached like every search.
-- `exit_kind.py` — one delistings.csv row in the contract's terms: `ending_fields` (exit kind, drop reason,
-  continuation, `dlret` and `dlret_fill`; `MEASURED_METHODS` includes `otc_print` and `plan_stock`, so an answered OTC print or plan value is a value, not a fill) and `is_distress`. Today's bucket and CRSP code map to the exit kind
-  (a code-470 bankruptcy is `dropped` for `bankruptcy`; `unknown` asserts none; a compliance failure the exchange
-  removed for a price deficiency only, its Form 25 notice, else its 3.01 items, carries CRSP 552, drop reason
-  `price`, from stage 9e, and an issuer's own Form 25 changes nothing: sub-plan 5g). The contract, the golden judge
-  and the scorecard all read through it. The one definition of the row predicates every table reader asks:
-  `is_real_ending` (the successor is not the security itself) and `is_continuation` (a successor other than itself):
-  contract, lifecycle, verdict, verdict_rules, scorecard and audit.
+- `exit_kind.py` — the row vocabulary (architecture step 8a): one reading of a delistings.csv row, and the text its
+  producers write for the readers to read back. It imports nothing of the package (`tests/test_import_closure.py`
+  pins it, and that no measurement or contract module loads a network client, nor a classification module a
+  measurement one). Producers (end_of_era, handoffs, the finder, rewrites, the payout gate, last_trade, stage 9g)
+  write through it; readers (verdict, scorecard, contract, payout_rule, lifecycle, audit, truth, diagnosis_truth,
+  regression, diagnosis_loop, review_triage) read through it.
+  - The contract's view: `ending_fields` (exit kind, drop reason, continuation, `dlret` and `dlret_fill`;
+    `MEASURED_METHODS` includes `otc_print` and `plan_stock`, so an answered OTC print or plan value is a value, not
+    a fill) and `is_distress`. Today's bucket and CRSP code map to the exit kind (a code-470 bankruptcy is `dropped`
+    for `bankruptcy`; `unknown` asserts none; a compliance failure the exchange removed for a price deficiency only,
+    its Form 25 notice, else its 3.01 items, carries CRSP 552, drop reason `price`, from stage 9e, and an issuer's
+    own Form 25 changes nothing: sub-plan 5g).
+  - Real endings, one definition each: `is_real_ending` (the successor is not the security itself),
+    `is_continuation` (a successor other than itself) and `last_endings` (each security's last real ending by delist
+    date, a tie keeping the later row: the contract's row, the verdict's `earlier_ending` and stale-seed rule, the
+    lifecycle walk's final ending, the diagnosis judge and the loop's context).
+  - Flags: `flag_tokens`, `flag_name`, `flag_detail`, `flag_names` (review_triage, the verdict, the lifecycle grade,
+    the scorecard, the payout rule and the rewrites read the cell through them); the gate flags `GATE_FLAGS`
+    (`PAYOUT_GATE_FAILED`, `LLM_GATE_FAILED`, `TERMS_GATE_FAILED`, `TERMS_GATE_SKIPPED`), which the payout gate
+    writes and the verdict's ruling D, the payout rule's `terms_gate` and the rewrites read.
+  - The evidence a reason names, each writer beside its reader: the continued-filings rule (`CONTINUED`,
+    `rests_on_continued_filings`), an end-of-era relabel (`relabel`, `resolved_from_continued_filings`) to a merger
+    (`change_in_control_reason`, `completed_acquisition_reason`, `merger_relabel`), a successor registration
+    (`SUCCESSOR_FORMS`, `successor_registration_reason`, `continuation_reason`, `names_successor_registration`), a
+    link's note (`successor_note`) and a handoff linked by timing (`TIMING_CIK`, `linked_by_timing`). The published
+    text is byte for byte the producers' as before; `tests/test_exit_kind.py` reads the resolver's and the handoff
+    stage's own text back.
+  - `VALUE_RULES` (contract/delistings.csv's `value_rule`).
+  - The last trade's sources, flags and facts (`LastTrade`, `end_day`, `effective_date`, `cites_form25`, and over a
+    row `of_row`, `effective_of`, `published`, `end_day_of`; last_trade.py's module entry) and stage 9g's answer,
+    `ContinuationReading` (the verdict's input beside the tables).
 - `contract.py` — the contract's rows (spec "The contract", decisions 6, 7, 9, 10, 12), written under
   `output/contract/` beside today's tables for one release: `security_history_rows` (ticker ranges split where
-  the issuer in force changes), `delisting_rows` (one per ended security, its last), `seed_rows` (the seed
+  the issuer in force changes), `delisting_rows` (one per ended security, its last: `exit_kind.last_endings`), `seed_rows` (the seed
   echo), `id_change_rows` (baseline placeholders that now hold a FIGI; stage 4b's folds by name, `renames`; and a baseline
   FIGI the run no longer holds that `renames` maps to a FIGI of this run, rule F: BTU, CRC; `regression.renamed_to`
   and `diagnosis_loop.rename_truth` read every row alike, placeholder or not), `payout_leg_rows` (schema 3, R3: each
   security of a basket ending per share, `contract/payout_legs.csv`). `run_manifest.json` carries
-  `schema_version` (`store.CONTRACT_SCHEMA_VERSION`, 3).
+  `schema_version` (`store.CONTRACT_SCHEMA_VERSION`, 3). It loads no client (its value inputs are payout_rule's
+  types), so the regression report reads `id_change_rows` from it.
 - `issuer_in_force.py` — the issuer CIK on each sighting's date: the era's CIK when its EDGAR name that day agrees
   with the observed name, else the one other CIK SEC's name index lists under that name whose name agreed then
   (MRK 2008: old Merck & Co, CIK 64978). `issuer_changes` dates each change: it sorts sightings by day then CIK
   and records at most one change per day (a same-day sighting under another CIK changes nothing).
 - `payout_rule.py` — the payout rule of each contract ending (`value_fields`, the eleven columns after `verdict` in
-  `contract/delistings.csv`: the columns came in schema 2, the contract is now schema 3 with `payout_legs.csv`): `value_rule` (`VALUE_RULES`), `cash_per_share`, `cash_currency`, `stock_ratio`,
+  `contract/delistings.csv`: the columns came in schema 2, the contract is now schema 3 with `payout_legs.csv`): `value_rule` (`exit_kind.VALUE_RULES`), `cash_per_share`, `cash_currency`, `stock_ratio`,
   `price_sec_id`/`price_ticker`/`price_date` (the acquirer for a stock leg, the security itself for `otc_print`; the
   trading day after the last trade), `recovery_ratio`, `terms_source`, `terms_gate` and `value_formula`; the caller
-  computes `dlret = payout / last close − 1` with its own prices. `MergerInputs` (stage 8's
-  `MergerValues.contract_inputs`) holds a merger's `--merger-terms` row, LLM terms and regex read from before the
+  computes `dlret = payout / last close − 1` with its own prices. Its two inputs beyond the row are defined here:
+  `DistressTerms` (stage 9e's OTC symbol and plan ratio) and `MergerInputs` (stage 8's
+  `MergerValues.contract_inputs`), which holds a merger's `--merger-terms` row, LLM terms and regex read from before the
   payout gate: terms the gate dropped are still published,
   `terms_gate=failed` (a failed election publishes both legs as read), `skipped` when the gate could not check them
   (`terms_gate_skipped:<why>`: a non-USD cash leg, a basket, a dollar-valued leg), blank with no last close.
@@ -1141,7 +1178,7 @@ conflate them.
   `output/contract/{security_history,delistings,seeds,price_requests,id_changes,payout_legs}.csv` from the tables about to be
   written and the verdicts; the scorecard (10h) reads the issuer from `contract/security_history.csv`. Contract
   delistings hold one row per ended security, its last real ending; `last_trade_date` is published only when it
-  is publishable (`last_trade.LastTrade.publishable`, read over the row by `last_trade.published`: confirmed, from an
+  is publishable (`exit_kind.LastTrade.publishable`, read over the row by `exit_kind.published`: confirmed, from an
   exchange print, no later than the Form 25 effective date; architecture step 4's ruling), and the price date and
   the price requests follow the published date; a continuation has no value; assumed par, Shumway marks
   and a transfer's 0.0 are `dlret_fill`. `--price-answers` (the requests plus a `price` column) feeds the closes and
