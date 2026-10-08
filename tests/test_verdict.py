@@ -32,7 +32,7 @@ def test_a_placeholder_needs_ticker_evidence():
 
 
 def test_an_introduction_outside_the_history_makes_the_security_uncertain():
-    # an after_delisting seed past a settled ending is the caller's stale snapshot (verdict_rules.stale_seed); one the
+    # an after_delisting seed past a settled ending is the caller's stale snapshot (the verdict's ruling E); one the
     # ending cannot settle, here a worked-out last trade, still counts
     v = _one(ending("A", "2015-03-10", **{**GOOD, "source": "closing_day", "flags": "last_trade_date_unconfirmed"}),
              observations=[obs("AAA", "2016-06-30", "A", "after_unconfirmed_delisting")])

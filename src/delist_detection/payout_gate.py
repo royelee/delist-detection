@@ -8,12 +8,14 @@ from __future__ import annotations
 from collections.abc import Callable, Collection, Iterable, Mapping
 from dataclasses import dataclass, field
 
+from .exit_kind import LLM_GATE_FAILED, PAYOUT_GATE_FAILED, TERMS_GATE_FAILED, TERMS_GATE_SKIPPED
 from .reconstruction import for_delisting
 
 DEFAULT_TOL = 0.15
-GATE_FAILED = "payout_gate_failed:"
-LLM_GATE_FAILED = "llm_gate_failed"
-GATE_SKIPPED = "terms_gate_skipped:"   # terms the gate cannot check: a non-USD cash leg, a basket, a dollar-valued leg
+# the gate flags are the row vocabulary's (exit_kind.GATE_FLAGS), which the verdict, the payout rule and the rewrites
+# read back
+GATE_FAILED = f"{PAYOUT_GATE_FAILED}:"
+GATE_SKIPPED = f"{TERMS_GATE_SKIPPED}:"   # terms the gate cannot check: a non-USD cash leg, a basket, a dollar leg
 DROP_REASONS = ("csv_override", "no_acq_ticker", "no_acq_price", "no_last_close", "fail_sanity", "skipped", "no_ratio")
 NO_DEFAULT = "election_no_default"   # an election whose v3 answer states no package: the either-or reading of the earlier prompt
 PACKAGE = "llm_election_package"     # an election's default cash-and-stock package settled the row
@@ -214,7 +216,7 @@ def gate_payouts(
     def flag_terms_gate_drop(key, reason: str) -> None:
         # Every drop reason but csv_override gets a flag: a merger row the rules
         # leave at par must still surface in review.csv.
-        out.flags[key] = out.flags.get(key, ()) + (f"terms_gate_failed:{reason}",)
+        out.flags[key] = out.flags.get(key, ()) + (f"{TERMS_GATE_FAILED}:{reason}",)
 
     for key, terms in llm_terms.items():
         package = terms.is_package

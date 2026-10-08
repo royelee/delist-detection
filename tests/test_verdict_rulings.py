@@ -1,14 +1,9 @@
-"""Sub-plan 5i: the verdict-only rulings of spec 2.3 (`verdict_rules`), each with its guard, on small tables."""
+"""Sub-plan 5i: the verdict-only rulings of spec 2.3 (the verdict's rulings A to F), each with its guard, on small
+tables, through `verdict.decide`."""
 import pytest
 
-from datetime import date
-
-from delist_detection import end_of_era
-from delist_detection.crsp_codes import CrspBucket
-from delist_detection.end_of_era import EraSignals, Filed
-from delist_detection.verdict import GATE_FAILED, decide
-from delist_detection.verdict_rules import (MERGER_RELABELS, STALE_CLOSE_DAYS, STALE_SEED_DAYS, Reading, ratio_doubt,
-                                            unpriced_gate)
+from delist_detection.exit_kind import GATE_FLAGS, ContinuationReading, flag_names
+from delist_detection.verdict import STALE_CLOSE_DAYS, STALE_SEED_DAYS, decide
 from tests.lifecycle_tables import ending, iv, obs, review, sec, tables
 
 KEPT = "; the registrant kept filing after it"
@@ -26,8 +21,11 @@ def _reasons(row, **kw):
     return _verdicts(row, **kw).endings[(row["sec_id"], row["delist_date"])].reasons
 
 
-def _gate(row):
-    return unpriced_gate(row, GATE_FAILED)
+def _unpriced(row):
+    """Ruling D through the verdict: assumed par after a gate flag is a doubt unless every gate failed on the price
+    side."""
+    assert row["dlret_method"] == "assumed_par" and flag_names(row) & GATE_FLAGS
+    return "assumed_par_after_failed_gate" not in _reasons(row)
 
 
 # -- a relabel the matched Form 25 settles (note A theme 1) -------------------------------------------------------
@@ -50,14 +48,6 @@ def test_other_relabels_and_a_merger_without_a_form25_keep_the_doubt(cells):
     row = ending("A", "2015-03-13", **{**GOOD, "reason": f"Change in control (8-K item 5.01 filed 2015-02-20){KEPT}",
                                         **cells})
     assert "resolved_from_continued_filings" in _reasons(row)
-
-
-def test_the_relabel_prefixes_are_the_resolvers_own_wording():
-    era = EraSignals(False, item_filed={"5.01": date(2015, 2, 20)})
-    assert end_of_era.resolve(era, None).reason.startswith(MERGER_RELABELS[0])
-    era = EraSignals(False, item_filed={"2.01": date(2015, 2, 27)}, merger_filing=Filed("DEFM14A", date(2014, 12, 1)))
-    v = end_of_era.resolve(era, None)
-    assert v.bucket is CrspBucket.MERGER and v.reason.startswith(MERGER_RELABELS[1])
 
 
 # -- a successor registration confirms a continuation (note A themes 2 and 6) -------------------------------------
@@ -132,7 +122,7 @@ def test_a_handoff_row_built_on_an_unmatched_form25_is_no_issuer_evidence():
 def test_a_gate_that_failed_only_on_the_price_side_is_unpriced(flags):
     row = ending("A", "2021-06-25", **{**GOOD, "method": "assumed_par", "flags": flags, "acquirer_ticker": "JET",
                                        "last_trade_close": "300", "terminal_value": "310"})
-    assert _gate(row) and _reasons(row) == ()
+    assert _unpriced(row) and _reasons(row) == ()
 
 
 @pytest.mark.parametrize("flags", [
@@ -143,7 +133,7 @@ def test_a_gate_that_failed_only_on_the_price_side_is_unpriced(flags):
 ])
 def test_a_gate_that_failed_against_a_fresh_close_stays_a_doubt(flags):
     row = ending("A", "2021-06-25", **{**GOOD, "method": "assumed_par", "flags": flags})
-    assert not _gate(row) and "assumed_par_after_failed_gate" in _reasons(row)
+    assert not _unpriced(row)
 
 
 # -- stale seeds after a confirmed ending (note A theme 5) --------------------------------------------------------
@@ -233,27 +223,21 @@ def test_rule_b_keeps_a_continuation_whose_own_filings_state_another_ratio():
                  reason=f"Successor registration 8-K12B 2016-05-20: the security continues under a successor{KEPT}; "
                         "successor by new issuer")
     t = tables(_chain()["securities"], _chain()["history"], [row], [obs("AAA", "2010-06-30", "A", name="ALPHA")])
-    r = decide(t, {}, {("A", "2016-05-18"): Reading(doubt="ratio:0.9042")}).endings[("A", "2016-05-18")].reasons
+    r = decide(t, {}, {("A", "2016-05-18"): ContinuationReading(doubt="ratio:0.9042")}
+               ).endings[("A", "2016-05-18")].reasons
     assert r == ("continuation_not_one_for_one:ratio:0.9042", "resolved_from_continued_filings")
-    assert decide(t, {}, {("A", "2016-05-18"): Reading()}).endings[("A", "2016-05-18")].reasons == ()
-
-
-def test_a_ratio_that_is_a_plain_split_or_one_is_no_doubt():
-    assert ratio_doubt(1.0, False) == "" and ratio_doubt(0.1, False) == "" and ratio_doubt(2.0, False) == ""
-    assert ratio_doubt(0.9042, False) == "ratio:0.9042" and ratio_doubt(1.0, True) == "cash"
-    assert ratio_doubt(0.05, False) == "" and ratio_doubt(20.0, False) == ""                    # 1-for-20, 20-for-1
-    assert ratio_doubt(0.75, False) == "ratio:0.75" and ratio_doubt(1.5, False) == "ratio:1.5"
+    assert decide(t, {}, {("A", "2016-05-18"): ContinuationReading()}).endings[("A", "2016-05-18")].reasons == ()
 
 
 def test_a_skipped_gate_beside_a_price_side_token_stays_a_doubt():
-    # 5f adds terms_gate_skipped to verdict.GATE_FAILED: it can never be a price-side failure
-    gates = GATE_FAILED | {"terms_gate_skipped"}
+    # 5f adds terms_gate_skipped to the gates (exit_kind.GATE_FLAGS): it can never be a price-side failure
+    assert "terms_gate_skipped" in GATE_FLAGS
     for flags in ("terms_gate_skipped:CAD;llm_gate_failed:no_acq_price",
                   f"ftd_close_prior:{STALE_CLOSE_DAYS + 2};terms_gate_skipped:basket;payout_gate_failed:44.25",
                   f"ftd_close_prior:{STALE_CLOSE_DAYS + 2};terms_gate_skipped"):
         row = ending("A", "2021-06-25", **{**GOOD, "method": "assumed_par", "flags": flags,
                                            "last_trade_close": "44", "acquirer_ticker": "ACQ"})
-        assert not unpriced_gate(row, gates)
+        assert not _unpriced(row)
 
 
 @pytest.mark.parametrize("ticker", ["", "NULL", "null", "None", "N/A", "-", " NA "])
@@ -261,10 +245,10 @@ def test_a_null_like_acquirer_ticker_is_a_missing_one(ticker):
     # GRUB 2021: the gate said no_acq_price for a ticker of the word NULL
     row = ending("A", "2021-06-25", **{**GOOD, "method": "assumed_par", "acquirer_ticker": ticker,
                                        "flags": "terms_gate_failed:no_acq_price;merger_at_par"})
-    assert not _gate(row) and "assumed_par_after_failed_gate" in _reasons(row)
+    assert not _unpriced(row)
     named = ending("A", "2021-06-25", **{**GOOD, "method": "assumed_par", "acquirer_ticker": "JET",
                                          "flags": "terms_gate_failed:no_acq_price;merger_at_par"})
-    assert _gate(named)
+    assert _unpriced(named)
 
 
 def test_a_stale_close_failure_counts_only_within_the_tolerance_its_age_widens():
@@ -272,13 +256,13 @@ def test_a_stale_close_failure_counts_only_within_the_tolerance_its_age_widens()
     age = STALE_CLOSE_DAYS + 1
     small = ending("A", "2021-06-25", **{**base, "flags": f"ftd_close_prior:{age};payout_gate_failed:75.0"})
     huge = ending("A", "2021-06-25", **{**base, "flags": f"ftd_close_prior:{age};payout_gate_failed:481.37"})   # AT
-    assert _gate(small) and not _gate(huge)
+    assert _unpriced(small) and not _unpriced(huge)
     compared = ending("A", "2021-06-25", **{**base, "terminal_value": "480",
                                             "flags": f"ftd_close_prior:{age};terms_gate_failed:fail_sanity"})
-    assert not _gate(compared)
+    assert not _unpriced(compared)
     no_close = ending("A", "2021-06-25", **{**GOOD, "method": "assumed_par",
                                             "flags": f"ftd_close_prior:{age};payout_gate_failed:75.0"})
-    assert not _gate(no_close)
+    assert not _unpriced(no_close)
 
 
 def test_a_form25_filed_name_check_needs_an_observed_name():

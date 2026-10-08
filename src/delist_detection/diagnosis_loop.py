@@ -15,8 +15,8 @@ from collections.abc import Collection, Mapping, Sequence
 from pathlib import Path
 
 from .atomic_io import replace_all_on_success, write_atomic
-from .contract import last_endings
 from .diagnosis_truth import CaseJudgement, Mismatch
+from .exit_kind import last_endings
 from .lifecycle import Tables
 from .regression import regression_key
 

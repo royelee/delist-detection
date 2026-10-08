@@ -6,7 +6,8 @@ from delist_detection.classifier import DelistClassifier, DelistRecord
 from delist_detection.crsp_codes import CrspBucket
 from delist_detection.delistings import DelistingFinder, SecurityContext
 from delist_detection.edgar import EdgarSubmission
-from delist_detection.form25 import SecurityRef, effective_date
+from delist_detection.exit_kind import effective_date
+from delist_detection.form25 import SecurityRef
 from delist_detection.last_trade import LastTrade
 from delist_detection.observations import Observation, split_eras
 from delist_detection.security_master import Security

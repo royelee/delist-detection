@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from delist_detection.distress import DistressTerms
+from delist_detection.payout_rule import DistressTerms
 from delist_detection.price_requests import (LAST_CLOSE, OTC_PRINT, RECEIVED_CLOSE, PriceAnswers, PriceKey, key_of,
                                              load_answers, request_rows)
 from delist_detection.reconstruction import OverrideFileError

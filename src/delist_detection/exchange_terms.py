@@ -188,8 +188,8 @@ def one_share_no_cash(ratio: float | None, cash) -> bool:
 
 def split_factor(ratio: float) -> bool:
     """Whether `ratio` shares per share is a split or a consolidation: n or 1/n for a whole n up to
-    SPLIT_FACTOR_MAX, 1 included. The holders keep their stake (rule 6's guard, SIRI 2024's 0.1; the verdict's
-    ratio doubt, `verdict_rules.ratio_doubt`)."""
+    SPLIT_FACTOR_MAX, 1 included. The holders keep their stake (rule 6's guard, SIRI 2024's 0.1; stage 9g's ratio
+    doubt, `continuation_evidence.ratio_doubt`)."""
     if ratio <= 0:
         return False
     n = ratio if ratio >= 1 else 1 / ratio

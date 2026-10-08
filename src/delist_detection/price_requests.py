@@ -31,7 +31,7 @@ from datetime import date
 from pathlib import Path
 from typing import Any, NamedTuple
 
-from .distress import DistressTerms
+from .payout_rule import DistressTerms
 from .reconstruction import OverrideFileError, for_delisting
 from .store import PRICE_REQUEST_COLUMNS, DelistingKey
 from .trading_calendar import next_trading_day
@@ -126,7 +126,7 @@ def request_rows(contract_rows: Sequence[Mapping[str, Any]], endings: Mapping[st
                  plans: Mapping[DelistingKey, DistressTerms] | None = None,
                  leg_rows: Sequence[Mapping[str, Any]] = ()) -> list[dict[str, str]]:
     """price_requests.csv: per contract ending (`endings`: each sec_id's last real delistings.csv row,
-    contract.last_endings) with a last trade date and no continuation, its last close, the first OTC print of a drop
+    exit_kind.last_endings) with a last trade date and no continuation, its last close, the first OTC print of a drop
     or distress ending (under its published OTC symbol), the received close of its stock leg (`legs`: a merger's, as
     stage 8 asked it, else a bankruptcy plan's new line from stage 9e's `plans`), and of each further leg of a basket
     (`leg_rows`: contract/payout_legs.csv's rows, legs 2 and on; ruling R3). A basket leg's answer is accepted and not

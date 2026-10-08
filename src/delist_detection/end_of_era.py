@@ -37,6 +37,8 @@ from datetime import date, timedelta
 from typing import TYPE_CHECKING
 
 from .crsp_codes import CONTINUATION_CODE, CrspBucket
+from .exit_kind import (CONTINUED, SUCCESSOR_FORMS, change_in_control_reason, completed_acquisition_reason, relabel,
+                        successor_registration_reason)
 
 if TYPE_CHECKING:
     from .edgar import EdgarSubmission
@@ -44,18 +46,12 @@ if TYPE_CHECKING:
 
 ITEMS_BEFORE_DAYS, ITEMS_AFTER_DAYS = 30, 120          # 8-K items, successor filings, Form 25s around the end
 MERGER_FILING_BEFORE_DAYS, MERGER_FILING_AFTER_DAYS = 540, 30
-SUCCESSOR_FORMS = frozenset({"8-K12B", "8-K12G3"})
 MERGER_FILING_FORMS = frozenset({"DEFM14A", "DEFM14C", "PREM14A", "SC 14D9", "SC TO-T", "SC TO-I", "SC 13E3",
                                  "425", "S-4"})
 DELIST_FORMS = frozenset({"25-NSE", "25"})
 MERGER_CODES = frozenset({200, 231, 233})
-# The reason protocol the published `reason` column carries, defined once here (its writer) and read from here by
-# the finder, stage 9g, the verdict and the scorecard: the continued-filings rule's reason starts with
-# CONTINUED_FILINGS; a branch that relabelled a continued-filings ending ends its reason with
-# RESOLVED_FROM_CONTINUED_FILINGS.
-CONTINUED_FILINGS = "Continued 10-K/Q filings"
-CONTINUED = f"{CONTINUED_FILINGS} >180d after delist (moved to OTC or spun off)"
-RESOLVED_FROM_CONTINUED_FILINGS = "; the registrant kept filing after it"
+# The reasons a branch writes go through the row vocabulary (exit_kind: `CONTINUED`, `relabel` and the merger and
+# successor wordings), which the finder, stage 9g, the verdict and the scorecard read back.
 
 
 @dataclass(frozen=True)
@@ -156,34 +152,34 @@ def resolve(s: EraSignals, items_code: int | None) -> EraVerdict:
     holders' stake: another ratio than one or a split factor, or cash (spec 5c rule 6,
     sub-plan 5f: CHTR 2016's 0.9042 New Charter; SIRI 2024's 0.1 is a consolidation)."""
     merger_code = items_code if items_code in MERGER_CODES else 231
-    kept = RESOLVED_FROM_CONTINUED_FILINGS
     if s.trading_after:
         return EraVerdict("trading", CONTINUATION_CODE, CrspBucket.EXCHANGE_TRANSFER, CONTINUED)
     if s.successor_filing:
         own = s.successor_terms
         if own is not None and own.stake_changed:
+            became = (f"each share became {own.ratio:g} shares {own.target[:60].strip()}"
+                      f"{' and cash' if own.cash else ''}, a merger (rule 6)")
             return EraVerdict("successor_merger", 231, CrspBucket.MERGER,
-                              f"Successor registration {s.successor_filing}: each share became {own.ratio:g} shares "
-                              f"{own.target[:60].strip()}{' and cash' if own.cash else ''}, a merger (rule 6)")
+                              successor_registration_reason(s.successor_filing, became))
         return EraVerdict("successor", CONTINUATION_CODE, CrspBucket.EXCHANGE_TRANSFER,
-                          f"Successor registration {s.successor_filing}: the security continues under a successor{kept}")
+                          relabel(successor_registration_reason(s.successor_filing,
+                                                                "the security continues under a successor")))
     if "5.01" in s.item_filed and not s.survived:
         return EraVerdict("change_in_control", merger_code, CrspBucket.MERGER,
-                          f"Change in control (8-K item 5.01 filed {s.item_filed['5.01']}){kept}")
+                          change_in_control_reason(s.item_filed["5.01"]))
     if "2.01" in s.item_filed and (s.merger_filing or s.delist_filing):
         if s.bankruptcy_filing and s.bankruptcy_filing.day <= s.item_filed["2.01"]:
             return EraVerdict("bankruptcy", 470, CrspBucket.LIQUIDATION,
-                              f"Bankruptcy ({s.bankruptcy_filing}, item 1.03) before the completed sale "
-                              f"(8-K item 2.01 filed {s.item_filed['2.01']}){kept}")
+                              relabel(f"Bankruptcy ({s.bankruptcy_filing}, item 1.03) before the completed sale "
+                                      f"(8-K item 2.01 filed {s.item_filed['2.01']})"))
         if not s.survived:             # a survivor acquired or distributed: no merger ending (rule 1, 5c)
             return EraVerdict("completed_merger", merger_code, CrspBucket.MERGER,
-                              f"Completed acquisition (8-K item 2.01 filed {s.item_filed['2.01']}, "
-                              f"{s.merger_filing or s.delist_filing}){kept}")
+                              completed_acquisition_reason(s.item_filed["2.01"], s.merger_filing or s.delist_filing))
     if "3.01" in s.item_filed and s.deficiency_notice:
         return EraVerdict("delisting_notice", 570, CrspBucket.COMPLIANCE_FAILURE,
-                          f"Listing deficiency notice ({s.deficiency_notice}), no merger evidence{kept}")
+                          relabel(f"Listing deficiency notice ({s.deficiency_notice}), no merger evidence"))
     if s.liquidation_notice:
         return EraVerdict("liquidation", 400, CrspBucket.LIQUIDATION,
-                          f"Liquidation: delisted while winding down ({s.liquidation_notice} announces a liquidating "
-                          f"distribution, trust or plan){kept}")
+                          relabel(f"Liquidation: delisted while winding down ({s.liquidation_notice} announces a "
+                                  f"liquidating distribution, trust or plan)"))
     return EraVerdict("continued_filings", CONTINUATION_CODE, CrspBucket.EXCHANGE_TRANSFER, CONTINUED)

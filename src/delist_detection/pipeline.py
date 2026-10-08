@@ -26,10 +26,12 @@ from .continuation_evidence import needs_doubt_check, needs_filing, read_continu
 from .degraded import DegradedWatch, degraded_item, flag_degraded, report_halt_feed_failures
 from .delistings import LATE_ROW_DAYS, Delisting, DelistingFinder, SecurityContext
 from .distress import (
-    BANKRUPTCY_WORDS, OTC_SYMBOL_DAYS, DistressTerms, otc_symbol_from_fails, otc_symbol_from_text, plan_ratio,
+    BANKRUPTCY_WORDS, OTC_SYMBOL_DAYS, otc_symbol_from_fails, otc_symbol_from_text, plan_ratio,
     new_cusips as plan_new_cusips, price_only, substitutes_new_shares,
 )
 from .evidence import item_sections
+from .exit_kind import (ContinuationReading, continuation_reason, end_day, flag_name, flag_tokens, last_endings,
+                        successor_note)
 from .fatal import FATAL
 from .handoffs import (
     HandoffDecision, HandoffOutcome, apply_handoffs, continuation_filing, cusip_switch, decide_handoff,
@@ -38,7 +40,7 @@ from .handoffs import (
 from .figi_resolution import class_letter, is_placeholder, share_class_from_name
 from .form25 import ISSUER_FORM25_FORMS, SecurityRef, letter_hint
 from .issuer_record import IssuerRecord, ReadWatch
-from .last_trade import Dating, OwnTrading, end_day, first_day_after
+from .last_trade import Dating, OwnTrading, first_day_after
 from .ftd import FTD_START, FtdIndex, FtdRow, close_age, is_trading_symbol, trades_after
 from .history import (
     Histories, Sighting, backfill_cusips, cusip_sightings, filtered_ticker_sightings, observation_map_rows,
@@ -53,15 +55,16 @@ from .own_shares import OwnShares, Reader, new_issuer
 from .own_shares import of as own_shares_of
 from .merger_value import MergerValues, value_mergers
 from .payout_gate import DEFAULT_TOL
+from .payout_rule import DistressTerms
 from .prefetch import Serialized, warm
 from .reconstruction import (
     OverrideFileError, build_delistings_table, delisting_row, for_delisting, override_row_name,
     unmatched_override_keys,
 )
-from .review_triage import Decision, ReviewItem, Triage, flag_name, is_blank, merge_review_rows, triage
+from .review_triage import Decision, ReviewItem, Triage, is_blank, merge_review_rows, triage
 from .rewrites import (
     LINE_CONTINUATION, R1_CONTINUATION, Rule, awaits_successor, continuation, is_real_ending, mark_going_on, reclassify,
-    rewrite_by, successor_note,
+    rewrite_by,
 )
 from .sec_stats import SEC_STATS
 from .security_master import EraResolution, Issuer, Security, cik_of, cusip_job, superseded_placeholders
@@ -74,10 +77,9 @@ from .successors import (
     successor_from_8k12b, successor_in_run, successor_search_args, successor_search_name,
 )
 from .verdict import Verdicts
-from .verdict_rules import Reading
 from .verdict import decide as decide_verdicts
 from .contract import delisting_rows as contract_delisting_rows
-from .contract import id_change_rows, last_endings, payout_leg_rows, security_history_rows, seed_rows
+from .contract import id_change_rows, payout_leg_rows, security_history_rows, seed_rows
 from .issuer_in_force import Sighting as IssuerSighting
 from .issuer_in_force import issuer_changes
 from .price_requests import PriceAnswers, request_rows
@@ -626,8 +628,9 @@ def _r1_continuations(ctx: _RunContext, delistings: list[Delisting], securities:
         old = (e.record.bucket.value, e.record.crsp_code, e.record.reason)
         continuation(e, sid, Rule.R1, confidence="medium", flag=R1_CONTINUATION, how=how,
                      evidence=own.statement.sentence[:300], payouts=values,
-                     reason=f"Continuation (R1): each share became one {own.statement.target[:80].strip(' ,')}, "
-                            "no cash" + successor_note(how))
+                     reason=continuation_reason("R1", f"each share became one "
+                                                           f"{own.statement.target[:80].strip(' ,')}, no cash")
+                     + successor_note(how))
         out.links[e.key] = link
         out.review.append(ReviewItem(e.sec_id, e.ticker, e.cik, R1_REBUCKETED,
                                      f"was {old[0]} (CRSP {old[1]}: {old[2]}); R1 makes it a continuation into {sid}",
@@ -677,8 +680,9 @@ def _line_successor_links(delistings: list[Delisting], securities: dict[str, Sec
         found.links[e.key] = (ls.composite, LINE_FOLLOW)
         if e.record.bucket is CrspBucket.UNKNOWN:
             found.rebucketed[e.key] = (
-                f"Continuation (line follow, {ls.evidence}): {e.ticker}'s new CUSIP {ls.step.new_cusip} traded from "
-                f"{ls.step.first} as {ls.composite}, its own FIGI; holders' shares became {ls.composite}'s")
+                continuation_reason(f"line follow, {ls.evidence}",
+                                    f"{e.ticker}'s new CUSIP {ls.step.new_cusip} traded from {ls.step.first} as "
+                                    f"{ls.composite}, its own FIGI; holders' shares became {ls.composite}'s"))
         x = ls.composite
         if x not in securities and x not in acquirers and x not in found.added:
             rows = [r for r in ftd.trading_rows([ls.step.new_cusip]) if r.symbol == ls.step.symbol]
@@ -1258,7 +1262,7 @@ def _triage(ctx: _RunContext, review_rows: list[dict], review_decisions: Sequenc
     that tally feeds RunSummary.review_flags and the manifest, so exit code 3
     still sees every `error` and `resolution_degraded`."""
     review_rows = merge_review_rows(review_rows)
-    flags = Counter(flag_name(f) for r in review_rows for f in (r.get("review_flags") or "").split(";") if f)
+    flags = Counter(flag_name(t) for r in review_rows for t in flag_tokens(r))
     # A --limit dev subset (or a second universe sharing the repo-relative
     # default data/review_decisions.csv) can only see a fraction of the rows a
     # decisions file was written against, so every decision outside it would
@@ -1275,7 +1279,7 @@ def _triage(ctx: _RunContext, review_rows: list[dict], review_decisions: Sequenc
 
 def _continuation_filings(ctx: _RunContext, delistings: list[Delisting], securities: Mapping[str, Security],
                           review: list[ReviewItem], added: Mapping[str, AddedSecurity] | None = None
-                          ) -> dict[DelistingKey, Reading]:
+                          ) -> dict[DelistingKey, ContinuationReading]:
     """9g. Sub-plan 5i (spec ruling 2.3): what the registrant's own filings say of each continuation, for its
     verdict (10f) only (`continuation_evidence`, over the ending's own-share reading: the one the delisting carries
     when an earlier rule read it, CHTR 2016's and SIRI 2024's rule 6, else one made at its anchor, `own_shares.of`):
@@ -1288,7 +1292,7 @@ def _continuation_filings(ctx: _RunContext, delistings: list[Delisting], securit
     mark = ctx.meter.start()
     names = {sid: s.name or "" for sid, s in securities.items()}
     names.update({sid: a.security.name or "" for sid, a in (added or {}).items()})
-    out: dict[DelistingKey, Reading] = {}
+    out: dict[DelistingKey, ContinuationReading] = {}
     for d in delistings:
         rec, sec = d.record, securities.get(d.sec_id)
         reason = rec.reason or ""

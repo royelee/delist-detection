@@ -20,26 +20,39 @@ value (PCYC) is carried in `value_formula` over the acquirer's averaging price, 
 is named there as the filing words it (`avg_price(ABBV: ten consecutive trading days ending on and including the
 second trading day prior to the final expiration date of the offer)`: `MergerTerms.value_window`). A drop or a
 bankruptcy is priced at its first off-exchange print under its own OTC symbol, and a bankruptcy plan that gave the
-old holders new shares is the stock rule on the new line (ruling R6), from what stage 9e read
-(`distress.DistressTerms`, sub-plan 5g). Pure, on string rows as store.read_table returns them."""
+old holders new shares is the stock rule on the new line (ruling R6), from what stage 9e read (`DistressTerms`,
+sub-plan 5g). The rule's two inputs beyond the row, a merger's (`MergerInputs`) and a drop's or a bankruptcy's
+(`DistressTerms`), are defined here; the value rules are the row vocabulary's (`exit_kind.VALUE_RULES`). Pure, on
+string rows as store.read_table returns them; it loads no client (the LLM's answer type is named for its annotations
+only)."""
 from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import date
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from .distress import DistressTerms
-from .exit_kind import ending_fields
-from .llm_merger_extractor import MergerTerms
+from .exit_kind import TERMS_GATE_SKIPPED, ending_fields, flag_names
 from .observations import normalize_ticker
 from .trading_calendar import next_trading_day
 
-VALUE_RULES = frozenset({"cash", "stock", "cash_plus_stock", "basket", "otc_print", "recovery", "worthless",
-                         "transfer", "continuation", "expiration", "unknown"})
+if TYPE_CHECKING:
+    from .llm_merger_extractor import MergerTerms
+
 OVERRIDE_SOURCE = "--merger-terms"
 PASSED, FAILED, SKIPPED = "passed", "failed", "skipped"
-SKIPPED_FLAG = "terms_gate_skipped"
+
+
+@dataclass(frozen=True)
+class DistressTerms:
+    """What the contract publishes for one drop or bankruptcy ending beyond its delistings.csv row (stage 9e, from
+    distress.py's readers): `otc_symbol` the symbol of its first off-exchange print ("" when unknown); `plan_ratio` a
+    bankruptcy plan's new shares per old share as read (R6: the ending is valued by the stock rule on the new line),
+    with `plan_ticker` the new line's ticker and `plan_source` where the ratio was read."""
+    otc_symbol: str = ""
+    plan_ratio: str = ""
+    plan_ticker: str = ""
+    plan_source: str = ""
 
 
 @dataclass(frozen=True)
@@ -74,7 +87,7 @@ def _ungated(row: Mapping[str, str]) -> str:
     """The terms_gate of terms the payout gate did not keep: `skipped` when it could not check them (a non-USD
     cash leg, a basket, a dollar-valued leg: `terms_gate_skipped`), `failed` when it checked and refused them, and
     blank when no last close existed to check them against."""
-    if any(f.startswith(SKIPPED_FLAG) for f in (row.get("review_flags") or "").split(";")):
+    if TERMS_GATE_SKIPPED in flag_names(row):
         return SKIPPED
     return FAILED if row["last_trade_close"] else ""
 

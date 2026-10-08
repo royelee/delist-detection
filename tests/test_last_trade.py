@@ -1,6 +1,7 @@
 """The last trade module (architecture step 4), at its interface: the readers (`eightk_last_trade`,
-`closing_day`), the source order (`decide_last_trade`), the derived facts (`LastTrade.confirmed`, `publishable`,
-`published` over a row, `anchor_day`, `first_day_after`), the handoff rule (`at_handoff`), and `Dating`: a Form 25
+`closing_day`), the source order (`decide_last_trade`), the anchor day and the first day after (`anchor_day`,
+`first_day_after`; `LastTrade`'s facts and the row reading are exit_kind's, tests/test_exit_kind.py), the handoff
+rule (`at_handoff`), and `Dating`: a Form 25
 group's windows, the MIDAS and halt confirmations through fake adapters, rule 3's tenure (`ticker_taken`,
 `OwnTrading`), rule 4's closing day, the no-Form-25 fallback and stage 9c's re-dating from a notice."""
 from datetime import date
@@ -13,10 +14,9 @@ from delist_detection.form25 import parse_form25
 from delist_detection.ftd import FtdIndex, FtdRow
 from delist_detection.history import Sighting
 from delist_detection.last_trade import (
-    CLOSING_DAY, CONFLICT, EIGHTK_301, EX99_NOTICE, EXCHANGE_PRINTS, LAST_SIGHTING, MIDAS, NASDAQ_HALT, NO_DAY,
-    SOURCES, UNCONFIRMED, UNSOURCED, Dating, LastTrade, OwnTrading, anchor_day, at_handoff, closing_day,
-    decide_last_trade, effective_of, eightk_last_trade, end_day, first_day_after, handoff_day, last_row_trade_day, of_row,
-    published, sections_3_01, ticker_taken,
+    CLOSING_DAY, CONFLICT, EIGHTK_301, EX99_NOTICE, LAST_SIGHTING, MIDAS, NASDAQ_HALT, NO_DAY, UNCONFIRMED, UNSOURCED,
+    Dating, LastTrade, OwnTrading, anchor_day, at_handoff, closing_day, decide_last_trade, eightk_last_trade,
+    first_day_after, handoff_day, last_row_trade_day, sections_3_01, ticker_taken,
 )
 from delist_detection.nasdaq_halts import Halt
 
@@ -346,48 +346,6 @@ def test_a_suspension_during_the_session_reads_no_day(sentence):
     assert eightk_last_trade(_k(sentence)) == (None, "")
 
 
-# -- the derived facts: confirmed, worked out, publishable ---------------------------------------------------------
-def test_confirmed_is_a_day_nothing_flags_unconfirmed():
-    assert LastTrade(date(2020, 1, 2), MIDAS, ()).confirmed
-    assert LastTrade(date(2020, 1, 2), MIDAS, (CONFLICT,)).confirmed
-    assert not LastTrade(date(2020, 1, 2), EX99_NOTICE, (UNCONFIRMED,)).confirmed
-    assert not LastTrade(None, UNSOURCED, (NO_DAY,)).confirmed
-    assert LastTrade(date(2020, 1, 2), CLOSING_DAY, (UNCONFIRMED,)).worked_out
-    assert not LastTrade(date(2020, 1, 2), LAST_SIGHTING, ()).worked_out
-
-
-def test_publishable_is_confirmed_an_exchange_print_and_no_later_than_the_form25_effective_date():
-    eff = date(2018, 12, 9)
-    assert LastTrade(date(2018, 11, 28), EX99_NOTICE, ()).publishable(eff)
-    assert LastTrade(date(2018, 12, 9), MIDAS, ()).publishable(eff)
-    assert LastTrade(date(2018, 11, 28), MIDAS, ()).publishable(None)
-    assert not LastTrade(date(2018, 12, 10), MIDAS, ()).publishable(eff)                 # after it takes effect
-    assert not LastTrade(date(2018, 11, 28), LAST_SIGHTING, ()).publishable(eff)         # no exchange print
-    assert not LastTrade(date(2018, 11, 28), CLOSING_DAY, (UNCONFIRMED,)).publishable(eff)
-    # CNB 2009, IMB 2008: an involuntary notice's decision day, "suspended immediately": not confirmed
-    assert not LastTrade(date(2009, 8, 17), EX99_NOTICE, (UNCONFIRMED,)).publishable(date(2009, 9, 18))
-    assert SOURCES[-1] == UNSOURCED and EXCHANGE_PRINTS < set(SOURCES)
-
-
-def _row(ltd="2018-11-28", source=EX99_NOTICE, flags="", form="25-NSE", filed="2018-11-29"):
-    return {"last_trade_date": ltd, "last_trade_date_source": source, "review_flags": flags,
-            "delist_filing_form": form, "delist_filing_date": filed}
-
-
-def test_a_rows_published_day_reads_the_one_definition():
-    """contract/delistings.csv's last_trade_date over a delistings.csv row: the row read back (`of_row`) is
-    publishable against its Form 25's effective date (filed + 10 days)."""
-    assert published(_row()) == "2018-11-28"
-    assert published(_row(ltd="2018-12-10")) == ""                                   # past 2018-12-09
-    assert published(_row(ltd="2018-12-10", form="8-K")) == "2018-12-10"             # no Form 25: no cap
-    assert published(_row(source=LAST_SIGHTING)) == ""
-    assert published(_row(flags=f"ftd_close_lagged;{UNCONFIRMED}")) == ""
-    assert published(_row(flags=f"{CONFLICT}")) == "2018-11-28"
-    assert published(_row(ltd="", source="")) == ""
-    assert of_row(_row(flags=f"x;{CONFLICT};payout_gate_failed:4.5")).flags == (CONFLICT,)
-    assert effective_of(_row()) == date(2018, 12, 9) and effective_of(_row(form="", filed="")) is None
-
-
 # -- the anchor day and the first day after ------------------------------------------------------------------------
 def test_the_anchor_is_the_last_trade_then_the_form25_then_the_anchor_8k_then_the_delisting_date():
     day = LastTrade(date(2020, 7, 1), MIDAS, ())
@@ -396,12 +354,6 @@ def test_the_anchor_is_the_last_trade_then_the_form25_then_the_anchor_8k_then_th
     assert anchor_day(none, "2020-07-20", filed="2020-07-10", anchor_8k="2020-07-02") == date(2020, 7, 10)
     assert anchor_day(none, "2020-07-20", anchor_8k="2020-07-02") == date(2020, 7, 2)
     assert anchor_day(none, "2020-07-20") == date(2020, 7, 20)
-
-
-def test_the_end_day_is_the_last_trade_else_the_delisting_date_never_the_form25_filing_day():
-    """FWLT 2014: no day, the issuer's own Form 25 filed 2014-11-24, effective 2014-12-04: listed until then."""
-    assert end_day(LastTrade(None, UNSOURCED, (NO_DAY,)), "2014-12-04") == date(2014, 12, 4)
-    assert end_day(LastTrade(date(2014, 11, 21), MIDAS, ()), "2014-12-04") == date(2014, 11, 21)
 
 
 def test_an_added_successors_first_day_is_the_next_trading_day():

@@ -87,7 +87,7 @@ def test_nothing_else_keeps_todays_continued_filings_transfer():
     assert CONTINUED == "Continued 10-K/Q filings >180d after delist (moved to OTC or spun off)"
 
 
-from delist_detection.end_of_era import RESOLVED_FROM_CONTINUED_FILINGS
+from delist_detection.exit_kind import RESOLVED_FROM_CONTINUED_FILINGS
 
 
 def test_every_relabelled_ending_says_the_registrant_kept_filing():

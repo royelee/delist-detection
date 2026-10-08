@@ -3,7 +3,7 @@ from pathlib import Path
 
 from delist_detection.edgar import EdgarSubmission
 from delist_detection.form25 import (
-    Form25, SecurityRef, class_kind, class_label, effective_date, exchange_label, exchanges_named,
+    Form25, SecurityRef, class_kind, class_label, exchange_label, exchanges_named,
     list_form25, match_securities, match_security, notice_last_trade, parse_form25, tied_securities,
 )
 
@@ -152,12 +152,11 @@ def test_exchange_labels():
     assert exchanges_named("The Nasdaq Stock Market LLC") == {"NASDAQ"}
 
 
-def test_list_form25_and_effective_date():
+def test_list_form25():
     subs = [EdgarSubmission("x2", "25-NSE", "2020-01-02", "", "", "p"),
             EdgarSubmission("x1", "25", "2019-01-02", "", "", "p"),
             EdgarSubmission("x3", "8-K", "2019-01-02", "", "3.01", "p")]
     assert [s.accession for s in list_form25(subs)] == ["x1", "x2"]
-    assert effective_date("2018-11-29") == "2018-12-09"
 
 
 def _load_text(name, accession, filing_date):

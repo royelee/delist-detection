@@ -21,31 +21,20 @@ from collections import defaultdict
 from collections.abc import Collection, Mapping, Sequence
 from datetime import date, timedelta
 
-from .distress import DistressTerms
-from .exit_kind import ending_fields, is_real_ending
-from .last_trade import published
+from .exit_kind import ending_fields, last_endings, published
 from .lifecycle import Tables
-from .payout_rule import MergerInputs, basket_legs, value_fields
+from .payout_rule import DistressTerms, MergerInputs, basket_legs, value_fields
 from .store import DelistingKey
 from .verdict import Verdicts, seed_key
 
 ECHOED = ("ticker", "as_of", "name", "cusip", "pin_cik", "pin_sec_id", "sec_id")
 
 
-def last_endings(delistings: Sequence[Mapping[str, str]]) -> dict[str, Mapping[str, str]]:
-    """Each security's last real ending (its successor is not itself), by delist
-    date: the one contract/delistings.csv keeps (decision 12)."""
-    out: dict[str, Mapping[str, str]] = {}
-    for r in sorted((r for r in delistings if is_real_ending(r)), key=lambda r: r["delist_date"]):
-        out[r["sec_id"]] = r
-    return out
-
-
 def delisting_rows(tables: Tables, verdicts: Verdicts,
                    inputs: Mapping[DelistingKey, MergerInputs] | None = None,
                    distress: Mapping[DelistingKey, DistressTerms] | None = None) -> list[dict[str, object]]:
-    """contract/delistings.csv: one row per ended security (`exit_kind.ending_fields`,
-    `last_trade.published`, its ending's verdict, and the payout rule
+    """contract/delistings.csv: one row per ended security, its last real ending (`exit_kind.last_endings`;
+    `exit_kind.ending_fields`, `exit_kind.published`, its ending's verdict, and the payout rule
     `payout_rule.value_fields`; `inputs` are the mergers' pre-gate reads, `distress` the drops'
     and bankruptcies' OTC symbols and plan ratios, pipeline stage 9e). A continuation
     carries no terminal value."""

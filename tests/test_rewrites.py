@@ -9,6 +9,7 @@ import pytest
 from delist_detection.classifier import DelistRecord
 from delist_detection.crsp_codes import CONTINUATION_CODE, CrspBucket
 from delist_detection.delistings import Delisting
+from delist_detection.exit_kind import successor_note
 from delist_detection.last_trade import LastTrade
 from delist_detection.llm_merger_extractor import MergerTerms
 from delist_detection.merger_value import MergerValue, MergerValues
@@ -16,7 +17,7 @@ from delist_detection.payout_extractor import PayoutResult
 from delist_detection.rewrites import (
     HANDOFF_CONTINUATION, LINE_CONTINUATION, NO_EVIDENCE_DEFAULT, R1_CONTINUATION, SUCCESSOR_UNKNOWN, Rewrite, Rule,
     awaits_successor, continuation, is_real_ending, mark_going_on, reclassify, rewrite_by, security_goes_on,
-    successor_by, successor_note,
+    successor_by,
 )
 
 
@@ -170,7 +171,3 @@ def test_a_reclassification_never_makes_a_continuation():
     with pytest.raises(ValueError, match="continuation"):
         reclassify(_row(bucket=CrspBucket.UNKNOWN, code=None), 304, Rule.PLAN_BANKRUPTCY, reason="r")
 
-
-def test_the_successor_note_is_the_reasons_one_wording():
-    assert successor_note("same_issuer_class") == "; successor by same issuer class"
-    assert successor_note("handoff", "timing:cik") == "; successor by handoff (timing:cik)"

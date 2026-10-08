@@ -28,10 +28,8 @@ from datetime import date
 from pathlib import Path
 
 from .atomic_io import write_atomic
-from .contract import last_endings
-from .exit_kind import DROP_REASONS, EXIT_KINDS
+from .exit_kind import DROP_REASONS, EXIT_KINDS, VALUE_RULES, last_endings
 from .lifecycle import Tables
-from .payout_rule import VALUE_RULES
 from .truth import TruthFileError
 
 SCORED = ("exit_kind", "drop_reason", "continuation", "successor_sec_id", "last_trade_date", "value_rule",

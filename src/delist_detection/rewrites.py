@@ -20,8 +20,9 @@ A delisting that did not end its security (`security_goes_on`) is its own succes
 a holding company's merger the security traded through is still a merger row (DIS 2019, WRK 2018).
 
 The interface: `continuation`, `security_goes_on`, `mark_going_on`, `reclassify`; the readings `awaits_successor`,
-`is_real_ending`, `successor_by`, `rewrite_by` and the reason note `successor_note`. Pure, over the in-memory
-delisting (`delistings.Delisting`); the published tables keep their columns and their text."""
+`is_real_ending`, `successor_by` and `rewrite_by`. The reason text a rewrite writes (a link's note, `successor_note`)
+and the flag tokens it reads are the row vocabulary's (exit_kind). Pure, over the in-memory delisting
+(`delistings.Delisting`); the published tables keep their columns and their text."""
 from __future__ import annotations
 
 from collections.abc import Collection, Iterable
@@ -30,6 +31,7 @@ from enum import Enum
 from typing import TYPE_CHECKING, Protocol
 
 from .crsp_codes import CONTINUATION_CODE, CrspBucket, bucket_for_code
+from .exit_kind import GATE_FLAGS, flag_name
 
 if TYPE_CHECKING:
     from .delistings import Delisting
@@ -41,8 +43,7 @@ SUCCESSOR_UNKNOWN = "successor_unknown"
 NO_EVIDENCE_DEFAULT = "no_evidence_default"
 # The flags a merger's value raises (stage 8: the payout and terms gates, the acquirer's close, assumed par); a
 # continuation has no value, so it carries none of them. Matched by flag name (`payout_gate_failed:87.69`).
-PAYOUT_FLAGS = frozenset({"payout_gate_failed", "terms_gate_failed", "terms_gate_skipped", "llm_gate_failed",
-                          "llm_election_package", "election_no_default", "merger_at_par", "acquirer_close_lagged"})
+PAYOUT_FLAGS = GATE_FLAGS | {"llm_election_package", "election_no_default", "merger_at_par", "acquirer_close_lagged"}
 # The flags a continuation rule leaves on the row it made (published in review_flags).
 R1_CONTINUATION, LINE_CONTINUATION = "r1_continuation", "line_continuation"
 HANDOFF_CONTINUATION = "handoff_continuation"
@@ -82,10 +83,6 @@ class Payouts(Protocol):
     def drop(self, key: DelistingKey) -> None: ...
 
 
-def _flag_name(flag: str) -> str:
-    return flag.split(":", 1)[0]
-
-
 def _record(d: Delisting, rule: Rule, **kw) -> Rewrite:
     rw = Rewrite(rule, d.record.bucket, d.record.crsp_code, **kw)
     d.rewrites.append(rw)
@@ -99,9 +96,9 @@ def continuation(d: Delisting, successor: str, rule: Rule, *, reason: str | None
 
     A delisting of another kind becomes an exchange transfer (CRSP `CONTINUATION_CODE`) and takes `reason` and
     `confidence`, both required then; an exchange transfer keeps its kind, and takes `reason` when given (a link's
-    note, `successor_note`). Its flags lose the no-evidence default, `successor_unknown` and every payout flag, then
-    gain `flag` (the rule's own, once); a merger's value is dropped (`payouts.drop`: required for a merger, whose
-    reads a continuation cannot carry). Records and returns the `Rewrite`."""
+    note, `exit_kind.successor_note`). Its flags lose the no-evidence default, `successor_unknown` and every payout
+    flag, then gain `flag` (the rule's own, once); a merger's value is dropped (`payouts.drop`: required for a merger,
+    whose reads a continuation cannot carry). Records and returns the `Rewrite`."""
     rec = d.record
     if rec.bucket is not CrspBucket.EXCHANGE_TRANSFER and (reason is None or confidence is None):
         raise ValueError(f"{d.key}: a {rec.bucket.value} made a continuation needs its own reason and confidence")
@@ -116,7 +113,7 @@ def continuation(d: Delisting, successor: str, rule: Rule, *, reason: str | None
         rec.reason = reason
     rec.successor_sec_id = successor
     kept = [f for f in d.flags if f not in (NO_EVIDENCE_DEFAULT, SUCCESSOR_UNKNOWN)
-            and _flag_name(f) not in PAYOUT_FLAGS]
+            and flag_name(f) not in PAYOUT_FLAGS]
     if flag is not None and flag not in kept:
         kept.append(flag)
     rec.evidence["flags"] = kept
@@ -161,12 +158,6 @@ def reclassify(d: Delisting, code: int, rule: Rule, *, reason: str, confidence: 
     if confidence is not None:
         rec.confidence = confidence
     return rw
-
-
-def successor_note(how: str, evidence: str = "") -> str:
-    """The note a successor link adds to an existing reason ("; successor by same ticker", "; successor by handoff
-    (timing:cik)"): the published reason's one wording of how a successor was found."""
-    return f"; successor by {how.replace('_', ' ')}" + (f" ({evidence})" if evidence else "")
 
 
 def awaits_successor(d: Delisting) -> bool:

@@ -15,30 +15,19 @@ around its last trade. Pure: texts and rows in, facts out.
   plan 8-K's two counts, the old shares outstanding and the new shares the old holders received (WOLF's
   1,306,896 / 156,479,390).
 - `liquidating`: an 8-K that announces a liquidating distribution, a liquidating trust or a plan of liquidation or
-  dissolution (EQC 2025: a voluntary delisting during the liquidation is a liquidation, not a transfer)."""
+  dissolution (EQC 2025: a voluntary delisting during the liquidation is a liquidation, not a transfer).
+
+What stage 9e hands the contract from these readings is `payout_rule.DistressTerms`, beside a merger's inputs."""
 from __future__ import annotations
 
 import re
 from collections.abc import Iterable, Sequence
-from dataclasses import dataclass
 from datetime import date, timedelta
 
 from .ftd import FtdRow, is_trading_symbol
 
 OTC_SYMBOL_DAYS = 60        # an other symbol counts this many days after the last trade (the census's latest: PMI, 40)
 OTC_SETTLE_DAYS = 10        # fails under the exchange symbol over longer than this, at changing prices: it kept trading
-
-
-@dataclass(frozen=True)
-class DistressTerms:
-    """What the contract publishes for one drop or bankruptcy ending beyond its delistings.csv row (stage 9e):
-    `otc_symbol` the symbol of its first off-exchange print ("" when unknown); `plan_ratio` a bankruptcy plan's new
-    shares per old share as read (R6: the ending is valued by the stock rule on the new line), with `plan_ticker`
-    the new line's ticker and `plan_source` where the ratio was read."""
-    otc_symbol: str = ""
-    plan_ratio: str = ""
-    plan_ticker: str = ""
-    plan_source: str = ""
 
 
 def _letters(symbol: str) -> bool:

@@ -22,8 +22,8 @@ from typing import NamedTuple
 
 from .added_securities import AddedSecurity
 from .crsp_codes import CrspBucket
+from .exit_kind import LastTrade, end_day
 from .ftd import FtdIndex, is_deleted_symbol, is_unassigned_symbol
-from .last_trade import LastTrade, end_day
 from .names import description_matches
 from .observations import TickerEra
 from .review_triage import ReviewItem
@@ -339,7 +339,7 @@ SUCCESSOR_TICKER_LOOKBACK_DAYS = 30
 @dataclass(frozen=True)
 class Ending:
     """One ending of a security as its history reads it (`delistings.Delisting.ending` builds it): its key, its last
-    trade (`LastTrade.confirmed` and `last_trade.end_day` are read from it), its bucket, its successor (None: none;
+    trade (`LastTrade.confirmed` and `exit_kind.end_day` are read from it), its bucket, its successor (None: none;
     the security's own sec_id: the security went on) and the exchange it left."""
     key: DelistingKey
     last_trade: LastTrade
@@ -395,7 +395,7 @@ class Histories:
       second reads the built ranges of any security (the taker is no successor).
     - A security is listed today as `listed` says, except one with an ending that ends it whose ticker a successor
       took: the issuer's listing is the successor's (AON 2012). Its history ends at the end day
-      (`last_trade.end_day`) of its last ending that ends it, unless it is listed today."""
+      (`exit_kind.end_day`) of its last ending that ends it, unless it is listed today."""
 
     def __init__(self, securities: Mapping[str, Security], sightings: Mapping[str, Sequence[Sighting]],
                  cusips: Mapping[str, Sequence[str]], ftd: FtdIndex, endings: Iterable[Ending], *,

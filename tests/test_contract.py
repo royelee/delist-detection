@@ -101,7 +101,7 @@ def test_delisting_rows_carry_the_payout_rule_columns_and_the_inputs_of_a_failed
 
 def test_delisting_rows_take_each_endings_distress_terms():
     """Sub-plan 5g: stage 9e's OTC symbol and plan ratio, keyed by the ending's DelistingKey."""
-    from delist_detection.distress import DistressTerms
+    from delist_detection.payout_rule import DistressTerms
     from delist_detection.store import DelistingKey
     t = tables([sec("H"), sec("S")], [iv("H", "HTZ", "2016-07-05", "2020-10-29"), iv("S", "SDRL", "2010-04-16",
                                                                                    "2018-07-02")],

@@ -39,6 +39,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .atomic_io import replace_on_success
+from .exit_kind import flag_name, flag_tokens
 
 SEVERITIES = ("fix", "check", "info")        # this order is the sort order
 
@@ -374,11 +375,6 @@ CATALOG: dict[str, FlagInfo] = {
 _UNKNOWN = FlagInfo("check", "not in the flag catalog", "add it to review_triage.CATALOG")
 
 
-def flag_name(token: str) -> str:
-    """The flag's name: the text before the first `:`."""
-    return token.split(":", 1)[0]
-
-
 def flag_info(token: str) -> FlagInfo:
     """The catalog entry for `token`'s name; an unknown name is `check`."""
     return CATALOG.get(flag_name(token), _UNKNOWN)
@@ -393,10 +389,6 @@ def is_blank(v: object) -> bool:
 
 def _text(v: object) -> str:
     return "" if v is None else str(v)
-
-
-def _tokens(flags: object) -> list[str]:
-    return [t for t in _text(flags).split(";") if t]
 
 
 def _most_severe(severities) -> str:
@@ -420,7 +412,7 @@ def row_severity(row: Mapping) -> str:
     `no_dlret` token (see `_inject_no_dlret`) before this is ever called --
     this function itself no longer special-cases the bucket/dlret fields."""
     bucket = _text(row.get("bucket")).strip()
-    return _most_severe(flag_info(t).severity_for(bucket) for t in _tokens(row.get("review_flags")))
+    return _most_severe(flag_info(t).severity_for(bucket) for t in flag_tokens(row))
 
 
 def _inject_no_dlret(row: Mapping) -> dict:
@@ -430,7 +422,7 @@ def _inject_no_dlret(row: Mapping) -> dict:
     it. Never applied to a non-delisting review item (a Form 25 review item
     such as `form25_unmatched` carries a date but no bucket)."""
     if _is_delisting(row) and is_blank(row.get("dlret")):
-        tokens = _tokens(row.get("review_flags"))
+        tokens = flag_tokens(row)
         if NO_DLRET_FLAG not in tokens:
             return {**row, "review_flags": ";".join(tokens + [NO_DLRET_FLAG])}
     return dict(row)
@@ -546,7 +538,7 @@ def accept_by_flag(review_rows: Iterable[Mapping], flag: str, *, note: str,
     for row in review_rows:
         if bucket is not None and _text(row.get("bucket")).strip() != bucket:
             continue
-        for token in _tokens(row.get("review_flags")):
+        for token in flag_tokens(row):
             if flag_name(token) == flag:
                 out.append(Decision(_text(row.get("sec_id")), _text(row.get("delist_date")),
                                     _text(row.get("ticker")), token, note))
@@ -642,7 +634,7 @@ def _label(row: Mapping) -> str:
 
 
 def _names(row: Mapping) -> set[str]:
-    return {flag_name(t) for t in _tokens(row.get("review_flags"))}
+    return {flag_name(t) for t in flag_tokens(row)}
 
 
 def triage(rows: list[Mapping], decisions: Sequence[Decision], *, report_unmatched: bool = True) -> Triage:
@@ -686,7 +678,7 @@ def triage(rows: list[Mapping], decisions: Sequence[Decision], *, report_unmatch
     info_hidden = cleared = 0
     for row in rows:
         key = _key(row.get("sec_id"), row.get("delist_date"), row.get("ticker"))
-        tokens = _tokens(row.get("review_flags"))
+        tokens = flag_tokens(row)
         kept = []
         for t in tokens:
             if key + (t,) in by_key:

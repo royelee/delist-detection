@@ -15,14 +15,16 @@ A walk starts at a security and ends in one of these kinds:
 - `no_interval`: it has no ticker interval at all;
 - `loop`: a successor chain that comes back to a security already visited.
 A real ending is a delistings.csv row whose `successor_sec_id` is not the
-security itself (a continuing exchange move is not an event). An ending that
-names a successor continues the walk there.
+security itself (a continuing exchange move is not an event); the walk follows
+each security's last one (`exit_kind.last_endings`). An ending that names a
+successor continues the walk there.
 
 `active` and `ended` are covered. Quality is the weakest grade along a covered
 chain (`event_grade`, plus `medium` for a security whose FIGI came from a
 ticker-only lookup).
 
-Pure: reads the tables as `store.read_table` returns them (every cell a string).
+Pure: reads the tables as `store.read_table` returns them (every cell a string), each row through the row
+vocabulary (exit_kind).
 """
 from __future__ import annotations
 
@@ -33,7 +35,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from . import store
-from .exit_kind import ending_fields, is_real_ending
+from .exit_kind import CONFLICT, end_day_of, ending_fields, flag_names, last_endings
 
 ACTIVE, ENDED = "active", "ended"
 ENDED_INCOMPLETE, LEFT_VIEW = "ended_incomplete", "left_view"
@@ -44,12 +46,7 @@ KINDS = (ACTIVE, ENDED, ENDED_INCOMPLETE, LEFT_VIEW, CLOSED_NO_EVENT, NO_INTERVA
 
 HIGH, MEDIUM, LOW = "high", "medium", "low"
 _RANK = {HIGH: 0, MEDIUM: 1, LOW: 2}
-LOW_FLAGS = frozenset({"last_trade_date_conflict", "resolved_by_current_ticker_map"})
-
-
-def flag_names(row: Mapping[str, str]) -> set[str]:
-    """The flag names on a delistings.csv row (the part of each token before `:`)."""
-    return {f.split(":")[0] for f in row.get("review_flags", "").split(";") if f}
+LOW_FLAGS = frozenset({CONFLICT, "resolved_by_current_ticker_map"})
 
 
 @dataclass(frozen=True)
@@ -127,7 +124,7 @@ class LifecycleView:
     the look-ups a truth case needs (`security_on`, `issuer_of`, `tickers_of`)."""
     tables: Tables
     _intervals: dict[str, list[Mapping[str, str]]] = field(init=False)
-    _endings: dict[str, list[Mapping[str, str]]] = field(init=False)
+    _last: dict[str, Mapping[str, str]] = field(init=False)
     _securities: dict[str, Mapping[str, str]] = field(init=False)
     _mapped: dict[tuple[str, str], str] = field(init=False)
     _history: dict[str, list[Mapping[str, str]]] = field(init=False)
@@ -141,11 +138,7 @@ class LifecycleView:
         for r in self.tables.ticker_history:
             self._intervals[r["sec_id"]].append(r)
         self._mapped = {(r["ticker"], r["as_of"]): r["sec_id"] for r in self.tables.observation_map if r["sec_id"]}
-        self._endings = defaultdict(list)
-        for r in self.tables.delistings:
-            self._endings[r["sec_id"]].append(r)
-        for rows in self._endings.values():
-            rows.sort(key=lambda r: r["delist_date"])
+        self._last = last_endings(self.tables.delistings)
         self._securities = {r["sec_id"]: r for r in self.tables.securities}
 
     # -- look-ups -------------------------------------------------------------
@@ -178,12 +171,13 @@ class LifecycleView:
         return hits.pop() if len(hits) == 1 else None
 
     def end_of(self, lc: Lifecycle) -> str | None:
-        """The date a lifecycle that is not active ends: its final ending's last
-        trade date (else its delist date); with no ending, the latest interval end."""
+        """The date a lifecycle that is not active ends: its final ending's end day
+        (`exit_kind.end_day_of`: its last trade date, else its delist date); with no
+        ending, the latest interval end."""
         if lc.kind == ACTIVE:
             return None
         if lc.final is not None:
-            return lc.final["last_trade_date"] or lc.final["delist_date"]
+            return end_day_of(lc.final).isoformat()
         ends = [r["valid_to"] for s in lc.chain for r in self._intervals.get(s, ()) if r["valid_to"]]
         return max(ends) if ends else None
 
@@ -206,11 +200,10 @@ class LifecycleView:
         intervals = self._intervals.get(s, [])
         if not intervals:
             return NO_INTERVAL, chain, []
-        real = [e for e in self._endings.get(s, []) if is_real_ending(e)]
+        e = self._last.get(s)
         open_ = [r for r in intervals if not r["valid_to"]]
-        if not real:
+        if e is None:
             return (ACTIVE if open_ else CLOSED_NO_EVENT), chain, []
-        e = real[-1]
         if any(r["valid_from"] > e["delist_date"] for r in open_):
             return ACTIVE, chain, [e]                 # an open interval after the ending: it kept trading
         if e["successor_sec_id"]:

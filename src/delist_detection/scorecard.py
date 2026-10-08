@@ -26,16 +26,14 @@ from datetime import date
 from pathlib import Path
 
 from .atomic_io import write_atomic
-from .end_of_era import CONTINUED_FILINGS
-from .last_trade import CONFLICT, EXCHANGE_PRINTS, UNCONFIRMED
 from .lifecycle import (CLOSED_NO_EVENT, ENDED_INCOMPLETE,
                         HIGH, LEFT_VIEW, LOW, MEDIUM, NO_INTERVAL,
-                        NO_MAPPED_SIGHTING, Lifecycle, LifecycleView, Tables, flag_names)
+                        NO_MAPPED_SIGHTING, Lifecycle, LifecycleView, Tables)
 from .diagnosis_truth import (KNOWN_WRONG as D_KNOWN_WRONG, MISMATCH_FIELDS, PASS as D_PASS, RULING_PENDING,
                               DiagnosisCase, LibraryRows, field_key, judge_all as judge_diagnosis,
                               load_diagnosis_truth)
-from .exit_kind import ending_fields, is_distress, is_real_ending
-from .payout_rule import VALUE_RULES
+from .exit_kind import (CONFLICT, EXCHANGE_PRINTS, UNCONFIRMED, VALUE_RULES, ending_fields, flag_names, is_distress,
+                        is_real_ending, rests_on_continued_filings)
 from .truth import KNOWN_WRONG, PASS, TruthCase, clopper_pearson_upper, judge_all, load_truth
 from .verdict import ENDING, SECURITY, SEED
 
@@ -204,7 +202,7 @@ def _ending_lines(tables: Tables, window: Window | None) -> dict[str, float]:
         "R2.1.missing_last_trade_date": len(missing_ltd),
         "R2.1.exchange_print_source": sum(r["last_trade_date_source"] in EXCHANGE_PRINTS for r in real),
         "R2.2.unknown_reason": sum(not fields[id(r)].exit_kind for r in real),
-        "R2.2.continued_filings_rule": sum(r["reason"].startswith(CONTINUED_FILINGS) for r in real),
+        "R2.2.continued_filings_rule": sum(rests_on_continued_filings(r["reason"]) for r in real),
         "R2.4.assumed_par": sum(r["dlret_method"] == "assumed_par" for r in real),
         "R2.5.distress": len(distress),
         "R2.5.distress_blank_dlret": sum(not r["dlret"] for r in distress),

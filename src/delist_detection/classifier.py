@@ -35,6 +35,7 @@ from .evidence import (
     says_listing_transfer,
     still_operating,
 )
+from .exit_kind import continuation_reason
 from .figi_resolution import share_class_from_name
 from .form25 import notice_says_acquired, parse_form25
 from .issuer_record import IssuerRecord
@@ -528,7 +529,8 @@ class DelistClassifier:
         if own is not None and own.one_for_one and own.target_issuer():
             _add_flag(flags, R1_CONTINUATION)
             return rec(CONTINUATION_CODE, CrspBucket.EXCHANGE_TRANSFER, "medium",
-                       f"Continuation (R1): each share became one share {own.statement.target[:80].strip()}, no cash")
+                       continuation_reason("R1", f"each share became one share {own.statement.target[:80].strip()}, "
+                                                 "no cash"))
         # Sub-plan 5f: a filer with no 8-K item that decides (a foreign private issuer files 6-Ks) reports the
         # completion in a 6-K or a press-release 8-K near the Form 25 (TAHO's and KING's 6-Ks, BPYU's 7.01 8-K)
         done = self._completion_report(cik, filings, delist_filing, evidence.get("name")) \

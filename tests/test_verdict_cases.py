@@ -3,7 +3,7 @@ committed run's rows. The `before` column is the committed run's (the rules' tar
 keeps its own)."""
 import pytest
 
-from delist_detection.verdict_rules import Reading
+from delist_detection.exit_kind import ContinuationReading
 from tests import verdict_cases as vc
 
 CASES, EDGAR = vc.load()
@@ -98,8 +98,8 @@ def test_each_cases_security_verdict(name):
 
 def test_stage_9g_names_the_confirming_filing_and_the_contradicting_ratio():
     r = vc.readings
-    assert r(CASES["APA"], EDGAR) == {("BBG000BC2C10", "2021-03-14"): Reading(filing="8-K 0001193125-21-063792")}
-    assert r(CASES["HHC"], EDGAR) == {("BBG000MJRJJ2", "2023-08-24"): Reading(filing="8-K 0001104659-23-090461")}
+    assert r(CASES["APA"], EDGAR) == {("BBG000BC2C10", "2021-03-14"): ContinuationReading(filing="8-K 0001193125-21-063792")}
+    assert r(CASES["HHC"], EDGAR) == {("BBG000MJRJJ2", "2023-08-24"): ContinuationReading(filing="8-K 0001104659-23-090461")}
     assert r(CASES["LSXMA"], EDGAR) == {} and r(CASES["DVMT"], EDGAR) == {}
-    assert r(CASES["CHTR"], EDGAR) == {("BBG000PYZSR8", "2016-05-18"): Reading(doubt="ratio:0.9042")}
+    assert r(CASES["CHTR"], EDGAR) == {("BBG000PYZSR8", "2016-05-18"): ContinuationReading(doubt="ratio:0.9042")}
     assert r(CASES["SIRI"], EDGAR) == {}                  # 0.1: a reverse split, no doubt

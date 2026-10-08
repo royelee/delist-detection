@@ -1,5 +1,5 @@
 """Build tests/fixtures/verdicts/ from the committed output/ and the local caches, once (sub-plan 5i): the real cases
-whose verdicts tests/test_verdict_cases.py recomputes offline (spec ruling 2.3, `verdict_rules`, and stage 9g's
+whose verdicts tests/test_verdict_cases.py recomputes offline (spec ruling 2.3, `verdict`'s rulings, and stage 9g's
 `continuation_evidence`).
 
   PYTHONPATH=src python scripts/build_verdict_fixtures.py        # -> tests/fixtures/verdicts/

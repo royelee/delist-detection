@@ -503,7 +503,3 @@ def notice_says_acquired(f25: Form25) -> bool:
     continuations)."""
     t = re.sub(r"\s+", " ", f25.notice_text or "")
     return bool(_ACQUIRED.search(t)) and not _REORGANIZED.search(t)
-
-
-def effective_date(filing_date: str) -> str:
-    return (date.fromisoformat(filing_date) + timedelta(days=10)).isoformat()

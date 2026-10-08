@@ -14,12 +14,12 @@ from datetime import date, timedelta
 from .classifier import DelistClassifier, DelistRecord
 from .crsp_codes import CrspBucket
 from .edgar import EdgarSubmission
-from .end_of_era import CONTINUED_FILINGS
 from .evidence import edgar_names
+from .exit_kind import effective_date, rests_on_continued_filings
 from .figi_resolution import class_letter
 from .form25 import (
-    ISSUER_FORM25_FORMS, REGIONAL_EXCHANGES, Form25, SecurityRef, class_kind, class_letters, effective_date,
-    is_involuntary, list_form25, match_securities, other_class, parse_form25, tied_securities,
+    ISSUER_FORM25_FORMS, REGIONAL_EXCHANGES, Form25, SecurityRef, class_kind, class_letters, is_involuntary,
+    list_form25, match_securities, other_class, parse_form25, tied_securities,
 )
 from .history import Ending
 from .last_trade import Dating, LastTrade, OwnTrading, anchor_day
@@ -652,7 +652,7 @@ class DelistingFinder:
             return None
         ended_by, extra_flags = self._fallback_date(ctx, evidence)
         if ctx.has_cusips is False and "delist_date_approx" in extra_flags \
-                and (rec.reason or "").startswith(CONTINUED_FILINGS):
+                and rests_on_continued_filings(rec.reason or ""):
             # 5h: the continued-filings guess dated by the last sighting alone, for a security with no CUSIP whose
             # fails rows could show it stop: nothing says it ended there (WW 2013, a later name a snapshot
             # carried back; the line traded on to its 2025 bankruptcy). No ending; ended_without_delisting.

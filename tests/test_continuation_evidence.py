@@ -8,8 +8,8 @@ import pytest
 
 from delist_detection import pipeline
 from delist_detection.classifier import DelistRecord
-from delist_detection.continuation_evidence import (confirming_filing, needs_doubt_check, needs_filing, read_continuation,
-                                                    successor_doubt)
+from delist_detection.continuation_evidence import (confirming_filing, needs_doubt_check, needs_filing, ratio_doubt,
+                                                    read_continuation, successor_doubt)
 from delist_detection.crsp_codes import CrspBucket
 from delist_detection.delistings import Delisting
 from delist_detection.edgar import EdgarSubmission
@@ -19,7 +19,7 @@ from delist_detection.last_trade import LastTrade
 from delist_detection.manifest import StageMeter
 from delist_detection.own_shares import Reader
 from delist_detection.sec_stats import SEC_STATS
-from delist_detection.verdict_rules import Reading
+from delist_detection.exit_kind import ContinuationReading
 
 ONE = ("At the effective time, each share of common stock of Acme Corp issued and outstanding was converted into one "
        "share of common stock, par value $0.01 per share, of Acme Holdings, having the same rights.")
@@ -113,7 +113,7 @@ def _stage(edgar, reason=None, names=None, carried=None):
 
 def test_stage_9g_maps_the_delisting_to_its_confirming_filing_and_changes_no_row():
     found, review, d = _stage(Edgar([_8k("0001-21-1", "2021-03-01")], {"0001-21-1": ONE}))
-    assert found == {d.key: Reading(filing="8-K 0001-21-1")} and review == [] and d.flags == []
+    assert found == {d.key: ContinuationReading(filing="8-K 0001-21-1")} and review == [] and d.flags == []
     assert d.own_shares is not None and d.own_shares.day == DAY        # made at the anchor, kept on the delisting
 
 
@@ -160,7 +160,7 @@ def test_a_stated_ratio_other_than_one_or_a_plain_split_contradicts_the_registra
     e = Edgar([_8k("r", "2021-03-02", items="", form="8-K12B")], {"r": RATIO})
     assert successor_doubt(_own(e)) == "ratio:0.9042"
     found, _, d = _stage(e, REASON)
-    assert found == {d.key: Reading(doubt="ratio:0.9042")}
+    assert found == {d.key: ContinuationReading(doubt="ratio:0.9042")}
     split = Edgar([_8k("r", "2021-03-02", items="", form="8-K12B")], {"r": SPLIT})
     assert successor_doubt(_own(split)) == ""                      # SIRI: a reverse split of the same class
     assert _stage(split, REASON)[0] == {}
@@ -171,7 +171,7 @@ def test_stage_9g_reads_the_reading_the_delisting_carries():
     carried = _own(Edgar([_8k("r", "2021-03-02", items="", form="8-K12B")], {"r": RATIO}))
     assert carried.statement.ratio == 0.9042
     found, _, d = _stage(Edgar([], {}), REASON, carried=carried)
-    assert found == {d.key: Reading(doubt="ratio:0.9042")} and d.own_shares is carried
+    assert found == {d.key: ContinuationReading(doubt="ratio:0.9042")} and d.own_shares is carried
 
 
 def test_the_exchanges_notice_is_not_the_registrants_own_filing():
@@ -186,7 +186,7 @@ def test_the_exchanges_notice_is_not_the_registrants_own_filing():
 def test_a_missing_reading_vetoes_nothing_and_a_one_for_one_one_confirms_nothing_here():
     assert successor_doubt(_own(Edgar([], {}))) == ""
     one = Edgar([_8k("r", "2021-03-02", items="", form="8-K12B")], {"r": ONE})
-    assert read_continuation(_own(one), REASON, "A", "B") == Reading()
+    assert read_continuation(_own(one), REASON, "A", "B") == ContinuationReading()
 
 
 def test_the_reading_of_a_failed_fetch_gives_no_veto_and_a_degraded_row():
@@ -216,8 +216,24 @@ def test_a_refusal_stops_the_stage_and_an_added_securitys_delisting_is_skipped()
     assert pipeline._continuation_filings(ctx, [d], {}, []) == {}        # "A" is not an observed security here
 
 
-def test_the_successor_registration_forms_are_all_read():
-    from delist_detection.verdict_rules import successor_filing_reason
+def test_a_ratio_that_is_a_plain_split_or_one_is_no_doubt():
+    assert ratio_doubt(1.0, False) == "" and ratio_doubt(0.1, False) == "" and ratio_doubt(2.0, False) == ""
+    assert ratio_doubt(0.9042, False) == "ratio:0.9042" and ratio_doubt(1.0, True) == "cash"
+    assert ratio_doubt(0.05, False) == "" and ratio_doubt(20.0, False) == ""                    # 1-for-20, 20-for-1
+    assert ratio_doubt(0.75, False) == "ratio:0.75" and ratio_doubt(1.5, False) == "ratio:1.5"
+
+
+def test_the_selection_reads_the_reason_through_the_row_vocabulary():
+    """Stage 9g reads the continuations the verdict reads, from the text their producers write
+    (`exit_kind.continuation_reason`, `successor_note`, `CONTINUED`, `successor_registration_reason`)."""
+    from delist_detection.exit_kind import (CONTINUED, TIMING_CIK, TIMING_CUSIP, continuation_reason, successor_note,
+                                            successor_registration_reason)
+    assert needs_filing(continuation_reason(TIMING_CIK, "x"), "A", "B")
+    assert needs_filing(CONTINUED + successor_note("same_issuer"), "A", "B")
+    assert needs_filing(CONTINUED + successor_note("handoff", TIMING_CIK), "A", "B")
+    assert not needs_filing(continuation_reason(TIMING_CUSIP, "x"), "A", "B")             # a CUSIP switch: evidence
+    assert not needs_filing(continuation_reason(TIMING_CIK, "x"), "A", "A")               # not a continuation
     for form in ("8-K12B", "8-K12B/A", "8-K12G3", "8-K12G3/A"):
-        assert successor_filing_reason(f"Successor registration {form} 2021-03-02: x")
-        assert successor_filing_reason(f"Continuation ({form} 0001-1): x")
+        assert needs_doubt_check(successor_registration_reason(f"{form} 2021-03-02", "x"), "A", "B")
+        assert needs_doubt_check(continuation_reason(f"{form} 0001-1", "x"), "A", "B")
+    assert not needs_doubt_check(successor_registration_reason("8-K12B 2021-03-02", "x"), "A", "")

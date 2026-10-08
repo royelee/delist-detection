@@ -30,12 +30,13 @@ from .crsp_codes import CrspBucket
 from .delistings import Delisting
 from .edgar import EdgarSubmission
 from .evidence import names_near
+from .exit_kind import SUCCESSOR_FORMS, TIMING_CIK, TIMING_CUSIP, continuation_reason, successor_note
 from .filing_search import successor_query
 from .ftd import FtdIndex
 from .history import TAKEOVER_DAYS, Sighting
 from .last_trade import NO_DAY, at_handoff
 from .review_triage import ReviewItem
-from .rewrites import HANDOFF_CONTINUATION, Payouts, Rule, continuation, successor_note
+from .rewrites import HANDOFF_CONTINUATION, Payouts, Rule, continuation
 from .security_master import Security
 from .store import DelistingKey
 
@@ -131,9 +132,6 @@ def continuation_filing(search: Callable, *, name: str, day: date,
     return None
 
 
-SUCCESSOR_FORMS_12G3 = ("8-K12B", "8-K12G3")
-
-
 def own_continuation_filing(filings: Sequence[EdgarSubmission], day: date) -> tuple[str, str, str] | None:
     """The successor issuer's own 8-K12B/8-K12G3 (Rule 12g-3) in its filing list,
     in the window `continuation_filing`'s search uses (30 days before `day`, B's
@@ -143,7 +141,7 @@ def own_continuation_filing(filings: Sequence[EdgarSubmission], day: date) -> tu
     holders' shares carried over (Xerox Holdings 2019, Cigna 2018)."""
     lo, hi = day - timedelta(days=30), day + timedelta(days=60)
     hits = sorted((f.filing_date, f.form, f.accession) for f in filings
-                  if f.form in SUCCESSOR_FORMS_12G3 and f.filing_date
+                  if f.form in SUCCESSOR_FORMS and f.filing_date
                   and lo <= date.fromisoformat(f.filing_date) <= hi)
     return (hits[0][1], hits[0][2], hits[0][0]) if hits else None
 
@@ -228,7 +226,7 @@ def decide_handoff(pair: HandoffPair, *, filing: tuple[str, str, str] | None, sa
     existed = _days(pair.b_first_any, pair.a_last) > CONTINUATION_DAYS
     if (abs(pair.gap) <= CONTINUATION_DAYS and not existed and not lived_on and not issuer_carries_on
             and (same_issuer or cusip_switch)):
-        return HandoffDecision(pair, "continuation", "timing:cik" if same_issuer else "timing:cusip", False)
+        return HandoffDecision(pair, "continuation", TIMING_CIK if same_issuer else TIMING_CUSIP, False)
     older = (not same_issuer and b_issuer_since is not None
              and _days(b_issuer_since, pair.a_last) > ISSUER_AGE_DAYS)
     if existed or older:
@@ -287,8 +285,8 @@ def _unmatched_form25(review: Sequence[ReviewItem], pair: HandoffPair) -> Review
 
 def _continuation_reason(decision: HandoffDecision) -> str:
     p = decision.pair
-    return (f"Continuation ({decision.evidence}): {p.a} last traded as {p.ticker} on {p.a_last} and {p.b} "
-            f"took the ticker from {p.b_first}; holders' shares became {p.b}'s")
+    return continuation_reason(decision.evidence, f"{p.a} last traded as {p.ticker} on {p.a_last} and {p.b} took the "
+                                                  f"ticker from {p.b_first}; holders' shares became {p.b}'s")
 
 
 def _continue(d: Delisting, decision: HandoffDecision, payouts: Payouts | None) -> None:
@@ -393,7 +391,7 @@ def apply_handoffs(decisions: Sequence[HandoffDecision], delistings: Sequence[De
             conflict = None
             if d.record.successor_sec_id not in (None, "", p.b):
                 conflict = f"its row already names {d.record.successor_sec_id} as its successor"
-            elif bucket is CrspBucket.MERGER and decision.evidence == "timing:cusip":
+            elif bucket is CrspBucket.MERGER and decision.evidence == TIMING_CUSIP:
                 # Another issuer's new line taking the target's ticker is also an
                 # acquirer's holding company (Wendy's into Wendy's/Arby's at 4.25
                 # shares, IGT into IGT PLC for cash and stock): only a filing says
