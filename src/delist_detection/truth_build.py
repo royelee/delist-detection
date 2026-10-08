@@ -17,6 +17,7 @@ from collections.abc import Callable, Collection, Mapping, Sequence
 
 from .diagnosis_truth import (COLUMNS, ENDING, ENDING_MOVED, KNOWN_WRONG, NO_ENDING, NOT_SCORED, PASS,
                               RULING_PENDING, SCORED, CaseJudgement, field_key)
+from .truth_set import noted
 
 # What `composite_of` returns for an OpenFIGI answer that cannot settle R2 (an error, or several US lines), as
 # against None (no US line: one security).
@@ -28,7 +29,7 @@ CONTINUATION_BLANKS = ("drop_reason", "cash_per_share", "cash_currency", "stock_
 
 
 def _note(row: dict[str, str], text: str) -> None:
-    row["note"] = f"{row['note']}; {text}" if row["note"] else text
+    row["note"] = noted(row["note"], text)
 
 
 def assemble(norm: Mapping, meta: Mapping[str, str], *, composite_of: Callable[[str], str | None],

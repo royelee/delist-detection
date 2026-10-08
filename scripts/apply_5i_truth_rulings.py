@@ -1,12 +1,12 @@
-"""Sub-plan 5i's truth rulings (2026-10-04), applied to data/diagnosis_truth.csv with change-log rows, through
-`diagnosis_loop.write_together` (both files or neither). The reasons: docs/superpowers/plans/research/2026-10-04-5i-verdicts.md,
+"""Sub-plan 5i's truth rulings (2026-10-04), applied to the diagnosis truth set (data/diagnosis_truth.csv and its change
+log, committed together: `truth_set.TruthSet`). The reasons: docs/superpowers/plans/research/2026-10-04-5i-verdicts.md,
 section 5.
 
-  PYTHONPATH=src python scripts/apply_5i_truth_rulings.py
+  PYTHONPATH=src python scripts/apply_5i_truth_rulings.py [--truth PATH]
 
-Three groups, each cell-based (a cell is set only when it differs, so the script reads the file as it stands and
-leaves every other cell to the sub-plan that owns it: 5f edits other cells of THE and ABI) and idempotent (a second
-run adds no change and no note):
+Three groups of rulings as data (`Ruling`), each cell-based (a cell is set only when it differs, so the script reads
+the file as it stands and leaves every other cell to the sub-plan that owns it: 5f edits other cells of THE and ABI)
+and idempotent (a ruling applies once, the truth set's rule: a second run adds no change and no note):
 
 - `RULINGS`: the 11 rows with fixed_by 5i. 5i changes verdicts only (spec 2.3), never a contract field, so none of
   them can pass by 5i's code: each goes to the sub-plan that owns what is left of it, or to the residual list. Three
@@ -15,18 +15,17 @@ run adds no change and no note):
 - `WAVE2`: the controller's R8 rulings on THE, ABI, LEG and OKE (`controller ruling 2026-10-04 (wave 2)`), each on
   its own NYSE notice in the cache. A row the ruling leaves with no mismatch turns `pass`.
 - `NOTES`: a ruling that changes no cell (the four Liberty 2023 rows' last trade), and `CORRECTIONS`, a reason a
-  ruling stated wrongly (MEL's exit kind), corrected in the note and in the change log.
+  ruling stated wrongly (MEL's exit kind), corrected in the note and in the change log (`Correction`).
 """
+import argparse
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
-from delist_detection import diagnosis_loop as dl  # noqa: E402
-from delist_detection.diagnosis_truth import COLUMNS, load_legs, parse_rows  # noqa: E402
+from delist_detection.truth import TruthFileError  # noqa: E402
+from delist_detection.truth_set import Correction, Ruling, TruthSet, configured  # noqa: E402
 
-TRUTH, LEGS = ROOT / "data/diagnosis_truth.csv", ROOT / "data/diagnosis_truth_legs.csv"
-CHANGES = ROOT / "data/diagnosis_truth_changes.csv"
 WHY = "5i ruling 2026-10-04"
 WHY2 = "controller ruling 2026-10-04 (wave 2)"
 REPORT = "docs/superpowers/plans/research/2026-10-04-5i-verdicts.md"
@@ -40,9 +39,9 @@ MEL_BLOCK = ("its own matched 25-NSE (filed under CIK 64782, accession 000087666
 MEL_WRONG = ("5c's R1 reads the registrant's own 8-Ks, and Mellon filed none that states the exchange (the merger 8-K "
              "is The Bank of New York Mellon's, CIK 1390777); no remaining sub-plan reads a successor's filing for "
              "it, and 5i changes no contract field")
-CORRECTIONS = [("BBG000BNXLK1_2007-07-12", MEL_WRONG, MEL_BLOCK)]
+CORRECTIONS = [Correction("BBG000BNXLK1_2007-07-12", MEL_WRONG, MEL_BLOCK)]
 
-RULINGS = {
+_RULINGS = {
     "BBG000BH5K72_2007-12-28": (        # DJ
         [("last_trade_date", "2007-12-13"), ("fixed_by", "5f")],
         R8.format(acc="0000876661-07-000947", quote="suspended from trading on December 14, 2007")
@@ -79,8 +78,11 @@ RULINGS = {
         "5i changes no contract field"),
 }
 
+# 5i's own rows (fixed_by 5i): a later ruling that moved the row on is left alone
+RULINGS = [Ruling(cid, cells, why, tag=WHY, report=REPORT, owner="5i") for cid, (cells, why) in _RULINGS.items()]
+
 # the controller's R8 rulings: the library already publishes each day (the truth rows called them worked out)
-WAVE2 = {
+_WAVE2 = {
     "BBG000L93Q69_2007-07-22": (        # THE: cash_currency is 5f's, the row stays known_wrong
         [("last_trade_date", "2007-07-11"), ("price_date", "2007-07-12")],
         R8.format(acc="0000876661-07-000606", quote="suspended from trading on July 12, 2007")
@@ -98,6 +100,7 @@ WAVE2 = {
         R8.format(acc="0000876661-26-000770", quote="suspended from trading on September 10, 2026")
         + "; the row matches on every scored field"),
 }
+WAVE2 = [Ruling(cid, cells, why, tag=WHY2, report=REPORT) for cid, (cells, why) in _WAVE2.items()]
 
 # a ruling that changes no cell: the four Liberty 2023 rows keep a last-trade mismatch the baskets do not touch
 _LIBERTY = ("the truth's last trade 2023-08-03 stands, on the 8-K 0001104659-23-087380 (item 3.03: the Reclassification "
@@ -106,49 +109,26 @@ _LIBERTY = ("the truth's last trade 2023-08-03 stands, on the 8-K 0001104659-23-
             "library's 2023-08-04 is the handoff row's last sighting (source last_sighting), the day the new series "
             "began; no sub-plan reads a reclassification's effective time for a handoff row, so the row keeps this "
             "internal_last_trade_date mismatch after 5f's basket work and stays known_wrong until a later one does")
-NOTES = {c: _LIBERTY for c in ("BBG00BFHD827_2023-08-13", "BBG00BFHD9S7_2023-08-13",
-                               "BBG00BFHDCV6_2023-08-13", "BBG00BFHDFR4_2023-08-13")}
+NOTES = [Ruling(c, (), _LIBERTY, tag=WHY2, report=REPORT)
+         for c in ("BBG00BFHD827_2023-08-13", "BBG00BFHD9S7_2023-08-13", "BBG00BFHDCV6_2023-08-13",
+                   "BBG00BFHDFR4_2023-08-13")]
 
 
-def _apply(r, cells, why, tag, changes) -> None:
-    changed = False
-    for f, v in cells:
-        if r[f] != v:
-            changed = True
-            changes.append(dict(case_id=r["case_id"], field=f, old=r[f], new=v, reason=f"{tag}: {why}",
-                                report=REPORT))
-            r[f] = v
-    if changed:
-        r["note"] = f"{r['note']}; {tag}: {why}"
-
-
-def main() -> int:
-    rows = dl.read_csv(TRUTH)
-    log = dl.read_csv(CHANGES)
-    changes: list[dict] = []
-    for r in rows:
-        cid = r["case_id"]
-        if cid in RULINGS:
-            cells, why = RULINGS[cid]
-            # a later ruling that moved the row on is left alone
-            if r["fixed_by"] == "5i" or ("fixed_by", r["fixed_by"]) in cells:
-                _apply(r, cells, why, WHY, changes)
-        if cid in WAVE2:
-            _apply(r, WAVE2[cid][0], WAVE2[cid][1], WHY2, changes)
-        if cid in NOTES and NOTES[cid] not in r["note"]:
-            changes.append(dict(case_id=cid, field="note", old="", new=NOTES[cid], reason=f"{WHY2}: {NOTES[cid]}",
-                                report=REPORT))
-            r["note"] = f"{r['note']}; {WHY2}: {NOTES[cid]}"
-        for case_id, old, new in CORRECTIONS:
-            if cid == case_id and old in r["note"]:
-                r["note"] = r["note"].replace(old, new)
-    for case_id, old, new in CORRECTIONS:          # the change log states the same reason
-        for c in log:
-            if c["case_id"] == case_id and old in c["reason"]:
-                c["reason"] = c["reason"].replace(old, new)
-    parse_rows(rows, str(TRUTH), load_legs(LEGS))
-    dl.write_together([(TRUTH, COLUMNS, rows), (CHANGES, dl.CHANGE_COLUMNS, log + changes)])
-    print(f"{len(changes)} truth changes")
+def main(argv: list[str] | None = None) -> int:
+    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    p.add_argument("--truth", type=Path, help="the truth file (default: the one data/scorecard.json names)")
+    args = p.parse_args(argv)
+    try:
+        truth = TruthSet.open(args.truth or configured(ROOT))
+        for ruling in (*RULINGS, *WAVE2, *NOTES):
+            truth.rule(ruling)
+        for correction in CORRECTIONS:          # the note and the change log state the same reason
+            truth.correct(correction)
+        truth.commit()
+    except TruthFileError as exc:
+        print(f"ABORTED: {exc}", file=sys.stderr)
+        return 2
+    print(f"{len(truth.changes)} truth changes")
     return 0
 
 

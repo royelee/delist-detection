@@ -27,6 +27,7 @@ from delist_detection.crsp_codes import CrspBucket             # noqa: E402
 from delist_detection.edgar import EdgarClient                 # noqa: E402
 from delist_detection.llm_merger_extractor import LLMMergerTermsExtractor   # noqa: E402
 from delist_detection.payout_extractor import PayoutExtractor  # noqa: E402
+from delist_detection.truth_set import TruthSet, configured     # noqa: E402
 
 # case_id -> what it pins: a rule that moves it (R5, R4, R3, the stock value leg) or a guard that keeps it
 CASES = {
@@ -67,9 +68,10 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--out", type=Path, default=ROOT / "tests" / "fixtures" / "terms")
     args = p.parse_args(argv)
 
-    truth = {r["case_id"]: r for r in csv.DictReader(open(ROOT / "data" / "diagnosis_truth.csv"))}
+    truth_set = TruthSet.open(configured(ROOT))
+    truth = {r["case_id"]: r for r in truth_set.rows}
     truth_legs: dict[str, list[dict]] = {}
-    for r in csv.DictReader(open(ROOT / "data" / "diagnosis_truth_legs.csv")):
+    for r in truth_set.legs:
         truth_legs.setdefault(r["case_id"], []).append({k: r[k] for k in ("leg", "ratio", "price_ticker")})
     rows: dict[str, list[dict]] = {}
     for r in csv.DictReader(open(args.run / "delistings.csv")):

@@ -1,4 +1,5 @@
-"""diagnosis_loop: error keys, the ledger, case rows and placeholder renames (spec 1.7)."""
+"""diagnosis_loop: error keys, the ledger's vocabulary and case rows (spec 1.7); the round script end to end. The
+ledger's reading and writing, and renaming truth rows, are the truth set's (tests/test_truth_set.py)."""
 import importlib.util
 import json
 import os
@@ -8,7 +9,8 @@ from pathlib import Path
 from delist_detection import diagnosis_loop as dl
 from delist_detection import diagnosis_truth as dt
 from delist_detection import store
-from tests.diagnosis_rows import truth_row
+from delist_detection.truth_set import TruthSet, changes_path, read_ledger
+from tests.diagnosis_rows import ledger_row, truth_row, write_truth
 from tests.lifecycle_tables import contract_row, ending, hist, sec, tables
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -24,21 +26,16 @@ def test_mismatch_key_names_the_case_field_and_both_values():
     assert dl.mismatch_key(j.mismatches[0]) == "mis|A_2010-01-04|exit_kind|merger|exchange"
 
 
-def test_ledger_round_trip_and_settled_keys(tmp_path):
-    path = tmp_path / "loop" / "diagnosed.csv"
-    rows = [dict(key="k1", kind="regression", sec_id="Z", label="5a", round="1", outcome="new_right", report="r"),
-            dict(key="k2", kind="mismatch", sec_id="A", label="5a", round="1", outcome="pending", report="")]
-    dl.write_ledger(path, rows)
-    back = dl.read_ledger(path)
-    assert back == rows and dl.ledger_keys(back) == {"k1", "k2"} and dl.settled_keys(back) == {"k1"}
-    assert dl.read_ledger(tmp_path / "absent.csv") == []
+def test_settled_keys_are_the_regressions_the_loop_found_right():
+    rows = [ledger_row("k1", kind="regression", outcome="new_right"), ledger_row("k2", outcome="pending")]
+    assert dl.settled_keys(rows) == {"k1"}
 
 
 def test_seeding_twice_adds_nothing():
     judged = _judged([contract_row("A", exit_kind="exchange", last_trade_date="2010-01-02")])
     first = dl.seed_rows(judged, set(), "5-0")
     assert [r["outcome"] for r in first] == ["known", "known"]
-    assert dl.seed_rows(judged, dl.ledger_keys(first), "5-0") == []
+    assert dl.seed_rows(judged, {r["key"] for r in first}, "5-0") == []
 
 
 def test_context_collapses_ticker_ranges_and_reads_the_last_real_ending():
@@ -66,41 +63,6 @@ def test_case_rows_group_errors_by_security_with_json_cells():
     assert json.loads(rows[0]["side_b"]) == ["exchange", "2010-01-02"]
     assert json.loads(rows[1]["fields"]) == ["delistings.added"] and rows[1]["ticker"] == "ZZZ"
     assert json.loads(rows[1]["keys"])[0].startswith("reg|Z|delistings||added")
-
-
-def test_rename_truth_follows_id_changes():
-    rows = [truth_row("CIK9-COMMON_2010-01-04", "CIK9-COMMON"), truth_row("B_2010-01-04", "B")]
-    ids = [{"old_sec_id": "CIK9-COMMON", "new_sec_id": "BBGX", "changed_on": "2026-10-04", "issuer_cik": "9",
-            "share_class": "COMMON"}]
-    renamed, changes = dl.rename_truth(rows, ids)
-    assert [r["sec_id"] for r in renamed] == ["BBGX", "B"]
-    assert renamed[0]["case_id"] == "CIK9-COMMON_2010-01-04"
-    assert [(c["case_id"], c["field"], c["old"], c["new"]) for c in changes] == [
-        ("CIK9-COMMON_2010-01-04", "sec_id", "CIK9-COMMON", "BBGX")]
-
-
-def test_rename_truth_follows_a_figi_renamed_to_another_figi():
-    """Sub-plan 5h, rule F: id_changes also holds FIGI-to-FIGI rows (CRC BBG00Y04KP80 to BBG0060B3M63)."""
-    rows = [truth_row("BBG00Y04KP80_2016-06-01", "BBG00Y04KP80")]
-    ids = [{"old_sec_id": "BBG00Y04KP80", "new_sec_id": "BBG0060B3M63", "changed_on": "2026-10-04",
-            "issuer_cik": "1609253", "share_class": "COMMON"}]
-    renamed, changes = dl.rename_truth(rows, ids)
-    assert renamed[0]["sec_id"] == "BBG0060B3M63" and len(changes) == 1
-
-
-def test_rename_truth_renames_a_placeholder_named_as_price_or_successor_security():
-    """Identity follows the FIGI (R2): a truth row that prices at, or continues into, a placeholder the run renamed
-    names the FIGI too (CWTR's otc_print at its own CIK1018005-COMMON line; ANN's ASNA leg at CIK1498301-COMMON)."""
-    rows = [truth_row("CIK9-COMMON_2010-01-04", "CIK9-COMMON", price_sec_id="CIK9-COMMON"),
-            truth_row("C_2011-01-04", "C", successor_sec_id="CIK9-COMMON", price_sec_id="*")]
-    ids = [{"old_sec_id": "CIK9-COMMON", "new_sec_id": "BBGX", "changed_on": "2026-10-04", "issuer_cik": "9",
-            "share_class": "COMMON"}]
-    renamed, changes = dl.rename_truth(rows, ids)
-    assert [(r["sec_id"], r["price_sec_id"], r["successor_sec_id"]) for r in renamed] == [
-        ("BBGX", "BBGX", "*"), ("C", "*", "BBGX")]
-    assert sorted((c["case_id"], c["field"]) for c in changes) == [
-        ("CIK9-COMMON_2010-01-04", "price_sec_id"), ("CIK9-COMMON_2010-01-04", "sec_id"),
-        ("C_2011-01-04", "successor_sec_id")]
 
 
 def test_two_truth_cases_of_one_security_get_distinct_case_ids():
@@ -136,22 +98,21 @@ def _write_out(out, contract, ids=(), securities=None):
 
 def _argv(tmp_path, repo, *extra):
     return ["--repo", str(repo), "--output-dir", str(repo / "output"), "--truth", str(tmp_path / "truth.csv"),
-            "--legs", str(tmp_path / "legs.csv"), "--changes", str(tmp_path / "changes.csv"),
             "--loop-dir", str(tmp_path / "loop"), *extra]
 
 
 def test_seed_ledger_twice_adds_nothing(tmp_path, capsys):
     repo = tmp_path / "repo"
     _write_out(repo / "output", [contract_row("A", exit_kind="exchange", last_trade_date="2010-01-02")])
-    dt.write_diagnosis_truth(tmp_path / "truth.csv", [truth_row("A_2010-01-04", "A", exit_kind="merger",
-                                                                last_trade_date="2010-01-01")])
+    write_truth(tmp_path / "truth.csv", [truth_row("A_2010-01-04", "A", exit_kind="merger",
+                                                    last_trade_date="2010-01-01")])
     argv = _argv(tmp_path, repo, "--label", "5-0", "--seed-ledger")
     assert round_script.main(argv) == 0
     assert json.loads(capsys.readouterr().out)["seeded"] == 2
     assert round_script.main(argv) == 0
     assert json.loads(capsys.readouterr().out)["seeded"] == 0
-    ledger = dl.read_ledger(tmp_path / "loop" / "diagnosed.csv")
-    assert len(ledger) == 2 and len(dl.ledger_keys(ledger)) == 2 and {r["outcome"] for r in ledger} == {"known"}
+    ledger = read_ledger(tmp_path / "loop" / "diagnosed.csv")
+    assert len(ledger) == 2 and len({r["key"] for r in ledger}) == 2 and {r["outcome"] for r in ledger} == {"known"}
 
 
 def test_a_round_renames_truth_and_reports_a_regression(tmp_path, capsys):
@@ -165,16 +126,15 @@ def test_a_round_renames_truth_and_reports_a_regression(tmp_path, capsys):
     ids = [{"old_sec_id": "CIK9-COMMON", "new_sec_id": "BBGX", "changed_on": "2026-10-04", "issuer_cik": "9",
             "share_class": "COMMON"}]
     _write_out(out, [contract_row("Z", exit_kind="exchange"), contract_row("BBGX", exit_kind="merger")], ids)
-    dt.write_diagnosis_truth(tmp_path / "truth.csv",
-                             [truth_row("CIK9-COMMON_2010-01-04", "CIK9-COMMON", exit_kind="merger")])
+    write_truth(tmp_path / "truth.csv", [truth_row("CIK9-COMMON_2010-01-04", "CIK9-COMMON", exit_kind="merger")])
     assert round_script.main(_argv(tmp_path, repo, "--label", "5a", "--base", "HEAD", "--round", "1")) == 0
     printed = json.loads(capsys.readouterr().out)
     assert (printed["mismatches_new"], printed["regressions_new"], printed["renamed"]) == (0, 1, 1)
     # the renamed placeholder (removed row, new id change) belongs to its truth case, so only Z shows
     assert [(c["case_id"], c["mode"]) for c in printed["cases"]] == [("Z_5a-r1", "regression")]
-    renamed = dl.read_csv(tmp_path / "truth.csv")
+    renamed = TruthSet.open(tmp_path / "truth.csv").rows
     assert [(r["case_id"], r["sec_id"]) for r in renamed] == [("CIK9-COMMON_2010-01-04", "BBGX")]
-    [change] = dl.read_csv(tmp_path / "changes.csv")
+    [change] = dl.read_csv(changes_path(tmp_path / "truth.csv"))
     assert (change["case_id"], change["old"], change["new"]) == ("CIK9-COMMON_2010-01-04", "CIK9-COMMON", "BBGX")
     assert Path(printed["path"]) == tmp_path / "loop" / "5a" / "round-1" / "cases.csv"
     cases = dl.read_csv(Path(printed["path"]))
@@ -192,12 +152,11 @@ def test_a_round_renames_through_the_base_commits_securities_when_id_changes_is_
     _git(repo, "add", "-A")
     _git(repo, "commit", "-q", "-m", "base")
     _write_out(out, [contract_row("Z", exit_kind="merger")], securities=[sec("Z"), sec("BBGX", cik="9")])
-    dt.write_diagnosis_truth(tmp_path / "truth.csv", [truth_row("CIK9-COMMON_2010-01-04", "CIK9-COMMON",
-                                                                shape="no_ending")])
+    write_truth(tmp_path / "truth.csv", [truth_row("CIK9-COMMON_2010-01-04", "CIK9-COMMON", shape="no_ending")])
     assert round_script.main(_argv(tmp_path, repo, "--label", "5a", "--base", "HEAD", "--round", "1")) == 0
     printed = json.loads(capsys.readouterr().out)
     assert (printed["mismatches_new"], printed["renamed"], printed["cases"]) == (0, 1, [])
-    assert [(r["case_id"], r["sec_id"]) for r in dl.read_csv(tmp_path / "truth.csv")] == [
+    assert [(r["case_id"], r["sec_id"]) for r in TruthSet.open(tmp_path / "truth.csv").rows] == [
         ("CIK9-COMMON_2010-01-04", "BBGX")]
-    [change] = dl.read_csv(tmp_path / "changes.csv")
+    [change] = dl.read_csv(changes_path(tmp_path / "truth.csv"))
     assert (change["old"], change["new"]) == ("CIK9-COMMON", "BBGX")

@@ -16,18 +16,17 @@ is the corrected last trade date for delistings.csv when the contract leaves it 
 (must not match yet; `fixed_by` names the sub-plan, or `residual`) or ruling_pending (not judged; `fixed_by`
 `regression` marks a regressed row the loop could not settle). `data/diagnosis_truth_legs.csv` holds a basket's
 legs (ruling R3), judged against contract/payout_legs.csv once the contract has one.
+
+This module holds the rows' format (`parse_rows` and `parse_legs` turn rows into validated cases) and the judge.
+The files are read, changed and written as one truth set (`truth_set.TruthSet`), their only reader and writer.
 """
 from __future__ import annotations
 
-import csv
-import io
 from collections import defaultdict
 from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date
-from pathlib import Path
 
-from .atomic_io import write_atomic
 from .exit_kind import DROP_REASONS, EXIT_KINDS, VALUE_RULES, last_endings
 from .run_snapshot import RunSnapshot
 from .truth import TruthFileError
@@ -153,21 +152,13 @@ def parse_rows(rows: Sequence[Mapping[str, str]], where: str = "rows",
     return out
 
 
-def _read(path: Path, columns: Sequence[str]) -> list[dict[str, str]]:
-    with path.open(newline="", encoding="utf-8-sig") as fh:
-        reader = csv.DictReader(fh)
-        if tuple(reader.fieldnames or ()) != tuple(columns):
-            raise DiagnosisTruthError(f"{path}: columns {reader.fieldnames} are not {list(columns)}")
-        return list(reader)
-
-
-def load_legs(path: str | Path) -> dict[str, tuple[Leg, ...]]:
-    """data/diagnosis_truth_legs.csv by case_id, each case's legs in leg order. Raises DiagnosisTruthError on a
-    leg number below 1, a repeated leg, a ratio that is not a number or a bad price_date."""
-    path = Path(path)
+def parse_legs(rows: Sequence[Mapping[str, str]], where: str = "legs") -> dict[str, tuple[Leg, ...]]:
+    """Leg rows (every LEG_COLUMNS key) by case_id, each case's legs in leg order. Raises DiagnosisTruthError naming
+    `where` and the line (the header is line 1) on a leg number below 1, a repeated leg, a ratio that is not a number
+    or a bad price_date."""
     by_case: dict[str, dict[int, Leg]] = {}
-    for line, r in enumerate(_read(path, LEG_COLUMNS), start=2):
-        at = f"{path}:{line}"
+    for line, r in enumerate(rows, start=2):
+        at = f"{where}:{line}"
         try:
             n = int(r["leg"])
         except ValueError:
@@ -183,36 +174,6 @@ def load_legs(path: str | Path) -> dict[str, tuple[Leg, ...]]:
             raise DiagnosisTruthError(f"{at}: leg {n} of {r['case_id']} is repeated")
         legs[n] = Leg(n, r["ratio"], r["price_sec_id"], r["price_ticker"], r["price_date"])
     return {cid: tuple(legs[n] for n in sorted(legs)) for cid, legs in by_case.items()}
-
-
-def load_diagnosis_truth(path: str | Path, legs_path: str | Path | None = None) -> list[DiagnosisCase]:
-    """Every case of the truth file at `path`, with its legs from `legs_path` (missing: no legs). Raises
-    DiagnosisTruthError (file and line in the message), also for legs whose case is not in the truth file."""
-    path = Path(path)
-    legs = load_legs(legs_path) if legs_path is not None and Path(legs_path).exists() else {}
-    cases = parse_rows(_read(path, COLUMNS), str(path), legs)
-    unknown = sorted(set(legs) - {c.case_id for c in cases})
-    if unknown:
-        raise DiagnosisTruthError(f"{legs_path}: legs for unknown case(s) {unknown}")
-    return cases
-
-
-def _write(path: str | Path, columns: Sequence[str], rows: Sequence[Mapping[str, str]]) -> None:
-    buf = io.StringIO()
-    w = csv.DictWriter(buf, fieldnames=list(columns), lineterminator="\n")
-    w.writeheader()
-    w.writerows(rows)
-    write_atomic(Path(path), buf.getvalue())
-
-
-def write_diagnosis_truth(path: str | Path, rows: Sequence[Mapping[str, str]]) -> None:
-    """Write truth rows (every COLUMNS key) to `path` in one atomic replace."""
-    _write(path, COLUMNS, rows)
-
-
-def write_legs(path: str | Path, rows: Sequence[Mapping[str, str]]) -> None:
-    """Write leg rows (every LEG_COLUMNS key) to `path` in one atomic replace."""
-    _write(path, LEG_COLUMNS, rows)
 
 
 MISMATCH_FIELDS = (*SCORED, "internal_last_trade_date", "shape", "ending", "legs", "sec_id")

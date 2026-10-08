@@ -27,12 +27,13 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 from delist_detection.atomic_io import write_atomic
-from delist_detection.diagnosis_loop import LEDGER, read_csv, settled_keys
+from delist_detection.diagnosis_loop import LEDGER, settled_keys
 from delist_detection.lifecycle import LifecycleView
 from delist_detection.scorecard import (ScorecardConfigError, build, drops, load_config, raise_floor, write)
 from delist_detection.regression import build_report, unexplained
 from delist_detection.run_snapshot import RunSnapshot, SnapshotError
 from delist_detection.truth import TruthFileError
+from delist_detection.truth_set import read_ledger
 
 LIFECYCLE_COLUMNS = ("unit", "key", "sec_id", "kind", "quality", "chain", "final_delist_date", "final_bucket")
 
@@ -81,10 +82,11 @@ def main(argv: list[str] | None = None) -> int:
         # Recomputed here, never read from output/regression_report.csv, which can be stale.
         try:
             rows = build_report(RunSnapshot.at(args.repo, args.base, args.output_dir), run, config.diagnosis)
-        except (SnapshotError, OSError) as exc:
+            settled = settled_keys(read_ledger(args.ledger))
+        except (SnapshotError, TruthFileError, OSError) as exc:
             print(f"ABORTED: {exc}", file=sys.stderr)
             return 2
-        left = unexplained(rows, config.diagnosis, settled_keys(read_csv(args.ledger)))
+        left = unexplained(rows, config.diagnosis, settled)
         card["metrics"]["D.unexplained_regressions"] = len({r["sec_id"] for r in left})
     for name, value in sorted(card["metrics"].items()):
         print(f"{name:48} {value}")

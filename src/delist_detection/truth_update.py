@@ -22,21 +22,27 @@
   to retry (spec 1.6).
 - A case with no usable record (the agent failed: none, not a JSON object, or without `field_verdicts`,
   `confidence` or `verification`) changes nothing and leaves no ledger row, so the next round retries it.
-- `flip_statuses` turns a known_wrong case that now matches into `pass`.
+- A known_wrong case that now matches turns `pass` (`TruthSet.flip`, after the round).
 
-Every truth change is a change-log row, and every settled error a ledger row. Loop records carry `mode` and
-`field_verdicts`: [{"field", "right": old | new | truth | library | neither, "value", "missed_filing"}]."""
+The truth set (`truth_set.TruthSet`) holds the truth file, its change log and the ledger, and logs every change these
+rules make through its primitives: every truth change is a change-log row, and every settled error a ledger row. Loop
+records carry `mode` and `field_verdicts`: [{"field", "right": old | new | truth | library | neither, "value",
+"missed_filing"}]."""
 from __future__ import annotations
 
 import json
 import re
 from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from .diagnosis_loop import LIBRARY_RIGHT, MISMATCH, NEW_RIGHT, OLD_RIGHT, PENDING, REGRESSION, TRUTH_RIGHT
 from .diagnosis_truth import (COLUMNS, ENDING, KNOWN_WRONG, NO_ENDING, NOT_SCORED, PASS, REGRESSION_PENDING,
                               RULING_PENDING, SCORED)
 from .regression import BRIEF_COLUMNS
+
+if TYPE_CHECKING:                   # the truth set calls these rules (TruthSet.apply_round); no import at run time
+    from .truth_set import TruthSet
 
 OLD, NEW, TRUTH, LIBRARY = "old", "new", "truth", "library"
 WHOLE_ROW = ("delistings.added", "delistings.removed")
@@ -46,6 +52,8 @@ REQUIRED_KEYS = ("field_verdicts", "confidence", "verification")
 
 @dataclass
 class RoundResult:
+    """What `TruthSet.apply_round` gives back: the truth rows as they now stand, the round's change-log and ledger
+    rows, and the cases to retry."""
     truth_rows: list[dict[str, str]]
     changes: list[dict[str, str]]
     ledger_rows: list[dict[str, str]]
@@ -65,10 +73,6 @@ def _cites(verdict: Mapping) -> bool:
 def _usable(rec: Mapping) -> bool:
     v = rec.get("verification") or {}
     return rec.get("confidence") == "verified" and bool(v.get("upheld")) and not v.get("fields_refuted")
-
-
-def _change(case_id: str, name: str, old: str, new: str, reason: str, report: str) -> dict[str, str]:
-    return dict(case_id=case_id, field=name, old=old, new=new, reason=reason, report=report)
 
 
 def _ledger(key: str, kind: str, sec: str, label: str, round_no: int, outcome: str, report: str) -> dict[str, str]:
@@ -121,20 +125,18 @@ def _truth_right_keys(case_id: str, right: Mapping[str, str], fields: Sequence[s
     return out
 
 
-def apply_round(cases: Sequence[Mapping[str, str]], records: Mapping[str, Mapping],
-                truth_rows: Sequence[Mapping[str, str]], base_contract: Mapping[str, Mapping[str, str]],
-                new_contract: Mapping[str, Mapping[str, str]], *, label: str, round_no: int, report_dir: str,
-                ledger_keys: Collection[str] = frozenset(), run_sec_ids: Collection[str] | None = None,
-                renamed: Collection[str] = ()) -> RoundResult:
-    """One round's diagnoses applied (the module docstring's rules). A regression of a security the run no longer
-    holds (`run_sec_ids`: the run's securities, None for no check) or of a placeholder renamed since the base
-    commit (`renamed`: the old sec_ids) settles its ledger keys and adds no truth row: a truth row under an id
-    the run lacks could only ever be judged a `sec_id` mismatch."""
-    rows = [dict(r) for r in truth_rows]
-    by_case = {r["case_id"]: r for r in rows}
-    in_truth = {r["sec_id"] for r in rows}
-    changes: list[dict[str, str]] = []
-    ledger: list[dict[str, str]] = []
+def apply_round(truth: TruthSet, cases: Sequence[Mapping[str, str]], records: Mapping[str, Mapping],
+                base_contract: Mapping[str, Mapping[str, str]], new_contract: Mapping[str, Mapping[str, str]], *,
+                label: str, round_no: int, report_dir: str, run_sec_ids: Collection[str] | None = None,
+                renamed: Collection[str] = ()) -> list[str]:
+    """One round's diagnoses applied to the truth set `truth` and its ledger (the module docstring's rules), through
+    the set's primitives (`TruthSet.set_cells`, `move_status`, `add_row`, `settle`), which log each change. Called
+    by `TruthSet.apply_round`. A regression of a security the run no longer holds (`run_sec_ids`: the run's
+    securities, None for no check) or of a placeholder renamed since the base commit (`renamed`: the old sec_ids)
+    settles its ledger keys and adds no truth row: a truth row under an id the run lacks could only ever be judged a
+    `sec_id` mismatch. Returns the cases to retry (no usable record)."""
+    ledger_keys = truth.ledger_keys             # the keys settled before this round
+    in_truth = {r["sec_id"] for r in truth.rows}
     pending: list[str] = []
     for case in cases:
         keys, fields, a, b = (json.loads(case[c]) for c in ("keys", "fields", "side_a", "side_b"))
@@ -153,7 +155,7 @@ def apply_round(cases: Sequence[Mapping[str, str]], records: Mapping[str, Mappin
             for f, k in zip(fields, keys):
                 outcome = (NEW_RIGHT if right[f] == NEW else OLD_RIGHT if right[f] == OLD else PENDING) \
                     if usable else PENDING
-                ledger.append(_ledger(k, REGRESSION, sec, label, round_no, outcome, report))
+                truth.settle([_ledger(k, REGRESSION, sec, label, round_no, outcome, report)])
             touching = [f for f in fields if f in SCORED or f in WHOLE_ROW]
             gone = (run_sec_ids is not None and sec not in run_sec_ids) or sec in renamed
             if sec in in_truth or not touching or gone:
@@ -164,10 +166,10 @@ def apply_round(cases: Sequence[Mapping[str, str]], records: Mapping[str, Mappin
                 row.update(status=PASS if all_new else KNOWN_WRONG, fixed_by="" if all_new else label,
                            confidence=rec.get("confidence", ""), skeptic="upheld",
                            note=f"added by the {label} loop: regression of {', '.join(fields)}")
-                settled = {r["key"] for r in ledger} | set(ledger_keys)
+                settled = truth.ledger_keys
                 for k in _truth_right_keys(row["case_id"], right, fields, a, b, row):
                     if k not in settled:
-                        ledger.append(_ledger(k, MISMATCH, sec, label, round_no, TRUTH_RIGHT, report))
+                        truth.settle([_ledger(k, MISMATCH, sec, label, round_no, TRUTH_RIGHT, report)])
                         settled.add(k)
             else:
                 row = _blank(case["case_id"], sec, case["ticker"])
@@ -176,41 +178,27 @@ def apply_round(cases: Sequence[Mapping[str, str]], records: Mapping[str, Mappin
                            skeptic="upheld" if (rec.get("verification") or {}).get("upheld") else "refuted",
                            note=f"regression of {', '.join(fields)} not settled by the {label} loop")
             row["report"] = report
-            rows.append(row)
+            truth.add_row(row, reason=f"{label} loop round {round_no}: regression", report=report)
             in_truth.add(sec)
-            changes.append(_change(row["case_id"], "(row)", "", f"added ({row['status']})",
-                                   f"{label} loop round {round_no}: regression", report))
         else:
-            truth = by_case.get(case["truth_case_id"])
-            if truth is None:
+            t = truth.row(case["truth_case_id"])
+            if t is None:
                 raise ValueError(
                     f"case {case['case_id']}: truth case {case['truth_case_id']!r} is not in the truth rows")
-            for f, k, t, lib in zip(fields, keys, a, b):
+            for f, k, lib in zip(fields, keys, b):
                 v = verdicts.get(f) or {}
                 if usable and v.get("right") == LIBRARY and _cites(v):
                     outcome = LIBRARY_RIGHT
                     if f in SCORED or f == "internal_last_trade_date":
-                        changes.append(_change(truth["case_id"], f, truth[f], lib,
-                                               f"diagnosis {case['case_id']} cites {v['missed_filing']}", report))
-                        truth[f] = lib
+                        truth.set_cells(t["case_id"], [(f, lib)],
+                                        reason=f"diagnosis {case['case_id']} cites {v['missed_filing']}", report=report)
                     else:
-                        changes.append(_change(truth["case_id"], "status", truth["status"], RULING_PENDING,
-                                               f"diagnosis {case['case_id']} found the library's {f} right", report))
-                        truth.update(status=RULING_PENDING, fixed_by="",
-                                     note=f"{truth['note']}; {f}: the library is right per {case['case_id']}")
+                        truth.move_status(t["case_id"], RULING_PENDING,
+                                          reason=f"diagnosis {case['case_id']} found the library's {f} right",
+                                          report=report, note=f"{f}: the library is right per {case['case_id']}")
                 elif usable and v.get("right") == TRUTH:
                     outcome = TRUTH_RIGHT
                 else:
                     outcome = PENDING
-                ledger.append(_ledger(k, MISMATCH, sec, label, round_no, outcome, report))
-    return RoundResult(rows, changes, ledger, pending)
-
-
-def flip_statuses(rows: Sequence[dict[str, str]], matching: Collection[str]) -> list[dict[str, str]]:
-    """Every known_wrong row whose case now matches becomes pass (in place); returns the change-log rows."""
-    out = []
-    for r in rows:
-        if r["status"] == KNOWN_WRONG and r["case_id"] in matching:
-            out.append(_change(r["case_id"], "status", KNOWN_WRONG, PASS, "the library now matches", ""))
-            r["status"], r["fixed_by"] = PASS, ""
-    return out
+                truth.settle([_ledger(k, MISMATCH, sec, label, round_no, outcome, report)])
+    return pending

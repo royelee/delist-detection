@@ -1,9 +1,11 @@
-"""truth_update: what a round's diagnoses may change in the truth file (spec 1.6)."""
+"""truth_update: what a round's diagnoses may change in the truth file (spec 1.6), applied through the truth set
+(`TruthSet.apply_round`); the update script end to end."""
 import csv
 import importlib.util
 import json
 import os
 import subprocess
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -11,8 +13,9 @@ import pytest
 from delist_detection import diagnosis_loop as dl
 from delist_detection import diagnosis_truth as dt
 from delist_detection import store
-from delist_detection import truth_update as tu
-from tests.diagnosis_rows import truth_row
+from delist_detection.diagnosis_loop import LEDGER_COLUMNS
+from delist_detection.truth_set import TruthSet, changes_path, read_ledger
+from tests.diagnosis_rows import ledger_row, truth_row, write_truth
 from tests.lifecycle_tables import contract_row, sec
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -30,8 +33,12 @@ def _record(verdicts, confidence="verified", upheld=True, refuted=()):
 
 
 def _apply(cases, records, truth=(), base=None, new=None, keys=frozenset(), **kw):
-    return tu.apply_round(cases, records, list(truth), base or {}, new or {}, label="5a", round_no=1,
-                          report_dir="loop/5a/round-1/reports", ledger_keys=keys, **kw)
+    """The round applied to a truth set holding `truth` and a ledger holding `keys` (never committed)."""
+    with tempfile.TemporaryDirectory() as d:
+        ts = TruthSet.new(Path(d) / "truth.csv", list(truth), ledger=Path(d) / "diagnosed.csv")
+        ts.settle([ledger_row(k) for k in keys])
+        return ts.apply_round(cases, records, base or {}, new or {}, label="5a", round_no=1,
+                              report_dir="loop/5a/round-1/reports", **kw)
 
 
 BASE = {"Z": contract_row("Z", exit_kind="merger", last_trade_date="2010-09-30", value_rule="cash")}
@@ -133,14 +140,6 @@ def test_rerunning_a_round_skips_settled_keys():
     again = _apply([REG], rec, truth=first.truth_rows, base=BASE, new=NEW,
                    keys={r["key"] for r in first.ledger_rows})
     assert again.truth_rows == first.truth_rows and again.changes == [] and again.ledger_rows == []
-
-
-def test_flip_statuses_turns_matching_known_wrong_cases_into_pass():
-    rows = [truth_row("A_2010-01-04", "A", status="known_wrong", fixed_by="5a"),
-            truth_row("B_2010-01-04", "B", status="known_wrong", fixed_by="5a")]
-    changes = tu.flip_statuses(rows, {"A_2010-01-04"})
-    assert [(r["status"], r["fixed_by"]) for r in rows] == [("pass", ""), ("known_wrong", "5a")]
-    assert [(c["case_id"], c["old"], c["new"]) for c in changes] == [("A_2010-01-04", "known_wrong", "pass")]
 
 
 def test_a_truth_row_takes_the_base_value_for_a_field_the_case_does_not_hold():
@@ -290,10 +289,9 @@ def _round(tmp_path):
     store.write_tables(out, {"contract_delistings": [NEW["Z"]], "securities": [sec("Z")]})
     rdir = tmp_path / "loop" / "5a" / "round-1"
     (rdir / "records").mkdir(parents=True)
-    dl.write_ledger(tmp_path / "loop" / "diagnosed.csv", [])
+    (tmp_path / "loop" / "diagnosed.csv").write_text(",".join(LEDGER_COLUMNS) + "\n")
     argv = ["--label", "5a", "--round", "1", "--base", "HEAD", "--repo", str(repo), "--output-dir", str(out),
-            "--truth", str(tmp_path / "truth.csv"), "--legs", str(tmp_path / "legs.csv"),
-            "--changes", str(tmp_path / "changes.csv"), "--loop-dir", str(tmp_path / "loop")]
+            "--truth", str(tmp_path / "truth.csv"), "--loop-dir", str(tmp_path / "loop")]
     return rdir, argv
 
 
@@ -312,19 +310,19 @@ def test_script_dry_run_writes_nothing_and_prints_the_counts(tmp_path, capsys):
         w.writerow(case)
     rec = _record([{"field": "last_trade_date", "right": "new", "value": "", "missed_filing": ""}])
     (rdir / "records" / "Z_5a-r1.json").write_text(json.dumps(rec))
-    dt.write_diagnosis_truth(tmp_path / "truth.csv", [])
+    write_truth(tmp_path / "truth.csv", [])
     truth = (tmp_path / "truth.csv").read_bytes()
     ledger = (tmp_path / "loop" / "diagnosed.csv").read_bytes()
     assert _script().main(argv + ["--dry-run"]) == 0
     line = json.loads(capsys.readouterr().out)
     assert (line["cases"], line["records"], line["truth_changes"], line["dry_run"]) == (1, 1, 1, True)
     assert truth == (tmp_path / "truth.csv").read_bytes()
-    assert not (tmp_path / "changes.csv").exists() and not (rdir / "summary.md").exists()
+    assert not changes_path(tmp_path / "truth.csv").exists() and not (rdir / "summary.md").exists()
     assert ledger == (tmp_path / "loop" / "diagnosed.csv").read_bytes()
     assert _script().main(argv) == 0
-    assert [r["case_id"] for r in dl.read_csv(tmp_path / "truth.csv")] == ["Z_5a-r1"]
-    assert [r["field"] for r in dl.read_csv(tmp_path / "changes.csv")] == ["(row)"]
-    assert [r["outcome"] for r in dl.read_ledger(tmp_path / "loop" / "diagnosed.csv")] == ["new_right"]
+    assert [r["case_id"] for r in TruthSet.open(tmp_path / "truth.csv").rows] == ["Z_5a-r1"]
+    assert [r["field"] for r in dl.read_csv(changes_path(tmp_path / "truth.csv"))] == ["(row)"]
+    assert [r["outcome"] for r in read_ledger(tmp_path / "loop" / "diagnosed.csv")] == ["new_right"]
     assert (rdir / "summary.md").exists()
 
 
@@ -338,7 +336,7 @@ def test_script_adds_no_truth_row_for_a_security_the_run_no_longer_holds(tmp_pat
         w.writeheader()
         w.writerow(case)
     (rdir / "records" / "Z_5a-r1.json").write_text(json.dumps(NEW_RIGHT))
-    dt.write_diagnosis_truth(tmp_path / "truth.csv", [])
+    write_truth(tmp_path / "truth.csv", [])
     assert _script().main(argv) == 0
-    assert dl.read_csv(tmp_path / "truth.csv") == []
-    assert [r["outcome"] for r in dl.read_ledger(tmp_path / "loop" / "diagnosed.csv")] == ["new_right"]
+    assert TruthSet.open(tmp_path / "truth.csv").rows == []
+    assert [r["outcome"] for r in read_ledger(tmp_path / "loop" / "diagnosed.csv")] == ["new_right"]

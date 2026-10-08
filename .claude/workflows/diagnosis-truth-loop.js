@@ -117,7 +117,7 @@ for (let round = 1; round <= maxRounds; round++) {
     { label: `update:${round}`, phase: 'Update', schema: UPDATE, model: 'sonnet', effort: 'low' }), `update ${round}`)
   if (!listed.cases.length) {
     // No new error: the update step still runs on the empty cases.csv, so a known_wrong case the run now matches
-    // becomes pass (flip_statuses), and then the loop stops.
+    // becomes pass (TruthSet.flip), and then the loop stops.
     log(`round ${round}: no new errors`)
     summaries.push({ round, cases: 0, missing: [], update: await update() })
     break

@@ -36,6 +36,7 @@ from delist_detection.crsp_codes import CrspBucket
 from delist_detection.edgar import EdgarClient
 from delist_detection.llm_client import default_llm_client
 from delist_detection.llm_merger_extractor import LLMMergerTermsExtractor
+from delist_detection.truth_set import TruthSet, configured
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -116,9 +117,10 @@ def _acq_match(got: str | None, exp: str | None) -> bool:
 
 def _truth_cases(wanted: set[str] | None) -> list[dict]:
     """The TRUTH_CASES rows with their delisting's cik and date and the security's name."""
-    truth = {r["case_id"]: r for r in csv.DictReader(open(ROOT / "data" / "diagnosis_truth.csv"))}
+    truth_set = TruthSet.open(configured(ROOT))
+    truth = {r["case_id"]: r for r in truth_set.rows}
     legs: dict[str, list[dict]] = {}
-    for r in csv.DictReader(open(ROOT / "data" / "diagnosis_truth_legs.csv")):
+    for r in truth_set.legs:
         legs.setdefault(r["case_id"], []).append(r)
     names = {r["sec_id"]: r["name"] for r in csv.DictReader(open(ROOT / "output" / "securities.csv"))}
     ends: dict[str, dict] = {}

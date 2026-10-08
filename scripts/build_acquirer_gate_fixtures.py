@@ -37,6 +37,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
 import build_form25_fixtures as b5  # noqa: E402  (refuses every SEC request on import)
+from delist_detection.truth_set import TruthSet, configured  # noqa: E402
 import requests  # noqa: E402
 import delist_detection.edgar as edgar_mod  # noqa: E402
 
@@ -120,7 +121,7 @@ def main(argv: list[str] | None = None) -> int:
     args = p.parse_args(argv)
     repo, out = args.repo, args.out
     secs, eras, cusips, history, _ = b5._securities(repo)
-    truth = {r["sec_id"]: r for r in b5._read(repo / "data/diagnosis_truth.csv")}
+    truth = {r["sec_id"]: r for r in TruthSet.open(configured(repo)).rows}
     contract = {r["sec_id"]: r for r in b5._read(repo / "output/contract/delistings.csv")}
     merger_rows = defaultdict(list)
     for r in b5._read(repo / "output/delistings.csv"):

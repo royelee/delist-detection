@@ -188,7 +188,7 @@ def test_build_has_no_value_rule_lines_without_the_contract():
 
 
 from delist_detection import diagnosis_truth as dt
-from tests.diagnosis_rows import truth_row
+from tests.diagnosis_rows import leg_row, truth_row, write_truth
 from tests.lifecycle_tables import contract_row
 
 
@@ -221,10 +221,18 @@ def test_no_diagnosis_lines_without_a_truth_set_or_a_contract():
 
 
 def test_load_config_reads_the_diagnosis_truth_and_its_legs(tmp_path):
-    dt.write_diagnosis_truth(tmp_path / "d.csv", [truth_row("A_2012-03-10", "A", value_rule="basket")])
-    dt.write_legs(tmp_path / "l.csv", [{"case_id": "A_2012-03-10", "leg": "1", "ratio": "1", "price_sec_id": "",
-                                        "price_ticker": "X", "price_date": ""}])
+    write_truth(tmp_path / "d.csv", [truth_row("A_2012-03-10", "A", value_rule="basket")],
+                [leg_row("A_2012-03-10", 1, price_ticker="X")])
+    cfg = tmp_path / "scorecard.json"
+    for config in ({"diagnosis": "d.csv"}, {"diagnosis": "d.csv", "diagnosis_legs": "d_legs.csv"}):
+        cfg.write_text(json.dumps(config))
+        [case] = sc.load_config(cfg).diagnosis
+        assert case.case_id == "A_2012-03-10" and case.legs[0].price_ticker == "X"
+
+
+def test_load_config_refuses_legs_not_named_after_the_truth_file(tmp_path):
+    write_truth(tmp_path / "d.csv", [truth_row("A_2012-03-10", "A")])
     cfg = tmp_path / "scorecard.json"
     cfg.write_text(json.dumps({"diagnosis": "d.csv", "diagnosis_legs": "l.csv"}))
-    [case] = sc.load_config(cfg).diagnosis
-    assert case.case_id == "A_2012-03-10" and case.legs[0].price_ticker == "X"
+    with pytest.raises(dt.DiagnosisTruthError, match="named after the truth file"):
+        sc.load_config(cfg)

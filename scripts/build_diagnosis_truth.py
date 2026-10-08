@@ -5,8 +5,9 @@
   python scripts/build_diagnosis_truth.py --no-figi   # offline: no R2 check (lists the unchecked cases)
 
 Reads output/diagnose_unknown_report/truth_rows/*.json, records/*.json (confidence, verification), the case map
-(sub-plan per case) and the run's tables. Writes the truth file, the legs file and
-output/diagnose_unknown_report/truth_review.md. Exit 2: a missing input or a row the truth loader refuses.
+(sub-plan per case) and the run's tables. Writes the truth file (--out, by default the one data/scorecard.json
+names) and its legs file as one new truth set (`truth_set.TruthSet.new`; the legs are named after the truth file),
+and output/diagnose_unknown_report/truth_review.md. Exit 2: a missing input or a row the truth set refuses.
 """
 from __future__ import annotations
 
@@ -17,13 +18,13 @@ import sys
 from pathlib import Path
 
 from delist_detection.atomic_io import write_atomic
-from delist_detection.diagnosis_truth import (COLUMNS, Leg, LibraryRows, judge_case, parse_rows,
-                                              write_diagnosis_truth, write_legs)
+from delist_detection.diagnosis_truth import LibraryRows, judge_case, parse_legs, parse_rows
 from delist_detection.figi_resolution import us_candidates
 from delist_detection.openfigi import OpenFigiClient, resolve_api_key
 from delist_detection.run_snapshot import RunSnapshot
 from delist_detection.truth import TruthFileError
 from delist_detection.truth_build import UNSETTLED, assemble, final_status, review_markdown
+from delist_detection.truth_set import TruthSet, configured
 
 ROOT = Path(__file__).resolve().parents[1]
 DIAG = ROOT / "output" / "diagnose_unknown_report"
@@ -52,8 +53,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--case-map", type=Path,
                    default=ROOT / "docs/superpowers/specs/2026-10-03-diagnosis-truth-fixes/case_map.csv")
     p.add_argument("--output-dir", type=Path, default=ROOT / "output")
-    p.add_argument("--out", type=Path, default=ROOT / "data" / "diagnosis_truth.csv")
-    p.add_argument("--legs", type=Path, default=ROOT / "data" / "diagnosis_truth_legs.csv")
+    p.add_argument("--out", type=Path, help="the truth file (default: the one data/scorecard.json names)")
     p.add_argument("--review", type=Path, default=DIAG / "truth_review.md")
     p.add_argument("--no-figi", action="store_true")
     args = p.parse_args(argv)
@@ -91,11 +91,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.no_figi:
         unchecked = [n["case_id"] for n in norms if (n.get("identity_check") or {}).get("new_cusip")]
         print(f"--no-figi: R2 not checked for {len(unchecked)} case(s): {unchecked[:10]}")
-    legs_by_case: dict[str, tuple[Leg, ...]] = {}
-    for lg in sorted(legs, key=lambda r: (r["case_id"], int(r["leg"]))):
-        legs_by_case[lg["case_id"]] = legs_by_case.get(lg["case_id"], ()) + (
-            Leg(int(lg["leg"]), lg["ratio"], lg["price_sec_id"], lg["price_ticker"], lg["price_date"]),)
+    legs.sort(key=lambda r: (r["case_id"], int(r["leg"])))
     try:
+        out = args.out or configured(ROOT)
+        legs_by_case = parse_legs(legs, "built legs")
         lib = LibraryRows.of(tables)
         for row in rows:
             # A row assemble left without a status is judged as if it were `pass`; final_status then decides.
@@ -103,17 +102,16 @@ def main(argv: list[str] | None = None) -> int:
                                 legs_by_case)
             final_status(row, judge_case(case, lib).ok, sub_plan.get(row["case_id"], ""))
         cases = parse_rows(rows, "built truth", legs_by_case)
+        rows.sort(key=lambda r: r["case_id"])
+        TruthSet.new(out, rows, legs).commit()
     except TruthFileError as exc:
         print(f"ABORTED: {exc}", file=sys.stderr)
         return 2
-    rows.sort(key=lambda r: r["case_id"])
-    write_diagnosis_truth(args.out, [{c: r[c] for c in COLUMNS} for r in rows])
-    write_legs(args.legs, sorted(legs, key=lambda r: (r["case_id"], int(r["leg"]))))
     judged = [judge_case(c, lib) for c in cases if c.status != "ruling_pending"]
     args.review.parent.mkdir(parents=True, exist_ok=True)
     write_atomic(args.review, review_markdown(rows, judged))
     status = {s: sum(r["status"] == s for r in rows) for s in ("pass", "known_wrong", "ruling_pending")}
-    print(f"{len(rows)} truth rows {status}, {len(legs)} legs -> {args.out}, review {args.review}")
+    print(f"{len(rows)} truth rows {status}, {len(legs)} legs -> {out}, review {args.review}")
     return 0
 
 

@@ -1,6 +1,6 @@
 """The diagnosis loop's bookkeeping (spec 2026-10-03-diagnosis-truth-fixes, section 1.7). It covers which errors
-a round must diagnose, the ledger of errors already diagnosed, the case rows the diagnose workflow reads, and
-renaming truth rows whose placeholder now holds a FIGI.
+a round must diagnose, the ledger of errors already diagnosed and the case rows the diagnose workflow reads. The
+ledger is read and written with the truth set (`truth_set.TruthSet`, `truth_set.read_ledger`), never alone.
 
 An error is a truth mismatch (a scored field the run gets wrong) or a regression report row (a contract field
 that changed outside the truth set). Each has a key. The ledger (`LEDGER`) records the keys already diagnosed and
@@ -14,7 +14,7 @@ import json
 from collections.abc import Collection, Mapping, Sequence
 from pathlib import Path
 
-from .atomic_io import replace_all_on_success, write_atomic
+from .atomic_io import write_atomic
 from .diagnosis_truth import CaseJudgement, Mismatch
 from .exit_kind import last_endings
 from .regression import regression_key
@@ -32,7 +32,6 @@ CONTEXT_COLUMNS = ("tickers", "security_name", "share_class", "issuer_ids", "fir
                    "review_flags", "uncertain_reasons")
 CASE_COLUMNS = ("case_id", "mode", "sec_id", "ticker", "truth_case_id", "keys", "fields", "side_a", "side_b",
                 *CONTEXT_COLUMNS)
-CHANGE_COLUMNS = ("case_id", "field", "old", "new", "reason", "report")
 
 
 def mismatch_key(m: Mismatch) -> str:
@@ -48,42 +47,14 @@ def _write_csv(path: str | Path, columns: Sequence[str], rows: Sequence[Mapping[
     write_atomic(Path(path), buf.getvalue())
 
 
-def write_together(sets: Sequence[tuple[str | Path, Sequence[str], Sequence[Mapping[str, str]]]]) -> None:
-    """Write several CSVs (path, columns, rows) so they are replaced together or not at all
-    (`atomic_io.replace_all_on_success`): the truth file, its change log and the ledger must not disagree."""
-    with replace_all_on_success([path for path, _, _ in sets]) as tmps:
-        for tmp, (_, columns, rows) in zip(tmps, sets):
-            with tmp.open("w", newline="", encoding="utf-8") as fh:
-                w = csv.DictWriter(fh, fieldnames=list(columns), lineterminator="\n")
-                w.writeheader()
-                w.writerows({c: r[c] for c in columns} for r in rows)
-
-
 def read_csv(path: str | Path) -> list[dict[str, str]]:
-    """A CSV's rows, or [] when the file does not exist."""
+    """A CSV's rows, or [] when the file does not exist (a round's cases.csv; the truth files and the ledger are read
+    through `truth_set`)."""
     path = Path(path)
     if not path.exists():
         return []
     with path.open(newline="", encoding="utf-8") as fh:
         return list(csv.DictReader(fh))
-
-
-def read_ledger(path: str | Path) -> list[dict[str, str]]:
-    return read_csv(path)
-
-
-def write_ledger(path: str | Path, rows: Sequence[Mapping[str, str]]) -> None:
-    Path(path).parent.mkdir(parents=True, exist_ok=True)
-    _write_csv(path, LEDGER_COLUMNS, rows)
-
-
-def write_changes(path: str | Path, rows: Sequence[Mapping[str, str]]) -> None:
-    """data/diagnosis_truth_changes.csv, rewritten whole (callers pass every old row first)."""
-    _write_csv(path, CHANGE_COLUMNS, rows)
-
-
-def ledger_keys(rows: Sequence[Mapping[str, str]]) -> set[str]:
-    return {r["key"] for r in rows}
 
 
 def settled_keys(rows: Sequence[Mapping[str, str]]) -> set[str]:
@@ -163,21 +134,3 @@ def case_rows(mismatches: Sequence[Mismatch], regressions: Sequence[Mapping[str,
 def write_cases(path: str | Path, rows: Sequence[Mapping[str, str]]) -> None:
     Path(path).parent.mkdir(parents=True, exist_ok=True)
     _write_csv(path, CASE_COLUMNS, rows)
-
-
-def rename_truth(rows: Sequence[Mapping[str, str]],
-                 id_changes: Sequence[Mapping[str, str]]) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
-    """Truth rows whose placeholder sec_id now holds a FIGI (contract/id_changes.csv) take the new sec_id; the
-    case_id stays. A row that names a renamed placeholder as its price or successor security names the FIGI too
-    (identity follows the FIGI, R2). Returns the rows and one change-log entry per renamed cell."""
-    new_id = {r["old_sec_id"]: r["new_sec_id"] for r in id_changes if r.get("new_sec_id")}
-    out, changes = [], []
-    for r in rows:
-        r = dict(r)
-        for field in ("sec_id", "price_sec_id", "successor_sec_id"):
-            if r.get(field) in new_id:
-                changes.append(dict(case_id=r["case_id"], field=field, old=r[field], new=new_id[r[field]],
-                                    reason="contract/id_changes.csv: the placeholder now holds a FIGI", report=""))
-                r[field] = new_id[r[field]]
-        out.append(r)
-    return out, changes

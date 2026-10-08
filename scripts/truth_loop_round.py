@@ -4,16 +4,18 @@
   python scripts/truth_loop_round.py --label 5-0 --seed-ledger
 
 A round does five things:
-1. It renames truth rows whose placeholder now holds a FIGI: by the run's contract/id_changes.csv and by comparing
-   the --base commit's securities.csv with the run's (that file is not cumulative), and writes the truth file and
-   the change log together.
+1. It renames truth rows and legs that name a renamed security: by the run's contract/id_changes.csv and by comparing
+   the --base commit's securities.csv with the run's (that file is not cumulative), and commits the truth set (the
+   truth file, its legs and its change log together).
 2. It judges the run under --output-dir against the truth file.
 3. It writes output/regression_report.csv against --base.
 4. It keeps the errors the ledger has not seen.
 5. It writes them as case rows to output/diagnose_unknown_report/loop/<label>/round-<N>/cases.csv.
 
-It prints one JSON line with the counts, the cases and the path. --seed-ledger records every current mismatch as
-`known` (the reports already describe them). Offline (git only). Exit 2: a missing or unreadable input.
+The truth file is --truth, by default the one data/scorecard.json names; its legs and change log are named after it
+(`truth_set`). It prints one JSON line with the counts, the cases and the path. --seed-ledger records every current
+mismatch as `known` (the reports already describe them), committed with the truth set. Offline (git only). Exit 2: a
+missing or unreadable input.
 """
 from __future__ import annotations
 
@@ -23,10 +25,11 @@ import sys
 from pathlib import Path
 
 from delist_detection import diagnosis_loop as dl
-from delist_detection.diagnosis_truth import COLUMNS, LibraryRows, judge_all, load_legs, parse_rows
+from delist_detection.diagnosis_truth import LibraryRows, judge_all
 from delist_detection.regression import build_report, id_changes_since, regression_key, write_report
 from delist_detection.run_snapshot import RunSnapshot, SnapshotError
 from delist_detection.truth import TruthFileError
+from delist_detection.truth_set import TruthSet, configured
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -39,35 +42,29 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--seed-ledger", action="store_true")
     p.add_argument("--repo", type=Path, default=ROOT)
     p.add_argument("--output-dir", type=Path, default=ROOT / "output")
-    p.add_argument("--truth", type=Path, default=ROOT / "data" / "diagnosis_truth.csv")
-    p.add_argument("--legs", type=Path, default=ROOT / "data" / "diagnosis_truth_legs.csv")
-    p.add_argument("--changes", type=Path, default=ROOT / "data" / "diagnosis_truth_changes.csv")
+    p.add_argument("--truth", type=Path, help="the truth file (default: the one the repo's data/scorecard.json names)")
     p.add_argument("--loop-dir", type=Path, default=ROOT / dl.LOOP_DIR)
     args = p.parse_args(argv)
     if not args.seed_ledger and not args.base:
         p.error("--base is required for a round")
     ledger_path = args.loop_dir / "diagnosed.csv"
     try:
-        truth_rows = dl.read_csv(args.truth)
+        truth = TruthSet.open(args.truth or configured(args.repo), ledger=ledger_path)
         run = RunSnapshot.read(args.output_dir)
         base = None if args.seed_ledger else RunSnapshot.at(args.repo, args.base, args.output_dir)
         id_changes = list(run.id_changes or []) if base is None else id_changes_since(base, run)
-        truth_rows, renames = dl.rename_truth(truth_rows, id_changes)
-        legs = load_legs(args.legs) if args.legs.exists() else {}
-        cases = parse_rows(truth_rows, str(args.truth), legs)
+        renamed = truth.rename(id_changes)
+        cases = truth.cases
         judged = judge_all(cases, LibraryRows.of(run))
-        ledger = dl.read_ledger(ledger_path)
+        truth.commit()
     except (TruthFileError, SnapshotError, ValueError, OSError) as exc:
         print(f"ABORTED: {exc}", file=sys.stderr)
         return 2
-    if renames:
-        dl.write_together([(args.truth, COLUMNS, truth_rows),
-                           (args.changes, dl.CHANGE_COLUMNS, dl.read_csv(args.changes) + renames)])
-    keys = dl.ledger_keys(ledger)
+    keys = truth.ledger_keys
     if args.seed_ledger:
-        seeded = dl.seed_rows(judged, keys, args.label)
-        dl.write_ledger(ledger_path, ledger + seeded)
-        print(json.dumps({"label": args.label, "seeded": len(seeded), "ledger": str(ledger_path)}))
+        truth.settle(dl.seed_rows(judged, keys, args.label))
+        truth.commit()
+        print(json.dumps({"label": args.label, "seeded": len(truth.settled), "ledger": str(ledger_path)}))
         return 0
     try:
         report = build_report(base, run, cases, id_changes)
@@ -82,7 +79,7 @@ def main(argv: list[str] | None = None) -> int:
     path = args.loop_dir / args.label / f"round-{args.round}" / "cases.csv"
     dl.write_cases(path, rows)
     print(json.dumps({"label": args.label, "round": args.round, "mismatches_new": len(mismatches),
-                      "regressions_new": len(regressions), "renamed": len(renames),
+                      "regressions_new": len(regressions), "renamed": renamed,
                       "cases": [{"case_id": r["case_id"], "mode": r["mode"], "ticker": r["ticker"]} for r in rows],
                       "path": str(path)}))
     return 0

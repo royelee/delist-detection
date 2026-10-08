@@ -137,7 +137,8 @@ def _legs(rows: Sequence[Mapping[str, str]]) -> dict[str, str]:
 
 def renamed_to(renames: Sequence[Mapping[str, str]]) -> dict[str, str]:
     """Each renamed placeholder's sec_id now (`renames`: id_changes rows), a chain of renames followed to its end
-    (P renamed to M, M to F: P is F now)."""
+    (P renamed to M, M to F: P is F now). The one chain rule: the truth set renames by it too
+    (`truth_set.TruthSet.rename`)."""
     step = {r["old_sec_id"]: r["new_sec_id"] for r in renames if r.get("old_sec_id") and r.get("new_sec_id")}
     out: dict[str, str] = {}
     for old in step:

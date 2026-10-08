@@ -7,10 +7,9 @@ from pathlib import Path
 
 import pytest
 
-from delist_detection import diagnosis_truth as dt
 from delist_detection import store
 from delist_detection.truth import load_truth
-from tests.diagnosis_rows import truth_row
+from tests.diagnosis_rows import truth_row, write_truth
 from tests.lifecycle_tables import contract_row, ending, iv, obs, sec, tables
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -105,7 +104,7 @@ def test_draw_writes_a_pending_worksheet_once(tmp_path, out, capsys):
 
 def test_check_fails_on_a_failing_diagnosis_pass_case(tmp_path, out, capsys):
     store.write_tables(out, {"contract_delistings": [contract_row("A", exit_kind="merger", value_rule="cash")]})
-    dt.write_diagnosis_truth(tmp_path / "d.csv", [truth_row("A_2012-03-10", "A", exit_kind="exchange")])
+    write_truth(tmp_path / "d.csv", [truth_row("A_2012-03-10", "A", exit_kind="exchange")])
     cfg = tmp_path / "scorecard.json"
     cfg.write_text(json.dumps({"diagnosis": "d.csv", "floor": {}}))
     assert scorecard_script.main(["--output-dir", str(out), "--config", str(cfg), "--check"]) == 1
@@ -138,7 +137,7 @@ def test_check_base_fails_on_an_unexplained_regression_and_passes_once_the_secur
     # a stale report on disk (an empty one) must not decide the result
     (out / "regression_report.csv").write_text("sec_id,table,field,kind,old,new\n")
     truth = tmp_path / "truth.csv"
-    dt.write_diagnosis_truth(truth, [truth_row("A_2010-01-04", "A", exit_kind="merger")])
+    write_truth(truth, [truth_row("A_2010-01-04", "A", exit_kind="merger")])
     cfg = tmp_path / "scorecard.json"
     cfg.write_text(json.dumps({"floor": {}, "diagnosis": "truth.csv"}))
     argv = ["--output-dir", str(out), "--config", str(cfg), "--repo", str(repo), "--ledger",
@@ -147,8 +146,8 @@ def test_check_base_fails_on_an_unexplained_regression_and_passes_once_the_secur
     assert "D.unexplained_regressions" not in capsys.readouterr().out
     assert scorecard_script.main([*argv, "--base", "HEAD"]) == 1
     assert "D.unexplained_regressions" in capsys.readouterr().out
-    dt.write_diagnosis_truth(truth, [truth_row("A_2010-01-04", "A", exit_kind="merger"),
-                                     truth_row("Z_2010-01-04", "Z", exit_kind="exchange")])
+    write_truth(truth, [truth_row("A_2010-01-04", "A", exit_kind="merger"),
+                        truth_row("Z_2010-01-04", "Z", exit_kind="exchange")])
     (out / "regression_report.csv").write_text(
         "sec_id,table,field,kind,old,new\nZ,delistings,exit_kind,changed,merger,exchange\n")   # stale, the other way
     assert scorecard_script.main([*argv, "--base", "HEAD"]) == 0

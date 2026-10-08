@@ -33,12 +33,12 @@ from .lifecycle import (CLOSED_NO_EVENT, ENDED_INCOMPLETE,
                         HIGH, LEFT_VIEW, LOW, MEDIUM, NO_INTERVAL,
                         NO_MAPPED_SIGHTING, Lifecycle, LifecycleView)
 from .diagnosis_truth import (KNOWN_WRONG as D_KNOWN_WRONG, MISMATCH_FIELDS, PASS as D_PASS, RULING_PENDING,
-                              DiagnosisCase, LibraryRows, field_key, judge_all as judge_diagnosis,
-                              load_diagnosis_truth)
+                              DiagnosisCase, LibraryRows, field_key, judge_all as judge_diagnosis)
 from .exit_kind import (CONFLICT, EXCHANGE_PRINTS, UNCONFIRMED, VALUE_RULES, ending_fields, flag_names, is_distress,
                         is_real_ending, rests_on_continued_filings)
 from .run_snapshot import RunSnapshot
 from .truth import KNOWN_WRONG, PASS, TruthCase, clopper_pearson_upper, judge_all, load_truth
+from .truth_set import TruthSet, truth_file_of
 from .verdict import ENDING, SECURITY, SEED
 
 SCORECARD_NAME = "scorecard.json"
@@ -98,9 +98,10 @@ class ScorecardConfig:
 
 def load_config(path: str | Path) -> ScorecardConfig:
     """data/scorecard.json: {"window": {"start", "end"} | null, "floor": {metric: number},
-    "golden": file, "audit": file, "diagnosis": file, "diagnosis_legs": file} (the truth files relative to the config's
-    folder; a missing truth file means no cases). Raises ScorecardConfigError or
-    truth.TruthFileError."""
+    "golden": file, "audit": file, "diagnosis": file} (the truth files relative to the config's folder; a missing
+    truth file means no cases). The diagnosis truth set is read whole (`truth_set.TruthSet`): its legs and change
+    log are named after the truth file, and a "diagnosis_legs" entry must name that legs file
+    (`truth_set.truth_file_of`). Raises ScorecardConfigError or truth.TruthFileError."""
     path = Path(path)
     try:
         raw = json.loads(path.read_text(encoding="utf-8"))
@@ -136,13 +137,9 @@ def load_config(path: str | Path) -> ScorecardConfig:
         p = path.parent / name
         return load_truth(p, allow_pending=(key == "audit")) if p.exists() else []
 
-    def diagnosis() -> list[DiagnosisCase]:
-        name = raw.get("diagnosis")
-        if not name or not (path.parent / name).exists():
-            return []
-        legs = raw.get("diagnosis_legs")
-        return load_diagnosis_truth(path.parent / name, path.parent / legs if legs else None)
-    return ScorecardConfig(window, dict(floor), cases("golden"), cases("audit"), diagnosis())
+    truth = truth_file_of(raw, path.parent, str(path))
+    diagnosis = TruthSet.open(truth).cases if truth is not None and truth.exists() else []
+    return ScorecardConfig(window, dict(floor), cases("golden"), cases("audit"), diagnosis)
 
 
 def _share(n: int, d: int) -> float:

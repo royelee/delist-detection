@@ -12,10 +12,10 @@ import argparse
 import sys
 from pathlib import Path
 
-from delist_detection.diagnosis_truth import load_diagnosis_truth
 from delist_detection.regression import build_report, write_report
 from delist_detection.run_snapshot import RunSnapshot, SnapshotError
 from delist_detection.truth import TruthFileError
+from delist_detection.truth_set import TruthSet, configured
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -25,11 +25,11 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--base", required=True, help="the commit the sub-plan started from")
     p.add_argument("--repo", type=Path, default=ROOT)
     p.add_argument("--output-dir", type=Path, default=ROOT / "output")
-    p.add_argument("--truth", type=Path, default=ROOT / "data" / "diagnosis_truth.csv")
+    p.add_argument("--truth", type=Path, help="the truth file (default: the one the repo's data/scorecard.json names)")
     p.add_argument("--out", type=Path, default=ROOT / "output" / "regression_report.csv")
     args = p.parse_args(argv)
     try:
-        cases = load_diagnosis_truth(args.truth) if args.truth.exists() else []
+        cases = TruthSet.open(args.truth or configured(args.repo)).cases
         rows = build_report(RunSnapshot.at(args.repo, args.base, args.output_dir), RunSnapshot.read(args.output_dir),
                             cases)
     except (SnapshotError, TruthFileError) as exc:
