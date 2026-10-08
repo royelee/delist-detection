@@ -1,4 +1,4 @@
-# src/delist_detection/identity.py
+# src/delist_detection/identity/identity.py
 """A security's identity: the run's stages 1 to 4 behind one interface (architecture step 6).
 
 `identify(index, clients, as_of=...)` turns the caller's observations into the securities the rest of the run works

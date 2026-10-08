@@ -1,4 +1,4 @@
-# src/delist_detection/manifest.py
+# src/delist_detection/outputs/manifest.py
 """run_manifest.json: what one run of the pipeline rested on.
 
 Written next to the eight tables, and only after them: a run that aborts leaves the
