@@ -24,7 +24,7 @@ _Avoid_: series
 A run of one ticker's observations that the library takes to be one security, before it looks up that security's FIGI. A new era starts when a pin changes, when the observed name stops agreeing, or when the class letter in the name changes; then, from SEC fails-to-deliver rows under the ticker, when the CUSIP switches or when more than 400 days pass with no observation and no fails row of the era's CUSIP. A ticker used by two securities (DELL, Dell Inc. and later Dell Technologies) therefore gives two eras. Two eras can still be one security: they merge when they resolve to the same FIGI. An era is never dropped: when a ticker is seen under two names on one date, both names keep their eras (under distinct keys) and the date is reported for review. An era is a grouping step, not a listing.
 
 **Identity**:
-Which security an observation is: its ticker era, the era's issuer (a CIK), the security's `sec_id` (its US composite FIGI or a placeholder) and the security's CUSIPs. The library settles it once per run, before any delisting is searched (`identity.py`); a pin settles part of it ahead of the library, and the line follow then carries it past the observations (a new CUSIP or ticker of the same security, or a placeholder folded into the FIGI line its new CUSIP names).
+Which security an observation is: its ticker era, the era's issuer (a CIK), the security's `sec_id` (its US composite FIGI or a placeholder) and the security's CUSIPs. The library settles it once per run, before any delisting is searched (`identity/identity.py`); a pin settles part of it ahead of the library, and the line follow then carries it past the observations (a new CUSIP or ticker of the same security, or a placeholder folded into the FIGI line its new CUSIP names).
 _Avoid_: mapping, resolution (an era's resolution is one step of it)
 
 **Delisting**:
@@ -32,14 +32,14 @@ The removal of a security from its US exchange listing, after which it is listed
 _Avoid_: termination, delist event
 
 **End of era**:
-The last date a security's history is known, and what happened next: it kept trading, moved to a new exchange, took a new ticker or CUSIP, was merged away, was liquidated, or nobody can tell. The end-of-era resolver (`end_of_era.py`) reads EDGAR for what the registrant did after that date, in a fixed branch order.
+The last date a security's history is known, and what happened next: it kept trading, moved to a new exchange, took a new ticker or CUSIP, was merged away, was liquidated, or nobody can tell. The end-of-era resolver (`endings/end_of_era.py`) reads EDGAR for what the registrant did after that date, in a fixed branch order.
 
 **Last trade date**:
-The last day a security traded on its exchange before a delisting: measured by SEC MIDAS volume or a Nasdaq halt, else stated by the exchange's Form 25 notice or the issuer's 8-K, else worked out from the deal's closing or the last sighting. It is confirmed when a measurement or a stated timing gives it, and published in the contract only when confirmed, from an exchange print and no later than the Form 25's effective date (`last_trade.py`). An ending's anchor day, the day it is read around, is its last trade date, else its Form 25's filing date (then the 8-K it was classified on, then its delisting date); its end day, the day its listing ended, is its last trade date, else its delisting date.
+The last day a security traded on its exchange before a delisting: measured by SEC MIDAS volume or a Nasdaq halt, else stated by the exchange's Form 25 notice or the issuer's 8-K, else worked out from the deal's closing or the last sighting. It is confirmed when a measurement or a stated timing gives it, and published in the contract only when confirmed, from an exchange print and no later than the Form 25's effective date (`endings/last_trade.py`). An ending's anchor day, the day it is read around, is its last trade date, else its Form 25's filing date (then the 8-K it was classified on, then its delisting date); its end day, the day its listing ended, is its last trade date, else its delisting date.
 _Avoid_: delist date (the Form 25's effective date), exit date
 
 **Trading record**:
-What a security's own sightings and fails rows say of its trading: the days it was seen under each ticker (its observations, and the fails-to-deliver rows of its own CUSIPs under any symbol, the OTC symbol it moved to included), and from them its ticker on a day, its last sighting under its own tickers, whether it traded on after a day, its CUSIP switches and the day another CUSIP took its ticker (`trading_record.py`). The delisting finder and the last trade date read it. A successor the run added, which no observation names, has one over the span the run knows it for.
+What a security's own sightings and fails rows say of its trading: the days it was seen under each ticker (its observations, and the fails-to-deliver rows of its own CUSIPs under any symbol, the OTC symbol it moved to included), and from them its ticker on a day, its last sighting under its own tickers, whether it traded on after a day, its CUSIP switches and the day another CUSIP took its ticker (`endings/trading_record.py`). The delisting finder and the last trade date read it. A successor the run added, which no observation names, has one over the span the run knows it for.
 _Avoid_: context, trading view
 
 **Bucket**:
@@ -57,7 +57,7 @@ _Avoid_: ticker reuse (a reuse years later is no handoff)
 A handoff in which the holders' shares became the new security's one for one: a holding-company reorganization, a redomicile, a rename or a share reclassification (AON 2020, Liberty's 2023 reclassification). The old security gets an `exchange_transfer` delisting with a zero return, and the new one is its successor.
 
 **Rewrite**:
-A later rule's change of a delisting's kind or successor after the delisting finder classified it, named by the rule that decided it: the issuer moving the class, the security going on, R1, the line follow, a successor link, a handoff, a bankruptcy plan, a price deficiency (`rewrites.py`). A rewrite into a continuation drops what a continuation cannot carry: the no-evidence default, the open successor, and the merger's payout reads and gate flags. A security that goes on is its own successor and keeps its kind.
+A later rule's change of a delisting's kind or successor after the delisting finder classified it, named by the rule that decided it: the issuer moving the class, the security going on, R1, the line follow, a successor link, a handoff, a bankruptcy plan, a price deficiency (`endings/rewrites.py`). A rewrite into a continuation drops what a continuation cannot carry: the no-evidence default, the open successor, and the merger's payout reads and gate flags. A security that goes on is its own successor and keeps its kind.
 _Avoid_: override, relabel (the end-of-era resolver's relabel happens before the delisting is built)
 
 **Ticker takeover**:
@@ -110,7 +110,7 @@ Everything one run wrote that measurement reads: every output table, the run dat
 _Avoid_: tables (one part of it), output (the folder, one of its sources)
 
 **Contract**:
-The tables the consumer reads (`output/contract/`): security_history, one-ending-per-security delistings, the seed echo, price requests, id changes, and `schema_version` in the manifest. Built from today's tables by `contract.py`; written beside them for one release.
+The tables the consumer reads (`output/contract/`): security_history, one-ending-per-security delistings, the seed echo, price requests, id changes, and `schema_version` in the manifest. Built from today's tables by `outputs/contract.py`; written beside them for one release.
 
 **Exit kind**:
 The contract's kind of ending: merger, exchange, liquidation, dropped (with a drop reason), lost_source, expiration. A continuation is an exchange whose successor is held by the same holders one for one.
@@ -130,3 +130,11 @@ What EDGAR records of one issuer, as a run reads it: its names over time, its fi
 
 **Issuer in force**:
 The CIK that carried a security's name on a given day; it can change while the security continues (a reverse merger, a holding-company reorganization).
+
+**Ending**:
+One row of `delistings.csv`: a delisting, or, where no Form 25 was filed, the filing or last sighting that ended the security's trading, with its kind (CRSP code and bucket), its last trade date and its value. A real ending is one the security does not go on from (its successor is not itself); a security's last real ending is the one the contract publishes, and the verdict judges each one.
+_Avoid_: delist event, exit (an exit kind is the contract's reading of an ending)
+
+## Package layout
+
+The subpackages under `src/delist_detection/` are named after the concepts above where one fits: `identity/` (Identity), `endings/` (a security's endings, each found, dated and classified) and `terms/` (a merger value's terms). The others are named after what they hold: `vocabulary/` (the leaves every part reads), `sources/` (the clients of SEC, OpenFIGI, Nasdaq and the LLM), `filings/` (what SEC filings say), `outputs/` (what a run publishes), `measurement/` (how far a run is from the truth) and `handling/` (delistings.csv for training and backtests).

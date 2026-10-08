@@ -41,7 +41,7 @@ A deepening moves behaviour behind a smaller interface. It changes nothing the l
 | 13 | One leaf module for ticker and share-class spelling (small) | | done |
 | 14 | The finder builds its own trading record (small) | | done |
 | 15 | One truth-case type (speculative; reduced: no re-key) | | done |
-| 16 | Package layout: concept subpackages and a lazy package root (review 11) | | |
+| 16 | Package layout: concept subpackages and a lazy package root (review 11) | | done |
 
 The issuer record (2) comes early because stages 8, 9 and 9b read issuers through closures that it replaces. The
 layout (16) comes last, once steps 8 and 13 have made the pure leaf modules.
@@ -2237,3 +2237,409 @@ Decisions made in the step:
   scorecard.py from 368 to 391, truth_set.py from 503 to 498, and scripts/scorecard.py from 119 to 132.
 - **CONTEXT.md is unchanged:** no module is named after a new concept. "Truth case" and "truth set" already cover
   the terms.
+
+### Step 16: the package layout: concept subpackages, imports one way, a lazy root
+
+- **The layout.** The 82 flat modules move (`git mv`, history follows) into nine subpackages; `pipeline.py` stays at
+  the root beside a lazy `__init__.py`:
+  ```
+  delist_detection/
+    __init__.py   lazy: importing the package loads none of its modules
+    pipeline.py   the run
+    vocabulary/   the leaves, each importing nothing of the package (6)
+    sources/      the SEC, OpenFIGI, Nasdaq and LLM clients and their plumbing (17)
+    filings/      what SEC filings say, read by several stages (4)
+    outputs/      what a run publishes, as rows (11)
+    identity/     a security's identity, stages 1 to 4c (11)
+    endings/      every delisting, found, dated and classified, stages 5 to 9g (12)
+    terms/        what one share of a merger ending became, stage 8 (9)
+    measurement/  how far a published run is from the truth (10)
+    handling/     delistings.csv for training and backtests (2)
+  ```
+  - How each module was placed: by what it imports and what imports it, read from the import graph at 78f99b2
+    (`/tmp/claude/delist_detection/arch/s16/graph.py`: top level, inside a function and under `TYPE_CHECKING`; the
+    move itself is `s16/move.py`, and `s16/layout.py` holds the placement). Under the final placement
+    only 5 of the graph's edges broke the direction; 3 of them were `DelistRecord` (below), 2 are the type-only
+    exceptions.
+  - Each subpackage's `__init__.py` is its docstring only: what it holds and what it imports.
+- **The direction.**
+  - The vocabulary imports nothing; sources import the vocabulary; filings and outputs import sources; identity
+    imports filings and outputs; endings import identity; terms import endings. Each also imports everything below
+    what it names.
+  - measurement and handling import outputs and the vocabulary. Of the sources, the pure subpackages (outputs,
+    measurement, handling) read only the plumbing that loads no client: `atomic_io` (the truth files, scorecard.json
+    and the manifest are written atomically) and `sec_stats` (the manifest's counters, the degraded watch).
+  - Nothing imports `pipeline.py`.
+- **Named exceptions: two, both type only (`TYPE_CHECKING`), so neither loads anything.**
+  - `outputs/dlret.py` names `terms.llm_merger_extractor.MergerTerms`: a `MergerInputs` carries the LLM's answer, and
+    the value rule reads its published legs. The type is the extractor's, which builds it.
+  - `outputs/degraded.py` names `endings.delistings.Delisting`: the `resolution_degraded` flag goes on a delisting's
+    own row.
+  - Alternative: a Protocol in outputs for each. Rejected: a second type for one object, written only to satisfy the
+    test. Cost if wrong: two lines of the exception table; the test fails when either becomes a runtime import.
+- **Where the code changed the proposal** (each with the alternative and its cost):
+  - **A `vocabulary/` subpackage holds the six leaves** (identifiers, names, trading_calendar, crsp_codes, exchanges,
+    exit_kind), not identity, endings, measurement and handling.
+    - Why: the data clients (ftd, midas, nasdaq_halts) read the ticker spelling, the names and the calendar, and
+      dlret reads the bucket and exchange enums. In their concept subpackages, sources would import identity and
+      endings, and outputs would import handling.
+    - Alternative: leaves in their concept subpackages, and the test exempts any import of a module that imports
+      nothing. Rejected: every subpackage would import four others, and the picture would read as a web.
+    - Cost if wrong: six modules move again.
+    - exit_kind keeps its name (step 8a's open point). It is the row vocabulary, now `vocabulary/exit_kind.py`.
+      Renaming it would touch 21 modules' imports and every doc for a name, in the step that moves everything.
+  - **`filings/` is its own subpackage below identity** (evidence, form25, listing_status, filing_search), not
+    `endings/filings`.
+    - Why: the identity stages read evidence's name readers (issuer_record, ticker_resolver, issuer_in_force,
+      identity, line_follow), and form25 and listing_status read evidence.
+    - Alternative: evidence in identity, the rest in endings. Rejected: evidence also holds the 8-K item readers the
+      classifier and the last trade date read.
+    - Cost if wrong: one more subpackage of four modules.
+  - **outputs sits below the stages, not above them.**
+    - Why: every stage writes into it and it reads none of them. `ReviewItem` (8 modules), `DelistingKey` (5), the
+      SEC meter and the degraded watch (identity, the line follow, the merger value), the value inputs and the price
+      answers (the merger value, the payout gate).
+    - verdict and run_snapshot go to outputs (proposal: measurement): the contract reads both, the verdict column and
+      the snapshot it is built from. In measurement, outputs and measurement would import each other.
+    - history stays in identity (proposal: outputs?): it is the security's dated history, which the finder, the
+      trading record and the acquirer line read.
+    - Alternative: outputs split in two, the stages' records (store, review_triage, degraded, manifest) below and the
+      tables (contract, verdict, ...) above. Rejected: once `DelistRecord` moved, the tables read nothing above
+      outputs either, so one subpackage holds.
+    - Cost if wrong: a reader expects outputs at the end of the run; the subpackage's docstring and CLAUDE.md say why.
+  - **The one class move: `DelistRecord` from `endings/classifier.py` into `outputs/reconstruction.py`**, beside the
+    `EnrichedDelistRecord` it becomes.
+    - reconstruction, handling, qlib_adapter, payout_extractor and llm_merger_extractor imported the classifier for
+      it. Measured at 78f99b2 through the root, and now: handling 33 package modules (with `requests`) to 7,
+      qlib_adapter 35 to 10, reconstruction 34 to 6 (and, the root no longer loading the clients, store 34 to 2 and
+      verdict 37 to 7).
+    - Alternative: a new `outputs/delist_record.py`. Rejected: one dataclass, and reconstruction already turns it into
+      the row. Alternative: the proposal's `endings/record`. Rejected: outputs sits below endings.
+    - `Delisting` stays in `endings/delistings.py` (proposal: endings/record): it carries the last trade, the Form 25,
+      the rewrites and the own-share reading, all endings' types; only degraded names it, type only.
+    - Cost if wrong: 24 test files and 3 scripts import it from its new path.
+  - **line_follow, added_securities and ticker_evidence go to identity** (proposal: endings/successors and
+    measurement).
+    - line_follow: CONTEXT.md's Identity says the line follow carries identity past the observations; it is stage 4b,
+      before the Form 25 search, and imports nothing of endings.
+    - added_securities: history imports it (its one history row per added security).
+    - ticker_evidence: what ties a placeholder's ticker to its CIK, an identity fact the verdict reads; it imports
+      nothing.
+  - **exchanges goes to the vocabulary** (proposal: handling): dlret reads `Exchange`.
+  - **ftd stays whole in sources.** Steps 12 and 13 foresaw moving only `FtdClient`. The fails index's rules read only
+    the vocabulary (names, identifiers, the calendar), so the whole module sits in sources without breaking the
+    direction. Alternative: `FtdIndex` into identity. Rejected: 500 lines split for no direction gained. Cost: the
+    index's relabel rules live beside the client.
+  - **No nested subpackages.** endings, the largest group after sources, has 12 modules. The proposal's
+    `endings/{record, filings, classify, dating, finder, successors}` would leave dating and record one module each
+    once filings moved down and the record stayed with the finder.
+  - **pipeline.py stays whole at the root** (proposal: "stage order only"). Its stage functions wire the clients
+    into each stage; moving them out is a deepening per stage, not a move. The replay also patches
+    `pipeline.listing_answers` and `listed_today` by module.
+    - Cost: pipeline.py is still 1557 lines.
+  - **Two names stutter: `identity/identity.py` and `handling/handling.py`.** Kept: CONTEXT.md and CLAUDE.md name the
+    modules, and a rename is a second change.
+- **The lazy root.** `import delist_detection` loads none of the package's modules (a test pins the empty closure).
+  - It keeps, through a module `__getattr__`, the eight names the README and the scripts import from it:
+    `EdgarClient`, `TickerResolver`, `DelistClassifier`, `PayoutExtractor`, `Exchange` and the three handling
+    builders. Each is its module's own object, loaded on first use.
+  - The other 13 are gone, since nothing in the repo used them: `CrspBucket`, `DLST_CODE_TO_BUCKET`,
+    `bucket_for_code`, `EdgarSubmission`, `DelistRecord`, `TrainLabelAdjustment`, `BacktestExit`,
+    `adjustments_from_rows`, `normalize_exchange`, `SHUMWAY_NYSE_AMEX`, `SHUMWAY_NASDAQ`, `FirmMonthReturn`,
+    `PayoutResult`.
+  - The step 8a strict xfail `test_the_package_root_loads_no_client` passes, its xfail removed. The closures are now
+    measured through the real root; the bare-root mode is gone.
+- **No old path is kept.** Every import was updated: src (each relative import recomputed from the module's new
+  place), tests, scripts, the diagnose-delisting skill's `sec.py`, README.md (the examples, the links and a layout
+  tree by subpackage), CLAUDE.md, CONTEXT.md and docs/data-flow.md.
+  - Left as written: the dated records (docs/superpowers/plans and specs, docs/validation, docs/research,
+    docs/2026-09-28-handoff-validation.md) and this plan's earlier steps. They describe the code of their date, and
+    some name modules that no longer exist (diagnosis_loop, bmp_correction, verdict_rules). Cost if wrong: a snippet
+    copied from a dated plan fails at import, naming the old module.
+  - Three module-relative repo paths count one more parent: `settings.REPO_ENV`, the manifest's git checkout and
+    `llm_client`'s `.env`.
+  - Logger names follow the module paths (`delist_detection.sources.edgar`, ...); the tests' `caplog` names were
+    updated. A caller filtering logs by the old names needs the new ones.
+- **The direction test: tests/test_import_closure.py**, from the real graph (ast, every module):
+  - the root holds only `__init__` and `pipeline`, and every subpackage has a direction;
+  - the directions have no cycle;
+  - each subpackage imports only those its concept rests on (9 cases);
+  - nothing imports the run;
+  - each named exception is real and type only (2);
+  - a pure subpackage reads only the sources' plumbing (3).
+  - The closure tests: every vocabulary module loads nothing else (was 2 leaves, now 6); the handling loads no
+    network client (2, new); importing the package loads none of its modules; each root name is its module's object,
+    and the root has no other.
+- **Tests.** Added 32 in test_import_closure (35 collected to 67), and the strict xfail now passes; none deleted.
+  The import updates touched 131 test files and 27 scripts. Suite: 3478 passed, 45 xfailed (step 15: 3445 passed,
+  46 xfailed).
+- **The gate.**
+  - The replay copy `/tmp/claude/delist_detection/arch/replay_layout.py` differs from `replay_wave1.py` in module
+    paths and in one addition: every package module that imports `write_atomic` or `clean_orphan_temps` is patched,
+    the lists are checked against the package's imports at start, and a missing target raises.
+    - `manifest` and `scorecard` write the run's own outputs (run_manifest.json, scorecard.json) through
+      `write_atomic`, so a plain no-op there would drop two files from the gate. The five modules outside the
+      original list get a patch that makes a write under cache/ a no-op, lets one under the run's folder through,
+      and raises on any other.
+    - The diff (`diff -u replay_wave1.py replay_layout.py`):
+
+      ```diff
+      --- /tmp/claude/delist_detection/wave1/replay_wave1.py	2026-10-04 17:02:25
+      +++ /tmp/claude/delist_detection/arch/replay_layout.py	2026-10-08 01:18:45
+      @@ -23,6 +23,7 @@
+
+       ROOT = Path.cwd()
+       AS_OF = date(2026, 9, 25)
+      +OUT: Path | None = None        # the run's folder: the one place a write outside the cache may go (step 16)
+
+       # each sub-plan's expected changed set (its own replay's measured list), keyed by sub-plan
+       def _expected_of(path: str) -> set[str]:
+      @@ -77,20 +78,69 @@
+
+           def no_write(*a, **k):
+               return None
+      -    for mod in ("edgar", "sec_http", "midas", "nasdaq_halts", "openfigi", "ticker_resolver", "cik_lookup", "ftd",
+      -                "llm_merger_extractor"):
+      -        m = __import__(f"delist_detection.{mod}", fromlist=["x"])
+      -        for name in ("write_atomic", "clean_orphan_temps"):
+      -            if hasattr(m, name):
+      -                setattr(m, name, no_write)
+      -    import delist_detection.atomic_io as aio
+      -    import delist_detection.sec_limiter as lim
+      +    import delist_detection.sources.atomic_io as aio
+      +    import delist_detection.sources.sec_limiter as lim
+      +    # Every package module that imports write_atomic or clean_orphan_temps, with the names it imports (step 16), as
+      +    #   grep -rnE "from \.+[a-z_.]*atomic_io import" src/delist_detection
+      +    # lists them. NO_WRITE is the original list at its new paths (cik_lookup imports neither name, so it is not here:
+      +    # its download writes through sec_http's): every write of theirs is a cache write, a no-op as before. The modules
+      +    # of OUTSIDE_CACHE write outside the cache (outputs.manifest's run_manifest.json and measurement.scorecard's
+      +    # scorecard.json are the run's own outputs; the truth and loop modules write no file in a run): a write under
+      +    # cache/ is a no-op, one under the run's folder goes through, any other raises. A listed target that does not
+      +    # exist raises, and so does a package module the lists miss.
+      +    NO_WRITE = {
+      +        "sources.edgar": ("write_atomic", "clean_orphan_temps"),
+      +        "sources.sec_http": ("write_atomic",),
+      +        "sources.midas": ("write_atomic", "clean_orphan_temps"),
+      +        "sources.nasdaq_halts": ("write_atomic", "clean_orphan_temps"),
+      +        "sources.openfigi": ("write_atomic", "clean_orphan_temps"),
+      +        "identity.ticker_resolver": ("write_atomic", "clean_orphan_temps"),
+      +        "sources.ftd": ("clean_orphan_temps",),
+      +        "terms.llm_merger_extractor": ("write_atomic", "clean_orphan_temps"),
+      +    }
+      +    OUTSIDE_CACHE = {
+      +        "outputs.manifest": ("write_atomic",),
+      +        "measurement.scorecard": ("write_atomic",),
+      +        "measurement.truth": ("write_atomic",),
+      +        "measurement.regression": ("write_atomic",),
+      +        "measurement.loop_round": ("write_atomic",),
+      +    }
+      +    import ast
+      +    import importlib
+      +    pkg = Path(aio.__file__).resolve().parent.parent
+      +    found: dict[str, set[str]] = defaultdict(set)
+      +    for path in pkg.rglob("*.py"):
+      +        for node in ast.walk(ast.parse(path.read_text())):
+      +            if isinstance(node, ast.ImportFrom) and (node.module or "").endswith("atomic_io"):
+      +                names = {a.name for a in node.names} & {"write_atomic", "clean_orphan_temps"}
+      +                if names:
+      +                    found[".".join(path.relative_to(pkg).with_suffix("").parts)] |= names
+      +    listed = {m: set(n) for m, n in {**NO_WRITE, **OUTSIDE_CACHE}.items()}
+      +    if dict(found) != listed:
+      +        raise RuntimeError(f"the patch lists differ from the package's imports: {dict(found)} != {listed}")
+      +    real_write = aio.write_atomic
+      +    cache_dir = (ROOT / "cache").resolve()
+      +
+      +    def outside_cache(path, data):
+      +        p = Path(path).resolve()
+      +        if p == cache_dir or cache_dir in p.parents:
+      +            return None
+      +        if OUT is not None and OUT in p.parents:
+      +            return real_write(path, data)
+      +        raise RuntimeError(f"replay: a write outside cache/ and the run's folder: {path}")
+      +    for patch, table in ((no_write, NO_WRITE), (outside_cache, OUTSIDE_CACHE)):
+      +        for mod, names in table.items():
+      +            m = importlib.import_module(f"delist_detection.{mod}")
+      +            for name in names:
+      +                if not hasattr(m, name):
+      +                    raise AttributeError(f"replay: delist_detection.{mod} has no {name} to patch")
+      +                setattr(m, name, patch)
+           aio.clean_orphan_temps = no_write
+           lim.throttle = lambda *a, **k: None
+           lim.use_machine_wide_limit = lambda *a, **k: None
+
+      -    from delist_detection.edgar import EdgarClient
+      -    from delist_detection.openfigi import OpenFigiClient
+      +    from delist_detection.sources.edgar import EdgarClient
+      +    from delist_detection.sources.openfigi import OpenFigiClient
+           real_text, real_raw = EdgarClient.fetch_filing_text, EdgarClient.fetch_filing_raw
+
+           def text(self, cik, accession, primary_doc):
+      @@ -112,7 +162,7 @@
+
+           # 5d: a halt day the cache lacks reads as no halts (the feed's 404), not as a failed read: 5d asks new days
+           # (the Form 25 day when nothing states the last trade, the text days the new reader finds)
+      -    from delist_detection.nasdaq_halts import NasdaqHaltClient, parse_halts_rss
+      +    from delist_detection.sources.nasdaq_halts import NasdaqHaltClient, parse_halts_rss
+           halt_days: list[str] = []
+
+           def halts_on(self, day):
+      @@ -136,17 +186,17 @@
+
+
+       def _clients(index):
+      -    from delist_detection.cik_lookup import CikLookupClient
+      -    from delist_detection.classifier import DelistClassifier
+      -    from delist_detection.edgar import EdgarClient
+      -    from delist_detection.ftd import FtdClient
+      -    from delist_detection.llm_merger_extractor import LLMMergerTermsExtractor
+      -    from delist_detection.midas import MidasClient
+      -    from delist_detection.nasdaq_halts import NasdaqHaltClient
+      -    from delist_detection.openfigi import OpenFigiClient
+      -    from delist_detection.payout_extractor import PayoutExtractor
+      +    from delist_detection.sources.cik_lookup import CikLookupClient
+      +    from delist_detection.endings.classifier import DelistClassifier
+      +    from delist_detection.sources.edgar import EdgarClient
+      +    from delist_detection.sources.ftd import FtdClient
+      +    from delist_detection.terms.llm_merger_extractor import LLMMergerTermsExtractor
+      +    from delist_detection.sources.midas import MidasClient
+      +    from delist_detection.sources.nasdaq_halts import NasdaqHaltClient
+      +    from delist_detection.sources.openfigi import OpenFigiClient
+      +    from delist_detection.terms.payout_extractor import PayoutExtractor
+           from delist_detection.pipeline import Clients
+      -    from delist_detection.ticker_resolver import TickerResolver
+      +    from delist_detection.identity.ticker_resolver import TickerResolver
+           import delist_detection as _dd                 # the scripts beside the source tree on PYTHONPATH (5h)
+           scripts = Path(_dd.__file__).resolve().parents[2] / "scripts"
+           spec = importlib.util.spec_from_file_location("cu", scripts / "classify_universe.py")
+      @@ -173,12 +223,14 @@
+
+
+       def run(out_dir: str, baseline: str) -> None:
+      +    global OUT
+      +    OUT = Path(out_dir).resolve()
+           refused, blank = offline()
+           import delist_detection.pipeline as P
+      -    from delist_detection.observations import ObservationIndex, load_observations
+      -    from delist_detection.review_triage import load_decisions
+      -    from delist_detection.scorecard import load_config
+      -    from delist_detection.store import read_table
+      +    from delist_detection.identity.observations import ObservationIndex, load_observations
+      +    from delist_detection.outputs.review_triage import load_decisions
+      +    from delist_detection.measurement.scorecard import load_config
+      +    from delist_detection.outputs.store import read_table
+           listed = _listed_from_output()
+           P.listing_answers = lambda figi, ids: {}
+           P.listed_today = lambda figi, sid, **k: listed.get(sid)
+      @@ -246,8 +298,8 @@
+           """D.mismatches on each folder: plain (the truth file as written), and with the truth rows renamed by that
+           folder's contract/id_changes.csv first (as truth_loop_round.py does, 5h's judge)."""
+           from delist_detection import diagnosis_loop as dl
+      -    from delist_detection.diagnosis_truth import LibraryRows, judge_case, load_legs, parse_rows
+      -    from delist_detection.lifecycle import Tables
+      +    from delist_detection.measurement.diagnosis_truth import LibraryRows, judge_case, load_legs, parse_rows
+      +    from delist_detection.measurement.lifecycle import Tables
+           legs = load_legs(ROOT / "data/diagnosis_truth_legs.csv")
+           rows = dl.read_csv(ROOT / "data/diagnosis_truth.csv")
+           libs = [LibraryRows.of(Tables.read(Path(d))) for d in (base, new)]
+      ```
+
+  - The replay ran twice at one worker: on the moves commit (eager root) and on the final tree (lazy root). Before
+    each a marker was touched; `find cache -newer <marker>` listed nothing after it.
+  - Both are SAME against `accepted4_out`, refuse no request (`refused 0`, no uncached text or halt day), and their
+    logs equal step 15's `s15_run.log` line for line, byte for byte (no path appears in it).
+  - The 4-worker replay (`replay_layout_w4.py`, `sec_workers=4`): every table SAME against `accepted4_out`,
+    run_manifest.json differing only in `sec_workers`; SAME against step 14's four-worker replay (`s14_w4_out`), and
+    its log equals that one's byte for byte.
+  - `scripts/scorecard.py --check` on output/ prints what step 15's src and script print (exit 0), and `--check
+    --base ca58ee1` gives its 118 lines, D.unexplained_regressions 0, exit 0.
+  - Every script in scripts/ imports cleanly, and each with argparse answers `--help` (26 of 29;
+    build_last_trade_fixtures, regen_payout_fixtures and verify_altair have no argparse and were imported only).
+- **pipeline.py: 1557 lines, unchanged.** Its imports were rewritten in place (one rewrapped).
+- **CONTEXT.md gains "Ending"** (the concept `endings/` is named after, used throughout the glossary but never
+  defined) and a short "Package layout" note naming which subpackages are domain concepts.
+- **The moved modules** (every old path under `src/delist_detection/`):
+
+| Old path | New path |
+|---|---|
+| `identifiers.py` | `vocabulary/identifiers.py` |
+| `names.py` | `vocabulary/names.py` |
+| `trading_calendar.py` | `vocabulary/trading_calendar.py` |
+| `crsp_codes.py` | `vocabulary/crsp_codes.py` |
+| `exchanges.py` | `vocabulary/exchanges.py` |
+| `exit_kind.py` | `vocabulary/exit_kind.py` |
+| `atomic_io.py` | `sources/atomic_io.py` |
+| `settings.py` | `sources/settings.py` |
+| `retries.py` | `sources/retries.py` |
+| `sec_limiter.py` | `sources/sec_limiter.py` |
+| `sec_stats.py` | `sources/sec_stats.py` |
+| `fatal.py` | `sources/fatal.py` |
+| `html_text.py` | `sources/html_text.py` |
+| `edgar.py` | `sources/edgar.py` |
+| `sec_http.py` | `sources/sec_http.py` |
+| `openfigi.py` | `sources/openfigi.py` |
+| `cik_lookup.py` | `sources/cik_lookup.py` |
+| `ftd.py` | `sources/ftd.py` |
+| `midas.py` | `sources/midas.py` |
+| `nasdaq_halts.py` | `sources/nasdaq_halts.py` |
+| `llm_client.py` | `sources/llm_client.py` |
+| `prefetch.py` | `sources/prefetch.py` |
+| `capabilities.py` | `sources/capabilities.py` |
+| `evidence.py` | `filings/evidence.py` |
+| `form25.py` | `filings/form25.py` |
+| `listing_status.py` | `filings/listing_status.py` |
+| `filing_search.py` | `filings/filing_search.py` |
+| `store.py` | `outputs/store.py` |
+| `review_triage.py` | `outputs/review_triage.py` |
+| `degraded.py` | `outputs/degraded.py` |
+| `manifest.py` | `outputs/manifest.py` |
+| `run_snapshot.py` | `outputs/run_snapshot.py` |
+| `verdict.py` | `outputs/verdict.py` |
+| `contract.py` | `outputs/contract.py` |
+| `dlret.py` | `outputs/dlret.py` |
+| `payout_rule.py` | `outputs/payout_rule.py` |
+| `price_requests.py` | `outputs/price_requests.py` |
+| `reconstruction.py` | `outputs/reconstruction.py` |
+| `observations.py` | `identity/observations.py` |
+| `figi_resolution.py` | `identity/figi_resolution.py` |
+| `security_master.py` | `identity/security_master.py` |
+| `ticker_resolver.py` | `identity/ticker_resolver.py` |
+| `issuer_record.py` | `identity/issuer_record.py` |
+| `issuer_in_force.py` | `identity/issuer_in_force.py` |
+| `identity.py` | `identity/identity.py` |
+| `history.py` | `identity/history.py` |
+| `added_securities.py` | `identity/added_securities.py` |
+| `ticker_evidence.py` | `identity/ticker_evidence.py` |
+| `line_follow.py` | `identity/line_follow.py` |
+| `delistings.py` | `endings/delistings.py` |
+| `trading_record.py` | `endings/trading_record.py` |
+| `classifier.py` | `endings/classifier.py` |
+| `end_of_era.py` | `endings/end_of_era.py` |
+| `distress.py` | `endings/distress.py` |
+| `exchange_terms.py` | `endings/exchange_terms.py` |
+| `own_shares.py` | `endings/own_shares.py` |
+| `continuation_evidence.py` | `endings/continuation_evidence.py` |
+| `last_trade.py` | `endings/last_trade.py` |
+| `rewrites.py` | `endings/rewrites.py` |
+| `successors.py` | `endings/successors.py` |
+| `handoffs.py` | `endings/handoffs.py` |
+| `merger_value.py` | `terms/merger_value.py` |
+| `payout_gate.py` | `terms/payout_gate.py` |
+| `payout_extractor.py` | `terms/payout_extractor.py` |
+| `llm_merger_extractor.py` | `terms/llm_merger_extractor.py` |
+| `filing_selection.py` | `terms/filing_selection.py` |
+| `currency.py` | `terms/currency.py` |
+| `acquirer_line.py` | `terms/acquirer_line.py` |
+| `acquirers.py` | `terms/acquirers.py` |
+| `acquirer_ticker.py` | `terms/acquirer_ticker.py` |
+| `lifecycle.py` | `measurement/lifecycle.py` |
+| `scorecard.py` | `measurement/scorecard.py` |
+| `audit.py` | `measurement/audit.py` |
+| `truth.py` | `measurement/truth.py` |
+| `diagnosis_truth.py` | `measurement/diagnosis_truth.py` |
+| `truth_set.py` | `measurement/truth_set.py` |
+| `truth_build.py` | `measurement/truth_build.py` |
+| `truth_update.py` | `measurement/truth_update.py` |
+| `regression.py` | `measurement/regression.py` |
+| `loop_round.py` | `measurement/loop_round.py` |
+| `handling.py` | `handling/handling.py` |
+| `qlib_adapter.py` | `handling/qlib_adapter.py` |
