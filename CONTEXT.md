@@ -38,6 +38,10 @@ The last date a security's history is known, and what happened next: it kept tra
 The last day a security traded on its exchange before a delisting: measured by SEC MIDAS volume or a Nasdaq halt, else stated by the exchange's Form 25 notice or the issuer's 8-K, else worked out from the deal's closing or the last sighting. It is confirmed when a measurement or a stated timing gives it, and published in the contract only when confirmed, from an exchange print and no later than the Form 25's effective date (`last_trade.py`). An ending's anchor day, the day it is read around, is its last trade date, else its Form 25's filing date (then the 8-K it was classified on, then its delisting date); its end day, the day its listing ended, is its last trade date, else its delisting date.
 _Avoid_: delist date (the Form 25's effective date), exit date
 
+**Trading record**:
+What a security's own sightings and fails rows say of its trading: the days it was seen under each ticker (its observations, and the fails-to-deliver rows of its own CUSIPs under any symbol, the OTC symbol it moved to included), and from them its ticker on a day, its last sighting under its own tickers, whether it traded on after a day, its CUSIP switches and the day another CUSIP took its ticker (`trading_record.py`). The delisting finder and the last trade date read it. A successor the run added, which no observation names, has one over the span the run knows it for.
+_Avoid_: context, trading view
+
 **Bucket**:
 The handling class a delisting's CRSP code maps to: `merger`, `exchange_transfer`, `liquidation`, `compliance_failure`, `expiration`, or `active` when no delisting occurred. The bucket, not the exact code, decides the training label and the backtest exit.
 _Avoid_: category

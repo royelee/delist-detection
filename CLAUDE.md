@@ -99,8 +99,12 @@ successor for stage 9; its `Lines` answer carries the review items of stages 1 t
 candidate holds the ticker today folds into its next CUSIP's composite when that composite left the ticker, CRC and
 BTU, whose post-bankruptcy lines took the ticker), `_other_issuers` (stage 4c: the one CIK other than a
 security's own that was its issuer in force on every sighting, `issuer_in_force.issuer_changes`; stage 5 reads its
-Form 25s too; metered as "other issuers in force"), `_find_delistings`,
-`_dead_before_sighting` (stage 5b: a security whose last real ending came before its
+Form 25s too; metered as "other issuers in force"), `_find_delistings` (stage 5: every security searched by
+`delistings.DelistingFinder` over the contexts the finder builds itself, `delistings.SecurityContexts.observed`: each
+security's trading record, `trading_record.TradingRecord`, over its observations, its own CUSIPs and the fails
+index, with its issuer's securities as siblings, its other CIK in force and its issuer's lookup tier; the warm pass
+and the sequential pass ask that one object, so both search one context; the records' sightings are the stage's
+answer), `_dead_before_sighting` (stage 5b: a security whose last real ending came before its
 first observation and that has no trading fails row died before the run's fails
 window began, so (eligibility decided first, then) the fails index is asked for its tickers' rows over
 [end − 1095 d, end + 10 d] (`FtdIndex.around`), it takes the CUSIPs `history.backfill_cusips` finds that no other
@@ -112,7 +116,7 @@ delisting's `last_close` request, `price_requests.PriceAnswers`, else the fails 
 one call into `merger_value.value_mergers`, which answers one `MergerValue` per merger ending; the module map has
 its steps), `_r1_continuations` (stage 8b: a merger whose published terms are one share and no cash (`exchange_terms.one_share_no_cash`, a special dividend set aside: `OwnShares.consideration`), whose registrant's filings say the same of its own shares (the ending's own-share reading, `own_shares.of`: the one the delisting carries, else one made at its anchor), into a new issuer (`own_shares.new_issuer`, `NEW_ISSUER_DAYS`) or the same issuer (`successors.successor_by_terms` over the reading's statement, else the new issuer's 8-K12B), is an exchange transfer to that successor, flagged `r1_continuation`, its payout reads dropped (`rewrites.continuation`, `Rule.R1`, with the run's merger values); the LLM's final terms must agree; the new issuer is named by the R1 statement's target (the name tie, `own_shares.names_target`), its 8-K12B candidate included; a degraded read, now or when the carried reading was made (`OwnShares.degraded`), keeps the merger and flags the row; the run logs `role refusal: N rows (...)`, the delistings whose end-of-era reading refused a merger on the registrant's role; metered as "R1 continuations"),
 `_find_successors` (stage 9, with sub-plan 5c's `_terms_links` before the 8-K12B search, over the ending's own-share reading (`own_shares.of`): the same issuer's class, a new issuer, or the security's own same-CIK 8-K12B line via OpenFIGI and R2 (the CUSIP the reading's texts name); a name tie for any 8-K12B link; sub-plan 5h: `_own_registration_link` takes a text-named CUSIP with no fails row
-yet when the fails data ends before the day, OKE 2026: the added successor starts on the next trading day, as every successor the run adds does (`last_trade.first_day_after`), and a Form 25 that already owns a delisting of the run raises no unmatched row in stage 9d; the stage ends by recording its links as rewrites, `_link_successors`), `_handoffs` (stage 9b: first `rewrites.mark_going_on` over `history.Histories.going_on`, the clip check's merger or transfer that does not end its security goes on as itself, here and only here, so the handoffs see it; then the handoffs), `_date_from_notices` (stage 9c: `last_trade.Dating.from_notice`, a handoff continuation row's last trade day from its own Form 25's confirmed EX-99.25 notice, when before the successor's first sighting, the handoff rewrite's typed `successor_from`, and no later than the effective date; the stage keeps the failed-read watch; metered as "handoff notice dates"), `_successor_endings` (stage 9d: the Form 25 search, matches only, for the line and 8-K12B successors the run added; the finder's items about a Form 25 that already owns a delisting are dropped by their typed `ReviewItem.filing`; metered as "successor endings"), `_distress` (stage 9e,
+yet when the fails data ends before the day, OKE 2026: the added successor starts on the next trading day, as every successor the run adds does (`last_trade.first_day_after`), and a Form 25 that already owns a delisting of the run raises no unmatched row in stage 9d; the stage ends by recording its links as rewrites, `_link_successors`), `_handoffs` (stage 9b: first `rewrites.mark_going_on` over `history.Histories.going_on`, the clip check's merger or transfer that does not end its security goes on as itself, here and only here, so the handoffs see it; then the handoffs), `_date_from_notices` (stage 9c: `last_trade.Dating.from_notice`, a handoff continuation row's last trade day from its own Form 25's confirmed EX-99.25 notice, when before the successor's first sighting, the handoff rewrite's typed `successor_from`, and no later than the effective date; the stage keeps the failed-read watch; metered as "handoff notice dates"), `_successor_endings` (stage 9d: the Form 25 search, matches only, for the line and 8-K12B successors the run added, each searched from its own trading record (`TradingRecord.added`: its ticker, its span, to the run date when it has no fails rows, and its CUSIPs; no era or observation is made up for it, and its issuer's lookup tier is none) beside the run's securities of its issuer; the finder's items about a Form 25 that already owns a delisting are dropped by their typed `ReviewItem.filing`; metered as "successor endings"), `_distress` (stage 9e,
 sub-plan 5g: for each liquidation, compliance-failure or unknown delisting with no successor, a bankruptcy plan's
 stock rule (R6), a price-only removal's code 552, and the OTC symbol of its first off-exchange print, anchored on the
 last trade day stage 5 dated; `dlret.DistressTerms` for the contract; metered as "distress notices"; at stage 10a a
@@ -393,7 +397,8 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   (`identifiers.figi_class_letter`, `one_class_issuers`: MSG onto MSG Networks, LMCA onto Starz); never a shared CUSIP
   (tracking stocks).
 - `history.py` — a security's dated history: its sightings
-  (`ticker_sightings`/`cusip_sightings`, `own_last_seen`, `ticker_on`; a fails row is a ticker
+  (`ticker_sightings`/`cusip_sightings`, and `span_sightings` for a successor the run added, stage 9d: its span's
+  days, source `SPAN`, and its CUSIPs' fails rows; a fails row is a ticker
   sighting only when its symbol has a letter, because SEC's Aug–Dec 2007 files mask some symbols as "**********"),
   `ranges_from_sightings()` (dated `Sighting`s into `ticker_history`/
   `cusip_history` ranges; `value_on` reads one), `backfill_cusips()` (the
@@ -416,7 +421,8 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   `history_ticker`. A first-day `…ZZZZ` row is no ticker sighting;
   an observation is a sighting of its era's ticker. Sub-plan 5h: `cusip_sightings` drops an old CUSIP's `…ZZZZ`
   settle rows dated once another CUSIP of the security, begun after it, has begun (MSG 2015: the new CUSIP's range
-  starts on its first row).
+  starts on its first row). What the sightings say of the security's trading (the ticker on a day, the last
+  own-ticker sighting) is the trading record's (`trading_record.py`).
   Where a security's history ends is one module, `Histories` (architecture step 5): the caller passes the observed
   securities, their sightings, their CUSIPs, the fails index, a summary of every ending (`Ending`: key, `LastTrade`,
   bucket, successor, exchange; built by `delistings.Delisting.ending`, so history imports no `Delisting`), the
@@ -437,6 +443,24 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   why). A security with an ending that ends it whose ticker a successor took is not listed today (AON 2012). Pipeline
   builds it twice (`pipeline._histories`): stage 9b's first step reads `going_on`, and 10b and 10c2 read the
   history over the final delistings.
+- `trading_record.py` — architecture step 14: a security's trading record (CONTEXT.md), what its sightings and its
+  own CUSIPs' fails rows say of its trading, read by the finder and the last trade module; data only, no closure.
+  Two constructors: `TradingRecord.observed(security, fails, cusips[, sightings])` (a security of the run: its
+  sightings `history.ticker_sightings` unless given; its last era's ticker and name, its eras' first and last day)
+  and `TradingRecord.added(security, ticker, span, fails, cusips)` (stage 9d's added successor, over its span, no
+  era). Its answers: `ticker`, `known_from`, `known_until`, `expected_name`, `own_tickers` (the eras', the line's and
+  an added security's own), `has_cusips`; `ticker_on(day)` (the latest sighting on or before the day, else the
+  first), `last_seen` (the last own-ticker sighting, not an OTC tail; else `known_until`), `seen_after(day)`,
+  `seen_in_fails_after(day)` (a fails row under an own ticker), `span` (a sibling's first sighting to its last own
+  one), `tickers(lo, hi)` (every ticker sighted in a window: SAVE and SAVEQ); `trades_after(day)`
+  (`ftd.trades_after` over its own CUSIPs' trading rows, any symbol), `traded_within(day, days)` (a trading row,
+  `ftd.is_trading_symbol`, in the days up to a day: the late reach), `cusip_switches` (each later CUSIP's first
+  sighting, `history.cusip_sightings`: QGEN 2026), `letter_hint` (R2: a letterless class's one letter its CUSIPs'
+  descriptions name, `identifiers.descriptions_class_letter`), `taken` (rule 3, `ticker_taken`: the trading day
+  before another CUSIP's first priced fails row under the ticker, on or after the own last one; a $0.01 row is no
+  trade) and `trades_until()` (rule 4's floor, `last_row_trade_day`: the trading day before `ftd.settled_last`'s row
+  of the CUSIP it held last). Cached answers are read from the one fails index on the warm pass's threads too.
+  Tested at its interface (`tests/test_trading_record.py`).
 - `added_securities.py` — `AddedAcquirer`/`AddedSuccessor`/`AddedLineSuccessor` (`AddedSecurity`; the last a FIGI
   line's successor stage 4b found, linked in stage 9 and added only for an ending that takes it): a
   security the run adds that no observation names, with its one
@@ -570,7 +594,7 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   stage (9b), stage 9c, the clip and the contract ask it; no other module decides or edits a last trade.
   `Dating(edgar, midas=, halts=)` dates an ending: `of_group` (a Form 25 group: the first notice that states a day,
   an exchange's 25-NSE first; the best 3.01 8-K reading filed in [earliest − 60 d, latest + 15 d]; MIDAS over
-  [earliest − 75 d, latest effective + 10 d] under every ticker the security carried then, `OwnTrading.tickers`:
+  [earliest − 75 d, latest effective + 10 d] under every ticker the security carried then, `TradingRecord.tickers`:
   SAVE and its OTC SAVEQ; the halt feed around the text days, else the Form 25 day, PHLY 2008), `of_fallback` (no
   Form 25: the 3.01 8-Ks up to the last sighting + 5 d, VRM 2024, MIDAS anchored on the dating filing; a merger
   left undated ends on the closing day its latest 2.01/5.01 8-K near the last sighting states, FCL, SGP 2009, never
@@ -578,17 +602,18 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   handoff row dated by its last sighting takes its own Form 25 notice's confirmed day, before the successor's first
   sighting and no later than the effective date). MIDAS and the Nasdaq halt feed are its two adapters
   (`last_trade_day`; `deletion_halt`, `failed_days`), each a real client or a fixture-backed double; a halt-feed
-  day it could not read rides on `LastTrade.halt_feed_failed`. Rule 3, the ticker's tenure (`ticker_taken`,
-  `OwnTrading.taken`: the trading day before another CUSIP's first priced fails row under the ticker, on or after
-  the security's own last one there; none without an own row; a $0.01 row is no trade): a MIDAS or halt day after a
+  day it could not read rides on `LastTrade.halt_feed_failed`. Rule 3, the ticker's tenure (the security's trading
+  record, `trading_record.TradingRecord.taken`, which the finder passes in: the trading day before another CUSIP's
+  first priced fails row under the ticker, on or after the security's own last one there; none without an own row;
+  a $0.01 row is no trade): a MIDAS or halt day after a
   text day, from that day on, is the other security's: MIDAS is read up to the day before, the halt dropped (CCE,
   JCI 2016, GRUB 2021); without a disagreeing text day nothing is bounded (a successor's first fails rows can lag
   its first day: Sinclair Inc 2023, new TCF 2019). Rule 4, inside `of_group`: a group left undated, not continued,
   whose winner is an exchange's Form 25 (not the issuer's 25 or 25/A, not under (b): it follows the suspension by
   weeks, TMA) takes the closing day (`closing_day_read`: the 8-Ks in [F − 10, F + 10] for [F − 10, F]), else F,
   source `closing_day`, flagged unconfirmed (`LastTrade.worked_out`: the classification keeps F as its anchor); the
-  closing day never comes before the last day its own fails rows show it trading (`OwnTrading.trades_until`,
-  `last_row_trade_day`: the trading day before `ftd.settled_last`'s row of the CUSIP it held last; AVGO 2018, Z
+  closing day never comes before the last day its own fails rows show it trading (`TradingRecord.trades_until`,
+  `trading_record.last_row_trade_day`: the trading day before `ftd.settled_last`'s row of the CUSIP it held last; AVGO 2018, Z
   2015) unless the text dated the closing before the open (Imclone 2008's 8:28 A.M.). `at_handoff` (stage 9b): a row
   the handoff writes, or a kept row with no day, takes A's last sighting before B's first (`handoff_day`, source
   `last_sighting`); a worked-out closing day never reaches B's first sighting. `anchor_day` (the day an ending is
@@ -655,26 +680,36 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   matches and groups them into one delisting per removal (chained within
   `SAME_EVENT_DAYS` of the group's earliest filing, across exchanges), dates
   and classifies each, and falls back to the classifier's no-Form-25 paths
-  when none exists. `SecurityContext.sibling_spans` keeps a Form 25 from being
-  matched to a sibling security that wasn't alive on the filing date. `SecurityContext.cusip_switches`: a Form 25
+  when none exists. Its interface is `SecurityContext` (architecture step 14, all data): the security's trading
+  record (`trading_record.TradingRecord`), the records of its issuer's securities (`siblings`, itself among them),
+  whether it is listed today, its other CIK in force and its issuer's lookup tier; the finder works out the ticker on
+  a day, the last sighting, trading after a day, rows near a Form 25, the CUSIP switches, the tenure and the rows'
+  last trading day from the record. `SecurityContexts` builds them (stage 5 and the real-case harnesses:
+  `SecurityContexts.observed(securities, cusips, fails, other_ciks=, resolution_source=)`, each record built once and
+  read by the warm pass and the sequential pass alike; stage 9d: from an added successor's
+  `TradingRecord.added` beside its issuer's records). `SecurityContext.spans` (each sibling's first sighting to its
+  last own one) keeps a Form 25 from being
+  matched to a sibling security that wasn't alive on the filing date. `TradingRecord.cusip_switches`: a Form 25
   within `OWN_SWITCH_DAYS` (5) trading days of the security's own CUSIP switch, while it trades on, is no
   delisting (QGEN 2026). Sub-plan 5b: `_continued` (listed today; the issuer's own Form 25 (25 or 25/A, not
   25-NSE, not under (b)) with its 8-A12B (not 8-A12B/A, a rights-plan amendment) within `EIGHT_A_DAYS`, 10, R7; judged on every member
   of a group, the earliest member anchoring the row; or, not under (b),
-  `SecurityContext.trades_after`; an observation alone never continues a security), `_judge` (one Form 25 against
-  the security), early reach (Form 25s up to `EARLY_REACH_DAYS`, 365, before the floor, for a security gone today,
+  `TradingRecord.trades_after`; an observation alone never continues a security), `_judge` (one Form 25 against
+  the security; `_judge_early`, the one judgement of a Form 25 before the floor, for the early window and the
+  fallback's early group alike: the security and the siblings alive then, the letter rule when it stands alone),
+  early reach (Form 25s up to `EARLY_REACH_DAYS`, 365, before the floor, for a security gone today,
   the latest early group, flagged `observed_after_delisting`; none when an unreadable early Form 25 is dated
-  after it, or for an issuer's own Form 25 with its 8-A12B), late reach (`SecurityContext.cusip_rows_near`,
+  after it, or for an issuer's own Form 25 with its 8-A12B), late reach (`TradingRecord.traded_within`,
   `LATE_ROW_DAYS` 30; and, with early reach where the security stands alone, the other CIK's reach, take only a Form 25 that names
   no class letter, or the security's own share-class letter or its `letter_hint`, `_names_other_letter`), and the
   other CIK in force (`SecurityContext.other_cik`, R5; the delisting carries the filer
   CIK; stage 4c gives a security whose submissions read failed a `resolution_degraded` row). An `unknown` row of a continued group with the issuer's 8-A12B becomes 304 with the security as its own
   successor. Each delisting is dated by the last trade module (`last_trade.Dating`, `self.dating`, built over the
   `midas` and `halts` adapters the finder is given: `of_group` for a Form 25 group, rules 3 and 4 inside;
-  `of_fallback` for the no-Form-25 path), reading the security's own trading from `SecurityContext.trading`
-  (`last_trade.OwnTrading`: its sightings, own CUSIPs, their trading fails rows and the fails index); a worked-out
+  `of_fallback` for the no-Form-25 path), reading the security's own trading from its trading record
+  (`SecurityContext.record`: its sightings, own CUSIPs, their trading fails rows and the fails index); a worked-out
   closing day (`LastTrade.worked_out`) is not the classification's anchor or the delisting's ticker day, which stay
-  the Form 25's. Sub-plan 5h: `SecurityContext.has_cusips`: a security with no CUSIP gets no continued-filings
+  the Form 25's. Sub-plan 5h: `TradingRecord.has_cusips`: a security with no CUSIP gets no continued-filings
   ending dated by its last sighting alone (`ended_without_delisting` instead: WW 2013, NCRA 2013). The finder's R7 and
   its continued transfer's successor are rewrites (`rewrites.continuation`, `security_goes_on`); each `form25_*` review
   item carries the Form 25 typed (`review_triage.FilingRef`, `ReviewItem.filing`): the handoff stage and stage 9d read

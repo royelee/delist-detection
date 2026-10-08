@@ -39,7 +39,7 @@ A deepening moves behaviour behind a smaller interface. It changes nothing the l
 | 11 | The Clients seam declares capabilities (small) | | done |
 | 12 | The fails index owns its loading (small) | | done |
 | 13 | One leaf module for ticker and share-class spelling (small) | | done |
-| 14 | The finder builds its own trading record (small) | | |
+| 14 | The finder builds its own trading record (small) | | done |
 | 15 | One truth-case type (speculative) | | |
 | 16 | Package layout: concept subpackages and a lazy package root (review 11) | | |
 
@@ -1989,3 +1989,117 @@ Decisions made in the step:
   Its log equals step 12's byte for byte.
 - **pipeline.py: 1637 lines to 1638** (an import and a wrapped line). identifiers.py is new, 203 lines;
   figi_resolution.py lost 42, observations.py 29.
+
+### Step 14: the finder builds its own trading record
+
+- **One trading-record type per security: `trading_record.TradingRecord`, a new module that replaces
+  `last_trade.OwnTrading`.** The finder and the last trade module read the same record; `Dating`'s `trading=` now
+  takes it (it asks `tickers`, `taken` and `trades_until`, as before). Its interface:
+  - two constructors: `TradingRecord.observed(security, fails, cusips[, sightings])` (its sightings
+    `history.ticker_sightings` unless given; its last era's ticker and name, its eras' first and last day) and
+    `TradingRecord.added(security, ticker, span, fails, cusips)` (stage 9d, below);
+  - what it is known by: `ticker`, `known_from`, `known_until`, `expected_name`, `own_tickers`, `has_cusips`;
+  - what the sightings say: `ticker_on(day)`, `last_seen`, `seen_after(day)`, `seen_in_fails_after(day)`, `span`,
+    `tickers(lo, hi)`;
+  - what its own CUSIPs' rows say: `trades_after(day)`, `traded_within(day, days)`, `cusip_switches`,
+    `letter_hint`, `taken(ticker, lo, hi)`, `trades_until()`.
+  - Moved in, each with its rule unchanged: `history.ticker_on` and `history.own_last_seen` (their only callers were
+    the context builder and stage 5's review row); `last_trade.ticker_taken`, `last_row_trade_day` and
+    `PLACEHOLDER_PRICE` (rule 3's tenure and rule 4's floor are the record's answers; `Dating` asks the record);
+    `pipeline._cusip_switches`, `_rows_near` and `_security_ref`'s letter hint.
+  - Alternative: grow `OwnTrading` inside last_trade.py. Rejected: CUSIP switches, rows near a Form 25 and a
+    sibling's span are the finder's reads, not dating; the module would hold the finder's facts behind the last
+    trade date's name.
+  - Cost if wrong: one more module (210 lines). last_trade.py imports the type only under `TYPE_CHECKING`, so its
+    import closure is unchanged.
+- **The finder's interface, `SecurityContext`, is five fields, all data, frozen:** `record`, `siblings` (the
+  records of its issuer's securities, itself among them: added when absent), `listed_today`, `other_cik`,
+  `resolution_source`. It derives `security`, `refs`, `own_ref` (each a `form25.SecurityRef` with the record's
+  letter hint) and `spans` (each sibling's `TradingRecord.span`). Before: 16 fields, five of them closures over the
+  sightings and rows (`ticker_on`, `seen_after`, `ftd_seen_after`, `trades_after`, `cusip_rows_near`) and two with
+  "unknown" defaults (`has_cusips=None`, `trading=OwnTrading()`) that only hand-built contexts used.
+  - Alternative: `find(record, siblings=, listed_today=, other_cik=, resolution_source=)` with no context type.
+    Rejected: the context is passed to a dozen private methods, and its derived refs and spans are computed once per
+    search.
+  - Cost if wrong: a later sub-plan that needs a new fact of the security's trading adds a query to the record, not
+    a field to the context.
+- **The constructor sits next to the finder: `delistings.SecurityContexts`.** `SecurityContexts(records,
+  other_ciks=, resolution_source=)` groups the records by issuer CIK (in the records' order, as the old builder
+  grouped `securities.values()`; a security with no CIK stands alone) and answers `contexts(security, listed)`;
+  `SecurityContexts.observed(securities, cusips, fails, ...)` builds each record over its own CUSIPs. `pipeline.
+  _context_builder` and its three helpers are gone. Stage 5 reads the records' sightings back as its answer
+  (`_DelistingSearch.sightings`) and its error row's last sighting from the record.
+  - The sightings are built by the constructor (`history.ticker_sightings`), no longer passed in. Alternative: stage
+    5 builds them and passes them, as before. Cost if wrong: none to output; one place builds them now, and the
+    harnesses no longer repeat the comprehension.
+- **One context for every worker count.** The warm pass and the sequential pass ask the one `SecurityContexts`
+  object, so a security's record (and each sibling's) is built once and both passes read it. Its cached answers
+  (rows, last sighting, switches, letter hint) are computed from the one fails index, which no query changes during
+  stage 5 (step 12), so a warm thread and the sequential pass get the same answers whichever computes them first.
+  Before, each pass built its own context; the sibling refs were built once per builder, the rows and switches once
+  per call. A test pins that both passes read the same record objects.
+- **Stage 9d searches an added successor from its span and CUSIPs, with no era or observation made up.**
+  `TradingRecord.added(a.security, a.ticker, (first, last or the run date), fails, cusips)`: its sightings are the
+  span's two days under its ticker (source `SPAN`, `history.span_sightings`, spelled as `ticker_sightings` spells
+  them) and its CUSIPs' fails rows; its known days are the span, its expected name the security's own, its own
+  tickers its ticker and its line's. The siblings are the run's securities of its issuer (records over the current
+  index), then the added record: the order of the old one-off world. `_SuccessorEndings.securities` now holds the
+  security as the run added it (no era); stage 7 reads only its `cusip_sightings`, to which the old era's
+  observations (no CUSIP) added nothing.
+  - Its issuer's lookup tier is none: "security_master". Before, `Identity.resolution_source` was asked over the
+    made-up era key `TICKER@first`, which would have taken an observed era's tier only if an observed era of that
+    ticker began the same day. Both 9d endings of the replay (DYN, BBG000BNLX91; ODP, BBG00R24W7X2) publish
+    security_master either way. `_successor_endings` loses its `resolution_source` parameter.
+  - Alternative: keep the made-up era and observations. Rejected by the step: they existed only to feed the
+    builder, and a sighting labelled "observation" for a day nobody observed is a misreading waiting to happen.
+  - Cost if wrong: the span's days are sightings with source `SPAN`; no reader keys on `OBSERVATION` for a 9d
+    sighting (the fallback, which reads `FTD`, never runs in 9d).
+- **The early window and the fallback's early group share one judgement, `_judge_early`** (the replay stays SAME):
+  the main scan's `_judge`, quiet, against the security and the siblings alive on the filing date, the letter rule
+  (`_names_other_letter`) when the security stands alone. `_early_group` repeated `_judge`'s checks by hand without
+  that rule. It now judges each neighbour with `_judge_early` over a scratch `_Scan` (no review item; the main
+  scan's state untouched), and reads the issuer's names once, passed in from `find` (which already read them),
+  instead of once per early filing.
+  - Consequence outside the replay: the fallback's early group no longer takes, for a letterless security alone, an
+    early Form 25 naming another class letter (final review M1's rule, which the early window and the other CIK's
+    reach already applied). A test pins it, and fails under the old rule (checked with a probe).
+  - Alternative: keep both. Cost if wrong: a case like that, if the replay had one, would lose a fallback ending; the
+    replay has none.
+- **`has_cusips` and the unknown defaults are gone.** A record always knows its CUSIPs, so the 5h rule reads
+  `not record.has_cusips`. test_identity_rules' WW guard looped over `has_cusips` True and None; None no longer
+  exists, so the guard runs once, with a CUSIP. `_fallback_date` takes the last sighting, not a context (it is a
+  pure function of it).
+- **Tests.**
+  - Added: tests/test_trading_record.py, 20 tests at the record's interface (5 new: an observed security's
+    sightings, a fails row under an own ticker after a day, a sibling's span, the CUSIP switches, an added
+    successor's span record; 15 moved, below). test_delistings.py, 6 at the finder's interface: the constructor's
+    siblings and spans (the deleted run test's two classes and OTC tail), its other CIK and lookup tier, one record
+    for every pass, a context from a record alone, an added successor searched from its span beside its issuer's
+    earlier security, and the shared early judgement.
+  - Moved, every assertion kept: test_last_trade's six tenure, rows' last day and window-tickers tests;
+    test_history's two ticker-on-a-day tests and the line-follow last sighting; test_pipeline's two `own_last_seen`
+    tests and its four `_one_security_context`/`_security_ref` tests (trading after a day under any symbol, rows
+    near a day, unassigned and pair-off rows, the letter hint).
+  - Deleted, covered at the record and the constructor: test_pipeline's two whole-run tests that replaced
+    `pipeline.DelistingFinder` with a recorder to read the context's last sighting, sightings after a day, fails
+    sightings, window tickers and sibling spans.
+  - The four hand-built contexts (test_delistings' `_ctx`, its fallback-date and no-era tests, test_identity_rules'
+    WW) are built by the constructor over rows. Each scenario a lambda stated is now data: a later observation, an
+    OTC row of the security's own CUSIP, 21 weekly rows at two prices (trading after a day), a row a day before a
+    Form 25 (the late reach), two CUSIPs (the switch), a description naming class B (the letter hint), securities of
+    the issuer as siblings. Three cases' observation dates moved to the last sighting the lambda gave (AET's
+    ambiguity row 2018-11-28, CBS's 2019-12-06, Kraft Heinz's 2026-09-04). test_successor_endings' line successor
+    now asserts that the stage hands back the security as the run added it, no era, in place of the made-up era's
+    ticker.
+  - The real-case harnesses (form25_cases, distress_cases, last_trade_cases, issuer_role_cases) build their context
+    with `SecurityContexts.observed`; their outcomes are unchanged. test_identity_rules' 9d test no longer patches
+    the builder.
+  - test_import_closure: `trading_record` joins the classification modules that load no measurement module.
+  - Suite: 3427 passed, 46 xfailed (step 13: 3417).
+- **The gate.** The replay is SAME against `accepted4_out` and refuses no request (`refused 0`). Its log equals step
+  13's byte for byte. The four-worker replay (`replay_w4.py`, `sec_workers=4`) differs from `accepted4_out` only in
+  run_manifest.json's `sec_workers` key (the count it records), is SAME against step 7b's four-worker replay
+  (`w4_7b_out`), and its log equals that one's byte for byte.
+- **pipeline.py: 1638 lines to 1557.** delistings.py 671 to 714, last_trade.py 680 to 624, history.py 619 to 612;
+  trading_record.py is new, 210 lines.
+- **CONTEXT.md gains "Trading record"**, the concept the type is named after.
