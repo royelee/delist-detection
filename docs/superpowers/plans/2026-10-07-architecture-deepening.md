@@ -38,7 +38,7 @@ A deepening moves behaviour behind a smaller interface. It changes nothing the l
 | 10 | dlret decides the value rule once (small) | plan_stock's confidence | done |
 | 11 | The Clients seam declares capabilities (small) | | done |
 | 12 | The fails index owns its loading (small) | | done |
-| 13 | One leaf module for ticker and share-class spelling (small) | | |
+| 13 | One leaf module for ticker and share-class spelling (small) | | done |
 | 14 | The finder builds its own trading record (small) | | |
 | 15 | One truth-case type (speculative) | | |
 | 16 | Package layout: concept subpackages and a lazy package root (review 11) | | |
@@ -1885,3 +1885,107 @@ Decisions made in the step:
   - **A `--limit` subset's coverage now follows SEC's file index (accepted).** Over the whole replay every answer of
     `data_covers`, `data_end` and `opened_from` equals the old one, so the predicates now say what a full run already
     meant, and a subset answers as the full run would.
+
+### Step 13: one leaf module for ticker and share-class spelling
+
+- **The leaf is `identifiers.py`: how a security's identifiers are spelled and how its share class is read from
+  text. It imports nothing of the package** (`tests/test_import_closure.py` pins it beside `exit_kind`). Its
+  interface:
+  - ticker spellings: `normalize_ticker`, `regular_way`, `bloomberg_ticker`, `bare_ticker` (the fails files' BRKB)
+    and `class_suffix` (UAC-C is UAC and C);
+  - the placeholder sec_id: `SHARE_CLASS_CODE`, `placeholder_id`, `is_placeholder`;
+  - the class code's letter (`class_letter`) and one reader per kind of text (below).
+  - Name: the review's. Alternatives: `spelling` (but half of it reads classes), `share_class` (but a ticker is no
+    class). CONTEXT.md is unchanged: a security is one share class there already, and "identifiers" is the
+    module's subject, not a new domain term.
+  - `is_placeholder` moved with `placeholder_id`: it reads the spelling `placeholder_id` writes.
+  - Cost if wrong: one rename across 20 modules' imports.
+- **How a merge was decided: a probe of every reader's inputs over the replay.** A copy of the tree at 7ef60c4
+  recorded each distinct input of each candidate reader (`/tmp/claude/delist_detection/arch/s13_probe.json`; the
+  probe's own replay is SAME), and `s13_analyze.py` asked, per candidate rule, which recorded inputs would get
+  another answer. When a rule gives every recorded input the answer it gets today, the run takes the same path, so
+  the replay stays SAME. A merge was made only then, and only when the unit tests' cases agreed too.
+- **Merges** (each with the replay's evidence):
+  - **The class letter a security's name states: one reader, `name_class_letter`.** It was written four times as
+    `class_letter(share_class_from_name(name))`: `observations._class_letter` (the era split), `identity._class_letter`
+    (the old `ticker_resolver._class_letter`, the issuer inference), and inline in
+    `security_master.one_class_issuers`. Same rule.
+  - **The name without its class words: one regex (handoffs' and successors' `_CLASS_WORDS`), now
+    `strip_class_words`, which also folds the spaces and strips " -" at the ends** (successors' tail moved in).
+    handoffs then strips EDGAR's state tag and folds again, as before. Folding first changes none of the 89 names
+    the handoffs asked over the replay; successors' fallback (no EDGAR name) was asked for none.
+  - **One fails description's class letter: `description_class_letter` (ftd's `_DESC_CLASS`: CL or CLASS, a "-"
+    allowed).** The fails index's base relabel used it; the line follow's class refusal read a step's descriptions
+    with the name reader (which also reads SER X and a trailing -X). The CL rule gives the line follow's 12 recorded
+    descriptions their answers ("SINCLAIR INC CL A", "STARZ ENTMT CORP COM (CAN)"), so the line follow now reads
+    descriptions as descriptions.
+  - **A filing's prose: one reader, `prose_class_letters` (exchange_terms' `_LETTER`: "Class X"/"Series X", the
+    letter not followed by a word character or "-").** acquirer_line's `named_class` used `\b` after the letter.
+    exchange_terms' rule keeps all 331 recorded quotes' answers; acquirer_line's rule would change 5 of
+    exchange_terms' 527 sentences (Envision Healthcare's 2016 "Series A-1" preferred, Discovery's 2022 "Series A-1"
+    preferred, read as series A). `named_class` keeps its quote parse (consideration, subject) in acquirer_line.
+  - **The fails files' spelling `t.replace("-", "")`: one function, `bare_ticker`.** It was written in ftd
+    (`_learn`), handoffs (`_bare`), history (`_bare` and the sightings' label), the line follow (six places) and
+    own_shares (a ticker as a word of a target name). Same rule.
+  - **OpenFIGI's spelling: successors' `t.replace("-", "/")` is `bloomberg_ticker(t)`.** `t` is already normalized,
+    so the TICKER job and its cache key are the same.
+  - **ftd's `_CLASS_SUFFIX` is `class_suffix`.** Same rule; the base relabel reads it.
+  - **`class_of` and `CLASS_MODIFIERS` moved from own_shares and exchange_terms.** exchange_terms reads the
+    modifiers in a statement's head, own_shares the class a statement must name.
+- **Readers kept apart** (each its own rule; the probe shows the merge would change answers):
+  - **`figi_class_letter` (the old `security_master.line_class_letter`): the letter an OpenFIGI name ends with,
+    after a dash and spaces.** The name reader reads "MSG NETWORKS INC- A" and "STARZ - A" (2 of the 5 recorded) as
+    COMMON. Widening the name reader to a spaced trailing dash would change 29 of its 4,114 recorded inputs.
+    - Open point, outside this program: those 29 are OpenFIGI candidate names ("CBRE GROUP INC - A", "DOORDASH INC
+      - A", "LIBERTY MEDIA CORP - C") that `share_class_from_name` reads as COMMON today. An observed security takes
+      its class from its own name (securities.csv shows CBRE's as CLASS A), and `security_master` falls back to the
+      era's name when a candidate's reads COMMON. But an added security named by OpenFIGI alone, or a successor's
+      class match (`successor_from_8k12b`), could take COMMON for a class A. A fix can change rows, so it needs a fix
+      sub-plan.
+  - **`descriptions_class_letter` (the old `form25.letter_hint`, R2): CL, CLASS, SER or SERIES followed by a space,
+    one letter over all of a CUSIP's descriptions.** Under the one-description CL rule, 15 of the 1,840 recorded
+    description sets would change: "CONTL AIRLINES INC CL-B" and "HUBBELL INC CL-B" would gain a hint, Celanese's
+    "SER A COM" and Liberty Interactive's "SER A" would lose theirs. Under the name rule, 16 would. And the hint's
+    rule would change 2 of the relabel's 18 descriptions ("GREIF, INC. CL-A", "THE NEWS CORPORATION LTD CL-B").
+  - **`answer_class_letter` (the old `llm_merger_extractor.leg_class_letter`): the whole answer one class.** The LLM
+    answers a bare letter ("A", "B", "C": 3 of the 6 recorded answers), which the name reader reads as no class.
+  - **A Form 25's class text stays in form25** (`class_label`, `class_letters`, `_lettered_segments`). It is read
+    segment by segment, past attached rights and a common's preferred clauses, CLASS X before SERIES X across
+    segments. The same segments feed the match (`_named_by`) and R3 (`other_class`), so moving the letter rule out
+    would split one parse across two modules. Each label's letter is read with `identifiers.class_letter`.
+    - Cost if wrong: one class-letter reading outside the leaf, documented there and in the leaf's docstring.
+  - **exchange_terms' `_CLASS_WORDS` (a set of words dropped from party names) is not a class reader** and stays.
+- **Outside spellings left in place:**
+  - listing_status reads OpenFIGI's tickers back with `.replace("/", "-")`;
+  - acquirers looks the acquirer up in EDGAR's ticker file under `acq.upper().replace(".", "-")`;
+  - the LLM extractor's `clean_ticker` drops a spelled-out null.
+  - Each reads one outside spelling for one lookup. `normalize_ticker` would also fold spaces and strip dashes;
+    that is not measured, so it could change a lookup. Cost if wrong: three one-line spellings outside the leaf.
+- **The fails index still imports `names`** (`names_agree`, its relabel rule's name check). names is a leaf too; the
+  relabel rules stay in the index (step 12's decision), and step 16 moves `FtdClient` (the client) into the sources
+  package. ftd, midas and nasdaq_halts no longer import observations (a test pins it).
+- **The cycle is gone.** observations imports `identifiers` and `names` only; figi_resolution `identifiers` and
+  `names`. A test pins that neither imports the other.
+- **No old name is re-exported.** The callers were updated:
+  - the two fixture builders (`build_acquirer_gate_fixtures.py`, `build_line_fixtures.py`);
+  - every package module;
+  - test_continuation_evidence.
+  The README names none of them. `observations.normalize_ticker` still resolves, because observations imports it,
+  but nothing imports it from there.
+- **Tests.**
+  - Added: tests/test_identifiers.py, 17 tests at the leaf's interface: each spelling and each reader, with the real
+    cases the code cites (BRK-B/BRKB, LGF-B/LGFB, UAC-C, EHAB-WI, Liberty Capital's LCAPA name, Lennar's class B,
+    Viacom's class A quote, CAA's Lennar class A and B, GLIBA's Series C, SunPower's CL A, Continental's CL-B,
+    Celanese's SER A, MSG Networks' and Starz's OpenFIGI names, Comcast Special, Lions Gate's non-voting class B,
+    Envision Healthcare's Series A-1).
+  - Moved, every assertion kept: test_figi_resolution's two class and placeholder tests and its `bloomberg_ticker`
+    lines; test_observations' `normalize_ticker` and `regular_way` tests; test_form25's `letter_hint` test;
+    test_identity_rules' OpenFIGI-name test; test_own_shares' `class_of` test. 7 tests deleted from the old files.
+  - test_import_closure: `identifiers` joins `exit_kind` as a leaf; the data clients read the spelling, not the
+    observations (3); observations and figi_resolution import neither of each other; dlret's closure loses
+    observations and names.
+  - Suite: 3417 passed, 46 xfailed (step 12: 3402).
+- **The gate.** The replay is SAME against `accepted4_out` and refuses no request (`refused 0`, as the reference).
+  Its log equals step 12's byte for byte.
+- **pipeline.py: 1637 lines to 1638** (an import and a wrapped line). identifiers.py is new, 203 lines;
+  figi_resolution.py lost 42, observations.py 29.

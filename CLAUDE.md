@@ -28,7 +28,7 @@ editable install.
 
 ```bash
 pip install -e .                         # editable install (Python ≥3.10) — once per env
-pytest   # full suite (3390 passed, 46 xfailed: 8 known-wrong golden + the diagnosis truth set's 37 known_wrong cases, all residual, all strict, + the package root's eager imports, tests/test_import_closure.py, until the layout step; offline, no network)
+pytest   # full suite (3417 passed, 46 xfailed: 8 known-wrong golden + the diagnosis truth set's 37 known_wrong cases, all residual, all strict, + the package root's eager imports, tests/test_import_closure.py, until the layout step; offline, no network)
 pytest tests/test_payout_extractor.py -v  # one file
 pytest tests/test_payout_extractor.py::test_match_in_cash_family_altr -v   # one test
 
@@ -138,12 +138,33 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
 (security, era, sighting, pin, …).
 
 **Classification (network):**
+- `identifiers.py` — architecture step 13, a leaf (it imports nothing of the package): how a security's identifiers
+  are spelled and how its share class is read from text. Ticker spellings: `normalize_ticker` (the tables' spelling,
+  "brk.b" and "BRK B" are BRK-B), `regular_way` (EHAB-WI is EHAB), `bloomberg_ticker` (OpenFIGI's BF/A),
+  `bare_ticker` (the fails files' BRKB, with a post-split "...D" or a new CUSIP's "...ZZZZ" appended to it),
+  `class_suffix` (a one-letter class ticker's base and letter: UAC-C is UAC and C). The placeholder sec_id:
+  `placeholder_id` (`CIK<cik>-<CLASS>` from a class code, `SHARE_CLASS_CODE`) and `is_placeholder`. A class code
+  (COMMON, CLASS X, SERIES X) and its letter (`class_letter`). One reader per kind of text, each its own rule:
+  a security's name, observed, EDGAR's or OpenFIGI's (`share_class_from_name`; `name_class_letter`, the era split's
+  and the identity rules'; `strip_class_words`, the name an 8-K12B prints, for stage 9's and the handoffs'
+  searches); the class letter an OpenFIGI name ends with (`figi_class_letter`: "MSG NETWORKS INC- A", which the
+  name reader reads as COMMON); one fails description (`description_class_letter`: CL or CLASS, a "-" allowed; the
+  fails index's base relabel and the line follow's class refusal); a CUSIP's descriptions together
+  (`descriptions_class_letter`: CL, CLASS, SER or SERIES and a space, one letter over all; R2's letter hint); an
+  LLM answer's share class (`answer_class_letter`: "B", "Class B", "Series C common"; a basket leg's class); a
+  filing's prose (`prose_class_letters`: "Class X"/"Series X", a following "-" not, Series A-1; the own-share
+  statements and the acquirer line's quote); `CLASS_MODIFIERS` and `class_of` (the letter and the words, SPECIAL,
+  NON-VOTING, LIMITED VOTING, a security's statements must name). A Form 25's class text stays `form25`'s. The data
+  clients (ftd, midas, nasdaq_halts) read their spelling here, not from the observations
+  (`tests/test_import_closure.py`).
 - `observations.py` — `Observation`, `TickerEra`, `ObservationIndex`: splits
   one ticker's observations into eras (runs that belong to one security),
   splitting on a name mismatch, a pin change, or a gap over `ERA_GAP_DAYS`
-  that neither side's name confirms as continuous. `regular_way` maps a when-issued ticker to its regular-way one
+  that neither side's name confirms as continuous (the class letter a name states is
+  `identifiers.name_class_letter`). `identifiers.regular_way` maps a when-issued ticker to its regular-way one
   (EHAB-WI is EHAB): `ObservationIndex` groups by it and each era carries it, while each observation keeps the
-  caller's ticker. The second split, on the fails rows, is `identity.refine_eras`; `identity.identify` is the one
+  caller's ticker. It no longer spells tickers itself, and imports nothing of FIGI's rules (step 13 removed the
+  cycle). The second split, on the fails rows, is `identity.refine_eras`; `identity.identify` is the one
   place both run.
 - `edgar.py` — throttled, on-disk-cached SEC client. `submissions()`,
   `recent_filings()`, `fetch_filing_text()`/`fetch_filing_raw()` (HTML-stripped
@@ -226,9 +247,10 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   the class letter and is dated before the base symbol's own first observation when the run observes the base as a
   ticker (`FtdIndex.opened(..., first_seen=)`: a class C spelled UA-C, whose base UA became its own line's symbol
   on 2016-12-08) (`_relabel_base`); `by_symbol(base)` keeps only the rows left under it (HEI beside HEI-A). The
-  relabel rules stay in the index (they decide how it keys its rows). A row is relabelled when it is added, with the
-  spellings asked for by then: the replay holds Berkshire's and Lions Gate's BRKB/LGFB rows twice, once relabelled
-  after the gate asked BRK-B and LGF-B (step 12's log, open for a ruling).
+  relabel rules stay in the index (they decide how it keys its rows); the spellings and the description's letter
+  they read are `identifiers`' (`bare_ticker`, `class_suffix`, `description_class_letter`). A row is relabelled
+  when it is added, with the spellings asked for by then: the replay holds Berkshire's and Lions Gate's BRKB/LGFB
+  rows twice, once relabelled after the gate asked BRK-B and LGF-B (step 12's log, open for a ruling).
 - `midas.py` — `MidasClient`: SEC MIDAS per-security exchange volume (2012+,
   ticker-keyed); `last_trade_day()` confirms the last day with lit+hidden
   exchange volume, suppressed to `None` when the window runs past MIDAS's
@@ -251,8 +273,9 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   composite FIGI: `us_candidates()` groups rows by composite and keeps only US
   venues; `accept()` never trusts Bloomberg's current name alone (a dead line
   gets renamed to its acquirer) — a CUSIP hit needs no name check, a
-  ticker/name hit does; `placeholder_id()` builds `CIK<cik>-<CLASS>` when
-  nothing is confirmed.
+  ticker/name hit does. The placeholder `CIK<cik>-<CLASS>` used when nothing is
+  confirmed, and the class code read from a candidate's name, are `identifiers`' (`placeholder_id`,
+  `share_class_from_name`).
 - `issuer_record.py` — `IssuerRecord`, the run's issuer record (architecture step 2): one per run
   (`Clients.issuers`, the resolver's and the classifier's; `forget` when a run starts), over the EDGAR client. It
   reads each issuer's submissions JSON and filing list once (every issuer's `profile`, the JSON without its filings
@@ -367,7 +390,7 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   backfill may take the line whose confirming CUSIP traded over its dates (`FigiResolver(cusip_span=, foreign=)`:
   UAG 2008-09 on PAG's line). `_handoff_joins` lets a CUSIP switch join a lettered era to a plain-named era of its
   issuer when OpenFIGI names that line with the same letter and the issuer's eras name no other
-  (`line_class_letter`, `one_class_issuers`: MSG onto MSG Networks, LMCA onto Starz); never a shared CUSIP
+  (`identifiers.figi_class_letter`, `one_class_issuers`: MSG onto MSG Networks, LMCA onto Starz); never a shared CUSIP
   (tracking stocks).
 - `history.py` — a security's dated history: its sightings
   (`ticker_sightings`/`cusip_sightings`, `own_last_seen`, `ticker_on`; a fails row is a ticker
@@ -514,11 +537,12 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   else the run's issuer that carried the name around the closing, best by shared words (`issuer_by_name`).
   `choose_line` picks the issuer's line: the class the quote names, else the CUSIP that began at the closing, else
   the holder; the class letter is read only from a quote about the target's own class (`named_class(quote,
-  own_class)`: Viacom class B shares class A's read). `LineIndex.price` prices a closing CUSIP at its close on the
-  price date, past the $0.01 and $1.00 placeholder rows (`is_placeholder_row`), and any other line at the last trade
-  day's close. `symbol_on` gives the line's symbol from the row that carries that close: for a closing CUSIP the
-  first non-placeholder row from the next trading day (JCI 2016, ABI's LIFE: the row dated the price date is still
-  the old CUSIP), for any other line the row dated the price date.
+  own_class)`: Viacom class B shares class A's read; the letters are `identifiers.prose_class_letters`).
+  `LineIndex.price` prices a closing CUSIP at its close on the price date, past the $0.01 and $1.00 placeholder rows
+  (`is_placeholder_row`), and any other line at the last trade day's close. `symbol_on` gives the line's symbol
+  from the row that carries that close: for a closing CUSIP the first non-placeholder row from the next trading day
+  (JCI 2016, ABI's LIFE: the row dated the price date is still the old CUSIP), for any other line the row dated the
+  price date.
 - `html_text.py` — `strip_html()`: filing HTML as plain text, for the EDGAR
   client's text cache and Form 25 parsing.
 - `form25.py` — parses a Form 25's XML or text (exchange, `class_text`, rule),
@@ -532,9 +556,11 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   SHARES) is the common's, generic descriptors such as SUBORDINATE, CONVERTIBLE, RESTRICTED, LIMITED,
   PARTICIPATING, REDEEMABLE, EXCHANGEABLE or MULTIPLE are not another tracking group, and CAPITAL is a group word,
   Liberty Capital); `notice_says_acquired` (R6b: the EX-99.25 notice says acquired or paid in cash, and nothing of
-  a reclassification, a holding company or a reorganization); `SecurityRef.letter_hint` and `letter_hint` (R2: a
-  letterless class takes the one letter its own CUSIP's fails descriptions name, only for a letter no sibling's
-  share class carries).
+  a reclassification, a holding company or a reorganization); `SecurityRef.letter_hint` (R2: a letterless class
+  takes the one letter its own CUSIP's fails descriptions name, `identifiers.descriptions_class_letter`, only for a
+  letter no sibling's share class carries). The class text's letters stay read here (`class_label`,
+  `class_letters`: CLASS X, else SERIES X, per segment, past attached rights and a common's preferred clauses; the
+  segments feed the match and R3 too), each turned into a letter by `identifiers.class_letter`.
 - `listing_status.py` — `exchanges_around()`/`withdrawal_kind()`: reads the
   10-K cover page's exchange list before and after a Form 25 to tell a real
   delisting from the withdrawal of a secondary/regional listing while the
@@ -732,7 +758,8 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   names in the year before the event, a defined term for one, "the Company"/"its"/"our") and the security's class,
   and gives the ratio, cash in the exchange (par values, cash in lieu of fractions and special dividends set aside:
   a special dividend is never consideration; rollover shares and cash conversions are read), the target clause and
-  its names (defined terms expanded), the target's class letter, and whether readings disagree (`ambiguous`);
+  its names (defined terms expanded), the target's class letter (`identifiers.prose_class_letters`), and whether
+  readings disagree (`ambiguous`);
   `acquires` (another party's shares became the registrant's, or it issued shares under the merger agreement) and
   `distributes` ("for every four shares", kept) are the registrant's other roles. What a statement means for its
   holders is its own: `OwnExchange.one_for_one` (R1's shape, `one_share_no_cash`, which 8b reads over the terms and
@@ -744,9 +771,9 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   form25=)` gives a lazy `OwnShares` (nothing read until asked): the registrant's 8-Ks in [day − 3, day + 10] of the
   ending's anchor day (`filings`, then their `texts`) and its matched Form 25's notice (a parsed `Form25`, or the
   filing, read when the notice is asked), its EDGAR names in the year up to two days before the day
-  (`registrant_names`, then the security's name), and the security's own share class (`class_of`: the FIGI's, never
-  the name's). It answers `statement` (8-Ks and notice), `registrant_statement` (the 8-Ks alone: stage 9g; Actavis
-  2013's notice reads another company's 0.160), `one_for_one`, `consideration` (a special dividend is no cash),
+  (`registrant_names`, then the security's name), and the security's own share class (`identifiers.class_of`: the
+  FIGI's, never the name's). It answers `statement` (8-Ks and notice), `registrant_statement` (the 8-Ks alone:
+  stage 9g; Actavis 2013's notice reads another company's 0.160), `one_for_one`, `consideration` (a special dividend is no cash),
   `names_target` (the one name tie: a ticker of two letters or more as a word of a target name, or `names_agree`),
   `target_issuer` (stage 5's R1: `SAME_ISSUER` or `NEW_ISSUER` by EDGAR's ticker file and `new_issuer`,
   `NEW_ISSUER_DAYS` 1095), `survived(deal_days)` (rule 1, the deal's 5.01/2.01 8-Ks read too; `other_role`) and
@@ -1346,7 +1373,7 @@ expiration is 0.0 in the table and no correction in the firm month, which leaves
   between two renames can leave some tables new and the rest old; each
   single table is always whole.
 - **`sec_id` is a US composite FIGI, or a placeholder.** When no FIGI can be
-  confirmed it is `CIK<cik>-<CLASS>` (`figi_resolution.placeholder_id`) —
+  confirmed it is `CIK<cik>-<CLASS>` (`identifiers.placeholder_id`) —
   still a stable, joinable key, just not a real FIGI. `figi_resolution.py`
   never accepts a candidate on Bloomberg's current name alone: a dead line
   gets renamed to its acquirer, so acceptance needs a CUSIP match, or a
