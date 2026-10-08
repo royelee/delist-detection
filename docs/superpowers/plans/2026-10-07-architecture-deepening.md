@@ -1331,3 +1331,9 @@ Decisions made in the step:
   - truth_set.py is 495 lines.
   - diagnosis_truth.py went from 338 to 299 lines, diagnosis_loop.py from 183 to 136, truth_update.py from 216 to 204.
   - The three apply scripts went from 399 to 347 lines; truth_loop_round and update_truth from 185 to 176.
+- **Controller fix after the step: the change log's CNB `price_date` row is quoted.** Step 9a found that the row
+  appended by hand in f089b8a had an unquoted comma in its reason, so it read as seven cells and the old rewrites
+  (apply_5h, apply_5i, update_truth) would have dropped its report path. The row is rewritten quoted, and the test of
+  the step-4 rulings now checks the module writes that row byte for byte. No cell's value changes. The truth set
+  still tolerates extra cells in the log; every row now has six.
+  - Cost if wrong: none. The row's six values are the ones the ruling wrote.

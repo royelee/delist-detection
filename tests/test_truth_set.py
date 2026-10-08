@@ -269,9 +269,9 @@ CNB_NOTE = ("Colonial BancGroup: bank closed, NYSE suspension 8-K 3.01 on 2009-0
 
 
 def test_the_step_4_cnb_rulings_as_data(tmp_path):
-    """The controller's two step-4 rulings on CNB 2009 (data/diagnosis_truth_changes.csv's last two rows): the first
-    gives the row the change log holds, byte for byte; the second's reason has a comma, which the module quotes (the
-    hand-written row did not, so it reads as seven cells)."""
+    """The controller's two step-4 rulings on CNB 2009 (data/diagnosis_truth_changes.csv's last two rows): each gives
+    the row the change log holds, byte for byte. The second's reason has a comma, which the module quotes (the row
+    was first written by hand unquoted, seven cells, and quoted after step 9a found it)."""
     before = truth_row(CNB, "BBG000BF2JS9", ticker="CNB", report=f"reports/{CNB}.md", confidence="inferred",
                        skeptic="upheld", exit_kind="dropped", drop_reason="bankruptcy", continuation="false",
                        successor_sec_id="", last_trade_date="2009-08-17", value_rule="otc_print", cash_per_share="",
@@ -293,7 +293,7 @@ def test_the_step_4_cnb_rulings_as_data(tmp_path):
     last = _log(path)[-1]
     assert (last["field"], last["old"], last["new"], last["report"]) == ("price_date", "2009-08-18", "*", CNB_REPORT)
     assert last["reason"].endswith("the last trade date, which is not scored")
-    assert len(next(csv.reader([real[-1]]))) == 7                     # the hand-written row: the comma unquoted
+    assert ts.changes_path(path).read_text().splitlines()[-1] == real[-1]
 
 
 # -- a correction ----------------------------------------------------------------------------------------------------
