@@ -339,6 +339,35 @@ def test_a_failed_read_that_leaves_no_step_still_gives_a_resolution_degraded_row
     assert _flags(lines) == [("BBGA", "resolution_degraded")]
 
 
+def _renamed_lately():
+    """A line renamed AA -> BB on its own CUSIP within `RECENT_DAYS` of the run date (BB from 2026-06-29), with no
+    periodic report after it yet: R1 then rests on whether BB is listed today (UNIT 2025)."""
+    rows, price = [], 10.0
+    for w in range(2 * WEEKS):
+        day = (date(2026, 5, 4) + timedelta(weeks=w)).isoformat()
+        rows.append(FtdRow(day, "A1", "AA" if w < WEEKS else "BB", NAME, round(price, 2)))
+        price += 0.01
+    return [_Spec("BBGA", 1, "AA", ["A1"], first="2026-05-04", last="2026-06-22")], rows
+
+
+def test_a_failed_listed_today_read_refuses_a_recent_step_and_never_stops_the_run():
+    """Architecture step 7a: the listed-today read of a recent step goes through the issuer record. When it fails
+    the step is refused `merged_out` (nothing says the old registrant carries on) and degraded; the run goes on (it
+    used to stop). With the read answered (BB on NYSE) the same step is followed."""
+    class Listed(_Edgar):
+        def submissions(self, cik, fresh_after=None):
+            return {"name": NAME, "formerNames": [], "tickers": ["BB"], "exchanges": ["NYSE"]}
+
+    specs, rows = _renamed_lately()
+    followed = _follow(specs, rows, edgar=Listed([]))
+    assert _flags(followed) == [("BBGA", "line_followed")] and followed.securities["BBGA"].line_tickers == {"BB"}
+    specs, rows = _renamed_lately()
+    edgar = _Down([], requests.ConnectionError("down"))
+    lines = _follow(specs, rows, edgar=edgar)
+    assert sorted(_flags(lines)) == [("BBGA", "line_follow_refused:merged_out"), ("BBGA", "resolution_degraded")]
+    assert lines.securities["BBGA"].line_tickers == frozenset() and edgar.calls > 0
+
+
 def test_a_failed_8k_text_read_that_leaves_no_step_gives_one_resolution_degraded_row():
     class TextDown(_Edgar):
         def fetch_filing_text(self, cik, accession, primary_doc):

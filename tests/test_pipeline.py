@@ -2960,3 +2960,76 @@ def test_a_failed_read_of_a_submissions_file_in_the_other_issuer_stage_degrades_
     assert pipeline._other_issuers(ctx, [era], resolutions, issuers, {s.sec_id: s}, review) == {}
     assert [(r.sec_id, r.flag) for r in review] == [("BBG000P4BQM9", "resolution_degraded")]
 
+# --- the failed-read reports of stages 9 and 9c (the final review's I2: each stage's own report, tested) ---------
+
+def _stage_ctx(edgar):
+    from delist_detection.identity.issuer_record import IssuerRecord
+    from delist_detection.outputs import manifest as run_manifest
+    clients = Clients(edgar=edgar, resolver=None, classifier=None, figi=None, ftd_client=None,
+                      issuers=IssuerRecord(edgar))
+    return pipeline._RunContext(clients, date(2026, 9, 25), lambda *_: None, 1, run_manifest.StageMeter(lambda *_: None))
+
+
+def _handoff_row() -> Delisting:
+    """A continuation row the handoff stage built from LEG's unmatched Form 25: its last trade day is its last
+    sighting, and the handoff rewrite caps the notice's day at the successor's first sighting."""
+    from delist_detection.endings.rewrites import Rewrite, Rule
+    evidence = {"flags": ["handoff_continuation"],
+                "delist_filing": {"form": "25-NSE", "filing_date": "2026-08-27", "accession": "0000876661-26-000712"}}
+    rec = DelistRecord("LEG", 58492, "2026-08-25", 304, CrspBucket.EXCHANGE_TRANSFER, "high", "Continuation", evidence,
+                       sec_id="OLD", delist_date="2026-09-06", successor_sec_id="NEW")
+    d = Delisting("OLD", 58492, "LEG", "2026-09-06", rec, LastTrade(date(2026, 8, 25), "last_sighting", ()), None,
+                  None, "")
+    d.rewrites.append(Rewrite(Rule.HANDOFF, CrspBucket.EXCHANGE_TRANSFER, 304, successor="NEW", how="handoff",
+                              successor_from="2026-08-27"))
+    return d
+
+
+def test_a_failed_notice_read_in_stage_9c_is_reported_and_keeps_the_sighting():
+    """Stage 9c (`_date_from_notices`): the handoff row's Form 25 notice read rests on a failed request (it counts
+    itself degraded and answers nothing): the row keeps its sighting, and carries resolution_degraded on its own row
+    and in a review item naming the notice."""
+    from delist_detection.sources.sec_stats import SEC_STATS
+
+    class Failing:
+        full_text_search = None
+
+        def fetch_filing_raw(self, cik, accession):
+            SEC_STATS.degraded("failed_request")
+            return ""
+
+    d, review = _handoff_row(), []
+    assert pipeline._date_from_notices(_stage_ctx(Failing()), [d], review) == 0
+    assert (d.last_trade.day, d.last_trade.source) == (date(2026, 8, 25), "last_sighting")
+    assert "resolution_degraded" in d.flags
+    assert [(r.sec_id, r.flag, r.delist_date, r.reason) for r in review] == [
+        ("OLD", "resolution_degraded", "2026-09-06",
+         "the handoff row's Form 25 notice rested on a failed EDGAR request or a stale copy")]
+
+
+def test_a_failed_read_under_the_successor_terms_reading_is_reported():
+    """Stage 9 (`_find_successors`, its terms links): an exchange transfer awaiting its successor whose own-share
+    reading rests on a failed filing-list read links nothing, and carries resolution_degraded on its own row and in a
+    review item naming the successor terms reading."""
+    import requests
+
+    class Down:
+        full_text_search = None
+
+        def recent_filings(self, cik):
+            raise requests.ConnectionError("down")
+
+        def submissions(self, cik, fresh_after=None):
+            raise requests.ConnectionError("down")
+
+    rec = DelistRecord("OLDT", 4242, "2020-06-01", 304, CrspBucket.EXCHANGE_TRANSFER, "medium", "x",
+                       {"flags": ["successor_unknown"]}, sec_id="BBGOLD0001", delist_date="2020-06-10")
+    d = Delisting("BBGOLD0001", 4242, "OLDT", "2020-06-10", rec, LastTrade(date(2020, 6, 1), "midas", ()), None, None,
+                  "")
+    sec = Security("BBGOLD0001", 4242, "COMMON", "OLD CO", "Common Stock", True, "cusip")
+    found = pipeline._find_successors(_stage_ctx(Down()), [d], {sec.sec_id: sec}, {}, {})
+    assert found.links == {} and found.degraded == [d.key]
+    assert "resolution_degraded" in d.flags
+    assert [(r.sec_id, r.flag, r.delist_date, r.reason) for r in found.review] == [
+        ("BBGOLD0001", "resolution_degraded", "2020-06-10",
+         "the successor terms reading rested on a failed EDGAR request or a stale copy")]
