@@ -93,6 +93,10 @@ The best value each scorecard number has reached (`data/scorecard.json`). No lat
 `confirmed` or `uncertain`, one per seed, security and ending. Confirmed means the evidence the spec requires is in hand: a FIGI or a filing tying a placeholder's ticker to its CIK, a history covering every introduction, a filing-backed exit kind and an exchange-printed last trade date. Uncertain rows go to `uncertain.csv` for a person to pin, override or drop.
 _Avoid_: confidence, review
 
+**Run snapshot**:
+Everything one run wrote that measurement reads: every output table, the run date and what stage 9g read of each continuation, read once, from an output folder, a commit's copy of it, or the rows the run is about to write (`run_snapshot.RunSnapshot`). The scorecard, the judges, the verdicts and the regression report read a run only through it, so they read the same run; a table a run predates is absent, never an error.
+_Avoid_: tables (one part of it), output (the folder, one of its sources)
+
 **Contract**:
 The tables the consumer reads (`output/contract/`): security_history, one-ending-per-security delistings, the seed echo, price requests, id changes, and `schema_version` in the manifest. Built from today's tables by `contract.py`; written beside them for one release.
 

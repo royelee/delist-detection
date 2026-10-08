@@ -33,7 +33,7 @@ A deepening moves behaviour behind a smaller interface. It changes nothing the l
 | 5 | history owns where a security's history ends (review 6) | | done |
 | 6 | A security's identity behind one interface, `identity.py` (review 7) | | done |
 | 7 | The line follow owns its rounds; one R1 reading per ending (review 8) | | done |
-| 8 | One run snapshot; one reading of a delistings row (review 9) | | 8a done |
+| 8 | One run snapshot; one reading of a delistings row (review 9) | | done |
 | 9 | The truth set and the loop round as two modules (review 10) | | |
 | 10 | dlret decides the value rule once (small) | plan_stock's confidence | |
 | 11 | The Clients seam declares capabilities (small) | | |
@@ -1046,3 +1046,143 @@ Decisions made in the step:
   and its log equals step 7b's line for line.
 - **pipeline.py: 1613 lines to 1617.** The three continuation reasons now go through `continuation_reason`, and
   there are two import lines. exit_kind.py went from 90 to 358 lines, last_trade.py from 756 to 681.
+
+### Step 8b: one run snapshot, read from a folder, a commit or memory
+
+- **The module is `run_snapshot.py`, named after a new domain term ("run snapshot", in CONTEXT.md).** `RunSnapshot`
+  holds every table one run wrote and the two manifest fields measurement reads (`as_of`, and stage 9g's readings as
+  `continuations`). It replaces `lifecycle.Tables` (both its constructors, `Tables.read` and `pipeline._as_read`),
+  regression's `Snapshot` (`read_snapshot`, `snapshot_at`, `_at`, `REQUIRED_COLUMNS`) and the raw reads in scripts
+  and tests. It loads no network client (tests/test_import_closure.py lists it first among the measurement modules).
+  - Alternative: grow `lifecycle.Tables`. Rejected: the lifecycle walk would hold git and manifest reading, and the
+    regression diff and the diagnosis judge read the run without the walk.
+- **Three adapters behind one class, a real seam.** `RunSnapshot.read(out_dir)` (a folder), `RunSnapshot.at(repo,
+  rev, out_dir)` (`git show` of the folder in commit `rev`; it checks at once that the folder lies inside the repo and
+  that `rev` is a commit) and `RunSnapshot.of(tables, as_of=, continuations=)` (the rows the pipeline is about to
+  write, through `store.formatted`). Each fills a private source with `rows(name)`, `where(name)` and `manifest()`.
+  - **Each table is read the first time a reader asks, and once.** The regression report reads only the contract
+    files and securities.csv of the base commit; the scorecard never reads cusip_history.csv.
+  - Alternative: read every table up front. Rejected: 15 `git show`s per base commit, and a table no reader needs
+    could refuse the whole snapshot.
+  - Cost if wrong: a bad table surfaces when first read, not when the snapshot is built. scripts/scorecard.py builds
+    the card inside its `SnapshotError` catch, so a bad table still exits 2.
+  - The in-memory adapter copies each table's list when it is built and formats a table when first read, so stage
+    10f's snapshot does not see 10g's tables.
+- **Every `store.TABLES` name is an attribute, generated from store.TABLES.** A new contract table is added in one
+  place, store.TABLES. `table(name)` is the same read, `has(name)` asks whether the run wrote it, and `require(name)`
+  reads a table a reader cannot do without (the regression diff's contract delistings and security history).
+  - Alternative: one hand-written property per table. Rejected: the second place every new table has to be added.
+  - `test_every_store_table_is_an_attribute` pins the attributes against store.TABLES.
+- **The older-schema rule, once.** The column check reads the file's header before any row.
+  - A table newer than the first eight (`FIRST_TABLES`) is None when the run did not write it: uncertain before
+    reset-2, the contract before reset-3, payout_legs before schema 3.
+  - A missing first-eight table raises `SnapshotError` naming the file.
+  - A file must have its table's columns in order. The one older layout read is a schema-1
+    contract/delistings.csv (`CONTRACT_SCHEMA_1`: the columns before `value_rule`, which schema 2 appended): it reads
+    as None, as for a run before schema 2. Any other header raises `SnapshotError` naming the file and the missing
+    or unknown columns.
+  - What changed against the two old rules:
+    - lifecycle's "`value_rule` in the header" is now the exact schema-1 layout. Another header without
+      `value_rule` raises instead of reading as None.
+    - regression's subset check is now the exact check. A base commit between 4597a02 and dea52c9 (payout_legs.csv
+      without `share_class`) and a schema-1 base now refuse the report.
+    - `_at`'s securities special case is gone: securities.csv is checked like any table (its columns have not
+      changed since the library merged).
+    - review.csv is one of the first eight. `Tables.read` read a missing one as no rows; only test folders lacked
+      it, and tests/test_scorecard_script.py's two fixtures now write it.
+  - Cost if wrong: a regression report against a base before schema 2, or mid-5f, cannot be computed. None is used:
+    the report came in 5f99ca2, after schema 2 (b177619), and every loop base since is schema 3 with `share_class`.
+- **`SnapshotError` (a `ValueError`) replaces `RegressionInputError`.** A run that cannot be read is one error,
+  whatever reads it. Every script catches it and exits 2, as before.
+- **The run date.** It is the manifest's `as_of`, or today when the source holds no manifest (scripts/scorecard.py's
+  `tables_as_of` rule, moved in). A manifest that is not JSON, not an object, or without a date raises.
+  - `scorecard.build(snapshot, config=)` takes no `as_of` and no `legs_rows`. The card's date and the payout legs
+    are the snapshot's, so the pipeline (stage 10h, `RunSnapshot.of`), scripts/scorecard.py and the floor test
+    (`RunSnapshot.read`) agree by construction. tests/test_pipeline.py's run-versus-folder scorecard test now
+    compares the two adapters.
+- **Stage 9g's doubts are written too.** `continuation_filings` lists a doubted reading as well: a blank filing and a
+  `doubt`. `run_snapshot.continuation_entries` writes the entries and `continuation_readings` reads them back, so the
+  format lives beside its reader. The verdicts recomputed from a written folder are then the run's own.
+  - A confirmation's entry keeps its three keys. The replay has 0 doubts ("0 contradicted"), so its manifest is
+    unchanged.
+  - Alternative: a new manifest key for the doubts. Rejected: every manifest changes (the gate's manifest compare,
+    and test_run_provenance's key set).
+  - Alternative: record only the confirmations, as before. Rejected: an offline recompute would miss a doubt like
+    CHTR 2016's `ratio:0.9042`.
+  - Cost if wrong: a consumer that reads `filing` from every entry sees a blank one on a doubt entry.
+- **The verdict is `decide(snapshot, evidence)`.** It reads the continuations from the snapshot; the
+  `continuations` argument and its bare-string shortcut are gone. Each placeholder's ticker evidence (stage 10e)
+  stays an argument: the run records it nowhere, and recording it would add a manifest key. tests/test_pipeline.py
+  adds `test_the_verdicts_recomputed_from_the_written_folder_are_the_runs`: the folder's snapshot gives the
+  uncertain.csv the run wrote, an unresolved seed included.
+- **regression reads snapshots.** `build_report(base, new, cases)`, `id_changes_since(base, new)` and
+  `diff_contract(base, new)` take run snapshots. The scripts read each run once: truth_loop_round's base and folder
+  feed the renames, the judge, the report and the case rows. The diff works on a private `_Contract` (the four
+  contract lists) that `_rekeyed` rewrites. `id_changes_since` asks `has("securities")` on both sides, so "a missing
+  securities.csv gives no computed renames" holds.
+- **pipeline.py.** `_as_read` is gone. `partial(RunSnapshot.of, as_of=, continuations=)` gives stages 10f, 10g and 10h
+  each a snapshot of the tables as they then are. `_scorecard` takes no legs, and the manifest's entries come from
+  `continuation_entries`.
+- **Readers moved to the snapshot.**
+  - The lifecycle view, scorecard, verdict, contract, diagnosis judge (`LibraryRows.of(snapshot)`, legs from
+    `payout_legs`), diagnosis loop and regression.
+  - Scripts: scorecard (`legs_rows`, `tables_as_of` and `LEGS_FILE` are gone), truth_loop_round and update_truth (both
+    `_legs_rows` are gone; update_truth's three reads of the folder are one), regression_report,
+    apply_5h_truth_rulings (`_era_sec_ids` reads `observation_map`), build_diagnosis_truth, draw_audit_sample and
+    build_verdict_fixtures.
+  - Tests: the floor test (its `_legs_rows` and manifest read are gone), the diagnosis cases (their legs reader is
+    gone), the golden cases, and the pipeline's scorecard test.
+  - build_diagnosis_truth's judge now sees the run's payout legs. Before, it passed none ("(no payout_legs table)").
+    It is the one-time 5-0 build, outside the gate.
+- **The verdict harness reads 9g's readings from each case's snapshot.**
+  - tests/fixtures/verdicts/cases.json gains each case's `continuation_filings`: 68 lines added, nothing else
+    changed. They are what stage 9g gave those rows (APA, CMCSK, HHC, SPB and HUB-B confirmed, CHTR doubted), written
+    by a one-off from the harness's own replay of 9g over the recorded EDGAR answers, because the builder reads
+    today's output/, which has moved on since the fixture was built.
+  - `verdicts(case)` is `decide(snapshot_of(case), evidence)`.
+  - The replay (`readings`) stays as 9g's oracle. `test_stage_9g_names_the_confirming_filing_and_the_contradicting_ratio`
+    is unchanged, and a new parametrized test holds each case's recorded readings equal to it.
+    - Alternative: delete `readings`. Rejected: the 9g test would then assert only the fixture's own content, a
+      weaker assertion.
+  - The builder writes `continuation_filings` from the output snapshot's continuations. It records EDGAR's answers
+    through `verdict_cases.readings`, so its own copy of 9g's selection loop is gone.
+  - The builder has an argparse parser, so `--help` prints its usage and builds nothing.
+- **Tests.**
+  - Added: tests/test_run_snapshot.py, 25 tests:
+    - the interface: every table an attribute;
+    - the folder adapter: every table and the manifest, read once, a missing folder, no manifest, a bad manifest;
+    - the older-schema rule: later tables None, a missing first table, schema 1, three bad layouts;
+    - the commit adapter: the commit's rows and manifest, a missing table, a bad layout, a folder outside the repo, a
+      revision that is no commit;
+    - the in-memory adapter: equal to the written folder, an unknown table;
+    - the 9g entries: their shape, their round trip, bad entries.
+  - Added elsewhere:
+    - test_verdict_cases: 31 (each case's recorded readings);
+    - test_regression: 3 (the report over two snapshots, a run without the contract, renames over two commits);
+    - test_pipeline: 1 (the folder's verdicts);
+    - the import pin: 1 (run_snapshot).
+  - Deleted once covered:
+    - test_lifecycle's three `Tables.read` tests (the folder adapter's now);
+    - test_regression's two `snapshot_at` tests (the commit adapter's now);
+    - the floor test's and the diagnosis cases' private legs and manifest readers.
+  - Rewritten at the interface:
+    - test_scorecard's `build` calls: the date comes from the snapshot, and one new assertion checks it;
+    - test_verdict_rulings' rule B: the readings ride in the snapshot;
+    - test_exit_kind's `is last`: now identity with the snapshot's own copy, which equals `last`;
+    - test_terms_5f_fixes' legs diff;
+    - test_diagnosis_truth's `_lib`;
+    - tests/lifecycle_tables.py's `tables()`, which now builds a `RunSnapshot.of`.
+  - Suite: 3312 passed, 46 xfailed (step 8a: 3256 passed, 46 xfailed).
+- **scripts/scorecard.py on the committed output/ gives the same numbers.** I ran it before and after, with
+  `--lifecycles` and with `--base ca58ee1`, and ran scripts/regression_report.py against ca58ee1. All four outputs
+  are identical (117 lines, 4421 lifecycle rows, 118 lines with the regression metric, 419 report rows), and
+  `--check` passes.
+- **Left as they were.** `store.read_table` (accept_review, verify_against_web and the tests' table checks call it);
+  the golden judge reads the snapshot through the lifecycle view; the audit's `view.tables`.
+- **The gate:** the replay of eb27ee5 is SAME against `accepted4_out` (scorecard.json, uncertain.csv, the contract
+  files and the manifest included). It refuses no request and reads no uncached text, and its log equals step 8a's
+  line for line. On that replay folder, `decide(RunSnapshot.read(folder), evidence)` gives its uncertain.csv (601
+  rows, 5 readings from the manifest; a placeholder's evidence read back as the harness does), and
+  `scorecard.build(RunSnapshot.read(folder))` gives its scorecard.json.
+- **pipeline.py: 1617 lines to 1606.** regression.py went from 282 to 230 lines, lifecycle.py from 237 to 200;
+  run_snapshot.py is 309.

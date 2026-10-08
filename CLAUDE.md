@@ -760,8 +760,8 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   `atomic_io.replace_all_on_success`), and `read_delistings_frame`
   (delistings.csv as a typed pandas DataFrame: `qlib_adapter.load_delistings`
   reads through it). `CONTRACT_SCHEMA_VERSION` 3 adds `contract/payout_legs.csv` (sub-plan 5f). Every table read — `qlib_adapter`, `accept_review.py`,
-  `verify_against_web.py` — goes through this module, so a later move to
-  DuckDB changes only this module.
+  `verify_against_web.py`, and `run_snapshot` for every measurement reader — goes through this module's specs, so
+  a later move to DuckDB changes only this module and `run_snapshot`'s adapters.
 - `review_triage.py` — pure (no network): `CATALOG` maps every review flag to
   a severity (`fix`/`check`/`info`), a description and an action;
   `row_severity`/`triage()` turn the pipeline's merged review rows plus a
@@ -782,7 +782,8 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   the flag on a delisting's own row), `report_halt_feed_failures` (a
   last-trade decision that asked a Nasdaq halt-feed day that failed).
 - `manifest.py` — `run_manifest.json` (`build`/`write`) and `StageMeter`, the
-  per-stage SEC traffic it reports.
+  per-stage SEC traffic it reports. Its `continuation_filings` are stage 9g's readings, a confirmation's filing or a
+  doubt (`run_snapshot.continuation_entries` writes them, `RunSnapshot.continuations` reads them back).
 - `trading_calendar.py` — NYSE trading days (weekends, exchange holidays,
   unscheduled closures); turns "suspended before the open on D" into the
   actual last trading day and lines up FTD rows (dated D, priced at D−1's close).
@@ -813,8 +814,19 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   is emitted for it.
 
 **Measurement (pure), over the output tables as string rows:**
-- `lifecycle.py` — `Tables` (the tables `store.read_table` returns) and
-  `LifecycleView`: every security's and every input ticker's lifecycle
+- `run_snapshot.py` — architecture step 8b: `RunSnapshot`, every table one run wrote (every `store.TABLES` name is an
+  attribute, read the first time a reader asks, once; `has`, `require`) and the manifest fields measurement reads
+  (`as_of`, today without a manifest; `continuations`, stage 9g's `exit_kind.ContinuationReading`s from
+  `continuation_filings`). Three adapters, one interface: `RunSnapshot.read(out_dir)` (an output folder),
+  `RunSnapshot.at(repo, rev, out_dir)` (a commit's copy of it, `git show`), `RunSnapshot.of(tables, as_of=,
+  continuations=)` (the rows the pipeline is about to write, `store.formatted`: stages 10f to 10h). The older-schema
+  rule lives here once: a table newer than the first eight (`FIRST_TABLES`) the run did not write is None (uncertain
+  before reset-2, the contract before reset-3, payout_legs before schema 3), a missing first-eight table raises
+  `SnapshotError`; a file must have its table's columns in order, except a schema-1 contract/delistings.csv
+  (`CONTRACT_SCHEMA_1`, before the payout rule), which reads as None; any other header raises `SnapshotError` naming
+  the file and the columns. The scorecard, both judges, the verdicts, the contract, the regression diff, the loop
+  round, update_truth, the audit draw and the verdict fixture builder read a run only through it.
+- `lifecycle.py` — `LifecycleView` over a run snapshot: every security's and every input ticker's lifecycle
   (`active`, `ended`, `ended_incomplete`, `left_view`, `closed_no_event`,
   `no_interval`, `loop`; `active`/`ended` are covered), quality (the weakest
   `event_grade` on a covered chain, `medium` for a ticker-only FIGI), and the
@@ -830,11 +842,15 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
 - `diagnosis_truth.py` — the diagnosis truth set (`data/diagnosis_truth.csv`, spec
   2026-10-03-diagnosis-truth-fixes): one row per diagnosed case. `shape` is ending, no_ending or ending_moved. Scored
   contract fields hold a value, a blank or `*`; `internal_last_trade_date` holds a worked-out date, and a side file
-  holds a basket's legs. Its judge (`LibraryRows`, `judge_case`) gives one `Mismatch` per scored field, or one `sec_id` mismatch when the case's security is not in the run. The
+  holds a basket's legs. Its judge (`LibraryRows.of(snapshot)`: the contract rows, the last real endings, the
+  securities and contract/payout_legs.csv, None before schema 3; `judge_case`) gives one `Mismatch` per scored field,
+  or one `sec_id` mismatch when the case's security is not in the run. The
   scorecard's `D.*` lines and `tests/test_diagnosis_truth_cases.py` (strict xfail on known_wrong) read it.
-- `regression.py` — the contract diff against a base commit (`snapshot_at`), outside the truth set and its
-  successor chains (`excluded`); `build_report` is the one place that builds the report (the standalone script, the
-  round script and the scorecard all call it) and `id_changes_since` finds renames against the base commit.
+- `regression.py` — the contract diff between two run snapshots (the base commit's, `RunSnapshot.at`, and the
+  folder's), outside the truth set and its successor chains (`excluded`); `build_report(base, new, cases)` is the one
+  place that builds the report (the standalone script, the round script and the scorecard all call it) and
+  `id_changes_since(base, new)` finds renames against the base run. A snapshot without contract/delistings.csv or
+  security_history.csv raises `run_snapshot.SnapshotError` (exit 2 in the scripts).
   `SKIPPED_COLUMNS` leaves out `verdict` and the price-derived columns. `unexplained` gives the rows the ledger has
   not settled; they become `D.unexplained_regressions`, which `scripts/scorecard.py --check --base <commit>`
   requires to be 0. A renamed placeholder is compared under its FIGI (`renamed_to`): one `renamed` id_changes row
@@ -847,20 +863,21 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   of a renamed placeholder, adds no truth row (`apply_round`: `run_sec_ids`, `renamed`).
 - `truth_build.py` — the first truth file, built from the normalization workflow's JSON rows (the R2 FIGI check,
   pending fields, the residual list, statuses).
-- `scorecard.py` — `build` (the spec's gap table as one flat dict: L1/L2, R1.x,
-  R2.x, G.x, A.x), `METRICS` (each floored number's good direction), `drops`,
+- `scorecard.py` — `build(snapshot, config=)` (the spec's gap table as one flat dict: L1/L2, R1.x,
+  R2.x, G.x, A.x, D.x, V.x; its `as_of` the snapshot's), `METRICS` (each floored number's good direction), `drops`,
   `raise_floor`, `load_config` (`data/scorecard.json`: the caller's window, the
   floor, the two truth files), `write` (`output/scorecard.json`).
 - `audit.py` — decision 17's sample: `census` (each ending in its first group of
   distress, continuation, left_view, blank_no_value, assumed_par), `random_sample`
   (seeded, avoiding census chains), `worksheet_rows`.
 - `verdict.py` — one verdict per seed (an observation_map row), security and
-  ending (a delistings.csv row whose successor is not itself): `decide`
-  returns `Verdicts`; `uncertain_rows()` is `uncertain.csv`. The rules are the
+  ending (a delistings.csv row whose successor is not itself): `decide(snapshot, evidence)`
+  returns `Verdicts`; `uncertain_rows()` is `uncertain.csv`. A function of the run snapshot: the rules are the
   spec's invariants, read from the tables (FIGI source, intervals, each
   ending's reason, flags, last-trade source and Form 25 date) through the row
-  vocabulary (`exit_kind`), plus each placeholder's ticker evidence and stage
-  9g's `exit_kind.ContinuationReading`s. The diagnosis-truth spec's 2.3 rulings
+  vocabulary (`exit_kind`), and stage 9g's `exit_kind.ContinuationReading`s
+  (`RunSnapshot.continuations`, so a written folder's snapshot gives the run's own verdicts), plus each
+  placeholder's ticker evidence (stage 10e, recorded nowhere: an offline caller supplies it). The diagnosis-truth spec's 2.3 rulings
   (sub-plan 5i: a relabel its own Form 25 settles, a successor registration, the
   Form 25's filer as issuer evidence, an unpriced gate, a stale seed, no ending
   at all; A to F in its docstring) are its own private rules (architecture step
@@ -1134,7 +1151,9 @@ conflate them.
   file's own header order, never reformatted or dropped. A real write prints
   "rerun classify_universe.py to apply them"; `--dry-run` does not.
 - **The scorecard only moves one way.** Every run builds `output/scorecard.json`
-  (`pipeline._scorecard`, stage 10h) from the rows it is about to write and
+  (`pipeline._scorecard`, stage 10h) from the run snapshot of the rows it is about to write
+  (`RunSnapshot.of`; scripts/scorecard.py and the floor test build it from the written folder's, `RunSnapshot.read`,
+  so the two agree by construction, payout legs and run date included) and
   writes it after the nine tables and the contract files, before the manifest. `data/scorecard.json`
   holds the caller's training window (data, never code), the floor and the two
   truth files. `tests/test_scorecard_floor.py` recomputes the scorecard from the
@@ -1168,7 +1187,8 @@ conflate them.
   only problem is its security is counted, not listed. Pipeline stages 10e
   (ticker evidence: about one cached EDGAR search per placeholder without a
   ticker tier), 10f (verdicts), 10g (the contract) and 10h (scorecard) run
-  before the write; `uncertain.csv` is written with the other tables. An
+  before the write, each over a run snapshot of the rows about to be written (`RunSnapshot.of`, carrying stage 9g's
+  readings, which run_manifest.json records, doubts included); `uncertain.csv` is written with the other tables. An
   ending that is not its security's last real ending is uncertain
   (`earlier_ending:<the last one's delist_date>`). The scorecard's V lines
   read it; a committed output without it has no V lines. The scorecard's
