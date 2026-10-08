@@ -34,7 +34,7 @@ A deepening moves behaviour behind a smaller interface. It changes nothing the l
 | 6 | A security's identity behind one interface, `identity.py` (review 7) | | done |
 | 7 | The line follow owns its rounds; one R1 reading per ending (review 8) | | done |
 | 8 | One run snapshot; one reading of a delistings row (review 9) | | done |
-| 9 | The truth set and the loop round as two modules (review 10) | | |
+| 9 | The truth set and the loop round as two modules (review 10) | | 9a done |
 | 10 | dlret decides the value rule once (small) | plan_stock's confidence | |
 | 11 | The Clients seam declares capabilities (small) | | |
 | 12 | The fails index owns its loading (small) | | |
@@ -1186,3 +1186,148 @@ Decisions made in the step:
   `scorecard.build(RunSnapshot.read(folder))` gives its scorecard.json.
 - **pipeline.py: 1617 lines to 1606.** regression.py went from 282 to 230 lines, lifecycle.py from 237 to 200;
   run_snapshot.py is 309.
+
+### Step 9a: the diagnosis truth set as one module
+
+- **The module is `truth_set.py`, named after a new domain term ("truth set", in CONTEXT.md).** `TruthSet` holds the
+  truth rows, the legs, the change log and, when a change settles loop errors, the ledger, as one unit. diagnosis_truth
+  keeps the rows' format (`parse_rows`, and `parse_legs`, which was `load_legs`'s body) and the judge.
+  - Alternative: grow diagnosis_truth. Rejected: the file module would hold the judge, which step 9b's loop round
+    reorganises.
+  - Cost if wrong: one module more; merging the two is mechanical.
+- **One validation, when a set is opened and again before `commit` writes.**
+  - Each header must be exact. Every truth row passes `parse_rows` and every leg `parse_legs`. Legs with no case are
+    refused. A row with a missing or an extra cell is a `DiagnosisTruthError` naming the file and line, not a
+    `KeyError`. The change log's and the ledger's headers are checked too.
+  - Gone: `load_diagnosis_truth`, `load_legs`, `write_diagnosis_truth`, `write_legs`, and diagnosis_loop's
+    `write_together`, `read_ledger`, `write_ledger`, `write_changes`, `rename_truth`, `ledger_keys` and
+    `CHANGE_COLUMNS` (now `truth_set.CHANGE_COLUMNS`). `dl.read_csv` stays for a round's cases.csv only.
+  - What changed: the loop scripts and the apply scripts read the truth raw (`read_csv` + `parse_rows`, no header or
+    legs check; apply_5f checked no legs at all). They now check everything the scorecard checked.
+  - Cost if wrong: a hand-edited file the scripts used to read now refuses with exit 2, naming the line.
+- **Finding: the change log's last row is malformed, and every old rewrite damaged it.** Step 4's f089b8a appended
+  CNB's price_date ruling by hand with an unquoted comma in its reason, so the row reads as 7 cells. Every old script
+  that rewrote the log (apply_5h, apply_5i, update_truth: `DictReader`, then `DictWriter`) dropped the 7th cell, the
+  report path. The before-run on copies showed it: each of those runs, with no change to make, changed the log's
+  bytes.
+  - data/ is frozen in this step, so the row is not fixed here. The module keeps each change-log record's text as
+    read and appends new records. A log record (only a log record) may carry cells past its six, and its text is
+    kept. New reasons are quoted by the CSV writer.
+  - Alternative: refuse the row. Rejected for this step: the truth set could not be opened until data/ changes, and
+    the gate asks for a byte-identical round trip on the real files.
+  - For the operator: quote that reason in data/diagnosis_truth_changes.csv (one line). The validation then holds the
+    log to six cells like every other file, if that rule is wanted.
+- **A ruling applies once, by its own change-log rows.** A `Ruling` sets a cell only when it differs and the change log
+  does not already record this ruling (the same reason) setting that cell to that value. A cell a later change moved on
+  is therefore never set back.
+  - Finding: apply_5f was not idempotent on the current files. Its two carried rows (VMED and MHS) were made
+    known_wrong for 5f, and the wave 2 loop then flipped them to pass (change-log rows 981 and 982). A rerun set them
+    back to known_wrong 5f: 4 change rows. Its `CARRIED` special case only covered a row still at fixed_by 5f. With
+    the once-rule, the rewritten script changes nothing.
+  - Alternative: keep the cell-differs rule, with the special case. Rejected: it is what failed.
+  - Cost if wrong: a ruling meant to be applied again after a later change has to be a new ruling, with a new reason.
+- **The owner guard is one rule.** A ruling with an `owner` applies to a row whose fixed_by is the owner, or is already
+  the fixed_by the ruling sets. A ruling with no owner applies to any row. This is 5h's and 5i's guard. 5f's maps onto
+  it: owner 5f, or no owner for its carried and controller rows; `LEFT` rows have owner 5f, `RESTORED` owner residual.
+  - A ruling on a case the truth file lacks raises. The old scripts skipped it silently.
+- **A sub-plan's rulings are data.** The three scripts hold `Ruling` and `Correction` values and a `main` that opens
+  the set, applies them in order and commits.
+  - `s9a_rulings_diff.py` checked the data: each script's rulings (case, cells, reason, legs, report, owner) equal the
+    old script's, ruling by ruling.
+  - Order: rulings are applied in data order. The old loops went over the rows within each group, so the change-log
+    order of a first application would differ. All rulings are already applied, so nothing changes today.
+  - 5i's `NOTES` are rulings with no cells (one `note` log row, once). Its `CORRECTIONS` are `Correction`s: the reason
+    is corrected in the note and the logged reasons, with no log row, as before.
+  - apply_5h's `--after-run` stays a ruling whose sec_id the run's observation_map gives. It is not a rename (no
+    id_changes row names those eras). It reads `--output-dir`, default output/.
+  - Each script takes `--truth` and prints its old message ("no change" / "N changes", "N truth change rows",
+    "N truth changes"). A bad truth set exits 2.
+- **The note convention, once (`noted`).** The text is added as `note; tag: why`, or alone when the note is empty
+  (truth_build's rule).
+  - The old scripts and truth_update wrote `; text` on an empty note. No current row's note starts with "; ".
+  - truth_build's `_note` now calls `noted`.
+- **Renames: one chain rule, legs included.** `TruthSet.rename(id_changes)` maps through `regression.renamed_to` (P
+  renamed to M and M to F is F, one change-log row). It renames sec_id, price_sec_id and successor_sec_id, and every
+  leg's price_sec_id (logged as `legN.price_sec_id`, the judge's field name).
+  - The old `rename_truth` took one step, renamed no leg, and would also map a blank old_sec_id.
+  - Alternative: move `renamed_to` to contract.py. Rejected: the regression diff is its first user, and the loop
+    modules already import regression.
+- **Where the files are: data/scorecard.json names the truth file, and the rest derive from it.**
+  - The legs and the change log are named after the truth file (`<stem>_legs.csv`, `<stem>_changes.csv`).
+  - Every script's `--truth` defaults to `truth_set.configured(repo)`, the config's "diagnosis" entry. This holds for
+    truth_loop_round, update_truth, regression_report, the apply scripts and build_diagnosis_truth's `--out`.
+  - `--legs` and `--changes` are gone from truth_loop_round and update_truth, and `--legs` from
+    build_diagnosis_truth. The workflow never passed them.
+  - The config's "diagnosis_legs" entry is accepted only when it names the derived file (`truth_file_of`; data/ is
+    frozen in this step, so the key stays until data/ next changes).
+  - The fixture builders (build_terms_fixtures, build_acquirer_gate_fixtures), eval_merger_extractor and
+    tests/test_diagnosis_truth_cases.py read through `TruthSet.open(configured(...))`. eval's `_truth_cases` gives the
+    same 22 rows before and after.
+  - Alternative: the module names data/diagnosis_truth.csv and the config follows it. Rejected: data/scorecard.json
+    cannot change in this step, and its "diagnosis" key would be dead.
+  - Cost if wrong: a config whose truth file has differently named legs is refused. test_scorecard's `l.csv` case is
+    rewritten to `d_legs.csv`, plus one test of the refusal.
+- **The ledger moves with the truth set.** `TruthSet.open(truth, ledger=)`, `settle(rows)`, and `commit` writes it
+  with the rest. truth_loop_round's `--seed-ledger` now commits through the set; the old script wrote the ledger
+  alone. `read_ledger(path)` is the validated read for scripts/scorecard.py's `--ledger`. The ledger's path stays the
+  caller's: step 9b owns the loop folder.
+- **`commit` writes only the files whose content changed, all of them together.** Each file is serialized and compared
+  with the bytes read. A file that did not exist is written only once it has a row. `TruthSet.new` (the 5-0 build and
+  tests) always writes its truth file and legs.
+  - The old update_truth, apply_5h and apply_5i rewrote every file on every run; update_truth created an empty change
+    log.
+  - The round trip on the real files writes nothing (tested on copies). So the serializer reproduces the truth file,
+    the legs and the ledger byte for byte, and the log's records are kept as read.
+- **truth_update keeps its rules and loses its file handling.**
+  - `apply_round(truth, ...)` edits the set through four public primitives: `set_cells`, `move_status`, `add_row` and
+    `settle`. `TruthSet.apply_round` calls it and returns the `RoundResult` (rows, the round's change and ledger
+    rows, the retries). The rule texts are unchanged.
+  - Two edge differences, neither reachable on today's files: an empty note takes the text alone; and a second
+    library-right verdict on a field the truth cannot take, on the same case, no longer logs a ruling_pending to
+    ruling_pending row.
+  - `flip_statuses` is `TruthSet.flip(lib)`: it judges the set's own cases against the run, so update_truth no longer
+    re-parses the rows itself.
+  - Alternative: move apply_round's body into truth_set. Rejected: step 9b's loop round restructures the round, and
+    truth_update stays the rules' module. It imports truth_set only for typing.
+- **Tests.**
+  - Added: tests/test_truth_set.py, 44 tests:
+    - the paths and the config;
+    - the validation: the loader tests moved from test_diagnosis_truth, plus row widths, the log and the ledger;
+    - each change kind, with idempotence and the once-rule;
+    - the step-4 CNB rulings as data: the first gives the change log's row byte for byte, and the second's comma is
+      quoted;
+    - a correction;
+    - the chain rename with legs, and a FIGI renamed to another FIGI;
+    - the flip;
+    - the settle;
+    - the commit: only what changed, nothing on an invalid set or a failed write, the new set;
+    - two round trips: a synthetic set with a two-line field and a 7-cell log record, and the real data/ files plus
+      the ledger.
+  - tests/test_apply_truth_rulings.py (renamed from test_apply_5h_truth_rulings.py; 1 test to 6): each script and
+    5h's `--after-run`, run twice on copies of the committed files, leaves every byte as committed. Also: 5f's
+    rulings still apply to a row they have not reached, and the carried rows stay flipped.
+  - Moved to the interface:
+    - test_truth_update's `_apply` builds a `TruthSet.new` and calls `apply_round`; every assertion is unchanged;
+    - the round and update scripts' tests drop `--legs`/`--changes` and read the derived change log;
+    - scorecard tests write through `write_truth` (tests/diagnosis_rows.py, with `ledger_row`).
+  - Deleted once covered:
+    - test_diagnosis_truth's 22 loader tests (now in test_truth_set);
+    - test_diagnosis_loop's three `rename_truth` tests and its ledger round trip (a `settled_keys` test stays);
+    - test_truth_update's `flip_statuses` test.
+  - Added elsewhere: the import pin (truth_set, 1), test_scorecard (the legs refusal, 1).
+  - Suite: 3343 passed, 46 xfailed (2a28ae3: 3318 passed, 46 xfailed).
+- **The gate.**
+  - The loop scripts were run before (the base clone's scripts at 2a28ae3) and after, on copies, against a shared
+    clone's output/ and base commits (truth_loop_round: wave2 round 1 at ca58ee1, wave1 round 2 at 0de5d8f;
+    update_truth, dry and real: wave2 rounds 1 and 2, wave1 round 1). Every stdout line, cases.csv,
+    regression_report.csv, summary.md, ledger and truth file is identical. The one difference is the change log of
+    the old real update_truth runs: the old code damaged the CNB row (the finding above), and the new code leaves the
+    log as committed.
+  - scripts/scorecard.py `--check`, and `--base ca58ee1`: output identical before and after, exit 0, and the `D.*`
+    values unchanged (D.mismatches 121, D.cases_matching 284, D.unexplained_regressions 0).
+  - `git diff --stat 2a28ae3 -- data` is empty.
+  - The replay is SAME against `accepted4_out`, refuses no request, and its log equals step 8a's byte for byte.
+- **pipeline.py: 1606 lines, unchanged** (stage 10h's scorecard config reads the truth set through `load_config`).
+  - truth_set.py is 495 lines.
+  - diagnosis_truth.py went from 338 to 299 lines, diagnosis_loop.py from 183 to 136, truth_update.py from 216 to 204.
+  - The three apply scripts went from 399 to 347 lines; truth_loop_round and update_truth from 185 to 176.

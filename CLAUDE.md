@@ -37,7 +37,7 @@ python scripts/scorecard.py              # offline: recompute output/'s scorecar
 python scripts/build_diagnosis_truth.py   # the diagnosis truth file from the normalization pass (OpenFIGI for new CUSIPs; --no-figi offline)
 python scripts/regression_report.py --base <commit>    # offline: contract changes outside the truth set -> output/regression_report.csv
 python scripts/truth_loop_round.py --label 5a --base <commit> --round 1   # offline: one loop round's new errors -> loop/<label>/round-<N>/cases.csv (--seed-ledger records current mismatches as known)
-python scripts/update_truth.py --label 5a --round 1 --base <commit>      # offline: apply the round's diagnoses to data/diagnosis_truth.csv, the change log and the ledger (--dry-run)
+python scripts/update_truth.py --label 5a --round 1 --base <commit>      # offline: apply the round's diagnoses to data/diagnosis_truth.csv, the change log and the ledger (--dry-run; the loop scripts' --truth defaults to the file data/scorecard.json names, its legs and change log named after it)
 python scripts/scorecard.py --base REV --ledger PATH   # the ledger scorecard reads for D.unexplained_regressions (default output/diagnose_unknown_report/loop/diagnosed.csv; computed only with --base, never from output/regression_report.csv)
 # The loop: run the Workflow tool with scriptPath ".claude/workflows/diagnosis-truth-loop.js" and args {"label": "<sub-plan>", "base": "<commit>"} (prepared cases: add "casesPath", which makes the update a dry run; at most 3 rounds, 5 agents). Normalization: scriptPath ".claude/workflows/diagnosis-truth-normalize.js", args {"cases": [...], "batch": 10}. Workflows are run by path; name lookup does not find them.
 python scripts/draw_audit_sample.py --out data/accuracy_audit.csv   # offline: draw the decision-17 audit worksheet once (census + 100 random, seed 7)
@@ -840,13 +840,33 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   decision-17 audit (`data/accuracy_audit.csv`, `census:<group>` or `random`;
   an unfilled row is pending). `load_truth`, `write_truth`, `judge` (one
   mismatch per checked field that disagrees), `clopper_pearson_upper`.
-- `diagnosis_truth.py` — the diagnosis truth set (`data/diagnosis_truth.csv`, spec
+- `diagnosis_truth.py` — the diagnosis truth set's row format (`data/diagnosis_truth.csv`, spec
   2026-10-03-diagnosis-truth-fixes): one row per diagnosed case. `shape` is ending, no_ending or ending_moved. Scored
   contract fields hold a value, a blank or `*`; `internal_last_trade_date` holds a worked-out date, and a side file
-  holds a basket's legs. Its judge (`LibraryRows.of(snapshot)`: the contract rows, the last real endings, the
+  holds a basket's legs. `parse_rows` and `parse_legs` turn rows into validated cases (`truth_set` reads the files).
+  Its judge (`LibraryRows.of(snapshot)`: the contract rows, the last real endings, the
   securities and contract/payout_legs.csv, None before schema 3; `judge_case`) gives one `Mismatch` per scored field,
   or one `sec_id` mismatch when the case's security is not in the run. The
   scorecard's `D.*` lines and `tests/test_diagnosis_truth_cases.py` (strict xfail on known_wrong) read it.
+- `truth_set.py` — the diagnosis truth set as one unit (step 9a): `TruthSet.open(truth, ledger=)` reads the truth
+  rows, the legs, the change log and, when a change settles loop errors, the ledger, and validates them once (each
+  header exact; `parse_rows`; `parse_legs`; no legs without a case; a row with a missing or an extra cell is a
+  `DiagnosisTruthError` naming the file and line; a change-log record may carry cells past its six, kept as read).
+  Where the files are: data/scorecard.json's "diagnosis" names the truth file (`truth_file_of`, `configured`); the
+  legs and the change log are named after it (`legs_path`: `<truth>_legs.csv`, `changes_path`:
+  `<truth>_changes.csv`). The changes: `rule(Ruling)` (a sub-plan's or the controller's ruling as data: cells, legs,
+  `tag: why`, report and the `owner` whose rows it applies to; it applies once: a cell the change log already
+  records it setting is never set again), `correct(Correction)` (a reason a ruling stated wrongly, in the note and
+  the log), `rename(id_changes)` (sec_id, price_sec_id, successor_sec_id and every leg's price_sec_id, through
+  `regression.renamed_to`, the one chain rule), `flip(lib)` (known_wrong cases that now match become pass),
+  `apply_round(...)` (truth_update's rules) and `settle(ledger_rows)`, all made of `set_cells`, `move_status`,
+  `add_row` and `settle`: every changed cell is one change-log row, a note grows by `; tag: why` (`noted`).
+  `commit()` validates and writes every file whose content changed, together (`atomic_io.replace_all_on_success`);
+  an unchanged file keeps its bytes, and the change log is appended to, its old records written back as read.
+  `TruthSet.new(truth, rows, legs)` is a set whose rows and legs are given (sub-plan 5-0's build, tests);
+  `read_ledger` is the ledger's validated read (scripts/scorecard.py). The truth files' only reader and writer:
+  the scorecard, the loop scripts, the apply_5f/5h/5i_truth_rulings.py scripts (their rulings as data), the fixture
+  builders and tests/test_diagnosis_truth_cases.py go through it.
 - `regression.py` — the contract diff between two run snapshots (the base commit's, `RunSnapshot.at`, and the
   folder's), outside the truth set and its successor chains (`excluded`); `build_report(base, new, cases)` is the one
   place that builds the report (the standalone script, the round script and the scorecard all call it) and
@@ -854,20 +874,25 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   security_history.csv raises `run_snapshot.SnapshotError` (exit 2 in the scripts).
   `SKIPPED_COLUMNS` leaves out `verdict` and the price-derived columns. `unexplained` gives the rows the ledger has
   not settled; they become `D.unexplained_regressions`, which `scripts/scorecard.py --check --base <commit>`
-  requires to be 0. A renamed placeholder is compared under its FIGI (`renamed_to`): one `renamed` id_changes row
-  (`regression.RENAMED`, `diff_contract(..., renames=)`) instead of its removed row and the FIGI's added one.
-- `diagnosis_loop.py` — the loop's ledger (`output/diagnose_unknown_report/loop/diagnosed.csv`), error keys, case
-  rows for the diagnose workflow, and placeholder renames (`contract/id_changes.csv` and the base commit's securities.csv, `regression.id_changes_since`; `write_together` writes the truth file and its change log as one set).
-- `truth_update.py` — spec 1.6's rules for what a round's diagnoses may change in the truth file. A regression is
-  added only when it is verified and upheld. A mismatch changes the truth only when the diagnosis cites a filing the
-  earlier report missed. `flip_statuses` turns a known_wrong case that now matches into pass. A regression of a sec_id the run lacks, or
-  of a renamed placeholder, adds no truth row (`apply_round`: `run_sec_ids`, `renamed`).
+  requires to be 0. A renamed placeholder is compared under its FIGI (`renamed_to`, a chain of renames followed to
+  its end; the truth set renames by the same rule): one `renamed` id_changes row (`regression.RENAMED`,
+  `diff_contract(..., renames=)`) instead of its removed row and the FIGI's added one.
+- `diagnosis_loop.py` — the loop's ledger vocabulary (`output/diagnose_unknown_report/loop/diagnosed.csv`:
+  `LEDGER_COLUMNS`, the outcomes, `settled_keys`, `seed_rows`), error keys and case rows for the diagnose workflow.
+  The ledger is read and written only with the truth set (`truth_set.TruthSet`, `truth_set.read_ledger`).
+- `truth_update.py` — spec 1.6's rules for what a round's diagnoses may change in the truth file, applied to a truth
+  set through its primitives (`apply_round(truth, ...)`, called by `TruthSet.apply_round`, which returns a
+  `RoundResult`). A regression is added only when it is verified and upheld. A mismatch changes the truth only when
+  the diagnosis cites a filing the earlier report missed. A regression of a sec_id the run lacks, or of a renamed
+  placeholder, adds no truth row (`run_sec_ids`, `renamed`). The flip after a round is `TruthSet.flip`.
 - `truth_build.py` — the first truth file, built from the normalization workflow's JSON rows (the R2 FIGI check,
-  pending fields, the residual list, statuses).
+  pending fields, the residual list, statuses; notes by `truth_set.noted`); scripts/build_diagnosis_truth.py writes
+  it as `TruthSet.new`.
 - `scorecard.py` — `build(snapshot, config=)` (the spec's gap table as one flat dict: L1/L2, R1.x,
   R2.x, G.x, A.x, D.x, V.x; its `as_of` the snapshot's), `METRICS` (each floored number's good direction), `drops`,
   `raise_floor`, `load_config` (`data/scorecard.json`: the caller's window, the
-  floor, the two truth files), `write` (`output/scorecard.json`).
+  floor, the two truth files; the diagnosis truth set through `truth_set`, its legs named after its truth file),
+  `write` (`output/scorecard.json`).
 - `audit.py` — decision 17's sample: `census` (each ending in its first group of
   distress, continuation, left_view, blank_no_value, assumed_par), `random_sample`
   (seeded, avoiding census chains), `worksheet_rows`.
@@ -926,7 +951,7 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   the issuer in force changes), `delisting_rows` (one per ended security, its last: `exit_kind.last_endings`), `seed_rows` (the seed
   echo), `id_change_rows` (baseline placeholders that now hold a FIGI; stage 4b's folds by name, `renames`; and a baseline
   FIGI the run no longer holds that `renames` maps to a FIGI of this run, rule F: BTU, CRC; `regression.renamed_to`
-  and `diagnosis_loop.rename_truth` read every row alike, placeholder or not), `payout_leg_rows` (schema 3, R3: each
+  and `truth_set.TruthSet.rename` read every row alike, placeholder or not), `payout_leg_rows` (schema 3, R3: each
   security of a basket ending per share, `contract/payout_legs.csv`). `run_manifest.json` carries
   `schema_version` (`store.CONTRACT_SCHEMA_VERSION`, 3). It loads no client (its value inputs are payout_rule's
   types), so the regression report reads `id_change_rows` from it.
@@ -1167,7 +1192,9 @@ conflate them.
   to the floor. A drop or a failing golden case warns on stderr and never changes
   the exit code; a bad config or truth file exits 2.
 - **Every fix sub-plan passes the diagnosis truth loop (spec 2026-10-03-diagnosis-truth-fixes).** After the cached
-  full run: (1) `truth_loop_round.py` judges the run against `data/diagnosis_truth.csv` and writes the regression
+  full run: (1) `truth_loop_round.py` renames the truth rows and legs that name a renamed security, judges the run
+  against `data/diagnosis_truth.csv` (the file data/scorecard.json names; every script's `--truth` defaults to it)
+  and writes the regression
   report against the sub-plan's base commit; (2) it keeps the errors the ledger has not seen (mismatch case ids are
   `<truth_case_id>_<label>-r<N>`, regression ids `<sec_id>_<label>-r<N>`; `regression.excluded(..., id_changes=)` also
   leaves out placeholders renamed to a truth security); (3) the `diagnosis-truth-loop` workflow diagnoses each one in
@@ -1175,7 +1202,9 @@ conflate them.
   (a mismatched truth field never takes a library value unless a verified, upheld diagnosis cites an SEC accession
   the earlier report missed; a regressed row enters the truth file with the side the diagnosis found right for the
   fields the agent saw: a whole added or removed row scores only its brief, and a changed field keeps the base run's
-  other scored values, which the regression guard presumes right) and writes the truth file, the change log and the ledger together (`atomic_io.replace_all_on_success`). A
+  other scored values, which the regression guard presumes right) and commits the truth set: the truth file, the
+  change log and the ledger together (`truth_set.TruthSet.commit`, `atomic_io.replace_all_on_success`); no script
+  writes one of them alone, and a sub-plan's rulings are data passed to `TruthSet.rule` (scripts/apply_5f/5h/5i). A
   `pending` ledger row is never re-diagnosed automatically: the operator settles it or deletes the row. The loop
   stops after a round with no new error, or after 3 rounds. A sub-plan is accepted only when `D.mismatches` fell
   and `scripts/scorecard.py --check --base <commit>` passes (`D.unexplained_regressions` 0). `truth_build.UNSETTLED`: an OpenFIGI error or several US

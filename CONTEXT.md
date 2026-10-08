@@ -86,6 +86,10 @@ A lifecycle that reaches `active` or `ended` with nothing missing on the way. Co
 One security's outcome checked by hand at a cited source, naming the security by a ticker and a date it traded and listing only what was checked. The golden set and the accuracy audit are both made of truth cases.
 _Avoid_: test case, expectation
 
+**Truth set**:
+The diagnosis truth file (one row per diagnosed case, what its contract row should say), a basket's legs, the change log of every edit to them, and the loop's ledger of errors already diagnosed, read, validated, changed and written as one unit (`truth_set.TruthSet`). A ruling (a decision on one case, given as data and applied once), a rename, a status flip or a loop round is a change to the truth set: every changed cell is a change-log row, and the files are committed together.
+_Avoid_: truth file (one part of it), truth table
+
 **Floor**:
 The best value each scorecard number has reached (`data/scorecard.json`). No later change may make a floored number worse.
 
