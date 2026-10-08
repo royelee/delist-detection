@@ -1743,6 +1743,25 @@ Decisions made in the step:
   byte: production's adapters offer every capability, so no line is added.
 - **pipeline.py: 1604 lines to 1629.** The `Clients` docstring, its two properties and `absent()`. capabilities.py
   is new, 81 lines.
+- **Controller ruling on the named LLM call: dropped; the LLM extractor has one call shape.** It is
+  `extract(record, security_name=)`, required of every adapter (production's since sub-plan 5f; its calls are
+  filled ahead on the worker threads). `NAMED_LLM_CALL`, `Clients.names_security` and the extractors'
+  `names_security` flags are gone, so `CAPABILITIES` holds full-text search alone; merger_value always names the
+  target and always fills the calls ahead with workers > 1.
+  - The stale test became `test_payouts_and_llm_calls_are_filled_ahead_and_no_llm_answer_is_paid_for_twice`. It runs
+    the real `LLMMergerTermsExtractor` over a fake LLM client and a tmp cache, with 4 workers, and asserts:
+    - the regex reads are warmed on a sec-warm thread and finished on the main thread, as before;
+    - every LLM call is made on a worker thread or the main thread;
+    - the client's call count equals the distinct (filing, model, version, ticker) cache keys asked: no answer is
+      paid for twice.
+    Measured: one call, on `sec-warm_0`, for one key (`000112230418000178_m_v3_AET.json`); the sequential pass read
+    the warm pass's cached answer.
+  - Deleted with the capability: 3 tests (test_merger_value's absent-path test; test_capabilities' named-call test
+    and the LLM case of its parametrized refusal), and the LLM lines of the refusal-message, run-log and
+    default_clients tests (the run-log test now expects one line; the default_clients test checks the one call
+    shape). Suite: 3390 passed, 46 xfailed.
+  - Alternative: keep the capability for the one test.
+  - Cost if wrong: none to output; the replay is SAME.
 - **CONTEXT.md is unchanged.** A capability is design vocabulary (an adapter's statement at a seam), not a domain
   term. CLAUDE.md gained the capabilities module, the `Clients` seam in the stage text, the edgar, ticker_resolver,
   line_follow and LLM entries, and the doubles' contract in "Tests are fully offline".

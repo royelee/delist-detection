@@ -89,9 +89,7 @@ class NoFtd:
 
 class CaseExtractor:
     """The case's own read: its regex payout (`raw`) or its LLM terms (`terms`). As the LLM extractor it takes the
-    target's name, as production's does (`names_security`), and answers by the case all the same."""
-
-    names_security = True
+    target's name, as production's does, and answers by the case all the same."""
 
     def __init__(self, kind: str) -> None:
         self.kind = kind

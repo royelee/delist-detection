@@ -28,7 +28,7 @@ editable install.
 
 ```bash
 pip install -e .                         # editable install (Python ≥3.10) — once per env
-pytest   # full suite (3393 passed, 46 xfailed: 8 known-wrong golden + the diagnosis truth set's 37 known_wrong cases, all residual, all strict, + the package root's eager imports, tests/test_import_closure.py, until the layout step; offline, no network)
+pytest   # full suite (3390 passed, 46 xfailed: 8 known-wrong golden + the diagnosis truth set's 37 known_wrong cases, all residual, all strict, + the package root's eager imports, tests/test_import_closure.py, until the layout step; offline, no network)
 pytest tests/test_payout_extractor.py -v  # one file
 pytest tests/test_payout_extractor.py::test_match_in_cash_family_altr -v   # one test
 
@@ -123,8 +123,8 @@ inputs and outputs and the run-wide `_RunContext` (clients, run date, log,
 workers, SEC meter `manifest.StageMeter`). `Clients` is the seam every stage reads SEC, OpenFIGI, the fails files,
 MIDAS, the halt feed and the LLM through (architecture step 11): each adapter, production's (`default_clients`) or a
 test double, provides its client's required reads and states each optional capability (`capabilities.py`) offered
-or absent; stages ask `Clients.full_text_search` and `Clients.names_security`, never a `getattr` default, and `run`
-logs each absent capability once (`Clients.absent()`). Each stage returns what it produces
+or absent; stages ask `Clients.full_text_search`, never a `getattr` default, and `run` logs each absent
+capability once (`Clients.absent()`). Each stage returns what it produces
 (`_Successors` for stage 9, for instance) and `_run` combines the answers. Every change of an ending's kind or
 successor after the finder built it is a rewrite (`rewrites.py`), never a stage's own field edit. Helpers that
 belong to one kind of data live with it, not in `pipeline.py`:
@@ -160,16 +160,15 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   `endpoint_of`, and degraded answers), and fill-only mode (`fill_only`/
   `filling_only`: a prefetch thread only fills missing cache entries).
 - `capabilities.py` — the clients' optional capabilities, declared once for the `pipeline.Clients` seam
-  (architecture step 11): EDGAR full-text search (`FULL_TEXT_SEARCH`, stated as `edgar.full_text_search`, a
-  `FullTextSearch`) and the LLM extractor's named call (`NAMED_LLM_CALL`, the flag `llm_extractor.names_security`:
-  `extract(record, security_name=)`, filled ahead on the worker threads). Each adapter states a capability offered
-  or absent (the attribute, or None, False for a flag); one that states nothing is refused where the statement is
-  read (`stated`, `offers`, `Undeclared`). `Clients.absent()` lists the absent ones; `run` logs each once, with what
+  (architecture step 11): one, EDGAR full-text search (`FULL_TEXT_SEARCH`, stated as `edgar.full_text_search`, a
+  `FullTextSearch`). Each adapter states a capability offered or absent (the attribute, or None); one that states
+  nothing is refused where the statement is read (`stated`, `offers`, `Undeclared`). `Clients.absent()` lists the absent ones; `run` logs each once, with what
   the run goes without (`Capability.without`), before anything is read; run_manifest.json is unchanged. Every
   other read a stage makes of a client is required of its adapters: EDGAR's `submissions`, `recent_filings`,
   `fetch_filing_text`, `fetch_filing_raw` and `company_tickers`; the resolver's `flush` and `shadow`; the
   classifier's `shadow` (`DelistClassifier.shadow`, the delisting warm-up's twin over a shadow issuer record); the
-  halt feed's `failed_days`. The resolver and the classifier state the issuer record they read through
+  halt feed's `failed_days`; the LLM extractor's one call shape, `extract(record, security_name=)`, filled ahead on
+  the worker threads. The resolver and the classifier state the issuer record they read through
   (`issuers`, None for none of their own), from which `Clients.issuers` takes the run's.
 - `fatal.py` — `FATAL`: the exceptions that stop a run instead of becoming a
   review row (`EdgarBlocked`, `OpenFigiBlocked`, `OpenFigiUnavailable`).
@@ -752,8 +751,8 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   chat-completions API to OpenAI or Anthropic; every LLM client adapter states the model it calls, `model`, None for
   none, the cache label's first choice, then `$CHAT_MODEL`) and `filing_selection.py`
   (filing-tier picker shared with `payout_extractor.py`); responses cached under
-  `cache/llm/`. `LLMMergerTermsExtractor` offers the named call (`names_security`,
-  `capabilities.NAMED_LLM_CALL`). Disabled by default — enabled by `--extract-merger-terms-llm`;
+  `cache/llm/`. Every extractor adapter takes one call shape, `extract(record, security_name=)` (stage 8 names
+  the target security). Disabled by default — enabled by `--extract-merger-terms-llm`;
   `acquirer_price` and `last_trade_close` come from `ftd.py`, not a filing. `MergerTerms` answers for its own
   package, so the gate, the payout rule, the requests and stage 8 ask it instead of reading its fields: `ticker`
   (normalized; a spelled-out null, `NULL_TICKERS`, is cleaned when the answer is built, `clean_ticker`),
@@ -1437,7 +1436,7 @@ expiration is 0.0 in the table and no correction in the firm month, which leaves
   its fixture) or absent, never silent (`capabilities.Undeclared` refuses that). `_FakeEdgar` and the real-case
   harnesses' EDGAR doubles state full-text search absent (`full_text_search = None`: their fixtures recorded no
   searches; a test that wants one sets it, and tests/test_line_follow_cases.py's double answers from its recorded
-  searches); every LLM extractor double states `names_security`, every LLM client double `model`, and every
+  searches); every LLM extractor double takes `security_name`, every LLM client double states `model`, and every
   resolver double passed to `Clients` its `issuers`. Golden fixtures are regenerated out-of-band by
   `scripts/regen_payout_fixtures.py`.
 - **Ticker recycling** (e.g. ALTR was Altera then Altair) is handled by

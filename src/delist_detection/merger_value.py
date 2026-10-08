@@ -225,8 +225,8 @@ def _quiet(*_: object) -> None:
 @dataclass
 class _Stage:
     """What every step of the stage shares: the run's clients (edgar, resolver, issuers, figi, ftd_client,
-    payout_extractor, llm_extractor and its `names_security`: `pipeline.Clients`), the run's securities as acquirer
-    lines, the first day the run loaded fails rows from, the prefetch worker count and the log."""
+    payout_extractor, llm_extractor: `pipeline.Clients`), the run's securities as acquirer lines, the first day the
+    run loaded fails rows from, the prefetch worker count and the log."""
     clients: Any
     index: acquirer_line.LineIndex
     ftd_lo: date | None
@@ -252,7 +252,7 @@ def value_mergers(delistings: Sequence[Delisting], index: acquirer_line.LineInde
     """Stage 8 (see the module docstring): every merger-bucket delisting of `delistings`, valued. `index` holds the
     run's securities, their ticker sightings, CUSIPs and the fails index (extended here with the acquirers' rows);
     `clients` the run's edgar, resolver, issuers (the issuer record), figi, ftd_client, payout_extractor and
-    llm_extractor, and whether the extractor takes the target's name (`names_security`; `pipeline.Clients`)."""
+    llm_extractor (`extract(record, security_name=)`)."""
     st = _Stage(clients, index, ftd_lo, workers, log)
     mergers = [e for e in delistings if e.record.bucket is CrspBucket.MERGER]
     raw, llm_terms, review = _read_terms(st, mergers, closes, {sid: s.name or "" for sid, s in st.securities.items()})
@@ -303,13 +303,12 @@ def _read_terms(st: _Stage, mergers: list[Delisting], closes: Mapping[DelistingK
     answer (a failed EDGAR read or LLM call; it also flags the merger's own row)."""
     clients, raw, llm_terms = st.clients, {}, {}
     review: list[ReviewItem] = []
-    named = clients.names_security       # the extractor's named call (`capabilities.NAMED_LLM_CALL`)
     if st.workers > 1 and clients.payout_extractor is not None:
         # The regex payout reader's EDGAR reads, warmed.
         extractor = clients.payout_extractor
         warm(mergers, lambda e: extractor.extract(e.record, last_close=closes.get(e.key)),
              workers=st.workers, name="payouts")
-    if st.workers > 1 and named:
+    if st.workers > 1 and clients.llm_extractor is not None:
         # The LLM calls the sequential pass makes, filled ahead on the worker threads (sub-plan 5f: a new prompt
         # version asks every merger again). Each call fills the cache entry the sequential pass then reads: the
         # same candidates in the same order, and a failed call is never cached, so the tables do not depend on the
@@ -325,8 +324,7 @@ def _read_terms(st: _Stage, mergers: list[Delisting], closes: Mapping[DelistingK
             if clients.payout_extractor is not None:
                 raw[key] = clients.payout_extractor.extract(e.record, last_close=closes.get(key))
             if clients.llm_extractor is not None:
-                t = clients.llm_extractor.extract(e.record, security_name=names.get(e.sec_id, "")) if named \
-                    else clients.llm_extractor.extract(e.record)
+                t = clients.llm_extractor.extract(e.record, security_name=names.get(e.sec_id, ""))
                 if t is not None:
                     llm_terms[key] = t
         except FATAL:

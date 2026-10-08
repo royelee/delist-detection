@@ -24,6 +24,7 @@ from delist_detection.edgar import EFTS_KEY, EFTS_SCHEMA, FETCHED_KEY, EdgarBloc
 from delist_detection.filing_search import successor_query
 from delist_detection.issuer_record import IssuerRecord
 from delist_detection.last_trade import LastTrade
+from delist_detection.llm_merger_extractor import LLMMergerTermsExtractor
 from delist_detection.midas import MIDAS_INDEX_URL, MidasClient
 from delist_detection.observations import Observation, ObservationIndex
 from delist_detection.openfigi import OpenFigiBlocked
@@ -366,9 +367,12 @@ def test_the_successor_search_query_is_the_one_the_prefetch_sends():
         '"GOOGLE INC"', "8-K12B,8-K12G3", date(2015, 9, 2), date(2015, 12, 1))
 
 
-def test_payout_extraction_is_warmed_on_worker_threads_and_the_llm_is_not(fake_edgar, tmp_path):
+def test_payouts_and_llm_calls_are_filled_ahead_and_no_llm_answer_is_paid_for_twice(fake_edgar, tmp_path):
+    """With 4 workers the regex payout reads and the LLM calls are filled ahead on the worker threads (sub-plan 5f).
+    The real extractor caches each answer under its (filing, model, prompt version, ticker) key, so the sequential
+    pass reads what the warm pass paid for: the LLM client is called once per key asked, never twice."""
     index, clients = _clients(fake_edgar)
-    regex, llm, guard = [], [], threading.Lock()
+    regex, llm, keys, guard = [], [], set(), threading.Lock()
 
     class _Regex:
         def extract(self, record, last_close=None):
@@ -376,22 +380,29 @@ def test_payout_extraction_is_warmed_on_worker_threads_and_the_llm_is_not(fake_e
                 regex.append(threading.current_thread().name)
             return PayoutResult.none()
 
-    class _Llm:
-        # States the named call absent, and so keeps the path this test was written for: an extractor that takes
-        # no target name is never filled ahead. Production's extractor takes it and is filled ahead since sub-plan
-        # 5f (test_merger_value's worker-thread test); with it, this test's last assertion fails (the plan's
-        # step 11 decision log, left for a ruling).
-        names_security = False
+    class _Client:                                  # the LLM client: a paid call per `extract`
+        model = "m"
 
-        def extract(self, record):
+        def extract(self, system, user, schema):
             with guard:
                 llm.append(threading.current_thread().name)
-            return None
+            return {"deal_type": "cash", "cash_per_share": 212.70, "stock_ratio": None, "acquirer_name": "CVS",
+                    "acquirer_ticker": "CVS", "confidence": "high", "quote": "$212.70 in cash",
+                    "package_basis": "fixed"}
 
-    clients.payout_extractor, clients.llm_extractor = _Regex(), _Llm()
-    run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None, sec_workers=4)
+    class _Extractor(LLMMergerTermsExtractor):     # records every cache key asked, on any thread
+        def cache_path(self, filing, record):
+            path = super().cache_path(filing, record)
+            with guard:
+                keys.add(path.name)
+            return path
+
+    clients.payout_extractor = _Regex()
+    clients.llm_extractor = _Extractor(fake_edgar, _Client(), cache_dir=tmp_path / "llm")
+    run(index, clients, Overrides(), out_dir=tmp_path / "out", log=lambda *_: None, sec_workers=4)
     assert any(n.startswith("sec-warm") for n in regex) and regex[-1] == threading.main_thread().name
-    assert set(llm) == {threading.main_thread().name}                  # paid calls are never warmed
+    assert llm and all(n.startswith("sec-warm") or n == threading.main_thread().name for n in llm)
+    assert len(llm) == len(keys)                   # no answer paid for twice
 
 
 def test_the_successor_search_is_warmed_with_the_query_the_sequential_pass_sends(fake_edgar, tmp_path,

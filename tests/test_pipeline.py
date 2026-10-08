@@ -899,8 +899,6 @@ class _FakePayoutExtractor:
 
 
 class _FakeLLMExtractor:
-    names_security = True
-
     def __init__(self, terms):
         self.terms = terms
 
@@ -1002,8 +1000,6 @@ def _two_stock_mergers(fake_edgar, monkeypatch):
     terms2 = MergerTerms("stock", None, 1.0, "ACQUIRER CO", "ACQ", "high", "8-K:X2", "")
 
     class _LLMByKey:
-        names_security = True
-
         def __init__(self, mapping):
             self.mapping = mapping
 
@@ -1380,8 +1376,6 @@ def test_a_lagged_acquirer_close_flags_the_delisting(fake_edgar, tmp_path, monke
     monkeypatch.setattr(pipeline, "DelistingFinder", _CannedFinder)
 
     class _LLM:
-        names_security = True
-
         def extract(self, record, security_name=""):
             return MergerTerms("stock", None, 1.0, "ACQUIRER CO", "ACQ", "high", "8-K:X", "")
 

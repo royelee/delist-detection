@@ -46,8 +46,6 @@ class _NoFtd:
 class _Terms:
     """An LLM extractor that answers each target from a map (by ticker); `seen` records the names it was told."""
 
-    names_security = True
-
     def __init__(self, answers: dict, calls: list | None = None) -> None:
         self.answers, self.calls, self.seen = answers, calls if calls is not None else [], []
 
@@ -88,8 +86,6 @@ def test_the_llm_calls_are_filled_ahead_on_worker_threads_with_the_same_answers(
     calls, cache = [], {}
 
     class Ext:                          # caches its answer per target, as LLMMergerTermsExtractor does on disk
-        names_security = True
-
         def extract(self, record, security_name=""):
             calls.append(record.ticker)
             return cache.setdefault(record.ticker, MergerTerms("cash", 10.0 + len(cache), None, None, None, "high",
@@ -106,24 +102,6 @@ def test_the_llm_calls_are_filled_ahead_on_worker_threads_with_the_same_answers(
     calls.clear()
     assert run(4) == one and sorted(calls) == ["AAA", "AAA", "BBB", "BBB", "CCC", "CCC"]
 
-
-def test_an_extractor_stating_the_named_call_absent_is_asked_without_the_name_and_never_ahead():
-    """`capabilities.NAMED_LLM_CALL` absent: each merger is asked once, as `extract(record)`, on the stage's own
-    thread, whatever the worker count."""
-    import threading
-    calls = []
-
-    class Unnamed:
-        names_security = False
-
-        def extract(self, record):
-            calls.append((record.ticker, threading.current_thread() is threading.main_thread()))
-            return MergerTerms("cash", 10.0, None, None, None, "high", "8-K:x", "", package_basis="fixed")
-
-    es = [_merger(t, t, "2016-09-16", date(2016, 9, 15)) for t in ("AAA", "BBB")]
-    values = _value(es, llm=Unnamed(), workers=4)
-    assert calls == [("AAA", True), ("BBB", True)]
-    assert {k.sec_id: v.llm.cash_per_share for k, v in values.records.items()} == {"AAA": 10.0, "BBB": 10.0}
 
 
 # --- 8a': an unnamed stock leg's ticker -----------------------------------------------------------------------------

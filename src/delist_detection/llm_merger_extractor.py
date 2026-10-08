@@ -536,10 +536,6 @@ class LLMMergerTermsExtractor:
         Cap on the number of candidate filings whose text is sent to the LLM.
     """
 
-    # ``extract`` takes the target security's name (``capabilities.NAMED_LLM_CALL``): stage 8 names it and fills the
-    # calls ahead on the worker threads
-    names_security = True
-
     def __init__(
         self,
         edgar,

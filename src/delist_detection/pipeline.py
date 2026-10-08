@@ -21,7 +21,7 @@ from . import acquirer_line
 from . import manifest as run_manifest
 from . import scorecard as run_scorecard
 from .added_securities import AddedAcquirer, AddedLineSuccessor, AddedSecurity, AddedSuccessor
-from .capabilities import CAPABILITIES, FULL_TEXT_SEARCH, NAMED_LLM_CALL, Capability, FullTextSearch, offers, stated
+from .capabilities import CAPABILITIES, FULL_TEXT_SEARCH, Capability, FullTextSearch, offers, stated
 from .crsp_codes import CrspBucket
 from .continuation_evidence import needs_doubt_check, needs_filing, read_continuation
 from .degraded import DegradedWatch, degraded_item, flag_degraded, report_halt_feed_failures
@@ -95,8 +95,8 @@ class Clients:
     Each field is filled by an adapter: production's (`default_clients`) or a test double (None: a client the
     caller left out, such as `--no-midas`). Each adapter provides its client's required reads (`capabilities`'
     docstring lists them) and states each optional capability it may be asked for, offered or absent:
-    `full_text_search` and `names_security` read those statements, and `absent()` lists the capabilities the run
-    goes without (`run` logs each once). The resolver and the classifier state the issuer record they read through
+    `full_text_search` reads that statement, and `absent()` lists the capabilities the run goes without (`run`
+    logs each once). The resolver and the classifier state the issuer record they read through
     (`issuers`)."""
     edgar: Any                      # EDGAR (`edgar.EdgarClient`); states `full_text_search`
     resolver: Any                   # the issuer lookup (`identity.IssuerLookup`: `ticker_resolver.TickerResolver`)
@@ -106,7 +106,7 @@ class Clients:
     midas: Any = None
     halts: Any = None               # the Nasdaq halt feed: `deletion_halt`, `failed_days`
     payout_extractor: Any = None
-    llm_extractor: Any = None       # `llm_merger_extractor.LLMMergerTermsExtractor`; states `names_security`
+    llm_extractor: Any = None       # `llm_merger_extractor.LLMMergerTermsExtractor`: `extract(record, security_name=)`
     as_of: date | None = None       # the run date every client uses (default_clients sets it)
     issuers: IssuerRecord | None = None     # the run's issuer record (None: the resolver's or classifier's)
 
@@ -123,11 +123,6 @@ class Clients:
         """EDGAR full-text search, or None when the EDGAR adapter states it absent (`capabilities.FULL_TEXT_SEARCH`:
         what the stages go without)."""
         return stated(self.edgar, FULL_TEXT_SEARCH) if self.edgar is not None else None
-
-    @property
-    def names_security(self) -> bool:
-        """Whether the LLM extractor takes the target security's name (`capabilities.NAMED_LLM_CALL`)."""
-        return offers(self.llm_extractor, NAMED_LLM_CALL)
 
     def absent(self) -> tuple[Capability, ...]:
         """The capabilities an adapter of these clients states absent (a client left out offers none, and is no
