@@ -28,7 +28,7 @@ editable install.
 
 ```bash
 pip install -e .                         # editable install (Python ≥3.10) — once per env
-pytest   # full suite (3107 passed, 45 xfailed: 8 known-wrong golden + the diagnosis truth set's 37 known_wrong cases, all residual, all strict; offline, no network)
+pytest   # full suite (3318 passed, 46 xfailed: 8 known-wrong golden + the diagnosis truth set's 37 known_wrong cases, all residual, all strict, + the package root's eager imports, tests/test_import_closure.py, until the layout step; offline, no network)
 pytest tests/test_payout_extractor.py -v  # one file
 pytest tests/test_payout_extractor.py::test_match_in_cash_family_altr -v   # one test
 
@@ -68,7 +68,7 @@ python scripts/compute_corrected_returns.py --panel panel.csv --delistings outpu
 # --review-decisions PATH (default data/review_decisions.csv) is read the same way: sec_id,delist_date,ticker,flag,decision,note. Missing at the default path means no decisions; missing at an explicit path, or a bad file, exits 2.
 # (append --limit N --output-dir /tmp/sub to classify_universe
 # for a fast cached/offline subset; never write a subset into output/, the committed-output tests read it)
-# Auto-extract cash+stock merger terms with an LLM instead of hand-writing terms.csv (NETWORK: SEC + OpenAI; needs OPENAI_API_KEY + CHAT_MODEL in .env):
+# Auto-extract cash+stock merger terms with an LLM instead of hand-writing terms.csv (NETWORK: SEC + the LLM endpoint, OpenAI or Anthropic; needs OPENAI_API_KEY + CHAT_MODEL in .env, and OPENAI_BASE_URL for Anthropic — see "The LLM endpoint" under Non-obvious invariants):
 python scripts/classify_universe.py --observations obs.csv --extract-merger-terms-llm   # → output/delistings.csv with cash_plus_stock/stock_only rows
 # LLM (prompt v3, sub-plan 5f) reads the package one share became from EDGAR: cash leg and its currency, stock ratio (or a dollar value), acquirer name/ticker/class, further legs of a basket; acquirer_price is joined from SEC fails-to-deliver closes around the deal-completion date; a sanity gate (--merger-terms-sanity-tol, default 0.15) drops any term whose terminal value doesn't reconcile with last_trade_close. An explicit --merger-terms row always overrides the LLM. Calibrate the prompt with `python scripts/eval_merger_extractor.py` (10 labeled deals, live; `--truth` replays the diagnosis truth rows) before trusting a run.
 
@@ -728,7 +728,8 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
 - `llm_merger_extractor.py` — the **cash+stock** counterpart: an LLM reads a
   filing and returns full structured terms (`cash_per_share`, `stock_ratio`,
   `acquirer_ticker`) the regex extractor can't generalize over. Uses
-  `llm_client.py` (injectable OpenAI JSON client) and `filing_selection.py`
+  `llm_client.py` (`OpenAIJsonClient`: injectable, speaks the OpenAI
+  chat-completions API to OpenAI or Anthropic) and `filing_selection.py`
   (filing-tier picker shared with `payout_extractor.py`); responses cached under
   `cache/llm/`. Disabled by default — enabled by `--extract-merger-terms-llm`;
   `acquirer_price` and `last_trade_close` come from `ftd.py`, not a filing. `MergerTerms` answers for its own
@@ -1332,6 +1333,27 @@ conflate them.
   `scripts/classify_universe.py` (~35 ambiguous short tickers). When web
   verification proves a wrong CIK, extend that dict — don't patch the resolver.
 - **Payout extraction is cash-only; the DLRET table supports full consideration.** Auto-extraction from EDGAR remains cash-only. The DLRET table abstains (neutral mark) only when no consideration terms are supplied; when stock-leg terms (`stock_ratio`, `acquirer_price`) are provided via `--merger-terms`, it computes the full cash+stock consideration (e.g. AET→CVS: $145 cash + 0.8378 CVS @ $80 = $212.02, DLRET = +11.6%). The `--last-trade-closes`, `--recoveries`, and `--merger-terms` CSVs are keyed by `sec_id` and accept an optional `delist_date` column for per-event overrides (blank/absent = applies to all delistings of that security); a row matching no delisting stops the run.
+- **The LLM endpoint is the one `.env` names: OpenAI or Anthropic.**
+  `llm_client.OpenAIJsonClient` speaks the OpenAI chat-completions API and
+  reads `OPENAI_API_KEY`, `OPENAI_BASE_URL` (unset means OpenAI) and
+  `CHAT_MODEL`. For Claude it uses Anthropic's OpenAI-compatible endpoint:
+  the Anthropic key goes under `OPENAI_API_KEY`,
+  `OPENAI_BASE_URL=https://api.anthropic.com/v1/`,
+  `CHAT_MODEL=claude-sonnet-5-5`; `ANTHROPIC_API_KEY` is never read. That
+  endpoint answers 400 to a `temperature` (seen on `claude-sonnet-5-5`) and to
+  `response_format` type `json_object`, so a model whose name contains
+  `claude` is sent no temperature, and its first request, the `json_schema`
+  one, is the one that answers. The cache file name
+  (`cache/llm/<accession>_<model>_v3_<ticker>.json`; the earlier prompt's
+  cache-only reading, `LEGACY_VERSION`, `<accession>_<model>_<version>.json`)
+  carries the model the client calls (`OpenAIJsonClient.model`: `--llm-model`,
+  else `CHAT_MODEL`), so a new model sends every merger filing again; rerun the
+  10-deal eval for it (10/10 on `claude-sonnet-5-5`, 2026-10-07, with main's
+  prompt v2; not yet rerun on v3). An
+  agent-sandbox run must allow the host in `OPENAI_BASE_URL`
+  (`api.anthropic.com` or `api.openai.com`): a blocked LLM host raises on
+  every call, each becomes a miss, and the run exits 0 with those mergers'
+  terms missing.
 - **The resolver cache is versioned.** `cache/ticker_resolution.json` carries
   `{"__version__": 4, ...}`, each answer keyed `TICKER|date|observed name`
   (versions 2 and 3, keyed `TICKER|date`, load re-keyed from their stored

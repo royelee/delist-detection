@@ -146,6 +146,21 @@ def test_default_clients_share_one_run_date_and_a_machine_wide_limit(tmp_path, m
     assert c.issuers._index is None
 
 
+def test_default_clients_label_the_llm_cache_with_the_model_called(tmp_path, monkeypatch):
+    """--llm-model names the model the client calls, so the extractor's cache
+    label is that model and not $CHAT_MODEL: another model's cached answers
+    are neither reused nor overwritten."""
+    monkeypatch.setenv(sec_limiter.SEC_RATE_LOCK_ENV, str(tmp_path / "sec_rate.lock"))
+    monkeypatch.setenv("EDGAR_USER_AGENT", "Test Co test@example.com")
+    monkeypatch.setenv("CHAT_MODEL", "model-a")
+    monkeypatch.setenv("OPENAI_API_KEY", "test-key")
+    monkeypatch.setattr("dotenv.load_dotenv", lambda *a, **kw: False)   # the repo .env stays out of os.environ
+    index = ObservationIndex([Observation("AET", "2018-06-29", "AETNA INC")])
+    c = pipeline.default_clients(index, cache_dir=tmp_path / "cache", as_of=date(2026, 9, 23),
+                                 extract_payouts=False, extract_llm=True, llm_model="model-b")
+    assert c.llm_extractor.model == "model-b"
+
+
 class _Midas:
     def last_trade_day(self, ticker, lo, hi):
         return None

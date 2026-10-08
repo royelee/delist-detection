@@ -208,6 +208,24 @@ def test_cache_hit_second_call_served_from_disk(tmp_path):
     assert any(PROMPT_VERSION in p.name for p in cache_files)  # prompt version tags the cache key
 
 
+def test_cache_is_labelled_with_the_clients_own_model(tmp_path, monkeypatch):
+    """The cache label is the model the injected client calls, ahead of
+    $CHAT_MODEL: an answer cached for another model is not reused."""
+    monkeypatch.setenv("CHAT_MODEL", "m1")
+    resp = {"deal_type": "cash", "cash_per_share": 113.0, "stock_ratio": None, "acquirer_name": None,
+            "acquirer_ticker": None, "confidence": "high", "quote": "$113.00 in cash"}
+    edgar = _FakeEdgarText([_closing_8k()], {"C1": _USABLE_TEXT})
+    other = _FakeLlm([dict(resp, cash_per_share=1.0)])           # no model of its own: labelled $CHAT_MODEL
+    LLMMergerTermsExtractor(edgar, other, cache_dir=tmp_path).extract(_merger_rec())
+    llm = _FakeLlm([resp])
+    llm.model = "m2"
+    terms = LLMMergerTermsExtractor(edgar, llm, cache_dir=tmp_path).extract(_merger_rec())
+    assert llm.calls == 1
+    assert terms.cash_per_share == 113.0
+    assert sorted(p.name for p in tmp_path.glob("*.json")) == [
+        f"C1_m1_{PROMPT_VERSION}_AET.json", f"C1_m2_{PROMPT_VERSION}_AET.json"]
+
+
 def test_an_answer_cut_off_mid_write_leaves_no_cache_file(tmp_path, writes_fail_midway):
     """A run that dies while caching the LLM's answer leaves no cut-off JSON
     file: the answer is written through atomic_io.write_atomic."""

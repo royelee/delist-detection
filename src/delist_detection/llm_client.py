@@ -11,6 +11,9 @@ expected (constructor-injection pattern, same as EdgarClient in PayoutExtractor)
 dict describing the expected output.  The method returns a parsed dict on
 success and MAY raise on hard failure (callers should wrap in try/except).
 
+A client may also carry ``model``, the name of the model it calls;
+``LLMMergerTermsExtractor`` labels its cache with it.
+
 Provided implementation: ``OpenAIJsonClient``.
 
 Factory: ``default_llm_client(model=None)`` — loads ``.env`` from the repo
@@ -81,6 +84,12 @@ class OpenAIJsonClient:
     # Public API
     # ------------------------------------------------------------------
 
+    @property
+    def model(self) -> str:
+        """The model every request names. ``LLMMergerTermsExtractor`` labels
+        its cache with it."""
+        return self._model
+
     def extract(self, system: str, user: str, schema: dict) -> dict:
         """Call the chat-completions API and return a parsed JSON dict.
 
@@ -139,7 +148,7 @@ class OpenAIJsonClient:
         """Thin wrapper around chat.completions.create(); returns message content.
 
         ``temperature=None`` omits the parameter entirely (for models that only
-        accept the default).
+        accept the default). A Claude model never gets one.
         """
         kwargs: dict = {
             "model": self._model,
@@ -148,7 +157,7 @@ class OpenAIJsonClient:
                 {"role": "user", "content": user},
             ],
         }
-        if temperature is not None:
+        if temperature is not None and _takes_temperature(self._model):
             kwargs["temperature"] = temperature
         if response_format is not None:
             kwargs["response_format"] = response_format
@@ -161,6 +170,14 @@ class OpenAIJsonClient:
 # ---------------------------------------------------------------------------
 
 _FENCE_RE = re.compile(r"```(?:json)?\s*([\s\S]*?)\s*```", re.I)
+
+
+def _takes_temperature(model: str) -> bool:
+    """False for a Claude model. Anthropic's OpenAI-compatible endpoint answers
+    400 ("`temperature` is deprecated for this model") to any temperature on its
+    current models, which would fail the json_schema request and leave only the
+    last, schema-less attempt."""
+    return "claude" not in model.lower()
 
 
 def _parse_content(content: str) -> dict:

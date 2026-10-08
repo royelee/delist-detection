@@ -524,9 +524,10 @@ class LLMMergerTermsExtractor:
     llm:
         Injected duck-typed LLM client — ``extract(system, user, schema) -> dict``.
     model:
-        Model identifier used in the cache key. Defaults to ``$CHAT_MODEL`` or
-        ``"model"`` when unset (it labels the cache, not the call — the injected
-        ``llm`` already knows which model it talks to).
+        Model identifier used in the cache key (it labels the cache, not the
+        call). Defaults to the injected ``llm``'s own ``model``, the one it
+        calls, so an answer is never filed under another model's name; then
+        ``$CHAT_MODEL``, then ``"model"``, for a client that carries none.
     cache_dir:
         Directory for the per-filing LLM-response cache.
     max_filings:
@@ -544,7 +545,7 @@ class LLMMergerTermsExtractor:
     ) -> None:
         self.edgar = edgar
         self.llm = llm
-        self.model = model or os.environ.get("CHAT_MODEL", "model")
+        self.model = model or getattr(llm, "model", None) or os.environ.get("CHAT_MODEL", "model")
         self.cache_dir = Path(cache_dir)
         self.max_filings = max_filings
         clean_orphan_temps(self.cache_dir)    # a killed run's cut-off answer
