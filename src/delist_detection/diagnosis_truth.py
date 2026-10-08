@@ -7,9 +7,12 @@ compares one run's tables to it.
     ending        the security's contract/delistings.csv row must match the scored fields
     no_ending     the security has no real ending: there is no contract row for it
     ending_moved  the ending the report examined is not the security's last real ending: delistings.csv's last
-                  real ending must have another delist_date, and the scored fields that are not `*` are checked
-                  on the contract row (required only when one is scored)
+                  real ending must have another delist_date than `examined_delist_date`, and the scored fields that
+                  are not `*` are checked on the contract row (required only when one is scored)
 
+`examined_delist_date` is the delist_date of the ending the report examined: required for ending_moved, blank when
+the case examined no ending (a removed row). It is a column of its own, never read from the case_id (a loop-added
+case's id ends in its round, not a date).
 A scored cell holds the value, a blank (the field must be blank) or `*` (not scored). `internal_last_trade_date`
 is the corrected last trade date for delistings.csv when the contract leaves it blank (a worked-out date; decision
 12 publishes only exchange prints); blank there means not scored. `status` is pass (must match now), known_wrong
@@ -35,7 +38,7 @@ SCORED = ("exit_kind", "drop_reason", "continuation", "successor_sec_id", "last_
           "cash_per_share", "cash_currency", "stock_ratio", "price_sec_id", "price_ticker", "price_date",
           "recovery_ratio")
 COLUMNS = ("case_id", "sec_id", "ticker", "report", "confidence", "skeptic", "status", "fixed_by", "shape",
-           *SCORED, "internal_last_trade_date", "note")
+           "examined_delist_date", *SCORED, "internal_last_trade_date", "note")
 LEG_COLUMNS = ("case_id", "leg", "ratio", "price_sec_id", "price_ticker", "price_date")
 NOT_SCORED = "*"
 ENDING, NO_ENDING, ENDING_MOVED = "ending", "no_ending", "ending_moved"
@@ -77,16 +80,7 @@ class DiagnosisCase:
     skeptic: str = ""
     note: str = ""
     legs: tuple[Leg, ...] = field(default=())
-
-    @property
-    def old_delist_date(self) -> str:
-        """The delist_date of the ending the report examined (the case_id's tail; blank for `nodate` or a
-        loop-added case, whose tail is not a date)."""
-        tail = self.case_id.rsplit("_", 1)[-1]
-        try:
-            return date.fromisoformat(tail).isoformat()
-        except ValueError:
-            return ""
+    examined_delist_date: str = ""           # the delist_date of the ending the report examined (module docstring)
 
 
 def _is_date(cell: str) -> bool:
@@ -112,7 +106,7 @@ def _check(name: str, cell: str, where: str) -> None:
                "value_rule": TRUTH_VALUE_RULES}.get(name)
     if allowed is not None and cell not in allowed:
         raise DiagnosisTruthError(f"{where}: {name} {cell!r} is not one of {sorted(allowed)}")
-    if (name in DATES or name == "internal_last_trade_date") and not _is_date(cell):
+    if (name in DATES or name in ("internal_last_trade_date", "examined_delist_date")) and not _is_date(cell):
         raise DiagnosisTruthError(f"{where}: {name} {cell!r} is not a YYYY-MM-DD date")
     if name in NUMBERS and not _is_number(cell):
         raise DiagnosisTruthError(f"{where}: {name} {cell!r} is not a number")
@@ -122,7 +116,8 @@ def parse_rows(rows: Sequence[Mapping[str, str]], where: str = "rows",
                legs: Mapping[str, tuple[Leg, ...]] | None = None) -> list[DiagnosisCase]:
     """Truth rows (every COLUMNS key) as cases. Raises DiagnosisTruthError naming `where` and the line (the header
     is line 1) on a blank or repeated case_id, a blank sec_id, an unknown shape or status, a known_wrong row with no
-    fixed_by, or a scored cell outside its vocabulary, date or number format."""
+    fixed_by, an ending_moved row with no examined_delist_date, or a scored cell outside its vocabulary, date or
+    number format."""
     out: list[DiagnosisCase] = []
     seen: set[str] = set()
     for line, r in enumerate(rows, start=2):
@@ -144,11 +139,15 @@ def parse_rows(rows: Sequence[Mapping[str, str]], where: str = "rows",
             _check(name, cell, at)
         internal = r["internal_last_trade_date"].strip()
         _check("internal_last_trade_date", internal, at)
+        examined = r["examined_delist_date"].strip()
+        _check("examined_delist_date", examined, at)
+        if r["shape"] == ENDING_MOVED and not examined:
+            raise DiagnosisTruthError(f"{at}: an ending_moved case needs the examined_delist_date it refuses")
         out.append(DiagnosisCase(
             case_id=cid, sec_id=r["sec_id"].strip(), ticker=r["ticker"], status=r["status"],
             fixed_by=r["fixed_by"].strip(), shape=r["shape"], fields=cells, internal_last_trade_date=internal,
             report=r["report"], confidence=r["confidence"], skeptic=r["skeptic"], note=r["note"],
-            legs=(legs or {}).get(cid, ())))
+            legs=(legs or {}).get(cid, ()), examined_delist_date=examined))
     return out
 
 
@@ -275,8 +274,8 @@ def judge_case(case: DiagnosisCase, lib: LibraryRows) -> CaseJudgement:
         if row is not None:
             miss("shape", NO_ENDING, "ending")
         return CaseJudgement(case, tuple(bad))
-    if case.shape == ENDING_MOVED and end is not None and end["delist_date"] == case.old_delist_date:
-        miss("shape", ENDING_MOVED, f"ending {case.old_delist_date}")
+    if case.shape == ENDING_MOVED and end is not None and end["delist_date"] == case.examined_delist_date:
+        miss("shape", ENDING_MOVED, f"ending {case.examined_delist_date}")
     scored = [f for f in SCORED if case.fields[f] != NOT_SCORED]
     if row is None:
         if case.shape == ENDING or scored:

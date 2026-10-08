@@ -4,10 +4,11 @@
   python scripts/build_diagnosis_truth.py             # NETWORK: OpenFIGI for new CUSIPs not yet cached
   python scripts/build_diagnosis_truth.py --no-figi   # offline: no R2 check (lists the unchecked cases)
 
-Reads output/diagnose_unknown_report/truth_rows/*.json, records/*.json (confidence, verification), the case map
-(sub-plan per case) and the run's tables. Writes the truth file (--out, by default the one data/scorecard.json
-names) and its legs file as one new truth set (`truth_set.TruthSet.new`; the legs are named after the truth file),
-and output/diagnose_unknown_report/truth_review.md. Exit 2: a missing input or a row the truth set refuses.
+Reads output/diagnose_unknown_report/truth_rows/*.json, records/*.json (confidence, verification), source.csv (the
+delist_date each case examined), the case map (sub-plan per case) and the run's tables. Writes the truth file (--out,
+by default the one data/scorecard.json names) and its legs file as one new truth set (`truth_set.TruthSet.new`; the
+legs are named after the truth file), and output/diagnose_unknown_report/truth_review.md. Exit 2: a missing input or
+a row the truth set refuses.
 """
 from __future__ import annotations
 
@@ -50,6 +51,7 @@ def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--rows", type=Path, default=DIAG / "truth_rows")
     p.add_argument("--records", type=Path, default=DIAG / "records")
+    p.add_argument("--source", type=Path, default=DIAG / "source.csv", help="the cases the reports examined")
     p.add_argument("--case-map", type=Path,
                    default=ROOT / "docs/superpowers/specs/2026-10-03-diagnosis-truth-fixes/case_map.csv")
     p.add_argument("--output-dir", type=Path, default=ROOT / "output")
@@ -61,6 +63,8 @@ def main(argv: list[str] | None = None) -> int:
         norms = [json.loads(f.read_text()) for f in sorted(args.rows.glob("*.json"))]
         with args.case_map.open(newline="") as fh:
             sub_plan = {r["case_id"]: r["sub_plan"] for r in csv.DictReader(fh)}
+        with args.source.open(newline="") as fh:
+            examined = {r["case_id"]: r["delist_date"] for r in csv.DictReader(fh)}
         tables = RunSnapshot.read(args.output_dir)
         records = {}
         for n in norms:
@@ -84,7 +88,8 @@ def main(argv: list[str] | None = None) -> int:
         v = rec.get("verification")
         meta = {"ticker": rec.get("ticker", ""), "report": rec.get("report", ""),
                 "confidence": rec.get("confidence", ""),
-                "skeptic": "" if not v else ("upheld" if v.get("upheld") else "refuted")}
+                "skeptic": "" if not v else ("upheld" if v.get("upheld") else "refuted"),
+                "examined_delist_date": examined.get(n["case_id"], "")}
         row, leg_rows = assemble(n, meta, composite_of=composite_of, securities=securities)
         rows.append(row)
         legs += leg_rows

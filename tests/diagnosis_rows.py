@@ -1,6 +1,6 @@
 """Rows of the diagnosis truth files for tests: every column present, every scored field `*` (not scored) unless
-a test sets it, status pass and shape ending by default; `write_truth` writes a truth file (and its legs) as a new
-truth set."""
+a test sets it, status pass and shape ending by default, and no examined_delist_date (an ending_moved row names its
+own); `write_truth` writes a truth file (and its legs) as a new truth set."""
 from __future__ import annotations
 
 from delist_detection.diagnosis_loop import LEDGER_COLUMNS

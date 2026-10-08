@@ -75,11 +75,18 @@ def test_round_trip_keeps_every_cell(tmp_path):
     assert case.fields["exit_kind"] == "merger" and case.fields["stock_ratio"] == "1.05"
     assert case.fields["last_trade_date"] == "" and case.fields["cash_per_share"] == dt.NOT_SCORED
     assert case.internal_last_trade_date == "2010-01-01" and case.note == "worked out"
-    assert case.old_delist_date == "2010-01-04"
 
 
-def test_a_nodate_case_has_no_old_delist_date(tmp_path):
-    assert TruthSet.open(_set(tmp_path, [truth_row("S1_nodate", "S1")])).cases[0].old_delist_date == ""
+def test_the_examined_ending_is_the_cases_own_column_never_its_ids_tail(tmp_path):
+    rows = [truth_row("S1_2010-01-04", "S1"), truth_row("S2_5a-r2", "S2", examined_delist_date="2016-06-01"),
+            truth_row("S3_2012-02-03", "S3", examined_delist_date="2012-02-03", shape="ending_moved")]
+    assert [c.examined_delist_date for c in TruthSet.open(_set(tmp_path, rows)).cases] == [
+        "", "2016-06-01", "2012-02-03"]
+
+
+def test_an_ending_moved_case_needs_the_ending_it_refuses(tmp_path):
+    with pytest.raises(dt.DiagnosisTruthError, match=r"truth\.csv:2.*examined_delist_date"):
+        TruthSet.new(tmp_path / "truth.csv", [truth_row("S1_2010-01-04", "S1", shape="ending_moved")])
 
 
 def test_star_and_blank_and_basket_are_accepted(tmp_path):
@@ -98,6 +105,7 @@ def test_star_and_blank_and_basket_are_accepted(tmp_path):
     ({"last_trade_date": "2010-13-01"}, "last_trade_date"),
     ({"stock_ratio": "1.05x"}, "stock_ratio"),
     ({"internal_last_trade_date": "soon"}, "internal_last_trade_date"),
+    ({"examined_delist_date": "2010-02-30"}, "examined_delist_date"),
     ({"sec_id": ""}, "sec_id"),
 ])
 def test_a_bad_cell_names_the_file_line_and_field(tmp_path, cells, message):

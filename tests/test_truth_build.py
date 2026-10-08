@@ -77,6 +77,15 @@ def test_ending_moved_also_takes_the_r2_flip():
     assert (row["shape"], row["continuation"]) == ("ending", "true")
 
 
+def test_the_row_keeps_the_ending_its_report_examined():
+    norm = _norm(shape="ending_moved", fields=dict(FIELDS))
+    row, _ = tb.assemble(norm, {**META, "examined_delist_date": "2010-01-04"}, composite_of=lambda cusip: None,
+                         securities=set())
+    assert row["examined_delist_date"] == "2010-01-04"
+    assert dt.parse_rows([{**row, "status": "pass"}])[0].examined_delist_date == "2010-01-04"
+    assert _assemble(_norm())[0]["examined_delist_date"] == ""            # none given: blank, never the id's tail
+
+
 def test_legs_come_out_as_leg_rows():
     _, legs = _assemble(_norm(legs=[{"leg": 1, "ratio": "1", "price_sec_id": "", "price_ticker": "LION",
                                      "price_date": ""}]))

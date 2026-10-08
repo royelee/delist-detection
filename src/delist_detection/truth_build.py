@@ -34,10 +34,13 @@ def _note(row: dict[str, str], text: str) -> None:
 
 def assemble(norm: Mapping, meta: Mapping[str, str], *, composite_of: Callable[[str], str | None],
              securities: Collection[str]) -> tuple[dict[str, str], list[dict[str, str]]]:
-    """One truth row (status provisional: ruling_pending, known_wrong residual, or blank) and its leg rows."""
+    """One truth row (status provisional: ruling_pending, known_wrong residual, or blank) and its leg rows. `meta`
+    gives the report's ticker, report, confidence and skeptic, and the delist_date of the ending it examined
+    (`examined_delist_date`, from the diagnosis's source row)."""
     row = dict.fromkeys(COLUMNS, "")
     row.update(case_id=norm["case_id"], sec_id=norm["sec_id"], shape=norm["shape"], ticker=meta.get("ticker", ""),
                report=meta.get("report", ""), confidence=meta.get("confidence", ""), skeptic=meta.get("skeptic", ""),
+               examined_delist_date=meta.get("examined_delist_date", ""),
                internal_last_trade_date=str(norm.get("internal_last_trade_date") or ""), note=norm.get("notes", ""))
     fields = norm.get("fields") or {}
     row.update({f: "" if fields.get(f) is None else str(fields.get(f, NOT_SCORED)) for f in SCORED})

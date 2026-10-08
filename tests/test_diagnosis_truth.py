@@ -48,7 +48,8 @@ def test_no_ending_wants_no_contract_row():
 def test_a_case_whose_security_is_not_in_the_run_is_one_sec_id_mismatch_for_any_shape():
     lib = _lib(securities=("BBGX",))
     for shape in dt.SHAPES:
-        case = dt.parse_rows([truth_row("CIK9-COMMON_2010-01-04", "CIK9-COMMON", shape=shape, exit_kind="merger")])[0]
+        case = dt.parse_rows([truth_row("CIK9-COMMON_2010-01-04", "CIK9-COMMON", shape=shape, exit_kind="merger",
+                                        examined_delist_date="2010-01-04")])[0]
         j = dt.judge_case(case, lib)
         assert [(m.field, m.truth, m.library) for m in j.mismatches] == [
             ("sec_id", "CIK9-COMMON", "(not in the run)")]
@@ -56,11 +57,23 @@ def test_a_case_whose_security_is_not_in_the_run_is_one_sec_id_mismatch_for_any_
 
 
 def test_ending_moved_refuses_the_old_ending_and_scores_the_later_one():
+    moved = {"shape": "ending_moved", "examined_delist_date": "2010-01-04"}
     old = _lib([contract_row("S1", exit_kind="exchange")], [ending("S1", "2010-01-04", "exchange_transfer")])
-    assert [m.field for m in dt.judge_case(_case(shape="ending_moved"), old).mismatches] == ["shape"]
+    assert [(m.field, m.library) for m in dt.judge_case(_case(**moved), old).mismatches] == [
+        ("shape", "ending 2010-01-04")]
     later = _lib([contract_row("S1", exit_kind="merger")], [ending("S1", "2014-04-08")])
-    assert dt.judge_case(_case(shape="ending_moved", exit_kind="merger"), later).ok
-    assert dt.judge_case(_case(shape="ending_moved"), _lib()).ok          # nothing scored, nothing required
+    assert dt.judge_case(_case(**moved, exit_kind="merger"), later).ok
+    assert dt.judge_case(_case(**moved), _lib()).ok          # nothing scored, nothing required
+
+
+def test_a_loop_added_ending_moved_case_refuses_the_ending_its_column_names():
+    """A loop-added case's id ends in its round (`_5a-r2`), not a date: the ending it refuses is its
+    examined_delist_date (the defect the id's tail hid: it compared the last ending with a blank)."""
+    case = dt.parse_rows([truth_row("S1_5a-r2", "S1", shape="ending_moved", examined_delist_date="2016-06-01")])[0]
+    still = _lib([contract_row("S1", exit_kind="exchange")], [ending("S1", "2016-06-01", "exchange_transfer")])
+    assert [(m.field, m.truth, m.library) for m in dt.judge_case(case, still).mismatches] == [
+        ("shape", "ending_moved", "ending 2016-06-01")]
+    assert dt.judge_case(case, _lib([contract_row("S1")], [ending("S1", "2020-08-10")])).ok
 
 
 def test_internal_last_trade_date_is_judged_on_delistings_csv():

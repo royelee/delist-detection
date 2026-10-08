@@ -21,10 +21,10 @@ from tests.lifecycle_tables import contract_row, sec
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def _case(case_id, mode, sec, fields, a, b, truth_case_id="", keys=None):
+def _case(case_id, mode, sec, fields, a, b, truth_case_id="", keys=None, delist_date=""):
     return {"case_id": case_id, "mode": mode, "sec_id": sec, "ticker": sec, "truth_case_id": truth_case_id,
             "keys": json.dumps(keys or [f"k-{case_id}-{f}" for f in fields]), "fields": json.dumps(fields),
-            "side_a": json.dumps(a), "side_b": json.dumps(b)}
+            "side_a": json.dumps(a), "side_b": json.dumps(b), "delist_date": delist_date}
 
 
 def _record(verdicts, confidence="verified", upheld=True, refuted=()):
@@ -68,6 +68,16 @@ def test_a_regression_of_a_security_the_run_no_longer_holds_adds_no_truth_row():
 def test_a_regression_of_a_renamed_placeholder_adds_no_truth_row():
     res = _apply([REG], {"Z_5a-r1": NEW_RIGHT}, base=BASE, new=NEW, run_sec_ids={"Z"}, renamed={"Z"})
     assert res.truth_rows == [] and [r["outcome"] for r in res.ledger_rows] == ["new_right"]
+
+
+def test_a_new_row_keeps_the_ending_its_case_examined():
+    case = _case("Z_5a-r1", "regression", "Z", ["last_trade_date"], ["2010-09-30"], ["2010-10-01"],
+                 delist_date="2010-10-04")
+    added = _apply([case], {"Z_5a-r1": NEW_RIGHT}, base=BASE, new=NEW)
+    pending = _apply([case], {"Z_5a-r1": _record([{"field": "last_trade_date", "right": "new", "value": "",
+                                                    "missed_filing": ""}], confidence="inferred")}, base=BASE, new=NEW)
+    assert [r.truth_rows[0]["examined_delist_date"] for r in (added, pending)] == ["2010-10-04", "2010-10-04"]
+    assert pending.truth_rows[0]["status"] == "ruling_pending"
 
 
 def test_an_old_value_enters_as_known_wrong_for_the_sub_plan():

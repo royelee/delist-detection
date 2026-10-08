@@ -10,7 +10,8 @@
   only the fields the diagnosing agent saw (`regression.BRIEF_COLUMNS`) and `*` elsewhere; a changed field keeps
   the base run's values for the scored fields it did not change (the regression guard presumes them right). The
   mismatches an `old` verdict makes for the new row get `truth_right` ledger rows, so the next round does not
-  diagnose them again. A record that is not verified, or that the skeptic refuted, adds the row as
+  diagnose them again. The row keeps the delist_date of the ending the case examined (`examined_delist_date`, the
+  case row's `delist_date`). A record that is not verified, or that the skeptic refuted, adds the row as
   `ruling_pending` with `fixed_by` `regression`; it counts as unexplained until the operator settles it.
 - A mismatched truth field changes only when the diagnosis is verified and upheld, finds the library's value right,
   and names a filing the earlier report missed or misread (`missed_filing`, an SEC accession number: anything else
@@ -79,16 +80,16 @@ def _ledger(key: str, kind: str, sec: str, label: str, round_no: int, outcome: s
     return dict(key=key, kind=kind, sec_id=sec, label=label, round=str(round_no), outcome=outcome, report=report)
 
 
-def _blank(case_id: str, sec: str, ticker: str) -> dict[str, str]:
+def _blank(case_id: str, sec: str, ticker: str, examined: str) -> dict[str, str]:
     row = dict.fromkeys(COLUMNS, "")
-    row.update(case_id=case_id, sec_id=sec, ticker=ticker, shape=ENDING)
+    row.update(case_id=case_id, sec_id=sec, ticker=ticker, shape=ENDING, examined_delist_date=examined)
     return row
 
 
 def _regression_row(case: Mapping[str, str], right: Mapping[str, str], fields: Sequence[str], old: Sequence[str],
                     new: Sequence[str], base_row: Mapping[str, str] | None,
                     new_row: Mapping[str, str] | None) -> dict[str, str]:
-    row = _blank(case["case_id"], case["sec_id"], case["ticker"])
+    row = _blank(case["case_id"], case["sec_id"], case["ticker"], case.get("delist_date", ""))
     whole = next((f for f in fields if f in WHOLE_ROW), None)
     if whole is not None:
         # The agent saw only the brief of the row, so only the brief is scored; the rest is not judged.
@@ -172,7 +173,7 @@ def apply_round(truth: TruthSet, cases: Sequence[Mapping[str, str]], records: Ma
                         truth.settle([_ledger(k, MISMATCH, sec, label, round_no, TRUTH_RIGHT, report)])
                         settled.add(k)
             else:
-                row = _blank(case["case_id"], sec, case["ticker"])
+                row = _blank(case["case_id"], sec, case["ticker"], case.get("delist_date", ""))
                 row.update({f: NOT_SCORED for f in SCORED}, status=RULING_PENDING, fixed_by=REGRESSION_PENDING,
                            confidence=rec.get("confidence", ""),
                            skeptic="upheld" if (rec.get("verification") or {}).get("upheld") else "refuted",
