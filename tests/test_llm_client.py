@@ -86,6 +86,31 @@ class _FallbackFakeOpenAI:
         return self.chat.completions
 
 
+class _NoTemperatureFakeCompletions:
+    """Raises on any request carrying a temperature, as Anthropic's
+    OpenAI-compatible endpoint does for its current Claude models."""
+
+    def __init__(self, response_content: str) -> None:
+        self._response_content = response_content
+        self.calls: list[dict[str, Any]] = []
+
+    def create(self, **kwargs: Any) -> _FakeCompletion:
+        self.calls.append(dict(kwargs))
+        if "temperature" in kwargs:
+            raise Exception("`temperature` is deprecated for this model.")
+        return _FakeCompletion(self._response_content)
+
+
+class _NoTemperatureFakeOpenAI:
+    def __init__(self, response_content: str) -> None:
+        completions = _NoTemperatureFakeCompletions(response_content)
+        self.chat = _FakeChat(completions)
+
+    @property
+    def _completions(self) -> _NoTemperatureFakeCompletions:
+        return self.chat.completions
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -166,6 +191,32 @@ def test_fallback_to_json_object_on_json_schema_rejection(monkeypatch):
     # A subsequent call used json_object
     json_object_calls = [c for c in calls if isinstance(c.get("response_format"), dict) and c["response_format"].get("type") == "json_object"]
     assert len(json_object_calls) >= 1
+
+
+@pytest.mark.parametrize("model", ["claude-sonnet-5-5", "anthropic/claude-opus-5-5"])
+def test_claude_model_gets_no_temperature(model):
+    """A Claude model's json_schema request carries no temperature, so the
+    first request succeeds instead of falling through to the schema-less one."""
+    fake = _NoTemperatureFakeOpenAI(json.dumps(_PAYLOAD))
+    client = OpenAIJsonClient(model=model, client=fake)
+
+    result = client.extract(_SYSTEM, _USER, _SCHEMA)
+
+    assert result == _PAYLOAD
+    calls = fake._completions.calls
+    assert len(calls) == 1
+    assert calls[0]["response_format"]["type"] == "json_schema"
+    assert "temperature" not in calls[0]
+
+
+def test_other_models_keep_temperature_zero():
+    """A non-Claude model still gets temperature=0 on the json_schema request."""
+    fake = _FakeOpenAI(json.dumps(_PAYLOAD))
+    client = OpenAIJsonClient(model="gpt-test", client=fake)
+
+    client.extract(_SYSTEM, _USER, _SCHEMA)
+
+    assert fake._completions.calls[0]["temperature"] == 0
 
 
 def test_model_resolution_raises_without_chat_model(monkeypatch):
