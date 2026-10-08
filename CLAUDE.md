@@ -28,7 +28,7 @@ editable install.
 
 ```bash
 pip install -e .                         # editable install (Python ≥3.10) — once per env
-pytest   # full suite (3318 passed, 46 xfailed: 8 known-wrong golden + the diagnosis truth set's 37 known_wrong cases, all residual, all strict, + the package root's eager imports, tests/test_import_closure.py, until the layout step; offline, no network)
+pytest   # full suite (3393 passed, 46 xfailed: 8 known-wrong golden + the diagnosis truth set's 37 known_wrong cases, all residual, all strict, + the package root's eager imports, tests/test_import_closure.py, until the layout step; offline, no network)
 pytest tests/test_payout_extractor.py -v  # one file
 pytest tests/test_payout_extractor.py::test_match_in_cash_family_altr -v   # one test
 
@@ -120,7 +120,11 @@ through its own request, `PriceAnswers.ending_values`), then the row builders (s
 `MergerValues.table_terms`, `payout_rows`, `contract_inputs` and `requests`) and `_triage`; the contract (stage 10g) takes sub-plan 5h's `Identity.renames` too: each placeholder whose eras
 now hold one FIGI line is a `contract/id_changes.csv` rename, across a class label), each with explicit
 inputs and outputs and the run-wide `_RunContext` (clients, run date, log,
-workers, SEC meter `manifest.StageMeter`). Each stage returns what it produces
+workers, SEC meter `manifest.StageMeter`). `Clients` is the seam every stage reads SEC, OpenFIGI, the fails files,
+MIDAS, the halt feed and the LLM through (architecture step 11): each adapter, production's (`default_clients`) or a
+test double, provides its client's required reads and states each optional capability (`capabilities.py`) offered
+or absent; stages ask `Clients.full_text_search` and `Clients.names_security`, never a `getattr` default, and `run`
+logs each absent capability once (`Clients.absent()`). Each stage returns what it produces
 (`_Successors` for stage 9, for instance) and `_run` combines the answers. Every change of an ending's kind or
 successor after the finder built it is a rewrite (`rewrites.py`), never a stage's own field edit. Helpers that
 belong to one kind of data live with it, not in `pipeline.py`:
@@ -141,7 +145,8 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   place both run.
 - `edgar.py` — throttled, on-disk-cached SEC client. `submissions()`,
   `recent_filings()`, `fetch_filing_text()`/`fetch_filing_raw()` (HTML-stripped
-  and raw text caches). Owns `EdgarBlocked`, `resolve_user_agent()`, and
+  and raw text caches), `company_tickers()`, and `full_text_search()`, the optional capability
+  `capabilities.FULL_TEXT_SEARCH`, which this adapter offers. Owns `EdgarBlocked`, `resolve_user_agent()`, and
   `sec_get()`: the one SEC request path (`sec_limiter.throttle`, User-Agent,
   `sec_stats` counting, `retry_request`, `EdgarBlocked` on 403/429) that
   `EdgarClient`, `sec_http.py` and `verify_against_web.py` share.
@@ -154,6 +159,18 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   `RequestStats`: requests, cache answers and latency per endpoint,
   `endpoint_of`, and degraded answers), and fill-only mode (`fill_only`/
   `filling_only`: a prefetch thread only fills missing cache entries).
+- `capabilities.py` — the clients' optional capabilities, declared once for the `pipeline.Clients` seam
+  (architecture step 11): EDGAR full-text search (`FULL_TEXT_SEARCH`, stated as `edgar.full_text_search`, a
+  `FullTextSearch`) and the LLM extractor's named call (`NAMED_LLM_CALL`, the flag `llm_extractor.names_security`:
+  `extract(record, security_name=)`, filled ahead on the worker threads). Each adapter states a capability offered
+  or absent (the attribute, or None, False for a flag); one that states nothing is refused where the statement is
+  read (`stated`, `offers`, `Undeclared`). `Clients.absent()` lists the absent ones; `run` logs each once, with what
+  the run goes without (`Capability.without`), before anything is read; run_manifest.json is unchanged. Every
+  other read a stage makes of a client is required of its adapters: EDGAR's `submissions`, `recent_filings`,
+  `fetch_filing_text`, `fetch_filing_raw` and `company_tickers`; the resolver's `flush` and `shadow`; the
+  classifier's `shadow` (`DelistClassifier.shadow`, the delisting warm-up's twin over a shadow issuer record); the
+  halt feed's `failed_days`. The resolver and the classifier state the issuer record they read through
+  (`issuers`, None for none of their own), from which `Clients.issuers` takes the run's.
 - `fatal.py` — `FATAL`: the exceptions that stop a run instead of becoming a
   review row (`EdgarBlocked`, `OpenFigiBlocked`, `OpenFigiUnavailable`).
 - `retries.py` — `retrying()`: the one retry loop (attempts, the wait between
@@ -234,7 +251,8 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
 - `ticker_resolver.py` — the memoized (ticker, date, observed name) → CIK lookup the identity stage asks
   (`identity.IssuerLookup`: `resolve`, `is_degraded`, `frequency_candidates` (its 8-K frequency tier's candidates
   and whether the search failed, for the second pass's rule B; its own state left as it was), `shadow`, `flush`);
-  it imports no `security_master`. 6 strategies in order of
+  it imports no `security_master`. It states the issuer record it reads through (`issuers`), which `pipeline.Clients`
+  takes as the run's and the classifier as its own. 6 strategies in order of
   precision (caller's `cik` pin → manual override → `company_tickers.json` →
   EFTS Form-25/15 → observation-name company search → 8-K frequency rank),
   each strict-validated. Every read of an issuer's EDGAR record (names over time, first filing, filings, forms)
@@ -413,8 +431,8 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   and the handoffs' continuation filing send. It imports nothing of the package.
 - `line_follow.py` — sub-plan 5a, stage 4b as one module (architecture step 7a): a security's line across a CUSIP or
   ticker change. Its interface is `follow_lines(identity, clients, *, as_of, log, meter) -> Lines`: the caller passes
-  the identity stage's answer and the run's clients (`LineSources`: the issuer record, EDGAR's full-text search,
-  OpenFIGI, the fails files) and gets the securities, era resolutions and CUSIPs after the follow, the folds
+  the identity stage's answer and the run's clients (`LineSources`: the issuer record, EDGAR's full-text search
+  as `Clients.full_text_search` states it, OpenFIGI, the fails files) and gets the securities, era resolutions and CUSIPs after the follow, the folds
   (`renames`), the line successors (`successors`, sec_id -> `LineSuccessor`) and the review items of stages 1 to 4b
   (a folded placeholder's moved to its FIGI line, its `no_figi` dropped). Behind it: the rounds, the holders, the
   8-K text sources (`_Reads.text_sources`, the filter before the `MAX_TEXTS` cap), the fold (`_fold`: a fold of a fold
@@ -731,9 +749,11 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   filing and returns full structured terms (`cash_per_share`, `stock_ratio`,
   `acquirer_ticker`) the regex extractor can't generalize over. Uses
   `llm_client.py` (`OpenAIJsonClient`: injectable, speaks the OpenAI
-  chat-completions API to OpenAI or Anthropic) and `filing_selection.py`
+  chat-completions API to OpenAI or Anthropic; every LLM client adapter states the model it calls, `model`, None for
+  none, the cache label's first choice, then `$CHAT_MODEL`) and `filing_selection.py`
   (filing-tier picker shared with `payout_extractor.py`); responses cached under
-  `cache/llm/`. Disabled by default — enabled by `--extract-merger-terms-llm`;
+  `cache/llm/`. `LLMMergerTermsExtractor` offers the named call (`names_security`,
+  `capabilities.NAMED_LLM_CALL`). Disabled by default — enabled by `--extract-merger-terms-llm`;
   `acquirer_price` and `last_trade_close` come from `ftd.py`, not a filing. `MergerTerms` answers for its own
   package, so the gate, the payout rule, the requests and stage 8 ask it instead of reading its fields: `ticker`
   (normalized; a spelled-out null, `NULL_TICKERS`, is cleaned when the answer is built, `clean_ticker`),
@@ -1412,7 +1432,13 @@ expiration is 0.0 in the table and no correction in the firm month, which leaves
 - **Tests are fully offline.** They use a `FakeEdgar` fixture (`tests/conftest.py`)
   and committed text fixtures (`tests/fixtures/`); every new client (OpenFIGI,
   FTD, MIDAS, Nasdaq halts) has its own fake or fixture-backed double; never
-  add network to the test path. Golden fixtures are regenerated out-of-band by
+  add network to the test path. A double is an adapter of the `pipeline.Clients` seam: it gives its client's
+  required reads (`capabilities`' docstring lists them) and states each optional capability, offered (backed by
+  its fixture) or absent, never silent (`capabilities.Undeclared` refuses that). `_FakeEdgar` and the real-case
+  harnesses' EDGAR doubles state full-text search absent (`full_text_search = None`: their fixtures recorded no
+  searches; a test that wants one sets it, and tests/test_line_follow_cases.py's double answers from its recorded
+  searches); every LLM extractor double states `names_security`, every LLM client double `model`, and every
+  resolver double passed to `Clients` its `issuers`. Golden fixtures are regenerated out-of-band by
   `scripts/regen_payout_fixtures.py`.
 - **Ticker recycling** (e.g. ALTR was Altera then Altair) is handled by
   `observations.split_eras` (a new era per security, on a name mismatch, a

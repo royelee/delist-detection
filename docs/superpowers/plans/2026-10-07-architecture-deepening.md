@@ -36,7 +36,7 @@ A deepening moves behaviour behind a smaller interface. It changes nothing the l
 | 8 | One run snapshot; one reading of a delistings row (review 9) | | done |
 | 9 | The truth set and the loop round as two modules (review 10) | a loop-added ending_moved case's examined day | done |
 | 10 | dlret decides the value rule once (small) | plan_stock's confidence | done |
-| 11 | The Clients seam declares capabilities (small) | | |
+| 11 | The Clients seam declares capabilities (small) | | done |
 | 12 | The fails index owns its loading (small) | | |
 | 13 | One leaf module for ticker and share-class spelling (small) | | |
 | 14 | The finder builds its own trading record (small) | | |
@@ -1628,3 +1628,121 @@ Decisions made in the step:
   - Alternative: make the firm month read the table's dlret, so a blank stays uncorrected.
   - Cost if wrong: a caller who expects the corrected panel to match delistings.csv finds 23 endings filled that the
     table leaves blank. Each is flagged `no_dlret` in the table.
+
+### Step 11: the clients' optional capabilities declared at the `Clients` seam
+
+- **The declarations are a leaf module, `capabilities.py`; `pipeline.Clients` reads them.** It holds the
+  `FullTextSearch` protocol, `Capability(client, attribute, without)`, the table `CAPABILITIES`, and `stated`,
+  `offers` and `Undeclared`. Stages ask the seam: `Clients.full_text_search`, `Clients.names_security`, and
+  `Clients.absent()` for the run's log. `line_follow.LineSources` gained `full_text_search`, and merger_value reads
+  `clients.names_security`.
+  - Why a leaf: line_follow and merger_value read the same statements and cannot import pipeline.
+  - Alternative: the declarations beside `Clients` in pipeline.
+  - Cost if wrong: one 81-line module.
+- **An adapter states a capability by its attribute: the capability, or None (False for a flag).** This is how
+  Python's own `__hash__ = None` states an object unhashable. An adapter that states nothing is refused where the
+  statement is read (`Undeclared`, a TypeError naming the client, the capability and how to state it).
+  - The statements are read when asked (properties), not checked in `__post_init__`. Tests set a field of the
+    `Clients` or `fake_edgar.full_text_search` after building it. `run` checks every statement at its start
+    (`absent()`), so a run never stops partway on one.
+  - Alternatives:
+    - `runtime_checkable` Protocols. Rejected: `isinstance` discovers, so a double that leaves a method out is
+      silently absent again.
+    - A capability set per adapter class. Rejected: a test that sets `full_text_search` on an instance would also
+      have to change the set.
+  - Cost if wrong: every double carries a one-line statement.
+- **Two capabilities are optional: EDGAR full-text search and the LLM extractor's named call. Every other probed
+  read is required of each adapter.** Required now:
+  - EDGAR's `submissions` (classifier's `_completes_as_acquirer`), `fetch_filing_raw` (own_shares' `read_form25`)
+    and `company_tickers` (own_shares' `target_issuer`);
+  - the resolver's `flush` (`_flush_memo`);
+  - the halt feed's `failed_days` (`Dating`);
+  - the classifier's `shadow()` (the delisting warm-up; below).
+  - Why: production's adapters always have them. The classifier and the finder already call `submissions` and
+    `fetch_filing_raw` unconditionally elsewhere, and `identify` already calls `flush`. A double answers each from
+    its fixture: nothing ("", {}, ()), which is what each `getattr` default gave. So no rule changes.
+  - Full-text search stays optional: the real-case fixtures recorded no searches. An absent search has a defined
+    meaning (the 8-K12B and continuation-filing searches, the other-registrant check and the ticker evidence are
+    not run); a present one that answers [] would be a made-up "searched, nothing found".
+  - Alternative: every probed read optional and declared. Rejected: production never lacks them, so each would be
+    a branch only doubles take, the friction the step removes.
+  - Cost if wrong: a new double must provide those reads. It fails loudly (AttributeError), never silently.
+- **The named LLM call stays optional only for one unit test, which fails with the capability: left for a ruling.**
+  - The test is `test_pipeline_prefetch.py::test_payout_extraction_is_warmed_on_worker_threads_and_the_llm_is_not`.
+    It asserts "paid calls are never warmed" (written at c43bdd0). Its `_Llm` took no `security_name`, so
+    `inspect.signature` turned off the warm pass that sub-plan 5f (4597a02) added for every extractor that takes
+    the name.
+  - Given the named call, its LLM is filled ahead on a worker thread and `set(llm) == {MainThread}` fails
+    (measured: `{'MainThread', 'sec-warm_0'}`). Production warms since 5f, and test_merger_value's
+    `test_the_llm_calls_are_filled_ahead_on_worker_threads_with_the_same_answers` tests that.
+  - Following the brief, the double keeps the old path, stated absent (`names_security = False`), with a comment.
+    The assertion and the library are unchanged.
+  - Ruling asked: drop `NAMED_LLM_CALL` and rewrite that assertion to production's behaviour (the LLM filled
+    ahead, the sequential pass last on the main thread). The library then has one call shape.
+  - Every other LLM double now takes the name and states `names_security = True`: test_pipeline's three,
+    test_merger_value's two, acquirer_gate's `CaseExtractor`.
+- **Absent capabilities are logged, not added to the manifest.** `run` logs one line per absent capability, before
+  anything is read: `capability absent: <client>.<attribute>: <what the run goes without>`.
+  - Why: the manifest records SEC traffic and versions. Production (the CLI's `default_clients`) never lacks a
+    capability, so only a library caller's own adapters can. The manifest's keys are unchanged for every run.
+  - Alternative: an `absent_capabilities` key, added only when one is absent.
+  - Cost if wrong: a caller who reads only the manifest misses it. Adding the key is one line.
+- **The resolver and the classifier state their issuer record (`issuers`, None for none of their own).**
+  - `Clients.__post_init__` reads the statements. `DelistClassifier.__init__` also reads the resolver's,
+    in place of `isinstance(resolver, TickerResolver)`.
+  - Production: the same record (TickerResolver's). The suite passes, and no `DelistClassifier` test's resolver
+    lacked the attribute.
+  - The resolver doubles passed to `Clients` state None: `CommittedLookup`, `_UnsavableResolver` and
+    `_OneAnswerResolver`.
+  - Alternative: leave the classifier's `isinstance`. Rejected: a resolver double holding a record would then be
+    shared by `Clients` but not by the classifier.
+- **`DelistClassifier.shadow()` replaces the warm-up's copy and its `issuers` probe.** It returns a copy reading
+  through `IssuerRecord.shadow()`, which is what `_warm_delisting_search` built inline. The worker-count
+  determinism tests pass.
+- **The LLM client states the model it calls (`model`, None for none).** `llm_client`'s interface says so.
+  - The extractor reads it only when its caller names no model: `model or llm.model`. So the replay's `NoLlm` and
+    a cache-only reader (`llm=None`) need no statement.
+  - LLM client doubles that name no model state None: `_FakeLlm`, `_BoomLlm`.
+  - A client that states nothing, with no model given, is refused (a new test).
+- **Plain fields, left alone.** These are not capability probes:
+  - `getattr(a, "rows", [])` (stage 9d): `AddedLineSuccessor` has rows and `AddedSuccessor` none;
+  - `getattr(pr, ...)` in `MergerValues.contract_inputs`: `MergerValue.raw` is optional, a None guard;
+  - `getattr(pr, "currency", "")` in the gate: a `PayoutResult` field;
+  - `getattr(self.form25, "notice_text", "")` in own_shares: a `Form25` or an `EdgarSubmission`;
+  - the response's `url` in edgar's error message;
+  - the thread-local reads.
+- **Harness doubles.**
+  - Real-case harnesses, full-text search: none gained it. Their fixtures recorded no searches, so their EDGAR
+    doubles state it absent: issuer_role (and last_trade, its subclass), distress, form25, acquirer_gate, identity,
+    golden (whose EFTS answers are the resolver's, not the client's search). `_FakeEdgar` in conftest states it
+    absent too. tests/test_line_follow_cases.py's double already answered from its recorded searches.
+  - Real-case harnesses, other changes: acquirer_gate's 71 cases now make production's named LLM call. The case
+    answers by sec_id, so every case gives the same result and passes. They run on one worker, so no warm pass.
+  - No real-case test failed, so none keeps an old path.
+  - Unit tests now on production's path, all passing:
+    - test_pipeline's three LLM-driven runs (the named call);
+    - test_pipeline_prefetch's `_Halts` (now asked `failed_days`, which answers none);
+    - test_classifier's four `_TextEdgar` tests (own_shares now reads the Form 25 raw; it is "", unreadable as
+      before);
+    - test_terms_5f's KING 6-K test (`_completes_as_acquirer` now reads submissions; {} gives the same names).
+  - The stage tests that handed a stage a `SimpleNamespace` as its clients now build `pipeline.Clients`:
+    acquirer_gate, test_merger_value, test_line_stage, test_line_follow_cases, two test_pipeline stage tests and
+    test_successor_terms' ROVI stage.
+- **Tests.**
+  - Added, 16 tests:
+    - tests/test_capabilities.py, 14 (13 functions): each capability offered and stated absent; a client left out;
+      an adapter stating nothing refused, with its message; the absent conditions logged once, first, by a run;
+      none logged when all are offered; a run refused before writing; `default_clients` offering every capability
+      and every required read; the issuer record taken from the statements; the classifier's shadow;
+    - test_merger_value, 1: a named call stated absent is asked without the name and never ahead;
+    - test_llm_merger_extractor, 1: an LLM client stating no model is refused.
+  - Deleted: none. No test checked only a `getattr` fallback. The handoff test's `assert not hasattr(fake_edgar,
+    "full_text_search")` now asserts the statement: `fake_edgar.full_text_search is None`.
+  - Suite: 3393 passed, 46 xfailed (step 10: 3377).
+- **The gate.** The replay is SAME against `accepted4_out` and refuses no request. Its log equals step 10's byte for
+  byte: production's adapters offer every capability, so no line is added.
+- **pipeline.py: 1604 lines to 1629.** The `Clients` docstring, its two properties and `absent()`. capabilities.py
+  is new, 81 lines.
+- **CONTEXT.md is unchanged.** A capability is design vocabulary (an adapter's statement at a seam), not a domain
+  term. CLAUDE.md gained the capabilities module, the `Clients` seam in the stage text, the edgar, ticker_resolver,
+  line_follow and LLM entries, and the doubles' contract in "Tests are fully offline".
