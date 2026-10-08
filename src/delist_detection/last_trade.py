@@ -9,7 +9,7 @@ No rule requires an issuer to state the day, so it is read from several places a
 - SEC MIDAS exchange volume and Nasdaq's code-D halts, the two confirmations. Each is an adapter of `Dating`: a real
   client (`midas.MidasClient`, `nasdaq_halts.NasdaqHaltClient`) or a fixture-backed double;
 - the ticker's tenure (rule 3): a read by ticker from the day another CUSIP took it is that security's
-  (`OwnTrading.taken`, `ticker_taken`);
+  (`trading_record.TradingRecord.taken`: the security's trading record, which the finder passes in);
 - when nothing states the day, the closing day the filings give (rule 4, `closing_day_read`) is the worked-out day,
   kept in delistings.csv and never published (decision 12).
 
@@ -31,8 +31,8 @@ and the contract read them without this module's clients.
 from __future__ import annotations
 
 import re
-from collections.abc import Collection, Iterable, Mapping, Sequence
-from dataclasses import dataclass, replace
+from collections.abc import Iterable, Mapping, Sequence
+from dataclasses import replace
 from datetime import date, datetime, timedelta
 from typing import TYPE_CHECKING
 
@@ -42,14 +42,13 @@ from .evidence import ITEM_MIN_SECTION, item_mention
 from .exit_kind import (CLOSING_DAY, CONFLICT, EIGHTK_301, EX99_NOTICE, LAST_SIGHTING, MIDAS, NASDAQ_HALT, NO_DAY,
                         UNCONFIRMED, UNSOURCED, LastTrade, effective_date)
 from .form25 import ISSUER_FORM25_FORMS, Form25, is_involuntary, notice_last_trade, parse_form25
-from .ftd import FtdIndex, FtdRow, settled_last
 from .midas import MIDAS_START
 from .nasdaq_halts import last_trade_from_halt
 from .trading_calendar import is_trading_day, next_trading_day, previous_trading_day
 
 if TYPE_CHECKING:
     from .edgar import EdgarSubmission
-    from .history import Sighting
+    from .trading_record import TradingRecord
 
 _MONTHS = ("January|February|March|April|May|June|July|August|September|October|November|December")
 _DATE = rf"((?:{_MONTHS})\s+\d{{1,2}},\s+\d{{4}})"
@@ -356,62 +355,6 @@ def decide_last_trade(*, notice: tuple[date | None, str], eightk: tuple[date | N
     return LastTrade(None, UNSOURCED, (NO_DAY,))
 
 
-# -- the security's own trading: what a dating reads of it ------------------------
-PLACEHOLDER_PRICE = 0.01        # a fails row priced at or below this carries no close (a new CUSIP's placeholder)
-
-
-def ticker_taken(fails: FtdIndex, ticker: str, own: Collection[str], lo: str, hi: str) -> str | None:
-    """Rule 3 (5d), the ticker's tenure: the first day another CUSIP traded under `ticker` within the ISO window
-    [lo, hi] once the security's own CUSIPs (`own`) stopped: the trading day before that CUSIP's first priced fails
-    row there (a row carries the close of the trading day before it), when that row comes on or after the own
-    CUSIPs' last row under the ticker -- else None. None too when the own CUSIPs have no row under the ticker in the
-    window (the tenure there is not known: Peabody's, Chesapeake's own new CUSIPs). A $0.01 placeholder row is no
-    trade (APA Corp's first row, 2021-03-02, beside Apache's own row carrying its March 1 close). CCEP's shares
-    under CCE from 2016-05-31, Johnson Controls plc's under JCI from 2016-09-06."""
-    rows = [r for r in fails.by_symbol(ticker, lo, hi) if r.price is not None and r.price > PLACEHOLDER_PRICE]
-    mine = [r.date for r in rows if r.cusip in own]
-    if not mine:
-        return None
-    other = next((r.date for r in rows if r.cusip not in own and r.date > mine[0] and r.date >= mine[-1]), None)
-    return previous_trading_day(date.fromisoformat(other)).isoformat() if other else None
-
-
-def last_row_trade_day(rows: Sequence[FtdRow]) -> str | None:
-    """The last day the fails rows show the security trading: the trading day before the row that opens the
-    last one-price run (`ftd.settled_last`, fails still settling after the last trade) of the CUSIP it held
-    last, ISO (AVGO 2018: the run opens 04-05, so 04-04); None without rows."""
-    if not rows:
-        return None
-    last = max(r.date for r in rows)
-    own = sorted((r for r in rows if r.cusip == next(x.cusip for x in rows if x.date == last)),
-                 key=lambda r: r.date)
-    return previous_trading_day(date.fromisoformat(settled_last(own).date)).isoformat()
-
-
-@dataclass(frozen=True)
-class OwnTrading:
-    """What a dating reads of the security's own trading: its sightings (`history.Sighting`, by day; the OTC symbol
-    it moved to included), its own CUSIPs, their trading fails rows, and the fails index another CUSIP's rows under
-    its ticker come from. The default (nothing known): no other ticker, no tenure bound, no rows."""
-    sightings: Sequence[Sighting] = ()
-    cusips: frozenset[str] = frozenset()
-    rows: Sequence[FtdRow] = ()
-    fails: FtdIndex | None = None
-
-    def tickers(self, lo: str, hi: str) -> list[str]:
-        """Every ticker the security was sighted under between two ISO days, in sighting order: the ticker on a Form
-        25's date can be the OTC symbol already (SAVE -> SAVEQ), which no exchange source knows."""
-        return list(dict.fromkeys(x.value for x in self.sightings if lo <= x.day <= hi))
-
-    def taken(self, ticker: str, lo: str, hi: str) -> str | None:
-        """Rule 3 over the security's own CUSIPs (`ticker_taken`); None without a fails index."""
-        return ticker_taken(self.fails, ticker, self.cusips, lo, hi) if self.fails is not None else None
-
-    def trades_until(self) -> str | None:
-        """The last day the security's own fails rows show it trading (`last_row_trade_day`)."""
-        return last_row_trade_day(self.rows)
-
-
 # -- dating an ending -------------------------------------------------------------
 MIDAS_BEFORE_DAYS, MIDAS_AFTER_DAYS, MIDAS_STILL_TRADING_DAYS = 75, 10, 5
 EIGHTK_BEFORE_DAYS, EIGHTK_AFTER_DAYS = 60, 5      # single-filing 8-K window (fallback path)
@@ -433,7 +376,7 @@ class Dating:
 
     # -- the entry points -----------------------------------------------------------
     def of_group(self, cik: int, filings: Sequence[EdgarSubmission], group: Sequence[tuple[EdgarSubmission, Form25]],
-                 winner: tuple[EdgarSubmission, Form25], *, ticker: str, trading: OwnTrading,
+                 winner: tuple[EdgarSubmission, Form25], *, ticker: str, trading: TradingRecord,
                  continued: bool) -> LastTrade:
         """The last trade of a delisting made of the Form 25 `group` of CIK `cik` (`filings`: its filing list), whose
         `winner` supplies the delisting's exchange and which the security went on after when `continued`.
@@ -448,7 +391,7 @@ class Dating:
         give within CLOSING_BEFORE_DAYS of its earliest filing day F (read from those filed up to
         CLOSING_TEXT_AFTER_DAYS after it), else F itself: source `closing_day`, flagged `UNCONFIRMED` (`worked_out`).
         The closing day never comes before the last day the security's own fails rows show it trading
-        (`OwnTrading.trades_until`) when that day is no later than F and the text did not date the closing before
+        (`TradingRecord.trades_until`) when that day is no later than F and the text did not date the closing before
         the open (AVGO 2018, Z 2015; Imclone 2008's 8:28 A.M. stands)."""
         lt = self._group_reading(cik, filings, group, ticker, trading)
         sub, f25 = winner
@@ -461,7 +404,7 @@ class Dating:
         return replace(got or LastTrade(filed, CLOSING_DAY, (UNCONFIRMED,)), halt_feed_failed=lt.halt_feed_failed)
 
     def of_fallback(self, cik: int, filings: Sequence[EdgarSubmission], *, ticker: str, ended_by: date,
-                    last_seen: date, trading: OwnTrading, merger: bool) -> LastTrade:
+                    last_seen: date, trading: TradingRecord, merger: bool) -> LastTrade:
         """The last trade of a delisting with no Form 25, dated by the filing `ended_by` (the fallback's dating
         filing) for a security last sighted on `last_seen`.
 
@@ -506,7 +449,8 @@ class Dating:
 
     # -- the readings ---------------------------------------------------------------
     def _group_reading(self, cik: int, filings: Sequence[EdgarSubmission],
-                       group: Sequence[tuple[EdgarSubmission, Form25]], ticker: str, trading: OwnTrading) -> LastTrade:
+                       group: Sequence[tuple[EdgarSubmission, Form25]], ticker: str,
+                       trading: TradingRecord) -> LastTrade:
         subs = [s for s, _ in group]
         earliest_filed = date.fromisoformat(min(s.filing_date for s in subs))
         latest_filed = date.fromisoformat(max(s.filing_date for s in subs))
@@ -529,7 +473,7 @@ class Dating:
         return self._decide(notice, eightk, confirmations)
 
     def _single_reading(self, cik: int, filings: Sequence[EdgarSubmission], ticker: str, filed: date,
-                        trading: OwnTrading, eightk_until: date) -> LastTrade:
+                        trading: TradingRecord, eightk_until: date) -> LastTrade:
         """No Form 25: the 3.01 8-Ks in [filed - EIGHTK_BEFORE_DAYS, `eightk_until` + EIGHTK_AFTER_DAYS], MIDAS
         around `filed`, the halt feed around the 8-K's day (else the trading day before `filed`)."""
         notice: tuple[date | None, str] = (None, "")
@@ -577,7 +521,7 @@ class Dating:
         return tuple(self.halts.failed_days())
 
     def _confirmations(self, tickers: list[str], filed: date, lo: date, hi: date, still_trading: date,
-                       guesses: list[date], trading: OwnTrading, texts: Sequence[date] = ()
+                       guesses: list[date], trading: TradingRecord, texts: Sequence[date] = ()
                        ) -> tuple[date | None, date | None, tuple[date, ...]]:
         """(MIDAS last day with exchange volume, Nasdaq code-D halt day, halt feed days that failed to read) over
         every ticker in `tickers`: MIDAS (asked when `filed` is in its coverage) takes the latest day in `[lo, hi]`
@@ -585,7 +529,7 @@ class Dating:
         text sources' `guesses`.
 
         Rule 3: a MIDAS or halt day after a text day (`texts`) is the security's own only before another CUSIP began
-        trading under that ticker (`OwnTrading.taken`): MIDAS is then read up to the day before (CCEP under CCE
+        trading under that ticker (`TradingRecord.taken`): MIDAS is then read up to the day before (CCEP under CCE
         2016, Johnson Controls plc under JCI 2016, JET's ADS under GRUB 2021), and such a halt is dropped. Without a
         text day that disagrees, nothing is bounded, and the bound is only tried when MIDAS's day under the ticker
         falls before the still-trading cut (a successor's first fails rows can lag its first day: Sinclair Inc 2023,
@@ -634,7 +578,7 @@ class Dating:
         return replace(lt, halt_feed_failed=failed) if failed else lt
 
     @staticmethod
-    def _tickers(trading: OwnTrading, ticker: str, lo: date, hi: date) -> list[str]:
+    def _tickers(trading: TradingRecord, ticker: str, lo: date, hi: date) -> list[str]:
         """`ticker` first, then every other ticker the security carried in `[lo, hi]`."""
         return list(dict.fromkeys([ticker, *trading.tickers(lo.isoformat(), hi.isoformat())]))
 

@@ -19,7 +19,7 @@ from delist_detection.payout_extractor import PayoutResult
 from delist_detection.acquirers import acquirer_cik
 from delist_detection.pipeline import Clients, Overrides, run
 from delist_detection.review_triage import merge_review_rows
-from delist_detection.history import own_last_seen, ticker_range_review
+from delist_detection.history import ticker_range_review
 from delist_detection.successors import SecurityStart, successor_from_8k12b, successor_in_run, successor_search_name
 from delist_detection.review_triage import Decision
 from delist_detection.security_master import Security
@@ -474,32 +474,6 @@ def test_an_openfigi_outage_stops_the_run_and_keeps_previous_outputs(fake_edgar,
     assert {p.name: p.read_text() for p in tmp_path.glob("*.csv")} == before
 
 
-def test_own_last_seen_ignores_an_otc_tail_under_another_symbol():
-    """A bankrupt XYZ's CUSIP keeps showing up in FTD data under the OTC symbol
-    XYZQ after the real delisting; last_seen must stay at the last sighting
-    under the security's own era ticker(s), not the later OTC-tail date."""
-    from delist_detection.observations import TickerEra
-    from delist_detection.history import Sighting
-
-    era = TickerEra("XYZ", "2020-01-01", "2020-06-15", [])
-    sec = Security("BBGXYZ", 555, "COMMON", "XYZ CORP", "Common Stock", True, "cusip", eras=[era])
-    sig = [
-        Sighting("2020-01-01", "XYZ", "observation"),
-        Sighting("2020-06-15", "XYZ", "observation"),
-        Sighting("2020-07-01", "XYZQ", "ftd"),        # post-delisting OTC tail, later than the real last sighting
-        Sighting("2020-09-01", "XYZQ", "ftd"),
-    ]
-    assert own_last_seen(sec, sig) == "2020-06-15"
-
-
-def test_own_last_seen_falls_back_to_era_end_with_no_own_ticker_sighting():
-    from delist_detection.observations import TickerEra
-
-    era = TickerEra("XYZ", "2020-01-01", "2020-06-15", [])
-    sec = Security("BBGXYZ", 555, "COMMON", "XYZ CORP", "Common Stock", True, "cusip", eras=[era])
-    assert own_last_seen(sec, []) == "2020-06-15"
-
-
 # --- successor_from_8k12b resolves the matching-share-class candidate ---
 
 def _alphabet_hit(a_ticker="GOOGL", c_ticker="GOOG", a_name="Alphabet Inc Class A", c_name="Alphabet Inc Class C",
@@ -682,98 +656,6 @@ def test_run_writes_an_open_successor_ticker_history_row(fake_edgar, tmp_path, m
     assert suc[0]["valid_from"] == "2018-12-15" and suc[0]["valid_to"] == ""
     d = read_table("delistings", table_path(tmp_path, "delistings"))[0]
     assert d["successor_sec_id"] == "BBGSUX00001"
-
-
-# --- run() builds the SecurityContext correctly ---
-
-def test_run_builds_last_seen_and_seen_after_from_the_right_sightings(fake_edgar, tmp_path, monkeypatch):
-    rows = list(_FtdClient.ROWS) + [FtdRow("2019-06-01", "00817Y108", "AETQ", "AETNA INC OTC PINK", 0.05)]
-    index, clients = _clients(fake_edgar, ftd_rows=rows)
-
-    contexts = {}
-
-    class _Recorder:
-        def __init__(self, edgar, classifier, *, midas=None, halts=None):
-            pass
-
-        def find(self, ctx):
-            contexts[ctx.security.sec_id] = ctx
-            return [], []
-
-    monkeypatch.setattr(pipeline, "DelistingFinder", _Recorder)
-    run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
-
-    ctx = contexts["BBG000FJLFX8"]
-    assert ctx.last_seen == "2018-11-29"           # last AET-labeled sighting, not the later OTC row
-    assert ctx.seen_after("2019-01-01") is True    # the OTC row is still visible to seen_after
-    assert ctx.seen_after("2019-12-31") is False
-    # ftd_seen_after: fails rows under the security's own tickers only (not the
-    # OTC tail, not observations)
-    assert ctx.ftd_seen_after("2018-11-28") is True
-    assert ctx.ftd_seen_after("2018-11-29") is False
-    assert ctx.ftd_seen_after("2017-01-01") is True
-    # the last trade module's view of its trading: every ticker sighted in the window, the OTC tail's included
-    assert ctx.trading.tickers("2018-06-01", "2019-12-31") == ["AET", "AETQ"]
-    assert ctx.trading.tickers("2019-01-01", "2019-12-31") == ["AETQ"]
-    assert ctx.trading.cusips == frozenset({"00817Y108"}) and ctx.trading.trades_until() is not None
-
-
-def test_run_builds_sibling_spans_for_every_security_of_the_issuer(fake_edgar, tmp_path, monkeypatch):
-    """Two share classes of one issuer must each see the other's sighting span
-    in SecurityContext.sibling_spans, keyed by sec_id. BBB's CUSIP also shows
-    an OTC tail under another symbol after its last own-ticker sighting: the
-    span's end must stay at that own-ticker sighting -- this fails under the
-    old `sib_sig[-1][0]`, which would pick up the later OTC-tail date."""
-    fake_edgar.company_map["AAA"] = {"cik_str": 9001, "ticker": "AAA", "title": "DUAL CLASS CO"}
-    fake_edgar.company_map["BBB"] = {"cik_str": 9001, "ticker": "BBB", "title": "DUAL CLASS CO"}
-    fake_edgar.submissions_by_cik[9001] = []
-
-    figi = _SuccessorFigi({
-        "AAA": _figi_answer("BBGAAA00001", "AAA", "DUAL CLASS CO"),
-        "BBB": _figi_answer("BBGBBB00001", "BBB", "DUAL CLASS CO"),
-        "BBGAAA00001": {"data": [{"figi": "BBGAAA00001", "compositeFIGI": "BBGAAA00001", "exchCode": "UN",
-                                  "ticker": "AAA", "name": "DUAL CLASS CO"}]},
-        "BBGBBB00001": {"data": [{"figi": "BBGBBB00001", "compositeFIGI": "BBGBBB00001", "exchCode": "UN",
-                                  "ticker": "BBB", "name": "DUAL CLASS CO"}]},
-    })
-
-    class _FtdOtcTail:
-        ROWS = [FtdRow("2020-08-01", "BBBCUSIP1", "BBBQ", "DUAL CLASS CO OTC", 0.01)]
-
-        def urls_for(self, lo, hi):
-            return ["mem"]
-
-        def rows(self, url, *, symbols=None, cusips=None):
-            for r in self.ROWS:
-                if (symbols and r.symbol in symbols) or (cusips and r.cusip in cusips):
-                    yield r
-
-    obs = [Observation("AAA", "2020-01-01", "DUAL CLASS CO", cik=9001),
-           Observation("AAA", "2020-06-01", "DUAL CLASS CO", cik=9001),
-           Observation("BBB", "2020-02-01", "DUAL CLASS CO", cusip="BBBCUSIP1", cik=9001),
-           Observation("BBB", "2020-07-01", "DUAL CLASS CO", cusip="BBBCUSIP1", cik=9001)]
-    index = ObservationIndex(obs)
-    resolver = TickerResolver(fake_edgar, observed_names=index.name_on, cik_pins=index.cik_pin_on)
-    clients = Clients(edgar=fake_edgar, resolver=resolver, classifier=DelistClassifier(fake_edgar, resolver),
-                      figi=figi, ftd_client=_FtdOtcTail())
-
-    contexts = {}
-
-    class _Recorder:
-        def __init__(self, edgar, classifier, *, midas=None, halts=None):
-            pass
-
-        def find(self, ctx):
-            contexts[ctx.security.sec_id] = ctx
-            return [], []
-
-    monkeypatch.setattr(pipeline, "DelistingFinder", _Recorder)
-    run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
-
-    aaa_ctx = contexts["BBGAAA00001"]
-    assert set(aaa_ctx.sibling_spans) == {"BBGAAA00001", "BBGBBB00001"}
-    assert aaa_ctx.sibling_spans["BBGAAA00001"] == ("2020-01-01", "2020-06-01")
-    assert aaa_ctx.sibling_spans["BBGBBB00001"] == ("2020-02-01", "2020-07-01")   # not the 2020-08-01 OTC tail
 
 
 # --- an open ticker_history row's exchange comes from EDGAR's own submissions ---
@@ -2910,59 +2792,6 @@ def test_openfigi_unavailable_in_stage_4b_stops_the_run_and_writes_nothing(fake_
     with pytest.raises(OpenFigiUnavailable):
         run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
     assert not list(tmp_path.glob("*.csv"))
-
-
-# --- sub-plan 5b, C: the finder's context reads trading from the security's own CUSIPs ---
-
-def _one_security_context(rows, cusip="74955W307"):
-    from delist_detection.ftd import FtdIndex
-    from delist_detection.history import ticker_sightings
-    from delist_detection.observations import TickerEra
-    s = Security("BBG_RHD", 30419, "COMMON", "R H DONNELLEY CORP", "Common Stock", True, "cusip",
-                 eras=[TickerEra("RHD", "2008-01-16", "2008-12-31", [Observation("RHD", "2008-01-16", "R H DONNELLEY"),
-                                                                    Observation("RHD", "2008-12-31", "R H DONNELLEY")])])
-    ftd = FtdIndex(rows)
-    cusips = {s.sec_id: [cusip]}
-    build = pipeline._context_builder({s.sec_id: s}, {s.sec_id: ticker_sightings(s, ftd, cusips[s.sec_id])},
-                                      ftd, cusips)
-    return build(s, False)
-
-
-def test_the_finders_context_reads_trading_from_the_securitys_own_cusip_under_any_symbol():
-    days = [f"2009-02-{d:02d}" for d in range(2, 28)]
-    rows = [FtdRow(d, "74955W307", "RHDC", "R H DONNELLEY CORP", 1.0 + (i % 2) / 10) for i, d in enumerate(days)]
-    ctx = _one_security_context(rows)
-    assert ctx.trades_after("2009-01-31") and not ctx.trades_after("2009-02-10")
-
-
-# --- sub-plan 5b, L: a fails row of the security's own CUSIP near a day ---
-
-def test_the_finders_context_sees_its_own_cusip_trading_in_the_30_days_up_to_a_day():
-    rows = [FtdRow("2016-10-03", "74955W307", "MWW", "MONSTER WORLDWIDE", 3.3),
-            FtdRow("2016-10-31", "74955W307", "MWW", "MONSTER WORLDWIDE", 3.4)]
-    ctx = _one_security_context(rows)
-    assert ctx.cusip_rows_near("2016-11-01") and ctx.cusip_rows_near("2016-10-31")
-    assert not ctx.cusip_rows_near("2016-12-01") and not ctx.cusip_rows_near("2016-10-02")
-
-
-def test_the_finders_late_reach_ignores_unassigned_and_pair_off_rows():
-    """Final review M6: `ZZZZ` and pair-off symbols are no trading (`ftd.is_trading_symbol`)."""
-    rows = [FtdRow("2016-10-31", "74955W307", "MWWZZZZ", "MONSTER WORLDWIDE", 3.4),
-            FtdRow("2016-10-31", "74955W307", "M104PAIROFF", "MONSTER WORLDWIDE", 3.4)]
-    assert not _one_security_context(rows).cusip_rows_near("2016-11-01")
-
-
-# --- sub-plan 5b, R2: the finder's view of a letterless class ---
-
-def test_a_letterless_security_takes_the_letter_of_its_own_cusips_fails_descriptions():
-    from delist_detection.ftd import FtdIndex
-    ftd = FtdIndex([FtdRow("2011-06-01", "867652109", "SPWRA", "SUNPOWER CORP CL A", 20.0),
-                    FtdRow("2011-06-01", "867652307", "SPWRB", "SUNPOWER CORP CL B", 19.0)])
-    plain = Security("CIK867773-COMMON", 867773, "COMMON", "SUNPOWER CORP", "", True, "placeholder")
-    lettered = Security("BBG_B", 867773, "CLASS B", "SUNPOWER CORP CL B", "", True, "cusip")
-    assert pipeline._security_ref(plain, ftd, ["867652109"]).letter_hint == "A"
-    assert pipeline._security_ref(lettered, ftd, ["867652307"]).letter_hint is None
-    assert pipeline._security_ref(plain, ftd, []).letter_hint is None
 
 
 # --- sub-plan 5b, R5: the one other CIK in force over a security's whole span ---

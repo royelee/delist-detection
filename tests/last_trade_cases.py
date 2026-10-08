@@ -1,7 +1,7 @@
 """Sub-plan 5d's real cases, replayed offline: tests/fixtures/last_trade/ (built once from the local caches by
 scripts/build_last_trade_fixtures.py, 5c's builder over 5d's cases) holds each case's security, the securities whose
 CUSIPs bound its ticker, the other securities of their issuers, their fails rows, and the EDGAR, MIDAS and Nasdaq-halt
-answers. `outcome(sec_id)` runs the run's own code over them: stage 5 (`pipeline._context_builder`,
+answers. `outcome(sec_id)` runs the run's own code over them: stage 5 (`delistings.SecurityContexts`,
 `delistings.DelistingFinder`, which dates each delisting through the last trade module, `last_trade.Dating`, over
 the fixture's MIDAS and halt adapters) and stage 7's fails close (`pipeline._last_trade_closes`). The doubles are
 5c's (tests/issuer_role_cases.py), reading this fixture."""
@@ -17,11 +17,10 @@ from pathlib import Path
 
 from delist_detection import pipeline
 from delist_detection.classifier import DelistClassifier
-from delist_detection.delistings import Delisting, DelistingFinder
+from delist_detection.delistings import Delisting, DelistingFinder, SecurityContexts
 from delist_detection.edgar import EdgarSubmission
 from delist_detection.figi_resolution import security_kind
 from delist_detection.ftd import FtdIndex, FtdRow
-from delist_detection.history import ticker_sightings
 from delist_detection.last_trade import UNCONFIRMED
 from delist_detection.manifest import StageMeter
 from delist_detection.midas import MidasClient
@@ -119,10 +118,9 @@ def find(sec_id: str, c: pipeline.Clients | None = None) -> tuple[list[Delisting
     """Stage 5: the finder's delistings and review items for the case."""
     c = c or clients()
     securities, cusips, ftd = world()
-    sightings = {sid: ticker_sightings(s, ftd, cusips[sid]) for sid, s in securities.items()}
-    build = pipeline._context_builder(securities, sightings, ftd, cusips)
+    contexts = SecurityContexts.observed(securities, cusips, ftd)
     finder = DelistingFinder(c.edgar, c.classifier, midas=c.midas, halts=c.halts)
-    return finder.find(build(securities[sec_id], DATA["securities"][sec_id]["listed"]))
+    return finder.find(contexts(securities[sec_id], DATA["securities"][sec_id]["listed"]))
 
 
 def outcome(sec_id: str) -> list[tuple]:

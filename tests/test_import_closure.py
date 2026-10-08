@@ -33,7 +33,7 @@ LEAVES = ("exit_kind", "identifiers")
 # The data clients read the ticker spelling only, never the observations (step 13)
 DATA_CLIENTS = ("ftd", "midas", "nasdaq_halts")
 CLASSIFICATION = ("end_of_era", "handoffs", "delistings", "continuation_evidence", "classifier", "rewrites",
-                  "last_trade", "payout_gate", "review_triage", "history")
+                  "last_trade", "payout_gate", "review_triage", "history", "trading_record")
 # A module that cannot get there yet, with the step whose move it waits on. None today: the package root is the one
 # exception, and every closure below leaves it out (module docstring).
 KNOWN_EXCEPTIONS: dict[str, str] = {}

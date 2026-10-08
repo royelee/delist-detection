@@ -1,6 +1,6 @@
 """Build tests/fixtures/form25_reach/ from the local caches, once (sub-plan 5b): the real cases whose Form 25
 search, matching and ownership tests/test_form25_reach_cases.py replays offline through the finder
-(`delistings.DelistingFinder`) and the pipeline's own context builder (`pipeline._context_builder`).
+(`delistings.DelistingFinder`) over the contexts it builds itself (`delistings.SecurityContexts`).
 
   PYTHONPATH=src python scripts/build_form25_fixtures.py          # -> tests/fixtures/form25_reach/
 

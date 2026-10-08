@@ -4,25 +4,34 @@ A delisting is a Form 25 that removed the security's class from its exchange
 and left it on no exchange or on a new one. Securities with no Form 25 fall back
 to the classifier's no-Form-25 paths; a security that ended with no evidence at
 all is reported for review instead of being dropped.
+
+The finder's interface (architecture step 14): `DelistingFinder.find(SecurityContext)`, where the context is data
+only -- the security's trading record (`trading_record.TradingRecord`), its issuer's securities' records, whether it
+is listed today, its other CIK in force and its issuer's lookup tier -- and `SecurityContexts`, the constructor that
+builds each security's record once over its sightings, its own CUSIPs and the fails index. The finder works out what
+it reads of the security's trading from the record itself.
 """
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections import defaultdict
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date, timedelta
+from functools import cached_property
 
 from .classifier import DelistClassifier, DelistRecord
 from .crsp_codes import CrspBucket
 from .edgar import EdgarSubmission
 from .evidence import edgar_names
 from .exit_kind import effective_date, rests_on_continued_filings
+from .ftd import FtdIndex
 from .form25 import (
     ISSUER_FORM25_FORMS, REGIONAL_EXCHANGES, Form25, SecurityRef, class_kind, class_letters, is_involuntary,
     list_form25, match_securities, other_class, parse_form25, tied_securities,
 )
 from .history import Ending
 from .identifiers import class_letter
-from .last_trade import Dating, LastTrade, OwnTrading, anchor_day
+from .last_trade import Dating, LastTrade, anchor_day
 from .listing_status import exchanges_around, issuer_exchange, withdrawal_kind
 from .own_shares import OwnShares
 from .review_triage import FilingRef, ReviewItem
@@ -30,6 +39,7 @@ from .rewrites import SUCCESSOR_UNKNOWN, Rewrite, Rule, continuation, security_g
 from .security_master import Security
 from .store import DelistingKey
 from .trading_calendar import add_trading_days
+from .trading_record import TradingRecord
 
 FORM25_LOOKBACK_DAYS = 30           # how far before the security's first sighting to look for a Form 25
 SAME_EVENT_DAYS = 30                # Form 25s of this security this close together are one delisting
@@ -107,50 +117,88 @@ class Delisting:
         return Ending(self.key, self.last_trade, self.record.bucket, self.record.successor_sec_id, self.exchange)
 
 
-@dataclass
+def _ref(record: TradingRecord) -> SecurityRef:
+    """The finder's view of a security (`form25.SecurityRef`): its class, kind and name, and for a class with no
+    letter the one its own CUSIPs' fails descriptions name (`TradingRecord.letter_hint`, R2)."""
+    s = record.security
+    return SecurityRef(s.sec_id, s.share_class, s.kind, s.name, record.letter_hint)
+
+
+@dataclass(frozen=True)
 class SecurityContext:
-    security: Security
-    siblings: list[SecurityRef]
-    ticker_on: Callable[[str], str | None]
-    last_seen: str
-    seen_after: Callable[[str], bool]
-    listed_today: bool | None
-    expected_name: str | None
-    # sec_id -> (first sighting, last sighting), ISO. A sibling absent here is
-    # treated as alive at every filing date (the caller doesn't know its span).
-    sibling_spans: dict[str, tuple[str, str]] = field(default_factory=dict)
-    # The resolver tier that found this security's CIK (e.g. "cik_map",
-    # "manual"); recorded on every DelistRecord this security's delistings
-    # produce, in place of the classify_event default "security_master".
-    resolution_source: str = "security_master"
-    # True when an SEC fails-to-deliver row under one of the security's own
-    # tickers is dated after the given ISO day: evidence of trading that an
-    # observation alone does not give (a stale snapshot can list a security
-    # long after it was acquired). Unknown (the default) counts as none.
-    ftd_seen_after: Callable[[str], bool] = lambda day: False
-    # What the last trade module reads of the security's own trading (`last_trade.OwnTrading`): every ticker it
-    # was sighted under by day (the OTC symbol it moved to included: SAVE -> SAVEQ), its own CUSIPs and their
-    # trading fails rows (rule 4's floor, `OwnTrading.trades_until`), and the fails index the ticker's tenure is read
-    # from (rule 3, `OwnTrading.taken`: CCEP under CCE 2016). Unknown (the default): no other ticker, no bound.
-    trading: OwnTrading = field(default_factory=OwnTrading)
-    # The first fails row of each of the security's own CUSIPs after its first, ISO: a CUSIP switch on its own
-    # line (a reverse split, a redomicile that kept the composite). A Form 25 filed at one while the security
-    # trades on removed the old CUSIP, not the security (QGEN 2026, Acxiom/LiveRamp 2018).
-    cusip_switches: tuple[str, ...] = ()
-    # True when the fails rows of the security's own CUSIPs, under any symbol it trades under, show it still
-    # trading after the given ISO day (`ftd.trades_after`). With `listed_today`, the one sign that a security went
-    # on after a Form 25 (`DelistingFinder._continued`): an observation can be a stale snapshot (XMSR 2008, SOV
-    # 2009). Unknown (the default) counts as no.
-    trades_after: Callable[[str], bool] = lambda day: False
-    # True when the security's own CUSIPs have a trading fails row in the LATE_ROW_DAYS up to the given ISO day:
-    # a Form 25 filed long after the security's last sighting still reaches it (Monster Worldwide 2016, L).
-    cusip_rows_near: Callable[[str], bool] = lambda day: False
-    # The one CIK other than `security.issuer_cik` that was the issuer in force over the security's whole span
-    # (`pipeline._other_issuers`), whose Form 25s are read too (R5: the old Spectrum Brands, the old Match Group).
+    """What the finder reads of one security, all data: its trading record (`trading_record.TradingRecord`: its
+    sightings, own CUSIPs and the fails index, from which the finder works out the ticker on a day, the last
+    sighting, trading after a day, rows near a Form 25, its CUSIP switches, the ticker's tenure and the rows' last
+    trading day); the records of the securities of its issuer the search holds (`siblings`; itself among them, added
+    when absent), among which a Form 25 is matched while each is alive (`spans`); whether it is listed today
+    (None: unknown); the one CIK other than its issuer's that was its issuer in force over its whole span
+    (`other_cik`, R5: stage 4c, `pipeline._other_issuers`), whose Form 25s are read too (the old Spectrum Brands,
+    the old Match Group); and the lookup tier that found its issuer (`resolution_source`, recorded on every
+    DelistRecord of its delistings). Built by `SecurityContexts` (stage 5, the real-case harnesses) or directly
+    from a record (stage 9d's added successors)."""
+    record: TradingRecord
+    siblings: tuple[TradingRecord, ...] = ()
+    listed_today: bool | None = None
     other_cik: int | None = None
-    # Whether the security has a CUSIP of its own (fails rows that could show it stop); None: unknown. A security
-    # with none gets no continued-filings ending dated by its last sighting alone (sub-plan 5h, `_fallback`).
-    has_cusips: bool | None = None
+    resolution_source: str = "security_master"
+
+    @property
+    def security(self) -> Security:
+        return self.record.security
+
+    @cached_property
+    def _members(self) -> tuple[TradingRecord, ...]:
+        """The siblings, the security's own record among them."""
+        own = self.security.sec_id
+        return self.siblings if any(r.security.sec_id == own for r in self.siblings) else (self.record, *self.siblings)
+
+    @cached_property
+    def refs(self) -> list[SecurityRef]:
+        """The finder's view of each sibling (`_ref`), in the siblings' order."""
+        return [self.own_ref if r.security.sec_id == self.security.sec_id else _ref(r) for r in self._members]
+
+    @cached_property
+    def own_ref(self) -> SecurityRef:
+        return _ref(self.record)
+
+    @cached_property
+    def spans(self) -> dict[str, tuple[str, str]]:
+        """sec_id -> (first sighting, last own-ticker sighting) of each sibling with sightings
+        (`TradingRecord.span`). A sibling absent here is treated as alive at every filing date."""
+        return {r.security.sec_id: r.span for r in self._members if r.span is not None}
+
+
+class SecurityContexts:
+    """The finder's contexts over one search's securities: each security's trading record, and as its siblings the
+    records of every security of its issuer (by issuer CIK, in the records' order; a security with no CIK stands
+    alone). Asked for a security and today's listing answer (`contexts(security, listed)`), it gives that security's
+    `SecurityContext`, with its other CIK in force (`other_ciks`, by sec_id) and its issuer's lookup tier
+    (`resolution_source(security)`; none: "security_master"). Stage 5's warm pass and its sequential pass ask the
+    one object, so each security is searched over the same context on either."""
+
+    def __init__(self, records: Iterable[TradingRecord], *, other_ciks: Mapping[str, int] = {},
+                 resolution_source: Callable[[Security], str] | None = None) -> None:
+        self.records: dict[str, TradingRecord] = {r.security.sec_id: r for r in records}
+        of_issuer: dict[int, list[TradingRecord]] = defaultdict(list)
+        for r in self.records.values():
+            if r.security.issuer_cik is not None:
+                of_issuer[r.security.issuer_cik].append(r)
+        self._siblings = {cik: tuple(rs) for cik, rs in of_issuer.items()}
+        self._other_ciks = dict(other_ciks)
+        self._resolution_source = resolution_source
+
+    @classmethod
+    def observed(cls, securities: Mapping[str, Security], cusips: Mapping[str, Sequence[str]], fails: FtdIndex,
+                 **kw) -> SecurityContexts:
+        """The contexts over a run's securities (`TradingRecord.observed`: each over its own CUSIPs, `cusips` by
+        sec_id, and the fails index); `kw`: `other_ciks`, `resolution_source`."""
+        return cls((TradingRecord.observed(s, fails, cusips.get(sid, ())) for sid, s in securities.items()), **kw)
+
+    def __call__(self, security: Security, listed_today: bool | None) -> SecurityContext:
+        record = self.records[security.sec_id]
+        source = self._resolution_source(security) if self._resolution_source is not None else "security_master"
+        return SecurityContext(record, self._siblings.get(security.issuer_cik, (record,)), listed_today,
+                               self._other_ciks.get(security.sec_id), source)
 
 
 @dataclass
@@ -176,7 +224,7 @@ class DelistingFinder:
 
     # -- sibling / class matching -----------------------------------------
     def _alive_at(self, ctx: SecurityContext, sec_id: str, filing_date: str) -> bool:
-        span = ctx.sibling_spans.get(sec_id)
+        span = ctx.spans.get(sec_id)
         if span is None:
             return True
         first, last = span
@@ -186,12 +234,14 @@ class DelistingFinder:
 
     @staticmethod
     def _at_own_switch(ctx: SecurityContext, filing_date: str) -> bool:
-        """Whether one of the security's own CUSIP switches (`SecurityContext.cusip_switches`) lies within
-        `OWN_SWITCH_DAYS` trading days of a Form 25's filing date."""
+        """Whether one of the security's own CUSIP switches (`TradingRecord.cusip_switches`: a reverse split, a
+        redomicile that kept the composite) lies within `OWN_SWITCH_DAYS` trading days of a Form 25's filing date: a
+        Form 25 filed there while the security trades on removed the old CUSIP, not the security (QGEN 2026,
+        Acxiom/LiveRamp 2018)."""
         day = date.fromisoformat(filing_date)
         lo = add_trading_days(day, -OWN_SWITCH_DAYS).isoformat()
         hi = add_trading_days(day, OWN_SWITCH_DAYS).isoformat()
-        return any(lo <= d <= hi for d in ctx.cusip_switches)
+        return any(lo <= d <= hi for d in ctx.record.cusip_switches)
 
     def _class_conflict(self, f25: Form25, ref: SecurityRef) -> bool:
         """True when the Form 25 names class letters and the matched sibling's
@@ -256,7 +306,7 @@ class DelistingFinder:
         """Whether the security went on trading after this Form 25: it is listed today; or the issuer moved the
         class to another exchange (`_eight_a`, R7); or the Form 25 is not an exchange's removal under rule
         12d2-2(b) (`form25.is_involuntary`) and the security's own CUSIPs trade on after its effective date plus
-        SEEN_AFTER_DAYS (`SecurityContext.trades_after`). An observation alone never continues a security: a
+        SEEN_AFTER_DAYS (`TradingRecord.trades_after`). An observation alone never continues a security: a
         stale snapshot lists one long after it was acquired (XMSR 2008, SOV 2009), and the OTC tail after a
         removal under (b) is not the listing going on (R.H. Donnelley, Idearc, LSC Communications)."""
         if ctx.listed_today:
@@ -266,7 +316,7 @@ class DelistingFinder:
         if is_involuntary(f25):
             return False
         after = date.fromisoformat(effective_date(sub.filing_date)) + timedelta(days=SEEN_AFTER_DAYS)
-        return ctx.trades_after(after.isoformat())
+        return ctx.record.trades_after(after.isoformat())
 
     def _not_this_removal(self, ctx: SecurityContext, filer: int, filings: list[EdgarSubmission],
                           sub: EdgarSubmission, f25: Form25) -> bool:
@@ -281,12 +331,6 @@ class DelistingFinder:
         return after is not None and f25.exchange in after   # another class left, not this one
 
     # -- one Form 25 against the security --------------------------------------
-    @staticmethod
-    def _own_ref(ctx: SecurityContext) -> SecurityRef:
-        sec = ctx.security
-        return next((r for r in ctx.siblings if r.sec_id == sec.sec_id),
-                    SecurityRef(sec.sec_id, sec.share_class, sec.kind, sec.name))
-
     def _issuer_names(self, cik: int) -> tuple[str, ...]:
         """The issuer's EDGAR names (current and former), for R3's group words. A failed submissions read gives (): R3 then
         refuses less, since no issuer words are removed from a Form 25's group words."""
@@ -320,7 +364,7 @@ class DelistingFinder:
                 self._review(scan.review, scan.seen, sec, ticker, filer, "form25_unclassified",
                              f"{sub.form} {sub.accession} ({f25.class_text!r}) has no recognized class", sub)
             return None
-        if other_class(f25, self._own_ref(ctx), issuer_names):
+        if other_class(f25, ctx.own_ref, issuer_names):
             return None
         matched, why = match_securities(f25, refs)
         if not matched:
@@ -340,7 +384,7 @@ class DelistingFinder:
         ref = next((r for r in refs if r.sec_id == sec.sec_id), None)
         if ref is not None and self._class_conflict(f25, ref):
             return None
-        if by_elimination and self._names_other_letter(f25, self._own_ref(ctx)):
+        if by_elimination and self._names_other_letter(f25, ctx.own_ref):
             return None
         return f25
 
@@ -353,35 +397,46 @@ class DelistingFinder:
         mine = {class_letter(own.share_class) or own.letter_hint} - {None}
         return bool(letters and not letters & mine)
 
+    def _judge_early(self, ctx: SecurityContext, scan: _Scan, cik: int, sub: EdgarSubmission,
+                     issuer_names: tuple[str, ...]) -> Form25 | None:
+        """A Form 25 filed before the main scan's floor, judged by the main scan's own rules (`_judge`), quietly,
+        against the security and the siblings alive on its filing date: the security itself counts as alive (its
+        first sighting is what put the filing before the floor), and when it stands alone a Form 25 that names a
+        class letter must name its own (`by_elimination`). The early window's filings and the fallback's early group
+        (`_early_group`) are judged by this one judgement."""
+        own = ctx.own_ref
+        refs = [own] + [r for r in ctx.refs
+                        if r.sec_id != own.sec_id and self._alive_at(ctx, r.sec_id, sub.filing_date)]
+        return self._judge(ctx, scan, cik, sub, refs, issuer_names, quiet=True, by_elimination=len(refs) == 1)
+
     # -- main ------------------------------------------------------------
     def find(self, ctx: SecurityContext, *, fallback: bool = True) -> tuple[list[Delisting], list[ReviewItem]]:
         """The security's delistings and review items. `fallback=False` (pipeline stage 9d, a successor the run
         added): Form 25 matches only, no fallback ending and no review item for a security without one."""
-        sec = ctx.security
-        if not sec.eras:
+        sec, rec = ctx.security, ctx.record
+        if not rec.known_from:          # no day the run knows it by (no era): nothing to search around
             return [], []
         cik = sec.issuer_cik
-        ticker_last = sec.eras[-1].ticker
+        ticker_last = rec.ticker
         if sec.line_tickers:            # the line went on under a ticker the line follow found: its latest one
-            latest = ctx.ticker_on(ctx.last_seen)
-            ticker_last = latest if latest in sec.own_tickers() else ticker_last
+            latest = rec.ticker_on(rec.last_seen)
+            ticker_last = latest if latest in rec.own_tickers else ticker_last
         if cik is None:
             if ctx.listed_today is False:
                 return [], [ReviewItem(sec.sec_id, ticker_last, None, "ended_without_delisting",
-                                       "no issuer CIK to search for a Form 25", last_seen=ctx.last_seen)]
+                                       "no issuer CIK to search for a Form 25", last_seen=rec.last_seen)]
             if ctx.listed_today is None:
                 return [], [ReviewItem(sec.sec_id, ticker_last, None, "listing_status_unknown",
-                                       "no issuer CIK and listing status unknown", last_seen=ctx.last_seen)]
+                                       "no issuer CIK and listing status unknown", last_seen=rec.last_seen)]
             return [], []
 
         filings = self.edgar.recent_filings(cik)
-        first_seen = min(e.first for e in sec.eras)
-        floor = (date.fromisoformat(first_seen) - timedelta(days=FORM25_LOOKBACK_DAYS)).isoformat()
+        floor = (date.fromisoformat(rec.known_from) - timedelta(days=FORM25_LOOKBACK_DAYS)).isoformat()
         # E: a security gone today also judges the Form 25s of the year before the floor, as when a stale
         # snapshot first listed it months after its merger (TXU, Station Casinos, Biomet 2007)
         early_floor = (date.fromisoformat(floor) - timedelta(days=EARLY_REACH_DAYS)).isoformat() \
             if ctx.listed_today is False else floor
-        own = self._own_ref(ctx)
+        own = ctx.own_ref
         scan = _Scan(ticker_last)
         names = self._issuer_names(cik)
         early: list[tuple[EdgarSubmission, Form25]] = []
@@ -392,13 +447,11 @@ class DelistingFinder:
                 if sub.filing_date < early_floor:
                     scan.older.append(sub)      # before the early window: only the fallback may take one
                     continue
-                refs = [own] + [r for r in ctx.siblings
-                                if r.sec_id != sec.sec_id and self._alive_at(ctx, r.sec_id, sub.filing_date)]
-                f25 = self._judge(ctx, scan, cik, sub, refs, names, quiet=True, by_elimination=len(refs) == 1)
+                f25 = self._judge_early(ctx, scan, cik, sub, names)
                 after = date.fromisoformat(effective_date(sub.filing_date)) + timedelta(days=SEEN_AFTER_DAYS)
                 if f25 is not None and self._eight_a(sub, f25, filings) is not None:
                     pass                            # the issuer moved the class (R7), no ending
-                elif f25 is not None and not ctx.trades_after(after.isoformat()):
+                elif f25 is not None and not rec.trades_after(after.isoformat()):
                     early.append((sub, f25))
                 elif f25 is None and sub in scan.unreadable:
                     scan.older.append(sub)          # never read: the fallback may still take it
@@ -411,10 +464,10 @@ class DelistingFinder:
             # still counts when its own CUSIP traded within LATE_ROW_DAYS before
             # the filing (a line that went on under a ticker it was never seen
             # under: Monster Worldwide's NYSE MWW, 2016).
-            alive = [r for r in ctx.siblings if self._alive_at(ctx, r.sec_id, sub.filing_date)]
+            alive = [r for r in ctx.refs if self._alive_at(ctx, r.sec_id, sub.filing_date)]
             late = False
             if not alive:
-                if not ctx.cusip_rows_near(sub.filing_date):
+                if not rec.traded_within(sub.filing_date, LATE_ROW_DAYS):
                     continue
                 alive = [own]
                 late = True
@@ -437,7 +490,7 @@ class DelistingFinder:
             earliest_sub, _ = min(group, key=lambda item: item[0].filing_date)
             if last_definitive is not None:
                 gap = (date.fromisoformat(earliest_sub.filing_date) - date.fromisoformat(last_definitive.delist_date)).days
-                if gap > IGNORE_AFTER_DEFINITIVE_DAYS and not ctx.seen_after(earliest_sub.filing_date):
+                if gap > IGNORE_AFTER_DEFINITIVE_DAYS and not rec.seen_after(earliest_sub.filing_date):
                     continue        # a security truly gone can't have a later Form 25 of its own
             eff = effective_date(earliest_sub.filing_date)
             continued = any(self._continued(ctx, s, f, filer_filings) for s, f in group)     # R7: any member's move
@@ -471,7 +524,7 @@ class DelistingFinder:
             return delistings, review
         if last_definitive is None:
             if ctx.listed_today is False:
-                fb = self._fallback(ctx, cik, filings, ticker_last, scan.older)
+                fb = self._fallback(ctx, cik, filings, ticker_last, scan.older, names)
                 if fb is not None:
                     delistings.append(fb)
                 else:
@@ -481,11 +534,11 @@ class DelistingFinder:
                     why = ("no Form 25 matched it (see its form25_* rows) and no other delisting filing found"
                            if scan.had_unmatched else "no Form 25 or delisting filing found")
                     review.append(ReviewItem(sec.sec_id, ticker_last, cik, "ended_without_delisting",
-                                             f"not listed today and {why}", last_seen=ctx.last_seen))
+                                             f"not listed today and {why}", last_seen=rec.last_seen))
             elif ctx.listed_today is None:
                 review.append(ReviewItem(sec.sec_id, ticker_last, cik, "listing_status_unknown",
                                          "listing status unknown and no delisting found",
-                                         last_seen=ctx.last_seen))
+                                         last_seen=rec.last_seen))
         return delistings, review
 
     def _other_issuer_groups(self, ctx: SecurityContext, scan: _Scan, floor: str, own: SecurityRef
@@ -511,30 +564,31 @@ class DelistingFinder:
     def _build_delisting(self, ctx: SecurityContext, cik: int, filings: list[EdgarSubmission],
                      group: list[tuple[EdgarSubmission, Form25]], eff: str, continued: bool,
                      extra_flags: tuple[str, ...] = ()) -> Delisting:
-        sec = ctx.security
+        sec, rec = ctx.security, ctx.record
         winner_sub, winner_f25 = min(group, key=self._exchange_rank)
-        filing_ticker = ctx.ticker_on(winner_sub.filing_date) or sec.eras[-1].ticker
+        filing_ticker = rec.ticker_on(winner_sub.filing_date) or rec.ticker
         lt = self.dating.of_group(cik, filings, group, (winner_sub, winner_f25), ticker=filing_ticker,
-                                  trading=ctx.trading, continued=continued)
+                                  trading=rec, continued=continued)
         # spec 7.4: the delisting's ticker is the ticker on the last trade
         # date, not on the Form 25 filing date -- only fall back to the
         # filing-date ticker when the last trade date itself is unknown. A worked-out closing day (rule 4) is not
         # one: the classification keeps the filing day as its anchor.
         day = None if lt.worked_out else lt.day
-        ticker = (day and ctx.ticker_on(day.isoformat())) or filing_ticker
+        ticker = (day and rec.ticker_on(day.isoformat())) or filing_ticker
         anchor = day.isoformat() if day else winner_sub.filing_date
         # the ending's own-share reading, at its anchor (a worked-out last trade included: `Delisting.anchor`)
         own = self.classifier.reader.ending(cik, share_class=sec.share_class, name=sec.name,
                                             day=anchor_day(lt, eff, filed=winner_sub.filing_date), form25=winner_f25)
-        rec = self.classifier.classify_event(ticker=ticker, cik=cik, anchor_date=anchor, name=sec.name,
-                                             expected_name=ctx.expected_name, kind=sec.kind, form25=winner_sub,
-                                             resolution_source=ctx.resolution_source,
-                                             trading_after=continued, own_shares=own)
+        record = self.classifier.classify_event(ticker=ticker, cik=cik, anchor_date=anchor, name=sec.name,
+                                                expected_name=rec.expected_name, kind=sec.kind, form25=winner_sub,
+                                                resolution_source=ctx.resolution_source,
+                                                trading_after=continued, own_shares=own)
         moved = None
-        if continued and rec.bucket is CrspBucket.UNKNOWN:
+        if continued and record.bucket is CrspBucket.UNKNOWN:
             moved = next(((s, a) for s, f in sorted(group, key=lambda i: i[0].filing_date)
                           if (a := self._eight_a(s, f, filings)) is not None), None)
-        delisting = self._delisting(sec, cik, ticker, eff, rec, lt, winner_f25, winner_sub, continued, extra_flags)
+        delisting = self._delisting(sec, cik, ticker, eff, record, lt, winner_f25, winner_sub, continued,
+                                    extra_flags)
         delisting.own_shares = own if own.stated else None
         if moved is not None:              # R7: the issuer moved the class (Kraft Heinz 2026, Nasdaq to NYSE)
             s, a = moved
@@ -562,9 +616,10 @@ class DelistingFinder:
         return delisting
 
     # -- no-Form-25 fallback ----------------------------------------------
-    def _fallback_date(self, ctx: SecurityContext, evidence: dict) -> tuple[str, tuple[str, ...]]:
-        """Date a fallback delisting: the confirmed bankruptcy 8-K, then the
-        anchor 8-K, then the revocation filing or a Form 15 but only if either
+    @staticmethod
+    def _fallback_date(last_seen: str, evidence: dict) -> tuple[str, tuple[str, ...]]:
+        """Date a fallback delisting of a security last sighted on `last_seen`: the confirmed bankruptcy 8-K, then
+        the anchor 8-K, then the revocation filing or a Form 15 but only if either
         falls within [last_seen - 30d, last_seen + 120d]; otherwise last_seen
         itself, flagged `delist_date_approx`.
 
@@ -578,54 +633,41 @@ class DelistingFinder:
             f = evidence.get(key)
             if f and f.get("filing_date"):
                 return f["filing_date"], ()
-        lo = (date.fromisoformat(ctx.last_seen) - timedelta(days=DEREG_FALLBACK_BEFORE_DAYS)).isoformat()
-        hi = (date.fromisoformat(ctx.last_seen) + timedelta(days=DEREG_FALLBACK_AFTER_DAYS)).isoformat()
+        lo = (date.fromisoformat(last_seen) - timedelta(days=DEREG_FALLBACK_BEFORE_DAYS)).isoformat()
+        hi = (date.fromisoformat(last_seen) + timedelta(days=DEREG_FALLBACK_AFTER_DAYS)).isoformat()
         for key in ("revoked_filing", "dereg_filing"):
             f = evidence.get(key)
             fd = f.get("filing_date") if f else None
             if fd and lo <= fd <= hi:
                 return fd, ()
-        return ctx.last_seen, ("delist_date_approx",)
+        return last_seen, ("delist_date_approx",)
 
-    def _early_group(self, ctx: SecurityContext, cik: int, picked: str,
-                     early: list[EdgarSubmission]) -> list[tuple[EdgarSubmission, Form25]]:
+    def _early_group(self, ctx: SecurityContext, cik: int, picked: str, early: list[EdgarSubmission],
+                     issuer_names: tuple[str, ...]) -> list[tuple[EdgarSubmission, Form25]]:
         """The Form 25 `picked` (an accession) from `early`, the filings dated
         before the main scan's floor, with its early neighbours within
-        SAME_EVENT_DAYS — each kept only when it matches this security by the
-        main scan's own rules (readable, not regional, a recognized class, and
-        `match_securities` against this security and the siblings alive then).
-        The security itself counts as alive: its first sighting is what put
-        the filing before the floor. Empty when `picked` is not early."""
-        sec = ctx.security
+        SAME_EVENT_DAYS -- each kept only when the early window's judgement
+        (`_judge_early`) matches it to this security. Empty when `picked` is not early."""
         anchor = next((s for s in early if s.accession == picked), None)
         if anchor is None:
             return []
-        own = self._own_ref(ctx)
+        scratch = _Scan(ctx.record.ticker)        # quiet: no review item, and the main scan's state stays as it is
         group: list[tuple[EdgarSubmission, Form25]] = []
         for sub in early:
             if abs((date.fromisoformat(sub.filing_date) - date.fromisoformat(anchor.filing_date)).days) > SAME_EVENT_DAYS:
                 continue
-            raw = self.edgar.fetch_filing_raw(cik, sub.accession)
-            if not raw:
-                continue
-            f25 = parse_form25(raw, accession=sub.accession, form=sub.form, filing_date=sub.filing_date)
-            if f25.exchange in REGIONAL_EXCHANGES or class_kind(f25.class_text) == "other" \
-                    or other_class(f25, own, self._issuer_names(cik)):
-                continue
-            alive = [own] + [r for r in ctx.siblings
-                             if r.sec_id != sec.sec_id and self._alive_at(ctx, r.sec_id, sub.filing_date)]
-            matched, _ = match_securities(f25, alive)
-            if sec.sec_id in matched and not self._class_conflict(f25, own):
+            f25 = self._judge_early(ctx, scratch, cik, sub, issuer_names)
+            if f25 is not None:
                 group.append((sub, f25))
         return group
 
-    def _fallback(self, ctx: SecurityContext, cik: int, filings: list[EdgarSubmission],
-                  ticker: str, early: list[EdgarSubmission] | None = None) -> Delisting | None:
-        sec = ctx.security
+    def _fallback(self, ctx: SecurityContext, cik: int, filings: list[EdgarSubmission], ticker: str,
+                  early: list[EdgarSubmission], issuer_names: tuple[str, ...]) -> Delisting | None:
+        sec, last_seen = ctx.security, ctx.record.last_seen
         own = self.classifier.reader.ending(cik, share_class=sec.share_class, name=sec.name,
-                                            day=date.fromisoformat(ctx.last_seen)) if ctx.last_seen else None
-        rec = self.classifier.classify_event(ticker=ticker, cik=cik, anchor_date=ctx.last_seen, name=sec.name,
-                                             expected_name=ctx.expected_name, kind=sec.kind, form25=None,
+                                            day=date.fromisoformat(last_seen)) if last_seen else None
+        rec = self.classifier.classify_event(ticker=ticker, cik=cik, anchor_date=last_seen, name=sec.name,
+                                             expected_name=ctx.record.expected_name, kind=sec.kind, form25=None,
                                              resolution_source=ctx.resolution_source, own_shares=own)
         evidence = rec.evidence or {}
         if evidence.get("delist_filing"):
@@ -641,24 +683,25 @@ class DelistingFinder:
             # fails-to-deliver row under the security's own tickers shows it
             # trading after it; the observations after it are flagged
             # `observed_after_delisting`.
-            group = self._early_group(ctx, cik, evidence["delist_filing"].get("accession") or "", early or [])
+            group = self._early_group(ctx, cik, evidence["delist_filing"].get("accession") or "", early,
+                                      issuer_names)
             if not group:
                 return None
             eff = effective_date(min(s.filing_date for s, _ in group))
-            if ctx.ftd_seen_after((date.fromisoformat(eff) + timedelta(days=SEEN_AFTER_DAYS)).isoformat()):
+            if ctx.record.seen_in_fails_after((date.fromisoformat(eff) + timedelta(days=SEEN_AFTER_DAYS)).isoformat()):
                 return None
             return self._build_delisting(ctx, cik, filings, group, eff, False, ("observed_after_delisting",))
         if rec.bucket is CrspBucket.UNKNOWN and not evidence.get("deregistered"):
             return None
-        ended_by, extra_flags = self._fallback_date(ctx, evidence)
-        if ctx.has_cusips is False and "delist_date_approx" in extra_flags \
+        ended_by, extra_flags = self._fallback_date(last_seen, evidence)
+        if not ctx.record.has_cusips and "delist_date_approx" in extra_flags \
                 and rests_on_continued_filings(rec.reason or ""):
             # 5h: the continued-filings guess dated by the last sighting alone, for a security with no CUSIP whose
             # fails rows could show it stop: nothing says it ended there (WW 2013, a later name a snapshot
             # carried back; the line traded on to its 2025 bankruptcy). No ending; ended_without_delisting.
             return None
         lt = self.dating.of_fallback(cik, filings, ticker=ticker, ended_by=date.fromisoformat(ended_by),
-                                     last_seen=date.fromisoformat(ctx.last_seen), trading=ctx.trading,
+                                     last_seen=date.fromisoformat(last_seen), trading=ctx.record,
                                      merger=rec.bucket is CrspBucket.MERGER)
         # No Form 25 means no exchange evidence from a filing; fall back to
         # whatever exchange EDGAR's own submissions JSON records for this

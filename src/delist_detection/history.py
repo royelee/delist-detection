@@ -35,9 +35,14 @@ BACKFILL_START = "2004-01-31"      # spec §7.x: the earliest as_of the backfill
 BACKFILL_WINDOW_DAYS = 30
 
 
+# A sighting's sources: an observation, a fails row, or a day of an added security's span (stage 9d, which no
+# observation names: `span_sightings`)
+OBSERVATION, FTD, SPAN = "observation", "ftd", "span"
+
+
 class Sighting(NamedTuple):
     """One dated sighting of a security's ticker or CUSIP (`value`), from an
-    observation or an FTD row (`source`: "observation" | "ftd")."""
+    observation, an FTD row or an added security's span (`source`: `OBSERVATION`, `FTD`, `SPAN`)."""
     day: str
     value: str
     source: str
@@ -116,14 +121,26 @@ def ticker_sightings(sec: Security, ftd: FtdIndex, cusips: Sequence[str]) -> lis
     B, observed as "HUB-B" and "HUBB", is "HUB-B". A row under a deleted
     symbol ("ORLYXXXX") is a fail still settling after the delisting, not a
     sighting of trading: it opens and extends no range, and counts in no
-    `seen_after`, `last_seen` or sibling span."""
-    out = [Sighting(o.as_of, e.ticker, "observation") for e in sec.eras for o in e.observations]
+    `seen_after`, `last_seen` or sibling span (`trading_record.TradingRecord`)."""
+    return _sightings([Sighting(o.as_of, e.ticker, OBSERVATION) for e in sec.eras for o in e.observations],
+                      {e.ticker for e in sec.eras}, ftd, cusips)
+
+
+def span_sightings(ticker: str, days: Iterable[str], ftd: FtdIndex, cusips: Sequence[str]) -> list[Sighting]:
+    """An added security's sightings (stage 9d: a successor no observation names): the days of its span under its
+    ticker (source `SPAN`) and the FTD rows of its CUSIPs, spelled as `ticker_sightings` spells them."""
+    return _sightings([Sighting(d, ticker, SPAN) for d in days], {ticker}, ftd, cusips)
+
+
+def _sightings(seen: list[Sighting], tickers: Iterable[str], ftd: FtdIndex, cusips: Sequence[str]) -> list[Sighting]:
+    """`seen` and the FTD rows of `cusips`, each ticker spelled one way: a spelling of `tickers`, the one with a
+    separator first (`ticker_sightings`)."""
     # SEC's 2007 fails files mask some symbols (**********), and a new CUSIP's first rows carry the ticker with
     # "ZZZZ" appended (FMDZZZZ): neither is a ticker
-    out += [Sighting(r.date, r.symbol, "ftd") for r in ftd.trading_rows(cusips)
-            if any(ch.isalpha() for ch in r.symbol) and not is_unassigned_symbol(r.symbol)]
+    out = seen + [Sighting(r.date, r.symbol, FTD) for r in ftd.trading_rows(cusips)
+                  if any(ch.isalpha() for ch in r.symbol) and not is_unassigned_symbol(r.symbol)]
     label: dict[str, str] = {}
-    for t in sorted({e.ticker for e in sec.eras}, key=lambda t: ("-" not in t, t)):
+    for t in sorted(set(tickers), key=lambda t: ("-" not in t, t)):
         label.setdefault(bare_ticker(t), t)
     return sorted({s._replace(value=label.get(bare_ticker(s.value), s.value)) for s in out})
 
@@ -148,30 +165,6 @@ def cusip_sightings(sec: Security, ftd: FtdIndex, cusips: Sequence[str],
            if r.date < successor_starts.get(r.symbol, "~") and not _settling(r)]
     out += [Sighting(o.as_of, o.cusip, "observation") for e in sec.eras for o in e.observations if o.cusip]
     return sorted(set(out))
-
-
-def ticker_on(sightings: Sequence[Sighting]) -> Callable[[str], str | None]:
-    """The security's ticker on an ISO day, from its date-sorted ticker
-    sightings: the latest one on or before the day, else its first."""
-    def on(day: str) -> str | None:
-        before = [s.value for s in sightings if s.day <= day]
-        if before:
-            return before[-1]
-        return sightings[0].value if sightings else None
-    return on
-
-
-def own_last_seen(sec: Security, sig: Sequence[Sighting]) -> str:
-    """The latest sighting under one of the security's own tickers (its eras' and its line's), else
-    the latest era end date.
-
-    FTD rows found by CUSIP include a post-delisting OTC tail under another
-    symbol (e.g. a bankrupt XYZ trading as XYZQ), which would otherwise push
-    `last_seen` past the real delisting and misdate a fallback delisting.
-    """
-    own = sec.own_tickers()
-    dates = [s.day for s in sig if s.value in own]
-    return dates[-1] if dates else max(e.last for e in sec.eras)
 
 
 def _security_rows(sec: Security, sightings: Sequence[Sighting], cusip_sightings: Sequence[Sighting], *,

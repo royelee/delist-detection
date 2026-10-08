@@ -1,7 +1,7 @@
 """Sub-plan 5c's real cases, replayed offline: tests/fixtures/issuer_role/ (built once from the local caches by
 scripts/build_issuer_role_fixtures.py) holds each case's security, the securities a successor link may name and the
 other securities of their issuers, their fails rows, and the EDGAR, OpenFIGI, MIDAS and Nasdaq-halt answers.
-`outcome(sec_id)` runs the run's own code over them: stage 5 (`pipeline._context_builder`,
+`outcome(sec_id)` runs the run's own code over them: stage 5 (`delistings.SecurityContexts`,
 `delistings.DelistingFinder`, which makes each ending's own-share reading and keeps the one its classifier read),
 stage 8b (`pipeline._r1_continuations`, the terms the committed contract published standing in for the LLM's), and
 stage 9 (`pipeline._find_successors`, which records its links as rewrites; no full-text search: the fixture has
@@ -21,7 +21,7 @@ from delist_detection import pipeline
 from delist_detection.added_securities import AddedAcquirer, AddedSecurity
 from delist_detection.classifier import DelistClassifier
 from delist_detection.crsp_codes import CrspBucket
-from delist_detection.delistings import Delisting, DelistingFinder
+from delist_detection.delistings import Delisting, DelistingFinder, SecurityContexts
 from delist_detection.edgar import EdgarSubmission
 from delist_detection.figi_resolution import security_kind
 from delist_detection.ftd import FtdIndex, FtdRow
@@ -155,10 +155,9 @@ def clients(edgar: FixtureEdgar | None = None) -> pipeline.Clients:
 def find(sec_id: str, c: pipeline.Clients) -> tuple[list[Delisting], list[ReviewItem]]:
     """Stage 5: the finder's delistings and review items for the case."""
     securities, _, cusips, ftd = world()
-    sightings = {sid: ticker_sightings(s, ftd, cusips[sid]) for sid, s in securities.items()}
-    build = pipeline._context_builder(securities, sightings, ftd, cusips)
+    contexts = SecurityContexts.observed(securities, cusips, ftd)
     finder = DelistingFinder(c.edgar, c.classifier, midas=c.midas, halts=c.halts)
-    return finder.find(build(securities[sec_id], DATA["securities"][sec_id]["listed"]))
+    return finder.find(contexts(securities[sec_id], DATA["securities"][sec_id]["listed"]))
 
 
 def _payouts(sec_id: str, found: list[Delisting]) -> MergerValues:

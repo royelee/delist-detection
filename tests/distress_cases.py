@@ -1,7 +1,7 @@
 """Sub-plan 5g's real cases, replayed offline: tests/fixtures/distress/ (built once from the local caches by
 scripts/build_distress_fixtures.py, which is scripts/build_form25_fixtures.py over this sub-plan's cases) holds each
 case's security, the other securities of its issuer, their fails rows, and the EDGAR, MIDAS and Nasdaq-halt answers.
-`outcome(sec_id)` runs the run's own code over them: stage 5 (`pipeline._context_builder`,
+`outcome(sec_id)` runs the run's own code over them: stage 5 (`delistings.SecurityContexts`,
 `delistings.DelistingFinder`), then stage 9e (`pipeline._distress`), and the payout rule the contract publishes for
 each delisting (`payout_rule.value_fields`)."""
 from __future__ import annotations
@@ -16,12 +16,11 @@ from pathlib import Path
 
 from delist_detection import pipeline
 from delist_detection.classifier import DelistClassifier
-from delist_detection.delistings import Delisting, DelistingFinder
+from delist_detection.delistings import Delisting, DelistingFinder, SecurityContexts
 from delist_detection.edgar import EdgarSubmission
 from delist_detection.exit_kind import DROP_REASON_OF_CODE
 from delist_detection.figi_resolution import security_kind
 from delist_detection.ftd import FtdIndex, FtdRow
-from delist_detection.history import ticker_sightings
 from delist_detection.manifest import StageMeter
 from delist_detection.midas import MidasClient
 from delist_detection.nasdaq_halts import Halt, NasdaqHaltClient
@@ -133,11 +132,10 @@ def find(sec_id: str, c: pipeline.Clients) -> tuple[list[Delisting], list[Review
     """Stage 5: the finder's delistings and review items for the case (its other CIK in force as the committed run
     had it)."""
     securities, cusips, ftd = world()
-    sightings = {sid: ticker_sightings(s, ftd, cusips[sid]) for sid, s in securities.items()}
     other = DATA["cases"][sec_id]["other_cik"]
-    build = pipeline._context_builder(securities, sightings, ftd, cusips, {sec_id: other} if other else {})
+    contexts = SecurityContexts.observed(securities, cusips, ftd, other_ciks={sec_id: other} if other else {})
     finder = DelistingFinder(c.edgar, c.classifier, midas=c.midas, halts=c.halts)
-    return finder.find(build(securities[sec_id], DATA["securities"][sec_id]["listed"]))
+    return finder.find(contexts(securities[sec_id], DATA["securities"][sec_id]["listed"]))
 
 
 def after(sec_id: str, *, edgar: FixtureEdgar | None = None):

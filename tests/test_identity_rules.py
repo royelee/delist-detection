@@ -12,9 +12,8 @@ from delist_detection import pipeline
 from delist_detection.cik_lookup import CikNameIndex, normalize_name
 from delist_detection.classifier import DelistClassifier
 from delist_detection.crsp_codes import CrspBucket
-from delist_detection.delistings import Delisting, DelistingFinder, SecurityContext
+from delist_detection.delistings import Delisting, DelistingFinder, SecurityContexts
 from delist_detection.edgar import EdgarSubmission
-from delist_detection.form25 import SecurityRef
 from delist_detection.ftd import FtdIndex, FtdRow
 from delist_detection.last_trade import LastTrade
 from delist_detection.manifest import StageMeter
@@ -110,12 +109,10 @@ def test_the_predecessors_own_form_25_raises_no_unmatched_row_for_the_added_succ
                        filing=FilingRef("25-NSE", "0000876661-26-000999", "2026-09-18"))
     finder = SimpleNamespace(find=lambda ctx, fallback: ([], [item, other]))
     monkeypatch.setattr(pipeline, "listed_today", lambda *a, **k: False)
-    monkeypatch.setattr(pipeline, "_context_builder", lambda *a, **k: (lambda s, listed: None))
     ctx = SimpleNamespace(clients=SimpleNamespace(figi=None, edgar=None), as_of=date(2026, 9, 25),
                           meter=StageMeter(lambda *a: None), log=lambda m: None)
     owner = SimpleNamespace(form25_sub=SimpleNamespace(accession="0000876661-26-000770"))
-    out = pipeline._successor_endings(ctx, finder, {added.security.sec_id: added}, {}, {}, FtdIndex([]), None,
-                                      [owner])
+    out = pipeline._successor_endings(ctx, finder, {added.security.sec_id: added}, {}, {}, FtdIndex([]), [owner])
     assert out.review == [other]
 
 
@@ -128,9 +125,10 @@ def test_a_new_cusip_the_fails_data_reaches_must_show_its_rows():
 
 # --- rule G, WW 2013: no continued-filings ending at the last sighting of a security with no CUSIP --------------
 
-def _ww(fake_edgar, has_cusips):
+def _ww(fake_edgar, cusips):
     """WW 2012-2013, a 2018 name and ticker a snapshot carried back onto Weight Watchers (WTW then): no Form 25 in
-    reach, the issuer kept filing its 10-Qs; the security holds no CUSIP (its old one maps to another composite)."""
+    reach, the issuer kept filing its 10-Qs; the security holds no CUSIP (`cusips` empty: its old one maps to another
+    composite)."""
     fake_edgar.submissions_by_cik[105319] = [
         EdgarSubmission("q1", "10-Q", "2014-05-01", "2014-03-31", "", "q1.htm"),
         EdgarSubmission("q2", "10-Q", "2014-08-01", "2014-06-30", "", "q2.htm"),
@@ -139,22 +137,20 @@ def _ww(fake_edgar, has_cusips):
                       Observation("WW", "2013-12-31", "WW INTERNATIONAL INC")])
     sec = Security("BBG000DY6735", 105319, "COMMON", "WW INTERNATIONAL INC", "Common Stock", True, "ticker",
                    "common", era)
-    ctx = SecurityContext(security=sec, siblings=[SecurityRef(sec.sec_id, sec.share_class, sec.kind)],
-                          ticker_on=lambda d: "WW", last_seen="2013-12-31", seen_after=lambda d: False,
-                          listed_today=False, expected_name=sec.name, has_cusips=has_cusips)
+    ctx = SecurityContexts.observed({sec.sec_id: sec}, {sec.sec_id: cusips}, FtdIndex([]))(sec, False)
+    assert ctx.record.last_seen == "2013-12-31" and ctx.record.has_cusips is bool(cusips)
     clf = DelistClassifier(fake_edgar, TickerResolver(fake_edgar))
     return DelistingFinder(fake_edgar, clf).find(ctx)
 
 
 def test_a_security_with_no_cusip_gets_no_continued_filings_guess_at_its_last_sighting(fake_edgar):
-    events, review = _ww(fake_edgar, has_cusips=False)
+    events, review = _ww(fake_edgar, [])
     assert events == [] and [r.flag for r in review] == ["ended_without_delisting"]
 
 
 def test_a_security_with_its_cusip_keeps_the_continued_filings_ending(fake_edgar):
     """Guard: a security whose own CUSIP could show it stop keeps today's ending (a genuine no-Form-25 end)."""
-    for has in (True, None):
-        events, _ = _ww(fake_edgar, has_cusips=has)
-        assert [(e.delist_date, e.record.crsp_code) for e in events] == [("2013-12-31", 304)], has
+    events, _ = _ww(fake_edgar, ["948626106"])
+    assert [(e.delist_date, e.record.crsp_code) for e in events] == [("2013-12-31", 304)]
 
 

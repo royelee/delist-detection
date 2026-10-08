@@ -672,7 +672,7 @@ candidate accepted, the security gets the placeholder `sec_id`
    securities by class kind (common/preferred/warrant/unit/…) and class
    letter (`form25.match_security`); zero or several matches is
    `form25_unmatched`. A sibling security only competes for the match while
-   it was alive on the filing date (`SecurityContext.sibling_spans`).
+   it was alive on the filing date (`SecurityContext.spans`, from each sibling's trading record).
 4. **Secondary-listing check**: a matched Form 25 counts only when the
    security has no exchange listing left afterwards or has moved to a new
    one (`listing_status.withdrawal_kind`, from 10-K cover-page exchange
@@ -964,9 +964,9 @@ extracted payout (`raw_payout_per_share`, `raw_payout_source`,
 `raw_payout_confidence`) before the last-close gate runs. Columns are
 `DELISTINGS_COLUMNS` in `store.py`. `resolution_source` records the resolver
 tier that found the security's CIK, taken from the security's latest era
-that has a CIK (`security_master` when none has one); `SecurityContext
-.resolution_source` → `classify_event(resolution_source=...)` carry it to
-the row.
+that has a CIK (`security_master` when none has one, and for a successor the
+run added); `SecurityContext.resolution_source` →
+`classify_event(resolution_source=...)` carry it to the row.
 
 `output/payouts.csv`: per-merger cash payout after the last-close gate:
 only a payout (or cash+stock/stock-only terms) that reconciles with the

@@ -2,8 +2,9 @@
 `closing_day`), the source order (`decide_last_trade`), the anchor day and the first day after (`anchor_day`,
 `first_day_after`; `LastTrade`'s facts and the row reading are exit_kind's, tests/test_exit_kind.py), the handoff
 rule (`at_handoff`), and `Dating`: a Form 25
-group's windows, the MIDAS and halt confirmations through fake adapters, rule 3's tenure (`ticker_taken`,
-`OwnTrading`), rule 4's closing day, the no-Form-25 fallback and stage 9c's re-dating from a notice."""
+group's windows, the MIDAS and halt confirmations through fake adapters, rule 3's tenure (read from the security's
+trading record, `trading_record.TradingRecord`, whose own rules are tests/test_trading_record.py's), rule 4's closing
+day, the no-Form-25 fallback and stage 9c's re-dating from a notice."""
 from datetime import date
 from pathlib import Path
 
@@ -15,10 +16,20 @@ from delist_detection.ftd import FtdIndex, FtdRow
 from delist_detection.history import Sighting
 from delist_detection.last_trade import (
     CLOSING_DAY, CONFLICT, EIGHTK_301, EX99_NOTICE, LAST_SIGHTING, MIDAS, NASDAQ_HALT, NO_DAY, UNCONFIRMED, UNSOURCED,
-    Dating, LastTrade, OwnTrading, anchor_day, at_handoff, closing_day, decide_last_trade, eightk_last_trade,
-    first_day_after, handoff_day, last_row_trade_day, sections_3_01, ticker_taken,
+    Dating, LastTrade, anchor_day, at_handoff, closing_day, decide_last_trade, eightk_last_trade,
+    first_day_after, handoff_day, sections_3_01,
 )
 from delist_detection.nasdaq_halts import Halt
+from delist_detection.security_master import Security
+from delist_detection.trading_record import TradingRecord
+
+_SECURITY = Security("BBG_T", 1, "COMMON", "SOME CORP", "Common Stock", True, "cusip")
+
+
+def _trading(sightings=(), *, cusips=(), fails=None) -> TradingRecord:
+    """A security's trading record as the last trade module reads it: its sightings, its own CUSIPs and the fails
+    index their rows come from (none: no rows, no tenure bound)."""
+    return TradingRecord(_SECURITY, sightings, tuple(cusips), fails)
 
 
 def _k(item301: str, extra: str = "") -> str:
@@ -494,7 +505,7 @@ def _exchange_raw(rule="17 CFR 240.12d2-2(a)(3)", notice=""):
             f"<ruleProvision>{rule}</ruleProvision></notificationOfRemoval>{text}")
 
 
-def _group(dating, group, *, ticker="AET", trading=OwnTrading(), continued=False, filings=()):
+def _group(dating, group, *, ticker="AET", trading=_trading(), continued=False, filings=()):
     return dating.of_group(1, list(filings), group, group[0], ticker=ticker, trading=trading, continued=continued)
 
 
@@ -523,7 +534,7 @@ def test_an_involuntary_notices_day_nothing_confirms_is_unconfirmed_until_midas_
 def test_the_confirmations_ask_every_ticker_the_security_carried_in_the_window(fake_edgar):
     """Spirit Airlines 2024: by its Form 25 the shares traded OTC as SAVEQ; MIDAS knows SAVE only."""
     group = [_f25(_notice("save_25nse.txt"), filed="2024-12-05")]
-    trading = OwnTrading([Sighting("2024-11-15", "SAVE", "ftd"), Sighting("2024-11-20", "SAVEQ", "ftd")])
+    trading = _trading([Sighting("2024-11-15", "SAVE", "ftd"), Sighting("2024-11-20", "SAVEQ", "ftd")])
     midas = _Midas(days={"SAVE": date(2024, 11, 15)})
     lt = _group(Dating(fake_edgar, midas=midas), group, ticker="SAVEQ", trading=trading)
     assert (lt.day, lt.source) == (date(2024, 11, 15), MIDAS)
@@ -556,7 +567,7 @@ def test_rule_3_bounds_a_read_by_ticker_at_the_day_another_cusip_took_it(fake_ed
                               "2016, trading in Company common stock was suspended. " + "x" * 300)
     filings = [EdgarSubmission("k1", "8-K", "2016-09-06", "2016-09-06", "3.01", "k.htm")]
     group = [_f25(_exchange_raw(), filed="2016-09-06")]
-    trading = OwnTrading((), frozenset({"OWNCUSIP1"}), (), FtdIndex(_tenure_rows()))
+    trading = _trading(cusips=["OWNCUSIP1"], fails=FtdIndex(_tenure_rows()))
     midas = _Midas(days={"JJJ": date(2016, 9, 6)})
     unbounded = _group(Dating(fake_edgar, midas=midas), group, ticker="JJJ", filings=filings)
     assert unbounded.day == date(2016, 9, 6)
@@ -576,7 +587,7 @@ def test_rule_3_drops_a_halt_under_a_ticker_another_cusip_took(fake_edgar):
     rows = [FtdRow("2016-08-30", "OWNCUSIP1", "JJJ", "OLD CO", 45.0),
             FtdRow("2016-09-01", "OWNCUSIP1", "JJJ", "OLD CO", 45.04),
             FtdRow("2016-09-02", "NEWCUSIP1", "JJJ", "NEW PLC", 48.9)]
-    trading = OwnTrading((), frozenset({"OWNCUSIP1"}), (), FtdIndex(rows))
+    trading = _trading(cusips=["OWNCUSIP1"], fails=FtdIndex(rows))
     halts = _Halts({"JJJ": _halt("JJJ", date(2016, 9, 2), "16:30:00")})
     lt = _group(Dating(fake_edgar, halts=halts), group, ticker="JJJ", trading=trading, filings=filings)
     assert (lt.day, lt.source) == (date(2016, 9, 1), EIGHTK_301)
@@ -617,7 +628,7 @@ def test_rule_4s_closing_day_never_comes_before_the_last_day_the_own_rows_show_t
     rows = [FtdRow("2021-03-02", "OWNCUSIP1", "APA", "APACHE", 19.0), FtdRow("2021-03-04", "OWNCUSIP1", "APA",
                                                                           "APACHE", 19.52),
             FtdRow("2021-03-05", "OWNCUSIP1", "APA", "APACHE", 19.52)]
-    trading = OwnTrading((), frozenset({"OWNCUSIP1"}), rows, None)
+    trading = _trading(cusips=["OWNCUSIP1"], fails=FtdIndex(rows))
     lt = _group(Dating(fake_edgar), [_f25(_exchange_raw(), filed="2021-03-04")], trading=trading, filings=filings)
     assert (lt.day, lt.source) == (date(2021, 3, 3), CLOSING_DAY)
 
@@ -629,17 +640,17 @@ def test_the_fallback_reads_3_01_8ks_up_to_the_last_sighting_plus_five_days(fake
                               "opening of business on January 28, 2015. " + "x" * 300)
     filings = [EdgarSubmission("s2", "8-K", "2015-01-26", "2015-01-26", "3.01", "k2.htm")]
     lt = Dating(fake_edgar).of_fallback(1, filings, ticker="VVV", ended_by=date(2015, 1, 12),
-                                        last_seen=date(2015, 1, 28), trading=OwnTrading(), merger=False)
+                                        last_seen=date(2015, 1, 28), trading=_trading(), merger=False)
     assert (lt.day, lt.source, lt.confirmed) == (date(2015, 1, 27), EIGHTK_301, True)
     early = Dating(fake_edgar).of_fallback(1, filings, ticker="VVV", ended_by=date(2015, 1, 12),
-                                           last_seen=date(2015, 1, 12), trading=OwnTrading(), merger=False)
+                                           last_seen=date(2015, 1, 12), trading=_trading(), merger=False)
     assert early.source == UNSOURCED                  # the 8-K came past the last sighting + 5 days
 
 
 def test_the_fallback_ends_on_its_last_sighting_unconfirmed_keeping_the_failed_halt_days(fake_edgar):
     halts = _Halts(fail=True)
     lt = Dating(fake_edgar, halts=halts).of_fallback(1, [], ticker="VVV", ended_by=date(2015, 1, 10),
-                                                     last_seen=date(2015, 1, 10), trading=OwnTrading(), merger=False)
+                                                     last_seen=date(2015, 1, 10), trading=_trading(), merger=False)
     assert (lt.day, lt.source, lt.flags) == (date(2015, 1, 10), UNSOURCED, (UNCONFIRMED,))
     assert lt.halt_feed_failed == tuple(halts.failed) != ()
 
@@ -649,64 +660,11 @@ def test_a_fallback_merger_ends_on_the_closing_day_its_completion_8k_states(fake
     fake_edgar.texts["m1"] = "On July 31, 2009, the Company completed its merger with Alpha Natural Resources."
     filings = [EdgarSubmission("m1", "8-K", "2009-07-31", "2009-07-31", "2.01,5.01", "k.htm")]
     lt = Dating(fake_edgar).of_fallback(1, filings, ticker="FCL", ended_by=date(2009, 8, 14),
-                                        last_seen=date(2009, 8, 14), trading=OwnTrading(), merger=True)
+                                        last_seen=date(2009, 8, 14), trading=_trading(), merger=True)
     assert (lt.day, lt.source) == (date(2009, 7, 31), CLOSING_DAY) and not lt.confirmed
     plain = Dating(fake_edgar).of_fallback(1, filings, ticker="FCL", ended_by=date(2009, 8, 14),
-                                           last_seen=date(2009, 8, 14), trading=OwnTrading(), merger=False)
+                                           last_seen=date(2009, 8, 14), trading=_trading(), merger=False)
     assert plain.source == UNSOURCED
     before = Dating(fake_edgar).of_fallback(1, filings, ticker="FCL", ended_by=date(2009, 7, 30),
-                                            last_seen=date(2009, 7, 30), trading=OwnTrading(), merger=True)
+                                            last_seen=date(2009, 7, 30), trading=_trading(), merger=True)
     assert before.day == date(2009, 7, 30) and before.source == UNSOURCED
-
-
-# -- the security's own trading: rule 3's tenure and the rows' last day ---------------------------------------------
-OWN = {"OWNCUSIP1"}
-
-
-def _ftd(day, cusip, price, symbol="TKR"):
-    return FtdRow(day, cusip, symbol, "SOME CORP", price)
-
-
-def _taken(rows):
-    return ticker_taken(FtdIndex(rows), "TKR", OWN, "2019-03-01", "2019-04-30")
-
-
-def test_the_ticker_is_taken_the_day_before_another_cusips_first_priced_row_after_the_own_last_row():
-    rows = [_ftd("2019-03-04", "OWNCUSIP1", 10.0), _ftd("2019-03-05", "OWNCUSIP1", 10.5),
-            _ftd("2019-03-07", "OTHERCUSP", 48.9)]
-    assert _taken(rows) == "2019-03-06"          # a row carries the close of the trading day before it
-    trading = OwnTrading((), frozenset(OWN), (), FtdIndex(rows))
-    assert trading.taken("TKR", "2019-03-01", "2019-04-30") == "2019-03-06"
-    assert OwnTrading().taken("TKR", "2019-03-01", "2019-04-30") is None      # no fails index: no bound
-
-
-def test_another_cusips_row_between_the_own_rows_takes_nothing():
-    rows = [_ftd("2019-03-04", "OWNCUSIP1", 10.0), _ftd("2019-03-06", "OTHERCUSP", 48.9),
-            _ftd("2019-03-08", "OWNCUSIP1", 10.5), _ftd("2019-03-12", "OTHERCUSP", 49.0)]
-    assert _taken(rows) == "2019-03-11"
-
-
-def test_a_row_at_or_below_a_cent_is_no_trade():
-    """APA 2021: the new CUSIP's $0.01 first row beside the own row carrying the last close."""
-    assert _taken([_ftd("2019-03-04", "OWNCUSIP1", 10.0), _ftd("2019-03-05", "OTHERCUSP", 0.01)]) is None
-
-
-def test_no_own_row_under_the_ticker_gives_no_bound():
-    """BTU 2016, CHK 2020: the own CUSIPs have no row under the ticker in the window."""
-    assert _taken([_ftd("2019-03-05", "OTHERCUSP", 48.9)]) is None
-
-
-def test_the_rows_last_trading_day_is_the_day_before_the_last_one_price_run_of_the_last_cusip():
-    """AVGO 2018: the last CUSIP's fails settle at one price from 04-05, so it last traded on 04-04."""
-    rows = [_ftd("2018-03-29", "OLDCUSIP1", 250.0), _ftd("2018-04-02", "OWNCUSIP1", 251.0),
-            _ftd("2018-04-05", "OWNCUSIP1", 252.5), _ftd("2018-04-09", "OWNCUSIP1", 252.5)]
-    assert last_row_trade_day(rows) == "2018-04-04"
-    assert OwnTrading(rows=rows).trades_until() == "2018-04-04"
-    assert last_row_trade_day([]) is None
-
-
-def test_the_tickers_of_a_window_are_every_ticker_sighted_in_it_in_order():
-    trading = OwnTrading([Sighting("2018-06-01", "AET", "obs"), Sighting("2018-11-28", "AET", "ftd"),
-                          Sighting("2019-06-01", "AETQ", "ftd")])
-    assert trading.tickers("2018-06-01", "2019-12-31") == ["AET", "AETQ"]
-    assert trading.tickers("2019-01-01", "2019-12-31") == ["AETQ"]

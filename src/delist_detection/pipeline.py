@@ -25,7 +25,7 @@ from .capabilities import CAPABILITIES, FULL_TEXT_SEARCH, Capability, FullTextSe
 from .crsp_codes import CrspBucket
 from .continuation_evidence import needs_doubt_check, needs_filing, read_continuation
 from .degraded import DegradedWatch, degraded_item, flag_degraded, report_halt_feed_failures
-from .delistings import LATE_ROW_DAYS, Delisting, DelistingFinder, SecurityContext
+from .delistings import Delisting, DelistingFinder, SecurityContexts
 from .distress import (
     BANKRUPTCY_WORDS, OTC_SYMBOL_DAYS, otc_symbol_from_fails, otc_symbol_from_text, plan_ratio,
     new_cusips as plan_new_cusips, price_only, substitutes_new_shares,
@@ -39,19 +39,19 @@ from .handoffs import (
     HandoffDecision, HandoffOutcome, apply_handoffs, continuation_filing, cusip_switch, decide_handoff,
     drop_resolved_shared, find_handoffs, issuer_carries_on, own_continuation_filing, predecessor_names,
 )
-from .form25 import ISSUER_FORM25_FORMS, SecurityRef
+from .form25 import ISSUER_FORM25_FORMS
 from .issuer_record import IssuerRecord, ReadWatch
-from .last_trade import Dating, OwnTrading, first_day_after
-from .ftd import FTD_START, FtdIndex, FtdRow, close_age, is_trading_symbol, trades_after
+from .last_trade import Dating, first_day_after
+from .ftd import FTD_START, FtdIndex, close_age
 from .history import (
     Histories, Sighting, backfill_cusips, cusip_sightings, filtered_ticker_sightings, observation_map_rows,
-    own_last_seen, ranges_from_sightings, ticker_on, ticker_range_review, ticker_sightings, value_on,
+    ranges_from_sightings, ticker_range_review, ticker_sightings, value_on,
 )
 from .line_follow import LineSuccessor, composites, follow_lines, is_line_symbol, text_cusips
-from .identifiers import class_letter, descriptions_class_letter, is_placeholder, share_class_from_name
+from .identifiers import is_placeholder, share_class_from_name
 from .identity import Identity, identify
 from .listing_status import issuer_exchange, listed_today, listing_answers
-from .observations import Observation, ObservationIndex, TickerEra, observation_conflicts
+from .observations import ObservationIndex, TickerEra, observation_conflicts
 from .exchange_terms import one_share_no_cash
 from .exchanges import normalize_exchange
 from .own_shares import OwnShares, Reader, new_issuer
@@ -71,6 +71,7 @@ from .rewrites import (
 from .sec_stats import SEC_STATS
 from .security_master import EraResolution, Issuer, Security, cik_of, cusip_job, superseded_placeholders
 from .ticker_evidence import EraEvidence, evidence_for
+from .trading_record import TradingRecord
 from .store import DelistingKey, write_tables
 from .filing_search import successor_query
 from .successors import (
@@ -163,8 +164,7 @@ def _flush_memo(clients: Clients) -> None:
 
 
 def _warm_delisting_search(clients: Clients, ordered: list[Security], listing: dict[str, dict],
-                           context: Callable[[Security, bool | None], SecurityContext], workers: int,
-                           retired: frozenset[str] = frozenset()) -> None:
+                           contexts: SecurityContexts, workers: int, retired: frozenset[str] = frozenset()) -> None:
     """Fill the SEC caches for the Form 25 search: each security's own finder work
     on `workers` threads, fill-only, its answers thrown away. A warm finder is the
     sequential finder's twin: the run's classifier's shadow (`DelistClassifier.shadow`:
@@ -173,7 +173,8 @@ def _warm_delisting_search(clients: Clients, ordered: list[Security], listing: d
     therefore takes the same last-trade anchors and asks for what the sequential
     pass will. A security whose batched OpenFIGI answer is missing is skipped: the
     sequential pass asks OpenFIGI for it alone, and its listing status decides what
-    the finder reads."""
+    the finder reads. Each warm search reads the sequential pass's own context (`contexts`, one object for both):
+    the same trading records, built once over the same fails index."""
     midas = Serialized(clients.midas) if clients.midas is not None else None
     halts = Serialized(clients.halts) if clients.halts is not None else None
 
@@ -187,7 +188,7 @@ def _warm_delisting_search(clients: Clients, ordered: list[Security], listing: d
         now = False if s.sec_id in retired else listed_today(
             None, s.sec_id, edgar=clients.edgar, cik=s.issuer_cik,
             tickers=sorted(s.own_tickers()), answer=answer)
-        finder.find(context(s, now))
+        finder.find(contexts(s, now))
 
     warm(ordered, task, workers=workers, state=make_finder, name="delisting search")
 
@@ -255,83 +256,6 @@ class _RunContext:
     meter: run_manifest.StageMeter
 
 
-def _cusip_switches(s: Security, ftd: FtdIndex, cusips: Sequence[str]) -> tuple[str, ...]:
-    """The first sighting of each of the security's CUSIPs after its first (`history.cusip_sightings`): the days
-    its own line switched CUSIP."""
-    first: dict[str, str] = {}
-    for x in cusip_sightings(s, ftd, cusips):
-        first.setdefault(x.value, x.day)
-    return tuple(sorted(first.values())[1:])
-
-
-def _security_ref(s: Security, ftd: FtdIndex, cusips: Sequence[str]) -> SecurityRef:
-    """The finder's view of a security (`form25.SecurityRef`): its class, kind and name, and for a class with no
-    letter the one its own CUSIPs' fails descriptions name (`identifiers.descriptions_class_letter`, R2: SunPower's
-    class A placeholder, "SUNPOWER CORP CL A")."""
-    hint = None if class_letter(s.share_class) else \
-        descriptions_class_letter(d for c in cusips for d in ftd.descriptions(c))
-    return SecurityRef(s.sec_id, s.share_class, s.kind, s.name, hint)
-
-
-def _rows_near(rows: Sequence[FtdRow], day: str) -> bool:
-    """Whether a trading fails row of the security's own CUSIPs (`rows`) is dated in the LATE_ROW_DAYS up to the
-    ISO day `day`."""
-    lo = (date.fromisoformat(day) - timedelta(days=LATE_ROW_DAYS)).isoformat()
-    return any(lo <= r.date <= day and is_trading_symbol(r.symbol) for r in rows)
-
-
-def _context_builder(securities: dict[str, Security], sightings: dict[str, list[Sighting]],
-                     ftd: FtdIndex, sec_cusips: dict[str, list[str]], other_ciks: Mapping[str, int] = {}, *,
-                     resolution_source: Callable[[Security], str] | None = None
-                     ) -> Callable[[Security, bool | None], SecurityContext]:
-    """The finder's `SecurityContext` for a security of the run, given whether it
-    is listed today; `resolution_source`: the lookup tier that found each security's issuer
-    (`identity.Identity.resolution_source`; none: "security_master")."""
-    siblings: dict[int, list[SecurityRef]] = defaultdict(list)
-    for s in securities.values():
-        if s.issuer_cik is not None:
-            siblings[s.issuer_cik].append(_security_ref(s, ftd, sec_cusips.get(s.sec_id, [])))
-
-    def security_context(s: Security, listed_now: bool | None) -> SecurityContext:
-        sig = sightings[s.sec_id]
-        sibs = siblings.get(s.issuer_cik) or [_security_ref(s, ftd, sec_cusips.get(s.sec_id, []))]
-        rows = ftd.trading_rows(sec_cusips.get(s.sec_id, []))
-        # sec_id -> (first sighting, last own-ticker sighting) for every security
-        # sharing this issuer CIK, from the same sightings built above; a sibling
-        # with no sightings gets no entry (the finder treats it as alive at every
-        # filing). The end reuses own_last_seen so a sibling's post-delisting OTC
-        # tail under another symbol can't extend its life past its real death.
-        spans: dict[str, tuple[str, str]] = {}
-        for ref in sibs:
-            sib_sig = sightings.get(ref.sec_id)
-            if not sib_sig:
-                continue
-            sib_sec = securities.get(ref.sec_id)
-            span_end = own_last_seen(sib_sec, sib_sig) if sib_sec is not None else sib_sig[-1].day
-            spans[ref.sec_id] = (sib_sig[0].day, span_end)
-        return SecurityContext(
-            security=s,
-            siblings=sibs,
-            ticker_on=ticker_on(sig),
-            last_seen=own_last_seen(s, sig),
-            seen_after=lambda day, sig=sig: any(x.day > day for x in sig),
-            listed_today=listed_now,
-            expected_name=s.eras[-1].name if s.eras else None,
-            sibling_spans=spans,
-            resolution_source=resolution_source(s) if resolution_source is not None else "security_master",
-            ftd_seen_after=lambda day, sig=sig, own=s.own_tickers(): any(
-                x.day > day for x in sig if x.source == "ftd" and x.value in own),
-            trading=OwnTrading(sig, frozenset(sec_cusips.get(s.sec_id, [])), rows, ftd),
-            cusip_switches=_cusip_switches(s, ftd, sec_cusips.get(s.sec_id, [])),
-            trades_after=lambda day, rows=rows: trades_after(rows, day),
-            cusip_rows_near=lambda day, rows=rows: _rows_near(rows, day),
-            other_cik=other_ciks.get(s.sec_id),
-            has_cusips=bool(sec_cusips.get(s.sec_id)),
-        )
-
-    return security_context
-
-
 @dataclass
 class _DelistingSearch:
     """Stage 5's answer: every delisting found, whether each security is listed
@@ -358,9 +282,10 @@ def _find_delistings(ctx: _RunContext, securities: dict[str, Security], sec_cusi
     delistings: list[Delisting] = []
     listed: dict[str, bool | None] = {}
     review: list[ReviewItem] = []
-    sightings = {sid: ticker_sightings(s, ftd, sec_cusips[sid]) for sid, s in securities.items()}
-    security_context = _context_builder(securities, sightings, ftd, sec_cusips, other_ciks,
-                                        resolution_source=resolution_source)
+    # each security's trading record, over its own CUSIPs and the fails index; its siblings are its issuer's
+    contexts = SecurityContexts.observed(securities, sec_cusips, ftd, other_ciks=other_ciks,
+                                         resolution_source=resolution_source)
+    sightings = {sid: r.sightings for sid, r in contexts.records.items()}
 
     ordered = sorted(securities.values(), key=lambda s: s.sec_id)
     # One batched OpenFIGI ask for every security's listing; a failed batch leaves
@@ -376,9 +301,9 @@ def _find_delistings(ctx: _RunContext, securities: dict[str, Security], sec_cusi
                         if is_placeholder(s.sec_id) and ftd.symbol_deleted(sec_cusips[s.sec_id])) \
         | superseded_placeholders(securities) | frozenset(moved_on)
     if ctx.sec_workers > 1:
-        _warm_delisting_search(clients, ordered, listing, security_context, ctx.sec_workers, retired)
+        _warm_delisting_search(clients, ordered, listing, contexts, ctx.sec_workers, retired)
     for i, s in enumerate(ordered, 1):
-        last_seen = own_last_seen(s, sightings[s.sec_id])
+        last_seen = contexts.records[s.sec_id].last_seen
         ticker = s.eras[-1].ticker if s.eras else ""
         watch = DegradedWatch()
         try:
@@ -388,7 +313,7 @@ def _find_delistings(ctx: _RunContext, securities: dict[str, Security], sec_cusi
             listed[s.sec_id] = False if s.sec_id in retired else listed_today(
                 clients.figi, s.sec_id, edgar=clients.edgar, cik=s.issuer_cik,
                 tickers=sorted(s.own_tickers()), answer=listing.get(s.sec_id))
-            found, found_review = finder.find(security_context(s, listed[s.sec_id]))
+            found, found_review = finder.find(contexts(s, listed[s.sec_id]))
         except FATAL:
             raise
         except Exception as exc:  # an overnight run must survive one bad security
@@ -982,8 +907,8 @@ PREDECESSOR_FORM25_DAYS = 30     # stage 9d: a successor's Form 25 this close to
 
 @dataclass
 class _SuccessorEndings:
-    """Stage 9d's answer: the endings found for the successors the run added, the securities they were searched
-    as (one era over each successor's span) with their CUSIPs, and the degraded-answer review items."""
+    """Stage 9d's answer: the endings found for the successors the run added, each such successor's security (as
+    the run added it, no era) and CUSIPs, and the degraded-answer review items."""
     delistings: list[Delisting] = field(default_factory=list)
     securities: dict[str, Security] = field(default_factory=dict)
     cusips: dict[str, list[str]] = field(default_factory=dict)
@@ -992,16 +917,16 @@ class _SuccessorEndings:
 
 def _successor_endings(ctx: _RunContext, finder: DelistingFinder, added: Mapping[str, AddedSecurity],
                        securities: dict[str, Security], sec_cusips: dict[str, list[str]], ftd: FtdIndex,
-                       resolution_source: Callable[[Security], str] | None,
                        delistings: Iterable[Delisting] = ()) -> _SuccessorEndings:
     """9d. The Form 25 search (`DelistingFinder.find`, Form 25 matches only: no fallback ending for a security no
     observation names) for each successor the run added: a line successor (`AddedLineSuccessor`, seen over its new
     CUSIP's fails rows: California Resources' 2016 line, Dynegy's 2010 line, ODP Corp) and an 8-K12B successor
     (`AddedSuccessor`, alive from its 8-K12B until its issuer's own Form 25: TiVo Corp, Rovi's successor). Each is
-    searched as a security with one era over that span, beside the run's securities of its issuer; a successor
-    listed today keeps no ending. An 8-K12B successor's span then runs to the ending's last trade. A Form 25 that
-    already owns one of the run's delistings (the predecessor's own, filed under the shared CIK: OKE 2026) raises no
-    unmatched review item here."""
+    searched from its own trading record (`TradingRecord.added`: its ticker, its span, to the run date when it has
+    no fails rows, and its CUSIPs), beside the run's securities of its issuer as its siblings; no era is made up for
+    it, and its issuer's lookup tier is none ("security_master"). A successor listed today keeps no ending. An 8-K12B
+    successor's span then runs to the ending's last trade. A Form 25 that already owns one of the run's delistings
+    (the predecessor's own, filed under the shared CIK: OKE 2026) raises no unmatched review item here."""
     clients, out = ctx.clients, _SuccessorEndings()
     owned = {d.form25_sub.accession for d in delistings if d.form25_sub is not None}
     mark = ctx.meter.start()
@@ -1011,19 +936,14 @@ def _successor_endings(ctx: _RunContext, finder: DelistingFinder, added: Mapping
             continue
         rows = list(getattr(a, "rows", []))
         first, last = a.span()
-        end = last if rows else ctx.as_of.isoformat()
-        era = TickerEra(a.ticker, first, end, [Observation(a.ticker, first, a.security.name),
-                                               Observation(a.ticker, end, a.security.name)])
-        s = replace(a.security, eras=[era])
-        world = {x.sec_id: x for x in securities.values() if x.issuer_cik == cik} | {sid: s}
-        cusips = {x: list(sec_cusips.get(x, [])) for x in world} | {sid: sorted({r.cusip for r in rows})}
-        sightings = {x: ticker_sightings(world[x], ftd, cusips[x]) for x in world}
+        record = TradingRecord.added(a.security, a.ticker, (first, last if rows else ctx.as_of.isoformat()), ftd,
+                                     sorted({r.cusip for r in rows}))
+        issuer = SecurityContexts([*(TradingRecord.observed(x, ftd, sec_cusips.get(x.sec_id, []))
+                                     for x in securities.values() if x.issuer_cik == cik), record])
         watch = DegradedWatch()
         try:
             listed = listed_today(clients.figi, sid, edgar=clients.edgar, cik=cik, tickers=[a.ticker])
-            found, found_review = ([], []) if listed else finder.find(
-                _context_builder(world, sightings, ftd, cusips, resolution_source=resolution_source)(s, listed),
-                fallback=False)
+            found, found_review = ([], []) if listed else finder.find(issuer(a.security, listed), fallback=False)
         except FATAL:
             raise
         except Exception as exc:  # one added successor must not abort the run
@@ -1041,8 +961,8 @@ def _successor_endings(ctx: _RunContext, finder: DelistingFinder, added: Mapping
         if not endings:
             continue
         out.delistings += endings
-        out.securities[sid] = s
-        out.cusips[sid] = cusips[sid]
+        out.securities[sid] = a.security
+        out.cusips[sid] = list(record.cusips)
         if isinstance(a, (AddedSuccessor, AddedLineSuccessor)) and endings[-1].last_trade.day is not None:
             a.last = endings[-1].last_trade.day.isoformat()
     ctx.log(f"successor endings: {len(out.delistings)} for {len(out.securities)} added successors "
@@ -1528,8 +1448,7 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
         delistings += handoffs.added
         closes.update(_last_trade_closes(ctx, handoffs.added, securities, sec_cusips, ftd, ftd_lo, overrides,
                                          prices))
-    ends = _successor_endings(ctx, search.finder, added, securities, sec_cusips, ftd, identity.resolution_source,
-                              delistings)                                                           # 9d
+    ends = _successor_endings(ctx, search.finder, added, securities, sec_cusips, ftd, delistings)          # 9d
     review += ends.review
     if ends.delistings:
         delistings += ends.delistings

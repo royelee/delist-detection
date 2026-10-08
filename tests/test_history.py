@@ -1,31 +1,21 @@
-"""history.ticker_on: a security's ticker on a day, from its dated sightings.
-history.observation_map_rows: observation_map.csv's rows (spec §7.x).
+"""history.observation_map_rows: observation_map.csv's rows (spec §7.x).
 history.filtered_ticker_sightings: Phase 4 rule 2, a backfilled observation
 adds no ticker_history range.
 history.Histories: where a security's history ends (the clip, a successor's ticker, listed today), at its
-interface, without a run."""
+interface, without a run. (The ticker on a day and the last own sighting are the trading record's:
+tests/test_trading_record.py.)"""
 from datetime import date, timedelta
 
 from delist_detection.added_securities import AddedLineSuccessor
 from delist_detection.crsp_codes import CrspBucket
 from delist_detection.ftd import FtdIndex, FtdRow
 from delist_detection.history import (Ending, Histories, SecurityEnd, Sighting, cusip_sightings,
-                                      filtered_ticker_sightings, is_backfilled, observation_map_rows, own_last_seen,
-                                      ticker_on, ticker_range_review, ticker_sightings)
+                                      filtered_ticker_sightings, is_backfilled, observation_map_rows,
+                                      ticker_range_review, ticker_sightings)
 from delist_detection.last_trade import NO_DAY, UNCONFIRMED, LastTrade
 from delist_detection.observations import Observation, TickerEra
 from delist_detection.security_master import Security
 from delist_detection.store import DelistingKey
-
-
-def test_the_ticker_on_a_day_is_the_latest_sighting_on_or_before_it():
-    on = ticker_on([Sighting("2021-12-31", "FB", "observation"), Sighting("2022-06-09", "META", "ftd")])
-    assert on("2022-06-08") == "FB" and on("2022-06-09") == "META" and on("2030-01-01") == "META"
-
-
-def test_a_day_before_every_sighting_takes_the_first_and_none_without_sightings():
-    assert ticker_on([Sighting("2021-12-31", "FB", "observation")])("2000-01-01") == "FB"
-    assert ticker_on([])("2021-12-31") is None
 
 
 # --- observation_map_rows: one row per observation, its sec_id and status, read from the history's own answer ---
@@ -236,14 +226,6 @@ def _hsc(line_tickers=frozenset()):
 
 def test_own_tickers_are_the_eras_and_the_lines():
     assert _hsc().own_tickers() == {"HSC"} and _hsc({"NVRI"}).own_tickers() == {"HSC", "NVRI"}
-
-
-def test_own_last_seen_counts_a_ticker_the_line_follow_found():
-    """Harsco renamed itself Enviri (NVRI) in 2023 on the same CUSIP: once the line follow adds NVRI, the
-    security's last own sighting is its last NVRI row, not its last HSC one."""
-    sig = [Sighting("2023-06-20", "HSC", "ftd"), Sighting("2024-01-02", "NVRI", "ftd")]
-    assert own_last_seen(_hsc(), sig) == "2023-06-20"
-    assert own_last_seen(_hsc({"NVRI"}), sig) == "2024-01-02"
 
 
 def test_a_first_day_zzzz_row_is_no_ticker_sighting_but_still_a_cusip_sighting():

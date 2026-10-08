@@ -45,7 +45,7 @@ def _ends(fake_edgar, monkeypatch, added, *, listed=False, form25=True):
     ctx = pipeline._RunContext(clients, date(2026, 9, 25), lambda *a: None, 1, StageMeter(lambda *a: None))
     rows = [r for a in added.values() for r in getattr(a, "rows", [])]
     finder = DelistingFinder(edgar, clients.classifier)
-    return pipeline._successor_endings(ctx, finder, added, {}, {}, FtdIndex(rows), None)
+    return pipeline._successor_endings(ctx, finder, added, {}, {}, FtdIndex(rows))
 
 
 def _security():
@@ -54,10 +54,13 @@ def _security():
 
 def test_a_line_successor_takes_its_own_form25_ending(fake_edgar, monkeypatch):
     rows = [FtdRow(f"2020-0{m}-15", "65249B109", "NEWC", "NEWCO CORP", 10.0 + m) for m in range(1, 6)]
-    ends = _ends(fake_edgar, monkeypatch, {SID: AddedLineSuccessor(_security(), "NEWC", "2019-06-03", rows)})
+    a = AddedLineSuccessor(_security(), "NEWC", "2019-06-03", rows)
+    ends = _ends(fake_edgar, monkeypatch, {SID: a})
     assert [(d.sec_id, d.delist_date, d.record.bucket) for d in ends.delistings] == [
         (SID, "2020-06-11", CrspBucket.MERGER)]
-    assert ends.securities[SID].eras[0].ticker == "NEWC" and ends.cusips[SID] == ["65249B109"]
+    assert [d.ticker for d in ends.delistings] == ["NEWC"]
+    # searched from its own span and CUSIPs: the stage hands back the security as the run added it, no era made up
+    assert ends.securities[SID] is a.security and a.security.eras == [] and ends.cusips[SID] == ["65249B109"]
 
 
 def test_an_8k12b_successor_is_searched_to_the_run_date_and_its_span_runs_to_the_ending(fake_edgar, monkeypatch):
@@ -116,7 +119,7 @@ def test_a_failed_halt_feed_read_makes_the_ending_resolution_degraded(fake_edgar
     clients, ctx = _ctx(edgar, monkeypatch)
     finder = DelistingFinder(edgar, clients.classifier, halts=_FailingHalts())
     a = AddedSuccessor(_security(), "NEWC", "2016-09-08")
-    ends = pipeline._successor_endings(ctx, finder, {SID: a}, {}, {}, FtdIndex([]), None)
+    ends = pipeline._successor_endings(ctx, finder, {SID: a}, {}, {}, FtdIndex([]))
     assert [d.delist_date for d in ends.delistings] == ["2020-06-11"]
     assert "resolution_degraded" in ends.delistings[0].flags
     degraded = [r for r in ends.review if r.flag == "resolution_degraded"]
@@ -134,7 +137,7 @@ def test_the_finders_review_rows_are_kept(fake_edgar, monkeypatch):
             return [], [item]
 
     ends = pipeline._successor_endings(ctx, _Finder(), {SID: AddedSuccessor(_security(), "NEWC", "2016-09-08")},
-                                       {}, {}, FtdIndex([]), None)
+                                       {}, {}, FtdIndex([]))
     assert ends.review == [item]
 
 
