@@ -22,7 +22,8 @@ from delist_detection.llm_merger_extractor import (LEGACY_VERSION, PROMPT_VERSIO
                                                     StockLeg, electors_only)
 from delist_detection.payout_gate import (DEFAULT_TOL, GATE_SKIPPED, NO_DEFAULT, PACKAGE, gate_payouts,
                                           reconcile)
-from delist_detection.payout_rule import MergerInputs, basket_legs, value_fields
+from delist_detection.dlret import MergerInputs
+from delist_detection.payout_rule import basket_legs, value_fields
 from delist_detection.price_requests import RECEIVED_CLOSE, request_rows
 from delist_detection.run_snapshot import RunSnapshot
 from delist_detection.sec_stats import SEC_STATS

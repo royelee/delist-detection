@@ -12,7 +12,7 @@ from delist_detection.delistings import Delisting
 from delist_detection.exit_kind import successor_note
 from delist_detection.last_trade import LastTrade
 from delist_detection.llm_merger_extractor import MergerTerms
-from delist_detection.merger_value import MergerValue, MergerValues
+from delist_detection.merger_value import MergerValue, MergerValues, TableTerms
 from delist_detection.payout_extractor import PayoutResult
 from delist_detection.rewrites import (
     HANDOFF_CONTINUATION, LINE_CONTINUATION, NO_EVIDENCE_DEFAULT, R1_CONTINUATION, SUCCESSOR_UNKNOWN, Rewrite, Rule,
@@ -55,7 +55,7 @@ def test_a_merger_made_a_continuation_drops_its_payout_reads_and_flags():
         CONTINUATION_CODE, CrspBucket.EXCHANGE_TRANSFER, "NEW")
     assert d.flags == ["last_trade_date_unconfirmed", "ftd_close_prior:1", HANDOFF_CONTINUATION]
     assert values.get(d.key) is None and values.payout_rows({d.key: "TKR"}) == []
-    assert all(d.key not in m for m in values.table_inputs().values())
+    assert values.table_terms(d.key) == TableTerms()
     assert rw == Rewrite(Rule.HANDOFF, CrspBucket.MERGER, 231, "NEW", "handoff", "8-K12B X") and d.rewrites == [rw]
 
 

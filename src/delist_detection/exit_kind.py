@@ -5,12 +5,11 @@ the contract, the lifecycle walk, the audit, the truth judges, the regression re
 It imports nothing of the package, so a measurement module reads a row without loading a network client.
 
 - **The contract's view** (spec: Delist Library Reset, "delistings · one row per ended security"; decisions 9 and
-  12): `ending_fields` gives a row's exit kind, drop reason, whether it is a continuation, and its value split into
-  a measured `dlret` and a `dlret_fill`. Today's bucket and CRSP code map to `exit_kind` and `drop_reason`: a
-  bankruptcy delisting (the classifier's code 470, today's `liquidation` bucket) is `dropped` for `bankruptcy`; a
-  compliance failure is `dropped` for the reason its code names; `unknown` asserts no kind. A cash or stock
-  consideration or a recovery is measured; a Shumway mark, assumed par and a transfer's 0.0 are fills; a
-  continuation has neither. `is_distress` reads it.
+  12): `ending_fields` gives a row's exit kind, drop reason and whether it is a continuation. Today's bucket and CRSP
+  code map to `exit_kind` and `drop_reason`: a bankruptcy delisting (the classifier's code 470, today's
+  `liquidation` bucket) is `dropped` for `bankruptcy`; a compliance failure is `dropped` for the reason its code
+  names; `unknown` asserts no kind. `is_distress` reads it. Its value, a measured `dlret` or a `dlret_fill`, is the
+  value's own answer (`dlret.contract_value`, architecture step 10: each method's kind is defined beside it).
 - **Real endings** (`is_real_ending`, `is_continuation`, `last_endings`): a row whose successor is not the security
   itself ended it; a successor other than itself is a continuation (decision 9); each security's last real ending is
   the one contract/delistings.csv keeps (decision 12).
@@ -54,9 +53,6 @@ DROP_REASON_OF_CODE = {
     "560": "capital", "570": "guidelines", "584": "guidelines", "573": "sec_order", "585": "sec_order",
     "580": "filings_fees",
 }
-MEASURED_METHODS = frozenset({"cash_only", "stock_only", "cash_plus_stock", "recovery_ratio", "otc_print", "plan_stock",
-                              "worthless"})
-FILL_METHODS = frozenset({"assumed_par", "shumway_nyse_amex", "shumway_nasdaq", "exchange_transfer_zero"})
 
 
 @dataclass(frozen=True)
@@ -64,8 +60,6 @@ class EndingFields:
     exit_kind: str           # one of EXIT_KINDS, or "" when the row asserts none (today's `unknown`)
     drop_reason: str         # one of DROP_REASONS on a `dropped` row whose code names one, else ""
     continuation: bool
-    dlret: str               # the measured value as delistings.csv writes it, or ""
-    dlret_fill: str          # the fill as delistings.csv writes it, or ""
 
 
 # -- real endings ------------------------------------------------------------------------------------------------
@@ -107,13 +101,9 @@ def _kind(row: Mapping[str, str]) -> tuple[str, str]:
 
 
 def ending_fields(row: Mapping[str, str]) -> EndingFields:
-    """The contract's columns for one delistings.csv row."""
+    """The contract's kind columns for one delistings.csv row (its value cells are the value's: dlret.contract_value)."""
     kind, reason = _kind(row)
-    cont = is_continuation(row)
-    method, value = row["dlret_method"], row["dlret"]
-    return EndingFields(kind, reason, cont,
-                        value if method in MEASURED_METHODS and not cont else "",
-                        value if method in FILL_METHODS and not cont else "")
+    return EndingFields(kind, reason, is_continuation(row))
 
 
 def is_distress(row: Mapping[str, str]) -> bool:
@@ -249,7 +239,7 @@ def linked_by_timing(reason: str) -> bool:
 
 
 # -- the value rules ---------------------------------------------------------------------------------------------
-# contract/delistings.csv's value_rule column (payout_rule.value_fields writes it).
+# contract/delistings.csv's value_rule column (dlret.rule_of decides it, payout_rule.value_fields writes it).
 VALUE_RULES = frozenset({"cash", "stock", "cash_plus_stock", "basket", "otc_print", "recovery", "worthless",
                          "transfer", "continuation", "expiration", "unknown"})
 

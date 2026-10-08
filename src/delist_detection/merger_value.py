@@ -21,8 +21,8 @@ first filings and SEC's name index are read through the run's issuer record (`is
 failure policy is the stage's: a failed read is unknown and never remembered.
 
 The later stages ask `MergerValues`, never a parallel map: stage 8b the terms R1 reads (`read_terms`) and the rows it
-rewrites (`drop`), stage 9b whether a merger reconciled (`reconciled`), stage 10a the delistings.csv inputs
-(`table_inputs`), 10c the payouts.csv rows (`payout_rows`) and 10g the contract's inputs (`contract_inputs`) and the
+rewrites (`drop`), stage 9b whether a merger reconciled (`reconciled`), stage 10a the terms delistings.csv carries
+(`table_terms`), 10c the payouts.csv rows (`payout_rows`) and 10g the contract's inputs (`contract_inputs`) and the
 stock legs' price requests (`requests`).
 
 The four rule modules it calls are its collaborators, each with its own interface and real-case tests:
@@ -45,6 +45,7 @@ from .added_securities import AddedAcquirer, AddedSecurity
 from .crsp_codes import CrspBucket
 from .degraded import DegradedWatch, degraded_item
 from .delistings import Delisting
+from .dlret import MergerInputs
 from .exchange_terms import one_share_no_cash
 from .fatal import FATAL
 from .figi_resolution import class_letter, share_class_from_name
@@ -52,7 +53,6 @@ from .ftd import FtdIndex
 from .llm_merger_extractor import MergerTerms
 from .observations import normalize_ticker
 from .payout_gate import BY_LINE, BY_TICKER, GATE_SKIPPED, GatedPayouts, gate_payouts
-from .payout_rule import MergerInputs
 from .prefetch import warm
 from .price_requests import PriceAnswers
 from .reconstruction import for_delisting
@@ -88,6 +88,21 @@ class MergerValue:
     price_ticker: str = ""
     leg_sec_ids: Mapping[str, str] = field(default_factory=dict)
     request: tuple[str, str] | None = None
+
+
+@dataclass(frozen=True)
+class TableTerms:
+    """One ending's merger terms as delistings.csv carries them (`MergerValues.table_terms`, stage 10a): the cash per
+    share, the stock leg (its ratio, the acquirer's price and ticker), where the cash came from, its read's confidence
+    and the payout gate's flags. The cash, the leg's ratio and price and the confidence are value inputs
+    (`dlret.ValueInputs`); the ticker, the source and the flags are the row's provenance."""
+    payout_per_share: float | None = None
+    stock_ratio: float | None = None
+    acquirer_price: float | None = None
+    acquirer_ticker: str | None = None
+    payout_source: str | None = None
+    payout_confidence: str | None = None
+    flags: tuple[str, ...] = ()
 
 
 @dataclass
@@ -149,18 +164,16 @@ class MergerValues:
         t = terms or {}
         return not (one_share_no_cash(t.get("stock_ratio"), t.get("cash_per_share")) and payout is None)
 
-    def table_inputs(self) -> dict[str, Mapping]:
-        """`reconstruction.build_delistings_table`'s merger inputs, keyed as it reads them: the caller's rows by
-        sec_id or delisting and the gate's verdicts by delisting."""
-        merger_terms = dict(self.caller_terms)
-        merger_terms.update({k: v.terms for k, v in self.records.items() if v.terms is not None})
-        return {
-            "payouts": {k: v.payout for k, v in self.records.items() if v.payout is not None},
-            "merger_terms": merger_terms,
-            "payout_sources": {k: v.source for k, v in self.records.items() if v.source is not None},
-            "payout_confidences": {k: v.confidence for k, v in self.records.items() if v.confidence is not None},
-            "payout_flags": {k: v.flags for k, v in self.records.items() if v.flags},
-        }
+    def table_terms(self, key: DelistingKey) -> TableTerms:
+        """What delistings.csv carries of the delisting's merger terms (stage 10a), for any delisting: the stock leg
+        the gate priced, else the caller's --merger-terms row (by delisting, else by sec_id: every delisting of the
+        security), and its cash, else the cash the gate kept; with the gate's source, confidence and flags."""
+        v = self.records.get(key)
+        terms = (v.terms if v is not None and v.terms is not None else for_delisting(self.caller_terms, key)) or {}
+        if v is None:
+            v = MergerValue(key)
+        return TableTerms(terms.get("cash_per_share", v.payout), terms.get("stock_ratio"), terms.get("acquirer_price"),
+                          terms.get("acquirer_ticker"), v.source, v.confidence, v.flags)
 
     def payout_rows(self, tickers: Mapping[DelistingKey, str]) -> list[dict]:
         """payouts.csv (stage 10c): each merger the regex reader answered for, its gated payout and where it came

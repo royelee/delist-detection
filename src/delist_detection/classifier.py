@@ -91,6 +91,12 @@ class DelistRecord:
     successor_sec_id: str | None = None       # a continuation: the security a holder's shares became, one for one
     ticker_successor_sec_id: str | None = None   # another security that took over this ticker (not a continuation)
 
+    @property
+    def deregistered(self) -> bool:
+        """The classifier found a deregistration and no merger or distress evidence (`evidence["deregistered"]`):
+        an unknown ending valued at par (`dlret.ValueInputs.deregistered`)."""
+        return bool((self.evidence or {}).get("deregistered"))
+
     def to_dict(self) -> dict:
         d = asdict(self)
         d["bucket"] = self.bucket.value

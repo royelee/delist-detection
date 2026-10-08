@@ -16,7 +16,7 @@ from delist_detection.handoffs import (
 from delist_detection.history import Sighting
 from delist_detection.last_trade import LastTrade
 from delist_detection.llm_merger_extractor import MergerTerms
-from delist_detection.merger_value import MergerValue, MergerValues
+from delist_detection.merger_value import MergerValue, MergerValues, TableTerms
 from delist_detection.review_triage import FilingRef, ReviewItem
 from delist_detection.rewrites import SUCCESSOR_UNKNOWN, Rule, rewrite_by
 from delist_detection.security_master import Security
@@ -371,7 +371,7 @@ def test_a_rewritten_merger_drops_its_payout_reads_and_flags_and_a_rewritten_unk
     assert (azpn.record.bucket, azpn.record.crsp_code, azpn.record.successor_sec_id) == (
         CrspBucket.EXCHANGE_TRANSFER, 304, "NEW")
     assert azpn.flags == ["last_trade_date_unconfirmed", "ftd_close_prior:1", "handoff_continuation"]
-    assert values.get(azpn.key) is None and values.table_inputs()["payout_flags"] == {}
+    assert values.get(azpn.key) is None and values.table_terms(azpn.key) == TableTerms()
     googl = _delisting("OLD", "2015-10-12", CrspBucket.UNKNOWN, "2015-10-02", code=None, ticker="GOOGL",
                        flags=("no_evidence_default",))
     p = HandoffPair("GOOGL", "OLD", "NEW", "2015-10-05", "2015-10-06", "2015-10-06")

@@ -18,7 +18,7 @@ from delist_detection.ftd import FtdIndex
 from delist_detection.issuer_record import IssuerRecord
 from delist_detection.last_trade import LastTrade
 from delist_detection.llm_merger_extractor import MergerTerms
-from delist_detection.merger_value import MergerValue, MergerValues, value_mergers
+from delist_detection.merger_value import MergerValue, MergerValues, TableTerms, value_mergers
 from delist_detection.payout_extractor import PayoutResult
 from delist_detection.price_requests import RECEIVED_CLOSE, PriceAnswers, PriceKey
 from delist_detection.security_master import Security
@@ -213,10 +213,14 @@ def test_the_callers_terms_reach_every_delisting_of_the_security():
     values = MergerValues({K: MergerValue(K, payout=3.0, source="8K_2.01", confidence="high", flags=("x",))},
                           caller_terms={"M": {"cash_per_share": 5.0}})
     assert values.reconciled(other) and values.read_terms(other) is None
-    t = values.table_inputs()
-    assert t["merger_terms"]["M"] == {"cash_per_share": 5.0} and t["payouts"] == {K: 3.0}
-    assert (t["payout_sources"], t["payout_confidences"], t["payout_flags"]) == ({K: "8K_2.01"}, {K: "high"},
-                                                                                 {K: ("x",)})
+    # delistings.csv: the caller's cash reaches the earlier delisting too; the merger's own record keeps its gate's
+    # source, confidence and flags (the caller's row, by sec_id, gives the cash over the gate's payout)
+    assert values.table_terms(other) == TableTerms(payout_per_share=5.0)
+    assert values.table_terms(K) == TableTerms(5.0, None, None, None, "8K_2.01", "high", ("x",))
+    # without the caller's row, the gate's payout is the cash
+    gated = MergerValues({K: MergerValue(K, payout=3.0, source="8K_2.01", confidence="high", flags=("x",))})
+    assert gated.table_terms(K) == TableTerms(3.0, None, None, None, "8K_2.01", "high", ("x",))
+    assert gated.table_terms(other) == TableTerms()
 
 
 def test_a_dropped_merger_has_no_reads_left():
@@ -225,7 +229,7 @@ def test_a_dropped_merger_has_no_reads_left():
     assert len(values.payout_rows({K: "MMM"})) == 1
     values.drop(K)
     assert values.get(K) is None and values.payout_rows({K: "MMM"}) == [] and values.read_terms(K) is None
-    assert values.table_inputs()["payout_flags"] == {}
+    assert values.table_terms(K) == TableTerms()
 
 
 def test_a_payout_row_cites_the_filing_its_value_came_from():

@@ -1457,7 +1457,7 @@ def test_a_stale_review_decision_becomes_a_review_decision_unmatched_row(fake_ed
 
 
 def test_a_blank_dlret_with_no_flags_still_reaches_review_as_fix_no_dlret(fake_edgar, tmp_path, monkeypatch):
-    """resolve_dlret can return NaN with an *empty* flags
+    """dlret.decide can return NaN with an *empty* flags
     list -- a --last-trade-closes override of 0 on a non-merger bucket, since
     the override was "given" so no_last_close is never added (SEC
     fails-to-deliver data never itself yields a close <= 0). Such a delisting
@@ -1874,13 +1874,13 @@ def test_a_look_back_close_keeps_its_row_date_in_the_evidence(fake_edgar, tmp_pa
             FtdRow("2018-11-21", "00817Y108", "AET", "AETNA INC.(NEW)", 205.00)]
     index, clients = _clients(fake_edgar, ftd_rows=rows)
     seen = {}
-    real = pipeline.build_delistings_table
+    real = pipeline.enrich
 
-    def spy(records, **kw):
-        seen.update({r.sec_id: r.evidence for r in records})
-        return real(records, **kw)
+    def spy(record, value, **kw):
+        seen[record.sec_id] = record.evidence
+        return real(record, value, **kw)
 
-    monkeypatch.setattr(pipeline, "build_delistings_table", spy)
+    monkeypatch.setattr(pipeline, "enrich", spy)
     run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
     assert seen["BBG000FJLFX8"]["ftd_close_row_date"] == "2018-11-21"
     (d,) = read_table("delistings", table_path(tmp_path, "delistings"))

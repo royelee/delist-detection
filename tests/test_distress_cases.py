@@ -153,10 +153,12 @@ def _wolf():
 def test_an_answered_plan_received_close_is_the_plans_value_not_the_shumway_fill():
     """WOLF 2025: stage 10g asks the new line's received close; with the answer the ending's dlret is the ratio x
     that close / the last close - 1 (a second run changes values only), never the bucket's Shumway -30%. Its method
-    is its own (sub-plan 5f): a plan's new shares are no OTC print."""
-    from delist_detection.dlret import DlretMethod
+    is its own (sub-plan 5f): a plan's new shares are no OTC print; and (step 10's declared fix) it is graded medium,
+    like an OTC print."""
+    from delist_detection.dlret import DlretMethod, ValueInputs
+    from delist_detection.exchanges import normalize_exchange
     from delist_detection.price_requests import OTC_PRINT, RECEIVED_CLOSE, PriceAnswers, PriceKey
-    from delist_detection.reconstruction import build_delistings_table
+    from delist_detection.reconstruction import enrich
     from delist_detection.trading_calendar import next_trading_day
     d, terms, _, _, _, _, _, _ = _wolf()
     ratio, day = float(terms[d.key].plan_ratio), d.last_trade.day
@@ -166,10 +168,10 @@ def test_an_answered_plan_received_close_is_the_plans_value_not_the_shumway_fill
 
     otc, plan = PriceAnswers({asked(RECEIVED_CLOSE, "WOLF"): 22.0}).ending_values(d.sec_id, day, terms[d.key])
     assert otc is None
-    rows = build_delistings_table([d.record], last_trade_closes={d.key: 1.85}, otc_prints={},
-                                  plan_values={d.key: plan}, exchanges={d.key: d.exchange})
-    assert rows[0].dlret == pytest.approx(ratio * 22.0 / 1.85 - 1)
-    assert rows[0].dlret_method is DlretMethod.PLAN_STOCK
+    e = enrich(d.record, ValueInputs(d.record.bucket, normalize_exchange(d.exchange), 1.85, plan_value=plan))
+    assert e.dlret == pytest.approx(ratio * 22.0 / 1.85 - 1)
+    assert e.dlret_method is DlretMethod.PLAN_STOCK
+    assert e.dlret_confidence == "medium"
     # an answer for another ticker is not the plan's
     assert PriceAnswers({asked(RECEIVED_CLOSE, "XXXX"): 22.0}).ending_values(d.sec_id, day, terms[d.key]) == (
         None, None)

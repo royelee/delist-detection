@@ -25,7 +25,7 @@ NETWORK_CLIENTS = frozenset({"edgar", "sec_http", "openfigi", "ftd", "midas", "n
 # one round of the diagnosis loop and its tokens
 MEASUREMENT = ("run_snapshot", "lifecycle", "verdict", "scorecard", "truth", "diagnosis_truth", "truth_set",
                "regression", "loop_round", "truth_update", "audit", "truth_build")
-CONTRACT = ("contract", "payout_rule")           # the contract's rows, pure over the tables and stage 8's inputs
+CONTRACT = ("contract", "payout_rule", "dlret")  # the contract's rows and an ending's value, pure
 VOCABULARY = ("exit_kind",)                      # the row vocabulary: imports nothing of the package
 CLASSIFICATION = ("end_of_era", "handoffs", "delistings", "continuation_evidence", "classifier", "rewrites",
                   "last_trade", "payout_gate", "review_triage", "history")
@@ -57,6 +57,12 @@ def test_a_reader_of_the_tables_loads_no_network_client(module):
 
 def test_the_row_vocabulary_imports_nothing_of_the_package():
     assert _closure("exit_kind") == {"exit_kind"}
+
+
+def test_an_endings_value_loads_only_the_row_vocabulary_and_the_leaf_enums():
+    """dlret (architecture step 10) is read by the table, the contract and the firm month alike: it loads the row
+    vocabulary, the bucket and exchange enums and the ticker spelling, nothing that classifies."""
+    assert _closure("dlret") == {"dlret", "exit_kind", "crsp_codes", "exchanges", "observations", "names"}
 
 
 @pytest.mark.parametrize("module", CLASSIFICATION)

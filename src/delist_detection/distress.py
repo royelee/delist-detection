@@ -17,7 +17,7 @@ around its last trade. Pure: texts and rows in, facts out.
 - `liquidating`: an 8-K that announces a liquidating distribution, a liquidating trust or a plan of liquidation or
   dissolution (EQC 2025: a voluntary delisting during the liquidation is a liquidation, not a transfer).
 
-What stage 9e hands the contract from these readings is `payout_rule.DistressTerms`, beside a merger's inputs."""
+What stage 9e hands the contract from these readings is `dlret.DistressTerms`, beside a merger's inputs."""
 from __future__ import annotations
 
 import re

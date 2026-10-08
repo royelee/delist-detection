@@ -11,7 +11,17 @@ The two callers are different worlds:
 
 We expose two pure functions that take a `DelistRecord` plus the price panel
 and emit (a) a forward-return adjustment for training, (b) an exit cashflow
-plus universe-exit date for backtesting.
+plus universe-exit date for backtesting. These are handling's own policies per
+bucket, not the ending's value rule.
+
+The CRSP-style firm-month form is the Beaver-McNichols-Price (2007) correction
+(`firm_month_correction`, from one `dlret.ValueInputs`; `build_firm_month_correction`
+takes the same inputs as keywords):
+
+    R_delisting_month = (1 + R_partial) * (1 + DLRET) - 1
+    R_partial = last_trade_close / prior_month_end_close - 1
+
+with the DLRET `dlret.decide` answers for the firm month.
 
 Conventions
 -----------
@@ -55,9 +65,9 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Iterable, Mapping
 
-from .bmp_correction import bmp_firm_month_return, compute_dlret
 from .classifier import DelistRecord
 from .crsp_codes import CrspBucket
+from .dlret import ValueInputs, decide
 from .exchanges import Exchange
 
 
@@ -276,35 +286,22 @@ def _float(v) -> float | None:
     return None if f != f else f
 
 
-def build_firm_month_correction(
-    record: DelistRecord,
-    prior_month_end_close: float,
-    last_trade_close: float,
-    exchange: Exchange | None,
-    payout_per_share: float | None = None,
-    recovery_ratio: float | None = None,
-    stock_ratio: float | None = None,
-    acquirer_price: float | None = None,
-    otc_print: float | None = None,
-) -> FirmMonthReturn:
-    """Compute the BMP 2007 corrected firm-month return for one delisting.
+def firm_month_correction(record: DelistRecord, prior_month_end_close: float,
+                          value: ValueInputs) -> FirmMonthReturn:
+    """The BMP 2007 corrected firm-month return of one delisting, from its value inputs (`value`, of the record's
+    bucket).
 
-    Implements `R_month = (1 + R_partial) * (1 + DLRET) - 1`, where
-    `R_partial` is the price return from prior month-end close to last
-    trade, and `DLRET` is the synthesized cash-out return per bucket
-    (see `bmp_correction.compute_dlret`).
+    Implements `R_month = (1 + R_partial) * (1 + DLRET) - 1`, where `R_partial` is the price return from the prior
+    month-end close to the last trade (`value.last_trade_close`), and `DLRET` is the one `dlret.decide` answers for
+    the firm month (`EndingValue.firm_month`: the bucket's rule measured, else its Shumway mark; the table's par fill
+    is the table's).
 
-    `exchange=None` falls back to `Exchange.OTHER`, which uses the
-    conservative Nasdaq Shumway constant for performance delistings.
-
-    The returned `drop` field is the canonical caller signal:
-    `drop=True` means the firm-month is unrecoverable (EXPIRATION, no
-    delist date, degenerate prices, negative payout/recovery) and the
-    row should be removed from the panel. By invariant,
-    `drop == math.isnan(firm_month_return)`.
+    The returned `drop` field is the canonical caller signal: `drop=True` means the firm-month is unrecoverable
+    (EXPIRATION, no delist date, degenerate prices, negative payout/recovery) and the row should be removed from the
+    panel. By invariant, `drop == math.isnan(firm_month_return)`.
     """
     dd = _parse(record.observed_delist_date)
-    ex = exchange if exchange is not None else Exchange.OTHER
+    ex = value.exchange
     if dd is None:
         return FirmMonthReturn(
             ticker=record.ticker, bucket=record.bucket, exchange=ex,
@@ -314,32 +311,13 @@ def build_firm_month_correction(
             notes="No delist date; dropping from panel",
         )
 
-    dlret = compute_dlret(
-        bucket=record.bucket, exchange=ex,
-        last_trade_close=last_trade_close,
-        payout_per_share=payout_per_share,
-        recovery_ratio=recovery_ratio,
-        stock_ratio=stock_ratio,
-        acquirer_price=acquirer_price,
-        otc_print=otc_print,
-    )
-    r_month = bmp_firm_month_return(
-        prior_month_end_close=prior_month_end_close,
-        last_trade_close=last_trade_close,
-        bucket=record.bucket, exchange=ex,
-        payout_per_share=payout_per_share,
-        recovery_ratio=recovery_ratio,
-        stock_ratio=stock_ratio,
-        acquirer_price=acquirer_price,
-        otc_print=otc_print,
-    )
-    drop = math.isnan(r_month)
-    assert drop == math.isnan(r_month), "drop must agree with NaN return"
-
+    dlret = decide(value).firm_month
     r_partial = (
-        (last_trade_close / prior_month_end_close) - 1.0
+        (value.last_trade_close / prior_month_end_close) - 1.0
         if prior_month_end_close > 0 else float("nan")
     )
+    r_month = float("nan") if math.isnan(dlret) or prior_month_end_close <= 0 else         (1.0 + r_partial) * (1.0 + dlret) - 1.0
+    drop = math.isnan(r_month)
 
     return FirmMonthReturn(
         ticker=record.ticker, bucket=record.bucket, exchange=ex,
@@ -353,3 +331,13 @@ def build_firm_month_correction(
             f"Dropped ({record.bucket.value}): NaN firm-month return"
         ),
     )
+
+
+def build_firm_month_correction(record: DelistRecord, prior_month_end_close: float, last_trade_close: float,
+                                exchange: Exchange | None, **value) -> FirmMonthReturn:
+    """`firm_month_correction` from the inputs as keywords (the per-event form the README shows): `exchange=None`
+    falls back to `Exchange.OTHER`, which uses the conservative Nasdaq Shumway constant for performance delistings;
+    `value` holds `dlret.ValueInputs`' other fields (`payout_per_share`, `stock_ratio`, `acquirer_price`,
+    `recovery_ratio`, `otc_print`, `plan_value`)."""
+    return firm_month_correction(record, prior_month_end_close, ValueInputs(
+        record.bucket, exchange if exchange is not None else Exchange.OTHER, last_trade_close, **value))

@@ -30,6 +30,7 @@ from .distress import (
     BANKRUPTCY_WORDS, OTC_SYMBOL_DAYS, otc_symbol_from_fails, otc_symbol_from_text, plan_ratio,
     new_cusips as plan_new_cusips, price_only, substitutes_new_shares,
 )
+from .dlret import DistressTerms, ValueInputs
 from .evidence import item_sections
 from .exit_kind import (ContinuationReading, continuation_reason, end_day, flag_name, flag_tokens, last_endings,
                         successor_note)
@@ -52,15 +53,14 @@ from .identity import Identity, identify
 from .listing_status import issuer_exchange, listed_today, listing_answers
 from .observations import Observation, ObservationIndex, TickerEra, observation_conflicts
 from .exchange_terms import one_share_no_cash
+from .exchanges import normalize_exchange
 from .own_shares import OwnShares, Reader, new_issuer
 from .own_shares import of as own_shares_of
 from .merger_value import MergerValues, value_mergers
 from .payout_gate import DEFAULT_TOL
-from .payout_rule import DistressTerms
 from .prefetch import Serialized, warm
 from .reconstruction import (
-    OverrideFileError, build_delistings_table, delisting_row, for_delisting, override_row_name,
-    unmatched_override_keys,
+    OverrideFileError, delisting_row, enrich, for_delisting, override_row_name, unmatched_override_keys,
 )
 from .review_triage import Decision, ReviewItem, Triage, is_blank, merge_review_rows, triage
 from .run_snapshot import RunSnapshot, continuation_entries
@@ -1161,27 +1161,25 @@ def _delisting_rows(delistings: list[Delisting], closes: dict[DelistingKey, floa
                     overrides: Overrides, answers: PriceAnswers,
                     distress: Mapping[DelistingKey, DistressTerms]) -> tuple[list[dict], list[dict]]:
     """10a. The delistings.csv rows, and the review rows of those delistings that
-    carry a flag or no DLRET. A merger's inputs are stage 8's record
-    (`MergerValues.table_inputs`); a drop's first OTC print and a bankruptcy plan's
-    value (ruling R6, stage 9e's ratio times the new line's close) are the
-    caller's answers to their requests (`PriceAnswers.ending_values`), so a second
-    run with the answers changes values only."""
-    otc_prints, plan_values = {}, {}
-    for e in delistings:
-        otc, plan = answers.ending_values(e.sec_id, e.last_trade.day, distress.get(e.key))
-        if otc is not None:
-            otc_prints[e.key] = otc
-        if plan is not None:
-            plan_values[e.key] = plan
-    table = build_delistings_table(
-        [e.record for e in delistings], last_trade_closes=closes, exchanges={e.key: e.exchange for e in delistings},
-        recovery_ratios=overrides.recoveries, otc_prints=otc_prints, plan_values=plan_values,
-        **values.table_inputs(),
-    )
-    delisting_by_key = {e.key: e for e in delistings}
+    carry a flag or no DLRET. Each delisting's value inputs (`dlret.ValueInputs`)
+    are its classification, its stage 7 close, the merger terms delistings.csv
+    carries (stage 8's record, `MergerValues.table_terms`), the caller's
+    --recoveries ratio, and a drop's first OTC print or a bankruptcy plan's value
+    (ruling R6, stage 9e's ratio times the new line's close): the caller's answers
+    to their requests (`PriceAnswers.ending_values`), so a second run with the
+    answers changes values only."""
     delisting_rows, review_rows = [], []
-    for enriched in table:
-        e = delisting_by_key[DelistingKey(enriched.sec_id, enriched.delist_date)]
+    for e in delistings:
+        terms = values.table_terms(e.key)
+        otc, plan = answers.ending_values(e.sec_id, e.last_trade.day, distress.get(e.key))
+        value = ValueInputs(e.record.bucket, normalize_exchange(e.exchange), closes.get(e.key),
+                            payout_per_share=terms.payout_per_share, stock_ratio=terms.stock_ratio,
+                            acquirer_price=terms.acquirer_price,
+                            recovery_ratio=for_delisting(overrides.recoveries, e.key), otc_print=otc,
+                            plan_value=plan, payout_confidence=terms.payout_confidence,
+                            deregistered=e.record.deregistered)
+        enriched = enrich(e.record, value, acquirer_ticker=terms.acquirer_ticker, payout_source=terms.payout_source,
+                          extra_flags=terms.flags)
         v = values.get(e.key)
         pr = v.raw if v is not None else None
         delisting_rows.append(delisting_row(
@@ -1195,7 +1193,7 @@ def _delisting_rows(delistings: list[Delisting], closes: dict[DelistingKey, floa
             raw_payout_confidence=pr.confidence if pr else None,
         ))
         # A delisting with a blank DLRET must reach triage even with no flags at
-        # all -- resolve_dlret can return NaN with no flag added (e.g. a
+        # all -- dlret.decide can return NaN with no flag added (e.g. a
         # --last-trade-closes override of 0 or a negative --recoveries/
         # --merger-terms value on a non-merger bucket: the override was "given", so
         # no_last_close is never added). triage() itself drops a flagless row with a

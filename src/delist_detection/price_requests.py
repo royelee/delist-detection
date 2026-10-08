@@ -31,7 +31,7 @@ from datetime import date
 from pathlib import Path
 from typing import Any, NamedTuple
 
-from .payout_rule import DistressTerms
+from .dlret import DistressTerms
 from .reconstruction import OverrideFileError, for_delisting
 from .store import PRICE_REQUEST_COLUMNS, DelistingKey
 from .trading_calendar import next_trading_day

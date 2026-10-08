@@ -20,10 +20,10 @@ from delist_detection.exit_kind import (
 from lifecycle_tables import ending
 
 
-def test_a_bankruptcy_is_dropped_for_bankruptcy_with_its_mark_as_a_fill():
+def test_a_bankruptcy_is_dropped_for_bankruptcy():
     f = ending_fields(ending("S", "2020-05-11", "liquidation", dlret="-0.550000", method="shumway_nasdaq",
                              crsp_code="470"))
-    assert (f.exit_kind, f.drop_reason, f.dlret, f.dlret_fill) == ("dropped", "bankruptcy", "", "-0.550000")
+    assert (f.exit_kind, f.drop_reason) == ("dropped", "bankruptcy")
 
 
 def test_a_liquidation_without_the_bankruptcy_code_stays_a_liquidation():
@@ -38,29 +38,28 @@ def test_a_compliance_failure_is_dropped_for_the_reason_its_code_names(code, rea
     assert (f.exit_kind, f.drop_reason) == ("dropped", reason)
 
 
-def test_a_measured_value_stays_dlret_and_assumed_par_is_a_fill():
+def test_a_merger_is_a_merger_whatever_its_value():
     cash = ending_fields(ending("S", "2018-11-29", dlret="0.110000", method="cash_only", crsp_code="231"))
     par = ending_fields(ending("S", "2018-11-29", dlret="0.000000", method="assumed_par", crsp_code="231"))
-    assert (cash.exit_kind, cash.dlret, cash.dlret_fill) == ("merger", "0.110000", "")
-    assert (par.dlret, par.dlret_fill) == ("", "0.000000")
+    assert (cash.exit_kind, par.exit_kind) == ("merger", "merger")
 
 
-def test_a_continuation_has_no_value_and_a_transfer_keeps_its_zero_as_a_fill():
+def test_a_continuation_and_a_transfer_are_both_exchanges():
     cont = ending_fields(ending("S", "2015-10-02", "exchange_transfer", successor="T", dlret="0.000000",
                                 method="exchange_transfer_zero", crsp_code="304"))
     xfer = ending_fields(ending("S", "2015-10-02", "exchange_transfer", dlret="0.000000",
                                 method="exchange_transfer_zero", crsp_code="304"))
-    assert (cont.exit_kind, cont.continuation, cont.dlret, cont.dlret_fill) == ("exchange", True, "", "")
-    assert (xfer.exit_kind, xfer.continuation, xfer.dlret, xfer.dlret_fill) == ("exchange", False, "", "0.000000")
+    assert (cont.exit_kind, cont.continuation) == ("exchange", True)
+    assert (xfer.exit_kind, xfer.continuation) == ("exchange", False)
 
 
 def test_a_successor_that_is_the_security_itself_is_not_a_continuation():
     assert not ending_fields(ending("S", "2019-03-20", "merger", successor="S")).continuation
 
 
-def test_unknown_asserts_no_kind_and_a_blank_value_stays_blank():
+def test_unknown_asserts_no_kind():
     f = ending_fields(ending("S", "2009-03-08", "unknown", method="needs_last_trade"))
-    assert (f.exit_kind, f.drop_reason, f.dlret, f.dlret_fill) == ("", "", "", "")
+    assert (f.exit_kind, f.drop_reason) == ("", "")
 
 
 def test_distress_is_a_liquidation_or_a_drop_that_carries_a_harsh_mark():
@@ -79,12 +78,6 @@ def test_every_code_maps_into_the_contract_vocabulary():
         f = ending_fields(ending("S", "2010-01-04", bucket.value, crsp_code=str(code)))
         assert f.exit_kind in EXIT_KINDS
         assert f.drop_reason == "" or (f.exit_kind == "dropped" and f.drop_reason in DROP_REASONS)
-
-
-def test_an_otc_print_value_is_a_measured_dlret_not_a_fill():
-    f = ending_fields(ending("S", "2012-05-01", "compliance_failure", dlret="-0.750000", method="otc_print",
-                             crsp_code="500"))
-    assert (f.dlret, f.dlret_fill) == ("-0.750000", "")
 
 
 def test_a_real_ending_and_a_continuation_are_read_from_the_successor_once():
@@ -262,7 +255,8 @@ def test_the_handoff_stages_reasons_are_read_back_by_the_vocabulary():
 
 # -- the value rules ------------------------------------------------------------------------------------------------
 def test_every_value_rule_the_payout_rule_writes_is_one_of_the_value_rules():
-    from delist_detection.payout_rule import DistressTerms, MergerInputs, value_fields
+    from delist_detection.dlret import DistressTerms, MergerInputs
+    from delist_detection.payout_rule import value_fields
     rows = [ending("S", "2018-11-29", "merger", payout_per_share="10.0", last_trade_close="9.9"),
             ending("S", "2015-10-02", "exchange_transfer"), ending("S", "2015-10-02", "exchange_transfer",
                                                                     successor="T"),

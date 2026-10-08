@@ -7,7 +7,7 @@ Five operational buckets, each with deterministic train/backtest handling:
     EXCHANGE_TRANSFER   — 300s, ticker continues elsewhere; re-link, don't drop
     LIQUIDATION         — 400s, partial recovery; apply realized recovery
     COMPLIANCE_FAILURE  — 500s (excl. 501/502 up-migrations); apply the Shumway
-                          constant (-30% NYSE/AMEX, -55% Nasdaq) per bmp_correction
+                          constant (-30% NYSE/AMEX, -55% Nasdaq) per dlret
     EXPIRATION          — 600s, scheduled end (warrants/units/ADRs); drop from equity universe
     UNKNOWN             — could not classify with confidence
 """

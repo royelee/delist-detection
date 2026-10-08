@@ -285,7 +285,7 @@ def gate_payouts(
         else:
             # The LLM read this as all-stock and the stock leg alone reconciles, so
             # any cash the regex (mis)read from the filing is wrong. Drop it:
-            # otherwise build_delistings_table's `terms.get("cash_per_share", payouts[...])`
+            # otherwise MergerValues.table_terms' `terms.get("cash_per_share", payout)`
             # fallback would re-add that phantom cash (e.g. MRD 65x).
             drop_payout(key)
         out.merged_terms[key] = d

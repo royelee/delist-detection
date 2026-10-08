@@ -86,7 +86,7 @@ def test_id_changes_name_the_figi_that_now_holds_a_placeholders_issuer_and_class
 
 def test_delisting_rows_carry_the_payout_rule_columns_and_the_inputs_of_a_failed_gate():
     from delist_detection.llm_merger_extractor import MergerTerms
-    from delist_detection.payout_rule import MergerInputs
+    from delist_detection.dlret import MergerInputs
     from delist_detection.store import CONTRACT_DELISTINGS_COLUMNS, DelistingKey
     t = tables([sec("M")], [iv("M", "MMM", "2010-01-04", "2015-03-02")],
                [ending("M", "2015-03-10", ltd="2015-03-02", method="assumed_par", last_trade_close="10")],
@@ -101,7 +101,7 @@ def test_delisting_rows_carry_the_payout_rule_columns_and_the_inputs_of_a_failed
 
 def test_delisting_rows_take_each_endings_distress_terms():
     """Sub-plan 5g: stage 9e's OTC symbol and plan ratio, keyed by the ending's DelistingKey."""
-    from delist_detection.payout_rule import DistressTerms
+    from delist_detection.dlret import DistressTerms
     from delist_detection.store import DelistingKey
     t = tables([sec("H"), sec("S")], [iv("H", "HTZ", "2016-07-05", "2020-10-29"), iv("S", "SDRL", "2010-04-16",
                                                                                    "2018-07-02")],

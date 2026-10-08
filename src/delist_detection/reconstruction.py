@@ -1,18 +1,16 @@
 """DLRET reconstruction: the library's primary output.
 
-`enrich()` joins a classification `DelistRecord` with externally-provided DLRET
-inputs (last_trade_close, cash/stock merger terms, recovery) and the computed
-DLRET into a single `EnrichedDelistRecord` — the central type every downstream
-consumer can derive from. `build_delistings_table()` enriches a whole sequence
-of records, keyed by `(sec_id, delist_date)`, and `delisting_row()` projects
-one `EnrichedDelistRecord` into an `output/delistings.csv` row; `store.py` owns
-writing the CSV.
+`enrich()` joins a classification `DelistRecord` with its value inputs (`dlret.ValueInputs`: the last close, a
+merger's terms, the caller's answers) and the DLRET `dlret.decide` answers for them into a single
+`EnrichedDelistRecord` -- the central type every downstream consumer can derive from -- with the review flags the
+value raises. `delisting_row()` projects one `EnrichedDelistRecord` into an `output/delistings.csv` row; `store.py`
+owns writing the CSV. The caller's override files (`--last-trade-closes`, `--merger-terms`, `--recoveries`) are read
+here too, keyed by `sec_id` or `(sec_id, delist_date)` (`for_delisting`).
 """
 
 from __future__ import annotations
 
 import csv
-import math
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -20,9 +18,8 @@ from typing import Any
 
 from .classifier import DelistRecord
 from .crsp_codes import CrspBucket
-from .dlret import DlretMethod, DlretResult, resolve_dlret
-from .exchanges import Exchange, normalize_exchange
-from .store import DelistingKey
+from .dlret import DlretMethod, EndingValue, ValueInputs, decide
+from .exchanges import Exchange
 
 
 @dataclass(frozen=True)
@@ -44,11 +41,8 @@ class EnrichedDelistRecord:
     acquirer_price: float | None
     acquirer_ticker: str | None
     recovery_ratio: float | None
-    # --- DLRET outputs ---
-    dlret: float
-    dlret_method: DlretMethod
-    terminal_value: float | None
-    dlret_confidence: str
+    # --- the DLRET dlret.decide answered ---
+    answer: EndingValue
     # --- provenance carried through ---
     payout_source: str | None
     payout_confidence: str | None
@@ -57,102 +51,53 @@ class EnrichedDelistRecord:
     sec_id: str | None = None
     delist_date: str | None = None
 
+    @property
+    def dlret(self) -> float:
+        return self.answer.value
 
-_VALID_CONF = {"high", "medium", "low"}
+    @property
+    def dlret_method(self) -> DlretMethod:
+        return self.answer.method
 
+    @property
+    def terminal_value(self) -> float | None:
+        return self.answer.terminal_value
 
-def _dlret_confidence(value: float, method: DlretMethod, payout_confidence: str | None) -> str:
-    if math.isnan(value):
-        return "low"                     # never high when NaN
-    if method is DlretMethod.CASH_ONLY:
-        return payout_confidence if payout_confidence in _VALID_CONF else "medium"
-    if method is DlretMethod.EXCHANGE_TRANSFER_ZERO:
-        return "high"
-    if method in (
-        DlretMethod.CASH_PLUS_STOCK, DlretMethod.STOCK_ONLY,
-        DlretMethod.SHUMWAY_NYSE_AMEX, DlretMethod.SHUMWAY_NASDAQ,
-        DlretMethod.RECOVERY_RATIO, DlretMethod.OTC_PRINT,
-        # a plan's value is the caller's answered close of the new line times the plan's ratio: the same kind of
-        # measured value as an OTC print (controller ruling, architecture step 10)
-        DlretMethod.PLAN_STOCK,
-    ):
-        return "medium"
-    return "low"                         # ABSTAIN_NO_CONSIDERATION / UNKNOWN
+    @property
+    def dlret_confidence(self) -> str:
+        return self.answer.confidence
 
 
-def enrich(
-    record: DelistRecord,
-    *,
-    exchange: Exchange = Exchange.OTHER,
-    last_trade_close: float | None = None,
-    payout_per_share: float | None = None,
-    stock_ratio: float | None = None,
-    acquirer_price: float | None = None,
-    acquirer_ticker: str | None = None,
-    recovery_ratio: float | None = None,
-    payout_source: str | None = None,
-    payout_confidence: str | None = None,
-    extra_flags: Iterable[str] = (),
-    otc_print: float | None = None,
-    plan_value: float | None = None,
-) -> EnrichedDelistRecord:
-    res = resolve_dlret(
-        record.bucket, exchange, last_trade_close,
-        payout_per_share, stock_ratio, acquirer_price, recovery_ratio,
-        otc_print=otc_print, plan_value=plan_value,
-    )
-    # No empty DLRET in the table: a completed merger or a fund/non-equity closure
-    # with a known last price but no computable consideration has terminal value
-    # ≈ that last price (merger arbitrage closes the gap to the deal value before
-    # the last trade; a fund/ETF redeems at NAV ≈ its last trade). So DLRET ≈ 0 is
-    # the maximum-likelihood estimate, NOT a missing value — emit it as ASSUMED_PAR
-    # at low confidence so a reader never mistakes it for a realized/computed
-    # return. Buckets whose price collapses AFTER delisting (compliance, liquidation)
-    # already carry Shumway/recovery marks and never reach an abstain here. A valid
-    # positive last price is required (no denominator otherwise). This is a
-    # table-only estimate; the firm-month facade (compute_dlret) is untouched.
-    # The same holds for a deregistration the classifier found no merger or
-    # distress evidence for (UNKNOWN + evidence["deregistered"]).
-    if (record.bucket is CrspBucket.UNKNOWN and (record.evidence or {}).get("deregistered")
-            and last_trade_close is not None and last_trade_close > 0):
-        res = DlretResult(0.0, DlretMethod.ASSUMED_PAR, last_trade_close)
-    if (
-        record.bucket in (CrspBucket.MERGER, CrspBucket.EXPIRATION)
-        and res.method in (DlretMethod.ABSTAIN_NO_CONSIDERATION, DlretMethod.DROPPED_EXPIRATION)
-        and last_trade_close is not None and last_trade_close > 0
-    ):
-        res = DlretResult(0.0, DlretMethod.ASSUMED_PAR, last_trade_close)
+def enrich(record: DelistRecord, value: ValueInputs, *, acquirer_ticker: str | None = None,
+           payout_source: str | None = None, extra_flags: Iterable[str] = ()) -> EnrichedDelistRecord:
+    """One delistings.csv record: `record`'s classification, its value inputs (`value`, of the record's own bucket)
+    and the DLRET `dlret.decide` answers for them, with the merger's provenance (`acquirer_ticker`, `payout_source`)
+    and its flags (`extra_flags`, after the classification's own). Two review flags follow from the value: a merger
+    left at par (`merger_at_par`: its consideration was never found, which reads as a realized 0% return) and a
+    distress ending at a normal price (`distress_at_normal_price`: a last close of $5 or more)."""
+    if value.bucket is not record.bucket:
+        raise ValueError(f"enrich: value inputs of bucket {value.bucket.value} for a {record.bucket.value} record")
+    answer = decide(value)
     flags = list((record.evidence or {}).get("flags", [])) + list(extra_flags)
-    # A merger whose consideration was never found lands at par silently, which
-    # reads as a realized 0% return. Flag it so review.csv lists the row.
-    if record.bucket is CrspBucket.MERGER and res.method is DlretMethod.ASSUMED_PAR:
+    if record.bucket is CrspBucket.MERGER and answer.method is DlretMethod.ASSUMED_PAR:
         flags.append("merger_at_par")
+    close = value.last_trade_close
     if (record.bucket in (CrspBucket.COMPLIANCE_FAILURE, CrspBucket.LIQUIDATION)
-            and last_trade_close is not None and last_trade_close >= 5.0):
+            and close is not None and close >= 5.0):
         flags.append("distress_at_normal_price")
     return EnrichedDelistRecord(
         ticker=record.ticker, cik=record.cik,
         observed_delist_date=record.observed_delist_date,
         crsp_code=record.crsp_code, bucket=record.bucket,
         confidence=record.confidence, reason=record.reason, evidence=record.evidence,
-        exchange=exchange, last_trade_close=last_trade_close,
-        payout_per_share=payout_per_share, stock_ratio=stock_ratio,
-        acquirer_price=acquirer_price, acquirer_ticker=acquirer_ticker,
-        recovery_ratio=recovery_ratio,
-        dlret=res.value, dlret_method=res.method, terminal_value=res.terminal_value,
-        dlret_confidence=_dlret_confidence(res.value, res.method, payout_confidence),
-        payout_source=payout_source, payout_confidence=payout_confidence,
+        exchange=value.exchange, last_trade_close=close,
+        payout_per_share=value.payout_per_share, stock_ratio=value.stock_ratio,
+        acquirer_price=value.acquirer_price, acquirer_ticker=acquirer_ticker,
+        recovery_ratio=value.recovery_ratio, answer=answer,
+        payout_source=payout_source, payout_confidence=value.payout_confidence,
         review_flags=tuple(dict.fromkeys(flags)),
         sec_id=record.sec_id, delist_date=record.delist_date,
     )
-
-
-# A merger/expiration abstain WITH a valid last price is upgraded to ASSUMED_PAR
-# (DLRET 0, see enrich) and rendered, so the only abstains that reach the table are
-# the no-price ones (NaN) — those, and UNKNOWN, are blanked so a reader never
-# mistakes a genuinely-uncomputable row for a realized 0%. EXCHANGE_TRANSFER_ZERO
-# and ASSUMED_PAR keep their explicit 0.
-_DLRET_BLANK_IN_TABLE = {DlretMethod.ABSTAIN_NO_CONSIDERATION, DlretMethod.UNKNOWN}
 
 
 def for_delisting(m: Mapping, key: tuple[str, str | None]):
@@ -167,61 +112,6 @@ def for_delisting(m: Mapping, key: tuple[str, str | None]):
     if key in m:
         return m[key]
     return m.get(sec_id)
-
-
-def build_delistings_table(
-    records: Iterable[DelistRecord],
-    *,
-    last_trade_closes: Mapping | None = None,
-    payouts: Mapping | None = None,
-    exchanges: Mapping | None = None,
-    merger_terms: Mapping | None = None,
-    recovery_ratios: Mapping | None = None,
-    otc_prints: Mapping | None = None,
-    payout_sources: Mapping | None = None,
-    plan_values: Mapping | None = None,
-    payout_confidences: Mapping | None = None,
-    payout_flags: Mapping | None = None,
-) -> list[EnrichedDelistRecord]:
-    """Enrich each delisting into a `delistings.csv` record.
-
-    Every input map is keyed by `sec_id` (applies to all of the security's
-    delistings) or `(sec_id, delist_date)` (one delisting, which wins).
-    `merger_terms[key]` may hold `cash_per_share` (overrides `payouts`),
-    `stock_ratio`, `acquirer_price`, `acquirer_ticker`.
-    """
-    last_trade_closes = last_trade_closes or {}
-    payouts = payouts or {}
-    exchanges = exchanges or {}
-    merger_terms = merger_terms or {}
-    recovery_ratios = recovery_ratios or {}
-    otc_prints = otc_prints or {}
-    plan_values = plan_values or {}
-    payout_sources = payout_sources or {}
-    payout_confidences = payout_confidences or {}
-    payout_flags = payout_flags or {}
-
-    out: list[EnrichedDelistRecord] = []
-    for rec in records:
-        key = DelistingKey(rec.sec_id or rec.ticker.upper(), rec.delist_date)
-        terms = for_delisting(merger_terms, key) or {}
-        cash = terms.get("cash_per_share", for_delisting(payouts, key))
-        out.append(enrich(
-            rec,
-            exchange=normalize_exchange(for_delisting(exchanges, key)),
-            last_trade_close=for_delisting(last_trade_closes, key),
-            payout_per_share=cash,
-            stock_ratio=terms.get("stock_ratio"),
-            acquirer_price=terms.get("acquirer_price"),
-            acquirer_ticker=terms.get("acquirer_ticker"),
-            recovery_ratio=for_delisting(recovery_ratios, key),
-            otc_print=for_delisting(otc_prints, key),
-            plan_value=for_delisting(plan_values, key),
-            payout_source=for_delisting(payout_sources, key),
-            payout_confidence=for_delisting(payout_confidences, key),
-            extra_flags=for_delisting(payout_flags, key) or (),
-        ))
-    return out
 
 
 _ROW_EXTRAS = ("exchange", "last_trade_date", "last_trade_date_source", "successor_sec_id", "ticker_successor_sec_id",
@@ -244,7 +134,7 @@ def delisting_row(e: EnrichedDelistRecord, **extra) -> dict:
         "last_trade_close": e.last_trade_close, "payout_per_share": e.payout_per_share,
         "stock_ratio": e.stock_ratio, "acquirer_price": e.acquirer_price, "acquirer_ticker": e.acquirer_ticker,
         "recovery_ratio": e.recovery_ratio, "terminal_value": e.terminal_value,
-        "dlret": None if e.dlret_method in _DLRET_BLANK_IN_TABLE else e.dlret,
+        "dlret": e.answer.table_dlret,
         "dlret_method": e.dlret_method.value, "dlret_confidence": e.dlret_confidence,
         "payout_source": e.payout_source,
         "delist_filing_form": delist_filing.get("form"), "delist_filing_date": delist_filing.get("filing_date"),

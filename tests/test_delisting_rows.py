@@ -4,8 +4,9 @@ import pytest
 
 from delist_detection.classifier import DelistRecord
 from delist_detection.crsp_codes import CrspBucket
+from delist_detection.dlret import ValueInputs
 from delist_detection.reconstruction import (
-    OverrideFileError, build_delistings_table, delisting_row, load_float_overrides, load_merger_terms_overrides,
+    OverrideFileError, delisting_row, enrich, for_delisting, load_float_overrides, load_merger_terms_overrides,
     unmatched_override_keys,
 )
 from delist_detection.store import DELISTINGS_COLUMNS
@@ -20,22 +21,29 @@ def _rec(sec_id, dd, bucket=CrspBucket.MERGER, code=231):
                         sec_id=sec_id, delist_date=dd)
 
 
-def test_table_keys_by_sec_id_and_delist_date():
-    recs = [_rec("BBG1", "2018-12-09"), _rec("BBG1", "2010-01-01")]
-    t = build_delistings_table(
-        recs,
-        last_trade_closes={"BBG1": 200.0, ("BBG1", "2018-12-09"): 212.70},
-        merger_terms={("BBG1", "2018-12-09"): {"cash_per_share": 145.0, "stock_ratio": 0.8378,
-                                               "acquirer_price": 80.27, "acquirer_ticker": "CVS"}},
-    )
+def test_each_delisting_takes_its_own_inputs_by_sec_id_and_delist_date():
+    """An override keyed (sec_id, delist_date) wins over the security-wide one (`for_delisting`); each delisting is
+    enriched from its own value inputs."""
+    closes = {"BBG1": 200.0, ("BBG1", "2018-12-09"): 212.70}
+    terms = {("BBG1", "2018-12-09"): {"cash_per_share": 145.0, "stock_ratio": 0.8378, "acquirer_price": 80.27,
+                                      "acquirer_ticker": "CVS"}}
+    t = []
+    for rec in (_rec("BBG1", "2018-12-09"), _rec("BBG1", "2010-01-01")):
+        key = (rec.sec_id, rec.delist_date)
+        given = for_delisting(terms, key) or {}
+        t.append(enrich(rec, ValueInputs(rec.bucket, last_trade_close=for_delisting(closes, key),
+                                         payout_per_share=given.get("cash_per_share"),
+                                         stock_ratio=given.get("stock_ratio"),
+                                         acquirer_price=given.get("acquirer_price")),
+                        acquirer_ticker=given.get("acquirer_ticker")))
     assert t[0].last_trade_close == 212.70 and t[1].last_trade_close == 200.0
     assert t[0].sec_id == "BBG1" and t[0].delist_date == "2018-12-09"
     assert math.isclose(t[0].terminal_value, 145.0 + 0.8378 * 80.27)
 
 
 def test_delisting_row_has_every_column_and_extras():
-    (e,) = build_delistings_table([_rec("BBG1", "2018-12-09")], last_trade_closes={"BBG1": 212.70},
-                                  payouts={"BBG1": 212.25})
+    e = enrich(_rec("BBG1", "2018-12-09"), ValueInputs(CrspBucket.MERGER, last_trade_close=212.70,
+                                                        payout_per_share=212.25))
     row = delisting_row(e, exchange="NYSE", last_trade_date="2018-11-28", last_trade_date_source="midas",
                         acquirer_sec_id="BBG000BGRY34", raw_payout_per_share=212.25)
     assert set(row) <= set(DELISTINGS_COLUMNS)
@@ -47,8 +55,7 @@ def test_delisting_row_has_every_column_and_extras():
 
 def test_unknown_without_price_has_blank_dlret():
     rec = _rec("BBG2", "2019-01-01", bucket=CrspBucket.UNKNOWN, code=None)
-    (e,) = build_delistings_table([rec])
-    assert delisting_row(e)["dlret"] is None
+    assert delisting_row(enrich(rec, ValueInputs(rec.bucket)))["dlret"] is None
 
 
 def test_loaders(tmp_path):
@@ -131,7 +138,7 @@ def test_an_override_file_error_is_a_value_error():
 
 
 def test_a_delisting_row_takes_the_ticker_successor_and_leaves_it_blank_by_default():
-    (e,) = build_delistings_table([_rec("BBG1", "2022-07-01")])
+    e = enrich(_rec("BBG1", "2022-07-01"), ValueInputs(CrspBucket.MERGER))
     assert delisting_row(e)["ticker_successor_sec_id"] is None
     row = delisting_row(e, ticker_successor_sec_id="BBG000BLW102")
     assert row["ticker_successor_sec_id"] == "BBG000BLW102"

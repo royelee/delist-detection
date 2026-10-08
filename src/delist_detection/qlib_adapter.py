@@ -20,8 +20,9 @@ The three public functions emit:
 
 All three read every DLRET input (exchange, last trade close, payout,
 recovery ratio, successor) straight off the `delistings.csv` row for that
-security. Every function is pure: they return new DataFrames; they do not
-mutate.
+security; the firm month reads them as one `dlret.ValueInputs` (`value_inputs`)
+and its DLRET is the one `dlret.decide` answers. Every function is pure: they
+return new DataFrames; they do not mutate.
 """
 
 from __future__ import annotations
@@ -32,8 +33,9 @@ import pandas as pd
 
 from .classifier import DelistRecord
 from .crsp_codes import CrspBucket
+from .dlret import DlretMethod, ValueInputs
 from .exchanges import normalize_exchange
-from .handling import build_train_label_adjustment, build_backtest_exit, build_firm_month_correction
+from .handling import build_train_label_adjustment, build_backtest_exit, firm_month_correction
 from .store import read_delistings_frame
 
 
@@ -86,6 +88,18 @@ def row_payout(row) -> float | None:
     if row.get("bucket") == "merger" and _num(row.get("terminal_value")) is not None:
         return _num(row.get("terminal_value"))
     return _num(row.get("payout_per_share"))
+
+
+def value_inputs(row, last_trade_close: float) -> ValueInputs:
+    """The firm month's value inputs (`dlret.ValueInputs`) of one delistings.csv row: its bucket and exchange,
+    `last_trade_close` (the row's, else the panel's), its payout (`row_payout`: a merger's terminal value, which covers
+    a stock leg), its recovery ratio, and the answered OTC print or plan value it was valued by (its terminal value
+    under that method)."""
+    method, terminal = _str(row.get("dlret_method")), _num(row.get("terminal_value"))
+    return ValueInputs(record_from_row(row).bucket, normalize_exchange(_str(row.get("exchange"))), last_trade_close,
+                       payout_per_share=row_payout(row), recovery_ratio=_num(row.get("recovery_ratio")),
+                       otc_print=terminal if method == DlretMethod.OTC_PRINT.value else None,
+                       plan_value=terminal if method == DlretMethod.PLAN_STOCK.value else None)
 
 
 def _is_continuing(row) -> bool:
@@ -259,8 +273,6 @@ def apply_bmp_corrections(
         prior_close = float(df.loc[(prior_month_end, sec_id), close_col])
         provided_last_trade = _num(row.get("last_trade_close"))
         recov = _num(row.get("recovery_ratio"))
-        otc = _num(row.get("terminal_value")) if _str(row.get("dlret_method")) in ("otc_print", "plan_stock") \
-            else None
         if provided_last_trade is None:
             last_trade_close = float(df.loc[(delist_month_end, sec_id), close_col])
             bucket = rec.bucket
@@ -281,17 +293,7 @@ def apply_bmp_corrections(
         else:
             last_trade_close = provided_last_trade
 
-        ex = normalize_exchange(_str(row.get("exchange")))
-
-        fm = build_firm_month_correction(
-            record=rec,
-            prior_month_end_close=prior_close,
-            last_trade_close=last_trade_close,
-            exchange=ex,
-            payout_per_share=row_payout(row),
-            recovery_ratio=recov,
-            otc_print=otc,
-        )
+        fm = firm_month_correction(rec, prior_close, value_inputs(row, last_trade_close))
 
         if fm.drop:
             rows_to_drop.append((delist_month_end, sec_id))

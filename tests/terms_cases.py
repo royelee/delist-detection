@@ -11,7 +11,8 @@ from pathlib import Path
 from delist_detection.edgar import EdgarSubmission
 from delist_detection.llm_merger_extractor import LLMMergerTermsExtractor, base_reading, states_no_package
 from delist_detection.payout_gate import DEFAULT_TOL, gate_payouts
-from delist_detection.payout_rule import MergerInputs, basket_legs, value_fields
+from delist_detection.dlret import MergerInputs
+from delist_detection.payout_rule import basket_legs, value_fields
 from delist_detection.reconstruction import for_delisting
 from delist_detection.store import DelistingKey, format_cell
 from lifecycle_tables import ending

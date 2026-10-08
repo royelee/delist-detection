@@ -20,7 +20,8 @@ from delist_detection.llm_merger_extractor import (PROMPT_VERSION, LLMMergerTerm
 from delist_detection.payout_extractor import _collect
 from delist_detection.payout_gate import (DEFAULT_TOL, ELECTION_CASH, GATE_SKIPPED, PACKAGE, gate_payouts,
                                           reconcile)
-from delist_detection.payout_rule import MergerInputs, basket_legs, value_fields
+from delist_detection.dlret import MergerInputs
+from delist_detection.payout_rule import basket_legs, value_fields
 from delist_detection.price_requests import RECEIVED_CLOSE, request_rows
 from delist_detection.sec_stats import SEC_STATS
 from delist_detection.store import DelistingKey

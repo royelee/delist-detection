@@ -5,10 +5,7 @@ from .edgar import EdgarClient, EdgarSubmission
 from .ticker_resolver import TickerResolver
 from .classifier import DelistClassifier, DelistRecord
 from .exchanges import Exchange, normalize_exchange
-from .bmp_correction import (
-    SHUMWAY_NYSE_AMEX, SHUMWAY_NASDAQ,
-    compute_dlret, bmp_firm_month_return,
-)
+from .dlret import SHUMWAY_NYSE_AMEX, SHUMWAY_NASDAQ
 from .handling import (
     TrainLabelAdjustment, BacktestExit, FirmMonthReturn,
     build_train_label_adjustment, build_backtest_exit, adjustments_from_rows,
@@ -34,8 +31,6 @@ __all__ = [
     "normalize_exchange",
     "SHUMWAY_NYSE_AMEX",
     "SHUMWAY_NASDAQ",
-    "compute_dlret",
-    "bmp_firm_month_return",
     "FirmMonthReturn",
     "build_firm_month_correction",
     "PayoutExtractor",

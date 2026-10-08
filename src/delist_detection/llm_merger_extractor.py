@@ -15,9 +15,9 @@ This module extracts only the *consideration legs*. The acquirer's market
 PRICE is NOT resolved here: a later integration step joins it from a price
 panel and enforces the cash+stock sanity gate. ``to_merger_terms_dict()``
 therefore emits ``cash_per_share`` / ``stock_ratio`` / ``acquirer_ticker``
-(omitting any that are ``None``) — exactly the shape
-``reconstruction.build_delistings_table`` consumes via ``--merger-terms``;
-``acquirer_price`` is added downstream.
+(omitting any that are ``None``) — exactly the shape of a ``--merger-terms``
+row (``reconstruction.load_merger_terms_overrides``) that delistings.csv carries
+(``merger_value.MergerValues.table_terms``); ``acquirer_price`` is added downstream.
 
 Prompt v3 (sub-plan 5f)
 -----------------------
@@ -242,7 +242,7 @@ class MergerTerms:
         return out
 
     def to_merger_terms_dict(self) -> dict:
-        """Project to the dict shape ``build_delistings_table`` consumes.
+        """Project to the dict shape of a ``--merger-terms`` row (``MergerValues.table_terms`` reads it).
 
         Emits ``cash_per_share`` / ``stock_ratio`` / ``acquirer_ticker``,
         OMITTING any that are ``None``. ``acquirer_price`` is intentionally

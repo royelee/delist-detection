@@ -188,3 +188,24 @@ def test_apply_bmp_corrections_uses_an_otc_print_not_the_shumway_mark(monthly_pa
     # R_partial = -0.20; DLRET = 0.20/0.40 - 1 = -0.50; R_month = 0.8 * 0.5 - 1 = -0.60
     rsh = out.xs("RSH_ID", level="instrument")
     assert rsh.loc[pd.Timestamp("2015-02-28"), "monthly_return"] == pytest.approx(-0.60, rel=1e-3)
+
+
+def test_a_plan_value_row_is_read_back_as_its_plan_value(monthly_panel, tmp_path):
+    """A bankruptcy plan's value (ruling R6) is the row's terminal value under plan_stock: the splicer reads it back as
+    the plan value it is (`qlib_adapter.value_inputs`), not as an OTC print, and the firm month compounds it."""
+    from delist_detection.dlret import DlretMethod, decide
+    from delist_detection.qlib_adapter import load_delistings, value_inputs
+    rows = [
+        _row("RSH_ID", ticker="RSH", cik=1144980, bucket="liquidation", crsp_code=470, reason="plan",
+             exchange="NYSE", delist_date="2015-02-09", last_trade_date="2015-02-06", last_trade_close=0.40,
+             payout_per_share=None, dlret_method="plan_stock", terminal_value=0.10),
+    ]
+    csv_path = _write(tmp_path, rows)
+    (_, row), = load_delistings(str(csv_path)).iterrows()
+    v = value_inputs(row, 0.40)
+    assert (v.plan_value, v.otc_print) == (0.10, None)
+    assert decide(v).method is DlretMethod.PLAN_STOCK
+    out = apply_bmp_corrections(monthly_panel, str(csv_path), return_col="monthly_return")
+    # R_partial = -0.20; DLRET = 0.10/0.40 - 1 = -0.75; R_month = 0.8 * 0.25 - 1 = -0.80
+    rsh = out.xs("RSH_ID", level="instrument")
+    assert rsh.loc[pd.Timestamp("2015-02-28"), "monthly_return"] == pytest.approx(-0.80, rel=1e-3)
