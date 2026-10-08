@@ -42,6 +42,7 @@ A deepening moves behaviour behind a smaller interface. It changes nothing the l
 | 14 | The finder builds its own trading record (small) | | done |
 | 15 | One truth-case type (speculative; reduced: no re-key) | | done |
 | 16 | Package layout: concept subpackages and a lazy package root (review 11) | | done |
+| 17 | The final review's fixes (2026-10-08) | I1: an answered close moved the acquirer; I3: an outage's line step | done |
 
 The issuer record (2) comes early because stages 8, 9 and 9b read issuers through closures that it replaces. The
 layout (16) comes last, once steps 8 and 13 have made the pure leaf modules.
@@ -2643,3 +2644,147 @@ Decisions made in the step:
 | `loop_round.py` | `measurement/loop_round.py` |
 | `handling.py` | `handling/handling.py` |
 | `qlib_adapter.py` | `handling/qlib_adapter.py` |
+
+### The final review's fixes (2026-10-08)
+
+The final review of the branch (`/tmp/claude/delist_detection/arch/final_review.md`: Important 3, Minor 9, and the
+three weakest interfaces) was ruled on finding by finding; this records what was built and the choices inside it.
+
+- **I1, fixed: stage 8's acquirer, requests and decisions read the run's own closes, never an answer.**
+  - What was wrong: stage 7 handed stage 8 the answered last closes as the closes, and the regex read's sanity
+    bound and the gate's first pass (which settles the acquirer and each stock leg's request) read them. On the real
+    cases an answered close 20% off the fails close flips the gate for IPHI and WBS, and the published acquirer moved
+    (IPHI: old Marvell's holder for new Marvell; WBS: no acquirer for Santander). The claim had lost its "received
+    closes" scope in step 1; the behaviour predates the branch.
+  - Stage 7 returns `_Closes`: the run's own close (a `--last-trade-closes` row, else the fails close) and the one the
+    value reads (the answer in its place). Under an answer the fails close is read quietly: the flags (`no_last_close`,
+    `ftd_close_lagged`, `ftd_close_prior`) stay the value's close's, as before.
+    - Alternative: `value_mergers` reads the answered last closes from `answers` itself. Rejected: a stage reads an
+      answer only through its own request, and the last close is stage 7's. Cost if wrong: one more parameter
+      (`own_closes`, None meaning the closes are the run's own, so every existing caller is unchanged).
+  - The regex read is bounded by the run's own close, once, in both passes. Its bound (0.05x to 20x the close) decides
+    which cash it reads, and that cash reaches the first pass, so it can move a request.
+    - Alternative: read it again on the answered close for the values. Rejected: the raw columns would move with an
+      answer too, for a read whose bound is only a sanity filter. Cost if wrong: a caller's better close would have
+      let the regex read another cash; `raw_payout_per_share` keeps the fails-close read.
+  - The second pass sets the values: it runs when a received close is answered (as before) or an answered last close
+    differs from the run's own.
+  - **Beyond the ruling's list: the run's decisions read the first pass too.** `MergerValues.read_terms` (8b's R1
+    test) and `reconciled` (9b's handoff conflict) read `MergerValue.own_verdict`, the first pass's (payout, terms),
+    when an answer moved the values.
+    - Why: through them an answer could rebucket a merger (an R1 continuation, a handoff that is no longer a
+      conflict). A continuation asks no last close and no received close, so the first run's answers would answer no
+      request and the second run would exit 2: the same break as I1, one stage later.
+    - It also changes the received-close path: before, an answered received close that let the gate price a leg made
+      the merger reconciled in the second run and not in the first.
+    - Cost if wrong: 9b's reconciled verdict ignores a better answered price; both runs then agree on the kind.
+  - Tests: a whole run (a stock merger whose answered last close fails the gate) keeps every identity table and
+    request byte for byte and does not exit 2; on the old code securities.csv loses the added acquirer. Every real
+    acquirer-gate case answered at 0.5x to 2x of its fails close keeps its acquirer, added acquirers and request; IPHI
+    and WBS flip the gate and keep their acquirer. The regex bound on the warm threads too, and the decisions on the
+    first pass.
+- **I2, tests added.** Stage 9c's failed notice read (the deleted step 4 test, at the stage) and stage 9's "the
+  successor terms reading", which no test built at base either. With both reports made no-ops the full suite fails
+  exactly these two tests (3518 passed, 2 failed); before, it passed.
+- **I3, fixed: a degraded other-registrant search refuses the step `read_failed`.**
+  - Production's `full_text_search` answers [] for a failed read and counts it degraded, so `other_registrant` read
+    "no other registrant", and in an outage a step was attached, folded or made a line successor.
+  - `other_registrant` watches the search on its thread (`degraded.DegradedWatch`, the counter the stage's read watch
+    reads): a search that counted itself degraded is `READ_FAILED`, as one that raises.
+    - Alternative: watch the whole check. Rejected: a filer listing answered from a stale copy (production's
+      submissions read serves its cached copy, counted degraded) is an answer; it decides, and the step's own watch
+      reports it degraded. That is what the old degraded-but-answered stage case means in production, and its test is
+      now that case. The old case's shape (a search counting degraded with no hits) is production's failed search.
+    - Any degraded search is refused (production never answers one from a stale copy): the conservative reading.
+      Cost if wrong: in an outage more steps are refused `read_failed`, each flagged; a rerun once SEC answers
+      follows them.
+  - The stage's search-failure double is production's shape (counts degraded, answers []). A failed filer listing
+    keeps its test (refused `read_failed`).
+- **M1, fixed: sort inside the ask.** Every ask (and the constructor, and `apart`) sorts the keys it added before it
+  returns (`_settle`), so no query sorts. The file periods' once-only fill is under a lock.
+  - Alternative: a lock around `_sort` on every query. Rejected: a lock per query, and a query would still change the
+    index. Cost: a sort per ask, of only the keys it touched (before: of every key at the next query).
+  - The test: eight threads query an ask's keys at once, the switch interval at 1 µs. It fails on the old index on
+    every run (5 of 5) and passes on this one (8 of 8).
+- **M2, the assertion made real.** `warm` returns only once every item is done, so every paid LLM call is a warm
+  thread's: the test asserts it, and fails with stage 8's LLM warm pass removed.
+- **M3, docs.** `LineSources` holds the issuer record, the EDGAR client, full-text search and OpenFIGI (no fails
+  files: they come from `identity.ftd`), in CLAUDE.md and line_follow's docstring; CLAUDE.md names `match_securities`
+  as form25's match (`match_security` is its tests' surface).
+- **M4, fixed in the code.** Stage 10c3 reads the contract's issuer timeline before triage
+  (`_issuers_in_force(..., review=)`), and a security whose timeline asked a CIK whose read failed or was stale gets a
+  `resolution_degraded` row, as 4c's. It asks per security in the written table's order (`store.formatted`), the
+  order the one call took, so the reads and answers are the same. `_contract` takes the timeline.
+  - Cost: the "issuers in force" meter and its log line now come before 10e's; the manifest's stage meters are
+    volatile in the gate.
+- **M5, deleted.** New with the branch: `loop_round.parse_case_id` (its tests now pin the id's format and the
+  label refusal) and `rewrites.successor_by` (into tests/issuer_role_cases.py; test_rewrites reads the rewrite's
+  `how`). Pre-existing and called from nowhere (src, scripts, tests, README, docs examples): classifier.py's
+  `MERGER_ITEMS`, `COMPLIANCE_ITEMS`, `LIQUIDATION_ITEMS`, `DEFAULT_LOOKBACK_DAYS` and
+  `DelistClassifier.classify_many`, `exchange_terms._BASIS`, `edgar.DEFAULT_UA` (it resolved the User-Agent, reading
+  `.env`, at import). Kept, since tests call them: `store.CONTRACT_TABLES`, `GatedPayouts.gate_failed`,
+  `MergerTerms.to_merger_terms_dict`, `payout_extractor._match_payout`, `form25.match_security`, `form25.class_label`
+  (step 13's log names it among the class readers; only tests use it).
+- **M6, fixed.** `scorecard.flip` writes the golden file with the diagnosis set as one write set (`truth.flipped`,
+  `truth.truth_text`, `TruthSet.commit(also=)`); the golden file alone is still `write_atomic`. A failed write of the
+  truth file leaves the golden file unflipped too (tested; on the old code it was flipped).
+- **M7, fixed.** `follow_lines` copies each security whose line tickers it changes (`replace`); its input identity is
+  left as it was. Nothing after 4b read the identity's securities, so no row moves (tested).
+- **M8, half dead.** 8a' loses its `except requests.RequestException`: every read in it is the issuer record's, SEC's
+  name index (in memory) or the fails scan, which counts its own failure. 8a's is not dead: the resolver's SEC
+  ticker-map tier (`EdgarClient.company_tickers`) raises on a failed read with no cached copy (a run whose eras are
+  all pinned reaches it first in stage 8). It is narrowed to the resolver call and reports `resolution_degraded`
+  itself, whether or not the client counted the failure, and, as before, no issuer is then looked for by name.
+  - Alternative: make the resolver catch its ticker-map failure. Rejected here: it changes stages 1 to 4's outage
+    behaviour too. Cost if wrong: one stage-level catch left.
+- **M9, test added.** A recent step whose listed-today read fails is refused `merged_out` and degraded, and the run
+  goes on; answered, the same step is followed. With the pre-7a read (straight to the client) the test fails.
+- **Tests.** 15 new test functions, 49 collected (the acquirer-gate one runs over the 33 cases with a fails close);
+  3 rewritten (I3's degraded-but-answered case as production's, M5's two case-id tests); I3's raising search double
+  replaced by production's shape. Suite: 3478 passed to 3527, 45 xfailed unchanged. Mutation checks as listed.
+- **The gate.** The replay (`replay_layout.py`, one worker) of the committed code (4917c97):
+  - SAME against `accepted4_out` (`fix_out`), `refused 0`, no uncached text or halt day read; a marker was touched
+    before it and `find cache -newer` lists nothing.
+  - Its log equals step 16's (`s16b_run.log`) line for line but one move, M4's: the "issuers in force" meter line
+    now comes before "ticker evidence".
+  - The four-worker replay (`replay_layout_w4.py`): every table SAME against `fix_out` (run_manifest.json differs only
+    in `sec_workers`) and SAME against step 16's four-worker replay (`s16_w4_out`); its log equals that one's but for
+    the same move; `find cache -newer` lists nothing.
+  - `scripts/scorecard.py --check` on output/ prints what step 16's src and script print, byte for byte (117 lines,
+    exit 0).
+
+### Follow-up candidates
+
+For a later program, each a fix sub-plan that passes the diagnosis truth loop where it can change rows:
+
+- **Stage 9's successor rule is split between pipeline.py and endings/successors.py** (final review W1).
+  - In pipeline.py: `_line_successor_links`, `_terms_links`, `_find_successors` and `_own_registration_link`
+    (pipeline.py:650-689 at review), which re-applies the line follow's R2 inline (one US composite, the security's
+    own composite or another, the OKE 2026 data-edge rule) by importing line_follow's `composites`, `is_line_symbol`
+    and `text_cusips`.
+  - The same shape: stage 8b's R1 continuation (`_r1_continuations`, `_r1_successor`) decides a rewrite and adds
+    successors from the orchestrator. "Who is this ending's successor" has no single module.
+- **Stage 9e's rules live in the orchestrator, and it reads EDGAR outside the issuer record** (W2).
+  - In pipeline.py (1018-1106 at review): the bankruptcy-plan reclassification, the 552 price-deficiency rule and the
+    OTC-symbol fallback order (fails rows, then 3.01 text); endings/distress.py holds only the readers.
+  - `_eightks` reads `edgar.recent_filings` and `fetch_filing_text` with no try: a failed `recent_filings` with no
+    cached copy aborts the run with exit 1 (logged in step 2 as left).
+- **Stage 7's last-close rule is pipeline code, called three times** (W3).
+  - In pipeline.py (408-461 at review, now `_last_trade_closes` with `_Closes`): other securities' CUSIPs skipped
+    and a plan's new CUSIPs (`plan_new_cusips`); the CUSIP held on the day (`cusip_sightings` →
+    `ranges_from_sightings` → `value_on`); `close_of`, then `close_known_on`; three flag writes and one evidence
+    write on the delisting.
+  - `_run` calls it three times (stage 7, then 9b's and 9d's added rows).
+  - The review also names `value_mergers(..., clients: Any)` and `_Stage.clients: Any` (the whole `Clients`,
+    untyped), and `_handoffs`' two closures (`filing_args`, `find_filing`) holding the continuation-filing search
+    policy while the rule sits in handoffs.py.
+- **The doubled BRK-B/LGF-B fails rows** (step 12's ruling): 3,728 fails of Berkshire's 084670207 and 084670702 and
+  Lions Gate's 535919500, held once under BRKB/LGFB and again relabelled under BRK-B/LGF-B when stage 8's gate asks
+  for the acquirer tickers. No output row shows them, but the answer depends on the order of asks, and a fix can
+  change rows.
+- **The 29 OpenFIGI "X - A" names read as COMMON** (step 13's open point): candidate names such as "CBRE GROUP INC -
+  A", "DOORDASH INC - A", "LIBERTY MEDIA CORP - C", which `share_class_from_name` reads as COMMON. An added security
+  named by OpenFIGI alone, or a successor's class match (`successor_from_8k12b`), could take COMMON for a class A.
+- **The committed output/ predates steps 3 and 4's declared fixes** (AZPN 2022's stale payout flags on a
+  continuation; CNB, IMB and SPNV publishing a last trade date flagged unconfirmed). The replay folders carry them
+  (`accepted4_out`); output/ is refreshed only by a live (or cached full) run, which this program never made.
