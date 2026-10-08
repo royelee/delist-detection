@@ -90,6 +90,10 @@ _Avoid_: test case, expectation
 The diagnosis truth file (one row per diagnosed case, what its contract row should say), a basket's legs, the change log of every edit to them, and the loop's ledger of errors already diagnosed, read, validated, changed and written as one unit (`truth_set.TruthSet`). A ruling (a decision on one case, given as data and applied once), a rename, a status flip or a loop round is a change to the truth set: every changed cell is a change-log row, and the files are committed together.
 _Avoid_: truth file (one part of it), truth table
 
+**Loop round**:
+One pass of the diagnosis truth loop over a run, for one sub-plan (`loop_round.Round`). It opens by listing, as cases for the diagnose workflow, the errors the ledger has not seen: truth mismatches, and regressions against the sub-plan's base commit. It closes by applying the agents' records to the truth set under fixed rules. An error is known by its key, a regression's field by its name and a case by its id (`<subject>_<label>-r<N>`), each built and read back in one module; a case carries what it examined itself, never in its id.
+_Avoid_: iteration, pass
+
 **Floor**:
 The best value each scorecard number has reached (`data/scorecard.json`). No later change may make a floored number worse.
 

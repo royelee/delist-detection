@@ -34,7 +34,7 @@ A deepening moves behaviour behind a smaller interface. It changes nothing the l
 | 6 | A security's identity behind one interface, `identity.py` (review 7) | | done |
 | 7 | The line follow owns its rounds; one R1 reading per ending (review 8) | | done |
 | 8 | One run snapshot; one reading of a delistings row (review 9) | | done |
-| 9 | The truth set and the loop round as two modules (review 10) | | 9a done |
+| 9 | The truth set and the loop round as two modules (review 10) | a loop-added ending_moved case's examined day | done |
 | 10 | dlret decides the value rule once (small) | plan_stock's confidence | |
 | 11 | The Clients seam declares capabilities (small) | | |
 | 12 | The fails index owns its loading (small) | | |
@@ -1337,3 +1337,148 @@ Decisions made in the step:
   the step-4 rulings now checks the module writes that row byte for byte. No cell's value changes. The truth set
   still tolerates extra cells in the log; every row now has six.
   - Cost if wrong: none. The row's six values are the ones the ruling wrote.
+
+### Step 9b: the loop round behind one module that owns its error vocabulary
+
+- **The module is `loop_round.py`, named after a new domain term ("loop round", in CONTEXT.md). It replaces
+  diagnosis_loop.py** (deleted), whose bookkeeping it absorbs: the ledger's outcomes, the case rows and their context.
+  - `Loop(folder, repo)` is the loop folder: `ledger` (the one place the ledger's path is named), `truth_set(truth)`,
+    `seed(truth, run, label=)` and `round(label, n)`.
+  - `Round` has the two operations. `open(truth, run, base, report=)` renames, judges, writes the report, filters by
+    the ledger and writes the case rows. `close(truth, run, base, dry_run=)` applies the records
+    (`TruthSet.apply_round`), re-judges and flips (`TruthSet.flip`), and commits and writes summary.md.
+  - `unexplained(base, run, cases, ledger_rows)` gives `Unexplained`: its `count` is D.unexplained_regressions, its
+    `passes` the gate (0), its `line()` the scorecard line. It is defined beside its gate, and scripts/scorecard.py
+    asks it only with `--base`, as before.
+  - The operations take run snapshots, not a repository and a revision. The scripts read the run and the base commit
+    (`RunSnapshot.read`, `RunSnapshot.at`), and the tests give the base through a throwaway git repository.
+  - Alternative: grow diagnosis_loop.py under its name. Rejected: its name says the whole loop, while the module is
+    one round of it (the workflow runs the rounds).
+  - Cost if wrong: a rename, mechanical.
+- **The import graph: truth_update reads the loop round's tokens, and the loop round opens truth sets, so
+  `TruthSet.apply_round` imports truth_update locally** (the precedent: handling.py's qlib_adapter import).
+  `LEDGER_COLUMNS` moved to truth_set beside `CHANGE_COLUMNS`: the ledger's file format is the set's, while what its
+  keys and outcomes mean is the loop round's.
+  - Alternative: the tokens in a module below both (diagnosis_loop kept as the vocabulary). Rejected: the prompt's one
+    owner of every token, and the tokens and the round would again live in two places.
+  - Alternative: truth_update's rules moved into loop_round, `TruthSet.apply_round` deleted. Rejected: step 9a's
+    TruthSet interface stays, and truth_update stays the rules' module.
+  - Cost if wrong: one local import. tests/test_import_closure.py lists loop_round among the measurement modules.
+- **Every token is built by one function and read back by its inverse in the same module.**
+  - The key: `mismatch_key` and `regression_key` (moved from regression.py), read by `parse_key` (a Mismatch, or a
+    report row) and `key_kind`. A key part holding `|` is refused, so every key reads back. No ledger key holds one
+    today (1,536 rows checked: every `mis|` key has 5 parts, every `reg|` key 7).
+  - A ledger row's kind is its key's (`ledger_row` derives it): one fewer argument, and the kind cannot disagree with
+    the key. Every one of the 1,536 ledger rows already agrees.
+    - Alternative: keep the kind as an argument. Rejected: a second spelling of what the key says.
+    - Cost if wrong: test_truth_update's fake keys (`k-...`) became real keys, built by the module; every assertion
+      on them names the same key.
+  - The field name of a regression: `Field.of(row)` (a report row), `Field.name` (the text) and `parse_field` (its
+    inverse). truth_update asks `Field.scored` and `Field.whole` instead of `f in SCORED` and the `WHOLE_ROW` tuple
+    (gone). The same answers for every name a report row gives; `parse_field` refuses a name no report row has.
+  - The case id: `case_id(subject, label, n)` and `parse_case_id`. A label holds letters, digits, `.` and `-`
+    (every label in the ledger does), so the id reads back; `Round` refuses any other label with exit 2.
+  - A mismatch's field name is the judge's own (`diagnosis_truth.MISMATCH_FIELDS`): the loop carries it. Its one
+    built name, `legN.x`, is now `diagnosis_truth.leg_field`, with `field_key` (unchanged meaning) its inverse in the
+    same module; `TruthSet.rename` logs through `leg_field` too.
+    - Alternative: move the leg field into loop_round. Rejected: the judge would import the loop round, which imports
+      the judge.
+- **The round's cases are typed: `RoundCase.of(row)` reads a cases.csv row back** (its JSON cells as `CaseError`s:
+  key, field, two sides; `delist_date`, the context's last real ending). The rules read attributes, never the case
+  row's columns or JSON. `RoundCase.of` refuses an unknown mode and error lists of unequal lengths; the old rules
+  treated any mode but `regression` as a mismatch and `zip` cut uneven lists short. No real cases.csv has either.
+- **truth_update asks the judge for the keys a new truth row produces (`loop_round.new_row_keys`)**, instead of
+  spelling the judge's wording (`present`, `(no contract row)`, the shapes). It judges the new row against the run
+  and settles every mismatch as `truth_right`.
+  - Why every mismatch: every scored cell of the new row other than a field the diagnosis found `old` is the run's
+    own value (an unchanged field equals the base's; a `new` field is the run's), so the row's mismatches are exactly
+    the `old` fields. No knowledge of the judge's field names is needed.
+  - The keys are ordered by the case's fields (then the judge's order), so the ledger lists them in the old order:
+    contract column order, `last_trade_date` before `exit_kind`, where the judge's order is SCORED's.
+  - To judge, the rules take the run as the judge reads it: `apply_round(truth, cases, records, base_contract, run)`,
+    `run` a `diagnosis_truth.LibraryRows`, replacing `new_contract` and `run_sec_ids` (`run.contract`,
+    `run.sec_ids`). `TruthSet.apply_round` takes the same arguments. The scripts always passed the securities, so
+    "None for no check" is gone; test_truth_update's helper passes every security its cases name by default.
+  - Alternative: keep the two arguments and build a partial `LibraryRows` inside. Rejected: a hidden partial view of
+    the run, and two arguments where one does.
+- **The record vocabulary has one Python definition** (`MODES`, `RIGHTS` with `neither`, `CONFIDENCES`,
+  `VERDICT_KEYS`, `RECORD_KEYS`, `VERIFIED`). tests/test_loop_round.py reads the workflow's RECORD schema (the
+  `mode`, `right` and `confidence` enums, a field verdict's required keys, the write-back's "has all of the keys"),
+  its round folder and file names, and its two commands (parsed by the scripts' own parsers), and checks the keys it
+  reads from the open line. The JS is unchanged: it already agreed.
+- **The scripts are argparse over the module.** truth_loop_round.py and update_truth.py each have a `parser()` and a
+  `main` that reads the snapshots, calls `Loop.seed`, `Round.open` or `Round.close`, and prints its `line()`;
+  scripts/scorecard.py has a `parser()` too, and its `--ledger` default is `Loop.of(ROOT).ledger`. Their command
+  lines are unchanged.
+  - Each script now catches `TruthFileError`, `SnapshotError`, `ValueError` and `OSError` around the whole call and
+    exits 2. Before, truth_loop_round's seed commit and update_truth's commit and summary sat outside the catch (a
+    failed write was a traceback, exit 1), and scripts/scorecard.py's `--base` catch gains `ValueError` (a key part
+    holding `|`).
+  - The order in which several bad inputs are reported can differ (the snapshots are read before cases.csv); each
+    still exits 2.
+- **Declared defect fix: the examined day is a column of its own** (its own commit, before the module's). data/diagnosis_truth.csv gains
+  `examined_delist_date` after `shape`; `DiagnosisCase.old_delist_date` (the case_id's tail) is gone, and the judge's
+  ending_moved check reads the column. `parse_rows` requires it on an ending_moved row and checks its date format.
+  - The column alone changed in data/: every other cell is kept, no change-log row (a format change, not a ruling),
+    and the truth set's round trip on the migrated files writes nothing.
+  - Its values, by a one-off migration: the 284 rows of sub-plan 5-0's diagnosis take the date their id was built
+    from (source.csv agrees for the 282 it lists). The 37 loop-added rows take the `delist_date` of their row in
+    their round's cases.csv (the run's last real ending when the round was opened: the ending the case examined); 5
+    removed-row cases have none and stay blank.
+  - The one loop-added ending_moved row is CRC's, `BBG00Y04KP80_5a-r2` (now under BBG0060B3M63): its examined date is
+    2016-06-01. Before, its check compared the last ending with a blank.
+  - Going forward, a row the loop adds takes its case's `delist_date` (`RoundCase.delist_date`, from the context
+    column cases.csv already had): derived where the case is built.
+  - The 5-0 builder: `truth_build.assemble` takes `examined_delist_date` from its `meta`, and
+    scripts/build_diagnosis_truth.py reads it from the diagnosis's source.csv.
+  - Alternative: derive the date where the case is built and keep no column. Rejected: a loop-added case's examined
+    ending exists nowhere else in data/ (only in output/'s round folders).
+  - Cost if wrong: a hand-written ending_moved row without the date is refused (exit 2, naming the line).
+- **Judgements on output/ and on the replay folder: none changed.** Every truth case judged with 26fa691's code and
+  truth files and with this step's: 321 cases, 0 judgements changed, 121 mismatches before and after, on both
+  folders. CRC's last real ending is 2020-08-10, not the 2016-06-01 it examined, so its shape holds either way.
+- **Tests.**
+  - Added: tests/test_loop_round.py, 48 tests:
+    - each token and its inverse (keys, field names, case ids, labels, ledger rows, case rows);
+    - the loop folder's files and the one ledger every script names;
+    - the workflow's agreement (vocabulary, round folder, commands, the open line);
+    - seeding, opening (renames, the report, the ledger filter, case rows and context, two cases of one security) and
+      closing (dry run, real run, a missing cases.csv, a retried record, a security the run lacks, a flip, the
+      examined ending a new row keeps) in a throwaway git repository with JSON records;
+    - the judge-key agreement for 8 branches (a scored field old, two old in the case's order, one new and one old,
+      an added row old or new, a removed row old or new, every field new): the ledger's `truth_right` keys are the
+      judge's for the new row, and the next round lists nothing of it;
+    - the unexplained count;
+    - the two scripts' thin tests (their arguments reach `Round.open`, `Loop.seed`, `Round.close`; exit 2).
+  - Added elsewhere: test_diagnosis_truth, 2 (the loop-added ending_moved case; the leg field round trip);
+    test_truth_set, 3 (the column, never the id's tail; the ending_moved refusal; a bad date), replacing its 2
+    `old_delist_date` checks; test_truth_build, 1 (the builder's examined date); test_truth_update, 1 (a new row keeps
+    its case's examined ending); test_scorecard_script, 1 (`--base` asks the loop round, `--check` fails unless it
+    passes).
+  - Deleted once covered: tests/test_diagnosis_loop.py (9 tests, 3 of them loading the round script with importlib in
+    throwaway repositories), test_truth_update's 3 script tests, test_regression's `unexplained` test, and
+    test_scorecard_script's git-driven `--check --base` test.
+  - Rewritten at the interface: test_truth_update's helper builds `RoundCase`s with real keys and passes the run as
+    `LibraryRows`; its assertions name the same keys.
+  - Suite: 3384 passed, 46 xfailed (26fa691: 3343 passed, 46 xfailed; the defect fix's commit alone: 3348).
+- **The gate.**
+  - The loop scripts were run before (a shared clone at 26fa691, its own scripts, src and data) and after (this
+    worktree, its migrated data), on copies, against the clone's output/ and base commits: truth_loop_round (wave2
+    round 1 at ca58ee1, wave1 round 2 at 0de5d8f); the seed on the committed ledger and on an empty one; update_truth
+    dry and real (wave2 rounds 1 and 2 and 5a, 5b, 5c round 1 at ca58ee1, wave1 round 1 at 0de5d8f); and a synthetic
+    round. In it the ledger is emptied, so every current mismatch (121) and regression against ca58ee1 (419) is a
+    case; records are synthesized for each verdict kind, refuted, inferred and missing; update_truth runs dry and
+    real; then round 2 opens on the result. Every stdout line, cases.csv, regression report, change log, ledger and
+    summary.md is identical (the copies' own folder names read alike). The truth files are identical on the old
+    columns, with `examined_delist_date` kept on every existing row and set on the 351 rows the synthetic round adds.
+    Round 2 lists only the 32 retried cases, before and after: the judge's keys settled every mismatch the 351 new
+    rows make, as the spelled keys did.
+  - scripts/scorecard.py `--check`, and `--check --base ca58ee1`: output identical before and after, exit 0
+    (D.mismatches 121, D.cases_matching 284, D.unexplained_regressions 0).
+  - `git diff --stat 26fa691 -- data`: data/diagnosis_truth.csv only, the column.
+  - The replay is SAME against `accepted4_out` (scorecard.json's `D.*` lines included), refuses no request, and its
+    log equals step 9a's byte for byte.
+  - The 5-0 builder, run offline on a copy (`--no-figi`), gives each of its 282 rows the date its id was built from.
+- **pipeline.py: 1606 lines, unchanged.** loop_round.py is 560 lines (diagnosis_loop.py was 136, deleted).
+  truth_update.py went from 204 to 186 lines, regression.py from 231 to 219; truth_loop_round.py and update_truth.py
+  from 176 to 125.
