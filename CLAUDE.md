@@ -102,8 +102,10 @@ security's own that was its issuer in force on every sighting, `issuer_in_force.
 Form 25s too; metered as "other issuers in force"), `_find_delistings`,
 `_dead_before_sighting` (stage 5b: a security whose last real ending came before its
 first observation and that has no trading fails row died before the run's fails
-window began, so (eligibility decided first, then) rows for [end − 1095 d, end + 10 d] are loaded, it takes the
-CUSIPs `history.backfill_cusips` finds that no other security holds and its sightings are rebuilt; no `sec_id`
+window began, so (eligibility decided first, then) the fails index is asked for its tickers' rows over
+[end − 1095 d, end + 10 d] (`FtdIndex.around`), it takes the CUSIPs `history.backfill_cusips` finds that no other
+security holds (one an earlier security of the stage took included) and its sightings are rebuilt; it returns them
+(`_Backfill`: CUSIPs and sightings) and `_run` merges them over stage 5's, so it changes no input; no `sec_id`
 or issuer changes),
 `_check_overrides`, `_last_trade_closes` (stage 7: a `--last-trade-closes` row, else the caller's answer to the
 delisting's `last_close` request, `price_requests.PriceAnswers`, else the fails close), `_merger_values` (stage 8:
@@ -193,8 +195,22 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   goes through it, and each client removes a killed run's temp files
   (`atomic_io.clean_orphan_temps`, also old `.part` downloads) when it starts.
 - `ftd.py` — `FtdClient`/`FtdIndex`: SEC fails-to-deliver rows (`(date, CUSIP,
-  symbol, price)`, 2004+). `close_after()` supplies every last-trade close and
-  acquirer-completion price (`close_of`/`close_known_on`: by the security's
+  symbol, price)`, 2004+). Architecture step 12: the index is the only reader of the fails files (its source, an
+  `FtdSource`: `FtdClient` or a test's double with `urls_for` and `rows`). `FtdIndex(rows)` holds given rows (with no
+  source they are all it has); `FtdIndex.opened(source, lo, hi, through=, symbols=, cusips=, names=, first_seen=)`
+  is the run's index, opened by `identity` (stage 1) over the eras' tickers and CUSIPs, its run's fails window
+  [lo, `through`] (the run date). A stage asks it, never the files: `follow(cusips=, symbols=)` (the keys' rows over
+  the run's fails window: stages 4 and 4b), `around(days, before=, after=, cusips=, symbols=)` (from `before` days
+  before the earliest day to `after` days after the latest: stages 5b, 7 and 8's gate), `apart(days, ...)` (a
+  separate index of CUSIPs' rows around days with this one's rows of them, this one left as it was: stage 8a's early
+  mergers) and `every_row(lo, hi)` (every row of the files in a span, as spelled, held nowhere: stage 8a'). An ask
+  reads only the keys not held over its whole span, in one pass; a query never reads the files (the warm passes
+  read the index on worker threads), and a windowless one (`by_cusip(c)`) answers every row held, those other keys'
+  asks brought in too. Coverage is stated: `opened_from` (the window the index was opened over:
+  `cusip_handoffs`' margin; `Identity.ftd_lo`), `data_covers(lo, hi)` and `data_end()` (the fails data's own
+  coverage, the periods of SEC's file index up to the run date: `guarded_eras`, the line follow's data edge, stage
+  9's OKE rule; an index with no file index answers from its rows held). `close_after()` supplies every last-trade
+  close and acquirer-completion price (`close_of`/`close_known_on`: by the security's
   CUSIP on the day, then its symbol, never from a row of a CUSIP another security of the run holds: `skip`,
   WEN 2008, sub-plan 5d); `by_cusip`/`by_symbol` supply CUSIP
   history, `trading_rows` the rows not under a deleted symbol, `symbol_deleted`
@@ -208,8 +224,11 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   (a snapshot's `UAC-C` for Under Armour's class C, FTD's `UAC`) also loads that base spelling; a base row is keyed
   by the class ticker only when the ticker's observed names agree with its description and the description names
   the class letter and is dated before the base symbol's own first observation when the run observes the base as a
-  ticker (`FtdIndex.load(..., first_seen=)`: a class C spelled UA-C, whose base UA became its own line's symbol on
-  2016-12-08) (`_relabel_base`); `by_symbol(base)` keeps only the rows left under it (HEI beside HEI-A).
+  ticker (`FtdIndex.opened(..., first_seen=)`: a class C spelled UA-C, whose base UA became its own line's symbol
+  on 2016-12-08) (`_relabel_base`); `by_symbol(base)` keeps only the rows left under it (HEI beside HEI-A). The
+  relabel rules stay in the index (they decide how it keys its rows). A row is relabelled when it is added, with the
+  spellings asked for by then: the replay holds Berkshire's and Lions Gate's BRKB/LGFB rows twice, once relabelled
+  after the gate asked BRK-B and LGF-B (step 12's log, open for a ruling).
 - `midas.py` — `MidasClient`: SEC MIDAS per-security exchange volume (2012+,
   ticker-keyed); `last_trade_day()` confirms the last day with lit+hidden
   exchange volume, suppressed to `None` when the window runs past MIDAS's
@@ -282,10 +301,10 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
 - `identity.py` — architecture step 6: a security's identity, stages 1 to 4 behind one interface.
   `identify(index, clients, as_of=, limit=, log=, workers=, meter=)` gives `Identity`: the refined eras
   (`refine_eras`, the second split after `observations.split_eras`: a CUSIP switch under the ticker, or a gap over
-  `ERA_GAP_DAYS` no fails row bridges) and the fails index stage 1 loads (`ftd`, from `ftd_lo`; later stages extend
-  it), each era's issuer (`issuers`, by era key, the one source of an era's CIK: asked at its last sighting,
+  `ERA_GAP_DAYS` no fails row bridges) and the run's fails index, opened by stage 1 over the fails files (`ftd`;
+  `ftd_lo`, its `opened_from`; later stages ask it for more rows), each era's issuer (`issuers`, by era key, the one source of an era's CIK: asked at its last sighting,
   `era_last_seen`, with its own pin, name and first sighting), each era's FIGI resolution, the securities, each
-  security's CUSIPs over its whole life (`cusips`, rows loaded to the run date), the identity review items, and the
+  security's CUSIPs over its whole life (`cusips`, their rows followed to the run date), the identity review items, and the
   facts later stages read: `tier`/`resolution_source` (the lookup tier that found an era's or a security's issuer;
   "security_master" for none), `rows_decided` (stage 2b's `ticker_rows` eras: stages 4c and 10g keep their CIK in
   force), `securities_of(resolutions)` (stage 4b's rebuild after a fold, `build_securities`) and
@@ -445,7 +464,7 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   names (`text_symbols`, which also reads "symbol ... changed from X to Y" as Y, curly quotes included: sub-plan 5c, RRI to GEN; `text_cusips`), or the same CUSIP under a new non-OTC ticker; never a CUSIP another
   security holds, nor a switch while the old CUSIP trades on at changing prices more than `SWITCH_DAYS` trading
   days after the new CUSIP's first row, applied only at the data edge (the old CUSIP's last row within
-  `SWITCH_TAIL_DAYS` of `FtdIndex.last_date()`, passed as `data_end`: a live line has no stop to see; CHTR's new
+  `SWITCH_TAIL_DAYS` of `FtdIndex.data_end()`, the fails data's last day, passed as `data_end`: a live line has no stop to see; CHTR's new
   preferred; elsewhere the window is ±`LINE_DAYS` both sides, HYH 2018); the own-ticker pick is made before held CUSIPs are
   dropped, and a pick another security holds is no step (LMCA 2016)); `corroborate` (R1: refused for an 8-K 1.03 in
   [first − 180, first + 30] d, an OTC move, a description that names no name in force, a class conflict, a
@@ -470,7 +489,7 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   the review items. Its steps: the reads (the LLM told the target's name; both filled ahead on the worker threads,
   the sequential pass then reading what they cached), sub-plan 5e's stage 8a acquirer line of every stock leg before
   the gate, passed or not (`acquirer_line`; a merger before the run's fails window reads its lines' rows into a
-  private index, `LineIndex.fresh`), stage 8a' (`acquirer_ticker`: a leg with no ticker and no line), the gate
+  private index, `FtdIndex.apart` and `LineIndex.fresh`), stage 8a' (`acquirer_ticker`: a leg with no ticker and no line), the gate
   (`payout_gate`: the terms' ticker price, then the line's, the line's first for a `line_first` leg whose ticker's
   rows are another line of the issuer's, TWC, VIA, STRZA), the acquirer (`acquirers`: the fails-row acquirer for
   ticker-settled terms, the only source of `AddedAcquirer`s, else the line or holder; a `line_first` leg publishes
@@ -1132,7 +1151,10 @@ expiration is 0.0 in the table and no correction in the firm month, which leaves
   it answered HTTP 429 (a run-stopping `EdgarBlocked`) three times in a cold
   full run, at 8, 2 and 1 workers. That is why the name tier now reads SEC's
   `cik-lookup-data.txt` (one ~38 MB download; building the index takes about
-  9 s and ~440 MB) instead of searching. Peak memory is 1.8–4.2 GB (mostly data, likely the fails-to-deliver panel; not profiled);
+  9 s and ~440 MB) instead of searching. Peak memory was 1.8–4.2 GB in older runs (not profiled); the offline
+  whole-run replay (2,468 eras, every cache warm, 1 worker; architecture step 12, 2026-10-07) takes 580 s and a
+  5.0 GiB maximum resident set, its fails index holding about 4.0 million rows at the end, and its passes over the
+  fails files take 252 s of it, 117 s of them stage 5b's 68 one-security passes (each ~1.7 s);
   threads add at most about 37 MB (measured). SEC does not keep full-text-search hit order
   stable between two fetches of the same query: the same cache always gives
   the same output, but a refetch can reorder tied hits (see `docs/data-flow.md`).

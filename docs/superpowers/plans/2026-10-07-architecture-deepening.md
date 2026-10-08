@@ -37,7 +37,7 @@ A deepening moves behaviour behind a smaller interface. It changes nothing the l
 | 9 | The truth set and the loop round as two modules (review 10) | a loop-added ending_moved case's examined day | done |
 | 10 | dlret decides the value rule once (small) | plan_stock's confidence | done |
 | 11 | The Clients seam declares capabilities (small) | | done |
-| 12 | The fails index owns its loading (small) | | |
+| 12 | The fails index owns its loading (small) | | done |
 | 13 | One leaf module for ticker and share-class spelling (small) | | |
 | 14 | The finder builds its own trading record (small) | | |
 | 15 | One truth-case type (speculative) | | |
@@ -1765,3 +1765,111 @@ Decisions made in the step:
 - **CONTEXT.md is unchanged.** A capability is design vocabulary (an adapter's statement at a seam), not a domain
   term. CLAUDE.md gained the capabilities module, the `Clients` seam in the stage text, the edgar, ticker_resolver,
   line_follow and LLM entries, and the doubles' contract in "Tests are fully offline".
+
+### Step 12: the fails index owns its loading and its coverage
+
+- **The index is the only reader of the fails files; a stage asks it for keys over days.** Its interface:
+  - built as `FtdIndex(rows, source=, window=)` (the 69 constructions from rows unchanged) or
+    `FtdIndex.opened(source, lo, hi, through=, symbols=, cusips=, names=, first_seen=)`, which `identify` calls once
+    (stage 1), its run's fails window [lo, `through`] the run date;
+  - four asks, each named for what a stage reads:
+    - `follow(cusips=, symbols=)`: the keys' rows over the run's fails window (stage 4; stage 4b twice);
+    - `around(days, before=, after=, cusips=, symbols=)`: from `before` days before the earliest day to `after`
+      after the latest (stages 5b, 7 and 8's gate);
+    - `apart(days, ...)`: a separate index of CUSIPs' rows around days, with this one's rows of them, this one
+      left as it was (stage 8a's early mergers: what `FtdIndex.load` plus `add` did inline);
+    - `every_row(lo, hi)`: every row of the files in a span, as spelled, held nowhere (stage 8a', which read the
+      client directly; its degraded `ftd_scan` policy stays in the stage);
+  - the queries, unchanged; and three coverage statements (below).
+  - Gone from the interface: `load`, `extend`, `add`, `has_rows`, `scanned_from`, `last_date`. `Clients.ftd_client`
+    stays the run's adapter, read only by `identify`. `LineSources.ftd_client` is gone, and so is `Identity`'s
+    `ftd_lo` field (now a property, the index's `opened_from`).
+  - Alternative: queries that load what they miss (a windowed `by_symbol` reading its span on a miss). Rejected:
+    - a pass over the run's 419 files costs 20 to 27 s (measured, below), so the asks must come in batches only the
+      stage knows;
+    - today's windowless queries answer every row held, and later stages read across asks (stage 10's history
+      sees 5b's and 7's early rows), so loading per query span would change rows;
+    - the warm passes read the index on worker threads: a loading read would race them, and could make the output
+      depend on the worker count. Now a query never reads the files (a test pins it), so the warm passes only read.
+  - Cost if wrong: a stage still states its keys and days in one call; what it no longer does is hold the files,
+    choose a window, or build a private index.
+- **The coverage statements, each measured against the file index's meaning over the whole replay** (a probe
+  recorded every call and its answer; /tmp/claude/delist_detection/arch/s12_probe_out):
+  - `has_rows(lo, hi)` (60 calls, all from `guarded_eras`) is now `data_covers(lo, hi)`: a file of SEC's index has
+    a period that meets the span, by the run date. Its answer equals today's for all 60.
+  - `last_date()` (4,588 calls from the line follow's data edge, 2 from stage 9's OKE rule) is now `data_end()`:
+    the end of the latest file period that begins by the run date, the run date inside it. All answers were
+    2026-08-31 both ways (the data's last row and the last period's end).
+  - `scanned_from(ticker)` (2,659 calls, `cusip_handoffs`) is now `opened_from`: the first day of the window the
+    index was opened over, which no later ask moves. Every answer was 2007-12-17 both ways: every era's ticker is
+    opened over that window, and `cusip_handoffs` runs before any other ask.
+    - The file index's own start (2004-01-01) is the wrong statement here: the margin asks whether the index read
+      a CUSIP's earlier days. Measured anyway (a replay with `FTD_START` there): SAME, its log identical. So no
+      open coverage row is left for a ruling.
+  - An index with no file index (built from rows, or over a double whose files carry no SEC period) answers
+    `data_covers`/`data_end` from its rows held, which are then all its data. Every double of the suite keeps its
+    answers, and the zip-fixture tests cover the file index.
+  - Consequence outside the replay: a run whose tickers rarely fail (a `--limit` subset) now guards an unconfirmed
+    era whenever the data covers its window, and its data edge is the data's end; before, only when one of its own
+    tickers had a row then, and its own latest row. That is what the guard and the edge were written to read.
+  - Alternative: keep the held-rows meanings, named for what they are. Rejected: the brief keeps today's meaning
+    only where the file index's would change a replay row, and none does.
+- **Two order dependences are kept as they were, each pinned by a test:**
+  - a windowless query (`by_cusip(c)`) answers every row held, those another key's ask brought in too, so it
+    depends on what was asked before it;
+  - a row is relabelled when it is added, with the spellings asked for by then: a bare-spelled row ("BFB") held
+    for a CUSIP before "BF-B" was asked is read again relabelled, a second row for one fail.
+- **Open for a ruling: the replay's index holds 3,728 fails twice** (measured at the end of the timed run, below).
+  They are every row of three CUSIPs: Berkshire's 084670207 and 084670702 and Lions Gate's 535919500. The files
+  spell them BRKB and LGFB, one row a day (checked over the run's files), and so do the observations. Stage 8's
+  gate then asks for the acquirer tickers BRK-B and LGF-B (Berkshire's acquisitions, Starz into Lions Gate). That
+  ask learns the class spelling and reads the same rows again, relabelled. `by_cusip` of those CUSIPs then gives
+  each fail twice, and `by_symbol("BRK-B")` gives the relabelled copies. It was so before this step (the gate's
+  `extend` did the same), and no output row of the replay shows it (the sightings dedupe by spelling). But an ask
+  order that put "BRK-B" first would hold each fail once, under a different symbol. A fix (relabel nothing an ask did not ask for, or
+  relabel the rows held when a spelling is learned) can change rows, so it is not built here.
+- **Stage 5b returns its CUSIPs and sightings (`_Backfill`), and `_run` merges them** (`sec_cusips = {**sec_cusips,
+  **back.cusips}`; `search = replace(search, sightings=...)`), so the stage changes no input. A CUSIP an earlier
+  security of the stage took is still held from a later one (the loop merges its own answers). No other in-place
+  mutation of CUSIPs or sightings is left: stage 4b's fold and attach write `Lines.cusips`, the stage's own answer
+  copied from the identity's (since 7a), and stage 9d builds its own.
+- **Stage 5b's asks are left one security at a time: a faster batch is open for a ruling.** Its 34 securities make
+  68 passes, 117 s of the replay's 587 s (the probe; each pass ~1.7 s over 13 files). One pass for every
+  security's span of its tickers, and one for the CUSIPs, would take a few seconds. But a security's rebuilt
+  sightings would then see rows a later security's ask brought in (today: only earlier ones'), so it is no pure
+  move.
+- **The relabel rules (`_relabel`, `_relabel_base`) stay in ftd.py.**
+  - They decide how the index keys its rows, and every query reads that keying (`by_symbol`'s bare-spelling union,
+    a base's rows left under it). Beside identity, half of a key's meaning would sit outside the index, behind a
+    seam with one adapter (a hypothetical seam).
+  - Their inputs are the observed names and first days the index is opened with, not identity's decisions.
+  - Step 13's spelling leaf will take the separator-free spelling and the class-letter regexes; the relabel rules
+    can then read them there. The `normalize_ticker` and `names_agree` imports are left for step 13.
+  - Cost if wrong: the fails index keeps a domain import (`names.names_agree`).
+- **The fixture builders and the data-flow diagram use the new names** (`opened`, `follow`); their output is the
+  same rows.
+- **Tests.**
+  - Added: 12 in tests/test_ftd.py, at the index's interface, over SEC-named zip fixtures in a tmp folder (a real
+    `FtdClient`, wrapped to count and record its reads) and rows. They cover: the opening and `follow` past it; a
+    query that reads no file; `around`'s span and an ask already held; an index with no source; `apart` leaving
+    the index as it was; `every_row`'s unrelabelled stream; a windowed answer the same in either ask order;
+    `opened_from` unmoved by an earlier ask; `data_covers`/`data_end` from the file index (a span with no held row
+    covered, the run date inside a period); their held-rows meaning with no file index; and the two kept order
+    dependences.
+  - Moved to the asks: test_ftd's five `extend` tests (follow, a CUSIP under another symbol, the gap, the adjacent
+    spans, an acquirer spelling), with every assertion. The 5b stage tests read the returned values and now also
+    assert the stage left its inputs as they were. test_merger_value's index takes its fails double as its source.
+  - Deleted: none. No test checked only a stage's own `extend` call; the 5b test that the stage asks for no rows of
+    an ineligible security checks a stage rule.
+  - Suite: 3402 passed, 46 xfailed (step 11: 3390).
+- **The gate.** The replay is SAME against `accepted4_out` and refuses no request. Its log equals step 11's byte for
+  byte.
+- **Peak memory and wall time of the replay** (one worker, `resource.getrusage`; macOS's `/usr/bin/time -l` needs a
+  sysctl the sandbox refuses): before (HEAD 644a308) 580.1 s wall and 5.06 GiB maximum resident set; after
+  581.5 s and 5.04 GiB. The asks read the same files for the same keys, so the rows held (3,997,194 at the end)
+  and the passes are the same. The probe's passes over the files: 252 s of the run, 117 s of them stage 5b's. The
+  memory is above CLAUDE.md's 1.8 to 4.2 GB (an older, unprofiled figure); its measured-speed note now gives these
+  numbers.
+- **pipeline.py: 1624 lines to 1637** (`_Backfill`). ftd.py: 502 to 628.
+- **CONTEXT.md is unchanged:** the index, its asks and its coverage are design vocabulary over the fails data, a
+  term the glossary's "era" already uses.
