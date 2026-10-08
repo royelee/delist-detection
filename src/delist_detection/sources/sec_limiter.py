@@ -161,8 +161,8 @@ class MachineGate:
 def use_machine_wide_limit(path: str | Path | None = None) -> MachineGate:
     """Extend SEC_LIMITER's spacing to every process on this machine that uses the
     same lock file (`path`, default `default_rate_lock_path()`). Call it once at
-    start-up, before any SEC request: the CLI, `pipeline.default_clients`,
-    `verify_against_web.py` and `build_golden_fixtures.py` do. Idempotent for one
+    start-up, before any SEC request: the CLI, `pipeline.default_clients`
+    and `build_golden_fixtures.py` do. Idempotent for one
     path. Raises OSError, naming the path and SEC_RATE_LOCK_ENV, when the lock
     file cannot be opened for writing."""
     p = Path(path).expanduser() if path is not None else default_rate_lock_path()
@@ -182,7 +182,7 @@ def throttle() -> None:
     """Wait for the next SEC request slot: this process's, and, once
     `use_machine_wide_limit()` has installed a gate, the machine's across every
     process sharing the lock file. Every SEC request (`sec_get`, which
-    EdgarClient, sec_http and verify_against_web share) calls this, from any thread. It
+    EdgarClient and sec_http share) calls this, from any thread. It
     reads the module's SEC_LIMITER at each call, so a test or the CLI can swap
     or extend the limiter."""
     SEC_LIMITER.acquire()

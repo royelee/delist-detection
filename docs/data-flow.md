@@ -209,9 +209,8 @@ A connection error, a timeout, or a 5xx on a submissions fetch, a filing text
 or raw fetch (`fetch_filing_text` and `fetch_filing_raw` are both retried the
 same way), a full-text-search query, or a MIDAS/FTD ZIP download is retried up
 to 3 attempts with 2s/4s backoff (`edgar.retry_request`, inside
-`edgar.sec_get`, the one request path `EdgarClient`, `sources/sec_http.py` and
-`verify_against_web.py` share; `verify_against_web.py` asks it for a single
-attempt) before giving up; a 403/429 still raises `EdgarBlocked`
+`edgar.sec_get`, the one request path `EdgarClient` and `sources/sec_http.py`
+share) before giving up; a 403/429 still raises `EdgarBlocked`
 immediately, never retried, and a failure is never cached as an answer. A
 MIDAS quarter that keeps failing to download, or whose ZIP SEC no longer
 serves (a 404), is remembered in-memory (`MidasClient`) for the rest of the
@@ -268,7 +267,7 @@ exchange transfer). It runs each stage's own code on N threads
   `flock` on `~/.cache/delist_detection/sec_rate.lock`
   (`$DELIST_DETECTION_SEC_RATE_LOCK` overrides it). That file holds the last
   start time, so every SEC client on the machine that uses the same file (runs
-  in any worktree, `verify_against_web.py`, `build_golden_fixtures.py`) stays
+  in any worktree, `build_golden_fixtures.py`) stays
   under 8 requests/s together. A library caller that builds its own clients
   instead of using `default_clients` must call `sec_limiter.use_machine_wide_limit()`
   itself. A process never sleeps while holding the lock file's `flock` — it
@@ -1050,30 +1049,6 @@ the first cell) and refuses to touch a file that doesn't load, rewriting a
 valid one with every existing row/column preserved in the file's own header
 order. Written by `scripts/classify_universe.py` alongside the other eight
 output tables (nine in all, counting `uncertain.csv`).
-
-`output/web_verification.csv` — independent EDGAR cross-check produced by
-`scripts/verify_against_web.py`. Verdicts:
-
-| Verdict | Meaning |
-|---|---|
-| `OK` | `resolved_name` shares a token with EDGAR's name; bucket-specific evidence present |
-| `OK_recycled_ticker` | `resolved_name` doesn't match (ticker recycled) but the CIK has a Form 25 within ±30d of the observed date |
-| `MISMATCH_name` | `resolved_name` shares no tokens with EDGAR's name and no nearby Form 25 — needs human review |
-| `WEAK_no_delist_form`, `WEAK_no_ma_items`, `WEAK_no_3_01`, `WEAK_no_form15` | Names agree, but the bucket-specific evidence expected on EDGAR wasn't found |
-| `no_cik`, `bad_cik`, `no_entity_data` | No CIK, an invalid one, or nothing to check on the EDGAR entity page |
-
-The verifier reads the company's whole filing list (the submissions JSON's
-`recent` block plus each older submissions file overlapping the window) and
-counts evidence only within [delisting − 400 days, delisting + 120 days]: a
-Form 25/15 for `WEAK_no_delist_form`; for a merger an 8-K item 2.01 or 5.01
-or a merger document (SC 14D9, SC TO-T, DEFM14A/C, PREM14A/C, 425, SC 13E3);
-for a liquidation a Form 15 or the bankruptcy 8-K (item 1.03); for a
-compliance failure an 8-K item 3.01. Names are compared on words of four or
-more letters, legal and share-class words dropped, both as written and split
-on camelCase ("BlackRock" matches "BLACKROCK"). Agreement on the delisting
-rows counts `MISMATCH_*`, `WEAK_no_ma_items`, `WEAK_no_3_01` and
-`WEAK_no_form15` as disagreements; `WEAK_no_delist_form` and `no_*` are no
-evidence either way.
 
 ## Downstream integration
 

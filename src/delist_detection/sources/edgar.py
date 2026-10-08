@@ -183,7 +183,7 @@ def retry_request(make_request, *, sleep=time.sleep, max_attempts: int = RETRY_M
 def sec_get(url: str, *, headers: dict[str, str], timeout: float, session=None, endpoint: str | None = None,
             retry: bool = True, sleep=time.sleep):
     """GET `url` from SEC: the one request path every SEC client shares
-    (EdgarClient, sec_http, verify_against_web). Each attempt waits for the
+    (EdgarClient, sec_http). Each attempt waits for the
     shared limiter (`sec_limiter.throttle`), is counted as `request:<endpoint>` and timed
     under `endpoint` in `sec_stats.SEC_STATS` (default: `endpoint_of(url)`), and goes out on
     `session` (default: a one-off `requests.get`) with `headers` as given --

@@ -773,8 +773,7 @@ table, delistings by bucket, `securities.csv` FIGI sources (`pin` / `ticker` /
 `cusip` / `name` / `placeholder`), `review.csv` flag counts, and a `Review: N
 fix, M check (…)` line — the first place to look for how well a run went.
 `output/review_summary.csv` groups the triage list by cause;
-see *Severities and accepting a review row* above and *Verifying the output*
-below for the independent EDGAR cross-check.
+see *Severities and accepting a review row* above.
 
 The same run auto-extracts the per-share cash merger consideration for every
 `merger`-bucket delisting into `output/payouts.csv` (see *Payout extraction*
@@ -1077,7 +1076,6 @@ scripts/
     seeds_from_observations.py        Observations CSV → one row per introduction (the seeds-only input)
     classify_universe.py              Reads --observations → writes the nine output tables
     accept_review.py                  Bulk-accept review.csv rows by flag → appends data/review_decisions.csv
-    verify_against_web.py             Independent EDGAR cross-check → output/web_verification.csv
     compute_corrected_returns.py      CLI: read panel + delistings.csv → write BMP-corrected panel
     regen_payout_fixtures.py          Regenerate golden payout test fixtures from live SEC
     build_golden_fixtures.py          Rebuild the golden regression set from live EDGAR
@@ -1091,7 +1089,6 @@ output/
     review.csv            Every row (delisting or not) that still needs a human look, severity-ordered
     review_summary.csv    review.csv's rows grouped by flag, for triaging by cause
     run_manifest.json     What the run rested on: as_of, code version, SEC requests/cache/latency per endpoint
-    web_verification.csv  Per-row independent cross-check verdict
 
 data/
     review_decisions.csv  Accepted review flags (sec_id,delist_date,ticker,flag,decision,note), read every run
@@ -1253,28 +1250,6 @@ placeholder `sec_id` `CIK<cik>-<CLASS>` (flagged `no_figi`, an `info` flag:
 counted in `review_summary.csv`, not listed in `review.csv`; `securities.csv`
 marks the security `figi_source=placeholder`); with no CIK
 either, the observation goes to `review.csv` as `observation_unresolved`.
-
----
-
-## Verifying the output
-
-`scripts/verify_against_web.py` reads `output/delistings.csv` (or `--input`)
-and does an independent EDGAR cross-check for each row, checking the row's
-own `resolved_name` — the name our resolver settled on — against the EDGAR
-entity page's current and former names, and emits a verdict in
-`output/web_verification.csv` (`sec_id, ticker, our_bucket, web_says, agree,
-evidence_url, note`):
-
-| Verdict | What it means |
-|---|---|
-| `OK` | `resolved_name` shares a token with EDGAR's name; bucket-specific evidence present (M&A items for `merger`, a 3.01 for `compliance_failure`, a Form 15 for `liquidation`) |
-| `OK_recycled_ticker` | `resolved_name` shares no token with EDGAR's current/former names, but the CIK still has a Form 25 within ±30d of the observed date |
-| `MISMATCH_name` | `resolved_name` shares no token with EDGAR's name and no nearby Form 25 — needs human review |
-| `WEAK_no_delist_form`, `WEAK_no_ma_items`, `WEAK_no_3_01`, `WEAK_no_form15` | Names agree, but the bucket-specific evidence expected on EDGAR wasn't found |
-| `no_cik`, `bad_cik`, `no_entity_data` | No CIK, an invalid one, or the EDGAR entity page had nothing to check |
-
-Run it after a full `classify_universe.py` pass and use `--sample N` for a
-stratified spot-check across buckets rather than the whole table.
 
 ---
 

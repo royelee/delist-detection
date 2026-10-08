@@ -58,7 +58,6 @@ python scripts/classify_universe.py --observations obs.csv --id-baseline output/
 python scripts/seeds_from_observations.py --observations data/observations.csv --out seeds.csv   # one row per introduction: the seeds-only input
 python scripts/observations_from_snapshots.py --dir <folder of dated snapshot CSVs> --out obs.csv   # ticker/name columns, one date per file name
 python scripts/observations_from_instruments.py --instruments all.txt --out obs.csv   # legacy (ticker,start,end) file → two observations per row
-python scripts/verify_against_web.py     # independent EDGAR cross-check on output/delistings.csv → output/web_verification.csv
 python scripts/regen_payout_fixtures.py  # refetch golden 8-K fixtures from live SEC
 python scripts/build_golden_fixtures.py  # rebuild the 31-case golden regression set (NETWORK); --efts-only / --llm-only / --only ID
 python scripts/accept_review.py --flag terms_gate_failed --note "sampled 5, all fine"   # bulk-accept every current review.csv row carrying that flag → appends to data/review_decisions.csv (offline); --bucket narrows, --dry-run previews, --yes required for a fix-severity flag
@@ -250,7 +249,7 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   `capabilities.FULL_TEXT_SEARCH`, which this adapter offers. Owns `EdgarBlocked`, `resolve_user_agent()`, and
   `sec_get()`: the one SEC request path (`sec_limiter.throttle`, User-Agent,
   `sec_stats` counting, `retry_request`, `EdgarBlocked` on 403/429) that
-  `EdgarClient`, `sources/sec_http.py` and `verify_against_web.py` share.
+  `EdgarClient` and `sources/sec_http.py` share.
 - `sources/sec_limiter.py` — the SEC rate limit: `SEC_LIMITER` (a `RateLimiter`, 8
   request starts/s across the process's threads), `MachineGate` and
   `use_machine_wide_limit()` (the same limit across every process on the
@@ -403,7 +402,7 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   `atomic_io.replace_all_on_success`), and `read_delistings_frame`
   (delistings.csv as a typed pandas DataFrame: `qlib_adapter.load_delistings`
   reads through it). `CONTRACT_SCHEMA_VERSION` 3 adds `contract/payout_legs.csv` (sub-plan 5f). Every table read — `qlib_adapter`, `accept_review.py`,
-  `verify_against_web.py`, and `run_snapshot` for every measurement reader — goes through this module's specs, so
+  and `run_snapshot` for every measurement reader — goes through this module's specs, so
   a later move to DuckDB changes only this module and `run_snapshot`'s adapters.
 - `outputs/review_triage.py` — pure (no network): `CATALOG` maps every review flag to
   a severity (`fix`/`check`/`info`), a description and an action;
@@ -1298,8 +1297,8 @@ expiration is 0.0 in the table and no correction in the firm month, which leaves
   The limiter (`sec_limiter.SEC_LIMITER`) is shared by every thread of the process
   and, through `~/.cache/delist_detection/sec_rate.lock`
   (`$DELIST_DETECTION_SEC_RATE_LOCK`), by every SEC client on the machine
-  (`sec_limiter.use_machine_wide_limit()`, installed by the CLI, `default_clients`,
-  `verify_against_web.py` and `build_golden_fixtures.py`). `--sec-workers N`
+  (`sec_limiter.use_machine_wide_limit()`, installed by the CLI, `default_clients`
+  and `build_golden_fixtures.py`). `--sec-workers N`
   threads prefetch through it (`prefetch.warm`); they only fill missing cache
   entries, so output is byte-identical for any N given the same caches and run
   date. A 5xx pauses every thread. The CLI refuses to start without
@@ -1686,12 +1685,13 @@ expiration is 0.0 in the table and no correction in the firm month, which leaves
   cases, from `data/golden_events.csv`) replays real EDGAR responses
   offline; every case must stay green. `scripts/build_golden_fixtures.py`
   rebuilds it after a live-data change.
-- **Validation is the EDGAR-cross-check loop**, not eyeballing: start from
-  `output/review_summary.csv`, work `review.csv` top down, record each
+- **Validation is the review loop and the scorecard**, not eyeballing: start
+  from `output/review_summary.csv`, work `review.csv` top down, record each
   accepted row in `data/review_decisions.csv`, then re-run
-  `classify_universe.py`, then `verify_against_web.py` on
-  `output/delistings.csv` (and curl the cited accession) to confirm output
-  against an independent path. Drill mismatches to root cause and re-run.
+  `classify_universe.py`, then `python scripts/scorecard.py --check` (exit 1
+  on a drop or a failing golden or diagnosis `pass` case). To confirm one row
+  against an independent path, curl the accession it cites. Drill mismatches
+  to root cause and re-run.
 - **Configurable input paths.** `classify_universe.py` requires
   `--observations` (a CSV of `ticker, as_of[, name, cusip, cik, sec_id]`,
   built by `observations_from_snapshots.py` / `observations_from_instruments.py`
