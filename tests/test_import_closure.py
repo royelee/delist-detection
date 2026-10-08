@@ -21,9 +21,10 @@ import delist_detection
 SRC = str(Path(delist_detection.__file__).resolve().parent.parent)
 NETWORK_CLIENTS = frozenset({"edgar", "sec_http", "openfigi", "ftd", "midas", "nasdaq_halts", "llm_client",
                              "cik_lookup"})
-# run_snapshot: every reader's one input; truth_set: the diagnosis truth files' one reader and writer
+# run_snapshot: every reader's one input; truth_set: the diagnosis truth files' one reader and writer; loop_round:
+# one round of the diagnosis loop and its tokens
 MEASUREMENT = ("run_snapshot", "lifecycle", "verdict", "scorecard", "truth", "diagnosis_truth", "truth_set",
-               "regression", "diagnosis_loop", "truth_update", "audit", "truth_build")
+               "regression", "loop_round", "truth_update", "audit", "truth_build")
 CONTRACT = ("contract", "payout_rule")           # the contract's rows, pure over the tables and stage 8's inputs
 VOCABULARY = ("exit_kind",)                      # the row vocabulary: imports nothing of the package
 CLASSIFICATION = ("end_of_era", "handoffs", "delistings", "continuation_evidence", "classifier", "rewrites",

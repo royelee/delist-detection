@@ -124,15 +124,6 @@ def test_excluded_leaves_out_placeholders_renamed_to_a_truth_security():
     assert rg.excluded(cases, id_changes=ids) == {"A", "MID", "CIK1-COMMON"}
 
 
-def test_unexplained_counts_rows_not_settled_and_pending_regressions():
-    rows = [{"sec_id": "Z", "table": "delistings", "field": "exit_kind", "kind": "changed", "old": "a", "new": "b"},
-            {"sec_id": "Y", "table": "security_history", "field": "ranges", "kind": "changed", "old": "x",
-             "new": "y"}]
-    cases = dt.parse_rows([truth_row("P_5a-r1", "P", status="ruling_pending", fixed_by="regression")])
-    left = rg.unexplained(rows, cases, settled={rg.regression_key(rows[1])})
-    assert [r["sec_id"] for r in left] == ["Z", "P"]
-
-
 def _git(repo, *args):
     subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True,
                    env={**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t",

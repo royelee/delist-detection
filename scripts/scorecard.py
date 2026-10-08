@@ -6,6 +6,7 @@ the floor in --config (spec: Delist Library Reset, step 1 "Measure first").
                                                  # diagnosis pass case fails
   python scripts/scorecard.py --check --base REV # also recompute the regression report against commit REV (a sub-plan's
                                                  # base) and fail on a regression the --ledger has not settled
+                                                 # (D.unexplained_regressions, `loop_round.unexplained`)
   python scripts/scorecard.py --write            # also rewrite <output-dir>/scorecard.json
   python scripts/scorecard.py --raise-floor      # move the config's floor to every better number (never worse)
   python scripts/scorecard.py --lifecycles l.csv # one row per input ticker and per security
@@ -27,10 +28,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 from delist_detection.atomic_io import write_atomic
-from delist_detection.diagnosis_loop import LEDGER, settled_keys
 from delist_detection.lifecycle import LifecycleView
+from delist_detection.loop_round import Loop, unexplained
 from delist_detection.scorecard import (ScorecardConfigError, build, drops, load_config, raise_floor, write)
-from delist_detection.regression import build_report, unexplained
 from delist_detection.run_snapshot import RunSnapshot, SnapshotError
 from delist_detection.truth import TruthFileError
 from delist_detection.truth_set import read_ledger
@@ -57,7 +57,7 @@ def _csv_text(columns, rows) -> str:
     return buf.getvalue()
 
 
-def main(argv: list[str] | None = None) -> int:
+def parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--output-dir", type=Path, default=ROOT / "output")
     p.add_argument("--config", type=Path, default=ROOT / "data" / "scorecard.json")
@@ -66,10 +66,14 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--base", help="a commit: recompute the regression report against it and count "
                    "D.unexplained_regressions (without it there is no such metric)")
     p.add_argument("--repo", type=Path, default=ROOT)
-    p.add_argument("--ledger", type=Path, default=ROOT / LEDGER, help="the diagnosis loop's diagnosed.csv")
+    p.add_argument("--ledger", type=Path, default=Loop.of(ROOT).ledger, help="the diagnosis loop's diagnosed.csv")
     p.add_argument("--raise-floor", action="store_true")
     p.add_argument("--lifecycles", type=Path)
-    args = p.parse_args(argv)
+    return p
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = parser().parse_args(argv)
     try:
         config = load_config(args.config)
         run = RunSnapshot.read(args.output_dir)
@@ -78,16 +82,15 @@ def main(argv: list[str] | None = None) -> int:
         print(f"ABORTED: {exc}", file=sys.stderr)
         return 2
     card["drops"] = drops(card, config.floor)
+    left = None
     if args.base:
-        # Recomputed here, never read from output/regression_report.csv, which can be stale.
         try:
-            rows = build_report(RunSnapshot.at(args.repo, args.base, args.output_dir), run, config.diagnosis)
-            settled = settled_keys(read_ledger(args.ledger))
-        except (SnapshotError, TruthFileError, OSError) as exc:
+            left = unexplained(RunSnapshot.at(args.repo, args.base, args.output_dir), run, config.diagnosis,
+                               read_ledger(args.ledger))
+        except (SnapshotError, TruthFileError, ValueError, OSError) as exc:
             print(f"ABORTED: {exc}", file=sys.stderr)
             return 2
-        left = unexplained(rows, config.diagnosis, settled)
-        card["metrics"]["D.unexplained_regressions"] = len({r["sec_id"] for r in left})
+        card["metrics"].update(left.line())
     for name, value in sorted(card["metrics"].items()):
         print(f"{name:48} {value}")
     for line in card["drops"]:
@@ -107,7 +110,7 @@ def main(argv: list[str] | None = None) -> int:
         write_atomic(args.config, json.dumps(raw, indent=2) + "\n")
         print(f"raised the floor in {args.config}")
     if args.check and (card["drops"] or card["golden_failures"] or card["diagnosis_failures"]
-                       or card["metrics"].get("D.unexplained_regressions", 0) > 0):
+                       or (left is not None and not left.passes)):
         return 1
     return 0
 

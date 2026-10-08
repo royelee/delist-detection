@@ -11,9 +11,9 @@ import pytest
 
 from delist_detection import diagnosis_truth as dt
 from delist_detection import truth_set as ts
-from delist_detection.diagnosis_loop import LEDGER, LEDGER_COLUMNS
+from delist_detection.loop_round import Loop
 from delist_detection.regression import renamed_to
-from delist_detection.truth_set import Correction, Ruling, TruthSet
+from delist_detection.truth_set import LEDGER_COLUMNS, Correction, Ruling, TruthSet
 from tests.diagnosis_rows import leg_row, ledger_row, truth_row, write_truth
 from tests.lifecycle_tables import contract_row, sec, tables
 
@@ -455,7 +455,7 @@ def test_a_round_trip_on_the_real_truth_set_keeps_every_byte(tmp_path):
     real = ts.configured(ROOT)
     for path in (real, ts.legs_path(real), ts.changes_path(real)):
         shutil.copy(path, tmp_path / path.name)
-    shutil.copy(ROOT / LEDGER, tmp_path / "diagnosed.csv")
+    shutil.copy(Loop.of(ROOT).ledger, tmp_path / "diagnosed.csv")
     before = _files(tmp_path)
     truth = TruthSet.open(tmp_path / "diagnosis_truth.csv", ledger=tmp_path / "diagnosed.csv")
     assert len(truth.cases) == len(truth.rows) > 300

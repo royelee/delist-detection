@@ -4,7 +4,9 @@ together, validated once, changed through one set of operations and committed to
 
 Where the files are. data/scorecard.json's "diagnosis" entry names the truth file, relative to the config's folder
 (`truth_file_of`; `configured` reads a repository's config). The legs and the change log are named after it
-(`legs_path`: `<truth>_legs.csv`; `changes_path`: `<truth>_changes.csv`). The ledger's path is the caller's.
+(`legs_path`: `<truth>_legs.csv`; `changes_path`: `<truth>_changes.csv`). The ledger's path is the loop folder's
+(`loop_round.Loop.ledger`); its columns (`LEDGER_COLUMNS`) are this module's, like the other files', and what its
+keys and outcomes mean is the loop round's (`loop_round`).
 
 Validation, when a set is opened and again before `commit` writes anything:
 - each file's header is its columns exactly; a missing file is an empty one;
@@ -23,7 +25,7 @@ The changes:
 - `rename(id_changes)`: every truth cell and leg that names a renamed security names the security it is now
   (`regression.renamed_to`, the one chain rule).
 - `flip(lib)`: every known_wrong case that now matches the run becomes pass.
-- `apply_round(...)`: one loop round's diagnoses, by truth_update's rules.
+- `apply_round(...)`: one loop round's diagnoses, by truth_update's rules (`loop_round.Round.close` calls it).
 - `settle(ledger_rows)`: ledger rows (a seed).
 They are made of four primitives that truth_update's rules also use: `set_cells`, `move_status`, `add_row` and
 `settle`.
@@ -42,14 +44,19 @@ from collections.abc import Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import truth_update
+from typing import TYPE_CHECKING
+
 from .atomic_io import replace_all_on_success
-from .diagnosis_loop import LEDGER_COLUMNS
 from .diagnosis_truth import (COLUMNS, KNOWN_WRONG, LEG_COLUMNS, PASS, DiagnosisCase, DiagnosisTruthError, LibraryRows,
-                              judge_all, parse_legs, parse_rows)
+                              judge_all, leg_field, parse_legs, parse_rows)
 from .regression import renamed_to
 
+if TYPE_CHECKING:
+    from .loop_round import RoundCase
+    from .truth_update import RoundResult
+
 CHANGE_COLUMNS = ("case_id", "field", "old", "new", "reason", "report")
+LEDGER_COLUMNS = ("key", "kind", "sec_id", "label", "round", "outcome", "report")
 CONFIG = Path("data") / "scorecard.json"         # under a repository: names the truth file ("diagnosis")
 RENAMED_FIELDS = ("sec_id", "price_sec_id", "successor_sec_id")
 RENAME_REASON = "contract/id_changes.csv: the placeholder now holds a FIGI"
@@ -438,7 +445,7 @@ class TruthSet:
                                 reason=RENAME_REASON)
         for leg in self._legs:
             if leg["price_sec_id"] in moved:
-                self._log(leg["case_id"], f"leg{leg['leg']}.price_sec_id", leg["price_sec_id"],
+                self._log(leg["case_id"], leg_field(int(leg["leg"]), "price_sec_id"), leg["price_sec_id"],
                           moved[leg["price_sec_id"]], RENAME_REASON, "")
                 leg["price_sec_id"] = moved[leg["price_sec_id"]]
                 n += 1
@@ -450,16 +457,17 @@ class TruthSet:
         return sum(self.move_status(r["case_id"], PASS, reason=NOW_MATCHES) for r in list(self._rows)
                    if r["status"] == KNOWN_WRONG and r["case_id"] in matching)
 
-    def apply_round(self, cases: Sequence[Mapping[str, str]], records: Mapping[str, Mapping],
-                    base_contract: Mapping[str, Mapping[str, str]], new_contract: Mapping[str, Mapping[str, str]], *,
-                    label: str, round_no: int, report_dir: str, run_sec_ids: Collection[str] | None = None,
-                    renamed: Collection[str] = ()) -> truth_update.RoundResult:
-        """One loop round's diagnoses (`truth_update.apply_round`'s rules), on this set and its ledger. Returns the
-        rows as they now stand, the round's change-log and ledger rows, and the cases to retry."""
+    def apply_round(self, cases: Sequence[RoundCase], records: Mapping[str, Mapping],
+                    base_contract: Mapping[str, Mapping[str, str]], run: LibraryRows, *, label: str, round_no: int,
+                    report_dir: str, renamed: Collection[str] = ()) -> RoundResult:
+        """One loop round's diagnoses (`truth_update.apply_round`'s rules), on this set and its ledger: `cases` the
+        round's cases, `records` the agents' records by case_id, `base_contract` the base run's contract rows by
+        sec_id, `run` the run as the judge reads it. Returns the rows as they now stand, the round's change-log and
+        ledger rows, and the cases to retry."""
+        from . import truth_update      # local import: truth_update imports loop_round, which imports this module
         log0, ledger0 = len(self._records), len(self._ledger_rows)
-        pending = truth_update.apply_round(self, cases, records, base_contract, new_contract, label=label,
-                                           round_no=round_no, report_dir=report_dir, run_sec_ids=run_sec_ids,
-                                           renamed=renamed)
+        pending = truth_update.apply_round(self, cases, records, base_contract, run, label=label, round_no=round_no,
+                                           report_dir=report_dir, renamed=renamed)
         return truth_update.RoundResult(self.rows,
                                         [dict(rec.row) for rec in self._records[log0:] if rec.row is not None],
                                         [dict(r) for r in self._ledger_rows[ledger0:]], pending)

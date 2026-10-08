@@ -25,6 +25,7 @@ The files are read, changed and written as one truth set (`truth_set.TruthSet`),
 """
 from __future__ import annotations
 
+import re
 from collections import defaultdict
 from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass, field
@@ -177,6 +178,7 @@ def parse_legs(rows: Sequence[Mapping[str, str]], where: str = "legs") -> dict[s
 
 MISMATCH_FIELDS = (*SCORED, "internal_last_trade_date", "shape", "ending", "legs", "sec_id")
 LEG_FIELDS = ("ratio", "price_sec_id", "price_ticker", "price_date")
+_LEG_FIELD = re.compile(r"leg([1-9][0-9]*)\.(" + "|".join(LEG_FIELDS) + ")")
 
 
 @dataclass(frozen=True)
@@ -223,9 +225,18 @@ class LibraryRows:
                    frozenset(r["sec_id"] for r in tables.securities), legs)
 
 
+def leg_field(leg: int, name: str) -> str:
+    """The field name of one leg's cell, `leg<N>.<name>` (a LEG_FIELDS name): the judge's mismatch field for it, and
+    the change log's (`truth_set.TruthSet.rename`). `field_key` reads it back."""
+    if leg < 1 or name not in LEG_FIELDS:
+        raise ValueError(f"no leg field {leg}.{name}")
+    return f"leg{leg}.{name}"
+
+
 def field_key(name: str) -> str:
-    """The MISMATCH_FIELDS entry a mismatch counts under (every `legN.x` is `legs`)."""
-    return "legs" if name.startswith("leg") and name != "legs" else name
+    """The MISMATCH_FIELDS entry a mismatch counts under: a leg field (`leg_field`) is `legs`, any other name is
+    itself."""
+    return "legs" if _LEG_FIELD.fullmatch(name) else name
 
 
 def _same(name: str, truth: str, library: str) -> bool:
@@ -252,7 +263,7 @@ def _judge_legs(case: DiagnosisCase, rows: Sequence[Mapping[str, str]] | None) -
         for name in LEG_FIELDS:
             want = getattr(leg, name)
             if not _same("stock_ratio" if name == "ratio" else name, want, row.get(name, "")):
-                out.append(Mismatch(case.case_id, f"leg{leg.leg}.{name}", want, row.get(name, "")))
+                out.append(Mismatch(case.case_id, leg_field(leg.leg, name), want, row.get(name, "")))
     return out
 
 

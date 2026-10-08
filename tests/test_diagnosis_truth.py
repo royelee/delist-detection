@@ -1,5 +1,7 @@
 """diagnosis_truth: the judge (spec 1.3). The truth files' format and loading are the truth set's
 (tests/test_truth_set.py)."""
+import pytest
+
 from delist_detection import diagnosis_truth as dt
 from tests.diagnosis_rows import truth_row
 from tests.lifecycle_tables import contract_row, ending, sec, tables
@@ -95,6 +97,16 @@ def test_legs_need_the_payout_legs_table_and_match_leg_by_leg():
     j = dt.judge_case(case, _lib(contract, legs_rows=legs))
     assert [(m.field, m.truth, m.library) for m in j.mismatches] == [("leg2.price_ticker", "STRZ", "STRY")]
     assert dt.field_key("leg2.price_ticker") == "legs"
+
+
+def test_a_leg_field_name_reads_back_as_legs_and_every_other_name_as_itself():
+    for n in (1, 2, 12):
+        for name in dt.LEG_FIELDS:
+            assert dt.field_key(dt.leg_field(n, name)) == "legs"
+    assert all(dt.field_key(f) == f for f in dt.MISMATCH_FIELDS)
+    for bad in ((0, "ratio"), (1, "shape")):
+        with pytest.raises(ValueError):
+            dt.leg_field(*bad)
 
 
 def test_judge_all_skips_ruling_pending_cases():

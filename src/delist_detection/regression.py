@@ -6,10 +6,9 @@ A security's contract/delistings.csv row is compared column by column. The verdi
 derived from other columns and prices (`SKIPPED_COLUMNS`) are left out: the loop judges classification, and
 sub-plan 5i changes verdicts on purpose. Its contract/security_history.csv rows are compared as one list of ranges, a
 basket's legs (contract/payout_legs.csv, schema 3: one list of legs per security, a missing file is none) the same
-way, and a new contract/id_changes.csv row (a placeholder that now holds a FIGI) is listed too. A report row is
-explained when the ledger settled that exact change as right (`new_right`); a
-regressed row the loop added to the truth file as ruling_pending (fixed_by `regression`) stays unexplained until
-the operator settles it.
+way, and a new contract/id_changes.csv row (a placeholder that now holds a FIGI) is listed too. Which report rows
+the loop has explained, and each row's key and field name, are the loop round's (`loop_round.unexplained`,
+`loop_round.regression_key`, `loop_round.Field`).
 
 Both runs are run snapshots (`run_snapshot.RunSnapshot`: the base commit's, `RunSnapshot.at`, and the output
 folder's, `RunSnapshot.read`); a snapshot that lacks contract/delistings.csv or contract/security_history.csv, or
@@ -93,7 +92,9 @@ def successor_chain(sec_ids: Collection[str], *delistings: Sequence[Mapping[str,
     return out
 
 
-def _pending_regression(c: DiagnosisCase) -> bool:
+def pending_regression(c: DiagnosisCase) -> bool:
+    """A regressed row the loop added to the truth file and could not settle (ruling_pending, fixed_by
+    `regression`): it keeps showing in the report, and counts as unexplained, until the operator settles it."""
     return c.status == RULING_PENDING and c.fixed_by == REGRESSION_PENDING
 
 
@@ -103,7 +104,7 @@ def excluded(cases: Sequence[DiagnosisCase], *delistings: Sequence[Mapping[str, 
     regressed row the loop could not settle (it keeps showing until the operator does). A placeholder whose
     `id_changes` row names an excluded security as its new sec_id is left out too (repeated, so a chain of
     renames is), since the rename belongs to the truth case."""
-    out = successor_chain({c.sec_id for c in cases if not _pending_regression(c)}, *delistings)
+    out = successor_chain({c.sec_id for c in cases if not pending_regression(c)}, *delistings)
     grew = True
     while grew:
         old = {r["old_sec_id"] for r in id_changes if r["new_sec_id"] in out}
@@ -112,7 +113,8 @@ def excluded(cases: Sequence[DiagnosisCase], *delistings: Sequence[Mapping[str, 
     return out
 
 
-def _row(sec: str, table: str, name: str, kind: str, old: str, new: str) -> dict[str, str]:
+def report_row(sec: str, table: str, name: str, kind: str, old: str, new: str) -> dict[str, str]:
+    """One report row (REPORT_COLUMNS)."""
     return dict(zip(REPORT_COLUMNS, (sec, table, name, kind, old, new)))
 
 
@@ -185,42 +187,28 @@ def diff_contract(base_run: RunSnapshot, new_run: RunSnapshot, exclude: Collecti
     for sec in sorted((old_rows.keys() | new_rows.keys()) - skip):
         o, n = old_rows.get(sec), new_rows.get(sec)
         if o is None:
-            out.append(_row(sec, "delistings", "", ADDED, "", _brief(n)))
+            out.append(report_row(sec, "delistings", "", ADDED, "", _brief(n)))
         elif n is None:
-            out.append(_row(sec, "delistings", "", REMOVED, _brief(o), ""))
+            out.append(report_row(sec, "delistings", "", REMOVED, _brief(o), ""))
         else:
             for col in dict.fromkeys([*o, *n]):
                 if col not in SKIPPED_COLUMNS and o.get(col, "") != n.get(col, ""):
-                    out.append(_row(sec, "delistings", col, CHANGED, o.get(col, ""), n.get(col, "")))
+                    out.append(report_row(sec, "delistings", col, CHANGED, o.get(col, ""), n.get(col, "")))
     old_r, new_r = _ranges(base.security_history), _ranges(new.security_history)
     for sec in sorted((old_r.keys() | new_r.keys()) - skip):
         if old_r.get(sec, "") != new_r.get(sec, ""):
             kind = ADDED if sec not in old_r else REMOVED if sec not in new_r else CHANGED
-            out.append(_row(sec, "security_history", "ranges", kind, old_r.get(sec, ""), new_r.get(sec, "")))
+            out.append(report_row(sec, "security_history", "ranges", kind, old_r.get(sec, ""), new_r.get(sec, "")))
     old_l, new_l = _legs(base.legs), _legs(new.legs)
     for sec in sorted((old_l.keys() | new_l.keys()) - skip):
         if old_l.get(sec, "") != new_l.get(sec, ""):
             kind = ADDED if sec not in old_l else REMOVED if sec not in new_l else CHANGED
-            out.append(_row(sec, "payout_legs", "legs", kind, old_l.get(sec, ""), new_l.get(sec, "")))
+            out.append(report_row(sec, "payout_legs", "legs", kind, old_l.get(sec, ""), new_l.get(sec, "")))
     seen = {(r["old_sec_id"], r["new_sec_id"]) for r in base.id_changes}
     for old, now in sorted(moved.items(), key=lambda kv: (kv[1], kv[0])):
         if (old, now) not in seen and old not in skip and now not in skip:
-            out.append(_row(now, "id_changes", "sec_id", RENAMED, old, now))
+            out.append(report_row(now, "id_changes", "sec_id", RENAMED, old, now))
     return out
-
-
-def regression_key(row: Mapping[str, str]) -> str:
-    """The ledger key of one report row."""
-    return "reg|" + "|".join(row[c] for c in REPORT_COLUMNS)
-
-
-def unexplained(rows: Sequence[Mapping[str, str]], cases: Sequence[DiagnosisCase],
-                settled: Collection[str]) -> list[dict[str, str]]:
-    """The report rows the ledger has not settled as right, then one row per regressed security the loop added to
-    the truth file as ruling_pending."""
-    left = [dict(r) for r in rows if regression_key(r) not in settled]
-    left += [_row(c.sec_id, "truth", "status", RULING_PENDING, "", c.note) for c in cases if _pending_regression(c)]
-    return left
 
 
 def write_report(path: str | Path, rows: Sequence[Mapping[str, str]]) -> None:
