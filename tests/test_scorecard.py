@@ -11,7 +11,7 @@ from tests.lifecycle_tables import ending, iv, obs, review, sec, tables
 AS_OF = date(2026, 9, 25)
 
 
-def _tables():
+def _tables(**tables_kw):
     """A: merger, complete. B: transfer with no successor (left view). C: active, ticker-only FIGI.
     D: liquidation with a blank dlret and a conflicting date. E: placeholder, merger with no last trade date.
     F: a FIGI security with no CIK, active."""
@@ -30,11 +30,13 @@ def _tables():
         [obs("AAA", "2010-06-30", "A"), obs("BBB", "2009-06-30", "B"), obs("CCC", "2010-06-30", "C"),
          obs("DDD", "2010-06-30", "D"), obs("EEE", "2010-06-30", "CIK5-COMMON"), obs("FFF", "2010-06-30", "F"),
          obs("FFF", "2011-06-30", "F", "backfilled_ticker"), obs("GGG", "2010-06-30", "", "unresolved")],
-        [review("B"), review("B", "successor_unknown"), review("D")])
+        [review("B"), review("B", "successor_unknown"), review("D")], as_of=AS_OF, **tables_kw)
 
 
 def test_build_counts_the_lifecycle_identity_and_ending_lines():
-    m = sc.build(_tables(), as_of=AS_OF)["metrics"]
+    card = sc.build(_tables())
+    assert card["as_of"] == AS_OF.isoformat()                            # the run's date, from its snapshot
+    m = card["metrics"]
     assert {k: m[k] for k in ("L1.tickers", "L1.tickers_covered", "L1.securities", "L1.securities_covered",
                               "L1.left_view", "L1.ended_incomplete", "L1.no_mapped_sighting")} == {
         "L1.tickers": 7, "L1.tickers_covered": 3, "L1.securities": 6, "L1.securities_covered": 3,
@@ -49,14 +51,14 @@ def test_build_counts_the_lifecycle_identity_and_ending_lines():
 
 
 def test_window_lines_appear_only_with_a_window():
-    assert "R2.3.blank_dlret_in_window" not in sc.build(_tables(), as_of=AS_OF)["metrics"]
-    m = sc.build(_tables(), as_of=AS_OF, config=ScorecardConfig(window=Window("2006-01-02", "2024-12-29")))["metrics"]
+    assert "R2.3.blank_dlret_in_window" not in sc.build(_tables())["metrics"]
+    m = sc.build(_tables(), config=ScorecardConfig(window=Window("2006-01-02", "2024-12-29")))["metrics"]
     assert (m["R2.3.blank_dlret_in_window"], m["R2.3.blank_needs_last_close_in_window"],
             m["R2.3.blank_no_value_in_window"], m["R2.1.missing_last_trade_date_in_window"]) == (1, 1, 0, 1)
 
 
 def test_empty_tables_give_zero_shares():
-    m = sc.build(tables(), as_of=AS_OF)["metrics"]
+    m = sc.build(tables())["metrics"]
     assert m["L1.coverage_tickers"] == 0.0 and m["R1.1.mapped_share"] == 0.0 and m["L2.high_share"] == 0.0
 
 
@@ -72,7 +74,7 @@ def test_golden_and_audit_lines():
         audit=[_case("r1", group="random", exit_kind="merger"), _case("r2", group="random", exit_kind="liquidation"),
                _case("c1", group="census:left_view", ticker="BBB", on="2009-06-30", exit_kind="merger"),
                _case("p1", group="random")])
-    card = sc.build(_tables(), as_of=AS_OF, config=config)
+    card = sc.build(_tables(), config=config)
     m = card["metrics"]
     assert (m["G.cases"], m["G.pass"], m["G.pass_failing"], m["G.known_wrong"], m["G.known_wrong_now_right"]) == (
         3, 1, 1, 1, 0)
@@ -146,15 +148,14 @@ def _uncertain(kind, sec_id, day, reason="x"):
 
 
 def _with_uncertain(rows):
-    t = _tables()
-    return type(t)(t.securities, t.ticker_history, t.delistings, t.observation_map, t.review, rows)
+    return _tables(uncertain=rows)
 
 
 def test_verdict_lines_count_uncertain_csv_and_appear_only_with_it():
-    assert not any(k.startswith("V.") for k in sc.build(_tables(), as_of=AS_OF)["metrics"])
+    assert not any(k.startswith("V.") for k in sc.build(_tables())["metrics"])
     rows = [_uncertain("security", "C", "2008-01-02"), _uncertain("ending", "D", "2025-02-10"),
             _uncertain("ending", "A", "2012-03-10"), _uncertain("seed", "", "2010-06-30")]
-    m = sc.build(_with_uncertain(rows), as_of=AS_OF,
+    m = sc.build(_with_uncertain(rows),
                  config=ScorecardConfig(window=Window("2006-01-02", "2024-12-29")))["metrics"]
     assert (m["V.uncertain_seeds"], m["V.uncertain_securities"], m["V.uncertain_endings"]) == (1, 1, 2)
     assert (m["V.uncertain_distress"], m["V.uncertain_endings_in_window"]) == (1, 1)      # D is a 2025 liquidation
@@ -166,23 +167,23 @@ def test_an_audited_wrong_row_counts_as_confirmed_but_wrong_unless_listed():
     audit = [_case("r1", group="random", exit_kind="liquidation"),
              _case("r2", group="random", ticker="CCC", on="2010-06-30", terminal="ended")]
     config = ScorecardConfig(audit=audit)
-    assert sc.build(_with_uncertain([]), as_of=AS_OF, config=config)["metrics"]["V.audit.confirmed_but_wrong"] == 2
+    assert sc.build(_with_uncertain([]), config=config)["metrics"]["V.audit.confirmed_but_wrong"] == 2
     listed = _with_uncertain([_uncertain("ending", "A", "2012-03-10")])
-    assert sc.build(listed, as_of=AS_OF, config=config)["metrics"]["V.audit.confirmed_but_wrong"] == 1
+    assert sc.build(listed, config=config)["metrics"]["V.audit.confirmed_but_wrong"] == 1
 
 
 def test_build_counts_endings_by_value_rule_and_the_known_ones():
     from tests.lifecycle_tables import cend
     t = tables([sec("A")], [], [], [],
                contract_delistings=[cend("A", "cash"), cend("B", "cash"), cend("C", "continuation"), cend("D", "unknown")])
-    m = sc.build(t, as_of=AS_OF)["metrics"]
+    m = sc.build(t)["metrics"]
     assert (m["R2.7.value_rule.cash"], m["R2.7.value_rule.continuation"], m["R2.7.value_rule.unknown"]) == (2, 1, 1)
     assert m["R2.7.value_rule.otc_print"] == 0 and m["R2.7.payout_rule_known"] == 3
     assert sc.METRICS["R2.7.payout_rule_known"] == sc.UP
 
 
 def test_build_has_no_value_rule_lines_without_the_contract():
-    m = sc.build(_tables(), as_of=AS_OF)["metrics"]
+    m = sc.build(_tables())["metrics"]
     assert not [k for k in m if k.startswith("R2.7.")]
 
 
@@ -203,7 +204,7 @@ def test_diagnosis_lines_count_mismatches_by_field_and_list_failing_pass_cases()
                contract_delistings=[contract_row("A", exit_kind="merger", value_rule="cash",
                                                  cash_per_share="9.000000"),
                                     contract_row("B", exit_kind="exchange", value_rule="transfer")])
-    card = sc.build(t, as_of=AS_OF, config=ScorecardConfig(diagnosis=cases))
+    card = sc.build(t, config=ScorecardConfig(diagnosis=cases))
     m = card["metrics"]
     assert (m["D.cases"], m["D.ruling_pending"], m["D.known_wrong"], m["D.cases_matching"]) == (3, 1, 1, 0)
     assert sc.METRICS["D.ruling_pending"] == sc.DOWN and "D.mismatches.sec_id" in sc.METRICS
@@ -213,9 +214,9 @@ def test_diagnosis_lines_count_mismatches_by_field_and_list_failing_pass_cases()
 
 
 def test_no_diagnosis_lines_without_a_truth_set_or_a_contract():
-    assert not any(k.startswith("D.") for k in sc.build(_tables(), as_of=AS_OF)["metrics"])
+    assert not any(k.startswith("D.") for k in sc.build(_tables())["metrics"])
     cases = dt.parse_rows([truth_row("A_2012-03-10", "A", exit_kind="merger")])
-    card = sc.build(_tables(), as_of=AS_OF, config=ScorecardConfig(diagnosis=cases))
+    card = sc.build(_tables(), config=ScorecardConfig(diagnosis=cases))
     assert not any(k.startswith("D.") for k in card["metrics"]) and card["diagnosis_failures"] == []
 
 

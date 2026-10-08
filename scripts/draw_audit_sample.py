@@ -15,7 +15,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 from delist_detection.audit import census, random_sample, worksheet_rows
-from delist_detection.lifecycle import LifecycleView, Tables
+from delist_detection.lifecycle import LifecycleView
+from delist_detection.run_snapshot import RunSnapshot
 from delist_detection.scorecard import ScorecardConfigError, load_config
 from delist_detection.truth import TruthFileError, write_truth
 
@@ -33,7 +34,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     try:
         window = load_config(args.config).window
-        view = LifecycleView(Tables.read(args.output_dir))
+        view = LifecycleView(RunSnapshot.read(args.output_dir))
     except (ScorecardConfigError, TruthFileError, ValueError, OSError) as exc:
         print(f"ABORTED: {exc}", file=sys.stderr)
         return 2

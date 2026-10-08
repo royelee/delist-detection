@@ -4,16 +4,19 @@ whose verdicts tests/test_verdict_cases.py recomputes offline (spec ruling 2.3, 
 
   PYTHONPATH=src python scripts/build_verdict_fixtures.py        # -> tests/fixtures/verdicts/
 
-Offline: every SEC request is refused (scripts/build_form25_fixtures.py's guard). It writes:
+Offline: every SEC request is refused (scripts/build_form25_fixtures.py's guard). It reads output/ as one run
+snapshot (`run_snapshot.RunSnapshot`) and writes:
 
 - cases.json: for each case (tests/verdict_cases.py's CASES), the rows of output/'s securities, ticker_history,
   delistings, observation_map and review tables for the case's securities and the successors their endings name,
-  and the uncertain.csv rows the committed run gave them (the verdicts before 5i);
+  the uncertain.csv rows the committed run gave them (the verdicts before 5i), and stage 9g's readings of those
+  rows as run_manifest.json recorded them (`continuation_filings`);
 - edgar.json.gz: what stage 9g's readings of the cases' continuations asks of EDGAR (each CIK's filings and names, and
-  every filing text it reads), recorded through the cached client.
+  every filing text it reads), recorded through the cached client by the harness's replay (`verdict_cases.readings`).
 """
 from __future__ import annotations
 
+import argparse
 import gzip
 import json
 import sys
@@ -26,13 +29,8 @@ sys.path.insert(0, str(ROOT / "tests"))
 
 import build_form25_fixtures  # noqa: E402,F401  (refuses every SEC request on import)
 import verdict_cases as vc  # noqa: E402
-from delist_detection.continuation_evidence import needs_doubt_check, needs_filing, read_continuation  # noqa: E402
 from delist_detection.edgar import EdgarClient  # noqa: E402
-from delist_detection.issuer_record import IssuerRecord  # noqa: E402
-from delist_detection.lifecycle import Tables  # noqa: E402
-from delist_detection.own_shares import Reader  # noqa: E402
-
-TABLES = ("securities", "ticker_history", "delistings", "observation_map", "review")
+from delist_detection.run_snapshot import RunSnapshot, continuation_entries  # noqa: E402
 
 
 class RecordingEdgar:
@@ -62,24 +60,19 @@ class RecordingEdgar:
         return text
 
 
-def main() -> int:
-    t = Tables.read(ROOT / "output")
-    rows = {name: getattr(t, name) for name in TABLES}
+def main(argv: list[str] | None = None) -> int:
+    argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter).parse_args(argv)
+    t = RunSnapshot.read(ROOT / "output")
     edgar = RecordingEdgar(EdgarClient(cache_dir=ROOT / "cache/edgar", sleep=lambda s: None, today=vc.AS_OF))
     out: dict[str, dict] = {}
     for case in vc.CASES:
         ids = set(case.sec_ids)
         ids |= {r["successor_sec_id"] for r in t.delistings if r["sec_id"] in ids and r["successor_sec_id"]}
-        out[case.name] = {name: [r for r in rows[name] if r["sec_id"] in ids] for name in TABLES}
+        out[case.name] = {name: [r for r in t.table(name) if r["sec_id"] in ids] for name in vc.TABLES}
         out[case.name]["uncertain_before"] = [r for r in t.uncertain if r["sec_id"] in ids]
-        secs = {r["sec_id"]: r for r in t.securities}
-        names = {sid: r["name"] for sid, r in secs.items()}
-        reader = Reader(edgar, IssuerRecord(edgar, today=vc.AS_OF))
-        for r in out[case.name]["delistings"]:
-            if r["sec_id"] in names and (needs_filing(r["reason"], r["sec_id"], r["successor_sec_id"])
-                                         or needs_doubt_check(r["reason"], r["sec_id"], r["successor_sec_id"])):
-                read_continuation(vc.reading(r, secs[r["sec_id"]], reader), r["reason"], r["sec_id"],
-                                  r["successor_sec_id"], [names.get(r["successor_sec_id"], "")])
+        out[case.name]["continuation_filings"] = continuation_entries(
+            {k: r for k, r in t.continuations.items() if k[0] in ids})
+        vc.readings(out[case.name], edgar)          # records what stage 9g reads for the case's rows
     target = ROOT / "tests/fixtures/verdicts"
     target.mkdir(parents=True, exist_ok=True)
     (target / "cases.json").write_text(json.dumps(out, indent=1, sort_keys=True) + "\n")

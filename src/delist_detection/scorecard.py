@@ -8,7 +8,10 @@ to `output/scorecard.json` on every run.
 - G.x: the golden set (`data/golden_lifecycles.csv`), A.x: the accuracy audit
   (`data/accuracy_audit.csv`), both judged by `truth.judge`.
 - D.x: the diagnosis truth set (`data/diagnosis_truth.csv`, spec 2026-10-03-diagnosis-truth-fixes),
-  judged by `diagnosis_truth.judge_case` against contract/delistings.csv.
+  judged by `diagnosis_truth.judge_case` against contract/delistings.csv and contract/payout_legs.csv.
+
+Every line reads one run snapshot (`run_snapshot.RunSnapshot`): the pipeline's stage 10h builds it from the rows it
+is about to write, scripts/scorecard.py and the floor test from the written folder, so they agree by construction.
 
 `METRICS` gives each floored number its good direction. `drops` compares a
 scorecard to the floor in `data/scorecard.json` (a number that moved the bad
@@ -28,12 +31,13 @@ from pathlib import Path
 from .atomic_io import write_atomic
 from .lifecycle import (CLOSED_NO_EVENT, ENDED_INCOMPLETE,
                         HIGH, LEFT_VIEW, LOW, MEDIUM, NO_INTERVAL,
-                        NO_MAPPED_SIGHTING, Lifecycle, LifecycleView, Tables)
+                        NO_MAPPED_SIGHTING, Lifecycle, LifecycleView)
 from .diagnosis_truth import (KNOWN_WRONG as D_KNOWN_WRONG, MISMATCH_FIELDS, PASS as D_PASS, RULING_PENDING,
                               DiagnosisCase, LibraryRows, field_key, judge_all as judge_diagnosis,
                               load_diagnosis_truth)
 from .exit_kind import (CONFLICT, EXCHANGE_PRINTS, UNCONFIRMED, VALUE_RULES, ending_fields, flag_names, is_distress,
                         is_real_ending, rests_on_continued_filings)
+from .run_snapshot import RunSnapshot
 from .truth import KNOWN_WRONG, PASS, TruthCase, clopper_pearson_upper, judge_all, load_truth
 from .verdict import ENDING, SECURITY, SEED
 
@@ -166,7 +170,7 @@ def _lifecycle_lines(view: LifecycleView) -> dict[str, float]:
     return out
 
 
-def _identity_lines(tables: Tables) -> dict[str, float]:
+def _identity_lines(tables: RunSnapshot) -> dict[str, float]:
     statuses = Counter(r["status"] for r in tables.observation_map)
     n_obs = len(tables.observation_map)
     observed = [r for r in tables.securities if r.get("observed") == "true"]
@@ -186,7 +190,7 @@ def _identity_lines(tables: Tables) -> dict[str, float]:
     return out
 
 
-def _ending_lines(tables: Tables, window: Window | None) -> dict[str, float]:
+def _ending_lines(tables: RunSnapshot, window: Window | None) -> dict[str, float]:
     real = [r for r in tables.delistings if is_real_ending(r)]
     inw = (lambda r: window.contains(r["delist_date"])) if window else None
     fields = {id(r): ending_fields(r) for r in real}
@@ -250,7 +254,7 @@ class _Uncertain:
         return lc.final is not None and (lc.final["sec_id"], lc.final["delist_date"]) in self.endings
 
 
-def _verdict_lines(tables: Tables, view: LifecycleView, window: Window | None,
+def _verdict_lines(tables: RunSnapshot, view: LifecycleView, window: Window | None,
                    unc: _Uncertain | None) -> dict[str, float]:
     """The V lines, from uncertain.csv; none when the run wrote no uncertain.csv."""
     if unc is None:
@@ -300,12 +304,11 @@ def _truth_lines(view: LifecycleView, config: ScorecardConfig, unc: _Uncertain |
     return out
 
 
-def _diagnosis_lines(tables: Tables, config: ScorecardConfig,
-                     legs_rows: Sequence[Mapping[str, str]] | None) -> tuple[dict[str, float], list[str]]:
+def _diagnosis_lines(tables: RunSnapshot, config: ScorecardConfig) -> tuple[dict[str, float], list[str]]:
     """The D lines and the failing `pass` cases; none without a truth set or a contract with payout columns."""
     if not config.diagnosis or tables.contract_delistings is None:
         return {}, []
-    judged = judge_diagnosis(config.diagnosis, LibraryRows.of(tables, legs_rows))
+    judged = judge_diagnosis(config.diagnosis, LibraryRows.of(tables))
     counts = Counter(field_key(m.field) for j in judged for m in j.mismatches)
     out: dict[str, float] = {
         "D.cases": len(config.diagnosis),
@@ -321,19 +324,18 @@ def _diagnosis_lines(tables: Tables, config: ScorecardConfig,
     return out, failures
 
 
-def build(tables: Tables, *, as_of: date, config: ScorecardConfig = ScorecardConfig(),
-          legs_rows: Sequence[Mapping[str, str]] | None = None) -> dict:
-    """The scorecard of one run's tables: {"as_of", "window", "metrics", "golden_failures", "diagnosis_failures"}.
-    `legs_rows` are contract/payout_legs.csv's rows when the run has that table."""
+def build(tables: RunSnapshot, *, config: ScorecardConfig = ScorecardConfig()) -> dict:
+    """The scorecard of one run (`tables`, its snapshot): {"as_of" (the run's date), "window", "metrics",
+    "golden_failures", "diagnosis_failures"}."""
     view = LifecycleView(tables)
     unc = None if tables.uncertain is None else _Uncertain.of(tables.uncertain)
-    diag, diag_failures = _diagnosis_lines(tables, config, legs_rows)
+    diag, diag_failures = _diagnosis_lines(tables, config)
     metrics = {**_lifecycle_lines(view), **_identity_lines(tables), **_ending_lines(tables, config.window),
                **_verdict_lines(tables, view, config.window, unc), **_truth_lines(view, config, unc), **diag}
     failures = [f"{j.case.case}: {'; '.join(j.mismatches)}" for j in judge_all(config.golden, view)
                 if j.case.status == PASS and not j.ok]
     window = None if config.window is None else {"start": config.window.start, "end": config.window.end}
-    return {"as_of": as_of.isoformat(), "window": window, "metrics": metrics, "golden_failures": failures,
+    return {"as_of": tables.as_of.isoformat(), "window": window, "metrics": metrics, "golden_failures": failures,
             "diagnosis_failures": diag_failures}
 
 

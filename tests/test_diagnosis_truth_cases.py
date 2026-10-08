@@ -7,7 +7,7 @@ import pytest
 
 from delist_detection.diagnosis_truth import (KNOWN_WRONG, RULING_PENDING, LibraryRows, judge_case,
                                               load_diagnosis_truth)
-from delist_detection.lifecycle import Tables
+from delist_detection.run_snapshot import RunSnapshot
 
 ROOT = Path(__file__).resolve().parents[1]
 TRUTH = ROOT / "data" / "diagnosis_truth.csv"
@@ -18,13 +18,7 @@ CASES = load_diagnosis_truth(TRUTH, ROOT / "data" / "diagnosis_truth_legs.csv")
 
 @pytest.fixture(scope="module")
 def lib():
-    legs = ROOT / "output" / "contract" / "payout_legs.csv"
-    rows = None
-    if legs.exists():
-        import csv
-        with legs.open(newline="") as fh:
-            rows = list(csv.DictReader(fh))
-    return LibraryRows.of(Tables.read(ROOT / "output"), rows)
+    return LibraryRows.of(RunSnapshot.read(ROOT / "output"))       # a basket case is judged on its legs too
 
 
 @pytest.mark.parametrize("case", CASES, ids=[c.case_id for c in CASES])

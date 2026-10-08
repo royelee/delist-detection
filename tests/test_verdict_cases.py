@@ -1,6 +1,6 @@
 """Sub-plan 5i's real cases (tests/verdict_cases.py): each case's verdict reasons, recomputed offline from the
-committed run's rows. The `before` column is the committed run's (the rules' targets lose their reason; every guard
-keeps its own)."""
+committed run's snapshot (its rows and stage 9g's recorded readings). The `before` column is the committed run's (the
+rules' targets lose their reason; every guard keeps its own)."""
 import pytest
 
 from delist_detection.exit_kind import ContinuationReading
@@ -85,7 +85,7 @@ def test_each_cases_ending_verdict(name):
     key, before, now = ENDINGS[name]
     case = CASES[name]
     assert _before(case, "ending", *key) == before          # the fixture is the committed run's
-    assert ";".join(vc.verdicts(case, EDGAR).endings[key].reasons) == now
+    assert ";".join(vc.verdicts(case).endings[key].reasons) == now
 
 
 @pytest.mark.parametrize("name", sorted(SECURITIES))
@@ -93,7 +93,7 @@ def test_each_cases_security_verdict(name):
     sec_id, before, now = SECURITIES[name]
     case = CASES[name]
     assert _before(case, "security", sec_id) == before
-    assert ";".join(vc.verdicts(case, EDGAR).securities[sec_id].reasons) == now
+    assert ";".join(vc.verdicts(case).securities[sec_id].reasons) == now
 
 
 def test_stage_9g_names_the_confirming_filing_and_the_contradicting_ratio():
@@ -103,3 +103,10 @@ def test_stage_9g_names_the_confirming_filing_and_the_contradicting_ratio():
     assert r(CASES["LSXMA"], EDGAR) == {} and r(CASES["DVMT"], EDGAR) == {}
     assert r(CASES["CHTR"], EDGAR) == {("BBG000PYZSR8", "2016-05-18"): ContinuationReading(doubt="ratio:0.9042")}
     assert r(CASES["SIRI"], EDGAR) == {}                  # 0.1: a reverse split, no doubt
+
+
+@pytest.mark.parametrize("name", sorted(CASES))
+def test_each_case_records_what_stage_9g_reads(name):
+    """The verdict reads stage 9g's readings from the snapshot; the recorded ones are what 9g reads from the
+    recorded EDGAR answers."""
+    assert vc.snapshot_of(CASES[name]).continuations == vc.readings(CASES[name], EDGAR)

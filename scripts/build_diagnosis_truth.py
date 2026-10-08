@@ -20,8 +20,8 @@ from delist_detection.atomic_io import write_atomic
 from delist_detection.diagnosis_truth import (COLUMNS, Leg, LibraryRows, judge_case, parse_rows,
                                               write_diagnosis_truth, write_legs)
 from delist_detection.figi_resolution import us_candidates
-from delist_detection.lifecycle import Tables
 from delist_detection.openfigi import OpenFigiClient, resolve_api_key
+from delist_detection.run_snapshot import RunSnapshot
 from delist_detection.truth import TruthFileError
 from delist_detection.truth_build import UNSETTLED, assemble, final_status, review_markdown
 
@@ -61,7 +61,7 @@ def main(argv: list[str] | None = None) -> int:
         norms = [json.loads(f.read_text()) for f in sorted(args.rows.glob("*.json"))]
         with args.case_map.open(newline="") as fh:
             sub_plan = {r["case_id"]: r["sub_plan"] for r in csv.DictReader(fh)}
-        tables = Tables.read(args.output_dir)
+        tables = RunSnapshot.read(args.output_dir)
         records = {}
         for n in norms:
             rec_path = args.records / f"{n['case_id']}.json"

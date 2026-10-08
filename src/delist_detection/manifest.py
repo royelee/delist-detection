@@ -75,9 +75,11 @@ def build(*, as_of: date, sec_workers: int, counts: dict[str, int], timings: dic
     decisions, so exit code 3 always sees every `error`/`resolution_degraded`.
     `handoffs` is the handoff pass's counts (`handoffs.apply_handoffs`: pairs
     decided, continuations by filing and by timing, takeovers, conflicts, rows
-    added). `continuation_filings` lists each continuation a filing confirmed for its verdict (sub-plan 5i, stage 9g:
-    sec_id, delist_date, "<form> <accession>"). `schema_version` is the contract's (store.CONTRACT_SCHEMA_VERSION),
-    asserted by the consumer's reader."""
+    added). `continuation_filings` lists what stage 9g read for each continuation's verdict (sub-plan 5i): each one a
+    filing confirmed (sec_id, delist_date, "<form> <accession>"), and each one its registrant's own filings doubt (a
+    blank filing and a `doubt`), as `run_snapshot.continuation_entries` writes them and `RunSnapshot.continuations`
+    reads them back. `schema_version` is the contract's (store.CONTRACT_SCHEMA_VERSION), asserted by the consumer's
+    reader."""
     return {
         "as_of": as_of.isoformat(),
         "code_version": code_version(),

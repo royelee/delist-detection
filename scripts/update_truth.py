@@ -22,19 +22,12 @@ from pathlib import Path
 from delist_detection import diagnosis_loop as dl
 from delist_detection.atomic_io import write_atomic
 from delist_detection.diagnosis_truth import COLUMNS, LibraryRows, judge_all, load_legs, parse_rows
-from delist_detection.lifecycle import Tables
-from delist_detection.regression import RegressionInputError, id_changes_since, read_snapshot, snapshot_at
+from delist_detection.regression import id_changes_since
+from delist_detection.run_snapshot import RunSnapshot, SnapshotError
 from delist_detection.truth import TruthFileError
 from delist_detection.truth_update import apply_round, flip_statuses
 
 ROOT = Path(__file__).resolve().parents[1]
-
-
-def _legs_rows(out_dir: Path):
-    """contract/payout_legs.csv's rows, or None for a run before schema 3: a status flip judges a basket's legs
-    too (sub-plan 5f)."""
-    path = out_dir / "contract" / "payout_legs.csv"
-    return dl.read_csv(path) if path.exists() else None
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -58,25 +51,26 @@ def main(argv: list[str] | None = None) -> int:
         records = {f.stem: json.loads(f.read_text()) for f in sorted((round_dir / "records").glob("*.json"))}
         truth_rows = dl.read_csv(args.truth)
         legs = load_legs(args.legs) if args.legs.exists() else {}
-        base, new = snapshot_at(args.repo, args.base, args.output_dir), read_snapshot(args.output_dir)
-        renamed = {r["old_sec_id"] for r in id_changes_since(args.repo, args.base, args.output_dir, new.id_changes)}
+        base, new = RunSnapshot.at(args.repo, args.base, args.output_dir), RunSnapshot.read(args.output_dir)
+        renamed = {r["old_sec_id"] for r in id_changes_since(base, new)}
+        base_rows = {r["sec_id"]: r for r in base.require("contract_delistings")}
+        new_rows = {r["sec_id"]: r for r in new.require("contract_delistings")}
+        run_sec_ids = {r["sec_id"] for r in new.securities}
+        lib = LibraryRows.of(new)      # a status flip judges a basket's legs too (sub-plan 5f)
         ledger = dl.read_ledger(args.loop_dir / "diagnosed.csv")
-        tables = Tables.read(args.output_dir)
-    except (RegressionInputError, TruthFileError, ValueError, OSError) as exc:
+    except (SnapshotError, TruthFileError, ValueError, OSError) as exc:
         print(f"ABORTED: {exc}", file=sys.stderr)
         return 2
     rel_reports = (round_dir / "reports").relative_to(args.repo).as_posix() if round_dir.is_relative_to(args.repo) \
         else str(round_dir / "reports")
     try:
-        res = apply_round(cases, records, truth_rows, {r["sec_id"]: r for r in base.delistings},
-                          {r["sec_id"]: r for r in new.delistings}, label=args.label, round_no=args.round,
-                          report_dir=rel_reports, ledger_keys=dl.ledger_keys(ledger),
-                          run_sec_ids={r["sec_id"] for r in tables.securities}, renamed=renamed)
+        res = apply_round(cases, records, truth_rows, base_rows, new_rows, label=args.label, round_no=args.round,
+                          report_dir=rel_reports, ledger_keys=dl.ledger_keys(ledger), run_sec_ids=run_sec_ids,
+                          renamed=renamed)
     except ValueError as exc:
         print(f"ABORTED: {exc}", file=sys.stderr)
         return 2
-    judged = judge_all(parse_rows(res.truth_rows, "updated truth", legs),
-                       LibraryRows.of(tables, _legs_rows(args.output_dir)))
+    judged = judge_all(parse_rows(res.truth_rows, "updated truth", legs), lib)
     res.changes += flip_statuses(res.truth_rows, {j.case.case_id for j in judged if j.ok})
     summary = {"label": args.label, "round": args.round, "cases": len(cases), "records": len(records),
                "truth_changes": len(res.changes), "ledger_rows": len(res.ledger_rows), "retry": res.pending,

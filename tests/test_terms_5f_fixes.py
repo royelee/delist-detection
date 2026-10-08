@@ -24,6 +24,7 @@ from delist_detection.payout_gate import (DEFAULT_TOL, GATE_SKIPPED, NO_DEFAULT,
                                           reconcile)
 from delist_detection.payout_rule import MergerInputs, basket_legs, value_fields
 from delist_detection.price_requests import RECEIVED_CLOSE, request_rows
+from delist_detection.run_snapshot import RunSnapshot
 from delist_detection.sec_stats import SEC_STATS
 from delist_detection.store import DelistingKey
 from lifecycle_tables import ending
@@ -311,19 +312,18 @@ def test_two_legs_never_share_a_price_request_key():
 
 def test_a_basket_leg_change_is_a_contract_change():
     d = [{"sec_id": "CAA", "successor_sec_id": "", "value_rule": "basket"}]
-    base = regression.Snapshot(d, [], (), [{"sec_id": "CAA", "leg": "2", "ratio": "0.0177", "price_sec_id": "",
-                                            "price_ticker": "LEN"},
-                                           {"sec_id": "CAA", "leg": "1", "ratio": "0.885", "price_sec_id": "B",
-                                            "price_ticker": "LEN"}])
-    new = regression.Snapshot(d, [], (), [{"sec_id": "CAA", "leg": "1", "ratio": "0.885", "price_sec_id": "B",
-                                           "price_ticker": "LEN"},
-                                          {"sec_id": "CAA", "leg": "2", "ratio": "0.0177", "price_sec_id": "",
-                                           "price_ticker": "LEN-B"}])
+    def run(legs=None):
+        tables = {"contract_delistings": d, "security_history": [], "id_changes": []}
+        return RunSnapshot.of(tables if legs is None else {**tables, "payout_legs": legs})
+    base = run([{"sec_id": "CAA", "leg": "2", "ratio": "0.0177", "price_sec_id": "", "price_ticker": "LEN"},
+                {"sec_id": "CAA", "leg": "1", "ratio": "0.885", "price_sec_id": "B", "price_ticker": "LEN"}])
+    new = run([{"sec_id": "CAA", "leg": "1", "ratio": "0.885", "price_sec_id": "B", "price_ticker": "LEN"},
+               {"sec_id": "CAA", "leg": "2", "ratio": "0.0177", "price_sec_id": "", "price_ticker": "LEN-B"}])
     rows = regression.diff_contract(base, new)
     assert [(r["table"], r["field"], r["kind"]) for r in rows] == [("payout_legs", "legs", "changed")]
     assert regression.diff_contract(base, base) == [] and regression.diff_contract(new, new, exclude={"CAA"}) == []
     # a run with no legs file reads as no legs: a first run's baskets are added
-    added = regression.diff_contract(regression.Snapshot(d, []), new)
+    added = regression.diff_contract(run(), new)
     assert [(r["table"], r["kind"]) for r in added] == [("payout_legs", "added")]
 
 

@@ -1,5 +1,12 @@
 {
  "APA": {
+  "continuation_filings": [
+   {
+    "delist_date": "2021-03-14",
+    "filing": "8-K 0001193125-21-063792",
+    "sec_id": "BBG000BC2C10"
+   }
+  ],
   "delistings": [
    {
     "acquirer_price": "",
@@ -597,6 +604,7 @@
   ]
  },
  "AT": {
+  "continuation_filings": [],
   "delistings": [
    {
     "acquirer_price": "",
@@ -862,6 +870,7 @@
   ]
  },
  "AZN": {
+  "continuation_filings": [],
   "delistings": [],
   "observation_map": [],
   "review": [],
@@ -889,6 +898,7 @@
   "uncertain_before": []
  },
  "BHI": {
+  "continuation_filings": [],
   "delistings": [
    {
     "acquirer_price": "",
@@ -1532,6 +1542,7 @@
   ]
  },
  "BOL": {
+  "continuation_filings": [],
   "delistings": [
    {
     "acquirer_price": "",
@@ -1797,6 +1808,7 @@
   ]
  },
  "BTU": {
+  "continuation_filings": [],
   "delistings": [
    {
     "acquirer_price": "",
@@ -2069,6 +2081,7 @@
   ]
  },
  "CBL": {
+  "continuation_filings": [],
   "delistings": [
    {
     "acquirer_price": "",
@@ -2312,6 +2325,7 @@
   ]
  },
  "CDWC": {
+  "continuation_filings": [],
   "delistings": [
    {
     "acquirer_price": "",
@@ -2577,6 +2591,7 @@
   ]
  },
  "CHK": {
+  "continuation_filings": [],
   "delistings": [
    {
     "acquirer_price": "",
@@ -3123,6 +3138,14 @@
   ]
  },
  "CHTR": {
+  "continuation_filings": [
+   {
+    "delist_date": "2016-05-18",
+    "doubt": "ratio:0.9042",
+    "filing": "",
+    "sec_id": "BBG000PYZSR8"
+   }
+  ],
   "delistings": [
    {
     "acquirer_price": "",
@@ -3644,6 +3667,13 @@
   ]
  },
  "CMCSK": {
+  "continuation_filings": [
+   {
+    "delist_date": "2015-12-21",
+    "filing": "8-K 0000950103-15-009516",
+    "sec_id": "BBG000BFTJ91"
+   }
+  ],
   "delistings": [
    {
     "acquirer_price": "",
@@ -4255,6 +4285,7 @@
   ]
  },
  "DVMT": {
+  "continuation_filings": [],
   "delistings": [
    {
     "acquirer_price": "",
@@ -4600,6 +4631,7 @@
   ]
  },
  "EA": {
+  "continuation_filings": [],
   "delistings": [
    {
     "acquirer_price": "",
@@ -5188,6 +5220,7 @@
   ]
  },
  "EQC": {
+  "continuation_filings": [],
   "delistings": [
    {
     "acquirer_price": "",
@@ -5630,6 +5663,7 @@
   ]
  },
  "FCL": {
+  "continuation_filings": [],
   "delistings": [
    {
     "acquirer_price": "33.310000",
@@ -5818,6 +5852,7 @@
   ]
  },
  "FRK": {
+  "continuation_filings": [],
   "delistings": [
    {
     "acquirer_price": "",
@@ -6083,6 +6118,7 @@
   ]
  },
  "GOOGL": {
+  "continuation_filings": [],
   "delistings": [
    {
     "acquirer_price": "",
@@ -6632,6 +6668,7 @@
   ]
  },
  "GRUB": {
+  "continuation_filings": [],
   "delistings": [
    {
     "acquirer_price": "",
@@ -6806,6 +6843,13 @@
   ]
  },
  "HHC": {
+  "continuation_filings": [
+   {
+    "delist_date": "2023-08-24",
+    "filing": "8-K 0001104659-23-090461",
+    "sec_id": "BBG000MJRJJ2"
+   }
+  ],
   "delistings": [
    {
     "acquirer_price": "",
@@ -7305,6 +7349,13 @@
   ]
  },
  "HUB-B": {
+  "continuation_filings": [
+   {
+    "delist_date": "2016-01-03",
+    "filing": "8-K 0001193125-15-412174",
+    "sec_id": "CIK48898-CLASS-B"
+   }
+  ],
   "delistings": [
    {
     "acquirer_price": "",
@@ -7937,6 +7988,7 @@
   ]
  },
  "LSXMA": {
+  "continuation_filings": [],
   "delistings": [
    {
     "acquirer_price": "",
@@ -8314,6 +8366,7 @@
   ]
  },
  "MDP": {
+  "continuation_filings": [],
   "delistings": [
    {
     "acquirer_price": "",
@@ -8502,6 +8555,7 @@
   ]
  },
  "MDRX": {
+  "continuation_filings": [],
   "delistings": [
    {
     "acquirer_price": "",
@@ -8748,6 +8802,7 @@
   ]
  },
  "MEL": {
+  "continuation_filings": [],
   "delistings": [
    {
     "acquirer_price": "44.250000",
@@ -9013,6 +9068,7 @@
   ]
  },
  "NCRA": {
+  "continuation_filings": [],
   "delistings": [],
   "observation_map": [
    {
@@ -9106,6 +9162,7 @@
   ]
  },
  "PNRA": {
+  "continuation_filings": [],
   "delistings": [
    {
     "acquirer_price": "",
@@ -9448,6 +9505,7 @@
   ]
  },
  "PRE": {
+  "continuation_filings": [],
   "delistings": [
    {
     "acquirer_price": "",
@@ -9734,6 +9792,7 @@
   ]
  },
  "SIRI": {
+  "continuation_filings": [],
   "delistings": [
    {
     "acquirer_price": "",
@@ -10345,6 +10404,13 @@
   ]
  },
  "SPB": {
+  "continuation_filings": [
+   {
+    "delist_date": "2018-07-26",
+    "filing": "8-K 0001193125-18-217952",
+    "sec_id": "BBG000P4BQM9"
+   }
+  ],
   "delistings": [
    {
     "acquirer_price": "",
@@ -10773,6 +10839,7 @@
   ]
  },
  "WMG": {
+  "continuation_filings": [],
   "delistings": [
    {
     "acquirer_price": "",
@@ -10947,6 +11014,7 @@
   ]
  },
  "WW": {
+  "continuation_filings": [],
   "delistings": [],
   "observation_map": [
    {

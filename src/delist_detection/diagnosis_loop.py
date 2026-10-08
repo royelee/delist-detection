@@ -17,8 +17,8 @@ from pathlib import Path
 from .atomic_io import replace_all_on_success, write_atomic
 from .diagnosis_truth import CaseJudgement, Mismatch
 from .exit_kind import last_endings
-from .lifecycle import Tables
 from .regression import regression_key
+from .run_snapshot import RunSnapshot
 
 LOOP_DIR = "output/diagnose_unknown_report/loop"
 LEDGER = f"{LOOP_DIR}/diagnosed.csv"
@@ -104,7 +104,7 @@ def seed_rows(judgements: Sequence[CaseJudgement], keys: Collection[str], label:
     return out
 
 
-def context(tables: Tables, sec_id: str) -> dict[str, str]:
+def context(tables: RunSnapshot, sec_id: str) -> dict[str, str]:
     """What a diagnosing agent reads about a security beside the changed fields: its ticker ranges collapsed, its
     last real ending in delistings.csv, and that ending's uncertain reasons (the columns of source.csv)."""
     hist = sorted((r for r in tables.security_history or () if r["sec_id"] == sec_id), key=lambda r: r["start_date"])
@@ -135,7 +135,7 @@ def _field_name(r: Mapping[str, str]) -> str:
     return f"{r['table']}.{r['field'] if r['table'] != 'delistings' else r['kind']}"
 
 
-def case_rows(mismatches: Sequence[Mismatch], regressions: Sequence[Mapping[str, str]], tables: Tables, *,
+def case_rows(mismatches: Sequence[Mismatch], regressions: Sequence[Mapping[str, str]], tables: RunSnapshot, *,
               label: str, round_no: int, truth_sec: Mapping[str, str]) -> list[dict[str, str]]:
     """One case row per truth case (mismatch mode) or security (regression mode) and round; a mismatch case's id
     starts with its truth case_id, since two truth cases can share a sec_id. Mode mismatch lists its mismatched truth fields (side_a the truth,

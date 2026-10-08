@@ -127,7 +127,8 @@ def test_the_verdict_the_lifecycle_and_the_contract_read_the_same_last_ending():
     went_on = ending("A", "2016-01-04", "exchange_transfer", successor="A")
     t = tables([sec("A")], [iv("A", "AAA", "2010-01-04", "2015-03-02")], [last, went_on, earlier],
                [obs("AAA", "2010-06-30", "A")])
-    assert LifecycleView(t).lifecycle("A").final is last
+    (held,) = [r for r in t.delistings if r["delist_date"] == "2015-03-10"]       # the snapshot's copy of `last`
+    assert held == last and LifecycleView(t).lifecycle("A").final is held
     v = decide(t, {})
     assert v.endings[("A", "2012-05-01")].reasons == ("earlier_ending:2015-03-10",)
     assert v.endings[("A", "2015-03-10")].confirmed and ("A", "2016-01-04") not in v.endings

@@ -9,21 +9,24 @@ basket's legs (contract/payout_legs.csv, schema 3: one list of legs per security
 way, and a new contract/id_changes.csv row (a placeholder that now holds a FIGI) is listed too. A report row is
 explained when the ledger settled that exact change as right (`new_right`); a
 regressed row the loop added to the truth file as ruling_pending (fixed_by `regression`) stays unexplained until
-the operator settles it."""
+the operator settles it.
+
+Both runs are run snapshots (`run_snapshot.RunSnapshot`: the base commit's, `RunSnapshot.at`, and the output
+folder's, `RunSnapshot.read`); a snapshot that lacks contract/delistings.csv or contract/security_history.csv, or
+whose file has another layout, raises `run_snapshot.SnapshotError` naming the file."""
 from __future__ import annotations
 
 import csv
 import io
-import subprocess
 from collections import defaultdict
 from collections.abc import Collection, Mapping, Sequence
-from dataclasses import dataclass, field
 from pathlib import Path
+from typing import NamedTuple
 
-from . import store
 from .atomic_io import write_atomic
 from .contract import id_change_rows
 from .diagnosis_truth import REGRESSION_PENDING, RULING_PENDING, DiagnosisCase
+from .run_snapshot import RunSnapshot
 
 REPORT_COLUMNS = ("sec_id", "table", "field", "kind", "old", "new")
 CHANGED, ADDED, REMOVED, RENAMED = "changed", "added", "removed", "renamed"
@@ -34,98 +37,42 @@ SKIPPED_COLUMNS = frozenset({"sec_id", "verdict", "dlret", "dlret_fill", "termin
 BRIEF_COLUMNS = ("exit_kind", "drop_reason", "continuation", "successor_sec_id", "last_trade_date", "value_rule")
 
 
-class RegressionInputError(ValueError):
-    """A base commit or output folder that lacks a contract file; the message names it."""
-
-
-@dataclass(frozen=True)
-class Snapshot:
-    """One run's contract files, as string rows."""
+class _Contract(NamedTuple):
+    """The contract files one diff compares, from a run snapshot (`of`)."""
     delistings: Sequence[Mapping[str, str]]
     security_history: Sequence[Mapping[str, str]]
-    id_changes: Sequence[Mapping[str, str]] = field(default=())
-    legs: Sequence[Mapping[str, str]] = field(default=())     # contract/payout_legs.csv (schema 3; missing before)
+    id_changes: Sequence[Mapping[str, str]]
+    legs: Sequence[Mapping[str, str]]
+
+    @classmethod
+    def of(cls, run: RunSnapshot) -> _Contract:
+        """contract/delistings.csv and security_history.csv must be there; id_changes.csv and payout_legs.csv
+        (schema 3) may be missing: none."""
+        return cls(run.require("contract_delistings"), run.require("security_history"), run.id_changes or [],
+                   run.payout_legs or [])
 
 
-REQUIRED_COLUMNS = {
-    "contract_delistings": ("sec_id", "successor_sec_id"),
-    "security_history": ("sec_id", "ticker", "start_date", "end_date", "issuer_id"),
-    "id_changes": ("old_sec_id", "new_sec_id"),
-    "payout_legs": ("sec_id", "leg", "ratio", "price_ticker"),
-}
-
-
-def _rows(text: str, table: str, where: str) -> list[dict[str, str]]:
-    """The rows of one contract file, after its header is checked (an empty file is checked by its header)."""
-    reader = csv.DictReader(io.StringIO(text))
-    missing = [c for c in REQUIRED_COLUMNS[table] if c not in (reader.fieldnames or [])]
-    if missing:
-        raise RegressionInputError(f"{where}: missing column(s) {', '.join(missing)}")
-    return list(reader)
-
-
-def read_snapshot(out_dir: str | Path) -> Snapshot:
-    """The contract files under `out_dir` (contract/id_changes.csv may be missing)."""
-    def rows(name: str, required: bool = True) -> list[dict[str, str]]:
-        path = store.table_path(out_dir, name)
-        if not path.exists():
-            if required:
-                raise RegressionInputError(f"{path}: missing")
-            return []
-        return _rows(path.read_text(encoding="utf-8"), name, str(path))
-    return Snapshot(rows("contract_delistings"), rows("security_history"), rows("id_changes", required=False),
-                    rows("payout_legs", required=False))
-
-
-def _at(repo: str | Path, rev: str, out_dir: str | Path, name: str, required: bool = True) -> list[dict[str, str]]:
-    """Table `name` under `out_dir` as commit `rev` of the repository `repo` holds it (`out_dir` lies inside
-    `repo`); [] when the commit lacks it and it is not `required`."""
-    root = Path(repo).resolve()
-    path = store.table_path(Path(out_dir).resolve(), name)
-    try:
-        rel = path.relative_to(root).as_posix()
-    except ValueError:
-        raise RegressionInputError(f"{path}: not inside the repository {root}") from None
-    done = subprocess.run(["git", "-C", str(root), "show", f"{rev}:{rel}"], capture_output=True, text=True)
-    if done.returncode != 0:
-        if required:
-            raise RegressionInputError(f"{rev}:{rel}: {done.stderr.strip() or 'not in that commit'}")
-        return []
-    if name == "securities":
-        return list(csv.DictReader(io.StringIO(done.stdout)))
-    return _rows(done.stdout, name, f"{rev}:{rel}")
-
-
-def snapshot_at(repo: str | Path, rev: str, out_dir: str | Path) -> Snapshot:
-    """The contract files as commit `rev` of git repository `repo` holds them (`out_dir` lies inside `repo`)."""
-    return Snapshot(_at(repo, rev, out_dir, "contract_delistings"), _at(repo, rev, out_dir, "security_history"),
-                    _at(repo, rev, out_dir, "id_changes", required=False),
-                    _at(repo, rev, out_dir, "payout_legs", required=False))
-
-
-def id_changes_since(repo: str | Path, rev: str, out_dir: str | Path,
-                     run_id_changes: Sequence[Mapping[str, str]] = ()) -> list[dict[str, str]]:
-    """Every placeholder that now holds a FIGI since commit `rev`: `contract.id_change_rows` over that commit's
-    securities.csv and this run's, plus the run's own contract/id_changes.csv rows (`run_id_changes`). The run's
-    file is not cumulative (it lists one run's renames, empty on the next), so a rename that happened over several
-    runs is found only by comparing against the base commit. A missing securities.csv on either side gives no
-    computed renames."""
-    now = store.table_path(out_dir, "securities")
-    run = list(csv.DictReader(now.open(newline="", encoding="utf-8"))) if now.exists() else []
-    found = id_change_rows(_at(repo, rev, out_dir, "securities", required=False), run, "") if run else []
+def id_changes_since(base: RunSnapshot, new: RunSnapshot) -> list[dict[str, str]]:
+    """Every placeholder that now holds a FIGI since the `base` run: `contract.id_change_rows` over the base run's
+    securities.csv and the `new` run's, plus the new run's own contract/id_changes.csv rows. The run's file is not
+    cumulative (it lists one run's renames, empty on the next), so a rename that happened over several runs is found
+    only by comparing against the base commit. A missing securities.csv on either side gives no computed renames."""
+    run = new.securities if new.has("securities") else []
+    found = id_change_rows(base.securities if base.has("securities") else [], run, "") if run else []
+    run_id_changes = new.id_changes or []
     seen = {(r["old_sec_id"], r["new_sec_id"]) for r in run_id_changes}
     return [dict(r) for r in run_id_changes] + [r for r in found if (r["old_sec_id"], r["new_sec_id"]) not in seen]
 
 
-def build_report(repo: str | Path, rev: str, out_dir: str | Path, cases: Sequence[DiagnosisCase],
+def build_report(base: RunSnapshot, new: RunSnapshot, cases: Sequence[DiagnosisCase],
                  id_changes: Sequence[Mapping[str, str]] | None = None) -> list[dict[str, str]]:
-    """The regression report of the run under `out_dir` against commit `rev`: the one place that reads both
-    snapshots, builds the exclusion set (truth cases, successor chains and renames) and diffs. `id_changes` are the
-    renames to exclude (default: `id_changes_since`)."""
-    base, new = snapshot_at(repo, rev, out_dir), read_snapshot(out_dir)
+    """The regression report of the `new` run against the `base` run (a commit's, `RunSnapshot.at`): the one place
+    that builds the exclusion set (truth cases, successor chains and renames) and diffs. `id_changes` are the renames
+    to exclude (default: `id_changes_since`)."""
     if id_changes is None:
-        id_changes = id_changes_since(repo, rev, out_dir, new.id_changes)
-    return diff_contract(base, new, excluded(cases, base.delistings, new.delistings, id_changes=id_changes),
+        id_changes = id_changes_since(base, new)
+    return diff_contract(base, new, excluded(cases, base.require("contract_delistings"),
+                                             new.require("contract_delistings"), id_changes=id_changes),
                          renames=id_changes)
 
 
@@ -202,7 +149,7 @@ def renamed_to(renames: Sequence[Mapping[str, str]]) -> dict[str, str]:
     return out
 
 
-def _rekeyed(base: Snapshot, moved: Mapping[str, str]) -> Snapshot:
+def _rekeyed(base: _Contract, moved: Mapping[str, str]) -> _Contract:
     """`base` with each renamed placeholder's rows under its sec_id now: its contract/delistings.csv row becomes
     that security's when the security had none of its own (its own row wins otherwise; of several placeholders the
     first in sec_id order wins), and its ticker ranges join that security's."""
@@ -216,10 +163,10 @@ def _rekeyed(base: Snapshot, moved: Mapping[str, str]) -> Snapshot:
             taken.add(new_id)
     history = [{**r, "sec_id": moved.get(r["sec_id"], r["sec_id"])} for r in base.security_history]
     legs = [{**r, "sec_id": moved.get(r["sec_id"], r["sec_id"])} for r in base.legs]
-    return Snapshot(out, history, base.id_changes, legs)
+    return _Contract(out, history, base.id_changes, legs)
 
 
-def diff_contract(base: Snapshot, new: Snapshot, exclude: Collection[str] = (),
+def diff_contract(base_run: RunSnapshot, new_run: RunSnapshot, exclude: Collection[str] = (),
                   renames: Sequence[Mapping[str, str]] | None = None) -> list[dict[str, str]]:
     """Every change from `base` to `new` outside `exclude`: delistings rows first (by sec_id, then column), then
     ticker ranges, then the placeholder renames. A renamed placeholder (`renames`, id_changes rows; default the
@@ -228,6 +175,7 @@ def diff_contract(base: Snapshot, new: Snapshot, exclude: Collection[str] = (),
     ranges really changed, never as its own removed row and the FIGI's added one. A rename the base run already
     listed in its own contract/id_changes.csv is not reported again."""
     skip = set(exclude)
+    base, new = _Contract.of(base_run), _Contract.of(new_run)
     moved = renamed_to(new.id_changes if renames is None else renames)
     base = _rekeyed(base, moved)
     out: list[dict[str, str]] = []

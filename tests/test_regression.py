@@ -9,14 +9,17 @@ import pytest
 from delist_detection import diagnosis_truth as dt
 from delist_detection import regression as rg
 from delist_detection import store
+from delist_detection.run_snapshot import RunSnapshot, SnapshotError
 from tests.diagnosis_rows import truth_row
-from tests.lifecycle_tables import contract_row, hist
+from tests.lifecycle_tables import contract_row, hist, sec
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 def _snap(delistings=(), history=(), ids=()):
-    return rg.Snapshot(list(delistings), list(history), list(ids))
+    """A run snapshot of contract rows (the in-memory adapter)."""
+    return RunSnapshot.of({"contract_delistings": list(delistings), "security_history": list(history),
+                           "id_changes": list(ids)})
 
 
 def test_a_changed_field_is_one_row_and_the_verdict_column_is_ignored():
@@ -150,12 +153,28 @@ def _repo(tmp_path, with_contract=True):
     return repo, out
 
 
-def test_snapshot_at_reads_the_base_commit(tmp_path):
+def test_build_report_diffs_the_base_commit_against_the_folder(tmp_path):
     repo, out = _repo(tmp_path)
     store.write_tables(out, {"contract_delistings": [contract_row("Z", exit_kind="exchange")]})
-    base = rg.snapshot_at(repo, "HEAD", out)
-    assert base.delistings[0]["exit_kind"] == "merger" and base.id_changes == []
-    assert rg.read_snapshot(out).delistings[0]["exit_kind"] == "exchange"
+    rows = rg.build_report(RunSnapshot.at(repo, "HEAD", out), RunSnapshot.read(out), [])
+    assert [(r["sec_id"], r["field"], r["old"], r["new"]) for r in rows] == [("Z", "exit_kind", "merger", "exchange")]
+
+
+def test_a_run_without_the_contract_cannot_be_diffed():
+    with pytest.raises(SnapshotError, match="contract/delistings.csv: missing"):
+        rg.diff_contract(RunSnapshot.of({"security_history": []}), _snap())
+
+
+def test_id_changes_since_compares_the_base_commits_securities(tmp_path):
+    repo, out = _repo(tmp_path)
+    store.write_tables(out, {"securities": [sec("CIK9-COMMON", cik="9", figi_source="placeholder")]})
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", "placeholder")
+    store.write_tables(out, {"securities": [sec("BBGF", cik="9")]})
+    found = rg.id_changes_since(RunSnapshot.at(repo, "HEAD", out), RunSnapshot.read(out))
+    assert [(r["old_sec_id"], r["new_sec_id"]) for r in found] == [("CIK9-COMMON", "BBGF")]
+    # a run that wrote no securities.csv (the base, or this run) gives no computed renames
+    assert rg.id_changes_since(RunSnapshot.at(repo, "HEAD~1", out), RunSnapshot.read(out)) == []
 
 
 def _script():
@@ -197,12 +216,6 @@ def test_script_exits_2_when_the_base_history_lacks_a_column(tmp_path, capsys):
     assert _script().main(argv) == 2
     err = capsys.readouterr().err
     assert "issuer_id" in err and "HEAD:output/contract/security_history.csv" in err
-
-
-def test_snapshot_at_refuses_an_output_folder_outside_the_repo(tmp_path):
-    repo, _ = _repo(tmp_path)
-    with pytest.raises(rg.RegressionInputError, match="not inside"):
-        rg.snapshot_at(repo, "HEAD", tmp_path / "elsewhere")
 
 
 def test_a_figi_renamed_to_another_figi_is_one_renamed_row_under_the_new_figi():

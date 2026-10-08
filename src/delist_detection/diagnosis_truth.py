@@ -29,7 +29,7 @@ from pathlib import Path
 
 from .atomic_io import write_atomic
 from .exit_kind import DROP_REASONS, EXIT_KINDS, VALUE_RULES, last_endings
-from .lifecycle import Tables
+from .run_snapshot import RunSnapshot
 from .truth import TruthFileError
 
 SCORED = ("exit_kind", "drop_reason", "continuation", "successor_sec_id", "last_trade_date", "value_rule",
@@ -242,20 +242,21 @@ class CaseJudgement:
 
 @dataclass(frozen=True)
 class LibraryRows:
-    """What the judge reads from one run: the contract row and the last real ending of each security, the run's
-    securities (a case whose sec_id is gone from the run cannot be judged: a `no_ending` row would pass on it),
-    and its payout legs (None: the run has no contract/payout_legs.csv yet, before sub-plan 5f)."""
+    """What the judge reads from one run (`of`, its snapshot): the contract row and the last real ending of each
+    security, the run's securities (a case whose sec_id is gone from the run cannot be judged: a `no_ending` row
+    would pass on it), and its payout legs (None: the run has no contract/payout_legs.csv yet, before sub-plan
+    5f)."""
     contract: Mapping[str, Mapping[str, str]]
     last_endings: Mapping[str, Mapping[str, str]]
     sec_ids: Collection[str]
     legs: Mapping[str, Sequence[Mapping[str, str]]] | None = None
 
     @classmethod
-    def of(cls, tables: Tables, legs_rows: Sequence[Mapping[str, str]] | None = None) -> LibraryRows:
+    def of(cls, tables: RunSnapshot) -> LibraryRows:
         legs = None
-        if legs_rows is not None:
+        if tables.payout_legs is not None:
             grouped: dict[str, list[Mapping[str, str]]] = defaultdict(list)
-            for r in legs_rows:
+            for r in tables.payout_legs:
                 grouped[r["sec_id"]].append(r)
             legs = {k: sorted(v, key=lambda r: int(r["leg"])) for k, v in grouped.items()}
         return cls({r["sec_id"]: r for r in tables.contract_delistings or ()}, last_endings(tables.delistings),

@@ -3,7 +3,8 @@
 
   python scripts/regression_report.py --base <commit>     # -> output/regression_report.csv
 
-Offline (git only). Exit 2: the base commit or the output folder lacks a contract file, or the truth file is bad.
+Offline (git only). Both runs are read as run snapshots (`run_snapshot.RunSnapshot`). Exit 2: the base commit or the
+output folder lacks a contract file (or holds one of another layout), or the truth file is bad.
 """
 from __future__ import annotations
 
@@ -12,7 +13,8 @@ import sys
 from pathlib import Path
 
 from delist_detection.diagnosis_truth import load_diagnosis_truth
-from delist_detection.regression import RegressionInputError, build_report, write_report
+from delist_detection.regression import build_report, write_report
+from delist_detection.run_snapshot import RunSnapshot, SnapshotError
 from delist_detection.truth import TruthFileError
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -28,8 +30,9 @@ def main(argv: list[str] | None = None) -> int:
     args = p.parse_args(argv)
     try:
         cases = load_diagnosis_truth(args.truth) if args.truth.exists() else []
-        rows = build_report(args.repo, args.base, args.output_dir, cases)
-    except (RegressionInputError, TruthFileError) as exc:
+        rows = build_report(RunSnapshot.at(args.repo, args.base, args.output_dir), RunSnapshot.read(args.output_dir),
+                            cases)
+    except (SnapshotError, TruthFileError) as exc:
         print(f"ABORTED: {exc}", file=sys.stderr)
         return 2
     write_report(args.out, rows)

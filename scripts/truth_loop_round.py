@@ -24,17 +24,11 @@ from pathlib import Path
 
 from delist_detection import diagnosis_loop as dl
 from delist_detection.diagnosis_truth import COLUMNS, LibraryRows, judge_all, load_legs, parse_rows
-from delist_detection.lifecycle import Tables
-from delist_detection.regression import (RegressionInputError, build_report, id_changes_since, regression_key,
-                                         write_report)
+from delist_detection.regression import build_report, id_changes_since, regression_key, write_report
+from delist_detection.run_snapshot import RunSnapshot, SnapshotError
 from delist_detection.truth import TruthFileError
 
 ROOT = Path(__file__).resolve().parents[1]
-
-
-def _legs_rows(out_dir: Path):
-    path = out_dir / "contract" / "payout_legs.csv"
-    return dl.read_csv(path) if path.exists() else None
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -55,15 +49,15 @@ def main(argv: list[str] | None = None) -> int:
     ledger_path = args.loop_dir / "diagnosed.csv"
     try:
         truth_rows = dl.read_csv(args.truth)
-        run_ids = dl.read_csv(args.output_dir / "contract" / "id_changes.csv")
-        id_changes = run_ids if args.seed_ledger else id_changes_since(args.repo, args.base, args.output_dir, run_ids)
+        run = RunSnapshot.read(args.output_dir)
+        base = None if args.seed_ledger else RunSnapshot.at(args.repo, args.base, args.output_dir)
+        id_changes = list(run.id_changes or []) if base is None else id_changes_since(base, run)
         truth_rows, renames = dl.rename_truth(truth_rows, id_changes)
         legs = load_legs(args.legs) if args.legs.exists() else {}
         cases = parse_rows(truth_rows, str(args.truth), legs)
-        tables = Tables.read(args.output_dir)
-        judged = judge_all(cases, LibraryRows.of(tables, _legs_rows(args.output_dir)))
+        judged = judge_all(cases, LibraryRows.of(run))
         ledger = dl.read_ledger(ledger_path)
-    except (TruthFileError, RegressionInputError, ValueError, OSError) as exc:
+    except (TruthFileError, SnapshotError, ValueError, OSError) as exc:
         print(f"ABORTED: {exc}", file=sys.stderr)
         return 2
     if renames:
@@ -76,14 +70,14 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps({"label": args.label, "seeded": len(seeded), "ledger": str(ledger_path)}))
         return 0
     try:
-        report = build_report(args.repo, args.base, args.output_dir, cases, id_changes)
-    except RegressionInputError as exc:
+        report = build_report(base, run, cases, id_changes)
+    except (SnapshotError, OSError) as exc:
         print(f"ABORTED: {exc}", file=sys.stderr)
         return 2
     write_report(args.output_dir / "regression_report.csv", report)
     mismatches = [m for j in judged for m in j.mismatches if dl.mismatch_key(m) not in keys]
     regressions = [r for r in report if regression_key(r) not in keys]
-    rows = dl.case_rows(mismatches, regressions, tables, label=args.label, round_no=args.round,
+    rows = dl.case_rows(mismatches, regressions, run, label=args.label, round_no=args.round,
                         truth_sec={c.case_id: c.sec_id for c in cases})
     path = args.loop_dir / args.label / f"round-{args.round}" / "cases.csv"
     dl.write_cases(path, rows)

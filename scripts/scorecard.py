@@ -10,8 +10,9 @@ the floor in --config (spec: Delist Library Reset, step 1 "Measure first").
   python scripts/scorecard.py --raise-floor      # move the config's floor to every better number (never worse)
   python scripts/scorecard.py --lifecycles l.csv # one row per input ticker and per security
 
-Offline. The run date is the tables' own (run_manifest.json's as_of; today
-when there is no manifest). Exit 2: a bad config or truth file, or tables
+Offline. The tables, the run date (run_manifest.json's as_of; today when
+there is no manifest) and the base commit's contract are read as run snapshots
+(`run_snapshot.RunSnapshot`). Exit 2: a bad config or truth file, or tables
 that cannot be read.
 """
 from __future__ import annotations
@@ -21,40 +22,19 @@ import csv
 import io
 import json
 import sys
-from datetime import date
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
 from delist_detection.atomic_io import write_atomic
 from delist_detection.diagnosis_loop import LEDGER, read_csv, settled_keys
-from delist_detection.lifecycle import LifecycleView, Tables
-from delist_detection.manifest import MANIFEST_NAME
+from delist_detection.lifecycle import LifecycleView
 from delist_detection.scorecard import (ScorecardConfigError, build, drops, load_config, raise_floor, write)
-from delist_detection.regression import RegressionInputError, build_report, unexplained
+from delist_detection.regression import build_report, unexplained
+from delist_detection.run_snapshot import RunSnapshot, SnapshotError
 from delist_detection.truth import TruthFileError
 
-LEGS_FILE = "contract/payout_legs.csv"
 LIFECYCLE_COLUMNS = ("unit", "key", "sec_id", "kind", "quality", "chain", "final_delist_date", "final_bucket")
-
-
-def tables_as_of(out_dir: Path) -> date:
-    path = out_dir / MANIFEST_NAME
-    if not path.exists():
-        return date.today()
-    manifest = json.loads(path.read_text())
-    if not isinstance(manifest, dict) or "as_of" not in manifest:
-        raise ValueError(f"{path}: no as_of")
-    return date.fromisoformat(manifest["as_of"])
-
-
-def legs_rows(out_dir: Path) -> list[dict[str, str]] | None:
-    """contract/payout_legs.csv's rows, or None when the run has no such table (before sub-plan 5f)."""
-    path = out_dir / LEGS_FILE
-    if not path.exists():
-        return None
-    with path.open(newline="") as fh:
-        return list(csv.DictReader(fh))
 
 
 def lifecycle_rows(view: LifecycleView) -> list[dict[str, str]]:
@@ -91,18 +71,17 @@ def main(argv: list[str] | None = None) -> int:
     args = p.parse_args(argv)
     try:
         config = load_config(args.config)
-        tables = Tables.read(args.output_dir)
-        as_of = tables_as_of(args.output_dir)
-    except (ScorecardConfigError, TruthFileError, ValueError, OSError) as exc:
+        run = RunSnapshot.read(args.output_dir)
+        card = build(run, config=config)          # each table is read when a line first asks for it
+    except (ScorecardConfigError, TruthFileError, SnapshotError, OSError) as exc:
         print(f"ABORTED: {exc}", file=sys.stderr)
         return 2
-    card = build(tables, as_of=as_of, config=config, legs_rows=legs_rows(args.output_dir))
     card["drops"] = drops(card, config.floor)
     if args.base:
         # Recomputed here, never read from output/regression_report.csv, which can be stale.
         try:
-            rows = build_report(args.repo, args.base, args.output_dir, config.diagnosis)
-        except RegressionInputError as exc:
+            rows = build_report(RunSnapshot.at(args.repo, args.base, args.output_dir), run, config.diagnosis)
+        except (SnapshotError, OSError) as exc:
             print(f"ABORTED: {exc}", file=sys.stderr)
             return 2
         left = unexplained(rows, config.diagnosis, settled_keys(read_csv(args.ledger)))
@@ -118,7 +97,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.write:
         print(f"wrote {write(args.output_dir, card)}")
     if args.lifecycles:
-        write_atomic(args.lifecycles, _csv_text(LIFECYCLE_COLUMNS, lifecycle_rows(LifecycleView(tables))))
+        write_atomic(args.lifecycles, _csv_text(LIFECYCLE_COLUMNS, lifecycle_rows(LifecycleView(run))))
         print(f"wrote {args.lifecycles}")
     if args.raise_floor:
         raw = json.loads(args.config.read_text(encoding="utf-8"))

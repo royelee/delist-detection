@@ -87,11 +87,11 @@ settle a doubt the rules above would otherwise raise; none changes a table row, 
 `uncertain_rows` is uncertain.csv: every uncertain security and ending, and
 every seed uncertain for a reason of its own; a seed whose only problem is
 its security is counted, not listed. Each reason is `code` or `code:detail`.
-Pure: reads the tables as store.read_table returns them, through the row vocabulary (exit_kind: real endings, flags,
-the evidence a reason names, the last trade), plus what pipeline stage 9g read from the registrant's own filings for
-each continuation (`continuations`, recorded in run_manifest.json's `continuation_filings`): the one input that is
-not a table, so an offline recompute from committed outputs alone gives APA, CMCSK and HHC no confirmation and CHTR
-no ratio doubt.
+Pure: a function of one run's snapshot (`run_snapshot.RunSnapshot`): its tables, read through the row vocabulary
+(exit_kind: real endings, flags, the evidence a reason names, the last trade), and what stage 9g read from the
+registrant's own filings for each continuation (`RunSnapshot.continuations`: run_manifest.json's
+`continuation_filings`, so the verdicts recomputed from a written folder are the run's), plus each placeholder's
+ticker evidence (stage 10e, `evidence`: the run records none, so an offline caller supplies it).
 """
 from __future__ import annotations
 
@@ -105,7 +105,7 @@ from .exit_kind import (CONFLICT, EXCHANGE_PRINTS, GATE_FLAGS, MEASURED, PAYOUT_
                         flag_name, flag_names, flag_tokens, is_continuation, is_real_ending, last_endings,
                         linked_by_timing, merger_relabel, names_successor_registration, of_row,
                         resolved_from_continued_filings, rests_on_continued_filings)
-from .lifecycle import Tables
+from .run_snapshot import RunSnapshot
 
 SEED, SECURITY, ENDING = "seed", "security", "ending"
 SECURITY_UNCERTAIN = "security_uncertain"
@@ -262,7 +262,7 @@ def _closed_without_ending(security: Mapping[str, str], intervals: Sequence[Mapp
 
 
 # -- the verdicts ---------------------------------------------------------------------------------------------------
-def _security_verdicts(tables: Tables, evidence: Mapping[str, str],
+def _security_verdicts(tables: RunSnapshot, evidence: Mapping[str, str],
                        settled: Mapping[str, tuple[Mapping[str, str], bool]] | None = None) -> dict[str, Verdict]:
     """`settled`: each security's last real ending and whether that ending's own reasons are none (`decide`), for
     ruling E (`_stale_seed`)."""
@@ -368,7 +368,7 @@ def _seed_reasons(row: Mapping[str, str], covered: bool, names_on_day: int,
 
 @dataclass(frozen=True)
 class Verdicts:
-    tables: Tables
+    tables: RunSnapshot
     securities: Mapping[str, Verdict]
     endings: Mapping[tuple[str, str], Verdict]          # (sec_id, delist_date)
     seeds: Mapping[tuple[str, str, str, str, str, str], Verdict]   # observation_map's key
@@ -418,17 +418,14 @@ def seed_key(r: Mapping[str, str]) -> tuple[str, str, str, str, str, str]:
     return (r["ticker"], r["as_of"], r["name"], r["cusip"], r["pin_cik"], r["pin_sec_id"])
 
 
-def decide(tables: Tables, evidence: Mapping[str, str],
-           continuations: Mapping[tuple[str, str], ContinuationReading | str] | None = None) -> Verdicts:
-    """Every verdict of one run's tables. `evidence` maps a placeholder's sec_id
+def decide(tables: RunSnapshot, evidence: Mapping[str, str]) -> Verdicts:
+    """Every verdict of one run (`tables`, its snapshot). `evidence` maps a placeholder's sec_id
     to what ties its ticker to its CIK (`ticker_evidence.evidence_for`); a
-    placeholder missing from it, or mapped to "", has none. `continuations`
-    maps a continuation's (sec_id, delist_date) to what stage 9g read for it
+    placeholder missing from it, or mapped to "", has none. The snapshot's
+    `continuations` give what stage 9g read for each continuation, by (sec_id, delist_date)
     (`exit_kind.ContinuationReading`: the filing that confirms it, or the doubt its
-    registrant's own filings raise; a bare string is the confirming filing); a
-    key missing from it has none."""
-    continuations = {k: v if isinstance(v, ContinuationReading) else ContinuationReading(filing=v)
-                     for k, v in (continuations or {}).items()}
+    registrant's own filings raise); a key missing from them has none."""
+    continuations = tables.continuations
     issuers = {s["sec_id"]: s["issuer_cik"] for s in tables.securities}
     seeds_of: dict[str, list[Mapping[str, str]]] = defaultdict(list)
     for r in tables.observation_map:

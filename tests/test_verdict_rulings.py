@@ -222,11 +222,12 @@ def test_rule_b_keeps_a_continuation_whose_own_filings_state_another_ratio():
     row = ending("A", "2016-05-18", "exchange_transfer", successor="B", ltd="2016-05-18",
                  reason=f"Successor registration 8-K12B 2016-05-20: the security continues under a successor{KEPT}; "
                         "successor by new issuer")
-    t = tables(_chain()["securities"], _chain()["history"], [row], [obs("AAA", "2010-06-30", "A", name="ALPHA")])
-    r = decide(t, {}, {("A", "2016-05-18"): ContinuationReading(doubt="ratio:0.9042")}
-               ).endings[("A", "2016-05-18")].reasons
+    def t(reading):
+        return tables(_chain()["securities"], _chain()["history"], [row], [obs("AAA", "2010-06-30", "A", name="ALPHA")],
+                      continuations={("A", "2016-05-18"): reading})
+    r = decide(t(ContinuationReading(doubt="ratio:0.9042")), {}).endings[("A", "2016-05-18")].reasons
     assert r == ("continuation_not_one_for_one:ratio:0.9042", "resolved_from_continued_filings")
-    assert decide(t, {}, {("A", "2016-05-18"): ContinuationReading()}).endings[("A", "2016-05-18")].reasons == ()
+    assert decide(t(ContinuationReading()), {}).endings[("A", "2016-05-18")].reasons == ()
 
 
 def test_a_skipped_gate_beside_a_price_side_token_stays_a_doubt():

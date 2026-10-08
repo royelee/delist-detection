@@ -23,19 +23,17 @@ successor continues the walk there.
 chain (`event_grade`, plus `medium` for a security whose FIGI came from a
 ticker-only lookup).
 
-Pure: reads the tables as `store.read_table` returns them (every cell a string), each row through the row
-vocabulary (exit_kind).
+Pure: reads one run's tables through its snapshot (`run_snapshot.RunSnapshot`: every cell a string), each row
+through the row vocabulary (exit_kind).
 """
 from __future__ import annotations
 
-import csv
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from pathlib import Path
 
-from . import store
 from .exit_kind import CONFLICT, end_day_of, ending_fields, flag_names, last_endings
+from .run_snapshot import RunSnapshot
 
 ACTIVE, ENDED = "active", "ended"
 ENDED_INCOMPLETE, LEFT_VIEW = "ended_incomplete", "left_view"
@@ -47,41 +45,6 @@ KINDS = (ACTIVE, ENDED, ENDED_INCOMPLETE, LEFT_VIEW, CLOSED_NO_EVENT, NO_INTERVA
 HIGH, MEDIUM, LOW = "high", "medium", "low"
 _RANK = {HIGH: 0, MEDIUM: 1, LOW: 2}
 LOW_FLAGS = frozenset({CONFLICT, "resolved_by_current_ticker_map"})
-
-
-@dataclass(frozen=True)
-class Tables:
-    """The output tables one lifecycle walk reads, as string rows."""
-    securities: Sequence[Mapping[str, str]]
-    ticker_history: Sequence[Mapping[str, str]]
-    delistings: Sequence[Mapping[str, str]]
-    observation_map: Sequence[Mapping[str, str]]
-    review: Sequence[Mapping[str, str]] = ()
-    uncertain: Sequence[Mapping[str, str]] | None = None     # None: no uncertain.csv (a run before reset-2)
-    security_history: Sequence[Mapping[str, str]] | None = None     # None: no contract (a run before reset-3)
-    contract_delistings: Sequence[Mapping[str, str]] | None = None  # None: no payout rule (a run before schema 2)
-
-    @classmethod
-    def read(cls, out_dir: str | Path) -> Tables:
-        """The tables under `out_dir` (store.read_table: a column mismatch raises).
-        review.csv may be missing (no rows); uncertain.csv may be missing (None);
-        contract/security_history.csv may be missing (None)."""
-        def rd(name: str) -> list[dict[str, str]]:
-            return store.read_table(name, store.table_path(out_dir, name))
-
-        def optional(name: str) -> list[dict[str, str]] | None:
-            return rd(name) if store.table_path(out_dir, name).exists() else None
-        def contract_delistings() -> list[dict[str, str]] | None:
-            """None for a file of schema 1 (no payout-rule columns): a run before schema 2."""
-            path = store.table_path(out_dir, "contract_delistings")
-            if not path.exists():
-                return None
-            with path.open(newline="") as fh:
-                header = next(csv.reader(fh), [])
-            return rd("contract_delistings") if "value_rule" in header else None
-        return cls(rd("securities"), rd("ticker_history"), rd("delistings"), rd("observation_map"),
-                   optional("review") or [], optional("uncertain"), optional("security_history"),
-                   contract_delistings())
 
 
 @dataclass(frozen=True)
@@ -120,9 +83,9 @@ def weakest(grades: Sequence[str]) -> str:
 
 @dataclass
 class LifecycleView:
-    """Lifecycles over one set of tables: per security, per input ticker, and
+    """Lifecycles over one run's tables (its snapshot): per security, per input ticker, and
     the look-ups a truth case needs (`security_on`, `issuer_of`, `tickers_of`)."""
-    tables: Tables
+    tables: RunSnapshot
     _intervals: dict[str, list[Mapping[str, str]]] = field(init=False)
     _last: dict[str, Mapping[str, str]] = field(init=False)
     _securities: dict[str, Mapping[str, str]] = field(init=False)

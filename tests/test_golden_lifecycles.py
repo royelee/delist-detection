@@ -6,7 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from delist_detection.lifecycle import LifecycleView, Tables
+from delist_detection.lifecycle import LifecycleView
+from delist_detection.run_snapshot import RunSnapshot
 from delist_detection.truth import KNOWN_WRONG, judge, load_truth
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -15,7 +16,7 @@ CASES = load_truth(ROOT / "data" / "golden_lifecycles.csv")
 
 @pytest.fixture(scope="module")
 def view():
-    return LifecycleView(Tables.read(ROOT / "output"))
+    return LifecycleView(RunSnapshot.read(ROOT / "output"))
 
 
 @pytest.mark.parametrize("case", CASES, ids=[c.case for c in CASES])

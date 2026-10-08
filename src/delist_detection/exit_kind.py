@@ -351,8 +351,9 @@ def end_day_of(row: Mapping[str, str]) -> date:
 @dataclass(frozen=True)
 class ContinuationReading:
     """What stage 9g (`continuation_evidence`) read for one continuation, the verdict's input beside the tables
-    (run_manifest.json's `continuation_filings` records the confirmations). `filing`: `"<form> <accession>"` of the
-    filing whose text states the exchange one for one, for a continuation the continued-filings rule or timing
-    linked; `doubt`: why the registrant's own filings contradict an 8-K12B continuation (`ratio:0.9042`, `cash`)."""
+    (run_manifest.json's `continuation_filings` records it; `run_snapshot.RunSnapshot.continuations` reads it back).
+    `filing`: `"<form> <accession>"` of the filing whose text states the exchange one for one, for a continuation
+    the continued-filings rule or timing linked; `doubt`: why the registrant's own filings contradict an 8-K12B
+    continuation (`ratio:0.9042`, `cash`)."""
     filing: str = ""
     doubt: str = ""

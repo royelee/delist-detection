@@ -7,10 +7,9 @@ docs/superpowers/plans/research/2026-10-04-5h-identity.md, section 4 (decision 6
                                                                        # full run of 5h's code
 
 The identity renames name the security a run of 5h's code gives each case's era (read from
-output/observation_map.csv): only such a run holds it, so applied before, the committed tables fail the
+output/observation_map.csv, through the run snapshot): only such a run holds it, so applied before, the committed tables fail the
 D.mismatches.sec_id floor.
 """
-import csv
 import sys
 from pathlib import Path
 
@@ -18,6 +17,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 from delist_detection import diagnosis_loop as dl  # noqa: E402
 from delist_detection.diagnosis_truth import COLUMNS, load_legs, parse_rows  # noqa: E402
+from delist_detection.run_snapshot import RunSnapshot  # noqa: E402
 
 TRUTH, LEGS = ROOT / "data/diagnosis_truth.csv", ROOT / "data/diagnosis_truth_legs.csv"
 CHANGES = ROOT / "data/diagnosis_truth_changes.csv"
@@ -49,8 +49,7 @@ AFTER_RUN = {
 
 
 def _era_sec_ids() -> dict[str, str]:
-    with (ROOT / "output/observation_map.csv").open(newline="", encoding="utf-8") as fh:
-        return {r["era"]: r["sec_id"] for r in csv.DictReader(fh) if r["sec_id"]}
+    return {r["era"]: r["sec_id"] for r in RunSnapshot.read(ROOT / "output").observation_map if r["sec_id"]}
 
 
 def main() -> int:

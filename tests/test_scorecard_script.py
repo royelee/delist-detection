@@ -37,7 +37,7 @@ def out(tmp_path):
     out = tmp_path / "output"
     out.mkdir()
     store.write_tables(out, {"securities": t.securities, "ticker_history": t.ticker_history,
-                             "delistings": t.delistings, "observation_map": t.observation_map})
+                             "delistings": t.delistings, "observation_map": t.observation_map, "review": t.review})
     (out / "run_manifest.json").write_text(json.dumps({"as_of": "2026-09-25"}))
     return out
 
@@ -120,7 +120,7 @@ def _vc(repo, *args):
 
 def _run_tables(out, z_exit):
     store.write_tables(out, {"securities": [sec("A"), sec("Z")], "ticker_history": [], "delistings": [],
-                             "observation_map": [], "security_history": [],
+                             "observation_map": [], "review": [], "security_history": [],
                              "contract_delistings": [contract_row("A", exit_kind="merger", value_rule="cash"),
                                                      contract_row("Z", exit_kind=z_exit, value_rule="cash")]})
     (out / "run_manifest.json").write_text(json.dumps({"as_of": "2026-09-25"}))

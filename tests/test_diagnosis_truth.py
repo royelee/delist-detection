@@ -102,7 +102,7 @@ from tests.lifecycle_tables import contract_row, ending, sec, tables
 
 def _lib(contract=(), delistings=(), legs_rows=None, securities=("S1", "S2")):
     return dt.LibraryRows.of(tables([sec(s) for s in securities], delistings=list(delistings),
-                                    contract_delistings=list(contract)), legs_rows)
+                                    contract_delistings=list(contract), payout_legs=legs_rows))
 
 
 def _case(**cells):

@@ -1,7 +1,7 @@
 """The contract (spec: Delist Library Reset, "The contract"; decisions 6, 7, 9,
 10 and 12): the tables qlib_practice will read, built from the run's own tables
-and verdicts and written under output/contract/ beside today's tables for one
-release.
+and verdicts (read from the run's snapshot, `run_snapshot.RunSnapshot`, as the pipeline is about to write them)
+and written under output/contract/ beside today's tables for one release.
 
 - security_history.csv (`security_history_rows`): one row per security per
   interval in which its ticker and its issuer CIK hold;
@@ -22,15 +22,15 @@ from collections.abc import Collection, Mapping, Sequence
 from datetime import date, timedelta
 
 from .exit_kind import ending_fields, last_endings, published
-from .lifecycle import Tables
 from .payout_rule import DistressTerms, MergerInputs, basket_legs, value_fields
+from .run_snapshot import RunSnapshot
 from .store import DelistingKey
 from .verdict import Verdicts, seed_key
 
 ECHOED = ("ticker", "as_of", "name", "cusip", "pin_cik", "pin_sec_id", "sec_id")
 
 
-def delisting_rows(tables: Tables, verdicts: Verdicts,
+def delisting_rows(tables: RunSnapshot, verdicts: Verdicts,
                    inputs: Mapping[DelistingKey, MergerInputs] | None = None,
                    distress: Mapping[DelistingKey, DistressTerms] | None = None) -> list[dict[str, object]]:
     """contract/delistings.csv: one row per ended security, its last real ending (`exit_kind.last_endings`;
@@ -58,7 +58,7 @@ def delisting_rows(tables: Tables, verdicts: Verdicts,
     return rows
 
 
-def payout_leg_rows(tables: Tables, inputs: Mapping[DelistingKey, MergerInputs] | None = None
+def payout_leg_rows(tables: RunSnapshot, inputs: Mapping[DelistingKey, MergerInputs] | None = None
                     ) -> list[dict[str, object]]:
     """contract/payout_legs.csv (ruling R3, schema 3): each security one share of a basket ending (value rule
     `basket`, contract/delistings.csv) became, in leg order, with the security, ticker and date its price is needed
@@ -70,7 +70,7 @@ def payout_leg_rows(tables: Tables, inputs: Mapping[DelistingKey, MergerInputs] 
     return rows
 
 
-def seed_rows(tables: Tables, verdicts: Verdicts) -> list[dict[str, str]]:
+def seed_rows(tables: RunSnapshot, verdicts: Verdicts) -> list[dict[str, str]]:
     """contract/seeds.csv: every input observation (observation_map's input
     columns), its sec_id (blank when unplaced) and its verdict."""
     return [{**{c: r[c] for c in ECHOED}, "verdict": verdicts.seeds[seed_key(r)].word}
@@ -91,7 +91,7 @@ def _day_before(iso: str) -> str:
     return (date.fromisoformat(iso) - timedelta(days=1)).isoformat()
 
 
-def security_history_rows(tables: Tables, issuers: Mapping[str, Sequence[tuple[str, str]]],
+def security_history_rows(tables: RunSnapshot, issuers: Mapping[str, Sequence[tuple[str, str]]],
                           leave_out: Collection[str] = ()) -> list[dict[str, str]]:
     """contract/security_history.csv: each ticker_history range, split where the
     issuer CIK in force changes. `issuers` is each security's issuer timeline

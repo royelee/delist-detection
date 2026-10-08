@@ -24,10 +24,11 @@ from delist_detection.successors import SecurityStart, successor_from_8k12b, suc
 from delist_detection.review_triage import Decision
 from delist_detection.security_master import Security
 from delist_detection import scorecard as run_scorecard
-from delist_detection.lifecycle import Tables
+from delist_detection.run_snapshot import RunSnapshot
 from delist_detection.scorecard import ScorecardConfig, Window
 from delist_detection.truth import TruthCase
-from delist_detection.store import read_table, table_path
+from delist_detection.store import formatted, read_table, table_path
+from delist_detection.verdict import decide as decide_verdicts
 from delist_detection.ticker_resolver import TickerResolution, TickerResolver
 
 FIX = Path(__file__).parent / "fixtures" / "form25"
@@ -2499,8 +2500,18 @@ def test_run_writes_the_scorecard_of_the_tables_it_wrote(fake_edgar, tmp_path):
     assert (m["L1.tickers"], m["L1.securities"], m["R1.1.sightings"], m["R2.endings"]) == (2, 2, 3, 1)
     assert card["window"] == {"start": "2006-01-02", "end": "2024-12-29"} and "R2.3.blank_dlret_in_window" in m
     # the same numbers scripts/scorecard.py computes from the written tables
-    again = run_scorecard.build(Tables.read(tmp_path), as_of=date.fromisoformat(card["as_of"]), config=config)
+    again = run_scorecard.build(RunSnapshot.read(tmp_path), config=config)
     assert card == {**json.loads(json.dumps(again)), "drops": []}
+
+
+def test_the_verdicts_recomputed_from_the_written_folder_are_the_runs(fake_edgar, tmp_path):
+    """Stage 10f's verdicts are a function of the run snapshot: the folder's (its tables and run_manifest.json's stage
+    9g readings) gives the uncertain.csv the run wrote (the run has no placeholder, so no ticker evidence)."""
+    index, clients = _clients(fake_edgar, extra_obs=[Observation("ZZZ", "2020-06-30", "ZED CO")])   # unresolved
+    run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
+    written = RunSnapshot.read(tmp_path)
+    assert written.uncertain
+    assert formatted("uncertain", decide_verdicts(written, {}).uncertain_rows()) == written.uncertain
 
 
 def test_run_reports_floor_drops_and_failing_golden_cases(fake_edgar, tmp_path):

@@ -14,6 +14,7 @@ from collections import Counter, defaultdict
 from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import date, timedelta
+from functools import partial
 from pathlib import Path
 from typing import Any
 
@@ -62,15 +63,15 @@ from .reconstruction import (
     unmatched_override_keys,
 )
 from .review_triage import Decision, ReviewItem, Triage, is_blank, merge_review_rows, triage
+from .run_snapshot import RunSnapshot, continuation_entries
 from .rewrites import (
     LINE_CONTINUATION, R1_CONTINUATION, Rule, awaits_successor, continuation, is_real_ending, mark_going_on, reclassify,
     rewrite_by,
 )
 from .sec_stats import SEC_STATS
 from .security_master import EraResolution, Issuer, Security, cik_of, cusip_job, superseded_placeholders
-from .lifecycle import Tables
 from .ticker_evidence import EraEvidence, evidence_for
-from .store import DelistingKey, formatted, write_tables
+from .store import DelistingKey, write_tables
 from .filing_search import successor_query
 from .successors import (
     SUCCESSOR_AFTER_DAYS, SUCCESSOR_BEFORE_DAYS, SecurityStart, successor_by_terms,
@@ -1288,7 +1289,8 @@ def _continuation_filings(ctx: _RunContext, delistings: list[Delisting], securit
     registrant or the successor), and the ratio or cash that contradicts a successor registration. No row changes.
     A reading that rested on a failed request or a stale copy gives no reading and a `resolution_degraded` review
     item (not a flag on the row: the row itself does not rest on it); a refusal (`fatal.FATAL`) stops the run. Each
-    confirmation is logged and recorded in run_manifest.json's `continuation_filings`."""
+    reading is logged and recorded in run_manifest.json's `continuation_filings` (`run_snapshot.continuation_entries`),
+    so a snapshot of the written folder carries it (`RunSnapshot.continuations`)."""
     mark = ctx.meter.start()
     names = {sid: s.name or "" for sid, s in securities.items()}
     names.update({sid: a.security.name or "" for sid, a in (added or {}).items()})
@@ -1330,16 +1332,6 @@ def _ticker_evidence(ctx: _RunContext, securities: dict[str, Security], tier: Ca
            for s in securities.values() if s.figi_source == "placeholder"}
     ctx.meter.done("ticker evidence", mark)
     return out
-
-
-def _as_read(tables: dict[str, list[dict]]) -> Tables:
-    """The tables about to be written, as store.read_table would read them back."""
-    def rows(name: str) -> list[dict[str, str]]:
-        return formatted(name, tables[name])
-    return Tables(rows("securities"), rows("ticker_history"), rows("delistings"), rows("observation_map"),
-                  rows("review"), rows("uncertain") if "uncertain" in tables else None,
-                  rows("security_history") if "security_history" in tables else None,
-                  rows("contract_delistings") if "contract_delistings" in tables else None)
 
 
 def _in_force_reads(issuers: IssuerRecord) -> tuple[Callable[[int], dict | None], ReadWatch]:
@@ -1419,7 +1411,7 @@ def _issuers_in_force(ctx: _RunContext, observation_map: Sequence[Mapping[str, s
     return out
 
 
-def _contract(ctx: _RunContext, read: Tables, verdicts: Verdicts, values: MergerValues, successor_ids: set[str],
+def _contract(ctx: _RunContext, read: RunSnapshot, verdicts: Verdicts, values: MergerValues, successor_ids: set[str],
               answers: PriceAnswers, id_baseline: Sequence[Mapping[str, str]],
               renames: Mapping[str, str] = {}, rows_decided: Collection[str] = (),
               distress: Mapping[DelistingKey, DistressTerms] | None = None) -> dict[str, list[dict]]:
@@ -1450,13 +1442,11 @@ def _contract(ctx: _RunContext, read: Tables, verdicts: Verdicts, values: Merger
     }
 
 
-def _scorecard(ctx: _RunContext, read: Tables, config: run_scorecard.ScorecardConfig, limit: int | None,
-               legs_rows: Sequence[Mapping[str, str]] | None = None) -> dict:
-    """10h. The scorecard of the tables about to be written (`read`; `legs_rows`: contract/payout_legs.csv's rows,
-    which the diagnosis judge reads), with
+def _scorecard(ctx: _RunContext, read: RunSnapshot, config: run_scorecard.ScorecardConfig, limit: int | None) -> dict:
+    """10h. The scorecard of the run about to be written (`read`, its snapshot), with
     `drops`: the floored numbers that got worse. A --limit subset sees a
     fraction of the universe, so its numbers are never compared to the floor."""
-    card = run_scorecard.build(read, as_of=ctx.as_of, config=config, legs_rows=legs_rows)
+    card = run_scorecard.build(read, config=config)
     card["drops"] = run_scorecard.drops(card, config.floor) if limit is None else []
     for line in card["drops"]:
         ctx.log(f"scorecard drop: {line}")
@@ -1542,14 +1532,16 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
         "observation_map": map_rows,
     }
     evidence = _ticker_evidence(ctx, securities, identity.tier)                                    # 10e
-    verdicts = decide_verdicts(_as_read(tables), evidence, confirmations)                          # 10f
+    # 10f to 10h read the rows about to be written as one run snapshot, the type every offline reader reads
+    snapshot = partial(RunSnapshot.of, as_of=ctx.as_of, continuations=confirmations)
+    verdicts = decide_verdicts(snapshot(tables), evidence)                                         # 10f
     tables["uncertain"] = verdicts.uncertain_rows()
     # an acquirer the run added that R1 made a merger row's successor is in the contract's history (Sinclair Inc)
     successor_ids = set(successors.added) | set(r1.added) | {sid for sid, _ in r1.links.values()}
-    tables.update(_contract(ctx, _as_read(tables), verdicts, values, successor_ids, prices,
+    tables.update(_contract(ctx, snapshot(tables), verdicts, values, successor_ids, prices,
                             id_baseline, {**identity.renames(resolutions), **lines.renames},
                             identity.rows_decided, distress=distress))                              # 10g
-    card = _scorecard(ctx, _as_read(tables), scorecard, limit, formatted("payout_legs", tables["payout_legs"]))  # 10h
+    card = _scorecard(ctx, snapshot(tables), scorecard, limit)                                    # 10h
 
     # 11. write -- every table formatted and written to its temp file first, so
     # a failure in any leaves every previous table; then renamed into place one
@@ -1561,10 +1553,7 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
                                                    timings=stat_timings, stages=ctx.meter.stages,
                                                    review_flags=dict(flags), review=triaged.counts,
                                                    handoffs=handoffs.counts,
-                                                   continuation_filings=[
-                                                       {"sec_id": k.sec_id, "delist_date": k.delist_date,
-                                                        "filing": r.filing} for k, r in sorted(confirmations.items())
-                                                       if r.filing]))
+                                                   continuation_filings=continuation_entries(confirmations)))
     return RunSummary(counts, dict(Counter(e.record.bucket.value for e in delistings)),
                       dict(Counter(s.figi_source for s in securities.values())), dict(flags), dict(triaged.counts),
                       scorecard_drops=card["drops"], golden_failures=card["golden_failures"],
