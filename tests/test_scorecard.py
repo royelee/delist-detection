@@ -274,6 +274,28 @@ def test_flip_applies_the_one_flip_rule_to_both_truth_sets(tmp_path):
     assert sc.flip(run, sc.load_config(tmp_path / "scorecard.json")) == sc.Flipped((), ())
 
 
+def test_flip_writes_both_truth_sets_as_one_write_set(tmp_path, monkeypatch):
+    """Final review M6: the golden file and the diagnosis set are one write set. A write that fails for the
+    diagnosis truth file leaves the golden file unflipped too (it used to be rewritten first)."""
+    from pathlib import Path
+    config = _flip_config(tmp_path)
+    before = {p: p.read_bytes() for p in (tmp_path / "golden.csv", tmp_path / "d.csv")}
+    run = _tables(contract_delistings=[contract_row("A", exit_kind="merger"), contract_row("B", exit_kind="exchange"),
+                                       contract_row("C", exit_kind="merger")])
+    real = Path.write_bytes
+
+    def failing(self, data):
+        if self.name == ".d.csv.tmp":
+            raise OSError("disk full")
+        return real(self, data)
+    monkeypatch.setattr(Path, "write_bytes", failing)
+    with pytest.raises(OSError, match="disk full"):
+        sc.flip(run, config)
+    monkeypatch.undo()
+    assert {p: p.read_bytes() for p in before} == before and not list(tmp_path.glob(".*.tmp"))
+    assert sc.flip(run, config) == sc.Flipped(("right",), ("A_2012-03-10",))      # the same flip, written whole
+
+
 def test_flip_leaves_the_diagnosis_set_alone_without_a_contract(tmp_path):
     """Without contract/delistings.csv the D lines are not computed, and C's no_ending case would hold on nothing."""
     config = _flip_config(tmp_path)

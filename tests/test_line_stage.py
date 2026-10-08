@@ -271,6 +271,22 @@ def test_a_line_successor_that_kept_the_ticker_or_a_cusip_line_stays_a_successor
     assert {k: v.composite for k, v in lines.successors.items()} == {CRC: CRC_SPLIT}, why
 
 
+def test_the_follow_leaves_its_input_identity_as_it_was():
+    """Final review M7: the securities the follow changes are copies in its answer; the identity's own securities,
+    resolutions and CUSIPs are unchanged (BBGA takes the ticker FNP on its own CUSIP)."""
+    rows = _line("AA", ["A1"]) + [r for r in _line("FNP", ["X", "A1"]) if r.cusip != "X"]
+    identity = _identity([_Spec("BBGA", 1, "AA", ["A1"])], rows)
+    before = (dict(identity.securities), {k: s.line_tickers for k, s in identity.securities.items()},
+              dict(identity.resolutions), {k: list(v) for k, v in identity.cusips.items()})
+    edgar = _Edgar(_stating(rows))
+    lines = follow_lines(identity, Clients(edgar=edgar, resolver=None, classifier=None, figi=_Figi(),
+                                           ftd_client=_NoFiles(), issuers=IssuerRecord(edgar)), as_of=AS_OF)
+    assert lines.securities["BBGA"].line_tickers == {"FNP"}
+    assert (dict(identity.securities), {k: s.line_tickers for k, s in identity.securities.items()},
+            dict(identity.resolutions), {k: list(v) for k, v in identity.cusips.items()}) == before
+    assert identity.securities["BBGA"].line_tickers == frozenset()
+
+
 # --- the 8-K text sources -------------------------------------------------------------------------------------------
 
 def test_the_text_sources_filter_the_8ks_before_the_cap():

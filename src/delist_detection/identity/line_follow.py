@@ -607,7 +607,8 @@ def follow_lines(identity: "Identity", clients: LineSources, *, as_of: date,
     refused is an info review item (`line_followed`, `line_follow_refused:<why>`); a step whose reads rested on a
     failed request or a stale copy, or of a CIK one of whose reads in the stage did, gets a `resolution_degraded`
     one, and so does a security with no such step whose CIK's read did. A refusal (`fatal.FATAL`) or an OpenFIGI
-    outage stops it."""
+    outage stops it. `identity` is left as it was (final review M7): a security the follow changes is a copy in
+    `Lines`; only its fails index, which the stage asks to follow, holds more rows after."""
     meter = meter if meter is not None else StageMeter(log)
     mark = meter.start()
     reads = _Reads(clients)
@@ -706,8 +707,10 @@ def follow_lines(identity: "Identity", clients: LineSources, *, as_of: date,
                                     last_seen=step.old_last))
         if any(sid in out.renames for sid in out.securities):
             out.securities = identity.securities_of(out.resolutions)
-        for sid, s in out.securities.items():
-            s.line_tickers = frozenset(tickers.get(sid, set()) - {e.ticker for e in s.eras})
+        for sid, s in list(out.securities.items()):          # a copy of each security the follow changes
+            line = frozenset(tickers.get(sid, set()) - {e.ticker for e in s.eras})
+            if line != s.line_tickers:
+                out.securities[sid] = replace(s, line_tickers=line)
         todo = sorted(sid for sid in moved if sid in out.securities)
         if not todo:
             break

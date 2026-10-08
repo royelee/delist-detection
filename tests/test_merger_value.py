@@ -122,6 +122,23 @@ def test_the_regex_read_is_bounded_by_the_runs_own_close(workers):
     assert asked and set(asked) == {100.0}
 
 
+def test_a_failed_acquirer_ticker_lookup_is_reported_even_when_the_client_counted_nothing():
+    """Final review M8: stage 8a's one read outside the issuer record, the resolver's (its SEC ticker-map tier
+    raises on a failed read with no cached copy), gives no issuer and a resolution_degraded item of its own, whether
+    or not the client counted the failure; no issuer is then looked for by name."""
+    import requests
+
+    class Down:
+        def resolve(self, *a, **k):
+            raise requests.ConnectionError("down")
+
+    e = _merger("T", "TGT", "2018-12-10", date(2018, 11, 28))
+    values = _value([e], llm=_Terms({"TGT": _stock(0.5, "ACQ", name="ACQUIRER CO")}), resolver=Down())
+    assert values.get(e.key).acquirer_sec_id == ""
+    assert [(r.flag, r.reason.split(" rested")[0]) for r in values.review] == [
+        ("resolution_degraded", "the acquirer issuer lookup")]
+
+
 # --- 8a': an unnamed stock leg's ticker -----------------------------------------------------------------------------
 
 def _shaw(terms: MergerTerms):

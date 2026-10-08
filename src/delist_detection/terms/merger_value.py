@@ -409,20 +409,23 @@ def _acquirer_lines(st: _Stage, mergers: list[Delisting], llm_terms: Mapping[Del
         if cik is not None and not acquirer_line.issuer_fits(reads.profile, reads.first_filed, int(cik), name,
                                                              last):
             holder, cik = None, None
-        try:
-            if cik is None and ticker and resolver is not None:
+        failed = False
+        if cik is None and ticker and resolver is not None:
+            try:
                 cik = acquirer_line.issuer_by_ticker(resolver, reads.profile, ticker, name, last,
                                                      target_cik=e.cik)
-            if cik is None:
-                # no ticker, or one that names no issuer on the last trade day (sub-plan 5f: prompt v3 gives
-                # today's ticker of a renamed acquirer, FDC 2019's FI for Fiserv's FISV): the run's issuer of the name
-                cik = acquirer_line.issuer_by_name(index.issuers(), reads.profile, name, last, day,
-                                                   target_cik=e.cik)
-        except FATAL:
-            raise
-        except requests.RequestException:
-            cik = None
-        if watch.tripped():
+            except FATAL:
+                raise
+            except requests.RequestException:
+                # the resolver's SEC ticker-map tier (`EdgarClient.company_tickers`) raises on a failed read with no
+                # cached copy (final review M8: the one read here that is not the issuer record's); reported below
+                # whether or not the client counted it, and no other issuer is looked for
+                cik, failed = None, True
+        if cik is None and not failed:
+            # no ticker, or one that names no issuer on the last trade day (sub-plan 5f: prompt v3 gives
+            # today's ticker of a renamed acquirer, FDC 2019's FI for Fiserv's FISV): the run's issuer of the name
+            cik = acquirer_line.issuer_by_name(index.issuers(), reads.profile, name, last, day, target_cik=e.cik)
+        if failed or watch.tripped():
             review.append(degraded_item(e.sec_id, e.ticker, e.cik, "the acquirer issuer lookup",
                                         delist_date=e.delist_date))
         issuers[key] = (holder, int(cik) if cik else None)
@@ -480,27 +483,24 @@ def _name_acquirer_tickers(st: _Stage, mergers: list[Delisting], llm_terms: Mapp
     for e in todo:
         t, last = llm_terms[e.key], e.last_trade.day
         watch = reads.watch()
-        try:
-            accession = (t.source or "").split(":", 1)[-1]
-            filing = next((f for f in reads.filings(e.cik) if f.accession == accession), None)
-            text = reads.text(e.cik, filing) if filing is not None else ""
+        # every read here is the issuer record's (a failure is unknown, never an exception), SEC's name index (in
+        # memory) or the fails scan below, which counts its own failure (final review M8)
+        accession = (t.source or "").split(":", 1)[-1]
+        filing = next((f for f in reads.filings(e.cik) if f.accession == accession), None)
+        text = reads.text(e.cik, filing) if filing is not None else ""
 
-            def rows():
-                day = next_trading_day(last)
-                try:
-                    yield from st.ftd.every_row(day, day + timedelta(days=15))
-                except FATAL:
-                    raise
-                except requests.RequestException:
-                    SEC_STATS.degraded("ftd_scan")
+        def rows(last=last):
+            day = next_trading_day(last)
+            try:
+                yield from st.ftd.every_row(day, day + timedelta(days=15))
+            except FATAL:
+                raise
+            except requests.RequestException:
+                SEC_STATS.degraded("ftd_scan")
 
-            ticker = acquirer_ticker.acquirer_ticker(t.acquirer_name, text, index=index, subs=reads.profile,
-                                                     first_filed=reads.first_filed, rows=rows, last=last,
-                                                     target_cik=e.cik)
-        except FATAL:
-            raise
-        except requests.RequestException:
-            ticker = ""
+        ticker = acquirer_ticker.acquirer_ticker(t.acquirer_name, text, index=index, subs=reads.profile,
+                                                 first_filed=reads.first_filed, rows=rows, last=last,
+                                                 target_cik=e.cik)
         if watch.tripped():
             review.append(degraded_item(e.sec_id, e.ticker, e.cik, "the acquirer name lookup",
                                         delist_date=e.delist_date))

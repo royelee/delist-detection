@@ -22,6 +22,7 @@ import calendar
 import io
 import logging
 import re
+import threading
 import zipfile
 from bisect import bisect_left, bisect_right
 from collections import Counter, defaultdict
@@ -249,7 +250,9 @@ class FtdIndex:
       periods of SEC's files), up to the run date. Neither depends on what was asked.
 
     The warm passes read the index and never ask it, so a run's asks are the sequential pass's, in its order, for
-    any worker count."""
+    any worker count. A query only reads: every ask leaves the rows it added sorted before it returns (`_settle`),
+    so warm threads querying at once never see a list mid-sort (final review M1), and the file periods
+    (`_file_periods`), read once on the first coverage question, are filled under a lock."""
 
     def __init__(self, rows: Iterable[FtdRow] = (), *, source: FtdSource | None = None,
                  window: tuple[date, date] | None = None) -> None:
@@ -259,8 +262,10 @@ class FtdIndex:
         self._by_symbol: dict[str, list[FtdRow]] = defaultdict(list)
         self._by_cusip: dict[str, list[FtdRow]] = defaultdict(list)
         self._seen: set[FtdRow] = set()
-        self._dates: list[str] = []            # every row's date, sorted by `_sort`
-        self._dirty = False
+        self._dates: list[str] = []            # every row's date, sorted by `_settle`
+        self._fresh_symbols: set[str] = set()  # the keys whose lists an ask added rows to, until `_settle` sorts them
+        self._fresh_cusips: set[str] = set()
+        self._periods_lock = threading.Lock()
         # The disjoint [lo, hi] ranges already scanned *as that exact filter
         # key* (not merely a key that happened to show up under the other
         # dimension's filter) — see `_ask`. Sorted, non-overlapping,
@@ -284,6 +289,7 @@ class FtdIndex:
         self._own_from: dict[str, str] = {}
         for r in rows:
             self._add(r)
+        self._settle()
 
     def _learn(self, symbols: set[str], names: Mapping[str, Iterable[str]] | None = None,
                first_seen: Mapping[str, str] | None = None) -> set[str]:
@@ -356,7 +362,8 @@ class FtdIndex:
         self._by_symbol[r.symbol].append(r)
         self._by_cusip[r.cusip].append(r)
         self._dates.append(r.date)
-        self._dirty = True
+        self._fresh_symbols.add(r.symbol)
+        self._fresh_cusips.add(r.cusip)
 
     @classmethod
     def opened(cls, source: FtdSource, lo: date, hi: date, *, through: date | None = None,
@@ -415,6 +422,7 @@ class FtdIndex:
                       {c.upper() for c in cusips})
         for r in (r for c in cusips for r in self.by_cusip(c)):
             out._add(r)
+        out._settle()
         return out
 
     def every_row(self, lo: date, hi: date) -> Iterator[FtdRow]:
@@ -470,17 +478,21 @@ class FtdIndex:
             for r in self._source.rows(url, symbols=wanted, cusips=cusips):
                 if lo_s <= r.date <= hi_s:
                     self._add(r)
+        self._settle()
         for keys, windows in ((symbols, self._symbol_windows), (cusips, self._cusip_windows)):
             for k in keys or ():
                 windows[k] = self._merge(windows.get(k, []), lo, hi)
 
-    def _sort(self) -> None:
-        if self._dirty:
-            for m in (self._by_symbol, self._by_cusip):
-                for v in m.values():
-                    v.sort(key=lambda r: (r.date, r.cusip, r.symbol))
-            self._dates.sort()
-            self._dirty = False
+    def _settle(self) -> None:
+        """Sort what `_add` added (each key's rows by date, CUSIP and symbol; every row's date): the end of every
+        ask and of the constructor, so no query sorts (the warm passes query from several threads)."""
+        if not (self._fresh_symbols or self._fresh_cusips):
+            return
+        for m, keys in ((self._by_symbol, self._fresh_symbols), (self._by_cusip, self._fresh_cusips)):
+            for k in keys:
+                m[k].sort(key=lambda r: (r.date, r.cusip, r.symbol))
+            keys.clear()
+        self._dates.sort()
 
     @staticmethod
     def _slice(rows: list[FtdRow], lo: str | None, hi: str | None) -> list[FtdRow]:
@@ -494,7 +506,6 @@ class FtdIndex:
         row FTD wrote under it: its own and those relabelled to the class ticker.
         A class ticker's base ("UAC" of "UAC-C") gives only the rows left under it:
         it is usually another security's own ticker (VIA beside VIA-B)."""
-        self._sort()
         s = normalize_ticker(symbol)
         rows = self._by_symbol.get(s, [])
         canon = self._aliases.get(s)
@@ -503,19 +514,19 @@ class FtdIndex:
         return self._slice(rows, lo, hi)
 
     def by_cusip(self, cusip: str, lo: str | None = None, hi: str | None = None) -> list[FtdRow]:
-        self._sort()
         return self._slice(self._by_cusip.get(cusip.upper(), []), lo, hi)
 
     def _file_periods(self) -> list[tuple[date, date]]:
         """The periods of the source's files (SEC's file names, `period_of`) that begin by the run date, read once:
         the fails data's own coverage. Empty when there is no file index: no source, or a file without a period (a
-        test's double)."""
-        if self._periods is None:
-            hi = self._window[1] if self._window is not None else date.max
-            urls = self._source.urls_for(FTD_START, hi) if self._source is not None else []
-            got = [period_of(u) if isinstance(u, str) else None for u in urls]
-            self._periods = [] if None in got else sorted(p for p in got if p is not None)
-        return self._periods
+        test's double). Filled once, under a lock: a warm thread may ask first."""
+        with self._periods_lock:
+            if self._periods is None:
+                hi = self._window[1] if self._window is not None else date.max
+                urls = self._source.urls_for(FTD_START, hi) if self._source is not None else []
+                got = [period_of(u) if isinstance(u, str) else None for u in urls]
+                self._periods = [] if None in got else sorted(p for p in got if p is not None)
+            return self._periods
 
     def data_covers(self, lo: str, hi: str) -> bool:
         """Whether the fails data covers some day of the ISO span [lo, hi], up to the run date: a file of the
@@ -525,7 +536,6 @@ class FtdIndex:
         data: some row held is dated in the span."""
         periods = self._file_periods()
         if not periods:
-            self._sort()
             i = bisect_left(self._dates, lo)
             return i < len(self._dates) and self._dates[i] <= hi
         if self._window is not None:
@@ -539,7 +549,6 @@ class FtdIndex:
         None when it holds none."""
         periods = self._file_periods()
         if not periods:
-            self._sort()
             return self._dates[-1] if self._dates else None
         end = self._window[1] if self._window is not None else date.max
         ends = [min(b, end) for a, b in periods if a <= end]

@@ -15,7 +15,6 @@ import copy
 import re
 from dataclasses import asdict, replace
 from datetime import date, datetime, timedelta
-from typing import Iterable
 
 from . import end_of_era
 from ..vocabulary.crsp_codes import CONTINUATION_CODE, CrspBucket, bucket_for_code
@@ -51,11 +50,6 @@ DELIST_FORMS = {"25", "25-NSE"}
 NON_EQUITY_KINDS = frozenset({"preferred", "debt", "warrant", "unit", "right", "fund"})
 DEREG_FORMS = {"15-12G", "15-12B", "15-15D"}
 
-# 8-K item code fingerprints (numeric strings as EDGAR emits them).
-MERGER_ITEMS = {"2.01", "5.01"}
-COMPLIANCE_ITEMS = {"3.01"}
-LIQUIDATION_ITEMS = {"2.04"}
-DEFAULT_LOOKBACK_DAYS = 30
 EIGHT_K_WINDOW_DAYS = 14
 EIGHT_K_BACKSCAN_DAYS = 120  # how far back to scan for an announcement 8-K
 
@@ -1019,8 +1013,3 @@ class DelistClassifier:
         return self._classify_resolved(ticker, resolution, anchor_date, expected_name=expected_name,
                                        delist_filing_override=form25, trading_after=trading_after,
                                        own_shares=own_shares)
-
-    def classify_many(
-        self, items: Iterable[tuple[str, str | None]]
-    ) -> list[DelistRecord]:
-        return [self.classify_ticker(t, d) for t, d in items]

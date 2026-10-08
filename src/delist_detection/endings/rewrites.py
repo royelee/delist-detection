@@ -20,7 +20,7 @@ A delisting that did not end its security (`security_goes_on`) is its own succes
 a holding company's merger the security traded through is still a merger row (DIS 2019, WRK 2018).
 
 The interface: `continuation`, `security_goes_on`, `mark_going_on`, `reclassify`; the readings `awaits_successor`,
-`is_real_ending`, `successor_by` and `rewrite_by`. The reason text a rewrite writes (a link's note, `successor_note`)
+`is_real_ending` and `rewrite_by`. The reason text a rewrite writes (a link's note, `successor_note`)
 and the flag tokens it reads are the row vocabulary's (exit_kind). Pure, over the in-memory delisting
 (`delistings.Delisting`); the published tables keep their columns and their text."""
 from __future__ import annotations
@@ -174,7 +174,3 @@ def rewrite_by(d: Delisting, rule: Rule) -> Rewrite | None:
     """The latest rewrite of `d` that `rule` decided, else None."""
     return next((rw for rw in reversed(d.rewrites) if rw.rule is rule), None)
 
-
-def successor_by(d: Delisting) -> str:
-    """How `d`'s successor was found, as the rewrite that set it recorded it ("" when none says)."""
-    return next((rw.how for rw in reversed(d.rewrites) if rw.successor), "")

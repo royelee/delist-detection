@@ -371,7 +371,8 @@ def test_the_successor_search_query_is_the_one_the_prefetch_sends():
 
 def test_payouts_and_llm_calls_are_filled_ahead_and_no_llm_answer_is_paid_for_twice(fake_edgar, tmp_path):
     """With 4 workers the regex payout reads and the LLM calls are filled ahead on the worker threads (sub-plan 5f).
-    The real extractor caches each answer under its (filing, model, prompt version, ticker) key, so the sequential
+    The warm pass returns only once every item is done (`prefetch.warm`), and the real extractor caches each answer
+    under its (filing, model, prompt version, ticker) key, so every paid call is a warm thread's and the sequential
     pass reads what the warm pass paid for: the LLM client is called once per key asked, never twice."""
     index, clients = _clients(fake_edgar)
     regex, llm, keys, guard = [], [], set(), threading.Lock()
@@ -403,7 +404,7 @@ def test_payouts_and_llm_calls_are_filled_ahead_and_no_llm_answer_is_paid_for_tw
     clients.llm_extractor = _Extractor(fake_edgar, _Client(), cache_dir=tmp_path / "llm")
     run(index, clients, Overrides(), out_dir=tmp_path / "out", log=lambda *_: None, sec_workers=4)
     assert any(n.startswith("sec-warm") for n in regex) and regex[-1] == threading.main_thread().name
-    assert llm and all(n.startswith("sec-warm") or n == threading.main_thread().name for n in llm)
+    assert llm and all(n.startswith("sec-warm") for n in llm)        # final review M2: the warm pass paid for each
     assert len(llm) == len(keys)                   # no answer paid for twice
 
 

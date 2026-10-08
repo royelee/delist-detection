@@ -154,11 +154,11 @@ def test_a_name_no_regression_has_is_refused():
 @pytest.mark.parametrize("subject, label, n", [
     ("A_2010-01-04", "5a", 1), ("CIK1469372-CLASS-A", "wave1", 3), ("A_2010-01-04", "5-0", 2),
     ("BBG000BB2N27_2014-12-25", "5b-preruling", 12), ("Z", "pilot.2", 0)])
-def test_a_case_id_reads_back_as_its_subject_label_and_round(subject, label, n):
-    assert lr.parse_case_id(lr.case_id(subject, label, n)) == (subject, label, n)
+def test_a_case_id_is_its_subject_label_and_round(subject, label, n):
+    assert lr.case_id(subject, label, n) == f"{subject}_{label}-r{n}"
 
 
-def test_a_label_a_case_id_could_not_read_back_is_refused(tmp_path):
+def test_a_label_that_would_make_a_case_id_ambiguous_is_refused(tmp_path):
     for label in ("a_b", "", "-x", ".x", "x|y", "x/y"):
         with pytest.raises(ValueError, match="label"):
             lr.case_id("A", label, 1)
@@ -168,9 +168,8 @@ def test_a_label_a_case_id_could_not_read_back_is_refused(tmp_path):
         lr.Loop.of(tmp_path).round("5a", 0)
     with pytest.raises(ValueError):
         lr.case_id("", "5a", 1)
-    for text in ("A_2010-01-04", "A_5a-rx", "_5a-r1", "A_5a-r01"):
-        with pytest.raises(ValueError, match="not a loop case id"):
-            lr.parse_case_id(text)
+    with pytest.raises(ValueError):
+        lr.case_id("A", "5a", -1)
 
 
 def test_a_ledger_row_takes_its_kind_from_its_key():

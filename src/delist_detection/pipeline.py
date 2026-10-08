@@ -72,7 +72,7 @@ from .sources.sec_stats import SEC_STATS
 from .identity.security_master import EraResolution, Issuer, Security, cik_of, cusip_job, superseded_placeholders
 from .identity.ticker_evidence import EraEvidence, evidence_for
 from .endings.trading_record import TradingRecord
-from .outputs.store import DelistingKey, write_tables
+from .outputs.store import DelistingKey, formatted, write_tables
 from .filings.filing_search import successor_query
 from .endings.successors import (
     SUCCESSOR_AFTER_DAYS, SUCCESSOR_BEFORE_DAYS, SecurityStart, successor_by_terms,
@@ -1350,39 +1350,63 @@ def _other_issuers(ctx: _RunContext, eras: list[TickerEra], resolutions: dict[st
 
 
 def _issuers_in_force(ctx: _RunContext, observation_map: Sequence[Mapping[str, str]],
-                      rows_decided: Collection[str] = ()) -> dict[str, list[tuple[str, str]]]:
-    """Each security's issuer timeline (issuer_in_force.issuer_changes) from its
-    sightings: every observation_map row with a sec_id, except a conflict (two
-    names that day). A submissions read that fails keeps the era's CIK; a refusal
-    (`fatal.FATAL`) stops the run. Without a name index (the run's issuer record
-    holds none), every sighting keeps its era's CIK. A sighting of an era whose
-    issuer its ticker's fails rows decided (`rows_decided`, stage 2b's
-    `ticker_rows`) keeps its era's CIK too: its observed name is the one those
-    rows refuted (ERA 2013's BRISTOW GROUP INC)."""
-    submissions, _ = _in_force_reads(ctx.clients.issuers)
+                      rows_decided: Collection[str] = (),
+                      review: list[ReviewItem] | None = None) -> dict[str, list[tuple[str, str]]]:
+    """10c3. Each security's issuer timeline (issuer_in_force.issuer_changes) from its
+    sightings, for contract/security_history.csv (10g): every observation_map row (as
+    written, `store.formatted`) with a sec_id, except a conflict (two names that day).
+    A submissions read that fails keeps the era's CIK, and a security whose timeline
+    asked a CIK whose read failed or was stale gets a `resolution_degraded` row in
+    `review`, as stage 4c's does (final review M4: read before triage, so the row is
+    reviewed and counts toward exit 3); a refusal (`fatal.FATAL`) stops the run.
+    Without a name index (the run's issuer record holds none), every sighting keeps
+    its era's CIK. A sighting of an era whose issuer its ticker's fails rows decided
+    (`rows_decided`, stage 2b's `ticker_rows`) keeps its era's CIK too: its observed
+    name is the one those rows refuted (ERA 2013's BRISTOW GROUP INC)."""
+    read, reads = _in_force_reads(ctx.clients.issuers)
+    touched: set[int] = set()
+
+    def submissions(cik: int) -> dict | None:
+        touched.add(cik)
+        return read(cik)
+
     mark = ctx.meter.start()
-    out = issuer_changes((IssuerSighting(r["sec_id"], r["as_of"], "" if r["era"] in rows_decided else r["name"],
-                                         r["issuer_cik"])
-                          for r in observation_map if r["sec_id"] and r["status"] != "conflict"),
-                         submissions, ctx.clients.issuers.exact_holders)
+    by_sec: dict[str, list[IssuerSighting]] = {}          # each security's sightings, in the table's order
+    seen: dict[str, Mapping[str, str]] = {}
+    for r in observation_map:
+        if r["sec_id"] and r["status"] != "conflict":
+            by_sec.setdefault(r["sec_id"], []).append(
+                IssuerSighting(r["sec_id"], r["as_of"], "" if r["era"] in rows_decided else r["name"],
+                               r["issuer_cik"]))
+            seen[r["sec_id"]] = r
+    out: dict[str, list[tuple[str, str]]] = {}
+    for sid, rows in by_sec.items():
+        touched.clear()
+        out.update(issuer_changes(rows, submissions, ctx.clients.issuers.exact_holders))
+        if review is not None and touched & reads.ciks:
+            last = seen[sid]
+            review.append(degraded_item(sid, last.get("ticker", ""), int(last["issuer_cik"]) if last["issuer_cik"]
+                                        else None, "the issuer in force (contract/security_history.csv)",
+                                        "; run again once SEC answers"))
     ctx.meter.done("issuers in force", mark)
     return out
 
 
 def _contract(ctx: _RunContext, read: RunSnapshot, verdicts: Verdicts, values: MergerValues, successor_ids: set[str],
               answers: PriceAnswers, id_baseline: Sequence[Mapping[str, str]],
-              renames: Mapping[str, str] = {}, rows_decided: Collection[str] = (),
+              renames: Mapping[str, str] = {}, in_force: Mapping[str, list[tuple[str, str]]] | None = None,
               distress: Mapping[DelistingKey, DistressTerms] | None = None) -> dict[str, list[dict]]:
     """10g. The contract (contract.py), written under contract/ beside today's
     tables (decision 6): security_history with each interval's issuer in force
-    (`_issuers_in_force`), leaving out the merger acquirers the run adds;
+    (`in_force`, stage 10c3's `_issuers_in_force`, read before triage; read here
+    when not given), leaving out the merger acquirers the run adds;
     delistings, one row per ended security (a drop's OTC symbol and a bankruptcy
     plan's ratio from stage 9e, `distress`); the seed echo; the price requests (a
     merger's stock leg as stage 8 asked it, a plan's new line, a basket's further
     legs; an answer to no request stops the run); and the placeholders of `id_baseline`
     (a securities.csv) that now hold a FIGI (`renames`: stage 4b's folds, by name,
     whatever other FIGI lines the issuer has)."""
-    issuers = _issuers_in_force(ctx, read.observation_map, rows_decided)
+    issuers = in_force if in_force is not None else _issuers_in_force(ctx, read.observation_map)
     endings = last_endings(read.delistings)
     inputs = values.contract_inputs(list(endings.values()))
     ended = contract_delisting_rows(read, verdicts, inputs, distress)
@@ -1481,6 +1505,10 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
     review_rows += [item.row() for item in drop_resolved_shared(ticker_range_review(th_rows), handoffs.resolved_pairs)]
     # 10c2. observation_map rows (the payout rows, 10c, are built with the tables below)
     map_rows = _observation_map(ctx, index, eras, resolutions, identity.issuers, history)
+    # 10c3. the issuers in force, for 10g's security_history: before triage, so a failed read is a review row
+    in_force_review: list[ReviewItem] = []
+    in_force = _issuers_in_force(ctx, formatted("observation_map", map_rows), identity.rows_decided, in_force_review)
+    review_rows += [item.row() for item in in_force_review]
     flags, triaged = _triage(ctx, review_rows, review_decisions, limit)
 
     tables = {
@@ -1502,7 +1530,7 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
     successor_ids = set(successors.added) | set(r1.added) | {sid for sid, _ in r1.links.values()}
     tables.update(_contract(ctx, snapshot(tables), verdicts, values, successor_ids, prices,
                             id_baseline, {**identity.renames(resolutions), **lines.renames},
-                            identity.rows_decided, distress=distress))                              # 10g
+                            in_force, distress=distress))                                           # 10g
     card = _scorecard(ctx, snapshot(tables), scorecard, limit)                                    # 10h
 
     # 11. write -- every table formatted and written to its temp file first, so

@@ -478,8 +478,9 @@ class TruthSet:
             out.append(text)
         return "".join(out)
 
-    def commit(self) -> list[Path]:
-        """Validate the set, then write every file whose content changed, all together or none. Returns the paths
+    def commit(self, also: Sequence[tuple[Path, bytes]] = ()) -> list[Path]:
+        """Validate the set, then write every file whose content changed, with `also` (other files written with the
+        set, as (path, bytes): `scorecard.flip`'s golden file), all together or none. Returns the set's paths
         written."""
         self._validate()
         texts = {_TRUTH: _csv(COLUMNS, self._rows), _LEGS: _csv(LEG_COLUMNS, self._legs), _CHANGES: self._log_text()}
@@ -489,9 +490,11 @@ class TruthSet:
         data = {k: t.encode("utf-8") for k, t in texts.items()}
         write = [k for k in texts if k in self._force or (
             data[k] != self._originals[k] if self._originals[k] is not None else bool(held[k]))]
-        with replace_all_on_success([self._paths[k] for k in write]) as tmps:
+        with replace_all_on_success([self._paths[k] for k in write] + [Path(p) for p, _ in also]) as tmps:
             for tmp, k in zip(tmps, write):
                 tmp.write_bytes(data[k])
+            for tmp, (_, other) in zip(tmps[len(write):], also):
+                tmp.write_bytes(other)
         for k in write:
             self._originals[k] = data[k]
         self._force.clear()

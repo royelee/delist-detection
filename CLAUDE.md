@@ -160,7 +160,9 @@ last trade day stage 5 dated; `dlret.DistressTerms` for the contract; metered as
 plan's `received_close` answer times its ratio is that ending's value and an answered OTC print a drop's, each read
 through its own request, `PriceAnswers.ending_values`), then the row builders (stage 10a builds one
 `dlret.ValueInputs` per delisting and `reconstruction.enrich`es it; stage 8's records feed 10a, 10c and 10g:
-`MergerValues.table_terms`, `payout_rows`, `contract_inputs` and `requests`) and `_triage`; the contract (stage 10g) takes sub-plan 5h's `Identity.renames` too: each placeholder whose eras
+`MergerValues.table_terms`, `payout_rows`, `contract_inputs` and `requests`), `_issuers_in_force` (stage 10c3: the
+contract's issuer timeline, read before triage so a failed or stale read is a `resolution_degraded` row, as 4c's) and
+`_triage`; the contract (stage 10g) takes sub-plan 5h's `Identity.renames` too: each placeholder whose eras
 now hold one FIGI line is a `contract/id_changes.csv` rename, across a class label), each with explicit
 inputs and outputs and the run-wide `_RunContext` (clients, run date, log,
 workers, SEC meter `manifest.StageMeter`). `Clients` is the seam every stage reads SEC, OpenFIGI, the fails files,
@@ -301,8 +303,9 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   before the earliest day to `after` days after the latest: stages 5b, 7 and 8's gate), `apart(days, ...)` (a
   separate index of CUSIPs' rows around days with this one's rows of them, this one left as it was: stage 8a's early
   mergers) and `every_row(lo, hi)` (every row of the files in a span, as spelled, held nowhere: stage 8a'). An ask
-  reads only the keys not held over its whole span, in one pass; a query never reads the files (the warm passes
-  read the index on worker threads), and a windowless one (`by_cusip(c)`) answers every row held, those other keys'
+  reads only the keys not held over its whole span, in one pass, and leaves the rows it added sorted (`_settle`): a
+  query never reads the files and never changes the index (the warm passes read it on worker threads at once; the
+  file periods behind the coverage answers are filled once, under a lock), and a windowless one (`by_cusip(c)`) answers every row held, those other keys'
   asks brought in too. Coverage is stated: `opened_from` (the window the index was opened over:
   `cusip_handoffs`' margin; `Identity.ftd_lo`), `data_covers(lo, hi)` and `data_end()` (the fails data's own
   coverage, the periods of SEC's file index up to the run date: `guarded_eras`, the line follow's data edge, stage
@@ -365,8 +368,8 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   and the handoffs' continuation filing send. It imports nothing of the package.
 - `filings/form25.py` — parses a Form 25's XML or text (exchange, `class_text`, rule),
   labels the exchange, reads `class_kind` (common/preferred/warrant/unit/…)
-  from the class text, and `match_security()`s it to one observed security of
-  that kind/class letter. Sub-plan 5b: `is_involuntary` (a removal under rule 12d2-2(b)); `notice_last_trade` never reads the NYSE (b) template's "an
+  from the class text, and matches it (`match_securities`: the securities it names, `tied_securities` for a tie;
+  `match_security`, one security, is its tests' surface only) to the observed securities of that kind/class letter. Sub-plan 5b: `is_involuntary` (a removal under rule 12d2-2(b)); `notice_last_trade` never reads the NYSE (b) template's "an
   announcement was made on the 'ticker' ... at the close of the trading session on D" press day, and `_class_expiry`
   takes an expiry only within [filing - 30 d, filing + 10 d]; `Form25.solely` and
   `other_class` (R3: a Form 25 that relates solely to a non-common class, or whose lettered tracking-stock segments
@@ -719,7 +722,8 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   (`last`).
 - `identity/line_follow.py` — sub-plan 5a, stage 4b as one module (architecture step 7a): a security's line across a CUSIP or
   ticker change. Its interface is `follow_lines(identity, clients, *, as_of, log, meter) -> Lines`: the caller passes
-  the identity stage's answer (its fails index included: the stage asks it to follow the lines' rows) and the
+  the identity stage's answer (left as it was: a security the follow changes is a copy; its fails index, which the
+  stage asks to follow the lines' rows, holds more rows after) and the
   run's clients (`LineSources`: the issuer record, the EDGAR client for a successor filer's listing, EDGAR's
   full-text search as `Clients.full_text_search` states it, and OpenFIGI) and gets the securities, era resolutions and CUSIPs after the follow, the folds
   (`renames`), the line successors (`successors`, sec_id -> `LineSuccessor`) and the review items of stages 1 to 4b
@@ -888,7 +892,8 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   own successor and keeps the kind and value (WRK, DIS); `mark_going_on(delistings, going_on)` is the clip check's
   (`history.Histories.going_on`), filling only a blank successor; `reclassify(d, code, rule, ...)` any other kind (470, 552), a kind leaving
   `unknown` dropping the no-evidence default. Readings: `awaits_successor`, `is_real_ending` (in memory; the tables'
-  is `exit_kind.is_real_ending`), `rewrite_by`, `successor_by`; a link's reason note is `exit_kind.successor_note`,
+  is `exit_kind.is_real_ending`), `rewrite_by` (a rewrite's `how` says how its successor was found); a link's
+  reason note is `exit_kind.successor_note`,
   the reason's one wording of how a successor was found ("; successor by same ticker"), and the payout flags a
   continuation drops include `exit_kind.GATE_FLAGS`. The classifier's own edits of the end-of-era verdict before it
   builds the record (rule 6, branch 5b, R6b) are no rewrites. Its rules are tested at its interface
@@ -1206,7 +1211,7 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   and summary.md unless a dry run). Each answers the line its script prints (`line()`). The tokens, each built here
   and read back by its inverse here: an error's key (`mismatch_key`, `regression_key`; `parse_key`, `key_kind`; no
   part may hold `|`), a regression's field name (`Field.of(row).name`, `parse_field`: a changed delistings column by
-  its name, `delistings.added` or `delistings.removed`, `<table>.<field>`) and a case id (`case_id`, `parse_case_id`:
+  its name, `delistings.added` or `delistings.removed`, `<table>.<field>`) and a case id (`case_id`, built only:
   `<subject>_<label>-r<N>`; a label holds letters, digits, `.` and `-`). A ledger row's kind is its key's
   (`ledger_row`). The keys a truth row the loop adds settles are the judge's (`new_row_keys`, in the case's field
   order), never spelled from its wording; a case carries the ending it examined (`RoundCase.delist_date`), never read
@@ -1233,8 +1238,9 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   `raise_floor`, `load_config` (`data/scorecard.json`: the caller's window, the
   floor, the truth files, read as cases and named as files, `golden_file` and `diagnosis_file`; the diagnosis truth
   set through `truth_set`, its legs named after its truth file), `flip(snapshot, config)` (the flip rule on both
-  sets: `truth.flip` for the golden file, `TruthSet.flip` and its commit for the diagnosis set, which is flipped only
-  when the run has a contract; returns the flipped ids, `Flipped`; scripts/scorecard.py --flip),
+  sets: `truth.flipped` for the golden file, `TruthSet.flip` for the diagnosis set, which is flipped only when the
+  run has a contract; both written as one write set, `TruthSet.commit(also=)`; returns the flipped ids, `Flipped`;
+  scripts/scorecard.py --flip),
   `write` (`output/scorecard.json`). `D.unexplained_regressions` is not built here: it needs a base commit, and is
   the loop round's (`loop_round.unexplained`), added by scripts/scorecard.py with `--base`.
 - `measurement/audit.py` — decision 17's sample: `census` (each ending in its first group of
@@ -1354,8 +1360,11 @@ expiration is 0.0 in the table and no correction in the firm month, which leaves
   whether or not a decision also exists for it (it can't: both flags are
   `acceptable=False`).
 - **An issuer is read through the run's issuer record, once.** The resolver, the classifier's up-front refresh and
-  name check, and the stages' reads of an issuer's names, filings and first filing (2's names, 4b, 4c/10g, 8a/8a',
-  8b, 9's terms links, 9b) ask `Clients.issuers` (`issuer_record.IssuerRecord`). A read that fails after the
+  name check, and the stages' reads of an issuer's names, filings and first filing (2's names, 4b, 4c/10c3, 8a/8a',
+  8b, 9's terms links, 9b) ask `Clients.issuers` (`issuer_record.IssuerRecord`); 10c3 reads the contract's issuer
+  timeline before triage, so its failed or stale read is a reviewed row too, and 8a's one read outside the record
+  (the resolver's SEC ticker map, which raises on a failed read with no cached copy) is reported by the stage
+  itself. A read that fails after the
   client's retries is unknown and never remembered, a refusal stops the run, and the answer that rested on a failed
   or stale read gets `resolution_degraded` (`IssuerRecord.watch`): the handoff stage's read of the successor
   issuer's filings no longer stops a run that has no cached copy (exit 1). Reads still made straight from the

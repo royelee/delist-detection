@@ -17,7 +17,6 @@ from delist_detection.terms.payout_extractor import PayoutResult
 from delist_detection.endings.rewrites import (
     HANDOFF_CONTINUATION, LINE_CONTINUATION, NO_EVIDENCE_DEFAULT, R1_CONTINUATION, SUCCESSOR_UNKNOWN, Rewrite, Rule,
     awaits_successor, continuation, is_real_ending, mark_going_on, reclassify, rewrite_by, security_goes_on,
-    successor_by,
 )
 
 
@@ -92,7 +91,8 @@ def test_r1_makes_a_merger_a_continuation_into_a_new_issuer():
                         + successor_note("new_issuer"))
     assert d.record.reason.endswith("no cash; successor by new issuer") and d.record.confidence == "medium"
     assert d.flags == [R1_CONTINUATION] and values.get(d.key) is None
-    assert successor_by(d) == "new_issuer" and rewrite_by(d, Rule.R1).evidence.startswith("each share")
+    rw = rewrite_by(d, Rule.R1)
+    assert (rw.successor, rw.how) == ("BBG00BN961G4", "new_issuer") and rw.evidence.startswith("each share")
 
 
 def test_a_successor_link_keeps_the_transfer_and_its_reason_and_closes_the_open_successor():
@@ -105,10 +105,10 @@ def test_a_successor_link_keeps_the_transfer_and_its_reason_and_closes_the_open_
     assert (d.record.bucket, d.record.confidence, d.record.successor_sec_id) == (
         CrspBucket.EXCHANGE_TRANSFER, "high", "BBGBLKNEW01")
     assert d.record.reason == "Continued filings; successor by same ticker" and d.flags == ["no_form25"]
-    assert not awaits_successor(d) and successor_by(d) == "same_ticker"
+    assert not awaits_successor(d) and rewrite_by(d, Rule.SUCCESSOR_LINK).how == "same_ticker"
     other = _row(bucket=CrspBucket.EXCHANGE_TRANSFER, code=304, flags=(SUCCESSOR_UNKNOWN,), reason="r")
     continuation(other, "X", Rule.SUCCESSOR_LINK)
-    assert other.record.reason == "r" and successor_by(other) == ""
+    assert other.record.reason == "r" and rewrite_by(other, Rule.SUCCESSOR_LINK).how == ""
 
 
 def test_the_line_continuation_rewrites_an_unknown_row_at_the_switch():

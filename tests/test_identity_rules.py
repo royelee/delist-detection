@@ -53,6 +53,29 @@ def test_an_era_its_tickers_rows_decided_keeps_its_cik_in_force():
         {"CIK1525221-COMMON": [("2013-06-28", "1525221")]}
 
 
+def test_a_failed_read_of_the_issuer_in_force_is_a_resolution_degraded_row():
+    """Final review M4: stage 10c3 (the contract's issuer timeline) reports a submissions read that failed as stage
+    4c does: a `resolution_degraded` row for each security whose timeline asked that CIK, none for the others."""
+    import requests
+
+    def submissions(cik):
+        if int(cik) == 1525221:
+            raise requests.ConnectionError("down")
+        return ERA_SUBS[int(cik)]
+    ctx = _in_force_ctx()
+    ctx.clients.edgar.submissions = submissions
+    rows = [{"sec_id": "CIK1525221-COMMON", "as_of": "2013-06-28", "name": "BRISTOW GROUP INC.", "ticker": "ERA",
+             "issuer_cik": "1525221", "status": "mapped", "era": "ERA@2013-06-28"},
+            {"sec_id": "BBGBRS", "as_of": "2008-06-30", "name": "BRISTOW GROUP INC", "ticker": "BRS",
+             "issuer_cik": "73887", "status": "mapped", "era": "BRS@2008-06-30"}]
+    review = []
+    timeline = pipeline._issuers_in_force(ctx, rows, review=review)
+    assert timeline["BBGBRS"] == [("2008-06-30", "73887")]
+    assert [(r.sec_id, r.ticker, r.cik, r.flag) for r in review] == [
+        ("CIK1525221-COMMON", "ERA", 1525221, "resolution_degraded")]
+    assert "the issuer in force" in review[0].reason
+
+
 # --- rule E, OKE 2026: a holding company's new CUSIP the notice names, after the fails data's last day ----------
 
 def _oke(ftd_rows, day=date(2026, 9, 9)):

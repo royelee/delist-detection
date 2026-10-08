@@ -29,7 +29,7 @@ The tokens. Each is built by one function here and read back by its inverse here
   change `<table>.<field>`. `Field.of` reads a report row, `Field.name` builds the name and `parse_field` reads it.
   A mismatch's field is the judge's own name (`diagnosis_truth.MISMATCH_FIELDS` and `leg_field`), carried as given.
 - a case id (`case_id`): `<subject>_<label>-r<N>`, the subject being the truth case_id of a mismatch case and the
-  sec_id of a regression case. `parse_case_id` reads it. What a case examined is never read from its id: the case
+  sec_id of a regression case. Nothing reads it back: what a case examined is never read from its id: the case
   carries it (`RoundCase.delist_date`, which a truth row the loop adds keeps as `examined_delist_date`).
 The keys a truth row the loop adds produces are the judge's (`new_row_keys` judges the row), so the judge's wording
 can change without the ledger losing them.
@@ -170,7 +170,6 @@ def parse_field(name: str) -> Field:
 
 
 _LABEL = r"[A-Za-z0-9][A-Za-z0-9.-]*"
-_CASE_ID = re.compile(rf"(?P<subject>.+)_(?P<label>{_LABEL})-r(?P<round>0|[1-9][0-9]*)")
 
 
 def _check_label(label: str) -> None:
@@ -180,19 +179,12 @@ def _check_label(label: str) -> None:
 
 def case_id(subject: str, label: str, round_no: int) -> str:
     """A round's case id: `<subject>_<label>-r<N>` (module docstring). Raises ValueError on a blank subject or a
-    label `parse_case_id` could not read back."""
+    label that would make the id ambiguous (one holding `_`, or anything but letters, digits, `.` and `-`)."""
     _check_label(label)
     if not subject or round_no < 0:
         raise ValueError(f"no case id for subject {subject!r}, round {round_no}")
     return f"{subject}_{label}-r{round_no}"
 
-
-def parse_case_id(cid: str) -> tuple[str, str, int]:
-    """A case id's subject, label and round. Raises ValueError on any other text."""
-    m = _CASE_ID.fullmatch(cid)
-    if m is None:
-        raise ValueError(f"not a loop case id: {cid!r}")
-    return m["subject"], m["label"], int(m["round"])
 
 
 # -- the ledger ---------------------------------------------------------------------------------------------------

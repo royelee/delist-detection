@@ -603,3 +603,40 @@ def test_a_bare_spelled_row_held_before_its_class_ticker_was_asked_is_held_again
 
     assert held(["cusip", "symbol"]) == ["BF-B", "BFB"]
     assert held(["symbol", "cusip"]) == ["BF-B"]
+
+
+def test_a_query_only_reads_so_threads_querying_at_once_see_the_asked_rows():
+    """Final review M1: every ask leaves its rows sorted, so a query never sorts a list another thread is reading
+    (CPython empties a list while it sorts it). Eight threads querying the keys of an ask at once, switching as
+    often as the interpreter can, each see every row, in order."""
+    import sys
+    import threading
+    rows = [FtdRow(f"2019-01-{d:02d}", f"C{k:04d}", f"S{k:04d}", "X CO", 1.0) for k in range(400)
+            for d in (17, 3, 28, 9, 22, 14, 2, 30, 5, 11, 19, 25)]
+
+    class _Client:
+        def urls_for(self, lo, hi):
+            return ["mem"]
+
+        def rows(self, url, *, symbols=None, cusips=None):
+            yield from rows
+
+    idx = FtdIndex(source=_Client())
+    idx.around([date(2019, 1, 15)], before=20, after=20, cusips={r.cusip for r in rows})
+    want = {c: sorted(r.date for r in rows if r.cusip == c) for c in {r.cusip for r in rows}}
+    seen, start = [], threading.Barrier(8)
+
+    def query():
+        start.wait()
+        seen.append({c: [r.date for r in idx.by_cusip(c)] for c in want})
+    threads = [threading.Thread(target=query) for _ in range(8)]
+    interval = sys.getswitchinterval()
+    sys.setswitchinterval(1e-6)
+    try:
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+    finally:
+        sys.setswitchinterval(interval)
+    assert len(seen) == 8 and all(got == want for got in seen)

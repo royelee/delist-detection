@@ -57,7 +57,6 @@ _SHARE = (r"(?:\s+of\s+an?)?(?:\s+(?:validly[- ]issued|fully[- ]paid|non-?assess
 # the consideration: "into one share", "for an equivalent share", "received 1.11130 shares", "receiving one share"
 _CONSIDERATION = re.compile(r"\b(?P<lead>into|for|receiv(?:e|ed|es|ing))\s+(?:the\s+right\s+to\s+receive\s+)?"
                             + _QTY + _SHARE, re.I)
-_BASIS = re.compile(r"on\s+a\s+one[- ](?:for|to)[- ]one\s+basis|share[- ]for[- ]share", re.I)
 _VERB = re.compile(r"convert|exchang|reclassif|redeem|redemption|receiv", re.I)
 _FOR_EACH = re.compile(r"\bfor\s+each\s+(?:outstanding\s+|issued\s+and\s+outstanding\s+)?(?:share|shares)\s+of\s+",
                        re.I)

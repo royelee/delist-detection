@@ -345,17 +345,24 @@ class Flipped:
 
 def flip(tables: RunSnapshot, config: ScorecardConfig) -> Flipped:
     """The flip rule (`truth.now_right`) on both truth sets the config names, against one run (`tables`): every
-    known_wrong golden case the run now matches becomes pass with a note (`truth.flip`), and every known_wrong
-    diagnosis case with a change-log row (`truth_set.TruthSet.flip`, then its commit). The diagnosis set is flipped
-    only when the run has a contract with payout columns, the D lines' rule (without one a no_ending case would
-    hold on nothing). Writes only a file in which a case flipped. Raises truth.TruthFileError."""
-    golden = truth.flip(config.golden_file, LifecycleView(tables)) if config.golden_file is not None else []
+    known_wrong golden case the run now matches becomes pass with a note (`truth.flipped`), and every known_wrong
+    diagnosis case with a change-log row (`truth_set.TruthSet.flip`). The diagnosis set is flipped only when the run
+    has a contract with payout columns, the D lines' rule (without one a no_ending case would hold on nothing).
+    Writes only a file in which a case flipped, and the golden file and the diagnosis set as one write set (the
+    set's `commit(also=)`, `atomic_io.replace_all_on_success`): a failure writing either leaves both as they were.
+    Raises truth.TruthFileError."""
+    golden, rows = truth.flipped(config.golden_file, LifecycleView(tables)) if config.golden_file is not None \
+        else ([], None)
+    also = [] if rows is None else [(Path(config.golden_file), truth.truth_text(rows).encode("utf-8"))]
     diagnosis: list[str] = []
     if config.diagnosis_file is not None and tables.contract_delistings is not None:
         ts = TruthSet.open(config.diagnosis_file)
         if ts.flip(LibraryRows.of(tables)):
             diagnosis = [c["case_id"] for c in ts.changes]
-            ts.commit()
+            ts.commit(also=also)
+            also = []
+    for path, data in also:                     # the golden file alone
+        write_atomic(path, data)
     return Flipped(tuple(golden), tuple(diagnosis))
 
 

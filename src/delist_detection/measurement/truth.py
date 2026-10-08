@@ -257,13 +257,18 @@ def load_truth(path: str | Path, *, allow_pending: bool = False) -> list[TruthCa
     return out
 
 
-def write_truth(path: str | Path, rows: Sequence[dict[str, str]]) -> None:
-    """Write truth rows (every TRUTH_COLUMNS key) to `path` in one atomic replace."""
+def truth_text(rows: Sequence[dict[str, str]]) -> str:
+    """Truth rows (every TRUTH_COLUMNS key) as a truth file's text."""
     buf = io.StringIO()
     w = csv.DictWriter(buf, fieldnames=list(TRUTH_COLUMNS), lineterminator="\n")
     w.writeheader()
     w.writerows(rows)
-    write_atomic(Path(path), buf.getvalue())
+    return buf.getvalue()
+
+
+def write_truth(path: str | Path, rows: Sequence[dict[str, str]]) -> None:
+    """Write truth rows (every TRUTH_COLUMNS key) to `path` in one atomic replace."""
+    write_atomic(Path(path), truth_text(rows))
 
 
 def judge(case: TruthCase, view: LifecycleView) -> Judgement:
@@ -320,21 +325,30 @@ def judge_all(cases: Sequence[TruthCase], view: LifecycleView) -> list[Judgement
     return [judge(c, view) for c in cases]
 
 
-def flip(path: str | Path, view: LifecycleView) -> list[str]:
-    """The flip rule (`now_right`) on a golden truth file: every known_wrong case the run behind `view` now matches
-    becomes pass, its fixed_by cleared, and its note records the flip (`<note>; the library now matches, was
-    known_wrong until <fixed_by>`: the file has no change log). No other cell changes, and the file is rewritten
-    (`write_truth`) only when a case flipped. Returns the flipped case ids. Raises TruthFileError as `load_truth`."""
+def flipped(path: str | Path, view: LifecycleView) -> tuple[list[str], list[dict[str, str]] | None]:
+    """The flip rule (`now_right`) on a golden truth file, unwritten: the case ids it moves to pass and the file's
+    rows after it (None when no case flipped). Each flipped case becomes pass, its fixed_by cleared, and its note
+    records the flip (`<note>; the library now matches, was known_wrong until <fixed_by>`: the file has no change
+    log); no other cell changes. Raises TruthFileError as `load_truth`."""
     path = Path(path)
-    flipped = now_right(judge_all(load_truth(path), view))
-    if flipped:
-        rows, moved = _rows(path), set(flipped)
-        for r in rows:
-            if r["case"] in moved:
-                r["note"] = noted(r["note"], f"{NOW_MATCHES}, was known_wrong until {r['fixed_by']}")
-                r["status"], r["fixed_by"] = PASS, ""
+    ids = now_right(judge_all(load_truth(path), view))
+    if not ids:
+        return [], None
+    rows, moved = _rows(path), set(ids)
+    for r in rows:
+        if r["case"] in moved:
+            r["note"] = noted(r["note"], f"{NOW_MATCHES}, was known_wrong until {r['fixed_by']}")
+            r["status"], r["fixed_by"] = PASS, ""
+    return ids, rows
+
+
+def flip(path: str | Path, view: LifecycleView) -> list[str]:
+    """`flipped`, written: the file is rewritten (`write_truth`) only when a case flipped. Returns the flipped case
+    ids. (`scorecard.flip` writes the golden file with the diagnosis truth set, as one write set.)"""
+    ids, rows = flipped(path, view)
+    if rows is not None:
         write_truth(path, rows)
-    return flipped
+    return ids
 
 
 def binom_cdf(k: int, n: int, p: float) -> float:

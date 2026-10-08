@@ -57,8 +57,6 @@ def resolve_user_agent(env_file: str | Path = REPO_ENV) -> str:
     return env_setting("EDGAR_USER_AGENT", env_file) or FALLBACK_UA
 
 
-DEFAULT_UA = resolve_user_agent()
-
 # The day a cached JSON payload was fetched; a payload without it is dated by its file time.
 FETCHED_KEY = "__fetched__"
 # Marks a payload served from cache because the refetch failed. Added to the

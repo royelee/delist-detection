@@ -6,7 +6,7 @@ other securities of their issuers, their fails rows, and the EDGAR, OpenFIGI, MI
 stage 8b (`pipeline._r1_continuations`, the terms the committed contract published standing in for the LLM's), and
 stage 9 (`pipeline._find_successors`, which records its links as rewrites; no full-text search: the fixture has
 none, and its EDGAR double states the capability absent); `later` runs 8b and 9 over delistings `find` gave. How each successor was found is the rewrite's typed provenance
-(`rewrites.successor_by`)."""
+(`successor_by`, over `Delisting.rewrites`)."""
 from __future__ import annotations
 
 import csv
@@ -33,7 +33,6 @@ from delist_detection.sources.midas import MidasClient
 from delist_detection.sources.nasdaq_halts import Halt, NasdaqHaltClient
 from delist_detection.identity.observations import Observation, TickerEra
 from delist_detection.outputs.review_triage import ReviewItem
-from delist_detection.endings.rewrites import successor_by
 from delist_detection.identity.security_master import Security
 from delist_detection.identity.ticker_resolver import TickerResolver
 
@@ -193,6 +192,11 @@ def later(sec_id: str, found: list[Delisting], c: pipeline.Clients) -> list[Deli
     acquirers = dict(payouts.added) | pipeline._r1_continuations(ctx, found, securities, sightings, payouts).added
     pipeline._find_successors(ctx, found, securities, sightings, acquirers, {}, ftd, cusips)
     return found
+
+
+def successor_by(d: Delisting) -> str:
+    """How `d`'s successor was found, as the latest rewrite that set it recorded it ("" when none says)."""
+    return next((rw.how for rw in reversed(d.rewrites) if rw.successor), "")
 
 
 def outcome(sec_id: str, **kw) -> list[tuple]:
