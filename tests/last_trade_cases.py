@@ -130,7 +130,8 @@ def outcome(sec_id: str) -> list[tuple]:
     found, _ = find(sec_id, c)
     securities, cusips, ftd = world()
     ctx = pipeline._RunContext(c, AS_OF, lambda *a: None, 1, StageMeter(lambda *a: None))
-    closes = pipeline._last_trade_closes(ctx, found, securities, cusips, ftd, date(1990, 1, 1), pipeline.Overrides())
+    closes = pipeline._last_trade_closes(ctx, found, securities, cusips, ftd, date(1990, 1, 1),
+                                         pipeline.Overrides()).closes
     return [(d.delist_date, d.record.bucket.value, d.last_trade.day.isoformat() if d.last_trade.day else "",
              d.last_trade.source, UNCONFIRMED in d.last_trade.flags, closes.get(d.key))
             for d in found]

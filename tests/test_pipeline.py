@@ -1215,7 +1215,8 @@ def test_last_trade_close_uses_the_cusip_whose_range_holds_the_last_trade_day():
                           delisting("RSQ", "2021-01-14", date(2021, 1, 4)))
     ctx = pipeline._RunContext(None, date(2026, 9, 25), lambda *_: None, 1, StageMeter(lambda *_: None))
     closes = pipeline._last_trade_closes(ctx, [first, second, otc], {"BBGRS": sec},
-                                         {"BBGRS": ["11111A101", "11111A200"]}, ftd, date(2004, 1, 1), Overrides())
+                                         {"BBGRS": ["11111A101", "11111A200"]}, ftd, date(2004, 1, 1),
+                                         Overrides()).closes
     assert closes[first.key] == 2.0                  # 11111A101's range holds 2019-09-03
     assert closes[second.key] == 20.0                # 11111A200's range holds 2020-03-02
     assert closes[otc.key] == 7.0                    # the range's CUSIP has no row that day: the ticker's
@@ -2508,6 +2509,95 @@ def test_a_last_close_given_twice_stops_the_run(fake_edgar, tmp_path):
             out_dir=tmp_path / "second", log=lambda *_: None)
 
 
+def _stock_merger_whose_gate_reads_the_close(fake_edgar, monkeypatch):
+    """One merger (S1, last trade 2020-06-01) of 2.0 ACQ shares, no cash: its own fails close is 200.00 and ACQ's
+    100.00, so its terms reconcile on the run's own close; ACQ's CUSIP is a line OpenFIGI names, the acquirer the run
+    adds when the gate settles the leg on the terms' ticker."""
+    fake_edgar.company_map["S1"] = {"cik_str": 7001, "ticker": "S1", "title": "TARGET ONE INC"}
+    fake_edgar.submissions_by_cik[7001] = []
+    figi = _RecordingFigi({"S1": _figi_answer("BBGSEC001", "S1", "TARGET ONE INC"),
+                           "ACQCUSIP": _figi_answer("BBGACQ0001", "ACQ", "ACQUIRER CO")})
+
+    class _Ftd:
+        ROWS = [FtdRow("2020-06-02", "S1CUSIP01", "S1", "TARGET ONE INC", 200.0),
+                FtdRow("2020-06-02", "ACQCUSIP", "ACQ", "ACQUIRER CO", 100.0)]
+
+        def urls_for(self, lo, hi):
+            return ["mem"]
+
+        def rows(self, url, *, symbols=None, cusips=None):
+            for r in self.ROWS:
+                if (symbols and r.symbol in symbols) or (cusips and r.cusip in cusips):
+                    yield r
+
+    obs = [Observation("S1", "2020-01-01", "TARGET ONE INC", cik=7001),
+           Observation("S1", "2020-06-01", "TARGET ONE INC", cik=7001)]
+    index = ObservationIndex(obs)
+    resolver = TickerResolver(fake_edgar, observed_names=index.name_on, cik_pins=index.cik_pin_on)
+    clients = Clients(edgar=fake_edgar, resolver=resolver, classifier=DelistClassifier(fake_edgar, resolver),
+                      figi=figi, ftd_client=_Ftd())
+    rec = DelistRecord(ticker="S1", cik=7001, observed_delist_date="2020-06-15", crsp_code=231,
+                       bucket=CrspBucket.MERGER, confidence="high", reason="x", evidence={"flags": []},
+                       sec_id="BBGSEC001", delist_date="2020-06-15")
+
+    class _CannedFinder:
+        def __init__(self, edgar, classifier, *, midas=None, halts=None):
+            pass
+
+        def find(self, ctx):
+            if ctx.security.sec_id != "BBGSEC001":
+                return [], []
+            return [Delisting(sec_id="BBGSEC001", cik=7001, ticker="S1", delist_date="2020-06-15",
+                              record=replace(rec, evidence={"flags": []}),
+                              last_trade=LastTrade(date(2020, 6, 1), "midas", ()), form25=None, form25_sub=None,
+                              exchange="NYSE")], []
+
+    monkeypatch.setattr(pipeline, "DelistingFinder", _CannedFinder)
+
+    class _LLM:
+        def extract(self, record, security_name=""):
+            return MergerTerms("stock", None, 2.0, "ACQUIRER CO", "ACQ", "high", "8-K:X1", "", package_basis="fixed")
+
+    clients.llm_extractor = _LLM()
+    return index, clients
+
+
+def test_an_answered_last_close_that_flips_the_gate_changes_values_only(fake_edgar, tmp_path, monkeypatch):
+    """I1 (the final review): the gate pass that settles the acquirer and the stock leg's request reads the run's own
+    last close, never the caller's answer. Run 1 settles 2.0 ACQ at 100.00 against S1's fails close (200.00): the
+    acquirer is ACQ's line, added by the run, and the leg asks ACQ's received close. Run 2 answers S1's last close at
+    120.00, on which the terms no longer reconcile, and the received close: the run completes (no answer is
+    refused), the acquirer, the requests and every identity table are run 1's, and only the values move."""
+    from delist_detection.outputs.price_requests import key_of
+    index, clients = _stock_merger_whose_gate_reads_the_close(fake_edgar, monkeypatch)
+    first = tmp_path / "first"
+    run(index, clients, Overrides(), out_dir=first, log=lambda *_: None)
+    requests = read_table("price_requests", table_path(first, "price_requests"))
+    last = next(r for r in requests if r["sec_id"] == "BBGSEC001" and r["kind"] == "last_close")
+    leg = next(r for r in requests if r["sec_id"] == "BBGSEC001" and r["kind"] == "received_close")
+    assert (leg["lookup_ticker"], leg["lookup_sec_id"]) == ("ACQ", "BBGACQ0001")
+    one = next(r for r in read_table("delistings", table_path(first, "delistings")) if r["sec_id"] == "BBGSEC001")
+    assert (one["last_trade_close"], one["stock_ratio"], one["acquirer_price"]) == ("200.000000", "2.000000",
+                                                                                   "100.000000")
+
+    index, clients = _stock_merger_whose_gate_reads_the_close(fake_edgar, monkeypatch)
+    second = tmp_path / "second"
+    run(index, clients, Overrides(price_answers={key_of(last): 120.0, key_of(leg): 100.0}), out_dir=second,
+        log=lambda *_: None)
+    for name in ("securities", "ticker_history", "cusip_history", "observation_map", "security_history", "seeds",
+                 "price_requests", "id_changes"):
+        assert table_path(first, name).read_bytes() == table_path(second, name).read_bytes(), name
+    two = next(r for r in read_table("delistings", table_path(second, "delistings")) if r["sec_id"] == "BBGSEC001")
+    assert two["last_trade_close"] == "120.000000"
+    assert two["acquirer_sec_id"] == one["acquirer_sec_id"] == "BBGACQ0001"
+    assert two["stock_ratio"] == "" and "terms_gate_failed" in two["review_flags"]       # the values: the gate failed
+    contract = [r for d in (first, second)
+                for r in read_table("contract_delistings", table_path(d, "contract_delistings"))
+                if r["sec_id"] == "BBGSEC001"]
+    assert [(r["price_sec_id"], r["price_ticker"], r["exit_kind"]) for r in contract] == [
+        ("BBGACQ0001", "ACQ", "merger")] * 2
+
+
 def test_a_when_issued_observation_joins_its_regular_way_security(fake_edgar, tmp_path):
     """U8 (sub-plan 5a): EHAB-WI, seen once before the spin-off, is Enhabit's regular-way line: one security on
     EHAB's FIGI, no placeholder, and the caller's EHAB-WI observation mapped onto it."""
@@ -2869,3 +2959,4 @@ def test_a_failed_read_of_a_submissions_file_in_the_other_issuer_stage_degrades_
     review = []
     assert pipeline._other_issuers(ctx, [era], resolutions, issuers, {s.sec_id: s}, review) == {}
     assert [(r.sec_id, r.flag) for r in review] == [("BBG000P4BQM9", "resolution_degraded")]
+

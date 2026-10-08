@@ -186,7 +186,7 @@ def test_a_plan_endings_last_close_is_never_the_new_lines():
     from delist_detection.pipeline import _last_trade_closes
     d, _, securities, cusips, ftd, ftd_lo, ctx, ov = _wolf()
     assert d.last_trade.day.isoformat() == "2025-09-26"
-    closes = _last_trade_closes(ctx, [d], securities, cusips, ftd, ftd_lo, ov)
+    closes = _last_trade_closes(ctx, [d], securities, cusips, ftd, ftd_lo, ov).closes
     assert closes.get(d.key) != 22.1
     assert closes[d.key] == pytest.approx(1.85)
     assert any(f.startswith("ftd_close_prior") for f in d.flags)

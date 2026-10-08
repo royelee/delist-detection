@@ -147,10 +147,11 @@ window began, so (eligibility decided first, then) the fails index is asked for 
 security holds (one an earlier security of the stage took included) and its sightings are rebuilt; it returns them
 (`_Backfill`: CUSIPs and sightings) and `_run` merges them over stage 5's, so it changes no input; no `sec_id`
 or issuer changes),
-`_check_overrides`, `_last_trade_closes` (stage 7: a `--last-trade-closes` row, else the caller's answer to the
-delisting's `last_close` request, `price_requests.PriceAnswers`, else the fails close), `_merger_values` (stage 8:
-one call into `merger_value.value_mergers`, which answers one `MergerValue` per merger ending; the module map has
-its steps), `_r1_continuations` (stage 8b: a merger whose published terms are one share and no cash (`exchange_terms.one_share_no_cash`, a special dividend set aside: `OwnShares.consideration`), whose registrant's filings say the same of its own shares (the ending's own-share reading, `own_shares.of`: the one the delisting carries, else one made at its anchor), into a new issuer (`own_shares.new_issuer`, `NEW_ISSUER_DAYS`) or the same issuer (`successors.successor_by_terms` over the reading's statement, else the new issuer's 8-K12B), is an exchange transfer to that successor, flagged `r1_continuation`, its payout reads dropped (`rewrites.continuation`, `Rule.R1`, with the run's merger values); the LLM's final terms must agree; the new issuer is named by the R1 statement's target (the name tie, `own_shares.names_target`), its 8-K12B candidate included; a degraded read, now or when the carried reading was made (`OwnShares.degraded`), keeps the merger and flags the row; the run logs `role refusal: N rows (...)`, the delistings whose end-of-era reading refused a merger on the registrant's role; metered as "R1 continuations"),
+`_check_overrides`, `_last_trade_closes` (stage 7, a `_Closes` of two maps: the run's own close, a
+`--last-trade-closes` row, else the fails close; and the one the value reads, the caller's answer to the
+delisting's `last_close` request, `price_requests.PriceAnswers`, in its place), `_merger_values` (stage 8: one call
+into `merger_value.value_mergers`, which answers one `MergerValue` per merger ending, its acquirer and requests on
+the run's own closes; the module map has its steps), `_r1_continuations` (stage 8b: a merger whose published terms are one share and no cash (`exchange_terms.one_share_no_cash`, a special dividend set aside: `OwnShares.consideration`), whose registrant's filings say the same of its own shares (the ending's own-share reading, `own_shares.of`: the one the delisting carries, else one made at its anchor), into a new issuer (`own_shares.new_issuer`, `NEW_ISSUER_DAYS`) or the same issuer (`successors.successor_by_terms` over the reading's statement, else the new issuer's 8-K12B), is an exchange transfer to that successor, flagged `r1_continuation`, its payout reads dropped (`rewrites.continuation`, `Rule.R1`, with the run's merger values); the LLM's final terms must agree; the new issuer is named by the R1 statement's target (the name tie, `own_shares.names_target`), its 8-K12B candidate included; a degraded read, now or when the carried reading was made (`OwnShares.degraded`), keeps the merger and flags the row; the run logs `role refusal: N rows (...)`, the delistings whose end-of-era reading refused a merger on the registrant's role; metered as "R1 continuations"),
 `_find_successors` (stage 9, with sub-plan 5c's `_terms_links` before the 8-K12B search, over the ending's own-share reading (`own_shares.of`): the same issuer's class, a new issuer, or the security's own same-CIK 8-K12B line via OpenFIGI and R2 (the CUSIP the reading's texts name); a name tie for any 8-K12B link; sub-plan 5h: `_own_registration_link` takes a text-named CUSIP with no fails row
 yet when the fails data ends before the day, OKE 2026: the added successor starts on the next trading day, as every successor the run adds does (`last_trade.first_day_after`), and a Form 25 that already owns a delisting of the run raises no unmatched row in stage 9d; the stage ends by recording its links as rewrites, `_link_successors`), `_handoffs` (stage 9b: first `rewrites.mark_going_on` over `history.Histories.going_on`, the clip check's merger or transfer that does not end its security goes on as itself, here and only here, so the handoffs see it; then the handoffs), `_date_from_notices` (stage 9c: `last_trade.Dating.from_notice`, a handoff continuation row's last trade day from its own Form 25's confirmed EX-99.25 notice, when before the successor's first sighting, the handoff rewrite's typed `successor_from`, and no later than the effective date; the stage keeps the failed-read watch; metered as "handoff notice dates"), `_successor_endings` (stage 9d: the Form 25 search, matches only, for the line and 8-K12B successors the run added, each searched from its own trading record (`TradingRecord.added`: its ticker, its span, to the run date when it has no fails rows, and its CUSIPs; no era or observation is made up for it, and its issuer's lookup tier is none) beside the run's securities of its issuer; the finder's items about a Form 25 that already owns a delisting are dropped by their typed `ReviewItem.filing`; metered as "successor endings"), `_distress` (stage 9e,
 sub-plan 5g: for each liquidation, compliance-failure or unknown delisting with no successor, a bankruptcy plan's
@@ -1041,10 +1042,13 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   (`payout_gate`: the terms' ticker price, then the line's, the line's first for a `line_first` leg whose ticker's
   rows are another line of the issuer's, TWC, VIA, STRZA), the acquirer (`acquirers`: the fails-row acquirer for
   ticker-settled terms, the only source of `AddedAcquirer`s, else the line or holder; a `line_first` leg publishes
-  the line, another issuer's ticker security, IPHI, still wins) and its symbol on the price date. The first gate pass
-  reads none of the caller's `--price-answers`: the acquirer and each leg's request come from it, and a second pass
-  takes an answer only through the request it answers (the path the first pass settled on), so a second run changes
-  values only. A `--merger-terms` row (`caller_terms`) wins for every delisting of its security and asks nothing; its
+  the line, another issuer's ticker security, IPHI, still wins) and its symbol on the price date. The regex read's
+  sanity bound and the first gate pass read only the run's own last closes (stage 7's `own`: a `--last-trade-closes`
+  row, else the fails close) and none of the caller's `--price-answers`, neither a last close nor a received close:
+  the acquirer, each leg's request and the run's decisions (8b's `read_terms`, 9b's `reconciled`, through
+  `MergerValue.own_verdict`) come from it. A second pass sets the values on the answered last closes and takes a
+  received close only through the request it answers (the path the first pass settled on), so a second run changes
+  values only (IPHI, WBS: an answered close that fails the gate keeps new Marvell and Santander). A `--merger-terms` row (`caller_terms`) wins for every delisting of its security and asks nothing; its
   acquirer ticker is published as given. The later stages read the records: `read_terms` and `drop` (8b),
   `reconciled` (9b), `table_terms` (10a: a `TableTerms`, the terms delistings.csv carries, for any delisting),
   `payout_rows` (10c), `contract_inputs` and `requests` (10g). The four rule
@@ -1494,7 +1498,9 @@ expiration is 0.0 in the table and no correction in the firm month, which leaves
   and a transfer's 0.0 are `dlret_fill`. `--price-answers` (the requests plus a `price` column) feeds the closes and
   acquirer prices, so a second run changes values only: each stage reads the answer to its own request
   (`price_requests.PriceAnswers`; stage 7 a last close, stage 8 a stock leg's received close, stage 10a an OTC print
-  or a plan's new-line close), and `pipeline.Overrides` holds only the caller's own files. A price that is not a finite positive
+  or a plan's new-line close), and `pipeline.Overrides` holds only the caller's own files. What decides an identity,
+  a kind or a request never reads an answer: stage 7 hands stage 8 the run's own closes beside the answered ones
+  (`pipeline._Closes`), and stage 8's acquirer, requests and decisions rest on them alone. A price that is not a finite positive
   number, an answer to no request, or a last close also given by `--last-trade-closes`, exits 2 before anything is
   written. Today's nine tables keep their columns.
 - **Every output is written only after the whole run succeeds.**

@@ -148,11 +148,12 @@ class Outcome(NamedTuple):
 
 
 def payouts(sec_id: str, *, ftd_lo: date = date(2007, 12, 17), answer: tuple[str, float] | None = None,
-            resolver: FixtureResolver | None = None, name_index=None
+            last_close: float | None = None, resolver: FixtureResolver | None = None, name_index=None
             ) -> tuple[MergerValues, Delisting, FixtureResolver]:
     """The run's stage 8 over the case; `answer` is the caller's answer to the case's received_close request (its
-    lookup_ticker and the price), as `--price-answers` gives it. The run's issuer record reads the fixture's EDGAR
-    answers and holds `name_index` (a loader; none by default)."""
+    lookup_ticker and the price), and `last_close` its answer to the last_close request (stage 7's close for the
+    values, the case's own staying the run's own), as `--price-answers` gives them. The run's issuer record reads
+    the fixture's EDGAR answers and holds `name_index` (a loader; none by default)."""
     securities, cusips, rows = world()
     resolver = resolver or FixtureResolver()
     edgar = FixtureEdgar()
@@ -163,22 +164,23 @@ def payouts(sec_id: str, *, ftd_lo: date = date(2007, 12, 17), answer: tuple[str
     sightings = {sid: ticker_sightings(s, ftd, cusips.get(sid, [])) for sid, s in securities.items()}
     e = delisting(sec_id)
     close = DATA["cases"][sec_id]["last_trade_close"]
-    closes = {} if close is None else {e.key: close}
+    own = {} if close is None else {e.key: close}
+    closes = own if last_close is None else {e.key: last_close}
     answers = {}
     if answer is not None:
         day = e.last_trade.day
         answers[PriceKey(e.sec_id, day.isoformat(), RECEIVED_CLOSE, answer[0], next_trading_day(day).isoformat())] \
             = answer[1]
     got = value_mergers([e], LineIndex(securities, sightings, cusips, ftd), clients=clients, closes=closes,
-                        caller_terms={}, answers=PriceAnswers(answers), tol=0.15, ftd_lo=ftd_lo)
+                        own_closes=own, caller_terms={}, answers=PriceAnswers(answers), tol=0.15, ftd_lo=ftd_lo)
     return got, e, resolver
 
 
-def outcome(sec_id: str, answer: tuple[str, float] | None = None) -> Outcome:
+def outcome(sec_id: str, answer: tuple[str, float] | None = None, last_close: float | None = None) -> Outcome:
     """The case's acquirer security, the ticker its received close is asked under (the request's lookup_ticker:
     the acquirer's symbol on the price date, else the terms' ticker), the gate's verdict and the price that settled
     it."""
-    got, e, _ = payouts(sec_id, answer=answer)
+    got, e, _ = payouts(sec_id, answer=answer, last_close=last_close)
     v = got.get(DelistingKey(e.sec_id, e.delist_date))
     terms = v.terms or {}
     return Outcome(v.acquirer_sec_id, v.request[0] if v.request else "",

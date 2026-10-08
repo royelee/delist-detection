@@ -56,12 +56,14 @@ class _Terms:
 
 
 def _value(delistings, *, llm=None, payout=None, edgar=None, resolver=None, name_index=None, ftd_client=None,
-           securities=None, closes=None, caller_terms=None, answers=None, workers=1, log=None) -> MergerValues:
+           securities=None, closes=None, own_closes=None, caller_terms=None, answers=None, workers=1,
+           log=None) -> MergerValues:
     clients = Clients(edgar=edgar, resolver=resolver, classifier=None, figi=None, ftd_client=ftd_client or _NoFtd(),
                       payout_extractor=payout, llm_extractor=llm, issuers=IssuerRecord(edgar, name_index=name_index))
     index = LineIndex(securities or {}, {}, {}, FtdIndex(source=clients.ftd_client))
-    return value_mergers(delistings, index, clients=clients, closes=closes or {}, caller_terms=caller_terms or {},
-                         answers=answers or PriceAnswers(), tol=0.15, workers=workers, log=log or (lambda *a: None))
+    return value_mergers(delistings, index, clients=clients, closes=closes or {}, own_closes=own_closes,
+                         caller_terms=caller_terms or {}, answers=answers or PriceAnswers(), tol=0.15,
+                         workers=workers, log=log or (lambda *a: None))
 
 
 def _stock(ratio, ticker, *, cash=None, value=None, name=None):
@@ -102,6 +104,22 @@ def test_the_llm_calls_are_filled_ahead_on_worker_threads_with_the_same_answers(
     calls.clear()
     assert run(4) == one and sorted(calls) == ["AAA", "AAA", "BBB", "BBB", "CCC", "CCC"]
 
+
+
+@pytest.mark.parametrize("workers", [1, 4])
+def test_the_regex_read_is_bounded_by_the_runs_own_close(workers):
+    """The regex reader's sanity bound decides what it reads, and what it reads can move the first gate pass: it is
+    the run's own last close (here 100.00), never the caller's answered one (50.00), on the warm threads too."""
+    asked = []
+
+    class Regex:
+        def extract(self, record, last_close=None):
+            asked.append(last_close)
+            return PayoutResult(None, "none", "", "", "")
+
+    e = _merger("T", "TGT", "2018-12-10", date(2018, 11, 28))
+    _value([e], payout=Regex(), closes={e.key: 50.0}, own_closes={e.key: 100.0}, workers=workers)
+    assert asked and set(asked) == {100.0}
 
 
 # --- 8a': an unnamed stock leg's ticker -----------------------------------------------------------------------------
@@ -180,6 +198,23 @@ def test_an_answer_reaches_the_gate_only_through_the_request_it_answers():
     assert _value([e], llm=llm, closes=closes, answers=asked("OTHER", 20.0)).get(e.key).terms is None
 
 
+def test_an_answered_last_close_moves_the_gates_values_only():
+    """The values pass reads the answers: 0.5 ACQ at the answered 40.00 reconciles with the run's own close (20.00)
+    and fails against an answered 30.00. The request and the run's decisions (8b's R1 reading, 9b's reconciled) are
+    the first pass's, on the run's own close and no answer (no ACQ close: no leg priced), in both runs."""
+    e = _merger("T", "TGT", "2018-12-10", date(2018, 11, 28))
+    llm = _Terms({"TGT": _stock(0.5, "ACQ")})
+    leg = PriceAnswers({PriceKey("T", "2018-11-28", RECEIVED_CLOSE, "ACQ", "2018-11-29"): 40.0})
+    own = _value([e], llm=llm, closes={e.key: 20.0}, answers=leg)
+    moved = _value([e], llm=llm, closes={e.key: 30.0}, own_closes={e.key: 20.0}, answers=leg)
+    a, b = own.get(e.key), moved.get(e.key)
+    assert a.terms["acquirer_price"] == 40.0 and b.terms is None and "terms_gate_failed" in " ".join(b.flags)
+    assert (b.request, b.acquirer_sec_id, b.price_ticker) == (a.request, a.acquirer_sec_id, a.price_ticker)
+    assert moved.read_terms(e.key) == own.read_terms(e.key) == (None, 0.5)         # the LLM's, as read
+    assert moved.reconciled(e.key) is own.reconciled(e.key) is False
+    assert _value([e], llm=llm, closes={e.key: 20.0}).get(e.key).own_verdict is None   # nothing answered: one pass
+
+
 # --- what the later stages read --------------------------------------------------------------------------------------
 
 K = DelistingKey("M", "2018-06-01")
@@ -198,6 +233,16 @@ def test_read_terms_takes_the_gates_terms_then_the_llms_then_the_regex_cash():
     assert _values().read_terms(K) is None
     given = MergerValues({K: MergerValue(K, llm=_stock(1.0, "Y"))}, caller_terms={"M": {"stock_ratio": 1.0}})
     assert given.read_terms(K) is None             # the caller's terms decide the row
+
+
+def test_the_runs_decisions_read_the_gate_on_its_own_closes():
+    """`own_verdict` is the first pass's (payout, terms) when an answer moved the values: R1's reading and
+    reconciled read it, the table the values."""
+    moved = _values(payout=12.0, source="8K_2.01", own_verdict=(None, None), llm=_stock(1.0, "Y"))
+    assert moved.read_terms(K) == (None, 1.0) and not moved.reconciled(K)
+    assert moved.table_terms(K).payout_per_share == 12.0
+    kept = _values(own_verdict=(12.0, None))
+    assert kept.read_terms(K) == (12.0, None) and kept.reconciled(K) and kept.table_terms(K).payout_per_share is None
 
 
 def test_one_share_and_no_cash_never_reconciles():

@@ -405,22 +405,30 @@ def _check_overrides(overrides: Overrides, delistings: list[Delisting]) -> None:
         raise OverrideFileError("override rows that match no delisting: " + "; ".join(bad))
 
 
+@dataclass(frozen=True)
+class _Closes:
+    """Stage 7's answer: the last-trade close each delisting's value reads (`closes`: the caller's answered close in
+    place of the run's own) and the run's own (`own`: a --last-trade-closes row, else the fails close), which stage 8's
+    reads and its first gate pass read, so that the acquirer and every request are those of a run without answers."""
+    closes: dict[DelistingKey, float]
+    own: dict[DelistingKey, float]
+
+
 def _last_trade_closes(ctx: _RunContext, delistings: list[Delisting], securities: dict[str, Security],
                        sec_cusips: dict[str, list[str]], ftd: FtdIndex, ftd_lo: date,
-                       overrides: Overrides, answers: PriceAnswers = PriceAnswers()) -> dict[DelistingKey, float]:
-    """7. Each delisting's last-trade close: a --last-trade-closes row, else the
-    caller's answer to its last_close request (`answers`; a close given both ways
-    stops the run), else the FTD close of its last trade day (by the security's
-    CUSIP on that day, then its ticker), flagging the delisting where none is
-    found or it is lagged or older. The FTD rows were loaded from the eras' first
-    sighting on; a delisting whose last trade came earlier (a stale snapshot
-    listed the security after it was gone) has the index asked for the rows around
-    that day first (`FtdIndex.around`)."""
+                       overrides: Overrides, answers: PriceAnswers = PriceAnswers()) -> _Closes:
+    """7. Each delisting's last-trade close, the run's own and the one its value reads (`_Closes`). The run's own is a
+    --last-trade-closes row, else the FTD close of its last trade day (by the security's CUSIP on that day, then its
+    ticker). The value reads the caller's answer to its last_close request instead (`answers`; a close given both
+    ways stops the run). The flags (no close found, a lagged or an older close) are the value's close's: an answered
+    close raises none, and the run's own close under it is read quietly. The FTD rows were loaded from the eras'
+    first sighting on; a delisting whose last trade came earlier (a stale snapshot listed the security after it was
+    gone) has the index asked for the rows around that day first (`FtdIndex.around`)."""
     answered = answers.last_closes(delistings, overrides.last_trade_closes)
     early = [e for e in delistings if e.last_trade.day is not None and FTD_START <= e.last_trade.day < ftd_lo]
     ftd.around([e.last_trade.day for e in early], before=20, after=10, symbols={e.ticker for e in early},
                cusips={c for e in early for c in sec_cusips.get(e.sec_id, [])})
-    closes: dict[DelistingKey, float] = {}
+    own: dict[DelistingKey, float] = {}
     held = {c for cs in sec_cusips.values() for c in cs}
     for e in delistings:
         key = e.key
@@ -429,14 +437,13 @@ def _last_trade_closes(ctx: _RunContext, delistings: list[Delisting], securities
         if e.form25 is not None:
             skip |= plan_new_cusips(e.form25.notice_text)     # a plan exchange's new line is no price of the old one (WOLF)
         given = for_delisting(overrides.last_trade_closes, e.key)
-        if given is None:
-            given = answered.get(key)
         if given is not None:
-            closes[key] = given
+            own[key] = given
             continue
         if e.last_trade.day is None:
             e.add_flag("no_last_close")
             continue
+        quiet = key in answered          # the value reads the answer: the fails close is the first gate pass's only
         sec = securities[e.sec_id]
         cusip_ranges = ranges_from_sightings(cusip_sightings(sec, ftd, sec_cusips.get(e.sec_id, [])),
                                              end=None, open_ended=True)
@@ -448,30 +455,34 @@ def _last_trade_closes(ctx: _RunContext, delistings: list[Delisting], securities
             # age in trading days (ftd_close_prior:<n>); the evidence the row date.
             back = ftd.close_known_on(e.last_trade.day, cusip=cusip, symbol=e.ticker, skip=skip)
             if back is None:
-                e.add_flag("no_last_close")
+                if not quiet:
+                    e.add_flag("no_last_close")
             else:
-                closes[key] = back[0]
-                e.record.evidence["ftd_close_row_date"] = back[1]
-                e.add_flag(f"ftd_close_prior:{close_age(back[1], e.last_trade.day)}")
+                own[key] = back[0]
+                if not quiet:
+                    e.record.evidence["ftd_close_row_date"] = back[1]
+                    e.add_flag(f"ftd_close_prior:{close_age(back[1], e.last_trade.day)}")
             continue
         price, _, lagged = got
-        closes[key] = price
-        if lagged:
+        own[key] = price
+        if lagged and not quiet:
             e.add_flag("ftd_close_lagged")
-    return closes
+    return _Closes({**own, **answered}, own)
 
 
 def _merger_values(ctx: _RunContext, delistings: list[Delisting], securities: dict[str, Security],
-                   sec_cusips: dict[str, list[str]], ftd: FtdIndex, closes: dict[DelistingKey, float],
+                   sec_cusips: dict[str, list[str]], ftd: FtdIndex, closes: _Closes,
                    overrides: Overrides, answers: PriceAnswers, tol: float,
                    sightings: Mapping[str, Sequence[Sighting]], ftd_lo: date | None) -> MergerValues:
     """8. What one share of each merger ending became (`merger_value.value_mergers`: the payout reads, the acquirer
-    lines and names, the payout gate, the acquirer securities and the stock legs' price requests), metered as
-    "payouts"; the resolver's memo is written after (the acquirer lookups resolved tickers)."""
+    lines and names, the payout gate, the acquirer securities and the stock legs' price requests, on the run's own
+    closes; the values on the answered ones), metered as "payouts"; the resolver's memo is written after (the
+    acquirer lookups resolved tickers)."""
     mark = ctx.meter.start()
     values = value_mergers(delistings, acquirer_line.LineIndex(securities, sightings, sec_cusips, ftd),
-                           clients=ctx.clients, closes=closes, caller_terms=overrides.merger_terms, answers=answers,
-                           tol=tol, ftd_lo=ftd_lo, workers=ctx.sec_workers, log=ctx.log)
+                           clients=ctx.clients, closes=closes.closes, own_closes=closes.own,
+                           caller_terms=overrides.merger_terms, answers=answers, tol=tol, ftd_lo=ftd_lo,
+                           workers=ctx.sec_workers, log=ctx.log)
     _flush_memo(ctx.clients)
     ctx.meter.done("payouts", mark)
     return values
@@ -1431,8 +1442,9 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
     search = replace(search, sightings={**search.sightings, **back.sightings})
     _check_overrides(overrides, delistings)                                                         # 6
     prices = PriceAnswers(overrides.price_answers)    # 6b: each stage reads the answer to its own request
-    closes = _last_trade_closes(ctx, delistings, securities, sec_cusips, ftd, ftd_lo, overrides, prices)    # 7
-    values = _merger_values(ctx, delistings, securities, sec_cusips, ftd, closes, overrides, prices, tol,
+    stage7 = _last_trade_closes(ctx, delistings, securities, sec_cusips, ftd, ftd_lo, overrides, prices)    # 7
+    closes = stage7.closes
+    values = _merger_values(ctx, delistings, securities, sec_cusips, ftd, stage7, overrides, prices, tol,
                             search.sightings, ftd_lo)                                               # 8
     review += values.review
     r1 = _r1_continuations(ctx, delistings, securities, search.sightings, values)                  # 8b
@@ -1447,13 +1459,13 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
     if handoffs.added:
         delistings += handoffs.added
         closes.update(_last_trade_closes(ctx, handoffs.added, securities, sec_cusips, ftd, ftd_lo, overrides,
-                                         prices))
+                                         prices).closes)
     ends = _successor_endings(ctx, search.finder, added, securities, sec_cusips, ftd, delistings)          # 9d
     review += ends.review
     if ends.delistings:
         delistings += ends.delistings
         closes.update(_last_trade_closes(ctx, ends.delistings, {**securities, **ends.securities},
-                                         {**sec_cusips, **ends.cusips}, ftd, ftd_lo, overrides, prices))
+                                         {**sec_cusips, **ends.cusips}, ftd, ftd_lo, overrides, prices).closes)
     distress = _distress(ctx, delistings, {**sec_cusips, **ends.cusips}, ftd, review)              # 9e
     confirmations = _continuation_filings(ctx, delistings, securities, review, added)             # 9g
     _log_role_refusals(ctx, delistings)
