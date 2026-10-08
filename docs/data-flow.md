@@ -115,7 +115,7 @@ one observation per row per file).
               │  (+ ticker_history.csv,    │     review_summary.csv (review_triage),
               │     cusip_history.csv)     │     cusip_history.csv from history.ranges_from_sightings
               └─────────────┬──────────────┘
-                             │ handling.py / bmp_correction.py / qlib_adapter.py
+                             │ handling.py / qlib_adapter.py (DLRET: dlret.decide)
                              │ — all keyed on sec_id
         ┌────────────────────┴────────────────────┐
         ▼                                          ▼
@@ -343,7 +343,7 @@ submissions read per issuer CIK, and SEC's name index for a sighting whose era
 CIK did not carry its name that day), then `contract.py`'s rows and
 `price_requests.request_rows`. A price answer to no request stops the run here. An `otc_print` answer
 is read at stage 10a through the request it answers (`price_requests.PriceAnswers.ending_values`);
-`dlret.resolve_dlret(..., otc_print=)` then values a liquidation or
+`dlret.decide` (its `ValueInputs.otc_print`) then values a liquidation or
 compliance-failure ending as `print / last_close − 1` (`dlret_method` `otc_print`).
 A blank `exit_kind` in the contract means no kind is asserted; such a row's
 verdict is always `uncertain`, so a reader must not filter it away as "no ending".
@@ -991,7 +991,7 @@ first observation and no fails-to-deliver row under its own tickers shows it
 trading afterwards: the observations after it are a stale snapshot's).
 
 `pipeline.py` adds a delisting to the triage input when it has flags **or**
-a blank DLRET (`review_triage.is_blank`): `resolve_dlret` can return NaN
+a blank DLRET (`review_triage.is_blank`): `dlret.decide` can return NaN
 with *no* flag at all when a `--last-trade-closes`/`--recoveries`/
 `--merger-terms` override resolves to no consideration on a non-merger
 bucket (the override was "given", so `no_last_close` is never added), and

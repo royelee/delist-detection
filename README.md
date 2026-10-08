@@ -345,8 +345,8 @@ security's history. Both are filled by the run's handoff pass (see
 [`docs/data-flow.md`](docs/data-flow.md), *Ticker handoffs*), which also
 writes the predecessor's delisting row for a continuation whose Form 25 no
 class text could tell apart (flag `handoff_continuation`).
-Each row is an `EnrichedDelistRecord` produced by `enrich`, and the table is
-built by `build_delistings_table` / `delisting_row` in
+Each row is an `EnrichedDelistRecord` produced by `enrich` from the delisting's
+value inputs (`dlret.ValueInputs`, valued by `dlret.decide`) and written by `delisting_row` in
 [`reconstruction.py`](src/delist_detection/reconstruction.py). `delist_date`
 is the Form 25 filing date plus 10 days (Rule 12d2-2(d)(1)), or the date of
 the fallback filing that ended trading when no Form 25 exists.
@@ -1001,11 +1001,10 @@ src/delist_detection/
     pipeline.py               run(): observations → security master + delisting table, one function per stage
     successors.py             Successor after a FIGI change: a line of the run, else the successor's 8-K12B
     acquirers.py              A merger's acquirer as a security: its FIGI (from FTD rows) and issuer CIK
-    handling.py               Pure train-label and backtest-exit per bucket
+    handling.py               Pure train-label and backtest-exit per bucket; BMP 2007 firm-month correction
     exchanges.py               Listing-exchange normalization (NYSE/AMEX/NASDAQ/OTHER)
-    bmp_correction.py          BMP 2007 firm-month return correction (Shumway constants)
-    dlret.py                    DLRET hub: resolve_dlret / compute_dlret
-    reconstruction.py           EnrichedDelistRecord, build_delistings_table — output/delistings.csv
+    dlret.py                    An ending's value, decided once: decide (DLRET), rule_of (the value rule)
+    reconstruction.py           EnrichedDelistRecord, enrich, delisting_row — output/delistings.csv
     payout_extractor.py         Per-share cash merger consideration from EDGAR filings (regex)
     llm_merger_extractor.py     Cash+stock/stock-only merger terms via an LLM
     review_triage.py            Flag catalog + severities → review.csv / review_summary.csv; decisions file

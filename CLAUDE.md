@@ -113,10 +113,11 @@ its steps), `_r1_continuations` (stage 8b: a merger whose published terms are on
 yet when the fails data ends before the day, OKE 2026: the added successor starts on the next trading day, as every successor the run adds does (`last_trade.first_day_after`), and a Form 25 that already owns a delisting of the run raises no unmatched row in stage 9d; the stage ends by recording its links as rewrites, `_link_successors`), `_handoffs` (stage 9b: first `rewrites.mark_going_on` over `history.Histories.going_on`, the clip check's merger or transfer that does not end its security goes on as itself, here and only here, so the handoffs see it; then the handoffs), `_date_from_notices` (stage 9c: `last_trade.Dating.from_notice`, a handoff continuation row's last trade day from its own Form 25's confirmed EX-99.25 notice, when before the successor's first sighting, the handoff rewrite's typed `successor_from`, and no later than the effective date; the stage keeps the failed-read watch; metered as "handoff notice dates"), `_successor_endings` (stage 9d: the Form 25 search, matches only, for the line and 8-K12B successors the run added; the finder's items about a Form 25 that already owns a delisting are dropped by their typed `ReviewItem.filing`; metered as "successor endings"), `_distress` (stage 9e,
 sub-plan 5g: for each liquidation, compliance-failure or unknown delisting with no successor, a bankruptcy plan's
 stock rule (R6), a price-only removal's code 552, and the OTC symbol of its first off-exchange print, anchored on the
-last trade day stage 5 dated; `payout_rule.DistressTerms` for the contract; metered as "distress notices"; at stage 10a a
+last trade day stage 5 dated; `dlret.DistressTerms` for the contract; metered as "distress notices"; at stage 10a a
 plan's `received_close` answer times its ratio is that ending's value and an answered OTC print a drop's, each read
-through its own request, `PriceAnswers.ending_values`), then the row builders (stage 8's records feed 10a, 10c and
-10g: `MergerValues.table_inputs`, `payout_rows`, `contract_inputs` and `requests`) and `_triage`; the contract (stage 10g) takes sub-plan 5h's `Identity.renames` too: each placeholder whose eras
+through its own request, `PriceAnswers.ending_values`), then the row builders (stage 10a builds one
+`dlret.ValueInputs` per delisting and `reconstruction.enrich`es it; stage 8's records feed 10a, 10c and 10g:
+`MergerValues.table_terms`, `payout_rows`, `contract_inputs` and `requests`) and `_triage`; the contract (stage 10g) takes sub-plan 5h's `Identity.renames` too: each placeholder whose eras
 now hold one FIGI line is a `contract/id_changes.csv` rename, across a class label), each with explicit
 inputs and outputs and the run-wide `_RunContext` (clients, run date, log,
 workers, SEC meter `manifest.StageMeter`). Each stage returns what it produces
@@ -461,7 +462,8 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   takes an answer only through the request it answers (the path the first pass settled on), so a second run changes
   values only. A `--merger-terms` row (`caller_terms`) wins for every delisting of its security and asks nothing; its
   acquirer ticker is published as given. The later stages read the records: `read_terms` and `drop` (8b),
-  `reconciled` (9b), `table_inputs` (10a), `payout_rows` (10c), `contract_inputs` and `requests` (10g). The four rule
+  `reconciled` (9b), `table_terms` (10a: a `TableTerms`, the terms delistings.csv carries, for any delisting),
+  `payout_rows` (10c), `contract_inputs` and `requests` (10g). The four rule
   modules are its collaborators, each with its own interface and real-case tests. Its real cases replay offline from
   `tests/fixtures/acquirer_gate/` (`tests/acquirer_gate_cases.py`, through `value_mergers`).
 - `acquirers.py` — a merger's acquirer as a security (a collaborator of `merger_value`): `find_acquirer` (its
@@ -625,7 +627,7 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   capitalization, equity, back-door listing, filings), `substitutes_new_shares`/`plan_ratio` (R6: a 12d2-2(a)(3)
   notice naming new shares; the notice's stated ratio, else the plan 8-K's one old-share and one new-share count
   outside a condition), and `liquidating` (a liquidating distribution, trust, or plan of liquidation or
-  dissolution). What stage 9e hands the contract from them is `payout_rule.DistressTerms`.
+  dissolution). What stage 9e hands the contract from them is `dlret.DistressTerms`.
 - `classifier.py` — the filing-trio fingerprint (**Form 25 + 8-K item codes +
   Form 15**), now anchored on the Form 25/fallback filing date rather than a
   vendor end date. `_classify_items()` maps an 8-K item set to a `DLSTCD`
@@ -792,23 +794,39 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
 **Handling (pure), keyed by `sec_id`:**
 - `handling.py` — event-level: `build_train_label_adjustment` (forward-return
   label) and `build_backtest_exit` (exit cashflow + universe-exit date), one
-  deterministic policy per bucket. Each still takes a `DelistRecord` plus
-  scalar `last_close`/`payout_per_share`/`recovery_ratio` (unchanged
+  deterministic policy per bucket (handling's own, not the ending's value rule). Each still takes a `DelistRecord`
+  plus scalar `last_close`/`payout_per_share`/`recovery_ratio` (unchanged
   signature); `adjustments_from_rows` is the new wrapper that calls both
   straight from a `delistings.csv` row, via `qlib_adapter.record_from_row`/
-  `row_payout` — no more ticker-keyed dictionary arguments to assemble.
-- `bmp_correction.py` + `exchanges.py` — firm-month BMP 2007 correction:
-  `R_month = (1+R_partial)(1+DLRET)−1`, synthesizing `DLRET` per bucket with
-  exchange-specific Shumway constants when no realized delist return is observed.
-- `dlret.py` — DLRET hub: `resolve_dlret`/`DlretResult`/`compute_dlret` (self-explaining delisting return; `otc_print=` gives `DlretMethod.OTC_PRINT` on a liquidation or compliance_failure, a `--recoveries` ratio winning, a merger ignoring it; `plan_value=` gives `PLAN_STOCK`, an answered R6 plan value, sub-plan 5f). `bmp_correction.py` re-exports for backward compatibility.
-- `reconstruction.py` — `EnrichedDelistRecord`, `enrich`, `build_delistings_table`,
-  `delisting_row`. `output/delistings.csv` is the **primary output**, keyed by
-  `(sec_id, delist_date)` (`store.DelistingKey`; `for_delisting` looks a delisting up
+  `row_payout` — no more ticker-keyed dictionary arguments to assemble. The firm-month BMP 2007 correction
+  (architecture step 10 folded bmp_correction.py in): `firm_month_correction(record, prior_month_end_close, value)`,
+  `R_month = (1+R_partial)(1+DLRET)−1` with the DLRET `dlret.decide(value)` answers for the firm month
+  (`EndingValue.firm_month`), from one `dlret.ValueInputs`; `build_firm_month_correction(record, prior, last_close,
+  exchange, **value)` is the README's keyword form (`exchange=None` is `Exchange.OTHER`). `exchanges.py` holds the
+  venue enum the Shumway constants are chosen by.
+- `dlret.py` — an ending's value, decided once (architecture step 10). `decide(ValueInputs) -> EndingValue`: one typed
+  input record per ending (bucket, exchange, last close, a merger's terms, `--recoveries`, an answered OTC print or
+  plan value, the cash read's confidence, `deregistered`) gives the method (`DlretMethod`), the value, the terminal
+  value, its confidence, whether it is measured or a fill (`METHODS`: each method's kind and confidence beside it;
+  `plan_stock` is medium like `otc_print`, step 10's declared fix), the table's cell (`table_dlret`: an abstain and an
+  unknown are blank) and the firm month's DLRET (`firm_month`: before the table's assumed-par fill, so an expiration
+  with a last close is 0.0 in the table and a drop in the firm month; open for the operator's ruling, step 10's
+  measurement). `rule_of(row, merger, distress) -> Rule`: the value rule (`exit_kind.VALUE_RULES`) and its terms from
+  a delistings.csv row, a merger's pre-gate reads (`MergerInputs`) and stage 9e's `DistressTerms` (both defined here);
+  `contract_value(row)`: the contract's `dlret`/`dlret_fill`/`terminal_value` (none for a continuation). A
+  liquidation's value and rule read one order (`_distress_rule`: a recovery, else a plan, else the first OTC print).
+  It loads only the row vocabulary and the leaf enums (`tests/test_import_closure.py`).
+- `reconstruction.py` — `EnrichedDelistRecord` (its `answer` is dlret's `EndingValue`), `enrich(record, value,
+  *, acquirer_ticker, payout_source, extra_flags)` (refuses value inputs of another bucket; adds `merger_at_par` and
+  `distress_at_normal_price`), `delisting_row`, and the override files' readers. `output/delistings.csv` is the
+  **primary output**, keyed by `(sec_id, delist_date)` (`store.DelistingKey`; `for_delisting` looks a delisting up
   in a map keyed by it or by the bare `sec_id`).
 - `qlib_adapter.py` — DataFrame splicers over a `(datetime, instrument)` panel,
   where `instrument` is a `sec_id`: `inject_terminal_labels`,
   `apply_backtest_exits`, `apply_bmp_corrections`, each reading every input
-  straight off the matching `delistings.csv` row. All three, and
+  straight off the matching `delistings.csv` row; the firm month reads the row as one `dlret.ValueInputs`
+  (`value_inputs`: a merger's terminal value as its payout, and an `otc_print` or `plan_stock` row's terminal value as
+  the print or plan value it is) and asks `handling.firm_month_correction`. All three, and
   `handling.adjustments_from_rows`, skip a row whose `successor_sec_id`
   equals its own `sec_id` (a continuing security, e.g. an exchange transfer
   that kept the same FIGI) — it isn't an exit, so no label/exit/correction
@@ -951,9 +969,8 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   measurement one). Producers (end_of_era, handoffs, the finder, rewrites, the payout gate, last_trade, stage 9g)
   write through it; readers (verdict, scorecard, contract, payout_rule, lifecycle, audit, truth, diagnosis_truth,
   regression, loop_round, review_triage) read through it.
-  - The contract's view: `ending_fields` (exit kind, drop reason, continuation, `dlret` and `dlret_fill`;
-    `MEASURED_METHODS` includes `otc_print` and `plan_stock`, so an answered OTC print or plan value is a value, not
-    a fill) and `is_distress`. Today's bucket and CRSP code map to the exit kind (a code-470 bankruptcy is `dropped`
+  - The contract's view: `ending_fields` (exit kind, drop reason, continuation; the value cells are
+    `dlret.contract_value`'s, whose methods' kinds are defined beside them) and `is_distress`. Today's bucket and CRSP code map to the exit kind (a code-470 bankruptcy is `dropped`
     for `bankruptcy`; `unknown` asserts none; a compliance failure the exchange removed for a price deficiency only,
     its Form 25 notice, else its 3.01 items, carries CRSP 552, drop reason `price`, from stage 9e, and an issuer's
     own Form 25 changes nothing: sub-plan 5g).
@@ -983,18 +1000,20 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   FIGI the run no longer holds that `renames` maps to a FIGI of this run, rule F: BTU, CRC; `regression.renamed_to`
   and `truth_set.TruthSet.rename` read every row alike, placeholder or not), `payout_leg_rows` (schema 3, R3: each
   security of a basket ending per share, `contract/payout_legs.csv`). `run_manifest.json` carries
-  `schema_version` (`store.CONTRACT_SCHEMA_VERSION`, 3). It loads no client (its value inputs are payout_rule's
-  types), so the regression report reads `id_change_rows` from it.
+  `schema_version` (`store.CONTRACT_SCHEMA_VERSION`, 3). It loads no client (its value inputs are dlret's
+  types; its value cells `dlret.contract_value`), so the regression report reads `id_change_rows` from it.
 - `issuer_in_force.py` — the issuer CIK on each sighting's date: the era's CIK when its EDGAR name that day agrees
   with the observed name, else the one other CIK SEC's name index lists under that name whose name agreed then
   (MRK 2008: old Merck & Co, CIK 64978). `issuer_changes` dates each change: it sorts sightings by day then CIK
   and records at most one change per day (a same-day sighting under another CIK changes nothing).
-- `payout_rule.py` — the payout rule of each contract ending (`value_fields`, the eleven columns after `verdict` in
-  `contract/delistings.csv`: the columns came in schema 2, the contract is now schema 3 with `payout_legs.csv`): `value_rule` (`exit_kind.VALUE_RULES`), `cash_per_share`, `cash_currency`, `stock_ratio`,
+- `payout_rule.py` — the payout rule of each contract ending as the contract writes it (`value_fields`, the eleven
+  columns after `verdict` in `contract/delistings.csv`: the columns came in schema 2, the contract is now schema 3
+  with `payout_legs.csv`), from the rule `dlret.rule_of` decides (step 10: which rule, which terms, their source and
+  gate, whose price): `value_rule` (`exit_kind.VALUE_RULES`), `cash_per_share`, `cash_currency`, `stock_ratio`,
   `price_sec_id`/`price_ticker`/`price_date` (the acquirer for a stock leg, the security itself for `otc_print`; the
-  trading day after the last trade), `recovery_ratio`, `terms_source`, `terms_gate` and `value_formula`; the caller
-  computes `dlret = payout / last close − 1` with its own prices. Its two inputs beyond the row are defined here:
-  `DistressTerms` (stage 9e's OTC symbol and plan ratio) and `MergerInputs` (stage 8's
+  trading day after the last trade), `recovery_ratio`, `terms_source`, `terms_gate` and `value_formula` (written
+  here); the caller computes `dlret = payout / last close − 1` with its own prices. The rule's two inputs beyond the
+  row are dlret's: `DistressTerms` (stage 9e's OTC symbol and plan ratio) and `MergerInputs` (stage 8's
   `MergerValues.contract_inputs`), which holds a merger's `--merger-terms` row, LLM terms and regex read from before the
   payout gate: terms the gate dropped are still published,
   `terms_gate=failed` (a failed election publishes both legs as read), `skipped` when the gate could not check them
@@ -1041,8 +1060,8 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   hint), a received close on its ticker too.
 
 There are **two return-correction APIs** for different research conventions:
-event-level (`handling.py`) vs CRSP-style firm-month (`bmp_correction.py`). Don't
-conflate them.
+event-level (`handling.build_train_label_adjustment`/`build_backtest_exit`) vs CRSP-style firm-month
+(`handling.firm_month_correction`, its DLRET from `dlret.decide`). Don't conflate them.
 
 ## Non-obvious invariants
 
@@ -1140,7 +1159,7 @@ conflate them.
   never silently drops a delisting that still has no return — only supplying
   the value or explicitly accepting `no_dlret` itself does; `pipeline.py`
   adds a delisting to the triage input when it has flags **or** a blank
-  DLRET (`review_triage.is_blank`), since `resolve_dlret` can return NaN with
+  DLRET (`review_triage.is_blank`), since `dlret.decide` can return NaN with
   *no* flag at all (a `--last-trade-closes`/`--recoveries`/`--merger-terms`
   override that resolves to no consideration on a non-merger bucket — the
   override was "given", so `no_last_close` is never added). A flag's severity

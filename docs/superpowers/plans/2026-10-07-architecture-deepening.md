@@ -35,7 +35,7 @@ A deepening moves behaviour behind a smaller interface. It changes nothing the l
 | 7 | The line follow owns its rounds; one R1 reading per ending (review 8) | | done |
 | 8 | One run snapshot; one reading of a delistings row (review 9) | | done |
 | 9 | The truth set and the loop round as two modules (review 10) | a loop-added ending_moved case's examined day | done |
-| 10 | dlret decides the value rule once (small) | plan_stock's confidence | |
+| 10 | dlret decides the value rule once (small) | plan_stock's confidence | done |
 | 11 | The Clients seam declares capabilities (small) | | |
 | 12 | The fails index owns its loading (small) | | |
 | 13 | One leaf module for ticker and share-class spelling (small) | | |
@@ -1482,3 +1482,141 @@ Decisions made in the step:
 - **pipeline.py: 1606 lines, unchanged.** loop_round.py is 560 lines (diagnosis_loop.py was 136, deleted).
   truth_update.py went from 204 to 186 lines, regression.py from 231 to 219; truth_loop_round.py and update_truth.py
   from 176 to 125.
+
+### Step 10: dlret decides an ending's value once
+
+- **The module is `dlret.py`, grown in place.** Its interface has three entry points over one input record:
+  - `decide(ValueInputs) -> EndingValue`: the method (`DlretMethod`), the value, the terminal value, its confidence,
+    its kind (measured, a fill, or no value), the table's cell (`table_dlret`) and the firm month's DLRET
+    (`firm_month`);
+  - `rule_of(row, merger, distress) -> Rule`: the value rule (`exit_kind.VALUE_RULES`) and the terms it publishes;
+  - `contract_value(row) -> ContractValue`: the contract's `dlret`, `dlret_fill` and `terminal_value` cells.
+  - Each method's kind and confidence sit beside the enum, in one table (`METHODS`); a test checks every method has
+    an entry. The rule's two inputs beyond the row, `MergerInputs` and `DistressTerms`, moved here from payout_rule,
+    with `OVERRIDE_SOURCE` and the `terms_gate` words.
+  - It loads the row vocabulary, the bucket and exchange enums and the ticker spelling only (exit_kind, crsp_codes,
+    exchanges, observations, names), pinned in tests/test_import_closure.py; dlret joined the contract modules there.
+  - Alternative: a new `value.py` (step 16's layout names a `value/` group). Cost if wrong: a rename.
+- **One typed input record per ending, `ValueInputs`.** It holds the bucket, the exchange, the last close, a merger's
+  terms (`payout_per_share`, `stock_ratio`, `acquirer_price`), `recovery_ratio`, `otc_print`, `plan_value`, the cash
+  read's `payout_confidence` and `deregistered`.
+  - It replaces six parameter lists: `resolve_dlret` (9), `enrich` (12), `build_delistings_table` (10 maps),
+    `compute_dlret` (8), `bmp_firm_month_return` (9) and `build_firm_month_correction` (8).
+  - Its field names are the old keywords, so the README's keyword form passes `**value` straight through and cannot
+    fall behind as `compute_dlret` did (it never got `plan_value`).
+  - `enrich(record, value)` refuses value inputs of another bucket. `DelistRecord.deregistered` names the evidence
+    the classifier writes (`evidence["deregistered"]`), so stage 10a does not read the evidence dict.
+  - Alternative: `decide(bucket, inputs)`, with the bucket outside the record. Rejected: the bucket is the first
+    input every branch reads.
+- **The table's fills are decided in dlret, beside the value.** Assumed par moved from reconstruction (a merger or an
+  expiration with no consideration and a last close; an unknown ending the classifier found deregistered), and so did
+  the table's blanking (an abstain and an unknown). `EnrichedDelistRecord` carries dlret's answer (`answer`); its
+  `dlret`, `dlret_method`, `terminal_value` and `dlret_confidence` are properties over it.
+  - The two DLRETs per ending are kept exactly. They are now two fields of one answer: `value` is the table's,
+    `firm_month` the value before the par fill.
+- **The value rule is decided from the delistings.csv row, not at stage 10a.**
+  - Why: the contract is built from the tables (decision 6), so a committed output's contract can be rebuilt from its
+    tables alone. And the formula's digits are the row's six decimals: `f"{ratio:.6g}"` of the cell "0.012346" is not
+    that of an in-memory 0.0123456.
+  - The rule reads the table's answer from the row, never decides the value again: `worthless` is still the row's
+    method (via `DlretMethod.WORTHLESS`), and the method is never emitted.
+  - **One order for a liquidation or a drop** (`_distress_rule`): a recovery ratio, else a bankruptcy plan, else the
+    first OTC print. The value asks it with what it can measure (an answered plan value), the rule with what was read
+    (a plan's ratio). Before, payout_rule decided recovery, plan and print in its own order beside dlret's.
+  - payout_rule's `or f.exit_kind == "dropped"` went: `exit_kind._kind` gives `dropped` only to a liquidation or a
+    compliance failure, which the branch already names. No row changes.
+  - Alternative: decide the rule at stage 10a from `ValueInputs` extended with the reads, and carry it to the
+    contract. Rejected for both reasons above.
+- **payout_rule writes the rule dlret decides** (`value_fields`, `basket_legs`): the eleven columns, the formula
+  grammar and the price date (the trading calendar). It went from 231 to 114 lines.
+  - Alternative: dlret writes the eleven columns and payout_rule goes by the deletion test. Rejected: the formula
+    grammar is the contract's writing, not a decision; it would put the trading calendar and the contract's text into
+    the module the table and the firm month read.
+  - Cost if wrong: a new value kind touches payout_rule's `_formula` as well as dlret. The decision (which rule, which
+    terms, whose price) is in dlret alone.
+- **exit_kind's measured/fill split moved to dlret** (`contract_value`). The row vocabulary imports nothing of the
+  package (pinned), so it could not read dlret's method table. `EndingFields` lost `dlret` and `dlret_fill`, and
+  `MEASURED_METHODS` and `FILL_METHODS` are gone. The contract was their one reader in the package.
+  - Alternative: exit_kind imports dlret and the pin is relaxed. Rejected: step 8a's pin keeps the measurement side
+    free of everything but strings.
+- **`MergerValues.table_terms(key) -> TableTerms` replaces `table_inputs()`'s five maps.** It answers for any
+  delisting: the stock leg the gate priced, else the caller's --merger-terms row (by delisting, else by sec_id), the
+  cash, and the gate's source, confidence and flags. The same precedence as the maps' `for_delisting` lookups.
+  - It is not a `ValueInputs`: stage 8 knows only the merger's share. The last close, the exchange, the recovery and
+    the answers are other stages' inputs, so stage 10a builds the record.
+  - `build_delistings_table` is gone. Stage 10a is one loop: each delisting's `ValueInputs`, then `enrich`. Each row
+    now pairs with its own delisting; before, a dict by key paired them. No key repeats in output/ or the replay
+    (checked).
+- **The deletion test.**
+  - bmp_correction.py is deleted. Its compounding is `handling.firm_month_correction(record, prior, value)`, which
+    asks dlret once; it asked twice before (`compute_dlret`, then `bmp_firm_month_return`, which called it again).
+  - `resolve_dlret`, `DlretResult`, `compute_dlret` and `bmp_firm_month_return` are deleted. The package root no
+    longer exports `compute_dlret` and `bmp_firm_month_return`; it exports the Shumway constants from dlret. No
+    script, README example or the companion repo (qlib_practice, searched) uses either name.
+  - `build_firm_month_correction` is kept, with the README's keyword signature, as one line over
+    `firm_month_correction`.
+  - Cost if wrong: an outside caller of the two names gets an ImportError. The fix is
+    `decide(ValueInputs(...)).firm_month`, and the compound is `build_firm_month_correction(...).firm_month_return`.
+- **The splicer reads a row back as one `ValueInputs`** (`qlib_adapter.value_inputs`).
+  - A `plan_stock` row's terminal value is read as the plan value it is, no longer as an OTC print. dlret values both
+    alike on a liquidation, so the output is the same for every row the library writes.
+  - The one change is a row dlret never writes: a compliance failure under `plan_stock`. It now takes its Shumway
+    mark, since a drop takes no plan; before, it took an OTC print. Only the harness's three synthetic `SYN_PLANC`
+    rows show it.
+- **The train-label and backtest-exit policies stay handling's own.** They are per-bucket handling policies (README),
+  not a value rule, and the gate keeps their outputs.
+- **Declared defect fix: `plan_stock` is graded medium** (its own commit, before the module's). This is the
+  controller's ruling: a plan value is the caller's answered close of the new line times the plan's ratio, the same
+  kind of measured value as an OTC print. It fell through to "low", and lifecycle reads `dlret_confidence` for
+  quality.
+  - Tested in reconstruction (a `plan_stock` row's `dlret_confidence`), dlret (`METHODS`, beside `otc_print`) and the
+    WOLF 2025 real case (test_distress_cases).
+  - The replay answers no price request: no `plan_stock` row, and no row changes.
+- **Measured, open for the operator's ruling: the two DLRETs per ending.** This covers every row of the committed
+  output/delistings.csv the firm-month splicer corrects (873: not a continuing security, with a date). It compares
+  the table's dlret with the DLRET `apply_bmp_corrections` compounds from the row. A row with no last close takes the
+  panel's close; it counts as equal when the value does not depend on that close.
+  - 25 endings differ:
+    - `abstain_no_consideration`, 14: table blank, firm month 0.0 (TAHO 2019, FRK 2007, IFIN 2007, FWLT 2014, PARAA
+      2025: mergers with no terms and no last close);
+    - `needs_last_trade`, 7: table blank, firm month payout over the panel's close − 1 (CERN 2022, CNW 2015, PLL
+      2015, HSP 2015, N 2016);
+    - `unknown`, 2: table blank, firm month the Shumway mark at the panel's close (WPG 2021 liquidation −0.55, SPNV
+      2020 compliance failure −0.30);
+    - `assumed_par`, 2: table 0.0, firm month a drop (STAY 2021 and TMUSR 2020, expirations).
+  - The other 26 assumed-par mergers agree (0.0 both).
+  - 588 more agree only at the table's six decimals: the firm month recomputes from the row's six-decimal cells.
+  - Unchanged by this step; the same measurement on the new interface prints the same lines.
+- **Tests.**
+  - Added: tests/test_dlret.py rewritten at the interface, 30 tests (19 before). They cover each method's value,
+    confidence and kind; the table's cell and the firm month; the method table; worthless never decided; the
+    contract's value cells; each rule; the liquidation order shared by the value and the rule; and a merger's rule from
+    its published terms.
+  - Added elsewhere: test_firm_month_correction 4 (Shumway by venue, a degenerate last trade, a plan value, the two
+    DLRETs); test_reconstruction 2 (the plan_stock grade, the bucket refusal); test_qlib_adapter_bmp 1 (a plan_stock
+    row read back); test_import_closure 1 (dlret's closure).
+  - Moved: exit_kind's value-cell assertions to test_dlret's `contract_value` tests, row for row; payout_rule's two
+    ordering tests to test_dlret's rule tests (the writing of a recovery and of worthless stays in test_payout_rule).
+  - Deleted once covered: tests/test_bmp_correction.py (21: its `compute_dlret` tests duplicate test_dlret's; its
+    compound tests are test_firm_month_correction's, the NYSE −0.44 and the degenerate last trade added there);
+    test_firm_month_correction's `compute_dlret` test; test_reconstruction's three `build_delistings_table` tests
+    (the keying is `for_delisting`'s, tested, and test_delisting_rows' rewritten keying test).
+  - Rewritten at the interface: test_known_cases_bmp (through `build_firm_month_correction`), the `table_inputs`
+    assertions of test_merger_value, test_rewrites and test_handoffs (`table_terms`), test_delisting_rows' table
+    tests, the WOLF plan test, and test_pipeline's spy (on `enrich`).
+  - In all: 44 test functions added, 52 removed.
+  - Suite: 3377 passed, 46 xfailed (57e2728: 3384 passed, 46 xfailed; the fix's commit alone adds one test).
+- **The gate.**
+  - The replay of 4dd5944 is SAME against `accepted4_out`, refuses no request, and its log equals step 9b's byte for byte. The fix's commit (1ae302e) changes no replay row: the replay answers no price request, so no ending is `plan_stock`.
+  - The handling outputs, before (57e2728) and after, on a synthetic panel over the committed output/delistings.csv
+    and outside output/ (scratchpad `s10/handling_harness.py`), are byte-identical:
+    - `apply_bmp_corrections`, `inject_terminal_labels` and `apply_backtest_exits` (5,677 monthly rows, 42,040 daily
+      rows), with their warnings;
+    - scripts/compute_corrected_returns.py's `main` on the same panel as a file;
+    - `adjustments_from_rows`.
+  - The same harness also runs 31 synthetic rows the replay never writes: OTC prints and plan values on liquidations
+    and drops, recoveries, rows with no close, mergers with no terminal value, expirations with a close, and unknown
+    buckets. All are identical but the three `SYN_PLANC` rows above.
+  - scripts/scorecard.py `--check`: output identical, exit 0.
+- **pipeline.py: 1606 lines to 1604.** dlret.py went from 177 to 458 lines, payout_rule.py from 231 to 114,
+  reconstruction.py from 356 to 249; bmp_correction.py (61) is deleted.
