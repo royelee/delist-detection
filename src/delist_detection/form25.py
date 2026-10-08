@@ -14,7 +14,7 @@ from datetime import date, datetime, timedelta
 
 from .edgar import EdgarSubmission
 from .html_text import strip_html
-from .figi_resolution import class_letter
+from .identifiers import class_letter
 from .names import name_tokens
 from .trading_calendar import previous_trading_day
 
@@ -255,18 +255,9 @@ class SecurityRef:
     kind: str
     name: str = ""
     # The class letter the security's own CUSIP fails descriptions name ("SUNPOWER CORP CL A"), for a share
-    # class without a letter of its own (`letter_hint`); None when they name none, or two.
+    # class without a letter of its own (`identifiers.descriptions_class_letter`); None when they name none, or
+    # two.
     letter_hint: str | None = None
-
-
-_DESCRIPTION_LETTER = re.compile(r"\b(?:CL|CLASS|SER|SERIES)\s+([A-Z])\b")
-
-
-def letter_hint(descriptions: Iterable[str]) -> str | None:
-    """The one class letter a security's own CUSIP fails descriptions name ("CL A", "CLASS A", "SER A"); None
-    when they name none, or more than one."""
-    letters = {m.group(1) for d in descriptions for m in _DESCRIPTION_LETTER.finditer((d or "").upper())}
-    return letters.pop() if len(letters) == 1 else None
 
 
 def _named_by(segment: str, hits: Sequence[SecurityRef]) -> list[SecurityRef]:

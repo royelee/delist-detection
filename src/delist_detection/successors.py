@@ -17,12 +17,14 @@ from typing import NamedTuple
 
 from .delistings import Delisting
 from .exchange_terms import OwnExchange
-from .figi_resolution import FigiCandidate, class_letter, share_class_from_name, us_candidates
+from .figi_resolution import FigiCandidate, us_candidates
 from .filing_search import successor_query
+from .identifiers import (
+    bloomberg_ticker, class_letter, normalize_ticker, share_class_from_name, strip_class_words,
+)
 from .issuer_record import IssuerRecord
 from .listing_status import edgar_lists
 from .names import names_agree
-from .observations import normalize_ticker
 from .own_shares import NEW_ISSUER, names_target, new_issuer
 from .rewrites import awaits_successor
 from .security_master import Security
@@ -85,7 +87,7 @@ def successor_from_8k12b(search: Callable, figi, *, name: str, day: date, exclud
                 continue
             candidates: list[FigiCandidate] = []
             for t in tickers:
-                ans = figi.map([{"idType": "TICKER", "idValue": t.replace("-", "/")}])[0]
+                ans = figi.map([{"idType": "TICKER", "idValue": bloomberg_ticker(t)}])[0]
                 candidates += us_candidates(ans.get("data") or [])
             agreeing = [c for c in candidates if names_agree(c.name, edgar_name)]
             if not agreeing:
@@ -98,7 +100,6 @@ def successor_from_8k12b(search: Callable, figi, *, name: str, day: date, exclud
     return None
 
 
-_CLASS_WORDS = re.compile(r"\b(?:CL(?:ASS)?|SER(?:IES)?)\s*-?\s*[A-Z0-9]\b|-[A-Z]$", re.I)
 _STATE_TAG = re.compile(r"\s*/[A-Z]+/?\s*$")        # EDGAR's "AETNA INC /PA/", "ALLEGHANY CORP /DE"
 
 
@@ -111,7 +112,7 @@ def successor_search_name(edgar, cik: int | None, observed_name: str | None) -> 
     name = (sub.get("name") or "").strip() if isinstance(sub, dict) else ""
     if name:
         return _STATE_TAG.sub("", name).strip()
-    return re.sub(r"\s+", " ", _CLASS_WORDS.sub(" ", observed_name or "")).strip(" -")
+    return strip_class_words(observed_name)
 
 
 SUCCESSOR_BEFORE_DAYS, SUCCESSOR_AFTER_DAYS = 5, 15    # a successor's first sighting around the last trade

@@ -30,11 +30,10 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from datetime import date, timedelta
 
 from .evidence import edgar_names, names_between
-from .figi_resolution import class_letter
 from .ftd import FtdIndex, FtdRow, is_trading_symbol, is_unassigned_symbol
 from .history import Range, Sighting, ranges_from_sightings
+from .identifiers import class_letter, normalize_ticker, prose_class_letters
 from .names import _words, names_agree
-from .observations import normalize_ticker
 from .security_master import Security
 from .trading_calendar import add_trading_days, next_trading_day
 
@@ -64,7 +63,6 @@ def is_placeholder_row(rows: Sequence[FtdRow], i: int) -> bool:
 
 
 _CONSIDERATION = re.compile(r"\b(?:receive|into)\b(.*?)(?:\bfor each\b|\bper\b|$)", re.I | re.S)
-_CLASS = re.compile(r"\b(?:Series|Class)\s+([A-Z])\b")
 
 
 def named_class(quote: str | None, own_class: str | None = None) -> str | None:
@@ -77,11 +75,11 @@ def named_class(quote: str | None, own_class: str | None = None) -> str | None:
     m = _CONSIDERATION.search(quote or "")
     if m is None:
         return None
-    subject = _CLASS.search((quote or "")[:m.start()])
-    if subject is not None and own_class and subject.group(1) != own_class:
+    subject = prose_class_letters((quote or "")[:m.start()])
+    if subject and own_class and subject[0] != own_class:
         return None
-    k = _CLASS.search(m.group(1))
-    return k.group(1) if k else None
+    received = prose_class_letters(m.group(1))
+    return received[0] if received else None
 
 
 class LineIndex:

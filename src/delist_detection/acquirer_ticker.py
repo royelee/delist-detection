@@ -26,8 +26,8 @@ from .acquirer_line import _shared_words, _words, issuer_fits
 from .evidence import edgar_names
 from .exchange_terms import defined_terms
 from .ftd import FtdRow, is_trading_symbol
+from .identifiers import normalize_ticker
 from .names import description_names, names_agree
-from .observations import normalize_ticker
 
 MAX_HITS = 12      # index matches per query whose submissions are read: a longer list names no one company
 _LEGAL = re.compile(r"[\s,.]+(?:inc|incorporated|corp|corporation|co|company|ltd|limited|plc|llc|l\.?p|n\.?v|s\.?a|"

@@ -43,7 +43,7 @@ from typing import TYPE_CHECKING, Any, NamedTuple
 from .crsp_codes import CrspBucket
 from .exchanges import Exchange
 from .exit_kind import TERMS_GATE_SKIPPED, flag_names, is_continuation
-from .observations import normalize_ticker
+from .identifiers import normalize_ticker
 
 if TYPE_CHECKING:
     from .llm_merger_extractor import MergerTerms

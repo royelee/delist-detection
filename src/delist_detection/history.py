@@ -24,6 +24,7 @@ from .added_securities import AddedSecurity
 from .crsp_codes import CrspBucket
 from .exit_kind import LastTrade, end_day
 from .ftd import FtdIndex, is_deleted_symbol, is_unassigned_symbol
+from .identifiers import bare_ticker
 from .names import description_matches
 from .observations import TickerEra
 from .review_triage import ReviewItem
@@ -123,8 +124,8 @@ def ticker_sightings(sec: Security, ftd: FtdIndex, cusips: Sequence[str]) -> lis
             if any(ch.isalpha() for ch in r.symbol) and not is_unassigned_symbol(r.symbol)]
     label: dict[str, str] = {}
     for t in sorted({e.ticker for e in sec.eras}, key=lambda t: ("-" not in t, t)):
-        label.setdefault(t.replace("-", ""), t)
-    return sorted({s._replace(value=label.get(s.value.replace("-", ""), s.value)) for s in out})
+        label.setdefault(bare_ticker(t), t)
+    return sorted({s._replace(value=label.get(bare_ticker(s.value), s.value)) for s in out})
 
 
 def cusip_sightings(sec: Security, ftd: FtdIndex, cusips: Sequence[str],
@@ -276,10 +277,6 @@ def ticker_range_review(th_rows: list[dict]) -> list[ReviewItem]:
     return out
 
 
-def _bare(ticker: str) -> str:
-    return ticker.replace("-", "")
-
-
 def is_backfilled(as_of: str, ticker: str, cusips: Sequence[str], ftd: FtdIndex) -> bool:
     """spec §7.x rule 4: `as_of` is on or after `BACKFILL_START`, no fails-to-deliver
     row of `cusips` under `ticker` (either separator spelling) within
@@ -297,9 +294,9 @@ def is_backfilled(as_of: str, ticker: str, cusips: Sequence[str], ftd: FtdIndex)
     rows = [r for r in ftd.trading_rows(cusips) if lo <= r.date <= hi]
     if not rows:
         return False
-    bare = _bare(ticker)
-    own = any(_bare(r.symbol) == bare for r in rows)
-    other = any(_bare(r.symbol) != bare for r in rows)
+    bare = bare_ticker(ticker)
+    own = any(bare_ticker(r.symbol) == bare for r in rows)
+    other = any(bare_ticker(r.symbol) != bare for r in rows)
     return not own and other
 
 
@@ -535,8 +532,8 @@ class Histories:
 
 
 def _in_ticker_history(ticker: str, as_of: str, ranges: Sequence[Range]) -> bool:
-    bare = _bare(ticker)
-    return any(_bare(r.value) == bare and r.valid_from <= as_of and (r.valid_to is None or as_of <= r.valid_to)
+    bare = bare_ticker(ticker)
+    return any(bare_ticker(r.value) == bare and r.valid_from <= as_of and (r.valid_to is None or as_of <= r.valid_to)
               for r in ranges)
 
 

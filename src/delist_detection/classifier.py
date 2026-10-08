@@ -37,7 +37,7 @@ from .evidence import (
     still_operating,
 )
 from .exit_kind import continuation_reason
-from .figi_resolution import share_class_from_name
+from .identifiers import share_class_from_name
 from .form25 import notice_says_acquired, parse_form25
 from .issuer_record import IssuerRecord
 from .names import names_agree

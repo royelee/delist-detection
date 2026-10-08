@@ -47,10 +47,9 @@ from .delistings import Delisting
 from .dlret import MergerInputs
 from .exchange_terms import one_share_no_cash
 from .fatal import FATAL
-from .figi_resolution import class_letter, share_class_from_name
 from .ftd import FtdIndex
 from .llm_merger_extractor import MergerTerms
-from .observations import normalize_ticker
+from .identifiers import class_letter, normalize_ticker, share_class_from_name
 from .payout_gate import BY_LINE, BY_TICKER, GATE_SKIPPED, GatedPayouts, gate_payouts
 from .prefetch import warm
 from .price_requests import PriceAnswers

@@ -35,11 +35,10 @@ from typing import TYPE_CHECKING, Any
 
 from .edgar import EdgarSubmission
 from .evidence import names_between, parse_day
-from .exchange_terms import CLASS_MODIFIERS, OwnExchange, acquires, distributes, own_exchange
-from .figi_resolution import class_letter
+from .exchange_terms import OwnExchange, acquires, distributes, own_exchange
 from .form25 import parse_form25
+from .identifiers import bare_ticker, class_of, normalize_ticker
 from .names import names_agree
-from .observations import normalize_ticker
 
 if TYPE_CHECKING:
     from .delistings import Delisting
@@ -66,19 +65,12 @@ def registrant_names(sub: dict | None, before: date, security_name: str = "") ->
     return [*names, security_name] if security_name else names
 
 
-def class_of(share_class: str | None, name: str | None) -> tuple[str, tuple[str, ...]]:
-    """The class letter a security's statements must name ("" for a plain common) and the words that set its class
-    apart in its name ("COMCAST SPECIAL CORP CLASS A": ("SPECIAL",))."""
-    up = (name or "").upper()
-    return class_letter(share_class) or "", tuple(w for w in CLASS_MODIFIERS if w in up)
-
-
 def names_target(statement: OwnExchange, names: Iterable[str], tickers: Iterable[str] = ()) -> bool:
     """The name tie (R1): the statement's target names the candidate. One of its tickers (two letters or more) is a
     word of a target name ("BHGE's Class A common stock"), or a target name agrees with one of its names
     (`names.names_agree`: "DowDuPont" and DowDuPont Inc.; "Holdco", expanded, and Howard Hughes Holdings Inc.)."""
     words = {w.upper() for t in statement.target_names for w in re.findall(r"[A-Za-z0-9]+", t)}
-    if {normalize_ticker(t).replace("-", "") for t in tickers if len(t) >= 2} & words:
+    if {bare_ticker(normalize_ticker(t)) for t in tickers if len(t) >= 2} & words:
         return True
     names = [n for n in names if n]
     return any(names_agree(t, n) for t in statement.target_names for n in names)

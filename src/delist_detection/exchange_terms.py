@@ -27,6 +27,8 @@ import re
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 
+from .identifiers import CLASS_MODIFIERS, prose_class_letters
+
 _QUOTES = str.maketrans({"“": '"', "”": '"', "’": "'", "‘": "'", " ": " "})
 _NUMBER_WORDS = {"one": 1.0, "two": 2.0, "three": 3.0, "four": 4.0, "five": 5.0}
 # "one (1) share", "one-tenth (0.1) of a share": the number in parentheses is the reading
@@ -68,7 +70,6 @@ _STRONG_VERB = re.compile(r"convert|exchang|reclassif|redeem|redemption", re.I)
 _DISTRIBUTION_STRONG = re.compile(r"\bRecord\s+Date\b|\b(?:the\s+)?Distribution\b|\bpro\s+rata\b|\bfor\s+every\b")
 _SHARES_OF = re.compile(r"\b(?:shares?|stock)\s+of\s+", re.I)
 _EACH = re.compile(r"\beach\s+", re.I)
-_LETTER = re.compile(r"\b(?:Class|Series)\s+([A-Z])(?![\w-])")
 # a subject that is not the class's public shares: an award, another security, a merger subsidiary's shares, the
 # shares an insider rolled over (Continental Resources 2022: "the Rollover Shares owned by the Hamm Family")
 _NOT_SHARES = re.compile(r"\b(?:options?|restricted|awards?|warrants?|preferred|RSUs?|units?|debentures?|notes?|"
@@ -123,8 +124,6 @@ _OWN_PRONOUN = re.compile(r"\b(?:the\s+Company|Company's|our|its|we)\b", re.I)
 _OWN_SKIP = {"THE", "NEW", "OLD", "INC", "CORP", "CO", "COMPANY", "HOLDINGS", "GROUP", "LTD", "PLC", "NV", "LLC",
              "SA", "AG", "SE", "LP", "TRUST", "INTERNATIONAL", "AMERICAN", "UNITED", "NATIONAL", "FIRST", "GENERAL",
              "ENERGY", "FINANCIAL", "CLASS", "COMMON", "SERIES", "STOCK"}
-# the words that set a class apart in its name ("COMCAST SPECIAL CORP CLASS A")
-CLASS_MODIFIERS = ("SPECIAL", "NON-VOTING", "LIMITED VOTING")
 
 
 @dataclass(frozen=True)
@@ -278,7 +277,7 @@ def statements(text: str) -> list[Statement]:
                 if _VERB.search(before[-160:]):
                     subject = _subject_phrase(before)
                     out.append(Statement(0.0, True, subject.strip(" ,"), "", sentence,
-                                         frozenset(_LETTER.findall(subject)), "",
+                                         frozenset(prose_class_letters(subject)), "",
                                          _distribution(sentence, before[-160:])))
                 continue
             ratio = _qty(m.group("qty"))
@@ -292,9 +291,9 @@ def statements(text: str) -> list[Statement]:
             if not _VERB.search(before[-160:] + " " + m.group("lead")):
                 continue
             consideration = _DIVIDEND_LEG.sub(" ", _LIEU.sub(" ", _PAR.sub(" ", m.group(0) + target)))
-            letters = _LETTER.findall(target)
+            letters = prose_class_letters(target)
             out.append(Statement(ratio, bool(_CASH.search(consideration)), subject.strip(" ,"), target.strip(" ,"),
-                                 sentence, frozenset(_LETTER.findall(subject)), letters[0] if letters else "",
+                                 sentence, frozenset(prose_class_letters(subject)), letters[0] if letters else "",
                                  _distribution(sentence, before[-160:] + " " + m.group("lead"))))
     return out
 
@@ -402,7 +401,7 @@ def _cash_for_class(texts: Iterable[str], own: set[str], letter: str | None) -> 
     for t in texts:
         for m in _CASH_FOR_SHARE.finditer(t):
             subj = re.split(r"\s+(?:held|and|or)\b|[,;(]", m.group("subj"), maxsplit=1)[0]
-            letters = set(_LETTER.findall(subj))
+            letters = set(prose_class_letters(subj))
             if letter and letters and letter not in letters:
                 continue
             if not letter and letters:
@@ -416,7 +415,7 @@ def own_exchange(texts: Iterable[str], *, names: Sequence[str], class_letter: st
                  class_words: Sequence[str] = ()) -> OwnExchange | None:
     """What the security's own shares became (module docstring): `names` the registrant's names before the event
     (`own_shares.registrant_names`), `class_letter` its class letter ("" for a plain common, None for any class),
-    `class_words` the words that set its class apart (`own_shares.class_of`). None when no filing states it."""
+    `class_words` the words that set its class apart (`identifiers.class_of`). None when no filing states it."""
     texts = [normalize(t) for t in texts if t]
     found = own_statements(texts, names=names, class_letter=class_letter, class_words=class_words)
     if not found:
@@ -430,7 +429,7 @@ def own_exchange(texts: Iterable[str], *, names: Sequence[str], class_letter: st
     for p in parties(named):
         target_names.append(p)
         target_names += [v for k, v in terms.items() if k.upper() == p.upper() or k.upper() in p.upper().split()]
-    letters = _LETTER.findall(named)
+    letters = prose_class_letters(named)
     letter = letters[0] if letters else (class_letter or "" if re.search(
         r"corresponding\s+(?:series|class)", st.target, re.I) else "")
     rest = _PAR.sub(" ", st.target)[cut.start():] if cut else ""

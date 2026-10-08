@@ -10,8 +10,8 @@ import re
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 
+from .identifiers import normalize_ticker
 from .names import names_agree
-from .observations import normalize_ticker
 
 US_EXCH = frozenset({"US", "UN", "UW", "UQ", "UR", "UA", "UP", "UF", "UV", "PQ", "UB", "UC", "UM", "UX",
                      "UD", "UT", "UL", "UI", "UO", "UU", "VJ", "VK", "VY"})
@@ -79,46 +79,6 @@ def accept(cands: Sequence[FigiCandidate], *, ticker: str, names: Sequence[str],
         return None
     plain = [c for c in cands if _carries(c, t) and any(names_agree(c.name, n) for n in names)]
     return plain[0] if len(plain) == 1 else None
-
-
-def share_class_from_name(name: str | None) -> str:
-    s = (name or "").upper().strip()
-    m = re.search(r"\bCL(?:ASS)?\s*-?\s*([A-Z])\b", s)
-    if m:
-        return f"CLASS {m.group(1)}"
-    m = re.search(r"\bSER(?:IES)?\s*-?\s*([A-Z0-9])\b", s)
-    if m:
-        return f"SERIES {m.group(1)}"
-    m = re.search(r"-([A-Z])$", s)
-    if m:
-        return f"CLASS {m.group(1)}"
-    return "COMMON"
-
-
-def class_letter(share_class: str | None) -> str | None:
-    m = re.fullmatch(r"(?:CLASS|SERIES)\s+([A-Z0-9])", (share_class or "").upper().strip())
-    return m.group(1) if m else None
-
-
-SHARE_CLASS_CODE = re.compile(r"COMMON|CLASS [A-Z]|SERIES [A-Z0-9]")     # share_class_from_name's values
-
-
-def placeholder_id(cik: int, share_class: str | None) -> str:
-    """`CIK<cik>-<CLASS>` from a class code (decision 7): COMMON, CLASS X or
-    SERIES X, as `share_class_from_name` gives it. Free class text could give one
-    class two IDs, so anything else raises ValueError."""
-    code = (share_class or "COMMON").upper().strip()
-    if not SHARE_CLASS_CODE.fullmatch(code):
-        raise ValueError(f"placeholder_id: {share_class!r} is not a class code")
-    return f"CIK{int(cik)}-{code.replace(' ', '-')}"
-
-
-def is_placeholder(sec_id: str) -> bool:
-    return sec_id.startswith("CIK")
-
-
-def bloomberg_ticker(ticker: str) -> str:
-    return normalize_ticker(ticker).replace("-", "/")
 
 
 def filter_query(name: str) -> str:

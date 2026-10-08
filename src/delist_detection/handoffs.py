@@ -34,6 +34,7 @@ from .exit_kind import SUCCESSOR_FORMS, TIMING_CIK, TIMING_CUSIP, continuation_r
 from .filing_search import successor_query
 from .ftd import FtdIndex
 from .history import TAKEOVER_DAYS, Sighting
+from .identifiers import bare_ticker, strip_class_words
 from .last_trade import NO_DAY, at_handoff
 from .review_triage import ReviewItem
 from .rewrites import HANDOFF_CONTINUATION, Payouts, Rule, continuation
@@ -44,10 +45,6 @@ OVERLAP_DAYS = 10         # B's first sighting under the ticker may precede A's 
 CONTINUATION_DAYS = 10    # a continuation by timing: A's last and B's first sighting this close
 # TAKEOVER_DAYS (history.py: a successor's ticker window too): B's first sighting at most this long after A's last
 ISSUER_AGE_DAYS = 365     # B's issuer filing with EDGAR this long before the handoff: a company that existed
-
-
-def _bare(ticker: str) -> str:
-    return ticker.replace("-", "")
 
 
 def _days(lo: str, hi: str) -> int:
@@ -91,7 +88,7 @@ def find_handoffs(sightings: Mapping[str, Sequence[Sighting]]) -> list[HandoffPa
     last_any: dict[str, str] = {}
     for sid, sig in sightings.items():
         for s in sig:
-            t = _bare(s.value)
+            t = bare_ticker(s.value)
             span = spans[t].setdefault(sid, [s.day, s.day])
             span[0], span[1] = min(span[0], s.day), max(span[1], s.day)
             label.setdefault((t, sid), s.value)
@@ -146,7 +143,6 @@ def own_continuation_filing(filings: Sequence[EdgarSubmission], day: date) -> tu
     return (hits[0][1], hits[0][2], hits[0][0]) if hits else None
 
 
-_CLASS_WORDS = re.compile(r"\b(?:CL(?:ASS)?|SER(?:IES)?)\s*-?\s*[A-Z0-9]\b|-[A-Z]$", re.I)
 _STATE_TAG = re.compile(r"\s*/[A-Z]+/?\s*$")
 
 
@@ -160,7 +156,7 @@ def predecessor_names(sub: dict | None, a_last: str, observed: str | None) -> li
     if isinstance(sub, dict):
         names += names_near(sub, date.fromisoformat(a_last), 30)
         names.append(sub.get("name") or "")
-    names.append(_CLASS_WORDS.sub(" ", observed or ""))
+    names.append(strip_class_words(observed))
     out: list[str] = []
     for n in names:
         n = re.sub(r"\s+", " ", _STATE_TAG.sub("", n)).strip(" -")
@@ -427,7 +423,7 @@ def apply_handoffs(decisions: Sequence[HandoffDecision], delistings: Sequence[De
             if d.last_trade.day is None:            # A's range ends where B's begins (PNFP 2026)
                 d.record.evidence["flags"] = [f for f in d.flags if f != NO_DAY]
             d.last_trade = at_handoff(d.last_trade, p.a_last, p.b_first)
-        resolved.add((_bare(p.ticker), p.a, p.b))
+        resolved.add((bare_ticker(p.ticker), p.a, p.b))
         accession = form25.filing.accession if form25 is not None else None
         for i, r in enumerate(review):
             if r.sec_id == p.a and r.flag in _RESOLVED_FLAGS:
@@ -444,5 +440,5 @@ def drop_resolved_shared(items: Sequence[ReviewItem], resolved: Collection[tuple
     name both securities of a continuation the pass resolved."""
     def solved(r: ReviewItem) -> bool:
         return r.flag == "ticker_shared" and any(
-            _bare(r.ticker) == t and f"({a})" in r.reason and f"({b})" in r.reason for t, a, b in resolved)
+            bare_ticker(r.ticker) == t and f"({a})" in r.reason and f"({b})" in r.reason for t, a, b in resolved)
     return [r for r in items if not solved(r)]

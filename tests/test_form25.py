@@ -364,16 +364,6 @@ def test_a_form25_that_relates_solely_to_the_rights_is_not_about_the_common():
 
 # --- sub-plan 5b, R2: a letterless common takes the letter its own fails descriptions name ---
 
-from delist_detection.form25 import letter_hint  # noqa: E402
-
-
-def test_the_letter_a_securitys_fails_descriptions_name():
-    assert letter_hint(["SUNPOWER CORP CL A"]) == "A"
-    assert letter_hint(["LIBERTY INTERACTIVE CORP SER A", "LIBERTY INTERACTIVE CORP"]) == "A"
-    assert letter_hint(["X CORP CLASS A", "X CORP CL B"]) is None
-    assert letter_hint(["SUNPOWER CORP", ""]) is None
-
-
 SUNPOWER_2011 = Form25("a", "25-NSE", "2011-11-16", "NASDAQ", "Common Stock Class A & Common Stock Class B", "", "")
 
 

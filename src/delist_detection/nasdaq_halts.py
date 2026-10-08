@@ -26,8 +26,8 @@ from pathlib import Path
 import requests
 
 from .atomic_io import clean_orphan_temps, write_atomic
+from .identifiers import normalize_ticker
 from .sec_stats import SEC_STATS
-from .observations import normalize_ticker
 from .retries import retrying
 from .trading_calendar import is_trading_day, previous_trading_day
 

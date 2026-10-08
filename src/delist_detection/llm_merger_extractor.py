@@ -76,7 +76,7 @@ from .filing_selection import (
     form_filings,
     parse_date,
 )
-from .observations import normalize_ticker
+from .identifiers import answer_class_letter, normalize_ticker
 from .sec_stats import SEC_STATS
 
 
@@ -104,16 +104,6 @@ class StockLeg:
     issuer_name: str = ""
     ticker: str = ""
     share_class: str = ""
-
-
-_LETTER = re.compile(r"(?i)\s*(?:(?:class|series)\s+)?([A-Z0-9])(?:\s+(?:common|ordinary)\b.*)?\s*")
-
-
-def leg_class_letter(text: str) -> str:
-    """The letter of a share class an answer names ("B", "Class B", "Series C common"), "" for any other text
-    ("preferred unit", "common")."""
-    m = _LETTER.fullmatch(text or "")
-    return m.group(1).upper() if m else ""
 
 
 @dataclass(frozen=True)
@@ -226,11 +216,11 @@ class MergerTerms:
         class (BPYU 2021's "BPY preferred unit", not the common units' BPY) have none, so no price is asked of the
         wrong security."""
         out = [(self.stock_ratio, main_ticker, self.acquirer_share_class or "")]
-        letters: dict[str, set[str]] = {main_ticker: {leg_class_letter(self.acquirer_share_class or "")}} \
+        letters: dict[str, set[str]] = {main_ticker: {answer_class_letter(self.acquirer_share_class or "")}} \
             if main_ticker else {}
         for leg in self.extra_legs:
             ticker = normalize_ticker(leg.ticker) if leg.ticker else ""
-            letter = leg_class_letter(leg.share_class)
+            letter = answer_class_letter(leg.share_class)
             if ticker and "PREFER" in (leg.share_class or "").upper():
                 ticker = ""
             elif ticker in letters:

@@ -32,8 +32,8 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from .atomic_io import clean_orphan_temps
+from .identifiers import bare_ticker, class_suffix, description_class_letter, normalize_ticker
 from .names import names_agree
-from .observations import normalize_ticker
 from .sec_http import download, get_text
 from .trading_calendar import add_trading_days, next_trading_day, previous_trading_day
 
@@ -46,8 +46,6 @@ _QTR = re.compile(r"cnsp_sec_fails_(\d{4})q([1-4])\.zip$", re.I)
 
 
 FTD_START = date(2004, 1, 1)      # the first day SEC's fails-to-deliver files cover
-_CLASS_SUFFIX = re.compile(r"([A-Z]+)-([A-Z])")             # a one-letter class ticker: base, letter ("UAC-C")
-_DESC_CLASS = re.compile(r"\bCL(?:ASS)?\s*-?\s*([A-Z])\b")   # the class letter a fails description names ("CL C")
 
 
 @dataclass(frozen=True)
@@ -301,15 +299,16 @@ class FtdIndex:
             self._own_from[t] = min(day, self._own_from.get(t, day))
         out = set(symbols)
         for s in symbols:
-            bare = s.replace("-", "")
+            bare = bare_ticker(s)
             if bare != s:
                 out.add(bare)
                 self._aliases[bare] = s if self._aliases.get(bare, s) == s else None
-            m = _CLASS_SUFFIX.fullmatch(s)
-            if m:
-                out.add(m.group(1))
-                got = (s, m.group(2))
-                self._bases[m.group(1)] = got if self._bases.get(m.group(1), got) == got else None
+            suffix = class_suffix(s)
+            if suffix:
+                base, letter = suffix
+                out.add(base)
+                got = (s, letter)
+                self._bases[base] = got if self._bases.get(base, got) == got else None
         return out
 
     def _relabel(self, r: FtdRow) -> FtdRow:
@@ -342,8 +341,8 @@ class FtdIndex:
             return r
         canon, letter = got
         names = self._names.get(canon)
-        m = _DESC_CLASS.search(r.description.upper())
-        if not names or m is None or m.group(1) != letter or not any(names_agree(r.description, n) for n in names):
+        if (not names or description_class_letter(r.description) != letter
+                or not any(names_agree(r.description, n) for n in names)):
             return r
         if r.date >= self._own_from.get(r.symbol, "~"):
             return r

@@ -14,9 +14,8 @@ from datetime import date, timedelta
 from .edgar import EdgarSubmission
 from .evidence import parse_day
 from .fatal import FATAL
-from .figi_resolution import is_placeholder
 from .form25 import MAJOR_EXCHANGES, REGIONAL_EXCHANGES, exchange_label, exchanges_named
-from .observations import normalize_ticker
+from .identifiers import is_placeholder, normalize_ticker
 
 ANNUAL_FORMS = frozenset({"10-K", "10-K405", "10-KSB", "10-KT", "20-F", "40-F"})
 EXCHANGE_VENUES = frozenset({"UN", "UW", "UQ", "UR", "UA", "UP", "UF"})

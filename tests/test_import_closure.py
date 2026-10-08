@@ -27,6 +27,11 @@ MEASUREMENT = ("run_snapshot", "lifecycle", "verdict", "scorecard", "truth", "di
                "regression", "loop_round", "truth_update", "audit", "truth_build")
 CONTRACT = ("contract", "payout_rule", "dlret")  # the contract's rows and an ending's value, pure
 VOCABULARY = ("exit_kind",)                      # the row vocabulary: imports nothing of the package
+# The leaves: the row vocabulary, and the spellings of a security's identifiers with the readers of its share class
+# (architecture step 13)
+LEAVES = ("exit_kind", "identifiers")
+# The data clients read the ticker spelling only, never the observations (step 13)
+DATA_CLIENTS = ("ftd", "midas", "nasdaq_halts")
 CLASSIFICATION = ("end_of_era", "handoffs", "delistings", "continuation_evidence", "classifier", "rewrites",
                   "last_trade", "payout_gate", "review_triage", "history")
 # A module that cannot get there yet, with the step whose move it waits on. None today: the package root is the one
@@ -55,14 +60,27 @@ def test_a_reader_of_the_tables_loads_no_network_client(module):
     assert not _closure(module) & NETWORK_CLIENTS
 
 
-def test_the_row_vocabulary_imports_nothing_of_the_package():
-    assert _closure("exit_kind") == {"exit_kind"}
+@pytest.mark.parametrize("module", LEAVES)
+def test_a_leaf_imports_nothing_of_the_package(module):
+    assert _closure(module) == {module}
 
 
 def test_an_endings_value_loads_only_the_row_vocabulary_and_the_leaf_enums():
     """dlret (architecture step 10) is read by the table, the contract and the firm month alike: it loads the row
     vocabulary, the bucket and exchange enums and the ticker spelling, nothing that classifies."""
-    assert _closure("dlret") == {"dlret", "exit_kind", "crsp_codes", "exchanges", "observations", "names"}
+    assert _closure("dlret") == {"dlret", "exit_kind", "crsp_codes", "exchanges", "identifiers"}
+
+
+@pytest.mark.parametrize("module", DATA_CLIENTS)
+def test_a_data_client_reads_the_ticker_spelling_not_the_observations(module):
+    closure = _closure(module)
+    assert "identifiers" in closure and not closure & {"observations", "figi_resolution"}
+
+
+def test_the_observations_and_the_figi_rules_import_neither_of_each_other():
+    """Their one cycle (`observations._class_letter` imported figi_resolution inside the function) is gone: both read
+    the class and the ticker spelling from the leaf."""
+    assert "figi_resolution" not in _closure("observations") and "observations" not in _closure("figi_resolution")
 
 
 @pytest.mark.parametrize("module", CLASSIFICATION)

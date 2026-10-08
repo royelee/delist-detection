@@ -43,11 +43,11 @@ from delist_detection.atomic_io import write_atomic  # noqa: E402
 from delist_detection.edgar import EdgarClient  # noqa: E402
 from delist_detection.figi_resolution import US_EXCH  # noqa: E402
 from delist_detection.ftd import FtdIndex, parse_ftd_lines, period_of  # noqa: E402
+from delist_detection.identifiers import normalize_ticker  # noqa: E402
 from delist_detection.line_follow import (  # noqa: E402
     SUCCESSOR_FORMS, SWITCH, candidate_steps, eightks_near, is_line_symbol, line_end, name_on, text_cusips,
     text_symbols,
 )
-from delist_detection.observations import normalize_ticker  # noqa: E402
 from delist_detection.security_master import cusip_job  # noqa: E402
 from delist_detection.filing_search import successor_query  # noqa: E402
 

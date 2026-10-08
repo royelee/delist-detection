@@ -48,14 +48,14 @@ from .degraded import degraded_item
 from .edgar import EdgarSubmission
 from .evidence import name_at, names_between
 from .fatal import FATAL
-from .figi_resolution import FigiCandidate, class_letter, is_placeholder, share_class_from_name, us_candidates
+from .figi_resolution import FigiCandidate, us_candidates
 from .filing_search import successor_query
 from .ftd import FtdIndex, FtdRow, is_deleted_symbol, is_unassigned_symbol, settled_last
 from .issuer_record import IssuerRecord
 from .listing_status import edgar_lists, lists_on_major_exchange
 from .manifest import StageMeter
 from .names import description_names, names_agree
-from .observations import normalize_ticker
+from .identifiers import bare_ticker, class_letter, description_class_letter, is_placeholder, normalize_ticker
 from .review_triage import ReviewItem
 from .security_master import SWITCH_DAYS, SWITCH_TAIL_DAYS, EraResolution, Security, cusip_job
 from .trading_calendar import add_trading_days
@@ -141,8 +141,8 @@ def is_line_symbol(symbol: str) -> bool:
 def is_otc_symbol(symbol: str, tickers: Iterable[str]) -> bool:
     """An over-the-counter symbol after a delisting: five letters ending in Q (bankruptcy), F (foreign) or Y
     (ADR) -- RADCQ, WFTIF -- or one of the line's own tickers with a Q appended (DFQ)."""
-    bare = symbol.replace("-", "")
-    return (len(bare) == 5 and bare[-1] in "QFY") or any(bare == t.replace("-", "") + "Q" for t in tickers)
+    bare = bare_ticker(symbol)
+    return (len(bare) == 5 and bare[-1] in "QFY") or any(bare == bare_ticker(t) + "Q" for t in tickers)
 
 
 def _days(day: str, n: int) -> str:
@@ -152,12 +152,12 @@ def _days(day: str, n: int) -> str:
 def _line_symbol_of(rows: Sequence[FtdRow], tickers: Collection[str], fallback: str) -> str:
     """The ticker a new CUSIP's rows trade under: the first line symbol that is not a post-split "...D" spelling
     of one of the line's tickers (YRCWD for 20 days, then YRCW), else the scanned spelling stripped."""
-    post_split = {t.replace("-", "") + "D" for t in tickers}
+    post_split = {bare_ticker(t) + "D" for t in tickers}
     for r in rows:
         if is_line_symbol(r.symbol) and r.symbol not in post_split:
             return r.symbol
     for t in tickers:
-        if fallback in (t.replace("-", "") + "ZZZZ", t.replace("-", "") + "D"):
+        if fallback in (bare_ticker(t) + "ZZZZ", bare_ticker(t) + "D"):
             return t
     return fallback
 
@@ -234,7 +234,7 @@ def candidate_steps(sec_id: str, cusips: Sequence[str], tickers: Collection[str]
     at_edge = data_end is not None and end.last >= _days(data_end, -SWITCH_TAIL_DAYS)
     tail = _days(end.last, SWITCH_TAIL_DAYS)
     if not any(r.date > tail for r in ftd.trading_rows([end.cusip])):
-        scan = {s for t in own for s in (t, t.replace("-", "") + "ZZZZ", t.replace("-", "") + "D")}
+        scan = {s for t in own for s in (t, bare_ticker(t) + "ZZZZ", bare_ticker(t) + "D")}
         found = {r.cusip: s for s in sorted(scan | set(extra_symbols)) for r in ftd.by_symbol(s, lo, hi)}
         found.update({c: "" for c in extra_cusips if c not in found})
         switches: dict[str, LineStep] = {}
@@ -351,7 +351,7 @@ def corroborate(step: LineStep, *, filings: Sequence[EdgarSubmission], sub: Mapp
         if not any(description_names(d, n) for d in step.descriptions for n in names):
             return "", "name"
         own = class_letter(share_class)
-        if own and any((letter := class_letter(share_class_from_name(d))) and letter != own
+        if own and any((letter := description_class_letter(d)) and letter != own
                        for d in step.descriptions):
             return "", "class"
     own_successor = _near(filings, first, FILING_DAYS, FILING_DAYS, lambda f: f.form in SUCCESSOR_FORMS)
@@ -617,7 +617,7 @@ def follow_lines(identity: "Identity", clients: LineSources, *, as_of: date,
                                   for sid in todo}
     # every line's tickers, their first-day ZZZZ and post-split D spellings and the issuers' other tickers, to the
     # run date (stage 1 loaded the eras' tickers only to 400 days past their last observation)
-    spellings = {t.replace("-", "") + suffix for sid in todo for t in own(sid) for suffix in ("", "ZZZZ", "D")}
+    spellings = {bare_ticker(t) + suffix for sid in todo for t in own(sid) for suffix in ("", "ZZZZ", "D")}
     ftd.follow(symbols=spellings | {t for v in extra.values() for t in v})
     named: dict[str, set[str]] = defaultdict(set)
     counts: Counter[str] = Counter()

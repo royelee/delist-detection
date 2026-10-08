@@ -56,9 +56,10 @@ from delist_detection.crsp_codes import CrspBucket  # noqa: E402
 from delist_detection.edgar import EdgarClient  # noqa: E402
 from delist_detection.figi_resolution import US_EXCH  # noqa: E402
 from delist_detection.ftd import FtdIndex  # noqa: E402
+from delist_detection.identifiers import normalize_ticker  # noqa: E402
 from delist_detection.llm_merger_extractor import LLMMergerTermsExtractor  # noqa: E402
 from delist_detection.names import names_agree  # noqa: E402
-from delist_detection.observations import ObservationIndex, load_observations, normalize_ticker  # noqa: E402
+from delist_detection.observations import ObservationIndex, load_observations  # noqa: E402
 from delist_detection.openfigi import OpenFigiClient  # noqa: E402
 from delist_detection.ticker_resolver import TickerResolver  # noqa: E402
 from delist_detection.trading_calendar import next_trading_day  # noqa: E402

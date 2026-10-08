@@ -16,12 +16,12 @@ from .crsp_codes import CrspBucket
 from .edgar import EdgarSubmission
 from .evidence import edgar_names
 from .exit_kind import effective_date, rests_on_continued_filings
-from .figi_resolution import class_letter
 from .form25 import (
     ISSUER_FORM25_FORMS, REGIONAL_EXCHANGES, Form25, SecurityRef, class_kind, class_letters, is_involuntary,
     list_form25, match_securities, other_class, parse_form25, tied_securities,
 )
 from .history import Ending
+from .identifiers import class_letter
 from .last_trade import Dating, LastTrade, OwnTrading, anchor_day
 from .listing_status import exchanges_around, issuer_exchange, withdrawal_kind
 from .own_shares import OwnShares

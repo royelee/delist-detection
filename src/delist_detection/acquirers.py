@@ -10,8 +10,8 @@ from datetime import date, timedelta
 from .delistings import Delisting
 from .figi_resolution import FigiCandidate, accept, us_candidates
 from .ftd import FtdIndex, FtdRow
+from .identifiers import normalize_ticker
 from .listing_status import edgar_lists
-from .observations import normalize_ticker
 
 ACQUIRER_WINDOW_DAYS = 10       # the fails rows under the acquirer ticker this close to the last trade
 

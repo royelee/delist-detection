@@ -19,7 +19,7 @@ from delist_detection.ftd import FtdIndex, FtdRow
 from delist_detection.last_trade import LastTrade
 from delist_detection.manifest import StageMeter
 from delist_detection.observations import Observation, split_eras
-from delist_detection.security_master import Security, line_class_letter
+from delist_detection.security_master import Security
 from delist_detection.classifier import DelistRecord
 from delist_detection.issuer_record import IssuerRecord
 from delist_detection.ticker_resolver import TickerResolver
@@ -158,9 +158,3 @@ def test_a_security_with_its_cusip_keeps_the_continued_filings_ending(fake_edgar
         assert [(e.delist_date, e.record.crsp_code) for e in events] == [("2013-12-31", 304)], has
 
 
-# --- rule B's class reading of an OpenFIGI name ----------------------------------------------------------------
-
-def test_the_class_letter_an_openfigi_name_ends_with():
-    assert [line_class_letter(n) for n in ("MSG NETWORKS INC- A", "STARZ - A", "GRAHAM HOLDINGS CO-CLASS B",
-                                           "HUBBELL INC", "ALPHABET INC-CL A", "WW INTERNATIONAL INC")] == \
-        ["A", "A", "B", None, "A", None]

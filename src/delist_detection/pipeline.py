@@ -39,8 +39,7 @@ from .handoffs import (
     HandoffDecision, HandoffOutcome, apply_handoffs, continuation_filing, cusip_switch, decide_handoff,
     drop_resolved_shared, find_handoffs, issuer_carries_on, own_continuation_filing, predecessor_names,
 )
-from .figi_resolution import class_letter, is_placeholder, share_class_from_name
-from .form25 import ISSUER_FORM25_FORMS, SecurityRef, letter_hint
+from .form25 import ISSUER_FORM25_FORMS, SecurityRef
 from .issuer_record import IssuerRecord, ReadWatch
 from .last_trade import Dating, OwnTrading, first_day_after
 from .ftd import FTD_START, FtdIndex, FtdRow, close_age, is_trading_symbol, trades_after
@@ -49,6 +48,7 @@ from .history import (
     own_last_seen, ranges_from_sightings, ticker_on, ticker_range_review, ticker_sightings, value_on,
 )
 from .line_follow import LineSuccessor, composites, follow_lines, is_line_symbol, text_cusips
+from .identifiers import class_letter, descriptions_class_letter, is_placeholder, share_class_from_name
 from .identity import Identity, identify
 from .listing_status import issuer_exchange, listed_today, listing_answers
 from .observations import Observation, ObservationIndex, TickerEra, observation_conflicts
@@ -266,9 +266,10 @@ def _cusip_switches(s: Security, ftd: FtdIndex, cusips: Sequence[str]) -> tuple[
 
 def _security_ref(s: Security, ftd: FtdIndex, cusips: Sequence[str]) -> SecurityRef:
     """The finder's view of a security (`form25.SecurityRef`): its class, kind and name, and for a class with no
-    letter the one its own CUSIPs' fails descriptions name (`form25.letter_hint`, R2: SunPower's class A placeholder,
-    "SUNPOWER CORP CL A")."""
-    hint = None if class_letter(s.share_class) else letter_hint(d for c in cusips for d in ftd.descriptions(c))
+    letter the one its own CUSIPs' fails descriptions name (`identifiers.descriptions_class_letter`, R2: SunPower's
+    class A placeholder, "SUNPOWER CORP CL A")."""
+    hint = None if class_letter(s.share_class) else \
+        descriptions_class_letter(d for c in cusips for d in ftd.descriptions(c))
     return SecurityRef(s.sec_id, s.share_class, s.kind, s.name, hint)
 
 

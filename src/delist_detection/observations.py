@@ -7,7 +7,7 @@ recycled ticker (MON = Monsanto, later Monument Circle) must never be merged
 into one security. Eras are built in two stages:
 
 1. Here, from observations alone (a when-issued ticker's observations join its
-   regular-way ticker's, `regular_way`): a new era starts when a pin changes, when the
+   regular-way ticker's, `identifiers.regular_way`): a new era starts when a pin changes, when the
    name stops agreeing, or when the share class letter in the name changes
    ("GOOGLE INC CLASS A" -> "GOOGLE INC CLASS C"; a name with no class counts as
    unknown and never splits). A gap alone does not split: index snapshots can
@@ -28,27 +28,12 @@ from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
 
+from .identifiers import name_class_letter, normalize_ticker, regular_way
 from .names import names_agree
 
 ERA_GAP_DAYS = 400
 DATE_IN_NAME = r"(\d{4}-\d{2}-\d{2}|\d{8})"
 OBS_COLUMNS = ("ticker", "as_of", "name", "cusip", "cik", "sec_id")
-
-
-def normalize_ticker(raw: str) -> str:
-    return re.sub(r"[./\s]+", "-", (raw or "").strip().upper()).strip("-")
-
-
-_WHEN_ISSUED = re.compile(r"-W-?I$")       # "EHAB WI", "EHAB.WI", "EHAB-WI", "EHAB/WI", "EHAB W/I"
-
-
-def regular_way(ticker: str) -> str:
-    """The regular-way line a when-issued ticker trades ahead of: "EHAB-WI" (or "EHAB WI", "EHAB.WI", "EHAB W/I")
-    is EHAB, which the shares trade under once they are issued (Enhabit's 2022 spin-off). Any other ticker,
-    normalized, is its own."""
-    t = normalize_ticker(ticker)
-    stripped = _WHEN_ISSUED.sub("", t)
-    return stripped or t
 
 
 @dataclass(frozen=True)
@@ -205,14 +190,6 @@ def _gap_days(a: str, b: str) -> int:
     return (date.fromisoformat(b) - date.fromisoformat(a)).days
 
 
-def _class_letter(name: str | None) -> str | None:
-    """The class letter a name states ("…CLASS C" -> "C"; "…SERIES A" and
-    "…-A" -> "A"), or None when it states none: a name without a class
-    ("COMMON") is unknown, not a class of its own."""
-    from .figi_resolution import class_letter, share_class_from_name   # figi_resolution imports this module
-    return class_letter(share_class_from_name(name))
-
-
 def split_eras(obs: list[Observation]) -> list[TickerEra]:
     """Stage 1 of era building (module docstring): split one ticker's
     observations on a pin change, a name that stops agreeing, or a change of
@@ -221,7 +198,7 @@ def split_eras(obs: list[Observation]) -> list[TickerEra]:
     era_class: str | None = None                  # the current era's latest stated class letter
     for o in sorted(obs, key=lambda o: o.as_of):
         cur = eras[-1] if eras else None
-        cls = _class_letter(o.name)
+        cls = name_class_letter(o.name)
         if cur is not None:
             last_name = cur.name
             pin_changed = ((o.cik is not None and cur.cik_pin is not None and o.cik != cur.cik_pin)

@@ -114,11 +114,6 @@ def test_the_names_are_those_in_force_before_the_day_then_the_securitys():
     assert own.edgar_names == ["SCHERING PLOUGH CORP"] and own.names == ["SCHERING PLOUGH CORP"] * 2
 
 
-def test_the_class_is_the_securitys_share_class_and_the_words_its_name_sets_it_apart_by():
-    assert O.class_of("CLASS A", "COMCAST SPECIAL CORP CLASS A") == ("A", ("SPECIAL",))
-    assert O.class_of("COMMON", "ONEOK INC") == ("", ())
-
-
 def test_sbgi_is_read_by_its_figi_class_not_by_its_truncated_name():
     """SBGI 2023: the name "SINCLAIR BROADCAST GROUP INC CLASS" lost its letter; the statement is of the Class A
     shares, so only the security's share class reads it (stage 8b took it; stage 5 reads it the same way now)."""

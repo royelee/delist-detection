@@ -13,7 +13,7 @@ from delist_detection.continuation_evidence import (confirming_filing, needs_dou
 from delist_detection.crsp_codes import CrspBucket
 from delist_detection.delistings import Delisting
 from delist_detection.edgar import EdgarSubmission
-from delist_detection.figi_resolution import share_class_from_name
+from delist_detection.identifiers import share_class_from_name
 from delist_detection.issuer_record import IssuerRecord
 from delist_detection.last_trade import LastTrade
 from delist_detection.manifest import StageMeter

@@ -43,8 +43,8 @@ from typing import Any, Protocol
 
 from .degraded import degraded_item
 from .evidence import names_between, parse_day, renamed_near
-from .figi_resolution import class_letter, is_placeholder, placeholder_id, share_class_from_name
 from .ftd import FTD_START, FtdIndex, FtdRow
+from .identifiers import is_placeholder, name_class_letter, placeholder_id, share_class_from_name
 from .issuer_record import IssuerRecord
 from .manifest import StageMeter
 from .names import description_matches, description_names, names_agree, names_an_issuer
@@ -579,11 +579,6 @@ class SecondPass:
 IssuerLines = dict[int, dict[str, set[str | None]]]
 
 
-def _class_letter(era: TickerEra) -> str | None:
-    """The share class letter the era's name states ("...CLASS B" -> "B"), or None."""
-    return class_letter(share_class_from_name(era.name))
-
-
 def _other_class(letters: set[str | None], era_class: str | None) -> bool:
     """Whether a CUSIP whose eras state `letters` is of another share class than
     an era of class `era_class`: both known, and every one of them differs."""
@@ -754,7 +749,7 @@ class EraIssuers:
             issuer_cusips: dict[int, dict[str, set[str | None]]] = defaultdict(lambda: defaultdict(set))
             for k, c in known.items():
                 for cusip in {*by_key[k].ftd_cusips, *by_key[k].cusips}:
-                    issuer_cusips[c][cusip].add(_class_letter(by_key[k]))
+                    issuer_cusips[c][cusip].add(name_class_letter(by_key[k].name))
             return known, issuer_cusips
 
         while True:
@@ -765,7 +760,7 @@ class EraIssuers:
                     continue
                 self._reset()
                 got = self._named(e, self._handoff(rows[e.key], links[e.key], known, ftd, issuer_cusips,
-                                                   _class_letter(e)), last_seen[e.key])
+                                                   name_class_letter(e.name)), last_seen[e.key])
                 if got is not None:
                     new[e.key] = got
                 self._mark(e)
@@ -781,7 +776,8 @@ class EraIssuers:
             dropped = []
             for key, got in out.items():
                 self._reset()
-                found = self._linked_issuers(links[key], known, ftd, issuer_cusips, _class_letter(by_key[key]))
+                found = self._linked_issuers(links[key], known, ftd, issuer_cusips,
+                                             name_class_letter(by_key[key].name))
                 candidates = [*found, *([got.cik] if got.source == "efts_frequency_renamed" else [])]
                 if self._guard(candidates, rows[key]) != got.cik:
                     dropped.append(key)
@@ -797,7 +793,7 @@ class EraIssuers:
                 continue
             self._reset()
             got = self._named(e, self._handoff(rows[e.key], links[e.key], known, ftd, issuer_cusips,
-                                               _class_letter(e)), last_seen[e.key])
+                                               name_class_letter(e.name)), last_seen[e.key])
             if got is not None and got.cik != first:
                 disagreements[e.key] = got
         return SecondPass(out, disagreements)

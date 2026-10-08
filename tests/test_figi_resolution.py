@@ -1,9 +1,4 @@
-import pytest
-
-from delist_detection.figi_resolution import (
-    FigiCandidate, accept, bloomberg_ticker, class_letter, filter_query, is_placeholder, placeholder_id,
-    security_kind, share_class_from_name, us_candidates,
-)
+from delist_detection.figi_resolution import FigiCandidate, accept, filter_query, security_kind, us_candidates
 
 
 def _row(comp, exch, ticker, name, st="Common Stock", figi=None, st2="Common Stock"):
@@ -50,28 +45,7 @@ def test_accept_old_name_on_a_venue_row():
     assert accept([col], ticker="COL", names=["ROCKWELL COLLINS INC"], via_cusip=False) is col
 
 
-def test_share_class_and_placeholders():
-    assert share_class_from_name("ALPHABET INC-CL C") == "CLASS C"
-    assert share_class_from_name("META PLATFORMS INC-CLASS A") == "CLASS A"
-    assert share_class_from_name("DISCOVERY INC-A") == "CLASS A"
-    assert share_class_from_name("LIBERTY BROADBAND-SER C") == "SERIES C"
-    assert share_class_from_name("CLOROX CO") == "COMMON"
-    assert share_class_from_name(None) == "COMMON"
-    assert class_letter("SERIES C") == "C" and class_letter("CLASS A") == "A" and class_letter("COMMON") is None
-    assert placeholder_id(1122304, None) == "CIK1122304-COMMON"
-    assert placeholder_id(14693, "CLASS A") == "CIK14693-CLASS-A"
-    assert is_placeholder("CIK1-COMMON") and not is_placeholder("BBG000FJLFX8")
-
-
-def test_a_placeholder_is_built_from_a_class_code_only():
-    assert placeholder_id(1, "SERIES A") == "CIK1-SERIES-A"
-    with pytest.raises(ValueError):
-        placeholder_id(1, "Class A Common Stock")
-
-
 def test_small_helpers():
-    assert bloomberg_ticker("BF-A") == "BF/A"
-    assert bloomberg_ticker("aet") == "AET"
     assert filter_query("Aaron's Company, Inc.") == "AARON'S"
     assert filter_query("ALLEGHANY CORP /DE") == "ALLEGHANY"
     assert security_kind("Common Stock") == "common"

@@ -12,18 +12,18 @@ and asks `FigiResolver` (with `resolve_with_identity_guard`, the CUSIP links `cu
 """
 from __future__ import annotations
 
-import re
 from bisect import bisect_left, bisect_right
 from collections import defaultdict
 from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 
-from .figi_resolution import (
-    FigiCandidate, accept, bloomberg_ticker, class_letter, filter_query, is_placeholder, placeholder_id,
-    security_kind, share_class_from_name, us_candidates,
-)
+from .figi_resolution import FigiCandidate, accept, filter_query, security_kind, us_candidates
 from .ftd import FTD_START, FtdIndex, is_deleted_symbol, settled_last
+from .identifiers import (
+    bloomberg_ticker, class_letter, figi_class_letter, is_placeholder, name_class_letter, placeholder_id,
+    share_class_from_name,
+)
 from .trading_calendar import add_trading_days
 from .names import description_matches
 from .observations import TickerEra, eras_by_key, observation_conflicts
@@ -234,16 +234,6 @@ def _link_text(h: Handoff) -> str:
     return f"{h.era_key}'s CUSIP {h.cusip} ended as {h.to_key}'s {h.new_cusip} began on {h.day}"
 
 
-_LINE_CLASS = re.compile(r"(?:-\s*|\bCL(?:ASS)?\s*-?\s*)([A-Z])\s*$")
-
-
-def line_class_letter(name: str) -> str | None:
-    """The class letter an OpenFIGI (Bloomberg) security name ends with: "MSG NETWORKS INC- A", "STARZ - A",
-    "GRAHAM HOLDINGS CO-CLASS B" (None: none)."""
-    m = _LINE_CLASS.search((name or "").upper().strip())
-    return m.group(1) if m else None
-
-
 def one_class_issuers(eras: Sequence[TickerEra], issuers: Mapping[str, Issuer]) -> set[int]:
     """The issuer CIKs whose eras in the run name at most one class letter (`share_class_from_name`'s CLASS X or
     SERIES X): for them a plain-named era and a lettered one are one share class."""
@@ -252,7 +242,7 @@ def one_class_issuers(eras: Sequence[TickerEra], issuers: Mapping[str, Issuer]) 
         cik = cik_of(issuers, e.key)
         if cik is None:
             continue
-        letter = class_letter(share_class_from_name(e.name))
+        letter = name_class_letter(e.name)
         letters[cik] |= {letter} if letter else set()
     return {cik for cik, found in letters.items() if len(found) <= 1}
 
@@ -301,7 +291,7 @@ def _handoff_joins(eras: Sequence[TickerEra], issuers: Mapping[str, Issuer], han
             return a[0] is not None
         letter = class_letter(a[1])
         return (h.kind == "cusip_handoff" and a[0] == b[0] and a[0] in one_class and letter is not None
-                and class_letter(b[1]) is None and line_class_letter(names.get(h.to_key, "")) == letter)
+                and class_letter(b[1]) is None and figi_class_letter(names.get(h.to_key, "")) == letter)
 
     links = sorted((h for h in handoffs if h.era_key in by_key and h.to_key in by_key and linked(h)),
                    key=lambda h: (h.era_key, h.kind != "shared_cusip", h.to_key))
