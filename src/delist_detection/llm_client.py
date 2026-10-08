@@ -11,6 +11,9 @@ expected (constructor-injection pattern, same as EdgarClient in PayoutExtractor)
 dict describing the expected output.  The method returns a parsed dict on
 success and MAY raise on hard failure (callers should wrap in try/except).
 
+A client may also carry ``model``, the name of the model it calls;
+``LLMMergerTermsExtractor`` labels its cache with it.
+
 Provided implementation: ``OpenAIJsonClient``.
 
 Factory: ``default_llm_client(model=None)`` — loads ``.env`` from the repo
@@ -80,6 +83,12 @@ class OpenAIJsonClient:
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
+
+    @property
+    def model(self) -> str:
+        """The model every request names. ``LLMMergerTermsExtractor`` labels
+        its cache with it."""
+        return self._model
 
     def extract(self, system: str, user: str, schema: dict) -> dict:
         """Call the chat-completions API and return a parsed JSON dict.

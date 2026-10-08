@@ -219,6 +219,13 @@ def test_other_models_keep_temperature_zero():
     assert fake._completions.calls[0]["temperature"] == 0
 
 
+def test_model_names_the_model_called():
+    """``model`` is the model every request names; the extractor labels its cache with it."""
+    client = OpenAIJsonClient(model="gpt-test", client=_FakeOpenAI(json.dumps(_PAYLOAD)))
+
+    assert client.model == "gpt-test"
+
+
 def test_model_resolution_raises_without_chat_model(monkeypatch):
     """ValueError when no model is supplied and CHAT_MODEL env var is absent."""
     monkeypatch.delenv("CHAT_MODEL", raising=False)
