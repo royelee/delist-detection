@@ -9,15 +9,18 @@ to `output/scorecard.json` on every run.
   (`data/accuracy_audit.csv`), both judged by `truth.judge`.
 - D.x: the diagnosis truth set (`data/diagnosis_truth.csv`, spec 2026-10-03-diagnosis-truth-fixes),
   judged by `diagnosis_truth.judge_case` against contract/delistings.csv and contract/payout_legs.csv.
+  Each judge keeps its own rules and gives `truth.Judgement`s; the G, A and D lines count them through one
+  `truth.tally`, so a status, a holding case and a failing `pass` case are counted alike in every set.
 
 Every line reads one run snapshot (`run_snapshot.RunSnapshot`): the pipeline's stage 10h builds it from the rows it
 is about to write, scripts/scorecard.py and the floor test from the written folder, so they agree by construction.
 
 `METRICS` gives each floored number its good direction. `drops` compares a
 scorecard to the floor in `data/scorecard.json` (a number that moved the bad
-way), `raise_floor` moves the floor up to a better scorecard. Window lines
+way), `raise_floor` moves the floor up to a better scorecard, and `flip` applies
+the flip rule (`truth.now_right`) to both truth sets. Window lines
 (`*_in_window`) are computed only when the config names the caller's training
-window. Pure, apart from `write` and `load_config`.
+window. Pure, apart from `write`, `load_config` and `flip`.
 """
 from __future__ import annotations
 
@@ -32,12 +35,13 @@ from .atomic_io import write_atomic
 from .lifecycle import (CLOSED_NO_EVENT, ENDED_INCOMPLETE,
                         HIGH, LEFT_VIEW, LOW, MEDIUM, NO_INTERVAL,
                         NO_MAPPED_SIGHTING, Lifecycle, LifecycleView)
-from .diagnosis_truth import (KNOWN_WRONG as D_KNOWN_WRONG, MISMATCH_FIELDS, PASS as D_PASS, RULING_PENDING,
-                              DiagnosisCase, LibraryRows, field_key, judge_all as judge_diagnosis)
+from . import truth
+from .diagnosis_truth import (MISMATCH_FIELDS, RULING_PENDING, DiagnosisCase, LibraryRows, field_key,
+                              judge_all as judge_diagnosis)
 from .exit_kind import (CONFLICT, EXCHANGE_PRINTS, UNCONFIRMED, VALUE_RULES, ending_fields, flag_names, is_distress,
                         is_real_ending, rests_on_continued_filings)
 from .run_snapshot import RunSnapshot
-from .truth import KNOWN_WRONG, PASS, TruthCase, clopper_pearson_upper, judge_all, load_truth
+from .truth import TruthCase, clopper_pearson_upper, judge_all, load_truth, tally
 from .truth_set import TruthSet, truth_file_of
 from .verdict import ENDING, SECURITY, SEED
 
@@ -89,11 +93,15 @@ class Window:
 
 @dataclass(frozen=True)
 class ScorecardConfig:
+    """data/scorecard.json as read (`load_config`): the window, the floor, each truth set's cases and, for `flip`,
+    the golden and diagnosis truth files (None when the config names none or the file is missing)."""
     window: Window | None = None
     floor: Mapping[str, float] = field(default_factory=dict)
     golden: Sequence[TruthCase] = ()
     audit: Sequence[TruthCase] = ()
     diagnosis: Sequence[DiagnosisCase] = ()
+    golden_file: Path | None = None
+    diagnosis_file: Path | None = None
 
 
 def load_config(path: str | Path) -> ScorecardConfig:
@@ -130,16 +138,15 @@ def load_config(path: str | Path) -> ScorecardConfig:
     if bad:
         raise ScorecardConfigError(f"{path}: floor entries {bad} are not floored metrics with a number")
 
-    def cases(key: str) -> list[TruthCase]:
-        name = raw.get(key)
-        if not name:
-            return []
-        p = path.parent / name
-        return load_truth(p, allow_pending=(key == "audit")) if p.exists() else []
+    def file(name: str | None) -> Path | None:
+        return path.parent / name if name and (path.parent / name).exists() else None
 
-    truth = truth_file_of(raw, path.parent, str(path))
-    diagnosis = TruthSet.open(truth).cases if truth is not None and truth.exists() else []
-    return ScorecardConfig(window, dict(floor), cases("golden"), cases("audit"), diagnosis)
+    golden, audit = file(raw.get("golden")), file(raw.get("audit"))
+    diagnosis = truth_file_of(raw, path.parent, str(path))
+    diagnosis = diagnosis if diagnosis is not None and diagnosis.exists() else None
+    return ScorecardConfig(window, dict(floor), load_truth(golden) if golden else [],
+                           load_truth(audit, allow_pending=True) if audit else [],
+                           TruthSet.open(diagnosis).cases if diagnosis else [], golden, diagnosis)
 
 
 def _share(n: int, d: int) -> float:
@@ -274,51 +281,45 @@ def _audited_uncertain(case: TruthCase, view: LifecycleView, unc: _Uncertain) ->
     return sec is None or unc.touches(view.lifecycle(sec))
 
 
-def _truth_lines(view: LifecycleView, config: ScorecardConfig, unc: _Uncertain | None = None) -> dict[str, float]:
+def _truth_lines(view: LifecycleView, config: ScorecardConfig,
+                 unc: _Uncertain | None = None) -> tuple[dict[str, float], list[str]]:
+    """The G and A lines and the failing golden `pass` cases."""
     out: dict[str, float] = {}
-    golden = judge_all(config.golden, view)
-    if golden:
-        out["G.cases"] = len(golden)
-        out["G.pass"] = sum(j.ok for j in golden if j.case.status == PASS)
-        out["G.pass_failing"] = sum(not j.ok for j in golden if j.case.status == PASS)
-        out["G.known_wrong"] = sum(j.case.status == KNOWN_WRONG for j in golden)
-        out["G.known_wrong_now_right"] = sum(j.ok for j in golden if j.case.status == KNOWN_WRONG)
+    golden = tally(judge_all(config.golden, view))
+    if golden.cases:
+        out.update({"G.cases": golden.cases, "G.pass": golden.passing, "G.pass_failing": golden.pass_failing,
+                    "G.known_wrong": golden.known_wrong, "G.known_wrong_now_right": golden.now_right})
     if config.audit:
         out["A.pending"] = sum(c.pending for c in config.audit)
     audit = judge_all([c for c in config.audit if not c.pending], view)
     if audit:
-        rnd = [j for j in audit if j.case.group == "random"]
-        errs = sum(not j.ok for j in rnd)
-        out["A.random.n"], out["A.random.errors"] = len(rnd), errs
-        out["A.random.upper95"] = round(clopper_pearson_upper(errs, len(rnd)), 6)
+        rnd = tally([j for j in audit if j.case.group == "random"])
+        out["A.random.n"], out["A.random.errors"] = rnd.cases, rnd.errors
+        out["A.random.upper95"] = round(clopper_pearson_upper(rnd.errors, rnd.cases), 6)
         for g in CENSUS_GROUPS:
-            rows = [j for j in audit if j.case.group == f"census:{g}"]
-            out[f"A.census.{g}.n"] = len(rows)
-            out[f"A.census.{g}.errors"] = sum(not j.ok for j in rows)
+            census = tally([j for j in audit if j.case.group == f"census:{g}"])
+            out[f"A.census.{g}.n"], out[f"A.census.{g}.errors"] = census.cases, census.errors
         if unc is not None:
             out["V.audit.confirmed_but_wrong"] = sum(not j.ok and not _audited_uncertain(j.case, view, unc)
                                                      for j in audit)
-    return out
+    return out, list(golden.failures)
 
 
 def _diagnosis_lines(tables: RunSnapshot, config: ScorecardConfig) -> tuple[dict[str, float], list[str]]:
     """The D lines and the failing `pass` cases; none without a truth set or a contract with payout columns."""
     if not config.diagnosis or tables.contract_delistings is None:
         return {}, []
-    judged = judge_diagnosis(config.diagnosis, LibraryRows.of(tables))
-    counts = Counter(field_key(m.field) for j in judged for m in j.mismatches)
+    judged = tally(judge_diagnosis(config.diagnosis, LibraryRows.of(tables)), key=field_key)
     out: dict[str, float] = {
         "D.cases": len(config.diagnosis),
         "D.ruling_pending": sum(c.status == RULING_PENDING for c in config.diagnosis),
-        "D.known_wrong": sum(j.case.status == D_KNOWN_WRONG for j in judged),
-        "D.known_wrong_now_right": sum(j.ok for j in judged if j.case.status == D_KNOWN_WRONG),
-        "D.cases_matching": sum(j.ok for j in judged),
-        "D.mismatches": sum(counts.values()),
-        **{f"D.mismatches.{f}": counts.get(f, 0) for f in MISMATCH_FIELDS},
+        "D.known_wrong": judged.known_wrong,
+        "D.known_wrong_now_right": judged.now_right,
+        "D.cases_matching": judged.matching,
+        "D.mismatches": judged.mismatches,
+        **{f"D.mismatches.{f}": judged.fields.get(f, 0) for f in MISMATCH_FIELDS},
     }
-    failures = [f"{j.case.case_id}: {'; '.join(map(str, j.mismatches))}" for j in judged
-                if j.case.status == D_PASS and not j.ok]
-    return out, failures
+    return out, list(judged.failures)
 
 
 def build(tables: RunSnapshot, *, config: ScorecardConfig = ScorecardConfig()) -> dict:
@@ -326,14 +327,36 @@ def build(tables: RunSnapshot, *, config: ScorecardConfig = ScorecardConfig()) -
     "golden_failures", "diagnosis_failures"}."""
     view = LifecycleView(tables)
     unc = None if tables.uncertain is None else _Uncertain.of(tables.uncertain)
+    truth_lines, golden_failures = _truth_lines(view, config, unc)
     diag, diag_failures = _diagnosis_lines(tables, config)
     metrics = {**_lifecycle_lines(view), **_identity_lines(tables), **_ending_lines(tables, config.window),
-               **_verdict_lines(tables, view, config.window, unc), **_truth_lines(view, config, unc), **diag}
-    failures = [f"{j.case.case}: {'; '.join(j.mismatches)}" for j in judge_all(config.golden, view)
-                if j.case.status == PASS and not j.ok]
+               **_verdict_lines(tables, view, config.window, unc), **truth_lines, **diag}
     window = None if config.window is None else {"start": config.window.start, "end": config.window.end}
-    return {"as_of": tables.as_of.isoformat(), "window": window, "metrics": metrics, "golden_failures": failures,
-            "diagnosis_failures": diag_failures}
+    return {"as_of": tables.as_of.isoformat(), "window": window, "metrics": metrics,
+            "golden_failures": golden_failures, "diagnosis_failures": diag_failures}
+
+
+@dataclass(frozen=True)
+class Flipped:
+    """The case ids `flip` moved to pass, by truth set."""
+    golden: tuple[str, ...]
+    diagnosis: tuple[str, ...]
+
+
+def flip(tables: RunSnapshot, config: ScorecardConfig) -> Flipped:
+    """The flip rule (`truth.now_right`) on both truth sets the config names, against one run (`tables`): every
+    known_wrong golden case the run now matches becomes pass with a note (`truth.flip`), and every known_wrong
+    diagnosis case with a change-log row (`truth_set.TruthSet.flip`, then its commit). The diagnosis set is flipped
+    only when the run has a contract with payout columns, the D lines' rule (without one a no_ending case would
+    hold on nothing). Writes only a file in which a case flipped. Raises truth.TruthFileError."""
+    golden = truth.flip(config.golden_file, LifecycleView(tables)) if config.golden_file is not None else []
+    diagnosis: list[str] = []
+    if config.diagnosis_file is not None and tables.contract_delistings is not None:
+        ts = TruthSet.open(config.diagnosis_file)
+        if ts.flip(LibraryRows.of(tables)):
+            diagnosis = [c["case_id"] for c in ts.changes]
+            ts.commit()
+    return Flipped(tuple(golden), tuple(diagnosis))
 
 
 def drops(card: Mapping, floor: Mapping[str, float]) -> list[str]:

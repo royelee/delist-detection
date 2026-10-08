@@ -2401,7 +2401,7 @@ def test_the_verdicts_recomputed_from_the_written_folder_are_the_runs(fake_edgar
 
 def test_run_reports_floor_drops_and_failing_golden_cases(fake_edgar, tmp_path):
     index, clients = _clients(fake_edgar)
-    golden = [TruthCase(case="AET", group="golden", ticker="AET", on="2017-06-30", issuer_cik="999", status="pass")]
+    golden = [TruthCase(case_id="AET", group="golden", ticker="AET", on="2017-06-30", issuer_cik="999", status="pass")]
     config = ScorecardConfig(floor={"G.pass": 1, "L1.coverage_tickers": 1.0}, golden=golden)
     logged = []
     summary = run(index, clients, Overrides(), out_dir=tmp_path, log=logged.append, scorecard=config)

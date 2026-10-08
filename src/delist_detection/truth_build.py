@@ -15,9 +15,8 @@ from __future__ import annotations
 from collections import Counter
 from collections.abc import Callable, Collection, Mapping, Sequence
 
-from .diagnosis_truth import (COLUMNS, ENDING, ENDING_MOVED, KNOWN_WRONG, NO_ENDING, NOT_SCORED, PASS,
-                              RULING_PENDING, SCORED, CaseJudgement, field_key)
-from .truth_set import noted
+from .diagnosis_truth import COLUMNS, ENDING, ENDING_MOVED, NO_ENDING, NOT_SCORED, RULING_PENDING, SCORED, field_key
+from .truth import KNOWN_WRONG, PASS, Judgement, noted
 
 # What `composite_of` returns for an OpenFIGI answer that cannot settle R2 (an error, or several US lines), as
 # against None (no US line: one security).
@@ -86,7 +85,7 @@ def final_status(row: dict[str, str], ok: bool, sub_plan: str) -> None:
         _note(row, "the library differs, but the case map gives no sub-plan (the report found it right)")
 
 
-def review_markdown(rows: Sequence[Mapping[str, str]], judgements: Sequence[CaseJudgement]) -> str:
+def review_markdown(rows: Sequence[Mapping[str, str]], judgements: Sequence[Judgement]) -> str:
     """The operator's review page for the built truth file."""
     status = Counter(r["status"] for r in rows)
     shape = Counter(r["shape"] for r in rows)

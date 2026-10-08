@@ -5,7 +5,7 @@ import pytest
 
 from delist_detection import scorecard as sc
 from delist_detection.scorecard import ScorecardConfig, ScorecardConfigError, Window
-from delist_detection.truth import TRUTH_COLUMNS, TruthCase
+from delist_detection.truth import TRUTH_COLUMNS, TruthCase, TruthFileError
 from tests.lifecycle_tables import ending, iv, obs, review, sec, tables
 
 AS_OF = date(2026, 9, 25)
@@ -63,7 +63,7 @@ def test_empty_tables_give_zero_shares():
 
 
 def _case(case, status="", group="golden", **cells):
-    return TruthCase(case=case, group=group, ticker=cells.pop("ticker", "AAA"), on=cells.pop("on", "2010-06-30"),
+    return TruthCase(case_id=case, group=group, ticker=cells.pop("ticker", "AAA"), on=cells.pop("on", "2010-06-30"),
                      status=status, fixed_by="reset-4a" if status == "known_wrong" else "", **cells)
 
 
@@ -111,7 +111,7 @@ def test_load_config_reads_the_window_floor_and_truth_files(tmp_path):
                                             "floor": {"G.pass": 1}, "golden": "golden.csv",
                                             "audit": "audit.csv"}, [row]))
     assert cfg.window == Window("2006-01-02", "2024-12-29") and cfg.floor == {"G.pass": 1}
-    assert [c.case for c in cfg.golden] == ["AAA"] and cfg.audit == []        # a missing audit file: no cases
+    assert [c.case_id for c in cfg.golden] == ["AAA"] and cfg.audit == []        # a missing audit file: no cases
 
 
 @pytest.mark.parametrize("raw, says", [
@@ -188,6 +188,9 @@ def test_build_has_no_value_rule_lines_without_the_contract():
 
 
 from delist_detection import diagnosis_truth as dt
+from delist_detection import truth_set as ts
+from delist_detection.truth import load_truth, write_truth as write_golden
+from delist_detection.truth_set import TruthSet
 from tests.diagnosis_rows import leg_row, truth_row, write_truth
 from tests.lifecycle_tables import contract_row
 
@@ -234,5 +237,46 @@ def test_load_config_refuses_legs_not_named_after_the_truth_file(tmp_path):
     write_truth(tmp_path / "d.csv", [truth_row("A_2012-03-10", "A")])
     cfg = tmp_path / "scorecard.json"
     cfg.write_text(json.dumps({"diagnosis": "d.csv", "diagnosis_legs": "l.csv"}))
-    with pytest.raises(dt.DiagnosisTruthError, match="named after the truth file"):
+    with pytest.raises(TruthFileError, match="named after the truth file"):
         sc.load_config(cfg)
+
+
+def _flip_config(tmp_path):
+    """A config naming a golden file (one known_wrong case `_tables()` now matches, one it does not) and a diagnosis
+    truth set (the same, plus a known_wrong no_ending case)."""
+    blank = dict.fromkeys(TRUTH_COLUMNS, "")
+    write_golden(tmp_path / "golden.csv", [
+        {**blank, "case": "right", "group": "golden", "ticker": "AAA", "on": "2010-06-30", "exit_kind": "merger",
+         "status": "known_wrong", "fixed_by": "reset-4a"},
+        {**blank, "case": "wrong", "group": "golden", "ticker": "AAA", "on": "2010-06-30",
+         "exit_kind": "liquidation", "status": "known_wrong", "fixed_by": "reset-4a"}])
+    write_truth(tmp_path / "d.csv", [
+        truth_row("A_2012-03-10", "A", status="known_wrong", fixed_by="5a", exit_kind="merger"),
+        truth_row("B_2010-05-10", "B", status="known_wrong", fixed_by="5a", exit_kind="merger"),
+        truth_row("C_2011-01-01", "C", status="known_wrong", fixed_by="5a", shape="no_ending")])
+    path = tmp_path / "scorecard.json"
+    path.write_text(json.dumps({"golden": "golden.csv", "diagnosis": "d.csv"}))
+    return sc.load_config(path)
+
+
+def test_flip_applies_the_one_flip_rule_to_both_truth_sets(tmp_path):
+    config = _flip_config(tmp_path)
+    assert config.golden_file == tmp_path / "golden.csv" and config.diagnosis_file == tmp_path / "d.csv"
+    run = _tables(contract_delistings=[contract_row("A", exit_kind="merger"), contract_row("B", exit_kind="exchange"),
+                                       contract_row("C", exit_kind="merger")])
+    m = sc.build(run, config=config)["metrics"]
+    assert (m["G.known_wrong_now_right"], m["D.known_wrong_now_right"]) == (1, 1)     # what the flip moves
+    assert sc.flip(run, config) == sc.Flipped(("right",), ("A_2012-03-10",))
+    assert [(c.case_id, c.status) for c in load_truth(tmp_path / "golden.csv")] == [
+        ("right", "pass"), ("wrong", "known_wrong")]
+    assert [(c.case_id, c.status) for c in TruthSet.open(tmp_path / "d.csv").cases] == [
+        ("A_2012-03-10", "pass"), ("B_2010-05-10", "known_wrong"), ("C_2011-01-01", "known_wrong")]
+    assert sc.flip(run, sc.load_config(tmp_path / "scorecard.json")) == sc.Flipped((), ())
+
+
+def test_flip_leaves_the_diagnosis_set_alone_without_a_contract(tmp_path):
+    """Without contract/delistings.csv the D lines are not computed, and C's no_ending case would hold on nothing."""
+    config = _flip_config(tmp_path)
+    before = (tmp_path / "d.csv").read_bytes()
+    assert sc.flip(_tables(), config) == sc.Flipped(("right",), ())
+    assert (tmp_path / "d.csv").read_bytes() == before and not ts.changes_path(tmp_path / "d.csv").exists()

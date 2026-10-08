@@ -1,7 +1,8 @@
 """The golden set (data/golden_lifecycles.csv) against the committed output
 tables. A `pass` case must hold. A `known_wrong` case must still fail (strict
 xfail) until the plan named in its `fixed_by` lands; that plan flips it to
-`pass` and raises the scorecard floor (scripts/scorecard.py --raise-floor)."""
+`pass` (scripts/scorecard.py --flip, the flip rule both truth sets share) and
+raises the scorecard floor (scripts/scorecard.py --raise-floor)."""
 from pathlib import Path
 
 import pytest
@@ -19,9 +20,9 @@ def view():
     return LifecycleView(RunSnapshot.read(ROOT / "output"))
 
 
-@pytest.mark.parametrize("case", CASES, ids=[c.case for c in CASES])
+@pytest.mark.parametrize("case", CASES, ids=[c.case_id for c in CASES])
 def test_golden_lifecycle(case, view, request):
     if case.status == KNOWN_WRONG:
         request.applymarker(pytest.mark.xfail(strict=True, reason=f"known wrong until {case.fixed_by}"))
     j = judge(case, view)
-    assert j.ok, "; ".join(j.mismatches)
+    assert j.ok, str(j)

@@ -8,8 +8,8 @@ import pytest
 
 from delist_detection import store
 from delist_detection.loop_round import Unexplained
-from delist_detection.truth import load_truth
-from delist_detection.truth_set import LEDGER_COLUMNS
+from delist_detection.truth import TRUTH_COLUMNS, TruthFileError, load_truth, write_truth as write_golden
+from delist_detection.truth_set import LEDGER_COLUMNS, TruthSet
 from tests.diagnosis_rows import truth_row, write_truth
 from tests.lifecycle_tables import contract_row, ending, iv, obs, sec, tables
 
@@ -140,3 +140,37 @@ def test_base_asks_the_loop_round_for_the_unexplained_count_and_check_fails_unle
     assert scorecard_script.main([*argv, "--base", "REV"]) == 0
     assert re.search(r"^D\.unexplained_regressions +0$", capsys.readouterr().out, re.M)
     assert asked == [(f"REV@{tmp_path}", "2026-09-25", ["A_2010-01-04"], ["k"])] * 2
+
+
+def test_flip_moves_each_known_wrong_case_of_both_sets_the_tables_now_match_and_says_which(tmp_path, out, capsys):
+    store.write_tables(out, {"contract_delistings": [contract_row("A", exit_kind="merger", value_rule="cash")]})
+    write_golden(tmp_path / "golden.csv", [{**dict.fromkeys(TRUTH_COLUMNS, ""), "case": "AAA", "group": "golden",
+                                            "ticker": "AAA", "on": "2010-06-30", "exit_kind": "merger",
+                                            "status": "known_wrong", "fixed_by": "reset-4a"}])
+    write_truth(tmp_path / "d.csv", [truth_row("A_2012-03-10", "A", status="known_wrong", fixed_by="5a",
+                                               exit_kind="merger")])
+    cfg = tmp_path / "scorecard.json"
+    cfg.write_text(json.dumps({"golden": "golden.csv", "diagnosis": "d.csv", "floor": {}}))
+    argv = ["--output-dir", str(out), "--config", str(cfg)]
+    assert scorecard_script.main(argv) == 0
+    assert "flipped" not in capsys.readouterr().out                          # only --flip writes
+    assert [c.status for c in load_truth(tmp_path / "golden.csv")] == ["known_wrong"]
+    assert scorecard_script.main([*argv, "--flip"]) == 0
+    printed = capsys.readouterr().out
+    assert "flipped 1 golden case(s) to pass: AAA\n" in printed
+    assert "flipped 1 diagnosis case(s) to pass: A_2012-03-10\n" in printed
+    assert [c.status for c in load_truth(tmp_path / "golden.csv")] == ["pass"]
+    assert [c.status for c in TruthSet.open(tmp_path / "d.csv").cases] == ["pass"]
+    assert scorecard_script.main([*argv, "--flip"]) == 0
+    printed = capsys.readouterr().out
+    assert "flipped 0 golden case(s) to pass\n" in printed and "flipped 0 diagnosis case(s) to pass\n" in printed
+
+
+@pytest.mark.parametrize("error", [TruthFileError("golden.csv:3: bad"), OSError("disk full")])
+def test_a_flip_that_cannot_read_or_write_a_truth_file_exits_2(tmp_path, out, capsys, monkeypatch, error):
+    def refuse(run, config):
+        raise error
+
+    monkeypatch.setattr(scorecard_script, "flip", refuse)
+    assert scorecard_script.main(["--output-dir", str(out), "--config", str(_config(tmp_path, {})), "--flip"]) == 2
+    assert f"ABORTED: {error}" in capsys.readouterr().err

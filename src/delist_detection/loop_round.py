@@ -1,7 +1,7 @@
 """One round of the diagnosis truth loop (spec 2026-10-03-diagnosis-truth-fixes, sections 1.6 and 1.7), and every
 token a round's errors are known by.
 
-An error is a truth mismatch (a scored field the run gets wrong: `diagnosis_truth.Mismatch`) or a regression report
+An error is a truth mismatch (a scored field the run gets wrong: `truth.Mismatch`) or a regression report
 row (a contract field that changed outside the truth set since a base commit: `regression.build_report`). A round
 of one sub-plan (`Round`, under a loop folder, `Loop`):
 
@@ -48,12 +48,12 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .atomic_io import write_atomic
-from .diagnosis_truth import (RULING_PENDING, SCORED, CaseJudgement, DiagnosisCase, LibraryRows, Mismatch, judge_all,
-                              parse_rows)
+from .diagnosis_truth import RULING_PENDING, SCORED, DiagnosisCase, LibraryRows, judge_all, parse_rows
 from .exit_kind import last_endings
 from .regression import (ADDED, REMOVED, REPORT_COLUMNS, build_report, id_changes_since, pending_regression,
                          report_row, write_report)
 from .run_snapshot import RunSnapshot
+from .truth import Judgement, Mismatch
 from .truth_set import TruthSet
 
 LOOP_DIR = Path("output/diagnose_unknown_report/loop")          # under a repository
@@ -339,7 +339,7 @@ class Loop:
         return Seeded(label, len(ts.settled), self.ledger)
 
 
-def _seed_rows(judgements: Sequence[CaseJudgement], seen: Collection[str], label: str) -> list[dict[str, str]]:
+def _seed_rows(judgements: Sequence[Judgement], seen: Collection[str], label: str) -> list[dict[str, str]]:
     return [ledger_row(mismatch_key(m), sec_id=j.case.sec_id, label=label, round_no=0, outcome=KNOWN,
                        report=j.case.report)
             for j in judgements for m in j.mismatches if mismatch_key(m) not in seen]

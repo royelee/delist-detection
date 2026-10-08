@@ -39,11 +39,12 @@ from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from .diagnosis_truth import (COLUMNS, ENDING, KNOWN_WRONG, NO_ENDING, NOT_SCORED, PASS, REGRESSION_PENDING,
-                              RULING_PENDING, SCORED, LibraryRows)
+from .diagnosis_truth import (COLUMNS, ENDING, NO_ENDING, NOT_SCORED, REGRESSION_PENDING, RULING_PENDING, SCORED,
+                              LibraryRows)
 from .loop_round import (LIBRARY, LIBRARY_RIGHT, NEW, NEW_RIGHT, OLD, OLD_RIGHT, PENDING, RECORD_KEYS, REGRESSION,
                          TRUTH, TRUTH_RIGHT, VERIFIED, RoundCase, ledger_row, new_row_keys, parse_field)
 from .regression import BRIEF_COLUMNS
+from .truth import KNOWN_WRONG, PASS
 
 if TYPE_CHECKING:                   # the truth set calls these rules (TruthSet.apply_round); no import at run time
     from .truth_set import TruthSet

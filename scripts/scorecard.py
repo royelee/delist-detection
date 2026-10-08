@@ -9,6 +9,9 @@ the floor in --config (spec: Delist Library Reset, step 1 "Measure first").
                                                  # (D.unexplained_regressions, `loop_round.unexplained`)
   python scripts/scorecard.py --write            # also rewrite <output-dir>/scorecard.json
   python scripts/scorecard.py --raise-floor      # move the config's floor to every better number (never worse)
+  python scripts/scorecard.py --flip             # the flip rule on both truth sets: every known_wrong golden and
+                                                 # diagnosis case these tables now match becomes pass
+                                                 # (`scorecard.flip`)
   python scripts/scorecard.py --lifecycles l.csv # one row per input ticker and per security
 
 Offline. The tables, the run date (run_manifest.json's as_of; today when
@@ -30,7 +33,7 @@ ROOT = Path(__file__).resolve().parents[1]
 from delist_detection.atomic_io import write_atomic
 from delist_detection.lifecycle import LifecycleView
 from delist_detection.loop_round import Loop, unexplained
-from delist_detection.scorecard import (ScorecardConfigError, build, drops, load_config, raise_floor, write)
+from delist_detection.scorecard import (ScorecardConfigError, build, drops, flip, load_config, raise_floor, write)
 from delist_detection.run_snapshot import RunSnapshot, SnapshotError
 from delist_detection.truth import TruthFileError
 from delist_detection.truth_set import read_ledger
@@ -68,6 +71,8 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--repo", type=Path, default=ROOT)
     p.add_argument("--ledger", type=Path, default=Loop.of(ROOT).ledger, help="the diagnosis loop's diagnosed.csv")
     p.add_argument("--raise-floor", action="store_true")
+    p.add_argument("--flip", action="store_true", help="every known_wrong golden and diagnosis case the tables now "
+                   "match becomes pass, its fixed_by cleared (truth.now_right, the one flip rule)")
     p.add_argument("--lifecycles", type=Path)
     return p
 
@@ -104,6 +109,14 @@ def main(argv: list[str] | None = None) -> int:
     if args.lifecycles:
         write_atomic(args.lifecycles, _csv_text(LIFECYCLE_COLUMNS, lifecycle_rows(LifecycleView(run))))
         print(f"wrote {args.lifecycles}")
+    if args.flip:
+        try:
+            flipped = flip(run, config)
+        except (TruthFileError, OSError) as exc:
+            print(f"ABORTED: {exc}", file=sys.stderr)
+            return 2
+        for name, ids in (("golden", flipped.golden), ("diagnosis", flipped.diagnosis)):
+            print(f"flipped {len(ids)} {name} case(s) to pass" + (f": {', '.join(ids)}" if ids else ""))
     if args.raise_floor:
         raw = json.loads(args.config.read_text(encoding="utf-8"))
         raw["floor"] = raise_floor(card, config.floor)

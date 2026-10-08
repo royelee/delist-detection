@@ -15,7 +15,7 @@ Validation, when a set is opened and again before `commit` writes anything:
 - every leg row passes `diagnosis_truth.parse_legs` and names a case of the truth file;
 - a row with a missing or an extra cell is refused. The one exception is a change-log record, which may carry
   cells past its six: the log is history, and each record keeps the bytes it was read with.
-Every failure is a DiagnosisTruthError naming the file and line.
+Every failure is a `truth.TruthFileError` naming the file and line.
 
 The changes:
 - `rule(ruling)`: a `Ruling` (a sub-plan's or the controller's) sets cells, and may replace a case's legs, with
@@ -24,13 +24,14 @@ The changes:
 - `correct(correction)`: a reason a ruling stated wrongly, corrected in the case's note and its change-log reasons.
 - `rename(id_changes)`: every truth cell and leg that names a renamed security names the security it is now
   (`regression.renamed_to`, the one chain rule).
-- `flip(lib)`: every known_wrong case that now matches the run becomes pass.
+- `flip(lib)`: the flip rule (`truth.now_right`, the golden set's too): every known_wrong case that now matches
+  the run becomes pass.
 - `apply_round(...)`: one loop round's diagnoses, by truth_update's rules (`loop_round.Round.close` calls it).
 - `settle(ledger_rows)`: ledger rows (a seed).
 They are made of four primitives that truth_update's rules also use: `set_cells`, `move_status`, `add_row` and
 `settle`.
 Every changed cell is one change-log row (case_id, field, old, new, reason, report). A note grows by `; tag: why`,
-or takes the text alone when it was empty (`noted`). A change that changes nothing logs nothing.
+or takes the text alone when it was empty (`truth.noted`). A change that changes nothing logs nothing.
 
 `commit` writes every file whose content changed, all of them or none (`atomic_io.replace_all_on_success`). A file
 nothing changed keeps its bytes. The change log is appended to, and its old records are written back as they were
@@ -47,9 +48,10 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from .atomic_io import replace_all_on_success
-from .diagnosis_truth import (COLUMNS, KNOWN_WRONG, LEG_COLUMNS, PASS, DiagnosisCase, DiagnosisTruthError, LibraryRows,
-                              judge_all, leg_field, parse_legs, parse_rows)
+from .diagnosis_truth import (COLUMNS, LEG_COLUMNS, DiagnosisCase, LibraryRows, judge_all, leg_field, parse_legs,
+                              parse_rows)
 from .regression import renamed_to
+from .truth import KNOWN_WRONG, NOW_MATCHES, PASS, TruthFileError, noted, now_right
 
 if TYPE_CHECKING:
     from .loop_round import RoundCase
@@ -60,7 +62,6 @@ LEDGER_COLUMNS = ("key", "kind", "sec_id", "label", "round", "outcome", "report"
 CONFIG = Path("data") / "scorecard.json"         # under a repository: names the truth file ("diagnosis")
 RENAMED_FIELDS = ("sec_id", "price_sec_id", "successor_sec_id")
 RENAME_REASON = "contract/id_changes.csv: the placeholder now holds a FIGI"
-NOW_MATCHES = "the library now matches"
 _TRUTH, _LEGS, _CHANGES, _LEDGER = "truth", "legs", "changes", "ledger"
 
 
@@ -83,32 +84,27 @@ def truth_file_of(config: Mapping, folder: str | Path, where: str = "config") ->
     legs = config.get("diagnosis_legs")
     if not name:
         if legs:
-            raise DiagnosisTruthError(f"{where}: diagnosis_legs without a diagnosis truth file")
+            raise TruthFileError(f"{where}: diagnosis_legs without a diagnosis truth file")
         return None
     truth = Path(folder) / name
     if legs and Path(folder) / legs != legs_path(truth):
-        raise DiagnosisTruthError(f"{where}: diagnosis_legs {legs!r} is not {legs_path(truth).name!r}: the legs are "
+        raise TruthFileError(f"{where}: diagnosis_legs {legs!r} is not {legs_path(truth).name!r}: the legs are "
                                   "named after the truth file")
     return truth
 
 
 def configured(repo: str | Path) -> Path:
-    """The truth file the repository's data/scorecard.json names. Raises DiagnosisTruthError when the config cannot
+    """The truth file the repository's data/scorecard.json names. Raises TruthFileError when the config cannot
     be read or names none."""
     path = Path(repo) / CONFIG
     try:
         raw = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError) as exc:
-        raise DiagnosisTruthError(f"{path}: {exc}") from None
+        raise TruthFileError(f"{path}: {exc}") from None
     truth = truth_file_of(raw, path.parent, str(path)) if isinstance(raw, dict) else None
     if truth is None:
-        raise DiagnosisTruthError(f"{path}: names no diagnosis truth file")
+        raise TruthFileError(f"{path}: names no diagnosis truth file")
     return truth
-
-
-def noted(note: str, text: str) -> str:
-    """`note` with `text` added: `note; text`, or `text` alone when the note is empty."""
-    return f"{note}; {text}" if note else text
 
 
 def read_ledger(path: str | Path) -> list[dict[str, str]]:
@@ -164,7 +160,7 @@ def _decode(path: Path, data: bytes) -> str:
     try:
         return data.decode("utf-8-sig")
     except UnicodeDecodeError as exc:
-        raise DiagnosisTruthError(f"{path}: not UTF-8 ({exc})") from None
+        raise TruthFileError(f"{path}: not UTF-8 ({exc})") from None
 
 
 def _read_rows(path: Path, data: bytes | None, columns: Sequence[str]) -> list[dict[str, str]]:
@@ -173,13 +169,13 @@ def _read_rows(path: Path, data: bytes | None, columns: Sequence[str]) -> list[d
     reader = csv.reader(io.StringIO(_decode(path, data), newline=""))
     header = next(reader, None)
     if tuple(header or ()) != tuple(columns):
-        raise DiagnosisTruthError(f"{path}: columns {header} are not {list(columns)}")
+        raise TruthFileError(f"{path}: columns {header} are not {list(columns)}")
     out = []
     for cells in reader:
         if not cells:
             continue                # a blank line holds no row
         if len(cells) != len(columns):
-            raise DiagnosisTruthError(f"{path}:{reader.line_num}: {len(cells)} cells, not {len(columns)}")
+            raise TruthFileError(f"{path}:{reader.line_num}: {len(cells)} cells, not {len(columns)}")
         out.append(dict(zip(columns, cells)))
     return out
 
@@ -198,13 +194,13 @@ def _read_log(path: Path, data: bytes | None) -> tuple[str, list[_Record]]:
     reader = csv.reader(feed())
     header = next(reader, None)
     if tuple(header or ()) != CHANGE_COLUMNS:
-        raise DiagnosisTruthError(f"{path}: columns {header} are not {list(CHANGE_COLUMNS)}")
+        raise TruthFileError(f"{path}: columns {header} are not {list(CHANGE_COLUMNS)}")
     head, start = "".join(lines), len(lines)
     records = []
     for cells in reader:
         raw = "".join(lines[start:])
         if cells and len(cells) < len(CHANGE_COLUMNS):
-            raise DiagnosisTruthError(f"{path}:{start + 1}: {len(cells)} cells, not {len(CHANGE_COLUMNS)}")
+            raise TruthFileError(f"{path}:{start + 1}: {len(cells)} cells, not {len(CHANGE_COLUMNS)}")
         records.append(_Record(raw, dict(zip(CHANGE_COLUMNS, cells)) if cells else None))
         start = len(lines)
     return head, records
@@ -246,7 +242,7 @@ class TruthSet:
     @classmethod
     def open(cls, truth: str | Path, *, ledger: str | Path | None = None) -> TruthSet:
         """The truth set of the truth file `truth`, with the ledger at `ledger` when the changes will settle loop
-        errors. A missing file is an empty one. Raises DiagnosisTruthError (module docstring: validation)."""
+        errors. A missing file is an empty one. Raises TruthFileError (module docstring: validation)."""
         truth = Path(truth)
         ledger = None if ledger is None else Path(ledger)
         return cls._read(truth, ledger, None)
@@ -263,7 +259,7 @@ class TruthSet:
             for r in given:
                 missing = [c for c in columns if c not in r]
                 if missing:
-                    raise DiagnosisTruthError(f"{where}: a row lacks {missing}")
+                    raise TruthFileError(f"{where}: a row lacks {missing}")
             return [{c: str(r[c]) for c in columns} for r in given]
 
         return cls._read(truth, None if ledger is None else Path(ledger),
@@ -291,7 +287,7 @@ class TruthSet:
         cases = parse_rows(self._rows, str(self.truth), legs)
         unknown = sorted(set(legs) - {c.case_id for c in cases})
         if unknown:
-            raise DiagnosisTruthError(f"{self._paths[_LEGS]}: legs for unknown case(s) {unknown}")
+            raise TruthFileError(f"{self._paths[_LEGS]}: legs for unknown case(s) {unknown}")
         return cases
 
     # -- reading ------------------------------------------------------------------------------------------------
@@ -334,7 +330,7 @@ class TruthSet:
     def _case(self, case_id: str) -> dict[str, str]:
         r = self._by_case.get(case_id)
         if r is None:
-            raise DiagnosisTruthError(f"{self.truth}: no case {case_id!r}")
+            raise TruthFileError(f"{self.truth}: no case {case_id!r}")
         return r
 
     def _log(self, case_id: str, name: str, old: str, new: str, reason: str, report: str) -> None:
@@ -347,7 +343,7 @@ class TruthSet:
         n = 0
         for name, value in cells:
             if name not in r:
-                raise DiagnosisTruthError(f"{self.truth}: no column {name!r}")
+                raise TruthFileError(f"{self.truth}: no column {name!r}")
             if r[name] != value:
                 self._log(case_id, name, r[name], value, reason, report)
                 r[name] = value
@@ -372,9 +368,9 @@ class TruthSet:
         """Add one truth row (every COLUMNS cell), logged as `(row)` added with its status."""
         missing = [c for c in COLUMNS if c not in row]
         if missing:
-            raise DiagnosisTruthError(f"{self.truth}: a new row lacks {missing}")
+            raise TruthFileError(f"{self.truth}: a new row lacks {missing}")
         if row["case_id"] in self._by_case:
-            raise DiagnosisTruthError(f"{self.truth}: case_id {row['case_id']!r} is repeated")
+            raise TruthFileError(f"{self.truth}: case_id {row['case_id']!r} is repeated")
         r = {c: row[c] for c in COLUMNS}
         self._rows.append(r)
         self._by_case[r["case_id"]] = r
@@ -387,7 +383,7 @@ class TruthSet:
         for r in ledger_rows:
             missing = [c for c in LEDGER_COLUMNS if c not in r]
             if missing:
-                raise DiagnosisTruthError(f"{self.ledger}: a new row lacks {missing}")
+                raise TruthFileError(f"{self.ledger}: a new row lacks {missing}")
             self._ledger_rows.append({c: r[c] for c in LEDGER_COLUMNS})
 
     # -- the changes --------------------------------------------------------------------------------------------
@@ -452,10 +448,9 @@ class TruthSet:
         return n
 
     def flip(self, lib: LibraryRows) -> int:
-        """Every known_wrong case that now matches the run (`lib`) becomes pass. Returns how many did."""
-        matching = {j.case.case_id for j in judge_all(self.cases, lib) if j.ok}
-        return sum(self.move_status(r["case_id"], PASS, reason=NOW_MATCHES) for r in list(self._rows)
-                   if r["status"] == KNOWN_WRONG and r["case_id"] in matching)
+        """The flip rule (`truth.now_right`): every known_wrong case that now matches the run (`lib`) becomes pass,
+        one change-log row each (reason `truth.NOW_MATCHES`). Returns how many did."""
+        return sum(self.move_status(cid, PASS, reason=NOW_MATCHES) for cid in now_right(judge_all(self.cases, lib)))
 
     def apply_round(self, cases: Sequence[RoundCase], records: Mapping[str, Mapping],
                     base_contract: Mapping[str, Mapping[str, str]], run: LibraryRows, *, label: str, round_no: int,

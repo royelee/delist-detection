@@ -13,15 +13,22 @@ compares one run's tables to it.
 `examined_delist_date` is the delist_date of the ending the report examined: required for ending_moved, blank when
 the case examined no ending (a removed row). It is a column of its own, never read from the case_id (a loop-added
 case's id ends in its round, not a date).
-A scored cell holds the value, a blank (the field must be blank) or `*` (not scored). `internal_last_trade_date`
-is the corrected last trade date for delistings.csv when the contract leaves it blank (a worked-out date; decision
-12 publishes only exchange prints); blank there means not scored. `status` is pass (must match now), known_wrong
-(must not match yet; `fixed_by` names the sub-plan, or `residual`) or ruling_pending (not judged; `fixed_by`
-`regression` marks a regressed row the loop could not settle). `data/diagnosis_truth_legs.csv` holds a basket's
-legs (ruling R3), judged against contract/payout_legs.csv once the contract has one.
+A scored cell holds the value, a blank (the field must be blank) or `*` (not scored).
 
-This module holds the rows' format (`parse_rows` and `parse_legs` turn rows into validated cases) and the judge.
-The files are read, changed and written as one truth set (`truth_set.TruthSet`), their only reader and writer.
+The two last trade dates. The scored `last_trade_date` is the contract's published day of the security's own last
+ending (contract/delistings.csv: decision 12 publishes only exchange prints). `internal_last_trade_date` is
+delistings.csv's internal day of that same ending, the corrected one when the contract leaves it blank (a worked-out
+date); blank there means not scored. The golden set's `last_trade_date` column is neither of these: delistings.csv's
+day of the chain's final ending (`truth.TruthCase.final_last_trade_date`).
+
+`status` is pass (must match now) or known_wrong (must not match yet; `fixed_by` names the sub-plan, or `residual`),
+both `truth`'s, or ruling_pending (not judged; `fixed_by` `regression` marks a regressed row the loop could not
+settle), this set's own. `data/diagnosis_truth_legs.csv` holds a basket's legs (ruling R3), judged against
+contract/payout_legs.csv once the contract has one.
+
+This module holds the rows' format (`parse_rows` and `parse_legs` turn rows into validated cases) and the judge,
+which gives every truth set's judgement (`truth.Judgement`, a `truth.Mismatch` per scored field that disagrees). The
+files are read, changed and written as one truth set (`truth_set.TruthSet`), their only reader and writer.
 """
 from __future__ import annotations
 
@@ -33,7 +40,7 @@ from datetime import date
 
 from .exit_kind import DROP_REASONS, EXIT_KINDS, VALUE_RULES, last_endings
 from .run_snapshot import RunSnapshot
-from .truth import TruthFileError
+from .truth import KNOWN_WRONG, PASS, Judgement, Mismatch, TruthFileError, check_status
 
 SCORED = ("exit_kind", "drop_reason", "continuation", "successor_sec_id", "last_trade_date", "value_rule",
           "cash_per_share", "cash_currency", "stock_ratio", "price_sec_id", "price_ticker", "price_date",
@@ -44,17 +51,13 @@ LEG_COLUMNS = ("case_id", "leg", "ratio", "price_sec_id", "price_ticker", "price
 NOT_SCORED = "*"
 ENDING, NO_ENDING, ENDING_MOVED = "ending", "no_ending", "ending_moved"
 SHAPES = (ENDING, NO_ENDING, ENDING_MOVED)
-PASS, KNOWN_WRONG, RULING_PENDING = "pass", "known_wrong", "ruling_pending"
+RULING_PENDING = "ruling_pending"                 # this set's own status (not judged); pass and known_wrong are truth's
 STATUSES = (PASS, KNOWN_WRONG, RULING_PENDING)
 REGRESSION_PENDING = "regression"            # fixed_by of a ruling_pending row the loop added for a regression
 BASKET = "basket"
 TRUTH_VALUE_RULES = VALUE_RULES | {BASKET}
 NUMBERS = ("cash_per_share", "stock_ratio", "recovery_ratio")
 DATES = ("last_trade_date", "price_date")
-
-
-class DiagnosisTruthError(TruthFileError):
-    """A diagnosis truth file that cannot be read; the message names the file and line."""
 
 
 @dataclass(frozen=True)
@@ -68,6 +71,8 @@ class Leg:
 
 @dataclass(frozen=True)
 class DiagnosisCase:
+    """One diagnosis case (module docstring). `fields` holds the scored contract cells: its `last_trade_date` is the
+    contract's published day; `internal_last_trade_date` is delistings.csv's day of the same ending."""
     case_id: str
     sec_id: str
     ticker: str
@@ -106,16 +111,16 @@ def _check(name: str, cell: str, where: str) -> None:
     allowed = {"exit_kind": EXIT_KINDS, "drop_reason": DROP_REASONS, "continuation": {"true", "false"},
                "value_rule": TRUTH_VALUE_RULES}.get(name)
     if allowed is not None and cell not in allowed:
-        raise DiagnosisTruthError(f"{where}: {name} {cell!r} is not one of {sorted(allowed)}")
+        raise TruthFileError(f"{where}: {name} {cell!r} is not one of {sorted(allowed)}")
     if (name in DATES or name in ("internal_last_trade_date", "examined_delist_date")) and not _is_date(cell):
-        raise DiagnosisTruthError(f"{where}: {name} {cell!r} is not a YYYY-MM-DD date")
+        raise TruthFileError(f"{where}: {name} {cell!r} is not a YYYY-MM-DD date")
     if name in NUMBERS and not _is_number(cell):
-        raise DiagnosisTruthError(f"{where}: {name} {cell!r} is not a number")
+        raise TruthFileError(f"{where}: {name} {cell!r} is not a number")
 
 
 def parse_rows(rows: Sequence[Mapping[str, str]], where: str = "rows",
                legs: Mapping[str, tuple[Leg, ...]] | None = None) -> list[DiagnosisCase]:
-    """Truth rows (every COLUMNS key) as cases. Raises DiagnosisTruthError naming `where` and the line (the header
+    """Truth rows (every COLUMNS key) as cases. Raises TruthFileError naming `where` and the line (the header
     is line 1) on a blank or repeated case_id, a blank sec_id, an unknown shape or status, a known_wrong row with no
     fixed_by, an ending_moved row with no examined_delist_date, or a scored cell outside its vocabulary, date or
     number format."""
@@ -125,16 +130,13 @@ def parse_rows(rows: Sequence[Mapping[str, str]], where: str = "rows",
         at = f"{where}:{line}"
         cid = r["case_id"].strip()
         if not cid or cid in seen:
-            raise DiagnosisTruthError(f"{at}: case_id {cid!r} is blank or repeated")
+            raise TruthFileError(f"{at}: case_id {cid!r} is blank or repeated")
         seen.add(cid)
         if not r["sec_id"].strip():
-            raise DiagnosisTruthError(f"{at}: sec_id is blank")
+            raise TruthFileError(f"{at}: sec_id is blank")
         if r["shape"] not in SHAPES:
-            raise DiagnosisTruthError(f"{at}: shape {r['shape']!r} is not one of {list(SHAPES)}")
-        if r["status"] not in STATUSES:
-            raise DiagnosisTruthError(f"{at}: status {r['status']!r} is not one of {list(STATUSES)}")
-        if r["status"] == KNOWN_WRONG and not r["fixed_by"].strip():
-            raise DiagnosisTruthError(f"{at}: a known_wrong case needs fixed_by")
+            raise TruthFileError(f"{at}: shape {r['shape']!r} is not one of {list(SHAPES)}")
+        check_status(r["status"], r["fixed_by"], at, STATUSES)
         cells = {f: r[f].strip() for f in SCORED}
         for name, cell in cells.items():
             _check(name, cell, at)
@@ -143,7 +145,7 @@ def parse_rows(rows: Sequence[Mapping[str, str]], where: str = "rows",
         examined = r["examined_delist_date"].strip()
         _check("examined_delist_date", examined, at)
         if r["shape"] == ENDING_MOVED and not examined:
-            raise DiagnosisTruthError(f"{at}: an ending_moved case needs the examined_delist_date it refuses")
+            raise TruthFileError(f"{at}: an ending_moved case needs the examined_delist_date it refuses")
         out.append(DiagnosisCase(
             case_id=cid, sec_id=r["sec_id"].strip(), ticker=r["ticker"], status=r["status"],
             fixed_by=r["fixed_by"].strip(), shape=r["shape"], fields=cells, internal_last_trade_date=internal,
@@ -153,7 +155,7 @@ def parse_rows(rows: Sequence[Mapping[str, str]], where: str = "rows",
 
 
 def parse_legs(rows: Sequence[Mapping[str, str]], where: str = "legs") -> dict[str, tuple[Leg, ...]]:
-    """Leg rows (every LEG_COLUMNS key) by case_id, each case's legs in leg order. Raises DiagnosisTruthError naming
+    """Leg rows (every LEG_COLUMNS key) by case_id, each case's legs in leg order. Raises TruthFileError naming
     `where` and the line (the header is line 1) on a leg number below 1, a repeated leg, a ratio that is not a number
     or a bad price_date."""
     by_case: dict[str, dict[int, Leg]] = {}
@@ -164,14 +166,14 @@ def parse_legs(rows: Sequence[Mapping[str, str]], where: str = "legs") -> dict[s
         except ValueError:
             n = 0
         if n < 1:
-            raise DiagnosisTruthError(f"{at}: leg {r['leg']!r} is not a number from 1")
+            raise TruthFileError(f"{at}: leg {r['leg']!r} is not a number from 1")
         if not _is_number(r["ratio"]):
-            raise DiagnosisTruthError(f"{at}: ratio {r['ratio']!r} is not a number")
+            raise TruthFileError(f"{at}: ratio {r['ratio']!r} is not a number")
         if r["price_date"] and not _is_date(r["price_date"]):
-            raise DiagnosisTruthError(f"{at}: price_date {r['price_date']!r} is not a YYYY-MM-DD date")
+            raise TruthFileError(f"{at}: price_date {r['price_date']!r} is not a YYYY-MM-DD date")
         legs = by_case.setdefault(r["case_id"], {})
         if n in legs:
-            raise DiagnosisTruthError(f"{at}: leg {n} of {r['case_id']} is repeated")
+            raise TruthFileError(f"{at}: leg {n} of {r['case_id']} is repeated")
         legs[n] = Leg(n, r["ratio"], r["price_sec_id"], r["price_ticker"], r["price_date"])
     return {cid: tuple(legs[n] for n in sorted(legs)) for cid, legs in by_case.items()}
 
@@ -179,27 +181,6 @@ def parse_legs(rows: Sequence[Mapping[str, str]], where: str = "legs") -> dict[s
 MISMATCH_FIELDS = (*SCORED, "internal_last_trade_date", "shape", "ending", "legs", "sec_id")
 LEG_FIELDS = ("ratio", "price_sec_id", "price_ticker", "price_date")
 _LEG_FIELD = re.compile(r"leg([1-9][0-9]*)\.(" + "|".join(LEG_FIELDS) + ")")
-
-
-@dataclass(frozen=True)
-class Mismatch:
-    case_id: str
-    field: str
-    truth: str
-    library: str
-
-    def __str__(self) -> str:
-        return f"{self.field} {self.library or '(blank)'} != {self.truth or '(blank)'}"
-
-
-@dataclass(frozen=True)
-class CaseJudgement:
-    case: DiagnosisCase
-    mismatches: tuple[Mismatch, ...]
-
-    @property
-    def ok(self) -> bool:
-        return not self.mismatches
 
 
 @dataclass(frozen=True)
@@ -267,9 +248,10 @@ def _judge_legs(case: DiagnosisCase, rows: Sequence[Mapping[str, str]] | None) -
     return out
 
 
-def judge_case(case: DiagnosisCase, lib: LibraryRows) -> CaseJudgement:
+def judge_case(case: DiagnosisCase, lib: LibraryRows) -> Judgement:
     """Compare one case to one run; every scored field that disagrees is one Mismatch (spec 1.3). A case whose
-    sec_id is not in the run's securities gives one `sec_id` mismatch and nothing else."""
+    sec_id is not in the run's securities gives one `sec_id` mismatch and nothing else. The scored `last_trade_date`
+    is read from the contract row, `internal_last_trade_date` from the last real ending's delistings.csv row."""
     row, end = lib.contract.get(case.sec_id), lib.last_endings.get(case.sec_id)
     bad: list[Mismatch] = []
 
@@ -280,30 +262,30 @@ def judge_case(case: DiagnosisCase, lib: LibraryRows) -> CaseJudgement:
         # A security folded into another (a placeholder that now holds a FIGI) has no contract row either, which
         # would read as "no ending" and pass a no_ending case; the case must be renamed or ruled on instead.
         miss("sec_id", case.sec_id, "(not in the run)")
-        return CaseJudgement(case, tuple(bad))
+        return Judgement(case, tuple(bad))
     if case.shape == NO_ENDING:
         if row is not None:
             miss("shape", NO_ENDING, "ending")
-        return CaseJudgement(case, tuple(bad))
+        return Judgement(case, tuple(bad))
     if case.shape == ENDING_MOVED and end is not None and end["delist_date"] == case.examined_delist_date:
         miss("shape", ENDING_MOVED, f"ending {case.examined_delist_date}")
     scored = [f for f in SCORED if case.fields[f] != NOT_SCORED]
     if row is None:
         if case.shape == ENDING or scored:
             miss("ending", "present", "(no contract row)")
-        return CaseJudgement(case, tuple(bad))
+        return Judgement(case, tuple(bad))
     for name in scored:
         if not _same(name, case.fields[name], row.get(name, "")):
             miss(name, case.fields[name], row.get(name, ""))
     if case.internal_last_trade_date not in ("", NOT_SCORED):
-        got = end["last_trade_date"] if end else ""
-        if got != case.internal_last_trade_date:
-            miss("internal_last_trade_date", case.internal_last_trade_date, got)
+        internal = end["last_trade_date"] if end else ""          # delistings.csv's day, not the contract's
+        if internal != case.internal_last_trade_date:
+            miss("internal_last_trade_date", case.internal_last_trade_date, internal)
     if case.legs:
         bad.extend(_judge_legs(case, None if lib.legs is None else lib.legs.get(case.sec_id, [])))
-    return CaseJudgement(case, tuple(bad))
+    return Judgement(case, tuple(bad))
 
 
-def judge_all(cases: Sequence[DiagnosisCase], lib: LibraryRows) -> list[CaseJudgement]:
+def judge_all(cases: Sequence[DiagnosisCase], lib: LibraryRows) -> list[Judgement]:
     """Every case that is not ruling_pending, judged."""
     return [judge_case(c, lib) for c in cases if c.status != RULING_PENDING]

@@ -13,6 +13,7 @@ from delist_detection import diagnosis_truth as dt
 from delist_detection import truth_set as ts
 from delist_detection.loop_round import Loop
 from delist_detection.regression import renamed_to
+from delist_detection.truth import TruthFileError
 from delist_detection.truth_set import LEDGER_COLUMNS, Correction, Ruling, TruthSet
 from tests.diagnosis_rows import leg_row, ledger_row, truth_row, write_truth
 from tests.lifecycle_tables import contract_row, sec, tables
@@ -50,9 +51,9 @@ def test_the_scorecard_config_names_the_truth_file(tmp_path):
     assert ts.truth_file_of({"diagnosis": "d.csv"}, tmp_path) == tmp_path / "d.csv"
     assert ts.truth_file_of({"diagnosis": "d.csv", "diagnosis_legs": "d_legs.csv"}, tmp_path) == tmp_path / "d.csv"
     assert ts.truth_file_of({}, tmp_path) is None
-    with pytest.raises(dt.DiagnosisTruthError, match="named after the truth file"):
+    with pytest.raises(TruthFileError, match="named after the truth file"):
         ts.truth_file_of({"diagnosis": "d.csv", "diagnosis_legs": "l.csv"}, tmp_path)
-    with pytest.raises(dt.DiagnosisTruthError, match="without a diagnosis"):
+    with pytest.raises(TruthFileError, match="without a diagnosis"):
         ts.truth_file_of({"diagnosis_legs": "l.csv"}, tmp_path)
 
 
@@ -60,9 +61,9 @@ def test_configured_reads_the_repositorys_config(tmp_path):
     assert ts.configured(ROOT) == ROOT / "data" / "diagnosis_truth.csv"
     (tmp_path / "data").mkdir()
     (tmp_path / "data" / "scorecard.json").write_text(json.dumps({"floor": {}}))
-    with pytest.raises(dt.DiagnosisTruthError, match="names no diagnosis truth file"):
+    with pytest.raises(TruthFileError, match="names no diagnosis truth file"):
         ts.configured(tmp_path)
-    with pytest.raises(dt.DiagnosisTruthError, match="scorecard.json"):
+    with pytest.raises(TruthFileError, match="scorecard.json"):
         ts.configured(tmp_path / "nowhere")
 
 
@@ -85,7 +86,7 @@ def test_the_examined_ending_is_the_cases_own_column_never_its_ids_tail(tmp_path
 
 
 def test_an_ending_moved_case_needs_the_ending_it_refuses(tmp_path):
-    with pytest.raises(dt.DiagnosisTruthError, match=r"truth\.csv:2.*examined_delist_date"):
+    with pytest.raises(TruthFileError, match=r"truth\.csv:2.*examined_delist_date"):
         TruthSet.new(tmp_path / "truth.csv", [truth_row("S1_2010-01-04", "S1", shape="ending_moved")])
 
 
@@ -113,21 +114,21 @@ def test_a_bad_cell_names_the_file_line_and_field(tmp_path, cells, message):
     row.update(cells)                                  # after the helper: a blank sec_id is also a cell here
     path = tmp_path / "truth.csv"
     path.write_text(",".join(dt.COLUMNS) + "\n" + ",".join(row[c] for c in dt.COLUMNS) + "\n")
-    with pytest.raises(dt.DiagnosisTruthError, match=rf"truth\.csv:2.*{message}"):
+    with pytest.raises(TruthFileError, match=rf"truth\.csv:2.*{message}"):
         TruthSet.open(path)
-    with pytest.raises(dt.DiagnosisTruthError, match=message):      # the same check refuses to write it
+    with pytest.raises(TruthFileError, match=message):      # the same check refuses to write it
         TruthSet.new(tmp_path / "other.csv", [row])
 
 
 def test_a_repeated_case_id_is_refused(tmp_path):
-    with pytest.raises(dt.DiagnosisTruthError, match=r"truth\.csv:3.*repeated"):
+    with pytest.raises(TruthFileError, match=r"truth\.csv:3.*repeated"):
         TruthSet.new(tmp_path / "truth.csv", [truth_row("S1_2010-01-04", "S1"), truth_row("S1_2010-01-04", "S1")])
 
 
 def test_a_wrong_header_is_refused(tmp_path):
     path = tmp_path / "truth.csv"
     path.write_text("case_id,sec_id\nS1_2010-01-04,S1\n")
-    with pytest.raises(dt.DiagnosisTruthError, match="columns"):
+    with pytest.raises(TruthFileError, match="columns"):
         TruthSet.open(path)
 
 
@@ -136,10 +137,10 @@ def test_a_row_with_a_missing_or_an_extra_cell_is_refused_not_a_key_error(tmp_pa
     text = path.read_text()
     path.write_text(text.rstrip("\n").rsplit(",", 1)[0] + "\n")              # the note cell gone
     n = len(dt.COLUMNS)
-    with pytest.raises(dt.DiagnosisTruthError, match=rf"truth\.csv:2: {n - 1} cells, not {n}"):
+    with pytest.raises(TruthFileError, match=rf"truth\.csv:2: {n - 1} cells, not {n}"):
         TruthSet.open(path)
     path.write_text(text.rstrip("\n") + ",extra\n")
-    with pytest.raises(dt.DiagnosisTruthError, match=rf"truth\.csv:2: {n + 1} cells, not {n}"):
+    with pytest.raises(TruthFileError, match=rf"truth\.csv:2: {n + 1} cells, not {n}"):
         TruthSet.open(path)
 
 
@@ -162,7 +163,7 @@ def test_bad_legs_are_refused(tmp_path, legs, message):
     write_truth(path, [truth_row("S1_2010-01-04", "S1")])
     ts.legs_path(path).write_text(",".join(dt.LEG_COLUMNS) + "\n" + "".join(
         ",".join(r[c] for c in dt.LEG_COLUMNS) + "\n" for r in legs))
-    with pytest.raises(dt.DiagnosisTruthError, match=message):
+    with pytest.raises(TruthFileError, match=message):
         TruthSet.open(path)
 
 
@@ -176,16 +177,16 @@ def test_missing_files_are_empty(tmp_path):
 
 def test_the_change_log_and_the_ledger_are_checked_too(tmp_path):
     path = _set(tmp_path, [truth_row("S1_2010-01-04", "S1")], changes="case_id,field\n")
-    with pytest.raises(dt.DiagnosisTruthError, match="changes.csv: columns"):
+    with pytest.raises(TruthFileError, match="changes.csv: columns"):
         TruthSet.open(path)
     ts.changes_path(path).write_text(CHANGE_HEADER + "S1_2010-01-04,status,pass\n")
-    with pytest.raises(dt.DiagnosisTruthError, match=r"changes\.csv:2: 3 cells, not 6"):
+    with pytest.raises(TruthFileError, match=r"changes\.csv:2: 3 cells, not 6"):
         TruthSet.open(path)
     ts.changes_path(path).unlink()
     (tmp_path / "ledger.csv").write_text("key,kind\n")
-    with pytest.raises(dt.DiagnosisTruthError, match="ledger.csv: columns"):
+    with pytest.raises(TruthFileError, match="ledger.csv: columns"):
         TruthSet.open(path, ledger=tmp_path / "ledger.csv")
-    with pytest.raises(dt.DiagnosisTruthError, match="ledger.csv: columns"):
+    with pytest.raises(TruthFileError, match="ledger.csv: columns"):
         ts.read_ledger(tmp_path / "ledger.csv")
 
 
@@ -211,10 +212,6 @@ def test_a_ruling_sets_its_cells_with_its_reason_and_report_and_notes_once(tmp_p
     assert again.changes == [] and again.commit() == []
 
 
-def test_an_empty_note_takes_the_text_alone():
-    assert ts.noted("", "a: b") == "a: b" and ts.noted("x", "a: b") == "x; a: b"
-
-
 def test_a_ruling_applies_once_even_after_a_later_change_moved_its_cell_on(tmp_path):
     """5f's carried rows (VMED, MHS): the ruling made them known_wrong for 5f, the wave 2 loop flipped them to pass;
     applying the ruling again must not undo the flip."""
@@ -238,7 +235,7 @@ def test_a_ruling_leaves_a_row_another_sub_plan_owns(tmp_path):
     assert truth.rule(_ruling("B_2010-01-04", to_residual, owner="5f")) == 2           # 5f's own row
     assert truth.rule(_ruling("C_2010-01-04", to_residual, owner="5f")) == 1           # already where it sends it
     assert truth.rule(_ruling("A_2010-01-04", to_residual)) == 2                       # no owner: any row
-    with pytest.raises(dt.DiagnosisTruthError, match="no case 'NOPE'"):
+    with pytest.raises(TruthFileError, match="no case 'NOPE'"):
         truth.rule(_ruling("NOPE"))
 
 
@@ -404,7 +401,7 @@ def test_a_commit_writes_nothing_when_the_set_is_invalid_or_a_write_fails(tmp_pa
     before = _files(tmp_path)
     truth = TruthSet.open(path)
     truth.rule(_ruling("A_2010-01-04", (("exit_kind", "acquired"),)))
-    with pytest.raises(dt.DiagnosisTruthError, match="exit_kind"):
+    with pytest.raises(TruthFileError, match="exit_kind"):
         truth.commit()
     assert _files(tmp_path) == before
     truth = TruthSet.open(path)
