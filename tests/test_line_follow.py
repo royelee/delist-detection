@@ -420,6 +420,7 @@ def test_a_candidate_typed_preferred_warrant_right_or_unit_is_refused(kind):
 def test_other_registrant_reraises_fatal_and_treats_a_request_failure_as_failed():
     import requests
     from delist_detection.sources.fatal import FATAL
+    from delist_detection.sources.sec_stats import SEC_STATS
 
     def hits(exc):
         def search(q, forms, lo, hi):
@@ -439,6 +440,14 @@ def test_other_registrant_reraises_fatal_and_treats_a_request_failure_as_failed(
                                own_tickers=set()) == lf.READ_FAILED
     assert lf.other_registrant(hits(requests.Timeout("slow")), _Edgar({}), name="X Co", day=date(2012, 9, 26),
                                cik=1, own_tickers=set()) == lf.READ_FAILED
+
+    def failed_search(q, forms, lo, hi):           # production's shape: a failed read counts itself, answers no hits
+        SEC_STATS.degraded("failed_request")
+        return []
+    assert lf.other_registrant(failed_search, _Edgar({}), name="X Co", day=date(2012, 9, 26), cik=1,
+                               own_tickers=set()) == lf.READ_FAILED
+    assert lf.other_registrant(lambda *a: [], _Edgar({}), name="X Co", day=date(2012, 9, 26), cik=1,
+                               own_tickers=set()) is None        # an answered search with no hits: none
     assert _corr(other=lf.READ_FAILED, filings=[_f("8-K", "2012-09-24", "5.03"), LATER_10Q]) == ("", "read_failed")
 
 

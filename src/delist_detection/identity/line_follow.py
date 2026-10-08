@@ -8,7 +8,7 @@ sightings, so a later real ending is found instead of a guess anchored on the ol
 
 The interface is `follow_lines(identity, clients, *, as_of, log, meter) -> Lines`. A caller passes the identity
 stage's answer (`identity.Identity`: the securities, each era's resolution, each security's CUSIPs, the fails index)
-and the run's clients (`LineSources`: the issuer record, EDGAR's full-text search, OpenFIGI and the fails files). It
+and the run's clients (`LineSources`: the issuer record, the EDGAR client, EDGAR's full-text search and OpenFIGI). It
 gets the securities, resolutions and CUSIPs after the follow, the placeholders folded into a FIGI line (`renames`),
 the FIGI lines another composite continues (`successors`, which stage 9 links) and the review items of stages 1 to
 4b. Behind it:
@@ -44,7 +44,7 @@ from typing import TYPE_CHECKING, Any, Protocol
 import requests
 
 from ..sources.capabilities import FullTextSearch
-from ..outputs.degraded import degraded_item
+from ..outputs.degraded import DegradedWatch, degraded_item
 from ..sources.edgar import EdgarSubmission
 from ..filings.evidence import name_at, names_between
 from ..sources.fatal import FATAL
@@ -400,12 +400,19 @@ def other_registrant(search: Callable | None, edgar, *, name: str, day: date, ci
     issuer's own, still-listed stock is skipped, as `successors.successor_from_8k12b` skips it: its EDGAR name
     does not agree with `name`, none of its tickers is one of `own_tickers`, and EDGAR lists one of them on a major
     exchange today (iHeartMedia's 8-K12G3 names its subsidiary Clear Channel Outdoor). None without a search;
-    `READ_FAILED` when a read failed (`fatal.FATAL` is re-raised)."""
+    `READ_FAILED` when a read failed (`fatal.FATAL` is re-raised): the search counted itself degraded on this
+    thread (`degraded.DegradedWatch`: production's `EdgarClient.full_text_search` answers [] for a failed read and
+    counts it, so its "no hits" is no answer), or the search or a filer's listing raised. A filer's listing answered
+    from a stale copy is an answer: it decides, and the caller's watch reports the step degraded."""
     if search is None or not name:
         return None
     try:
         own = {normalize_ticker(t) for t in own_tickers}
-        for h in search(*successor_query(name, day)):
+        watch = DegradedWatch()
+        hits = search(*successor_query(name, day))
+        if watch.tripped():
+            return READ_FAILED
+        for h in hits:
             src = h.get("_source", h)
             for cik_s, disp in zip(src.get("ciks") or [], src.get("display_names") or []):
                 other = int(cik_s)

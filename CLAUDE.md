@@ -719,15 +719,19 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   (`last`).
 - `identity/line_follow.py` — sub-plan 5a, stage 4b as one module (architecture step 7a): a security's line across a CUSIP or
   ticker change. Its interface is `follow_lines(identity, clients, *, as_of, log, meter) -> Lines`: the caller passes
-  the identity stage's answer and the run's clients (`LineSources`: the issuer record, EDGAR's full-text search
-  as `Clients.full_text_search` states it, OpenFIGI, the fails files) and gets the securities, era resolutions and CUSIPs after the follow, the folds
+  the identity stage's answer (its fails index included: the stage asks it to follow the lines' rows) and the
+  run's clients (`LineSources`: the issuer record, the EDGAR client for a successor filer's listing, EDGAR's
+  full-text search as `Clients.full_text_search` states it, and OpenFIGI) and gets the securities, era resolutions and CUSIPs after the follow, the folds
   (`renames`), the line successors (`successors`, sec_id -> `LineSuccessor`) and the review items of stages 1 to 4b
   (a folded placeholder's moved to its FIGI line, its `no_figi` dropped). Behind it: the rounds, the holders, the
   8-K text sources (`_Reads.text_sources`, the filter before the `MAX_TEXTS` cap), the fold (`_fold`: a fold of a fold
   points at the last FIGI) and sub-plan 5h's `_today_holder_fold`, and every EDGAR read in one place (`_Reads`: the
   issuers' submissions, filing lists and 8-K texts through the run's issuer record, listed-today from the issuer's
   profile, `listing_status.lists_on_major_exchange`; the other-registrant search and its filer's listing through
-  `other_registrant`, a failure there `read_failed`). Its rules stay importable for their own tests and only
+  `other_registrant`, a failure there `read_failed`: a search that counted itself degraded, production's answer of
+  no hits for a failed read, a search or a filer listing that raised; a filer listing answered from a stale copy
+  decides, and the step is degraded. So an attach, a fold or a line successor never rests on a failed read). Its
+  rules stay importable for their own tests and only
   `follow_lines` calls them in a run: `candidate_steps` (the
   next step in the fails rows within ±`LINE_DAYS` (10) trading days of the old CUSIP's settled last row: a new
   CUSIP under the line's ticker, its `…ZZZZ`/`…D` spellings, a ticker of the issuer EDGAR lists or its 8-K text

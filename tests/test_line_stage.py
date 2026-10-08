@@ -380,10 +380,12 @@ def test_a_failed_8k_text_read_that_leaves_no_step_gives_one_resolution_degraded
 
 
 def test_a_failed_other_registrant_search_refuses_the_step_and_degrades_it():
-    """The other-registrant search (R1) failing reads as `read_failed`, never as no other registrant."""
+    """The other-registrant search (R1) failing reads as `read_failed`, never as no other registrant. The double is
+    production's shape (`EdgarClient.full_text_search`): a failed read counts itself degraded and answers no hits."""
     class SearchDown(_Edgar):
         def full_text_search(self, q, forms, lo, hi):
-            raise requests.Timeout("slow")
+            SEC_STATS.degraded("failed_request")
+            return []
 
     rows = _line("AA", ["A1", "A2"])
     lines = _follow([_Spec("BBGA", 1, "AA", ["A1"])], rows, edgar=SearchDown(_stating(rows)))
@@ -391,15 +393,41 @@ def test_a_failed_other_registrant_search_refuses_the_step_and_degrades_it():
     assert lines.cusips == {"BBGA": ["A1"]}
 
 
-def test_a_step_whose_search_answered_from_a_stale_copy_is_degraded():
-    """Any SEC read of the step that counted itself degraded (here the other-registrant search, answered from a
-    stale copy with no other registrant) makes the followed step's answer rest on it."""
-    class StaleSearch(_Edgar):
+def _other_filer(listing):
+    """An issuer's record whose other-registrant search names another filer (OTHER CO, OTH, CIK 999): `listing` is
+    that filer's submissions read."""
+    class Edgar(_Edgar):
         def full_text_search(self, q, forms, lo, hi):
-            SEC_STATS.degraded("efts")
-            return []
+            return [{"_source": {"ciks": ["0000000999"], "display_names": ["OTHER CO (OTH) (CIK 0000000999)"],
+                                 "form": "8-K12B", "file_date": "2012-03-01"}}]
+
+        def submissions(self, cik, fresh_after=None):
+            return listing() if int(cik) == 999 else super().submissions(cik)
+    return Edgar
+
+
+def test_a_failed_read_of_the_other_filers_listing_refuses_the_step_and_degrades_it():
+    """The filer the search names may be another issuer's own listed stock (skipped) or the old registrant's
+    successor: with its listing unread nothing is known, so the step is refused `read_failed`."""
+    def down():
+        SEC_STATS.degraded("failed_request")
+        raise requests.ConnectionError("down")
 
     rows = _line("AA", ["A1", "A2"])
-    lines = _follow([_Spec("BBGA", 1, "AA", ["A1"])], rows, edgar=StaleSearch(_stating(rows)))
+    lines = _follow([_Spec("BBGA", 1, "AA", ["A1"])], rows, edgar=_other_filer(down)(_stating(rows)))
+    assert sorted(_flags(lines)) == [("BBGA", "line_follow_refused:read_failed"), ("BBGA", "resolution_degraded")]
+    assert lines.cusips == {"BBGA": ["A1"]}
+
+
+def test_a_step_whose_other_filers_listing_answered_from_a_stale_copy_is_followed_and_degraded():
+    """A read answered from a stale copy is an answer (production's submissions read serves its cached copy, counted
+    degraded): the filer's stale listing says OTH is its own NYSE stock, so it is no successor of the issuer and the
+    step is followed; the step's answer rested on the stale copy, so it is degraded too."""
+    def stale():
+        SEC_STATS.degraded("stale_copy")
+        return {"name": "OTHER CO", "tickers": ["OTH"], "exchanges": ["NYSE"]}
+
+    rows = _line("AA", ["A1", "A2"])
+    lines = _follow([_Spec("BBGA", 1, "AA", ["A1"])], rows, edgar=_other_filer(stale)(_stating(rows)))
     assert sorted(_flags(lines)) == [("BBGA", "line_followed"), ("BBGA", "resolution_degraded")]
     assert lines.cusips == {"BBGA": ["A1", "A2"]}
