@@ -1620,3 +1620,11 @@ Decisions made in the step:
   - scripts/scorecard.py `--check`: output identical, exit 0.
 - **pipeline.py: 1606 lines to 1604.** dlret.py went from 177 to 458 lines, payout_rule.py from 231 to 114,
   reconstruction.py from 356 to 249; bmp_correction.py (61) is deleted.
+- **Controller ruling on the firm-month measurement: keep both, and document it.** The 25 endings that differ follow
+  from the two conventions. The table publishes only what the library knows and flags the rest `no_dlret`. The BMP
+  firm-month correction must give every ending a number, so it fills by bucket. The two assumed-par expirations come
+  out the same either way: a 0.0 DLRET and no correction both leave the month's return unchanged. The 588 that agree
+  at six decimals differ only by the table's rounding. CLAUDE.md's note on the two return-correction APIs now says so.
+  - Alternative: make the firm month read the table's dlret, so a blank stays uncorrected.
+  - Cost if wrong: a caller who expects the corrected panel to match delistings.csv finds 23 endings filled that the
+    table leaves blank. Each is flagged `no_dlret` in the table.

@@ -1062,6 +1062,11 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
 There are **two return-correction APIs** for different research conventions:
 event-level (`handling.build_train_label_adjustment`/`build_backtest_exit`) vs CRSP-style firm-month
 (`handling.firm_month_correction`, its DLRET from `dlret.decide`). Don't conflate them.
+The firm-month correction and delistings.csv's `dlret` can differ on purpose: the table publishes only a value the
+library knows and flags the rest `no_dlret`, while the firm-month correction gives every ending a number, filled by
+bucket (BMP 2007). On the committed output, 25 of 873 corrected endings differ (2026-10-08): a merger that abstains
+or needs its last trade, and an `unknown` ending, are blank in the table and filled in the firm month; an assumed-par
+expiration is 0.0 in the table and no correction in the firm month, which leaves the month's return the same.
 
 ## Non-obvious invariants
 
