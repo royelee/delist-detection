@@ -305,3 +305,13 @@ def test_an_otc_print_values_a_compliance_failure_row():
     (e,) = build_delistings_table([rec], last_trade_closes={key: 2.0}, otc_prints={key: 0.5})
     assert e.dlret_method is DlretMethod.OTC_PRINT
     assert round(e.dlret, 6) == -0.75
+
+
+def test_a_plan_value_row_is_graded_medium():
+    """Step 10's declared fix: a plan_stock row's dlret_confidence is medium, like an OTC print's (it was low)."""
+    rec = _drec("BBG_W", "2025-09-15", ticker="WOLF", bucket=CrspBucket.LIQUIDATION, code=470)
+    e = enrich(rec, exchange=Exchange.NYSE, last_trade_close=1.85, plan_value=0.5)
+    row = delisting_row(e)
+    assert (row["dlret_method"], row["dlret_confidence"]) == ("plan_stock", "medium")
+    otc = enrich(rec, exchange=Exchange.NYSE, last_trade_close=1.85, otc_print=0.5)
+    assert e.dlret_confidence == otc.dlret_confidence and e.dlret == otc.dlret

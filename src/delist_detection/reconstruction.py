@@ -72,6 +72,9 @@ def _dlret_confidence(value: float, method: DlretMethod, payout_confidence: str 
         DlretMethod.CASH_PLUS_STOCK, DlretMethod.STOCK_ONLY,
         DlretMethod.SHUMWAY_NYSE_AMEX, DlretMethod.SHUMWAY_NASDAQ,
         DlretMethod.RECOVERY_RATIO, DlretMethod.OTC_PRINT,
+        # a plan's value is the caller's answered close of the new line times the plan's ratio: the same kind of
+        # measured value as an OTC print (controller ruling, architecture step 10)
+        DlretMethod.PLAN_STOCK,
     ):
         return "medium"
     return "low"                         # ABSTAIN_NO_CONSIDERATION / UNKNOWN
