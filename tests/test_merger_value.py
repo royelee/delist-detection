@@ -20,6 +20,7 @@ from delist_detection.last_trade import LastTrade
 from delist_detection.llm_merger_extractor import MergerTerms
 from delist_detection.merger_value import MergerValue, MergerValues, TableTerms, value_mergers
 from delist_detection.payout_extractor import PayoutResult
+from delist_detection.pipeline import Clients
 from delist_detection.price_requests import RECEIVED_CLOSE, PriceAnswers, PriceKey
 from delist_detection.security_master import Security
 from delist_detection.store import DelistingKey
@@ -45,6 +46,8 @@ class _NoFtd:
 class _Terms:
     """An LLM extractor that answers each target from a map (by ticker); `seen` records the names it was told."""
 
+    names_security = True
+
     def __init__(self, answers: dict, calls: list | None = None) -> None:
         self.answers, self.calls, self.seen = answers, calls if calls is not None else [], []
 
@@ -56,8 +59,8 @@ class _Terms:
 
 def _value(delistings, *, llm=None, payout=None, edgar=None, resolver=None, name_index=None, ftd_client=None,
            securities=None, closes=None, caller_terms=None, answers=None, workers=1, log=None) -> MergerValues:
-    clients = SimpleNamespace(edgar=edgar, resolver=resolver, issuers=IssuerRecord(edgar, name_index=name_index),
-                              figi=None, ftd_client=ftd_client or _NoFtd(), payout_extractor=payout, llm_extractor=llm)
+    clients = Clients(edgar=edgar, resolver=resolver, classifier=None, figi=None, ftd_client=ftd_client or _NoFtd(),
+                      payout_extractor=payout, llm_extractor=llm, issuers=IssuerRecord(edgar, name_index=name_index))
     index = LineIndex(securities or {}, {}, {}, FtdIndex())
     return value_mergers(delistings, index, clients=clients, closes=closes or {}, caller_terms=caller_terms or {},
                          answers=answers or PriceAnswers(), tol=0.15, workers=workers, log=log or (lambda *a: None))
@@ -85,6 +88,8 @@ def test_the_llm_calls_are_filled_ahead_on_worker_threads_with_the_same_answers(
     calls, cache = [], {}
 
     class Ext:                          # caches its answer per target, as LLMMergerTermsExtractor does on disk
+        names_security = True
+
         def extract(self, record, security_name=""):
             calls.append(record.ticker)
             return cache.setdefault(record.ticker, MergerTerms("cash", 10.0 + len(cache), None, None, None, "high",
@@ -100,6 +105,25 @@ def test_the_llm_calls_are_filled_ahead_on_worker_threads_with_the_same_answers(
     assert calls == ["AAA", "BBB", "CCC"]
     calls.clear()
     assert run(4) == one and sorted(calls) == ["AAA", "AAA", "BBB", "BBB", "CCC", "CCC"]
+
+
+def test_an_extractor_stating_the_named_call_absent_is_asked_without_the_name_and_never_ahead():
+    """`capabilities.NAMED_LLM_CALL` absent: each merger is asked once, as `extract(record)`, on the stage's own
+    thread, whatever the worker count."""
+    import threading
+    calls = []
+
+    class Unnamed:
+        names_security = False
+
+        def extract(self, record):
+            calls.append((record.ticker, threading.current_thread() is threading.main_thread()))
+            return MergerTerms("cash", 10.0, None, None, None, "high", "8-K:x", "", package_basis="fixed")
+
+    es = [_merger(t, t, "2016-09-16", date(2016, 9, 15)) for t in ("AAA", "BBB")]
+    values = _value(es, llm=Unnamed(), workers=4)
+    assert calls == [("AAA", True), ("BBB", True)]
+    assert {k.sec_id: v.llm.cash_per_share for k, v in values.records.items()} == {"AAA": 10.0, "BBB": 10.0}
 
 
 # --- 8a': an unnamed stock leg's ticker -----------------------------------------------------------------------------

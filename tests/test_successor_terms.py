@@ -199,7 +199,8 @@ def _rovi_stage(monkeypatch, target):
     monkeypatch.setattr(pipeline, "successor_search_name", lambda *a: "Rovi Corp")
     monkeypatch.setattr(pipeline, "successor_from_8k12b", lambda *a, **k: (999, cand, "2016-09-08"))
     books = _RoviBooks(target)
-    clients = _NS(edgar=books, figi=None, issuers=IssuerRecord(books))
+    clients = pipeline.Clients(edgar=books, resolver=None, classifier=None, figi=None, ftd_client=None,
+                               issuers=IssuerRecord(books))
     ctx = pipeline._RunContext(clients, date(2026, 9, 25), lambda *a: None, 1,
                                pipeline.run_manifest.StageMeter(lambda *a: None))
     rec = DelistRecord("ROVI", 1, "2016-09-07", 231, CrspBucket.MERGER, "medium", "merger", {"flags": []},

@@ -86,6 +86,8 @@ class FixtureFtd:
 class FixtureEdgar:
     """The recorded EDGAR answers: a CIK's names, tickers and filings."""
 
+    full_text_search = None      # the fixture recorded no full-text searches (`capabilities.FULL_TEXT_SEARCH`)
+
     def __init__(self, issuers: dict) -> None:
         self._issuers = issuers
 
@@ -132,7 +134,9 @@ def load_backend() -> Backend:
 class CommittedLookup:
     """The issuer lookup (`identity.IssuerLookup`) as the committed run answered: each era, known by its ticker and
     first sighting (`since`), gets its answer from `answers` (era key -> (CIK, tier)); no 8-K frequency candidates;
-    nothing degraded, nothing saved."""
+    nothing degraded, nothing saved; no issuer record of its own (`issuers`)."""
+
+    issuers = None
 
     def __init__(self, answers: dict[str, tuple[int | None, str]]) -> None:
         self.answers = answers

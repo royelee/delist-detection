@@ -43,6 +43,7 @@ from typing import TYPE_CHECKING, Any, Protocol
 
 import requests
 
+from .capabilities import FullTextSearch
 from .degraded import degraded_item
 from .edgar import EdgarSubmission
 from .evidence import name_at, names_between
@@ -463,7 +464,8 @@ LINE_FOLLOWED, LINE_REFUSED = "line_followed", "line_follow_refused"
 class LineSources(Protocol):
     """What `follow_lines` reads through (`pipeline.Clients` has it all)."""
     issuers: IssuerRecord     # the run's issuer record: every issuer's submissions, filing list and 8-K texts
-    edgar: Any                # the EDGAR client: its full-text search, and a successor filer's listing
+    edgar: Any                # the EDGAR client: a successor filer's listing
+    full_text_search: FullTextSearch | None     # EDGAR full-text search (None: absent, no other registrant is found)
     figi: Any                 # OpenFIGI: `map(jobs)`, the new CUSIPs' composites
     ftd_client: Any           # SEC's fails-to-deliver files (`ftd.FtdClient`) the fails index is extended from
 
@@ -492,7 +494,7 @@ class _Reads:
 
     def __init__(self, clients: LineSources) -> None:
         self.issuers, self._edgar = clients.issuers, clients.edgar
-        self._search = getattr(clients.edgar, "full_text_search", None)
+        self._search = clients.full_text_search
         self._stage = self.issuers.watch()          # every issuer read of the stage
         self._search_failed: set[int] = set()       # the CIKs whose other-registrant search failed
 

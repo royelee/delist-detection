@@ -132,8 +132,7 @@ class Reader:
 
     def read_form25(self, cik: int, sub: EdgarSubmission) -> Form25 | None:
         """The Form 25 `sub` parsed from its complete text; None when it cannot be read."""
-        fetch = getattr(self.edgar, "fetch_filing_raw", None)
-        raw = fetch(cik, sub.accession) if fetch is not None else ""
+        raw = self.edgar.fetch_filing_raw(cik, sub.accession)
         return parse_form25(raw, accession=sub.accession, form=sub.form, filing_date=sub.filing_date) if raw else None
 
 
@@ -268,8 +267,7 @@ class OwnShares:
             return ""
         if names_target(own, self.edgar_names):
             return SAME_ISSUER
-        company_tickers = getattr(self.reader.edgar, "company_tickers", None)
-        for entry in (company_tickers().values() if company_tickers is not None else ()):
+        for entry in self.reader.edgar.company_tickers().values():
             other = entry.get("cik_str")
             if other is None or int(other) == self.cik or not names_target(own, [entry.get("title", "")]):
                 continue

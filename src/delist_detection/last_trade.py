@@ -573,9 +573,8 @@ class Dating:
         return LastTrade(day, got[1], (UNCONFIRMED,))
 
     def _halt_feed_failures(self) -> tuple[date, ...]:
-        """The halt feed's failed days so far on this thread (an adapter without `failed_days` never fails)."""
-        failed_days = getattr(self.halts, "failed_days", None)
-        return tuple(failed_days()) if failed_days is not None else ()
+        """The halt feed's failed days so far on this thread (`NasdaqHaltClient.failed_days`)."""
+        return tuple(self.halts.failed_days())
 
     def _confirmations(self, tickers: list[str], filed: date, lo: date, hi: date, still_trading: date,
                        guesses: list[date], trading: OwnTrading, texts: Sequence[date] = ()

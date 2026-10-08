@@ -11,6 +11,7 @@ Pipeline per ticker:
 
 from __future__ import annotations
 
+import copy
 import re
 from dataclasses import asdict, dataclass, field, replace
 from datetime import date, datetime, timedelta
@@ -188,15 +189,15 @@ class DelistClassifier:
         issuers: IssuerRecord | None = None,
     ) -> None:
         """`issuers`: the run's issuer record, which the up-front submissions read
-        and the name check go through (None: the resolver's, else one over `edgar`
-        dated `today`)."""
+        and the name check go through (None: the one the resolver states it reads
+        through, `issuers`, else one over `edgar` dated `today`)."""
         self.edgar = edgar
         self.resolver = resolver
         self.asset_type_lookup = asset_type_lookup or (lambda *a, **kw: None)
         self.name_hint_lookup = name_hint_lookup or (lambda *a, **kw: None)
         self.today = today    # the run date (None: the clock)
         if issuers is None:
-            issuers = resolver.issuers if isinstance(resolver, TickerResolver) else IssuerRecord(edgar, today=today)
+            issuers = (resolver.issuers if resolver is not None else None) or IssuerRecord(edgar, today=today)
         self.issuers = issuers
 
     def _detect_continued_filings(
@@ -233,6 +234,14 @@ class DelistClassifier:
             if lo <= fd <= delist_date:
                 return True
         return False
+
+    def shadow(self) -> "DelistClassifier":
+        """A warm pass's twin (`pipeline._warm_delisting_search`): this classifier's copy, reading issuers through a
+        shadow of its issuer record (`IssuerRecord.shadow`), so it reads what this one will and remembers nothing
+        for it."""
+        twin = copy.copy(self)
+        twin.issuers = self.issuers.shadow()
+        return twin
 
     @property
     def reader(self) -> Reader:
@@ -577,8 +586,7 @@ class DelistClassifier:
         distributed another company's). An acquirer's 8-K says it completed the deal as well; the
         registrant that was acquired is named after the verb ("Pan American Silver completes acquisition of
         Tahoe")."""
-        subs = getattr(self.edgar, "submissions", None)
-        sub = subs(cik) if subs is not None else None
+        sub = self.edgar.submissions(cik)
         names = registrant_names(sub if isinstance(sub, dict) else None, before, name or "")
         tail = text[max(0, m.start() - 60):m.start()]
         if m.group(0).lower().startswith(("completed", "completes")) and (

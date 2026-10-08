@@ -170,6 +170,9 @@ class _Halts:
     def deletion_halt(self, symbol, lo, hi, max_days=7):
         return None
 
+    def failed_days(self):
+        return ()
+
 
 def test_the_warm_finders_are_the_sequential_finders_twins(fake_edgar, tmp_path, monkeypatch):
     index, clients = _clients(fake_edgar)
@@ -310,6 +313,8 @@ def test_a_refusal_of_the_runs_midas_download_on_a_worker_aborts_the_run(fake_ed
 class _UnsavableResolver:
     """A resolver whose memo cannot be written (the disk is full)."""
 
+    issuers = None        # no issuer record of its own
+
     def flush(self):
         raise OSError("No space left on device")
 
@@ -372,6 +377,12 @@ def test_payout_extraction_is_warmed_on_worker_threads_and_the_llm_is_not(fake_e
             return PayoutResult.none()
 
     class _Llm:
+        # States the named call absent, and so keeps the path this test was written for: an extractor that takes
+        # no target name is never filled ahead. Production's extractor takes it and is filled ahead since sub-plan
+        # 5f (test_merger_value's worker-thread test); with it, this test's last assertion fails (the plan's
+        # step 11 decision log, left for a ruling).
+        names_security = False
+
         def extract(self, record):
             with guard:
                 llm.append(threading.current_thread().name)

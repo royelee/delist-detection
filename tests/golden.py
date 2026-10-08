@@ -59,6 +59,9 @@ def load_cases() -> list[GoldenCase]:
 
 
 class GoldenEdgar:
+    # the golden fixtures hold the resolver's EFTS answers (`patch_efts`), not the client's full-text searches
+    full_text_search = None      # the fixture recorded no full-text searches (`capabilities.FULL_TEXT_SEARCH`)
+
     def __init__(self, case: GoldenCase) -> None:
         self.case = case
         self.data = case.data

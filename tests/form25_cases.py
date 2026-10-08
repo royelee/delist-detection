@@ -38,6 +38,8 @@ class FixtureEdgar:
     """The cases' EDGAR answers as the fixture recorded them. A raw or a text the cache lacked reads as "" (as
     an unreadable filing); `raws_read` lists every Form 25 raw the finder asked for."""
 
+    full_text_search = None      # the fixture recorded no full-text searches (`capabilities.FULL_TEXT_SEARCH`)
+
     def __init__(self) -> None:
         self.raws_read: list[str] = []
 

@@ -5,7 +5,6 @@ and its new CUSIPs' composites from an OpenFIGI double. tests/test_line_follow.p
 tests/test_line_follow_cases.py runs real cases through both."""
 from dataclasses import dataclass
 from datetime import date, timedelta
-from types import SimpleNamespace
 
 import pytest
 import requests
@@ -18,6 +17,7 @@ from delist_detection.issuer_record import IssuerRecord
 from delist_detection.line_follow import MAX_ROUNDS, MAX_TEXTS, follow_lines
 from delist_detection.observations import TickerEra
 from delist_detection.openfigi import OpenFigiUnavailable
+from delist_detection.pipeline import Clients
 from delist_detection.review_triage import ReviewItem
 from delist_detection.sec_stats import SEC_STATS
 from delist_detection.security_master import EraResolution, Issuer, build_securities
@@ -82,7 +82,10 @@ def _identity(specs, rows):
 
 class _Edgar:
     """Each issuer's record: its name, and its filings (by default, an 8-K item 5.03 on every CUSIP's first row
-    date and a 10-Q for a period after every step, which `corroborate` takes as stating each switch)."""
+    date and a 10-Q for a period after every step, which `corroborate` takes as stating each switch). No full-text
+    search (a test that wants one gives it `full_text_search`)."""
+
+    full_text_search = None
 
     def __init__(self, filings=None, *, texts=None, name=NAME):
         self.filings, self.texts, self.name, self.read = filings, texts or {}, name, []
@@ -131,7 +134,8 @@ def _follow(specs, rows, *, edgar=None, figi=None, review=()):
     identity = _identity(specs, rows)
     identity.review = list(review)
     edgar = edgar if edgar is not None else _Edgar(_stating(rows))
-    clients = SimpleNamespace(edgar=edgar, issuers=IssuerRecord(edgar), figi=figi or _Figi(), ftd_client=_NoFiles())
+    clients = Clients(edgar=edgar, resolver=None, classifier=None, figi=figi or _Figi(), ftd_client=_NoFiles(),
+                      issuers=IssuerRecord(edgar))
     return follow_lines(identity, clients, as_of=AS_OF)
 
 

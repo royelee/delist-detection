@@ -13,7 +13,6 @@ import json
 from datetime import date
 from functools import lru_cache
 from pathlib import Path
-from types import SimpleNamespace
 from typing import NamedTuple
 
 from delist_detection.acquirer_line import LineIndex
@@ -29,6 +28,7 @@ from delist_detection.llm_merger_extractor import MergerTerms
 from delist_detection.merger_value import MergerValues, value_mergers
 from delist_detection.observations import Observation, TickerEra
 from delist_detection.payout_extractor import PayoutResult
+from delist_detection.pipeline import Clients
 from delist_detection.price_requests import RECEIVED_CLOSE, PriceAnswers, PriceKey
 from delist_detection.security_master import Security
 from delist_detection.store import DelistingKey
@@ -43,6 +43,8 @@ AS_OF = date.fromisoformat(DATA["as_of"])
 
 
 class FixtureEdgar:
+    full_text_search = None      # the fixture recorded no full-text searches (`capabilities.FULL_TEXT_SEARCH`)
+
     def submissions(self, cik, fresh_after=None):
         return EDGAR.get(str(int(cik))) or {}
 
@@ -86,12 +88,15 @@ class NoFtd:
 
 
 class CaseExtractor:
-    """The case's own read: its regex payout (`raw`) or its LLM terms (`terms`)."""
+    """The case's own read: its regex payout (`raw`) or its LLM terms (`terms`). As the LLM extractor it takes the
+    target's name, as production's does (`names_security`), and answers by the case all the same."""
+
+    names_security = True
 
     def __init__(self, kind: str) -> None:
         self.kind = kind
 
-    def extract(self, record, last_close=None):
+    def extract(self, record, last_close=None, security_name=""):
         case = DATA["cases"][record.sec_id]
         if self.kind == "raw":
             raw = case["raw"]
@@ -153,9 +158,9 @@ def payouts(sec_id: str, *, ftd_lo: date = date(2007, 12, 17), answer: tuple[str
     securities, cusips, rows = world()
     resolver = resolver or FixtureResolver()
     edgar = FixtureEdgar()
-    clients = SimpleNamespace(edgar=edgar, resolver=resolver, issuers=IssuerRecord(edgar, name_index=name_index),
-                              figi=FixtureFigi(), ftd_client=NoFtd(), payout_extractor=CaseExtractor("raw"),
-                              llm_extractor=CaseExtractor("terms"))
+    clients = Clients(edgar=edgar, resolver=resolver, classifier=None, figi=FixtureFigi(), ftd_client=NoFtd(),
+                      payout_extractor=CaseExtractor("raw"), llm_extractor=CaseExtractor("terms"),
+                      issuers=IssuerRecord(edgar, name_index=name_index))
     ftd = FtdIndex(rows)
     sightings = {sid: ticker_sightings(s, ftd, cusips.get(sid, [])) for sid, s in securities.items()}
     e = delisting(sec_id)

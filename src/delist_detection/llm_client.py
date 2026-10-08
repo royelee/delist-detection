@@ -1,18 +1,20 @@
 """Injectable LLM client for JSON extraction.
 
-Duck-type interface
--------------------
-Any object with the following method can be used wherever an LLM client is
+Interface
+---------
+Any adapter with the following members can be used wherever an LLM client is
 expected (constructor-injection pattern, same as EdgarClient in PayoutExtractor):
 
     extract(self, system: str, user: str, schema: dict) -> dict
+    model: str | None
 
 ``system`` and ``user`` are the prompt strings; ``schema`` is a JSON Schema
 dict describing the expected output.  The method returns a parsed dict on
 success and MAY raise on hard failure (callers should wrap in try/except).
 
-A client may also carry ``model``, the name of the model it calls;
-``LLMMergerTermsExtractor`` labels its cache with it.
+``model`` states the name of the model the client calls, or None when it names
+none (a test double); ``LLMMergerTermsExtractor`` labels its cache with it.
+Every adapter states it: there is no default.
 
 Provided implementation: ``OpenAIJsonClient``.
 

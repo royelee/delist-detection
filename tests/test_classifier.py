@@ -93,6 +93,8 @@ class _TextEdgar:
         return {"name": "Reorg Co", "formerNames": [], "sic": "1311"}
     def fetch_filing_text(self, cik, acc, doc):
         return self.texts.get(acc, "")
+    def fetch_filing_raw(self, cik, acc):
+        return ""                # no complete submission text in the fixture: an unreadable Form 25
 
 
 def test_bankruptcy_history_beats_continued_filings():

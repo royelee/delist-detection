@@ -8,7 +8,6 @@ import csv
 import json
 from datetime import date
 from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
 
@@ -19,6 +18,7 @@ from delist_detection.identity import Identity
 from delist_detection.issuer_record import IssuerRecord
 from delist_detection.listing_status import edgar_lists
 from delist_detection.observations import Observation, TickerEra
+from delist_detection.pipeline import Clients
 from delist_detection.security_master import EraResolution, Issuer, Security, build_securities
 
 FIX = Path(__file__).parent / "fixtures" / "lines"
@@ -238,7 +238,8 @@ def _identity() -> Identity:
 @pytest.fixture(scope="module")
 def staged():
     edgar = _Edgar()
-    clients = SimpleNamespace(edgar=edgar, issuers=IssuerRecord(edgar), figi=_Figi(), ftd_client=_NoFiles())
+    clients = Clients(edgar=edgar, resolver=None, classifier=None, figi=_Figi(), ftd_client=_NoFiles(),
+                      issuers=IssuerRecord(edgar))
     return lf.follow_lines(_identity(), clients, as_of=AS_OF)
 
 

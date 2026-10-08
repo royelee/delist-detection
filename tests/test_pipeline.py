@@ -899,10 +899,12 @@ class _FakePayoutExtractor:
 
 
 class _FakeLLMExtractor:
+    names_security = True
+
     def __init__(self, terms):
         self.terms = terms
 
-    def extract(self, record):
+    def extract(self, record, security_name=""):
         return self.terms
 
 
@@ -1000,10 +1002,12 @@ def _two_stock_mergers(fake_edgar, monkeypatch):
     terms2 = MergerTerms("stock", None, 1.0, "ACQUIRER CO", "ACQ", "high", "8-K:X2", "")
 
     class _LLMByKey:
+        names_security = True
+
         def __init__(self, mapping):
             self.mapping = mapping
 
-        def extract(self, record):
+        def extract(self, record, security_name=""):
             return self.mapping.get((record.sec_id, record.delist_date))
 
     clients.llm_extractor = _LLMByKey({
@@ -1376,7 +1380,9 @@ def test_a_lagged_acquirer_close_flags_the_delisting(fake_edgar, tmp_path, monke
     monkeypatch.setattr(pipeline, "DelistingFinder", _CannedFinder)
 
     class _LLM:
-        def extract(self, record):
+        names_security = True
+
+        def extract(self, record, security_name=""):
             return MergerTerms("stock", None, 1.0, "ACQUIRER CO", "ACQ", "high", "8-K:X", "")
 
     clients.llm_extractor = _LLM()
@@ -2189,6 +2195,8 @@ def test_a_placeholder_whose_late_rows_are_a_deleted_symbol_is_not_listed_today(
 # --- an acquirer on another ticker that resolves to the target's CIK ---
 
 class _OneAnswerResolver:
+    issuers = None        # no issuer record of its own
+
     def __init__(self, cik):
         self.cik = cik
 
@@ -2382,7 +2390,7 @@ def test_a_search_hit_means_the_filing_list_is_not_read_for_the_continuation(fak
 
 
 def test_the_successors_own_8k12b_settles_a_continuation_with_no_full_text_search_at_all(fake_edgar, tmp_path):
-    assert not hasattr(fake_edgar, "full_text_search")
+    assert fake_edgar.full_text_search is None          # the fixture states the search absent
     filing = EdgarSubmission("0000000999-15-000042", "8-K12B", "2015-06-15", "", "", "x.htm")
     (d,) = _holdco_run(fake_edgar, tmp_path, filings=[filing])
     assert (d["successor_sec_id"], d["confidence"]) == ("BBGHCNEW001", "high")
@@ -2550,6 +2558,8 @@ def test_a_sighting_after_the_ending_is_an_uncertain_seed_but_not_an_uncertain_s
 
 
 class _SearchEdgar:
+    """EDGAR whose full-text search answers `hits` (and records each query)."""
+
     def __init__(self, hits):
         self.hits, self.calls = hits, []
 
@@ -2559,12 +2569,11 @@ class _SearchEdgar:
 
 
 def test_ticker_evidence_asks_the_search_only_for_a_placeholder_without_a_ticker_tier():
-    from types import SimpleNamespace
     from delist_detection import manifest as run_manifest
     from delist_detection.observations import TickerEra
     edgar = _SearchEdgar([{"_id": "a:d", "_source": {"ciks": ["0000000555"], "adsh": "0000000555-16-000001"}}])
-    ctx = pipeline._RunContext(SimpleNamespace(edgar=edgar), date(2026, 9, 25), lambda *_: None, 1,
-                               run_manifest.StageMeter(lambda *_: None))
+    ctx = pipeline._RunContext(Clients(edgar=edgar, resolver=None, classifier=None, figi=None, ftd_client=None),
+                               date(2026, 9, 25), lambda *_: None, 1, run_manifest.StageMeter(lambda *_: None))
     securities = {
         "CIK555-COMMON": Security("CIK555-COMMON", 555, "COMMON", "PHX CO", "", True, "placeholder",
                                   eras=[TickerEra("PHX", "2015-06-30", "2016-06-30")]),
@@ -2830,8 +2839,9 @@ def test_a_delisting_without_a_line_link_still_gets_the_in_run_successor_search(
     from types import SimpleNamespace
     from delist_detection import manifest as run_manifest
     from delist_detection.history import Sighting
-    ctx = pipeline._RunContext(SimpleNamespace(edgar=SimpleNamespace()), date(2026, 9, 25), lambda *_: None, 1,
-                               run_manifest.StageMeter(lambda *_: None))
+    no_search = SimpleNamespace(full_text_search=None)          # EDGAR stating its full-text search absent
+    ctx = pipeline._RunContext(Clients(edgar=no_search, resolver=None, classifier=None, figi=None, ftd_client=None),
+                               date(2026, 9, 25), lambda *_: None, 1, run_manifest.StageMeter(lambda *_: None))
     on_line = _unit_delisting("BBGRS01", CrspBucket.EXCHANGE_TRANSFER, 304, ["successor_unknown"])
     other = _unit_delisting("BBGOTH1", CrspBucket.EXCHANGE_TRANSFER, 304, ["successor_unknown"])
     securities = {sid: Security(sid, 4242, "COMMON", "CO", "", True, "cusip") for sid in ("BBGRS01", "BBGOTH1")}

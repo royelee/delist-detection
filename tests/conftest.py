@@ -14,7 +14,11 @@ from delist_detection.edgar import EdgarSubmission
 
 @dataclass
 class _FakeEdgar:
-    """Minimal stand-in for EdgarClient used by classifier unit tests."""
+    """Minimal stand-in for EdgarClient used by classifier unit tests: an adapter of the run's EDGAR client
+    (`pipeline.Clients`). Its fixture holds no full-text search answers, so it states that capability absent
+    (`capabilities.FULL_TEXT_SEARCH`); a test that wants one sets `full_text_search` on its instance."""
+
+    full_text_search = None      # not a field: a class attribute, the statement
 
     submissions_by_cik: dict[int, list[EdgarSubmission]]
     company_map: dict[str, dict[str, Any]]

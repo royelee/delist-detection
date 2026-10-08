@@ -8,7 +8,6 @@ tables are renamed into place one at a time at the very end; see
 """
 from __future__ import annotations
 
-import copy
 import sys
 from collections import Counter, defaultdict
 from collections.abc import Callable, Collection, Iterable, Mapping, Sequence
@@ -22,6 +21,7 @@ from . import acquirer_line
 from . import manifest as run_manifest
 from . import scorecard as run_scorecard
 from .added_securities import AddedAcquirer, AddedLineSuccessor, AddedSecurity, AddedSuccessor
+from .capabilities import CAPABILITIES, FULL_TEXT_SEARCH, NAMED_LLM_CALL, Capability, FullTextSearch, offers, stated
 from .crsp_codes import CrspBucket
 from .continuation_evidence import needs_doubt_check, needs_filing, read_continuation
 from .degraded import DegradedWatch, degraded_item, flag_degraded, report_halt_feed_failures
@@ -91,26 +91,49 @@ BACKFILL_DAYS = 1095   # how far before a dead-before-sighting security's end it
 
 @dataclass
 class Clients:
-    edgar: Any
-    resolver: Any
-    classifier: Any
+    """The seam every stage reads SEC, OpenFIGI, the fails files, MIDAS, the Nasdaq halt feed and the LLM through.
+    Each field is filled by an adapter: production's (`default_clients`) or a test double (None: a client the
+    caller left out, such as `--no-midas`). Each adapter provides its client's required reads (`capabilities`'
+    docstring lists them) and states each optional capability it may be asked for, offered or absent:
+    `full_text_search` and `names_security` read those statements, and `absent()` lists the capabilities the run
+    goes without (`run` logs each once). The resolver and the classifier state the issuer record they read through
+    (`issuers`)."""
+    edgar: Any                      # EDGAR (`edgar.EdgarClient`); states `full_text_search`
+    resolver: Any                   # the issuer lookup (`identity.IssuerLookup`: `ticker_resolver.TickerResolver`)
+    classifier: Any                 # `classifier.DelistClassifier`
     figi: Any
     ftd_client: Any
     midas: Any = None
-    halts: Any = None
+    halts: Any = None               # the Nasdaq halt feed: `deletion_halt`, `failed_days`
     payout_extractor: Any = None
-    llm_extractor: Any = None
+    llm_extractor: Any = None       # `llm_merger_extractor.LLMMergerTermsExtractor`; states `names_security`
     as_of: date | None = None       # the run date every client uses (default_clients sets it)
     issuers: IssuerRecord | None = None     # the run's issuer record (None: the resolver's or classifier's)
 
     def __post_init__(self) -> None:
-        """The run's issuer record: the one the resolver and the classifier read through, so a run reads each
-        issuer once and reports every failed read one way; a new one over `edgar` when neither holds one (a test
-        double)."""
+        """The run's issuer record: the one the resolver and the classifier state they read through (`issuers`),
+        so a run reads each issuer once and reports every failed read one way; a new one over `edgar` when neither
+        holds one (a test double states None)."""
         if self.issuers is None:
-            held = (getattr(self.resolver, "issuers", None), getattr(self.classifier, "issuers", None))
-            self.issuers = next((r for r in held if isinstance(r, IssuerRecord)), None) \
-                or IssuerRecord(self.edgar, today=self.as_of)
+            held = (c.issuers for c in (self.resolver, self.classifier) if c is not None)
+            self.issuers = next((r for r in held if r is not None), None) or IssuerRecord(self.edgar, today=self.as_of)
+
+    @property
+    def full_text_search(self) -> FullTextSearch | None:
+        """EDGAR full-text search, or None when the EDGAR adapter states it absent (`capabilities.FULL_TEXT_SEARCH`:
+        what the stages go without)."""
+        return stated(self.edgar, FULL_TEXT_SEARCH) if self.edgar is not None else None
+
+    @property
+    def names_security(self) -> bool:
+        """Whether the LLM extractor takes the target security's name (`capabilities.NAMED_LLM_CALL`)."""
+        return offers(self.llm_extractor, NAMED_LLM_CALL)
+
+    def absent(self) -> tuple[Capability, ...]:
+        """The capabilities an adapter of these clients states absent (a client left out offers none, and is no
+        absent capability). An adapter that states nothing is refused (`capabilities.Undeclared`)."""
+        return tuple(c for c in CAPABILITIES
+                     if (adapter := getattr(self, c.client)) is not None and not offers(adapter, c))
 
 
 @dataclass
@@ -141,9 +164,7 @@ def _stderr(*parts) -> None:
 
 def _flush_memo(clients: Clients) -> None:
     """Write the resolver's batched memo now (TickerResolver.flush)."""
-    flush = getattr(clients.resolver, "flush", None)
-    if flush is not None:
-        flush()
+    clients.resolver.flush()
 
 
 def _warm_delisting_search(clients: Clients, ordered: list[Security], listing: dict[str, dict],
@@ -151,8 +172,8 @@ def _warm_delisting_search(clients: Clients, ordered: list[Security], listing: d
                            retired: frozenset[str] = frozenset()) -> None:
     """Fill the SEC caches for the Form 25 search: each security's own finder work
     on `workers` threads, fill-only, its answers thrown away. A warm finder is the
-    sequential finder's twin: a copy of the run's classifier reading issuers through
-    a shadow of its issuer record (`IssuerRecord.shadow`), and the run's own MIDAS
+    sequential finder's twin: the run's classifier's shadow (`DelistClassifier.shadow`:
+    its copy reading issuers through a shadow of its issuer record), and the run's own MIDAS
     and Nasdaq-halt clients, each behind one lock shared by every warm finder. It
     therefore takes the same last-trade anchors and asks for what the sequential
     pass will. A security whose batched OpenFIGI answer is missing is skipped: the
@@ -162,10 +183,7 @@ def _warm_delisting_search(clients: Clients, ordered: list[Security], listing: d
     halts = Serialized(clients.halts) if clients.halts is not None else None
 
     def make_finder() -> DelistingFinder:
-        classifier = copy.copy(clients.classifier)
-        if isinstance(getattr(classifier, "issuers", None), IssuerRecord):
-            classifier.issuers = classifier.issuers.shadow()
-        return DelistingFinder(clients.edgar, classifier, midas=midas, halts=halts)
+        return DelistingFinder(clients.edgar, clients.classifier.shadow(), midas=midas, halts=halts)
 
     def task(finder: DelistingFinder, s: Security) -> None:
         answer = listing.get(s.sec_id)
@@ -202,6 +220,10 @@ def run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_
     or not); the new `RunSummary.review_counts` (= `triaged.counts`, also under
     the manifest's `"review"` key) reports triage's own tally
     (fix/check/info_hidden/accepted/cleared/unmatched_decisions).
+
+    Each optional capability an adapter of `clients` states absent (`Clients.absent`, `capabilities`) is logged
+    once, with what the run goes without, before anything is read; an adapter that states nothing about one stops
+    the run there (`capabilities.Undeclared`).
 
     `sec_workers` > 1 fills the SEC caches ahead of each SEC-heavy stage on that
     many threads (`prefetch.warm`: fill-only, every thread under the one limiter).
@@ -563,10 +585,10 @@ def _r1_successor(ctx: _RunContext, e: Delisting, sec: Security, own: OwnShares,
     `own_shares.new_issuer`, and named by the R1 statement's target, the name tie `OwnShares.names_target`), to be
     added as a security of its own (`AddedSuccessor`, seen from the day after `day`) in `pending`: the caller adds it
     once the reading is known not to be degraded. Issuers' first filings and names come from the run's issuer
-    record."""
+    record. No 8-K12B candidate without full-text search (`Clients.full_text_search`)."""
     issuers = ctx.clients.issuers
     link = successor_by_terms(e, own.statement, day, starts, issuers=issuers)
-    search = getattr(ctx.clients.edgar, "full_text_search", None)
+    search = ctx.clients.full_text_search
     if link is not None or search is None:
         return link
     hit = successor_from_8k12b(search, ctx.clients.figi, name=successor_search_name(ctx.clients.edgar, e.cik, sec.name),
@@ -774,12 +796,12 @@ def _find_successors(ctx: _RunContext, delistings: list[Delisting], securities: 
     or an acquirer the run adds) that starts right after the last trade under the
     same issuer or ticker (a holdco reorganization's new line, a rename's new
     FIGI), then the successor issuer's 8-K12B (search: EDGAR full-text search,
-    wired in default_clients). Before the 8-K12B search, sub-plan 5c's links
-    (`_terms_links`): the security or the line the registrant's own filings say
-    the shares became, one for one. Then the answer is recorded on the
+    `Clients.full_text_search`; none when the EDGAR adapter states it absent).
+    Before the 8-K12B search, sub-plan 5c's links (`_terms_links`): the security
+    or the line the registrant's own filings say the shares became, one for one. Then the answer is recorded on the
     delistings (`_link_successors`): stage 9 is this one call."""
     clients, found = ctx.clients, _Successors()
-    successor_search = getattr(clients.edgar, "full_text_search", None)
+    successor_search = clients.full_text_search
     mark = ctx.meter.start()
     if line_successors:
         _line_successor_links(delistings, securities, acquirers, line_successors, ftd or FtdIndex(), found)
@@ -885,7 +907,7 @@ def _handoffs(ctx: _RunContext, delistings: list[Delisting], securities: dict[st
     (the issuer's first filing included) is decided without what could not be read and gets a
     `resolution_degraded` item. Returns the outcome; the caller adds its rows."""
     clients, edgar, issuers = ctx.clients, ctx.clients.edgar, ctx.clients.issuers
-    fts = getattr(edgar, "full_text_search", None)
+    fts = clients.full_text_search
     sightings = {sid: filtered_ticker_sightings(sig, sec_cusips.get(sid, []), ftd)
                  for sid, sig in search.sightings.items()}
     pairs = find_handoffs(sightings)
@@ -1320,9 +1342,9 @@ def _ticker_evidence(ctx: _RunContext, securities: dict[str, Security], tier: Ca
     """10e. What ties each placeholder's ticker to its CIK (decision 1;
     ticker_evidence.evidence_for): a resolver tier that names the ticker (`tier`: each era's, by era key,
     `Identity.tier`), else
-    a full-text hit in the CIK's own filings. A client without full-text
-    search (a test double) gives every other placeholder no evidence."""
-    search = getattr(ctx.clients.edgar, "full_text_search", None)
+    a full-text hit in the CIK's own filings. Without full-text search (an EDGAR adapter that states it absent,
+    `capabilities.FULL_TEXT_SEARCH`) every other placeholder gets no evidence."""
+    search = ctx.clients.full_text_search
     mark = ctx.meter.start()
     out = {s.sec_id: evidence_for(s.issuer_cik,
                                   [EraEvidence(e.ticker, e.first, e.last, tier(e.key)) for e in s.eras],
@@ -1461,6 +1483,8 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
     """The run's stages in order (each function's docstring says what it does);
     `run` wraps it with the resolver memo's final flush."""
     ctx = _RunContext(clients, clients.as_of or date.today(), log, sec_workers, run_manifest.StageMeter(log))
+    for capability in clients.absent():       # each once, before anything is read (production's offer them all)
+        log(f"capability absent: {capability.name}: {capability.without}")
     clients.issuers.forget()                  # one issuer record per run: each issuer is read afresh, once
     run_mark = SEC_STATS.snapshot()           # the manifest reports the traffic since here
     identity = identify(index, clients, as_of=ctx.as_of, limit=limit, log=log, workers=sec_workers,
@@ -1566,7 +1590,8 @@ def default_clients(index: ObservationIndex, *, cache_dir: Path, rename_map: dic
     read once here), the resolver batches its memo writes and finds its name
     candidates in SEC's cik-lookup-data.txt (`cik_lookup.CikLookupClient`, loaded
     on first use), and the SEC limit is made machine-wide
-    (sec_limiter.use_machine_wide_limit)."""
+    (sec_limiter.use_machine_wide_limit). Every adapter offers every capability
+    (`capabilities.CAPABILITIES`: `Clients.absent()` is empty)."""
     from .cik_lookup import CikLookupClient
     from .classifier import DelistClassifier
     from .edgar import EdgarClient

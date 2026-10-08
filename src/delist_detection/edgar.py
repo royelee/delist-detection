@@ -697,7 +697,9 @@ class EdgarClient:
         them) for `q` within `forms`, filed in `[lo, hi]`, cached as `efts_search`
         caches them; `ciks` limits the search to those filers' own filings. []
         when EDGAR could not answer: the successor search then leaves
-        `successor_unknown` set. A 403/429 raises `EdgarBlocked`.
+        `successor_unknown` set. A 403/429 raises `EdgarBlocked`. The client's
+        optional capability (`capabilities.FULL_TEXT_SEARCH`), which this adapter
+        offers.
         """
         url = (
             "https://efts.sec.gov/LATEST/search-index?"

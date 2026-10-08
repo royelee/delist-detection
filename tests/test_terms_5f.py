@@ -363,6 +363,9 @@ class _ClsEdgar:
     def __init__(self, filings, texts):
         self.filings, self.texts = filings, texts
 
+    def submissions(self, cik, fresh_after=None):
+        return {}                # no record of the registrant: its names are the security's own
+
     def fetch_filing_text(self, cik, accession, primary_doc):
         return self.texts.get(accession, "")
 

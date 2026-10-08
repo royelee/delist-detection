@@ -522,17 +522,23 @@ class LLMMergerTermsExtractor:
         Injected EDGAR client — ``recent_filings(cik)`` and
         ``fetch_filing_text(cik, accession, primary_doc)``.
     llm:
-        Injected duck-typed LLM client — ``extract(system, user, schema) -> dict``.
+        Injected LLM client (``llm_client``'s interface) — ``extract(system,
+        user, schema) -> dict`` and ``model``; None for a reader of cached
+        answers only.
     model:
         Model identifier used in the cache key (it labels the cache, not the
-        call). Defaults to the injected ``llm``'s own ``model``, the one it
-        calls, so an answer is never filed under another model's name; then
-        ``$CHAT_MODEL``, then ``"model"``, for a client that carries none.
+        call). Defaults to the model the injected ``llm`` states it calls, so
+        an answer is never filed under another model's name; then
+        ``$CHAT_MODEL``, then ``"model"``, for a client that states none.
     cache_dir:
         Directory for the per-filing LLM-response cache.
     max_filings:
         Cap on the number of candidate filings whose text is sent to the LLM.
     """
+
+    # ``extract`` takes the target security's name (``capabilities.NAMED_LLM_CALL``): stage 8 names it and fills the
+    # calls ahead on the worker threads
+    names_security = True
 
     def __init__(
         self,
@@ -545,7 +551,7 @@ class LLMMergerTermsExtractor:
     ) -> None:
         self.edgar = edgar
         self.llm = llm
-        self.model = model or getattr(llm, "model", None) or os.environ.get("CHAT_MODEL", "model")
+        self.model = model or (llm.model if llm is not None else None) or os.environ.get("CHAT_MODEL", "model")
         self.cache_dir = Path(cache_dir)
         self.max_filings = max_filings
         clean_orphan_temps(self.cache_dir)    # a killed run's cut-off answer

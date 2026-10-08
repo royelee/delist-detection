@@ -30,7 +30,6 @@ The four rule modules it calls are its collaborators, each with its own interfac
 (the acquirer's FIGI from its fails rows, its CIK) and `payout_gate` (the check against the last close)."""
 from __future__ import annotations
 
-import inspect
 from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import date, timedelta
@@ -226,8 +225,8 @@ def _quiet(*_: object) -> None:
 @dataclass
 class _Stage:
     """What every step of the stage shares: the run's clients (edgar, resolver, issuers, figi, ftd_client,
-    payout_extractor, llm_extractor), the run's securities as acquirer lines, the first day the run loaded fails rows
-    from, the prefetch worker count and the log."""
+    payout_extractor, llm_extractor and its `names_security`: `pipeline.Clients`), the run's securities as acquirer
+    lines, the first day the run loaded fails rows from, the prefetch worker count and the log."""
     clients: Any
     index: acquirer_line.LineIndex
     ftd_lo: date | None
@@ -253,7 +252,7 @@ def value_mergers(delistings: Sequence[Delisting], index: acquirer_line.LineInde
     """Stage 8 (see the module docstring): every merger-bucket delisting of `delistings`, valued. `index` holds the
     run's securities, their ticker sightings, CUSIPs and the fails index (extended here with the acquirers' rows);
     `clients` the run's edgar, resolver, issuers (the issuer record), figi, ftd_client, payout_extractor and
-    llm_extractor."""
+    llm_extractor, and whether the extractor takes the target's name (`names_security`; `pipeline.Clients`)."""
     st = _Stage(clients, index, ftd_lo, workers, log)
     mergers = [e for e in delistings if e.record.bucket is CrspBucket.MERGER]
     raw, llm_terms, review = _read_terms(st, mergers, closes, {sid: s.name or "" for sid, s in st.securities.items()})
@@ -304,8 +303,7 @@ def _read_terms(st: _Stage, mergers: list[Delisting], closes: Mapping[DelistingK
     answer (a failed EDGAR read or LLM call; it also flags the merger's own row)."""
     clients, raw, llm_terms = st.clients, {}, {}
     review: list[ReviewItem] = []
-    named = clients.llm_extractor is not None and \
-        "security_name" in inspect.signature(clients.llm_extractor.extract).parameters
+    named = clients.names_security       # the extractor's named call (`capabilities.NAMED_LLM_CALL`)
     if st.workers > 1 and clients.payout_extractor is not None:
         # The regex payout reader's EDGAR reads, warmed.
         extractor = clients.payout_extractor

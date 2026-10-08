@@ -131,6 +131,8 @@ def test_payout_extractor_propagates_refusal():
 
 def test_llm_merger_extractor_propagates_refusal(tmp_path):
     class _BoomLlm:
+        model = None
+
         def extract(self, system, user, schema):
             raise AssertionError("LLM must not be called when EDGAR is blocked")
 

@@ -5,7 +5,7 @@ other securities of their issuers, their fails rows, and the EDGAR, OpenFIGI, MI
 `delistings.DelistingFinder`, which makes each ending's own-share reading and keeps the one its classifier read),
 stage 8b (`pipeline._r1_continuations`, the terms the committed contract published standing in for the LLM's), and
 stage 9 (`pipeline._find_successors`, which records its links as rewrites; no full-text search: the fixture has
-none); `later` runs 8b and 9 over delistings `find` gave. How each successor was found is the rewrite's typed provenance
+none, and its EDGAR double states the capability absent); `later` runs 8b and 9 over delistings `find` gave. How each successor was found is the rewrite's typed provenance
 (`rewrites.successor_by`)."""
 from __future__ import annotations
 
@@ -48,7 +48,10 @@ AS_OF = date.fromisoformat(DATA["as_of"])
 
 class FixtureEdgar:
     """The cases' EDGAR answers as the fixture recorded them. A raw or a text the cache lacked reads as "" (as an
-    unreadable filing); `texts_read` lists every 8-K text read."""
+    unreadable filing); `texts_read` lists every 8-K text read. The fixture recorded no full-text searches, so it
+    states the search absent: stage 8b's 8-K12B candidate and stage 9's 8-K12B search are not run here."""
+
+    full_text_search = None      # the fixture recorded no full-text searches (`capabilities.FULL_TEXT_SEARCH`)
 
     def __init__(self) -> None:
         self.texts_read: list[str] = []
