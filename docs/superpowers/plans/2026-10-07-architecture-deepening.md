@@ -1873,3 +1873,15 @@ Decisions made in the step:
 - **pipeline.py: 1624 lines to 1637** (`_Backfill`). ftd.py: 502 to 628.
 - **CONTEXT.md is unchanged:** the index, its asks and its coverage are design vocabulary over the fails data, a
   term the glossary's "era" already uses.
+- **Controller rulings on step 12's open points.**
+  - **The doubled rows (3,728 fails of Berkshire's two CUSIPs and Lions Gate's 535919500, held once under BRKB/LGFB
+    and again relabelled under BRK-B/LGF-B) stay as they are, as a follow-up outside this program.** No output row
+    shows them, but the answer depends on the order of asks, and a fix can change rows. That needs a fix sub-plan that
+    passes the diagnosis truth loop, not a refactor step.
+    - Cost if wrong: an ask that counts rows (`trades_after`'s 20-row test, a settled-last run) could count the same
+      day twice for these three CUSIPs; none does in the replay.
+  - **Stage 5b stays one pass per security.** Two batched passes would save about 110 s of the 580 s replay, but a
+    security's sightings would then see rows from a later security's ask.
+  - **A `--limit` subset's coverage now follows SEC's file index (accepted).** Over the whole replay every answer of
+    `data_covers`, `data_end` and `opened_from` equals the old one, so the predicates now say what a full run already
+    meant, and a subset answers as the full run would.
