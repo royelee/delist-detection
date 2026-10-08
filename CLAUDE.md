@@ -38,6 +38,7 @@ python scripts/build_diagnosis_truth.py   # the diagnosis truth file from the no
 python scripts/regression_report.py --base <commit>    # offline: contract changes outside the truth set -> output/regression_report.csv
 python scripts/truth_loop_round.py --label 5a --base <commit> --round 1   # offline: open one loop round (loop_round.Round.open): its new errors -> loop/<label>/round-<N>/cases.csv (--seed-ledger records current mismatches as known, loop_round.Loop.seed)
 python scripts/update_truth.py --label 5a --round 1 --base <commit>      # offline: close the round (loop_round.Round.close): apply its diagnoses to data/diagnosis_truth.csv, the change log and the ledger (--dry-run; the loop scripts' --truth defaults to the file data/scorecard.json names, its legs and change log named after it)
+python scripts/scorecard.py --flip       # offline: the flip rule (truth.now_right) on both truth sets: every known_wrong golden case (data/golden_lifecycles.csv, its note records it) and diagnosis case (the truth set, a change-log row) that output/'s tables now match becomes pass, its fixed_by cleared; prints the flipped case ids (scorecard.flip)
 python scripts/scorecard.py --base REV --ledger PATH   # the ledger scorecard reads for D.unexplained_regressions (default the loop folder's, loop_round.Loop.ledger: output/diagnose_unknown_report/loop/diagnosed.csv; computed only with --base, loop_round.unexplained, never from output/regression_report.csv)
 # The loop: run the Workflow tool with scriptPath ".claude/workflows/diagnosis-truth-loop.js" and args {"label": "<sub-plan>", "base": "<commit>"} (prepared cases: add "casesPath", which makes the update a dry run; at most 3 rounds, 5 agents). Normalization: scriptPath ".claude/workflows/diagnosis-truth-normalize.js", args {"cases": [...], "batch": 10}. Workflows are run by path; name lookup does not find them.
 python scripts/draw_audit_sample.py --out data/accuracy_audit.csv   # offline: draw the decision-17 audit worksheet once (census + 100 random, seed 7)
@@ -953,37 +954,53 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   `end_of`: the final ending's `exit_kind.end_day_of`). The walk follows each
   security's last real ending (`exit_kind.last_endings`) and reads its kind and
   flags through the row vocabulary.
-- `truth.py` — truth cases, checked by hand at a cited source: the golden set
-  (`data/golden_lifecycles.csv`, `pass` or `known_wrong` + `fixed_by`) and the
-  decision-17 audit (`data/accuracy_audit.csv`, `census:<group>` or `random`;
-  an unfilled row is pending). `load_truth`, `write_truth`, `judge` (one
-  mismatch per checked field that disagrees), `clopper_pearson_upper`.
+- `truth.py` — truth cases, checked by hand at a cited source. What every truth set shares is defined here once
+  (step 15): the statuses `PASS` and `KNOWN_WRONG` and their rule (`check_status`: a known_wrong case names its
+  fixer in `fixed_by`; the diagnosis set adds its own `ruling_pending`), the one error `TruthFileError` (any truth
+  file, golden, audit or diagnosis, its legs, change log or ledger), the judgement (`Judgement`: a case and one
+  `Mismatch` per checked field that disagrees, with `field`, `truth`, `library` and the judge's own `wording` where
+  `<field> <library> != <truth>` would not read; both judges return it), `tally` (one set's judgements counted:
+  cases, matching, pass holding and failing, known_wrong, now right, mismatches by field through the set's `key`,
+  the failing pass cases' text; the scorecard's G.*, A.* and D.* lines read it), the flip rule (`now_right`: every
+  known_wrong case whose judgement now holds becomes pass, fixed_by cleared, reason `NOW_MATCHES`) and the note
+  convention (`noted`). Then the golden set (`data/golden_lifecycles.csv`, `pass` or `known_wrong` + `fixed_by`)
+  and the decision-17 audit (`data/accuracy_audit.csv`, `census:<group>` or `random`; an unfilled row is pending):
+  `TruthCase` (named by `case_id`, its file's `case`), `load_truth`, `write_truth`, `judge`, `flip(path, view)` (the
+  flip rule on a golden file: the flipped rows' status, fixed_by and note change, and the file is rewritten only
+  when a case flipped), `clopper_pearson_upper`. The golden `last_trade_date` column is delistings.csv's internal
+  day of the lifecycle's final ending, the chain's (a successor's, when the chain continues), never the contract's:
+  `TruthCase.final_last_trade_date` in code.
 - `diagnosis_truth.py` — the diagnosis truth set's row format (`data/diagnosis_truth.csv`, spec
   2026-10-03-diagnosis-truth-fixes): one row per diagnosed case. `shape` is ending, no_ending or ending_moved. Scored
-  contract fields hold a value, a blank or `*`; `internal_last_trade_date` holds a worked-out date, and a side file
-  holds a basket's legs. `examined_delist_date` is the delist_date of the ending the case examined (step 9b): an
+  contract fields hold a value, a blank or `*`, and a side file holds a basket's legs. The two last trade dates: the
+  scored `last_trade_date` is the contract's published day of the security's own last ending;
+  `internal_last_trade_date` is delistings.csv's day of that same ending (a worked-out date when the contract leaves
+  it blank). Neither is the golden column of the same name (`truth.TruthCase.final_last_trade_date`). Its statuses
+  are `truth`'s pass and known_wrong (`truth.check_status`) and its own `RULING_PENDING`; a bad file is a
+  `truth.TruthFileError`. `examined_delist_date` is the delist_date of the ending the case examined (step 9b): an
   ending_moved case needs it, and refuses it as the last real ending; it is never read from the case_id (a loop-added
   case's id ends in its round). `parse_rows` and `parse_legs` turn rows into validated cases (`truth_set` reads the
   files). A leg's field name is `leg_field(n, name)` (`legN.x`, the judge's and the change log's), and `field_key`
   reads it back as `legs` for the `D.mismatches.*` names.
   Its judge (`LibraryRows.of(snapshot)`: the contract rows, the last real endings, the
-  securities and contract/payout_legs.csv, None before schema 3; `judge_case`) gives one `Mismatch` per scored field,
-  or one `sec_id` mismatch when the case's security is not in the run. The
+  securities and contract/payout_legs.csv, None before schema 3; `judge_case`) gives a `truth.Judgement`, one
+  `truth.Mismatch` per scored field, or one `sec_id` mismatch when the case's security is not in the run. The
   scorecard's `D.*` lines and `tests/test_diagnosis_truth_cases.py` (strict xfail on known_wrong) read it.
 - `truth_set.py` — the diagnosis truth set as one unit (step 9a): `TruthSet.open(truth, ledger=)` reads the truth
   rows, the legs, the change log and, when a change settles loop errors, the ledger, and validates them once (each
   header exact; `parse_rows`; `parse_legs`; no legs without a case; a row with a missing or an extra cell is a
-  `DiagnosisTruthError` naming the file and line; a change-log record may carry cells past its six, kept as read).
+  `truth.TruthFileError` naming the file and line; a change-log record may carry cells past its six, kept as read).
   Where the files are: data/scorecard.json's "diagnosis" names the truth file (`truth_file_of`, `configured`); the
   legs and the change log are named after it (`legs_path`: `<truth>_legs.csv`, `changes_path`:
   `<truth>_changes.csv`). The changes: `rule(Ruling)` (a sub-plan's or the controller's ruling as data: cells, legs,
   `tag: why`, report and the `owner` whose rows it applies to; it applies once: a cell the change log already
   records it setting is never set again), `correct(Correction)` (a reason a ruling stated wrongly, in the note and
   the log), `rename(id_changes)` (sec_id, price_sec_id, successor_sec_id and every leg's price_sec_id, through
-  `regression.renamed_to`, the one chain rule), `flip(lib)` (known_wrong cases that now match become pass),
+  `regression.renamed_to`, the one chain rule), `flip(lib)` (the flip rule, `truth.now_right`, the golden set's
+  too: known_wrong cases that now match become pass, one change-log row each),
   `apply_round(cases, records, base_contract, run, ...)` (truth_update's rules, on the round's `loop_round.RoundCase`s;
   `loop_round.Round.close` calls it) and `settle(ledger_rows)`, all made of `set_cells`, `move_status`,
-  `add_row` and `settle`: every changed cell is one change-log row, a note grows by `; tag: why` (`noted`).
+  `add_row` and `settle`: every changed cell is one change-log row, a note grows by `; tag: why` (`truth.noted`).
   `commit()` validates and writes every file whose content changed, together (`atomic_io.replace_all_on_success`);
   an unchanged file keeps its bytes, and the change log is appended to, its old records written back as read.
   `TruthSet.new(truth, rows, legs)` is a set whose rows and legs are given (sub-plan 5-0's build, tests);
@@ -1033,12 +1050,16 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   cites a filing the earlier report missed. A regression of a sec_id the run lacks, or of a renamed placeholder, adds
   no truth row (`run.sec_ids`, `renamed`). The flip after a round is `TruthSet.flip`.
 - `truth_build.py` — the first truth file, built from the normalization workflow's JSON rows (the R2 FIGI check,
-  pending fields, the residual list, statuses; notes by `truth_set.noted`; the examined ending from the diagnosis's
+  pending fields, the residual list, statuses; notes by `truth.noted`; the examined ending from the diagnosis's
   source.csv); scripts/build_diagnosis_truth.py writes it as `TruthSet.new`.
 - `scorecard.py` — `build(snapshot, config=)` (the spec's gap table as one flat dict: L1/L2, R1.x,
-  R2.x, G.x, A.x, D.x, V.x; its `as_of` the snapshot's), `METRICS` (each floored number's good direction), `drops`,
+  R2.x, G.x, A.x, D.x, V.x; its `as_of` the snapshot's; the G, A and D lines count each set's judgements through
+  one `truth.tally`), `METRICS` (each floored number's good direction), `drops`,
   `raise_floor`, `load_config` (`data/scorecard.json`: the caller's window, the
-  floor, the two truth files; the diagnosis truth set through `truth_set`, its legs named after its truth file),
+  floor, the truth files, read as cases and named as files, `golden_file` and `diagnosis_file`; the diagnosis truth
+  set through `truth_set`, its legs named after its truth file), `flip(snapshot, config)` (the flip rule on both
+  sets: `truth.flip` for the golden file, `TruthSet.flip` and its commit for the diagnosis set, which is flipped only
+  when the run has a contract; returns the flipped ids, `Flipped`; scripts/scorecard.py --flip),
   `write` (`output/scorecard.json`). `D.unexplained_regressions` is not built here: it needs a base commit, and is
   the loop round's (`loop_round.unexplained`), added by scripts/scorecard.py with `--base`.
 - `audit.py` — decision 17's sample: `census` (each ending in its first group of
@@ -1343,7 +1364,8 @@ expiration is 0.0 in the table and no correction in the firm month, which leaves
   committed `output/` and fails when a floored number got worse, a floored
   metric disappeared, or a golden `pass` case fails;
   `tests/test_golden_lifecycles.py` runs every golden case (`known_wrong` is a
-  strict xfail, so a fix forces the row to flip to `pass`). A plan that improves
+  strict xfail, so a fix forces the row to flip to `pass`: `scripts/scorecard.py --flip`, the flip rule the
+  diagnosis set's loop applies too). A plan that improves
   a number runs `scripts/scorecard.py --raise-floor`; a floor entry is lowered
   only by hand, with the reason in the commit. A `--limit` run is never compared
   to the floor. A drop or a failing golden case warns on stderr and never changes

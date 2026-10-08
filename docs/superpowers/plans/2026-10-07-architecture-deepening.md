@@ -40,7 +40,7 @@ A deepening moves behaviour behind a smaller interface. It changes nothing the l
 | 12 | The fails index owns its loading (small) | | done |
 | 13 | One leaf module for ticker and share-class spelling (small) | | done |
 | 14 | The finder builds its own trading record (small) | | done |
-| 15 | One truth-case type (speculative) | | |
+| 15 | One truth-case type (speculative; reduced: no re-key) | | done |
 | 16 | Package layout: concept subpackages and a lazy package root (review 11) | | |
 
 The issuer record (2) comes early because stages 8, 9 and 9b read issuers through closures that it replaces. The
@@ -2103,3 +2103,137 @@ Decisions made in the step:
 - **pipeline.py: 1638 lines to 1557.** delistings.py 671 to 714, last_trade.py 680 to 624, history.py 619 to 612;
   trading_record.py is new, 210 lines.
 - **CONTEXT.md gains "Trading record"**, the concept the type is named after.
+
+### Step 15: one truth-case type, reduced to the parts with one meaning and two definitions
+
+- **Rejected for this program: re-keying the diagnosis set from its `sec_id` to an anchor the run resolves**
+  (the candidate's full form, controller ruling). The truth file's keys, the loop's ledger keys (`mis|<case_id>|...`,
+  `reg|<sec_id>|...`) and the regression exclusion (`regression.excluded`: the truth cases' sec_ids and their successor
+  chains) all use the truth's sec_ids, and the shapes `no_ending` and `ending_moved` have no golden counterpart, so a
+  shared anchor would need its own rules for them. Changing the key needs a design with the operator.
+  - What it would buy: a rename needs no truth edit. `TruthSet.rename`, apply_5h's `--after-run`, update_truth's
+    `renamed` and `excluded(id_changes=)` would go, and 5h's D.mismatches.sec_id 0 to 8 (settled in three ordered
+    steps) would not happen; the (ticker, date)-keyed audit judge survived the same renames unchanged.
+  - Cost of not doing it: the rename machinery stays, as it is today.
+- **Where the shared parts live: truth.py, not a new module.** It now opens with what every truth set shares: the
+  statuses and their rule, the error, the judgement and its tally, the flip rule, the note convention. Then the golden
+  and audit format and judge, as before. diagnosis_truth imports the shared names from it (it already imported
+  `TruthFileError`).
+  - Alternative: a fourth truth module below truth, diagnosis_truth and truth_set. Rejected: about 100 lines with no
+    behaviour of their own beside truth.py, whose name is the concept.
+  - Cost if wrong: moving the shared block out is mechanical.
+- **One status vocabulary.** `PASS` and `KNOWN_WRONG` are defined in truth.py only. diagnosis_truth imports them and
+  keeps `RULING_PENDING`, the one status only its set has. scorecard's `D_PASS`/`D_KNOWN_WRONG` aliases are gone, and
+  truth_set, truth_update and truth_build import the two from truth.
+  - The rule is one function, `check_status(status, fixed_by, where, allowed)`: a status outside the set's own, and a
+    known_wrong case with no fixed_by, are refused.
+  - What changed: the golden loader's message is now "is not one of ['', 'pass', 'known_wrong']" (was "is not pass or
+    known_wrong"), and a golden fixed_by of spaces is refused, as the diagnosis loader did. No row has one.
+  - Alternative: define `RULING_PENDING` in truth.py too. Rejected: the golden loader refuses it, and a status defined
+    beside the golden format reads as one a golden case could hold.
+- **One error.** `DiagnosisTruthError` is deleted; its 55 references raise or expect `truth.TruthFileError`. No caller
+  caught the subclass alone: every script catches `TruthFileError`.
+  - Alternative: keep it as an alias. Rejected: two names for one error is what the step removes.
+- **One judgement type: `truth.Judgement(case, mismatches)`, each a `truth.Mismatch(case_id, field, truth, library,
+  wording="")`.** Both judges keep their rules and return it. `CaseJudgement` and diagnosis_truth's `Mismatch` are
+  gone. A judgement holds (`ok`) with no mismatch, knows its `case_id`, and reads as `case_id: m; m`.
+  - The golden judge's mismatches are now structured. The field is the checked column, or `security` (no single
+    security at the ticker and date) or `ending` (no final ending), the diagnosis judge's own name for that. Five
+    messages do not read as `<field> <library> != <truth>`: the missing security, the missing tickers, the early end,
+    the missing final ending and the missing successor. They carry the judge's `wording`. A missing exit kind's
+    library value is `(none)`, as the text said.
+  - Every text is unchanged. With the base code and this step's, all 789 judgements of the golden set, the audit and
+    the diagnosis set on output/ read alike, including the 97 failing ones, which cover every wording.
+  - `TruthCase.case` is now `case_id` (the file's column stays `case`), so both case types are known by the same name.
+  - Alternative: keep golden mismatches as strings and make `Judgement` generic over its mismatch type. Rejected: the
+    tally's field count and the failure text would branch on the type.
+  - Alternative: the default text for every golden mismatch. Rejected: golden_failures lines and their tests assert
+    the texts, and the gate wants the same output.
+  - Cost if wrong: `wording` is a second text path, so a judge that words a mismatch must still set its field. The
+    tests assert field and text together.
+- **One counting: `truth.tally(judgements, key=)` gives a `Tally`.** It holds cases, matching, errors, pass holding
+  and failing, known_wrong, now right, mismatches by field (through the set's `key`: the diagnosis set passes
+  `field_key`, so a leg's fields count as `legs`) and the failing pass cases' text.
+  - `_truth_lines` (G and A) and `_diagnosis_lines` (D) read it.
+  - The golden failures are taken from the same tally. `build` judged the golden set a second time before.
+  - `V.audit.confirmed_but_wrong` stays in the scorecard: it reads uncertain.csv.
+- **One flip rule: `truth.now_right(judgements)`, the case ids of every known_wrong case whose judgement holds.**
+  `TruthSet.flip` applies it through `move_status` (one change-log row, reason `truth.NOW_MATCHES`, moved from
+  truth_set); the order and result are unchanged. `Tally.now_right` counts it, so `G.known_wrong_now_right` and
+  `D.known_wrong_now_right` are exactly what a flip moves.
+  - The golden set's flip is new: `truth.flip(path, view)`. Each flipped row gets status pass, a blank fixed_by and a
+    note (`<note>; the library now matches, was known_wrong until <fixed_by>`). No other cell changes, and the file
+    is written (`write_truth`) only when a case flipped. Both committed golden and audit files round-trip
+    byte-identically through its reader and writer (checked).
+  - The note stands in for a change log. The hand flips did not agree: 9c12f60 wrote no note, ca58ee1's
+    flip_golden.py wrote "passes since <plan>, was known_wrong until <fixed_by>".
+  - Alternative: a change log for the golden file. Rejected: a new data file, and data/ stays untouched.
+  - Alternative: no note. Rejected: fixed_by is cleared, and nothing else would record which plan the case waited for.
+  - `noted` moved from truth_set to truth: both sets' notes follow it.
+- **The command: `scripts/scorecard.py --flip`, both sets (`scorecard.flip(snapshot, config)`, which returns
+  `Flipped`).** It prints the flipped ids of each set.
+  - The diagnosis set is flipped with its commit, and only when the run has a contract, the D lines' rule: without
+    one, a known_wrong no_ending case would hold on nothing (a test pins it).
+  - `ScorecardConfig` gains `golden_file` and `diagnosis_file`: the files `load_config` read, None when the config
+    names none or the file is missing.
+  - The loop's `Round.close` still flips the diagnosis set by the same rule; `--flip` serves a plan with no round,
+    and the golden set, which had no command.
+  - Alternative: `--flip` for the golden set only. Rejected: two commands for one rule, and a plan that fixes cases
+    of both sets outside a loop would flip one by command and the other by hand.
+  - Alternative: the script reads the config's paths itself, as `--raise-floor` reads the floor. Rejected: a second
+    reading of where the truth files are.
+  - Nothing in data/ was flipped. Against output/ no case of either set is right now (G and D `known_wrong_now_right`
+    are 0), and a test runs both flips on copies of the real files and finds nothing to write.
+- **The two meanings of `last_trade_date`, named in code; the CSV columns are unchanged.**
+  - Golden and audit: `TruthCase.final_last_trade_date`, delistings.csv's internal day of the lifecycle's final
+    ending (the chain's: a successor's when the chain continues). The judge's local `final` says it is that row.
+  - Diagnosis: the scored `last_trade_date` is the contract's published day of the security's own last ending.
+    `internal_last_trade_date` is delistings.csv's day of that same ending; the judge's local is `internal`.
+  - Both readings are stated in both modules' docstrings, `TruthCase`, `DiagnosisCase` and `Mismatch`, and in
+    CLAUDE.md. A golden mismatch's field stays `last_trade_date`, its file's column, so its text is unchanged.
+  - A test pins the golden reading: the successor's day holds, the security's own ending's day does not.
+  - Alternative: call the golden attribute `internal_last_trade_date`. Rejected: the diagnosis name means the
+    security's own last ending, the golden one the chain's final ending, so one name would join two readings again.
+  - Alternative: a `published_last_trade_date` property on `DiagnosisCase`. Rejected: no caller; the judge reads the
+    scored fields by name from `SCORED`.
+- **Deletion test, part by part.**
+  - The statuses and the error remove two aliases and a subclass.
+  - The judgement type removes a class pair and a counting block.
+  - The flip rule gives the golden set a code path where there was none.
+  - The naming is docstrings and one attribute.
+  - No part only moves complexity, so none was skipped.
+- **Tests.**
+  - Added in tests/test_truth.py (31 to 45 collected), at the shared interface:
+    - the status rule on both loaders (3 cases);
+    - pass and known_wrong in both sets, ruling_pending only in the diagnosis set;
+    - a mismatch's and a judgement's text;
+    - the tally's counts, and its key;
+    - one tally over both judges' judgements;
+    - the flip rule's order;
+    - the golden flip: only the flipped row's line changes, and a second flip writes nothing;
+    - no write when nothing flips;
+    - both flips on copies of the real files against output/: nothing flips, no byte changes;
+    - the golden last trade date's reading.
+  - Strengthened: the golden judge's eight field cases now assert the field with the text.
+  - Added in test_scorecard (2): `flip` on both sets, and the diagnosis set left alone without a contract.
+  - Added in test_scorecard_script (3): `--flip` flips both and prints the ids; a flip failure (a bad file, a failed
+    write) exits 2.
+  - Moved: test_truth_set's `noted` test, to test_truth.
+  - Rewritten at the interface, with the same assertions:
+    - every `DiagnosisTruthError` expectation, now `TruthFileError`;
+    - `TruthCase(case=...)`, now `case_id`;
+    - the golden judge's string comparisons, now through `str`.
+  - Suite: 3445 passed, 46 xfailed (step 14: 3427).
+  - tests/test_golden_lifecycles.py keeps 44 passed, 8 strict xfails, and tests/test_diagnosis_truth_cases.py keeps
+    284 passed, 37 strict xfails. Their docstrings name `--flip`.
+- **The gate.**
+  - The replay is SAME against `accepted4_out` (scorecard.json's G, A, D and V lines included). It refuses no request
+    (`refused 0`), and its log equals step 14's byte for byte.
+  - scripts/scorecard.py on output/ printed the same output before (86c9bc7's src and scripts) and after: plain,
+    `--check` (exit 0), `--lifecycles`, and `--check --base ca58ee1` with the loop's ledger (118 lines,
+    D.unexplained_regressions 0, exit 0).
+  - `git diff --stat 86c9bc7 -- data` is empty.
+- **pipeline.py: 1557 lines, unchanged.** truth.py went from 221 to 361 lines, diagnosis_truth.py from 309 to 291,
+  scorecard.py from 368 to 391, truth_set.py from 503 to 498, and scripts/scorecard.py from 119 to 132.
+- **CONTEXT.md is unchanged:** no module is named after a new concept. "Truth case" and "truth set" already cover
+  the terms.
