@@ -1,7 +1,8 @@
 import pytest
 
-from delist_detection import store
-from delist_detection.verdict import ENDING, SECURITY, SEED, Verdict, Verdicts, decide, is_introduction, seed_key
+from delist_detection.outputs import store
+from delist_detection.outputs.verdict import (ENDING, SECURITY, SEED, Verdict, Verdicts, decide, is_introduction,
+                                              seed_key)
 from tests.lifecycle_tables import ending, iv, obs, sec, tables
 
 GOOD = dict(ltd="2015-03-02", dlret="0.01", reason="M&A 2.01+3.01+5.01", delist_filing_form="25-NSE",

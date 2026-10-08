@@ -2,7 +2,7 @@
 import pytest
 import requests
 
-from delist_detection.retries import retrying
+from delist_detection.sources.retries import retrying
 
 
 def _sender(*outcomes):

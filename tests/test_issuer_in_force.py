@@ -1,6 +1,6 @@
 from datetime import date
 
-from delist_detection.issuer_in_force import Sighting, agreeing_since, in_force, issuer_changes
+from delist_detection.identity.issuer_in_force import Sighting, agreeing_since, in_force, issuer_changes
 
 OLD_MERCK = {"name": "MERCK SHARP & DOHME CORP",
              "formerNames": [{"name": "MERCK & CO INC", "from": "1994-01-01T00:00:00.000Z",

@@ -19,21 +19,23 @@ import pytest
 import delist_detection
 
 SRC = str(Path(delist_detection.__file__).resolve().parent.parent)
-NETWORK_CLIENTS = frozenset({"edgar", "sec_http", "openfigi", "ftd", "midas", "nasdaq_halts", "llm_client",
-                             "cik_lookup"})
+NETWORK_CLIENTS = frozenset({"sources.edgar", "sources.sec_http", "sources.openfigi", "sources.ftd", "sources.midas",
+                             "sources.nasdaq_halts", "sources.llm_client", "sources.cik_lookup"})
 # run_snapshot: every reader's one input; truth_set: the diagnosis truth files' one reader and writer; loop_round:
 # one round of the diagnosis loop and its tokens
-MEASUREMENT = ("run_snapshot", "lifecycle", "verdict", "scorecard", "truth", "diagnosis_truth", "truth_set",
-               "regression", "loop_round", "truth_update", "audit", "truth_build")
-CONTRACT = ("contract", "payout_rule", "dlret")  # the contract's rows and an ending's value, pure
-VOCABULARY = ("exit_kind",)                      # the row vocabulary: imports nothing of the package
+MEASUREMENT = ("outputs.run_snapshot", "measurement.lifecycle", "outputs.verdict", "measurement.scorecard",
+               "measurement.truth", "measurement.diagnosis_truth", "measurement.truth_set", "measurement.regression",
+               "measurement.loop_round", "measurement.truth_update", "measurement.audit", "measurement.truth_build")
+CONTRACT = ("outputs.contract", "outputs.payout_rule", "outputs.dlret")  # the contract's rows and an ending's value
+VOCABULARY = ("vocabulary.exit_kind",)           # the row vocabulary: imports nothing of the package
 # The leaves: the row vocabulary, and the spellings of a security's identifiers with the readers of its share class
 # (architecture step 13)
-LEAVES = ("exit_kind", "identifiers")
+LEAVES = ("vocabulary.exit_kind", "vocabulary.identifiers")
 # The data clients read the ticker spelling only, never the observations (step 13)
-DATA_CLIENTS = ("ftd", "midas", "nasdaq_halts")
-CLASSIFICATION = ("end_of_era", "handoffs", "delistings", "continuation_evidence", "classifier", "rewrites",
-                  "last_trade", "payout_gate", "review_triage", "history", "trading_record")
+DATA_CLIENTS = ("sources.ftd", "sources.midas", "sources.nasdaq_halts")
+CLASSIFICATION = ("endings.end_of_era", "endings.handoffs", "endings.delistings", "endings.continuation_evidence",
+                  "endings.classifier", "endings.rewrites", "endings.last_trade", "terms.payout_gate",
+                  "outputs.review_triage", "identity.history", "endings.trading_record")
 # A module that cannot get there yet, with the step whose move it waits on. None today: the package root is the one
 # exception, and every closure below leaves it out (module docstring).
 KNOWN_EXCEPTIONS: dict[str, str] = {}
@@ -45,7 +47,8 @@ if sys.argv[2] == "bare":       # the package root's eager imports left out (ste
     root.__path__ = list(importlib.util.find_spec("delist_detection").submodule_search_locations)
     sys.modules["delist_detection"] = root
 importlib.import_module("delist_detection." + sys.argv[1])
-print(json.dumps(sorted(m.split(".", 1)[1] for m in sys.modules if m.startswith("delist_detection."))))
+print(json.dumps(sorted(m.split(".", 1)[1] for m, v in sys.modules.items()
+                        if m.startswith("delist_detection.") and not hasattr(v, "__path__"))))
 """
 
 
@@ -68,19 +71,21 @@ def test_a_leaf_imports_nothing_of_the_package(module):
 def test_an_endings_value_loads_only_the_row_vocabulary_and_the_leaf_enums():
     """dlret (architecture step 10) is read by the table, the contract and the firm month alike: it loads the row
     vocabulary, the bucket and exchange enums and the ticker spelling, nothing that classifies."""
-    assert _closure("dlret") == {"dlret", "exit_kind", "crsp_codes", "exchanges", "identifiers"}
+    assert _closure("outputs.dlret") == {"outputs.dlret", "vocabulary.exit_kind", "vocabulary.crsp_codes",
+                                         "vocabulary.exchanges", "vocabulary.identifiers"}
 
 
 @pytest.mark.parametrize("module", DATA_CLIENTS)
 def test_a_data_client_reads_the_ticker_spelling_not_the_observations(module):
     closure = _closure(module)
-    assert "identifiers" in closure and not closure & {"observations", "figi_resolution"}
+    assert "vocabulary.identifiers" in closure and not closure & {"identity.observations", "identity.figi_resolution"}
 
 
 def test_the_observations_and_the_figi_rules_import_neither_of_each_other():
     """Their one cycle (`observations._class_letter` imported figi_resolution inside the function) is gone: both read
     the class and the ticker spelling from the leaf."""
-    assert "figi_resolution" not in _closure("observations") and "observations" not in _closure("figi_resolution")
+    assert ("identity.figi_resolution" not in _closure("identity.observations")
+            and "identity.observations" not in _closure("identity.figi_resolution"))
 
 
 @pytest.mark.parametrize("module", CLASSIFICATION)
@@ -91,4 +96,4 @@ def test_a_classification_module_loads_no_measurement_module(module):
 @pytest.mark.xfail(strict=True, reason="step 16: the package root imports the EDGAR client, the ticker resolver and "
                                        "the classifier eagerly")
 def test_the_package_root_loads_no_client():
-    assert not _closure("verdict", root="package") & NETWORK_CLIENTS
+    assert not _closure("outputs.verdict", root="package") & NETWORK_CLIENTS

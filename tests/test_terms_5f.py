@@ -10,21 +10,21 @@ from types import SimpleNamespace
 
 import pytest
 
-from delist_detection import currency
-from delist_detection.classifier import COMPLETION, DelistClassifier
-from delist_detection.contract import payout_leg_rows
-from delist_detection.edgar import EdgarSubmission
-from delist_detection.exchange_terms import OwnExchange, split_factor
-from delist_detection.llm_merger_extractor import (PROMPT_VERSION, LLMMergerTermsExtractor, MergerTerms,
+from delist_detection.terms import currency
+from delist_detection.endings.classifier import COMPLETION, DelistClassifier
+from delist_detection.outputs.contract import payout_leg_rows
+from delist_detection.sources.edgar import EdgarSubmission
+from delist_detection.endings.exchange_terms import OwnExchange, split_factor
+from delist_detection.terms.llm_merger_extractor import (PROMPT_VERSION, LLMMergerTermsExtractor, MergerTerms,
                                                     StockLeg)
-from delist_detection.payout_extractor import _collect
-from delist_detection.payout_gate import (DEFAULT_TOL, ELECTION_CASH, GATE_SKIPPED, PACKAGE, gate_payouts,
+from delist_detection.terms.payout_extractor import _collect
+from delist_detection.terms.payout_gate import (DEFAULT_TOL, ELECTION_CASH, GATE_SKIPPED, PACKAGE, gate_payouts,
                                           reconcile)
-from delist_detection.dlret import MergerInputs
-from delist_detection.payout_rule import basket_legs, value_fields
-from delist_detection.price_requests import RECEIVED_CLOSE, request_rows
-from delist_detection.sec_stats import SEC_STATS
-from delist_detection.store import DelistingKey
+from delist_detection.outputs.dlret import MergerInputs
+from delist_detection.outputs.payout_rule import basket_legs, value_fields
+from delist_detection.outputs.price_requests import RECEIVED_CLOSE, request_rows
+from delist_detection.sources.sec_stats import SEC_STATS
+from delist_detection.outputs.store import DelistingKey
 from lifecycle_tables import ending, tables
 
 LTD = "2014-12-12"       # a Friday: price_date is Monday the 15th
@@ -100,8 +100,8 @@ class _Llm:
 
 
 def _rec(ticker="JCI", day="2016-09-02"):
-    from delist_detection.classifier import DelistRecord
-    from delist_detection.crsp_codes import CrspBucket
+    from delist_detection.outputs.reconstruction import DelistRecord
+    from delist_detection.vocabulary.crsp_codes import CrspBucket
     return DelistRecord(ticker=ticker, cik=53669, observed_delist_date=day, crsp_code=231,
                         bucket=CrspBucket.MERGER, confidence="high", reason="", evidence={})
 
@@ -385,7 +385,7 @@ def test_a_6k_near_the_form_25_that_reports_the_completion_is_found():
 def test_an_unsure_one_for_one_answer_with_no_share_count_is_passed_over(tmp_path):
     """ATH 2022: the 5.01 8-K says only that Athene became a subsidiary of AGM; the model guessed one share
     (medium confidence) where holders got 1.149 AGM shares, so the proxy, the next candidate, is read."""
-    from delist_detection.llm_merger_extractor import unsupported_one_for_one
+    from delist_detection.terms.llm_merger_extractor import unsupported_one_for_one
     guess = {**V3_JCI, "deal_type": "stock", "package_basis": "fixed", "cash_per_share": None, "stock_ratio": 1,
              "confidence": "medium", "quote": "As a result of the Mergers, AAM and AHL became direct subsidiaries"}
     proxy = {**guess, "stock_ratio": 1.149, "confidence": "high", "quote": "1.149 AGM Shares"}
@@ -409,7 +409,7 @@ def test_an_unsure_one_for_one_answer_with_no_share_count_is_passed_over(tmp_pat
 def test_a_spelled_out_null_ticker_is_no_ticker(spelled):
     """GRUB 2021: the terms' acquirer ticker "NULL" is no ticker: the gate reports `no_acq_ticker`, never a price
     missing for a symbol called NULL, and the extractor reads it as none."""
-    from delist_detection.llm_merger_extractor import clean_ticker
+    from delist_detection.terms.llm_merger_extractor import clean_ticker
     asked = []
     t = MergerTerms("stock", None, 0.35, "Just Eat Takeaway.com", spelled, "high", "8-K:x", "")
     g = gate_payouts([K], {}, {}, {}, {K: t}, {"ABC": 10.0}, {}, lambda ticker, key: asked.append(ticker),

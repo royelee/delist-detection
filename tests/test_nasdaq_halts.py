@@ -5,8 +5,8 @@ from pathlib import Path
 import pytest
 import requests
 
-from delist_detection.sec_stats import SEC_STATS
-from delist_detection.nasdaq_halts import Halt, NasdaqHaltClient, last_trade_from_halt, parse_halts_rss
+from delist_detection.sources.sec_stats import SEC_STATS
+from delist_detection.sources.nasdaq_halts import Halt, NasdaqHaltClient, last_trade_from_halt, parse_halts_rss
 
 RSS = """﻿<?xml version="1.0" encoding="utf-8"?>
 <rss version="2.0" xmlns:ndaq="http://www.nasdaqtrader.com/">
@@ -225,7 +225,7 @@ def test_failed_days_are_kept_per_thread_and_a_warm_thread_counts_apart(tmp_path
     on that thread: the sequential pass sees only its own failed days."""
     import threading
 
-    from delist_detection.sec_stats import fill_only
+    from delist_detection.sources.sec_stats import fill_only
 
     c = NasdaqHaltClient(tmp_path, session=_SessionRaising(requests.Timeout("t")), min_interval=0,
                          sleep=lambda _: None)
@@ -295,7 +295,7 @@ def test_the_retry_waits_are_the_feeds_own(tmp_path):
 
 def test_each_attempt_waits_out_the_pacing_interval(tmp_path, monkeypatch):
     """The feed is paced before every attempt, the retry included."""
-    import delist_detection.nasdaq_halts as nh
+    import delist_detection.sources.nasdaq_halts as nh
 
     clock = iter([100.0, 100.0, 100.0, 100.0, 100.0, 100.0])
     monkeypatch.setattr(nh.time, "monotonic", lambda: next(clock))

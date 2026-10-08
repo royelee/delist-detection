@@ -10,7 +10,7 @@ from datetime import date
 import pytest
 import requests
 
-from delist_detection.edgar import EdgarClient
+from delist_detection.sources.edgar import EdgarClient
 
 URL = "https://data.sec.gov/submissions/CIK0000000042.json"
 

@@ -18,9 +18,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
-from delist_detection.run_snapshot import RunSnapshot, SnapshotError  # noqa: E402
-from delist_detection.truth import TruthFileError  # noqa: E402
-from delist_detection.truth_set import Ruling, TruthSet, configured  # noqa: E402
+from delist_detection.outputs.run_snapshot import RunSnapshot, SnapshotError  # noqa: E402
+from delist_detection.measurement.truth import TruthFileError  # noqa: E402
+from delist_detection.measurement.truth_set import Ruling, TruthSet, configured  # noqa: E402
 
 WHY = "5h ruling 2026-10-04 (identity follows the issuer and FIGI, R2)"
 REPORT = "docs/superpowers/plans/research/2026-10-04-5h-identity.md"

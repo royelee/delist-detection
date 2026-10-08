@@ -1,6 +1,6 @@
 """truth_build: one normalized JSON row into one truth row (spec 1.2)."""
-from delist_detection import diagnosis_truth as dt
-from delist_detection import truth_build as tb
+from delist_detection.measurement import diagnosis_truth as dt
+from delist_detection.measurement import truth_build as tb
 from tests.lifecycle_tables import contract_row, sec, tables
 
 FIELDS = {f: "" for f in dt.SCORED}

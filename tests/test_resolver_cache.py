@@ -7,8 +7,8 @@ from datetime import date
 import pytest
 import requests
 
-from delist_detection.edgar import STALE_KEY
-from delist_detection.ticker_resolver import TickerResolver
+from delist_detection.sources.edgar import STALE_KEY
+from delist_detection.identity.ticker_resolver import TickerResolver
 
 OLD_KEY = "ALTR|2025-03-26"            # a version-2/3 entry's key
 KEY = "ALTR|2025-03-26|"               # version 4: ticker, date, observed name (none here)
@@ -176,7 +176,7 @@ def test_every_resolver_read_is_fresh_past_the_event(fake_edgar, monkeypatch):
 
 def test_a_stale_cached_copy_is_refetched_before_the_resolver_checks_it(tmp_path, monkeypatch):
     # LBRDA: the cache (2026-05-26) holds only the 2015 Form 25; the 2026-08-20 one is live
-    from delist_detection.edgar import EdgarClient
+    from delist_detection.sources.edgar import EdgarClient
 
     def recent(*rows):
         keys = ("accessionNumber", "form", "filingDate", "reportDate", "items", "primaryDocument")
@@ -323,7 +323,7 @@ def test_a_rename_built_on_a_degraded_answer_is_degraded_and_not_saved(tmp_path,
 
 
 def test_batched_writes_reach_the_file_only_on_flush(tmp_path, fake_edgar, monkeypatch):
-    import delist_detection.ticker_resolver as tr
+    import delist_detection.identity.ticker_resolver as tr
     writes = []
     real = tr.write_atomic
 

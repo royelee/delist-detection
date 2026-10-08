@@ -9,9 +9,9 @@ from datetime import date
 import pytest
 import requests
 
-from delist_detection import sec_http
-from delist_detection.edgar import FETCHED_KEY, STALE_KEY, EdgarClient
-from delist_detection.sec_stats import SEC_STATS, endpoint_of, fill_only
+from delist_detection.sources import sec_http
+from delist_detection.sources.edgar import FETCHED_KEY, STALE_KEY, EdgarClient
+from delist_detection.sources.sec_stats import SEC_STATS, endpoint_of, fill_only
 
 UA = "Test Co test@example.com"
 SUB_URL = "https://data.sec.gov/submissions/CIK0000000042.json"

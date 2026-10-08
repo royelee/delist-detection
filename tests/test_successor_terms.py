@@ -8,15 +8,15 @@ from datetime import date, timedelta
 import pytest
 
 from delist_detection import pipeline
-from delist_detection.classifier import DelistRecord
-from delist_detection.crsp_codes import CrspBucket
-from delist_detection.delistings import SUCCESSOR_UNKNOWN, Delisting
-from delist_detection.edgar import EdgarSubmission
-from delist_detection.exchange_terms import OwnExchange
-from delist_detection.issuer_record import IssuerRecord
-from delist_detection.last_trade import LastTrade
-from delist_detection.own_shares import NEW_ISSUER_DAYS
-from delist_detection.successors import NEW_ISSUER, SAME_ISSUER_CLASS, SecurityStart, successor_by_terms
+from delist_detection.outputs.reconstruction import DelistRecord
+from delist_detection.vocabulary.crsp_codes import CrspBucket
+from delist_detection.endings.delistings import SUCCESSOR_UNKNOWN, Delisting
+from delist_detection.sources.edgar import EdgarSubmission
+from delist_detection.endings.exchange_terms import OwnExchange
+from delist_detection.identity.issuer_record import IssuerRecord
+from delist_detection.endings.last_trade import LastTrade
+from delist_detection.endings.own_shares import NEW_ISSUER_DAYS
+from delist_detection.endings.successors import NEW_ISSUER, SAME_ISSUER_CLASS, SecurityStart, successor_by_terms
 from tests import issuer_role_cases as ic
 
 DAY = date(2020, 6, 30)
@@ -169,9 +169,9 @@ from types import SimpleNamespace as _NS  # noqa: E402
 
 import requests  # noqa: E402
 
-from delist_detection.llm_merger_extractor import MergerTerms  # noqa: E402
-from delist_detection.merger_value import MergerValue, MergerValues  # noqa: E402
-from delist_detection.security_master import Security  # noqa: E402
+from delist_detection.terms.llm_merger_extractor import MergerTerms  # noqa: E402
+from delist_detection.terms.merger_value import MergerValue, MergerValues  # noqa: E402
+from delist_detection.identity.security_master import Security  # noqa: E402
 
 _ROVI_8K = EdgarSubmission("0001-16-1", "8-K", "2016-09-07", "", "2.01,3.01,5.01", "d.htm")
 

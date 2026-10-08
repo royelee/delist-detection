@@ -3,9 +3,9 @@ from datetime import date
 
 import pytest
 
-from delist_detection import scorecard as sc
-from delist_detection.scorecard import ScorecardConfig, ScorecardConfigError, Window
-from delist_detection.truth import TRUTH_COLUMNS, TruthCase, TruthFileError
+from delist_detection.measurement import scorecard as sc
+from delist_detection.measurement.scorecard import ScorecardConfig, ScorecardConfigError, Window
+from delist_detection.measurement.truth import TRUTH_COLUMNS, TruthCase, TruthFileError
 from tests.lifecycle_tables import ending, iv, obs, review, sec, tables
 
 AS_OF = date(2026, 9, 25)
@@ -187,10 +187,10 @@ def test_build_has_no_value_rule_lines_without_the_contract():
     assert not [k for k in m if k.startswith("R2.7.")]
 
 
-from delist_detection import diagnosis_truth as dt
-from delist_detection import truth_set as ts
-from delist_detection.truth import load_truth, write_truth as write_golden
-from delist_detection.truth_set import TruthSet
+from delist_detection.measurement import diagnosis_truth as dt
+from delist_detection.measurement import truth_set as ts
+from delist_detection.measurement.truth import load_truth, write_truth as write_golden
+from delist_detection.measurement.truth_set import TruthSet
 from tests.diagnosis_rows import leg_row, truth_row, write_truth
 from tests.lifecycle_tables import contract_row
 

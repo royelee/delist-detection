@@ -2,8 +2,8 @@
 tables, through `verdict.decide`."""
 import pytest
 
-from delist_detection.exit_kind import GATE_FLAGS, ContinuationReading, flag_names
-from delist_detection.verdict import STALE_CLOSE_DAYS, STALE_SEED_DAYS, decide
+from delist_detection.vocabulary.exit_kind import GATE_FLAGS, ContinuationReading, flag_names
+from delist_detection.outputs.verdict import STALE_CLOSE_DAYS, STALE_SEED_DAYS, decide
 from tests.lifecycle_tables import ending, iv, obs, review, sec, tables
 
 KEPT = "; the registrant kept filing after it"

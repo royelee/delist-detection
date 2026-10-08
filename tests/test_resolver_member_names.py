@@ -1,6 +1,6 @@
-from delist_detection.classifier import DelistClassifier
-from delist_detection.edgar import EdgarSubmission
-from delist_detection.ticker_resolver import TickerResolver
+from delist_detection.endings.classifier import DelistClassifier
+from delist_detection.sources.edgar import EdgarSubmission
+from delist_detection.identity.ticker_resolver import TickerResolver
 
 # Read at import, before the autouse fixture in conftest.py replaces it.
 _REAL_EFTS_LOOKUP = TickerResolver._efts_lookup

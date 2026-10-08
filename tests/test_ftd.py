@@ -2,7 +2,7 @@ import io
 import zipfile
 from datetime import date
 
-from delist_detection.ftd import (
+from delist_detection.sources.ftd import (
     FtdClient, FtdIndex, FtdRow, close_age, is_deleted_symbol, parse_ftd_lines, parse_index_links, period_of,
 )
 
@@ -120,7 +120,7 @@ def test_client_reads_a_member_without_an_extension(tmp_path, caplog):
         "readme": "no fails rows in here\n",
     }))
     c = FtdClient(tmp_path)
-    with caplog.at_level("WARNING", logger="delist_detection.ftd"):
+    with caplog.at_level("WARNING", logger="delist_detection.sources.ftd"):
         rows = list(c.rows(c.urls_for(date(2024, 1, 1), date(2024, 1, 15))[0]))
     assert rows == [FtdRow("2024-01-02", "00206R102", "T", "AT&T INC COM", 16.78)]
     assert "readme" in caplog.text and "cnsfails202401a.zip" in caplog.text
@@ -365,7 +365,7 @@ def test_a_fails_rows_close_is_a_trading_day_older_than_its_date():
 
 # --- sub-plan 5b, C: whether a security's own CUSIPs trade on after a day ---
 
-from delist_detection.ftd import is_trading_symbol, trades_after  # noqa: E402
+from delist_detection.sources.ftd import is_trading_symbol, trades_after  # noqa: E402
 
 
 def _tail_rows(symbol, days, prices=(10.0, 10.5)):

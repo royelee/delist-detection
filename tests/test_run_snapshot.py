@@ -7,9 +7,9 @@ from datetime import date
 
 import pytest
 
-from delist_detection import manifest, store
-from delist_detection.exit_kind import ContinuationReading
-from delist_detection.run_snapshot import (CONTRACT_SCHEMA_1, FIRST_TABLES, RunSnapshot, SnapshotError,
+from delist_detection.outputs import manifest, store
+from delist_detection.vocabulary.exit_kind import ContinuationReading
+from delist_detection.outputs.run_snapshot import (CONTRACT_SCHEMA_1, FIRST_TABLES, RunSnapshot, SnapshotError,
                                            continuation_entries, continuation_readings)
 from tests.lifecycle_tables import contract_row, ending, hist, iv, obs, sec
 

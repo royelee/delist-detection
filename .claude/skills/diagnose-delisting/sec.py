@@ -34,9 +34,9 @@ from collections import defaultdict
 from datetime import date
 from pathlib import Path
 
-from delist_detection.edgar import EdgarClient
-from delist_detection.html_text import strip_html
-from delist_detection.sec_limiter import use_machine_wide_limit
+from delist_detection.sources.edgar import EdgarClient
+from delist_detection.sources.html_text import strip_html
+from delist_detection.sources.sec_limiter import use_machine_wide_limit
 
 FTD_DIR = Path("cache/sec_data/ftd")
 

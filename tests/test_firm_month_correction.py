@@ -1,10 +1,10 @@
 import math
 import pytest
 
-from delist_detection.classifier import DelistRecord
-from delist_detection.crsp_codes import CrspBucket
-from delist_detection.exchanges import Exchange
-from delist_detection.handling import (
+from delist_detection.outputs.reconstruction import DelistRecord
+from delist_detection.vocabulary.crsp_codes import CrspBucket
+from delist_detection.vocabulary.exchanges import Exchange
+from delist_detection.handling.handling import (
     FirmMonthReturn, build_firm_month_correction,
 )
 
@@ -90,10 +90,10 @@ def test_firm_month_correction_zero_prior_close_drops():
 def test_firm_month_merger_includes_stock_leg():
     # AET->CVS: prior 200, last 190 (R_partial=-0.05); DLRET from full
     # consideration 212.024/190-1=+0.11592 -> R_month=(0.95)(1.11592)-1
-    from delist_detection.handling import build_firm_month_correction
-    from delist_detection.classifier import DelistRecord
-    from delist_detection.crsp_codes import CrspBucket
-    from delist_detection.exchanges import Exchange
+    from delist_detection.handling.handling import build_firm_month_correction
+    from delist_detection.outputs.reconstruction import DelistRecord
+    from delist_detection.vocabulary.crsp_codes import CrspBucket
+    from delist_detection.vocabulary.exchanges import Exchange
     rec = DelistRecord(
         ticker="AET", cik=1, observed_delist_date="2018-11-28",
         crsp_code=241, bucket=CrspBucket.MERGER, confidence="high", reason="", evidence={},
@@ -134,7 +134,7 @@ def test_firm_month_correction_takes_a_plan_value_as_measured():
 def test_the_firm_month_compounds_the_value_before_the_tables_par_fill():
     """Two DLRETs per ending, by design (step 10, open for the operator's ruling): the table assumes par for an
     expiration with a last close; the firm month drops it."""
-    from delist_detection.dlret import DlretMethod, ValueInputs, decide
+    from delist_detection.outputs.dlret import DlretMethod, ValueInputs, decide
     value = ValueInputs(CrspBucket.EXPIRATION, Exchange.NYSE, 80.0)
     assert decide(value).method is DlretMethod.ASSUMED_PAR and decide(value).value == 0.0
     assert build_firm_month_correction(_rec(bucket=CrspBucket.EXPIRATION, code=600), 100.0, 80.0,

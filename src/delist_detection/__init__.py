@@ -1,17 +1,18 @@
 """Delist Detection: classify CRSP-style delisting reasons from SEC EDGAR."""
 
-from .crsp_codes import CrspBucket, DLST_CODE_TO_BUCKET, bucket_for_code
-from .edgar import EdgarClient, EdgarSubmission
-from .ticker_resolver import TickerResolver
-from .classifier import DelistClassifier, DelistRecord
-from .exchanges import Exchange, normalize_exchange
-from .dlret import SHUMWAY_NYSE_AMEX, SHUMWAY_NASDAQ
-from .handling import (
+from .vocabulary.crsp_codes import CrspBucket, DLST_CODE_TO_BUCKET, bucket_for_code
+from .sources.edgar import EdgarClient, EdgarSubmission
+from .identity.ticker_resolver import TickerResolver
+from .endings.classifier import DelistClassifier
+from .outputs.reconstruction import DelistRecord
+from .vocabulary.exchanges import Exchange, normalize_exchange
+from .outputs.dlret import SHUMWAY_NYSE_AMEX, SHUMWAY_NASDAQ
+from .handling.handling import (
     TrainLabelAdjustment, BacktestExit, FirmMonthReturn,
     build_train_label_adjustment, build_backtest_exit, adjustments_from_rows,
     build_firm_month_correction,
 )
-from .payout_extractor import PayoutExtractor, PayoutResult
+from .terms.payout_extractor import PayoutExtractor, PayoutResult
 
 __all__ = [
     "CrspBucket",

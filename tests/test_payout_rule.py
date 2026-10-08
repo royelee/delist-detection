@@ -1,9 +1,9 @@
 from dataclasses import replace
 
-from delist_detection.llm_merger_extractor import MergerTerms
-from delist_detection.exit_kind import VALUE_RULES
-from delist_detection.dlret import MergerInputs
-from delist_detection.payout_rule import value_fields
+from delist_detection.terms.llm_merger_extractor import MergerTerms
+from delist_detection.vocabulary.exit_kind import VALUE_RULES
+from delist_detection.outputs.dlret import MergerInputs
+from delist_detection.outputs.payout_rule import value_fields
 from lifecycle_tables import ending
 
 LTD = "2014-12-12"       # a Friday: price_date is Monday the 15th
@@ -153,7 +153,7 @@ def test_expiration_and_unknown_buckets():
 
 # -- sub-plan 5g: the OTC symbol and a bankruptcy plan's stock rule (DistressTerms, stage 9e) -------------------
 
-from delist_detection.dlret import DistressTerms  # noqa: E402
+from delist_detection.outputs.dlret import DistressTerms  # noqa: E402
 
 
 def test_a_drop_is_priced_under_its_own_otc_symbol():

@@ -31,12 +31,12 @@ import csv
 import sys
 from pathlib import Path
 
-from delist_detection.classifier import DelistRecord
-from delist_detection.crsp_codes import CrspBucket
-from delist_detection.edgar import EdgarClient
-from delist_detection.llm_client import default_llm_client
-from delist_detection.llm_merger_extractor import LLMMergerTermsExtractor
-from delist_detection.truth_set import TruthSet, configured
+from delist_detection.outputs.reconstruction import DelistRecord
+from delist_detection.vocabulary.crsp_codes import CrspBucket
+from delist_detection.sources.edgar import EdgarClient
+from delist_detection.sources.llm_client import default_llm_client
+from delist_detection.terms.llm_merger_extractor import LLMMergerTermsExtractor
+from delist_detection.measurement.truth_set import TruthSet, configured
 
 ROOT = Path(__file__).resolve().parents[1]
 

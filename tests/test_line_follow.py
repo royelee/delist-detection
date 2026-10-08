@@ -4,12 +4,12 @@ from datetime import date, timedelta
 
 import pytest
 
-from delist_detection import line_follow as lf
-from delist_detection.edgar import EdgarSubmission
-from delist_detection.figi_resolution import us_candidates
-from delist_detection.ftd import FtdIndex, FtdRow
-from delist_detection.observations import TickerEra
-from delist_detection.security_master import Security  # noqa: F401
+from delist_detection.identity import line_follow as lf
+from delist_detection.sources.edgar import EdgarSubmission
+from delist_detection.identity.figi_resolution import us_candidates
+from delist_detection.sources.ftd import FtdIndex, FtdRow
+from delist_detection.identity.observations import TickerEra
+from delist_detection.identity.security_master import Security  # noqa: F401
 
 
 def _rows(symbol, cusip, desc, start, n, *, step=1, prices=None):
@@ -338,7 +338,7 @@ def test_composites_reads_an_answer():
 
 def _from(symbol, cusip, first, n=5):
     """`n` fails rows on consecutive trading days from the trading day `first`."""
-    from delist_detection.trading_calendar import add_trading_days
+    from delist_detection.vocabulary.trading_calendar import add_trading_days
     return [FtdRow(add_trading_days(date.fromisoformat(first), i).isoformat(), cusip, symbol, "REVERSE SPLIT CO",
                    20.0 + i) for i in range(n)]
 
@@ -419,7 +419,7 @@ def test_a_candidate_typed_preferred_warrant_right_or_unit_is_refused(kind):
 
 def test_other_registrant_reraises_fatal_and_treats_a_request_failure_as_failed():
     import requests
-    from delist_detection.fatal import FATAL
+    from delist_detection.sources.fatal import FATAL
 
     def hits(exc):
         def search(q, forms, lo, hi):
@@ -447,7 +447,7 @@ def test_other_registrant_reraises_fatal_and_treats_a_request_failure_as_failed(
 def test_a_symbol_changed_from_one_ticker_to_another_names_the_new_one():
     """RRI Energy's 2010 8-K: "our ticker symbol was changed from “RRI” to “GEN,”" -- the first pattern alone reads
     RRI, the old one, which the line follow drops as its own; GEN is the line's new symbol."""
-    from delist_detection.line_follow import text_symbols  # noqa: E402
+    from delist_detection.identity.line_follow import text_symbols  # noqa: E402
     from tests import issuer_role_cases as ic  # noqa: E402
     assert "GEN" in text_symbols([ic.EDGAR["texts"]["0000950123-10-111604"]])
     assert "XYZ" in text_symbols(['the trading symbol of the common stock changed from "ABC" to "XYZ" today'])

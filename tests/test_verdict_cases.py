@@ -3,7 +3,7 @@ committed run's snapshot (its rows and stage 9g's recorded readings). The `befor
 rules' targets lose their reason; every guard keeps its own)."""
 import pytest
 
-from delist_detection.exit_kind import ContinuationReading
+from delist_detection.vocabulary.exit_kind import ContinuationReading
 from tests import verdict_cases as vc
 
 CASES, EDGAR = vc.load()

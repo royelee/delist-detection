@@ -11,11 +11,11 @@ from datetime import date
 import pytest
 import requests
 
-from delist_detection.ftd import FtdIndex
-from delist_detection.identity import Identity, identify
-from delist_detection.observations import Observation, ObservationError, ObservationIndex, TickerEra
+from delist_detection.sources.ftd import FtdIndex
+from delist_detection.identity.identity import Identity, identify
+from delist_detection.identity.observations import Observation, ObservationError, ObservationIndex, TickerEra
 from delist_detection.pipeline import Clients
-from delist_detection.security_master import EraResolution, Issuer, Security
+from delist_detection.identity.security_master import EraResolution, Issuer, Security
 from tests.identity_cases import CommittedLookup
 
 AS_OF = date(2026, 9, 25)

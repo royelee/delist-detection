@@ -8,11 +8,12 @@ from datetime import date
 
 import pytest
 
-from delist_detection import pipeline, sec_limiter
-from delist_detection.capabilities import CAPABILITIES, FULL_TEXT_SEARCH, Undeclared, offers, stated
-from delist_detection.classifier import DelistClassifier
-from delist_detection.issuer_record import IssuerRecord
-from delist_detection.observations import Observation, ObservationIndex
+from delist_detection import pipeline
+from delist_detection.sources import sec_limiter
+from delist_detection.sources.capabilities import CAPABILITIES, FULL_TEXT_SEARCH, Undeclared, offers, stated
+from delist_detection.endings.classifier import DelistClassifier
+from delist_detection.identity.issuer_record import IssuerRecord
+from delist_detection.identity.observations import Observation, ObservationIndex
 from delist_detection.pipeline import Clients, Overrides, run
 from test_pipeline import _clients
 

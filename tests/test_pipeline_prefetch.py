@@ -16,23 +16,25 @@ from types import SimpleNamespace
 import pytest
 
 import delist_detection.pipeline as pipeline
-from delist_detection import edgar, manifest, sec_limiter, sec_stats
-from delist_detection.classifier import DelistClassifier, DelistRecord
-from delist_detection.crsp_codes import CrspBucket
-from delist_detection.delistings import Delisting
-from delist_detection.edgar import EFTS_KEY, EFTS_SCHEMA, FETCHED_KEY, EdgarBlocked, EdgarClient
-from delist_detection.filing_search import successor_query
-from delist_detection.issuer_record import IssuerRecord
-from delist_detection.last_trade import LastTrade
-from delist_detection.llm_merger_extractor import LLMMergerTermsExtractor
-from delist_detection.midas import MIDAS_INDEX_URL, MidasClient
-from delist_detection.observations import Observation, ObservationIndex
-from delist_detection.openfigi import OpenFigiBlocked
-from delist_detection.payout_extractor import PayoutExtractor, PayoutResult
+from delist_detection.sources import edgar, sec_limiter, sec_stats
+from delist_detection.outputs import manifest
+from delist_detection.endings.classifier import DelistClassifier
+from delist_detection.outputs.reconstruction import DelistRecord
+from delist_detection.vocabulary.crsp_codes import CrspBucket
+from delist_detection.endings.delistings import Delisting
+from delist_detection.sources.edgar import EFTS_KEY, EFTS_SCHEMA, FETCHED_KEY, EdgarBlocked, EdgarClient
+from delist_detection.filings.filing_search import successor_query
+from delist_detection.identity.issuer_record import IssuerRecord
+from delist_detection.endings.last_trade import LastTrade
+from delist_detection.terms.llm_merger_extractor import LLMMergerTermsExtractor
+from delist_detection.sources.midas import MIDAS_INDEX_URL, MidasClient
+from delist_detection.identity.observations import Observation, ObservationIndex
+from delist_detection.sources.openfigi import OpenFigiBlocked
+from delist_detection.terms.payout_extractor import PayoutExtractor, PayoutResult
 from delist_detection.pipeline import Clients, Overrides, run
-from delist_detection.prefetch import Serialized
-from delist_detection.store import read_table, table_path
-from delist_detection.ticker_resolver import TickerResolver
+from delist_detection.sources.prefetch import Serialized
+from delist_detection.outputs.store import read_table, table_path
+from delist_detection.identity.ticker_resolver import TickerResolver
 from tests.test_pipeline import AET_RAW, _clients, _Figi, _figi_answer, _ftd, _FtdClient, _index_clients
 
 
@@ -637,10 +639,10 @@ def _one_and_n(tmp_path, monkeypatch, caplog, workers, *, stale_hits=(), **unive
     shutil.copytree(seed, tmp_path / "one")
     shutil.copytree(seed, tmp_path / "n")
     sec1 = _offline_run(tmp_path / "one", tmp_path / "out1", 1, **universe)
-    caplog.set_level(logging.WARNING, logger="delist_detection.prefetch")
+    caplog.set_level(logging.WARNING, logger="delist_detection.sources.prefetch")
     caplog.clear()
     secn = _offline_run(tmp_path / "n", tmp_path / "outn", workers, **universe)
-    assert [r.getMessage() for r in caplog.records if r.name == "delist_detection.prefetch"] == []
+    assert [r.getMessage() for r in caplog.records if r.name == "delist_detection.sources.prefetch"] == []
     csv1 = {str(p.relative_to(tmp_path / "out1")): p.read_bytes() for p in (tmp_path / "out1").rglob("*.csv")}
     csvn = {str(p.relative_to(tmp_path / "outn")): p.read_bytes() for p in (tmp_path / "outn").rglob("*.csv")}
     # the six tables, review_summary, observation_map and uncertain, plus the contract's six files

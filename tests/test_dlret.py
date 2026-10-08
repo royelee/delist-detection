@@ -6,13 +6,13 @@ import math
 
 import pytest
 
-from delist_detection.crsp_codes import CrspBucket
-from delist_detection.dlret import (
+from delist_detection.vocabulary.crsp_codes import CrspBucket
+from delist_detection.outputs.dlret import (
     FILL, MEASURED, METHODS, SHUMWAY_NASDAQ, SHUMWAY_NYSE_AMEX, DistressTerms, DlretMethod, MergerInputs, ValueInputs,
     contract_value, decide, rule_of,
 )
-from delist_detection.exchanges import Exchange
-from delist_detection.exit_kind import VALUE_RULES
+from delist_detection.vocabulary.exchanges import Exchange
+from delist_detection.vocabulary.exit_kind import VALUE_RULES
 from lifecycle_tables import ending
 
 M, X, L, C, E, U = (CrspBucket.MERGER, CrspBucket.EXCHANGE_TRANSFER, CrspBucket.LIQUIDATION,

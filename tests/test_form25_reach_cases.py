@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-import delist_detection.delistings as delistings
+import delist_detection.endings.delistings as delistings
 from tests import form25_cases as fc
 
 # The rules of sub-plan 5b built so far; each task adds its own (the cases it moves change then, and only then)

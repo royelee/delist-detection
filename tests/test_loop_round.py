@@ -13,12 +13,12 @@ from types import SimpleNamespace
 
 import pytest
 
-from delist_detection import diagnosis_truth as dt
-from delist_detection import loop_round as lr
-from delist_detection import store
-from delist_detection.regression import report_row
-from delist_detection.run_snapshot import RunSnapshot
-from delist_detection.truth_set import LEDGER_COLUMNS, Ruling, TruthSet, changes_path, read_ledger
+from delist_detection.measurement import diagnosis_truth as dt
+from delist_detection.measurement import loop_round as lr
+from delist_detection.outputs import store
+from delist_detection.measurement.regression import report_row
+from delist_detection.outputs.run_snapshot import RunSnapshot
+from delist_detection.measurement.truth_set import LEDGER_COLUMNS, Ruling, TruthSet, changes_path, read_ledger
 from tests.diagnosis_rows import truth_row, write_truth
 from tests.lifecycle_tables import contract_row, ending, hist, sec
 

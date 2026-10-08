@@ -6,9 +6,9 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
-from delist_detection.edgar import EdgarSubmission
-from delist_detection.llm_merger_extractor import MergerTerms
-from delist_detection.ticker_resolver import TickerResolver
+from delist_detection.sources.edgar import EdgarSubmission
+from delist_detection.terms.llm_merger_extractor import MergerTerms
+from delist_detection.identity.ticker_resolver import TickerResolver
 
 ROOT = Path(__file__).resolve().parents[1]
 FIX = ROOT / "tests" / "fixtures" / "golden"

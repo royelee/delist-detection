@@ -6,10 +6,10 @@ regression in the formula or the constants table is caught immediately.
 
 import pytest
 
-from delist_detection.classifier import DelistRecord
-from delist_detection.crsp_codes import CrspBucket
-from delist_detection.exchanges import Exchange
-from delist_detection.handling import build_firm_month_correction
+from delist_detection.outputs.reconstruction import DelistRecord
+from delist_detection.vocabulary.crsp_codes import CrspBucket
+from delist_detection.vocabulary.exchanges import Exchange
+from delist_detection.handling.handling import build_firm_month_correction
 
 
 def _rec(ticker, bucket, delist):

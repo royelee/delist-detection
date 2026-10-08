@@ -7,8 +7,8 @@ from datetime import date
 import pytest
 import requests
 
-from delist_detection.edgar import EdgarClient
-from delist_detection.ticker_resolver import TickerResolver
+from delist_detection.sources.edgar import EdgarClient
+from delist_detection.identity.ticker_resolver import TickerResolver
 
 # Read at import, before conftest's autouse fixture stubs them for each test.
 _REAL = {name: getattr(TickerResolver, name) for name in ("_efts_lookup", "_efts_pre_delist_frequency_ranked")}

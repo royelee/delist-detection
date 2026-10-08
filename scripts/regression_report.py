@@ -12,10 +12,10 @@ import argparse
 import sys
 from pathlib import Path
 
-from delist_detection.regression import build_report, write_report
-from delist_detection.run_snapshot import RunSnapshot, SnapshotError
-from delist_detection.truth import TruthFileError
-from delist_detection.truth_set import TruthSet, configured
+from delist_detection.measurement.regression import build_report, write_report
+from delist_detection.outputs.run_snapshot import RunSnapshot, SnapshotError
+from delist_detection.measurement.truth import TruthFileError
+from delist_detection.measurement.truth_set import TruthSet, configured
 
 ROOT = Path(__file__).resolve().parents[1]
 

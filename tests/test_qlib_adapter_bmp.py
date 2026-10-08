@@ -3,8 +3,8 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from delist_detection.qlib_adapter import apply_bmp_corrections
-from delist_detection.store import table_path, write_tables
+from delist_detection.handling.qlib_adapter import apply_bmp_corrections
+from delist_detection.outputs.store import table_path, write_tables
 
 
 def _row(sec_id: str, **over) -> dict:
@@ -193,8 +193,8 @@ def test_apply_bmp_corrections_uses_an_otc_print_not_the_shumway_mark(monthly_pa
 def test_a_plan_value_row_is_read_back_as_its_plan_value(monthly_panel, tmp_path):
     """A bankruptcy plan's value (ruling R6) is the row's terminal value under plan_stock: the splicer reads it back as
     the plan value it is (`qlib_adapter.value_inputs`), not as an OTC print, and the firm month compounds it."""
-    from delist_detection.dlret import DlretMethod, decide
-    from delist_detection.qlib_adapter import load_delistings, value_inputs
+    from delist_detection.outputs.dlret import DlretMethod, decide
+    from delist_detection.handling.qlib_adapter import load_delistings, value_inputs
     rows = [
         _row("RSH_ID", ticker="RSH", cik=1144980, bucket="liquidation", crsp_code=470, reason="plan",
              exchange="NYSE", delist_date="2015-02-09", last_trade_date="2015-02-06", last_trade_close=0.40,

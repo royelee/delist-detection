@@ -3,8 +3,8 @@ a test sets it, status pass and shape ending by default, and no examined_delist_
 own); `write_truth` writes a truth file (and its legs) as a new truth set."""
 from __future__ import annotations
 
-from delist_detection.diagnosis_truth import COLUMNS, LEG_COLUMNS, SCORED
-from delist_detection.truth_set import LEDGER_COLUMNS, TruthSet
+from delist_detection.measurement.diagnosis_truth import COLUMNS, LEG_COLUMNS, SCORED
+from delist_detection.measurement.truth_set import LEDGER_COLUMNS, TruthSet
 
 
 def truth_row(case_id: str, sec_id: str, **cells) -> dict[str, str]:

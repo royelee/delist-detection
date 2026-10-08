@@ -6,8 +6,8 @@ from datetime import date
 
 import pytest
 
-from delist_detection.crsp_codes import DLST_CODE_TO_BUCKET
-from delist_detection.exit_kind import (
+from delist_detection.vocabulary.crsp_codes import DLST_CODE_TO_BUCKET
+from delist_detection.vocabulary.exit_kind import (
     CHANGE_IN_CONTROL, CLOSING_DAY, COMPLETED_ACQUISITION, CONFLICT, CONTINUED, DROP_REASONS, EX99_NOTICE,
     EXCHANGE_PRINTS, EXIT_KINDS, GATE_FLAGS, LAST_SIGHTING, LLM_GATE_FAILED, MIDAS, NO_DAY, PAYOUT_GATE_FAILED, SOURCES,
     SUCCESSOR_FORMS, TERMS_GATE_FAILED, TERMS_GATE_SKIPPED, TIMING_CIK, TIMING_CUSIP, UNCONFIRMED, UNSOURCED, VALUE_RULES,
@@ -107,9 +107,9 @@ def test_the_verdict_the_lifecycle_and_the_contract_read_the_same_last_ending():
     """Before step 8a the contract sorted, the verdict took the max date and the lifecycle walk the last of its sorted
     list: the three agreed on the committed output and on 20,000 random tables (ties and went-on rows included).
     Now each asks `last_endings`."""
-    from delist_detection.contract import delisting_rows
-    from delist_detection.lifecycle import LifecycleView
-    from delist_detection.verdict import decide
+    from delist_detection.outputs.contract import delisting_rows
+    from delist_detection.measurement.lifecycle import LifecycleView
+    from delist_detection.outputs.verdict import decide
     from lifecycle_tables import iv, obs, sec, tables
 
     def good(ltd, filed):
@@ -141,8 +141,8 @@ def test_a_rows_flag_tokens_are_read_whole_and_in_order():
 
 
 def test_the_gate_flags_the_payout_gate_writes_are_the_ones_its_readers_read():
-    from delist_detection import payout_gate
-    from delist_detection.rewrites import PAYOUT_FLAGS
+    from delist_detection.terms import payout_gate
+    from delist_detection.endings.rewrites import PAYOUT_FLAGS
     written = (payout_gate.GATE_FAILED + "34.88", payout_gate.LLM_GATE_FAILED, payout_gate.GATE_SKIPPED + "CAD",
                f"{TERMS_GATE_FAILED}:no_acq_price")
     assert {flag_name(t) for t in written} == GATE_FLAGS
@@ -162,7 +162,7 @@ def test_the_continued_filings_rule_round_trips():
 
 
 def test_a_relabel_round_trips_and_only_the_two_merger_branches_are_merger_relabels():
-    from delist_detection.end_of_era import Filed
+    from delist_detection.endings.end_of_era import Filed
     cic, acq = change_in_control_reason(DAY), completed_acquisition_reason(DAY, Filed("25-NSE", date(2015, 3, 3)))
     assert cic == "Change in control (8-K item 5.01 filed 2015-02-20); the registrant kept filing after it"
     assert acq == ("Completed acquisition (8-K item 2.01 filed 2015-02-20, 25-NSE 2015-03-03); the registrant kept "
@@ -180,8 +180,8 @@ def test_a_relabel_round_trips_and_only_the_two_merger_branches_are_merger_relab
 def test_the_resolvers_reasons_are_read_back_by_the_vocabulary():
     """The producer end to end: every branch of `end_of_era.resolve` writes a reason its reader reads (this replaces
     the test that tied verdict_rules' copy of the prefixes to the resolver's f-strings)."""
-    from delist_detection.end_of_era import EraSignals, Filed, resolve
-    from delist_detection.exchange_terms import OwnExchange
+    from delist_detection.endings.end_of_era import EraSignals, Filed, resolve
+    from delist_detection.endings.exchange_terms import OwnExchange
 
     def reason(**kw):
         return resolve(EraSignals(**{"trading_after": False, **kw}), None).reason
@@ -229,11 +229,11 @@ def test_a_timing_link_round_trips_in_a_continuations_reason_and_in_a_successor_
 def test_the_handoff_stages_reasons_are_read_back_by_the_vocabulary():
     """The producer end to end: a handoff decided by timing and the same CIK, or by a successor issuer's 8-K12B,
     writes a reason (a new row's, or a note on a kept transfer's) the readers read."""
-    from delist_detection.classifier import DelistRecord
-    from delist_detection.crsp_codes import CrspBucket
-    from delist_detection.delistings import Delisting
-    from delist_detection.handoffs import HandoffPair, apply_handoffs, decide_handoff
-    from delist_detection.security_master import Security
+    from delist_detection.outputs.reconstruction import DelistRecord
+    from delist_detection.vocabulary.crsp_codes import CrspBucket
+    from delist_detection.endings.delistings import Delisting
+    from delist_detection.endings.handoffs import HandoffPair, apply_handoffs, decide_handoff
+    from delist_detection.identity.security_master import Security
 
     pair = HandoffPair("AON", "OLD", "NEW", "2020-03-31", "2020-04-01", "2020-04-01")
     secs = {s: Security(s, 315293, "COMMON", "AON PLC", "Common Stock", True, "cusip") for s in ("OLD", "NEW")}
@@ -255,8 +255,8 @@ def test_the_handoff_stages_reasons_are_read_back_by_the_vocabulary():
 
 # -- the value rules ------------------------------------------------------------------------------------------------
 def test_every_value_rule_the_payout_rule_writes_is_one_of_the_value_rules():
-    from delist_detection.dlret import DistressTerms, MergerInputs
-    from delist_detection.payout_rule import value_fields
+    from delist_detection.outputs.dlret import DistressTerms, MergerInputs
+    from delist_detection.outputs.payout_rule import value_fields
     rows = [ending("S", "2018-11-29", "merger", payout_per_share="10.0", last_trade_close="9.9"),
             ending("S", "2015-10-02", "exchange_transfer"), ending("S", "2015-10-02", "exchange_transfer",
                                                                     successor="T"),

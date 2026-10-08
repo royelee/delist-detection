@@ -7,9 +7,9 @@ from pathlib import Path
 
 import pytest
 
-from delist_detection.lifecycle import LifecycleView
-from delist_detection.run_snapshot import RunSnapshot
-from delist_detection.truth import KNOWN_WRONG, judge, load_truth
+from delist_detection.measurement.lifecycle import LifecycleView
+from delist_detection.outputs.run_snapshot import RunSnapshot
+from delist_detection.measurement.truth import KNOWN_WRONG, judge, load_truth
 
 ROOT = Path(__file__).resolve().parents[1]
 CASES = load_truth(ROOT / "data" / "golden_lifecycles.csv")

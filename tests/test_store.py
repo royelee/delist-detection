@@ -3,8 +3,8 @@ from datetime import date
 
 import pytest
 
-import delist_detection.store as store
-from delist_detection.store import (
+import delist_detection.outputs.store as store
+from delist_detection.outputs.store import (
     DELISTINGS_COLUMNS, TABLES, format_cell, read_table, table_path, write_tables,
 )
 
@@ -267,7 +267,7 @@ def test_the_ticker_successor_is_blank_by_default(tmp_path):
 
 
 def test_contract_tables_are_written_under_contract_and_read_back(tmp_path):
-    from delist_detection.store import CONTRACT_TABLES, TABLES, read_table, table_path, write_tables
+    from delist_detection.outputs.store import CONTRACT_TABLES, TABLES, read_table, table_path, write_tables
     row = {"sec_id": "S", "issuer_id": "100", "start_date": "2010-01-04", "end_date": "", "ticker": "AAA",
            "security_name": "S", "share_class": "COMMON"}
     write_tables(tmp_path, {"security_history": [row]})

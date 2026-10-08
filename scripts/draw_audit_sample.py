@@ -14,11 +14,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
-from delist_detection.audit import census, random_sample, worksheet_rows
-from delist_detection.lifecycle import LifecycleView
-from delist_detection.run_snapshot import RunSnapshot
-from delist_detection.scorecard import ScorecardConfigError, load_config
-from delist_detection.truth import TruthFileError, write_truth
+from delist_detection.measurement.audit import census, random_sample, worksheet_rows
+from delist_detection.measurement.lifecycle import LifecycleView
+from delist_detection.outputs.run_snapshot import RunSnapshot
+from delist_detection.measurement.scorecard import ScorecardConfigError, load_config
+from delist_detection.measurement.truth import TruthFileError, write_truth
 
 
 def main(argv: list[str] | None = None) -> int:

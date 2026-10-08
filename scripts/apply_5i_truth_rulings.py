@@ -23,8 +23,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
-from delist_detection.truth import TruthFileError  # noqa: E402
-from delist_detection.truth_set import Correction, Ruling, TruthSet, configured  # noqa: E402
+from delist_detection.measurement.truth import TruthFileError  # noqa: E402
+from delist_detection.measurement.truth_set import Correction, Ruling, TruthSet, configured  # noqa: E402
 
 WHY = "5i ruling 2026-10-04"
 WHY2 = "controller ruling 2026-10-04 (wave 2)"

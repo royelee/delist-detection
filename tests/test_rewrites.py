@@ -6,15 +6,15 @@ from datetime import date
 
 import pytest
 
-from delist_detection.classifier import DelistRecord
-from delist_detection.crsp_codes import CONTINUATION_CODE, CrspBucket
-from delist_detection.delistings import Delisting
-from delist_detection.exit_kind import successor_note
-from delist_detection.last_trade import LastTrade
-from delist_detection.llm_merger_extractor import MergerTerms
-from delist_detection.merger_value import MergerValue, MergerValues, TableTerms
-from delist_detection.payout_extractor import PayoutResult
-from delist_detection.rewrites import (
+from delist_detection.outputs.reconstruction import DelistRecord
+from delist_detection.vocabulary.crsp_codes import CONTINUATION_CODE, CrspBucket
+from delist_detection.endings.delistings import Delisting
+from delist_detection.vocabulary.exit_kind import successor_note
+from delist_detection.endings.last_trade import LastTrade
+from delist_detection.terms.llm_merger_extractor import MergerTerms
+from delist_detection.terms.merger_value import MergerValue, MergerValues, TableTerms
+from delist_detection.terms.payout_extractor import PayoutResult
+from delist_detection.endings.rewrites import (
     HANDOFF_CONTINUATION, LINE_CONTINUATION, NO_EVIDENCE_DEFAULT, R1_CONTINUATION, SUCCESSOR_UNKNOWN, Rewrite, Rule,
     awaits_successor, continuation, is_real_ending, mark_going_on, reclassify, rewrite_by, security_goes_on,
     successor_by,

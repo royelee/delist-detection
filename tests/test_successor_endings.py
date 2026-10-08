@@ -5,15 +5,15 @@ from __future__ import annotations
 from datetime import date
 
 from delist_detection import pipeline
-from delist_detection.added_securities import AddedAcquirer, AddedLineSuccessor, AddedSuccessor
-from delist_detection.classifier import DelistClassifier
-from delist_detection.crsp_codes import CrspBucket
-from delist_detection.delistings import DelistingFinder
-from delist_detection.edgar import EdgarSubmission
-from delist_detection.ftd import FtdIndex, FtdRow
-from delist_detection.manifest import StageMeter
-from delist_detection.security_master import Security
-from delist_detection.ticker_resolver import TickerResolver
+from delist_detection.identity.added_securities import AddedAcquirer, AddedLineSuccessor, AddedSuccessor
+from delist_detection.endings.classifier import DelistClassifier
+from delist_detection.vocabulary.crsp_codes import CrspBucket
+from delist_detection.endings.delistings import DelistingFinder
+from delist_detection.sources.edgar import EdgarSubmission
+from delist_detection.sources.ftd import FtdIndex, FtdRow
+from delist_detection.outputs.manifest import StageMeter
+from delist_detection.identity.security_master import Security
+from delist_detection.identity.ticker_resolver import TickerResolver
 
 CIK, SID = 777001, "BBG000NEWLN1"
 NYSE_RAW = ("<TYPE>25-NSE\n<notificationOfRemoval><exchange><entityName>New York Stock Exchange LLC</entityName>"
@@ -127,7 +127,7 @@ def test_a_failed_halt_feed_read_makes_the_ending_resolution_degraded(fake_edgar
 
 
 def test_the_finders_review_rows_are_kept(fake_edgar, monkeypatch):
-    from delist_detection.review_triage import ReviewItem
+    from delist_detection.outputs.review_triage import ReviewItem
     edgar = _edgar(fake_edgar)
     clients, ctx = _ctx(edgar, monkeypatch)
     item = ReviewItem(SID, "NEWC", CIK, "ticker_unconfirmed", "from the finder")

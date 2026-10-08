@@ -1,9 +1,9 @@
 from datetime import date
 
-from delist_detection.crsp_codes import CrspBucket
-from delist_detection.edgar import EdgarSubmission
-from delist_detection.end_of_era import CONTINUED, EraSignals, Filed, registers_successor, resolve, signals
-from delist_detection.exchange_terms import OwnExchange
+from delist_detection.vocabulary.crsp_codes import CrspBucket
+from delist_detection.sources.edgar import EdgarSubmission
+from delist_detection.endings.end_of_era import CONTINUED, EraSignals, Filed, registers_successor, resolve, signals
+from delist_detection.endings.exchange_terms import OwnExchange
 
 END = date(2020, 11, 20)
 _FILINGS = ("successor_filing", "merger_filing", "delist_filing", "deficiency_notice", "bankruptcy_filing",
@@ -87,7 +87,7 @@ def test_nothing_else_keeps_todays_continued_filings_transfer():
     assert CONTINUED == "Continued 10-K/Q filings >180d after delist (moved to OTC or spun off)"
 
 
-from delist_detection.exit_kind import RESOLVED_FROM_CONTINUED_FILINGS
+from delist_detection.vocabulary.exit_kind import RESOLVED_FROM_CONTINUED_FILINGS
 
 
 def test_every_relabelled_ending_says_the_registrant_kept_filing():
@@ -134,7 +134,7 @@ def test_the_bankruptcy_filing_is_the_classifiers_answer_carried_on_the_signals(
 
 
 # --- sub-plan 5c, rule 1: a registrant that survived the transaction ---
-from delist_detection.end_of_era import merges  # noqa: E402
+from delist_detection.endings.end_of_era import merges  # noqa: E402
 
 
 def test_a_survivor_takes_no_merger_branch_and_goes_on_to_the_notice_or_the_continued_filings():

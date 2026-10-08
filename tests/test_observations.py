@@ -1,6 +1,6 @@
 import pytest
 
-from delist_detection.observations import (
+from delist_detection.identity.observations import (
     Observation, ObservationError, ObservationIndex, TickerEra, eras_by_key, load_observations, number_eras,
     observation_conflicts, observations_from_instruments, observations_from_snapshots, split_eras, write_observations,
 )

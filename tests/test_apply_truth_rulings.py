@@ -8,8 +8,8 @@ from pathlib import Path
 
 import pytest
 
-from delist_detection.diagnosis_truth import KNOWN_WRONG, PASS
-from delist_detection.truth_set import Ruling, TruthSet, changes_path, configured, legs_path
+from delist_detection.measurement.diagnosis_truth import KNOWN_WRONG, PASS
+from delist_detection.measurement.truth_set import Ruling, TruthSet, changes_path, configured, legs_path
 
 ROOT = Path(__file__).resolve().parents[1]
 TRUTH = configured(ROOT)

@@ -8,10 +8,10 @@ from pathlib import Path
 
 import pytest
 
-from delist_detection.classifier import DelistRecord
-from delist_detection.crsp_codes import CrspBucket
-from delist_detection.edgar import EdgarSubmission
-from delist_detection.llm_merger_extractor import (
+from delist_detection.outputs.reconstruction import DelistRecord
+from delist_detection.vocabulary.crsp_codes import CrspBucket
+from delist_detection.sources.edgar import EdgarSubmission
+from delist_detection.terms.llm_merger_extractor import (
     LLMMergerTermsExtractor,
     MergerTerms,
     PROMPT_VERSION,
@@ -341,7 +341,7 @@ def test_empty_text_skipped_does_not_count(tmp_path):
     assert llm.calls == 1
 
 
-from delist_detection.llm_merger_extractor import LLMMergerTermsExtractor as _Ext
+from delist_detection.terms.llm_merger_extractor import LLMMergerTermsExtractor as _Ext
 
 
 def test_relevant_excerpts_windows_keywords(tmp_path):

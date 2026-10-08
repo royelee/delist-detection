@@ -5,8 +5,8 @@ from __future__ import annotations
 
 import pytest
 
-from delist_detection import exchange_terms as X
-from delist_detection.form25 import parse_form25
+from delist_detection.endings import exchange_terms as X
+from delist_detection.filings.form25 import parse_form25
 from tests import issuer_role_cases as ic
 
 

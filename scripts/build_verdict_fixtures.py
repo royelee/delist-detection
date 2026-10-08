@@ -29,8 +29,8 @@ sys.path.insert(0, str(ROOT / "tests"))
 
 import build_form25_fixtures  # noqa: E402,F401  (refuses every SEC request on import)
 import verdict_cases as vc  # noqa: E402
-from delist_detection.edgar import EdgarClient  # noqa: E402
-from delist_detection.run_snapshot import RunSnapshot, continuation_entries  # noqa: E402
+from delist_detection.sources.edgar import EdgarClient  # noqa: E402
+from delist_detection.outputs.run_snapshot import RunSnapshot, continuation_entries  # noqa: E402
 
 
 class RecordingEdgar:

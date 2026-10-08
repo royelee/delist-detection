@@ -13,21 +13,22 @@ from types import SimpleNamespace
 import pytest
 import requests
 
-from delist_detection import acquirer_ticker as at
-from delist_detection import currency, regression
-from delist_detection.classifier import DelistClassifier
-from delist_detection.cik_lookup import CikNameIndex
-from delist_detection.ftd import FtdRow
-from delist_detection.llm_merger_extractor import (LEGACY_VERSION, PROMPT_VERSION, LLMMergerTermsExtractor, MergerTerms,
-                                                    StockLeg, electors_only)
-from delist_detection.payout_gate import (DEFAULT_TOL, GATE_SKIPPED, NO_DEFAULT, PACKAGE, gate_payouts,
+from delist_detection.terms import acquirer_ticker as at
+from delist_detection.terms import currency
+from delist_detection.measurement import regression
+from delist_detection.endings.classifier import DelistClassifier
+from delist_detection.sources.cik_lookup import CikNameIndex
+from delist_detection.sources.ftd import FtdRow
+from delist_detection.terms.llm_merger_extractor import (LEGACY_VERSION, PROMPT_VERSION, LLMMergerTermsExtractor,
+                                                         MergerTerms, StockLeg, electors_only)
+from delist_detection.terms.payout_gate import (DEFAULT_TOL, GATE_SKIPPED, NO_DEFAULT, PACKAGE, gate_payouts,
                                           reconcile)
-from delist_detection.dlret import MergerInputs
-from delist_detection.payout_rule import basket_legs, value_fields
-from delist_detection.price_requests import RECEIVED_CLOSE, request_rows
-from delist_detection.run_snapshot import RunSnapshot
-from delist_detection.sec_stats import SEC_STATS
-from delist_detection.store import DelistingKey
+from delist_detection.outputs.dlret import MergerInputs
+from delist_detection.outputs.payout_rule import basket_legs, value_fields
+from delist_detection.outputs.price_requests import RECEIVED_CLOSE, request_rows
+from delist_detection.outputs.run_snapshot import RunSnapshot
+from delist_detection.sources.sec_stats import SEC_STATS
+from delist_detection.outputs.store import DelistingKey
 from lifecycle_tables import ending
 from test_terms_5f import K, V3_JCI, _Edgar, _f, _Llm, _rec, _v3
 
@@ -131,7 +132,7 @@ class _Index:
 
 
 def at_key(name):
-    from delist_detection.cik_lookup import normalize_name
+    from delist_detection.sources.cik_lookup import normalize_name
     return normalize_name(name)
 
 
@@ -398,7 +399,7 @@ PCYC = ("a number of shares of AbbVie common stock equal to $109.00 divided by t
 
 
 def test_the_averaging_window_of_a_dollar_valued_leg_is_named_in_the_formula(tmp_path):
-    from delist_detection.llm_merger_extractor import averaging_window
+    from delist_detection.terms.llm_merger_extractor import averaging_window
     window = averaging_window(PCYC)
     assert window == ("ten consecutive trading days ending on and including the second trading day prior to the "
                       "final expiration date of the offer")

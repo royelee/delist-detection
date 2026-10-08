@@ -19,11 +19,11 @@ from pathlib import Path
 
 import pytest
 
-from delist_detection.evidence import edgar_names
-from delist_detection.ftd import FtdIndex, FtdRow
-from delist_detection.observations import ObservationIndex, load_observations
-from delist_detection.identity import candidate_cusips, refine_eras
-from delist_detection.security_master import FigiResolver, cusip_handoffs, issuers_by_era
+from delist_detection.filings.evidence import edgar_names
+from delist_detection.sources.ftd import FtdIndex, FtdRow
+from delist_detection.identity.observations import ObservationIndex, load_observations
+from delist_detection.identity.identity import candidate_cusips, refine_eras
+from delist_detection.identity.security_master import FigiResolver, cusip_handoffs, issuers_by_era
 
 FIX = Path(__file__).parent / "fixtures" / "eras"
 EDGAR = json.loads((FIX / "renamed_edgar.json").read_text())

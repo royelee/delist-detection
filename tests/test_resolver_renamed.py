@@ -20,13 +20,13 @@ from pathlib import Path
 import pytest
 import requests
 
-from delist_detection.edgar import EdgarSubmission
-from delist_detection.ftd import FtdIndex, FtdRow
-from delist_detection.identity import EraIssuers, InferredIssuer, era_last_seen, identify, refine_eras
-from delist_detection.observations import ObservationIndex, load_observations
+from delist_detection.sources.edgar import EdgarSubmission
+from delist_detection.sources.ftd import FtdIndex, FtdRow
+from delist_detection.identity.identity import EraIssuers, InferredIssuer, era_last_seen, identify, refine_eras
+from delist_detection.identity.observations import ObservationIndex, load_observations
 from delist_detection.pipeline import Clients
-from delist_detection.security_master import Handoff, cusip_handoffs
-from delist_detection.ticker_resolver import TickerResolver
+from delist_detection.identity.security_master import Handoff, cusip_handoffs
+from delist_detection.identity.ticker_resolver import TickerResolver
 from tests.identity_cases import CommittedLookup
 
 FIX = Path(__file__).parent / "fixtures" / "eras"

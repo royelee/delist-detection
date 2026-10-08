@@ -18,14 +18,14 @@ import json
 import sys
 from pathlib import Path
 
-from delist_detection.atomic_io import write_atomic
-from delist_detection.diagnosis_truth import LibraryRows, judge_case, parse_legs, parse_rows
-from delist_detection.figi_resolution import us_candidates
-from delist_detection.openfigi import OpenFigiClient, resolve_api_key
-from delist_detection.run_snapshot import RunSnapshot
-from delist_detection.truth import TruthFileError
-from delist_detection.truth_build import UNSETTLED, assemble, final_status, review_markdown
-from delist_detection.truth_set import TruthSet, configured
+from delist_detection.sources.atomic_io import write_atomic
+from delist_detection.measurement.diagnosis_truth import LibraryRows, judge_case, parse_legs, parse_rows
+from delist_detection.identity.figi_resolution import us_candidates
+from delist_detection.sources.openfigi import OpenFigiClient, resolve_api_key
+from delist_detection.outputs.run_snapshot import RunSnapshot
+from delist_detection.measurement.truth import TruthFileError
+from delist_detection.measurement.truth_build import UNSETTLED, assemble, final_status, review_markdown
+from delist_detection.measurement.truth_set import TruthSet, configured
 
 ROOT = Path(__file__).resolve().parents[1]
 DIAG = ROOT / "output" / "diagnose_unknown_report"

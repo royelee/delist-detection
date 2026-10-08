@@ -4,22 +4,22 @@ from datetime import date
 
 import pytest
 
-from delist_detection.classifier import DelistRecord
-from delist_detection.crsp_codes import CrspBucket
-from delist_detection.edgar import EdgarSubmission
-from delist_detection.delistings import Delisting
-from delist_detection.ftd import FtdIndex, FtdRow
-from delist_detection.handoffs import (
+from delist_detection.outputs.reconstruction import DelistRecord
+from delist_detection.vocabulary.crsp_codes import CrspBucket
+from delist_detection.sources.edgar import EdgarSubmission
+from delist_detection.endings.delistings import Delisting
+from delist_detection.sources.ftd import FtdIndex, FtdRow
+from delist_detection.endings.handoffs import (
     CONTINUATION_DAYS, OVERLAP_DAYS, TAKEOVER_DAYS, HandoffDecision, HandoffPair, apply_handoffs, continuation_filing,
     cusip_switch, own_continuation_filing, decide_handoff, drop_resolved_shared, find_handoffs, issuer_carries_on, predecessor_names,
 )
-from delist_detection.history import Sighting
-from delist_detection.last_trade import LastTrade
-from delist_detection.llm_merger_extractor import MergerTerms
-from delist_detection.merger_value import MergerValue, MergerValues, TableTerms
-from delist_detection.review_triage import FilingRef, ReviewItem
-from delist_detection.rewrites import SUCCESSOR_UNKNOWN, Rule, rewrite_by
-from delist_detection.security_master import Security
+from delist_detection.identity.history import Sighting
+from delist_detection.endings.last_trade import LastTrade
+from delist_detection.terms.llm_merger_extractor import MergerTerms
+from delist_detection.terms.merger_value import MergerValue, MergerValues, TableTerms
+from delist_detection.outputs.review_triage import FilingRef, ReviewItem
+from delist_detection.endings.rewrites import SUCCESSOR_UNKNOWN, Rule, rewrite_by
+from delist_detection.identity.security_master import Security
 
 
 def _sig(*items):

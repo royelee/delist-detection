@@ -9,19 +9,19 @@ from datetime import date
 from types import SimpleNamespace
 
 from delist_detection import pipeline
-from delist_detection.cik_lookup import CikNameIndex, normalize_name
-from delist_detection.classifier import DelistClassifier
-from delist_detection.crsp_codes import CrspBucket
-from delist_detection.delistings import Delisting, DelistingFinder, SecurityContexts
-from delist_detection.edgar import EdgarSubmission
-from delist_detection.ftd import FtdIndex, FtdRow
-from delist_detection.last_trade import LastTrade
-from delist_detection.manifest import StageMeter
-from delist_detection.observations import Observation, split_eras
-from delist_detection.security_master import Security
-from delist_detection.classifier import DelistRecord
-from delist_detection.issuer_record import IssuerRecord
-from delist_detection.ticker_resolver import TickerResolver
+from delist_detection.sources.cik_lookup import CikNameIndex, normalize_name
+from delist_detection.endings.classifier import DelistClassifier
+from delist_detection.vocabulary.crsp_codes import CrspBucket
+from delist_detection.endings.delistings import Delisting, DelistingFinder, SecurityContexts
+from delist_detection.sources.edgar import EdgarSubmission
+from delist_detection.sources.ftd import FtdIndex, FtdRow
+from delist_detection.endings.last_trade import LastTrade
+from delist_detection.outputs.manifest import StageMeter
+from delist_detection.identity.observations import Observation, split_eras
+from delist_detection.identity.security_master import Security
+from delist_detection.outputs.reconstruction import DelistRecord
+from delist_detection.identity.issuer_record import IssuerRecord
+from delist_detection.identity.ticker_resolver import TickerResolver
 
 
 # --- rule D, ERA 2013: the issuer in force follows the fails rows, not the refuted observed name ----------------
@@ -97,8 +97,8 @@ def test_the_predecessors_own_form_25_raises_no_unmatched_row_for_the_added_succ
     """Stage 9d searches the successor's Form 25s under the shared CIK: Legacy ONEOK's 25-NSE already owns the
     predecessor's ending, so its `form25_unmatched` item is not repeated for the successor (read from the item's
     typed filing, never its reason)."""
-    from delist_detection.added_securities import AddedLineSuccessor
-    from delist_detection.review_triage import FilingRef, ReviewItem
+    from delist_detection.identity.added_securities import AddedLineSuccessor
+    from delist_detection.outputs.review_triage import FilingRef, ReviewItem
     link, found = _oke(OLD_ROWS)
     added = found.added["BBG024TZWVN1"]
     item = ReviewItem("BBG024TZWVN1", "OKE", 1039684, "form25_unmatched",

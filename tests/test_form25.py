@@ -1,8 +1,8 @@
 from datetime import date
 from pathlib import Path
 
-from delist_detection.edgar import EdgarSubmission
-from delist_detection.form25 import (
+from delist_detection.sources.edgar import EdgarSubmission
+from delist_detection.filings.form25 import (
     Form25, SecurityRef, class_kind, class_label, exchange_label, exchanges_named,
     list_form25, match_securities, match_security, notice_last_trade, parse_form25, tied_securities,
 )
@@ -303,7 +303,7 @@ def test_a_letterless_sibling_no_class_names_is_not_tied():
 
 import pytest  # noqa: E402
 
-from delist_detection.form25 import notice_says_acquired  # noqa: E402
+from delist_detection.filings.form25 import notice_says_acquired  # noqa: E402
 from tests import form25_cases as fc  # noqa: E402
 
 
@@ -322,7 +322,7 @@ def test_a_real_notice_says_the_class_was_acquired_only_without_a_reorganization
 
 # --- sub-plan 5b, R3: a Form 25 about another class ---
 
-from delist_detection.form25 import other_class  # noqa: E402
+from delist_detection.filings.form25 import other_class  # noqa: E402
 
 LIBERTY_2011 = ("Series A Liberty Capital Common Stock, Series B Liberty Capital Common Stock, Liberty Starz Ser A "
                 "Common Stock, Liberty Starz Ser B Common Stock")

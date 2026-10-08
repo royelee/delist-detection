@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from delist_detection.qlib_adapter import apply_bmp_corrections
+from delist_detection.handling.qlib_adapter import apply_bmp_corrections
 
 ROOT = Path(__file__).resolve().parents[1]
 

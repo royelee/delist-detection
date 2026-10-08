@@ -7,19 +7,19 @@ from types import SimpleNamespace
 import pytest
 
 from delist_detection import pipeline
-from delist_detection.classifier import DelistRecord
-from delist_detection.continuation_evidence import (confirming_filing, needs_doubt_check, needs_filing, ratio_doubt,
-                                                    read_continuation, successor_doubt)
-from delist_detection.crsp_codes import CrspBucket
-from delist_detection.delistings import Delisting
-from delist_detection.edgar import EdgarSubmission
-from delist_detection.identifiers import share_class_from_name
-from delist_detection.issuer_record import IssuerRecord
-from delist_detection.last_trade import LastTrade
-from delist_detection.manifest import StageMeter
-from delist_detection.own_shares import Reader
-from delist_detection.sec_stats import SEC_STATS
-from delist_detection.exit_kind import ContinuationReading
+from delist_detection.outputs.reconstruction import DelistRecord
+from delist_detection.endings.continuation_evidence import (confirming_filing, needs_doubt_check, needs_filing,
+                                                            ratio_doubt, read_continuation, successor_doubt)
+from delist_detection.vocabulary.crsp_codes import CrspBucket
+from delist_detection.endings.delistings import Delisting
+from delist_detection.sources.edgar import EdgarSubmission
+from delist_detection.vocabulary.identifiers import share_class_from_name
+from delist_detection.identity.issuer_record import IssuerRecord
+from delist_detection.endings.last_trade import LastTrade
+from delist_detection.outputs.manifest import StageMeter
+from delist_detection.endings.own_shares import Reader
+from delist_detection.sources.sec_stats import SEC_STATS
+from delist_detection.vocabulary.exit_kind import ContinuationReading
 
 ONE = ("At the effective time, each share of common stock of Acme Corp issued and outstanding was converted into one "
        "share of common stock, par value $0.01 per share, of Acme Holdings, having the same rights.")
@@ -202,7 +202,7 @@ def test_a_carried_reading_that_rested_on_a_failed_read_is_reported_too():
 
 
 def test_a_refusal_stops_the_stage_and_an_added_securitys_delisting_is_skipped():
-    from delist_detection.edgar import EdgarBlocked
+    from delist_detection.sources.edgar import EdgarBlocked
 
     class Blocked(Edgar):
         def fetch_filing_text(self, cik, accession, primary_doc):
@@ -226,8 +226,8 @@ def test_a_ratio_that_is_a_plain_split_or_one_is_no_doubt():
 def test_the_selection_reads_the_reason_through_the_row_vocabulary():
     """Stage 9g reads the continuations the verdict reads, from the text their producers write
     (`exit_kind.continuation_reason`, `successor_note`, `CONTINUED`, `successor_registration_reason`)."""
-    from delist_detection.exit_kind import (CONTINUED, TIMING_CIK, TIMING_CUSIP, continuation_reason, successor_note,
-                                            successor_registration_reason)
+    from delist_detection.vocabulary.exit_kind import (CONTINUED, TIMING_CIK, TIMING_CUSIP, continuation_reason,
+                                                       successor_note, successor_registration_reason)
     assert needs_filing(continuation_reason(TIMING_CIK, "x"), "A", "B")
     assert needs_filing(CONTINUED + successor_note("same_issuer"), "A", "B")
     assert needs_filing(CONTINUED + successor_note("handoff", TIMING_CIK), "A", "B")

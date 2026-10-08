@@ -15,13 +15,13 @@ from datetime import date
 
 import pytest
 
-from delist_detection import sec_limiter
-from delist_detection import prefetch
-from delist_detection.edgar import EdgarBlocked, EdgarClient
-from delist_detection.sec_limiter import PrefetchCancelled, RateLimiter
-from delist_detection.sec_stats import SEC_STATS, filling_only
-from delist_detection.openfigi import OpenFigiBlocked, OpenFigiUnavailable
-from delist_detection.prefetch import Serialized, warm
+from delist_detection.sources import sec_limiter
+from delist_detection.sources import prefetch
+from delist_detection.sources.edgar import EdgarBlocked, EdgarClient
+from delist_detection.sources.sec_limiter import PrefetchCancelled, RateLimiter
+from delist_detection.sources.sec_stats import SEC_STATS, filling_only
+from delist_detection.sources.openfigi import OpenFigiBlocked, OpenFigiUnavailable
+from delist_detection.sources.prefetch import Serialized, warm
 
 HANG = 5.0      # seconds; reached only when the code under test is wrong
 SUB_URL = "https://data.sec.gov/submissions/CIK0000000042.json"
@@ -34,7 +34,7 @@ def _warm_failures(mark):
 
 def _warnings(caplog):
     return [r.getMessage() for r in caplog.records
-            if r.name == "delist_detection.prefetch" and r.levelno >= logging.WARNING]
+            if r.name == "delist_detection.sources.prefetch" and r.levelno >= logging.WARNING]
 
 
 class _Clock:
@@ -110,18 +110,18 @@ def test_a_pass_whose_every_task_raises_returns_and_reports_each_failure(caplog)
         raise ValueError(f"item {item} could not be parsed")
 
     mark = SEC_STATS.snapshot()
-    with caplog.at_level(logging.DEBUG, logger="delist_detection.prefetch"):
+    with caplog.at_level(logging.DEBUG, logger="delist_detection.sources.prefetch"):
         assert warm([1, 2, 3, 4], task, workers=2, limiter=_Limiter(), name="payouts") == 4
     assert _warm_failures(mark) == {"warm_failed:payouts": 4}
     assert _warnings(caplog) == ["warm pass payouts: 4 of 4 items raised; the sequential pass re-runs them"]
-    debug = [r for r in caplog.records if r.name == "delist_detection.prefetch" and r.levelno == logging.DEBUG]
+    debug = [r for r in caplog.records if r.name == "delist_detection.sources.prefetch" and r.levelno == logging.DEBUG]
     assert sorted(r.getMessage() for r in debug) == ["warm 1 failed", "warm 2 failed", "warm 3 failed", "warm 4 failed"]
     assert all(r.exc_info and r.exc_info[0] is ValueError for r in debug)   # each with its traceback
 
 
 def test_a_pass_with_no_failure_warns_nothing(caplog):
     mark = SEC_STATS.snapshot()
-    with caplog.at_level(logging.DEBUG, logger="delist_detection.prefetch"):
+    with caplog.at_level(logging.DEBUG, logger="delist_detection.sources.prefetch"):
         warm([1, 2, 3], lambda item: None, workers=2, limiter=_Limiter(), name="payouts")
     assert _warm_failures(mark) == {} and _warnings(caplog) == []
 

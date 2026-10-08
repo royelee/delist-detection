@@ -31,7 +31,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
-import delist_detection.edgar as edgar_mod  # noqa: E402
+import delist_detection.sources.edgar as edgar_mod  # noqa: E402
 
 
 def _refuse(*args, **kwargs):
@@ -39,17 +39,17 @@ def _refuse(*args, **kwargs):
 
 
 edgar_mod.sec_get = _refuse
-from delist_detection.atomic_io import write_atomic  # noqa: E402
-from delist_detection.edgar import EdgarClient  # noqa: E402
-from delist_detection.figi_resolution import US_EXCH  # noqa: E402
-from delist_detection.ftd import FtdIndex, parse_ftd_lines, period_of  # noqa: E402
-from delist_detection.identifiers import normalize_ticker  # noqa: E402
-from delist_detection.line_follow import (  # noqa: E402
+from delist_detection.sources.atomic_io import write_atomic  # noqa: E402
+from delist_detection.sources.edgar import EdgarClient  # noqa: E402
+from delist_detection.identity.figi_resolution import US_EXCH  # noqa: E402
+from delist_detection.sources.ftd import FtdIndex, parse_ftd_lines, period_of  # noqa: E402
+from delist_detection.vocabulary.identifiers import normalize_ticker  # noqa: E402
+from delist_detection.identity.line_follow import (  # noqa: E402
     SUCCESSOR_FORMS, SWITCH, candidate_steps, eightks_near, is_line_symbol, line_end, name_on, text_cusips,
     text_symbols,
 )
-from delist_detection.security_master import cusip_job  # noqa: E402
-from delist_detection.filing_search import successor_query  # noqa: E402
+from delist_detection.identity.security_master import cusip_job  # noqa: E402
+from delist_detection.filings.filing_search import successor_query  # noqa: E402
 
 AS_OF = date(2026, 9, 25)                 # the committed run's date
 FTD_WINDOW = (date(2007, 12, 17), AS_OF)  # the committed run's fails window

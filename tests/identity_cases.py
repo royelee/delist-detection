@@ -18,13 +18,13 @@ from datetime import date
 from pathlib import Path
 from types import SimpleNamespace
 
-from delist_detection.cik_lookup import CikNameIndex, normalize_name
-from delist_detection.edgar import EdgarSubmission
-from delist_detection.ftd import FtdRow
-from delist_detection.identity import Identity, identify
-from delist_detection.issuer_record import IssuerRecord
-from delist_detection.observations import Observation, ObservationIndex
-from delist_detection.ticker_resolver import TickerResolution
+from delist_detection.sources.cik_lookup import CikNameIndex, normalize_name
+from delist_detection.sources.edgar import EdgarSubmission
+from delist_detection.sources.ftd import FtdRow
+from delist_detection.identity.identity import Identity, identify
+from delist_detection.identity.issuer_record import IssuerRecord
+from delist_detection.identity.observations import Observation, ObservationIndex
+from delist_detection.identity.ticker_resolver import TickerResolution
 
 FIX = Path(__file__).parent / "fixtures" / "identity"
 AS_OF = date(2026, 9, 25)                    # the committed run's date

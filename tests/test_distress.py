@@ -3,10 +3,10 @@ from datetime import date
 
 import pytest
 
-from delist_detection.distress import (
+from delist_detection.endings.distress import (
     liquidating, otc_symbol_from_fails, otc_symbol_from_text, plan_ratio, price_only, substitutes_new_shares,
 )
-from delist_detection.ftd import FtdRow
+from delist_detection.sources.ftd import FtdRow
 
 
 def rows(*spec):
@@ -222,7 +222,7 @@ def test_a_sentence_naming_the_exchange_symbol_it_left_and_the_otc_symbol_gives_
 
 
 def test_the_new_cusip_a_plan_notice_names():
-    from delist_detection.distress import new_cusips
+    from delist_detection.endings.distress import new_cusips
     notice = ("the instruments representing the securities comprising the entire class of this security came to "
               "evidence, by operation of law or otherwise, other securities in substitution therefore. Holders of "
               'Common Stock of Wolfspeed, Inc. "Old", (CUSIP - 977852102) will receive shares of Common Stock of '

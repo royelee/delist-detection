@@ -10,11 +10,11 @@ from datetime import date
 import pytest
 import requests
 
-from delist_detection import issuer_record
-from delist_detection.cik_lookup import CikNameIndex
-from delist_detection.edgar import FETCHED_KEY, STALE_KEY, EdgarBlocked, EdgarSubmission
-from delist_detection.issuer_record import IssuerRecord
-from delist_detection.sec_stats import SEC_STATS
+from delist_detection.identity import issuer_record
+from delist_detection.sources.cik_lookup import CikNameIndex
+from delist_detection.sources.edgar import FETCHED_KEY, STALE_KEY, EdgarBlocked, EdgarSubmission
+from delist_detection.identity.issuer_record import IssuerRecord
+from delist_detection.sources.sec_stats import SEC_STATS
 
 HALYARD = {"name": "AVANOS MEDICAL, INC.", "tickers": ["AVNS"], "exchanges": ["NYSE"],
            "formerNames": [{"name": "HALYARD HEALTH INC", "from": "2014-06-02T00:00:00.000Z",
@@ -277,9 +277,9 @@ def test_a_failed_read_of_the_successor_issuers_filings_in_the_handoff_stage_is_
     filing for `issuer_since`) straight from EDGAR with no catch: a failed read with no cached copy stopped the run
     (exit 1). HOLDCO NEW INC (CIK 998) took HC from HOLDCO INC (CIK 999) and its filings cannot be read: the run
     completes, and the handoff decided without them carries a `resolution_degraded` review row."""
-    from delist_detection.observations import Observation
+    from delist_detection.identity.observations import Observation
     from delist_detection.pipeline import Overrides, run
-    from delist_detection.store import read_table, table_path
+    from delist_detection.outputs.store import read_table, table_path
     from tests.test_pipeline import _figi_answer, _ftd, _index_clients
 
     fake_edgar.company_map["HC"] = {"cik_str": 999, "ticker": "HC", "title": "HOLDCO INC"}

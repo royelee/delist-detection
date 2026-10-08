@@ -5,11 +5,11 @@ every ticker of a window, trading after a day and near a day under any symbol, i
 its descriptions name, rule 3's tenure and the rows' last trading day."""
 from datetime import date
 
-from delist_detection.ftd import FtdIndex, FtdRow
-from delist_detection.history import Sighting
-from delist_detection.observations import Observation, TickerEra
-from delist_detection.security_master import Security
-from delist_detection.trading_record import TradingRecord, last_row_trade_day, ticker_taken
+from delist_detection.sources.ftd import FtdIndex, FtdRow
+from delist_detection.identity.history import Sighting
+from delist_detection.identity.observations import Observation, TickerEra
+from delist_detection.identity.security_master import Security
+from delist_detection.endings.trading_record import TradingRecord, last_row_trade_day, ticker_taken
 
 
 def _security(ticker="AET", first="2017-06-30", last="2018-06-29", name="AETNA INC", *, sec_id="BBG000FJLFX8",

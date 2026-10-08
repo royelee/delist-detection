@@ -12,14 +12,14 @@ from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 
-from delist_detection.continuation_evidence import needs_doubt_check, needs_filing, read_continuation
-from delist_detection.edgar import EdgarSubmission
-from delist_detection.issuer_record import IssuerRecord
-from delist_detection.exit_kind import ContinuationReading, of_row
-from delist_detection.last_trade import anchor_day
-from delist_detection.own_shares import Reader
-from delist_detection.run_snapshot import RunSnapshot, continuation_readings
-from delist_detection.verdict import Verdicts, decide
+from delist_detection.endings.continuation_evidence import needs_doubt_check, needs_filing, read_continuation
+from delist_detection.sources.edgar import EdgarSubmission
+from delist_detection.identity.issuer_record import IssuerRecord
+from delist_detection.vocabulary.exit_kind import ContinuationReading, of_row
+from delist_detection.endings.last_trade import anchor_day
+from delist_detection.endings.own_shares import Reader
+from delist_detection.outputs.run_snapshot import RunSnapshot, continuation_readings
+from delist_detection.outputs.verdict import Verdicts, decide
 
 AS_OF = date(2026, 9, 25)
 FIXTURES = Path(__file__).parent / "fixtures" / "verdicts"

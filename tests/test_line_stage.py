@@ -9,18 +9,18 @@ from datetime import date, timedelta
 import pytest
 import requests
 
-from delist_detection.edgar import EdgarBlocked, EdgarSubmission
-from delist_detection.figi_resolution import FigiCandidate
-from delist_detection.ftd import FtdIndex, FtdRow
-from delist_detection.identity import Identity
-from delist_detection.issuer_record import IssuerRecord
-from delist_detection.line_follow import MAX_ROUNDS, MAX_TEXTS, follow_lines
-from delist_detection.observations import TickerEra
-from delist_detection.openfigi import OpenFigiUnavailable
+from delist_detection.sources.edgar import EdgarBlocked, EdgarSubmission
+from delist_detection.identity.figi_resolution import FigiCandidate
+from delist_detection.sources.ftd import FtdIndex, FtdRow
+from delist_detection.identity.identity import Identity
+from delist_detection.identity.issuer_record import IssuerRecord
+from delist_detection.identity.line_follow import MAX_ROUNDS, MAX_TEXTS, follow_lines
+from delist_detection.identity.observations import TickerEra
+from delist_detection.sources.openfigi import OpenFigiUnavailable
 from delist_detection.pipeline import Clients
-from delist_detection.review_triage import ReviewItem
-from delist_detection.sec_stats import SEC_STATS
-from delist_detection.security_master import EraResolution, Issuer, build_securities
+from delist_detection.outputs.review_triage import ReviewItem
+from delist_detection.sources.sec_stats import SEC_STATS
+from delist_detection.identity.security_master import EraResolution, Issuer, build_securities
 
 AS_OF = date(2026, 9, 25)
 NAME = "REVERSE SPLIT CO"

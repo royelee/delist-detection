@@ -4,8 +4,8 @@ does not care), as store.read_table would; `tables` makes a run snapshot of them
 (`RunSnapshot.of`, the in-memory adapter)."""
 from __future__ import annotations
 
-from delist_detection.run_snapshot import RunSnapshot
-from delist_detection.store import TABLES
+from delist_detection.outputs.run_snapshot import RunSnapshot
+from delist_detection.outputs.store import TABLES
 
 
 def _row(table: str, **cells) -> dict[str, str]:

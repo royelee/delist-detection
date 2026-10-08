@@ -11,15 +11,15 @@ from pathlib import Path
 
 import pytest
 
-from delist_detection import line_follow as lf
-from delist_detection.edgar import EdgarSubmission
-from delist_detection.ftd import FtdIndex, FtdRow
-from delist_detection.identity import Identity
-from delist_detection.issuer_record import IssuerRecord
-from delist_detection.listing_status import edgar_lists
-from delist_detection.observations import Observation, TickerEra
+from delist_detection.identity import line_follow as lf
+from delist_detection.sources.edgar import EdgarSubmission
+from delist_detection.sources.ftd import FtdIndex, FtdRow
+from delist_detection.identity.identity import Identity
+from delist_detection.identity.issuer_record import IssuerRecord
+from delist_detection.filings.listing_status import edgar_lists
+from delist_detection.identity.observations import Observation, TickerEra
 from delist_detection.pipeline import Clients
-from delist_detection.security_master import EraResolution, Issuer, Security, build_securities
+from delist_detection.identity.security_master import EraResolution, Issuer, Security, build_securities
 
 FIX = Path(__file__).parent / "fixtures" / "lines"
 DATA = json.loads((FIX / "cases.json").read_text())

@@ -45,15 +45,15 @@ from pathlib import Path
 
 import requests
 
-from delist_detection.classifier import DelistClassifier
-from delist_detection.edgar import EFTS_SOURCE_KEYS, SEC_HOST, EdgarClient
-from delist_detection.sec_limiter import use_machine_wide_limit
-from delist_detection.filing_selection import announcement_8k, closing_8k, form_filings
-from delist_detection.ftd import FtdClient, FtdIndex
-from delist_detection.llm_client import default_llm_client
-from delist_detection.llm_merger_extractor import LLMMergerTermsExtractor
-from delist_detection.settings import env_setting
-from delist_detection.ticker_resolver import TickerResolver
+from delist_detection.endings.classifier import DelistClassifier
+from delist_detection.sources.edgar import EFTS_SOURCE_KEYS, SEC_HOST, EdgarClient
+from delist_detection.sources.sec_limiter import use_machine_wide_limit
+from delist_detection.terms.filing_selection import announcement_8k, closing_8k, form_filings
+from delist_detection.sources.ftd import FtdClient, FtdIndex
+from delist_detection.sources.llm_client import default_llm_client
+from delist_detection.terms.llm_merger_extractor import LLMMergerTermsExtractor
+from delist_detection.sources.settings import env_setting
+from delist_detection.identity.ticker_resolver import TickerResolver
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "tests" / "fixtures" / "golden"

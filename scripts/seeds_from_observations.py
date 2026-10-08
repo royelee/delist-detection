@@ -14,7 +14,7 @@ import csv
 import sys
 from collections import defaultdict
 
-from delist_detection.names import names_agree
+from delist_detection.vocabulary.names import names_agree
 
 
 def seeds(rows: list[dict[str, str]]) -> list[dict[str, str]]:

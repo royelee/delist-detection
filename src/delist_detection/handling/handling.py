@@ -1,0 +1,343 @@
+"""Train- and backtest-time handling for delisting events.
+
+The two callers are different worlds:
+
+    *Training* turns a corporate-action event into a *label* (forward return) for
+    the supervised learning task. The wrong choice silently injects survivorship
+    bias of one sign or the other.
+
+    *Backtest* turns the same event into an exit cashflow for a strategy. Errors
+    here show up as missing returns, look-ahead, or fictitious capital recovery.
+
+We expose two pure functions that take a `DelistRecord` plus the price panel
+and emit (a) a forward-return adjustment for training, (b) an exit cashflow
+plus universe-exit date for backtesting. These are handling's own policies per
+bucket, not the ending's value rule.
+
+The CRSP-style firm-month form is the Beaver-McNichols-Price (2007) correction
+(`firm_month_correction`, from one `dlret.ValueInputs`; `build_firm_month_correction`
+takes the same inputs as keywords):
+
+    R_delisting_month = (1 + R_partial) * (1 + DLRET) - 1
+    R_partial = last_trade_close / prior_month_end_close - 1
+
+with the DLRET `dlret.decide` answers for the firm month.
+
+Conventions
+-----------
+* All returns are simple (decimal), not log.
+* "Last price" = last observed close in the price panel for the ticker.
+* "Payout" = cash-equivalent value per share at delist.
+* "Forward horizon" = the model's prediction horizon (e.g. 21 trading days).
+
+Train handling per bucket
+-------------------------
+MERGER                  : forward-return label = (payout / price_at_label) - 1.
+                          payout defaults to last_price if unknown (neutral mark).
+EXCHANGE_TRANSFER       : drop the ticker's delist event; relink to successor
+                          ticker if available. If not, treat as MERGER w/ neutral
+                          payout (no return shock).
+LIQUIDATION             : forward-return label = recovery_ratio - 1
+                          (recovery_ratio defaults to 0.10 conservatively).
+COMPLIANCE_FAILURE      : forward-return label = -1.0 (-100%). This is the bias
+                          you'd otherwise miss by dropping the row.
+EXPIRATION              : drop. Not equity universe.
+UNKNOWN                 : conservative: -50%. Flag for manual review.
+
+Backtest handling per bucket
+----------------------------
+MERGER                  : exit at delist date at min(last_close, payout).
+                          Reinvest into cash (or rebalance per portfolio policy).
+EXCHANGE_TRANSFER       : continue holding the successor; no cashflow.
+LIQUIDATION             : exit at delist date at recovery_ratio * last_close.
+COMPLIANCE_FAILURE      : exit at delist date at 0 (full loss). The realistic
+                          assumption — by the time a 12d2-2 hits, the OTC mark
+                          is illusory.
+EXPIRATION              : exit at maturity value (default 0 for equity contexts).
+UNKNOWN                 : exit at 0.5 * last_close, flag for review.
+"""
+
+from __future__ import annotations
+
+import logging
+import math
+from dataclasses import dataclass
+from datetime import date, datetime
+from typing import Iterable, Mapping
+
+from ..outputs.reconstruction import DelistRecord
+from ..vocabulary.crsp_codes import CrspBucket
+from ..outputs.dlret import ValueInputs, decide
+from ..vocabulary.exchanges import Exchange
+
+
+logger = logging.getLogger(__name__)
+
+DEFAULT_RECOVERY_RATIO = 0.10
+DEFAULT_UNKNOWN_TRAIN_RETURN = -0.5
+DEFAULT_UNKNOWN_EXIT_FRACTION = 0.5
+
+
+@dataclass
+class TrainLabelAdjustment:
+    ticker: str
+    bucket: CrspBucket
+    delist_date: date
+    forward_return: float            # the adjusted label value
+    keep_in_training: bool           # False = drop this row from supervision
+    notes: str = ""
+
+
+@dataclass
+class BacktestExit:
+    ticker: str
+    bucket: CrspBucket
+    exit_date: date                  # last day position is held (T_exit)
+    exit_price: float                # per-share exit value applied at T_exit
+    successor_sec_id: str | None = None
+    notes: str = ""
+
+
+@dataclass
+class FirmMonthReturn:
+    """BMP 2007 corrected firm-month return for the delisting month."""
+    ticker: str
+    bucket: CrspBucket
+    exchange: Exchange
+    delist_date: date
+    firm_month_return: float    # the corrected R_month (NaN means drop)
+    r_partial: float            # (last_trade / prior_month_end) - 1
+    dlret: float                # cash-out return implied by bucket+exchange
+    drop: bool                  # True -> remove this firm-month from panel
+    notes: str = ""
+
+
+def _parse(d: str | date | None) -> date | None:
+    if d is None:
+        return None
+    if isinstance(d, date):
+        return d
+    try:
+        return datetime.strptime(d, "%Y-%m-%d").date()
+    except ValueError:
+        return None
+
+
+def build_train_label_adjustment(
+    record: DelistRecord,
+    last_close: float,
+    payout_per_share: float | None = None,
+    recovery_ratio: float = DEFAULT_RECOVERY_RATIO,
+) -> TrainLabelAdjustment:
+    """Return the forward-return label to use for the *last* training row of `ticker`."""
+    dd = _parse(record.observed_delist_date)
+    if dd is None:
+        return TrainLabelAdjustment(
+            ticker=record.ticker,
+            bucket=record.bucket,
+            delist_date=date.today(),
+            forward_return=0.0,
+            keep_in_training=False,
+            notes="No delist date; dropping from training",
+        )
+
+    bucket = record.bucket
+    if bucket is CrspBucket.MERGER:
+        payout = payout_per_share if payout_per_share is not None else last_close
+        ret = (payout / last_close) - 1.0 if last_close > 0 else 0.0
+        return TrainLabelAdjustment(
+            ticker=record.ticker, bucket=bucket, delist_date=dd,
+            forward_return=ret, keep_in_training=True,
+            notes=f"M&A: payout {payout:.4f} vs last_close {last_close:.4f}",
+        )
+
+    if bucket is CrspBucket.EXCHANGE_TRANSFER:
+        successor = record.successor_sec_id
+        if successor:
+            return TrainLabelAdjustment(
+                ticker=record.ticker, bucket=bucket, delist_date=dd,
+                forward_return=0.0, keep_in_training=False,
+                notes=f"Exchange transfer; re-link to {successor}",
+            )
+        return TrainLabelAdjustment(
+            ticker=record.ticker, bucket=bucket, delist_date=dd,
+            forward_return=0.0, keep_in_training=False,
+            notes="Exchange transfer; no successor mapping. Dropping.",
+        )
+
+    if bucket is CrspBucket.LIQUIDATION:
+        ret = (recovery_ratio - 1.0)
+        return TrainLabelAdjustment(
+            ticker=record.ticker, bucket=bucket, delist_date=dd,
+            forward_return=ret, keep_in_training=True,
+            notes=f"Liquidation: assumed recovery {recovery_ratio:.0%}",
+        )
+
+    if bucket is CrspBucket.COMPLIANCE_FAILURE:
+        return TrainLabelAdjustment(
+            ticker=record.ticker, bucket=bucket, delist_date=dd,
+            forward_return=-1.0, keep_in_training=True,
+            notes="Compliance failure: -100% terminal return",
+        )
+
+    if bucket is CrspBucket.EXPIRATION:
+        return TrainLabelAdjustment(
+            ticker=record.ticker, bucket=bucket, delist_date=dd,
+            forward_return=0.0, keep_in_training=False,
+            notes="Expiration security; not equity universe",
+        )
+
+    return TrainLabelAdjustment(
+        ticker=record.ticker, bucket=bucket, delist_date=dd,
+        forward_return=DEFAULT_UNKNOWN_TRAIN_RETURN, keep_in_training=True,
+        notes="Unknown bucket: applying conservative -50% with review flag",
+    )
+
+
+def build_backtest_exit(
+    record: DelistRecord,
+    last_close: float,
+    payout_per_share: float | None = None,
+    recovery_ratio: float = DEFAULT_RECOVERY_RATIO,
+) -> BacktestExit:
+    dd = _parse(record.observed_delist_date) or date.today()
+    bucket = record.bucket
+
+    if bucket is CrspBucket.MERGER:
+        payout = payout_per_share if payout_per_share is not None else last_close
+        return BacktestExit(
+            ticker=record.ticker, bucket=bucket, exit_date=dd,
+            exit_price=min(last_close, payout) if payout < last_close else payout,
+            notes=f"M&A exit at payout {payout:.4f}",
+        )
+
+    if bucket is CrspBucket.EXCHANGE_TRANSFER:
+        successor = record.successor_sec_id
+        return BacktestExit(
+            ticker=record.ticker, bucket=bucket, exit_date=dd,
+            exit_price=last_close, successor_sec_id=successor,
+            notes="Exchange transfer: hold continues in successor",
+        )
+
+    if bucket is CrspBucket.LIQUIDATION:
+        return BacktestExit(
+            ticker=record.ticker, bucket=bucket, exit_date=dd,
+            exit_price=recovery_ratio * last_close,
+            notes=f"Liquidation exit at {recovery_ratio:.0%} of last close",
+        )
+
+    if bucket is CrspBucket.COMPLIANCE_FAILURE:
+        return BacktestExit(
+            ticker=record.ticker, bucket=bucket, exit_date=dd,
+            exit_price=0.0, notes="Compliance failure: total loss",
+        )
+
+    if bucket is CrspBucket.EXPIRATION:
+        return BacktestExit(
+            ticker=record.ticker, bucket=bucket, exit_date=dd,
+            exit_price=0.0, notes="Expiration: zero exit value",
+        )
+
+    return BacktestExit(
+        ticker=record.ticker, bucket=bucket, exit_date=dd,
+        exit_price=DEFAULT_UNKNOWN_EXIT_FRACTION * last_close,
+        notes="Unknown: 50% haircut exit with review flag",
+    )
+
+
+def adjustments_from_rows(rows: Iterable[Mapping[str, str]]) -> tuple[list[TrainLabelAdjustment], list[BacktestExit]]:
+    """Train-label adjustments and backtest exits straight from delistings.csv rows.
+
+    A row whose `successor_sec_id` equals its own `sec_id` is a continuing
+    security (it kept trading under the same FIGI, e.g. an exchange transfer)
+    and is silently skipped -- it never reaches training or backtest handling
+    because it isn't an exit at all. A row missing `last_trade_close` is also
+    skipped (there's no price to compute a label/exit from), but that one is
+    never silent: spec 11 says nothing is dropped without a trace, so it's
+    logged at WARNING naming the `(sec_id, delist_date)` dropped.
+    """
+    from .qlib_adapter import record_from_row, row_payout   # local import: qlib_adapter imports this module
+
+    train, exits = [], []
+    for row in rows:
+        sec_id = row.get("sec_id")
+        successor = row.get("successor_sec_id")
+        if successor and successor == sec_id:
+            continue
+        close = _float(row.get("last_trade_close"))
+        if close is None:
+            logger.warning("adjustments_from_rows: skipping (sec_id=%s, delist_date=%s): no last_trade_close",
+                           sec_id, row.get("delist_date"))
+            continue
+        rec = record_from_row(row)
+        payout = row_payout(row)
+        recovery = _float(row.get("recovery_ratio"))
+        kw = {"recovery_ratio": recovery} if recovery is not None else {}
+        train.append(build_train_label_adjustment(rec, close, payout, **kw))
+        exits.append(build_backtest_exit(rec, close, payout, **kw))
+    return train, exits
+
+
+def _float(v) -> float | None:
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return None
+    return None if f != f else f
+
+
+def firm_month_correction(record: DelistRecord, prior_month_end_close: float,
+                          value: ValueInputs) -> FirmMonthReturn:
+    """The BMP 2007 corrected firm-month return of one delisting, from its value inputs (`value`, of the record's
+    bucket).
+
+    Implements `R_month = (1 + R_partial) * (1 + DLRET) - 1`, where `R_partial` is the price return from the prior
+    month-end close to the last trade (`value.last_trade_close`), and `DLRET` is the one `dlret.decide` answers for
+    the firm month (`EndingValue.firm_month`: the bucket's rule measured, else its Shumway mark; the table's par fill
+    is the table's).
+
+    The returned `drop` field is the canonical caller signal: `drop=True` means the firm-month is unrecoverable
+    (EXPIRATION, no delist date, degenerate prices, negative payout/recovery) and the row should be removed from the
+    panel. By invariant, `drop == math.isnan(firm_month_return)`.
+    """
+    dd = _parse(record.observed_delist_date)
+    ex = value.exchange
+    if dd is None:
+        return FirmMonthReturn(
+            ticker=record.ticker, bucket=record.bucket, exchange=ex,
+            delist_date=date.today(),
+            firm_month_return=float("nan"), r_partial=float("nan"),
+            dlret=float("nan"), drop=True,
+            notes="No delist date; dropping from panel",
+        )
+
+    dlret = decide(value).firm_month
+    r_partial = (
+        (value.last_trade_close / prior_month_end_close) - 1.0
+        if prior_month_end_close > 0 else float("nan")
+    )
+    r_month = float("nan") if math.isnan(dlret) or prior_month_end_close <= 0 else         (1.0 + r_partial) * (1.0 + dlret) - 1.0
+    drop = math.isnan(r_month)
+
+    return FirmMonthReturn(
+        ticker=record.ticker, bucket=record.bucket, exchange=ex,
+        delist_date=dd,
+        firm_month_return=r_month, r_partial=r_partial, dlret=dlret,
+        drop=drop,
+        notes=(
+            f"BMP({record.bucket.value}, {ex.value}): "
+            f"R_partial={r_partial:.4f}, DLRET={dlret:.4f}"
+            if not drop else
+            f"Dropped ({record.bucket.value}): NaN firm-month return"
+        ),
+    )
+
+
+def build_firm_month_correction(record: DelistRecord, prior_month_end_close: float, last_trade_close: float,
+                                exchange: Exchange | None, **value) -> FirmMonthReturn:
+    """`firm_month_correction` from the inputs as keywords (the per-event form the README shows): `exchange=None`
+    falls back to `Exchange.OTHER`, which uses the conservative Nasdaq Shumway constant for performance delistings;
+    `value` holds `dlret.ValueInputs`' other fields (`payout_per_share`, `stock_ratio`, `acquirer_price`,
+    `recovery_ratio`, `otc_print`, `plan_value`)."""
+    return firm_month_correction(record, prior_month_end_close, ValueInputs(
+        record.bucket, exchange if exchange is not None else Exchange.OTHER, last_trade_close, **value))

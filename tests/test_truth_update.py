@@ -6,10 +6,10 @@ from pathlib import Path
 
 import pytest
 
-from delist_detection import diagnosis_truth as dt
-from delist_detection.loop_round import CaseError, RoundCase, mismatch_key, parse_field, regression_key
-from delist_detection.regression import report_row
-from delist_detection.truth_set import TruthSet
+from delist_detection.measurement import diagnosis_truth as dt
+from delist_detection.measurement.loop_round import CaseError, RoundCase, mismatch_key, parse_field, regression_key
+from delist_detection.measurement.regression import report_row
+from delist_detection.measurement.truth_set import TruthSet
 from tests.diagnosis_rows import ledger_row, truth_row
 from tests.lifecycle_tables import contract_row
 

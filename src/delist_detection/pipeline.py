@@ -17,74 +17,74 @@ from functools import partial
 from pathlib import Path
 from typing import Any
 
-from . import acquirer_line
-from . import manifest as run_manifest
-from . import scorecard as run_scorecard
-from .added_securities import AddedAcquirer, AddedLineSuccessor, AddedSecurity, AddedSuccessor
-from .capabilities import CAPABILITIES, FULL_TEXT_SEARCH, Capability, FullTextSearch, offers, stated
-from .crsp_codes import CrspBucket
-from .continuation_evidence import needs_doubt_check, needs_filing, read_continuation
-from .degraded import DegradedWatch, degraded_item, flag_degraded, report_halt_feed_failures
-from .delistings import Delisting, DelistingFinder, SecurityContexts
-from .distress import (
+from .terms import acquirer_line
+from .outputs import manifest as run_manifest
+from .measurement import scorecard as run_scorecard
+from .identity.added_securities import AddedAcquirer, AddedLineSuccessor, AddedSecurity, AddedSuccessor
+from .sources.capabilities import CAPABILITIES, FULL_TEXT_SEARCH, Capability, FullTextSearch, offers, stated
+from .vocabulary.crsp_codes import CrspBucket
+from .endings.continuation_evidence import needs_doubt_check, needs_filing, read_continuation
+from .outputs.degraded import DegradedWatch, degraded_item, flag_degraded, report_halt_feed_failures
+from .endings.delistings import Delisting, DelistingFinder, SecurityContexts
+from .endings.distress import (
     BANKRUPTCY_WORDS, OTC_SYMBOL_DAYS, otc_symbol_from_fails, otc_symbol_from_text, plan_ratio,
     new_cusips as plan_new_cusips, price_only, substitutes_new_shares,
 )
-from .dlret import DistressTerms, ValueInputs
-from .evidence import item_sections
-from .exit_kind import (ContinuationReading, continuation_reason, end_day, flag_name, flag_tokens, last_endings,
-                        successor_note)
-from .fatal import FATAL
-from .handoffs import (
+from .outputs.dlret import DistressTerms, ValueInputs
+from .filings.evidence import item_sections
+from .vocabulary.exit_kind import (ContinuationReading, continuation_reason, end_day, flag_name, flag_tokens,
+                                   last_endings, successor_note)
+from .sources.fatal import FATAL
+from .endings.handoffs import (
     HandoffDecision, HandoffOutcome, apply_handoffs, continuation_filing, cusip_switch, decide_handoff,
     drop_resolved_shared, find_handoffs, issuer_carries_on, own_continuation_filing, predecessor_names,
 )
-from .form25 import ISSUER_FORM25_FORMS
-from .issuer_record import IssuerRecord, ReadWatch
-from .last_trade import Dating, first_day_after
-from .ftd import FTD_START, FtdIndex, close_age
-from .history import (
+from .filings.form25 import ISSUER_FORM25_FORMS
+from .identity.issuer_record import IssuerRecord, ReadWatch
+from .endings.last_trade import Dating, first_day_after
+from .sources.ftd import FTD_START, FtdIndex, close_age
+from .identity.history import (
     Histories, Sighting, backfill_cusips, cusip_sightings, filtered_ticker_sightings, observation_map_rows,
     ranges_from_sightings, ticker_range_review, ticker_sightings, value_on,
 )
-from .line_follow import LineSuccessor, composites, follow_lines, is_line_symbol, text_cusips
-from .identifiers import is_placeholder, share_class_from_name
-from .identity import Identity, identify
-from .listing_status import issuer_exchange, listed_today, listing_answers
-from .observations import ObservationIndex, TickerEra, observation_conflicts
-from .exchange_terms import one_share_no_cash
-from .exchanges import normalize_exchange
-from .own_shares import OwnShares, Reader, new_issuer
-from .own_shares import of as own_shares_of
-from .merger_value import MergerValues, value_mergers
-from .payout_gate import DEFAULT_TOL
-from .prefetch import Serialized, warm
-from .reconstruction import (
+from .identity.line_follow import LineSuccessor, composites, follow_lines, is_line_symbol, text_cusips
+from .vocabulary.identifiers import is_placeholder, share_class_from_name
+from .identity.identity import Identity, identify
+from .filings.listing_status import issuer_exchange, listed_today, listing_answers
+from .identity.observations import ObservationIndex, TickerEra, observation_conflicts
+from .endings.exchange_terms import one_share_no_cash
+from .vocabulary.exchanges import normalize_exchange
+from .endings.own_shares import OwnShares, Reader, new_issuer
+from .endings.own_shares import of as own_shares_of
+from .terms.merger_value import MergerValues, value_mergers
+from .terms.payout_gate import DEFAULT_TOL
+from .sources.prefetch import Serialized, warm
+from .outputs.reconstruction import (
     OverrideFileError, delisting_row, enrich, for_delisting, override_row_name, unmatched_override_keys,
 )
-from .review_triage import Decision, ReviewItem, Triage, is_blank, merge_review_rows, triage
-from .run_snapshot import RunSnapshot, continuation_entries
-from .rewrites import (
+from .outputs.review_triage import Decision, ReviewItem, Triage, is_blank, merge_review_rows, triage
+from .outputs.run_snapshot import RunSnapshot, continuation_entries
+from .endings.rewrites import (
     LINE_CONTINUATION, R1_CONTINUATION, Rule, awaits_successor, continuation, is_real_ending, mark_going_on, reclassify,
     rewrite_by,
 )
-from .sec_stats import SEC_STATS
-from .security_master import EraResolution, Issuer, Security, cik_of, cusip_job, superseded_placeholders
-from .ticker_evidence import EraEvidence, evidence_for
-from .trading_record import TradingRecord
-from .store import DelistingKey, write_tables
-from .filing_search import successor_query
-from .successors import (
+from .sources.sec_stats import SEC_STATS
+from .identity.security_master import EraResolution, Issuer, Security, cik_of, cusip_job, superseded_placeholders
+from .identity.ticker_evidence import EraEvidence, evidence_for
+from .endings.trading_record import TradingRecord
+from .outputs.store import DelistingKey, write_tables
+from .filings.filing_search import successor_query
+from .endings.successors import (
     SUCCESSOR_AFTER_DAYS, SUCCESSOR_BEFORE_DAYS, SecurityStart, successor_by_terms,
     successor_from_8k12b, successor_in_run, successor_search_args, successor_search_name,
 )
-from .verdict import Verdicts
-from .verdict import decide as decide_verdicts
-from .contract import delisting_rows as contract_delisting_rows
-from .contract import id_change_rows, payout_leg_rows, security_history_rows, seed_rows
-from .issuer_in_force import Sighting as IssuerSighting
-from .issuer_in_force import issuer_changes
-from .price_requests import PriceAnswers, request_rows
+from .outputs.verdict import Verdicts
+from .outputs.verdict import decide as decide_verdicts
+from .outputs.contract import delisting_rows as contract_delisting_rows
+from .outputs.contract import id_change_rows, payout_leg_rows, security_history_rows, seed_rows
+from .identity.issuer_in_force import Sighting as IssuerSighting
+from .identity.issuer_in_force import issuer_changes
+from .outputs.price_requests import PriceAnswers, request_rows
 
 
 BACKFILL_DAYS = 1095   # how far before a dead-before-sighting security's end its fails rows are loaded
@@ -1520,16 +1520,16 @@ def default_clients(index: ObservationIndex, *, cache_dir: Path, rename_map: dic
     on first use), and the SEC limit is made machine-wide
     (sec_limiter.use_machine_wide_limit). Every adapter offers every capability
     (`capabilities.CAPABILITIES`: `Clients.absent()` is empty)."""
-    from .cik_lookup import CikLookupClient
-    from .classifier import DelistClassifier
-    from .edgar import EdgarClient
-    from .sec_limiter import use_machine_wide_limit
-    from .ftd import FtdClient
-    from .midas import MidasClient
-    from .nasdaq_halts import NasdaqHaltClient
-    from .openfigi import OpenFigiClient, resolve_api_key
-    from .payout_extractor import PayoutExtractor
-    from .ticker_resolver import TickerResolver
+    from .sources.cik_lookup import CikLookupClient
+    from .endings.classifier import DelistClassifier
+    from .sources.edgar import EdgarClient
+    from .sources.sec_limiter import use_machine_wide_limit
+    from .sources.ftd import FtdClient
+    from .sources.midas import MidasClient
+    from .sources.nasdaq_halts import NasdaqHaltClient
+    from .sources.openfigi import OpenFigiClient, resolve_api_key
+    from .terms.payout_extractor import PayoutExtractor
+    from .identity.ticker_resolver import TickerResolver
 
     as_of = as_of or date.today()
     use_machine_wide_limit()
@@ -1543,8 +1543,8 @@ def default_clients(index: ObservationIndex, *, cache_dir: Path, rename_map: dic
                               name_index=CikLookupClient(cache_dir / "sec_data" / "cik_lookup").index)
     llm = None
     if extract_llm:
-        from .llm_client import default_llm_client
-        from .llm_merger_extractor import LLMMergerTermsExtractor
+        from .sources.llm_client import default_llm_client
+        from .terms.llm_merger_extractor import LLMMergerTermsExtractor
         llm = LLMMergerTermsExtractor(edgar, default_llm_client(llm_model), cache_dir=cache_dir / "llm")
     return Clients(
         edgar=edgar, resolver=resolver, classifier=DelistClassifier(edgar, resolver, today=as_of),

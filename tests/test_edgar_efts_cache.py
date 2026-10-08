@@ -9,8 +9,8 @@ from datetime import date, timedelta
 import pytest
 import requests
 
-from delist_detection.edgar import EFTS_KEY, EFTS_SCHEMA, FETCHED_KEY, EdgarBlocked, EdgarClient, efts_ttl_days
-from delist_detection.sec_stats import SEC_STATS, fill_only
+from delist_detection.sources.edgar import EFTS_KEY, EFTS_SCHEMA, FETCHED_KEY, EdgarBlocked, EdgarClient, efts_ttl_days
+from delist_detection.sources.sec_stats import SEC_STATS, fill_only
 
 AS_OF = date(2026, 9, 23)
 UA = "Test Co test@example.com"
@@ -132,7 +132,7 @@ def test_an_undated_search_is_kept_for_the_run_only(tmp_path):
 def test_a_rejected_query_is_a_non_answer_logged_and_never_written(tmp_path, caplog, status):
     c, s = _client(tmp_path, _Resp(status))
     mark = SEC_STATS.snapshot()
-    with caplog.at_level(logging.WARNING, logger="delist_detection.edgar"):
+    with caplog.at_level(logging.WARNING, logger="delist_detection.sources.edgar"):
         assert c.efts_search(URL, window_end=END) == []
     assert c.efts_search(URL, window_end=END) == []                  # asked once per run
     assert len(s.calls) == 1 and not c._cache_path(URL).exists()

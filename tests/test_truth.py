@@ -6,13 +6,13 @@ from pathlib import Path
 
 import pytest
 
-from delist_detection import diagnosis_truth as dt
-from delist_detection import truth
-from delist_detection.lifecycle import LifecycleView
-from delist_detection.run_snapshot import RunSnapshot
-from delist_detection.truth import (TRUTH_COLUMNS, Judgement, Mismatch, TruthCase, TruthFileError,
+from delist_detection.measurement import diagnosis_truth as dt
+from delist_detection.measurement import truth
+from delist_detection.measurement.lifecycle import LifecycleView
+from delist_detection.outputs.run_snapshot import RunSnapshot
+from delist_detection.measurement.truth import (TRUTH_COLUMNS, Judgement, Mismatch, TruthCase, TruthFileError,
                                     clopper_pearson_upper, judge, load_truth, now_right, tally, write_truth)
-from delist_detection.truth_set import TruthSet, changes_path, configured, legs_path
+from delist_detection.measurement.truth_set import TruthSet, changes_path, configured, legs_path
 from tests.diagnosis_rows import truth_row
 from tests.lifecycle_tables import contract_row, ending, hist, iv, obs, sec, tables
 

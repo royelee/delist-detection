@@ -10,18 +10,18 @@ from pathlib import Path
 
 import pytest
 
-from delist_detection.edgar import EdgarSubmission
-from delist_detection.form25 import parse_form25
-from delist_detection.ftd import FtdIndex, FtdRow
-from delist_detection.history import Sighting
-from delist_detection.last_trade import (
+from delist_detection.sources.edgar import EdgarSubmission
+from delist_detection.filings.form25 import parse_form25
+from delist_detection.sources.ftd import FtdIndex, FtdRow
+from delist_detection.identity.history import Sighting
+from delist_detection.endings.last_trade import (
     CLOSING_DAY, CONFLICT, EIGHTK_301, EX99_NOTICE, LAST_SIGHTING, MIDAS, NASDAQ_HALT, NO_DAY, UNCONFIRMED, UNSOURCED,
     Dating, LastTrade, anchor_day, at_handoff, closing_day, decide_last_trade, eightk_last_trade,
     first_day_after, handoff_day, sections_3_01,
 )
-from delist_detection.nasdaq_halts import Halt
-from delist_detection.security_master import Security
-from delist_detection.trading_record import TradingRecord
+from delist_detection.sources.nasdaq_halts import Halt
+from delist_detection.identity.security_master import Security
+from delist_detection.endings.trading_record import TradingRecord
 
 _SECURITY = Security("BBG_T", 1, "COMMON", "SOME CORP", "Common Stock", True, "cusip")
 
@@ -442,8 +442,8 @@ def test_a_row_dated_another_way_or_without_a_form25_is_never_read():
 
 
 def test_a_failed_notice_read_keeps_the_sighting_and_trips_the_stages_watch():
-    from delist_detection.degraded import DegradedWatch
-    from delist_detection.sec_stats import SEC_STATS
+    from delist_detection.outputs.degraded import DegradedWatch
+    from delist_detection.sources.sec_stats import SEC_STATS
 
     class Failing(_Raws):
         def fetch_filing_raw(self, cik, accession):

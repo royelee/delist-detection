@@ -2,7 +2,7 @@
 (tests/test_truth_set.py)."""
 import pytest
 
-from delist_detection import diagnosis_truth as dt
+from delist_detection.measurement import diagnosis_truth as dt
 from tests.diagnosis_rows import truth_row
 from tests.lifecycle_tables import contract_row, ending, sec, tables
 

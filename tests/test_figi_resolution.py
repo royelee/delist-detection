@@ -1,4 +1,4 @@
-from delist_detection.figi_resolution import FigiCandidate, accept, filter_query, security_kind, us_candidates
+from delist_detection.identity.figi_resolution import FigiCandidate, accept, filter_query, security_kind, us_candidates
 
 
 def _row(comp, exch, ticker, name, st="Common Stock", figi=None, st2="Common Stock"):

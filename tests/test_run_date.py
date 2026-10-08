@@ -6,9 +6,9 @@ from datetime import date
 
 import requests
 
-from delist_detection.classifier import DelistClassifier
-from delist_detection.edgar import FETCHED_KEY, EdgarClient, submissions_fresh_after
-from delist_detection.ticker_resolver import TickerResolver
+from delist_detection.endings.classifier import DelistClassifier
+from delist_detection.sources.edgar import FETCHED_KEY, EdgarClient, submissions_fresh_after
+from delist_detection.identity.ticker_resolver import TickerResolver
 
 AS_OF = date(2026, 9, 23)
 UA = "Test Co test@example.com"

@@ -17,8 +17,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
-from delist_detection.truth import TruthFileError  # noqa: E402
-from delist_detection.truth_set import Ruling, TruthSet, configured  # noqa: E402
+from delist_detection.measurement.truth import TruthFileError  # noqa: E402
+from delist_detection.measurement.truth_set import Ruling, TruthSet, configured  # noqa: E402
 
 WHY = "5f ruling 2026-10-04"
 REPORT = "docs/superpowers/plans/research/2026-10-04-5f-terms.md"

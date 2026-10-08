@@ -1,9 +1,9 @@
 import pytest
 
-from delist_detection.classifier import DelistClassifier
-from delist_detection.payout_extractor import PayoutExtractor
-from delist_detection.payout_gate import DEFAULT_TOL, reconcile
-from delist_detection.ticker_resolver import TickerResolver
+from delist_detection.endings.classifier import DelistClassifier
+from delist_detection.terms.payout_extractor import PayoutExtractor
+from delist_detection.terms.payout_gate import DEFAULT_TOL, reconcile
+from delist_detection.identity.ticker_resolver import TickerResolver
 from tests.golden import GoldenEdgar, load_cases, patch_efts
 
 CASES = load_cases()

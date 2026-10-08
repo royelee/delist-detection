@@ -6,10 +6,10 @@ from pathlib import Path
 
 import pytest
 
-from delist_detection import store
-from delist_detection.loop_round import Unexplained
-from delist_detection.truth import TRUTH_COLUMNS, TruthFileError, load_truth, write_truth as write_golden
-from delist_detection.truth_set import LEDGER_COLUMNS, TruthSet
+from delist_detection.outputs import store
+from delist_detection.measurement.loop_round import Unexplained
+from delist_detection.measurement.truth import TRUTH_COLUMNS, TruthFileError, load_truth, write_truth as write_golden
+from delist_detection.measurement.truth_set import LEDGER_COLUMNS, TruthSet
 from tests.diagnosis_rows import truth_row, write_truth
 from tests.lifecycle_tables import contract_row, ending, iv, obs, sec, tables
 

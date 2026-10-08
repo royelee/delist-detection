@@ -9,12 +9,12 @@ from pathlib import Path
 
 import pytest
 
-from delist_detection import diagnosis_truth as dt
-from delist_detection import truth_set as ts
-from delist_detection.loop_round import Loop
-from delist_detection.regression import renamed_to
-from delist_detection.truth import TruthFileError
-from delist_detection.truth_set import LEDGER_COLUMNS, Correction, Ruling, TruthSet
+from delist_detection.measurement import diagnosis_truth as dt
+from delist_detection.measurement import truth_set as ts
+from delist_detection.measurement.loop_round import Loop
+from delist_detection.measurement.regression import renamed_to
+from delist_detection.measurement.truth import TruthFileError
+from delist_detection.measurement.truth_set import LEDGER_COLUMNS, Correction, Ruling, TruthSet
 from tests.diagnosis_rows import leg_row, ledger_row, truth_row, write_truth
 from tests.lifecycle_tables import contract_row, sec, tables
 

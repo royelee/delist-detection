@@ -6,10 +6,10 @@ from pathlib import Path
 
 import pytest
 
-from delist_detection import diagnosis_truth as dt
-from delist_detection import regression as rg
-from delist_detection import store
-from delist_detection.run_snapshot import RunSnapshot, SnapshotError
+from delist_detection.measurement import diagnosis_truth as dt
+from delist_detection.measurement import regression as rg
+from delist_detection.outputs import store
+from delist_detection.outputs.run_snapshot import RunSnapshot, SnapshotError
 from tests.diagnosis_rows import truth_row
 from tests.lifecycle_tables import contract_row, hist, sec
 

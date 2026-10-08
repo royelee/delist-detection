@@ -8,8 +8,8 @@ entry only on purpose (a changed universe, a retired metric), by hand, and say
 why in the commit."""
 from pathlib import Path
 
-from delist_detection.run_snapshot import RunSnapshot
-from delist_detection.scorecard import build, drops, load_config
+from delist_detection.outputs.run_snapshot import RunSnapshot
+from delist_detection.measurement.scorecard import build, drops, load_config
 
 ROOT = Path(__file__).resolve().parents[1]
 

@@ -34,11 +34,11 @@ sys.path.insert(0, str(ROOT / "tests"))
 
 import build_form25_fixtures as b5  # noqa: E402  (refuses every SEC request on import)
 import identity_cases as ic  # noqa: E402
-from delist_detection.atomic_io import write_atomic  # noqa: E402
-from delist_detection.cik_lookup import CikLookupClient  # noqa: E402
-from delist_detection.edgar import EdgarClient  # noqa: E402
-from delist_detection.observations import Observation  # noqa: E402
-from delist_detection.openfigi import OpenFigiClient  # noqa: E402
+from delist_detection.sources.atomic_io import write_atomic  # noqa: E402
+from delist_detection.sources.cik_lookup import CikLookupClient  # noqa: E402
+from delist_detection.sources.edgar import EdgarClient  # noqa: E402
+from delist_detection.identity.observations import Observation  # noqa: E402
+from delist_detection.sources.openfigi import OpenFigiClient  # noqa: E402
 
 # offline: an OpenFIGI job the cache lacks is an error answer, never a request
 OpenFigiClient._post = lambda self, path, payload: ([{"error": "offline"} for _ in payload] if path == "/mapping"
@@ -133,7 +133,7 @@ class RecordingFigi:
 
 
 def b5_us():
-    from delist_detection.figi_resolution import US_EXCH
+    from delist_detection.identity.figi_resolution import US_EXCH
     return US_EXCH
 
 

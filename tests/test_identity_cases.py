@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import pytest
 
-from delist_detection.contract import id_change_rows
+from delist_detection.outputs.contract import id_change_rows
 from tests import identity_cases as ic
 
 
@@ -114,7 +114,7 @@ def test_a_joined_lines_cusip_ranges_ignore_the_old_cusips_settling_rows(cases):
     they are no sighting of it, so the new CUSIP's range starts on its first row."""
     from types import SimpleNamespace
 
-    from delist_detection.history import cusip_sightings, ranges_from_sightings
+    from delist_detection.identity.history import cusip_sightings, ranges_from_sightings
     ftd = cases.stage3({"MSG", "MSGN"}).ftd
     sig = cusip_sightings(SimpleNamespace(eras=[]), ftd, ["55826P100", "553573106"])
     got = {r.value: (r.valid_from, r.valid_to)
@@ -129,12 +129,12 @@ def test_a_ticker_range_carried_to_the_next_ticker_stops_before_another_security
     stops the day before the new security's first day under MSG (`history.Histories`)."""
     from datetime import date
 
-    from delist_detection.crsp_codes import CrspBucket
-    from delist_detection.ftd import FtdIndex
-    from delist_detection.history import Ending, Histories, Sighting
-    from delist_detection.last_trade import LastTrade
-    from delist_detection.security_master import Security
-    from delist_detection.store import DelistingKey
+    from delist_detection.vocabulary.crsp_codes import CrspBucket
+    from delist_detection.sources.ftd import FtdIndex
+    from delist_detection.identity.history import Ending, Histories, Sighting
+    from delist_detection.endings.last_trade import LastTrade
+    from delist_detection.identity.security_master import Security
+    from delist_detection.outputs.store import DelistingKey
 
     secs = {sid: Security(sid, 1, "COMMON", sid, "Common Stock", True, "cusip") for sid in ("OLD", "NEW")}
     new = [Sighting("2015-10-05", "MSG", "ftd"), Sighting("2015-10-06", "MSG", "ftd")]

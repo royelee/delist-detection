@@ -7,7 +7,7 @@ from datetime import date, datetime
 import pytest
 import requests
 
-from delist_detection.edgar import EdgarBlocked, EdgarClient
+from delist_detection.sources.edgar import EdgarBlocked, EdgarClient
 
 URL = "https://data.sec.gov/submissions/CIK0000000042.json"
 EVENT = date(2026, 8, 20)          # LBRDA's Form 25, after a 2026-05-26 cache

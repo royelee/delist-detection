@@ -7,29 +7,31 @@ from pathlib import Path
 import pytest
 
 import delist_detection.pipeline as pipeline
-from delist_detection.classifier import DelistClassifier, DelistRecord
-from delist_detection.crsp_codes import CrspBucket
-from delist_detection.delistings import Delisting, DelistingFinder
-from delist_detection.edgar import EdgarBlocked, EdgarSubmission
-from delist_detection.ftd import FtdRow
-from delist_detection.last_trade import LastTrade
-from delist_detection.llm_merger_extractor import MergerTerms
-from delist_detection.observations import Observation, ObservationIndex
-from delist_detection.payout_extractor import PayoutResult
-from delist_detection.acquirers import acquirer_cik
+from delist_detection.endings.classifier import DelistClassifier
+from delist_detection.outputs.reconstruction import DelistRecord
+from delist_detection.vocabulary.crsp_codes import CrspBucket
+from delist_detection.endings.delistings import Delisting, DelistingFinder
+from delist_detection.sources.edgar import EdgarBlocked, EdgarSubmission
+from delist_detection.sources.ftd import FtdRow
+from delist_detection.endings.last_trade import LastTrade
+from delist_detection.terms.llm_merger_extractor import MergerTerms
+from delist_detection.identity.observations import Observation, ObservationIndex
+from delist_detection.terms.payout_extractor import PayoutResult
+from delist_detection.terms.acquirers import acquirer_cik
 from delist_detection.pipeline import Clients, Overrides, run
-from delist_detection.review_triage import merge_review_rows
-from delist_detection.history import ticker_range_review
-from delist_detection.successors import SecurityStart, successor_from_8k12b, successor_in_run, successor_search_name
-from delist_detection.review_triage import Decision
-from delist_detection.security_master import Security
-from delist_detection import scorecard as run_scorecard
-from delist_detection.run_snapshot import RunSnapshot
-from delist_detection.scorecard import ScorecardConfig, Window
-from delist_detection.truth import TruthCase
-from delist_detection.store import formatted, read_table, table_path
-from delist_detection.verdict import decide as decide_verdicts
-from delist_detection.ticker_resolver import TickerResolution, TickerResolver
+from delist_detection.outputs.review_triage import merge_review_rows
+from delist_detection.identity.history import ticker_range_review
+from delist_detection.endings.successors import (SecurityStart, successor_from_8k12b, successor_in_run,
+                                                 successor_search_name)
+from delist_detection.outputs.review_triage import Decision
+from delist_detection.identity.security_master import Security
+from delist_detection.measurement import scorecard as run_scorecard
+from delist_detection.outputs.run_snapshot import RunSnapshot
+from delist_detection.measurement.scorecard import ScorecardConfig, Window
+from delist_detection.measurement.truth import TruthCase
+from delist_detection.outputs.store import formatted, read_table, table_path
+from delist_detection.outputs.verdict import decide as decide_verdicts
+from delist_detection.identity.ticker_resolver import TickerResolution, TickerResolver
 
 FIX = Path(__file__).parent / "fixtures" / "form25"
 AET_RAW = (FIX / "aet_25nse.txt").read_text(encoding="utf-8", errors="replace")
@@ -286,9 +288,9 @@ def _stage_5b(rows, specs, endings, sec_cusips=None, loaded=()):
     """Run stage 5b directly. specs: sid -> (ticker, first observation day);
     endings: (sid, last trade day, successor sid or None); loaded: rows already in the index."""
     from types import SimpleNamespace
-    from delist_detection.ftd import FtdIndex
-    from delist_detection.manifest import StageMeter
-    from delist_detection.observations import TickerEra
+    from delist_detection.sources.ftd import FtdIndex
+    from delist_detection.outputs.manifest import StageMeter
+    from delist_detection.identity.observations import TickerEra
     securities = {}
     for sid, (ticker, first) in specs.items():
         era = TickerEra(ticker, first, first, [Observation(ticker, first, "AETNA INC")])
@@ -415,7 +417,7 @@ def test_unmatched_override_stops_before_writing(fake_edgar, tmp_path):
 def test_an_override_row_that_matches_no_delisting_names_its_file_and_line(fake_edgar, tmp_path):
     """A loaded override file remembers where each row came from, so the refusal
     names the flag, the file and the line of every row that matches nothing."""
-    from delist_detection.reconstruction import OverrideFileError, load_float_overrides
+    from delist_detection.outputs.reconstruction import OverrideFileError, load_float_overrides
 
     lt = tmp_path / "lt.csv"
     lt.write_text("sec_id,delist_date,last_trade_close\nBBG000FJLFX8,2018-12-09,212.7\nBBG999,,1\n"
@@ -454,7 +456,7 @@ def test_an_openfigi_outage_stops_the_run_and_keeps_previous_outputs(fake_edgar,
     (that would change sec_ids between runs), nothing written over the
     previous complete outputs -- whether the batched listing ask or one
     security's own ask meets it."""
-    from delist_detection.openfigi import OpenFigiUnavailable
+    from delist_detection.sources.openfigi import OpenFigiUnavailable
 
     index, clients = _clients(fake_edgar)
     run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
@@ -765,7 +767,7 @@ def test_issuer_exchange_for_ticker_reads_the_parallel_arrays(fake_edgar):
     fake_edgar.submissions = lambda cik, fresh_after=None: (
         {"tickers": ["X"], "exchanges": ["NYSE"]} if cik == 1 else {"tickers": [], "exchanges": []}
     )
-    from delist_detection.listing_status import issuer_exchange
+    from delist_detection.filings.listing_status import issuer_exchange
     assert issuer_exchange(fake_edgar, 1, "X") == "NYSE"
     assert issuer_exchange(fake_edgar, 1, "Y") is None
     assert issuer_exchange(fake_edgar, None, "X") is None
@@ -910,7 +912,7 @@ def test_run_level_acquirer_price_uses_each_mergers_own_last_trade_day(fake_edga
 
 
 def test_an_answered_received_close_is_the_acquirer_price(fake_edgar, tmp_path, monkeypatch):
-    from delist_detection.price_requests import key_of
+    from delist_detection.outputs.price_requests import key_of
     index, clients = _two_stock_mergers(fake_edgar, monkeypatch)
     first = tmp_path / "first"
     run(index, clients, Overrides(), out_dir=first, log=lambda *_: None)
@@ -1191,9 +1193,9 @@ def test_last_trade_close_uses_the_cusip_whose_range_holds_the_last_trade_day():
     """`_last_trade_closes` prices each last trade day by the security's CUSIP whose
     range holds that day (from its fails rows), then by its ticker: by symbol
     alone, another CUSIP's rows under RS (99.0) would come first on both days."""
-    from delist_detection.ftd import FtdIndex
-    from delist_detection.manifest import StageMeter
-    from delist_detection.observations import TickerEra
+    from delist_detection.sources.ftd import FtdIndex
+    from delist_detection.outputs.manifest import StageMeter
+    from delist_detection.identity.observations import TickerEra
 
     ftd = FtdIndex(_ftd("RS", "11111A101", "REVERSE SPLIT CO", ["2019-06-03", "2019-09-04"], price=2.0)
                    + _ftd("RS", "00000X000", "SOMETHING ELSE", ["2019-09-04", "2020-03-03"], price=99.0)
@@ -1517,7 +1519,7 @@ ERAS_FIX = Path(__file__).parent / "fixtures" / "eras"
 
 def _eras_fixture(tickers):
     import csv
-    from delist_detection.observations import load_observations
+    from delist_detection.identity.observations import load_observations
     obs = [o for o in load_observations(ERAS_FIX / "observations.csv") if o.ticker in tickers]
     with (ERAS_FIX / "ftd_rows.csv").open(newline="") as fh:
         rows = [FtdRow(r["date"], r["cusip"], r["symbol"], r["description"],
@@ -2446,8 +2448,8 @@ class _SearchEdgar:
 
 
 def test_ticker_evidence_asks_the_search_only_for_a_placeholder_without_a_ticker_tier():
-    from delist_detection import manifest as run_manifest
-    from delist_detection.observations import TickerEra
+    from delist_detection.outputs import manifest as run_manifest
+    from delist_detection.identity.observations import TickerEra
     edgar = _SearchEdgar([{"_id": "a:d", "_source": {"ciks": ["0000000555"], "adsh": "0000000555-16-000001"}}])
     ctx = pipeline._RunContext(Clients(edgar=edgar, resolver=None, classifier=None, figi=None, ftd_client=None),
                                date(2026, 9, 25), lambda *_: None, 1, run_manifest.StageMeter(lambda *_: None))
@@ -2466,7 +2468,7 @@ def test_ticker_evidence_asks_the_search_only_for_a_placeholder_without_a_ticker
 
 
 def test_price_answers_change_value_columns_only(fake_edgar, tmp_path):
-    from delist_detection.price_requests import key_of
+    from delist_detection.outputs.price_requests import key_of
     index, clients = _clients(fake_edgar)
     first = tmp_path / "first"
     run(index, clients, Overrides(), out_dir=first, log=lambda *_: None)
@@ -2483,8 +2485,8 @@ def test_price_answers_change_value_columns_only(fake_edgar, tmp_path):
 
 
 def test_an_answer_to_no_request_stops_the_run_before_anything_is_written(fake_edgar, tmp_path):
-    from delist_detection.price_requests import PriceKey
-    from delist_detection.reconstruction import OverrideFileError
+    from delist_detection.outputs.price_requests import PriceKey
+    from delist_detection.outputs.reconstruction import OverrideFileError
     index, clients = _clients(fake_edgar)
     stray = {PriceKey("BBG000FJLFX8", "2001-01-02", "last_close", "AET", "2001-01-02"): 10.0}
     with pytest.raises(OverrideFileError, match="answer no request"):
@@ -2493,8 +2495,8 @@ def test_an_answer_to_no_request_stops_the_run_before_anything_is_written(fake_e
 
 
 def test_a_last_close_given_twice_stops_the_run(fake_edgar, tmp_path):
-    from delist_detection.price_requests import key_of
-    from delist_detection.reconstruction import OverrideFileError
+    from delist_detection.outputs.price_requests import key_of
+    from delist_detection.outputs.reconstruction import OverrideFileError
     index, clients = _clients(fake_edgar)
     first = tmp_path / "first"
     run(index, clients, Overrides(), out_dir=first, log=lambda *_: None)
@@ -2694,8 +2696,8 @@ def _unit_delisting(sec_id, bucket, code, flags):
 
 
 def _line_successor(sec_id):
-    from delist_detection.figi_resolution import FigiCandidate
-    from delist_detection.line_follow import LineStep, LineSuccessor
+    from delist_detection.identity.figi_resolution import FigiCandidate
+    from delist_detection.identity.line_follow import LineStep, LineSuccessor
     step = LineStep(sec_id, "switch", RS_OLD, RS_NEW, "RS", "2012-09-17", "2012-09-25")
     return LineSuccessor(sec_id, "BBGRSNEW1", FigiCandidate("BBGRSNEW1", "REVERSE SPLIT CO", "RS", "Common Stock", ()),
                          step, "8-K 2012-09-24")
@@ -2704,7 +2706,7 @@ def _line_successor(sec_id):
 @pytest.mark.parametrize("bucket,code", [(CrspBucket.LIQUIDATION, 450), (CrspBucket.COMPLIANCE_FAILURE, 560),
                                          (CrspBucket.EXPIRATION, 600), (CrspBucket.MERGER, 231)])
 def test_distress_expiration_and_merger_endings_at_the_switch_take_no_line_successor(bucket, code):
-    from delist_detection.ftd import FtdIndex
+    from delist_detection.sources.ftd import FtdIndex
     d = _unit_delisting("BBGRS01", bucket, code, [])
     securities = {"BBGRS01": Security("BBGRS01", 4242, "COMMON", "REVERSE SPLIT CO", "", True, "cusip")}
     found = pipeline._Successors()
@@ -2714,8 +2716,8 @@ def test_distress_expiration_and_merger_endings_at_the_switch_take_no_line_succe
 
 def test_a_delisting_without_a_line_link_still_gets_the_in_run_successor_search():
     from types import SimpleNamespace
-    from delist_detection import manifest as run_manifest
-    from delist_detection.history import Sighting
+    from delist_detection.outputs import manifest as run_manifest
+    from delist_detection.identity.history import Sighting
     no_search = SimpleNamespace(full_text_search=None)          # EDGAR stating its full-text search absent
     ctx = pipeline._RunContext(Clients(edgar=no_search, resolver=None, classifier=None, figi=None, ftd_client=None),
                                date(2026, 9, 25), lambda *_: None, 1, run_manifest.StageMeter(lambda *_: None))
@@ -2774,7 +2776,7 @@ def test_a_form25_at_the_lines_own_switch_while_it_trades_on_leaves_no_ending(fa
 
 def test_openfigi_unavailable_in_stage_4b_stops_the_run_and_writes_nothing(fake_edgar, tmp_path):
     """The new CUSIP's OpenFIGI answer is first asked by the line follow; no placeholder stands in for it."""
-    from delist_detection.openfigi import OpenFigiUnavailable
+    from delist_detection.sources.openfigi import OpenFigiUnavailable
 
     class _Down(_MapFigi):
         def map(self, jobs, use_cache=True):
@@ -2800,8 +2802,8 @@ def _in_force_run(subs, exact):
     """A run context whose EDGAR answers `subs` (CIK -> submissions JSON) and whose issuer record's name index
     lists `exact` (name -> CIKs)."""
     from types import SimpleNamespace
-    from delist_detection import manifest as run_manifest
-    from delist_detection.issuer_record import IssuerRecord
+    from delist_detection.outputs import manifest as run_manifest
+    from delist_detection.identity.issuer_record import IssuerRecord
     index = SimpleNamespace(split_search=lambda name: ([SimpleNamespace(cik=c) for c in exact.get(name, [])], []))
     edgar = SimpleNamespace(submissions=lambda cik: subs.get(cik))
     clients = SimpleNamespace(edgar=edgar, issuers=IssuerRecord(edgar, name_index=index))
@@ -2809,8 +2811,8 @@ def _in_force_run(subs, exact):
 
 
 def _security_with_era(sec_id, cik, ticker, observations):
-    from delist_detection.observations import TickerEra
-    from delist_detection.security_master import EraResolution, Issuer
+    from delist_detection.identity.observations import TickerEra
+    from delist_detection.identity.security_master import EraResolution, Issuer
     era = TickerEra(ticker, observations[0].as_of, observations[-1].as_of, observations)
     s = Security(sec_id, cik, "COMMON", observations[-1].name, "Common Stock", True, "cusip", eras=[era])
     return s, era, {era.key: EraResolution(era.key, sec_id, "cusip", None, ())}, {era.key: Issuer(cik, ())}

@@ -1,7 +1,8 @@
 import pytest
 
-from delist_detection.lifecycle import (ACTIVE, CLOSED_NO_EVENT, ENDED, ENDED_INCOMPLETE, HIGH, LEFT_VIEW, LOOP, LOW,
-                                        MEDIUM, NO_INTERVAL, NO_MAPPED_SIGHTING, LifecycleView, event_grade)
+from delist_detection.measurement.lifecycle import (ACTIVE, CLOSED_NO_EVENT, ENDED, ENDED_INCOMPLETE, HIGH, LEFT_VIEW,
+                                                    LOOP, LOW, MEDIUM, NO_INTERVAL, NO_MAPPED_SIGHTING, LifecycleView,
+                                                    event_grade)
 from tests.lifecycle_tables import ending, hist, iv, obs, sec, tables
 
 

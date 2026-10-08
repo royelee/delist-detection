@@ -8,8 +8,8 @@ from typing import Any
 
 import pytest
 
-from delist_detection import sec_limiter
-from delist_detection.edgar import EdgarSubmission
+from delist_detection.sources import sec_limiter
+from delist_detection.sources.edgar import EdgarSubmission
 
 
 @dataclass
@@ -99,7 +99,7 @@ def writes_fail_midway(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def _no_efts_network(monkeypatch):
-    from delist_detection.ticker_resolver import TickerResolver
+    from delist_detection.identity.ticker_resolver import TickerResolver
     monkeypatch.setattr(TickerResolver, "_efts_lookup", lambda self, t, d=None, **kw: (None, None, False))
     monkeypatch.setattr(TickerResolver, "_efts_pre_delist_frequency_ranked",
                         lambda self, t, d, top_n=5: [])

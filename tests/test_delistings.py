@@ -1,17 +1,19 @@
 from datetime import date, timedelta
 from pathlib import Path
 
-from delist_detection.classifier import DelistClassifier, DelistRecord
-from delist_detection.crsp_codes import CrspBucket
-from delist_detection.delistings import DelistingFinder, SecurityContext, SecurityContexts
-from delist_detection.edgar import EdgarSubmission
-from delist_detection.exit_kind import effective_date
-from delist_detection.ftd import FtdIndex, FtdRow
-from delist_detection.last_trade import LastTrade
-from delist_detection.trading_record import TradingRecord
-from delist_detection.observations import Observation, split_eras
-from delist_detection.security_master import Security
-from delist_detection.ticker_resolver import TickerResolver
+from delist_detection.endings.classifier import DelistClassifier
+
+from delist_detection.outputs.reconstruction import DelistRecord
+from delist_detection.vocabulary.crsp_codes import CrspBucket
+from delist_detection.endings.delistings import DelistingFinder, SecurityContext, SecurityContexts
+from delist_detection.sources.edgar import EdgarSubmission
+from delist_detection.vocabulary.exit_kind import effective_date
+from delist_detection.sources.ftd import FtdIndex, FtdRow
+from delist_detection.endings.last_trade import LastTrade
+from delist_detection.endings.trading_record import TradingRecord
+from delist_detection.identity.observations import Observation, split_eras
+from delist_detection.identity.security_master import Security
+from delist_detection.identity.ticker_resolver import TickerResolver
 
 FIX = Path(__file__).parent / "fixtures" / "form25"
 AET_RAW = (FIX / "aet_25nse.txt").read_text(encoding="utf-8", errors="replace")
@@ -748,8 +750,8 @@ def test_a_delistings_flags_are_its_records_evidence_flags():
     """One list: what the pipeline adds or clears on the event is what the
     delistings.csv row (built from record.evidence) carries, and a found
     successor (a rewrite, `rewrites.continuation`) clears successor_unknown from both views at once."""
-    from delist_detection.delistings import Delisting
-    from delist_detection.rewrites import Rule, continuation
+    from delist_detection.endings.delistings import Delisting
+    from delist_detection.endings.rewrites import Rule, continuation
     rec = DelistRecord(ticker="GOOGL", cik=1288776, observed_delist_date="2015-10-02", crsp_code=300,
                        bucket=CrspBucket.EXCHANGE_TRANSFER, confidence="high", reason="holdco reorg",
                        evidence={"flags": ["successor_unknown"]}, sec_id="BBGGOOGLEA1", delist_date="2015-10-12")

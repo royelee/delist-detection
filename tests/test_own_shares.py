@@ -8,15 +8,15 @@ from types import SimpleNamespace
 
 import pytest
 
-from delist_detection import own_shares as O
-from delist_detection.classifier import DelistRecord
-from delist_detection.crsp_codes import CrspBucket
-from delist_detection.delistings import Delisting
-from delist_detection.edgar import EdgarSubmission
-from delist_detection.form25 import parse_form25
-from delist_detection.issuer_record import IssuerRecord
-from delist_detection.last_trade import LastTrade
-from delist_detection.sec_stats import SEC_STATS
+from delist_detection.endings import own_shares as O
+from delist_detection.outputs.reconstruction import DelistRecord
+from delist_detection.vocabulary.crsp_codes import CrspBucket
+from delist_detection.endings.delistings import Delisting
+from delist_detection.sources.edgar import EdgarSubmission
+from delist_detection.filings.form25 import parse_form25
+from delist_detection.identity.issuer_record import IssuerRecord
+from delist_detection.endings.last_trade import LastTrade
+from delist_detection.sources.sec_stats import SEC_STATS
 from tests import issuer_role_cases as ic
 
 CIK, DAY = 1, date(2017, 9, 1)

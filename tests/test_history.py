@@ -6,16 +6,16 @@ interface, without a run. (The ticker on a day and the last own sighting are the
 tests/test_trading_record.py.)"""
 from datetime import date, timedelta
 
-from delist_detection.added_securities import AddedLineSuccessor
-from delist_detection.crsp_codes import CrspBucket
-from delist_detection.ftd import FtdIndex, FtdRow
-from delist_detection.history import (Ending, Histories, SecurityEnd, Sighting, cusip_sightings,
+from delist_detection.identity.added_securities import AddedLineSuccessor
+from delist_detection.vocabulary.crsp_codes import CrspBucket
+from delist_detection.sources.ftd import FtdIndex, FtdRow
+from delist_detection.identity.history import (Ending, Histories, SecurityEnd, Sighting, cusip_sightings,
                                       filtered_ticker_sightings, is_backfilled, observation_map_rows,
                                       ticker_range_review, ticker_sightings)
-from delist_detection.last_trade import NO_DAY, UNCONFIRMED, LastTrade
-from delist_detection.observations import Observation, TickerEra
-from delist_detection.security_master import Security
-from delist_detection.store import DelistingKey
+from delist_detection.endings.last_trade import NO_DAY, UNCONFIRMED, LastTrade
+from delist_detection.identity.observations import Observation, TickerEra
+from delist_detection.identity.security_master import Security
+from delist_detection.outputs.store import DelistingKey
 
 
 # --- observation_map_rows: one row per observation, its sec_id and status, read from the history's own answer ---
@@ -146,8 +146,8 @@ def test_row_count_equals_the_number_of_observations_given():
 
 def test_a_masked_fails_symbol_is_not_a_ticker_sighting():
     """SEC's 2007 fails files mask some symbols (**********): not a ticker."""
-    from delist_detection.history import ticker_sightings
-    from delist_detection.security_master import Security
+    from delist_detection.identity.history import ticker_sightings
+    from delist_detection.identity.security_master import Security
     sec = Security("CIK1-COMMON", 1, "COMMON", "AAA INC", "Common Stock", False, "placeholder")
     ftd = FtdIndex([FtdRow("2007-03-01", "CUSIP1", "AAA", "AAA INC", 5.0),
                     FtdRow("2007-03-02", "CUSIP1", "**********", "AAA INC", 5.0)])
@@ -194,7 +194,7 @@ def test_is_backfilled_treats_a_bare_fails_row_symbol_as_the_observed_dashed_tic
 
 
 def test_backfill_cusips_names_the_issuers_cusip_before_its_end():
-    from delist_detection.history import backfill_cusips
+    from delist_detection.identity.history import backfill_cusips
     ftd = FtdIndex([
         FtdRow("2007-10-01", "071707103", "BOL", "BAUSCH & LOMB INC COM", 60.0),
         FtdRow("2007-10-15", "071707103", "BOL", "BAUSCH & LOMB INC COM", 61.0),
@@ -208,7 +208,7 @@ def test_backfill_cusips_names_the_issuers_cusip_before_its_end():
 
 
 def test_backfill_cusips_with_no_names_matches_nothing():
-    from delist_detection.history import backfill_cusips
+    from delist_detection.identity.history import backfill_cusips
     ftd = FtdIndex([
         FtdRow("2007-10-01", "071707103", "BOL", "BAUSCH & LOMB INC COM", 60.0),
         FtdRow("2007-09-01", "999999999", "BOL", "OTHER WIDGETS CO", 5.0),

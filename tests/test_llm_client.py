@@ -12,7 +12,7 @@ from typing import Any
 
 import pytest
 
-from delist_detection.llm_client import OpenAIJsonClient
+from delist_detection.sources.llm_client import OpenAIJsonClient
 
 
 # ---------------------------------------------------------------------------

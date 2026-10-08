@@ -13,17 +13,17 @@ from datetime import date
 from functools import lru_cache
 from pathlib import Path
 
-from delist_detection.classifier import DelistClassifier
-from delist_detection.delistings import Delisting, DelistingFinder, SecurityContexts
-from delist_detection.edgar import EdgarSubmission
-from delist_detection.figi_resolution import security_kind
-from delist_detection.ftd import FtdIndex, FtdRow
-from delist_detection.midas import MidasClient
-from delist_detection.nasdaq_halts import Halt, NasdaqHaltClient
-from delist_detection.observations import Observation, TickerEra
-from delist_detection.review_triage import ReviewItem
-from delist_detection.security_master import Security
-from delist_detection.ticker_resolver import TickerResolver
+from delist_detection.endings.classifier import DelistClassifier
+from delist_detection.endings.delistings import Delisting, DelistingFinder, SecurityContexts
+from delist_detection.sources.edgar import EdgarSubmission
+from delist_detection.identity.figi_resolution import security_kind
+from delist_detection.sources.ftd import FtdIndex, FtdRow
+from delist_detection.sources.midas import MidasClient
+from delist_detection.sources.nasdaq_halts import Halt, NasdaqHaltClient
+from delist_detection.identity.observations import Observation, TickerEra
+from delist_detection.outputs.review_triage import ReviewItem
+from delist_detection.identity.security_master import Security
+from delist_detection.identity.ticker_resolver import TickerResolver
 
 FIX = Path(__file__).parent / "fixtures" / "form25_reach"
 DATA = json.loads((FIX / "cases.json").read_text())

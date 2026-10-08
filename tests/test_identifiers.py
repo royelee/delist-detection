@@ -2,7 +2,7 @@
 reader of a share class, one per kind of text, with the real cases the code cites."""
 import pytest
 
-from delist_detection.identifiers import (
+from delist_detection.vocabulary.identifiers import (
     CLASS_MODIFIERS, answer_class_letter, bare_ticker, bloomberg_ticker, class_letter, class_of, class_suffix,
     description_class_letter, descriptions_class_letter, figi_class_letter, is_placeholder, name_class_letter,
     normalize_ticker, placeholder_id, prose_class_letters, regular_way, share_class_from_name, strip_class_words,

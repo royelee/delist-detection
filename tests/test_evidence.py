@@ -1,6 +1,6 @@
 from datetime import date
 
-from delist_detection.evidence import name_at, names_near
+from delist_detection.filings.evidence import name_at, names_near
 
 SUB = {"name": "SunPower Inc.", "formerNames": [
     {"name": "Complete Solaria, Inc.", "from": "2023-03-10T05:00:00.000Z", "to": "2025-09-26T04:00:00.000Z"},
@@ -22,8 +22,8 @@ def test_names_near_includes_a_name_that_ended_just_before_the_date():
     assert names_near({"name": "Solo Co", "formerNames": []}, date(2020, 1, 1)) == ["Solo Co"]
 
 
-from delist_detection.edgar import EdgarSubmission
-from delist_detection.evidence import bankruptcy_8ks, mentions_bankruptcy
+from delist_detection.sources.edgar import EdgarSubmission
+from delist_detection.filings.evidence import bankruptcy_8ks, mentions_bankruptcy
 
 
 def _8k(d, items, acc="A"):
@@ -40,7 +40,7 @@ def test_mentions_bankruptcy():
     assert not mentions_bankruptcy("completion of the merger with CSG")
 
 
-from delist_detection.evidence import item_text, renamed_near, says_listing_transfer, still_operating
+from delist_detection.filings.evidence import item_text, renamed_near, says_listing_transfer, still_operating
 
 LC_SUB = {"name": "Happen, Inc.", "formerNames": [
     {"name": "LendingClub Corp", "from": "2007-08-15T04:00:00.000Z", "to": "2026-06-18T04:00:00.000Z"}]}
@@ -66,7 +66,7 @@ def test_listing_transfer_text():
     assert says_listing_transfer("the Company transferred its listing to NYSE American")
 
 
-from delist_detection.evidence import is_spac
+from delist_detection.filings.evidence import is_spac
 
 
 def test_is_spac_by_sic_or_name_at_the_date():
@@ -103,7 +103,7 @@ def test_is_spac_sic_6770_when_the_only_rename_has_not_completed_by_the_date():
 
 import pytest
 
-from delist_detection.evidence import cites_listing_deficiency
+from delist_detection.filings.evidence import cites_listing_deficiency
 
 
 @pytest.mark.parametrize("text, cites", [
@@ -158,7 +158,7 @@ def test_item_text_with_no_match_is_empty():
 
 
 def test_edgar_names_lists_the_current_name_then_the_former_ones():
-    from delist_detection.evidence import edgar_names
+    from delist_detection.filings.evidence import edgar_names
     sub = {"name": "Eversource Energy",
            "formerNames": [{"name": "NORTHEAST UTILITIES"}, {"name": " "}, {"name": None}, "junk"]}
     assert edgar_names(sub) == ("Eversource Energy", "NORTHEAST UTILITIES")
@@ -167,7 +167,7 @@ def test_edgar_names_lists_the_current_name_then_the_former_ones():
 
 # --- sub-plan 5b: every Item section ---
 
-from delist_detection.evidence import item_sections, item_text  # noqa: E402
+from delist_detection.filings.evidence import item_sections, item_text  # noqa: E402
 
 # Ascena's 2020 bankruptcy 8-K, shortened: its first "Item 1.03" is a cross-reference long enough to read as the
 # section; the item's own section, which reports the Chapter 11 cases, comes next.
@@ -198,7 +198,7 @@ def test_a_short_filing_has_one_section_and_a_filing_without_the_item_none():
 
 import pytest  # noqa: E402
 
-from delist_detection.evidence import cites_listing_deficiency  # noqa: E402
+from delist_detection.filings.evidence import cites_listing_deficiency  # noqa: E402
 from tests import form25_cases as fc  # noqa: E402
 
 # R.H. Donnelley's 8-K of 2009-01-02, Item 3.01: NYSE's market-capitalization standard (Rule 802.01B)

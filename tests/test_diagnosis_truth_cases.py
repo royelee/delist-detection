@@ -6,9 +6,9 @@ from pathlib import Path
 
 import pytest
 
-from delist_detection.diagnosis_truth import KNOWN_WRONG, RULING_PENDING, LibraryRows, judge_case
-from delist_detection.run_snapshot import RunSnapshot
-from delist_detection.truth_set import TruthSet, configured
+from delist_detection.measurement.diagnosis_truth import KNOWN_WRONG, RULING_PENDING, LibraryRows, judge_case
+from delist_detection.outputs.run_snapshot import RunSnapshot
+from delist_detection.measurement.truth_set import TruthSet, configured
 
 ROOT = Path(__file__).resolve().parents[1]
 TRUTH = configured(ROOT)

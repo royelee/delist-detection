@@ -22,12 +22,12 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
-from delist_detection.classifier import DelistRecord          # noqa: E402
-from delist_detection.crsp_codes import CrspBucket             # noqa: E402
-from delist_detection.edgar import EdgarClient                 # noqa: E402
-from delist_detection.llm_merger_extractor import LLMMergerTermsExtractor   # noqa: E402
-from delist_detection.payout_extractor import PayoutExtractor  # noqa: E402
-from delist_detection.truth_set import TruthSet, configured     # noqa: E402
+from delist_detection.outputs.reconstruction import DelistRecord  # noqa: E402
+from delist_detection.vocabulary.crsp_codes import CrspBucket             # noqa: E402
+from delist_detection.sources.edgar import EdgarClient                 # noqa: E402
+from delist_detection.terms.llm_merger_extractor import LLMMergerTermsExtractor   # noqa: E402
+from delist_detection.terms.payout_extractor import PayoutExtractor  # noqa: E402
+from delist_detection.measurement.truth_set import TruthSet, configured     # noqa: E402
 
 # case_id -> what it pins: a rule that moves it (R5, R4, R3, the stock value leg) or a guard that keeps it
 CASES = {
