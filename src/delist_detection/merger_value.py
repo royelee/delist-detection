@@ -224,9 +224,10 @@ def _quiet(*_: object) -> None:
 
 @dataclass
 class _Stage:
-    """What every step of the stage shares: the run's clients (edgar, resolver, issuers, figi, ftd_client,
-    payout_extractor, llm_extractor: `pipeline.Clients`), the run's securities as acquirer lines, the first day the
-    run loaded fails rows from, the prefetch worker count and the log."""
+    """What every step of the stage shares: the run's clients (edgar, resolver, issuers, figi, payout_extractor,
+    llm_extractor: `pipeline.Clients`), the run's securities as acquirer lines (with the run's fails index, the only
+    reader of the fails files), the first day the run loaded fails rows from, the prefetch worker count and the
+    log."""
     clients: Any
     index: acquirer_line.LineIndex
     ftd_lo: date | None
@@ -250,9 +251,10 @@ def value_mergers(delistings: Sequence[Delisting], index: acquirer_line.LineInde
                   closes: Mapping[DelistingKey, float], caller_terms: Mapping, answers: PriceAnswers, tol: float,
                   ftd_lo: date | None = None, workers: int = 1, log: Callable = _quiet) -> MergerValues:
     """Stage 8 (see the module docstring): every merger-bucket delisting of `delistings`, valued. `index` holds the
-    run's securities, their ticker sightings, CUSIPs and the fails index (extended here with the acquirers' rows);
-    `clients` the run's edgar, resolver, issuers (the issuer record), figi, ftd_client, payout_extractor and
-    llm_extractor (`extract(record, security_name=)`)."""
+    run's securities, their ticker sightings, CUSIPs and the fails index (asked here for the acquirer tickers' rows
+    around every merger, `FtdIndex.around`; an early merger's lines are read apart, `FtdIndex.apart`); `clients` the
+    run's edgar, resolver, issuers (the issuer record), figi, payout_extractor and llm_extractor (`extract(record,
+    security_name=)`)."""
     st = _Stage(clients, index, ftd_lo, workers, log)
     mergers = [e for e in delistings if e.record.bucket is CrspBucket.MERGER]
     raw, llm_terms, review = _read_terms(st, mergers, closes, {sid: s.name or "" for sid, s in st.securities.items()})
@@ -371,8 +373,8 @@ def _acquirer_lines(st: _Stage, mergers: list[Delisting], llm_terms: Mapping[Del
     pass it (sub-plan 5e rules 1-4): the issuer (`acquirer_line`: the holder of the terms' ticker on the last trade
     day, else the resolver's issuer of it whose EDGAR names agree with the acquirer name, else the one issuer of the
     run that carried that name), its line on the price date, that line's symbol then and its price. A merger
-    before the fails rows the run loaded (`ftd_lo`) has its candidate lines' rows read for it (a private index:
-    the run's own is not extended, so no later stage sees rows it did not load). A lookup that rested on a
+    before the fails rows the run loaded (`ftd_lo`) has its candidate lines' rows read for it (`FtdIndex.apart`:
+    the run's own index is left as it was, so no later stage sees rows it did not ask for). A lookup that rested on a
     degraded answer is a review item."""
     out: dict[DelistingKey, _AcquirerLine] = {}
     review: list[ReviewItem] = []
@@ -417,11 +419,8 @@ def _acquirer_lines(st: _Stage, mergers: list[Delisting], llm_terms: Mapping[Del
         # the candidate lines' rows around these mergers, read into an index of their own
         cusips = {c for e in early for sid in index.lines(issuers[e.key][1], exclude=e.sec_id)
                   for c in st.cusips.get(sid, [])}
-        lo = min(e.last_trade.day for e in early) - timedelta(days=acquirer_line.EARLY_DAYS)
-        hi = max(e.last_trade.day for e in early) + timedelta(days=acquirer_line.EARLY_DAYS)
-        own = FtdIndex.load(st.clients.ftd_client, lo, hi, cusips=cusips) if cusips else FtdIndex()
-        for r in (r for c in cusips for r in st.ftd.by_cusip(c)):
-            own.add(r)
+        own = st.ftd.apart([e.last_trade.day for e in early], before=acquirer_line.EARLY_DAYS,
+                           after=acquirer_line.EARLY_DAYS, cusips=cusips)
         view = index.fresh(own)
 
     for key, (holder, cik) in sorted(issuers.items()):
@@ -458,7 +457,7 @@ def _name_acquirer_tickers(st: _Stage, mergers: list[Delisting], llm_terms: Mapp
             and t.stock_leg and not t.acquirer_ticker and t.acquirer_name]
     if not todo:
         return out, review
-    ftd_client, reads = st.clients.ftd_client, st.clients.issuers
+    reads = st.clients.issuers
     index = reads.name_index()
     if index is None:
         return out, review
@@ -474,9 +473,7 @@ def _name_acquirer_tickers(st: _Stage, mergers: list[Delisting], llm_terms: Mapp
             def rows():
                 day = next_trading_day(last)
                 try:
-                    for url in ftd_client.urls_for(day, day + timedelta(days=15)):
-                        yield from (r for r in ftd_client.rows(url)
-                                    if day.isoformat() <= r.date <= (day + timedelta(days=15)).isoformat())
+                    yield from st.ftd.every_row(day, day + timedelta(days=15))
                 except FATAL:
                     raise
                 except requests.RequestException:
@@ -516,10 +513,7 @@ def _gate(st: _Stage, mergers: list[Delisting], trade_day: Mapping[DelistingKey,
     acq_symbols = {t.ticker for t in llm_terms.values() if t.acquirer_ticker}
     acq_symbols |= {normalize_ticker(v["acquirer_ticker"]) for v in caller_terms.values() if v.get("acquirer_ticker")}
     if acq_symbols:
-        days = [d for d in trade_day.values() if d]
-        if days:
-            ftd.extend(st.clients.ftd_client, min(days) - timedelta(days=10), max(days) + timedelta(days=10),
-                       symbols=acq_symbols)
+        ftd.around([d for d in trade_day.values() if d], before=10, after=10, symbols=acq_symbols)
 
     lagged_acquirer: set[DelistingKey] = set()
 

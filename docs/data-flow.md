@@ -35,7 +35,7 @@ one observation per row per file).
               │  stage 1: TickerEra per    │   splits on pin change / name mismatch /
               │  (ticker, observations)    │   class-letter change; a gap alone never splits
               └─────────────┬──────────────┘
-                             │ FtdIndex.load (era tickers' fails-to-deliver rows)
+                             │ FtdIndex.opened (era tickers' fails-to-deliver rows)
                              ▼
               ┌────────────────────────────┐
               │  stage 2: refine_eras      │   splits again on the ticker's FTD rows: a

@@ -59,7 +59,7 @@ def _value(delistings, *, llm=None, payout=None, edgar=None, resolver=None, name
            securities=None, closes=None, caller_terms=None, answers=None, workers=1, log=None) -> MergerValues:
     clients = Clients(edgar=edgar, resolver=resolver, classifier=None, figi=None, ftd_client=ftd_client or _NoFtd(),
                       payout_extractor=payout, llm_extractor=llm, issuers=IssuerRecord(edgar, name_index=name_index))
-    index = LineIndex(securities or {}, {}, {}, FtdIndex())
+    index = LineIndex(securities or {}, {}, {}, FtdIndex(source=clients.ftd_client))
     return value_mergers(delistings, index, clients=clients, closes=closes or {}, caller_terms=caller_terms or {},
                          answers=answers or PriceAnswers(), tol=0.15, workers=workers, log=log or (lambda *a: None))
 

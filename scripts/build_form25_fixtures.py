@@ -195,8 +195,8 @@ def main(argv: list[str] | None = None) -> int:
                   | set(EXTRA_CIKS))
 
     # fails rows: every row of a case's CUSIPs; a sibling's span and descriptions
-    ftd = FtdIndex.load(LocalFtd(repo / "cache/sec_data/ftd"), *FTD_WINDOW,
-                        cusips={c for sid in needed for c in cusips.get(sid, [])} | set(EXTRA_CUSIPS))
+    ftd = FtdIndex.opened(LocalFtd(repo / "cache/sec_data/ftd"), *FTD_WINDOW,
+                          cusips={c for sid in needed for c in cusips.get(sid, [])} | set(EXTRA_CUSIPS))
     rows = {r for c in EXTRA_CUSIPS for r in ftd.by_cusip(c)}
     for sid in needed:
         for c in cusips.get(sid, []):

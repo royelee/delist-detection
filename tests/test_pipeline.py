@@ -297,13 +297,14 @@ def _stage_5b(rows, specs, endings, sec_cusips=None, loaded=()):
                                   anchor=date.fromisoformat(day), record=SimpleNamespace(successor_sec_id=succ))
                   for sid, day, succ in endings]
     client = _RecordingFtdClient(rows)
-    ctx = SimpleNamespace(clients=SimpleNamespace(ftd_client=client), log=lambda *_: None,
-                          meter=StageMeter(lambda *_: None))
-    ftd = FtdIndex(loaded)
+    ctx = SimpleNamespace(log=lambda *_: None, meter=StageMeter(lambda *_: None))
+    ftd = FtdIndex(loaded, source=client)          # the index reads the fails files; the stage only asks it
     held = {sid: list((sec_cusips or {}).get(sid, [])) for sid in specs}
     sightings = {sid: [] for sid in specs}
-    fixed = pipeline._dead_before_sighting(ctx, securities, delistings, held, ftd, sightings, {})
-    return fixed, held, sightings, securities, client, ctx
+    before = {sid: list(v) for sid, v in held.items()}
+    back = pipeline._dead_before_sighting(ctx, securities, delistings, held, ftd, {})
+    assert held == before                          # the stage returns its CUSIPs and sightings; `_run` merges them
+    return back.fixed, {**held, **back.cusips}, {**sightings, **back.sightings}, securities, client, ctx
 
 
 def _aet_rows(ticker="AET", cusip="00817Y108"):

@@ -231,7 +231,7 @@ def _identity() -> Identity:
         eras[era.key] = era
         cusips[sid] = sorted(c for c, held in DATA["holders"].items() if sid in held)
         res[era.key] = EraResolution(era.key, sid, "cusip", None, (), tuple(cusips[sid]))
-    return Identity(list(eras.values()), eras, _load_ftd(), date(2004, 1, 1), issuers, res,
+    return Identity(list(eras.values()), eras, _load_ftd(), issuers, res,
                     build_securities(res, eras, issuers), cusips)
 
 

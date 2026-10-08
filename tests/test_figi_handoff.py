@@ -67,7 +67,7 @@ def _rows():
 @pytest.fixture(scope="module")
 def ftd():
     index = ObservationIndex(load_observations(FIX / "renamed_observations.csv"))
-    return FtdIndex.load(_RowsClient(_rows()), *FTD_WINDOW, symbols={e.ticker for e in index.eras()})
+    return FtdIndex.opened(_RowsClient(_rows()), *FTD_WINDOW, symbols={e.ticker for e in index.eras()})
 
 
 @pytest.fixture(scope="module")

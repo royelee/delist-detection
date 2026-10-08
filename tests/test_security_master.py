@@ -46,8 +46,8 @@ def _fixture_ftd_rows():
 @pytest.fixture(scope="module")
 def real_ftd():
     obs = load_observations(ERAS_FIX / "observations.csv")
-    return FtdIndex.load(_RowsClient(_fixture_ftd_rows()), date(2004, 1, 1), date(2026, 9, 1),
-                         symbols={o.ticker for o in obs})
+    return FtdIndex.opened(_RowsClient(_fixture_ftd_rows()), date(2004, 1, 1), date(2026, 9, 1),
+                           symbols={o.ticker for o in obs})
 
 
 @pytest.fixture(scope="module")
@@ -190,11 +190,11 @@ def test_another_security_under_the_bare_symbol_does_not_split_a_class_tickers_e
             + _rows("BFB", "999999999", ["2016-01-04", "2016-02-01", "2016-03-01", "2016-04-01"], "BIG FAKE BANCORP")
             + _rows("BFB", "115637209", ["2016-05-02", "2016-06-01", "2016-07-01"], "BROWN-FORMAN CORP CL-B"))
     client = _RowsClient(rows)
-    guarded = FtdIndex.load(client, date(2015, 1, 1), date(2016, 12, 31), symbols={"BF-B"},
-                            names={"BF-B": ["BROWN FORMAN CORP CLASS B"]})
+    guarded = FtdIndex.opened(client, date(2015, 1, 1), date(2016, 12, 31), symbols={"BF-B"},
+                              names={"BF-B": ["BROWN FORMAN CORP CLASS B"]})
     assert [(e.first, e.last, e.ftd_cusips) for e in refine_eras(split_eras(obs), guarded)] == [
         ("2015-06-30", "2016-06-30", ("115637209",))]
-    unguarded = FtdIndex.load(client, date(2015, 1, 1), date(2016, 12, 31), symbols={"BF-B"})
+    unguarded = FtdIndex.opened(client, date(2015, 1, 1), date(2016, 12, 31), symbols={"BF-B"})
     assert len(refine_eras(split_eras(obs), unguarded)) == 2
 
 
@@ -1040,14 +1040,15 @@ def test_unconfirmed_eras_are_those_no_fails_row_shows_under_their_ticker():
 
 def test_only_an_unconfirmed_era_the_fails_data_covers_is_guarded():
     """The guard acts on evidence of absence: an unconfirmed era is guarded only
-    when the loaded fails data has rows (of any symbol) in its window. With no
-    fails row at all then, the data says nothing about its ticker."""
+    when the fails data covers its window (`FtdIndex.data_covers`; an index built
+    from rows: they are all its data, so some row of any symbol falls in it). With
+    no fails row at all then, the data says nothing about its ticker."""
     from delist_detection.security_master import guarded_eras
     aptv12 = _era("APTV", ("2012-06-29", "APTIV PLC"), ("2013-12-31", "APTIV PLC"))
     live = _era("LIVE", ("2025-06-30", "LIVE CO"))
     ftd = FtdIndex([FtdRow("2012-07-02", "G6095L109", "DLPH", "DELPHI AUTOMOTIVE PLC", 25.0)])
     assert guarded_eras([aptv12, live], ftd) == {aptv12.key}
-    assert ftd.has_rows("2012-07-02", "2012-07-02") and not ftd.has_rows("2012-07-03", "2025-01-01")
+    assert ftd.data_covers("2012-07-02", "2012-07-02") and not ftd.data_covers("2012-07-03", "2025-01-01")
 
 
 def _sle_hsh(settling=True):
@@ -1066,7 +1067,7 @@ def _sle_hsh(settling=True):
                               Observation("SLE", "2012-06-29", "SARA LEE CORP"),
                               Observation("HSH", "2012-07-31", "HILLSHIRE BRANDS CO"),
                               Observation("HSH", "2012-12-31", "HILLSHIRE BRANDS CO")])
-    ftd = FtdIndex.load(_RowsClient(rows), date(2012, 1, 3), date(2013, 1, 31), symbols={"SLE", "HSH"})
+    ftd = FtdIndex.opened(_RowsClient(rows), date(2012, 1, 3), date(2013, 1, 31), symbols={"SLE", "HSH"})
     return refine_eras(index.eras(), ftd), ftd
 
 

@@ -149,9 +149,9 @@ def _acquirer_price(acquirer: str | None, on: date) -> float | None:
     acquirer ticker or a priced row."""
     if not acquirer:
         return None
-    ftd = FtdIndex.load(FtdClient(ROOT / "cache" / "sec_data" / "ftd"),
-                        on - timedelta(days=10), on + timedelta(days=10),
-                        symbols={acquirer})
+    ftd = FtdIndex.opened(FtdClient(ROOT / "cache" / "sec_data" / "ftd"),
+                          on - timedelta(days=10), on + timedelta(days=10),
+                          symbols={acquirer})
     close = ftd.close_after(on, symbol=acquirer)
     return close[0] if close else None
 

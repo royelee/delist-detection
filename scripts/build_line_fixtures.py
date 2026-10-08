@@ -138,8 +138,8 @@ def main(argv: list[str] | None = None) -> int:
                    if is_line_symbol(normalize_ticker(t))} - tickers[sid] for sid in CASES}
     symbols = {t for sid in CASES for t in tickers[sid]} | {t for v in extra.values() for t in v}
     symbols |= {t.replace("-", "") + s for sid in CASES for t in tickers[sid] for s in ("ZZZZ", "D")}
-    ftd = FtdIndex.load(LocalFtd(repo / "cache/sec_data/ftd"), *FTD_WINDOW, symbols=symbols,
-                        cusips={c for sid in CASES for c in cusips[sid]})
+    ftd = FtdIndex.opened(LocalFtd(repo / "cache/sec_data/ftd"), *FTD_WINDOW, symbols=symbols,
+                          cusips={c for sid in CASES for c in cusips[sid]})
     named: dict[str, set[str]] = defaultdict(set)
     filings = {sid: _cached(edgar.recent_filings, int(secs[sid]["issuer_cik"]), default=[]) for sid in CASES}
     for sid in CASES:                       # the 8-K text sources, as the stage reads them (line_follow)
@@ -153,8 +153,7 @@ def main(argv: list[str] | None = None) -> int:
         texts = [_cached(edgar.fetch_filing_text, cik, f.accession, f.primary_doc, default="") or "" for f in near]
         extra[sid] |= {t for t in text_symbols(texts) if is_line_symbol(t)} - tickers[sid]
         named[sid] |= text_cusips(texts)
-    ftd.extend(LocalFtd(repo / "cache/sec_data/ftd"), *FTD_WINDOW, symbols={t for v in extra.values() for t in v},
-               cusips={c for v in named.values() for c in v})
+    ftd.follow(symbols={t for v in extra.values() for t in v}, cusips={c for v in named.values() for c in v})
     windows: dict[str, list[tuple[str, str, set[str], set[str]]]] = defaultdict(list)
     steps_of: dict[str, list] = {}
     for sid in CASES:
@@ -167,7 +166,7 @@ def main(argv: list[str] | None = None) -> int:
                                     extra_cusips=named[sid])
             new = {st.new_cusip for st in steps if st.kind == SWITCH}
             if new:
-                ftd.extend(LocalFtd(repo / "cache/sec_data/ftd"), *FTD_WINDOW, cusips=new)
+                ftd.follow(cusips=new)
                 steps = candidate_steps(sid, cus, own, ftd, holders=holders, extra_symbols=extra[sid],
                                         extra_cusips=named[sid])
             lo = (date.fromisoformat(end.settled) - timedelta(days=200)).isoformat()

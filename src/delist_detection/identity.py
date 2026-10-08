@@ -94,22 +94,22 @@ class Sources(Protocol):
     resolver: IssuerLookup
     issuers: IssuerRecord     # the run's issuer record (the lookup's own, in production)
     figi: Any                 # OpenFIGI: `map(jobs)`, `filter(query, **fields)`
-    ftd_client: Any           # SEC's fails-to-deliver files (`ftd.FtdClient`)
+    ftd_client: Any           # SEC's fails-to-deliver files (`ftd.FtdClient`): the run's fails index is opened over them
     edgar: Any                # the EDGAR client whose cache the warm pass fills with the issuers' submissions
 
 
 @dataclass
 class Identity:
-    """What `identify` answers: the refined eras (by key too), the fails index stage 1 loaded and stage 4 extended
-    (`ftd`, from `ftd_lo`), each era's issuer (`issuers`, by era key, for the eras whose issuer is known: the one
-    source of an era's CIK), each era's FIGI resolution, the securities, each security's CUSIPs over its whole life
-    (`cusips`), the identity review items, each era's lookup tier (`tiers`: the first pass's, or the source of the
-    2b or second-pass rule that answered it) and the eras whose ticker's fails rows decided their issuer
-    (`rows_decided`, 2b's `ticker_rows`: their observed name was refuted, so the issuer in force keeps their CIK)."""
+    """What `identify` answers: the refined eras (by key too), the run's fails index (`ftd`: opened by stage 1,
+    asked by stage 4 to follow every security's CUSIPs; `ftd_lo`, its first day), each era's issuer (`issuers`,
+    by era key, for the eras whose issuer is known: the one source of an era's CIK), each era's FIGI resolution,
+    the securities, each security's CUSIPs over its whole life (`cusips`), the identity review items, each era's
+    lookup tier (`tiers`: the first pass's, or the source of the 2b or second-pass rule that answered it) and the
+    eras whose ticker's fails rows decided their issuer (`rows_decided`, 2b's `ticker_rows`: their observed name
+    was refuted, so the issuer in force keeps their CIK)."""
     eras: list[TickerEra]
     era_by_key: dict[str, TickerEra]
     ftd: FtdIndex
-    ftd_lo: date
     issuers: dict[str, Issuer] = field(default_factory=dict)
     resolutions: dict[str, EraResolution] = field(default_factory=dict)
     securities: dict[str, Security] = field(default_factory=dict)
@@ -117,6 +117,12 @@ class Identity:
     review: list[ReviewItem] = field(default_factory=list)
     tiers: dict[str, str] = field(default_factory=dict)
     rows_decided: frozenset[str] = frozenset()
+
+    @property
+    def ftd_lo(self) -> date | None:
+        """The run's first fails day: the first day of the window the fails index was opened over
+        (`FtdIndex.opened_from`; None for an index built from rows)."""
+        return self.ftd.opened_from
 
     def tier(self, era_key: str) -> str:
         """The lookup tier that found the era's issuer CIK ("cik_map", "manual", "company_tickers", ...; a 2b or
@@ -163,23 +169,24 @@ def identify(index: ObservationIndex, clients: Sources, *, as_of: date, limit: i
     > 1 fills the EDGAR caches ahead on that many threads. Raises `ObservationError` when there is no observation;
     a refusal (`fatal.FATAL`) or an OpenFIGI outage stops it."""
     meter = meter if meter is not None else StageMeter(log)
-    eras, era_by_key, ftd, ftd_lo = _refine(index, clients.ftd_client, as_of, limit, log)               # 1
+    eras, era_by_key, ftd = _refine(index, clients.ftd_client, as_of, limit, log)                       # 1
     handoffs = cusip_handoffs(eras, ftd)        # the CUSIP links between the eras: the second pass and stage 3 read them
     found = _resolve_issuers(eras, ftd, handoffs, clients, log, workers, meter)                          # 2, 2b
     resolutions, securities, review = _resolve_securities(eras, era_by_key, ftd, handoffs, found, clients, log)  # 3
-    cusips = _security_cusips(securities, resolutions, ftd, clients.ftd_client, ftd_lo, as_of)          # 4
-    return Identity(eras, era_by_key, ftd, ftd_lo, found.issuers, resolutions, securities, cusips, review,
+    cusips = _security_cusips(securities, resolutions, ftd)                                              # 4
+    return Identity(eras, era_by_key, ftd, found.issuers, resolutions, securities, cusips, review,
                     {k: r.source for k, r in found.answers.items()},
                     frozenset(k for k, v in found.inferred.items() if v.source == TICKER_ROWS))
 
 
 def _refine(index: ObservationIndex, ftd_client: Any, as_of: date, limit: int | None,
-            log: Callable[[str], None]) -> tuple[list[TickerEra], dict[str, TickerEra], FtdIndex, date]:
-    """1. The observation eras, refined on SEC fails-to-deliver evidence: FTD rows
-    for the eras' tickers are loaded first (they date each era's real last
-    sighting), then each era is split further on that evidence (a CUSIP switch,
-    or a gap no FTD row bridges). Every later step works on the refined eras.
-    Returns them, by key too, the FTD index, and the first day it covers."""
+            log: Callable[[str], None]) -> tuple[list[TickerEra], dict[str, TickerEra], FtdIndex]:
+    """1. The observation eras, refined on SEC fails-to-deliver evidence: the run's
+    fails index is opened over `ftd_client` with the eras' tickers' and CUSIPs' rows
+    first (they date each era's real last sighting), then each era is split further
+    on that evidence (a CUSIP switch, or a gap no FTD row bridges). Every later step
+    works on the refined eras. The index's run's fails window runs from 30 days before
+    the first sighting to the run date. Returns the eras, by key too, and the index."""
     eras = index.eras()
     if limit:
         eras = eras[:limit]
@@ -196,12 +203,12 @@ def _refine(index: ObservationIndex, ftd_client: Any, as_of: date, limit: int | 
         first_seen[e.ticker] = min(e.first, first_seen.get(e.ticker, e.first))
         if "-" in e.ticker:
             class_names[e.ticker] += e.names
-    ftd = FtdIndex.load(ftd_client, lo, hi, symbols={e.ticker for e in eras},
-                        cusips={c for e in eras for c in e.cusips}, names=class_names, first_seen=first_seen)
+    ftd = FtdIndex.opened(ftd_client, lo, hi, through=as_of, symbols={e.ticker for e in eras},
+                          cusips={c for e in eras for c in e.cusips}, names=class_names, first_seen=first_seen)
     eras = refine_eras(eras, ftd)
     era_by_key = eras_by_key(eras)               # raises on a duplicate key: an era is never dropped
     log(f"{len(eras)} eras after the FTD split")
-    return eras, era_by_key, ftd, lo
+    return eras, era_by_key, ftd
 
 
 @dataclass
@@ -340,14 +347,14 @@ def _resolve_securities(eras: list[TickerEra], era_by_key: dict[str, TickerEra],
     return resolutions, securities, review
 
 
-def _security_cusips(securities: dict[str, Security], resolutions: dict[str, EraResolution], ftd: FtdIndex,
-                     ftd_client: Any, ftd_lo: date, as_of: date) -> dict[str, list[str]]:
+def _security_cusips(securities: dict[str, Security], resolutions: dict[str, EraResolution],
+                     ftd: FtdIndex) -> dict[str, list[str]]:
     """4. Each security's CUSIPs over its whole life: every CUSIP of each of its
     eras that resolved to its FIGI (a reverse split's old and new CUSIP both),
-    with their FTD rows loaded up to the run date."""
+    their rows held over the run's fails window, to the run date (`FtdIndex.follow`)."""
     sec_cusips = {sid: list(dict.fromkeys(c for e in s.eras for c in resolutions[e.key].cusips))
                   for sid, s in securities.items()}
-    ftd.extend(ftd_client, ftd_lo, as_of, cusips={c for v in sec_cusips.values() for c in v})
+    ftd.follow(cusips={c for v in sec_cusips.values() for c in v})
     return sec_cusips
 
 

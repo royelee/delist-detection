@@ -142,8 +142,9 @@ def cusip_handoffs(eras: Sequence[TickerEra], ftd: FtdIndex) -> list[Handoff]:
       fails row of another era's FTD CUSIP (from `SWITCH_DAYS` before the row
       that opens the old CUSIP's last one-price run, `ftd.settled_last`, to
       `SWITCH_DAYS` after its last row); that new CUSIP has no earlier row,
-      and starts at least `NEW_CUSIP_MARGIN_DAYS` after the fails window scanned
-      for its ticker opens (else it may be older than the rows show); the old
+      and starts at least `NEW_CUSIP_MARGIN_DAYS` after the window the fails
+      index was opened over (`FtdIndex.opened_from`: every era's ticker's rows
+      are held from that day; else it may be older than the rows show); the old
       CUSIP trades under no symbol more than `SWITCH_TAIL_DAYS` trading days
       later (a ticker change that kept the CUSIP is a shared CUSIP instead).
       KORS's G60754101 last trades 2019-01-03, CPRI's G1890L107 first fails
@@ -157,8 +158,8 @@ def cusip_handoffs(eras: Sequence[TickerEra], ftd: FtdIndex) -> list[Handoff]:
     out = [Handoff(e.key, k, "shared_cusip", c) for e in eras for c in sorted(cusips_of[e.key])
            for k in holders[c] if k != e.key]
     starts: list[tuple[str, str, str]] = []               # (first fails row, era key, CUSIP): the new CUSIPs
+    opened = ftd.opened_from
     for e in eras:
-        opened = ftd.scanned_from(e.ticker)
         for c in e.ftd_cusips:
             rows = ftd.by_cusip(c)
             if rows and opened is not None and \
@@ -755,11 +756,12 @@ def foreign_ticker_eras(eras: Sequence[TickerEra], ftd: FtdIndex, issuers: Mappi
 
 
 def guarded_eras(eras: Sequence[TickerEra], ftd: FtdIndex) -> set[str]:
-    """The `unconfirmed_eras` whose window the loaded fails data covers (some row
-    of another symbol falls in it): the data shows the ticker was not failing
-    then, rather than having nothing to say. Their ticker and name tiers are
-    not asked (`FigiResolver.resolve_many`'s `unconfirmed`)."""
-    return {k for k in unconfirmed_eras(eras, ftd) if ftd.has_rows(*_confirm_window(eras_by_key(eras)[k]))}
+    """The `unconfirmed_eras` whose window the fails data covers (`FtdIndex.data_covers`:
+    a file of SEC's index meets it, by the run date; the index holds every era's
+    ticker's rows over the window it was opened over): the data shows the ticker
+    was not failing then, rather than having nothing to say. Their ticker and name
+    tiers are not asked (`FigiResolver.resolve_many`'s `unconfirmed`)."""
+    return {k for k in unconfirmed_eras(eras, ftd) if ftd.data_covers(*_confirm_window(eras_by_key(eras)[k]))}
 
 
 def ticker_unconfirmed_review(eras: list[TickerEra], ftd: FtdIndex, resolutions: dict,

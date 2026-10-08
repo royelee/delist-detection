@@ -76,7 +76,7 @@ def _identity(specs, rows):
         res[era.key] = EraResolution(era.key, sp.sec_id, source, sp.candidate, (), tuple(sp.cusips))
         issuers[era.key] = Issuer(sp.cik)
         cusips[sp.sec_id] = list(sp.cusips)
-    return Identity(list(eras.values()), eras, FtdIndex(rows), date(2004, 1, 1), issuers, res,
+    return Identity(list(eras.values()), eras, FtdIndex(rows), issuers, res,
                     build_securities(res, eras, issuers), cusips)
 
 

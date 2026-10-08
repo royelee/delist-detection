@@ -129,7 +129,7 @@ OLD, NEW = TickerEra("X", "2010-01-04", "2012-06-29", []), TickerEra("X", "2014-
 
 def _answer(issuers: dict, tiers: dict, resolutions: dict | None = None) -> Identity:
     eras = {e.key: e for e in (OLD, NEW)}
-    return Identity(list(eras.values()), eras, FtdIndex(), date(2004, 1, 1), issuers, resolutions or {},
+    return Identity(list(eras.values()), eras, FtdIndex(), issuers, resolutions or {},
                     tiers=tiers)
 
 

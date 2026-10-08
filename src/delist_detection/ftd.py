@@ -4,6 +4,10 @@ Two uses: the close on a security's last trading day (a row dated D carries the
 close of the prior trading day), and the CUSIP a symbol carried on a date.
 Rows exist only on days with fails, so a quiet security has gaps.
 
+`FtdClient` reads SEC's files; `FtdIndex` holds the rows a run asks about and is
+the only reader of its client (its source): a stage asks the index for keys
+over a span (`follow`, `around`, `apart`, `every_row`) and never holds the files.
+
 FTD writes class tickers without a separator ("BFB", "BRKB") where the output
 tables write "BF-B". `FtdIndex` loads a requested ticker under both spellings
 and keys the rows by the separator spelling. A one-letter class suffix can also
@@ -25,6 +29,7 @@ from collections.abc import Collection, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import date, timedelta
 from pathlib import Path
+from typing import Any, Protocol
 
 from .atomic_io import clean_orphan_temps
 from .names import names_agree
@@ -204,8 +209,55 @@ class FtdClient:
                     _log.warning(f"{dest.name}: member {info.filename!r} holds no fails-to-deliver rows; skipped")
 
 
+class FtdSource(Protocol):
+    """The fails files an index reads: `FtdClient`, or a test's double. `urls_for` lists the files whose period
+    meets [lo, hi]; `rows` gives a file's rows, those of `symbols` or `cusips` when either is given, every row when
+    neither is."""
+
+    def urls_for(self, lo: date, hi: date) -> list[Any]: ...
+
+    def rows(self, url: Any, *, symbols: set[str] | None = None,
+             cusips: set[str] | None = None) -> Iterator[FtdRow]: ...
+
+
 class FtdIndex:
-    def __init__(self, rows: Iterable[FtdRow] = ()) -> None:
+    """The fails rows a run asks about, keyed by symbol and by CUSIP; the only reader of its source.
+
+    Built two ways:
+
+    - `FtdIndex(rows)`: an index holding the given rows. With no `source`, they are all it has (the tests'
+      fixtures); an ask reads nothing.
+    - `FtdIndex.opened(source, lo, hi, ...)`: the run's index, opened with the observed tickers' and CUSIPs' rows
+      over [lo, hi] (stage 1). Its run's fails window is [lo, `through`]: what `follow` reads.
+
+    What a stage asks, the index reads from its source; no stage holds the files, and none chooses a window but
+    by the days it asks about:
+
+    - `follow(cusips=, symbols=)`: these keys' rows over the run's fails window (stages 4 and 4b);
+    - `around(days, before=, after=, ...)`: these keys' rows from `before` days before the earliest day to
+      `after` days after the latest (stages 5b, 7 and 8's gate);
+    - `apart(days, ...)`: a separate index of CUSIPs' rows around days, this one left as it was (stage 8a);
+    - `every_row(lo, hi)`: every row of the files in a span, held nowhere (stage 8a').
+
+    An ask reads only the keys it does not hold over its whole span, in one pass over the span's files. A key's
+    spans are remembered as that key: a CUSIP whose rows came in under a symbol is read again when asked as a
+    CUSIP (so it is found under any symbol). A row already held is never added twice.
+
+    Every query answers from the rows held (`by_symbol`, `by_cusip`, `trading_rows`, the closes): the rows the
+    run has asked for so far, with the rows other keys' asks brought in. Coverage is stated:
+
+    - `opened_from`: the first day of the window the index was opened over (rows asked for);
+    - `data_covers(lo, hi)` and `data_end()`: the fails data's own coverage, from the source's file index (the
+      periods of SEC's files), up to the run date. Neither depends on what was asked.
+
+    The warm passes read the index and never ask it, so a run's asks are the sequential pass's, in its order, for
+    any worker count."""
+
+    def __init__(self, rows: Iterable[FtdRow] = (), *, source: FtdSource | None = None,
+                 window: tuple[date, date] | None = None) -> None:
+        self._source = source
+        self._window = window                  # the run's fails window: what `follow` reads
+        self._periods: list[tuple[date, date]] | None = None     # the source's file periods, once read
         self._by_symbol: dict[str, list[FtdRow]] = defaultdict(list)
         self._by_cusip: dict[str, list[FtdRow]] = defaultdict(list)
         self._seen: set[FtdRow] = set()
@@ -213,7 +265,7 @@ class FtdIndex:
         self._dirty = False
         # The disjoint [lo, hi] ranges already scanned *as that exact filter
         # key* (not merely a key that happened to show up under the other
-        # dimension's filter) — see `extend`. Sorted, non-overlapping,
+        # dimension's filter) — see `_ask`. Sorted, non-overlapping,
         # non-adjacent; a key is covered for [lo, hi] only if one of its
         # merged intervals spans the whole range, so two scans with a gap
         # between them (e.g. Jan and Mar) don't falsely cover Feb.
@@ -233,7 +285,7 @@ class FtdIndex:
         # observation is the base's, not the class ticker's (rule A's date bound).
         self._own_from: dict[str, str] = {}
         for r in rows:
-            self.add(r)
+            self._add(r)
 
     def _learn(self, symbols: set[str], names: Mapping[str, Iterable[str]] | None = None,
                first_seen: Mapping[str, str] | None = None) -> set[str]:
@@ -297,7 +349,7 @@ class FtdIndex:
             return r
         return replace(r, symbol=canon)
 
-    def add(self, r: FtdRow) -> None:
+    def _add(self, r: FtdRow) -> None:
         r = self._relabel(r)
         if r in self._seen:
             return
@@ -308,34 +360,90 @@ class FtdIndex:
         self._dirty = True
 
     @classmethod
-    def load(cls, client: FtdClient, lo: date, hi: date, *, symbols: Iterable[str] | None = None,
-             cusips: Iterable[str] | None = None,
-             names: Mapping[str, Iterable[str]] | None = None,
-             first_seen: Mapping[str, str] | None = None) -> "FtdIndex":
-        """`names`: observed names per class ticker, for the bare-spelling check; `first_seen`: the first day each
-        observed ticker was seen, which bounds the base-symbol relabel."""
-        idx = cls()
+    def opened(cls, source: FtdSource, lo: date, hi: date, *, through: date | None = None,
+               symbols: Iterable[str] | None = None, cusips: Iterable[str] | None = None,
+               names: Mapping[str, Iterable[str]] | None = None,
+               first_seen: Mapping[str, str] | None = None) -> FtdIndex:
+        """The run's index over `source`, opened with the rows of `symbols` and `cusips` over [lo, hi] (every row of
+        the span when neither is given). Its run's fails window, which `follow` reads, is [lo, `through`] (default
+        `hi`). `names`: observed names per class ticker, for the bare-spelling check; `first_seen`: the first day
+        each observed ticker was seen, which bounds the base-symbol relabel."""
+        idx = cls(source=source, window=(lo, through or hi))
         idx._learn(set(), names, first_seen)
-        idx._scan(client, lo, hi,
+        idx._scan(lo, hi,
                   None if symbols is None else {normalize_ticker(s) for s in symbols},
                   None if cusips is None else {c.upper() for c in cusips})
         return idx
 
-    def extend(self, client: FtdClient, lo: date, hi: date, *, cusips: Iterable[str] = (),
+    @property
+    def opened_from(self) -> date | None:
+        """The first day of the window this index was opened over (`opened`: the run's first fails day): every
+        ticker and CUSIP it was opened with, and every key `follow` asked for, has its rows held from that day, so
+        a CUSIP first held near it may have rows before it (`security_master.cusip_handoffs`). None for an index
+        built from rows. No later ask moves it (`around` can read a key from earlier days)."""
+        return self._window[0] if self._window else None
+
+    def follow(self, *, cusips: Iterable[str] = (), symbols: Iterable[str] = ()) -> None:
+        """Hold the rows of `cusips` and `symbols` over the run's fails window, [`opened_from`, the run date]: the
+        securities' CUSIPs (stage 4), the lines' tickers and their spellings and each step's new CUSIPs (stage 4b).
+        Nothing for an index with no source or no window."""
+        if self._window is not None:
+            self._ask(*self._window, cusips, symbols)
+
+    def around(self, days: Iterable[date], *, before: int = 0, after: int = 0, cusips: Iterable[str] = (),
                symbols: Iterable[str] = ()) -> None:
+        """Hold the rows of `cusips` and `symbols` from `before` days before the earliest of `days` to `after`
+        days after the latest: a dead-before-sighting security's end (stage 5b), the delistings whose last trade
+        came before the run's fails window (stage 7), every merger's last trade day for its acquirer tickers (stage
+        8's gate). Nothing for no day, or an index with no source."""
+        days = list(days)
+        if days:
+            self._ask(min(days) - timedelta(days=before), max(days) + timedelta(days=after), cusips, symbols)
+
+    def apart(self, days: Iterable[date], *, before: int = 0, after: int = 0,
+              cusips: Collection[str] = ()) -> FtdIndex:
+        """A separate index of `cusips`' rows from `before` days before the earliest of `days` to `after` days
+        after the latest, read from this index's source, with every row this index holds of them. This index is
+        left as it was, so no later reader of it sees rows it did not ask for (stage 8a: the acquirer lines of a
+        merger before the run's fails window). The separate index has no spellings of its own (no relabel), and is
+        empty for no CUSIP."""
+        days = list(days)
+        out = FtdIndex(source=self._source)
+        if not cusips or not days:
+            return out
+        if self._source is not None:
+            out._scan(min(days) - timedelta(days=before), max(days) + timedelta(days=after), None,
+                      {c.upper() for c in cusips})
+        for r in (r for c in cusips for r in self.by_cusip(c)):
+            out._add(r)
+        return out
+
+    def every_row(self, lo: date, hi: date) -> Iterator[FtdRow]:
+        """Every row of the fails files dated in [lo, hi], as the files spell it (not relabelled), held nowhere:
+        one pass over the span's files (stage 8a' reads a merger's acquirer by the description its first trading
+        days carry). Nothing for an index with no source. A failed read raises, as the source's does."""
+        if self._source is None:
+            return
+        lo_s, hi_s = lo.isoformat(), hi.isoformat()
+        for url in self._source.urls_for(lo, hi):
+            yield from (r for r in self._source.rows(url) if lo_s <= r.date <= hi_s)
+
+    def _ask(self, lo: date, hi: date, cusips: Iterable[str], symbols: Iterable[str]) -> None:
         """Scan `[lo, hi]` for any of `cusips`/`symbols` not already covered by
-        an earlier `load`/`extend` scan filtered on that exact key over at
-        least that range. A CUSIP picked up only incidentally through a symbol
-        filter (never itself used as a CUSIP filter) has no recorded CUSIP
-        window, so it is rescanned here as a CUSIP filter — which is not
-        symbol-restricted, so it catches that CUSIP's rows under any symbol
-        (e.g. a ticker change). Rows already indexed are deduped via `_seen`."""
+        an earlier scan filtered on that exact key over at least that range. A
+        CUSIP picked up only incidentally through a symbol filter (never itself
+        used as a CUSIP filter) has no recorded CUSIP window, so it is rescanned
+        here as a CUSIP filter — which is not symbol-restricted, so it catches
+        that CUSIP's rows under any symbol (e.g. a ticker change). Rows already
+        indexed are deduped via `_seen`."""
+        if self._source is None:
+            return
         cusips = {c.upper() for c in cusips}
         symbols = {normalize_ticker(s) for s in symbols}
         new_cusips = {c for c in cusips if not self._covered(self._cusip_windows.get(c, []), lo, hi)}
         new_symbols = {s for s in symbols if not self._covered(self._symbol_windows.get(s, []), lo, hi)}
         if new_cusips or new_symbols:
-            self._scan(client, lo, hi, new_symbols or None, new_cusips or None)
+            self._scan(lo, hi, new_symbols or None, new_cusips or None)
 
     @staticmethod
     def _covered(intervals: list[tuple[date, date]], lo: date, hi: date) -> bool:
@@ -356,14 +464,13 @@ class FtdIndex:
                 merged.append((a, b))
         return merged
 
-    def _scan(self, client: FtdClient, lo: date, hi: date, symbols: set[str] | None,
-              cusips: set[str] | None) -> None:
+    def _scan(self, lo: date, hi: date, symbols: set[str] | None, cusips: set[str] | None) -> None:
         lo_s, hi_s = lo.isoformat(), hi.isoformat()
         wanted = None if symbols is None else self._learn(symbols)
-        for url in client.urls_for(lo, hi):
-            for r in client.rows(url, symbols=wanted, cusips=cusips):
+        for url in self._source.urls_for(lo, hi):
+            for r in self._source.rows(url, symbols=wanted, cusips=cusips):
                 if lo_s <= r.date <= hi_s:
-                    self.add(r)
+                    self._add(r)
         for keys, windows in ((symbols, self._symbol_windows), (cusips, self._cusip_windows)):
             for k in keys or ():
                 windows[k] = self._merge(windows.get(k, []), lo, hi)
@@ -400,25 +507,44 @@ class FtdIndex:
         self._sort()
         return self._slice(self._by_cusip.get(cusip.upper(), []), lo, hi)
 
-    def last_date(self) -> str | None:
-        """The date of the latest row loaded (the last day the fails data covers, to the loaded symbols); None when
-        empty."""
-        self._sort()
-        return self._dates[-1] if self._dates else None
+    def _file_periods(self) -> list[tuple[date, date]]:
+        """The periods of the source's files (SEC's file names, `period_of`) that begin by the run date, read once:
+        the fails data's own coverage. Empty when there is no file index: no source, or a file without a period (a
+        test's double)."""
+        if self._periods is None:
+            hi = self._window[1] if self._window is not None else date.max
+            urls = self._source.urls_for(FTD_START, hi) if self._source is not None else []
+            got = [period_of(u) if isinstance(u, str) else None for u in urls]
+            self._periods = [] if None in got else sorted(p for p in got if p is not None)
+        return self._periods
 
-    def has_rows(self, lo: str, hi: str) -> bool:
-        """Whether any row at all (of any symbol or CUSIP) is dated in [lo, hi]:
-        the loaded fails data says something about those days, so a symbol with
-        no row then did not fail then."""
-        self._sort()
-        i = bisect_left(self._dates, lo)
-        return i < len(self._dates) and self._dates[i] <= hi
+    def data_covers(self, lo: str, hi: str) -> bool:
+        """Whether the fails data covers some day of the ISO span [lo, hi], up to the run date: a file of the
+        source's index has a period that meets it. Then a ticker this index was asked for over the span, with no
+        row in it, did not fail then (`security_master.guarded_eras`). An index with no file index (built from
+        rows, or over a double whose files carry no period) answers from the rows it holds, which are then all its
+        data: some row held is dated in the span."""
+        periods = self._file_periods()
+        if not periods:
+            self._sort()
+            i = bisect_left(self._dates, lo)
+            return i < len(self._dates) and self._dates[i] <= hi
+        if self._window is not None:
+            hi = min(hi, self._window[1].isoformat())
+        return lo <= hi and any(a.isoformat() <= hi and b.isoformat() >= lo for a, b in periods)
 
-    def scanned_from(self, symbol: str) -> date | None:
-        """The first day of the earliest window scanned for `symbol` (None: never
-        scanned): a CUSIP first seen near it may have rows before it."""
-        windows = self._symbol_windows.get(normalize_ticker(symbol))
-        return windows[0][0] if windows else None
+    def data_end(self) -> str | None:
+        """The last day the fails data covers, up to the run date (ISO): the end of the latest file period that
+        begins by then, the run date when that period runs past it. The line follow's data edge, and stage 9's
+        "after the fails data's last day" (OKE 2026). An index with no file index answers its latest row held;
+        None when it holds none."""
+        periods = self._file_periods()
+        if not periods:
+            self._sort()
+            return self._dates[-1] if self._dates else None
+        end = self._window[1] if self._window is not None else date.max
+        ends = [min(b, end) for a, b in periods if a <= end]
+        return max(ends).isoformat() if ends else None
 
     def descriptions(self, cusip: str) -> set[str]:
         """Every description the fails rows of `cusip` carry."""

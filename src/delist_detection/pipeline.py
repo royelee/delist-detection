@@ -102,7 +102,7 @@ class Clients:
     resolver: Any                   # the issuer lookup (`identity.IssuerLookup`: `ticker_resolver.TickerResolver`)
     classifier: Any                 # `classifier.DelistClassifier`
     figi: Any
-    ftd_client: Any
+    ftd_client: Any                 # SEC's fails files (`ftd.FtdSource`): identity opens the run's index over them
     midas: Any = None
     halts: Any = None               # the Nasdaq halt feed: `deletion_halt`, `failed_days`
     payout_extractor: Any = None
@@ -406,18 +406,33 @@ def _find_delistings(ctx: _RunContext, securities: dict[str, Security], sec_cusi
     return _DelistingSearch(delistings, listed, sightings, review, finder)
 
 
+@dataclass
+class _Backfill:
+    """Stage 5b's answer: the securities that took CUSIPs, each one's CUSIPs (its own and those it took, in that
+    order) and its ticker sightings rebuilt over them. `_run` merges them over stage 5's."""
+    cusips: dict[str, list[str]] = field(default_factory=dict)
+    sightings: dict[str, list[Sighting]] = field(default_factory=dict)
+
+    @property
+    def fixed(self) -> list[str]:
+        """The sec_ids that took CUSIPs, in the order they were taken."""
+        return list(self.cusips)
+
+
 def _dead_before_sighting(ctx: _RunContext, securities: dict[str, Security], delistings: list[Delisting],
-                          sec_cusips: dict[str, list[str]], ftd: FtdIndex, sightings: dict[str, list[Sighting]],
-                          issuers: dict[str, Issuer]) -> list[str]:
+                          sec_cusips: Mapping[str, list[str]], ftd: FtdIndex,
+                          issuers: Mapping[str, Issuer]) -> _Backfill:
     """5b. A security whose last real ending (its successor not itself) came before
     its first observation, and none of whose CUSIPs has a trading fails row, died
     before a stale snapshot listed it: the run's fails window starts after it.
-    Eligibility is decided first, on the rows loaded when the stage starts, so one
-    security's load cannot change another's. Its rows under its tickers from
-    BACKFILL_DAYS before the end are then loaded; the CUSIPs whose rows before the
-    end name its issuer (`history.backfill_cusips`) and that no other security holds
-    become its CUSIPs, and its sightings are rebuilt, so the close, history and
-    contract stages see them. Returns the sec_ids that took CUSIPs."""
+    Eligibility is decided first, on the rows held when the stage starts, so one
+    security's ask cannot change another's eligibility. The index is then asked for
+    its rows under its tickers from BACKFILL_DAYS before the end (`FtdIndex.around`);
+    the CUSIPs whose rows before the end name its issuer (`history.backfill_cusips`)
+    and that no other security holds (a CUSIP an earlier security of the stage took
+    included) become its CUSIPs, their rows are asked for over the same span, and its
+    sightings are rebuilt over them, so the close, history and contract stages see
+    them. Returns them (`_Backfill`); `sec_cusips` is left as it was."""
     mark = ctx.meter.start()
     ends: dict[str, str] = {}
     for e in delistings:
@@ -432,25 +447,23 @@ def _dead_before_sighting(ctx: _RunContext, securities: dict[str, Security], del
         if s is None or not seen or end >= min(seen) or ftd.trading_rows(sec_cusips.get(sid, [])):
             continue
         eligible.append((sid, end))
-    fixed: list[str] = []
+    out = _Backfill()
     for sid, end in eligible:
         s = securities[sid]
         end_on = date.fromisoformat(end)
-        lo, hi = end_on - timedelta(days=BACKFILL_DAYS), end_on + timedelta(days=10)
         tickers = sorted(s.own_tickers())
-        ftd.extend(ctx.clients.ftd_client, lo, hi, symbols=tickers)
+        ftd.around([end_on], before=BACKFILL_DAYS, after=10, symbols=tickers)
         names = [n for era in s.eras for n in (era.name, *(issuers[era.key].names if era.key in issuers else ())) if n]
-        held = {c for other, cs in sec_cusips.items() if other != sid for c in cs}
+        held = {c for other, cs in {**sec_cusips, **out.cusips}.items() if other != sid for c in cs}
         found = [c for c in backfill_cusips(tickers, end, ftd, names) if c not in held]
         if not found:
             continue
-        ftd.extend(ctx.clients.ftd_client, lo, hi, cusips=found)
-        sec_cusips[sid] = list(dict.fromkeys([*sec_cusips.get(sid, []), *found]))
-        sightings[sid] = ticker_sightings(s, ftd, sec_cusips[sid])
-        fixed.append(sid)
-    ctx.log(f"dead before first sighting: {len(fixed)} securities took CUSIPs from fails rows before their end")
+        ftd.around([end_on], before=BACKFILL_DAYS, after=10, cusips=found)
+        out.cusips[sid] = list(dict.fromkeys([*sec_cusips.get(sid, []), *found]))
+        out.sightings[sid] = ticker_sightings(s, ftd, out.cusips[sid])
+    ctx.log(f"dead before first sighting: {len(out.cusips)} securities took CUSIPs from fails rows before their end")
     ctx.meter.done("dead before first sighting", mark)
-    return fixed
+    return out
 
 
 def _check_overrides(overrides: Overrides, delistings: list[Delisting]) -> None:
@@ -475,14 +488,12 @@ def _last_trade_closes(ctx: _RunContext, delistings: list[Delisting], securities
     CUSIP on that day, then its ticker), flagging the delisting where none is
     found or it is lagged or older. The FTD rows were loaded from the eras' first
     sighting on; a delisting whose last trade came earlier (a stale snapshot
-    listed the security after it was gone) needs the rows around that day first."""
+    listed the security after it was gone) has the index asked for the rows around
+    that day first (`FtdIndex.around`)."""
     answered = answers.last_closes(delistings, overrides.last_trade_closes)
     early = [e for e in delistings if e.last_trade.day is not None and FTD_START <= e.last_trade.day < ftd_lo]
-    if early:
-        days = [e.last_trade.day for e in early]
-        ftd.extend(ctx.clients.ftd_client, min(days) - timedelta(days=20), max(days) + timedelta(days=10),
-                   symbols={e.ticker for e in early},
-                   cusips={c for e in early for c in sec_cusips.get(e.sec_id, [])})
+    ftd.around([e.last_trade.day for e in early], before=20, after=10, symbols={e.ticker for e in early},
+               cusips={c for e in early for c in sec_cusips.get(e.sec_id, [])})
     closes: dict[DelistingKey, float] = {}
     held = {c for cs in sec_cusips.values() for c in cs}
     for e in delistings:
@@ -739,7 +750,7 @@ def _own_registration_link(ctx: _RunContext, e: Delisting, texts: Sequence[str],
     if x.composite == e.sec_id:
         return e.sec_id, BY_OWN_REGISTRATION
     new_rows = [r for r in ftd.trading_rows([cusip]) if r.symbol in tickers]
-    data_end = ftd.last_date()
+    data_end = ftd.data_end()
     if not new_rows and not (named and data_end is not None and data_end < day.isoformat()):
         return None      # (5h) a CUSIP the texts name, after the fails data's last day, has no row to show yet: OKE 2026
     if x.composite not in securities and x.composite not in taken and x.composite not in found.added:
@@ -1494,7 +1505,9 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
                               other_ciks)                                                           # 5
     delistings = search.delistings
     review += search.review
-    _dead_before_sighting(ctx, securities, delistings, sec_cusips, ftd, search.sightings, identity.issuers)  # 5b
+    back = _dead_before_sighting(ctx, securities, delistings, sec_cusips, ftd, identity.issuers)      # 5b
+    sec_cusips = {**sec_cusips, **back.cusips}
+    search = replace(search, sightings={**search.sightings, **back.sightings})
     _check_overrides(overrides, delistings)                                                         # 6
     prices = PriceAnswers(overrides.price_answers)    # 6b: each stage reads the answer to its own request
     closes = _last_trade_closes(ctx, delistings, securities, sec_cusips, ftd, ftd_lo, overrides, prices)    # 7

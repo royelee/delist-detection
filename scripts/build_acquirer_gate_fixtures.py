@@ -200,8 +200,8 @@ def main(argv: list[str] | None = None) -> int:
     local = b5.LocalFtd(repo / "cache/sec_data/ftd")
     rows = set()
     for lo, hi, group, tickers in windows:
-        idx = FtdIndex.load(local, lo, min(hi, AS_OF), cusips={c for s in group for c in cusips.get(s, [])},
-                            symbols=tickers)
+        idx = FtdIndex.opened(local, lo, min(hi, AS_OF), cusips={c for s in group for c in cusips.get(s, [])},
+                              symbols=tickers)
         rows.update(r for c in {c for s in group for c in cusips.get(s, [])} for r in idx.by_cusip(c))
         rows.update(r for tk in tickers for r in idx.by_symbol(tk))
     firsts = defaultdict(lambda: "~")
@@ -210,7 +210,7 @@ def main(argv: list[str] | None = None) -> int:
             firsts[r["cusip"]] = min(firsts[r["cusip"]], r["valid_from"])
     for c, d in sorted(firsts.items()):
         day = date.fromisoformat(d)
-        idx = FtdIndex.load(local, day - timedelta(days=5), day + timedelta(days=5), cusips={c})
+        idx = FtdIndex.opened(local, day - timedelta(days=5), day + timedelta(days=5), cusips={c})
         rows.update(idx.by_cusip(c)[:3])
 
     figi_answers = {}

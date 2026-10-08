@@ -136,7 +136,7 @@ def main(argv: list[str] | None = None) -> int:
 
     # fails rows: a case's CUSIPs, and its tickers' rows near its anchors; the others' span and descriptions
     local = b5.LocalFtd(repo / "cache/sec_data/ftd")
-    ftd = FtdIndex.load(local, *FTD_WINDOW, cusips={c for sid in needed for c in cusips.get(sid, [])})
+    ftd = FtdIndex.opened(local, *FTD_WINDOW, cusips={c for sid in needed for c in cusips.get(sid, [])})
     rows = set()
     for sid in needed:
         for c in cusips.get(sid, []):
@@ -154,7 +154,7 @@ def main(argv: list[str] | None = None) -> int:
         tickers = {k.split("@")[0] for k in eras[sid]} | set(b5._line_tickers(eras[sid], history[sid]))
         for day in anchors[sid]:
             lo, hi = day - timedelta(days=ROWS_DAYS), day + timedelta(days=ROWS_DAYS)
-            near = FtdIndex.load(local, lo, min(hi, AS_OF), symbols=tickers)
+            near = FtdIndex.opened(local, lo, min(hi, AS_OF), symbols=tickers)
             rows.update(r for t in tickers for r in near.by_symbol(t))
 
     # EDGAR

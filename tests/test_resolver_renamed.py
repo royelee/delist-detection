@@ -89,7 +89,7 @@ def index():
 
 @pytest.fixture(scope="module")
 def ftd(index):
-    return FtdIndex.load(_RowsClient(_rows()), *FTD_WINDOW, symbols={e.ticker for e in index.eras()})
+    return FtdIndex.opened(_RowsClient(_rows()), *FTD_WINDOW, symbols={e.ticker for e in index.eras()})
 
 
 @pytest.fixture(scope="module")

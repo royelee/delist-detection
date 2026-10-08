@@ -212,8 +212,8 @@ def candidate_steps(sec_id: str, cusips: Sequence[str], tickers: Collection[str]
       spelling, one of `extra_symbols` (the issuer's other tickers), or among `extra_cusips` (CUSIPs its 8-K text
       names). The one picked (below) is dropped, and no step is taken, when another security holds it. None when
       the old CUSIP's last row is within `SWITCH_TAIL_DAYS` trading days of `data_end` (the last day the fails
-      index covers; the old line has not been seen to stop) and its settled row is more than `SWITCH_DAYS`
-      trading days after the new CUSIP's first row (the old line trades on at changing prices beside it: CHTR's
+      data covers, `FtdIndex.data_end`; the old line has not been seen to stop) and its settled row is more than
+      `SWITCH_DAYS` trading days after the new CUSIP's first row (the old line trades on at changing prices beside it: CHTR's
       new preferred; no `data_end`: the rule is off), and None when the old CUSIP trades on past `SWITCH_TAIL_DAYS` after its last row under the tickers (a
       spin-off took the ticker while the old line went on: GOOG, AAN).
     - NEW_SYMBOL: the old CUSIP's first row under a line symbol that is not one of `tickers` and not an OTC
@@ -467,7 +467,6 @@ class LineSources(Protocol):
     edgar: Any                # the EDGAR client: a successor filer's listing
     full_text_search: FullTextSearch | None     # EDGAR full-text search (None: absent, no other registrant is found)
     figi: Any                 # OpenFIGI: `map(jobs)`, the new CUSIPs' composites
-    ftd_client: Any           # SEC's fails-to-deliver files (`ftd.FtdClient`) the fails index is extended from
 
 
 @dataclass
@@ -582,13 +581,15 @@ def _quiet(*_: Any) -> None:
 
 def follow_lines(identity: "Identity", clients: LineSources, *, as_of: date,
                  log: Callable[[str], None] = _quiet, meter: StageMeter | None = None) -> Lines:
-    """Stage 4b: each security of `identity` followed past its observations (module docstring), every window ending
-    on the run date `as_of`; `log` takes the stage's tally, `meter` its SEC traffic ("line follow").
+    """Stage 4b: each security of `identity` followed past its observations (module docstring), as of the run date
+    `as_of`; `log` takes the stage's tally, `meter` its SEC traffic ("line follow"). The fails rows it reads, it
+    asks the identity's index to follow (`FtdIndex.follow`: their rows over the run's fails window, to the run
+    date): every line's tickers, spellings and issuer tickers first, each round's new CUSIPs and text symbols next.
 
     A round finds each line's next step in the fails rows (`candidate_steps`: a new CUSIP under the line's ticker,
     or a ticker of the issuer EDGAR lists today or its 8-K text names (`_Reads.text_sources`, read in the first
     round for a line with no step that stopped more than `TEXT_SOURCE_DAYS` before the run date); or the same CUSIP
-    under a new ticker), loads the new CUSIPs' rows to the run date, asks OpenFIGI for their composites in one
+    under a new ticker), has the index follow the new CUSIPs, asks OpenFIGI for their composites in one
     batch, checks each step against the issuer's filings (`corroborate`) and applies R2 (`decide`, then
     `_today_holder_fold`): the same security takes the new CUSIP and ticker; a placeholder folds into the FIGI line
     its new CUSIP names (the securities are rebuilt, `Identity.securities_of`); a FIGI line whose new CUSIP has its
@@ -602,7 +603,7 @@ def follow_lines(identity: "Identity", clients: LineSources, *, as_of: date,
     meter = meter if meter is not None else StageMeter(log)
     mark = meter.start()
     reads = _Reads(clients)
-    ftd, ftd_lo = identity.ftd, identity.ftd_lo
+    ftd = identity.ftd
     out = Lines(dict(identity.securities), dict(identity.resolutions),
                 {k: list(v) for k, v in identity.cusips.items()})
     items: list[ReviewItem] = []
@@ -617,7 +618,7 @@ def follow_lines(identity: "Identity", clients: LineSources, *, as_of: date,
     # every line's tickers, their first-day ZZZZ and post-split D spellings and the issuers' other tickers, to the
     # run date (stage 1 loaded the eras' tickers only to 400 days past their last observation)
     spellings = {t.replace("-", "") + suffix for sid in todo for t in own(sid) for suffix in ("", "ZZZZ", "D")}
-    ftd.extend(clients.ftd_client, ftd_lo, as_of, symbols=spellings | {t for v in extra.values() for t in v})
+    ftd.follow(symbols=spellings | {t for v in extra.values() for t in v})
     named: dict[str, set[str]] = defaultdict(set)
     counts: Counter[str] = Counter()
     flagged: set[str] = set()            # securities whose step already got a resolution_degraded item
@@ -627,7 +628,7 @@ def follow_lines(identity: "Identity", clients: LineSources, *, as_of: date,
         def steps_of(sid: str) -> list[LineStep]:
             return candidate_steps(sid, out.cusips.get(sid, []), own(sid), ftd, holders=holders,
                                    extra_symbols=extra.get(sid, ()), extra_cusips=named.get(sid, ()),
-                                   data_end=ftd.last_date())
+                                   data_end=ftd.data_end())
 
         steps = {sid: steps_of(sid) for sid in todo}
         new_symbols: set[str] = set()
@@ -644,7 +645,7 @@ def follow_lines(identity: "Identity", clients: LineSources, *, as_of: date,
         new_cusips = {st.new_cusip for v in steps.values() for st in v if st.kind == SWITCH}
         new_cusips |= {c for v in named.values() for c in v}
         if new_cusips or new_symbols:
-            ftd.extend(clients.ftd_client, ftd_lo, as_of, cusips=new_cusips, symbols=new_symbols)
+            ftd.follow(cusips=new_cusips, symbols=new_symbols)
             steps = {sid: steps_of(sid) for sid in todo}
         switch_cusips = sorted({v[0].new_cusip for v in steps.values() if v and v[0].kind == SWITCH})
         figi_answers = dict(zip(switch_cusips, clients.figi.map([cusip_job(c) for c in switch_cusips]))) \
