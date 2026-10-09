@@ -11,8 +11,13 @@ of one sub-plan (`Round`, under a loop folder, `Loop`):
   (.claude/workflows/diagnosis-truth-loop.js);
 - closes (`Round.close`): it reads the round's cases and the agents' records (records/<case_id>.json), applies them
   to the truth set by truth_update's rules (`truth_set.TruthSet.apply_round`), turns every known_wrong case that now
-  matches into pass (`TruthSet.flip`), and commits the truth set (the truth file, its change log and the ledger
-  together) and writes the round's summary.md, unless it is a dry run.
+  matches into pass (`TruthSet.flip`), and, unless it is a dry run, copies the reports the truth set goes on citing
+  (a truth or change-log row's, an open ledger row's: `Round.kept_reports`) to the kept reports (`Loop.reports`),
+  cites them there, commits the truth set (the truth file, its change log and the ledger together) and writes the
+  round's summary.md.
+
+What a repository commits of the loop is the ledger and the kept reports. A round's own folder (cases.csv,
+records/, reports/, summary.md) is its working copy, read only while the round is open.
 
 The ledger (`Loop.ledger`, the one place its path is named) records every error already diagnosed and its outcome,
 so a round diagnoses only new errors. Sub-plan 5-0 seeded it with every mismatch the reports already describe
@@ -296,8 +301,9 @@ def _write_csv(path: Path, columns: Sequence[str], rows: Sequence[Mapping[str, s
 # -- the loop folder and its rounds -------------------------------------------------------------------------------
 @dataclass(frozen=True)
 class Loop:
-    """A loop folder (by default `LOOP_DIR` under the repository, `of`): the ledger and each round's files. Report
-    paths are recorded relative to `repo` when the folder lies inside it."""
+    """A loop folder (by default `LOOP_DIR` under the repository, `of`): the ledger and each round's files, and
+    beside it the kept reports (`reports`). A round's report paths are recorded relative to `repo` when the folder
+    lies inside it."""
     folder: Path
     repo: Path
 
@@ -310,6 +316,19 @@ class Loop:
     def ledger(self) -> Path:
         """The ledger: the one place its path is named."""
         return self.folder / LEDGER_NAME
+
+    @property
+    def reports(self) -> Path:
+        """The kept reports, in the loop folder's parent (data/diagnosis/reports/, beside sub-plan 5-0's): every
+        report a truth row, a change-log row or an open ledger row cites (`Round.close` copies a round's there).
+        They and the ledger are what the repository commits; the rest of the loop folder stays in the checkout
+        that wrote it."""
+        return self.folder.parent / REPORTS_NAME
+
+    @staticmethod
+    def kept(name: str) -> str:
+        """A kept report's citation: relative to the loop folder's parent, as sub-plan 5-0's reports are cited."""
+        return f"{REPORTS_NAME}/{name}"
 
     def truth_set(self, truth: str | Path) -> TruthSet:
         """The truth set of the truth file `truth`, with this loop's ledger."""
@@ -372,7 +391,8 @@ class Round:
 
     @property
     def report_dir(self) -> str:
-        """The reports folder as the truth file and the ledger record it: relative to the repository when inside it."""
+        """The reports folder as the round's citations record it (a kept report is cited at its copy instead,
+        `Loop.kept`): relative to the repository when inside it."""
         reports = self.reports_dir
         return reports.relative_to(self.loop.repo).as_posix() if reports.is_relative_to(self.loop.repo) \
             else str(reports)
@@ -441,7 +461,9 @@ class Round:
     def close(self, truth: str | Path, run: RunSnapshot, base: RunSnapshot, *, dry_run: bool = False) -> Closed:
         """Close the round: apply its records to the truth set (truth_update's rules; the base run's contract rows,
         the run as the judge reads it, and the placeholders renamed since `base`), turn every known_wrong case that
-        now matches the run into pass, and, unless `dry_run`, commit the truth set and write summary.md."""
+        now matches the run into pass, and, unless `dry_run`, copy the reports the truth set goes on citing to the
+        kept reports (`kept_reports`), commit the truth set and write summary.md. Raises ValueError, before anything
+        is written, when a report to keep is missing (an agent returned its record without writing the report)."""
         cases = self.cases()
         records = self.records()
         ts = self.loop.truth_set(truth)
@@ -451,14 +473,33 @@ class Round:
         lib = LibraryRows.of(run)              # a status flip judges a basket's legs too (sub-plan 5f)
         res = ts.apply_round(cases, records, base_rows, lib, label=self.label, round_no=self.number,
                              report_dir=self.report_dir, renamed=renamed)
+        kept = self.kept_reports(res.changes, res.ledger_rows)
+        missing = [name for name in kept if not (self.reports_dir / name).exists()]
+        if missing:
+            raise ValueError(f"{self.reports_dir}: no report {missing}, which the truth set would cite")
+        ts.recite({f"{self.report_dir}/{name}": self.loop.kept(name) for name in kept})
         ts.flip(lib)
         closed = Closed(self, len(cases), len(records), tuple(ts.changes), len(ts.settled), tuple(res.pending),
-                        dry_run)
+                        dry_run, len(kept))
         if not dry_run:
-            # The truth file, the change log and the ledger move together: all are replaced, or none.
+            # Copied first, so a truth set that cites a kept report always has it. The truth file, the change log and
+            # the ledger move together: all are replaced, or none.
+            if kept:
+                self.loop.reports.mkdir(parents=True, exist_ok=True)
+            for name in kept:
+                write_atomic(self.loop.reports / name, (self.reports_dir / name).read_bytes())
             ts.commit()
             write_atomic(self.summary_file, closed.summary())
         return closed
+
+    def kept_reports(self, changes: Sequence[Mapping[str, str]], ledger_rows: Sequence[Mapping[str, str]]) -> list[str]:
+        """The file names of the round's reports the truth set goes on citing, given the round's change-log and
+        ledger rows: every report a change-log row cites (a truth row the round added cites its own) and every report
+        an open (pending) ledger row cites, which the operator settles it from. A report only a settled ledger row
+        cites is not kept: the ledger holds its outcome."""
+        cited = {c["report"] for c in changes} | {r["report"] for r in ledger_rows if r["outcome"] == PENDING}
+        prefix = f"{self.report_dir}/"
+        return sorted(c[len(prefix):] for c in cited if c.startswith(prefix))
 
 
 @dataclass(frozen=True)
@@ -493,8 +534,8 @@ class Opened:
 
 @dataclass(frozen=True)
 class Closed:
-    """A closed round: its case and record counts, the truth set's change-log rows and ledger rows, and the cases to
-    retry (no usable record)."""
+    """A closed round: its case and record counts, the truth set's change-log rows and ledger rows, the cases to
+    retry (no usable record) and how many of its reports were kept (`Loop.reports`)."""
     round: Round
     cases: int
     records: int
@@ -502,17 +543,19 @@ class Closed:
     ledger_rows: int
     retry: tuple[str, ...]
     dry_run: bool
+    kept: int = 0
 
     def line(self) -> dict:
         """The script's JSON line."""
         return {"label": self.round.label, "round": self.round.number, "cases": self.cases, "records": self.records,
-                "truth_changes": len(self.changes), "ledger_rows": self.ledger_rows, "retry": list(self.retry),
-                "dry_run": self.dry_run}
+                "truth_changes": len(self.changes), "ledger_rows": self.ledger_rows, "kept_reports": self.kept,
+                "retry": list(self.retry), "dry_run": self.dry_run}
 
     def summary(self) -> str:
         """The round's summary.md."""
         lines = [f"# Loop {self.round.label}, round {self.round.number}", "",
                  f"- cases: {self.cases}, records: {self.records}", f"- truth changes: {len(self.changes)}",
+                 f"- reports kept in {self.round.loop.reports.name}/: {self.kept}",
                  f"- retried next round (no record): {list(self.retry) or 'none'}", "",
                  "| case | field | old | new | reason |", "| --- | --- | --- | --- | --- |"]
         lines += [f"| {c['case_id']} | {c['field']} | {c['old']} | {c['new']} | {c['reason']} |" for c in self.changes]

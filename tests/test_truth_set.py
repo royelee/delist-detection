@@ -376,6 +376,24 @@ def test_settled_ledger_rows_are_committed_with_the_truth_set(tmp_path):
         TruthSet.open(path).settle([ledger_row("k3")])
 
 
+def test_recite_moves_a_reports_citation_in_what_this_set_added_and_logs_nothing(tmp_path):
+    old_log = CHANGE_HEADER + "A_2010-01-04,note,,x,earlier,round/A.md\n"
+    old_ledger = ",".join(LEDGER_COLUMNS) + "\nk0,mismatch,,,,known,round/A.md\n"
+    path = _set(tmp_path, [truth_row("A_2010-01-04", "A", report="round/A.md")], changes=old_log, ledger=old_ledger)
+    truth = TruthSet.open(path, ledger=tmp_path / "ledger.csv")
+    truth.set_cells("A_2010-01-04", [("exit_kind", "exchange")], reason="r", report="round/A.md")
+    truth.settle([ledger_row("k1", report="round/A.md"), ledger_row("k2", report="round/B.md")])
+    assert truth.recite({"round/A.md": "reports/A.md"}) == 3
+    # the truth row, the new change-log row and the new ledger row; the records read back keep their citation
+    assert truth.row("A_2010-01-04")["report"] == "reports/A.md"
+    assert [(c["field"], c["report"]) for c in truth.changes] == [("exit_kind", "reports/A.md")]
+    assert [(r["key"], r["report"]) for r in truth.settled] == [("k1", "reports/A.md"), ("k2", "round/B.md")]
+    truth.commit()
+    assert [(c["field"], c["report"]) for c in _log(path)] == [("note", "round/A.md"), ("exit_kind", "reports/A.md")]
+    assert [r["report"] for r in ts.read_ledger(tmp_path / "ledger.csv")] == ["round/A.md", "reports/A.md",
+                                                                             "round/B.md"]
+
+
 # -- the commit ------------------------------------------------------------------------------------------------------
 def test_a_commit_writes_only_what_changed_and_appends_to_the_change_log(tmp_path):
     old_log = CHANGE_HEADER + 'Z_2009-01-01,note,,x,"a, b",r\n'

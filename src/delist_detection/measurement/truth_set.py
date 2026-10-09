@@ -29,7 +29,7 @@ The changes:
 - `apply_round(...)`: one loop round's diagnoses, by truth_update's rules (`loop_round.Round.close` calls it).
 - `settle(ledger_rows)`: ledger rows (a seed).
 They are made of four primitives that truth_update's rules also use: `set_cells`, `move_status`, `add_row` and
-`settle`.
+`settle`. A fifth, `recite`, moves a report's citation and changes no truth value.
 Every changed cell is one change-log row (case_id, field, old, new, reason, report). A note grows by `; tag: why`,
 or takes the text alone when it was empty (`truth.noted`). A change that changes nothing logs nothing.
 
@@ -385,6 +385,18 @@ class TruthSet:
             if missing:
                 raise TruthFileError(f"{self.ledger}: a new row lacks {missing}")
             self._ledger_rows.append({c: r[c] for c in LEDGER_COLUMNS})
+
+    def recite(self, moves: Mapping[str, str]) -> int:
+        """Cite each report in `moves` (as cited -> where it is cited now) at its new path, in the truth rows, the
+        change-log rows added since the set was opened and the ledger rows settled since: a round's kept reports
+        (`loop_round.Round.close`). A citation is no truth value, so it logs nothing. Returns how many cells changed."""
+        n = 0
+        for r in (*self._rows, *(rec.row for rec in self._records[self._new_log:] if rec.row is not None),
+                  *self._ledger_rows[self._new_ledger:]):
+            if r["report"] in moves:
+                r["report"] = moves[r["report"]]
+                n += 1
+        return n
 
     # -- the changes --------------------------------------------------------------------------------------------
     def rule(self, ruling: Ruling) -> int:

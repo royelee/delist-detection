@@ -39,14 +39,13 @@ output/run.log
 .env
 .env.local
 
-# The diagnosis truth set's working files (data/diagnosis/ keeps the reports and the loop ledger): the inputs
-# and outputs of sub-plan 5-0's one-time build (scripts/build_diagnosis_truth.py), and each loop round's cases,
-# records and summary, read only while the round is open
+# The diagnosis truth set's working files. data/diagnosis/ commits only reports/ (every report a truth row, a
+# change-log row or an open ledger row cites; loop_round.Round.close copies a round's there) and the loop ledger,
+# loop/diagnosed.csv. Ignored: sub-plan 5-0's one-time build files (scripts/build_diagnosis_truth.py) and every
+# sub-plan's loop folder (each round's cases, records, reports and summary, and the sub-plan's write-ups)
 data/diagnosis/truth_rows/
 data/diagnosis/records/
 data/diagnosis/source.csv
 data/diagnosis/summary.csv
 data/diagnosis/truth_review.md
-data/diagnosis/loop/*/round-*/cases.csv
-data/diagnosis/loop/*/round-*/records/
-data/diagnosis/loop/*/round-*/summary.md
+data/diagnosis/loop/*/

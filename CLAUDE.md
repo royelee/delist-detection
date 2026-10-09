@@ -28,7 +28,7 @@ editable install.
 
 ```bash
 pip install -e .                         # editable install (Python ≥3.10) — once per env
-pytest   # full suite (3519 passed, 45 xfailed: 8 known-wrong golden + the diagnosis truth set's 37 known_wrong cases, all residual, all strict; offline, no network)
+pytest   # full suite (3521 passed, 45 xfailed: 8 known-wrong golden + the diagnosis truth set's 37 known_wrong cases, all residual, all strict; offline, no network)
 pytest tests/test_payout_extractor.py -v  # one file
 pytest tests/test_payout_extractor.py::test_match_in_cash_family_altr -v   # one test
 
@@ -1200,14 +1200,17 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   `diff_contract(..., renames=)`) instead of its removed row and the FIGI's added one.
 - `measurement/loop_round.py` — one round of the diagnosis truth loop (step 9b), and every token a round's errors are known by.
   `Loop.of(repo, folder=)` is the loop folder (default `data/diagnosis/loop`): its `ledger` (the one
-  place the ledger's path is named), `truth_set(truth)` (the truth set with that ledger), `seed(truth, run, label=)`
-  (sub-plan 5-0's `known` rows, round 0) and `round(label, n)`. A `Round` names its files (`<label>/round-<N>/`:
-  cases.csv, records/, reports/, summary.md; reports recorded relative to the repository) and has two operations:
-  `open(truth, run, base, report=)` (rename the truth rows by `regression.id_changes_since` and commit, judge the
-  run, write the regression report, keep the errors the ledger has not seen, write them as case rows with the
-  security's context) and `close(truth, run, base, dry_run=)` (cases.csv read back as `RoundCase`s, records/*.json,
-  `TruthSet.apply_round` with the base contract and the run as the judge reads it, `TruthSet.flip`, then the commit
-  and summary.md unless a dry run). Each answers the line its script prints (`line()`). The tokens, each built here
+  place the ledger's path is named), `reports` (the kept reports, in the folder's parent: data/diagnosis/reports/,
+  cited as `reports/<case_id>.md`, `Loop.kept`), `truth_set(truth)` (the truth set with that ledger),
+  `seed(truth, run, label=)` (sub-plan 5-0's `known` rows, round 0) and `round(label, n)`. A `Round` names its files
+  (`<label>/round-<N>/`: cases.csv, records/, reports/, summary.md; reports recorded relative to the repository) and
+  has two operations: `open(truth, run, base, report=)` (rename the truth rows by `regression.id_changes_since` and
+  commit, judge the run, write the regression report, keep the errors the ledger has not seen, write them as case
+  rows with the security's context) and `close(truth, run, base, dry_run=)` (cases.csv read back as `RoundCase`s,
+  records/*.json, `TruthSet.apply_round` with the base contract and the run as the judge reads it, the reports the
+  truth set goes on citing, `kept_reports`: a truth or change-log row's and a pending ledger row's, cited at their
+  copy, `TruthSet.recite`; a missing one refuses the close before anything is written; `TruthSet.flip`; then, unless
+  a dry run, the copies into `Loop.reports`, the commit and summary.md). Each answers the line its script prints (`line()`). The tokens, each built here
   and read back by its inverse here: an error's key (`mismatch_key`, `regression_key`; `parse_key`, `key_kind`; no
   part may hold `|`), a regression's field name (`Field.of(row).name`, `parse_field`: a changed delistings column by
   its name, `delistings.added` or `delistings.removed`, `<table>.<field>`) and a case id (`case_id`, built only:
@@ -1484,11 +1487,13 @@ expiration is 0.0 in the table and no correction in the firm month, which leaves
   `pending` ledger row is never re-diagnosed automatically: the operator settles it or deletes the row. The loop
   stops after a round with no new error, or after 3 rounds. A sub-plan is accepted only when `D.mismatches` fell
   and `scripts/scorecard.py --check --base <commit>` passes (`D.unexplained_regressions` 0, `loop_round.unexplained`). `truth_build.UNSETTLED`: an OpenFIGI error or several US
-  lines leave a CUSIP-change row `ruling_pending`. `data/diagnosis/` commits what the truth set needs: the diagnosis
-  reports (each truth row, ledger row and change-log row cites one; a later round reads the earlier report), each
-  round's reports, the sub-plans' loop reports and the ledger. A round's cases.csv, records/ and summary.md, and
-  sub-plan 5-0's build files (truth_rows/, records/, source.csv, summary.csv, truth_review.md), are gitignored: they
-  stay in the checkout that wrote them.
+  lines leave a CUSIP-change row `ruling_pending`. `data/diagnosis/` commits only what is read later: the ledger
+  (`loop/diagnosed.csv`) and `reports/`, every report a truth row, a change-log row or a pending ledger row cites (the
+  evidence for a truth value, which a later round's mismatch diagnosis reads first, and what the operator settles a
+  pending row from; `Round.close` copies a round's there). Everything else is gitignored and stays in the checkout
+  that wrote it: every sub-plan's loop folder (`loop/<label>/`: each round's cases.csv, records/, reports/ and
+  summary.md, so a report only a settled ledger row cites, and the sub-plan's write-ups) and sub-plan 5-0's build
+  files (truth_rows/, records/, source.csv, summary.csv, truth_review.md).
 - **Every seed, security and ending has a verdict, and every uncertain one is
   in `uncertain.csv`.** `kind` is seed | security | ending; `reason` holds
   `code` or `code:detail` items (outputs/verdict.py's docstring lists them). The

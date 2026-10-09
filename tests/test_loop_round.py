@@ -94,10 +94,14 @@ def _record(case, rights, confidence="verified", upheld=True):
             "verification": {"upheld": upheld, "fields_upheld": [], "fields_refuted": [], "notes": ""}}
 
 
-def _write_records(rnd, records):
+def _write_records(rnd, records, *, reports=True):
+    """Each record and, as the diagnose agent writes it beside the record, its report."""
     rnd.records_dir.mkdir(parents=True, exist_ok=True)
+    rnd.reports_dir.mkdir(parents=True, exist_ok=True)
     for rec in records:
         (rnd.records_dir / f"{rec['case_id']}.json").write_text(json.dumps(rec))
+        if reports:
+            (rnd.reports_dir / f"{rec['case_id']}.md").write_text(f"# {rec['case_id']}\n")
 
 
 # -- the tokens -------------------------------------------------------------------------------------------------------
@@ -412,19 +416,25 @@ def test_closing_dry_writes_nothing_and_closing_commits_the_truth_set_and_the_su
     before = {p: p.read_bytes() for p in (tmp_path / "truth.csv", rnd.loop.ledger) if p.exists()}
     dry = rnd.close(tmp_path / "truth.csv", repo.run(), repo.base(), dry_run=True)
     assert dry.line() == {"label": "5a", "round": 1, "cases": 1, "records": 1, "truth_changes": 1, "ledger_rows": 1,
-                          "retry": [], "dry_run": True}
+                          "kept_reports": 1, "retry": [], "dry_run": True}
     assert {p: p.read_bytes() for p in before} == before and not rnd.loop.ledger.exists()
     assert not changes_path(tmp_path / "truth.csv").exists() and not rnd.summary_file.exists()
+    assert not rnd.loop.reports.exists()
     real = rnd.close(tmp_path / "truth.csv", repo.run(), repo.base())
     assert real.line() == {**dry.line(), "dry_run": False}
+    # the report the new truth row rests on is kept beside the loop folder, and every citation names the copy
+    assert rnd.loop.reports == tmp_path / "reports" and rnd.loop.kept("Z_5a-r1.md") == "reports/Z_5a-r1.md"
+    assert (rnd.loop.reports / "Z_5a-r1.md").read_bytes() == (rnd.reports_dir / "Z_5a-r1.md").read_bytes()
     [row] = TruthSet.open(tmp_path / "truth.csv").rows
     assert (row["case_id"], row["status"], row["last_trade_date"], row["exit_kind"], row["report"]) == (
-        "Z_5a-r1", "pass", "2010-10-01", "merger", f"{rnd.report_dir}/Z_5a-r1.md")
-    assert [r["field"] for r in _csv(changes_path(tmp_path / "truth.csv"))] == ["(row)"]
-    assert [(r["key"], r["outcome"]) for r in read_ledger(rnd.loop.ledger)] == [
-        ("reg|Z|delistings|last_trade_date|changed|2010-09-30|2010-10-01", "new_right")]
+        "Z_5a-r1", "pass", "2010-10-01", "merger", "reports/Z_5a-r1.md")
+    assert [(r["field"], r["report"]) for r in _csv(changes_path(tmp_path / "truth.csv"))] == [
+        ("(row)", "reports/Z_5a-r1.md")]
+    assert [(r["key"], r["outcome"], r["report"]) for r in read_ledger(rnd.loop.ledger)] == [
+        ("reg|Z|delistings|last_trade_date|changed|2010-09-30|2010-10-01", "new_right", "reports/Z_5a-r1.md")]
     assert rnd.summary_file.read_text() == real.summary()
-    assert real.summary().startswith("# Loop 5a, round 1\n\n- cases: 1, records: 1\n- truth changes: 1\n")
+    assert real.summary().startswith("# Loop 5a, round 1\n\n- cases: 1, records: 1\n- truth changes: 1\n"
+                                     "- reports kept in reports/: 1\n")
 
 
 def test_closing_without_cases_csv_is_an_error(tmp_path, repo):
@@ -451,7 +461,32 @@ def test_closing_adds_no_truth_row_for_a_security_the_run_no_longer_holds(tmp_pa
     repo.write([NEW_Z], securities=[sec("Y")])
     closed = rnd.close(tmp_path / "truth.csv", repo.run(), repo.base())
     assert TruthSet.open(tmp_path / "truth.csv").rows == [] and closed.changes == ()
-    assert [r["outcome"] for r in read_ledger(rnd.loop.ledger)] == ["new_right"]
+    # only a settled ledger row cites the report: it stays in the round's folder, cited there
+    assert [(r["outcome"], r["report"]) for r in read_ledger(rnd.loop.ledger)] == [
+        ("new_right", f"{rnd.report_dir}/Z_5a-r1.md")]
+    assert closed.kept == 0 and not rnd.loop.reports.exists()
+
+
+def test_closing_keeps_the_report_of_an_open_ledger_row_and_refuses_a_missing_one(tmp_path, repo):
+    repo.write([contract_row("A", exit_kind="exchange")])
+    repo.commit()
+    write_truth(tmp_path / "truth.csv", [truth_row("A_2010-01-04", "A", exit_kind="merger")])
+    rnd, opened = _open(tmp_path, repo)
+    [case] = opened.cases
+    _write_records(rnd, [_record(case, ["library"], confidence="inferred")], reports=False)
+    truth = (tmp_path / "truth.csv").read_bytes()
+    for dry_run in (True, False):
+        with pytest.raises(ValueError, match=r"no report \['A_2010-01-04_5a-r1.md'\]"):
+            rnd.close(tmp_path / "truth.csv", repo.run(), repo.base(), dry_run=dry_run)
+    assert (tmp_path / "truth.csv").read_bytes() == truth and not rnd.loop.ledger.exists()
+    assert not rnd.loop.reports.exists()
+    (rnd.reports_dir / "A_2010-01-04_5a-r1.md").write_text("# A\n")
+    closed = rnd.close(tmp_path / "truth.csv", repo.run(), repo.base())
+    # an unverified diagnosis changes no truth cell and leaves the error open: the operator settles it from the report
+    assert closed.changes == () and closed.kept == 1
+    assert [(r["outcome"], r["report"]) for r in read_ledger(rnd.loop.ledger)] == [
+        ("pending", "reports/A_2010-01-04_5a-r1.md")]
+    assert (rnd.loop.reports / "A_2010-01-04_5a-r1.md").read_text() == "# A\n"
 
 
 def test_closing_flips_a_known_wrong_case_the_run_now_matches(tmp_path, repo):
