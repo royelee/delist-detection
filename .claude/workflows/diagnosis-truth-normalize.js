@@ -49,12 +49,12 @@ instructions; follow them exactly) and .claude/skills/diagnose-delisting/referen
 the spec's decisions).
 
 Cases: ${ids.join(', ')}.
-For each case: read output/diagnose_unknown_report/reports/<case_id>.md (all sections, including 9) and
-output/diagnose_unknown_report/records/<case_id>.json. To look up a sec_id, grep output/securities.csv and
+For each case: read data/diagnosis/reports/<case_id>.md (all sections, including 9) and
+data/diagnosis/records/<case_id>.json. To look up a sec_id, grep output/securities.csv and
 output/ticker_history.csv. Do not fetch from SEC or the web: the report is the evidence.
 
 Write one file per case with the Write tool, BEFORE you return:
-output/diagnose_unknown_report/truth_rows/<case_id>.json. Then return {"rows": [...]} with the same objects.
+data/diagnosis/truth_rows/<case_id>.json. Then return {"rows": [...]} with the same objects.
 Do not edit any other file, run the pipeline, commit or dispatch subagents.`
 }
 

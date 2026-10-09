@@ -38,3 +38,15 @@ output/run.log
 # Local env
 .env
 .env.local
+
+# The diagnosis truth set's working files (data/diagnosis/ keeps the reports and the loop ledger): the inputs
+# and outputs of sub-plan 5-0's one-time build (scripts/build_diagnosis_truth.py), and each loop round's cases,
+# records and summary, read only while the round is open
+data/diagnosis/truth_rows/
+data/diagnosis/records/
+data/diagnosis/source.csv
+data/diagnosis/summary.csv
+data/diagnosis/truth_review.md
+data/diagnosis/loop/*/round-*/cases.csv
+data/diagnosis/loop/*/round-*/records/
+data/diagnosis/loop/*/round-*/summary.md

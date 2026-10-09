@@ -56,7 +56,7 @@ from ..outputs.run_snapshot import RunSnapshot
 from .truth import Judgement, Mismatch
 from .truth_set import TruthSet
 
-LOOP_DIR = Path("output/diagnose_unknown_report/loop")          # under a repository
+LOOP_DIR = Path("data/diagnosis/loop")          # under a repository
 LEDGER_NAME = "diagnosed.csv"
 CASES_NAME, RECORDS_NAME, REPORTS_NAME, SUMMARY_NAME = "cases.csv", "records", "reports", "summary.md"
 

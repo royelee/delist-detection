@@ -1,4 +1,4 @@
-"""Assemble output/diagnose_unknown_report/summary.csv from records/*.json, and print the counts.
+"""Assemble data/diagnosis/summary.csv from records/*.json, and print the counts.
 
 Run from the repo root: python .claude/skills/diagnose-delisting/summarize.py
 The summary is the batch's index and its resume checkpoint: a case with a record is done.
@@ -8,7 +8,7 @@ import json
 from collections import Counter
 from pathlib import Path
 
-OUT = Path("output/diagnose_unknown_report")
+OUT = Path("data/diagnosis")
 COLUMNS = ["case_id", "sec_id", "ticker", "report", "event_type", "consideration", "confidence", "exit_kind",
            "drop_reason", "continuation", "successor_ticker", "last_trade_date", "value_rule", "cash_per_share",
            "cash_currency", "stock_ratio", "price_ticker", "price_date", "value_formula",

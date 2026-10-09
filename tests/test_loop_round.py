@@ -203,13 +203,13 @@ def test_a_case_row_reads_back_as_its_errors():
 # -- the loop folder --------------------------------------------------------------------------------------------------
 def test_the_loop_folder_names_the_ledger_and_each_rounds_files(tmp_path):
     loop = lr.Loop.of(tmp_path)
-    assert loop.folder == tmp_path / "output" / "diagnose_unknown_report" / "loop"
+    assert loop.folder == tmp_path / "data" / "diagnosis" / "loop"
     assert loop.ledger == loop.folder / "diagnosed.csv"
     rnd = loop.round("5a", 2)
     assert rnd.folder == loop.folder / "5a" / "round-2"
     assert (rnd.cases_file, rnd.records_dir, rnd.reports_dir, rnd.summary_file) == (
         rnd.folder / "cases.csv", rnd.folder / "records", rnd.folder / "reports", rnd.folder / "summary.md")
-    assert rnd.report_dir == "output/diagnose_unknown_report/loop/5a/round-2/reports"     # relative to the repo
+    assert rnd.report_dir == "data/diagnosis/loop/5a/round-2/reports"     # relative to the repo
     outside = lr.Loop.of(tmp_path / "repo", tmp_path / "elsewhere").round("5a", 1)
     assert outside.report_dir == str(tmp_path / "elsewhere" / "5a" / "round-1" / "reports")
     assert rnd.case_id("Z") == "Z_5a-r2"

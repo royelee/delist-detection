@@ -7,7 +7,7 @@ the skeptic's correction, never the report's section 3.
 
 ## Output
 
-One JSON file, `output/diagnose_unknown_report/truth_rows/<case_id>.json`:
+One JSON file, `data/diagnosis/truth_rows/<case_id>.json`:
 
 ```json
 {"case_id": "...", "sec_id": "...", "shape": "ending | no_ending | ending_moved",

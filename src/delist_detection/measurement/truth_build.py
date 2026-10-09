@@ -1,6 +1,6 @@
 """The first diagnosis truth file, from the normalization pass (spec 2026-10-03-diagnosis-truth-fixes, 1.2). The
 diagnosis-truth-normalize workflow writes one JSON row per case under
-output/diagnose_unknown_report/truth_rows/; `assemble` turns each into a data/diagnosis_truth.csv row.
+data/diagnosis/truth_rows/; `assemble` turns each into a data/diagnosis_truth.csv row.
 
 `assemble` applies what the agents could not decide:
 - Ruling R2's FIGI check on a CUSIP change. The caller looks up the new CUSIP's composite, and a different

@@ -102,7 +102,7 @@ const maxRounds = args.maxRounds || 3
 const summaries = []
 for (let round = 1; round <= maxRounds; round++) {
   const dir = args.casesPath ? args.casesPath.replace(/\/cases\.csv$/, '') :
-    `output/diagnose_unknown_report/loop/${label}/round-${round}`
+    `data/diagnosis/loop/${label}/round-${round}`
   let listed
   if (args.casesPath) {
     listed = parsed(await agent(runner(`${PY} -c "import csv,json; print(json.dumps({'mismatches_new': 0, 'regressions_new': 0, 'path': '${args.casesPath}', 'cases': [{'case_id': r['case_id'], 'mode': r['mode'], 'ticker': r['ticker']} for r in csv.DictReader(open('${args.casesPath}'))]}))"`),

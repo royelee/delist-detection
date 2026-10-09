@@ -4,10 +4,10 @@
   python scripts/build_diagnosis_truth.py             # NETWORK: OpenFIGI for new CUSIPs not yet cached
   python scripts/build_diagnosis_truth.py --no-figi   # offline: no R2 check (lists the unchecked cases)
 
-Reads output/diagnose_unknown_report/truth_rows/*.json, records/*.json (confidence, verification), source.csv (the
+Reads data/diagnosis/truth_rows/*.json, records/*.json (confidence, verification), source.csv (the
 delist_date each case examined), the case map (sub-plan per case) and the run's tables. Writes the truth file (--out,
 by default the one data/scorecard.json names) and its legs file as one new truth set (`truth_set.TruthSet.new`; the
-legs are named after the truth file), and output/diagnose_unknown_report/truth_review.md. Exit 2: a missing input or
+legs are named after the truth file), and data/diagnosis/truth_review.md. Exit 2: a missing input or
 a row the truth set refuses.
 """
 from __future__ import annotations
@@ -28,7 +28,7 @@ from delist_detection.measurement.truth_build import UNSETTLED, assemble, final_
 from delist_detection.measurement.truth_set import TruthSet, configured
 
 ROOT = Path(__file__).resolve().parents[1]
-DIAG = ROOT / "output" / "diagnose_unknown_report"
+DIAG = ROOT / "data" / "diagnosis"
 
 
 def _figi(no_figi: bool):

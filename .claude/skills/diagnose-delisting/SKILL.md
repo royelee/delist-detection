@@ -1,14 +1,14 @@
 ---
 name: diagnose-delisting
-description: Diagnose one uncertain delisting of the delist_detection library from SEC filings (cached, then live) and the web, and write a per-case report plus a summary record under output/diagnose_unknown_report/. Use when asked to diagnose, classify or verify a delisting row, especially a contract ending with verdict=uncertain, a 0.0 or blank return, or a guessed reason.
+description: Diagnose one uncertain delisting of the delist_detection library from SEC filings (cached, then live) and the web, and write a per-case report plus a summary record under data/diagnosis/. Use when asked to diagnose, classify or verify a delisting row, especially a contract ending with verdict=uncertain, a 0.0 or blank return, or a guessed reason.
 ---
 
 # Diagnose one uncertain delisting
 
-You get one case: a row of `output/diagnose_unknown_report/source.csv` (one uncertain ending of
+You get one case: a row of `data/diagnosis/source.csv` (one uncertain ending of
 `output/contract/delistings.csv`, joined to its ticker history and to the library's internal row in
 `output/delistings.csv`). Find out from evidence what really happened to the security, compare it with what the
-library says, and write two files. **Write nothing else.** No library code, no other file under `output/`, no
+library says, and write two files. **Write nothing else.** No library code, no file under `output/`, no other
 `data/` file. The report is for a person who will later decide how to fix the library.
 
 Read `reference.md` (same folder) before you start: the contract's vocabulary, the spec's decisions that define
@@ -55,7 +55,7 @@ the right answer, the decision table and the cause tags. `example-THI.md` is a f
 
 ## Files
 
-`output/diagnose_unknown_report/reports/<case_id>.md` — the report, in this order:
+`data/diagnosis/reports/<case_id>.md` — the report, in this order:
 
 1. **Verdict.** One or two sentences: what happened, and whether the library's row is right.
 2. **Library vs evidence.** A table, one row per field: `exit_kind`, `drop_reason`, `continuation`, `successor`,
@@ -77,7 +77,7 @@ the right answer, the decision table and the cause tags. `example-THI.md` is a f
 8. **Fix and open checks.** What the corrected row needs; facts still to confirm (never a market price — those
    are qlib_practice's); whether this should become a golden case (a well-sourced case a rule fix should flip).
 
-`output/diagnose_unknown_report/records/<case_id>.json` — one JSON object, the summary line:
+`data/diagnosis/records/<case_id>.json` — one JSON object, the summary line:
 
 ```json
 {"case_id": "...", "sec_id": "...", "ticker": "...", "report": "reports/<case_id>.md",
@@ -101,7 +101,7 @@ the right answer, the decision table and the cause tags. `example-THI.md` is a f
 
 Besides the uncertain rows of `source.csv` (mode `uncertain`, steps 1–5 above), the truth loop (spec
 `docs/superpowers/specs/2026-10-03-diagnosis-truth-fixes-design.md`, 1.5) sends two other kinds of case. Its case
-row is in `output/diagnose_unknown_report/loop/<label>/round-<N>/cases.csv`: `mode`, `sec_id`, `ticker`,
+row is in `data/diagnosis/loop/<label>/round-<N>/cases.csv`: `mode`, `sec_id`, `ticker`,
 `truth_case_id`, and three JSON lists of the same length: `fields`, `side_a`, `side_b`, plus the context columns of
 `source.csv`.
 
@@ -110,12 +110,12 @@ row is in `output/diagnose_unknown_report/loop/<label>/round-<N>/cases.csv`: `mo
   `delistings.added` / `delistings.removed` means the whole contract row appeared or disappeared;
   `security_history.ranges` compares the ticker ranges.
 - `mismatch`: the library disagrees with the truth file; `side_a` is the truth, `side_b` the library. The truth came
-  from an earlier report (`truth_case_id`'s report under `output/diagnose_unknown_report/reports/`): read it first.
+  from an earlier report (`truth_case_id`'s report under `data/diagnosis/reports/`): read it first.
   Decide, field by field, which value the filings support. If the library is right, name the filing the earlier
   report missed or misread (its accession number) in `missed_filing`; without one, the truth will not change.
 
 Write the report and the record under the round's folder (`reports/<case_id>.md`, `records/<case_id>.json`), not
-under `output/diagnose_unknown_report/reports/`. Section 2 of the report shows both values and the evidence for
+under `data/diagnosis/reports/`. Section 2 of the report shows both values and the evidence for
 each field. The record has every key of the uncertain-mode record, plus:
 
 ```json

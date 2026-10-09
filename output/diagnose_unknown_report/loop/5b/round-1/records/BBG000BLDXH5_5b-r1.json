@@ -1,9 +1,0 @@
-{"case_id":"BBG000BLDXH5_5b-r1","sec_id":"BBG000BLDXH5","ticker":"MDRXD","report":"reports/BBG000BLDXH5_5b-r1.md","mode":"regression",
-"event_type":"exchange_delisting","consideration":"none","confidence":"verified","exit_kind":"dropped","drop_reason":"guidelines","continuation":false,"successor_ticker":"","last_trade_date":"2024-02-28",
-"value_rule":"otc_print","cash_per_share":null,"cash_currency":"","stock_ratio":null,"price_ticker":"MDRX","price_date":"2024-02-29",
-"value_formula":"otc_print(MDRX, from 2024-02-29) / last_close - 1",
-"status":{"exit_kind":"agree","last_trade_date":"agree","successor":"agree","value_rule":"agree","terms":"agree","issuer":"agree","ticker_history":"agree"},
-"confidence_reasons":[],"library_wrong":false,"cause":"library_right_but_uncertain","golden_worthy":true,"sec_evidence":4,"web_evidence":0,
-"open_checks":[],"verdict":"Nasdaq delisted Veradigm for late filings (suspended 2024-02-29, Form 25-NSE 2024-04-25); the new dropped/guidelines/otc_print row with last trade 2024-02-28 and range clipped there is right.",
-"field_verdicts":[{"field":"delistings.added","right":"new","value":"exit_kind=dropped;drop_reason=guidelines;continuation=false;successor_sec_id=;last_trade_date=2024-02-28;value_rule=otc_print","missed_filing":""},
-{"field":"security_history.ranges","right":"new","value":"MDRX:2007-12-20..2008-10-13:1124804;MDRX:2008-10-21..2024-02-28:1124804;MDRXD:2008-10-14..2008-10-20:1124804","missed_filing":""}]}
