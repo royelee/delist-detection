@@ -1,8 +1,6 @@
 from datetime import date
 
-from delist_detection.cik_lookup import CikNameIndex
-from delist_detection.issuer_in_force import Sighting, agreeing_since, in_force, issuer_changes
-from delist_detection.ticker_resolver import TickerResolver
+from delist_detection.identity.issuer_in_force import Sighting, agreeing_since, in_force, issuer_changes
 
 OLD_MERCK = {"name": "MERCK SHARP & DOHME CORP",
              "formerNames": [{"name": "MERCK & CO INC", "from": "1994-01-01T00:00:00.000Z",
@@ -72,9 +70,3 @@ def test_input_order_does_not_change_the_timeline():
     rows = [Sighting("S", "2020-01-01", "ACME INC", "1"), Sighting("S", "2020-01-02", "ACME INC", "2"),
             Sighting("S", "2020-01-02", "ACME INC", "1"), Sighting("S", "2020-01-03", "ACME INC", "1")]
     assert issuer_changes(rows, AGREE.get, lambda n: []) == issuer_changes(rows[::-1], AGREE.get, lambda n: [])
-
-
-def test_the_resolver_hands_out_its_name_index(fake_edgar):
-    index = CikNameIndex.from_text("MERCK & CO INC:0000064978:\n")
-    assert TickerResolver(fake_edgar, name_index=index).name_index() is index
-    assert TickerResolver(fake_edgar).name_index() is None

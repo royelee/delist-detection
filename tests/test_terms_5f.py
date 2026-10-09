@@ -10,19 +10,21 @@ from types import SimpleNamespace
 
 import pytest
 
-from delist_detection import currency
-from delist_detection.classifier import COMPLETION, DelistClassifier, _split_factor
-from delist_detection.contract import payout_leg_rows
-from delist_detection.edgar import EdgarSubmission
-from delist_detection.llm_merger_extractor import (PROMPT_VERSION, LLMMergerTermsExtractor, MergerTerms,
+from delist_detection.terms import currency
+from delist_detection.endings.classifier import COMPLETION, DelistClassifier
+from delist_detection.outputs.contract import payout_leg_rows
+from delist_detection.sources.edgar import EdgarSubmission
+from delist_detection.endings.exchange_terms import OwnExchange, split_factor
+from delist_detection.terms.llm_merger_extractor import (PROMPT_VERSION, LLMMergerTermsExtractor, MergerTerms,
                                                     StockLeg)
-from delist_detection.payout_extractor import _collect
-from delist_detection.payout_gate import (DEFAULT_TOL, ELECTION_CASH, GATE_SKIPPED, PACKAGE, gate_payouts,
-                                          reconcile, skip_reason)
-from delist_detection.payout_rule import MergerInputs, basket_legs, value_fields
-from delist_detection.price_requests import RECEIVED_CLOSE, request_rows, stock_legs
-from delist_detection.sec_stats import SEC_STATS
-from delist_detection.store import DelistingKey
+from delist_detection.terms.payout_extractor import _collect
+from delist_detection.terms.payout_gate import (DEFAULT_TOL, ELECTION_CASH, GATE_SKIPPED, PACKAGE, gate_payouts,
+                                          reconcile)
+from delist_detection.outputs.dlret import MergerInputs
+from delist_detection.outputs.payout_rule import basket_legs, value_fields
+from delist_detection.outputs.price_requests import RECEIVED_CLOSE, request_rows
+from delist_detection.sources.sec_stats import SEC_STATS
+from delist_detection.outputs.store import DelistingKey
 from lifecycle_tables import ending, tables
 
 LTD = "2014-12-12"       # a Friday: price_date is Monday the 15th
@@ -98,8 +100,8 @@ class _Llm:
 
 
 def _rec(ticker="JCI", day="2016-09-02"):
-    from delist_detection.classifier import DelistRecord
-    from delist_detection.crsp_codes import CrspBucket
+    from delist_detection.outputs.reconstruction import DelistRecord
+    from delist_detection.vocabulary.crsp_codes import CrspBucket
     return DelistRecord(ticker=ticker, cik=53669, observed_delist_date=day, crsp_code=231,
                         bucket=CrspBucket.MERGER, confidence="high", reason="", evidence={})
 
@@ -227,7 +229,7 @@ def test_without_a_last_close_a_package_of_stock_replaces_the_regex_cash():
 def test_a_non_usd_cash_leg_is_skipped_by_the_gate_with_a_flag():
     """THI 2014: C$65.50 + 0.8025 QSR against a USD close; the library has no FX source (R5)."""
     t = _v3("election", 65.5, 0.8025, "QSR", basis="default", currency_code="CAD")
-    assert skip_reason(t) == "CAD"
+    assert t.skip_reason == "CAD"
     g = _gate(t, close=85.92, price=35.46)
     assert K not in g.merged_terms and g.flags[K] == (f"{GATE_SKIPPED}CAD",) and g.dropped["skipped"] == 1
     r = reconcile(None, 85.92, _v3("cash", 65.5, currency_code="CAD"), None, DEFAULT_TOL)
@@ -302,7 +304,7 @@ def test_payout_leg_rows_are_the_last_endings_baskets():
 
 def test_a_dollar_valued_stock_leg_is_carried_in_the_formula_with_a_price_request():
     """PCYC 2015: $152.25 + $109.00 of AbbVie at its averaging price: no ratio, the acquirer priced the day after
-    the last trade, and a received close asked for it."""
+    the last trade (its received close is asked: tests/test_merger_value.py)."""
     t = _v3("election", 152.25, None, "ABBV", value=109.0, basis="default")
     r = ending("PCYC", "2015-06-05", ltd="2015-05-22", method="assumed_par", last_trade_close="0.01",
                flags="terms_gate_skipped:stock_value")
@@ -311,8 +313,10 @@ def test_a_dollar_valued_stock_leg_is_carried_in_the_formula_with_a_price_reques
             f["price_date"]) == ("cash_plus_stock", 152.25, None, "BBG0025Y4RY4", "ABBV", "2015-05-26")
     assert f["value_formula"] == ("(152.25 + 109.00 × price(ABBV, 2015-05-26) / avg_price(ABBV)) "
                                   "/ last_close − 1")
-    key = DelistingKey("PCYC", "2015-06-05")
-    assert stock_legs([r], {key: t}, {}, {key: "BBG0025Y4RY4"}) == {key: ("ABBV", "BBG0025Y4RY4")}
+
+
+def _leg(sec_id, n, ticker, price_sec_id):
+    return {"sec_id": sec_id, "leg": n, "price_ticker": ticker, "price_sec_id": price_sec_id}
 
 
 def test_a_baskets_further_legs_ask_their_received_close():
@@ -320,7 +324,7 @@ def test_a_baskets_further_legs_ask_their_received_close():
                  "value_rule": "basket"}]
     endings = {"LGFB": ending("LGFB", "2025-05-17", ltd="2025-05-06")}
     rows = request_rows(contract, endings, {DelistingKey("LGFB", "2025-05-17"): ("LION", "")},
-                        {"LGFB": [("STRZ", ""), ("", "")]})
+                        leg_rows=[_leg("LGFB", 2, "STRZ", ""), _leg("LGFB", 3, "", "")])
     assert [(r["kind"], r["lookup_ticker"], r["date"]) for r in rows if r["kind"] == RECEIVED_CLOSE] == [
         (RECEIVED_CLOSE, "LION", "2025-05-07"), (RECEIVED_CLOSE, "STRZ", "2025-05-07")]
 
@@ -328,9 +332,16 @@ def test_a_baskets_further_legs_ask_their_received_close():
 # --- rule 6 and a completion reported in a 6-K -------------------------------------------------------------------
 
 def test_a_split_factor_keeps_the_stake_and_another_ratio_does_not():
-    """SIRI 2024's 0.1 New Sirius (a one-for-ten consolidation) is no merger; CHTR 2016's 0.9042 is."""
-    assert _split_factor(0.1) and _split_factor(1.0) and _split_factor(2.0) and _split_factor(0.25)
-    assert not _split_factor(0.9042) and not _split_factor(0.6029) and not _split_factor(1.5)
+    """SIRI 2024's 0.1 New Sirius (a one-for-ten consolidation) is no merger; CHTR 2016's 0.9042 is (the one split
+    factor rule, `exchange_terms.split_factor`, which the verdict's ratio doubt reads too)."""
+    assert split_factor(0.1) and split_factor(1.0) and split_factor(2.0) and split_factor(0.25)
+    assert not split_factor(0.9042) and not split_factor(0.6029) and not split_factor(1.5)
+    assert split_factor(0.01) and not split_factor(1 / 150) and not split_factor(0.0)       # n up to SPLIT_FACTOR_MAX
+
+    def own(ratio, cash=False, ambiguous=False):
+        return OwnExchange(ratio, cash, "of New Charter", ("New Charter",), "", False, "s", ambiguous=ambiguous)
+    assert own(0.9042).stake_changed and own(1.0, cash=True).stake_changed               # rule 6: a merger
+    assert not own(0.1).stake_changed and not own(1.0).stake_changed and not own(0.9042, ambiguous=True).stake_changed
 
 
 @pytest.mark.parametrize("text", [
@@ -352,6 +363,9 @@ class _ClsEdgar:
     def __init__(self, filings, texts):
         self.filings, self.texts = filings, texts
 
+    def submissions(self, cik, fresh_after=None):
+        return {}                # no record of the registrant: its names are the security's own
+
     def fetch_filing_text(self, cik, accession, primary_doc):
         return self.texts.get(accession, "")
 
@@ -368,53 +382,10 @@ def test_a_6k_near_the_form_25_that_reports_the_completion_is_found():
     assert cls._completion_report(1580732, [f25, filings[2], filings[3]], f25) == ""
 
 
-def test_the_pipeline_tells_the_llm_the_target_security():
-    """The LLM extractor is asked with the security's name (its class) when it takes one."""
-    from delist_detection import pipeline
-    seen = []
-
-    class Ext:
-        def extract(self, record, security_name=""):
-            seen.append((record.ticker, security_name))
-            return None
-
-    rec = _rec("PARA")
-    e = SimpleNamespace(record=rec, key=K, sec_id="BBG000C496P7", ticker="PARA", cik=813828, delist_date=K[1])
-    ctx = SimpleNamespace(clients=SimpleNamespace(payout_extractor=None, llm_extractor=Ext()), sec_workers=1,
-                          log=lambda *a: None)
-    pipeline._extract_payouts(ctx, [e], {}, {"BBG000C496P7": "PARAMOUNT GLOBAL CLASS B"})
-    assert seen == [("PARA", "PARAMOUNT GLOBAL CLASS B")]
-
-
-def test_the_llm_calls_are_filled_ahead_on_worker_threads_with_the_same_answers():
-    """With --sec-workers > 1 the LLM extractor runs on the worker threads first (a new prompt version asks every
-    merger again); the sequential pass then reads what they cached, so its terms are the one-worker run's."""
-    from delist_detection import pipeline
-    calls, cache = [], {}
-
-    class Ext:                          # caches its answer per target, as LLMMergerTermsExtractor does on disk
-        def extract(self, record, security_name=""):
-            calls.append(record.ticker)
-            return cache.setdefault(record.ticker, _v3("cash", 10.0 + len(cache)))
-
-    es = [SimpleNamespace(record=_rec(t), key=DelistingKey(t, "2016-09-16"), sec_id=t, ticker=t, cik=1,
-                          delist_date="2016-09-16") for t in ("AAA", "BBB", "CCC")]
-
-    def run(workers):
-        ctx = SimpleNamespace(clients=SimpleNamespace(payout_extractor=None, llm_extractor=Ext()),
-                              sec_workers=workers, log=lambda *a: None)
-        return pipeline._extract_payouts(ctx, es, {}, {})[1]
-
-    one = run(1)
-    assert calls == ["AAA", "BBB", "CCC"]
-    calls.clear()
-    assert run(4) == one and sorted(calls) == ["AAA", "AAA", "BBB", "BBB", "CCC", "CCC"]
-
-
 def test_an_unsure_one_for_one_answer_with_no_share_count_is_passed_over(tmp_path):
     """ATH 2022: the 5.01 8-K says only that Athene became a subsidiary of AGM; the model guessed one share
     (medium confidence) where holders got 1.149 AGM shares, so the proxy, the next candidate, is read."""
-    from delist_detection.llm_merger_extractor import unsupported_one_for_one
+    from delist_detection.terms.llm_merger_extractor import unsupported_one_for_one
     guess = {**V3_JCI, "deal_type": "stock", "package_basis": "fixed", "cash_per_share": None, "stock_ratio": 1,
              "confidence": "medium", "quote": "As a result of the Mergers, AAM and AHL became direct subsidiaries"}
     proxy = {**guess, "stock_ratio": 1.149, "confidence": "high", "quote": "1.149 AGM Shares"}
@@ -438,12 +409,13 @@ def test_an_unsure_one_for_one_answer_with_no_share_count_is_passed_over(tmp_pat
 def test_a_spelled_out_null_ticker_is_no_ticker(spelled):
     """GRUB 2021: the terms' acquirer ticker "NULL" is no ticker: the gate reports `no_acq_ticker`, never a price
     missing for a symbol called NULL, and the extractor reads it as none."""
-    from delist_detection.payout_gate import clean_ticker
+    from delist_detection.terms.llm_merger_extractor import clean_ticker
     asked = []
     t = MergerTerms("stock", None, 0.35, "Just Eat Takeaway.com", spelled, "high", "8-K:x", "")
     g = gate_payouts([K], {}, {}, {}, {K: t}, {"ABC": 10.0}, {}, lambda ticker, key: asked.append(ticker),
                      DEFAULT_TOL)
     assert g.flags[K] == ("terms_gate_failed:no_acq_ticker",) and asked == [] and clean_ticker(spelled) == ""
+    assert t.acquirer_ticker is None and t.ticker == ""          # the answer itself holds no ticker
     assert LLMMergerTermsExtractor._to_terms({**V3_JCI, "acquirer_ticker": spelled}, _f("C1")).acquirer_ticker is None
     assert clean_ticker(" JET ") == "JET"
 

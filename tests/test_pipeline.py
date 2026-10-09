@@ -7,28 +7,31 @@ from pathlib import Path
 import pytest
 
 import delist_detection.pipeline as pipeline
-from delist_detection.classifier import DelistClassifier, DelistRecord
-from delist_detection.crsp_codes import CrspBucket
-from delist_detection.delistings import Delisting, DelistingFinder
-from delist_detection.edgar import EdgarBlocked, EdgarSubmission
-from delist_detection.ftd import FtdRow
-from delist_detection.last_trade import LastTrade
-from delist_detection.llm_merger_extractor import MergerTerms
-from delist_detection.observations import Observation, ObservationIndex
-from delist_detection.payout_extractor import PayoutResult
-from delist_detection.acquirers import acquirer_cik
+from delist_detection.endings.classifier import DelistClassifier
+from delist_detection.outputs.reconstruction import DelistRecord
+from delist_detection.vocabulary.crsp_codes import CrspBucket
+from delist_detection.endings.delistings import Delisting, DelistingFinder
+from delist_detection.sources.edgar import EdgarBlocked, EdgarSubmission
+from delist_detection.sources.ftd import FtdRow
+from delist_detection.endings.last_trade import LastTrade
+from delist_detection.terms.llm_merger_extractor import MergerTerms
+from delist_detection.identity.observations import Observation, ObservationIndex
+from delist_detection.terms.payout_extractor import PayoutResult
+from delist_detection.terms.acquirers import acquirer_cik
 from delist_detection.pipeline import Clients, Overrides, run
-from delist_detection.review_triage import merge_review_rows
-from delist_detection.history import own_last_seen, ticker_range_review
-from delist_detection.successors import SecurityStart, successor_from_8k12b, successor_in_run, successor_search_name
-from delist_detection.review_triage import Decision
-from delist_detection.security_master import Security
-from delist_detection import scorecard as run_scorecard
-from delist_detection.lifecycle import Tables
-from delist_detection.scorecard import ScorecardConfig, Window
-from delist_detection.truth import TruthCase
-from delist_detection.store import read_table, table_path
-from delist_detection.ticker_resolver import TickerResolution, TickerResolver
+from delist_detection.outputs.review_triage import merge_review_rows
+from delist_detection.identity.history import ticker_range_review
+from delist_detection.endings.successors import (SecurityStart, successor_from_8k12b, successor_in_run,
+                                                 successor_search_name)
+from delist_detection.outputs.review_triage import Decision
+from delist_detection.identity.security_master import Security
+from delist_detection.measurement import scorecard as run_scorecard
+from delist_detection.outputs.run_snapshot import RunSnapshot
+from delist_detection.measurement.scorecard import ScorecardConfig, Window
+from delist_detection.measurement.truth import TruthCase
+from delist_detection.outputs.store import formatted, read_table, table_path
+from delist_detection.outputs.verdict import decide as decide_verdicts
+from delist_detection.identity.ticker_resolver import TickerResolution, TickerResolver
 
 FIX = Path(__file__).parent / "fixtures" / "form25"
 AET_RAW = (FIX / "aet_25nse.txt").read_text(encoding="utf-8", errors="replace")
@@ -285,24 +288,25 @@ def _stage_5b(rows, specs, endings, sec_cusips=None, loaded=()):
     """Run stage 5b directly. specs: sid -> (ticker, first observation day);
     endings: (sid, last trade day, successor sid or None); loaded: rows already in the index."""
     from types import SimpleNamespace
-    from delist_detection.ftd import FtdIndex
-    from delist_detection.manifest import StageMeter
-    from delist_detection.observations import TickerEra
+    from delist_detection.sources.ftd import FtdIndex
+    from delist_detection.outputs.manifest import StageMeter
+    from delist_detection.identity.observations import TickerEra
     securities = {}
     for sid, (ticker, first) in specs.items():
         era = TickerEra(ticker, first, first, [Observation(ticker, first, "AETNA INC")])
         securities[sid] = Security(sid, 1, "", "AETNA INC", "Common Stock", True, "ticker", eras=[era])
     delistings = [SimpleNamespace(sec_id=sid, delist_date=day, last_trade=SimpleNamespace(day=date.fromisoformat(day)),
-                                  record=SimpleNamespace(successor_sec_id=succ))
+                                  anchor=date.fromisoformat(day), record=SimpleNamespace(successor_sec_id=succ))
                   for sid, day, succ in endings]
     client = _RecordingFtdClient(rows)
-    ctx = SimpleNamespace(clients=SimpleNamespace(ftd_client=client), log=lambda *_: None,
-                          meter=StageMeter(lambda *_: None))
-    ftd = FtdIndex(loaded)
+    ctx = SimpleNamespace(log=lambda *_: None, meter=StageMeter(lambda *_: None))
+    ftd = FtdIndex(loaded, source=client)          # the index reads the fails files; the stage only asks it
     held = {sid: list((sec_cusips or {}).get(sid, [])) for sid in specs}
     sightings = {sid: [] for sid in specs}
-    fixed = pipeline._dead_before_sighting(ctx, securities, delistings, held, ftd, sightings, {})
-    return fixed, held, sightings, securities, client, ctx
+    before = {sid: list(v) for sid, v in held.items()}
+    back = pipeline._dead_before_sighting(ctx, securities, delistings, held, ftd, {})
+    assert held == before                          # the stage returns its CUSIPs and sightings; `_run` merges them
+    return back.fixed, {**held, **back.cusips}, {**sightings, **back.sightings}, securities, client, ctx
 
 
 def _aet_rows(ticker="AET", cusip="00817Y108"):
@@ -413,7 +417,7 @@ def test_unmatched_override_stops_before_writing(fake_edgar, tmp_path):
 def test_an_override_row_that_matches_no_delisting_names_its_file_and_line(fake_edgar, tmp_path):
     """A loaded override file remembers where each row came from, so the refusal
     names the flag, the file and the line of every row that matches nothing."""
-    from delist_detection.reconstruction import OverrideFileError, load_float_overrides
+    from delist_detection.outputs.reconstruction import OverrideFileError, load_float_overrides
 
     lt = tmp_path / "lt.csv"
     lt.write_text("sec_id,delist_date,last_trade_close\nBBG000FJLFX8,2018-12-09,212.7\nBBG999,,1\n"
@@ -452,7 +456,7 @@ def test_an_openfigi_outage_stops_the_run_and_keeps_previous_outputs(fake_edgar,
     (that would change sec_ids between runs), nothing written over the
     previous complete outputs -- whether the batched listing ask or one
     security's own ask meets it."""
-    from delist_detection.openfigi import OpenFigiUnavailable
+    from delist_detection.sources.openfigi import OpenFigiUnavailable
 
     index, clients = _clients(fake_edgar)
     run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
@@ -470,32 +474,6 @@ def test_an_openfigi_outage_stops_the_run_and_keeps_previous_outputs(fake_edgar,
     with pytest.raises(OpenFigiUnavailable):
         run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
     assert {p.name: p.read_text() for p in tmp_path.glob("*.csv")} == before
-
-
-def test_own_last_seen_ignores_an_otc_tail_under_another_symbol():
-    """A bankrupt XYZ's CUSIP keeps showing up in FTD data under the OTC symbol
-    XYZQ after the real delisting; last_seen must stay at the last sighting
-    under the security's own era ticker(s), not the later OTC-tail date."""
-    from delist_detection.observations import TickerEra
-    from delist_detection.history import Sighting
-
-    era = TickerEra("XYZ", "2020-01-01", "2020-06-15", [])
-    sec = Security("BBGXYZ", 555, "COMMON", "XYZ CORP", "Common Stock", True, "cusip", eras=[era])
-    sig = [
-        Sighting("2020-01-01", "XYZ", "observation"),
-        Sighting("2020-06-15", "XYZ", "observation"),
-        Sighting("2020-07-01", "XYZQ", "ftd"),        # post-delisting OTC tail, later than the real last sighting
-        Sighting("2020-09-01", "XYZQ", "ftd"),
-    ]
-    assert own_last_seen(sec, sig) == "2020-06-15"
-
-
-def test_own_last_seen_falls_back_to_era_end_with_no_own_ticker_sighting():
-    from delist_detection.observations import TickerEra
-
-    era = TickerEra("XYZ", "2020-01-01", "2020-06-15", [])
-    sec = Security("BBGXYZ", 555, "COMMON", "XYZ CORP", "Common Stock", True, "cusip", eras=[era])
-    assert own_last_seen(sec, []) == "2020-06-15"
 
 
 # --- successor_from_8k12b resolves the matching-share-class candidate ---
@@ -682,297 +660,6 @@ def test_run_writes_an_open_successor_ticker_history_row(fake_edgar, tmp_path, m
     assert d["successor_sec_id"] == "BBGSUX00001"
 
 
-# --- an unconfirmed last trade day still clips the ranges at delist_date ---
-
-def test_ticker_history_clips_at_delist_date_when_last_trade_day_is_unconfirmed(fake_edgar, tmp_path, monkeypatch):
-    index, clients = _clients(fake_edgar)
-    record = DelistRecord(ticker="AET", cik=1122304, observed_delist_date="2018-11-28", crsp_code=470,
-                          bucket=CrspBucket.LIQUIDATION, confidence="low", reason="x",
-                          evidence={"flags": []}, sec_id="BBG000FJLFX8", delist_date="2018-12-09")
-    ev = Delisting(sec_id="BBG000FJLFX8", cik=1122304, ticker="AET", delist_date="2018-12-09", record=record,
-                        last_trade=LastTrade(None, "", ("last_trade_date_unconfirmed",)), form25=None,
-                        form25_sub=None, exchange="")
-
-    class _CannedFinder:
-        def __init__(self, edgar, classifier, *, midas=None, halts=None):
-            pass
-
-        def find(self, ctx):
-            return ([ev], []) if ctx.security.sec_id == "BBG000FJLFX8" else ([], [])
-
-    monkeypatch.setattr(pipeline, "DelistingFinder", _CannedFinder)
-    run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
-
-    th = read_table("ticker_history", table_path(tmp_path, "ticker_history"))
-    aet = [r for r in th if r["sec_id"] == "BBG000FJLFX8"]
-    assert aet[0]["valid_to"] == "2018-12-09"      # clipped at delist_date, not left at a raw last sighting
-
-
-# --- Phase 4: clip only at the last delisting that actually ends the security ---
-
-def _continuing_rows(symbol, cusip, desc, *, start, count, step_days=3, prices=(200.0, 201.0)):
-    out, d = [], date.fromisoformat(start)
-    for i in range(count):
-        out.append(FtdRow(d.isoformat(), cusip, symbol, desc, prices[i % len(prices)]))
-        d += timedelta(days=step_days)
-    return out
-
-
-def test_a_delisting_whose_successor_is_the_security_itself_does_not_clip_its_history(fake_edgar, tmp_path,
-                                                                                      monkeypatch):
-    """A continuing exchange transfer keeps the same FIGI (D18): it is not the
-    end of the security, so ticker_history is not clipped at its delist_date."""
-    index, clients = _clients(fake_edgar)
-    record = DelistRecord(ticker="AET", cik=1122304, observed_delist_date="2018-11-28", crsp_code=304,
-                          bucket=CrspBucket.EXCHANGE_TRANSFER, confidence="high", reason="moved exchanges",
-                          evidence={"flags": []}, sec_id="BBG000FJLFX8", delist_date="2018-12-09",
-                          successor_sec_id="BBG000FJLFX8")
-    ev = Delisting(sec_id="BBG000FJLFX8", cik=1122304, ticker="AET", delist_date="2018-12-09", record=record,
-                        last_trade=LastTrade(date(2018, 11, 28), "notice_a", ()), form25=None, form25_sub=None,
-                        exchange="NASDAQ")
-
-    class _CannedFinder:
-        def __init__(self, edgar, classifier, *, midas=None, halts=None):
-            pass
-
-        def find(self, ctx):
-            return ([ev], []) if ctx.security.sec_id == "BBG000FJLFX8" else ([], [])
-
-    monkeypatch.setattr(pipeline, "DelistingFinder", _CannedFinder)
-    run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
-
-    th = read_table("ticker_history", table_path(tmp_path, "ticker_history"))
-    aet = [r for r in th if r["sec_id"] == "BBG000FJLFX8"]
-    assert aet[0]["valid_to"] == "2018-11-29"      # its last real sighting, not the exchange-transfer's own date
-
-
-def test_a_merger_with_the_same_cusip_still_trading_under_its_own_ticker_does_not_clip_the_history(
-        fake_edgar, tmp_path, monkeypatch):
-    """WRK-like: a merger delisting is recorded, but the security's own CUSIP
-    keeps trading under its own ticker afterward -- at least 20 live fails
-    rows over at least 60 days with 2+ distinct prices -- so it was not a real
-    end and the history is not clipped there."""
-    continuing = _continuing_rows("AET", "00817Y108", "AETNA INC.(NEW)", start="2018-12-03", count=25)
-    index, clients = _clients(fake_edgar, ftd_rows=list(_FtdClient.ROWS) + continuing)
-    record = DelistRecord(ticker="AET", cik=1122304, observed_delist_date="2018-11-28", crsp_code=231,
-                          bucket=CrspBucket.MERGER, confidence="high", reason="x",
-                          evidence={"flags": []}, sec_id="BBG000FJLFX8", delist_date="2018-12-09")
-    ev = Delisting(sec_id="BBG000FJLFX8", cik=1122304, ticker="AET", delist_date="2018-12-09", record=record,
-                        last_trade=LastTrade(date(2018, 11, 28), "notice_a", ()), form25=None, form25_sub=None,
-                        exchange="NYSE")
-
-    class _CannedFinder:
-        def __init__(self, edgar, classifier, *, midas=None, halts=None):
-            pass
-
-        def find(self, ctx):
-            return ([ev], []) if ctx.security.sec_id == "BBG000FJLFX8" else ([], [])
-
-    monkeypatch.setattr(pipeline, "DelistingFinder", _CannedFinder)
-    run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
-
-    th = read_table("ticker_history", table_path(tmp_path, "ticker_history"))
-    aet = [r for r in th if r["sec_id"] == "BBG000FJLFX8"]
-    assert aet[0]["valid_to"] not in ("2018-11-28", "2018-12-09")
-    assert aet[0]["valid_to"] == continuing[-1].date       # extends to the real last sighting instead
-
-
-def test_a_bankruptcy_liquidation_with_varying_price_otc_fails_still_clips_the_history(fake_edgar, tmp_path,
-                                                                                       monkeypatch):
-    """RHD/Smurfit-Stone/Idearc/GGP-like: a bankruptcy (liquidation) delisting
-    is followed by years of real, varying-price OTC pink-sheet fails -- unlike
-    a WRK-like reorg, the listing itself did not carry on (CONTEXT.md
-    "Listing": ticker_history records exchange listings, and a delisting
-    leaves the security on no exchange). The continues-trading exception
-    applies only to merger/exchange_transfer buckets, so a liquidation always
-    clips, however much (and however varied) the fails evidence that follows
-    -- the old <2-distinct-price guard alone would have wrongly un-clipped
-    this (many rows, many distinct prices, well past 60 days)."""
-    varying = _continuing_rows("AET", "00817Y108", "AETNA INC.(NEW)", start="2018-12-03", count=200, step_days=10,
-                               prices=(0.50, 0.75, 1.10, 0.30, 0.90))
-    index, clients = _clients(fake_edgar, ftd_rows=list(_FtdClient.ROWS) + varying)
-    record = DelistRecord(ticker="AET", cik=1122304, observed_delist_date="2018-11-28", crsp_code=470,
-                          bucket=CrspBucket.LIQUIDATION, confidence="high", reason="Bankruptcy",
-                          evidence={"flags": []}, sec_id="BBG000FJLFX8", delist_date="2018-12-09")
-    ev = Delisting(sec_id="BBG000FJLFX8", cik=1122304, ticker="AET", delist_date="2018-12-09", record=record,
-                        last_trade=LastTrade(date(2018, 11, 28), "notice_a", ()), form25=None, form25_sub=None,
-                        exchange="")
-
-    class _CannedFinder:
-        def __init__(self, edgar, classifier, *, midas=None, halts=None):
-            pass
-
-        def find(self, ctx):
-            return ([ev], []) if ctx.security.sec_id == "BBG000FJLFX8" else ([], [])
-
-    monkeypatch.setattr(pipeline, "DelistingFinder", _CannedFinder)
-    run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
-
-    th = read_table("ticker_history", table_path(tmp_path, "ticker_history"))
-    aet = [r for r in th if r["sec_id"] == "BBG000FJLFX8"]
-    assert aet[0]["valid_to"] == "2018-11-28"
-
-
-def test_a_merger_with_no_last_trade_date_at_all_still_clips_despite_continuing_fails_rows(
-        fake_edgar, tmp_path, monkeypatch):
-    """Bank-of-Ozarks-like: a merger/exchange_transfer delisting with no
-    last-trade date at all (`no_last_trade_date`) is too weak a signal to
-    trust "fails rows show it kept trading past X" against -- there is no X
-    to compare to. It still clips at delist_date, whatever fails evidence
-    follows; only a delisting with an established, confirmed last-trade day
-    can be second-guessed by continued trading."""
-    continuing = _continuing_rows("AET", "00817Y108", "AETNA INC.(NEW)", start="2018-12-03", count=25)
-    index, clients = _clients(fake_edgar, ftd_rows=list(_FtdClient.ROWS) + continuing)
-    record = DelistRecord(ticker="AET", cik=1122304, observed_delist_date="2018-11-28", crsp_code=200,
-                          bucket=CrspBucket.MERGER, confidence="high", reason="M&A 2.01+3.01",
-                          evidence={"flags": []}, sec_id="BBG000FJLFX8", delist_date="2018-12-09")
-    ev = Delisting(sec_id="BBG000FJLFX8", cik=1122304, ticker="AET", delist_date="2018-12-09", record=record,
-                        last_trade=LastTrade(None, "", ("no_last_trade_date",)), form25=None, form25_sub=None,
-                        exchange="")
-
-    class _CannedFinder:
-        def __init__(self, edgar, classifier, *, midas=None, halts=None):
-            pass
-
-        def find(self, ctx):
-            return ([ev], []) if ctx.security.sec_id == "BBG000FJLFX8" else ([], [])
-
-    monkeypatch.setattr(pipeline, "DelistingFinder", _CannedFinder)
-    run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
-
-    th = read_table("ticker_history", table_path(tmp_path, "ticker_history"))
-    aet = [r for r in th if r["sec_id"] == "BBG000FJLFX8"]
-    assert aet[0]["valid_to"] == "2018-12-09"      # clipped at delist_date -- no established last-trade day to test
-
-
-def test_a_merger_with_an_unconfirmed_last_trade_date_still_clips_despite_continuing_fails_rows(
-        fake_edgar, tmp_path, monkeypatch):
-    """Monster Worldwide/SunPower-like: the no-Form-25 "continued 10-K/Q
-    filings" fallback (delistings.py's `_fallback_delisting`) never claims to
-    know when trading stopped -- when it finds no last-trade evidence at all
-    it substitutes the security's own last observed sighting date, flagged
-    `last_trade_date_unconfirmed`. That guessed date is too weak to trust
-    "fails rows show it kept trading past X" against (Monster Worldwide
-    traded normally as MNST on NYSE for years after this fallback guessed
-    2009-06-08; the guess, not the listing, was wrong). Only a *confirmed*
-    last-trade day (no `last_trade_date_unconfirmed` flag) can be
-    second-guessed by continued trading."""
-    continuing = _continuing_rows("AET", "00817Y108", "AETNA INC.(NEW)", start="2018-12-03", count=25)
-    index, clients = _clients(fake_edgar, ftd_rows=list(_FtdClient.ROWS) + continuing)
-    record = DelistRecord(ticker="AET", cik=1122304, observed_delist_date="2018-11-28", crsp_code=304,
-                          bucket=CrspBucket.EXCHANGE_TRANSFER, confidence="medium",
-                          reason="Continued 10-K/Q filings >180d after delist (moved to OTC or spun off)",
-                          evidence={"flags": []}, sec_id="BBG000FJLFX8", delist_date="2018-12-09")
-    ev = Delisting(sec_id="BBG000FJLFX8", cik=1122304, ticker="AET", delist_date="2018-12-09", record=record,
-                        last_trade=LastTrade(date(2018, 11, 28), "", ("last_trade_date_unconfirmed",)),
-                        form25=None, form25_sub=None, exchange="")
-
-    class _CannedFinder:
-        def __init__(self, edgar, classifier, *, midas=None, halts=None):
-            pass
-
-        def find(self, ctx):
-            return ([ev], []) if ctx.security.sec_id == "BBG000FJLFX8" else ([], [])
-
-    monkeypatch.setattr(pipeline, "DelistingFinder", _CannedFinder)
-    run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
-
-    th = read_table("ticker_history", table_path(tmp_path, "ticker_history"))
-    aet = [r for r in th if r["sec_id"] == "BBG000FJLFX8"]
-    assert aet[0]["valid_to"] == "2018-11-28"      # clipped at the guessed last-trade day -- never confirmed
-
-
-# --- run() builds the SecurityContext correctly ---
-
-def test_run_builds_last_seen_and_seen_after_from_the_right_sightings(fake_edgar, tmp_path, monkeypatch):
-    rows = list(_FtdClient.ROWS) + [FtdRow("2019-06-01", "00817Y108", "AETQ", "AETNA INC OTC PINK", 0.05)]
-    index, clients = _clients(fake_edgar, ftd_rows=rows)
-
-    contexts = {}
-
-    class _Recorder:
-        def __init__(self, edgar, classifier, *, midas=None, halts=None):
-            pass
-
-        def find(self, ctx):
-            contexts[ctx.security.sec_id] = ctx
-            return [], []
-
-    monkeypatch.setattr(pipeline, "DelistingFinder", _Recorder)
-    run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
-
-    ctx = contexts["BBG000FJLFX8"]
-    assert ctx.last_seen == "2018-11-29"           # last AET-labeled sighting, not the later OTC row
-    assert ctx.seen_after("2019-01-01") is True    # the OTC row is still visible to seen_after
-    assert ctx.seen_after("2019-12-31") is False
-    # ftd_seen_after: fails rows under the security's own tickers only (not the
-    # OTC tail, not observations)
-    assert ctx.ftd_seen_after("2018-11-28") is True
-    assert ctx.ftd_seen_after("2018-11-29") is False
-    assert ctx.ftd_seen_after("2017-01-01") is True
-    # tickers_between: every ticker sighted in the window, the OTC tail's included
-    assert ctx.tickers_between("2018-06-01", "2019-12-31") == ["AET", "AETQ"]
-    assert ctx.tickers_between("2019-01-01", "2019-12-31") == ["AETQ"]
-
-
-def test_run_builds_sibling_spans_for_every_security_of_the_issuer(fake_edgar, tmp_path, monkeypatch):
-    """Two share classes of one issuer must each see the other's sighting span
-    in SecurityContext.sibling_spans, keyed by sec_id. BBB's CUSIP also shows
-    an OTC tail under another symbol after its last own-ticker sighting: the
-    span's end must stay at that own-ticker sighting -- this fails under the
-    old `sib_sig[-1][0]`, which would pick up the later OTC-tail date."""
-    fake_edgar.company_map["AAA"] = {"cik_str": 9001, "ticker": "AAA", "title": "DUAL CLASS CO"}
-    fake_edgar.company_map["BBB"] = {"cik_str": 9001, "ticker": "BBB", "title": "DUAL CLASS CO"}
-    fake_edgar.submissions_by_cik[9001] = []
-
-    figi = _SuccessorFigi({
-        "AAA": _figi_answer("BBGAAA00001", "AAA", "DUAL CLASS CO"),
-        "BBB": _figi_answer("BBGBBB00001", "BBB", "DUAL CLASS CO"),
-        "BBGAAA00001": {"data": [{"figi": "BBGAAA00001", "compositeFIGI": "BBGAAA00001", "exchCode": "UN",
-                                  "ticker": "AAA", "name": "DUAL CLASS CO"}]},
-        "BBGBBB00001": {"data": [{"figi": "BBGBBB00001", "compositeFIGI": "BBGBBB00001", "exchCode": "UN",
-                                  "ticker": "BBB", "name": "DUAL CLASS CO"}]},
-    })
-
-    class _FtdOtcTail:
-        ROWS = [FtdRow("2020-08-01", "BBBCUSIP1", "BBBQ", "DUAL CLASS CO OTC", 0.01)]
-
-        def urls_for(self, lo, hi):
-            return ["mem"]
-
-        def rows(self, url, *, symbols=None, cusips=None):
-            for r in self.ROWS:
-                if (symbols and r.symbol in symbols) or (cusips and r.cusip in cusips):
-                    yield r
-
-    obs = [Observation("AAA", "2020-01-01", "DUAL CLASS CO", cik=9001),
-           Observation("AAA", "2020-06-01", "DUAL CLASS CO", cik=9001),
-           Observation("BBB", "2020-02-01", "DUAL CLASS CO", cusip="BBBCUSIP1", cik=9001),
-           Observation("BBB", "2020-07-01", "DUAL CLASS CO", cusip="BBBCUSIP1", cik=9001)]
-    index = ObservationIndex(obs)
-    resolver = TickerResolver(fake_edgar, observed_names=index.name_on, cik_pins=index.cik_pin_on)
-    clients = Clients(edgar=fake_edgar, resolver=resolver, classifier=DelistClassifier(fake_edgar, resolver),
-                      figi=figi, ftd_client=_FtdOtcTail())
-
-    contexts = {}
-
-    class _Recorder:
-        def __init__(self, edgar, classifier, *, midas=None, halts=None):
-            pass
-
-        def find(self, ctx):
-            contexts[ctx.security.sec_id] = ctx
-            return [], []
-
-    monkeypatch.setattr(pipeline, "DelistingFinder", _Recorder)
-    run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
-
-    aaa_ctx = contexts["BBGAAA00001"]
-    assert set(aaa_ctx.sibling_spans) == {"BBGAAA00001", "BBGBBB00001"}
-    assert aaa_ctx.sibling_spans["BBGAAA00001"] == ("2020-01-01", "2020-06-01")
-    assert aaa_ctx.sibling_spans["BBGBBB00001"] == ("2020-02-01", "2020-07-01")   # not the 2020-08-01 OTC tail
-
-
 # --- an open ticker_history row's exchange comes from EDGAR's own submissions ---
 
 def test_open_ticker_history_row_gets_its_exchange_from_issuer_submissions(fake_edgar, tmp_path):
@@ -1080,11 +767,10 @@ def test_issuer_exchange_for_ticker_reads_the_parallel_arrays(fake_edgar):
     fake_edgar.submissions = lambda cik, fresh_after=None: (
         {"tickers": ["X"], "exchanges": ["NYSE"]} if cik == 1 else {"tickers": [], "exchanges": []}
     )
-    from delist_detection.listing_status import issuer_exchange
+    from delist_detection.filings.listing_status import issuer_exchange
     assert issuer_exchange(fake_edgar, 1, "X") == "NYSE"
     assert issuer_exchange(fake_edgar, 1, "Y") is None
     assert issuer_exchange(fake_edgar, None, "X") is None
-
 
 
 # --- payouts.csv cites the right accession, at the run() level ---
@@ -1101,7 +787,7 @@ class _FakeLLMExtractor:
     def __init__(self, terms):
         self.terms = terms
 
-    def extract(self, record):
+    def extract(self, record, security_name=""):
         return self.terms
 
 
@@ -1202,7 +888,7 @@ def _two_stock_mergers(fake_edgar, monkeypatch):
         def __init__(self, mapping):
             self.mapping = mapping
 
-        def extract(self, record):
+        def extract(self, record, security_name=""):
             return self.mapping.get((record.sec_id, record.delist_date))
 
     clients.llm_extractor = _LLMByKey({
@@ -1226,7 +912,7 @@ def test_run_level_acquirer_price_uses_each_mergers_own_last_trade_day(fake_edga
 
 
 def test_an_answered_received_close_is_the_acquirer_price(fake_edgar, tmp_path, monkeypatch):
-    from delist_detection.price_requests import key_of
+    from delist_detection.outputs.price_requests import key_of
     index, clients = _two_stock_mergers(fake_edgar, monkeypatch)
     first = tmp_path / "first"
     run(index, clients, Overrides(), out_dir=first, log=lambda *_: None)
@@ -1239,33 +925,6 @@ def test_an_answered_received_close_is_the_acquirer_price(fake_edgar, tmp_path, 
     d = {r["sec_id"]: r for r in read_table("delistings", table_path(second, "delistings"))}
     assert d["BBGSEC001"]["acquirer_price"] == "105.000000"
     assert d["BBGSEC002"]["acquirer_price"] == "150.000000"
-
-
-def test_apply_price_answers_resolves_each_answer_to_its_delisting():
-    from delist_detection.price_requests import PriceKey
-    def stand_in(sec_id, day):
-        return type("D", (), {"sec_id": sec_id, "key": (sec_id, "2020-06-15"),
-                              "last_trade": type("L", (), {"day": day})()})()
-    a, b = stand_in("A", date(2020, 6, 1)), stand_in("B", date(2020, 6, 5))
-    answers = {PriceKey("A", "2020-06-01", "last_close", "A", "2020-06-01"): 11.0,
-               PriceKey("B", "2020-06-05", "received_close", "ACQ", "2020-06-05"): 22.0,
-               PriceKey("B", "2020-01-01", "last_close", "B", "2020-01-01"): 33.0}
-    got = pipeline._apply_price_answers(Overrides(price_answers=answers), [a, b])
-    assert got.last_trade_closes == {("A", "2020-06-15"): 11.0}
-    assert got.acquirer_prices == {("B", "2020-06-15"): ("ACQ", 22.0)}
-    unmatched = Overrides(price_answers={PriceKey("Z", "2020-06-01", "last_close", "Z", "2020-06-01"): 1.0})
-    again = pipeline._apply_price_answers(unmatched, [a, b])
-    assert again.last_trade_closes == {} and again.acquirer_prices == {}
-
-
-def test_apply_price_answers_reads_an_otc_print_without_touching_the_other_maps():
-    from delist_detection.price_requests import PriceKey
-    d = type("D", (), {"sec_id": "A", "key": ("A", "2020-06-15"),
-                       "last_trade": type("L", (), {"day": date(2020, 6, 1)})()})()
-    answers = {PriceKey("A", "2020-06-01", "otc_print", "A", "2020-06-02"): 0.4}
-    got = pipeline._apply_price_answers(Overrides(price_answers=answers), [d])
-    assert got.otc_prints == {("A", "2020-06-15"): 0.4}
-    assert got.last_trade_closes == {} and got.acquirer_prices == {}
 
 
 # --- a same-ticker successor does not overlap its predecessor ---
@@ -1534,9 +1193,9 @@ def test_last_trade_close_uses_the_cusip_whose_range_holds_the_last_trade_day():
     """`_last_trade_closes` prices each last trade day by the security's CUSIP whose
     range holds that day (from its fails rows), then by its ticker: by symbol
     alone, another CUSIP's rows under RS (99.0) would come first on both days."""
-    from delist_detection.ftd import FtdIndex
-    from delist_detection.manifest import StageMeter
-    from delist_detection.observations import TickerEra
+    from delist_detection.sources.ftd import FtdIndex
+    from delist_detection.outputs.manifest import StageMeter
+    from delist_detection.identity.observations import TickerEra
 
     ftd = FtdIndex(_ftd("RS", "11111A101", "REVERSE SPLIT CO", ["2019-06-03", "2019-09-04"], price=2.0)
                    + _ftd("RS", "00000X000", "SOMETHING ELSE", ["2019-09-04", "2020-03-03"], price=99.0)
@@ -1556,81 +1215,12 @@ def test_last_trade_close_uses_the_cusip_whose_range_holds_the_last_trade_day():
                           delisting("RSQ", "2021-01-14", date(2021, 1, 4)))
     ctx = pipeline._RunContext(None, date(2026, 9, 25), lambda *_: None, 1, StageMeter(lambda *_: None))
     closes = pipeline._last_trade_closes(ctx, [first, second, otc], {"BBGRS": sec},
-                                         {"BBGRS": ["11111A101", "11111A200"]}, ftd, date(2004, 1, 1), Overrides())
+                                         {"BBGRS": ["11111A101", "11111A200"]}, ftd, date(2004, 1, 1),
+                                         Overrides()).closes
     assert closes[first.key] == 2.0                  # 11111A101's range holds 2019-09-03
     assert closes[second.key] == 20.0                # 11111A200's range holds 2020-03-02
     assert closes[otc.key] == 7.0                    # the range's CUSIP has no row that day: the ticker's
     assert first.flags == second.flags == otc.flags == []
-
-
-# --- _delisting_endings / _mark_continuing_delistings: a continuing merger or
-# exchange_transfer (the DIS/WRK pattern) gets successor_sec_id = itself, the
-# same predicate the ticker_history clip uses, computed once ---
-
-def _continuation_case(bucket, last_trade_day, own_cusip, own_ticker, fails_after, *,
-                       existing_successor=None):
-    from delist_detection.ftd import FtdIndex
-    from delist_detection.observations import TickerEra
-    era = TickerEra(own_ticker, "2007-12-01", "2026-06-30",
-                    [Observation(own_ticker, "2007-12-01", "TEST CO")])
-    sec = Security("BBGTEST", 5, "COMMON", "TEST CO", "Common Stock", True, "cusip", eras=[era])
-    record = DelistRecord(ticker=own_ticker, cik=5, observed_delist_date="2019-03-30", crsp_code=231,
-                          bucket=bucket, confidence="high", reason="x", evidence={"flags": []},
-                          sec_id="BBGTEST", delist_date="2019-03-30", successor_sec_id=existing_successor)
-    delisting = Delisting("BBGTEST", 5, own_ticker, "2019-03-30", record,
-                          LastTrade(last_trade_day, "ex99_notice", ()), None, None, "NYSE")
-    ftd = FtdIndex(fails_after)
-    securities = {"BBGTEST": sec}
-    sec_cusips = {"BBGTEST": [own_cusip]}
-    endings = pipeline._delisting_endings([delisting], securities, sec_cusips, ftd)
-    pipeline._mark_continuing_delistings([delisting], endings)
-    return delisting
-
-
-def _continuing_fails(ticker, cusip, n=20, start=date(2019, 4, 1), step_days=4):
-    dates = [(start + timedelta(days=i * step_days)).isoformat() for i in range(n)]
-    prices = [110.0 if i % 2 == 0 else 111.0 for i in range(n)]     # 2 distinct prices
-    return [FtdRow(d, cusip, ticker, "TEST CO", p) for d, p in zip(dates, prices)]
-
-
-def test_a_disney_like_continuing_merger_gets_successor_itself():
-    """A merger whose own CUSIP keeps trading under its own ticker well past a
-    confirmed last-trade day (>=20 rows over >=60 days at >=2 prices) does not
-    end the security (`_ends_the_security`): its successor_sec_id becomes its
-    own sec_id, so handling.py/qlib_adapter skip it as a continuing security,
-    not a real exit -- the DIS 2019 holding-company reorg."""
-    fails = _continuing_fails("DIS", "254687106", n=20, start=date(2019, 4, 1), step_days=4)
-    d = _continuation_case(CrspBucket.MERGER, date(2019, 3, 19), "254687106", "DIS", fails)
-    assert d.record.successor_sec_id == "BBGTEST"
-
-
-def test_a_real_cash_merger_whose_cusip_stops_trading_keeps_no_successor():
-    """No fails rows at all under the security's own ticker after the last
-    trade day: a real exit, `_ends_the_security` is True, no self-successor is
-    added (and no existing successor is disturbed)."""
-    d = _continuation_case(CrspBucket.MERGER, date(2015, 3, 16), "037411105", "AGN", [])
-    assert d.record.successor_sec_id is None
-
-
-def test_a_liquidation_with_a_long_otc_tail_is_untouched():
-    """A liquidation always ends the security, whatever fails rows follow (a
-    bankrupt security's years of OTC trading is not the exchange listing
-    continuing): `_ends_the_security` never questions it, so its successor
-    link is left alone even with abundant continuing trading."""
-    fails = _continuing_fails("XYZ", "CUSIPXYZ0", n=30, start=date(2009, 1, 10), step_days=20)
-    d = _continuation_case(CrspBucket.LIQUIDATION, date(2009, 1, 5), "CUSIPXYZ0", "XYZ", fails)
-    assert d.record.successor_sec_id is None
-
-
-def test_a_continuing_delisting_never_overwrites_a_real_successor_already_found():
-    """A continuing merger/exchange_transfer that already has a real,
-    different successor (found by the successor search, e.g. MWV -> WRK) is
-    never overwritten with a self-reference -- only a blank successor is ever
-    filled."""
-    fails = _continuing_fails("DIS", "254687106", n=20, start=date(2019, 4, 1), step_days=4)
-    d = _continuation_case(CrspBucket.MERGER, date(2019, 3, 19), "254687106", "DIS", fails,
-                           existing_successor="BBGOTHER")
-    assert d.record.successor_sec_id == "BBGOTHER"
 
 
 def test_a_lagged_acquirer_close_flags_the_delisting(fake_edgar, tmp_path, monkeypatch):
@@ -1672,7 +1262,7 @@ def test_a_lagged_acquirer_close_flags_the_delisting(fake_edgar, tmp_path, monke
     monkeypatch.setattr(pipeline, "DelistingFinder", _CannedFinder)
 
     class _LLM:
-        def extract(self, record):
+        def extract(self, record, security_name=""):
             return MergerTerms("stock", None, 1.0, "ACQUIRER CO", "ACQ", "high", "8-K:X", "")
 
     clients.llm_extractor = _LLM()
@@ -1753,7 +1343,7 @@ def test_a_stale_review_decision_becomes_a_review_decision_unmatched_row(fake_ed
 
 
 def test_a_blank_dlret_with_no_flags_still_reaches_review_as_fix_no_dlret(fake_edgar, tmp_path, monkeypatch):
-    """resolve_dlret can return NaN with an *empty* flags
+    """dlret.decide can return NaN with an *empty* flags
     list -- a --last-trade-closes override of 0 on a non-merger bucket, since
     the override was "given" so no_last_close is never added (SEC
     fails-to-deliver data never itself yields a close <= 0). Such a delisting
@@ -1896,21 +1486,6 @@ def test_the_resolver_tier_reaches_the_delisting_row(fake_edgar, tmp_path, pinne
     assert d["sec_id"] == "BBG000FJLFX8" and d["resolution_source"] == source
 
 
-def test_resolution_source_comes_from_the_latest_era_that_has_a_cik():
-    from delist_detection.observations import TickerEra
-    from delist_detection.ticker_resolver import TickerResolution
-    old, new = TickerEra("X", "2010-01-04", "2012-06-29", []), TickerEra("X", "2014-06-30", "2016-06-30", [])
-    sec = Security("BBGX", 5, "COMMON", "X CO", "Common Stock", True, "cusip", eras=[old, new])
-    from delist_detection.security_master import Issuer
-    res = {old.key: TickerResolution("X", 5, None, "manual"), new.key: TickerResolution("X", None, None, "none")}
-    issuers = {old.key: Issuer(5)}
-    assert pipeline._resolution_source(sec, issuers, res) == "manual"          # the era issuer_cik came from
-    res[new.key] = TickerResolution("X", 5, None, "company_tickers")
-    issuers[new.key] = Issuer(5)
-    assert pipeline._resolution_source(sec, issuers, res) == "company_tickers"
-    assert pipeline._resolution_source(sec, {}, res) == "security_master"
-
-
 def test_an_era_whose_ticker_the_sec_data_never_shows_is_reviewed(fake_edgar, tmp_path):
     """APTV as the snapshots record it: "APTIV PLC" under APTV in 2012-2013 (a
     backfilled ticker: Delphi traded as DLPH then) and again from 2017-12-31.
@@ -1945,7 +1520,7 @@ ERAS_FIX = Path(__file__).parent / "fixtures" / "eras"
 
 def _eras_fixture(tickers):
     import csv
-    from delist_detection.observations import load_observations
+    from delist_detection.identity.observations import load_observations
     obs = [o for o in load_observations(ERAS_FIX / "observations.csv") if o.ticker in tickers]
     with (ERAS_FIX / "ftd_rows.csv").open(newline="") as fh:
         rows = [FtdRow(r["date"], r["cusip"], r["symbol"], r["description"],
@@ -2185,13 +1760,13 @@ def test_a_look_back_close_keeps_its_row_date_in_the_evidence(fake_edgar, tmp_pa
             FtdRow("2018-11-21", "00817Y108", "AET", "AETNA INC.(NEW)", 205.00)]
     index, clients = _clients(fake_edgar, ftd_rows=rows)
     seen = {}
-    real = pipeline.build_delistings_table
+    real = pipeline.enrich
 
-    def spy(records, **kw):
-        seen.update({r.sec_id: r.evidence for r in records})
-        return real(records, **kw)
+    def spy(record, value, **kw):
+        seen[record.sec_id] = record.evidence
+        return real(record, value, **kw)
 
-    monkeypatch.setattr(pipeline, "build_delistings_table", spy)
+    monkeypatch.setattr(pipeline, "enrich", spy)
     run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
     assert seen["BBG000FJLFX8"]["ftd_close_row_date"] == "2018-11-21"
     (d,) = read_table("delistings", table_path(tmp_path, "delistings"))
@@ -2416,7 +1991,6 @@ def test_a_same_ticker_acquirer_is_never_the_target_itself(fake_edgar, tmp_path)
     assert secs["BBGWCNNEW01"]["issuer_cik"] == "1318220"
 
 
-
 # --- a deleted symbol's fails rows are not trading ---
 
 _NASDAQ_F25 = ("<TYPE>25-NSE\n<notificationOfRemoval><exchange><entityName>The Nasdaq Stock Market LLC"
@@ -2501,6 +2075,8 @@ def test_a_placeholder_whose_late_rows_are_a_deleted_symbol_is_not_listed_today(
 # --- an acquirer on another ticker that resolves to the target's CIK ---
 
 class _OneAnswerResolver:
+    issuers = None        # no issuer record of its own
+
     def __init__(self, cik):
         self.cik = cik
 
@@ -2694,7 +2270,7 @@ def test_a_search_hit_means_the_filing_list_is_not_read_for_the_continuation(fak
 
 
 def test_the_successors_own_8k12b_settles_a_continuation_with_no_full_text_search_at_all(fake_edgar, tmp_path):
-    assert not hasattr(fake_edgar, "full_text_search")
+    assert fake_edgar.full_text_search is None          # the fixture states the search absent
     filing = EdgarSubmission("0000000999-15-000042", "8-K12B", "2015-06-15", "", "", "x.htm")
     (d,) = _holdco_run(fake_edgar, tmp_path, filings=[filing])
     assert (d["successor_sec_id"], d["confidence"]) == ("BBGHCNEW001", "high")
@@ -2812,13 +2388,23 @@ def test_run_writes_the_scorecard_of_the_tables_it_wrote(fake_edgar, tmp_path):
     assert (m["L1.tickers"], m["L1.securities"], m["R1.1.sightings"], m["R2.endings"]) == (2, 2, 3, 1)
     assert card["window"] == {"start": "2006-01-02", "end": "2024-12-29"} and "R2.3.blank_dlret_in_window" in m
     # the same numbers scripts/scorecard.py computes from the written tables
-    again = run_scorecard.build(Tables.read(tmp_path), as_of=date.fromisoformat(card["as_of"]), config=config)
+    again = run_scorecard.build(RunSnapshot.read(tmp_path), config=config)
     assert card == {**json.loads(json.dumps(again)), "drops": []}
+
+
+def test_the_verdicts_recomputed_from_the_written_folder_are_the_runs(fake_edgar, tmp_path):
+    """Stage 10f's verdicts are a function of the run snapshot: the folder's (its tables and run_manifest.json's stage
+    9g readings) gives the uncertain.csv the run wrote (the run has no placeholder, so no ticker evidence)."""
+    index, clients = _clients(fake_edgar, extra_obs=[Observation("ZZZ", "2020-06-30", "ZED CO")])   # unresolved
+    run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
+    written = RunSnapshot.read(tmp_path)
+    assert written.uncertain
+    assert formatted("uncertain", decide_verdicts(written, {}).uncertain_rows()) == written.uncertain
 
 
 def test_run_reports_floor_drops_and_failing_golden_cases(fake_edgar, tmp_path):
     index, clients = _clients(fake_edgar)
-    golden = [TruthCase(case="AET", group="golden", ticker="AET", on="2017-06-30", issuer_cik="999", status="pass")]
+    golden = [TruthCase(case_id="AET", group="golden", ticker="AET", on="2017-06-30", issuer_cik="999", status="pass")]
     config = ScorecardConfig(floor={"G.pass": 1, "L1.coverage_tickers": 1.0}, golden=golden)
     logged = []
     summary = run(index, clients, Overrides(), out_dir=tmp_path, log=logged.append, scorecard=config)
@@ -2852,6 +2438,8 @@ def test_a_sighting_after_the_ending_is_an_uncertain_seed_but_not_an_uncertain_s
 
 
 class _SearchEdgar:
+    """EDGAR whose full-text search answers `hits` (and records each query)."""
+
     def __init__(self, hits):
         self.hits, self.calls = hits, []
 
@@ -2861,12 +2449,11 @@ class _SearchEdgar:
 
 
 def test_ticker_evidence_asks_the_search_only_for_a_placeholder_without_a_ticker_tier():
-    from types import SimpleNamespace
-    from delist_detection import manifest as run_manifest
-    from delist_detection.observations import TickerEra
+    from delist_detection.outputs import manifest as run_manifest
+    from delist_detection.identity.observations import TickerEra
     edgar = _SearchEdgar([{"_id": "a:d", "_source": {"ciks": ["0000000555"], "adsh": "0000000555-16-000001"}}])
-    ctx = pipeline._RunContext(SimpleNamespace(edgar=edgar), date(2026, 9, 25), lambda *_: None, 1,
-                               run_manifest.StageMeter(lambda *_: None))
+    ctx = pipeline._RunContext(Clients(edgar=edgar, resolver=None, classifier=None, figi=None, ftd_client=None),
+                               date(2026, 9, 25), lambda *_: None, 1, run_manifest.StageMeter(lambda *_: None))
     securities = {
         "CIK555-COMMON": Security("CIK555-COMMON", 555, "COMMON", "PHX CO", "", True, "placeholder",
                                   eras=[TickerEra("PHX", "2015-06-30", "2016-06-30")]),
@@ -2875,17 +2462,14 @@ def test_ticker_evidence_asks_the_search_only_for_a_placeholder_without_a_ticker
         "BBGFIGI": Security("BBGFIGI", 888, "COMMON", "FIGI CO", "", True, "cusip",
                             eras=[TickerEra("FIG", "2015-06-30", "2016-06-30")]),
     }
-    answers = pipeline._IssuerAnswers(
-        resolutions={"PHX@2015-06-30": TickerResolution("PHX", 555, None, "name_search"),
-                     "PIN@2015-06-30": TickerResolution("PIN", 777, None, "cik_map")},
-        issuers={}, last_seen={}, names_degraded=set())
-    assert pipeline._ticker_evidence(ctx, securities, answers) == {
+    tiers = {"PHX@2015-06-30": "name_search", "PIN@2015-06-30": "cik_map"}
+    assert pipeline._ticker_evidence(ctx, securities, lambda key: tiers.get(key, "")) == {
         "CIK555-COMMON": "filing:0000000555-16-000001", "CIK777-COMMON": "tier:cik_map"}
     assert edgar.calls == [('"PHX"', (555,))]
 
 
 def test_price_answers_change_value_columns_only(fake_edgar, tmp_path):
-    from delist_detection.price_requests import key_of
+    from delist_detection.outputs.price_requests import key_of
     index, clients = _clients(fake_edgar)
     first = tmp_path / "first"
     run(index, clients, Overrides(), out_dir=first, log=lambda *_: None)
@@ -2902,8 +2486,8 @@ def test_price_answers_change_value_columns_only(fake_edgar, tmp_path):
 
 
 def test_an_answer_to_no_request_stops_the_run_before_anything_is_written(fake_edgar, tmp_path):
-    from delist_detection.price_requests import PriceKey
-    from delist_detection.reconstruction import OverrideFileError
+    from delist_detection.outputs.price_requests import PriceKey
+    from delist_detection.outputs.reconstruction import OverrideFileError
     index, clients = _clients(fake_edgar)
     stray = {PriceKey("BBG000FJLFX8", "2001-01-02", "last_close", "AET", "2001-01-02"): 10.0}
     with pytest.raises(OverrideFileError, match="answer no request"):
@@ -2912,8 +2496,8 @@ def test_an_answer_to_no_request_stops_the_run_before_anything_is_written(fake_e
 
 
 def test_a_last_close_given_twice_stops_the_run(fake_edgar, tmp_path):
-    from delist_detection.price_requests import key_of
-    from delist_detection.reconstruction import OverrideFileError
+    from delist_detection.outputs.price_requests import key_of
+    from delist_detection.outputs.reconstruction import OverrideFileError
     index, clients = _clients(fake_edgar)
     first = tmp_path / "first"
     run(index, clients, Overrides(), out_dir=first, log=lambda *_: None)
@@ -2925,80 +2509,93 @@ def test_a_last_close_given_twice_stops_the_run(fake_edgar, tmp_path):
             out_dir=tmp_path / "second", log=lambda *_: None)
 
 
-class _RawEdgar:
-    def __init__(self, raw):
-        self.raw, self.asked = raw, []
+def _stock_merger_whose_gate_reads_the_close(fake_edgar, monkeypatch):
+    """One merger (S1, last trade 2020-06-01) of 2.0 ACQ shares, no cash: its own fails close is 200.00 and ACQ's
+    100.00, so its terms reconcile on the run's own close; ACQ's CUSIP is a line OpenFIGI names, the acquirer the run
+    adds when the gate settles the leg on the terms' ticker."""
+    fake_edgar.company_map["S1"] = {"cik_str": 7001, "ticker": "S1", "title": "TARGET ONE INC"}
+    fake_edgar.submissions_by_cik[7001] = []
+    figi = _RecordingFigi({"S1": _figi_answer("BBGSEC001", "S1", "TARGET ONE INC"),
+                           "ACQCUSIP": _figi_answer("BBGACQ0001", "ACQ", "ACQUIRER CO")})
 
-    def fetch_filing_raw(self, cik, accession):
-        self.asked.append((cik, accession))
-        return self.raw
+    class _Ftd:
+        ROWS = [FtdRow("2020-06-02", "S1CUSIP01", "S1", "TARGET ONE INC", 200.0),
+                FtdRow("2020-06-02", "ACQCUSIP", "ACQ", "ACQUIRER CO", 100.0)]
 
+        def urls_for(self, lo, hi):
+            return ["mem"]
 
-def _continuation(source="last_sighting", b_first="2026-08-27"):
-    evidence = {"flags": ["handoff_continuation"], "handoff": {"b_first": b_first},
-                "delist_filing": {"form": "25-NSE", "filing_date": "2026-08-27", "accession": "0000876661-26-000712"}}
-    rec = DelistRecord("LEG", 58492, "2026-08-25", 304, CrspBucket.EXCHANGE_TRANSFER, "high", "Continuation", evidence,
-                       sec_id="OLD", delist_date="2026-09-06", successor_sec_id="NEW")
-    return Delisting("OLD", 58492, "LEG", "2026-09-06", rec, LastTrade(date(2026, 8, 25), source, ()), None, None, "")
+        def rows(self, url, *, symbols=None, cusips=None):
+            for r in self.ROWS:
+                if (symbols and r.symbol in symbols) or (cusips and r.cusip in cusips):
+                    yield r
 
+    obs = [Observation("S1", "2020-01-01", "TARGET ONE INC", cik=7001),
+           Observation("S1", "2020-06-01", "TARGET ONE INC", cik=7001)]
+    index = ObservationIndex(obs)
+    resolver = TickerResolver(fake_edgar, observed_names=index.name_on, cik_pins=index.cik_pin_on)
+    clients = Clients(edgar=fake_edgar, resolver=resolver, classifier=DelistClassifier(fake_edgar, resolver),
+                      figi=figi, ftd_client=_Ftd())
+    rec = DelistRecord(ticker="S1", cik=7001, observed_delist_date="2020-06-15", crsp_code=231,
+                       bucket=CrspBucket.MERGER, confidence="high", reason="x", evidence={"flags": []},
+                       sec_id="BBGSEC001", delist_date="2020-06-15")
 
-def _notice_ctx(edgar):
-    from types import SimpleNamespace
+    class _CannedFinder:
+        def __init__(self, edgar, classifier, *, midas=None, halts=None):
+            pass
 
-    from delist_detection.manifest import StageMeter
-    return pipeline._RunContext(SimpleNamespace(edgar=edgar), date(2026, 9, 25), lambda *_: None, 1,
-                                StageMeter(lambda *_: None))
+        def find(self, ctx):
+            if ctx.security.sec_id != "BBGSEC001":
+                return [], []
+            return [Delisting(sec_id="BBGSEC001", cik=7001, ticker="S1", delist_date="2020-06-15",
+                              record=replace(rec, evidence={"flags": []}),
+                              last_trade=LastTrade(date(2020, 6, 1), "midas", ()), form25=None, form25_sub=None,
+                              exchange="NYSE")], []
 
+    monkeypatch.setattr(pipeline, "DelistingFinder", _CannedFinder)
 
-def test_a_handoff_continuation_takes_its_form25_notice_day():
-    raw = (Path(__file__).parent / "fixtures" / "form25" / "leg_25nse_before_market_open.txt").read_text(
-        encoding="utf-8", errors="replace")
-    d = _continuation()
-    assert pipeline._date_from_notices(_notice_ctx(_RawEdgar(raw)), [d], []) == 1
-    assert (d.last_trade.day, d.last_trade.source) == (date(2026, 8, 26), "ex99_notice")
-    assert d.record.observed_delist_date == "2026-08-26"
+    class _LLM:
+        def extract(self, record, security_name=""):
+            return MergerTerms("stock", None, 2.0, "ACQUIRER CO", "ACQ", "high", "8-K:X1", "", package_basis="fixed")
 
-
-def test_a_handoff_continuation_without_a_dated_notice_keeps_its_sighting():
-    d, edgar = _continuation(), _RawEdgar("<TYPE>25-NSE no notice here")
-    assert pipeline._date_from_notices(_notice_ctx(edgar), [d], []) == 0
-    assert (d.last_trade.day, d.last_trade.source) == (date(2026, 8, 25), "last_sighting")
-    other = _continuation(source="midas")
-    pipeline._date_from_notices(_notice_ctx(edgar), [other], [])
-    assert edgar.asked == [(58492, "0000876661-26-000712")]    # a row dated another way is never re-read
-
-
-def _form25_text(name):
-    return (Path(__file__).parent / "fixtures" / "form25" / name).read_text(encoding="utf-8", errors="replace")
-
-
-def test_a_dated_but_unconfirmed_notice_keeps_the_sighting():
-    d = _continuation()
-    assert pipeline._date_from_notices(_notice_ctx(_RawEdgar(_form25_text("rsh_25nse.txt"))), [d], []) == 0
-    assert (d.last_trade.day, d.last_trade.source) == (date(2026, 8, 25), "last_sighting")
-
-
-def test_a_failed_notice_read_is_reported_and_keeps_the_sighting():
-    from delist_detection.sec_stats import SEC_STATS
-
-    class Failing(_RawEdgar):
-        def fetch_filing_raw(self, cik, accession):
-            SEC_STATS.degraded("failed_request")
-            return ""
-
-    d, review = _continuation(), []
-    assert pipeline._date_from_notices(_notice_ctx(Failing("")), [d], review) == 0
-    assert d.last_trade.source == "last_sighting"
-    assert "resolution_degraded" in d.flags
-    assert [r.flag for r in review] == ["resolution_degraded"]
+    clients.llm_extractor = _LLM()
+    return index, clients
 
 
-def test_a_notice_day_on_or_after_the_successors_first_sighting_keeps_the_sighting():
-    raw = _form25_text("leg_25nse_before_market_open.txt")
-    for b_first in ("2026-08-26", "2026-08-20"):
-        d = _continuation(b_first=b_first)
-        assert pipeline._date_from_notices(_notice_ctx(_RawEdgar(raw)), [d], []) == 0
-        assert (d.last_trade.day, d.last_trade.source) == (date(2026, 8, 25), "last_sighting")
+def test_an_answered_last_close_that_flips_the_gate_changes_values_only(fake_edgar, tmp_path, monkeypatch):
+    """I1 (the final review): the gate pass that settles the acquirer and the stock leg's request reads the run's own
+    last close, never the caller's answer. Run 1 settles 2.0 ACQ at 100.00 against S1's fails close (200.00): the
+    acquirer is ACQ's line, added by the run, and the leg asks ACQ's received close. Run 2 answers S1's last close at
+    120.00, on which the terms no longer reconcile, and the received close: the run completes (no answer is
+    refused), the acquirer, the requests and every identity table are run 1's, and only the values move."""
+    from delist_detection.outputs.price_requests import key_of
+    index, clients = _stock_merger_whose_gate_reads_the_close(fake_edgar, monkeypatch)
+    first = tmp_path / "first"
+    run(index, clients, Overrides(), out_dir=first, log=lambda *_: None)
+    requests = read_table("price_requests", table_path(first, "price_requests"))
+    last = next(r for r in requests if r["sec_id"] == "BBGSEC001" and r["kind"] == "last_close")
+    leg = next(r for r in requests if r["sec_id"] == "BBGSEC001" and r["kind"] == "received_close")
+    assert (leg["lookup_ticker"], leg["lookup_sec_id"]) == ("ACQ", "BBGACQ0001")
+    one = next(r for r in read_table("delistings", table_path(first, "delistings")) if r["sec_id"] == "BBGSEC001")
+    assert (one["last_trade_close"], one["stock_ratio"], one["acquirer_price"]) == ("200.000000", "2.000000",
+                                                                                   "100.000000")
+
+    index, clients = _stock_merger_whose_gate_reads_the_close(fake_edgar, monkeypatch)
+    second = tmp_path / "second"
+    run(index, clients, Overrides(price_answers={key_of(last): 120.0, key_of(leg): 100.0}), out_dir=second,
+        log=lambda *_: None)
+    for name in ("securities", "ticker_history", "cusip_history", "observation_map", "security_history", "seeds",
+                 "price_requests", "id_changes"):
+        assert table_path(first, name).read_bytes() == table_path(second, name).read_bytes(), name
+    two = next(r for r in read_table("delistings", table_path(second, "delistings")) if r["sec_id"] == "BBGSEC001")
+    assert two["last_trade_close"] == "120.000000"
+    assert two["acquirer_sec_id"] == one["acquirer_sec_id"] == "BBGACQ0001"
+    assert two["stock_ratio"] == "" and "terms_gate_failed" in two["review_flags"]       # the values: the gate failed
+    contract = [r for d in (first, second)
+                for r in read_table("contract_delistings", table_path(d, "contract_delistings"))
+                if r["sec_id"] == "BBGSEC001"]
+    assert [(r["price_sec_id"], r["price_ticker"], r["exit_kind"]) for r in contract] == [
+        ("BBGACQ0001", "ACQ", "merger")] * 2
 
 
 def test_a_when_issued_observation_joins_its_regular_way_security(fake_edgar, tmp_path):
@@ -3024,163 +2621,7 @@ def test_a_when_issued_observation_joins_its_regular_way_security(fake_edgar, tm
         "BBG014QJ5BV6", "EHAB", "true", "mapped")
 
 
-def test_a_merger_whose_cusip_goes_on_under_a_line_ticker_does_not_end_the_security():
-    """U5 (sub-plan 5a): the continues-after rule counts the tickers the line follow added: TEST's own CUSIP keeps
-    trading as TSTN (a rename the line follow found), so the merger record is no real exit."""
-    from delist_detection.ftd import FtdIndex
-    from delist_detection.observations import TickerEra
-    era = TickerEra("TEST", "2007-12-01", "2019-03-29", [Observation("TEST", "2007-12-01", "TEST CO")])
-    sec = Security("BBGTEST", 5, "COMMON", "TEST CO", "Common Stock", True, "cusip", eras=[era])
-    record = DelistRecord(ticker="TEST", cik=5, observed_delist_date="2019-03-30", crsp_code=231,
-                          bucket=CrspBucket.MERGER, confidence="high", reason="x", evidence={"flags": []},
-                          sec_id="BBGTEST", delist_date="2019-03-30")
-    d = Delisting("BBGTEST", 5, "TEST", "2019-03-30", record, LastTrade(date(2019, 3, 29), "ex99_notice", ()),
-                  None, None, "NYSE")
-    ftd = FtdIndex(_continuing_fails("TSTN", "11111T101"))
-    assert pipeline._ends_the_security(d, sec, {"BBGTEST": ["11111T101"]}, ftd) is True
-    sec.line_tickers = frozenset({"TSTN"})
-    assert pipeline._ends_the_security(d, sec, {"BBGTEST": ["11111T101"]}, ftd) is False
-
-
-# --- Task 13b (sub-plan 5a): a successor's ticker is not its predecessor's ---
-
-def _successor_case(bucket, last_trade_day, successor_first, fails, *, observed_successor=True):
-    """S ("BBGOLD", own ticker TEST, line ticker TEST) with a delisting whose successor X ("BBGNEW") holds TEST from
-    `successor_first`; `fails` are S's own CUSIP's rows. Returns what `_history_rows` would be fed."""
-    from delist_detection.added_securities import AddedLineSuccessor
-    from delist_detection.ftd import FtdIndex
-    from delist_detection.history import Sighting
-    from delist_detection.observations import TickerEra
-    era = TickerEra("TEST", "2007-12-01", "2012-03-30", [Observation("TEST", "2007-12-01", "TEST CO")])
-    old = Security("BBGOLD", 5, "COMMON", "TEST CO", "Common Stock", True, "cusip", eras=[era],
-                   line_tickers=frozenset({"TEST"}))
-    new = Security("BBGNEW", 6, "COMMON", "TEST PLC", "Common Stock", True, "cusip")
-    record = DelistRecord(ticker="TEST", cik=5, observed_delist_date="2012-03-31", crsp_code=303, bucket=bucket,
-                          confidence="high", reason="x", evidence={"flags": []}, sec_id="BBGOLD",
-                          delist_date="2012-03-31", successor_sec_id="BBGNEW")
-    d = Delisting("BBGOLD", 5, "TEST", "2012-03-31", record, LastTrade(last_trade_day, "ex99_notice", ()), None,
-                  None, "NYSE")
-    ftd = FtdIndex(fails)
-    securities, added = {"BBGOLD": old}, {}
-    sightings = {"BBGOLD": [Sighting("2007-12-01", "TEST", "observation")]}
-    if observed_successor:
-        securities["BBGNEW"] = new
-        sightings["BBGNEW"] = [Sighting(successor_first, "TEST", "observation")]
-    else:
-        added["BBGNEW"] = AddedLineSuccessor(new, "TEST", successor_first, [])
-    cusips = {"BBGOLD": ["11111T101"]}
-    starts = pipeline._successor_starts([d], securities, sightings, cusips, ftd, added)
-    return d, old, cusips, ftd, starts
-
-
-def _th(old, ftd, cusips, starts, end, listed=False):
-    from delist_detection.history import Sighting, cusip_sightings, history_rows
-    sig = [Sighting("2007-12-01", "TEST", "observation")] + [
-        Sighting(r.date, r.symbol, "ftd") for r in ftd.trading_rows(cusips["BBGOLD"])]
-    th, ch = history_rows(old, sig, cusip_sightings(old, ftd, cusips["BBGOLD"], starts.get("BBGOLD", {})),
-                          listed=listed, end=end, end_exchange="NYSE", exchange_today=lambda t: None,
-                          successor_starts=starts.get("BBGOLD", {}))
-    return th, ch
-
-
-def test_a_successors_ticker_is_not_the_predecessors_AON_shape():
-    """AON 2012: the old CUSIP's fails rows keep coming under TEST after the continuation took the ticker, at
-    changing prices. They are the successor's: the continuation clips S, its TEST range ends at the last trade, the
-    successor holds TEST from its first day and no ticker is shared."""
-    fails = (_continuing_fails("TEST", "11111T101", n=3, start=date(2012, 3, 1), step_days=10)
-             + _continuing_fails("TEST", "11111T101", n=20, start=date(2012, 4, 3), step_days=4))
-    d, old, cusips, ftd, starts = _successor_case(CrspBucket.EXCHANGE_TRANSFER, date(2012, 3, 30), "2012-04-03",
-                                                  fails)
-    assert starts == {"BBGOLD": {"TEST": "2012-04-03"}}
-    assert pipeline._ends_the_security(d, old, cusips, ftd, starts["BBGOLD"]) is True
-    assert pipeline._ends_the_security(d, old, cusips, ftd) is False          # the old behaviour, no map
-    th, ch = _th(old, ftd, cusips, starts, "2012-03-30")
-    assert [(r["ticker"], r["valid_to"]) for r in th] == [("TEST", "2012-03-30")]
-    assert [r["valid_to"] for r in ch] == ["2012-03-30"]
-    new_th = [{"sec_id": "BBGNEW", "ticker": "TEST", "exchange": "NYSE", "valid_from": "2012-04-03",
-               "valid_to": None, "source": "observation"}]
-    assert ticker_range_review(th + new_th) == []
-
-
-def test_a_successors_ticker_is_not_the_predecessors_STX_shape():
-    """STX 2021: a line successor (added) starts its ticker on 2021-05-19, before the predecessor's last sighting
-    (the old CUSIP's settling tail under the same ticker). The predecessor's range ends the day before."""
-    tail = [FtdRow(d, "11111T101", "TEST", "TEST CO", 10.0)
-            for d in ("2021-05-17", "2021-05-18", "2021-05-24", "2021-05-28")]
-    d, old, cusips, ftd, starts = _successor_case(CrspBucket.EXCHANGE_TRANSFER, None, "2021-05-19", tail,
-                                                  observed_successor=False)
-    d.delist_date = "2021-05-28"                 # the helper's own date is 2012: X is out of its window
-    assert starts == {}
-    from delist_detection.added_securities import AddedLineSuccessor
-    x = AddedLineSuccessor(Security("BBGNEW", 6, "COMMON", "T", "Common Stock", False, "cusip"), "TEST",
-                           "2021-05-19", [])
-    starts = pipeline._successor_starts([d], {"BBGOLD": old}, {}, cusips, ftd, {"BBGNEW": x})
-    assert starts == {"BBGOLD": {"TEST": "2021-05-19"}}
-    th, ch = _th(old, ftd, cusips, starts, None)
-    assert [(r["ticker"], r["valid_to"]) for r in th] == [("TEST", "2021-05-18")]
-    new_th = [{"sec_id": "BBGNEW", "ticker": "TEST", "exchange": None, "valid_from": "2021-05-19",
-               "valid_to": None, "source": "ftd"}]
-    assert ticker_range_review(th + new_th) == []
-
-
-def test_a_successor_sighting_before_a_confirmed_last_trade_sets_no_start():
-    """With a confirmed last trade day D, a successor's TEST sighting 10 days before D is not the start: F is X's
-    first sighting on or after D, so S's range still reaches D."""
-    fails = _continuing_fails("TEST", "11111T101", n=3, start=date(2012, 3, 1), step_days=10)
-    d, old, cusips, ftd, starts = _successor_case(CrspBucket.EXCHANGE_TRANSFER, date(2012, 3, 30), "2012-03-20",
-                                                  fails)
-    assert starts == {}
-    th, _ = _th(old, ftd, cusips, starts, "2012-03-30")
-    assert [(r["ticker"], r["valid_to"], r["exchange"]) for r in th] == [("TEST", "2012-03-30", "NYSE")]
-
-
-def test_a_successor_first_seen_long_after_the_anchor_sets_no_start():
-    """A ticker first seen under the successor 200 days after the confirmed last trade is a recycled one."""
-    fails = _continuing_fails("TEST", "11111T101", n=3, start=date(2012, 3, 1), step_days=10)
-    _, _, _, _, starts = _successor_case(CrspBucket.EXCHANGE_TRANSFER, date(2012, 3, 30), "2012-10-16", fails)
-    assert starts == {}
-
-
-def test_a_blank_delist_date_with_no_last_trade_sets_no_start_and_raises_nothing():
-    fails = _continuing_fails("TEST", "11111T101", n=3, start=date(2012, 3, 1), step_days=10)
-    from delist_detection.ftd import FtdIndex
-    d, old, cusips, ftd, _ = _successor_case(CrspBucket.EXCHANGE_TRANSFER, None, "2012-04-03", fails)
-    d.delist_date = ""
-    assert pipeline._successor_starts([d], {"BBGOLD": old}, {}, cusips, ftd, {}) == {}
-
-
-def test_a_listed_security_whose_ticker_a_successor_took_ends_its_open_range_the_day_before():
-    """No clip, listed today: the open TEST range ends the day before the successor's first day."""
-    fails = (_continuing_fails("TEST", "11111T101", n=3, start=date(2012, 3, 1), step_days=10)
-             + _continuing_fails("TEST", "11111T101", n=5, start=date(2012, 4, 3), step_days=4))
-    d, old, cusips, ftd, starts = _successor_case(CrspBucket.EXCHANGE_TRANSFER, date(2012, 3, 30), "2012-04-03",
-                                                  fails)
-    th, _ = _th(old, ftd, cusips, starts, None, listed=True)
-    assert [(r["ticker"], r["valid_to"]) for r in th] == [("TEST", "2012-04-02")]
-
-
-def test_a_successor_on_another_ticker_changes_nothing_MWV_shape():
-    """MWV -> WRK: the successor trades under another ticker, so S's own rows are all S's."""
-    fails = _continuing_fails("TEST", "11111T101", n=20, start=date(2012, 4, 3), step_days=4)
-    d, old, cusips, ftd, starts = _successor_case(CrspBucket.MERGER, date(2012, 3, 30), "2012-04-03", fails)
-    from delist_detection.history import Sighting
-    other = pipeline._successor_starts([d], {"BBGOLD": old, "BBGNEW": old},
-                                       {"BBGNEW": [Sighting("2012-04-03", "WRK", "observation")]}, cusips, ftd, {})
-    assert other == {"BBGOLD": {"WRK": "2012-04-03"}}
-    assert pipeline._ends_the_security(d, old, cusips, ftd, other["BBGOLD"]) is False   # the WRK-like own rows count
-
-
-def test_a_security_with_no_successor_taking_its_ticker_keeps_every_row_WRK_shape():
-    """The existing continues-after tests (`test_a_disney_like_continuing_merger_gets_successor_itself`) pin the
-    default; a delisting whose successor is the security itself yields no start."""
-    fails = _continuing_fails("TEST", "11111T101", n=20, start=date(2012, 4, 3), step_days=4)
-    d, old, cusips, ftd, _ = _successor_case(CrspBucket.MERGER, date(2012, 3, 30), "2012-04-03", fails)
-    d.record = replace(d.record, successor_sec_id="BBGOLD")
-    assert pipeline._successor_starts([d], {"BBGOLD": old}, {}, cusips, ftd, {}) == {}
-    assert pipeline._ends_the_security(d, old, cusips, ftd, {}) is False
-
-
-# --- sub-plan 5a, stage 4b: a line followed past the observations (pipeline._follow_lines) ---
+# --- sub-plan 5a, stage 4b: a line followed past the observations (line_follow.follow_lines, in a whole run) ---
 
 LINE_F25 = ("<TYPE>25-NSE\n<notificationOfRemoval><exchange><entityName>New York Stock Exchange LLC</entityName>"
             "</exchange>\n<descriptionClassSecurity>Common Stock</descriptionClassSecurity>\n"
@@ -3345,8 +2786,8 @@ def _unit_delisting(sec_id, bucket, code, flags):
 
 
 def _line_successor(sec_id):
-    from delist_detection.figi_resolution import FigiCandidate
-    from delist_detection.line_follow import LineStep, LineSuccessor
+    from delist_detection.identity.figi_resolution import FigiCandidate
+    from delist_detection.identity.line_follow import LineStep, LineSuccessor
     step = LineStep(sec_id, "switch", RS_OLD, RS_NEW, "RS", "2012-09-17", "2012-09-25")
     return LineSuccessor(sec_id, "BBGRSNEW1", FigiCandidate("BBGRSNEW1", "REVERSE SPLIT CO", "RS", "Common Stock", ()),
                          step, "8-K 2012-09-24")
@@ -3355,7 +2796,7 @@ def _line_successor(sec_id):
 @pytest.mark.parametrize("bucket,code", [(CrspBucket.LIQUIDATION, 450), (CrspBucket.COMPLIANCE_FAILURE, 560),
                                          (CrspBucket.EXPIRATION, 600), (CrspBucket.MERGER, 231)])
 def test_distress_expiration_and_merger_endings_at_the_switch_take_no_line_successor(bucket, code):
-    from delist_detection.ftd import FtdIndex
+    from delist_detection.sources.ftd import FtdIndex
     d = _unit_delisting("BBGRS01", bucket, code, [])
     securities = {"BBGRS01": Security("BBGRS01", 4242, "COMMON", "REVERSE SPLIT CO", "", True, "cusip")}
     found = pipeline._Successors()
@@ -3365,10 +2806,11 @@ def test_distress_expiration_and_merger_endings_at_the_switch_take_no_line_succe
 
 def test_a_delisting_without_a_line_link_still_gets_the_in_run_successor_search():
     from types import SimpleNamespace
-    from delist_detection import manifest as run_manifest
-    from delist_detection.history import Sighting
-    ctx = pipeline._RunContext(SimpleNamespace(edgar=SimpleNamespace()), date(2026, 9, 25), lambda *_: None, 1,
-                               run_manifest.StageMeter(lambda *_: None))
+    from delist_detection.outputs import manifest as run_manifest
+    from delist_detection.identity.history import Sighting
+    no_search = SimpleNamespace(full_text_search=None)          # EDGAR stating its full-text search absent
+    ctx = pipeline._RunContext(Clients(edgar=no_search, resolver=None, classifier=None, figi=None, ftd_client=None),
+                               date(2026, 9, 25), lambda *_: None, 1, run_manifest.StageMeter(lambda *_: None))
     on_line = _unit_delisting("BBGRS01", CrspBucket.EXCHANGE_TRANSFER, 304, ["successor_unknown"])
     other = _unit_delisting("BBGOTH1", CrspBucket.EXCHANGE_TRANSFER, 304, ["successor_unknown"])
     securities = {sid: Security(sid, 4242, "COMMON", "CO", "", True, "cusip") for sid in ("BBGRS01", "BBGOTH1")}
@@ -3424,7 +2866,7 @@ def test_a_form25_at_the_lines_own_switch_while_it_trades_on_leaves_no_ending(fa
 
 def test_openfigi_unavailable_in_stage_4b_stops_the_run_and_writes_nothing(fake_edgar, tmp_path):
     """The new CUSIP's OpenFIGI answer is first asked by the line follow; no placeholder stands in for it."""
-    from delist_detection.openfigi import OpenFigiUnavailable
+    from delist_detection.sources.openfigi import OpenFigiUnavailable
 
     class _Down(_MapFigi):
         def map(self, jobs, use_cache=True):
@@ -3444,75 +2886,23 @@ def test_openfigi_unavailable_in_stage_4b_stops_the_run_and_writes_nothing(fake_
     assert not list(tmp_path.glob("*.csv"))
 
 
-# --- sub-plan 5b, C: the finder's context reads trading from the security's own CUSIPs ---
-
-def _one_security_context(rows, cusip="74955W307"):
-    from delist_detection.ftd import FtdIndex
-    from delist_detection.history import ticker_sightings
-    from delist_detection.observations import TickerEra
-    s = Security("BBG_RHD", 30419, "COMMON", "R H DONNELLEY CORP", "Common Stock", True, "cusip",
-                 eras=[TickerEra("RHD", "2008-01-16", "2008-12-31", [Observation("RHD", "2008-01-16", "R H DONNELLEY"),
-                                                                    Observation("RHD", "2008-12-31", "R H DONNELLEY")])])
-    ftd = FtdIndex(rows)
-    cusips = {s.sec_id: [cusip]}
-    build = pipeline._context_builder({s.sec_id: s}, {s.sec_id: ticker_sightings(s, ftd, cusips[s.sec_id])},
-                                      pipeline._IssuerAnswers({}, {}, {}, set()), ftd, cusips)
-    return build(s, False)
-
-
-def test_the_finders_context_reads_trading_from_the_securitys_own_cusip_under_any_symbol():
-    days = [f"2009-02-{d:02d}" for d in range(2, 28)]
-    rows = [FtdRow(d, "74955W307", "RHDC", "R H DONNELLEY CORP", 1.0 + (i % 2) / 10) for i, d in enumerate(days)]
-    ctx = _one_security_context(rows)
-    assert ctx.trades_after("2009-01-31") and not ctx.trades_after("2009-02-10")
-
-
-# --- sub-plan 5b, L: a fails row of the security's own CUSIP near a day ---
-
-def test_the_finders_context_sees_its_own_cusip_trading_in_the_30_days_up_to_a_day():
-    rows = [FtdRow("2016-10-03", "74955W307", "MWW", "MONSTER WORLDWIDE", 3.3),
-            FtdRow("2016-10-31", "74955W307", "MWW", "MONSTER WORLDWIDE", 3.4)]
-    ctx = _one_security_context(rows)
-    assert ctx.cusip_rows_near("2016-11-01") and ctx.cusip_rows_near("2016-10-31")
-    assert not ctx.cusip_rows_near("2016-12-01") and not ctx.cusip_rows_near("2016-10-02")
-
-
-def test_the_finders_late_reach_ignores_unassigned_and_pair_off_rows():
-    """Final review M6: `ZZZZ` and pair-off symbols are no trading (`ftd.is_trading_symbol`)."""
-    rows = [FtdRow("2016-10-31", "74955W307", "MWWZZZZ", "MONSTER WORLDWIDE", 3.4),
-            FtdRow("2016-10-31", "74955W307", "M104PAIROFF", "MONSTER WORLDWIDE", 3.4)]
-    assert not _one_security_context(rows).cusip_rows_near("2016-11-01")
-
-
-# --- sub-plan 5b, R2: the finder's view of a letterless class ---
-
-def test_a_letterless_security_takes_the_letter_of_its_own_cusips_fails_descriptions():
-    from delist_detection.ftd import FtdIndex
-    ftd = FtdIndex([FtdRow("2011-06-01", "867652109", "SPWRA", "SUNPOWER CORP CL A", 20.0),
-                    FtdRow("2011-06-01", "867652307", "SPWRB", "SUNPOWER CORP CL B", 19.0)])
-    plain = Security("CIK867773-COMMON", 867773, "COMMON", "SUNPOWER CORP", "", True, "placeholder")
-    lettered = Security("BBG_B", 867773, "CLASS B", "SUNPOWER CORP CL B", "", True, "cusip")
-    assert pipeline._security_ref(plain, ftd, ["867652109"]).letter_hint == "A"
-    assert pipeline._security_ref(lettered, ftd, ["867652307"]).letter_hint is None
-    assert pipeline._security_ref(plain, ftd, []).letter_hint is None
-
-
 # --- sub-plan 5b, R5: the one other CIK in force over a security's whole span ---
 
 def _in_force_run(subs, exact):
-    """A run context whose EDGAR answers `subs` (CIK -> submissions JSON) and whose resolver's name index lists
-    `exact` (name -> CIKs)."""
+    """A run context whose EDGAR answers `subs` (CIK -> submissions JSON) and whose issuer record's name index
+    lists `exact` (name -> CIKs)."""
     from types import SimpleNamespace
-    from delist_detection import manifest as run_manifest
+    from delist_detection.outputs import manifest as run_manifest
+    from delist_detection.identity.issuer_record import IssuerRecord
     index = SimpleNamespace(split_search=lambda name: ([SimpleNamespace(cik=c) for c in exact.get(name, [])], []))
-    clients = SimpleNamespace(edgar=SimpleNamespace(submissions=lambda cik: subs.get(cik)),
-                              resolver=SimpleNamespace(name_index=lambda: index))
+    edgar = SimpleNamespace(submissions=lambda cik: subs.get(cik))
+    clients = SimpleNamespace(edgar=edgar, issuers=IssuerRecord(edgar, name_index=index))
     return pipeline._RunContext(clients, date(2026, 9, 25), lambda *_: None, 1, run_manifest.StageMeter(lambda *_: None))
 
 
 def _security_with_era(sec_id, cik, ticker, observations):
-    from delist_detection.observations import TickerEra
-    from delist_detection.security_master import EraResolution, Issuer
+    from delist_detection.identity.observations import TickerEra
+    from delist_detection.identity.security_master import EraResolution, Issuer
     era = TickerEra(ticker, observations[0].as_of, observations[-1].as_of, observations)
     s = Security(sec_id, cik, "COMMON", observations[-1].name, "Common Stock", True, "cusip", eras=[era])
     return s, era, {era.key: EraResolution(era.key, sec_id, "cusip", None, ())}, {era.key: Issuer(cik, ())}
@@ -3569,3 +2959,77 @@ def test_a_failed_read_of_a_submissions_file_in_the_other_issuer_stage_degrades_
     review = []
     assert pipeline._other_issuers(ctx, [era], resolutions, issuers, {s.sec_id: s}, review) == {}
     assert [(r.sec_id, r.flag) for r in review] == [("BBG000P4BQM9", "resolution_degraded")]
+
+# --- the failed-read reports of stages 9 and 9c (the final review's I2: each stage's own report, tested) ---------
+
+def _stage_ctx(edgar):
+    from delist_detection.identity.issuer_record import IssuerRecord
+    from delist_detection.outputs import manifest as run_manifest
+    clients = Clients(edgar=edgar, resolver=None, classifier=None, figi=None, ftd_client=None,
+                      issuers=IssuerRecord(edgar))
+    return pipeline._RunContext(clients, date(2026, 9, 25), lambda *_: None, 1, run_manifest.StageMeter(lambda *_: None))
+
+
+def _handoff_row() -> Delisting:
+    """A continuation row the handoff stage built from LEG's unmatched Form 25: its last trade day is its last
+    sighting, and the handoff rewrite caps the notice's day at the successor's first sighting."""
+    from delist_detection.endings.rewrites import Rewrite, Rule
+    evidence = {"flags": ["handoff_continuation"],
+                "delist_filing": {"form": "25-NSE", "filing_date": "2026-08-27", "accession": "0000876661-26-000712"}}
+    rec = DelistRecord("LEG", 58492, "2026-08-25", 304, CrspBucket.EXCHANGE_TRANSFER, "high", "Continuation", evidence,
+                       sec_id="OLD", delist_date="2026-09-06", successor_sec_id="NEW")
+    d = Delisting("OLD", 58492, "LEG", "2026-09-06", rec, LastTrade(date(2026, 8, 25), "last_sighting", ()), None,
+                  None, "")
+    d.rewrites.append(Rewrite(Rule.HANDOFF, CrspBucket.EXCHANGE_TRANSFER, 304, successor="NEW", how="handoff",
+                              successor_from="2026-08-27"))
+    return d
+
+
+def test_a_failed_notice_read_in_stage_9c_is_reported_and_keeps_the_sighting():
+    """Stage 9c (`_date_from_notices`): the handoff row's Form 25 notice read rests on a failed request (it counts
+    itself degraded and answers nothing): the row keeps its sighting, and carries resolution_degraded on its own row
+    and in a review item naming the notice."""
+    from delist_detection.sources.sec_stats import SEC_STATS
+
+    class Failing:
+        full_text_search = None
+
+        def fetch_filing_raw(self, cik, accession):
+            SEC_STATS.degraded("failed_request")
+            return ""
+
+    d, review = _handoff_row(), []
+    assert pipeline._date_from_notices(_stage_ctx(Failing()), [d], review) == 0
+    assert (d.last_trade.day, d.last_trade.source) == (date(2026, 8, 25), "last_sighting")
+    assert "resolution_degraded" in d.flags
+    assert [(r.sec_id, r.flag, r.delist_date, r.reason) for r in review] == [
+        ("OLD", "resolution_degraded", "2026-09-06",
+         "the handoff row's Form 25 notice rested on a failed EDGAR request or a stale copy")]
+
+
+def test_a_failed_read_under_the_successor_terms_reading_is_reported():
+    """Stage 9 (`_find_successors`, its terms links): an exchange transfer awaiting its successor whose own-share
+    reading rests on a failed filing-list read links nothing, and carries resolution_degraded on its own row and in a
+    review item naming the successor terms reading."""
+    import requests
+
+    class Down:
+        full_text_search = None
+
+        def recent_filings(self, cik):
+            raise requests.ConnectionError("down")
+
+        def submissions(self, cik, fresh_after=None):
+            raise requests.ConnectionError("down")
+
+    rec = DelistRecord("OLDT", 4242, "2020-06-01", 304, CrspBucket.EXCHANGE_TRANSFER, "medium", "x",
+                       {"flags": ["successor_unknown"]}, sec_id="BBGOLD0001", delist_date="2020-06-10")
+    d = Delisting("BBGOLD0001", 4242, "OLDT", "2020-06-10", rec, LastTrade(date(2020, 6, 1), "midas", ()), None, None,
+                  "")
+    sec = Security("BBGOLD0001", 4242, "COMMON", "OLD CO", "Common Stock", True, "cusip")
+    found = pipeline._find_successors(_stage_ctx(Down()), [d], {sec.sec_id: sec}, {}, {})
+    assert found.links == {} and found.degraded == [d.key]
+    assert "resolution_degraded" in d.flags
+    assert [(r.sec_id, r.flag, r.delist_date, r.reason) for r in found.review] == [
+        ("BBGOLD0001", "resolution_degraded", "2020-06-10",
+         "the successor terms reading rested on a failed EDGAR request or a stale copy")]

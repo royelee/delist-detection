@@ -3,12 +3,12 @@ Synthetic fails rows shaped like the real cases (CAL/UAL 2010, RTN/RTX 2020, ABI
 GLIBA/Liberty Broadband 2020); the real cases themselves are in tests/test_acquirer_gate_cases.py."""
 from datetime import date
 
-from delist_detection.acquirer_line import (
+from delist_detection.terms.acquirer_line import (
     LineIndex, choose_line, is_placeholder_row, issuer_by_name, issuer_by_ticker, named_class,
 )
-from delist_detection.ftd import FtdIndex, FtdRow
-from delist_detection.history import Sighting
-from delist_detection.security_master import Security
+from delist_detection.sources.ftd import FtdIndex, FtdRow
+from delist_detection.identity.history import Sighting
+from delist_detection.identity.security_master import Security
 
 L, P = date(2010, 9, 30), date(2010, 10, 1)     # CAL's last trade and price date
 
@@ -79,7 +79,7 @@ def test_a_ticker_handed_to_a_new_holder_at_the_closing_is_the_new_holders():
 def test_a_holders_issuer_must_have_filed_by_the_last_trade_and_carry_the_acquirer_name():
     """ASD 2008: the run's IR line from 2007 belongs to CIK 1699150 (Ingersoll Rand Inc, first filed in 2017), a
     security-master error the acquirer must not inherit; a name that agrees with none of its EDGAR names fails too."""
-    from delist_detection.acquirer_line import issuer_fits
+    from delist_detection.terms.acquirer_line import issuer_fits
     subs = _subs({1699150: {"name": "Ingersoll Rand Inc.", "formerNames": []},
                   100517: {"name": "United Airlines Holdings, Inc.",
                            "formerNames": [{"name": "UAL CORP /DE/", "from": "1994-01-01", "to": "2019-06-27"}]}})
@@ -206,7 +206,7 @@ class _Resolver:
         self.answers = answers
 
     def resolve(self, ticker, observed_date=None, **kw):
-        from delist_detection.ticker_resolver import TickerResolution
+        from delist_detection.identity.ticker_resolver import TickerResolution
         return TickerResolution(ticker, self.answers.get(ticker), None, "test")
 
 

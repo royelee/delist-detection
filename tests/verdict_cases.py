@@ -1,6 +1,9 @@
 """Sub-plan 5i's real cases (tests/fixtures/verdicts/, scripts/build_verdict_fixtures.py) and the harness that
-recomputes their verdicts offline: the committed run's rows for each case's securities, stage 9g's readings
-(the confirming filing, the contradicting ratio) read from the recorded EDGAR answers, then `verdict.decide`."""
+recomputes their verdicts offline. Each case is a run snapshot in miniature: the committed run's rows for the case's
+securities and stage 9g's readings as the run recorded them (`continuation_filings`, run_manifest.json's entries for
+those rows), read as one `run_snapshot.RunSnapshot`, then `verdict.decide`. Stage 9g itself (the confirming filing,
+the contradicting ratio, over each continuation's own-share reading at its anchor) is replayed from the recorded
+EDGAR answers by `readings`, which the tests hold to the recorded entries."""
 from __future__ import annotations
 
 import gzip
@@ -9,14 +12,18 @@ from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 
-from delist_detection.continuation_evidence import needs_doubt_check, needs_filing, read_continuation
-from delist_detection.edgar import EdgarSubmission
-from delist_detection.lifecycle import Tables
-from delist_detection.verdict import Verdicts, decide
-from delist_detection.verdict_rules import Reading
+from delist_detection.endings.continuation_evidence import needs_doubt_check, needs_filing, read_continuation
+from delist_detection.sources.edgar import EdgarSubmission
+from delist_detection.identity.issuer_record import IssuerRecord
+from delist_detection.vocabulary.exit_kind import ContinuationReading, of_row
+from delist_detection.endings.last_trade import anchor_day
+from delist_detection.endings.own_shares import Reader
+from delist_detection.outputs.run_snapshot import RunSnapshot, continuation_readings
+from delist_detection.outputs.verdict import Verdicts, decide
 
 AS_OF = date(2026, 9, 25)
 FIXTURES = Path(__file__).parent / "fixtures" / "verdicts"
+TABLES = ("securities", "ticker_history", "delistings", "observation_map", "review")
 
 
 @dataclass(frozen=True)
@@ -70,31 +77,44 @@ def load() -> tuple[dict, FixtureEdgar]:
         return cases, FixtureEdgar(json.load(fh))
 
 
-def tables_of(case: dict) -> Tables:
-    return Tables(case["securities"], case["ticker_history"], case["delistings"], case["observation_map"],
-                  case["review"])
+def snapshot_of(case: dict) -> RunSnapshot:
+    """The case as a run snapshot: its rows and stage 9g's recorded readings, on the run date."""
+    return RunSnapshot.of({name: case[name] for name in TABLES}, as_of=AS_OF,
+                          continuations=continuation_readings(case["continuation_filings"]))
 
 
-def readings(case: dict, edgar) -> dict[tuple[str, str], Reading]:
-    """Stage 9g over the case's rows (pipeline._continuation_filings, from the table rows)."""
-    names = {r["sec_id"]: r["name"] for r in case["securities"]}
+def reading(r: dict, security: dict, reader: Reader):
+    """A delistings row's own-share reading, as stage 9g makes it (`own_shares.of`): at the row's anchor (its last
+    trade, else its Form 25's filing date, else its delisting date: `last_trade.anchor_day`), of the security's
+    class."""
+    day = anchor_day(of_row(r), r["delist_date"], filed=r["delist_filing_date"] or None)
+    return reader.ending(int(r["cik"]), share_class=security["share_class"], name=security["name"], day=day)
+
+
+def readings(case: dict, edgar) -> dict[tuple[str, str], ContinuationReading]:
+    """Stage 9g replayed over the case's rows from the recorded EDGAR answers (pipeline._continuation_filings, from
+    the table rows): the oracle the recorded `continuation_filings` are held to, and the reads the fixture builder
+    records."""
+    secs = {r["sec_id"]: r for r in case["securities"]}
+    names = {sid: r["name"] for sid, r in secs.items()}
+    reader = Reader(edgar, IssuerRecord(edgar, today=AS_OF))
     out = {}
     for r in case["delistings"]:
         if r["sec_id"] in names and (needs_filing(r["reason"], r["sec_id"], r["successor_sec_id"])
                                      or needs_doubt_check(r["reason"], r["sec_id"], r["successor_sec_id"])):
-            days = [date.fromisoformat(d) for d in (r["last_trade_date"], r["delist_date"]) if d]
-            found = read_continuation(edgar, int(r["cik"]), days, names[r["sec_id"]], r["reason"], r["sec_id"],
+            found = read_continuation(reading(r, secs[r["sec_id"]], reader), r["reason"], r["sec_id"],
                                       r["successor_sec_id"], [names.get(r["successor_sec_id"], "")])
             if found.filing or found.doubt:
                 out[(r["sec_id"], r["delist_date"])] = found
     return out
 
 
-def verdicts(case: dict, edgar) -> Verdicts:
-    """The case's verdicts. A placeholder's ticker evidence is read back from the committed verdicts (one without
-    `placeholder_without_ticker_filing` had it)."""
+def verdicts(case: dict) -> Verdicts:
+    """The case's verdicts, a function of its snapshot. A placeholder's ticker evidence (stage 10e, which the run
+    records nowhere) is read back from the committed verdicts (one without `placeholder_without_ticker_filing` had
+    it)."""
     no_ev = {r["sec_id"] for r in case["uncertain_before"]
              if r["kind"] == "security" and "placeholder_without_ticker_filing" in r["reason"]}
     evidence = {r["sec_id"]: "" if r["sec_id"] in no_ev else "tier:recorded" for r in case["securities"]
                 if r["figi_source"] == "placeholder"}
-    return decide(tables_of(case), evidence, readings(case, edgar))
+    return decide(snapshot_of(case), evidence)

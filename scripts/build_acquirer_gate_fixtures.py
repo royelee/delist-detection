@@ -1,6 +1,6 @@
 """Build tests/fixtures/acquirer_gate/ from the local caches, once (sub-plan 5e): the real merger endings whose
 acquirer line (pipeline stage 8a), payout gate and acquirer security tests/test_acquirer_gate_cases.py replays offline
-through the run's own stage 8 (`pipeline._merger_payouts`, tests/acquirer_gate_cases.py).
+through the run's own stage 8 (`merger_value.value_mergers`, tests/acquirer_gate_cases.py).
 
   PYTHONPATH=src python scripts/build_acquirer_gate_fixtures.py          # -> tests/fixtures/acquirer_gate/
 
@@ -37,8 +37,9 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
 import build_form25_fixtures as b5  # noqa: E402  (refuses every SEC request on import)
+from delist_detection.measurement.truth_set import TruthSet, configured  # noqa: E402
 import requests  # noqa: E402
-import delist_detection.edgar as edgar_mod  # noqa: E402
+import delist_detection.sources.edgar as edgar_mod  # noqa: E402
 
 
 def _unreachable(*args, **kwargs):
@@ -47,20 +48,21 @@ def _unreachable(*args, **kwargs):
 
 
 edgar_mod.sec_get = _unreachable
-from delist_detection.atomic_io import write_atomic  # noqa: E402
-from delist_detection.cik_lookup import CikLookupClient  # noqa: E402
-from delist_detection.classifier import DelistRecord  # noqa: E402
-from delist_detection.evidence import edgar_names  # noqa: E402
-from delist_detection.crsp_codes import CrspBucket  # noqa: E402
-from delist_detection.edgar import EdgarClient  # noqa: E402
-from delist_detection.figi_resolution import US_EXCH  # noqa: E402
-from delist_detection.ftd import FtdIndex  # noqa: E402
-from delist_detection.llm_merger_extractor import LLMMergerTermsExtractor  # noqa: E402
-from delist_detection.names import names_agree  # noqa: E402
-from delist_detection.observations import ObservationIndex, load_observations, normalize_ticker  # noqa: E402
-from delist_detection.openfigi import OpenFigiClient  # noqa: E402
-from delist_detection.ticker_resolver import TickerResolver  # noqa: E402
-from delist_detection.trading_calendar import next_trading_day  # noqa: E402
+from delist_detection.sources.atomic_io import write_atomic  # noqa: E402
+from delist_detection.sources.cik_lookup import CikLookupClient  # noqa: E402
+from delist_detection.outputs.reconstruction import DelistRecord  # noqa: E402
+from delist_detection.filings.evidence import edgar_names  # noqa: E402
+from delist_detection.vocabulary.crsp_codes import CrspBucket  # noqa: E402
+from delist_detection.sources.edgar import EdgarClient  # noqa: E402
+from delist_detection.identity.figi_resolution import US_EXCH  # noqa: E402
+from delist_detection.sources.ftd import FtdIndex  # noqa: E402
+from delist_detection.vocabulary.identifiers import normalize_ticker  # noqa: E402
+from delist_detection.terms.llm_merger_extractor import LLMMergerTermsExtractor  # noqa: E402
+from delist_detection.vocabulary.names import names_agree  # noqa: E402
+from delist_detection.identity.observations import ObservationIndex, load_observations  # noqa: E402
+from delist_detection.sources.openfigi import OpenFigiClient  # noqa: E402
+from delist_detection.identity.ticker_resolver import TickerResolver  # noqa: E402
+from delist_detection.vocabulary.trading_calendar import next_trading_day  # noqa: E402
 
 AS_OF = b5.AS_OF
 BEFORE, AFTER = 60, 20          # fails rows kept from this long before a case's last trade to this long after its price date
@@ -120,7 +122,7 @@ def main(argv: list[str] | None = None) -> int:
     args = p.parse_args(argv)
     repo, out = args.repo, args.out
     secs, eras, cusips, history, _ = b5._securities(repo)
-    truth = {r["sec_id"]: r for r in b5._read(repo / "data/diagnosis_truth.csv")}
+    truth = {r["sec_id"]: r for r in TruthSet.open(configured(repo)).rows}
     contract = {r["sec_id"]: r for r in b5._read(repo / "output/contract/delistings.csv")}
     merger_rows = defaultdict(list)
     for r in b5._read(repo / "output/delistings.csv"):
@@ -199,8 +201,8 @@ def main(argv: list[str] | None = None) -> int:
     local = b5.LocalFtd(repo / "cache/sec_data/ftd")
     rows = set()
     for lo, hi, group, tickers in windows:
-        idx = FtdIndex.load(local, lo, min(hi, AS_OF), cusips={c for s in group for c in cusips.get(s, [])},
-                            symbols=tickers)
+        idx = FtdIndex.opened(local, lo, min(hi, AS_OF), cusips={c for s in group for c in cusips.get(s, [])},
+                              symbols=tickers)
         rows.update(r for c in {c for s in group for c in cusips.get(s, [])} for r in idx.by_cusip(c))
         rows.update(r for tk in tickers for r in idx.by_symbol(tk))
     firsts = defaultdict(lambda: "~")
@@ -209,7 +211,7 @@ def main(argv: list[str] | None = None) -> int:
             firsts[r["cusip"]] = min(firsts[r["cusip"]], r["valid_from"])
     for c, d in sorted(firsts.items()):
         day = date.fromisoformat(d)
-        idx = FtdIndex.load(local, day - timedelta(days=5), day + timedelta(days=5), cusips={c})
+        idx = FtdIndex.opened(local, day - timedelta(days=5), day + timedelta(days=5), cusips={c})
         rows.update(idx.by_cusip(c)[:3])
 
     figi_answers = {}

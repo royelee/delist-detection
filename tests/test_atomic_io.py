@@ -3,7 +3,7 @@ the decisions file); write_atomic and the orphan-temp cleanup are covered in
 test_edgar_threads.py beside the cache writers that use them."""
 import pytest
 
-from delist_detection.atomic_io import replace_all_on_success, replace_on_success
+from delist_detection.sources.atomic_io import replace_all_on_success, replace_on_success
 
 
 def test_replace_on_success_removes_temp_on_error(tmp_path):

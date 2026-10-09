@@ -4,14 +4,14 @@ from pathlib import Path
 
 import pytest
 
-from delist_detection.figi_resolution import FigiCandidate
-from delist_detection.ftd import FtdIndex, FtdRow
-from delist_detection.observations import Observation, ObservationIndex, load_observations, split_eras
-from delist_detection.added_securities import AddedAcquirer, AddedSuccessor
-from delist_detection.history import Range, Sighting, ranges_from_sightings
-from delist_detection.security_master import (
-    EraResolution, FigiResolver, Handoff, Issuer, Security, build_securities, cusip_handoffs, era_cusips,
-    era_last_seen, issuers_by_era, refine_eras,
+from delist_detection.identity.figi_resolution import FigiCandidate
+from delist_detection.sources.ftd import FtdIndex, FtdRow
+from delist_detection.identity.observations import Observation, ObservationIndex, load_observations, split_eras
+from delist_detection.identity.added_securities import AddedAcquirer, AddedSuccessor
+from delist_detection.identity.history import Range, Sighting, ranges_from_sightings
+from delist_detection.identity.identity import era_cusips, era_last_seen, refine_eras
+from delist_detection.identity.security_master import (
+    EraResolution, FigiResolver, Handoff, Issuer, Security, build_securities, cusip_handoffs, issuers_by_era,
 )
 
 ERAS_FIX = Path(__file__).parent / "fixtures" / "eras"
@@ -46,8 +46,8 @@ def _fixture_ftd_rows():
 @pytest.fixture(scope="module")
 def real_ftd():
     obs = load_observations(ERAS_FIX / "observations.csv")
-    return FtdIndex.load(_RowsClient(_fixture_ftd_rows()), date(2004, 1, 1), date(2026, 9, 1),
-                         symbols={o.ticker for o in obs})
+    return FtdIndex.opened(_RowsClient(_fixture_ftd_rows()), date(2004, 1, 1), date(2026, 9, 1),
+                           symbols={o.ticker for o in obs})
 
 
 @pytest.fixture(scope="module")
@@ -190,11 +190,11 @@ def test_another_security_under_the_bare_symbol_does_not_split_a_class_tickers_e
             + _rows("BFB", "999999999", ["2016-01-04", "2016-02-01", "2016-03-01", "2016-04-01"], "BIG FAKE BANCORP")
             + _rows("BFB", "115637209", ["2016-05-02", "2016-06-01", "2016-07-01"], "BROWN-FORMAN CORP CL-B"))
     client = _RowsClient(rows)
-    guarded = FtdIndex.load(client, date(2015, 1, 1), date(2016, 12, 31), symbols={"BF-B"},
-                            names={"BF-B": ["BROWN FORMAN CORP CLASS B"]})
+    guarded = FtdIndex.opened(client, date(2015, 1, 1), date(2016, 12, 31), symbols={"BF-B"},
+                              names={"BF-B": ["BROWN FORMAN CORP CLASS B"]})
     assert [(e.first, e.last, e.ftd_cusips) for e in refine_eras(split_eras(obs), guarded)] == [
         ("2015-06-30", "2016-06-30", ("115637209",))]
-    unguarded = FtdIndex.load(client, date(2015, 1, 1), date(2016, 12, 31), symbols={"BF-B"})
+    unguarded = FtdIndex.opened(client, date(2015, 1, 1), date(2016, 12, 31), symbols={"BF-B"})
     assert len(refine_eras(split_eras(obs), unguarded)) == 2
 
 
@@ -669,7 +669,7 @@ def test_an_era_linked_to_two_composites_through_handoffs_takes_neither():
 def test_build_securities_merges_eras_of_one_figi():
     fb = _era("FB", ("2021-12-31", "FACEBOOK INC CLASS A"))
     meta = _era("META", ("2022-06-30", "META PLATFORMS INC CLASS A"))
-    from delist_detection.figi_resolution import FigiCandidate
+    from delist_detection.identity.figi_resolution import FigiCandidate
     cand = FigiCandidate("BBG000MM2P62", "META PLATFORMS INC-CLASS A", "META", "Common Stock", ())
     secs = build_securities(
         {fb.key: EraResolution(fb.key, "BBG000MM2P62", "cusip", cand, ()),
@@ -812,7 +812,7 @@ def test_issuers_by_era_names_each_known_issuer_and_skips_the_unknown():
 def test_an_added_acquirers_row_spans_its_fails_rows_or_its_fallback_day():
     from datetime import date
 
-    from delist_detection.ftd import FtdRow
+    from delist_detection.sources.ftd import FtdRow
     sec = Security("BBGACQ00001", 7, "COMMON", "ACQ CORP", "Common Stock", False, "cusip")
     acq = AddedAcquirer(sec, "ACQ", date(2018, 11, 28))
     assert acq.span() == ("2018-11-28", "2018-11-28")
@@ -838,29 +838,11 @@ def test_ranges_from_sightings_takes_named_sightings():
                                                                  ("AAB", "2020-06-30", None)]
 
 
-def test_history_rows_end_at_the_last_delisting_or_stay_open_while_listed():
-    from delist_detection.history import history_rows
-    sec = Security("BBGX", 1, "COMMON", "X CO", "Common Stock", True, "cusip")
-    sig = [Sighting("2020-01-02", "X", "observation"), Sighting("2020-06-30", "XX", "observation"),
-           Sighting("2021-01-04", "XX", "observation")]
-    cus = [Sighting("2020-01-02", "111111111", "observation"), Sighting("2021-01-04", "111111111", "observation")]
-    asked = []
-    th, ch = history_rows(sec, sig, cus, listed=False, end="2020-12-31", end_exchange="NYSE",
-                          exchange_today=lambda t: asked.append(t) or "NASDAQ")
-    assert [(r["ticker"], r["valid_from"], r["valid_to"], r["exchange"]) for r in th] == [
-        ("X", "2020-01-02", "2020-06-29", None), ("XX", "2020-06-30", "2020-12-31", "NYSE")]
-    assert [(r["cusip"], r["valid_to"]) for r in ch] == [("111111111", "2020-12-31")]
-    assert asked == []
-    th, _ = history_rows(sec, sig, cus, listed=True, end=None, end_exchange=None,
-                         exchange_today=lambda t: asked.append(t) or "NASDAQ")
-    assert (th[-1]["valid_to"], th[-1]["exchange"], asked) == (None, "NASDAQ", ["XX"])
-
-
 def test_find_acquirer_counts_only_cusips_that_are_not_the_targets():
     from datetime import date
 
-    from delist_detection.acquirers import find_acquirer
-    from delist_detection.ftd import FtdIndex, FtdRow
+    from delist_detection.terms.acquirers import find_acquirer
+    from delist_detection.sources.ftd import FtdIndex, FtdRow
     ftd = FtdIndex([FtdRow("2016-09-20", "044209104", "ASH", "ASHLAND INC", 1.0),
                     FtdRow("2016-09-21", "044209104", "ASH", "ASHLAND INC", 1.0),
                     FtdRow("2016-09-22", "044186104", "ASH", "ASHLAND GLOBAL HOLDINGS", 1.0)])
@@ -917,7 +899,7 @@ def test_an_unconfirmed_era_with_no_line_to_be_placed_on_keeps_the_ticker_tier()
     as before: a stale snapshot's dead company finds its own line there (Dow
     Jones, listed in 2008 after News Corp bought it in 2007), and a later
     holder's line is caught by the crossing check (APTV17 lies between)."""
-    from delist_detection.security_master import resolve_with_identity_guard
+    from delist_detection.identity.security_master import resolve_with_identity_guard
     eras, figi, cusips = _aptv_eras()
     dlph, aptv12, aptv17, aptv24 = eras
     alone = [aptv12, aptv24]
@@ -978,7 +960,7 @@ def test_a_weak_era_whose_merge_would_swallow_another_securitys_confirmed_range_
     ITT range would then run 2008..today across BBG000BMB7R1's CUSIP-confirmed
     2012-2015 era. The weak era is taken back out and resolved without its
     ticker pick (here: its issuer's placeholder); the report names it."""
-    from delist_detection.security_master import crossing_weak_eras, resolve_with_identity_guard
+    from delist_detection.identity.security_master import crossing_weak_eras, resolve_with_identity_guard
     eras, figi, cusips = _itt_eras()
     itt08, itt12, itt16 = eras
     issuers = issuers_by_era({e.key: 216228 for e in eras})
@@ -997,7 +979,7 @@ def test_a_weak_era_that_only_overlaps_another_securitys_era_is_not_detached():
     observation-conflict review reports; it is kept on the ACE/Chubb Ltd line
     it reached. A weak era with no other era of its security on the far side
     of the confirmed one crosses nothing either."""
-    from delist_detection.security_master import crossing_weak_eras
+    from delist_detection.identity.security_master import crossing_weak_eras
     chubb = _era("CB", ("2008-01-16", "CHUBB CORP"), ("2015-12-31", "CHUBB CORP"))
     cb_ace = _era("CB", ("2012-06-29", "ACE LTD"), ("2014-06-30", "ACE LTD"))
     cb_new = _era("CB", ("2016-06-30", "CHUBB LTD"), ("2026-06-30", "CHUBB LTD"))
@@ -1019,7 +1001,7 @@ def test_a_placeholder_whose_ticker_a_later_line_of_its_issuer_and_class_holds_i
     when a FIGI security of its issuer and class, sharing one of its tickers,
     begins after its own last observation; not when that line began before, is
     another class, or shares no ticker."""
-    from delist_detection.security_master import superseded_placeholders
+    from delist_detection.identity.security_master import superseded_placeholders
     j12 = _era("J", ("2012-06-29", "JACOBS ENGINEERING GROUP INC"), ("2014-06-30", "JACOBS ENGINEERING GROUP INC"))
     j19 = _era("J", ("2019-12-31", "JACOBS ENGINEERING GROUP INC"), ("2022-06-30", "JACOBS ENGINEERING GROUP INC"))
     j22 = _era("J", ("2022-12-31", "JACOBS SOLUTIONS INC"), ("2026-06-30", "JACOBS SOLUTIONS INC"))
@@ -1047,7 +1029,7 @@ def test_a_placeholder_whose_ticker_a_later_line_of_its_issuer_and_class_holds_i
 def test_unconfirmed_eras_are_those_no_fails_row_shows_under_their_ticker():
     """The fact `ticker_unconfirmed_review` reports, as a set of era keys: from
     2004 on, no fails row under the era's ticker within 30 days of its span."""
-    from delist_detection.security_master import unconfirmed_eras
+    from delist_detection.identity.security_master import unconfirmed_eras
     aptv12 = _era("APTV", ("2012-06-29", "APTIV PLC"), ("2013-12-31", "APTIV PLC"))
     aptv17 = _era("APTV", ("2017-12-31", "APTIV PLC"))
     old = _era("OLD", ("2001-06-29", "OLD CO"))
@@ -1058,14 +1040,15 @@ def test_unconfirmed_eras_are_those_no_fails_row_shows_under_their_ticker():
 
 def test_only_an_unconfirmed_era_the_fails_data_covers_is_guarded():
     """The guard acts on evidence of absence: an unconfirmed era is guarded only
-    when the loaded fails data has rows (of any symbol) in its window. With no
-    fails row at all then, the data says nothing about its ticker."""
-    from delist_detection.security_master import guarded_eras
+    when the fails data covers its window (`FtdIndex.data_covers`; an index built
+    from rows: they are all its data, so some row of any symbol falls in it). With
+    no fails row at all then, the data says nothing about its ticker."""
+    from delist_detection.identity.security_master import guarded_eras
     aptv12 = _era("APTV", ("2012-06-29", "APTIV PLC"), ("2013-12-31", "APTIV PLC"))
     live = _era("LIVE", ("2025-06-30", "LIVE CO"))
     ftd = FtdIndex([FtdRow("2012-07-02", "G6095L109", "DLPH", "DELPHI AUTOMOTIVE PLC", 25.0)])
     assert guarded_eras([aptv12, live], ftd) == {aptv12.key}
-    assert ftd.has_rows("2012-07-02", "2012-07-02") and not ftd.has_rows("2012-07-03", "2025-01-01")
+    assert ftd.data_covers("2012-07-02", "2012-07-02") and not ftd.data_covers("2012-07-03", "2025-01-01")
 
 
 def _sle_hsh(settling=True):
@@ -1084,7 +1067,7 @@ def _sle_hsh(settling=True):
                               Observation("SLE", "2012-06-29", "SARA LEE CORP"),
                               Observation("HSH", "2012-07-31", "HILLSHIRE BRANDS CO"),
                               Observation("HSH", "2012-12-31", "HILLSHIRE BRANDS CO")])
-    ftd = FtdIndex.load(_RowsClient(rows), date(2012, 1, 3), date(2013, 1, 31), symbols={"SLE", "HSH"})
+    ftd = FtdIndex.opened(_RowsClient(rows), date(2012, 1, 3), date(2013, 1, 31), symbols={"SLE", "HSH"})
     return refine_eras(index.eras(), ftd), ftd
 
 
@@ -1105,7 +1088,7 @@ def test_an_old_cusip_still_trading_beside_the_new_one_is_no_switch():
 
 
 def test_settled_last_is_the_row_that_opens_the_last_one_price_run():
-    from delist_detection.ftd import settled_last
+    from delist_detection.sources.ftd import settled_last
     rows = [FtdRow(d, "1", "X", "X", p) for d, p in (("2012-06-28", 18.63), ("2012-06-29", 18.5),
                                                      ("2012-07-02", 18.5), ("2012-07-13", 18.5))]
     assert settled_last(rows).date == "2012-06-29" and settled_last(rows[:1]).date == "2012-06-28"
@@ -1194,7 +1177,7 @@ def test_a_join_to_a_picked_composite_is_still_withdrawn_when_another_issuers_cu
 def test_a_placeholder_whose_line_ticker_a_later_figi_line_holds_is_superseded():
     """U5 (sub-plan 5a): Aon's placeholder traded as AOC, then (the line follow found) as AON; Aon plc's later FIGI
     line of the same issuer and class holds AON. The placeholder is not the line listed today."""
-    from delist_detection.security_master import superseded_placeholders
+    from delist_detection.identity.security_master import superseded_placeholders
     aoc = _era("AOC", ("2008-01-16", "AON CORP"), ("2009-06-08", "AON CORP"))
     aon = _era("AON", ("2012-06-29", "AON PLC"))
     p = Security("CIK315293-COMMON", 315293, "COMMON", "AON CORP", "", True, "placeholder", eras=[aoc],

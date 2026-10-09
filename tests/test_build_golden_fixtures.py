@@ -4,7 +4,7 @@ import importlib.util
 from datetime import date
 from pathlib import Path
 
-from delist_detection.edgar import EdgarSubmission
+from delist_detection.sources.edgar import EdgarSubmission
 
 ROOT = Path(__file__).resolve().parents[1]
 _spec = importlib.util.spec_from_file_location("build_golden_fixtures_under_test",

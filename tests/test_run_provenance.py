@@ -8,17 +8,18 @@ import pytest
 import requests
 
 import delist_detection.pipeline as pipeline
-from delist_detection import edgar, manifest
-from delist_detection.classifier import DelistRecord
-from delist_detection.crsp_codes import CrspBucket
-from delist_detection.delistings import Delisting
-from delist_detection.edgar import EdgarBlocked
-from delist_detection.sec_stats import SEC_STATS
-from delist_detection.last_trade import LastTrade
-from delist_detection.observations import Observation
-from delist_detection.payout_extractor import PayoutResult
+from delist_detection.sources import edgar
+from delist_detection.outputs import manifest
+from delist_detection.outputs.reconstruction import DelistRecord
+from delist_detection.vocabulary.crsp_codes import CrspBucket
+from delist_detection.endings.delistings import Delisting
+from delist_detection.sources.edgar import EdgarBlocked
+from delist_detection.sources.sec_stats import SEC_STATS
+from delist_detection.endings.last_trade import LastTrade
+from delist_detection.identity.observations import Observation
+from delist_detection.terms.payout_extractor import PayoutResult
 from delist_detection.pipeline import Overrides, run
-from delist_detection.store import read_table, table_path
+from delist_detection.outputs.store import read_table, table_path
 from tests.test_pipeline import LIVE_FIGI, _clients, _index_clients, _same_ticker_acquirer_run
 
 
@@ -102,7 +103,7 @@ class _HaltSession:
 
 
 def _with_halt_feed(fake_edgar, tmp_path, session):
-    from delist_detection.nasdaq_halts import NasdaqHaltClient
+    from delist_detection.sources.nasdaq_halts import NasdaqHaltClient
 
     index, clients = _clients(fake_edgar)
     clients.halts = NasdaqHaltClient(tmp_path / "halts", session=session, min_interval=0, sleep=lambda _: None)

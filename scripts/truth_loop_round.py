@@ -1,19 +1,18 @@
-"""One diagnosis-loop round's error list, or the ledger's seed (spec 2026-10-03-diagnosis-truth-fixes, 1.7).
+"""Open one diagnosis-loop round, or seed the ledger (spec 2026-10-03-diagnosis-truth-fixes, 1.7).
 
   python scripts/truth_loop_round.py --label 5a --base <commit> --round 1
   python scripts/truth_loop_round.py --label 5-0 --seed-ledger
 
-A round does five things:
-1. It renames truth rows whose placeholder now holds a FIGI: by the run's contract/id_changes.csv and by comparing
-   the --base commit's securities.csv with the run's (that file is not cumulative), and writes the truth file and
-   the change log together.
-2. It judges the run under --output-dir against the truth file.
-3. It writes output/regression_report.csv against --base.
-4. It keeps the errors the ledger has not seen.
-5. It writes them as case rows to output/diagnose_unknown_report/loop/<label>/round-<N>/cases.csv.
+Opening a round (`loop_round.Round.open`) renames the truth rows and legs that name a renamed security (by the run's
+contract/id_changes.csv and by comparing the --base commit's securities.csv with the run's) and commits the truth
+set, judges the run under --output-dir against it, writes <output-dir>/regression_report.csv against --base, keeps
+the errors the ledger has not seen and writes them as case rows to <loop-dir>/<label>/round-<N>/cases.csv.
+--seed-ledger (`loop_round.Loop.seed`) records every current mismatch as `known` (the reports already describe
+them), committed with the truth set.
 
-It prints one JSON line with the counts, the cases and the path. --seed-ledger records every current mismatch as
-`known` (the reports already describe them). Offline (git only). Exit 2: a missing or unreadable input.
+The truth file is --truth, by default the one data/scorecard.json names; its legs and change log are named after it
+(`truth_set`), and the ledger is the loop folder's (`loop_round.Loop.ledger`). It prints one JSON line with the
+counts, the cases and the path. Offline (git only). Exit 2: a missing or unreadable input.
 """
 from __future__ import annotations
 
@@ -22,22 +21,15 @@ import json
 import sys
 from pathlib import Path
 
-from delist_detection import diagnosis_loop as dl
-from delist_detection.diagnosis_truth import COLUMNS, LibraryRows, judge_all, load_legs, parse_rows
-from delist_detection.lifecycle import Tables
-from delist_detection.regression import (RegressionInputError, build_report, id_changes_since, regression_key,
-                                         write_report)
-from delist_detection.truth import TruthFileError
+from delist_detection.measurement.loop_round import LOOP_DIR, Loop
+from delist_detection.outputs.run_snapshot import RunSnapshot, SnapshotError
+from delist_detection.measurement.truth import TruthFileError
+from delist_detection.measurement.truth_set import configured
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def _legs_rows(out_dir: Path):
-    path = out_dir / "contract" / "payout_legs.csv"
-    return dl.read_csv(path) if path.exists() else None
-
-
-def main(argv: list[str] | None = None) -> int:
+def parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--label", required=True, help="the sub-plan, e.g. 5a")
     p.add_argument("--base", help="the commit the sub-plan started from (not needed with --seed-ledger)")
@@ -45,52 +37,30 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--seed-ledger", action="store_true")
     p.add_argument("--repo", type=Path, default=ROOT)
     p.add_argument("--output-dir", type=Path, default=ROOT / "output")
-    p.add_argument("--truth", type=Path, default=ROOT / "data" / "diagnosis_truth.csv")
-    p.add_argument("--legs", type=Path, default=ROOT / "data" / "diagnosis_truth_legs.csv")
-    p.add_argument("--changes", type=Path, default=ROOT / "data" / "diagnosis_truth_changes.csv")
-    p.add_argument("--loop-dir", type=Path, default=ROOT / dl.LOOP_DIR)
+    p.add_argument("--truth", type=Path, help="the truth file (default: the one the repo's data/scorecard.json names)")
+    p.add_argument("--loop-dir", type=Path, default=ROOT / LOOP_DIR)
+    return p
+
+
+def main(argv: list[str] | None = None) -> int:
+    p = parser()
     args = p.parse_args(argv)
     if not args.seed_ledger and not args.base:
         p.error("--base is required for a round")
-    ledger_path = args.loop_dir / "diagnosed.csv"
     try:
-        truth_rows = dl.read_csv(args.truth)
-        run_ids = dl.read_csv(args.output_dir / "contract" / "id_changes.csv")
-        id_changes = run_ids if args.seed_ledger else id_changes_since(args.repo, args.base, args.output_dir, run_ids)
-        truth_rows, renames = dl.rename_truth(truth_rows, id_changes)
-        legs = load_legs(args.legs) if args.legs.exists() else {}
-        cases = parse_rows(truth_rows, str(args.truth), legs)
-        tables = Tables.read(args.output_dir)
-        judged = judge_all(cases, LibraryRows.of(tables, _legs_rows(args.output_dir)))
-        ledger = dl.read_ledger(ledger_path)
-    except (TruthFileError, RegressionInputError, ValueError, OSError) as exc:
+        loop = Loop.of(args.repo, args.loop_dir)
+        truth = args.truth or configured(args.repo)
+        run = RunSnapshot.read(args.output_dir)
+        if args.seed_ledger:
+            done = loop.seed(truth, run, label=args.label)
+        else:
+            base = RunSnapshot.at(args.repo, args.base, args.output_dir)
+            done = loop.round(args.label, args.round).open(truth, run, base,
+                                                           report=args.output_dir / "regression_report.csv")
+    except (TruthFileError, SnapshotError, ValueError, OSError) as exc:
         print(f"ABORTED: {exc}", file=sys.stderr)
         return 2
-    if renames:
-        dl.write_together([(args.truth, COLUMNS, truth_rows),
-                           (args.changes, dl.CHANGE_COLUMNS, dl.read_csv(args.changes) + renames)])
-    keys = dl.ledger_keys(ledger)
-    if args.seed_ledger:
-        seeded = dl.seed_rows(judged, keys, args.label)
-        dl.write_ledger(ledger_path, ledger + seeded)
-        print(json.dumps({"label": args.label, "seeded": len(seeded), "ledger": str(ledger_path)}))
-        return 0
-    try:
-        report = build_report(args.repo, args.base, args.output_dir, cases, id_changes)
-    except RegressionInputError as exc:
-        print(f"ABORTED: {exc}", file=sys.stderr)
-        return 2
-    write_report(args.output_dir / "regression_report.csv", report)
-    mismatches = [m for j in judged for m in j.mismatches if dl.mismatch_key(m) not in keys]
-    regressions = [r for r in report if regression_key(r) not in keys]
-    rows = dl.case_rows(mismatches, regressions, tables, label=args.label, round_no=args.round,
-                        truth_sec={c.case_id: c.sec_id for c in cases})
-    path = args.loop_dir / args.label / f"round-{args.round}" / "cases.csv"
-    dl.write_cases(path, rows)
-    print(json.dumps({"label": args.label, "round": args.round, "mismatches_new": len(mismatches),
-                      "regressions_new": len(regressions), "renamed": len(renames),
-                      "cases": [{"case_id": r["case_id"], "mode": r["mode"], "ticker": r["ticker"]} for r in rows],
-                      "path": str(path)}))
+    print(json.dumps(done.line()))
     return 0
 
 

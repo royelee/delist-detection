@@ -1,8 +1,8 @@
 import pytest
 
-from delist_detection import store
-from delist_detection.lifecycle import (ACTIVE, CLOSED_NO_EVENT, ENDED, ENDED_INCOMPLETE, HIGH, LEFT_VIEW, LOOP, LOW,
-                                        MEDIUM, NO_INTERVAL, NO_MAPPED_SIGHTING, LifecycleView, Tables, event_grade)
+from delist_detection.measurement.lifecycle import (ACTIVE, CLOSED_NO_EVENT, ENDED, ENDED_INCOMPLETE, HIGH, LEFT_VIEW,
+                                                    LOOP, LOW, MEDIUM, NO_INTERVAL, NO_MAPPED_SIGHTING, LifecycleView,
+                                                    event_grade)
 from tests.lifecycle_tables import ending, hist, iv, obs, sec, tables
 
 
@@ -142,31 +142,6 @@ def test_end_of_a_lifecycle():
                [ending("A", "2015-03-10", ltd="2015-03-02", dlret="0.0"), ending("B", "2015-03-10")])
     view = LifecycleView(t)
     assert [view.end_of(view.lifecycle(s)) for s in "ABCD"] == ["2015-03-02", "2015-03-10", "2011-05-31", None]
-
-
-def test_tables_read_the_written_tables(tmp_path):
-    t = tables([sec("A")], [iv("A", "AAA", "2010-01-04")], [ending("A", "2015-03-10")], [obs("AAA", "2010-06-30", "A")])
-    store.write_tables(tmp_path, {"securities": t.securities, "ticker_history": t.ticker_history,
-                                  "delistings": t.delistings, "observation_map": t.observation_map})
-    back = Tables.read(tmp_path)
-    assert back.securities == t.securities and back.delistings == t.delistings and back.review == []
-
-
-def test_tables_read_takes_uncertain_csv_when_it_is_there(tmp_path):
-    t = tables([sec("A")], [iv("A", "AAA", "2010-01-04")], [], [obs("AAA", "2010-06-30", "A")])
-    store.write_tables(tmp_path, {"securities": t.securities, "ticker_history": t.ticker_history,
-                                  "delistings": t.delistings, "observation_map": t.observation_map})
-    assert Tables.read(tmp_path).uncertain is None
-    store.write_tables(tmp_path, {"uncertain": []})
-    assert Tables.read(tmp_path).uncertain == []
-
-
-def test_tables_read_takes_security_history_when_the_run_wrote_one(tmp_path):
-    from delist_detection.store import write_tables
-    write_tables(tmp_path, {"securities": [], "ticker_history": [], "delistings": [], "observation_map": []})
-    assert Tables.read(tmp_path).security_history is None
-    write_tables(tmp_path, {"security_history": [hist("S", "100", "2010-01-04")]})
-    assert Tables.read(tmp_path).security_history == [hist("S", "100", "2010-01-04")]
 
 
 def test_issuer_of_reads_the_issuer_in_force_on_the_day():

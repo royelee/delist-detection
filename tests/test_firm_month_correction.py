@@ -1,10 +1,10 @@
 import math
 import pytest
 
-from delist_detection.classifier import DelistRecord
-from delist_detection.crsp_codes import CrspBucket
-from delist_detection.exchanges import Exchange
-from delist_detection.handling import (
+from delist_detection.outputs.reconstruction import DelistRecord
+from delist_detection.vocabulary.crsp_codes import CrspBucket
+from delist_detection.vocabulary.exchanges import Exchange
+from delist_detection.handling.handling import (
     FirmMonthReturn, build_firm_month_correction,
 )
 
@@ -90,10 +90,10 @@ def test_firm_month_correction_zero_prior_close_drops():
 def test_firm_month_merger_includes_stock_leg():
     # AET->CVS: prior 200, last 190 (R_partial=-0.05); DLRET from full
     # consideration 212.024/190-1=+0.11592 -> R_month=(0.95)(1.11592)-1
-    from delist_detection.handling import build_firm_month_correction
-    from delist_detection.classifier import DelistRecord
-    from delist_detection.crsp_codes import CrspBucket
-    from delist_detection.exchanges import Exchange
+    from delist_detection.handling.handling import build_firm_month_correction
+    from delist_detection.outputs.reconstruction import DelistRecord
+    from delist_detection.vocabulary.crsp_codes import CrspBucket
+    from delist_detection.vocabulary.exchanges import Exchange
     rec = DelistRecord(
         ticker="AET", cik=1, observed_delist_date="2018-11-28",
         crsp_code=241, bucket=CrspBucket.MERGER, confidence="high", reason="", evidence={},
@@ -107,9 +107,38 @@ def test_firm_month_merger_includes_stock_leg():
     assert fm.firm_month_return == pytest.approx((0.95) * (1.11592) - 1.0, abs=1e-4)
 
 
-def test_compute_dlret_takes_an_otc_print():
-    from delist_detection.dlret import compute_dlret
-    assert compute_dlret(CrspBucket.COMPLIANCE_FAILURE, Exchange.NASDAQ, 2.0, otc_print=0.5) == pytest.approx(-0.75)
+def test_firm_month_correction_compliance_shumway_by_venue():
+    # Prior 100, last trade 80 (-20% partial): Shumway -55% on Nasdaq -> (0.80)(0.45) - 1; -30% on NYSE -> (0.80)(0.70) - 1
+    rec = _rec(ticker="RSH", bucket=CrspBucket.COMPLIANCE_FAILURE, code=584)
+    nasdaq = build_firm_month_correction(rec, 100.0, 80.0, Exchange.NASDAQ)
+    nyse = build_firm_month_correction(rec, 100.0, 80.0, Exchange.NYSE)
+    assert nasdaq.firm_month_return == pytest.approx(-0.64)
+    assert nyse.firm_month_return == pytest.approx(-0.44)
+
+
+def test_firm_month_correction_drops_a_degenerate_last_trade():
+    # a non-positive last trade gives no DLRET; the NaN carries through the compound to a drop
+    out = build_firm_month_correction(_rec(bucket=CrspBucket.MERGER), 100.0, 0.0, Exchange.NYSE,
+                                      payout_per_share=113.0)
+    assert math.isnan(out.dlret) and math.isnan(out.firm_month_return) and out.drop is True
+
+
+def test_firm_month_correction_takes_a_plan_value_as_measured():
+    """A bankruptcy plan's value (ruling R6) is the firm month's DLRET as it is the table's, read as a plan value."""
+    out = build_firm_month_correction(_rec(bucket=CrspBucket.LIQUIDATION, code=470), 4.0, 2.0, Exchange.NYSE,
+                                      plan_value=0.5)
+    assert out.dlret == pytest.approx(-0.75)
+    assert out.firm_month_return == pytest.approx(0.5 * 0.25 - 1.0)
+
+
+def test_the_firm_month_compounds_the_value_before_the_tables_par_fill():
+    """Two DLRETs per ending, by design (step 10, open for the operator's ruling): the table assumes par for an
+    expiration with a last close; the firm month drops it."""
+    from delist_detection.outputs.dlret import DlretMethod, ValueInputs, decide
+    value = ValueInputs(CrspBucket.EXPIRATION, Exchange.NYSE, 80.0)
+    assert decide(value).method is DlretMethod.ASSUMED_PAR and decide(value).value == 0.0
+    assert build_firm_month_correction(_rec(bucket=CrspBucket.EXPIRATION, code=600), 100.0, 80.0,
+                                       Exchange.NYSE).drop is True
 
 
 def test_firm_month_correction_uses_an_otc_print():

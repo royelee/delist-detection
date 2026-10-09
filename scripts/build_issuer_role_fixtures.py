@@ -40,15 +40,15 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
 import build_form25_fixtures as b5  # noqa: E402  (refuses every SEC request on import)
-from delist_detection.atomic_io import write_atomic  # noqa: E402
-from delist_detection.edgar import EdgarClient  # noqa: E402
-from delist_detection.form25 import FORM25_FORMS  # noqa: E402
-from delist_detection.figi_resolution import US_EXCH  # noqa: E402
-from delist_detection.ftd import FtdIndex  # noqa: E402
-from delist_detection.line_follow import text_cusips  # noqa: E402
-from delist_detection.listing_status import ANNUAL_FORMS  # noqa: E402
-from delist_detection.nasdaq_halts import parse_halts_rss  # noqa: E402
-from delist_detection.security_master import cusip_job  # noqa: E402
+from delist_detection.sources.atomic_io import write_atomic  # noqa: E402
+from delist_detection.sources.edgar import EdgarClient  # noqa: E402
+from delist_detection.filings.form25 import FORM25_FORMS  # noqa: E402
+from delist_detection.identity.figi_resolution import US_EXCH  # noqa: E402
+from delist_detection.sources.ftd import FtdIndex  # noqa: E402
+from delist_detection.identity.line_follow import text_cusips  # noqa: E402
+from delist_detection.filings.listing_status import ANNUAL_FORMS  # noqa: E402
+from delist_detection.sources.nasdaq_halts import parse_halts_rss  # noqa: E402
+from delist_detection.identity.security_master import cusip_job  # noqa: E402
 
 AS_OF, FTD_WINDOW, COVER_DAYS = b5.AS_OF, b5.FTD_WINDOW, b5.COVER_DAYS
 TEXT_DAYS = (40, 70)            # 8-K texts kept from this long before a case's anchor to this long after
@@ -136,7 +136,7 @@ def main(argv: list[str] | None = None) -> int:
 
     # fails rows: a case's CUSIPs, and its tickers' rows near its anchors; the others' span and descriptions
     local = b5.LocalFtd(repo / "cache/sec_data/ftd")
-    ftd = FtdIndex.load(local, *FTD_WINDOW, cusips={c for sid in needed for c in cusips.get(sid, [])})
+    ftd = FtdIndex.opened(local, *FTD_WINDOW, cusips={c for sid in needed for c in cusips.get(sid, [])})
     rows = set()
     for sid in needed:
         for c in cusips.get(sid, []):
@@ -154,7 +154,7 @@ def main(argv: list[str] | None = None) -> int:
         tickers = {k.split("@")[0] for k in eras[sid]} | set(b5._line_tickers(eras[sid], history[sid]))
         for day in anchors[sid]:
             lo, hi = day - timedelta(days=ROWS_DAYS), day + timedelta(days=ROWS_DAYS)
-            near = FtdIndex.load(local, lo, min(hi, AS_OF), symbols=tickers)
+            near = FtdIndex.opened(local, lo, min(hi, AS_OF), symbols=tickers)
             rows.update(r for t in tickers for r in near.by_symbol(t))
 
     # EDGAR

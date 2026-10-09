@@ -5,15 +5,15 @@ from __future__ import annotations
 from datetime import date
 
 from delist_detection import pipeline
-from delist_detection.added_securities import AddedAcquirer, AddedLineSuccessor, AddedSuccessor
-from delist_detection.classifier import DelistClassifier
-from delist_detection.crsp_codes import CrspBucket
-from delist_detection.delistings import DelistingFinder
-from delist_detection.edgar import EdgarSubmission
-from delist_detection.ftd import FtdIndex, FtdRow
-from delist_detection.manifest import StageMeter
-from delist_detection.security_master import Security
-from delist_detection.ticker_resolver import TickerResolver
+from delist_detection.identity.added_securities import AddedAcquirer, AddedLineSuccessor, AddedSuccessor
+from delist_detection.endings.classifier import DelistClassifier
+from delist_detection.vocabulary.crsp_codes import CrspBucket
+from delist_detection.endings.delistings import DelistingFinder
+from delist_detection.sources.edgar import EdgarSubmission
+from delist_detection.sources.ftd import FtdIndex, FtdRow
+from delist_detection.outputs.manifest import StageMeter
+from delist_detection.identity.security_master import Security
+from delist_detection.identity.ticker_resolver import TickerResolver
 
 CIK, SID = 777001, "BBG000NEWLN1"
 NYSE_RAW = ("<TYPE>25-NSE\n<notificationOfRemoval><exchange><entityName>New York Stock Exchange LLC</entityName>"
@@ -45,8 +45,7 @@ def _ends(fake_edgar, monkeypatch, added, *, listed=False, form25=True):
     ctx = pipeline._RunContext(clients, date(2026, 9, 25), lambda *a: None, 1, StageMeter(lambda *a: None))
     rows = [r for a in added.values() for r in getattr(a, "rows", [])]
     finder = DelistingFinder(edgar, clients.classifier)
-    return pipeline._successor_endings(ctx, finder, added, {}, {}, FtdIndex(rows),
-                                       pipeline._IssuerAnswers({}, {}, {}, set()))
+    return pipeline._successor_endings(ctx, finder, added, {}, {}, FtdIndex(rows))
 
 
 def _security():
@@ -55,10 +54,13 @@ def _security():
 
 def test_a_line_successor_takes_its_own_form25_ending(fake_edgar, monkeypatch):
     rows = [FtdRow(f"2020-0{m}-15", "65249B109", "NEWC", "NEWCO CORP", 10.0 + m) for m in range(1, 6)]
-    ends = _ends(fake_edgar, monkeypatch, {SID: AddedLineSuccessor(_security(), "NEWC", "2019-06-03", rows)})
+    a = AddedLineSuccessor(_security(), "NEWC", "2019-06-03", rows)
+    ends = _ends(fake_edgar, monkeypatch, {SID: a})
     assert [(d.sec_id, d.delist_date, d.record.bucket) for d in ends.delistings] == [
         (SID, "2020-06-11", CrspBucket.MERGER)]
-    assert ends.securities[SID].eras[0].ticker == "NEWC" and ends.cusips[SID] == ["65249B109"]
+    assert [d.ticker for d in ends.delistings] == ["NEWC"]
+    # searched from its own span and CUSIPs: the stage hands back the security as the run added it, no era made up
+    assert ends.securities[SID] is a.security and a.security.eras == [] and ends.cusips[SID] == ["65249B109"]
 
 
 def test_an_8k12b_successor_is_searched_to_the_run_date_and_its_span_runs_to_the_ending(fake_edgar, monkeypatch):
@@ -117,8 +119,7 @@ def test_a_failed_halt_feed_read_makes_the_ending_resolution_degraded(fake_edgar
     clients, ctx = _ctx(edgar, monkeypatch)
     finder = DelistingFinder(edgar, clients.classifier, halts=_FailingHalts())
     a = AddedSuccessor(_security(), "NEWC", "2016-09-08")
-    ends = pipeline._successor_endings(ctx, finder, {SID: a}, {}, {}, FtdIndex([]),
-                                       pipeline._IssuerAnswers({}, {}, {}, set()))
+    ends = pipeline._successor_endings(ctx, finder, {SID: a}, {}, {}, FtdIndex([]))
     assert [d.delist_date for d in ends.delistings] == ["2020-06-11"]
     assert "resolution_degraded" in ends.delistings[0].flags
     degraded = [r for r in ends.review if r.flag == "resolution_degraded"]
@@ -126,7 +127,7 @@ def test_a_failed_halt_feed_read_makes_the_ending_resolution_degraded(fake_edgar
 
 
 def test_the_finders_review_rows_are_kept(fake_edgar, monkeypatch):
-    from delist_detection.review_triage import ReviewItem
+    from delist_detection.outputs.review_triage import ReviewItem
     edgar = _edgar(fake_edgar)
     clients, ctx = _ctx(edgar, monkeypatch)
     item = ReviewItem(SID, "NEWC", CIK, "ticker_unconfirmed", "from the finder")
@@ -136,7 +137,7 @@ def test_the_finders_review_rows_are_kept(fake_edgar, monkeypatch):
             return [], [item]
 
     ends = pipeline._successor_endings(ctx, _Finder(), {SID: AddedSuccessor(_security(), "NEWC", "2016-09-08")},
-                                       {}, {}, FtdIndex([]), pipeline._IssuerAnswers({}, {}, {}, set()))
+                                       {}, {}, FtdIndex([]))
     assert ends.review == [item]
 
 

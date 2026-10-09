@@ -1,10 +1,11 @@
 """Small output tables for the lifecycle, truth, scorecard and audit tests. Each
 helper returns one row with its table's full column set (blank where a test
-does not care), as store.read_table would."""
+does not care), as store.read_table would; `tables` makes a run snapshot of them
+(`RunSnapshot.of`, the in-memory adapter)."""
 from __future__ import annotations
 
-from delist_detection.lifecycle import Tables
-from delist_detection.store import TABLES
+from delist_detection.outputs.run_snapshot import RunSnapshot
+from delist_detection.outputs.store import TABLES
 
 
 def _row(table: str, **cells) -> dict[str, str]:
@@ -49,9 +50,15 @@ def hist(sec_id, issuer, start, end="", ticker="AAA"):
 
 
 def tables(securities=(), history=(), delistings=(), observations=(), reviews=(), *, uncertain=None,
-           security_history=None, contract_delistings=None) -> Tables:
-    return Tables(list(securities), list(history), list(delistings), list(observations), list(reviews),
-                  uncertain, security_history, contract_delistings)
+           security_history=None, contract_delistings=None, payout_legs=None, continuations=None,
+           as_of=None) -> RunSnapshot:
+    """A run snapshot of these rows; a later table left None is one the run did not write."""
+    rows = {"securities": securities, "ticker_history": history, "delistings": delistings,
+            "observation_map": observations, "review": reviews, "uncertain": uncertain,
+            "security_history": security_history, "contract_delistings": contract_delistings,
+            "payout_legs": payout_legs}
+    return RunSnapshot.of({k: list(v) for k, v in rows.items() if v is not None}, as_of=as_of,
+                          continuations=continuations)
 
 
 def cend(sec_id, value_rule):

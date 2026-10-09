@@ -1,7 +1,8 @@
 """Sub-plan 5b's real cases, replayed offline: tests/fixtures/form25_reach/ (built once from the local caches by
 scripts/build_form25_fixtures.py) holds each case's security, the other securities of its issuer, their fails
 rows, and the EDGAR, MIDAS and Nasdaq-halt answers the finder reads. `find(sec_id)` runs the run's own stage-5
-code over them: the pipeline's context builder (`pipeline._context_builder`) and `delistings.DelistingFinder`."""
+code over them: the finder's own contexts (`delistings.SecurityContexts`, each security's trading record over
+its CUSIPs and the fails rows) and `delistings.DelistingFinder`."""
 from __future__ import annotations
 
 import csv
@@ -12,19 +13,17 @@ from datetime import date
 from functools import lru_cache
 from pathlib import Path
 
-from delist_detection import pipeline
-from delist_detection.classifier import DelistClassifier
-from delist_detection.delistings import Delisting, DelistingFinder
-from delist_detection.edgar import EdgarSubmission
-from delist_detection.figi_resolution import security_kind
-from delist_detection.ftd import FtdIndex, FtdRow
-from delist_detection.history import ticker_sightings
-from delist_detection.midas import MidasClient
-from delist_detection.nasdaq_halts import Halt, NasdaqHaltClient
-from delist_detection.observations import Observation, TickerEra
-from delist_detection.review_triage import ReviewItem
-from delist_detection.security_master import Security
-from delist_detection.ticker_resolver import TickerResolver
+from delist_detection.endings.classifier import DelistClassifier
+from delist_detection.endings.delistings import Delisting, DelistingFinder, SecurityContexts
+from delist_detection.sources.edgar import EdgarSubmission
+from delist_detection.identity.figi_resolution import security_kind
+from delist_detection.sources.ftd import FtdIndex, FtdRow
+from delist_detection.sources.midas import MidasClient
+from delist_detection.sources.nasdaq_halts import Halt, NasdaqHaltClient
+from delist_detection.identity.observations import Observation, TickerEra
+from delist_detection.outputs.review_triage import ReviewItem
+from delist_detection.identity.security_master import Security
+from delist_detection.identity.ticker_resolver import TickerResolver
 
 FIX = Path(__file__).parent / "fixtures" / "form25_reach"
 DATA = json.loads((FIX / "cases.json").read_text())
@@ -37,6 +36,8 @@ AS_OF = date.fromisoformat(DATA["as_of"])
 class FixtureEdgar:
     """The cases' EDGAR answers as the fixture recorded them. A raw or a text the cache lacked reads as "" (as
     an unreadable filing); `raws_read` lists every Form 25 raw the finder asked for."""
+
+    full_text_search = None      # the fixture recorded no full-text searches (`capabilities.FULL_TEXT_SEARCH`)
 
     def __init__(self) -> None:
         self.raws_read: list[str] = []
@@ -123,15 +124,13 @@ def finder(edgar: FixtureEdgar | None = None) -> DelistingFinder:
 
 
 def context(sec_id: str, *, other_cik: int | None | str = "fixture"):
-    """The case's `SecurityContext`, as stage 5 builds it (`pipeline._context_builder`); its other CIK in force
+    """The case's `SecurityContext`, as stage 5 builds it (`SecurityContexts.observed`); its other CIK in force
     (R5) is the fixture's (from the committed run's contract/security_history.csv) unless `other_cik` says
     otherwise."""
     securities, cusips, ftd = world()
-    sightings = {sid: ticker_sightings(s, ftd, cusips[sid]) for sid, s in securities.items()}
     other = DATA["cases"][sec_id]["other_cik"] if other_cik == "fixture" else other_cik
-    build = pipeline._context_builder(securities, sightings, pipeline._IssuerAnswers({}, {}, {}, set()), ftd, cusips,
-                                      {sec_id: other} if other else {})
-    return build(securities[sec_id], DATA["securities"][sec_id]["listed"])
+    contexts = SecurityContexts.observed(securities, cusips, ftd, other_ciks={sec_id: other} if other else {})
+    return contexts(securities[sec_id], DATA["securities"][sec_id]["listed"])
 
 
 def find(sec_id: str, *, edgar: FixtureEdgar | None = None, **kw) -> tuple[list[Delisting], list[ReviewItem]]:

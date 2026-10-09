@@ -1,16 +1,16 @@
 """scripts/scorecard.py and scripts/draw_audit_sample.py over small tables in a temp folder."""
 import importlib.util
 import json
-import os
-import subprocess
+import re
 from pathlib import Path
 
 import pytest
 
-from delist_detection import diagnosis_truth as dt
-from delist_detection import store
-from delist_detection.truth import load_truth
-from tests.diagnosis_rows import truth_row
+from delist_detection.outputs import store
+from delist_detection.measurement.loop_round import Unexplained
+from delist_detection.measurement.truth import TRUTH_COLUMNS, TruthFileError, load_truth, write_truth as write_golden
+from delist_detection.measurement.truth_set import LEDGER_COLUMNS, TruthSet
+from tests.diagnosis_rows import truth_row, write_truth
 from tests.lifecycle_tables import contract_row, ending, iv, obs, sec, tables
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -37,7 +37,7 @@ def out(tmp_path):
     out = tmp_path / "output"
     out.mkdir()
     store.write_tables(out, {"securities": t.securities, "ticker_history": t.ticker_history,
-                             "delistings": t.delistings, "observation_map": t.observation_map})
+                             "delistings": t.delistings, "observation_map": t.observation_map, "review": t.review})
     (out / "run_manifest.json").write_text(json.dumps({"as_of": "2026-09-25"}))
     return out
 
@@ -105,51 +105,72 @@ def test_draw_writes_a_pending_worksheet_once(tmp_path, out, capsys):
 
 def test_check_fails_on_a_failing_diagnosis_pass_case(tmp_path, out, capsys):
     store.write_tables(out, {"contract_delistings": [contract_row("A", exit_kind="merger", value_rule="cash")]})
-    dt.write_diagnosis_truth(tmp_path / "d.csv", [truth_row("A_2012-03-10", "A", exit_kind="exchange")])
+    write_truth(tmp_path / "d.csv", [truth_row("A_2012-03-10", "A", exit_kind="exchange")])
     cfg = tmp_path / "scorecard.json"
     cfg.write_text(json.dumps({"diagnosis": "d.csv", "floor": {}}))
     assert scorecard_script.main(["--output-dir", str(out), "--config", str(cfg), "--check"]) == 1
     assert "DIAGNOSIS FAILING A_2012-03-10: exit_kind merger != exchange" in capsys.readouterr().out
 
 
-def _vc(repo, *args):
-    subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True,
-                   env={**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t",
-                        "GIT_COMMITTER_EMAIL": "t@t"})
-
-
-def _run_tables(out, z_exit):
-    store.write_tables(out, {"securities": [sec("A"), sec("Z")], "ticker_history": [], "delistings": [],
-                             "observation_map": [], "security_history": [],
-                             "contract_delistings": [contract_row("A", exit_kind="merger", value_rule="cash"),
-                                                     contract_row("Z", exit_kind=z_exit, value_rule="cash")]})
-    (out / "run_manifest.json").write_text(json.dumps({"as_of": "2026-09-25"}))
-
-
-def test_check_base_fails_on_an_unexplained_regression_and_passes_once_the_security_is_in_the_truth(tmp_path, capsys):
-    repo = tmp_path / "repo"
-    out = repo / "output"
-    out.mkdir(parents=True)
-    _vc(repo, "init", "-q")
-    _run_tables(out, "merger")
-    _vc(repo, "add", "-A")
-    _vc(repo, "commit", "-q", "-m", "base")
-    _run_tables(out, "exchange")
-    # a stale report on disk (an empty one) must not decide the result
-    (out / "regression_report.csv").write_text("sec_id,table,field,kind,old,new\n")
-    truth = tmp_path / "truth.csv"
-    dt.write_diagnosis_truth(truth, [truth_row("A_2010-01-04", "A", exit_kind="merger")])
+def test_base_asks_the_loop_round_for_the_unexplained_count_and_check_fails_unless_it_passes(tmp_path, out, capsys,
+                                                                                            monkeypatch):
+    """The count and its gate are the loop round's (tests/test_loop_round.py); the script asks it only with --base,
+    for the base commit's run, this run, the config's truth cases and the --ledger's rows."""
+    write_truth(tmp_path / "truth.csv", [truth_row("A_2010-01-04", "A", exit_kind="merger")])
     cfg = tmp_path / "scorecard.json"
     cfg.write_text(json.dumps({"floor": {}, "diagnosis": "truth.csv"}))
-    argv = ["--output-dir", str(out), "--config", str(cfg), "--repo", str(repo), "--ledger",
-            str(tmp_path / "none.csv"), "--check"]
+    ledger = tmp_path / "diagnosed.csv"
+    ledger.write_text(",".join(LEDGER_COLUMNS) + "\nk,mismatch,A,5a,1,known,\n")
+    asked = []
+    answers = [Unexplained(({"sec_id": "Z", "table": "delistings", "field": "exit_kind", "kind": "changed",
+                             "old": "merger", "new": "exchange"},)), Unexplained(())]
+
+    def unexplained(base, run, cases, ledger_rows):
+        asked.append((base, run.as_of.isoformat(), [c.case_id for c in cases], [r["key"] for r in ledger_rows]))
+        return answers.pop(0)
+
+    monkeypatch.setattr(scorecard_script, "unexplained", unexplained)
+    monkeypatch.setattr(scorecard_script.RunSnapshot, "at", staticmethod(lambda repo, rev, out_dir: f"{rev}@{repo}"))
+    argv = ["--output-dir", str(out), "--config", str(cfg), "--repo", str(tmp_path), "--ledger", str(ledger),
+            "--check"]
     assert scorecard_script.main(argv) == 0                    # no --base: no regression metric, no check
-    assert "D.unexplained_regressions" not in capsys.readouterr().out
-    assert scorecard_script.main([*argv, "--base", "HEAD"]) == 1
-    assert "D.unexplained_regressions" in capsys.readouterr().out
-    dt.write_diagnosis_truth(truth, [truth_row("A_2010-01-04", "A", exit_kind="merger"),
-                                     truth_row("Z_2010-01-04", "Z", exit_kind="exchange")])
-    (out / "regression_report.csv").write_text(
-        "sec_id,table,field,kind,old,new\nZ,delistings,exit_kind,changed,merger,exchange\n")   # stale, the other way
-    assert scorecard_script.main([*argv, "--base", "HEAD"]) == 0
-    assert "D.unexplained_regressions" in capsys.readouterr().out
+    assert "D.unexplained_regressions" not in capsys.readouterr().out and asked == []
+    assert scorecard_script.main([*argv, "--base", "REV"]) == 1
+    assert re.search(r"^D\.unexplained_regressions +1$", capsys.readouterr().out, re.M)
+    assert scorecard_script.main([*argv, "--base", "REV"]) == 0
+    assert re.search(r"^D\.unexplained_regressions +0$", capsys.readouterr().out, re.M)
+    assert asked == [(f"REV@{tmp_path}", "2026-09-25", ["A_2010-01-04"], ["k"])] * 2
+
+
+def test_flip_moves_each_known_wrong_case_of_both_sets_the_tables_now_match_and_says_which(tmp_path, out, capsys):
+    store.write_tables(out, {"contract_delistings": [contract_row("A", exit_kind="merger", value_rule="cash")]})
+    write_golden(tmp_path / "golden.csv", [{**dict.fromkeys(TRUTH_COLUMNS, ""), "case": "AAA", "group": "golden",
+                                            "ticker": "AAA", "on": "2010-06-30", "exit_kind": "merger",
+                                            "status": "known_wrong", "fixed_by": "reset-4a"}])
+    write_truth(tmp_path / "d.csv", [truth_row("A_2012-03-10", "A", status="known_wrong", fixed_by="5a",
+                                               exit_kind="merger")])
+    cfg = tmp_path / "scorecard.json"
+    cfg.write_text(json.dumps({"golden": "golden.csv", "diagnosis": "d.csv", "floor": {}}))
+    argv = ["--output-dir", str(out), "--config", str(cfg)]
+    assert scorecard_script.main(argv) == 0
+    assert "flipped" not in capsys.readouterr().out                          # only --flip writes
+    assert [c.status for c in load_truth(tmp_path / "golden.csv")] == ["known_wrong"]
+    assert scorecard_script.main([*argv, "--flip"]) == 0
+    printed = capsys.readouterr().out
+    assert "flipped 1 golden case(s) to pass: AAA\n" in printed
+    assert "flipped 1 diagnosis case(s) to pass: A_2012-03-10\n" in printed
+    assert [c.status for c in load_truth(tmp_path / "golden.csv")] == ["pass"]
+    assert [c.status for c in TruthSet.open(tmp_path / "d.csv").cases] == ["pass"]
+    assert scorecard_script.main([*argv, "--flip"]) == 0
+    printed = capsys.readouterr().out
+    assert "flipped 0 golden case(s) to pass\n" in printed and "flipped 0 diagnosis case(s) to pass\n" in printed
+
+
+@pytest.mark.parametrize("error", [TruthFileError("golden.csv:3: bad"), OSError("disk full")])
+def test_a_flip_that_cannot_read_or_write_a_truth_file_exits_2(tmp_path, out, capsys, monkeypatch, error):
+    def refuse(run, config):
+        raise error
+
+    monkeypatch.setattr(scorecard_script, "flip", refuse)
+    assert scorecard_script.main(["--output-dir", str(out), "--config", str(_config(tmp_path, {})), "--flip"]) == 2
+    assert f"ABORTED: {error}" in capsys.readouterr().err

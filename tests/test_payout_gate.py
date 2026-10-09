@@ -1,5 +1,5 @@
-from delist_detection.llm_merger_extractor import MergerTerms
-from delist_detection.payout_gate import DEFAULT_TOL, gate_payouts, reconcile
+from delist_detection.terms.llm_merger_extractor import MergerTerms
+from delist_detection.terms.payout_gate import DEFAULT_TOL, gate_payouts, reconcile
 
 
 def _terms(deal_type, cash=None, ratio=None, ticker=None):

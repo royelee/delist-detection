@@ -1,6 +1,7 @@
 import pytest
 
-from delist_detection.names import description_matches, description_names, name_tokens, names_agree, names_an_issuer
+from delist_detection.vocabulary.names import (description_matches, description_names, name_tokens, names_agree,
+                                               names_an_issuer)
 
 
 def test_tokens_keep_three_letter_words_and_drop_legal_suffixes():

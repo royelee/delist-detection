@@ -1,9 +1,9 @@
 from datetime import date
 from pathlib import Path
 
-from delist_detection.edgar import EdgarSubmission
-from delist_detection.form25 import (
-    Form25, SecurityRef, class_kind, class_label, effective_date, exchange_label, exchanges_named,
+from delist_detection.sources.edgar import EdgarSubmission
+from delist_detection.filings.form25 import (
+    Form25, SecurityRef, class_kind, class_label, exchange_label, exchanges_named,
     list_form25, match_securities, match_security, notice_last_trade, parse_form25, tied_securities,
 )
 
@@ -152,12 +152,11 @@ def test_exchange_labels():
     assert exchanges_named("The Nasdaq Stock Market LLC") == {"NASDAQ"}
 
 
-def test_list_form25_and_effective_date():
+def test_list_form25():
     subs = [EdgarSubmission("x2", "25-NSE", "2020-01-02", "", "", "p"),
             EdgarSubmission("x1", "25", "2019-01-02", "", "", "p"),
             EdgarSubmission("x3", "8-K", "2019-01-02", "", "3.01", "p")]
     assert [s.accession for s in list_form25(subs)] == ["x1", "x2"]
-    assert effective_date("2018-11-29") == "2018-12-09"
 
 
 def _load_text(name, accession, filing_date):
@@ -304,7 +303,7 @@ def test_a_letterless_sibling_no_class_names_is_not_tied():
 
 import pytest  # noqa: E402
 
-from delist_detection.form25 import notice_says_acquired  # noqa: E402
+from delist_detection.filings.form25 import notice_says_acquired  # noqa: E402
 from tests import form25_cases as fc  # noqa: E402
 
 
@@ -323,7 +322,7 @@ def test_a_real_notice_says_the_class_was_acquired_only_without_a_reorganization
 
 # --- sub-plan 5b, R3: a Form 25 about another class ---
 
-from delist_detection.form25 import other_class  # noqa: E402
+from delist_detection.filings.form25 import other_class  # noqa: E402
 
 LIBERTY_2011 = ("Series A Liberty Capital Common Stock, Series B Liberty Capital Common Stock, Liberty Starz Ser A "
                 "Common Stock, Liberty Starz Ser B Common Stock")
@@ -364,16 +363,6 @@ def test_a_form25_that_relates_solely_to_the_rights_is_not_about_the_common():
 
 
 # --- sub-plan 5b, R2: a letterless common takes the letter its own fails descriptions name ---
-
-from delist_detection.form25 import letter_hint  # noqa: E402
-
-
-def test_the_letter_a_securitys_fails_descriptions_name():
-    assert letter_hint(["SUNPOWER CORP CL A"]) == "A"
-    assert letter_hint(["LIBERTY INTERACTIVE CORP SER A", "LIBERTY INTERACTIVE CORP"]) == "A"
-    assert letter_hint(["X CORP CLASS A", "X CORP CL B"]) is None
-    assert letter_hint(["SUNPOWER CORP", ""]) is None
-
 
 SUNPOWER_2011 = Form25("a", "25-NSE", "2011-11-16", "NASDAQ", "Common Stock Class A & Common Stock Class B", "", "")
 

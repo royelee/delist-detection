@@ -1,6 +1,6 @@
-from delist_detection.contract import (delisting_rows, id_change_rows, last_endings, security_history_rows,
+from delist_detection.outputs.contract import (delisting_rows, id_change_rows, last_endings, security_history_rows,
                                        seed_rows)
-from delist_detection.verdict import decide
+from delist_detection.outputs.verdict import decide
 from lifecycle_tables import ending, iv, obs, sec, tables
 
 
@@ -85,15 +85,13 @@ def test_id_changes_name_the_figi_that_now_holds_a_placeholders_issuer_and_class
 
 
 def test_delisting_rows_carry_the_payout_rule_columns_and_the_inputs_of_a_failed_gate():
-    from types import SimpleNamespace
-
-    from delist_detection.payout_rule import MergerInputs
-    from delist_detection.store import CONTRACT_DELISTINGS_COLUMNS, DelistingKey
+    from delist_detection.terms.llm_merger_extractor import MergerTerms
+    from delist_detection.outputs.dlret import MergerInputs
+    from delist_detection.outputs.store import CONTRACT_DELISTINGS_COLUMNS, DelistingKey
     t = tables([sec("M")], [iv("M", "MMM", "2010-01-04", "2015-03-02")],
                [ending("M", "2015-03-10", ltd="2015-03-02", method="assumed_par", last_trade_close="10")],
                [obs("MMM", "2012-06-29", "M")])
-    llm = SimpleNamespace(deal_type="cash_and_stock", cash_per_share=65.5, stock_ratio=0.8025, acquirer_ticker="QSR",
-                          source="8-K:1")
+    llm = MergerTerms("cash_and_stock", 65.5, 0.8025, None, "QSR", "high", "8-K:1", "")
     inputs = {DelistingKey("M", "2015-03-10"): MergerInputs(llm=llm, acquirer_sec_id="BBG0QSR")}
     (row,) = delisting_rows(t, decide(t, {}), inputs)
     assert set(row) == set(CONTRACT_DELISTINGS_COLUMNS)
@@ -103,8 +101,8 @@ def test_delisting_rows_carry_the_payout_rule_columns_and_the_inputs_of_a_failed
 
 def test_delisting_rows_take_each_endings_distress_terms():
     """Sub-plan 5g: stage 9e's OTC symbol and plan ratio, keyed by the ending's DelistingKey."""
-    from delist_detection.distress import DistressTerms
-    from delist_detection.store import DelistingKey
+    from delist_detection.outputs.dlret import DistressTerms
+    from delist_detection.outputs.store import DelistingKey
     t = tables([sec("H"), sec("S")], [iv("H", "HTZ", "2016-07-05", "2020-10-29"), iv("S", "SDRL", "2010-04-16",
                                                                                    "2018-07-02")],
                [ending("H", "2020-11-09", "liquidation", ltd="2020-10-29", method="shumway_nyse_amex",

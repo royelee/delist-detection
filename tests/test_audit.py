@@ -1,9 +1,9 @@
 import csv
 
-from delist_detection import audit
-from delist_detection.lifecycle import LifecycleView
-from delist_detection.scorecard import Window
-from delist_detection.truth import TRUTH_COLUMNS, load_truth
+from delist_detection.measurement import audit
+from delist_detection.measurement.lifecycle import LifecycleView
+from delist_detection.measurement.scorecard import Window
+from delist_detection.measurement.truth import TRUTH_COLUMNS, load_truth
 from tests.lifecycle_tables import ending, iv, obs, sec, tables
 
 WINDOW = Window("2006-01-02", "2024-12-29")

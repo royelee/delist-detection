@@ -101,3 +101,43 @@ def test_an_answered_received_close_changes_no_acquirer_and_no_request(sec_id):
         second = outcome(sec_id, answer=(first.price_ticker, price))
         assert (second.price_sec_id, second.price_ticker) == (first.price_sec_id, first.price_ticker), \
             DATA["cases"][sec_id]["note"]
+
+
+@pytest.mark.parametrize("sec_id", sorted(sid for sid in EXPECTED if DATA["cases"][sid]["last_trade_close"]))
+def test_an_answered_last_close_changes_no_acquirer_and_no_request(sec_id):
+    """I1 (the final review): the gate pass that settles the acquirer and the stock leg's request reads the run's own
+    last close (the fails close), never the caller's answered one, so a second run whose answer moves the gate's
+    verdict keeps the acquirer, the acquirers the run adds and the request (its ticker and its acquirer)."""
+    first, e, _ = payouts(sec_id)
+    close = DATA["cases"][sec_id]["last_trade_close"]
+    v1 = first.get(e.key)
+    for factor in (0.5, 0.8, 1.25, 2.0):
+        second, e2, _ = payouts(sec_id, last_close=close * factor)
+        v2 = second.get(e2.key)
+        assert (v2.acquirer_sec_id, v2.price_ticker, v2.request, sorted(second.added)) == (
+            v1.acquirer_sec_id, v1.price_ticker, v1.request, sorted(first.added)), DATA["cases"][sec_id]["note"]
+
+
+@pytest.mark.parametrize("sec_id, acquirer", [("BBG000R23VW8", "BBG00ZXBJ153"),     # IPHI: new Marvell
+                                              ("BBG000BWMX63", "BBG000BTJS47")])    # WBS: Santander
+def test_an_answered_last_close_moves_the_values_only(sec_id, acquirer):
+    """IPHI and WBS pass the gate on their fails close and fail it on a close 20% lower: the values follow the answer
+    (no terms kept), while the acquirer and the request stay those the run's own close settled (before the fix, the
+    failed first pass published old Marvell's holder for IPHI and no acquirer for WBS)."""
+    first = outcome(sec_id)
+    second = outcome(sec_id, last_close=DATA["cases"][sec_id]["last_trade_close"] * 0.8)
+    assert (first.gate, second.gate) == ("passed", "failed")
+    assert first.price_sec_id == second.price_sec_id == acquirer and first.price_ticker == second.price_ticker
+
+
+def test_a_leg_whose_acquirer_line_was_found_is_never_named_again():
+    """Stage 8a' names only a stock leg with no ticker that stage 8a found no acquirer line of: LEG's Somnigroup,
+    GXP's Monarch Energy Holding and LSXMA's New Sirius name no ticker, and their lines settle them without the name
+    index being asked."""
+    def never():
+        raise AssertionError("the name index is asked only for a leg with no line")
+
+    for sid in ("BBG000BN53G7", "BBG000K3T8L8", "BBG01HLM8W28"):
+        assert not DATA["cases"][sid]["terms"][4]                    # the terms name no ticker
+        got, e, _ = payouts(sid, name_index=never)
+        assert got.get(e.key).llm.acquirer_ticker is None and got.get(e.key).priced_by == "line"

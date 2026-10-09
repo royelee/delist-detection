@@ -19,7 +19,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
 import build_form25_fixtures as b5  # noqa: E402  (refuses every SEC request on import)
-import delist_detection.edgar as edgar_mod  # noqa: E402
+import delist_detection.sources.edgar as edgar_mod  # noqa: E402
 
 edgar_mod.write_atomic = lambda *a, **k: None          # the caches are read, never written...
 edgar_mod.clean_orphan_temps = lambda *a, **k: None    # ...nor cleaned: another run may be writing them

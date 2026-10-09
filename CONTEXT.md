@@ -23,12 +23,24 @@ _Avoid_: series
 **Ticker era**:
 A run of one ticker's observations that the library takes to be one security, before it looks up that security's FIGI. A new era starts when a pin changes, when the observed name stops agreeing, or when the class letter in the name changes; then, from SEC fails-to-deliver rows under the ticker, when the CUSIP switches or when more than 400 days pass with no observation and no fails row of the era's CUSIP. A ticker used by two securities (DELL, Dell Inc. and later Dell Technologies) therefore gives two eras. Two eras can still be one security: they merge when they resolve to the same FIGI. An era is never dropped: when a ticker is seen under two names on one date, both names keep their eras (under distinct keys) and the date is reported for review. An era is a grouping step, not a listing.
 
+**Identity**:
+Which security an observation is: its ticker era, the era's issuer (a CIK), the security's `sec_id` (its US composite FIGI or a placeholder) and the security's CUSIPs. The library settles it once per run, before any delisting is searched (`identity/identity.py`); a pin settles part of it ahead of the library, and the line follow then carries it past the observations (a new CUSIP or ticker of the same security, or a placeholder folded into the FIGI line its new CUSIP names).
+_Avoid_: mapping, resolution (an era's resolution is one step of it)
+
 **Delisting**:
 The removal of a security from its US exchange listing, after which it is listed on no exchange or has moved to another one. It is recorded by a Form 25 (or, where none was filed, by the filing that ended its trading) and classified by a CRSP `DLSTCD` code. A rename is not a delisting, and neither is withdrawing a secondary listing while the main one continues. A security can have more than one, such as an exchange transfer followed years later by a merger.
 _Avoid_: termination, delist event
 
 **End of era**:
-The last date a security's history is known, and what happened next: it kept trading, moved to a new exchange, took a new ticker or CUSIP, was merged away, was liquidated, or nobody can tell. The end-of-era resolver (`end_of_era.py`) reads EDGAR for what the registrant did after that date, in a fixed branch order.
+The last date a security's history is known, and what happened next: it kept trading, moved to a new exchange, took a new ticker or CUSIP, was merged away, was liquidated, or nobody can tell. The end-of-era resolver (`endings/end_of_era.py`) reads EDGAR for what the registrant did after that date, in a fixed branch order.
+
+**Last trade date**:
+The last day a security traded on its exchange before a delisting: measured by SEC MIDAS volume or a Nasdaq halt, else stated by the exchange's Form 25 notice or the issuer's 8-K, else worked out from the deal's closing or the last sighting. It is confirmed when a measurement or a stated timing gives it, and published in the contract only when confirmed, from an exchange print and no later than the Form 25's effective date (`endings/last_trade.py`). An ending's anchor day, the day it is read around, is its last trade date, else its Form 25's filing date (then the 8-K it was classified on, then its delisting date); its end day, the day its listing ended, is its last trade date, else its delisting date.
+_Avoid_: delist date (the Form 25's effective date), exit date
+
+**Trading record**:
+What a security's own sightings and fails rows say of its trading: the days it was seen under each ticker (its observations, and the fails-to-deliver rows of its own CUSIPs under any symbol, the OTC symbol it moved to included), and from them its ticker on a day, its last sighting under its own tickers, whether it traded on after a day, its CUSIP switches and the day another CUSIP took its ticker (`endings/trading_record.py`). The delisting finder and the last trade date read it. A successor the run added, which no observation names, has one over the span the run knows it for.
+_Avoid_: context, trading view
 
 **Bucket**:
 The handling class a delisting's CRSP code maps to: `merger`, `exchange_transfer`, `liquidation`, `compliance_failure`, `expiration`, or `active` when no delisting occurred. The bucket, not the exact code, decides the training label and the backtest exit.
@@ -43,6 +55,10 @@ _Avoid_: ticker reuse (a reuse years later is no handoff)
 
 **Continuation**:
 A handoff in which the holders' shares became the new security's one for one: a holding-company reorganization, a redomicile, a rename or a share reclassification (AON 2020, Liberty's 2023 reclassification). The old security gets an `exchange_transfer` delisting with a zero return, and the new one is its successor.
+
+**Rewrite**:
+A later rule's change of a delisting's kind or successor after the delisting finder classified it, named by the rule that decided it: the issuer moving the class, the security going on, R1, the line follow, a successor link, a handoff, a bankruptcy plan, a price deficiency (`endings/rewrites.py`). A rewrite into a continuation drops what a continuation cannot carry: the no-evidence default, the open successor, and the merger's payout reads and gate flags. A security that goes on is its own successor and keeps its kind.
+_Avoid_: override, relabel (the end-of-era resolver's relabel happens before the delisting is built)
 
 **Ticker takeover**:
 A handoff in which another, already trading security takes the ticker over, typically an acquirer that renames itself after its target (II-VI as Coherent Corp on COHR, Eldorado as Caesars on CZR). The target keeps its own delisting (a merger); the taker is recorded as `ticker_successor_sec_id`, never as a successor, since the ticker's price series before the handoff is the target's, not the taker's.
@@ -74,6 +90,14 @@ A lifecycle that reaches `active` or `ended` with nothing missing on the way. Co
 One security's outcome checked by hand at a cited source, naming the security by a ticker and a date it traded and listing only what was checked. The golden set and the accuracy audit are both made of truth cases.
 _Avoid_: test case, expectation
 
+**Truth set**:
+The diagnosis truth file (one row per diagnosed case, what its contract row should say), a basket's legs, the change log of every edit to them, and the loop's ledger of errors already diagnosed, read, validated, changed and written as one unit (`truth_set.TruthSet`). A ruling (a decision on one case, given as data and applied once), a rename, a status flip or a loop round is a change to the truth set: every changed cell is a change-log row, and the files are committed together.
+_Avoid_: truth file (one part of it), truth table
+
+**Loop round**:
+One pass of the diagnosis truth loop over a run, for one sub-plan (`loop_round.Round`). It opens by listing, as cases for the diagnose workflow, the errors the ledger has not seen: truth mismatches, and regressions against the sub-plan's base commit. It closes by applying the agents' records to the truth set under fixed rules. An error is known by its key, a regression's field by its name and a case by its id (`<subject>_<label>-r<N>`), each built and read back in one module; a case carries what it examined itself, never in its id.
+_Avoid_: iteration, pass
+
 **Floor**:
 The best value each scorecard number has reached (`data/scorecard.json`). No later change may make a floored number worse.
 
@@ -81,8 +105,12 @@ The best value each scorecard number has reached (`data/scorecard.json`). No lat
 `confirmed` or `uncertain`, one per seed, security and ending. Confirmed means the evidence the spec requires is in hand: a FIGI or a filing tying a placeholder's ticker to its CIK, a history covering every introduction, a filing-backed exit kind and an exchange-printed last trade date. Uncertain rows go to `uncertain.csv` for a person to pin, override or drop.
 _Avoid_: confidence, review
 
+**Run snapshot**:
+Everything one run wrote that measurement reads: every output table, the run date and what stage 9g read of each continuation, read once, from an output folder, a commit's copy of it, or the rows the run is about to write (`run_snapshot.RunSnapshot`). The scorecard, the judges, the verdicts and the regression report read a run only through it, so they read the same run; a table a run predates is absent, never an error.
+_Avoid_: tables (one part of it), output (the folder, one of its sources)
+
 **Contract**:
-The tables the consumer reads (`output/contract/`): security_history, one-ending-per-security delistings, the seed echo, price requests, id changes, and `schema_version` in the manifest. Built from today's tables by `contract.py`; written beside them for one release.
+The tables the consumer reads (`output/contract/`): security_history, one-ending-per-security delistings, the seed echo, price requests, id changes, and `schema_version` in the manifest. Built from today's tables by `outputs/contract.py`; written beside them for one release.
 
 **Exit kind**:
 The contract's kind of ending: merger, exchange, liquidation, dropped (with a drop reason), lost_source, expiration. A continuation is an exchange whose successor is held by the same holders one for one.
@@ -90,5 +118,23 @@ The contract's kind of ending: merger, exchange, liquidation, dropped (with a dr
 **Fill** (`dlret_fill`):
 A value the library assumes rather than measures: a Shumway mark, assumed par, a transfer's 0.0. Never in `dlret`.
 
+**Merger value**:
+What one share of a security became in its merger, as the library reads it: the terms (cash, shares of the acquirer, further securities), whether they reconcile with the last close, the acquirer security whose price values the shares, and the price request that price needs. There is one per merger ending (`merger_value.MergerValue`). A caller's `--merger-terms` row replaces the terms the library read.
+
+**Own-share reading**:
+What the registrant said each of a security's shares became at one ending: the statement (so many shares of a target, and any cash), whom the target names (the registrant itself, another class of it, a new issuer, another company), and the registrant's other roles (it acquired another party, or distributed another company's shares). It is read once per ending, from the registrant's 8-Ks around the ending's anchor day and the exchange's Form 25 notice, against the security's own share class (`own_shares.OwnShares`). One share per share and no cash, into the same issuer or a new one, is a continuation (R1); another ratio than one or a split, or cash, is a merger.
+_Avoid_: exchange terms (the merger value's terms), R1 reading
+
+**Issuer record**:
+What EDGAR records of one issuer, as a run reads it: its names over time, its first filing and its filings. A run reads each issuer once, through one `issuer_record.IssuerRecord`; a read that failed is unknown, never a fact, and the answers that rested on it are reported `resolution_degraded`.
+
 **Issuer in force**:
 The CIK that carried a security's name on a given day; it can change while the security continues (a reverse merger, a holding-company reorganization).
+
+**Ending**:
+One row of `delistings.csv`: a delisting, or, where no Form 25 was filed, the filing or last sighting that ended the security's trading, with its kind (CRSP code and bucket), its last trade date and its value. A real ending is one the security does not go on from (its successor is not itself); a security's last real ending is the one the contract publishes, and the verdict judges each one.
+_Avoid_: delist event, exit (an exit kind is the contract's reading of an ending)
+
+## Package layout
+
+The subpackages under `src/delist_detection/` are named after the concepts above where one fits: `identity/` (Identity), `endings/` (a security's endings, each found, dated and classified) and `terms/` (a merger value's terms). The others are named after what they hold: `vocabulary/` (the leaves every part reads), `sources/` (the clients of SEC, OpenFIGI, Nasdaq and the LLM), `filings/` (what SEC filings say), `outputs/` (what a run publishes), `measurement/` (how far a run is from the truth) and `handling/` (delistings.csv for training and backtests).

@@ -6,25 +6,29 @@ tests/test_terms_cases.py. Offline."""
 from __future__ import annotations
 
 import json
+from dataclasses import fields, replace
 from datetime import date
 from types import SimpleNamespace
 
 import pytest
 import requests
 
-from delist_detection import acquirer_ticker as at
-from delist_detection import currency, regression
-from delist_detection.classifier import DelistClassifier
-from delist_detection.cik_lookup import CikNameIndex
-from delist_detection.ftd import FtdRow
-from delist_detection.llm_merger_extractor import (LEGACY_VERSION, PROMPT_VERSION, LLMMergerTermsExtractor, MergerTerms,
-                                                    StockLeg, electors_only)
-from delist_detection.payout_gate import (DEFAULT_TOL, GATE_SKIPPED, NO_DEFAULT, PACKAGE, gate_payouts, is_package,
+from delist_detection.terms import acquirer_ticker as at
+from delist_detection.terms import currency
+from delist_detection.measurement import regression
+from delist_detection.endings.classifier import DelistClassifier
+from delist_detection.sources.cik_lookup import CikNameIndex
+from delist_detection.sources.ftd import FtdRow
+from delist_detection.terms.llm_merger_extractor import (LEGACY_VERSION, PROMPT_VERSION, LLMMergerTermsExtractor,
+                                                         MergerTerms, StockLeg, electors_only)
+from delist_detection.terms.payout_gate import (DEFAULT_TOL, GATE_SKIPPED, NO_DEFAULT, PACKAGE, gate_payouts,
                                           reconcile)
-from delist_detection.payout_rule import MergerInputs, basket_legs, leg_terms, value_fields
-from delist_detection.price_requests import RECEIVED_CLOSE, request_rows
-from delist_detection.sec_stats import SEC_STATS
-from delist_detection.store import DelistingKey
+from delist_detection.outputs.dlret import MergerInputs
+from delist_detection.outputs.payout_rule import basket_legs, value_fields
+from delist_detection.outputs.price_requests import RECEIVED_CLOSE, request_rows
+from delist_detection.outputs.run_snapshot import RunSnapshot
+from delist_detection.sources.sec_stats import SEC_STATS
+from delist_detection.outputs.store import DelistingKey
 from lifecycle_tables import ending
 from test_terms_5f import K, V3_JCI, _Edgar, _f, _Llm, _rec, _v3
 
@@ -52,7 +56,7 @@ def _wsc(tmp_path, *, v2=True):
 def test_an_election_that_states_no_default_keeps_the_either_or_reading_of_the_earlier_prompt(tmp_path):
     t = _wsc(tmp_path).extract(_rec("WSC", "2011-07-07"))
     assert (t.cash_per_share, t.stock_ratio, t.acquirer_ticker, t.no_default) == (385.0, 5.0611, "BRK.B", True)
-    assert not is_package(t) and t.election_note.startswith("$385.00 in cash")
+    assert not t.is_package and t.election_note.startswith("$385.00 in cash")
     # the gate reads it as sub-plan 5e did: the stock alternative (a tie goes to stock) settles the row, flagged
     g = gate_payouts([K], {}, {}, {}, {K: t}, {"ABC": 390.0}, {}, lambda ticker, key: 76.5, DEFAULT_TOL)
     assert g.merged_terms[K]["stock_ratio"] == 5.0611 and NO_DEFAULT in g.flags[K]
@@ -98,7 +102,7 @@ def test_a_result_for_the_holders_who_elected_is_flagged_not_the_package():
     assert not electors_only("election", "final_prorated", "became entitled to receive $5.7293 and 0.8357 shares")
     raw = {**V3_JCI, "package_basis": "final_prorated", "quote": nmx, "cash_per_share": 7.29, "stock_ratio": 0.2164}
     t = LLMMergerTermsExtractor._to_terms(raw, _f("C1"))
-    assert is_package(t) and t.no_default and (t.cash_per_share, t.stock_ratio) == (7.29, 0.2164)
+    assert t.is_package and t.no_default and (t.cash_per_share, t.stock_ratio) == (7.29, 0.2164)
 
 
 def test_an_election_alternative_is_never_the_published_package():
@@ -128,7 +132,7 @@ class _Index:
 
 
 def at_key(name):
-    from delist_detection.cik_lookup import normalize_name
+    from delist_detection.sources.cik_lookup import normalize_name
     return normalize_name(name)
 
 
@@ -189,16 +193,6 @@ def test_several_issuers_of_the_name_or_none_give_no_ticker():
                               last=date(2016, 6, 10), target_cik=1) == ""
 
 
-class _Ctx:
-    def __init__(self, edgar, index, ftd_client=None):
-        self.clients = SimpleNamespace(edgar=edgar, resolver=SimpleNamespace(name_index=lambda: index),
-                                       ftd_client=ftd_client)
-        self.logged = []
-
-    def log(self, msg):
-        self.logged.append(msg)
-
-
 class _EdgarShaw:
     def __init__(self, fail=False):
         self.fail = fail
@@ -223,34 +217,8 @@ class _Ftd:
     def urls_for(self, lo, hi):
         return ["u"]
 
-    def rows(self, url):
+    def rows(self, url, **kw):
         yield FtdRow("2013-02-25", "167250109", "CBI", "CHICAGO BRIDGE & IRON CO N V", 49.0)
-
-
-def test_the_pipeline_gives_an_unnamed_stock_leg_its_ticker_and_keeps_the_other_terms():
-    """Stage 8a': SHAW 2013's $41.00 + 0.12883 CB&I with no ticker takes CBI (price_ticker blank before: the leg
-    failed the gate `no_acq_ticker`); a leg that already has a ticker or an acquirer line is left alone."""
-    from delist_detection import pipeline
-    e = SimpleNamespace(key=K, sec_id="SHAW", ticker="SHAW", cik=820280, delist_date=K[1],
-                        last_trade=SimpleNamespace(day=date(2013, 2, 22)))
-    t = MergerTerms("cash_and_stock", 41.0, 0.12883, "CB&I", None, "high", "8-K:0001193125-13-054117", "",
-                    package_basis="fixed")
-    out, review = pipeline._name_acquirer_tickers(_Ctx(_EdgarShaw(), INDEX, _Ftd()), [e], {K: t}, {},
-                                                  SimpleNamespace(merger_terms={}))
-    assert (out[K].acquirer_ticker, out[K].cash_per_share, out[K].stock_ratio) == ("CBI", 41.0, 0.12883) and not review
-    kept, _ = pipeline._name_acquirer_tickers(_Ctx(_EdgarShaw(), INDEX, _Ftd()), [e], {K: t}, {K: object()},
-                                              SimpleNamespace(merger_terms={}))
-    assert kept[K].acquirer_ticker is None
-
-
-def test_a_failed_read_gives_no_ticker_and_a_degraded_review_item():
-    from delist_detection import pipeline
-    e = SimpleNamespace(key=K, sec_id="SHAW", ticker="SHAW", cik=820280, delist_date=K[1],
-                        last_trade=SimpleNamespace(day=date(2013, 2, 22)))
-    t = MergerTerms("cash_and_stock", 41.0, 0.12883, "CB&I", None, "high", "8-K:0001193125-13-054117", "")
-    out, review = pipeline._name_acquirer_tickers(_Ctx(_EdgarShaw(fail=True), INDEX, _Ftd()), [e], {K: t}, {},
-                                                  SimpleNamespace(merger_terms={}))
-    assert out[K].acquirer_ticker is None and [r.flag for r in review] == ["resolution_degraded"]
 
 
 # --- the gate's answer shapes -----------------------------------------------------------------------------------
@@ -288,17 +256,16 @@ def test_cad_cash_that_states_no_package_is_skipped_against_the_usd_close():
 
 def test_a_stock_leg_with_no_ratio_that_names_no_skip_is_dropped_with_a_flag():
     """The guard behind every shape: a stock leg that reaches the cash+stock check with no number of shares."""
-    t = _v3("stock", None, None, "X", basis="fixed")
+    class _NoSkip(MergerTerms):             # ...an answer whose shape names no skip reason
+        @property
+        def skip_reason(self) -> str:
+            return ""
+
+    t = replace(_v3("stock", None, None, "X", basis="fixed"), cash_currency="")
+    t = _NoSkip(**{f.name: getattr(t, f.name) for f in fields(t)})
     object.__setattr__(t, "stock_value", 1.0)       # has_stock, but a ratio-less leg that skip_reason would name...
-    object.__setattr__(t, "cash_currency", "")
     object.__setattr__(t, "stock_ratio", None)
-    from delist_detection import payout_gate
-    real = payout_gate.skip_reason
-    payout_gate.skip_reason = lambda terms: ""
-    try:
-        g = _g(t)
-    finally:
-        payout_gate.skip_reason = real
+    g = _g(t)
     assert g.flags[K] == ("terms_gate_failed:no_ratio",) and g.dropped["no_ratio"] == 1
 
 
@@ -314,7 +281,7 @@ def test_a_second_class_under_the_main_legs_ticker_takes_its_class_ticker():
     fails rows spell it; the class A's price request is not asked twice."""
     t = MergerTerms("stock", None, 0.885, "Lennar", "LEN", "high", "8-K:x", "", acquirer_share_class="A",
                     extra_legs=(StockLeg(0.0177, "Lennar", "LEN", "B"),), package_basis="fixed")
-    assert leg_terms(t, "LEN") == [(0.885, "LEN", "A"), (0.0177, "LEN-B", "B")]
+    assert t.legs("LEN") == [(0.885, "LEN", "A"), (0.0177, "LEN-B", "B")]
     r = ending("CAA", "2018-02-20", ltd="2018-02-09", method="assumed_par", last_trade_close="40")
     rows = basket_legs(r, "2018-02-09", MergerInputs(llm=t, acquirer_sec_id="BBG0LEN", leg_sec_ids={"LEN-B": "BBG0LENB"}))
     assert [(x["leg"], x["share_class"], x["price_ticker"], x["price_sec_id"]) for x in rows] == [
@@ -328,7 +295,7 @@ def test_a_preferred_unit_leg_is_not_priced_as_the_common_units():
     t = MergerTerms("cash_and_stock", 12.38, 0.0913, "Brookfield Asset Management", "BAM", "high", "8-K:x", "",
                     acquirer_share_class="A", package_basis="fixed",
                     extra_legs=(StockLeg(0.0657, "Brookfield Property Partners L.P.", "BPY", "preferred unit"),))
-    assert [x[1] for x in leg_terms(t, "BAM")] == ["BAM", ""]
+    assert [x[1] for x in t.legs("BAM")] == ["BAM", ""]
 
 
 def test_two_legs_never_share_a_price_request_key():
@@ -336,7 +303,8 @@ def test_two_legs_never_share_a_price_request_key():
                  "value_rule": "basket"}]
     endings = {"CAA": ending("CAA", "2018-02-20", ltd="2018-02-09")}
     rows = request_rows(contract, endings, {DelistingKey("CAA", "2018-02-20"): ("LEN", "BBG0LEN")},
-                        {"CAA": [("LEN", "BBG0LEN"), ("LEN-B", "")]})
+                        leg_rows=[{"sec_id": "CAA", "leg": 2, "price_ticker": "LEN", "price_sec_id": "BBG0LEN"},
+                                  {"sec_id": "CAA", "leg": 3, "price_ticker": "LEN-B", "price_sec_id": ""}])
     asked = [(r["lookup_ticker"]) for r in rows if r["kind"] == RECEIVED_CLOSE]
     assert asked == ["LEN", "LEN-B"]
     assert len({(r["sec_id"], r["last_trade_date"], r["kind"], r["lookup_ticker"], r["date"]) for r in rows}) == len(rows)
@@ -346,19 +314,18 @@ def test_two_legs_never_share_a_price_request_key():
 
 def test_a_basket_leg_change_is_a_contract_change():
     d = [{"sec_id": "CAA", "successor_sec_id": "", "value_rule": "basket"}]
-    base = regression.Snapshot(d, [], (), [{"sec_id": "CAA", "leg": "2", "ratio": "0.0177", "price_sec_id": "",
-                                            "price_ticker": "LEN"},
-                                           {"sec_id": "CAA", "leg": "1", "ratio": "0.885", "price_sec_id": "B",
-                                            "price_ticker": "LEN"}])
-    new = regression.Snapshot(d, [], (), [{"sec_id": "CAA", "leg": "1", "ratio": "0.885", "price_sec_id": "B",
-                                           "price_ticker": "LEN"},
-                                          {"sec_id": "CAA", "leg": "2", "ratio": "0.0177", "price_sec_id": "",
-                                           "price_ticker": "LEN-B"}])
+    def run(legs=None):
+        tables = {"contract_delistings": d, "security_history": [], "id_changes": []}
+        return RunSnapshot.of(tables if legs is None else {**tables, "payout_legs": legs})
+    base = run([{"sec_id": "CAA", "leg": "2", "ratio": "0.0177", "price_sec_id": "", "price_ticker": "LEN"},
+                {"sec_id": "CAA", "leg": "1", "ratio": "0.885", "price_sec_id": "B", "price_ticker": "LEN"}])
+    new = run([{"sec_id": "CAA", "leg": "1", "ratio": "0.885", "price_sec_id": "B", "price_ticker": "LEN"},
+               {"sec_id": "CAA", "leg": "2", "ratio": "0.0177", "price_sec_id": "", "price_ticker": "LEN-B"}])
     rows = regression.diff_contract(base, new)
     assert [(r["table"], r["field"], r["kind"]) for r in rows] == [("payout_legs", "legs", "changed")]
     assert regression.diff_contract(base, base) == [] and regression.diff_contract(new, new, exclude={"CAA"}) == []
     # a run with no legs file reads as no legs: a first run's baskets are added
-    added = regression.diff_contract(regression.Snapshot(d, []), new)
+    added = regression.diff_contract(run(), new)
     assert [(r["table"], r["kind"]) for r in added] == [("payout_legs", "added")]
 
 
@@ -391,7 +358,7 @@ def test_an_answer_that_is_no_json_object_counts_degraded_and_is_not_cached(tmp_
 
 def test_package_basis_none_is_kept_as_none():
     t = LLMMergerTermsExtractor._to_terms({**V3_JCI, "package_basis": "none"}, _f("C1"))
-    assert t.package_basis == "none" and not is_package(t)
+    assert t.package_basis == "none" and not t.is_package
 
 
 # --- the completion rule's role check ----------------------------------------------------------------------------
@@ -432,7 +399,7 @@ PCYC = ("a number of shares of AbbVie common stock equal to $109.00 divided by t
 
 
 def test_the_averaging_window_of_a_dollar_valued_leg_is_named_in_the_formula(tmp_path):
-    from delist_detection.llm_merger_extractor import averaging_window
+    from delist_detection.terms.llm_merger_extractor import averaging_window
     window = averaging_window(PCYC)
     assert window == ("ten consecutive trading days ending on and including the second trading day prior to the "
                       "final expiration date of the offer")

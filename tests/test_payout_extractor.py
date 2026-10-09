@@ -1,6 +1,6 @@
-from delist_detection.classifier import DelistRecord
-from delist_detection.crsp_codes import CrspBucket
-from delist_detection.payout_extractor import PayoutExtractor, PayoutResult
+from delist_detection.outputs.reconstruction import DelistRecord
+from delist_detection.vocabulary.crsp_codes import CrspBucket
+from delist_detection.terms.payout_extractor import PayoutExtractor, PayoutResult
 
 
 class _StubEdgar:
@@ -31,7 +31,7 @@ def test_merger_no_cik_returns_none():
     assert res.confidence == "none"
 
 
-from delist_detection.payout_extractor import _match_payout, _passes_sanity
+from delist_detection.terms.payout_extractor import _match_payout, _passes_sanity
 
 
 def test_match_in_cash_family_altr():
@@ -355,7 +355,7 @@ def test_sanity_relative_band():
     assert _passes_sanity(113.0, last_close=111.85)
 
 
-from delist_detection.edgar import EdgarSubmission
+from delist_detection.sources.edgar import EdgarSubmission
 
 
 class _FakeEdgarText:
@@ -527,7 +527,7 @@ def test_extract_swallows_fetch_error_returns_none():
 
 # --- Task 10: whole dollars, preferred redemptions, award payouts, elections, ties ---
 
-from delist_detection.payout_extractor import _collect, _select
+from delist_detection.terms.payout_extractor import _collect, _select
 
 
 def test_whole_dollar_cash_is_read():

@@ -1,20 +1,35 @@
 from datetime import date
 
-from delist_detection.crsp_codes import CrspBucket
-from delist_detection.edgar import EdgarSubmission
-from delist_detection.end_of_era import CONTINUED, EraSignals, resolve, signals
+from delist_detection.vocabulary.crsp_codes import CrspBucket
+from delist_detection.sources.edgar import EdgarSubmission
+from delist_detection.endings.end_of_era import CONTINUED, EraSignals, Filed, registers_successor, resolve, signals
+from delist_detection.endings.exchange_terms import OwnExchange
 
 END = date(2020, 11, 20)
+_FILINGS = ("successor_filing", "merger_filing", "delist_filing", "deficiency_notice", "bankruptcy_filing",
+            "liquidation_notice")
 
 
 def _f(form, day, items=""):
     return EdgarSubmission(f"A-{form}-{day}", form, day, "", items, "d.htm")
 
 
+def F(text):
+    """A filing the signals name, written as a reason prints it: "8-K 2020-11-09"."""
+    form, day = text.rsplit(" ", 1)
+    return Filed(form, date.fromisoformat(day))
+
+
+def _days(items):
+    return {k: date.fromisoformat(v) for k, v in items.items()}
+
+
 def _s(**kw):
-    base = dict(trading_after=False, item_filed={}, successor_filing="", merger_filing="", delist_filing="",
-                deficiency_notice="")
-    return EraSignals(**{**base, **kw})
+    """The signals, typed, from their printed shorthand ("8-K 2020-11-09", {"5.01": "2020-11-02"}; "" is none)."""
+    kw = {k: (F(v) if v else None) if k in _FILINGS else v for k, v in kw.items()}
+    if "item_filed" in kw:
+        kw["item_filed"] = _days(kw["item_filed"])
+    return EraSignals(**{"trading_after": False, **kw})
 
 
 def test_signals_read_items_successors_and_form25s_inside_their_windows_only():
@@ -22,13 +37,15 @@ def test_signals_read_items_successors_and_form25s_inside_their_windows_only():
                  _f("8-K/A", "2020-11-10", "1.03"), _f("8-K12B", "2020-12-01", "8.01"),
                  _f("25-NSE", "2020-11-03"), _f("DEFM14A", "2019-08-01"), _f("10-Q", "2021-08-05")],
                 END, trading_after=False)
-    assert s.item_filed == {"2.01": "2020-11-02", "3.01": "2020-11-02", "5.01": "2020-11-02", "1.03": "2020-11-10"}
-    assert s.successor_filing == "8-K12B 2020-12-01" and s.delist_filing == "25-NSE 2020-11-03"
-    assert s.merger_filing == "DEFM14A 2019-08-01"
+    assert s.item_filed == _days({"2.01": "2020-11-02", "3.01": "2020-11-02", "5.01": "2020-11-02",
+                                  "1.03": "2020-11-10"})
+    assert s.successor_filing == F("8-K12B 2020-12-01") and s.delist_filing == F("25-NSE 2020-11-03")
+    assert s.merger_filing == F("DEFM14A 2019-08-01")
+    assert str(s.successor_filing) == "8-K12B 2020-12-01"
 
 
 def test_a_merger_filing_older_than_its_window_does_not_count():
-    assert signals([_f("DEFM14A", "2018-01-02")], END, trading_after=False).merger_filing == ""
+    assert signals([_f("DEFM14A", "2018-01-02")], END, trading_after=False).merger_filing is None
 
 
 def test_still_trading_keeps_todays_transfer():
@@ -70,7 +87,7 @@ def test_nothing_else_keeps_todays_continued_filings_transfer():
     assert CONTINUED == "Continued 10-K/Q filings >180d after delist (moved to OTC or spun off)"
 
 
-from delist_detection.lifecycle import RESOLVED_FROM_CONTINUED_FILINGS
+from delist_detection.vocabulary.exit_kind import RESOLVED_FROM_CONTINUED_FILINGS
 
 
 def test_every_relabelled_ending_says_the_registrant_kept_filing():
@@ -112,12 +129,12 @@ def test_a_change_in_control_still_comes_before_the_bankruptcy_branch():
 
 
 def test_the_bankruptcy_filing_is_the_classifiers_answer_carried_on_the_signals():
-    s = signals([_f("8-K", "2020-12-01", "1.03")], END, trading_after=False, bankruptcy_filing="8-K 2020-12-01")
-    assert s.bankruptcy_filing == "8-K 2020-12-01" and s.item_filed == {"1.03": "2020-12-01"}
+    s = signals([_f("8-K", "2020-12-01", "1.03")], END, trading_after=False, bankruptcy_filing=F("8-K 2020-12-01"))
+    assert s.bankruptcy_filing == F("8-K 2020-12-01") and s.item_filed == _days({"1.03": "2020-12-01"})
 
 
 # --- sub-plan 5c, rule 1: a registrant that survived the transaction ---
-from delist_detection.end_of_era import merges  # noqa: E402
+from delist_detection.endings.end_of_era import merges  # noqa: E402
 
 
 def test_a_survivor_takes_no_merger_branch_and_goes_on_to_the_notice_or_the_continued_filings():
@@ -156,9 +173,9 @@ def test_a_liquidation_notice_is_a_liquidation_after_every_other_branch():
 
 
 def test_the_liquidation_notice_is_the_classifiers_answer_carried_on_the_signals():
-    s = signals([_f("8-K", "2020-11-02", "3.01")], END, trading_after=False, liquidation_notice="8-K 2020-11-02")
-    assert s.liquidation_notice == "8-K 2020-11-02"
-    assert signals([], END, trading_after=False).liquidation_notice == ""
+    s = signals([_f("8-K", "2020-11-02", "3.01")], END, trading_after=False, liquidation_notice=F("8-K 2020-11-02"))
+    assert s.liquidation_notice == F("8-K 2020-11-02")
+    assert signals([], END, trading_after=False).liquidation_notice is None
 
 
 def test_merges_says_when_branch_3_or_4_would_decide():
@@ -167,3 +184,33 @@ def test_merges_says_when_branch_3_or_4_would_decide():
     assert not merges(_s(item_filed={"2.01": "2020-11-02"}))
     assert not merges(_s(item_filed={"5.01": "2020-11-02"}, successor_filing="8-K12B 2020-11-03"))
     assert not merges(_s(item_filed={"5.01": "2020-11-02"}, trading_after=True))
+
+
+# --- spec 5c rule 6 (sub-plan 5f), inside branch 2 (architecture step 7b) ---
+
+def _own(ratio, cash=False, ambiguous=False):
+    return OwnExchange(ratio, cash, "of New Charter Class A Common Stock", ("New Charter",), "A", False, "s",
+                       ambiguous=ambiguous)
+
+
+def test_a_successor_registration_whose_statement_changed_the_stake_is_a_merger():
+    """CHTR 2016: each share became 0.9042 New Charter shares: a merger (231), whatever files the 8-K12B."""
+    v = resolve(_s(successor_filing="8-K12B 2016-05-20", successor_terms=_own(0.9042)), None)
+    assert (v.branch, v.crsp_code, v.bucket) == ("successor_merger", 231, CrspBucket.MERGER)
+    assert v.reason == ("Successor registration 8-K12B 2016-05-20: each share became 0.9042 shares of New Charter "
+                        "Class A Common Stock, a merger (rule 6)")
+    cash = resolve(_s(successor_filing="8-K12B 2016-05-20", successor_terms=_own(1.0, cash=True)), None)
+    assert cash.branch == "successor_merger" and cash.reason.endswith(" and cash, a merger (rule 6)")
+
+
+def test_a_split_factor_one_for_one_two_readings_or_no_statement_keep_the_transfer():
+    """SIRI 2024's 0.1 New Sirius is a consolidation into the successor: the transfer stands."""
+    for terms in (_own(0.1), _own(1.0), _own(0.9042, ambiguous=True), None):
+        v = resolve(_s(successor_filing="8-K12B 2024-09-10", successor_terms=terms), None)
+        assert (v.branch, v.bucket) == ("successor", CrspBucket.EXCHANGE_TRANSFER)
+
+
+def test_rule_6_is_read_only_where_branch_2_decides():
+    assert registers_successor(_s(successor_filing="8-K12B 2024-09-10"))
+    assert not registers_successor(_s(successor_filing="8-K12B 2024-09-10", trading_after=True))
+    assert not registers_successor(_s(item_filed={"5.01": "2020-11-02"}))

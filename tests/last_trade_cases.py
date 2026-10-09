@@ -1,9 +1,10 @@
 """Sub-plan 5d's real cases, replayed offline: tests/fixtures/last_trade/ (built once from the local caches by
 scripts/build_last_trade_fixtures.py, 5c's builder over 5d's cases) holds each case's security, the securities whose
 CUSIPs bound its ticker, the other securities of their issuers, their fails rows, and the EDGAR, MIDAS and Nasdaq-halt
-answers. `outcome(sec_id)` runs the run's own code over them: stage 5 (`pipeline._context_builder`,
-`delistings.DelistingFinder`) and stage 7's fails close (`pipeline._last_trade_closes`). The doubles are 5c's
-(tests/issuer_role_cases.py), reading this fixture."""
+answers. `outcome(sec_id)` runs the run's own code over them: stage 5 (`delistings.SecurityContexts`,
+`delistings.DelistingFinder`, which dates each delisting through the last trade module, `last_trade.Dating`, over
+the fixture's MIDAS and halt adapters) and stage 7's fails close (`pipeline._last_trade_closes`). The doubles are
+5c's (tests/issuer_role_cases.py), reading this fixture."""
 from __future__ import annotations
 
 import csv
@@ -15,19 +16,19 @@ from functools import lru_cache
 from pathlib import Path
 
 from delist_detection import pipeline
-from delist_detection.classifier import DelistClassifier
-from delist_detection.delistings import Delisting, DelistingFinder
-from delist_detection.edgar import EdgarSubmission
-from delist_detection.figi_resolution import security_kind
-from delist_detection.ftd import FtdIndex, FtdRow
-from delist_detection.history import ticker_sightings
-from delist_detection.manifest import StageMeter
-from delist_detection.midas import MidasClient
-from delist_detection.nasdaq_halts import Halt, NasdaqHaltClient
-from delist_detection.observations import Observation, TickerEra
-from delist_detection.review_triage import ReviewItem
-from delist_detection.security_master import Security
-from delist_detection.ticker_resolver import TickerResolver
+from delist_detection.endings.classifier import DelistClassifier
+from delist_detection.endings.delistings import Delisting, DelistingFinder, SecurityContexts
+from delist_detection.sources.edgar import EdgarSubmission
+from delist_detection.identity.figi_resolution import security_kind
+from delist_detection.sources.ftd import FtdIndex, FtdRow
+from delist_detection.endings.last_trade import UNCONFIRMED
+from delist_detection.outputs.manifest import StageMeter
+from delist_detection.sources.midas import MidasClient
+from delist_detection.sources.nasdaq_halts import Halt, NasdaqHaltClient
+from delist_detection.identity.observations import Observation, TickerEra
+from delist_detection.outputs.review_triage import ReviewItem
+from delist_detection.identity.security_master import Security
+from delist_detection.identity.ticker_resolver import TickerResolver
 from tests import issuer_role_cases as ic
 
 FIX = Path(__file__).parent / "fixtures" / "last_trade"
@@ -117,10 +118,9 @@ def find(sec_id: str, c: pipeline.Clients | None = None) -> tuple[list[Delisting
     """Stage 5: the finder's delistings and review items for the case."""
     c = c or clients()
     securities, cusips, ftd = world()
-    sightings = {sid: ticker_sightings(s, ftd, cusips[sid]) for sid, s in securities.items()}
-    build = pipeline._context_builder(securities, sightings, pipeline._IssuerAnswers({}, {}, {}, set()), ftd, cusips)
+    contexts = SecurityContexts.observed(securities, cusips, ftd)
     finder = DelistingFinder(c.edgar, c.classifier, midas=c.midas, halts=c.halts)
-    return finder.find(build(securities[sec_id], DATA["securities"][sec_id]["listed"]))
+    return finder.find(contexts(securities[sec_id], DATA["securities"][sec_id]["listed"]))
 
 
 def outcome(sec_id: str) -> list[tuple]:
@@ -130,7 +130,8 @@ def outcome(sec_id: str) -> list[tuple]:
     found, _ = find(sec_id, c)
     securities, cusips, ftd = world()
     ctx = pipeline._RunContext(c, AS_OF, lambda *a: None, 1, StageMeter(lambda *a: None))
-    closes = pipeline._last_trade_closes(ctx, found, securities, cusips, ftd, date(1990, 1, 1), pipeline.Overrides())
+    closes = pipeline._last_trade_closes(ctx, found, securities, cusips, ftd, date(1990, 1, 1),
+                                         pipeline.Overrides()).closes
     return [(d.delist_date, d.record.bucket.value, d.last_trade.day.isoformat() if d.last_trade.day else "",
-             d.last_trade.source, "last_trade_date_unconfirmed" in d.last_trade.flags, closes.get(d.key))
+             d.last_trade.source, UNCONFIRMED in d.last_trade.flags, closes.get(d.key))
             for d in found]

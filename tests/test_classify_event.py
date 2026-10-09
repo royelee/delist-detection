@@ -1,6 +1,7 @@
-from delist_detection.classifier import DelistClassifier, DelistRecord
-from delist_detection.crsp_codes import CrspBucket
-from delist_detection.ticker_resolver import TickerResolver
+from delist_detection.endings.classifier import DelistClassifier
+from delist_detection.outputs.reconstruction import DelistRecord
+from delist_detection.vocabulary.crsp_codes import CrspBucket
+from delist_detection.identity.ticker_resolver import TickerResolver
 
 
 def _clf(fake_edgar):
@@ -57,8 +58,8 @@ def test_delist_record_new_fields_default_none():
 
 # --- sub-plan 5b: the Item 1.03 sections, and 5g sub-rule 2 ---
 
-from delist_detection.classifier import _confirms_bankruptcy  # noqa: E402
-from delist_detection.edgar import EdgarSubmission  # noqa: E402
+from delist_detection.endings.classifier import _confirms_bankruptcy  # noqa: E402
+from delist_detection.sources.edgar import EdgarSubmission  # noqa: E402
 from tests import form25_cases as fc  # noqa: E402
 
 NASDAQ_REMOVAL = ("<TYPE>25-NSE\n<notificationOfRemoval><exchange><entityName>The Nasdaq Stock Market LLC"

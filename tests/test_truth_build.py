@@ -1,6 +1,6 @@
 """truth_build: one normalized JSON row into one truth row (spec 1.2)."""
-from delist_detection import diagnosis_truth as dt
-from delist_detection import truth_build as tb
+from delist_detection.measurement import diagnosis_truth as dt
+from delist_detection.measurement import truth_build as tb
 from tests.lifecycle_tables import contract_row, sec, tables
 
 FIELDS = {f: "" for f in dt.SCORED}
@@ -75,6 +75,15 @@ def test_ending_moved_also_takes_the_r2_flip():
     norm = _norm(shape="ending_moved", fields=dict(FIELDS), identity_check={"old_cusip": "1", "new_cusip": "2"})
     row, _ = _assemble(norm, composite="BBGB", securities={"BBGB"})
     assert (row["shape"], row["continuation"]) == ("ending", "true")
+
+
+def test_the_row_keeps_the_ending_its_report_examined():
+    norm = _norm(shape="ending_moved", fields=dict(FIELDS))
+    row, _ = tb.assemble(norm, {**META, "examined_delist_date": "2010-01-04"}, composite_of=lambda cusip: None,
+                         securities=set())
+    assert row["examined_delist_date"] == "2010-01-04"
+    assert dt.parse_rows([{**row, "status": "pass"}])[0].examined_delist_date == "2010-01-04"
+    assert _assemble(_norm())[0]["examined_delist_date"] == ""            # none given: blank, never the id's tail
 
 
 def test_legs_come_out_as_leg_rows():

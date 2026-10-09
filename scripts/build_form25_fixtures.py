@@ -1,6 +1,6 @@
 """Build tests/fixtures/form25_reach/ from the local caches, once (sub-plan 5b): the real cases whose Form 25
 search, matching and ownership tests/test_form25_reach_cases.py replays offline through the finder
-(`delistings.DelistingFinder`) and the pipeline's own context builder (`pipeline._context_builder`).
+(`delistings.DelistingFinder`) over the contexts it builds itself (`delistings.SecurityContexts`).
 
   PYTHONPATH=src python scripts/build_form25_fixtures.py          # -> tests/fixtures/form25_reach/
 
@@ -39,7 +39,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
-import delist_detection.edgar as edgar_mod  # noqa: E402
+import delist_detection.sources.edgar as edgar_mod  # noqa: E402
 
 
 def _refuse(*args, **kwargs):
@@ -47,12 +47,12 @@ def _refuse(*args, **kwargs):
 
 
 edgar_mod.sec_get = _refuse
-from delist_detection.atomic_io import write_atomic  # noqa: E402
-from delist_detection.edgar import EdgarClient  # noqa: E402
-from delist_detection.form25 import FORM25_FORMS  # noqa: E402
-from delist_detection.ftd import FtdIndex, parse_ftd_lines, period_of  # noqa: E402
-from delist_detection.listing_status import ANNUAL_FORMS  # noqa: E402
-from delist_detection.nasdaq_halts import parse_halts_rss  # noqa: E402
+from delist_detection.sources.atomic_io import write_atomic  # noqa: E402
+from delist_detection.sources.edgar import EdgarClient  # noqa: E402
+from delist_detection.filings.form25 import FORM25_FORMS  # noqa: E402
+from delist_detection.sources.ftd import FtdIndex, parse_ftd_lines, period_of  # noqa: E402
+from delist_detection.filings.listing_status import ANNUAL_FORMS  # noqa: E402
+from delist_detection.sources.nasdaq_halts import parse_halts_rss  # noqa: E402
 
 AS_OF = date(2026, 9, 25)                       # the committed run's date
 FTD_WINDOW = (date(2007, 12, 17), AS_OF)        # the committed run's fails window
@@ -195,8 +195,8 @@ def main(argv: list[str] | None = None) -> int:
                   | set(EXTRA_CIKS))
 
     # fails rows: every row of a case's CUSIPs; a sibling's span and descriptions
-    ftd = FtdIndex.load(LocalFtd(repo / "cache/sec_data/ftd"), *FTD_WINDOW,
-                        cusips={c for sid in needed for c in cusips.get(sid, [])} | set(EXTRA_CUSIPS))
+    ftd = FtdIndex.opened(LocalFtd(repo / "cache/sec_data/ftd"), *FTD_WINDOW,
+                          cusips={c for sid in needed for c in cusips.get(sid, [])} | set(EXTRA_CUSIPS))
     rows = {r for c in EXTRA_CUSIPS for r in ftd.by_cusip(c)}
     for sid in needed:
         for c in cusips.get(sid, []):

@@ -31,7 +31,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
-import delist_detection.edgar as edgar_mod  # noqa: E402
+import delist_detection.sources.edgar as edgar_mod  # noqa: E402
 
 
 def _refuse(*args, **kwargs):
@@ -39,17 +39,17 @@ def _refuse(*args, **kwargs):
 
 
 edgar_mod.sec_get = _refuse
-from delist_detection.atomic_io import write_atomic  # noqa: E402
-from delist_detection.edgar import EdgarClient  # noqa: E402
-from delist_detection.figi_resolution import US_EXCH  # noqa: E402
-from delist_detection.ftd import FtdIndex, parse_ftd_lines, period_of  # noqa: E402
-from delist_detection.line_follow import (  # noqa: E402
+from delist_detection.sources.atomic_io import write_atomic  # noqa: E402
+from delist_detection.sources.edgar import EdgarClient  # noqa: E402
+from delist_detection.identity.figi_resolution import US_EXCH  # noqa: E402
+from delist_detection.sources.ftd import FtdIndex, parse_ftd_lines, period_of  # noqa: E402
+from delist_detection.vocabulary.identifiers import normalize_ticker  # noqa: E402
+from delist_detection.identity.line_follow import (  # noqa: E402
     SUCCESSOR_FORMS, SWITCH, candidate_steps, eightks_near, is_line_symbol, line_end, name_on, text_cusips,
     text_symbols,
 )
-from delist_detection.observations import normalize_ticker  # noqa: E402
-from delist_detection.security_master import cusip_job  # noqa: E402
-from delist_detection.successors import successor_query  # noqa: E402
+from delist_detection.identity.security_master import cusip_job  # noqa: E402
+from delist_detection.filings.filing_search import successor_query  # noqa: E402
 
 AS_OF = date(2026, 9, 25)                 # the committed run's date
 FTD_WINDOW = (date(2007, 12, 17), AS_OF)  # the committed run's fails window
@@ -138,11 +138,11 @@ def main(argv: list[str] | None = None) -> int:
                    if is_line_symbol(normalize_ticker(t))} - tickers[sid] for sid in CASES}
     symbols = {t for sid in CASES for t in tickers[sid]} | {t for v in extra.values() for t in v}
     symbols |= {t.replace("-", "") + s for sid in CASES for t in tickers[sid] for s in ("ZZZZ", "D")}
-    ftd = FtdIndex.load(LocalFtd(repo / "cache/sec_data/ftd"), *FTD_WINDOW, symbols=symbols,
-                        cusips={c for sid in CASES for c in cusips[sid]})
+    ftd = FtdIndex.opened(LocalFtd(repo / "cache/sec_data/ftd"), *FTD_WINDOW, symbols=symbols,
+                          cusips={c for sid in CASES for c in cusips[sid]})
     named: dict[str, set[str]] = defaultdict(set)
     filings = {sid: _cached(edgar.recent_filings, int(secs[sid]["issuer_cik"]), default=[]) for sid in CASES}
-    for sid in CASES:                       # the 8-K text sources, as pipeline._text_sources reads them
+    for sid in CASES:                       # the 8-K text sources, as the stage reads them (line_follow)
         end = line_end(cusips[sid], tickers[sid], ftd)
         if end is None or candidate_steps(sid, cusips[sid], tickers[sid], ftd, holders=holders,
                                           extra_symbols=extra[sid]):
@@ -153,8 +153,7 @@ def main(argv: list[str] | None = None) -> int:
         texts = [_cached(edgar.fetch_filing_text, cik, f.accession, f.primary_doc, default="") or "" for f in near]
         extra[sid] |= {t for t in text_symbols(texts) if is_line_symbol(t)} - tickers[sid]
         named[sid] |= text_cusips(texts)
-    ftd.extend(LocalFtd(repo / "cache/sec_data/ftd"), *FTD_WINDOW, symbols={t for v in extra.values() for t in v},
-               cusips={c for v in named.values() for c in v})
+    ftd.follow(symbols={t for v in extra.values() for t in v}, cusips={c for v in named.values() for c in v})
     windows: dict[str, list[tuple[str, str, set[str], set[str]]]] = defaultdict(list)
     steps_of: dict[str, list] = {}
     for sid in CASES:
@@ -167,7 +166,7 @@ def main(argv: list[str] | None = None) -> int:
                                     extra_cusips=named[sid])
             new = {st.new_cusip for st in steps if st.kind == SWITCH}
             if new:
-                ftd.extend(LocalFtd(repo / "cache/sec_data/ftd"), *FTD_WINDOW, cusips=new)
+                ftd.follow(cusips=new)
                 steps = candidate_steps(sid, cus, own, ftd, holders=holders, extra_symbols=extra[sid],
                                         extra_cusips=named[sid])
             lo = (date.fromisoformat(end.settled) - timedelta(days=200)).isoformat()

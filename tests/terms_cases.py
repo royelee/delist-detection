@@ -8,12 +8,13 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from delist_detection.edgar import EdgarSubmission
-from delist_detection.llm_merger_extractor import LLMMergerTermsExtractor, base_reading, states_no_package
-from delist_detection.payout_gate import DEFAULT_TOL, gate_payouts
-from delist_detection.payout_rule import MergerInputs, basket_legs, value_fields
-from delist_detection.reconstruction import for_delisting
-from delist_detection.store import DelistingKey, format_cell
+from delist_detection.sources.edgar import EdgarSubmission
+from delist_detection.terms.llm_merger_extractor import LLMMergerTermsExtractor, base_reading, states_no_package
+from delist_detection.terms.payout_gate import DEFAULT_TOL, gate_payouts
+from delist_detection.outputs.dlret import MergerInputs
+from delist_detection.outputs.payout_rule import basket_legs, value_fields
+from delist_detection.outputs.reconstruction import for_delisting
+from delist_detection.outputs.store import DelistingKey, format_cell
 from lifecycle_tables import ending
 
 FIX = Path(__file__).parent / "fixtures" / "terms"

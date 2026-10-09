@@ -45,15 +45,15 @@ from pathlib import Path
 
 import requests
 
-from delist_detection.classifier import DelistClassifier
-from delist_detection.edgar import EFTS_SOURCE_KEYS, SEC_HOST, EdgarClient
-from delist_detection.sec_limiter import use_machine_wide_limit
-from delist_detection.filing_selection import announcement_8k, closing_8k, form_filings
-from delist_detection.ftd import FtdClient, FtdIndex
-from delist_detection.llm_client import default_llm_client
-from delist_detection.llm_merger_extractor import LLMMergerTermsExtractor
-from delist_detection.settings import env_setting
-from delist_detection.ticker_resolver import TickerResolver
+from delist_detection.endings.classifier import DelistClassifier
+from delist_detection.sources.edgar import EFTS_SOURCE_KEYS, SEC_HOST, EdgarClient
+from delist_detection.sources.sec_limiter import use_machine_wide_limit
+from delist_detection.terms.filing_selection import announcement_8k, closing_8k, form_filings
+from delist_detection.sources.ftd import FtdClient, FtdIndex
+from delist_detection.sources.llm_client import default_llm_client
+from delist_detection.terms.llm_merger_extractor import LLMMergerTermsExtractor
+from delist_detection.sources.settings import env_setting
+from delist_detection.identity.ticker_resolver import TickerResolver
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "tests" / "fixtures" / "golden"
@@ -123,7 +123,7 @@ def _resolver(edgar, row) -> TickerResolver:
 def _capture_efts(resolver: TickerResolver, t: str, d: str) -> tuple[dict, list, list]:
     """Issue both EFTS queries for (t, d): (efts_raw, efts_lookup, efts_frequency)."""
     _efts_raw.clear()
-    lookup = list(resolver._efts_lookup(t, d, expected_name=resolver._expected_name(t, d)))
+    lookup = list(resolver._efts_lookup(t, d, expected_name=resolver.expected_name(t, d)))
     frequency = [list(x) for x in resolver._efts_pre_delist_frequency_ranked(t, d)]
     return dict(_efts_raw), lookup, frequency
 
@@ -149,9 +149,9 @@ def _acquirer_price(acquirer: str | None, on: date) -> float | None:
     acquirer ticker or a priced row."""
     if not acquirer:
         return None
-    ftd = FtdIndex.load(FtdClient(ROOT / "cache" / "sec_data" / "ftd"),
-                        on - timedelta(days=10), on + timedelta(days=10),
-                        symbols={acquirer})
+    ftd = FtdIndex.opened(FtdClient(ROOT / "cache" / "sec_data" / "ftd"),
+                          on - timedelta(days=10), on + timedelta(days=10),
+                          symbols={acquirer})
     close = ftd.close_after(on, symbol=acquirer)
     return close[0] if close else None
 

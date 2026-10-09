@@ -13,9 +13,9 @@ from unittest.mock import patch
 import pytest
 import requests
 
-from delist_detection.sec_stats import SEC_STATS, fill_only
-from delist_detection.midas import MIDAS_INDEX_URL, MidasClient, quarter_of, summarize_midas_csv
-from delist_detection.sec_http import get_text
+from delist_detection.sources.sec_stats import SEC_STATS, fill_only
+from delist_detection.sources.midas import MIDAS_INDEX_URL, MidasClient, quarter_of, summarize_midas_csv
+from delist_detection.sources.sec_http import get_text
 
 CSV = """Date,Security,Ticker,McapRank,TurnRank,VolatilityRank,PriceRank,LitVol('000),OrderVol('000),Hidden,TradesForHidden,HiddenVol('000),TradeVolForHidden('000),Cancels,LitTrades,OddLots,TradesForOddLots,OddLotVol('000),TradeVolForOddLots('000)
 20181127,Stock,AET,10,4,1,10,400.1,500,1,1,20.0,1,1,1,1,1,1,1
@@ -142,7 +142,7 @@ def test_client_recovers_from_corrupt_zip(tmp_path):
             dest.write_bytes(good_zip)
             return dest
 
-    with patch("delist_detection.midas.download", side_effect=mock_download):
+    with patch("delist_detection.sources.midas.download", side_effect=mock_download):
         c = MidasClient(tmp_path)
         result = c.last_trade_day("AET", date(2018, 10, 1), date(2018, 12, 10))
 
@@ -163,7 +163,7 @@ def test_failed_quarter_download_is_remembered_for_the_rest_of_the_run(tmp_path)
         calls[0] += 1
         raise requests.ConnectionError("down")
 
-    with patch("delist_detection.midas.download", side_effect=fail_download):
+    with patch("delist_detection.sources.midas.download", side_effect=fail_download):
         c = MidasClient(tmp_path)
         assert c.last_trade_day("AET", date(2018, 10, 1), date(2018, 12, 10)) is None
         assert c.last_trade_day("ZZZ", date(2018, 10, 1), date(2018, 12, 10)) is None
@@ -340,7 +340,7 @@ def test_the_warm_threads_read_and_parse_the_index_once(tmp_path):
         reads.append(threading.current_thread().name)
         return get_text(*a, **k)
 
-    with patch("delist_detection.midas.get_text", side_effect=counting):
+    with patch("delist_detection.sources.midas.get_text", side_effect=counting):
         c = MidasClient(tmp_path, session=_Sec({}))
         with fill_only():
             assert c.last_trade_day("AET", *Q4) == date(2018, 11, 28)
@@ -395,7 +395,7 @@ def test_a_download_the_warm_threads_gave_up_on_is_tried_again_by_the_sequential
         calls[0] += 1
         raise requests.ConnectionError("down")
 
-    with patch("delist_detection.midas.download", side_effect=fail_download):
+    with patch("delist_detection.sources.midas.download", side_effect=fail_download):
         c = MidasClient(tmp_path)
         with fill_only():
             assert c.last_trade_day("AET", *Q4) is None

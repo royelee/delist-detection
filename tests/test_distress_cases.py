@@ -3,8 +3,8 @@ endings stage 5 gives them, and the drop reason, plan exchange and OTC symbol st
 (delist_date, bucket, CRSP code, drop reason, value rule, price ticker, stock ratio)."""
 import pytest
 
-from delist_detection.distress import price_only
-from delist_detection.form25 import parse_form25
+from delist_detection.endings.distress import price_only
+from delist_detection.filings.form25 import parse_form25
 from distress_cases import EDGAR, FixtureEdgar, after, outcome
 
 LAST = -1      # the security's last ending, the one the contract publishes
@@ -141,7 +141,7 @@ def test_pmi_otc_symbol_is_the_one_the_fails_show_40_days_after_the_halt():
 def _wolf():
     from datetime import date
 
-    from delist_detection.manifest import StageMeter
+    from delist_detection.outputs.manifest import StageMeter
     from delist_detection.pipeline import Overrides, _RunContext
     from distress_cases import AS_OF, DATA, clients, world
     found, terms, _ = after("BBG000BG14P4")
@@ -153,24 +153,31 @@ def _wolf():
 def test_an_answered_plan_received_close_is_the_plans_value_not_the_shumway_fill():
     """WOLF 2025: stage 10g asks the new line's received close; with the answer the ending's dlret is the ratio x
     that close / the last close - 1 (a second run changes values only), never the bucket's Shumway -30%. Its method
-    is its own (sub-plan 5f): a plan's new shares are no OTC print."""
-    from delist_detection.dlret import DlretMethod
-    from delist_detection.pipeline import Overrides, _plan_values
-    from delist_detection.reconstruction import build_delistings_table
-    d, terms, _, _, _, _, _, ov = _wolf()
-    ratio = float(terms[d.key].plan_ratio)
-    ov.acquirer_prices[d.key] = ("WOLF", 22.0)
-    ov = _plan_values(ov, terms)
-    assert ov.otc_prints == {}
-    rows = build_delistings_table([d.record], last_trade_closes={d.key: 1.85}, otc_prints=ov.otc_prints,
-                                  plan_values=ov.plan_values, exchanges={d.key: d.exchange})
-    assert rows[0].dlret == pytest.approx(ratio * 22.0 / 1.85 - 1)
-    assert rows[0].dlret_method is DlretMethod.PLAN_STOCK
+    is its own (sub-plan 5f): a plan's new shares are no OTC print; and (step 10's declared fix) it is graded medium,
+    like an OTC print."""
+    from delist_detection.outputs.dlret import DlretMethod, ValueInputs
+    from delist_detection.vocabulary.exchanges import normalize_exchange
+    from delist_detection.outputs.price_requests import OTC_PRINT, RECEIVED_CLOSE, PriceAnswers, PriceKey
+    from delist_detection.outputs.reconstruction import enrich
+    from delist_detection.vocabulary.trading_calendar import next_trading_day
+    d, terms, _, _, _, _, _, _ = _wolf()
+    ratio, day = float(terms[d.key].plan_ratio), d.last_trade.day
+
+    def asked(kind, ticker):        # the request stage 10g makes, as the answers file repeats it
+        return PriceKey(d.sec_id, day.isoformat(), kind, ticker, next_trading_day(day).isoformat())
+
+    otc, plan = PriceAnswers({asked(RECEIVED_CLOSE, "WOLF"): 22.0}).ending_values(d.sec_id, day, terms[d.key])
+    assert otc is None
+    e = enrich(d.record, ValueInputs(d.record.bucket, normalize_exchange(d.exchange), 1.85, plan_value=plan))
+    assert e.dlret == pytest.approx(ratio * 22.0 / 1.85 - 1)
+    assert e.dlret_method is DlretMethod.PLAN_STOCK
+    assert e.dlret_confidence == "medium"
     # an answer for another ticker is not the plan's
-    assert _plan_values(Overrides(acquirer_prices={d.key: ("XXXX", 22.0)}), terms).plan_values == {}
+    assert PriceAnswers({asked(RECEIVED_CLOSE, "XXXX"): 22.0}).ending_values(d.sec_id, day, terms[d.key]) == (
+        None, None)
     # an answered OTC print of the same ending wins: the plan value is not set
-    assert _plan_values(Overrides(acquirer_prices={d.key: ("WOLF", 22.0)}, otc_prints={d.key: 1.0}),
-                        terms).plan_values == {}
+    assert PriceAnswers({asked(RECEIVED_CLOSE, "WOLF"): 22.0, asked(OTC_PRINT, "WOLF"): 1.0}).ending_values(
+        d.sec_id, day, terms[d.key]) == (1.0, None)
 
 
 def test_a_plan_endings_last_close_is_never_the_new_lines():
@@ -179,7 +186,7 @@ def test_a_plan_endings_last_close_is_never_the_new_lines():
     from delist_detection.pipeline import _last_trade_closes
     d, _, securities, cusips, ftd, ftd_lo, ctx, ov = _wolf()
     assert d.last_trade.day.isoformat() == "2025-09-26"
-    closes = _last_trade_closes(ctx, [d], securities, cusips, ftd, ftd_lo, ov)
+    closes = _last_trade_closes(ctx, [d], securities, cusips, ftd, ftd_lo, ov).closes
     assert closes.get(d.key) != 22.1
     assert closes[d.key] == pytest.approx(1.85)
     assert any(f.startswith("ftd_close_prior") for f in d.flags)
@@ -190,7 +197,7 @@ def test_a_plan_endings_last_close_is_never_the_new_lines():
 def test_a_failed_read_in_stage_9e_gives_a_resolution_degraded_row():
     """WOLF's plan 8-K read counts itself degraded (a failed request, a stale copy): the delisting's own row and a
     review item carry resolution_degraded; the ratio read still stands (it is flagged, not dropped)."""
-    from delist_detection.sec_stats import SEC_STATS
+    from delist_detection.sources.sec_stats import SEC_STATS
 
     class Degrading(FixtureEdgar):
         def fetch_filing_text(self, cik, accession, primary_doc):
@@ -205,7 +212,7 @@ def test_a_failed_read_in_stage_9e_gives_a_resolution_degraded_row():
 
 
 def test_a_refusal_in_stage_9e_stops_the_run():
-    from delist_detection.edgar import EdgarBlocked
+    from delist_detection.sources.edgar import EdgarBlocked
 
     class Blocked(FixtureEdgar):
         def fetch_filing_text(self, cik, accession, primary_doc):

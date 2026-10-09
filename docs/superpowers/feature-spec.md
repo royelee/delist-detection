@@ -418,7 +418,7 @@ python scripts/observations_from_instruments.py --instruments all.txt --out obs.
 ```
 
 `compute_corrected_returns.py` reads `delistings.csv` and a panel keyed by
-`sec_id`. `verify_against_web.py` reads `delistings.csv`.
+`sec_id`. `verify_against_web.py` read `delistings.csv` until it was removed (2026-10-08).
 
 ## 11. Non-functional requirements
 
@@ -463,7 +463,8 @@ architecture, test count).
 4. Every observed security is listed today, has a delisting, or is in
    `review.csv` with a reason.
 5. `verify_against_web.py` agreement on the delisting rows is at least the current
-   98.9%.
+   98.9%. *(Retired 2026-10-08: the script was removed. `scripts/scorecard.py --check`
+   and the truth sets measure this now.)*
 6. `last_trade_close` is filled for at least 90% of 2004+ merger delistings.
 
 ## 14. `qlib_practice` migration (follow-up, separate repo)

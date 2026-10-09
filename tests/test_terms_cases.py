@@ -54,8 +54,8 @@ def test_the_currency_comes_from_each_cases_own_read():
 def test_the_cad_package_is_published_but_never_gated():
     """THI: the gate cannot compare C$65.50 + 0.8025 QSR with a USD close, so its terms are skipped (the contract's
     `skipped`), never passed on an unconverted sum as before 5f."""
-    from delist_detection.payout_gate import DEFAULT_TOL, gate_payouts
-    from delist_detection.store import DelistingKey
+    from delist_detection.terms.payout_gate import DEFAULT_TOL, gate_payouts
+    from delist_detection.outputs.store import DelistingKey
     c = tc.DATA["cases"]["BBG000BB2N27_2014-12-25"]
     key = DelistingKey(c["sec_id"], c["delist_date"])
     g = gate_payouts([key], {}, {}, {}, {key: tc.terms("BBG000BB2N27_2014-12-25")}, {c["sec_id"]: c["last_close"]},

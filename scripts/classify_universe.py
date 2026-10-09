@@ -18,19 +18,19 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
-from delist_detection.edgar import EdgarSetupError, require_user_agent
-from delist_detection.sec_limiter import use_machine_wide_limit
-from delist_detection.fatal import FATAL
-from delist_detection.observations import ObservationError, ObservationIndex, load_observations
-from delist_detection.openfigi import OpenFigiUnavailable
-from delist_detection.payout_gate import DEFAULT_TOL
+from delist_detection.sources.edgar import EdgarSetupError, require_user_agent
+from delist_detection.sources.sec_limiter import use_machine_wide_limit
+from delist_detection.sources.fatal import FATAL
+from delist_detection.identity.observations import ObservationError, ObservationIndex, load_observations
+from delist_detection.sources.openfigi import OpenFigiUnavailable
+from delist_detection.terms.payout_gate import DEFAULT_TOL
 from delist_detection.pipeline import Overrides, default_clients, run
-from delist_detection.price_requests import load_answers
-from delist_detection.reconstruction import OverrideFileError, load_float_overrides, load_merger_terms_overrides
-from delist_detection.review_triage import Decision, ReviewDecisionError, load_decisions
-from delist_detection.scorecard import ScorecardConfig, ScorecardConfigError, load_config
-from delist_detection.store import read_table
-from delist_detection.truth import TruthFileError
+from delist_detection.outputs.price_requests import load_answers
+from delist_detection.outputs.reconstruction import OverrideFileError, load_float_overrides, load_merger_terms_overrides
+from delist_detection.outputs.review_triage import Decision, ReviewDecisionError, load_decisions
+from delist_detection.measurement.scorecard import ScorecardConfig, ScorecardConfigError, load_config
+from delist_detection.outputs.store import read_table
+from delist_detection.measurement.truth import TruthFileError
 
 KNOWN_RENAMES = {
     # Tiingo ticker -> SEC-current ticker (only when SEC has a different one)

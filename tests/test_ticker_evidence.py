@@ -2,8 +2,8 @@ from datetime import date
 
 import pytest
 
-from delist_detection.edgar import EdgarBlocked, EdgarClient
-from delist_detection.ticker_evidence import SEARCH_FORMS, EraEvidence, evidence_for, ticker_filing
+from delist_detection.sources.edgar import EdgarBlocked, EdgarClient
+from delist_detection.identity.ticker_evidence import SEARCH_FORMS, EraEvidence, evidence_for, ticker_filing
 
 
 class _Search:

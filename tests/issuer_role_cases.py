@@ -1,15 +1,16 @@
 """Sub-plan 5c's real cases, replayed offline: tests/fixtures/issuer_role/ (built once from the local caches by
 scripts/build_issuer_role_fixtures.py) holds each case's security, the securities a successor link may name and the
 other securities of their issuers, their fails rows, and the EDGAR, OpenFIGI, MIDAS and Nasdaq-halt answers.
-`outcome(sec_id)` runs the run's own code over them: stage 5 (`pipeline._context_builder`,
-`delistings.DelistingFinder`), stage 8b when it exists (`pipeline._r1_continuations`, the terms the committed
-contract published standing in for the LLM's), and stage 9 (`pipeline._find_successors`,
-`pipeline._link_successors`; no full-text search: the fixture has none)."""
+`outcome(sec_id)` runs the run's own code over them: stage 5 (`delistings.SecurityContexts`,
+`delistings.DelistingFinder`, which makes each ending's own-share reading and keeps the one its classifier read),
+stage 8b (`pipeline._r1_continuations`, the terms the committed contract published standing in for the LLM's), and
+stage 9 (`pipeline._find_successors`, which records its links as rewrites; no full-text search: the fixture has
+none, and its EDGAR double states the capability absent); `later` runs 8b and 9 over delistings `find` gave. How each successor was found is the rewrite's typed provenance
+(`successor_by`, over `Delisting.rewrites`)."""
 from __future__ import annotations
 
 import csv
 import gzip
-import inspect
 import io
 import json
 from datetime import date
@@ -17,23 +18,23 @@ from functools import lru_cache
 from pathlib import Path
 
 from delist_detection import pipeline
-from delist_detection.added_securities import AddedAcquirer, AddedSecurity
-from delist_detection.classifier import DelistClassifier
-from delist_detection.crsp_codes import CrspBucket
-from delist_detection.delistings import Delisting, DelistingFinder
-from delist_detection.edgar import EdgarSubmission
-from delist_detection.figi_resolution import security_kind
-from delist_detection.ftd import FtdIndex, FtdRow
-from delist_detection.history import ticker_sightings
-from delist_detection.llm_merger_extractor import MergerTerms
-from delist_detection.manifest import StageMeter
-from delist_detection.midas import MidasClient
-from delist_detection.nasdaq_halts import Halt, NasdaqHaltClient
-from delist_detection.observations import Observation, TickerEra
-from delist_detection.payout_gate import GatedPayouts
-from delist_detection.review_triage import ReviewItem
-from delist_detection.security_master import Security
-from delist_detection.ticker_resolver import TickerResolver
+from delist_detection.identity.added_securities import AddedAcquirer, AddedSecurity
+from delist_detection.endings.classifier import DelistClassifier
+from delist_detection.vocabulary.crsp_codes import CrspBucket
+from delist_detection.endings.delistings import Delisting, DelistingFinder, SecurityContexts
+from delist_detection.sources.edgar import EdgarSubmission
+from delist_detection.identity.figi_resolution import security_kind
+from delist_detection.sources.ftd import FtdIndex, FtdRow
+from delist_detection.identity.history import ticker_sightings
+from delist_detection.terms.llm_merger_extractor import MergerTerms
+from delist_detection.outputs.manifest import StageMeter
+from delist_detection.terms.merger_value import MergerValue, MergerValues
+from delist_detection.sources.midas import MidasClient
+from delist_detection.sources.nasdaq_halts import Halt, NasdaqHaltClient
+from delist_detection.identity.observations import Observation, TickerEra
+from delist_detection.outputs.review_triage import ReviewItem
+from delist_detection.identity.security_master import Security
+from delist_detection.identity.ticker_resolver import TickerResolver
 
 FIX = Path(__file__).parent / "fixtures" / "issuer_role"
 DATA = json.loads((FIX / "cases.json").read_text())
@@ -46,7 +47,10 @@ AS_OF = date.fromisoformat(DATA["as_of"])
 
 class FixtureEdgar:
     """The cases' EDGAR answers as the fixture recorded them. A raw or a text the cache lacked reads as "" (as an
-    unreadable filing); `texts_read` lists every 8-K text read."""
+    unreadable filing); `texts_read` lists every 8-K text read. The fixture recorded no full-text searches, so it
+    states the search absent: stage 8b's 8-K12B candidate and stage 9's 8-K12B search are not run here."""
+
+    full_text_search = None      # the fixture recorded no full-text searches (`capabilities.FULL_TEXT_SEARCH`)
 
     def __init__(self) -> None:
         self.texts_read: list[str] = []
@@ -150,47 +154,53 @@ def clients(edgar: FixtureEdgar | None = None) -> pipeline.Clients:
 def find(sec_id: str, c: pipeline.Clients) -> tuple[list[Delisting], list[ReviewItem]]:
     """Stage 5: the finder's delistings and review items for the case."""
     securities, _, cusips, ftd = world()
-    sightings = {sid: ticker_sightings(s, ftd, cusips[sid]) for sid, s in securities.items()}
-    build = pipeline._context_builder(securities, sightings, pipeline._IssuerAnswers({}, {}, {}, set()), ftd, cusips)
+    contexts = SecurityContexts.observed(securities, cusips, ftd)
     finder = DelistingFinder(c.edgar, c.classifier, midas=c.midas, halts=c.halts)
-    return finder.find(build(securities[sec_id], DATA["securities"][sec_id]["listed"]))
+    return finder.find(contexts(securities[sec_id], DATA["securities"][sec_id]["listed"]))
 
 
-def _payouts(sec_id: str, found: list[Delisting]) -> pipeline._Payouts:
+def _payouts(sec_id: str, found: list[Delisting]) -> MergerValues:
     """Stage 8's answer for the case, the terms the committed contract published for its merger rows standing in
     for the LLM's (none passed the gate: the gate is not replayed)."""
     terms = DATA["cases"][sec_id]["terms"]
-    llm = {}
+    records = {}
     for d in found:
         t = terms.get(d.delist_date)
         if d.record.bucket is CrspBucket.MERGER and t is not None:
             cash, ratio, ticker = (float(t[0]) if t[0] else None), (float(t[1]) if t[1] else None), t[2] or None
-            llm[d.key] = MergerTerms("cash_and_stock" if cash and ratio else "stock" if ratio else "cash", cash,
-                                     ratio, None, ticker, "high", "fixture", "")
+            records[d.key] = MergerValue(d.key, llm=MergerTerms(
+                "cash_and_stock" if cash and ratio else "stock" if ratio else "cash", cash, ratio, None, ticker,
+                "high", "fixture", ""))
     _, added, _, _ = world()
-    return pipeline._Payouts({}, llm, GatedPayouts({}, {}, {}, {}, {}), {}, dict(added), [])
+    return MergerValues(records, added=dict(added))
 
 
 def after(sec_id: str, *, edgar: FixtureEdgar | None = None) -> list[Delisting]:
-    """The case's delistings after stage 9: stage 5's, rewritten by stage 8b (when it exists) and linked by stage 9."""
+    """The case's delistings after stage 9: stage 5's, rewritten by stage 8b and linked by stage 9."""
     c = clients(edgar)
     found, _ = find(sec_id, c)
+    return later(sec_id, found, c)
+
+
+def later(sec_id: str, found: list[Delisting], c: pipeline.Clients) -> list[Delisting]:
+    """Stages 8b and 9 over the case's stage-5 delistings (`find`), in place: each reads the own-share reading its
+    delisting carries, else makes one (`own_shares.of`)."""
     securities, _, cusips, ftd = world()
     sightings = {sid: ticker_sightings(s, ftd, cusips[sid]) for sid, s in securities.items()}
     ctx = pipeline._RunContext(c, AS_OF, lambda *a: None, 1, StageMeter(lambda *a: None))
     payouts = _payouts(sec_id, found)
-    acquirers = dict(payouts.added)
-    r1 = getattr(pipeline, "_r1_continuations", None)
-    if r1 is not None:
-        acquirers |= r1(ctx, found, securities, sightings, payouts, pipeline.Overrides()).added
-    kw = {"sec_cusips": cusips} if "sec_cusips" in inspect.signature(pipeline._find_successors).parameters else {}
-    pipeline._link_successors(found, pipeline._find_successors(ctx, found, securities, sightings, acquirers, {}, ftd,
-                                                               **kw))
+    acquirers = dict(payouts.added) | pipeline._r1_continuations(ctx, found, securities, sightings, payouts).added
+    pipeline._find_successors(ctx, found, securities, sightings, acquirers, {}, ftd, cusips)
     return found
+
+
+def successor_by(d: Delisting) -> str:
+    """How `d`'s successor was found, as the latest rewrite that set it recorded it ("" when none says)."""
+    return next((rw.how for rw in reversed(d.rewrites) if rw.successor), "")
 
 
 def outcome(sec_id: str, **kw) -> list[tuple]:
     """What the run gives the case: each delisting as (delist_date, bucket, CRSP code, successor sec_id, how the
     successor was found), in order."""
     return [(d.delist_date, d.record.bucket.value, d.record.crsp_code, d.record.successor_sec_id or "",
-             (d.record.evidence or {}).get("successor_by", "")) for d in after(sec_id, **kw)]
+             successor_by(d)) for d in after(sec_id, **kw)]

@@ -1,14 +1,16 @@
-from types import SimpleNamespace
+from dataclasses import replace
 
-from delist_detection.payout_rule import VALUE_RULES, MergerInputs, value_fields
+from delist_detection.terms.llm_merger_extractor import MergerTerms
+from delist_detection.vocabulary.exit_kind import VALUE_RULES
+from delist_detection.outputs.dlret import MergerInputs
+from delist_detection.outputs.payout_rule import value_fields
 from lifecycle_tables import ending
 
 LTD = "2014-12-12"       # a Friday: price_date is Monday the 15th
 
 
 def _terms(deal_type="cash_and_stock", cash=None, ratio=None, ticker=None, basis=""):
-    return SimpleNamespace(deal_type=deal_type, cash_per_share=cash, stock_ratio=ratio, acquirer_ticker=ticker,
-                           source="8-K:0001", package_basis=basis)
+    return MergerTerms(deal_type, cash, ratio, None, ticker, "high", "8-K:0001", "", package_basis=basis)
 
 
 def test_a_cash_merger_publishes_its_cash_and_source():
@@ -90,7 +92,7 @@ def test_an_election_that_states_no_package_publishes_only_its_all_cash_alternat
     f = value_fields(r, LTD, MergerInputs(llm=_terms("election", cash=385.0, ratio=5.0611, ticker="BRK-B")))
     assert (f["value_rule"], f["cash_per_share"], f["stock_ratio"], f["price_ticker"]) == ("cash", 385.0, None, "")
     assert f["terms_gate"] == "failed"
-    stock_only = SimpleNamespace(**{**vars(_terms("election", ratio=0.145, ticker="Y")), "stock_value": 61.14})
+    stock_only = replace(_terms("election", ratio=0.145, ticker="Y"), stock_value=61.14)
     f = value_fields(r, LTD, MergerInputs(llm=stock_only))
     assert (f["value_rule"], f["cash_per_share"], f["stock_ratio"], f["price_ticker"]) == ("unknown", None, None, "")
 
@@ -133,13 +135,14 @@ def test_a_drop_values_from_its_own_first_otc_print():
     assert f["value_formula"] == "otc_print(ABCD, from 2014-12-15) / last_close − 1"
 
 
-def test_a_liquidation_takes_a_recovery_else_worthless_else_a_print():
+def test_a_recovery_and_worthless_are_written_with_their_formulas():
+    """The order a liquidation's rule takes (a recovery, else a plan, else worthless, else a print) is dlret's
+    (test_dlret); here, how the contract writes each."""
     rec = ending("A", "2014-12-20", "liquidation", method="recovery_ratio", crsp_code="470", recovery_ratio="0.15")
     f = value_fields(rec, LTD)
     assert (f["value_rule"], f["recovery_ratio"], f["value_formula"]) == ("recovery", 0.15, "0.1500 − 1")
-    assert value_fields(ending("A", "2014-12-20", "liquidation", method="worthless"), LTD)["value_rule"] == "worthless"
-    assert value_fields(ending("A", "2014-12-20", "liquidation", method="shumway_nyse_amex", crsp_code="470"),
-                        LTD)["value_rule"] == "otc_print"
+    f = value_fields(ending("A", "2014-12-20", "liquidation", method="worthless"), LTD)
+    assert (f["value_rule"], f["value_formula"], f["price_ticker"], f["price_date"]) == ("worthless", "0 − 1", "", "")
 
 
 def test_expiration_and_unknown_buckets():
@@ -150,7 +153,7 @@ def test_expiration_and_unknown_buckets():
 
 # -- sub-plan 5g: the OTC symbol and a bankruptcy plan's stock rule (DistressTerms, stage 9e) -------------------
 
-from delist_detection.distress import DistressTerms  # noqa: E402
+from delist_detection.outputs.dlret import DistressTerms  # noqa: E402
 
 
 def test_a_drop_is_priced_under_its_own_otc_symbol():
@@ -176,12 +179,6 @@ def test_a_bankruptcy_plan_exchange_is_the_stock_rule_on_the_new_line():
         ("stock", "0.0037345", "", "SDRL", "2018-07-03")
     assert (f["terms_source"], f["terms_gate"], f["cash_per_share"]) == ("form25_notice", "", None)
     assert f["value_formula"] == "0.0037345 × price(SDRL, 2018-07-03) / last_close − 1"
-
-
-def test_a_callers_recovery_beats_the_plan():
-    r = ending("A", "2018-07-13", "liquidation", method="recovery_ratio", crsp_code="470", recovery_ratio="0.2")
-    assert value_fields(r, "2018-07-02", distress=DistressTerms(plan_ratio="0.0037345", plan_ticker="SDRL"))[
-        "value_rule"] == "recovery"
 
 
 def test_without_distress_terms_a_drop_keeps_its_exchange_symbol():

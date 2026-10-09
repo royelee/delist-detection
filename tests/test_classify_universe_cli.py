@@ -8,9 +8,9 @@ from pathlib import Path
 
 import pytest
 
-from delist_detection import edgar as edgar_mod
-from delist_detection.scorecard import Window
-from delist_detection.truth import TRUTH_COLUMNS
+from delist_detection.sources import edgar as edgar_mod
+from delist_detection.measurement.scorecard import Window
+from delist_detection.measurement.truth import TRUTH_COLUMNS
 
 ROOT = Path(__file__).resolve().parents[1]
 SPEC = importlib.util.spec_from_file_location("classify_universe_cli", ROOT / "scripts" / "classify_universe.py")
@@ -88,7 +88,7 @@ def test_an_openfigi_outage_exits_4_with_no_outputs_written(monkeypatch, capsys)
     """OpenFIGI down after its retries is not a refusal (exit 2) nor a crash
     (exit 1) but an outage: exit 4, and the message says nothing was written
     and to rerun later."""
-    from delist_detection.openfigi import OpenFigiUnavailable
+    from delist_detection.sources.openfigi import OpenFigiUnavailable
 
     rc = _entry_with_run_raising(monkeypatch, OpenFigiUnavailable("OpenFIGI /mapping kept failing after 6 attempts"))
     assert rc == 4
@@ -97,8 +97,8 @@ def test_an_openfigi_outage_exits_4_with_no_outputs_written(monkeypatch, capsys)
 
 
 def test_a_refusal_still_exits_2(monkeypatch, capsys):
-    from delist_detection.edgar import EdgarBlocked
-    from delist_detection.openfigi import OpenFigiBlocked
+    from delist_detection.sources.edgar import EdgarBlocked
+    from delist_detection.sources.openfigi import OpenFigiBlocked
 
     rc = _entry_with_run_raising(monkeypatch, OpenFigiBlocked("OpenFIGI returned 403 for /mapping"))
     assert rc == 2 and "ABORTED" in capsys.readouterr().err
@@ -109,9 +109,9 @@ def test_every_fatal_exception_has_its_own_exit_code_and_nothing_else_is_caught(
     """The CLI catches fatal.FATAL, the one list of exceptions that stop a run,
     each with its exit code: a refusal 2, an OpenFIGI outage 4. Any other
     exception is an unexpected crash: it is not caught, so Python exits 1."""
-    from delist_detection.edgar import EdgarBlocked
-    from delist_detection.fatal import FATAL
-    from delist_detection.openfigi import OpenFigiBlocked, OpenFigiUnavailable
+    from delist_detection.sources.edgar import EdgarBlocked
+    from delist_detection.sources.fatal import FATAL
+    from delist_detection.sources.openfigi import OpenFigiBlocked, OpenFigiUnavailable
 
     expected = {EdgarBlocked: 2, OpenFigiBlocked: 2, OpenFigiUnavailable: 4}
     assert set(FATAL) == set(expected)              # a new fatal exception needs its code here
@@ -126,7 +126,7 @@ def test_every_fatal_exception_has_its_own_exit_code_and_nothing_else_is_caught(
 def test_an_override_row_that_matches_no_delisting_exits_2_on_one_line(monkeypatch, capsys):
     """The pipeline finds an override row that names no delisting mid-run, before
     anything is written: a bad input file (exit 2), not a crash (exit 1)."""
-    from delist_detection.reconstruction import OverrideFileError
+    from delist_detection.outputs.reconstruction import OverrideFileError
 
     rc = _entry_with_run_raising(monkeypatch, OverrideFileError(
         "override rows that match no delisting: --recoveries rec.csv line 3: BBG999"))
@@ -138,7 +138,7 @@ def test_an_override_row_that_matches_no_delisting_exits_2_on_one_line(monkeypat
 def test_no_observations_to_process_exits_2(monkeypatch, capsys):
     """An observations file with no rows (or a --limit that leaves none) is bad
     input, like a malformed file: exit 2, not an unexpected crash."""
-    from delist_detection.observations import ObservationError
+    from delist_detection.identity.observations import ObservationError
 
     assert _entry_with_run_raising(monkeypatch, ObservationError("no observations to process")) == 2
     assert "no observations to process" in capsys.readouterr().err

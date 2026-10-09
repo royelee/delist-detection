@@ -1,17 +1,9 @@
 import pytest
 
-from delist_detection.observations import (
-    Observation, ObservationError, ObservationIndex, TickerEra, eras_by_key, load_observations, normalize_ticker,
-    number_eras, observation_conflicts, observations_from_instruments, observations_from_snapshots, split_eras,
-    write_observations,
+from delist_detection.identity.observations import (
+    Observation, ObservationError, ObservationIndex, TickerEra, eras_by_key, load_observations, number_eras,
+    observation_conflicts, observations_from_instruments, observations_from_snapshots, split_eras, write_observations,
 )
-
-
-def test_normalize_ticker():
-    assert normalize_ticker(" brk.b ") == "BRK-B"
-    assert normalize_ticker("BF/A") == "BF-A"
-    assert normalize_ticker("BRK B") == "BRK-B"
-    assert normalize_ticker("AET") == "AET"
 
 
 def test_load_validates_and_dedupes(tmp_path):
@@ -178,12 +170,6 @@ def test_where_ignored_when_column_blank(tmp_path):
     (tmp_path / "russell_2008-01-16.csv").write_text("ticker,name,asset_class\nAET,AETNA INC,\n")
     obs = observations_from_snapshots(tmp_path, where={"asset_class": "Equity"})
     assert [o.ticker for o in obs] == ["AET"]
-
-
-def test_regular_way_strips_a_when_issued_suffix_and_nothing_else():
-    from delist_detection.observations import regular_way
-    assert [regular_way(t) for t in ("EHAB-WI", "EHAB WI", "ehab.wi", "EHAB W/I", "AWI", "BF-B", "WI")] == [
-        "EHAB", "EHAB", "EHAB", "EHAB", "AWI", "BF-B", "WI"]
 
 
 def test_a_when_issued_ticker_joins_its_regular_way_era():

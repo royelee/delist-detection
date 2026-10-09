@@ -6,12 +6,17 @@ the floor in --config (spec: Delist Library Reset, step 1 "Measure first").
                                                  # diagnosis pass case fails
   python scripts/scorecard.py --check --base REV # also recompute the regression report against commit REV (a sub-plan's
                                                  # base) and fail on a regression the --ledger has not settled
+                                                 # (D.unexplained_regressions, `loop_round.unexplained`)
   python scripts/scorecard.py --write            # also rewrite <output-dir>/scorecard.json
   python scripts/scorecard.py --raise-floor      # move the config's floor to every better number (never worse)
+  python scripts/scorecard.py --flip             # the flip rule on both truth sets: every known_wrong golden and
+                                                 # diagnosis case these tables now match becomes pass
+                                                 # (`scorecard.flip`)
   python scripts/scorecard.py --lifecycles l.csv # one row per input ticker and per security
 
-Offline. The run date is the tables' own (run_manifest.json's as_of; today
-when there is no manifest). Exit 2: a bad config or truth file, or tables
+Offline. The tables, the run date (run_manifest.json's as_of; today when
+there is no manifest) and the base commit's contract are read as run snapshots
+(`run_snapshot.RunSnapshot`). Exit 2: a bad config or truth file, or tables
 that cannot be read.
 """
 from __future__ import annotations
@@ -21,40 +26,20 @@ import csv
 import io
 import json
 import sys
-from datetime import date
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
-from delist_detection.atomic_io import write_atomic
-from delist_detection.diagnosis_loop import LEDGER, read_csv, settled_keys
-from delist_detection.lifecycle import LifecycleView, Tables
-from delist_detection.manifest import MANIFEST_NAME
-from delist_detection.scorecard import (ScorecardConfigError, build, drops, load_config, raise_floor, write)
-from delist_detection.regression import RegressionInputError, build_report, unexplained
-from delist_detection.truth import TruthFileError
+from delist_detection.sources.atomic_io import write_atomic
+from delist_detection.measurement.lifecycle import LifecycleView
+from delist_detection.measurement.loop_round import Loop, unexplained
+from delist_detection.measurement.scorecard import (ScorecardConfigError, build, drops, flip, load_config, raise_floor,
+                                                    write)
+from delist_detection.outputs.run_snapshot import RunSnapshot, SnapshotError
+from delist_detection.measurement.truth import TruthFileError
+from delist_detection.measurement.truth_set import read_ledger
 
-LEGS_FILE = "contract/payout_legs.csv"
 LIFECYCLE_COLUMNS = ("unit", "key", "sec_id", "kind", "quality", "chain", "final_delist_date", "final_bucket")
-
-
-def tables_as_of(out_dir: Path) -> date:
-    path = out_dir / MANIFEST_NAME
-    if not path.exists():
-        return date.today()
-    manifest = json.loads(path.read_text())
-    if not isinstance(manifest, dict) or "as_of" not in manifest:
-        raise ValueError(f"{path}: no as_of")
-    return date.fromisoformat(manifest["as_of"])
-
-
-def legs_rows(out_dir: Path) -> list[dict[str, str]] | None:
-    """contract/payout_legs.csv's rows, or None when the run has no such table (before sub-plan 5f)."""
-    path = out_dir / LEGS_FILE
-    if not path.exists():
-        return None
-    with path.open(newline="") as fh:
-        return list(csv.DictReader(fh))
 
 
 def lifecycle_rows(view: LifecycleView) -> list[dict[str, str]]:
@@ -76,7 +61,7 @@ def _csv_text(columns, rows) -> str:
     return buf.getvalue()
 
 
-def main(argv: list[str] | None = None) -> int:
+def parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--output-dir", type=Path, default=ROOT / "output")
     p.add_argument("--config", type=Path, default=ROOT / "data" / "scorecard.json")
@@ -85,28 +70,33 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--base", help="a commit: recompute the regression report against it and count "
                    "D.unexplained_regressions (without it there is no such metric)")
     p.add_argument("--repo", type=Path, default=ROOT)
-    p.add_argument("--ledger", type=Path, default=ROOT / LEDGER, help="the diagnosis loop's diagnosed.csv")
+    p.add_argument("--ledger", type=Path, default=Loop.of(ROOT).ledger, help="the diagnosis loop's diagnosed.csv")
     p.add_argument("--raise-floor", action="store_true")
+    p.add_argument("--flip", action="store_true", help="every known_wrong golden and diagnosis case the tables now "
+                   "match becomes pass, its fixed_by cleared (truth.now_right, the one flip rule)")
     p.add_argument("--lifecycles", type=Path)
-    args = p.parse_args(argv)
+    return p
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = parser().parse_args(argv)
     try:
         config = load_config(args.config)
-        tables = Tables.read(args.output_dir)
-        as_of = tables_as_of(args.output_dir)
-    except (ScorecardConfigError, TruthFileError, ValueError, OSError) as exc:
+        run = RunSnapshot.read(args.output_dir)
+        card = build(run, config=config)          # each table is read when a line first asks for it
+    except (ScorecardConfigError, TruthFileError, SnapshotError, OSError) as exc:
         print(f"ABORTED: {exc}", file=sys.stderr)
         return 2
-    card = build(tables, as_of=as_of, config=config, legs_rows=legs_rows(args.output_dir))
     card["drops"] = drops(card, config.floor)
+    left = None
     if args.base:
-        # Recomputed here, never read from output/regression_report.csv, which can be stale.
         try:
-            rows = build_report(args.repo, args.base, args.output_dir, config.diagnosis)
-        except RegressionInputError as exc:
+            left = unexplained(RunSnapshot.at(args.repo, args.base, args.output_dir), run, config.diagnosis,
+                               read_ledger(args.ledger))
+        except (SnapshotError, TruthFileError, ValueError, OSError) as exc:
             print(f"ABORTED: {exc}", file=sys.stderr)
             return 2
-        left = unexplained(rows, config.diagnosis, settled_keys(read_csv(args.ledger)))
-        card["metrics"]["D.unexplained_regressions"] = len({r["sec_id"] for r in left})
+        card["metrics"].update(left.line())
     for name, value in sorted(card["metrics"].items()):
         print(f"{name:48} {value}")
     for line in card["drops"]:
@@ -118,15 +108,23 @@ def main(argv: list[str] | None = None) -> int:
     if args.write:
         print(f"wrote {write(args.output_dir, card)}")
     if args.lifecycles:
-        write_atomic(args.lifecycles, _csv_text(LIFECYCLE_COLUMNS, lifecycle_rows(LifecycleView(tables))))
+        write_atomic(args.lifecycles, _csv_text(LIFECYCLE_COLUMNS, lifecycle_rows(LifecycleView(run))))
         print(f"wrote {args.lifecycles}")
+    if args.flip:
+        try:
+            flipped = flip(run, config)
+        except (TruthFileError, OSError) as exc:
+            print(f"ABORTED: {exc}", file=sys.stderr)
+            return 2
+        for name, ids in (("golden", flipped.golden), ("diagnosis", flipped.diagnosis)):
+            print(f"flipped {len(ids)} {name} case(s) to pass" + (f": {', '.join(ids)}" if ids else ""))
     if args.raise_floor:
         raw = json.loads(args.config.read_text(encoding="utf-8"))
         raw["floor"] = raise_floor(card, config.floor)
         write_atomic(args.config, json.dumps(raw, indent=2) + "\n")
         print(f"raised the floor in {args.config}")
     if args.check and (card["drops"] or card["golden_failures"] or card["diagnosis_failures"]
-                       or card["metrics"].get("D.unexplained_regressions", 0) > 0):
+                       or (left is not None and not left.passes)):
         return 1
     return 0
 

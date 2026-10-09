@@ -3,7 +3,7 @@ import json
 import pytest
 import requests
 
-from delist_detection.openfigi import OpenFigiBlocked, OpenFigiClient, resolve_api_key
+from delist_detection.sources.openfigi import OpenFigiBlocked, OpenFigiClient, resolve_api_key
 
 
 class _Resp:
@@ -83,7 +83,7 @@ def test_an_outage_is_unavailable_not_a_refusal_and_nothing_is_cached(tmp_path):
     """Timeouts or 5xx answers until the retries
     run out are an outage (OpenFigiUnavailable, the CLI exits 4), not a refusal
     of the key (OpenFigiBlocked, exit 2); nothing is cached either way."""
-    from delist_detection.openfigi import OpenFigiUnavailable
+    from delist_detection.sources.openfigi import OpenFigiUnavailable
 
     c = OpenFigiClient(tmp_path, "k", session=_Timeouts(), sleep=lambda _: None)
     with pytest.raises(OpenFigiUnavailable) as err:
@@ -146,7 +146,7 @@ def test_the_retry_waits_are_the_clients_own(tmp_path):
     (at most 60) after a transport error, the retry-after/ratelimit-reset
     header (plus one second) or 2**attempt after a 5xx, 60 s after a 429 with no
     header -- and a wait after the last attempt too, before giving up."""
-    from delist_detection.openfigi import OpenFigiUnavailable
+    from delist_detection.sources.openfigi import OpenFigiUnavailable
 
     slept = []
     c = OpenFigiClient(tmp_path, "k", session=_Timeouts(), sleep=slept.append)
