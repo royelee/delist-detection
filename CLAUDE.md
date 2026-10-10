@@ -734,7 +734,10 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   on its own name (SPW to SPXC); `cusip_job` is the one OpenFIGI CUSIP job. Sub-plan 5h: `foreign_ticker_eras`: an
   era whose rows under its ticker are all another security's (none names its issuer) is guarded too, and its
   backfill may take the line whose confirming CUSIP traded over its dates (`FigiResolver(cusip_span=, foreign=)`:
-  UAG 2008-09 on PAG's line). `_handoff_joins` lets a CUSIP switch join a lettered era to a plain-named era of its
+  UAG 2008-09 on PAG's line), or, when none traded over them, the one whose CUSIP's last trading row came at most
+  `ERA_GAP_DAYS` before the era began (FB-004 part c: the snapshots kept listing a dead company, so the era is its
+  line's stale tail, BSC and CCU of 2008-11 to 2009-06 on Bear Stearns' and Clear Channel's FIGIs, instead of a
+  placeholder no Form 25 can end). `_handoff_joins` lets a CUSIP switch join a lettered era to a plain-named era of its
   issuer when OpenFIGI names that line with the same letter and the issuer's eras name no other
   (`identifiers.figi_class_letter`, `one_class_issuers`: MSG onto MSG Networks, LMCA onto Starz); never a shared CUSIP
   (tracking stocks). The other way too (FB-003): a switch joins a plain-named era to a lettered one of its issuer

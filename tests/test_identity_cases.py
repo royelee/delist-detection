@@ -47,6 +47,11 @@ MOVES = {
     "LINTA@2008-01-16": ("CIK1355096-COMMON-53071M104", "placeholder"),
     "QVCA@2014-12-31": ("CIK1355096-COMMON-53071M104", "placeholder"),
     "LCAPA@2008-01-16": ("CIK1355096-COMMON-53071M302", "placeholder"),
+    # FB-004 part c: the snapshots of 2008-11 to 2009-06 still listed Bear Stearns (merged 2008-05-30) and Clear Channel
+    # (LBO 2008-07-30) while the tickers' rows were another security's (an ETN under BSC, the Chilean CCU): each era is
+    # its dead line's stale tail, not a placeholder that no Form 25 can end
+    "BSC@2008-11-18": ("BBG000BDRQ10", "backfill"),
+    "CCU@2008-11-18": ("BBG000BF8BH2", "backfill"),
 }
 
 # era key -> (sec_id, FIGI source), unchanged by 5h

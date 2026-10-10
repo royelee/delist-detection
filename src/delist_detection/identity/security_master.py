@@ -27,7 +27,7 @@ from ..vocabulary.identifiers import (
 )
 from ..vocabulary.trading_calendar import add_trading_days
 from ..vocabulary.names import description_matches, names_agree
-from .observations import TickerEra, eras_by_key, observation_conflicts
+from .observations import ERA_GAP_DAYS, TickerEra, eras_by_key, observation_conflicts
 from ..outputs.review_triage import ReviewItem
 
 
@@ -438,6 +438,13 @@ class FigiResolver:
                 lines = {confirmed[o.key] for o in others if o.key in confirmed_by
                          and (span := self.cusip_span(confirmed_by[o.key])) is not None
                          and span[0] <= era.last and era.first <= span[1]}
+            if not lines and self.cusip_span is not None and era.key in self.foreign:
+                # a stale tail (FB-004 part c, BSC and CCU in 2008-09): the snapshots kept listing a dead company
+                # while its ticker's rows were another security's; the line its issuer and class are confirmed on
+                # ended within ERA_GAP_DAYS before the era began
+                lines = {confirmed[o.key] for o in others if o.key in confirmed_by
+                         and (span := self.cusip_span(confirmed_by[o.key])) is not None
+                         and 0 <= (date.fromisoformat(era.first) - date.fromisoformat(span[1])).days <= ERA_GAP_DAYS}
             return next(iter(lines)) if len(lines) == 1 else None
 
         def named(era: TickerEra, cands: list[FigiCandidate]) -> tuple[FigiCandidate | None, bool]:

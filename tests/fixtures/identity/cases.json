@@ -2,10 +2,14 @@
  "as_of": "2026-09-25",
  "eras_issuer": {
   "ABBI@2008-01-16": 1141399,
+  "BSC@2008-01-16": 777001,
+  "BSC@2008-11-18": 777001,
   "CBG@2008-01-16": 1138118,
   "CBG@2014-12-31": 1138118,
   "CBRE@2012-06-29": 1138118,
   "CBRE@2018-06-30": 1138118,
+  "CCU@2008-01-16": 739708,
+  "CCU@2008-11-18": 739708,
   "CHK@2008-01-16": 895126,
   "CHK@2022-06-30": 895126,
   "ERA@2013-06-28": 73887,
@@ -4616,6 +4620,90 @@
    "TT",
    "2026-06-30",
    "TRANE TECHNOLOGIES PLC",
+   ""
+  ],
+  [
+   "BSC",
+   "2008-01-16",
+   "BEAR STEARNS COS INC",
+   "777001"
+  ],
+  [
+   "BSC",
+   "2008-05-31",
+   "BEAR STEARNS COS INC",
+   "777001"
+  ],
+  [
+   "BSC",
+   "2008-07-25",
+   "BEAR STEARNS COS INC",
+   "777001"
+  ],
+  [
+   "BSC",
+   "2008-11-18",
+   "BEAR STEARNS COS INC",
+   "777001"
+  ],
+  [
+   "BSC",
+   "2009-01-23",
+   "BEAR STEARNS COS INC",
+   "777001"
+  ],
+  [
+   "BSC",
+   "2009-03-20",
+   "BEAR STEARNS COS INC",
+   "777001"
+  ],
+  [
+   "BSC",
+   "2009-06-08",
+   "BEAR STEARNS COS INC",
+   "777001"
+  ],
+  [
+   "CCU",
+   "2008-01-16",
+   "CLEAR CHANNEL COMM INC",
+   ""
+  ],
+  [
+   "CCU",
+   "2008-05-31",
+   "CLEAR CHANNEL COMM INC",
+   ""
+  ],
+  [
+   "CCU",
+   "2008-07-25",
+   "CLEAR CHANNEL COMM INC",
+   ""
+  ],
+  [
+   "CCU",
+   "2008-11-18",
+   "CLEAR CHANNEL COMM INC",
+   ""
+  ],
+  [
+   "CCU",
+   "2009-01-23",
+   "CLEAR CHANNEL COMM INC",
+   ""
+  ],
+  [
+   "CCU",
+   "2009-03-20",
+   "CLEAR CHANNEL COMM INC",
+   ""
+  ],
+  [
+   "CCU",
+   "2009-06-08",
+   "CLEAR CHANNEL COMM INC",
    ""
   ]
  ]

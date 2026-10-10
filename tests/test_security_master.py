@@ -1,5 +1,5 @@
 import csv
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
 import pytest
@@ -1441,3 +1441,31 @@ def test_an_era_with_no_cusip_goes_with_the_line_of_its_ticker():
          ("c", "LCAPA", "2015-12-31", [])], spans=LIBERTY_SPANS)
     assert res["a"].sec_id == "CIK1355096-COMMON-53071M104"
     assert res["b"].sec_id == res["c"].sec_id == "CIK1355096-COMMON-53071M302"
+
+
+def _stale_tail(gap_days):
+    """Bear Stearns' line (CUSIP 073902108, traded to 2008-05-30) and a later era of the same issuer, class and name
+    whose ticker's rows are another security's (an ETN under BSC): a snapshot that kept listing the dead company."""
+    old = _era("BSC", ("2008-01-16", "BEAR STEARNS COS INC"), ("2008-07-25", "BEAR STEARNS COS INC"))
+    tail = _era("BSC", ("2008-11-18", "BEAR STEARNS COS INC"), ("2009-06-08", "BEAR STEARNS COS INC"))
+    figi = _Figi({("ID_CUSIP", "073902108"): {"data": [_row("BBG000BDRQ10", "US", "BSC", "BEAR STEARNS COMPANIES INC")]}})
+    last = (date.fromisoformat(tail.first) - timedelta(days=gap_days)).isoformat()       # the CUSIP's last trading row
+    resolver = FigiResolver(figi, cusip_span={"073902108": ("2007-12-17", last)}.get, foreign={tail.key})
+    res = resolver.resolve_many([old, tail], issuers=issuers_by_era({old.key: 777001, tail.key: 777001}),
+                                cusips={old.key: ["073902108"], tail.key: []}, unconfirmed={tail.key})
+    return res, old, tail
+
+
+def test_a_foreign_era_after_its_issuers_line_ended_is_the_dead_lines_stale_tail():
+    """BSC and CCU (FB-004 part c): the snapshots kept listing Bear Stearns (and Clear Channel) months after the merger,
+    while the ticker's fails rows were another security's (an ETN; the Chilean brewer CCU). The era's issuer and class
+    have one confirmed line, whose CUSIP traded until 177 days before the era began: the era is that line's tail
+    (`backfill`), not a placeholder holding a second Bear Stearns that no Form 25 can end."""
+    res, old, tail = _stale_tail(177)
+    assert res[old.key].sec_id == "BBG000BDRQ10"
+    assert (res[tail.key].sec_id, res[tail.key].source) == ("BBG000BDRQ10", "backfill")
+
+
+def test_a_foreign_era_long_after_the_line_ended_is_not_its_tail():
+    res, _, tail = _stale_tail(401)
+    assert (res[tail.key].sec_id, res[tail.key].source) == ("CIK777001-COMMON", "placeholder")

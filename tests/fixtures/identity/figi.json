@@ -18777,6 +18777,21 @@
     }
    ]
   },
+  "{\"idType\": \"ID_CUSIP\", \"idValue\": \"073902108\", \"includeUnlistedEquities\": true}": {
+   "data": [
+    {
+     "compositeFIGI": "BBG000BDRQ10",
+     "exchCode": "US",
+     "figi": "BBG000BDRQ10",
+     "marketSector": "Equity",
+     "name": "BEAR STEARNS COS LLC/THE",
+     "securityDescription": "2942331Q",
+     "securityType": "Common Stock",
+     "securityType2": "Common Stock",
+     "ticker": "2942331Q"
+    }
+   ]
+  },
   "{\"idType\": \"ID_CUSIP\", \"idValue\": \"12497T101\", \"includeUnlistedEquities\": true}": {
    "data": []
   },
@@ -18821,6 +18836,21 @@
      "securityType": "Common Stock",
      "securityType2": "Common Stock",
      "ticker": "CHK"
+    }
+   ]
+  },
+  "{\"idType\": \"ID_CUSIP\", \"idValue\": \"184502102\", \"includeUnlistedEquities\": true}": {
+   "data": [
+    {
+     "compositeFIGI": "BBG000BF8BH2",
+     "exchCode": "US",
+     "figi": "BBG000BF8BH2",
+     "marketSector": "Equity",
+     "name": "IHEARTCOMMUNICATIONS INC",
+     "securityDescription": "2968900Q",
+     "securityType": "Common Stock",
+     "securityType2": "Common Stock",
+     "ticker": "2968900Q"
     }
    ]
   },
@@ -19545,6 +19575,21 @@
   "{\"idType\": \"TICKER\", \"idValue\": \"ABBI\", \"includeUnlistedEquities\": true}": {
    "data": []
   },
+  "{\"idType\": \"TICKER\", \"idValue\": \"BSC\", \"includeUnlistedEquities\": true}": {
+   "data": [
+    {
+     "compositeFIGI": "BBG000HSLQD4",
+     "exchCode": "US",
+     "figi": "BBG000HSLQD4",
+     "marketSector": "Equity",
+     "name": "ELMNTS LKD BEN GR S/C VAL TR",
+     "securityDescription": "BSC",
+     "securityType": "ETP",
+     "securityType2": "Mutual Fund",
+     "ticker": "BSC"
+    }
+   ]
+  },
   "{\"idType\": \"TICKER\", \"idValue\": \"CBG\", \"includeUnlistedEquities\": true}": {
    "data": []
   },
@@ -19560,6 +19605,21 @@
      "securityType": "Common Stock",
      "securityType2": "Common Stock",
      "ticker": "CBRE"
+    }
+   ]
+  },
+  "{\"idType\": \"TICKER\", \"idValue\": \"CCU\", \"includeUnlistedEquities\": true}": {
+   "data": [
+    {
+     "compositeFIGI": "BBG000BBCT50",
+     "exchCode": "US",
+     "figi": "BBG000BBCT50",
+     "marketSector": "Equity",
+     "name": "CIA CERVECERIAS UNI-SPON ADR",
+     "securityDescription": "CCU",
+     "securityType": "ADR",
+     "securityType2": "Depositary Receipt",
+     "ticker": "CCU"
     }
    ]
   },

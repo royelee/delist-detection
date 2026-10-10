@@ -38,7 +38,8 @@ AS_OF = date(2026, 9, 25)                    # the committed run's date
 # Co Ltd, plc and Inc, Trane, Gardner Denver Holdings, Chesapeake.
 STAGE3_CIKS = (1336917, 1469372, 1636519, 1507934, 1560385, 1019849, 891103, 1800227,
                1288776, 1652044, 46619, 920760, 1339947, 1355096, 48898, 1138118, 104889, 1323854,
-               1160497, 1466258, 1699150, 895126)
+               1160497, 1466258, 1699150, 895126,
+               777001, 739708)       # FB-004 part c: Bear Stearns and Clear Channel, whose stale snapshots outlived the merger
 # Stage 2b: era key -> (its observed name, the committed run's first-pass answer, a name search)
 NAME_CASES = {
     "ABBI@2008-01-16": ("ABRAXIS BIOSCIENCE INC", 1141399),   # now 1409012: the new Abraxis carried the name then
