@@ -29,10 +29,14 @@ SEARCHES = json.loads((FIX / "searches.json").read_text())
 AS_OF = date.fromisoformat(DATA["as_of"])
 
 
-def _load_ftd() -> FtdIndex:
+def _fixture_rows() -> list[FtdRow]:
     with (FIX / "ftd_rows.csv").open(newline="") as fh:
-        return FtdIndex(FtdRow(r["date"], r["cusip"], r["symbol"], r["description"],
-                               float(r["price"]) if r["price"] else None) for r in csv.DictReader(fh))
+        return [FtdRow(r["date"], r["cusip"], r["symbol"], r["description"],
+                       float(r["price"]) if r["price"] else None) for r in csv.DictReader(fh)]
+
+
+def _load_ftd() -> FtdIndex:
+    return FtdIndex(_fixture_rows())
 
 
 @pytest.fixture(scope="module")
@@ -88,12 +92,23 @@ def _search(sec_id):
     return search
 
 
+def _held(sec_id):
+    """Every security of the run that holds a CUSIP the fixture knows, and its CUSIPs."""
+    held = {h: [c for c, hs in DATA["holders"].items() if h in hs] for hs in DATA["holders"].values() for h in hs}
+    return {**held, **{sid: case["cusips"] for sid, case in DATA["cases"].items()}}
+
+
+def _holders(sec_id, ftd):
+    """The CUSIP holders `candidate_steps` reads for the case, as the stage gives them (`line_follow.holders_for`)."""
+    return lf.holders_for(RUN[sec_id], RUN, _held(sec_id), DATA["holders"], ftd)
+
+
 def follow(sec_id, ftd, *, cusips=None, tickers=None):
     """(step, evidence, refusal, decision) for the case's next step, as stage 4b reaches them; None, no step."""
     case = DATA["cases"][sec_id]
     cusips = cusips or case["cusips"]
     tickers = tickers or set(case["tickers"])
-    steps = lf.candidate_steps(sec_id, cusips, tickers, ftd, holders=DATA["holders"],
+    steps = lf.candidate_steps(sec_id, cusips, tickers, ftd, holders=_holders(sec_id, ftd),
                                extra_symbols=case["extra_symbols"], extra_cusips=case["extra_cusips"])
     if not steps:
         return None
@@ -109,7 +124,8 @@ def follow(sec_id, ftd, *, cusips=None, tickers=None):
     decision = None
     if not refused and (step.kind == lf.NEW_SYMBOL or step.new_cusip in FIGI):
         cands = lf.composites(FIGI[step.new_cusip]) if step.kind == lf.SWITCH else None
-        decision = lf.decide(step, RUN[sec_id], cands, RUN)
+        decision = lf.decide(step, RUN[sec_id], cands, RUN, described=lf.described_letter(cusips, ftd),
+                             issuer_letters=lf.issuer_letters_of(case["issuer_cik"], RUN.values()))
     return step, evidence, refused, decision
 
 
@@ -130,6 +146,14 @@ EXPECTED = {
     "BBG00D30HGP6": (lf.SWITCH, "25401T108", "DBRG", "2021-06-22", "", lf.ATTACH, ""),
     "CIK1115836-COMMON": (lf.SWITCH, "G1154H107", "OEH", "2014-07-01", "", lf.FOLD, "BBG000BKZ5F6"),
     "CIK1066104-COMMON": (lf.NEW_SYMBOL, "21988R102", "CEB", "2012-08-14", "", lf.ATTACH, ""),
+    # FB-003 (batch 3): the eight renames the follow refused. The OpenFIGI answers for DV's and YRCW's new CUSIPs are
+    # not cached (decision None): a full run asks them live.
+    "CIK1011006-COMMON": (lf.SWITCH, "021346101", "AABA", "2017-06-21", "", lf.ATTACH, ""),
+    "CIK104889-COMMON": (lf.SWITCH, "384637104", "GHC", "2013-11-29", "", lf.FOLD, "BBG000C3FGH9"),
+    "CIK730464-COMMON": (lf.SWITCH, "00737L103", "ATGE", "2017-05-24", "", None, None),
+    "CIK716006-COMMON": (lf.SWITCH, "985510106", "YELL", "2021-02-09", "", None, None),
+    "BBG000PCQQL6": (lf.NEW_SYMBOL, "74915M100", "QVCGA", "2025-02-25", "", lf.ATTACH, ""),
+    "CIK891103-COMMON": (lf.SWITCH, "44919P508", "IACI", "2008-08-26", "", lf.FOLD, "BBG000BKQG80"),
 }
 NO_STEP = ("BBG00WYYC600", "CIK1507934-CLASS-A", "CIK1469372-CLASS-A")
 
@@ -211,6 +235,22 @@ class _NoFiles:
         return []
 
 
+class _FixtureFiles:
+    """The fixture's rows as one fails file, for the stage's reads of whole windows (`FtdIndex.every_row`: DV)."""
+
+    def __init__(self):
+        self.rows_ = _fixture_rows()
+
+    def urls_for(self, lo, hi):
+        return ["fixture"]
+
+    def rows(self, url, *, symbols=None, cusips=None):
+        for r in self.rows_:
+            if (symbols is None and cusips is None) or (symbols and r.symbol in symbols) or \
+                    (cusips and r.cusip in cusips):
+                yield r
+
+
 # the run's other securities that hold a CUSIP the cases meet (WLL's, LMCA's and MSG's next ones); with no issuer
 # known here they are not followed themselves
 HOLDERS = sorted({h for held in DATA["holders"].values() for h in held} - set(DATA["cases"]))
@@ -231,7 +271,10 @@ def _identity() -> Identity:
         eras[era.key] = era
         cusips[sid] = sorted(c for c, held in DATA["holders"].items() if sid in held)
         res[era.key] = EraResolution(era.key, sid, "cusip", None, (), tuple(cusips[sid]))
-    return Identity(list(eras.values()), eras, _load_ftd(), issuers, res,
+        if RUN[sid].issuer_cik in {c["issuer_cik"] for c in DATA["cases"].values()}:
+            issuers[era.key] = Issuer(RUN[sid].issuer_cik)       # the line of a case's issuer (GHC, IAC) is known
+    index = FtdIndex(_fixture_rows(), source=_FixtureFiles(), window=(date(2007, 12, 17), AS_OF))
+    return Identity(list(eras.values()), eras, index, issuers, res,
                     build_securities(res, eras, issuers), cusips)
 
 
@@ -272,3 +315,83 @@ def test_a_real_lines_first_step_through_the_stage(sec_id, staged):
 def test_a_line_whose_next_cusip_is_another_securitys_takes_no_step_in_the_stage(sec_id, staged):
     assert _first_item(staged, sec_id) is None
     assert NEW_CUSIP_OF[sec_id][0] not in staged.cusips[sec_id]
+
+
+# --- FB-003: the eight renames the follow refused, each with the step that decides it ------------------------------------
+
+def test_the_yhoo_step_to_altaba_passes_r1_on_the_funds_reports_and_attaches(ftd):
+    """YHOO 2017: Altaba filed N-CSR and N-Q for periods after the step and no 10-K or 10-Q (merged_out before).
+    OpenFIGI's answer for 021346101 is a closed-end fund typed Mutual Fund, which R2 leaves out of the US lines, so the
+    placeholder takes the CUSIP and the ticker AABA (the same security): stage 5 then finds Altaba's 2019 25-NSE."""
+    step, evidence, refused, decision = follow("CIK1011006-COMMON", ftd)
+    assert (refused, decision.kind) == ("", lf.ATTACH) and evidence.startswith("renamed from YAHOO INC")
+    filings = EDGAR_FIX.filings(DATA["cases"]["CIK1011006-COMMON"]["issuer_cik"])
+    assert {f.form for f in filings if f.report_date > step.first} & lf.INVESTMENT_COMPANY_FORMS
+    assert not {f.form for f in filings if f.report_date > step.first} & lf.PERIODIC_FORMS
+
+
+def test_the_wpo_step_was_kept_out_only_by_ghcs_line_holding_its_cusip(ftd):
+    """WPO 2013: GHC's line BBG000C3FGH9 holds the new CUSIP 384637104, which kept the step out of candidate_steps; a
+    COMMON placeholder is not kept from the CUSIP of its own issuer's line it folds into (`holders_for`), the fails
+    descriptions say CLB, and the issuer's lines name class B only."""
+    case = DATA["cases"]["CIK104889-COMMON"]
+    assert lf.candidate_steps("CIK104889-COMMON", case["cusips"], case["tickers"], ftd, holders=DATA["holders"],
+                              extra_symbols=case["extra_symbols"]) == []
+    assert lf.described_letter(case["cusips"], ftd) == "B"
+    step, _, refused, decision = follow("CIK104889-COMMON", ftd)
+    assert (step.new_cusip, refused, decision.kind, decision.composite) == ("384637104", "", lf.FOLD, "BBG000C3FGH9")
+
+
+def test_the_iaci_step_was_kept_out_only_by_its_issuers_line_holding_its_cusip(ftd):
+    """IACI 2008: BBG000BKQG80 holds 44919P508, the CUSIP the placeholder's 44919P300 ended as; the follow folds the
+    placeholder into it. That line's own next step, 44919P508 -> 44891N109 (2020-07-02), is refused `name`: the new
+    IAC is a different issuer, the old one became Match Group, and the follow is right to stop there."""
+    case = DATA["cases"]["CIK891103-COMMON"]
+    assert lf.candidate_steps("CIK891103-COMMON", case["cusips"], case["tickers"], ftd, holders=DATA["holders"],
+                              extra_symbols=case["extra_symbols"]) == []
+    step, _, refused, decision = follow("CIK891103-COMMON", ftd)
+    assert (step.new_cusip, refused, decision.composite) == ("44919P508", "", "BBG000BKQG80")
+
+
+def _second(sec_id, ftd, cusips, tickers):
+    """The case's step after the first one was followed (`cusips` and `tickers` as an attach left them)."""
+    return follow(sec_id, ftd, cusips=cusips, tickers=tickers)
+
+
+def test_exbds_second_step_to_ceb_inc_is_found_and_corroborated_but_needs_an_openfigi_answer(ftd):
+    """EXBD/CEB: after the 2012 rename (CEB on 21988R102) the line goes on as CEB INC on 125134106 from 2015-05-15 (the
+    ticker CEB is loaded for the round; the Gartner merger closed 2017-04-05). R1 passes (10-Qs, the 8-K 5.03); the
+    new CUSIP's OpenFIGI answer is not cached, so R2 waits for a full run, which asks it."""
+    step, evidence, refused, decision = _second("CIK1066104-COMMON", ftd, ["21988R102"], {"EXBD", "CEB"})
+    assert (step.kind, step.new_cusip, step.symbol, step.first) == (lf.SWITCH, "125134106", "CEB", "2015-05-15")
+    assert refused == "" and decision is None and bool(evidence)
+
+
+def test_qrteas_second_step_to_the_reverse_split_cusip_is_found_but_needs_an_openfigi_answer(ftd):
+    """QRTEA: the same CUSIP 74915M100 went on as QVCGA (the first step, found 14 trading days past the settled row),
+    then the 1-for-50 reverse split made 74915M605 from 2025-05-23. R1 passes; OpenFIGI's answer is not cached."""
+    step, evidence, refused, decision = _second("BBG000PCQQL6", ftd, ["74915M100"], {"QRTEA", "QVCGA"})
+    assert (step.kind, step.new_cusip, step.symbol, step.first) == (lf.SWITCH, "74915M605", "QVCGA", "2025-05-23")
+    assert refused == "" and decision is None and bool(evidence)
+
+
+def test_iacs_2020_step_is_refused_because_the_new_iac_is_another_issuer(ftd):
+    """The old IAC became Match Group on 2020-07-01; the CUSIP 44891N109 under IAC is the new IAC's. The description
+    names no name the issuer carried from then (Match Group, Inc.), so the follow stops: right."""
+    case = DATA["cases"]["CIK891103-COMMON"]
+    rows = ftd.by_cusip("44891N109")
+    assert rows and rows[0].date == "2020-07-02"
+    steps = lf.candidate_steps("BBG000BKQG80", ["44919P508"], {"IAC", "IACI"}, ftd, holders={},
+                               extra_symbols=case["extra_symbols"])
+    assert [(st.new_cusip, st.symbol) for st in steps] == [("44891N109", "IAC")]
+    _, refused = lf.corroborate(
+        steps[0], filings=EDGAR_FIX.filings(case["issuer_cik"]), sub=EDGAR_FIX.submissions(case["issuer_cik"]),
+        share_class="COMMON", text_of=lambda f: EDGAR["texts"].get(f.accession, ""), as_of=AS_OF,
+        listed_now=lambda: False)
+    assert refused == "name"
+
+
+def test_the_dv_step_is_found_by_the_name_its_rows_carry():
+    """DV 2017: the case's named CUSIP is 00737L103, found by `renamed_cusips` (EDGAR dates the rename to Adtalem on
+    2017-05-24; ATGE is neither listed by EDGAR today nor named by the 8-K 5.03)."""
+    assert DATA["cases"]["CIK730464-COMMON"]["extra_cusips"] == ["00737L103"]

@@ -107,6 +107,25 @@
     "BXS"
    ]
   },
+  "BBG000PCQQL6": {
+   "cusips": [
+    "74915M100"
+   ],
+   "extra_cusips": [],
+   "extra_symbols": [
+    "QVCAQ",
+    "QVCGQ",
+    "QVCPQ"
+   ],
+   "figi_source": "cusip",
+   "issuer_cik": 1355096,
+   "name": "QURATE RETAIL INC SERIES A",
+   "note": "QRTEA 2025: Qurate's series A, the same CUSIP under QVCGA, then a new CUSIP",
+   "share_class": "SERIES A",
+   "tickers": [
+    "QRTEA"
+   ]
+  },
   "BBG001D9S707": {
    "cusips": [
     "26817G102"
@@ -203,6 +222,39 @@
     "WLL"
    ]
   },
+  "CIK1011006-COMMON": {
+   "cusips": [
+    "984332106"
+   ],
+   "extra_cusips": [],
+   "extra_symbols": [],
+   "figi_source": "placeholder",
+   "issuer_cik": 1011006,
+   "name": "ALTABA INC",
+   "note": "YHOO 2017: Yahoo renamed Altaba (AABA), new CUSIP, a registered fund after",
+   "share_class": "COMMON",
+   "tickers": [
+    "AABA",
+    "YHOO"
+   ]
+  },
+  "CIK104889-COMMON": {
+   "cusips": [
+    "939640108"
+   ],
+   "extra_cusips": [],
+   "extra_symbols": [
+    "GHC"
+   ],
+   "figi_source": "placeholder",
+   "issuer_cik": 104889,
+   "name": "WASHINGTON POST CO",
+   "note": "WPO 2013: Washington Post renamed Graham Holdings (GHC), a COMMON placeholder, CLASS B line",
+   "share_class": "COMMON",
+   "tickers": [
+    "WPO"
+   ]
+  },
   "CIK1066104-COMMON": {
    "cusips": [
     "21988R102"
@@ -281,6 +333,64 @@
    "tickers": [
     "LMCA"
    ]
+  },
+  "CIK716006-COMMON": {
+   "cusips": [
+    "984249102",
+    "984249300",
+    "984249607"
+   ],
+   "extra_cusips": [
+    "985510106"
+   ],
+   "extra_symbols": [
+    "YELL"
+   ],
+   "figi_source": "placeholder",
+   "issuer_cik": 716006,
+   "name": "YRC WORLDWIDE INC",
+   "note": "YRCW 2021: YRC Worldwide renamed Yellow (YELL), new CUSIP",
+   "share_class": "COMMON",
+   "tickers": [
+    "YRCW"
+   ]
+  },
+  "CIK730464-COMMON": {
+   "cusips": [
+    "251893103"
+   ],
+   "extra_cusips": [
+    "00737L103"
+   ],
+   "extra_symbols": [
+    "CVSA"
+   ],
+   "figi_source": "placeholder",
+   "issuer_cik": 730464,
+   "name": "DEVRY EDUCATION GROUP INC",
+   "note": "DV 2017: DeVry renamed Adtalem (ATGE), new CUSIP",
+   "share_class": "COMMON",
+   "tickers": [
+    "DV"
+   ]
+  },
+  "CIK891103-COMMON": {
+   "cusips": [
+    "44919P300"
+   ],
+   "extra_cusips": [],
+   "extra_symbols": [
+    "MTCH"
+   ],
+   "figi_source": "placeholder",
+   "issuer_cik": 891103,
+   "name": "IAC INTERACTIVE",
+   "note": "IACI 2020: IAC's CUSIPs after the 2020 Match separation",
+   "share_class": "COMMON",
+   "tickers": [
+    "IAC",
+    "IACI"
+   ]
   }
  },
  "holders": {
@@ -296,14 +406,26 @@
   "21988R102": [
    "CIK1066104-COMMON"
   ],
+  "251893103": [
+   "CIK730464-COMMON"
+  ],
   "26817G102": [
    "BBG001D9S707"
   ],
   "320771108": [
    "BBG000BN6349"
   ],
+  "384637104": [
+   "BBG000C3FGH9"
+  ],
   "415864107": [
    "BBG000BLH3P8"
+  ],
+  "44919P300": [
+   "CIK891103-COMMON"
+  ],
+  "44919P508": [
+   "BBG000BKQG80"
   ],
   "530322106": [
    "CIK1507934-CLASS-A"
@@ -316,6 +438,9 @@
   ],
   "55826P100": [
    "CIK1469372-CLASS-A"
+  ],
+  "74915M100": [
+   "BBG000PCQQL6"
   ],
   "767754104": [
    "BBG000BRWGG9"
@@ -338,11 +463,20 @@
   "92918V109": [
    "BBG009NGKQ45"
   ],
+  "939640108": [
+   "CIK104889-COMMON"
+  ],
   "966387102": [
    "BBG00WYYC600"
   ],
   "966387409": [
    "BBG000PX3XC0"
+  ],
+  "984249607": [
+   "CIK716006-COMMON"
+  ],
+  "984332106": [
+   "CIK1011006-COMMON"
   ],
   "G39108108": [
    "BBG00JM9V731"
@@ -356,6 +490,12 @@
    "figi_source": "cusip",
    "issuer_cik": 892535,
    "name": "THORNBURG MORTGAGE INC",
+   "share_class": "COMMON"
+  },
+  "BBG000BKQG80": {
+   "figi_source": "cusip",
+   "issuer_cik": 891103,
+   "name": "IAC INTERACTIVE",
    "share_class": "COMMON"
   },
   "BBG000BLH3P8": {
@@ -376,6 +516,12 @@
    "name": "RITE AID CORP",
    "share_class": "COMMON"
   },
+  "BBG000C3FGH9": {
+   "figi_source": "cusip",
+   "issuer_cik": 104889,
+   "name": "GRAHAM HOLDINGS COMPANY CLASS B",
+   "share_class": "CLASS B"
+  },
   "BBG000D9V7T4": {
    "figi_source": "cusip",
    "issuer_cik": 706688,
@@ -393,6 +539,12 @@
    "issuer_cik": 701853,
    "name": "BANCORPSOUTH INC",
    "share_class": "COMMON"
+  },
+  "BBG000PCQQL6": {
+   "figi_source": "cusip",
+   "issuer_cik": 1355096,
+   "name": "QURATE RETAIL INC SERIES A",
+   "share_class": "SERIES A"
   },
   "BBG000PX3XC0": {
    "figi_source": "cusip",
@@ -454,6 +606,18 @@
    "name": "SINCLAIR INC",
    "share_class": "COMMON"
   },
+  "CIK1011006-COMMON": {
+   "figi_source": "placeholder",
+   "issuer_cik": 1011006,
+   "name": "ALTABA INC",
+   "share_class": "COMMON"
+  },
+  "CIK104889-COMMON": {
+   "figi_source": "placeholder",
+   "issuer_cik": 104889,
+   "name": "WASHINGTON POST CO",
+   "share_class": "COMMON"
+  },
   "CIK1066104-COMMON": {
    "figi_source": "placeholder",
    "issuer_cik": 1066104,
@@ -483,6 +647,24 @@
    "issuer_cik": 1507934,
    "name": "LIBERTY MEDIA CORP CLASS A",
    "share_class": "CLASS A"
+  },
+  "CIK716006-COMMON": {
+   "figi_source": "placeholder",
+   "issuer_cik": 716006,
+   "name": "YRC WORLDWIDE INC",
+   "share_class": "COMMON"
+  },
+  "CIK730464-COMMON": {
+   "figi_source": "placeholder",
+   "issuer_cik": 730464,
+   "name": "DEVRY EDUCATION GROUP INC",
+   "share_class": "COMMON"
+  },
+  "CIK891103-COMMON": {
+   "figi_source": "placeholder",
+   "issuer_cik": 891103,
+   "name": "IAC INTERACTIVE",
+   "share_class": "COMMON"
   }
  }
 }
