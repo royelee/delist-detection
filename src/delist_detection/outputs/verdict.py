@@ -83,6 +83,13 @@ settle a doubt the rules above would otherwise raise; none changes a table row, 
   no real ending (lifecycle `closed_no_event`; every `ended_without_delisting` security is one) is uncertain,
   `closed_no_event:<its last interval's end>`: nothing says how it left (WW 2013, NCRA). A security the run added (an
   acquirer's price line) is no lifecycle claim and is left alone.
+- **G. The consumer's guards** (upstream feedback, 2026-10-10). An ending stays uncertain when its security has no
+  ticker interval (`no_history`, FB-009: TRB, SKYF), when it is its security's last real ending, not a
+  continuation, and the history runs past its end day (`history_after_last_trade:<day>`, FB-001: GTX, CHK, TWO),
+  when it is an `exchange` ending with no successor (`exchange_without_successor`, FB-003: an unlinked rename), when
+  its kind rests only on an NT 10-K/Q in the prior year (`kind_by_filing_history_only`, FB-002), or when it is a
+  wind-down whose distributions are not read (`value_pending:distributions`, FB-002: no measured value and no fill,
+  the spec's invariant).
 
 `uncertain_rows` is uncertain.csv: every uncertain security and ending, and
 every seed uncertain for a reason of its own; a seed whose only problem is
@@ -105,7 +112,8 @@ from ..vocabulary.exit_kind import (CONFLICT, EXCHANGE_PRINTS, GATE_FLAGS, MEASU
                                     ending_fields, flag_detail, flag_name, flag_names, flag_tokens, is_continuation,
                                     is_real_ending, last_endings, linked_by_timing, merger_relabel,
                                     names_successor_registration, of_row, resolved_from_continued_filings,
-                                    rests_on_continued_filings)
+                                    rests_on_continued_filings, rests_on_delinquency)
+from .dlret import DlretMethod
 from .run_snapshot import RunSnapshot
 
 SEED, SECURITY, ENDING = "seed", "security", "ending"
@@ -327,10 +335,17 @@ def _own_reasons(row: Mapping[str, str], issuer_cik: str = "", reading: Continua
         reasons.append("resolved_from_continued_filings")
     if "no_evidence_default" in flags:          # no continuation carries it (`rewrites.continuation` drops it)
         reasons.append("no_evidence_default")
-    if not ending_fields(row).exit_kind:
+    kind = ending_fields(row).exit_kind
+    if not kind:
         reasons.append("unknown_exit_kind")
+    if rests_on_delinquency(row["reason"]):                     # G
+        reasons.append("kind_by_filing_history_only")
+    if kind == "exchange" and not is_continuation(row):         # G
+        reasons.append("exchange_without_successor")
     if row["dlret_method"] == "assumed_par" and flags & GATE_FLAGS and not _unpriced_gate(row):
         reasons.append("assumed_par_after_failed_gate")
+    if row["dlret_method"] == DlretMethod.PENDING_RECOVERY.value:   # G
+        reasons.append("value_pending:distributions")
     if is_continuation(row):
         if linked_by_timing(row["reason"]) and not confirmed:
             reasons.append("continuation_by_timing_only")
@@ -351,6 +366,21 @@ def _own_reasons(row: Mapping[str, str], issuer_cik: str = "", reading: Continua
     if effective is not None and lt.day > effective:
         reasons.append(f"last_trade_after_form25_effective:{effective.isoformat()}")
     return reasons
+
+
+def _history_reasons(row: Mapping[str, str], intervals: Sequence[Mapping[str, str]], last: bool) -> list[str]:
+    """G: an ending whose security has no ticker interval (`no_history`: TRB, SKYF 2007-08), and the security's last
+    real ending, not a continuation, whose security's history runs past the day it ended (`exit_kind.end_day_of`: its
+    last trade, else its delist date): a later or open interval, or one spanning that day (`history_after_last_trade`:
+    GTX and CHK 2020, TWO 2026). The contract's invariant: the last trade date ends the history (FB-001, FB-009)."""
+    if not intervals:
+        return ["no_history"]
+    if not last or is_continuation(row):
+        return []
+    end = end_day_of(row).isoformat()
+    if any(not r["valid_to"] or r["valid_to"] > end for r in intervals):
+        return [f"history_after_last_trade:{end}"]
+    return []
 
 
 def _seed_reasons(row: Mapping[str, str], covered: bool, names_on_day: int,
@@ -443,18 +473,19 @@ def decide(tables: RunSnapshot, evidence: Mapping[str, str]) -> Verdicts:
            for r in real}
     settled = {sid: (r, not own[(sid, r["delist_date"])]) for sid, r in last.items()}
     securities = _security_verdicts(tables, evidence, settled)
-    endings = {}
-    for r in real:
-        security = securities.get(r["sec_id"])
-        reasons = ([SECURITY_UNCERTAIN] if security is None or not security.confirmed else []) \
-            + own[(r["sec_id"], r["delist_date"])]
-        last_day = last[r["sec_id"]]["delist_date"]
-        if r["delist_date"] != last_day:
-            reasons.append(f"earlier_ending:{last_day}")
-        endings[(r["sec_id"], r["delist_date"])] = Verdict(tuple(reasons))
     intervals: dict[str, list[Mapping[str, str]]] = defaultdict(list)
     for r in tables.ticker_history:
         intervals[r["sec_id"]].append(r)
+    endings = {}
+    for r in real:
+        security = securities.get(r["sec_id"])
+        last_day = last[r["sec_id"]]["delist_date"]
+        reasons = ([SECURITY_UNCERTAIN] if security is None or not security.confirmed else []) \
+            + own[(r["sec_id"], r["delist_date"])] \
+            + _history_reasons(r, intervals[r["sec_id"]], r["delist_date"] == last_day)
+        if r["delist_date"] != last_day:
+            reasons.append(f"earlier_ending:{last_day}")
+        endings[(r["sec_id"], r["delist_date"])] = Verdict(tuple(reasons))
     names: dict[tuple[str, str], set[str]] = defaultdict(set)
     secs_on_day: dict[tuple[str, str], set[str]] = defaultdict(set)
     for r in tables.observation_map:

@@ -64,6 +64,8 @@ def _formula(rule: Rule, day: str) -> str:
     if rule.name == "cash":
         return f"{rule.cash:.2f} / last_close − 1"
     if rule.name == "recovery":
+        if rule.recovery_ratio is None:            # FB-002: a wind-down whose distributions are not read yet
+            return "distributions(?, after the last trade) / last_close − 1"
         return f"{rule.recovery_ratio:.4f} − 1"
     if rule.name == "worthless":
         return "0 − 1"

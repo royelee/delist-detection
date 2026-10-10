@@ -43,7 +43,9 @@ ENDINGS = {
     "BTU": (("BBG000FW00S1", "2016-05-14"), "issuer_from_todays_ticker_map", ""),
     "SPB": (("BBG000P4BQM9", "2018-07-26"), "issuer_from_todays_ticker_map;continuation_by_timing_only",
             "issuer_from_todays_ticker_map"),
-    "CHK": (("BBG00Z6DX554", "2020-07-30"), "issuer_from_todays_ticker_map", "issuer_from_todays_ticker_map"),
+    # FB-001 (ruling G): one interval spans CHK's 2020-06-26 last trade, the old common and the new on one FIGI
+    "CHK": (("BBG00Z6DX554", "2020-07-30"), "issuer_from_todays_ticker_map",
+            "issuer_from_todays_ticker_map;history_after_last_trade:2020-06-26"),
     "CBL": (("BBG000B9YSK6", "2020-11-02"), "issuer_from_todays_ticker_map", "issuer_from_todays_ticker_map"),
     # theme 4: a missing acquirer price is unpriced; a lagged close still tests the terms (MDP's miss a leg)
     # (GRUB's contract row publishes the acquirer ticker "NULL", its delistings row none: a missing ticker is a doubt

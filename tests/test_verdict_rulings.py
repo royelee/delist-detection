@@ -266,6 +266,50 @@ def test_a_stale_close_failure_counts_only_within_the_tolerance_its_age_widens()
     assert not _unpriced(no_close)
 
 
+# -- ruling G: the consumer's guards (upstream feedback FB-001, FB-002, FB-003, FB-009) -----------------------------
+
+def test_an_ending_whose_history_goes_on_after_its_last_trade_is_uncertain():
+    """FB-001: GTX 2020 (a later interval), CHK 2020 (one interval spanning the last trade), TWO 2026 (an open
+    interval): the published last trade does not end the security's history, so the ending is uncertain."""
+    for history in ([iv("A", "AAA", "2010-01-04", "2015-03-02"), iv("A", "AAAQ", "2015-03-03", "2016-01-04")],
+                    [iv("A", "AAA", "2010-01-04", "2018-06-29")], [iv("A", "AAA", "2010-01-04")]):
+        assert "history_after_last_trade:2015-03-02" in _reasons(ending("A", "2015-03-13", **GOOD), history=history)
+    assert _reasons(ending("A", "2015-03-13", **GOOD)) == ()          # the history ends at the last trade
+    # an earlier ending and a continuation are no claim that the history ended there
+    later = ending("A", "2018-07-09", **{**GOOD, "ltd": "2018-06-29", "delist_filing_date": "2018-07-02"})
+    v = _verdicts(ending("A", "2015-03-13", **GOOD), later, history=[iv("A", "AAA", "2010-01-04", "2018-06-29")])
+    assert not any(r.startswith("history_after") for r in v.endings[("A", "2015-03-13")].reasons)
+    cont = ending("A", "2015-03-13", "exchange_transfer", successor="B", reason="Continuation (8-K12B x)", **GOOD)
+    assert not any(r.startswith("history_after") for r in _reasons(cont, history=[iv("A", "AAA", "2010-01-04")]))
+
+
+def test_an_ending_of_a_security_with_no_history_is_uncertain():
+    """FB-009: TRB and SKYF 2007-08: an ending, no security_history interval."""
+    assert "no_history" in _reasons(ending("A", "2015-03-13", **GOOD), history=[iv("B", "BBB", "2010-01-04")])
+
+
+def test_an_exchange_ending_with_no_successor_is_uncertain():
+    """FB-003: YHOO, WPO, GDI, QRTEA, DV: an unlinked rename published as `exchange` with continuation false."""
+    row = ending("A", "2015-03-13", "exchange_transfer", crsp_code="304", **GOOD)
+    assert "exchange_without_successor" in _reasons(row)
+    cont = ending("A", "2015-03-13", "exchange_transfer", crsp_code="304", successor="B", **GOOD)
+    assert "exchange_without_successor" not in _reasons(cont)
+
+
+def test_a_580_resting_only_on_an_nt_filing_is_uncertain():
+    """FB-002: the classifier's delinquent-filer default states no filing that names the exit kind."""
+    from delist_detection.vocabulary.exit_kind import DELINQUENT_ONLY
+    row = ending("A", "2015-03-13", "compliance_failure", crsp_code="580", reason=DELINQUENT_ONLY, **GOOD)
+    assert "kind_by_filing_history_only" in _reasons(row)
+
+
+def test_a_wind_down_with_no_value_read_is_uncertain():
+    """FB-002 and the spec's invariant (an ending has a dlret, a fill, or an uncertain verdict): PDLI 2020's
+    distributions are not read, so it has neither."""
+    row = ending("A", "2015-03-13", "liquidation", crsp_code="400", method="pending_recovery", **GOOD)
+    assert "value_pending:distributions" in _reasons(row)
+
+
 def test_a_form25_filed_name_check_needs_an_observed_name():
     # member_name_mismatch is raised against an observed name only: a nameless seed gets no name check at all
     nameless = _verdicts(_mapped(), observations=[obs("AAA", "2010-06-30", "A")])

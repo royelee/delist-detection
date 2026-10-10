@@ -100,6 +100,12 @@ def _kind(row: Mapping[str, str]) -> tuple[str, str]:
     return "", ""
 
 
+def is_wind_down(bucket: str, crsp_code: str | int) -> bool:
+    """A liquidation that is no bankruptcy: the contract's exit kind `liquidation` (a plan of liquidation or
+    dissolution, a liquidating trust; PDLI 2020, EQC 2025), valued by what holders received (FB-002)."""
+    return bucket == "liquidation" and DROP_REASON_OF_CODE.get(str(crsp_code), "") != "bankruptcy"
+
+
 def ending_fields(row: Mapping[str, str]) -> EndingFields:
     """The contract's kind columns for one delistings.csv row (its value cells are the value's: dlret.contract_value)."""
     kind, reason = _kind(row)
@@ -209,6 +215,16 @@ def successor_note(how: str, evidence: str = "") -> str:
 def rests_on_continued_filings(reason: str) -> bool:
     """The continued-filings rule's reason (`CONTINUED`)."""
     return reason.startswith(CONTINUED_FILINGS)
+
+
+# The classifier's delinquent-filer default: a 580 whose only evidence is an NT 10-K/Q in the prior year, no filing
+# that states the exit kind (FB-002); the verdict keeps it a doubt (`rests_on_delinquency`).
+DELINQUENT_ONLY = "Delinquent filer (NT 10-K/Q in the prior year), no merger evidence"
+
+
+def rests_on_delinquency(reason: str) -> bool:
+    """The classifier's delinquent-filer default (`DELINQUENT_ONLY`)."""
+    return reason.startswith(DELINQUENT_ONLY)
 
 
 def resolved_from_continued_filings(reason: str) -> bool:

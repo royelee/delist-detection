@@ -33,7 +33,7 @@ from .endings.distress import (
 from .outputs.dlret import DistressTerms, ValueInputs
 from .filings.evidence import item_sections
 from .vocabulary.exit_kind import (ContinuationReading, continuation_reason, end_day, flag_name, flag_tokens,
-                                   last_endings, successor_note)
+                                   is_wind_down, last_endings, successor_note)
 from .sources.fatal import FATAL
 from .endings.handoffs import (
     HandoffDecision, HandoffOutcome, apply_handoffs, continuation_filing, cusip_switch, decide_handoff,
@@ -1151,7 +1151,8 @@ def _delisting_rows(delistings: list[Delisting], closes: dict[DelistingKey, floa
                             acquirer_price=terms.acquirer_price,
                             recovery_ratio=for_delisting(overrides.recoveries, e.key), otc_print=otc,
                             plan_value=plan, payout_confidence=terms.payout_confidence,
-                            deregistered=e.record.deregistered)
+                            deregistered=e.record.deregistered,
+                            wind_down=is_wind_down(e.record.bucket.value, e.record.crsp_code))
         enriched = enrich(e.record, value, acquirer_ticker=terms.acquirer_ticker, payout_source=terms.payout_source,
                           extra_flags=terms.flags)
         v = values.get(e.key)

@@ -456,8 +456,9 @@ causes sort first.
 | `exchange_transfer` | `exchange_transfer_zero` | `0` | Security continues at successor exchange |
 | `liquidation` | `recovery_ratio` | `recovery_ratio − 1` | Recovery ratio supplied |
 | `liquidation` / `compliance_failure` | `otc_print` | `otc_print / last_close − 1` | First off-exchange print supplied (`--price-answers`); a `--recoveries` ratio wins for a liquidation; **`medium` confidence** |
-| `liquidation` | `shumway_nyse_amex` | `−0.30` | No recovery; NYSE/AMEX listing |
-| `liquidation` | `shumway_nasdaq` | `−0.55` | No recovery; Nasdaq listing |
+| `liquidation` | `shumway_nyse_amex` | `−0.30` | A bankruptcy (CRSP 470) with no recovery; NYSE/AMEX listing |
+| `liquidation` | `shumway_nasdaq` | `−0.55` | A bankruptcy (CRSP 470) with no recovery; Nasdaq listing |
+| `liquidation` | `pending_recovery` | *(blank)* | A voluntary liquidation (CRSP 400-series, the contract's `liquidation`: PDLI, EQC) with no recovery, plan or OTC print read: valued by what holders received, so no Shumway mark (estimated on performance delistings); `value_rule` `recovery` when no OTC symbol was read, and the verdict `uncertain` (`value_pending`). The BMP firm month keeps the mark (FB-002) |
 | `compliance_failure` | `worthless` | `−1.0` | Exchange kicked the ticker; equity is worthless |
 | `expiration` | `dropped_expiration` | *(blank)* | Non-equity instrument with no last price |
 | *(any)* | `unknown` | *(blank)* | Unclassified ticker |

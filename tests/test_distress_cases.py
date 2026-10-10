@@ -44,7 +44,6 @@ def test_an_exchange_symbol_that_keeps_trading_is_its_own_otc_symbol(sec_id, sym
 @pytest.mark.parametrize("sec_id", [
     "BBG000BF2JS9",     # CNB: two days of fails settling under CNB; the 3.01 names only the NYSE symbol
     "BBG000BT0CM2",     # SIVB: a day of settling fails, no notice names an OTC symbol
-    "BBG000CPZ0F5",     # PDLI: a month of fails at the one last close, no trading
     "BBG000BV18Z1",     # TDW: a prepackaged plan, no OTC trading
 ])
 def test_no_evidence_of_an_otc_symbol_publishes_it_blank(sec_id):
@@ -66,10 +65,21 @@ def test_a_removal_for_a_price_deficiency_only_is_dropped_for_price(sec_id):
     ("BBG009R0CVG1", 570, "guidelines"),    # LKSD: market capitalization
     ("BBG000BLDXH5", 570, "guidelines"),    # MDRX: a late annual report
     ("BBG00ZSDS6T8", 580, "filings_fees"),  # TSP: its own Form 25 (a voluntary removal) states no exchange reason
-    ("BBG000CPZ0F5", 580, "filings_fees"),  # PDLI: the same
 ])
 def test_another_standard_or_a_voluntary_removal_keeps_its_reason(sec_id, code, reason):
     assert outcome(sec_id)[LAST][1:4] == ("compliance_failure", code, reason)
+
+
+def test_pdli_voluntary_delisting_under_its_plan_of_dissolution_is_a_liquidation():
+    """FB-002: PDLI 2020's 3.01 notice says it delists voluntarily under its Plan of Dissolution. It deregistered
+    (no continued filings, so end-of-era branch 5b never read the notice) and filed an NT 10-K/Q in the prior year,
+    so the delinquent-filer branch called it a 580 drop. A liquidation (CRSP 400), valued by what its holders
+    received: with no OTC symbol read (a month of fails at the one last close, no trading), the recovery rule, its
+    distributions not read yet."""
+    found, _, _ = after("BBG000CPZ0F5")
+    assert outcome("BBG000CPZ0F5")[LAST][1:3] + outcome("BBG000CPZ0F5")[LAST][4:6] == (
+        "liquidation", 400, "recovery", "")
+    assert found[LAST].record.reason.startswith("Liquidation: delisted while winding down (8-K 2020-")
 
 
 def test_fst_back_door_listing_notice_is_not_a_price_deficiency():

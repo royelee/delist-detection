@@ -145,6 +145,16 @@ def test_a_recovery_and_worthless_are_written_with_their_formulas():
     assert (f["value_rule"], f["value_formula"], f["price_ticker"], f["price_date"]) == ("worthless", "0 − 1", "", "")
 
 
+def test_a_wind_down_with_no_recovery_read_asks_for_its_distributions():
+    """FB-002: PDLI 2020, no recovery read and no OTC symbol: the rule is `recovery` with no ratio, the formula the
+    sum of what holders received after the last trade over the last close, and no price is named."""
+    from delist_detection.outputs.dlret import DistressTerms
+    pdli = ending("A", "2021-01-07", "liquidation", method="pending_recovery", crsp_code="400")
+    f = value_fields(pdli, LTD, distress=DistressTerms())
+    assert (f["value_rule"], f["recovery_ratio"], f["price_ticker"], f["price_date"]) == ("recovery", None, "", "")
+    assert f["value_formula"] == "distributions(?, after the last trade) / last_close − 1"
+
+
 def test_expiration_and_unknown_buckets():
     assert value_fields(ending("A", "2014-12-20", "expiration", method="dropped_expiration"), LTD)["value_rule"] == "expiration"
     assert value_fields(ending("A", "2014-12-20", "unknown", method="unknown"), LTD)["value_rule"] == "unknown"

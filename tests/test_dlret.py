@@ -272,6 +272,32 @@ def test_the_value_and_the_rule_read_one_order():
     assert _v(L, close=4.0).method is DlretMethod.SHUMWAY_NYSE_AMEX
 
 
+def test_a_wind_down_with_nothing_read_publishes_no_fill():
+    """FB-002 (PDLI 2020, EQC 2025): a voluntary liquidation (the contract's exit kind `liquidation`, not a
+    bankruptcy) is valued by what holders received. With no recovery, plan or OTC print read it has no value
+    (`pending_recovery`: no Shumway mark, which was estimated on performance delistings), blank in the table and the
+    contract; the firm month keeps the bucket's mark (BMP's convention). A bankruptcy keeps its mark."""
+    v = _v(L, Exchange.NASDAQ, 10.0, wind_down=True)
+    assert (v.method, v.kind, v.confidence, v.table_dlret) == (DlretMethod.PENDING_RECOVERY, "", "low", None)
+    assert math.isnan(v.value) and v.firm_month == SHUMWAY_NASDAQ
+    assert _v(L, Exchange.NASDAQ, 10.0, wind_down=True, recovery_ratio=1.1).method is DlretMethod.RECOVERY_RATIO
+    assert _v(L, Exchange.NASDAQ, 10.0, wind_down=True, otc_print=9.0).method is DlretMethod.OTC_PRINT
+    assert _v(L, Exchange.NASDAQ, 10.0).method is DlretMethod.SHUMWAY_NASDAQ
+    row = ending("P", "2021-01-07", "liquidation", method="pending_recovery", crsp_code="400", dlret="")
+    assert contract_value(row) == ("", "", "")
+
+
+def test_a_wind_downs_rule_is_its_recovery_unless_an_otc_symbol_was_read():
+    """FB-002: a voluntary liquidation with no OTC symbol read is valued by the sum of its distributions (rule
+    `recovery`, no ratio read yet); with one it keeps the first OTC print. A bankruptcy keeps the print."""
+    pdli = ending("P", "2021-01-07", "liquidation", method="pending_recovery", crsp_code="400", ticker="PDLI")
+    r = rule_of(pdli, distress=DistressTerms())
+    assert (r.name, r.recovery_ratio) == ("recovery", None)
+    assert rule_of(pdli, distress=DistressTerms(otc_symbol="PDLIQ")).name == "otc_print"
+    bankrupt = ending("B", "2020-11-09", "liquidation", method="shumway_nyse_amex", crsp_code="470", ticker="HTZ")
+    assert rule_of(bankrupt, distress=DistressTerms()).name == "otc_print"
+
+
 def test_a_mergers_rule_follows_its_published_terms():
     cash = rule_of(ending("A", "2014-12-20", last_trade_close="10", payout_per_share="12.5", payout_source="8K_2.01"))
     assert (cash.name, cash.cash, cash.leg, cash.terms_source, cash.terms_gate) == ("cash", 12.5, None, "8K_2.01",

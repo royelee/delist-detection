@@ -35,7 +35,7 @@ from ..filings.evidence import (
     says_listing_transfer,
     still_operating,
 )
-from ..vocabulary.exit_kind import continuation_reason
+from ..vocabulary.exit_kind import DELINQUENT_ONLY, continuation_reason
 from ..outputs.reconstruction import DelistRecord
 from ..vocabulary.identifiers import share_class_from_name
 from ..filings.form25 import notice_says_acquired, parse_form25
@@ -448,8 +448,10 @@ class DelistClassifier:
         2.01 + Form 15 → merger; a SPAC → 600 expiration (NYSE's trust-liquidation
         notice says "commence proceedings to delist"); a 3.01 notice citing a
         listing deficiency → compliance (580 with an NT 10-K/Q in the prior
-        year); a merger proxy or tender filing → merger; an NT 10-K/Q alone →
-        580; else unknown.
+        year); a 3.01 8-K announcing a liquidating distribution, trust or plan
+        of liquidation or dissolution → liquidation 400 (FB-002, PDLI 2020); a
+        merger proxy or tender filing → merger; an NT 10-K/Q alone → 580; else
+        unknown.
         """
         def rec(code, bucket, conf, reason, **extra):
             return DelistRecord(ticker=ticker.upper(), cik=cik, observed_delist_date=observed_delist_date,
@@ -483,6 +485,14 @@ class DelistClassifier:
             return rec(580 if delinquent else 570, CrspBucket.COMPLIANCE_FAILURE, "medium",
                        "Listing deficiency cited in the 3.01 notice"
                        + (" + NT 10-K/Q in the prior year (delinquent filer 580)" if delinquent else ""))
+        # FB-002: a voluntary delisting while winding down (PDLI 2020's 3.01 notice under its Plan of Dissolution) is a
+        # liquidation, read before a merger proxy or a prior-year NT 10-K/Q can call it a merger or a delinquent filer;
+        # end-of-era branch 5b reads the same notice for a registrant that kept filing (EQC 2025)
+        wound_down = self._liquidation_notice(cik, filings, anchor) if anchor else None
+        if wound_down is not None:
+            return rec(400, CrspBucket.LIQUIDATION, "medium",
+                       f"Liquidation: delisted while winding down ({wound_down} announces a liquidating "
+                       "distribution, trust or plan)")
         # An unreadable notice means the evidence here is at its weakest, and the
         # merger branch is the least conservative option — so require a proxy or
         # tender filing close to the anchor instead of one up to 400 days old.
@@ -493,8 +503,7 @@ class DelistClassifier:
             return rec(231, CrspBucket.MERGER, "medium",
                        f"Merger filing {proxy.form} {proxy.filing_date} before the delisting")
         if delinquent:
-            return rec(580, CrspBucket.COMPLIANCE_FAILURE, "medium",
-                       "Delinquent filer (NT 10-K/Q in the prior year), no merger evidence")
+            return rec(580, CrspBucket.COMPLIANCE_FAILURE, "medium", DELINQUENT_ONLY)
         # Sub-plan 5c, R1: no 8-K item code, but the filings state each share became one share, with no cash, of the
         # same issuer or a new one (`OwnShares.target_issuer`: a reclassification into another class, Clearway 2026;
         # a holding company's formation, ONEOK 2026)

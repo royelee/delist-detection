@@ -42,7 +42,7 @@ from typing import TYPE_CHECKING, Any, NamedTuple
 
 from ..vocabulary.crsp_codes import CrspBucket
 from ..vocabulary.exchanges import Exchange
-from ..vocabulary.exit_kind import TERMS_GATE_SKIPPED, flag_names, is_continuation
+from ..vocabulary.exit_kind import TERMS_GATE_SKIPPED, flag_names, is_continuation, is_wind_down
 from ..vocabulary.identifiers import normalize_ticker
 
 if TYPE_CHECKING:
@@ -71,6 +71,7 @@ class DlretMethod(str, Enum):
     PLAN_STOCK = "plan_stock"          # ruling R6: a bankruptcy plan's new shares, at the caller's answered close
     SHUMWAY_NYSE_AMEX = "shumway_nyse_amex"
     SHUMWAY_NASDAQ = "shumway_nasdaq"
+    PENDING_RECOVERY = "pending_recovery"   # FB-002: a wind-down whose distributions are not read yet, no fill
     WORTHLESS = "worthless"            # reserved; not emitted in v1
     DROPPED_EXPIRATION = "dropped_expiration"
     ASSUMED_PAR = "assumed_par"        # completed delisting, terminal assumed = last price (DLRET≈0)
@@ -98,13 +99,14 @@ METHODS: dict[DlretMethod, tuple[str, str]] = {
     DlretMethod.ASSUMED_PAR: (FILL, LOW),
     DlretMethod.ABSTAIN_NO_CONSIDERATION: ("", LOW),
     DlretMethod.NEEDS_LAST_TRADE: ("", LOW),
+    DlretMethod.PENDING_RECOVERY: ("", LOW),
     DlretMethod.DROPPED_EXPIRATION: ("", LOW),
     DlretMethod.UNKNOWN: ("", LOW),
 }
 _GRADES = {HIGH, MEDIUM, LOW}
 # Blank in the table: an abstain (only one with no last close reaches it: with one it is assumed par) and an unknown,
 # so a reader never mistakes an uncomputable row for a realized 0%. A transfer's 0.0 and assumed par keep theirs.
-_BLANK_IN_TABLE = frozenset({DlretMethod.ABSTAIN_NO_CONSIDERATION, DlretMethod.UNKNOWN})
+_BLANK_IN_TABLE = frozenset({DlretMethod.ABSTAIN_NO_CONSIDERATION, DlretMethod.UNKNOWN, DlretMethod.PENDING_RECOVERY})
 
 
 # -- the DLRET ---------------------------------------------------------------------------------------------------
@@ -115,7 +117,9 @@ class ValueInputs:
     terms the payout gate kept; a stock leg needs both of its halves), with `payout_confidence` its cash read's own
     confidence; `recovery_ratio` the caller's --recoveries ratio; `otc_print` the answered first off-exchange print;
     `plan_value` a bankruptcy plan's ratio times its new line's answered close (ruling R6); `deregistered` an unknown
-    ending the classifier found deregistered with no merger or distress evidence (valued at par). None is blank."""
+    ending the classifier found deregistered with no merger or distress evidence (valued at par); `wind_down` a
+    liquidation that is no bankruptcy (`exit_kind.is_wind_down`: valued by its distributions, never a Shumway mark).
+    None is blank."""
     bucket: CrspBucket
     exchange: Exchange = Exchange.OTHER
     last_trade_close: float | None = None
@@ -127,6 +131,7 @@ class ValueInputs:
     plan_value: float | None = None
     payout_confidence: str | None = None
     deregistered: bool = False
+    wind_down: bool = False
 
 
 @dataclass(frozen=True)
@@ -274,6 +279,10 @@ def decide(inputs: ValueInputs) -> EndingValue:
     value, method, terminal = base
     if _at_par(inputs, method):
         value, method, terminal = 0.0, DlretMethod.ASSUMED_PAR, inputs.last_trade_close
+    if inputs.wind_down and method in (DlretMethod.SHUMWAY_NYSE_AMEX, DlretMethod.SHUMWAY_NASDAQ):
+        # FB-002: Shumway's marks were estimated on performance delistings; a wind-down is valued by what its holders
+        # received, and until that is read it has no value (the firm month keeps the bucket's mark, BMP's convention)
+        value, method, terminal = _NAN, DlretMethod.PENDING_RECOVERY, None
     return EndingValue(method, value, terminal, _confidence(method, value, inputs.payout_confidence), base.value)
 
 
@@ -428,6 +437,9 @@ def rule_of(row: Mapping[str, str], merger: MergerInputs | None = None,
                         terms_source=distress.plan_source)
         if bucket == CrspBucket.LIQUIDATION.value and row["dlret_method"] == DlretMethod.WORTHLESS.value:
             return Rule("worthless")
+        if is_wind_down(bucket, row["crsp_code"]) and distress is not None and not distress.otc_symbol:
+            # FB-002: a wind-down with no OTC symbol read is valued by the sum of its distributions, not read yet
+            return Rule("recovery")
         # decision 11: the first off-exchange print, under the security's own OTC symbol as stage 9e read it (blank
         # when it found none), else (no terms: a caller of this pure function) its exchange ticker
         return Rule("otc_print", print_sec_id=row["sec_id"],
