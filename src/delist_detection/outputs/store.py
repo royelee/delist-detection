@@ -79,6 +79,8 @@ ID_CHANGES_COLUMNS: tuple[str, ...] = ("old_sec_id", "new_sec_id", "changed_on",
 PAYOUT_LEGS_COLUMNS: tuple[str, ...] = ("sec_id", "leg", "ratio", "share_class", "price_sec_id", "price_ticker",
                                         "price_date")
 
+DISPUTES_COLUMNS: tuple[str, ...] = ("sec_id", "last_trade_date", "truth_file", "case", "field", "truth", "library")
+
 TABLES: dict[str, TableSpec] = {t.name: t for t in (
     TableSpec("securities",
               ("sec_id", "issuer_cik", "share_class", "name", "security_type", "observed", "figi_source"),
@@ -113,6 +115,8 @@ TABLES: dict[str, TableSpec] = {t.name: t for t in (
               file="contract/price_requests.csv"),
     TableSpec("id_changes", ID_CHANGES_COLUMNS, ("old_sec_id",), file="contract/id_changes.csv"),
     TableSpec("payout_legs", PAYOUT_LEGS_COLUMNS, ("sec_id", "leg"), file="contract/payout_legs.csv"),
+    # not a contract file (no schema_version): what the truth files dispute in this run (FB-011)
+    TableSpec("disputes", DISPUTES_COLUMNS, ("sec_id", "truth_file", "case", "field")),
 )}
 
 

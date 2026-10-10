@@ -886,6 +886,12 @@ writes the contract under `output/contract/` (stage 10g): `security_history.csv`
 `id_changes.csv` (with a `kind`, `rename`; `split` is reserved) and `payout_legs.csv`, beside the seven tables for one
 release. `price_requests.csv` ends with `lookup_name` (contract schema 4, FB-008).
 
+`output/disputes.csv` (FB-011, stage 10h, `measurement/disputes.py`) is written with the tables in the same group, on
+every run and header-only when empty: one row per checked field a truth case of `data/scorecard.json`'s files (golden,
+accuracy audit, diagnosis) fails on the run: `sec_id, last_trade_date, truth_file, case, field, truth, library`. The
+verdict never reads the truth files; a caller treats a `sec_id` hit like `uncertain`. `run_manifest.json`'s `disputes`
+is its row count; it is no contract file.
+
 `output/securities.csv`: one row per identified security — `sec_id`,
 `issuer_cik`, `share_class`, `name`, `security_type`, `observed`,
 `figi_source`.

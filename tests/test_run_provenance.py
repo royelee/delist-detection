@@ -222,7 +222,8 @@ def test_the_manifest_records_what_the_run_rested_on(fake_edgar, tmp_path):
     # _by_prefix helper would otherwise silently drop.
     assert set(m) == {"as_of", "code_version", "schema_version", "sec_workers", "sec_requests", "cache_answers",
                       "degraded_answers", "warm_degraded", "rejected_queries", "not_covered", "warm_failed",
-                      "latency_ms", "stages", "resolution_degraded", "review", "handoffs", "continuation_filings"}
+                      "latency_ms", "stages", "resolution_degraded", "review", "handoffs", "continuation_filings",
+                      "disputes"}
     assert set(m["stages"]) == {"issuer resolution", "delisting search", "payouts", "successor search",
                                 "handoff search", "ticker evidence", "issuers in force",
                                 "dead before first sighting", "handoff notice dates", "line follow",

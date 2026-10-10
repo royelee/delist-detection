@@ -102,6 +102,9 @@ class ScorecardConfig:
     diagnosis: Sequence[DiagnosisCase] = ()
     golden_file: Path | None = None
     diagnosis_file: Path | None = None
+    golden_name: str = ""          # each truth file as data/scorecard.json names it (disputes.csv's `truth_file`)
+    audit_name: str = ""
+    diagnosis_name: str = ""
 
 
 def load_config(path: str | Path) -> ScorecardConfig:
@@ -146,7 +149,8 @@ def load_config(path: str | Path) -> ScorecardConfig:
     diagnosis = diagnosis if diagnosis is not None and diagnosis.exists() else None
     return ScorecardConfig(window, dict(floor), load_truth(golden) if golden else [],
                            load_truth(audit, allow_pending=True) if audit else [],
-                           TruthSet.open(diagnosis).cases if diagnosis else [], golden, diagnosis)
+                           TruthSet.open(diagnosis).cases if diagnosis else [], golden, diagnosis,
+                           raw.get("golden") or "", raw.get("audit") or "", raw.get("diagnosis") or "")
 
 
 def _share(n: int, d: int) -> float:

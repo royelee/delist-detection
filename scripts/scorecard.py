@@ -7,7 +7,7 @@ the floor in --config (spec: Delist Library Reset, step 1 "Measure first").
   python scripts/scorecard.py --check --base REV # also recompute the regression report against commit REV (a sub-plan's
                                                  # base) and fail on a regression the --ledger has not settled
                                                  # (D.unexplained_regressions, `loop_round.unexplained`)
-  python scripts/scorecard.py --write            # also rewrite <output-dir>/scorecard.json
+  python scripts/scorecard.py --write            # also rewrite <output-dir>/scorecard.json and disputes.csv
   python scripts/scorecard.py --raise-floor      # move the config's floor to every better number (never worse)
   python scripts/scorecard.py --flip             # the flip rule on both truth sets: every known_wrong golden and
                                                  # diagnosis case these tables now match becomes pass
@@ -35,7 +35,9 @@ from delist_detection.measurement.lifecycle import LifecycleView
 from delist_detection.measurement.loop_round import Loop, unexplained
 from delist_detection.measurement.scorecard import (ScorecardConfigError, build, drops, flip, load_config, raise_floor,
                                                     write)
+from delist_detection.measurement.disputes import dispute_rows
 from delist_detection.outputs.run_snapshot import RunSnapshot, SnapshotError
+from delist_detection.outputs.store import table_path, write_tables
 from delist_detection.measurement.truth import TruthFileError
 from delist_detection.measurement.truth_set import read_ledger
 
@@ -107,6 +109,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"DIAGNOSIS FAILING {line}")
     if args.write:
         print(f"wrote {write(args.output_dir, card)}")
+        n = write_tables(args.output_dir, {"disputes": dispute_rows(run, config)})["disputes"]
+        print(f"wrote {table_path(args.output_dir, 'disputes')} ({n} dispute(s))")
     if args.lifecycles:
         write_atomic(args.lifecycles, _csv_text(LIFECYCLE_COLUMNS, lifecycle_rows(LifecycleView(run))))
         print(f"wrote {args.lifecycles}")

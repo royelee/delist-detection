@@ -59,7 +59,8 @@ def _latency(timings: dict[str, list[float]]) -> dict[str, dict[str, float]]:
 
 def build(*, as_of: date, sec_workers: int, counts: dict[str, int], timings: dict[str, list[float]],
           stages: dict[str, dict[str, int]], review_flags: dict[str, int], review: dict[str, int],
-          handoffs: dict[str, int] | None = None, continuation_filings: list[dict[str, str]] | None = None
+          handoffs: dict[str, int] | None = None, continuation_filings: list[dict[str, str]] | None = None,
+          disputes: int = 0
           ) -> dict:
     """The manifest of one run. `counts` and `timings` are sec_stats.SEC_STATS.since()
     of the run's start; `stages` is the pipeline's per-stage meter. `warm_failed`
@@ -79,7 +80,7 @@ def build(*, as_of: date, sec_workers: int, counts: dict[str, int], timings: dic
     filing confirmed (sec_id, delist_date, "<form> <accession>"), and each one its registrant's own filings doubt (a
     blank filing and a `doubt`), as `run_snapshot.continuation_entries` writes them and `RunSnapshot.continuations`
     reads them back. `schema_version` is the contract's (store.CONTRACT_SCHEMA_VERSION), asserted by the consumer's
-    reader."""
+    reader. `disputes` is the row count of disputes.csv (FB-011), written on every run."""
     return {
         "as_of": as_of.isoformat(),
         "code_version": code_version(),
@@ -98,6 +99,7 @@ def build(*, as_of: date, sec_workers: int, counts: dict[str, int], timings: dic
         "review": review,
         "handoffs": handoffs or {},
         "continuation_filings": continuation_filings or [],
+        "disputes": disputes,
     }
 
 

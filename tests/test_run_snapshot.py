@@ -43,6 +43,8 @@ def _rows():
         "price_requests": [],
         "id_changes": [],
         "payout_legs": [{"sec_id": "A", "leg": 1, "ratio": 0.5, "price_ticker": "X"}],
+        "disputes": [{"sec_id": "A", "last_trade_date": "2016-05-18", "truth_file": "golden.csv", "case": "g1",
+                      "field": "exit_kind", "truth": "merger", "library": "dropped"}],
     }
 
 

@@ -49,7 +49,7 @@ python scripts/build_last_trade_fixtures.py  # offline: tests/fixtures/last_trad
 python scripts/build_acquirer_gate_fixtures.py --repo <checkout with output/ and cache/>   # offline: tests/fixtures/acquirer_gate/ (sub-plan 5e's acquirer line and gate cases), read-only on the caches
 python scripts/build_distress_fixtures.py --repo <checkout with output/ and cache/>   # offline: tests/fixtures/distress/ (sub-plan 5g's drop and bankruptcy cases), read-only on the caches
 python scripts/build_identity_fixtures.py --repo <checkout with output/ and cache/>   # offline: tests/fixtures/identity/ (sub-plan 5h's identity cases), read-only on the caches
-python scripts/classify_universe.py --observations obs.csv   # → output/{securities,cusip_history,delistings,review,review_summary,observation_map,uncertain}.csv + contract/{security_history,delistings,seeds,price_requests,id_changes,payout_legs}.csv + scorecard.json (NETWORK; free when cached)
+python scripts/classify_universe.py --observations obs.csv   # → output/{securities,cusip_history,delistings,review,review_summary,observation_map,uncertain,disputes}.csv + contract/{security_history,delistings,seeds,price_requests,id_changes,payout_legs}.csv + scorecard.json (NETWORK; free when cached)
 python scripts/classify_universe.py --observations obs.csv --limit 20 --no-extract-payouts --no-midas --no-halts   # fast dev subset
 python scripts/classify_universe.py --observations obs.csv --sec-workers 1   # one SEC request at a time (default: 4 prefetch threads, max 8, one machine-wide 8 req/s limit)
 python scripts/classify_universe.py --observations obs.csv --as-of 2026-09-25   # pin the run date (default today; run_manifest.json records it) to reproduce an earlier run's tables from the same caches
@@ -62,7 +62,7 @@ python scripts/regen_payout_fixtures.py  # refetch golden 8-K fixtures from live
 python scripts/build_golden_fixtures.py  # rebuild the 31-case golden regression set (NETWORK); --efts-only / --llm-only / --only ID
 python scripts/accept_review.py --flag terms_gate_failed --note "sampled 5, all fine"   # bulk-accept every current review.csv row carrying that flag → appends to data/review_decisions.csv (offline); --bucket narrows, --dry-run previews, --yes required for a fix-severity flag
 # End-to-end pipeline (the canonical way to use the library) — classify a universe → output/delistings.csv (+ 6 more tables), then firm-month-correct a returns panel:
-python scripts/classify_universe.py --observations obs.csv --last-trade-closes lt.csv --merger-terms terms.csv --recoveries rec.csv   # → output/{securities,cusip_history,delistings,review,review_summary,observation_map,uncertain}.csv + contract/{security_history,delistings,seeds,price_requests,id_changes,payout_legs}.csv + scorecard.json
+python scripts/classify_universe.py --observations obs.csv --last-trade-closes lt.csv --merger-terms terms.csv --recoveries rec.csv   # → output/{securities,cusip_history,delistings,review,review_summary,observation_map,uncertain,disputes}.csv + contract/{security_history,delistings,seeds,price_requests,id_changes,payout_legs}.csv + scorecard.json
 python scripts/compute_corrected_returns.py --panel panel.csv --delistings output/delistings.csv --out corrected.parquet   # firm-month BMP correction, keyed on sec_id
 # override-CSV columns are keyed by sec_id[,delist_date] (a blank/absent delist_date applies to every delisting of that security): lt.csv=`sec_id,last_trade_close[,delist_date]` · terms.csv=`sec_id,cash_per_share,stock_ratio,acquirer_price,acquirer_ticker[,delist_date]` · rec.csv=`sec_id,recovery_ratio[,delist_date]`. A malformed file, or a row that matches no delisting, stops the run before anything is written (exit 2, one stderr line naming the file and line).
 # --review-decisions PATH (default data/review_decisions.csv) is read the same way: sec_id,delist_date,ticker,flag,decision,note. Missing at the default path means no decisions; missing at an explicit path, or a bad file, exits 2.
@@ -1255,6 +1255,10 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   scripts/scorecard.py --flip),
   `write` (`output/scorecard.json`). `D.unexplained_regressions` is not built here: it needs a base commit, and is
   the loop round's (`loop_round.unexplained`), added by scripts/scorecard.py with `--base`.
+- `measurement/disputes.py` — `dispute_rows(snapshot, config)` (FB-011): output/disputes.csv, one row per `truth.Mismatch` of
+  every golden, audit (not pending) and diagnosis case (not ruling_pending) of the config against the run, from the same
+  judges the scorecard's lines count, with the resolved `sec_id` (blank when none), its contract `last_trade_date` and the
+  truth file as `ScorecardConfig.golden_name`/`audit_name`/`diagnosis_name` (data/scorecard.json's own spelling).
 - `measurement/audit.py` — decision 17's sample: `census` (each ending in its first group of
   distress, continuation, left_view, blank_no_value, assumed_par), `random_sample`
   (seeded, avoiding census chains), `worksheet_rows`.
@@ -1515,7 +1519,12 @@ expiration is 0.0 in the table and no correction in the firm month, which leaves
   (ticker evidence: about one cached EDGAR search per placeholder without a
   ticker tier), 10f (verdicts), 10g (the contract) and 10h (scorecard) run
   before the write, each over a run snapshot of the rows about to be written (`RunSnapshot.of`, carrying stage 9g's
-  readings, which run_manifest.json records, doubts included); `uncertain.csv` is written with the other tables. An
+  readings, which run_manifest.json records, doubts included); `uncertain.csv` is written with the other tables. The
+  verdict never reads the truth files: `output/disputes.csv` (`measurement/disputes.py`, stage 10h, written with the
+  tables in `store.TABLES`' one group because the pipeline has its rows in memory by then; `run_manifest.json`'s
+  `disputes` is its count) lists what they dispute, one row per failing checked field of a golden, audit or diagnosis
+  case (`sec_id,last_trade_date,truth_file,case,field,truth,library`, header-only when none, a `--limit` run too;
+  scripts/scorecard.py --write rewrites it); nothing in measurement reads it back. An
   ending that is not its security's last real ending is uncertain
   (`earlier_ending:<the last one's delist_date>`). The scorecard's V lines
   read it; a committed output without it has no V lines. The scorecard's
@@ -1720,7 +1729,7 @@ expiration is 0.0 in the table and no correction in the firm month, which leaves
   `--observations` (a CSV of `ticker, as_of[, name, cusip, cik, sec_id]`,
   built by `observations_from_snapshots.py` / `observations_from_instruments.py`
   or hand-supplied) and reads `--output-dir`/`--cache-dir` with repo-local
-  defaults; it writes seven tables to `output/` and the six contract files to
+  defaults; it writes eight tables to `output/` (disputes.csv among them) and the six contract files to
   `output/contract/` in the same group, all committed artifacts.
 
 ## Design/plan docs

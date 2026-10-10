@@ -20,6 +20,7 @@ from typing import Any
 from .terms import acquirer_line
 from .outputs import manifest as run_manifest
 from .measurement import scorecard as run_scorecard
+from .measurement.disputes import dispute_rows
 from .identity.added_securities import AddedAcquirer, AddedLineSuccessor, AddedSecurity, AddedSuccessor
 from .sources.capabilities import CAPABILITIES, FULL_TEXT_SEARCH, Capability, FullTextSearch, offers, stated
 from .vocabulary.crsp_codes import CrspBucket
@@ -1547,6 +1548,9 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
                             id_baseline, {**identity.renames(resolutions), **lines.renames},
                             in_force, distress=distress))                                           # 10g
     card = _scorecard(ctx, snapshot(tables), scorecard, limit)                                    # 10h
+    # what the truth files dispute, written with the tables in their one group (a header-only file with none, on every
+    # run, a --limit one too); the verdicts above never read the truth files
+    tables["disputes"] = dispute_rows(snapshot(tables), scorecard)
 
     # 11. write -- every table formatted and written to its temp file first, so
     # a failure in any leaves every previous table; then renamed into place one
@@ -1558,7 +1562,8 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
                                                    timings=stat_timings, stages=ctx.meter.stages,
                                                    review_flags=dict(flags), review=triaged.counts,
                                                    handoffs=handoffs.counts,
-                                                   continuation_filings=continuation_entries(confirmations)))
+                                                   continuation_filings=continuation_entries(confirmations),
+                                                   disputes=counts["disputes"]))
     return RunSummary(counts, dict(Counter(e.record.bucket.value for e in delistings)),
                       dict(Counter(s.figi_source for s in securities.values())), dict(flags), dict(triaged.counts),
                       scorecard_drops=card["drops"], golden_failures=card["golden_failures"],

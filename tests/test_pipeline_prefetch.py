@@ -646,9 +646,9 @@ def _one_and_n(tmp_path, monkeypatch, caplog, workers, *, stale_hits=(), **unive
     assert [r.getMessage() for r in caplog.records if r.name == "delist_detection.sources.prefetch"] == []
     csv1 = {str(p.relative_to(tmp_path / "out1")): p.read_bytes() for p in (tmp_path / "out1").rglob("*.csv")}
     csvn = {str(p.relative_to(tmp_path / "outn")): p.read_bytes() for p in (tmp_path / "outn").rglob("*.csv")}
-    # securities, cusip_history, delistings, review, review_summary, observation_map and uncertain, plus the contract's six files
+    # securities, cusip_history, delistings, review, review_summary, observation_map, uncertain and disputes, plus the contract's six files
     # (security_history, delistings, seeds, price_requests, id_changes, payout_legs)
-    assert len(csv1) == 13 and csv1 == csvn
+    assert len(csv1) == 14 and csv1 == csvn
     return (sec1, _tree(tmp_path / "one")), (secn, _tree(tmp_path / "n"))
 
 

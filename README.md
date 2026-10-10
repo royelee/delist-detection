@@ -217,6 +217,19 @@ not placed, seen under two names, or outside its security's history).
 answers a row with a pin, an override or a drop-list row; a security or ending
 not listed is confirmed.
 
+### `disputes.csv` — key `(sec_id, truth_file, case, field)`
+
+What the truth files dispute in this run (FB-011): one row per checked field that a truth case of
+`data/scorecard.json`'s files (the golden lifecycles, the accuracy audit, the diagnosis truth set) fails on the run, a
+failing `pass` case and a `known_wrong` case alike, from the judgements the scorecard's G, A and D lines count.
+Columns `sec_id, last_trade_date, truth_file, case, field, truth, library`: `sec_id` is the security the judge
+resolved (blank when it found none), `last_trade_date` that security's `contract/delistings.csv` day (blank with no
+contract row), `truth_file` the file as `data/scorecard.json` names it. Written on every run, a `--limit` run and
+`scripts/scorecard.py --write` included, header-only when nothing is disputed (a missing file is an error for a
+caller, never "no disputes"); `run_manifest.json` carries its row count as `disputes`. It is regenerated each run, so
+a fixed case drops out. It is not a contract file (no `schema_version` change). The verdict never reads the truth
+files; a caller joins `disputes.csv` to `contract/delistings.csv` on `sec_id` and treats a hit as `uncertain`.
+
 ### `contract/` — the tables qlib_practice will read
 
 Written to `output/contract/` by stage 10g, from the tables and verdicts above
@@ -794,7 +807,7 @@ python scripts/verify_altair.py          # smoke test: ALTR → CRSP 231 high
 # Build an observations CSV, then run the pipeline:
 python scripts/observations_from_instruments.py --instruments data/delisted_tickers.tsv --out obs.csv
 # or: scripts/observations_from_snapshots.py --dir <folder of dated index-membership CSVs> --out obs.csv
-python scripts/classify_universe.py --observations obs.csv   # → output/{securities,cusip_history,delistings,review,review_summary,observation_map,uncertain}.csv
+python scripts/classify_universe.py --observations obs.csv   # → output/{securities,cusip_history,delistings,review,review_summary,observation_map,uncertain,disputes}.csv
 
 pytest -q                                # 1344 unit tests, no network
 ```
@@ -1119,6 +1132,7 @@ output/
     review_summary.csv    review.csv's rows grouped by flag, for triaging by cause
     observation_map.csv   What became of each input observation: the caller's join surface
     uncertain.csv         One row per uncertain verdict (seed, security or ending)
+    disputes.csv          What the truth files dispute in this run (header-only when none)
     contract/             security_history, delistings, seeds, price_requests, id_changes, payout_legs
     scorecard.json        The gap table's numbers, compared to the floor in data/scorecard.json
     run_manifest.json     What the run rested on: as_of, code version, SEC requests/cache/latency per endpoint

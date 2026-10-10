@@ -1238,7 +1238,7 @@ def test_run_is_deterministic(fake_edgar, tmp_path):
     run(index, clients, Overrides(), out_dir=tmp_path / "a", log=lambda *_: None)
     run(index, clients, Overrides(), out_dir=tmp_path / "b", log=lambda *_: None)
     names = ["securities", "cusip_history", "delistings", "review", "review_summary",
-             "observation_map", "uncertain"]
+             "observation_map", "uncertain", "disputes"]
     contract = ["security_history", "contract_delistings", "seeds", "price_requests", "id_changes"]
     for name in names + contract:
         assert table_path(tmp_path / "a", name).read_bytes() == table_path(tmp_path / "b", name).read_bytes(), name
@@ -2367,6 +2367,20 @@ def test_run_reports_floor_drops_and_failing_golden_cases(fake_edgar, tmp_path):
     assert summary.scorecard_drops == ["G.pass: 1 -> 0"]               # coverage holds at 1.0
     assert summary.golden_failures == ["AET: issuer_cik 1122304 != 999"]
     assert "scorecard drop: G.pass: 1 -> 0" in logged
+    # FB-011: the failing golden case is a dispute, written with the tables, counted in the manifest
+    disputes = read_table("disputes", table_path(tmp_path, "disputes"))
+    assert [(r["case"], r["field"], r["truth"], r["library"]) for r in disputes] == [("AET", "issuer_cik", "999", "1122304")]
+    assert json.loads((tmp_path / "run_manifest.json").read_text())["disputes"] == 1
+
+
+def test_every_run_writes_disputes_csv_header_only_when_nothing_is_disputed_a_limit_run_too(fake_edgar, tmp_path):
+    index, clients = _clients(fake_edgar)
+    run(index, clients, Overrides(), out_dir=tmp_path / "full", log=lambda *_: None)
+    run(index, clients, Overrides(), out_dir=tmp_path / "limit", log=lambda *_: None, limit=1)
+    for sub in ("full", "limit"):
+        text = (tmp_path / sub / "disputes.csv").read_text()
+        assert text == "sec_id,last_trade_date,truth_file,case,field,truth,library\n"
+        assert json.loads((tmp_path / sub / "run_manifest.json").read_text())["disputes"] == 0
 
 
 def test_a_limit_subset_is_never_compared_to_the_floor(fake_edgar, tmp_path):

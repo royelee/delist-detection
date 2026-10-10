@@ -55,6 +55,8 @@ def test_check_passes_on_a_held_floor_and_write_puts_the_card_next_to_the_tables
     assert scorecard_script.main(["--output-dir", str(out), "--config", str(cfg), "--check", "--write"]) == 0
     card = json.loads((out / "scorecard.json").read_text())
     assert card["as_of"] == "2026-09-25" and card["metrics"]["L1.tickers"] == 3 and card["drops"] == []
+    # FB-011: --write also writes disputes.csv, header-only with no truth case
+    assert (out / "disputes.csv").read_text() == "sec_id,last_trade_date,truth_file,case,field,truth,library\n"
 
 
 def test_check_fails_on_a_drop_and_names_it(tmp_path, out, capsys):
