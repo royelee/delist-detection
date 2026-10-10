@@ -29,7 +29,7 @@ from ..filings.evidence import parse_day
 from ..sources.fatal import FATAL
 from ..sources.cik_lookup import CikNameIndex, normalize_name
 from .issuer_record import IssuerRecord
-from ..vocabulary.names import name_tokens, names_agree
+from ..vocabulary.names import has_name, name_tokens, names_agree
 
 log = logging.getLogger(__name__)
 _LOOK_UP_PIN = object()     # resolve(pin=...) default: look the pin up with cik_pins
@@ -164,12 +164,14 @@ class TickerResolver:
     def expected_name(self, t: str, observed_date: str | None, name: str | None | object = _LOOK_UP_NAME
                        ) -> str | None:
         """The observed name (`_observed_name`), else the AV name: the first
-        with a usable word.
+        that can agree with another name (`names.has_name`).
 
-        A name with no `name_tokens` word ("AT&T INC.", "3M CO", "HP INC")
-        cannot agree with anything, so it counts as no expected name."""
+        A name with no `name_tokens` word ("AT&T INC.", "3M CO", "HP INC",
+        "2U INC") agrees only with a name of the same letters and digits
+        (FB-006), so it is an expected name: the name tier looks it up and
+        the answers are checked against it (FB-004 part c, TWOU)."""
         for n in (self._observed_name(t, observed_date, name), self.name_lookup(t, observed_date)):
-            if n and name_tokens(n):
+            if n and has_name(n):
                 return n
         return None
 
@@ -260,13 +262,18 @@ class TickerResolver:
     def _exact_holder(self, index: CikNameIndex, nm: str, observed_date: str | None) -> int | None:
         """The one CIK whose name is exactly `nm` (as the index compares names) and that filed within
         `EXACT_ACTIVE_DAYS` of the date (of several, the one that carried the name): `_index_candidates`' first rule,
-        EDGAR's company page for the company still filing. None when there is no such CIK or there are several."""
+        EDGAR's company page for the company still filing. None when there is no such CIK or there are several.
+        Of several that carried the name in the years before the date, the one that carried it within 30 days of the
+        date, as `_one_filer` narrows (ALBERTO CULVER CO in 2010: the 2006 spin-off, not the old registrant renamed
+        New Alberto-Culver in 2006, which still filed; FB-004 part c), when exactly one did."""
         exact, _ = index.split_search(nm)
         target = parse_day(observed_date)
         active = [c for c in sorted({h.cik for h in exact} - self.EXCHANGE_CIKS)
                   if self._filing_gap(c, target) <= self.EXACT_ACTIVE_DAYS]
         if len(active) > 1:
             active = [c for c in active if self._carried_on(c, nm, target)]
+        if len(active) > 1:
+            active = [c for c in active if self._carried_on(c, nm, target, near=True)] or active
         return active[0] if len(active) == 1 else None
 
     def _ensure_companies(self) -> dict[str, dict]:
@@ -928,7 +935,7 @@ class TickerResolver:
                 # Loose validation (a real Form 25 in the window), or the
                 # observed-name acceptance when the caller supplied a usable
                 # observed name.
-                if observed_name and name_tokens(observed_name):
+                if observed_name and has_name(observed_name):
                     def ok(c: int) -> bool:
                         return self._accept_observed_name_candidate(c, observed_date, observed_name)
                 else:

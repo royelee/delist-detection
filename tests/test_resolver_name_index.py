@@ -340,3 +340,49 @@ def test_without_an_index_a_remembered_name_search_answer_stands(tmp_path):
     r, cache = _realogy(tmp_path, 1355001)
     r2 = TickerResolver(r.edgar, cache_path=cache)
     assert r2.resolve("RLGY", "2020-02-03", name="REALOGY HOLDINGS CORP", since="2012-12-31", pin=None).cik == 1355001
+
+
+# FB-004 part c: a remembered answer for a name two companies carried, and a name with no word of three letters
+def _alberto(tmp_path, memo_cik):
+    old = (3327, ("New Alberto-Culver LLC", [{"name": "ALBERTO CULVER CO", "from": "1994-01-20T00:00:00.000Z",
+                                             "to": "2006-11-29T00:00:00.000Z"}],
+                  [_f("O1", "25-NSE", "2006-11-17"), _f("O2", "8-K", "2010-06-01")]))
+    new = (1368457, ("ALBERTO CULVER CO", [], [_f("N0", "10-K", "2007-11-20"), _f("N1", "10-K", "2009-11-20"),
+                                              _f("N2", "25-NSE", "2011-05-11")]))
+    idx = _index("ALBERTO CULVER CO:0000003327:", "NEW ALBERTO-CULVER LLC:0000003327:",
+                 "ALBERTO-CULVER CO:0001368457:")
+    cache = tmp_path / "res.json"
+    cache.write_text(json.dumps({"__version__": 4, "entries": {
+        "ACV|2010-07-09|ALBERTO CULVER CO": {"ticker": "ACV", "cik": memo_cik, "name": "New Alberto-Culver LLC",
+                                             "source": "name_search", "member_name": "ALBERTO CULVER CO"}}}))
+    return TickerResolver(_Edgar(dict([old, new])), cache_path=cache, name_index=idx)
+
+
+def test_of_two_active_holders_of_a_name_the_one_that_carried_it_on_the_date_is_the_company(tmp_path):
+    """ACV (Alberto-Culver, observed 2008-11): the old registrant, renamed New Alberto-Culver LLC in 2006, still filed
+    in 2010 and had carried the name within CARRIED_YEARS; the 2006 spin-off carried it on the date. A remembered
+    answer of the retired live search, the old registrant, no longer stands, and the 25-NSE of 2011 is the spin-off's."""
+    r = _alberto(tmp_path, 3327)
+    got = r.resolve("ACV", "2010-07-09", name="ALBERTO CULVER CO", since="2008-01-16", pin=None)
+    assert (got.cik, got.source) == (1368457, "name_search")
+
+
+def test_a_remembered_answer_of_the_holder_that_carried_the_name_on_the_date_is_kept(tmp_path):
+    r = _alberto(tmp_path, 1368457)
+    got = r.resolve("ACV", "2010-07-09", name="ALBERTO CULVER CO", since="2008-01-16", pin=None)
+    assert got.cik == 1368457 and r.edgar.searches == []
+
+
+def test_a_name_with_no_word_of_three_letters_is_looked_up_by_the_name_tier():
+    """TWOU (2U INC, observed to 2020, delisted 2024): `name_tokens` is empty, but 2U, Inc. and 2U INC are one name
+    (`names_agree`), so the name is an expected name, and the tier's observed-name acceptance applies to it: 2U, LLC
+    (formerly 2U, Inc.) filed a 10-K within the year of the date."""
+    twou = (1459417, ("2U, LLC", [{"name": "2U, Inc.", "from": "2008-03-14T00:00:00.000Z",
+                                   "to": "2024-09-30T00:00:00.000Z"}],
+                      [_f("K0", "S-1", "2014-03-01"), _f("K", "10-K", "2021-02-24"), _f("F", "25-NSE", "2024-09-06")]))
+    other = (1689537, ("2U LAUNDRY, INC.", [], [_f("L", "10-K", "2021-03-01")]))
+    idx = _index("2U, INC.:0001459417:", "2U, LLC:0001459417:", "2U LAUNDRY, INC.:0001689537:")
+    r = TickerResolver(_Edgar(dict([twou, other])), name_index=idx)
+    assert r.expected_name("TWOU", "2020-12-31", "2U INC") == "2U INC"
+    got = r.resolve("TWOU", "2020-12-31", name="2U INC", since="2014-05-15", pin=None)
+    assert (got.cik, got.source) == (1459417, "name_search")

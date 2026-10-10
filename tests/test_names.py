@@ -231,6 +231,14 @@ def test_a_name_without_a_word_of_three_letters_compares_as_one_string():
     assert not names_agree("", "")
 
 
+def test_a_name_can_agree_with_another_when_it_has_a_word_or_letters_left_after_the_fillers():
+    """`has_name` (FB-004 part c): 2U INC, 3M CO, HP INC and AT&T INC. have no word of three letters and still agree
+    with themselves; a name of legal suffixes and fillers only, or an empty one, agrees with nothing."""
+    from delist_detection.vocabulary.names import has_name
+    assert all(has_name(n) for n in ("2U INC", "3M CO", "HP INC", "AT&T INC.", "APPLE INC"))
+    assert not any(has_name(n) for n in ("", "INC", "THE COMPANY", None))
+
+
 def test_one_shared_word_still_agrees_only_where_a_side_has_one_word():
     """Unchanged by the word equivalence: JetBlue Airways and US Airways share one word and US Airways has one."""
     assert names_agree("JETBLUE AIRWAYS CORP", "U S AIRWAYS GROUP INC")

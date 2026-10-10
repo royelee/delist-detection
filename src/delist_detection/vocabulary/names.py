@@ -62,6 +62,12 @@ def names_agree(a: str, b: str) -> bool:
     return min(exact_a, exact_b) >= 1 and min(exact_a + short_a, exact_b + short_b) >= need
 
 
+def has_name(name: str) -> bool:
+    """Whether the name can agree with another (`names_agree`): it has a word of three letters or more, or, with
+    none (2U INC, 3M CO, HP INC), letters and digits left once legal suffixes and fillers are out."""
+    return bool(_words(name)) or _run(name) != ""
+
+
 def _run(name: str) -> str:
     """A name's letters and digits run together, legal suffixes and fillers out (2U INC and 2U, Inc. are 2U)."""
     parts = re.findall(r"[A-Z0-9]+", re.sub(r"['’]", "", (name or "").upper()))

@@ -256,7 +256,8 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   together are one word, also spelled by each run of four letters or more in it, so SKY440 is never SKY and
   L3HARRIS meets HARRIS; FB-004: `description_names` leaves a holding word out of the words it compares, on either
   side when another word is left, `_HOLDING_WORDS`: a holding company that keeps the name, EXXONMOBIL HLDGS CORPORATION
-  beside EXXON MOBIL CORP, is that name): `name_tokens`, `names_agree`, `description_names`,
+  beside EXXON MOBIL CORP, is that name; FB-004 part c: `has_name`, whether a name can agree with another, a word of
+  three letters or the letters and digits left after the fillers): `name_tokens`, `names_agree`, `has_name`, `description_names`,
   `names_an_issuer` and `description_matches` (a fails row's description against a security's names), read by the
   observations, the identity rules, the fails index, the Form 25 match, the classifier and the merger readers.
 - `vocabulary/exchanges.py` — a listing's exchange, normalized, a leaf: `Exchange` (NYSE, AMEX, NASDAQ, OTHER, the four buckets
@@ -629,7 +630,8 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   and the name index go through its issuer record (`issuers`, built over its client, run date and `name_index=`
   unless given); a read that failed or was stale in a resolve (`_reset`/`_rested_on_failure`, the record's watch)
   marks its answer transient, as a failed search does. `expected_name` is the name an answer is checked with (the
-  observed name, else the AV name). The name tier finds its candidates in SEC's
+  observed name, else the AV name, the first that can agree with another, `names.has_name`: a name with no word of
+  three letters, 2U INC, is one, and the name tier and its observed-name acceptance read it, FB-004 part c, TWOU). The name tier finds its candidates in SEC's
   `cik-lookup-data.txt` (`sources/cik_lookup.py`: `CikLookupClient`, cached 30 days
   under `cache/sec_data/cik_lookup/`, and `CikNameIndex`, exact then
   character-prefix matches, read through their submissions JSON as the live
@@ -1838,7 +1840,10 @@ expiration is 0.0 in the table and no correction in the firm month, which leaves
   while it agrees with the name tier's first rule (`TickerResolver._still_named`, FB-004: with the name index, the one
   active holder of exactly the expected name, `_exact_holder`, is the company): one the retired live company search
   remembered against it is resolved again (Realogy Holdings Corp. kept CIK 1355001, the LLC, over 1398987, the
-  listed Anywhere Real Estate Inc.). With no index, no exact holder or several, the remembered answer stands.
+  listed Anywhere Real Estate Inc.). Of several active holders that carried the name in the years before the date,
+  `_exact_holder` takes the one that carried it within 30 days of it (`_one_filer`'s narrowing: Alberto-Culver, ACV
+  2010, is the 2006 spin-off, CIK 1368457, not the old registrant renamed New Alberto-Culver LLC, 3327). With no
+  index, no exact holder or several, the remembered answer stands.
 - **A merger payout is gated; `delistings.csv` carries both the gated and the raw read.** Every merger payout is
   checked against the last trade close (`payout_gate.reconcile`) before it reaches `delistings.csv`'s
   `payout_per_share` / `payout_source`; the same file keeps the raw, unchecked extraction in its

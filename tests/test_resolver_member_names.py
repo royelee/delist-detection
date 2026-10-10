@@ -158,11 +158,13 @@ def test_a_member_company_with_its_own_form25_replaces_the_efts_fallback(monkeyp
     assert (res.cik, res.source) == (765880, "name_search")
 
 
-def test_a_member_name_without_usable_words_is_no_expected_name():
+def test_a_member_name_without_a_three_letter_word_is_an_expected_name_that_agrees_with_its_own_letters():
+    """FB-004 part c: AT&T INC. has no `name_tokens` word, but `names_agree` reads it by its letters (FB-006), so the
+    name tier and the checks use it (2U INC, TWOU); the ticker map still answers first and agrees."""
     att = (732717, ("AT&T INC.", [], [_f("T0", "10-K", "2020-02-19"), _f("T1", "10-Q", "2023-11-01")]))
     e = _Edgar(dict([att]), {}, tickers={"T": {"cik_str": 732717, "ticker": "T", "title": "AT&T INC."}})
     r = TickerResolver(e, observed_names=lambda t, d=None: "AT&T INC.")
-    assert r.expected_name("T", "2024-01-02") is None
+    assert r.expected_name("T", "2024-01-02") == "AT&T INC."
     res = r.resolve("T", "2024-01-02")
     assert (res.cik, res.source) == (732717, "company_tickers")
     rec = DelistClassifier(e, r).classify_ticker("T", "2024-01-02")
