@@ -605,6 +605,8 @@ def test_no_rename_near_the_stop_reads_no_whole_file():
     assert lines.cusips == {"BBGA": ["A1"]} and _flags(lines) == [] and files.whole == 0
 
 
-def test_rows_that_do_not_carry_the_new_name_are_no_next_cusip():
-    lines, files = _renamed(new_desc="ANOTHER WIDGET CORP")
+@pytest.mark.parametrize("new_desc", ["ANOTHER WIDGET CORP",
+                                      "SPLIT REVERSE CO"])      # both words, another first word: Global X beside Adtalem Global
+def test_rows_that_do_not_carry_the_new_name_are_no_next_cusip(new_desc):
+    lines, files = _renamed(new_desc=new_desc)
     assert lines.cusips == {"BBGA": ["A1"]} and _flags(lines) == [] and files.whole == 1

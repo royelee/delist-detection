@@ -295,6 +295,38 @@ def cusip_check_digit_ok(cusip: str) -> bool:
     return (10 - total % 10) % 10 == int(cusip[8])
 
 
+def _first_word(name: str) -> str:
+    """The first word of a name or description, upper case and without punctuation or a leading THE: the new name's
+    first word is the one a fails description must share (ADTALEM GLOBAL ED INC), for `description_names` alone also
+    matches the name's second word (GLOBAL X FDS)."""
+    words = re.findall(r"[A-Z0-9]+", (name or "").upper())
+    return next((w for w in words if w != "THE"), "")
+
+
+def renamed_cusips(sub: Mapping | None, end: LineEnd, cusips: Collection[str], ftd: FtdIndex) -> set[str]:
+    """The CUSIPs, none of `cusips` (the security's own), whose fails rows near a line's end carry a name its issuer
+    took when it was renamed, read only for an issuer EDGAR dates a rename to (`sub`, its profile) within `RENAME_DAYS` of the
+    line's settled row: the rename gave the stock a new ticker that EDGAR no longer lists (DeVry's ATGE: EDGAR lists
+    CVSA today) and the 8-K does not name, so no symbol or CUSIP finds it. One pass over the files of the window
+    (`FtdIndex.every_row`). A CUSIP needs `MIN_NEW_ROWS` rows there under a line symbol, the first inside the step
+    window; `corroborate` and `decide` then judge the step."""
+    settled = date.fromisoformat(end.settled)
+    renames = [date.fromisoformat(to) for fn in (sub.get("formerNames") or [] if isinstance(sub, Mapping) else ())
+               if (to := (fn.get("to") or "")[:10]) and abs((date.fromisoformat(to) - settled).days) <= RENAME_DAYS]
+    if not renames:
+        return set()
+    renamed = max(renames)           # the names the issuer held from its last rename here on
+    names = names_between(sub, renamed + timedelta(days=1), renamed + timedelta(days=RENAME_DAYS))
+    lo, hi = _days(end.settled, -LINE_DAYS), _days(end.last, LINE_DAYS)
+    rows: dict[str, list[str]] = defaultdict(list)
+    for r in ftd.every_row(date.fromisoformat(lo), date.fromisoformat(hi) + timedelta(days=NAME_DAYS)):
+        if r.cusip not in cusips and is_line_symbol(r.symbol) \
+                and any(_first_word(r.description) == _first_word(n) and description_names(r.description, n)
+                        for n in names):
+            rows[r.cusip].append(r.date)
+    return {c for c, days in rows.items() if len(days) >= MIN_NEW_ROWS and lo <= min(days) <= hi}
+
+
 def text_cusips(texts: Iterable[str]) -> set[str]:
     """The CUSIP numbers an 8-K's text names (each passing its check digit)."""
     return {c for t in texts for m in _TEXT_CUSIP.finditer(t or "") if cusip_check_digit_ok(c := m.group(1).upper())}
@@ -578,26 +610,8 @@ class _Reads:
         return {t for t in text_symbols(texts) if is_line_symbol(t)} - s.own_tickers(), text_cusips(texts)
 
     def renamed_cusips(self, s: Security, end: LineEnd, cusips: Collection[str], ftd: FtdIndex) -> set[str]:
-        """The CUSIPs, none of `cusips` (the security's own), whose fails rows near a line's end carry a name its issuer
-        held then, read only for an issuer EDGAR dates a rename to within `RENAME_DAYS` of the line's settled row: the
-        rename gave the stock a new ticker that EDGAR no longer lists (DeVry's ATGE: EDGAR lists CVSA today) and the
-        8-K does not name, so no symbol or CUSIP finds it. One pass over the files of the window
-        (`FtdIndex.every_row`). A CUSIP needs `MIN_NEW_ROWS` rows there under a line symbol; `corroborate` and
-        `decide` then judge the step."""
-        sub = self.issuers.profile(s.issuer_cik)
-        settled = date.fromisoformat(end.settled)
-        if not isinstance(sub, Mapping) or not any(
-                (to := (fn.get("to") or "")[:10]) and abs((date.fromisoformat(to) - settled).days) <= RENAME_DAYS
-                for fn in sub.get("formerNames") or []):
-            return set()
-        names = names_between(sub, settled, settled + timedelta(days=RENAME_DAYS))
-        lo, hi = _days(end.settled, -LINE_DAYS), _days(end.last, LINE_DAYS)
-        rows: dict[str, list[str]] = defaultdict(list)
-        for r in ftd.every_row(date.fromisoformat(lo), date.fromisoformat(hi) + timedelta(days=NAME_DAYS)):
-            if r.cusip not in cusips and is_line_symbol(r.symbol) \
-                    and any(description_names(r.description, n) for n in names):
-                rows[r.cusip].append(r.date)
-        return {c for c, days in rows.items() if len(days) >= MIN_NEW_ROWS and lo <= min(days) <= hi}
+        """`renamed_cusips` for security `s`, from its issuer's profile."""
+        return renamed_cusips(self.issuers.profile(s.issuer_cik), end, cusips, ftd)
 
     def corroborate(self, step: LineStep, s: Security, tickers: set[str], as_of: date) -> tuple[str, str]:
         """`corroborate` for a step of security `s` (its line's `tickers`), from the issuer's record."""
