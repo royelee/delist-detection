@@ -7,7 +7,7 @@ from datetime import date, datetime
 import pytest
 import requests
 
-from delist_detection.sources.edgar import EdgarBlocked, EdgarClient
+from delist_detection.sources.edgar import FILED_AFTER_RUN_DATE, EdgarBlocked, EdgarClient
 
 URL = "https://data.sec.gov/submissions/CIK0000000042.json"
 EVENT = date(2026, 8, 20)          # LBRDA's Form 25, after a 2026-05-26 cache
@@ -209,6 +209,8 @@ def test_a_run_date_hides_the_filings_made_after_it(tmp_path):
     assert got["filings"]["recent"] == {"accessionNumber": ["a2", "a1"], "form": ["8-K", "10-Q"],
                                         "filingDate": ["2026-09-25", "2026-08-05"], "items": ["2.01", ""]}
     assert [f.accession for f in client.recent_filings(42)] == ["a2", "a1"]
+    assert got[FILED_AFTER_RUN_DATE] == ["25-NSE"]          # what was left out: listed on the run date (FB-004)
     assert json.loads(cp.read_text()) == cached
     later = EdgarClient(cache_dir=tmp_path, session=_Session(), today=date(2026, 10, 10))
     assert later.submissions(42)["filings"]["recent"]["accessionNumber"] == ["a3", "a2", "a1"]
+    assert FILED_AFTER_RUN_DATE not in later.submissions(42)

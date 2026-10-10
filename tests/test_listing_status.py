@@ -125,6 +125,21 @@ def test_the_openfigi_ticker_also_counts_and_no_cik_keeps_the_openfigi_rule():
     assert listed_today(_Figi({}), "CIK5-COMMON", edgar=sub, cik=5, tickers=["NEWT"]) is True
 
 
+def test_a_form_25_filed_after_the_run_date_means_listed_on_it():
+    """An --as-of run reads today's OpenFIGI and EDGAR listing, which a later delisting has already changed (WBD,
+    LESL and QRVO in a run as of 2026-09-25 read on 2026-10-10). A Form 25 the issuer filed after the run date (the
+    EDGAR client's copy names the forms it left out, `FILED_AFTER_RUN_DATE`) shows its security was listed on it."""
+    from delist_detection.filings.listing_status import lists_on_major_exchange
+    from delist_detection.sources.edgar import FILED_AFTER_RUN_DATE
+    later = {"tickers": ["WBD"], "exchanges": [""], FILED_AFTER_RUN_DATE: ["25-NSE", "8-K"]}
+    gone = _Figi({"warning": "No identifier found."})
+    assert listed_today(gone, "BBG011386VF4", edgar=_FixEdgar(later), cik=1437107, tickers=["WBD"]) is True
+    assert listed_today(_Figi({}), "CIK5-COMMON", edgar=_FixEdgar(later), cik=5, tickers=["WBD"]) is True
+    assert lists_on_major_exchange(later, ["WBD"]) is True
+    only_8k = {"tickers": ["WBD"], "exchanges": [""], FILED_AFTER_RUN_DATE: ["8-K"]}
+    assert listed_today(gone, "BBG011386VF4", edgar=_FixEdgar(only_8k), cik=1437107, tickers=["WBD"]) is False
+
+
 def test_a_security_edgar_lists_on_cboe_is_listed_today():
     figi = _Figi({"data": [{"exchCode": "UF", "ticker": "CBOE"}]})
     sub = _FixEdgar({"tickers": ["CBOE"], "exchanges": ["CBOE"]})

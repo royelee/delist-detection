@@ -11,7 +11,7 @@ import re
 from collections.abc import Iterable
 from datetime import date, timedelta
 
-from ..sources.edgar import EdgarSubmission
+from ..sources.edgar import FILED_AFTER_RUN_DATE, EdgarSubmission
 from .evidence import parse_day
 from ..sources.fatal import FATAL
 from .form25 import MAJOR_EXCHANGES, REGIONAL_EXCHANGES, exchange_label, exchanges_named
@@ -66,11 +66,21 @@ def edgar_lists(edgar, cik: int, tickers: Iterable[str] | None) -> bool:
     return lists_on_major_exchange(edgar.submissions(cik), tickers)
 
 
+def delisted_after_run_date(sub) -> bool:
+    """Whether the issuer filed a Form 25 after the run date (a submissions JSON or profile as an --as-of run reads
+    it, `edgar.FILED_AFTER_RUN_DATE`): its listing ended after the run date, so it was listed on it, whatever
+    today's OpenFIGI answer and EDGAR `exchanges` say (WBD, LESL, QRVO in a run as of 2026-09-25)."""
+    return isinstance(sub, dict) and any(str(f).startswith("25") for f in sub.get(FILED_AFTER_RUN_DATE) or ())
+
+
 def lists_on_major_exchange(sub, tickers: Iterable[str] | None) -> bool:
     """`edgar_lists` over a submissions JSON (or its profile, `IssuerRecord.profile`) already read: True when it
-    lists one of `tickers` on a major exchange (any of its tickers when `tickers` is None); False for no copy."""
+    lists one of `tickers` on a major exchange (any of its tickers when `tickers` is None), or when the issuer was
+    delisted only after the run date (`delisted_after_run_date`); False for no copy."""
     if not isinstance(sub, dict):
         return False
+    if delisted_after_run_date(sub):
+        return True
     want = None if tickers is None else {normalize_ticker(t) for t in tickers if t}
     for t, x in zip(sub.get("tickers") or [], sub.get("exchanges") or []):
         if (want is None or normalize_ticker(t) in want) and exchange_label(x or "") in MAJOR_EXCHANGES:
@@ -129,7 +139,10 @@ def listed_today(figi, sec_id: str, *, edgar=None, cik: int | None = None,
     issuer's CIK is known the issuer's EDGAR submissions JSON must also list one
     of the security's `tickers`, or a ticker OpenFIGI returns, on a major
     exchange. With no CIK, OpenFIGI alone decides. A placeholder has no FIGI:
-    EDGAR alone decides, on the security's own tickers."""
+    EDGAR alone decides, on the security's own tickers. Both answers are today's: an --as-of run whose issuer
+    filed a Form 25 after the run date was listed on it (`delisted_after_run_date`), and is."""
+    if edgar is not None and cik is not None and delisted_after_run_date(edgar.submissions(cik)):
+        return True
     if not is_placeholder(sec_id):
         ans = answer if answer is not None else figi.map([listing_job(sec_id)], use_cache=False)[0]
         if "error" in ans:

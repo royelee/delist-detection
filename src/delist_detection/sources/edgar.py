@@ -63,6 +63,9 @@ FETCHED_KEY = "__fetched__"
 STALE_KEY = "__stale__"
 SUBMISSIONS_FRESH_DAYS = 45  # filings this long after the last trade must be in the submissions read
 COMPANY_SEARCH_FRESH_DAYS = 7  # a company-search answer this old is refetched, never trusted forever
+# The forms of the recent filings an --as-of run's submissions copy left out, dated after the run date
+# (`_as_filed_by`); never written to the cache.
+FILED_AFTER_RUN_DATE = "__filed_after_run_date__"
 
 # EDGAR full-text search (efts.sec.gov). Every answer, hits or empty, is cached
 # under the URL's SHA1 with the day it was fetched, and holds for
@@ -111,8 +114,10 @@ def _filed_by(hits: list[dict], day: date) -> list[dict]:
 
 
 def _as_filed_by(sub: Any, day: date) -> Any:
-    """A submissions JSON as it stood on `day`: its recent filings dated after `day` dropped, every column cut alike.
-    The cached copy keeps them for a later run date. Any other payload is returned as it is."""
+    """A submissions JSON as it stood on `day`: its recent filings dated after `day` dropped, every column cut alike,
+    and the forms left out named under FILED_AFTER_RUN_DATE (a Form 25 among them shows the issuer was still listed
+    on `day`, though the copy's `tickers`/`exchanges` already show the later state: `listing_status`). The cached
+    copy keeps every filing for a later run date. Any other payload is returned as it is."""
     recent = sub.get("filings", {}).get("recent") if isinstance(sub, dict) else None
     dates = recent.get("filingDate") if isinstance(recent, dict) else None
     last = day.isoformat()
@@ -121,7 +126,9 @@ def _as_filed_by(sub: Any, day: date) -> Any:
     keep = [i for i, d in enumerate(dates) if d <= last]
     cut = {k: [v[i] for i in keep] if isinstance(v, list) and len(v) == len(dates) else v
            for k, v in recent.items()}
-    return {**sub, "filings": {**sub["filings"], "recent": cut}}
+    forms = recent.get("form") if isinstance(recent.get("form"), list) else []
+    later = sorted({forms[i] for i, d in enumerate(dates) if d > last and i < len(forms)})
+    return {**sub, "filings": {**sub["filings"], "recent": cut}, FILED_AFTER_RUN_DATE: later}
 
 
 def submissions_fresh_after(on: date, today: date | None = None) -> date:
