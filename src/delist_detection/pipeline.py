@@ -50,7 +50,7 @@ from .identity.history import (
 from .identity.line_follow import LineSuccessor, composites, follow_lines, is_line_symbol, text_cusips
 from .vocabulary.identifiers import is_placeholder, share_class_from_name
 from .identity.identity import identify
-from .filings.listing_status import issuer_exchange, listed_today, listing_answers
+from .filings.listing_status import issuer_exchange, listed_on_run_date, listed_today, listing_answers
 from .identity.observations import ObservationIndex, TickerEra, observation_conflicts
 from .endings.exchange_terms import one_share_no_cash
 from .vocabulary.exchanges import normalize_exchange
@@ -163,8 +163,25 @@ def _flush_memo(clients: Clients) -> None:
     clients.resolver.flush()
 
 
+def _listed_now(figi, clients: Clients, s: Security, contexts: SecurityContexts, ftd: FtdIndex,
+                answer: dict | None, retired: Collection[str]) -> bool | None:
+    """Stage 5's listed answer of one security, the warm pass's and the sequential pass's alike: False for a retired
+    line; else today's (`listed_today`: OpenFIGI's answer and the issuer's EDGAR listing), which an --as-of run
+    corrects for a delisting after its run date (`listing_status.listed_on_run_date`: the security still trading at
+    the fails data's end, by its trading record)."""
+    if s.sec_id in retired:
+        return False
+    now = listed_today(figi, s.sec_id, edgar=clients.edgar, cik=s.issuer_cik, tickers=sorted(s.own_tickers()),
+                       answer=answer)
+    if s.issuer_cik is None:
+        return now
+    return listed_on_run_date(now, clients.edgar.submissions(s.issuer_cik), contexts.records[s.sec_id].last_seen,
+                              ftd.data_end())
+
+
 def _warm_delisting_search(clients: Clients, ordered: list[Security], listing: dict[str, dict],
-                           contexts: SecurityContexts, workers: int, retired: frozenset[str] = frozenset()) -> None:
+                           contexts: SecurityContexts, ftd: FtdIndex, workers: int,
+                           retired: frozenset[str] = frozenset()) -> None:
     """Fill the SEC caches for the Form 25 search: each security's own finder work
     on `workers` threads, fill-only, its answers thrown away. A warm finder is the
     sequential finder's twin: the run's classifier's shadow (`DelistClassifier.shadow`:
@@ -185,10 +202,7 @@ def _warm_delisting_search(clients: Clients, ordered: list[Security], listing: d
         answer = listing.get(s.sec_id)
         if answer is None and not is_placeholder(s.sec_id):
             return
-        now = False if s.sec_id in retired else listed_today(
-            None, s.sec_id, edgar=clients.edgar, cik=s.issuer_cik,
-            tickers=sorted(s.own_tickers()), answer=answer)
-        finder.find(contexts(s, now))
+        finder.find(contexts(s, _listed_now(None, clients, s, contexts, ftd, answer, retired)))
 
     warm(ordered, task, workers=workers, state=make_finder, name="delisting search")
 
@@ -301,7 +315,7 @@ def _find_delistings(ctx: _RunContext, securities: dict[str, Security], sec_cusi
                         if is_placeholder(s.sec_id) and ftd.symbol_deleted(sec_cusips[s.sec_id])) \
         | superseded_placeholders(securities) | frozenset(moved_on)
     if ctx.sec_workers > 1:
-        _warm_delisting_search(clients, ordered, listing, contexts, ctx.sec_workers, retired)
+        _warm_delisting_search(clients, ordered, listing, contexts, ftd, ctx.sec_workers, retired)
     for i, s in enumerate(ordered, 1):
         last_seen = contexts.records[s.sec_id].last_seen
         ticker = s.eras[-1].ticker if s.eras else ""
@@ -310,9 +324,7 @@ def _find_delistings(ctx: _RunContext, securities: dict[str, Security], sec_cusi
             # listed_today and the context live inside the try too: a FIGI/EDGAR
             # error there must become a reviewable row for this one security,
             # not abort the whole overnight run.
-            listed[s.sec_id] = False if s.sec_id in retired else listed_today(
-                clients.figi, s.sec_id, edgar=clients.edgar, cik=s.issuer_cik,
-                tickers=sorted(s.own_tickers()), answer=listing.get(s.sec_id))
+            listed[s.sec_id] = _listed_now(clients.figi, clients, s, contexts, ftd, listing.get(s.sec_id), retired)
             found, found_review = finder.find(contexts(s, listed[s.sec_id]))
         except FATAL:
             raise

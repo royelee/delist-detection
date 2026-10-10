@@ -66,21 +66,34 @@ def edgar_lists(edgar, cik: int, tickers: Iterable[str] | None) -> bool:
     return lists_on_major_exchange(edgar.submissions(cik), tickers)
 
 
+EDGE_DAYS = 31     # a security last sighted this close to the fails data's last day was still trading at its end
+
+
 def delisted_after_run_date(sub) -> bool:
-    """Whether the issuer filed a Form 25 after the run date (a submissions JSON or profile as an --as-of run reads
-    it, `edgar.FILED_AFTER_RUN_DATE`): its listing ended after the run date, so it was listed on it, whatever
-    today's OpenFIGI answer and EDGAR `exchanges` say (WBD, LESL, QRVO in a run as of 2026-09-25)."""
+    """Whether the issuer filed a Form 25 after the run date (a submissions JSON as an --as-of run reads it,
+    `edgar.FILED_AFTER_RUN_DATE`)."""
     return isinstance(sub, dict) and any(str(f).startswith("25") for f in sub.get(FILED_AFTER_RUN_DATE) or ())
+
+
+def listed_on_run_date(listed_now: bool | None, sub, last_seen: date | str | None,
+                       data_end: date | str | None) -> bool | None:
+    """Whether a security was listed on an --as-of run's date. `listed_today` reads today's OpenFIGI answer and
+    EDGAR `exchanges`, which a delisting after the run date has already changed (WBD, LESL and QRVO in a run as of
+    2026-09-25 read on 2026-10-10). A security its issuer delisted after the run date (`sub`, its submissions JSON,
+    `delisted_after_run_date`) and that was still trading at the end of the fails data (`last_seen` within
+    EDGE_DAYS of `data_end`) was listed then. An issuer-level Form 25 alone says nothing of its other lines: Discovery's
+    DISCA and DISCK ended in 2022 under WBD's CIK."""
+    seen, end = (d if isinstance(d, date) else parse_day(d) for d in (last_seen, data_end))
+    if listed_now or seen is None or end is None or not delisted_after_run_date(sub):
+        return listed_now
+    return True if (end - seen).days <= EDGE_DAYS else listed_now
 
 
 def lists_on_major_exchange(sub, tickers: Iterable[str] | None) -> bool:
     """`edgar_lists` over a submissions JSON (or its profile, `IssuerRecord.profile`) already read: True when it
-    lists one of `tickers` on a major exchange (any of its tickers when `tickers` is None), or when the issuer was
-    delisted only after the run date (`delisted_after_run_date`); False for no copy."""
+    lists one of `tickers` on a major exchange (any of its tickers when `tickers` is None); False for no copy."""
     if not isinstance(sub, dict):
         return False
-    if delisted_after_run_date(sub):
-        return True
     want = None if tickers is None else {normalize_ticker(t) for t in tickers if t}
     for t, x in zip(sub.get("tickers") or [], sub.get("exchanges") or []):
         if (want is None or normalize_ticker(t) in want) and exchange_label(x or "") in MAJOR_EXCHANGES:
@@ -139,10 +152,8 @@ def listed_today(figi, sec_id: str, *, edgar=None, cik: int | None = None,
     issuer's CIK is known the issuer's EDGAR submissions JSON must also list one
     of the security's `tickers`, or a ticker OpenFIGI returns, on a major
     exchange. With no CIK, OpenFIGI alone decides. A placeholder has no FIGI:
-    EDGAR alone decides, on the security's own tickers. Both answers are today's: an --as-of run whose issuer
-    filed a Form 25 after the run date was listed on it (`delisted_after_run_date`), and is."""
-    if edgar is not None and cik is not None and delisted_after_run_date(edgar.submissions(cik)):
-        return True
+    EDGAR alone decides, on the security's own tickers. Both answers are today's (`listed_on_run_date` corrects
+    them for an --as-of run)."""
     if not is_placeholder(sec_id):
         ans = answer if answer is not None else figi.map([listing_job(sec_id)], use_cache=False)[0]
         if "error" in ans:
