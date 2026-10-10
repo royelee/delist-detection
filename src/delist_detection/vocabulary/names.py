@@ -12,11 +12,17 @@ _STOP = {"CORP", "CORPORATION", "INC", "INCORPORATED", "COMPANY", "COMPANIES", "
 
 def _words(name: str) -> list[set[str]]:
     """Each word of the name as the set of its spellings (see `name_tokens`),
-    minus legal suffixes and fillers; a word with no spelling left is dropped."""
+    minus legal suffixes and fillers; a word with no spelling left is dropped.
+    Letters and digits run together are one word, also spelled by each run of four
+    letters or more in it (L3HARRIS meets HARRIS; SKY440 is never SKY, FB-009); a
+    run of digits alone is no word."""
     text = re.sub(r"’", "'", (name or "").upper())
     out = []
-    for w in re.findall(r"[A-Z]+(?:'[A-Z]+)*", text):
-        forms = {f for f in (w.replace("'", ""), *w.split("'")) if len(f) >= 3 and f not in _STOP}
+    for w in re.findall(r"[A-Z0-9]*[A-Z][A-Z0-9]*(?:'[A-Z0-9]*[A-Z][A-Z0-9]*)*", text):
+        spellings = (w.replace("'", ""), *w.split("'"))
+        if re.search(r"\d", w):
+            spellings += tuple(p for p in re.findall(r"[A-Z]{4,}", w))
+        forms = {f for f in spellings if len(f) >= 3 and f not in _STOP}
         if forms:
             out.append(forms)
     return out

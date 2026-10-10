@@ -13,6 +13,21 @@ def test_tokens_keep_three_letter_words_and_drop_legal_suffixes():
     assert name_tokens("ANHEUSER BUSCH COMPANIES INC") == name_tokens("ANHEUSER BUSCH COS INC")   # COS is COMPANIES
 
 
+def test_letters_and_digits_run_together_are_one_word():
+    """SKY440 is a word of its own, not SKY (FB-009: SKY440 Inc's fails rows under the recycled ticker SKYF named
+    Sky Financial Group by its one word SKY). A run of digits alone, and a word under three characters, still count
+    for nothing (3M, F5, 1-800-FLOWERS's 800 is no word either way)."""
+    assert name_tokens("SKY440 Inc Common Stock") == {"SKY440"}
+    assert name_tokens("3COM CORP") == {"3COM"}
+    assert name_tokens("1-800-FLOWERS.COM INC") == name_tokens("1 800 FLOWERS COM INC") == {"FLOWERS", "COM"}
+    assert name_tokens("3M CO") == set() and name_tokens("F5 NETWORKS INC") == {"NETWORKS"}
+    assert not description_names("SKY440 Inc Common Stock", "SKY FINANCIAL GROUP INC")
+    assert not description_matches("SKY440 Inc Common Stock", ["SKY FINANCIAL GROUP INC"], empty=False)
+    assert description_names("SKY440 Inc Common Stock", "SKY440 INC")
+    assert names_agree("21ST CENTURY FOX", "TWENTY-FIRST CENTURY FOX, INC.")
+    assert names_agree("HARRIS CORP", "L3HARRIS TECHNOLOGIES CORP")   # a run of four letters or more spells it too
+
+
 def test_agreement_needs_two_shared_words_unless_a_name_has_one():
     assert names_agree("HALYARD HEALTH INC", "Halyard Health, Inc.")
     assert names_agree("SUNPOWER CORP.", "SunPower Inc.")               # one-word names: one shared word

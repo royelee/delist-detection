@@ -241,7 +241,9 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
 - `vocabulary/names.py` — issuer-name tokens and agreement, a leaf (FB-006: `names_agree` and `description_names` share
   one word equivalence, `_word_matches`: plural S, in-order abbreviation or truncation of at least four letters on
   either side (never the only word shared), the vendor's `_VENDOR_ABBREVIATIONS` (PPTYS), run-together words; a name
-  with no word of three letters compares as one string, `2U INC` and `2U, Inc.`): `name_tokens`, `names_agree`, `description_names`,
+  with no word of three letters compares as one string, `2U INC` and `2U, Inc.`; FB-009: letters and digits run
+  together are one word, also spelled by each run of four letters or more in it, so SKY440 is never SKY and
+  L3HARRIS meets HARRIS): `name_tokens`, `names_agree`, `description_names`,
   `names_an_issuer` and `description_matches` (a fails row's description against a security's names), read by the
   observations, the identity rules, the fails index, the Form 25 match, the classifier and the merger readers.
 - `vocabulary/exchanges.py` — a listing's exchange, normalized, a leaf: `Exchange` (NYSE, AMEX, NASDAQ, OTHER, the four buckets
