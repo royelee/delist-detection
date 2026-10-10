@@ -29,8 +29,19 @@ MERGER_EVIDENCE_FORMS = {"DEFM14A", "DEFM14C", "PREM14A", "SC 14D9", "SC TO-T", 
 
 
 def parse_day(s: str | None) -> date | None:
+    """The day an ISO "YYYY-MM-DD" text (or the first ten characters of a longer one) names, None for anything else.
+    A text in exactly that shape is read by slicing; `strptime`, which is slow when run ten million times, reads the
+    rest (a day written without its zeros, a text that is no day)."""
+    text = (s or "")[:10]
+    if len(text) == 10 and text[4] == "-" and text[7] == "-":
+        year, month, day = text[:4], text[5:7], text[8:]
+        if all(part.isascii() and part.isdigit() for part in (year, month, day)):
+            try:
+                return date(int(year), int(month), int(day))
+            except ValueError:
+                return None
     try:
-        return datetime.strptime((s or "")[:10], "%Y-%m-%d").date()
+        return datetime.strptime(text, "%Y-%m-%d").date()
     except ValueError:
         return None
 

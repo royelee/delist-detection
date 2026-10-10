@@ -1,6 +1,8 @@
-from datetime import date
+from datetime import date, datetime
 
-from delist_detection.filings.evidence import name_at, names_near
+import pytest
+
+from delist_detection.filings.evidence import name_at, names_near, parse_day
 
 SUB = {"name": "SunPower Inc.", "formerNames": [
     {"name": "Complete Solaria, Inc.", "from": "2023-03-10T05:00:00.000Z", "to": "2025-09-26T04:00:00.000Z"},
@@ -262,3 +264,16 @@ def test_a_10k_index_entry_page_number_ends_no_section():
     assert "Item 8. 29 Kodak" in item_text(text, "3.01")
     spaced = "Item 3.01 Notice. " + "y" * 300 + " ITEM 1 .0 3 Bankruptcy " + "z" * 300
     assert "ITEM 1 .0 3" not in item_text(spaced, "3.01")
+
+
+@pytest.mark.parametrize("text", [
+    "2024-01-05", "2024-01-05T10:20:30.000Z", "2024-1-5", "2024-02-30", "2023-02-29", "2024-02-29", "0000-01-01",
+    "2024-13-01", "2024-00-10", "2024-01-00", "2024/01/05", "20240105", "2024-01-0", "", None, "abcd-ef-gh",
+    "\u0662\u0660\u0662\u0664-01-05", " 2024-01-05", "2024-01-05 ", "9999-12-31", "1900-01-01"])
+def test_parse_day_reads_what_strptime_read(text):
+    """Slicing an exactly-shaped day gives the date `strptime` gave, and the same None for anything else."""
+    try:
+        want = datetime.strptime((text or "")[:10], "%Y-%m-%d").date()
+    except ValueError:
+        want = None
+    assert parse_day(text) == want

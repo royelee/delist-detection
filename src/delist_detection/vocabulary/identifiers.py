@@ -40,10 +40,17 @@ from collections.abc import Collection, Iterable
 # --- ticker spellings -----------------------------------------------------------------------------------------------
 
 
+_TICKER_SEPARATORS = re.compile(r"[./\s]+")
+
+
 def normalize_ticker(raw: str) -> str:
     """The tables' spelling of a ticker: upper case, each run of ".", "/" and spaces one "-", none at either end
-    (" brk.b " and "BRK B" are BRK-B, "BF/A" is BF-A)."""
-    return re.sub(r"[./\s]+", "-", (raw or "").strip().upper()).strip("-")
+    (" brk.b " and "BRK B" are BRK-B, "BF/A" is BF-A). A ticker of letters and digits only (nearly every one) is
+    its upper-cased self: the pattern has nothing to change in it."""
+    text = (raw or "").strip().upper()
+    if text.isalnum():
+        return text
+    return _TICKER_SEPARATORS.sub("-", text).strip("-")
 
 
 _WHEN_ISSUED = re.compile(r"-W-?I$")       # "EHAB WI", "EHAB.WI", "EHAB-WI", "EHAB/WI", "EHAB W/I"

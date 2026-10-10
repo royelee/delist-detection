@@ -235,3 +235,11 @@ def test_a_class_the_name_does_not_state_fits_the_one_letter_the_issuer_and_its_
     assert not fits_class("CLASS A", "CLASS B", described="B", issuer_letters=("B",))     # its own class is stated
     assert not fits_class("CLASS B", "COMMON", described="B", issuer_letters=("B",))      # only a plain class fits
     assert not fits_class("COMMON", "PREFERRED", described=None, issuer_letters=())
+
+
+@pytest.mark.parametrize("raw", ["AET", "aet", " brk.b ", "BRK B", "BF/A", "..A..", "-A-", "A--B", "UAC-C", "F104PAIROFF",
+                                 "A B", "x\ty", "ÉT", "", "  ", "...", "-", "A-", "-A", "1.5", "ZZ ZZ", None])
+def test_normalize_ticker_is_the_pattern_it_replaced(raw):
+    """The fast path (a ticker of letters and digits is its upper-cased self) gives what the one-line pattern did."""
+    import re
+    assert normalize_ticker(raw) == re.sub(r"[./\s]+", "-", (raw or "").strip().upper()).strip("-")
