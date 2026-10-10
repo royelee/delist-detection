@@ -173,7 +173,7 @@ def main(argv: list[str] | None = None) -> int:
         if r["issuer_cik"]:
             eras_issuer.setdefault(r["era"], int(r["issuer_cik"]))
     stage3 = {k for k, c in eras_issuer.items() if c in ic.STAGE3_CIKS}
-    tickers = {k.split("@")[0] for k in stage3} | {k.split("@")[0] for k in ic.NAME_CASES}
+    tickers = {k.split("@")[0] for k in stage3} | {k.split("@")[0] for k in ic.NAME_CASES} | set(ic.EXTRA_TICKERS)
     observations = [[r["ticker"], r["as_of"], r["name"], r["cik"]] for r in b5._read(repo / "data/observations.csv")
                     if r["ticker"] in tickers]
     keep = {k: c for k, c in eras_issuer.items() if k.split("@")[0] in tickers}

@@ -1,6 +1,10 @@
 {
  "as_of": "2026-09-25",
  "cases": {
+  "BBG000BB41G8": {
+   "note": "ACV 2011: Alberto-Culver, issuer CIK 3327 (the old registrant, renamed 2006) in the run; the 25-NSE of Unilever's acquisition is CIK 1368457's",
+   "other_cik": null
+  },
   "BBG000BBG3P1": {
    "note": "TMA 2008: a revocation after the 25-NSE (R6a)",
    "other_cik": null
@@ -27,6 +31,10 @@
   },
   "BBG000BGZ9V9": {
    "note": "ASNA 2020: a bankruptcy 8-K whose first Item 1.03 is a cross-reference (5g sub-rule 2)",
+   "other_cik": null
+  },
+  "BBG000BH13K9": {
+   "note": "DD 2017: E I du Pont de Nemours, no issuer CIK in the run; the 25-NSE of the DowDuPont merger is CIK 30554's (its raw is in no cache)",
    "other_cik": null
   },
   "BBG000BJQ328": {
@@ -113,6 +121,10 @@
    "note": "DISCK 2022: an exchange's 25-NSE beside an 8-A12B for the new class (no R7)",
    "other_cik": null
   },
+  "BBG001KS9450": {
+   "note": "TWOU 2024: 2U Inc, no issuer CIK in the run; the 25-NSE of 2024-09-06 is CIK 1459417's (its raw is in no cache)",
+   "other_cik": null
+  },
   "BBG001QD41M9": {
    "note": "APTV: an old redomiciled line the sibling slack keeps from a false ending",
    "other_cik": null
@@ -131,6 +143,14 @@
   },
   "BBG005DKMJ67": {
    "note": "LTRPA 2023: a Nasdaq removal under (b), then an OTC merger (C, ruling G4)",
+   "other_cik": null
+  },
+  "BBG006N7RYV7": {
+   "note": "FNFV 2017: FNFV Group, a tracking stock, no issuer CIK in the run; the 25-NSE of the Cannae split-off is Fidelity National Financial's, CIK 1331875",
+   "other_cik": null
+  },
+  "BBG009CKXW23": {
+   "note": "PTHN 2017: Patheon N.V., issuer CIK 1400431 (the Canadian Patheon Inc.) in the run; the Form 25 of Thermo Fisher's acquisition is CIK 1643848's (its raw is in no cache)",
    "other_cik": null
   },
   "BBG009R0CVG1": {
@@ -200,6 +220,72 @@
  },
  "ftd_from": "2007-12-17",
  "securities": {
+  "BBG000BB41G8": {
+   "cusips": [
+    "013078100"
+   ],
+   "eras": {
+    "ACV@2008-01-16": [
+     [
+      "ACV",
+      "2008-01-16",
+      "ALBERTO CULVER CO",
+      "",
+      ""
+     ],
+     [
+      "ACV",
+      "2008-05-31",
+      "ALBERTO CULVER CO",
+      "",
+      ""
+     ],
+     [
+      "ACV",
+      "2008-07-25",
+      "ALBERTO CULVER CO",
+      "",
+      ""
+     ],
+     [
+      "ACV",
+      "2008-11-18",
+      "ALBERTO CULVER CO",
+      "",
+      ""
+     ],
+     [
+      "ACV",
+      "2009-01-23",
+      "ALBERTO CULVER CO",
+      "",
+      ""
+     ],
+     [
+      "ACV",
+      "2009-03-20",
+      "ALBERTO CULVER CO",
+      "",
+      ""
+     ],
+     [
+      "ACV",
+      "2009-06-08",
+      "ALBERTO CULVER CO",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "issuer_cik": 3327,
+   "line_tickers": [],
+   "listed": false,
+   "name": "ALBERTO CULVER CO",
+   "observed": true,
+   "security_type": "Common Stock",
+   "share_class": "COMMON"
+  },
   "BBG000BBG3P1": {
    "cusips": [
     "885218107",
@@ -1061,6 +1147,149 @@
    "line_tickers": [],
    "listed": false,
    "name": "ASCENA RETAIL GROUP INC.",
+   "observed": true,
+   "security_type": "Common Stock",
+   "share_class": "COMMON"
+  },
+  "BBG000BH13K9": {
+   "cusips": [
+    "263534109"
+   ],
+   "eras": {
+    "DD@2008-01-16": [
+     [
+      "DD",
+      "2008-01-16",
+      "DU PONT E I DE NEMOURS",
+      "",
+      ""
+     ],
+     [
+      "DD",
+      "2008-05-31",
+      "DU PONT E I DE NEMOURS",
+      "",
+      ""
+     ],
+     [
+      "DD",
+      "2008-07-25",
+      "DU PONT E I DE NEMOURS",
+      "",
+      ""
+     ],
+     [
+      "DD",
+      "2008-11-18",
+      "DU PONT E I DE NEMOURS",
+      "",
+      ""
+     ],
+     [
+      "DD",
+      "2009-01-23",
+      "DU PONT E I DE NEMOURS",
+      "",
+      ""
+     ],
+     [
+      "DD",
+      "2009-03-20",
+      "DU PONT E I DE NEMOURS",
+      "",
+      ""
+     ],
+     [
+      "DD",
+      "2009-06-08",
+      "DU PONT E I DE NEMOURS",
+      "",
+      ""
+     ],
+     [
+      "DD",
+      "2012-06-29",
+      "E I DU PONT DE NEMOURS",
+      "",
+      ""
+     ],
+     [
+      "DD",
+      "2012-12-31",
+      "E I DU PONT DE NEMOURS",
+      "",
+      ""
+     ],
+     [
+      "DD",
+      "2013-06-28",
+      "E I DU PONT DE NEMOURS",
+      "",
+      ""
+     ],
+     [
+      "DD",
+      "2013-12-31",
+      "E I DU PONT DE NEMOURS",
+      "",
+      ""
+     ],
+     [
+      "DD",
+      "2014-06-30",
+      "E I DU PONT DE NEMOURS",
+      "",
+      ""
+     ],
+     [
+      "DD",
+      "2014-12-31",
+      "E I DU PONT DE NEMOURS",
+      "",
+      ""
+     ],
+     [
+      "DD",
+      "2015-06-30",
+      "E I DU PONT DE NEMOURS",
+      "",
+      ""
+     ],
+     [
+      "DD",
+      "2015-12-31",
+      "E I DU PONT DE NEMOURS",
+      "",
+      ""
+     ],
+     [
+      "DD",
+      "2016-06-30",
+      "E I DU PONT DE NEMOURS",
+      "",
+      ""
+     ],
+     [
+      "DD",
+      "2016-12-30",
+      "E I DU PONT DE NEMOURS",
+      "",
+      ""
+     ],
+     [
+      "DD",
+      "2017-06-30",
+      "E I DU PONT DE NEMOURS",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "issuer_cik": null,
+   "line_tickers": [],
+   "listed": false,
+   "name": "E I DU PONT DE NEMOURS",
    "observed": true,
    "security_type": "Common Stock",
    "share_class": "COMMON"
@@ -4157,6 +4386,65 @@
    "security_type": "Common Stock",
    "share_class": "CLASS C"
   },
+  "BBG001KS9450": {
+   "cusips": [
+    "90214J101"
+   ],
+   "eras": {
+    "TWOU@2018-06-30": [
+     [
+      "TWOU",
+      "2018-06-30",
+      "2U INC",
+      "",
+      ""
+     ],
+     [
+      "TWOU",
+      "2018-12-31",
+      "2U INC",
+      "",
+      ""
+     ],
+     [
+      "TWOU",
+      "2019-06-30",
+      "2U INC",
+      "",
+      ""
+     ],
+     [
+      "TWOU",
+      "2019-12-31",
+      "2U INC",
+      "",
+      ""
+     ],
+     [
+      "TWOU",
+      "2020-06-30",
+      "2U INC",
+      "",
+      ""
+     ],
+     [
+      "TWOU",
+      "2020-12-31",
+      "2U INC",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "issuer_cik": null,
+   "line_tickers": [],
+   "listed": false,
+   "name": "2U INC",
+   "observed": true,
+   "security_type": "Common Stock",
+   "share_class": "COMMON"
+  },
   "BBG001QD41M9": {
    "cusips": [
     "G27823106",
@@ -5121,6 +5409,30 @@
    "security_type": "Common Stock",
    "share_class": "CLASS C"
   },
+  "BBG006N7RYV7": {
+   "cusips": [
+    "31620R402"
+   ],
+   "eras": {
+    "FNFV@2014-12-31": [
+     [
+      "FNFV",
+      "2014-12-31",
+      "FNFV GROUP INC",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "issuer_cik": null,
+   "line_tickers": [],
+   "listed": false,
+   "name": "FNFV GROUP INC",
+   "observed": true,
+   "security_type": "Tracking Stk",
+   "share_class": "COMMON"
+  },
   "BBG008LJ4TF3": {
    "cusips": [
     "18539C204"
@@ -5186,6 +5498,37 @@
    "observed": true,
    "security_type": "Common Stock",
    "share_class": "CLASS C"
+  },
+  "BBG009CKXW23": {
+   "cusips": [
+    "N6865W105"
+   ],
+   "eras": {
+    "PTHN@2016-12-30": [
+     [
+      "PTHN",
+      "2016-12-30",
+      "PATHEON NV",
+      "",
+      ""
+     ],
+     [
+      "PTHN",
+      "2017-06-30",
+      "PATHEON NV",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "issuer_cik": 1400431,
+   "line_tickers": [],
+   "listed": false,
+   "name": "PATHEON NV",
+   "observed": true,
+   "security_type": "Common Stock",
+   "share_class": "COMMON"
   },
   "BBG009R0CVG1": {
    "cusips": [

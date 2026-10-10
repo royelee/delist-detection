@@ -28,7 +28,7 @@ editable install.
 
 ```bash
 pip install -e .                         # editable install (Python ≥3.10) — once per env
-pytest   # full suite (3747 passed, 44 xfailed: the known-wrong golden cases and the diagnosis truth set's known_wrong cases, all residual, all strict; offline, no network)
+pytest   # full suite (3775 passed, 44 xfailed: the known-wrong golden cases and the diagnosis truth set's known_wrong cases, all residual, all strict; offline, no network)
 pytest tests/test_payout_extractor.py -v  # one file
 pytest tests/test_payout_extractor.py::test_match_in_cash_family_altr -v   # one test
 
@@ -690,7 +690,11 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   days up to that row or by the name the switch renamed it from, no
   other CUSIP of its own and of the same class, begun before the switch,
   trading at it). Answers are checked again at the fixed point; each carries
-  the check flag `issuer_inferred`. Rule C also runs over first-pass answers:
+  the check flag `issuer_inferred`. Rule D (FB-004 part c, `cusip_issuer`, after the fixed point, on the answers
+  the others made): the one issuer of the other eras holding a CUSIP of the era's issuer code (its first six
+  characters) over the same dates, when it had filed by the era's first sighting; no name check, the code is the
+  evidence (FNFV Group, a tracking stock, on Fidelity National Financial's 31620R105; UHALB on U-Haul Holding);
+  eras of two issuers or none give nothing. Rule C also runs over first-pass answers:
   where the CUSIP evidence points elsewhere, the first pass's answer stands
   and the check flag `issuer_cusip_disagrees` names both CIKs. Sub-plan 5h: `check_names` (stage 2b, never
   saved): a first-pass name-search answer is replaced by the one other CIK SEC's name index lists under exactly the

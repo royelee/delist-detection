@@ -832,6 +832,15 @@ class EraIssuers:
                 break
             for key in dropped:
                 del out[key]
+        known, issuer_cusips = issuers_now()
+        for e in todo:                               # D, after the fixed point: it rests on the answers the others made
+            if e.key in out:
+                continue
+            self._reset()
+            got = self._issuer_code(e, eras, known, last_seen)
+            if got is not None:
+                out[e.key] = got
+            self._mark(e)
         disagreements: dict[str, InferredIssuer] = {}
         for e in sorted(eras, key=lambda e: e.key):
             first = first_pass.get(e.key)
@@ -843,6 +852,27 @@ class EraIssuers:
             if got is not None and got.cik != first:
                 disagreements[e.key] = got
         return SecondPass(out, disagreements)
+
+    def _issuer_code(self, era: TickerEra, eras: Sequence[TickerEra], known: dict[str, int],
+                     last_seen: dict[str, str]) -> InferredIssuer | None:
+        """Rule D (`cusip_issuer`, FB-004 part c, FNFV): a CUSIP's first six characters name its issuer, whatever the
+        security is called (FNFV Group, a tracking stock of Fidelity National Financial, 31620R402; the company's own
+        31620R105). The one issuer of the other eras that hold a CUSIP of the era's issuer code over the same dates
+        (`known`: the first pass's answers and the rules above), when it existed by the era's first sighting. Eras
+        of two issuers, none, or no CUSIP: None. The name is no check here, as it is for B and C: the code is the
+        evidence, and a tracking stock is named for its group."""
+        codes = {c[:6] for c in (*era.ftd_cusips, *era.cusips)}
+        if not codes:
+            return None
+        ciks = {known[o.key] for o in eras
+                if o.key != era.key and o.key in known and codes & {c[:6] for c in (*o.ftd_cusips, *o.cusips)}
+                and o.first <= last_seen[era.key] and era.first <= last_seen[o.key]}
+        if len(ciks) != 1:
+            return None
+        cik = next(iter(ciks))
+        if not self.issuers.existed_by(cik, era.first):
+            return None
+        return InferredIssuer(cik, "cusip_issuer", f"its CUSIP's issuer code {sorted(codes)[0]} is the issuer's own")
 
     def _named(self, era: TickerEra, got: InferredIssuer | None, last_seen: str) -> InferredIssuer | None:
         """`got`, when one of the era's observed names `names.description_matches`

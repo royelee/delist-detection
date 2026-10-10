@@ -302,7 +302,8 @@ CATALOG: dict[str, FlagInfo] = {
     "issuer_inferred": FlagInfo(
         "check", "The resolver found no issuer CIK for this ticker era by its ticker or name, so it inferred one "
                  "from SEC fails-to-deliver CUSIP evidence (the issuer of an era sharing its CUSIP, shared_cusip, "
-                 "or of the new CUSIP its own switched to after a rename, cusip_handoff) or from the ranking of "
+                 "or of the new CUSIP its own switched to after a rename, cusip_handoff; the issuer code of its "
+                 "CUSIP, cusip_issuer) or from the ranking of "
                  "8-Ks naming the ticker (efts_frequency_renamed); the reason says which. Such an answer is never "
                  "saved in the resolver cache.",
         "Confirm the issuer named in the reason is the company that traded under the ticker then (its EDGAR "

@@ -176,6 +176,12 @@ STAY = {
     'CIK48898-CLASS-B': ([('2016-01-03', 'exchange_transfer', 304, '2015-12-23', False, '0000876661-15-000665', 48898)], ['form25_unmatched']),   # HUB-B 2015
     'CIK65873-COMMON': ([('2007-11-30', 'merger', 231, '2007-11-16', False, '0000876661-07-000891', 65873)], []),   # AT 2007
     'BBG000QN4GY3': ([], ['ended_without_delisting']),   # HOUS 2026 under the LLC's CIK 1355001, as the run had it
+    # FB-004 part c, under the issuer CIK the run had (the old registrant's, or none): see the test below for the right one
+    'BBG000BB41G8': ([], ['ended_without_delisting']),   # ACV 2011 under the old registrant's CIK 3327
+    'BBG006N7RYV7': ([], ['ended_without_delisting']),   # FNFV 2017, no issuer CIK
+    'BBG000BH13K9': ([], ['ended_without_delisting']),   # DD 2017, no issuer CIK
+    'BBG001KS9450': ([], ['ended_without_delisting']),   # TWOU 2024, no issuer CIK
+    'BBG009CKXW23': ([], ['ended_without_delisting']),   # PTHN 2017 under the Canadian Patheon Inc.'s CIK 1400431
 }
 
 
@@ -277,3 +283,32 @@ def test_the_form25_of_anywhere_real_estate_inc_is_reached_through_its_own_cik_n
     _, review = fc.finder().find(ctx)
     assert [(r.flag, r.filing.accession) for r in review if r.filing is not None] == [
         ("form25_unreadable", "0000876661-26-000018")]
+
+
+# FB-004 part c: the finder under the issuer CIK the resolver now gives (ACV 1368457 by the name in force, FNFV 1331875 by
+# its CUSIP's issuer code, DD 30554 by the name's letters, TWOU 1459417 by the name tier, PTHN 1643848 by the exact
+# holder): delisting tuples as `fc.outcome`'s, and the Form 25s a live run must fetch (in no cache)
+RIGHT = {
+    'BBG000BB41G8': (1368457, [('2011-05-21', 'merger', 231, '2011-05-10', False, '0000876661-11-000210', 1368457)], []),
+    'BBG006N7RYV7': (1331875, [('2017-11-30', 'merger', 231, '2017-11-17', False, '0000876661-17-000713', 1331875)], []),
+    'BBG000BH13K9': (30554, [], [('ended_without_delisting', ''), ('form25_unreadable', '0000876661-17-000494')]),
+    'BBG001KS9450': (1459417, [('2024-06-14', 'unknown', None, '2024-06-12', False, '', 1459417)],
+                     [('form25_unreadable', '0001354457-24-000658')]),
+    'BBG009CKXW23': (1643848, [], [('ended_without_delisting', ''), ('form25_unreadable', '0001104659-17-055224')]),
+}
+
+
+@pytest.mark.parametrize("sec_id", sorted(RIGHT), ids=lambda s: fc.DATA["cases"][s]["note"].split(":")[0])
+def test_the_right_registrants_form25_is_reached_once_the_issuer_is_right(sec_id):
+    """ACV: the old registrant (3327) had only the 2006 spin-off's 25-NSE; the spin-off's (1368457) is Unilever's
+    acquisition. FNFV: Fidelity National Financial's 25-NSE of the Cannae split-off. DD, TWOU and PTHN: the Form 25's
+    raw is in no cache, so it is `form25_unreadable` here (a live run fetches it and decides)."""
+    cik, delistings, review = RIGHT[sec_id]
+    securities, cusips, ftd = fc.world()
+    sec = dataclasses.replace(securities[sec_id], issuer_cik=cik)
+    ctx = SecurityContexts.observed({sec.sec_id: sec}, cusips, ftd)(sec, False)
+    found, items = fc.finder().find(ctx)
+    assert [(d.delist_date, d.record.bucket.value, d.record.crsp_code,
+             d.last_trade.day.isoformat() if d.last_trade.day else "", d.record.successor_sec_id == sec_id,
+             d.form25_sub.accession if d.form25_sub else "", d.cik) for d in found] == delistings
+    assert sorted({(r.flag, r.filing.accession if r.filing else "") for r in items}) == review

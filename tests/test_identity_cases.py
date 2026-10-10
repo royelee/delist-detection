@@ -117,6 +117,18 @@ def test_the_placeholders_joined_across_a_class_label_are_renames(stage3):
     assert [r["new_sec_id"] for r in id_change_rows(baseline, now, "2026-09-25", renames)] == ["BBG000NS03H7"]
 
 
+def test_a_tracking_stock_with_no_issuer_takes_its_cusips_issuer_code(cases):
+    """FB-004 part c, FNFV: the run's lookup found no issuer for FNFV GROUP INC (no EDGAR name of Fidelity National
+    Financial, CIK 1331875, agrees with it), but its CUSIP 31620R402 shares the issuer code 31620R with the company's
+    own, whose eras the lookup answered: rule D of the second pass gives the era that issuer, flagged issuer_inferred."""
+    answers = {k: (c, "committed") for k, c in cases.backend.eras_issuer.items() if k.startswith("FNF@")}
+    assert answers, "FNF's eras are in the fixture"
+    identity = cases.identify({"FNF", "FNFV"}, answers)
+    assert identity.issuers["FNFV@2014-12-31"].cik == 1331875
+    assert [(i.flag, i.cik) for i in identity.review if i.flag == "issuer_inferred" and "FNFV" in i.reason] == [
+        ("issuer_inferred", 1331875)]
+
+
 def test_a_name_search_answer_is_checked_against_the_eras_span_and_its_tickers_rows(cases):
     """Rule D (stage 2b): ABBI 2008-09's name was the new Abraxis's (APP Pharmaceuticals dropped it in 2007); the
     rows under ERA in 2013 are Era Group's (later renamed Bristow Group Inc). TCF, Gannett and News Corp carried

@@ -726,4 +726,6 @@ def test_an_era_linked_to_two_issuers_takes_neither(eras, ftd, no_frequency):
     issuers = {**DATA["issuers"], "999999": DATA["issuers"]["1530721"]}   # a second issuer passing the guard
     got = _infer(eras, ftd, list(eras), {**RESOLVED, "KORS@2014-12-31": 1530721, "CPRI@2018-12-31": 999999},
                  edgar=_Edgar(issuers))
-    assert "KORS@2012-06-29" not in got
+    # rule C's links give it two issuers; rule D (FB-004 part c) is another evidence: its CUSIP's issuer code, G60754,
+    # is KORS@2014's, whose issuer the first pass gave
+    assert got.get("KORS@2012-06-29", (None, None))[1] in (None, "cusip_issuer")
