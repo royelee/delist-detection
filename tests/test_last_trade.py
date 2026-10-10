@@ -274,6 +274,18 @@ def test_a_halt_the_8k_puts_at_the_open_dates_the_day_before():
     assert het == LastTrade(date(2008, 1, 28), "nasdaq_halt", ("last_trade_date_conflict",))
 
 
+def test_a_halt_after_the_stated_last_day_dates_that_day():
+    """CC 2008 (R8, FB-011): the feed stamps the code-D halt 09:30:15 on November 10; the 8-K says "The last day that
+    the Company's common stock traded on the Exchange was November 7, 2008", the trading day before: the 7th. A stated
+    last day that is not the day before the halt's leaves the halt standing."""
+    cc = decide_last_trade(notice=(None, ""), eightk=(date(2008, 11, 7), "8k_last_day"), midas=None,
+                           halt=date(2008, 11, 10))
+    assert cc == LastTrade(date(2008, 11, 7), "8k_301", ())
+    earlier = decide_last_trade(notice=(None, ""), eightk=(date(2008, 11, 6), "8k_last_day"), midas=None,
+                                halt=date(2008, 11, 10))
+    assert earlier == LastTrade(date(2008, 11, 10), "nasdaq_halt", ("last_trade_date_conflict",))
+
+
 # -- rule 4: the closing day when nothing states the last trade --------------------------------------------------
 @pytest.mark.parametrize("text, lo, hi, reading", [
     ("Pursuant to the terms of the Merger Agreement, at 8:28 A.M. (Eastern) on November 24, 2008 (the “Effective "

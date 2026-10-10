@@ -884,7 +884,8 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   modal, completion word, other date or "immediate": BMC 2013, WeWork 2023); a weekday may precede any date ("on
   Friday, December 5, 2008": TMA, IDARQ); a stated close or last day that falls on no session moves to the trading
   day before (CNDT 2019); a stated timing ranks first (`reading_rank`). Source order: MIDAS, then a halt (but the
-  8-K's day when it puts the halt at the open of the halt day, `OPEN_KINDS`: WM 2008, ruling R8), the notice's own
+  8-K's day when it puts the halt at the open of the halt day, `HALT_AT_OPEN_KINDS`: an open wording, WM 2008, ruling
+  R8, or a stated last day that is the trading day before the halt's, CC 2008, FB-011), the notice's own
   timing, then an 8-K timing that disagrees with the notice's bare date (`BARE_NOTICE_KINDS`: TMHC 2026), then the
   notice, then the 8-K. `closing_day(texts, lo, hi)` (rule 4): when nothing states the last trade, the latest
   completion the 8-Ks state in the window (a defined Closing Date, "On D, ... completed its acquisition", "Merger Sub

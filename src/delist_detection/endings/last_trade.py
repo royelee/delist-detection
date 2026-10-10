@@ -83,6 +83,10 @@ EXPLICIT_KINDS = frozenset({"8k_open", "8k_open_closing", "8k_close", "8k_close_
                             "8k_open_effective", "8k_close_clock", "8k_open_clock", "8k_last_day"})
 _RANK = {**{k: 0 for k in EXPLICIT_KINDS}, "8k_suspended": 1, "8k_suspended_unconfirmed": 2}
 OPEN_KINDS = frozenset({"8k_open", "8k_open_closing", "8k_open_effective", "8k_open_clock"})
+# The 8-K readings that put a halt at the open of its day when they date the trading day before it (ruling R8): an
+# open wording, or the last day it states the stock traded (CC 2008: "The last day ... traded on the Exchange was
+# November 7", the feed's halt 09:30:15 on November 10).
+HALT_AT_OPEN_KINDS = OPEN_KINDS | {"8k_last_day"}
 
 
 def _session_on_or_before(d: date) -> date:
@@ -337,9 +341,10 @@ def decide_last_trade(*, notice: tuple[date | None, str], eightk: tuple[date | N
     if midas is not None:
         return pick(midas, MIDAS)
     if halt is not None:
-        if e_day is not None and e_kind in OPEN_KINDS and e_day == previous_trading_day(halt):
+        if e_day is not None and e_kind in HALT_AT_OPEN_KINDS and e_day == previous_trading_day(halt):
             # the 8-K says the halt came at the open of the halt day (ruling R8: WM 2008, the regulatory halt "at
-            # the NYSE market open on September 26", which the feed stamps 09:30:06): the day before
+            # the NYSE market open on September 26", which the feed stamps 09:30:06; CC 2008, its stated last day
+            # before the feed's 09:30:15 halt): the day before
             return pick(e_day, EIGHTK_301)
         return pick(halt, NASDAQ_HALT)
     if n_day and _confirmed(n_kind):
