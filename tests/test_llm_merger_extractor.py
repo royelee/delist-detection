@@ -376,3 +376,81 @@ def test_network_error_returns_none(tmp_path):
 
     ext = LLMMergerTermsExtractor(_RaisingEdgar(), _FakeLlm([]), cache_dir=tmp_path)
     assert ext.extract(_merger_rec()) is None
+
+
+def test_threads_asking_for_one_answer_file_pay_for_one_call(tmp_path):
+    """Two mergers can ask for one file (the same filing and target ticker) and the warm threads run them at once:
+    the second waits for the first's call and reads its answer, so the model is called once."""
+    import threading
+    import time
+    resp = {"deal_type": "cash", "cash_per_share": 10.0, "stock_ratio": None, "acquirer_name": "X",
+            "acquirer_ticker": None, "confidence": "high", "quote": "$10.00 in cash", "package_basis": "fixed"}
+
+    class _Slow(_FakeLlm):
+        def extract(self, system, user, schema):
+            time.sleep(0.2)                   # long enough for every thread to be waiting for the answer
+            return super().extract(system, user, schema)
+
+    llm = _Slow([resp])
+    edgar = _FakeEdgarText([_closing_8k()], {"C1": _USABLE_TEXT})
+    ext = LLMMergerTermsExtractor(edgar, llm, cache_dir=tmp_path)
+    got: list = []
+    threads = [threading.Thread(target=lambda: got.append(ext.extract(_merger_rec()))) for _ in range(6)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert llm.calls == 1 and len(got) == 6 and all(t == got[0] and t.cash_per_share == 10.0 for t in got)
+
+
+def _concurrent_extract(ext, n, *, warm):
+    import threading
+
+    from delist_detection.sources.sec_stats import fill_only
+
+    def ask():
+        if warm:
+            with fill_only():
+                ext.extract(_merger_rec())
+        else:
+            ext.extract(_merger_rec())
+
+    threads = [threading.Thread(target=ask) for _ in range(n)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+
+def _slow_ext(tmp_path):
+    import time
+    resp = {"deal_type": "cash", "cash_per_share": 10.0, "stock_ratio": None, "acquirer_name": "X",
+            "acquirer_ticker": None, "confidence": "high", "quote": "$10.00 in cash", "package_basis": "fixed"}
+
+    class _Slow(_FakeLlm):
+        def extract(self, system, user, schema):
+            time.sleep(0.2)
+            return super().extract(system, user, schema)
+
+    llm = _Slow([resp])
+    return LLMMergerTermsExtractor(_FakeEdgarText([_closing_8k()], {"C1": _USABLE_TEXT}), llm, cache_dir=tmp_path), llm
+
+
+def test_threads_that_waited_for_one_answer_count_it_as_any_cache_read_is_counted(tmp_path):
+    """Six sequential-pass threads ask for one file: one asked the model (`asked`), the five that waited read its
+    answer (`asked` too, since this run asked for it): the count is that of six cache reads after one call."""
+    ext, llm = _slow_ext(tmp_path)
+    _concurrent_extract(ext, 6, warm=False)
+    u = ext.usage()
+    assert llm.calls == 1 and (u["asked"], u["from_cache"], u["failed"], u["answers"]) == (6, 0, 0, 6)
+
+
+def test_a_warm_pass_counts_nothing_and_the_sequential_read_after_it_counts_asked(tmp_path):
+    """The warm threads' own reads are not counted, however many wait on the lock; the sequential pass then reads the
+    file the warm pass asked for and counts it once as `asked`."""
+    ext, llm = _slow_ext(tmp_path)
+    _concurrent_extract(ext, 6, warm=True)
+    assert llm.calls == 1 and ext.usage()["answers"] == 0 and ext.usage()["asked"] == 0
+    ext.extract(_merger_rec())
+    u = ext.usage()
+    assert (u["asked"], u["from_cache"], u["failed"]) == (1, 0, 0)

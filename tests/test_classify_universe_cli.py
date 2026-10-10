@@ -272,6 +272,20 @@ def test_main_passes_sec_workers_to_run(monkeypatch):
     assert _run_main.seen["sec_workers"] == 3
 
 
+def test_llm_workers_default_to_8_and_are_passed_to_run(monkeypatch):
+    assert _run_main(monkeypatch, {}) == 0
+    assert _run_main.seen["llm_workers"] == 8
+    assert _run_main(monkeypatch, {}, "--sec-workers", "1", "--llm-workers", "16") == 0
+    assert (_run_main.seen["sec_workers"], _run_main.seen["llm_workers"]) == (1, 16)
+
+
+@pytest.mark.parametrize("n", ["0", "17"])
+def test_llm_workers_outside_1_to_16_is_refused(monkeypatch, n):
+    with pytest.raises(SystemExit) as exc:
+        _run_main(monkeypatch, {}, "--llm-workers", n)
+    assert exc.value.code == 2
+
+
 @pytest.mark.parametrize("n", ["0", "9"])
 def test_sec_workers_outside_1_to_8_is_refused(monkeypatch, n):
     with pytest.raises(SystemExit) as exc:

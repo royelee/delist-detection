@@ -51,7 +51,8 @@ python scripts/build_distress_fixtures.py --repo <checkout with output/ and cach
 python scripts/build_identity_fixtures.py --repo <checkout with output/ and cache/>   # offline: tests/fixtures/identity/ (sub-plan 5h's identity cases), read-only on the caches
 python scripts/classify_universe.py --observations obs.csv   # → output/{securities,cusip_history,delistings,review,review_summary,observation_map,uncertain,disputes}.csv + contract/{security_history,delistings,seeds,price_requests,id_changes,payout_legs}.csv + scorecard.json (NETWORK; free when cached)
 python scripts/classify_universe.py --observations obs.csv --limit 20 --no-extract-payouts --no-midas --no-halts   # fast dev subset
-python scripts/classify_universe.py --observations obs.csv --sec-workers 1   # one SEC request at a time (default: 4 prefetch threads, max 8, one machine-wide 8 req/s limit)
+python scripts/classify_universe.py --observations obs.csv --sec-workers 1   # one SEC prefetch thread; with `--extract-merger-terms-llm` add `--llm-workers 1` for one SEC request at a time (default: 4 prefetch threads, max 8, one machine-wide 8 req/s limit)
+python scripts/classify_universe.py --observations obs.csv --extract-merger-terms-llm --llm-workers 16   # threads that make the `--extract-merger-terms-llm` calls ahead; default 8, max 16; independent of `--sec-workers`; the tables are the same for any count
 python scripts/classify_universe.py --observations obs.csv --as-of 2026-09-25   # pin the run date (default today; run_manifest.json records it) to reproduce an earlier run's tables from the same caches
 python scripts/classify_universe.py --observations obs.csv --price-answers answered.csv   # contract/price_requests.csv plus a price column: a second run changes values only (and, through verdict ruling D, a merger's verdict when its gate result moves with the answered close: FB-012); a row that answers no request exits 2
 python scripts/classify_universe.py --observations obs.csv --id-baseline output/securities.csv   # compare placeholders with this securities.csv, or a previous run's contract/security_history.csv, for contract/id_changes.csv (default: OUTPUT_DIR/securities.csv, else OUTPUT_DIR/contract/security_history.csv)
@@ -1259,7 +1260,7 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   answer whose quote states no share count is passed over (`unsupported_one_for_one`: ATH, CHTR); a spelled-out null
   ticker ("NULL") is none. A failed LLM call is a
   degraded miss (`SEC_STATS.degraded("llm_call")`: the delisting is `resolution_degraded`), never cached; with
-  `--sec-workers` > 1 the calls are filled ahead on the worker threads. Calibrate with
+  the calls are filled ahead on `--llm-workers` threads (default 8), one lock per answer file so no call is paid for twice. Calibrate with
   `scripts/eval_merger_extractor.py --truth` (the 10 deals and the truth set's terms cases).
 - `terms/payout_gate.py` — every merger payout checked against the last trade before it reaches the table
   (`reconcile`, `gate_payouts` -> `GatedPayouts`); the payout rule's entry has the gate's reading of an LLM answer.
@@ -1844,7 +1845,11 @@ expiration is 0.0 in the table and no correction in the firm month, which leaves
   agent-sandbox run must allow the host in `OPENAI_BASE_URL`
   (`api.anthropic.com` or `api.openai.com`): a blocked LLM host raises on
   every call, each becomes a miss, and the run exits 0 with those mergers'
-  terms missing.
+  terms missing. The calls run on `--llm-workers` threads before the sequential
+  pass reads their answer files. Those threads also read an uncached candidate
+  filing's text from EDGAR, so up to that many SEC requests can be in flight,
+  inside the 8 requests/s limit. An LLM call in flight is not cancelled by an
+  abort or Ctrl-C: the run waits for it (the client sets no timeout).
 - **The resolver cache is versioned.** `cache/ticker_resolution.json` carries
   `{"__version__": 4, ...}`, each answer keyed `TICKER|date|observed name`
   (versions 2 and 3, keyed `TICKER|date`, load re-keyed from their stored

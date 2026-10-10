@@ -222,12 +222,13 @@ def _quiet(*_: object) -> None:
 class _Stage:
     """What every step of the stage shares: the run's clients (edgar, resolver, issuers, figi, payout_extractor,
     llm_extractor: `pipeline.Clients`), the run's securities as acquirer lines (with the run's fails index, the only
-    reader of the fails files), the first day the run loaded fails rows from, the prefetch worker count and the
-    log."""
+    reader of the fails files), the first day the run loaded fails rows from, the prefetch worker count, the
+    number of threads that make the LLM calls ahead and the log."""
     clients: Any
     index: acquirer_line.LineIndex
     ftd_lo: date | None
     workers: int
+    llm_workers: int
     log: Callable
 
     @property
@@ -246,16 +247,17 @@ class _Stage:
 def value_mergers(delistings: Sequence[Delisting], index: acquirer_line.LineIndex, *, clients: Any,
                   closes: Mapping[DelistingKey, float], caller_terms: Mapping, answers: PriceAnswers, tol: float,
                   own_closes: Mapping[DelistingKey, float] | None = None, ftd_lo: date | None = None,
-                  workers: int = 1, log: Callable = _quiet) -> MergerValues:
+                  workers: int = 1, llm_workers: int | None = None, log: Callable = _quiet) -> MergerValues:
     """Stage 8 (see the module docstring): every merger-bucket delisting of `delistings`, valued. `index` holds the
     run's securities, their ticker sightings, CUSIPs and the fails index (asked here for the acquirer tickers' rows
     around every merger, `FtdIndex.around`; an early merger's lines are read apart, `FtdIndex.apart`); `clients` the
     run's edgar, resolver, issuers (the issuer record), figi, payout_extractor and llm_extractor (`extract(record,
     security_name=)`). `closes` are the last closes the values read (stage 7's: a caller's answered close in place of
     the run's own); `own_closes` the run's own (a --last-trade-closes row, else the fails close; None: `closes` are
-    the run's own), which the reads and the first gate pass read."""
+    the run's own), which the reads and the first gate pass read. `workers` threads fill the EDGAR caches ahead;
+    `llm_workers` (default: `workers`) threads make the LLM calls ahead, since a call waits on the model, not on SEC."""
     own = closes if own_closes is None else own_closes
-    st = _Stage(clients, index, ftd_lo, workers, log)
+    st = _Stage(clients, index, ftd_lo, workers, workers if llm_workers is None else llm_workers, log)
     mergers = [e for e in delistings if e.record.bucket is CrspBucket.MERGER]
     raw, llm_terms, review = _read_terms(st, mergers, own, {sid: s.name or "" for sid, s in st.securities.items()})
     trade_day = {e.key: e.last_trade.day for e in delistings}
@@ -319,15 +321,15 @@ def _read_terms(st: _Stage, mergers: list[Delisting], closes: Mapping[DelistingK
         extractor = clients.payout_extractor
         warm(mergers, lambda e: extractor.extract(e.record, last_close=closes.get(e.key)),
              workers=st.workers, name="payouts")
-    if st.workers > 1 and clients.llm_extractor is not None:
+    if st.llm_workers > 1 and clients.llm_extractor is not None:
         # The LLM calls the sequential pass makes, filled ahead on the worker threads (sub-plan 5f: a new prompt
-        # version asks every merger again). Each call fills the cache entry the sequential pass then reads: the
-        # same candidates in the same order, and a failed call is never cached, so the tables do not depend on the
-        # worker count. A warm thread pays for a call the sequential pass skips only when an EDGAR text read
-        # fails on one thread and not the other.
+        # version asks every merger again; a call takes seconds, so one at a time is most of such a run). Each call
+        # fills the cache entry the sequential pass then reads: the same candidates in the same order, and a failed
+        # call is never cached, so the tables do not depend on the worker count. A warm thread pays for a call the
+        # sequential pass skips only when an EDGAR text read fails on one thread and not the other.
         llm = clients.llm_extractor
         warm(mergers, lambda e: llm.extract(e.record, security_name=names.get(e.sec_id, "")),
-             workers=st.workers, name="llm terms")
+             workers=st.llm_workers, name="llm terms")
     for e in mergers:
         key = e.key
         watch = DegradedWatch()

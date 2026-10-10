@@ -408,6 +408,60 @@ def test_payouts_and_llm_calls_are_filled_ahead_and_no_llm_answer_is_paid_for_tw
     assert len(llm) == len(keys)                   # no answer paid for twice
 
 
+def test_llm_calls_are_filled_ahead_on_llm_workers_while_sec_reads_stay_on_one_thread(fake_edgar, tmp_path):
+    """--llm-workers sets the threads for the LLM calls apart from --sec-workers: with one SEC worker the regex
+    payout reads stay on the main thread and the LLM calls still run on the warm threads, each paid for once."""
+    index, clients = _clients(fake_edgar)
+    regex, llm, guard = [], [], threading.Lock()
+
+    class _Regex:
+        def extract(self, record, last_close=None):
+            with guard:
+                regex.append(threading.current_thread().name)
+            return PayoutResult.none()
+
+    class _Client:
+        model = "m"
+
+        def extract(self, system, user, schema):
+            with guard:
+                llm.append(threading.current_thread().name)
+            return {"deal_type": "cash", "cash_per_share": 212.70, "stock_ratio": None, "acquirer_name": "CVS",
+                    "acquirer_ticker": "CVS", "confidence": "high", "quote": "$212.70 in cash",
+                    "package_basis": "fixed"}
+
+    clients.payout_extractor = _Regex()
+    clients.llm_extractor = LLMMergerTermsExtractor(fake_edgar, _Client(), cache_dir=tmp_path / "llm")
+    run(index, clients, Overrides(), out_dir=tmp_path / "out", log=lambda *_: None, sec_workers=1, llm_workers=4)
+    assert regex and set(regex) == {threading.main_thread().name}
+    assert llm and all(n.startswith("sec-warm") for n in llm)
+    assert len(llm) == len(list((tmp_path / "llm").glob("*.json")))
+
+
+def test_llm_answers_and_tables_do_not_depend_on_the_llm_worker_count(fake_edgar, tmp_path):
+    """One LLM thread and four leave the same answer files and the same tables: a warm thread only fills the cache
+    entry the sequential pass would fill itself."""
+    class _Client:
+        model = "m"
+
+        def extract(self, system, user, schema):
+            return {"deal_type": "cash", "cash_per_share": 212.70, "stock_ratio": None, "acquirer_name": "CVS",
+                    "acquirer_ticker": "CVS", "confidence": "high", "quote": "$212.70 in cash",
+                    "package_basis": "fixed"}
+
+    for n in (1, 4):
+        index, clients = _clients(fake_edgar)
+        clients.llm_extractor = LLMMergerTermsExtractor(fake_edgar, _Client(), cache_dir=tmp_path / f"llm{n}")
+        run(index, clients, Overrides(), out_dir=tmp_path / f"out{n}", log=lambda *_: None, sec_workers=1,
+            llm_workers=n)
+
+    def files(root):
+        return {p.name: p.read_bytes() for p in sorted(root.glob("*.json" if root.name.startswith("llm") else "*.csv"))}
+
+    assert files(tmp_path / "llm1") and files(tmp_path / "llm1") == files(tmp_path / "llm4")
+    assert files(tmp_path / "out1") and files(tmp_path / "out1") == files(tmp_path / "out4")
+
+
 def test_the_successor_search_is_warmed_with_the_query_the_sequential_pass_sends(fake_edgar, tmp_path,
                                                                                  monkeypatch):
     fake_edgar.company_map["GOOGL"] = {"cik_str": 1288776, "ticker": "GOOGL", "title": "Google Inc."}

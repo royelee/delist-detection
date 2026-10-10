@@ -526,6 +526,7 @@ class LLMMergerTermsExtractor:
         self.max_filings = max_filings
         clean_orphan_temps(self.cache_dir)    # a killed run's cut-off answer
         self._lock = threading.Lock()
+        self._path_locks: dict[Path, threading.Lock] = {}     # one per answer file asked for on a warm thread
         self._asked: set[Path] = set()        # the answers this run asked the model for, on any thread
         self._usage = {"from_cache": 0, "asked": 0, "failed": 0}
 
@@ -739,40 +740,51 @@ class LLMMergerTermsExtractor:
         (cached or fresh) payload is not a usable dict.
         """
         cache_path = self.cache_path(filing, record)
-
-        raw: object
-        if cache_path.exists():
-            try:
-                raw = json.loads(cache_path.read_text())
-            except (json.JSONDecodeError, OSError):
-                raw = None
-        else:
-            raw = None
-
-        if isinstance(raw, dict):
-            with self._lock:
-                asked = cache_path in self._asked
-            self._count("asked" if asked else "from_cache")
-        else:
-            user_prompt = self._user_prompt(excerpt, record, filing, security_name)
-            try:
-                raw = self.llm.extract(SYSTEM_PROMPT, user_prompt, RESULT_SCHEMA)
-            except Exception:
-                self._count("failed")
-                raise
+        with self._path_lock(cache_path):
+            raw = self._cached(cache_path)
             if isinstance(raw, dict):
-                self.cache_dir.mkdir(parents=True, exist_ok=True)
-                write_atomic(cache_path, json.dumps(raw))
                 with self._lock:
-                    self._asked.add(cache_path)
-                self._count("asked")
+                    asked = cache_path in self._asked
+                self._count("asked" if asked else "from_cache")
             else:
-                # an answer that is no JSON object is never cached, so it is asked again on every run: it counts
-                # itself degraded, like a failed call, and the delisting's row carries `resolution_degraded`
-                SEC_STATS.degraded("llm_call")
-                self._count("failed")
+                user_prompt = self._user_prompt(excerpt, record, filing, security_name)
+                try:
+                    raw = self.llm.extract(SYSTEM_PROMPT, user_prompt, RESULT_SCHEMA)
+                except Exception:
+                    self._count("failed")
+                    raise
+                if isinstance(raw, dict):
+                    self.cache_dir.mkdir(parents=True, exist_ok=True)
+                    write_atomic(cache_path, json.dumps(raw))
+                    with self._lock:
+                        self._asked.add(cache_path)
+                    self._count("asked")
+                else:
+                    # an answer that is no JSON object is never cached, so it is asked again on every run: it counts
+                    # itself degraded, like a failed call, and the delisting's row carries `resolution_degraded`
+                    SEC_STATS.degraded("llm_call")
+                    self._count("failed")
 
         return self._to_terms(raw, filing)
+
+    @staticmethod
+    def _cached(cache_path: Path) -> object:
+        """The answer stored at `cache_path`, None when there is none or it cannot be read."""
+        if not cache_path.exists():
+            return None
+        try:
+            return json.loads(cache_path.read_text())
+        except (json.JSONDecodeError, OSError):
+            return None
+
+    def _path_lock(self, cache_path: Path) -> threading.Lock:
+        """The lock of one answer file. Two mergers can ask for one file (the same filing and target ticker), and
+        the warm threads (`merger_value._read_terms`) run them at once: the second waits for the first's call and
+        reads its answer, so a call is never paid for twice. The answer is read and counted under the lock, so a
+        thread that waited counts what it read as any cache hit is counted (`from_cache`, or `asked` when this run
+        asked for it), and a warm thread's reads are still not counted (`_count`)."""
+        with self._lock:
+            return self._path_locks.setdefault(cache_path, threading.Lock())
 
     @staticmethod
     def _user_prompt(excerpt: str, record: DelistRecord, filing: EdgarSubmission | None = None,

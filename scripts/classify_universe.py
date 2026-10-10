@@ -100,7 +100,10 @@ MANUAL_OVERRIDES: dict[str, int] = {
 }
 
 DEFAULT_SEC_WORKERS = 4     # threads prefetching SEC data; each stage itself stays sequential
-MAX_SEC_WORKERS = 8         # one process's ceiling: all threads share one 8 requests/s limit
+MAX_SEC_WORKERS = 8         # the ceiling on SEC prefetch threads: all threads share one 8 requests/s limit (the LLM
+                            # threads can hold up to MAX_LLM_WORKERS more requests in flight, inside the same limit)
+DEFAULT_LLM_WORKERS = 8     # threads making LLM calls ahead of the merger stage (a call waits on the model, not SEC)
+MAX_LLM_WORKERS = 16
 DEFAULT_REVIEW_DECISIONS = str(ROOT / "data" / "review_decisions.csv")
 DEFAULT_SCORECARD = str(ROOT / "data" / "scorecard.json")
 
@@ -184,6 +187,13 @@ def build_parser() -> argparse.ArgumentParser:
                         "from every other SEC client on this machine through the lock file "
                         "$DELIST_DETECTION_SEC_RATE_LOCK (default ~/.cache/delist_detection/sec_rate.lock), "
                         "shares one 8 requests/s limit, so more threads only fill that limit sooner.")
+    p.add_argument("--llm-workers", type=int, default=DEFAULT_LLM_WORKERS,
+                   help=f"Threads that make the --extract-merger-terms-llm calls ahead of the merger stage (default "
+                        f"%(default)s, at most {MAX_LLM_WORKERS}; 1 = one call at a time). Independent of "
+                        "--sec-workers: a call waits on the model, and the tables are the same for any count. These "
+                        "threads also read a candidate filing's text from EDGAR when it is not cached, so up to this "
+                        "many SEC requests can be in flight (the 8 requests/s limit still holds); for one SEC "
+                        "request at a time give --sec-workers 1 --llm-workers 1.")
     p.add_argument("--as-of", type=run_date, default=None, metavar="YYYY-MM-DD",
                    help="The run date every freshness rule reads (default: today). Pin it to an earlier run's "
                         "date (run_manifest.json's as_of) to reproduce that run's tables from the same caches.")
@@ -275,6 +285,8 @@ def main() -> int:
     args = p.parse_args()
     if not 1 <= args.sec_workers <= MAX_SEC_WORKERS:
         p.error(f"--sec-workers must be between 1 and {MAX_SEC_WORKERS}")
+    if not 1 <= args.llm_workers <= MAX_LLM_WORKERS:
+        p.error(f"--llm-workers must be between 1 and {MAX_LLM_WORKERS}")
     try:
         require_user_agent()           # SEC 403s the fallback: stop before the first request
         use_machine_wide_limit()       # every SEC client on this machine shares the 8 requests/s
@@ -297,7 +309,8 @@ def main() -> int:
     )
     log = (lambda *a: None) if args.quiet else None
     summary = run(index, clients, overrides, out_dir=Path(args.output_dir), tol=args.merger_terms_sanity_tol,
-                  limit=args.limit, sec_workers=args.sec_workers, review_decisions=review_decisions,
+                  limit=args.limit, sec_workers=args.sec_workers, llm_workers=args.llm_workers,
+                  review_decisions=review_decisions,
                   scorecard=scorecard, id_baseline=id_baseline,
                   id_baseline_history=id_baseline_history, **({"log": log} if log else {}))
     print("Rows written:", summary.counts)

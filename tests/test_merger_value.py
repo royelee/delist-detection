@@ -57,13 +57,13 @@ class _Terms:
 
 def _value(delistings, *, llm=None, payout=None, edgar=None, resolver=None, name_index=None, ftd_client=None,
            securities=None, closes=None, own_closes=None, caller_terms=None, answers=None, workers=1,
-           log=None) -> MergerValues:
+           llm_workers=None, log=None) -> MergerValues:
     clients = Clients(edgar=edgar, resolver=resolver, classifier=None, figi=None, ftd_client=ftd_client or _NoFtd(),
                       payout_extractor=payout, llm_extractor=llm, issuers=IssuerRecord(edgar, name_index=name_index))
     index = LineIndex(securities or {}, {}, {}, FtdIndex(source=clients.ftd_client))
     return value_mergers(delistings, index, clients=clients, closes=closes or {}, own_closes=own_closes,
                          caller_terms=caller_terms or {}, answers=answers or PriceAnswers(), tol=0.15,
-                         workers=workers, log=log or (lambda *a: None))
+                         workers=workers, llm_workers=llm_workers, log=log or (lambda *a: None))
 
 
 def _stock(ratio, ticker, *, cash=None, value=None, name=None):
@@ -306,3 +306,25 @@ def test_the_contract_inputs_are_the_mergers_records(bucket):
         return
     assert (got[K].llm, got[K].acquirer_sec_id, got[K].price_ticker, got[K].leg_sec_ids) == (
         llm, "BBG0ACQ", "ACQN", {"B": "BBG0B"})
+
+
+def test_the_llm_calls_are_filled_ahead_on_their_own_threads_whatever_the_sec_workers():
+    """`llm_workers` sets the threads that make the LLM calls ahead, apart from the SEC `workers`: one SEC request
+    at a time still gets the LLM calls on many threads, and the terms are the one-thread run's."""
+    import threading
+    threads, cache, guard = [], {}, threading.Lock()
+
+    class Ext:
+        def extract(self, record, security_name=""):
+            with guard:
+                threads.append(threading.current_thread().name)
+                return cache.setdefault(record.ticker, MergerTerms("cash", 10.0 + len(cache), None, None, None, "high",
+                                                                   "8-K:x", "", package_basis="fixed"))
+
+    es = [_merger(t, t, "2016-09-16", date(2016, 9, 15)) for t in ("AAA", "BBB", "CCC")]
+    one = {k: v.llm for k, v in _value(es, llm=Ext(), workers=1, llm_workers=1).records.items()}
+    assert threads == [threading.main_thread().name] * 3
+    threads.clear()
+    many = {k: v.llm for k, v in _value(es, llm=Ext(), workers=1, llm_workers=4).records.items()}
+    assert many == one
+    assert sum(n.startswith("sec-warm") for n in threads) == 3 and threads[-3:] == [threading.main_thread().name] * 3

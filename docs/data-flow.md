@@ -224,7 +224,10 @@ download themselves.
 issuer resolution (one task per era), the Form 25 search (one per security),
 payout extraction (one per merger) and the successor search (one per unresolved
 exchange transfer). It runs each stage's own code on N threads
-(`prefetch.warm`) and throws the answers away.
+(`prefetch.warm`) and throws the answers away. `--llm-workers N` (default 8, at
+most 16) does the same for the LLM merger-terms calls, filled ahead the same
+way; those threads also read uncached filing text from EDGAR, inside the same
+8 requests/s limit.
 - **Fill-only threads.** Warm threads only fill missing cache entries; they
   never refresh an existing one (`sec_stats.fill_only`). The stage then runs one
   item at a time on the main thread, in the usual order, reading exactly what a
@@ -236,8 +239,8 @@ exchange transfer). It runs each stage's own code on N threads
 - **Warm finders.** They use the run's own MIDAS and Nasdaq-halt clients, each
   behind one lock (`prefetch.Serialized`), so they take the same last-trade
   anchors as the sequential pass.
-- **What stays on the main thread.** The fails-to-deliver downloads, OpenFIGI
-  and the LLM extractor. OpenFIGI's per-security listing check is sent as
+- **What stays on the main thread.** The fails-to-deliver downloads and OpenFIGI.
+  The LLM extractor's calls are filled ahead on the `--llm-workers` threads. OpenFIGI's per-security listing check is sent as
   batched mapping requests.
 - **Measured speed** (task 16's live measurement, 2026-09-24). Cold runs on
   150 eras: 1 worker 18m, 4 workers 11m, 8 workers 5m (3.6× wall time; issuer resolution 4.6×). A fully warm
@@ -297,7 +300,7 @@ exchange transfer). It runs each stage's own code on N threads
   goes through no SEC limiter, so it is not cancelled — the worker stops at its
   next SEC request after it. A first Ctrl-C does the same, then waits for each
   worker's one in-flight request (an EDGAR request times out at 30 s, a
-  MIDAS/FTD ZIP download at 180 s). A second Ctrl-C during that wait interrupts
+  MIDAS/FTD ZIP download at 180 s; an LLM call in flight has no such bound). A second Ctrl-C during that wait interrupts
   the wait itself and propagates at once, but the workers are not daemon
   threads, so the interpreter still waits for each one's in-flight request
   before the process exits.

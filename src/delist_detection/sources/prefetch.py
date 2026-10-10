@@ -88,7 +88,10 @@ def warm(items: Iterable[Any], task: Callable[..., object], *, workers: int,
     A stopped worker may first sleep out a retry backoff or a shared pause (at
     most 4 s) before that next request raises, and a request to another service
     (OpenFIGI, the Nasdaq halt feed) goes through no SEC limiter, so it is not
-    cancelled: the worker stops at its next SEC request after it. On a first
+    cancelled: the worker stops at its next SEC request after it. The same
+    holds for an LLM call (`--llm-workers`): it goes through no SEC limiter,
+    has no timeout of its own, and the wait on a stop lasts until the model
+    answers or the client gives up. On a first
     Ctrl-C this function waits for the workers; each finishes the one request it
     has in flight (an EDGAR request times out after 30 s without an answer, a
     SEC data-file download such as a MIDAS ZIP after 180 s). A second Ctrl-C

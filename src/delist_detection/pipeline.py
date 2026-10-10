@@ -239,7 +239,7 @@ def _warm_delisting_search(clients: Clients, ordered: list[Security], listing: d
 
 def run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_dir: Path,
         tol: float = DEFAULT_TOL, limit: int | None = None, log: Callable = _stderr,
-        sec_workers: int = 1, review_decisions: Sequence[Decision] = (),
+        sec_workers: int = 1, llm_workers: int | None = None, review_decisions: Sequence[Decision] = (),
         scorecard: run_scorecard.ScorecardConfig = run_scorecard.ScorecardConfig(),
         id_baseline: Sequence[Mapping[str, str]] = (),
         id_baseline_history: Sequence[Mapping[str, str]] = ()) -> RunSummary:
@@ -271,7 +271,11 @@ def run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_
     many threads (`prefetch.warm`: fill-only, every thread under the one limiter).
     Each stage itself still runs one item at a time, in its usual order, on this
     thread, so the same caches and run date (`clients.as_of`) give byte-identical
-    tables for any worker count. A refusal on any thread aborts the run before
+    tables for any worker count. `llm_workers` (default: `sec_workers`) is the same for the LLM merger-terms calls
+    (`merger_value._read_terms`), which wait on the model, so a run with one SEC worker can still make them on many
+    threads. Those threads also read a candidate filing's text from EDGAR when it is not cached, so up to
+    `llm_workers` SEC requests can then be in flight at once (the shared 8 requests/s limit still holds); one SEC
+    request at a time takes `sec_workers=1, llm_workers=1`. A refusal on any thread aborts the run before
     anything is written. The resolver's memo is written after issuer resolution,
     after the acquirer lookups, and on the way out, error or not. On the way out
     of an aborted run, a memo that cannot be written is logged and the abort (a
@@ -279,8 +283,8 @@ def run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_
     still exits with that abort's code (2 for a refusal, 4 for an OpenFIGI outage)."""
     try:
         summary = _run(index, clients, overrides, out_dir=out_dir, tol=tol, limit=limit, log=log,
-                       sec_workers=sec_workers, review_decisions=review_decisions, scorecard=scorecard,
-                       id_baseline=id_baseline, id_baseline_history=id_baseline_history)
+                       sec_workers=sec_workers, llm_workers=llm_workers, review_decisions=review_decisions,
+                       scorecard=scorecard, id_baseline=id_baseline, id_baseline_history=id_baseline_history)
     except BaseException:
         try:
             _flush_memo(clients)
@@ -294,12 +298,17 @@ def run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_
 @dataclass
 class _RunContext:
     """What every stage of one run shares: the clients, the one run date (every
-    window ends on it), the log, the prefetch worker count and the SEC meter."""
+    window ends on it), the log, the prefetch worker counts (SEC reads, LLM calls) and the SEC meter."""
     clients: Clients
     as_of: date
     log: Callable
     sec_workers: int
     meter: run_manifest.StageMeter
+    llm_workers: int | None = None       # None: as many as `sec_workers`
+
+    def __post_init__(self) -> None:
+        if self.llm_workers is None:
+            self.llm_workers = self.sec_workers
 
 
 @dataclass
@@ -552,7 +561,7 @@ def _merger_values(ctx: _RunContext, delistings: list[Delisting], securities: di
     values = value_mergers(delistings, acquirer_line.LineIndex(securities, sightings, sec_cusips, ftd),
                            clients=ctx.clients, closes=closes.closes, own_closes=closes.own,
                            caller_terms=overrides.merger_terms, answers=answers, tol=tol, ftd_lo=ftd_lo,
-                           workers=ctx.sec_workers, log=ctx.log)
+                           workers=ctx.sec_workers, llm_workers=ctx.llm_workers, log=ctx.log)
     _flush_memo(ctx.clients)
     ctx.meter.done("payouts", mark)
     return values
@@ -1529,14 +1538,15 @@ def _merger_terms_usage(extractor) -> dict | None:
 
 
 def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_dir: Path, tol: float,
-         limit: int | None, log: Callable, sec_workers: int,
+         limit: int | None, log: Callable, sec_workers: int, llm_workers: int | None = None,
          review_decisions: Sequence[Decision] = (),
          scorecard: run_scorecard.ScorecardConfig = run_scorecard.ScorecardConfig(),
          id_baseline: Sequence[Mapping[str, str]] = (),
          id_baseline_history: Sequence[Mapping[str, str]] = ()) -> RunSummary:
     """The run's stages in order (each function's docstring says what it does);
     `run` wraps it with the resolver memo's final flush."""
-    ctx = _RunContext(clients, clients.as_of or date.today(), log, sec_workers, run_manifest.StageMeter(log))
+    ctx = _RunContext(clients, clients.as_of or date.today(), log, sec_workers, run_manifest.StageMeter(log),
+                      llm_workers)
     for capability in clients.absent():       # each once, before anything is read (production's offer them all)
         log(f"capability absent: {capability.name}: {capability.without}")
     clients.issuers.forget()                  # one issuer record per run: each issuer is read afresh, once
