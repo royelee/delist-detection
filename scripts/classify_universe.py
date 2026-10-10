@@ -183,7 +183,8 @@ def build_parser() -> argparse.ArgumentParser:
                         "reconcile tightly.")
     p.add_argument("--sec-workers", type=int, default=DEFAULT_SEC_WORKERS,
                    help=f"Threads that fetch SEC data ahead of each stage (default %(default)s, at most "
-                        f"{MAX_SEC_WORKERS}; 1 = one request at a time). Every SEC request from this process, and "
+                        f"{MAX_SEC_WORKERS}; 1 = one request at a time, with --extract-merger-terms-llm "
+                        "only together with --llm-workers 1). Every SEC request from this process, and "
                         "from every other SEC client on this machine through the lock file "
                         "$DELIST_DETECTION_SEC_RATE_LOCK (default ~/.cache/delist_detection/sec_rate.lock), "
                         "shares one 8 requests/s limit, so more threads only fill that limit sooner.")

@@ -312,14 +312,15 @@ def test_the_llm_calls_are_filled_ahead_on_their_own_threads_whatever_the_sec_wo
     """`llm_workers` sets the threads that make the LLM calls ahead, apart from the SEC `workers`: one SEC request
     at a time still gets the LLM calls on many threads, and the terms are the one-thread run's."""
     import threading
-    threads, cache, guard = [], {}, threading.Lock()
+    threads, guard = [], threading.Lock()
+    cash = {"AAA": 10.0, "BBB": 11.0, "CCC": 12.0}      # each ticker's value, whichever thread asks first
 
     class Ext:
         def extract(self, record, security_name=""):
             with guard:
                 threads.append(threading.current_thread().name)
-                return cache.setdefault(record.ticker, MergerTerms("cash", 10.0 + len(cache), None, None, None, "high",
-                                                                   "8-K:x", "", package_basis="fixed"))
+            return MergerTerms("cash", cash[record.ticker], None, None, None, "high", "8-K:x", "",
+                               package_basis="fixed")
 
     es = [_merger(t, t, "2016-09-16", date(2016, 9, 15)) for t in ("AAA", "BBB", "CCC")]
     one = {k: v.llm for k, v in _value(es, llm=Ext(), workers=1, llm_workers=1).records.items()}
