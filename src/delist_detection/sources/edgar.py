@@ -103,6 +103,27 @@ def _trim_hits(hits: Any) -> list[dict]:
     return out
 
 
+def _filed_by(hits: list[dict], day: date) -> list[dict]:
+    """The full-text-search hits filed on or before `day` (a hit with no file date is kept): an --as-of run sees no
+    filing made after its run date, whenever the answer was fetched."""
+    last = day.isoformat()
+    return [h for h in hits if not (h.get("_source") or {}).get("file_date", "") > last]
+
+
+def _as_filed_by(sub: Any, day: date) -> Any:
+    """A submissions JSON as it stood on `day`: its recent filings dated after `day` dropped, every column cut alike.
+    The cached copy keeps them for a later run date. Any other payload is returned as it is."""
+    recent = sub.get("filings", {}).get("recent") if isinstance(sub, dict) else None
+    dates = recent.get("filingDate") if isinstance(recent, dict) else None
+    last = day.isoformat()
+    if not isinstance(dates, list) or all(d <= last for d in dates):
+        return sub
+    keep = [i for i, d in enumerate(dates) if d <= last]
+    cut = {k: [v[i] for i in keep] if isinstance(v, list) and len(v) == len(dates) else v
+           for k, v in recent.items()}
+    return {**sub, "filings": {**sub["filings"], "recent": cut}}
+
+
 def submissions_fresh_after(on: date, today: date | None = None) -> date:
     """The `fresh_after` for reading an issuer's submissions about an event on `on`:
     `min(on + 45 days, today)`, where `today` is the run date (default: the clock).
@@ -505,12 +526,13 @@ class EdgarClient:
             return out
 
     def submissions(self, cik: int | str, fresh_after: date | None = None) -> dict[str, Any]:
-        """The company's submissions JSON. A cached copy fetched before
-        `fresh_after` is fetched again (and the cache rewritten), so filings
-        made after the cache date are seen."""
+        """The company's submissions JSON as it stood on the run date: a recent filing dated after it is left out
+        (`_as_filed_by`), so an --as-of run reads what that day could read, however fresh the copy. A cached copy
+        fetched before `fresh_after` is fetched again (and the cache rewritten), so filings made after the cache
+        date are seen."""
         cik_str = str(int(cik)).zfill(10)
         url = f"{SEC_HOST}/submissions/CIK{cik_str}.json"
-        return self._get_json(url, fresh_after=fresh_after)
+        return _as_filed_by(self._get_json(url, fresh_after=fresh_after), self.today)
 
     def fetch_filing_text(self, cik: int | str, accession: str, primary_doc: str) -> str:
         """Fetch a filing's primary document, return stripped plain text.
@@ -645,12 +667,12 @@ class EdgarClient:
                 memo = self._run_memo.get(url)
                 if memo is not None:
                     SEC_STATS.add("cache:full_text_search")
-                    return [dict(h) for h in memo]
+                    return [dict(h) for h in _filed_by(memo, self.today)]
                 if window_end is not None:
                     cached = self._efts_cached(cp, window_end, any_age=filling_only())
                     if cached is not None:
                         SEC_STATS.add("cache:full_text_search")
-                        return list(cached)
+                        return _filed_by(list(cached), self.today)
             try:
                 resp = self._get(url, host="efts.sec.gov", accept="application/json")   # EdgarBlocked propagates
             except requests.RequestException:
@@ -686,7 +708,7 @@ class EdgarClient:
                 else:
                     write_atomic(cp, json.dumps({"schema": EFTS_SCHEMA, "window_end": window_end.isoformat(),
                                                   FETCHED_KEY: self.today.isoformat(), EFTS_KEY: hits}))
-            return list(hits)
+            return _filed_by(list(hits), self.today)
 
     def full_text_search(self, q: str, forms: str, lo: date, hi: date, *,
                          ciks: Sequence[int] = ()) -> list[dict]:

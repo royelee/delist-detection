@@ -193,3 +193,22 @@ def test_a_5xx_without_a_cached_copy_still_raises(tmp_path):
     with pytest.raises(requests.HTTPError):
         client.submissions(42, fresh_after=EVENT)
     assert session.calls == [URL, URL, URL]
+
+
+def test_a_run_date_hides_the_filings_made_after_it(tmp_path):
+    """An --as-of run reads the issuer as it stood on its run date: a recent filing dated after the run date is not
+    seen (WBD's 2026-10 Form 25 in a run as of 2026-09-25), wherever it sits in the list, and the cached copy keeps
+    every filing for a later run date."""
+    recent = {"accessionNumber": ["a3", "a2", "a1"], "form": ["25-NSE", "8-K", "10-Q"],
+              "filingDate": ["2026-10-06", "2026-09-25", "2026-08-05"], "items": ["", "2.01", ""]}
+    cached = {"name": "X Co", "__fetched__": "2026-09-25", "filings": {"recent": recent, "files": []}}
+    client = EdgarClient(cache_dir=tmp_path, session=_Session(), today=date(2026, 9, 25))
+    cp = client._cache_path(URL)
+    cp.write_text(json.dumps(cached))
+    got = client.submissions(42)
+    assert got["filings"]["recent"] == {"accessionNumber": ["a2", "a1"], "form": ["8-K", "10-Q"],
+                                        "filingDate": ["2026-09-25", "2026-08-05"], "items": ["2.01", ""]}
+    assert [f.accession for f in client.recent_filings(42)] == ["a2", "a1"]
+    assert json.loads(cp.read_text()) == cached
+    later = EdgarClient(cache_dir=tmp_path, session=_Session(), today=date(2026, 10, 10))
+    assert later.submissions(42)["filings"]["recent"]["accessionNumber"] == ["a3", "a2", "a1"]

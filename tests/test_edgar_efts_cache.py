@@ -252,3 +252,19 @@ def test_the_run_memo_returns_copies_not_shared_dicts(tmp_path):
     first[0]["_id"] = "mutated"                    # a caller changing its own copy
     second = c.efts_search(URL, window_end=None)    # must not see that change
     assert second == [HIT]
+
+
+def test_a_run_date_hides_the_hits_filed_after_it(tmp_path):
+    """An --as-of run sees no full-text-search hit filed after its run date, from the network or the cache; the
+    cached answer keeps every hit for a later run date."""
+    late = {"_id": "0000000001-26-000009:y.htm",
+            "_source": {"ciks": ["0000000001"], "display_names": ["X CO  (X)  (CIK 0000000001)"],
+                        "file_date": "2026-09-24"}}
+    url = ("https://efts.sec.gov/LATEST/search-index?q=%22X%22&forms=8-K"
+           "&dateRange=custom&startdt=2026-08-01&enddt=2026-10-31")
+    early = {**HIT, "_source": {**HIT["_source"], "file_date": "2026-09-01"}}
+    client, _ = _client(tmp_path, _answer(early, late), today=date(2026, 9, 23))
+    assert client.efts_search(url, window_end=date(2026, 10, 31)) == [early]
+    assert client.efts_search(url, window_end=date(2026, 10, 31)) == [early]        # the cached answer, filtered
+    later, _ = _client(tmp_path, today=date(2026, 9, 28))           # still within the answer's 7-day hold
+    assert later.efts_search(url, window_end=date(2026, 10, 31)) == [early, late]
