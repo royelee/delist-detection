@@ -1376,3 +1376,68 @@ def test_a_weak_pick_across_a_change_of_issuer_with_no_evidence_of_two_lines_kee
     show. The issuer does not go on as another security and no bankruptcy lies between: one line, as before."""
     res, detached, old, new = _two_lines(old_cik=1316631, new_cik=1570585)
     assert (res[old.key].sec_id, res[old.key].source) == ("BBGTODAY001", "ticker") and detached == {}
+
+
+# --- a placeholder holds one line (FB-005, Liberty's tracking stocks) -------------------------------------------------
+
+
+def _placeholder_lines(specs, handoffs=(), spans=None):
+    """Eras of one issuer and class that no FIGI answers for: `specs` is (label, ticker, first observation, CUSIPs).
+    Returns (resolutions by label, eras by label)."""
+    import dataclasses
+
+    from delist_detection.identity.security_master import resolve_with_identity_guard
+    eras = {lab: dataclasses.replace(_era(t, (d, "LIBERTY CORP")), ftd_cusips=tuple(c)) for lab, t, d, c in specs}
+    spans = spans or {}
+    res, _ = resolve_with_identity_guard(
+        FigiResolver(_Figi({}), cusip_span=lambda c: spans.get(c)), list(eras.values()),
+        issuers=issuers_by_era({e.key: 1355096 for e in eras.values()}),
+        cusips={e.key: list(e.ftd_cusips) for e in eras.values()}, handoffs=[h(eras) for h in handoffs])
+    return {lab: res[e.key] for lab, e in eras.items()}, eras
+
+
+LIBERTY_SPANS = {"53071M104": ("2007-12-17", "2018-04-10"), "53071M302": ("2008-01-02", "2018-04-10")}
+
+
+def test_two_placeholder_lines_trading_at_once_are_two_suffixed_placeholders():
+    """Liberty: LINTA (later QVCA) and LCAPA trade on different CUSIPs on the same days, so they are two securities;
+    a shared CUSIP (LINTA and QVCA) keeps one line together. Both take their first CUSIP as a suffix."""
+    res, eras = _placeholder_lines(
+        [("a", "LINTA", "2008-12-31", ["53071M104"]), ("b", "LCAPA", "2008-12-31", ["53071M302"]),
+         ("c", "QVCA", "2014-12-31", ["53071M104"])],
+        handoffs=[lambda e: Handoff(e["a"].key, e["c"].key, "shared_cusip", "53071M104")], spans=LIBERTY_SPANS)
+    assert res["a"].sec_id == res["c"].sec_id == "CIK1355096-COMMON-53071M104"
+    assert res["b"].sec_id == "CIK1355096-COMMON-53071M302"
+    assert {r.source for r in res.values()} == {"placeholder"}
+
+
+SEQUENTIAL = {"0OLDCUSIP": ("2008-01-02", "2012-06-01"), "0NEWCUSIP": ("2012-06-04", "2018-01-02")}
+TWO_ERAS = [("a", "AAA", "2008-12-31", ["0OLDCUSIP"]), ("b", "BBB", "2012-12-31", ["0NEWCUSIP"])]
+
+
+def test_a_line_through_a_cusip_switch_stays_one_unsuffixed_placeholder():
+    res, eras = _placeholder_lines(
+        TWO_ERAS, spans={"0OLDCUSIP": ("2008-01-02", "2012-12-31"), "0NEWCUSIP": ("2012-06-04", "2018-01-02")},
+        handoffs=[lambda e: Handoff(e["a"].key, e["b"].key, "cusip_handoff", "0OLDCUSIP", "0NEWCUSIP", "2012-06-01")])
+    assert res["a"].sec_id == res["b"].sec_id == "CIK1355096-COMMON"
+
+
+def test_sequential_placeholder_eras_with_no_link_stay_one_placeholder():
+    """A rename no switch links: their CUSIPs do not trade at once, so nothing says they are two lines."""
+    res, eras = _placeholder_lines(TWO_ERAS, spans=SEQUENTIAL)
+    assert res["a"].sec_id == res["b"].sec_id == "CIK1355096-COMMON"
+
+
+def test_a_few_days_of_settling_overlap_is_no_second_line():
+    res, eras = _placeholder_lines(
+        TWO_ERAS, spans={"0OLDCUSIP": ("2008-01-02", "2012-06-20"), "0NEWCUSIP": ("2012-06-04", "2018-01-02")})
+    assert res["a"].sec_id == res["b"].sec_id == "CIK1355096-COMMON"
+
+
+def test_an_era_with_no_cusip_goes_with_the_line_of_its_ticker():
+    """No CUSIP, so no evidence of its own: it follows its ticker's line (else the nearest line in time)."""
+    res, eras = _placeholder_lines(
+        [("a", "LINTA", "2008-12-31", ["53071M104"]), ("b", "LCAPA", "2008-12-31", ["53071M302"]),
+         ("c", "LCAPA", "2015-12-31", [])], spans=LIBERTY_SPANS)
+    assert res["a"].sec_id == "CIK1355096-COMMON-53071M104"
+    assert res["b"].sec_id == res["c"].sec_id == "CIK1355096-COMMON-53071M302"

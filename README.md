@@ -113,7 +113,11 @@ sec_id, issuer_cik, share_class, name, security_type, observed, figi_source
 ```
 
 `sec_id` is the US composite FIGI, or a placeholder `CIK<cik>-<CLASS>` when
-none is confirmed. `figi_source` is how it was found: `pin`, `ticker`,
+none is confirmed. A placeholder holds one line: when an issuer and class have
+more than one placeholder line (CUSIPs that trade on the same days and no CUSIP
+switch links, Liberty Interactive's LINTA and LCAPA tracking stocks), each line
+is named by its first CUSIP, `CIK1355096-COMMON-53071M104`, and the unsuffixed
+id is not used. `figi_source` is how it was found: `pin`, `ticker`,
 `cusip`, `name`, `handoff` (a renamed ticker's era with no FIGI of its own,
 joined to a same-issuer, same-class sibling's composite through their
 shared-CUSIP or CUSIP-switch evidence — spec §17), `backfill` (an era whose
@@ -1293,7 +1297,8 @@ never touched by this guard either way. `figi_source=handoff` marks a joined
 sibling too, ranked just above `placeholder`.
 
 When nothing is accepted, the security gets the
-placeholder `sec_id` `CIK<cik>-<CLASS>` (flagged `no_figi`, an `info` flag:
+placeholder `sec_id` `CIK<cik>-<CLASS>` (`CIK<cik>-<CLASS>-<first CUSIP>` for
+each of several lines of one issuer and class; flagged `no_figi`, an `info` flag:
 counted in `review_summary.csv`, not listed in `review.csv`; `securities.csv`
 marks the security `figi_source=placeholder`); with no CIK
 either, the observation goes to `review.csv` as `observation_unresolved`.

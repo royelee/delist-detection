@@ -155,7 +155,8 @@ class Identity:
             if cik is None or r is None or not r.sec_id or is_placeholder(r.sec_id):
                 continue
             held[placeholder_id(cik, share_class_from_name(e.name))].add(r.sec_id)
-        return {p: next(iter(f)) for p, f in held.items() if len(f) == 1 and p not in kept}
+        split = {p for p in held if any(k.startswith(p + "-") for k in kept)}      # lines named by a CUSIP: a split
+        return {p: next(iter(f)) for p, f in held.items() if len(f) == 1 and p not in kept and p not in split}
 
 
 def _quiet(*_: Any) -> None:

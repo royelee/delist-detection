@@ -187,7 +187,8 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   "brk.b" and "BRK B" are BRK-B), `regular_way` (EHAB-WI is EHAB), `bloomberg_ticker` (OpenFIGI's BF/A),
   `bare_ticker` (the fails files' BRKB, with a post-split "...D" or a new CUSIP's "...ZZZZ" appended to it),
   `class_suffix` (a one-letter class ticker's base and letter: UAC-C is UAC and C). The placeholder sec_id:
-  `placeholder_id` (`CIK<cik>-<CLASS>` from a class code, `SHARE_CLASS_CODE`) and `is_placeholder`. A class code
+  `placeholder_id` (`CIK<cik>-<CLASS>` from a class code, `SHARE_CLASS_CODE`; an optional CUSIP appends
+  `-<CUSIP>`, one of several lines of an issuer and class, FB-005) and `is_placeholder` (a prefix test). A class code
   (COMMON, CLASS X, SERIES X) and its letter (`class_letter`). One reader per kind of text, each its own rule:
   a security's name, observed, EDGAR's or OpenFIGI's (`share_class_from_name`; `name_class_letter`, the era split's
   and the identity rules'; `strip_class_words`, the name an 8-K12B prints, for stage 9's and the handoffs'
@@ -701,6 +702,13 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   (tracking stocks). The other way too (FB-003): a switch joins a plain-named era to a lettered one of its issuer
   when `identifiers.fits_class` holds over `issuer_letters` (the letters the issuer's eras name) and the letter the
   old CUSIP's fails descriptions name: WPO ("WASHINGTON POST CO CLB") onto Graham Holdings' class B GHC.
+  A placeholder holds one line (FB-005): `split_placeholder_lines`, the end of `resolve_with_identity_guard`,
+  groups the eras that took one placeholder (an issuer and class) by shared CUSIP or a CUSIP switch
+  (`_carrying_links`), makes two groups separate lines when their CUSIPs' trading fails rows (`FigiResolver.cusip_span`)
+  share `PLACEHOLDER_OVERLAP_DAYS` (60) days, puts an era with no CUSIP of its own with the line holding an era of its
+  ticker (else the nearest in time), and, with more than one line, names every line by its first CUSIP (the earliest
+  trading row: Liberty's `CIK1355096-COMMON-53071M104` for LINTA/QVCA and `-53071M302` for LCAPA); one line keeps
+  the unsuffixed id. `Identity.renames` leaves out a placeholder whose lines are suffixed (that is a split).
 - `identity/history.py` — a security's dated history: its sightings
   (`ticker_sightings`/`cusip_sightings`, and `span_sightings` for a successor the run added, stage 9d: its span's
   days, source `SPAN`, and its CUSIPs' fails rows; a fails row is a ticker
@@ -1596,7 +1604,9 @@ expiration is 0.0 in the table and no correction in the firm month, which leaves
   single table is always whole.
 - **`sec_id` is a US composite FIGI, or a placeholder.** When no FIGI can be
   confirmed it is `CIK<cik>-<CLASS>` (`identifiers.placeholder_id`) —
-  still a stable, joinable key, just not a real FIGI. `identity/figi_resolution.py`
+  still a stable, joinable key, just not a real FIGI. A placeholder holds one line: an issuer and class with more
+  than one placeholder line (CUSIPs trading on the same days, no switch between them) name each
+  `CIK<cik>-<CLASS>-<first CUSIP>` and the unsuffixed id is unused (`security_master.split_placeholder_lines`). `identity/figi_resolution.py`
   never accepts a candidate on Bloomberg's current name alone: a dead line
   gets renamed to its acquirer, so acceptance needs a CUSIP match, or a
   ticker+name match against the observation name or, failing that, the

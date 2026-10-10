@@ -54,6 +54,15 @@ def test_share_class_and_placeholders():
     assert is_placeholder("CIK1-COMMON") and not is_placeholder("BBG000FJLFX8")
 
 
+def test_a_placeholder_line_takes_its_first_cusip_as_a_suffix():
+    """FB-005: an issuer and class with more than one placeholder line name each by its first CUSIP."""
+    assert placeholder_id(1355096, None, "53071M104") == "CIK1355096-COMMON-53071M104"
+    assert placeholder_id(1, "SERIES A", "53071m302") == "CIK1-SERIES-A-53071M302"
+    assert is_placeholder("CIK1355096-COMMON-53071M104")
+    with pytest.raises(ValueError):
+        placeholder_id(1, None, "not a cusip")
+
+
 def test_a_placeholder_is_built_from_a_class_code_only():
     assert placeholder_id(1, "SERIES A") == "CIK1-SERIES-A"
     assert placeholder_id(1, share_class_from_name("BERKSHIRE HATHAWAY INC CLASS B")) == "CIK1-CLASS-B"

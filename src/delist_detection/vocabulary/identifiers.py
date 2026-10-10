@@ -13,7 +13,8 @@ and its class ("BRK-B").
 - `bare_ticker`: the fails files' spelling, with no separator (BRKB).
 - `class_suffix`: a one-letter class ticker's base and letter (UAC-C: UAC and C).
 
-The placeholder sec_id: `placeholder_id` (`CIK<cik>-<CLASS>`, decision 7) and `is_placeholder`.
+The placeholder sec_id: `placeholder_id` (`CIK<cik>-<CLASS>`, decision 7; `CIK<cik>-<CLASS>-<CUSIP>` for one of
+several placeholder lines of an issuer and class, FB-005) and `is_placeholder`.
 
 The share class. A class code is COMMON, CLASS X or SERIES X (`SHARE_CLASS_CODE`, what `share_class_from_name`
 gives); `class_letter` reads its letter. The readers of a class from text, one per kind of text, each with its own
@@ -84,14 +85,24 @@ def class_suffix(ticker: str) -> tuple[str, str] | None:
 SHARE_CLASS_CODE = re.compile(r"COMMON|CLASS [A-Z]|SERIES [A-Z0-9]")     # share_class_from_name's values
 
 
-def placeholder_id(cik: int, share_class: str | None) -> str:
+PLACEHOLDER_CUSIP = re.compile(r"[0-9A-Z]{9}")
+
+
+def placeholder_id(cik: int, share_class: str | None, cusip: str | None = None) -> str:
     """`CIK<cik>-<CLASS>` from a class code (decision 7): COMMON, CLASS X or SERIES X, as `share_class_from_name`
     gives it ("CIK14693-CLASS-A"; no class is COMMON). Free class text could give one class two IDs, so anything
-    else raises ValueError."""
+    else raises ValueError. With a `cusip` (nine letters or digits) the id is the placeholder line that CUSIP began
+    ("CIK1355096-COMMON-53071M104", FB-005): an issuer and class with more than one placeholder line name every
+    one by its first CUSIP."""
     code = (share_class or "COMMON").upper().strip()
     if not SHARE_CLASS_CODE.fullmatch(code):
         raise ValueError(f"placeholder_id: {share_class!r} is not a class code")
-    return f"CIK{int(cik)}-{code.replace(' ', '-')}"
+    out = f"CIK{int(cik)}-{code.replace(' ', '-')}"
+    if cusip is None:
+        return out
+    if not PLACEHOLDER_CUSIP.fullmatch(cusip.upper()):
+        raise ValueError(f"placeholder_id: {cusip!r} is not a CUSIP")
+    return f"{out}-{cusip.upper()}"
 
 
 def is_placeholder(sec_id: str) -> bool:

@@ -12,6 +12,7 @@ and asks `FigiResolver` (with `resolve_with_identity_guard`, the CUSIP links `cu
 """
 from __future__ import annotations
 
+import re
 from bisect import bisect_left, bisect_right
 from collections import defaultdict
 from collections.abc import Callable, Collection, Mapping, Sequence
@@ -794,7 +795,99 @@ def resolve_with_identity_guard(resolver: "FigiResolver", eras: Sequence[TickerE
             if res[k].source == "placeholder" and res[k].sec_id != target:
                 res[k] = replace(res[k], sec_id=target) if is_placeholder(target) else replace(
                     res[k], sec_id=target, source="handoff", candidate=res[last.key].candidate, flags=())
+    split_placeholder_lines(res, by_key, issuers, cusips, handoffs, bankrupt_between, resolver.cusip_span, resolver.log)
     return res, detached
+
+
+PLACEHOLDER_OVERLAP_DAYS = 60       # two placeholder lines trade at once when their CUSIPs' fails rows share this many days
+
+
+def split_placeholder_lines(res: dict[str, EraResolution], eras: Mapping[str, TickerEra], issuers: Mapping[str, Issuer],
+                            cusips: Mapping[str, list[str]], handoffs: Sequence[Handoff],
+                            bankrupt_between: Callable[[str, str, int | None], bool] | None,
+                            span: Callable[[str], tuple[str, str] | None] | None,
+                            log: Callable[[str], None] = lambda _: None) -> None:
+    """FB-005: a placeholder holds one line. The eras that took one placeholder (an issuer and class, no FIGI
+    anywhere) can be Liberty Interactive's LINTA, LCAPA and LVNTA: separate tracking stocks, each its own CUSIP,
+    trading on the same days, which `placeholder_id` alone cannot tell apart. They are grouped into lines, `res`
+    changed in place:
+
+    - eras whose own CUSIPs (`cusips`) are one line stay together: they share a CUSIP, or a CUSIP switch leads from
+      one to the other (`_carrying_links`); LINTA and its later QVCA share 53071M104;
+    - two such groups are separate lines when their CUSIPs' trading fails rows (`span`, a CUSIP's first and last
+      trading day) share at least `PLACEHOLDER_OVERLAP_DAYS` days: a rename or a switch settles out in a few days
+      and never does. Groups that do not overlap (a rename no switch links) stay one line, as before;
+    - an era with no CUSIP of its own, or none that trades, has no evidence of its own: it goes with the line that
+      holds an era of its ticker, else the line nearest to it in time.
+
+    When an issuer and class end with more than one line, every line is named by its first CUSIP, the one with the
+    earliest trading row (`identifiers.placeholder_id`); the unsuffixed id is then not used. One line keeps it."""
+    if span is None:
+        return
+    groups: dict[str, list[str]] = defaultdict(list)
+    for key, r in res.items():
+        if r.source == "placeholder" and r.sec_id and is_placeholder(r.sec_id):
+            groups[r.sec_id].append(key)
+    for sec_id, keys in sorted(groups.items()):
+        if len(keys) < 2:
+            continue
+        own = {k: set(cusips.get(k, ())) for k in keys}
+        parent = {k: k for k in keys}
+
+        def root(k: str) -> str:
+            while parent[k] != k:
+                k = parent[k]
+            return k
+
+        for a, b in _carrying_links({k: eras[k] for k in keys}, handoffs, issuers, bankrupt_between):
+            parent[root(b)] = root(a)
+        for i, a in enumerate(keys):
+            for b in keys[i + 1:]:
+                if own[a] & own[b]:
+                    parent[root(b)] = root(a)
+        comps: dict[str, list[str]] = defaultdict(list)
+        for k in keys:
+            comps[root(k)].append(k)
+        spans: dict[str, dict[str, tuple[str, str]]] = {}      # component -> its CUSIPs' trading spans
+        for r_, ks in comps.items():
+            got = {c: sp for c in sorted(set().union(*(own[k] for k in ks))) if (sp := span(c)) is not None}
+            if got:
+                spans[r_] = got
+
+        def overlap(a: str, b: str) -> bool:
+            return any((date.fromisoformat(min(x[1], y[1])) - date.fromisoformat(max(x[0], y[0]))).days
+                       >= PLACEHOLDER_OVERLAP_DAYS for x in spans[a].values() for y in spans[b].values())
+
+        lines: list[list[str]] = []                            # components, a line's own CUSIPs never trading at once
+        for r_ in sorted(spans, key=lambda c: (min(x[0] for x in spans[c].values()), c)):
+            line = next((ln for ln in lines if not any(overlap(r_, o) for o in ln)), None)
+            if line is None:
+                lines.append([r_])
+            else:
+                line.append(r_)
+        if len(lines) < 2:
+            continue
+        members = [[k for r_ in ln for k in comps[r_]] for ln in lines]
+        placed = {k for m in members for k in m}
+        for k in sorted((k for k in keys if k not in placed), key=lambda k: (eras[k].first, k)):
+            e = eras[k]
+            tied = [i for i, m in enumerate(members) if any(eras[o].ticker == e.ticker for o in m)]
+
+            def gap(i: int) -> int:
+                lo, hi = min(eras[o].first for o in members[i]), max(eras[o].last for o in members[i])
+                return max((date.fromisoformat(lo) - date.fromisoformat(e.last)).days,
+                           (date.fromisoformat(e.first) - date.fromisoformat(hi)).days, 0)
+
+            members[min(tied or range(len(members)), key=lambda i: (gap(i), i))].append(k)
+        m = re.fullmatch(r"CIK(\d+)-(.+)", sec_id)
+        if m is None:
+            continue
+        for ln, ks in zip(lines, members):
+            first = min((sp[0], c) for r_ in ln for c, sp in spans[r_].items())[1]
+            new = placeholder_id(int(m.group(1)), m.group(2).replace("-", " "), first)
+            for k in ks:
+                res[k] = replace(res[k], sec_id=new)
+            log(f"placeholder {sec_id} holds {len(lines)} lines: {new} is {', '.join(sorted(ks))}")
 
 
 def detached_review(detached: Mapping[str, tuple[str, str]], eras: Mapping[str, TickerEra],

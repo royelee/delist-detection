@@ -41,13 +41,17 @@ MOVES = {
     # FB-001: old Chesapeake (CUSIP 165167107) reached post-bankruptcy Chesapeake's composite by ticker; one issuer, and
     # the issuer's Item 1.03 8-K of 2020-06 falls in the year before the new CUSIP's first row
     "CHK@2008-01-16": ("CIK895126-COMMON", "placeholder"),
+    # FB-005: Liberty's tracking stocks are no FIGI's and state no class, so they shared CIK1355096-COMMON; LINTA and its
+    # later QVCA share a CUSIP (one line), LCAPA's CUSIP trades beside it (another): each placeholder is named by its
+    # line's first CUSIP
+    "LINTA@2008-01-16": ("CIK1355096-COMMON-53071M104", "placeholder"),
+    "QVCA@2014-12-31": ("CIK1355096-COMMON-53071M104", "placeholder"),
+    "LCAPA@2008-01-16": ("CIK1355096-COMMON-53071M302", "placeholder"),
 }
 
 # era key -> (sec_id, FIGI source), unchanged by 5h
 STAY = {
     "HUB-B@2008-01-16": ("CIK48898-CLASS-B", "placeholder"),   # class B reclassified into the plain common (R1)
-    "QVCA@2014-12-31": ("CIK1355096-COMMON", "placeholder"),
-    "LINTA@2008-01-16": ("CIK1355096-COMMON", "placeholder"),
     "LVNTA@2017-06-30": ("BBG0038K9G41", "cusip"),
     "MSG@2015-12-31": ("BBG007FG0C23", "cusip"),               # the new MSG took the ticker: another issuer
     "LMCA@2013-06-28": ("BBG003P9ZSL3", "cusip"),              # the new Liberty Media took the ticker

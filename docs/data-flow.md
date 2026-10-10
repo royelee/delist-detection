@@ -654,7 +654,12 @@ name alone, since Bloomberg renames a dead line to its acquirer. With no
 candidate accepted, the security gets the placeholder `sec_id`
 `CIK<cik>-<CLASS>` (flagged `no_figi`, an `info` flag: counted in
 `review_summary.csv`, not listed in `review.csv`; `securities.csv` marks it
-`figi_source=placeholder`); with no CIK either, the observation goes to
+`figi_source=placeholder`). A placeholder holds one line (FB-005,
+`security_master.split_placeholder_lines`): the eras that took one placeholder are grouped by shared CUSIP or a
+CUSIP switch, and two groups whose CUSIPs' trading fails rows share at least 60 days are separate lines; an era
+with no CUSIP of its own goes with the line holding an era of its ticker, else the line nearest in time. An issuer
+and class with more than one line name each by its first CUSIP (`CIK1355096-COMMON-53071M104`, LINTA and QVCA;
+`CIK1355096-COMMON-53071M302`, LCAPA); with no CIK either, the observation goes to
 `review.csv` as `observation_unresolved`.
 
 ## Delisting discovery
