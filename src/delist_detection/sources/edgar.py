@@ -263,6 +263,22 @@ class EdgarSubmission:
         return {x.strip() for x in self.items.split(",") if x.strip()}
 
 
+def _submissions_of(block: dict) -> list[EdgarSubmission]:
+    """The filings a submissions JSON's columnar block lists (its "recent" block, or one of its older files): row `i`
+    of every column is one filing. A column the block lacks reads as blank; a column shorter than the accession
+    column raises IndexError, as it always has."""
+    n = len(block.get("accessionNumber", []))
+    if not n:
+        return []
+    blank = [""] * n
+    accession, form = block["accessionNumber"], block["form"]
+    filed = block.get("filingDate", blank)
+    reported = block.get("reportDate", blank)
+    items = block.get("items", blank)
+    primary = block.get("primaryDocument", blank)
+    return [EdgarSubmission(accession[i], form[i], filed[i], reported[i], items[i], primary[i]) for i in range(n)]
+
+
 # A genuine EDGAR company-search answer, matched or not, is always a complete
 # ATOM feed (see tests/fixtures/company_search/: nomatch.atom is a <feed> with
 # no <cik>, just like onematch.atom and multimatch.atom are <feed>s with one).
@@ -743,36 +759,12 @@ class EdgarClient:
         sub = self.submissions(cik)
         if not isinstance(sub, dict) or sub.get("__not_found__"):
             return []
-        recent = sub.get("filings", {}).get("recent", {})
-        n = len(recent.get("accessionNumber", []))
-        out: list[EdgarSubmission] = []
-        for i in range(n):
-            out.append(
-                EdgarSubmission(
-                    accession=recent["accessionNumber"][i],
-                    form=recent["form"][i],
-                    filing_date=recent.get("filingDate", [""] * n)[i],
-                    report_date=recent.get("reportDate", [""] * n)[i],
-                    items=recent.get("items", [""] * n)[i],
-                    primary_doc=recent.get("primaryDocument", [""] * n)[i],
-                )
-            )
+        out = _submissions_of(sub.get("filings", {}).get("recent", {}))
         # also pull historical files (paginated chunks of older filings)
         for fchunk in sub.get("filings", {}).get("files", []):
             url = f"{SEC_HOST}/submissions/{fchunk['name']}"
             data = self._get_json(url)
             if not isinstance(data, dict) or data.get("__not_found__"):
                 continue
-            n = len(data.get("accessionNumber", []))
-            for i in range(n):
-                out.append(
-                    EdgarSubmission(
-                        accession=data["accessionNumber"][i],
-                        form=data["form"][i],
-                        filing_date=data.get("filingDate", [""] * n)[i],
-                        report_date=data.get("reportDate", [""] * n)[i],
-                        items=data.get("items", [""] * n)[i],
-                        primary_doc=data.get("primaryDocument", [""] * n)[i],
-                    )
-                )
+            out += _submissions_of(data)
         return out
