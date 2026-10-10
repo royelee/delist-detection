@@ -154,6 +154,10 @@ EXPECTED = {
     "CIK716006-COMMON": (lf.SWITCH, "985510106", "YELL", "2021-02-09", "", None, None),
     "BBG000PCQQL6": (lf.NEW_SYMBOL, "74915M100", "QVCGA", "2025-02-25", "", lf.ATTACH, ""),
     "CIK891103-COMMON": (lf.SWITCH, "44919P508", "IACI", "2008-08-26", "", lf.FOLD, "BBG000BKQG80"),
+    # FB-004 (batch 3): ExxonMobil Holdings keeps the name (fails rows: EXXONMOBIL HLDGS CORPORATION), so the step is no
+    # longer refused for its name. The cached copy of CIK 34088's filings ends on 2026-05-22, before the step, so no
+    # filing states it here: a run with a refreshed copy reads the July 8-Ks (and the holding company's 8-K12B).
+    "BBG000GZQ728": (lf.SWITCH, "30233Q108", "XOM", "2026-07-02", "no_filing", None, None),
 }
 NO_STEP = ("BBG00WYYC600", "CIK1507934-CLASS-A", "CIK1469372-CLASS-A")
 

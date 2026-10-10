@@ -249,7 +249,9 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   either side (never the only word shared), the vendor's `_VENDOR_ABBREVIATIONS` (PPTYS), run-together words; a name
   with no word of three letters compares as one string, `2U INC` and `2U, Inc.`; FB-009: letters and digits run
   together are one word, also spelled by each run of four letters or more in it, so SKY440 is never SKY and
-  L3HARRIS meets HARRIS): `name_tokens`, `names_agree`, `description_names`,
+  L3HARRIS meets HARRIS; FB-004: `description_names` leaves a holding word out of the words it compares, on either
+  side when another word is left, `_HOLDING_WORDS`: a holding company that keeps the name, EXXONMOBIL HLDGS CORPORATION
+  beside EXXON MOBIL CORP, is that name): `name_tokens`, `names_agree`, `description_names`,
   `names_an_issuer` and `description_matches` (a fails row's description against a security's names), read by the
   observations, the identity rules, the fails index, the Form 25 match, the classifier and the merger readers.
 - `vocabulary/exchanges.py` — a listing's exchange, normalized, a leaf: `Exchange` (NYSE, AMEX, NASDAQ, OTHER, the four buckets
@@ -816,7 +818,8 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   `SWITCH_TAIL_DAYS` of `FtdIndex.data_end()`, the fails data's last day, passed as `data_end`: a live line has no stop to see; CHTR's new
   preferred; elsewhere the window is the whole of it, HYH 2018); the own-ticker pick is made before held CUSIPs are
   dropped, and a pick another security holds is no step (LMCA 2016)); `corroborate` (R1: refused for an 8-K 1.03 in
-  [first − 180, first + 30] d, an OTC move, a description that names no name in force, a class conflict, a
+  [first − 180, first + 30] d, an OTC move, a description that names no name in force (a holding word does not
+  count, `names.description_names`: ExxonMobil Holdings, XOM 2026, keeps the name), a class conflict, a
   registrant that merged out or that another CIK's 8-K12B/12G3 replaces (`other_registrant`), no filing stating
   the change, or a failed `other_registrant` read (`read_failed`); the registrant carries on by a periodic report in `PERIODIC_FORMS`, which includes the small-business
   forms 10-K405, 10-KSB, 10-KSB40 and 10-QSB, or by a registered investment company's report in

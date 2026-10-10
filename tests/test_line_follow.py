@@ -210,6 +210,21 @@ def test_an_8k_item_1_03_refuses_a_step_only_within_its_window(filed, refused):
     assert _corr(filings=f) == (("", "bankruptcy") if refused else ("8-K 5.03 2012-09-24", ""))
 
 
+def test_new_rows_named_by_a_holding_company_that_keeps_the_name_do_not_refuse_a_switch():
+    """XOM 2026: the July holding-company reorganization put the line under new CUSIP 30233Q108, whose fails rows
+    describe EXXONMOBIL HLDGS CORPORATION; Exxon Mobil's EDGAR name is the same without the holding word."""
+    step = lf.LineStep("BBGXOM", lf.SWITCH, "30231G102", "30233Q108", "XOM", "2026-07-02", "2026-07-06",
+                       ("EXXONMOBIL HLDGS CORPORATION",))
+    sub = {"name": "EXXON MOBIL CORP", "formerNames": [{"name": "EXXON CORP", "from": "1994-05-11T04:00:00.000Z",
+                                                        "to": "1999-11-30T05:00:00.000Z"}]}
+    f = [_f("8-K", "2026-07-02", "3.03,5.03,9.01")]
+    assert _corr(step, filings=f, sub=sub, listed=True, as_of=date(2026, 9, 25)) == (
+        "8-K 3.03,5.03,9.01 2026-07-02", "")
+    other = lf.LineStep("BBGXOM", lf.SWITCH, "30231G102", "99999X999", "XOM", "2026-07-02", "2026-07-06",
+                        ("CHEVRON HLDGS CORPORATION",))
+    assert _corr(other, filings=f, sub=sub, listed=True, as_of=date(2026, 9, 25)) == ("", "name")
+
+
 def test_the_registrants_own_successor_registration_carries_it_on():
     assert _corr(filings=[_f("8-K12B", "2012-09-26")]) == ("8-K12B 2012-09-26", "")
 

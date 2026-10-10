@@ -85,6 +85,7 @@ CASES = {
     "CIK716006-COMMON": "YRCW 2021: YRC Worldwide renamed Yellow (YELL), new CUSIP",
     "BBG000PCQQL6": "QRTEA 2025: Qurate's series A, the same CUSIP under QVCGA, then a new CUSIP",
     "CIK891103-COMMON": "IACI 2020: IAC's CUSIPs after the 2020 Match separation",
+    "BBG000GZQ728": "XOM 2026: a holding company, ExxonMobil Holdings, keeps the name; the new CUSIP has its own composite",
 }
 EXTRA_RUN = ("BBG000C3FGH9", "BBG000BKQG80", "BBG01GJ3NY88", "BBG000BKZ5F6", "BBG000PX3XC0", "BBG003P9ZSL3", "BBG007FG0C23")
 

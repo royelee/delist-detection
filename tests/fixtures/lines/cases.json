@@ -107,6 +107,21 @@
     "BXS"
    ]
   },
+  "BBG000GZQ728": {
+   "cusips": [
+    "30231G102"
+   ],
+   "extra_cusips": [],
+   "extra_symbols": [],
+   "figi_source": "cusip",
+   "issuer_cik": 34088,
+   "name": "EXXON MOBIL CORP",
+   "note": "XOM 2026: a holding company, ExxonMobil Holdings, keeps the name; the new CUSIP has its own composite",
+   "share_class": "COMMON",
+   "tickers": [
+    "XOM"
+   ]
+  },
   "BBG000PCQQL6": {
    "cusips": [
     "74915M100"
@@ -412,6 +427,9 @@
   "26817G102": [
    "BBG001D9S707"
   ],
+  "30231G102": [
+   "BBG000GZQ728"
+  ],
   "320771108": [
    "BBG000BN6349"
   ],
@@ -538,6 +556,12 @@
    "figi_source": "cusip",
    "issuer_cik": 701853,
    "name": "BANCORPSOUTH INC",
+   "share_class": "COMMON"
+  },
+  "BBG000GZQ728": {
+   "figi_source": "cusip",
+   "issuer_cik": 34088,
+   "name": "EXXON MOBIL CORP",
    "share_class": "COMMON"
   },
   "BBG000PCQQL6": {

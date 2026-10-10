@@ -641,6 +641,262 @@
    }
   ]
  },
+ "30233Q108": {
+  "data": [
+   {
+    "compositeFIGI": "BBG023CY9MM1",
+    "exchCode": "US",
+    "figi": "BBG023CY9MM1",
+    "marketSector": "Equity",
+    "name": "EXXONMOBIL HOLDINGS CORP",
+    "securityDescription": "XOM",
+    "securityType": "Common Stock",
+    "securityType2": "Common Stock",
+    "shareClassFIGI": "BBG023CY9NL0",
+    "ticker": "XOM"
+   },
+   {
+    "compositeFIGI": "BBG023CY9MM1",
+    "exchCode": "UA",
+    "figi": "BBG023CY9MN0",
+    "marketSector": "Equity",
+    "name": "EXXONMOBIL HOLDINGS CORP",
+    "securityDescription": "XOM",
+    "securityType": "Common Stock",
+    "securityType2": "Common Stock",
+    "shareClassFIGI": "BBG023CY9NL0",
+    "ticker": "XOM"
+   },
+   {
+    "compositeFIGI": "BBG023CY9MM1",
+    "exchCode": "UC",
+    "figi": "BBG023CY9MP8",
+    "marketSector": "Equity",
+    "name": "EXXONMOBIL HOLDINGS CORP",
+    "securityDescription": "XOM",
+    "securityType": "Common Stock",
+    "securityType2": "Common Stock",
+    "shareClassFIGI": "BBG023CY9NL0",
+    "ticker": "XOM"
+   },
+   {
+    "compositeFIGI": "BBG023CY9MM1",
+    "exchCode": "UI",
+    "figi": "BBG023CY9MQ7",
+    "marketSector": "Equity",
+    "name": "EXXONMOBIL HOLDINGS CORP",
+    "securityDescription": "XOM",
+    "securityType": "Common Stock",
+    "securityType2": "Common Stock",
+    "shareClassFIGI": "BBG023CY9NL0",
+    "ticker": "XOM"
+   },
+   {
+    "compositeFIGI": "BBG023CY9MM1",
+    "exchCode": "UN",
+    "figi": "BBG023CY9MR6",
+    "marketSector": "Equity",
+    "name": "EXXONMOBIL HOLDINGS CORP",
+    "securityDescription": "XOM",
+    "securityType": "Common Stock",
+    "securityType2": "Common Stock",
+    "shareClassFIGI": "BBG023CY9NL0",
+    "ticker": "XOM"
+   },
+   {
+    "compositeFIGI": "BBG023CY9MM1",
+    "exchCode": "UP",
+    "figi": "BBG023CY9MS5",
+    "marketSector": "Equity",
+    "name": "EXXONMOBIL HOLDINGS CORP",
+    "securityDescription": "XOM",
+    "securityType": "Common Stock",
+    "securityType2": "Common Stock",
+    "shareClassFIGI": "BBG023CY9NL0",
+    "ticker": "XOM"
+   },
+   {
+    "compositeFIGI": "BBG023CY9MM1",
+    "exchCode": "UQ",
+    "figi": "BBG023CY9MT4",
+    "marketSector": "Equity",
+    "name": "EXXONMOBIL HOLDINGS CORP",
+    "securityDescription": "XOM",
+    "securityType": "Common Stock",
+    "securityType2": "Common Stock",
+    "shareClassFIGI": "BBG023CY9NL0",
+    "ticker": "XOM"
+   },
+   {
+    "compositeFIGI": "BBG023CY9MM1",
+    "exchCode": "UB",
+    "figi": "BBG023CY9MV1",
+    "marketSector": "Equity",
+    "name": "EXXONMOBIL HOLDINGS CORP",
+    "securityDescription": "XOM",
+    "securityType": "Common Stock",
+    "securityType2": "Common Stock",
+    "shareClassFIGI": "BBG023CY9NL0",
+    "ticker": "XOM"
+   },
+   {
+    "compositeFIGI": "BBG023CY9MM1",
+    "exchCode": "UT",
+    "figi": "BBG023CY9MW0",
+    "marketSector": "Equity",
+    "name": "EXXONMOBIL HOLDINGS CORP",
+    "securityDescription": "XOM",
+    "securityType": "Common Stock",
+    "securityType2": "Common Stock",
+    "shareClassFIGI": "BBG023CY9NL0",
+    "ticker": "XOM"
+   },
+   {
+    "compositeFIGI": "BBG023CY9MM1",
+    "exchCode": "UM",
+    "figi": "BBG023CY9MX9",
+    "marketSector": "Equity",
+    "name": "EXXONMOBIL HOLDINGS CORP",
+    "securityDescription": "XOM",
+    "securityType": "Common Stock",
+    "securityType2": "Common Stock",
+    "shareClassFIGI": "BBG023CY9NL0",
+    "ticker": "XOM"
+   },
+   {
+    "compositeFIGI": "BBG023CY9MM1",
+    "exchCode": "UX",
+    "figi": "BBG023CY9MY8",
+    "marketSector": "Equity",
+    "name": "EXXONMOBIL HOLDINGS CORP",
+    "securityDescription": "XOM",
+    "securityType": "Common Stock",
+    "securityType2": "Common Stock",
+    "shareClassFIGI": "BBG023CY9NL0",
+    "ticker": "XOM"
+   },
+   {
+    "compositeFIGI": "BBG023CY9MM1",
+    "exchCode": "UR",
+    "figi": "BBG023CY9MZ7",
+    "marketSector": "Equity",
+    "name": "EXXONMOBIL HOLDINGS CORP",
+    "securityDescription": "XOM",
+    "securityType": "Common Stock",
+    "securityType2": "Common Stock",
+    "shareClassFIGI": "BBG023CY9NL0",
+    "ticker": "XOM"
+   },
+   {
+    "compositeFIGI": "BBG023CY9MM1",
+    "exchCode": "UU",
+    "figi": "BBG023CY9N03",
+    "marketSector": "Equity",
+    "name": "EXXONMOBIL HOLDINGS CORP",
+    "securityDescription": "XOM",
+    "securityType": "Common Stock",
+    "securityType2": "Common Stock",
+    "shareClassFIGI": "BBG023CY9NL0",
+    "ticker": "XOM"
+   },
+   {
+    "compositeFIGI": "BBG023CY9MM1",
+    "exchCode": "PQ",
+    "figi": "BBG023CY9N12",
+    "marketSector": "Equity",
+    "name": "EXXONMOBIL HOLDINGS CORP",
+    "securityDescription": "XOM",
+    "securityType": "Common Stock",
+    "securityType2": "Common Stock",
+    "shareClassFIGI": "BBG023CY9NL0",
+    "ticker": "XOM"
+   },
+   {
+    "compositeFIGI": "BBG023CY9MM1",
+    "exchCode": "UV",
+    "figi": "BBG023CY9N21",
+    "marketSector": "Equity",
+    "name": "EXXONMOBIL HOLDINGS CORP",
+    "securityDescription": "XOM",
+    "securityType": "Common Stock",
+    "securityType2": "Common Stock",
+    "shareClassFIGI": "BBG023CY9NL0",
+    "ticker": "XOM"
+   },
+   {
+    "compositeFIGI": "BBG023CY9MM1",
+    "exchCode": "UD",
+    "figi": "BBG023CY9N30",
+    "marketSector": "Equity",
+    "name": "EXXONMOBIL HOLDINGS CORP",
+    "securityDescription": "XOM",
+    "securityType": "Common Stock",
+    "securityType2": "Common Stock",
+    "shareClassFIGI": "BBG023CY9NL0",
+    "ticker": "XOM"
+   },
+   {
+    "compositeFIGI": "BBG023CY9MM1",
+    "exchCode": "UW",
+    "figi": "BBG023CY9N58",
+    "marketSector": "Equity",
+    "name": "EXXONMOBIL HOLDINGS CORP",
+    "securityDescription": "XOM",
+    "securityType": "Common Stock",
+    "securityType2": "Common Stock",
+    "shareClassFIGI": "BBG023CY9NL0",
+    "ticker": "XOM"
+   },
+   {
+    "compositeFIGI": "BBG023CY9MM1",
+    "exchCode": "UF",
+    "figi": "BBG023CY9N67",
+    "marketSector": "Equity",
+    "name": "EXXONMOBIL HOLDINGS CORP",
+    "securityDescription": "XOM",
+    "securityType": "Common Stock",
+    "securityType2": "Common Stock",
+    "shareClassFIGI": "BBG023CY9NL0",
+    "ticker": "XOM"
+   },
+   {
+    "compositeFIGI": "BBG023CY9MM1",
+    "exchCode": "VY",
+    "figi": "BBG023CY9N76",
+    "marketSector": "Equity",
+    "name": "EXXONMOBIL HOLDINGS CORP",
+    "securityDescription": "XOM",
+    "securityType": "Common Stock",
+    "securityType2": "Common Stock",
+    "shareClassFIGI": "BBG023CY9NL0",
+    "ticker": "XOM"
+   },
+   {
+    "compositeFIGI": "BBG023CY9MM1",
+    "exchCode": "VJ",
+    "figi": "BBG023CY9N85",
+    "marketSector": "Equity",
+    "name": "EXXONMOBIL HOLDINGS CORP",
+    "securityDescription": "XOM",
+    "securityType": "Common Stock",
+    "securityType2": "Common Stock",
+    "shareClassFIGI": "BBG023CY9NL0",
+    "ticker": "XOM"
+   },
+   {
+    "compositeFIGI": "BBG023CY9MM1",
+    "exchCode": "VK",
+    "figi": "BBG023CY9N94",
+    "marketSector": "Equity",
+    "name": "EXXONMOBIL HOLDINGS CORP",
+    "securityDescription": "XOM",
+    "securityType": "Common Stock",
+    "securityType2": "Common Stock",
+    "shareClassFIGI": "BBG023CY9NL0",
+    "ticker": "XOM"
+   }
+  ]
+ },
  "320771207": {
   "data": [
    {

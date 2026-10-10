@@ -168,6 +168,13 @@ def test_with_nothing_to_compare_the_answer_is_the_callers():
     ("CLEAR CHANNEL COMMUNICTNS INC", "CITIZENS COMMUNICATIONS CO", False),
     ("INTEGRYS ENERGY GROUP INC COM", "WISCONSIN ENERGY CORP", False),
     ("2U INC COM STK", "SilverSun Technologies, Inc.", False),         # nothing to compare
+    # FB-004: a holding company that keeps the name adds only a holding word (ExxonMobil Holdings, July 2026)
+    ("EXXONMOBIL HLDGS CORPORATION", "EXXON MOBIL CORP", True),
+    ("EXXONMOBIL HOLDINGS CORP", "EXXON MOBIL CORPORATION", True),
+    ("WALT DISNEY HLDGS", "WALT DISNEY CO", True),
+    ("ACME HOLDINGS", "BETA HOLDINGS", False),                         # a holding word is no word shared
+    ("ACME HOLDINGS", "ACME ROCKETS", True),
+    ("HOLDINGS", "HOLDINGS CORP", False),                              # nothing left to compare
 ])
 def test_a_description_names_a_company_word_by_word(description, name, names):
     assert description_names(description, name) is names

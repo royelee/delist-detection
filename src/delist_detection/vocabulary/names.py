@@ -148,12 +148,23 @@ def description_names(description: str, name: str) -> bool:
     COMMUNICATIONS does not name CLEAR CHANNEL COMMUNICTNS, while CORN PRODUCTS
     INTERNATIONAL names CORN PRODUCTS INT'L. With nothing to compare it names
     nothing."""
-    d_words = _issuer_words(_name_part(description))
-    n_words = _issuer_words(name)
+    d_words = _without_holding(_issuer_words(_name_part(description)))
+    n_words = _without_holding(_issuer_words(name))
     if not d_words or not n_words:
         return False
     exact, short = _word_matches(d_words, n_words, _name_part(description), name, either=False)
     return exact + short >= min(2, len(d_words), len(n_words))
+
+
+# The word a holding company's name adds to its operating company's: ExxonMobil Holdings is Exxon Mobil's holding
+# company from July 2026 and keeps its name (FB-004). It names no company, so `description_names` leaves it out of
+# the words it compares, when another word is left on that side.
+_HOLDING_WORDS = {"HOLDINGS", "HOLDING", "HLDGS", "HLDG", "HOLDCO"}
+
+
+def _without_holding(words: list[set[str]]) -> list[set[str]]:
+    kept = [w for w in words if not w & _HOLDING_WORDS]
+    return kept or words
 
 
 def names_an_issuer(description: str) -> bool:
