@@ -510,3 +510,31 @@ def test_decide_still_refuses_a_class_the_evidence_does_not_name():
     assert lf.decide(STEP, placeholder, _cand("BBGGHC"), run).why == "class"
     class_a = _sec("CIK1-CLASS-A", share_class="CLASS A")
     assert lf.decide(STEP, class_a, _cand("BBGGHC"), run, described="B", issuer_letters=("B",)).why == "class"
+
+
+# --- FB-003: the window runs from the settled row to LINE_DAYS past the line's last row ---------------------------------
+
+def _flat_tail(tail):
+    """The old line: 26 rows at changing prices, then `tail` rows at one price (a fail still settling at the last
+    close: QRTEA's 0.33 from 2025-02-04 to 2025-02-24)."""
+    prices = [10.0 + i * 0.1 for i in range(26)] + [3.0] * tail
+    return _rows("RS", "11111A101", "REVERSE SPLIT CO", "2012-08-01", 26 + tail, prices=prices)
+
+
+@pytest.mark.parametrize("offset, found", [(1, True), (lf.LINE_DAYS, True), (lf.LINE_DAYS + 1, False)])
+def test_a_new_symbol_is_found_up_to_line_days_after_the_last_row_of_a_flat_tail(offset, found):
+    """QRTEA 2025: the same CUSIP 74915M100 went on as QVCGA the day after QRTEA's last row, 14 trading days after
+    the row that opens the old line's flat tail (`settled`): the window's upper bound is the last row's."""
+    old = _flat_tail(14)
+    end = lf.line_end(["11111A101"], {"RS"}, FtdIndex(old))
+    assert end.settled < end.last
+    new = _from("RSNW", "11111A101", lf._days(end.last, offset))
+    steps = _steps(old + new)
+    assert [(s.kind, s.symbol) for s in steps] == ([(lf.NEW_SYMBOL, "RSNW")] if found else [])
+
+
+def test_a_new_cusip_is_found_after_a_flat_tail_but_not_before_the_settled_row_less_line_days():
+    old = _flat_tail(14)
+    end = lf.line_end(["11111A101"], {"RS"}, FtdIndex(old))
+    assert len(_steps(old + _from("RS", "11111A200", lf._days(end.last, 1)))) == 1
+    assert _steps(old + _from("RS", "11111A200", lf._days(end.settled, -lf.LINE_DAYS - 1))) == []

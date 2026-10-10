@@ -209,8 +209,10 @@ def _one_switch(switches: Mapping[str, LineStep], tickers: Collection[str]) -> l
 def candidate_steps(sec_id: str, cusips: Sequence[str], tickers: Collection[str], ftd: FtdIndex, *,
                     holders: Mapping[str, Collection[str]] = {}, extra_symbols: Collection[str] = (),
                     extra_cusips: Collection[str] = (), days: int = LINE_DAYS, data_end: str | None = None) -> list[LineStep]:
-    """The next steps of a security's line in the fails rows (pure). Its `line_end` opens a window of `days`
-    trading days either side of the settled last row. `holders` maps a CUSIP to the securities of the run that
+    """The next steps of a security's line in the fails rows (pure). Its `line_end` opens a window from `days`
+    trading days before the settled row to `days` after the line's last row (a fail still settling at the last
+    close can run weeks past the settled row: QRTEA's QVCGA began the day after QRTEA's last row, 14 trading days
+    after its settled one). `holders` maps a CUSIP to the securities of the run that
     hold it.
 
     - SWITCH: a CUSIP not among `cusips`, whose first row (under any symbol) falls in
@@ -232,7 +234,7 @@ def candidate_steps(sec_id: str, cusips: Sequence[str], tickers: Collection[str]
     if end is None:
         return []
     own = set(tickers)
-    lo, hi = _days(end.settled, -days), _days(end.settled, days)
+    lo, hi = _days(end.settled, -days), _days(end.last, days)
     steps: list[LineStep] = []
 
     # a live line has no stop for the tail check below to see: at the data's edge a switch needs the old line to
@@ -645,7 +647,8 @@ def follow_lines(identity: "Identity", clients: LineSources, *, as_of: date,
     asks the identity's index to follow (`FtdIndex.follow`: their rows over the run's fails window, to the run
     date): every line's tickers, spellings and issuer tickers first, each round's new CUSIPs and text symbols next.
 
-    A round finds each line's next step in the fails rows (`candidate_steps`: a new CUSIP under the line's ticker,
+    A round finds each line's next step in the fails rows (`candidate_steps`, over the rows of the tickers the line
+    took in an earlier round too, which the index follows when the round begins: a new CUSIP under the line's ticker,
     or a ticker of the issuer EDGAR lists today or its 8-K text names (`_Reads.text_sources`, read in the first
     round for a line with no step that stopped more than `TEXT_SOURCE_DAYS` before the run date); or the same CUSIP
     under a new ticker), has the index follow the new CUSIPs, asks OpenFIGI for their composites in one
@@ -677,12 +680,16 @@ def follow_lines(identity: "Identity", clients: LineSources, *, as_of: date,
                                   for sid in todo}
     # every line's tickers, their first-day ZZZZ and post-split D spellings and the issuers' other tickers, to the
     # run date (stage 1 loaded the eras' tickers only to 400 days past their last observation)
-    spellings = {bare_ticker(t) + suffix for sid in todo for t in own(sid) for suffix in ("", "ZZZZ", "D")}
-    ftd.follow(symbols=spellings | {t for v in extra.values() for t in v})
+    def spellings_of(sids: Iterable[str]) -> set[str]:
+        return {bare_ticker(t) + suffix for sid in sids for t in own(sid) for suffix in ("", "ZZZZ", "D")}
+
+    ftd.follow(symbols=spellings_of(todo) | {t for v in extra.values() for t in v})
     named: dict[str, set[str]] = defaultdict(set)
     counts: Counter[str] = Counter()
     flagged: set[str] = set()            # securities whose step already got a resolution_degraded item
     for round_no in range(1, MAX_ROUNDS + 1):
+        if round_no > 1:        # the tickers a line took last round (CEB beside EXBD): their rows are held now too
+            ftd.follow(symbols=spellings_of(todo))
         holders = _cusip_holders(out.cusips)
 
         def steps_of(sid: str) -> list[LineStep]:

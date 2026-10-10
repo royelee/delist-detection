@@ -68,7 +68,7 @@ class _Spec:
     name: str = ""            # the name its era was observed under (blank: none, so no class letter)
 
 
-def _identity(specs, rows):
+def _identity(specs, rows, index=None):
     eras, res, issuers, cusips = {}, {}, {}, {}
     for sp in specs:
         era = TickerEra(sp.ticker, sp.first, sp.last, [Observation(sp.ticker, sp.first, sp.name)] if sp.name else [])
@@ -77,7 +77,7 @@ def _identity(specs, rows):
         res[era.key] = EraResolution(era.key, sp.sec_id, source, sp.candidate, (), tuple(sp.cusips))
         issuers[era.key] = Issuer(sp.cik)
         cusips[sp.sec_id] = list(sp.cusips)
-    return Identity(list(eras.values()), eras, FtdIndex(rows), issuers, res,
+    return Identity(list(eras.values()), eras, index if index is not None else FtdIndex(rows), issuers, res,
                     build_securities(res, eras, issuers), cusips)
 
 
@@ -90,9 +90,10 @@ class _Edgar:
 
     def __init__(self, filings=None, *, texts=None, name=NAME):
         self.filings, self.texts, self.name, self.read = filings, texts or {}, name, []
+        self.former = []        # EDGAR's former names: {"name", "from", "to"}
 
     def submissions(self, cik, fresh_after=None):
-        return {"name": self.name, "formerNames": [], "tickers": [], "exchanges": []}
+        return {"name": self.name, "formerNames": self.former, "tickers": [], "exchanges": []}
 
     def recent_filings(self, cik):
         return list(self.filings)
@@ -131,8 +132,8 @@ class _NoFiles:
         return []
 
 
-def _follow(specs, rows, *, edgar=None, figi=None, review=(), log=None):
-    identity = _identity(specs, rows)
+def _follow(specs, rows, *, edgar=None, figi=None, review=(), log=None, index=None):
+    identity = _identity(specs, rows, index)
     identity.review = list(review)
     edgar = edgar if edgar is not None else _Edgar(_stating(rows))
     clients = Clients(edgar=edgar, resolver=None, classifier=None, figi=figi or _Figi(), ftd_client=_NoFiles(),
@@ -522,3 +523,35 @@ def test_a_placeholder_does_not_fold_into_a_line_that_trades_on_under_another_cu
                                          for i in range(5)]
     lines = _follow(specs, rows, figi=_Figi({"C9": _answer("BBGH")}))
     assert lines.renames == {} and _flags(lines) == []
+
+
+# --- FB-003: the tickers a round attached are loaded before the next round ---------------------------------------------
+
+class _FailsFiles:
+    """A fails source over rows: the index holds only what it was asked for, as with SEC's files."""
+
+    def __init__(self, rows):
+        self.rows_ = list(rows)
+
+    def urls_for(self, lo, hi):
+        return ["mem"]
+
+    def rows(self, url, *, symbols=None, cusips=None):
+        for r in self.rows_:
+            if (symbols and r.symbol in symbols) or (cusips and r.cusip in cusips):
+                yield r
+
+
+def test_a_new_ticker_a_round_attached_is_loaded_for_the_next_round():
+    """EXBD 2012-2015: CEB is the same CUSIP under a new ticker (round 1); the 2015 switch to 125134106 is found
+    under CEB, whose rows the index must then hold (it held the old CUSIP's rows and the old ticker's only)."""
+    old = _line("AA", ["A1"])
+    renamed = [FtdRow(_monday(WEEKS + w), "A1", "BB", NAME, 20.0 + w * 0.01) for w in range(WEEKS)]
+    new = [FtdRow(_monday(2 * WEEKS + w), "C9", "BB", NAME, 30.0 + w * 0.01) for w in range(WEEKS)]
+    everything = old + renamed + new
+    held = [r for r in everything if r.symbol == "AA" or r.cusip == "A1"]       # what stage 1 opened it with
+    index = FtdIndex(held, source=_FailsFiles(everything), window=(date(2008, 1, 1), AS_OF))
+    lines = _follow([_Spec("BBGA", 1, "AA", ["A1"])], everything, index=index, figi=_Figi({"C9": _answer("BBGA")}))
+    assert lines.cusips == {"BBGA": ["A1", "C9"]} and lines.securities["BBGA"].line_tickers == {"BB"}
+    assert [f for _, f in _flags(lines)] == ["line_followed", "line_followed"]
+

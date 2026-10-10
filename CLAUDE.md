@@ -760,13 +760,15 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   decides, and the step is degraded. So an attach, a fold or a line successor never rests on a failed read). Its
   rules stay importable for their own tests and only
   `follow_lines` calls them in a run: `candidate_steps` (the
-  next step in the fails rows within ±`LINE_DAYS` (10) trading days of the old CUSIP's settled last row: a new
+  next step in the fails rows from `LINE_DAYS` (10) trading days before the old CUSIP's settled row to `LINE_DAYS`
+  after its last row (a flat settling tail can run weeks: QRTEA's QVCGA began the day after QRTEA's last row, 14 trading
+  days after the settled one): a new
   CUSIP under the line's ticker, its `…ZZZZ`/`…D` spellings, a ticker of the issuer EDGAR lists or its 8-K text
   names (`text_symbols`, which also reads "symbol ... changed from X to Y" as Y, curly quotes included: sub-plan 5c, RRI to GEN; `text_cusips`), or the same CUSIP under a new non-OTC ticker; never a CUSIP another
   security holds, nor a switch while the old CUSIP trades on at changing prices more than `SWITCH_DAYS` trading
   days after the new CUSIP's first row, applied only at the data edge (the old CUSIP's last row within
   `SWITCH_TAIL_DAYS` of `FtdIndex.data_end()`, the fails data's last day, passed as `data_end`: a live line has no stop to see; CHTR's new
-  preferred; elsewhere the window is ±`LINE_DAYS` both sides, HYH 2018); the own-ticker pick is made before held CUSIPs are
+  preferred; elsewhere the window is the whole of it, HYH 2018); the own-ticker pick is made before held CUSIPs are
   dropped, and a pick another security holds is no step (LMCA 2016)); `corroborate` (R1: refused for an 8-K 1.03 in
   [first − 180, first + 30] d, an OTC move, a description that names no name in force, a class conflict, a
   registrant that merged out or that another CIK's 8-K12B/12G3 replaces (`other_registrant`), no filing stating
@@ -779,7 +781,7 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   next CUSIP by a security of its own issuer that holds it and that it would fold into (`holders_for`: same issuer, a
   class that fits, no other CUSIP of the holder failing more than `LINE_DAYS` after the CUSIP's first row; a FIGI
   line still takes no step to another security's CUSIP, WLL 2017: IAC 2008, WPO 2013). Up to
-  `MAX_ROUNDS` steps a line; a CUSIP, or a successor composite, one
+  `MAX_ROUNDS` steps a line (the tickers a round attached, CEB beside EXBD, are loaded into the fails index when the next begins); a CUSIP, or a successor composite, one
   security took is held for the rest of the round (a second is refused `taken`). A FIGI line with a line successor
   is not listed today (stage 5's `retired`). A failed EDGAR read is never cached, and any degraded read of a CIK gives each
   of that CIK's steps a `resolution_degraded` row, as does any other SEC read of the step that counted itself
