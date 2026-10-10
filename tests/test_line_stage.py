@@ -130,13 +130,13 @@ class _NoFiles:
         return []
 
 
-def _follow(specs, rows, *, edgar=None, figi=None, review=()):
+def _follow(specs, rows, *, edgar=None, figi=None, review=(), log=None):
     identity = _identity(specs, rows)
     identity.review = list(review)
     edgar = edgar if edgar is not None else _Edgar(_stating(rows))
     clients = Clients(edgar=edgar, resolver=None, classifier=None, figi=figi or _Figi(), ftd_client=_NoFiles(),
                       issuers=IssuerRecord(edgar))
-    return follow_lines(identity, clients, as_of=AS_OF)
+    return follow_lines(identity, clients, as_of=AS_OF, **({"log": log} if log else {}))
 
 
 def _flags(lines):
@@ -447,3 +447,19 @@ def test_a_step_whose_other_filers_listing_answered_from_a_stale_copy_is_followe
     lines = _follow([_Spec("BBGA", 1, "AA", ["A1"])], rows, edgar=_other_filer(stale)(_stating(rows)))
     assert sorted(_flags(lines)) == [("BBGA", "line_followed"), ("BBGA", "resolution_degraded")]
     assert lines.cusips == {"BBGA": ["A1", "A2"]}
+
+
+# --- FB-003: the run log names each refused step ---------------------------------------------------------------
+
+def test_the_run_log_names_each_refused_step_with_its_security_cusips_day_and_reason():
+    """A full run's log lists every step the follow refused: the security, old CUSIP -> new CUSIP under the symbol
+    from the first new row's day, and the reason (the review row, `line_follow_refused:<why>`, is unchanged)."""
+    specs = [_Spec("BBGA", 1, "AA", ["A1"]), _Spec("BBGB", 1, "BB", ["B1"])]
+    rows = _line("AA", ["A1", "C9"]) + _line("BB", ["B1", "C9"], weekday=1)
+    logged = []
+    lines = _follow(specs, rows, log=logged.append)
+    assert sorted(_flags(lines)) == [("BBGA", "line_followed"), ("BBGB", "line_follow_refused:taken")]
+    # C9's rows come first under AA's symbol (the same CUSIP fails weekly under both), so the step names AA
+    first = _firsts(rows)["C9"]
+    assert [m for m in logged if m.startswith("line follow refused:")] == [
+        f"line follow refused: BBGB B1 -> C9 under AA from {first} (taken)"]

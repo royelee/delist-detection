@@ -460,3 +460,28 @@ def test_a_symbol_changed_from_one_ticker_to_another_names_the_new_one():
     from tests import issuer_role_cases as ic  # noqa: E402
     assert "GEN" in text_symbols([ic.EDGAR["texts"]["0000950123-10-111604"]])
     assert "XYZ" in text_symbols(['the trading symbol of the common stock changed from "ABC" to "XYZ" today'])
+
+
+# --- FB-003: an investment company's periodic reports carry the registrant on ---
+
+@pytest.mark.parametrize("form", ["N-CSR", "N-CSRS", "N-Q", "N-CEN", "NPORT-P", "NSAR-A", "NSAR-B", "N-CSR/A"])
+def test_a_registered_funds_periodic_report_carries_the_registrant_on(form):
+    """YHOO 2017: Yahoo became Altaba, a registered investment company that files N-CSR, N-Q and N-CEN, never a
+    10-K or 10-Q. For R1 the question is whether the registrant carries on, not under which regime it reports."""
+    step = lf.LineStep("CIK1-COMMON", lf.SWITCH, "11111A101", "11111A200", "RS", "2012-09-25", "2012-09-26",
+                       ("REVERSE SPLIT CO NEW",))
+    f = [_f("8-K", "2012-09-24", "5.03"), _f(form, "2012-11-29", report="2012-09-30")]
+    assert _corr(step, filings=f) == ("8-K 5.03 2012-09-24", "")
+
+
+def test_a_funds_report_for_a_period_before_the_step_does_not_carry_the_registrant_on():
+    """The test reads the period the report covers, as it does for a 10-Q (BXS 2017)."""
+    f = [_f("8-K", "2012-09-24", "5.03"), _f("N-CSR", "2012-09-28", report="2012-06-30")]
+    assert _corr(filings=f) == ("", "merged_out")
+
+
+def test_a_filing_that_is_no_periodic_report_of_a_fund_does_not_carry_the_registrant_on():
+    """A fund's proxy-voting record (N-PX), registration (N-2, N-8A) and tender offer are not periodic reports."""
+    f = [_f("8-K", "2012-09-24", "5.03"), _f("N-PX", "2012-11-29", report="2012-09-30"),
+         _f("N-2", "2012-11-29", report="2012-09-30"), _f("SC TO-I/A", "2012-11-29", report="2012-09-30")]
+    assert _corr(filings=f) == ("", "merged_out")

@@ -29,8 +29,8 @@ surface of their own tests (tests/test_line_follow.py, and the real-case harness
 Stage 9's own-registration link reads `is_line_symbol`, `text_cusips` and `composites` too, since it applies the
 same R2 reading to the new CUSIP of a same-CIK 8-K12B.
 
-A step is followed only when the old registrant carries on (R1): it files a periodic report after the step, or the
-step is its own successor registration (8-K12B/8-K12G3), and no other registrant's 8-K12B/8-K12G3 names it then.
+A step is followed only when the old registrant carries on (R1): it files a periodic report (an operating company's
+or a registered investment company's) for a period after the step, or the step is its own successor registration (8-K12B/8-K12G3), and no other registrant's 8-K12B/8-K12G3 names it then.
 """
 from __future__ import annotations
 
@@ -79,7 +79,11 @@ MAX_ROUNDS = 3                # steps followed per line (WIN's two reverse split
 MAX_TEXTS = 5                 # 8-K texts read per step for a reverse split or the new CUSIP
 PERIODIC_FORMS = frozenset({"10-K", "10-Q", "20-F", "40-F", "10-KT", "10-QT", "10-K405", "10-KSB", "10-KSB40",
                             "10-QSB"})
+# the 1940 Act periodic reports of a registered investment company (Altaba after 2017-06: N-CSR, N-CSRS, N-Q,
+# N-CEN, NPORT-P; NSAR-A and NSAR-B before 2019), each stating the period it covers like a 10-K or 10-Q does
+INVESTMENT_COMPANY_FORMS = frozenset({"N-CSR", "N-CSRS", "N-Q", "N-CEN", "NPORT-P", "NSAR-A", "NSAR-B"})
 SUCCESSOR_FORMS = frozenset({"8-K12B", "8-K12G3"})
+CARRYING_ON_FORMS = PERIODIC_FORMS | INVESTMENT_COMPANY_FORMS
 _REVERSE_SPLIT = re.compile(r"reverse\s+(?:stock\s+)?split|share\s+consolidation", re.I)
 _NOT_COMMON = re.compile(r"pref|warrant|right|unit|\bWRT\b", re.I)     # OpenFIGI securityType of a line that is no common
 _SYMBOL = re.compile(r"[A-Z]{1,5}(?:-[A-Z])?")
@@ -329,10 +333,12 @@ def corroborate(step: LineStep, *, filings: Sequence[EdgarSubmission], sub: Mapp
       carried from the first new row on (`evidence.names_between`, `NAME_DAYS`): a ticker passed to another issuer
       (new LMCA 2013, new MSG 2015) carries the old name only as a former one;
     - "class" (a switch only): a new row's description states a class letter other than the line's;
-    - "merged_out" (R1): no 10-K/10-Q/20-F/40-F for a period that ends after the first new row (a 10-Q filed
-      days after the step reports on the old registrant's past: BXS 2017), the step is not the issuer's own
-      8-K12B/8-K12G3 within `FILING_DAYS`, and it is not a step within `RECENT_DAYS` of the run date of a line
-      listed today (UNIT 2025: Uniti Group LLC filed a 15-12G and no 10-Q);
+    - "merged_out" (R1): no 10-K/10-Q/20-F/40-F (`PERIODIC_FORMS`) and no registered investment company's N-CSR,
+      N-CSRS, N-Q, N-CEN, NPORT-P, NSAR-A or NSAR-B (`INVESTMENT_COMPANY_FORMS`: Altaba 2017) for a period that
+      ends after the first new row (a 10-Q filed days after the step reports on the old registrant's past: BXS
+      2017), the step is not the issuer's own 8-K12B/8-K12G3 within `FILING_DAYS`, and it is not a step within
+      `RECENT_DAYS` of the run date of a line listed today (UNIT 2025: Uniti Group LLC filed a 15-12G and no
+      10-Q);
     - "other_registrant" (R1): another CIK's 8-K12B/8-K12G3 names the issuer (SBGI 2023's new holding company);
     - "read_failed": `other_registrant` could not read (`READ_FAILED`): nothing is known of another registrant;
     - "no_filing" (a switch only): no 8-K item 5.03 or 3.03, own 8-K12B/8-K12G3 or 8-K text stating a reverse
@@ -356,7 +362,7 @@ def corroborate(step: LineStep, *, filings: Sequence[EdgarSubmission], sub: Mapp
                        for d in step.descriptions):
             return "", "class"
     own_successor = _near(filings, first, FILING_DAYS, FILING_DAYS, lambda f: f.form in SUCCESSOR_FORMS)
-    periodic = any(f.form.split("/")[0] in PERIODIC_FORMS and (f.report_date or "")[:10] > step.first
+    periodic = any(f.form.split("/")[0] in CARRYING_ON_FORMS and (f.report_date or "")[:10] > step.first
                    for f in filings)
     if not (periodic or own_successor or ((as_of - first).days <= RECENT_DAYS and listed_now())):
         return "", "merged_out"
@@ -686,6 +692,7 @@ def follow_lines(identity: "Identity", clients: LineSources, *, as_of: date,
                                            "; run again once SEC answers", last_seen=step.old_last))
             if refused:
                 counts[f"refused:{refused}"] += 1
+                log(f"line follow refused: {sid} {what} ({refused})")
                 items.append(ReviewItem(sid, step.symbol, cik, f"{LINE_REFUSED}:{refused}",
                                         f"{what}: not followed ({refused})", last_seen=step.old_last))
                 continue

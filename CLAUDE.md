@@ -760,14 +760,17 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   [first − 180, first + 30] d, an OTC move, a description that names no name in force, a class conflict, a
   registrant that merged out or that another CIK's 8-K12B/12G3 replaces (`other_registrant`), no filing stating
   the change, or a failed `other_registrant` read (`read_failed`); the registrant carries on by a periodic report in `PERIODIC_FORMS`, which includes the small-business
-  forms 10-K405, 10-KSB, 10-KSB40 and 10-QSB); `decide` (R2: attach, fold a placeholder, a line successor, or
+  forms 10-K405, 10-KSB, 10-KSB40 and 10-QSB, or by a registered investment company's report in
+  `INVESTMENT_COMPANY_FORMS` (N-CSR, N-CSRS, N-Q, N-CEN, NPORT-P, NSAR-A, NSAR-B: Altaba 2017), each for a period
+  after the step); `decide` (R2: attach, fold a placeholder, a line successor, or
   refused: `unsettled`, `type` for an OpenFIGI preferred/warrant/right/unit, `other_issuer`, `class`). Up to
   `MAX_ROUNDS` steps a line; a CUSIP, or a successor composite, one
   security took is held for the rest of the round (a second is refused `taken`). A FIGI line with a line successor
   is not listed today (stage 5's `retired`). A failed EDGAR read is never cached, and any degraded read of a CIK gives each
   of that CIK's steps a `resolution_degraded` row, as does any other SEC read of the step that counted itself
   degraded, and so does a security with no step when a read of its CIK failed. Review flags `line_followed`,
-  `line_follow_refused:<why>` (info). Stage 9's own-registration link reads `is_line_symbol`, `text_cusips` and
+  `line_follow_refused:<why>` (info), and the run log names each refused step (`line follow refused: <sec_id>
+  <old CUSIP> -> <new CUSIP> under <symbol> from <day> (<why>)`). Stage 9's own-registration link reads `is_line_symbol`, `text_cusips` and
   `composites` too (the same R2 reading of a same-CIK 8-K12B's new CUSIP). Its real cases replay offline from
   `tests/fixtures/lines/` (`scripts/build_line_fixtures.py`), through the rules and through `follow_lines`; the
   stage's own rules are tested at `follow_lines` with doubles (tests/test_line_stage.py).
@@ -1611,7 +1614,7 @@ expiration is 0.0 in the table and no correction in the firm month, which leaves
   across a reverse split or a rename the fails rows show after the caller's last observation, before the Form 25
   search: so a later real ending is found instead of a guess anchored on the old ticker's last row. A step needs a
   filing that states it (an 8-K 5.03/3.03, an own 8-K12B/12G3, an EDGAR rename, or 8-K text) and an old registrant
-  that carries on (a periodic report for a period after the step, or its own 8-K12B; listed today for a step
+  that carries on (a periodic report, an operating company's or a registered investment company's, for a period after the step, or its own 8-K12B; listed today for a step
   within 120 days of the run date; no other CIK's 8-K12B/12G3 naming it). R2 decides identity: the same composite
   or none is one security; a placeholder folds into the FIGI line its new CUSIP names (contract/id_changes.csv
   names it); another composite is a line successor, linked by stage 9 as a continuation (an `unknown` row at the
