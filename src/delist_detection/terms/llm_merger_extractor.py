@@ -57,6 +57,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import threading
 from dataclasses import dataclass, replace
 from datetime import date, timedelta
 from pathlib import Path
@@ -76,7 +77,7 @@ from .filing_selection import (
     parse_date,
 )
 from ..vocabulary.identifiers import answer_class_letter, normalize_ticker
-from ..sources.sec_stats import SEC_STATS
+from ..sources.sec_stats import SEC_STATS, filling_only
 
 
 # --------------------------------------------------------------------------- #
@@ -524,6 +525,23 @@ class LLMMergerTermsExtractor:
         self.cache_dir = Path(cache_dir)
         self.max_filings = max_filings
         clean_orphan_temps(self.cache_dir)    # a killed run's cut-off answer
+        self._lock = threading.Lock()
+        self._asked: set[Path] = set()        # the answers this run asked the model for, on any thread
+        self._usage = {"from_cache": 0, "asked": 0, "failed": 0}
+
+    def usage(self) -> dict:
+        """The run's merger-terms answers by where they came from, for run_manifest.json's `merger_terms` (FB-004:
+        a value change read against a model change): the model that labels them, and the sequential pass's answers
+        read from the cache as the run found it (`from_cache`), asked of the model this run, a warm thread's fill
+        included (`asked`), and calls that failed (`failed`, never cached). A warm pass's own reads are not counted."""
+        with self._lock:
+            u = dict(self._usage)
+        return {"model": self.model, "answers": u["from_cache"] + u["asked"], **u}
+
+    def _count(self, kind: str) -> None:
+        if not filling_only():
+            with self._lock:
+                self._usage[kind] += 1
 
     # ------------------------------------------------------------------ #
     # Public API
@@ -731,16 +749,28 @@ class LLMMergerTermsExtractor:
         else:
             raw = None
 
-        if not isinstance(raw, dict):
+        if isinstance(raw, dict):
+            with self._lock:
+                asked = cache_path in self._asked
+            self._count("asked" if asked else "from_cache")
+        else:
             user_prompt = self._user_prompt(excerpt, record, filing, security_name)
-            raw = self.llm.extract(SYSTEM_PROMPT, user_prompt, RESULT_SCHEMA)
+            try:
+                raw = self.llm.extract(SYSTEM_PROMPT, user_prompt, RESULT_SCHEMA)
+            except Exception:
+                self._count("failed")
+                raise
             if isinstance(raw, dict):
                 self.cache_dir.mkdir(parents=True, exist_ok=True)
                 write_atomic(cache_path, json.dumps(raw))
+                with self._lock:
+                    self._asked.add(cache_path)
+                self._count("asked")
             else:
                 # an answer that is no JSON object is never cached, so it is asked again on every run: it counts
                 # itself degraded, like a failed call, and the delisting's row carries `resolution_degraded`
                 SEC_STATS.degraded("llm_call")
+                self._count("failed")
 
         return self._to_terms(raw, filing)
 

@@ -1469,6 +1469,13 @@ def _scorecard(ctx: _RunContext, read: RunSnapshot, config: run_scorecard.Scorec
     return card
 
 
+def _merger_terms_usage(extractor) -> dict | None:
+    """run_manifest.json's `merger_terms`: the LLM reader's model and where its answers came from (FB-004), or None
+    for a run with no LLM reader (or a test's double of one, which keeps no account)."""
+    from .terms.llm_merger_extractor import LLMMergerTermsExtractor
+    return extractor.usage() if isinstance(extractor, LLMMergerTermsExtractor) else None
+
+
 def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_dir: Path, tol: float,
          limit: int | None, log: Callable, sec_workers: int,
          review_decisions: Sequence[Decision] = (),
@@ -1579,7 +1586,8 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
                                                    review_flags=dict(flags), review=triaged.counts,
                                                    handoffs=handoffs.counts,
                                                    continuation_filings=continuation_entries(confirmations),
-                                                   disputes=counts["disputes"]))
+                                                   disputes=counts["disputes"],
+                                                   merger_terms=_merger_terms_usage(clients.llm_extractor)))
     return RunSummary(counts, dict(Counter(e.record.bucket.value for e in delistings)),
                       dict(Counter(s.figi_source for s in securities.values())), dict(flags), dict(triaged.counts),
                       scorecard_drops=card["drops"], golden_failures=card["golden_failures"],

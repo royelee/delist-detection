@@ -178,6 +178,29 @@ def test_cache_hit_second_call_served_from_disk(tmp_path):
     assert any(PROMPT_VERSION in p.name for p in cache_files)  # prompt version tags the cache key
 
 
+def test_usage_counts_the_runs_answers_by_where_they_came_from(tmp_path):
+    """run_manifest.json's `merger_terms` (FB-004's model provenance): the sequential pass's answers, each from the
+    cache as the run found it, asked of the model this run (a warm thread's fill included), or failed."""
+    from delist_detection.sources.sec_stats import fill_only
+    resp = {"deal_type": "cash", "cash_per_share": 113.0, "stock_ratio": None, "acquirer_name": None,
+            "acquirer_ticker": None, "confidence": "high", "quote": "$113.00 in cash"}
+    edgar = _FakeEdgarText([_closing_8k()], {"C1": _USABLE_TEXT})
+    LLMMergerTermsExtractor(edgar, _FakeLlm([resp]), model="m1", cache_dir=tmp_path).extract(_merger_rec())
+    cached = LLMMergerTermsExtractor(edgar, _FakeLlm([]), model="m1", cache_dir=tmp_path)   # a later run
+    cached.extract(_merger_rec())
+    assert cached.usage() == {"model": "m1", "answers": 1, "from_cache": 1, "asked": 0, "failed": 0}
+
+    warm = LLMMergerTermsExtractor(edgar, _FakeLlm([resp]), model="m2", cache_dir=tmp_path)
+    with fill_only():
+        warm.extract(_merger_rec())             # the warm pass asks; it is not the run's answer
+    warm.extract(_merger_rec())                 # the sequential pass reads what the warm pass cached
+    assert warm.usage() == {"model": "m2", "answers": 1, "from_cache": 0, "asked": 1, "failed": 0}
+
+    failing = LLMMergerTermsExtractor(edgar, _FakeLlm([], raises=True), model="m3", cache_dir=tmp_path)
+    failing.extract(_merger_rec())
+    assert failing.usage() == {"model": "m3", "answers": 0, "from_cache": 0, "asked": 0, "failed": 1}
+
+
 def test_cache_is_labelled_with_the_clients_own_model(tmp_path, monkeypatch):
     """The cache label is the model the injected client calls, ahead of
     $CHAT_MODEL: an answer cached for another model is not reused."""

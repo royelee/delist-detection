@@ -98,7 +98,9 @@ The run also writes the contract, the tables `qlib_practice` will read, under
 `output/contract/` (see *contract/* below), beside these for one release.
 
 Next to the tables, every run writes `run_manifest.json` (what the run rested
-on) and `scorecard.json`: lifecycle coverage and quality per input ticker and
+on, including `merger_terms`: the LLM model that read the merger terms and how
+many of its answers came from the cache, were asked this run, or failed; null
+without `--extract-merger-terms-llm`) and `scorecard.json`: lifecycle coverage and quality per input ticker and
 per security, the gap-table lines (identity, last trade dates, values,
 distress), the golden set's result and the accuracy audit's error bound. It is
 compared to the floor in `data/scorecard.json`; `scripts/scorecard.py`

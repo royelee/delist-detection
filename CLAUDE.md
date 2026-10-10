@@ -448,7 +448,10 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   last-trade decision that asked a Nasdaq halt-feed day that failed).
 - `outputs/manifest.py` — `run_manifest.json` (`build`/`write`) and `StageMeter`, the
   per-stage SEC traffic it reports. Its `continuation_filings` are stage 9g's readings, a confirmation's filing or a
-  doubt (`run_snapshot.continuation_entries` writes them, `RunSnapshot.continuations` reads them back).
+  doubt (`run_snapshot.continuation_entries` writes them, `RunSnapshot.continuations` reads them back). Its
+  `merger_terms` (FB-004) is the LLM reader's model and its answers by source (`LLMMergerTermsExtractor.usage`: the
+  sequential pass's answers `from_cache` as the run found it, `asked` of the model this run, a warm fill included, and
+  `failed`), null with no LLM reader, so a value change can be read against a model change.
 - `outputs/dlret.py` — an ending's value, decided once (architecture step 10). `decide(ValueInputs) -> EndingValue`: one typed
   input record per ending (bucket, exchange, last close, a merger's terms, `--recoveries`, an answered OTC print or
   plan value, the cash read's confidence, `deregistered`) gives the method (`DlretMethod`), the value, the terminal
