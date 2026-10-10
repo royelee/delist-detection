@@ -555,3 +555,56 @@ def test_a_new_ticker_a_round_attached_is_loaded_for_the_next_round():
     assert lines.cusips == {"BBGA": ["A1", "C9"]} and lines.securities["BBGA"].line_tickers == {"BB"}
     assert [f for _, f in _flags(lines)] == ["line_followed", "line_followed"]
 
+
+# --- FB-003: a rename EDGAR dates, whose new ticker neither EDGAR nor the 8-K names (DV to ATGE) ------------------------
+
+class _EveryFile(_FailsFiles):
+    """`_FailsFiles` that also reads a whole file when asked for no key (`FtdIndex.every_row`), counting such reads."""
+
+    def __init__(self, rows):
+        super().__init__(rows)
+        self.whole = 0
+
+    def rows(self, url, *, symbols=None, cusips=None):
+        if symbols is None and cusips is None:
+            self.whole += 1
+            yield from self.rows_
+        else:
+            yield from super().rows(url, symbols=symbols, cusips=cusips)
+
+
+def _renamed(*, rename_at="stop", new_desc=NAME):
+    """AA (OLD NAME CO) fails for WEEKS weeks on A1; REVERSE SPLIT CO's C9 then fails under ZZ, a ticker nobody
+    names. EDGAR dates the issuer's rename from OLD NAME CO (`rename_at`: the stop, or years before)."""
+    old, new = _line("AA", ["A1"], desc="OLD NAME CO"), _line("ZZ", ["X", "C9"], desc=new_desc)
+    new = [r for r in new if r.cusip == "C9"]
+    everything = old + new
+    stop = date.fromisoformat(_monday(WEEKS - 1))
+    day = stop if rename_at == "stop" else date(2009, 1, 5)
+    former = [{"name": "OLD NAME CO", "from": "2000-01-01T00:00:00.000Z", "to": f"{day.isoformat()}T04:00:00.000Z"}]
+    files = _EveryFile(everything)
+    index = FtdIndex([r for r in everything if r.symbol == "AA" or r.cusip == "A1"], source=files,
+                     window=(date(2008, 1, 1), AS_OF))
+    edgar = _Edgar(_stating(everything), name=NAME)
+    edgar.former = former
+    lines = _follow([_Spec("BBGA", 1, "AA", ["A1"])], everything, edgar=edgar, index=index)
+    return lines, files
+
+
+def test_a_rename_edgar_dates_finds_the_new_cusip_by_the_name_its_fails_rows_carry():
+    """DV 2017: DeVry renamed itself Adtalem on 2017-05-24 and the new CUSIP 00737L103 failed from that day under
+    ATGE, which EDGAR no longer lists (it lists CVSA today) and the 8-K 5.03 does not name. The rows near the stop
+    that carry the name EDGAR dates the issuer's rename to are the line's next CUSIP."""
+    lines, files = _renamed()
+    assert lines.cusips == {"BBGA": ["A1", "C9"]} and lines.securities["BBGA"].line_tickers == {"ZZ"}
+    assert [f for _, f in _flags(lines)] == ["line_followed"] and files.whole == 1
+
+
+def test_no_rename_near_the_stop_reads_no_whole_file():
+    lines, files = _renamed(rename_at="long ago")
+    assert lines.cusips == {"BBGA": ["A1"]} and _flags(lines) == [] and files.whole == 0
+
+
+def test_rows_that_do_not_carry_the_new_name_are_no_next_cusip():
+    lines, files = _renamed(new_desc="ANOTHER WIDGET CORP")
+    assert lines.cusips == {"BBGA": ["A1"]} and _flags(lines) == [] and files.whole == 1

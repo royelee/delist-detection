@@ -577,6 +577,28 @@ class _Reads:
         texts = [self.issuers.text(s.issuer_cik, f) for f in near]
         return {t for t in text_symbols(texts) if is_line_symbol(t)} - s.own_tickers(), text_cusips(texts)
 
+    def renamed_cusips(self, s: Security, end: LineEnd, cusips: Collection[str], ftd: FtdIndex) -> set[str]:
+        """The CUSIPs, none of `cusips` (the security's own), whose fails rows near a line's end carry a name its issuer
+        held then, read only for an issuer EDGAR dates a rename to within `RENAME_DAYS` of the line's settled row: the
+        rename gave the stock a new ticker that EDGAR no longer lists (DeVry's ATGE: EDGAR lists CVSA today) and the
+        8-K does not name, so no symbol or CUSIP finds it. One pass over the files of the window
+        (`FtdIndex.every_row`). A CUSIP needs `MIN_NEW_ROWS` rows there under a line symbol; `corroborate` and
+        `decide` then judge the step."""
+        sub = self.issuers.profile(s.issuer_cik)
+        settled = date.fromisoformat(end.settled)
+        if not isinstance(sub, Mapping) or not any(
+                (to := (fn.get("to") or "")[:10]) and abs((date.fromisoformat(to) - settled).days) <= RENAME_DAYS
+                for fn in sub.get("formerNames") or []):
+            return set()
+        names = names_between(sub, settled, settled + timedelta(days=RENAME_DAYS))
+        lo, hi = _days(end.settled, -LINE_DAYS), _days(end.last, LINE_DAYS)
+        rows: dict[str, list[str]] = defaultdict(list)
+        for r in ftd.every_row(date.fromisoformat(lo), date.fromisoformat(hi) + timedelta(days=NAME_DAYS)):
+            if r.cusip not in cusips and is_line_symbol(r.symbol) \
+                    and any(description_names(r.description, n) for n in names):
+                rows[r.cusip].append(r.date)
+        return {c for c, days in rows.items() if len(days) >= MIN_NEW_ROWS and lo <= min(days) <= hi}
+
     def corroborate(self, step: LineStep, s: Security, tickers: set[str], as_of: date) -> tuple[str, str]:
         """`corroborate` for a step of security `s` (its line's `tickers`), from the issuer's record."""
         cik, first = s.issuer_cik, date.fromisoformat(step.first)
@@ -707,6 +729,8 @@ def follow_lines(identity: "Identity", clients: LineSources, *, as_of: date,
                 if steps[sid] or end is None or end.last >= stopped:
                     continue
                 symbols, cusips = reads.text_sources(out.securities[sid], end)
+                if not symbols and not cusips:      # no filing names the new ticker or CUSIP: the rows' names may
+                    cusips = reads.renamed_cusips(out.securities[sid], end, out.cusips.get(sid, []), ftd)
                 extra[sid] |= symbols
                 named[sid] |= cusips
                 new_symbols |= symbols

@@ -751,7 +751,10 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   full-text search as `Clients.full_text_search` states it, and OpenFIGI) and gets the securities, era resolutions and CUSIPs after the follow, the folds
   (`renames`), the line successors (`successors`, sec_id -> `LineSuccessor`) and the review items of stages 1 to 4b
   (a folded placeholder's moved to its FIGI line, its `no_figi` dropped). Behind it: the rounds, the holders, the
-  8-K text sources (`_Reads.text_sources`, the filter before the `MAX_TEXTS` cap), the fold (`_fold`: a fold of a fold
+  8-K text sources (`_Reads.text_sources`, the filter before the `MAX_TEXTS` cap; for a line they name nothing for,
+  an issuer EDGAR dates a rename to within `RENAME_DAYS` of the settled row gets `_Reads.renamed_cusips`: one
+  `FtdIndex.every_row` pass over the window for a CUSIP, none of its own, whose rows carry a name the issuer held
+  then, DeVry's ATGE that EDGAR no longer lists and the 8-K 5.03 does not name), the fold (`_fold`: a fold of a fold
   points at the last FIGI) and sub-plan 5h's `_today_holder_fold`, and every EDGAR read in one place (`_Reads`: the
   issuers' submissions, filing lists and 8-K texts through the run's issuer record, listed-today from the issuer's
   profile, `listing_status.lists_on_major_exchange`; the other-registrant search and its filer's listing through
