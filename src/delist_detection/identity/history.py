@@ -397,6 +397,7 @@ class Histories:
         self._ftd = ftd
         self._exchange_today = exchange_today
         self._own_memo: dict[str, list[Sighting]] = {}
+        self._listed = listed
         endings = [e for e in endings if e.sec_id in securities]
         self._starts = self._successor_starts(endings, added)
         ends: dict[DelistingKey, bool] = {}
@@ -497,14 +498,26 @@ class Histories:
         (`LastTrade.confirmed`; an unconfirmed day is a guess, the no-Form-25 fallback's last sighting, too weak to
         test continued trading against: Monster Worldwide's and SunPower's 2008-09 rows, Bank of Ozarks with no day),
         not one after which the security's own CUSIPs keep trading under its own tickers (`_continues_after`). A
-        liquidation, compliance failure, expiration or unknown ending always ends it, whatever fails rows follow."""
+        liquidation, compliance failure, expiration or unknown ending ends it whatever fails rows follow, unless the
+        security is listed today and the CUSIP it traded under up to that last trade keeps trading under its own
+        tickers: it returned (GTX 2021, FB-001; a new CUSIP after a bankruptcy is no return, CHK)."""
         if not e.real:
             return False
-        if e.bucket not in CONTINUATION_BUCKETS or not e.last_trade.confirmed:
+        if not e.last_trade.confirmed:
             return True
-        return not self._continues_after(e.sec_id, e.last_trade.day.isoformat())
+        after = e.last_trade.day.isoformat()
+        if e.bucket not in CONTINUATION_BUCKETS:
+            return not (self._listed.get(e.sec_id) and
+                        self._continues_after(e.sec_id, after, cusips=self._cusips_at(e.sec_id, e.last_trade.day)))
+        return not self._continues_after(e.sec_id, after)
 
-    def _continues_after(self, sec_id: str, after: str) -> bool:
+    def _cusips_at(self, sec_id: str, day: date) -> list[str]:
+        """The security's CUSIPs it traded under at an ending on `day`: those whose first trading fails row is on or
+        before it (a CUSIP begun after it is a new line's, CHK's 2021 common)."""
+        return [c for c in self._cusips.get(sec_id, [])
+                if any(r.date <= day.isoformat() for r in self._ftd.trading_rows([c]))]
+
+    def _continues_after(self, sec_id: str, after: str, *, cusips: Sequence[str] | None = None) -> bool:
         """Whether the security's own CUSIPs keep trading under its own tickers (its eras' and its line's) strictly
         after the ISO day `after` (Phase 4's clip rule): at least `CONTINUATION_MIN_ROWS` live fails rows (never a
         deleted symbol; a fail still settling after the real end) over at least `CONTINUATION_MIN_DAYS` days, with
@@ -514,7 +527,7 @@ class Histories:
         CUSIP's lingering fails)."""
         own = self._securities[sec_id].own_tickers()
         starts = self._starts.get(sec_id, {})
-        rows = [r for r in self._ftd.trading_rows(self._cusips.get(sec_id, []))
+        rows = [r for r in self._ftd.trading_rows(self._cusips.get(sec_id, []) if cusips is None else cusips)
                 if r.symbol in own and r.date > after and r.date < starts.get(r.symbol, "~")]
         if len(rows) < CONTINUATION_MIN_ROWS:
             return False

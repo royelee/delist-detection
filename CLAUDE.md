@@ -728,7 +728,9 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   Its three rules: an ending ends its security unless its successor is the security itself, or it is a merger or
   exchange transfer (`CONTINUATION_BUCKETS`) with a confirmed last trade after which its own CUSIPs keep trading
   under its own tickers (`_continues_after`: `CONTINUATION_MIN_ROWS` 20 rows over `CONTINUATION_MIN_DAYS` 60 days
-  at `CONTINUATION_MIN_PRICES` 2 prices; WRK, DIS); the history ends at the end day (`exit_kind.end_day`) of the
+  at `CONTINUATION_MIN_PRICES` 2 prices; WRK, DIS), or any other kind with a confirmed last trade of a security
+  listed today whose CUSIPs begun by that day so trade on (it returned: GTX 2021, FB-001; a CUSIP begun after the
+  ending is a new line's, CHK 2021); the history ends at the end day (`exit_kind.end_day`) of the
   last ending that ends it, unless it is listed today. A successor's ticker is not its predecessor's
   (`_successor_starts`, over the endings: the successor's first sighting under the ticker within `TAKEOVER_DAYS`,
   120, the handoff window, defined here, after the confirmed last trade, else from the delist date less
@@ -1653,7 +1655,9 @@ expiration is 0.0 in the table and no correction in the firm month, which leaves
   `expiration` or `unknown` delisting always clips, however much (and however
   varied) the fails evidence that follows — `ticker_history` records exchange
   listings, and OTC pink-sheet trading after a real bankruptcy delisting is
-  not that listing continuing (RHD, Smurfit-Stone, Idearc, GGP). An
+  not that listing continuing (RHD, Smurfit-Stone, Idearc, GGP). The one exception is a security listed today
+  whose CUSIP of the ending trades on under its own tickers: it returned, and the ending goes on as the security
+  itself (GTX, relisted in 2021 on the CUSIP its Chapter 11 left in place; FB-001). An
   *unconfirmed* last-trade day (the no-Form-25 "continued 10-K/Q filings"
   fallback substitutes the security's own last sighting when it has no
   last-trade evidence at all) is too weak a guess to second-guess against

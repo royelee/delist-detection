@@ -323,6 +323,32 @@ def test_a_liquidation_ends_its_security_whatever_otc_tail_follows():
     assert _aet_ranges(history)[0][2] == "2018-11-28"
 
 
+def test_a_listed_security_whose_cusip_trades_on_after_a_distress_ending_returned_GTX():
+    """GTX 2020-2021 (FB-001): Garrett Motion's Chapter 11 delisting (last trade 2020-09-18), the old equity not
+    cancelled: the same CUSIP traded OTC and then relisted, and the security is listed today. A security listed today
+    whose CUSIP of the ending, the one it traded under up to its last trade, keeps trading under its own tickers
+    returned: the ending does not end it (`going_on`), and its history stays open. Not listed today, the liquidation
+    rule above stands (RHD, GGP)."""
+    varying = _continuing_rows("AET", AET_CUSIP, start="2018-12-03", count=40, step_days=10,
+                               prices=(0.50, 0.75, 1.10, 0.30, 0.90))
+    ending = _ending("BBGAET", "2018-12-09", CrspBucket.LIQUIDATION, date(2018, 11, 28), exchange="")
+    history = _history(_aet(), AET_ROWS + varying, [ending], cusips={"BBGAET": [AET_CUSIP]}, listed={"BBGAET": True})
+    assert history.going_on == {ending.key}
+    assert history.end("BBGAET") == SecurityEnd(None, False, True)
+
+
+def test_a_new_cusip_after_a_bankruptcy_is_no_return_CHK():
+    """CHK 2020-2021 (FB-001): the old common's CUSIP was cancelled at the 2021 emergence and a new CUSIP trades under
+    the ticker. A new CUSIP that began after the ending is not the ending's CUSIP trading on, so a security that holds
+    both (one line merged with the next) is not said to have returned: the ending ends it."""
+    new_cusip = "00817Y999"
+    new_rows = _continuing_rows("AET", new_cusip, start="2019-02-01", count=40, step_days=10)
+    ending = _ending("BBGAET", "2018-12-09", CrspBucket.LIQUIDATION, date(2018, 11, 28), exchange="")
+    history = _history(_aet(), AET_ROWS + new_rows, [ending], cusips={"BBGAET": [AET_CUSIP, new_cusip]},
+                       listed={"BBGAET": True})
+    assert history.going_on == frozenset()
+
+
 def test_an_ending_with_no_confirmed_last_trade_clips_at_its_end_day_and_is_never_second_guessed():
     """A last trade nothing confirms is too weak to test continued trading against: Bank of Ozarks (no day at all:
     clipped at the delist date), Monster Worldwide and SunPower (the no-Form-25 fallback's guessed last sighting:
