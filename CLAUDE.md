@@ -35,7 +35,7 @@ pytest tests/test_payout_extractor.py::test_match_in_cash_family_altr -v   # one
 python scripts/verify_altair.py          # smoke: ALTR → CRSP 231, high
 python scripts/scorecard.py              # offline: recompute output/'s scorecard vs data/scorecard.json; --check (exit 1 on a drop or a failing golden or diagnosis `pass` case), --base REV (recompute the regression report against that commit; --check then also fails on `D.unexplained_regressions` above 0), --write, --raise-floor, --lifecycles PATH
 python scripts/build_diagnosis_truth.py   # the diagnosis truth file from the normalization pass (OpenFIGI for new CUSIPs; --no-figi offline; its inputs under data/diagnosis/ are gitignored, so only the checkout that ran sub-plan 5-0 has them)
-python scripts/regression_report.py --base <commit>    # offline: contract changes outside the truth set -> output/regression_report.csv
+python scripts/regression_report.py --base <commit>    # offline: contract changes outside the truth set -> output/regression_report.csv (gitignored: the truth loop's working copy)
 python scripts/truth_loop_round.py --label 5a --base <commit> --round 1   # offline: open one loop round (loop_round.Round.open): its new errors -> loop/<label>/round-<N>/cases.csv (--seed-ledger records current mismatches as known, loop_round.Loop.seed)
 python scripts/update_truth.py --label 5a --round 1 --base <commit>      # offline: close the round (loop_round.Round.close): apply its diagnoses to data/diagnosis_truth.csv, the change log and the ledger (--dry-run; the loop scripts' --truth defaults to the file data/scorecard.json names, its legs and change log named after it)
 python scripts/scorecard.py --flip       # offline: the flip rule (truth.now_right) on both truth sets: every known_wrong golden case (data/golden_lifecycles.csv, its note records it) and diagnosis case (the truth set, a change-log row) that output/'s tables now match becomes pass, its fixed_by cleared; prints the flipped case ids (scorecard.flip)
@@ -61,7 +61,7 @@ python scripts/observations_from_instruments.py --instruments all.txt --out obs.
 python scripts/regen_payout_fixtures.py  # refetch golden 8-K fixtures from live SEC
 python scripts/build_golden_fixtures.py  # rebuild the 31-case golden regression set (NETWORK); --efts-only / --llm-only / --only ID
 python scripts/accept_review.py --flag terms_gate_failed --note "sampled 5, all fine"   # bulk-accept every current review.csv row carrying that flag → appends to data/review_decisions.csv (offline); --bucket narrows, --dry-run previews, --yes required for a fix-severity flag
-# End-to-end pipeline (the canonical way to use the library) — classify a universe → output/delistings.csv (+ 8 more tables), then firm-month-correct a returns panel:
+# End-to-end pipeline (the canonical way to use the library) — classify a universe → output/delistings.csv (+ 6 more tables), then firm-month-correct a returns panel:
 python scripts/classify_universe.py --observations obs.csv --last-trade-closes lt.csv --merger-terms terms.csv --recoveries rec.csv   # → output/{securities,cusip_history,delistings,review,review_summary,observation_map,uncertain}.csv + contract/{security_history,delistings,seeds,price_requests,id_changes,payout_legs}.csv + scorecard.json
 python scripts/compute_corrected_returns.py --panel panel.csv --delistings output/delistings.csv --out corrected.parquet   # firm-month BMP correction, keyed on sec_id
 # override-CSV columns are keyed by sec_id[,delist_date] (a blank/absent delist_date applies to every delisting of that security): lt.csv=`sec_id,last_trade_close[,delist_date]` · terms.csv=`sec_id,cash_per_share,stock_ratio,acquirer_price,acquirer_ticker[,delist_date]` · rec.csv=`sec_id,recovery_ratio[,delist_date]`. A malformed file, or a row that matches no delisting, stops the run before anything is written (exit 2, one stderr line naming the file and line).
@@ -1656,7 +1656,7 @@ expiration is 0.0 in the table and no correction in the firm month, which leaves
 - **Ticker recycling** (e.g. ALTR was Altera then Altair) is handled by
   `observations.split_eras` (a new era per security, on a name mismatch, a
   pin change, or an unconfirmed gap) and by `MANUAL_OVERRIDES` in
-  `scripts/classify_universe.py` (~35 ambiguous short tickers). When web
+  `scripts/classify_universe.py` (~45 ambiguous short tickers). When web
   verification proves a wrong CIK, extend that dict — don't patch the resolver.
 - **Payout extraction is cash-only; the DLRET table supports full consideration.** Auto-extraction from EDGAR remains cash-only. The DLRET table abstains (neutral mark) only when no consideration terms are supplied; when stock-leg terms (`stock_ratio`, `acquirer_price`) are provided via `--merger-terms`, it computes the full cash+stock consideration (e.g. AET→CVS: $145 cash + 0.8378 CVS @ $80 = $212.02, DLRET = +11.6%). The `--last-trade-closes`, `--recoveries`, and `--merger-terms` CSVs are keyed by `sec_id` and accept an optional `delist_date` column for per-event overrides (blank/absent = applies to all delistings of that security); a row matching no delisting stops the run.
 - **The LLM endpoint is the one `.env` names: OpenAI or Anthropic.**

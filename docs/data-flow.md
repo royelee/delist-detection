@@ -879,11 +879,11 @@ carry the `handoff search` SEC traffic.
 
 ## Outputs
 
-Nine CSVs written to `output/`, all committed artifacts; see `outputs/store.py` for
+Seven CSVs written to `output/`, all committed artifacts; see `outputs/store.py` for
 the exact schema. `delistings.csv` is the primary deliverable. The run also
 writes the contract under `output/contract/` (stage 10g): `security_history.csv`,
-`delistings.csv` (one row per ended security), `seeds.csv`, `price_requests.csv`
-and `id_changes.csv`, beside the seven tables for one release.
+`delistings.csv` (one row per ended security), `seeds.csv`, `price_requests.csv`,
+`id_changes.csv` and `payout_legs.csv`, beside the seven tables for one release.
 
 `output/securities.csv`: one row per identified security — `sec_id`,
 `issuer_cik`, `share_class`, `name`, `security_type`, `observed`,
@@ -1053,8 +1053,8 @@ a token with a `:`; bulk-accepting a `fix`-severity flag needs `--yes`).
 `load_decisions` first (both read `utf-8-sig`, so an Excel BOM doesn't blank
 the first cell) and refuses to touch a file that doesn't load, rewriting a
 valid one with every existing row/column preserved in the file's own header
-order. Written by `scripts/classify_universe.py` alongside the other seven
-output tables (eight in all, counting `uncertain.csv`).
+order. Written by `scripts/classify_universe.py` alongside the other six
+output tables.
 
 ## Downstream integration
 

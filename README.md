@@ -85,13 +85,13 @@ classification evidence, and concrete train/backtest mechanics:
 
 ---
 
-## The eight output tables
+## The seven output tables
 
-`classify_universe.py` writes eight CSVs to `output/`, all committed
+`classify_universe.py` writes seven CSVs to `output/`, all committed
 artifacts (one row layout each, fixed column order, ISO dates, `;`-joined
 lists, empty cell for NULL, rows sorted by key unless noted — see
 [`outputs/store.py`](src/delist_detection/outputs/store.py) for the schema every table
-shares). `delistings.csv` is the primary deliverable; the other seven support
+shares). `delistings.csv` is the primary deliverable; the other six support
 it.
 
 The run also writes the contract, the tables `qlib_practice` will read, under
@@ -303,7 +303,7 @@ have no price.
 `lost_source` is an allowed `exit_kind` that nothing produces yet (reset-4a).
 
 **Values.** `cash_only`, `stock_only`, `cash_plus_stock`, `recovery_ratio`,
-`otc_print` and `worthless` are measured, in `dlret`. Shumway marks, assumed par and an
+`otc_print`, `plan_stock` and `worthless` are measured, in `dlret`. Shumway marks, assumed par and an
 exchange transfer's 0.0 are fills, in `dlret_fill`; a fill is never in
 `dlret`. A continuation has neither. Transfers with no successor keep today's
 0.0 as a fill, so labels built from `delistings.csv` do not move until reset-4a
@@ -369,7 +369,8 @@ is the Form 25 filing date plus 10 days (Rule 12d2-2(d)(1)), or the date of
 the fallback filing that ended trading when no Form 25 exists.
 `raw_payout_*` is the extraction before the last-close gate (see *Payout
 reconciliation* below); `last_trade_date_source` is `ex99_notice`, `8k_301`,
-`midas`, `nasdaq_halt`, or empty. `resolution_source` records the resolver
+`midas`, `nasdaq_halt`, `closing_day` (a worked-out closing day, never published), `last_sighting` (a handoff
+row's), or empty. `resolution_source` records the resolver
 tier that found the security's CIK (`cik_map` for an observation's `cik` pin,
 `manual`, `company_tickers`, `efts`, `name_search`, …), taken from the
 security's latest era that has a CIK (`security_master` when none has one);
@@ -464,7 +465,7 @@ Not every row is settled by clean evidence. `enrich()` collects every
 classifier and payout-gate flag into a `review_flags` column on
 `delistings.csv` (semicolon-joined), and `classify_universe.py` also writes
 `output/review.csv` and `output/review_summary.csv` (plus rows for
-securities with no delisting at all — see *The eight output tables* above),
+securities with no delisting at all — see *The seven output tables* above),
 with the ticker, bucket, `dlret`, reason, `cik`, and anchor 8-K item set, so a
 human can triage without re-deriving which rows the automatic rules could not
 settle on their own. `review.csv` also carries a delisting with a blank
@@ -1083,7 +1084,7 @@ scripts/
     observations_from_instruments.py  Legacy (ticker,start,end) file → observations CSV
     observations_from_snapshots.py    Folder of dated snapshot CSVs → observations CSV
     seeds_from_observations.py        Observations CSV → one row per introduction (the seeds-only input)
-    classify_universe.py              Reads --observations → writes the eight output tables
+    classify_universe.py              Reads --observations → writes the seven output tables
     accept_review.py                  Bulk-accept review.csv rows by flag → appends data/review_decisions.csv
     compute_corrected_returns.py      CLI: read panel + delistings.csv → write BMP-corrected panel
     regen_payout_fixtures.py          Regenerate golden payout test fixtures from live SEC
@@ -1095,6 +1096,10 @@ output/
     delistings.csv        One row per delisting, with DLRET and its audit trail (primary output)
     review.csv            Every row (delisting or not) that still needs a human look, severity-ordered
     review_summary.csv    review.csv's rows grouped by flag, for triaging by cause
+    observation_map.csv   What became of each input observation: the caller's join surface
+    uncertain.csv         One row per uncertain verdict (seed, security or ending)
+    contract/             security_history, delistings, seeds, price_requests, id_changes, payout_legs
+    scorecard.json        The gap table's numbers, compared to the floor in data/scorecard.json
     run_manifest.json     What the run rested on: as_of, code version, SEC requests/cache/latency per endpoint
 
 data/
@@ -1159,7 +1164,7 @@ validates the candidate looks like a delist *target* (not an *acquirer*):
    (`cache/ticker_resolution.json`): the tier answers before the cache is
    even consulted, so persisting it would let a stale pin survive a later
    correction in the observations file.
-2. **Manual override.** Hand-curated `MANUAL_OVERRIDES` for ~35 short
+2. **Manual override.** Hand-curated `MANUAL_OVERRIDES` for ~45 short
    ambiguous tickers (`AET`, `X`, `MER`, `KLG`, …) in
    `scripts/classify_universe.py`. Wins over everything below it.
 3. **`company_tickers.json`.** Master active map: today's holder, taken only

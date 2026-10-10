@@ -110,7 +110,7 @@ Everything one run wrote that measurement reads: every output table, the run dat
 _Avoid_: tables (one part of it), output (the folder, one of its sources)
 
 **Contract**:
-The tables the consumer reads (`output/contract/`): security_history, one-ending-per-security delistings, the seed echo, price requests, id changes, and `schema_version` in the manifest. Built from today's tables by `outputs/contract.py`; written beside them for one release.
+The tables the consumer reads (`output/contract/`): security_history, one-ending-per-security delistings, the seed echo, price requests, id changes, a basket's payout legs, and `schema_version` in the manifest. Built from today's tables by `outputs/contract.py`; written beside them for one release.
 
 **Exit kind**:
 The contract's kind of ending: merger, exchange, liquidation, dropped (with a drop reason), lost_source, expiration. A continuation is an exchange whose successor is held by the same holders one for one.

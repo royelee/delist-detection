@@ -25,6 +25,7 @@ market price.
 | `cash` | the cash | `cash_per_share`, `cash_currency` |
 | `stock` | `stock_ratio` × the price of `price_ticker` on `price_date` | `stock_ratio`, `price_ticker` (`price_sec_id` if in the run), `price_date` |
 | `cash_plus_stock` | cash + `stock_ratio` × that price | all of the above |
+| `basket` | cash + each further security's ratio × its price (ruling R3; the legs are `contract/payout_legs.csv`) | `cash_per_share`, `cash_currency`, and each leg's ratio, price ticker, price date |
 | `otc_print` | the first off-exchange print within 10 trading days (decision 11) | `price_ticker` = the security's own OTC symbol if known, `price_date` = the session after the last exchange trade |
 | `recovery` | `recovery_ratio` × the last close (liquidation payments) | `recovery_ratio`, or the payments with dates in the report |
 | `worthless` | 0 | — |
@@ -37,16 +38,16 @@ market price.
 first OTC session). For an election deal (cash or stock at the holder's choice, prorated), give the default or
 aggregate package the agreement fixes and say so. `terms_gate=failed` on the library's row means its own check
 against its fails-based close failed: the published terms may be misread (RAI shows 1 BTI per share where the
-filing says 0.5260 BAT ADS) — check each term against the filing. `cash_currency` is blank in the library today;
+filing says 0.5260 BAT ADS) — check each term against the filing. `cash_currency` is the currency of the library's own read (blank for a `--merger-terms` row);
 give the currency the filing states. `value_formula` is one line, e.g.
 `(65.50 CAD + 0.8025 × price(QSR, 2014-12-15)) / last_close − 1`.
 
 Internal columns (`output/delistings.csv`): `bucket` (merger, exchange_transfer, liquidation, compliance_failure,
 expiration, unknown) maps to `exit_kind` as merger→merger, exchange_transfer→exchange, compliance_failure→dropped,
 liquidation→dropped (if bankruptcy) or liquidation, expiration→expiration, unknown→blank. `dlret_method` names how
-the value was made (`cash_only`, `stock_only`, `cash_plus_stock`, `recovery_ratio`, `otc_print`, `worthless` are
+the value was made (`cash_only`, `stock_only`, `cash_plus_stock`, `recovery_ratio`, `otc_print`, `plan_stock`, `worthless` are
 measured; `assumed_par`, `shumway_*`, `exchange_transfer_zero` are fills; `needs_last_trade`,
-`abstain_no_consideration`, `unknown` leave it blank).
+`abstain_no_consideration`, `dropped_expiration`, `unknown` leave it blank).
 
 ## The spec's decisions that define the right answer
 
