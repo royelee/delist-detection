@@ -610,3 +610,22 @@ def test_no_rename_near_the_stop_reads_no_whole_file():
 def test_rows_that_do_not_carry_the_new_name_are_no_next_cusip(new_desc):
     lines, files = _renamed(new_desc=new_desc)
     assert lines.cusips == {"BBGA": ["A1"]} and _flags(lines) == [] and files.whole == 1
+
+
+def test_a_placeholder_folds_into_the_holder_of_its_next_cusip_whatever_openfigi_answers():
+    """SVC 2019 and UNIT 2017: OpenFIGI names no US composite for the new CUSIP (decide alone would attach), but the
+    placeholder's issuer's FIGI line holds it: the placeholder folds into that line, never takes a held CUSIP."""
+    specs = [_Spec("CIK1-COMMON", 1, "AA", ["A1"]), _Spec("BBGH", 1, "HH", ["C9"])]
+    rows = _line("AA", ["A1", "C9"])
+    for figi in (_Figi({}), _Figi({"C9": _answer("BBGOTHER")})):
+        lines = _follow(specs, rows, figi=figi)
+        assert lines.renames == {"CIK1-COMMON": "BBGH"} and set(lines.securities) == {"BBGH"}
+        assert [c for c, hs in _holders_of(lines).items() if len(hs) > 1] == []
+
+
+def _holders_of(lines):
+    held = {}
+    for sid, cusips in lines.cusips.items():
+        for c in cusips:
+            held.setdefault(c, set()).add(sid)
+    return held

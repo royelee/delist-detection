@@ -770,6 +770,13 @@ def follow_lines(identity: "Identity", clients: LineSources, *, as_of: date,
                 step, s, composites(figi_answers[step.new_cusip]) if step.kind == SWITCH else None, out.securities,
                 described=described_letter(out.cusips.get(sid, []), ftd),
                 issuer_letters=issuer_letters_of(cik, out.securities.values()))
+            if decision is not None and decision.kind in (ATTACH, FOLD) and step.kind == SWITCH and is_placeholder(sid):
+                # the step was allowed because a security of its issuer holds the new CUSIP (`holders_for`): the
+                # placeholder is that line, whatever OpenFIGI answers (SVC, UNIT); a held CUSIP is never on two securities
+                kept = holders_for(s, out.securities, out.cusips, holders, ftd).get(step.new_cusip, set())
+                lifted = sorted(holders.get(step.new_cusip, set()) - set(kept) - {sid})
+                if lifted:
+                    decision = Decision(FOLD, lifted[0], candidate=decision.candidate)
             decision = _today_holder_fold(decision, s, out.resolutions, own(sid))
             if decision is not None and decision.kind == REFUSED:
                 refused = decision.why
