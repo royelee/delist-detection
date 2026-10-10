@@ -403,6 +403,8 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   no class letter, every security of its kind) is the finder's to break by trading.
 - `filings/listing_status.py` — `unlisted_cover()` (FB-004: the first annual report after a day whose "Name of each
   exchange on which registered" column is there to read and holds no exchange; an unread report is none),
+  `quoted_over_the_counter()` (FB-004 part b: EDGAR's submissions JSON lists one of the security's tickers on the OTC
+  market and none on a major exchange; an issuer it lists nowhere says nothing),
   `exchanges_around()`/`withdrawal_kind()`: reads the
   10-K cover page's exchange list before and after a Form 25 to tell a real
   delisting from the withdrawal of a secondary/regional listing while the
@@ -995,10 +997,13 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   of a group, the earliest member anchoring the row; or, not under (b),
   `TradingRecord.trades_after`; an observation alone never continues a security), `_moved_otc`/`_to_otc` (FB-004,
   `Rule.MOVED_OTC`: a group the security traded on past, when it is not listed today, no member is the issuer's Form
-  25 with its 8-A12B and the first annual report after it names no exchange on its cover, `listing_status.
-  unlisted_cover`, is no transfer: the classifier's listing deficiency, default transfer or `unknown` becomes CRSP
-  520, compliance failure, drop reason `moved_otc`, medium; a cover not in the cache, unread or naming an exchange
-  changes nothing; Freddie Mac and Fannie Mae, June 2010), `_tie_owner` (FB-004: a Form 25 the text leaves between
+  25 with its 8-A12B and either the first annual report after it names no exchange on its cover, `listing_status.
+  unlisted_cover`, or EDGAR lists the security's own tickers on the OTC market and on no exchange today, `listing_status.
+  quoted_over_the_counter` (Light & Wonder's LNWO, whose inline-XBRL cover has no column to read), is no transfer: the
+  classifier's listing deficiency, default transfer, `unknown` or a merger only the continued-filings rule relabelled
+  (`exit_kind.merger_relabel`: Retail Value Inc. 2022's Item 2.01 and a registrant that kept filing) becomes CRSP
+  520, compliance failure, drop reason `moved_otc`, medium; a cover not in the cache, unread or naming an exchange,
+  with no OTC listing, changes nothing; Freddie Mac and Fannie Mae, June 2010, both on EDGAR's OTC listing too), `_tie_owner` (FB-004: a Form 25 the text leaves between
   siblings, `form25.tie_candidates`, belongs to the one that stops at it: the candidates whose own CUSIPs trade on
   past it (`_goes_on`: `trades_after`, after a removal under (b) only a row under an own ticker) are not removed, and
   when at least one trades on and exactly one of the rest was sighted within `TIE_STOP_NEAR_DAYS` (90) before the

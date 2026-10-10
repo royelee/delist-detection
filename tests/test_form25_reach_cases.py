@@ -12,7 +12,7 @@ import delist_detection.endings.delistings as delistings
 from tests import form25_cases as fc
 
 # The rules of sub-plan 5b built so far; each task adds its own (the cases it moves change then, and only then)
-RULES_DONE: set[str] = {"1.03", "R6a", "R6b", "C", "R7", "E", "R3", "L", "R2", "R5", "F4-read", "F4-tie"}
+RULES_DONE: set[str] = {"1.03", "R6a", "R6b", "C", "R7", "E", "R3", "L", "R2", "R5", "F4-read", "F4-tie", "F4-otc"}
 
 # sec_id -> (the rule that moves it, its outcome before 5b, its outcome after)
 MOVES = {
@@ -130,13 +130,23 @@ MOVES = {
     'CIK1611983-COMMON': ('F4-read',
         ([], ['ended_without_delisting', 'form25_unmatched']),
         ([('2015-01-19', 'expiration', 600, '2015-01-09', False, '0001354457-15-000004', 1611983)], [])),
-    # FMCC, FNMA 2010: the common read; neither 10-K cover is cached, so the security goes on (`test_..._moved_otc`)
-    'BBG000BF7Y65': ('F4-read',
+    # FMCC, FNMA 2010: the common read (F4-read: a transfer the security went on through, neither 10-K cover being
+    # cached); EDGAR lists both on the OTC market today and on no exchange, which makes the Form 25 a move to the OTC
+    # market (F4-otc: `test_a_2010_nyse_delisting_followed_by_otc_trading_is_dropped_for_moving_otc` has the cover too)
+    'BBG000BF7Y65': ('F4-otc',
         ([], ['ended_without_delisting', 'form25_unclassified']),
-        ([('2010-07-08', 'exchange_transfer', 304, '', True, '0001026214-10-000037', 1026214)], ['ended_without_delisting'])),
-    'BBG000BJQ328': ('F4-read',
+        ([('2010-07-08', 'compliance_failure', 520, '', False, '0001026214-10-000037', 1026214)], [])),
+    'BBG000BJQ328': ('F4-otc',
         ([], ['ended_without_delisting', 'form25_unclassified']),
-        ([('2010-07-08', 'exchange_transfer', 304, '', True, '0000950123-10-061714', 310522)], ['ended_without_delisting'])),
+        ([('2010-07-08', 'compliance_failure', 520, '', False, '0000950123-10-061714', 310522)], [])),
+    # LNWO 2025, RVIC 2022: a voluntary Form 25 the security traded on past over the counter. Before it, the OTC
+    # trading read as the listing going on: a transfer (LNWO), and for RVIC, once the exchange was read, a merger.
+    'BBG00JR5MM31': ('F4-otc',
+        ([('2025-11-13', 'exchange_transfer', 304, '', True, '0000950157-25-000903', 750004)], ['ended_without_delisting']),
+        ([('2025-11-13', 'compliance_failure', 520, '2025-11-12', False, '0000950157-25-000903', 750004)], [])),
+    'BBG00L31HTW0': ('F4-otc',
+        ([('2022-04-07', 'merger', 200, '2022-04-06', False, '0001193125-22-085937', 1735184)], []),
+        ([('2022-04-07', 'compliance_failure', 520, '2022-04-06', False, '0001193125-22-085937', 1735184)], [])),
     # APA: the NYSE Form 25 of 2020-06-08 (the issuer's own, naming only the NYSE) was read as the Chicago's; it is the
     # class's move to Nasdaq
     'BBG000BC2C10': ('F4-read',
@@ -230,3 +240,24 @@ def test_a_2010_nyse_delisting_followed_by_otc_trading_is_dropped_for_moving_otc
         [('2010-07-08', 'compliance_failure', 520, '', False, accession, cik)], [])
     found, _ = fc.find(sec_id, edgar=_CoverEdgar())
     assert [rw.rule.value for rw in found[0].rewrites] == ["moved_otc"]
+
+
+# FB-004 part b: a voluntary Form 25 the security traded on past over the counter (the real cases)
+def test_light_and_wonders_voluntary_nasdaq_withdrawal_is_a_move_to_the_otc_market():
+    """LNWO 2025: the issuer's Form 25 of 2025-11-03; its 10-K's inline-XBRL cover has no column to read, and EDGAR
+    lists LNWO and LAWIL on the OTC market today and on no exchange: dropped, not an exchange transfer."""
+    found, _ = fc.find("BBG00JR5MM31")
+    assert [(d.delist_date, d.record.bucket.value, d.record.crsp_code, d.record.successor_sec_id, d.cik)
+            for d in found] == [("2025-11-13", "compliance_failure", 520, None, 750004)]
+    assert [rw.rule.value for rw in found[0].rewrites] == ["moved_otc"]
+    assert "OTC market" in found[0].record.reason
+
+
+def test_retail_values_voluntary_nyse_move_is_a_move_to_the_otc_market_not_a_merger():
+    """RVIC 2022: the Form 25 of 2022-03-28, an Item 2.01 of 2022-04-14 and its 10-K of 2023-02-24 naming no exchange;
+    its shares traded over the counter until 2023-04-06."""
+    found, _ = fc.find("BBG00L31HTW0")
+    assert [(d.delist_date, d.record.bucket.value, d.record.crsp_code, d.record.successor_sec_id, d.cik)
+            for d in found] == [("2022-04-07", "compliance_failure", 520, None, 1735184)]
+    assert [rw.rule.value for rw in found[0].rewrites] == ["moved_otc"]
+    assert "2023-02-24" in found[0].record.reason

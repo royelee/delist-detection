@@ -145,6 +145,14 @@
    "note": "LIN: an old redomiciled line the sibling slack keeps from a false ending",
    "other_cik": null
   },
+  "BBG00JR5MM31": {
+   "note": "LNWO 2025: Light & Wonder's voluntary Nasdaq withdrawal; EDGAR lists LNWO on the OTC market",
+   "other_cik": null
+  },
+  "BBG00L31HTW0": {
+   "note": "RVIC 2022: Retail Value's voluntary NYSE move to the OTC, an Item 2.01 after it, no exchange on the cover",
+   "other_cik": null
+  },
   "BBG01HLMB6H5": {
    "note": "LSXMK 2024: one 25-NSE for the Series A, B and C Liberty SiriusXM Common Stock",
    "other_cik": null
@@ -5844,6 +5852,130 @@
    "name": "LINDE PLC",
    "observed": true,
    "security_type": "Common Stock",
+   "share_class": "COMMON"
+  },
+  "BBG00JR5MM31": {
+   "cusips": [
+    "80874P109"
+   ],
+   "eras": {
+    "LNW@2024-06-30": [
+     [
+      "LNW",
+      "2024-06-30",
+      "LIGHT WONDER INC",
+      "",
+      ""
+     ],
+     [
+      "LNW",
+      "2024-12-31",
+      "LIGHT WONDER INC",
+      "",
+      ""
+     ],
+     [
+      "LNW",
+      "2025-06-30",
+      "LIGHT WONDER INC",
+      "",
+      ""
+     ]
+    ],
+    "SGMS@2008-01-16": [
+     [
+      "SGMS",
+      "2008-01-16",
+      "SCIENTIFIC GAMES CORP",
+      "",
+      ""
+     ],
+     [
+      "SGMS",
+      "2008-05-31",
+      "SCIENTIFIC GAMES CORP",
+      "",
+      ""
+     ],
+     [
+      "SGMS",
+      "2008-07-25",
+      "SCIENTIFIC GAMES CORP",
+      "",
+      ""
+     ],
+     [
+      "SGMS",
+      "2008-11-18",
+      "SCIENTIFIC GAMES CORP",
+      "",
+      ""
+     ],
+     [
+      "SGMS",
+      "2009-01-23",
+      "SCIENTIFIC GAMES CORP",
+      "",
+      ""
+     ],
+     [
+      "SGMS",
+      "2009-03-20",
+      "SCIENTIFIC GAMES CORP",
+      "",
+      ""
+     ],
+     [
+      "SGMS",
+      "2009-06-08",
+      "SCIENTIFIC GAMES CORP",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "issuer_cik": 750004,
+   "line_tickers": [
+    "LNWO"
+   ],
+   "listed": false,
+   "name": "LIGHT WONDER INC",
+   "observed": true,
+   "security_type": "Common Stock",
+   "share_class": "COMMON"
+  },
+  "BBG00L31HTW0": {
+   "cusips": [
+    "76133Q102"
+   ],
+   "eras": {
+    "RVI@2018-06-30": [
+     [
+      "RVI",
+      "2018-06-30",
+      "RETAIL VALUE INC",
+      "",
+      ""
+     ],
+     [
+      "RVI",
+      "2018-12-31",
+      "RETAIL VALUE INC",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "issuer_cik": 1735184,
+   "line_tickers": [
+    "RVIC"
+   ],
+   "listed": false,
+   "name": "RETAIL VALUE INC",
+   "observed": true,
+   "security_type": "REIT",
    "share_class": "COMMON"
   },
   "BBG00LT2PDY4": {

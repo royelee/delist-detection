@@ -121,6 +121,9 @@ CASES = {
     "CIK929351-COMMON": "LGF 2016: a 25-NSE of 'Common Shares' beside the Lions Gate A and B lines",
     "BBG000BF7Y65": "FMCC 2010: a Form 25 with no class text, the July 2010 NYSE delisting",
     "BBG000BJQ328": "FNMA 2010: a Form 25 with no class text, the July 2010 NYSE delisting",
+    # FB-004 part b: a voluntary Form 25 the security traded on past, over the counter
+    "BBG00JR5MM31": "LNWO 2025: Light & Wonder's voluntary Nasdaq withdrawal; EDGAR lists LNWO on the OTC market",
+    "BBG00L31HTW0": "RVIC 2022: Retail Value's voluntary NYSE move to the OTC, an Item 2.01 after it, no exchange on the cover",
 }
 
 

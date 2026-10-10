@@ -24,7 +24,7 @@ from ..outputs.reconstruction import DelistRecord
 from ..vocabulary.crsp_codes import CrspBucket
 from ..sources.edgar import EdgarSubmission
 from ..filings.evidence import edgar_names
-from ..vocabulary.exit_kind import effective_date, rests_on_continued_filings
+from ..vocabulary.exit_kind import effective_date, merger_relabel, rests_on_continued_filings
 from ..sources.ftd import FtdIndex
 from ..filings.form25 import (
     ISSUER_FORM25_FORMS, REGIONAL_EXCHANGES, Form25, SecurityRef, class_kind, class_letters, is_involuntary,
@@ -34,7 +34,9 @@ from ..identity.history import Ending
 from ..vocabulary.identifiers import class_letter
 from ..vocabulary.names import name_tokens
 from .last_trade import Dating, LastTrade, anchor_day
-from ..filings.listing_status import exchanges_around, issuer_exchange, unlisted_cover, withdrawal_kind
+from ..filings.listing_status import (
+    exchanges_around, issuer_exchange, quoted_over_the_counter, unlisted_cover, withdrawal_kind,
+)
 from .own_shares import OwnShares
 from ..outputs.review_triage import FilingRef, ReviewItem
 from .rewrites import SUCCESSOR_UNKNOWN, Rewrite, Rule, continuation, reclassify, security_goes_on
@@ -404,32 +406,42 @@ class DelistingFinder:
 
     def _moved_otc(self, ctx: SecurityContext, filer: int, filings: list[EdgarSubmission],
                    group: list[tuple[EdgarSubmission, Form25]]) -> str | None:
-        """The annual report's filing date when a group the security traded on past was a move to the OTC market, else
-        None: the security is not listed today, no member is the issuer's Form 25 with its 8-A12B (`_eight_a`, a move
-        to another exchange), and the first annual report after the group names no exchange on its cover (Freddie
-        Mac and Fannie Mae, June 2010: the conservator's directive to withdraw from the NYSE, both common stocks
-        quoted over the counter after it and their 10-K covers listing none). Its own CUSIPs trading on is what made
-        the group `continued`; with an exchange named on the cover, or no cover read, the group stays what
-        `_continued` made it."""
+        """What says a group the security traded on past was a move to the OTC market, else None: the security is not
+        listed today, no member is the issuer's Form 25 with its 8-A12B (`_eight_a`, a move to another exchange), and
+        either the first annual report after the group names no exchange on its cover (Freddie Mac and Fannie Mae,
+        June 2010: the conservator's directive to withdraw from the NYSE, both common stocks quoted over the counter
+        after it and their 10-K covers listing none) or EDGAR lists the security's own tickers on the OTC market and
+        on no exchange today (`listing_status.quoted_over_the_counter`: Light & Wonder's LNWO, whose inline-XBRL cover
+        has no column to read). Its own CUSIPs trading on is what made the group `continued`; with an exchange named
+        on the cover, or neither piece of evidence, the group stays what `_continued` made it."""
         if ctx.listed_today is not False:
             return None
         if any(self._eight_a(s, f, filings) is not None for s, f in group):
             return None
         earliest = min(s.filing_date for s, _ in group)
-        return unlisted_cover(self.edgar, filer, filings, date.fromisoformat(earliest))
+        cover = unlisted_cover(self.edgar, filer, filings, date.fromisoformat(earliest))
+        if cover is not None:
+            return f"the 10-K filed {cover} lists no exchange"
+        tickers = sorted(ctx.record.own_tickers)
+        if quoted_over_the_counter(self.edgar.submissions(filer), tickers):
+            return f"EDGAR lists {', '.join(tickers)} on the OTC market today and on no exchange"
+        return None
 
     @staticmethod
-    def _to_otc(d: Delisting, cover_date: str) -> None:
+    def _to_otc(d: Delisting, evidence: str) -> None:
         """Give a delisting `_moved_otc` found CRSP 520 (compliance failure, drop reason `moved_otc`) when the
-        classifier read it as no more than a listing deficiency, a transfer by default or nothing (`unknown`); a
+        classifier read it as no more than a listing deficiency, a transfer by default or nothing (`unknown`), or a
+        merger only the continued-filings rule relabelled (`exit_kind.merger_relabel`: an Item 2.01 or 5.01 and a
+        registrant that kept filing, while its own CUSIPs traded on over the counter: Retail Value Inc. 2022); a
         merger, a liquidation or a revocation it found evidence for stays."""
         rec = d.record
         if rec.bucket in (CrspBucket.UNKNOWN, CrspBucket.EXCHANGE_TRANSFER) or (
-                rec.bucket is CrspBucket.COMPLIANCE_FAILURE and rec.crsp_code in (570, 580)):
+                rec.bucket is CrspBucket.COMPLIANCE_FAILURE and rec.crsp_code in (570, 580)) or (
+                rec.bucket is CrspBucket.MERGER and merger_relabel(rec.reason or "")):
             reclassify(d, 520, Rule.MOVED_OTC, confidence="medium",
                        reason=f"Moved to the OTC market: the Form 25 {d.form25_sub.filing_date if d.form25_sub else ''} "
                               f"removed the class from {d.exchange or 'its exchange'}, its own CUSIPs traded on after "
-                              f"it and the 10-K filed {cover_date} lists no exchange")
+                              f"it and {evidence}")
 
     @staticmethod
     def _goes_on(record: TradingRecord, sub: EdgarSubmission, f25: Form25) -> bool:

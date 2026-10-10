@@ -6,7 +6,8 @@ import pytest
 
 from delist_detection.sources.edgar import EdgarSubmission
 from delist_detection.filings.listing_status import (
-    cover_exchanges, exchanges_around, listed_today, listing_answers, unlisted_cover, withdrawal_kind,
+    cover_exchanges, exchanges_around, listed_today, listing_answers, quoted_over_the_counter, unlisted_cover,
+    withdrawal_kind,
 )
 
 COVER_2019 = ("UNITED STATES SECURITIES AND EXCHANGE COMMISSION FORM 10-K ... Securities registered pursuant "
@@ -235,3 +236,16 @@ def test_no_figi_client_or_only_placeholders_asks_nothing():
     figi = _BatchFigi({})
     assert listing_answers(figi, ["CIK1-COMMON"]) == {} and figi.calls == []
     assert listing_answers(None, ["BBG1"]) == {}
+
+
+def test_quoted_over_the_counter_is_an_otc_listing_of_the_securitys_tickers_and_no_major_exchange():
+    """Light & Wonder 2025: EDGAR lists LNWO and LAWIL on the OTC market and nothing on an exchange."""
+    otc = {"tickers": ["LAWIL", "LNWO"], "exchanges": ["OTC", "OTC"]}
+    assert quoted_over_the_counter(otc, ["LNWO"]) is True
+    assert quoted_over_the_counter(otc, None) is True
+    assert quoted_over_the_counter(otc, ["OTHER"]) is False                      # not one of the security's tickers
+    assert quoted_over_the_counter({"tickers": ["LNWO", "LNW"], "exchanges": ["OTC", "Nasdaq"]},
+                                   ["LNWO", "LNW"]) is False
+    assert quoted_over_the_counter({"tickers": ["LNWO"], "exchanges": [None]}, ["LNWO"]) is False
+    assert quoted_over_the_counter({"tickers": [], "exchanges": []}, ["LNWO"]) is False     # Retail Value: no listing
+    assert quoted_over_the_counter(None, ["LNWO"]) is False

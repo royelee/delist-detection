@@ -129,13 +129,17 @@ NASDAQ_COVER = ("FORM 10-K ... Title of each class Name of each exchange on whic
 ISSUER_CIK = 88001
 
 
-def _otc_world(fake_edgar, cover, *, eight_a=False):
+def _otc_world(fake_edgar, cover, *, eight_a=False, listing=(), acquired_8k=False):
     """One security, an issuer-filed Form 25 (12d2-2(c)) of 2010-06-28 and its own CUSIP trading on after it under
     the same symbol; the next 10-K's cover is `cover` ("" for one that is not in the cache)."""
     filings = [EdgarSubmission("o25", "25", "2010-06-28", "", "", "p.xml"),
                EdgarSubmission("ok", "10-K", "2011-02-24", "2010-12-31", "", "k.htm")]
     if eight_a:
         filings.append(EdgarSubmission("o8a", "8-A12B", "2010-06-30", "", "", "a.htm"))
+    if acquired_8k:           # an Item 2.01 the end-of-era branch reads as a completed acquisition
+        filings.append(EdgarSubmission("o201", "8-K", "2010-07-06", "2010-07-06", "2.01,9.01", "e.htm"))
+    if listing:
+        fake_edgar.listings[ISSUER_CIK] = list(listing)
     fake_edgar.submissions_by_cik[ISSUER_CIK] = filings
     fake_edgar.raws["o25"] = _f25_raw("New York Stock Exchange LLC", rule="17 CFR 240.12d2-2(c)", form_tag="25")
     if cover:
@@ -167,4 +171,36 @@ def test_a_cover_that_could_not_be_read_is_no_evidence_of_an_otc_move(fake_edgar
 
 def test_the_issuers_8a12b_beside_its_form25_is_a_move_to_another_exchange_not_the_otc(fake_edgar):
     (d,) = _otc_world(fake_edgar, NO_EXCHANGE_COVER, eight_a=True)
+    assert (d.record.bucket, d.record.successor_sec_id) == (CrspBucket.EXCHANGE_TRANSFER, "BBG_OTC")
+
+
+def test_edgars_otc_listing_today_is_the_evidence_when_no_cover_could_be_read(fake_edgar):
+    """Light & Wonder 2025 (its 10-K's inline-XBRL cover has no column to read): EDGAR lists its tickers on the OTC
+    market and on no exchange today, so the voluntary Form 25 it traded on past was a move to the OTC market."""
+    (d,) = _otc_world(fake_edgar, "", listing=[("OTCX", "OTC")])
+    assert (d.record.bucket, d.record.crsp_code, d.record.successor_sec_id) == (CrspBucket.COMPLIANCE_FAILURE, 520, None)
+    assert [rw.rule for rw in d.rewrites] == [Rule.MOVED_OTC]
+    assert "OTCX" in d.record.reason and "OTC market" in d.record.reason
+
+
+def test_an_exchange_listing_of_its_ticker_is_no_otc_move(fake_edgar):
+    (d,) = _otc_world(fake_edgar, "", listing=[("OTCX", "Nasdaq")])
+    assert (d.record.bucket, d.record.successor_sec_id) == (CrspBucket.EXCHANGE_TRANSFER, "BBG_OTC")
+
+
+def test_an_8a12b_beside_the_form25_is_still_a_move_to_another_exchange_whatever_edgar_lists(fake_edgar):
+    (d,) = _otc_world(fake_edgar, "", eight_a=True, listing=[("OTCX", "OTC")])
+    assert (d.record.bucket, d.record.successor_sec_id) == (CrspBucket.EXCHANGE_TRANSFER, "BBG_OTC")
+
+
+def test_a_merger_the_continued_filings_rule_relabelled_is_no_merger_for_a_security_that_traded_on_otc(fake_edgar):
+    """Retail Value Inc. 2022: an Item 2.01 (the last asset sales) and a 10-K after it made the voluntary Form 25 a
+    'completed acquisition'; its shares traded over the counter for a year and its cover names no exchange."""
+    (d,) = _otc_world(fake_edgar, NO_EXCHANGE_COVER, acquired_8k=True)
+    assert (d.record.bucket, d.record.crsp_code) == (CrspBucket.COMPLIANCE_FAILURE, 520)
+    assert [rw.rule for rw in d.rewrites] == [Rule.MOVED_OTC]
+
+
+def test_with_an_exchange_on_the_cover_the_item_201_does_not_make_it_a_merger(fake_edgar):
+    (d,) = _otc_world(fake_edgar, NASDAQ_COVER, acquired_8k=True)
     assert (d.record.bucket, d.record.successor_sec_id) == (CrspBucket.EXCHANGE_TRANSFER, "BBG_OTC")

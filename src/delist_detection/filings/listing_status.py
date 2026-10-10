@@ -137,6 +137,17 @@ def lists_on_major_exchange(sub, tickers: Iterable[str] | None) -> bool:
     return False
 
 
+def quoted_over_the_counter(sub, tickers: Iterable[str] | None) -> bool:
+    """Whether a submissions JSON (or its profile) lists one of `tickers` on the OTC market (any of its tickers when
+    `tickers` is None) and none of them on a major exchange: Light & Wonder's LNWO and LAWIL after its 2025 move.
+    False for no copy, and for an issuer EDGAR lists nowhere (Retail Value Inc.): that says nothing."""
+    if not isinstance(sub, dict) or lists_on_major_exchange(sub, tickers):
+        return False
+    want = None if tickers is None else {normalize_ticker(t) for t in tickers if t}
+    return any((want is None or normalize_ticker(t) in want) and "OTC" in (x or "").upper()
+               for t, x in zip(sub.get("tickers") or [], sub.get("exchanges") or []))
+
+
 def issuer_exchange(edgar, cik: int | None, ticker: str) -> str | None:
     """The exchange EDGAR's own submissions JSON records for `ticker` (the
     parallel `tickers`/`exchanges` arrays), mapped to the table's exchange
