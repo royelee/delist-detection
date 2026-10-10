@@ -186,7 +186,7 @@ def test_a_stock_leg_asks_its_received_close_unless_the_caller_gave_terms():
     values = _value([a, b], llm=_Terms({"AET": _stock(0.8378, "cvs"), "BBB": _stock(0.5, "XYZ")}),
                     caller_terms=given)
     assert values.get(a.key).request == ("CVS", "") and values.get(b.key).request is None
-    assert values.requests([ending("A", "2018-12-10"), ending("B", "2019-01-10")]) == {a.key: ("CVS", "")}
+    assert values.requests([ending("A", "2018-12-10"), ending("B", "2019-01-10")]) == {a.key: ("CVS", "", "")}
 
 
 def test_a_dollar_valued_leg_asks_its_acquirers_close_too():

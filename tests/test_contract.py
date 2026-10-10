@@ -80,7 +80,7 @@ def test_id_changes_name_the_figi_that_now_holds_a_placeholders_issuer_and_class
            _sec_row("BBG000BBB200", "200", "ticker"), _sec_row("CIK300-COMMON", "300", "placeholder")]
     assert id_change_rows(baseline, now, "2026-09-25") == [
         {"old_sec_id": "CIK100-COMMON", "new_sec_id": "BBG000NEW100", "changed_on": "2026-09-25",
-         "issuer_cik": "100", "share_class": "COMMON"}]
+         "issuer_cik": "100", "share_class": "COMMON", "kind": "rename"}]
     assert id_change_rows([], now, "2026-09-25") == []
 
 
@@ -149,7 +149,7 @@ def test_id_changes_name_the_figi_a_line_follow_folded_a_placeholder_into():
     assert id_change_rows(baseline, now, "2026-09-25") == []
     assert id_change_rows(baseline, now, "2026-09-25", {"CIK20520-COMMON": "BBGFTR00001"}) == [
         {"old_sec_id": "CIK20520-COMMON", "new_sec_id": "BBGFTR00001", "changed_on": "2026-09-25",
-         "issuer_cik": "20520", "share_class": "COMMON"}]
+         "issuer_cik": "20520", "share_class": "COMMON", "kind": "rename"}]
     assert id_change_rows(baseline, now, "2026-09-25", {"CIK20520-COMMON": "BBGGONE0001"}) == []
 
 
@@ -163,4 +163,4 @@ def test_id_changes_name_the_figi_a_rule_f_line_moved_a_baseline_figi_to():
     assert id_change_rows(baseline, now, "2026-10-04") == []
     assert id_change_rows(baseline, now, "2026-10-04", renames) == [
         {"old_sec_id": "BBG00GBV88T6", "new_sec_id": "BBG000FW00S1", "changed_on": "2026-10-04",
-         "issuer_cik": "1064728", "share_class": "COMMON"}]
+         "issuer_cik": "1064728", "share_class": "COMMON", "kind": "rename"}]

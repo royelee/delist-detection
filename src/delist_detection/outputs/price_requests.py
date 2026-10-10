@@ -21,7 +21,8 @@ request it matches:
 The answers file is the requests file plus a `price` column (raw as-traded closes). A last close or an OTC print is
 the security's own, on its last trade day: matched on the security, the day and the kind (its ticker and date are a
 hint). A received close is one leg's: matched on its ticker too. An answer whose whole `PriceKey` matches no request
-of the run stops it (`PriceAnswers.refuse_unrequested`); `lookup_sec_id` is informational."""
+of the run stops it (`PriceAnswers.refuse_unrequested`); `lookup_sec_id` and `lookup_name` are informational: every
+request names the security a vendor series must match (FB-008, contract schema 4), and an answers file may drop both."""
 from __future__ import annotations
 
 import csv
@@ -33,7 +34,7 @@ from typing import Any, NamedTuple
 
 from .dlret import DistressTerms
 from .reconstruction import OverrideFileError, for_delisting
-from .store import PRICE_REQUEST_COLUMNS, DelistingKey
+from .store import DelistingKey
 from ..vocabulary.trading_calendar import next_trading_day
 
 LAST_CLOSE, RECEIVED_CLOSE, OTC_PRINT = "last_close", "received_close", "otc_print"
@@ -124,27 +125,42 @@ class PriceAnswers:
 def request_rows(contract_rows: Sequence[Mapping[str, Any]], endings: Mapping[str, Mapping[str, str]],
                  legs: Mapping[DelistingKey, tuple[str, str]], *,
                  plans: Mapping[DelistingKey, DistressTerms] | None = None,
-                 leg_rows: Sequence[Mapping[str, Any]] = ()) -> list[dict[str, str]]:
+                 leg_rows: Sequence[Mapping[str, Any]] = (), names: Mapping[str, str] | None = None,
+                 leg_issuers: Mapping[str, Sequence[str]] | None = None) -> list[dict[str, str]]:
     """price_requests.csv: per contract ending (`endings`: each sec_id's last real delistings.csv row,
     exit_kind.last_endings) with a last trade date and no continuation, its last close, the first OTC print of a drop
     or distress ending (under its published OTC symbol), the received close of its stock leg (`legs`: a merger's, as
     stage 8 asked it, else a bankruptcy plan's new line from stage 9e's `plans`), and of each further leg of a basket
     (`leg_rows`: contract/payout_legs.csv's rows, legs 2 and on; ruling R3). A basket leg's answer is accepted and not
-    used: the library prices no basket."""
-    legs = dict(legs)
-    legs.update({k: (t.plan_ticker, "") for k, t in (plans or {}).items() if t.plan_ratio and k not in legs})
-    basket: dict[str, list[tuple[str, str]]] = {}
+    used: the library prices no basket.
+
+    Every row carries `lookup_name` (FB-008), for the caller to check a vendor series against: the security's own
+    name for a last close, an OTC print and a plan's new line (`names`: sec_id -> securities.csv name); for a
+    merger's stock leg and a basket's further leg the name of the security the request names when the run holds it
+    (it is in `names`, whether or not the contract publishes it), else the issuer name the LLM read for that leg (a
+    `legs` value's third cell; `leg_issuers`: sec_id -> the issuer names of the basket's further legs in order, leg 2
+    first), else blank. The name is informational and part of no key."""
+    names = names or {}
+    leg_issuers = leg_issuers or {}
+    legs = {k: (v[0], v[1], v[2] if len(v) > 2 else "") for k, v in legs.items()}
+    plan_keys = {k for k, t in (plans or {}).items() if t.plan_ratio and k not in legs}
+    legs.update({k: (plans[k].plan_ticker, "", "") for k in plan_keys})
+    basket: dict[str, list[tuple[str, str, str]]] = {}
     for r in leg_rows:
         if r["leg"] > 1:
-            basket.setdefault(r["sec_id"], []).append((r["price_ticker"], r["price_sec_id"]))
+            issuers = leg_issuers.get(r["sec_id"], ())
+            at = r["leg"] - 2
+            basket.setdefault(r["sec_id"], []).append(
+                (r["price_ticker"], r["price_sec_id"], issuers[at] if at < len(issuers) else ""))
     out: list[dict[str, str]] = []
     for c in contract_rows:
         ltd = c["last_trade_date"]
         if not ltd or c["continuation"] is True:
             continue
         r = endings[c["sec_id"]]
+        own = names.get(c["sec_id"], "")
         out.append({"sec_id": c["sec_id"], "last_trade_date": ltd, "kind": LAST_CLOSE,
-                    "lookup_sec_id": c["sec_id"], "lookup_ticker": r["ticker"], "date": ltd})
+                    "lookup_sec_id": c["sec_id"], "lookup_ticker": r["ticker"], "date": ltd, "lookup_name": own})
         if c["exit_kind"] in OTC_EXIT_KINDS and c.get("value_rule") != "stock" and c.get("price_ticker"):
             # only under the OTC symbol the contract publishes (sub-plan 5g; FB-007): with none read, a vendor's bar
             # under the exchange ticker after the delisting is no OTC print, so nothing is asked and the fill
@@ -152,22 +168,26 @@ def request_rows(contract_rows: Sequence[Mapping[str, Any]], endings: Mapping[st
             # close
             out.append({"sec_id": c["sec_id"], "last_trade_date": ltd, "kind": OTC_PRINT,
                         "lookup_sec_id": c["sec_id"], "lookup_ticker": c["price_ticker"],
-                        "date": next_trading_day(date.fromisoformat(ltd)).isoformat()})
-        leg = legs.get(DelistingKey(r["sec_id"], r["delist_date"]))
+                        "date": next_trading_day(date.fromisoformat(ltd)).isoformat(), "lookup_name": own})
+        key = DelistingKey(r["sec_id"], r["delist_date"])
+        leg = legs.get(key)
         asked: set[str] = set()
-        for ticker, sid in ([leg] if leg is not None else []) + [b for b in basket.get(c["sec_id"], ()) if b[0]]:
+        for ticker, sid, issuer in ([leg] if leg is not None else []) + [b for b in basket.get(c["sec_id"], ()) if b[0]]:
             if ticker in asked:
                 continue         # two legs never share a request key: one answer would price both
             asked.add(ticker)
+            # a plan's new shares are the same issuer's: the security's own name
+            name = own if key in plan_keys else (names.get(sid) if sid else None) or issuer
             out.append({"sec_id": c["sec_id"], "last_trade_date": ltd, "kind": RECEIVED_CLOSE,
                         "lookup_sec_id": sid, "lookup_ticker": ticker,
-                        "date": next_trading_day(date.fromisoformat(ltd)).isoformat()})
+                        "date": next_trading_day(date.fromisoformat(ltd)).isoformat(), "lookup_name": name})
     return out
 
 
 def load_answers(path: str | Path) -> dict[PriceKey, float]:
     """The answers file (--price-answers): price_requests.csv's columns plus
-    `price`. A blank price is unanswered and skipped. A missing column, a kind
+    `price`. `lookup_sec_id` and `lookup_name` are informational and optional (an answers file written against schema 3
+    loads); the other columns of `PriceKey` and `price` are required. A blank price is unanswered and skipped. A missing column, a kind
     not in KINDS, or a price that is not a positive number raises
     OverrideFileError naming the file and line."""
     p = Path(path)
@@ -175,7 +195,7 @@ def load_answers(path: str | Path) -> dict[PriceKey, float]:
     first_line: dict[PriceKey, int] = {}
     with p.open(newline="", encoding="utf-8-sig") as fh:
         reader = csv.DictReader(fh)
-        missing = [c for c in (*PRICE_REQUEST_COLUMNS, "price") if c not in (reader.fieldnames or [])]
+        missing = [c for c in (*PriceKey._fields, "price") if c not in (reader.fieldnames or [])]
         if missing:
             raise OverrideFileError(f"{p}: missing column(s) {', '.join(missing)}")
         for line, row in enumerate(reader, start=2):

@@ -215,3 +215,15 @@ def test_a_figi_renamed_to_another_figi_is_one_renamed_row_under_the_new_figi():
     new = _snap([contract_row("BBGNEW", exit_kind="merger", last_trade_date="2016-05-14")])
     assert rg.renamed_to([_rename("BBGOLD", "BBGNEW")]) == {"BBGOLD": "BBGNEW"}
     assert [r["kind"] for r in rg.diff_contract(base, new, renames=[_rename("BBGOLD", "BBGNEW")])] == ["renamed"]
+
+
+def test_only_rename_rows_are_followed_and_a_row_with_no_kind_is_one():
+    """FB-005 batch: id_changes.csv's `kind` is rename | split; a split (one old placeholder into several ids) is
+    not followed as a rename, and an older commit's row with no kind cell is a rename."""
+    ids = [{"old_sec_id": "CIK1-COMMON", "new_sec_id": "A", "kind": "rename"},
+           {"old_sec_id": "CIK2-COMMON", "new_sec_id": "B"},
+           {"old_sec_id": "CIK3-COMMON", "new_sec_id": "C", "kind": "split"},
+           {"old_sec_id": "CIK3-COMMON", "new_sec_id": "D", "kind": "split"}]
+    assert rg.renamed_to(ids) == {"CIK1-COMMON": "A", "CIK2-COMMON": "B"}
+    cases = dt.parse_rows([truth_row("C_2010-01-04", "C")])
+    assert rg.excluded(cases, id_changes=ids) == {"C"}

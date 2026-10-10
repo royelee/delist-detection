@@ -21,9 +21,9 @@ def test_requests_ask_the_last_close_and_a_stock_legs_received_close():
     legs = {DelistingKey("A", "2018-12-10"): ("CVS", "BBG000BGRY34")}
     assert request_rows(contract, endings, legs) == [
         {"sec_id": "A", "last_trade_date": "2018-11-28", "kind": LAST_CLOSE, "lookup_sec_id": "A",
-         "lookup_ticker": "AET", "date": "2018-11-28"},
+         "lookup_ticker": "AET", "date": "2018-11-28", "lookup_name": ""},
         {"sec_id": "A", "last_trade_date": "2018-11-28", "kind": RECEIVED_CLOSE, "lookup_sec_id": "BBG000BGRY34",
-         "lookup_ticker": "CVS", "date": "2018-11-29"}]
+         "lookup_ticker": "CVS", "date": "2018-11-29", "lookup_name": ""}]
 
 
 def test_a_drop_or_distress_ending_asks_for_the_first_otc_print():
@@ -37,7 +37,7 @@ def test_a_drop_or_distress_ending_asks_for_the_first_otc_print():
     assert [(r["sec_id"], r["kind"]) for r in got] == [
         ("D", LAST_CLOSE), ("D", "otc_print"), ("L", LAST_CLOSE), ("L", "otc_print"), ("M", LAST_CLOSE)]
     assert got[1] == {"sec_id": "D", "last_trade_date": "2015-03-06", "kind": "otc_print", "lookup_sec_id": "D",
-                      "lookup_ticker": "TDQ", "date": "2015-03-09"}
+                      "lookup_ticker": "TDQ", "date": "2015-03-09", "lookup_name": ""}
 
 
 # --- the answers, read through the request each value input makes ---

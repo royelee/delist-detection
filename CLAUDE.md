@@ -482,10 +482,12 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   FIGI the run no longer holds that `renames` maps to a FIGI of this run, rule F: BTU, CRC; `regression.renamed_to`
   and `truth_set.TruthSet.rename` read every row alike, placeholder or not), `payout_leg_rows` (schema 3, R3: each
   security of a basket ending per share, `contract/payout_legs.csv`). `run_manifest.json` carries
-  `schema_version` (`store.CONTRACT_SCHEMA_VERSION`, 3). It loads no client (its value inputs are dlret's
+  `schema_version` (`store.CONTRACT_SCHEMA_VERSION`, 4: price_requests.csv gains `lookup_name`, FB-008, and id_changes.csv a
+  `kind`, `store.RENAME` or `SPLIT`; readers follow only renames, `regression.follows`, a row with no kind cell is one, and
+  `run_snapshot` reads an older file's missing last column filled). It loads no client (its value inputs are dlret's
   types; its value cells `dlret.contract_value`), so the regression report reads `id_change_rows` from it.
 - `outputs/payout_rule.py` — the payout rule of each contract ending as the contract writes it (`value_fields`, the eleven
-  columns after `verdict` in `contract/delistings.csv`: the columns came in schema 2, the contract is now schema 3
+  columns after `verdict` in `contract/delistings.csv`: the columns came in schema 2, the contract is now schema 4
   with `payout_legs.csv`), from the rule `dlret.rule_of` decides (step 10: which rule, which terms, their source and
   gate, whose price): `value_rule` (`exit_kind.VALUE_RULES`), `cash_per_share`, `cash_currency`, `stock_ratio`,
   `price_sec_id`/`price_ticker`/`price_date` (the acquirer for a stock leg, the security itself for `otc_print`; the
@@ -535,7 +537,12 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   stock leg, by its ticker), `ending_values` (stage 10a: an OTC print, else a plan's ratio times its new line's
   close) and `refuse_unrequested` (stage 10g: an answer whose `PriceKey` matches no request stops the run). A last
   close or an OTC print is matched on the security, its last trade day and the kind (the ticker and date are a
-  hint), a received close on its ticker too.
+  hint), a received close on its ticker too. Every request carries `lookup_name` (FB-008, schema 4; informational, part
+  of no key): the security's own name (`names=`, sec_id -> securities.csv name, built in `_contract`) for a last close,
+  an OTC print and a plan's new line; for a stock leg or a basket's further leg the name of the security the request
+  names when the run holds it (in securities.csv, published or not), else the LLM's issuer name for the leg
+  (`MergerValues.requests`' third cell, `MergerValues.leg_issuers` -> `leg_issuers=`), else blank. `load_answers`
+  requires the columns of `PriceKey` and `price`; `lookup_sec_id` and `lookup_name` are optional.
 
 **`identity/`: a security's identity, stages 1 to 4c (network):**
 - `identity/observations.py` — `Observation`, `TickerEra`, `ObservationIndex`: splits

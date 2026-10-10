@@ -1427,7 +1427,8 @@ def _contract(ctx: _RunContext, read: RunSnapshot, verdicts: Verdicts, values: M
     ended = contract_delisting_rows(read, verdicts, inputs, distress)
     basket_rows = payout_leg_rows(read, inputs)
     requests = request_rows(ended, endings, values.requests(list(endings.values())), plans=distress,
-                            leg_rows=basket_rows)
+                            leg_rows=basket_rows, names={s["sec_id"]: s["name"] for s in read.securities},
+                            leg_issuers=values.leg_issuers(list(endings.values())))
     answers.refuse_unrequested(requests)
     return {
         "security_history": security_history_rows(read, issuers, leave_out=set(values.added) - successor_ids),

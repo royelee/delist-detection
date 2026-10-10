@@ -264,3 +264,15 @@ def test_continuation_entries_keep_a_confirmations_shape_and_carry_a_doubt():
 def test_an_entry_that_names_no_delisting_is_refused(entries):
     with pytest.raises(SnapshotError):
         continuation_readings(entries)
+
+
+def test_a_contract_before_schema_4_reads_its_id_changes_as_renames_and_its_requests_without_a_name(tmp_path):
+    _write_run(tmp_path)
+    ids = store.table_path(tmp_path, "id_changes")
+    ids.write_text("old_sec_id,new_sec_id,changed_on,issuer_cik,share_class\nCIK1-COMMON,BBG1,2026-09-25,1,COMMON\n")
+    reqs = store.table_path(tmp_path, "price_requests")
+    reqs.write_text("sec_id,last_trade_date,kind,lookup_sec_id,lookup_ticker,date\n"
+                    "A,2018-11-28,last_close,A,AET,2018-11-28\n")
+    snap = RunSnapshot.read(tmp_path)
+    assert [(r["new_sec_id"], r["kind"]) for r in snap.id_changes] == [("BBG1", "rename")]
+    assert [(r["lookup_ticker"], r["lookup_name"]) for r in snap.price_requests] == [("AET", "")]

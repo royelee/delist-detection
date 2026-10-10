@@ -236,9 +236,9 @@ payout_legs.csv       key sec_id, leg — each security of a basket ending, per 
 seeds.csv             key ticker, as_of, name, cusip, pin_cik, pin_sec_id — the seed echo
   ticker, as_of, name, cusip, pin_cik, pin_sec_id, sec_id, verdict
 price_requests.csv    key sec_id, kind, date, lookup_ticker
-  sec_id, last_trade_date, kind, lookup_sec_id, lookup_ticker, date
+  sec_id, last_trade_date, kind, lookup_sec_id, lookup_ticker, date, lookup_name
 id_changes.csv        key old_sec_id
-  old_sec_id, new_sec_id, changed_on, issuer_cik, share_class
+  old_sec_id, new_sec_id, changed_on, issuer_cik, share_class, kind
 ```
 
 A blank `exit_kind` means no kind is asserted (today's `unknown` bucket); such
@@ -257,9 +257,12 @@ class say so or a line follow folded the placeholder into it by name; it also
 lists a baseline FIGI this run no longer holds that maps to a FIGI of this run
 (the ticker tier's composite was the line that took the ticker over later: BTU,
 CRC), so a panel keyed on the old FIGI can follow it. It is not cumulative, git
-keeps earlier versions. `run_manifest.json` carries `schema_version`
-(`store.CONTRACT_SCHEMA_VERSION`, now 3: `delistings.csv` gained the payout-rule
-columns in 2, and `payout_legs.csv` came in 3).
+keeps earlier versions. Every `id_changes.csv` row has a `kind`: `rename` (all that a run writes today); `split`
+(one old placeholder into several new ids, each its own row with the same `old_sec_id`) is reserved, and a reader
+follows only `rename` rows. `run_manifest.json` carries `schema_version`
+(`store.CONTRACT_SCHEMA_VERSION`, now 4: `delistings.csv` gained the payout-rule
+columns in 2, `payout_legs.csv` came in 3, and in 4 `price_requests.csv` gained `lookup_name` and
+`id_changes.csv` gained `kind`).
 
 **Payout rule** (`outputs/payout_rule.py`). The library need not price an ending; it
 publishes what one share turned into and the caller, which holds the prices,
@@ -339,7 +342,13 @@ other verdict moves. To list the moves, compare the two runs'
 `contract/delistings.csv` `verdict` columns (FB-012). An answer is
 matched on `(sec_id, last_trade_date, kind, lookup_ticker, date)`, and a
 `last_close` or `otc_print` answer reaches the stage by its security, day and
-kind alone (its ticker and date are a hint); `lookup_sec_id` is informational. An answer to no request, or a last close also
+kind alone (its ticker and date are a hint). `lookup_name` (schema 4) is the name of the security the request is for, so
+the caller can check a vendor series before it answers: the security's own name for a `last_close`, an `otc_print` and
+a plan's new line; for a `received_close` of a stock leg or a basket's further leg the name of the acquirer security
+when the run holds it (it is in `securities.csv`, even where `security_history.csv` leaves it out), else the issuer name
+the filing gives for that leg, else blank. `lookup_sec_id` and `lookup_name` are informational and optional in an
+answers file (one written against schema 3 loads); `sec_id`, `last_trade_date`, `kind`, `lookup_ticker`, `date` and
+`price` are required. An answer to no request, or a last close also
 given by `--last-trade-closes`, exits 2 before anything is written.
 
 ### `delistings.csv` — key `(sec_id, delist_date)` — the primary output

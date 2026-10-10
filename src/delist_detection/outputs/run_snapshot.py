@@ -46,6 +46,7 @@ from datetime import date, timedelta
 from pathlib import Path
 
 from . import store
+from .store import RENAME
 from ..vocabulary.exit_kind import ContinuationReading
 from .manifest import MANIFEST_NAME
 
@@ -56,7 +57,10 @@ FIRST_TABLES = frozenset({"securities", "ticker_history", "cusip_history", "deli
                           "observation_map"})
 # contract/delistings.csv as schema 1 wrote it: the columns before the payout rule (schema 2 appended the rest)
 CONTRACT_SCHEMA_1 = store.CONTRACT_DELISTINGS_COLUMNS[:store.CONTRACT_DELISTINGS_COLUMNS.index("value_rule")]
-_BEFORE_PAYOUT_RULE = "a contract before schema 2 (no payout rule)"
+# the last column schema 4 appended, and what an older file's rows read as: a row with no `kind` is a rename, one with
+# no `lookup_name` has no name
+SCHEMA_3_FILLED = {"id_changes": RENAME, "price_requests": ""}
+_BEFORE_PAYOUT_RULE ="a contract before schema 2 (no payout rule)"
 
 
 class SnapshotError(ValueError):
@@ -110,6 +114,9 @@ def _parse(name: str, text: str, where: str) -> Rows | _Absent:
         return list(reader)
     if name == "contract_delistings" and header == CONTRACT_SCHEMA_1:
         return _Absent(_BEFORE_PAYOUT_RULE)
+    if name in SCHEMA_3_FILLED and header == columns[:-1]:
+        # a file of contract schema 3 or before lacks the column schema 4 appended: its rows read with the cell filled
+        return [{**r, columns[-1]: SCHEMA_3_FILLED[name]} for r in csv.DictReader(io.StringIO(text, newline=""))]
     missing = [c for c in columns if c not in header]
     unknown = [c for c in header if c not in columns]
     problems = ([f"missing column(s) {', '.join(missing)}"] if missing else []) + \

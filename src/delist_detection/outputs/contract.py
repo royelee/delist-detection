@@ -26,7 +26,7 @@ from ..vocabulary.exit_kind import ending_fields, last_endings, published
 from ..vocabulary.identifiers import is_placeholder
 from .payout_rule import basket_legs, value_fields
 from .run_snapshot import RunSnapshot
-from .store import DelistingKey
+from .store import RENAME, DelistingKey
 from .verdict import Verdicts, seed_key
 
 ECHOED = ("ticker", "as_of", "name", "cusip", "pin_cik", "pin_sec_id", "sec_id")
@@ -163,5 +163,5 @@ def id_change_rows(baseline: Sequence[Mapping[str, str]], securities: Sequence[M
             figis.get((b["issuer_cik"], b["share_class"]), set())
         if len(found) == 1:
             rows.append({"old_sec_id": b["sec_id"], "new_sec_id": next(iter(found)), "changed_on": changed_on,
-                         "issuer_cik": b["issuer_cik"], "share_class": b["share_class"]})
+                         "issuer_cik": b["issuer_cik"], "share_class": b["share_class"], "kind": RENAME})
     return rows

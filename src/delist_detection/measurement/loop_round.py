@@ -55,8 +55,8 @@ from pathlib import Path
 from ..sources.atomic_io import write_atomic
 from .diagnosis_truth import RULING_PENDING, SCORED, DiagnosisCase, LibraryRows, judge_all, parse_rows
 from ..vocabulary.exit_kind import last_endings
-from .regression import (ADDED, REMOVED, REPORT_COLUMNS, build_report, id_changes_since, pending_regression,
-                         report_row, write_report)
+from .regression import (ADDED, REMOVED, REPORT_COLUMNS, build_report, follows, id_changes_since,
+                         pending_regression, report_row, write_report)
 from ..outputs.run_snapshot import RunSnapshot
 from .truth import Judgement, Mismatch
 from .truth_set import TruthSet
@@ -467,7 +467,7 @@ class Round:
         cases = self.cases()
         records = self.records()
         ts = self.loop.truth_set(truth)
-        renamed = {r["old_sec_id"] for r in id_changes_since(base, run)}
+        renamed = {r["old_sec_id"] for r in id_changes_since(base, run) if follows(r)}
         base_rows = {r["sec_id"]: r for r in base.require("contract_delistings")}
         run.require("contract_delistings")
         lib = LibraryRows.of(run)              # a status flip judges a basket's legs too (sub-plan 5f)

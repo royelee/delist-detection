@@ -26,6 +26,7 @@ from ..sources.atomic_io import write_atomic
 from ..outputs.contract import id_change_rows
 from .diagnosis_truth import REGRESSION_PENDING, RULING_PENDING, DiagnosisCase
 from ..outputs.run_snapshot import RunSnapshot
+from ..outputs.store import RENAME
 
 REPORT_COLUMNS = ("sec_id", "table", "field", "kind", "old", "new")
 CHANGED, ADDED, REMOVED, RENAMED = "changed", "added", "removed", "renamed"
@@ -107,7 +108,7 @@ def excluded(cases: Sequence[DiagnosisCase], *delistings: Sequence[Mapping[str, 
     out = successor_chain({c.sec_id for c in cases if not pending_regression(c)}, *delistings)
     grew = True
     while grew:
-        old = {r["old_sec_id"] for r in id_changes if r["new_sec_id"] in out}
+        old = {r["old_sec_id"] for r in id_changes if follows(r) and r["new_sec_id"] in out}
         grew = not old <= out
         out |= old
     return out
@@ -137,11 +138,17 @@ def _legs(rows: Sequence[Mapping[str, str]]) -> dict[str, str]:
     return {k: ";".join(t for _, t in sorted(v)) for k, v in by.items()}
 
 
+def follows(row: Mapping[str, str]) -> bool:
+    """Whether an id_changes row is a rename, the only kind a reader follows. A row with no `kind` cell (an older
+    commit's) is one; a `split` (one old placeholder became several ids) is not."""
+    return (row.get("kind") or RENAME) == RENAME
+
+
 def renamed_to(renames: Sequence[Mapping[str, str]]) -> dict[str, str]:
     """Each renamed placeholder's sec_id now (`renames`: id_changes rows), a chain of renames followed to its end
     (P renamed to M, M to F: P is F now). The one chain rule: the truth set renames by it too
     (`truth_set.TruthSet.rename`)."""
-    step = {r["old_sec_id"]: r["new_sec_id"] for r in renames if r.get("old_sec_id") and r.get("new_sec_id")}
+    step = {r["old_sec_id"]: r["new_sec_id"] for r in renames if follows(r) and r.get("old_sec_id") and r.get("new_sec_id")}
     out: dict[str, str] = {}
     for old in step:
         now, seen = step[old], {old}

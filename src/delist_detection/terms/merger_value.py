@@ -190,15 +190,27 @@ class MergerValues:
                                     v.price_ticker, getattr(pr, "currency", "") or "", v.leg_sec_ids)
         return out
 
-    def requests(self, endings: Sequence[Mapping[str, str]]) -> dict[DelistingKey, tuple[str, str]]:
-        """The received close each ending's stock leg asks, (ticker, acquirer sec_id) (`MergerValue.request`):
-        decided at stage 8, before the gate's verdict, so an answer that changes the gate does not change it."""
-        out: dict[DelistingKey, tuple[str, str]] = {}
+    def requests(self, endings: Sequence[Mapping[str, str]]) -> dict[DelistingKey, tuple[str, str, str]]:
+        """The received close each ending's stock leg asks, (ticker, acquirer sec_id, the issuer name the LLM read for
+        the leg, "" when none) (`MergerValue.request`): decided at stage 8, before the gate's verdict, so an answer that
+        changes the gate does not change it. The name is the price request's `lookup_name` when the run holds no
+        security of that sec_id (FB-008)."""
+        out: dict[DelistingKey, tuple[str, str, str]] = {}
         for r in endings:
             key = DelistingKey(r["sec_id"], r["delist_date"])
             v = self.records.get(key)
             if v is not None and v.request is not None:
-                out[key] = v.request
+                out[key] = (*v.request, (v.llm.acquirer_name or "") if v.llm is not None else "")
+        return out
+
+    def leg_issuers(self, endings: Sequence[Mapping[str, str]]) -> dict[str, tuple[str, ...]]:
+        """The issuer name the LLM read for each further leg of a basket ending (`MergerTerms.extra_legs`, leg 2 first),
+        by sec_id: the price request's `lookup_name` when the run holds no security for the leg (FB-008)."""
+        out: dict[str, tuple[str, ...]] = {}
+        for r in endings:
+            v = self.records.get(DelistingKey(r["sec_id"], r["delist_date"]))
+            if v is not None and v.llm is not None and v.llm.extra_legs:
+                out[r["sec_id"]] = tuple(leg.issuer_name or "" for leg in v.llm.extra_legs)
         return out
 
 
