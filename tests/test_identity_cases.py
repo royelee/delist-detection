@@ -31,6 +31,9 @@ MOVES = {
     # FB-006: "LIBERTY INTERACTIVE VENTURE CORP S" is "LIBERTY VENTURES - SER A" (a plural S), so the one-observation
     # era the name split cut from LVNTA@2012-12-31 is no era of its own; it was the placeholder's, and FB-005's overlap
     "LVNTA@2012-12-31": ("BBG0038K9G41", "ticker"),
+    # FB-003: Washington Post's name states no class, its CUSIP's descriptions say "CLB" and its issuer's only other
+    # era is Graham Holdings' class B: the old CUSIP ended as GHC's began, so one line, not an `exchange` ending
+    "WPO@2008-01-16": ("BBG000C3FGH9", "handoff"),
 }
 
 # era key -> (sec_id, FIGI source), unchanged by 5h
@@ -52,7 +55,6 @@ STAY = {
     "VIA-B@2008-01-16": ("BBG000DHSPT0", "cusip"),
     "UA@2016-12-30": ("BBG009DTD8H2", "cusip"),
     "PAG@2014-06-30": ("BBG000H6K1B0", "cusip"),
-    "WPO@2008-01-16": ("CIK104889-COMMON", "placeholder"),     # its line's OpenFIGI name states no letter of it
 }
 
 

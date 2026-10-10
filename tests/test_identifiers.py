@@ -4,7 +4,7 @@ import pytest
 
 from delist_detection.vocabulary.identifiers import (
     CLASS_MODIFIERS, answer_class_letter, bare_ticker, bloomberg_ticker, class_letter, class_of, class_suffix,
-    description_class_letter, descriptions_class_letter, figi_class_letter, is_placeholder, name_class_letter,
+    description_class_letter, descriptions_class_letter, figi_class_letter, fits_class, is_placeholder, name_class_letter,
     normalize_ticker, placeholder_id, prose_class_letters, regular_way, share_class_from_name, strip_class_words,
 )
 
@@ -183,3 +183,46 @@ def test_the_class_is_the_securitys_share_class_and_the_words_its_name_sets_it_a
     assert class_of("COMMON", "ONEOK INC") == ("", ())
     assert class_of("CLASS B", "LIONS GATE ENTERTAINMENT NON-VOTING") == ("B", ("NON-VOTING",))
     assert CLASS_MODIFIERS == ("SPECIAL", "NON-VOTING", "LIMITED VOTING")
+
+
+# --- FB-003: a class the name does not state ------------------------------------------------------------------------
+
+
+def test_a_cl_joined_to_one_letter_at_the_end_of_a_description_names_that_class():
+    """WPO 2007-2013: SEC's fails descriptions spell Washington Post's class B "WASHINGTON POST CO CLB"."""
+    assert descriptions_class_letter(["WASHINGTON POST CO CLB"]) == "B"
+    assert descriptions_class_letter(["WASHINGTON POST CO CLB", "WASHINGTON POST CO CL B"]) == "B"
+    assert descriptions_class_letter(["WASHINGTON POST CO CLB", "WASHINGTON POST CO CL A"]) is None
+
+
+@pytest.mark.parametrize("description", [
+    "CLB HOLDINGS INC",            # CLB inside a name, not at its end
+    "ACME CLBX",                   # a longer word
+    "ACMECLB",                     # no word break before CL
+    "ACME CLUB",                   # a word that begins with CL
+    "ACME CL",                     # CL alone
+    "ACME CLB INC",                # CLB followed by more words
+    "ACME CLBB",
+    "ACME CL1",                    # a digit is no class letter here
+])
+def test_a_cl_that_is_not_a_class_letter_at_the_end_of_a_description_names_none(description):
+    assert descriptions_class_letter([description]) is None
+
+
+def test_a_class_the_name_does_not_state_fits_the_one_letter_the_issuer_and_its_cusips_name():
+    """WPO: COMMON is "class not stated". It fits the issuer's one lettered class when the old CUSIP's descriptions
+    name that letter, or the issuer's securities name that letter only; never beside another letter (Liberty's
+    tracking stocks, FB-005), and never when its own class is stated."""
+    assert fits_class("COMMON", "COMMON", described=None, issuer_letters=())
+    assert fits_class("CLASS B", "CLASS B", described=None, issuer_letters=("A", "B"))
+    assert fits_class("COMMON", "CLASS B", described="B", issuer_letters=())              # the descriptions name B
+    assert fits_class("COMMON", "CLASS B", described=None, issuer_letters=("B",))         # the issuer names only B
+    assert fits_class("COMMON", "CLASS B", described="B", issuer_letters=("B",))
+    assert fits_class("COMMON", "SERIES B", described="B", issuer_letters=())
+    assert not fits_class("COMMON", "CLASS B", described=None, issuer_letters=())         # nothing says B
+    assert not fits_class("COMMON", "CLASS B", described="A", issuer_letters=("B",))      # the descriptions say A
+    assert not fits_class("COMMON", "CLASS B", described="B", issuer_letters=("A", "B"))  # an issuer of two letters
+    assert not fits_class("COMMON", "CLASS B", described=None, issuer_letters=("A", "B"))
+    assert not fits_class("CLASS A", "CLASS B", described="B", issuer_letters=("B",))     # its own class is stated
+    assert not fits_class("CLASS B", "COMMON", described="B", issuer_letters=("B",))      # only a plain class fits
+    assert not fits_class("COMMON", "PREFERRED", described=None, issuer_letters=())

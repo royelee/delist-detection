@@ -1186,3 +1186,71 @@ def test_a_placeholder_whose_line_ticker_a_later_figi_line_holds_is_superseded()
     assert superseded_placeholders({p.sec_id: p, s.sec_id: s}) == {"CIK315293-COMMON"}
     p.line_tickers = frozenset()
     assert superseded_placeholders({p.sec_id: p, s.sec_id: s}) == set()
+
+
+# --- FB-003: a plain-named era is the lettered class its issuer's other eras name ------------------------------------
+
+class _CusipFigi:
+    """OpenFIGI over a few CUSIPs: each maps to one US composite; any other job (a ticker, a name) finds none."""
+
+    def __init__(self, lines):
+        self.lines = lines
+
+    def map(self, jobs, use_cache=True):
+        out = []
+        for j in jobs:
+            line = self.lines.get(j["idValue"]) if j["idType"] == "ID_CUSIP" else None
+            out.append({"data": [{"figi": line[0], "compositeFIGI": line[0], "exchCode": "US", "ticker": line[1],
+                                  "name": line[2], "securityType": "Common Stock"}]} if line else
+                       {"warning": "No identifier found."})
+        return out
+
+    def filter(self, query, **fields):
+        return []
+
+
+WPO_LINES = {"384637104": ("BBG000C3FGH9", "GHC", "GRAHAM HOLDINGS CO-CLASS B")}
+WPO_HANDOFF_DESC = (("WASHINGTON POST CO CLB", "2007-12-26"),)
+
+
+def _wpo(*extra_eras, described=WPO_HANDOFF_DESC, cik=104889):
+    """WPO (class not stated) and GHC (class B), one issuer: the old CUSIP's last row under WPO on 2013-11-25, the
+    new one's first on 2013-11-29. `extra_eras`: (ticker, name) of further eras of the issuer."""
+    wpo = _era("WPO", ("2008-01-16", "WASHINGTON POST CO"))
+    ghc = _era("GHC", ("2012-06-29", "GRAHAM HOLDINGS COMPANY CLASS B"))
+    ghc.ftd_cusips = ("384637104",)
+    wpo.ftd_cusips = ("939640108",)
+    eras = [wpo, ghc, *[_era(t, ("2012-06-29", n)) for t, n in extra_eras]]
+    issuers = {e.key: Issuer(cik, ("GRAHAM HOLDINGS CO", "WASHINGTON POST CO")) for e in eras}
+    h = Handoff(wpo.key, ghc.key, "cusip_handoff", "939640108", "384637104", "2013-11-29", described, "2007-12-26",
+                "2013-11-25")
+    cusips = {wpo.key: ["939640108"], ghc.key: ["384637104"]}
+    res = FigiResolver(_CusipFigi(WPO_LINES)).resolve_many(eras, issuers=issuers, cusips=cusips, handoffs=[h])
+    return {e.ticker: (res[e.key].sec_id, res[e.key].source) for e in eras}
+
+
+def test_a_plain_named_era_joins_the_lettered_line_its_issuers_other_eras_name():
+    """WPO 2013: Washington Post's name states no class, its fails descriptions say "CLB" and GHC's line is class B.
+    The old CUSIP ended as GHC's began, so the two are one line (the handoff the plain name hid)."""
+    got = _wpo()
+    assert got["WPO"] == ("BBG000C3FGH9", "handoff") and got["GHC"] == ("BBG000C3FGH9", "cusip")
+
+
+def test_a_plain_named_era_does_not_join_when_its_issuer_names_two_letters():
+    """Liberty's tracking stocks and Alphabet (FB-005): an issuer with eras of two letters keeps its lines apart."""
+    got = _wpo(("GHCA", "GRAHAM HOLDINGS COMPANY CLASS A"))
+    assert got["WPO"][0] == "CIK104889-COMMON" and got["GHC"][0] == "BBG000C3FGH9"
+
+
+def test_a_plain_named_era_does_not_join_a_letter_its_cusips_descriptions_contradict():
+    got = _wpo(described=(("WASHINGTON POST CO CL A", "2007-12-26"),))
+    assert got["WPO"][0] == "CIK104889-COMMON"
+
+
+def test_a_plain_named_era_with_no_cusip_link_stays_on_its_placeholder():
+    wpo = _era("WPO", ("2008-01-16", "WASHINGTON POST CO"))
+    ghc = _era("GHC", ("2012-06-29", "GRAHAM HOLDINGS COMPANY CLASS B"))
+    issuers = {e.key: Issuer(104889) for e in (wpo, ghc)}
+    res = FigiResolver(_CusipFigi(WPO_LINES)).resolve_many(
+        [wpo, ghc], issuers=issuers, cusips={wpo.key: ["939640108"], ghc.key: ["384637104"]}, handoffs=[])
+    assert res[wpo.key].sec_id == "CIK104889-COMMON"

@@ -485,3 +485,28 @@ def test_a_filing_that_is_no_periodic_report_of_a_fund_does_not_carry_the_regist
     f = [_f("8-K", "2012-09-24", "5.03"), _f("N-PX", "2012-11-29", report="2012-09-30"),
          _f("N-2", "2012-11-29", report="2012-09-30"), _f("SC TO-I/A", "2012-11-29", report="2012-09-30")]
     assert _corr(filings=f) == ("", "merged_out")
+
+
+# --- FB-003: COMMON is "class not stated" (WPO to GHC's class B) -----------------------------------------------------
+
+def test_decide_folds_a_plain_placeholder_into_the_lettered_line_its_cusips_and_issuer_name():
+    """WPO 2013: the placeholder states no class; GHC's line (the new CUSIP's composite, a security of the run) is
+    class B. The old CUSIP's descriptions name B ("WASHINGTON POST CO CLB"), or the issuer's securities name only B."""
+    placeholder, ghc = _sec("CIK1-COMMON"), _sec("BBGGHC", share_class="CLASS B")
+    run = {"BBGGHC": ghc}
+    d = lf.decide(STEP, placeholder, _cand("BBGGHC"), run, described="B", issuer_letters=("B",))
+    assert (d.kind, d.composite) == (lf.FOLD, "BBGGHC")
+    assert lf.decide(STEP, placeholder, _cand("BBGGHC"), run, described="B").kind == lf.FOLD
+    assert lf.decide(STEP, placeholder, _cand("BBGGHC"), run, issuer_letters=("B",)).kind == lf.FOLD
+
+
+def test_decide_still_refuses_a_class_the_evidence_does_not_name():
+    """An issuer of two letters (Liberty's tracking stocks, FB-005), a letter the descriptions contradict, and no
+    evidence at all keep the `class` refusal; a placeholder of a stated class is never another's."""
+    placeholder, ghc = _sec("CIK1-COMMON"), _sec("BBGGHC", share_class="CLASS B")
+    run = {"BBGGHC": ghc}
+    assert lf.decide(STEP, placeholder, _cand("BBGGHC"), run, described="B", issuer_letters=("A", "B")).why == "class"
+    assert lf.decide(STEP, placeholder, _cand("BBGGHC"), run, described="A", issuer_letters=("B",)).why == "class"
+    assert lf.decide(STEP, placeholder, _cand("BBGGHC"), run).why == "class"
+    class_a = _sec("CIK1-CLASS-A", share_class="CLASS A")
+    assert lf.decide(STEP, class_a, _cand("BBGGHC"), run, described="B", issuer_letters=("B",)).why == "class"

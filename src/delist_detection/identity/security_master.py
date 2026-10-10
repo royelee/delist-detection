@@ -21,8 +21,8 @@ from datetime import date, timedelta
 from .figi_resolution import FigiCandidate, accept, filter_query, security_kind, us_candidates
 from ..sources.ftd import FTD_START, FtdIndex, is_deleted_symbol, settled_last
 from ..vocabulary.identifiers import (
-    bloomberg_ticker, class_letter, figi_class_letter, is_placeholder, name_class_letter, placeholder_id,
-    share_class_from_name,
+    bloomberg_ticker, class_letter, descriptions_class_letter, figi_class_letter, fits_class, is_placeholder,
+    name_class_letter, placeholder_id, share_class_from_name,
 )
 from ..vocabulary.trading_calendar import add_trading_days
 from ..vocabulary.names import description_matches
@@ -234,9 +234,8 @@ def _link_text(h: Handoff) -> str:
     return f"{h.era_key}'s CUSIP {h.cusip} ended as {h.to_key}'s {h.new_cusip} began on {h.day}"
 
 
-def one_class_issuers(eras: Sequence[TickerEra], issuers: Mapping[str, Issuer]) -> set[int]:
-    """The issuer CIKs whose eras in the run name at most one class letter (`share_class_from_name`'s CLASS X or
-    SERIES X): for them a plain-named era and a lettered one are one share class."""
+def issuer_letters(eras: Sequence[TickerEra], issuers: Mapping[str, Issuer]) -> dict[int, set[str]]:
+    """The class letters (`name_class_letter`: CLASS X or SERIES X) the eras of each issuer CIK name in the run."""
     letters: dict[int, set[str]] = defaultdict(set)
     for e in eras:
         cik = cik_of(issuers, e.key)
@@ -244,7 +243,13 @@ def one_class_issuers(eras: Sequence[TickerEra], issuers: Mapping[str, Issuer]) 
             continue
         letter = name_class_letter(e.name)
         letters[cik] |= {letter} if letter else set()
-    return {cik for cik, found in letters.items() if len(found) <= 1}
+    return dict(letters)
+
+
+def one_class_issuers(eras: Sequence[TickerEra], issuers: Mapping[str, Issuer]) -> set[int]:
+    """The issuer CIKs whose eras in the run name at most one class letter (`share_class_from_name`'s CLASS X or
+    SERIES X): for them a plain-named era and a lettered one are one share class."""
+    return {cik for cik, found in issuer_letters(eras, issuers).items() if len(found) <= 1}
 
 
 def _handoff_joins(eras: Sequence[TickerEra], issuers: Mapping[str, Issuer], handoffs: Sequence[Handoff],
@@ -265,7 +270,10 @@ def _handoff_joins(eras: Sequence[TickerEra], issuers: Mapping[str, Issuer], han
     tickers of one issuer is one line, so SPW (2008-2015) joins the composite
     SPXC's ticker gives, with OpenFIGI knowing that CUSIP on no US venue.
 
-    A CUSIP switch also links a lettered era to a plain-named one of its issuer
+    A CUSIP switch also links a plain-named era to the lettered one of its issuer (FB-003, Washington Post's WPO
+    to Graham Holdings' class B GHC) when `identifiers.fits_class` holds: the issuer's eras in the run name that
+    letter only, or only the letter the old CUSIP's fails descriptions name ("WASHINGTON POST CO CLB"), and no
+    other. A CUSIP switch also links a lettered era to a plain-named one of its issuer
     (sub-plan 5h) when OpenFIGI names the plain era's confirmed line with the
     same letter (`line_names`: era key -> its line's OpenFIGI name; Bloomberg's
     "MSG NETWORKS INC- A", "STARZ - A") and the issuer's eras name no other
@@ -284,14 +292,20 @@ def _handoff_joins(eras: Sequence[TickerEra], issuers: Mapping[str, Issuer], han
         return cik_of(issuers, key), share_class_from_name(by_key[key].name)
 
     names = line_names or {}
+    letters = issuer_letters(eras, issuers)
 
     def linked(h: Handoff) -> bool:
         a, b = group(h.era_key), group(h.to_key)
         if a[0] is None or a == b:
             return a[0] is not None
+        if h.kind != "cusip_handoff" or a[0] != b[0]:
+            return False
         letter = class_letter(a[1])
-        return (h.kind == "cusip_handoff" and a[0] == b[0] and a[0] in one_class and letter is not None
-                and class_letter(b[1]) is None and figi_class_letter(names.get(h.to_key, "")) == letter)
+        if letter is None:       # a plain-named era to a lettered one (FB-003, WPO to GHC's class B)
+            described = descriptions_class_letter(d for d, _ in h.descriptions)
+            return fits_class(a[1], b[1], described=described, issuer_letters=letters.get(a[0], ()))
+        return (a[0] in one_class and class_letter(b[1]) is None
+                and figi_class_letter(names.get(h.to_key, "")) == letter)
 
     links = sorted((h for h in handoffs if h.era_key in by_key and h.to_key in by_key and linked(h)),
                    key=lambda h: (h.era_key, h.kind != "shared_cusip", h.to_key))

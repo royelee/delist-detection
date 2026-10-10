@@ -198,7 +198,12 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   LLM answer's share class (`answer_class_letter`: "B", "Class B", "Series C common"; a basket leg's class); a
   filing's prose (`prose_class_letters`: "Class X"/"Series X", a following "-" not, Series A-1; the own-share
   statements and the acquirer line's quote); `CLASS_MODIFIERS` and `class_of` (the letter and the words, SPECIAL,
-  NON-VOTING, LIMITED VOTING, a security's statements must name). A Form 25's class text stays `form25`'s. The data
+  NON-VOTING, LIMITED VOTING, a security's statements must name). `descriptions_class_letter` also reads a "CL"
+  joined to one letter that ends a description ("WASHINGTON POST CO CLB", never "CLB HOLDINGS" or "CLUB"), and
+  `fits_class` (FB-003) says whether a COMMON security, which states no class, is the one lettered class of its
+  issuer: the only letter its CUSIPs' descriptions and its issuer's eras and securities name, never beside a second
+  letter (Liberty's tracking stocks); `line_follow.decide` and the identity stage's `_handoff_joins` share it. A
+  Form 25's class text stays `form25`'s. The data
   clients (ftd, midas, nasdaq_halts) read their spelling here, not from the observations
   (`tests/test_import_closure.py`).
 - `vocabulary/crsp_codes.py` — the truth table: `DLST_CODE_TO_BUCKET` plus a leading-digit
@@ -683,7 +688,9 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   UAG 2008-09 on PAG's line). `_handoff_joins` lets a CUSIP switch join a lettered era to a plain-named era of its
   issuer when OpenFIGI names that line with the same letter and the issuer's eras name no other
   (`identifiers.figi_class_letter`, `one_class_issuers`: MSG onto MSG Networks, LMCA onto Starz); never a shared CUSIP
-  (tracking stocks).
+  (tracking stocks). The other way too (FB-003): a switch joins a plain-named era to a lettered one of its issuer
+  when `identifiers.fits_class` holds over `issuer_letters` (the letters the issuer's eras name) and the letter the
+  old CUSIP's fails descriptions name: WPO ("WASHINGTON POST CO CLB") onto Graham Holdings' class B GHC.
 - `identity/history.py` — a security's dated history: its sightings
   (`ticker_sightings`/`cusip_sightings`, and `span_sightings` for a successor the run added, stage 9d: its span's
   days, source `SPAN`, and its CUSIPs' fails rows; a fails row is a ticker
@@ -767,7 +774,11 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   forms 10-K405, 10-KSB, 10-KSB40 and 10-QSB, or by a registered investment company's report in
   `INVESTMENT_COMPANY_FORMS` (N-CSR, N-CSRS, N-Q, N-CEN, NPORT-P, NSAR-A, NSAR-B: Altaba 2017), each for a period
   after the step); `decide` (R2: attach, fold a placeholder, a line successor, or
-  refused: `unsettled`, `type` for an OpenFIGI preferred/warrant/right/unit, `other_issuer`, `class`). Up to
+  refused: `unsettled`, `type` for an OpenFIGI preferred/warrant/right/unit, `other_issuer`, `class`, which
+  `fits_class` can lift for a COMMON placeholder: WPO's "CLB" to GHC's class B). A placeholder is not kept from its
+  next CUSIP by a security of its own issuer that holds it and that it would fold into (`holders_for`: same issuer, a
+  class that fits, no other CUSIP of the holder failing more than `LINE_DAYS` after the CUSIP's first row; a FIGI
+  line still takes no step to another security's CUSIP, WLL 2017: IAC 2008, WPO 2013). Up to
   `MAX_ROUNDS` steps a line; a CUSIP, or a successor composite, one
   security took is held for the rest of the round (a second is refused `taken`). A FIGI line with a line successor
   is not listed today (stage 5's `retired`). A failed EDGAR read is never cached, and any degraded read of a CIK gives each

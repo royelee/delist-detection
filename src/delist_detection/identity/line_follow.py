@@ -55,7 +55,8 @@ from .issuer_record import IssuerRecord
 from ..filings.listing_status import edgar_lists, lists_on_major_exchange
 from ..outputs.manifest import StageMeter
 from ..vocabulary.names import description_names, names_agree
-from ..vocabulary.identifiers import (bare_ticker, class_letter, description_class_letter, is_placeholder,
+from ..vocabulary.identifiers import (bare_ticker, class_letter, description_class_letter,
+                                      descriptions_class_letter, fits_class, is_placeholder, name_class_letter,
                                       normalize_ticker)
 from ..outputs.review_triage import ReviewItem
 from .security_master import SWITCH_DAYS, SWITCH_TAIL_DAYS, EraResolution, Security, cusip_job
@@ -446,13 +447,17 @@ def composites(answer: Mapping) -> list[FigiCandidate] | None:
 
 
 def decide(step: LineStep, sec: Security, cands: list[FigiCandidate] | None,
-           securities: Mapping[str, Security]) -> Decision:
+           securities: Mapping[str, Security], *, described: str | None = None,
+           issuer_letters: Collection[str] = ()) -> Decision:
     """R2 for `step` of security `sec`: a new symbol of the same CUSIP is the same security (ATTACH). A switch
     follows its new CUSIP's US composites (`cands`): none, or `sec`'s own, ATTACH; several, or an OpenFIGI error,
     REFUSED "unsettled"; one other composite X: REFUSED "type" when OpenFIGI types it a preferred, warrant (also "Equity WRT"), right
     or unit (CHTR's new preferred CHTRP), REFUSED "other_issuer" when a security of the run of another
     issuer holds X, REFUSED "class" when one of another share class does, else FOLD into X for a placeholder (the
-    truth set's reading of R2 for a line with no composite) and SUCCESSOR X for a FIGI line."""
+    truth set's reading of R2 for a line with no composite) and SUCCESSOR X for a FIGI line. A holder's class is
+    another when `identifiers.fits_class` says so: COMMON states no class, and fits the one lettered class its
+    issuer's securities name (`issuer_letters`) or its own CUSIPs' fails descriptions name (`described`), WPO's
+    "CLB" to GHC's class B; with neither given, the classes must be equal."""
     if step.kind == NEW_SYMBOL:
         return Decision(ATTACH)
     if cands is None or len(cands) > 1:
@@ -465,9 +470,49 @@ def decide(step: LineStep, sec: Security, cands: list[FigiCandidate] | None,
     holder = securities.get(x.composite)
     if holder is not None and holder.issuer_cik is not None and holder.issuer_cik != sec.issuer_cik:
         return Decision(REFUSED, x.composite, "other_issuer", x)
-    if holder is not None and holder.share_class != sec.share_class:
+    if holder is not None and not fits_class(sec.share_class, holder.share_class, described=described,
+                                             issuer_letters=issuer_letters):
         return Decision(REFUSED, x.composite, "class", x)
     return Decision(FOLD if is_placeholder(sec.sec_id) else SUCCESSOR, x.composite, candidate=x)
+
+
+def issuer_letters_of(cik: int | None, securities: Iterable[Security]) -> set[str]:
+    """The class letters the run's securities of issuer `cik` state: their share classes' and their eras' names'."""
+    letters: set[str] = set()
+    for t in securities:
+        if cik is not None and t.issuer_cik == cik:
+            letters |= {x for x in [class_letter(t.share_class), *(name_class_letter(e.name) for e in t.eras)] if x}
+    return letters
+
+
+def described_letter(cusips: Iterable[str], ftd: FtdIndex) -> str | None:
+    """The one class letter the fails descriptions of `cusips` name (`identifiers.descriptions_class_letter`)."""
+    return descriptions_class_letter(d for c in cusips for d in sorted(ftd.descriptions(c)))
+
+
+def holders_for(sec: Security, securities: Mapping[str, Security], cusips: Mapping[str, Sequence[str]],
+                holders: Mapping[str, Collection[str]], ftd: FtdIndex) -> Mapping[str, Collection[str]]:
+    """The CUSIP holders `candidate_steps` reads for `sec`: all of them, except that a placeholder is not kept from a
+    CUSIP by a security of its own issuer that it would fold into (IAC 2008, WPO 2013): same issuer, a class that
+    `fits_class`, and no other CUSIP of the holder failing more than `LINE_DAYS` trading days after the CUSIP's
+    first row (a second live line of the issuer is not the placeholder's next CUSIP). A FIGI line's step to another
+    security's CUSIP stays no step (WLL 2017: a second line of the run is stage 9's link, not this follow's)."""
+    if not is_placeholder(sec.sec_id):
+        return holders
+    letters = issuer_letters_of(sec.issuer_cik, securities.values())
+    described = described_letter(cusips.get(sec.sec_id, ()), ftd)
+
+    def folds_into(h: str, cusip: str) -> bool:
+        t = securities.get(h)
+        if t is None or h == sec.sec_id or sec.issuer_cik is None or t.issuer_cik != sec.issuer_cik:
+            return False
+        if not fits_class(sec.share_class, t.share_class, described=described, issuer_letters=letters):
+            return False
+        rows = ftd.by_cusip(cusip)
+        until = _days(rows[0].date, LINE_DAYS) if rows else ""
+        return not any(r.date > until for o in cusips.get(h, ()) if o != cusip for r in ftd.trading_rows([o]))
+
+    return {c: kept for c, hs in holders.items() if (kept := {h for h in hs if not folds_into(h, c)})}
 
 
 # --- the stage: `follow_lines` -----------------------------------------------------------------------------------
@@ -641,7 +686,8 @@ def follow_lines(identity: "Identity", clients: LineSources, *, as_of: date,
         holders = _cusip_holders(out.cusips)
 
         def steps_of(sid: str) -> list[LineStep]:
-            return candidate_steps(sid, out.cusips.get(sid, []), own(sid), ftd, holders=holders,
+            return candidate_steps(sid, out.cusips.get(sid, []), own(sid), ftd,
+                                   holders=holders_for(out.securities[sid], out.securities, out.cusips, holders, ftd),
                                    extra_symbols=extra.get(sid, ()), extra_cusips=named.get(sid, ()),
                                    data_end=ftd.data_end())
 
@@ -676,7 +722,9 @@ def follow_lines(identity: "Identity", clients: LineSources, *, as_of: date,
             evidence, refused = reads.corroborate(step, s, own(sid), as_of)
             what = f"{step.old_cusip} -> {step.new_cusip} under {step.symbol} from {step.first}"
             decision = None if refused else decide(
-                step, s, composites(figi_answers[step.new_cusip]) if step.kind == SWITCH else None, out.securities)
+                step, s, composites(figi_answers[step.new_cusip]) if step.kind == SWITCH else None, out.securities,
+                described=described_letter(out.cusips.get(sid, []), ftd),
+                issuer_letters=issuer_letters_of(cik, out.securities.values()))
             decision = _today_holder_fold(decision, s, out.resolutions, own(sid))
             if decision is not None and decision.kind == REFUSED:
                 refused = decision.why

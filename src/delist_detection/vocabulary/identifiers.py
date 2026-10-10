@@ -25,7 +25,8 @@ rule (their docstrings give the rule and a real example):
   rule: `descriptions_class_letter`;
 - the share class an LLM answer names: `answer_class_letter`;
 - a filing's prose, an 8-K's sentence or an LLM answer's quote: `prose_class_letters`;
-- the words that set a class apart in a name: `CLASS_MODIFIERS`, read with the letter by `class_of`.
+- the words that set a class apart in a name: `CLASS_MODIFIERS`, read with the letter by `class_of`;
+- whether a security that states no class (COMMON) is the line of a lettered class of its issuer: `fits_class`.
 Where two readers of one kind of text keep two rules, merging them would change what the replay reads (the step 13
 decision log gives the inputs). A Form 25's class text is read by `form25` (segment by segment, past attached rights
 and preferred clauses), which turns each class it names into a letter with `class_letter`.
@@ -33,7 +34,7 @@ and preferred clauses), which turns each class it names into a letter with `clas
 from __future__ import annotations
 
 import re
-from collections.abc import Iterable
+from collections.abc import Collection, Iterable
 
 # --- ticker spellings -----------------------------------------------------------------------------------------------
 
@@ -164,14 +165,38 @@ def description_class_letter(description: str | None) -> str | None:
 
 
 _DESCRIPTIONS_CLASS = re.compile(r"\b(?:CL|CLASS|SER|SERIES)\s+([A-Z])\b")
+_JOINED_CLASS = re.compile(r"\bCL([A-Z])\s*$")
 
 
 def descriptions_class_letter(descriptions: Iterable[str]) -> str | None:
     """The one class letter a CUSIP's fails-to-deliver descriptions name, by "CL", "CLASS", "SER" or "SERIES" and a
-    space ("SUNPOWER CORP CL A", "LIBERTY INTERACTIVE CORP SER A"); None when they name none, or more than one ("X
-    CORP CLASS A" beside "X CORP CL B")."""
-    letters = {m.group(1) for d in descriptions for m in _DESCRIPTIONS_CLASS.finditer((d or "").upper())}
+    space ("SUNPOWER CORP CL A", "LIBERTY INTERACTIVE CORP SER A"), or by a "CL" joined to one letter that ends the
+    description ("WASHINGTON POST CO CLB": a word that ends a description only, never "CLB HOLDINGS" or "CLUB");
+    None when they name none, or more than one ("X CORP CLASS A" beside "X CORP CL B")."""
+    letters = set()
+    for d in descriptions:
+        d = (d or "").upper()
+        letters |= {m.group(1) for m in _DESCRIPTIONS_CLASS.finditer(d)}
+        if m := _JOINED_CLASS.search(d):
+            letters.add(m.group(1))
     return letters.pop() if len(letters) == 1 else None
+
+
+def fits_class(own: str | None, other: str | None, *, described: str | None,
+               issuer_letters: Collection[str]) -> bool:
+    """Whether a security of share class `own` is the line of `other`, a class of the same issuer: the same class; or
+    `own` is COMMON, which states no class (a name that says none, WPO's "WASHINGTON POST CO", is unknown, not a class
+    of its own: `name_class_letter`), and `other` is one lettered class X, with X the only letter the evidence names:
+    the letter its own CUSIPs' fails descriptions name (`described`, `descriptions_class_letter`) together with the
+    letters the issuer's eras and securities in the run state (`issuer_letters`). An issuer of two letters keeps them
+    apart (Liberty's tracking stocks), and a letter the descriptions name that the issuer's lines do not is no match.
+    The one rule of `line_follow.decide` and of the identity stage's CUSIP handoffs."""
+    if own == other:
+        return True
+    x = class_letter(other)
+    if own != "COMMON" or x is None:
+        return False
+    return {*issuer_letters, *([described] if described else [])} == {x}
 
 
 _ANSWER_CLASS = re.compile(r"(?i)\s*(?:(?:class|series)\s+)?([A-Z0-9])(?:\s+(?:common|ordinary)\b.*)?\s*")

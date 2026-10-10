@@ -15,7 +15,7 @@ from delist_detection.sources.ftd import FtdIndex, FtdRow
 from delist_detection.identity.identity import Identity
 from delist_detection.identity.issuer_record import IssuerRecord
 from delist_detection.identity.line_follow import MAX_ROUNDS, MAX_TEXTS, follow_lines
-from delist_detection.identity.observations import TickerEra
+from delist_detection.identity.observations import Observation, TickerEra
 from delist_detection.sources.openfigi import OpenFigiUnavailable
 from delist_detection.pipeline import Clients
 from delist_detection.outputs.review_triage import ReviewItem
@@ -65,12 +65,13 @@ class _Spec:
     candidate: FigiCandidate | None = None
     first: str = "2008-01-01"
     last: str = "2009-01-01"
+    name: str = ""            # the name its era was observed under (blank: none, so no class letter)
 
 
 def _identity(specs, rows):
     eras, res, issuers, cusips = {}, {}, {}, {}
     for sp in specs:
-        era = TickerEra(sp.ticker, sp.first, sp.last)
+        era = TickerEra(sp.ticker, sp.first, sp.last, [Observation(sp.ticker, sp.first, sp.name)] if sp.name else [])
         source = sp.source or ("placeholder" if sp.sec_id.startswith("CIK") else "cusip")
         eras[era.key] = era
         res[era.key] = EraResolution(era.key, sp.sec_id, source, sp.candidate, (), tuple(sp.cusips))
@@ -463,3 +464,61 @@ def test_the_run_log_names_each_refused_step_with_its_security_cusips_day_and_re
     first = _firsts(rows)["C9"]
     assert [m for m in logged if m.startswith("line follow refused:")] == [
         f"line follow refused: BBGB B1 -> C9 under AA from {first} (taken)"]
+
+
+# --- FB-003: a placeholder's new CUSIP held by a security of its own issuer ---------------------------------------------
+
+def _held(holder_kw=None, holder_cik=1, placeholder="CIK1-COMMON", others=(), figi_for="BBGH", described=None):
+    """A placeholder AA (CUSIP A1) whose next CUSIP C9 another security of the run, BBGH (ticker HH, issuer
+    `holder_cik`), holds; `others` are further securities of the run."""
+    kw = {"name": "REVERSE SPLIT CO CLASS B", **(holder_kw or {})}
+    specs = [_Spec(placeholder, 1, "AA", ["A1"]), _Spec("BBGH", holder_cik, "HH", ["C9"], **kw), *others]
+    desc = described or NAME
+    rows = _line("AA", ["A1", "C9"], desc=desc)
+    return _follow(specs, rows, figi=_Figi({"C9": _answer(figi_for)}))
+
+
+def test_a_placeholder_folds_into_the_line_of_its_issuer_that_holds_its_next_cusip():
+    """IAC 2008 and WPO 2013: the placeholder's old CUSIP ended as a FIGI line of the same issuer began on the new
+    one, which that line holds; the "another security holds it" guard is for another issuer's line (WLL, LMCA, MSG)."""
+    lines = _held({"name": ""})
+    assert lines.renames == {"CIK1-COMMON": "BBGH"} and set(lines.securities) == {"BBGH"}
+    assert set(lines.cusips["BBGH"]) == {"A1", "C9"}
+    assert [(r.flag, r.reason.rsplit(": ", 1)[1]) for r in lines.review] == [("line_followed", "folded into BBGH")]
+
+
+def test_a_plain_placeholder_folds_into_the_lettered_line_its_cusips_descriptions_name():
+    """WPO 2013 through the stage: COMMON placeholder, the holder's class B, the old CUSIP's descriptions say CLB."""
+    lines = _held(described=NAME + " CLB", holder_kw={"name": NAME + " CLASS B"})
+    assert lines.renames == {"CIK1-COMMON": "BBGH"}
+
+
+def test_a_plain_placeholder_does_not_fold_when_its_issuer_has_lines_of_two_letters():
+    others = [_Spec("BBGOTHER", 1, "OO", ["O1"], name="REVERSE SPLIT CO CLASS A")]
+    lines = _held(described=NAME + " CLB", holder_kw={"name": NAME + " CLASS B"}, others=others)
+    assert lines.renames == {} and set(lines.securities) >= {"CIK1-COMMON", "BBGH"}
+    assert [f for _, f in _flags(lines)] == []
+
+
+def test_a_figi_line_never_steps_to_a_cusip_another_security_of_its_issuer_holds():
+    """WLL 2017 must not change: only a placeholder is the same line as the holder (a fold); two FIGI lines are
+    two securities of the run, and their link is stage 9's."""
+    lines = _follow([_Spec("BBGA", 1, "AA", ["A1"]), _Spec("BBGH", 1, "HH", ["C9"])], _line("AA", ["A1", "C9"]),
+                    figi=_Figi({"C9": _answer("BBGH")}))
+    assert lines.renames == {} and lines.successors == {} and _flags(lines) == []
+
+
+def test_a_placeholder_never_steps_to_a_cusip_another_issuers_security_holds():
+    """New LMCA 2013 and new MSG 2015 must not change."""
+    lines = _held(holder_cik=2)
+    assert lines.renames == {} and _flags(lines) == []
+
+
+def test_a_placeholder_does_not_fold_into_a_line_that_trades_on_under_another_cusip():
+    """The holder has another CUSIP still failing past the new one's first row: a second live line of the issuer,
+    not the placeholder's next CUSIP."""
+    specs = [_Spec("CIK1-COMMON", 1, "AA", ["A1"]), _Spec("BBGH", 1, "HH", ["H0", "C9"])]
+    rows = _line("AA", ["A1", "C9"]) + [FtdRow(_monday(2 * WEEKS + 3 + i), "H0", "HH", NAME, 20.0 + i)
+                                         for i in range(5)]
+    lines = _follow(specs, rows, figi=_Figi({"C9": _answer("BBGH")}))
+    assert lines.renames == {} and _flags(lines) == []
