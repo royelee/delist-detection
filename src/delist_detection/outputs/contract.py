@@ -26,7 +26,7 @@ from ..vocabulary.exit_kind import ending_fields, last_endings, published
 from ..vocabulary.identifiers import is_placeholder
 from .payout_rule import basket_legs, value_fields
 from .run_snapshot import RunSnapshot
-from .store import RENAME, DelistingKey
+from .store import RENAME, SPLIT, DelistingKey
 from .verdict import Verdicts, seed_key
 
 ECHOED = ("ticker", "as_of", "name", "cusip", "pin_cik", "pin_sec_id", "sec_id")
@@ -139,8 +139,43 @@ def baseline_of_history(history: Sequence[Mapping[str, str]]) -> list[dict[str, 
     return out
 
 
+SPLIT_MIN_DAYS = 90         # another id must hold at least this many days of a baseline id's ranges ...
+SPLIT_MIN_SHARE = 0.10      # ... and at least this share of all the days the baseline id held
+
+
+def _span(start: str, end: str, as_of: date) -> tuple[date, date]:
+    return date.fromisoformat(start), date.fromisoformat(end) if end else as_of
+
+
+def split_holders(baseline_history: Sequence[Mapping[str, str]], history: Sequence[Mapping[str, str]],
+                  as_of: date) -> dict[str, list[str]]:
+    """FB-005, FB-001 (CHK): the baseline ids whose days this run holds under other ids. `baseline_history` is the
+    baseline run's contract/security_history.csv rows and `history` this run's. For each baseline sec_id B, the ids
+    other than B that hold days of B's baseline ranges *under the same ticker*: an id counts when it holds at least
+    `SPLIT_MIN_DAYS` days of them and at least `SPLIT_MIN_SHARE` of the days B held (a ticker handed over at a
+    range's edge, or a few days a range's start moved, hold less: Hertz, Herc). Returns B -> those ids, sorted;
+    the caller decides which are splits (`id_change_rows`). An open range runs to `as_of`."""
+    now: dict[str, list[tuple[str, date, date, str]]] = defaultdict(list)
+    for r in history:
+        lo, hi = _span(r["start_date"], r["end_date"], as_of)
+        now[r["ticker"]].append((r["sec_id"], lo, hi, r["ticker"]))
+    held: dict[str, int] = defaultdict(int)
+    taken: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
+    for r in baseline_history:
+        lo, hi = _span(r["start_date"], r["end_date"], as_of)
+        held[r["sec_id"]] += (hi - lo).days + 1
+        for sid, a, b, _ in now.get(r["ticker"], ()):
+            days = (min(hi, b) - max(lo, a)).days + 1
+            if sid != r["sec_id"] and days > 0:
+                taken[r["sec_id"]][sid] += days
+    return {b: sorted(sid for sid, d in got.items() if d >= SPLIT_MIN_DAYS and d >= SPLIT_MIN_SHARE * held[b])
+            for b, got in sorted(taken.items())}
+
+
 def id_change_rows(baseline: Sequence[Mapping[str, str]], securities: Sequence[Mapping[str, str]],
-                   changed_on: str, renames: Mapping[str, str] = {}) -> list[dict[str, str]]:
+                   changed_on: str, renames: Mapping[str, str] = {}, *,
+                   baseline_history: Sequence[Mapping[str, str]] = (),
+                   history: Sequence[Mapping[str, str]] = ()) -> list[dict[str, str]]:
     """contract/id_changes.csv (decision 7): each placeholder of the baseline run
     (its securities.csv rows) that this run no longer has and that a line
     follow folded into a FIGI security of this run (`renames`: old sec_id -> new,
@@ -148,20 +183,37 @@ def id_change_rows(baseline: Sequence[Mapping[str, str]], securities: Sequence[M
     and class exactly one FIGI security of this run holds; and each baseline FIGI this run no longer holds that
     `renames` maps to a FIGI of this run (sub-plan 5h, rule F: the ticker tier's composite was the line that took
     the ticker over later, BTU BBG00GBV88T6 to BBG000FW00S1, CRC BBG00Y04KP80 to BBG0060B3M63), so a panel keyed
-    on the old FIGI can follow it. Not cumulative: git keeps the earlier files."""
+    on the old FIGI can follow it. Not cumulative: git keeps the earlier files.
+
+    Split rows (`kind` `store.SPLIT`, FB-005 and FB-001; `split_holders` has the threshold): a baseline id B whose
+    ranges, under the same ticker, this run holds under other ids (`baseline_history`, the baseline's
+    security_history.csv, and `history`, this run's) gets one row per such id, B repeated in `old_sec_id`, when B is
+    gone and two or more ids hold them (Liberty's placeholder), or when B is still here and another id holds a part
+    (Chesapeake's old eras, now a placeholder). A B that one other id took over alone is a rename, as before, and a
+    B with split rows gets no rename row. With no `baseline_history` there are no split rows. A split row's
+    `issuer_cik` and `share_class` are the new id's."""
     now = {s["sec_id"] for s in securities}
     figis: dict[tuple[str, str], set[str]] = defaultdict(set)
     for s in securities:
         if s["figi_source"] != "placeholder" and s["issuer_cik"]:
             figis[(s["issuer_cik"], s["share_class"])].add(s["sec_id"])
+    splits = {b: ids for b, ids in (split_holders(baseline_history, history, date.fromisoformat(changed_on))
+                                    if baseline_history else {}).items() if ids and (b in now or len(ids) >= 2)}
     rows = []
     for b in baseline:
         renamed = renames.get(b["sec_id"]) in now
-        if b["sec_id"] in now or (b["figi_source"] != "placeholder" and not renamed):
+        if b["sec_id"] in splits or b["sec_id"] in now or (b["figi_source"] != "placeholder" and not renamed):
             continue
         found = {renames[b["sec_id"]]} if renames.get(b["sec_id"]) in now else \
             figis.get((b["issuer_cik"], b["share_class"]), set())
         if len(found) == 1:
             rows.append({"old_sec_id": b["sec_id"], "new_sec_id": next(iter(found)), "changed_on": changed_on,
                          "issuer_cik": b["issuer_cik"], "share_class": b["share_class"], "kind": RENAME})
+    by_id = {s["sec_id"]: s for s in securities}
+    for b, ids in splits.items():
+        for new in ids:
+            if new in by_id:
+                rows.append({"old_sec_id": b, "new_sec_id": new, "changed_on": changed_on,
+                             "issuer_cik": by_id[new]["issuer_cik"], "share_class": by_id[new]["share_class"],
+                             "kind": SPLIT})
     return rows

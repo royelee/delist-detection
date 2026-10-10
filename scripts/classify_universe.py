@@ -250,6 +250,26 @@ def read_id_baseline(args: argparse.Namespace) -> list[dict[str, str]]:
             raise OverrideFileError(f"{exc} (nor table 'security_history')") from None
 
 
+def read_id_baseline_history(args: argparse.Namespace) -> list[dict[str, str]]:
+    """The baseline run's contract/security_history.csv rows, which contract/id_changes.csv's split rows compare this
+    run's ranges with (FB-005): --id-baseline's own file when it is a security_history.csv, the contract/ folder
+    beside it when it is a securities.csv, else the output folder's own; none when no such file exists (no split
+    rows). A file that does not read as security_history.csv is no baseline history (read_id_baseline has already
+    refused a baseline that is neither table)."""
+    if args.id_baseline:
+        path = Path(args.id_baseline)
+        candidates = [path, path.parent / "contract" / table_path(".", "security_history").name]
+    else:
+        candidates = [table_path(args.output_dir, "security_history")]
+    for c in candidates:
+        if c.exists():
+            try:
+                return read_table("security_history", c)
+            except ValueError:
+                continue
+    return []
+
+
 def main() -> int:
     p = build_parser()
     args = p.parse_args()
@@ -264,6 +284,7 @@ def main() -> int:
     try:
         overrides, review_decisions, index, scorecard = read_inputs(args)
         id_baseline = read_id_baseline(args)
+        id_baseline_history = read_id_baseline_history(args)
     except BAD_INPUT as exc:
         return bad_input(exc)
     except OSError as exc:                 # a missing or unreadable input file
@@ -277,7 +298,8 @@ def main() -> int:
     log = (lambda *a: None) if args.quiet else None
     summary = run(index, clients, overrides, out_dir=Path(args.output_dir), tol=args.merger_terms_sanity_tol,
                   limit=args.limit, sec_workers=args.sec_workers, review_decisions=review_decisions,
-                  scorecard=scorecard, id_baseline=id_baseline, **({"log": log} if log else {}))
+                  scorecard=scorecard, id_baseline=id_baseline,
+                  id_baseline_history=id_baseline_history, **({"log": log} if log else {}))
     print("Rows written:", summary.counts)
     print("Delistings by bucket:", summary.buckets)
     print("FIGI sources:", summary.figi_sources)

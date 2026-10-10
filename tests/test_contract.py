@@ -164,3 +164,76 @@ def test_id_changes_name_the_figi_a_rule_f_line_moved_a_baseline_figi_to():
     assert id_change_rows(baseline, now, "2026-10-04", renames) == [
         {"old_sec_id": "BBG00GBV88T6", "new_sec_id": "BBG000FW00S1", "changed_on": "2026-10-04",
          "issuer_cik": "1064728", "share_class": "COMMON", "kind": "rename"}]
+
+
+# --- split rows (FB-005, FB-001's CHK): a baseline id whose days this run holds under other ids -----------------------
+
+
+def _h(sec_id, ticker, start, end=""):
+    return {"sec_id": sec_id, "issuer_id": "1", "start_date": start, "end_date": end, "ticker": ticker,
+            "security_name": sec_id, "share_class": "COMMON"}
+
+
+def _splits(baseline_rows, baseline_history, now_rows, history, renames={}):
+    rows = id_change_rows(baseline_rows, now_rows, "2026-10-10", renames, baseline_history=baseline_history,
+                          history=history)
+    return [(r["old_sec_id"], r["new_sec_id"], r["kind"]) for r in rows]
+
+
+LIBERTY_BASE = [_h("CIK1-COMMON", "LINTA", "2008-01-02", "2014-12-31"), _h("CIK1-COMMON", "QVCA", "2015-01-02", "2018-04-10"),
+                _h("CIK1-COMMON", "LCAPA", "2008-01-02", "2014-12-31")]
+LIBERTY_NOW = [_h("CIK1-COMMON-AAA", "LINTA", "2008-01-02", "2014-12-31"),
+               _h("CIK1-COMMON-AAA", "QVCA", "2015-01-02", "2018-04-10"),
+               _h("CIK1-COMMON-BBB", "LCAPA", "2008-01-02", "2014-12-31")]
+
+
+def test_a_gone_baseline_id_held_by_two_ids_is_split_into_both():
+    """Liberty: CIK1355096-COMMON's days are now two placeholders'. One row per new id, the old id repeated."""
+    baseline = [_sec_row("CIK1-COMMON", "1", "placeholder")]
+    now = [_sec_row("CIK1-COMMON-AAA", "1", "placeholder"), _sec_row("CIK1-COMMON-BBB", "1", "placeholder")]
+    rows = id_change_rows(baseline, now, "2026-10-10", baseline_history=LIBERTY_BASE, history=LIBERTY_NOW)
+    assert rows == [
+        {"old_sec_id": "CIK1-COMMON", "new_sec_id": "CIK1-COMMON-AAA", "changed_on": "2026-10-10", "issuer_cik": "1",
+         "share_class": "COMMON", "kind": "split"},
+        {"old_sec_id": "CIK1-COMMON", "new_sec_id": "CIK1-COMMON-BBB", "changed_on": "2026-10-10", "issuer_cik": "1",
+         "share_class": "COMMON", "kind": "split"}]
+
+
+def test_a_kept_baseline_id_whose_part_another_id_holds_is_split():
+    """CHK: BBG00Z6DX554 kept its 2020-2024 part; the 2007-2020 part is now the placeholder's."""
+    base = [_h("BBGCHK", "CHK", "2007-12-17", "2024-10-02")]
+    now_h = [_h("CIK9-COMMON", "CHK", "2007-12-17", "2020-06-26"), _h("BBGCHK", "CHK", "2020-06-27", "2024-10-02")]
+    rows = [_sec_row("BBGCHK", "9", "cusip"), _sec_row("CIK9-COMMON", "9", "placeholder")]
+    assert _splits([_sec_row("BBGCHK", "9", "cusip")], base, rows, now_h) == [("BBGCHK", "CIK9-COMMON", "split")]
+
+
+def test_a_baseline_id_one_other_id_fully_took_over_is_a_rename_not_a_split():
+    baseline = [_sec_row("CIK1-COMMON", "1", "placeholder")]
+    now = [_sec_row("BBGNEW", "1", "cusip")]
+    base_h = [_h("CIK1-COMMON", "AAA", "2008-01-02", "2014-12-31")]
+    now_h = [_h("BBGNEW", "AAA", "2008-01-02", "2014-12-31")]
+    assert _splits(baseline, base_h, now, now_h) == [("CIK1-COMMON", "BBGNEW", "rename")]
+
+
+def test_a_split_baseline_id_gets_no_rename_row_too():
+    baseline = [_sec_row("CIK1-COMMON", "1", "placeholder")]
+    now = [_sec_row("CIK1-COMMON-AAA", "1", "placeholder"), _sec_row("CIK1-COMMON-BBB", "1", "placeholder"),
+           _sec_row("BBGFIGI", "1", "cusip")]
+    out = _splits(baseline, LIBERTY_BASE, now, LIBERTY_NOW, {"CIK1-COMMON": "BBGFIGI"})
+    assert out == [("CIK1-COMMON", "CIK1-COMMON-AAA", "split"), ("CIK1-COMMON", "CIK1-COMMON-BBB", "split")]
+
+
+def test_a_ticker_handed_over_at_a_range_edge_is_no_split():
+    """Another id holds ten of B's days under the ticker (a range's edge moved): below the threshold."""
+    base = [_h("BBGKEEP", "AAA", "2010-01-04", "2018-12-31")]
+    now_h = [_h("BBGKEEP", "AAA", "2010-01-04", "2018-12-20"), _h("BBGNEXT", "AAA", "2018-12-21", "2019-12-31")]
+    rows = [_sec_row("BBGKEEP", "1", "cusip"), _sec_row("BBGNEXT", "2", "cusip")]
+    assert _splits([_sec_row("BBGKEEP", "1", "cusip")], base, rows, now_h) == []
+
+
+def test_another_ticker_or_no_baseline_history_gives_no_split():
+    baseline = [_sec_row("CIK1-COMMON", "1", "placeholder")]
+    now = [_sec_row("CIK1-COMMON-AAA", "1", "placeholder"), _sec_row("CIK1-COMMON-BBB", "1", "placeholder")]
+    assert _splits(baseline, [], now, LIBERTY_NOW) == []
+    elsewhere = [_h("CIK1-COMMON-AAA", "ZZZ", "2008-01-02", "2018-04-10"), _h("CIK1-COMMON-BBB", "YYY", "2008-01-02", "2018-04-10")]
+    assert _splits(baseline, LIBERTY_BASE, now, elsewhere) == []

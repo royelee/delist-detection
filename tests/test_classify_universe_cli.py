@@ -187,6 +187,23 @@ def test_a_previous_runs_security_history_is_an_id_baseline(tmp_path):
     assert cli.read_id_baseline(no_flag) == expected
 
 
+def test_the_baseline_history_is_the_contract_file_beside_the_baseline(tmp_path):
+    """FB-005: the split rows compare ranges: --id-baseline's own security_history.csv, the contract/ folder beside a
+    securities.csv, else the output folder's; none when there is no such file."""
+    import argparse
+    out = tmp_path / "out"
+    (out / "contract").mkdir(parents=True)
+    (out / "securities.csv").write_text("sec_id,issuer_cik,share_class,name,security_type,observed,figi_source\n")
+    none = argparse.Namespace(id_baseline=str(out / "securities.csv"), output_dir=str(tmp_path / "elsewhere"))
+    assert cli.read_id_baseline_history(none) == []
+    (out / "contract" / "security_history.csv").write_text(_HISTORY)
+    assert [r["sec_id"] for r in cli.read_id_baseline_history(none)] == ["CIK100-COMMON"]
+    own = argparse.Namespace(id_baseline=None, output_dir=str(out))
+    assert [r["sec_id"] for r in cli.read_id_baseline_history(own)] == ["CIK100-COMMON"]
+    direct = argparse.Namespace(id_baseline=str(out / "contract" / "security_history.csv"), output_dir=str(tmp_path))
+    assert [r["sec_id"] for r in cli.read_id_baseline_history(direct)] == ["CIK100-COMMON"]
+
+
 @pytest.mark.parametrize("flag,text,where", [
     ("--merger-terms", "sec_id,cash_per_share\nBBG1,1O.5\n", "line 2: cash_per_share '1O.5' is not a number"),
     ("--merger-terms", "sec_id,stock_ratio,acquirer_price\nBBG1,0.5,\n", "line 2: "),

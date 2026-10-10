@@ -1292,6 +1292,26 @@ def test_id_changes_compare_the_run_with_a_baseline(fake_edgar, tmp_path):
     assert [(r["old_sec_id"], r["new_sec_id"]) for r in rows] == [("CIK1122304-COMMON", "BBG000FJLFX8")]
 
 
+def test_id_changes_split_a_kept_baseline_id_whose_days_another_id_now_holds(fake_edgar, tmp_path):
+    """FB-005: the baseline's security_history.csv (`id_baseline_history`) gave AETNA's FIGI the ticker LIVE for 2025-26;
+    this run holds those days under BBG000LIVE01, so the FIGI the run still has is split, and the log says so when no
+    baseline history is given."""
+    index, clients = _clients(fake_edgar)
+    securities = [{"sec_id": "BBG000FJLFX8", "issuer_cik": "1122304", "share_class": "COMMON", "name": "AETNA INC",
+                   "security_type": "", "observed": "true", "figi_source": "cusip"}]
+    base = [{"sec_id": "BBG000FJLFX8", "issuer_id": "1122304", "start_date": "2025-06-30", "end_date": "2026-06-30",
+             "ticker": "LIVE", "security_name": "AETNA INC", "share_class": "COMMON"}]
+    run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None, id_baseline=securities,
+        id_baseline_history=base)
+    rows = read_table("id_changes", table_path(tmp_path, "id_changes"))
+    assert [(r["old_sec_id"], r["new_sec_id"], r["kind"], r["issuer_cik"]) for r in rows] == [
+        ("BBG000FJLFX8", "BBG000LIVE01", "split", "777")]
+    logged = []
+    run(index, clients, Overrides(), out_dir=tmp_path / "b", log=logged.append, id_baseline=securities)
+    assert read_table("id_changes", table_path(tmp_path / "b", "id_changes")) == []
+    assert any("no split rows" in line for line in logged)
+
+
 def test_review_decisions_accept_a_flag_and_are_counted_in_the_manifest(fake_edgar, tmp_path):
     """A decision matching the run's own `ticker_unconfirmed` row on LIVE (its
     only token) clears it from review.csv and is counted `accepted` in both

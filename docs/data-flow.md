@@ -888,7 +888,7 @@ Seven CSVs written to `output/`, all committed artifacts; see `outputs/store.py`
 the exact schema. `delistings.csv` is the primary deliverable. The run also
 writes the contract under `output/contract/` (stage 10g): `security_history.csv`,
 `delistings.csv` (one row per ended security), `seeds.csv`, `price_requests.csv`,
-`id_changes.csv` (with a `kind`, `rename`; `split` is reserved) and `payout_legs.csv`, beside the seven tables for one
+`id_changes.csv` (with a `kind`, `rename` or `split`: `outputs/contract.split_holders`) and `payout_legs.csv`, beside the seven tables for one
 release. `price_requests.csv` ends with `lookup_name` (contract schema 4, FB-008).
 
 `output/disputes.csv` (FB-011, stage 10h, `measurement/disputes.py`) is written with the tables in the same group, on

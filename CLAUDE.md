@@ -494,7 +494,14 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   echo), `id_change_rows` (baseline placeholders that now hold a FIGI; stage 4b's folds by name, `renames`; and a baseline
   FIGI the run no longer holds that `renames` maps to a FIGI of this run, rule F: BTU, CRC; `regression.renamed_to`
   and `truth_set.TruthSet.rename` read every row alike, placeholder or not), `payout_leg_rows` (schema 3, R3: each
-  security of a basket ending per share, `contract/payout_legs.csv`). `run_manifest.json` carries
+  security of a basket ending per share, `contract/payout_legs.csv`). `id_change_rows` also writes split rows
+  (`store.SPLIT`, FB-005, FB-001's CHK; `split_holders`): with the baseline's `contract/security_history.csv`
+  (`baseline_history=`, found beside a `--id-baseline` securities.csv or in the output folder by
+  `classify_universe.read_id_baseline_history`; none found, none written, logged) and this run's, a baseline id whose
+  ranges this run holds, under the same ticker, under other ids that each hold at least `SPLIT_MIN_DAYS` (90) days and
+  `SPLIT_MIN_SHARE` (10%) of the days it held is split when it is gone and two or more ids hold them or when it is
+  still here and another holds a part, one row per other id (that id's issuer and class); an id one other id
+  fully took over stays a rename, and a split id gets no rename row. `run_manifest.json` carries
   `schema_version` (`store.CONTRACT_SCHEMA_VERSION`, 4: price_requests.csv gains `lookup_name`, FB-008, and id_changes.csv a
   `kind`, `store.RENAME` or `SPLIT`; readers follow only renames, `regression.follows`, a row with no kind cell is one, and
   `run_snapshot` reads an older file's missing last column filled). It loads no client (its value inputs are dlret's

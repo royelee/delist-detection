@@ -212,10 +212,12 @@ def run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_
         tol: float = DEFAULT_TOL, limit: int | None = None, log: Callable = _stderr,
         sec_workers: int = 1, review_decisions: Sequence[Decision] = (),
         scorecard: run_scorecard.ScorecardConfig = run_scorecard.ScorecardConfig(),
-        id_baseline: Sequence[Mapping[str, str]] = ()) -> RunSummary:
+        id_baseline: Sequence[Mapping[str, str]] = (),
+        id_baseline_history: Sequence[Mapping[str, str]] = ()) -> RunSummary:
     """Observations -> the seven tables under `out_dir` and the contract under
     `out_dir`/contract/ (contract.py; `id_baseline`: the securities.csv rows
-    id_changes.csv compares with) (spec §8), then
+    id_changes.csv compares with, `id_baseline_history` the baseline's security_history.csv rows, for its split
+    rows: none, none written) (spec §8), then
     scorecard.json (`scorecard.build` over those tables, `scorecard`'s window,
     floor and truth cases; floor drops are not checked under `limit`): `review_decisions`
     (`review_triage.load_decisions`: "I checked this flag on this row, it is
@@ -249,7 +251,7 @@ def run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_
     try:
         summary = _run(index, clients, overrides, out_dir=out_dir, tol=tol, limit=limit, log=log,
                        sec_workers=sec_workers, review_decisions=review_decisions, scorecard=scorecard,
-                       id_baseline=id_baseline)
+                       id_baseline=id_baseline, id_baseline_history=id_baseline_history)
     except BaseException:
         try:
             _flush_memo(clients)
@@ -1417,6 +1419,7 @@ def _issuers_in_force(ctx: _RunContext, observation_map: Sequence[Mapping[str, s
 
 def _contract(ctx: _RunContext, read: RunSnapshot, verdicts: Verdicts, values: MergerValues, successor_ids: set[str],
               answers: PriceAnswers, id_baseline: Sequence[Mapping[str, str]],
+              baseline_history: Sequence[Mapping[str, str]] = (),
               renames: Mapping[str, str] = {}, in_force: Mapping[str, list[tuple[str, str]]] | None = None,
               distress: Mapping[DelistingKey, DistressTerms] | None = None) -> dict[str, list[dict]]:
     """10g. The contract (contract.py), written under contract/ beside today's
@@ -1428,7 +1431,8 @@ def _contract(ctx: _RunContext, read: RunSnapshot, verdicts: Verdicts, values: M
     merger's stock leg as stage 8 asked it, a plan's new line, a basket's further
     legs; an answer to no request stops the run); and the placeholders of `id_baseline`
     (a securities.csv) that now hold a FIGI (`renames`: stage 4b's folds, by name,
-    whatever other FIGI lines the issuer has)."""
+    whatever other FIGI lines the issuer has), and the baseline ids this run holds under several ids (split rows,
+    from `baseline_history`, the baseline's security_history.csv; none given, none written, logged)."""
     issuers = in_force if in_force is not None else _issuers_in_force(ctx, read.observation_map)
     endings = last_endings(read.delistings)
     inputs = values.contract_inputs(list(endings.values()))
@@ -1438,12 +1442,16 @@ def _contract(ctx: _RunContext, read: RunSnapshot, verdicts: Verdicts, values: M
                             leg_rows=basket_rows, names={s["sec_id"]: s["name"] for s in read.securities},
                             leg_issuers=values.leg_issuers(list(endings.values())))
     answers.refuse_unrequested(requests)
+    history = security_history_rows(read, issuers, leave_out=set(values.added) - successor_ids)
+    if id_baseline and not baseline_history:
+        ctx.log("id_changes: no baseline security_history.csv found; no split rows")
     return {
-        "security_history": security_history_rows(read, issuers, leave_out=set(values.added) - successor_ids),
+        "security_history": history,
         "contract_delistings": ended,
         "seeds": seed_rows(read, verdicts),
         "price_requests": requests,
-        "id_changes": id_change_rows(id_baseline, read.securities, ctx.as_of.isoformat(), renames),
+        "id_changes": id_change_rows(id_baseline, read.securities, ctx.as_of.isoformat(), renames,
+                                    baseline_history=baseline_history, history=history),
         "payout_legs": basket_rows,
     }
 
@@ -1465,7 +1473,8 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
          limit: int | None, log: Callable, sec_workers: int,
          review_decisions: Sequence[Decision] = (),
          scorecard: run_scorecard.ScorecardConfig = run_scorecard.ScorecardConfig(),
-         id_baseline: Sequence[Mapping[str, str]] = ()) -> RunSummary:
+         id_baseline: Sequence[Mapping[str, str]] = (),
+         id_baseline_history: Sequence[Mapping[str, str]] = ()) -> RunSummary:
     """The run's stages in order (each function's docstring says what it does);
     `run` wraps it with the resolver memo's final flush."""
     ctx = _RunContext(clients, clients.as_of or date.today(), log, sec_workers, run_manifest.StageMeter(log))
@@ -1552,7 +1561,7 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
     # an acquirer the run added that R1 made a merger row's successor is in the contract's history (Sinclair Inc)
     successor_ids = set(successors.added) | set(r1.added) | {sid for sid, _ in r1.links.values()}
     tables.update(_contract(ctx, snapshot(tables), verdicts, values, successor_ids, prices,
-                            id_baseline, {**identity.renames(resolutions), **lines.renames},
+                            id_baseline, id_baseline_history, {**identity.renames(resolutions), **lines.renames},
                             in_force, distress=distress))                                           # 10g
     card = _scorecard(ctx, snapshot(tables), scorecard, limit)                                    # 10h
     # what the truth files dispute, written with the tables in their one group (a header-only file with none, on every

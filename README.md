@@ -274,9 +274,12 @@ class say so or a line follow folded the placeholder into it by name; it also
 lists a baseline FIGI this run no longer holds that maps to a FIGI of this run
 (the ticker tier's composite was the line that took the ticker over later: BTU,
 CRC), so a panel keyed on the old FIGI can follow it. It is not cumulative, git
-keeps earlier versions. Every `id_changes.csv` row has a `kind`: `rename` (all that a run writes today); `split`
-(one old placeholder into several new ids, each its own row with the same `old_sec_id`) is reserved, and a reader
-follows only `rename` rows. `run_manifest.json` carries `schema_version`
+keeps earlier versions. Every `id_changes.csv` row has a `kind`: `rename`, or `split` (FB-005: a baseline id whose
+days, under the same ticker, this run holds under other ids, each its own row with the same `old_sec_id`: Liberty
+Interactive's placeholder into its lines, or Chesapeake's `BBG00Z6DX554`, kept, with its 2007-2020 part now on a
+placeholder; an id needs at least 90 days and 10% of the baseline id's days to count, and the baseline's
+`contract/security_history.csv`, beside a `securities.csv` baseline, must be found, else no split rows are
+written); a reader follows only `rename` rows. `run_manifest.json` carries `schema_version`
 (`store.CONTRACT_SCHEMA_VERSION`, now 4: `delistings.csv` gained the payout-rule
 columns in 2, `payout_legs.csv` came in 3, and in 4 `price_requests.csv` gained `lookup_name` and
 `id_changes.csv` gained `kind`).
