@@ -4,7 +4,6 @@ cache rule all use the date they were given, not the clock."""
 import json
 from datetime import date
 
-import requests
 
 from delist_detection.endings.classifier import DelistClassifier
 from delist_detection.sources.edgar import FETCHED_KEY, EdgarClient, submissions_fresh_after

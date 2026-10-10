@@ -3,8 +3,8 @@ from pathlib import Path
 
 from delist_detection.sources.edgar import EdgarSubmission
 from delist_detection.filings.form25 import (
-    Form25, SecurityRef, class_kind, class_label, exchange_label, exchanges_named,
-    list_form25, match_securities, match_security, notice_last_trade, parse_form25, tied_securities,
+    Form25, SecurityRef, class_kind, class_letters, exchange_label, exchanges_named,
+    list_form25, match_securities, notice_last_trade, parse_form25, tied_securities,
 )
 
 FIX = Path(__file__).parent / "fixtures" / "form25"
@@ -53,20 +53,20 @@ def test_notice_text_patterns_synthetic():
 def test_discovery_series_c():
     f = _load("discovery_series_c.txt", "0001354457-22-000231", "2022-04-08")
     assert f.exchange == "NASDAQ"
-    assert class_label(f.class_text) == "SERIES C"
+    assert class_letters(f.class_text) == {"C"}
     refs = [SecurityRef("BBG_A", "CLASS A", "common"), SecurityRef("BBG_B", "CLASS B", "common"),
             SecurityRef("BBG_C", "CLASS C", "common")]
-    assert match_security(f, refs) == ("BBG_C", "class C")
+    assert match_securities(f, refs) == (["BBG_C"], "class C")
 
 
 def test_match_rules():
     common = Form25("a", "25-NSE", "2018-11-29", "NYSE", "Common Stock", "", "")
     pref = Form25("b", "25-NSE", "2018-11-29", "NYSE", "6.375% Series A Preferred Stock", "", "")
     single = [SecurityRef("BBG1", "COMMON", "common")]
-    assert match_security(common, single) == ("BBG1", "only security of its kind")
-    assert match_security(pref, single) == (None, "no observed preferred security")
+    assert match_securities(common, single) == (["BBG1"], "only security of its kind")
+    assert match_securities(pref, single) == ([], "no observed preferred security")
     two = [SecurityRef("A", "CLASS A", "common"), SecurityRef("C", "CLASS C", "common")]
-    assert match_security(common, two) == (None, "ambiguous class")
+    assert match_securities(common, two) == ([], "ambiguous class")
 
 
 def test_class_kind():
@@ -122,18 +122,21 @@ def test_class_kind_warrants_named_after_common():
                       "Rights") == "common"
 
 
-def test_class_label_only_from_the_securitys_own_segment():
-    assert class_label("Common Stock, par value $0.01 per share, and associated Series A Junior "
-                       "Participating Preferred Stock Purchase Rights") is None
-    assert class_label("Series A Liberty SiriusXM Common Stock, par value $0.01") == "SERIES A"
-    assert class_label("Class B Common Stock") == "CLASS B"
-    assert class_label("Preferred Stock, Series C") == "SERIES C"
-    assert class_label("5.750% Cumulative Preferred Stock, Series F") == "SERIES F"
-    assert class_label("Depositary Shares, each representing a 1/1,000th interest in a share of "
-                       "5.750% Series F Preference Share") == "SERIES F"
-    assert class_label("6.375% Series A Preferred Stock") == "SERIES A"
-    assert class_label("Class A Common Stock and associated Series B Preferred Stock Purchase "
-                       "Rights") == "CLASS A"
+def test_class_letters_only_from_the_securitys_own_segment():
+    assert class_letters("Common Stock, par value $0.01 per share, and associated Series A Junior "
+                         "Participating Preferred Stock Purchase Rights") == set()
+    assert class_letters("Series A Liberty SiriusXM Common Stock, par value $0.01") == {"A"}
+    assert class_letters("Class B Common Stock") == {"B"}
+    assert class_letters("Preferred Stock, Series C") == {"C"}
+    assert class_letters("5.750% Cumulative Preferred Stock, Series F") == {"F"}
+    assert class_letters("Depositary Shares, each representing a 1/1,000th interest in a share of "
+                         "5.750% Series F Preference Share") == {"F"}
+    assert class_letters("6.375% Series A Preferred Stock") == {"A"}
+    assert class_letters("Class A Common Stock and associated Series B Preferred Stock Purchase "
+                         "Rights") == {"A"}
+    # a CLASS segment outranks SERIES ones; with none, every SERIES segment counts
+    assert class_letters("Class A Common Stock; Series B Common Stock") == {"A"}
+    assert class_letters("Series A Common Stock; Series B Common Stock") == {"A", "B"}
 
 
 def test_exchange_labels():
@@ -248,7 +251,6 @@ def test_same_letter_siblings_with_no_distinguishing_name_stay_ambiguous():
     refs = [SecurityRef("X1", "CLASS A", "common", "LIBERTY MEDIA CORP"),
             SecurityRef("X2", "CLASS A", "common", "LIBERTY MEDIA CORP")]
     assert match_securities(f, refs) == ([], "ambiguous class")
-    assert match_security(f, refs) == (None, "ambiguous class")
 
 
 def test_a_form25_naming_several_classes_matches_each_of_them():

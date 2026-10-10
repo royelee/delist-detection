@@ -74,7 +74,6 @@ ID_CHANGES_COLUMNS: tuple[str, ...] = ("old_sec_id", "new_sec_id", "changed_on",
 # ruling R3 (schema 3): each security of a basket per share (payout_rule.basket_legs)
 PAYOUT_LEGS_COLUMNS: tuple[str, ...] = ("sec_id", "leg", "ratio", "share_class", "price_sec_id", "price_ticker",
                                         "price_date")
-CONTRACT_TABLES = ("security_history", "contract_delistings", "seeds", "price_requests", "id_changes", "payout_legs")
 
 TABLES: dict[str, TableSpec] = {t.name: t for t in (
     TableSpec("securities",

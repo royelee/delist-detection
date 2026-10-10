@@ -308,7 +308,6 @@ def test_empty_text_skipped_does_not_count(tmp_path):
     assert llm.calls == 1
 
 
-from delist_detection.terms.llm_merger_extractor import LLMMergerTermsExtractor as _Ext
 
 
 def test_relevant_excerpts_windows_keywords(tmp_path):

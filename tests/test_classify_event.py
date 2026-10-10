@@ -189,3 +189,25 @@ def test_a_reorganization_a_security_trading_on_or_no_notice_keeps_the_continued
     sub = _continued_filer(fake_edgar, CASH_NOTICE)
     rec = clf.classify_event(ticker="NTY", cik=30004, anchor_date="2010-09-30", form25=sub, trading_after=True)
     assert (rec.crsp_code, rec.evidence["end_of_era"]) == (304, "trading")
+
+
+def test_classify_ticker_sends_every_ticker_to_the_resolver_whatever_its_name(fake_edgar):
+    """There is no asset-type or name-hint short-circuit in `classify_ticker`: a ticker whose name reads like an ETF,
+    a note or a warrant is looked up like any other, and a ticker with no CIK is `unknown`, not code 600."""
+    from types import SimpleNamespace
+    asked = []
+
+    class _NoCik:
+        issuers = None
+
+        def resolve(self, ticker, day):
+            asked.append((ticker, day))
+            return SimpleNamespace(cik=None, source="none")
+
+    clf = DelistClassifier(fake_edgar, _NoCik())
+    for ticker in ("XYZ", "ABC.WS", "SPY"):
+        rec = clf.classify_ticker(ticker, "2022-01-03")
+        assert rec.bucket is CrspBucket.UNKNOWN and rec.crsp_code is None and rec.cik is None
+        assert rec.reason.startswith("No CIK found for ticker")
+        assert rec.evidence == {"resolution_source": "none"}
+    assert asked == [("XYZ", "2022-01-03"), ("ABC.WS", "2022-01-03"), ("SPY", "2022-01-03")]

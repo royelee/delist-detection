@@ -29,14 +29,13 @@ class PayoutResult:
     value: float | None
     confidence: str            # 'high' | 'medium' | 'low' | 'none'
     source: str                # '8K_2.01' | '8K_1.01' | 'DEFM14A' | 'PRE14A' | 'none'
-    accession: str
     quote: str
     currency: str = ""         # the cash's currency as the filing writes it before "$" (ruling R5): "USD" for a bare
                                # "$", "CAD" for "C$"; "" with no value
 
     @classmethod
     def none(cls) -> "PayoutResult":
-        return cls(None, "none", "none", "", "")
+        return cls(None, "none", "none", "")
 
 
 _NONE = PayoutResult.none()
@@ -250,21 +249,6 @@ def _select(
     return tied[0], False            # a lone winner, or the consideration beside a small contingent leg (CVR cap)
 
 
-def _match_payout(
-    text: str, last_close: float | None = None, allow_weak: bool = True
-) -> tuple[float | None, str]:
-    """Return (modal sanity-passing value, ~120-char quote) or (None, '').
-
-    allow_weak gates the bare "$X per share" / "purchase price" / "merger
-    consideration of $X" patterns. Enable for clean merger-event 8-Ks; disable
-    for multi-page proxies, where those phrasings also cover dividends, DCF
-    valuation ranges, and mixed-consideration tables.
-    """
-    counts, mixed, quotes = _collect(text, last_close, allow_weak)
-    val, _mixed_deal = _select(counts, mixed)
-    return (val, quotes[val]) if val is not None else (None, "")
-
-
 class PayoutExtractor:
     def __init__(self, edgar) -> None:
         self.edgar = edgar
@@ -311,5 +295,5 @@ class PayoutExtractor:
                 if mixed_deal:
                     return _NONE
                 if val is not None:
-                    return PayoutResult(val, conf, source, f.accession, quotes[val][:160], currencies.get(val, ""))
+                    return PayoutResult(val, conf, source, quotes[val][:160], currencies.get(val, ""))
         return _NONE

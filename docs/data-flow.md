@@ -78,7 +78,7 @@ one observation per row per file).
               │  whole filing history)     │   class_text, rule); regional exchanges and
               │                            │   unreadable/unclassified filings skipped
               └─────────────┬──────────────┘
-                             │ match_security (class kind + letter) + secondary-
+                             │ match_securities (class kind + letter) + secondary-
                              │ listing check (10-K cover exchanges before/after)
                              ▼
               ┌────────────────────────────┐
@@ -669,7 +669,8 @@ candidate accepted, the security gets the placeholder `sec_id`
    (`form25_unclassified`) — flagged for review, not silently dropped.
 3. **Match** the remaining Form 25s to one of the issuer's observed
    securities by class kind (common/preferred/warrant/unit/…) and class
-   letter (`form25.match_security`); zero or several matches is
+   letter (`form25.match_securities`); an ambiguous class, or a tie with a
+   sibling no name word tells apart (`form25.tied_securities`), is
    `form25_unmatched`. A sibling security only competes for the match while
    it was alive on the filing date (`SecurityContext.spans`, from each sibling's trading record).
 4. **Secondary-listing check**: a matched Form 25 counts only when the

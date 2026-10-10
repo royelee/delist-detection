@@ -115,7 +115,7 @@ def test_the_regex_read_is_bounded_by_the_runs_own_close(workers):
     class Regex:
         def extract(self, record, last_close=None):
             asked.append(last_close)
-            return PayoutResult(None, "none", "", "", "")
+            return replace(PayoutResult.none(), source="")
 
     e = _merger("T", "TGT", "2018-12-10", date(2018, 11, 28))
     _value([e], payout=Regex(), closes={e.key: 50.0}, own_closes={e.key: 100.0}, workers=workers)
@@ -246,7 +246,7 @@ def test_read_terms_takes_the_gates_terms_then_the_llms_then_the_regex_cash():
     assert _values(terms=gated, llm=_stock(0.5, "Y")).read_terms(K) == (None, 1.0)
     assert _values(payout=12.0).read_terms(K) == (12.0, None)
     assert _values(llm=_stock(1.0, "Y", cash=2.0)).read_terms(K) == (2.0, 1.0)
-    assert _values(raw=PayoutResult(9.5, "high", "8K_2.01", "", "")).read_terms(K) == (9.5, None)
+    assert _values(raw=replace(PayoutResult.none(), value=9.5, confidence="high", source="8K_2.01")).read_terms(K) == (9.5, None)
     assert _values().read_terms(K) is None
     given = MergerValues({K: MergerValue(K, llm=_stock(1.0, "Y"))}, caller_terms={"M": {"stock_ratio": 1.0}})
     assert given.read_terms(K) is None             # the caller's terms decide the row
@@ -289,7 +289,7 @@ def test_the_callers_terms_reach_every_delisting_of_the_security():
 
 def test_a_dropped_merger_has_no_reads_left():
     """Stage 8b's R1 continuation: a continuation has no value, so nothing of the merger's reads is published."""
-    values = _values(raw=PayoutResult(9.5, "high", "8K_2.01", "0001", ""), payout=9.5, flags=("x",))
+    values = _values(raw=replace(PayoutResult.none(), value=9.5, confidence="high", source="8K_2.01"), payout=9.5, flags=("x",))
     values.drop(K)
     assert values.get(K) is None and values.read_terms(K) is None
     assert values.table_terms(K) == TableTerms()

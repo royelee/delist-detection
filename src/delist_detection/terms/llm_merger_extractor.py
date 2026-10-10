@@ -581,7 +581,7 @@ class LLMMergerTermsExtractor:
             if terms is None or unsupported_one_for_one(terms):
                 continue
             if states_no_package(terms):
-                kept = base_reading(terms, self._legacy_terms(f, record))
+                kept = base_reading(terms, self._legacy_terms(f))
                 if kept is not None:
                     return kept     # the completion filing states no default: a later filing never answers better (TRH)
                 if terms.no_default:
@@ -594,12 +594,12 @@ class LLMMergerTermsExtractor:
         # anything not supported" nulls both legs: WSC 2011, THE 2007) keeps the either-or reading the earlier
         # prompt cached for that filing; the payout gate decides whether it reconciles.
         for f, v3 in legless:
-            old = self._legacy_terms(f, record)
+            old = self._legacy_terms(f)
             if old is not None and (old.cash_per_share is not None or old.has_stock):
                 return replace(old, election_note=v3.election_note, no_default=True)
         return None
 
-    def _legacy_terms(self, filing: EdgarSubmission, record: DelistRecord) -> MergerTerms | None:
+    def _legacy_terms(self, filing: EdgarSubmission) -> MergerTerms | None:
         """The `LEGACY_VERSION` answer cached for this filing (no ticker in its key), None when there is none."""
         acc_key = filing.accession.replace("-", "")
         path = self.cache_dir / f"{acc_key}_{_sanitize_model(self.model)}_{LEGACY_VERSION}.json"

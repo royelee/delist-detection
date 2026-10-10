@@ -10,6 +10,7 @@ import csv
 import gzip
 import io
 import json
+from dataclasses import replace
 from datetime import date
 from functools import lru_cache
 from pathlib import Path
@@ -98,7 +99,7 @@ class CaseExtractor:
         case = DATA["cases"][record.sec_id]
         if self.kind == "raw":
             raw = case["raw"]
-            return None if raw is None else PayoutResult(raw[0], raw[2], raw[1], "", "")
+            return None if raw is None else replace(PayoutResult.none(), value=raw[0], confidence=raw[2], source=raw[1])
         t = case["terms"]
         return None if t is None else MergerTerms(*t)
 

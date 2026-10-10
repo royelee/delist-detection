@@ -6,7 +6,6 @@ tests/test_terms_cases.py."""
 from __future__ import annotations
 
 from datetime import date
-from types import SimpleNamespace
 
 import pytest
 

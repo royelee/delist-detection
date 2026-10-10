@@ -15,7 +15,7 @@ from delist_detection.filings.form25 import parse_form25
 from delist_detection.sources.ftd import FtdIndex, FtdRow
 from delist_detection.identity.history import Sighting
 from delist_detection.endings.last_trade import (
-    CLOSING_DAY, CONFLICT, EIGHTK_301, EX99_NOTICE, LAST_SIGHTING, MIDAS, NASDAQ_HALT, NO_DAY, UNCONFIRMED, UNSOURCED,
+    CLOSING_DAY, EIGHTK_301, EX99_NOTICE, LAST_SIGHTING, MIDAS, NASDAQ_HALT, NO_DAY, UNCONFIRMED, UNSOURCED,
     Dating, LastTrade, anchor_day, at_handoff, closing_day, decide_last_trade, eightk_last_trade,
     first_day_after, handoff_day, sections_3_01,
 )

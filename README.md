@@ -904,7 +904,7 @@ edgar = EdgarClient(cache_dir="cache/edgar")
 extractor = PayoutExtractor(edgar)
 res = extractor.extract(rec)        # rec: a MERGER-bucket DelistRecord
 # PayoutResult(value=113.0, confidence='high', source='8K_2.01',
-#              accession='0001193125-25-066329', quote='... $113.00 in cash ...')
+#              quote='... $113.00 in cash ...', currency='USD')
 ```
 
 `classify_universe.py` writes the gated payout into `delistings.csv`'s

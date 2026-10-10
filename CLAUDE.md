@@ -28,7 +28,7 @@ editable install.
 
 ```bash
 pip install -e .                         # editable install (Python ≥3.10) — once per env
-pytest   # full suite (3516 passed, 45 xfailed: 8 known-wrong golden + the diagnosis truth set's 37 known_wrong cases, all residual, all strict; offline, no network)
+pytest   # full suite (3517 passed, 45 xfailed: 8 known-wrong golden + the diagnosis truth set's 37 known_wrong cases, all residual, all strict; offline, no network)
 pytest tests/test_payout_extractor.py -v  # one file
 pytest tests/test_payout_extractor.py::test_match_in_cash_family_altr -v   # one test
 
@@ -367,8 +367,7 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   and the handoffs' continuation filing send. It imports nothing of the package.
 - `filings/form25.py` — parses a Form 25's XML or text (exchange, `class_text`, rule),
   labels the exchange, reads `class_kind` (common/preferred/warrant/unit/…)
-  from the class text, and matches it (`match_securities`: the securities it names, `tied_securities` for a tie;
-  `match_security`, one security, is its tests' surface only) to the observed securities of that kind/class letter. Sub-plan 5b: `is_involuntary` (a removal under rule 12d2-2(b)); `notice_last_trade` never reads the NYSE (b) template's "an
+  from the class text, and matches it (`match_securities`: the securities it names, `tied_securities` for a tie) to the observed securities of that kind/class letter. Sub-plan 5b: `is_involuntary` (a removal under rule 12d2-2(b)); `notice_last_trade` never reads the NYSE (b) template's "an
   announcement was made on the 'ticker' ... at the close of the trading session on D" press day, and `_class_expiry`
   takes an expiry only within [filing - 30 d, filing + 10 d]; `Form25.solely` and
   `other_class` (R3: a Form 25 that relates solely to a non-common class, or whose lettered tracking-stock segments
@@ -378,8 +377,7 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   Liberty Capital); `notice_says_acquired` (R6b: the EX-99.25 notice says acquired or paid in cash, and nothing of
   a reclassification, a holding company or a reorganization); `SecurityRef.letter_hint` (R2: a letterless class
   takes the one letter its own CUSIP's fails descriptions name, `identifiers.descriptions_class_letter`, only for a
-  letter no sibling's share class carries). The class text's letters stay read here (`class_label`,
-  `class_letters`: CLASS X, else SERIES X, per segment, past attached rights and a common's preferred clauses; the
+  letter no sibling's share class carries). The class text's letters stay read here (`class_letters`: CLASS X, else SERIES X, per segment, past attached rights and a common's preferred clauses; the
   segments feed the match and R3 too), each turned into a letter by `identifiers.class_letter`.
 - `filings/listing_status.py` — `exchanges_around()`/`withdrawal_kind()`: reads the
   10-K cover page's exchange list before and after a Form 25 to tell a real
@@ -887,7 +885,7 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   Every rewrite names its rule (`Rule`, a closed set: `ISSUER_MOVE` the finder's R7, `CONTINUED` the finder's continued
   transfer, `TRADES_ON` the clip check at stage 9b's start, `R1` stage 8b, `LINE_FOLLOW` and `SUCCESSOR_LINK` stage 9,
   `HANDOFF` stage 9b, `PLAN_BANKRUPTCY` and `PRICE_DEFICIENCY` stage 9e) and is recorded as typed provenance on the
-  delisting (`Delisting.rewrites`, one `Rewrite` each: the kind before, the successor, how it was found, the evidence,
+  delisting (`Delisting.rewrites`, one `Rewrite` each: the rule, the successor, how it was found, the evidence,
   a handoff's `successor_from`). `continuation(d, successor, rule, ...)` sets CRSP `crsp_codes.CONTINUATION_CODE` (304)
   and the bucket together and drops what a continuation cannot carry, one rule for all: `no_evidence_default`,
   `successor_unknown` (`SUCCESSOR_UNKNOWN`), every payout or terms-gate flag (`PAYOUT_FLAGS`: `payout_gate_failed:*`,
@@ -954,7 +952,7 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
 - `endings/classifier.py` — the filing-trio fingerprint (**Form 25 + 8-K item codes +
   Form 15**), now anchored on the Form 25/fallback filing date rather than a
   vendor end date. `_classify_items()` maps an 8-K item set to a `DLSTCD`
-  code; the surrounding logic handles asset-type short-circuits,
+  code; the surrounding logic handles non-equity kinds,
   exchange-transfer detection, and SEC-revocation. Rule order unchanged; the
   continued-filings rule now asks `end_of_era.resolve` instead of
   deciding alone, and records the branch in `evidence["end_of_era"]`. Sub-plan 5b: a revocation filed after a

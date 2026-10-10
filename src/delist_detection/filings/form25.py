@@ -242,12 +242,6 @@ def _lettered_segments(class_text: str) -> list[tuple[str, str]]:
     return out
 
 
-def class_label(class_text: str) -> str | None:
-    """The first class the text names ("CLASS A", "SERIES C"), or None."""
-    got = _lettered_segments(class_text)
-    return got[0][0] if got else None
-
-
 @dataclass(frozen=True)
 class SecurityRef:
     sec_id: str
@@ -336,15 +330,6 @@ def tied_securities(f25: Form25, refs: Sequence[SecurityRef]) -> set[str]:
     if len(same) < 2:
         return set()
     return _class_matches(f25, same)[3]
-
-
-def match_security(f25: Form25, refs: Sequence[SecurityRef]) -> tuple[str | None, str]:
-    """The one security the Form 25 removes (see match_securities); None when
-    it names none of `refs` or several."""
-    matched, why = match_securities(f25, refs)
-    if len(matched) == 1:
-        return matched[0], why
-    return None, why if not matched else "several classes"
 
 
 def class_letters(class_text: str) -> set[str]:

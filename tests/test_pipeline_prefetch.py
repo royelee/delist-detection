@@ -16,7 +16,7 @@ from types import SimpleNamespace
 import pytest
 
 import delist_detection.pipeline as pipeline
-from delist_detection.sources import edgar, sec_limiter, sec_stats
+from delist_detection.sources import sec_limiter, sec_stats
 from delist_detection.outputs import manifest
 from delist_detection.endings.classifier import DelistClassifier
 from delist_detection.outputs.reconstruction import DelistRecord

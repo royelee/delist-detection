@@ -64,13 +64,11 @@ class Rule(str, Enum):
 
 @dataclass(frozen=True)
 class Rewrite:
-    """One rewrite of a delisting, as typed provenance: the rule, the kind before (`was_bucket`, `was_code`), the
-    successor it set ("" when none), how the successor was found (`how`: stage 9's link names, "handoff", ...), what
-    decided it (`evidence`: a handoff's "<form> <accession>" or "timing:cik", R1's statement, R7's filings) and, for a
-    handoff, the successor's first sighting under the ticker (`successor_from`: stage 9c's cap)."""
+    """One rewrite of a delisting, as typed provenance: the rule, the successor it set ("" when none), how the
+    successor was found (`how`: stage 9's link names, "handoff", ...), what decided it (`evidence`: a handoff's
+    "<form> <accession>" or "timing:cik", R1's statement, R7's filings) and, for a handoff, the successor's first
+    sighting under the ticker (`successor_from`: stage 9c's cap)."""
     rule: Rule
-    was_bucket: CrspBucket
-    was_code: int | None
     successor: str = ""
     how: str = ""
     evidence: str = ""
@@ -84,7 +82,7 @@ class Payouts(Protocol):
 
 
 def _record(d: Delisting, rule: Rule, **kw) -> Rewrite:
-    rw = Rewrite(rule, d.record.bucket, d.record.crsp_code, **kw)
+    rw = Rewrite(rule, **kw)
     d.rewrites.append(rw)
     return rw
 

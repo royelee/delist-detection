@@ -20,7 +20,6 @@ import re
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from pathlib import Path
-from typing import Iterable
 
 import requests
 
@@ -725,7 +724,7 @@ class TickerResolver:
                 d = datetime.strptime(observed_date, "%Y-%m-%d").date()
                 lo = (d - timedelta(days=90)).isoformat()
                 hi = (d + timedelta(days=90)).isoformat()
-                params += [f"dateRange=custom", f"startdt={lo}", f"enddt={hi}"]
+                params += ["dateRange=custom", f"startdt={lo}", f"enddt={hi}"]
                 window_end = d + timedelta(days=90)
             except ValueError:
                 pass
@@ -936,11 +935,6 @@ class TickerResolver:
             return self._efts_pre_delist_frequency_ranked(ticker, day), self._transient
         finally:
             self._transient = transient
-
-    def resolve_many(
-        self, items: Iterable[tuple[str, str | None]]
-    ) -> dict[str, TickerResolution]:
-        return {t: self.resolve(t, d) for t, d in items}
 
     def shadow(self) -> "TickerResolver":
         """A copy for warming the EDGAR caches on another thread: the same EDGAR

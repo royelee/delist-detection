@@ -167,7 +167,7 @@ def test_edgar_names_lists_the_current_name_then_the_former_ones():
 
 # --- sub-plan 5b: every Item section ---
 
-from delist_detection.filings.evidence import item_sections, item_text  # noqa: E402
+from delist_detection.filings.evidence import item_sections  # noqa: E402
 
 # Ascena's 2020 bankruptcy 8-K, shortened: its first "Item 1.03" is a cross-reference long enough to read as the
 # section; the item's own section, which reports the Chapter 11 cases, comes next.
@@ -198,7 +198,6 @@ def test_a_short_filing_has_one_section_and_a_filing_without_the_item_none():
 
 import pytest  # noqa: E402
 
-from delist_detection.filings.evidence import cites_listing_deficiency  # noqa: E402
 from tests import form25_cases as fc  # noqa: E402
 
 # R.H. Donnelley's 8-K of 2009-01-02, Item 3.01: NYSE's market-capitalization standard (Rule 802.01B)

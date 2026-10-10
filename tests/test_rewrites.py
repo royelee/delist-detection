@@ -2,6 +2,7 @@
 built. Each rule at the interface, without a run: the kind it sets (code and bucket together), what the new kind
 drops (the no-evidence default, the open successor, a merger's payout reads and flags), and the typed provenance it
 records."""
+from dataclasses import replace
 from datetime import date
 
 import pytest
@@ -15,7 +16,7 @@ from delist_detection.terms.llm_merger_extractor import MergerTerms
 from delist_detection.terms.merger_value import MergerValue, MergerValues, TableTerms
 from delist_detection.terms.payout_extractor import PayoutResult
 from delist_detection.endings.rewrites import (
-    HANDOFF_CONTINUATION, LINE_CONTINUATION, NO_EVIDENCE_DEFAULT, R1_CONTINUATION, SUCCESSOR_UNKNOWN, Rewrite, Rule,
+    HANDOFF_CONTINUATION, LINE_CONTINUATION, NO_EVIDENCE_DEFAULT, R1_CONTINUATION, SUCCESSOR_UNKNOWN, Rule,
     awaits_successor, continuation, is_real_ending, mark_going_on, reclassify, rewrite_by, security_goes_on,
 )
 
@@ -46,8 +47,8 @@ def test_a_merger_made_a_continuation_drops_its_payout_reads_and_flags():
     d = _row(flags=("last_trade_date_unconfirmed", "ftd_close_prior:1", "acquirer_close_lagged"))
     values = MergerValues({d.key: _merger_value(d.key, flags=("payout_gate_failed:87.69",
                                                               "terms_gate_failed:no_acq_ticker"),
-                                                raw=PayoutResult(87.69, "high", "8K_2.01", "0000000000-22-000001",
-                                                                 "$87.69"))})
+                                                raw=replace(PayoutResult.none(), value=87.69,
+                                                            confidence="high", source="8K_2.01", quote="$87.69"))})
     rw = continuation(d, "NEW", Rule.HANDOFF, reason="Continuation (8-K12B X): ...", confidence="high",
                       flag=HANDOFF_CONTINUATION, how="handoff", evidence="8-K12B X", payouts=values)
     assert (d.record.crsp_code, d.record.bucket, d.record.successor_sec_id) == (
@@ -55,7 +56,9 @@ def test_a_merger_made_a_continuation_drops_its_payout_reads_and_flags():
     assert d.flags == ["last_trade_date_unconfirmed", "ftd_close_prior:1", HANDOFF_CONTINUATION]
     assert values.get(d.key) is None
     assert values.table_terms(d.key) == TableTerms()
-    assert rw == Rewrite(Rule.HANDOFF, CrspBucket.MERGER, 231, "NEW", "handoff", "8-K12B X") and d.rewrites == [rw]
+    assert d.rewrites == [rw]
+    assert (rw.rule, rw.successor, rw.how, rw.evidence, rw.successor_from) == (
+        Rule.HANDOFF, "NEW", "handoff", "8-K12B X", "")
 
 
 def test_an_unknown_made_a_continuation_drops_its_no_evidence_default():
@@ -156,7 +159,8 @@ def test_a_bankruptcy_plan_makes_an_unknown_a_liquidation_without_its_default():
     d = _row(bucket=CrspBucket.UNKNOWN, code=None, flags=(NO_EVIDENCE_DEFAULT, "no_last_close"))
     reclassify(d, 470, Rule.PLAN_BANKRUPTCY, reason="Bankruptcy plan exchange (...)", confidence="medium")
     assert (d.record.crsp_code, d.record.bucket, d.record.confidence) == (470, CrspBucket.LIQUIDATION, "medium")
-    assert d.flags == ["no_last_close"] and rewrite_by(d, Rule.PLAN_BANKRUPTCY).was_bucket is CrspBucket.UNKNOWN
+    assert d.flags == ["no_last_close"] and rewrite_by(d, Rule.PLAN_BANKRUPTCY) is d.rewrites[-1]
+    assert d.rewrites[-1].successor == "" and len(d.rewrites) == 1
 
 
 def test_a_price_deficiency_changes_the_code_and_keeps_the_rest():

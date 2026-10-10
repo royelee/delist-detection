@@ -139,19 +139,11 @@ def _confirms_bankruptcy(text: str) -> bool:
                for section in item_sections(text, "1.03"))
 
 
-def _near(d1: date | None, d2: date | None, days: int) -> bool:
-    if d1 is None or d2 is None:
-        return False
-    return abs((d1 - d2).days) <= days
-
-
 class DelistClassifier:
     def __init__(
         self,
         edgar: EdgarClient,
         resolver: TickerResolver,
-        asset_type_lookup: "callable[..., str | None] | None" = None,
-        name_hint_lookup: "callable[..., str | None] | None" = None,
         *,
         today: date | None = None,
         issuers: IssuerRecord | None = None,
@@ -161,8 +153,6 @@ class DelistClassifier:
         through, `issuers`, else one over `edgar` dated `today`)."""
         self.edgar = edgar
         self.resolver = resolver
-        self.asset_type_lookup = asset_type_lookup or (lambda *a, **kw: None)
-        self.name_hint_lookup = name_hint_lookup or (lambda *a, **kw: None)
         self.today = today    # the run date (None: the clock)
         if issuers is None:
             issuers = (resolver.issuers if resolver is not None else None) or IssuerRecord(edgar, today=today)
@@ -603,38 +593,6 @@ class DelistClassifier:
         ticker: str,
         observed_delist_date: str | None = None,
     ) -> DelistRecord:
-        # Asset-type short-circuit: ETFs, notes, warrants, units, rights all
-        # land in CRSP 600 EXPIRATION (scheduled end / not an equity event).
-        # We also pattern-match the AV company name for cases where the
-        # asset_type column is "Stock" but the name reveals the security
-        # (notes, warrants, ETF, rights).
-        atype = (self.asset_type_lookup(ticker, observed_delist_date) or "").strip().lower()
-        name_hint = (self.name_hint_lookup(ticker, observed_delist_date) or "").lower()
-        non_equity = atype in {
-            "warrant", "unit", "right", "rights", "warrants", "units",
-            "etf", "etn", "note", "notes", "preferred", "preferreds",
-            "adr depositary", "depositary",
-        }
-        if not non_equity and name_hint:
-            for kw in (" etf", " etn", " notes due", " note due",
-                       " tradeable rights", " rights ", " warrants",
-                       " trust units", " preferred"):
-                if kw in name_hint:
-                    non_equity = True
-                    atype = atype or "name-hint"
-                    break
-        if non_equity:
-            return DelistRecord(
-                ticker=ticker.upper(),
-                cik=None,
-                observed_delist_date=observed_delist_date,
-                crsp_code=600,
-                bucket=CrspBucket.EXPIRATION,
-                confidence="high",
-                reason=f"Non-equity security (asset_type='{atype}', name='{name_hint[:60]}')",
-                evidence={"asset_type": atype, "name_hint": name_hint},
-            )
-
         resolution = self.resolver.resolve(ticker, observed_delist_date)
 
         if resolution.cik is None:

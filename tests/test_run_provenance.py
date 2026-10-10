@@ -8,7 +8,6 @@ import pytest
 import requests
 
 import delist_detection.pipeline as pipeline
-from delist_detection.sources import edgar
 from delist_detection.outputs import manifest
 from delist_detection.outputs.reconstruction import DelistRecord
 from delist_detection.vocabulary.crsp_codes import CrspBucket

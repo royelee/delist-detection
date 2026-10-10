@@ -267,14 +267,15 @@ def test_the_ticker_successor_is_blank_by_default(tmp_path):
 
 
 def test_contract_tables_are_written_under_contract_and_read_back(tmp_path):
-    from delist_detection.outputs.store import CONTRACT_TABLES, TABLES, read_table, table_path, write_tables
+    from delist_detection.outputs.store import TABLES, read_table, table_path, write_tables
     row = {"sec_id": "S", "issuer_id": "100", "start_date": "2010-01-04", "end_date": "", "ticker": "AAA",
            "security_name": "S", "share_class": "COMMON"}
     write_tables(tmp_path, {"security_history": [row]})
     path = table_path(tmp_path, "security_history")
     assert path == tmp_path / "contract" / "security_history.csv"
     assert read_table("security_history", path) == [row]
-    assert {TABLES[t].file for t in CONTRACT_TABLES} == {
+    contract = ("security_history", "contract_delistings", "seeds", "price_requests", "id_changes", "payout_legs")
+    assert {TABLES[t].file for t in contract} == {
         "contract/security_history.csv", "contract/delistings.csv", "contract/seeds.csv",
         "contract/price_requests.csv", "contract/id_changes.csv", "contract/payout_legs.csv"}
     assert table_path(tmp_path, "delistings") == tmp_path / "delistings.csv"

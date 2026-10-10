@@ -120,7 +120,6 @@ def test_the_predecessors_own_form_25_raises_no_unmatched_row_for_the_added_succ
     """Stage 9d searches the successor's Form 25s under the shared CIK: Legacy ONEOK's 25-NSE already owns the
     predecessor's ending, so its `form25_unmatched` item is not repeated for the successor (read from the item's
     typed filing, never its reason)."""
-    from delist_detection.identity.added_securities import AddedLineSuccessor
     from delist_detection.outputs.review_triage import FilingRef, ReviewItem
     link, found = _oke(OLD_ROWS)
     added = found.added["BBG024TZWVN1"]

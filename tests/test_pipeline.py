@@ -2733,7 +2733,6 @@ def test_an_unknown_form25_at_the_lines_switch_becomes_the_continuation(fake_edg
 
 
 def _unit_delisting(sec_id, bucket, code, flags):
-    from types import SimpleNamespace
     record = DelistRecord(ticker="RS", cik=4242, observed_delist_date="2012-09-24", crsp_code=code, bucket=bucket,
                           confidence="high", reason="r", evidence={"flags": list(flags)}, sec_id=sec_id,
                           delist_date="2012-10-04")
@@ -2929,15 +2928,14 @@ def _stage_ctx(edgar):
 def _handoff_row() -> Delisting:
     """A continuation row the handoff stage built from LEG's unmatched Form 25: its last trade day is its last
     sighting, and the handoff rewrite caps the notice's day at the successor's first sighting."""
-    from delist_detection.endings.rewrites import Rewrite, Rule
+    from delist_detection.endings.rewrites import Rule, continuation
     evidence = {"flags": ["handoff_continuation"],
                 "delist_filing": {"form": "25-NSE", "filing_date": "2026-08-27", "accession": "0000876661-26-000712"}}
     rec = DelistRecord("LEG", 58492, "2026-08-25", 304, CrspBucket.EXCHANGE_TRANSFER, "high", "Continuation", evidence,
                        sec_id="OLD", delist_date="2026-09-06", successor_sec_id="NEW")
     d = Delisting("OLD", 58492, "LEG", "2026-09-06", rec, LastTrade(date(2026, 8, 25), "last_sighting", ()), None,
                   None, "")
-    d.rewrites.append(Rewrite(Rule.HANDOFF, CrspBucket.EXCHANGE_TRANSFER, 304, successor="NEW", how="handoff",
-                              successor_from="2026-08-27"))
+    continuation(d, "NEW", Rule.HANDOFF, how="handoff", successor_from="2026-08-27")
     return d
 
 
