@@ -140,8 +140,10 @@ security's trading record, `trading_record.TradingRecord`, over its observations
 index, with its issuer's securities as siblings, its other CIK in force and its issuer's lookup tier; the warm pass
 and the sequential pass ask that one object, so both search one context; the records' sightings are the stage's
 answer), `_dead_before_sighting` (stage 5b: a security whose last real ending came before its
-first observation and that has no trading fails row died before the run's fails
-window began, so (eligibility decided first, then) the fails index is asked for its tickers' rows over
+first observation and that has fewer than two trading fails rows on or before that ending and none from its first
+observation on (one fails sighting makes no range; rows settling in between do not count: TRB 2007, FB-009) died
+before the run's fails window began or showed it trading, so (eligibility decided first, then) the fails index is
+asked for its tickers' rows over
 [end − 1095 d, end + 10 d] (`FtdIndex.around`), it takes the CUSIPs `history.backfill_cusips` finds that no other
 security holds (one an earlier security of the stage took included) and its sightings are rebuilt; it returns them
 (`_Backfill`: CUSIPs and sightings) and `_run` merges them over stage 5's, so it changes no input; no `sec_id`

@@ -364,8 +364,12 @@ def _dead_before_sighting(ctx: _RunContext, securities: dict[str, Security], del
                           sec_cusips: Mapping[str, list[str]], ftd: FtdIndex,
                           issuers: Mapping[str, Issuer]) -> _Backfill:
     """5b. A security whose last real ending (its successor not itself) came before
-    its first observation, and none of whose CUSIPs has a trading fails row, died
-    before a stale snapshot listed it: the run's fails window starts after it.
+    its first observation, and whose CUSIPs have fewer than two trading fails rows
+    dated on or before that ending and none from its first observation on, died
+    before a stale snapshot listed it: the run's fails window starts after it, or
+    too late to show it trading (one fails sighting makes no range,
+    `history.ranges_from_sightings`; rows still settling between the ending and the
+    first observation do not count: TRB 2007, FB-009).
     Eligibility is decided first, on the rows held when the stage starts, so one
     security's ask cannot change another's eligibility. The index is then asked for
     its rows under its tickers from BACKFILL_DAYS before the end (`FtdIndex.around`);
@@ -385,7 +389,10 @@ def _dead_before_sighting(ctx: _RunContext, securities: dict[str, Security], del
     for sid, end in sorted(ends.items()):
         s = securities.get(sid)
         seen = [o.as_of for era in (s.eras if s else ()) for o in era.observations]
-        if s is None or not seen or end >= min(seen) or ftd.trading_rows(sec_cusips.get(sid, [])):
+        if s is None or not seen or end >= min(seen):
+            continue
+        rows = ftd.trading_rows(sec_cusips.get(sid, []))
+        if sum(1 for r in rows if r.date <= end) > 1 or any(r.date >= min(seen) for r in rows):
             continue
         eligible.append((sid, end))
     out = _Backfill()

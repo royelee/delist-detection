@@ -339,6 +339,27 @@ def test_stage_5b_drops_a_cusip_another_security_holds():
     assert fixed == [] and held["S1"] == [] and held["S2"] == ["00817Y108"]
 
 
+def test_stage_5b_takes_a_security_whose_rows_before_its_end_make_no_range():
+    # TRB 2007 (FB-009): one trading row of its own before the end, and fails still settling after it under the
+    # live symbol; one fails sighting makes no range, so the window opened too late to show it trading
+    loaded = [FtdRow("2018-11-27", "00817Y108", "AET", "AETNA INC COM", 181.0),
+              FtdRow("2018-12-05", "00817Y108", "AET", "AETNA INC COM", 212.0),
+              FtdRow("2018-12-12", "00817Y108", "AET", "AETNA INC COM", 212.0)]
+    fixed, held, sightings, *_ = _stage_5b(
+        _aet_rows(), {"S1": ("AET", "2019-06-28")}, [("S1", "2018-11-28", None)],
+        sec_cusips={"S1": ["00817Y108"]}, loaded=loaded)
+    assert fixed == ["S1"] and held["S1"] == ["00817Y108"]
+    assert {s[0] for s in sightings["S1"]} >= {"2018-11-20", "2018-11-27"}
+
+
+def test_stage_5b_leaves_a_security_the_fails_window_shows_trading_before_its_end():
+    loaded = [FtdRow("2018-11-26", "00817Y108", "AET", "AETNA INC COM", 180.0),
+              FtdRow("2018-11-27", "00817Y108", "AET", "AETNA INC COM", 181.0)]
+    fixed, *_ = _stage_5b(_aet_rows(), {"S1": ("AET", "2019-06-28")}, [("S1", "2018-11-28", None)],
+                          sec_cusips={"S1": ["00817Y108"]}, loaded=loaded)
+    assert fixed == []
+
+
 def test_stage_5b_keeps_identity_and_is_metered():
     fixed, held, sightings, securities, _, ctx = _stage_5b(
         _aet_rows(), {"S1": ("AET", "2019-06-28")}, [("S1", "2018-11-28", None)])
