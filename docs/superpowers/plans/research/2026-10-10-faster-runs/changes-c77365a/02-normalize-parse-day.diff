@@ -1,0 +1,97 @@
+diff --git a/src/delist_detection/filings/evidence.py b/src/delist_detection/filings/evidence.py
+index f254705..e8d3f71 100644
+--- a/src/delist_detection/filings/evidence.py
++++ b/src/delist_detection/filings/evidence.py
+@@ -29,8 +29,19 @@ MERGER_EVIDENCE_FORMS = {"DEFM14A", "DEFM14C", "PREM14A", "SC 14D9", "SC TO-T",
+ 
+ 
+ def parse_day(s: str | None) -> date | None:
++    """The day an ISO "YYYY-MM-DD" text (or the first ten characters of a longer one) names, None for anything else.
++    A text in exactly that shape is read by slicing; `strptime`, which is slow when run ten million times, reads the
++    rest (a day written without its zeros, a text that is no day)."""
++    text = (s or "")[:10]
++    if len(text) == 10 and text[4] == "-" and text[7] == "-":
++        year, month, day = text[:4], text[5:7], text[8:]
++        if all(part.isascii() and part.isdigit() for part in (year, month, day)):
++            try:
++                return date(int(year), int(month), int(day))
++            except ValueError:
++                return None
+     try:
+-        return datetime.strptime((s or "")[:10], "%Y-%m-%d").date()
++        return datetime.strptime(text, "%Y-%m-%d").date()
+     except ValueError:
+         return None
+ 
+diff --git a/src/delist_detection/vocabulary/identifiers.py b/src/delist_detection/vocabulary/identifiers.py
+index c7e7189..6726491 100644
+--- a/src/delist_detection/vocabulary/identifiers.py
++++ b/src/delist_detection/vocabulary/identifiers.py
+@@ -40,10 +40,17 @@ from collections.abc import Collection, Iterable
+ # --- ticker spellings -----------------------------------------------------------------------------------------------
+ 
+ 
++_TICKER_SEPARATORS = re.compile(r"[./\s]+")
++
++
+ def normalize_ticker(raw: str) -> str:
+     """The tables' spelling of a ticker: upper case, each run of ".", "/" and spaces one "-", none at either end
+-    (" brk.b " and "BRK B" are BRK-B, "BF/A" is BF-A)."""
+-    return re.sub(r"[./\s]+", "-", (raw or "").strip().upper()).strip("-")
++    (" brk.b " and "BRK B" are BRK-B, "BF/A" is BF-A). A ticker of letters and digits only (nearly every one) is
++    its upper-cased self: the pattern has nothing to change in it."""
++    text = (raw or "").strip().upper()
++    if text.isalnum():
++        return text
++    return _TICKER_SEPARATORS.sub("-", text).strip("-")
+ 
+ 
+ _WHEN_ISSUED = re.compile(r"-W-?I$")       # "EHAB WI", "EHAB.WI", "EHAB-WI", "EHAB/WI", "EHAB W/I"
+diff --git a/tests/test_evidence.py b/tests/test_evidence.py
+index e5d0d79..ef9552f 100644
+--- a/tests/test_evidence.py
++++ b/tests/test_evidence.py
+@@ -1,6 +1,8 @@
+-from datetime import date
++from datetime import date, datetime
+ 
+-from delist_detection.filings.evidence import name_at, names_near
++import pytest
++
++from delist_detection.filings.evidence import name_at, names_near, parse_day
+ 
+ SUB = {"name": "SunPower Inc.", "formerNames": [
+     {"name": "Complete Solaria, Inc.", "from": "2023-03-10T05:00:00.000Z", "to": "2025-09-26T04:00:00.000Z"},
+@@ -262,3 +264,16 @@ def test_a_10k_index_entry_page_number_ends_no_section():
+     assert "Item 8. 29 Kodak" in item_text(text, "3.01")
+     spaced = "Item 3.01 Notice. " + "y" * 300 + " ITEM 1 .0 3 Bankruptcy " + "z" * 300
+     assert "ITEM 1 .0 3" not in item_text(spaced, "3.01")
++
++
++@pytest.mark.parametrize("text", [
++    "2024-01-05", "2024-01-05T10:20:30.000Z", "2024-1-5", "2024-02-30", "2023-02-29", "2024-02-29", "0000-01-01",
++    "2024-13-01", "2024-00-10", "2024-01-00", "2024/01/05", "20240105", "2024-01-0", "", None, "abcd-ef-gh",
++    "\u0662\u0660\u0662\u0664-01-05", " 2024-01-05", "2024-01-05 ", "9999-12-31", "1900-01-01"])
++def test_parse_day_reads_what_strptime_read(text):
++    """Slicing an exactly-shaped day gives the date `strptime` gave, and the same None for anything else."""
++    try:
++        want = datetime.strptime((text or "")[:10], "%Y-%m-%d").date()
++    except ValueError:
++        want = None
++    assert parse_day(text) == want
+diff --git a/tests/test_identifiers.py b/tests/test_identifiers.py
+index 24f991e..c726b20 100644
+--- a/tests/test_identifiers.py
++++ b/tests/test_identifiers.py
+@@ -235,3 +235,11 @@ def test_a_class_the_name_does_not_state_fits_the_one_letter_the_issuer_and_its_
+     assert not fits_class("CLASS A", "CLASS B", described="B", issuer_letters=("B",))     # its own class is stated
+     assert not fits_class("CLASS B", "COMMON", described="B", issuer_letters=("B",))      # only a plain class fits
+     assert not fits_class("COMMON", "PREFERRED", described=None, issuer_letters=())
++
++
++@pytest.mark.parametrize("raw", ["AET", "aet", " brk.b ", "BRK B", "BF/A", "..A..", "-A-", "A--B", "UAC-C", "F104PAIROFF",
++                                 "A B", "x\ty", "ÉT", "", "  ", "...", "-", "A-", "-A", "1.5", "ZZ ZZ", None])
++def test_normalize_ticker_is_the_pattern_it_replaced(raw):
++    """The fast path (a ticker of letters and digits is its upper-cased self) gives what the one-line pattern did."""
++    import re
++    assert normalize_ticker(raw) == re.sub(r"[./\s]+", "-", (raw or "").strip().upper()).strip("-")
