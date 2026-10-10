@@ -1,8 +1,8 @@
 import pandas as pd
 import pytest
 
-from delist_detection.qlib_adapter import inject_terminal_labels, apply_backtest_exits
-from delist_detection.store import table_path, write_tables
+from delist_detection.handling.qlib_adapter import inject_terminal_labels, apply_backtest_exits
+from delist_detection.outputs.store import table_path, write_tables
 
 
 @pytest.fixture

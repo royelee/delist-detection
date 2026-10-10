@@ -1,17 +1,9 @@
 import pytest
 
-from delist_detection.observations import (
-    Observation, ObservationError, ObservationIndex, TickerEra, eras_by_key, load_observations, normalize_ticker,
-    number_eras, observation_conflicts, observations_from_instruments, observations_from_snapshots, split_eras,
-    write_observations,
+from delist_detection.identity.observations import (
+    Observation, ObservationError, ObservationIndex, TickerEra, eras_by_key, load_observations, number_eras,
+    observation_conflicts, observations_from_instruments, observations_from_snapshots, split_eras, write_observations,
 )
-
-
-def test_normalize_ticker():
-    assert normalize_ticker(" brk.b ") == "BRK-B"
-    assert normalize_ticker("BF/A") == "BF-A"
-    assert normalize_ticker("BRK B") == "BRK-B"
-    assert normalize_ticker("AET") == "AET"
 
 
 def test_load_validates_and_dedupes(tmp_path):
@@ -178,3 +170,15 @@ def test_where_ignored_when_column_blank(tmp_path):
     (tmp_path / "russell_2008-01-16.csv").write_text("ticker,name,asset_class\nAET,AETNA INC,\n")
     obs = observations_from_snapshots(tmp_path, where={"asset_class": "Equity"})
     assert [o.ticker for o in obs] == ["AET"]
+
+
+def test_a_when_issued_ticker_joins_its_regular_way_era():
+    """U8 (sub-plan 5a): Enhabit traded when-issued as EHAB-WI before its 2022 spin-off, then as EHAB. The two are
+    one era under EHAB; each observation keeps the ticker the caller saw."""
+    index = ObservationIndex([Observation("EHAB-WI", "2022-06-30", "ENHABIT INC WHEN ISSUED"),
+                              Observation("EHAB", "2022-12-31", "ENHABIT INC")])
+    [era] = index.eras()
+    assert (era.key, era.ticker, [o.ticker for o in era.observations]) == (
+        "EHAB@2022-06-30", "EHAB", ["EHAB-WI", "EHAB"])
+    assert index.name_on("EHAB-WI", "2022-07-01") == "ENHABIT INC WHEN ISSUED"
+    assert index.era_for("EHAB", "2022-07-01") is era

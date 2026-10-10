@@ -6,20 +6,27 @@ regression in the formula or the constants table is caught immediately.
 
 import pytest
 
-from delist_detection.bmp_correction import bmp_firm_month_return
-from delist_detection.crsp_codes import CrspBucket
-from delist_detection.exchanges import Exchange
+from delist_detection.outputs.reconstruction import DelistRecord
+from delist_detection.vocabulary.crsp_codes import CrspBucket
+from delist_detection.vocabulary.exchanges import Exchange
+from delist_detection.handling.handling import build_firm_month_correction
+
+
+def _rec(ticker, bucket, delist):
+    return DelistRecord(ticker=ticker, cik=None, observed_delist_date=delist, crsp_code=None, bucket=bucket,
+                        confidence="high", reason="known case")
 
 
 def test_altair_siemens_acquisition_march_2025():
     # ALTR — Siemens cash deal at $113.00/share, last trade ~$111.85 on Nasdaq.
     # Feb 2025 month-end close ~ $111.50 (approximate).
-    r = bmp_firm_month_return(
+    r = build_firm_month_correction(
+        _rec("ALTR", CrspBucket.MERGER, "2025-03-26"),
         prior_month_end_close=111.50,
         last_trade_close=111.85,
-        bucket=CrspBucket.MERGER, exchange=Exchange.NASDAQ,
+        exchange=Exchange.NASDAQ,
         payout_per_share=113.00,
-    )
+    ).firm_month_return
     # R_partial = 111.85/111.50 - 1 ≈ 0.00314
     # DLRET = 113/111.85 - 1 ≈ 0.01028
     # R_month ≈ 0.01345
@@ -30,12 +37,13 @@ def test_radioshack_compliance_failure_feb_2015():
     # RSH — Ch.11 bankruptcy filing 2015-02-05, delist 2015-02-09 on NYSE.
     # Stock collapsed from ~$0.50 (Jan close) to ~$0.05 (last quote).
     # NYSE Shumway = -0.30.
-    r = bmp_firm_month_return(
+    r = build_firm_month_correction(
+        _rec("RSH", CrspBucket.COMPLIANCE_FAILURE, "2015-02-09"),
         prior_month_end_close=0.50,
         last_trade_close=0.05,
-        bucket=CrspBucket.COMPLIANCE_FAILURE, exchange=Exchange.NYSE,
+        exchange=Exchange.NYSE,
         payout_per_share=None,
-    )
+    ).firm_month_return
     # R_partial = 0.05/0.50 - 1 = -0.90
     # DLRET = -0.30
     # R_month = (0.10)(0.70) - 1 = -0.93
@@ -48,13 +56,14 @@ def test_altaba_liquidation_with_observed_recovery_nov_2019():
     # For this test, assume recovery_ratio=4.07 (very large; reflects fund-style
     # liquidation, not bankruptcy). This exercises that LIQUIDATION respects
     # observed recovery instead of Shumway.
-    r = bmp_firm_month_return(
+    r = build_firm_month_correction(
+        _rec("AABA", CrspBucket.LIQUIDATION, "2019-11-06"),
         prior_month_end_close=22.50,
         last_trade_close=22.85,
-        bucket=CrspBucket.LIQUIDATION, exchange=Exchange.NYSE,
+        exchange=Exchange.NYSE,
         payout_per_share=None,
         recovery_ratio=4.07,
-    )
+    ).firm_month_return
     # R_partial = 22.85/22.50 - 1 ≈ 0.01556
     # DLRET = 4.07 - 1 = 3.07
     # R_month = (1.01556)(4.07) - 1 ≈ 3.1333

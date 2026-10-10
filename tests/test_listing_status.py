@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from delist_detection.edgar import EdgarSubmission
-from delist_detection.listing_status import (
+from delist_detection.sources.edgar import EdgarSubmission
+from delist_detection.filings.listing_status import (
     cover_exchanges, exchanges_around, listed_today, listing_answers, withdrawal_kind,
 )
 
@@ -131,7 +131,7 @@ def test_a_security_edgar_lists_on_cboe_is_listed_today():
     assert listed_today(figi, "BBG000QH56C1", edgar=sub, cik=1374310, tickers=["CBOE"]) is True
 
 
-from delist_detection.openfigi import OpenFigiBlocked
+from delist_detection.sources.openfigi import OpenFigiBlocked
 
 
 class _BatchFigi:

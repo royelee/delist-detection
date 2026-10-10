@@ -4,11 +4,10 @@ cache rule all use the date they were given, not the clock."""
 import json
 from datetime import date
 
-import requests
 
-from delist_detection.classifier import DelistClassifier
-from delist_detection.edgar import FETCHED_KEY, EdgarClient, submissions_fresh_after
-from delist_detection.ticker_resolver import TickerResolver
+from delist_detection.endings.classifier import DelistClassifier
+from delist_detection.sources.edgar import FETCHED_KEY, EdgarClient, submissions_fresh_after
+from delist_detection.identity.ticker_resolver import TickerResolver
 
 AS_OF = date(2026, 9, 23)
 UA = "Test Co test@example.com"
@@ -59,9 +58,10 @@ def test_a_client_stamps_its_run_date_not_the_clock(tmp_path):
 
 
 def test_the_resolver_reads_submissions_fresh_as_of_its_run_date(fake_edgar):
+    """The resolver's issuer record is dated its run date: a read about an event asks for a copy that fresh."""
     e = _Recording(fake_edgar)
     r = TickerResolver(e, today=date(2023, 6, 1))
-    r._submissions(999001, "2023-05-10")
+    r.issuers.profile(999001, about="2023-05-10")
     assert e.fresh == [date(2023, 6, 1)]              # min(2023-06-24, the run date)
 
 

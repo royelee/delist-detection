@@ -1,0 +1,53 @@
+case,group,ticker,on,issuer_cik,tickers,terminal,ends_after,exit_kind,last_trade_date,dlret,dlret_tol,successor_ticker,status,fixed_by,source,library_says,note
+IMCL,golden,IMCL,2008-06-30,765258,,,,merger,,,,,pass,,spec Part 2 (IMCL),,ImClone as its own security; its value waits on a last close
+ICPT,golden,ICPT,2020-06-30,1270073,,,,merger,2023-11-07,0.0,,,pass,,spec Part 2 (ICPT),,a flat vendor tail placed it 961 sessions late
+XTO,golden,XTO,2009-06-30,868809,,,,merger,2010-06-25,-0.015509,,,pass,,spec Part 2 (XTO),,a flat vendor tail placed it 955 sessions late
+ANAT,golden,ANAT,2015-06-30,904163,ANAT,,,merger,2022-05-24,-0.000105,,ANAT,pass,,spec Part 2 (ANAT),,2020 holding-company continuation then the 2022 merger
+CLWR,golden,CLWR,2012-06-29,1442505,,,,merger,2013-07-09,0.002004,,,pass,,spec Part 2 (CLWR),,
+CTCM,golden,CTCM,2012-06-29,1354513,,,,merger,2016-05-18,0.078049,,,pass,,spec Part 2 (CTCM),,
+HMA,golden,HMA,2010-06-30,792985,,,,merger,2014-01-24,0.001036,,,pass,,spec Part 2 (HMA),,
+LEAP,golden,LEAP,2010-06-30,1065049,,,,merger,2014-03-13,-0.143836,,,pass,,spec Part 2 (LEAP),,
+MON,golden,MON,2012-06-29,1110783,,,,merger,2018-06-06,0.000391,,,pass,,spec Part 2 (MON),,
+TIN,golden,TIN,2010-06-30,731939,,,,merger,2012-02-10,0.003764,,,pass,,spec Part 2 (TIN),,
+BK,golden,BK,2010-06-30,1390777,BK,active,,,,,,,pass,,spec Part 2 (BK),,reverse merger: one security
+CB-2010,golden,CB,2010-06-30,20171,,,,merger,2016-01-15,0.019589,,,known_wrong,reset-4c,spec Part 2 (CB),dlret 0.011833: since the 2026-10-02 refresh the cached merger-terms answer names the acquirer by its post-merger ticker CB (109.38) instead of ACE (111.02),Chubb Corp acquired by ACE; ACE took the CB ticker (a takeover not a successor)
+CB-2020,golden,CB,2020-06-30,896159,ACE;CB,active,,,,,,,pass,,spec Part 2 (CB),,ACE renamed Chubb Ltd
+JCI-2010,golden,JCI,2010-06-30,53669,,,,merger,2016-09-02,,,,pass,,spec Part 2 (JCI),,"value is assumed par after a failed payout gate (decision 4); not pinned; last trade 2016-09-02 (was 09-06, Johnson Controls plc's first day under JCI; the 8-K, the notice, the fails rows and MIDAS give 09-02), ruled 2026-10-04"
+JCI-2020,golden,JCI,2020-06-30,833444,TYC;JCI,active,,,,,,,pass,,spec Part 2 (JCI),,Tyco renamed Johnson Controls International
+PLD-2010,golden,PLD,2010-06-30,899881,,,,merger,2011-06-02,-0.000076,,,pass,,spec Part 2 (PLD),,old ProLogis merged into AMB
+PLD-2015,golden,PLD,2015-06-30,1045609,AMB;PLD,active,,,,,,,pass,,spec Part 2 (PLD),,AMB renamed Prologis
+MRK-2020,golden,MRK,2020-06-30,310158,MRK,active,,,,,,,pass,,spec golden list,,
+COHR-2015,golden,COHR,2015-06-30,21510,,,,merger,2022-06-30,0.000543,,,pass,,spec golden list,,Coherent Inc acquired by II-VI; II-VI took the COHR ticker
+COHR-2023,golden,COHR,2023-06-30,820318,IIVI;COHR,active,,,,,,,pass,,spec golden list,,
+CZR-2015,golden,CZR,2015-06-30,858339,,,,merger,,,,,pass,,spec golden list,,Caesars Entertainment Corp acquired by Eldorado; Eldorado took CZR
+CZR-2022,golden,CZR,2022-06-30,1590895,,active,,,,,,,pass,,spec golden list,,
+APTV,golden,APTV,2020-06-30,1521332,DLPH;APTV,active,,,,,,APTV,pass,,library PR #6,,2024 holding-company continuation
+ITT,golden,ITT,2012-06-29,216228,,active,,,,,,ITT,pass,,library PR #6,,2016 holding-company continuation
+J,golden,J,2020-06-30,52988,JEC;J,active,,,,,,J,pass,,library PR #6,,2022 holding-company continuation
+FOXA-2020,golden,FOXA,2020-06-30,1754301,,active,,,,,,,pass,,spec golden list,,Fox Corp class A
+FOX-2020,golden,FOX,2020-06-30,1754301,,active,,,,,,,pass,,spec golden list,,Fox Corp class B
+MRK-2008,golden,MRK,2008-06-30,64978,,,,,,,,,pass,,,,one composite FIGI across the 2009 Schering-Plough merger; old Merck & Co was the issuer in 2008
+FOXA-2015,golden,FOXA,2015-06-30,1308161,,,,merger,,,,,known_wrong,reset-4b,,,Twenty-First Century Fox class A; acquired by Disney 2019; output maps it to Fox Corp's FIGI
+FOX-2015,golden,FOX,2015-06-30,1308161,,,,merger,,,,,known_wrong,reset-4b,,,Twenty-First Century Fox class B; as FOXA-2015
+YHOO,golden,YHOO,2010-06-30,1011006,YHOO;AABA,,,liquidation,,,,,known_wrong,reset-4a,https://www.sec.gov/Archives/edgar/data/1011006/000119312519262790/d794671dex991.htm,,renamed Altaba (AABA) 2017-06-16; dissolved 2019-10-04 after a stockholder-approved liquidation
+PDLI,golden,PDLI,2015-06-30,882104,,,,liquidation,,,,,known_wrong,reset-4d,,,voluntary delisting to wind down; paid distributions
+EXBD,golden,EXBD,2010-06-30,1066104,EXBD;CEB,,2012-09-01,,,,,,pass,,https://www.sec.gov/Archives/edgar/data/1066104/000119312512322777/d387593dex991.htm,,ticker changed to CEB 2012-08-13; same company and listing
+XON,golden,XON,2015-06-30,1356090,XON;PGEN,,2020-02-02,,,,,,pass,,https://www.sec.gov/Archives/edgar/data/1356090/000119312520023400/d876809dex991.htm,,renamed Precigen (PGEN) 2020-02-01
+WTW,golden,WTW,2010-06-30,105319,WTW;WW,,2014-01-01,,,,,,known_wrong,reset-4a,https://www.streetinsider.com/Corporate+News/Weight+Watchers+(WTW)+Announces+NASDAQ+Stock+Ticker+Symbol+Change+to+WW/15377344.html,,left the index and kept trading as WTW; later WW on Nasdaq
+LIZ,golden,LIZ,2010-06-30,352363,LIZ;FNP,,2012-05-17,,,,,,pass,,https://streetinsider.com/Corporate+News/Liz+Claiborne+(LIZ)+Completes+Name+and+Ticker+Change;+Is+Now+Fifth+&+Pacific+Companies+(FNP)/7439631.html,,renamed Fifth & Pacific (FNP) 2012-05-15
+ACXM,golden,ACXM,2015-06-30,733269,ACXM;RAMP,,2018-10-03,,,,,,pass,,https://www.sec.gov/Archives/edgar/data/0000733269/000119312518289748/d612393d8k12b.htm,,holding-company reorganization; LiveRamp (RAMP) from 2018-10-02
+DF,golden,DF,2010-06-30,931336,DF,,2013-08-28,,,,,,pass,,https://www.sec.gov/Archives/edgar/data/0000931336/000119312513335750/d583800dex991.htm,,1-for-2 reverse split 2013-08-26: same ticker; new CUSIP
+MNI,golden,MNI,2010-06-30,1056087,MNI,,2016-06-09,,,,,,pass,,https://www.prnewswire.com/news-releases/mcclatchy-announces-completion-of-reverse-stock-split-300280463.html,,1-for-10 reverse split 2016-06-07: same ticker; new CUSIP
+ESV,golden,ESV,2009-06-30,314808,ESV,,2010-01-01,,,,,,pass,,https://www.sec.gov/Archives/edgar/data/0000314808/000095012309072898/d70526e8vk12b.htm,,redomiciled to the UK 2009-12-23; one share became one ADS; same ticker
+DRQ,golden,DRQ,2015-06-30,1042893,DRQ;INVX,,2024-09-08,,,,,,pass,,https://www.nasdaq.com/press-release/innovex-and-dril-quip-complete-merger-creating-unique-energy-industrial-platform-0,,Dril-Quip survives the Innovex merger; renamed; ticker INVX
+MDC,golden,MDC,2020-06-30,773141,,,,merger,,,,,pass,,https://www.sekisuihouse.co.jp/english/company/release/library/2024/20240419/20240419e.pdf,,acquired by Sekisui House 2024-04-19 for $63.00 cash
+SGP,golden,SGP,2008-06-30,310158,,,,merger,,,,,pass,,https://www.sec.gov/Archives/edgar/data/0000310158/000119312509223917/dex991.htm,,merged with Merck 2009-11-03 for 0.5767 MRK + $10.50
+ACF,golden,ACF,2008-06-30,804269,,,,merger,,,,,pass,,https://www.sec.gov/Archives/edgar/data/0001467858/000119312510263635/d424b1.htm,,acquired by General Motors 2010-10-01 for cash
+BNI,golden,BNI,2008-06-30,934612,,,,merger,,,,,pass,,https://www.sec.gov/Archives/edgar/data/0000934612/000093461211000005/d10k.htm,,acquired by Berkshire Hathaway 2010-02-12 for cash and stock
+UFS,golden,UFS,2015-06-30,1381531,,,,merger,,,,,pass,,https://www.pulpandpapercanada.com/paper-excellence-completes-acquisition-of-domtar/,,acquired by Paper Excellence 2021-11-30 for $55.50 cash
+CPN,golden,CPN,2015-06-30,916457,,,,merger,,,,,pass,,https://www.sec.gov/Archives/edgar/data/0000916457/000091645718000100/exhibit991-02212018.htm,,taken private 2018-03-08 for $15.25 cash
+CPGX,golden,CPGX,2015-12-31,1629995,,,,merger,,,,,pass,,https://www.worldpipelines.com/equipment-and-safety/04072016/transcanada-completes-columbia-pipeline-group-acquisition-276/,,acquired by TransCanada 2016-07-01 for $25.50 cash
+STN,golden,STN,2008-06-30,898660,,,,merger,,,,,known_wrong,reset-4a,https://lasvegassun.com/news/2009/jul/28/station-casinos/,,bought out 2007-11-07; the 2008 sighting is a stale constituent
+LVNTA,golden,LVNTA,2015-06-30,1355096,,,,,,,,GLIBA,known_wrong,reset-4a,https://investors.qvcgrp.com/news-media/press-releases/detail/14/liberty-interactive-and-gci-liberty-announce-completion-of,,split-off: each share redeemed 1:1 for GCI Liberty (GLIBA) 2018-03-09
+ERA,golden,ERA,2013-06-28,1525221,,,,,,,,,pass,,https://www.bristowgroup.com/news-media/press-releases/detail/324/era-group-inc-begins-trading-on-nyse-as-an-independent,,"Era Group sighting attached to the old Bristow Group (CIK 73887); passes since wave 1 (5h rule D: the era's own fails rows say ERA GROUP INC), was known_wrong until reset-4b"
+CBL-2008,golden,CBL,2008-01-16,910612,,ended,,dropped,,,,,pass,,"8-K 0001564590-20-049434 (item 1.03, 2020-11-02); 8-K 0001564590-20-050276 (item 3.01: NYSE suspended the common 2020-11-02 for abnormally low price); fails CUSIP 124830100 as CBL to 2020-11-04 then CBLAQ to 2021-11-02; new CUSIP 124830878 as CBL from 2021-11-02; 25-NSE 0000876661-21-001566/-001567 filed 2021-11-02","left_view; exchange_transfer 304 2020-11-04 (continued filings rule; no_form25, successor_unknown), dlret 0.0 fill","CBL & Associates: Chapter 11 2020-11-01, NYSE suspension 2020-11-02, OTC as CBLAQ. The NYSE exit is a bankruptcy drop to OTC valued at the first OTC print (decision 11); the post-emergence common (new CUSIP, 2021-11-02) is a new security (decision 9). Last trade 2020-11-02 or 2020-10-30 is not yet confirmed, so it is not checked.; passes since wave 1 (5g's distress ending with 5d's last trade), was known_wrong until reset-4a3"

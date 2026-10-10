@@ -1,5 +1,5 @@
-from delist_detection.llm_merger_extractor import MergerTerms
-from delist_detection.payout_gate import DEFAULT_TOL, gate_payouts, reconcile
+from delist_detection.terms.llm_merger_extractor import MergerTerms
+from delist_detection.terms.payout_gate import DEFAULT_TOL, gate_payouts, reconcile
 
 
 def _terms(deal_type, cash=None, ratio=None, ticker=None):
@@ -137,7 +137,7 @@ def test_an_election_stock_leg_drops_the_payout_and_writes_terms():
     assert K not in g.payouts and payouts == {K: 505.0}
     assert (g.sources[K], g.confidences[K]) == ("llm_election_stock", "high")
     assert g.merged_terms[K] == {"stock_ratio": 20.2, "acquirer_price": 16.54, "acquirer_ticker": "QXO"}
-    assert (g.flags, g.gate_failed, g.llm_cash) == ({}, 0, 0)
+    assert (g.flags, g.llm_cash) == ({}, 0)
 
 
 def test_a_stock_only_gate_pass_drops_a_regex_value_that_fit():
@@ -166,12 +166,12 @@ def test_full_terms_clear_the_failed_flag_of_their_cash_leg():
     # AET: the regex read the $145 cash leg of $145 + 0.8378 CVS
     g = _gate(payout=145.0, terms=_terms("cash_and_stock", 145.0, 0.8378, "CVS"), close=212.70, price=80.27)
     assert g.merged_terms[K]["cash_per_share"] == 145.0 and K not in g.payouts
-    assert (g.flags, g.gate_failed) == ({}, 0)
+    assert g.flags == {}
     # when the full terms fail too, the regex flag stays and the terms-gate drop
     # (fail_sanity) is appended so the row still surfaces in review.csv
     g = _gate(payout=145.0, terms=_terms("cash_and_stock", 145.0, 0.8378, "CVS"), close=300.0, price=80.27)
-    assert (g.flags[K], g.gate_failed, g.merged_terms) == (
-        ("payout_gate_failed:145", "terms_gate_failed:fail_sanity"), 1, {})
+    assert (g.flags[K], g.merged_terms) == (
+        ("payout_gate_failed:145", "terms_gate_failed:fail_sanity"), {})
 
 
 def test_a_cash_and_cvr_deal_labelled_other_fills_the_payout():
@@ -218,24 +218,6 @@ def test_failed_llm_terms_flag_the_row_in_gate_payouts():
     assert (g.payouts, g.flags[K]) == ({}, ("llm_gate_failed",))
 
 
-# --- F13: gate_failed counts only rows nothing settled ---
-
-def test_gate_failed_skips_a_row_the_llm_cash_settled():
-    # TWO: the regex $25 failed the close, the LLM's $12 settled the row
-    g = _gate(payout=25.0, terms=_terms("cash", 12.0), close=12.18)
-    assert (g.payouts[K], g.flags[K], g.gate_failed) == (12.0, ("payout_gate_failed:25",), 0)
-
-
-def test_gate_failed_skips_a_row_merger_terms_settled():
-    g = _gate(payout=25.0, close=12.18, csv={"ABC": {"cash_per_share": 12.0}})
-    assert (K in g.payouts, g.flags[K], g.gate_failed) == (False, ("payout_gate_failed:25",), 0)
-
-
-def test_gate_failed_counts_a_row_nothing_settled():
-    g = _gate(payout=25.0, close=12.18)
-    assert (K in g.payouts, g.flags[K], g.gate_failed) == (False, ("payout_gate_failed:25",), 1)
-
-
 # --- acquirer_price is called with the merger's own (sec_id, delist_date) key ---
 
 def test_acquirer_price_is_keyed_by_the_merger_not_just_its_shared_delist_date():
@@ -258,3 +240,82 @@ def test_acquirer_price_is_keyed_by_the_merger_not_just_its_shared_delist_date()
     )
     assert g.merged_terms[k1] == {"stock_ratio": 0.5, "acquirer_price": 100.0, "acquirer_ticker": "ACQ"}
     assert g.merged_terms[k2] == {"stock_ratio": 0.5, "acquirer_price": 200.0, "acquirer_ticker": "ACQ"}
+
+
+# --- sub-plan 5e: an election's default package, and the acquirer line's price ---
+
+def test_an_election_whose_legs_together_reconcile_is_its_default_package():
+    """NYX 2013: $11.27 and 0.1703 ICE Group per share (the default package; holders could elect all cash or all
+    stock, prorated). Neither leg alone is near the $45.29 close; the two together, at ICE's $199.84, are."""
+    r = reconcile(None, 45.29, _terms("election", 11.27, 0.1703, "ICE"), 199.84, DEFAULT_TOL)
+    assert (r.cash, r.stock_ratio, r.acquirer_price, r.source, r.flags) == (
+        11.27, 0.1703, 199.84, "llm_election_package", ())
+
+
+def test_an_either_or_election_is_never_summed():
+    # BLD's elections, $505 or 20.2 QXO at $17.28: the two legs together are twice the close
+    r = reconcile(None, 700.0, _terms("election", 505.0, 20.2, "QXO"), 17.28, DEFAULT_TOL)
+    assert (r.source, r.flags) == ("none", ("llm_gate_failed",))
+
+
+def test_a_package_election_writes_its_cash_and_its_stock_leg():
+    # SUN 2012: the regex read the $25.00 cash leg, so its failed flag is dropped once the package settles the row
+    g = _gate(payout=25.0, terms=_terms("election", 25.0, 0.5245, "ETP"), close=46.75, price=41.62)
+    assert g.merged_terms[K] == {"cash_per_share": 25.0, "stock_ratio": 0.5245, "acquirer_price": 41.62,
+                                 "acquirer_ticker": "ETP"}
+    assert (g.payouts[K], g.sources[K], g.flags, g.llm_cash, g.priced_by[K]) == (
+        25.0, "llm_election_package", {}, 0, "ticker")
+
+
+def _lined(terms, close, price, line):
+    return gate_payouts([K], {}, {}, {}, {K: terms}, {"ABC": close}, {}, lambda ticker, key: price, DEFAULT_TOL,
+                        line_price=lambda key: line)
+
+
+def test_the_acquirer_lines_price_settles_terms_whose_ticker_has_no_price():
+    # CAL 2010: no fails row under UAUA after the last trade; UAL's new CUSIP closed at $24.70 on the price date
+    g = _lined(_terms("stock", None, 1.05, "UAUA"), 24.53, None, ("UAL", 24.70))
+    assert g.merged_terms[K] == {"stock_ratio": 1.05, "acquirer_price": 24.70, "acquirer_ticker": "UAL"}
+    assert (g.flags, g.priced_by[K], g.emitted) == ({}, "line", 1)
+
+
+def test_the_acquirer_lines_price_settles_terms_with_no_ticker():
+    # GXP 2018: the LLM named Monarch Energy Holding but no ticker; Evergy's line closed at $54.25
+    g = _lined(_terms("stock", None, 0.5981, None), 31.99, None, ("EVRG", 54.25))
+    assert g.merged_terms[K] == {"stock_ratio": 0.5981, "acquirer_price": 54.25, "acquirer_ticker": "EVRG"}
+    assert g.dropped["no_acq_ticker"] == 0
+
+
+def test_the_lines_price_is_tried_after_the_tickers_fails():
+    # RTN 2020: UTX's close on the last trade day still held Carrier and Otis; RTX closed at $49.93 the day after
+    g = _lined(_terms("stock", None, 2.3348, "UTX"), 116.96, 86.01, ("RTX", 49.93))
+    assert (g.merged_terms[K]["acquirer_price"], g.priced_by[K], g.flags) == (49.93, "line", {})
+
+
+def test_a_ticker_price_that_reconciles_is_kept_over_the_lines():
+    # RDC 2019: Ensco's close before its 1-for-4 consolidation reconciles 2.215 per share; the new CUSIP would not
+    g = _lined(_terms("stock", None, 2.215, "ESV"), 8.80, 4.03, ("ESV", 16.37))
+    assert (g.merged_terms[K]["acquirer_price"], g.priced_by[K]) == (4.03, "ticker")
+
+
+def test_terms_that_fail_on_both_prices_still_fail():
+    # MRD 2016's stale $11.78 close: 0.375 Range at $39.37 is 25% away, whichever price
+    g = _lined(_terms("stock", None, 0.375, "RRC"), 11.78, 39.37, ("RRC", 39.37))
+    assert (g.flags[K], g.merged_terms) == (("terms_gate_failed:fail_sanity",), {})
+
+
+def test_an_election_tries_the_lines_price_too():
+    # no ticker price; the default package reconciles on the line's
+    g = _lined(_terms("election", 26.04, 0.3306, "ACT"), 97.46, None, ("ACT", 223.05))
+    assert (g.sources[K], g.priced_by[K], g.merged_terms[K]["acquirer_price"]) == (
+        "llm_election_package", "line", 223.05)
+
+
+def test_a_line_first_leg_is_priced_by_its_line_even_when_the_tickers_price_reconciles():
+    """TWC 2016, VIA 2019: the terms' ticker's close is another line's (old Charter's, CBS class B's) and also fits;
+    the acquirer's own line is priced first and settles the gate."""
+    terms = _terms("stock", None, 0.5, "XYZ")
+    for first, how, price in ((set(), "ticker", 20.0), ({K}, "line", 21.0)):
+        g = gate_payouts([K], {}, {}, {}, {K: terms}, {"ABC": 10.5}, {}, lambda ticker, key: 20.0, DEFAULT_TOL,
+                         line_price=lambda key: ("XYZA", 21.0), line_first=first)
+        assert (g.priced_by[K], g.merged_terms[K]["acquirer_price"]) == (how, price)

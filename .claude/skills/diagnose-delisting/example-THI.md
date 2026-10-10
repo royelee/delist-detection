@@ -1,0 +1,126 @@
+# Worked example: THI (Tim Hortons) → Restaurant Brands International, 2014
+
+The shape every report copies. Facts and links come from the operator's plan document ("Plan: Skill to Diagnose
+Unknown Delisting Classifications") and were re-checked through `sec.py` on 2026-10-03. A real report re-checks
+each one before citing it.
+
+Two habits this example shows:
+- For a stock leg, read the acquirer's own closing filing, or the target's closing press release, for the
+  acquirer's symbol and its first trading day. These are often stated, and they settle `price_ticker` and
+  `price_date` without fails rows.
+- Check the price security in the library's tables. Find the acquirer's line, the line whose CUSIP begins at the
+  closing, and check that its `ticker_history` holds the price ticker on the price date. A history that starts a
+  few days late is a library finding, not a reason to doubt the filing.
+
+Source row (abridged): `case_id` BBG000BB2N27_2014-12-25, `exit_kind` merger, `continuation` false,
+`last_trade_date` 2014-12-12, `dlret_fill` 0.0 (assumed par), `value_rule` cash_plus_stock, `cash_per_share`
+65.50, `cash_currency` blank, `stock_ratio` 0.8025, `price_sec_id` blank, `price_ticker` QSR, `price_date`
+2014-12-15, `terms_source` llm, `terms_gate` failed, verdict uncertain.
+
+---
+
+## 1. Verdict
+
+A real merger: each THI share became C$65.50 cash plus 0.8025 Restaurant Brands International shares (the
+default package). The library's kind, date, ratio and price ticker are right. The cash currency and the price
+security are missing, and its fill of assumed par is replaced once qlib_practice prices the package.
+
+## 2. Library vs evidence
+
+| Field | Library says | Evidence says | Status |
+| --- | --- | --- | --- |
+| exit_kind | merger | merger | agree |
+| drop_reason | — | — | agree |
+| continuation | false | false (cash plus another company's stock; not one for one) | agree |
+| successor | none | none (RBI is the acquirer, not a continuing line) | agree |
+| last_trade_date | 2014-12-12 | 2014-12-12 (NYSE trading suspended after the close on 2014-12-12) | agree |
+| value_rule | cash_plus_stock | cash_plus_stock | agree |
+| terms | 65.50 (no currency) + 0.8025 × QSR on 2014-12-15, price_sec_id blank | C$65.50 + 0.8025 RBI shares; QSR (BBG0076WG2V1) first traded 2014-12-15 | missing (currency, price_sec_id) |
+| issuer | 1345111 | 1345111 | agree |
+| ticker_history | THI 2007-12-26 .. 2014-12-12 | same | agree |
+
+## 3. Corrected classification
+
+```text
+exit_kind        = merger
+drop_reason      =
+continuation     = false
+successor        =
+last_trade_date  = 2014-12-12
+value_rule       = cash_plus_stock
+cash_per_share   = 65.50
+cash_currency    = CAD
+stock_ratio      = 0.8025
+price_ticker     = QSR
+price_sec_id     = BBG0076WG2V1 (in the run; its QSR ticker_history starts 2014-12-17, two sessions late)
+price_date       = 2014-12-15
+recovery_ratio   =
+value_formula    = (65.50 CAD + 0.8025 × price(QSR, 2014-12-15)) / last_close − 1
+event_type       = merger
+consideration    = cash_and_stock (an election deal; default package, to which elections were prorated)
+holder_value     = 65.50 CAD cash + 0.8025 RBI shares
+effective_date   = 2014-12-12
+successor_ticker = QSR (RBI common, first traded 2014-12-15)
+confidence       = verified
+```
+
+## 4. Why this confidence
+
+Verified.
+- Exit kind: filing (the 8-K of 2014-12-17 reports the arrangement's completion).
+- Successor: filing (the 424B3: holders receive cash and RBI shares, no continuing line).
+- Last trade date: filing (THI's 8-K of 2014-12-12, item 3.01: trading "suspended after the close of trading on
+  December 12, 2014").
+- Payout rule: filing (the 424B3's default package).
+- Terms: filing.
+  - The amounts: the 424B3 gives C$65.50 and 0.8025.
+  - The symbol and the price date: THI's EX-99.1 says "Restaurant Brands International to Begin Trading on Monday,
+    December 15, 2014" under "(TSX, NYSE: QSR)". RBI's own 8-K says its shares were approved for NYSE listing
+    "under the symbol 'QSR'" and "will begin trading on the NYSE and the TSX on December 15, 2014".
+  - The price security, BBG0076WG2V1, is a look-up in the library's tables, like a price. It does not need a filing
+    of its own.
+
+## 5. What happened
+
+- The arrangement closed on 2014-12-12; THI became an indirect subsidiary of the new holding company
+  ([SEC 8-K 2014-12-17](https://www.sec.gov/Archives/edgar/data/0001345111/000119312514445447/d839026d8k.htm)).
+- THI asked the NYSE to suspend trading "after the close of trading on December 12, 2014". Its EX-99.1 announces
+  that RBI (TSX, NYSE: QSR) begins trading on Monday, December 15, 2014
+  ([SEC 8-K 2014-12-12 and EX-99.1](https://www.sec.gov/Archives/edgar/data/0001345111/000119312514441344/d837647dex991.htm)).
+- RBI's 8-K of the same day: the common shares were approved for NYSE and TSX listing under "QSR" and "will begin
+  trading on the NYSE and the TSX on December 15, 2014"
+  ([SEC 8-K](https://www.sec.gov/Archives/edgar/data/1618756/000119312514441411/d836919d8k.htm)).
+- Default consideration C$65.50 cash + 0.8025 RBI shares; elections of C$88.50 cash or 3.0879 shares were
+  prorated to that package ([SEC 424B3](https://www.sec.gov/Archives/edgar/data/1618755/000119312514398439/d786007d424b3.htm)).
+- About 2% elected cash, 72% stock, 26% mixed or none
+  ([SEC EX-99.2](https://www.sec.gov/Archives/edgar/data/0001345111/000119312514438325/d835305dex992.htm)).
+- The NYSE removed THI because the shares came to represent other securities as of 2014-12-12
+  ([SEC Form 25](https://www.sec.gov/Archives/edgar/data/0001345111/000087666114000652/ruleprovisionnotice.htm)).
+- The library's tables hold QSR as BBG0076WG2V1, issuer RBI, CUSIP 76131D103. Both its ticker_history and its
+  cusip_history start 2014-12-17. Its fails rows also start 2014-12-17, with the 2014-12-16 close of $35.46. No
+  fails row carries the 2014-12-15 close.
+
+## 6. Decision-tree bucket
+
+Replaced: the old security was exchanged for cash plus another company's shares — a merger, not a continuation.
+
+## 7. Why the library got it wrong
+
+- **Currency.** The library publishes `cash_per_share` 65.50 with `cash_currency` blank, but the cash is Canadian
+  dollars.
+- **Price security.** `price_sec_id` is blank although QSR's line is in the run. The acquirer lookup runs only on
+  terms that passed the gate, and QSR's history starts two sessions after its first trading day.
+- **Price check.** It failed (`terms_gate=failed`), most likely because the gate compared C$65.50 plus the stock
+  leg with a USD close. Also, fails data has no QSR close for 2014-12-15.
+
+The terms themselves match the filing. Cause tag: `currency_missing`.
+
+## 8. Fix and open checks
+
+- Publish `cash_currency=CAD`. qlib_practice converts it to the close's currency on 2014-12-12 when it prices QSR
+  on 2014-12-15.
+- Find the acquirer for every published stock leg, including a failed gate. Here that is RBI, CIK 1618756, and
+  its line whose CUSIP begins at the closing. Publish `price_sec_id` BBG0076WG2V1.
+- Start QSR's ticker_history on 2014-12-15, the first trading day the filings state, not on its first fails row.
+- The gate cannot price the 2014-12-15 close from fails data, and its cash leg needs the CAD conversion.
+- Golden case: yes — a cash-and-stock election deal with a non-USD cash leg.

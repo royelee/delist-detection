@@ -35,7 +35,7 @@ one observation per row per file).
               │  stage 1: TickerEra per    │   splits on pin change / name mismatch /
               │  (ticker, observations)    │   class-letter change; a gap alone never splits
               └─────────────┬──────────────┘
-                             │ FtdIndex.load (era tickers' fails-to-deliver rows)
+                             │ FtdIndex.opened (era tickers' fails-to-deliver rows)
                              ▼
               ┌────────────────────────────┐
               │  stage 2: refine_eras      │   splits again on the ticker's FTD rows: a
@@ -55,7 +55,7 @@ one observation per row per file).
               │  order, strict-validated   │   5. era name → EDGAR company search
               │                            │   6. EFTS 8-K frequency rank
               │  second pass, never saved  │   the rest: 8-K frequency through guard G,
-              │  (infer_issuers)           │   else a shared CUSIP or a CUSIP handoff
+              │  (identity.EraIssuers)     │   else a shared CUSIP or a CUSIP handoff
               └─────────────┬──────────────┘
                              │ FigiResolver.resolve_many (OpenFIGI, per era)
                              ▼
@@ -78,7 +78,7 @@ one observation per row per file).
               │  whole filing history)     │   class_text, rule); regional exchanges and
               │                            │   unreadable/unclassified filings skipped
               └─────────────┬──────────────┘
-                             │ match_security (class kind + letter) + secondary-
+                             │ match_securities (class kind + letter) + secondary-
                              │ listing check (10-K cover exchanges before/after)
                              ▼
               ┌────────────────────────────┐
@@ -93,23 +93,29 @@ one observation per row per file).
               │  DelistRecord per delisting│   sec_id, delist_date, crsp_code, bucket,
               │                            │   confidence, reason, evidence
               └─────────────┬──────────────┘
+                             │ stage 5b (_dead_before_sighting): a security whose last
+                             │ real ending came before its first observation and with no
+                             │ trading fails row gets rows loaded for [end − 1095 d,
+                             │ end + 10 d], takes the CUSIPs of rows under its tickers
+                             │ in the 120 days before the end that name its issuer
+                             │ (history.backfill_cusips; not CUSIPs another security holds), and its sightings are rebuilt
                              │ ftd.close_after (last-trade + acquirer closes),
                              │ payout_extractor / llm_merger_extractor, payout_gate
                              ▼
               ┌────────────────────────────┐
               │  successors, then the      │   successor search (a line of the run, else the
-              │  handoff pass (handoffs.py)│   successor's 8-K12B); ticker handoffs: a
-              │                            │   continuation's row + successor, a takeover's
+              │  handoff pass              │   successor's 8-K12B); ticker handoffs: a
+              │  (endings/handoffs.py)     │   continuation's row + successor, a takeover's
               │                            │   ticker_successor_sec_id
               └─────────────┬──────────────┘
                              │
                              ▼
               ┌────────────────────────────┐
-              │  enrich() → delistings.csv │   + payouts.csv, review.csv +
-              │  (+ ticker_history.csv,    │     review_summary.csv (review_triage),
-              │     cusip_history.csv)     │     cusip_history.csv from history.ranges_from_sightings
+              │  enrich() → delistings.csv │   + review.csv +
+              │  (+ cusip_history.csv)     │     review_summary.csv (review_triage),
+              │                            │     cusip_history.csv from history.ranges_from_sightings
               └─────────────┬──────────────┘
-                             │ handling.py / bmp_correction.py / qlib_adapter.py
+                             │ handling/handling.py / handling/qlib_adapter.py (DLRET: dlret.decide)
                              │ — all keyed on sec_id
         ┌────────────────────┴────────────────────┐
         ▼                                          ▼
@@ -123,7 +129,7 @@ one observation per row per file).
 
 `observation_map.csv` (one row per input observation, its era, `sec_id` and
 status) is written in the same final row-building stage as the
-`ticker_history.csv`/`cusip_history.csv` box above, from the same eras and
+`cusip_history.csv` box above (and the in-memory ticker ranges), from the same eras and
 resolutions; see *Outputs* below for its schema and status rules.
 
 ## Caching
@@ -203,9 +209,8 @@ A connection error, a timeout, or a 5xx on a submissions fetch, a filing text
 or raw fetch (`fetch_filing_text` and `fetch_filing_raw` are both retried the
 same way), a full-text-search query, or a MIDAS/FTD ZIP download is retried up
 to 3 attempts with 2s/4s backoff (`edgar.retry_request`, inside
-`edgar.sec_get`, the one request path `EdgarClient`, `sec_http.py` and
-`verify_against_web.py` share; `verify_against_web.py` asks it for a single
-attempt) before giving up; a 403/429 still raises `EdgarBlocked`
+`edgar.sec_get`, the one request path `EdgarClient` and `sources/sec_http.py`
+share) before giving up; a 403/429 still raises `EdgarBlocked`
 immediately, never retried, and a failure is never cached as an answer. A
 MIDAS quarter that keeps failing to download, or whose ZIP SEC no longer
 serves (a 404), is remembered in-memory (`MidasClient`) for the rest of the
@@ -262,7 +267,7 @@ exchange transfer). It runs each stage's own code on N threads
   `flock` on `~/.cache/delist_detection/sec_rate.lock`
   (`$DELIST_DETECTION_SEC_RATE_LOCK` overrides it). That file holds the last
   start time, so every SEC client on the machine that uses the same file (runs
-  in any worktree, `verify_against_web.py`, `build_golden_fixtures.py`) stays
+  in any worktree, `build_golden_fixtures.py`) stays
   under 8 requests/s together. A library caller that builds its own clients
   instead of using `default_clients` must call `sec_limiter.use_machine_wide_limit()`
   itself. A process never sleeps while holding the lock file's `flock` — it
@@ -315,8 +320,38 @@ Each run writes `run_manifest.json` next to the tables:
 
 The manifest is not part of the byte-identical-output guarantee: `as_of`, the
 code version and the worker count make it expected to differ between two runs
-even when their eight tables come out identical. A run that aborts leaves the
+even when their seven tables come out identical. A run that aborts leaves the
 previous manifest in place.
+
+`scorecard.json` is built at stage 10h from the same rows the tables are
+written from (`store.formatted`), so it equals what `scripts/scorecard.py`
+recomputes from the written CSVs. It is written after the tables and before the
+manifest, carries `drops` (floored numbers that got worse; never computed under
+`--limit`) and `golden_failures`, and is compared to `data/scorecard.json`'s
+floor. It is deterministic for the same tables, config and run date.
+
+Before the write, stage 10e gathers each placeholder's ticker evidence
+(`ticker_evidence.evidence_for`: a resolver tier that names the ticker, else
+one full-text search of the CIK's own filings), 10f decides every verdict
+(`verdict.decide` over the rows about to be written) and adds `uncertain.csv`
+to the group, and 10h builds the scorecard from the same rows, so its V lines
+count exactly what `uncertain.csv` lists.
+
+10g, the contract (`pipeline._contract`): `_issuers_in_force` (one cached
+submissions read per issuer CIK, and SEC's name index for a sighting whose era
+CIK did not carry its name that day), then `outputs/contract.py`'s rows and
+`price_requests.request_rows`. A price answer to no request stops the run here. An `otc_print` answer
+is read at stage 10a through the request it answers (`price_requests.PriceAnswers.ending_values`);
+`dlret.decide` (its `ValueInputs.otc_print`) then values a liquidation or
+compliance-failure ending as `print / last_close − 1` (`dlret_method` `otc_print`).
+A blank `exit_kind` in the contract means no kind is asserted; such a row's
+verdict is always `uncertain`, so a reader must not filter it away as "no ending".
+`contract/delistings.csv` also carries each ending's payout rule (`payout_rule.value_fields`; stage 8's
+`merger_value.MergerValues.contract_inputs` hands it the `--merger-terms` row, the LLM terms and regex read from before the payout gate, and the acquirer's
+sec_id): a merger's terms come from the override, else the delistings.csv row (`terms_gate` passed, or blank
+when no last close existed), else the pre-gate read (`terms_gate=failed`; a failed election publishes both legs as read).
+The scorecard counts endings by `R2.7.value_rule.<rule>` and `R2.7.payout_rule_known`.
+10h, the scorecard.
 
 `scripts/classify_universe.py` exits:
 - `0` on success;
@@ -387,7 +422,7 @@ target rather than an acquirer.
 
 5. **The era's own `name` → SEC's name index.** In a production run
    (`pipeline.default_clients`) the candidates come from SEC's
-   `cik-lookup-data.txt` (`cik_lookup.py`): about a million `NAME:CIK:` lines,
+   `cik-lookup-data.txt` (`sources/cik_lookup.py`): about a million `NAME:CIK:` lines,
    every name each CIK filed under (MICHAEL KORS HOLDINGS LTD and CAPRI
    HOLDINGS LTD are both CIK 1530721), funds and individuals included,
    downloaded once and refreshed after 30 days under
@@ -441,11 +476,11 @@ target rather than an acquirer.
    in strict mode (must have Form 25/15 in window AND no 10-K/Q in the
    five years after `delist + 90d` — the latter rejects the acquirer).
 
-**The second pass** (`TickerResolver.infer_issuers`, after the memo is
+**The second pass** (`identity.EraIssuers.infer`, after the memo is
 flushed). A renamed issuer files no Form 25 and keeps filing 10-Ks, so tier 6
 rejects it, and the company search sees only today's name. The eras left with
 no CIK and no pin, with at least 3 fails rows of their own
-(`security_master.era_rows`, `era_last_seen`'s row choice from the first
+(`identity.era_rows`, `era_last_seen`'s row choice from the first
 observation to the last sighting), are answered in era-key order, and the
 answers are never saved (they depend on the run's other eras). A candidate CIK
 must pass **guard G**: it existed by the era's first fails row, every row's
@@ -506,7 +541,7 @@ flagged `member_name_mismatch` regardless of which tier resolved the CIK.
 
 ## FIGI resolution
 
-`FigiResolver.resolve_many` (`security_master.py`) resolves each era to a US
+`FigiResolver.resolve_many` (`identity/security_master.py`) resolves each era to a US
 composite FIGI via OpenFIGI, one era at a time. Each era's `Issuer` (its CIK
 and its EDGAR names, current and former) is read at the end of issuer
 resolution, inside that stage's meter and warm pass; a names read that fails
@@ -624,7 +659,7 @@ candidate accepted, the security gets the placeholder `sec_id`
 
 ## Delisting discovery
 
-`DelistingFinder.find` (`delistings.py`), per security:
+`DelistingFinder.find` (`endings/delistings.py`), per security:
 
 1. **List every Form 25 / 25-NSE / 25/A** in the issuer's submissions,
    including paginated older files, from `FORM25_LOOKBACK_DAYS` before the
@@ -634,9 +669,10 @@ candidate accepted, the security gets the placeholder `sec_id`
    (`form25_unclassified`) — flagged for review, not silently dropped.
 3. **Match** the remaining Form 25s to one of the issuer's observed
    securities by class kind (common/preferred/warrant/unit/…) and class
-   letter (`form25.match_security`); zero or several matches is
+   letter (`form25.match_securities`); an ambiguous class, or a tie with a
+   sibling no name word tells apart (`form25.tied_securities`), is
    `form25_unmatched`. A sibling security only competes for the match while
-   it was alive on the filing date (`SecurityContext.sibling_spans`).
+   it was alive on the filing date (`SecurityContext.spans`, from each sibling's trading record).
 4. **Secondary-listing check**: a matched Form 25 counts only when the
    security has no exchange listing left afterwards or has moved to a new
    one (`listing_status.withdrawal_kind`, from 10-K cover-page exchange
@@ -686,7 +722,17 @@ security-master rebuild — see the spec's §8.7):
 | 8-K item 1.03 whose own Item 1.03 section reports a bankruptcy, searched 540 days before to 30 days after the anchor date (an unreadable section still counts, flagged `bankruptcy_text_missing`). Exception: when that 1.03 is more than 180 days before the anchor and a change-in-control 8-K (5.01, or 2.01 with 3.01 or 3.03) falls within 30 days of it, the merger path wins instead and the row is flagged `bankruptcy_before_merger` | 470 | LIQUIDATION |
 | A rename near the anchor, or a 3.01 notice that reads as a listing transfer rather than a deficiency, with the company still reporting results afterward. Yields to the merger path whenever a nearby 8-K shows an acquisition (5.01, or 2.01 with 3.01 or 3.03) | 304 | EXCHANGE_TRANSFER |
 | SPAC trust liquidation (blank-check company, redeemed at trust value) | 600 | EXPIRATION |
-| 10-K / 10-Q / 20-F filed more than 180 days after the anchor | 304 | EXCHANGE_TRANSFER |
+| 10-K / 10-Q / 20-F filed more than 180 days after the anchor: the end-of-era resolver (`endings/end_of_era.py`) takes the first branch that fits, reading 8-K items, successor filings and Form 25s in [end − 30 d, end + 120 d] and merger filings in [end − 540 d, end + 30 d]: | | |
+| (1) the security still traded after the end (the finder's `continued`) | 304 | EXCHANGE_TRANSFER |
+| (2) a successor registration (8-K12B, 8-K12G3); stage 9 finds the successor | 304 | EXCHANGE_TRANSFER |
+| (3) a change in control (8-K item 5.01) | 231 (or the 8-K items' own merger code, 200/233) | MERGER |
+| (4) a completed acquisition (8-K item 2.01) with a merger filing or a Form 25 | 231 (or the items' own merger code) | MERGER |
+| (5) a 3.01 notice whose text cites a listing deficiency | 570 | COMPLIANCE_FAILURE |
+| (6) none of the above: today's continued-filings reason, unchanged | 304 | EXCHANGE_TRANSFER |
+| Sub-plan 5c, rule 1 (the exception to (3) and (4)): the registrant's own filings state no exchange of its own shares (`exchange_terms.own_exchange` finds none, a cash one included) and say it acquired another party (its shares were issued for the other's, or to it under the merger agreement; a top-up option is no such issue) or distributed another company's shares, kept by its holders: no merger from (3) or (4); the resolver goes on to (5) or (6). A bankruptcy before the completed sale (470) still decides, whatever the role | | |
+| Sub-plan 5c, R1 without an item code: the filings state each share of the security's class became one share, with no cash (a special dividend is none) and no second leg of shares, rights, warrants, units or a CVR, into the registrant itself or a new issuer (first EDGAR filing at most 1,095 days before, named by the target) | 304, flag `r1_continuation` | EXCHANGE_TRANSFER |
+| Sub-plan 5c, stage 8b: a merger whose published terms are one share and no cash (or cash equal to a special dividend the filings name), no `--merger-terms` row, the registrant's own filings saying the same in one reading, and a successor (a security of the run, else the new issuer's 8-K12B, named by the target) | 304, flag `r1_continuation` (was the merger code, kept in an `r1_rebucketed` review row) | EXCHANGE_TRANSFER |
+| Sub-plan 5c, stage 9d: each successor the run added (a line's new CUSIP, an 8-K12B filer) takes its own Form 25 ending when one exists (no fallback ending); its span ends at that ending's last trade | the ending's own code | the ending's own bucket |
 | None of the above: the 8-K item fingerprint decides, anchored on the matched Form 25's filing date (or the fallback filing date). A Form 25 more than 45 days from the anchor is a frozen tail, flagged `frozen_tail:<days>` | | |
 | 8-K items 2.01 + 3.01 + 5.01 | 231 | MERGER |
 | 8-K items 2.01 + 5.01 | 233 | MERGER |
@@ -704,7 +750,7 @@ security-master rebuild — see the spec's §8.7):
 A distress bucket (`compliance_failure`, `liquidation`) is never the silent
 default: every row above that ends in 470, 570, or 580 read the evidence
 that put it there. A deregistration with no merger or distress evidence
-lands `unknown`, which `enrich()` (`reconstruction.py`) resolves to par
+lands `unknown`, which `enrich()` (`outputs/reconstruction.py`) resolves to par
 (`dlret = 0`, `assumed_par`) when a valid last close exists, rather than
 compounding an unexplained gap into a fabricated return.
 
@@ -717,7 +763,10 @@ README's *Where each date and price comes from* for the full detail):
    (rule 12d2-2(b)) the date is the Exchange's decision day, whatever the
    wording (NYSE announces the suspension "at the close of the trading
    session on D"), so it counts only once MIDAS or a halt confirms it.
-2. The closing 8-K's Item 3.01 text.
+2. The closing 8-K's Item 3.01 text. An opening wording ("before the open",
+   "prior to the market opening", "before market open", "prior to the
+   commencement of trading", "as of the open of business", "at the opening of
+   business" on D) dates the last trade on the trading day before D.
 3. SEC MIDAS per-security exchange volume (2012+) — the last day with
    nonzero exchange volume, when it falls in a plausible window. When the
    requested window runs past MIDAS's coverage end (the last day of the
@@ -756,7 +805,7 @@ goes to `review.csv`.
 
 ## Ticker handoffs
 
-`handoffs.py`, run by `pipeline._handoffs` after the successor search and
+`endings/handoffs.py`, run by `pipeline._handoffs` after the successor search and
 before the history rows (so a row it adds clips the predecessor's ranges like
 any other delisting). A handoff is one security of the run stopping under a
 ticker and another starting under it within days (CONTEXT.md).
@@ -764,7 +813,8 @@ ticker and another starting under it within days (CONTEXT.md).
 1. **Finding** (`find_handoffs`): per ticker (either separator spelling), the
    securities sighted under it in the order they began under it, over the
    sightings `ticker_history` is built from (backfilled observations
-   dropped); each and the next to begin form a pair when the next one's first
+   dropped; a fails row is a sighting only when its symbol has a letter, because
+   SEC's Aug–Dec 2007 files mask some symbols as "**********"); each and the next to begin form a pair when the next one's first
    sighting falls within [−`OVERLAP_DAYS`, `TAKEOVER_DAYS`] = [−10, 120] days
    of the first one's last (CZR's two lines overlap 8 days, COHR waits 74).
 2. **Deciding** (`decide_handoff`), the first that applies: a continuation by
@@ -772,7 +822,14 @@ ticker and another starting under it within days (CONTEXT.md).
    naming A's issuer, under its EDGAR names around the handoff, today's, and
    its observed name (`predecessor_names`: Ashland Inc's CIK is ASHLAND LLC
    today), 30 days before to 60 after B's first sighting,
-   `continuation_filing`; the filer may keep A's CIK, as Aon did); a
+   `continuation_filing`; the filer may keep A's CIK, as Aon did). When the
+   search finds nothing, or none exists, B's issuer's own filing list is read for
+   the same 8-K12B/8-K12G3 in the same window (`own_continuation_filing`): a
+   1:1 holding-company reorganization (Xerox 2019, Cigna 2018, Broadcom 2016/2018,
+   QuidelOrtho 2022) names no predecessor the search can match. It is skipped
+   when A's issuer carries on in another line, as that filing names no
+   predecessor. A filing settles the continuation, so a merger row is rebucketed
+   (`handoff_rebucketed`). Next, a
    continuation by timing and identity (at most `CONTINUATION_DAYS` = 10
    days apart, B sighted under no ticker before then, and the same issuer CIK
    or the ticker's CUSIP switching from A's to B's in the fails data,
@@ -807,23 +864,39 @@ ticker and another starting under it within days (CONTEXT.md).
    `ticker_successor_sec_id` = B on A's delisting nearest the handoff, else
    writes `handoff_takeover_no_delisting`.
 
+**Stage 9c** (`pipeline._date_from_notices`) runs right after this stage, before
+the added rows' price answers and closes. A continuation row built from an
+unmatched Form 25 starts with its last sighting as its last trade day; 9c gives
+it the day that Form 25's own EX-99.25 notice states (source `ex99_notice`, and
+`observed_delist_date`), only when the day is confirmed (an involuntary
+12d2-2(b) notice is not), is before B's first sighting, and is no later than the
+row's `delist_date`. A failed read keeps the sighting and is reported as
+`resolution_degraded`. Its SEC traffic is the `handoff notice dates` stage.
+
 `run_manifest.json`'s `handoffs` key counts the pairs decided, continuations
 by filing and by timing, takeovers, conflicts and rows added; its `stages`
 carry the `handoff search` SEC traffic.
 
 ## Outputs
 
-Eight CSVs written to `output/`, all committed artifacts; see `store.py` for
-the exact schema. `delistings.csv` is the primary deliverable.
+Seven CSVs written to `output/`, all committed artifacts; see `outputs/store.py` for
+the exact schema. `delistings.csv` is the primary deliverable. The run also
+writes the contract under `output/contract/` (stage 10g): `security_history.csv`,
+`delistings.csv` (one row per ended security), `seeds.csv`, `price_requests.csv`,
+`id_changes.csv` and `payout_legs.csv`, beside the seven tables for one release.
 
 `output/securities.csv`: one row per identified security — `sec_id`,
 `issuer_cik`, `share_class`, `name`, `security_type`, `observed`,
 `figi_source`.
 
-`output/ticker_history.csv` / `output/cusip_history.csv`: point-in-time
-ticker and CUSIP ranges per security, keyed by `(sec_id, valid_from, ticker)`
-and `(sec_id, valid_from, cusip)` respectively, built from observations plus
-SEC fails-to-deliver rows. `ticker_history.exchange`
+`output/cusip_history.csv`: point-in-time CUSIP ranges per security, keyed by
+`(sec_id, valid_from, cusip)`, built from observations plus SEC
+fails-to-deliver rows. The ticker ranges are built the same way but no longer
+written as `ticker_history.csv`: the run keeps them in memory as `ticker_history`
+(the verdicts and the contract read them), and `contract/security_history.csv`
+publishes them, split where the issuer in force changes, without the merger
+acquirers the run adds (and without the `exchange` and `source` columns). In
+memory, `ticker_history.exchange`
 is filled for the range that ends in a delisting (from the Form 25) and for
 the still-open range (from the issuer's current EDGAR submissions listing);
 otherwise empty. `ticker_history.source` is `observation`, `ftd`, or
@@ -833,11 +906,10 @@ than from FTD sightings; an added acquirer security's range still comes from
 `ftd`.
 
 A security's ranges are clipped at the last delisting that actually ends it
-(`pipeline._ends_the_security`), not simply its last delisting: one whose
+(`history.Histories`), not simply its last delisting: one whose
 successor is the security itself (a continuing exchange transfer, D18) is
 skipped. Beyond that, only a `merger` or `exchange_transfer` delisting with a
-*confirmed* last-trade day (`e.last_trade.day` set and not flagged
-`last_trade_date_unconfirmed`) is second-guessed at all: it is also skipped
+*confirmed* last-trade day (`LastTrade.confirmed`) is second-guessed at all: it is also skipped
 when the security's own CUSIP keeps trading under its own ticker afterward —
 at least 20 live fails rows over at least 60 days with 2 or more distinct
 prices, so fails still settling at the last close don't count as continued
@@ -849,7 +921,7 @@ and years of real, varying-price OTC pink-sheet trading after a bankruptcy
 delisting (R H Donnelley, Smurfit-Stone Container, Idearc, General Growth
 Properties) is not that listing continuing. An *unconfirmed* last-trade day
 is equally too weak to second-guess: the classifier's no-Form-25 "continued
-10-K/Q filings >180d after delist" fallback (`delistings.py`'s
+10-K/Q filings >180d after delist" fallback (`endings/delistings.py`'s
 `_fallback_delisting`) substitutes the security's own last observed sighting
 when it has no last-trade evidence at all, flagged
 `last_trade_date_unconfirmed` — Monster Worldwide and SunPower both traded
@@ -882,7 +954,7 @@ de-duplication `load_observations` does), naming the era it fell into, the
 
 This is the caller's join surface: index membership comes from
 `observation_map.csv` (every row that resolved is one observation's
-`sec_id`), and a ticker lookup on a date goes through `ticker_history.csv` by
+`sec_id`), and a ticker lookup on a date goes through `contract/security_history.csv` by
 `history_ticker` — the canonical spelling (`BF-B`, not the raw `BFB`) a
 caller's own observed ticker may need normalizing to first. `--limit N` runs
 only ever produce rows for the eras that ran; the log names how many of the
@@ -894,16 +966,17 @@ name, resolved company name, which resolver tier won), the reconstructed
 delisting return (`dlret`), the method that produced it, and the raw
 extracted payout (`raw_payout_per_share`, `raw_payout_source`,
 `raw_payout_confidence`) before the last-close gate runs. Columns are
-`DELISTINGS_COLUMNS` in `store.py`. `resolution_source` records the resolver
+`DELISTINGS_COLUMNS` in `outputs/store.py`. `resolution_source` records the resolver
 tier that found the security's CIK, taken from the security's latest era
-that has a CIK (`security_master` when none has one); `SecurityContext
-.resolution_source` → `classify_event(resolution_source=...)` carry it to
-the row.
+that has a CIK (`security_master` when none has one, and for a successor the
+run added); `SecurityContext.resolution_source` →
+`classify_event(resolution_source=...)` carry it to the row.
 
-`output/payouts.csv`: per-merger cash payout after the last-close gate:
+`delistings.csv`'s `payout_per_share` / `payout_source`: per-merger cash payout after the last-close gate:
 only a payout (or cash+stock/stock-only terms) that reconciles with the
-target's last trade close is kept, so a row the gate drops is blank here
-even though `delistings.csv` still carries the raw extracted value.
+target's last trade close is kept, so a row the gate drops is blank there
+even though the `raw_payout_*` columns still carry the raw extracted value.
+The filing a payout came from is not published.
 
 `output/review.csv`: the pipeline collects one candidate row per delisting
 row whose `review_flags` is non-empty, plus every security with no delisting
@@ -923,14 +996,14 @@ first observation and no fails-to-deliver row under its own tickers shows it
 trading afterwards: the observations after it are a stale snapshot's).
 
 `pipeline.py` adds a delisting to the triage input when it has flags **or**
-a blank DLRET (`review_triage.is_blank`): `resolve_dlret` can return NaN
+a blank DLRET (`review_triage.is_blank`): `dlret.decide` can return NaN
 with *no* flag at all when a `--last-trade-closes`/`--recoveries`/
 `--merger-terms` override resolves to no consideration on a non-merger
 bucket (the override was "given", so `no_last_close` is never added), and
 such a row must still reach review, not vanish because `review_flags` was
 empty.
 
-`review_triage.triage()` (`review_triage.py`) first appends the token
+`review_triage.triage()` (`outputs/review_triage.py`) first appends the token
 `no_dlret` to every delisting row (non-blank `bucket`) whose `dlret` is still
 blank, *before* any decision is applied — so accepting the row's other flags
 never silently drops a delisting that still has no return; only supplying the
@@ -980,36 +1053,12 @@ a token with a `:`; bulk-accepting a `fix`-severity flag needs `--yes`).
 `load_decisions` first (both read `utf-8-sig`, so an Excel BOM doesn't blank
 the first cell) and refuses to touch a file that doesn't load, rewriting a
 valid one with every existing row/column preserved in the file's own header
-order. Written by `scripts/classify_universe.py` alongside the other seven
-output tables (eight in all, counting `observation_map.csv`).
-
-`output/web_verification.csv` — independent EDGAR cross-check produced by
-`scripts/verify_against_web.py`. Verdicts:
-
-| Verdict | Meaning |
-|---|---|
-| `OK` | `resolved_name` shares a token with EDGAR's name; bucket-specific evidence present |
-| `OK_recycled_ticker` | `resolved_name` doesn't match (ticker recycled) but the CIK has a Form 25 within ±30d of the observed date |
-| `MISMATCH_name` | `resolved_name` shares no tokens with EDGAR's name and no nearby Form 25 — needs human review |
-| `WEAK_no_delist_form`, `WEAK_no_ma_items`, `WEAK_no_3_01`, `WEAK_no_form15` | Names agree, but the bucket-specific evidence expected on EDGAR wasn't found |
-| `no_cik`, `bad_cik`, `no_entity_data` | No CIK, an invalid one, or nothing to check on the EDGAR entity page |
-
-The verifier reads the company's whole filing list (the submissions JSON's
-`recent` block plus each older submissions file overlapping the window) and
-counts evidence only within [delisting − 400 days, delisting + 120 days]: a
-Form 25/15 for `WEAK_no_delist_form`; for a merger an 8-K item 2.01 or 5.01
-or a merger document (SC 14D9, SC TO-T, DEFM14A/C, PREM14A/C, 425, SC 13E3);
-for a liquidation a Form 15 or the bankruptcy 8-K (item 1.03); for a
-compliance failure an 8-K item 3.01. Names are compared on words of four or
-more letters, legal and share-class words dropped, both as written and split
-on camelCase ("BlackRock" matches "BLACKROCK"). Agreement on the delisting
-rows counts `MISMATCH_*`, `WEAK_no_ma_items`, `WEAK_no_3_01` and
-`WEAK_no_form15` as disagreements; `WEAK_no_delist_form` and `no_*` are no
-evidence either way.
+order. Written by `scripts/classify_universe.py` alongside the other six
+output tables.
 
 ## Downstream integration
 
-`delistings.csv` is consumed by `delist_detection.qlib_adapter`, joined on
+`delistings.csv` is consumed by `delist_detection.handling.qlib_adapter`, joined on
 `sec_id` (the panel's `instrument` column):
 
 - `inject_terminal_labels(panel, "output/delistings.csv", horizon_days=21, …)`

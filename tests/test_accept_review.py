@@ -8,10 +8,10 @@ from pathlib import Path
 
 import pytest
 
-from delist_detection.review_triage import (
+from delist_detection.outputs.review_triage import (
     Decision, ReviewDecisionError, accept_by_flag, append_decisions, load_decisions, triage,
 )
-from delist_detection.store import TABLES
+from delist_detection.outputs.store import TABLES
 
 ROOT = Path(__file__).resolve().parents[1]
 SPEC = importlib.util.spec_from_file_location("accept_review_cli", ROOT / "scripts" / "accept_review.py")

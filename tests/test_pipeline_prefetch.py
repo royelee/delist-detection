@@ -16,21 +16,25 @@ from types import SimpleNamespace
 import pytest
 
 import delist_detection.pipeline as pipeline
-from delist_detection import edgar, manifest, sec_limiter, sec_stats
-from delist_detection.classifier import DelistClassifier, DelistRecord
-from delist_detection.crsp_codes import CrspBucket
-from delist_detection.delistings import Delisting
-from delist_detection.edgar import EFTS_KEY, EFTS_SCHEMA, FETCHED_KEY, EdgarBlocked, EdgarClient
-from delist_detection.last_trade import LastTrade
-from delist_detection.midas import MIDAS_INDEX_URL, MidasClient
-from delist_detection.observations import Observation, ObservationIndex
-from delist_detection.openfigi import OpenFigiBlocked
-from delist_detection.payout_extractor import PayoutExtractor, PayoutResult
+from delist_detection.sources import sec_limiter, sec_stats
+from delist_detection.outputs import manifest
+from delist_detection.endings.classifier import DelistClassifier
+from delist_detection.outputs.reconstruction import DelistRecord
+from delist_detection.vocabulary.crsp_codes import CrspBucket
+from delist_detection.endings.delistings import Delisting
+from delist_detection.sources.edgar import EFTS_KEY, EFTS_SCHEMA, FETCHED_KEY, EdgarBlocked, EdgarClient
+from delist_detection.filings.filing_search import successor_query
+from delist_detection.identity.issuer_record import IssuerRecord
+from delist_detection.endings.last_trade import LastTrade
+from delist_detection.terms.llm_merger_extractor import LLMMergerTermsExtractor
+from delist_detection.sources.midas import MIDAS_INDEX_URL, MidasClient
+from delist_detection.identity.observations import Observation, ObservationIndex
+from delist_detection.sources.openfigi import OpenFigiBlocked
+from delist_detection.terms.payout_extractor import PayoutExtractor, PayoutResult
 from delist_detection.pipeline import Clients, Overrides, run
-from delist_detection.successors import successor_query
-from delist_detection.prefetch import Serialized
-from delist_detection.store import read_table, table_path
-from delist_detection.ticker_resolver import TickerResolver
+from delist_detection.sources.prefetch import Serialized
+from delist_detection.outputs.store import read_table, table_path
+from delist_detection.identity.ticker_resolver import TickerResolver
 from tests.test_pipeline import AET_RAW, _clients, _Figi, _figi_answer, _ftd, _FtdClient, _index_clients
 
 
@@ -137,10 +141,12 @@ def test_default_clients_share_one_run_date_and_a_machine_wide_limit(tmp_path, m
     assert c.as_of == c.edgar.today == c.resolver.today == c.classifier.today == c.halts.today == date(2026, 9, 23)
     assert c.resolver.batch_writes is True
     assert sec_limiter.SEC_LIMITER.gate is not None and sec_limiter.SEC_LIMITER.gate.path == tmp_path / "sec_rate.lock"
-    # the resolver's name tier reads SEC's cik-lookup-data.txt under the cache, loaded on first use
-    loader = c.resolver._name_index_source
+    # one issuer record, dated the run date, read by the resolver, the classifier and the stages
+    assert c.issuers is c.resolver.issuers is c.classifier.issuers and c.issuers.today == date(2026, 9, 23)
+    # the name tier reads SEC's cik-lookup-data.txt under the cache, loaded on first use
+    loader = c.issuers._index_source
     assert loader.__self__.path == tmp_path / "cache" / "sec_data" / "cik_lookup" / "cik-lookup-data.txt"
-    assert c.resolver._name_index is None
+    assert c.issuers._index is None
 
 
 def test_default_clients_label_the_llm_cache_with_the_model_called(tmp_path, monkeypatch):
@@ -167,6 +173,9 @@ class _Halts:
     def deletion_halt(self, symbol, lo, hi, max_days=7):
         return None
 
+    def failed_days(self):
+        return ()
+
 
 def test_the_warm_finders_are_the_sequential_finders_twins(fake_edgar, tmp_path, monkeypatch):
     index, clients = _clients(fake_edgar)
@@ -188,9 +197,9 @@ def test_the_warm_finders_are_the_sequential_finders_twins(fake_edgar, tmp_path,
         assert isinstance(midas, Serialized) and midas._obj is clients.midas
         assert isinstance(halts, Serialized) and halts._obj is clients.halts
         assert classifier is not clients.classifier                     # a copy of the run's classifier
-        assert classifier.resolver is not clients.resolver and isinstance(classifier.resolver, TickerResolver)
+        assert classifier.issuers is not clients.issuers and isinstance(classifier.issuers, IssuerRecord)
     assert len({id(m) for m, _, _ in warm_built}) == 1                 # one lock shared by every warm finder
-    assert clients.classifier.resolver is clients.resolver             # the run's own classifier is untouched
+    assert clients.classifier.issuers is clients.issuers               # the run's own classifier is untouched
 
 
 def test_prefetch_reads_edgar_on_worker_threads_before_the_sequential_pass(fake_edgar, tmp_path):
@@ -307,6 +316,8 @@ def test_a_refusal_of_the_runs_midas_download_on_a_worker_aborts_the_run(fake_ed
 class _UnsavableResolver:
     """A resolver whose memo cannot be written (the disk is full)."""
 
+    issuers = None        # no issuer record of its own
+
     def flush(self):
         raise OSError("No space left on device")
 
@@ -358,9 +369,13 @@ def test_the_successor_search_query_is_the_one_the_prefetch_sends():
         '"GOOGLE INC"', "8-K12B,8-K12G3", date(2015, 9, 2), date(2015, 12, 1))
 
 
-def test_payout_extraction_is_warmed_on_worker_threads_and_the_llm_is_not(fake_edgar, tmp_path):
+def test_payouts_and_llm_calls_are_filled_ahead_and_no_llm_answer_is_paid_for_twice(fake_edgar, tmp_path):
+    """With 4 workers the regex payout reads and the LLM calls are filled ahead on the worker threads (sub-plan 5f).
+    The warm pass returns only once every item is done (`prefetch.warm`), and the real extractor caches each answer
+    under its (filing, model, prompt version, ticker) key, so every paid call is a warm thread's and the sequential
+    pass reads what the warm pass paid for: the LLM client is called once per key asked, never twice."""
     index, clients = _clients(fake_edgar)
-    regex, llm, guard = [], [], threading.Lock()
+    regex, llm, keys, guard = [], [], set(), threading.Lock()
 
     class _Regex:
         def extract(self, record, last_close=None):
@@ -368,16 +383,29 @@ def test_payout_extraction_is_warmed_on_worker_threads_and_the_llm_is_not(fake_e
                 regex.append(threading.current_thread().name)
             return PayoutResult.none()
 
-    class _Llm:
-        def extract(self, record):
+    class _Client:                                  # the LLM client: a paid call per `extract`
+        model = "m"
+
+        def extract(self, system, user, schema):
             with guard:
                 llm.append(threading.current_thread().name)
-            return None
+            return {"deal_type": "cash", "cash_per_share": 212.70, "stock_ratio": None, "acquirer_name": "CVS",
+                    "acquirer_ticker": "CVS", "confidence": "high", "quote": "$212.70 in cash",
+                    "package_basis": "fixed"}
 
-    clients.payout_extractor, clients.llm_extractor = _Regex(), _Llm()
-    run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None, sec_workers=4)
+    class _Extractor(LLMMergerTermsExtractor):     # records every cache key asked, on any thread
+        def cache_path(self, filing, record):
+            path = super().cache_path(filing, record)
+            with guard:
+                keys.add(path.name)
+            return path
+
+    clients.payout_extractor = _Regex()
+    clients.llm_extractor = _Extractor(fake_edgar, _Client(), cache_dir=tmp_path / "llm")
+    run(index, clients, Overrides(), out_dir=tmp_path / "out", log=lambda *_: None, sec_workers=4)
     assert any(n.startswith("sec-warm") for n in regex) and regex[-1] == threading.main_thread().name
-    assert set(llm) == {threading.main_thread().name}                  # paid calls are never warmed
+    assert llm and all(n.startswith("sec-warm") for n in llm)        # final review M2: the warm pass paid for each
+    assert len(llm) == len(keys)                   # no answer paid for twice
 
 
 def test_the_successor_search_is_warmed_with_the_query_the_sequential_pass_sends(fake_edgar, tmp_path,
@@ -446,7 +474,8 @@ AET_FILINGS = [("0000876661-18-001269", "25-NSE", "2018-11-29", "", "", "primary
                ("0001047469-18-000999", "DEFM14A", "2018-02-08", "", "", "defm.htm")]
 OLD_FILINGS = [("0000876661-19-000100", "25-NSE", "2019-02-01", "", "", "primary_doc.xml")]
 # XFR files no Form 25 and keeps filing reports long after its last sighting: an
-# exchange transfer to an unknown successor, which stage 9 searches for.
+# exchange transfer to an unknown successor, which stage 9 searches for. Its CUSIP is
+# observed: a security with none gets no such guess at its last sighting (sub-plan 5h).
 XFR_FILINGS = [("0000003333-19-000010", "10-Q", "2019-08-09", "2019-06-30", "", "q.htm"),
                ("0000003333-20-000004", "10-K", "2020-03-02", "2019-12-31", "", "k.htm")]
 STALE_HIT_FILINGS = [("0000005555-20-000002", "10-K", "2020-03-02", "2019-12-31", "", "k.htm"),
@@ -580,8 +609,8 @@ def _offline_run(root, out, workers, *, live_cik=None):
            Observation("AET", "2018-06-29", "AETNA INC", cik=1122304),
            Observation("OLD", "2018-06-29", "OLD CO INC", cik=2222),
            Observation("OLD", "2018-12-31", "OLD CO INC", cik=2222),
-           Observation("XFR", "2018-06-29", "XFR CORP", cik=3333),
-           Observation("XFR", "2018-12-31", "XFR CORP", cik=3333),
+           Observation("XFR", "2018-06-29", "XFR CORP", cusip="98400X101", cik=3333),
+           Observation("XFR", "2018-12-31", "XFR CORP", cusip="98400X101", cik=3333),
            Observation("LIVE", "2025-06-30", "LIVE CO", cik=live_cik)]
     index = ObservationIndex(obs)
     resolver = TickerResolver(edgar_client, cache_path=root / "ticker_resolution.json", observed_names=index.name_on,
@@ -611,13 +640,15 @@ def _one_and_n(tmp_path, monkeypatch, caplog, workers, *, stale_hits=(), **unive
     shutil.copytree(seed, tmp_path / "one")
     shutil.copytree(seed, tmp_path / "n")
     sec1 = _offline_run(tmp_path / "one", tmp_path / "out1", 1, **universe)
-    caplog.set_level(logging.WARNING, logger="delist_detection.prefetch")
+    caplog.set_level(logging.WARNING, logger="delist_detection.sources.prefetch")
     caplog.clear()
     secn = _offline_run(tmp_path / "n", tmp_path / "outn", workers, **universe)
-    assert [r.getMessage() for r in caplog.records if r.name == "delist_detection.prefetch"] == []
-    csv1 = {p.name: p.read_bytes() for p in (tmp_path / "out1").glob("*.csv")}
-    csvn = {p.name: p.read_bytes() for p in (tmp_path / "outn").glob("*.csv")}
-    assert len(csv1) == 8 and csv1 == csvn         # the six tables, review_summary.csv and observation_map.csv
+    assert [r.getMessage() for r in caplog.records if r.name == "delist_detection.sources.prefetch"] == []
+    csv1 = {str(p.relative_to(tmp_path / "out1")): p.read_bytes() for p in (tmp_path / "out1").rglob("*.csv")}
+    csvn = {str(p.relative_to(tmp_path / "outn")): p.read_bytes() for p in (tmp_path / "outn").rglob("*.csv")}
+    # securities, cusip_history, delistings, review, review_summary, observation_map and uncertain, plus the contract's six files
+    # (security_history, delistings, seeds, price_requests, id_changes, payout_legs)
+    assert len(csv1) == 13 and csv1 == csvn
     return (sec1, _tree(tmp_path / "one")), (secn, _tree(tmp_path / "n"))
 
 

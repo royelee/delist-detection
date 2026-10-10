@@ -8,10 +8,10 @@ from pathlib import Path
 
 import pytest
 
-from delist_detection.classifier import DelistRecord
-from delist_detection.crsp_codes import CrspBucket
-from delist_detection.edgar import EdgarSubmission
-from delist_detection.llm_merger_extractor import (
+from delist_detection.outputs.reconstruction import DelistRecord
+from delist_detection.vocabulary.crsp_codes import CrspBucket
+from delist_detection.sources.edgar import EdgarSubmission
+from delist_detection.terms.llm_merger_extractor import (
     LLMMergerTermsExtractor,
     MergerTerms,
     PROMPT_VERSION,
@@ -26,8 +26,11 @@ class _FakeLlm:
     """Returns canned dicts from a queue and records calls.
 
     ``responses`` is consumed in order; once exhausted the last entry repeats.
-    Set ``raises=True`` to make every ``extract`` call raise.
+    Set ``raises=True`` to make every ``extract`` call raise. It names no
+    model (``model``).
     """
+
+    model = None
 
     def __init__(self, responses, *, raises=False):
         self._responses = list(responses)
@@ -110,39 +113,6 @@ def test_cash_and_stock(tmp_path):
     assert terms.acquirer_ticker == "CVS"
     assert terms.confidence == "high"
     assert terms.source == "8-K:C1"
-    assert terms.to_merger_terms_dict() == {
-        "cash_per_share": 145.0, "stock_ratio": 0.8378, "acquirer_ticker": "CVS",
-    }
-
-
-def test_stock_only_omits_cash(tmp_path):
-    resp = {
-        "deal_type": "stock", "cash_per_share": None, "stock_ratio": 1.05,
-        "acquirer_name": "Buyer Inc", "acquirer_ticker": "BUY",
-        "confidence": "high", "quote": "1.05 shares",
-    }
-    edgar = _FakeEdgarText([_closing_8k()], {"C1": _USABLE_TEXT})
-    ext = LLMMergerTermsExtractor(edgar, _FakeLlm([resp]), cache_dir=tmp_path)
-    terms = ext.extract(_merger_rec())
-    assert terms.cash_per_share is None
-    assert terms.to_merger_terms_dict() == {
-        "stock_ratio": 1.05, "acquirer_ticker": "BUY",
-    }
-    assert "cash_per_share" not in terms.to_merger_terms_dict()
-
-
-def test_cash_only_omits_stock_and_ticker(tmp_path):
-    resp = {
-        "deal_type": "cash", "cash_per_share": 113.0, "stock_ratio": None,
-        "acquirer_name": "Buyer Inc", "acquirer_ticker": None,
-        "confidence": "high", "quote": "$113.00 in cash",
-    }
-    edgar = _FakeEdgarText([_closing_8k()], {"C1": _USABLE_TEXT})
-    ext = LLMMergerTermsExtractor(edgar, _FakeLlm([resp]), cache_dir=tmp_path)
-    terms = ext.extract(_merger_rec())
-    assert terms.to_merger_terms_dict() == {"cash_per_share": 113.0}
-    assert "stock_ratio" not in terms.to_merger_terms_dict()
-    assert "acquirer_ticker" not in terms.to_merger_terms_dict()
 
 
 def test_no_consideration_returns_none(tmp_path):
@@ -215,7 +185,7 @@ def test_cache_is_labelled_with_the_clients_own_model(tmp_path, monkeypatch):
     resp = {"deal_type": "cash", "cash_per_share": 113.0, "stock_ratio": None, "acquirer_name": None,
             "acquirer_ticker": None, "confidence": "high", "quote": "$113.00 in cash"}
     edgar = _FakeEdgarText([_closing_8k()], {"C1": _USABLE_TEXT})
-    other = _FakeLlm([dict(resp, cash_per_share=1.0)])           # no model of its own: labelled $CHAT_MODEL
+    other = _FakeLlm([dict(resp, cash_per_share=1.0)])           # states no model (None): labelled $CHAT_MODEL
     LLMMergerTermsExtractor(edgar, other, cache_dir=tmp_path).extract(_merger_rec())
     llm = _FakeLlm([resp])
     llm.model = "m2"
@@ -223,7 +193,19 @@ def test_cache_is_labelled_with_the_clients_own_model(tmp_path, monkeypatch):
     assert llm.calls == 1
     assert terms.cash_per_share == 113.0
     assert sorted(p.name for p in tmp_path.glob("*.json")) == [
-        f"C1_m1_{PROMPT_VERSION}.json", f"C1_m2_{PROMPT_VERSION}.json"]
+        f"C1_m1_{PROMPT_VERSION}_AET.json", f"C1_m2_{PROMPT_VERSION}_AET.json"]
+
+
+def test_an_llm_client_that_states_no_model_at_all_is_refused(tmp_path):
+    """`llm_client`'s interface: a client states the model it calls, or None; one that states nothing is never
+    labelled by a default."""
+    class Silent:
+        def extract(self, system, user, schema):
+            return {}
+
+    with pytest.raises(AttributeError):
+        LLMMergerTermsExtractor(_FakeEdgarText([], {}), Silent(), cache_dir=tmp_path)
+    assert LLMMergerTermsExtractor(_FakeEdgarText([], {}), Silent(), model="m", cache_dir=tmp_path).model == "m"
 
 
 def test_an_answer_cut_off_mid_write_leaves_no_cache_file(tmp_path, writes_fail_midway):
@@ -326,7 +308,6 @@ def test_empty_text_skipped_does_not_count(tmp_path):
     assert llm.calls == 1
 
 
-from delist_detection.llm_merger_extractor import LLMMergerTermsExtractor as _Ext
 
 
 def test_relevant_excerpts_windows_keywords(tmp_path):

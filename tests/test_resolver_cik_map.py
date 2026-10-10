@@ -1,4 +1,4 @@
-from delist_detection.ticker_resolver import TickerResolver
+from delist_detection.identity.ticker_resolver import TickerResolver
 
 
 def test_the_cik_map_answers_before_any_lookup(monkeypatch):

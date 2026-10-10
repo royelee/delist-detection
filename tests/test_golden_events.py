@@ -1,9 +1,9 @@
 import pytest
 
-from delist_detection.classifier import DelistClassifier
-from delist_detection.payout_extractor import PayoutExtractor
-from delist_detection.payout_gate import DEFAULT_TOL, reconcile
-from delist_detection.ticker_resolver import TickerResolver
+from delist_detection.endings.classifier import DelistClassifier
+from delist_detection.terms.payout_extractor import PayoutExtractor
+from delist_detection.terms.payout_gate import DEFAULT_TOL, reconcile
+from delist_detection.identity.ticker_resolver import TickerResolver
 from tests.golden import GoldenEdgar, load_cases, patch_efts
 
 CASES = load_cases()
@@ -65,8 +65,7 @@ def test_golden_classify_event_matches_classify_ticker(case, monkeypatch):
     clf = DelistClassifier(edgar, resolver)
     old = clf.classify_ticker(case.ticker, case.observed_delist_date)
     assert old.cik is not None
-    f25, _ = clf._pick_delist_filing(edgar.recent_filings(old.cik), date.fromisoformat(case.observed_delist_date),
-                                     old.cik)
+    f25, _ = clf._pick_delist_filing(edgar.recent_filings(old.cik), date.fromisoformat(case.observed_delist_date))
     new = clf.classify_event(ticker=case.ticker, cik=old.cik, anchor_date=case.observed_delist_date,
                              name=old.evidence.get("name"), expected_name=case.member_name, form25=f25)
     assert new.bucket is old.bucket, (old.reason, new.reason)

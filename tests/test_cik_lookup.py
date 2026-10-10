@@ -6,9 +6,9 @@ from pathlib import Path
 import pytest
 import requests
 
-from delist_detection.cik_lookup import CIK_LOOKUP_URL, CikLookupClient, CikNameIndex, normalize_name
-from delist_detection.edgar import EdgarBlocked
-from delist_detection.sec_stats import SEC_STATS
+from delist_detection.sources.cik_lookup import CIK_LOOKUP_URL, CikLookupClient, CikNameIndex, normalize_name
+from delist_detection.sources.edgar import EdgarBlocked
+from delist_detection.sources.sec_stats import SEC_STATS
 
 EXCERPT = (Path(__file__).parent / "fixtures" / "cik_lookup" / "excerpt.txt").read_text(encoding="latin-1")
 
@@ -99,7 +99,7 @@ class _Session:
 
 @pytest.fixture
 def _no_throttle(monkeypatch):
-    monkeypatch.setattr("delist_detection.sec_limiter.throttle", lambda: None)
+    monkeypatch.setattr("delist_detection.sources.sec_limiter.throttle", lambda: None)
 
 
 def test_the_client_downloads_once_and_reads_the_cache_after(tmp_path, _no_throttle):

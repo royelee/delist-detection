@@ -11,7 +11,7 @@ from __future__ import annotations
 import argparse
 import sys
 
-from delist_detection.observations import observations_from_snapshots, write_observations
+from delist_detection.identity.observations import observations_from_snapshots, write_observations
 
 
 def main() -> int:

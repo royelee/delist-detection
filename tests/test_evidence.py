@@ -1,6 +1,6 @@
 from datetime import date
 
-from delist_detection.evidence import name_at, names_near
+from delist_detection.filings.evidence import name_at, names_near
 
 SUB = {"name": "SunPower Inc.", "formerNames": [
     {"name": "Complete Solaria, Inc.", "from": "2023-03-10T05:00:00.000Z", "to": "2025-09-26T04:00:00.000Z"},
@@ -22,8 +22,8 @@ def test_names_near_includes_a_name_that_ended_just_before_the_date():
     assert names_near({"name": "Solo Co", "formerNames": []}, date(2020, 1, 1)) == ["Solo Co"]
 
 
-from delist_detection.edgar import EdgarSubmission
-from delist_detection.evidence import bankruptcy_8ks, mentions_bankruptcy
+from delist_detection.sources.edgar import EdgarSubmission
+from delist_detection.filings.evidence import bankruptcy_8ks, mentions_bankruptcy
 
 
 def _8k(d, items, acc="A"):
@@ -40,7 +40,7 @@ def test_mentions_bankruptcy():
     assert not mentions_bankruptcy("completion of the merger with CSG")
 
 
-from delist_detection.evidence import item_text, renamed_near, says_listing_transfer, still_operating
+from delist_detection.filings.evidence import item_text, renamed_near, says_listing_transfer, still_operating
 
 LC_SUB = {"name": "Happen, Inc.", "formerNames": [
     {"name": "LendingClub Corp", "from": "2007-08-15T04:00:00.000Z", "to": "2026-06-18T04:00:00.000Z"}]}
@@ -66,7 +66,7 @@ def test_listing_transfer_text():
     assert says_listing_transfer("the Company transferred its listing to NYSE American")
 
 
-from delist_detection.evidence import is_spac
+from delist_detection.filings.evidence import is_spac
 
 
 def test_is_spac_by_sic_or_name_at_the_date():
@@ -103,7 +103,7 @@ def test_is_spac_sic_6770_when_the_only_rename_has_not_completed_by_the_date():
 
 import pytest
 
-from delist_detection.evidence import cites_listing_deficiency
+from delist_detection.filings.evidence import cites_listing_deficiency
 
 
 @pytest.mark.parametrize("text, cites", [
@@ -158,8 +158,107 @@ def test_item_text_with_no_match_is_empty():
 
 
 def test_edgar_names_lists_the_current_name_then_the_former_ones():
-    from delist_detection.evidence import edgar_names
+    from delist_detection.filings.evidence import edgar_names
     sub = {"name": "Eversource Energy",
            "formerNames": [{"name": "NORTHEAST UTILITIES"}, {"name": " "}, {"name": None}, "junk"]}
     assert edgar_names(sub) == ("Eversource Energy", "NORTHEAST UTILITIES")
     assert edgar_names({"name": None, "formerNames": None}) == ()
+
+
+# --- sub-plan 5b: every Item section ---
+
+from delist_detection.filings.evidence import item_sections  # noqa: E402
+
+# Ascena's 2020 bankruptcy 8-K, shortened: its first "Item 1.03" is a cross-reference long enough to read as the
+# section; the item's own section, which reports the Chapter 11 cases, comes next.
+CROSS_REFERENCED_103 = (
+    "Item 1.01 Entry into a Material Definitive Agreement. The information set forth below in Item 1.03 in this "
+    "Current Report on Form 8-K under the captions “Restructuring Support Agreement” and “Backstop Commitment "
+    "Letter for the DIP Term Facility” is hereby incorporated by reference in this Item 1.01. Item 1.03 "
+    "Bankruptcy or Receivership. Voluntary Petition for Reorganization On July 23, 2020, Ascena Retail Group, Inc. "
+    "and certain of its subsidiaries commenced voluntary cases under chapter 11 of title 11 of the United States "
+    "Code in the United States Bankruptcy Court for the Eastern District of Virginia. " + "x" * 300
+    + " Item 2.04 Triggering Events.")
+
+
+def test_item_sections_are_every_section_of_the_item_and_item_text_the_first():
+    sections = item_sections(CROSS_REFERENCED_103, "1.03")
+    assert len(sections) == 2
+    assert sections[0].startswith("Item 1.03 in this Current Report") and "chapter 11" not in sections[0]
+    assert sections[1].startswith("Item 1.03 Bankruptcy or Receivership") and "chapter 11" in sections[1]
+    assert item_text(CROSS_REFERENCED_103, "1.03") == sections[0]
+
+
+def test_a_short_filing_has_one_section_and_a_filing_without_the_item_none():
+    assert item_sections("Item 1.03 Bankruptcy. Chapter 11.", "1.03") == ["Item 1.03 Bankruptcy. Chapter 11."]
+    assert item_sections("Item 8.01 Other Events.", "1.03") == [] and item_text("Item 8.01", "1.03") == ""
+
+
+# --- sub-plan 5b: NYSE's market-capitalization wording is a listing deficiency ---
+
+import pytest  # noqa: E402
+
+from tests import form25_cases as fc  # noqa: E402
+
+# R.H. Donnelley's 8-K of 2009-01-02, Item 3.01: NYSE's market-capitalization standard (Rule 802.01B)
+RHD_301 = ("Item 3.01. Notice of Delisting or Failure to Satisfy a Continued Listing Rule or Standard; Transfer of "
+           "Listing. (a) On December 31, 2008, R.H. Donnelley Corporation (the “Company”) was notified by the New "
+           "York Stock Exchange (“NYSE”) that it no longer complies with NYSE continued listing requirements. "
+           "Specifically, the Company no longer complies with Rule 802.01B, which requires that the Company's "
+           "average market capitalization over a consecutive 30-day trading period not be less than $25 million.")
+
+
+def test_nyses_market_capitalization_notice_cites_a_listing_deficiency():
+    assert cites_listing_deficiency(RHD_301)
+    assert cites_listing_deficiency(item_text(fc.EDGAR["texts"]["0001144204-08-071879"], "3.01"))
+
+
+@pytest.mark.parametrize("text", [
+    "the Company no longer complies with the NYSE's continued listing standards",
+    "the Company had fallen below two of the NYSE’s continued listing standards",
+    "its stockholders' equity was below the Exchange's continued listing standards",
+    "requires that the Company’s average total market capitalization over 30 trading days exceed $75 million",
+])
+def test_each_new_wording_cites_a_listing_deficiency(text):
+    assert cites_listing_deficiency(text)
+
+
+@pytest.mark.parametrize("text", [
+    "Following the merger, the common stock will no longer be listed on the New York Stock Exchange.",
+    "The Company requested that the NYSE suspend trading before the open on the closing date.",
+])
+def test_a_merger_notice_cites_no_listing_deficiency(text):
+    assert not cites_listing_deficiency(text)
+
+
+# --- sub-plan 5g: an item number the HTML stripping spaced out ---
+
+# CBL's 2020 bankruptcy 8-K as the text cache holds it, shortened: "ITEM 1 .0 3", and its 3.01 8-K's "ITEM 3 . 01"
+SPACED_103 = ("ITEM 1 .0 3 Bankruptcy or Receivership On November 1, 2020, CBL & Associates Properties, Inc. and "
+              "certain of its subsidiaries filed voluntary petitions under chapter 11 of title 11 of the United States "
+              "Code in the United States Bankruptcy Court for the Southern District of Texas. " + "x" * 300
+              + " ITEM 2.04 Triggering Events that Accelerate a Direct Financial Obligation")
+
+
+def test_an_item_number_with_spaces_inside_is_the_item():
+    (section,) = item_sections(SPACED_103, "1.03")
+    assert section.startswith("ITEM 1 .0 3 Bankruptcy") and "chapter 11" in section and "ITEM 2.04" not in section
+    assert item_text("ITEM 3 . 01 Notice of Delisting. The NYSE suspended trading.", "3.01").startswith("ITEM 3 . 01")
+
+
+def test_a_spaced_heading_ends_the_section_before_it():
+    text = "Item 3.01 Notice of Delisting. " + "y" * 300 + " ITEM 7 .0 1 Regulation FD Disclosure. Other words."
+    assert item_text(text, "3.01").rstrip().endswith("y")
+
+
+def test_another_items_number_or_a_page_number_is_not_the_item():
+    assert item_sections("Item 1.031 refers elsewhere; Item 10.3 too; Item 7. 35 is a page.", "1.03") == []
+
+
+def test_a_10k_index_entry_page_number_ends_no_section():
+    """A 10-K's table-of-contents entry ("Item 8. 29") is no heading: only a sub-number that starts with 0 may be
+    spaced out (CBL's "Item 3 . 01", "Item 1 .0 3")."""
+    text = "Item 3.01 Notice of Delisting. " + "y" * 300 + " Item 8. 29 Kodak " + "z" * 300
+    assert "Item 8. 29 Kodak" in item_text(text, "3.01")
+    spaced = "Item 3.01 Notice. " + "y" * 300 + " ITEM 1 .0 3 Bankruptcy " + "z" * 300
+    assert "ITEM 1 .0 3" not in item_text(spaced, "3.01")

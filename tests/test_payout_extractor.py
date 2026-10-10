@@ -1,6 +1,6 @@
-from delist_detection.classifier import DelistRecord
-from delist_detection.crsp_codes import CrspBucket
-from delist_detection.payout_extractor import PayoutExtractor, PayoutResult
+from delist_detection.outputs.reconstruction import DelistRecord
+from delist_detection.vocabulary.crsp_codes import CrspBucket
+from delist_detection.terms.payout_extractor import PayoutExtractor, PayoutResult
 
 
 class _StubEdgar:
@@ -21,7 +21,7 @@ def _rec(bucket, cik=111):
 def test_non_merger_returns_none():
     ext = PayoutExtractor(_StubEdgar())
     res = ext.extract(_rec(CrspBucket.COMPLIANCE_FAILURE))
-    assert res == PayoutResult(None, "none", "none", "", "")
+    assert res == PayoutResult.none()
 
 
 def test_merger_no_cik_returns_none():
@@ -31,7 +31,20 @@ def test_merger_no_cik_returns_none():
     assert res.confidence == "none"
 
 
-from delist_detection.payout_extractor import _match_payout, _passes_sanity
+from delist_detection.terms.payout_extractor import _passes_sanity
+
+
+def _match_payout(text, allow_weak=True):
+    """(value, quote) of one filing's text read through `PayoutExtractor.extract`: as the closing 8-K when weak patterns
+    are allowed (the 8-K tiers), as a DEFM14A when they are not (the proxy tiers)."""
+    if allow_weak:
+        filing = EdgarSubmission(accession="F1", form="8-K", filing_date="2025-03-28",
+                                 report_date="2025-03-26", items="2.01", primary_doc="d.htm")
+    else:
+        filing = EdgarSubmission(accession="F1", form="DEFM14A", filing_date="2025-02-01",
+                                 report_date="", items="", primary_doc="d.htm")
+    res = PayoutExtractor(_FakeEdgarText([filing], {"F1": text})).extract(_merger_rec())
+    return res.value, res.quote
 
 
 def test_match_in_cash_family_altr():
@@ -355,7 +368,7 @@ def test_sanity_relative_band():
     assert _passes_sanity(113.0, last_close=111.85)
 
 
-from delist_detection.edgar import EdgarSubmission
+from delist_detection.sources.edgar import EdgarSubmission
 
 
 class _FakeEdgarText:
@@ -363,9 +376,11 @@ class _FakeEdgarText:
     def __init__(self, filings, texts):
         self._filings = filings
         self._texts = texts
+        self.fetched = []
     def recent_filings(self, cik):
         return list(self._filings)
     def fetch_filing_text(self, cik, accession, primary_doc):
+        self.fetched.append(accession)
         return self._texts.get(accession, "")
 
 
@@ -387,7 +402,7 @@ def test_tier1_closing_8k_high():
     assert res.value == 113.00
     assert res.confidence == "high"
     assert res.source == "8K_2.01"
-    assert res.accession == "C1"
+    assert ext.edgar.fetched == ["C1"]        # the closing 8-K is the filing read, and it settles the figure
 
 
 def test_tier2_announcement_8k_medium():
@@ -527,7 +542,7 @@ def test_extract_swallows_fetch_error_returns_none():
 
 # --- Task 10: whole dollars, preferred redemptions, award payouts, elections, ties ---
 
-from delist_detection.payout_extractor import _collect, _select
+from delist_detection.terms.payout_extractor import _collect, _select
 
 
 def test_whole_dollar_cash_is_read():

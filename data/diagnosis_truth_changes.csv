@@ -1,0 +1,1004 @@
+case_id,field,old,new,reason,report
+BBG000BLH3P8_2023-06-20,shape,no_ending,ending_moved,operator ruling 2026-10-03 (5a pre-check): the line has a later Form 25 in the cached filings,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+BBG000BLH3P8_2023-06-20,exit_kind,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+BBG000BLH3P8_2023-06-20,drop_reason,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+BBG000BLH3P8_2023-06-20,continuation,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+BBG000BLH3P8_2023-06-20,successor_sec_id,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+BBG000BLH3P8_2023-06-20,last_trade_date,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+BBG000BLH3P8_2023-06-20,value_rule,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+BBG000BLH3P8_2023-06-20,cash_per_share,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+BBG000BLH3P8_2023-06-20,cash_currency,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+BBG000BLH3P8_2023-06-20,stock_ratio,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+BBG000BLH3P8_2023-06-20,price_sec_id,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+BBG000BLH3P8_2023-06-20,price_ticker,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+BBG000BLH3P8_2023-06-20,price_date,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+BBG000BLH3P8_2023-06-20,recovery_ratio,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+BBG000CL1HL7_2021-12-10,shape,no_ending,ending_moved,operator ruling 2026-10-03 (5a pre-check): the line has a later Form 25 in the cached filings,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+BBG000CL1HL7_2021-12-10,exit_kind,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+BBG000CL1HL7_2021-12-10,drop_reason,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+BBG000CL1HL7_2021-12-10,continuation,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+BBG000CL1HL7_2021-12-10,successor_sec_id,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+BBG000CL1HL7_2021-12-10,last_trade_date,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+BBG000CL1HL7_2021-12-10,value_rule,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+BBG000CL1HL7_2021-12-10,cash_per_share,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+BBG000CL1HL7_2021-12-10,cash_currency,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+BBG000CL1HL7_2021-12-10,stock_ratio,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+BBG000CL1HL7_2021-12-10,price_sec_id,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+BBG000CL1HL7_2021-12-10,price_ticker,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+BBG000CL1HL7_2021-12-10,price_date,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+BBG000CL1HL7_2021-12-10,recovery_ratio,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+BBG000DZCFX4_2020-06-02,shape,no_ending,ending_moved,operator ruling 2026-10-03 (5a pre-check): the line has a later Form 25 in the cached filings,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+BBG000DZCFX4_2020-06-02,exit_kind,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+BBG000DZCFX4_2020-06-02,drop_reason,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+BBG000DZCFX4_2020-06-02,continuation,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+BBG000DZCFX4_2020-06-02,successor_sec_id,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+BBG000DZCFX4_2020-06-02,last_trade_date,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+BBG000DZCFX4_2020-06-02,value_rule,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+BBG000DZCFX4_2020-06-02,cash_per_share,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+BBG000DZCFX4_2020-06-02,cash_currency,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+BBG000DZCFX4_2020-06-02,stock_ratio,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+BBG000DZCFX4_2020-06-02,price_sec_id,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+BBG000DZCFX4_2020-06-02,price_ticker,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+BBG000DZCFX4_2020-06-02,price_date,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+BBG000DZCFX4_2020-06-02,recovery_ratio,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+BBG000J453J8_2019-05-12,last_trade_date,,2019-05-01,operator ruling 2026-10-03 (5a pre-check): the Form 25 EX-99.25 notice gives 2019-05-01 (publishable),docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+BBG000J453J8_2019-05-12,internal_last_trade_date,,2019-05-01,operator ruling 2026-10-03 (5a pre-check): same,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+BBG000Q02P20_2011-11-14,shape,no_ending,ending_moved,operator ruling 2026-10-03 (5a pre-check): the line has a later Form 25 in the cached filings,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+BBG000Q02P20_2011-11-14,exit_kind,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+BBG000Q02P20_2011-11-14,drop_reason,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+BBG000Q02P20_2011-11-14,continuation,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+BBG000Q02P20_2011-11-14,successor_sec_id,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+BBG000Q02P20_2011-11-14,last_trade_date,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+BBG000Q02P20_2011-11-14,value_rule,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+BBG000Q02P20_2011-11-14,cash_per_share,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+BBG000Q02P20_2011-11-14,cash_currency,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+BBG000Q02P20_2011-11-14,stock_ratio,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+BBG000Q02P20_2011-11-14,price_sec_id,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+BBG000Q02P20_2011-11-14,price_ticker,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+BBG000Q02P20_2011-11-14,price_date,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+BBG000Q02P20_2011-11-14,recovery_ratio,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+BBG001D9S707_2010-05-25,last_trade_date,2012-07-05,,operator ruling 2026-10-03 (5a pre-check): 2012-07-05 belonged to the other line's bankruptcy (truth-build defect),docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+BBG001D9S707_2010-05-25,internal_last_trade_date,2012-07-05,2010-05-25,operator ruling 2026-10-03 (5a pre-check): the 2010 reverse split's last trade of the old CUSIP,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+BBG005PWSVQ3_2016-08-31,shape,no_ending,ending_moved,operator ruling 2026-10-03 (5a pre-check): the line has a later Form 25 in the cached filings,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+BBG005PWSVQ3_2016-08-31,exit_kind,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+BBG005PWSVQ3_2016-08-31,drop_reason,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+BBG005PWSVQ3_2016-08-31,continuation,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+BBG005PWSVQ3_2016-08-31,successor_sec_id,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+BBG005PWSVQ3_2016-08-31,last_trade_date,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+BBG005PWSVQ3_2016-08-31,value_rule,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+BBG005PWSVQ3_2016-08-31,cash_per_share,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+BBG005PWSVQ3_2016-08-31,cash_currency,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+BBG005PWSVQ3_2016-08-31,stock_ratio,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+BBG005PWSVQ3_2016-08-31,price_sec_id,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+BBG005PWSVQ3_2016-08-31,price_ticker,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+BBG005PWSVQ3_2016-08-31,price_date,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+BBG005PWSVQ3_2016-08-31,recovery_ratio,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+BBG00JM9V731_2026-07-30,exit_kind,,exchange,"operator ruling 2026-10-03 (5a pre-check): R2 via ID_CINS: G39104107 has its own FIGI BBG023G9VDF5, so two securities",docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+BBG00JM9V731_2026-07-30,continuation,,true,"operator ruling 2026-10-03 (5a pre-check): R2 via ID_CINS: G39104107 has its own FIGI BBG023G9VDF5, so two securities",docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+BBG00JM9V731_2026-07-30,successor_sec_id,,*,"operator ruling 2026-10-03 (5a pre-check): R2 via ID_CINS: G39104107 has its own FIGI BBG023G9VDF5, so two securities",docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+BBG00JM9V731_2026-07-30,last_trade_date,,*,"operator ruling 2026-10-03 (5a pre-check): R2 via ID_CINS: G39104107 has its own FIGI BBG023G9VDF5, so two securities",docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+BBG00JM9V731_2026-07-30,value_rule,,continuation,"operator ruling 2026-10-03 (5a pre-check): R2 via ID_CINS: G39104107 has its own FIGI BBG023G9VDF5, so two securities",docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+BBG00JM9V731_2026-07-30,shape,no_ending,ending,operator ruling 2026-10-03 (5a pre-check): R2: a continuation to New Gates,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1066104-COMMON_2012-08-13,shape,no_ending,ending_moved,operator ruling 2026-10-03 (5a pre-check): the line has a later Form 25 in the cached filings,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1066104-COMMON_2012-08-13,exit_kind,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1066104-COMMON_2012-08-13,drop_reason,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1066104-COMMON_2012-08-13,continuation,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1066104-COMMON_2012-08-13,successor_sec_id,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1066104-COMMON_2012-08-13,last_trade_date,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1066104-COMMON_2012-08-13,value_rule,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1066104-COMMON_2012-08-13,cash_per_share,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1066104-COMMON_2012-08-13,cash_currency,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1066104-COMMON_2012-08-13,stock_ratio,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1066104-COMMON_2012-08-13,price_sec_id,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1066104-COMMON_2012-08-13,price_ticker,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1066104-COMMON_2012-08-13,price_date,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1066104-COMMON_2012-08-13,recovery_ratio,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1095651-COMMON_2013-12-19,shape,no_ending,ending_moved,operator ruling 2026-10-03 (5a pre-check): the line has a later Form 25 in the cached filings,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1095651-COMMON_2013-12-19,exit_kind,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1095651-COMMON_2013-12-19,drop_reason,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1095651-COMMON_2013-12-19,continuation,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1095651-COMMON_2013-12-19,successor_sec_id,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1095651-COMMON_2013-12-19,last_trade_date,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1095651-COMMON_2013-12-19,value_rule,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1095651-COMMON_2013-12-19,cash_per_share,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1095651-COMMON_2013-12-19,cash_currency,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1095651-COMMON_2013-12-19,stock_ratio,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1095651-COMMON_2013-12-19,price_sec_id,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1095651-COMMON_2013-12-19,price_ticker,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1095651-COMMON_2013-12-19,price_date,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1095651-COMMON_2013-12-19,recovery_ratio,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1115836-COMMON_2014-07-01,shape,no_ending,ending_moved,operator ruling 2026-10-03 (5a pre-check): the line has a later Form 25 in the cached filings,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1115836-COMMON_2014-07-01,exit_kind,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1115836-COMMON_2014-07-01,drop_reason,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1115836-COMMON_2014-07-01,continuation,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1115836-COMMON_2014-07-01,successor_sec_id,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1115836-COMMON_2014-07-01,last_trade_date,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1115836-COMMON_2014-07-01,value_rule,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1115836-COMMON_2014-07-01,cash_per_share,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1115836-COMMON_2014-07-01,cash_currency,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1115836-COMMON_2014-07-01,stock_ratio,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1115836-COMMON_2014-07-01,price_sec_id,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1115836-COMMON_2014-07-01,price_ticker,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1115836-COMMON_2014-07-01,price_date,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1115836-COMMON_2014-07-01,recovery_ratio,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1282266-COMMON_2015-04-27,shape,no_ending,ending_moved,operator ruling 2026-10-03 (5a pre-check): the line has a later Form 25 in the cached filings,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1282266-COMMON_2015-04-27,exit_kind,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1282266-COMMON_2015-04-27,drop_reason,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1282266-COMMON_2015-04-27,continuation,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1282266-COMMON_2015-04-27,successor_sec_id,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1282266-COMMON_2015-04-27,last_trade_date,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1282266-COMMON_2015-04-27,value_rule,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1282266-COMMON_2015-04-27,cash_per_share,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1282266-COMMON_2015-04-27,cash_currency,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1282266-COMMON_2015-04-27,stock_ratio,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1282266-COMMON_2015-04-27,price_sec_id,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1282266-COMMON_2015-04-27,price_ticker,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1282266-COMMON_2015-04-27,price_date,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1282266-COMMON_2015-04-27,recovery_ratio,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1469372-CLASS-A_2015-10-02,shape,no_ending,ending_moved,operator ruling 2026-10-03 (5a pre-check): the line has a later Form 25 in the cached filings,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1469372-CLASS-A_2015-10-02,exit_kind,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1469372-CLASS-A_2015-10-02,drop_reason,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1469372-CLASS-A_2015-10-02,continuation,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1469372-CLASS-A_2015-10-02,successor_sec_id,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1469372-CLASS-A_2015-10-02,last_trade_date,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1469372-CLASS-A_2015-10-02,value_rule,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1469372-CLASS-A_2015-10-02,cash_per_share,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1469372-CLASS-A_2015-10-02,cash_currency,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1469372-CLASS-A_2015-10-02,stock_ratio,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1469372-CLASS-A_2015-10-02,price_sec_id,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1469372-CLASS-A_2015-10-02,price_ticker,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1469372-CLASS-A_2015-10-02,price_date,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1469372-CLASS-A_2015-10-02,recovery_ratio,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1469372-CLASS-A_2015-10-02,fixed_by,5a,5h,"operator ruling 2026-10-03 (5a pre-check): the follow needs a class match (CLASS-A vs COMMON), outside 5a",docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1507934-CLASS-A_2013-01-16,shape,no_ending,ending_moved,operator ruling 2026-10-03 (5a pre-check): the line has a later Form 25 in the cached filings,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1507934-CLASS-A_2013-01-16,exit_kind,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1507934-CLASS-A_2013-01-16,drop_reason,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1507934-CLASS-A_2013-01-16,continuation,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1507934-CLASS-A_2013-01-16,successor_sec_id,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1507934-CLASS-A_2013-01-16,last_trade_date,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1507934-CLASS-A_2013-01-16,value_rule,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1507934-CLASS-A_2013-01-16,cash_per_share,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1507934-CLASS-A_2013-01-16,cash_currency,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1507934-CLASS-A_2013-01-16,stock_ratio,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1507934-CLASS-A_2013-01-16,price_sec_id,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1507934-CLASS-A_2013-01-16,price_ticker,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1507934-CLASS-A_2013-01-16,price_date,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1507934-CLASS-A_2013-01-16,recovery_ratio,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1507934-CLASS-A_2013-01-16,fixed_by,5a,5h,"operator ruling 2026-10-03 (5a pre-check): the follow needs a class match (CLASS-A vs COMMON), outside 5a",docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1606498-COMMON_2018-07-11,shape,no_ending,ending_moved,operator ruling 2026-10-03 (5a pre-check): the line has a later Form 25 in the cached filings,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1606498-COMMON_2018-07-11,exit_kind,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1606498-COMMON_2018-07-11,drop_reason,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1606498-COMMON_2018-07-11,continuation,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1606498-COMMON_2018-07-11,successor_sec_id,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1606498-COMMON_2018-07-11,last_trade_date,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1606498-COMMON_2018-07-11,value_rule,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1606498-COMMON_2018-07-11,cash_per_share,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1606498-COMMON_2018-07-11,cash_currency,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1606498-COMMON_2018-07-11,stock_ratio,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1606498-COMMON_2018-07-11,price_sec_id,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1606498-COMMON_2018-07-11,price_ticker,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1606498-COMMON_2018-07-11,price_date,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1606498-COMMON_2018-07-11,recovery_ratio,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1723089-COMMON_2021-01-10,shape,no_ending,ending_moved,operator ruling 2026-10-03 (5a pre-check): the line has a later Form 25 in the cached filings,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1723089-COMMON_2021-01-10,exit_kind,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1723089-COMMON_2021-01-10,drop_reason,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1723089-COMMON_2021-01-10,continuation,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1723089-COMMON_2021-01-10,successor_sec_id,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1723089-COMMON_2021-01-10,last_trade_date,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1723089-COMMON_2021-01-10,value_rule,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1723089-COMMON_2021-01-10,cash_per_share,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1723089-COMMON_2021-01-10,cash_currency,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1723089-COMMON_2021-01-10,stock_ratio,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1723089-COMMON_2021-01-10,price_sec_id,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1723089-COMMON_2021-01-10,price_ticker,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1723089-COMMON_2021-01-10,price_date,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1723089-COMMON_2021-01-10,recovery_ratio,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1803737-COMMON_2022-06-30,shape,no_ending,ending_moved,operator ruling 2026-10-03 (5a pre-check): the line has a later Form 25 in the cached filings,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1803737-COMMON_2022-06-30,exit_kind,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1803737-COMMON_2022-06-30,drop_reason,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1803737-COMMON_2022-06-30,continuation,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1803737-COMMON_2022-06-30,successor_sec_id,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1803737-COMMON_2022-06-30,last_trade_date,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1803737-COMMON_2022-06-30,value_rule,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1803737-COMMON_2022-06-30,cash_per_share,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1803737-COMMON_2022-06-30,cash_currency,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1803737-COMMON_2022-06-30,stock_ratio,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1803737-COMMON_2022-06-30,price_sec_id,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1803737-COMMON_2022-06-30,price_ticker,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1803737-COMMON_2022-06-30,price_date,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1803737-COMMON_2022-06-30,recovery_ratio,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1808220-CLASS-A_2022-11-17,shape,no_ending,ending_moved,operator ruling 2026-10-03 (5a pre-check): the line has a later Form 25 in the cached filings,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1808220-CLASS-A_2022-11-17,exit_kind,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1808220-CLASS-A_2022-11-17,drop_reason,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1808220-CLASS-A_2022-11-17,continuation,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1808220-CLASS-A_2022-11-17,successor_sec_id,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1808220-CLASS-A_2022-11-17,last_trade_date,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1808220-CLASS-A_2022-11-17,value_rule,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1808220-CLASS-A_2022-11-17,cash_per_share,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1808220-CLASS-A_2022-11-17,cash_currency,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1808220-CLASS-A_2022-11-17,stock_ratio,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1808220-CLASS-A_2022-11-17,price_sec_id,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1808220-CLASS-A_2022-11-17,price_ticker,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1808220-CLASS-A_2022-11-17,price_date,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1808220-CLASS-A_2022-11-17,recovery_ratio,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1808220-CLASS-A_2022-11-17,fixed_by,5a,residual,operator ruling 2026-10-03 (5a pre-check): an 8-month gap in the fails rows; no general rule reaches it,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK23666-COMMON_2012-07-13,shape,no_ending,ending_moved,operator ruling 2026-10-03 (5a pre-check): the line has a later Form 25 in the cached filings,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK23666-COMMON_2012-07-13,exit_kind,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK23666-COMMON_2012-07-13,drop_reason,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK23666-COMMON_2012-07-13,continuation,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK23666-COMMON_2012-07-13,successor_sec_id,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK23666-COMMON_2012-07-13,last_trade_date,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK23666-COMMON_2012-07-13,value_rule,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK23666-COMMON_2012-07-13,cash_per_share,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK23666-COMMON_2012-07-13,cash_currency,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK23666-COMMON_2012-07-13,stock_ratio,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK23666-COMMON_2012-07-13,price_sec_id,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK23666-COMMON_2012-07-13,price_ticker,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK23666-COMMON_2012-07-13,price_date,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK23666-COMMON_2012-07-13,recovery_ratio,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK352363-COMMON_2012-05-14,shape,no_ending,ending_moved,operator ruling 2026-10-03 (5a pre-check): the line has a later Form 25 in the cached filings,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK352363-COMMON_2012-05-14,exit_kind,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK352363-COMMON_2012-05-14,drop_reason,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK352363-COMMON_2012-05-14,continuation,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK352363-COMMON_2012-05-14,successor_sec_id,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK352363-COMMON_2012-05-14,last_trade_date,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK352363-COMMON_2012-05-14,value_rule,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK352363-COMMON_2012-05-14,cash_per_share,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK352363-COMMON_2012-05-14,cash_currency,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK352363-COMMON_2012-05-14,stock_ratio,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK352363-COMMON_2012-05-14,price_sec_id,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK352363-COMMON_2012-05-14,price_ticker,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK352363-COMMON_2012-05-14,price_date,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK352363-COMMON_2012-05-14,recovery_ratio,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK708819-COMMON_2018-05-08,shape,no_ending,ending_moved,operator ruling 2026-10-03 (5a pre-check): the line has a later Form 25 in the cached filings,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK708819-COMMON_2018-05-08,exit_kind,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK708819-COMMON_2018-05-08,drop_reason,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK708819-COMMON_2018-05-08,continuation,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK708819-COMMON_2018-05-08,successor_sec_id,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK708819-COMMON_2018-05-08,last_trade_date,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK708819-COMMON_2018-05-08,value_rule,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK708819-COMMON_2018-05-08,cash_per_share,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK708819-COMMON_2018-05-08,cash_currency,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK708819-COMMON_2018-05-08,stock_ratio,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK708819-COMMON_2018-05-08,price_sec_id,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK708819-COMMON_2018-05-08,price_ticker,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK708819-COMMON_2018-05-08,price_date,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK708819-COMMON_2018-05-08,recovery_ratio,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK716006-COMMON_2010-10-04,shape,no_ending,ending_moved,operator ruling 2026-10-03 (5a pre-check): the line has a later Form 25 in the cached filings,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK716006-COMMON_2010-10-04,exit_kind,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK716006-COMMON_2010-10-04,drop_reason,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK716006-COMMON_2010-10-04,continuation,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK716006-COMMON_2010-10-04,successor_sec_id,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK716006-COMMON_2010-10-04,last_trade_date,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK716006-COMMON_2010-10-04,value_rule,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK716006-COMMON_2010-10-04,cash_per_share,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK716006-COMMON_2010-10-04,cash_currency,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK716006-COMMON_2010-10-04,stock_ratio,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK716006-COMMON_2010-10-04,price_sec_id,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK716006-COMMON_2010-10-04,price_ticker,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK716006-COMMON_2010-10-04,price_date,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK716006-COMMON_2010-10-04,recovery_ratio,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK910073-COMMON_2024-07-12,shape,no_ending,ending_moved,operator ruling 2026-10-03 (5a pre-check): the line has a later Form 25 in the cached filings,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK910073-COMMON_2024-07-12,exit_kind,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK910073-COMMON_2024-07-12,drop_reason,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK910073-COMMON_2024-07-12,continuation,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK910073-COMMON_2024-07-12,successor_sec_id,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK910073-COMMON_2024-07-12,last_trade_date,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK910073-COMMON_2024-07-12,value_rule,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK910073-COMMON_2024-07-12,cash_per_share,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK910073-COMMON_2024-07-12,cash_currency,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK910073-COMMON_2024-07-12,stock_ratio,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK910073-COMMON_2024-07-12,price_sec_id,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK910073-COMMON_2024-07-12,price_ticker,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK910073-COMMON_2024-07-12,price_date,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK910073-COMMON_2024-07-12,recovery_ratio,,*,operator ruling 2026-10-03 (5a pre-check): the later ending's fields are left to later sub-plans,docs/superpowers/plans/research/2026-10-03-5a-line-continuity.md
+CIK1019849-COMMON_2009-06-08,fixed_by,5a,5h,sub-plan 5a dropped U4: the stricter ticker confirmation changed 13 other eras (more than 10),
+CIK1018005-COMMON_2012-10-01,sec_id,CIK1018005-COMMON,BBG000BJ3CN0,contract/id_changes.csv: the placeholder now holds a FIGI,
+CIK1042893-COMMON_2024-09-04,sec_id,CIK1042893-COMMON,BBG000BVDBY2,contract/id_changes.csv: the placeholder now holds a FIGI,
+CIK1056087-COMMON_2016-05-25,sec_id,CIK1056087-COMMON,BBG000BP62Y3,contract/id_changes.csv: the placeholder now holds a FIGI,
+CIK1075415-COMMON_2020-01-07,sec_id,CIK1075415-COMMON,BBG000BM2GS0,contract/id_changes.csv: the placeholder now holds a FIGI,
+CIK1095651-COMMON_2013-12-19,sec_id,CIK1095651-COMMON,BBG000H35J52,contract/id_changes.csv: the placeholder now holds a FIGI,
+CIK1115836-COMMON_2014-07-01,sec_id,CIK1115836-COMMON,BBG000BKZ5F6,contract/id_changes.csv: the placeholder now holds a FIGI,
+CIK1282266-COMMON_2015-04-27,sec_id,CIK1282266-COMMON,BBG000BFJ645,contract/id_changes.csv: the placeholder now holds a FIGI,
+CIK1498301-COMMON_2020-08-21,sec_id,CIK1498301-COMMON,BBG000BGZ9V9,contract/id_changes.csv: the placeholder now holds a FIGI,
+CIK1575828-COMMON_2021-10-01,sec_id,CIK1575828-COMMON,BBG004K27P01,contract/id_changes.csv: the placeholder now holds a FIGI,
+CIK1606498-COMMON_2018-07-11,sec_id,CIK1606498-COMMON,BBG005L86G05,contract/id_changes.csv: the placeholder now holds a FIGI,
+CIK1710366-COMMON_2025-01-16,sec_id,CIK1710366-COMMON,BBG00HC114X0,contract/id_changes.csv: the placeholder now holds a FIGI,
+CIK1723089-COMMON_2021-01-10,sec_id,CIK1723089-COMMON,BBG00JH9TZ56,contract/id_changes.csv: the placeholder now holds a FIGI,
+CIK1803737-COMMON_2022-06-30,sec_id,CIK1803737-COMMON,BBG014QJ5BV6,contract/id_changes.csv: the placeholder now holds a FIGI,
+CIK1929561-COMMON_2022-12-31,sec_id,CIK1929561-COMMON,BBG0160DYCH4,contract/id_changes.csv: the placeholder now holds a FIGI,
+CIK20520-COMMON_2017-07-10,sec_id,CIK20520-COMMON,BBG000FH5YM1,contract/id_changes.csv: the placeholder now holds a FIGI,
+CIK23666-COMMON_2012-07-13,sec_id,CIK23666-COMMON,BBG000BT4T69,contract/id_changes.csv: the placeholder now holds a FIGI,
+CIK314808-CLASS-A_2019-04-11,sec_id,CIK314808-CLASS-A,BBG000BJ2VQ6,contract/id_changes.csv: the placeholder now holds a FIGI,
+CIK708819-COMMON_2018-05-08,sec_id,CIK708819-COMMON,BBG000BNW1S8,contract/id_changes.csv: the placeholder now holds a FIGI,
+CIK733269-COMMON_2018-09-30,sec_id,CIK733269-COMMON,BBG000BB4HM6,contract/id_changes.csv: the placeholder now holds a FIGI,
+CIK88205-COMMON_2015-09-28,sec_id,CIK88205-COMMON,BBG000BTGCV5,contract/id_changes.csv: the placeholder now holds a FIGI,
+CIK910073-COMMON_2024-07-12,sec_id,CIK910073-COMMON,BBG000BVXPZ8,contract/id_changes.csv: the placeholder now holds a FIGI,
+CIK931336-COMMON_2013-08-26,sec_id,CIK931336-COMMON,BBG000BBMT95,contract/id_changes.csv: the placeholder now holds a FIGI,
+BBG000C9N6Q9_2011-03-15,last_trade_date,,2015-08-21,diagnosis BBG000C9N6Q9_2011-03-15_5a-r1 cites 0000876661-15-000370,reports/BBG000C9N6Q9_2011-03-15_5a-r1.md
+BBG000C9N6Q9_2011-03-15,price_date,,2015-08-24,diagnosis BBG000C9N6Q9_2011-03-15_5a-r1 cites 0000876661-15-000370,reports/BBG000C9N6Q9_2011-03-15_5a-r1.md
+BBG000B9WJ73_5a-r1,(row),,added (ruling_pending),5a loop round 1: regression,reports/BBG000B9WJ73_5a-r1.md
+BBG000BDCQ25_5a-r1,(row),,added (ruling_pending),5a loop round 1: regression,reports/BBG000BDCQ25_5a-r1.md
+BBG000CF8227_5a-r1,(row),,added (pass),5a loop round 1: regression,reports/BBG000CF8227_5a-r1.md
+BBG000CG9XT7_5a-r1,(row),,added (pass),5a loop round 1: regression,reports/BBG000CG9XT7_5a-r1.md
+BBG000QN4GY3_5a-r1,(row),,added (pass),5a loop round 1: regression,reports/BBG000QN4GY3_5a-r1.md
+BBG000BLH3P8_2023-06-20,status,known_wrong,pass,the library now matches,
+BBG000C4MWH4_2023-07-05,status,known_wrong,pass,the library now matches,
+BBG000CL1HL7_2021-12-10,status,known_wrong,pass,the library now matches,
+BBG000DZCFX4_2020-06-02,status,known_wrong,pass,the library now matches,
+BBG000GTYWL7_2026-01-18,status,known_wrong,pass,the library now matches,
+BBG000Q02P20_2011-11-14,status,known_wrong,pass,the library now matches,
+BBG001D9S707_2010-05-25,status,known_wrong,pass,the library now matches,
+BBG005PWSVQ3_2016-08-31,status,known_wrong,pass,the library now matches,
+BBG00D30HGP6_2021-06-23,status,known_wrong,pass,the library now matches,
+BBG00JM9V731_2026-07-30,status,known_wrong,pass,the library now matches,
+CIK1042893-COMMON_2024-09-04,status,known_wrong,pass,the library now matches,
+CIK1066104-COMMON_2012-08-13,status,known_wrong,pass,the library now matches,
+CIK1075415-COMMON_2020-01-07,status,known_wrong,pass,the library now matches,
+CIK1095651-COMMON_2013-12-19,status,known_wrong,pass,the library now matches,
+CIK1115836-COMMON_2014-07-01,status,known_wrong,pass,the library now matches,
+CIK1282266-COMMON_2015-04-27,status,known_wrong,pass,the library now matches,
+CIK1606498-COMMON_2018-07-11,status,known_wrong,pass,the library now matches,
+CIK1710366-COMMON_2025-01-16,status,known_wrong,pass,the library now matches,
+CIK1723089-COMMON_2021-01-10,status,known_wrong,pass,the library now matches,
+CIK1803737-COMMON_2022-06-30,status,known_wrong,pass,the library now matches,
+CIK1929561-COMMON_2022-12-31,status,known_wrong,pass,the library now matches,
+CIK23666-COMMON_2012-07-13,status,known_wrong,pass,the library now matches,
+CIK352363-COMMON_2012-05-14,status,known_wrong,pass,the library now matches,
+CIK708819-COMMON_2018-05-08,status,known_wrong,pass,the library now matches,
+CIK716006-COMMON_2010-10-04,status,known_wrong,pass,the library now matches,
+CIK733269-COMMON_2018-09-30,status,known_wrong,pass,the library now matches,
+CIK88205-COMMON_2015-09-28,status,known_wrong,pass,the library now matches,
+CIK910073-COMMON_2024-07-12,status,known_wrong,pass,the library now matches,
+BBG000BH8XX2_5a-r2,(row),,added (pass),5a loop round 2: regression,reports/BBG000BH8XX2_5a-r2.md
+BBG000F0KF42_5a-r2,(row),,added (pass),5a loop round 2: regression,reports/BBG000F0KF42_5a-r2.md
+BBG000MG3Y65_5a-r2,(row),,added (pass),5a loop round 2: regression,reports/BBG000MG3Y65_5a-r2.md
+BBG000MMR2C9_5a-r2,(row),,added (ruling_pending),5a loop round 2: regression,reports/BBG000MMR2C9_5a-r2.md
+BBG000QL8VH9_5a-r2,(row),,added (ruling_pending),5a loop round 2: regression,reports/BBG000QL8VH9_5a-r2.md
+BBG00Y04KP80_5a-r2,(row),,added (known_wrong),5a loop round 2: regression,reports/BBG00Y04KP80_5a-r2.md
+BBG000B9WJ73_5a-r1,price_sec_id,*,BBG000B9WJ73,"controller ruling 2026-10-04 (5a loop, delegated autonomy): ACI: placeholder renamed to its FIGI (R2 fold); price_sec_id follows; skeptic upheld",reports/BBG000B9WJ73_5a-r1.md
+BBG000B9WJ73_5a-r1,status,ruling_pending,pass,"controller ruling 2026-10-04 (5a loop, delegated autonomy): settled; judged against the run",reports/BBG000B9WJ73_5a-r1.md
+BBG000B9WJ73_5a-r1,fixed_by,regression,,"controller ruling 2026-10-04 (5a loop, delegated autonomy): settled",reports/BBG000B9WJ73_5a-r1.md
+BBG000BDCQ25_5a-r1,shape,ending,no_ending,"controller ruling 2026-10-04 (5a loop, delegated autonomy): PRDO: rename CECO->PRDO, no ending (upheld); boundary 1-2 days late vs 8-K 0001564590-19-046273 (5d)",reports/BBG000BDCQ25_5a-r1.md
+BBG000BDCQ25_5a-r1,exit_kind,*,,"controller ruling 2026-10-04 (5a loop, delegated autonomy): PRDO: rename CECO->PRDO, no ending (upheld); boundary 1-2 days late vs 8-K 0001564590-19-046273 (5d)",reports/BBG000BDCQ25_5a-r1.md
+BBG000BDCQ25_5a-r1,drop_reason,*,,"controller ruling 2026-10-04 (5a loop, delegated autonomy): PRDO: rename CECO->PRDO, no ending (upheld); boundary 1-2 days late vs 8-K 0001564590-19-046273 (5d)",reports/BBG000BDCQ25_5a-r1.md
+BBG000BDCQ25_5a-r1,continuation,*,,"controller ruling 2026-10-04 (5a loop, delegated autonomy): PRDO: rename CECO->PRDO, no ending (upheld); boundary 1-2 days late vs 8-K 0001564590-19-046273 (5d)",reports/BBG000BDCQ25_5a-r1.md
+BBG000BDCQ25_5a-r1,successor_sec_id,*,,"controller ruling 2026-10-04 (5a loop, delegated autonomy): PRDO: rename CECO->PRDO, no ending (upheld); boundary 1-2 days late vs 8-K 0001564590-19-046273 (5d)",reports/BBG000BDCQ25_5a-r1.md
+BBG000BDCQ25_5a-r1,last_trade_date,*,,"controller ruling 2026-10-04 (5a loop, delegated autonomy): PRDO: rename CECO->PRDO, no ending (upheld); boundary 1-2 days late vs 8-K 0001564590-19-046273 (5d)",reports/BBG000BDCQ25_5a-r1.md
+BBG000BDCQ25_5a-r1,value_rule,*,,"controller ruling 2026-10-04 (5a loop, delegated autonomy): PRDO: rename CECO->PRDO, no ending (upheld); boundary 1-2 days late vs 8-K 0001564590-19-046273 (5d)",reports/BBG000BDCQ25_5a-r1.md
+BBG000BDCQ25_5a-r1,cash_per_share,*,,"controller ruling 2026-10-04 (5a loop, delegated autonomy): PRDO: rename CECO->PRDO, no ending (upheld); boundary 1-2 days late vs 8-K 0001564590-19-046273 (5d)",reports/BBG000BDCQ25_5a-r1.md
+BBG000BDCQ25_5a-r1,cash_currency,*,,"controller ruling 2026-10-04 (5a loop, delegated autonomy): PRDO: rename CECO->PRDO, no ending (upheld); boundary 1-2 days late vs 8-K 0001564590-19-046273 (5d)",reports/BBG000BDCQ25_5a-r1.md
+BBG000BDCQ25_5a-r1,stock_ratio,*,,"controller ruling 2026-10-04 (5a loop, delegated autonomy): PRDO: rename CECO->PRDO, no ending (upheld); boundary 1-2 days late vs 8-K 0001564590-19-046273 (5d)",reports/BBG000BDCQ25_5a-r1.md
+BBG000BDCQ25_5a-r1,price_sec_id,*,,"controller ruling 2026-10-04 (5a loop, delegated autonomy): PRDO: rename CECO->PRDO, no ending (upheld); boundary 1-2 days late vs 8-K 0001564590-19-046273 (5d)",reports/BBG000BDCQ25_5a-r1.md
+BBG000BDCQ25_5a-r1,price_ticker,*,,"controller ruling 2026-10-04 (5a loop, delegated autonomy): PRDO: rename CECO->PRDO, no ending (upheld); boundary 1-2 days late vs 8-K 0001564590-19-046273 (5d)",reports/BBG000BDCQ25_5a-r1.md
+BBG000BDCQ25_5a-r1,price_date,*,,"controller ruling 2026-10-04 (5a loop, delegated autonomy): PRDO: rename CECO->PRDO, no ending (upheld); boundary 1-2 days late vs 8-K 0001564590-19-046273 (5d)",reports/BBG000BDCQ25_5a-r1.md
+BBG000BDCQ25_5a-r1,recovery_ratio,*,,"controller ruling 2026-10-04 (5a loop, delegated autonomy): PRDO: rename CECO->PRDO, no ending (upheld); boundary 1-2 days late vs 8-K 0001564590-19-046273 (5d)",reports/BBG000BDCQ25_5a-r1.md
+BBG000BDCQ25_5a-r1,status,ruling_pending,pass,"controller ruling 2026-10-04 (5a loop, delegated autonomy): settled; judged against the run",reports/BBG000BDCQ25_5a-r1.md
+BBG000BDCQ25_5a-r1,fixed_by,regression,,"controller ruling 2026-10-04 (5a loop, delegated autonomy): settled",reports/BBG000BDCQ25_5a-r1.md
+BBG000MMR2C9_5a-r2,price_sec_id,*,BBG000MMR2C9,"controller ruling 2026-10-04 (5a loop, delegated autonomy): XCO: placeholder renamed to its FIGI (R2 fold); price_sec_id follows; skeptic upheld",reports/BBG000MMR2C9_5a-r2.md
+BBG000MMR2C9_5a-r2,status,ruling_pending,pass,"controller ruling 2026-10-04 (5a loop, delegated autonomy): settled; judged against the run",reports/BBG000MMR2C9_5a-r2.md
+BBG000MMR2C9_5a-r2,fixed_by,regression,,"controller ruling 2026-10-04 (5a loop, delegated autonomy): settled",reports/BBG000MMR2C9_5a-r2.md
+BBG000QL8VH9_5a-r2,shape,ending,no_ending,"controller ruling 2026-10-04 (5a loop, delegated autonomy): PGEN: rename XON->PGEN, no ending (upheld); boundary 2-3 days late vs 8-K 0001193125-20-023400 (5d)",reports/BBG000QL8VH9_5a-r2.md
+BBG000QL8VH9_5a-r2,exit_kind,*,,"controller ruling 2026-10-04 (5a loop, delegated autonomy): PGEN: rename XON->PGEN, no ending (upheld); boundary 2-3 days late vs 8-K 0001193125-20-023400 (5d)",reports/BBG000QL8VH9_5a-r2.md
+BBG000QL8VH9_5a-r2,drop_reason,*,,"controller ruling 2026-10-04 (5a loop, delegated autonomy): PGEN: rename XON->PGEN, no ending (upheld); boundary 2-3 days late vs 8-K 0001193125-20-023400 (5d)",reports/BBG000QL8VH9_5a-r2.md
+BBG000QL8VH9_5a-r2,continuation,*,,"controller ruling 2026-10-04 (5a loop, delegated autonomy): PGEN: rename XON->PGEN, no ending (upheld); boundary 2-3 days late vs 8-K 0001193125-20-023400 (5d)",reports/BBG000QL8VH9_5a-r2.md
+BBG000QL8VH9_5a-r2,successor_sec_id,*,,"controller ruling 2026-10-04 (5a loop, delegated autonomy): PGEN: rename XON->PGEN, no ending (upheld); boundary 2-3 days late vs 8-K 0001193125-20-023400 (5d)",reports/BBG000QL8VH9_5a-r2.md
+BBG000QL8VH9_5a-r2,last_trade_date,*,,"controller ruling 2026-10-04 (5a loop, delegated autonomy): PGEN: rename XON->PGEN, no ending (upheld); boundary 2-3 days late vs 8-K 0001193125-20-023400 (5d)",reports/BBG000QL8VH9_5a-r2.md
+BBG000QL8VH9_5a-r2,value_rule,*,,"controller ruling 2026-10-04 (5a loop, delegated autonomy): PGEN: rename XON->PGEN, no ending (upheld); boundary 2-3 days late vs 8-K 0001193125-20-023400 (5d)",reports/BBG000QL8VH9_5a-r2.md
+BBG000QL8VH9_5a-r2,cash_per_share,*,,"controller ruling 2026-10-04 (5a loop, delegated autonomy): PGEN: rename XON->PGEN, no ending (upheld); boundary 2-3 days late vs 8-K 0001193125-20-023400 (5d)",reports/BBG000QL8VH9_5a-r2.md
+BBG000QL8VH9_5a-r2,cash_currency,*,,"controller ruling 2026-10-04 (5a loop, delegated autonomy): PGEN: rename XON->PGEN, no ending (upheld); boundary 2-3 days late vs 8-K 0001193125-20-023400 (5d)",reports/BBG000QL8VH9_5a-r2.md
+BBG000QL8VH9_5a-r2,stock_ratio,*,,"controller ruling 2026-10-04 (5a loop, delegated autonomy): PGEN: rename XON->PGEN, no ending (upheld); boundary 2-3 days late vs 8-K 0001193125-20-023400 (5d)",reports/BBG000QL8VH9_5a-r2.md
+BBG000QL8VH9_5a-r2,price_sec_id,*,,"controller ruling 2026-10-04 (5a loop, delegated autonomy): PGEN: rename XON->PGEN, no ending (upheld); boundary 2-3 days late vs 8-K 0001193125-20-023400 (5d)",reports/BBG000QL8VH9_5a-r2.md
+BBG000QL8VH9_5a-r2,price_ticker,*,,"controller ruling 2026-10-04 (5a loop, delegated autonomy): PGEN: rename XON->PGEN, no ending (upheld); boundary 2-3 days late vs 8-K 0001193125-20-023400 (5d)",reports/BBG000QL8VH9_5a-r2.md
+BBG000QL8VH9_5a-r2,price_date,*,,"controller ruling 2026-10-04 (5a loop, delegated autonomy): PGEN: rename XON->PGEN, no ending (upheld); boundary 2-3 days late vs 8-K 0001193125-20-023400 (5d)",reports/BBG000QL8VH9_5a-r2.md
+BBG000QL8VH9_5a-r2,recovery_ratio,*,,"controller ruling 2026-10-04 (5a loop, delegated autonomy): PGEN: rename XON->PGEN, no ending (upheld); boundary 2-3 days late vs 8-K 0001193125-20-023400 (5d)",reports/BBG000QL8VH9_5a-r2.md
+BBG000QL8VH9_5a-r2,status,ruling_pending,pass,"controller ruling 2026-10-04 (5a loop, delegated autonomy): settled; judged against the run",reports/BBG000QL8VH9_5a-r2.md
+BBG000QL8VH9_5a-r2,fixed_by,regression,,"controller ruling 2026-10-04 (5a loop, delegated autonomy): settled",reports/BBG000QL8VH9_5a-r2.md
+BBG000C9N6Q9_2011-03-15,price_sec_id,CIK1498301-COMMON,BBG000BGZ9V9,contract/id_changes.csv: the placeholder now holds a FIGI,
+CIK1018005-COMMON_2012-10-01,price_sec_id,CIK1018005-COMMON,BBG000BJ3CN0,contract/id_changes.csv: the placeholder now holds a FIGI,
+CIK1056087-COMMON_2016-05-25,price_sec_id,CIK1056087-COMMON,BBG000BP62Y3,contract/id_changes.csv: the placeholder now holds a FIGI,
+CIK1498301-COMMON_2020-08-21,price_sec_id,CIK1498301-COMMON,BBG000BGZ9V9,contract/id_changes.csv: the placeholder now holds a FIGI,
+CIK20520-COMMON_2017-07-10,price_sec_id,CIK20520-COMMON,BBG000FH5YM1,contract/id_changes.csv: the placeholder now holds a FIGI,
+CIK314808-COMMON_2010-01-08,successor_sec_id,CIK314808-CLASS-A,BBG000BJ2VQ6,contract/id_changes.csv: the placeholder now holds a FIGI,
+CIK931336-COMMON_2013-08-26,price_sec_id,CIK931336-COMMON,BBG000BBMT95,contract/id_changes.csv: the placeholder now holds a FIGI,
+BBG000BN6349_2013-12-02,fixed_by,5a,5f,controller ruling 2026-10-04 (5a acceptance): the line is followed; what remains is cash_currency,
+BBG000BRWGG9_2019-04-22,fixed_by,5a,5g,"controller ruling 2026-10-04 (5a acceptance): the line is followed; what remains is the bankruptcy drop reason, OTC ticker and dates",
+BBG000BTQ9G8_2017-08-02,fixed_by,5a,5f,controller ruling 2026-10-04 (5a acceptance): the line is followed; what remains is cash_currency,
+BBG000C7WZ16_2010-10-15,fixed_by,5a,5f,controller ruling 2026-10-04 (5a acceptance): the line is followed; what remains is cash_currency,
+BBG000C9N6Q9_2011-03-15,fixed_by,5a,5f,controller ruling 2026-10-04 (5a acceptance): the line is followed; what remains is cash_currency (5f) and the ASNA leg's security (5e),
+BBG000J453J8_2019-05-12,fixed_by,5a,5c,controller ruling 2026-10-04 (5a acceptance): the line is followed; what remains is the continuation link: its 13-trading-day CUSIP gap is beyond the line follow's window,
+BBG006KY8KV2_2017-10-17,fixed_by,5a,5e,controller ruling 2026-10-04 (5a acceptance): the line is followed; what remains is the acquirer's line BEPC,
+BBG009NGKQ45_2024-02-13,fixed_by,5a,5g,controller ruling 2026-10-04 (5a acceptance): the line is followed; what remains is the OTC ticker VRMMQ and the last trade date,
+CIK1018005-COMMON_2012-10-01,fixed_by,5a,5g,controller ruling 2026-10-04 (5a acceptance): the line is followed; what remains is the OTC print's ticker CWTRQ,
+CIK1056087-COMMON_2016-05-25,fixed_by,5a,5g,controller ruling 2026-10-04 (5a acceptance): the line is followed; what remains is the 2020 bankruptcy ending the followed line reaches is not found yet,
+CIK20520-COMMON_2017-07-10,fixed_by,5a,5g,controller ruling 2026-10-04 (5a acceptance): the line is followed; what remains is the OTC print's ticker FTRCQ,
+CIK931336-COMMON_2013-08-26,fixed_by,5a,5g,controller ruling 2026-10-04 (5a acceptance): the line is followed; what remains is the OTC print's ticker DFODQ,
+BBG00Y04KP80_5a-r2,fixed_by,5a,5h,"controller ruling 2026-10-04 (5a acceptance): the 2014 CRC era holds the post-2020 line's FIGI BBG00Y04KP80; the genuine 2014-2020 line is BBG0060B3M63 (identity, 5h)",reports/BBG00Y04KP80_5a-r2.md
+CIK867773-COMMON_2009-06-08,fixed_by,5b,5c,operator ruling 2026-10-04: the truth's continuation into SPWR stands (not R2's one security); the successor link is 5c's,
+BBG000BBBP59_2016-03-28,last_trade_date,,2016-03-17,operator ruling 2026-10-04 (5b pre-check): G1: notice 'suspended on D' is D-1 (R8),docs/superpowers/plans/research/2026-10-04-5b-form25-reach.md
+BBG000BF8BH2_2008-08-10,last_trade_date,,2008-07-30,operator ruling 2026-10-04 (5b pre-check): G1: notice 'suspended on D' is D-1 (R8),docs/superpowers/plans/research/2026-10-04-5b-form25-reach.md
+BBG000BHBK84_2017-09-11,fixed_by,5b,5c,operator ruling 2026-10-04 (5b pre-check): re-route: the successor link,docs/superpowers/plans/research/2026-10-04-5b-form25-reach.md
+BBG000BHCDF1_2011-12-08,last_trade_date,,2011-11-25,operator ruling 2026-10-04 (5b pre-check): G1: notice 'suspended on D' is D-1 (R8),docs/superpowers/plans/research/2026-10-04-5b-form25-reach.md
+BBG000BJ27C4_2012-07-15,last_trade_date,,2012-07-02,operator ruling 2026-10-04 (5b pre-check): G2: a MIDAS exchange print is publishable (decision 12),docs/superpowers/plans/research/2026-10-04-5b-form25-reach.md
+BBG000BJ27C4_2012-07-15,price_date,,2012-07-03,operator ruling 2026-10-04 (5b pre-check): G2: a MIDAS exchange print is publishable (decision 12),docs/superpowers/plans/research/2026-10-04-5b-form25-reach.md
+BBG000BJCFP1_2013-03-11,last_trade_date,,2013-02-28,operator ruling 2026-10-04 (5b pre-check): G2: a MIDAS exchange print is publishable (decision 12),docs/superpowers/plans/research/2026-10-04-5b-form25-reach.md
+BBG000BJCFP1_2013-03-11,price_date,,2013-03-01,operator ruling 2026-10-04 (5b pre-check): G2: a MIDAS exchange print is publishable (decision 12),docs/superpowers/plans/research/2026-10-04-5b-form25-reach.md
+BBG000BTMDX4_2012-04-06,fixed_by,5b,5f,operator ruling 2026-10-04 (5b pre-check): re-route: the election default package,docs/superpowers/plans/research/2026-10-04-5b-form25-reach.md
+BBG000C070N2_2009-06-08,last_trade_date,,2008-07-28,operator ruling 2026-10-04 (5b pre-check): G3: a Nasdaq code-D halt is publishable (spec 1.2),docs/superpowers/plans/research/2026-10-04-5b-form25-reach.md
+BBG000C070N2_2009-06-08,price_date,,2008-07-29,operator ruling 2026-10-04 (5b pre-check): G3: a Nasdaq code-D halt is publishable (spec 1.2),docs/superpowers/plans/research/2026-10-04-5b-form25-reach.md
+BBG000DY8ZS4_2019-05-15,fixed_by,5b,5g,operator ruling 2026-10-04 (5b pre-check): re-route: the OTC print,docs/superpowers/plans/research/2026-10-04-5b-form25-reach.md
+BBG005DKMJ67_2025-04-29,exit_kind,merger,dropped,"operator ruling 2026-10-04 (5b pre-check): G4: the 2023 Nasdaq removal is the ending, not the 2025 OTC merger (decision 11)",docs/superpowers/plans/research/2026-10-04-5b-form25-reach.md
+BBG005DKMJ67_2025-04-29,drop_reason,,price,"operator ruling 2026-10-04 (5b pre-check): G4: the 2023 Nasdaq removal is the ending, not the 2025 OTC merger (decision 11)",docs/superpowers/plans/research/2026-10-04-5b-form25-reach.md
+BBG005DKMJ67_2025-04-29,last_trade_date,,*,"operator ruling 2026-10-04 (5b pre-check): G4: the 2023 Nasdaq removal is the ending, not the 2025 OTC merger (decision 11)",docs/superpowers/plans/research/2026-10-04-5b-form25-reach.md
+BBG005DKMJ67_2025-04-29,value_rule,cash,otc_print,"operator ruling 2026-10-04 (5b pre-check): G4: the 2023 Nasdaq removal is the ending, not the 2025 OTC merger (decision 11)",docs/superpowers/plans/research/2026-10-04-5b-form25-reach.md
+BBG005DKMJ67_2025-04-29,cash_per_share,0.2567,,"operator ruling 2026-10-04 (5b pre-check): G4: the 2023 Nasdaq removal is the ending, not the 2025 OTC merger (decision 11)",docs/superpowers/plans/research/2026-10-04-5b-form25-reach.md
+BBG005DKMJ67_2025-04-29,cash_currency,USD,,"operator ruling 2026-10-04 (5b pre-check): G4: the 2023 Nasdaq removal is the ending, not the 2025 OTC merger (decision 11)",docs/superpowers/plans/research/2026-10-04-5b-form25-reach.md
+BBG005DKMJ67_2025-04-29,price_sec_id,,*,"operator ruling 2026-10-04 (5b pre-check): G4: the 2023 Nasdaq removal is the ending, not the 2025 OTC merger (decision 11)",docs/superpowers/plans/research/2026-10-04-5b-form25-reach.md
+BBG005DKMJ67_2025-04-29,price_ticker,,*,"operator ruling 2026-10-04 (5b pre-check): G4: the 2023 Nasdaq removal is the ending, not the 2025 OTC merger (decision 11)",docs/superpowers/plans/research/2026-10-04-5b-form25-reach.md
+BBG005DKMJ67_2025-04-29,price_date,,*,"operator ruling 2026-10-04 (5b pre-check): G4: the 2023 Nasdaq removal is the ending, not the 2025 OTC merger (decision 11)",docs/superpowers/plans/research/2026-10-04-5b-form25-reach.md
+BBG005DKMJ67_2025-04-29,fixed_by,5d,5b,"operator ruling 2026-10-04 (5b pre-check): G4: the 2023 Nasdaq removal is the ending, not the 2025 OTC merger (decision 11)",docs/superpowers/plans/research/2026-10-04-5b-form25-reach.md
+BBG005DKMJ67_2025-04-29,internal_last_trade_date,2025-04-29,,"operator ruling 2026-10-04 (5b pre-check): G4: the 2023 Nasdaq removal is the ending, not the 2025 OTC merger (decision 11)",docs/superpowers/plans/research/2026-10-04-5b-form25-reach.md
+BBG00VNLZL95_2020-08-06,fixed_by,5b,5d,operator ruling 2026-10-04 (5b pre-check): re-route: the expiry date in the class text,docs/superpowers/plans/research/2026-10-04-5b-form25-reach.md
+BBG000BJ27C4_2012-07-15,status,known_wrong,pass,operator ruling 2026-10-04 (5b pre-check) G2: the case now matches the run,
+BBG000BJ27C4_2012-07-15,fixed_by,5b,,operator ruling 2026-10-04 (5b pre-check) G2: the case now matches the run,
+BBG000CHWP52_2022-04-18,case,,added,operator pre-ruling 2026-10-04 (5b plan): Series A reclassified one for one into WBD with DISCB and DISCK; mirrors DISCK's row; not a 5b regression to narrow,docs/superpowers/plans/research/2026-10-04-5b-form25-reach.md
+BBG000BLG1L7_2025-04-21,case,,added,"operator pre-ruling 2026-10-04 (5b plan): a voluntary delisting during the liquidation; exit_kind liquidation, the rest open; not a 5b regression to narrow",docs/superpowers/plans/research/2026-10-04-5b-form25-reach.md
+BBG009R0CVG1_2020-04-13,last_trade_date,,2019-12-27,diagnosis BBG009R0CVG1_2020-04-13_5b-r1 cites 0000876661-20-000026,reports/BBG009R0CVG1_2020-04-13_5b-r1.md
+BBG009R0CVG1_2020-04-13,price_date,,2019-12-30,diagnosis BBG009R0CVG1_2020-04-13_5b-r1 cites 0000876661-20-000026,reports/BBG009R0CVG1_2020-04-13_5b-r1.md
+BBG009R0CVG1_2020-04-13,internal_last_trade_date,2019-12-26,2019-12-27,diagnosis BBG009R0CVG1_2020-04-13_5b-r1 cites 0000876661-20-000026,reports/BBG009R0CVG1_2020-04-13_5b-r1.md
+BBG000BHRRV6_5b-r1,(row),,added (pass),5b loop round 1: regression,reports/BBG000BHRRV6_5b-r1.md
+BBG000BMLYZ2_5b-r1,(row),,added (ruling_pending),5b loop round 1: regression,reports/BBG000BMLYZ2_5b-r1.md
+BBG000BNY0W3_5b-r1,(row),,added (pass),5b loop round 1: regression,reports/BBG000BNY0W3_5b-r1.md
+BBG000BRMVZ6_5b-r1,(row),,added (pass),5b loop round 1: regression,reports/BBG000BRMVZ6_5b-r1.md
+BBG000BSYVD5_5b-r1,(row),,added (pass),5b loop round 1: regression,reports/BBG000BSYVD5_5b-r1.md
+BBG000BVK2W6_5b-r1,(row),,added (pass),5b loop round 1: regression,reports/BBG000BVK2W6_5b-r1.md
+BBG000C0ZL64_5b-r1,(row),,added (pass),5b loop round 1: regression,reports/BBG000C0ZL64_5b-r1.md
+BBG000C1TTV4_5b-r1,(row),,added (pass),5b loop round 1: regression,reports/BBG000C1TTV4_5b-r1.md
+BBG000C4ZNF2_5b-r1,(row),,added (pass),5b loop round 1: regression,reports/BBG000C4ZNF2_5b-r1.md
+BBG000G8M3Q5_5b-r1,(row),,added (pass),5b loop round 1: regression,reports/BBG000G8M3Q5_5b-r1.md
+BBG000R3BYX0_5b-r1,(row),,added (pass),5b loop round 1: regression,reports/BBG000R3BYX0_5b-r1.md
+BBG000RFD341_5b-r1,(row),,added (pass),5b loop round 1: regression,reports/BBG000RFD341_5b-r1.md
+BBG0057K5Y79_5b-r1,(row),,added (ruling_pending),5b loop round 1: regression,reports/BBG0057K5Y79_5b-r1.md
+BBG000BF2JS9_2009-09-18,status,known_wrong,pass,the library now matches,
+BBG000P4BQM9_2018-07-16,status,known_wrong,pass,the library now matches,
+BBG005CPNTQ2_2026-09-18,status,known_wrong,pass,the library now matches,
+BBG009R0CVG1_2020-04-13,status,known_wrong,pass,the library now matches,
+BBG00B6WH9G3_2020-07-10,status,known_wrong,pass,the library now matches,
+CIK1355096-SERIES-A_2011-10-03,status,known_wrong,pass,the library now matches,
+CIK898660-COMMON_2009-06-08,last_trade_date,,2007-11-07,diagnosis CIK898660-COMMON_2009-06-08_5b-r2 cites 0000876661-07-000873,reports/CIK898660-COMMON_2009-06-08_5b-r2.md
+BBG000BLDXH5_5b-r2,(row),,added (pass),5b loop round 2: regression,reports/BBG000BLDXH5_5b-r2.md
+BBG000CNNMD7_5b-r2,(row),,added (ruling_pending),5b loop round 2: regression,reports/BBG000CNNMD7_5b-r2.md
+BBG000K1T0M8_5b-r2,(row),,added (ruling_pending),5b loop round 2: regression,reports/BBG000K1T0M8_5b-r2.md
+BBG0016WLQ18_5b-r2,(row),,added (ruling_pending),5b loop round 2: regression,reports/BBG0016WLQ18_5b-r2.md
+BBG000BMLYZ2_5b-r1,exit_kind,*,dropped,"controller ruling 2026-10-04 (5b loop, delegated autonomy): NYSE removal for abnormally low price (8-K 3.01, Form 25-NSE EX-99.25); skeptic upheld",reports/BBG000BMLYZ2_5b-r1.md
+BBG000BMLYZ2_5b-r1,drop_reason,*,price,"controller ruling 2026-10-04 (5b loop, delegated autonomy): NYSE removal for abnormally low price (8-K 3.01, Form 25-NSE EX-99.25); skeptic upheld",reports/BBG000BMLYZ2_5b-r1.md
+BBG000BMLYZ2_5b-r1,status,ruling_pending,known_wrong,"controller ruling 2026-10-04 (5b loop, delegated autonomy): settled; judged against the run",reports/BBG000BMLYZ2_5b-r1.md
+BBG000BMLYZ2_5b-r1,fixed_by,regression,5g,"controller ruling 2026-10-04 (5b loop, delegated autonomy): settled",reports/BBG000BMLYZ2_5b-r1.md
+BBG0057K5Y79_5b-r1,exit_kind,*,dropped,"controller ruling 2026-10-04 (5b loop, delegated autonomy): NYSE 802.01D delisting, OTC EPEG afterwards (8-K, Form 25-NSE); skeptic upheld",reports/BBG0057K5Y79_5b-r1.md
+BBG0057K5Y79_5b-r1,drop_reason,*,guidelines,"controller ruling 2026-10-04 (5b loop, delegated autonomy): NYSE 802.01D delisting, OTC EPEG afterwards (8-K, Form 25-NSE); skeptic upheld",reports/BBG0057K5Y79_5b-r1.md
+BBG0057K5Y79_5b-r1,value_rule,*,otc_print,"controller ruling 2026-10-04 (5b loop, delegated autonomy): NYSE 802.01D delisting, OTC EPEG afterwards (8-K, Form 25-NSE); skeptic upheld",reports/BBG0057K5Y79_5b-r1.md
+BBG0057K5Y79_5b-r1,price_ticker,*,EPEG,"controller ruling 2026-10-04 (5b loop, delegated autonomy): NYSE 802.01D delisting, OTC EPEG afterwards (8-K, Form 25-NSE); skeptic upheld",reports/BBG0057K5Y79_5b-r1.md
+BBG0057K5Y79_5b-r1,status,ruling_pending,known_wrong,"controller ruling 2026-10-04 (5b loop, delegated autonomy): settled; judged against the run",reports/BBG0057K5Y79_5b-r1.md
+BBG0057K5Y79_5b-r1,fixed_by,regression,5g,"controller ruling 2026-10-04 (5b loop, delegated autonomy): settled",reports/BBG0057K5Y79_5b-r1.md
+BBG000CNNMD7_5b-r2,ticker,,SKYF,"controller ruling 2026-10-04 (5b loop, delegated autonomy): acquired by Huntington 2007-07 (DEFM14A, Form 25-NSE); skeptic upheld",reports/BBG000CNNMD7_5b-r2.md
+BBG000CNNMD7_5b-r2,exit_kind,*,merger,"controller ruling 2026-10-04 (5b loop, delegated autonomy): acquired by Huntington 2007-07 (DEFM14A, Form 25-NSE); skeptic upheld",reports/BBG000CNNMD7_5b-r2.md
+BBG000CNNMD7_5b-r2,continuation,*,false,"controller ruling 2026-10-04 (5b loop, delegated autonomy): acquired by Huntington 2007-07 (DEFM14A, Form 25-NSE); skeptic upheld",reports/BBG000CNNMD7_5b-r2.md
+BBG000CNNMD7_5b-r2,value_rule,*,cash_plus_stock,"controller ruling 2026-10-04 (5b loop, delegated autonomy): acquired by Huntington 2007-07 (DEFM14A, Form 25-NSE); skeptic upheld",reports/BBG000CNNMD7_5b-r2.md
+BBG000CNNMD7_5b-r2,stock_ratio,*,1.098,"controller ruling 2026-10-04 (5b loop, delegated autonomy): acquired by Huntington 2007-07 (DEFM14A, Form 25-NSE); skeptic upheld",reports/BBG000CNNMD7_5b-r2.md
+BBG000CNNMD7_5b-r2,status,ruling_pending,known_wrong,"controller ruling 2026-10-04 (5b loop, delegated autonomy): settled; judged against the run",reports/BBG000CNNMD7_5b-r2.md
+BBG000CNNMD7_5b-r2,fixed_by,regression,5f,"controller ruling 2026-10-04 (5b loop, delegated autonomy): settled",reports/BBG000CNNMD7_5b-r2.md
+BBG000K1T0M8_5b-r2,exit_kind,*,merger,"controller ruling 2026-10-04 (5b loop, delegated autonomy): 2025-05-06 arrangement, a 1.12 LION + 1.12 STRZ basket (Form 25-NSE, 8-K); skeptic upheld",reports/BBG000K1T0M8_5b-r2.md
+BBG000K1T0M8_5b-r2,continuation,*,false,"controller ruling 2026-10-04 (5b loop, delegated autonomy): 2025-05-06 arrangement, a 1.12 LION + 1.12 STRZ basket (Form 25-NSE, 8-K); skeptic upheld",reports/BBG000K1T0M8_5b-r2.md
+BBG000K1T0M8_5b-r2,status,ruling_pending,pass,"controller ruling 2026-10-04 (5b loop, delegated autonomy): settled; judged against the run",reports/BBG000K1T0M8_5b-r2.md
+BBG000K1T0M8_5b-r2,fixed_by,regression,,"controller ruling 2026-10-04 (5b loop, delegated autonomy): settled",reports/BBG000K1T0M8_5b-r2.md
+BBG0016WLQ18_5b-r2,exit_kind,*,dropped,"controller ruling 2026-10-04 (5b loop, delegated autonomy): Chapter 11 2020-06-23, NYSE 802.01D delisting (8-K 3.01); skeptic upheld",reports/BBG0016WLQ18_5b-r2.md
+BBG0016WLQ18_5b-r2,drop_reason,*,bankruptcy,"controller ruling 2026-10-04 (5b loop, delegated autonomy): Chapter 11 2020-06-23, NYSE 802.01D delisting (8-K 3.01); skeptic upheld",reports/BBG0016WLQ18_5b-r2.md
+BBG0016WLQ18_5b-r2,status,ruling_pending,pass,"controller ruling 2026-10-04 (5b loop, delegated autonomy): settled; judged against the run",reports/BBG0016WLQ18_5b-r2.md
+BBG0016WLQ18_5b-r2,fixed_by,regression,,"controller ruling 2026-10-04 (5b loop, delegated autonomy): settled",reports/BBG0016WLQ18_5b-r2.md
+BBG000BBBP59_2016-03-28,fixed_by,5b,5f,controller ruling 2026-10-04 (5b acceptance): the Form 25 is reached and owned; what remains is cash_currency,
+BBG000BF8BH2_2008-08-10,fixed_by,5b,5f,controller ruling 2026-10-04 (5b acceptance): the Form 25 is reached and owned; what remains is cash_currency,
+BBG000BHCDF1_2011-12-08,fixed_by,5b,5f,controller ruling 2026-10-04 (5b acceptance): the Form 25 is reached and owned; what remains is cash_currency,
+BBG000BJCFP1_2013-03-11,fixed_by,5b,5e,controller ruling 2026-10-04 (5b acceptance): the Form 25 is reached and owned; what remains is the acquirer line,
+BBG000BPTDN6_2010-10-11,fixed_by,5b,5f,controller ruling 2026-10-04 (5b acceptance): the Form 25 is reached and owned; what remains is cash_currency,
+BBG000BRF6B5_2009-05-29,fixed_by,5b,5g,controller ruling 2026-10-04 (5b acceptance): the Form 25 is reached and owned; what remains is the OTC print ticker,
+BBG000BVW841_2009-06-08,fixed_by,5b,5f,controller ruling 2026-10-04 (5b acceptance): the Form 25 is reached and owned; what remains is cash_currency,
+BBG000C070N2_2009-06-08,fixed_by,5b,5e,controller ruling 2026-10-04 (5b acceptance): the Form 25 is reached and owned; what remains is the acquirer line,
+BBG000DGZ1B6_2009-06-08,fixed_by,5b,5f,controller ruling 2026-10-04 (5b acceptance): the Form 25 is reached and owned; what remains is cash_currency,
+BBG000JXRXK2_2009-06-08,fixed_by,5b,5e,controller ruling 2026-10-04 (5b acceptance): the Form 25 is reached and owned; what remains is the acquirer ticker,
+BBG000PSSG77_2009-03-31,fixed_by,5b,5g,controller ruling 2026-10-04 (5b acceptance): the Form 25 is reached and owned; what remains is the OTC print and dates,
+CIK351346-COMMON_2006-12-28,fixed_by,5b,5d,"controller ruling 2026-10-04 (5b acceptance): the Form 25 is reached and owned; what remains is the last trade date (and currency, 5f)",
+CIK898660-COMMON_2009-06-08,fixed_by,5b,5f,controller ruling 2026-10-04 (5b acceptance): the Form 25 is reached and owned; what remains is cash_currency,
+BBG005DKMJ67_2025-04-29,fixed_by,5b,5g,controller ruling 2026-10-04 (5b acceptance): the 2023 removal is now the ending (G4); what remains is the drop reason (guidelines vs price),
+BBG000BJ9D07_2016-09-08,last_trade_date,,2016-09-07,"operator ruling 2026-10-04 (5c pre-check): the MIDAS print 2016-09-07 is publishable (decision 12, as G2 in 5b)",docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+BBG001BP9474_2015-02-27,shape,ending,ending_moved,operator ruling 2026-10-04 (5c pre-check): the line has a real later ending (or R2: the new CUSIP is the security's own FIGI); the old event is not it,docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+BBG001BP9474_2015-02-27,exit_kind,exchange,*,operator ruling 2026-10-04 (5c pre-check): the line has a real later ending (or R2: the new CUSIP is the security's own FIGI); the old event is not it,docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+BBG001BP9474_2015-02-27,drop_reason,,*,operator ruling 2026-10-04 (5c pre-check): the line has a real later ending (or R2: the new CUSIP is the security's own FIGI); the old event is not it,docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+BBG001BP9474_2015-02-27,continuation,true,*,operator ruling 2026-10-04 (5c pre-check): the line has a real later ending (or R2: the new CUSIP is the security's own FIGI); the old event is not it,docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+BBG001BP9474_2015-02-27,last_trade_date,,*,operator ruling 2026-10-04 (5c pre-check): the line has a real later ending (or R2: the new CUSIP is the security's own FIGI); the old event is not it,docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+BBG001BP9474_2015-02-27,value_rule,continuation,*,operator ruling 2026-10-04 (5c pre-check): the line has a real later ending (or R2: the new CUSIP is the security's own FIGI); the old event is not it,docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+BBG001BP9474_2015-02-27,cash_per_share,,*,operator ruling 2026-10-04 (5c pre-check): the line has a real later ending (or R2: the new CUSIP is the security's own FIGI); the old event is not it,docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+BBG001BP9474_2015-02-27,cash_currency,,*,operator ruling 2026-10-04 (5c pre-check): the line has a real later ending (or R2: the new CUSIP is the security's own FIGI); the old event is not it,docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+BBG001BP9474_2015-02-27,stock_ratio,,*,operator ruling 2026-10-04 (5c pre-check): the line has a real later ending (or R2: the new CUSIP is the security's own FIGI); the old event is not it,docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+BBG001BP9474_2015-02-27,price_sec_id,,*,operator ruling 2026-10-04 (5c pre-check): the line has a real later ending (or R2: the new CUSIP is the security's own FIGI); the old event is not it,docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+BBG001BP9474_2015-02-27,price_ticker,,*,operator ruling 2026-10-04 (5c pre-check): the line has a real later ending (or R2: the new CUSIP is the security's own FIGI); the old event is not it,docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+BBG001BP9474_2015-02-27,price_date,,*,operator ruling 2026-10-04 (5c pre-check): the line has a real later ending (or R2: the new CUSIP is the security's own FIGI); the old event is not it,docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+BBG001BP9474_2015-02-27,recovery_ratio,,*,operator ruling 2026-10-04 (5c pre-check): the line has a real later ending (or R2: the new CUSIP is the security's own FIGI); the old event is not it,docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+BBG001BP9474_2015-02-27,internal_last_trade_date,2015-02-26,,operator ruling 2026-10-04 (5c pre-check): the line has a real later ending (or R2: the new CUSIP is the security's own FIGI); the old event is not it,docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+BBG001YMS0B8_2015-07-12,exit_kind,merger,exchange,"operator ruling 2026-10-04 (5c pre-check): a deal's special dividend is never consideration; what is left is 1 KHC per KRFT share, no cash, into a new issuer (Kraft Heinz, registered 2015): a continuation under R1",docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+BBG001YMS0B8_2015-07-12,continuation,false,true,"operator ruling 2026-10-04 (5c pre-check): a deal's special dividend is never consideration; what is left is 1 KHC per KRFT share, no cash, into a new issuer (Kraft Heinz, registered 2015): a continuation under R1",docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+BBG001YMS0B8_2015-07-12,successor_sec_id,,BBG005CPNTQ2,"operator ruling 2026-10-04 (5c pre-check): a deal's special dividend is never consideration; what is left is 1 KHC per KRFT share, no cash, into a new issuer (Kraft Heinz, registered 2015): a continuation under R1",docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+BBG001YMS0B8_2015-07-12,value_rule,cash_plus_stock,continuation,"operator ruling 2026-10-04 (5c pre-check): a deal's special dividend is never consideration; what is left is 1 KHC per KRFT share, no cash, into a new issuer (Kraft Heinz, registered 2015): a continuation under R1",docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+BBG001YMS0B8_2015-07-12,cash_per_share,16.50,,"operator ruling 2026-10-04 (5c pre-check): a deal's special dividend is never consideration; what is left is 1 KHC per KRFT share, no cash, into a new issuer (Kraft Heinz, registered 2015): a continuation under R1",docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+BBG001YMS0B8_2015-07-12,cash_currency,USD,,"operator ruling 2026-10-04 (5c pre-check): a deal's special dividend is never consideration; what is left is 1 KHC per KRFT share, no cash, into a new issuer (Kraft Heinz, registered 2015): a continuation under R1",docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+BBG001YMS0B8_2015-07-12,stock_ratio,1.0,,"operator ruling 2026-10-04 (5c pre-check): a deal's special dividend is never consideration; what is left is 1 KHC per KRFT share, no cash, into a new issuer (Kraft Heinz, registered 2015): a continuation under R1",docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+BBG001YMS0B8_2015-07-12,price_sec_id,BBG005CPNTQ2,,"operator ruling 2026-10-04 (5c pre-check): a deal's special dividend is never consideration; what is left is 1 KHC per KRFT share, no cash, into a new issuer (Kraft Heinz, registered 2015): a continuation under R1",docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+BBG001YMS0B8_2015-07-12,price_ticker,KHC,,"operator ruling 2026-10-04 (5c pre-check): a deal's special dividend is never consideration; what is left is 1 KHC per KRFT share, no cash, into a new issuer (Kraft Heinz, registered 2015): a continuation under R1",docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+BBG001YMS0B8_2015-07-12,price_date,2015-07-06,,"operator ruling 2026-10-04 (5c pre-check): a deal's special dividend is never consideration; what is left is 1 KHC per KRFT share, no cash, into a new issuer (Kraft Heinz, registered 2015): a continuation under R1",docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+BBG001YMS0B8_2015-07-12,fixed_by,5e,5c,"operator ruling 2026-10-04 (5c pre-check): a deal's special dividend is never consideration; what is left is 1 KHC per KRFT share, no cash, into a new issuer (Kraft Heinz, registered 2015): a continuation under R1",docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+CIK1575828-COMMON_2021-10-01,shape,no_ending,ending_moved,operator ruling 2026-10-04 (5c pre-check): the line has a real later ending (or R2: the new CUSIP is the security's own FIGI); the old event is not it,docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+CIK1575828-COMMON_2021-10-01,exit_kind,,*,operator ruling 2026-10-04 (5c pre-check): the line has a real later ending (or R2: the new CUSIP is the security's own FIGI); the old event is not it,docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+CIK1575828-COMMON_2021-10-01,drop_reason,,*,operator ruling 2026-10-04 (5c pre-check): the line has a real later ending (or R2: the new CUSIP is the security's own FIGI); the old event is not it,docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+CIK1575828-COMMON_2021-10-01,continuation,,*,operator ruling 2026-10-04 (5c pre-check): the line has a real later ending (or R2: the new CUSIP is the security's own FIGI); the old event is not it,docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+CIK1575828-COMMON_2021-10-01,successor_sec_id,,*,operator ruling 2026-10-04 (5c pre-check): the line has a real later ending (or R2: the new CUSIP is the security's own FIGI); the old event is not it,docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+CIK1575828-COMMON_2021-10-01,last_trade_date,,*,operator ruling 2026-10-04 (5c pre-check): the line has a real later ending (or R2: the new CUSIP is the security's own FIGI); the old event is not it,docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+CIK1575828-COMMON_2021-10-01,value_rule,,*,operator ruling 2026-10-04 (5c pre-check): the line has a real later ending (or R2: the new CUSIP is the security's own FIGI); the old event is not it,docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+CIK1575828-COMMON_2021-10-01,cash_per_share,,*,operator ruling 2026-10-04 (5c pre-check): the line has a real later ending (or R2: the new CUSIP is the security's own FIGI); the old event is not it,docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+CIK1575828-COMMON_2021-10-01,cash_currency,,*,operator ruling 2026-10-04 (5c pre-check): the line has a real later ending (or R2: the new CUSIP is the security's own FIGI); the old event is not it,docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+CIK1575828-COMMON_2021-10-01,stock_ratio,,*,operator ruling 2026-10-04 (5c pre-check): the line has a real later ending (or R2: the new CUSIP is the security's own FIGI); the old event is not it,docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+CIK1575828-COMMON_2021-10-01,price_sec_id,,*,operator ruling 2026-10-04 (5c pre-check): the line has a real later ending (or R2: the new CUSIP is the security's own FIGI); the old event is not it,docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+CIK1575828-COMMON_2021-10-01,price_ticker,,*,operator ruling 2026-10-04 (5c pre-check): the line has a real later ending (or R2: the new CUSIP is the security's own FIGI); the old event is not it,docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+CIK1575828-COMMON_2021-10-01,price_date,,*,operator ruling 2026-10-04 (5c pre-check): the line has a real later ending (or R2: the new CUSIP is the security's own FIGI); the old event is not it,docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+CIK1575828-COMMON_2021-10-01,recovery_ratio,,*,operator ruling 2026-10-04 (5c pre-check): the line has a real later ending (or R2: the new CUSIP is the security's own FIGI); the old event is not it,docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+CIK314808-CLASS-A_2019-04-11,shape,no_ending,ending_moved,operator ruling 2026-10-04 (5c pre-check): the line has a real later ending (or R2: the new CUSIP is the security's own FIGI); the old event is not it,docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+CIK314808-CLASS-A_2019-04-11,exit_kind,,*,operator ruling 2026-10-04 (5c pre-check): the line has a real later ending (or R2: the new CUSIP is the security's own FIGI); the old event is not it,docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+CIK314808-CLASS-A_2019-04-11,drop_reason,,*,operator ruling 2026-10-04 (5c pre-check): the line has a real later ending (or R2: the new CUSIP is the security's own FIGI); the old event is not it,docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+CIK314808-CLASS-A_2019-04-11,continuation,,*,operator ruling 2026-10-04 (5c pre-check): the line has a real later ending (or R2: the new CUSIP is the security's own FIGI); the old event is not it,docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+CIK314808-CLASS-A_2019-04-11,successor_sec_id,,*,operator ruling 2026-10-04 (5c pre-check): the line has a real later ending (or R2: the new CUSIP is the security's own FIGI); the old event is not it,docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+CIK314808-CLASS-A_2019-04-11,last_trade_date,,*,operator ruling 2026-10-04 (5c pre-check): the line has a real later ending (or R2: the new CUSIP is the security's own FIGI); the old event is not it,docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+CIK314808-CLASS-A_2019-04-11,value_rule,,*,operator ruling 2026-10-04 (5c pre-check): the line has a real later ending (or R2: the new CUSIP is the security's own FIGI); the old event is not it,docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+CIK314808-CLASS-A_2019-04-11,cash_per_share,,*,operator ruling 2026-10-04 (5c pre-check): the line has a real later ending (or R2: the new CUSIP is the security's own FIGI); the old event is not it,docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+CIK314808-CLASS-A_2019-04-11,cash_currency,,*,operator ruling 2026-10-04 (5c pre-check): the line has a real later ending (or R2: the new CUSIP is the security's own FIGI); the old event is not it,docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+CIK314808-CLASS-A_2019-04-11,stock_ratio,,*,operator ruling 2026-10-04 (5c pre-check): the line has a real later ending (or R2: the new CUSIP is the security's own FIGI); the old event is not it,docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+CIK314808-CLASS-A_2019-04-11,price_sec_id,,*,operator ruling 2026-10-04 (5c pre-check): the line has a real later ending (or R2: the new CUSIP is the security's own FIGI); the old event is not it,docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+CIK314808-CLASS-A_2019-04-11,price_ticker,,*,operator ruling 2026-10-04 (5c pre-check): the line has a real later ending (or R2: the new CUSIP is the security's own FIGI); the old event is not it,docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+CIK314808-CLASS-A_2019-04-11,price_date,,*,operator ruling 2026-10-04 (5c pre-check): the line has a real later ending (or R2: the new CUSIP is the security's own FIGI); the old event is not it,docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+CIK314808-CLASS-A_2019-04-11,recovery_ratio,,*,operator ruling 2026-10-04 (5c pre-check): the line has a real later ending (or R2: the new CUSIP is the security's own FIGI); the old event is not it,docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+CIK314808-COMMON_2010-01-08,shape,ending,ending_moved,operator ruling 2026-10-04 (5c pre-check): the line has a real later ending (or R2: the new CUSIP is the security's own FIGI); the old event is not it,docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+CIK314808-COMMON_2010-01-08,exit_kind,exchange,*,operator ruling 2026-10-04 (5c pre-check): the line has a real later ending (or R2: the new CUSIP is the security's own FIGI); the old event is not it,docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+CIK314808-COMMON_2010-01-08,drop_reason,,*,operator ruling 2026-10-04 (5c pre-check): the line has a real later ending (or R2: the new CUSIP is the security's own FIGI); the old event is not it,docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+CIK314808-COMMON_2010-01-08,continuation,true,*,operator ruling 2026-10-04 (5c pre-check): the line has a real later ending (or R2: the new CUSIP is the security's own FIGI); the old event is not it,docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+CIK314808-COMMON_2010-01-08,successor_sec_id,BBG000BJ2VQ6,*,operator ruling 2026-10-04 (5c pre-check): the line has a real later ending (or R2: the new CUSIP is the security's own FIGI); the old event is not it,docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+CIK314808-COMMON_2010-01-08,last_trade_date,2009-12-22,*,operator ruling 2026-10-04 (5c pre-check): the line has a real later ending (or R2: the new CUSIP is the security's own FIGI); the old event is not it,docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+CIK314808-COMMON_2010-01-08,value_rule,continuation,*,operator ruling 2026-10-04 (5c pre-check): the line has a real later ending (or R2: the new CUSIP is the security's own FIGI); the old event is not it,docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+CIK314808-COMMON_2010-01-08,cash_per_share,,*,operator ruling 2026-10-04 (5c pre-check): the line has a real later ending (or R2: the new CUSIP is the security's own FIGI); the old event is not it,docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+CIK314808-COMMON_2010-01-08,cash_currency,,*,operator ruling 2026-10-04 (5c pre-check): the line has a real later ending (or R2: the new CUSIP is the security's own FIGI); the old event is not it,docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+CIK314808-COMMON_2010-01-08,stock_ratio,,*,operator ruling 2026-10-04 (5c pre-check): the line has a real later ending (or R2: the new CUSIP is the security's own FIGI); the old event is not it,docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+CIK314808-COMMON_2010-01-08,price_sec_id,,*,operator ruling 2026-10-04 (5c pre-check): the line has a real later ending (or R2: the new CUSIP is the security's own FIGI); the old event is not it,docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+CIK314808-COMMON_2010-01-08,price_ticker,,*,operator ruling 2026-10-04 (5c pre-check): the line has a real later ending (or R2: the new CUSIP is the security's own FIGI); the old event is not it,docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+CIK314808-COMMON_2010-01-08,price_date,,*,operator ruling 2026-10-04 (5c pre-check): the line has a real later ending (or R2: the new CUSIP is the security's own FIGI); the old event is not it,docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+CIK314808-COMMON_2010-01-08,recovery_ratio,,*,operator ruling 2026-10-04 (5c pre-check): the line has a real later ending (or R2: the new CUSIP is the security's own FIGI); the old event is not it,docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+CIK314808-COMMON_2010-01-08,internal_last_trade_date,2009-12-22,,operator ruling 2026-10-04 (5c pre-check): the line has a real later ending (or R2: the new CUSIP is the security's own FIGI); the old event is not it,docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+BBG001BP9474_2015-02-27,status,known_wrong,pass,operator ruling 2026-10-04 (5c pre-check): the re-shaped case now matches the run,
+BBG001BP9474_2015-02-27,fixed_by,5c,,operator ruling 2026-10-04 (5c pre-check): the re-shaped case now matches the run,
+CIK1575828-COMMON_2021-10-01,status,known_wrong,pass,operator ruling 2026-10-04 (5c pre-check): the re-shaped case now matches the run,
+CIK1575828-COMMON_2021-10-01,fixed_by,5c,,operator ruling 2026-10-04 (5c pre-check): the re-shaped case now matches the run,
+CIK314808-CLASS-A_2019-04-11,status,known_wrong,pass,operator ruling 2026-10-04 (5c pre-check): the re-shaped case now matches the run,
+CIK314808-CLASS-A_2019-04-11,fixed_by,5c,,operator ruling 2026-10-04 (5c pre-check): the re-shaped case now matches the run,
+CIK314808-COMMON_2010-01-08,status,known_wrong,pass,operator ruling 2026-10-04 (5c pre-check): the re-shaped case now matches the run,
+CIK314808-COMMON_2010-01-08,fixed_by,5c,,operator ruling 2026-10-04 (5c pre-check): the re-shaped case now matches the run,
+CIK1126294-COMMON_2010-12-03,sec_id,CIK1126294-COMMON,BBG000BDB3H1,contract/id_changes.csv: the placeholder now holds a FIGI,
+CIK1126294-COMMON_2010-12-03,shape,no_ending,ending_moved,operator pre-ruling 2026-10-04 (5c plan): the run follows the line to a real later ending (BBG000BDB3H1 2012-12-28); the old event is not it,docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+CIK1126294-COMMON_2010-12-03,exit_kind,,*,operator pre-ruling 2026-10-04 (5c plan): the run follows the line to a real later ending (BBG000BDB3H1 2012-12-28); the old event is not it,docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+CIK1126294-COMMON_2010-12-03,drop_reason,,*,operator pre-ruling 2026-10-04 (5c plan): the run follows the line to a real later ending (BBG000BDB3H1 2012-12-28); the old event is not it,docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+CIK1126294-COMMON_2010-12-03,continuation,,*,operator pre-ruling 2026-10-04 (5c plan): the run follows the line to a real later ending (BBG000BDB3H1 2012-12-28); the old event is not it,docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+CIK1126294-COMMON_2010-12-03,successor_sec_id,,*,operator pre-ruling 2026-10-04 (5c plan): the run follows the line to a real later ending (BBG000BDB3H1 2012-12-28); the old event is not it,docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+CIK1126294-COMMON_2010-12-03,last_trade_date,,*,operator pre-ruling 2026-10-04 (5c plan): the run follows the line to a real later ending (BBG000BDB3H1 2012-12-28); the old event is not it,docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+CIK1126294-COMMON_2010-12-03,value_rule,,*,operator pre-ruling 2026-10-04 (5c plan): the run follows the line to a real later ending (BBG000BDB3H1 2012-12-28); the old event is not it,docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+CIK1126294-COMMON_2010-12-03,cash_per_share,,*,operator pre-ruling 2026-10-04 (5c plan): the run follows the line to a real later ending (BBG000BDB3H1 2012-12-28); the old event is not it,docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+CIK1126294-COMMON_2010-12-03,cash_currency,,*,operator pre-ruling 2026-10-04 (5c plan): the run follows the line to a real later ending (BBG000BDB3H1 2012-12-28); the old event is not it,docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+CIK1126294-COMMON_2010-12-03,stock_ratio,,*,operator pre-ruling 2026-10-04 (5c plan): the run follows the line to a real later ending (BBG000BDB3H1 2012-12-28); the old event is not it,docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+CIK1126294-COMMON_2010-12-03,price_sec_id,,*,operator pre-ruling 2026-10-04 (5c plan): the run follows the line to a real later ending (BBG000BDB3H1 2012-12-28); the old event is not it,docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+CIK1126294-COMMON_2010-12-03,price_ticker,,*,operator pre-ruling 2026-10-04 (5c plan): the run follows the line to a real later ending (BBG000BDB3H1 2012-12-28); the old event is not it,docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+CIK1126294-COMMON_2010-12-03,price_date,,*,operator pre-ruling 2026-10-04 (5c plan): the run follows the line to a real later ending (BBG000BDB3H1 2012-12-28); the old event is not it,docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+CIK1126294-COMMON_2010-12-03,recovery_ratio,,*,operator pre-ruling 2026-10-04 (5c plan): the run follows the line to a real later ending (BBG000BDB3H1 2012-12-28); the old event is not it,docs/superpowers/plans/research/2026-10-04-5c-issuer-successors.md
+BBG000BCHG15_5c-r1,(row),,added (pass),5c loop round 1: regression,reports/BBG000BCHG15_5c-r1.md
+BBG000BL9JQ1_5c-r1,(row),,added (pass),5c loop round 1: regression,reports/BBG000BL9JQ1_5c-r1.md
+BBG008FCJZ83_5c-r1,(row),,added (pass),5c loop round 1: regression,reports/BBG008FCJZ83_5c-r1.md
+BBG000BD4VG8_2017-07-15,status,known_wrong,pass,the library now matches,
+BBG000BFTJ91_2015-12-21,status,known_wrong,pass,the library now matches,
+BBG000BHBK84_2017-09-11,status,known_wrong,pass,the library now matches,
+BBG000BJXKD0_2018-06-16,status,known_wrong,pass,the library now matches,
+BBG000CGQ6M4_2018-11-10,status,known_wrong,pass,the library now matches,
+BBG000F2XXP2_2023-05-31,status,known_wrong,pass,the library now matches,
+BBG000G0PPW3_2016-12-11,status,known_wrong,pass,the library now matches,
+BBG000J453J8_2019-05-12,status,known_wrong,pass,the library now matches,
+BBG000MJRJJ2_2023-08-24,status,known_wrong,pass,the library now matches,
+BBG000VMWHH5_2022-04-18,status,known_wrong,pass,the library now matches,
+BBG001YMS0B8_2015-07-12,status,known_wrong,pass,the library now matches,
+BBG004P33PN3_2026-05-11,status,known_wrong,pass,the library now matches,
+CIK104207-COMMON_2015-01-09,status,known_wrong,pass,the library now matches,
+CIK1126294-COMMON_2010-12-03,status,known_wrong,pass,the library now matches,
+CIK48898-CLASS-B_2016-01-03,status,known_wrong,pass,the library now matches,
+CIK944868-COMMON_2009-11-29,status,known_wrong,pass,the library now matches,
+BBG000CHWP52_2022-04-18,status,known_wrong,pass,the library now matches,
+BBG000F5YH15_5c-r2,(row),,added (ruling_pending),5c loop round 2: regression,reports/BBG000F5YH15_5c-r2.md
+BBG000F5YH15_5c-r2,exit_kind,*,exchange,"controller ruling 2026-10-04 (5c loop, delegated autonomy): one TKO Class A share per WWE share, no cash, into a new holdco: a continuation under R1, as DOW (DowDuPont) and WR (Evergy) mergers of equals are; round 2 verified it",reports/BBG000F5YH15_5c-r2.md
+BBG000F5YH15_5c-r2,continuation,*,true,"controller ruling 2026-10-04 (5c loop, delegated autonomy): one TKO Class A share per WWE share, no cash, into a new holdco: a continuation under R1, as DOW (DowDuPont) and WR (Evergy) mergers of equals are; round 2 verified it",reports/BBG000F5YH15_5c-r2.md
+BBG000F5YH15_5c-r2,successor_sec_id,*,BBG01G9JKWV5,"controller ruling 2026-10-04 (5c loop, delegated autonomy): one TKO Class A share per WWE share, no cash, into a new holdco: a continuation under R1, as DOW (DowDuPont) and WR (Evergy) mergers of equals are; round 2 verified it",reports/BBG000F5YH15_5c-r2.md
+BBG000F5YH15_5c-r2,value_rule,*,continuation,"controller ruling 2026-10-04 (5c loop, delegated autonomy): one TKO Class A share per WWE share, no cash, into a new holdco: a continuation under R1, as DOW (DowDuPont) and WR (Evergy) mergers of equals are; round 2 verified it",reports/BBG000F5YH15_5c-r2.md
+BBG000F5YH15_5c-r2,status,ruling_pending,pass,"controller ruling 2026-10-04 (5c loop, delegated autonomy): settled, judged",
+BBG000F5YH15_5c-r2,fixed_by,regression,,"controller ruling 2026-10-04 (5c loop, delegated autonomy): settled, judged",
+BBG000BJ9D07_2016-09-08,fixed_by,5c,5h,controller ruling 2026-10-04 (5c acceptance): what remains is the 8-K12B successor TiVo Corp needs its former name Titan Technologies for the name tie,
+BBG000BPQD31_2020-11-26,fixed_by,5c,5d,controller ruling 2026-10-04 (5c acceptance): what remains is the internal last trade date,
+BBG000BQHGR6_2026-09-28,fixed_by,5c,5h,"controller ruling 2026-10-04 (5c acceptance): what remains is the own-registration link needs OpenFIGI to give 30609A109 its own composite, which the run did not get",
+BBG000CNZC55_2020-07-11,fixed_by,5c,5d,controller ruling 2026-10-04 (5c acceptance): what remains is the internal last trade date,
+BBG01HMFL081_2025-12-25,fixed_by,5c,5d,controller ruling 2026-10-04 (5c acceptance): what remains is the last trade date,
+BBG01HMFLTN1_2025-12-25,fixed_by,5c,5d,controller ruling 2026-10-04 (5c acceptance): what remains is the last trade date,
+CIK1308161-CLASS-A_2013-06-28,fixed_by,5c,residual,controller ruling 2026-10-04 (5c acceptance): what remains is its line has no source for the new ticker; no general rule reaches it,
+CIK1308161-COMMON_2013-07-01,fixed_by,5c,residual,controller ruling 2026-10-04 (5c acceptance): what remains is its line has no source for the new ticker; no general rule reaches it,
+CIK1363851-COMMON_2012-07-24,fixed_by,5c,residual,controller ruling 2026-10-04 (5c acceptance): what remains is its line has no source for the new ticker; no general rule reaches it,
+CIK38079-COMMON_2015-01-25,fixed_by,5c,5g,controller ruling 2026-10-04 (5c acceptance): what remains is the OTC print ticker FSTO,
+BBG000BGYDX9_2023-06-30,last_trade_date,,2023-05-26,"5d ruling: MIDAS volume under DBD ends 2023-05-26 (none on 05-30..06-01 in a quarter covered to 06-30), Nasdaq's code-D halt for DBD at 07:16 on 05-30 (before the open) gives 05-26, and the own CUSIP's fails rows repeat one $0.25 close from the 05-30 row on; MIDAS and a halt are publishable (decision 12)",docs/superpowers/plans/research/2026-10-04-5d-last-trade.md
+BBG000BGYDX9_2023-06-30,price_date,,2023-05-30,"5d ruling: MIDAS volume under DBD ends 2023-05-26 (none on 05-30..06-01 in a quarter covered to 06-30), Nasdaq's code-D halt for DBD at 07:16 on 05-30 (before the open) gives 05-26, and the own CUSIP's fails rows repeat one $0.25 close from the 05-30 row on; MIDAS and a halt are publishable (decision 12)",docs/superpowers/plans/research/2026-10-04-5d-last-trade.md
+BBG000BGYDX9_2023-06-30,internal_last_trade_date,2023-06-01,2023-05-26,"5d ruling: MIDAS volume under DBD ends 2023-05-26 (none on 05-30..06-01 in a quarter covered to 06-30), Nasdaq's code-D halt for DBD at 07:16 on 05-30 (before the open) gives 05-26, and the own CUSIP's fails rows repeat one $0.25 close from the 05-30 row on; MIDAS and a halt are publishable (decision 12)",docs/superpowers/plans/research/2026-10-04-5d-last-trade.md
+BBG000BJ3QD0_2007-11-16,fixed_by,5d,residual,5d: no filing states DADE's last session; the closing day rule gives the Form 25 day 2007-11-06 and the halt feed is not cached for it; residual unless a halt answers,docs/superpowers/plans/research/2026-10-04-5d-last-trade.md
+BBG000BJXXX0_2007-07-12,fixed_by,5d,residual,5d: no filing states IFIN's last session; the closing day rule gives the Form 25 day 2007-07-02 and the halt feed is not cached for it; residual unless a halt answers,docs/superpowers/plans/research/2026-10-04-5d-last-trade.md
+BBG000BKKXG0_2008-12-11,last_trade_date,,2008-11-28,"5d ruling: Nasdaq's code-D halt for PHLY at 08:50 on 2008-12-01 (before the open) dates the last trade 11-28, an exchange halt (decision 12), the day the truth already worked out",docs/superpowers/plans/research/2026-10-04-5d-last-trade.md
+BBG000PTXBV3_2016-07-22,last_trade_date,2016-07-11,2016-07-12,"5d ruling: the 8-K 0001193125-16-646386 item 3.01 states the shares will cease trading on the NYSE following the close of trading on July 12, 2016, which the report did not read; it beats the NYSE notice's bare suspension date (rule 2, as TMHC 2026); the NLY price date follows",docs/superpowers/plans/research/2026-10-04-5d-last-trade.md
+BBG000PTXBV3_2016-07-22,price_date,2016-07-12,2016-07-13,"5d ruling: the 8-K 0001193125-16-646386 item 3.01 states the shares will cease trading on the NYSE following the close of trading on July 12, 2016, which the report did not read; it beats the NYSE notice's bare suspension date (rule 2, as TMHC 2026); the NLY price date follows",docs/superpowers/plans/research/2026-10-04-5d-last-trade.md
+BBG000PTXBV3_2016-07-22,internal_last_trade_date,2016-07-11,2016-07-12,"5d ruling: the 8-K 0001193125-16-646386 item 3.01 states the shares will cease trading on the NYSE following the close of trading on July 12, 2016, which the report did not read; it beats the NYSE notice's bare suspension date (rule 2, as TMHC 2026); the NLY price date follows",docs/superpowers/plans/research/2026-10-04-5d-last-trade.md
+BBG001KWG293_2021-06-25,last_trade_date,2021-06-15,2021-06-14,"5d ruling: R8 (8-K 0001193125-21-190684: suspended on June 15, no timing word) and the NYSE notice (suspended from trading on June 15) give 06-14; MIDAS's 06-15 volume under GRUB is Just Eat Takeaway's ADS, whose first fails row under GRUB (2021-06-16) carries the 06-15 close",docs/superpowers/plans/research/2026-10-04-5d-last-trade.md
+BBG001KWG293_2021-06-25,price_date,2021-06-16,2021-06-15,"5d ruling: R8 (8-K 0001193125-21-190684: suspended on June 15, no timing word) and the NYSE notice (suspended from trading on June 15) give 06-14; MIDAS's 06-15 volume under GRUB is Just Eat Takeaway's ADS, whose first fails row under GRUB (2021-06-16) carries the 06-15 close",docs/superpowers/plans/research/2026-10-04-5d-last-trade.md
+BBG001KWG293_2021-06-25,internal_last_trade_date,2021-06-15,2021-06-14,"5d ruling: R8 (8-K 0001193125-21-190684: suspended on June 15, no timing word) and the NYSE notice (suspended from trading on June 15) give 06-14; MIDAS's 06-15 volume under GRUB is Just Eat Takeaway's ADS, whose first fails row under GRUB (2021-06-16) carries the 06-15 close",docs/superpowers/plans/research/2026-10-04-5d-last-trade.md
+BBG001KWG293_2021-06-25,status,pass,known_wrong,5d: ruled from evidence the committed output predates; known_wrong until a run of 5d matches it,docs/superpowers/plans/research/2026-10-04-5d-last-trade.md
+BBG001KWG293_2021-06-25,fixed_by,,5d,5d: ruled from evidence the committed output predates; known_wrong until a run of 5d matches it,docs/superpowers/plans/research/2026-10-04-5d-last-trade.md
+CIK944868-COMMON_2009-11-29,last_trade_date,,2009-11-19,"5d ruling: the 8-K 0001104659-09-066017 item 3.01 states the trading on NASDAQ was suspended as of the close of trading on November 19, 2009, an 8-K print (decision 12), the day the truth already worked out",docs/superpowers/plans/research/2026-10-04-5d-last-trade.md
+CIK944868-COMMON_2009-11-29,status,pass,known_wrong,5d: ruled from evidence the committed output predates; known_wrong until a run of 5d matches it,docs/superpowers/plans/research/2026-10-04-5d-last-trade.md
+CIK944868-COMMON_2009-11-29,fixed_by,,5d,5d: ruled from evidence the committed output predates; known_wrong until a run of 5d matches it,docs/superpowers/plans/research/2026-10-04-5d-last-trade.md
+BBG000BB5HV5_2010-12-19,fixed_by,5d,5f,5d: its last trade fields match the replay; left cash_currency (5f),docs/superpowers/plans/research/2026-10-04-5d-last-trade.md
+BBG000BCTL84_2012-01-08,fixed_by,5d,5g,5d: its last trade fields match the replay; left price_ticker (5g),docs/superpowers/plans/research/2026-10-04-5d-last-trade.md
+BBG000BF5RY1_2016-06-10,fixed_by,5d,5e,"5d: its last trade fields match the replay; left cash_currency, price_ticker (5e, 5f)",docs/superpowers/plans/research/2026-10-04-5d-last-trade.md
+BBG000BGYDX9_2023-06-30,fixed_by,5d,5g,5d: its last trade fields match the replay; left price_ticker (5g),docs/superpowers/plans/research/2026-10-04-5d-last-trade.md
+BBG000BH2T94_2011-12-11,fixed_by,5d,5f,5d: its last trade fields match the replay; left cash_currency (5f),docs/superpowers/plans/research/2026-10-04-5d-last-trade.md
+BBG000BHD665_2007-10-22,fixed_by,5d,5f,5d: its last trade fields match the replay; left cash_currency (5f),docs/superpowers/plans/research/2026-10-04-5d-last-trade.md
+BBG000BK7SL0_2011-04-18,fixed_by,5d,5f,5d: its last trade fields match the replay; left cash_currency (5f),docs/superpowers/plans/research/2026-10-04-5d-last-trade.md
+BBG000BKKXG0_2008-12-11,fixed_by,5d,5f,5d: its last trade fields match the replay; left cash_currency (5f),docs/superpowers/plans/research/2026-10-04-5d-last-trade.md
+BBG000BMDV41_2016-09-16,fixed_by,5d,5e,"5d: its last trade fields match the replay; left cash_currency, cash_per_share, price_sec_id, value_rule (5e, 5f)",docs/superpowers/plans/research/2026-10-04-5d-last-trade.md
+BBG000BQ3F39_2011-05-07,fixed_by,5d,5f,5d: its last trade fields match the replay; left cash_currency (5f),docs/superpowers/plans/research/2026-10-04-5d-last-trade.md
+BBG000BSVZM9_2009-11-04,fixed_by,5d,5e,"5d: its last trade fields match the replay; left cash_currency, price_sec_id (5e, 5f)",docs/superpowers/plans/research/2026-10-04-5d-last-trade.md
+BBG000BWPN99_2008-10-11,fixed_by,5d,5e,5d: its last trade fields match the replay; left price_sec_id (5e),docs/superpowers/plans/research/2026-10-04-5d-last-trade.md
+BBG000BX67G5_2008-05-24,fixed_by,5d,5f,"5d: its last trade fields match the replay; left cash_currency, last_trade_date (5f)",docs/superpowers/plans/research/2026-10-04-5d-last-trade.md
+BBG000C0BGS7_2009-10-30,fixed_by,5d,5f,5d: its last trade fields match the replay; left cash_currency (5f),docs/superpowers/plans/research/2026-10-04-5d-last-trade.md
+BBG000CB2ZY4_2011-02-28,fixed_by,5d,5f,5d: its last trade fields match the replay; left cash_currency (5f),docs/superpowers/plans/research/2026-10-04-5d-last-trade.md
+BBG000CGQ485_2008-12-04,fixed_by,5d,5f,5d: its last trade fields match the replay; left cash_currency (5f),docs/superpowers/plans/research/2026-10-04-5d-last-trade.md
+BBG000FHN2M1_2007-12-14,fixed_by,5d,5f,5d: its last trade fields match the replay; left cash_currency (5f),docs/superpowers/plans/research/2026-10-04-5d-last-trade.md
+BBG000FRVFM1_2011-12-15,fixed_by,5d,5f,5d: its last trade fields match the replay; left cash_currency (5f),docs/superpowers/plans/research/2026-10-04-5d-last-trade.md
+BBG000FXYZF9_2008-11-10,fixed_by,5d,5g,5d: its last trade fields match the replay; left price_ticker (5g),docs/superpowers/plans/research/2026-10-04-5d-last-trade.md
+BBG000KBQZ88_2015-08-02,fixed_by,5d,5f,5d: its last trade fields match the replay; left cash_currency (5f),docs/superpowers/plans/research/2026-10-04-5d-last-trade.md
+BBG002BHBHM1_2020-10-23,fixed_by,5d,5g,5d: its last trade fields match the replay; left price_ticker (5g),docs/superpowers/plans/research/2026-10-04-5d-last-trade.md
+BBG003PGJHP5_2026-08-03,fixed_by,5d,5f,5d: its last trade fields match the replay; left cash_currency (5f),docs/superpowers/plans/research/2026-10-04-5d-last-trade.md
+BBG00ZHCT050_2023-07-15,fixed_by,5d,5f,5d: its last trade fields match the replay; left cash_currency (5f),docs/superpowers/plans/research/2026-10-04-5d-last-trade.md
+CIK1319048-COMMON_2007-09-24,fixed_by,5d,5f,5d: its last trade fields match the replay; left cash_currency (5f),docs/superpowers/plans/research/2026-10-04-5d-last-trade.md
+CIK351346-COMMON_2006-12-28,fixed_by,5d,5f,5d: its last trade fields match the replay; left cash_currency (5f),docs/superpowers/plans/research/2026-10-04-5d-last-trade.md
+CIK709519-COMMON_2010-02-05,fixed_by,5d,5f,5d: its last trade fields match the replay; left cash_currency (5f),docs/superpowers/plans/research/2026-10-04-5d-last-trade.md
+BBG000BQHGR6_2026-09-28,fixed_by,5h,5d,"5h ruling 2026-10-04 (identity follows the issuer and FIGI, R2): 5h links the continuation (its successor BBG024TZWVN1 past the fails data's end); what remains is the last trade date (worked out, so blank in the contract), 5d's",docs/superpowers/plans/research/2026-10-04-5h-identity.md
+BBG00GBV88T6_2016-05-14,sec_id,BBG00GBV88T6,BBG000FW00S1,"wave 1 integration ruling 2026-10-04 (identity follows the FIGI, R2; 5h decision 5): the 2008-2016 security and its OTC price security are the 2015 split's line BBG000FW00S1 (BTUUQ), not today's Peabody line BBG00GBV88T6, which 5h's rule F folds out of the ticker-tier pick; sec_id and price_sec_id renamed, case_id kept (price_sec_id BBG00GBV88T6 -> BBG000FW00S1 too)",docs/superpowers/plans/research/2026-10-04-5h-identity.md
+BBG000BRWGG9_2019-04-22,last_trade_date,,2023-10-13,"wave 1 review ruling 2026-10-04 (5d review): MIDAS 2023 Q4 shows RAD's last day 2023-10-13; the fails row dated 10-17 repeats the 10-13 close $0.65 (no new close on 10-16); the NYSE notice 0001143313-23-000135 'On October 16, 2023 ... should be suspended' reads as 10-13 under R8; RADCQ from 10-18; the report's 'fails rows only' misread the repeated close",docs/superpowers/plans/2026-10-03-diagnosis-truth-decisions.md
+BBG000BRWGG9_2019-04-22,price_date,,2023-10-16,"wave 1 review ruling 2026-10-04 (5d review): MIDAS 2023 Q4 shows RAD's last day 2023-10-13; the fails row dated 10-17 repeats the 10-13 close $0.65 (no new close on 10-16); the NYSE notice 0001143313-23-000135 'On October 16, 2023 ... should be suspended' reads as 10-13 under R8; RADCQ from 10-18; the report's 'fails rows only' misread the repeated close",docs/superpowers/plans/2026-10-03-diagnosis-truth-decisions.md
+BBG000BRWGG9_2019-04-22,internal_last_trade_date,2023-10-16,2023-10-13,"wave 1 review ruling 2026-10-04 (5d review): MIDAS 2023 Q4 shows RAD's last day 2023-10-13; the fails row dated 10-17 repeats the 10-13 close $0.65 (no new close on 10-16); the NYSE notice 0001143313-23-000135 'On October 16, 2023 ... should be suspended' reads as 10-13 under R8; RADCQ from 10-18; the report's 'fails rows only' misread the repeated close",docs/superpowers/plans/2026-10-03-diagnosis-truth-decisions.md
+BBG000BG14P4_2025-10-09,stock_ratio,0.008352,0.00835187,"sub-plan 5g ruling 2026-10-04: the exact quotient 1,306,896 / 156,479,390 (plan 8-K 0001193125-25-224251) at six significant figures; the report rounded it to four",docs/superpowers/plans/research/2026-10-04-5g-distress.md
+BBG0057K5Y79_5b-r1,drop_reason,guidelines,price,"sub-plan 5g ruling 2026-10-04: the NYSE notice and the 8-K 3.01 cite an abnormally low price only (802.01D), as for WFT and KWK; the 5b regression diagnosis did not weigh price against guidelines",docs/superpowers/plans/research/2026-10-04-5g-distress.md
+CIK1141399-COMMON_2008-09-20,sec_id,CIK1141399-COMMON,CIK1409012-COMMON,"5h ruling 2026-10-04 (identity follows the issuer and FIGI, R2): the observed security is the new Abraxis BioScience's (CIK 1409012), as the report finds; stage 2b's name_in_force check gives the era that issuer",docs/superpowers/plans/research/2026-10-04-5h-identity.md
+CIK73887-COMMON_2013-06-28,sec_id,CIK73887-COMMON,BBG001YH8PR9,"5h ruling 2026-10-04 (identity follows the issuer and FIGI, R2): the observation belongs to Era Group (CIK 1525221), as the report finds; stage 2b's ticker_rows check gives the era that issuer (the fails rows under ERA say ERA GROUP INC)",docs/superpowers/plans/research/2026-10-04-5h-identity.md
+BBG00Y04KP80_5a-r2,sec_id,BBG00Y04KP80,BBG0060B3M63,"5h ruling 2026-10-04 (identity follows the issuer and FIGI, R2): controller ruling 2026-10-04 (5a acceptance): the 2014-2020 line is BBG0060B3M63 (the 2016 split's CUSIP 13057Q206; BBG00Y04KP80 is the post-2020 line). On it the 2016 event is no ending and the line ends later (the 2020 bankruptcy, not scored here)",docs/superpowers/plans/research/2026-10-04-5h-identity.md
+BBG00Y04KP80_5a-r2,shape,no_ending,ending_moved,"5h ruling 2026-10-04 (identity follows the issuer and FIGI, R2): controller ruling 2026-10-04 (5a acceptance): the 2014-2020 line is BBG0060B3M63 (the 2016 split's CUSIP 13057Q206; BBG00Y04KP80 is the post-2020 line). On it the 2016 event is no ending and the line ends later (the 2020 bankruptcy, not scored here)",docs/superpowers/plans/research/2026-10-04-5h-identity.md
+CIK1019849-COMMON_2009-06-08,sec_id,CIK1019849-COMMON,BBG000H6K1B0,contract/id_changes.csv: the placeholder now holds a FIGI,
+CIK1336917-CLASS-C_2016-06-30,sec_id,CIK1336917-CLASS-C,BBG009DTD8H2,contract/id_changes.csv: the placeholder now holds a FIGI,
+CIK1469372-CLASS-A_2015-10-02,sec_id,CIK1469372-CLASS-A,BBG000NS03H7,contract/id_changes.csv: the placeholder now holds a FIGI,
+CIK1507934-CLASS-A_2013-01-16,sec_id,CIK1507934-CLASS-A,BBG000PCNTM2,contract/id_changes.csv: the placeholder now holds a FIGI,
+BBG000D3MB18_wave1-r1,(row),,added (ruling_pending),wave1 loop round 1: regression,reports/BBG000D3MB18_wave1-r1.md
+BBG000MRMY60_wave1-r1,(row),,added (pass),wave1 loop round 1: regression,reports/BBG000MRMY60_wave1-r1.md
+BBG000B9YSK6_2020-11-04,status,known_wrong,pass,the library now matches,
+BBG000BBG3P1_2009-01-25,status,known_wrong,pass,the library now matches,
+BBG000BC2C10_2021-03-14,status,known_wrong,pass,the library now matches,
+BBG000BCTL84_2012-01-08,status,known_wrong,pass,the library now matches,
+BBG000BDXVW8_2010-10-14,status,known_wrong,pass,the library now matches,
+BBG000BG09F5_2021-02-12,status,known_wrong,pass,the library now matches,
+BBG000BG14P4_2025-10-09,status,known_wrong,pass,the library now matches,
+BBG000BGYDX9_2023-06-30,status,known_wrong,pass,the library now matches,
+BBG000BJCFP1_2013-03-11,status,known_wrong,pass,the library now matches,
+BBG000BKQ3V3_2018-07-13,status,known_wrong,pass,the library now matches,
+BBG000BLPBL5_2026-08-27,status,known_wrong,pass,the library now matches,
+BBG000BLY636_2008-08-17,status,known_wrong,pass,the library now matches,
+BBG000BM1RP0_2009-08-14,status,known_wrong,pass,the library now matches,
+BBG000BPQD31_2020-11-26,status,known_wrong,pass,the library now matches,
+BBG000BRF6B5_2009-05-29,status,known_wrong,pass,the library now matches,
+BBG000BRWGG9_2019-04-22,status,known_wrong,pass,the library now matches,
+BBG000BSD7C2_2020-04-13,status,known_wrong,pass,the library now matches,
+BBG000BSGQN5_2015-10-11,status,known_wrong,pass,the library now matches,
+BBG000BWPN99_2008-10-11,status,known_wrong,pass,the library now matches,
+BBG000BYD720_2017-06-09,status,known_wrong,pass,the library now matches,
+BBG000C070N2_2009-06-08,status,known_wrong,pass,the library now matches,
+BBG000C0NY96_2019-08-11,status,known_wrong,pass,the library now matches,
+BBG000C1R174_2009-11-02,status,known_wrong,pass,the library now matches,
+BBG000CNZC55_2020-07-11,status,known_wrong,pass,the library now matches,
+BBG000DQV8M1_2010-12-17,status,known_wrong,pass,the library now matches,
+BBG000DY8ZS4_2019-05-15,status,known_wrong,pass,the library now matches,
+BBG000FVQ434_2016-07-23,status,known_wrong,pass,the library now matches,
+BBG000FXYZF9_2008-11-10,status,known_wrong,pass,the library now matches,
+BBG000K3T8L8_2018-06-16,status,known_wrong,pass,the library now matches,
+BBG000PSSG77_2009-03-31,status,known_wrong,pass,the library now matches,
+BBG001KWG293_2021-06-25,status,known_wrong,pass,the library now matches,
+BBG002BHBHM1_2020-10-23,status,known_wrong,pass,the library now matches,
+BBG005DKMJ67_2025-04-29,status,known_wrong,pass,the library now matches,
+BBG0069FL5L5_2016-09-26,status,known_wrong,pass,the library now matches,
+BBG009NGKQ45_2024-02-13,status,known_wrong,pass,the library now matches,
+BBG00D1WHZD9_2020-11-09,status,known_wrong,pass,the library now matches,
+BBG00GBV88T6_2016-05-14,status,known_wrong,pass,the library now matches,
+BBG00HY28P97_2020-10-18,status,known_wrong,pass,the library now matches,
+BBG00K7K2XZ0_2020-12-31,status,known_wrong,pass,the library now matches,
+BBG00VNLZL95_2020-08-06,status,known_wrong,pass,the library now matches,
+BBG00Z6DX554_2020-07-30,status,known_wrong,pass,the library now matches,
+BBG01HLM8W28_2024-09-19,status,known_wrong,pass,the library now matches,
+BBG01HMFL081_2025-12-25,status,known_wrong,pass,the library now matches,
+BBG01HMFLTN1_2025-12-25,status,known_wrong,pass,the library now matches,
+CIK1018005-COMMON_2012-10-01,status,known_wrong,pass,the library now matches,
+CIK1019849-COMMON_2009-06-08,status,known_wrong,pass,the library now matches,
+CIK1056087-COMMON_2016-05-25,status,known_wrong,pass,the library now matches,
+CIK1308161-CLASS-A_2013-06-28,status,known_wrong,pass,the library now matches,
+CIK1336917-CLASS-C_2016-06-30,status,known_wrong,pass,the library now matches,
+CIK1469372-CLASS-A_2015-10-02,status,known_wrong,pass,the library now matches,
+CIK1498301-COMMON_2020-08-21,status,known_wrong,pass,the library now matches,
+CIK1507934-CLASS-A_2013-01-16,status,known_wrong,pass,the library now matches,
+CIK20520-COMMON_2017-07-10,status,known_wrong,pass,the library now matches,
+CIK38079-COMMON_2015-01-25,status,known_wrong,pass,the library now matches,
+CIK73887-COMMON_2013-06-28,status,known_wrong,pass,the library now matches,
+CIK867773-COMMON_2009-06-08,status,known_wrong,pass,the library now matches,
+CIK886835-COMMON_2020-10-12,status,known_wrong,pass,the library now matches,
+CIK931336-COMMON_2013-08-26,status,known_wrong,pass,the library now matches,
+CIK944868-COMMON_2009-11-29,status,known_wrong,pass,the library now matches,
+BBG00Y04KP80_5a-r2,status,known_wrong,pass,the library now matches,
+BBG000BLG1L7_2025-04-21,status,known_wrong,pass,the library now matches,
+BBG000BMLYZ2_5b-r1,status,known_wrong,pass,the library now matches,
+BBG0057K5Y79_5b-r1,status,known_wrong,pass,the library now matches,
+BBG000CNNMD7_5b-r2,status,known_wrong,pass,the library now matches,
+BBG000BT0CM2_wave1-r2,(row),,added (ruling_pending),wave1 loop round 2: regression,reports/BBG000BT0CM2_wave1-r2.md
+BBG000DY6735_2013-12-31,fixed_by,5h,residual,"wave 1 loop ruling 2026-10-04: 5h removed the false 2013 ending; the 2025 chapter 11 ending needs a CUSIP the security does not hold (its 2012 era is a backfilled ticker), which no remaining sub-plan builds",docs/superpowers/plans/2026-10-03-diagnosis-truth-decisions.md
+BBG000FJJW82_2008-12-06,price_ticker,IVGN,LIFE,"wave 1 loop ruling 2026-10-04: Invitrogen was renamed Life Technologies on 2008-11-21 (8-K 0001193125-08-244797, missed by the report; same FIGI BBG000CKJ0P3), and the fails row carrying the 2008-11-24 close is under LIFE",docs/superpowers/plans/2026-10-03-diagnosis-truth-decisions.md
+BBG0017T9998_2020-07-30,last_trade_date,2020-07-17,2020-07-20,"wave 1 loop ruling 2026-10-04, overriding the 2026-10-03 R8 reading on exchange evidence: MIDAS 2020 Q3 shows CZR volume on 2020-07-20 while Eldorado still traded as ERI that day (ERI's last MIDAS day; new Caesars took CZR on 07-21), so old Caesars traded on the closing date",docs/superpowers/plans/2026-10-03-diagnosis-truth-decisions.md
+BBG0017T9998_2020-07-30,internal_last_trade_date,2020-07-17,2020-07-20,wave 1 loop ruling 2026-10-04: as last_trade_date (MIDAS 2020-07-20),docs/superpowers/plans/2026-10-03-diagnosis-truth-decisions.md
+CIK1141399-COMMON_2008-09-20,fixed_by,5h,residual,"wave 1 loop ruling 2026-10-04: 5h gives the era its issuer (CIK 1409012); the 2010 Celgene ending needs a CUSIP the security does not hold and a Form 25 beyond its reach, which no remaining sub-plan builds",docs/superpowers/plans/2026-10-03-diagnosis-truth-decisions.md
+BBG000D3MB18_wave1-r1,status,ruling_pending,pass,"wave 1 controller ruling 2026-10-04: the loop's diagnosis (inferred, upheld) finds the new price_sec_id BBG01K9HZH92 (LBTYA) right; scored from now on",docs/superpowers/plans/2026-10-03-diagnosis-truth-decisions.md
+BBG000D3MB18_wave1-r1,price_sec_id,*,BBG01K9HZH92,wave 1 controller ruling 2026-10-04: as status,docs/superpowers/plans/2026-10-03-diagnosis-truth-decisions.md
+BBG000BT0CM2_wave1-r2,row,ruling_pending,(removed),"wave 1 controller ruling 2026-10-04: the blank OTC symbol beats the old exchange ticker (settled new_right in the ledger), but a scored blank would say no OTC symbol exists; SIVBQ is likely and has no cited filing, so no truth row",docs/superpowers/plans/2026-10-03-diagnosis-truth-decisions.md
+BBG000BF5RY1_2016-06-10,fixed_by,5e,5f,"wave 1 ruling 2026-10-04: 5e is done; what is left (cash_currency, price_ticker) is 5f's",docs/superpowers/plans/2026-10-03-diagnosis-truth-decisions.md
+BBG000BGFLL5_2013-11-23,fixed_by,5e,5f,wave 1 ruling 2026-10-04: 5e is done; what is left (cash_currency) is 5f's,docs/superpowers/plans/2026-10-03-diagnosis-truth-decisions.md
+BBG000BJ9D07_2016-09-08,fixed_by,5h,5f,"wave 1 ruling 2026-10-04: 5h is done; what is left (continuation, exit_kind, price_date, price_ticker, stock_ratio, value_rule) is 5f's",docs/superpowers/plans/2026-10-03-diagnosis-truth-decisions.md
+BBG000BJVZF7_2014-07-12,fixed_by,5e,5f,wave 1 ruling 2026-10-04: 5e is done; what is left (cash_currency) is 5f's,docs/superpowers/plans/2026-10-03-diagnosis-truth-decisions.md
+BBG000BLBGS2_2025-12-20,fixed_by,5e,5f,"wave 1 ruling 2026-10-04: 5e is done; what is left (cash_currency, last_trade_date, price_date) is 5f's",docs/superpowers/plans/2026-10-03-diagnosis-truth-decisions.md
+BBG000BMDV41_2016-09-16,fixed_by,5e,5f,"wave 1 ruling 2026-10-04: 5e is done; what is left (cash_currency, cash_per_share, value_rule) is 5f's",docs/superpowers/plans/2026-10-03-diagnosis-truth-decisions.md
+BBG000BN53G7_2026-09-06,fixed_by,5e,residual,"wave 1 ruling 2026-10-04: 5e is done; what is left (last_trade_date, price_date) is residual's (no remaining sub-plan builds it)",docs/superpowers/plans/2026-10-03-diagnosis-truth-decisions.md
+BBG000BQHGR6_2026-09-28,fixed_by,5d,residual,wave 1 ruling 2026-10-04: 5d is done; what is left (last_trade_date) is residual's (no remaining sub-plan builds it),docs/superpowers/plans/2026-10-03-diagnosis-truth-decisions.md
+BBG000BSVZM9_2009-11-04,fixed_by,5e,5f,wave 1 ruling 2026-10-04: 5e is done; what is left (cash_currency) is 5f's,docs/superpowers/plans/2026-10-03-diagnosis-truth-decisions.md
+BBG000C3HNW5_2014-10-30,fixed_by,5e,5f,wave 1 ruling 2026-10-04: 5e is done; what is left (cash_currency) is 5f's,docs/superpowers/plans/2026-10-03-diagnosis-truth-decisions.md
+BBG000DBVBY4_2021-03-11,fixed_by,5e,5f,wave 1 ruling 2026-10-04: 5e is done; what is left (cash_currency) is 5f's,docs/superpowers/plans/2026-10-03-diagnosis-truth-decisions.md
+BBG000FJJW82_2008-12-06,fixed_by,5e,5f,"wave 1 ruling 2026-10-04: 5e is done; what is left (cash_currency, last_trade_date, price_date) is 5f's",docs/superpowers/plans/2026-10-03-diagnosis-truth-decisions.md
+BBG000JXRXK2_2009-06-08,fixed_by,5e,residual,wave 1 ruling 2026-10-04: 5e is done; what is left (price_ticker) is residual's (no remaining sub-plan builds it),docs/superpowers/plans/2026-10-03-diagnosis-truth-decisions.md
+BBG000L93Q69_2007-07-22,fixed_by,5e,5f,"wave 1 ruling 2026-10-04: 5e is done; what is left (cash_currency, last_trade_date, price_date) is 5f's",docs/superpowers/plans/2026-10-03-diagnosis-truth-decisions.md
+BBG000PTXBV3_2016-07-22,fixed_by,5e,5f,wave 1 ruling 2026-10-04: 5e is done; what is left (cash_currency) is 5f's,docs/superpowers/plans/2026-10-03-diagnosis-truth-decisions.md
+BBG002B67HB2_2025-08-01,fixed_by,5e,residual,wave 1 ruling 2026-10-04: 5e is done; what is left (price_ticker) is residual's (no remaining sub-plan builds it),docs/superpowers/plans/2026-10-03-diagnosis-truth-decisions.md
+BBG006KY8KV2_2017-10-17,fixed_by,5e,residual,"wave 1 ruling 2026-10-04: 5e is done; what is left (price_sec_id, price_ticker) is residual's (no remaining sub-plan builds it)",docs/superpowers/plans/2026-10-03-diagnosis-truth-decisions.md
+BBG006XVD9G0_2019-11-30,fixed_by,5e,5f,"wave 1 ruling 2026-10-04: 5e is done; what is left (cash_currency, price_ticker) is 5f's",docs/superpowers/plans/2026-10-03-diagnosis-truth-decisions.md
+BBG0077VS2C0_2026-07-11,fixed_by,5e,5f,wave 1 ruling 2026-10-04: 5e is done; what is left (cash_currency) is 5f's,docs/superpowers/plans/2026-10-03-diagnosis-truth-decisions.md
+CIK230463-COMMON_2008-02-07,fixed_by,5e,5f,wave 1 ruling 2026-10-04: 5e is done; what is left (cash_currency) is 5f's,docs/superpowers/plans/2026-10-03-diagnosis-truth-decisions.md
+CIK891103-COMMON_2014-06-30,fixed_by,5h,5f,"wave 1 ruling 2026-10-04: 5h is done; what is left (exit_kind, internal_last_trade_date, last_trade_date, legs, shape, value_rule) is 5f's",docs/superpowers/plans/2026-10-03-diagnosis-truth-decisions.md
+BBG000BLBGS2_2025-12-20,last_trade_date,,2025-12-09,"5f ruling 2026-10-04: MIDAS dates the last trade 2025-12-09 (exchange volume, a publishable print: spec 1.2 and decision 12, as the operator ruled for ROVI's MIDAS day); the truth's own internal day; price date the session after",docs/superpowers/plans/research/2026-10-04-5f-terms.md
+BBG000BLBGS2_2025-12-20,price_date,,2025-12-10,"5f ruling 2026-10-04: MIDAS dates the last trade 2025-12-09 (exchange volume, a publishable print: spec 1.2 and decision 12, as the operator ruled for ROVI's MIDAS day); the truth's own internal day; price date the session after",docs/superpowers/plans/research/2026-10-04-5f-terms.md
+BBG000QGWY50_2025-06-12,cash_per_share,5.00,3.00,"5f ruling 2026-10-04: ruling R4: the closing 8-K (0001193125-25-132850) says holders who made no election are deemed to have made the Cash and CVR election, so the default package is $3.00 cash, the CVR a note; the report read no default",docs/superpowers/plans/research/2026-10-04-5f-terms.md
+BBG006F8QZK4_2024-12-07,value_rule,basket,cash_plus_stock,"5f ruling 2026-10-04: ruling R3: a basket is two or more securities per share; $25.75 and one Revelyst share is one security and cash, published on the main row as cash_plus_stock (as CCE 2010's $10.00 and one New CCE share is)",docs/superpowers/plans/research/2026-10-04-5f-terms.md
+BBG006F8QZK4_2024-12-07,stock_ratio,,1.0,"5f ruling 2026-10-04: ruling R3: a basket is two or more securities per share; $25.75 and one Revelyst share is one security and cash, published on the main row as cash_plus_stock (as CCE 2010's $10.00 and one New CCE share is)",docs/superpowers/plans/research/2026-10-04-5f-terms.md
+BBG006F8QZK4_2024-12-07,price_ticker,,GEAR,"5f ruling 2026-10-04: ruling R3: a basket is two or more securities per share; $25.75 and one Revelyst share is one security and cash, published on the main row as cash_plus_stock (as CCE 2010's $10.00 and one New CCE share is)",docs/superpowers/plans/research/2026-10-04-5f-terms.md
+BBG006F8QZK4_2024-12-07,price_date,,2024-11-27,"5f ruling 2026-10-04: ruling R3: a basket is two or more securities per share; $25.75 and one Revelyst share is one security and cash, published on the main row as cash_plus_stock (as CCE 2010's $10.00 and one New CCE share is)",docs/superpowers/plans/research/2026-10-04-5f-terms.md
+BBG006F8QZK4_2024-12-07,legs,1: 1.0 GEAR,,"5f ruling 2026-10-04: ruling R3: a basket is two or more securities per share; $25.75 and one Revelyst share is one security and cash, published on the main row as cash_plus_stock (as CCE 2010's $10.00 and one New CCE share is)",docs/superpowers/plans/research/2026-10-04-5f-terms.md
+BBG000D3MB18_wave1-r1,status,pass,known_wrong,"5f ruling 2026-10-04: ruling R3 (the brief's VMED item): the closing 8-K 0001193125-13-256243 gives $17.50, 0.2582 Liberty Global class A and 0.1928 class C per share, a basket of two securities; the main row keeps the cash and no security, payout_legs.csv the legs (LBTYA on the wave 1 loop's line, the class C line not scored)",docs/superpowers/plans/research/2026-10-04-5f-terms.md
+BBG000D3MB18_wave1-r1,fixed_by,,5f,"5f ruling 2026-10-04: ruling R3 (the brief's VMED item): the closing 8-K 0001193125-13-256243 gives $17.50, 0.2582 Liberty Global class A and 0.1928 class C per share, a basket of two securities; the main row keeps the cash and no security, payout_legs.csv the legs (LBTYA on the wave 1 loop's line, the class C line not scored)",docs/superpowers/plans/research/2026-10-04-5f-terms.md
+BBG000D3MB18_wave1-r1,value_rule,*,basket,"5f ruling 2026-10-04: ruling R3 (the brief's VMED item): the closing 8-K 0001193125-13-256243 gives $17.50, 0.2582 Liberty Global class A and 0.1928 class C per share, a basket of two securities; the main row keeps the cash and no security, payout_legs.csv the legs (LBTYA on the wave 1 loop's line, the class C line not scored)",docs/superpowers/plans/research/2026-10-04-5f-terms.md
+BBG000D3MB18_wave1-r1,price_sec_id,BBG01K9HZH92,,"5f ruling 2026-10-04: ruling R3 (the brief's VMED item): the closing 8-K 0001193125-13-256243 gives $17.50, 0.2582 Liberty Global class A and 0.1928 class C per share, a basket of two securities; the main row keeps the cash and no security, payout_legs.csv the legs (LBTYA on the wave 1 loop's line, the class C line not scored)",docs/superpowers/plans/research/2026-10-04-5f-terms.md
+BBG000D3MB18_wave1-r1,legs,,1: 0.2582 LBTYA; 2: 0.1928 LBTYK,"5f ruling 2026-10-04: ruling R3 (the brief's VMED item): the closing 8-K 0001193125-13-256243 gives $17.50, 0.2582 Liberty Global class A and 0.1928 class C per share, a basket of two securities; the main row keeps the cash and no security, payout_legs.csv the legs (LBTYA on the wave 1 loop's line, the class C line not scored)",docs/superpowers/plans/research/2026-10-04-5f-terms.md
+BBG000MRMY60_wave1-r1,status,pass,known_wrong,"5f ruling 2026-10-04: ruling R5: the filing states the $28.80 cash in dollars; the wave 1 loop's regression row kept the base run's blank, which no source states",docs/superpowers/plans/research/2026-10-04-5f-terms.md
+BBG000MRMY60_wave1-r1,fixed_by,,5f,"5f ruling 2026-10-04: ruling R5: the filing states the $28.80 cash in dollars; the wave 1 loop's regression row kept the base run's blank, which no source states",docs/superpowers/plans/research/2026-10-04-5f-terms.md
+BBG000MRMY60_wave1-r1,cash_currency,,USD,"5f ruling 2026-10-04: ruling R5: the filing states the $28.80 cash in dollars; the wave 1 loop's regression row kept the base run's blank, which no source states",docs/superpowers/plans/research/2026-10-04-5f-terms.md
+BBG000BBB3K1_2017-08-04,fixed_by,5f,residual,5f ruling 2026-10-04: residual: prompt v3 still reads 1 BAT ADS for ADSs representing 0.5260 of an ordinary share,docs/superpowers/plans/research/2026-10-04-5f-terms.md
+BBG000BDN878_2019-03-04,fixed_by,5f,residual,5f ruling 2026-10-04: residual: the terms are in the 6-K's EX-99.1 exhibit; the extractor reads primary documents only,docs/superpowers/plans/research/2026-10-04-5f-terms.md
+BBG000BF5RY1_2016-06-10,fixed_by,5f,residual,5f ruling 2026-10-04: residual: the LLM names the stock leg's issuer without its ticker and the run holds no line of it (CCEP as CCE),docs/superpowers/plans/research/2026-10-04-5f-terms.md
+BBG000BJ9D07_2016-09-08,fixed_by,5f,residual,"5f ruling 2026-10-04: residual: R1's name tie needs TiVo Corp's former name (Titan Technologies), which no source gives",docs/superpowers/plans/research/2026-10-04-5f-terms.md
+BBG000BJV732_2007-12-01,fixed_by,5f,residual,"5f ruling 2026-10-04: residual: the prorated aggregate is in Vulcan's own 8-K exhibit, not a filing of the target; the last trade too (5d)",docs/superpowers/plans/research/2026-10-04-5f-terms.md
+BBG000BK1FD3_2014-12-04,fixed_by,5f,residual,5f ruling 2026-10-04: residual: the LLM names the stock leg's issuer without its ticker and the run holds no line of it (AMFW),docs/superpowers/plans/research/2026-10-04-5f-terms.md
+BBG000BX67G5_2008-05-24,fixed_by,5f,residual,"5f ruling 2026-10-04: residual: the last day is in the 3.01 8-K's EX-99.1 (""after the close of market today""), which the last-trade reader does not read",docs/superpowers/plans/research/2026-10-04-5f-terms.md
+BBG000C496P7_2025-08-17,fixed_by,5f,residual,5f ruling 2026-10-04: residual: the LLM names the stock leg's issuer without its ticker and the run holds no line of it (PSKY),docs/superpowers/plans/research/2026-10-04-5f-terms.md
+BBG000FJJW82_2008-12-06,fixed_by,5f,residual,"5f ruling 2026-10-04: residual: the published day is the notice's merger-effective day, which the truth calls worked out (the notice reader's rule, 5d)",docs/superpowers/plans/research/2026-10-04-5f-terms.md
+BBG000H89QJ6_2016-05-28,fixed_by,5f,residual,5f ruling 2026-10-04: residual: 0.48908178 New Charter shares is stated only in the Form 25 notice,docs/superpowers/plans/research/2026-10-04-5f-terms.md
+BBG000L93Q69_2007-07-22,fixed_by,5f,residual,5f ruling 2026-10-04: residual: prompt v3 states no package for TODCO's equalized election; the published day as ABI's,docs/superpowers/plans/research/2026-10-04-5f-terms.md
+BBG000M34GG1_2022-07-31,fixed_by,5f,residual,"5f ruling 2026-10-04: residual: the 2022 closing 8-K is MIC Hawaii's (CIK 1845290), not the run's issuer's",docs/superpowers/plans/research/2026-10-04-5f-terms.md
+BBG000PYZSR8_2016-05-18,fixed_by,5f,residual,"5f ruling 2026-10-04: residual: only the worked-out last trade is left (no Form 25; the last sighting, 5d)",docs/superpowers/plans/research/2026-10-04-5f-terms.md
+BBG0017T9998_2020-07-30,fixed_by,5f,residual,5f ruling 2026-10-04: residual: only the published last trade is left (the loop's ruling: MIDAS's 07-20; 5d),docs/superpowers/plans/research/2026-10-04-5f-terms.md
+BBG003P9ZSL3_2016-04-28,fixed_by,5f,residual,"5f ruling 2026-10-04: residual: R1 at the handoff stage: the timing continuation into new LMCA needs the exchange statement's three securities (exchange_terms at the handoff, not built)",docs/superpowers/plans/research/2026-10-04-5f-terms.md
+BBG005SW6TK5_2016-04-28,fixed_by,5f,residual,5f ruling 2026-10-04: residual: as LMCA 2016: R1 at the handoff stage,docs/superpowers/plans/research/2026-10-04-5f-terms.md
+BBG006F8QZK4_2024-12-07,fixed_by,5f,residual,"5f ruling 2026-10-04: residual: the LLM names the stock leg's issuer without its ticker and the run holds no line of it (Revelyst, GEAR)",docs/superpowers/plans/research/2026-10-04-5f-terms.md
+BBG006LYGNL7_2021-10-16,fixed_by,5f,residual,5f ruling 2026-10-04: residual: the exchange offer's terms and last day are in 6-K exhibits the extractor does not read,docs/superpowers/plans/research/2026-10-04-5f-terms.md
+BBG00DJ2LJF5_2019-01-07,fixed_by,5f,residual,"5f ruling 2026-10-04: residual: spec 5c rule 6 on the continued-filings branch (the class V election into class C), not measured: built only on the successor branch",docs/superpowers/plans/research/2026-10-04-5f-terms.md
+BBG00FFJY867_2025-05-17,fixed_by,5f,residual,5f ruling 2026-10-04: residual: the second leg's 1/15 is Starz's consolidation after the closing; the LLM gives 1,docs/superpowers/plans/research/2026-10-04-5f-terms.md
+CIK18568-COMMON_2007-09-16,fixed_by,5f,residual,"5f ruling 2026-10-04: residual: the truth's aggregate is inferred from 425 totals, not stated; R4 without a stated package publishes the all-cash alternative",docs/superpowers/plans/research/2026-10-04-5f-terms.md
+CIK891103-COMMON_2014-06-30,fixed_by,5f,residual,"5f ruling 2026-10-04: residual: the line is not followed past its 2014 observations to the 2020 separation, and the handoff's basket needs R1 at the handoff stage",docs/superpowers/plans/research/2026-10-04-5f-terms.md
+BBG000BH5K72_2007-12-28,last_trade_date,,2007-12-13,"5i ruling 2026-10-04: ruling R8 on the NYSE 25-NSE notice 0000876661-07-000947 ('suspended from trading on December 14, 2007'): the last trade is the trading day before, published; what is left (cash_currency) is 5f's",docs/superpowers/plans/research/2026-10-04-5i-verdicts.md
+BBG000BH5K72_2007-12-28,fixed_by,5i,5f,"5i ruling 2026-10-04: ruling R8 on the NYSE 25-NSE notice 0000876661-07-000947 ('suspended from trading on December 14, 2007'): the last trade is the trading day before, published; what is left (cash_currency) is 5f's",docs/superpowers/plans/research/2026-10-04-5i-verdicts.md
+BBG000BN53G7_2026-09-06,last_trade_date,,2026-08-26,"controller ruling 2026-10-04 (wave 2): ruling R8 on the NYSE 25-NSE notice 0000876661-26-000712 ('suspended from trading before market open on August 27, 2026'): the last trade is the trading day before, published (R8's open case), and the price date is the trading day after it; the row matches on every scored field",docs/superpowers/plans/research/2026-10-04-5i-verdicts.md
+BBG000BN53G7_2026-09-06,price_date,,2026-08-27,"controller ruling 2026-10-04 (wave 2): ruling R8 on the NYSE 25-NSE notice 0000876661-26-000712 ('suspended from trading before market open on August 27, 2026'): the last trade is the trading day before, published (R8's open case), and the price date is the trading day after it; the row matches on every scored field",docs/superpowers/plans/research/2026-10-04-5i-verdicts.md
+BBG000BN53G7_2026-09-06,status,known_wrong,pass,"controller ruling 2026-10-04 (wave 2): ruling R8 on the NYSE 25-NSE notice 0000876661-26-000712 ('suspended from trading before market open on August 27, 2026'): the last trade is the trading day before, published (R8's open case), and the price date is the trading day after it; the row matches on every scored field",docs/superpowers/plans/research/2026-10-04-5i-verdicts.md
+BBG000BN53G7_2026-09-06,fixed_by,residual,,"controller ruling 2026-10-04 (wave 2): ruling R8 on the NYSE 25-NSE notice 0000876661-26-000712 ('suspended from trading before market open on August 27, 2026'): the last trade is the trading day before, published (R8's open case), and the price date is the trading day after it; the row matches on every scored field",docs/superpowers/plans/research/2026-10-04-5i-verdicts.md
+BBG000BNXLK1_2007-07-12,last_trade_date,,2007-06-29,"5i ruling 2026-10-04: ruling R8 on the NYSE 25-NSE notice 0000876661-07-000586 ('suspended from trading on July 2, 2007'): the last trade is the trading day before, published; the exit kind is residual: its own matched 25-NSE (filed under CIK 64782, accession 0000876661-07-000586) states 'Each share of Common Stock of Mellon Financial Corporation was converted into one share of Common Stock of (New) The Bank of New York Mellon Corporation', which 5c's reader reads as one for one, ratio 1.0, no cash; what blocks the continuation is stage 8b's successor link (the BK line BBG000BD8PN9, issuer 1390777, starts in ticker_history only on 2007-12-21); 5i changes no contract field",docs/superpowers/plans/research/2026-10-04-5i-verdicts.md
+BBG000BNXLK1_2007-07-12,fixed_by,5i,residual,"5i ruling 2026-10-04: ruling R8 on the NYSE 25-NSE notice 0000876661-07-000586 ('suspended from trading on July 2, 2007'): the last trade is the trading day before, published; the exit kind is residual: its own matched 25-NSE (filed under CIK 64782, accession 0000876661-07-000586) states 'Each share of Common Stock of Mellon Financial Corporation was converted into one share of Common Stock of (New) The Bank of New York Mellon Corporation', which 5c's reader reads as one for one, ratio 1.0, no cash; what blocks the continuation is stage 8b's successor link (the BK line BBG000BD8PN9, issuer 1390777, starts in ticker_history only on 2007-12-21); 5i changes no contract field",docs/superpowers/plans/research/2026-10-04-5i-verdicts.md
+BBG000BQHGR6_2026-09-28,last_trade_date,,2026-09-09,"controller ruling 2026-10-04 (wave 2): ruling R8 on the NYSE 25-NSE notice 0000876661-26-000770 ('suspended from trading on September 10, 2026'): the last trade is the trading day before, published; the row matches on every scored field",docs/superpowers/plans/research/2026-10-04-5i-verdicts.md
+BBG000BQHGR6_2026-09-28,status,known_wrong,pass,"controller ruling 2026-10-04 (wave 2): ruling R8 on the NYSE 25-NSE notice 0000876661-26-000770 ('suspended from trading on September 10, 2026'): the last trade is the trading day before, published; the row matches on every scored field",docs/superpowers/plans/research/2026-10-04-5i-verdicts.md
+BBG000BQHGR6_2026-09-28,fixed_by,residual,,"controller ruling 2026-10-04 (wave 2): ruling R8 on the NYSE 25-NSE notice 0000876661-26-000770 ('suspended from trading on September 10, 2026'): the last trade is the trading day before, published; the row matches on every scored field",docs/superpowers/plans/research/2026-10-04-5i-verdicts.md
+BBG000FJJW82_2008-12-06,last_trade_date,,2008-11-21,"controller ruling 2026-10-04 (wave 2): ruling R8 on the NYSE 25-NSE notice 0000876661-08-000491 ('suspended from trading on November 24, 2008'): the last trade is the trading day before, published, and the price date is the trading day after it; what is left (cash_currency) is 5f's",docs/superpowers/plans/research/2026-10-04-5i-verdicts.md
+BBG000FJJW82_2008-12-06,price_date,,2008-11-24,"controller ruling 2026-10-04 (wave 2): ruling R8 on the NYSE 25-NSE notice 0000876661-08-000491 ('suspended from trading on November 24, 2008'): the last trade is the trading day before, published, and the price date is the trading day after it; what is left (cash_currency) is 5f's",docs/superpowers/plans/research/2026-10-04-5i-verdicts.md
+BBG000JBSJZ4_2014-07-01,fixed_by,5i,residual,"5i ruling 2026-10-04: what is left (internal_last_trade_date, the continued-filings row dated by the last sighting) is a last-trade reading 5d did not build; 5i changes no contract field",docs/superpowers/plans/research/2026-10-04-5i-verdicts.md
+BBG000L93Q69_2007-07-22,last_trade_date,,2007-07-11,"controller ruling 2026-10-04 (wave 2): ruling R8 on the NYSE 25-NSE notice 0000876661-07-000606 ('suspended from trading on July 12, 2007'): the last trade is the trading day before, published, and the price date is the trading day after it; what is left (cash_currency) is 5f's",docs/superpowers/plans/research/2026-10-04-5i-verdicts.md
+BBG000L93Q69_2007-07-22,price_date,,2007-07-12,"controller ruling 2026-10-04 (wave 2): ruling R8 on the NYSE 25-NSE notice 0000876661-07-000606 ('suspended from trading on July 12, 2007'): the last trade is the trading day before, published, and the price date is the trading day after it; what is left (cash_currency) is 5f's",docs/superpowers/plans/research/2026-10-04-5i-verdicts.md
+BBG00BDQ1H13_2022-10-10,fixed_by,5i,residual,"5i ruling 2026-10-04: what is left (the last trade 2022-09-30 the scheme's 8-K states) is the handoff row's dating, a 5d reading that its unmatched Form 25 does not reach; 5i changes no contract field (its verdict stays timing-only: no R1 reading of the scheme)",docs/superpowers/plans/research/2026-10-04-5i-verdicts.md
+BBG00BFHD827_2023-08-13,fixed_by,5i,5f,"5i ruling 2026-10-04: what is left (the basket and its legs, R3) is 5f's",docs/superpowers/plans/research/2026-10-04-5i-verdicts.md
+BBG00BFHD827_2023-08-13,note,,"the truth's last trade 2023-08-03 stands, on the 8-K 0001104659-23-087380 (item 3.03: the Reclassification 'effective as of 5:00 p.m. New York City time' on August 3, 2023; the new series 'expected to begin trading ... on August 4, 2023'); this is a note, not an R8 ruling (no notice says 'suspended'). The library's 2023-08-04 is the handoff row's last sighting (source last_sighting), the day the new series began; no sub-plan reads a reclassification's effective time for a handoff row, so the row keeps this internal_last_trade_date mismatch after 5f's basket work and stays known_wrong until a later one does","controller ruling 2026-10-04 (wave 2): the truth's last trade 2023-08-03 stands, on the 8-K 0001104659-23-087380 (item 3.03: the Reclassification 'effective as of 5:00 p.m. New York City time' on August 3, 2023; the new series 'expected to begin trading ... on August 4, 2023'); this is a note, not an R8 ruling (no notice says 'suspended'). The library's 2023-08-04 is the handoff row's last sighting (source last_sighting), the day the new series began; no sub-plan reads a reclassification's effective time for a handoff row, so the row keeps this internal_last_trade_date mismatch after 5f's basket work and stays known_wrong until a later one does",docs/superpowers/plans/research/2026-10-04-5i-verdicts.md
+BBG00BFHD9S7_2023-08-13,fixed_by,5i,5f,"5i ruling 2026-10-04: what is left (the basket and its legs, R3) is 5f's",docs/superpowers/plans/research/2026-10-04-5i-verdicts.md
+BBG00BFHD9S7_2023-08-13,note,,"the truth's last trade 2023-08-03 stands, on the 8-K 0001104659-23-087380 (item 3.03: the Reclassification 'effective as of 5:00 p.m. New York City time' on August 3, 2023; the new series 'expected to begin trading ... on August 4, 2023'); this is a note, not an R8 ruling (no notice says 'suspended'). The library's 2023-08-04 is the handoff row's last sighting (source last_sighting), the day the new series began; no sub-plan reads a reclassification's effective time for a handoff row, so the row keeps this internal_last_trade_date mismatch after 5f's basket work and stays known_wrong until a later one does","controller ruling 2026-10-04 (wave 2): the truth's last trade 2023-08-03 stands, on the 8-K 0001104659-23-087380 (item 3.03: the Reclassification 'effective as of 5:00 p.m. New York City time' on August 3, 2023; the new series 'expected to begin trading ... on August 4, 2023'); this is a note, not an R8 ruling (no notice says 'suspended'). The library's 2023-08-04 is the handoff row's last sighting (source last_sighting), the day the new series began; no sub-plan reads a reclassification's effective time for a handoff row, so the row keeps this internal_last_trade_date mismatch after 5f's basket work and stays known_wrong until a later one does",docs/superpowers/plans/research/2026-10-04-5i-verdicts.md
+BBG00BFHDCV6_2023-08-13,fixed_by,5i,5f,"5i ruling 2026-10-04: what is left (the basket and its legs, R3) is 5f's",docs/superpowers/plans/research/2026-10-04-5i-verdicts.md
+BBG00BFHDCV6_2023-08-13,note,,"the truth's last trade 2023-08-03 stands, on the 8-K 0001104659-23-087380 (item 3.03: the Reclassification 'effective as of 5:00 p.m. New York City time' on August 3, 2023; the new series 'expected to begin trading ... on August 4, 2023'); this is a note, not an R8 ruling (no notice says 'suspended'). The library's 2023-08-04 is the handoff row's last sighting (source last_sighting), the day the new series began; no sub-plan reads a reclassification's effective time for a handoff row, so the row keeps this internal_last_trade_date mismatch after 5f's basket work and stays known_wrong until a later one does","controller ruling 2026-10-04 (wave 2): the truth's last trade 2023-08-03 stands, on the 8-K 0001104659-23-087380 (item 3.03: the Reclassification 'effective as of 5:00 p.m. New York City time' on August 3, 2023; the new series 'expected to begin trading ... on August 4, 2023'); this is a note, not an R8 ruling (no notice says 'suspended'). The library's 2023-08-04 is the handoff row's last sighting (source last_sighting), the day the new series began; no sub-plan reads a reclassification's effective time for a handoff row, so the row keeps this internal_last_trade_date mismatch after 5f's basket work and stays known_wrong until a later one does",docs/superpowers/plans/research/2026-10-04-5i-verdicts.md
+BBG00BFHDFR4_2023-08-13,fixed_by,5i,5f,"5i ruling 2026-10-04: what is left (the basket and its legs, R3) is 5f's",docs/superpowers/plans/research/2026-10-04-5i-verdicts.md
+BBG00BFHDFR4_2023-08-13,note,,"the truth's last trade 2023-08-03 stands, on the 8-K 0001104659-23-087380 (item 3.03: the Reclassification 'effective as of 5:00 p.m. New York City time' on August 3, 2023; the new series 'expected to begin trading ... on August 4, 2023'); this is a note, not an R8 ruling (no notice says 'suspended'). The library's 2023-08-04 is the handoff row's last sighting (source last_sighting), the day the new series began; no sub-plan reads a reclassification's effective time for a handoff row, so the row keeps this internal_last_trade_date mismatch after 5f's basket work and stays known_wrong until a later one does","controller ruling 2026-10-04 (wave 2): the truth's last trade 2023-08-03 stands, on the 8-K 0001104659-23-087380 (item 3.03: the Reclassification 'effective as of 5:00 p.m. New York City time' on August 3, 2023; the new series 'expected to begin trading ... on August 4, 2023'); this is a note, not an R8 ruling (no notice says 'suspended'). The library's 2023-08-04 is the handoff row's last sighting (source last_sighting), the day the new series began; no sub-plan reads a reclassification's effective time for a handoff row, so the row keeps this internal_last_trade_date mismatch after 5f's basket work and stays known_wrong until a later one does",docs/superpowers/plans/research/2026-10-04-5i-verdicts.md
+CIK1355096-COMMON_2018-04-11,fixed_by,5i,residual,"5i ruling 2026-10-04: what is left (no ending: the placeholder is one line with BBG000PCQQL6, R2) is identity work 5a and 5h did not reach; 5i changes no contract field",docs/superpowers/plans/research/2026-10-04-5i-verdicts.md
+CIK1620280-COMMON_2017-02-28,fixed_by,5i,residual,"5i ruling 2026-10-04: what is left (no ending: the same-CIK rename to Uniti is one line, R2) is identity work 5a did not reach; 5i changes no contract field",docs/superpowers/plans/research/2026-10-04-5i-verdicts.md
+CIK718482-COMMON_2007-10-11,last_trade_date,,2007-09-28,"5i ruling 2026-10-04: ruling R8 on the NYSE 25-NSE notice 0000876661-07-000790 ('became effective before the opening on October 1, 2007 ... suspended from trading on October 1, 2007'): the last trade is the trading day before, published, and the price date is the trading day after it (spec 2.1); what is left (cash_currency) is 5f's",docs/superpowers/plans/research/2026-10-04-5i-verdicts.md
+CIK718482-COMMON_2007-10-11,price_date,,2007-10-01,"5i ruling 2026-10-04: ruling R8 on the NYSE 25-NSE notice 0000876661-07-000790 ('became effective before the opening on October 1, 2007 ... suspended from trading on October 1, 2007'): the last trade is the trading day before, published, and the price date is the trading day after it (spec 2.1); what is left (cash_currency) is 5f's",docs/superpowers/plans/research/2026-10-04-5i-verdicts.md
+CIK718482-COMMON_2007-10-11,fixed_by,5i,5f,"5i ruling 2026-10-04: ruling R8 on the NYSE 25-NSE notice 0000876661-07-000790 ('became effective before the opening on October 1, 2007 ... suspended from trading on October 1, 2007'): the last trade is the trading day before, published, and the price date is the trading day after it (spec 2.1); what is left (cash_currency) is 5f's",docs/superpowers/plans/research/2026-10-04-5i-verdicts.md
+BBG000DST2V3_2012-06-04,cash_per_share,14.53,14.65,"5f ruling 2026-10-04: controller ruling 2026-10-04 (R4: non-electors' package): the closing 8-K 0001193125-12-253764 states the result for each election class and that ""Holders of approximately 14.9% of outstanding New El Paso shares ... made no election. These holders will receive the Mixed Consideration"" (0.4187 of a share of Kinder Morgan Class P common stock, $14.65 in cash and 0.640 of a warrant); the stock electors' prorated 14.53 and 0.4231 is an elector class's result, not the package",docs/superpowers/plans/research/2026-10-04-5f-terms.md
+BBG000DST2V3_2012-06-04,stock_ratio,0.4231,0.4187,"5f ruling 2026-10-04: controller ruling 2026-10-04 (R4: non-electors' package): the closing 8-K 0001193125-12-253764 states the result for each election class and that ""Holders of approximately 14.9% of outstanding New El Paso shares ... made no election. These holders will receive the Mixed Consideration"" (0.4187 of a share of Kinder Morgan Class P common stock, $14.65 in cash and 0.640 of a warrant); the stock electors' prorated 14.53 and 0.4231 is an elector class's result, not the package",docs/superpowers/plans/research/2026-10-04-5f-terms.md
+BBG000L93Q69_2007-07-22,fixed_by,residual,5f,5f ruling 2026-10-04: restored from residual: the review fix keeps the earlier prompt's cached either-or reading when v3 states no leg of an election with no stated default; the row's terms match again,docs/superpowers/plans/research/2026-10-04-5f-terms.md
+BBG000BF6F94_wave2-r1,(row),,added (known_wrong),wave2 loop round 1: regression,reports/BBG000BF6F94_wave2-r1.md
+BBG000C4FB79_wave2-r1,(row),,added (known_wrong),wave2 loop round 1: regression,reports/BBG000C4FB79_wave2-r1.md
+BBG000H28X05_wave2-r1,(row),,added (ruling_pending),wave2 loop round 1: regression,reports/BBG000H28X05_wave2-r1.md
+BBG000BB2N27_2014-12-25,status,known_wrong,pass,the library now matches,
+BBG000BB5HV5_2010-12-19,status,known_wrong,pass,the library now matches,
+BBG000BBBP59_2016-03-28,status,known_wrong,pass,the library now matches,
+BBG000BCKC47_2016-07-11,status,known_wrong,pass,the library now matches,
+BBG000BDKN87_2010-02-26,status,known_wrong,pass,the library now matches,
+BBG000BDLLR9_2007-11-05,status,known_wrong,pass,the library now matches,
+BBG000BF8BH2_2008-08-10,status,known_wrong,pass,the library now matches,
+BBG000BFVKZ6_2019-02-25,status,known_wrong,pass,the library now matches,
+BBG000BGFLL5_2013-11-23,status,known_wrong,pass,the library now matches,
+BBG000BGMX22_2010-10-14,status,known_wrong,pass,the library now matches,
+BBG000BH2T94_2011-12-11,status,known_wrong,pass,the library now matches,
+BBG000BH5K72_2007-12-28,status,known_wrong,pass,the library now matches,
+BBG000BHBGN6_2022-12-03,status,known_wrong,pass,the library now matches,
+BBG000BHCDF1_2011-12-08,status,known_wrong,pass,the library now matches,
+BBG000BHD665_2007-10-22,status,known_wrong,pass,the library now matches,
+BBG000BHFHP8_2021-12-10,status,known_wrong,pass,the library now matches,
+BBG000BJVZF7_2014-07-12,status,known_wrong,pass,the library now matches,
+BBG000BK5DP1_2026-03-30,status,known_wrong,pass,the library now matches,
+BBG000BK7SL0_2011-04-18,status,known_wrong,pass,the library now matches,
+BBG000BKKXG0_2008-12-11,status,known_wrong,pass,the library now matches,
+BBG000BL9439_2013-07-28,status,known_wrong,pass,the library now matches,
+BBG000BLBGS2_2025-12-20,status,known_wrong,pass,the library now matches,
+BBG000BMDV41_2016-09-16,status,known_wrong,pass,the library now matches,
+BBG000BMZ7P7_2021-12-24,status,known_wrong,pass,the library now matches,
+BBG000BMZLP6_2007-08-20,status,known_wrong,pass,the library now matches,
+BBG000BN6349_2013-12-02,status,known_wrong,pass,the library now matches,
+BBG000BNTTY4_2024-04-29,status,known_wrong,pass,the library now matches,
+BBG000BNVNY4_2021-12-12,status,known_wrong,pass,the library now matches,
+BBG000BP0KQ8_2026-08-14,status,known_wrong,pass,the library now matches,
+BBG000BPQVR5_2015-07-12,status,known_wrong,pass,the library now matches,
+BBG000BPTDN6_2010-10-11,status,known_wrong,pass,the library now matches,
+BBG000BQ3F39_2011-05-07,status,known_wrong,pass,the library now matches,
+BBG000BRF689_2016-10-14,status,known_wrong,pass,the library now matches,
+BBG000BS3FD4_2008-03-27,status,known_wrong,pass,the library now matches,
+BBG000BSVZM9_2009-11-04,status,known_wrong,pass,the library now matches,
+BBG000BTMDX4_2012-04-06,status,known_wrong,pass,the library now matches,
+BBG000BTN971_2012-10-20,status,known_wrong,pass,the library now matches,
+BBG000BTQ9G8_2017-08-02,status,known_wrong,pass,the library now matches,
+BBG000BV3594_2007-12-06,status,known_wrong,pass,the library now matches,
+BBG000BV52H0_2007-09-07,status,known_wrong,pass,the library now matches,
+BBG000BVW841_2009-06-08,status,known_wrong,pass,the library now matches,
+BBG000BWMX63_2026-08-30,status,known_wrong,pass,the library now matches,
+BBG000C0BGS7_2009-10-30,status,known_wrong,pass,the library now matches,
+BBG000C11MQ5_2015-06-05,status,known_wrong,pass,the library now matches,
+BBG000C3HNW5_2014-10-30,status,known_wrong,pass,the library now matches,
+BBG000C3JJC4_2015-02-12,status,known_wrong,pass,the library now matches,
+BBG000C3W281_2026-06-20,status,known_wrong,pass,the library now matches,
+BBG000C7B169_2011-07-31,status,known_wrong,pass,the library now matches,
+BBG000C7WZ16_2010-10-15,status,known_wrong,pass,the library now matches,
+BBG000C9N6Q9_2011-03-15,status,known_wrong,pass,the library now matches,
+BBG000CB2ZY4_2011-02-28,status,known_wrong,pass,the library now matches,
+BBG000CG0HP5_2008-01-05,status,known_wrong,pass,the library now matches,
+BBG000CGQ485_2008-12-04,status,known_wrong,pass,the library now matches,
+BBG000CS7CB8_2007-11-25,status,known_wrong,pass,the library now matches,
+BBG000CXLZ20_2010-10-11,status,known_wrong,pass,the library now matches,
+BBG000DBVBY4_2021-03-11,status,known_wrong,pass,the library now matches,
+BBG000DGZ1B6_2009-06-08,status,known_wrong,pass,the library now matches,
+BBG000DQX1D4_2016-04-03,status,known_wrong,pass,the library now matches,
+BBG000DST2V3_2012-06-04,status,known_wrong,pass,the library now matches,
+BBG000FBWYH0_2026-07-06,status,known_wrong,pass,the library now matches,
+BBG000FHN2M1_2007-12-14,status,known_wrong,pass,the library now matches,
+BBG000FJJW82_2008-12-06,status,known_wrong,pass,the library now matches,
+BBG000FL1TC8_2015-08-03,status,known_wrong,pass,the library now matches,
+BBG000FRVFM1_2011-12-15,status,known_wrong,pass,the library now matches,
+BBG000G61VB6_2007-07-23,status,known_wrong,pass,the library now matches,
+BBG000G6BN50_2017-07-28,status,known_wrong,pass,the library now matches,
+BBG000GYLKX3_2013-10-07,status,known_wrong,pass,the library now matches,
+BBG000HZFZX3_2017-11-11,status,known_wrong,pass,the library now matches,
+BBG000KBQZ88_2015-08-02,status,known_wrong,pass,the library now matches,
+BBG000KZCJJ4_2020-04-09,status,known_wrong,pass,the library now matches,
+BBG000L93Q69_2007-07-22,status,known_wrong,pass,the library now matches,
+BBG000N8Y8W6_2017-07-27,status,known_wrong,pass,the library now matches,
+BBG000P1K2X6_2026-07-26,status,known_wrong,pass,the library now matches,
+BBG000PJ88D0_2015-08-27,status,known_wrong,pass,the library now matches,
+BBG000PTXBV3_2016-07-22,status,known_wrong,pass,the library now matches,
+BBG000QDST26_2016-10-24,status,known_wrong,pass,the library now matches,
+BBG000QGWY50_2025-06-12,status,known_wrong,pass,the library now matches,
+BBG000V31J96_2018-03-24,status,known_wrong,pass,the library now matches,
+BBG00265T6Q4_2023-02-13,status,known_wrong,pass,the library now matches,
+BBG002B67HB2_2025-08-01,status,known_wrong,pass,the library now matches,
+BBG003PGJHP5_2026-08-03,status,known_wrong,pass,the library now matches,
+BBG0060HN0R3_2016-03-04,status,known_wrong,pass,the library now matches,
+BBG006KY8KV2_2017-10-17,status,known_wrong,pass,the library now matches,
+BBG006XVD9G0_2019-11-30,status,known_wrong,pass,the library now matches,
+BBG0077VS2C0_2026-07-11,status,known_wrong,pass,the library now matches,
+BBG0077WYXF0_2016-07-11,status,known_wrong,pass,the library now matches,
+BBG007KGRPY4_2026-05-24,status,known_wrong,pass,the library now matches,
+BBG00GSNPM07_2026-07-11,status,known_wrong,pass,the library now matches,
+BBG00LT2PDY4_2021-08-05,status,known_wrong,pass,the library now matches,
+BBG00ZHCT050_2023-07-15,status,known_wrong,pass,the library now matches,
+BBG011FS2K38_2026-05-29,status,known_wrong,pass,the library now matches,
+BBG012BV9SK0_2026-07-17,status,known_wrong,pass,the library now matches,
+BBG014QJ5BV6_2026-05-25,status,known_wrong,pass,the library now matches,
+CIK1038914-COMMON_2007-12-23,status,known_wrong,pass,the library now matches,
+CIK1052045-COMMON_2007-08-04,status,known_wrong,pass,the library now matches,
+CIK1074771-COMMON_2007-08-05,status,known_wrong,pass,the library now matches,
+CIK1116521-COMMON_2007-11-05,status,known_wrong,pass,the library now matches,
+CIK1124887-COMMON_2007-11-23,status,known_wrong,pass,the library now matches,
+CIK1156826-COMMON_2007-10-20,status,known_wrong,pass,the library now matches,
+CIK1319048-COMMON_2007-09-24,status,known_wrong,pass,the library now matches,
+CIK230463-COMMON_2008-02-07,status,known_wrong,pass,the library now matches,
+CIK351346-COMMON_2006-12-28,status,known_wrong,pass,the library now matches,
+CIK47580-COMMON_2007-11-04,status,known_wrong,pass,the library now matches,
+CIK65873-COMMON_2007-11-30,status,known_wrong,pass,the library now matches,
+CIK709519-COMMON_2010-02-05,status,known_wrong,pass,the library now matches,
+CIK718482-COMMON_2007-10-11,status,known_wrong,pass,the library now matches,
+CIK737874-COMMON_2007-10-11,status,known_wrong,pass,the library now matches,
+CIK804055-COMMON_2010-10-15,status,known_wrong,pass,the library now matches,
+CIK835541-COMMON_2007-10-13,status,known_wrong,pass,the library now matches,
+CIK845752-COMMON_2007-08-11,status,known_wrong,pass,the library now matches,
+CIK849778-COMMON_2007-11-01,status,known_wrong,pass,the library now matches,
+CIK898660-COMMON_2009-06-08,status,known_wrong,pass,the library now matches,
+BBG000D3MB18_wave1-r1,status,known_wrong,pass,the library now matches,
+BBG000MRMY60_wave1-r1,status,known_wrong,pass,the library now matches,
+BBG000BJV732_2007-12-01,value_rule,cash_plus_stock,stock,"wave 2 loop ruling 2026-10-04 (R4: the non-electors' package, verified and upheld): Florida Rock's non-electors received all Vulcan stock, 0.63 VMC per share; the 46.90 + 0.189 aggregate and the library's cash 67.00 are both wrong",docs/superpowers/plans/2026-10-03-diagnosis-truth-decisions.md
+BBG000BJV732_2007-12-01,cash_per_share,46.90,,"wave 2 loop ruling 2026-10-04 (R4: the non-electors' package, verified and upheld): Florida Rock's non-electors received all Vulcan stock, 0.63 VMC per share; the 46.90 + 0.189 aggregate and the library's cash 67.00 are both wrong",docs/superpowers/plans/2026-10-03-diagnosis-truth-decisions.md
+BBG000BJV732_2007-12-01,cash_currency,USD,,"wave 2 loop ruling 2026-10-04 (R4: the non-electors' package, verified and upheld): Florida Rock's non-electors received all Vulcan stock, 0.63 VMC per share; the 46.90 + 0.189 aggregate and the library's cash 67.00 are both wrong",docs/superpowers/plans/2026-10-03-diagnosis-truth-decisions.md
+BBG000BJV732_2007-12-01,stock_ratio,0.189,0.63,"wave 2 loop ruling 2026-10-04 (R4: the non-electors' package, verified and upheld): Florida Rock's non-electors received all Vulcan stock, 0.63 VMC per share; the 46.90 + 0.189 aggregate and the library's cash 67.00 are both wrong",docs/superpowers/plans/2026-10-03-diagnosis-truth-decisions.md
+BBG000H28X05_wave2-r1,status,ruling_pending,pass,"wave 2 controller ruling 2026-10-04: the loop's diagnosis (inferred, upheld) finds the new stock reading right: non-electors defaulted to 0.5022 PEP; scored from now on",docs/superpowers/plans/2026-10-03-diagnosis-truth-decisions.md
+BBG000H28X05_wave2-r1,fixed_by,regression,,"wave 2 controller ruling 2026-10-04: the loop's diagnosis (inferred, upheld) finds the new stock reading right: non-electors defaulted to 0.5022 PEP; scored from now on",docs/superpowers/plans/2026-10-03-diagnosis-truth-decisions.md
+BBG000H28X05_wave2-r1,value_rule,*,stock,"wave 2 controller ruling 2026-10-04: the loop's diagnosis (inferred, upheld) finds the new stock reading right: non-electors defaulted to 0.5022 PEP; scored from now on",docs/superpowers/plans/2026-10-03-diagnosis-truth-decisions.md
+BBG000H28X05_wave2-r1,cash_per_share,*,,"wave 2 controller ruling 2026-10-04: the loop's diagnosis (inferred, upheld) finds the new stock reading right: non-electors defaulted to 0.5022 PEP; scored from now on",docs/superpowers/plans/2026-10-03-diagnosis-truth-decisions.md
+BBG000H28X05_wave2-r1,cash_currency,*,,"wave 2 controller ruling 2026-10-04: the loop's diagnosis (inferred, upheld) finds the new stock reading right: non-electors defaulted to 0.5022 PEP; scored from now on",docs/superpowers/plans/2026-10-03-diagnosis-truth-decisions.md
+BBG000H28X05_wave2-r1,stock_ratio,*,0.5022,"wave 2 controller ruling 2026-10-04: the loop's diagnosis (inferred, upheld) finds the new stock reading right: non-electors defaulted to 0.5022 PEP; scored from now on",docs/superpowers/plans/2026-10-03-diagnosis-truth-decisions.md
+BBG000H28X05_wave2-r1,price_sec_id,*,BBG000DH7JK6,"wave 2 controller ruling 2026-10-04: the loop's diagnosis (inferred, upheld) finds the new stock reading right: non-electors defaulted to 0.5022 PEP; scored from now on",docs/superpowers/plans/2026-10-03-diagnosis-truth-decisions.md
+BBG000H28X05_wave2-r1,price_ticker,*,PEP,"wave 2 controller ruling 2026-10-04: the loop's diagnosis (inferred, upheld) finds the new stock reading right: non-electors defaulted to 0.5022 PEP; scored from now on",docs/superpowers/plans/2026-10-03-diagnosis-truth-decisions.md
+BBG000H28X05_wave2-r1,price_date,*,2010-03-01,"wave 2 controller ruling 2026-10-04: the loop's diagnosis (inferred, upheld) finds the new stock reading right: non-electors defaulted to 0.5022 PEP; scored from now on",docs/superpowers/plans/2026-10-03-diagnosis-truth-decisions.md
+BBG000C4FB79_wave2-r1,cash_currency,,USD,wave 2 controller ruling 2026-10-04: the Form 25-NSE notice 0000876661-12-000106 states $14.22; the regression row took the base run's blank currency,docs/superpowers/plans/2026-10-03-diagnosis-truth-decisions.md
+BBG000BF6F94_wave2-r1,status,known_wrong,pass,the library now matches,
+BBG000C4FB79_wave2-r1,status,known_wrong,pass,the library now matches,
+BBG00BFHD827_2023-08-13,fixed_by,5f,residual,"wave 2 ruling 2026-10-04: the roadmap's last sub-plan (5i) is done; what is left (continuation, exit_kind, internal_last_trade_date, legs, successor_sec_id, value_rule) has no owner",docs/superpowers/plans/2026-10-03-diagnosis-truth-decisions.md
+BBG00BFHD9S7_2023-08-13,fixed_by,5f,residual,"wave 2 ruling 2026-10-04: the roadmap's last sub-plan (5i) is done; what is left (continuation, exit_kind, internal_last_trade_date, legs, successor_sec_id, value_rule) has no owner",docs/superpowers/plans/2026-10-03-diagnosis-truth-decisions.md
+BBG00BFHDCV6_2023-08-13,fixed_by,5f,residual,"wave 2 ruling 2026-10-04: the roadmap's last sub-plan (5i) is done; what is left (continuation, exit_kind, internal_last_trade_date, legs, successor_sec_id, value_rule) has no owner",docs/superpowers/plans/2026-10-03-diagnosis-truth-decisions.md
+BBG00BFHDFR4_2023-08-13,fixed_by,5f,residual,"wave 2 ruling 2026-10-04: the roadmap's last sub-plan (5i) is done; what is left (continuation, exit_kind, internal_last_trade_date, legs, successor_sec_id, value_rule) has no owner",docs/superpowers/plans/2026-10-03-diagnosis-truth-decisions.md
+BBG000BF2JS9_2009-09-18,last_trade_date,2009-08-17,*,operator ruling 2026-10-03 applied as for IMB 2008 (architecture step 4): suspended immediately on D: the last trade date is not scored,docs/superpowers/plans/2026-10-07-architecture-deepening.md
+BBG000BF2JS9_2009-09-18,price_date,2009-08-18,*,"operator ruling 2026-10-03 applied as for IMB 2008 (architecture step 4): the price date is the session after the last trade date, which is not scored",docs/superpowers/plans/2026-10-07-architecture-deepening.md

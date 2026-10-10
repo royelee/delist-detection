@@ -1,0 +1,4031 @@
+{
+ "as_of": "2026-09-25",
+ "eras_issuer": {
+  "ABBI@2008-01-16": 1141399,
+  "CBG@2008-01-16": 1138118,
+  "CBG@2014-12-31": 1138118,
+  "CBRE@2012-06-29": 1138118,
+  "CBRE@2018-06-30": 1138118,
+  "ERA@2013-06-28": 73887,
+  "FWONA@2017-06-30": 1560385,
+  "FWONA@2023-12-31": 1560385,
+  "FWONK@2017-06-30": 1560385,
+  "FWONK@2023-12-31": 1560385,
+  "GHC@2012-06-29": 104889,
+  "GOOG@2008-01-16": 1288776,
+  "GOOG@2014-06-30": 1288776,
+  "GOOG@2015-12-31": 1652044,
+  "GOOGL@2014-06-30": 1288776,
+  "GOOGL@2015-12-31": 1652044,
+  "HEI-A@2016-06-30": 46619,
+  "HEI@2016-06-30": 46619,
+  "HEIA@2017-06-30": 46619,
+  "HUB-B@2008-01-16": 48898,
+  "HUBB@2012-06-29": 48898,
+  "HUBB@2015-12-31": 48898,
+  "IAC@2012-06-29": 891103,
+  "IAC@2016-06-30": 891103,
+  "IAC@2020-12-31": 1800227,
+  "IAC@2021-06-30": 1800227,
+  "IACI@2008-01-16": 891103,
+  "IACI@2008-11-18": 891103,
+  "IACI@2014-12-31": 891103,
+  "LCAPA@2008-01-16": 1355096,
+  "LEN-B@2015-06-30": 920760,
+  "LEN@2008-01-16": 920760,
+  "LENB@2017-06-30": 920760,
+  "LINTA@2008-01-16": 1355096,
+  "LLYVA@2023-12-31": 1560385,
+  "LLYVA@2025-12-31": 2078416,
+  "LLYVK@2023-12-31": 1560385,
+  "LLYVK@2025-12-31": 2078416,
+  "LMCA@2012-06-29": 1507934,
+  "LMCA@2013-06-28": 1560385,
+  "LMCK@2014-12-31": 1560385,
+  "LSXMA@2016-06-30": 1560385,
+  "LSXMA@2023-12-31": 1560385,
+  "LSXMK@2016-06-30": 1560385,
+  "LSXMK@2023-12-31": 1560385,
+  "LVNTA@2012-12-31": 1355096,
+  "LVNTA@2016-12-30": 1355096,
+  "LVNTA@2017-06-30": 1355096,
+  "MSG@2012-06-29": 1469372,
+  "MSG@2015-12-31": 1636519,
+  "MSGN@2015-12-31": 1469372,
+  "MSGS@2020-06-30": 1636519,
+  "MTCH@2015-12-31": 891103,
+  "MTCH@2020-12-31": 891103,
+  "NWS-A@2008-01-16": 1308161,
+  "PAG@2014-06-30": 1019849,
+  "PPLI@2026-06-30": 1800227,
+  "QRTEA@2012-06-29": 1355096,
+  "QRTEA@2018-06-30": 1355096,
+  "QVCA@2014-12-31": 1355096,
+  "STRZA@2013-06-28": 1507934,
+  "TCF@2012-06-29": 814184,
+  "TCF@2017-06-30": 814184,
+  "TCF@2019-12-31": 19612,
+  "TGNA@2012-06-29": 39899,
+  "TGNA@2015-06-30": 39899,
+  "UA@2014-12-31": 1336917,
+  "UA@2016-12-30": 1336917,
+  "UAA@2012-06-29": 1336917,
+  "UAA@2016-12-30": 1336917,
+  "UAC-C@2016-06-30": 1336917,
+  "UAG@2008-01-16": 1019849,
+  "VIA-B@2008-01-16": 1339947,
+  "VIA@2015-06-30": 1339947,
+  "VIAB@2012-06-29": 1339947,
+  "WCRX@2008-01-16": 1323854,
+  "WCRX@2012-06-29": 1323854,
+  "WPO@2008-01-16": 104889
+ },
+ "index": [
+  [
+   "ABRAXIS BIOSCIENCE, INC.",
+   1141399
+  ],
+  [
+   "ABRAXIS BIOSCIENCE, INC.",
+   1409012
+  ],
+  [
+   "BRISTOW GROUP INC",
+   73887
+  ],
+  [
+   "BRISTOW GROUP INC.",
+   1525221
+  ],
+  [
+   "GANNETT CO INC /DE/",
+   39899
+  ],
+  [
+   "GANNETT CO., INC.",
+   1579684
+  ],
+  [
+   "GANNETT CO., INC.",
+   1635718
+  ],
+  [
+   "NEWS CORP",
+   1308161
+  ],
+  [
+   "NEWS CORP",
+   1564708
+  ],
+  [
+   "TCF FINANCIAL CORP",
+   19612
+  ],
+  [
+   "TCF FINANCIAL CORP",
+   814184
+  ]
+ ],
+ "observations": [
+  [
+   "ABBI",
+   "2008-01-16",
+   "ABRAXIS BIOSCIENCE INC",
+   ""
+  ],
+  [
+   "ABBI",
+   "2008-05-31",
+   "ABRAXIS BIOSCIENCE INC",
+   ""
+  ],
+  [
+   "ABBI",
+   "2008-07-25",
+   "ABRAXIS BIOSCIENCE INC",
+   ""
+  ],
+  [
+   "ABBI",
+   "2008-11-18",
+   "ABRAXIS BIOSCIENCE INC",
+   ""
+  ],
+  [
+   "ABBI",
+   "2009-01-23",
+   "ABRAXIS BIOSCIENCE INC",
+   ""
+  ],
+  [
+   "ABBI",
+   "2009-03-20",
+   "ABRAXIS BIOSCIENCE INC",
+   ""
+  ],
+  [
+   "ABBI",
+   "2009-06-08",
+   "ABRAXIS BIOSCIENCE INC",
+   ""
+  ],
+  [
+   "CBG",
+   "2008-01-16",
+   "CB RICHARD ELLIS GROUP",
+   ""
+  ],
+  [
+   "CBG",
+   "2008-05-31",
+   "CB RICHARD ELLIS GROUP",
+   ""
+  ],
+  [
+   "CBG",
+   "2008-07-25",
+   "CB RICHARD ELLIS GROUP",
+   ""
+  ],
+  [
+   "CBG",
+   "2008-11-18",
+   "CB RICHARD ELLIS GROUP",
+   ""
+  ],
+  [
+   "CBG",
+   "2009-01-23",
+   "CB RICHARD ELLIS GROUP",
+   ""
+  ],
+  [
+   "CBG",
+   "2009-03-20",
+   "CB RICHARD ELLIS GROUP",
+   ""
+  ],
+  [
+   "CBG",
+   "2009-06-08",
+   "CB RICHARD ELLIS GROUP",
+   ""
+  ],
+  [
+   "CBG",
+   "2014-12-31",
+   "CBRE GROUP INC",
+   ""
+  ],
+  [
+   "CBG",
+   "2015-06-30",
+   "CBRE GROUP INC",
+   ""
+  ],
+  [
+   "CBG",
+   "2015-12-31",
+   "CBRE GROUP INC",
+   ""
+  ],
+  [
+   "CBG",
+   "2016-06-30",
+   "CBRE GROUP INC",
+   ""
+  ],
+  [
+   "CBG",
+   "2016-12-30",
+   "CBRE GROUP INC",
+   ""
+  ],
+  [
+   "CBG",
+   "2017-06-30",
+   "CBRE GROUP INC CLASS A",
+   ""
+  ],
+  [
+   "CBG",
+   "2017-12-31",
+   "CBRE GROUP INC CLASS A",
+   ""
+  ],
+  [
+   "CBRE",
+   "2012-06-29",
+   "CBRE GROUP INC CLASS A",
+   ""
+  ],
+  [
+   "CBRE",
+   "2012-12-31",
+   "CBRE GROUP INC CLASS A",
+   ""
+  ],
+  [
+   "CBRE",
+   "2013-06-28",
+   "CBRE GROUP INC CLASS A",
+   ""
+  ],
+  [
+   "CBRE",
+   "2013-12-31",
+   "CBRE GROUP INC CLASS A",
+   ""
+  ],
+  [
+   "CBRE",
+   "2014-06-30",
+   "CBRE GROUP INC CLASS A",
+   ""
+  ],
+  [
+   "CBRE",
+   "2018-06-30",
+   "CBRE GROUP INC CLASS A",
+   ""
+  ],
+  [
+   "CBRE",
+   "2018-12-31",
+   "CBRE GROUP INC CLASS A",
+   ""
+  ],
+  [
+   "CBRE",
+   "2019-06-30",
+   "CBRE GROUP INC CLASS A",
+   ""
+  ],
+  [
+   "CBRE",
+   "2019-12-31",
+   "CBRE GROUP INC CLASS A",
+   ""
+  ],
+  [
+   "CBRE",
+   "2020-06-30",
+   "CBRE GROUP INC CLASS A",
+   ""
+  ],
+  [
+   "CBRE",
+   "2020-12-31",
+   "CBRE GROUP INC CLASS A",
+   ""
+  ],
+  [
+   "CBRE",
+   "2021-06-30",
+   "CBRE GROUP INC CLASS A",
+   ""
+  ],
+  [
+   "CBRE",
+   "2021-12-31",
+   "CBRE GROUP INC CLASS A",
+   ""
+  ],
+  [
+   "CBRE",
+   "2022-06-30",
+   "CBRE GROUP INC CLASS A",
+   ""
+  ],
+  [
+   "CBRE",
+   "2022-12-31",
+   "CBRE GROUP INC CLASS A",
+   ""
+  ],
+  [
+   "CBRE",
+   "2023-06-30",
+   "CBRE GROUP INC CLASS A",
+   ""
+  ],
+  [
+   "CBRE",
+   "2023-12-31",
+   "CBRE GROUP INC CLASS A",
+   ""
+  ],
+  [
+   "CBRE",
+   "2024-06-30",
+   "CBRE GROUP INC CLASS A",
+   ""
+  ],
+  [
+   "CBRE",
+   "2024-12-31",
+   "CBRE GROUP INC CLASS A",
+   ""
+  ],
+  [
+   "CBRE",
+   "2025-06-30",
+   "CBRE GROUP INC CLASS A",
+   ""
+  ],
+  [
+   "CBRE",
+   "2025-12-31",
+   "CBRE GROUP INC CLASS A",
+   ""
+  ],
+  [
+   "CBRE",
+   "2026-06-30",
+   "CBRE GROUP INC CLASS A",
+   ""
+  ],
+  [
+   "ERA",
+   "2013-06-28",
+   "BRISTOW GROUP INC",
+   ""
+  ],
+  [
+   "FWONA",
+   "2017-06-30",
+   "LIBERTY MEDIA FORMULA ONE CORP SER",
+   ""
+  ],
+  [
+   "FWONA",
+   "2017-12-31",
+   "LIBERTY MEDIA FORMULA ONE CORP SER",
+   ""
+  ],
+  [
+   "FWONA",
+   "2018-06-30",
+   "LIBERTY MEDIA FORMULA ONE CORP SER",
+   ""
+  ],
+  [
+   "FWONA",
+   "2018-12-31",
+   "LIBERTY MEDIA FORMULA ONE CORP SER",
+   ""
+  ],
+  [
+   "FWONA",
+   "2019-06-30",
+   "LIBERTY MEDIA FORMULA ONE CORP SER",
+   ""
+  ],
+  [
+   "FWONA",
+   "2019-12-31",
+   "LIBERTY MEDIA FORMULA ONE CORP SER",
+   ""
+  ],
+  [
+   "FWONA",
+   "2020-06-30",
+   "LIBERTY MEDIA FORMULA ONE CORP SER",
+   ""
+  ],
+  [
+   "FWONA",
+   "2020-12-31",
+   "LIBERTY MEDIA FORMULA ONE CORP SER",
+   ""
+  ],
+  [
+   "FWONA",
+   "2021-06-30",
+   "LIBERTY MEDIA FORMULA ONE CORP SER",
+   ""
+  ],
+  [
+   "FWONA",
+   "2021-12-31",
+   "LIBERTY MEDIA FORMULA ONE CORP SER",
+   ""
+  ],
+  [
+   "FWONA",
+   "2022-06-30",
+   "LIBERTY MEDIA FORMULA ONE CORP SER",
+   ""
+  ],
+  [
+   "FWONA",
+   "2022-12-31",
+   "LIBERTY MEDIA FORMULA ONE CORP SER",
+   ""
+  ],
+  [
+   "FWONA",
+   "2023-06-30",
+   "LIBERTY MEDIA FORMULA ONE CORP SER",
+   ""
+  ],
+  [
+   "FWONA",
+   "2023-12-31",
+   "LIBERTY MEDIA FORMULA ONE CORP SER",
+   ""
+  ],
+  [
+   "FWONA",
+   "2024-06-30",
+   "LIBERTY MEDIA FORMULA ONE CORP SER",
+   ""
+  ],
+  [
+   "FWONA",
+   "2024-12-31",
+   "LIBERTY MEDIA FORMULA ONE CORP SER",
+   ""
+  ],
+  [
+   "FWONA",
+   "2025-06-30",
+   "LIBERTY MEDIA FORMULA ONE CORP SER",
+   ""
+  ],
+  [
+   "FWONA",
+   "2025-12-31",
+   "LIBERTY MEDIA FORMULA ONE SERIES A",
+   ""
+  ],
+  [
+   "FWONA",
+   "2026-06-30",
+   "LIBERTY MEDIA FORMULA ONE SERIES A",
+   ""
+  ],
+  [
+   "FWONK",
+   "2017-06-30",
+   "LIBERTY MEDIA FORMULA ONE CORP SER",
+   ""
+  ],
+  [
+   "FWONK",
+   "2017-12-31",
+   "LIBERTY MEDIA FORMULA ONE CORP SER",
+   ""
+  ],
+  [
+   "FWONK",
+   "2018-06-30",
+   "LIBERTY MEDIA FORMULA ONE CORP SER",
+   ""
+  ],
+  [
+   "FWONK",
+   "2018-12-31",
+   "LIBERTY MEDIA FORMULA ONE CORP SER",
+   ""
+  ],
+  [
+   "FWONK",
+   "2019-06-30",
+   "LIBERTY MEDIA FORMULA ONE CORP SER",
+   ""
+  ],
+  [
+   "FWONK",
+   "2019-12-31",
+   "LIBERTY MEDIA FORMULA ONE CORP SER",
+   ""
+  ],
+  [
+   "FWONK",
+   "2020-06-30",
+   "LIBERTY MEDIA FORMULA ONE CORP SER",
+   ""
+  ],
+  [
+   "FWONK",
+   "2020-12-31",
+   "LIBERTY MEDIA FORMULA ONE CORP SER",
+   ""
+  ],
+  [
+   "FWONK",
+   "2021-06-30",
+   "LIBERTY MEDIA FORMULA ONE CORP SER",
+   ""
+  ],
+  [
+   "FWONK",
+   "2021-12-31",
+   "LIBERTY MEDIA FORMULA ONE CORP SER",
+   ""
+  ],
+  [
+   "FWONK",
+   "2022-06-30",
+   "LIBERTY MEDIA FORMULA ONE CORP SER",
+   ""
+  ],
+  [
+   "FWONK",
+   "2022-12-31",
+   "LIBERTY MEDIA FORMULA ONE CORP SER",
+   ""
+  ],
+  [
+   "FWONK",
+   "2023-06-30",
+   "LIBERTY MEDIA FORMULA ONE CORP SER",
+   ""
+  ],
+  [
+   "FWONK",
+   "2023-12-31",
+   "LIBERTY MEDIA FORMULA ONE CORP SER",
+   ""
+  ],
+  [
+   "FWONK",
+   "2024-06-30",
+   "LIBERTY MEDIA FORMULA ONE CORP SER",
+   ""
+  ],
+  [
+   "FWONK",
+   "2024-12-31",
+   "LIBERTY MEDIA FORMULA ONE CORP SER",
+   ""
+  ],
+  [
+   "FWONK",
+   "2025-06-30",
+   "LIBERTY MEDIA FORMULA ONE CORP SER",
+   ""
+  ],
+  [
+   "FWONK",
+   "2025-12-31",
+   "LIBERTY MEDIA FORMULA ONE SERIES C",
+   ""
+  ],
+  [
+   "FWONK",
+   "2026-06-30",
+   "LIBERTY MEDIA FORMULA ONE SERIES C",
+   ""
+  ],
+  [
+   "GHC",
+   "2012-06-29",
+   "GRAHAM HOLDINGS COMPANY CO CLASS B",
+   ""
+  ],
+  [
+   "GHC",
+   "2012-12-31",
+   "GRAHAM HOLDINGS COMPANY CO CLASS B",
+   ""
+  ],
+  [
+   "GHC",
+   "2013-06-28",
+   "GRAHAM HOLDINGS COMPANY CO CLASS B",
+   ""
+  ],
+  [
+   "GHC",
+   "2013-12-31",
+   "GRAHAM HOLDINGS COMPANY CLASS B",
+   ""
+  ],
+  [
+   "GHC",
+   "2014-06-30",
+   "GRAHAM HOLDINGS COMPANY CLASS B",
+   ""
+  ],
+  [
+   "GHC",
+   "2014-12-31",
+   "GRAHAM HOLDINGS COMPANY CO CLASS B",
+   ""
+  ],
+  [
+   "GHC",
+   "2015-06-30",
+   "GRAHAM HOLDINGS COMPANY CO CLASS B",
+   ""
+  ],
+  [
+   "GHC",
+   "2015-12-31",
+   "GRAHAM HOLDINGS COMPANY CO CLASS B",
+   ""
+  ],
+  [
+   "GHC",
+   "2016-06-30",
+   "GRAHAM HOLDINGS COMPANY CO CLASS B",
+   ""
+  ],
+  [
+   "GHC",
+   "2016-12-30",
+   "GRAHAM HOLDINGS COMPANY CO CLASS B",
+   ""
+  ],
+  [
+   "GHC",
+   "2017-06-30",
+   "GRAHAM HOLDINGS COMPANY CLASS B",
+   ""
+  ],
+  [
+   "GHC",
+   "2017-12-31",
+   "GRAHAM HOLDINGS COMPANY CLASS B",
+   ""
+  ],
+  [
+   "GHC",
+   "2018-06-30",
+   "GRAHAM HOLDINGS COMPANY CLASS B",
+   ""
+  ],
+  [
+   "GHC",
+   "2018-12-31",
+   "GRAHAM HOLDINGS COMPANY CLASS B",
+   ""
+  ],
+  [
+   "GHC",
+   "2019-06-30",
+   "GRAHAM HOLDINGS COMPANY CLASS B",
+   ""
+  ],
+  [
+   "GHC",
+   "2019-12-31",
+   "GRAHAM HOLDINGS COMPANY CLASS B",
+   ""
+  ],
+  [
+   "GHC",
+   "2020-06-30",
+   "GRAHAM HOLDINGS COMPANY CLASS B",
+   ""
+  ],
+  [
+   "GHC",
+   "2020-12-31",
+   "GRAHAM HOLDINGS COMPANY CLASS B",
+   ""
+  ],
+  [
+   "GOOG",
+   "2008-01-16",
+   "GOOGLE INC",
+   ""
+  ],
+  [
+   "GOOG",
+   "2008-05-31",
+   "GOOGLE INC",
+   ""
+  ],
+  [
+   "GOOG",
+   "2008-07-25",
+   "GOOGLE INC",
+   ""
+  ],
+  [
+   "GOOG",
+   "2008-11-18",
+   "GOOGLE INC",
+   ""
+  ],
+  [
+   "GOOG",
+   "2009-01-23",
+   "GOOGLE INC",
+   ""
+  ],
+  [
+   "GOOG",
+   "2009-03-20",
+   "GOOGLE INC",
+   ""
+  ],
+  [
+   "GOOG",
+   "2009-06-08",
+   "GOOGLE INC",
+   ""
+  ],
+  [
+   "GOOG",
+   "2014-06-30",
+   "GOOGLE INC CLASS C",
+   ""
+  ],
+  [
+   "GOOG",
+   "2014-12-31",
+   "GOOGLE INC CLASS C",
+   ""
+  ],
+  [
+   "GOOG",
+   "2015-06-30",
+   "GOOGLE INC CLASS C",
+   ""
+  ],
+  [
+   "GOOG",
+   "2015-12-31",
+   "ALPHABET INC CLASS C",
+   ""
+  ],
+  [
+   "GOOG",
+   "2016-06-30",
+   "ALPHABET INC CLASS C",
+   ""
+  ],
+  [
+   "GOOG",
+   "2016-12-30",
+   "ALPHABET INC CLASS C",
+   ""
+  ],
+  [
+   "GOOG",
+   "2017-06-30",
+   "ALPHABET INC CLASS C",
+   ""
+  ],
+  [
+   "GOOG",
+   "2017-12-31",
+   "ALPHABET INC CLASS C",
+   ""
+  ],
+  [
+   "GOOG",
+   "2018-06-30",
+   "ALPHABET INC CLASS C",
+   ""
+  ],
+  [
+   "GOOG",
+   "2018-12-31",
+   "ALPHABET INC CLASS C",
+   ""
+  ],
+  [
+   "GOOG",
+   "2019-06-30",
+   "ALPHABET INC CLASS C",
+   ""
+  ],
+  [
+   "GOOG",
+   "2019-12-31",
+   "ALPHABET INC CLASS C",
+   ""
+  ],
+  [
+   "GOOG",
+   "2020-06-30",
+   "ALPHABET INC CLASS C",
+   ""
+  ],
+  [
+   "GOOG",
+   "2020-12-31",
+   "ALPHABET INC CLASS C",
+   ""
+  ],
+  [
+   "GOOG",
+   "2021-06-30",
+   "ALPHABET INC CLASS C",
+   ""
+  ],
+  [
+   "GOOG",
+   "2021-12-31",
+   "ALPHABET INC CLASS C",
+   ""
+  ],
+  [
+   "GOOG",
+   "2022-06-30",
+   "ALPHABET INC CLASS C",
+   ""
+  ],
+  [
+   "GOOG",
+   "2022-12-31",
+   "ALPHABET INC CLASS C",
+   ""
+  ],
+  [
+   "GOOG",
+   "2023-06-30",
+   "ALPHABET INC CLASS C",
+   ""
+  ],
+  [
+   "GOOG",
+   "2023-12-31",
+   "ALPHABET INC CLASS C",
+   ""
+  ],
+  [
+   "GOOG",
+   "2024-06-30",
+   "ALPHABET INC CLASS C",
+   ""
+  ],
+  [
+   "GOOG",
+   "2024-12-31",
+   "ALPHABET INC CLASS C",
+   ""
+  ],
+  [
+   "GOOG",
+   "2025-06-30",
+   "ALPHABET INC CLASS C",
+   ""
+  ],
+  [
+   "GOOG",
+   "2025-12-31",
+   "ALPHABET INC CLASS C",
+   ""
+  ],
+  [
+   "GOOG",
+   "2026-06-30",
+   "ALPHABET INC CLASS C",
+   ""
+  ],
+  [
+   "GOOGL",
+   "2014-06-30",
+   "GOOGLE INC CLASS A",
+   ""
+  ],
+  [
+   "GOOGL",
+   "2014-12-31",
+   "GOOGLE INC CLASS A",
+   ""
+  ],
+  [
+   "GOOGL",
+   "2015-06-30",
+   "GOOGLE INC CLASS A",
+   ""
+  ],
+  [
+   "GOOGL",
+   "2015-12-31",
+   "ALPHABET INC CLASS A",
+   ""
+  ],
+  [
+   "GOOGL",
+   "2016-06-30",
+   "ALPHABET INC CLASS A",
+   ""
+  ],
+  [
+   "GOOGL",
+   "2016-12-30",
+   "ALPHABET INC CLASS A",
+   ""
+  ],
+  [
+   "GOOGL",
+   "2017-06-30",
+   "ALPHABET INC CLASS A",
+   ""
+  ],
+  [
+   "GOOGL",
+   "2017-12-31",
+   "ALPHABET INC CLASS A",
+   ""
+  ],
+  [
+   "GOOGL",
+   "2018-06-30",
+   "ALPHABET INC CLASS A",
+   ""
+  ],
+  [
+   "GOOGL",
+   "2018-12-31",
+   "ALPHABET INC CLASS A",
+   ""
+  ],
+  [
+   "GOOGL",
+   "2019-06-30",
+   "ALPHABET INC CLASS A",
+   ""
+  ],
+  [
+   "GOOGL",
+   "2019-12-31",
+   "ALPHABET INC CLASS A",
+   ""
+  ],
+  [
+   "GOOGL",
+   "2020-06-30",
+   "ALPHABET INC CLASS A",
+   ""
+  ],
+  [
+   "GOOGL",
+   "2020-12-31",
+   "ALPHABET INC CLASS A",
+   ""
+  ],
+  [
+   "GOOGL",
+   "2021-06-30",
+   "ALPHABET INC CLASS A",
+   ""
+  ],
+  [
+   "GOOGL",
+   "2021-12-31",
+   "ALPHABET INC CLASS A",
+   ""
+  ],
+  [
+   "GOOGL",
+   "2022-06-30",
+   "ALPHABET INC CLASS A",
+   ""
+  ],
+  [
+   "GOOGL",
+   "2022-12-31",
+   "ALPHABET INC CLASS A",
+   ""
+  ],
+  [
+   "GOOGL",
+   "2023-06-30",
+   "ALPHABET INC CLASS A",
+   ""
+  ],
+  [
+   "GOOGL",
+   "2023-12-31",
+   "ALPHABET INC CLASS A",
+   ""
+  ],
+  [
+   "GOOGL",
+   "2024-06-30",
+   "ALPHABET INC CLASS A",
+   ""
+  ],
+  [
+   "GOOGL",
+   "2024-12-31",
+   "ALPHABET INC CLASS A",
+   ""
+  ],
+  [
+   "GOOGL",
+   "2025-06-30",
+   "ALPHABET INC CLASS A",
+   ""
+  ],
+  [
+   "GOOGL",
+   "2025-12-31",
+   "ALPHABET INC CLASS A",
+   ""
+  ],
+  [
+   "GOOGL",
+   "2026-06-30",
+   "ALPHABET INC CLASS A",
+   ""
+  ],
+  [
+   "HEI",
+   "2016-06-30",
+   "HEICO CORP.",
+   ""
+  ],
+  [
+   "HEI",
+   "2016-12-30",
+   "HEICO CORP.",
+   ""
+  ],
+  [
+   "HEI",
+   "2017-06-30",
+   "HEICO CORP",
+   ""
+  ],
+  [
+   "HEI",
+   "2017-12-31",
+   "HEICO CORP",
+   ""
+  ],
+  [
+   "HEI",
+   "2018-06-30",
+   "HEICO CORP",
+   ""
+  ],
+  [
+   "HEI",
+   "2018-12-31",
+   "HEICO CORP",
+   ""
+  ],
+  [
+   "HEI",
+   "2019-06-30",
+   "HEICO CORP",
+   ""
+  ],
+  [
+   "HEI",
+   "2019-12-31",
+   "HEICO CORP",
+   ""
+  ],
+  [
+   "HEI",
+   "2020-06-30",
+   "HEICO CORP",
+   ""
+  ],
+  [
+   "HEI",
+   "2020-12-31",
+   "HEICO CORP",
+   ""
+  ],
+  [
+   "HEI",
+   "2021-06-30",
+   "HEICO CORP",
+   ""
+  ],
+  [
+   "HEI",
+   "2021-12-31",
+   "HEICO CORP",
+   ""
+  ],
+  [
+   "HEI",
+   "2022-06-30",
+   "HEICO CORP",
+   ""
+  ],
+  [
+   "HEI",
+   "2022-12-31",
+   "HEICO CORP",
+   ""
+  ],
+  [
+   "HEI",
+   "2023-06-30",
+   "HEICO CORP",
+   ""
+  ],
+  [
+   "HEI",
+   "2023-12-31",
+   "HEICO CORP",
+   ""
+  ],
+  [
+   "HEI",
+   "2024-06-30",
+   "HEICO CORP",
+   ""
+  ],
+  [
+   "HEI",
+   "2024-12-31",
+   "HEICO CORP",
+   ""
+  ],
+  [
+   "HEI",
+   "2025-06-30",
+   "HEICO CORP",
+   ""
+  ],
+  [
+   "HEI",
+   "2025-12-31",
+   "HEICO CORP",
+   ""
+  ],
+  [
+   "HEI",
+   "2026-06-30",
+   "HEICO CORP",
+   ""
+  ],
+  [
+   "HEI-A",
+   "2016-06-30",
+   "HEICO CORP. CL A",
+   ""
+  ],
+  [
+   "HEI-A",
+   "2016-12-30",
+   "HEICO CORP. CL A",
+   ""
+  ],
+  [
+   "HEIA",
+   "2017-06-30",
+   "HEICO CORP CLASS A",
+   ""
+  ],
+  [
+   "HEIA",
+   "2017-12-31",
+   "HEICO CORP CLASS A",
+   ""
+  ],
+  [
+   "HEIA",
+   "2018-06-30",
+   "HEICO CORP CLASS A",
+   ""
+  ],
+  [
+   "HEIA",
+   "2018-12-31",
+   "HEICO CORP CLASS A",
+   ""
+  ],
+  [
+   "HEIA",
+   "2019-06-30",
+   "HEICO CORP CLASS A",
+   ""
+  ],
+  [
+   "HEIA",
+   "2019-12-31",
+   "HEICO CORP CLASS A",
+   ""
+  ],
+  [
+   "HEIA",
+   "2020-06-30",
+   "HEICO CORP CLASS A",
+   ""
+  ],
+  [
+   "HEIA",
+   "2020-12-31",
+   "HEICO CORP CLASS A",
+   ""
+  ],
+  [
+   "HEIA",
+   "2021-06-30",
+   "HEICO CORP CLASS A",
+   ""
+  ],
+  [
+   "HEIA",
+   "2021-12-31",
+   "HEICO CORP CLASS A",
+   ""
+  ],
+  [
+   "HEIA",
+   "2022-06-30",
+   "HEICO CORP CLASS A",
+   ""
+  ],
+  [
+   "HEIA",
+   "2022-12-31",
+   "HEICO CORP CLASS A",
+   ""
+  ],
+  [
+   "HEIA",
+   "2023-06-30",
+   "HEICO CORP CLASS A",
+   ""
+  ],
+  [
+   "HEIA",
+   "2023-12-31",
+   "HEICO CORP CLASS A",
+   ""
+  ],
+  [
+   "HEIA",
+   "2024-06-30",
+   "HEICO CORP CLASS A",
+   ""
+  ],
+  [
+   "HEIA",
+   "2024-12-31",
+   "HEICO CORP CLASS A",
+   ""
+  ],
+  [
+   "HEIA",
+   "2025-06-30",
+   "HEICO CORP CLASS A",
+   ""
+  ],
+  [
+   "HEIA",
+   "2025-12-31",
+   "HEICO CORP CLASS A",
+   ""
+  ],
+  [
+   "HEIA",
+   "2026-06-30",
+   "HEICO CORP CLASS A",
+   ""
+  ],
+  [
+   "HUB-B",
+   "2008-01-16",
+   "HUBBELL INC",
+   ""
+  ],
+  [
+   "HUB-B",
+   "2008-05-31",
+   "HUBBELL INC",
+   ""
+  ],
+  [
+   "HUB-B",
+   "2008-07-25",
+   "HUBBELL INC",
+   ""
+  ],
+  [
+   "HUB-B",
+   "2008-11-18",
+   "HUBBELL INC",
+   ""
+  ],
+  [
+   "HUB-B",
+   "2009-01-23",
+   "HUBBELL INC",
+   ""
+  ],
+  [
+   "HUB-B",
+   "2009-03-20",
+   "HUBBELL INC",
+   ""
+  ],
+  [
+   "HUB-B",
+   "2009-06-08",
+   "HUBBELL INC",
+   ""
+  ],
+  [
+   "HUB-B",
+   "2014-12-31",
+   "HUBBELL INC. CL B",
+   ""
+  ],
+  [
+   "HUB-B",
+   "2015-06-30",
+   "HUBBELL INC. CL B",
+   ""
+  ],
+  [
+   "HUBB",
+   "2012-06-29",
+   "HUBBELL INC",
+   ""
+  ],
+  [
+   "HUBB",
+   "2012-12-31",
+   "HUBBELL INC",
+   ""
+  ],
+  [
+   "HUBB",
+   "2013-06-28",
+   "HUBBELL INC",
+   ""
+  ],
+  [
+   "HUBB",
+   "2013-12-31",
+   "HUBBELL INC",
+   ""
+  ],
+  [
+   "HUBB",
+   "2014-06-30",
+   "HUBBELL INC",
+   ""
+  ],
+  [
+   "HUBB",
+   "2015-12-31",
+   "HUBBELL INC",
+   ""
+  ],
+  [
+   "HUBB",
+   "2016-06-30",
+   "HUBBELL INC",
+   ""
+  ],
+  [
+   "HUBB",
+   "2016-12-30",
+   "HUBBELL INC",
+   ""
+  ],
+  [
+   "HUBB",
+   "2017-06-30",
+   "HUBBELL INC",
+   ""
+  ],
+  [
+   "HUBB",
+   "2017-12-31",
+   "HUBBELL INC",
+   ""
+  ],
+  [
+   "HUBB",
+   "2018-06-30",
+   "HUBBELL INC",
+   ""
+  ],
+  [
+   "HUBB",
+   "2018-12-31",
+   "HUBBELL INC",
+   ""
+  ],
+  [
+   "HUBB",
+   "2019-06-30",
+   "HUBBELL INC",
+   ""
+  ],
+  [
+   "HUBB",
+   "2019-12-31",
+   "HUBBELL INC",
+   ""
+  ],
+  [
+   "HUBB",
+   "2020-06-30",
+   "HUBBELL INC",
+   ""
+  ],
+  [
+   "HUBB",
+   "2020-12-31",
+   "HUBBELL INC",
+   ""
+  ],
+  [
+   "HUBB",
+   "2021-06-30",
+   "HUBBELL INC",
+   ""
+  ],
+  [
+   "HUBB",
+   "2021-12-31",
+   "HUBBELL INC",
+   ""
+  ],
+  [
+   "HUBB",
+   "2022-06-30",
+   "HUBBELL INC",
+   ""
+  ],
+  [
+   "HUBB",
+   "2022-12-31",
+   "HUBBELL INC",
+   ""
+  ],
+  [
+   "HUBB",
+   "2023-06-30",
+   "HUBBELL INC",
+   ""
+  ],
+  [
+   "HUBB",
+   "2023-12-31",
+   "HUBBELL INC",
+   ""
+  ],
+  [
+   "HUBB",
+   "2024-06-30",
+   "HUBBELL INC",
+   ""
+  ],
+  [
+   "HUBB",
+   "2024-12-31",
+   "HUBBELL INC",
+   ""
+  ],
+  [
+   "HUBB",
+   "2025-06-30",
+   "HUBBELL INC",
+   ""
+  ],
+  [
+   "HUBB",
+   "2025-12-31",
+   "HUBBELL INC",
+   ""
+  ],
+  [
+   "HUBB",
+   "2026-06-30",
+   "HUBBELL INC",
+   ""
+  ],
+  [
+   "IAC",
+   "2012-06-29",
+   "IAC INTERACTIVE",
+   "891103"
+  ],
+  [
+   "IAC",
+   "2012-12-31",
+   "IAC INTERACTIVE",
+   "891103"
+  ],
+  [
+   "IAC",
+   "2013-06-28",
+   "IAC INTERACTIVE",
+   "891103"
+  ],
+  [
+   "IAC",
+   "2013-12-31",
+   "IAC INTERACTIVE",
+   "891103"
+  ],
+  [
+   "IAC",
+   "2014-06-30",
+   "IAC INTERACTIVE",
+   "891103"
+  ],
+  [
+   "IAC",
+   "2016-06-30",
+   "IAC INTERACTIVE",
+   "891103"
+  ],
+  [
+   "IAC",
+   "2016-12-30",
+   "IAC INTERACTIVE",
+   "891103"
+  ],
+  [
+   "IAC",
+   "2017-06-30",
+   "IAC INTERACTIVE",
+   "891103"
+  ],
+  [
+   "IAC",
+   "2017-12-31",
+   "IAC INTERACTIVE",
+   "891103"
+  ],
+  [
+   "IAC",
+   "2018-06-30",
+   "IAC INTERACTIVE",
+   "891103"
+  ],
+  [
+   "IAC",
+   "2018-12-31",
+   "IAC INTERACTIVE",
+   "891103"
+  ],
+  [
+   "IAC",
+   "2019-06-30",
+   "IAC INTERACTIVE",
+   "891103"
+  ],
+  [
+   "IAC",
+   "2019-12-31",
+   "IAC INTERACTIVE",
+   "891103"
+  ],
+  [
+   "IAC",
+   "2020-06-30",
+   "IAC INTERACTIVE",
+   "891103"
+  ],
+  [
+   "IAC",
+   "2020-12-31",
+   "IAC INTERACTIVE",
+   "1800227"
+  ],
+  [
+   "IAC",
+   "2021-06-30",
+   "IAC INTERACTIVE",
+   "1800227"
+  ],
+  [
+   "IAC",
+   "2021-12-31",
+   "IAC INTERACTIVE",
+   "1800227"
+  ],
+  [
+   "IAC",
+   "2022-06-30",
+   "IAC INTERACTIVE",
+   "1800227"
+  ],
+  [
+   "IAC",
+   "2022-12-31",
+   "IAC INC",
+   "1800227"
+  ],
+  [
+   "IAC",
+   "2023-06-30",
+   "IAC INC",
+   "1800227"
+  ],
+  [
+   "IAC",
+   "2023-12-31",
+   "IAC INC",
+   "1800227"
+  ],
+  [
+   "IAC",
+   "2024-06-30",
+   "IAC INC",
+   "1800227"
+  ],
+  [
+   "IAC",
+   "2024-12-31",
+   "IAC INC",
+   "1800227"
+  ],
+  [
+   "IAC",
+   "2025-06-30",
+   "IAC INC",
+   "1800227"
+  ],
+  [
+   "IAC",
+   "2025-12-31",
+   "IAC INC",
+   "1800227"
+  ],
+  [
+   "IACI",
+   "2008-01-16",
+   "IAC INTERACTIVECORP",
+   "891103"
+  ],
+  [
+   "IACI",
+   "2008-05-31",
+   "IAC INTERACTIVECORP",
+   "891103"
+  ],
+  [
+   "IACI",
+   "2008-07-25",
+   "IAC INTERACTIVECORP",
+   "891103"
+  ],
+  [
+   "IACI",
+   "2008-11-18",
+   "IAC INTERACTIVECORP",
+   "891103"
+  ],
+  [
+   "IACI",
+   "2009-01-23",
+   "IAC INTERACTIVECORP",
+   "891103"
+  ],
+  [
+   "IACI",
+   "2009-03-20",
+   "IAC INTERACTIVECORP",
+   "891103"
+  ],
+  [
+   "IACI",
+   "2009-06-08",
+   "IAC INTERACTIVECORP",
+   "891103"
+  ],
+  [
+   "IACI",
+   "2014-12-31",
+   "IAC INTERACTIVE",
+   "891103"
+  ],
+  [
+   "IACI",
+   "2015-06-30",
+   "IAC INTERACTIVE",
+   "891103"
+  ],
+  [
+   "IACI",
+   "2015-12-31",
+   "IAC INTERACTIVE",
+   "891103"
+  ],
+  [
+   "LCAPA",
+   "2008-01-16",
+   "LIBERTY CAPITAL",
+   "1355096"
+  ],
+  [
+   "LCAPA",
+   "2008-05-31",
+   "LIBERTY CAPITAL",
+   "1355096"
+  ],
+  [
+   "LCAPA",
+   "2008-07-25",
+   "LIBERTY CAPITAL",
+   "1355096"
+  ],
+  [
+   "LCAPA",
+   "2008-11-18",
+   "LIBERTY CAPITAL",
+   "1355096"
+  ],
+  [
+   "LCAPA",
+   "2009-01-23",
+   "LIBERTY CAPITAL",
+   "1355096"
+  ],
+  [
+   "LCAPA",
+   "2009-03-20",
+   "LIBERTY CAPITAL",
+   "1355096"
+  ],
+  [
+   "LCAPA",
+   "2009-06-08",
+   "LIBERTY CAPITAL",
+   "1355096"
+  ],
+  [
+   "LEN",
+   "2008-01-16",
+   "LENNAR CORP",
+   ""
+  ],
+  [
+   "LEN",
+   "2008-05-31",
+   "LENNAR CORP",
+   ""
+  ],
+  [
+   "LEN",
+   "2008-07-25",
+   "LENNAR CORP",
+   ""
+  ],
+  [
+   "LEN",
+   "2008-11-18",
+   "LENNAR CORP",
+   ""
+  ],
+  [
+   "LEN",
+   "2009-01-23",
+   "LENNAR CORP",
+   ""
+  ],
+  [
+   "LEN",
+   "2009-03-20",
+   "LENNAR CORP",
+   ""
+  ],
+  [
+   "LEN",
+   "2009-06-08",
+   "LENNAR CORP",
+   ""
+  ],
+  [
+   "LEN",
+   "2012-06-29",
+   "LENNAR A CORP",
+   ""
+  ],
+  [
+   "LEN",
+   "2012-12-31",
+   "LENNAR A CORP",
+   ""
+  ],
+  [
+   "LEN",
+   "2013-06-28",
+   "LENNAR A CORP",
+   ""
+  ],
+  [
+   "LEN",
+   "2013-12-31",
+   "LENNAR A CORP",
+   ""
+  ],
+  [
+   "LEN",
+   "2014-06-30",
+   "LENNAR A CORP",
+   ""
+  ],
+  [
+   "LEN",
+   "2014-12-31",
+   "LENNAR A CORP",
+   ""
+  ],
+  [
+   "LEN",
+   "2015-06-30",
+   "LENNAR A CORP",
+   ""
+  ],
+  [
+   "LEN",
+   "2015-12-31",
+   "LENNAR A CORP",
+   ""
+  ],
+  [
+   "LEN",
+   "2016-06-30",
+   "LENNAR A CORP",
+   ""
+  ],
+  [
+   "LEN",
+   "2016-12-30",
+   "LENNAR A CORP",
+   ""
+  ],
+  [
+   "LEN",
+   "2017-06-30",
+   "LENNAR A CORP",
+   ""
+  ],
+  [
+   "LEN",
+   "2017-12-31",
+   "LENNAR A CORP",
+   ""
+  ],
+  [
+   "LEN",
+   "2018-06-30",
+   "LENNAR A CORP",
+   ""
+  ],
+  [
+   "LEN",
+   "2018-12-31",
+   "LENNAR A CORP",
+   ""
+  ],
+  [
+   "LEN",
+   "2019-06-30",
+   "LENNAR A CORP",
+   ""
+  ],
+  [
+   "LEN",
+   "2019-12-31",
+   "LENNAR A CORP",
+   ""
+  ],
+  [
+   "LEN",
+   "2020-06-30",
+   "LENNAR A CORP",
+   ""
+  ],
+  [
+   "LEN",
+   "2020-12-31",
+   "LENNAR A CORP",
+   ""
+  ],
+  [
+   "LEN",
+   "2021-06-30",
+   "LENNAR A CORP",
+   ""
+  ],
+  [
+   "LEN",
+   "2021-12-31",
+   "LENNAR A CORP",
+   ""
+  ],
+  [
+   "LEN",
+   "2022-06-30",
+   "LENNAR A CORP",
+   ""
+  ],
+  [
+   "LEN",
+   "2022-12-31",
+   "LENNAR A CORP",
+   ""
+  ],
+  [
+   "LEN",
+   "2023-06-30",
+   "LENNAR A CORP",
+   ""
+  ],
+  [
+   "LEN",
+   "2023-12-31",
+   "LENNAR A CORP",
+   ""
+  ],
+  [
+   "LEN",
+   "2024-06-30",
+   "LENNAR A CORP",
+   ""
+  ],
+  [
+   "LEN",
+   "2024-12-31",
+   "LENNAR A CORP CLASS A",
+   ""
+  ],
+  [
+   "LEN",
+   "2025-06-30",
+   "LENNAR A CORP CLASS A",
+   ""
+  ],
+  [
+   "LEN",
+   "2025-12-31",
+   "LENNAR A CORP CLASS A",
+   ""
+  ],
+  [
+   "LEN",
+   "2026-06-30",
+   "LENNAR A CORP CLASS A",
+   ""
+  ],
+  [
+   "LEN-B",
+   "2015-06-30",
+   "LENNAR CORP. CL B",
+   ""
+  ],
+  [
+   "LEN-B",
+   "2015-12-31",
+   "LENNAR CORP. CL B",
+   ""
+  ],
+  [
+   "LEN-B",
+   "2016-06-30",
+   "LENNAR CORP. CL B",
+   ""
+  ],
+  [
+   "LEN-B",
+   "2016-12-30",
+   "LENNAR CORP. CL B",
+   ""
+  ],
+  [
+   "LENB",
+   "2017-06-30",
+   "LENNAR CORP CLASS B",
+   ""
+  ],
+  [
+   "LENB",
+   "2017-12-31",
+   "LENNAR CORP CLASS B",
+   ""
+  ],
+  [
+   "LENB",
+   "2018-06-30",
+   "LENNAR CORP CLASS B",
+   ""
+  ],
+  [
+   "LENB",
+   "2018-12-31",
+   "LENNAR CORP CLASS B",
+   ""
+  ],
+  [
+   "LENB",
+   "2019-06-30",
+   "LENNAR CORP CLASS B",
+   ""
+  ],
+  [
+   "LENB",
+   "2019-12-31",
+   "LENNAR CORP CLASS B",
+   ""
+  ],
+  [
+   "LENB",
+   "2020-06-30",
+   "LENNAR CORP CLASS B",
+   ""
+  ],
+  [
+   "LENB",
+   "2020-12-31",
+   "LENNAR CORP CLASS B",
+   ""
+  ],
+  [
+   "LENB",
+   "2021-06-30",
+   "LENNAR CORP CLASS B",
+   ""
+  ],
+  [
+   "LENB",
+   "2021-12-31",
+   "LENNAR CORP CLASS B",
+   ""
+  ],
+  [
+   "LENB",
+   "2022-06-30",
+   "LENNAR CORP CLASS B",
+   ""
+  ],
+  [
+   "LENB",
+   "2022-12-31",
+   "LENNAR CORP CLASS B",
+   ""
+  ],
+  [
+   "LENB",
+   "2023-06-30",
+   "LENNAR CORP CLASS B",
+   ""
+  ],
+  [
+   "LENB",
+   "2023-12-31",
+   "LENNAR CORP CLASS B",
+   ""
+  ],
+  [
+   "LENB",
+   "2024-06-30",
+   "LENNAR CORP CLASS B",
+   ""
+  ],
+  [
+   "LENB",
+   "2024-12-31",
+   "LENNAR CORP CLASS B",
+   ""
+  ],
+  [
+   "LENB",
+   "2025-06-30",
+   "LENNAR CORP CLASS B",
+   ""
+  ],
+  [
+   "LENB",
+   "2025-12-31",
+   "LENNAR CORP CLASS B",
+   ""
+  ],
+  [
+   "LENB",
+   "2026-06-30",
+   "LENNAR CORP CLASS B",
+   ""
+  ],
+  [
+   "LINTA",
+   "2008-01-16",
+   "LIBERTY INTERACTIVE",
+   ""
+  ],
+  [
+   "LINTA",
+   "2008-05-31",
+   "LIBERTY INTERACTIVE",
+   ""
+  ],
+  [
+   "LINTA",
+   "2008-07-25",
+   "LIBERTY INTERACTIVE",
+   ""
+  ],
+  [
+   "LINTA",
+   "2008-11-18",
+   "LIBERTY INTERACTIVE",
+   ""
+  ],
+  [
+   "LINTA",
+   "2009-01-23",
+   "LIBERTY INTERACTIVE",
+   ""
+  ],
+  [
+   "LINTA",
+   "2009-03-20",
+   "LIBERTY INTERACTIVE",
+   ""
+  ],
+  [
+   "LINTA",
+   "2009-06-08",
+   "LIBERTY INTERACTIVE",
+   ""
+  ],
+  [
+   "LLYVA",
+   "2023-12-31",
+   "LIBERTY MEDIA LIBERTY LIVE CORP SE",
+   "1560385"
+  ],
+  [
+   "LLYVA",
+   "2024-06-30",
+   "LIBERTY MEDIA LIBERTY LIVE CORP SE",
+   "1560385"
+  ],
+  [
+   "LLYVA",
+   "2024-12-31",
+   "LIBERTY MEDIA LIBERTY LIVE CORP SE",
+   "1560385"
+  ],
+  [
+   "LLYVA",
+   "2025-06-30",
+   "LIBERTY MEDIA LIBERTY LIVE CORP SE",
+   "1560385"
+  ],
+  [
+   "LLYVA",
+   "2025-12-31",
+   "LIBERTY LIVE HOLDINGS INC",
+   "2078416"
+  ],
+  [
+   "LLYVA",
+   "2026-06-30",
+   "LIBERTY LIVE HOLDINGS INC SERIES A",
+   "2078416"
+  ],
+  [
+   "LLYVK",
+   "2023-12-31",
+   "LIBERTY MEDIA LIBERTY LIVE CORP SE",
+   "1560385"
+  ],
+  [
+   "LLYVK",
+   "2024-06-30",
+   "LIBERTY MEDIA LIBERTY LIVE CORP SE",
+   "1560385"
+  ],
+  [
+   "LLYVK",
+   "2024-12-31",
+   "LIBERTY MEDIA LIBERTY LIVE CORP SE",
+   "1560385"
+  ],
+  [
+   "LLYVK",
+   "2025-06-30",
+   "LIBERTY MEDIA LIBERTY LIVE CORP SE",
+   "1560385"
+  ],
+  [
+   "LLYVK",
+   "2025-12-31",
+   "LIBERTY LIVE HOLDINGS INC",
+   "2078416"
+  ],
+  [
+   "LLYVK",
+   "2026-06-30",
+   "LIBERTY LIVE HOLDINGS INC SERIES C",
+   "2078416"
+  ],
+  [
+   "LMCA",
+   "2012-06-29",
+   "LIBERTY MEDIA CORP CLASS A",
+   ""
+  ],
+  [
+   "LMCA",
+   "2012-12-31",
+   "LIBERTY MEDIA CORP CLASS A",
+   ""
+  ],
+  [
+   "LMCA",
+   "2013-06-28",
+   "LIBERTY MEDIA CORP SERIES A",
+   ""
+  ],
+  [
+   "LMCA",
+   "2013-12-31",
+   "LIBERTY MEDIA CORP SERIES A",
+   ""
+  ],
+  [
+   "LMCA",
+   "2014-06-30",
+   "LIBERTY MEDIA CORP SERIES A",
+   ""
+  ],
+  [
+   "LMCA",
+   "2014-12-31",
+   "LIBERTY MEDIA CORP SERIES A",
+   ""
+  ],
+  [
+   "LMCA",
+   "2015-06-30",
+   "LIBERTY MEDIA CORP SERIES A",
+   ""
+  ],
+  [
+   "LMCA",
+   "2015-12-31",
+   "LIBERTY MEDIA CORP SERIES A",
+   ""
+  ],
+  [
+   "LMCK",
+   "2014-12-31",
+   "LIBERTY MEDIA CORP SERIES C",
+   ""
+  ],
+  [
+   "LMCK",
+   "2015-06-30",
+   "LIBERTY MEDIA CORP SERIES C",
+   ""
+  ],
+  [
+   "LMCK",
+   "2015-12-31",
+   "LIBERTY MEDIA CORP SERIES C",
+   ""
+  ],
+  [
+   "LSXMA",
+   "2016-06-30",
+   "LIBERTY SIRIUSXM GROUP A",
+   "1560385"
+  ],
+  [
+   "LSXMA",
+   "2016-12-30",
+   "LIBERTY MEDIA LIBERTY SIRIUSXM COR",
+   "1560385"
+  ],
+  [
+   "LSXMA",
+   "2017-06-30",
+   "LIBERTY MEDIA LIBERTY SIRIUSXM COR",
+   "1560385"
+  ],
+  [
+   "LSXMA",
+   "2017-12-31",
+   "LIBERTY MEDIA LIBERTY SIRIUSXM COR",
+   "1560385"
+  ],
+  [
+   "LSXMA",
+   "2018-06-30",
+   "LIBERTY MEDIA LIBERTY SIRIUSXM COR",
+   "1560385"
+  ],
+  [
+   "LSXMA",
+   "2018-12-31",
+   "LIBERTY MEDIA LIBERTY SIRIUSXM COR",
+   "1560385"
+  ],
+  [
+   "LSXMA",
+   "2019-06-30",
+   "LIBERTY MEDIA LIBERTY SIRIUSXM COR",
+   "1560385"
+  ],
+  [
+   "LSXMA",
+   "2019-12-31",
+   "LIBERTY MEDIA LIBERTY SIRIUSXM COR",
+   "1560385"
+  ],
+  [
+   "LSXMA",
+   "2020-06-30",
+   "LIBERTY MEDIA LIBERTY SIRIUSXM COR",
+   "1560385"
+  ],
+  [
+   "LSXMA",
+   "2020-12-31",
+   "LIBERTY MEDIA LIBERTY SIRIUSXM COR",
+   "1560385"
+  ],
+  [
+   "LSXMA",
+   "2021-06-30",
+   "LIBERTY MEDIA LIBERTY SIRIUSXM COR",
+   "1560385"
+  ],
+  [
+   "LSXMA",
+   "2021-12-31",
+   "LIBERTY MEDIA LIBERTY SIRIUSXM COR",
+   "1560385"
+  ],
+  [
+   "LSXMA",
+   "2022-06-30",
+   "LIBERTY MEDIA LIBERTY SIRIUSXM COR",
+   "1560385"
+  ],
+  [
+   "LSXMA",
+   "2022-12-31",
+   "LIBERTY MEDIA LIBERTY SIRIUSXM COR",
+   "1560385"
+  ],
+  [
+   "LSXMA",
+   "2023-06-30",
+   "LIBERTY MEDIA LIBERTY SIRIUSXM COR",
+   "1560385"
+  ],
+  [
+   "LSXMA",
+   "2023-12-31",
+   "LIBERTY MEDIA LIBERTY SIRIUSXM COR",
+   "1560385"
+  ],
+  [
+   "LSXMA",
+   "2024-06-30",
+   "LIBERTY MEDIA LIBERTY SIRIUSXM COR",
+   "1560385"
+  ],
+  [
+   "LSXMK",
+   "2016-06-30",
+   "LIBERTY SIRIUSXM GROUP C",
+   "1560385"
+  ],
+  [
+   "LSXMK",
+   "2016-12-30",
+   "LIBERTY MEDIA LIBERTY SIRIUSXM COR",
+   "1560385"
+  ],
+  [
+   "LSXMK",
+   "2017-06-30",
+   "LIBERTY MEDIA LIBERTY SIRIUSXM COR",
+   "1560385"
+  ],
+  [
+   "LSXMK",
+   "2017-12-31",
+   "LIBERTY MEDIA LIBERTY SIRIUSXM COR",
+   "1560385"
+  ],
+  [
+   "LSXMK",
+   "2018-06-30",
+   "LIBERTY MEDIA LIBERTY SIRIUSXM COR",
+   "1560385"
+  ],
+  [
+   "LSXMK",
+   "2018-12-31",
+   "LIBERTY MEDIA LIBERTY SIRIUSXM COR",
+   "1560385"
+  ],
+  [
+   "LSXMK",
+   "2019-06-30",
+   "LIBERTY MEDIA LIBERTY SIRIUSXM COR",
+   "1560385"
+  ],
+  [
+   "LSXMK",
+   "2019-12-31",
+   "LIBERTY MEDIA LIBERTY SIRIUSXM COR",
+   "1560385"
+  ],
+  [
+   "LSXMK",
+   "2020-06-30",
+   "LIBERTY MEDIA LIBERTY SIRIUSXM COR",
+   "1560385"
+  ],
+  [
+   "LSXMK",
+   "2020-12-31",
+   "LIBERTY MEDIA LIBERTY SIRIUSXM COR",
+   "1560385"
+  ],
+  [
+   "LSXMK",
+   "2021-06-30",
+   "LIBERTY MEDIA LIBERTY SIRIUSXM COR",
+   "1560385"
+  ],
+  [
+   "LSXMK",
+   "2021-12-31",
+   "LIBERTY MEDIA LIBERTY SIRIUSXM COR",
+   "1560385"
+  ],
+  [
+   "LSXMK",
+   "2022-06-30",
+   "LIBERTY MEDIA LIBERTY SIRIUSXM COR",
+   "1560385"
+  ],
+  [
+   "LSXMK",
+   "2022-12-31",
+   "LIBERTY MEDIA LIBERTY SIRIUSXM COR",
+   "1560385"
+  ],
+  [
+   "LSXMK",
+   "2023-06-30",
+   "LIBERTY MEDIA LIBERTY SIRIUSXM COR",
+   "1560385"
+  ],
+  [
+   "LSXMK",
+   "2023-12-31",
+   "LIBERTY MEDIA LIBERTY SIRIUSXM COR",
+   "1560385"
+  ],
+  [
+   "LSXMK",
+   "2024-06-30",
+   "LIBERTY MEDIA LIBERTY SIRIUSXM COR",
+   "1560385"
+  ],
+  [
+   "LVNTA",
+   "2012-12-31",
+   "LIBERTY VENTURES - SER A",
+   ""
+  ],
+  [
+   "LVNTA",
+   "2013-06-28",
+   "LIBERTY VENTURES - SER A",
+   ""
+  ],
+  [
+   "LVNTA",
+   "2013-12-31",
+   "LIBERTY VENTURES - SER A",
+   ""
+  ],
+  [
+   "LVNTA",
+   "2014-06-30",
+   "LIBERTY VENTURES - SER A",
+   ""
+  ],
+  [
+   "LVNTA",
+   "2014-12-31",
+   "LIBERTY VENTURES - SER A",
+   ""
+  ],
+  [
+   "LVNTA",
+   "2015-06-30",
+   "LIBERTY VENTURES - SER A",
+   ""
+  ],
+  [
+   "LVNTA",
+   "2015-12-31",
+   "LIBERTY VENTURES - SER A",
+   ""
+  ],
+  [
+   "LVNTA",
+   "2016-06-30",
+   "LIBERTY VENTURES - SER A",
+   ""
+  ],
+  [
+   "LVNTA",
+   "2016-12-30",
+   "LIBERTY INTERACTIVE VENTURE CORP S",
+   ""
+  ],
+  [
+   "LVNTA",
+   "2017-06-30",
+   "LIBERTY INTERACTIVE VENTURE CORP S",
+   ""
+  ],
+  [
+   "LVNTA",
+   "2017-12-31",
+   "LIBERTY INTERACTIVE VENTURE CORP S",
+   ""
+  ],
+  [
+   "MSG",
+   "2012-06-29",
+   "MADISON SQUARE GARDEN CLASS A",
+   "1469372"
+  ],
+  [
+   "MSG",
+   "2012-12-31",
+   "MADISON SQUARE GARDEN CLASS A",
+   "1469372"
+  ],
+  [
+   "MSG",
+   "2013-06-28",
+   "MADISON SQUARE GARDEN CLASS A",
+   "1469372"
+  ],
+  [
+   "MSG",
+   "2013-12-31",
+   "MADISON SQUARE GARDEN CLASS A",
+   "1469372"
+  ],
+  [
+   "MSG",
+   "2014-06-30",
+   "MADISON SQUARE GARDEN CLASS A",
+   "1469372"
+  ],
+  [
+   "MSG",
+   "2014-12-31",
+   "MADISON SQUARE GARDEN ORD CLASS A",
+   "1469372"
+  ],
+  [
+   "MSG",
+   "2015-06-30",
+   "MADISON SQUARE GARDEN ORD CLASS A",
+   "1469372"
+  ],
+  [
+   "MSG",
+   "2015-12-31",
+   "MADISON SQUARE GARDEN CLASS A",
+   "1636519"
+  ],
+  [
+   "MSG",
+   "2016-06-30",
+   "MADISON SQUARE GARDEN CLASS A",
+   "1636519"
+  ],
+  [
+   "MSG",
+   "2016-12-30",
+   "MADISON SQUARE GARDEN CLASS A",
+   "1636519"
+  ],
+  [
+   "MSG",
+   "2017-06-30",
+   "MADISON SQUARE GARDEN CLASS A",
+   "1636519"
+  ],
+  [
+   "MSG",
+   "2017-12-31",
+   "MADISON SQUARE GARDEN CLASS A",
+   "1636519"
+  ],
+  [
+   "MSG",
+   "2018-06-30",
+   "MADISON SQUARE GARDEN CLASS A",
+   "1636519"
+  ],
+  [
+   "MSG",
+   "2018-12-31",
+   "MADISON SQUARE GARDEN CLASS A",
+   "1636519"
+  ],
+  [
+   "MSG",
+   "2019-06-30",
+   "MADISON SQUARE GARDEN CLASS A",
+   "1636519"
+  ],
+  [
+   "MSG",
+   "2019-12-31",
+   "MADISON SQUARE GARDEN CLASS A",
+   "1636519"
+  ],
+  [
+   "MSGN",
+   "2015-12-31",
+   "MSG NETWORKS INC",
+   ""
+  ],
+  [
+   "MSGS",
+   "2020-06-30",
+   "MADISON SQUARE GARDEN SPORTS CORP",
+   ""
+  ],
+  [
+   "MSGS",
+   "2020-12-31",
+   "MADISON SQUARE GARDEN SPORTS CORP",
+   ""
+  ],
+  [
+   "MSGS",
+   "2021-06-30",
+   "MADISON SQUARE GARDEN SPORTS CORP",
+   ""
+  ],
+  [
+   "MSGS",
+   "2021-12-31",
+   "MADISON SQUARE GARDEN SPORTS CORP",
+   ""
+  ],
+  [
+   "MSGS",
+   "2022-06-30",
+   "MADISON SQUARE GARDEN SPORTS CORP",
+   ""
+  ],
+  [
+   "MSGS",
+   "2022-12-31",
+   "MADISON SQUARE GARDEN SPORTS CORP",
+   ""
+  ],
+  [
+   "MSGS",
+   "2023-06-30",
+   "MADISON SQUARE GARDEN SPORTS CORP",
+   ""
+  ],
+  [
+   "MSGS",
+   "2023-12-31",
+   "MADISON SQUARE GARDEN SPORTS CORP",
+   ""
+  ],
+  [
+   "MSGS",
+   "2024-06-30",
+   "MADISON SQUARE GARDEN SPORTS CORP",
+   ""
+  ],
+  [
+   "MSGS",
+   "2024-12-31",
+   "MADISON SQUARE GARDEN SPORTS CORP",
+   ""
+  ],
+  [
+   "MSGS",
+   "2025-06-30",
+   "MADISON SQUARE GARDEN SPORTS CORP",
+   ""
+  ],
+  [
+   "MSGS",
+   "2025-12-31",
+   "MADISON SQUARE GARDEN SPORTS CORP",
+   ""
+  ],
+  [
+   "MSGS",
+   "2026-06-30",
+   "MADISON SQUARE GARDEN SPORTS CORP",
+   ""
+  ],
+  [
+   "MTCH",
+   "2015-12-31",
+   "MATCH GROUP INC",
+   ""
+  ],
+  [
+   "MTCH",
+   "2016-06-30",
+   "MATCH GROUP INC",
+   ""
+  ],
+  [
+   "MTCH",
+   "2016-12-30",
+   "MATCH GROUP INC",
+   ""
+  ],
+  [
+   "MTCH",
+   "2017-06-30",
+   "MATCH GROUP INC",
+   ""
+  ],
+  [
+   "MTCH",
+   "2017-12-31",
+   "MATCH GROUP INC",
+   ""
+  ],
+  [
+   "MTCH",
+   "2018-06-30",
+   "MATCH GROUP INC",
+   ""
+  ],
+  [
+   "MTCH",
+   "2018-12-31",
+   "MATCH GROUP INC",
+   ""
+  ],
+  [
+   "MTCH",
+   "2019-06-30",
+   "MATCH GROUP INC",
+   ""
+  ],
+  [
+   "MTCH",
+   "2019-12-31",
+   "MATCH GROUP INC",
+   ""
+  ],
+  [
+   "MTCH",
+   "2020-06-30",
+   "MATCH GROUP INC",
+   ""
+  ],
+  [
+   "MTCH",
+   "2020-12-31",
+   "MATCH GROUP INC",
+   ""
+  ],
+  [
+   "MTCH",
+   "2021-06-30",
+   "MATCH GROUP INC",
+   ""
+  ],
+  [
+   "MTCH",
+   "2021-12-31",
+   "MATCH GROUP INC",
+   ""
+  ],
+  [
+   "MTCH",
+   "2022-06-30",
+   "MATCH GROUP INC",
+   ""
+  ],
+  [
+   "MTCH",
+   "2022-12-31",
+   "MATCH GROUP INC",
+   ""
+  ],
+  [
+   "MTCH",
+   "2023-06-30",
+   "MATCH GROUP INC",
+   ""
+  ],
+  [
+   "MTCH",
+   "2023-12-31",
+   "MATCH GROUP INC",
+   ""
+  ],
+  [
+   "MTCH",
+   "2024-06-30",
+   "MATCH GROUP INC",
+   ""
+  ],
+  [
+   "MTCH",
+   "2024-12-31",
+   "MATCH GROUP INC",
+   ""
+  ],
+  [
+   "MTCH",
+   "2025-06-30",
+   "MATCH GROUP INC",
+   ""
+  ],
+  [
+   "MTCH",
+   "2025-12-31",
+   "MATCH GROUP INC",
+   ""
+  ],
+  [
+   "MTCH",
+   "2026-06-30",
+   "MATCH GROUP INC",
+   ""
+  ],
+  [
+   "NWS-A",
+   "2008-01-16",
+   "NEWS CORP",
+   ""
+  ],
+  [
+   "NWS-A",
+   "2008-05-31",
+   "NEWS CORP",
+   ""
+  ],
+  [
+   "NWS-A",
+   "2008-07-25",
+   "NEWS CORP",
+   ""
+  ],
+  [
+   "NWS-A",
+   "2008-11-18",
+   "NEWS CORP",
+   ""
+  ],
+  [
+   "NWS-A",
+   "2009-01-23",
+   "NEWS CORP",
+   ""
+  ],
+  [
+   "NWS-A",
+   "2009-03-20",
+   "NEWS CORP",
+   ""
+  ],
+  [
+   "NWS-A",
+   "2009-06-08",
+   "NEWS CORP",
+   ""
+  ],
+  [
+   "PAG",
+   "2014-06-30",
+   "PENSKE AUTOMOTIVE GROUP VOTING INC",
+   ""
+  ],
+  [
+   "PAG",
+   "2014-12-31",
+   "PENSKE AUTOMOTIVE GROUP INC.",
+   ""
+  ],
+  [
+   "PAG",
+   "2015-06-30",
+   "PENSKE AUTOMOTIVE GROUP INC.",
+   ""
+  ],
+  [
+   "PAG",
+   "2015-12-31",
+   "PENSKE AUTOMOTIVE GROUP INC.",
+   ""
+  ],
+  [
+   "PAG",
+   "2016-06-30",
+   "PENSKE AUTOMOTIVE GROUP INC.",
+   ""
+  ],
+  [
+   "PAG",
+   "2016-12-30",
+   "PENSKE AUTOMOTIVE GROUP INC.",
+   ""
+  ],
+  [
+   "PAG",
+   "2017-06-30",
+   "PENSKE AUTOMOTIVE GROUP VOTING INC",
+   ""
+  ],
+  [
+   "PAG",
+   "2017-12-31",
+   "PENSKE AUTOMOTIVE GROUP VOTING INC",
+   ""
+  ],
+  [
+   "PAG",
+   "2018-06-30",
+   "PENSKE AUTOMOTIVE GROUP VOTING INC",
+   ""
+  ],
+  [
+   "PAG",
+   "2018-12-31",
+   "PENSKE AUTOMOTIVE GROUP VOTING INC",
+   ""
+  ],
+  [
+   "PAG",
+   "2019-06-30",
+   "PENSKE AUTOMOTIVE GROUP VOTING INC",
+   ""
+  ],
+  [
+   "PAG",
+   "2019-12-31",
+   "PENSKE AUTOMOTIVE GROUP VOTING INC",
+   ""
+  ],
+  [
+   "PAG",
+   "2020-06-30",
+   "PENSKE AUTOMOTIVE GROUP VOTING INC",
+   ""
+  ],
+  [
+   "PAG",
+   "2020-12-31",
+   "PENSKE AUTOMOTIVE GROUP VOTING INC",
+   ""
+  ],
+  [
+   "PAG",
+   "2021-06-30",
+   "PENSKE AUTOMOTIVE GROUP VOTING INC",
+   ""
+  ],
+  [
+   "PAG",
+   "2021-12-31",
+   "PENSKE AUTOMOTIVE GROUP VOTING INC",
+   ""
+  ],
+  [
+   "PAG",
+   "2022-06-30",
+   "PENSKE AUTOMOTIVE GROUP VOTING INC",
+   ""
+  ],
+  [
+   "PAG",
+   "2022-12-31",
+   "PENSKE AUTOMOTIVE GROUP VOTING INC",
+   ""
+  ],
+  [
+   "PAG",
+   "2023-06-30",
+   "PENSKE AUTOMOTIVE GROUP VOTING INC",
+   ""
+  ],
+  [
+   "PAG",
+   "2023-12-31",
+   "PENSKE AUTOMOTIVE GROUP VOTING INC",
+   ""
+  ],
+  [
+   "PAG",
+   "2024-06-30",
+   "PENSKE AUTOMOTIVE GROUP VOTING INC",
+   ""
+  ],
+  [
+   "PAG",
+   "2024-12-31",
+   "PENSKE AUTOMOTIVE GROUP VOTING INC",
+   ""
+  ],
+  [
+   "PAG",
+   "2025-06-30",
+   "PENSKE AUTOMOTIVE GROUP VOTING INC",
+   ""
+  ],
+  [
+   "PAG",
+   "2025-12-31",
+   "PENSKE AUTOMOTIVE GROUP VOTING INC",
+   ""
+  ],
+  [
+   "PAG",
+   "2026-06-30",
+   "PENSKE AUTOMOTIVE GROUP VOTING INC",
+   ""
+  ],
+  [
+   "PPLI",
+   "2026-06-30",
+   "PEOPLE",
+   ""
+  ],
+  [
+   "QRTEA",
+   "2012-06-29",
+   "QURATE RETAIL GROUP CORP SERIES A",
+   "1355096"
+  ],
+  [
+   "QRTEA",
+   "2012-12-31",
+   "QURATE RETAIL GROUP CORP SERIES A",
+   "1355096"
+  ],
+  [
+   "QRTEA",
+   "2013-06-28",
+   "QURATE RETAIL GROUP CORP SERIES A",
+   "1355096"
+  ],
+  [
+   "QRTEA",
+   "2013-12-31",
+   "QURATE RETAIL GROUP CORP SERIES A",
+   "1355096"
+  ],
+  [
+   "QRTEA",
+   "2014-06-30",
+   "QURATE RETAIL GROUP CORP SERIES A",
+   "1355096"
+  ],
+  [
+   "QRTEA",
+   "2018-06-30",
+   "QURATE RETAIL INC SERIES A",
+   ""
+  ],
+  [
+   "QRTEA",
+   "2018-12-31",
+   "QURATE RETAIL INC SERIES A",
+   ""
+  ],
+  [
+   "QRTEA",
+   "2019-06-30",
+   "QURATE RETAIL INC SERIES A",
+   ""
+  ],
+  [
+   "QRTEA",
+   "2019-12-31",
+   "QURATE RETAIL INC SERIES A",
+   ""
+  ],
+  [
+   "QRTEA",
+   "2020-06-30",
+   "QURATE RETAIL INC SERIES A",
+   ""
+  ],
+  [
+   "QRTEA",
+   "2020-12-31",
+   "QURATE RETAIL INC SERIES A",
+   ""
+  ],
+  [
+   "QRTEA",
+   "2021-06-30",
+   "QURATE RETAIL INC SERIES A",
+   ""
+  ],
+  [
+   "QRTEA",
+   "2021-12-31",
+   "QURATE RETAIL INC SERIES A",
+   ""
+  ],
+  [
+   "QVCA",
+   "2014-12-31",
+   "LIBERTY INTERACTIVE CORP SERIES A",
+   ""
+  ],
+  [
+   "QVCA",
+   "2015-06-30",
+   "LIBERTY INTERACTIVE QVC GROUP CORP",
+   ""
+  ],
+  [
+   "QVCA",
+   "2015-12-31",
+   "LIBERTY INTERACTIVE QVC GROUP CORP",
+   ""
+  ],
+  [
+   "QVCA",
+   "2016-06-30",
+   "LIBERTY INTERACTIVE QVC GROUP CORP",
+   ""
+  ],
+  [
+   "QVCA",
+   "2016-12-30",
+   "LIBERTY INTERACTIVE QVC GROUP CORP",
+   ""
+  ],
+  [
+   "QVCA",
+   "2017-06-30",
+   "LIBERTY INTERACTIVE QVC GROUP CORP",
+   ""
+  ],
+  [
+   "QVCA",
+   "2017-12-31",
+   "LIBERTY INTERACTIVE QVC GROUP CORP",
+   ""
+  ],
+  [
+   "STRZA",
+   "2013-06-28",
+   "STARZ",
+   ""
+  ],
+  [
+   "STRZA",
+   "2013-12-31",
+   "STARZ",
+   ""
+  ],
+  [
+   "STRZA",
+   "2014-06-30",
+   "STARZ",
+   ""
+  ],
+  [
+   "STRZA",
+   "2014-12-31",
+   "STARZ",
+   ""
+  ],
+  [
+   "STRZA",
+   "2015-06-30",
+   "STARZ",
+   ""
+  ],
+  [
+   "STRZA",
+   "2015-12-31",
+   "STARZ",
+   ""
+  ],
+  [
+   "STRZA",
+   "2016-06-30",
+   "STARZ",
+   ""
+  ],
+  [
+   "TCF",
+   "2012-06-29",
+   "TCF FINANCIAL CORP",
+   ""
+  ],
+  [
+   "TCF",
+   "2012-12-31",
+   "TCF FINANCIAL CORP",
+   ""
+  ],
+  [
+   "TCF",
+   "2013-06-28",
+   "TCF FINANCIAL CORP",
+   ""
+  ],
+  [
+   "TCF",
+   "2013-12-31",
+   "TCF FINANCIAL CORP",
+   ""
+  ],
+  [
+   "TCF",
+   "2014-06-30",
+   "TCF FINANCIAL CORP",
+   ""
+  ],
+  [
+   "TCF",
+   "2017-06-30",
+   "TCF FINANCIAL CORP",
+   ""
+  ],
+  [
+   "TCF",
+   "2017-12-31",
+   "TCF FINANCIAL CORP",
+   ""
+  ],
+  [
+   "TCF",
+   "2018-06-30",
+   "TCF FINANCIAL CORP",
+   ""
+  ],
+  [
+   "TCF",
+   "2018-12-31",
+   "TCF FINANCIAL CORP",
+   ""
+  ],
+  [
+   "TCF",
+   "2019-06-30",
+   "TCF FINANCIAL CORP",
+   ""
+  ],
+  [
+   "TCF",
+   "2019-12-31",
+   "TCF FINANCIAL CORP",
+   ""
+  ],
+  [
+   "TCF",
+   "2020-06-30",
+   "TCF FINANCIAL CORP",
+   ""
+  ],
+  [
+   "TCF",
+   "2020-12-31",
+   "TCF FINANCIAL CORP",
+   ""
+  ],
+  [
+   "TGNA",
+   "2012-06-29",
+   "GANNETT CO INC",
+   ""
+  ],
+  [
+   "TGNA",
+   "2012-12-31",
+   "GANNETT CO INC",
+   ""
+  ],
+  [
+   "TGNA",
+   "2013-06-28",
+   "GANNETT CO INC",
+   ""
+  ],
+  [
+   "TGNA",
+   "2013-12-31",
+   "GANNETT CO INC",
+   ""
+  ],
+  [
+   "TGNA",
+   "2014-06-30",
+   "GANNETT CO INC",
+   ""
+  ],
+  [
+   "TGNA",
+   "2015-06-30",
+   "TEGNA INC",
+   ""
+  ],
+  [
+   "TGNA",
+   "2015-12-31",
+   "TEGNA INC",
+   ""
+  ],
+  [
+   "TGNA",
+   "2016-06-30",
+   "TEGNA INC",
+   ""
+  ],
+  [
+   "TGNA",
+   "2016-12-30",
+   "TEGNA INC",
+   ""
+  ],
+  [
+   "TGNA",
+   "2017-06-30",
+   "TEGNA INC",
+   ""
+  ],
+  [
+   "TGNA",
+   "2017-12-31",
+   "TEGNA INC",
+   ""
+  ],
+  [
+   "UA",
+   "2014-12-31",
+   "UNDER ARMOUR A INC",
+   ""
+  ],
+  [
+   "UA",
+   "2015-06-30",
+   "UNDER ARMOUR A INC",
+   ""
+  ],
+  [
+   "UA",
+   "2015-12-31",
+   "UNDER ARMOUR A INC",
+   ""
+  ],
+  [
+   "UA",
+   "2016-06-30",
+   "UNDER ARMOUR A INC",
+   ""
+  ],
+  [
+   "UA",
+   "2016-12-30",
+   "UNDER ARMOUR INC CLASS C",
+   ""
+  ],
+  [
+   "UA",
+   "2017-06-30",
+   "UNDER ARMOUR INC CLASS C",
+   ""
+  ],
+  [
+   "UA",
+   "2017-12-31",
+   "UNDER ARMOUR INC CLASS C",
+   ""
+  ],
+  [
+   "UA",
+   "2018-06-30",
+   "UNDER ARMOUR INC CLASS C",
+   ""
+  ],
+  [
+   "UA",
+   "2018-12-31",
+   "UNDER ARMOUR INC CLASS C",
+   ""
+  ],
+  [
+   "UA",
+   "2019-06-30",
+   "UNDER ARMOUR INC CLASS C",
+   ""
+  ],
+  [
+   "UA",
+   "2019-12-31",
+   "UNDER ARMOUR INC CLASS C",
+   ""
+  ],
+  [
+   "UA",
+   "2020-06-30",
+   "UNDER ARMOUR INC CLASS C",
+   ""
+  ],
+  [
+   "UA",
+   "2020-12-31",
+   "UNDER ARMOUR INC CLASS C",
+   ""
+  ],
+  [
+   "UA",
+   "2021-06-30",
+   "UNDER ARMOUR INC CLASS C",
+   ""
+  ],
+  [
+   "UA",
+   "2021-12-31",
+   "UNDER ARMOUR INC CLASS C",
+   ""
+  ],
+  [
+   "UA",
+   "2022-06-30",
+   "UNDER ARMOUR INC CLASS C",
+   ""
+  ],
+  [
+   "UA",
+   "2022-12-31",
+   "UNDER ARMOUR INC CLASS C",
+   ""
+  ],
+  [
+   "UA",
+   "2023-06-30",
+   "UNDER ARMOUR INC CLASS C",
+   ""
+  ],
+  [
+   "UA",
+   "2023-12-31",
+   "UNDER ARMOUR INC CLASS C",
+   ""
+  ],
+  [
+   "UA",
+   "2024-06-30",
+   "UNDER ARMOUR INC CLASS C",
+   ""
+  ],
+  [
+   "UA",
+   "2024-12-31",
+   "UNDER ARMOUR INC CLASS C",
+   ""
+  ],
+  [
+   "UA",
+   "2025-06-30",
+   "UNDER ARMOUR INC CLASS C",
+   ""
+  ],
+  [
+   "UA",
+   "2025-12-31",
+   "UNDER ARMOUR INC CLASS C",
+   ""
+  ],
+  [
+   "UAA",
+   "2012-06-29",
+   "UNDER ARMOUR INC CLASS A",
+   ""
+  ],
+  [
+   "UAA",
+   "2012-12-31",
+   "UNDER ARMOUR INC CLASS A",
+   ""
+  ],
+  [
+   "UAA",
+   "2013-06-28",
+   "UNDER ARMOUR INC CLASS A",
+   ""
+  ],
+  [
+   "UAA",
+   "2013-12-31",
+   "UNDER ARMOUR INC CLASS A",
+   ""
+  ],
+  [
+   "UAA",
+   "2014-06-30",
+   "UNDER ARMOUR INC CLASS A",
+   ""
+  ],
+  [
+   "UAA",
+   "2016-12-30",
+   "UNDER ARMOUR INC CLASS A",
+   ""
+  ],
+  [
+   "UAA",
+   "2017-06-30",
+   "UNDER ARMOUR INC CLASS A",
+   ""
+  ],
+  [
+   "UAA",
+   "2017-12-31",
+   "UNDER ARMOUR INC CLASS A",
+   ""
+  ],
+  [
+   "UAA",
+   "2018-06-30",
+   "UNDER ARMOUR INC CLASS A",
+   ""
+  ],
+  [
+   "UAA",
+   "2018-12-31",
+   "UNDER ARMOUR INC CLASS A",
+   ""
+  ],
+  [
+   "UAA",
+   "2019-06-30",
+   "UNDER ARMOUR INC CLASS A",
+   ""
+  ],
+  [
+   "UAA",
+   "2019-12-31",
+   "UNDER ARMOUR INC CLASS A",
+   ""
+  ],
+  [
+   "UAA",
+   "2020-06-30",
+   "UNDER ARMOUR INC CLASS A",
+   ""
+  ],
+  [
+   "UAA",
+   "2020-12-31",
+   "UNDER ARMOUR INC CLASS A",
+   ""
+  ],
+  [
+   "UAA",
+   "2021-06-30",
+   "UNDER ARMOUR INC CLASS A",
+   ""
+  ],
+  [
+   "UAA",
+   "2021-12-31",
+   "UNDER ARMOUR INC CLASS A",
+   ""
+  ],
+  [
+   "UAA",
+   "2022-06-30",
+   "UNDER ARMOUR INC CLASS A",
+   ""
+  ],
+  [
+   "UAA",
+   "2022-12-31",
+   "UNDER ARMOUR INC CLASS A",
+   ""
+  ],
+  [
+   "UAA",
+   "2023-06-30",
+   "UNDER ARMOUR INC CLASS A",
+   ""
+  ],
+  [
+   "UAA",
+   "2023-12-31",
+   "UNDER ARMOUR INC CLASS A",
+   ""
+  ],
+  [
+   "UAA",
+   "2024-06-30",
+   "UNDER ARMOUR INC CLASS A",
+   ""
+  ],
+  [
+   "UAA",
+   "2024-12-31",
+   "UNDER ARMOUR INC CLASS A",
+   ""
+  ],
+  [
+   "UAA",
+   "2025-06-30",
+   "UNDER ARMOUR INC CLASS A",
+   ""
+  ],
+  [
+   "UAA",
+   "2025-12-31",
+   "UNDER ARMOUR INC CLASS A",
+   ""
+  ],
+  [
+   "UAC-C",
+   "2016-06-30",
+   "UNDER ARMOUR INC CLASS C",
+   ""
+  ],
+  [
+   "UAG",
+   "2008-01-16",
+   "UNITED AUTO GROUP INC",
+   "1019849"
+  ],
+  [
+   "UAG",
+   "2008-05-31",
+   "UNITED AUTO GROUP INC",
+   "1019849"
+  ],
+  [
+   "UAG",
+   "2008-07-25",
+   "UNITED AUTO GROUP INC",
+   "1019849"
+  ],
+  [
+   "UAG",
+   "2008-11-18",
+   "UNITED AUTO GROUP INC",
+   "1019849"
+  ],
+  [
+   "UAG",
+   "2009-01-23",
+   "UNITED AUTO GROUP INC",
+   "1019849"
+  ],
+  [
+   "UAG",
+   "2009-03-20",
+   "UNITED AUTO GROUP INC",
+   "1019849"
+  ],
+  [
+   "UAG",
+   "2009-06-08",
+   "UNITED AUTO GROUP INC",
+   "1019849"
+  ],
+  [
+   "VIA",
+   "2015-06-30",
+   "VIACOM INC. CL A",
+   "1339947"
+  ],
+  [
+   "VIA",
+   "2015-12-31",
+   "VIACOM INC. CL A",
+   "1339947"
+  ],
+  [
+   "VIA",
+   "2016-06-30",
+   "VIACOM INC. CL A",
+   "1339947"
+  ],
+  [
+   "VIA",
+   "2016-12-30",
+   "VIACOM INC. CL A",
+   "1339947"
+  ],
+  [
+   "VIA",
+   "2017-06-30",
+   "VIACOM INC CLASS A",
+   "1339947"
+  ],
+  [
+   "VIA",
+   "2017-12-31",
+   "VIACOM INC CLASS A",
+   "1339947"
+  ],
+  [
+   "VIA",
+   "2018-06-30",
+   "VIACOM INC CLASS A",
+   "1339947"
+  ],
+  [
+   "VIA",
+   "2018-12-31",
+   "VIACOM INC CLASS A",
+   "1339947"
+  ],
+  [
+   "VIA",
+   "2019-06-30",
+   "VIACOM INC CLASS A",
+   "1339947"
+  ],
+  [
+   "VIA-B",
+   "2008-01-16",
+   "VIACOM INC",
+   "1339947"
+  ],
+  [
+   "VIA-B",
+   "2008-05-31",
+   "VIACOM INC",
+   "1339947"
+  ],
+  [
+   "VIA-B",
+   "2008-07-25",
+   "VIACOM INC",
+   "1339947"
+  ],
+  [
+   "VIA-B",
+   "2008-11-18",
+   "VIACOM INC",
+   "1339947"
+  ],
+  [
+   "VIA-B",
+   "2009-01-23",
+   "VIACOM INC",
+   "1339947"
+  ],
+  [
+   "VIA-B",
+   "2009-03-20",
+   "VIACOM INC",
+   "1339947"
+  ],
+  [
+   "VIA-B",
+   "2009-06-08",
+   "VIACOM INC",
+   "1339947"
+  ],
+  [
+   "VIAB",
+   "2012-06-29",
+   "VIACOM INC CLASS B",
+   "1339947"
+  ],
+  [
+   "VIAB",
+   "2012-12-31",
+   "VIACOM INC CLASS B",
+   "1339947"
+  ],
+  [
+   "VIAB",
+   "2013-06-28",
+   "VIACOM INC CLASS B",
+   "1339947"
+  ],
+  [
+   "VIAB",
+   "2013-12-31",
+   "VIACOM INC CLASS B",
+   "1339947"
+  ],
+  [
+   "VIAB",
+   "2014-06-30",
+   "VIACOM INC CLASS B",
+   "1339947"
+  ],
+  [
+   "VIAB",
+   "2014-12-31",
+   "VIACOM INC CLASS B",
+   "1339947"
+  ],
+  [
+   "VIAB",
+   "2015-06-30",
+   "VIACOM INC CLASS B",
+   "1339947"
+  ],
+  [
+   "VIAB",
+   "2015-12-31",
+   "VIACOM INC CLASS B",
+   "1339947"
+  ],
+  [
+   "VIAB",
+   "2016-06-30",
+   "VIACOM INC CLASS B",
+   "1339947"
+  ],
+  [
+   "VIAB",
+   "2016-12-30",
+   "VIACOM INC CLASS B",
+   "1339947"
+  ],
+  [
+   "VIAB",
+   "2017-06-30",
+   "VIACOM INC CLASS B",
+   "1339947"
+  ],
+  [
+   "VIAB",
+   "2017-12-31",
+   "VIACOM INC CLASS B",
+   "1339947"
+  ],
+  [
+   "VIAB",
+   "2018-06-30",
+   "VIACOM INC CLASS B",
+   "1339947"
+  ],
+  [
+   "VIAB",
+   "2018-12-31",
+   "VIACOM INC CLASS B",
+   "1339947"
+  ],
+  [
+   "VIAB",
+   "2019-06-30",
+   "VIACOM INC CLASS B",
+   "1339947"
+  ],
+  [
+   "WCRX",
+   "2008-01-16",
+   "WARNER CHILCOTT LIMITED",
+   ""
+  ],
+  [
+   "WCRX",
+   "2008-05-31",
+   "WARNER CHILCOTT LIMITED",
+   ""
+  ],
+  [
+   "WCRX",
+   "2008-07-25",
+   "WARNER CHILCOTT LIMITED",
+   ""
+  ],
+  [
+   "WCRX",
+   "2008-11-18",
+   "WARNER CHILCOTT LIMITED",
+   ""
+  ],
+  [
+   "WCRX",
+   "2009-01-23",
+   "WARNER CHILCOTT LIMITED",
+   ""
+  ],
+  [
+   "WCRX",
+   "2009-03-20",
+   "WARNER CHILCOTT LIMITED",
+   ""
+  ],
+  [
+   "WCRX",
+   "2009-06-08",
+   "WARNER CHILCOTT LIMITED",
+   ""
+  ],
+  [
+   "WCRX",
+   "2012-06-29",
+   "WARNER CHILCOTT PLC CLASS A",
+   ""
+  ],
+  [
+   "WCRX",
+   "2012-12-31",
+   "WARNER CHILCOTT PLC CLASS A",
+   ""
+  ],
+  [
+   "WCRX",
+   "2013-06-28",
+   "WARNER CHILCOTT PLC CLASS A",
+   ""
+  ],
+  [
+   "WPO",
+   "2008-01-16",
+   "WASHINGTON POST CO",
+   ""
+  ],
+  [
+   "WPO",
+   "2008-05-31",
+   "WASHINGTON POST CO",
+   ""
+  ],
+  [
+   "WPO",
+   "2008-07-25",
+   "WASHINGTON POST CO",
+   ""
+  ],
+  [
+   "WPO",
+   "2008-11-18",
+   "WASHINGTON POST CO",
+   ""
+  ],
+  [
+   "WPO",
+   "2009-01-23",
+   "WASHINGTON POST CO",
+   ""
+  ],
+  [
+   "WPO",
+   "2009-03-20",
+   "WASHINGTON POST CO",
+   ""
+  ],
+  [
+   "WPO",
+   "2009-06-08",
+   "WASHINGTON POST CO",
+   ""
+  ]
+ ]
+}

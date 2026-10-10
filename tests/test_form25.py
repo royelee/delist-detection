@@ -1,10 +1,10 @@
 from datetime import date
 from pathlib import Path
 
-from delist_detection.edgar import EdgarSubmission
-from delist_detection.form25 import (
-    Form25, SecurityRef, class_kind, class_label, effective_date, exchange_label, exchanges_named,
-    list_form25, match_securities, match_security, notice_last_trade, parse_form25, tied_securities,
+from delist_detection.sources.edgar import EdgarSubmission
+from delist_detection.filings.form25 import (
+    Form25, SecurityRef, class_kind, class_letters, exchange_label, exchanges_named,
+    list_form25, match_securities, notice_last_trade, parse_form25, tied_securities,
 )
 
 FIX = Path(__file__).parent / "fixtures" / "form25"
@@ -53,20 +53,20 @@ def test_notice_text_patterns_synthetic():
 def test_discovery_series_c():
     f = _load("discovery_series_c.txt", "0001354457-22-000231", "2022-04-08")
     assert f.exchange == "NASDAQ"
-    assert class_label(f.class_text) == "SERIES C"
+    assert class_letters(f.class_text) == {"C"}
     refs = [SecurityRef("BBG_A", "CLASS A", "common"), SecurityRef("BBG_B", "CLASS B", "common"),
             SecurityRef("BBG_C", "CLASS C", "common")]
-    assert match_security(f, refs) == ("BBG_C", "class C")
+    assert match_securities(f, refs) == (["BBG_C"], "class C")
 
 
 def test_match_rules():
     common = Form25("a", "25-NSE", "2018-11-29", "NYSE", "Common Stock", "", "")
     pref = Form25("b", "25-NSE", "2018-11-29", "NYSE", "6.375% Series A Preferred Stock", "", "")
     single = [SecurityRef("BBG1", "COMMON", "common")]
-    assert match_security(common, single) == ("BBG1", "only security of its kind")
-    assert match_security(pref, single) == (None, "no observed preferred security")
+    assert match_securities(common, single) == (["BBG1"], "only security of its kind")
+    assert match_securities(pref, single) == ([], "no observed preferred security")
     two = [SecurityRef("A", "CLASS A", "common"), SecurityRef("C", "CLASS C", "common")]
-    assert match_security(common, two) == (None, "ambiguous class")
+    assert match_securities(common, two) == ([], "ambiguous class")
 
 
 def test_class_kind():
@@ -122,18 +122,21 @@ def test_class_kind_warrants_named_after_common():
                       "Rights") == "common"
 
 
-def test_class_label_only_from_the_securitys_own_segment():
-    assert class_label("Common Stock, par value $0.01 per share, and associated Series A Junior "
-                       "Participating Preferred Stock Purchase Rights") is None
-    assert class_label("Series A Liberty SiriusXM Common Stock, par value $0.01") == "SERIES A"
-    assert class_label("Class B Common Stock") == "CLASS B"
-    assert class_label("Preferred Stock, Series C") == "SERIES C"
-    assert class_label("5.750% Cumulative Preferred Stock, Series F") == "SERIES F"
-    assert class_label("Depositary Shares, each representing a 1/1,000th interest in a share of "
-                       "5.750% Series F Preference Share") == "SERIES F"
-    assert class_label("6.375% Series A Preferred Stock") == "SERIES A"
-    assert class_label("Class A Common Stock and associated Series B Preferred Stock Purchase "
-                       "Rights") == "CLASS A"
+def test_class_letters_only_from_the_securitys_own_segment():
+    assert class_letters("Common Stock, par value $0.01 per share, and associated Series A Junior "
+                         "Participating Preferred Stock Purchase Rights") == set()
+    assert class_letters("Series A Liberty SiriusXM Common Stock, par value $0.01") == {"A"}
+    assert class_letters("Class B Common Stock") == {"B"}
+    assert class_letters("Preferred Stock, Series C") == {"C"}
+    assert class_letters("5.750% Cumulative Preferred Stock, Series F") == {"F"}
+    assert class_letters("Depositary Shares, each representing a 1/1,000th interest in a share of "
+                         "5.750% Series F Preference Share") == {"F"}
+    assert class_letters("6.375% Series A Preferred Stock") == {"A"}
+    assert class_letters("Class A Common Stock and associated Series B Preferred Stock Purchase "
+                         "Rights") == {"A"}
+    # a CLASS segment outranks SERIES ones; with none, every SERIES segment counts
+    assert class_letters("Class A Common Stock; Series B Common Stock") == {"A"}
+    assert class_letters("Series A Common Stock; Series B Common Stock") == {"A", "B"}
 
 
 def test_exchange_labels():
@@ -152,12 +155,11 @@ def test_exchange_labels():
     assert exchanges_named("The Nasdaq Stock Market LLC") == {"NASDAQ"}
 
 
-def test_list_form25_and_effective_date():
+def test_list_form25():
     subs = [EdgarSubmission("x2", "25-NSE", "2020-01-02", "", "", "p"),
             EdgarSubmission("x1", "25", "2019-01-02", "", "", "p"),
             EdgarSubmission("x3", "8-K", "2019-01-02", "", "3.01", "p")]
     assert [s.accession for s in list_form25(subs)] == ["x1", "x2"]
-    assert effective_date("2018-11-29") == "2018-12-09"
 
 
 def _load_text(name, accession, filing_date):
@@ -249,7 +251,6 @@ def test_same_letter_siblings_with_no_distinguishing_name_stay_ambiguous():
     refs = [SecurityRef("X1", "CLASS A", "common", "LIBERTY MEDIA CORP"),
             SecurityRef("X2", "CLASS A", "common", "LIBERTY MEDIA CORP")]
     assert match_securities(f, refs) == ([], "ambiguous class")
-    assert match_security(f, refs) == (None, "ambiguous class")
 
 
 def test_a_form25_naming_several_classes_matches_each_of_them():
@@ -298,3 +299,161 @@ def test_a_letterless_sibling_no_class_names_is_not_tied():
             SecurityRef("UHALB", "SERIES N", "common", "U HAUL NON VOTING SERIES N")]
     assert match_securities(f, refs)[0] == ["UHALB"]
     assert tied_securities(f, refs) == set()
+
+
+# --- sub-plan 5b, R6b: a notice that says the class was acquired ---
+
+import pytest  # noqa: E402
+
+from delist_detection.filings.form25 import notice_says_acquired  # noqa: E402
+from tests import form25_cases as fc  # noqa: E402
+
+
+@pytest.mark.parametrize("accession,acquired", [
+    ("0000876661-10-000366", True),    # NTY 2010: "converted into the right to receive $55.00 in cash"
+    ("0001354457-07-000287", True),    # BMET 2007: "Acquired by LVB Acquisition Inc"
+    ("0000876661-15-000665", False),   # HUB-B 2015: "the reclassification of ... dual-class common stock"
+    ("0000876661-23-000651", False),   # HHC 2023: "the formation of a holding company ... one share"
+    ("0001354457-21-000304", False),   # APA 2021: "APACHE CORPORATION REORGANIZED AS APA CORPORATION"
+    ("0001354457-15-000245", False),   # CMCSK 2015: no notice text
+], ids=["NTY", "BMET", "HUB-B", "HHC", "APA", "CMCSK"])
+def test_a_real_notice_says_the_class_was_acquired_only_without_a_reorganization(accession, acquired):
+    f = parse_form25(fc.EDGAR["raws"][accession], accession=accession, form="25-NSE", filing_date="2000-01-01")
+    assert notice_says_acquired(f) is acquired
+
+
+# --- sub-plan 5b, R3: a Form 25 about another class ---
+
+from delist_detection.filings.form25 import other_class  # noqa: E402
+
+LIBERTY_2011 = ("Series A Liberty Capital Common Stock, Series B Liberty Capital Common Stock, Liberty Starz Ser A "
+                "Common Stock, Liberty Starz Ser B Common Stock")
+LIBERTY_NAMES = ("QVC Group, Inc.", "Qurate Retail, Inc.", "Liberty Interactive Corp", "LIBERTY MEDIA CORP",
+                 "Liberty Media Holding CORP")
+
+
+def test_a_form25_of_other_tracking_groups_is_not_about_the_series_a_of_another():
+    """Liberty Media's 2011 25-NSE removed the Liberty Capital and Liberty Starz groups; the Series A placeholder
+    of Liberty Interactive (later Qurate) kept trading."""
+    f = Form25("a", "25-NSE", "2011-09-23", "NASDAQ", LIBERTY_2011, "", "")
+    ref = SecurityRef("CIK1355096-SERIES-A", "SERIES A", "common", "QURATE RETAIL GROUP CORP SERIES A")
+    assert other_class(f, ref, LIBERTY_NAMES) == "names another group (CAPITAL)"
+
+
+@pytest.mark.parametrize("class_text,name", [
+    ("Series A Liberty Ventures Common Stock & Series B Liberty Ventures Common Stock",
+     "LIBERTY INTERACTIVE VENTURE CORP S"),                                      # LVNTA 2018: VENTURE, VENTURES
+    ("Class A Special Common Stock", "COMCAST SPECIAL CORP CLASS A"),             # CMCSK 2015: SPECIAL is no group
+    ("Series N Non-Voting Common Stock", "U HAUL NON VOTING SERIES N"),           # U-Haul 2022
+    ("Series A Liberty SiriusXM Common Stock", "LIBERTY MEDIA LIBERTY SIRIUSXM COR"),
+    ("Common Stock", "BIOMET INC"),
+], ids=["LVNTA", "CMCSK", "UHALB", "LSXMA", "plain"])
+def test_a_form25_of_the_securitys_own_group_or_of_no_group_is_its_own(class_text, name):
+    f = Form25("a", "25-NSE", "2018-03-09", "NASDAQ", class_text, "", "")
+    assert other_class(f, SecurityRef("S", "SERIES A", "common", name), LIBERTY_NAMES) == ""
+
+
+def test_a_form25_that_relates_solely_to_the_rights_is_not_about_the_common():
+    """Biomet 2006 (0001104659-06-082100): "Common Shares; Preferred Share Purchase Rights", and the notification
+    "relates solely to the withdrawal from listing of the Preferred Share Purchase Rights"."""
+    raw = fc.EDGAR["raws"]["0001104659-06-082100"]
+    f = parse_form25(raw, accession="0001104659-06-082100", form="25", filing_date="2006-12-18")
+    assert (f.class_text, f.solely) == ("Common Shares; Preferred Share Purchase Rights",
+                                        "Preferred Share Purchase Rights")
+    assert other_class(f, SecurityRef("CIK351346-COMMON", "COMMON", "common", "BIOMET INC")) == \
+        "relates solely to Preferred Share Purchase Rights"
+
+
+# --- sub-plan 5b, R2: a letterless common takes the letter its own fails descriptions name ---
+
+SUNPOWER_2011 = Form25("a", "25-NSE", "2011-11-16", "NASDAQ", "Common Stock Class A & Common Stock Class B", "", "")
+
+
+def test_a_class_no_siblings_share_class_carries_goes_to_the_letterless_one_its_fails_name():
+    """SunPower 2011: the class A placeholder ("SUNPOWER CORP CL A") and the recombined SPWR line, both letterless;
+    without the hint the 25-NSE ties them."""
+    refs = [SecurityRef("CIK867773-COMMON", "COMMON", "common", "SUNPOWER CORP", "A"),
+            SecurityRef("BBG000FVQ185", "COMMON", "common", "SUNPOWER CORP.")]
+    assert match_securities(SUNPOWER_2011, refs) == (["CIK867773-COMMON"], "class A")
+    no_hint = [SecurityRef(r.sec_id, r.share_class, r.kind, r.name) for r in refs]
+    assert match_securities(SUNPOWER_2011, no_hint) == ([], "ambiguous class")
+
+
+def test_a_hint_never_competes_with_a_share_class_that_carries_the_letter():
+    """LVNTA 2018: the duplicate placeholder's fails say SER A too; LVNTA's own Series A takes the Form 25."""
+    f = Form25("a", "25-NSE", "2018-03-09", "NASDAQ",
+               "Series A Liberty Ventures Common Stock & Series B Liberty Ventures Common Stock", "", "")
+    refs = [SecurityRef("BBG0038K9G41", "SERIES A", "common", "LIBERTY INTERACTIVE VENTURE CORP S"),
+            SecurityRef("CIK1355096-COMMON", "COMMON", "common", "LIBERTY INTERACTIVE VENTURE CORP S", "A"),
+            SecurityRef("BBG000PCQQL6", "SERIES A", "common", "QURATE RETAIL INC SERIES A")]
+    assert match_securities(f, refs)[0] == ["BBG0038K9G41"]
+
+
+def test_two_letterless_siblings_both_hinted_the_letter_stay_tied():
+    """Review Focus (R2): a FIGI line and a placeholder of one class A, both letterless and both "CL A" in their
+    fails: the hint cannot tell them apart, so the Form 25 stays ambiguous, as before."""
+    refs = [SecurityRef("BBG_A", "COMMON", "common", "SUNPOWER CORP", "A"),
+            SecurityRef("CIK_A", "COMMON", "common", "SUNPOWER CORP", "A")]
+    assert match_securities(SUNPOWER_2011, refs) == ([], "ambiguous class")
+    assert tied_securities(SUNPOWER_2011, refs) == {"BBG_A", "CIK_A"}
+
+
+@pytest.mark.parametrize("class_text,solely", [
+    ("Common Stock and Warrants", "Common Stock and Warrants"),
+    ("Class A Common Stock and Warrants", "Class A Common Stock and Warrants"),
+])
+def test_a_spac_form25_solely_about_common_and_warrants_is_the_commons(class_text, solely):
+    f = Form25("a", "25-NSE", "2022-01-03", "NASDAQ", class_text, "", "", solely)
+    assert other_class(f, SecurityRef("S", "COMMON", "common", "SOME ACQUISITION CORP")) == ""
+
+
+@pytest.mark.parametrize("class_text", [
+    "Class A Subordinate Voting Common Stock", "Class A Convertible Common Stock",
+    "Series A Non-Voting Common Stock",
+])
+def test_a_generic_class_descriptor_is_no_tracking_group(class_text):
+    f = Form25("a", "25-NSE", "2022-01-03", "NASDAQ", class_text, "", "")
+    assert other_class(f, SecurityRef("S", "CLASS A", "common", "SOME CORP CLASS A"), ("Some Corp",)) == ""
+
+
+def test_a_class_expiry_outside_the_removal_window_is_no_last_trade():
+    """Roivant 2023: a Form 25 signed 2023-09-01 for "Warrant expiring 09/30/2026": no last trade."""
+    f = Form25("0001354457-23-000619", "25-NSE", "2023-09-01", "NASDAQ", "Warrant expiring 09/30/2026",
+               "17 CFR 240.12d2-2(a)(2)", "")
+    assert notice_last_trade(f) == (None, "")
+    early = Form25("a", "25-NSE", "2021-05-03", "NYSE", "Warrants expiring May 3, 2020", "", "")
+    assert notice_last_trade(early) == (None, "")
+
+
+NYSE_B_NOTICE = ("3. Pursuant to the above authorization, a press release was issued on {press} and an announcement "
+                 "was made on the 'ticker' of the Exchange at the close of the trading session on {press} of the "
+                 "suspension of trading in the Common Stock.{open}")
+
+
+def test_the_nyse_b_template_press_day_is_no_last_trade():
+    """TMA, IDARQ 2008: "an announcement was made on the 'ticker' of the Exchange at the close of the trading
+    session on D" gives the press day D, never a last trade; a stated opening ("before the opening of the trading
+    session on D2") is read, a bare template reads nothing."""
+    base = dict(accession="a", form="25-NSE", filing_date="2009-01-15", exchange="NYSE",
+                class_text="Common Stock", rule="17 CFR 240.12d2-2(b)(1)")
+    bare = Form25(**base, notice_text=NYSE_B_NOTICE.format(press="December 1, 2008", open=""))
+    assert notice_last_trade(bare) == (None, "")
+    opened = Form25(**base, notice_text=NYSE_B_NOTICE.format(
+        press="December 1, 2008", open=" Trading was suspended before the opening of the trading session on "
+                                       "December 5, 2008."))
+    assert notice_last_trade(opened) == (date(2008, 12, 4), "notice_b_unconfirmed")
+
+
+def test_a_rights_class_expiring_on_a_day_last_traded_that_day():
+    """TMUSR 2020 (5d): Nasdaq's 25-NSE for "Subscription Rights Expiring 7/27/2020" carries an empty notice; the
+    class text dates the expiry, the rights' last trading day (operator ruling of the 5b pre-check)."""
+    f = Form25("0001354457-20-000356", "25-NSE", "2020-07-27", "NASDAQ", "Subscription Rights Expiring 7/27/2020",
+               "17 CFR 240.12d2-2(a)(2)", "2 form25.txt form25")
+    assert notice_last_trade(f) == (date(2020, 7, 27), "notice_expiry")
+    warrants = Form25("a", "25-NSE", "2021-05-03", "NYSE", "Warrants expiring May 3, 2021", "", "")
+    assert notice_last_trade(warrants) == (date(2021, 5, 3), "notice_expiry")
+    # a common stock's text never dates an expiry; a notice's own day wins over the class text
+    assert notice_last_trade(Form25("a", "25-NSE", "2020-07-27", "NASDAQ", "Common Stock", "", "")) == (None, "")
+    stated = Form25("a", "25-NSE", "2020-07-27", "NASDAQ", "Rights Expiring 7/27/2020", "17 CFR 240.12d2-2(a)(3)",
+                    "the security was suspended from trading on July 24, 2020")
+    assert notice_last_trade(stated) == (date(2020, 7, 23), "notice_a")

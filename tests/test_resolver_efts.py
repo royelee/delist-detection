@@ -7,8 +7,8 @@ from datetime import date
 import pytest
 import requests
 
-from delist_detection.edgar import EdgarClient
-from delist_detection.ticker_resolver import TickerResolver
+from delist_detection.sources.edgar import EdgarClient
+from delist_detection.identity.ticker_resolver import TickerResolver
 
 # Read at import, before conftest's autouse fixture stubs them for each test.
 _REAL = {name: getattr(TickerResolver, name) for name in ("_efts_lookup", "_efts_pre_delist_frequency_ranked")}
@@ -81,6 +81,19 @@ def test_a_search_edgar_could_not_answer_marks_the_resolve_transient(tmp_path):
     assert r._efts_lookup("NOPE", "2020-01-02") == (None, None, False)
     assert r._transient is True
     assert not list(tmp_path.glob("*.json"))
+
+
+def test_the_frequency_candidates_say_whether_the_search_failed_and_leave_the_resolver_as_it_was(tmp_path):
+    """The era-level second pass reads the 8-K frequency tier through `frequency_candidates`: a search EDGAR
+    answered gives its candidates, one it could not answer gives none and says it failed; neither changes the
+    resolver's own state for the resolve it is in."""
+    r = TickerResolver(_client(tmp_path, _Session(_answer(HIT, HIT), _Resp(503), _Resp(503), _Resp(503))))
+    assert r.frequency_candidates("NOPE", "2020-01-02") == ([(999001, NAME)], False)
+    assert r.frequency_candidates("NOPE", "2020-01-03") == ([], True)
+    assert r._transient is False
+    r._transient = True
+    assert r.frequency_candidates("NOPE", "2020-01-02") == ([(999001, NAME)], False)      # from the cache
+    assert r._transient is True
 
 
 def test_a_rejected_search_is_not_transient(tmp_path):

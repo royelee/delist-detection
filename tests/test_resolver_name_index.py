@@ -3,9 +3,9 @@ candidates from the local index instead of the live company search."""
 import pytest
 import requests
 
-from delist_detection.cik_lookup import CikNameIndex
-from delist_detection.edgar import EdgarBlocked, EdgarSubmission
-from delist_detection.ticker_resolver import TickerResolver
+from delist_detection.sources.cik_lookup import CikNameIndex
+from delist_detection.sources.edgar import EdgarBlocked, EdgarSubmission
+from delist_detection.identity.ticker_resolver import TickerResolver
 
 
 def _f(acc, form, d):

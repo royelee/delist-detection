@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from delist_detection.review_triage import (
+from delist_detection.outputs.review_triage import (
     CATALOG, DECISION_COLUMNS, SEVERITIES, Decision, FlagInfo, ReviewDecisionError, flag_info, flag_name,
     is_blank, load_decisions, row_severity, triage,
 )
@@ -65,7 +65,8 @@ def test_every_catalog_entry_is_complete():
 def test_severities_follow_the_rulings():
     info = {"no_figi", "resolved_by_current_ticker_map", "resolved_by_cik_map", "resolved_by_manual_override",
             "ftd_close_prior", "ftd_close_lagged", "acquirer_close_lagged", "last_trade_date_unconfirmed",
-            "handoff_continuation"}
+            "handoff_continuation", "line_followed", "line_follow_refused", "line_continuation",
+            "r1_continuation"}
     unacceptable = {"error", "resolution_degraded", "review_decision_unmatched"}
     assert {n for n, i in CATALOG.items() if i.severity == "info"} == info
     assert {n for n, i in CATALOG.items() if not i.acceptable} == unacceptable
@@ -79,7 +80,7 @@ def test_severities_follow_the_rulings():
                  "observed_after_delisting", "member_name_mismatch",
                  "ticker_unconfirmed", "identity_detached", "ticker_shared", "ticker_range_overlap", "observation_conflict",
                  "issuer_inferred", "issuer_cusip_disagrees",
-                 "handoff_rebucketed", "handoff_conflict", "handoff_takeover_no_delisting"):
+                 "handoff_rebucketed", "handoff_conflict", "handoff_takeover_no_delisting", "r1_rebucketed"):
         assert CATALOG[name].severity == "check", name
 
 
@@ -147,7 +148,7 @@ def test_accepting_no_dlret_too_finally_clears_the_row():
 
 
 def test_accept_by_flag_on_no_last_close_then_triage_keeps_the_blank_dlret_row():
-    from delist_detection.review_triage import accept_by_flag
+    from delist_detection.outputs.review_triage import accept_by_flag
     rows = [_del("S1", "2020-01-02", "AAA", "no_last_close", dlret=None),         # blank DLRET: must stay
            _del("S2", "2020-02-02", "BBB", "no_last_close", dlret=0.1)]          # real DLRET: clears
     decisions = accept_by_flag(rows, "no_last_close", note="sampled, all fine")

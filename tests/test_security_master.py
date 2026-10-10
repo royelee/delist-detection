@@ -4,14 +4,14 @@ from pathlib import Path
 
 import pytest
 
-from delist_detection.figi_resolution import FigiCandidate
-from delist_detection.ftd import FtdIndex, FtdRow
-from delist_detection.observations import Observation, ObservationIndex, load_observations, split_eras
-from delist_detection.added_securities import AddedAcquirer, AddedSuccessor
-from delist_detection.history import Range, Sighting, ranges_from_sightings
-from delist_detection.security_master import (
-    EraResolution, FigiResolver, Handoff, Issuer, Security, build_securities, era_cusips, era_last_seen,
-    issuers_by_era, refine_eras,
+from delist_detection.identity.figi_resolution import FigiCandidate
+from delist_detection.sources.ftd import FtdIndex, FtdRow
+from delist_detection.identity.observations import Observation, ObservationIndex, load_observations, split_eras
+from delist_detection.identity.added_securities import AddedAcquirer, AddedSuccessor
+from delist_detection.identity.history import Range, Sighting, ranges_from_sightings
+from delist_detection.identity.identity import era_cusips, era_last_seen, refine_eras
+from delist_detection.identity.security_master import (
+    EraResolution, FigiResolver, Handoff, Issuer, Security, build_securities, cusip_handoffs, issuers_by_era,
 )
 
 ERAS_FIX = Path(__file__).parent / "fixtures" / "eras"
@@ -46,8 +46,8 @@ def _fixture_ftd_rows():
 @pytest.fixture(scope="module")
 def real_ftd():
     obs = load_observations(ERAS_FIX / "observations.csv")
-    return FtdIndex.load(_RowsClient(_fixture_ftd_rows()), date(2004, 1, 1), date(2026, 9, 1),
-                         symbols={o.ticker for o in obs})
+    return FtdIndex.opened(_RowsClient(_fixture_ftd_rows()), date(2004, 1, 1), date(2026, 9, 1),
+                           symbols={o.ticker for o in obs})
 
 
 @pytest.fixture(scope="module")
@@ -190,11 +190,11 @@ def test_another_security_under_the_bare_symbol_does_not_split_a_class_tickers_e
             + _rows("BFB", "999999999", ["2016-01-04", "2016-02-01", "2016-03-01", "2016-04-01"], "BIG FAKE BANCORP")
             + _rows("BFB", "115637209", ["2016-05-02", "2016-06-01", "2016-07-01"], "BROWN-FORMAN CORP CL-B"))
     client = _RowsClient(rows)
-    guarded = FtdIndex.load(client, date(2015, 1, 1), date(2016, 12, 31), symbols={"BF-B"},
-                            names={"BF-B": ["BROWN FORMAN CORP CLASS B"]})
+    guarded = FtdIndex.opened(client, date(2015, 1, 1), date(2016, 12, 31), symbols={"BF-B"},
+                              names={"BF-B": ["BROWN FORMAN CORP CLASS B"]})
     assert [(e.first, e.last, e.ftd_cusips) for e in refine_eras(split_eras(obs), guarded)] == [
         ("2015-06-30", "2016-06-30", ("115637209",))]
-    unguarded = FtdIndex.load(client, date(2015, 1, 1), date(2016, 12, 31), symbols={"BF-B"})
+    unguarded = FtdIndex.opened(client, date(2015, 1, 1), date(2016, 12, 31), symbols={"BF-B"})
     assert len(refine_eras(split_eras(obs), unguarded)) == 2
 
 
@@ -669,7 +669,7 @@ def test_an_era_linked_to_two_composites_through_handoffs_takes_neither():
 def test_build_securities_merges_eras_of_one_figi():
     fb = _era("FB", ("2021-12-31", "FACEBOOK INC CLASS A"))
     meta = _era("META", ("2022-06-30", "META PLATFORMS INC CLASS A"))
-    from delist_detection.figi_resolution import FigiCandidate
+    from delist_detection.identity.figi_resolution import FigiCandidate
     cand = FigiCandidate("BBG000MM2P62", "META PLATFORMS INC-CLASS A", "META", "Common Stock", ())
     secs = build_securities(
         {fb.key: EraResolution(fb.key, "BBG000MM2P62", "cusip", cand, ()),
@@ -812,7 +812,7 @@ def test_issuers_by_era_names_each_known_issuer_and_skips_the_unknown():
 def test_an_added_acquirers_row_spans_its_fails_rows_or_its_fallback_day():
     from datetime import date
 
-    from delist_detection.ftd import FtdRow
+    from delist_detection.sources.ftd import FtdRow
     sec = Security("BBGACQ00001", 7, "COMMON", "ACQ CORP", "Common Stock", False, "cusip")
     acq = AddedAcquirer(sec, "ACQ", date(2018, 11, 28))
     assert acq.span() == ("2018-11-28", "2018-11-28")
@@ -838,29 +838,11 @@ def test_ranges_from_sightings_takes_named_sightings():
                                                                  ("AAB", "2020-06-30", None)]
 
 
-def test_history_rows_end_at_the_last_delisting_or_stay_open_while_listed():
-    from delist_detection.history import history_rows
-    sec = Security("BBGX", 1, "COMMON", "X CO", "Common Stock", True, "cusip")
-    sig = [Sighting("2020-01-02", "X", "observation"), Sighting("2020-06-30", "XX", "observation"),
-           Sighting("2021-01-04", "XX", "observation")]
-    cus = [Sighting("2020-01-02", "111111111", "observation"), Sighting("2021-01-04", "111111111", "observation")]
-    asked = []
-    th, ch = history_rows(sec, sig, cus, listed=False, end="2020-12-31", end_exchange="NYSE",
-                          exchange_today=lambda t: asked.append(t) or "NASDAQ")
-    assert [(r["ticker"], r["valid_from"], r["valid_to"], r["exchange"]) for r in th] == [
-        ("X", "2020-01-02", "2020-06-29", None), ("XX", "2020-06-30", "2020-12-31", "NYSE")]
-    assert [(r["cusip"], r["valid_to"]) for r in ch] == [("111111111", "2020-12-31")]
-    assert asked == []
-    th, _ = history_rows(sec, sig, cus, listed=True, end=None, end_exchange=None,
-                         exchange_today=lambda t: asked.append(t) or "NASDAQ")
-    assert (th[-1]["valid_to"], th[-1]["exchange"], asked) == (None, "NASDAQ", ["XX"])
-
-
 def test_find_acquirer_counts_only_cusips_that_are_not_the_targets():
     from datetime import date
 
-    from delist_detection.acquirers import find_acquirer
-    from delist_detection.ftd import FtdIndex, FtdRow
+    from delist_detection.terms.acquirers import find_acquirer
+    from delist_detection.sources.ftd import FtdIndex, FtdRow
     ftd = FtdIndex([FtdRow("2016-09-20", "044209104", "ASH", "ASHLAND INC", 1.0),
                     FtdRow("2016-09-21", "044209104", "ASH", "ASHLAND INC", 1.0),
                     FtdRow("2016-09-22", "044186104", "ASH", "ASHLAND GLOBAL HOLDINGS", 1.0)])
@@ -917,7 +899,7 @@ def test_an_unconfirmed_era_with_no_line_to_be_placed_on_keeps_the_ticker_tier()
     as before: a stale snapshot's dead company finds its own line there (Dow
     Jones, listed in 2008 after News Corp bought it in 2007), and a later
     holder's line is caught by the crossing check (APTV17 lies between)."""
-    from delist_detection.security_master import resolve_with_identity_guard
+    from delist_detection.identity.security_master import resolve_with_identity_guard
     eras, figi, cusips = _aptv_eras()
     dlph, aptv12, aptv17, aptv24 = eras
     alone = [aptv12, aptv24]
@@ -978,7 +960,7 @@ def test_a_weak_era_whose_merge_would_swallow_another_securitys_confirmed_range_
     ITT range would then run 2008..today across BBG000BMB7R1's CUSIP-confirmed
     2012-2015 era. The weak era is taken back out and resolved without its
     ticker pick (here: its issuer's placeholder); the report names it."""
-    from delist_detection.security_master import crossing_weak_eras, resolve_with_identity_guard
+    from delist_detection.identity.security_master import crossing_weak_eras, resolve_with_identity_guard
     eras, figi, cusips = _itt_eras()
     itt08, itt12, itt16 = eras
     issuers = issuers_by_era({e.key: 216228 for e in eras})
@@ -997,7 +979,7 @@ def test_a_weak_era_that_only_overlaps_another_securitys_era_is_not_detached():
     observation-conflict review reports; it is kept on the ACE/Chubb Ltd line
     it reached. A weak era with no other era of its security on the far side
     of the confirmed one crosses nothing either."""
-    from delist_detection.security_master import crossing_weak_eras
+    from delist_detection.identity.security_master import crossing_weak_eras
     chubb = _era("CB", ("2008-01-16", "CHUBB CORP"), ("2015-12-31", "CHUBB CORP"))
     cb_ace = _era("CB", ("2012-06-29", "ACE LTD"), ("2014-06-30", "ACE LTD"))
     cb_new = _era("CB", ("2016-06-30", "CHUBB LTD"), ("2026-06-30", "CHUBB LTD"))
@@ -1019,7 +1001,7 @@ def test_a_placeholder_whose_ticker_a_later_line_of_its_issuer_and_class_holds_i
     when a FIGI security of its issuer and class, sharing one of its tickers,
     begins after its own last observation; not when that line began before, is
     another class, or shares no ticker."""
-    from delist_detection.security_master import superseded_placeholders
+    from delist_detection.identity.security_master import superseded_placeholders
     j12 = _era("J", ("2012-06-29", "JACOBS ENGINEERING GROUP INC"), ("2014-06-30", "JACOBS ENGINEERING GROUP INC"))
     j19 = _era("J", ("2019-12-31", "JACOBS ENGINEERING GROUP INC"), ("2022-06-30", "JACOBS ENGINEERING GROUP INC"))
     j22 = _era("J", ("2022-12-31", "JACOBS SOLUTIONS INC"), ("2026-06-30", "JACOBS SOLUTIONS INC"))
@@ -1047,7 +1029,7 @@ def test_a_placeholder_whose_ticker_a_later_line_of_its_issuer_and_class_holds_i
 def test_unconfirmed_eras_are_those_no_fails_row_shows_under_their_ticker():
     """The fact `ticker_unconfirmed_review` reports, as a set of era keys: from
     2004 on, no fails row under the era's ticker within 30 days of its span."""
-    from delist_detection.security_master import unconfirmed_eras
+    from delist_detection.identity.security_master import unconfirmed_eras
     aptv12 = _era("APTV", ("2012-06-29", "APTIV PLC"), ("2013-12-31", "APTIV PLC"))
     aptv17 = _era("APTV", ("2017-12-31", "APTIV PLC"))
     old = _era("OLD", ("2001-06-29", "OLD CO"))
@@ -1058,11 +1040,149 @@ def test_unconfirmed_eras_are_those_no_fails_row_shows_under_their_ticker():
 
 def test_only_an_unconfirmed_era_the_fails_data_covers_is_guarded():
     """The guard acts on evidence of absence: an unconfirmed era is guarded only
-    when the loaded fails data has rows (of any symbol) in its window. With no
-    fails row at all then, the data says nothing about its ticker."""
-    from delist_detection.security_master import guarded_eras
+    when the fails data covers its window (`FtdIndex.data_covers`; an index built
+    from rows: they are all its data, so some row of any symbol falls in it). With
+    no fails row at all then, the data says nothing about its ticker."""
+    from delist_detection.identity.security_master import guarded_eras
     aptv12 = _era("APTV", ("2012-06-29", "APTIV PLC"), ("2013-12-31", "APTIV PLC"))
     live = _era("LIVE", ("2025-06-30", "LIVE CO"))
     ftd = FtdIndex([FtdRow("2012-07-02", "G6095L109", "DLPH", "DELPHI AUTOMOTIVE PLC", 25.0)])
     assert guarded_eras([aptv12, live], ftd) == {aptv12.key}
-    assert ftd.has_rows("2012-07-02", "2012-07-02") and not ftd.has_rows("2012-07-03", "2025-01-01")
+    assert ftd.data_covers("2012-07-02", "2012-07-02") and not ftd.data_covers("2012-07-03", "2025-01-01")
+
+
+def _sle_hsh(settling=True):
+    """Sara Lee (SLE, 803111103) renamed Hillshire Brands (HSH, 432589109) in 2012: SLE's last trade 2012-06-28,
+    its fails still settling at 18.50 until 2012-07-13; HSH's first row 2012-07-03. With `settling` False, SLE's
+    rows after 2012-06-28 carry changing prices: it kept trading beside HSH."""
+    tail = [18.50] * 4 if settling else [18.50, 18.61, 18.40, 18.72]
+    sle = [("2012-05-01", 20.1), ("2012-05-15", 19.9), ("2012-06-01", 19.2), ("2012-06-15", 18.9),
+           ("2012-06-27", 18.78), ("2012-06-28", 18.63),
+           *zip(("2012-06-29", "2012-07-02", "2012-07-03", "2012-07-13"), tail)]
+    hsh = [("2012-07-03", 29.75), ("2012-07-05", 29.99), ("2012-07-06", 29.73), ("2012-07-09", 29.56),
+           ("2012-08-01", 30.10), ("2012-09-04", 31.00)]
+    rows = ([FtdRow(d, "803111103", "SLE", "SARA LEE CORP", p) for d, p in sle]
+            + [FtdRow(d, "432589109", "HSH", "HILLSHIRE BRANDS CO", p) for d, p in hsh])
+    index = ObservationIndex([Observation("SLE", "2012-03-30", "SARA LEE CORP"),
+                              Observation("SLE", "2012-06-29", "SARA LEE CORP"),
+                              Observation("HSH", "2012-07-31", "HILLSHIRE BRANDS CO"),
+                              Observation("HSH", "2012-12-31", "HILLSHIRE BRANDS CO")])
+    ftd = FtdIndex.opened(_RowsClient(rows), date(2012, 1, 3), date(2013, 1, 31), symbols={"SLE", "HSH"})
+    return refine_eras(index.eras(), ftd), ftd
+
+
+def test_a_switch_is_timed_from_the_old_cusips_last_price_change_not_its_settling_tail():
+    """U2 (sub-plan 5a, SLE 2012): HSH's first row is seven trading days before SLE's last fails row, but two
+    after the row that opens SLE's one-price settling tail; the switch is timed from that row."""
+    eras, ftd = _sle_hsh()
+    links = [(h.era_key, h.to_key, h.kind, h.cusip, h.new_cusip, h.day, h.last) for h in cusip_handoffs(eras, ftd)]
+    assert links == [("SLE@2012-03-30", "HSH@2012-07-31", "cusip_handoff", "803111103", "432589109", "2012-07-03",
+                      "2012-07-13")]
+
+
+def test_an_old_cusip_still_trading_beside_the_new_one_is_no_switch():
+    """Must not change: SLE's rows keep changing price for eight trading days after HSH's first row (two lines
+    trading side by side, as a spin-off's), so nothing settles and no switch is read."""
+    eras, ftd = _sle_hsh(settling=False)
+    assert [h for h in cusip_handoffs(eras, ftd) if h.kind == "cusip_handoff"] == []
+
+
+def test_settled_last_is_the_row_that_opens_the_last_one_price_run():
+    from delist_detection.sources.ftd import settled_last
+    rows = [FtdRow(d, "1", "X", "X", p) for d, p in (("2012-06-28", 18.63), ("2012-06-29", 18.5),
+                                                     ("2012-07-02", 18.5), ("2012-07-13", 18.5))]
+    assert settled_last(rows).date == "2012-06-29" and settled_last(rows[:1]).date == "2012-06-28"
+    assert settled_last(rows[:2]).date == "2012-06-29"
+
+
+def _spw_spxc(spxc_name="SPX CORP"):
+    """SPX's one CUSIP 784635104 under SPW (2008-2015) and SPXC (from 2015-09-29). OpenFIGI knows the CUSIP on no
+    US venue; SPXC's ticker gives BBG000BTGCV5."""
+    spw = _era("SPW", ("2008-01-16", "SPX CORP"), ("2015-06-30", "SPX CORP"))
+    spxc = _era("SPXC", ("2015-12-31", spxc_name))
+    figi = _Figi({("TICKER", "SPXC"): {"data": [_row("BBG000BTGCV5", "US", "SPXC", "SPX CORP")]}})
+    handoffs = [Handoff(spw.key, spxc.key, "shared_cusip", "784635104"),
+                Handoff(spxc.key, spw.key, "shared_cusip", "784635104")]
+    return spw, spxc, figi, handoffs
+
+
+def test_a_shared_cusip_reaches_a_sibling_the_ticker_tier_picked_on_its_own_name():
+    """U3 (sub-plan 5a, SPW 2015): SPW shares its CUSIP with SPXC, an era of its issuer and class the ticker tier
+    picked on its observed name. One CUSIP under two tickers of one issuer is one line: SPW joins that composite
+    instead of keeping a placeholder beside it."""
+    spw, spxc, figi, handoffs = _spw_spxc()
+    res = FigiResolver(figi).resolve_many([spw, spxc], issuers=issuers_by_era({spw.key: 88205, spxc.key: 88205}),
+                                          cusips={spw.key: ["784635104"], spxc.key: ["784635104"]},
+                                          handoffs=handoffs)
+    assert (res[spxc.key].sec_id, res[spxc.key].source) == ("BBG000BTGCV5", "ticker")
+    assert (res[spw.key].sec_id, res[spw.key].source) == ("BBG000BTGCV5", "handoff")
+
+
+def test_a_shared_cusip_does_not_carry_a_class_onto_another_classes_ticker_pick():
+    """Must not change: the reach still needs one issuer and one class (two classes of one issuer, MSG A and B)."""
+    a = _era("AA", ("2012-06-29", "SPLIT CO CLASS A"))
+    b = _era("BB", ("2015-06-30", "SPLIT CO CLASS B"))
+    figi = _Figi({("TICKER", "BB"): {"data": [_row("BBGCLASSB01", "US", "BB", "SPLIT CO CLASS B")]}})
+    handoffs = [Handoff(a.key, b.key, "shared_cusip", "SHAREDXCLASS")]
+    res = FigiResolver(figi).resolve_many([a, b], issuers=issuers_by_era({a.key: 4, b.key: 4}),
+                                          cusips={a.key: [], b.key: []}, handoffs=handoffs)
+    assert (res[b.key].sec_id, res[b.key].source) == ("BBGCLASSB01", "ticker")
+    assert res[a.key].sec_id == "CIK4-CLASS-A"
+
+
+def test_a_cusip_switch_does_not_reach_an_era_the_ticker_tier_picked():
+    """Must not change: only a shared CUSIP reaches a picked era. A switch link (`cusip_handoff`) from SPW to SPXC,
+    whose ticker pick stands on its own, leaves SPW on its issuer's placeholder."""
+    spw, spxc, figi, _ = _spw_spxc()
+    handoffs = [Handoff(spw.key, spxc.key, "cusip_handoff", "784635104", "784635999", "2015-09-29")]
+    res = FigiResolver(figi).resolve_many([spw, spxc], issuers=issuers_by_era({spw.key: 88205, spxc.key: 88205}),
+                                          cusips={spw.key: [], spxc.key: []}, handoffs=handoffs)
+    assert (res[spxc.key].sec_id, res[spxc.key].source) == ("BBG000BTGCV5", "ticker")
+    assert (res[spw.key].sec_id, res[spw.key].source) == ("CIK88205-COMMON", "placeholder")
+
+
+def test_a_shared_cusip_does_not_reach_a_ticker_pick_only_the_edgar_names_accepted():
+    """Must not change: a weak pick (accepted on the issuer's EDGAR names alone) is not a line a shared CUSIP
+    reaches. SPW also shares a CUSIP with CC, confirmed by CUSIP on BBGLINEB01; SPXC's weak pick on BBGLINEA01 is no
+    second composite for the chain to reach, so SPW still joins the confirmed line."""
+    spw = _era("SPW", ("2008-01-16", "SPX CORP"), ("2010-06-30", "SPX CORP"))
+    cc = _era("CC", ("2012-06-29", "SPX CORP"), ("2013-06-28", "SPX CORP"))
+    spxc = _era("SPXC", ("2015-12-31", "ZZZ HOLDINGS"))
+    figi = _Figi({("ID_CUSIP", "11111C101"): {"data": [_row("BBGLINEB01", "US", "CC", "SPX CORP")]},
+                  ("TICKER", "SPXC"): {"data": [_row("BBGLINEA01", "US", "SPXC", "SPX CORP")]}})
+    handoffs = [Handoff(spw.key, spxc.key, "shared_cusip", "784635104"),
+                Handoff(spw.key, cc.key, "shared_cusip", "784635104")]
+    res = FigiResolver(figi).resolve_many(
+        [spw, cc, spxc], issuers=issuers_by_era({spw.key: 88205, cc.key: 88205, spxc.key: 88205},
+                                                {88205: ("SPX CORP",)}),
+        cusips={spw.key: [], cc.key: ["11111C101"], spxc.key: []}, handoffs=handoffs)
+    assert res[cc.key].sec_id == "BBGLINEB01"
+    assert (res[spxc.key].sec_id, res[spxc.key].source) == ("BBGLINEA01", "ticker")
+    assert (res[spw.key].sec_id, res[spw.key].source) == ("BBGLINEB01", "handoff")
+
+
+def test_a_join_to_a_picked_composite_is_still_withdrawn_when_another_issuers_cusip_confirms_it():
+    """Must not change: `_contradicted` applies to a join through a picked era too. GG, another issuer's era, is
+    confirmed by CUSIP on SPXC's composite, so SPW does not take it."""
+    spw, spxc, figi, handoffs = _spw_spxc()
+    gg = _era("GG", ("2015-06-30", "OTHER CORP"))
+    figi.answers[("ID_CUSIP", "22222G101")] = {"data": [_row("BBG000BTGCV5", "US", "GG", "OTHER CORP")]}
+    res = FigiResolver(figi).resolve_many(
+        [spw, spxc, gg], issuers=issuers_by_era({spw.key: 88205, spxc.key: 88205, gg.key: 2}),
+        cusips={spw.key: [], spxc.key: [], gg.key: ["22222G101"]}, handoffs=handoffs)
+    assert res[spxc.key].sec_id == "BBG000BTGCV5"
+    assert (res[spw.key].sec_id, res[spw.key].source) == ("CIK88205-COMMON", "placeholder")
+
+
+def test_a_placeholder_whose_line_ticker_a_later_figi_line_holds_is_superseded():
+    """U5 (sub-plan 5a): Aon's placeholder traded as AOC, then (the line follow found) as AON; Aon plc's later FIGI
+    line of the same issuer and class holds AON. The placeholder is not the line listed today."""
+    from delist_detection.identity.security_master import superseded_placeholders
+    aoc = _era("AOC", ("2008-01-16", "AON CORP"), ("2009-06-08", "AON CORP"))
+    aon = _era("AON", ("2012-06-29", "AON PLC"))
+    p = Security("CIK315293-COMMON", 315293, "COMMON", "AON CORP", "", True, "placeholder", eras=[aoc],
+                 line_tickers=frozenset({"AON"}))
+    s = Security("BBG00AONPLC1", 315293, "COMMON", "AON PLC", "Common Stock", True, "cusip", eras=[aon])
+    assert superseded_placeholders({p.sec_id: p, s.sec_id: s}) == {"CIK315293-COMMON"}
+    p.line_tickers = frozenset()
+    assert superseded_placeholders({p.sec_id: p, s.sec_id: s}) == set()

@@ -1,0 +1,1019 @@
+{
+ "100517": {
+  "formerNames": [
+   {
+    "from": "2010-07-22T04:00:00.000Z",
+    "name": "United Continental Holdings, Inc.",
+    "to": "2019-06-27T04:00:00.000Z"
+   },
+   {
+    "from": "1994-08-08T04:00:00.000Z",
+    "name": "UAL CORP /DE/",
+    "to": "2010-09-30T04:00:00.000Z"
+   }
+  ],
+  "name": "United Airlines Holdings, Inc.",
+  "tickers": [
+   "UAL"
+  ]
+ },
+ "1010775": {
+  "formerNames": [
+   {
+    "from": "1998-07-29T00:00:00.000Z",
+    "name": "SOUTHERN ENERGY INC",
+    "to": "2001-01-30T00:00:00.000Z"
+   },
+   {
+    "from": "1996-10-28T00:00:00.000Z",
+    "name": "SEI HOLDINGS INC",
+    "to": "1997-06-17T00:00:00.000Z"
+   }
+  ],
+  "name": "MIRANT CORP",
+  "tickers": []
+ },
+ "1012569": {
+  "formerNames": [
+   {
+    "from": "2004-12-14T00:00:00.000Z",
+    "name": "Energy Transfer Partners, L.P.",
+    "to": "2017-04-28T00:00:00.000Z"
+   },
+   {
+    "from": "2004-04-05T00:00:00.000Z",
+    "name": "ENERGY TRANSFER PARTNERS LP",
+    "to": "2005-01-03T00:00:00.000Z"
+   },
+   {
+    "from": "1996-11-27T00:00:00.000Z",
+    "name": "HERITAGE PROPANE PARTNERS L P",
+    "to": "2004-02-24T00:00:00.000Z"
+   }
+  ],
+  "name": "Energy Transfer, LP",
+  "tickers": []
+ },
+ "101829": {
+  "formerNames": [
+   {
+    "from": "2020-04-07T04:00:00.000Z",
+    "name": "RAYTHEON TECHNOLOGIES CORP",
+    "to": "2023-06-29T04:00:00.000Z"
+   },
+   {
+    "from": "1994-01-24T05:00:00.000Z",
+    "name": "UNITED TECHNOLOGIES CORP /DE/",
+    "to": "2020-04-06T04:00:00.000Z"
+   }
+  ],
+  "name": "RTX Corp",
+  "tickers": [
+   "RTX"
+  ]
+ },
+ "102379": {
+  "formerNames": [],
+  "name": "URS CORP /NEW/",
+  "tickers": []
+ },
+ "1035675": {
+  "formerNames": [
+   {
+    "from": "1998-06-17T00:00:00.000Z",
+    "name": "B E C ENERGY",
+    "to": "1999-08-13T00:00:00.000Z"
+   },
+   {
+    "from": "1997-03-17T00:00:00.000Z",
+    "name": "BOSTON EDISON HOLDINGS",
+    "to": "1997-06-23T00:00:00.000Z"
+   }
+  ],
+  "name": "NSTAR/MA",
+  "tickers": []
+ },
+ "1043219": {
+  "formerNames": [
+   {
+    "from": "1997-10-08T00:00:00.000Z",
+    "name": "ANNALY MORTGAGE MANAGEMENT INC",
+    "to": "2006-08-03T00:00:00.000Z"
+   }
+  ],
+  "name": "ANNALY CAPITAL MANAGEMENT INC",
+  "tickers": [
+   "NLY",
+   "NLY-PF",
+   "NLY-PG",
+   "NLY-PI",
+   "NLY-PJ"
+  ]
+ },
+ "1047122": {
+  "formerNames": [
+   {
+    "from": "1997-10-08T00:00:00.000Z",
+    "name": "HE HOLDINGS INC",
+    "to": "1997-11-12T00:00:00.000Z"
+   }
+  ],
+  "name": "RAYTHEON CO/",
+  "tickers": []
+ },
+ "1058057": {
+  "formerNames": [],
+  "name": "MARVELL TECHNOLOGY GROUP LTD",
+  "tickers": []
+ },
+ "1065865": {
+  "formerNames": [
+   {
+    "from": "1999-11-29T00:00:00.000Z",
+    "name": "STILWELL FINANCIAL INC",
+    "to": "2003-01-10T00:00:00.000Z"
+   }
+  ],
+  "name": "JANUS CAPITAL GROUP INC",
+  "tickers": []
+ },
+ "1073431": {
+  "formerNames": [
+   {
+    "from": "1998-12-10T00:00:00.000Z",
+    "name": "INVITROGEN CORP",
+    "to": "2008-11-18T00:00:00.000Z"
+   }
+  ],
+  "name": "Life Technologies Corp",
+  "tickers": []
+ },
+ "1084580": {
+  "formerNames": [
+   {
+    "from": "1999-08-06T00:00:00.000Z",
+    "name": "JEFFERIES GROUP INC /DE/",
+    "to": "2013-03-01T00:00:00.000Z"
+   },
+   {
+    "from": "1999-04-20T00:00:00.000Z",
+    "name": "JEF HOLDING CO INC",
+    "to": "1999-04-20T00:00:00.000Z"
+   }
+  ],
+  "name": "Jefferies Group LLC",
+  "tickers": []
+ },
+ "1091530": {
+  "formerNames": [],
+  "name": "XM SATELLITE RADIO HOLDINGS INC",
+  "tickers": []
+ },
+ "1091667": {
+  "formerNames": [
+   {
+    "from": "1999-12-02T05:00:00.000Z",
+    "name": "CHARTER COMMUNICATIONS INC /MO/",
+    "to": "2009-12-15T05:00:00.000Z"
+   }
+  ],
+  "name": "CHARTER COMMUNICATIONS, INC. /MO/",
+  "tickers": [
+   "CHTR",
+   "CHTRP"
+  ]
+ },
+ "1094093": {
+  "formerNames": [
+   {
+    "from": "2000-07-14T04:00:00.000Z",
+    "name": "CP&L ENERGY INC",
+    "to": "2000-12-04T05:00:00.000Z"
+   },
+   {
+    "from": "1999-08-31T04:00:00.000Z",
+    "name": "CP&L HOLDINGS INC",
+    "to": "1999-12-03T05:00:00.000Z"
+   }
+  ],
+  "name": "PROGRESS ENERGY INC",
+  "tickers": []
+ },
+ "1126294": {
+  "formerNames": [
+   {
+    "from": "2009-05-04T00:00:00.000Z",
+    "name": "RRI ENERGY INC",
+    "to": "2010-11-24T00:00:00.000Z"
+   },
+   {
+    "from": "2004-04-26T00:00:00.000Z",
+    "name": "RELIANT ENERGY INC",
+    "to": "2009-04-30T00:00:00.000Z"
+   },
+   {
+    "from": "2000-10-17T00:00:00.000Z",
+    "name": "RELIANT RESOURCES INC",
+    "to": "2004-04-09T00:00:00.000Z"
+   }
+  ],
+  "name": "GenOn Energy, Inc.",
+  "tickers": []
+ },
+ "1143068": {
+  "formerNames": [],
+  "name": "GREAT PLAINS ENERGY INC",
+  "tickers": []
+ },
+ "1160958": {
+  "formerNames": [],
+  "name": "INPHI Corp",
+  "tickers": []
+ },
+ "1174746": {
+  "formerNames": [
+   {
+    "from": "2005-02-15T05:00:00.000Z",
+    "name": "INTERCONTINENTALEXCHANGE INC",
+    "to": "2014-05-08T04:00:00.000Z"
+   }
+  ],
+  "name": "Intercontinental Exchange Holdings, Inc.",
+  "tickers": []
+ },
+ "1206264": {
+  "formerNames": [
+   {
+    "from": "2013-06-26T04:00:00.000Z",
+    "name": "TEMPUR SEALY INTERNATIONAL, INC.",
+    "to": "2025-02-14T05:00:00.000Z"
+   },
+   {
+    "from": "2003-12-04T05:00:00.000Z",
+    "name": "TEMPUR PEDIC INTERNATIONAL INC",
+    "to": "2013-06-04T04:00:00.000Z"
+   },
+   {
+    "from": "2002-11-14T05:00:00.000Z",
+    "name": "TWI HOLDINGS INC",
+    "to": "2003-11-25T05:00:00.000Z"
+   }
+  ],
+  "name": "SOMNIGROUP INTERNATIONAL INC.",
+  "tickers": [
+   "SGI"
+  ]
+ },
+ "1236275": {
+  "formerNames": [
+   {
+    "from": "2011-08-03T04:00:00.000Z",
+    "name": "SilverSun Technologies, Inc.",
+    "to": "2024-06-05T04:00:00.000Z"
+   },
+   {
+    "from": "2005-09-27T04:00:00.000Z",
+    "name": "TREY RESOURCES INC",
+    "to": "2011-06-30T04:00:00.000Z"
+   },
+   {
+    "from": "2003-06-03T04:00:00.000Z",
+    "name": "TREY INDUSTRIES INC",
+    "to": "2005-09-14T04:00:00.000Z"
+   }
+  ],
+  "name": "QXO, Inc.",
+  "tickers": [
+   "QXO",
+   "QXO-PB"
+  ]
+ },
+ "1274173": {
+  "formerNames": [
+   {
+    "from": "2026-07-01T04:00:00.000Z",
+    "name": "Janus Henderson Group Ltc.",
+    "to": "2026-07-01T04:00:00.000Z"
+   },
+   {
+    "from": "2017-05-25T04:00:00.000Z",
+    "name": "JANUS HENDERSON GROUP PLC",
+    "to": "2026-06-30T04:00:00.000Z"
+   },
+   {
+    "from": "2005-05-11T04:00:00.000Z",
+    "name": "HENDERSON GROUP PLC",
+    "to": "2017-05-25T04:00:00.000Z"
+   },
+   {
+    "from": "2003-12-16T05:00:00.000Z",
+    "name": "HHG PLC",
+    "to": "2005-04-18T04:00:00.000Z"
+   }
+  ],
+  "name": "Janus Henderson Group Ltd.",
+  "tickers": []
+ },
+ "1316360": {
+  "formerNames": [],
+  "name": "IHS Inc.",
+  "tickers": []
+ },
+ "1326160": {
+  "formerNames": [
+   {
+    "from": "2005-07-01T04:00:00.000Z",
+    "name": "Duke Energy Holding Corp.",
+    "to": "2006-04-03T04:00:00.000Z"
+   },
+   {
+    "from": "2005-05-09T04:00:00.000Z",
+    "name": "Deer Holding Corp.",
+    "to": "2005-06-22T04:00:00.000Z"
+   }
+  ],
+  "name": "Duke Energy CORP",
+  "tickers": [
+   "DUK",
+   "DUKB",
+   "DUK-PA",
+   "DUKU",
+   "DUUKU"
+  ]
+ },
+ "1339947": {
+  "formerNames": [
+   {
+    "from": "2005-10-05T00:00:00.000Z",
+    "name": "New Viacom Corp.",
+    "to": "2006-01-06T00:00:00.000Z"
+   }
+  ],
+  "name": "Viacom Inc.",
+  "tickers": []
+ },
+ "1368007": {
+  "formerNames": [
+   {
+    "from": "2006-09-21T00:00:00.000Z",
+    "name": "NYSE Euronext, Inc.",
+    "to": "2007-04-04T00:00:00.000Z"
+   }
+  ],
+  "name": "NYSE Euronext",
+  "tickers": []
+ },
+ "1377013": {
+  "formerNames": [
+   {
+    "from": "2006-10-18T00:00:00.000Z",
+    "name": "TIME WARNER CABLE INC.",
+    "to": "2016-06-01T00:00:00.000Z"
+   }
+  ],
+  "name": "SPECTRUM MANAGEMENT HOLDING COMPANY, LLC",
+  "tickers": []
+ },
+ "1419521": {
+  "formerNames": [],
+  "name": "Hatteras Financial Corp",
+  "tickers": []
+ },
+ "1507934": {
+  "formerNames": [
+   {
+    "from": "2012-12-27T00:00:00.000Z",
+    "name": "Starz",
+    "to": "2016-12-07T00:00:00.000Z"
+   },
+   {
+    "from": "2011-09-23T00:00:00.000Z",
+    "name": "Liberty Media Corp",
+    "to": "2013-01-11T00:00:00.000Z"
+   },
+   {
+    "from": "2011-01-13T00:00:00.000Z",
+    "name": "Liberty CapStarz, Inc.",
+    "to": "2011-09-22T00:00:00.000Z"
+   },
+   {
+    "from": "2010-12-15T00:00:00.000Z",
+    "name": "Liberty Splitco, Inc.",
+    "to": "2011-05-20T00:00:00.000Z"
+   }
+  ],
+  "name": "Starz Acquisition LLC",
+  "tickers": []
+ },
+ "1560385": {
+  "formerNames": [
+   {
+    "from": "2012-10-19T04:00:00.000Z",
+    "name": "Liberty Spinco, Inc.",
+    "to": "2013-01-11T05:00:00.000Z"
+   }
+  ],
+  "name": "Liberty Media Corp",
+  "tickers": [
+   "FWONA",
+   "FWONK",
+   "FWONB"
+  ]
+ },
+ "1571949": {
+  "formerNames": [
+   {
+    "from": "2013-03-20T04:00:00.000Z",
+    "name": "IntercontinentalExchange Group, Inc.",
+    "to": "2014-05-29T04:00:00.000Z"
+   }
+  ],
+  "name": "Intercontinental Exchange, Inc.",
+  "tickers": [
+   "ICE"
+  ]
+ },
+ "1578845": {
+  "formerNames": [
+   {
+    "from": "2013-09-30T00:00:00.000Z",
+    "name": "Actavis plc",
+    "to": "2015-06-15T00:00:00.000Z"
+   },
+   {
+    "from": "2013-06-18T00:00:00.000Z",
+    "name": "Actavis Ltd",
+    "to": "2013-07-31T00:00:00.000Z"
+   }
+  ],
+  "name": "Allergan plc",
+  "tickers": []
+ },
+ "1584952": {
+  "formerNames": [],
+  "name": "EP Energy Corp",
+  "tickers": []
+ },
+ "1598014": {
+  "formerNames": [
+   {
+    "from": "2014-01-27T00:00:00.000Z",
+    "name": "Markit Ltd.",
+    "to": "2016-07-11T00:00:00.000Z"
+   }
+  ],
+  "name": "IHS Markit Ltd.",
+  "tickers": []
+ },
+ "1599222": {
+  "formerNames": [
+   {
+    "from": "2014-02-06T00:00:00.000Z",
+    "name": "Memorial Resource Development Corp.",
+    "to": "2016-09-16T00:00:00.000Z"
+   }
+  ],
+  "name": "Range Resources - Louisiana, Inc.",
+  "tickers": []
+ },
+ "1611983": {
+  "formerNames": [],
+  "name": "Liberty Broadband Corp",
+  "tickers": [
+   "LBRDK",
+   "LBRDA",
+   "LBRDP"
+  ]
+ },
+ "1633931": {
+  "formerNames": [
+   {
+    "from": "2015-03-30T04:00:00.000Z",
+    "name": "TopBuild Corp",
+    "to": "2026-06-29T04:00:00.000Z"
+   },
+   {
+    "from": "2015-03-04T05:00:00.000Z",
+    "name": "Masco SpinCo Corp.",
+    "to": "2015-03-04T05:00:00.000Z"
+   }
+  ],
+  "name": "QXO Insulation, LLC",
+  "tickers": []
+ },
+ "1711269": {
+  "formerNames": [
+   {
+    "from": "2017-07-10T04:00:00.000Z",
+    "name": "Monarch Energy Holding, Inc.",
+    "to": "2017-11-16T05:00:00.000Z"
+   }
+  ],
+  "name": "Evergy, Inc.",
+  "tickers": [
+   "EVRG"
+  ]
+ },
+ "1835632": {
+  "formerNames": [],
+  "name": "Marvell Technology, Inc.",
+  "tickers": [
+   "MRVL"
+  ]
+ },
+ "19612": {
+  "formerNames": [
+   {
+    "from": "1995-08-10T00:00:00.000Z",
+    "name": "CHEMICAL FINANCIAL CORP",
+    "to": "2019-08-01T00:00:00.000Z"
+   }
+  ],
+  "name": "TCF FINANCIAL CORP",
+  "tickers": []
+ },
+ "2088896": {
+  "formerNames": [],
+  "name": "X-Energy, Inc.",
+  "tickers": [
+   "XE"
+  ]
+ },
+ "230463": {
+  "formerNames": [
+   {
+    "from": "2007-11-26T00:00:00.000Z",
+    "name": "POGO PRODUCING CO LLC",
+    "to": "2012-04-25T00:00:00.000Z"
+   },
+   {
+    "from": "1994-11-08T00:00:00.000Z",
+    "name": "POGO PRODUCING CO",
+    "to": "2007-11-21T00:00:00.000Z"
+   }
+  ],
+  "name": "PXP PRODUCING CO LLC",
+  "tickers": []
+ },
+ "314808": {
+  "formerNames": [
+   {
+    "from": "2019-08-05T04:00:00.000Z",
+    "name": "Valaris plc",
+    "to": "2021-04-30T04:00:00.000Z"
+   },
+   {
+    "from": "2019-04-11T04:00:00.000Z",
+    "name": "Ensco Rowan plc",
+    "to": "2019-08-01T04:00:00.000Z"
+   },
+   {
+    "from": "2010-03-18T04:00:00.000Z",
+    "name": "Ensco plc",
+    "to": "2019-03-29T04:00:00.000Z"
+   },
+   {
+    "from": "2009-12-23T05:00:00.000Z",
+    "name": "Ensco International plc",
+    "to": "2010-03-31T04:00:00.000Z"
+   },
+   {
+    "from": "1995-12-04T05:00:00.000Z",
+    "name": "ENSCO INTERNATIONAL INC",
+    "to": "2009-12-23T05:00:00.000Z"
+   },
+   {
+    "from": "1993-12-31T05:00:00.000Z",
+    "name": "ENERGY SERVICE COMPANY INC",
+    "to": "1995-03-28T05:00:00.000Z"
+   }
+  ],
+  "name": "Valaris Ltd",
+  "tickers": [
+   "VAL",
+   "VAL-WT"
+  ]
+ },
+ "315852": {
+  "formerNames": [
+   {
+    "from": "1994-03-28T05:00:00.000Z",
+    "name": "LOMAK PETROLEUM INC",
+    "to": "1998-07-16T04:00:00.000Z"
+   }
+  ],
+  "name": "RANGE RESOURCES CORP",
+  "tickers": [
+   "RRC"
+  ]
+ },
+ "319687": {
+  "formerNames": [
+   {
+    "from": "2013-02-25T05:00:00.000Z",
+    "name": "CONTINENTAL AIRLINES, INC.",
+    "to": "2013-03-28T04:00:00.000Z"
+   },
+   {
+    "from": "1994-02-14T05:00:00.000Z",
+    "name": "CONTINENTAL AIRLINES INC /DE/",
+    "to": "2013-02-08T05:00:00.000Z"
+   }
+  ],
+  "name": "UNITED AIRLINES, INC.",
+  "tickers": []
+ },
+ "350797": {
+  "formerNames": [
+   {
+    "from": "1994-03-02T00:00:00.000Z",
+    "name": "EATON VANCE CORP",
+    "to": "2021-03-01T00:00:00.000Z"
+   }
+  ],
+  "name": "Mirror Merger Sub 2, LLC",
+  "tickers": []
+ },
+ "38074": {
+  "formerNames": [
+   {
+    "from": "2014-07-01T00:00:00.000Z",
+    "name": "Tango Merger Sub 2 LLC",
+    "to": "2014-07-01T00:00:00.000Z"
+   },
+   {
+    "from": "1994-10-17T00:00:00.000Z",
+    "name": "FOREST LABORATORIES INC",
+    "to": "2014-06-30T00:00:00.000Z"
+   }
+  ],
+  "name": "Forest Laboratories, LLC",
+  "tickers": []
+ },
+ "58492": {
+  "formerNames": [],
+  "name": "LEGGETT & PLATT INC",
+  "tickers": [
+   "LEG"
+  ]
+ },
+ "741508": {
+  "formerNames": [
+   {
+    "from": "2002-03-20T00:00:00.000Z",
+    "name": "SIERRA PACIFIC RESOURCES /NV/",
+    "to": "2008-11-20T00:00:00.000Z"
+   },
+   {
+    "from": "1996-11-22T00:00:00.000Z",
+    "name": "SIERRA PACIFIC RESOURCES",
+    "to": "2001-02-27T00:00:00.000Z"
+   }
+  ],
+  "name": "NV ENERGY, INC.",
+  "tickers": []
+ },
+ "77551": {
+  "formerNames": [
+   {
+    "from": "2000-12-11T00:00:00.000Z",
+    "name": "APPLERA CORP",
+    "to": "2008-07-01T00:00:00.000Z"
+   },
+   {
+    "from": "1999-02-11T00:00:00.000Z",
+    "name": "PE CORP",
+    "to": "2000-11-14T00:00:00.000Z"
+   },
+   {
+    "from": "1994-02-14T00:00:00.000Z",
+    "name": "PERKIN ELMER CORP",
+    "to": "1999-01-07T00:00:00.000Z"
+   }
+  ],
+  "name": "APPLIED BIOSYSTEMS INC.",
+  "tickers": []
+ },
+ "801337": {
+  "formerNames": [],
+  "name": "WEBSTER FINANCIAL CORP",
+  "tickers": [
+   "WBS",
+   "WBS-PF",
+   "WBS-PG"
+  ]
+ },
+ "808461": {
+  "formerNames": [
+   {
+    "from": "2018-02-21T00:00:00.000Z",
+    "name": "GCI LIBERTY, INC.",
+    "to": "2020-12-16T00:00:00.000Z"
+   },
+   {
+    "from": "1995-01-27T00:00:00.000Z",
+    "name": "GENERAL COMMUNICATION INC",
+    "to": "2018-02-13T00:00:00.000Z"
+   }
+  ],
+  "name": "GRIZZLY MERGER SUB 1, LLC",
+  "tickers": []
+ },
+ "811830": {
+  "formerNames": [
+   {
+    "from": "1995-04-28T04:00:00.000Z",
+    "name": "SOVEREIGN BANCORP INC",
+    "to": "2010-02-05T05:00:00.000Z"
+   }
+  ],
+  "name": "Santander Holdings USA, Inc.",
+  "tickers": []
+ },
+ "813828": {
+  "formerNames": [
+   {
+    "from": "2019-12-04T05:00:00.000Z",
+    "name": "ViacomCBS Inc.",
+    "to": "2022-02-15T05:00:00.000Z"
+   },
+   {
+    "from": "2006-01-09T05:00:00.000Z",
+    "name": "CBS CORP",
+    "to": "2019-12-04T05:00:00.000Z"
+   },
+   {
+    "from": "1994-01-11T05:00:00.000Z",
+    "name": "VIACOM INC",
+    "to": "2006-01-05T05:00:00.000Z"
+   }
+  ],
+  "name": "Paramount Global",
+  "tickers": []
+ },
+ "814184": {
+  "formerNames": [],
+  "name": "TCF FINANCIAL CORP",
+  "tickers": []
+ },
+ "85408": {
+  "formerNames": [
+   {
+    "from": "1994-02-10T00:00:00.000Z",
+    "name": "ROWAN COMPANIES INC",
+    "to": "2012-05-02T00:00:00.000Z"
+   }
+  ],
+  "name": "ROWAN COMPANIES PLC",
+  "tickers": []
+ },
+ "85974": {
+  "formerNames": [],
+  "name": "RYLAND GROUP INC",
+  "tickers": []
+ },
+ "868857": {
+  "formerNames": [
+   {
+    "from": "2002-08-23T04:00:00.000Z",
+    "name": "AECOM TECHNOLOGY CORP",
+    "to": "2015-01-07T05:00:00.000Z"
+   }
+  ],
+  "name": "AECOM",
+  "tickers": [
+   "ACM"
+  ]
+ },
+ "878560": {
+  "formerNames": [
+   {
+    "from": "2015-07-29T00:00:00.000Z",
+    "name": "CalAtlantic Group, Inc.",
+    "to": "2020-04-10T00:00:00.000Z"
+   },
+   {
+    "from": "1994-02-14T00:00:00.000Z",
+    "name": "STANDARD PACIFIC CORP /DE/",
+    "to": "2015-09-17T00:00:00.000Z"
+   }
+  ],
+  "name": "CalAtlantic Group, LLC",
+  "tickers": []
+ },
+ "884629": {
+  "formerNames": [
+   {
+    "from": "2013-01-25T00:00:00.000Z",
+    "name": "Actavis, Inc.",
+    "to": "2015-03-05T00:00:00.000Z"
+   },
+   {
+    "from": "1995-02-14T00:00:00.000Z",
+    "name": "WATSON PHARMACEUTICALS INC",
+    "to": "2013-01-14T00:00:00.000Z"
+   }
+  ],
+  "name": "Allergan Finance LLC",
+  "tickers": []
+ },
+ "891456": {
+  "formerNames": [
+   {
+    "from": "2002-06-21T00:00:00.000Z",
+    "name": "PLAINS EXPLORATION & PRODUCTION CO L P",
+    "to": "2002-10-18T00:00:00.000Z"
+   },
+   {
+    "from": "1999-11-18T00:00:00.000Z",
+    "name": "STOCKER RESOURCES LP",
+    "to": "2001-02-02T00:00:00.000Z"
+   }
+  ],
+  "name": "PLAINS EXPLORATION & PRODUCTION CO",
+  "tickers": []
+ },
+ "891478": {
+  "formerNames": [
+   {
+    "from": "2007-09-25T04:00:00.000Z",
+    "name": "BANCO SANTANDER SA",
+    "to": "2007-09-25T04:00:00.000Z"
+   },
+   {
+    "from": "1999-12-14T05:00:00.000Z",
+    "name": "BANCO SANTANDER CENTRAL HISPANO SA",
+    "to": "2007-09-25T04:00:00.000Z"
+   },
+   {
+    "from": "1994-03-30T05:00:00.000Z",
+    "name": "BANCO SANTANDER S A",
+    "to": "1999-02-08T05:00:00.000Z"
+   }
+  ],
+  "name": "Banco Santander, S.A.",
+  "tickers": [
+   "SAN",
+   "BCDRF"
+  ]
+ },
+ "893538": {
+  "formerNames": [
+   {
+    "from": "1996-10-10T04:00:00.000Z",
+    "name": "ST MARY LAND & EXPLORATION CO",
+    "to": "2010-05-27T04:00:00.000Z"
+   }
+  ],
+  "name": "SM Energy Co",
+  "tickers": [
+   "SM"
+  ]
+ },
+ "895421": {
+  "formerNames": [
+   {
+    "from": "1999-11-23T00:00:00.000Z",
+    "name": "MORGAN STANLEY",
+    "to": "2026-09-23T00:00:00.000Z"
+   },
+   {
+    "from": "1999-11-23T00:00:00.000Z",
+    "name": "MORGAN STANLEY",
+    "to": "2026-09-23T00:00:00.000Z"
+   },
+   {
+    "from": "1993-11-08T00:00:00.000Z",
+    "name": "MORGAN STANLEY DEAN WITTER & CO",
+    "to": "2002-07-12T00:00:00.000Z"
+   },
+   {
+    "from": "1997-06-19T00:00:00.000Z",
+    "name": "MORGAN STANLEY DEAN WITTER DISCOVER & CO",
+    "to": "1998-03-18T00:00:00.000Z"
+   },
+   {
+    "from": "1996-08-14T00:00:00.000Z",
+    "name": "DEAN WITTER DISCOVER & CO",
+    "to": "1997-05-08T00:00:00.000Z"
+   }
+  ],
+  "name": "MORGAN STANLEY",
+  "tickers": [
+   "MS",
+   "MS-PK",
+   "MS-PE",
+   "MS-PA",
+   "MS-PF",
+   "MS-PI",
+   "MS-PL",
+   "MS-PO",
+   "MS-PP",
+   "MS-PQ"
+  ]
+ },
+ "906107": {
+  "formerNames": [
+   {
+    "from": "2002-11-13T05:00:00.000Z",
+    "name": "EQUITY RESIDENTIAL",
+    "to": "2026-08-12T04:00:00.000Z"
+   },
+   {
+    "from": "1994-02-10T05:00:00.000Z",
+    "name": "EQUITY RESIDENTIAL PROPERTIES TRUST",
+    "to": "2002-10-30T05:00:00.000Z"
+   }
+  ],
+  "name": "VIVMARK RESIDENTIAL",
+  "tickers": [
+   "VMRK"
+  ]
+ },
+ "908937": {
+  "formerNames": [
+   {
+    "from": "2012-04-19T00:00:00.000Z",
+    "name": "SIRIUS XM HOLDINGS INC.",
+    "to": "2026-09-10T00:00:00.000Z"
+   },
+   {
+    "from": "2008-08-05T00:00:00.000Z",
+    "name": "SIRIUS XM RADIO INC.",
+    "to": "2013-11-14T00:00:00.000Z"
+   },
+   {
+    "from": "1999-12-28T00:00:00.000Z",
+    "name": "SIRIUS SATELLITE RADIO INC",
+    "to": "2008-08-04T00:00:00.000Z"
+   },
+   {
+    "from": "1996-09-18T00:00:00.000Z",
+    "name": "CD RADIO INC",
+    "to": "1999-10-13T00:00:00.000Z"
+   }
+  ],
+  "name": "SIRIUS XM HOLDINGS INC.",
+  "tickers": [
+   "SIRI"
+  ]
+ },
+ "915912": {
+  "formerNames": [
+   {
+    "from": "1998-08-03T00:00:00.000Z",
+    "name": "AVALON BAY COMMUNITIES INC",
+    "to": "1998-10-06T00:00:00.000Z"
+   },
+   {
+    "from": "1995-02-13T00:00:00.000Z",
+    "name": "BAY APARTMENT COMMUNITIES INC",
+    "to": "1998-06-02T00:00:00.000Z"
+   }
+  ],
+  "name": "AVALONBAY COMMUNITIES INC",
+  "tickers": []
+ },
+ "929351": {
+  "formerNames": [
+   {
+    "from": "1999-03-10T05:00:00.000Z",
+    "name": "LIONS GATE ENTERTAINMENT CORP /CN/",
+    "to": "2025-05-07T04:00:00.000Z"
+   }
+  ],
+  "name": "STARZ ENTERTAINMENT CORP /CN/",
+  "tickers": [
+   "STRZ"
+  ]
+ },
+ "95304": {
+  "formerNames": [
+   {
+    "from": "1994-06-23T00:00:00.000Z",
+    "name": "SUN CO INC",
+    "to": "1998-11-05T00:00:00.000Z"
+   }
+  ],
+  "name": "SUNOCO INC",
+  "tickers": []
+ },
+ "96223": {
+  "formerNames": [
+   {
+    "from": "2018-05-23T04:00:00.000Z",
+    "name": "Jefferies Financial Group Inc.",
+    "to": "2026-09-18T04:00:00.000Z"
+   },
+   {
+    "from": "1994-06-01T04:00:00.000Z",
+    "name": "LEUCADIA NATIONAL CORP",
+    "to": "2018-05-15T04:00:00.000Z"
+   }
+  ],
+  "name": "Jefferies Financial Group Inc.",
+  "tickers": [
+   "JEF"
+  ]
+ }
+}
