@@ -399,13 +399,18 @@ class TickerResolver:
             r"GROUP|INTERNATIONAL|TRUST|LLC|LP|LLP|HOLDING|HOLDINGS)\.?\s*$",
             re.IGNORECASE,
         )
-        cur = no_amp
-        for _ in range(3):
-            new = suffix_re.sub("", cur).strip()
-            if new == cur:
-                break
-            add(new)
-            cur = new
+        # Initials the snapshot spaces ("U S AIRWAYS GROUP", LCC) are one word in EDGAR's index ("US AIRWAYS
+        # GROUP INC"): the index matches by character prefix, so the spaced spelling finds nothing.
+        initials = re.sub(r"\b([A-Za-z]) (?=[A-Za-z]\b)", r"\1", no_amp)
+        if initials != no_amp:
+            add(initials)
+        for cur in dict.fromkeys((no_amp, initials)):
+            for _ in range(3):
+                new = suffix_re.sub("", cur).strip()
+                if new == cur:
+                    break
+                add(new)
+                cur = new
         # Take leading 1-3 tokens, alphabetic only — but skip very-common
         # first tokens that would over-match (THE, NEW, FIRST, etc.).
         tokens = [tok for tok in re.split(r"[\s\-/]+", no_amp)

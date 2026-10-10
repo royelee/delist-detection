@@ -89,7 +89,9 @@ settle a doubt the rules above would otherwise raise; none changes a table row, 
   when it is an `exchange` ending with no successor (`exchange_without_successor`, FB-003: an unlinked rename), when
   its kind rests only on an NT 10-K/Q in the prior year (`kind_by_filing_history_only`, FB-002), or when it is a
   wind-down whose distributions are not read (`value_pending:distributions`, FB-002: no measured value and no fill,
-  the spec's invariant).
+  the spec's invariant), or, as a security reason, when an observed security has a FIGI and no issuer CIK
+  (`issuer_unresolved`, FB-006: its seeds and endings are uncertain, so a blank `issuer_id` never rides on a
+  confirmed seed; an acquirer the run adds is no claim and is left alone).
 
 `uncertain_rows` is uncertain.csv: every uncertain security and ending, and
 every seed uncertain for a reason of its own; a seed whose only problem is
@@ -306,6 +308,8 @@ def _security_verdicts(tables: RunSnapshot, evidence: Mapping[str, str],
         sid, reasons = s["sec_id"], []
         if s["figi_source"] == "placeholder" and not evidence.get(sid):
             reasons.append(f"placeholder_without_ticker_filing:CIK {s['issuer_cik']}")
+        if s.get("observed") == "true" and s["figi_source"] != "placeholder" and not s["issuer_cik"]:
+            reasons.append("issuer_unresolved")                      # G (FB-006): a FIGI, and no issuer to key it by
         if outside[sid]:
             reasons.append(f"seeds_outside_history:{len(outside[sid])} from {min(outside[sid])}")
         reasons += [f"ticker_overlap:{ticker}" for ticker in sorted(set(overlaps[sid].values()))]

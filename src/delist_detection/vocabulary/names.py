@@ -38,13 +38,63 @@ def names_agree(a: str, b: str) -> bool:
     once however many spellings it has ("Wendy's Co" is one word, WENDYS or
     WENDY), and a word is shared when one of its spellings is in the other name;
     the shared count is the smaller of the two sides' counts, so two spellings
-    of one word on one side cannot match two words on the other."""
-    wa, wb = _words(a), _words(b)
-    ta = {f for forms in wa for f in forms}
-    tb = {f for forms in wb for f in forms}
+    of one word on one side cannot match two words on the other.
+
+    A word is shared in the ways `description_names` reads one (`_word_matches`): the
+    same word, a plural S aside, written short on either side (MATLS for
+    MATERIALS, WASHIN for WASHINGTON, a vendor's PPTYS for PROPERTIES), or run
+    together (DU PONT and DUPONT), because the caller's snapshots abbreviate and
+    truncate (FB-006). A word written short is never the only word shared: APPLE
+    is not APPLEBEES. A name with no word of three letters (2U INC, 3M CO) agrees
+    with one that has none either, when their remaining characters are the same."""
+    wa, wb = _spelled(_words(a)), _spelled(_words(b))
+    if not wa or not wb:
+        return not wa and not wb and _run(a) != "" and _run(a) == _run(b)
+    (exact_a, short_a), (exact_b, short_b) = (_word_matches(wa, wb, a, b, either=True, shortest=4),
+                                              _word_matches(wb, wa, b, a, either=True, shortest=4))
     need = min(2, len(wa), len(wb))
-    shared = min(sum(1 for forms in wa if forms & tb), sum(1 for forms in wb if forms & ta))
-    return need >= 1 and shared >= need
+    return min(exact_a, exact_b) >= 1 and min(exact_a + short_a, exact_b + short_b) >= need
+
+
+def _run(name: str) -> str:
+    """A name's letters and digits run together, legal suffixes and fillers out (2U INC and 2U, Inc. are 2U)."""
+    parts = re.findall(r"[A-Z0-9]+", re.sub(r"['’]", "", (name or "").upper()))
+    return "".join(p for p in parts if p not in _STOP and p != "CO")
+
+
+# The vendor's abbreviations that are not a word's letters in order (PPTYS has a Y PROPERTIES lacks).
+_VENDOR_ABBREVIATIONS = {"PPTY": "PROPERTY", "PPTYS": "PROPERTIES", "PRPTY": "PROPERTY", "PRPTYS": "PROPERTIES"}
+
+
+def _spelled(words: list[set[str]]) -> list[set[str]]:
+    """Each word's spellings, and also without a plural S (HANESBRANDS and HANESBRAND are one word) and, for a
+    vendor's abbreviation, the word it stands for."""
+    out = []
+    for forms in words:
+        forms = forms | {_VENDOR_ABBREVIATIONS[f] for f in forms if f in _VENDOR_ABBREVIATIONS}
+        out.append(forms | {f[:-1] for f in forms if len(f) > 3 and f.endswith("S")})
+    return out
+
+
+def _word_matches(words: list[set[str]], others: list[set[str]], text: str, other_text: str, *,
+                  either: bool, shortest: int = 1) -> tuple[int, int]:
+    """How many of `words` (spelled by `_spelled`) are words of `others`, as (same word or run together, written
+    short): the same spelling; written short, the word's letters in order from its first letter, as `others`' word
+    (`either`: or `others`' word as this one; `shortest`: the short word has at least that many letters); the
+    exact count has one more when two or three consecutive words of either text run together to make a word of
+    the other that is not a word they share already (MC DERMOTT, DU PONT; not Macy's Foods and Macys Retail)."""
+    forms = {f for w in others for f in w}
+    own = {f for w in words for f in w}
+    exact = short = 0
+    for w in words:
+        if w & forms:
+            exact += 1
+        elif any((len(d) >= shortest and _abbreviates(d, n)) or (either and len(n) >= shortest and _abbreviates(n, d))
+                 for d in w for n in forms):
+            short += 1
+    if (_joined(text) & forms) - own or (_joined(other_text) & own) - forms:
+        exact += 1                                          # MC DERMOTT and MCDERMOTT, one way or the other
+    return exact, short
 
 
 # What a fails-to-deliver description adds after the issuer's name: the kind of
@@ -63,12 +113,7 @@ def _name_part(description: str) -> str:
 def _issuer_words(text: str) -> list[set[str]]:
     """`_words` minus security words, each word also without a plural S
     (HANESBRANDS and HANESBRAND are one word)."""
-    out = []
-    for forms in _words(text):
-        forms = forms - _SECURITY_WORDS
-        if forms:
-            out.append(forms | {f[:-1] for f in forms if len(f) > 3 and f.endswith("S")})
-    return out
+    return _spelled([forms - _SECURITY_WORDS for forms in _words(text) if forms - _SECURITY_WORDS])
 
 
 def _abbreviates(short: str, word: str) -> bool:
@@ -101,13 +146,8 @@ def description_names(description: str, name: str) -> bool:
     n_words = _issuer_words(name)
     if not d_words or not n_words:
         return False
-    n_forms = {f for w in n_words for f in w}
-    matched = sum(1 for forms in d_words
-                  if forms & n_forms or any(_abbreviates(d, n) for d in forms for n in n_forms))
-    d_forms = {f for w in d_words for f in w}
-    if _joined(_name_part(description)) & n_forms or _joined(name) & d_forms:
-        matched += 1                                    # MC DERMOTT and MCDERMOTT, one way or the other
-    return matched >= min(2, len(d_words), len(n_words))
+    exact, short = _word_matches(d_words, n_words, _name_part(description), name, either=False)
+    return exact + short >= min(2, len(d_words), len(n_words))
 
 
 def names_an_issuer(description: str) -> bool:

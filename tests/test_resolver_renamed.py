@@ -143,17 +143,18 @@ def test_the_fixture_eras_and_last_sightings_are_the_real_ones(eras, ftd):
     assert seen == {"KORS@2012-06-29": "2015-08-03", "KORS@2014-12-31": "2019-01-03",
                     "LMCA@2012-06-29": "2013-01-16", "LMCA@2013-06-28": "2016-04-18",
                     "LUK@2008-01-16": "2010-07-13", "LUK@2012-06-29": "2015-08-04", "LUK@2014-12-31": "2018-05-25",
-                    "NU@2008-01-16": "2015-02-20", "NU@2023-06-30": "2026-08-31", "NU@2026-06-30": "2026-08-31"}
+                    "NU@2008-01-16": "2015-02-20", "NU@2023-06-30": "2026-08-31"}
 
 
 # --- 1a: each era is looked up under its own name --------------------------------
 
-def _identify(tickers, resolver, *, edgar=None, figi=None):
+def _identify(tickers, resolver, *, edgar=None, figi=None, observations=None):
     """The identity stage (`identity.identify`) over the fixture's observations of `tickers` and its fails rows,
     the issuer lookup `resolver`, OpenFIGI `figi` (default: no US line for anything)."""
     clients = Clients(edgar=edgar or _Edgar(), resolver=resolver, classifier=None, figi=figi or _NoFigi(),
                       ftd_client=_RowsClient(_rows()), as_of=FTD_WINDOW[1])
-    index = ObservationIndex([o for o in load_observations(FIX / "renamed_observations.csv") if o.ticker in tickers])
+    index = ObservationIndex([o for o in (observations or load_observations(FIX / "renamed_observations.csv"))
+                              if o.ticker in tickers])
     return identify(index, clients, as_of=FTD_WINDOW[1])
 
 
@@ -387,7 +388,7 @@ def test_cusip_handoffs_link_a_shared_cusip_and_a_cusip_switch(eras, ftd):
 
 
 RESOLVED = {"CPRI@2018-12-31": 1530721, "ES@2012-06-29": 72741, "ES@2015-06-30": 72741, "JEF@2008-01-16": 1084580,
-            "JEF@2018-06-30": 96223, "NU@2023-06-30": 1691493, "NU@2026-06-30": 1691493, "LMCA@2013-06-28": 1560385,
+            "JEF@2018-06-30": 96223, "NU@2023-06-30": 1691493, "LMCA@2013-06-28": 1560385,
             "BWXT@2015-12-31": 1486957, "BW@2015-12-31": 1630805, "VIAV@2015-12-31": 912093,
             "LITE@2015-12-31": 1633978}      # the committed run's first-pass answers for these eras
 
@@ -659,12 +660,28 @@ def test_a_description_naming_no_issuer_neither_confirms_nor_refutes(eras, ftd, 
     assert got.get("FFIV@2008-01-16") == (1048695, "shared_cusip")
 
 
-def test_cusip_evidence_that_contradicts_a_first_pass_answer_is_reported(eras, ftd, no_frequency):
+def _lstr_two_names():
+    """The fixture's LSTR rows with the 2012 era given another company's name. The vendor wrote LANDSTAR SYSTEMS INC
+    and then LANDSTAR SYSTEM INC for one issuer, and FB-006's plural rule reads them as one era; the rule-C tests
+    need two eras sharing a CUSIP, so the later one is renamed."""
+    return [replace(o, name="LANDSTAR TRANSPORT INC") if o.ticker == "LSTR" and o.as_of >= "2012" else o
+            for o in load_observations(FIX / "renamed_observations.csv")]
+
+
+def test_a_plural_s_in_the_vendors_name_does_not_split_an_era(eras):
+    """FB-006: LANDSTAR SYSTEMS INC (2008-09) and LANDSTAR SYSTEM INC (2012-) are one issuer's name."""
+    assert "LSTR@2012-06-29" not in eras and "LSTR@2008-01-16" in eras
+
+
+def test_cusip_evidence_that_contradicts_a_first_pass_answer_is_reported(no_frequency):
     """LSTR@2008 (LANDSTAR SYSTEMS INC) took, by name search, LandStar Inc
     (1068689; now Data443), another company; LSTR@2012, which shares its CUSIP,
     is Landstar System (853816) by SEC's ticker map. Rule C runs over eras the
     first pass answered too: the first pass's answer is kept, and the issuer its
     CUSIP evidence points to is reported for review. A pinned era is not checked."""
+    two = ObservationIndex(_lstr_two_names())
+    ftd = FtdIndex.opened(_RowsClient(_rows()), *FTD_WINDOW, symbols={"LSTR"})
+    eras = {e.key: e for e in refine_eras(two.eras(), ftd)}
     lstr = ["LSTR@2008-01-16", "LSTR@2012-06-29"]
     got = _second_pass(eras, ftd, lstr, {"LSTR@2008-01-16": 1068689, "LSTR@2012-06-29": 853816})
     assert got.inferred == {}
@@ -679,13 +696,13 @@ def test_a_cusip_disagreement_is_flagged_for_review_with_both_issuers():
     shared CUSIP runs both ways: LSTR@2012's evidence is LSTR@2008's answer, LandStar Inc."""
     first = CommittedLookup({"LSTR@2008-01-16": (1068689, "name_search"),
                              "LSTR@2012-06-29": (853816, "company_tickers")})
-    identity = _identify({"LSTR"}, first)
+    identity = _identify({"LSTR"}, first, observations=_lstr_two_names())
     assert (identity.issuers["LSTR@2008-01-16"].cik, identity.issuers["LSTR@2012-06-29"].cik) == (1068689, 853816)
     assert [(i.ticker, i.cik, i.reason) for i in identity.review if i.flag == "issuer_cusip_disagrees"] == [
         ("LSTR", 1068689, "LSTR@2008-01-16 LANDSTAR SYSTEMS INC: the resolver gave issuer 1068689 "
                           "(name_search); its CUSIP evidence gives 853816 by shared_cusip: shares CUSIP 515098101 "
                           "with LSTR@2012-06-29"),
-        ("LSTR", 853816, "LSTR@2012-06-29 LANDSTAR SYSTEM INC: the resolver gave issuer 853816 "
+        ("LSTR", 853816, "LSTR@2012-06-29 LANDSTAR TRANSPORT INC: the resolver gave issuer 853816 "
                          "(company_tickers); its CUSIP evidence gives 1068689 by shared_cusip: shares CUSIP 515098101 "
                          "with LSTR@2008-01-16")]
 

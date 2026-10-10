@@ -236,7 +236,10 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   - The last trade's sources, flags and facts (`LastTrade`, `end_day`, `effective_date`, `cites_form25`, and over a
     row `of_row`, `effective_of`, `published`, `end_day_of`; endings/last_trade.py's module entry) and stage 9g's answer,
     `ContinuationReading` (the verdict's input beside the tables).
-- `vocabulary/names.py` — issuer-name tokens and agreement, a leaf: `name_tokens`, `names_agree`, `description_names`,
+- `vocabulary/names.py` — issuer-name tokens and agreement, a leaf (FB-006: `names_agree` and `description_names` share
+  one word equivalence, `_word_matches`: plural S, in-order abbreviation or truncation of at least four letters on
+  either side (never the only word shared), the vendor's `_VENDOR_ABBREVIATIONS` (PPTYS), run-together words; a name
+  with no word of three letters compares as one string, `2U INC` and `2U, Inc.`): `name_tokens`, `names_agree`, `description_names`,
   `names_an_issuer` and `description_matches` (a fails row's description against a security's names), read by the
   observations, the identity rules, the fails index, the Form 25 match, the classifier and the merger readers.
 - `vocabulary/exchanges.py` — a listing's exchange, normalized, a leaf: `Exchange` (NYSE, AMEX, NASDAQ, OTHER, the four buckets
@@ -1514,7 +1517,8 @@ expiration is 0.0 in the table and no correction in the firm month, which leaves
   verdict covers identity, exit kind and the last trade date, never the value
   (except assumed par after a failed payout, LLM or terms gate, decision 4, and a wind-down with no value at all,
   ruling G's `value_pending`: the spec's invariant). Ruling G (upstream feedback) adds `no_history`,
-  `history_after_last_trade`, `exchange_without_successor` and `kind_by_filing_history_only`. A seed whose
+  `history_after_last_trade`, `exchange_without_successor` and `kind_by_filing_history_only`, and a security reason,
+  `issuer_unresolved` (FB-006: an observed security with a FIGI and no issuer CIK). A seed whose
   only problem is its security is counted, not listed. Pipeline stages 10e
   (ticker evidence: about one cached EDGAR search per placeholder without a
   ticker tier), 10f (verdicts), 10g (the contract) and 10h (scorecard) run

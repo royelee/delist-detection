@@ -310,6 +310,21 @@ def test_a_wind_down_with_no_value_read_is_uncertain():
     assert "value_pending:distributions" in _reasons(row)
 
 
+def test_an_observed_figi_security_with_no_issuer_is_uncertain():
+    """FB-006: AMAT, EXPD, DD: a FIGI confirmed by CUSIP and no issuer CIK. Its seeds and endings are uncertain; a
+    placeholder (its own rule) and a security the run added (no observation) are left alone."""
+    row = ending("A", "2015-03-13", **GOOD)
+    v = _verdicts(row, securities=[sec("A", cik="")])
+    assert "issuer_unresolved" in v.securities["A"].reasons
+    assert v.securities["A"].reasons.count("issuer_unresolved") == 1
+    assert "issuer_unresolved" not in _verdicts(row).securities["A"].reasons
+    placeholder = _verdicts(row, securities=[sec("A", cik="", figi_source="placeholder")])
+    assert "issuer_unresolved" not in placeholder.securities["A"].reasons
+    added = _verdicts(row, securities=[sec("A"), sec("B", cik="", observed=False)],
+                      history=[iv("A", "AAA", "2010-01-04", "2015-03-02")])
+    assert "issuer_unresolved" not in added.securities["B"].reasons
+
+
 def test_a_form25_filed_name_check_needs_an_observed_name():
     # member_name_mismatch is raised against an observed name only: a nameless seed gets no name check at all
     nameless = _verdicts(_mapped(), observations=[obs("AAA", "2010-06-30", "A")])

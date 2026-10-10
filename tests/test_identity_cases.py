@@ -26,12 +26,16 @@ MOVES = {
     "MSG@2012-06-29": ("BBG000NS03H7", "handoff"),     # rule B: class A renamed MSG Networks ("MSG NETWORKS INC- A")
     "LMCA@2012-06-29": ("BBG000PCNTM2", "handoff"),    # rule B: class A renamed Starz ("STARZ - A")
     "UAG@2008-01-16": ("BBG000H6K1B0", "backfill"),    # rule C: UBS's E-TRACS rows under UAG; PAG's CUSIP traded then
+    # FB-006: "IAC INTERACTIVE" is IACINTERACTIVECORP (run together), so the stale era is IAC's, not a placeholder
+    "IAC@2012-06-29": ("BBG000BKQG80", "backfill"),
+    # FB-006: "LIBERTY INTERACTIVE VENTURE CORP S" is "LIBERTY VENTURES - SER A" (a plural S), so the one-observation
+    # era the name split cut from LVNTA@2012-12-31 is no era of its own; it was the placeholder's, and FB-005's overlap
+    "LVNTA@2012-12-31": ("BBG0038K9G41", "ticker"),
 }
 
 # era key -> (sec_id, FIGI source), unchanged by 5h
 STAY = {
     "HUB-B@2008-01-16": ("CIK48898-CLASS-B", "placeholder"),   # class B reclassified into the plain common (R1)
-    "LVNTA@2016-12-30": ("CIK1355096-COMMON", "placeholder"),  # series A tracking stocks: a shared CUSIP joins none
     "QVCA@2014-12-31": ("CIK1355096-COMMON", "placeholder"),
     "LINTA@2008-01-16": ("CIK1355096-COMMON", "placeholder"),
     "LVNTA@2017-06-30": ("BBG0038K9G41", "cusip"),
@@ -48,7 +52,6 @@ STAY = {
     "VIA-B@2008-01-16": ("BBG000DHSPT0", "cusip"),
     "UA@2016-12-30": ("BBG009DTD8H2", "cusip"),
     "PAG@2014-06-30": ("BBG000H6K1B0", "cusip"),
-    "IAC@2012-06-29": ("CIK891103-COMMON", "placeholder"),     # a stale ticker with no rows: no span backfill
     "WPO@2008-01-16": ("CIK104889-COMMON", "placeholder"),     # its line's OpenFIGI name states no letter of it
 }
 

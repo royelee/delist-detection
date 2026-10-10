@@ -163,3 +163,54 @@ def test_a_description_names_a_company_word_by_word(description, name, names):
     ("F5 NETWORKS INC", True), ("HCP INC COM STK (MD)", True)])
 def test_a_description_names_an_issuer_when_a_word_is_left(description, named):
     assert names_an_issuer(description) is named
+
+
+# FB-006: the caller's vendor names abbreviate and truncate; issuer agreement reads them the way the fails
+# descriptions are read (plural S, in-order abbreviation and truncation, run-together words).
+@pytest.mark.parametrize("observed, edgar", [
+    ("APPLIED MATERIAL INC", "APPLIED MATERIALS INC /DE"),                           # AMAT, plural
+    ("E I DU PONT DE NEMOURS", "DUPONT E I DE NEMOURS & CO"),                        # DD, run together
+    ("EXPEDITORS INTERNATIONAL OF WASHIN", "EXPEDITORS INTERNATIONAL OF WASHINGTON INC"),    # EXPD, truncation
+    ("FEDERAL NATL MTG ASSOC", "FEDERAL NATIONAL MORTGAGE ASSOCIATION"),             # FNM
+    ("NATIONWIDE FINL SVCS", "NATIONWIDE FINANCIAL SERVICES"),                       # NFS
+    ("OVERSEAS SHIPHOLDNG GRP", "OVERSEAS SHIPHOLDING GROUP INC"),                   # OSG
+    ("VALMONT INDS INC", "VALMONT INDUSTRIES INC"),                                  # VMI
+    ("2U INC", "2U, Inc."),                                                          # TWOU, no word of 3 letters
+    ("RESTAURANTS BRANDS INTERNATIONAL I", "Restaurant Brands International Inc."),  # QSR
+    ("VICI PPTYS INC", "VICI PROPERTIES INC."),                                      # VCCP, vendor abbreviation
+    ("U S AIRWAYS GROUP INC", "US AIRWAYS GROUP INC"),                               # LCC, agreed already
+])
+def test_vendor_names_agree_with_the_edgar_names(observed, edgar):
+    assert names_agree(observed, edgar)
+    assert names_agree(edgar, observed)
+
+
+@pytest.mark.parametrize("a, b", [
+    ("FOREST OIL CORP", "Forest City Enterprises Inc"),
+    ("LEAP WIRELESS INTL INC", "Ribbit LEAP, Ltd."),
+    ("APPLIED MATERIAL INC", "APPLIED BIOSYSTEMS INC"),
+    ("VALMONT INDS INC", "VALLEY NATIONAL INDUSTRIES INC"),
+    ("VICI PPTYS INC", "HEALTHPEAK PROPERTIES INC"),
+    ("FEDERAL NATL MTG ASSOC", "FEDERAL HOME LOAN MORTGAGE CORP"),
+    ("DUPONT FABROS TECHNOLOGY", "E I DU PONT DE NEMOURS"),
+    ("2U INC", "2X INC"),
+    ("2U", "2X"),
+])
+def test_looser_word_equivalence_keeps_different_issuers_apart(a, b):
+    assert not names_agree(a, b)
+
+
+def test_a_name_without_a_word_of_three_letters_compares_as_one_string():
+    assert names_agree("2U INC", "2U, Inc.")
+    assert names_agree("2U", "2U Inc")
+    assert names_agree("3M CO", "3M CO")
+    assert not names_agree("2U INC", "Applied Materials Inc")      # a name with words does not agree with one without
+    assert not names_agree("2U INC", "")
+    assert not names_agree("", "")
+
+
+def test_one_shared_word_still_agrees_only_where_a_side_has_one_word():
+    """Unchanged by the word equivalence: JetBlue Airways and US Airways share one word and US Airways has one."""
+    assert names_agree("JETBLUE AIRWAYS CORP", "U S AIRWAYS GROUP INC")
+    assert not names_agree("JETBLUE AIRWAYS CORP", "DELTA AIR LINES INC")
+    assert not names_agree("AMERICAN AIRWAYS HOLDINGS", "ALASKA AIRWAYS HOLDINGS")   # one shared word of two and two
