@@ -302,7 +302,8 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   repo `.env` (one key only, `os.environ` untouched), behind
   `edgar.resolve_user_agent` and `openfigi.resolve_api_key`.
 - `sources/atomic_io.py` — atomic file writes: `write_atomic` (one cache file, durable,
-  through a writer-named temp file), `clean_orphan_temps` (a killed writer's
+  through a writer-named temp file), `write_atomic_with` (the same for a file a
+  library writes itself, a SQLite store: it is handed the temp path), `clean_orphan_temps` (a killed writer's
   leftovers), and `replace_on_success`/`replace_all_on_success` (the output
   tables and the decisions file: every temp file is written first and nothing
   is replaced unless all are; then each is renamed into place, one at a time).
@@ -352,6 +353,11 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   they read are `identifiers`' (`bare_ticker`, `class_suffix`, `description_class_letter`). A row is relabelled
   when it is added, with the spellings asked for by then: the replay holds Berkshire's and Lions Gate's BRKB/LGFB
   rows twice, once relabelled after the gate asked BRK-B and LGF-B (step 12's log, open for a ruling).
+- `sources/ftd_store.py` — a fails ZIP parsed once into `sec_data/ftd/parsed/<zip>.sqlite` (the ZIP's size and
+  mtime recorded, and a digest of what the line rule makes of a set of probe lines; rebuilt when the ZIP or the
+  rule changes; written through `atomic_io.write_atomic_with`), read by symbol and CUSIP through its indexes, in
+  the ZIP's row order; `split_line` is the one reader of a fails line (`ftd.parse_ftd_lines` uses it too);
+  `FtdClient.rows` reads through it.
 - `sources/midas.py` — `MidasClient`: SEC MIDAS per-security exchange volume (2012+,
   ticker-keyed); `last_trade_day()` confirms the last day with lit+hidden
   exchange volume, suppressed to `None` when the window runs past MIDAS's
@@ -1431,7 +1437,8 @@ expiration is 0.0 in the table and no correction in the firm month, which leaves
 - **SEC fair access.** `EdgarClient` throttles to 8 req/s and requires a
   descriptive `User-Agent`. Every response is cached under `cache/edgar/` (JSON)
   and `cache/edgar/text/` (stripped filing HTML), so re-runs cost nothing; these
-  caches are gitignored and re-derivable. The User-Agent comes from
+  caches are gitignored and re-derivable; the parsed fails-to-deliver copies are a cache like the rest (1.9 GB;
+  gitignored with `cache/`). The User-Agent comes from
   `EDGAR_USER_AGENT` (environment first, then the repo `.env`, via
   `edgar.resolve_user_agent()`); SEC 403s the noreply fallback, so set it.
   `sources/sec_http.py` (FTD, MIDAS) shares the same throttle, User-Agent and

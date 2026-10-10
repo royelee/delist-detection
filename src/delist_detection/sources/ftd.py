@@ -19,7 +19,6 @@ the class ticker (sub-plan 5h).
 from __future__ import annotations
 
 import calendar
-import io
 import logging
 import re
 import threading
@@ -32,6 +31,7 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import Any, Protocol
 
+from . import ftd_store
 from .atomic_io import clean_orphan_temps
 from ..vocabulary.identifiers import bare_ticker, class_suffix, description_class_letter, normalize_ticker
 from ..vocabulary.names import names_agree
@@ -141,30 +141,21 @@ def parse_ftd_lines(lines: Iterable[str], *, symbols: set[str] | None = None,
     """Rows from FTD text lines; header, trailer and malformed lines are skipped.
     `symbols`/`cusips` each filter independently when given (a row passes if it
     matches either one); both left `None` (the default) means no filtering at
-    all. Filtered on symbol/CUSIP before an `FtdRow` is built (fast path).
+    all. Each line is read by `ftd_store.split_line`.
     `counts["rows"]`, when given, counts every well-formed data line, filtered
     out or not."""
     for line in lines:
-        parts = line.rstrip("\r\n").split("|")
-        if len(parts) < 6:
-            continue
-        d = parts[0].strip()
-        if len(d) != 8 or not d.isdigit():
+        fields = ftd_store.split_line(line)
+        if fields is None:
             continue
         if counts is not None:
             counts["rows"] += 1
-        cusip = parts[1].strip().upper()
-        symbol = normalize_ticker(parts[2])
         if symbols is not None or cusips is not None:
-            sym_hit = symbols is not None and symbol in symbols
-            cus_hit = cusips is not None and cusip in cusips
+            sym_hit = symbols is not None and fields[2] in symbols
+            cus_hit = cusips is not None and fields[1] in cusips
             if not (sym_hit or cus_hit):
                 continue
-        try:
-            price: float | None = float(parts[-1].strip())
-        except ValueError:
-            price = None
-        yield FtdRow(f"{d[:4]}-{d[4:6]}-{d[6:]}", cusip, symbol, "|".join(parts[4:-1]).strip(), price)
+        yield FtdRow(*fields)
 
 
 class FtdClient:
@@ -190,22 +181,12 @@ class FtdClient:
         dest = self.dir / url.rsplit("/", 1)[-1]
         path = download(url, dest, session=self.session, user_agent=self.user_agent)
         try:
-            z = zipfile.ZipFile(path)
+            store = ftd_store.ensure(path)
         except zipfile.BadZipFile:
             path.unlink(missing_ok=True)          # a truncated download: fetch it again once
-            z = zipfile.ZipFile(download(url, dest, session=self.session, user_agent=self.user_agent))
-        with z:
-            # Every file member is read, whatever its name: from 2022-05 on the SEC
-            # ships one member without an extension ("cnsfails202401a").
-            for info in z.infolist():
-                if info.is_dir():
-                    continue
-                counts: Counter = Counter()
-                with z.open(info) as fh:
-                    yield from parse_ftd_lines(io.TextIOWrapper(fh, encoding="latin-1"),
-                                               symbols=symbols, cusips=cusips, counts=counts)
-                if not counts["rows"]:
-                    _log.warning(f"{dest.name}: member {info.filename!r} holds no fails-to-deliver rows; skipped")
+            store = ftd_store.ensure(download(url, dest, session=self.session, user_agent=self.user_agent))
+        for fields in ftd_store.select(store, symbols=symbols, cusips=cusips):
+            yield FtdRow(*fields)
 
 
 class FtdSource(Protocol):

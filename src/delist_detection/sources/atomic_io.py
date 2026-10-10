@@ -1,8 +1,10 @@
 """Atomic file writes: a reader sees the old file or the complete new one, never a part.
 
-Two shapes. `write_atomic` replaces one cache file with data it is handed,
+Three shapes. `write_atomic` replaces one cache file with data it is handed,
 durably, through a temp file named for its writer (so `clean_orphan_temps` can
-remove a killed writer's leftover). `replace_on_success`/`replace_all_on_success`
+remove a killed writer's leftover); `write_atomic_with` does the same for a file
+a library writes itself (a SQLite database), handing the writer the temp path.
+`replace_on_success`/`replace_all_on_success`
 yield temp paths for a block to write, and replace their targets only when the
 block finishes -- all of them together, for a group of output tables.
 """
@@ -11,7 +13,7 @@ from __future__ import annotations
 import os
 import re
 import threading
-from collections.abc import Iterator, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -49,6 +51,28 @@ def write_atomic(path: Path, data: str | bytes) -> None:
             fh.write(data)
             fh.flush()
             os.fsync(fh.fileno())
+        os.replace(tmp, path)
+    finally:
+        tmp.unlink(missing_ok=True)
+    _fsync_dir(path.parent)
+
+
+def write_atomic_with(path: Path, write: Callable[[Path], object]) -> None:
+    """Replace `path` with the file `write(tmp)` builds at the temp path it is
+    given: `write_atomic` for a file only a library can write (it must close its
+    handle before it returns). The temp file is named and fsynced as
+    `write_atomic`'s, so a reader sees the old file or the complete new one, and
+    `clean_orphan_temps` removes a killed writer's leftover. Nothing is replaced
+    when `write` raises."""
+    tmp = path.with_name(f".{path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
+    try:
+        tmp.unlink(missing_ok=True)
+        write(tmp)
+        fd = os.open(tmp, os.O_RDONLY)
+        try:
+            os.fsync(fd)
+        finally:
+            os.close(fd)
         os.replace(tmp, path)
     finally:
         tmp.unlink(missing_ok=True)
