@@ -88,10 +88,12 @@ def listed_on_run_date(listed_now: bool | None, sub, last_seen: date | str | Non
     seen, end = (d if isinstance(d, date) else parse_day(d) for d in (last_seen, data_end))
     if listed_now or seen is None or end is None or (end - seen).days > EDGE_DAYS:
         return listed_now
-    if delisted_after_run_date(sub):
-        return True
-    if behind_clock and lists_on_major_exchange(sub, tickers) and not _form25_since(sub, seen - timedelta(EDGE_DAYS)):
-        # a Form 25 filed by the run date (OKE 2026's transfer, effective after it) is the finder's to read
+    if _form25_since(sub, seen - timedelta(EDGE_DAYS)):
+        # a Form 25 the issuer filed by the run date is the finder's to read, and an ending it confirms wins over any
+        # listing evidence: OKE 2026's transfer (effective after the run date), TWO 2026's merger (a later Form 25
+        # of its preferred is no listing of the common)
+        return listed_now
+    if delisted_after_run_date(sub) or (behind_clock and lists_on_major_exchange(sub, tickers)):
         return True
     return listed_now
 

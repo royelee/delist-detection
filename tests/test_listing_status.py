@@ -150,6 +150,7 @@ def test_behind_the_clock_edgar_listing_stands_for_a_security_trading_at_the_dat
     LESLQ on OTC, EDGAR still lists QRVO and LESL on Nasdaq, no Form 25 yet. A run behind the clock takes EDGAR's
     listing for a security that traded to the fails data's end; a run on today's date keeps today's answer."""
     from delist_detection.filings.listing_status import listed_on_run_date
+    from delist_detection.sources.edgar import FILED_AFTER_RUN_DATE
     qrvo = {"tickers": ["QRVO"], "exchanges": ["Nasdaq"]}
     end = date(2026, 9, 14)
     assert listed_on_run_date(False, qrvo, date(2026, 8, 18), end, tickers=["QRVO"], behind_clock=True) is True
@@ -162,6 +163,10 @@ def test_behind_the_clock_edgar_listing_stands_for_a_security_trading_at_the_dat
     oke = {"tickers": ["OKE"], "exchanges": ["NYSE"],
            "filings": {"recent": {"form": ["8-K", "25"], "filingDate": ["2026-09-24", "2026-09-17"]}}}
     assert listed_on_run_date(False, oke, end, end, tickers=["OKE"], behind_clock=True) is False
+    # TWO 2026: its own Form 25 by the run date (the merger) wins over a later Form 25 of its preferred
+    two = {"tickers": ["TWO-PA", "TWOD"], "exchanges": ["NYSE", "NYSE"], FILED_AFTER_RUN_DATE: ["25", "4"],
+           "filings": {"recent": {"form": ["25", "8-K"], "filingDate": ["2026-09-24", "2026-09-10"]}}}
+    assert listed_on_run_date(False, two, end, end, tickers=["TWO"], behind_clock=True) is False
 
 
 def test_a_security_edgar_lists_on_cboe_is_listed_today():
