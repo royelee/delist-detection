@@ -291,25 +291,37 @@ BANKRUPTCY_LEAD_DAYS = 60      # ... and that 8-K is no more than this many days
 BANKRUPTCY_DAYS = 365          # an issuer's Item 1.03 8-K this many days before a CUSIP's first row: it began in a bankruptcy
 
 
-def _went_bankrupt(ftd: FtdIndex, record: IssuerRecord) -> Callable[[str, str, int | None], bool]:
+class _WentBankrupt:
     """Whether the line went through a bankruptcy between the CUSIP `old` and the CUSIP `new` (decision 9: its equity
     after emerging is a new security, whatever its CUSIP or ticker). Two readings the identity stage can make before
     stage 5 finds the ending: the old CUSIP traded under a bankruptcy symbol (the ticker with a Q, CHKAQ beside CHK,
     in its fails rows), or the old issuer (`cik`) filed an 8-K Item 1.03 within `BANKRUPTCY_DAYS` before the new
     CUSIP's first fails row and no earlier than `BANKRUPTCY_LEAD_DAYS` before the old CUSIP's last (an old line that
-    traded on for months after a subsidiary's or a past filing is no bankruptcy: Duke Energy 2011). A failed read of
-    the issuer's filings is no bankruptcy."""
-    def between(old: str, new: str, cik: int | None) -> bool:
-        symbols = {r.symbol for r in ftd.by_cusip(old)}
+    traded on for months after a subsidiary's or a past filing is no bankruptcy: Duke Energy 2011). A filings read
+    that failed or was stale counts as no bankruptcy, and its CIK is kept in `degraded` for the review rows."""
+
+    def __init__(self, ftd: FtdIndex, record: IssuerRecord) -> None:
+        self.ftd, self.record, self.degraded = ftd, record, set()
+
+    def __call__(self, old: str, new: str, cik: int | None) -> bool:
+        symbols = {r.symbol for r in self.ftd.by_cusip(old)}
         if any(s.endswith("Q") and len(s) >= 4 and (s[:-1] in symbols or s[:-2] in symbols) for s in symbols):
             return True
-        rows, olds = ftd.by_cusip(new), ftd.by_cusip(old)
+        rows, olds = self.ftd.by_cusip(new), self.ftd.by_cusip(old)
         first = parse_day(rows[0].date) if rows else None
         last = parse_day(olds[-1].date) if olds else None
-        return bool(cik is not None and first is not None and last is not None
-                    and any((parse_day(f.report_date) or parse_day(f.filing_date)) >= last - timedelta(days=BANKRUPTCY_LEAD_DAYS)
-                            for f in bankruptcy_8ks(record.filings(cik), first, before=BANKRUPTCY_DAYS, after=0)))
-    return between
+        if cik is None or first is None or last is None:
+            return False
+        reads = self.record.watch()
+        filings = self.record.filings(cik)
+        if reads.tripped():
+            self.degraded.add(cik)
+        return any((parse_day(f.report_date) or parse_day(f.filing_date)) >= last - timedelta(days=BANKRUPTCY_LEAD_DAYS)
+                   for f in bankruptcy_8ks(filings, first, before=BANKRUPTCY_DAYS, after=0))
+
+
+def _went_bankrupt(ftd: FtdIndex, record: IssuerRecord) -> _WentBankrupt:
+    return _WentBankrupt(ftd, record)
 
 
 def _resolve_securities(eras: list[TickerEra], era_by_key: dict[str, TickerEra], ftd: FtdIndex,
@@ -330,11 +342,12 @@ def _resolve_securities(eras: list[TickerEra], era_by_key: dict[str, TickerEra],
     no FIGI, were taken back out, or rested on a degraded answer."""
     issuers = found.issuers
     cusips = candidate_cusips(eras, ftd, issuers)
+    went_bankrupt = _went_bankrupt(ftd, clients.issuers)
     resolutions, detached = resolve_with_identity_guard(
         FigiResolver(clients.figi, log=log, cusip_span=lambda c: _trading_span(ftd, c),
                      foreign=foreign_ticker_eras(eras, ftd, issuers)),
         eras, issuers=issuers, cusips=cusips, handoffs=handoffs, unconfirmed=guarded_eras(eras, ftd),
-        bankrupt_between=_went_bankrupt(ftd, clients.issuers))
+        bankrupt_between=went_bankrupt)
     securities = build_securities(resolutions, era_by_key, issuers)
     review: list[ReviewItem] = detached_review(detached, era_by_key, resolutions, issuers)
     for key, res in resolutions.items():
@@ -347,6 +360,12 @@ def _resolve_securities(eras: list[TickerEra], era_by_key: dict[str, TickerEra],
             review.append(degraded_item(resolutions[e.key].sec_id or "", e.ticker, cik_of(issuers, e.key),
                                          f"{e.key} {e.name or ''}: issuer resolution",
                                          "; its answer was used for this run but not saved", last_seen=e.last))
+    for e in eras:        # the composite guard asked this issuer's filings and the read failed: it kept the pick
+        if (cik_of(issuers, e.key) in went_bankrupt.degraded
+                and resolutions[e.key].source not in ("pin", "cusip")):
+            review.append(degraded_item(resolutions[e.key].sec_id or "", e.ticker, cik_of(issuers, e.key),
+                                         f"{e.key} {e.name or ''}: the check for a bankruptcy between its CUSIPs",
+                                         "; the era was kept on the composite its pick gave", last_seen=e.last))
     for e in eras:
         inferred = found.inferred.get(e.key)
         if inferred is not None:

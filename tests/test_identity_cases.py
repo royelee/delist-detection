@@ -183,3 +183,23 @@ def test_old_chesapeake_is_its_own_security_and_the_composite_starts_at_the_new_
     secs = stage3.securities
     assert [e.key for e in secs["CIK895126-COMMON"].eras] == ["CHK@2008-01-16"]
     assert [e.key for e in secs["BBG00Z6DX554"].eras] == ["CHK@2022-06-30", "EXE@2024-12-31"]
+
+
+def test_a_failed_filings_read_in_the_composite_guard_keeps_the_pick_and_is_resolution_degraded(cases):
+    """CHK: the guard asks the issuer's filings for the 2020 bankruptcy 8-K. With that read failing it finds none, so
+    old Chesapeake stays on the composite its pick gave, and the era is reported degraded."""
+    import requests
+
+    class Down(ic.FixtureEdgar):
+        def recent_filings(self, cik):
+            if int(cik) == 895126:
+                raise requests.ConnectionError("down")
+            return super().recent_filings(cik)
+
+    backend = cases.backend
+    down = ic.Cases(ic.Backend(backend.observations, backend.eras_issuer, backend.ftd_client,
+                               Down(backend.edgar._issuers), backend.figi, backend.index))
+    found = down.stage3(["CHK", "EXE"])
+    assert found.resolutions["CHK@2008-01-16"].sec_id == "BBG00Z6DX554"
+    degraded = [r for r in found.review if r.flag == "resolution_degraded" and "bankruptcy" in r.reason]
+    assert [r.reason.split(" ")[0] for r in degraded] == ["CHK@2008-01-16"]
