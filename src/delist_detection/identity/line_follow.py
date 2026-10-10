@@ -437,7 +437,16 @@ def name_on(sub: Mapping | None, day: date, fallback: str = "") -> str:
 def other_registrant(search: Callable | None, edgar, *, name: str, day: date, cik: int,
                      own_tickers: Collection[str]) -> int | None:
     """Another CIK whose 8-K12B/8-K12G3 names `name` in the successor search's window around `day`
-    (`filing_search.successor_query`): a new registrant took the old one's place (R1). A filer that is another
+    (`filing_search.successor_query`): a new registrant took the old one's place (R1). `successor_filer` has the
+    rules; this is its CIK, None without one, `READ_FAILED` when a read failed."""
+    got = successor_filer(search, edgar, name=name, day=day, cik=cik, own_tickers=own_tickers)
+    return got[0] if isinstance(got, tuple) else got
+
+
+def successor_filer(search: Callable | None, edgar, *, name: str, day: date, cik: int,
+                    own_tickers: Collection[str]) -> tuple[int, str] | int | None:
+    """(the CIK, the day it filed) of another registrant whose 8-K12B/8-K12G3 names `name` in the successor search's
+    window around `day` (`filing_search.successor_query`; the hit's own file date, else `day`). A filer that is another
     issuer's own, still-listed stock is skipped, as `successors.successor_from_8k12b` skips it: its EDGAR name
     does not agree with `name`, none of its tickers is one of `own_tickers`, and EDGAR lists one of them on a major
     exchange today (iHeartMedia's 8-K12G3 names its subsidiary Clear Channel Outdoor). None without a search;
@@ -465,7 +474,7 @@ def other_registrant(search: Callable | None, edgar, *, name: str, day: date, ci
                 if (tickers and not names_agree(name, edgar_name) and not own & set(tickers)
                         and edgar_lists(edgar, other, tickers)):
                     continue
-                return other
+                return other, str(src.get("file_date") or day.isoformat())[:10]
         return None
     except FATAL:
         raise

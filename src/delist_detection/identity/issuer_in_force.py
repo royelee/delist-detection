@@ -80,6 +80,22 @@ def agreeing_since(sub: dict, name: str, on: date) -> date | None:
     return spans[i][0]
 
 
+def with_registrants(timeline: Sequence[tuple[str, str]],
+                     registrants: Iterable[tuple[str, str]]) -> list[tuple[str, str]]:
+    """A security's issuer timeline (`issuer_changes`) with its successor registrants (FB-004: the new registrants a
+    holding-company reorganization of an ending that went on put in the old one's place, each as (the ISO day its
+    successor registration was filed, CIK), earliest first): each is the issuer in force from that day, unless it
+    already is, dated after the timeline's last change so the days still strictly increase. A security with an empty
+    timeline stays without one (no sighting carried a CIK)."""
+    out = list(timeline)
+    for day, cik in registrants:
+        if not out or out[-1][1] == cik:
+            continue
+        after = (date.fromisoformat(out[-1][0]) + timedelta(days=1)).isoformat()
+        out.append((max(day, after), cik))
+    return out
+
+
 def issuer_changes(sightings: Iterable[Sighting], submissions: Submissions,
                    exact_names: ExactNames) -> dict[str, list[tuple[str, str]]]:
     """sec_id -> [(from ISO date, CIK)], earliest first: the CIK in force on the

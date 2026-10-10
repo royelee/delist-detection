@@ -72,6 +72,7 @@ from .endings.rewrites import (
 from .sources.sec_stats import SEC_STATS
 from .identity.security_master import EraResolution, Issuer, Security, cik_of, cusip_job, superseded_placeholders
 from .identity.ticker_evidence import EraEvidence, evidence_for
+from .endings.registrants import MAX_REGISTRANTS, Registrant, SuccessorRegistrants
 from .endings.trading_record import TradingRecord
 from .outputs.store import DelistingKey, formatted, write_tables
 from .filings.filing_search import successor_query
@@ -84,7 +85,7 @@ from .outputs.verdict import decide as decide_verdicts
 from .outputs.contract import delisting_rows as contract_delisting_rows
 from .outputs.contract import id_change_rows, payout_leg_rows, security_history_rows, seed_rows
 from .identity.issuer_in_force import Sighting as IssuerSighting
-from .identity.issuer_in_force import issuer_changes
+from .identity.issuer_in_force import issuer_changes, with_registrants
 from .outputs.price_requests import PriceAnswers, request_rows
 
 
@@ -165,19 +166,43 @@ def _flush_memo(clients: Clients) -> None:
 
 
 def _listed_now(figi, clients: Clients, s: Security, contexts: SecurityContexts, ftd: FtdIndex,
-                answer: dict | None, retired: Collection[str], behind_clock: bool) -> bool | None:
+                answer: dict | None, retired: Collection[str], behind_clock: bool,
+                cik: int | None = None) -> bool | None:
     """Stage 5's listed answer of one security, the warm pass's and the sequential pass's alike: False for a retired
     line; else today's (`listed_today`: OpenFIGI's answer and the issuer's EDGAR listing), which an --as-of run
     corrects for an ending after its run date (`listing_status.listed_on_run_date`: the security still trading at
-    the fails data's end, by its trading record)."""
+    the fails data's end, by its trading record). `cik`: the registrant EDGAR's listing is read from, the
+    security's issuer unless a holding-company reorganization put a successor registrant in its place
+    (`registrants`: Disney's CIK 1744489, not the 2019 registrant's 1001039)."""
     if s.sec_id in retired:
         return False
     tickers = sorted(s.own_tickers())
-    now = listed_today(figi, s.sec_id, edgar=clients.edgar, cik=s.issuer_cik, tickers=tickers, answer=answer)
-    if s.issuer_cik is None:
+    cik = s.issuer_cik if cik is None else cik
+    now = listed_today(figi, s.sec_id, edgar=clients.edgar, cik=cik, tickers=tickers, answer=answer)
+    if cik is None:
         return now
-    return listed_on_run_date(now, clients.edgar.submissions(s.issuer_cik), contexts.records[s.sec_id].last_seen,
+    return listed_on_run_date(now, clients.edgar.submissions(cik), contexts.records[s.sec_id].last_seen,
                               ftd.data_end(), tickers=tickers, behind_clock=behind_clock)
+
+
+def _search_security(finder: DelistingFinder, registrants: SuccessorRegistrants, contexts: SecurityContexts,
+                     s: Security, listed_of: Callable[[int | None], bool | None]
+                     ) -> tuple[list[Delisting], list[ReviewItem], list[Registrant], bool | None]:
+    """One security's stage-5 search, the warm pass's and the sequential pass's alike: the finder over its issuer;
+    then, while an ending that goes on has a successor registrant that is new (`SuccessorRegistrants.of`: a
+    holding-company reorganization, DIS 2019, WRK 2018), the finder again with that registrant in force, whose
+    Form 25s it reads from its registration on and whose listing is the listed-today answer (`listed_of(cik)`). At
+    most `MAX_REGISTRANTS` + 1 searches. Returns the delistings, the review items, the registrants and the
+    listed-today answer the last search used."""
+    regs: list[Registrant] = []
+    listed = listed_of(None)
+    for _ in range(MAX_REGISTRANTS + 1):
+        found, review = finder.find(contexts(s, listed, regs))
+        later = registrants.of(contexts.records[s.sec_id], found)
+        if later == regs:
+            break
+        regs, listed = later, listed_of(later[-1].cik)
+    return found, review, regs, listed
 
 
 def _warm_delisting_search(clients: Clients, ordered: list[Security], listing: dict[str, dict],
@@ -196,14 +221,18 @@ def _warm_delisting_search(clients: Clients, ordered: list[Security], listing: d
     midas = Serialized(clients.midas) if clients.midas is not None else None
     halts = Serialized(clients.halts) if clients.halts is not None else None
 
-    def make_finder() -> DelistingFinder:
-        return DelistingFinder(clients.edgar, clients.classifier.shadow(), midas=midas, halts=halts)
+    def make_finder() -> tuple[DelistingFinder, SuccessorRegistrants]:
+        twin = clients.classifier.shadow()
+        finder = DelistingFinder(clients.edgar, twin, midas=midas, halts=halts)
+        return finder, SuccessorRegistrants(twin.issuers, clients.full_text_search, clients.edgar)
 
-    def task(finder: DelistingFinder, s: Security) -> None:
+    def task(state: tuple[DelistingFinder, SuccessorRegistrants], s: Security) -> None:
         answer = listing.get(s.sec_id)
         if answer is None and not is_placeholder(s.sec_id):
             return
-        finder.find(contexts(s, _listed_now(None, clients, s, contexts, ftd, answer, retired, behind_clock)))
+        finder, registrants = state
+        _search_security(finder, registrants, contexts, s,
+                         lambda cik: _listed_now(None, clients, s, contexts, ftd, answer, retired, behind_clock, cik))
 
     warm(ordered, task, workers=workers, state=make_finder, name="delisting search")
 
@@ -282,6 +311,12 @@ class _DelistingSearch:
     sightings: dict[str, list[Sighting]]
     review: list[ReviewItem]
     finder: DelistingFinder | None = None      # the sequential finder, which stage 9d reuses
+    registrants: dict[str, list[Registrant]] = field(default_factory=dict)    # successor registrants, by sec_id
+
+    def issuer_now(self, s: Security) -> int | None:
+        """The registrant in force today: the last successor registrant, else the security's issuer."""
+        regs = self.registrants.get(s.sec_id)
+        return regs[-1].cik if regs else s.issuer_cik
 
 
 def _find_delistings(ctx: _RunContext, securities: dict[str, Security], sec_cusips: dict[str, list[str]],
@@ -293,11 +328,16 @@ def _find_delistings(ctx: _RunContext, securities: dict[str, Security], sec_cusi
     composite continues (`moved_on`: stage 4b's line successors) is not listed
     today: its line went on under that composite. `other_ciks` (stage 4c, R5): the
     other CIK in force over a security's whole span, whose Form 25s are read too. `resolution_source`: the lookup
-    tier that found each security's issuer (`Identity.resolution_source`), for its delistings' rows."""
+    tier that found each security's issuer (`Identity.resolution_source`), for its delistings' rows. A security whose
+    ending went on as the security itself and whose old registrant a new one replaced (`registrants`: a holding-company
+    reorganization, DIS 2019, WRK 2018) is searched again with the successor registrant in force: its Form 25s, from
+    its registration, and its listing as the listed-today answer (`_search_security`)."""
     clients, log = ctx.clients, ctx.log
     finder = DelistingFinder(clients.edgar, clients.classifier, midas=clients.midas, halts=clients.halts)
+    registrants = SuccessorRegistrants(clients.issuers, clients.full_text_search, clients.edgar)
     delistings: list[Delisting] = []
     listed: dict[str, bool | None] = {}
+    later: dict[str, list[Registrant]] = {}
     review: list[ReviewItem] = []
     # each security's trading record, over its own CUSIPs and the fails index; its siblings are its issuer's
     contexts = SecurityContexts.observed(securities, sec_cusips, ftd, other_ciks=other_ciks,
@@ -328,9 +368,12 @@ def _find_delistings(ctx: _RunContext, securities: dict[str, Security], sec_cusi
             # listed_today and the context live inside the try too: a FIGI/EDGAR
             # error there must become a reviewable row for this one security,
             # not abort the whole overnight run.
-            listed[s.sec_id] = _listed_now(clients.figi, clients, s, contexts, ftd, listing.get(s.sec_id), retired,
-                                           behind_clock)
-            found, found_review = finder.find(contexts(s, listed[s.sec_id]))
+            found, found_review, regs, listed[s.sec_id] = _search_security(
+                finder, registrants, contexts, s,
+                lambda cik: _listed_now(clients.figi, clients, s, contexts, ftd, listing.get(s.sec_id), retired,
+                                        behind_clock, cik))
+            if regs:
+                later[s.sec_id] = regs
         except FATAL:
             raise
         except Exception as exc:  # an overnight run must survive one bad security
@@ -346,7 +389,10 @@ def _find_delistings(ctx: _RunContext, securities: dict[str, Security], sec_cusi
         if i % 50 == 0:
             log(f"[{i}/{len(securities)}] securities searched; {len(delistings)} delistings so far")
     ctx.meter.done("delisting search", mark)
-    return _DelistingSearch(delistings, listed, sightings, review, finder)
+    if later:
+        log(f"successor registrants: {len(later)} securities ({', '.join(sorted(later)[:5])}"
+            f"{', ...' if len(later) > 5 else ''})")
+    return _DelistingSearch(delistings, listed, sightings, review, finder, later)
 
 
 @dataclass
@@ -1202,7 +1248,7 @@ def _histories(ctx: _RunContext, delistings: Iterable[Delisting], securities: di
     edgar = ctx.clients.edgar
     return Histories(securities, search.sightings, sec_cusips, ftd, [d.ending for d in delistings],
                      listed=search.listed, added=added,
-                     exchange_today=lambda s, ticker: issuer_exchange(edgar, s.issuer_cik, ticker))
+                     exchange_today=lambda s, ticker: issuer_exchange(edgar, search.issuer_now(s), ticker))
 
 
 def _history_rows(ctx: _RunContext, history: Histories,
@@ -1376,7 +1422,8 @@ def _other_issuers(ctx: _RunContext, eras: list[TickerEra], resolutions: dict[st
 
 def _issuers_in_force(ctx: _RunContext, observation_map: Sequence[Mapping[str, str]],
                       rows_decided: Collection[str] = (),
-                      review: list[ReviewItem] | None = None) -> dict[str, list[tuple[str, str]]]:
+                      review: list[ReviewItem] | None = None,
+                      registrants: Mapping[str, Sequence[Registrant]] = {}) -> dict[str, list[tuple[str, str]]]:
     """10c3. Each security's issuer timeline (issuer_in_force.issuer_changes) from its
     sightings, for contract/security_history.csv (10g): every observation_map row (as
     written, `store.formatted`) with a sec_id, except a conflict (two names that day).
@@ -1387,7 +1434,9 @@ def _issuers_in_force(ctx: _RunContext, observation_map: Sequence[Mapping[str, s
     Without a name index (the run's issuer record holds none), every sighting keeps
     its era's CIK. A sighting of an era whose issuer its ticker's fails rows decided
     (`rows_decided`, stage 2b's `ticker_rows`) keeps its era's CIK too: its observed
-    name is the one those rows refuted (ERA 2013's BRISTOW GROUP INC)."""
+    name is the one those rows refuted (ERA 2013's BRISTOW GROUP INC). A security's successor registrants
+    (`registrants`, stage 5: a holding-company reorganization of an ending that went on, DIS 2019) are the issuer in
+    force from the day their successor registration was filed (`issuer_in_force.with_registrants`)."""
     read, reads = _in_force_reads(ctx.clients.issuers)
     touched: set[int] = set()
 
@@ -1413,6 +1462,9 @@ def _issuers_in_force(ctx: _RunContext, observation_map: Sequence[Mapping[str, s
             review.append(degraded_item(sid, last.get("ticker", ""), int(last["issuer_cik"]) if last["issuer_cik"]
                                         else None, "the issuer in force (contract/security_history.csv)",
                                         "; run again once SEC answers"))
+    for sid, regs in registrants.items():
+        if sid in out:
+            out[sid] = with_registrants(out[sid], [(r.since, str(r.cik)) for r in regs])
     ctx.meter.done("issuers in force", mark)
     return out
 
@@ -1547,7 +1599,8 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
     map_rows = _observation_map(ctx, index, eras, resolutions, identity.issuers, history)
     # 10c3. the issuers in force, for 10g's security_history: before triage, so a failed read is a review row
     in_force_review: list[ReviewItem] = []
-    in_force = _issuers_in_force(ctx, formatted("observation_map", map_rows), identity.rows_decided, in_force_review)
+    in_force = _issuers_in_force(ctx, formatted("observation_map", map_rows), identity.rows_decided, in_force_review,
+                                 search.registrants)
     review_rows += [item.row() for item in in_force_review]
     flags, triaged = _triage(ctx, review_rows, review_decisions, limit)
 

@@ -525,16 +525,24 @@ class Histories:
         not continued trading (WRK stops being clipped; ARD and compliance failures stay clipped). Rows under a ticker
         a successor took (`_successor_starts`) from that day on are the successor's (AON 2012: Aon plc's AON, the old
         CUSIP's lingering fails)."""
-        own = self._securities[sec_id].own_tickers()
-        starts = self._starts.get(sec_id, {})
-        rows = [r for r in self._ftd.trading_rows(self._cusips.get(sec_id, []) if cusips is None else cusips)
-                if r.symbol in own and r.date > after and r.date < starts.get(r.symbol, "~")]
-        if len(rows) < CONTINUATION_MIN_ROWS:
-            return False
-        dates = [r.date for r in rows]
-        if (date.fromisoformat(max(dates)) - date.fromisoformat(min(dates))).days < CONTINUATION_MIN_DAYS:
-            return False
-        return len({r.price for r in rows if r.price is not None}) >= CONTINUATION_MIN_PRICES
+        return keeps_trading(self._ftd.trading_rows(self._cusips.get(sec_id, []) if cusips is None else cusips),
+                             self._securities[sec_id].own_tickers(), after, self._starts.get(sec_id, {}))
+
+
+def keeps_trading(rows: Iterable, own_tickers: Iterable[str], after: str, starts: Mapping[str, str] = {}) -> bool:
+    """Whether trading fails `rows` of a security's CUSIPs, under its `own_tickers`, show it trading strictly after
+    the ISO day `after`: at least `CONTINUATION_MIN_ROWS` live rows over at least `CONTINUATION_MIN_DAYS` days at
+    `CONTINUATION_MIN_PRICES` or more distinct prices (Phase 4's clip rule: the one test of whether an ending ended
+    its security, `Histories._continues_after`, and of whether a registrant's reorganization went on, FB-004). Rows
+    under a ticker a successor took from a day on (`starts`: `_successor_starts`) are the successor's."""
+    own = set(own_tickers)
+    kept = [r for r in rows if r.symbol in own and r.date > after and r.date < starts.get(r.symbol, "~")]
+    if len(kept) < CONTINUATION_MIN_ROWS:
+        return False
+    dates = [r.date for r in kept]
+    if (date.fromisoformat(max(dates)) - date.fromisoformat(min(dates))).days < CONTINUATION_MIN_DAYS:
+        return False
+    return len({r.price for r in kept if r.price is not None}) >= CONTINUATION_MIN_PRICES
 
 
 def _in_ticker_history(ticker: str, as_of: str, ranges: Sequence[Range]) -> bool:

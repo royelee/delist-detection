@@ -99,7 +99,7 @@ src/delist_detection/
                 ticker_evidence, line_follow
   endings/      every delisting, found, dated and classified, stages 5 to 9g: delistings, trading_record, classifier,
                 end_of_era, distress, exchange_terms, own_shares, continuation_evidence, last_trade, rewrites,
-                successors, handoffs
+                registrants, successors, handoffs
   terms/        what one share of a merger ending became, stage 8: merger_value, payout_gate, payout_extractor,
                 llm_merger_extractor, filing_selection, currency, acquirer_line, acquirers, acquirer_ticker
   measurement/  how far a published run is from the truth: lifecycle, scorecard, audit, truth, diagnosis_truth,
@@ -139,7 +139,12 @@ Form 25s too; metered as "other issuers in force"), `_find_delistings` (stage 5:
 security's trading record, `trading_record.TradingRecord`, over its observations, its own CUSIPs and the fails
 index, with its issuer's securities as siblings, its other CIK in force and its issuer's lookup tier; the warm pass
 and the sequential pass ask that one object, so both search one context; the records' sightings are the stage's
-answer), `_dead_before_sighting` (stage 5b: a security whose last real ending came before its
+answer; FB-004 part b, `_search_security`: a security whose ending goes on as the security itself (`registrants.goes_on`)
+and whose old registrant a new one replaced (`registrants.SuccessorRegistrants`: the 8-K12B/8-K12G3 search naming it) is
+searched again with that registrant in force, whose Form 25s the finder reads from its registration and whose listing
+is the listed-today answer, up to `MAX_REGISTRANTS`; the stage logs `successor registrants: N securities`, and
+`_DelistingSearch.registrants` is what stage 10c3's issuer timeline and the open range's exchange read),
+`_dead_before_sighting` (stage 5b: a security whose last real ending came before its
 first observation and that has fewer than two trading fails rows on or before that ending and none from its first
 observation on (one fails sighting makes no range; rows settling in between do not count: TRB 2007, FB-009) died
 before the run's fails window began or showed it trading, so (eligibility decided first, then) the fails index is
@@ -780,7 +785,8 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   `SUCCESSOR_TICKER_LOOKBACK_DAYS`, 30), and a range carried only to the security's next ticker stops the day before
   another security's first day under it (`_clip_at_takeovers`, over the built ranges: its own last sighting under it
   is earlier, the range is not its security's end; MSG 2015): two conditions, kept apart (the plan's step 5 log says
-  why). A security with an ending that ends it whose ticker a successor took is not listed today (AON 2012). Pipeline
+  why). A security with an ending that ends it whose ticker a successor took is not listed today (AON 2012).
+  `keeps_trading` is the one continues-after test, shared with `endings/registrants.goes_on`. Pipeline
   builds it twice (`pipeline._histories`): stage 9b's first step reads `going_on`, and 10b and 10c2 read the
   history over the final delistings.
 - `identity/added_securities.py` — `AddedAcquirer`/`AddedSuccessor`/`AddedLineSuccessor` (`AddedSecurity`; the last a FIGI
@@ -820,7 +826,8 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   dropped, and a pick another security holds is no step (LMCA 2016)); `corroborate` (R1: refused for an 8-K 1.03 in
   [first − 180, first + 30] d, an OTC move, a description that names no name in force (a holding word does not
   count, `names.description_names`: ExxonMobil Holdings, XOM 2026, keeps the name), a class conflict, a
-  registrant that merged out or that another CIK's 8-K12B/12G3 replaces (`other_registrant`), no filing stating
+  registrant that merged out or that another CIK's 8-K12B/12G3 replaces (`other_registrant`, the CIK of
+  `successor_filer`, which also gives the day it filed: stage 5's successor registrants), no filing stating
   the change, or a failed `other_registrant` read (`read_failed`); the registrant carries on by a periodic report in `PERIODIC_FORMS`, which includes the small-business
   forms 10-K405, 10-KSB, 10-KSB40 and 10-QSB, or by a registered investment company's report in
   `INVESTMENT_COMPANY_FORMS` (N-CSR, N-CSRS, N-Q, N-CEN, NPORT-P, NSAR-A, NSAR-B: Altaba 2017), each for a period
@@ -847,7 +854,10 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
 - `identity/issuer_in_force.py` — the issuer CIK on each sighting's date: the era's CIK when its EDGAR name that day agrees
   with the observed name, else the one other CIK SEC's name index lists under that name whose name agreed then
   (MRK 2008: old Merck & Co, CIK 64978). `issuer_changes` dates each change: it sorts sightings by day then CIK
-  and records at most one change per day (a same-day sighting under another CIK changes nothing).
+  and records at most one change per day (a same-day sighting under another CIK changes nothing). FB-004:
+  `with_registrants` adds a security's successor registrants (`endings/registrants.py`: the new registrant a
+  holding-company reorganization put in the old one's place) as the issuer in force from the day they registered,
+  dated after the timeline's last change; stage 10c3 applies it, and only for a security whose line goes on.
 
 **`endings/`: every delisting, found, dated and classified, stages 5 to 9g (network):**
 - `endings/trading_record.py` — architecture step 14: a security's trading record (CONTEXT.md), what its sightings and its
@@ -877,6 +887,22 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   `own_shares.new_issuer`, first sighted in the window and named by the target, `own_shares.names_target`); a
   successor is looked for around the ending's anchor (`Delisting.anchor`, `last_trade.anchor_day`). It imports
   `delistings`; the classifier no longer imports it (step 7b: no classifier, successors, delistings cycle).
+- `endings/registrants.py` — FB-004 part b, the issuer in force after a holding-company reorganization: Disney 2019 (CIK
+  1001039 to 1744489) and WestRock 2018 (1636023 to 1732845) ended the old registrant's listing with a merger-looking
+  Form 25 and an 8-K12B of the new one, while the security's own CUSIP kept trading under its ticker; the old CIK lists
+  nothing today and the later Form 25 (WRK 2024-07-08) is the new registrant's. A `Registrant` is the CIK whose
+  8-K12B/8-K12G3 names the old registrant around the ending, and the day it filed. `goes_on(d, record)`: the ending is
+  not real (the security is its own successor), or a merger or exchange transfer with a confirmed last trade after which
+  the security's own CUSIPs keep trading under its own tickers (`history.keeps_trading`, the clip rule's test).
+  `SuccessorRegistrants.of(record, delistings)` searches (`line_follow.successor_filer`, the search stage 4b's
+  other-registrant check sends, one cache entry for both; a filer that is another issuer's own still-listed stock is
+  skipped) once for each ending that goes on, at most `MAX_REGISTRANTS`; no search capability, none. A successor
+  registration alone changes nothing: a merger the security did not trade through sends no search. Stage 5
+  (`pipeline._search_security`) hands the registrants to the finder (`SecurityContext.registrants`: their Form 25s,
+  from their registration on, as `other_cik`'s; the listed-today answer is read through the last one), and stage 10c3
+  gives the contract's issuer timeline (`issuer_in_force.with_registrants`); `securities.csv` and the observation map
+  keep the security's resolved issuer. A live run sends one search per ending that goes on (125 securities over the
+  last full run; the four mergers among them are DIS, WRK, MIC and Inphi), cached afterwards.
 - `endings/handoffs.py` — ticker handoffs (CONTEXT.md: one security stops under a
   ticker, another of the run starts under it within days): `find_handoffs`
   (candidate pairs, [-10, 120] days), `decide_handoff` (continuation by the
@@ -1730,7 +1756,9 @@ expiration is 0.0 in the table and no correction in the firm month, which leaves
   clips the ranges at that day, before the Form 25's effective date, and is
   never second-guessed nor published. A security
   none of whose delistings ends it, and that isn't listed today either, is
-  left unclipped, ending at its last real sighting.
+  left unclipped, ending at its last real sighting. A security whose ending
+  went on as itself and whose old registrant a new one replaced (`endings/registrants.py`) is listed through the
+  new registrant, and the contract names it as the issuer in force from its registration.
   A successor's ticker is not its predecessor's (`Histories._successor_starts`, one map shared by the clip check,
   the ranges and the listed answer): when a delisting's successor is another security X that holds ticker T from day F (X's first
   sighting under T on or after the delisting's confirmed last trade day, or from 30 days before its delist date

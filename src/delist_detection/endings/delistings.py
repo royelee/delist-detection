@@ -38,6 +38,7 @@ from ..filings.listing_status import (
     exchanges_around, issuer_exchange, quoted_over_the_counter, unlisted_cover, withdrawal_kind,
 )
 from .own_shares import OwnShares
+from .registrants import Registrant
 from ..outputs.review_triage import FilingRef, ReviewItem
 from .rewrites import SUCCESSOR_UNKNOWN, Rewrite, Rule, continuation, reclassify, security_goes_on
 from ..identity.security_master import Security
@@ -140,13 +141,16 @@ class SecurityContext:
     (None: unknown); the one CIK other than its issuer's that was its issuer in force over its whole span
     (`other_cik`, R5: stage 4c, `pipeline._other_issuers`), whose Form 25s are read too (the old Spectrum Brands,
     the old Match Group); and the lookup tier that found its issuer (`resolution_source`, recorded on every
-    DelistRecord of its delistings). Built by `SecurityContexts` (stage 5, the real-case harnesses) or directly
-    from a record (stage 9d's added successors)."""
+    DelistRecord of its delistings); and its successor registrants (`registrants.Registrant`, FB-004: the new
+    registrants a holding-company reorganization of an ending that went on put in the old one's place, from the day
+    their successor registration was filed), whose Form 25s are read too. Built by `SecurityContexts` (stage 5, the
+    real-case harnesses) or directly from a record (stage 9d's added successors)."""
     record: TradingRecord
     siblings: tuple[TradingRecord, ...] = ()
     listed_today: bool | None = None
     other_cik: int | None = None
     resolution_source: str = "security_master"
+    registrants: tuple[Registrant, ...] = ()
 
     @property
     def security(self) -> Security:
@@ -204,11 +208,12 @@ class SecurityContexts:
         sec_id, and the fails index); `kw`: `other_ciks`, `resolution_source`."""
         return cls((TradingRecord.observed(s, fails, cusips.get(sid, ())) for sid, s in securities.items()), **kw)
 
-    def __call__(self, security: Security, listed_today: bool | None) -> SecurityContext:
+    def __call__(self, security: Security, listed_today: bool | None,
+                 registrants: Sequence[Registrant] = ()) -> SecurityContext:
         record = self.records[security.sec_id]
         source = self._resolution_source(security) if self._resolution_source is not None else "security_master"
         return SecurityContext(record, self._siblings.get(security.issuer_cik, (record,)), listed_today,
-                               self._other_ciks.get(security.sec_id), source)
+                               self._other_ciks.get(security.sec_id), source, tuple(registrants))
 
 
 @dataclass
@@ -578,7 +583,10 @@ class DelistingFinder:
             candidates.append((sub, f25))
         groups = [(cik, filings, g) for g in self._group(candidates)]
         if ctx.other_cik is not None and ctx.other_cik != cik:
-            groups += self._other_issuer_groups(ctx, scan, floor, own)
+            groups += self._other_issuer_groups(ctx, scan, floor, own, ctx.other_cik)
+        for registrant in ctx.registrants:          # a successor registrant's Form 25s, from its registration on
+            if registrant.cik != cik:
+                groups += self._other_issuer_groups(ctx, scan, max(floor, registrant.since), own, registrant.cik)
         groups.sort(key=lambda x: min(s.filing_date for s, _ in x[2]))
 
         delistings: list[Delisting] = []
@@ -642,12 +650,12 @@ class DelistingFinder:
                                          last_seen=rec.last_seen))
         return delistings, review
 
-    def _other_issuer_groups(self, ctx: SecurityContext, scan: _Scan, floor: str, own: SecurityRef
+    def _other_issuer_groups(self, ctx: SecurityContext, scan: _Scan, floor: str, own: SecurityRef, other: int
                              ) -> list[tuple[int, list[EdgarSubmission], list[tuple[EdgarSubmission, Form25]]]]:
-        """R5: the Form 25s, from the floor on, of the one other CIK in force over the security's whole span
-        (`SecurityContext.other_cik`), matched against this security alone, grouped; each group carries its
-        filer CIK and filing list, which date and classify it (old Spectrum Brands 2018, old Match Group 2020)."""
-        other = ctx.other_cik
+        """R5: the Form 25s, from the floor on, of another CIK (`other`: the one in force over the security's whole
+        span, `SecurityContext.other_cik`, or a successor registrant from its registration, `registrants`),
+        matched against this security alone, grouped; each group carries its filer CIK and filing list, which date
+        and classify it (old Spectrum Brands 2018, old Match Group 2020, WestRock Co 2024)."""
         filings = self.edgar.recent_filings(other)
         names = self._issuer_names(other)
         found = []
