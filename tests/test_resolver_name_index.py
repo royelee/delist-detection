@@ -1,5 +1,7 @@
 """The ticker resolver's name tier over SEC's cik-lookup-data.txt (cik-lookup plan, Task 3):
 candidates from the local index instead of the live company search."""
+import json
+
 import pytest
 import requests
 
@@ -295,3 +297,46 @@ def test_a_later_name_a_snapshot_carries_back_still_names_its_one_active_holder(
     idx = _index("DIVERSIFIED HEALTHCARE TRUST:0001075415:", "SENIOR HOUSING PROPERTIES TRUST:0001075415:")
     r = TickerResolver(_Edgar(dict([dhc])), name_index=idx)
     assert list(r._index_candidates(idx, "DIVERSIFIED HEALTHCARE TRUST", "2014-06-30")) == [1075415]
+
+
+# FB-004 part b: a remembered name-tier answer holds only while the name tier still names it
+def _realogy(tmp_path, memo_cik):
+    holdings = (1398987, ("Anywhere Real Estate Inc.",
+                          [{"name": "REALOGY HOLDINGS CORP.", "from": "2013-05-01T00:00:00.000Z",
+                            "to": "2022-05-27T00:00:00.000Z"}],
+                          [_f("H0", "10-K", "2012-11-29"), _f("H1", "10-K", "2019-02-26"), _f("H2", "10-K", "2020-02-25")]))
+    group = (1355001, ("Anywhere Real Estate Group LLC",
+                       [{"name": "REALOGY GROUP LLC", "from": "2012-10-16T00:00:00.000Z",
+                         "to": "2022-05-04T00:00:00.000Z"}],
+                       [_f("G0", "10-K", "2012-02-26"), _f("G1", "10-K", "2019-02-26"), _f("G2", "10-K", "2020-02-25")]))
+    idx = _index("REALOGY HOLDINGS CORP.:0001398987:", "REALOGY GROUP LLC:0001355001:",
+                 "ANYWHERE REAL ESTATE INC.:0001398987:", "ANYWHERE REAL ESTATE GROUP LLC:0001355001:")
+    cache = tmp_path / "res.json"
+    cache.write_text(json.dumps({"__version__": 4, "entries": {
+        "RLGY|2020-02-03|REALOGY HOLDINGS CORP": {"ticker": "RLGY", "cik": memo_cik, "name": "REALOGY HOLDINGS CORP",
+                                                   "source": "name_search", "member_name": "REALOGY HOLDINGS CORP"}}}))
+    return TickerResolver(_Edgar(dict([holdings, group])), cache_path=cache, name_index=idx), cache
+
+
+def test_a_remembered_name_search_answer_the_index_no_longer_names_is_resolved_again(tmp_path):
+    """RLGY/HOUS (Realogy Holdings, now Anywhere Real Estate Inc., CIK 1398987): an answer the retired live company
+    search remembered, the subsidiary Realogy Group LLC (CIK 1355001, whose name agrees once HOLDINGS and GROUP are
+    left out), outlived the rule that chose it and put the listed security's issuer on the LLC. The index names only
+    the holding company for this name and date, so the memo is no answer."""
+    r, cache = _realogy(tmp_path, 1355001)
+    got = r.resolve("RLGY", "2020-02-03", name="REALOGY HOLDINGS CORP", since="2012-12-31", pin=None)
+    assert (got.cik, got.source) == (1398987, "name_search")
+    saved = json.loads(cache.read_text())["entries"]["RLGY|2020-02-03|REALOGY HOLDINGS CORP"]
+    assert saved["cik"] == 1398987
+
+
+def test_a_remembered_name_search_answer_the_index_still_names_is_kept(tmp_path):
+    r, _ = _realogy(tmp_path, 1398987)
+    got = r.resolve("RLGY", "2020-02-03", name="REALOGY HOLDINGS CORP", since="2012-12-31", pin=None)
+    assert got.cik == 1398987 and r.edgar.searches == []
+
+
+def test_without_an_index_a_remembered_name_search_answer_stands(tmp_path):
+    r, cache = _realogy(tmp_path, 1355001)
+    r2 = TickerResolver(r.edgar, cache_path=cache)
+    assert r2.resolve("RLGY", "2020-02-03", name="REALOGY HOLDINGS CORP", since="2012-12-31", pin=None).cik == 1355001

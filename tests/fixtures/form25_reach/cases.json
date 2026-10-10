@@ -105,6 +105,10 @@
    "note": "OASPQ 2020: a 25-NSE of 'Common Stock' beside Oasis Petroleum's other lines",
    "other_cik": null
   },
+  "BBG000QN4GY3": {
+   "note": "HOUS 2026: Realogy Holdings, issuer CIK 1355001 (the LLC) in the run; the listed registrant is 1398987",
+   "other_cik": null
+  },
   "BBG000VMWHH5": {
    "note": "DISCK 2022: an exchange's 25-NSE beside an 8-A12B for the new class (no R7)",
    "other_cik": null
@@ -3917,6 +3921,116 @@
    "line_tickers": [],
    "listed": false,
    "name": "OASIS PETROLEUM INC.",
+   "observed": true,
+   "security_type": "Common Stock",
+   "share_class": "COMMON"
+  },
+  "BBG000QN4GY3": {
+   "cusips": [
+    "75605Y106"
+   ],
+   "eras": {
+    "RLGY@2012-12-31": [
+     [
+      "RLGY",
+      "2012-12-31",
+      "REALOGY HOLDINGS CORP",
+      "",
+      ""
+     ],
+     [
+      "RLGY",
+      "2013-06-28",
+      "REALOGY HOLDINGS CORP",
+      "",
+      ""
+     ],
+     [
+      "RLGY",
+      "2013-12-31",
+      "REALOGY HOLDINGS CORP",
+      "",
+      ""
+     ],
+     [
+      "RLGY",
+      "2014-06-30",
+      "REALOGY HOLDINGS CORP",
+      "",
+      ""
+     ],
+     [
+      "RLGY",
+      "2014-12-31",
+      "REALOGY HOLDINGS CORP.",
+      "",
+      ""
+     ],
+     [
+      "RLGY",
+      "2015-06-30",
+      "REALOGY HOLDINGS CORP.",
+      "",
+      ""
+     ],
+     [
+      "RLGY",
+      "2015-12-31",
+      "REALOGY HOLDINGS CORP.",
+      "",
+      ""
+     ],
+     [
+      "RLGY",
+      "2016-06-30",
+      "REALOGY HOLDINGS CORP.",
+      "",
+      ""
+     ],
+     [
+      "RLGY",
+      "2016-12-30",
+      "REALOGY HOLDINGS CORP.",
+      "",
+      ""
+     ],
+     [
+      "RLGY",
+      "2017-06-30",
+      "REALOGY HOLDINGS CORP",
+      "",
+      ""
+     ],
+     [
+      "RLGY",
+      "2017-12-31",
+      "REALOGY HOLDINGS CORP",
+      "",
+      ""
+     ],
+     [
+      "RLGY",
+      "2018-06-30",
+      "REALOGY HOLDINGS CORP",
+      "",
+      ""
+     ],
+     [
+      "RLGY",
+      "2018-12-31",
+      "REALOGY HOLDINGS CORP",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "issuer_cik": 1355001,
+   "line_tickers": [
+    "HOUS"
+   ],
+   "listed": false,
+   "name": "REALOGY HOLDINGS CORP",
    "observed": true,
    "security_type": "Common Stock",
    "share_class": "COMMON"

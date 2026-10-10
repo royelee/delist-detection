@@ -237,6 +237,38 @@ class TickerResolver:
                 return True
         return False
 
+    def _still_named(self, memo: TickerResolution, ticker: str, observed_date: str | None,
+                     observed_name: str | None) -> bool:
+        """Whether a remembered answer still stands. A name-tier answer (`name_search`) stands only while it agrees
+        with the tier's first rule, which the index makes deterministic: the one active holder of exactly the
+        expected name (`_exact_holder`) is the company. An answer the retired live company search remembered against
+        it is resolved again (FB-004: Realogy Holdings Corp., observed 2012-2020, taken for its subsidiary Realogy
+        Group LLC, CIK 1355001, whose name agrees once HOLDINGS and GROUP are left out; the one active holder of
+        REALOGY HOLDINGS CORP is CIK 1398987, today's Anywhere Real Estate Inc., which lists the security). Without
+        an index, with no exact holder or several, or when the holder could not be read, the remembered answer
+        stands; so does every other tier's."""
+        index = self._index()
+        if memo.source != "name_search" or index is None:
+            return True
+        expected = self.expected_name(ticker, observed_date, observed_name)
+        if not expected:
+            return True
+        self._reset()
+        holder = self._exact_holder(index, expected, observed_date)
+        return holder is None or holder == memo.cik or self._rested_on_failure()
+
+    def _exact_holder(self, index: CikNameIndex, nm: str, observed_date: str | None) -> int | None:
+        """The one CIK whose name is exactly `nm` (as the index compares names) and that filed within
+        `EXACT_ACTIVE_DAYS` of the date (of several, the one that carried the name): `_index_candidates`' first rule,
+        EDGAR's company page for the company still filing. None when there is no such CIK or there are several."""
+        exact, _ = index.split_search(nm)
+        target = parse_day(observed_date)
+        active = [c for c in sorted({h.cik for h in exact} - self.EXCHANGE_CIKS)
+                  if self._filing_gap(c, target) <= self.EXACT_ACTIVE_DAYS]
+        if len(active) > 1:
+            active = [c for c in active if self._carried_on(c, nm, target)]
+        return active[0] if len(active) == 1 else None
+
     def _ensure_companies(self) -> dict[str, dict]:
         if self._companies is None:
             self._companies = self.edgar.company_tickers()
@@ -819,7 +851,8 @@ class TickerResolver:
 
         memo = self._memo.get(cache_key)
         if memo is not None and self._memo_observed.get(cache_key) == observed_name and \
-                (memo.cik is None or memo.source in _GIVEN_SOURCES or self.issuers.existed_by(memo.cik, since)):
+                (memo.cik is None or memo.source in _GIVEN_SOURCES or self.issuers.existed_by(memo.cik, since)) and \
+                self._still_named(memo, t, observed_date, observed_name):
             # A rename built on this answer inherits whether it rests on a failed request.
             self._reset(cache_key in self._degraded)
             return memo

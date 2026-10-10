@@ -6,9 +6,12 @@ finder's delistings, each (delist_date, bucket, CRSP code, last trade day, succe
 25 accession, filer CIK), and the flags of its review items."""
 from __future__ import annotations
 
+import dataclasses
+
 import pytest
 
 import delist_detection.endings.delistings as delistings
+from delist_detection.endings.delistings import SecurityContexts
 from tests import form25_cases as fc
 
 # The rules of sub-plan 5b built so far; each task adds its own (the cases it moves change then, and only then)
@@ -172,6 +175,7 @@ STAY = {
     'CIK1469372-CLASS-A': ([('2015-08-03', 'exchange_transfer', 304, '2015-07-24', True, '0001193125-15-262759', 1469372), ('2015-10-02', 'exchange_transfer', 304, '2015-10-02', False, '', 1469372)], []),   # MSG 2015 (5d rule 1: the move's 8-K)
     'CIK48898-CLASS-B': ([('2016-01-03', 'exchange_transfer', 304, '2015-12-23', False, '0000876661-15-000665', 48898)], ['form25_unmatched']),   # HUB-B 2015
     'CIK65873-COMMON': ([('2007-11-30', 'merger', 231, '2007-11-16', False, '0000876661-07-000891', 65873)], []),   # AT 2007
+    'BBG000QN4GY3': ([], ['ended_without_delisting']),   # HOUS 2026 under the LLC's CIK 1355001, as the run had it
 }
 
 
@@ -261,3 +265,15 @@ def test_retail_values_voluntary_nyse_move_is_a_move_to_the_otc_market_not_a_mer
             for d in found] == [("2022-04-07", "compliance_failure", 520, None, 1735184)]
     assert [rw.rule.value for rw in found[0].rewrites] == ["moved_otc"]
     assert "2023-02-24" in found[0].record.reason
+
+
+def test_the_form25_of_anywhere_real_estate_inc_is_reached_through_its_own_cik_not_the_llcs():
+    """HOUS 2026: the run had issuer CIK 1355001 (Realogy Group LLC, whose last Form 25 is of 2007), so the Compass
+    merger's 25-NSE of 2026-01-09 was never searched. Under CIK 1398987 (Anywhere Real Estate Inc., the listed
+    registrant) the finder reaches it; its raw is in no cache (a live run fetches it), so here it is `unreadable`."""
+    securities, cusips, ftd = fc.world()
+    sec = dataclasses.replace(securities["BBG000QN4GY3"], issuer_cik=1398987)
+    ctx = SecurityContexts.observed({sec.sec_id: sec}, cusips, ftd)(sec, False)
+    _, review = fc.finder().find(ctx)
+    assert [(r.flag, r.filing.accession) for r in review if r.filing is not None] == [
+        ("form25_unreadable", "0000876661-26-000018")]

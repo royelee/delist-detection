@@ -1799,7 +1799,11 @@ expiration is 0.0 in the table and no correction in the firm month, which leaves
   `member_name`; an older file is ignored, not trusted, and replaced on the
   next save) and never holds a miss, a second-pass or 2b (`identity.EraIssuers`) answer, or
   an answer that rested on a failed request or a stale copy. The pipeline
-  writes it after each resolving stage and on the way out of a run.
+  writes it after each resolving stage and on the way out of a run. A remembered `name_search` answer stands only
+  while it agrees with the name tier's first rule (`TickerResolver._still_named`, FB-004: with the name index, the one
+  active holder of exactly the expected name, `_exact_holder`, is the company): one the retired live company search
+  remembered against it is resolved again (Realogy Holdings Corp. kept CIK 1355001, the LLC, over 1398987, the
+  listed Anywhere Real Estate Inc.). With no index, no exact holder or several, the remembered answer stands.
 - **A merger payout is gated; `delistings.csv` carries both the gated and the raw read.** Every merger payout is
   checked against the last trade close (`payout_gate.reconcile`) before it reaches `delistings.csv`'s
   `payout_per_share` / `payout_source`; the same file keeps the raw, unchecked extraction in its

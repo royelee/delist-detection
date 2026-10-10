@@ -124,12 +124,13 @@ CASES = {
     # FB-004 part b: a voluntary Form 25 the security traded on past, over the counter
     "BBG00JR5MM31": "LNWO 2025: Light & Wonder's voluntary Nasdaq withdrawal; EDGAR lists LNWO on the OTC market",
     "BBG00L31HTW0": "RVIC 2022: Retail Value's voluntary NYSE move to the OTC, an Item 2.01 after it, no exchange on the cover",
+    "BBG000QN4GY3": "HOUS 2026: Realogy Holdings, issuer CIK 1355001 (the LLC) in the run; the listed registrant is 1398987",
 }
 
 
 # CIKs whose filings are kept though no case reads them: Perrigo Company's (in force for PRGO until 2013), to show
 # what reading it would do
-EXTRA_CIKS = (820096,)
+EXTRA_CIKS = (820096, 1398987)
 # CUSIPs no case security holds whose fails rows are kept: a plan exchange's new line (WOLF's 97785W106, sub-plan 5g)
 EXTRA_CUSIPS: tuple[str, ...] = ()
 
