@@ -1,13 +1,13 @@
 {
   "as_of": "2026-09-25",
   "cache_answers": {
-    "archives": 8727,
+    "archives": 8748,
     "company_tickers": 10,
     "full_text_search": 626,
-    "submissions": 22322,
+    "submissions": 22321,
     "submissions_page": 7279
   },
-  "code_version": "3101070-dirty",
+  "code_version": "f370baf-dirty",
   "continuation_filings": [
     {
       "delist_date": "2021-03-14",
@@ -36,6 +36,7 @@
     }
   ],
   "degraded_answers": {},
+  "disputes": 201,
   "handoffs": {
     "conflicts": 7,
     "continuations_by_filing": 47,
@@ -52,11 +53,11 @@
     "accepted": 0,
     "check": 532,
     "cleared": 0,
-    "fix": 55,
+    "fix": 57,
     "info_hidden": 606,
     "unmatched_decisions": 0
   },
-  "schema_version": 3,
+  "schema_version": 4,
   "sec_requests": {},
   "sec_workers": 1,
   "stages": {

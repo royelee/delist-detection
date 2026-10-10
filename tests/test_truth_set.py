@@ -274,7 +274,7 @@ CNB_NOTE = ("Colonial BancGroup: bank closed, NYSE suspension 8-K 3.01 on 2009-0
 
 
 def test_the_step_4_cnb_rulings_as_data(tmp_path):
-    """The controller's two step-4 rulings on CNB 2009 (data/diagnosis_truth_changes.csv's last two rows): each gives
+    """The controller's two step-4 rulings on CNB 2009 (data/diagnosis_truth_changes.csv's last two CNB rows): each gives
     the row the change log holds, byte for byte. The second's reason has a comma, which the module quotes (the row
     was first written by hand unquoted, seven cells, and quoted after step 9a found it)."""
     before = truth_row(CNB, "BBG000BF2JS9", ticker="CNB", report=f"reports/{CNB}.md", confidence="inferred",
@@ -287,7 +287,9 @@ def test_the_step_4_cnb_rulings_as_data(tmp_path):
     truth.rule(Ruling(CNB, (("last_trade_date", "*"),), "suspended immediately on D: the last trade date is not scored",
                       tag=CNB_TAG, report=CNB_REPORT))
     truth.commit()
-    real = ts.changes_path(ts.configured(ROOT)).read_text().splitlines()
+    # CNB's two rows in the real change log (later rulings append after them)
+    real = [line for line in ts.changes_path(ts.configured(ROOT)).read_text().splitlines()
+            if line.startswith(f"{CNB},")][-2:]
     assert ts.changes_path(path).read_text().splitlines()[-1] == real[-2]
     assert TruthSet.open(path).row(CNB)["note"] == (
         f"{CNB_NOTE}; {CNB_TAG}: suspended immediately on D: the last trade date is not scored")

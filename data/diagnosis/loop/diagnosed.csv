@@ -1542,3 +1542,8 @@ reg|BBG000J7Q1L9|security_history|ranges|changed|HLX:2007-12-18..:866829|HLX:200
 reg|BBG000M6TR37|security_history|ranges|changed|SBNY:2008-02-05..2026-08-25:1288784|SBNY:2008-02-05..2026-09-04:1288784,regression,BBG000M6TR37,fb1,1,new_right,reports/BBG000M6TR37_fb1-r1.md
 reg|BBG0019LSQ49|security_history|ranges|changed|FRC:2010-12-14..2023-05-03:1132979;FRCB:2023-05-04..2026-08-10:1132979|FRC:2010-12-14..2023-05-03:1132979;FRCB:2023-05-04..2026-09-08:1132979,regression,BBG0019LSQ49,fb1,1,new_right,reports/BBG0019LSQ49_fb1-r1.md
 reg|BBG00JR5MM31|security_history|ranges|changed|LNW:2022-05-02..2025-11-13:750004;LNWO:2025-11-14..2026-08-31:750004;SGMS:2008-01-16..2022-05-01:750004|LNW:2022-05-02..2025-11-13:750004;LNWO:2025-11-14..2026-09-14:750004;SGMS:2008-01-16..2022-05-01:750004,regression,BBG00JR5MM31,fb1,1,new_right,reports/BBG00JR5MM31_fb1-r1.md
+reg|BBG000CPZ0F5|delistings|exit_kind|changed|dropped|liquidation,regression,BBG000CPZ0F5,fb2,2,new_right,reports/BBG000CPZ0F5_fb2-r2.md
+reg|BBG000CPZ0F5|delistings|drop_reason|changed|filings_fees|,regression,BBG000CPZ0F5,fb2,2,new_right,reports/BBG000CPZ0F5_fb2-r2.md
+reg|BBG000CPZ0F5|delistings|value_rule|changed|otc_print|recovery,regression,BBG000CPZ0F5,fb2,2,new_right,reports/BBG000CPZ0F5_fb2-r2.md
+reg|BBG000CPZ0F5|delistings|price_sec_id|changed|BBG000CPZ0F5|,regression,BBG000CPZ0F5,fb2,2,new_right,reports/BBG000CPZ0F5_fb2-r2.md
+reg|BBG000CPZ0F5|delistings|price_date|changed|2020-12-31|,regression,BBG000CPZ0F5,fb2,2,new_right,reports/BBG000CPZ0F5_fb2-r2.md

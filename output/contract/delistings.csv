@@ -179,7 +179,7 @@ BBG000BLBXT4,2016-09-22,merger,,false,,,-0.003245,,76.800000,confirmed,cash_plus
 BBG000BLCL55,2021-03-16,merger,,false,,,0.006005,,4.104500,confirmed,stock,,,0.050000,BBG002PHSYX9,FANG,2021-03-17,,llm,passed,"0.05 × price(FANG, 2021-03-17) / last_close − 1"
 BBG000BLDXH5,2024-02-28,dropped,guidelines,false,,,,-0.550000,,uncertain,otc_print,,,,BBG000BLDXH5,MDRX,2024-02-29,,,,"otc_print(MDRX, from 2024-02-29) / last_close − 1"
 BBG000BLFC07,2021-04-15,merger,,false,,,0.000000,,41.500000,confirmed,cash,41.500000,USD,,,,,,8K_2.01,passed,41.50 / last_close − 1
-BBG000BLG1L7,2025-04-21,liquidation,,false,,,,-0.300000,,uncertain,otc_print,,,,BBG000BLG1L7,,2025-04-22,,,,"otc_print(?, from 2025-04-22) / last_close − 1"
+BBG000BLG1L7,2025-04-21,liquidation,,false,,,,,,uncertain,recovery,,,,,,,,,,"distributions(?, after the last trade) / last_close − 1"
 BBG000BLH3P8,2026-05-29,merger,,false,,,0.056225,,21.916667,confirmed,cash_plus_stock,15.000000,USD,0.333333,BBG01YQ379B0,NVRI,2026-06-01,,llm,passed,"(15.00 + 0.333333 × price(NVRI, 2026-06-01)) / last_close − 1"
 BBG000BLNZL4,2025-12-31,merger,,false,,,-0.001674,,49.966217,confirmed,stock,,,0.523700,BBG01Z7V4LL1,PNFP,2026-01-02,,llm,passed,"0.5237 × price(PNFP, 2026-01-02) / last_close − 1"
 BBG000BLPBL5,2026-08-14,merger,,false,,,-0.028383,,178.835790,confirmed,stock,,,2.793000,BBG000BG8M31,EQR,2026-08-17,,llm,passed,"2.793 × price(EQR, 2026-08-17) / last_close − 1"
@@ -288,7 +288,7 @@ BBG000BV7YT5,2012-02-10,merger,,false,,,0.003764,,32.000000,confirmed,cash,32.00
 BBG000BV9X97,2013-11-29,merger,,false,,,0.000000,,2.450000,confirmed,cash,2.450000,USD,,,,,,llm,passed,2.45 / last_close − 1
 BBG000BVF2M3,2016-04-15,merger,,false,,,0.004112,,59.212460,confirmed,cash_plus_stock,21.000000,USD,0.862000,BBG000BQC9V2,NWL,2016-04-18,,llm,passed,"(21.00 + 0.862 × price(NWL, 2016-04-18)) / last_close − 1"
 BBG000BVFFV4,2012-05-16,merger,,false,,,0.000417,,72.000000,confirmed,cash,72.000000,USD,,,,,,8K_2.01,passed,72.00 / last_close − 1
-BBG000BVK2W6,2007-12-20,merger,,false,,,0.028122,,34.000000,confirmed,cash,34.000000,USD,,,,,,8K_1.01,passed,34.00 / last_close − 1
+BBG000BVK2W6,2007-12-20,merger,,false,,,0.028122,,34.000000,uncertain,cash,34.000000,USD,,,,,,8K_1.01,passed,34.00 / last_close − 1
 BBG000BVPPM1,2018-09-28,merger,,false,,,-0.008013,,152.270000,confirmed,cash,152.270000,USD,,,,,,8K_2.01,passed,152.27 / last_close − 1
 BBG000BVSX05,2014-12-05,merger,,false,,,-0.001248,,24.000000,confirmed,cash,24.000000,USD,,,,,,DEFM14A,passed,24.00 / last_close − 1
 BBG000BVVHH8,2016-02-26,merger,,false,,,0.000887,,110.067514,confirmed,stock,,,1.814200,BBG000BX57K1,XRAY,2016-02-29,,llm,passed,"1.8142 × price(XRAY, 2016-02-29) / last_close − 1"
@@ -405,7 +405,7 @@ BBG000CNWNL6,,exchange,,true,BBG00R2JZG39,,,,,confirmed,continuation,,,,,,,,,,
 BBG000CNZC55,,exchange,,true,BBG00R24W7X2,,,,,confirmed,continuation,,,,,,,,,,
 BBG000CP95B7,2012-12-21,merger,,false,,,0.001415,,92.000000,confirmed,cash,92.000000,USD,,,,,,8K_2.01,passed,92.00 / last_close − 1
 BBG000CPQZ77,2017-08-25,merger,,false,,,0.000238,,42.000000,confirmed,cash,42.000000,USD,,,,,,8K_2.01,passed,42.00 / last_close − 1
-BBG000CPZ0F5,2020-12-30,dropped,filings_fees,false,,,,-0.550000,,confirmed,otc_print,,,,BBG000CPZ0F5,,2020-12-31,,,,"otc_print(?, from 2020-12-31) / last_close − 1"
+BBG000CPZ0F5,2020-12-30,liquidation,,false,,,,,,uncertain,recovery,,,,,,,,,,"distributions(?, after the last trade) / last_close − 1"
 BBG000CQB684,2011-12-01,merger,,false,,,0.000000,,38.800000,confirmed,cash,38.800000,USD,,,,,,8K_2.01,passed,38.80 / last_close − 1
 BBG000CRTLP1,2019-03-07,merger,,false,,,0.000416,,42.907822,confirmed,cash_plus_stock,38.750000,USD,0.214100,BBG000C1THJ4,TVTY,2019-03-08,,llm,passed,"(38.75 + 0.2141 × price(TVTY, 2019-03-08)) / last_close − 1"
 BBG000CS7CB8,2007-11-13,merger,,false,,,0.000308,,65.000000,confirmed,cash,65.000000,USD,,,,,,8K_1.01,passed,65.00 / last_close − 1
@@ -558,7 +558,7 @@ BBG000P1K2X6,2026-07-15,merger,,false,,,0.000476,,210.000000,confirmed,cash,210.
 BBG000P4BQM9,2018-07-13,exchange,,true,BBG000DS5588,,,,,uncertain,continuation,,,,,,,,,,
 BBG000PB7F79,2015-06-30,merger,,false,,,-0.025593,,83.000000,confirmed,cash,83.000000,USD,,,,,,DEFM14A,passed,83.00 / last_close − 1
 BBG000PCNTM2,2016-12-08,merger,,false,,,0.010400,,35.889408,confirmed,cash_plus_stock,18.000000,USD,0.678400,BBG00FFJY867,LGFB,2016-12-09,,llm,passed,"(18.00 + 0.6784 × price(LGFB, 2016-12-09)) / last_close − 1"
-BBG000PCQQL6,2025-02-21,exchange,,false,,,,0.000000,,confirmed,transfer,,,,,,,,,,
+BBG000PCQQL6,2025-02-21,exchange,,false,,,,0.000000,,uncertain,transfer,,,,,,,,,,
 BBG000PJ88D0,2015-08-14,merger,,false,,,0.000000,,5.050000,confirmed,cash,5.050000,USD,,,,,,8K_2.01,passed,5.05 / last_close − 1
 BBG000PLXQQ3,2015-05-14,merger,,false,,,0.001328,,105.600000,confirmed,cash,105.600000,USD,,,,,,8K_2.01,passed,105.60 / last_close − 1
 BBG000PQ6YJ3,2018-10-23,dropped,bankruptcy,false,,,,-0.550000,,confirmed,otc_print,,,,BBG000PQ6YJ3,SHLDQ,2018-10-24,,,,"otc_print(SHLDQ, from 2018-10-24) / last_close − 1"
@@ -766,7 +766,7 @@ BBG00GX77LW3,2023-09-01,merger,,false,,,,,,confirmed,cash,75.867000,USD,,,,,,llm
 BBG00HJ8K617,2023-09-29,merger,,false,,,0.000000,,1.000000,confirmed,cash,1.000000,USD,,,,,,8K_2.01,passed,1.00 / last_close − 1
 BBG00HPDM5Z2,2022-12-05,merger,,false,,,0.000000,,34.250000,confirmed,cash,34.250000,USD,,,,,,8K_2.01,passed,34.25 / last_close − 1
 BBG00HS2GVL8,2026-03-12,merger,,false,,,0.000480,,20.850000,confirmed,cash,20.850000,USD,,,,,,8K_2.01,passed,20.85 / last_close − 1
-BBG00HY28P97,2020-09-18,dropped,bankruptcy,false,,,,-0.300000,,confirmed,otc_print,,,,BBG00HY28P97,GTXMQ,2020-09-21,,,,"otc_print(GTXMQ, from 2020-09-21) / last_close − 1"
+BBG00HY28P97,2020-09-18,dropped,bankruptcy,false,,,,-0.300000,,uncertain,otc_print,,,,BBG00HY28P97,GTXMQ,2020-09-21,,,,"otc_print(GTXMQ, from 2020-09-21) / last_close − 1"
 BBG00JH9TZ56,2025-07-15,merger,,false,,,-0.014969,,25.423650,confirmed,stock,,,0.735000,BBG000BT41Q8,SLB,2025-07-16,,llm,passed,"0.735 × price(SLB, 2025-07-16) / last_close − 1"
 BBG00JM9V731,2026-07-17,exchange,,true,BBG023G9VDF5,,,,,confirmed,continuation,,,,,,,,,,
 BBG00K53L394,2024-07-19,merger,,false,,,0.012267,,12.572352,confirmed,stock,,,0.350400,BBG000BHZ5J9,EQT,2024-07-22,,llm,passed,"0.3504 × price(EQT, 2024-07-22) / last_close − 1"
@@ -782,7 +782,7 @@ BBG00PPWYWJ8,2023-03-29,merger,,false,,,0.000527,,19.000000,confirmed,cash,19.00
 BBG00R24W7X2,2025-12-09,merger,,false,,,,0.000000,28.000000,confirmed,unknown,,,,,,,,,,
 BBG00RPJPN67,2025-06-30,merger,,false,,,-0.001762,,54.254260,confirmed,cash_plus_stock,26.450000,USD,1.034000,BBG000C1HL99,JHX,2025-07-01,,llm,passed,"(26.45 + 1.034 × price(JHX, 2025-07-01)) / last_close − 1"
 BBG00RQ70GQ2,2022-05-24,merger,,false,,,-0.000105,,190.000000,confirmed,cash,190.000000,USD,,,,,,8K_2.01,passed,190.00 / last_close − 1
-BBG00RRH0RM9,2020-02-28,exchange,,false,,,,0.000000,,confirmed,transfer,,,,,,,,,,
+BBG00RRH0RM9,2020-02-28,exchange,,false,,,,0.000000,,uncertain,transfer,,,,,,,,,,
 BBG00TCBG714,,exchange,,true,BBG0134WCM78,,,,,confirmed,continuation,,,,,,,,,,
 BBG00VCYVLH4,2024-07-31,merger,,false,,,0.000890,,45.000000,confirmed,cash,45.000000,USD,,,,,,8K_2.01,passed,45.00 / last_close − 1
 BBG00VCZX9Z6,2025-08-25,merger,,false,,,0.000000,,9.150000,confirmed,cash,9.150000,USD,,,,,,8K_1.01,passed,9.15 / last_close − 1
@@ -815,10 +815,10 @@ BBG018CZLZ09,2024-11-18,merger,,false,,,-0.000699,,14.300000,confirmed,cash,14.3
 BBG01HLM8W28,2024-09-09,merger,,false,,,0.028746,,22.930750,confirmed,stock,,,0.837500,BBG01KJQM3Y8,SIRI,2024-09-10,,llm,passed,"0.8375 × price(SIRI, 2024-09-10) / last_close − 1"
 BBG01HMFL081,2025-12-15,exchange,,true,BBG01YY256K1,,,,,confirmed,continuation,,,,,,,,,,
 BBG01HMFLTN1,2025-12-15,exchange,,true,BBG01YYX1Z14,,,,,confirmed,continuation,,,,,,,,,,
-CIK1011006-COMMON,2017-06-16,exchange,,false,,,,0.000000,,confirmed,transfer,,,,,,,,,,
+CIK1011006-COMMON,2017-06-16,exchange,,false,,,,0.000000,,uncertain,transfer,,,,,,,,,,
 CIK1038914-COMMON,2007-11-26,merger,,false,,,0.002376,,87.036275,confirmed,cash_plus_stock,22.460000,USD,0.475700,,RIG,2007-11-27,,llm,passed,"(22.46 + 0.4757 × price(RIG, 2007-11-27)) / last_close − 1"
 CIK104207-COMMON,2014-12-30,exchange,,true,BBG000BWLMJ4,,,,,confirmed,continuation,,,,,,,,,,
-CIK104889-COMMON,2013-11-27,exchange,,false,,,,0.000000,,confirmed,transfer,,,,,,,,,,
+CIK104889-COMMON,2013-11-27,exchange,,false,,,,0.000000,,uncertain,transfer,,,,,,,,,,
 CIK1052045-COMMON,2007-07-24,merger,,false,,,0.002888,,15.625000,confirmed,cash,15.625000,USD,,,,,,llm,passed,15.62 / last_close − 1
 CIK1066104-COMMON,,exchange,,false,,,,0.000000,,uncertain,transfer,,,,,,,,,,
 CIK1074771-COMMON,2007-07-24,merger,,false,,,0.002599,,54.000000,confirmed,cash,54.000000,USD,,,,,,8K_1.01,passed,54.00 / last_close − 1
@@ -854,7 +854,7 @@ CIK65873-COMMON,2007-11-16,merger,,false,,,0.004213,,71.500000,confirmed,cash,71
 CIK709519-COMMON,,merger,,false,,,,,,uncertain,cash,9.500000,USD,,,,,,8K_2.01,,9.50 / last_close − 1
 CIK716006-COMMON,2021-02-05,exchange,,false,,,,0.000000,,uncertain,transfer,,,,,,,,,,
 CIK718482-COMMON,2007-09-28,merger,,false,,,0.016927,,85.167660,confirmed,cash_plus_stock,35.800000,USD,0.984400,BBG000FRBSS9,WB,2007-10-01,,llm,passed,"(35.80 + 0.9844 × price(WB, 2007-10-01)) / last_close − 1"
-CIK730464-COMMON,2017-05-23,exchange,,false,,,,0.000000,,confirmed,transfer,,,,,,,,,,
+CIK730464-COMMON,2017-05-23,exchange,,false,,,,0.000000,,uncertain,transfer,,,,,,,,,,
 CIK737874-COMMON,2007-09-28,merger,,false,,,0.000852,,35.250000,confirmed,cash,35.250000,USD,,,,,,DEFM14A,passed,35.25 / last_close − 1
 CIK804055-COMMON,2010-10-01,merger,,false,,,0.029923,,32.010000,confirmed,cash_plus_stock,10.000000,USD,1.000000,BBG000BF5RY1,CCE,2010-10-04,,llm,passed,"(10.00 + 1 × price(CCE, 2010-10-04)) / last_close − 1"
 CIK835541-COMMON,2007-10-01,merger,,false,,,0.005168,,3.890000,confirmed,cash,3.890000,USD,,,,,,8K_1.01,passed,3.89 / last_close − 1
