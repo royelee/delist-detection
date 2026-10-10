@@ -176,6 +176,19 @@ def test_a_build_cut_off_by_a_killed_process_is_cleaned_up_by_the_next_one(tmp_p
     assert not orphan.exists()
 
 
+def test_rows_carry_no_dict_and_share_their_texts(tmp_path):
+    """A run holds millions of rows: an `FtdRow` has no per-row dict, and the same CUSIP, symbol, date or
+    description read from two files is one string."""
+    from dataclasses import replace
+
+    one, two = tmp_path / "cnsfails202401a.zip", tmp_path / "cnsfails202401b.zip"
+    _write_zip(one, {"a.txt": HEADER + "20240102|00206R102|T|500|AT&T INC COM|16.78\n"})
+    _write_zip(two, {"a.txt": HEADER + "20240102|00206R102|T|700|AT&T INC COM|16.80\n"})
+    a = FtdRow(*next(ftd_store.select(ftd_store.ensure(one))))
+    b = FtdRow(*next(ftd_store.select(ftd_store.ensure(two))))
+    assert not hasattr(a, "__dict__") and replace(a, price=1.0).price == 1.0 and hash(a) == hash(replace(a))
+    assert a.cusip is b.cusip and a.symbol is b.symbol and a.date is b.date and a.description is b.description
+
 
 @pytest.mark.parametrize("filters", [{}, {"symbols": {"T"}}, {"cusips": {"037833100"}}, {"symbols": {"BRK-B"}, "cusips": {"G0000Z000"}}])
 def test_parse_ftd_lines_and_the_reference_rule_agree(filters):

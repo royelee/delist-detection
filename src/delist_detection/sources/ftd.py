@@ -53,8 +53,10 @@ FTD_START = date(2004, 1, 1)      # the first day SEC's fails-to-deliver files c
 _date_of = attrgetter("date")
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class FtdRow:
+    """One fails row. A run holds millions, so it keeps no per-row dict (`slots`), and `ftd_store` hands out each date,
+    CUSIP, symbol and description text once (`sys.intern`) however many rows carry it."""
     date: str
     cusip: str
     symbol: str

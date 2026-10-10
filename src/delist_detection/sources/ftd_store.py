@@ -27,6 +27,7 @@ import sqlite3
 import zipfile
 from collections.abc import Iterator
 from pathlib import Path
+from sys import intern
 
 from .atomic_io import clean_orphan_temps, write_atomic_with
 from ..vocabulary.identifiers import normalize_ticker
@@ -179,9 +180,12 @@ def _build(zip_path: Path, dest: Path, fingerprint: str) -> None:
 
 
 def _row(rec: tuple) -> tuple[str, str, str, str, float | None]:
-    """A stored row as the fields of an `ftd.FtdRow`: (date, CUSIP, symbol, description, price)."""
+    """A stored row as the fields of an `ftd.FtdRow`: (date, CUSIP, symbol, description, price). Each text is
+    interned: a run holds the same few thousand dates, CUSIPs and symbols and a few hundred thousand descriptions
+    in millions of rows."""
     price = rec[5]
-    return rec[1], rec[2], rec[3], rec[4], float(price) if isinstance(price, str) else price
+    return (intern(rec[1]), intern(rec[2]), intern(rec[3]), intern(rec[4]),
+            float(price) if isinstance(price, str) else price)
 
 
 def select(db: Path, *, symbols: set[str] | None = None,
