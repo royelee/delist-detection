@@ -10,8 +10,16 @@ import pytest
 from delist_detection.outputs import manifest, store
 from delist_detection.vocabulary.exit_kind import ContinuationReading
 from delist_detection.outputs.run_snapshot import (CONTRACT_SCHEMA_1, FIRST_TABLES, RunSnapshot, SnapshotError,
-                                           continuation_entries, continuation_readings)
+                                           continuation_entries, continuation_readings, ticker_ranges)
 from tests.lifecycle_tables import contract_row, ending, hist, iv, obs, sec
+
+WRITTEN = [n for n, spec in store.TABLES.items() if spec.written]
+
+
+def _range(sec_id, ticker, start, end):
+    """A ticker_history row as a snapshot of a written folder rebuilds it: no exchange, no source."""
+    return {"sec_id": sec_id, "ticker": ticker, "exchange": "", "valid_from": start, "valid_to": end, "source": ""}
+
 
 READINGS = {("A", "2016-05-18"): ContinuationReading(doubt="ratio:0.9042"),
             ("B", "2021-03-14"): ContinuationReading(filing="8-K 0001193125-21-063792")}
@@ -25,7 +33,6 @@ def _rows():
         "cusip_history": [{"sec_id": "A", "cusip": "000000001", "valid_from": "2010-01-04", "valid_to": None,
                            "source": "ftd"}],
         "delistings": [ending("A", "2016-05-18", dlret=0.25, ltd="2016-05-18")],
-        "payouts": [],
         "review": [{"severity": "check", "sec_id": "B"}, {"severity": "fix", "sec_id": "A"}],
         "review_summary": [],
         "observation_map": [obs("AAA", "2010-06-30", "A")],
@@ -58,8 +65,10 @@ def test_every_store_table_is_an_attribute():
 def test_the_folder_reads_every_table_the_run_wrote_and_its_manifest(tmp_path):
     _write_run(tmp_path)
     snap = RunSnapshot.read(tmp_path)
-    for name in store.TABLES:
+    for name in WRITTEN:
         assert snap.table(name) == store.read_table(name, store.table_path(tmp_path, name))
+    assert not store.table_path(tmp_path, "ticker_history").exists()      # never written; rebuilt from the contract
+    assert snap.ticker_history == [_range("A", "AAA", "2010-01-04", "2016-05-18")]
     assert snap.as_of == date(2026, 9, 25)
     assert snap.continuations == READINGS
     assert snap.review[0]["severity"] == "check"                # review.csv keeps the order it was written in
@@ -161,8 +170,9 @@ def test_the_commit_reads_the_folder_as_the_commit_holds_it(tmp_path):
     assert base.contract_delistings[0]["exit_kind"] == "merger" and now.contract_delistings[0]["exit_kind"] == "exchange"
     assert (base.as_of, base.continuations) == (date(2026, 9, 25), READINGS)
     assert (now.as_of, now.continuations) == (date(2026, 10, 7), {})
-    for name in store.TABLES:
+    for name in WRITTEN:
         assert base.table(name) == store.formatted(name, _rows()[name])
+    assert base.ticker_history == [_range("A", "AAA", "2010-01-04", "2016-05-18")]
 
 
 def test_a_commit_without_a_table_follows_the_older_schema_rule(tmp_path):
@@ -192,13 +202,43 @@ def test_the_commit_adapter_refuses_a_folder_outside_the_repo_and_a_revision_tha
         RunSnapshot.at(repo, "nosuchrev", repo / "output")
 
 
+def test_a_commit_that_still_holds_ticker_history_csv_is_read_from_its_contract(tmp_path):
+    repo, out = _repo(tmp_path)
+    (out / "ticker_history.csv").write_text("sec_id,ticker,exchange,valid_from,valid_to,source\n"
+                                            "A,OLD,NYSE,2001-01-01,2002-02-02,ftd\n")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", "an older run's file")
+    assert RunSnapshot.at(repo, "HEAD", out).ticker_history == [_range("A", "AAA", "2010-01-04", "2016-05-18")]
+
+
+def test_a_folder_without_the_contract_cannot_give_ticker_history(tmp_path):
+    store.write_tables(tmp_path, {k: v for k, v in _rows().items() if k in FIRST_TABLES})
+    with pytest.raises(SnapshotError, match="contract/security_history.csv.*missing"):
+        RunSnapshot.read(tmp_path).ticker_history
+
+
+def test_ticker_ranges_put_issuer_splits_back_together_and_keep_separate_ranges_apart():
+    rows = [hist("A", "100", "2010-01-04", "2012-03-31"), hist("A", "200", "2012-04-01", "2014-06-30"),
+            hist("A", "100", "2014-07-01", ""),
+            hist("A", "100", "2001-01-01", "2002-01-31", ticker="OLD"),
+            hist("A", "100", "2002-02-01", "2003-01-01", ticker="OLD"),        # same issuer: two ranges, no split
+            hist("B", "300", "2011-01-03", "2011-12-30")]
+    got = ticker_ranges(store.formatted("security_history", rows))
+    assert [(r["sec_id"], r["ticker"], r["valid_from"], r["valid_to"]) for r in got] == [
+        ("A", "OLD", "2001-01-01", "2002-01-31"), ("A", "OLD", "2002-02-01", "2003-01-01"), ("A", "AAA", "2010-01-04", ""),
+        ("B", "AAA", "2011-01-03", "2011-12-30")]
+
+
 # -- the in-memory adapter ----------------------------------------------------------------------------------------
 def test_the_rows_about_to_be_written_read_as_the_written_folder(tmp_path):
     _write_run(tmp_path)
     written, held = RunSnapshot.read(tmp_path), RunSnapshot.of(_rows(), as_of=date(2026, 9, 25),
                                                                    continuations=READINGS)
-    for name in store.TABLES:
+    for name in WRITTEN:
         assert held.table(name) == written.table(name)
+    assert held.ticker_history == store.formatted("ticker_history", _rows()["ticker_history"])   # the run's own
+    assert [(r["sec_id"], r["ticker"], r["valid_from"], r["valid_to"]) for r in held.ticker_history] == \
+        [(r["sec_id"], r["ticker"], r["valid_from"], r["valid_to"]) for r in written.ticker_history]
     assert (held.as_of, held.continuations) == (written.as_of, written.continuations)
 
 

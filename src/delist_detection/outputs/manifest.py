@@ -1,7 +1,7 @@
 # src/delist_detection/outputs/manifest.py
 """run_manifest.json: what one run of the pipeline rested on.
 
-Written next to the eight tables, and only after them: a run that aborts leaves the
+Written next to the seven tables, and only after them: a run that aborts leaves the
 previous manifest in place, like the previous tables. It records:
 - the run date every freshness rule used (`as_of`);
 - the code that ran and the worker count;
@@ -12,7 +12,7 @@ So two runs over the same observations can be told apart when their tables diffe
 
 The manifest is not part of the byte-identical-output guarantee: it carries the
 run date, the code version and the worker count, so it is expected to differ
-between two runs even when their eight tables come out identical.
+between two runs even when their seven tables come out identical.
 """
 from __future__ import annotations
 

@@ -28,6 +28,7 @@ class TableSpec:
     key: tuple[str, ...]
     sort: bool = True          # False: rows are written in the order given
     file: str = ""             # the path under the output folder; "" means "<name>.csv"
+    written: bool = True       # False: a table of the run, read in memory (verdicts, contract) and never written
 
 
 class DelistingKey(NamedTuple):
@@ -79,16 +80,15 @@ TABLES: dict[str, TableSpec] = {t.name: t for t in (
     TableSpec("securities",
               ("sec_id", "issuer_cik", "share_class", "name", "security_type", "observed", "figi_source"),
               ("sec_id",)),
+    # not written since the contract: contract/security_history.csv replaces it for a caller, and a written folder's
+    # snapshot rebuilds its ranges from that file (run_snapshot.ticker_ranges)
     TableSpec("ticker_history",
               ("sec_id", "ticker", "exchange", "valid_from", "valid_to", "source"),
-              ("sec_id", "valid_from", "ticker")),
+              ("sec_id", "valid_from", "ticker"), written=False),
     TableSpec("cusip_history",
               ("sec_id", "cusip", "valid_from", "valid_to", "source"),
               ("sec_id", "valid_from", "cusip")),
     TableSpec("delistings", DELISTINGS_COLUMNS, ("sec_id", "delist_date")),
-    TableSpec("payouts",
-              ("sec_id", "delist_date", "ticker", "payout_per_share", "confidence", "source", "accession"),
-              ("sec_id", "delist_date")),
     TableSpec("review",
               ("severity", "sec_id", "delist_date", "ticker", "cik", "bucket", "dlret", "review_flags", "reason",
                "anchor_8k", "last_seen"),
@@ -182,7 +182,7 @@ def _write_all(tables: Sequence[tuple[str, Iterable[Mapping[str, object]], str |
 
 
 def write_tables(out_dir: str | Path, tables: Mapping[str, Iterable[Mapping[str, object]]]) -> dict[str, int]:
-    """Write every table in `tables` under `out_dir` as one group (`_write_all`):
+    """Write every table in `tables` that has a file (`TableSpec.written`) under `out_dir` as one group (`_write_all`):
     every table is formatted and written to its own temp file first, so a
     formatting or write failure in any of them leaves every previous file
     untouched and every temp file cleaned up. Only then are the temp files
@@ -191,7 +191,8 @@ def write_tables(out_dir: str | Path, tables: Mapping[str, Iterable[Mapping[str,
 
     Returns `{name: row_count}`.
     """
-    return _write_all([(name, rows, table_path(out_dir, name)) for name, rows in tables.items()])
+    return _write_all([(name, rows, table_path(out_dir, name)) for name, rows in tables.items()
+                       if TABLES[name].written])
 
 
 def read_table(name: str, path: str | Path) -> list[dict[str, str]]:

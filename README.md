@@ -85,13 +85,13 @@ classification evidence, and concrete train/backtest mechanics:
 
 ---
 
-## The nine output tables
+## The eight output tables
 
-`classify_universe.py` writes nine CSVs to `output/`, all committed
+`classify_universe.py` writes eight CSVs to `output/`, all committed
 artifacts (one row layout each, fixed column order, ISO dates, `;`-joined
 lists, empty cell for NULL, rows sorted by key unless noted — see
 [`outputs/store.py`](src/delist_detection/outputs/store.py) for the schema every table
-shares). `delistings.csv` is the primary deliverable; the other eight support
+shares). `delistings.csv` is the primary deliverable; the other seven support
 it.
 
 The run also writes the contract, the tables `qlib_practice` will read, under
@@ -123,22 +123,18 @@ or `placeholder`.
 `observed` is `false` for a successor/acquirer security added only to price a
 delisting, never itself observed.
 
-### `ticker_history.csv` — key `(sec_id, valid_from, ticker)`
+### Ticker ranges — `contract/security_history.csv` (no `ticker_history.csv`)
 
-Point-in-time ticker ranges.
+The run no longer writes `ticker_history.csv`: [`contract/security_history.csv`](#contract--the-tables-qlib_practice-will-read)
+replaces it. It holds the same point-in-time ticker ranges (`sec_id`, `ticker`,
+`start_date`, `end_date`), split where the issuer in force changes, with the
+issuer, name and share class on each row; the `exchange` and `source` columns
+of the old table are not published. A merger acquirer the run adds only to
+price a deal has no row there (a successor does). The run still builds the
+ranges in memory as `ticker_history` (the verdicts and the contract read
+them), and the text below describes how they are made.
 
-```
-sec_id, ticker, exchange, valid_from, valid_to, source
-```
-
-`valid_to` is empty for the still-open range. `exchange` is filled for the
-range that ends in a delisting (from the Form 25) and for the still-open
-range (from the issuer's current EDGAR submissions listing); a closed range
-that is neither has an empty `exchange` (see the spec's Implementation
-notes). `source` is `observation`, `ftd`, or `edgar_8k` — the last one for an
-added successor security's ticker range (exchange-transfer continuations),
-built directly from the 8-K that named it rather than from FTD sightings;
-an added acquirer security's range still comes from `ftd`.
+`end_date` is empty for the still-open range.
 
 A security's ranges are clipped at the last delisting that actually *ends*
 it, not just its last delisting: one whose successor is the security itself
@@ -165,7 +161,7 @@ for that ticker.
 
 ### `cusip_history.csv` — key `(sec_id, valid_from, cusip)`
 
-Point-in-time CUSIP ranges, same shape as `ticker_history.csv`:
+Point-in-time CUSIP ranges, same shape as `security_history.csv`'s ticker ranges:
 
 ```
 sec_id, cusip, valid_from, valid_to, source
@@ -186,9 +182,9 @@ history_ticker, in_ticker_history, status
 
 `pin_cik`/`pin_sec_id` are the observation's own `cik`/`sec_id` columns, kept
 under their own names since `issuer_cik`/`sec_id` here are the *resolved*
-answer. `history_ticker` is the security's `ticker_history` spelling on
-`as_of` (an observed `BFB` gets `BF-B`, the spelling to join panels on);
-`in_ticker_history` is `true` when a `ticker_history` range of that security,
+answer. `history_ticker` is the security's ticker spelling in
+`contract/security_history.csv` on `as_of` (an observed `BFB` gets `BF-B`, the spelling to join panels on);
+`in_ticker_history` is `true` when a `security_history.csv` range of that security,
 under the observed ticker (either separator spelling), covers `as_of`.
 `status` is the first of:
 
@@ -203,7 +199,7 @@ under the observed ticker (either separator spelling), covers `as_of`.
 
 A `backfilled_ticker` observation still gets its `sec_id` here; it just adds
 no range to `ticker_history` (see above). **Membership from
-`observation_map.csv`, ticker look-ups through `ticker_history.csv` keyed on
+`observation_map.csv`, ticker look-ups through `contract/security_history.csv` keyed on
 `history_ticker`** — not the raw observed ticker, which a class ticker may
 spell without its separator. Under `--limit N`, only the run's own eras get
 rows, and the run log says how many of the input's observations that is.
@@ -224,8 +220,8 @@ not listed is confirmed.
 ### `contract/` — the tables qlib_practice will read
 
 Written to `output/contract/` by stage 10g, from the tables and verdicts above
-(`outputs/contract.py`), beside today's nine tables for one release (their columns do
-not change). Five files, columns as in [`outputs/store.py`](src/delist_detection/outputs/store.py):
+(`outputs/contract.py`), beside today's seven tables for one release (their columns do
+not change). Six files, columns as in [`outputs/store.py`](src/delist_detection/outputs/store.py):
 
 ```
 security_history.csv  key sec_id, start_date, ticker
@@ -235,6 +231,8 @@ delistings.csv        key sec_id — one row per ended security, its last real e
   ticker_successor_sec_id, dlret, dlret_fill, terminal_value, verdict,
   value_rule, cash_per_share, cash_currency, stock_ratio, price_sec_id, price_ticker,
   price_date, recovery_ratio, terms_source, terms_gate, value_formula
+payout_legs.csv       key sec_id, leg — each security of a basket ending, per share
+  sec_id, leg, ratio, share_class, price_sec_id, price_ticker, price_date
 seeds.csv             key ticker, as_of, name, cusip, pin_cik, pin_sec_id — the seed echo
   ticker, as_of, name, cusip, pin_cik, pin_sec_id, sec_id, verdict
 price_requests.csv    key sec_id, kind, date, lookup_ticker
@@ -247,16 +245,20 @@ A blank `exit_kind` means no kind is asserted (today's `unknown` bucket); such
 a row's verdict is always `uncertain`, so a reader must not filter it away as
 "no ending".
 
-`security_history.csv` holds every `ticker_history` range except those of the
+`security_history.csv` holds every ticker range (the run's in-memory `ticker_history`) except those of the
 merger acquirers the run adds, split where the issuer in force changes (the
 CIK that carried the security's name that day; MRK 2008 moves from old Merck &
 Co, CIK 64978, to the new one). Successors stay, so a continuation's
 `successor_sec_id` resolves. `id_changes.csv` lists the placeholders of a
 baseline `securities.csv` (`--id-baseline`, default the output folder's own,
-read before the run writes) that now hold a FIGI; it is not cumulative, git
+read before the run writes) that now hold a FIGI, whether the FIGI's issuer and
+class say so or a line follow folded the placeholder into it by name; it also
+lists a baseline FIGI this run no longer holds that maps to a FIGI of this run
+(the ticker tier's composite was the line that took the ticker over later: BTU,
+CRC), so a panel keyed on the old FIGI can follow it. It is not cumulative, git
 keeps earlier versions. `run_manifest.json` carries `schema_version`
-(`store.CONTRACT_SCHEMA_VERSION`, now 2: `delistings.csv` gained the payout-rule
-columns).
+(`store.CONTRACT_SCHEMA_VERSION`, now 3: `delistings.csv` gained the payout-rule
+columns in 2, and `payout_legs.csv` came in 3).
 
 **Payout rule** (`outputs/payout_rule.py`). The library need not price an ending; it
 publishes what one share turned into and the caller, which holds the prices,
@@ -266,13 +268,23 @@ price(price_ticker, price_date)`, the acquirer's close the trading day after the
 last trade), `otc_print` (the security's own first off-exchange print from
 `price_date`), `recovery` (`recovery_ratio` × last close), `worthless`,
 `transfer` (same shares, 0), `continuation` (not an exit), `expiration` or
-`unknown`. `terms_source` says where the terms came from (`8K_2.01`, `llm`,
-`--merger-terms`); `terms_gate` is `passed` or `failed` (the library's own check
-against its fails-based close) or blank (an override, or no close to check).
+`unknown`; `basket` is a package of two or more securities per share (the main
+row keeps the cash and the first security, and `payout_legs.csv` has one row per
+security with its ratio, class and the security, ticker and date to price it on);
+a bankruptcy plan whose notice or 8-K states a ratio is `stock` on the new line.
+`terms_source` says where the terms came from: the filing the regex read
+(`8K_2.01`, `8K_1.01`, `DEFM14A`, `PRE14A`), `llm`, an election read
+(`llm_election_package`, `llm_election_cash`, `llm_election_stock`),
+`form25_notice` or `plan_8k` (a bankruptcy plan's ratio), or `--merger-terms`.
+`terms_gate` is `passed` or `failed` (the library's own check against its
+fails-based close), `skipped` (it could not check the terms: a non-USD cash leg,
+a basket, a dollar-valued leg) or blank (an override, or no close to check).
 A merger whose terms the gate dropped is still published, `failed`, so the caller
 can value it with real prices and re-check (an election's two legs are both
-published; THI's cash is Canadian dollars, which is why `cash_currency`
-stays blank). `cash_currency` is always blank (no source records one).
+published). `cash_currency` is the currency of the read that supplied the cash
+(the LLM's or the regex's, as the filing states it, never converted; THI's
+cash is `CAD`, with `terms_gate` `skipped`), and blank for a `--merger-terms`
+row or when no cash is published.
 `dlret`, `dlret_fill` and `terminal_value` are unchanged; use the fill when you
 have no price.
 
@@ -288,7 +300,7 @@ have no price.
 | `expiration` | `expiration` | |
 | `unknown` | blank (no kind asserted; its verdict is uncertain) | |
 
-`lost_source` is not produced until reset-4a.
+`lost_source` is an allowed `exit_kind` that nothing produces yet (reset-4a).
 
 **Values.** `cash_only`, `stock_only`, `cash_plus_stock`, `recovery_ratio`,
 `otc_print` and `worthless` are measured, in `dlret`. Shumway marks, assumed par and an
@@ -305,13 +317,18 @@ it is blanked only when the date itself is uncertain.
 **Price requests and `--price-answers`.** `price_requests.csv` asks for one
 `last_close` per contract ending with a published date that is not a
 continuation, and one `received_close` per LLM-read stock leg (a
-`--merger-terms` stock leg carries its own price), and one `otc_print` per
+`--merger-terms` stock leg carries its own price), per bankruptcy plan's new line
+and per further security of a basket (a basket leg's answer is accepted and not
+used; the library prices no basket), and one `otc_print` per
 `dropped` or `liquidation` ending that is not a continuation (dated the session
-after the last trade; answer with the first off-exchange print within 10
-sessions, which values the drop as `print / last_close − 1`). Fill a `price` column (a finite positive number) and rerun with
+after the last trade, asked under the OTC symbol stage 9e read, else the exchange
+ticker; answer with the first off-exchange print within 10
+sessions, which values the drop as `print / last_close − 1`). A bankruptcy plan
+whose value rule is `stock` asks no `otc_print`. Fill a `price` column (a finite positive number) and rerun with
 `--price-answers answered.csv`: a second run changes values only. An answer is
-matched on `(sec_id, last_trade_date, kind, lookup_ticker, date)`;
-`lookup_sec_id` is informational. An answer to no request, or a last close also
+matched on `(sec_id, last_trade_date, kind, lookup_ticker, date)`, and a
+`last_close` or `otc_print` answer reaches the stage by its security, day and
+kind alone (its ticker and date are a hint); `lookup_sec_id` is informational. An answer to no request, or a last close also
 given by `--last-trade-closes`, exits 2 before anything is written.
 
 ### `delistings.csv` — key `(sec_id, delist_date)` — the primary output
@@ -359,14 +376,6 @@ security's latest era that has a CIK (`security_master` when none has one);
 `SecurityContext.resolution_source` → `classify_event(resolution_source=...)`
 carry it to the row. A `company_tickers` resolution also sets the
 `resolved_by_current_ticker_map` flag (see the flags table below).
-
-### `payouts.csv` — key `(sec_id, delist_date)`
-
-Per-merger cash payout after the last-close gate.
-
-```
-sec_id, delist_date, ticker, payout_per_share, confidence, source, accession
-```
 
 ### `review.csv` — key `(sec_id, delist_date, ticker, review_flags)`, pre-sorted (not key-sorted)
 
@@ -455,7 +464,7 @@ Not every row is settled by clean evidence. `enrich()` collects every
 classifier and payout-gate flag into a `review_flags` column on
 `delistings.csv` (semicolon-joined), and `classify_universe.py` also writes
 `output/review.csv` and `output/review_summary.csv` (plus rows for
-securities with no delisting at all — see *The nine output tables* above),
+securities with no delisting at all — see *The eight output tables* above),
 with the ticker, bucket, `dlret`, reason, `cik`, and anchor 8-K item set, so a
 human can triage without re-deriving which rows the automatic rules could not
 settle on their own. `review.csv` also carries a delisting with a blank
@@ -604,7 +613,7 @@ every row of that cause at once.
 
 Every merger payout, the regex cash figure or the LLM cash+stock terms, is
 checked against the target's last trade close before it reaches
-`payouts.csv` or `delistings.csv`. A completed deal trades at its
+`delistings.csv`. A completed deal trades at its
 consideration, so a payout far from the last close is a misread, never a
 return. `payout_gate.reconcile` does the check (default tolerance 15%,
 `--merger-terms-sanity-tol`):
@@ -649,7 +658,7 @@ python scripts/classify_universe.py \
 ```
 
 This runs the full pipeline and writes `output/securities.csv`,
-`ticker_history.csv`, `cusip_history.csv`, `delistings.csv`, `payouts.csv`,
+`cusip_history.csv`, `delistings.csv`,
 `review.csv` and `review_summary.csv`. See *Observations and pins* below for
 the required `--observations` input, and *Severities and accepting a review
 row* above for `--review-decisions` (default `data/review_decisions.csv`).
@@ -706,7 +715,7 @@ dl = pd.read_csv("output/delistings.csv", parse_dates=["delist_date"])
 
 # --- Training labels: compound RET with DLRET at each security's delisting row ---
 # `panel` is your MultiIndex (date, instrument) frame with a forward return RET,
-# where `instrument` is the sec_id (join ticker_history.csv first if your panel
+# where `instrument` is the sec_id (join contract/security_history.csv first if your panel
 # is still ticker-keyed). Align delist_date to your panel's frequency first
 # (month-end for a monthly panel; the trade date itself for a daily panel).
 dlret = dl.set_index(["sec_id", "delist_date"])["dlret"]
@@ -763,7 +772,7 @@ python scripts/verify_altair.py          # smoke test: ALTR → CRSP 231 high
 # Build an observations CSV, then run the pipeline:
 python scripts/observations_from_instruments.py --instruments data/delisted_tickers.tsv --out obs.csv
 # or: scripts/observations_from_snapshots.py --dir <folder of dated index-membership CSVs> --out obs.csv
-python scripts/classify_universe.py --observations obs.csv   # → output/{securities,ticker_history,cusip_history,delistings,payouts,review,review_summary,observation_map}.csv
+python scripts/classify_universe.py --observations obs.csv   # → output/{securities,cusip_history,delistings,review,review_summary,observation_map,uncertain}.csv
 
 pytest -q                                # 1344 unit tests, no network
 ```
@@ -776,7 +785,7 @@ fix, M check (…)` line — the first place to look for how well a run went.
 see *Severities and accepting a review row* above.
 
 The same run auto-extracts the per-share cash merger consideration for every
-`merger`-bucket delisting into `output/payouts.csv` (see *Payout extraction*
+`merger`-bucket delisting into `delistings.csv`'s `payout_per_share` (see *Payout extraction*
 below); pass `--no-extract-payouts` to skip it during classifier development.
 
 ---
@@ -859,7 +868,7 @@ positions = apply_backtest_exits(positions, "output/delistings.csv")
 
 `merger`-bucket tickers need a per-share cash payout to turn the delist into a
 forward-return label (`payout / last_close − 1`) and a backtest exit. Rather
-than hand-curating `data/payouts.csv`, `classify_universe.py` extracts it
+than hand-curating a payouts file, `classify_universe.py` extracts it
 straight from EDGAR. For each merger ticker it walks a tiered chain of filings
 and regex-matches the cash consideration:
 
@@ -898,11 +907,11 @@ res = extractor.extract(rec)        # rec: a MERGER-bucket DelistRecord
 #              accession='0001193125-25-066329', quote='... $113.00 in cash ...')
 ```
 
-`classify_universe.py` writes `output/payouts.csv`
-(`sec_id,delist_date,ticker,payout_per_share,confidence,source,accession`,
-gated by the last-close check above) and the raw, ungated extraction into
-`delistings.csv`'s `raw_payout_per_share` / `raw_payout_source` /
-`raw_payout_confidence` columns. Pass `--no-extract-payouts` to skip the step
+`classify_universe.py` writes the gated payout into `delistings.csv`'s
+`payout_per_share` / `payout_source` columns (gated by the last-close check
+above) and the raw, ungated extraction into its `raw_payout_per_share` /
+`raw_payout_source` / `raw_payout_confidence` columns. The filing a payout was
+read from is not published. Pass `--no-extract-payouts` to skip the step
 during classifier development.
 
 ### BMP 2007 firm-month return correction
@@ -1074,7 +1083,7 @@ scripts/
     observations_from_instruments.py  Legacy (ticker,start,end) file → observations CSV
     observations_from_snapshots.py    Folder of dated snapshot CSVs → observations CSV
     seeds_from_observations.py        Observations CSV → one row per introduction (the seeds-only input)
-    classify_universe.py              Reads --observations → writes the nine output tables
+    classify_universe.py              Reads --observations → writes the eight output tables
     accept_review.py                  Bulk-accept review.csv rows by flag → appends data/review_decisions.csv
     compute_corrected_returns.py      CLI: read panel + delistings.csv → write BMP-corrected panel
     regen_payout_fixtures.py          Regenerate golden payout test fixtures from live SEC
@@ -1082,10 +1091,8 @@ scripts/
 
 output/
     securities.csv        One row per identified security
-    ticker_history.csv    Point-in-time ticker ranges per security
     cusip_history.csv     Point-in-time CUSIP ranges per security
     delistings.csv        One row per delisting, with DLRET and its audit trail (primary output)
-    payouts.csv           Per-merger extracted payout with source + accession (gated)
     review.csv            Every row (delisting or not) that still needs a human look, severity-ordered
     review_summary.csv    review.csv's rows grouped by flag, for triaging by cause
     run_manifest.json     What the run rested on: as_of, code version, SEC requests/cache/latency per endpoint

@@ -25,7 +25,7 @@ failure policy is the stage's: a failed read is unknown and never remembered.
 
 The later stages ask `MergerValues`, never a parallel map: stage 8b the terms R1 reads (`read_terms`) and the rows it
 rewrites (`drop`), stage 9b whether a merger reconciled (`reconciled`), stage 10a the terms delistings.csv carries
-(`table_terms`), 10c the payouts.csv rows (`payout_rows`) and 10g the contract's inputs (`contract_inputs`) and the
+(`table_terms`) and 10g the contract's inputs (`contract_inputs`) and the
 stock legs' price requests (`requests`).
 
 The four rule modules it calls are its collaborators, each with its own interface and real-case tests:
@@ -68,7 +68,7 @@ from ..vocabulary.trading_calendar import next_trading_day
 class MergerValue:
     """One merger ending's value: what the library read, what the payout gate kept, and the acquirer.
 
-    `raw` is the regex payout read (`read`: the regex reader answered, so payouts.csv has a row) and `llm` the LLM's
+    `raw` is the regex payout read and `llm` the LLM's
     terms (a ticker named by stage 8a' included), both before the gate. The gate's verdict: the cash it kept
     (`payout`, `source`, `confidence`), the stock leg it priced (`terms`: cash_per_share, stock_ratio,
     acquirer_price, acquirer_ticker), its `flags` and the price that settled the leg (`priced_by`). The acquirer
@@ -175,24 +175,6 @@ class MergerValues:
             v = MergerValue(key)
         return TableTerms(terms.get("cash_per_share", v.payout), terms.get("stock_ratio"), terms.get("acquirer_price"),
                           terms.get("acquirer_ticker"), v.source, v.confidence, v.flags)
-
-    def payout_rows(self, tickers: Mapping[DelistingKey, str]) -> list[dict]:
-        """payouts.csv (stage 10c): each merger the regex reader answered for, its gated payout and where it came
-        from (an LLM-sourced payout cites the LLM's filing: its regex accession, if any, is often blank or of another
-        filing tier). `tickers`: each delisting's ticker."""
-        rows = []
-        for key, v in self.records.items():
-            if not v.read:
-                continue
-            source = v.source or "none"
-            if source.startswith("llm"):
-                accession = v.llm.source.partition(":")[2] if v.llm is not None else None
-            else:
-                accession = v.raw.accession if v.raw and v.payout is not None else None
-            rows.append({"sec_id": key.sec_id, "delist_date": key.delist_date, "ticker": tickers[key],
-                         "payout_per_share": v.payout, "confidence": v.confidence or "none", "source": source,
-                         "accession": accession})
-        return rows
 
     def contract_inputs(self, endings: Sequence[Mapping[str, str]]) -> dict[DelistingKey, MergerInputs]:
         """The payout rule's inputs of each merger-bucket ending (`endings`: delistings.csv rows, stage 10g)."""
@@ -303,7 +285,7 @@ def _record(key: DelistingKey, raw: Mapping, llm_terms: Mapping, gated: GatedPay
     if gated is not first:
         own_verdict = (first.payouts.get(key), None if given else first.merged_terms.get(key))
     return MergerValue(
-        key, raw=raw.get(key), read=key in raw, llm=llm_terms.get(key), payout=gated.payouts.get(key),
+        key, raw=raw.get(key), llm=llm_terms.get(key), payout=gated.payouts.get(key),
         source=gated.sources.get(key), confidence=gated.confidences.get(key), terms=terms,
         flags=tuple(gated.flags.get(key, ())), priced_by=gated.priced_by.get(key, ""),
         acquirer_sec_id=acquirer_ids.get(key, ""), price_ticker=price_tickers.get(key, ""),

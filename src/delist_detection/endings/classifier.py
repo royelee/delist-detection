@@ -251,7 +251,6 @@ class DelistClassifier:
         self,
         filings: list[EdgarSubmission],
         observed: date | None,
-        cik: int | None = None,
     ) -> tuple[EdgarSubmission | None, int | None]:
         cands = [f for f in filings if f.form in DELIST_FORMS]
         if not cands:
@@ -580,7 +579,6 @@ class DelistClassifier:
         has_204 = "2.04" in items
         has_301 = "3.01" in items
         has_501 = "5.01" in items
-        has_503 = "5.03" in items
         has_303 = "3.03" in items
         control = has_501 and (has_201 or has_301 or has_303)
 
@@ -728,7 +726,7 @@ class DelistClassifier:
             fd = _parse_date(delist_filing.filing_date)
             gap = (observed - fd).days if (observed and fd) else None
         else:
-            delist_filing, gap = self._pick_delist_filing(filings, observed, resolution.cik)
+            delist_filing, gap = self._pick_delist_filing(filings, observed)
         if gap is not None and gap > FORM25_TAIL_DAYS:
             flags.append(f"frozen_tail:{gap}")
         dereg = self._pick_dereg(filings, observed)

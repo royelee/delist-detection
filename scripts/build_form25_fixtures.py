@@ -49,6 +49,7 @@ def _refuse(*args, **kwargs):
 edgar_mod.sec_get = _refuse
 from delist_detection.sources.atomic_io import write_atomic  # noqa: E402
 from delist_detection.sources.edgar import EdgarClient  # noqa: E402
+from delist_detection.outputs.run_snapshot import ticker_ranges  # noqa: E402
 from delist_detection.filings.form25 import FORM25_FORMS  # noqa: E402
 from delist_detection.sources.ftd import FtdIndex, parse_ftd_lines, period_of  # noqa: E402
 from delist_detection.filings.listing_status import ANNUAL_FORMS  # noqa: E402
@@ -159,7 +160,8 @@ def _securities(repo: Path) -> tuple[dict, dict, dict, dict, dict]:
         if r["cusip"] not in cusips[r["sec_id"]]:
             cusips[r["sec_id"]].append(r["cusip"])
     history: dict[str, list[dict]] = defaultdict(list)
-    for r in _read(repo / "output/ticker_history.csv"):
+    # no ticker_history.csv any more: the ranges are rebuilt from the contract (exchange and source blank)
+    for r in ticker_ranges(_read(repo / "output/contract/security_history.csv")):
         history[r["sec_id"]].append(r)
     inforce: dict[str, set[str]] = defaultdict(set)
     for r in _read(repo / "output/contract/security_history.csv"):
@@ -169,11 +171,12 @@ def _securities(repo: Path) -> tuple[dict, dict, dict, dict, dict]:
 
 
 def _line_tickers(eras: dict[str, list], history: list[dict]) -> list[str]:
-    """The tickers stage 4b's line follow found (not stored in output/): ticker_history tickers from fails rows
-    that the security was never observed under, not OTC-like, running past its last observation."""
+    """The tickers stage 4b's line follow found (not stored in output/): history tickers the security was never
+    observed under (the ranges' `source` is no longer published: such a range is one built from fails rows), not
+    OTC-like, running past its last observation."""
     seen = {k.split("@")[0] for k in eras}
     last = max((o[1] for obs in eras.values() for o in obs), default="")
-    return sorted({r["ticker"] for r in history if r["ticker"] not in seen and r["source"] == "ftd"
+    return sorted({r["ticker"] for r in history if r["ticker"] not in seen
                    and not OTC_LIKE.search(r["ticker"]) and (r["valid_to"] == "" or r["valid_to"] > last)})
 
 

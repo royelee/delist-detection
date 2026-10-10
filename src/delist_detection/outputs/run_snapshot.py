@@ -11,15 +11,19 @@ Three adapters fill one interface:
 - `RunSnapshot.of(tables, as_of=, continuations=)`: the rows the pipeline is about to write (stages 10f to 10h), as
   store.read_table would read them back (every cell formatted, rows sorted by key: `store.formatted`).
 
-Every `store.TABLES` name is an attribute holding that table's string rows. A table is read the first time a reader
+Every `store.TABLES` name is an attribute holding that table's string rows. `ticker_history` is the one table a run
+no longer writes (`TableSpec.written`): the in-memory adapter holds the run's own (every security's ranges, the merger
+acquirers the run adds included), and a folder or a commit gives it rebuilt from contract/security_history.csv
+(`ticker_ranges`: each security's and ticker's issuer-split rows merged back into one range; `exchange` and `source`
+blank, no row for an acquirer the contract leaves out), whether or not an older commit still holds the file. A table is read the first time a reader
 asks for it, and only once; `has(name)` asks whether the run wrote it, `require(name)` reads one a reader cannot do
 without. A table added to store.TABLES is an attribute here with nothing more to write.
 
 The older-schema rule (the one place it lives):
 
-- A table newer than the library's first eight (`FIRST_TABLES`) reads as None when the run did not write it: a run
+- A table newer than the library's first seven (`FIRST_TABLES`) reads as None when the run did not write it: a run
   before reset-2 has no uncertain.csv, one before reset-3 no contract, one before schema 3 no
-  contract/payout_legs.csv. One of the first eight that is missing raises SnapshotError.
+  contract/payout_legs.csv. One of the first seven that is missing raises SnapshotError.
 - A file must have its table's columns (store.TABLES), in their order. The one older layout read is
   contract/delistings.csv of contract schema 1, before the payout rule (`CONTRACT_SCHEMA_1`): it reads as None, as
   for a run before schema 2. Any other header raises SnapshotError naming the file and the columns it lacks or adds.
@@ -38,7 +42,7 @@ import io
 import json
 import subprocess
 from collections.abc import Iterable, Mapping, Sequence
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
 from . import store
@@ -48,8 +52,8 @@ from .manifest import MANIFEST_NAME
 Rows = list[dict[str, str]]
 Key = tuple[str, str]                    # a delisting's (sec_id, delist_date)
 
-FIRST_TABLES = frozenset({"securities", "ticker_history", "cusip_history", "delistings", "payouts", "review",
-                          "review_summary", "observation_map"})
+FIRST_TABLES = frozenset({"securities", "ticker_history", "cusip_history", "delistings", "review", "review_summary",
+                          "observation_map"})
 # contract/delistings.csv as schema 1 wrote it: the columns before the payout rule (schema 2 appended the rest)
 CONTRACT_SCHEMA_1 = store.CONTRACT_DELISTINGS_COLUMNS[:store.CONTRACT_DELISTINGS_COLUMNS.index("value_rule")]
 _BEFORE_PAYOUT_RULE = "a contract before schema 2 (no payout rule)"
@@ -67,6 +71,34 @@ class _Absent:
 
 
 _MISSING = _Absent("missing")
+
+
+def ticker_ranges(security_history: Sequence[Mapping[str, str]]) -> Rows:
+    """ticker_history's rows as contract/security_history.csv gives them: the ranges `contract.security_history_rows`
+    split where the issuer in force changed, put back together. Two rows of one security and ticker are one range
+    when the second starts the day after the first ends and the issuer differs (a split is always at a change of
+    issuer; an equal issuer across a boundary is two ranges the history built). `exchange` and `source` are blank,
+    the rows sorted as the table is."""
+    by_key: dict[tuple[str, str], Rows] = {}
+    for r in security_history:
+        by_key.setdefault((r["sec_id"], r["ticker"]), []).append(r)
+    out: Rows = []
+    for (sec_id, ticker), rows in by_key.items():
+        rows = sorted(rows, key=lambda r: r["start_date"])
+        start, end, issuer = rows[0]["start_date"], rows[0]["end_date"], rows[0]["issuer_id"]
+        for r in rows[1:]:
+            if end and r["start_date"] == (date.fromisoformat(end) + timedelta(days=1)).isoformat() \
+                    and r["issuer_id"] != issuer:
+                end, issuer = r["end_date"], r["issuer_id"]
+                continue
+            out.append(_range(sec_id, ticker, start, end))
+            start, end, issuer = r["start_date"], r["end_date"], r["issuer_id"]
+        out.append(_range(sec_id, ticker, start, end))
+    return store.formatted("ticker_history", out)
+
+
+def _range(sec_id: str, ticker: str, start: str, end: str) -> dict[str, str]:
+    return {"sec_id": sec_id, "ticker": ticker, "exchange": "", "valid_from": start, "valid_to": end, "source": ""}
 
 
 def _parse(name: str, text: str, where: str) -> Rows | _Absent:
@@ -154,6 +186,8 @@ class _Memory:
     def rows(self, name: str) -> Rows | _Absent:
         return store.formatted(name, self.tables[name]) if name in self.tables else _MISSING
 
+    holds_unwritten = True
+
     def manifest(self) -> tuple[str | None, str]:
         return None, "the run's manifest fields"
 
@@ -200,7 +234,12 @@ class RunSnapshot:
         if name not in store.TABLES:
             raise KeyError(f"no table {name!r}")
         if name not in self._tables:
-            self._tables[name] = self._source.rows(name)
+            if store.TABLES[name].written or getattr(self._source, "holds_unwritten", False):
+                self._tables[name] = self._source.rows(name)
+            else:
+                contract = self._load("security_history")
+                self._tables[name] = _Absent(f"{self._source.where('security_history')}: {contract.why}") \
+                    if isinstance(contract, _Absent) else ticker_ranges(contract)
         return self._tables[name]
 
     def table(self, name: str) -> Rows | None:

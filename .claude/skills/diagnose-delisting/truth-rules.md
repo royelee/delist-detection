@@ -39,7 +39,7 @@ scored). Use `*` sparingly: a field the report settles gets its value.
 - `drop_reason`: on a `dropped` row only: moved_otc | price | capital | went_private | bankruptcy | filings_fees |
   guidelines | sec_order; else blank.
 - `continuation`: "true" or "false". When true: `successor_sec_id` is the successor line's sec_id in the run (look
-  it up in `output/securities.csv` / `output/ticker_history.csv`; `*` when the run does not hold it yet),
+  it up in `output/securities.csv` / `output/contract/security_history.csv`; `*` when the run does not hold it yet),
   `value_rule` is `continuation`, and every value field is blank.
 - `last_trade_date`: published only when the corrected date rests on an exchange print or a filing's statement about
   trading: MIDAS, a Nasdaq halt, the Form 25 EX-99.25 notice, an 8-K / 8-K12B / 6-K or filed press release that says

@@ -7,8 +7,9 @@ whose verdicts tests/test_verdict_cases.py recomputes offline (spec ruling 2.3, 
 Offline: every SEC request is refused (scripts/build_form25_fixtures.py's guard). It reads output/ as one run
 snapshot (`run_snapshot.RunSnapshot`) and writes:
 
-- cases.json: for each case (tests/verdict_cases.py's CASES), the rows of output/'s securities, ticker_history,
-  delistings, observation_map and review tables for the case's securities and the successors their endings name,
+- cases.json: for each case (tests/verdict_cases.py's CASES), the rows of output/'s securities, ticker_history
+  (rebuilt from contract/security_history.csv, which RunSnapshot does: no exchange or source, no row for a merger
+  acquirer the contract leaves out), delistings, observation_map and review tables for the case's securities and the successors their endings name,
   the uncertain.csv rows the committed run gave them (the verdicts before 5i), and stage 9g's readings of those
   rows as run_manifest.json recorded them (`continuation_filings`);
 - edgar.json.gz: what stage 9g's readings of the cases' continuations asks of EDGAR (each CIK's filings and names, and

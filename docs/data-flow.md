@@ -111,9 +111,9 @@ one observation per row per file).
                              │
                              ▼
               ┌────────────────────────────┐
-              │  enrich() → delistings.csv │   + payouts.csv, review.csv +
-              │  (+ ticker_history.csv,    │     review_summary.csv (review_triage),
-              │     cusip_history.csv)     │     cusip_history.csv from history.ranges_from_sightings
+              │  enrich() → delistings.csv │   + review.csv +
+              │  (+ cusip_history.csv)     │     review_summary.csv (review_triage),
+              │                            │     cusip_history.csv from history.ranges_from_sightings
               └─────────────┬──────────────┘
                              │ handling/handling.py / handling/qlib_adapter.py (DLRET: dlret.decide)
                              │ — all keyed on sec_id
@@ -129,7 +129,7 @@ one observation per row per file).
 
 `observation_map.csv` (one row per input observation, its era, `sec_id` and
 status) is written in the same final row-building stage as the
-`ticker_history.csv`/`cusip_history.csv` box above, from the same eras and
+`cusip_history.csv` box above (and the in-memory ticker ranges), from the same eras and
 resolutions; see *Outputs* below for its schema and status rules.
 
 ## Caching
@@ -320,7 +320,7 @@ Each run writes `run_manifest.json` next to the tables:
 
 The manifest is not part of the byte-identical-output guarantee: `as_of`, the
 code version and the worker count make it expected to differ between two runs
-even when their nine tables come out identical. A run that aborts leaves the
+even when their seven tables come out identical. A run that aborts leaves the
 previous manifest in place.
 
 `scorecard.json` is built at stage 10h from the same rows the tables are
@@ -882,16 +882,20 @@ Nine CSVs written to `output/`, all committed artifacts; see `outputs/store.py` 
 the exact schema. `delistings.csv` is the primary deliverable. The run also
 writes the contract under `output/contract/` (stage 10g): `security_history.csv`,
 `delistings.csv` (one row per ended security), `seeds.csv`, `price_requests.csv`
-and `id_changes.csv`, beside the nine tables for one release.
+and `id_changes.csv`, beside the seven tables for one release.
 
 `output/securities.csv`: one row per identified security — `sec_id`,
 `issuer_cik`, `share_class`, `name`, `security_type`, `observed`,
 `figi_source`.
 
-`output/ticker_history.csv` / `output/cusip_history.csv`: point-in-time
-ticker and CUSIP ranges per security, keyed by `(sec_id, valid_from, ticker)`
-and `(sec_id, valid_from, cusip)` respectively, built from observations plus
-SEC fails-to-deliver rows. `ticker_history.exchange`
+`output/cusip_history.csv`: point-in-time CUSIP ranges per security, keyed by
+`(sec_id, valid_from, cusip)`, built from observations plus SEC
+fails-to-deliver rows. The ticker ranges are built the same way but no longer
+written as `ticker_history.csv`: the run keeps them in memory as `ticker_history`
+(the verdicts and the contract read them), and `contract/security_history.csv`
+publishes them, split where the issuer in force changes, without the merger
+acquirers the run adds (and without the `exchange` and `source` columns). In
+memory, `ticker_history.exchange`
 is filled for the range that ends in a delisting (from the Form 25) and for
 the still-open range (from the issuer's current EDGAR submissions listing);
 otherwise empty. `ticker_history.source` is `observation`, `ftd`, or
@@ -949,7 +953,7 @@ de-duplication `load_observations` does), naming the era it fell into, the
 
 This is the caller's join surface: index membership comes from
 `observation_map.csv` (every row that resolved is one observation's
-`sec_id`), and a ticker lookup on a date goes through `ticker_history.csv` by
+`sec_id`), and a ticker lookup on a date goes through `contract/security_history.csv` by
 `history_ticker` — the canonical spelling (`BF-B`, not the raw `BFB`) a
 caller's own observed ticker may need normalizing to first. `--limit N` runs
 only ever produce rows for the eras that ran; the log names how many of the
@@ -967,10 +971,11 @@ that has a CIK (`security_master` when none has one, and for a successor the
 run added); `SecurityContext.resolution_source` →
 `classify_event(resolution_source=...)` carry it to the row.
 
-`output/payouts.csv`: per-merger cash payout after the last-close gate:
+`delistings.csv`'s `payout_per_share` / `payout_source`: per-merger cash payout after the last-close gate:
 only a payout (or cash+stock/stock-only terms) that reconciles with the
-target's last trade close is kept, so a row the gate drops is blank here
-even though `delistings.csv` still carries the raw extracted value.
+target's last trade close is kept, so a row the gate drops is blank there
+even though the `raw_payout_*` columns still carry the raw extracted value.
+The filing a payout came from is not published.
 
 `output/review.csv`: the pipeline collects one candidate row per delisting
 row whose `review_flags` is non-empty, plus every security with no delisting
@@ -1047,8 +1052,8 @@ a token with a `:`; bulk-accepting a `fix`-severity flag needs `--yes`).
 `load_decisions` first (both read `utf-8-sig`, so an Excel BOM doesn't blank
 the first cell) and refuses to touch a file that doesn't load, rewriting a
 valid one with every existing row/column preserved in the file's own header
-order. Written by `scripts/classify_universe.py` alongside the other eight
-output tables (nine in all, counting `uncertain.csv`).
+order. Written by `scripts/classify_universe.py` alongside the other seven
+output tables (eight in all, counting `uncertain.csv`).
 
 ## Downstream integration
 

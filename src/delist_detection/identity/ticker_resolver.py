@@ -585,7 +585,7 @@ class TickerResolver:
         key = normalize_name(spelling)
         return any(normalize_name(n).startswith(key) for n in self._names_by(cik, on, near))
 
-    def _name_search(self, ticker: str, observed_date: str | None, nm: str | None) -> list[tuple[int, str]]:
+    def _name_search(self, observed_date: str | None, nm: str | None) -> list[tuple[int, str]]:
         """Candidates for the expected name `nm` (observed, else AV) from EDGAR's
         company search, best first, as (CIK, the name the search gave).
 
@@ -873,7 +873,7 @@ class TickerResolver:
         # checked best first, each one that existed by the era's first sighting.
         if cik is None:
             # A generator: a candidate below the one accepted is never read.
-            ranked = ((c, n) for c, n in self._name_search(t, observed_date, expected)
+            ranked = ((c, n) for c, n in self._name_search(observed_date, expected)
                       if self.issuers.existed_by(c, since))
             if fallback is not None:
                 # The observed name is a check, never a substitute: it replaces

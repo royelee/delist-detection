@@ -98,6 +98,14 @@ def writes_fail_midway(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _keep_the_runs_ticker_history(monkeypatch):
+    """ticker_history is never written; tests/run_ticker_history.py hands a test the run's own rows."""
+    import run_ticker_history
+    from delist_detection import pipeline
+    monkeypatch.setattr(pipeline, "write_tables", run_ticker_history.capturing(pipeline.write_tables))
+
+
+@pytest.fixture(autouse=True)
 def _no_efts_network(monkeypatch):
     from delist_detection.identity.ticker_resolver import TickerResolver
     monkeypatch.setattr(TickerResolver, "_efts_lookup", lambda self, t, d=None, **kw: (None, None, False))

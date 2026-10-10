@@ -49,7 +49,7 @@ from .identity.history import (
 )
 from .identity.line_follow import LineSuccessor, composites, follow_lines, is_line_symbol, text_cusips
 from .vocabulary.identifiers import is_placeholder, share_class_from_name
-from .identity.identity import Identity, identify
+from .identity.identity import identify
 from .filings.listing_status import issuer_exchange, listed_today, listing_answers
 from .identity.observations import ObservationIndex, TickerEra, observation_conflicts
 from .endings.exchange_terms import one_share_no_cash
@@ -198,7 +198,7 @@ def run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out_
         sec_workers: int = 1, review_decisions: Sequence[Decision] = (),
         scorecard: run_scorecard.ScorecardConfig = run_scorecard.ScorecardConfig(),
         id_baseline: Sequence[Mapping[str, str]] = ()) -> RunSummary:
-    """Observations -> the nine tables under `out_dir` and the contract under
+    """Observations -> the seven tables under `out_dir` and the contract under
     `out_dir`/contract/ (contract.py; `id_baseline`: the securities.csv rows
     id_changes.csv compares with) (spec §8), then
     scorecard.json (`scorecard.build` over those tables, `scorecard`'s window,
@@ -521,7 +521,7 @@ class _R1:
 
 def _r1_successor(ctx: _RunContext, e: Delisting, sec: Security, own: OwnShares, day: date,
                   starts: dict[str, SecurityStart], securities: dict[str, Security],
-                  added: Mapping[str, AddedSecurity], out: _R1,
+                  added: Mapping[str, AddedSecurity],
                   pending: dict[str, AddedSecurity]) -> tuple[str, str] | None:
     """The successor of a merger row R1 rewrites: a security of the run (`successors.successor_by_terms`), else
     the new issuer whose 8-K12B names the registrant (`successors.successor_from_8k12b`, its filer a new issuer,
@@ -581,7 +581,7 @@ def _r1_continuations(ctx: _RunContext, delistings: list[Delisting], securities:
         own = own_shares_of(e, _reader(ctx.clients), sec)
         link, pending = None, {}
         if own.one_for_one and one_share_no_cash(terms[1], own.consideration(terms[0])):
-            link = _r1_successor(ctx, e, sec, own, e.anchor, starts, securities, values.added, out, pending)
+            link = _r1_successor(ctx, e, sec, own, e.anchor, starts, securities, values.added, pending)
         if watch.tripped() or own.degraded:
             watch_item = degraded_item(e.sec_id, e.ticker, e.cik, "the R1 reading", delist_date=e.delist_date)
             out.review.append(watch_item)
@@ -1503,7 +1503,7 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
     review_rows += [item.row() for item in review]
     th_rows, ch_rows = _history_rows(ctx, history, added)
     review_rows += [item.row() for item in drop_resolved_shared(ticker_range_review(th_rows), handoffs.resolved_pairs)]
-    # 10c2. observation_map rows (the payout rows, 10c, are built with the tables below)
+    # 10c2. observation_map rows
     map_rows = _observation_map(ctx, index, eras, resolutions, identity.issuers, history)
     # 10c3. the issuers in force, for 10g's security_history: before triage, so a failed read is a review row
     in_force_review: list[ReviewItem] = []
@@ -1516,7 +1516,6 @@ def _run(index: ObservationIndex, clients: Clients, overrides: Overrides, *, out
         "ticker_history": th_rows,
         "cusip_history": ch_rows,
         "delistings": delisting_rows,
-        "payouts": values.payout_rows({e.key: e.ticker for e in delistings}),
         "review": triaged.review_rows,
         "review_summary": triaged.summary_rows,
         "observation_map": map_rows,

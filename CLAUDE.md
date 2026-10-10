@@ -28,7 +28,7 @@ editable install.
 
 ```bash
 pip install -e .                         # editable install (Python ≥3.10) — once per env
-pytest   # full suite (3521 passed, 45 xfailed: 8 known-wrong golden + the diagnosis truth set's 37 known_wrong cases, all residual, all strict; offline, no network)
+pytest   # full suite (3516 passed, 45 xfailed: 8 known-wrong golden + the diagnosis truth set's 37 known_wrong cases, all residual, all strict; offline, no network)
 pytest tests/test_payout_extractor.py -v  # one file
 pytest tests/test_payout_extractor.py::test_match_in_cash_family_altr -v   # one test
 
@@ -49,7 +49,7 @@ python scripts/build_last_trade_fixtures.py  # offline: tests/fixtures/last_trad
 python scripts/build_acquirer_gate_fixtures.py --repo <checkout with output/ and cache/>   # offline: tests/fixtures/acquirer_gate/ (sub-plan 5e's acquirer line and gate cases), read-only on the caches
 python scripts/build_distress_fixtures.py --repo <checkout with output/ and cache/>   # offline: tests/fixtures/distress/ (sub-plan 5g's drop and bankruptcy cases), read-only on the caches
 python scripts/build_identity_fixtures.py --repo <checkout with output/ and cache/>   # offline: tests/fixtures/identity/ (sub-plan 5h's identity cases), read-only on the caches
-python scripts/classify_universe.py --observations obs.csv   # → output/{securities,ticker_history,cusip_history,delistings,payouts,review,review_summary,observation_map,uncertain}.csv + contract/{security_history,delistings,seeds,price_requests,id_changes,payout_legs}.csv + scorecard.json (NETWORK; free when cached)
+python scripts/classify_universe.py --observations obs.csv   # → output/{securities,cusip_history,delistings,review,review_summary,observation_map,uncertain}.csv + contract/{security_history,delistings,seeds,price_requests,id_changes,payout_legs}.csv + scorecard.json (NETWORK; free when cached)
 python scripts/classify_universe.py --observations obs.csv --limit 20 --no-extract-payouts --no-midas --no-halts   # fast dev subset
 python scripts/classify_universe.py --observations obs.csv --sec-workers 1   # one SEC request at a time (default: 4 prefetch threads, max 8, one machine-wide 8 req/s limit)
 python scripts/classify_universe.py --observations obs.csv --as-of 2026-09-25   # pin the run date (default today; run_manifest.json records it) to reproduce an earlier run's tables from the same caches
@@ -62,7 +62,7 @@ python scripts/regen_payout_fixtures.py  # refetch golden 8-K fixtures from live
 python scripts/build_golden_fixtures.py  # rebuild the 31-case golden regression set (NETWORK); --efts-only / --llm-only / --only ID
 python scripts/accept_review.py --flag terms_gate_failed --note "sampled 5, all fine"   # bulk-accept every current review.csv row carrying that flag → appends to data/review_decisions.csv (offline); --bucket narrows, --dry-run previews, --yes required for a fix-severity flag
 # End-to-end pipeline (the canonical way to use the library) — classify a universe → output/delistings.csv (+ 8 more tables), then firm-month-correct a returns panel:
-python scripts/classify_universe.py --observations obs.csv --last-trade-closes lt.csv --merger-terms terms.csv --recoveries rec.csv   # → output/{securities,ticker_history,cusip_history,delistings,payouts,review,review_summary,observation_map,uncertain}.csv + contract/{security_history,delistings,seeds,price_requests,id_changes,payout_legs}.csv + scorecard.json
+python scripts/classify_universe.py --observations obs.csv --last-trade-closes lt.csv --merger-terms terms.csv --recoveries rec.csv   # → output/{securities,cusip_history,delistings,review,review_summary,observation_map,uncertain}.csv + contract/{security_history,delistings,seeds,price_requests,id_changes,payout_legs}.csv + scorecard.json
 python scripts/compute_corrected_returns.py --panel panel.csv --delistings output/delistings.csv --out corrected.parquet   # firm-month BMP correction, keyed on sec_id
 # override-CSV columns are keyed by sec_id[,delist_date] (a blank/absent delist_date applies to every delisting of that security): lt.csv=`sec_id,last_trade_close[,delist_date]` · terms.csv=`sec_id,cash_per_share,stock_ratio,acquirer_price,acquirer_ticker[,delist_date]` · rec.csv=`sec_id,recovery_ratio[,delist_date]`. A malformed file, or a row that matches no delisting, stops the run before anything is written (exit 2, one stderr line naming the file and line).
 # --review-decisions PATH (default data/review_decisions.csv) is read the same way: sec_id,delist_date,ticker,flag,decision,note. Missing at the default path means no decisions; missing at an explicit path, or a bad file, exits 2.
@@ -85,7 +85,7 @@ The package is laid out by concept (architecture step 16): nine subpackages and 
 ```
 src/delist_detection/
   __init__.py   lazy: `import delist_detection` loads none of its modules; the README's eight names load on first use
-  pipeline.py   the run: observations in, the nine tables and the contract out, one function per stage
+  pipeline.py   the run: observations in, the seven tables and the contract out, one function per stage
   vocabulary/   the leaves, each importing nothing of the package: identifiers, names, trading_calendar, crsp_codes,
                 exchanges, exit_kind
   sources/      the SEC, OpenFIGI, Nasdaq and LLM clients and their plumbing: atomic_io, settings, retries,
@@ -123,7 +123,7 @@ and the handling: `ticker, cik, observed_delist_date, crsp_code, bucket, confide
 `sec_id`, `delist_date`, `successor_sec_id` (a continuation only) and `ticker_successor_sec_id` (a ticker takeover)
 — optional fields the pipeline (`endings/delistings.py`/`pipeline.py`) fills in alongside the original ones.
 
-`pipeline.py`'s `run()` is the orchestration that turns a list of observations into the nine output tables: a short
+`pipeline.py`'s `run()` is the orchestration that turns a list of observations into the seven output tables: a short
 `_run` calls one function per numbered stage (`identity.identify` for stages 1 to 4: the eras, each era's issuer
 and FIGI, the securities and their CUSIPs, one `identity.Identity` whose facts the later stages read;
 `line_follow.follow_lines` (stage 4b, one call over the `Identity`: each security's line followed past its
@@ -159,7 +159,7 @@ last trade day stage 5 dated; `dlret.DistressTerms` for the contract; metered as
 plan's `received_close` answer times its ratio is that ending's value and an answered OTC print a drop's, each read
 through its own request, `PriceAnswers.ending_values`), then the row builders (stage 10a builds one
 `dlret.ValueInputs` per delisting and `reconstruction.enrich`es it; stage 8's records feed 10a, 10c and 10g:
-`MergerValues.table_terms`, `payout_rows`, `contract_inputs` and `requests`), `_issuers_in_force` (stage 10c3: the
+`MergerValues.table_terms`, `contract_inputs` and `requests`), `_issuers_in_force` (stage 10c3: the
 contract's issuer timeline, read before triage so a failed or stale read is a `resolution_degraded` row, as 4c's) and
 `_triage`; the contract (stage 10g) takes sub-plan 5h's `Identity.renames` too: each placeholder whose eras
 now hold one FIGI line is a `contract/id_changes.csv` rename, across a class label), each with explicit
@@ -393,7 +393,8 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   `cites_listing_deficiency`). The identity stages read its name readers, so it sits below them.
 
 **`outputs/`: what a run publishes, as rows (no client):**
-- `outputs/store.py` — every output table's column order, key and sort order
+- `outputs/store.py` — every output table's column order, key and sort order (`ticker_history` is the one table with
+  `TableSpec.written` False: the run holds it in memory for the verdicts and the contract, `write_tables` skips it)
   (`TABLES`), `DelistingKey` (a delisting's `(sec_id, delist_date)` key, here so
   every stage — the finder among them — and the handling can both use
   it without one importing the other), `format_cell` (the one cell formatter
@@ -450,9 +451,13 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   (`as_of`, today without a manifest; `continuations`, stage 9g's `exit_kind.ContinuationReading`s from
   `continuation_filings`). Three adapters, one interface: `RunSnapshot.read(out_dir)` (an output folder),
   `RunSnapshot.at(repo, rev, out_dir)` (a commit's copy of it, `git show`), `RunSnapshot.of(tables, as_of=,
-  continuations=)` (the rows the pipeline is about to write, `store.formatted`: stages 10f to 10h). The older-schema
-  rule lives here once: a table newer than the first eight (`FIRST_TABLES`) the run did not write is None (uncertain
-  before reset-2, the contract before reset-3, payout_legs before schema 3), a missing first-eight table raises
+  continuations=)` (the rows the pipeline is about to write, `store.formatted`: stages 10f to 10h). `ticker_history` is
+  not written: `of` holds the run's own (every security's ranges, the merger acquirers the run adds included), and a
+  folder or a commit gives it rebuilt from contract/security_history.csv (`ticker_ranges`: a security's and ticker's
+  issuer-split rows merged back into one range, `exchange` and `source` blank, no row for an acquirer the contract
+  leaves out), even when an older commit still holds ticker_history.csv. The older-schema
+  rule lives here once: a table newer than the first seven (`FIRST_TABLES`; an older commit's payouts.csv is simply not read) the run did not write is None (uncertain
+  before reset-2, the contract before reset-3, payout_legs before schema 3), a missing first-seven table raises
   `SnapshotError`; a file must have its table's columns in order, except a schema-1 contract/delistings.csv
   (`CONTRACT_SCHEMA_1`, before the payout rule), which reads as None; any other header raises `SnapshotError` naming
   the file and the columns. The scorecard, both judges, the verdicts, the contract, the regression diff, the loop
@@ -688,8 +693,8 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   has no confirmed last-trade day, so the caller keeps and checks the member
   rather than dropping it — `after_delisting`, `conflict`, `backfilled_ticker`,
   `mapped`) — the caller's join surface:
-  membership from this table, ticker look-ups through `ticker_history` by
-  `history_ticker`. A first-day `…ZZZZ` row is no ticker sighting;
+  membership from this table, ticker look-ups through contract/security_history.csv (the
+  `ticker_history` ranges, which are not written) by `history_ticker`. A first-day `…ZZZZ` row is no ticker sighting;
   an observation is a sighting of its era's ticker. Sub-plan 5h: `cusip_sightings` drops an old CUSIP's `…ZZZZ`
   settle rows dated once another CUSIP of the security, begun after it, has begun (MSG 2015: the new CUSIP's range
   starts on its first row). What the sightings say of the security's trading (the ticker on a day, the last
@@ -1059,7 +1064,7 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   values only (IPHI, WBS: an answered close that fails the gate keeps new Marvell and Santander). A `--merger-terms` row (`caller_terms`) wins for every delisting of its security and asks nothing; its
   acquirer ticker is published as given. The later stages read the records: `read_terms` and `drop` (8b),
   `reconciled` (9b), `table_terms` (10a: a `TableTerms`, the terms delistings.csv carries, for any delisting),
-  `payout_rows` (10c), `contract_inputs` and `requests` (10g). The four rule
+  `contract_inputs` and `requests` (10g). The four rule
   modules are its collaborators, each with its own interface and real-case tests. Its real cases replay offline from
   `tests/fixtures/acquirer_gate/` (`tests/acquirer_gate_cases.py`, through `value_mergers`).
 - `terms/acquirers.py` — a merger's acquirer as a security (a collaborator of `merger_value`): `find_acquirer` (its
@@ -1454,7 +1459,7 @@ expiration is 0.0 in the table and no correction in the firm month, which leaves
   (`pipeline._scorecard`, stage 10h) from the run snapshot of the rows it is about to write
   (`RunSnapshot.of`; scripts/scorecard.py and the floor test build it from the written folder's, `RunSnapshot.read`,
   so the two agree by construction, payout legs and run date included) and
-  writes it after the nine tables and the contract files, before the manifest. `data/scorecard.json`
+  writes it after the seven tables and the contract files, before the manifest. `data/scorecard.json`
   holds the caller's training window (data, never code), the floor and the two
   truth files. `tests/test_scorecard_floor.py` recomputes the scorecard from the
   committed `output/` and fails when a floored number got worse, a floored
@@ -1523,9 +1528,9 @@ expiration is 0.0 in the table and no correction in the firm month, which leaves
   a kind or a request never reads an answer: stage 7 hands stage 8 the run's own closes beside the answered ones
   (`pipeline._Closes`), and stage 8's acquirer, requests and decisions rest on them alone. A price that is not a finite positive
   number, an answer to no request, or a last close also given by `--last-trade-closes`, exits 2 before anything is
-  written. Today's nine tables keep their columns.
+  written. Today's seven tables keep their columns.
 - **Every output is written only after the whole run succeeds.**
-  `pipeline.run()` computes every table in memory first and writes all nine
+  `pipeline.run()` computes every table in memory first and writes all seven
   and the six contract files (same group) only at the end (`store.write_tables`): each table is formatted and written
   to its own temp file first, and only then are the temp files renamed over
   the old tables. So a refusal, a bad override CSV or any failure before the
@@ -1562,7 +1567,7 @@ expiration is 0.0 in the table and no correction in the firm month, which leaves
   its rule and is recorded typed on the delisting (`Delisting.rewrites`; never a column). A continuation carries no
   `no_evidence_default`, no `successor_unknown`, no payout or terms-gate flag and no payout read: a merger the handoff
   stage or R1 makes a continuation loses its merger value (`MergerValues.drop`: delistings.csv's payout, acquirer and
-  raw payout columns go blank and payouts.csv has no row for it). A security that goes on (its own successor) keeps
+  raw payout columns go blank). A security that goes on (its own successor) keeps
   its kind and value. The clip check's marking (`rewrites.mark_going_on`) runs once, as stage 9b's first step.
 - **An ending's kind follows the registrant's role and R1 (sub-plan 5c).** A registrant whose filings state no
   exchange of its own shares, and that acquired another party or distributed another company's shares, gets no
@@ -1590,7 +1595,8 @@ expiration is 0.0 in the table and no correction in the firm month, which leaves
   or none is one security; a placeholder folds into the FIGI line its new CUSIP names (contract/id_changes.csv
   names it); another composite is a line successor, linked by stage 9 as a continuation (an `unknown` row at the
   switch is rewritten, `line_continuation`: it drops `no_evidence_default` and gets medium confidence).
-- **`ticker_history` is clipped only at the delisting that actually ends the
+- **`ticker_history` (the in-memory history, never written: contract/security_history.csv is published from it) is clipped
+  only at the delisting that actually ends the
   security** (`history.Histories`, the one module for where a history ends). One whose successor is the security
   itself (a continuing
   exchange transfer) never clips it. Otherwise, only a `merger` or
@@ -1636,7 +1642,7 @@ expiration is 0.0 in the table and no correction in the firm month, which leaves
   projected a later ticker backward), else `mapped`. A `backfilled_ticker`
   observation still gets its `sec_id` here, but adds no range to
   `ticker_history` (`history.filtered_ticker_sightings`) — index membership
-  comes from this table, a ticker look-up by date from `ticker_history` keyed
+  comes from this table, a ticker look-up by date from contract/security_history.csv keyed
   on `history_ticker`, not the raw observed ticker.
 - **Tests are fully offline.** They use a `FakeEdgar` fixture (`tests/conftest.py`)
   and committed text fixtures (`tests/fixtures/`); every new client (OpenFIGI,
@@ -1683,11 +1689,13 @@ expiration is 0.0 in the table and no correction in the firm month, which leaves
   next save) and never holds a miss, a second-pass or 2b (`identity.EraIssuers`) answer, or
   an answer that rested on a failed request or a stale copy. The pipeline
   writes it after each resolving stage and on the way out of a run.
-- **`payouts.csv` is gated; `delistings.csv` carries the raw extraction
-  alongside it.** Every merger payout is checked against the last trade close
-  (`payout_gate.reconcile`) before it reaches `payouts.csv`; `delistings.csv`
-  keeps the raw, unchecked extraction in its `raw_payout_per_share` /
-  `raw_payout_source` / `raw_payout_confidence` columns. An election whose cash and stock legs together reconcile,
+- **A merger payout is gated; `delistings.csv` carries both the gated and the raw read.** Every merger payout is
+  checked against the last trade close (`payout_gate.reconcile`) before it reaches `delistings.csv`'s
+  `payout_per_share` / `payout_source`; the same file keeps the raw, unchecked extraction in its
+  `raw_payout_per_share` / `raw_payout_source` / `raw_payout_confidence` columns, and the contract carries the payout
+  rule. There is no separate payouts table (removed 2026-10: nothing read it), and the filing a payout was read from
+  (its accession) is not published: filing ids stay inside the library, and a new `delistings.csv` column would make
+  `run_snapshot` refuse every older commit's file. An election whose cash and stock legs together reconcile,
   when neither does alone, is its default package (`llm_election_package`, sub-plan 5e); either-or legs are never
   summed.
 - **The golden set is the regression gate.** `tests/fixtures/golden/` (31
@@ -1705,7 +1713,7 @@ expiration is 0.0 in the table and no correction in the firm month, which leaves
   `--observations` (a CSV of `ticker, as_of[, name, cusip, cik, sec_id]`,
   built by `observations_from_snapshots.py` / `observations_from_instruments.py`
   or hand-supplied) and reads `--output-dir`/`--cache-dir` with repo-local
-  defaults; it writes nine tables to `output/` and the six contract files to
+  defaults; it writes seven tables to `output/` and the six contract files to
   `output/contract/` in the same group, all committed artifacts.
 
 ## Design/plan docs

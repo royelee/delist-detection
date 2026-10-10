@@ -11,7 +11,7 @@ from delist_detection.measurement.loop_round import Unexplained
 from delist_detection.measurement.truth import TRUTH_COLUMNS, TruthFileError, load_truth, write_truth as write_golden
 from delist_detection.measurement.truth_set import LEDGER_COLUMNS, TruthSet
 from tests.diagnosis_rows import truth_row, write_truth
-from tests.lifecycle_tables import contract_row, ending, iv, obs, sec, tables
+from tests.lifecycle_tables import contract_row, ending, hist, iv, obs, sec, tables
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -36,7 +36,9 @@ def out(tmp_path):
                [obs("AAA", "2010-06-30", "A"), obs("BBB", "2009-06-30", "B"), obs("CCC", "2010-06-30", "C")])
     out = tmp_path / "output"
     out.mkdir()
-    store.write_tables(out, {"securities": t.securities, "ticker_history": t.ticker_history,
+    history = [hist("A", "100", "2008-01-02", "2012-03-01", "AAA"), hist("B", "100", "2008-01-02", "2010-05-03", "BBB"),
+               hist("C", "100", "2008-01-02", "", "CCC")]       # the ranges a written folder gives (no ticker_history)
+    store.write_tables(out, {"securities": t.securities, "security_history": history,
                              "delistings": t.delistings, "observation_map": t.observation_map, "review": t.review})
     (out / "run_manifest.json").write_text(json.dumps({"as_of": "2026-09-25"}))
     return out

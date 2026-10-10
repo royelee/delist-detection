@@ -289,22 +289,10 @@ def test_the_callers_terms_reach_every_delisting_of_the_security():
 
 def test_a_dropped_merger_has_no_reads_left():
     """Stage 8b's R1 continuation: a continuation has no value, so nothing of the merger's reads is published."""
-    values = _values(raw=PayoutResult(9.5, "high", "8K_2.01", "0001", ""), read=True, payout=9.5, flags=("x",))
-    assert len(values.payout_rows({K: "MMM"})) == 1
+    values = _values(raw=PayoutResult(9.5, "high", "8K_2.01", "0001", ""), payout=9.5, flags=("x",))
     values.drop(K)
-    assert values.get(K) is None and values.payout_rows({K: "MMM"}) == [] and values.read_terms(K) is None
+    assert values.get(K) is None and values.read_terms(K) is None
     assert values.table_terms(K) == TableTerms()
-
-
-def test_a_payout_row_cites_the_filing_its_value_came_from():
-    llm = replace(_stock(None, None, cash=12.0), deal_type="cash", source="8-K:0002")
-    regex = PayoutResult(11.0, "high", "8K_2.01", "0001", "")
-    rows = _values(raw=regex, read=True, llm=llm, payout=12.0, source="llm", confidence="high").payout_rows(
-        {K: "MMM"})
-    assert rows == [{"sec_id": "M", "delist_date": "2018-06-01", "ticker": "MMM", "payout_per_share": 12.0,
-                     "confidence": "high", "source": "llm", "accession": "0002"}]
-    unread = _values(raw=None, read=True).payout_rows({K: "MMM"})
-    assert unread[0]["source"] == "none" and unread[0]["accession"] is None
 
 
 @pytest.mark.parametrize("bucket", ["merger", "exchange_transfer"])

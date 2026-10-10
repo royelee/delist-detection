@@ -22,7 +22,7 @@ the right answer, the decision table and the cause tags. `example-THI.md` is a f
    `price_date`, `recovery_ratio`, `terms_source`, `terms_gate`, `value_formula`), the internal ending
    (`delist_date`, `bucket`, `crsp_code`, `reason`, `last_trade_date_source`, `review_flags`) and why it is
    uncertain (`uncertain_reasons`, `security_uncertain_reasons`). Look up the security's rows in
-   `output/ticker_history.csv` and `output/cusip_history.csv` (its CUSIPs) and, if useful, its seeds in
+   `output/contract/security_history.csv` (its ticker ranges) and `output/cusip_history.csv` (its CUSIPs) and, if useful, its seeds in
    `output/observation_map.csv` (grep the sec_id). Read files with grep or small scripts; they are large.
 2. **Evidence, in this order.** (a) the cache, (b) live SEC, (c) web search.
    - SEC, through the skill's helper (cached; a live fetch is cached for next time). Run from the repo root:

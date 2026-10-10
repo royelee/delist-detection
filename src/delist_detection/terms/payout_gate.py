@@ -118,17 +118,6 @@ class GatedPayouts:
     dropped: dict = field(default_factory=lambda: dict.fromkeys(DROP_REASONS, 0))
     priced_by: dict = field(default_factory=dict)    # key -> BY_TICKER | BY_LINE: the price that settled its stock leg
 
-    @property
-    def gate_failed(self) -> int:
-        """Rows flagged payout_gate_failed that nothing settled: no gated payout
-        and no merged terms (a row the LLM cash or full terms settled keeps its
-        flag for review but is not counted)."""
-        return sum(
-            any(f.startswith(GATE_FAILED) for f in fl)
-            and key not in self.payouts and not for_delisting(self.merged_terms, key)
-            for key, fl in self.flags.items()
-        )
-
 
 def gate_payouts(
     keys: Iterable[tuple[str, str | None]],

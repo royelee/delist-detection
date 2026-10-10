@@ -51,7 +51,7 @@ the spec's decisions).
 Cases: ${ids.join(', ')}.
 For each case: read data/diagnosis/reports/<case_id>.md (all sections, including 9) and
 data/diagnosis/records/<case_id>.json. To look up a sec_id, grep output/securities.csv and
-output/ticker_history.csv. Do not fetch from SEC or the web: the report is the evidence.
+output/contract/security_history.csv. Do not fetch from SEC or the web: the report is the evidence.
 
 Write one file per case with the Write tool, BEFORE you return:
 data/diagnosis/truth_rows/<case_id>.json. Then return {"rows": [...]} with the same objects.

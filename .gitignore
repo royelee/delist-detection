@@ -34,6 +34,8 @@ cache/
 # Run logs
 *.log
 output/run.log
+# the truth loop's working copy of the regression report (loop_round.unexplained recomputes it)
+output/regression_report.csv
 
 # Local env
 .env

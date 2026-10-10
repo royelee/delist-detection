@@ -427,7 +427,7 @@ class Histories:
 
     @property
     def ticker_rows(self) -> list[dict]:
-        """ticker_history.csv's rows of the observed securities."""
+        """The ticker_history rows (kept in memory, contract/security_history.csv is published from them) of the observed securities."""
         return self._rows[0]
 
     @property

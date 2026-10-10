@@ -30,7 +30,7 @@ def _row(sec_id="OLD", bucket=CrspBucket.MERGER, code=231, flags=(), successor=N
 
 def _merger_value(key, *, flags=(), raw=None):
     """A merger's value as stage 8 leaves it: the LLM's terms, the regex read and the gate's flags."""
-    return MergerValue(key, raw=raw, read=raw is not None,
+    return MergerValue(key, raw=raw,
                        llm=MergerTerms("stock", None, 1.0, "NEWCO", "NEWC", "high", "8-K:X", ""),
                        terms={"stock_ratio": 1.0, "acquirer_price": 179.8, "acquirer_ticker": "NEWC"},
                        source="llm", confidence="high", flags=tuple(flags), acquirer_sec_id="NEW")
@@ -42,7 +42,7 @@ def test_a_merger_made_a_continuation_drops_its_payout_reads_and_flags():
     """AZPN 2022 (gate flags `payout_gate_failed:87.69;terms_gate_failed:no_acq_ticker`), ENDP 2014
     (`acquirer_close_lagged`) and CI 2018 (the regex's $48.75 and the LLM's one-for-one terms): the handoff makes each
     merger a continuation. The row keeps its last close's own flags; the merger value is dropped with one call, so
-    neither delistings.csv's payout columns nor payouts.csv carry it."""
+    delistings.csv's payout columns do not carry it."""
     d = _row(flags=("last_trade_date_unconfirmed", "ftd_close_prior:1", "acquirer_close_lagged"))
     values = MergerValues({d.key: _merger_value(d.key, flags=("payout_gate_failed:87.69",
                                                               "terms_gate_failed:no_acq_ticker"),
@@ -53,7 +53,7 @@ def test_a_merger_made_a_continuation_drops_its_payout_reads_and_flags():
     assert (d.record.crsp_code, d.record.bucket, d.record.successor_sec_id) == (
         CONTINUATION_CODE, CrspBucket.EXCHANGE_TRANSFER, "NEW")
     assert d.flags == ["last_trade_date_unconfirmed", "ftd_close_prior:1", HANDOFF_CONTINUATION]
-    assert values.get(d.key) is None and values.payout_rows({d.key: "TKR"}) == []
+    assert values.get(d.key) is None
     assert values.table_terms(d.key) == TableTerms()
     assert rw == Rewrite(Rule.HANDOFF, CrspBucket.MERGER, 231, "NEW", "handoff", "8-K12B X") and d.rewrites == [rw]
 

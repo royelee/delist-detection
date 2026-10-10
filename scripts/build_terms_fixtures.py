@@ -16,7 +16,6 @@ import argparse
 import csv
 import json
 import sys
-from dataclasses import asdict
 from datetime import date
 from pathlib import Path
 

@@ -16,7 +16,6 @@ from delist_detection.sources.ftd import FtdRow
 from delist_detection.endings.last_trade import LastTrade
 from delist_detection.terms.llm_merger_extractor import MergerTerms
 from delist_detection.identity.observations import Observation, ObservationIndex
-from delist_detection.terms.payout_extractor import PayoutResult
 from delist_detection.terms.acquirers import acquirer_cik
 from delist_detection.pipeline import Clients, Overrides, run
 from delist_detection.outputs.review_triage import merge_review_rows
@@ -30,6 +29,7 @@ from delist_detection.outputs.run_snapshot import RunSnapshot
 from delist_detection.measurement.scorecard import ScorecardConfig, Window
 from delist_detection.measurement.truth import TruthCase
 from delist_detection.outputs.store import formatted, read_table, table_path
+from run_ticker_history import ticker_history
 from delist_detection.outputs.verdict import decide as decide_verdicts
 from delist_detection.identity.ticker_resolver import TickerResolution, TickerResolver
 
@@ -105,7 +105,7 @@ def test_end_to_end_tables(fake_edgar, tmp_path):
     assert (d["sec_id"], d["delist_date"], d["bucket"]) == ("BBG000FJLFX8", "2018-12-09", "merger")
     assert d["last_trade_date"] == "2018-11-28" and d["last_trade_close"] == "212.700000"
     assert d["exchange"] == "NYSE"
-    th = read_table("ticker_history", table_path(tmp_path, "ticker_history"))
+    th = ticker_history(tmp_path)
     aet = [r for r in th if r["sec_id"] == "BBG000FJLFX8"]
     assert aet == [{"sec_id": "BBG000FJLFX8", "ticker": "AET", "exchange": "NYSE", "valid_from": "2017-06-30",
                     "valid_to": "2018-11-28", "source": "observation"}]
@@ -173,7 +173,7 @@ def test_bf_b_spelling_joins_through_history_ticker_for_an_observed_bfb(fake_edg
 
     run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
 
-    th = [r for r in read_table("ticker_history", table_path(tmp_path, "ticker_history"))
+    th = [r for r in ticker_history(tmp_path)
          if r["sec_id"] == "BBGBFB0001"]
     assert [r["ticker"] for r in th] == ["BF-B"]
     om = {r["as_of"]: r for r in read_table("observation_map", table_path(tmp_path, "observation_map"))}
@@ -208,7 +208,7 @@ def test_a_backfilled_observation_adds_no_ticker_history_range(fake_edgar, tmp_p
     om = {r["as_of"]: r for r in read_table("observation_map", table_path(tmp_path, "observation_map"))}
     assert om["2012-06-29"]["status"] == "backfilled_ticker"
     assert om["2016-01-04"]["status"] == "mapped"
-    th = [r for r in read_table("ticker_history", table_path(tmp_path, "ticker_history"))
+    th = [r for r in ticker_history(tmp_path)
          if r["sec_id"] == "BBGCHUBB01"]
     # no CB range opened before CB is actually confirmed by its own fails rows
     assert not any(r["ticker"] == "CB" and r["valid_from"] < "2016-01-04" for r in th)
@@ -260,7 +260,7 @@ def test_a_security_dead_before_its_first_sighting_takes_its_cusips_from_earlier
     logged = []
     run(index, clients, Overrides(), out_dir=tmp_path, log=logged.append)
     assert any("dead before first sighting: 1" in str(m) for m in logged)
-    th = [r for r in read_table("ticker_history", table_path(tmp_path, "ticker_history"))
+    th = [r for r in ticker_history(tmp_path)
           if r["ticker"] == "AET"]
     assert th and th[0]["valid_to"] == "2018-11-28" and th[0]["valid_from"].startswith("2018")
     ch = read_table("cusip_history", table_path(tmp_path, "cusip_history"))
@@ -608,7 +608,7 @@ def test_run_writes_an_open_acquirer_ticker_history_row(fake_edgar, tmp_path):
 
     secs = {r["sec_id"]: r for r in read_table("securities", table_path(tmp_path, "securities"))}
     assert secs["BBGACQ00001"]["observed"] == "false"
-    th = read_table("ticker_history", table_path(tmp_path, "ticker_history"))
+    th = ticker_history(tmp_path)
     acq_rows = [r for r in th if r["sec_id"] == "BBGACQ00001"]
     assert len(acq_rows) == 1
     assert acq_rows[0]["ticker"] == "ACQ" and acq_rows[0]["source"] == "ftd" and acq_rows[0]["valid_to"] == ""
@@ -651,7 +651,7 @@ def test_run_writes_an_open_successor_ticker_history_row(fake_edgar, tmp_path, m
 
     run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
 
-    th = read_table("ticker_history", table_path(tmp_path, "ticker_history"))
+    th = ticker_history(tmp_path)
     suc = [r for r in th if r["sec_id"] == "BBGSUX00001"]
     assert len(suc) == 1
     assert suc[0]["ticker"] == "SUX" and suc[0]["source"] == "edgar_8k"
@@ -674,7 +674,7 @@ def test_open_ticker_history_row_gets_its_exchange_from_issuer_submissions(fake_
     fake_edgar.submissions = _submissions
     run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
 
-    th = read_table("ticker_history", table_path(tmp_path, "ticker_history"))
+    th = ticker_history(tmp_path)
     live = [r for r in th if r["sec_id"] == "BBG000LIVE01"]
     assert live[0]["valid_to"] == "" and live[0]["exchange"] == "NASDAQ"
 
@@ -771,50 +771,6 @@ def test_issuer_exchange_for_ticker_reads_the_parallel_arrays(fake_edgar):
     assert issuer_exchange(fake_edgar, 1, "X") == "NYSE"
     assert issuer_exchange(fake_edgar, 1, "Y") is None
     assert issuer_exchange(fake_edgar, None, "X") is None
-
-
-# --- payouts.csv cites the right accession, at the run() level ---
-
-class _FakePayoutExtractor:
-    def __init__(self, result):
-        self.result = result
-
-    def extract(self, record, last_close=None):
-        return self.result
-
-
-class _FakeLLMExtractor:
-    def __init__(self, terms):
-        self.terms = terms
-
-    def extract(self, record, security_name=""):
-        return self.terms
-
-
-def test_payouts_csv_cites_the_llm_accession_for_an_llm_sourced_payout(fake_edgar, tmp_path):
-    index, clients = _clients(fake_edgar)
-    clients.payout_extractor = _FakePayoutExtractor(PayoutResult.none())   # regex finds nothing
-    clients.llm_extractor = _FakeLLMExtractor(
-        MergerTerms("cash", 212.70, None, "ACQUIRER INC", "ACQ", "high", "8-K:0001-23-456789", "quote"))
-
-    run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
-
-    (row,) = read_table("payouts", table_path(tmp_path, "payouts"))
-    assert row["source"] == "llm"
-    assert row["accession"] == "0001-23-456789"   # not "8-K:0001-23-456789"
-
-
-def test_payouts_csv_cites_the_regex_accession_for_a_regex_sourced_payout(fake_edgar, tmp_path):
-    index, clients = _clients(fake_edgar)
-    clients.payout_extractor = _FakePayoutExtractor(
-        PayoutResult(212.70, "high", "8K_2.01", "0000123456-18-000001", "quote"))
-    clients.llm_extractor = _FakeLLMExtractor(None)   # present, but finds nothing -- regex must still win
-
-    run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
-
-    (row,) = read_table("payouts", table_path(tmp_path, "payouts"))
-    assert row["source"] == "8K_2.01"
-    assert row["accession"] == "0000123456-18-000001"
 
 
 # --- gate_payouts' acquirer_price is keyed by the merger, at the run() level ---
@@ -965,7 +921,7 @@ def test_same_ticker_successor_does_not_overlap_its_predecessor(fake_edgar, tmp_
 
     run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
 
-    th = read_table("ticker_history", table_path(tmp_path, "ticker_history"))
+    th = ticker_history(tmp_path)
     new_rows = [r for r in th if r["sec_id"] == "BBGAETNEW1"]
     assert len(new_rows) == 1
     assert new_rows[0]["valid_from"] == "2018-11-29"     # day after 2018-11-28, not the earlier 8-K12B date
@@ -1041,7 +997,7 @@ def test_run_writes_one_acquirer_range_spanning_all_its_mergers(fake_edgar, tmp_
 
     run(index, clients, overrides, out_dir=tmp_path, log=lambda *_: None)
 
-    th = read_table("ticker_history", table_path(tmp_path, "ticker_history"))
+    th = ticker_history(tmp_path)
     acq_rows = [r for r in th if r["sec_id"] == "BBGACQ0001"]
     assert len(acq_rows) == 1
     assert acq_rows[0]["valid_from"] == "2020-03-05" and acq_rows[0]["valid_to"] == "2020-09-10"
@@ -1132,7 +1088,7 @@ def test_run_splits_two_securities_that_shared_a_ticker(fake_edgar, tmp_path):
 
     secs = {r["sec_id"] for r in read_table("securities", table_path(tmp_path, "securities"))}
     assert secs == {"BBGDELLINC1", "BBGDELLTEC1"}
-    th = read_table("ticker_history", table_path(tmp_path, "ticker_history"))
+    th = ticker_history(tmp_path)
     assert [(r["sec_id"], r["valid_from"], r["valid_to"]) for r in th] == [
         ("BBGDELLINC1", "2012-06-01", "2013-10-29"), ("BBGDELLTEC1", "2018-12-31", "2019-09-03")]
 
@@ -1157,7 +1113,7 @@ def test_two_eras_of_one_security_give_one_security_and_one_ticker_range(fake_ed
     run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
 
     assert [r["sec_id"] for r in read_table("securities", table_path(tmp_path, "securities"))] == ["BBGRSPLIT01"]
-    th = read_table("ticker_history", table_path(tmp_path, "ticker_history"))
+    th = ticker_history(tmp_path)
     assert [(r["ticker"], r["valid_from"], r["valid_to"]) for r in th] == [("RS", "2009-06-01", "2013-07-01")]
 
 
@@ -1185,7 +1141,7 @@ def test_cusip_history_keeps_a_retired_cusip_closed_and_the_current_one_open(fak
     ch = read_table("cusip_history", table_path(tmp_path, "cusip_history"))
     assert [(r["cusip"], r["valid_from"], r["valid_to"]) for r in ch] == [
         ("11111A101", "2019-06-03", "2020-01-01"), ("11111A200", "2020-01-02", "")]
-    th = read_table("ticker_history", table_path(tmp_path, "ticker_history"))
+    th = ticker_history(tmp_path)
     assert [(r["ticker"], r["valid_from"], r["valid_to"]) for r in th] == [("RS", "2019-06-03", "")]
 
 
@@ -1281,7 +1237,7 @@ def test_run_is_deterministic(fake_edgar, tmp_path):
     index, clients = _clients(fake_edgar)
     run(index, clients, Overrides(), out_dir=tmp_path / "a", log=lambda *_: None)
     run(index, clients, Overrides(), out_dir=tmp_path / "b", log=lambda *_: None)
-    names = ["securities", "ticker_history", "cusip_history", "delistings", "payouts", "review", "review_summary",
+    names = ["securities", "cusip_history", "delistings", "review", "review_summary",
              "observation_map", "uncertain"]
     contract = ["security_history", "contract_delistings", "seeds", "price_requests", "id_changes"]
     for name in names + contract:
@@ -1618,7 +1574,7 @@ def test_ftd_rows_spelled_without_a_separator_are_sightings_of_the_observed_tick
 
     secs = read_table("securities", table_path(tmp_path, "securities"))
     assert [(r["sec_id"], r["figi_source"]) for r in secs] == [("BBG000BYNJ81", "cusip")]
-    th = read_table("ticker_history", table_path(tmp_path, "ticker_history"))
+    th = ticker_history(tmp_path)
     assert [(r["ticker"], r["valid_from"], r["valid_to"]) for r in th] == [("BF-B", "2015-06-01", "2016-01-04")]
 
 
@@ -1667,7 +1623,7 @@ def test_a_ticker_observed_in_both_spellings_keeps_each_securitys_own_spelling(f
 
     secs = {r["sec_id"] for r in read_table("securities", table_path(tmp_path, "securities"))}
     assert secs == {"BBGHUBBOLD1", "BBGHUBBNEW1"}
-    th = read_table("ticker_history", table_path(tmp_path, "ticker_history"))
+    th = ticker_history(tmp_path)
     assert [(r["sec_id"], r["ticker"], r["valid_from"], r["valid_to"]) for r in th] == [
         ("BBGHUBBNEW1", "HUBB", "2015-12-21", "2017-01-03"),
         ("BBGHUBBOLD1", "HUB-B", "2013-06-03", "2015-12-18")]
@@ -2024,7 +1980,7 @@ def _retired_cusip_run(fake_edgar, tmp_path, tail_symbol, tail_dates=("2025-12-3
     fake_edgar.full_text_search = lambda q, forms, lo, hi: []
     run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
     d = {r["sec_id"]: r for r in read_table("delistings", table_path(tmp_path, "delistings"))}
-    return d, read_table("ticker_history", table_path(tmp_path, "ticker_history"))
+    return d, ticker_history(tmp_path)
 
 
 def test_deleted_symbol_fails_after_the_delisting_are_not_continued_trading(fake_edgar, tmp_path):
@@ -2063,7 +2019,7 @@ def test_a_placeholder_whose_late_rows_are_a_deleted_symbol_is_not_listed_today(
             + _ftd("HPQXXXX", "428236103", "HEWLETT PACKARD CO", ["2015-11-03", "2015-11-20", "2016-01-04"]))
     index, clients = _index_clients(fake_edgar, obs, rows, {})
     run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None)
-    th = [r for r in read_table("ticker_history", table_path(tmp_path, "ticker_history"))
+    th = [r for r in ticker_history(tmp_path)
           if r["sec_id"] == "CIK47217-COMMON"]
     assert th and all(r["valid_to"] for r in th)
     assert not [r for r in th if r["ticker"].endswith("XXXX")]
@@ -2147,7 +2103,7 @@ def test_a_stale_era_does_not_take_the_cusip_of_the_next_company_on_its_ticker(f
     assert "BBG000BBCT50" not in secs
     ch = read_table("cusip_history", table_path(tmp_path, "cusip_history"))
     assert "204429104" not in {r["cusip"] for r in ch}
-    th = read_table("ticker_history", table_path(tmp_path, "ticker_history"))
+    th = ticker_history(tmp_path)
     assert max(r["valid_to"] or "9999" for r in th) <= "2009-06-08"
 
 
@@ -2209,7 +2165,7 @@ def test_an_era_under_its_issuers_old_name_is_accepted_on_the_ticker_by_the_edga
 
     secs = read_table("securities", table_path(tmp_path, "securities"))
     assert [(r["sec_id"], r["issuer_cik"]) for r in secs] == [("BBG000BQ87N0", "72741")]
-    th = read_table("ticker_history", table_path(tmp_path, "ticker_history"))
+    th = ticker_history(tmp_path)
     assert [(r["sec_id"], r["ticker"], r["valid_from"]) for r in th] == [("BBG000BQ87N0", "ES", "2012-06-29")]
     assert read_table("delistings", table_path(tmp_path, "delistings")) == []
 
@@ -2336,7 +2292,7 @@ def test_a_continuation_the_finder_found_no_row_for_clips_the_old_line_at_its_la
     assert d["dlret"] == "0.000000" and d["confidence"] == "medium" and "timing:cik" in d["reason"]
     assert d["review_flags"].split(";")[0] == "handoff_continuation" and d["exchange"] == "NYSE"
     th = {(r["sec_id"], r["ticker"]): (r["valid_from"], r["valid_to"])
-          for r in read_table("ticker_history", table_path(tmp_path, "ticker_history"))}
+          for r in ticker_history(tmp_path)}
     assert th == {("BBGHCOLD001", "HC"): ("2014-06-02", "2015-06-12"), ("BBGHCNEW001", "HC"): ("2015-06-15", "")}
     review = read_table("review", table_path(tmp_path, "review"))
     assert not [r for r in review if r["review_flags"] in ("ended_without_delisting", "ticker_shared")]
@@ -2373,7 +2329,7 @@ def test_a_handoff_continuation_clips_the_old_line_whose_ticker_the_issuer_still
     (d,) = read_table("delistings", table_path(tmp_path, "delistings"))
     assert d["review_flags"].split(";")[0] == "handoff_continuation" and d["successor_sec_id"] == "BBGHCNEW001"
     th = {(r["sec_id"], r["ticker"]): (r["valid_from"], r["valid_to"])
-          for r in read_table("ticker_history", table_path(tmp_path, "ticker_history"))}
+          for r in ticker_history(tmp_path)}
     assert th == {("BBGHCOLD001", "HC"): ("2014-06-02", "2015-06-12"), ("BBGHCNEW001", "HC"): ("2015-06-15", "")}
     review = read_table("review", table_path(tmp_path, "review"))
     assert not [r for r in review if r["review_flags"] in ("ended_without_delisting", "ticker_shared")]
@@ -2481,7 +2437,7 @@ def test_price_answers_change_value_columns_only(fake_edgar, tmp_path):
     run(index, clients, Overrides(price_answers=answered), out_dir=second, log=lambda *_: None)
     aet = next(r for r in read_table("delistings", table_path(second, "delistings")) if r["sec_id"] == "BBG000FJLFX8")
     assert aet["last_trade_close"] == "191.320000"
-    for name in ("securities", "ticker_history", "observation_map", "security_history", "seeds", "price_requests"):
+    for name in ("securities", "observation_map", "security_history", "seeds", "price_requests"):
         assert table_path(first, name).read_bytes() == table_path(second, name).read_bytes(), name
 
 
@@ -2584,7 +2540,7 @@ def test_an_answered_last_close_that_flips_the_gate_changes_values_only(fake_edg
     second = tmp_path / "second"
     run(index, clients, Overrides(price_answers={key_of(last): 120.0, key_of(leg): 100.0}), out_dir=second,
         log=lambda *_: None)
-    for name in ("securities", "ticker_history", "cusip_history", "observation_map", "security_history", "seeds",
+    for name in ("securities", "cusip_history", "observation_map", "security_history", "seeds",
                  "price_requests", "id_changes"):
         assert table_path(first, name).read_bytes() == table_path(second, name).read_bytes(), name
     two = next(r for r in read_table("delistings", table_path(second, "delistings")) if r["sec_id"] == "BBGSEC001")
@@ -2670,8 +2626,8 @@ def _line_run(fake_edgar, tmp_path, *, filings, figi, new_rows, old_figi=True, l
     index, clients = _index_clients(fake_edgar, [*obs, *extra_obs], rows, answers)
     run(index, clients, Overrides(), out_dir=tmp_path, log=lambda *_: None, id_baseline=id_baseline)
     return {name: read_table(name, table_path(tmp_path, name)) for name in (
-        "securities", "cusip_history", "ticker_history", "delistings", "contract_delistings", "id_changes",
-        "review_summary", "uncertain")}
+        "securities", "cusip_history", "delistings", "contract_delistings", "id_changes",
+        "review_summary", "uncertain")} | {"ticker_history": ticker_history(tmp_path)}
 
 
 def _flag_count(t, flag):

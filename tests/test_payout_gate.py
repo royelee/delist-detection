@@ -137,7 +137,7 @@ def test_an_election_stock_leg_drops_the_payout_and_writes_terms():
     assert K not in g.payouts and payouts == {K: 505.0}
     assert (g.sources[K], g.confidences[K]) == ("llm_election_stock", "high")
     assert g.merged_terms[K] == {"stock_ratio": 20.2, "acquirer_price": 16.54, "acquirer_ticker": "QXO"}
-    assert (g.flags, g.gate_failed, g.llm_cash) == ({}, 0, 0)
+    assert (g.flags, g.llm_cash) == ({}, 0)
 
 
 def test_a_stock_only_gate_pass_drops_a_regex_value_that_fit():
@@ -166,12 +166,12 @@ def test_full_terms_clear_the_failed_flag_of_their_cash_leg():
     # AET: the regex read the $145 cash leg of $145 + 0.8378 CVS
     g = _gate(payout=145.0, terms=_terms("cash_and_stock", 145.0, 0.8378, "CVS"), close=212.70, price=80.27)
     assert g.merged_terms[K]["cash_per_share"] == 145.0 and K not in g.payouts
-    assert (g.flags, g.gate_failed) == ({}, 0)
+    assert g.flags == {}
     # when the full terms fail too, the regex flag stays and the terms-gate drop
     # (fail_sanity) is appended so the row still surfaces in review.csv
     g = _gate(payout=145.0, terms=_terms("cash_and_stock", 145.0, 0.8378, "CVS"), close=300.0, price=80.27)
-    assert (g.flags[K], g.gate_failed, g.merged_terms) == (
-        ("payout_gate_failed:145", "terms_gate_failed:fail_sanity"), 1, {})
+    assert (g.flags[K], g.merged_terms) == (
+        ("payout_gate_failed:145", "terms_gate_failed:fail_sanity"), {})
 
 
 def test_a_cash_and_cvr_deal_labelled_other_fills_the_payout():
@@ -216,24 +216,6 @@ def test_terms_gate_csv_override_records_no_flag():
 def test_failed_llm_terms_flag_the_row_in_gate_payouts():
     g = _gate(terms=_terms("cash", 50.0), close=12.18)
     assert (g.payouts, g.flags[K]) == ({}, ("llm_gate_failed",))
-
-
-# --- F13: gate_failed counts only rows nothing settled ---
-
-def test_gate_failed_skips_a_row_the_llm_cash_settled():
-    # TWO: the regex $25 failed the close, the LLM's $12 settled the row
-    g = _gate(payout=25.0, terms=_terms("cash", 12.0), close=12.18)
-    assert (g.payouts[K], g.flags[K], g.gate_failed) == (12.0, ("payout_gate_failed:25",), 0)
-
-
-def test_gate_failed_skips_a_row_merger_terms_settled():
-    g = _gate(payout=25.0, close=12.18, csv={"ABC": {"cash_per_share": 12.0}})
-    assert (K in g.payouts, g.flags[K], g.gate_failed) == (False, ("payout_gate_failed:25",), 0)
-
-
-def test_gate_failed_counts_a_row_nothing_settled():
-    g = _gate(payout=25.0, close=12.18)
-    assert (K in g.payouts, g.flags[K], g.gate_failed) == (False, ("payout_gate_failed:25",), 1)
 
 
 # --- acquirer_price is called with the merger's own (sec_id, delist_date) key ---
