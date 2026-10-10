@@ -386,3 +386,47 @@ def test_a_name_with_no_word_of_three_letters_is_looked_up_by_the_name_tier():
     assert r.expected_name("TWOU", "2020-12-31", "2U INC") == "2U INC"
     got = r.resolve("TWOU", "2020-12-31", name="2U INC", since="2014-05-15", pin=None)
     assert (got.cik, got.source) == (1459417, "name_search")
+
+
+def _dupont(*extra):
+    eidp = (30554, ("EIDP, Inc.", [{"name": "DUPONT E I DE NEMOURS & CO", "from": "1994-01-01T00:00:00.000Z",
+                                   "to": "2019-05-31T00:00:00.000Z"}],
+                    [_f("D00", "10-K", "2005-02-10"), _f("D0", "10-K", "2016-02-10"), _f("D1", "25-NSE", "2017-09-01")]))
+    dead = (1137191, ("EI DU PONT DE NEMOURS & CO", [], [_f("X0", "10-K", "2001-03-01")]))
+    foundation = (1243868, ("NEMOURS FOUNDATION", [], [_f("N0", "10-K", "2016-03-01")]))
+    new = (1666700, ("DuPont de Nemours, Inc.", [], [_f("N1", "10-K", "2019-03-01")]))
+    idx = _index("DUPONT E I DE NEMOURS & CO:0000030554:", "EIDP, INC.:0000030554:",
+                 "EI DU PONT DE NEMOURS & CO:0001137191:", "NEMOURS FOUNDATION:0001243868:",
+                 "DUPONT DE NEMOURS, INC.:0001666700:", *extra)
+    return TickerResolver(_Edgar(dict([eidp, dead, foundation, new])), name_index=idx), idx
+
+
+def test_a_name_the_index_spells_with_words_run_together_is_reached_when_the_prefix_search_finds_no_company():
+    """DD (E I DU PONT DE NEMOURS, observed to 2017, 25-NSE 2017-09-01): EDGAR lists the company as DUPONT E I DE NEMOURS
+    & CO (CIK 30554), which the observed spelling is not a character prefix of (`names_agree` reads DU PONT as DUPONT).
+    The prefix search offers only a dead holder of EI DU PONT DE NEMOURS & CO, so the index's entries sharing the
+    name's longest word and agreeing with it are the last resort: the one that filed a Form 25 near the date, existed by
+    the era's first sighting and agrees on the date. A company founded after the era's first sighting (DuPont de
+    Nemours, Inc., 2019) and a foundation sharing one word are not."""
+    r, _ = _dupont()
+    got = r.resolve("DD", "2017-09-05", name="E I DU PONT DE NEMOURS", since="2007-12-18", pin=None)
+    assert (got.cik, got.source) == (30554, "name_search")
+
+
+def test_the_last_resort_by_agreeing_names_needs_exactly_one_company():
+    """Two agreeing companies that both filed a Form 25 near the date leave nothing to choose by: no answer."""
+    twin = (1555555, ("NEMOURS DUPONT E I DE CO", [], [_f("T00", "10-K", "2005-02-10"), _f("T1", "25-NSE", "2017-08-01")]))
+    r, idx = _dupont("NEMOURS DUPONT E I DE CO:0001555555:")
+    r.edgar.companies[1555555] = twin[1]
+    got = r.resolve("DD", "2017-09-05", name="E I DU PONT DE NEMOURS", since="2007-12-18", pin=None)
+    assert got.cik is None
+
+
+def test_the_last_resort_is_not_asked_when_the_prefix_search_already_has_an_answer():
+    """APTIV-like: an exact holder that filed near the date is the answer; an agreeing spelling elsewhere in the
+    index is never read."""
+    r, idx = _dupont("E I DU PONT DE NEMOURS & CO:0001999999:")
+    r.edgar.companies[1999999] = ("E I DU PONT DE NEMOURS & CO", [], [_f("Y0", "10-K", "2007-02-10"),
+                                                                      _f("Y1", "25-NSE", "2017-08-20")])
+    got = r.resolve("DD", "2017-09-05", name="E I DU PONT DE NEMOURS & CO", since="2007-12-18", pin=None)
+    assert got.cik == 1999999

@@ -85,6 +85,19 @@ class CikNameIndex:
             (exact if key == q else prefix).append(NameHit(cik, name))
         return exact, prefix
 
+    def containing(self, word: str) -> list[NameHit]:
+        """The entries whose normalized name holds `word` as a whole word, in the index's order: the names a
+        character-prefix search cannot reach because they spell the name's words in another order or run together
+        (DUPONT E I DE NEMOURS & CO for E I DU PONT DE NEMOURS). One pass over the entries."""
+        w = normalize_name(word)
+        if not w:
+            return []
+        out: list[NameHit] = []
+        for key, cik, name in self._entries:
+            if w in key and (key == w or key.startswith(w + " ") or key.endswith(" " + w) or f" {w} " in key):
+                out.append(NameHit(cik, name))
+        return out
+
     def search(self, query: str) -> list[NameHit]:
         """`split_search`'s exact matches, then its prefix matches."""
         exact, prefix = self.split_search(query)

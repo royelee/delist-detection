@@ -29,7 +29,7 @@ from ..filings.evidence import parse_day
 from ..sources.fatal import FATAL
 from ..sources.cik_lookup import CikNameIndex, normalize_name
 from .issuer_record import IssuerRecord
-from ..vocabulary.names import has_name, name_tokens, names_agree
+from ..vocabulary.names import has_name, name_tokens, names_agree, same_letters
 
 log = logging.getLogger(__name__)
 _LOOK_UP_PIN = object()     # resolve(pin=...) default: look the pin up with cik_pins
@@ -568,6 +568,32 @@ class TickerResolver:
                     found[c] = (names[c], penalty)
         return found
 
+    AGREEING_MAX = 25                            # CIKs the last resort reads: more is a name too common to tell
+
+    def _agreeing_issuer(self, nm: str | None, observed_date: str | None,
+                         since: str | None) -> tuple[int, str] | None:
+        """The name tier's last resort (FB-004 part c, DD): when the character-prefix candidates give no company, the
+        one CIK the index lists under the same name spelled with its words run together, split or reordered
+        (`names.same_letters`, among the entries holding `nm`'s longest word, `CikNameIndex.containing`: EDGAR spells
+        E I DU PONT DE NEMOURS as DUPONT E I DE NEMOURS & CO, which no prefix reaches) that existed by the era's
+        first sighting, carried an agreeing name within 30 days of the date and filed a Form 25 or 15 within 540 days
+        of it (`_validate_cik`, loose). Several such companies, more than `AGREEING_MAX` ones, no word to search by,
+        or no index: None."""
+        index = self._index()
+        words = name_tokens(nm or "")
+        if index is None or not words or not observed_date:
+            return None
+        names: dict[int, str] = {}
+        for h in index.containing(max(words, key=lambda w: (len(w), w))):
+            if h.cik not in self.EXCHANGE_CIKS and same_letters(h.name, nm):
+                names.setdefault(h.cik, h.name)
+        if not names or len(names) > self.AGREEING_MAX:
+            return None
+        found = [c for c in sorted(names) if self.issuers.existed_by(c, since)
+                 and self._fits_date(c, observed_date, nm) == (True, True)
+                 and self._validate_cik(c, observed_date, strict=False)]
+        return (found[0], names[found[0]]) if len(found) == 1 else None
+
     def _filing_gap(self, cik: int, on: date | None) -> int:
         """Days between `on` and the CIK's nearest filing of any form, as the
         company page the live search opens lists them (1000: unknown)."""
@@ -942,6 +968,8 @@ class TickerResolver:
                     def ok(c: int) -> bool:
                         return not observed_date or self._validate_cik(c, observed_date, strict=False)
                 hit = next(((c, n) for c, n in ranked if ok(c)), None)
+                if hit is None:
+                    hit = self._agreeing_issuer(expected, observed_date, since)
                 if hit is not None:
                     (cik, name), source = hit, "name_search"
 

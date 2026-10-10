@@ -239,6 +239,16 @@ def test_a_name_can_agree_with_another_when_it_has_a_word_or_letters_left_after_
     assert not any(has_name(n) for n in ("", "INC", "THE COMPANY", None))
 
 
+def test_the_same_letters_in_any_order_are_one_name_once_the_fillers_are_out():
+    """`same_letters` (FB-004 part c): E I DU PONT DE NEMOURS is EDGAR's DUPONT E I DE NEMOURS & CO with its words run
+    together and moved; a name with a letter more or less, or with no letters, is not."""
+    from delist_detection.vocabulary.names import same_letters
+    assert same_letters("E I DU PONT DE NEMOURS", "DUPONT E I DE NEMOURS & CO")
+    assert same_letters("2U INC", "2U, Inc.") and same_letters("BB&T CORP", "BB AND T CORP")
+    assert not same_letters("DUPONT DE NEMOURS", "E I DU PONT DE NEMOURS")      # the E I
+    assert not same_letters("", "") and not same_letters("INC", "CORP")
+
+
 def test_one_shared_word_still_agrees_only_where_a_side_has_one_word():
     """Unchanged by the word equivalence: JetBlue Airways and US Airways share one word and US Airways has one."""
     assert names_agree("JETBLUE AIRWAYS CORP", "U S AIRWAYS GROUP INC")

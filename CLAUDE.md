@@ -257,7 +257,8 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   L3HARRIS meets HARRIS; FB-004: `description_names` leaves a holding word out of the words it compares, on either
   side when another word is left, `_HOLDING_WORDS`: a holding company that keeps the name, EXXONMOBIL HLDGS CORPORATION
   beside EXXON MOBIL CORP, is that name; FB-004 part c: `has_name`, whether a name can agree with another, a word of
-  three letters or the letters and digits left after the fillers): `name_tokens`, `names_agree`, `has_name`, `description_names`,
+  three letters or the letters and digits left after the fillers; `same_letters`, two names of the same letters in any
+  order, the name run together, split or reordered): `name_tokens`, `names_agree`, `has_name`, `same_letters`, `description_names`,
   `names_an_issuer` and `description_matches` (a fails row's description against a security's names), read by the
   observations, the identity rules, the fails index, the Form 25 match, the classifier and the merger readers.
 - `vocabulary/exchanges.py` — a listing's exchange, normalized, a leaf: `Exchange` (NYSE, AMEX, NASDAQ, OTHER, the four buckets
@@ -373,8 +374,8 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   client's text cache and Form 25 parsing.
 - `sources/cik_lookup.py` — SEC's company-name index, `cik-lookup-data.txt`, as a local name -> CIK search:
   `CikLookupClient` (the download, cached 30 days under `cache/sec_data/cik_lookup/`) and `CikNameIndex` (exact, then
-  character-prefix matches); the ticker resolver's name tier and the acquirer ticker read it (the ticker resolver's
-  entry has the rules).
+  character-prefix matches, and `containing`, the entries holding a whole word, FB-004 part c); the ticker resolver's
+  name tier and the acquirer ticker read it (the ticker resolver's entry has the rules).
 - `sources/llm_client.py` — the injectable LLM client for JSON extraction: an adapter has `extract(system, user, schema) ->
   dict` and states its `model`; `OpenAIJsonClient` is the one provided, `default_llm_client` builds it from the repo
   `.env` (the only `load_dotenv` call).
@@ -637,7 +638,11 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   character-prefix matches, read through their submissions JSON as the live
   search answered, `_index_candidates`: the one active holder of the exact
   name, else the 25-NSE/25/15-12G form filter's one filer the query names
-  (`_one_filer`), else the exact name; `name_index=`, wired by
+  (`_one_filer`), else the exact name; when none of those candidates is accepted, the last resort
+  `_agreeing_issuer` (FB-004 part c, DD): the one CIK listed under the same name written with its words run
+  together, split or reordered (`names.same_letters`: EDGAR's DUPONT E I DE NEMOURS & CO for E I DU PONT DE
+  NEMOURS) that existed by the era's first sighting, carried an agreeing name within 30 days of the date and filed
+  a Form 25 or 15 within 540 days of it; several, or more than `AGREEING_MAX`, none; `name_index=`, wired by
   `default_clients`; the rules and the cases behind them in
   `docs/data-flow.md`), not
   in the live company search, which runs only without an index (the offline

@@ -68,6 +68,14 @@ def has_name(name: str) -> bool:
     return bool(_words(name)) or _run(name) != ""
 
 
+def same_letters(a: str, b: str) -> bool:
+    """Two names written with the same letters and digits, in any order, once legal suffixes and fillers are out:
+    the same name with its words run together, split or reordered (E I DU PONT DE NEMOURS and DUPONT E I DE NEMOURS &
+    CO), which no character-prefix search of a name index reaches. Stricter than `names_agree`: nothing may differ."""
+    ra, rb = _run(a), _run(b)
+    return ra != "" and sorted(ra) == sorted(rb)
+
+
 def _run(name: str) -> str:
     """A name's letters and digits run together, legal suffixes and fillers out (2U INC and 2U, Inc. are 2U)."""
     parts = re.findall(r"[A-Z0-9]+", re.sub(r"['’]", "", (name or "").upper()))

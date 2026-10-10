@@ -46,6 +46,15 @@ def test_exact_matches_come_before_prefix_matches():
     assert (_ciks(exact), _ciks(prefix)) == ([804269], [1037688])
 
 
+def test_the_entries_holding_a_word_are_found_wherever_the_word_stands():
+    """FB-004 part c: a name spelled in another order is no prefix of the observed one; its entries are found by a
+    word it holds. A word is a whole word of the normalized name (NEMOURS is no part of DENEMOURS)."""
+    idx = CikNameIndex.from_text("DUPONT E I DE NEMOURS & CO:0000030554:\nE I DUPONT DENEMOURS & CO:0000944975:\n"
+                                 "NEMOURS FOUNDATION:0001243868:\nDU PONT NEMOURS:0000001111:\nOTHER CO:0000002222:\n")
+    assert sorted(_ciks(idx.containing("nemours"))) == [1111, 30554, 1243868]
+    assert idx.containing("") == [] and idx.containing("ABSENT") == []
+
+
 def test_a_prefix_matches_by_character_as_edgar_does():
     """EDGAR's company search matches a prefix by character: a snapshot's name
     cut off mid-word still finds the company (COCA COLA ENTERPRISE, 2008)."""
