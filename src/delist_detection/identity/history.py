@@ -26,6 +26,7 @@ from ..vocabulary.exit_kind import LastTrade, end_day
 from ..sources.ftd import FtdIndex, is_deleted_symbol, is_unassigned_symbol
 from ..vocabulary.identifiers import bare_ticker
 from ..vocabulary.names import description_matches
+from ..vocabulary.trading_calendar import add_trading_days
 from .observations import TickerEra
 from ..outputs.review_triage import ReviewItem
 from .security_master import Security
@@ -319,6 +320,9 @@ CONTINUATION_MIN_PRICES = 2   # ...at 2 or more distinct prices, so fails still 
 # continuing (RHD, Smurfit-Stone, Idearc, GGP, SunPower, Endo: real, varied-
 # price OTC trading for years, but the exchange listing itself is long gone).
 CONTINUATION_BUCKETS = frozenset({CrspBucket.MERGER, CrspBucket.EXCHANGE_TRANSFER})
+# A security with no ending whose last fails row is this many trading days or fewer from the fails data's last day is
+# still trading (`Histories._at_data_edge`): its history stays open.
+DATA_EDGE_TRADING_DAYS = 2
 # A handoff's window (`handoffs.find_handoffs`) and a successor's: another security's first sighting under a ticker at
 # most this long after the old one's last (COHR: 74); a later one is a recycled ticker.
 TAKEOVER_DAYS = 120
@@ -420,7 +424,10 @@ class Histories:
                 self._ends_of[sid] = SecurityEnd(end_day(last.last_trade, last.delist_date).isoformat(),
                                                  last.last_trade.confirmed, False)
             else:
-                self._ends_of[sid] = SecurityEnd(listed=is_listed)
+                # No ending ends it. Not listed today (EDGAR, or OpenFIGI, says so), its last sighting would close the
+                # history; sighted at the fails data's last day it is still trading, whatever the listing answers
+                # (Disney, FB-004): it stays open.
+                self._ends_of[sid] = SecurityEnd(listed=is_listed or (last is None and self._at_data_edge(sid)))
 
     def end(self, sec_id: str) -> SecurityEnd:
         """Where the security's history ends (a security the history was not built over: open, not listed)."""
@@ -452,6 +459,16 @@ class Histories:
         th_rows = _clip_at_takeovers(th_rows, {sid: self._own(sid) for sid in self._securities},
                                      {sid: e.day for sid, e in self._ends_of.items()})
         return th_rows, ch_rows
+
+    def _at_data_edge(self, sec_id: str) -> bool:
+        """Whether the security's last fails row under an own ticker (an observation is the caller's snapshot, not
+        trading) is at the fails data's last day: within `DATA_EDGE_TRADING_DAYS` trading days of the last day the
+        files cover (`FtdIndex.files_end`, which is `data_end` for an index over SEC's files; none for one over rows
+        alone). A security gone weeks before it (SBNY, FRCB) is not."""
+        edge = self._ftd.files_end()
+        days = [s.day for s in self._own(sec_id) if s.source == FTD]
+        return bool(edge and days and max(days) >= add_trading_days(date.fromisoformat(edge),
+                                                                     -DATA_EDGE_TRADING_DAYS).isoformat())
 
     def _own(self, sec_id: str) -> list[Sighting]:
         """The security's ticker sightings the ranges are built from: a backfilled observation dropped (Phase 4 rule

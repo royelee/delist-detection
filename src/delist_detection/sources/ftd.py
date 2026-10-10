@@ -547,9 +547,15 @@ class FtdIndex:
         begins by then, the run date when that period runs past it. The line follow's data edge, and stage 9's
         "after the fails data's last day" (OKE 2026). An index with no file index answers its latest row held;
         None when it holds none."""
+        return self.files_end() or (self._dates[-1] if self._dates else None)
+
+    def files_end(self) -> str | None:
+        """`data_end` of an index whose source has a file index; None for one without (built from rows, or over a
+        double whose files carry no period), whose rows are all the coverage it knows: a security sighted at the
+        last of them is at no real edge (`history.Histories`' data-edge rule)."""
         periods = self._file_periods()
         if not periods:
-            return self._dates[-1] if self._dates else None
+            return None
         end = self._window[1] if self._window is not None else date.max
         ends = [min(b, end) for a, b in periods if a <= end]
         return max(ends).isoformat() if ends else None

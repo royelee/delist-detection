@@ -556,3 +556,59 @@ def test_ranges_end_at_the_last_ending_or_stay_open_while_listed():
     assert asked == []
     assert (listed.ticker_rows[-1]["valid_to"], listed.ticker_rows[-1]["exchange"], asked) == (
         None, "NASDAQ", [("BBGX", "XX")])
+
+
+# --- FB-004: a security sighted at the fails data's last day stays open ---
+
+class _Files:
+    """A fails source whose files are SEC's half-month periods (`ftd.period_of` reads their names)."""
+
+    def urls_for(self, lo, hi):
+        return ["cnsfails202609a.zip", "cnsfails202609b.zip"]
+
+    def rows(self, url, *, symbols=None, cusips=None):
+        return iter(())
+
+
+def _edge_history(last_row, *, endings=(), listed=False, files=True):
+    """One security observed in 2020 and failing every third day to `last_row`, the fails data's files
+    ending 2026-09-30 (the 9/16-9/30 period), not listed today unless `listed`."""
+    era = TickerEra("DIS", "2020-01-02", "2020-01-02", [Observation("DIS", "2020-01-02", "WALT DISNEY")])
+    sec = {"BBGDIS": Security("BBGDIS", 1001039, "COMMON", "WALT DISNEY", "Common Stock", True, "cusip", eras=[era])}
+    rows = [FtdRow(d.isoformat(), "254687106", "DIS", "WALT DISNEY CO", 100.0 + i % 3)
+            for i, d in enumerate(date(2026, 8, 1) + timedelta(days=k) for k in range(0, 200, 3))
+            if d.isoformat() <= last_row]
+    ftd = FtdIndex(rows, source=_Files() if files else None, window=(date(2007, 12, 17), date(2026, 9, 25)))
+    sightings = {"BBGDIS": ticker_sightings(sec["BBGDIS"], ftd, ["254687106"])}
+    return Histories(sec, sightings, {"BBGDIS": ["254687106"]}, ftd, endings, listed={"BBGDIS": listed},
+                     exchange_today=lambda security, ticker: None)
+
+
+def test_a_security_with_no_ending_sighted_at_the_fails_datas_last_day_stays_open():
+    """DIS 2026: its issuer CIK lists nothing, so it is 'not listed today'; its fails rows run to the data's last
+    day, so its history is not closed at the last of them."""
+    history = _edge_history("2026-09-25")
+    assert history.end("BBGDIS") == SecurityEnd(None, False, True)
+    assert [(r["ticker"], r["valid_to"]) for r in history.ticker_rows] == [("DIS", None)]
+
+
+def test_a_security_gone_before_the_data_ends_is_closed_at_its_last_sighting():
+    """SBNY, FRCB 2023: last sighted weeks before the data's last day, no ending found: closed where it was last seen
+    (the fixes for a failed bank are its own)."""
+    history = _edge_history("2026-09-02")
+    assert history.end("BBGDIS") == SecurityEnd(None, False, False)
+    assert history.ticker_rows[-1]["valid_to"] == "2026-08-31"          # its last fails row
+
+
+def test_the_edge_is_the_files_not_the_rows_held():
+    """An index built from rows alone knows no coverage beyond them: its last row is no edge."""
+    history = _edge_history("2026-09-25", files=False)
+    assert history.end("BBGDIS") == SecurityEnd(None, False, False)
+
+
+def test_an_ending_the_run_found_wins_over_the_data_edge():
+    """Sighted at the data's last day, but an ending that ended it (a liquidation, here) closes the history there."""
+    ending = _ending("BBGDIS", "2026-09-26", CrspBucket.LIQUIDATION, date(2026, 9, 24))
+    history = _edge_history("2026-09-25", endings=[ending])
+    assert history.end("BBGDIS") == SecurityEnd("2026-09-24", True, False)
+    assert history.ticker_rows[-1]["valid_to"] == "2026-09-24"

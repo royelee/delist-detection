@@ -328,7 +328,8 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   asks brought in too. Coverage is stated: `opened_from` (the window the index was opened over:
   `cusip_handoffs`' margin; `Identity.ftd_lo`), `data_covers(lo, hi)` and `data_end()` (the fails data's own
   coverage, the periods of SEC's file index up to the run date: `guarded_eras`, the line follow's data edge, stage
-  9's OKE rule; an index with no file index answers from its rows held). `close_after()` supplies every last-trade
+  9's OKE rule; an index with no file index answers from its rows held; `files_end()` is the file index's answer alone,
+  None for an index over rows, which the history's data-edge rule reads). `close_after()` supplies every last-trade
   close and acquirer-completion price (`close_of`/`close_known_on`: by the security's
   CUSIP on the day, then its symbol, never from a row of a CUSIP another security of the run holds: `skip`,
   WEN 2008, sub-plan 5d); `by_cusip`/`by_symbol` supply CUSIP
@@ -785,8 +786,13 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   `SUCCESSOR_TICKER_LOOKBACK_DAYS`, 30), and a range carried only to the security's next ticker stops the day before
   another security's first day under it (`_clip_at_takeovers`, over the built ranges: its own last sighting under it
   is earlier, the range is not its security's end; MSG 2015): two conditions, kept apart (the plan's step 5 log says
-  why). A security with an ending that ends it whose ticker a successor took is not listed today (AON 2012).
-  `keeps_trading` is the one continues-after test, shared with `endings/registrants.goes_on`. Pipeline
+  why). A security with an ending that ends it whose ticker a successor took is not listed today (AON 2012). A
+  security with no ending that ends it, not listed today, closes at its last sighting - unless that sighting is a
+  fails row under an own ticker within `DATA_EDGE_TRADING_DAYS` (2) trading days of `FtdIndex.files_end()`, the fails
+  data's last day (FB-004: DIS, whose issuer CIK lists nothing): it is still trading, its history stays open
+  (`Histories._at_data_edge`; a security gone weeks before the edge, SBNY, FRCB, is not; an ending that ends it
+  always wins; an index over rows alone has no edge). `keeps_trading` is the one continues-after test, shared with
+  `endings/registrants.goes_on`. Pipeline
   builds it twice (`pipeline._histories`): stage 9b's first step reads `going_on`, and 10b and 10c2 read the
   history over the final delistings.
 - `identity/added_securities.py` — `AddedAcquirer`/`AddedSuccessor`/`AddedLineSuccessor` (`AddedSecurity`; the last a FIGI
@@ -1756,7 +1762,8 @@ expiration is 0.0 in the table and no correction in the firm month, which leaves
   clips the ranges at that day, before the Form 25's effective date, and is
   never second-guessed nor published. A security
   none of whose delistings ends it, and that isn't listed today either, is
-  left unclipped, ending at its last real sighting. A security whose ending
+  left unclipped, ending at its last real sighting - unless that sighting is a fails row at the fails data's last day
+  (`Histories._at_data_edge`, FB-004): then it is still trading and its history stays open. A security whose ending
   went on as itself and whose old registrant a new one replaced (`endings/registrants.py`) is listed through the
   new registrant, and the contract names it as the issuer in force from its registration.
   A successor's ticker is not its predecessor's (`Histories._successor_starts`, one map shared by the clip check,
