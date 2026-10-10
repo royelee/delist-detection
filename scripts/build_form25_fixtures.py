@@ -3,6 +3,11 @@ search, matching and ownership tests/test_form25_reach_cases.py replays offline 
 (`delistings.DelistingFinder`) over the contexts it builds itself (`delistings.SecurityContexts`).
 
   PYTHONPATH=src python scripts/build_form25_fixtures.py          # -> tests/fixtures/form25_reach/
+  PYTHONPATH=src python scripts/build_form25_fixtures.py --merge  # add only the cases the folder lacks
+
+`--merge` keeps every entry already in the folder (its cases, securities, fails rows, EDGAR answers, MIDAS days and
+halts) and adds what the new cases need; `--repo` may be a folder whose output/ is another run's tables and whose
+cache/ holds the caches.
 
 Offline: it reads the committed output/ (each case's securities, eras and observations, CUSIPs, whether it is
 listed today, its issuer in force), the cached SEC fails-to-deliver zips (cache/sec_data/ftd), the cached EDGAR
@@ -57,7 +62,8 @@ from delist_detection.sources.nasdaq_halts import parse_halts_rss  # noqa: E402
 
 AS_OF = date(2026, 9, 25)                       # the committed run's date
 FTD_WINDOW = (date(2007, 12, 17), AS_OF)        # the committed run's fails window
-COVER_DAYS = 460                                # annual reports kept this close to a Form 25 (their cover page)
+TRADE_AFTER_DAYS = 400                          # a sibling's rows kept this long after a Form 25 of its issuer
+COVER_DAYS = 460                               # annual reports kept this close to a Form 25 (their cover page)
 MIDAS_BEFORE, MIDAS_AFTER = 80, 25              # MIDAS days kept around each Form 25...
 SEEN_BEFORE, SEEN_AFTER = 620, 140              # ...and around the last sighting (the fallback's anchors)
 KEPT_FORMS = re.compile(r"^(?:25|25-NSE|25/A|25-NSE/A|8-K.*|10-K.*|10-Q.*|20-F.*|40-F.*|15-.*|REVOKED|NT .*"
@@ -104,6 +110,17 @@ CASES = {
     "CIK65873-COMMON": "AT 2007: an early group the fallback finds today",
     "BBG000VMWHH5": "DISCK 2022: an exchange's 25-NSE beside an 8-A12B for the new class (no R7)",
     "BBG004P33PN3": "CWENA 2026: an exchange's 25-NSE beside an 8-A12B/A (no R7)",
+    # FB-004 part a: a Form 25 the finder found and left unplaced
+    "BBG000BG3HG3": "GGP 2018: a 25-NSE of 'GGP Inc. Common Stock' beside the old GGP line",
+    "BBG000BKQG80": "IAC 2020: a 25-NSE of 'Common Stock' beside the new IAC and Match Group lines",
+    "BBG000C2DSX9": "CG 2008: Altria's Carolina Group Stock, a tracking stock beside Altria's common",
+    "BBG000MW0PF2": "CITGQ 2009: a 25-NSE of 'Common Stock' beside CIT's other lines",
+    "BBG000QFJ7H3": "OASPQ 2020: a 25-NSE of 'Common Stock' beside Oasis Petroleum's other lines",
+    "BBG01HLMB6H5": "LSXMK 2024: one 25-NSE for the Series A, B and C Liberty SiriusXM Common Stock",
+    "CIK1611983-COMMON": "LBKRV 2014: Liberty Broadband's subscription rights to Series C",
+    "CIK929351-COMMON": "LGF 2016: a 25-NSE of 'Common Shares' beside the Lions Gate A and B lines",
+    "BBG000BF7Y65": "FMCC 2010: a Form 25 with no class text, the July 2010 NYSE delisting",
+    "BBG000BJQ328": "FNMA 2010: a Form 25 with no class text, the July 2010 NYSE delisting",
 }
 
 
@@ -180,19 +197,34 @@ def _line_tickers(eras: dict[str, list], history: list[dict]) -> list[str]:
                    and not OTC_LIKE.search(r["ticker"]) and (r["valid_to"] == "" or r["valid_to"] > last)})
 
 
+def _old(out: Path) -> dict:
+    """What the fixture folder already holds, for `--merge`: its cases.json, fails rows, EDGAR answers, MIDAS days and
+    halts."""
+    from delist_detection.sources.ftd import FtdRow
+    with io.TextIOWrapper(gzip.open(out / "ftd_rows.csv.gz"), encoding="utf-8", newline="") as fh:
+        rows = {FtdRow(r["date"], r["cusip"], r["symbol"], r["description"], float(r["price"]) if r["price"] else None)
+                for r in csv.DictReader(fh)}
+    return {"cases": json.loads((out / "cases.json").read_text()), "rows": rows,
+            "edgar": json.loads(gzip.decompress((out / "edgar.json.gz").read_bytes())),
+            "midas": json.loads((out / "midas.json").read_text()), "halts": json.loads((out / "halts.json").read_text())}
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--out", type=Path, default=ROOT / "tests" / "fixtures" / "form25_reach")
     p.add_argument("--repo", type=Path, default=ROOT)
+    p.add_argument("--merge", action="store_true", help="keep the folder's entries; build only the missing cases")
     args = p.parse_args(argv)
     repo, out = args.repo, args.out
+    old = _old(out) if args.merge else None
+    todo = {sid: note for sid, note in CASES.items() if old is None or sid not in old["cases"]["cases"]}
     secs, eras, cusips, history, inforce = _securities(repo)
     by_cik: dict[str, list[str]] = defaultdict(list)
     for sid, s in secs.items():
         if s["issuer_cik"]:
             by_cik[s["issuer_cik"]].append(sid)
-    needed = set(CASES) | {x for sid in CASES for x in by_cik.get(secs[sid]["issuer_cik"], [])}
-    others = {sid: int(next(iter(inforce[sid]))) for sid in CASES
+    needed = set(todo) | {x for sid in todo for x in by_cik.get(secs[sid]["issuer_cik"], [])}
+    others = {sid: int(next(iter(inforce[sid]))) for sid in todo
               if len(inforce.get(sid, ())) == 1 and next(iter(inforce[sid])) != secs[sid]["issuer_cik"]}
     ciks = sorted({int(secs[sid]["issuer_cik"]) for sid in needed if secs[sid]["issuer_cik"]} | set(others.values())
                   | set(EXTRA_CIKS))
@@ -204,7 +236,7 @@ def main(argv: list[str] | None = None) -> int:
     for sid in needed:
         for c in cusips.get(sid, []):
             got = ftd.by_cusip(c)
-            if sid in CASES:
+            if sid in todo:
                 rows.update(got)
                 continue
             ends, descs = {}, {}
@@ -244,10 +276,19 @@ def main(argv: list[str] | None = None) -> int:
                 if text:
                     texts[f.accession] = text[:12000]
 
+    # a sibling the finder may tell from a case by its trading (FB-004): its rows from just before to
+    # TRADE_AFTER_DAYS after each Form 25 of its issuer, so `trades_after` reads as it does in the run
+    for sid in sorted(needed - set(todo)):
+        days = [d for d in form25_days.get(int(secs[sid]["issuer_cik"]), [])] if secs[sid]["issuer_cik"] else []
+        for c in cusips.get(sid, []):
+            rows.update(r for r in ftd.by_cusip(c)
+                        if any(d - timedelta(days=10) <= _day(r.date) <= d + timedelta(days=TRADE_AFTER_DAYS)
+                               for d in days))
+
     # MIDAS and halts, for every symbol a case's sightings carry
     symbols: dict[str, set[str]] = {}
     windows: dict[str, list[tuple[date, date]]] = {}
-    for sid in CASES:
+    for sid in todo:
         s = secs[sid]
         own = {k.split("@")[0] for k in eras[sid]} | set(_line_tickers(eras[sid], history[sid]))
         syms = own | {r.symbol for c in cusips.get(sid, []) for r in ftd.by_cusip(c)}
@@ -263,7 +304,7 @@ def main(argv: list[str] | None = None) -> int:
     midas: dict[str, dict[str, list[str]]] = {}
     for p in sorted(midas_dir.glob("*_q*.json.gz")):
         summary = json.loads(gzip.decompress(p.read_bytes()))
-        for sid in CASES:
+        for sid in todo:
             for t in symbols[sid]:
                 for d in summary.get(t, []):
                     if any(lo <= _day(d) <= hi for lo, hi in windows[sid]):
@@ -277,6 +318,17 @@ def main(argv: list[str] | None = None) -> int:
                                                      h.halt_time, h.resumption_date.isoformat()
                                                      if h.resumption_date else ""])
 
+    if old is not None:
+        rows |= old["rows"]
+        for q, tickers in old["midas"]["days"].items():
+            for t, days in tickers.items():
+                have = midas.setdefault(q, {}).setdefault(t, [])
+                midas[q][t] = days + [d for d in have if d not in days]
+        for day, hs in old["halts"].items():
+            halts[day] = hs + [h for h in halts.get(day, []) if h not in hs]
+        for k in ("issuers", "raws", "texts"):
+            for key, v in old["edgar"][k].items():
+                {"issuers": issuers, "raws": raws, "texts": texts}[k][key] = v
     out.mkdir(parents=True, exist_ok=True)
     buf = io.StringIO()
     w = csv.writer(buf, lineterminator="\n")
@@ -293,7 +345,10 @@ def main(argv: list[str] | None = None) -> int:
                            "cusips": cusips.get(sid, []), "line_tickers": _line_tickers(eras[sid], history[sid]),
                            "listed": any(r["valid_to"] == "" for r in history.get(sid, [])),
                            "eras": {k: sorted(v, key=lambda o: o[1]) for k, v in sorted(eras[sid].items())}}
-    cases = {sid: {"note": note, "other_cik": others.get(sid)} for sid, note in CASES.items()}
+    cases = {sid: {"note": note, "other_cik": others.get(sid)} for sid, note in todo.items()}
+    if old is not None:
+        securities = {**securities, **old["cases"]["securities"]}
+        cases = {**cases, **old["cases"]["cases"]}
     json_out = {"as_of": AS_OF.isoformat(), "ftd_from": FTD_WINDOW[0].isoformat(), "cases": cases,
                 "securities": securities}
     for name, data in (("cases.json", json_out),

@@ -6,7 +6,7 @@ import pytest
 
 from delist_detection.sources.edgar import EdgarSubmission
 from delist_detection.filings.listing_status import (
-    cover_exchanges, exchanges_around, listed_today, listing_answers, withdrawal_kind,
+    cover_exchanges, exchanges_around, listed_today, listing_answers, unlisted_cover, withdrawal_kind,
 )
 
 COVER_2019 = ("UNITED STATES SECURITIES AND EXCHANGE COMMISSION FORM 10-K ... Securities registered pursuant "
@@ -49,6 +49,26 @@ def test_exchanges_around():
                                      date(2020, 6, 8))
     assert before == {"NYSE", "CHICAGO"} and after == {"NASDAQ"}
     assert exchanges_around(_Edgar({}), 1, [], date(2020, 6, 8)) == (None, None)
+
+
+COVER_NONE = ("FORM 10-K ... Securities registered pursuant to Section 12(b) of the Act: Title of each class Name of "
+              "each exchange on which registered None Securities registered pursuant to Section 12(g): Common Stock")
+
+
+def test_unlisted_cover_is_the_first_annual_report_after_the_day_whose_cover_names_no_exchange():
+    """Freddie Mac, Fannie Mae 2010: the next 10-K's "Name of each exchange on which registered" column holds none.
+    An unread report, one with an exchange, one without the column, and a report outside the window are no cover
+    that names none."""
+    filings = [EdgarSubmission("k10", "10-K", "2010-02-24", "", "", "a.htm"),
+               EdgarSubmission("k11", "10-K", "2011-02-24", "", "", "b.htm"),
+               EdgarSubmission("k12", "10-K", "2012-02-24", "", "", "c.htm")]
+    day = date(2010, 6, 28)
+    assert unlisted_cover(_Edgar({"k11": COVER_NONE}), 1, filings, day) == "2011-02-24"
+    assert unlisted_cover(_Edgar({}), 1, filings, day) is None                          # not in the cache
+    assert unlisted_cover(_Edgar({"k11": COVER_2021}), 1, filings, day) is None         # an exchange
+    assert unlisted_cover(_Edgar({"k11": "FORM 10-K ... no such column ..."}), 1, filings, day) is None
+    assert unlisted_cover(_Edgar({"k12": COVER_NONE}), 1, filings[:1] + filings[2:], day) is None   # past the window
+    assert unlisted_cover(_Edgar({"k11": COVER_NONE}), 1, [], day) is None
 
 
 class _Figi:

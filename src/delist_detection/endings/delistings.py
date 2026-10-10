@@ -28,15 +28,16 @@ from ..vocabulary.exit_kind import effective_date, rests_on_continued_filings
 from ..sources.ftd import FtdIndex
 from ..filings.form25 import (
     ISSUER_FORM25_FORMS, REGIONAL_EXCHANGES, Form25, SecurityRef, class_kind, class_letters, is_involuntary,
-    list_form25, match_securities, other_class, parse_form25, tied_securities,
+    list_form25, match_securities, other_class, parse_form25, tie_candidates, tied_securities,
 )
 from ..identity.history import Ending
 from ..vocabulary.identifiers import class_letter
+from ..vocabulary.names import name_tokens
 from .last_trade import Dating, LastTrade, anchor_day
-from ..filings.listing_status import exchanges_around, issuer_exchange, withdrawal_kind
+from ..filings.listing_status import exchanges_around, issuer_exchange, unlisted_cover, withdrawal_kind
 from .own_shares import OwnShares
 from ..outputs.review_triage import FilingRef, ReviewItem
-from .rewrites import SUCCESSOR_UNKNOWN, Rewrite, Rule, continuation, security_goes_on
+from .rewrites import SUCCESSOR_UNKNOWN, Rewrite, Rule, continuation, reclassify, security_goes_on
 from ..identity.security_master import Security
 from ..outputs.store import DelistingKey
 from ..vocabulary.trading_calendar import add_trading_days
@@ -48,6 +49,8 @@ IGNORE_AFTER_DEFINITIVE_DAYS = 30   # once truly delisted, a later Form 25 past 
 SEEN_AFTER_DAYS = 5                 # sighted this long past the effective date: the security kept trading
 SIBLING_ALIVE_BEFORE_DAYS = 30      # a sibling's own first sighting, minus this: still alive
 SIBLING_ALIVE_AFTER_DAYS = 400      # a sibling's own last sighting, plus this: still alive
+TIE_STOP_NEAR_DAYS = 90             # a tied sibling that stopped owns a Form 25 only if sighted this close before it
+TIE_RELINE_DAYS = 30                # a going-on sibling first sighted this close to a stopper's last may be its new line
 DEREG_FALLBACK_BEFORE_DAYS = 30     # a fallback revocation or Form 15 must be within
 OWN_SWITCH_DAYS = 5                 # trading days between a Form 25 and the security's own CUSIP switch it removed
 DEREG_FALLBACK_AFTER_DAYS = 120     # [last_seen - this, last_seen + this] to date the delisting
@@ -157,6 +160,10 @@ class SecurityContext:
     def refs(self) -> list[SecurityRef]:
         """The finder's view of each sibling (`_ref`), in the siblings' order."""
         return [self.own_ref if r.security.sec_id == self.security.sec_id else _ref(r) for r in self._members]
+
+    def record_of(self, sec_id: str) -> TradingRecord:
+        """The trading record of the sibling `sec_id` (the security's own, or one of its issuer's)."""
+        return next(r for r in self._members if r.security.sec_id == sec_id)
 
     @cached_property
     def own_ref(self) -> SecurityRef:
@@ -368,6 +375,12 @@ class DelistingFinder:
         if other_class(f25, ctx.own_ref, issuer_names):
             return None
         matched, why = match_securities(f25, refs)
+        if sec.sec_id not in matched:
+            owner = self._tie_owner(ctx, sub, f25, refs)
+            if owner is not None:
+                if owner != sec.sec_id:
+                    return None         # the trading record gives this Form 25 to another sibling
+                matched = [*matched, owner]
         if not matched:
             if why == "ambiguous class" and not quiet:
                 scan.had_unmatched = True
@@ -388,6 +401,77 @@ class DelistingFinder:
         if by_elimination and self._names_other_letter(f25, ctx.own_ref):
             return None
         return f25
+
+    def _moved_otc(self, ctx: SecurityContext, filer: int, filings: list[EdgarSubmission],
+                   group: list[tuple[EdgarSubmission, Form25]]) -> str | None:
+        """The annual report's filing date when a group the security traded on past was a move to the OTC market, else
+        None: the security is not listed today, no member is the issuer's Form 25 with its 8-A12B (`_eight_a`, a move
+        to another exchange), and the first annual report after the group names no exchange on its cover (Freddie
+        Mac and Fannie Mae, June 2010: the conservator's directive to withdraw from the NYSE, both common stocks
+        quoted over the counter after it and their 10-K covers listing none). Its own CUSIPs trading on is what made
+        the group `continued`; with an exchange named on the cover, or no cover read, the group stays what
+        `_continued` made it."""
+        if ctx.listed_today is not False:
+            return None
+        if any(self._eight_a(s, f, filings) is not None for s, f in group):
+            return None
+        earliest = min(s.filing_date for s, _ in group)
+        return unlisted_cover(self.edgar, filer, filings, date.fromisoformat(earliest))
+
+    @staticmethod
+    def _to_otc(d: Delisting, cover_date: str) -> None:
+        """Give a delisting `_moved_otc` found CRSP 520 (compliance failure, drop reason `moved_otc`) when the
+        classifier read it as no more than a listing deficiency, a transfer by default or nothing (`unknown`); a
+        merger, a liquidation or a revocation it found evidence for stays."""
+        rec = d.record
+        if rec.bucket in (CrspBucket.UNKNOWN, CrspBucket.EXCHANGE_TRANSFER) or (
+                rec.bucket is CrspBucket.COMPLIANCE_FAILURE and rec.crsp_code in (570, 580)):
+            reclassify(d, 520, Rule.MOVED_OTC, confidence="medium",
+                       reason=f"Moved to the OTC market: the Form 25 {d.form25_sub.filing_date if d.form25_sub else ''} "
+                              f"removed the class from {d.exchange or 'its exchange'}, its own CUSIPs traded on after "
+                              f"it and the 10-K filed {cover_date} lists no exchange")
+
+    @staticmethod
+    def _goes_on(record: TradingRecord, sub: EdgarSubmission, f25: Form25) -> bool:
+        """Whether the sibling's own CUSIPs show it still trading past the Form 25's effective date plus
+        SEEN_AFTER_DAYS (`TradingRecord.trades_after`). After a removal under rule 12d2-2(b) the OTC tail is not the
+        listing going on (as `_continued` reads it), so only a fails row under one of its own tickers counts."""
+        after = (date.fromisoformat(effective_date(sub.filing_date)) + timedelta(days=SEEN_AFTER_DAYS)).isoformat()
+        return record.seen_in_fails_after(after) if is_involuntary(f25) else record.trades_after(after)
+
+    def _tie_owner(self, ctx: SecurityContext, sub: EdgarSubmission, f25: Form25, refs: list[SecurityRef]
+                   ) -> str | None:
+        """The sec_id a Form 25 its text leaves between siblings (`form25.tie_candidates`) belongs to, by their
+        trading: the sibling that stops at it. A tied sibling whose own CUSIPs trade on after the Form 25 is not the
+        one removed; when exactly one of the rest was sighted within TIE_STOP_NEAR_DAYS before the filing (or
+        later) it owns the Form 25 (GGP 2018 against Brookfield Property REIT, Carolina Group 2008 against Loews, CIT
+        2009 against the reorganized CIT, Lions Gate 2016 against its A and B lines). None when no tied sibling
+        trades on (nothing says which stopped), or when several or none of the rest stopped here: the tie stays."""
+        cands = tie_candidates(f25, refs)
+        if len(cands) < 2:
+            return None
+        records = {sid: ctx.record_of(sid) for sid in cands}
+        going = {sid for sid, r in records.items() if self._goes_on(r, sub, f25)}
+        if not going:
+            return None
+        near = (date.fromisoformat(sub.filing_date) - timedelta(days=TIE_STOP_NEAR_DAYS)).isoformat()
+        stopped = [sid for sid in cands - going if records[sid].last_seen >= near]
+        if len(stopped) != 1:
+            return None
+        # A sibling that goes on and was first sighted within a month of the stopper's last sighting may be the same
+        # security under a new line (a redomicile, a holding company, a rename, a reclassification: Linde, Aptiv,
+        # Labcorp, Lions Gate; the binding ruling of 2026-10-04: the old line takes no ending). The tie is then
+        # broken only by a text that names the stopper by a word of its name the new line's lacks ("GGP Inc. Common
+        # Stock", beside Brookfield Property REIT); "Common Stock" or "Ordinary Shares" leave it standing.
+        stop = records[stopped[0]]
+        distinct = name_tokens(stop.security.name)
+        text = name_tokens(f25.class_text)
+        for sid in going:
+            r = records[sid]
+            if r.span and abs((date.fromisoformat(r.span[0]) - date.fromisoformat(stop.last_seen)).days) \
+                    <= TIE_RELINE_DAYS and not text & (distinct - name_tokens(r.security.name)):
+                return None
+        return stopped[0]
 
     @staticmethod
     def _names_other_letter(f25: Form25, own: SecurityRef) -> bool:
@@ -495,7 +579,11 @@ class DelistingFinder:
                     continue        # a security truly gone can't have a later Form 25 of its own
             eff = effective_date(earliest_sub.filing_date)
             continued = any(self._continued(ctx, s, f, filer_filings) for s, f in group)     # R7: any member's move
-            delisting = self._build_delisting(ctx, filer, filer_filings, group, eff, continued)
+            cover = self._moved_otc(ctx, filer, filer_filings, group) if continued else None
+            delisting = self._build_delisting(ctx, filer, filer_filings, group, eff, continued and cover is None)
+            if cover is not None:
+                continued = False
+                self._to_otc(delisting, cover)
             delistings.append(delisting)
             # Only an exchange transfer (or a delisting not classified) that the
             # security traded through continues it. A merger, liquidation,

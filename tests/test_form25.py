@@ -4,7 +4,7 @@ from pathlib import Path
 from delist_detection.sources.edgar import EdgarSubmission
 from delist_detection.filings.form25 import (
     Form25, SecurityRef, class_kind, class_letters, exchange_label, exchanges_named,
-    list_form25, match_securities, notice_last_trade, parse_form25, tied_securities,
+    list_form25, match_securities, notice_last_trade, parse_form25, tie_candidates, tied_securities,
 )
 
 FIX = Path(__file__).parent / "fixtures" / "form25"
@@ -260,25 +260,41 @@ def test_a_form25_naming_several_classes_matches_each_of_them():
     assert match_securities(f, refs) == (["A", "B"], "class A, B")
 
 
-def test_a_sibling_with_no_class_letter_is_left_tied_when_the_form25_names_letters():
-    """Liberty SiriusXM's 2024 Form 25 names Series A, B and C. Series A matches
-    its line by name; the Series C line's FIGI name carries no letter, so it
-    cannot be matched, and it is reported as tied (to review) rather than as a
-    security the Form 25 is not about."""
-    f = Form25("a", "25-NSE", "2024-09-09", "NASDAQ",
-               "Series A Liberty SiriusXM Common Stock (LSXMA), Series B Liberty SiriusXM Common Stock (LSXMB), "
-               "and Series C Liberty SiriusXM Common Stock (LSXMK)", "", "")
+LSXM_2024 = ("Series A Liberty SiriusXM Common Stock (LSXMA), Series B Liberty SiriusXM Common Stock (LSXMB), "
+             "and Series C Liberty SiriusXM Common Stock (LSXMK)")
+
+
+def test_a_sibling_with_no_class_letter_the_form25_names_by_group_is_a_class_no_lettered_sibling_took():
+    """Liberty SiriusXM's 2024 Form 25 names Series A, B and C. Series A matches its line by name; the Series C
+    line's FIGI name carries no letter, but the text's words (SIRIUSXM) name no other sibling, and Series B and C
+    are two classes no lettered sibling carries: the letterless line is one of them, so the Form 25 is about it
+    too (FB-004)."""
+    f = Form25("a", "25-NSE", "2024-09-09", "NASDAQ", LSXM_2024, "", "")
     refs = [SecurityRef("LSXMA", "CLASS A", "common", "LIBERTY MEDIA LIBERTY SIRIUSXM COR"),
             SecurityRef("LSXMK", "COMMON", "common", "LIBERTY MEDIA LIBERTY SIRIUSXM COR"),
             SecurityRef("FWONA", "CLASS A", "common", "LIBERTY MEDIA FORMULA ONE SERIES A")]
-    assert match_securities(f, refs) == (["LSXMA"], "class A by name")
-    assert tied_securities(f, refs) == {"LSXMK"}
+    assert match_securities(f, refs) == (["LSXMA", "LSXMK"], "class A, B by name")
+    assert tied_securities(f, refs) == set()
+
+
+def test_more_letterless_siblings_than_unmatched_classes_stay_tied():
+    """A FIGI line and a placeholder of one stock, both letterless and both named by the words of the one class
+    no lettered sibling took: the text cannot tell them apart."""
+    f = Form25("a", "25-NSE", "2024-09-09", "NASDAQ",
+               "Series A Liberty SiriusXM Common Stock (LSXMA), and Series C Liberty SiriusXM Common Stock (LSXMK)",
+               "", "")
+    refs = [SecurityRef("LSXMA", "CLASS A", "common", "LIBERTY MEDIA LIBERTY SIRIUSXM COR"),
+            SecurityRef("LSXMK", "COMMON", "common", "LIBERTY MEDIA LIBERTY SIRIUSXM COR"),
+            SecurityRef("CIK_K", "COMMON", "common", "LIBERTY MEDIA LIBERTY SIRIUSXM COR"),
+            SecurityRef("FWONA", "CLASS A", "common", "LIBERTY MEDIA FORMULA ONE SERIES A")]
+    assert match_securities(f, refs)[0] == ["LSXMA"]
+    assert tied_securities(f, refs) == {"LSXMK", "CIK_K"}
 
 
 def test_a_class_named_for_another_group_leaves_that_letters_siblings_untied():
     """The Series C of Liberty SiriusXM's Form 25 is not Formula One's or Liberty
-    Live's Series C: neither is named by the class's words, so neither is tied;
-    the letter-less SiriusXM line the words do name is."""
+    Live's Series C: neither is named by the class's words, so neither is tied
+    or matched; the letter-less SiriusXM line the words do name is the class."""
     f = Form25("a", "25-NSE", "2024-09-09", "NASDAQ",
                "Series A Liberty SiriusXM Common Stock (LSXMA), and Series C Liberty SiriusXM Common Stock (LSXMK)",
                "", "")
@@ -286,8 +302,41 @@ def test_a_class_named_for_another_group_leaves_that_letters_siblings_untied():
             SecurityRef("LSXMK", "COMMON", "common", "LIBERTY MEDIA LIBERTY SIRIUSXM COR"),
             SecurityRef("FWONK", "CLASS C", "common", "LIBERTY MEDIA FORMULA ONE SERIES C"),
             SecurityRef("LLYVK", "CLASS C", "common", "LIBERTY MEDIA LIBERTY LIVE CORP SE")]
-    assert match_securities(f, refs)[0] == ["LSXMA"]
-    assert tied_securities(f, refs) == {"LSXMK"}
+    assert match_securities(f, refs)[0] == ["LSXMA", "LSXMK"]
+    assert tied_securities(f, refs) == set()
+
+
+def test_a_subscription_rights_offering_is_a_right_not_the_common_it_sells():
+    """Liberty Broadband's 2014 rights offering: "Subscription Rights to Purchase Shares of Series C Common Stock"
+    was read as the Series C common (FB-004)."""
+    assert class_kind("Subscription Rights to Purchase Shares of Series C Common Stock") == "right"
+    assert class_kind("Rights to Subscribe for Shares of Common Stock") == "right"
+    assert class_kind("Subscription Rights Expiring 7/27/2020") == "right"
+    assert class_kind("Series C Common Stock") == "common"
+
+
+def test_a_text_form25_listing_a_common_and_eighteen_preferred_series_reads_its_common():
+    """Freddie Mac's 2010 Form 25 states 1,500 characters of classes above its caption: the reading stopped at 400
+    and returned no class (FB-004)."""
+    f = _real("0001026214-10-000037", "25", "2010-06-28")
+    assert f.class_text.startswith("Common Stock, without par value (FRE)") and len(f.class_text) > 1000
+    assert f.exchange == "NYSE" and class_kind(f.class_text) == "common"
+    assert match_securities(f, [SecurityRef("FMCC", "COMMON", "common")]) == (["FMCC"], "only security of its kind")
+
+
+def test_a_text_form25_naming_the_nyse_and_the_chicago_exchange_is_the_nyses():
+    """Fannie Mae's 2010 Form 25 for its common stock names "New York Stock Exchange, Chicago Stock Exchange":
+    read as the Chicago's, it was a regional withdrawal and skipped. One that names only the Chicago stays so
+    (Apache 2020's first Form 25 of the day)."""
+    fnma = _real("0000950123-10-061714", "25", "2010-06-28")
+    assert (fnma.exchange, fnma.class_text) == ("NYSE", "Common Stock, without par value")
+    apa_chicago = _real("0001193125-20-163501", "25", "2020-06-08")
+    apa_nyse = _real("0001193125-20-163490", "25", "2020-06-08")
+    assert (apa_chicago.exchange, apa_nyse.exchange) == ("CHICAGO", "NYSE")
+
+
+def _real(accession, form, filing_date):
+    return parse_form25(fc.EDGAR["raws"][accession], accession=accession, form=form, filing_date=filing_date)
 
 
 def test_a_letterless_sibling_no_class_names_is_not_tied():
@@ -457,3 +506,34 @@ def test_a_rights_class_expiring_on_a_day_last_traded_that_day():
     stated = Form25("a", "25-NSE", "2020-07-27", "NASDAQ", "Rights Expiring 7/27/2020", "17 CFR 240.12d2-2(a)(3)",
                     "the security was suspended from trading on July 24, 2020")
     assert notice_last_trade(stated) == (date(2020, 7, 23), "notice_a")
+
+
+# --- FB-004: a Form 25 its text leaves between siblings (the trading record breaks the tie: delistings._tie_owner) ---
+
+def test_a_text_naming_no_class_letter_leaves_every_security_of_its_kind_to_break():
+    """GGP 2018: "GGP Inc. Common Stock" beside Brookfield Property REIT's line; the text names no letter and ties
+    nothing by itself, so every common is a candidate for the trading record."""
+    f = Form25("a", "25-NSE", "2018-08-28", "NYSE", "GGP Inc. Common Stock", "", "")
+    refs = [SecurityRef("GGP", "COMMON", "common", "GGP INC"),
+            SecurityRef("BPR", "COMMON", "common", "BROOKFIELD PROPERTY REIT INC CLASS", "A"),
+            SecurityRef("PREF", "PREFERRED", "preferred", "GGP INC PFD")]
+    assert match_securities(f, refs) == ([], "ambiguous class")
+    assert tie_candidates(f, refs) == {"GGP", "BPR"}
+
+
+def test_a_class_letter_no_sibling_carries_is_no_tie_for_the_trading_record():
+    """DISCK 2022: "Series B Common Stock" names a letter no sibling carries; the trading record cannot say which
+    other sibling it is."""
+    f = Form25("a", "25-NSE", "2022-04-18", "NASDAQ", "Series B Common Stock", "", "")
+    refs = [SecurityRef("DISCA", "SERIES A", "common", "DISCOVERY INC SERIES A"),
+            SecurityRef("DISCK", "SERIES C", "common", "DISCOVERY INC SERIES C")]
+    assert match_securities(f, refs) == ([], "ambiguous class")
+    assert tie_candidates(f, refs) == set()
+
+
+def test_tied_siblings_are_the_candidates_when_the_text_names_letters():
+    f = Form25("a", "25-NSE", "2020-01-02", "NYSE", "Class B Common Stock", "", "")
+    refs = [SecurityRef("A", "CLASS A", "common"), SecurityRef("B1", "CLASS B", "common"),
+            SecurityRef("B2", "CLASS B", "common")]
+    assert tie_candidates(f, refs) == {"B1", "B2"}
+    assert tie_candidates(f, refs[:2]) == set()

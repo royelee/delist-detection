@@ -47,6 +47,25 @@ def exchanges_around(edgar, cik: int, filings: list[EdgarSubmission],
     return (read(before[-1]) if before else None), (read(after[0]) if after else None)
 
 
+_COVER_COLUMN = re.compile(r"name of each exchange\s+on which\s+registered", re.I)
+
+
+def unlisted_cover(edgar, cik: int, filings: list[EdgarSubmission], day: date) -> str | None:
+    """The filing date of the first annual report after `day` (within COVER_WINDOW_DAYS) whose cover page names no
+    exchange: its "Name of each exchange on which registered" column is there to read and holds none of the exchanges
+    (Freddie Mac's and Fannie Mae's 10-Ks after the NYSE left them in 2010). None when there is no such report, its
+    text could not be read (an empty read is no cover), or its cover has no such column in its first 12,000
+    characters (an inline-XBRL report, whose cover this reading does not find)."""
+    window = timedelta(days=COVER_WINDOW_DAYS)
+    after = [f for d, f in _annual(filings) if day < d <= day + window]
+    if not after:
+        return None
+    text = edgar.fetch_filing_text(cik, after[0].accession, after[0].primary_doc) or ""
+    if not _COVER_COLUMN.search(text[:12000]) or cover_exchanges(text):
+        return None
+    return after[0].filing_date
+
+
 def withdrawal_kind(exchange: str, before: set[str] | None, after: set[str] | None) -> str:
     if exchange in REGIONAL_EXCHANGES:
         return "secondary"

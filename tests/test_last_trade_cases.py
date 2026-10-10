@@ -19,8 +19,10 @@ RULES_DONE: set[str] = {"rule1", "rule2", "rule3", "rule4"}
 MOVES = {
     'BBG000BB5HV5': ('rule4', [('2010-12-19', 'merger', '', '', False, None)],
         [('2010-12-19', 'merger', '2010-12-09', 'closing_day', True, 12.76)]),   # ADCT 2010: effected the short-form merger on December 9 (rule 4)
-    'BBG000BC2C10': ('rule4', [('2021-03-14', 'exchange_transfer', '', '', False, None)],
-        [('2021-03-14', 'exchange_transfer', '2021-03-01', 'closing_day', True, 19.52)]),   # APA 2021: implemented the reorganization on March 1 (rule 4)
+    'BBG000BC2C10': ('rule4', [('2020-06-18', 'exchange_transfer', '', '', False, None),
+                               ('2021-03-14', 'exchange_transfer', '', '', False, None)],
+        [('2020-06-18', 'exchange_transfer', '', '', False, None),
+         ('2021-03-14', 'exchange_transfer', '2021-03-01', 'closing_day', True, 19.52)]),   # APA 2021: implemented the reorganization on March 1 (rule 4); the 2020 row is the class's NYSE move to Nasdaq (FB-004: its Form 25 was read as the Chicago's)
     'BBG000B9YSK6': ('rule1', [('2020-11-02', 'liquidation', '', '', True, 0.05)],
         [('2020-11-02', 'liquidation', '2020-10-30', '8k_301', False, 0.15)]),   # CBL 2020: "On November 2 ... had been suspended from trading": the 30th (R8, date first)
     'BBG000BBG3P1': ('rule1', [('2009-01-25', 'compliance_failure', '2008-12-01', 'ex99_notice', True, 0.38)],

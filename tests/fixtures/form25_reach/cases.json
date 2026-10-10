@@ -13,12 +13,28 @@
    "note": "CNB 2009: a revocation after the 25-NSE (R6a)",
    "other_cik": null
   },
+  "BBG000BF7Y65": {
+   "note": "FMCC 2010: a Form 25 with no class text, the July 2010 NYSE delisting",
+   "other_cik": null
+  },
   "BBG000BFTJ91": {
    "note": "CMCSK 2015: a reclassification, no notice text (R6b refuses)",
    "other_cik": null
   },
+  "BBG000BG3HG3": {
+   "note": "GGP 2018: a 25-NSE of 'GGP Inc. Common Stock' beside the old GGP line",
+   "other_cik": null
+  },
   "BBG000BGZ9V9": {
    "note": "ASNA 2020: a bankruptcy 8-K whose first Item 1.03 is a cross-reference (5g sub-rule 2)",
+   "other_cik": null
+  },
+  "BBG000BJQ328": {
+   "note": "FNMA 2010: a Form 25 with no class text, the July 2010 NYSE delisting",
+   "other_cik": null
+  },
+  "BBG000BKQG80": {
+   "note": "IAC 2020: a 25-NSE of 'Common Stock' beside the new IAC and Match Group lines",
    "other_cik": null
   },
   "BBG000BLY636": {
@@ -45,6 +61,10 @@
    "note": "XMSR 2008: a 25-NSE a stale observation continued (C)",
    "other_cik": null
   },
+  "BBG000C2DSX9": {
+   "note": "CG 2008: Altria's Carolina Group Stock, a tracking stock beside Altria's common",
+   "other_cik": null
+  },
   "BBG000CNFQW6": {
    "note": "PRGO: two CIKs in force, so no other CIK (R5) and no 2013 ending",
    "other_cik": null
@@ -69,12 +89,20 @@
    "note": "HHC 2023: a holding company's formation (R6b refuses)",
    "other_cik": null
   },
+  "BBG000MW0PF2": {
+   "note": "CITGQ 2009: a 25-NSE of 'Common Stock' beside CIT's other lines",
+   "other_cik": null
+  },
   "BBG000P4BQM9": {
    "note": "SPB 2018: the old Spectrum Brands' 25-NSE under its own CIK (R5)",
    "other_cik": 1487730
   },
   "BBG000PSSG77": {
    "note": "IAR 2008: a removal under (b) the OTC tail continued (C)",
+   "other_cik": null
+  },
+  "BBG000QFJ7H3": {
+   "note": "OASPQ 2020: a 25-NSE of 'Common Stock' beside Oasis Petroleum's other lines",
    "other_cik": null
   },
   "BBG000VMWHH5": {
@@ -117,12 +145,20 @@
    "note": "LIN: an old redomiciled line the sibling slack keeps from a false ending",
    "other_cik": null
   },
+  "BBG01HLMB6H5": {
+   "note": "LSXMK 2024: one 25-NSE for the Series A, B and C Liberty SiriusXM Common Stock",
+   "other_cik": null
+  },
   "CIK1355096-SERIES-A": {
    "note": "Liberty Series A 2011: a 25-NSE of the Capital and Starz groups (R3)",
    "other_cik": null
   },
   "CIK1469372-CLASS-A": {
    "note": "MSG 2015: the issuer's Form 25 with its 8-A12B ten days earlier (continued)",
+   "other_cik": null
+  },
+  "CIK1611983-COMMON": {
+   "note": "LBKRV 2014: Liberty Broadband's subscription rights to Series C",
    "other_cik": null
   },
   "CIK351346-COMMON": {
@@ -143,6 +179,10 @@
   },
   "CIK898660-COMMON": {
    "note": "STN 2007: a 25-NSE before the first sighting (E)",
+   "other_cik": null
+  },
+  "CIK929351-COMMON": {
+   "note": "LGF 2016: a 25-NSE of 'Common Shares' beside the Lions Gate A and B lines",
    "other_cik": null
   }
  },
@@ -479,6 +519,74 @@
    "security_type": "Common Stock",
    "share_class": "COMMON"
   },
+  "BBG000BF7Y65": {
+   "cusips": [
+    "313400301"
+   ],
+   "eras": {
+    "FRE@2008-01-16": [
+     [
+      "FRE",
+      "2008-01-16",
+      "FEDERAL HOME LN MTG",
+      "313400301",
+      ""
+     ],
+     [
+      "FRE",
+      "2008-05-31",
+      "FEDERAL HOME LN MTG",
+      "313400301",
+      ""
+     ],
+     [
+      "FRE",
+      "2008-07-25",
+      "FEDERAL HOME LN MTG",
+      "313400301",
+      ""
+     ],
+     [
+      "FRE",
+      "2008-11-18",
+      "FEDERAL HOME LN MTG",
+      "313400301",
+      ""
+     ],
+     [
+      "FRE",
+      "2009-01-23",
+      "FEDERAL HOME LN MTG",
+      "313400301",
+      ""
+     ],
+     [
+      "FRE",
+      "2009-03-20",
+      "FEDERAL HOME LN MTG",
+      "313400301",
+      ""
+     ],
+     [
+      "FRE",
+      "2009-06-08",
+      "FEDERAL HOME LN MTG",
+      "313400301",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "issuer_cik": 1026214,
+   "line_tickers": [
+    "FMCC"
+   ],
+   "listed": false,
+   "name": "FEDERAL HOME LN MTG",
+   "observed": true,
+   "security_type": "Common Stock",
+   "share_class": "COMMON"
+  },
   "BBG000BFT2L4": {
    "cusips": [
     "20030N101"
@@ -772,6 +880,119 @@
    "security_type": "Common Stock",
    "share_class": "CLASS A"
   },
+  "BBG000BG3HG3": {
+   "cusips": [
+    "370023103",
+    "36174X101"
+   ],
+   "eras": {
+    "GGP@2012-06-29": [
+     [
+      "GGP",
+      "2012-06-29",
+      "GGP INC",
+      "",
+      ""
+     ],
+     [
+      "GGP",
+      "2012-12-31",
+      "GGP INC",
+      "",
+      ""
+     ],
+     [
+      "GGP",
+      "2013-06-28",
+      "GGP INC",
+      "",
+      ""
+     ],
+     [
+      "GGP",
+      "2013-12-31",
+      "GGP INC",
+      "",
+      ""
+     ],
+     [
+      "GGP",
+      "2014-06-30",
+      "GGP INC",
+      "",
+      ""
+     ]
+    ],
+    "GGP@2014-12-31": [
+     [
+      "GGP",
+      "2014-12-31",
+      "GENERAL GROWTH PROPERTIES REIT INC",
+      "",
+      ""
+     ],
+     [
+      "GGP",
+      "2015-06-30",
+      "GENERAL GROWTH PROPERTIES REIT INC",
+      "",
+      ""
+     ],
+     [
+      "GGP",
+      "2015-12-31",
+      "GENERAL GROWTH PROPERTIES REIT INC",
+      "",
+      ""
+     ],
+     [
+      "GGP",
+      "2016-06-30",
+      "GENERAL GROWTH PROPERTIES REIT INC",
+      "",
+      ""
+     ],
+     [
+      "GGP",
+      "2016-12-30",
+      "GENERAL GROWTH PROPERTIES REIT INC",
+      "",
+      ""
+     ]
+    ],
+    "GGP@2017-06-30": [
+     [
+      "GGP",
+      "2017-06-30",
+      "GGP INC",
+      "",
+      ""
+     ],
+     [
+      "GGP",
+      "2017-12-31",
+      "GGP INC",
+      "",
+      ""
+     ],
+     [
+      "GGP",
+      "2018-06-30",
+      "GGP INC",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "issuer_cik": 1496048,
+   "line_tickers": [],
+   "listed": false,
+   "name": "GGP INC",
+   "observed": true,
+   "security_type": "REIT",
+   "share_class": "COMMON"
+  },
   "BBG000BGZ9V9": {
    "cusips": [
     "04351G101",
@@ -828,6 +1049,74 @@
    "line_tickers": [],
    "listed": false,
    "name": "ASCENA RETAIL GROUP INC.",
+   "observed": true,
+   "security_type": "Common Stock",
+   "share_class": "COMMON"
+  },
+  "BBG000BJQ328": {
+   "cusips": [
+    "313586109"
+   ],
+   "eras": {
+    "FNM@2008-01-16": [
+     [
+      "FNM",
+      "2008-01-16",
+      "FEDERAL NATL MTG ASSOC",
+      "313586109",
+      ""
+     ],
+     [
+      "FNM",
+      "2008-05-31",
+      "FEDERAL NATL MTG ASSOC",
+      "313586109",
+      ""
+     ],
+     [
+      "FNM",
+      "2008-07-25",
+      "FEDERAL NATL MTG ASSOC",
+      "313586109",
+      ""
+     ],
+     [
+      "FNM",
+      "2008-11-18",
+      "FEDERAL NATL MTG ASSOC",
+      "313586109",
+      ""
+     ],
+     [
+      "FNM",
+      "2009-01-23",
+      "FEDERAL NATL MTG ASSOC",
+      "313586109",
+      ""
+     ],
+     [
+      "FNM",
+      "2009-03-20",
+      "FEDERAL NATL MTG ASSOC",
+      "313586109",
+      ""
+     ],
+     [
+      "FNM",
+      "2009-06-08",
+      "FEDERAL NATL MTG ASSOC",
+      "313586109",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "issuer_cik": 310522,
+   "line_tickers": [
+    "FNMA"
+   ],
+   "listed": false,
+   "name": "FEDERAL NATL MTG ASSOC",
    "observed": true,
    "security_type": "Common Stock",
    "share_class": "COMMON"
@@ -1568,6 +1857,315 @@
    "observed": true,
    "security_type": "Common Stock",
    "share_class": "CLASS A"
+  },
+  "BBG000C2DSX9": {
+   "cusips": [
+    "540424207"
+   ],
+   "eras": {
+    "CG@2008-01-16": [
+     [
+      "CG",
+      "2008-01-16",
+      "LOEWS CORP - CAROLINA GR",
+      "",
+      ""
+     ],
+     [
+      "CG",
+      "2008-05-31",
+      "LOEWS CORP - CAROLINA GR",
+      "",
+      ""
+     ],
+     [
+      "CG",
+      "2008-07-25",
+      "LOEWS CORP - CAROLINA GR",
+      "",
+      ""
+     ],
+     [
+      "CG",
+      "2008-11-18",
+      "LOEWS CORP - CAROLINA GR",
+      "",
+      ""
+     ],
+     [
+      "CG",
+      "2009-01-23",
+      "LOEWS CORP - CAROLINA GR",
+      "",
+      ""
+     ],
+     [
+      "CG",
+      "2009-03-20",
+      "LOEWS CORP - CAROLINA GR",
+      "",
+      ""
+     ],
+     [
+      "CG",
+      "2009-06-08",
+      "LOEWS CORP - CAROLINA GR",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "issuer_cik": 60086,
+   "line_tickers": [],
+   "listed": false,
+   "name": "LOEWS CORP - CAROLINA GR",
+   "observed": true,
+   "security_type": "Tracking Stk",
+   "share_class": "COMMON"
+  },
+  "BBG000C45984": {
+   "cusips": [
+    "540424108"
+   ],
+   "eras": {
+    "L@2014-06-30": [
+     [
+      "L",
+      "2014-06-30",
+      "LOEWS CORP",
+      "",
+      ""
+     ],
+     [
+      "L",
+      "2014-12-31",
+      "LOEWS CORP",
+      "",
+      ""
+     ],
+     [
+      "L",
+      "2015-06-30",
+      "LOEWS CORP",
+      "",
+      ""
+     ],
+     [
+      "L",
+      "2015-12-31",
+      "LOEWS CORP",
+      "",
+      ""
+     ],
+     [
+      "L",
+      "2016-06-30",
+      "LOEWS CORP",
+      "",
+      ""
+     ],
+     [
+      "L",
+      "2016-12-30",
+      "LOEWS CORP",
+      "",
+      ""
+     ],
+     [
+      "L",
+      "2017-06-30",
+      "LOEWS CORP",
+      "",
+      ""
+     ],
+     [
+      "L",
+      "2017-12-31",
+      "LOEWS CORP",
+      "",
+      ""
+     ],
+     [
+      "L",
+      "2018-06-30",
+      "LOEWS CORP",
+      "",
+      ""
+     ],
+     [
+      "L",
+      "2018-12-31",
+      "LOEWS CORP",
+      "",
+      ""
+     ],
+     [
+      "L",
+      "2019-06-30",
+      "LOEWS CORP",
+      "",
+      ""
+     ],
+     [
+      "L",
+      "2019-12-31",
+      "LOEWS CORP",
+      "",
+      ""
+     ],
+     [
+      "L",
+      "2020-06-30",
+      "LOEWS CORP",
+      "",
+      ""
+     ],
+     [
+      "L",
+      "2020-12-31",
+      "LOEWS CORP",
+      "",
+      ""
+     ],
+     [
+      "L",
+      "2021-06-30",
+      "LOEWS CORP",
+      "",
+      ""
+     ],
+     [
+      "L",
+      "2021-12-31",
+      "LOEWS CORP",
+      "",
+      ""
+     ],
+     [
+      "L",
+      "2022-06-30",
+      "LOEWS CORP",
+      "",
+      ""
+     ],
+     [
+      "L",
+      "2022-12-31",
+      "LOEWS CORP",
+      "",
+      ""
+     ],
+     [
+      "L",
+      "2023-06-30",
+      "LOEWS CORP",
+      "",
+      ""
+     ],
+     [
+      "L",
+      "2023-12-31",
+      "LOEWS CORP",
+      "",
+      ""
+     ],
+     [
+      "L",
+      "2024-06-30",
+      "LOEWS CORP",
+      "",
+      ""
+     ],
+     [
+      "L",
+      "2024-12-31",
+      "LOEWS CORP",
+      "",
+      ""
+     ],
+     [
+      "L",
+      "2025-06-30",
+      "LOEWS CORP",
+      "",
+      ""
+     ],
+     [
+      "L",
+      "2025-12-31",
+      "LOEWS CORP",
+      "",
+      ""
+     ],
+     [
+      "L",
+      "2026-06-30",
+      "LOEWS CORP",
+      "",
+      ""
+     ]
+    ],
+    "LTR@2008-01-16": [
+     [
+      "LTR",
+      "2008-01-16",
+      "LOEWS CORP",
+      "",
+      ""
+     ],
+     [
+      "LTR",
+      "2008-05-31",
+      "LOEWS CORP",
+      "",
+      ""
+     ],
+     [
+      "LTR",
+      "2008-07-25",
+      "LOEWS CORP",
+      "",
+      ""
+     ],
+     [
+      "LTR",
+      "2008-11-18",
+      "LOEWS CORP",
+      "",
+      ""
+     ],
+     [
+      "LTR",
+      "2009-01-23",
+      "LOEWS CORP",
+      "",
+      ""
+     ],
+     [
+      "LTR",
+      "2009-03-20",
+      "LOEWS CORP",
+      "",
+      ""
+     ],
+     [
+      "LTR",
+      "2009-06-08",
+      "LOEWS CORP",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "issuer_cik": 60086,
+   "line_tickers": [],
+   "listed": true,
+   "name": "LOEWS CORP",
+   "observed": true,
+   "security_type": "Common Stock",
+   "share_class": "COMMON"
   },
   "BBG000CHWP52": {
    "cusips": [
@@ -2595,6 +3193,86 @@
    "security_type": "Common Stock",
    "share_class": "COMMON"
   },
+  "BBG000K1T0M8": {
+   "cusips": [
+    "535919401"
+   ],
+   "eras": {
+    "LGFA@2016-12-30": [
+     [
+      "LGFA",
+      "2016-12-30",
+      "LIONS GATE ENTERTAINMENT VOTING CO",
+      "",
+      ""
+     ],
+     [
+      "LGFA",
+      "2017-06-30",
+      "LIONS GATE ENTERTAINMENT VOTING CO",
+      "",
+      ""
+     ],
+     [
+      "LGFA",
+      "2017-12-31",
+      "LIONS GATE ENTERTAINMENT VOTING CO",
+      "",
+      ""
+     ],
+     [
+      "LGFA",
+      "2018-06-30",
+      "LIONS GATE ENTERTAINMENT VOTING CO",
+      "",
+      ""
+     ],
+     [
+      "LGFA",
+      "2018-12-31",
+      "LIONS GATE ENTERTAINMENT VOTING CO",
+      "",
+      ""
+     ],
+     [
+      "LGFA",
+      "2019-06-30",
+      "LIONS GATE ENTERTAINMENT VOTING CO",
+      "",
+      ""
+     ],
+     [
+      "LGFA",
+      "2019-12-31",
+      "LIONS GATE ENTERTAINMENT VOTING CO",
+      "",
+      ""
+     ],
+     [
+      "LGFA",
+      "2020-06-30",
+      "LIONS GATE ENTERTAINMENT VOTING CO",
+      "",
+      ""
+     ],
+     [
+      "LGFA",
+      "2020-12-31",
+      "LIONS GATE ENTERTAINMENT VOTING CO",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "issuer_cik": 929351,
+   "line_tickers": [],
+   "listed": false,
+   "name": "LIONS GATE ENTERTAINMENT VOTING CO",
+   "observed": true,
+   "security_type": "Common Stock",
+   "share_class": "COMMON"
+  },
   "BBG000MJRJJ2": {
    "cusips": [
     "44267D107"
@@ -2769,6 +3447,72 @@
    "line_tickers": [],
    "listed": false,
    "name": "HOWARD HUGHES CORP",
+   "observed": true,
+   "security_type": "Common Stock",
+   "share_class": "COMMON"
+  },
+  "BBG000MW0PF2": {
+   "cusips": [
+    "125581108"
+   ],
+   "eras": {
+    "CIT@2008-01-16": [
+     [
+      "CIT",
+      "2008-01-16",
+      "CIT GROUP INC",
+      "",
+      ""
+     ],
+     [
+      "CIT",
+      "2008-05-31",
+      "CIT GROUP INC",
+      "",
+      ""
+     ],
+     [
+      "CIT",
+      "2008-07-25",
+      "CIT GROUP INC",
+      "",
+      ""
+     ],
+     [
+      "CIT",
+      "2008-11-18",
+      "CIT GROUP INC",
+      "",
+      ""
+     ],
+     [
+      "CIT",
+      "2009-01-23",
+      "CIT GROUP INC",
+      "",
+      ""
+     ],
+     [
+      "CIT",
+      "2009-03-20",
+      "CIT GROUP INC",
+      "",
+      ""
+     ],
+     [
+      "CIT",
+      "2009-06-08",
+      "CIT GROUP INC",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "issuer_cik": 1171825,
+   "line_tickers": [],
+   "listed": false,
+   "name": "CIT GROUP INC",
    "observed": true,
    "security_type": "Common Stock",
    "share_class": "COMMON"
@@ -3012,6 +3756,159 @@
    "line_tickers": [],
    "listed": false,
    "name": "IDEARC INC",
+   "observed": true,
+   "security_type": "Common Stock",
+   "share_class": "COMMON"
+  },
+  "BBG000Q0BPZ4": {
+   "cusips": [
+    "125581801"
+   ],
+   "eras": {
+    "CIT@2012-06-29": [
+     [
+      "CIT",
+      "2012-06-29",
+      "CIT GROUP INC",
+      "",
+      ""
+     ],
+     [
+      "CIT",
+      "2012-12-31",
+      "CIT GROUP INC",
+      "",
+      ""
+     ],
+     [
+      "CIT",
+      "2013-06-28",
+      "CIT GROUP INC",
+      "",
+      ""
+     ],
+     [
+      "CIT",
+      "2013-12-31",
+      "CIT GROUP INC",
+      "",
+      ""
+     ],
+     [
+      "CIT",
+      "2014-06-30",
+      "CIT GROUP INC",
+      "",
+      ""
+     ],
+     [
+      "CIT",
+      "2014-12-31",
+      "CIT GROUP INC",
+      "",
+      ""
+     ],
+     [
+      "CIT",
+      "2015-06-30",
+      "CIT GROUP INC",
+      "",
+      ""
+     ],
+     [
+      "CIT",
+      "2015-12-31",
+      "CIT GROUP INC",
+      "",
+      ""
+     ],
+     [
+      "CIT",
+      "2016-06-30",
+      "CIT GROUP INC",
+      "",
+      ""
+     ],
+     [
+      "CIT",
+      "2016-12-30",
+      "CIT GROUP INC",
+      "",
+      ""
+     ],
+     [
+      "CIT",
+      "2017-06-30",
+      "CIT GROUP INC",
+      "",
+      ""
+     ],
+     [
+      "CIT",
+      "2017-12-31",
+      "CIT GROUP INC",
+      "",
+      ""
+     ],
+     [
+      "CIT",
+      "2018-06-30",
+      "CIT GROUP INC",
+      "",
+      ""
+     ],
+     [
+      "CIT",
+      "2018-12-31",
+      "CIT GROUP INC",
+      "",
+      ""
+     ],
+     [
+      "CIT",
+      "2019-06-30",
+      "CIT GROUP INC",
+      "",
+      ""
+     ],
+     [
+      "CIT",
+      "2019-12-31",
+      "CIT GROUP INC",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "issuer_cik": 1171825,
+   "line_tickers": [],
+   "listed": false,
+   "name": "CIT GROUP INC",
+   "observed": true,
+   "security_type": "Common Stock",
+   "share_class": "COMMON"
+  },
+  "BBG000QFJ7H3": {
+   "cusips": [
+    "674215108"
+   ],
+   "eras": {
+    "OAS@2014-12-31": [
+     [
+      "OAS",
+      "2014-12-31",
+      "OASIS PETROLEUM INC.",
+      "",
+      "1486159"
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "issuer_cik": 1486159,
+   "line_tickers": [],
+   "listed": false,
+   "name": "OASIS PETROLEUM INC.",
    "observed": true,
    "security_type": "Common Stock",
    "share_class": "COMMON"
@@ -3381,6 +4278,65 @@
    "security_type": "Tracking Stk",
    "share_class": "SERIES A"
   },
+  "BBG003P9ZSL3": {
+   "cusips": [
+    "531229102"
+   ],
+   "eras": {
+    "LMCA@2013-06-28": [
+     [
+      "LMCA",
+      "2013-06-28",
+      "LIBERTY MEDIA CORP SERIES A",
+      "",
+      ""
+     ],
+     [
+      "LMCA",
+      "2013-12-31",
+      "LIBERTY MEDIA CORP SERIES A",
+      "",
+      ""
+     ],
+     [
+      "LMCA",
+      "2014-06-30",
+      "LIBERTY MEDIA CORP SERIES A",
+      "",
+      ""
+     ],
+     [
+      "LMCA",
+      "2014-12-31",
+      "LIBERTY MEDIA CORP SERIES A",
+      "",
+      ""
+     ],
+     [
+      "LMCA",
+      "2015-06-30",
+      "LIBERTY MEDIA CORP SERIES A",
+      "",
+      ""
+     ],
+     [
+      "LMCA",
+      "2015-12-31",
+      "LIBERTY MEDIA CORP SERIES A",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "issuer_cik": 1560385,
+   "line_tickers": [],
+   "listed": false,
+   "name": "LIBERTY MEDIA CORP SERIES A",
+   "observed": true,
+   "security_type": "Common Stock",
+   "share_class": "SERIES A"
+  },
   "BBG004P33PN3": {
    "cusips": [
     "18539C105"
@@ -3635,6 +4591,414 @@
    "security_type": "Common Stock",
    "share_class": "CLASS A"
   },
+  "BBG005SW6TK5": {
+   "cusips": [
+    "531229300"
+   ],
+   "eras": {
+    "LMCK@2014-12-31": [
+     [
+      "LMCK",
+      "2014-12-31",
+      "LIBERTY MEDIA CORP SERIES C",
+      "",
+      ""
+     ],
+     [
+      "LMCK",
+      "2015-06-30",
+      "LIBERTY MEDIA CORP SERIES C",
+      "",
+      ""
+     ],
+     [
+      "LMCK",
+      "2015-12-31",
+      "LIBERTY MEDIA CORP SERIES C",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "issuer_cik": 1560385,
+   "line_tickers": [],
+   "listed": false,
+   "name": "LIBERTY MEDIA CORP SERIES C",
+   "observed": true,
+   "security_type": "Common Stock",
+   "share_class": "SERIES C"
+  },
+  "BBG006GNRZ83": {
+   "cusips": [
+    "530307107"
+   ],
+   "eras": {
+    "LBRDA@2014-12-31": [
+     [
+      "LBRDA",
+      "2014-12-31",
+      "LIBERTY BROADBAND CORP SERIES A",
+      "",
+      ""
+     ],
+     [
+      "LBRDA",
+      "2015-06-30",
+      "LIBERTY BROADBAND CORP SERIES A",
+      "",
+      ""
+     ],
+     [
+      "LBRDA",
+      "2015-12-31",
+      "LIBERTY BROADBAND CORP SERIES A",
+      "",
+      ""
+     ],
+     [
+      "LBRDA",
+      "2016-06-30",
+      "LIBERTY BROADBAND CORP SERIES A",
+      "",
+      ""
+     ],
+     [
+      "LBRDA",
+      "2016-12-30",
+      "LIBERTY BROADBAND CORP SERIES A",
+      "",
+      ""
+     ],
+     [
+      "LBRDA",
+      "2017-06-30",
+      "LIBERTY BROADBAND CORP SERIES A",
+      "",
+      ""
+     ],
+     [
+      "LBRDA",
+      "2017-12-31",
+      "LIBERTY BROADBAND CORP SERIES A",
+      "",
+      ""
+     ],
+     [
+      "LBRDA",
+      "2018-06-30",
+      "LIBERTY BROADBAND CORP SERIES A",
+      "",
+      ""
+     ],
+     [
+      "LBRDA",
+      "2018-12-31",
+      "LIBERTY BROADBAND CORP SERIES A",
+      "",
+      ""
+     ],
+     [
+      "LBRDA",
+      "2019-06-30",
+      "LIBERTY BROADBAND CORP SERIES A",
+      "",
+      ""
+     ],
+     [
+      "LBRDA",
+      "2019-12-31",
+      "LIBERTY BROADBAND CORP SERIES A",
+      "",
+      ""
+     ],
+     [
+      "LBRDA",
+      "2020-06-30",
+      "LIBERTY BROADBAND CORP SERIES A",
+      "",
+      ""
+     ],
+     [
+      "LBRDA",
+      "2020-12-31",
+      "LIBERTY BROADBAND CORP SERIES A",
+      "",
+      ""
+     ],
+     [
+      "LBRDA",
+      "2021-06-30",
+      "LIBERTY BROADBAND CORP SERIES A",
+      "",
+      ""
+     ],
+     [
+      "LBRDA",
+      "2021-12-31",
+      "LIBERTY BROADBAND CORP SERIES A",
+      "",
+      ""
+     ],
+     [
+      "LBRDA",
+      "2022-06-30",
+      "LIBERTY BROADBAND CORP SERIES A",
+      "",
+      ""
+     ],
+     [
+      "LBRDA",
+      "2022-12-31",
+      "LIBERTY BROADBAND CORP SERIES A",
+      "",
+      ""
+     ],
+     [
+      "LBRDA",
+      "2023-06-30",
+      "LIBERTY BROADBAND CORP SERIES A",
+      "",
+      ""
+     ],
+     [
+      "LBRDA",
+      "2023-12-31",
+      "LIBERTY BROADBAND CORP SERIES A",
+      "",
+      ""
+     ],
+     [
+      "LBRDA",
+      "2024-06-30",
+      "LIBERTY BROADBAND CORP SERIES A",
+      "",
+      ""
+     ],
+     [
+      "LBRDA",
+      "2024-12-31",
+      "LIBERTY BROADBAND CORP SERIES A",
+      "",
+      ""
+     ],
+     [
+      "LBRDA",
+      "2025-06-30",
+      "LIBERTY BROADBAND CORP SERIES A",
+      "",
+      ""
+     ],
+     [
+      "LBRDA",
+      "2025-12-31",
+      "LIBERTY BROADBAND CORP SERIES A",
+      "",
+      ""
+     ],
+     [
+      "LBRDA",
+      "2026-06-30",
+      "LIBERTY BROADBAND CORP SERIES A",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "issuer_cik": 1611983,
+   "line_tickers": [],
+   "listed": false,
+   "name": "LIBERTY BROADBAND CORP SERIES A",
+   "observed": true,
+   "security_type": "Common Stock",
+   "share_class": "CLASS A"
+  },
+  "BBG006GNSZW5": {
+   "cusips": [
+    "530307305"
+   ],
+   "eras": {
+    "LBRDK@2014-12-31": [
+     [
+      "LBRDK",
+      "2014-12-31",
+      "LIBERTY BROADBAND CORP SERIES C",
+      "",
+      ""
+     ],
+     [
+      "LBRDK",
+      "2015-06-30",
+      "LIBERTY BROADBAND CORP SERIES C",
+      "",
+      ""
+     ],
+     [
+      "LBRDK",
+      "2015-12-31",
+      "LIBERTY BROADBAND CORP SERIES C",
+      "",
+      ""
+     ],
+     [
+      "LBRDK",
+      "2016-06-30",
+      "LIBERTY BROADBAND CORP SERIES C",
+      "",
+      ""
+     ],
+     [
+      "LBRDK",
+      "2016-12-30",
+      "LIBERTY BROADBAND CORP SERIES C",
+      "",
+      ""
+     ],
+     [
+      "LBRDK",
+      "2017-06-30",
+      "LIBERTY BROADBAND CORP SERIES C",
+      "",
+      ""
+     ],
+     [
+      "LBRDK",
+      "2017-12-31",
+      "LIBERTY BROADBAND CORP SERIES C",
+      "",
+      ""
+     ],
+     [
+      "LBRDK",
+      "2018-06-30",
+      "LIBERTY BROADBAND CORP SERIES C",
+      "",
+      ""
+     ],
+     [
+      "LBRDK",
+      "2018-12-31",
+      "LIBERTY BROADBAND CORP SERIES C",
+      "",
+      ""
+     ],
+     [
+      "LBRDK",
+      "2019-06-30",
+      "LIBERTY BROADBAND CORP SERIES C",
+      "",
+      ""
+     ],
+     [
+      "LBRDK",
+      "2019-12-31",
+      "LIBERTY BROADBAND CORP SERIES C",
+      "",
+      ""
+     ],
+     [
+      "LBRDK",
+      "2020-06-30",
+      "LIBERTY BROADBAND CORP SERIES C",
+      "",
+      ""
+     ],
+     [
+      "LBRDK",
+      "2020-12-31",
+      "LIBERTY BROADBAND CORP SERIES C",
+      "",
+      ""
+     ],
+     [
+      "LBRDK",
+      "2021-06-30",
+      "LIBERTY BROADBAND CORP SERIES C",
+      "",
+      ""
+     ],
+     [
+      "LBRDK",
+      "2021-12-31",
+      "LIBERTY BROADBAND CORP SERIES C",
+      "",
+      ""
+     ],
+     [
+      "LBRDK",
+      "2022-06-30",
+      "LIBERTY BROADBAND CORP SERIES C",
+      "",
+      ""
+     ],
+     [
+      "LBRDK",
+      "2022-12-31",
+      "LIBERTY BROADBAND CORP SERIES C",
+      "",
+      ""
+     ],
+     [
+      "LBRDK",
+      "2023-06-30",
+      "LIBERTY BROADBAND CORP SERIES C",
+      "",
+      ""
+     ],
+     [
+      "LBRDK",
+      "2023-12-31",
+      "LIBERTY BROADBAND CORP SERIES C",
+      "",
+      ""
+     ],
+     [
+      "LBRDK",
+      "2024-06-30",
+      "LIBERTY BROADBAND CORP SERIES C",
+      "",
+      ""
+     ],
+     [
+      "LBRDK",
+      "2024-12-31",
+      "LIBERTY BROADBAND CORP SERIES C",
+      "",
+      ""
+     ],
+     [
+      "LBRDK",
+      "2025-06-30",
+      "LIBERTY BROADBAND CORP SERIES C",
+      "",
+      ""
+     ],
+     [
+      "LBRDK",
+      "2025-12-31",
+      "LIBERTY BROADBAND CORP SERIES C",
+      "",
+      ""
+     ],
+     [
+      "LBRDK",
+      "2026-06-30",
+      "LIBERTY BROADBAND CORP SERIES C",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "issuer_cik": 1611983,
+   "line_tickers": [],
+   "listed": false,
+   "name": "LIBERTY BROADBAND CORP SERIES C",
+   "observed": true,
+   "security_type": "Common Stock",
+   "share_class": "CLASS C"
+  },
   "BBG008LJ4TF3": {
    "cusips": [
     "18539C204"
@@ -3876,6 +5240,546 @@
    "security_type": "Common Stock",
    "share_class": "COMMON"
   },
+  "BBG00BFHD827": {
+   "cusips": [
+    "531229409"
+   ],
+   "eras": {
+    "LSXMA@2016-06-30": [
+     [
+      "LSXMA",
+      "2016-06-30",
+      "LIBERTY SIRIUSXM GROUP A",
+      "",
+      "1560385"
+     ],
+     [
+      "LSXMA",
+      "2016-12-30",
+      "LIBERTY MEDIA LIBERTY SIRIUSXM COR",
+      "",
+      "1560385"
+     ],
+     [
+      "LSXMA",
+      "2017-06-30",
+      "LIBERTY MEDIA LIBERTY SIRIUSXM COR",
+      "",
+      "1560385"
+     ],
+     [
+      "LSXMA",
+      "2017-12-31",
+      "LIBERTY MEDIA LIBERTY SIRIUSXM COR",
+      "",
+      "1560385"
+     ],
+     [
+      "LSXMA",
+      "2018-06-30",
+      "LIBERTY MEDIA LIBERTY SIRIUSXM COR",
+      "",
+      "1560385"
+     ],
+     [
+      "LSXMA",
+      "2018-12-31",
+      "LIBERTY MEDIA LIBERTY SIRIUSXM COR",
+      "",
+      "1560385"
+     ],
+     [
+      "LSXMA",
+      "2019-06-30",
+      "LIBERTY MEDIA LIBERTY SIRIUSXM COR",
+      "",
+      "1560385"
+     ],
+     [
+      "LSXMA",
+      "2019-12-31",
+      "LIBERTY MEDIA LIBERTY SIRIUSXM COR",
+      "",
+      "1560385"
+     ],
+     [
+      "LSXMA",
+      "2020-06-30",
+      "LIBERTY MEDIA LIBERTY SIRIUSXM COR",
+      "",
+      "1560385"
+     ],
+     [
+      "LSXMA",
+      "2020-12-31",
+      "LIBERTY MEDIA LIBERTY SIRIUSXM COR",
+      "",
+      "1560385"
+     ],
+     [
+      "LSXMA",
+      "2021-06-30",
+      "LIBERTY MEDIA LIBERTY SIRIUSXM COR",
+      "",
+      "1560385"
+     ],
+     [
+      "LSXMA",
+      "2021-12-31",
+      "LIBERTY MEDIA LIBERTY SIRIUSXM COR",
+      "",
+      "1560385"
+     ],
+     [
+      "LSXMA",
+      "2022-06-30",
+      "LIBERTY MEDIA LIBERTY SIRIUSXM COR",
+      "",
+      "1560385"
+     ],
+     [
+      "LSXMA",
+      "2022-12-31",
+      "LIBERTY MEDIA LIBERTY SIRIUSXM COR",
+      "",
+      "1560385"
+     ],
+     [
+      "LSXMA",
+      "2023-06-30",
+      "LIBERTY MEDIA LIBERTY SIRIUSXM COR",
+      "",
+      "1560385"
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "issuer_cik": 1560385,
+   "line_tickers": [],
+   "listed": false,
+   "name": "LIBERTY MEDIA LIBERTY SIRIUSXM COR",
+   "observed": true,
+   "security_type": "Tracking Stk",
+   "share_class": "COMMON"
+  },
+  "BBG00BFHD9S7": {
+   "cusips": [
+    "531229607"
+   ],
+   "eras": {
+    "LSXMK@2016-06-30": [
+     [
+      "LSXMK",
+      "2016-06-30",
+      "LIBERTY SIRIUSXM GROUP C",
+      "",
+      "1560385"
+     ],
+     [
+      "LSXMK",
+      "2016-12-30",
+      "LIBERTY MEDIA LIBERTY SIRIUSXM COR",
+      "",
+      "1560385"
+     ],
+     [
+      "LSXMK",
+      "2017-06-30",
+      "LIBERTY MEDIA LIBERTY SIRIUSXM COR",
+      "",
+      "1560385"
+     ],
+     [
+      "LSXMK",
+      "2017-12-31",
+      "LIBERTY MEDIA LIBERTY SIRIUSXM COR",
+      "",
+      "1560385"
+     ],
+     [
+      "LSXMK",
+      "2018-06-30",
+      "LIBERTY MEDIA LIBERTY SIRIUSXM COR",
+      "",
+      "1560385"
+     ],
+     [
+      "LSXMK",
+      "2018-12-31",
+      "LIBERTY MEDIA LIBERTY SIRIUSXM COR",
+      "",
+      "1560385"
+     ],
+     [
+      "LSXMK",
+      "2019-06-30",
+      "LIBERTY MEDIA LIBERTY SIRIUSXM COR",
+      "",
+      "1560385"
+     ],
+     [
+      "LSXMK",
+      "2019-12-31",
+      "LIBERTY MEDIA LIBERTY SIRIUSXM COR",
+      "",
+      "1560385"
+     ],
+     [
+      "LSXMK",
+      "2020-06-30",
+      "LIBERTY MEDIA LIBERTY SIRIUSXM COR",
+      "",
+      "1560385"
+     ],
+     [
+      "LSXMK",
+      "2020-12-31",
+      "LIBERTY MEDIA LIBERTY SIRIUSXM COR",
+      "",
+      "1560385"
+     ],
+     [
+      "LSXMK",
+      "2021-06-30",
+      "LIBERTY MEDIA LIBERTY SIRIUSXM COR",
+      "",
+      "1560385"
+     ],
+     [
+      "LSXMK",
+      "2021-12-31",
+      "LIBERTY MEDIA LIBERTY SIRIUSXM COR",
+      "",
+      "1560385"
+     ],
+     [
+      "LSXMK",
+      "2022-06-30",
+      "LIBERTY MEDIA LIBERTY SIRIUSXM COR",
+      "",
+      "1560385"
+     ],
+     [
+      "LSXMK",
+      "2022-12-31",
+      "LIBERTY MEDIA LIBERTY SIRIUSXM COR",
+      "",
+      "1560385"
+     ],
+     [
+      "LSXMK",
+      "2023-06-30",
+      "LIBERTY MEDIA LIBERTY SIRIUSXM COR",
+      "",
+      "1560385"
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "issuer_cik": 1560385,
+   "line_tickers": [],
+   "listed": false,
+   "name": "LIBERTY MEDIA LIBERTY SIRIUSXM COR",
+   "observed": true,
+   "security_type": "Tracking Stk",
+   "share_class": "COMMON"
+  },
+  "BBG00BFHDCV6": {
+   "cusips": [
+    "531229870"
+   ],
+   "eras": {
+    "FWONA@2017-06-30": [
+     [
+      "FWONA",
+      "2017-06-30",
+      "LIBERTY MEDIA FORMULA ONE CORP SER",
+      "",
+      ""
+     ],
+     [
+      "FWONA",
+      "2017-12-31",
+      "LIBERTY MEDIA FORMULA ONE CORP SER",
+      "",
+      ""
+     ],
+     [
+      "FWONA",
+      "2018-06-30",
+      "LIBERTY MEDIA FORMULA ONE CORP SER",
+      "",
+      ""
+     ],
+     [
+      "FWONA",
+      "2018-12-31",
+      "LIBERTY MEDIA FORMULA ONE CORP SER",
+      "",
+      ""
+     ],
+     [
+      "FWONA",
+      "2019-06-30",
+      "LIBERTY MEDIA FORMULA ONE CORP SER",
+      "",
+      ""
+     ],
+     [
+      "FWONA",
+      "2019-12-31",
+      "LIBERTY MEDIA FORMULA ONE CORP SER",
+      "",
+      ""
+     ],
+     [
+      "FWONA",
+      "2020-06-30",
+      "LIBERTY MEDIA FORMULA ONE CORP SER",
+      "",
+      ""
+     ],
+     [
+      "FWONA",
+      "2020-12-31",
+      "LIBERTY MEDIA FORMULA ONE CORP SER",
+      "",
+      ""
+     ],
+     [
+      "FWONA",
+      "2021-06-30",
+      "LIBERTY MEDIA FORMULA ONE CORP SER",
+      "",
+      ""
+     ],
+     [
+      "FWONA",
+      "2021-12-31",
+      "LIBERTY MEDIA FORMULA ONE CORP SER",
+      "",
+      ""
+     ],
+     [
+      "FWONA",
+      "2022-06-30",
+      "LIBERTY MEDIA FORMULA ONE CORP SER",
+      "",
+      ""
+     ],
+     [
+      "FWONA",
+      "2022-12-31",
+      "LIBERTY MEDIA FORMULA ONE CORP SER",
+      "",
+      ""
+     ],
+     [
+      "FWONA",
+      "2023-06-30",
+      "LIBERTY MEDIA FORMULA ONE CORP SER",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "issuer_cik": 1560385,
+   "line_tickers": [],
+   "listed": false,
+   "name": "LIBERTY MEDIA FORMULA ONE CORP SER",
+   "observed": true,
+   "security_type": "Tracking Stk",
+   "share_class": "CLASS A"
+  },
+  "BBG00BFHDFR4": {
+   "cusips": [
+    "531229854"
+   ],
+   "eras": {
+    "FWONK@2017-06-30": [
+     [
+      "FWONK",
+      "2017-06-30",
+      "LIBERTY MEDIA FORMULA ONE CORP SER",
+      "",
+      ""
+     ],
+     [
+      "FWONK",
+      "2017-12-31",
+      "LIBERTY MEDIA FORMULA ONE CORP SER",
+      "",
+      ""
+     ],
+     [
+      "FWONK",
+      "2018-06-30",
+      "LIBERTY MEDIA FORMULA ONE CORP SER",
+      "",
+      ""
+     ],
+     [
+      "FWONK",
+      "2018-12-31",
+      "LIBERTY MEDIA FORMULA ONE CORP SER",
+      "",
+      ""
+     ],
+     [
+      "FWONK",
+      "2019-06-30",
+      "LIBERTY MEDIA FORMULA ONE CORP SER",
+      "",
+      ""
+     ],
+     [
+      "FWONK",
+      "2019-12-31",
+      "LIBERTY MEDIA FORMULA ONE CORP SER",
+      "",
+      ""
+     ],
+     [
+      "FWONK",
+      "2020-06-30",
+      "LIBERTY MEDIA FORMULA ONE CORP SER",
+      "",
+      ""
+     ],
+     [
+      "FWONK",
+      "2020-12-31",
+      "LIBERTY MEDIA FORMULA ONE CORP SER",
+      "",
+      ""
+     ],
+     [
+      "FWONK",
+      "2021-06-30",
+      "LIBERTY MEDIA FORMULA ONE CORP SER",
+      "",
+      ""
+     ],
+     [
+      "FWONK",
+      "2021-12-31",
+      "LIBERTY MEDIA FORMULA ONE CORP SER",
+      "",
+      ""
+     ],
+     [
+      "FWONK",
+      "2022-06-30",
+      "LIBERTY MEDIA FORMULA ONE CORP SER",
+      "",
+      ""
+     ],
+     [
+      "FWONK",
+      "2022-12-31",
+      "LIBERTY MEDIA FORMULA ONE CORP SER",
+      "",
+      ""
+     ],
+     [
+      "FWONK",
+      "2023-06-30",
+      "LIBERTY MEDIA FORMULA ONE CORP SER",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "issuer_cik": 1560385,
+   "line_tickers": [],
+   "listed": false,
+   "name": "LIBERTY MEDIA FORMULA ONE CORP SER",
+   "observed": true,
+   "security_type": "Tracking Stk",
+   "share_class": "CLASS C"
+  },
+  "BBG00FFJY867": {
+   "cusips": [
+    "535919500"
+   ],
+   "eras": {
+    "LGFB@2016-12-30": [
+     [
+      "LGFB",
+      "2016-12-30",
+      "LIONS GATE ENTERTAINMENT NON VOTIN",
+      "",
+      ""
+     ],
+     [
+      "LGFB",
+      "2017-06-30",
+      "LIONS GATE ENTERTAINMENT NON VOTIN",
+      "",
+      ""
+     ],
+     [
+      "LGFB",
+      "2017-12-31",
+      "LIONS GATE ENTERTAINMENT NON VOTIN",
+      "",
+      ""
+     ],
+     [
+      "LGFB",
+      "2018-06-30",
+      "LIONS GATE ENTERTAINMENT NON VOTIN",
+      "",
+      ""
+     ],
+     [
+      "LGFB",
+      "2018-12-31",
+      "LIONS GATE ENTERTAINMENT NON VOTIN",
+      "",
+      ""
+     ],
+     [
+      "LGFB",
+      "2019-06-30",
+      "LIONS GATE ENTERTAINMENT NON VOTIN",
+      "",
+      ""
+     ],
+     [
+      "LGFB",
+      "2019-12-31",
+      "LIONS GATE ENTERTAINMENT NON VOTIN",
+      "",
+      ""
+     ],
+     [
+      "LGFB",
+      "2020-06-30",
+      "LIONS GATE ENTERTAINMENT NON VOTIN",
+      "",
+      ""
+     ],
+     [
+      "LGFB",
+      "2020-12-31",
+      "LIONS GATE ENTERTAINMENT NON VOTIN",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "issuer_cik": 929351,
+   "line_tickers": [],
+   "listed": false,
+   "name": "LIONS GATE ENTERTAINMENT NON VOTIN",
+   "observed": true,
+   "security_type": "Common Stock",
+   "share_class": "CLASS B"
+  },
   "BBG00GVR8YQ9": {
    "cusips": [
     "G5494J103"
@@ -3940,6 +5844,67 @@
    "name": "LINDE PLC",
    "observed": true,
    "security_type": "Common Stock",
+   "share_class": "COMMON"
+  },
+  "BBG00LT2PDY4": {
+   "cusips": [
+    "11282X103"
+   ],
+   "eras": {
+    "BPR@2018-12-31": [
+     [
+      "BPR",
+      "2018-12-31",
+      "BROOKFIELD PROPERTY REIT INC CLASS",
+      "",
+      ""
+     ],
+     [
+      "BPR",
+      "2019-06-30",
+      "BROOKFIELD PROPERTY REIT INC CLASS",
+      "",
+      ""
+     ],
+     [
+      "BPR",
+      "2019-12-31",
+      "BROOKFIELD PROPERTY REIT INC CLASS",
+      "",
+      ""
+     ]
+    ],
+    "BPYU@2020-06-30": [
+     [
+      "BPYU",
+      "2020-06-30",
+      "BROOKFIELD PROPERTY REIT INC CLASS",
+      "",
+      ""
+     ],
+     [
+      "BPYU",
+      "2020-12-31",
+      "BROOKFIELD PROPERTY REIT INC CLASS",
+      "",
+      ""
+     ],
+     [
+      "BPYU",
+      "2021-06-30",
+      "BROOKFIELD PROPERTY REIT INC CLASS",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "issuer_cik": 1496048,
+   "line_tickers": [],
+   "listed": false,
+   "name": "BROOKFIELD PROPERTY REIT INC CLASS",
+   "observed": true,
+   "security_type": "REIT",
    "share_class": "COMMON"
   },
   "BBG00VT0KNC3": {
@@ -4039,6 +6004,58 @@
    "line_tickers": [],
    "listed": true,
    "name": "MATCH GROUP INC",
+   "observed": true,
+   "security_type": "Common Stock",
+   "share_class": "COMMON"
+  },
+  "BBG00Y7BLHL9": {
+   "cusips": [
+    "674215207"
+   ],
+   "eras": {
+    "CHRD@2024-06-30": [
+     [
+      "CHRD",
+      "2024-06-30",
+      "CHORD ENERGY CORP",
+      "",
+      ""
+     ],
+     [
+      "CHRD",
+      "2024-12-31",
+      "CHORD ENERGY CORP",
+      "",
+      ""
+     ],
+     [
+      "CHRD",
+      "2025-06-30",
+      "CHORD ENERGY CORP",
+      "",
+      ""
+     ],
+     [
+      "CHRD",
+      "2025-12-31",
+      "CHORD ENERGY CORP",
+      "",
+      ""
+     ],
+     [
+      "CHRD",
+      "2026-06-30",
+      "CHORD ENERGY CORP",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "issuer_cik": 1486159,
+   "line_tickers": [],
+   "listed": true,
+   "name": "CHORD ENERGY CORP",
    "observed": true,
    "security_type": "Common Stock",
    "share_class": "COMMON"
@@ -4188,6 +6205,276 @@
    "observed": true,
    "security_type": "Common Stock",
    "share_class": "COMMON"
+  },
+  "BBG01HLM8W28": {
+   "cusips": [
+    "531229813"
+   ],
+   "eras": {
+    "LSXMA@2023-12-31": [
+     [
+      "LSXMA",
+      "2023-12-31",
+      "LIBERTY MEDIA LIBERTY SIRIUSXM COR",
+      "",
+      "1560385"
+     ],
+     [
+      "LSXMA",
+      "2024-06-30",
+      "LIBERTY MEDIA LIBERTY SIRIUSXM COR",
+      "",
+      "1560385"
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "issuer_cik": 1560385,
+   "line_tickers": [],
+   "listed": false,
+   "name": "LIBERTY MEDIA LIBERTY SIRIUSXM COR",
+   "observed": true,
+   "security_type": "Tracking Stk",
+   "share_class": "CLASS A"
+  },
+  "BBG01HLMB6H5": {
+   "cusips": [
+    "531229789"
+   ],
+   "eras": {
+    "LSXMK@2023-12-31": [
+     [
+      "LSXMK",
+      "2023-12-31",
+      "LIBERTY MEDIA LIBERTY SIRIUSXM COR",
+      "",
+      "1560385"
+     ],
+     [
+      "LSXMK",
+      "2024-06-30",
+      "LIBERTY MEDIA LIBERTY SIRIUSXM COR",
+      "",
+      "1560385"
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "issuer_cik": 1560385,
+   "line_tickers": [],
+   "listed": false,
+   "name": "LIBERTY MEDIA LIBERTY SIRIUSXM COR",
+   "observed": true,
+   "security_type": "Tracking Stk",
+   "share_class": "COMMON"
+  },
+  "BBG01HLMB809": {
+   "cusips": [
+    "531229771"
+   ],
+   "eras": {
+    "FWONA@2023-12-31": [
+     [
+      "FWONA",
+      "2023-12-31",
+      "LIBERTY MEDIA FORMULA ONE CORP SER",
+      "",
+      ""
+     ],
+     [
+      "FWONA",
+      "2024-06-30",
+      "LIBERTY MEDIA FORMULA ONE CORP SER",
+      "",
+      ""
+     ],
+     [
+      "FWONA",
+      "2024-12-31",
+      "LIBERTY MEDIA FORMULA ONE CORP SER",
+      "",
+      ""
+     ],
+     [
+      "FWONA",
+      "2025-06-30",
+      "LIBERTY MEDIA FORMULA ONE CORP SER",
+      "",
+      ""
+     ],
+     [
+      "FWONA",
+      "2025-12-31",
+      "LIBERTY MEDIA FORMULA ONE SERIES A",
+      "",
+      ""
+     ],
+     [
+      "FWONA",
+      "2026-06-30",
+      "LIBERTY MEDIA FORMULA ONE SERIES A",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "issuer_cik": 1560385,
+   "line_tickers": [],
+   "listed": true,
+   "name": "LIBERTY MEDIA FORMULA ONE SERIES A",
+   "observed": true,
+   "security_type": "Common Stock",
+   "share_class": "CLASS A"
+  },
+  "BBG01HLMBCG3": {
+   "cusips": [
+    "531229755"
+   ],
+   "eras": {
+    "FWONK@2023-12-31": [
+     [
+      "FWONK",
+      "2023-12-31",
+      "LIBERTY MEDIA FORMULA ONE CORP SER",
+      "",
+      ""
+     ],
+     [
+      "FWONK",
+      "2024-06-30",
+      "LIBERTY MEDIA FORMULA ONE CORP SER",
+      "",
+      ""
+     ],
+     [
+      "FWONK",
+      "2024-12-31",
+      "LIBERTY MEDIA FORMULA ONE CORP SER",
+      "",
+      ""
+     ],
+     [
+      "FWONK",
+      "2025-06-30",
+      "LIBERTY MEDIA FORMULA ONE CORP SER",
+      "",
+      ""
+     ],
+     [
+      "FWONK",
+      "2025-12-31",
+      "LIBERTY MEDIA FORMULA ONE SERIES C",
+      "",
+      ""
+     ],
+     [
+      "FWONK",
+      "2026-06-30",
+      "LIBERTY MEDIA FORMULA ONE SERIES C",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "issuer_cik": 1560385,
+   "line_tickers": [],
+   "listed": true,
+   "name": "LIBERTY MEDIA FORMULA ONE SERIES C",
+   "observed": true,
+   "security_type": "Common Stock",
+   "share_class": "CLASS C"
+  },
+  "BBG01HMFL081": {
+   "cusips": [
+    "531229748"
+   ],
+   "eras": {
+    "LLYVA@2023-12-31": [
+     [
+      "LLYVA",
+      "2023-12-31",
+      "LIBERTY MEDIA LIBERTY LIVE CORP SE",
+      "",
+      "1560385"
+     ],
+     [
+      "LLYVA",
+      "2024-06-30",
+      "LIBERTY MEDIA LIBERTY LIVE CORP SE",
+      "",
+      "1560385"
+     ],
+     [
+      "LLYVA",
+      "2024-12-31",
+      "LIBERTY MEDIA LIBERTY LIVE CORP SE",
+      "",
+      "1560385"
+     ],
+     [
+      "LLYVA",
+      "2025-06-30",
+      "LIBERTY MEDIA LIBERTY LIVE CORP SE",
+      "",
+      "1560385"
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "issuer_cik": 1560385,
+   "line_tickers": [],
+   "listed": false,
+   "name": "LIBERTY MEDIA LIBERTY LIVE CORP SE",
+   "observed": true,
+   "security_type": "Tracking Stk",
+   "share_class": "CLASS A"
+  },
+  "BBG01HMFLTN1": {
+   "cusips": [
+    "531229722"
+   ],
+   "eras": {
+    "LLYVK@2023-12-31": [
+     [
+      "LLYVK",
+      "2023-12-31",
+      "LIBERTY MEDIA LIBERTY LIVE CORP SE",
+      "",
+      "1560385"
+     ],
+     [
+      "LLYVK",
+      "2024-06-30",
+      "LIBERTY MEDIA LIBERTY LIVE CORP SE",
+      "",
+      "1560385"
+     ],
+     [
+      "LLYVK",
+      "2024-12-31",
+      "LIBERTY MEDIA LIBERTY LIVE CORP SE",
+      "",
+      "1560385"
+     ],
+     [
+      "LLYVK",
+      "2025-06-30",
+      "LIBERTY MEDIA LIBERTY LIVE CORP SE",
+      "",
+      "1560385"
+     ]
+    ]
+   },
+   "figi_source": "cusip",
+   "issuer_cik": 1560385,
+   "line_tickers": [],
+   "listed": false,
+   "name": "LIBERTY MEDIA LIBERTY LIVE CORP SE",
+   "observed": true,
+   "security_type": "Tracking Stk",
+   "share_class": "CLASS C"
   },
   "BBG01MMT6PL7": {
    "cusips": [
@@ -4582,6 +6869,28 @@
    "observed": true,
    "security_type": "",
    "share_class": "CLASS A"
+  },
+  "CIK1611983-COMMON": {
+   "cusips": [],
+   "eras": {
+    "LBKRV@2014-12-31": [
+     [
+      "LBKRV",
+      "2014-12-31",
+      "LIBERTY BROADBAND SUBSCRIPTION RIG",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "placeholder",
+   "issuer_cik": 1611983,
+   "line_tickers": [],
+   "listed": false,
+   "name": "LIBERTY BROADBAND SUBSCRIPTION RIG",
+   "observed": true,
+   "security_type": "",
+   "share_class": "COMMON"
   },
   "CIK351346-COMMON": {
    "cusips": [
@@ -4998,6 +7307,65 @@
    "line_tickers": [],
    "listed": false,
    "name": "STATION CASINOS INC",
+   "observed": true,
+   "security_type": "",
+   "share_class": "COMMON"
+  },
+  "CIK929351-COMMON": {
+   "cusips": [
+    "535919203"
+   ],
+   "eras": {
+    "LGF@2013-12-31": [
+     [
+      "LGF",
+      "2013-12-31",
+      "LIONS GATE ENTERTAINMENT CORP",
+      "",
+      ""
+     ],
+     [
+      "LGF",
+      "2014-06-30",
+      "LIONS GATE ENTERTAINMENT CORP",
+      "",
+      ""
+     ],
+     [
+      "LGF",
+      "2014-12-31",
+      "LIONS GATE ENTERTAINMENT CORP",
+      "",
+      ""
+     ],
+     [
+      "LGF",
+      "2015-06-30",
+      "LIONS GATE ENTERTAINMENT CORP",
+      "",
+      ""
+     ],
+     [
+      "LGF",
+      "2015-12-31",
+      "LIONS GATE ENTERTAINMENT CORP",
+      "",
+      ""
+     ],
+     [
+      "LGF",
+      "2016-06-30",
+      "LIONS GATE ENTERTAINMENT CORP",
+      "",
+      ""
+     ]
+    ]
+   },
+   "figi_source": "placeholder",
+   "issuer_cik": 929351,
+   "line_tickers": [],
+   "listed": false,
+   "name": "LIONS GATE ENTERTAINMENT CORP",
    "observed": true,
    "security_type": "",
    "share_class": "COMMON"

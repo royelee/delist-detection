@@ -96,7 +96,7 @@ def security_kind(security_type: str | None, name: str | None = None) -> str:
         return "fund"
     if "warrant" in st or re.search(r"\bWARRANTS?\b", nm):
         return "warrant"
-    if "right" in st or re.search(r"\bRIGHTS\b", nm):
+    if "right" in st or re.search(r"\bRIGHTS\b|\bSUBSCRIPTION RIG$", nm):     # the vendor cuts names at 32 letters
         return "right"
     if st.startswith("unit") or re.search(r"\bUNITS\b", nm):
         return "unit"

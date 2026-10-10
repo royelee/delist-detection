@@ -12,7 +12,7 @@ import delist_detection.endings.delistings as delistings
 from tests import form25_cases as fc
 
 # The rules of sub-plan 5b built so far; each task adds its own (the cases it moves change then, and only then)
-RULES_DONE: set[str] = {"1.03", "R6a", "R6b", "C", "R7", "E", "R3", "L", "R2", "R5"}
+RULES_DONE: set[str] = {"1.03", "R6a", "R6b", "C", "R7", "E", "R3", "L", "R2", "R5", "F4-read", "F4-tie"}
 
 # sec_id -> (the rule that moves it, its outcome before 5b, its outcome after)
 MOVES = {
@@ -102,11 +102,52 @@ MOVES = {
     'BBG00B6WH9G3': ('R5',
         ([], ['ended_without_delisting', 'form25_unmatched']),
         ([('2020-07-11', 'merger', 200, '2020-06-30', False, '0001354457-20-000292', 1575189)], ['form25_unmatched'])),
+    # FB-004 part a: a Form 25 the finder found and left unplaced. 'F4-tie': the sibling that stops at it owns it
+    # (`DelistingFinder._tie_owner`); 'F4-read': the Form 25 is read (a rights offering is a right, a class text of
+    # 1,500 characters and a national exchange beside a regional one are read, a letterless line the text names by its
+    # group is a class no lettered sibling took).
+    # GGP 2018 against Brookfield Property REIT
+    'BBG000BG3HG3': ('F4-tie',
+        ([], ['ended_without_delisting', 'form25_unmatched']),
+        ([('2018-09-07', 'merger', 231, '2018-08-27', False, '0000876661-18-000943', 1496048)], [])),
+    # CG 2008 against Loews
+    'BBG000C2DSX9': ('F4-tie',
+        ([], ['ended_without_delisting', 'form25_unmatched']),
+        ([('2008-06-20', 'merger', 200, '', False, '0001193125-08-131145', 60086)], [])),
+    # CIT 2009 against the reorganized CIT
+    'BBG000MW0PF2': ('F4-tie',
+        ([], ['ended_without_delisting', 'form25_unmatched']),
+        ([('2009-11-28', 'liquidation', 470, '2009-11-02', False, '0000876661-09-000439', 1171825)], [])),
+    # Oasis 2020 against Chord Energy; the 2019 move of its class to Nasdaq stays
+    'BBG000QFJ7H3': ('F4-tie',
+        ([('2020-01-02', 'exchange_transfer', 304, '2019-12-23', True, '0001486159-19-000047', 1486159)], ['ended_without_delisting', 'form25_unmatched']),
+        ([('2020-01-02', 'exchange_transfer', 304, '2019-12-23', True, '0001486159-19-000047', 1486159), ('2020-11-06', 'liquidation', 470, '2020-10-09', False, '0001354457-20-000638', 1486159)], [])),
+    # Liberty SiriusXM 2024: the Series C line the Form 25's Series B and C name by their group
+    'BBG01HLMB6H5': ('F4-read',
+        ([], ['ended_without_delisting', 'form25_unmatched']),
+        ([('2024-09-19', 'merger', 200, '2024-09-09', False, '0001354457-24-000664', 1560385)], [])),
+    # Liberty Broadband 2014: the subscription rights
+    'CIK1611983-COMMON': ('F4-read',
+        ([], ['ended_without_delisting', 'form25_unmatched']),
+        ([('2015-01-19', 'expiration', 600, '2015-01-09', False, '0001354457-15-000004', 1611983)], [])),
+    # FMCC, FNMA 2010: the common read; neither 10-K cover is cached, so the security goes on (`test_..._moved_otc`)
+    'BBG000BF7Y65': ('F4-read',
+        ([], ['ended_without_delisting', 'form25_unclassified']),
+        ([('2010-07-08', 'exchange_transfer', 304, '', True, '0001026214-10-000037', 1026214)], ['ended_without_delisting'])),
+    'BBG000BJQ328': ('F4-read',
+        ([], ['ended_without_delisting', 'form25_unclassified']),
+        ([('2010-07-08', 'exchange_transfer', 304, '', True, '0000950123-10-061714', 310522)], ['ended_without_delisting'])),
+    # APA: the NYSE Form 25 of 2020-06-08 (the issuer's own, naming only the NYSE) was read as the Chicago's; it is the
+    # class's move to Nasdaq
+    'BBG000BC2C10': ('F4-read',
+        ([('2021-03-14', 'exchange_transfer', 304, '2021-03-01', False, '0001354457-21-000304', 6769)], []),   # 5d rule 4: the 8-K's March 1
+        ([('2020-06-18', 'exchange_transfer', 304, '', True, '0001193125-20-163490', 6769), ('2021-03-14', 'exchange_transfer', 304, '2021-03-01', False, '0001354457-21-000304', 6769)], [])),
 }
 
 # the guards: securities whose outcome no rule of 5b changes
 STAY = {
-    'BBG000BC2C10': ([('2021-03-14', 'exchange_transfer', 304, '2021-03-01', False, '0001354457-21-000304', 6769)], []),   # APA (5d rule 4: the 8-K's March 1)
+    'CIK929351-COMMON': ([], ['ended_without_delisting', 'form25_unmatched']),   # LGF 2016: its A and B lines carry its name from the day it stopped (a reclassification, as Linde's): the tie stays
+    'BBG000BKQG80': ([], ['ended_without_delisting', 'form25_unmatched']),   # IAC 2020: the old Match Group (issuer CIK 891103 in the run, in force 1575189) stops with it: two stop, one goes on
     'BBG000BFTJ91': ([('2015-12-21', 'exchange_transfer', 304, '2015-12-11', False, '0001354457-15-000245', 1166691)], []),   # CMCSK 2015
     'BBG000CNFQW6': ([], []),   # PRGO
     'BBG000CS7CB8': ([('2007-11-25', 'merger', 231, '2007-11-13', False, '0000876661-07-000879', 885708)], []),   # JNC 2007
@@ -162,3 +203,30 @@ def test_reading_a_cik_in_force_over_part_of_the_span_would_give_perrigo_a_2013_
     reads no other CIK for it; reading that CIK would give the listed PRGO a 2013 row."""
     assert fc.outcome("BBG000CNFQW6") == ([], [])
     assert [r[0] for r in fc.outcome("BBG000CNFQW6", other_cik=820096)[0]] == ["2013-06-15"]
+
+
+# FB-004: Freddie Mac's and Fannie Mae's July 2010 NYSE delistings. Their next 10-Ks (FMCC 0001026214-11-000005, FNMA
+# 0000950123-11-017972) are in no cache, so the cover below is written to the registrants' layout: "Name of each
+# exchange on which registered: None". The evidence cached is the Form 25 (the issuer's own, 12d2-2(c)), the 8-K item
+# 3.01 of 2010-06-16 (the conservator's directive to withdraw from the NYSE; no other exchange named), no 8-A12B,
+# the securities not listed today, and their own CUSIPs' fails rows under FMCC and FNMA through 2026.
+NO_EXCHANGE_COVER = ("FORM 10-K ... Securities registered pursuant to Section 12(b) of the Act: Title of each class "
+                     "Name of each exchange on which registered None Securities registered pursuant to Section 12(g) "
+                     "of the Act: Common Stock, without par value ...")
+
+
+class _CoverEdgar(fc.FixtureEdgar):
+    def fetch_filing_text(self, cik, accession, primary_doc):
+        if accession in ("0001026214-11-000005", "0000950123-11-017972"):
+            return NO_EXCHANGE_COVER
+        return super().fetch_filing_text(cik, accession, primary_doc)
+
+
+@pytest.mark.parametrize("sec_id,accession,cik", [("BBG000BF7Y65", "0001026214-10-000037", 1026214),
+                                                  ("BBG000BJQ328", "0000950123-10-061714", 310522)],
+                         ids=["FMCC", "FNMA"])
+def test_a_2010_nyse_delisting_followed_by_otc_trading_is_dropped_for_moving_otc(sec_id, accession, cik):
+    assert fc.outcome(sec_id, edgar=_CoverEdgar()) == (
+        [('2010-07-08', 'compliance_failure', 520, '', False, accession, cik)], [])
+    found, _ = fc.find(sec_id, edgar=_CoverEdgar())
+    assert [rw.rule.value for rw in found[0].rewrites] == ["moved_otc"]

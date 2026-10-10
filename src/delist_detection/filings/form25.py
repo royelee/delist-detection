@@ -93,6 +93,31 @@ def _notice(raw: str) -> str:
 
 
 _CLASS_CAPTION = r"\(\s*Description of (?:the )?class(?:es)? of securit(?:y|ies)\s*\)"
+# The longest class text read above the caption: Freddie Mac's 2010 Form 25 lists its common and 18 preferred series
+# in 1,500 characters
+_CLASS_TEXT_MAX = 4000
+
+
+_EXCHANGE_CAPTION = re.compile(r"\(\s*Exact name of (?:the )?Issuer[^)]*\)", re.I)
+_EXCHANGE_LINE_CHARS = 250
+
+
+def _filing_exchange(text: str) -> str:
+    """The exchange a text Form 25 names: the words above its "(Exact name of Issuer ..., and name of Exchange ...)"
+    caption. When they name a national exchange and a regional one (Fannie Mae's 2010 "New York Stock Exchange,
+    Chicago Stock Exchange"), it is the national exchange's, so the regional withdrawal does not hide the removal
+    from the main listing. Without the caption, or with no exchange named above it, `exchange_label`'s reading of the
+    whole text."""
+    m = _EXCHANGE_CAPTION.search(text)
+    if m:
+        line = text[max(0, m.start() - _EXCHANGE_LINE_CHARS): m.start()]
+        named = exchanges_named(line)
+        major = [label for label, _ in _EXCHANGES if label in named and label in MAJOR_EXCHANGES]
+        if major:
+            return major[0]
+        if named:
+            return exchange_label(line)
+    return exchange_label(text)
 
 
 def _text_class(text: str) -> str:
@@ -102,7 +127,7 @@ def _text_class(text: str) -> str:
     after a "Title of class of securities:" label. Never the rule checkboxes
     ("☐ 17 CFR 240.12d2-2(a)(1)") that follow "...strike the class of
     securities from listing and registration:"."""
-    for pat in (rf"offices\s*\)\s*(.{{3,400}}?)\s*{_CLASS_CAPTION}",
+    for pat in (rf"offices\s*\)\s*(.{{3,{_CLASS_TEXT_MAX}}}?)\s*{_CLASS_CAPTION}",
                 rf"\)\s*([^()]{{3,400}}?)\s*{_CLASS_CAPTION}"):
         m = re.search(pat, text, re.I | re.S)
         if m:
@@ -131,7 +156,7 @@ def parse_form25(raw: str, *, accession: str, form: str, filing_date: str) -> Fo
     rule = _tag(raw, "ruleProvision")
     if not exch_name:                         # a text Form 25 without the XML document
         text = strip_html(raw)
-        exch_name = exchange_label(text[:4000])
+        exch_name = _filing_exchange(text[:4000])
         if not class_text:
             class_text = _text_class(text)
     return Form25(accession, form, filing_date, exchange_label(exch_name) or exch_name.upper(),
@@ -167,8 +192,11 @@ def class_kind(class_text: str) -> str:
         return "warrant"
     if re.match(r"^\W*(?:CLASS [A-Z] |SERIES [A-Z] )?(?:COMMON|ORDINARY)", s):
         return "common"
-    if re.search(r"\bPURCHASE RIGHTS?$", before_comma) or re.match(r"^\W*RIGHTS? TO PURCHASE\b", s):
-        # a rights plan names the preferred its rights buy; the class is the rights
+    if (re.search(r"\bPURCHASE RIGHTS?$", before_comma)
+            or re.match(r"^\W*(?:SUBSCRIPTION\s+)?RIGHTS?\s+TO\s+(?:PURCHASE|SUBSCRIBE)\b|^\W*SUBSCRIPTION\s+RIGHTS?\b",
+                        s)):
+        # a rights plan names the preferred its rights buy, a rights offering the common it sells (Liberty
+        # Broadband's 2014 "Subscription Rights to Purchase Shares of Series C Common Stock"); the class is the rights
         return "right"
     if re.search(r"DEPOSITARY SHARES?,? EACH REPRESENTING", s):
         # A depositary-share text is preferred only when it names a preferred
@@ -279,6 +307,7 @@ def _class_matches(f25: Form25, same: Sequence[SecurityRef]
     letters: list[str] = []
     by_name = False
     tied: set[str] = set()
+    claimed: dict[str, list[str]] = {}       # a letterless sibling its unmatched classes' words name -> those letters
     for label, seg in _lettered_segments(f25.class_text):
         letter = class_letter(label)
         hits = [r for r in same if class_letter(r.share_class) == letter]
@@ -297,10 +326,26 @@ def _class_matches(f25: Form25, same: Sequence[SecurityRef]
         letterless = [r for r in _named_by(seg, same) if class_letter(r.share_class) is None]
         if letterless:
             tied |= {r.sec_id for r in letterless}
+            for r in letterless:
+                claimed.setdefault(r.sec_id, []).append(letter)
         elif len(picked) > 1:
             tied |= {r.sec_id for r in picked}
         elif named and not _named_by(seg, same):
             tied |= {r.sec_id for r in hits}      # the class's words name no sibling at all
+    # Each letterless sibling the text's words name is one of the classes no lettered sibling took: as many of them
+    # as there are such classes are all removed by the Form 25 (Liberty SiriusXM's Series C line, FIGI-named with no
+    # letter, beside the Series B and C the text names). A sibling whose own fails descriptions name another letter
+    # (`SecurityRef.letter_hint`: LVNTA's duplicate placeholder, "SER A") is a copy of that class, not one of these,
+    # and more of them than classes (a FIGI line and a placeholder of one stock) cannot be told apart: both stay tied.
+    hints = {r.sec_id: r.letter_hint for r in same}
+    claimed = {s: ls for s, ls in claimed.items() if s not in matched and hints.get(s) in (None, *ls)}
+    unmatched = {x for ls in claimed.values() for x in ls}
+    if claimed and len(claimed) <= len(unmatched):
+        for sec_id, ls in claimed.items():
+            matched.append(sec_id)
+            letters.append(ls[0])
+        by_name = True
+        tied -= set(claimed)
     return matched, letters, by_name, tied - set(matched)
 
 
@@ -330,6 +375,22 @@ def tied_securities(f25: Form25, refs: Sequence[SecurityRef]) -> set[str]:
     if len(same) < 2:
         return set()
     return _class_matches(f25, same)[3]
+
+
+def tie_candidates(f25: Form25, refs: Sequence[SecurityRef]) -> set[str]:
+    """The securities of `refs` a Form 25 may be about and its text cannot tell apart, for the trading record to break:
+    the siblings it leaves tied (`tied_securities`), else, when its text names no class letter at all ("GGP Inc.
+    Common Stock", "Common Shares": every security of its kind could be the class), all of them. Empty when the text
+    names a letter and ties nothing (a class no sibling carries is not any sibling's), or when one security stands
+    alone."""
+    tied = tied_securities(f25, refs)
+    if tied:
+        return tied
+    if class_letters(f25.class_text):
+        return set()
+    kind = class_kind(f25.class_text)
+    same = [r.sec_id for r in refs if r.kind == kind or (kind == "other" and r.kind == "common")]
+    return set(same) if len(same) > 1 else set()
 
 
 def class_letters(class_text: str) -> set[str]:

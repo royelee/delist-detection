@@ -54,6 +54,10 @@ def test_small_helpers():
     assert security_kind("Preferred") == "preferred"
     assert security_kind("", "GOLDMAN SACHS 6.125% NOTES DUE 2060") == "debt"
     assert security_kind(None) == "common"
+    # the vendor cuts a name at 32 letters: Liberty Broadband's rights offering (FB-004)
+    assert security_kind("", "LIBERTY BROADBAND SUBSCRIPTION RIG") == "right"
+    assert security_kind("Right", "T MOBILE US SUBSCRIPTION RIGHTS IN") == "right"
+    assert security_kind("", "RIGGS NATIONAL CORP") == "common"
 
 
 def test_us_candidates_warrants_not_dropped():

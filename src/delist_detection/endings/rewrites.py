@@ -60,6 +60,7 @@ class Rule(str, Enum):
     HANDOFF = "handoff"                    # stage 9b: a continuation the ticker's handoff shows
     PLAN_BANKRUPTCY = "plan_bankruptcy"    # stage 9e: an `unknown` Form 25 whose notice says new shares, a bankruptcy
     PRICE_DEFICIENCY = "price_deficiency"  # stage 9e: a compliance failure the exchange removed for its price (552)
+    MOVED_OTC = "moved_otc"                # stage 5: a Form 25 the class traded on past, its 10-K cover naming no exchange (520)
 
 
 @dataclass(frozen=True)
@@ -144,7 +145,8 @@ def mark_going_on(delistings: Iterable[Delisting], going_on: Collection[Delistin
 
 def reclassify(d: Delisting, code: int, rule: Rule, *, reason: str, confidence: str | None = None) -> Rewrite:
     """Give `d` another kind that is no continuation (stage 9e): CRSP `code` and its bucket together, `reason`, and
-    `confidence` when given. A delisting that leaves `unknown` drops the no-evidence default."""
+    `confidence` when given. A delisting that leaves `unknown` drops the no-evidence default, and one that leaves an
+    exchange transfer the open successor it awaited."""
     bucket = bucket_for_code(code)
     if bucket is CrspBucket.EXCHANGE_TRANSFER:
         raise ValueError(f"{d.key}: CRSP {code} is a continuation's code: use `continuation`")
@@ -152,6 +154,8 @@ def reclassify(d: Delisting, code: int, rule: Rule, *, reason: str, confidence: 
     rec = d.record
     if rec.bucket is CrspBucket.UNKNOWN and bucket is not CrspBucket.UNKNOWN:
         rec.evidence["flags"] = [f for f in d.flags if f != NO_EVIDENCE_DEFAULT]
+    if rec.bucket is CrspBucket.EXCHANGE_TRANSFER:
+        rec.evidence["flags"] = [f for f in d.flags if f not in (NO_EVIDENCE_DEFAULT, SUCCESSOR_UNKNOWN)]
     rec.crsp_code, rec.bucket, rec.reason = code, bucket, reason
     if confidence is not None:
         rec.confidence = confidence

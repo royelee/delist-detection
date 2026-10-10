@@ -391,8 +391,19 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   a reclassification, a holding company or a reorganization); `SecurityRef.letter_hint` (R2: a letterless class
   takes the one letter its own CUSIP's fails descriptions name, `identifiers.descriptions_class_letter`, only for a
   letter no sibling's share class carries). The class text's letters stay read here (`class_letters`: CLASS X, else SERIES X, per segment, past attached rights and a common's preferred clauses; the
-  segments feed the match and R3 too), each turned into a letter by `identifiers.class_letter`.
-- `filings/listing_status.py` — `exchanges_around()`/`withdrawal_kind()`: reads the
+  segments feed the match and R3 too), each turned into a letter by `identifiers.class_letter`. FB-004: a text
+  Form 25 reads up to 4,000 characters of class above its caption (Freddie Mac's 2010 list of a common and 18
+  preferred series) and its exchange from the words above the "(Exact name of Issuer ...)" caption, a national
+  exchange beside a regional one being the national's (`_filing_exchange`: Fannie Mae's "New York Stock Exchange,
+  Chicago Stock Exchange"); `class_kind` reads "Subscription Rights to Purchase Shares of ..." as a right; the
+  letterless siblings the text's group words name are as many of the classes no lettered sibling took as there are
+  such classes (`_class_matches`: Liberty SiriusXM's Series C line beside the Series B and C the text names), unless
+  their own fails descriptions name another letter (`letter_hint`) or there are more of them than classes;
+  `tie_candidates` (the siblings a Form 25 its text cannot place may be about: the tied ones, else, for a text with
+  no class letter, every security of its kind) is the finder's to break by trading.
+- `filings/listing_status.py` — `unlisted_cover()` (FB-004: the first annual report after a day whose "Name of each
+  exchange on which registered" column is there to read and holds no exchange; an unread report is none),
+  `exchanges_around()`/`withdrawal_kind()`: reads the
   10-K cover page's exchange list before and after a Form 25 to tell a real
   delisting from the withdrawal of a secondary/regional listing while the
   main one continues; `listed_today()` for the completeness check;
@@ -945,7 +956,7 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
 - `endings/rewrites.py` — architecture step 3: the one owner of a delisting's kind and successor after its record is built.
   Every rewrite names its rule (`Rule`, a closed set: `ISSUER_MOVE` the finder's R7, `CONTINUED` the finder's continued
   transfer, `TRADES_ON` the clip check at stage 9b's start, `R1` stage 8b, `LINE_FOLLOW` and `SUCCESSOR_LINK` stage 9,
-  `HANDOFF` stage 9b, `PLAN_BANKRUPTCY` and `PRICE_DEFICIENCY` stage 9e) and is recorded as typed provenance on the
+  `HANDOFF` stage 9b, `PLAN_BANKRUPTCY` and `PRICE_DEFICIENCY` stage 9e, `MOVED_OTC` the finder's CRSP 520) and is recorded as typed provenance on the
   delisting (`Delisting.rewrites`, one `Rewrite` each: the rule, the successor, how it was found, the evidence,
   a handoff's `successor_from`). `continuation(d, successor, rule, ...)` sets CRSP `crsp_codes.CONTINUATION_CODE` (304)
   and the bucket together and drops what a continuation cannot carry, one rule for all: `no_evidence_default`,
@@ -979,7 +990,19 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   delisting (QGEN 2026). Sub-plan 5b: `_continued` (listed today; the issuer's own Form 25 (25 or 25/A, not
   25-NSE, not under (b)) with its 8-A12B (not 8-A12B/A, a rights-plan amendment) within `EIGHT_A_DAYS`, 10, R7; judged on every member
   of a group, the earliest member anchoring the row; or, not under (b),
-  `TradingRecord.trades_after`; an observation alone never continues a security), `_judge` (one Form 25 against
+  `TradingRecord.trades_after`; an observation alone never continues a security), `_moved_otc`/`_to_otc` (FB-004,
+  `Rule.MOVED_OTC`: a group the security traded on past, when it is not listed today, no member is the issuer's Form
+  25 with its 8-A12B and the first annual report after it names no exchange on its cover, `listing_status.
+  unlisted_cover`, is no transfer: the classifier's listing deficiency, default transfer or `unknown` becomes CRSP
+  520, compliance failure, drop reason `moved_otc`, medium; a cover not in the cache, unread or naming an exchange
+  changes nothing; Freddie Mac and Fannie Mae, June 2010), `_tie_owner` (FB-004: a Form 25 the text leaves between
+  siblings, `form25.tie_candidates`, belongs to the one that stops at it: the candidates whose own CUSIPs trade on
+  past it (`_goes_on`: `trades_after`, after a removal under (b) only a row under an own ticker) are not removed, and
+  when at least one trades on and exactly one of the rest was sighted within `TIE_STOP_NEAR_DAYS` (90) before the
+  filing it owns it; a going-on sibling first sighted within `TIE_RELINE_DAYS` (30) of its last sighting may be its
+  new line, so then only a text naming a word of the stopper's name the new line's lacks ("GGP Inc. Common Stock")
+  breaks the tie: Linde, Aptiv, Labcorp, whose binding ruling is no ending for the old line; no trading evidence, or
+  several stoppers, leave the tie to review), `_judge` (one Form 25 against
   the security; `_judge_early`, the one judgement of a Form 25 before the floor, for the early window and the
   fallback's early group alike: the security and the siblings alive then, the letter rule when it stands alone),
   early reach (Form 25s up to `EARLY_REACH_DAYS`, 365, before the floor, for a security gone today,
@@ -1633,7 +1656,9 @@ expiration is 0.0 in the table and no correction in the firm month, which leaves
   observation alone (a stale snapshot), never on the OTC tail after a removal under (b). A security gone today also
   takes the latest Form 25 group of the year before its first sighting, and a Form 25 after its alive window when
   its own CUSIP traded within 30 days before it; the one other CIK in force over its whole span is searched too. A
-  Form 25 solely about rights or about another tracking group is not the common's. The matched Form 25's notice
+  Form 25 solely about rights or about another tracking group is not the common's. A Form 25 its text leaves between
+  siblings is the one that stops trading at it, never one picked by order (FB-004); a group the security traded on
+  past with no exchange on the next annual cover is a move to the OTC market (520), not a transfer. The matched Form 25's notice
   outranks the continued-filings default when it says the class was acquired, and a later SEC revocation never
   decides its row.
 - **An ending's kind and successor change after the finder built it only by a rewrite (`endings/rewrites.py`).** Each names

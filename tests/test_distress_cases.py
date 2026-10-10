@@ -114,9 +114,10 @@ def test_a_plan_that_states_no_ratio_keeps_the_otc_print():
 
 
 def test_a_holding_companys_substitution_notice_is_no_plan_exchange():
-    """APA 2021: an exchange transfer under 12d2-2(a)(3), no bankruptcy: stage 9e reads nothing for it."""
+    """APA 2021: an exchange transfer under 12d2-2(a)(3), no bankruptcy: stage 9e reads nothing for it (nor for the
+    2020 move of the class from the NYSE to Nasdaq before it)."""
     found, terms, _ = after("BBG000BC2C10")
-    assert [d.record.bucket.value for d in found] == ["exchange_transfer"]
+    assert [d.record.bucket.value for d in found] == ["exchange_transfer", "exchange_transfer"]
     assert terms == {}
 
 

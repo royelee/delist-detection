@@ -171,6 +171,15 @@ def test_a_price_deficiency_changes_the_code_and_keeps_the_rest():
     assert d.record.reason.endswith("a price deficiency)") and d.flags == ["distress_at_normal_price"]
 
 
+def test_a_transfer_the_security_traded_through_to_the_otc_loses_its_open_successor():
+    """Freddie Mac 2010 (FB-004): the finder's transfer by default awaits a successor (`successor_unknown`); a move
+    to the OTC market has none, so the flag goes with the no-evidence default."""
+    d = _row(bucket=CrspBucket.EXCHANGE_TRANSFER, code=304, flags=(NO_EVIDENCE_DEFAULT, SUCCESSOR_UNKNOWN, "x"))
+    reclassify(d, 520, Rule.MOVED_OTC, reason="Moved to the OTC market", confidence="medium")
+    assert (d.record.crsp_code, d.record.bucket) == (520, CrspBucket.COMPLIANCE_FAILURE)
+    assert d.flags == ["x"] and not awaits_successor(d)
+
+
 def test_a_reclassification_never_makes_a_continuation():
     with pytest.raises(ValueError, match="continuation"):
         reclassify(_row(bucket=CrspBucket.UNKNOWN, code=None), 304, Rule.PLAN_BANKRUPTCY, reason="r")
