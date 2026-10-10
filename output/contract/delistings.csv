@@ -77,7 +77,7 @@ BBG000BDWKC5,2018-11-02,merger,,false,,,0.001350,,44.500000,confirmed,cash,44.50
 BBG000BDXVW8,2010-09-30,merger,,false,,,0.057277,,25.935000,confirmed,stock,,,1.050000,BBG000M65M61,UAL,2010-10-01,,llm,passed,"1.05 × price(UAL, 2010-10-01) / last_close − 1"
 BBG000BF1PD2,2020-02-03,merger,,false,,,0.001005,,62.012250,confirmed,stock,,,0.675000,BBG000B9Z0J8,PLD,2020-02-04,,llm,passed,"0.675 × price(PLD, 2020-02-04) / last_close − 1"
 BBG000BF1R66,2016-01-14,merger,,false,,BBG000BR14K5,0.019589,,129.752938,confirmed,cash_plus_stock,62.930000,USD,0.601900,BBG000BR14K5,CB,2016-01-15,,llm,passed,"(62.93 + 0.6019 × price(CB, 2016-01-15)) / last_close − 1"
-BBG000BF2JS9,2009-08-17,dropped,bankruptcy,false,,,,-0.300000,,uncertain,otc_print,,,,BBG000BF2JS9,,2009-08-18,,,,"otc_print(?, from 2009-08-18) / last_close − 1"
+BBG000BF2JS9,,dropped,bankruptcy,false,,,,-0.300000,,uncertain,otc_print,,,,BBG000BF2JS9,,,,,,"otc_print(?, from ?) / last_close − 1"
 BBG000BF2KK4,2012-11-30,merger,,false,,,-0.007177,,78.780508,confirmed,cash_plus_stock,39.150000,USD,0.774790,BBG000BJ3PD2,ETN,2012-12-03,,llm,passed,"(39.15 + 0.77479 × price(ETN, 2012-12-03)) / last_close − 1"
 BBG000BF4VY3,2008-11-10,dropped,bankruptcy,false,,,,-0.300000,,confirmed,otc_print,,,,BBG000BF4VY3,CCTYQ,2008-11-11,,,,"otc_print(CCTYQ, from 2008-11-11) / last_close − 1"
 BBG000BF5RY1,2016-05-27,merger,,false,,,,0.000000,51.550000,uncertain,cash_plus_stock,14.500000,USD,1.000000,,,2016-05-31,,llm,failed,"(14.50 + 1 × price(?, 2016-05-31)) / last_close − 1"
@@ -188,7 +188,7 @@ BBG000BLRGM1,2019-03-29,merger,,false,,,0.000204,,49.000000,confirmed,cash,49.00
 BBG000BLRYM2,2016-09-19,merger,,false,,,0.002799,,107.500000,confirmed,cash,107.500000,USD,,,,,,8K_2.01,passed,107.50 / last_close − 1
 BBG000BLVBC8,2024-01-04,merger,,false,,,0.001318,,7.600000,confirmed,cash,7.600000,USD,,,,,,8K_2.01,passed,7.60 / last_close − 1
 BBG000BLXT19,2020-10-22,merger,,false,,,0.001593,,88.000000,confirmed,cash,88.000000,USD,,,,,,8K_2.01,passed,88.00 / last_close − 1
-BBG000BLY636,2008-07-14,dropped,bankruptcy,false,,,,-0.300000,,uncertain,otc_print,,,,BBG000BLY636,IDMC,2008-07-15,,,,"otc_print(IDMC, from 2008-07-15) / last_close − 1"
+BBG000BLY636,,dropped,bankruptcy,false,,,,-0.300000,,uncertain,otc_print,,,,BBG000BLY636,IDMC,,,,,"otc_print(IDMC, from ?) / last_close − 1"
 BBG000BM1RP0,,merger,,false,,,0.007760,,36.108040,uncertain,stock,,,1.084000,BBG000PM7GJ0,ANR,,,llm,passed,"1.084 × price(ANR, ?) / last_close − 1"
 BBG000BM6KM3,2015-01-13,merger,,false,,,0.000500,,40.000000,confirmed,cash,40.000000,USD,,,,,,8K_1.01,passed,40.00 / last_close − 1
 BBG000BM7L13,2025-07-24,merger,,false,,,-0.000384,,26.000000,confirmed,cash,26.000000,USD,,,,,,8K_2.01,passed,26.00 / last_close − 1

@@ -1,13 +1,13 @@
 {
   "as_of": "2026-09-25",
   "cache_answers": {
-    "archives": 8900,
+    "archives": 8727,
     "company_tickers": 10,
-    "full_text_search": 625,
-    "submissions": 34366,
-    "submissions_page": 8990
+    "full_text_search": 626,
+    "submissions": 22322,
+    "submissions_page": 7279
   },
-  "code_version": "1244bc7-dirty",
+  "code_version": "3101070-dirty",
   "continuation_filings": [
     {
       "delist_date": "2021-03-14",
@@ -50,10 +50,10 @@
   "resolution_degraded": 0,
   "review": {
     "accepted": 0,
-    "check": 535,
+    "check": 532,
     "cleared": 0,
-    "fix": 56,
-    "info_hidden": 602,
+    "fix": 55,
+    "info_hidden": 606,
     "unmatched_decisions": 0
   },
   "schema_version": 3,
