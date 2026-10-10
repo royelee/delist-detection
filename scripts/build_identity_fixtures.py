@@ -75,6 +75,11 @@ class RecordingEdgar:
                              "tickers": sub.get("tickers") or [], "exchanges": sub.get("exchanges") or [],
                              "filings": [[first.accession, first.form, first.filing_date, first.report_date,
                                           first.items, first.primary_doc]] if first else []}
+        # The 8-Ks that report a bankruptcy (Item 1.03) too: stage 3 reads them for a line's break
+        # (`identity._went_bankrupt`).
+        self.issuers[key]["filings"] += [[f.accession, f.form, f.filing_date, f.report_date, f.items, f.primary_doc]
+                                         for f in sorted(filings, key=lambda f: f.filing_date)
+                                         if f.form.startswith("8-K") and "1.03" in f.item_set and f is not first]
 
     def submissions(self, cik, fresh_after=None):
         self._record(cik)
@@ -157,6 +162,9 @@ def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--out", type=Path, default=ROOT / "tests" / "fixtures" / "identity")
     p.add_argument("--repo", type=Path, default=ROOT)
+    p.add_argument("--merge", action="store_true",
+                   help="keep every committed key and row of --out and add only what is new (a rebuild reads the "
+                        "current output/, whose issuers and EDGAR answers may have moved since the cases were built)")
     args = p.parse_args(argv)
     repo, out = args.repo, args.out
 
@@ -188,18 +196,33 @@ def main(argv: list[str] | None = None) -> int:
         edgar.submissions(cik)
 
     out.mkdir(parents=True, exist_ok=True)
-    write_atomic(out / "cases.json", json.dumps({
-        "as_of": ic.AS_OF.isoformat(), "observations": observations, "eras_issuer": keep,
-        "index": sorted([n, c] for n, c in index.entries)}, indent=1, sort_keys=True))
+    new_rows = {(r.date, r.cusip, r.symbol, r.description, "" if r.price is None else repr(r.price))
+                for r in ftd.rows_seen}
+    cases_doc = {"as_of": ic.AS_OF.isoformat(), "observations": observations, "eras_issuer": keep,
+                 "index": sorted([n, c] for n, c in index.entries)}
+    issuers_doc, maps, filters = edgar.issuers, figi.maps, figi.filters
+    if args.merge:
+        old = json.loads((out / "cases.json").read_text())
+        cases_doc = {"as_of": old["as_of"],
+                     "observations": old["observations"] + [o for o in observations if o not in old["observations"]],
+                     "eras_issuer": {**keep, **old["eras_issuer"]},
+                     "index": sorted({tuple(x) for x in old["index"]} | {tuple(x) for x in cases_doc["index"]})}
+        cases_doc["index"] = [list(x) for x in cases_doc["index"]]
+        issuers_doc = {**issuers_doc, **json.loads(gzip.decompress((out / "edgar.json.gz").read_bytes()))}
+        old_figi = json.loads((out / "figi.json").read_text())
+        maps, filters = {**maps, **old_figi["map"]}, {**filters, **old_figi["filter"]}
+        with gzip.open(out / "ftd_rows.csv.gz", "rt", newline="") as fh:
+            new_rows |= {(r["date"], r["cusip"], r["symbol"], r["description"], r["price"])
+                         for r in csv.DictReader(fh)}
+    write_atomic(out / "cases.json", json.dumps(cases_doc, indent=1, sort_keys=True))
     buf = io.StringIO()
     w = csv.writer(buf, lineterminator="\n")
     w.writerow(["date", "cusip", "symbol", "description", "price"])
-    for r in sorted(ftd.rows_seen, key=lambda r: (r.date, r.cusip, r.symbol)):
-        w.writerow([r.date, r.cusip, r.symbol, r.description, "" if r.price is None else repr(r.price)])
+    for row in sorted(new_rows):
+        w.writerow(row)
     write_atomic(out / "ftd_rows.csv.gz", gzip.compress(buf.getvalue().encode(), mtime=0))
-    write_atomic(out / "edgar.json.gz", gzip.compress(json.dumps(edgar.issuers, sort_keys=True).encode(), mtime=0))
-    write_atomic(out / "figi.json", json.dumps({"map": figi.maps, "filter": figi.filters}, indent=1,
-                                               sort_keys=True))
+    write_atomic(out / "edgar.json.gz", gzip.compress(json.dumps(issuers_doc, sort_keys=True).encode(), mtime=0))
+    write_atomic(out / "figi.json", json.dumps({"map": maps, "filter": filters}, indent=1, sort_keys=True))
     print(f"{len(observations)} observations, {len(keep)} eras, {len(ftd.rows_seen)} fails rows, "
           f"{len(edgar.issuers)} CIKs, {len(figi.maps)} OpenFIGI jobs, {len(figi.filters)} filters, "
           f"{len(index.entries)} index entries -> {out}")

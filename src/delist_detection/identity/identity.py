@@ -42,7 +42,7 @@ from datetime import date, timedelta
 from typing import Any, Protocol
 
 from ..outputs.degraded import degraded_item
-from ..filings.evidence import names_between, parse_day, renamed_near
+from ..filings.evidence import bankruptcy_8ks, names_between, parse_day, renamed_near
 from ..sources.ftd import FTD_START, FtdIndex, FtdRow
 from ..vocabulary.identifiers import is_placeholder, name_class_letter, placeholder_id, share_class_from_name
 from .issuer_record import IssuerRecord
@@ -287,6 +287,31 @@ def _trading_span(ftd: FtdIndex, cusip: str) -> tuple[str, str] | None:
     return (rows[0].date, rows[-1].date) if rows else None
 
 
+BANKRUPTCY_LEAD_DAYS = 60      # ... and that 8-K is no more than this many days before the old CUSIP's last fails row
+BANKRUPTCY_DAYS = 365          # an issuer's Item 1.03 8-K this many days before a CUSIP's first row: it began in a bankruptcy
+
+
+def _went_bankrupt(ftd: FtdIndex, record: IssuerRecord) -> Callable[[str, str, int | None], bool]:
+    """Whether the line went through a bankruptcy between the CUSIP `old` and the CUSIP `new` (decision 9: its equity
+    after emerging is a new security, whatever its CUSIP or ticker). Two readings the identity stage can make before
+    stage 5 finds the ending: the old CUSIP traded under a bankruptcy symbol (the ticker with a Q, CHKAQ beside CHK,
+    in its fails rows), or the old issuer (`cik`) filed an 8-K Item 1.03 within `BANKRUPTCY_DAYS` before the new
+    CUSIP's first fails row and no earlier than `BANKRUPTCY_LEAD_DAYS` before the old CUSIP's last (an old line that
+    traded on for months after a subsidiary's or a past filing is no bankruptcy: Duke Energy 2011). A failed read of
+    the issuer's filings is no bankruptcy."""
+    def between(old: str, new: str, cik: int | None) -> bool:
+        symbols = {r.symbol for r in ftd.by_cusip(old)}
+        if any(s.endswith("Q") and len(s) >= 4 and (s[:-1] in symbols or s[:-2] in symbols) for s in symbols):
+            return True
+        rows, olds = ftd.by_cusip(new), ftd.by_cusip(old)
+        first = parse_day(rows[0].date) if rows else None
+        last = parse_day(olds[-1].date) if olds else None
+        return bool(cik is not None and first is not None and last is not None
+                    and any((parse_day(f.report_date) or parse_day(f.filing_date)) >= last - timedelta(days=BANKRUPTCY_LEAD_DAYS)
+                            for f in bankruptcy_8ks(record.filings(cik), first, before=BANKRUPTCY_DAYS, after=0)))
+    return between
+
+
 def _resolve_securities(eras: list[TickerEra], era_by_key: dict[str, TickerEra], ftd: FtdIndex,
                         handoffs: Sequence[Handoff], found: _Issuers, clients: Sources, log: Callable[[str], None]
                         ) -> tuple[dict[str, EraResolution], dict[str, Security], list[ReviewItem]]:
@@ -308,7 +333,8 @@ def _resolve_securities(eras: list[TickerEra], era_by_key: dict[str, TickerEra],
     resolutions, detached = resolve_with_identity_guard(
         FigiResolver(clients.figi, log=log, cusip_span=lambda c: _trading_span(ftd, c),
                      foreign=foreign_ticker_eras(eras, ftd, issuers)),
-        eras, issuers=issuers, cusips=cusips, handoffs=handoffs, unconfirmed=guarded_eras(eras, ftd))
+        eras, issuers=issuers, cusips=cusips, handoffs=handoffs, unconfirmed=guarded_eras(eras, ftd),
+        bankrupt_between=_went_bankrupt(ftd, clients.issuers))
     securities = build_securities(resolutions, era_by_key, issuers)
     review: list[ReviewItem] = detached_review(detached, era_by_key, resolutions, issuers)
     for key, res in resolutions.items():

@@ -34,6 +34,13 @@ MOVES = {
     # FB-003: Washington Post's name states no class, its CUSIP's descriptions say "CLB" and its issuer's only other
     # era is Graham Holdings' class B: the old CUSIP ended as GHC's began, so one line, not an `exchange` ending
     "WPO@2008-01-16": ("BBG000C3FGH9", "handoff"),
+    # FB-003: the old Ingersoll-Rand eras reached today's composite by the ticker IR (their CUSIPs are on no US venue);
+    # the new Ingersoll Rand's CUSIP confirms it, and the old plc's CUSIP ended as both it and Trane's began
+    "IR@2008-01-16": ("BBG000BM6788", "handoff"),     # ... which then goes where Ingersoll-Rand plc went: Trane
+    "IR@2014-12-31": ("BBG000BM6788", "handoff"),
+    # FB-001: old Chesapeake (CUSIP 165167107) reached post-bankruptcy Chesapeake's composite by ticker; one issuer, and
+    # the issuer's Item 1.03 8-K of 2020-06 falls in the year before the new CUSIP's first row
+    "CHK@2008-01-16": ("CIK895126-COMMON", "placeholder"),
 }
 
 # era key -> (sec_id, FIGI source), unchanged by 5h
@@ -55,6 +62,11 @@ STAY = {
     "VIA-B@2008-01-16": ("BBG000DHSPT0", "cusip"),
     "UA@2016-12-30": ("BBG009DTD8H2", "cusip"),
     "PAG@2014-06-30": ("BBG000H6K1B0", "cusip"),
+    "IR@2020-06-30": ("BBG002R1CW27", "cusip"),                # the new Ingersoll Rand keeps the composite
+    "GDI@2017-06-30": ("BBG00RRH0RM9", "cusip"),
+    "TT@2020-06-30": ("BBG000BM6788", "cusip"),
+    "CHK@2022-06-30": ("BBG00Z6DX554", "cusip"),               # post-bankruptcy Chesapeake, later Expand Energy
+    "EXE@2024-12-31": ("BBG00Z6DX554", "cusip"),
 }
 
 
@@ -157,3 +169,17 @@ def test_a_ticker_range_carried_to_the_next_ticker_stops_before_another_security
     ended = Ending(DelistingKey("OLD", "2015-10-15"), LastTrade(date(2015, 10, 5), "midas", ()),
                    CrspBucket.LIQUIDATION, None, "NASDAQ")
     assert msg_ranges(["2015-10-02"], [ended], listed=False) == [("NEW", ""), ("OLD", "2015-10-05")]
+
+
+def test_the_old_ingersoll_rand_eras_join_trane_and_the_composite_holds_one_issuer(stage3):
+    secs = stage3.securities
+    assert [e.key for e in secs["BBG002R1CW27"].eras] == ["IR@2020-06-30"] and secs["BBG002R1CW27"].issuer_cik == 1699150
+    trane = secs["BBG000BM6788"]
+    assert [e.key for e in trane.eras] == ["IR@2008-01-16", "TT@2012-06-29", "IR@2014-12-31", "TT@2020-06-30"]
+    assert trane.issuer_cik == 1466258
+
+
+def test_old_chesapeake_is_its_own_security_and_the_composite_starts_at_the_new_cusip(stage3):
+    secs = stage3.securities
+    assert [e.key for e in secs["CIK895126-COMMON"].eras] == ["CHK@2008-01-16"]
+    assert [e.key for e in secs["BBG00Z6DX554"].eras] == ["CHK@2022-06-30", "EXE@2024-12-31"]

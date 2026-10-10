@@ -15,7 +15,7 @@ from __future__ import annotations
 from bisect import bisect_left, bisect_right
 from collections import defaultdict
 from collections.abc import Callable, Collection, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date, timedelta
 
 from .figi_resolution import FigiCandidate, accept, filter_query, security_kind, us_candidates
@@ -25,7 +25,7 @@ from ..vocabulary.identifiers import (
     name_class_letter, placeholder_id, share_class_from_name,
 )
 from ..vocabulary.trading_calendar import add_trading_days
-from ..vocabulary.names import description_matches
+from ..vocabulary.names import description_matches, names_agree
 from .observations import TickerEra, eras_by_key, observation_conflicts
 from ..outputs.review_triage import ReviewItem
 
@@ -622,27 +622,179 @@ def crossing_weak_eras(resolutions: Mapping[str, EraResolution],
     return out
 
 
+def _carrying_links(eras: Mapping[str, TickerEra], handoffs: Sequence[Handoff], issuers: Mapping[str, Issuer],
+                    bankrupt_between: Callable[[str, str, int | None], bool] | None) -> set[tuple[str, str]]:
+    """The pairs of eras (sorted keys) whose CUSIPs are one line that goes on: they hold one CUSIP, or a CUSIP
+    switch (`cusip_handoffs`) leads from one's CUSIP to the other's and nowhere else, and no other era's CUSIP ended
+    into the new one (a company that split in two, or took over another's ticker: IR's old CUSIP ended as both the new
+    Ingersoll Rand's and Trane's began, and as Gardner Denver's did), and the line did not go through a bankruptcy
+    between them (`bankrupt_between(old CUSIP, new CUSIP, the old era's issuer)`: decision 9, post-bankruptcy equity
+    is a new security)."""
+    cusips = {k: set(e.ftd_cusips) | set(e.cusips) for k, e in eras.items()}
+    out: set[tuple[str, str]] = set()
+    keys = sorted(eras)
+    for i, a in enumerate(keys):
+        for b in keys[i + 1:]:
+            if cusips[a] & cusips[b]:
+                out.add((a, b))
+    onward: dict[tuple[str, str], set[str]] = defaultdict(set)       # (era, old CUSIP) -> the eras it switched to
+    inward: dict[tuple[str, str], set[str]] = defaultdict(set)       # (era, new CUSIP) -> the eras that switched in
+
+    def plausible(h: Handoff) -> bool:
+        """A switch of the run's whole universe is found by dates alone, so unrelated eras pair up: only an era of
+        the same ticker or issuer, or of an agreeing name, is a successor or a predecessor to count."""
+        a, b = eras.get(h.era_key), eras.get(h.to_key)
+        if a is None or b is None:
+            return True                 # not among the eras given: nothing to judge it by
+        cik_a, cik_b = cik_of(issuers, a.key), cik_of(issuers, b.key)
+        return (a.ticker == b.ticker or (cik_a is not None and cik_a == cik_b)
+                or any(names_agree(x, y) for x in a.names for y in b.names))
+
+    for h in handoffs:
+        if h.kind == "cusip_handoff" and plausible(h):
+            onward[(h.era_key, h.cusip)].add(h.to_key)
+            inward[(h.to_key, h.new_cusip)].add(h.era_key)
+    for h in handoffs:
+        if (h.kind != "cusip_handoff" or h.era_key not in eras or h.to_key not in eras
+                or len(onward[(h.era_key, h.cusip)]) != 1 or len(inward[(h.to_key, h.new_cusip)]) != 1):
+            continue
+        if bankrupt_between is not None and bankrupt_between(h.cusip, h.new_cusip, cik_of(issuers, h.era_key)):
+            continue
+        out.add(tuple(sorted((h.era_key, h.to_key))))
+    return out
+
+
+def weak_eras_on_another_line(resolutions: Mapping[str, EraResolution], eras: Mapping[str, TickerEra],
+                              issuers: Mapping[str, Issuer], handoffs: Sequence[Handoff] = (),
+                              bankrupt_between: Callable[[str, str, int | None], bool] | None = None
+                              ) -> list[list[str]]:
+    """The weak eras (`WEAK_SOURCES`) that joined a composite another era confirms (`CONFIRMED_SOURCES`) by a different
+    CUSIP, though no CUSIP carries the line from one to the other (`_carrying_links`) and the evidence says they are
+    two lines: each list is the eras of one line (the weak eras that the carrying links chain, none of them
+    confirmed), earliest first. The ticker and name tiers answer with whoever holds the ticker or name today, so on
+    their own they cannot say the two are one line. They are two lines when
+
+    - the line went through a bankruptcy before the confirmed era (`bankrupt_between`; decision 9: post-bankruptcy
+      equity is a new security, whatever the issuer; Chesapeake's old CUSIP and the one from 2021, FB-001, General
+      Motors' two), or
+    - the line's issuer goes on as another security of the run: an era of the same issuer CIK and share class,
+      confirmed on another composite, begins after the line's last era and no later than the confirmed era does
+      (the old Ingersoll-Rand plc's eras and Trane, FB-003; Alcoa and Arconic; Hertz and Herc; not General Growth's
+      renamed Brookfield Property REIT, which begins after the confirmed era that is its own line's).
+
+    Nothing else splits: a redomicile or a conversion whose CUSIP link the fails rows did not show (Liberty Global's
+    2013 plc, Capitol Federal's 2010 conversion) is one line under the weak pick, as before. An era with no CUSIP
+    of its own has nothing to set against the confirmed one and stays."""
+    carrying = _carrying_links(eras, handoffs, issuers, bankrupt_between)
+    by_composite: dict[str, list[str]] = defaultdict(list)
+    for key, res in resolutions.items():
+        if res.sec_id is not None and res.source in CONFIRMED_SOURCES + WEAK_SOURCES:
+            by_composite[res.sec_id].append(key)
+
+    def group(key: str) -> tuple[int | None, str]:
+        return cik_of(issuers, key), share_class_from_name(eras[key].name)
+
+    out: list[list[str]] = []
+    for composite, members in by_composite.items():
+        confirmed = [k for k in members if resolutions[k].source in CONFIRMED_SOURCES]
+        if not confirmed:
+            continue
+        chain = {k: k for k in members}
+
+        def root(k: str) -> str:
+            while chain[k] != k:
+                k = chain[k]
+            return k
+
+        for a, b in carrying:
+            if a in chain and b in chain:
+                chain[root(b)] = root(a)
+        lines: dict[str, list[str]] = defaultdict(list)
+        for k in members:
+            lines[root(k)].append(k)
+        anchored = {root(k) for k in confirmed}
+        for r, line in lines.items():
+            if r in anchored:
+                continue
+            own = set().union(*(set(eras[k].ftd_cusips) | set(eras[k].cusips) for k in line))
+            if not own:
+                continue
+            line.sort(key=lambda k: (eras[k].first, k))
+            last = line[-1]
+            cik = cik_of(issuers, last)
+            continues = cik is not None and any(
+                t not in members and resolutions[t].source in CONFIRMED_SOURCES and resolutions[t].sec_id != composite
+                and group(t) == group(last) and eras[last].last < eras[t].first
+                and any(eras[t].first <= eras[o].first for o in confirmed if eras[last].last < eras[o].first)
+                for t in resolutions)
+            broke = bankrupt_between is not None and any(
+                bankrupt_between(x, y, cik) for o in confirmed
+                for x, y in ((c1, c2) for c1 in sorted(own) for c2 in sorted(
+                    set(eras[o].ftd_cusips) | set(eras[o].cusips)))
+                if eras[line[0]].first < eras[o].first)
+            if continues or broke:
+                out.append(line)
+    return out
+
+
 def resolve_with_identity_guard(resolver: "FigiResolver", eras: Sequence[TickerEra], *,
                                 issuers: Mapping[str, Issuer], cusips: Mapping[str, list[str]],
-                                handoffs: Sequence[Handoff] = (), unconfirmed: Collection[str] = ()
+                                handoffs: Sequence[Handoff] = (), unconfirmed: Collection[str] = (),
+                                bankrupt_between: Callable[[str, str, int | None], bool] | None = None
                                 ) -> tuple[dict[str, EraResolution], dict[str, tuple[str, str]]]:
     """`resolver.resolve_many`, then each weak era whose merge would cross another
-    security's confirmed range (`crossing_weak_eras`) taken back out and resolved
-    again without its ticker or name pick, until none crosses. Returns the
-    resolutions and the detached eras (era key -> (the sec_id its weak pick gave,
-    the sec_id it crossed)), for the review."""
+    security's confirmed range (`crossing_weak_eras`), or that took a composite another
+    line's CUSIP confirms (`weak_eras_on_another_line`), taken back out and resolved
+    again without its ticker or name pick, until none does. The eras of one such line
+    that end on placeholders go where the line's last era did: the placeholder of its
+    issuer, or the line it joined (a redomicile changes the issuer, not the security). Returns the resolutions and the detached
+    eras (era key -> (the sec_id its weak pick gave, the sec_id it crossed, the same one
+    for a line off its composite)), for the review."""
     by_key = eras_by_key(eras)
     detached: dict[str, tuple[str, str]] = {}
+    lines: list[list[str]] = []
+    carrying = _carrying_links(by_key, handoffs, issuers, bankrupt_between)
+    res: dict[str, EraResolution] = {}
     while True:
-        res = resolver.resolve_many(eras, issuers=issuers, cusips=cusips, handoffs=handoffs,
+        # A switch that carries no line on (a split, a takeover of the ticker, a bankruptcy's emergence) does not
+        # take a detached era back onto the composite it left through the handoff join either: a link to an era
+        # confirmed on that composite is dropped for it, one to another line (Hertz to Herc) is kept.
+        usable = [h for h in handoffs if h.kind != "cusip_handoff"
+                  or tuple(sorted((h.era_key, h.to_key))) in carrying
+                  or not ((h.era_key in detached and h.to_key in res and res[h.to_key].sec_id == detached[h.era_key][0])
+                          or (h.to_key in detached and h.era_key in res
+                              and res[h.era_key].sec_id == detached[h.to_key][0]))]
+        res = resolver.resolve_many(eras, issuers=issuers, cusips=cusips, handoffs=usable,
                                     unconfirmed=unconfirmed, barred=set(detached))
         new = {k: v for k, v in crossing_weak_eras(res, by_key).items() if k not in detached}
-        if not new:
-            return res, detached
         for k, (sid, crossed) in new.items():
             resolver.log(f"FIGI {res[k].source} pick withdrawn: {k} would carry {sid}'s {by_key[k].ticker} range "
                          f"across {crossed}'s confirmed one")
+        for line in weak_eras_on_another_line(res, by_key, issuers, handoffs, bankrupt_between):
+            fresh = [k for k in line if k not in new]
+            for k in fresh:
+                new[k] = (res[k].sec_id or "", res[k].sec_id or "")
+                resolver.log(f"FIGI {res[k].source} pick withdrawn: {k} took {res[k].sec_id}, which another line's "
+                             f"CUSIP confirms, and no CUSIP carries the line on")
+            if fresh:
+                lines.append(fresh)
+        if not new:
+            break
         detached.update(new)
+    for line in lines:
+        last = by_key[line[-1]]
+        cik = cik_of(issuers, last.key)
+        if res[last.key].source != "placeholder":
+            target = res[last.key].sec_id           # the line's last era went on to another line (Trane): so did it
+        elif cik is not None:
+            target = placeholder_id(cik, share_class_from_name(last.name))
+        else:
+            continue
+        for k in line:
+            if res[k].source == "placeholder" and res[k].sec_id != target:
+                res[k] = replace(res[k], sec_id=target) if is_placeholder(target) else replace(
+                    res[k], sec_id=target, source="handoff", candidate=res[last.key].candidate, flags=())
+    return res, detached
 
 
 def detached_review(detached: Mapping[str, tuple[str, str]], eras: Mapping[str, TickerEra],
@@ -653,9 +805,12 @@ def detached_review(detached: Mapping[str, tuple[str, str]], eras: Mapping[str, 
     for key, (sid, crossed) in sorted(detached.items()):
         e = eras[key]
         now = resolutions[key].sec_id or "unresolved"
+        why = (f"its ticker or name pick {sid} would carry that security's {e.ticker} range across {crossed}'s "
+               f"confirmed one" if crossed != sid else
+               f"its ticker or name pick {sid} is a composite another line's CUSIP confirms, and no CUSIP carries "
+               f"the line on")
         out.append(ReviewItem(resolutions[key].sec_id or "", e.ticker, cik_of(issuers, key), "identity_detached",
-                              f"{key} {e.name or ''}: its ticker or name pick {sid} would carry that security's {e.ticker} range across {crossed}'s "
-                              f"confirmed one; resolved again as {now}", last_seen=e.last))
+                              f"{key} {e.name or ''}: {why}; resolved again as {now}", last_seen=e.last))
     return out
 
 

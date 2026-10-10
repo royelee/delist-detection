@@ -34,9 +34,11 @@ AS_OF = date(2026, 9, 25)                    # the committed run's date
 # IAC and its new IAC; the guards' issuers: Google and Alphabet (two class letters), HEICO, Lennar and Viacom (a
 # class ticker beside its base symbol), Liberty Interactive (series A tracking stocks sharing a CUSIP), Hubbell
 # (HUB-B beside FTD's bare HUBB); and the other renames a CUSIP switch joins across a class label (CB Richard
-# Ellis, Washington Post, Warner Chilcott).
+# Ellis, Washington Post, Warner Chilcott); and the lines a weak pick must not join (FB-003, FB-001): Ingersoll-Rand
+# Co Ltd, plc and Inc, Trane, Gardner Denver Holdings, Chesapeake.
 STAGE3_CIKS = (1336917, 1469372, 1636519, 1507934, 1560385, 1019849, 891103, 1800227,
-               1288776, 1652044, 46619, 920760, 1339947, 1355096, 48898, 1138118, 104889, 1323854)
+               1288776, 1652044, 46619, 920760, 1339947, 1355096, 48898, 1138118, 104889, 1323854,
+               1160497, 1466258, 1699150, 895126)
 # Stage 2b: era key -> (its observed name, the committed run's first-pass answer, a name search)
 NAME_CASES = {
     "ABBI@2008-01-16": ("ABRAXIS BIOSCIENCE INC", 1141399),   # now 1409012: the new Abraxis carried the name then

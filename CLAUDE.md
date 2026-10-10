@@ -675,7 +675,17 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   own line; own-name picks are not checked by `_contradicted`, since a line
   keeps its composite through a change of issuer, Merck 2009); `resolve_with_identity_guard` takes back
   a weak era whose merge would cross another security's confirmed span of the
-  ticker (`crossing_weak_eras`, review `identity_detached`, `detached_review`);
+  ticker (`crossing_weak_eras`, review `identity_detached`, `detached_review`), and (FB-003 IR, FB-001 CHK) a weak
+  era with CUSIPs of its own that took a composite another era confirms by a different CUSIP, when no CUSIP carries
+  the line on (`weak_eras_on_another_line`; `_carrying_links`: a shared CUSIP, or a lone CUSIP switch, whose new
+  CUSIP no other era's old one ended into and which is no bankruptcy's emergence) and the evidence says two lines:
+  a bankruptcy between them (`bankrupt_between`, `identity._went_bankrupt`: a Q symbol on the old CUSIP's fails rows,
+  or an Item 1.03 8-K within `BANKRUPTCY_DAYS` before the new CUSIP's first row and no earlier than
+  `BANKRUPTCY_LEAD_DAYS` before the old CUSIP's last; decision 9), or the line's issuer going on as another
+  confirmed security of the run (same CIK and class, begun after the line and no later than the confirmed era: Trane
+  beside the new Ingersoll Rand). A redomicile with no CUSIP link in the fails rows stays one line. The eras of one
+  such line go where its last era did (a placeholder of its issuer, or the line it joined: old IR joins Trane), and a
+  switch to an era confirmed on the composite a detached era left does not take it back;
   `superseded_placeholders` marks a placeholder a later FIGI line of its
   issuer and class holds the ticker for (not listed today). Its era-level
   review rows: `ticker_unconfirmed_review` (`ticker_unconfirmed`) and

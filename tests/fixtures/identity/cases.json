@@ -6,11 +6,16 @@
   "CBG@2014-12-31": 1138118,
   "CBRE@2012-06-29": 1138118,
   "CBRE@2018-06-30": 1138118,
+  "CHK@2008-01-16": 895126,
+  "CHK@2022-06-30": 895126,
   "ERA@2013-06-28": 73887,
+  "EXE@2024-12-31": 895126,
   "FWONA@2017-06-30": 1560385,
   "FWONA@2023-12-31": 1560385,
   "FWONK@2017-06-30": 1560385,
   "FWONK@2023-12-31": 1560385,
+  "GDI@2008-01-16": 916459,
+  "GDI@2017-06-30": 1699150,
   "GHC@2012-06-29": 104889,
   "GOOG@2008-01-16": 1288776,
   "GOOG@2014-06-30": 1288776,
@@ -30,6 +35,9 @@
   "IACI@2008-01-16": 891103,
   "IACI@2008-11-18": 891103,
   "IACI@2014-12-31": 891103,
+  "IR@2008-01-16": 1160497,
+  "IR@2014-12-31": 1466258,
+  "IR@2020-06-30": 1699150,
   "LCAPA@2008-01-16": 1355096,
   "LEN-B@2015-06-30": 920760,
   "LEN@2008-01-16": 920760,
@@ -67,6 +75,7 @@
   "TCF@2019-12-31": 19612,
   "TGNA@2012-06-29": 39899,
   "TGNA@2015-06-30": 39899,
+  "TT@2020-06-30": 1466258,
   "UA@2014-12-31": 1336917,
   "UA@2016-12-30": 1336917,
   "UAA@2012-06-29": 1336917,
@@ -4025,6 +4034,588 @@
    "WPO",
    "2009-06-08",
    "WASHINGTON POST CO",
+   ""
+  ],
+  [
+   "CHK",
+   "2008-01-16",
+   "CHESAPEAKE ENERGY CORP",
+   ""
+  ],
+  [
+   "CHK",
+   "2008-05-31",
+   "CHESAPEAKE ENERGY CORP",
+   ""
+  ],
+  [
+   "CHK",
+   "2008-07-25",
+   "CHESAPEAKE ENERGY CORP",
+   ""
+  ],
+  [
+   "CHK",
+   "2008-11-18",
+   "CHESAPEAKE ENERGY CORP",
+   ""
+  ],
+  [
+   "CHK",
+   "2009-01-23",
+   "CHESAPEAKE ENERGY CORP",
+   ""
+  ],
+  [
+   "CHK",
+   "2009-03-20",
+   "CHESAPEAKE ENERGY CORP",
+   ""
+  ],
+  [
+   "CHK",
+   "2009-06-08",
+   "CHESAPEAKE ENERGY CORP",
+   ""
+  ],
+  [
+   "CHK",
+   "2012-06-29",
+   "CHESAPEAKE ENERGY CORP",
+   ""
+  ],
+  [
+   "CHK",
+   "2012-12-31",
+   "CHESAPEAKE ENERGY CORP",
+   ""
+  ],
+  [
+   "CHK",
+   "2013-06-28",
+   "CHESAPEAKE ENERGY CORP",
+   ""
+  ],
+  [
+   "CHK",
+   "2013-12-31",
+   "CHESAPEAKE ENERGY CORP",
+   ""
+  ],
+  [
+   "CHK",
+   "2014-06-30",
+   "CHESAPEAKE ENERGY CORP",
+   ""
+  ],
+  [
+   "CHK",
+   "2014-12-31",
+   "CHESAPEAKE ENERGY CORP",
+   ""
+  ],
+  [
+   "CHK",
+   "2015-06-30",
+   "CHESAPEAKE ENERGY CORP",
+   ""
+  ],
+  [
+   "CHK",
+   "2015-12-31",
+   "CHESAPEAKE ENERGY CORP",
+   ""
+  ],
+  [
+   "CHK",
+   "2016-06-30",
+   "CHESAPEAKE ENERGY CORP",
+   ""
+  ],
+  [
+   "CHK",
+   "2016-12-30",
+   "CHESAPEAKE ENERGY CORP",
+   ""
+  ],
+  [
+   "CHK",
+   "2017-06-30",
+   "CHESAPEAKE ENERGY CORP",
+   ""
+  ],
+  [
+   "CHK",
+   "2017-12-31",
+   "CHESAPEAKE ENERGY CORP",
+   ""
+  ],
+  [
+   "CHK",
+   "2018-06-30",
+   "CHESAPEAKE ENERGY CORP",
+   ""
+  ],
+  [
+   "CHK",
+   "2018-12-31",
+   "CHESAPEAKE ENERGY CORP",
+   ""
+  ],
+  [
+   "CHK",
+   "2019-06-30",
+   "CHESAPEAKE ENERGY CORP",
+   ""
+  ],
+  [
+   "CHK",
+   "2019-12-31",
+   "CHESAPEAKE ENERGY CORP",
+   ""
+  ],
+  [
+   "CHK",
+   "2022-06-30",
+   "CHESAPEAKE ENERGY CORP",
+   ""
+  ],
+  [
+   "CHK",
+   "2022-12-31",
+   "CHESAPEAKE ENERGY CORP",
+   ""
+  ],
+  [
+   "CHK",
+   "2023-06-30",
+   "CHESAPEAKE ENERGY CORP",
+   ""
+  ],
+  [
+   "CHK",
+   "2023-12-31",
+   "CHESAPEAKE ENERGY CORP",
+   ""
+  ],
+  [
+   "CHK",
+   "2024-06-30",
+   "CHESAPEAKE ENERGY CORP",
+   ""
+  ],
+  [
+   "EXE",
+   "2024-12-31",
+   "EXPAND ENERGY CORP",
+   ""
+  ],
+  [
+   "EXE",
+   "2025-06-30",
+   "EXPAND ENERGY CORP",
+   ""
+  ],
+  [
+   "EXE",
+   "2025-12-31",
+   "EXPAND ENERGY CORP",
+   ""
+  ],
+  [
+   "EXE",
+   "2026-06-30",
+   "EXPAND ENERGY CORP",
+   ""
+  ],
+  [
+   "GDI",
+   "2008-01-16",
+   "GARDNER DENVER INC",
+   ""
+  ],
+  [
+   "GDI",
+   "2008-05-31",
+   "GARDNER DENVER INC",
+   ""
+  ],
+  [
+   "GDI",
+   "2008-07-25",
+   "GARDNER DENVER INC",
+   ""
+  ],
+  [
+   "GDI",
+   "2008-11-18",
+   "GARDNER DENVER INC",
+   ""
+  ],
+  [
+   "GDI",
+   "2009-01-23",
+   "GARDNER DENVER INC",
+   ""
+  ],
+  [
+   "GDI",
+   "2009-03-20",
+   "GARDNER DENVER INC",
+   ""
+  ],
+  [
+   "GDI",
+   "2009-06-08",
+   "GARDNER DENVER INC",
+   ""
+  ],
+  [
+   "GDI",
+   "2012-06-29",
+   "GARDNER DENVER INC.",
+   ""
+  ],
+  [
+   "GDI",
+   "2012-12-31",
+   "GARDNER DENVER INC.",
+   ""
+  ],
+  [
+   "GDI",
+   "2013-06-28",
+   "GARDNER DENVER INC.",
+   ""
+  ],
+  [
+   "GDI",
+   "2017-06-30",
+   "GARDNER DENVER HOLDINGS INC",
+   ""
+  ],
+  [
+   "GDI",
+   "2017-12-31",
+   "GARDNER DENVER HOLDINGS INC",
+   ""
+  ],
+  [
+   "GDI",
+   "2018-06-30",
+   "GARDNER DENVER HOLDINGS INC",
+   ""
+  ],
+  [
+   "GDI",
+   "2018-12-31",
+   "GARDNER DENVER HOLDINGS INC",
+   ""
+  ],
+  [
+   "GDI",
+   "2019-06-30",
+   "GARDNER DENVER HOLDINGS INC",
+   ""
+  ],
+  [
+   "GDI",
+   "2019-12-31",
+   "GARDNER DENVER HOLDINGS INC",
+   ""
+  ],
+  [
+   "IR",
+   "2008-01-16",
+   "INGERSOLL-RAND CO LTD",
+   "1160497"
+  ],
+  [
+   "IR",
+   "2008-05-31",
+   "INGERSOLL-RAND CO LTD",
+   "1160497"
+  ],
+  [
+   "IR",
+   "2008-07-25",
+   "INGERSOLL-RAND CO LTD",
+   "1160497"
+  ],
+  [
+   "IR",
+   "2008-11-18",
+   "INGERSOLL-RAND CO LTD",
+   "1160497"
+  ],
+  [
+   "IR",
+   "2009-01-23",
+   "INGERSOLL-RAND CO LTD",
+   "1160497"
+  ],
+  [
+   "IR",
+   "2009-03-20",
+   "INGERSOLL-RAND CO LTD",
+   "1160497"
+  ],
+  [
+   "IR",
+   "2009-06-08",
+   "INGERSOLL-RAND CO LTD",
+   "1160497"
+  ],
+  [
+   "IR",
+   "2014-12-31",
+   "INGERSOLL-RAND PLC",
+   "1466258"
+  ],
+  [
+   "IR",
+   "2015-06-30",
+   "INGERSOLL-RAND PLC",
+   "1466258"
+  ],
+  [
+   "IR",
+   "2015-12-31",
+   "INGERSOLL-RAND PLC",
+   "1466258"
+  ],
+  [
+   "IR",
+   "2016-06-30",
+   "INGERSOLL-RAND PLC",
+   "1466258"
+  ],
+  [
+   "IR",
+   "2016-12-30",
+   "INGERSOLL-RAND PLC",
+   "1466258"
+  ],
+  [
+   "IR",
+   "2017-06-30",
+   "INGERSOLL RAND PLC",
+   "1466258"
+  ],
+  [
+   "IR",
+   "2017-12-31",
+   "INGERSOLL RAND PLC",
+   "1466258"
+  ],
+  [
+   "IR",
+   "2018-06-30",
+   "INGERSOLL RAND PLC",
+   "1466258"
+  ],
+  [
+   "IR",
+   "2018-12-31",
+   "INGERSOLL RAND PLC",
+   "1466258"
+  ],
+  [
+   "IR",
+   "2019-06-30",
+   "INGERSOLL RAND PLC",
+   "1466258"
+  ],
+  [
+   "IR",
+   "2019-12-31",
+   "INGERSOLL RAND PLC",
+   "1466258"
+  ],
+  [
+   "IR",
+   "2020-06-30",
+   "INGERSOLL RAND INC",
+   "1699150"
+  ],
+  [
+   "IR",
+   "2020-12-31",
+   "INGERSOLL RAND INC",
+   "1699150"
+  ],
+  [
+   "IR",
+   "2021-06-30",
+   "INGERSOLL RAND INC",
+   "1699150"
+  ],
+  [
+   "IR",
+   "2021-12-31",
+   "INGERSOLL RAND INC",
+   "1699150"
+  ],
+  [
+   "IR",
+   "2022-06-30",
+   "INGERSOLL RAND INC",
+   "1699150"
+  ],
+  [
+   "IR",
+   "2022-12-31",
+   "INGERSOLL RAND INC",
+   "1699150"
+  ],
+  [
+   "IR",
+   "2023-06-30",
+   "INGERSOLL RAND INC",
+   "1699150"
+  ],
+  [
+   "IR",
+   "2023-12-31",
+   "INGERSOLL RAND INC",
+   "1699150"
+  ],
+  [
+   "IR",
+   "2024-06-30",
+   "INGERSOLL RAND INC",
+   "1699150"
+  ],
+  [
+   "IR",
+   "2024-12-31",
+   "INGERSOLL RAND INC",
+   "1699150"
+  ],
+  [
+   "IR",
+   "2025-06-30",
+   "INGERSOLL RAND INC",
+   "1699150"
+  ],
+  [
+   "IR",
+   "2025-12-31",
+   "INGERSOLL RAND INC",
+   "1699150"
+  ],
+  [
+   "IR",
+   "2026-06-30",
+   "INGERSOLL RAND INC",
+   "1699150"
+  ],
+  [
+   "TT",
+   "2012-06-29",
+   "TRANE TECHNOLOGIES PLC",
+   ""
+  ],
+  [
+   "TT",
+   "2012-12-31",
+   "TRANE TECHNOLOGIES PLC",
+   ""
+  ],
+  [
+   "TT",
+   "2013-06-28",
+   "TRANE TECHNOLOGIES PLC",
+   ""
+  ],
+  [
+   "TT",
+   "2013-12-31",
+   "TRANE TECHNOLOGIES PLC",
+   ""
+  ],
+  [
+   "TT",
+   "2014-06-30",
+   "TRANE TECHNOLOGIES PLC",
+   ""
+  ],
+  [
+   "TT",
+   "2020-06-30",
+   "TRANE TECHNOLOGIES PLC",
+   ""
+  ],
+  [
+   "TT",
+   "2020-12-31",
+   "TRANE TECHNOLOGIES PLC",
+   ""
+  ],
+  [
+   "TT",
+   "2021-06-30",
+   "TRANE TECHNOLOGIES PLC",
+   ""
+  ],
+  [
+   "TT",
+   "2021-12-31",
+   "TRANE TECHNOLOGIES PLC",
+   ""
+  ],
+  [
+   "TT",
+   "2022-06-30",
+   "TRANE TECHNOLOGIES PLC",
+   ""
+  ],
+  [
+   "TT",
+   "2022-12-31",
+   "TRANE TECHNOLOGIES PLC",
+   ""
+  ],
+  [
+   "TT",
+   "2023-06-30",
+   "TRANE TECHNOLOGIES PLC",
+   ""
+  ],
+  [
+   "TT",
+   "2023-12-31",
+   "TRANE TECHNOLOGIES PLC",
+   ""
+  ],
+  [
+   "TT",
+   "2024-06-30",
+   "TRANE TECHNOLOGIES PLC",
+   ""
+  ],
+  [
+   "TT",
+   "2024-12-31",
+   "TRANE TECHNOLOGIES PLC",
+   ""
+  ],
+  [
+   "TT",
+   "2025-06-30",
+   "TRANE TECHNOLOGIES PLC",
+   ""
+  ],
+  [
+   "TT",
+   "2025-12-31",
+   "TRANE TECHNOLOGIES PLC",
+   ""
+  ],
+  [
+   "TT",
+   "2026-06-30",
+   "TRANE TECHNOLOGIES PLC",
    ""
   ]
  ]

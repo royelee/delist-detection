@@ -1254,3 +1254,125 @@ def test_a_plain_named_era_with_no_cusip_link_stays_on_its_placeholder():
     res = FigiResolver(_CusipFigi(WPO_LINES)).resolve_many(
         [wpo, ghc], issuers=issuers, cusips={wpo.key: ["939640108"], ghc.key: ["384637104"]}, handoffs=[])
     assert res[wpo.key].sec_id == "CIK104889-COMMON"
+
+
+# --- one composite, one line: a weak pick does not join another line's CUSIP-confirmed era (FB-003 IR, FB-001 CHK) ---
+
+
+def _two_lines(*, old_cik, new_cik, handoffs=(), old_cusips=("1OLDCUSIP",), continues=False, **guard):
+    """A weak era (its ticker pick, today's holder) with CUSIPs OpenFIGI does not know, and a later era of the same
+    ticker confirmed by its own CUSIP on the same composite: (resolutions, detached, old era, new era). With
+    `continues`, the old issuer goes on as a later era of another ticker, confirmed on another composite (Trane)."""
+    import dataclasses
+
+    from delist_detection.identity.security_master import resolve_with_identity_guard
+    old = dataclasses.replace(_era("XX", ("2012-06-29", "ACME CORP")), ftd_cusips=old_cusips)
+    new = dataclasses.replace(_era("XX", ("2021-06-30", "ACME CORP")), ftd_cusips=("1NEWCUSIP",))
+    today = {"data": [_row("BBGTODAY001", "US", "XX", "ACME CORP")]}
+    figi = _Figi({("TICKER", "XX"): today, ("ID_CUSIP", "1NEWCUSIP"): today})
+    eras, ciks, cusips = [old, new], {old.key: old_cik, new.key: new_cik}, {old.key: list(old_cusips),
+                                                                           new.key: ["1NEWCUSIP"]}
+    if continues:
+        goes_on = dataclasses.replace(_era("YY", ("2021-06-30", "ACME CORP")), ftd_cusips=("1YYCUSIP1",))
+        figi.answers[("ID_CUSIP", "1YYCUSIP1")] = {"data": [_row("BBGOTHER001", "US", "YY", "ACME CORP")]}
+        eras.append(goes_on)
+        ciks[goes_on.key], cusips[goes_on.key] = old_cik, ["1YYCUSIP1"]
+    res, detached = resolve_with_identity_guard(
+        FigiResolver(figi), eras, issuers=issuers_by_era(ciks), cusips=cusips,
+        handoffs=[h(old, new) for h in handoffs], **guard)
+    return res, detached, old, new
+
+
+def _switch(old, new):
+    return Handoff(old.key, new.key, "cusip_handoff", "1OLDCUSIP", "1NEWCUSIP", "2021-06-01")
+
+
+def test_a_weak_pick_does_not_join_the_composite_another_issuers_cusip_confirms():
+    """IR: the old Ingersoll-Rand eras' CUSIPs are on no US venue, so the ticker IR (today's holder) put them on the
+    composite the new Ingersoll Rand's CUSIP confirms. With no CUSIP link between them they are another line."""
+    res, detached, old, new = _two_lines(old_cik=1466258, new_cik=1699150, continues=True)
+    assert res[new.key].sec_id == "BBGTODAY001" and res[new.key].source == "cusip"
+    assert (res[old.key].sec_id, res[old.key].source) == ("CIK1466258-COMMON", "placeholder")
+    assert old.key in detached
+
+
+def test_a_weak_pick_with_no_cusip_of_its_own_keeps_the_composite():
+    """Merck 2008: no CUSIP evidence against the line, so the own-name pick stands."""
+    res, detached, old, new = _two_lines(old_cik=64978, new_cik=310158, old_cusips=())
+    assert res[old.key].sec_id == "BBGTODAY001" and detached == {}
+
+
+def test_a_weak_pick_whose_cusip_switch_carries_the_line_on_joins():
+    """A redomicile (Medtronic, Eaton, Merck 2009): the old CUSIP ended as the new one began, the only such switch."""
+    res, detached, old, new = _two_lines(old_cik=64978, new_cik=310158, handoffs=[_switch])
+    assert res[old.key].sec_id == "BBGTODAY001" and res[old.key].source == "ticker" and detached == {}
+
+
+def test_a_weak_pick_sharing_a_cusip_with_the_confirmed_era_joins():
+    share = lambda old, new: Handoff(old.key, new.key, "shared_cusip", "1OLDCUSIP")
+    res, detached, old, new = _two_lines(old_cik=1, new_cik=2, handoffs=[share], old_cusips=("1OLDCUSIP", "1NEWCUSIP"))
+    assert res[old.key].sec_id == "BBGTODAY001" and detached == {}
+
+
+def test_a_cusip_switch_that_leads_to_two_new_cusips_carries_nothing_on():
+    """IR 2020: the old Ingersoll-Rand plc's CUSIP ended as both the new Ingersoll Rand's and Trane's began (the
+    company split in two); the switch to the confirmed era is not the old line going on."""
+    trane = lambda old, new: Handoff(old.key, "TT@2021-06-30", "cusip_handoff", "1OLDCUSIP", "TRANECUSIP", "2021-06-01")
+    res, detached, old, new = _two_lines(old_cik=1466258, new_cik=1699150, handoffs=[_switch, trane], continues=True)
+    assert (res[old.key].sec_id, res[old.key].source) == ("CIK1466258-COMMON", "placeholder")
+
+
+def test_a_cusip_switch_into_a_cusip_two_old_lines_ended_in_carries_nothing_on():
+    """GDI and IR: the new Ingersoll Rand's CUSIP began as Gardner Denver's ended and as the old IR's ended."""
+    other = lambda old, new: Handoff("GDI@2017-06-30", new.key, "cusip_handoff", "1GDICUSIP", "1NEWCUSIP", "2021-06-01")
+    res, detached, old, new = _two_lines(old_cik=1466258, new_cik=1699150, handoffs=[_switch, other], continues=True)
+    assert res[old.key].sec_id == "CIK1466258-COMMON"
+
+
+def test_weak_eras_chained_by_a_switch_leave_together_when_the_last_one_does_not_join():
+    """IR 2008 and 2014: the 2009 redomicile (a lone switch) links them, so the line leaves as a whole."""
+    import dataclasses
+
+    from delist_detection.identity.security_master import resolve_with_identity_guard
+    e08 = dataclasses.replace(_era("XX", ("2008-01-16", "ACME LTD")), ftd_cusips=("0CUSIP08",))
+    e14 = dataclasses.replace(_era("XX", ("2014-12-31", "ACME PLC")), ftd_cusips=("0CUSIP14",))
+    e21 = dataclasses.replace(_era("XX", ("2021-06-30", "ACME INC")), ftd_cusips=("0CUSIP21",))
+    today = {"data": [_row("BBGTODAY001", "US", "XX", "ACME")]}
+    goes_on = dataclasses.replace(_era("YY", ("2021-06-30", "ACME PLC")), ftd_cusips=("0CUSIPYY",))
+    figi = _Figi({("TICKER", "XX"): today, ("ID_CUSIP", "0CUSIP21"): today,
+                  ("ID_CUSIP", "0CUSIPYY"): {"data": [_row("BBGOTHER001", "US", "YY", "ACME PLC")]}})
+    handoffs = [Handoff(e08.key, e14.key, "cusip_handoff", "0CUSIP08", "0CUSIP14", "2009-07-01")]
+    res, detached = resolve_with_identity_guard(
+        FigiResolver(figi), [e08, e14, e21, goes_on],
+        issuers=issuers_by_era({e08.key: 1, e14.key: 2, e21.key: 3, goes_on.key: 2}),
+        cusips={e08.key: ["0CUSIP08"], e14.key: ["0CUSIP14"], e21.key: ["0CUSIP21"], goes_on.key: ["0CUSIPYY"]},
+        handoffs=handoffs)
+    assert res[e21.key].sec_id == "BBGTODAY001"
+    assert {res[e08.key].source, res[e14.key].source} == {"placeholder"}
+    assert set(detached) == {e08.key, e14.key}
+    assert res[e08.key].sec_id == res[e14.key].sec_id == "CIK2-COMMON"      # one line, the last era's issuer
+
+
+def test_a_same_issuer_weak_pick_leaves_only_across_a_bankruptcy():
+    """CHK: one issuer, two lines. No switch links the old CUSIP to the post-bankruptcy one; without evidence of a
+    bankruptcy between them the weak pick stands (a reverse split the fails rows did not bridge)."""
+    res, detached, old, new = _two_lines(old_cik=895126, new_cik=895126)
+    assert res[old.key].sec_id == "BBGTODAY001" and detached == {}
+    bankrupt = lambda old_c, new_c, cik: (old_c, new_c, cik) == ("1OLDCUSIP", "1NEWCUSIP", 895126)
+    res, detached, old, new = _two_lines(old_cik=895126, new_cik=895126, bankrupt_between=bankrupt)
+    assert (res[old.key].sec_id, res[old.key].source) == ("CIK895126-COMMON", "placeholder")
+    assert old.key in detached
+
+
+def test_a_cusip_switch_at_a_bankruptcys_emergence_does_not_carry_the_line_on():
+    """Decision 9: post-bankruptcy equity is a new security, even when its CUSIP began as the old one's ended."""
+    res, detached, old, new = _two_lines(old_cik=895126, new_cik=895126, handoffs=[_switch],
+                                         bankrupt_between=lambda old_c, new_c, cik: True)
+    assert res[old.key].sec_id == "CIK895126-COMMON" and old.key in detached
+
+
+def test_a_weak_pick_across_a_change_of_issuer_with_no_evidence_of_two_lines_keeps_the_composite():
+    """Liberty Global 2013, Capitol Federal 2010: a redomicile or a conversion whose CUSIP link the fails rows did not
+    show. The issuer does not go on as another security and no bankruptcy lies between: one line, as before."""
+    res, detached, old, new = _two_lines(old_cik=1316631, new_cik=1570585)
+    assert (res[old.key].sec_id, res[old.key].source) == ("BBGTODAY001", "ticker") and detached == {}
