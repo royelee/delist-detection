@@ -145,6 +145,21 @@ def test_a_security_trading_at_the_data_edge_and_delisted_after_the_run_date_was
     assert listed_today(gone, "BBG011386VF4", edgar=_FixEdgar(later), cik=1437107, tickers=["WBD"]) is False
 
 
+def test_behind_the_clock_edgar_listing_stands_for_a_security_trading_at_the_data_edge():
+    """QRVO and LESL in a run as of 2026-09-25 read on 2026-10-10: OpenFIGI answers "No identifier found" and
+    LESLQ on OTC, EDGAR still lists QRVO and LESL on Nasdaq, no Form 25 yet. A run behind the clock takes EDGAR's
+    listing for a security that traded to the fails data's end; a run on today's date keeps today's answer."""
+    from delist_detection.filings.listing_status import listed_on_run_date
+    qrvo = {"tickers": ["QRVO"], "exchanges": ["Nasdaq"]}
+    end = date(2026, 9, 14)
+    assert listed_on_run_date(False, qrvo, date(2026, 8, 18), end, tickers=["QRVO"], behind_clock=True) is True
+    assert listed_on_run_date(False, qrvo, date(2026, 8, 18), end, tickers=["QRVO"]) is False
+    assert listed_on_run_date(False, qrvo, date(2026, 6, 1), end, tickers=["QRVO"], behind_clock=True) is False
+    otc = {"tickers": ["FMCC"], "exchanges": ["OTC"]}
+    assert listed_on_run_date(False, otc, end, end, tickers=["FMCC"], behind_clock=True) is False
+    assert listed_on_run_date(False, qrvo, end, end, tickers=["XXX"], behind_clock=True) is False
+
+
 def test_a_security_edgar_lists_on_cboe_is_listed_today():
     figi = _Figi({"data": [{"exchCode": "UF", "ticker": "CBOE"}]})
     sub = _FixEdgar({"tickers": ["CBOE"], "exchanges": ["CBOE"]})

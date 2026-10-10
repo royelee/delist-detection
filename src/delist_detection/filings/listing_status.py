@@ -75,18 +75,22 @@ def delisted_after_run_date(sub) -> bool:
     return isinstance(sub, dict) and any(str(f).startswith("25") for f in sub.get(FILED_AFTER_RUN_DATE) or ())
 
 
-def listed_on_run_date(listed_now: bool | None, sub, last_seen: date | str | None,
-                       data_end: date | str | None) -> bool | None:
+def listed_on_run_date(listed_now: bool | None, sub, last_seen: date | str | None, data_end: date | str | None, *,
+                       tickers: Iterable[str] | None = None, behind_clock: bool = False) -> bool | None:
     """Whether a security was listed on an --as-of run's date. `listed_today` reads today's OpenFIGI answer and
-    EDGAR `exchanges`, which a delisting after the run date has already changed (WBD, LESL and QRVO in a run as of
-    2026-09-25 read on 2026-10-10). A security its issuer delisted after the run date (`sub`, its submissions JSON,
-    `delisted_after_run_date`) and that was still trading at the end of the fails data (`last_seen` within
-    EDGE_DAYS of `data_end`) was listed then. An issuer-level Form 25 alone says nothing of its other lines: Discovery's
-    DISCA and DISCK ended in 2022 under WBD's CIK."""
+    EDGAR `exchanges`, which an ending after the run date has already changed (in a run as of 2026-09-25 read on
+    2026-10-10: WBD and QRVO "No identifier found", LESL on OTC as LESLQ). A security still trading at the end of
+    the fails data (`last_seen` within EDGE_DAYS of `data_end`) was listed on the run date when its issuer filed a
+    Form 25 after it (`sub`, its submissions JSON, `delisted_after_run_date`), or, in a run behind the clock
+    (`behind_clock`), when the issuer's EDGAR copy still lists one of its `tickers` on a major exchange (today's
+    OpenFIGI answer postdates the run date). Issuer-level evidence alone says nothing of its other lines: Discovery's
+    DISCA and DISCK ended in 2022 under WBD's CIK, long before the data's end."""
     seen, end = (d if isinstance(d, date) else parse_day(d) for d in (last_seen, data_end))
-    if listed_now or seen is None or end is None or not delisted_after_run_date(sub):
+    if listed_now or seen is None or end is None or (end - seen).days > EDGE_DAYS:
         return listed_now
-    return True if (end - seen).days <= EDGE_DAYS else listed_now
+    if delisted_after_run_date(sub) or (behind_clock and lists_on_major_exchange(sub, tickers)):
+        return True
+    return listed_now
 
 
 def lists_on_major_exchange(sub, tickers: Iterable[str] | None) -> bool:
