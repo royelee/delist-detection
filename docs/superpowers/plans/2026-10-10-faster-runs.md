@@ -822,7 +822,8 @@ Expected: all pass.
 - [ ] **Step 4b: The line rule in the fingerprint, and two builders at once (from the review)**
 
 The store holds what the line rule made of each line (a normalized symbol, an upper-cased CUSIP), so a store built
-under another rule must be built again. Add these two tests to `tests/test_ftd_store.py`:
+under another rule must be built again. Add these two tests to `tests/test_ftd_store.py`, right after
+`test_store_is_built_once_and_again_when_the_zip_changes` (not at the end of the file: Task 6's diff appends there):
 
 ```python
 def test_a_store_built_under_another_line_rule_is_built_again(tmp_path, monkeypatch):
@@ -861,7 +862,8 @@ def test_threads_building_one_store_at_once_all_read_the_same_rows(tmp_path):
 Run: `PYTHONPATH=src ~/miniconda3/envs/rdagent4qlib/bin/python -m pytest tests/test_ftd_store.py -q -o addopts="" -k "another_line_rule or at_once"`
 Expected: the first FAILS (`['BRK-B'] != ['BRKB']`: the store is not rebuilt); the second passes already (it pins what holds).
 
-In `src/delist_detection/sources/ftd_store.py`, add `import hashlib`, and replace `_fingerprint` with:
+In `src/delist_detection/sources/ftd_store.py`, add `import hashlib` as the first import of the block (before
+`import io`, away from the lines Task 6's diff reads as context), and replace `_fingerprint` with:
 
 ```python
 # Lines that exercise each part of the line rule (`split_line`, and `normalize_ticker` inside it): separators and
