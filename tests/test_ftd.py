@@ -322,6 +322,22 @@ def test_trading_rows_skip_a_deleted_symbol_and_keep_the_cusip_order():
     assert idx.descriptions("a00000001") == {"A CO"}
 
 
+def test_trading_rows_in_a_span_are_the_spans_rows_of_trading_rows():
+    """`trading_rows(cusips, lo, hi)` is `trading_rows(cusips)` cut to the inclusive ISO span, either bound open."""
+    days = ["2020-01-02", "2020-01-02", "2020-01-03", "2020-02-03", "2020-02-03", "2020-03-04"]
+    idx = FtdIndex(_rows(*[(d, c, "AAA" if i != 3 else "AAAXXXX", "A CO", 1.0 + i)
+                           for c in ("A00000001", "B00000001") for i, d in enumerate(days)]))
+    every = idx.trading_rows(["B00000001", "A00000001"])
+    for lo, hi in [(None, None), ("2020-01-03", None), (None, "2020-02-03"), ("2020-01-03", "2020-02-03"),
+                   ("2020-01-04", "2020-02-02"), ("2019-01-01", "2019-12-31"), ("2020-03-04", "2020-03-04"),
+                   ("2020-02-03", "2020-01-03")]:
+        want = [r for r in every if (lo is None or r.date >= lo) and (hi is None or r.date <= hi)]
+        assert idx.trading_rows(["B00000001", "A00000001"], lo, hi) == want, (lo, hi)
+        for c in ("A00000001", "B00000001"):
+            assert idx.by_cusip(c, lo, hi) == [r for r in idx.by_cusip(c)
+                                               if (lo is None or r.date >= lo) and (hi is None or r.date <= hi)]
+
+
 def test_symbol_deleted_needs_the_last_rows_under_a_deleted_symbol_only():
     rows = _rows(("2015-10-01", "428236103", "HPQ", "HP INC", 1.0),
                  ("2015-11-02", "428236103", "HPQXXXX", "HP INC", 1.0))

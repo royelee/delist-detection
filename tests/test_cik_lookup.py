@@ -6,7 +6,8 @@ from pathlib import Path
 import pytest
 import requests
 
-from delist_detection.sources.cik_lookup import CIK_LOOKUP_URL, CikLookupClient, CikNameIndex, normalize_name
+from delist_detection.sources.cik_lookup import (
+    CIK_LOOKUP_URL, CikLookupClient, CikNameIndex, NameHit, normalize_name)
 from delist_detection.sources.edgar import EdgarBlocked
 from delist_detection.sources.sec_stats import SEC_STATS
 
@@ -145,3 +146,15 @@ def test_a_refusal_raises(tmp_path, _no_throttle):
     with pytest.raises(EdgarBlocked):
         CikLookupClient(tmp_path, session=_Session(_Resp(429)), user_agent="ua").index()
     assert not (tmp_path / "cik-lookup-data.txt").exists()
+
+
+def test_split_search_gives_the_exact_then_prefix_entries_a_plain_scan_gives():
+    """The search walks the sorted entries from the first key that can match, without copying the rest of them."""
+    names = ["ALPHA INC", "ALPHA", "ALPHA HOLDINGS CORP", "ALPHABET INC", "BETA CORP", "ALP", "ZETA", "ALPHA"]
+    index = CikNameIndex.from_text("\n".join(f"{n}:{1000 + i}:" for i, n in enumerate(names)))
+    for q in ["ALPHA", "ALP", "A", "ALPHAB", "BETA", "ZZ", "alpha inc", "", "ZETA"]:
+        key = normalize_name(q)
+        want = [(k, c, n) for k, c, n in index._entries if key and k.startswith(key)]
+        exact, prefix = index.split_search(q)
+        assert exact == [NameHit(c, n) for k, c, n in want if k == key]
+        assert prefix == [NameHit(c, n) for k, c, n in want if k != key]

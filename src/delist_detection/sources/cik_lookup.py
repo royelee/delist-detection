@@ -79,7 +79,9 @@ class CikNameIndex:
             return [], []
         exact: list[NameHit] = []
         prefix: list[NameHit] = []
-        for key, cik, name in self._entries[bisect_left(self._keys, q):]:
+        entries = self._entries
+        for i in range(bisect_left(self._keys, q), len(entries)):       # starts at the first match, copies nothing
+            key, cik, name = entries[i]
             if not key.startswith(q):
                 break
             (exact if key == q else prefix).append(NameHit(cik, name))

@@ -28,6 +28,7 @@ from collections import Counter, defaultdict
 from collections.abc import Collection, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import date, timedelta
+from operator import attrgetter
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -47,6 +48,9 @@ _QTR = re.compile(r"cnsp_sec_fails_(\d{4})q([1-4])\.zip$", re.I)
 
 
 FTD_START = date(2004, 1, 1)      # the first day SEC's fails-to-deliver files cover
+
+
+_date_of = attrgetter("date")
 
 
 @dataclass(frozen=True)
@@ -477,9 +481,8 @@ class FtdIndex:
 
     @staticmethod
     def _slice(rows: list[FtdRow], lo: str | None, hi: str | None) -> list[FtdRow]:
-        dates = [r.date for r in rows]
-        i = bisect_left(dates, lo) if lo else 0
-        j = bisect_right(dates, hi) if hi else len(rows)
+        i = bisect_left(rows, lo, key=_date_of) if lo else 0
+        j = bisect_right(rows, hi, key=_date_of) if hi else len(rows)
         return rows[i:j]
 
     def by_symbol(self, symbol: str, lo: str | None = None, hi: str | None = None) -> list[FtdRow]:
@@ -545,12 +548,13 @@ class FtdIndex:
         """Every description the fails rows of `cusip` carry."""
         return {r.description for r in self.by_cusip(cusip)}
 
-    def trading_rows(self, cusips: Iterable[str]) -> list[FtdRow]:
+    def trading_rows(self, cusips: Iterable[str], lo: str | None = None, hi: str | None = None) -> list[FtdRow]:
         """The rows of `cusips` (each CUSIP's by date, in the order given) that
         show the security trading: not those under a deleted symbol
         (`is_deleted_symbol`), which record a fail still settling after the
-        delisting."""
-        return [r for c in cusips for r in self.by_cusip(c) if not is_deleted_symbol(r.symbol)]
+        delisting. Only those dated in the ISO span [`lo`, `hi`] when either is
+        given (a bound left out is open)."""
+        return [r for c in cusips for r in self.by_cusip(c, lo, hi) if not is_deleted_symbol(r.symbol)]
 
     def symbol_deleted(self, cusips: Iterable[str]) -> bool:
         """Whether `cusips` last failed under a deleted symbol only: after the

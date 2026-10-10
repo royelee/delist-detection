@@ -285,7 +285,7 @@ def is_backfilled(as_of: str, ticker: str, cusips: Sequence[str], ftd: FtdIndex)
     day = date.fromisoformat(as_of)
     lo = (day - timedelta(days=BACKFILL_WINDOW_DAYS)).isoformat()
     hi = (day + timedelta(days=BACKFILL_WINDOW_DAYS)).isoformat()
-    rows = [r for r in ftd.trading_rows(cusips) if lo <= r.date <= hi]
+    rows = ftd.trading_rows(cusips, lo, hi)
     if not rows:
         return False
     bare = bare_ticker(ticker)

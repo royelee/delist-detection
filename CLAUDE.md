@@ -337,7 +337,7 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   close and acquirer-completion price (`close_of`/`close_known_on`: by the security's
   CUSIP on the day, then its symbol, never from a row of a CUSIP another security of the run holds: `skip`,
   WEN 2008, sub-plan 5d); `by_cusip`/`by_symbol` supply CUSIP
-  history, `trading_rows` the rows not under a deleted symbol, `symbol_deleted`
+  history, `trading_rows(cusips, lo=, hi=)` the rows not under a deleted symbol, `symbol_deleted`
   whether a CUSIP's last rows are all under one, `descriptions` a CUSIP's names;
   `FTD_START` (2004-01-01, the data's first day) and `close_age` (a fails
   row's close age in trading days, for `ftd_close_prior:<n>`). `trades_after` (sub-plan 5b): whether a security's own CUSIPs, under any symbol it trades under
