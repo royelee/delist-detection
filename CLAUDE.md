@@ -53,8 +53,8 @@ python scripts/classify_universe.py --observations obs.csv   # → output/{secur
 python scripts/classify_universe.py --observations obs.csv --limit 20 --no-extract-payouts --no-midas --no-halts   # fast dev subset
 python scripts/classify_universe.py --observations obs.csv --sec-workers 1   # one SEC request at a time (default: 4 prefetch threads, max 8, one machine-wide 8 req/s limit)
 python scripts/classify_universe.py --observations obs.csv --as-of 2026-09-25   # pin the run date (default today; run_manifest.json records it) to reproduce an earlier run's tables from the same caches
-python scripts/classify_universe.py --observations obs.csv --price-answers answered.csv   # contract/price_requests.csv plus a price column: a second run changes values only; a row that answers no request exits 2
-python scripts/classify_universe.py --observations obs.csv --id-baseline output/securities.csv   # compare placeholders with this securities.csv for contract/id_changes.csv (default: OUTPUT_DIR/securities.csv)
+python scripts/classify_universe.py --observations obs.csv --price-answers answered.csv   # contract/price_requests.csv plus a price column: a second run changes values only (and, through verdict ruling D, a merger's verdict when its gate result moves with the answered close: FB-012); a row that answers no request exits 2
+python scripts/classify_universe.py --observations obs.csv --id-baseline output/securities.csv   # compare placeholders with this securities.csv, or a previous run's contract/security_history.csv, for contract/id_changes.csv (default: OUTPUT_DIR/securities.csv, else OUTPUT_DIR/contract/security_history.csv)
 python scripts/seeds_from_observations.py --observations data/observations.csv --out seeds.csv   # one row per introduction: the seeds-only input
 python scripts/observations_from_snapshots.py --dir <folder of dated snapshot CSVs> --out obs.csv   # ticker/name columns, one date per file name
 python scripts/observations_from_instruments.py --instruments all.txt --out obs.csv   # legacy (ticker,start,end) file → two observations per row
@@ -527,8 +527,8 @@ See `CONTEXT.md` for the vocabulary its docstrings and variable names assume
   (`MergerValue.request`: the acquirer security's symbol on the price date, sub-plan 5e, a leg with no LLM ticker
   asking once the line is known, a dollar-valued leg too, 5f), of a plan's new line (`plans=`, 5g) and of each
   further leg of a basket (`leg_rows=`; accepted, not used: the library prices no basket), `otc_print` per
-  `dropped`/`liquidation` ending that is not a continuation, under the published OTC symbol (the exchange ticker
-  when blank), dated the session after the last trade; a plan's `stock` row asks no OTC print) and the answers
+  `dropped`/`liquidation` ending that is not a continuation, under the published OTC symbol (none asked when it
+  is blank, FB-007), dated the session after the last trade; a plan's `stock` row asks no OTC print) and the answers
   (`load_answers` for `--price-answers`, which refuses a price that is not a finite positive number, and
   `PriceAnswers`). Each request fills one value input, and a stage reads its answer only through the request it
   makes: `last_closes` (stage 7; one also given by `--last-trade-closes` stops the run), `received_close` (stage 8's

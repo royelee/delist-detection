@@ -29,14 +29,15 @@ def test_requests_ask_the_last_close_and_a_stock_legs_received_close():
 def test_a_drop_or_distress_ending_asks_for_the_first_otc_print():
     endings = {k: ending(k, "2015-03-10", ltd="2015-03-06", ticker="T" + k) for k in "DLMCB"}
     row = lambda k, kind, ltd="2015-03-06", cont=False: {
-        "sec_id": k, "last_trade_date": ltd, "continuation": cont, "exit_kind": kind}
+        "sec_id": k, "last_trade_date": ltd, "continuation": cont, "exit_kind": kind, "value_rule": "otc_print",
+        "price_ticker": "T" + k + "Q"}
     contract = [row("D", "dropped"), row("L", "liquidation"), row("M", "merger"),
                 row("C", "dropped", cont=True), row("B", "dropped", ltd="")]
     got = request_rows(contract, endings, {})
     assert [(r["sec_id"], r["kind"]) for r in got] == [
         ("D", LAST_CLOSE), ("D", "otc_print"), ("L", LAST_CLOSE), ("L", "otc_print"), ("M", LAST_CLOSE)]
     assert got[1] == {"sec_id": "D", "last_trade_date": "2015-03-06", "kind": "otc_print", "lookup_sec_id": "D",
-                      "lookup_ticker": "TD", "date": "2015-03-09"}
+                      "lookup_ticker": "TDQ", "date": "2015-03-09"}
 
 
 # --- the answers, read through the request each value input makes ---
@@ -122,17 +123,21 @@ def test_a_repeated_request_with_another_price_is_refused_and_with_the_same_pric
         load_answers(_answers(tmp_path, row + "191.32", row + "190"))
 
 
-def test_the_otc_print_is_asked_under_the_published_otc_symbol_and_a_plan_asks_no_print():
-    endings = {k: ending(k, "2015-03-10", ltd="2015-03-06", ticker="T" + k) for k in "DUP"}
+def test_the_otc_print_is_asked_only_under_a_published_otc_symbol_and_a_plan_asks_no_print():
+    """FB-007: with no OTC symbol read (stage 9e), no print is asked: a vendor's bar under the exchange ticker after
+    the delisting is no OTC print (SIVB 2023's frozen bar), so the fill stands. An OTC symbol the fails rows show
+    under the exchange ticker itself (MDRX 2024) is asked under it."""
+    endings = {k: ending(k, "2015-03-10", ltd="2015-03-06", ticker="T" + k) for k in "DUSP"}
     row = lambda k, rule, ticker: {"sec_id": k, "last_trade_date": "2015-03-06", "continuation": False,
                                    "exit_kind": "dropped", "value_rule": rule, "price_ticker": ticker}
-    contract = [row("D", "otc_print", "TDQ"), row("U", "otc_print", ""), row("P", "stock", "TP")]
+    contract = [row("D", "otc_print", "TDQ"), row("U", "otc_print", ""), row("S", "otc_print", "TS"),
+                row("P", "stock", "TP")]
     plans = {DelistingKey("P", "2015-03-10"): DistressTerms(plan_ratio="0.5", plan_ticker="TP", plan_source="25"),
              DelistingKey("U", "2015-03-10"): DistressTerms(otc_symbol="")}
     got = request_rows(contract, endings, {}, plans=plans)
     assert [(r["sec_id"], r["kind"], r["lookup_ticker"]) for r in got] == [
-        ("D", LAST_CLOSE, "TD"), ("D", "otc_print", "TDQ"), ("U", LAST_CLOSE, "TU"), ("U", "otc_print", "TU"),
-        ("P", LAST_CLOSE, "TP"), ("P", RECEIVED_CLOSE, "TP")]
+        ("D", LAST_CLOSE, "TD"), ("D", "otc_print", "TDQ"), ("U", LAST_CLOSE, "TU"),
+        ("S", LAST_CLOSE, "TS"), ("S", "otc_print", "TS"), ("P", LAST_CLOSE, "TP"), ("P", RECEIVED_CLOSE, "TP")]
 
 
 def test_an_answers_file_without_the_price_column_is_refused(tmp_path):

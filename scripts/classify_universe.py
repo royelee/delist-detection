@@ -29,7 +29,8 @@ from delist_detection.outputs.price_requests import load_answers
 from delist_detection.outputs.reconstruction import OverrideFileError, load_float_overrides, load_merger_terms_overrides
 from delist_detection.outputs.review_triage import Decision, ReviewDecisionError, load_decisions
 from delist_detection.measurement.scorecard import ScorecardConfig, ScorecardConfigError, load_config
-from delist_detection.outputs.store import read_table
+from delist_detection.outputs.contract import baseline_of_history
+from delist_detection.outputs.store import read_table, table_path
 from delist_detection.measurement.truth import TruthFileError
 
 KNOWN_RENAMES = {
@@ -157,8 +158,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--price-answers",
                    help="contract/price_requests.csv answered: its columns plus price (raw as-traded closes)")
     p.add_argument("--id-baseline", default=None,
-                   help="securities.csv to list placeholder->FIGI changes against in contract/id_changes.csv "
-                        "(default: OUTPUT_DIR/securities.csv when it exists)")
+                   help="securities.csv or a previous run's contract/security_history.csv to list "
+                        "placeholder->FIGI changes against in contract/id_changes.csv (default: "
+                        "OUTPUT_DIR/securities.csv, else OUTPUT_DIR/contract/security_history.csv, when it exists)")
     p.add_argument("--review-decisions", default=None,
                    help="CSV of accepted review flags: sec_id,delist_date,ticker,flag,decision,note "
                         f"(default {DEFAULT_REVIEW_DECISIONS}; missing at the default path means no decisions, "
@@ -228,16 +230,24 @@ def read_inputs(args: argparse.Namespace) -> tuple[Overrides, list[Decision], Ob
 
 
 def read_id_baseline(args: argparse.Namespace) -> list[dict[str, str]]:
-    """The securities.csv rows contract/id_changes.csv compares with: --id-baseline,
-    else the output folder's own when it exists (read before the run replaces it),
-    else none. A file that is not a securities.csv raises OverrideFileError."""
-    path = Path(args.id_baseline) if args.id_baseline else Path(args.output_dir) / "securities.csv"
-    if args.id_baseline is None and not path.exists():
-        return []
+    """The baseline rows contract/id_changes.csv compares with: --id-baseline, a securities.csv or a previous run's
+    contract/security_history.csv (FB-010, `contract.baseline_of_history`), else the output folder's own
+    securities.csv, else its contract/security_history.csv, when one exists (read before the run replaces it), else
+    none. A file that is neither raises OverrideFileError."""
+    if args.id_baseline:
+        path = Path(args.id_baseline)
+    else:
+        path = next((p for p in (table_path(args.output_dir, "securities"),
+                                 table_path(args.output_dir, "security_history")) if p.exists()), None)
+        if path is None:
+            return []
     try:
         return read_table("securities", path)
     except ValueError as exc:
-        raise OverrideFileError(str(exc)) from None
+        try:
+            return baseline_of_history(read_table("security_history", path))
+        except ValueError:
+            raise OverrideFileError(f"{exc} (nor table 'security_history')") from None
 
 
 def main() -> int:

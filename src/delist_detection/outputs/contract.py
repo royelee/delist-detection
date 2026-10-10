@@ -23,6 +23,7 @@ from datetime import date, timedelta
 
 from .dlret import DistressTerms, MergerInputs, contract_value
 from ..vocabulary.exit_kind import ending_fields, last_endings, published
+from ..vocabulary.identifiers import is_placeholder
 from .payout_rule import basket_legs, value_fields
 from .run_snapshot import RunSnapshot
 from .store import DelistingKey
@@ -115,6 +116,26 @@ def security_history_rows(tables: RunSnapshot, issuers: Mapping[str, Sequence[tu
             out.append({"sec_id": sid, "issuer_id": _issuer_on(timeline, lo, s.get("issuer_cik", "")),
                         "start_date": lo, "end_date": hi, "ticker": r["ticker"],
                         "security_name": s.get("name", ""), "share_class": s.get("share_class", "")})
+    return out
+
+
+def baseline_of_history(history: Sequence[Mapping[str, str]]) -> list[dict[str, str]]:
+    """A previous run's contract/security_history.csv as `id_change_rows`'s baseline (FB-010: a baseline that does
+    not need securities.csv): one row per security, sorted by sec_id, with the issuer of its latest interval that
+    names one (a placeholder named on none takes the CIK its id names), its share class, and `figi_source`
+    `placeholder` for a placeholder id (`identifiers.is_placeholder`), else `figi`."""
+    latest: dict[str, tuple[str, str]] = {}
+    issuer: dict[str, str] = {}
+    for r in sorted(history, key=lambda r: (r["sec_id"], r["start_date"])):
+        latest[r["sec_id"]] = (r["start_date"], r["share_class"])
+        if r["issuer_id"]:
+            issuer[r["sec_id"]] = r["issuer_id"]
+    out = []
+    for sid, (_, share_class) in sorted(latest.items()):
+        placeholder = is_placeholder(sid)
+        cik = issuer.get(sid) or (sid[len("CIK"):].split("-", 1)[0] if placeholder else "")
+        out.append({"sec_id": sid, "issuer_cik": cik, "share_class": share_class,
+                    "figi_source": "placeholder" if placeholder else "figi"})
     return out
 
 

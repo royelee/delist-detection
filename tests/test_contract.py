@@ -84,6 +84,28 @@ def test_id_changes_name_the_figi_that_now_holds_a_placeholders_issuer_and_class
     assert id_change_rows([], now, "2026-09-25") == []
 
 
+def _hist_row(sec_id, issuer_id, start, share_class="COMMON"):
+    return {"sec_id": sec_id, "issuer_id": issuer_id, "start_date": start, "end_date": "", "ticker": "T",
+            "security_name": sec_id, "share_class": share_class}
+
+
+def test_a_previous_runs_security_history_is_an_id_baseline():
+    """FB-010: a contract-native baseline. One row per security, its latest interval's issuer (a placeholder with no
+    issuer on any interval takes the CIK its id names), a placeholder known by its id."""
+    from delist_detection.outputs.contract import baseline_of_history
+    history = [_hist_row("CIK100-COMMON", "100", "2010-01-04"), _hist_row("CIK100-COMMON", "", "2012-01-03"),
+               _hist_row("CIK300-CLASS-A", "", "2011-01-03", "CLASS A"),
+               _hist_row("BBG000OLD001", "400", "2009-01-02"), _hist_row("BBG000OLD001", "401", "2013-01-02")]
+    baseline = baseline_of_history(history)
+    assert baseline == [
+        {"sec_id": "BBG000OLD001", "issuer_cik": "401", "share_class": "COMMON", "figi_source": "figi"},
+        {"sec_id": "CIK100-COMMON", "issuer_cik": "100", "share_class": "COMMON", "figi_source": "placeholder"},
+        {"sec_id": "CIK300-CLASS-A", "issuer_cik": "300", "share_class": "CLASS A", "figi_source": "placeholder"}]
+    now = [_sec_row("BBG000NEW100", "100", "cusip"), _sec_row("BBG000NEW300", "300", "cusip", "CLASS A")]
+    assert [(r["old_sec_id"], r["new_sec_id"]) for r in id_change_rows(baseline, now, "2026-10-10")] == [
+        ("CIK100-COMMON", "BBG000NEW100"), ("CIK300-CLASS-A", "BBG000NEW300")]
+
+
 def test_delisting_rows_carry_the_payout_rule_columns_and_the_inputs_of_a_failed_gate():
     from delist_detection.terms.llm_merger_extractor import MergerTerms
     from delist_detection.outputs.dlret import MergerInputs

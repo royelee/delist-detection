@@ -250,8 +250,9 @@ merger acquirers the run adds, split where the issuer in force changes (the
 CIK that carried the security's name that day; MRK 2008 moves from old Merck &
 Co, CIK 64978, to the new one). Successors stay, so a continuation's
 `successor_sec_id` resolves. `id_changes.csv` lists the placeholders of a
-baseline `securities.csv` (`--id-baseline`, default the output folder's own,
-read before the run writes) that now hold a FIGI, whether the FIGI's issuer and
+baseline run (`--id-baseline`: its `securities.csv` or its
+`contract/security_history.csv`; default the output folder's own `securities.csv`, else its
+`contract/security_history.csv`, read before the run writes) that now hold a FIGI, whether the FIGI's issuer and
 class say so or a line follow folded the placeholder into it by name; it also
 lists a baseline FIGI this run no longer holds that maps to a FIGI of this run
 (the ticker tier's composite was the line that took the ticker over later: BTU,
@@ -320,12 +321,22 @@ continuation, and one `received_close` per LLM-read stock leg (a
 `--merger-terms` stock leg carries its own price), per bankruptcy plan's new line
 and per further security of a basket (a basket leg's answer is accepted and not
 used; the library prices no basket), and one `otc_print` per
-`dropped` or `liquidation` ending that is not a continuation (dated the session
-after the last trade, asked under the OTC symbol stage 9e read, else the exchange
-ticker; answer with the first off-exchange print within 10
+`dropped` or `liquidation` ending that is not a continuation and has an OTC
+symbol (dated the session after the last trade, asked under the OTC symbol stage
+9e read from the fails rows, which can be the exchange ticker itself when the
+security went on trading under it; with no symbol read nothing is asked and the
+fill stands; answer with the first off-exchange print within 10
 sessions, which values the drop as `print / last_close − 1`). A bankruptcy plan
 whose value rule is `stock` asks no `otc_print`. Fill a `price` column (a finite positive number) and rerun with
-`--price-answers answered.csv`: a second run changes values only. An answer is
+`--price-answers answered.csv`: a second run changes values, and no identity,
+kind, successor, last trade date or request. One verdict rule reads the value:
+a merger valued at assumed par after a failed payout, LLM or terms gate is
+uncertain (decision 4, ruling D in `outputs/verdict.py`). The second run checks
+the gate again against the answered closes, so a merger's verdict can move
+either way between the passes: confirmed to uncertain when the terms no longer
+reconcile with the caller's close, uncertain to confirmed when they now do. No
+other verdict moves. To list the moves, compare the two runs'
+`contract/delistings.csv` `verdict` columns (FB-012). An answer is
 matched on `(sec_id, last_trade_date, kind, lookup_ticker, date)`, and a
 `last_close` or `otc_print` answer reaches the stage by its security, day and
 kind alone (its ticker and date are a hint); `lookup_sec_id` is informational. An answer to no request, or a last close also

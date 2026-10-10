@@ -14,9 +14,9 @@ request it matches:
 - `received_close` of a bankruptcy plan's new line (ruling R6): the plan's value at stage 10a, its ratio times the
   close (`PriceAnswers.ending_values`);
 - `received_close` of a basket's further leg (ruling R3): accepted and not used, the library prices no basket;
-- `otc_print`, one per drop or distress ending (`OTC_EXIT_KINDS`), dated the session after the last trade, the
-  caller answering with the first off-exchange print within 10 sessions: the drop's value at stage 10a
-  (`PriceAnswers.ending_values`, dlret.OTC_PRINT).
+- `otc_print`, one per drop or distress ending (`OTC_EXIT_KINDS`) with a published OTC symbol (none without one,
+  FB-007), dated the session after the last trade, the caller answering with the first off-exchange print within 10
+  sessions: the drop's value at stage 10a (`PriceAnswers.ending_values`, dlret.OTC_PRINT).
 
 The answers file is the requests file plus a `price` column (raw as-traded closes). A last close or an OTC print is
 the security's own, on its last trade day: matched on the security, the day and the kind (its ticker and date are a
@@ -145,11 +145,13 @@ def request_rows(contract_rows: Sequence[Mapping[str, Any]], endings: Mapping[st
         r = endings[c["sec_id"]]
         out.append({"sec_id": c["sec_id"], "last_trade_date": ltd, "kind": LAST_CLOSE,
                     "lookup_sec_id": c["sec_id"], "lookup_ticker": r["ticker"], "date": ltd})
-        if c["exit_kind"] in OTC_EXIT_KINDS and c.get("value_rule") != "stock":
-            # under the OTC symbol the contract publishes (sub-plan 5g), else the exchange ticker as a hint; a
-            # bankruptcy plan's new shares (ruling R6) are no OTC print: their stock leg asks a received close
+        if c["exit_kind"] in OTC_EXIT_KINDS and c.get("value_rule") != "stock" and c.get("price_ticker"):
+            # only under the OTC symbol the contract publishes (sub-plan 5g; FB-007): with none read, a vendor's bar
+            # under the exchange ticker after the delisting is no OTC print, so nothing is asked and the fill
+            # stands. A bankruptcy plan's new shares (ruling R6) are no OTC print: their stock leg asks a received
+            # close
             out.append({"sec_id": c["sec_id"], "last_trade_date": ltd, "kind": OTC_PRINT,
-                        "lookup_sec_id": c["sec_id"], "lookup_ticker": c.get("price_ticker") or r["ticker"],
+                        "lookup_sec_id": c["sec_id"], "lookup_ticker": c["price_ticker"],
                         "date": next_trading_day(date.fromisoformat(ltd)).isoformat()})
         leg = legs.get(DelistingKey(r["sec_id"], r["delist_date"]))
         asked: set[str] = set()

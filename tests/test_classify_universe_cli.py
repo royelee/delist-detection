@@ -166,6 +166,27 @@ def test_a_bad_id_baseline_exits_2(tmp_path, monkeypatch, capsys):
     assert rc == 2 and "securities.csv" in capsys.readouterr().err
 
 
+_HISTORY = ("sec_id,issuer_id,start_date,end_date,ticker,security_name,share_class\n"
+            "CIK100-COMMON,100,2010-01-04,,AAA,A Co,COMMON\n")
+
+
+def test_a_previous_runs_security_history_is_an_id_baseline(tmp_path):
+    """FB-010: --id-baseline takes a contract/security_history.csv as well as a securities.csv, and with no
+    flag the output folder's own contract/security_history.csv stands in when securities.csv is gone."""
+    import argparse
+    hist = tmp_path / "security_history.csv"
+    hist.write_text(_HISTORY)
+    expected = [{"sec_id": "CIK100-COMMON", "issuer_cik": "100", "share_class": "COMMON",
+                 "figi_source": "placeholder"}]
+    assert cli.read_id_baseline(argparse.Namespace(id_baseline=str(hist), output_dir=str(tmp_path))) == expected
+    out = tmp_path / "out"
+    (out / "contract").mkdir(parents=True)
+    no_flag = argparse.Namespace(id_baseline=None, output_dir=str(out))
+    assert cli.read_id_baseline(no_flag) == []
+    (out / "contract" / "security_history.csv").write_text(_HISTORY)
+    assert cli.read_id_baseline(no_flag) == expected
+
+
 @pytest.mark.parametrize("flag,text,where", [
     ("--merger-terms", "sec_id,cash_per_share\nBBG1,1O.5\n", "line 2: cash_per_share '1O.5' is not a number"),
     ("--merger-terms", "sec_id,stock_ratio,acquirer_price\nBBG1,0.5,\n", "line 2: "),
