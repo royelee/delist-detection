@@ -158,6 +158,10 @@ def test_behind_the_clock_edgar_listing_stands_for_a_security_trading_at_the_dat
     otc = {"tickers": ["FMCC"], "exchanges": ["OTC"]}
     assert listed_on_run_date(False, otc, end, end, tickers=["FMCC"], behind_clock=True) is False
     assert listed_on_run_date(False, qrvo, end, end, tickers=["XXX"], behind_clock=True) is False
+    # OKE 2026: its Form 25, filed before the run date, schedules the transfer after it: the finder reads it
+    oke = {"tickers": ["OKE"], "exchanges": ["NYSE"],
+           "filings": {"recent": {"form": ["8-K", "25"], "filingDate": ["2026-09-24", "2026-09-17"]}}}
+    assert listed_on_run_date(False, oke, end, end, tickers=["OKE"], behind_clock=True) is False
 
 
 def test_a_security_edgar_lists_on_cboe_is_listed_today():

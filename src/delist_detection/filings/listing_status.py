@@ -88,9 +88,20 @@ def listed_on_run_date(listed_now: bool | None, sub, last_seen: date | str | Non
     seen, end = (d if isinstance(d, date) else parse_day(d) for d in (last_seen, data_end))
     if listed_now or seen is None or end is None or (end - seen).days > EDGE_DAYS:
         return listed_now
-    if delisted_after_run_date(sub) or (behind_clock and lists_on_major_exchange(sub, tickers)):
+    if delisted_after_run_date(sub):
+        return True
+    if behind_clock and lists_on_major_exchange(sub, tickers) and not _form25_since(sub, seen - timedelta(EDGE_DAYS)):
+        # a Form 25 filed by the run date (OKE 2026's transfer, effective after it) is the finder's to read
         return True
     return listed_now
+
+
+def _form25_since(sub, day: date) -> bool:
+    """Whether the issuer's recent filings (as the run date reads them) hold a Form 25 filed on or after `day`."""
+    recent = (sub.get("filings") or {}).get("recent") or {} if isinstance(sub, dict) else {}
+    last = day.isoformat()
+    return any(str(f).startswith("25") and (d or "") >= last
+               for f, d in zip(recent.get("form") or [], recent.get("filingDate") or []))
 
 
 def lists_on_major_exchange(sub, tickers: Iterable[str] | None) -> bool:
